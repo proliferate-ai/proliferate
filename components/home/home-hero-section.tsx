@@ -13,7 +13,7 @@ export function HomeHeroSection() {
   const [isTalkOpen, setIsTalkOpen] = useState(false);
 
   return (
-    <section className="relative w-full h-screen max-h-screen bg-black min-[810px]:min-h-[800px] -mt-32">
+    <section className="relative w-full h-screen max-h-screen bg-black min-[810px]:min-h-[800px] -mt-14">
       {/* Background Image */}
       <div
         className="absolute inset-0 opacity-80"
@@ -36,20 +36,21 @@ export function HomeHeroSection() {
       <div className="absolute bottom-0 left-0 w-full h-1/4 bg-gradient-to-t from-black to-transparent mix-blend-multiply" />
 
       {/* Main Content */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center px-4 min-[810px]:pt-20">
-        <div className="flex flex-col items-center gap-6 w-full max-w-5xl">
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-4">
+        <div className="flex flex-col items-center gap-6 w-full max-w-5xl -translate-y-8">
           {/* Announcement Badge */}
           <HomeAnnouncementBadge />
 
           {/* Headlines */}
           <div className="flex flex-col items-center gap-2 text-white">
-            <h1 className="text-center">
-              <span className="block text-4xl sm:text-5xl md:text-6xl lg:text-[5rem] font-light leading-none">
+            <h1 className="text-center text-[clamp(2.4rem,6vw,5.2rem)] font-bold tracking-[-0.02em] text-white leading-[1] sm:leading-[1.1]">
+              <span className="block ">
                 The next generation
               </span>
-              <span className="block text-4xl sm:text-5xl md:text-6xl lg:text-[5rem] font-light leading-none mt-2">
+              <span className="block mt-2">
                 of error monitoring.
               </span>
+
             </h1>
             <h2 className="text-lg sm:text-xl text-white/80 mt-4 text-center max-w-md">
               AI-powered observability for B2B teams
