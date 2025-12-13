@@ -24,7 +24,7 @@ export function NewHowItWorks() {
 
   return (
     <section id="how-it-works" className="py-16 md:py-20 border-t border-zinc-800">
-      <div className="keystone-container  mx-auto px-5">
+      <div className="proliferate-container  mx-auto px-5">
         <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white text-center mb-3">
           Really easy to start
         </h2>

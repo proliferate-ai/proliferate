@@ -41,16 +41,16 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  /* keystone custom colors */
-  --color-keystone-dark: #1a1b1b;
-  --color-keystone-white: #fafafa;
-  --color-keystone-gray-light: #c8c9c9;
-  --color-keystone-gray: #9c9d9e;
-  --color-keystone-earth-brown: #8f644e;
-  --color-keystone-earth-gold: #b49460;
-  --color-keystone-earth-rose: #c6ada3;
-  --color-keystone-earth-teal: #6aa0a1;
-  --color-keystone-earth-beige: #d8c9a9;
+  /* proliferate custom colors */
+  --color-proliferate-dark: #1a1b1b;
+  --color-proliferate-white: #fafafa;
+  --color-proliferate-gray-light: #c8c9c9;
+  --color-proliferate-gray: #9c9d9e;
+  --color-proliferate-earth-brown: #8f644e;
+  --color-proliferate-earth-gold: #b49460;
+  --color-proliferate-earth-rose: #c6ada3;
+  --color-proliferate-earth-teal: #6aa0a1;
+  --color-proliferate-earth-beige: #d8c9a9;
 }
 
 :root {
@@ -134,35 +134,35 @@
 
 
 @layer components {
-  .keystone-container {
-    @apply container !max-w-5xl mx-auto px-1 sm:px-2 lg:px-4;
+  .proliferate-container {
+    @apply container !max-w-6xl mx-auto px-1 sm:px-2 lg:px-4;
   }
 
-  .keystone-container-sm {
+  .proliferate-container-sm {
     @apply container !max-w-5xl mx-auto px-4 sm:px-6 lg:px-8;
   }
-  .keystone-heading-xl {
+  .proliferate-heading-xl {
     @apply text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight;
   }
 
-  .keystone-heading-lg {
+  .proliferate-heading-lg {
     @apply text-[40px] md:text-[50px] leading-[48px] md:leading-[60px] font-[700] text-[rgb(51,51,51)] normal-case;
   }
 
-  .keystone-heading-md {
+  .proliferate-heading-md {
     @apply text-2xl sm:text-3xl font-bold;
   }
 
-  .keystone-heading-sm {
+  .proliferate-heading-sm {
     @apply text-xl sm:text-2xl font-bold;
   }
 
-  .keystone-button-primary {
-    @apply bg-keystone-dark text-white font-medium py-2 px-4 rounded-md transition-colors hover:bg-keystone-dark/90;
+  .proliferate-button-primary {
+    @apply bg-proliferate-dark text-white font-medium py-2 px-4 rounded-md transition-colors hover:bg-proliferate-dark/90;
   }
 
-  .keystone-button-secondary {
-    @apply bg-white text-keystone-dark border border-keystone-dark hover:bg-gray-50 font-medium py-2 px-4 rounded-md transition-colors;
+  .proliferate-button-secondary {
+    @apply bg-white text-proliferate-dark border border-proliferate-dark hover:bg-gray-50 font-medium py-2 px-4 rounded-md transition-colors;
   }
 }
 

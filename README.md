@@ -41,7 +41,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 The app now includes comprehensive Open Graph and Twitter Card meta tags for proper social media link previews.
 
 ### Current Configuration:
-- **Title**: Keystone AI - AI Web Testing
+- **Title**: Proliferate AI - AI Web Testing
 - **Description**: AI Web Testing | Autonomous End-To-End Testing
 - **Image**: `/logo.png` (1024x1024px)
 - **Twitter Card**: Large image format
@@ -53,8 +53,8 @@ The app now includes comprehensive Open Graph and Twitter Card meta tags for pro
 3. **LinkedIn Post Inspector**: https://www.linkedin.com/post-inspector/
 
 ### Recommendations:
-1. **Update the URL**: Replace `https://withkeystone.com` in `app/layout.tsx` with your actual domain
-2. **Update Twitter handles**: Replace `@keystoneai` with your actual Twitter handle
+1. **Update the URL**: Replace `https://withproliferate.com` in `app/layout.tsx` with your actual domain
+2. **Update Twitter handles**: Replace `@proliferateai` with your actual Twitter handle
 3. **Optimize image**: Consider creating a 1200x630px version of your logo for better social media display
 4. **Test thoroughly**: Use the tools above to verify your links display correctly
 

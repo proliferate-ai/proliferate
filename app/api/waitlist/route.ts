@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const textBody = `New Early Access Request\n\nCompany: ${name}\nEmail: ${email}\nTime: ${new Date().toLocaleString()}`;
 
     const RESEND_API_KEY = process.env.RESEND_API_KEY;
-    const TO_EMAIL = process.env.FOUNDER_EMAIL || 'founder@withkeystone.com';
+    const TO_EMAIL = process.env.FOUNDER_EMAIL || 'founder@withproliferate.com';
 
     if (RESEND_API_KEY) {
       const res = await fetch('https://api.resend.com/emails', {
@@ -63,12 +63,12 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           from: 'onboarding@resend.dev',
           to: [email],
-          subject: 'Welcome to Keystone Early Access!',
+          subject: 'Welcome to Proliferate Early Access!',
           html: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h1 style="color: #1a1a1a;">Welcome to Keystone! 🚀</h1>
+              <h1 style="color: #1a1a1a;">Welcome to Proliferate! 🚀</h1>
               <p>Hi ${name},</p>
-              <p>Thank you for your interest in Keystone! You're now on our exclusive early access list.</p>
+              <p>Thank you for your interest in Proliferate! You're now on our exclusive early access list.</p>
               <p>We're building the AI platform that automatically fixes production bugs, and we can't wait to show you what we've been working on.</p>
               <p><strong>What happens next?</strong></p>
               <ul>
@@ -77,10 +77,10 @@ export async function POST(req: NextRequest) {
                 <li>Get exclusive early access pricing and features</li>
               </ul>
               <p>In the meantime, feel free to reply to this email if you have any questions!</p>
-              <p>Best,<br>The Keystone Team</p>
+              <p>Best,<br>The Proliferate Team</p>
             </div>
           `,
-          text: `Welcome to Keystone!\n\nHi ${name},\n\nThank you for your interest in Keystone! You're now on our exclusive early access list.\n\nWe're building the AI platform that automatically fixes production bugs, and we can't wait to show you what we've been working on.\n\nWhat happens next?\n- We'll review your application\n- You'll receive an invitation when your spot is ready\n- Get exclusive early access pricing and features\n\nIn the meantime, feel free to reply to this email if you have any questions!\n\nBest,\nThe Keystone Team`
+          text: `Welcome to Proliferate!\n\nHi ${name},\n\nThank you for your interest in Proliferate! You're now on our exclusive early access list.\n\nWe're building the AI platform that automatically fixes production bugs, and we can't wait to show you what we've been working on.\n\nWhat happens next?\n- We'll review your application\n- You'll receive an invitation when your spot is ready\n- Get exclusive early access pricing and features\n\nIn the meantime, feel free to reply to this email if you have any questions!\n\nBest,\nThe Proliferate Team`
         }),
       });
 

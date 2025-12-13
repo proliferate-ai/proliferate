@@ -15,11 +15,11 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/docs",
-        destination: "https://withkeystone.mintlify.dev/docs",
+        destination: "https://withproliferate.mintlify.dev/docs",
       },
       {
         source: "/docs/:match*",
-        destination: "https://withkeystone.mintlify.dev/docs/:match*",
+        destination: "https://withproliferate.mintlify.dev/docs/:match*",
       },
       {
         source: "/ingest/static/:path*",

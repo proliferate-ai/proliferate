@@ -34,7 +34,7 @@ export function WhatYouGetSection() {
                 Your AI maintenance crew
               </h2>
               <p className="text-base leading-[1.6] opacity-60">
-                Stop finding out about bugs from angry customer emails. Keystone watches every account 24/7 and tells you the moment something breaks—with full context to fix it.
+                Stop finding out about bugs from angry customer emails. Proliferate watches every account 24/7 and tells you the moment something breaks—with full context to fix it.
               </p>
             </div>
           </div>

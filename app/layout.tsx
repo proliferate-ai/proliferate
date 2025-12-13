@@ -4,7 +4,6 @@ import "./globals.css";
 import "../styles/sonner.css";
 import { Toaster } from "sonner";
 import { PostHogProvider } from "../components/PostHogProvider";
-import { SiteHeader } from "@/components/header";
 import { Analytics } from "@vercel/analytics/next";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -14,27 +13,27 @@ const ibmPlexSans = IBM_Plex_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Keystone | Account-Level Bug Intelligence for B2B",
+  title: "Proliferate | Account-Level Bug Intelligence for B2B",
   description: "The B2B observability platform that shows you exactly what's happening inside each account. See who's struggling, why, and fix it before they email you.",
   keywords: ["B2B observability", "account health", "customer success", "bug detection", "session replay", "AI debugging", "developer tools", "VIP alerts", "customer intelligence"],
-  authors: [{ name: "Keystone" }],
-  creator: "Keystone",
-  publisher: "Keystone",
+  authors: [{ name: "Proliferate" }],
+  creator: "Proliferate",
+  publisher: "Proliferate",
 
   // Open Graph meta tags for social media sharing
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://withkeystone.com",
-    title: "Keystone | Know When Your Biggest Customers Are Struggling",
+    url: "https://withProliferate.com",
+    title: "Proliferate | Know When Your Biggest Customers Are Struggling",
     description: "The B2B observability platform that shows you exactly what's happening inside each account. See who's struggling, why, and fix it before they email you.",
-    siteName: "Keystone",
+    siteName: "Proliferate",
     images: [
       {
         url: "https://d1uh4o7rpdqkkl.cloudfront.net/og.webp",
         width: 1200,
         height: 630,
-        alt: "Keystone - Account-Level Bug Intelligence for B2B",
+        alt: "Proliferate - Account-Level Bug Intelligence for B2B",
         type: "image/webp",
       },
     ],
@@ -43,9 +42,9 @@ export const metadata: Metadata = {
   // Twitter Card meta tags
   twitter: {
     card: "summary_large_image",
-    site: "@withkeystone",
-    creator: "@withkeystone",
-    title: "Keystone | Know When Your Biggest Customers Are Struggling",
+    site: "@withProliferate",
+    creator: "@withProliferate",
+    title: "Proliferate | Know When Your Biggest Customers Are Struggling",
     description: "The B2B observability platform that shows you what's happening inside each account. Fix bugs before customers email you.",
     images: ["https://d1uh4o7rpdqkkl.cloudfront.net/og.webp"]
   },
@@ -95,7 +94,7 @@ export default function RootLayout({
       <body className={`${ibmPlexSans.variable} antialiased bg-black text-white`}>
         <PostHogProvider>
           <Toaster />
-          <SiteHeader />
+          {/* <SiteHeader /> */}
           {children}
           <Analytics />
         </PostHogProvider>

@@ -39,22 +39,23 @@ export function SiteHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full h-14 border-b border-gray-800/50 bg-black/95 backdrop-blur-md transition duration-100">
-      <div className="keystone-container  flex h-14 items-center justify-between">
+    <header className="sticky top-0 z-50 w-full  h-14   bg-transparent transition duration-100">
+    {/* <header className="sticky top-0 z-50 w-full  h-14 border-b border-gray-800/50 bg-black/95 backdrop-blur-md transition duration-100"> */}
+      <div className="proliferate-container  flex h-14 items-center justify-between">
         <div className="flex items-center">
           <Link href="/" className="flex items-center">
             <Image
-              src="https://d1uh4o7rpdqkkl.cloudfront.net/logos/keystone.webp"
-              alt="Keystone Logo"
-              width={40}
-              height={40}
-              className="revert h-8 w-8"
+              src="/logotype-inverted.png"
+              alt="Proliferate Logo"
+              width={6290}
+              height={1000}
+              className="revert h-[20px] w-auto"
             />
-            <span className="hidden font-bold sm:inline-block text-white text-sm">Keystone</span>
+            {/* <span className="hidden font-bold sm:inline-block text-white text-sm">Proliferate</span> */}
           </Link>
         </div>
 
-        <nav className="hidden md:flex absolute left-1/2 transform -translate-x-1/2 z-10">
+        {/* <nav className="hidden md:flex absolute left-1/2 transform -translate-x-1/2 z-10">
           <NavigationMenu>
             <NavigationMenuList>
               <NavigationMenuItem>
@@ -71,13 +72,6 @@ export function SiteHeader() {
                   </NavigationMenuLink>
                 </Link>
               </NavigationMenuItem>
-              {/* <NavigationMenuItem>
-                <Link href="/blog" passHref>
-                  <NavigationMenuLink className="text-[13.5px] font-medium text-gray-300 hover:text-white px-3 py-1 rounded-md hover:bg-neutral-800/50 transition-colors">
-                    Blog
-                  </NavigationMenuLink>
-                </Link>
-              </NavigationMenuItem> */}
               <NavigationMenuItem>
                 <span className="flex cursor-not-allowed items-center gap-1 text-[13.5px] font-medium text-gray-300 px-3 py-1 rounded-md relative select-none">
                   <span className="flex items-center gap-1">
@@ -88,26 +82,19 @@ export function SiteHeader() {
                   </span>
                 </span>
               </NavigationMenuItem>
-              {/* <NavigationMenuItem>
-                <Link href="/#pricing" passHref>
-                  <NavigationMenuLink onClick={(e) => onAnchorClick(e, '#pricing')} className="text-[13.5px] font-medium text-gray-300 hover:text-white px-3 py-1 rounded-md hover:bg-neutral-800/50 transition-colors">
-                    Pricing
-                  </NavigationMenuLink>
-                </Link>
-              </NavigationMenuItem> */}
             </NavigationMenuList>
           </NavigationMenu>
-        </nav>
+        </nav> */}
 
         <div className="flex items-center gap-4">
           <div className="hidden md:flex gap-2">
-            <Button
-              variant="outline"
-              className="text-[13.5px] font-medium border border-gray-700 text-gray-300 hover:bg-neutral-800 h-9 rounded-lg px-3"
+            <Link
+              href="/signin"
+              className="text-[13.5px] font-medium text-gray-50 hover:bg-neutral-800 h-9 rounded-lg px-3 bg-transparent flex items-center transition-colors"
               style={{ boxShadow: 'none' }}
-              onClick={() => setIsTalkOpen(true)}>
-              Request demo
-            </Button>
+            >
+              Sign in
+            </Link>
             <WaitlistForm>
               <Button
                 className="text-[13.5px] font-medium bg-white text-black hover:bg-gray-100 h-9 rounded-lg px-3 border-[0.5px] border-white/20"
@@ -148,7 +135,7 @@ export function SiteHeader() {
                 </Link> */}
                 {/* <Link
                   target="_blank"
-                  href="https://docs.withkeystone.com"
+                  href="https://docs.withproliferate.com"
                   className="block px-2 py-1 text-lg font-medium text-gray-300 hover:text-white"
                   onClick={() => setIsOpen(false)}
                 >

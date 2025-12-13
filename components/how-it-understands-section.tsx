@@ -123,8 +123,8 @@ export function HowItUnderstandsSection() {
     </div>
   );
 
-  // Right panel - Keystone account-centric view
-  const KeystoneAccountsUI = () => (
+  // Right panel - Proliferate account-centric view
+  const ProliferateAccountsUI = () => (
     <div className="space-y-2">
       <div className="bg-zinc-800/30 rounded-lg p-3 border border-zinc-700/30">
         <div className="flex items-center justify-between mb-2">
@@ -168,7 +168,7 @@ export function HowItUnderstandsSection() {
     </div>
   );
 
-  const KeystoneSessionsUI = () => (
+  const ProliferateSessionsUI = () => (
     <div className="space-y-3">
       <div className="bg-zinc-800/30 rounded-lg p-3 border border-zinc-700/30">
         <div className="flex items-center justify-between mb-2">
@@ -190,7 +190,7 @@ export function HowItUnderstandsSection() {
     </div>
   );
 
-  const KeystoneIssuesUI = () => (
+  const ProliferateIssuesUI = () => (
     <div className="space-y-2">
       <div className="bg-zinc-800/30 rounded-lg p-3 border border-zinc-700/30">
         <div className="flex items-center justify-between mb-2">
@@ -215,7 +215,7 @@ export function HowItUnderstandsSection() {
     </div>
   );
 
-  const KeystoneVIPUI = () => (
+  const ProliferateVIPUI = () => (
     <div className="space-y-3">
       <div className="bg-zinc-800/30 rounded-lg p-3 border border-zinc-700/30">
         <div className="flex items-center gap-2 mb-2">
@@ -245,10 +245,10 @@ export function HowItUnderstandsSection() {
   };
 
   const rightPanels = {
-    accounts: <KeystoneAccountsUI />,
-    sessions: <KeystoneSessionsUI />,
-    issues: <KeystoneIssuesUI />,
-    vip: <KeystoneVIPUI />,
+    accounts: <ProliferateAccountsUI />,
+    sessions: <ProliferateSessionsUI />,
+    issues: <ProliferateIssuesUI />,
+    vip: <ProliferateVIPUI />,
   };
 
   return (
@@ -258,7 +258,7 @@ export function HowItUnderstandsSection() {
       </h5>
       <h2 className="text-5xl font-bold pl-5 pr-8 mt-2 text-white">One platform. Every account.</h2>
       <p className="text-zinc-400 text-base font-medium pl-5 pr-8 text-left md:text-center w-full max-w-2xl mt-4 sm:pr-0">
-        Keystone captures what&apos;s happening across your product and organizes it by customer—so you see the accounts that matter, not aggregate noise.
+        Proliferate captures what&apos;s happening across your product and organizes it by customer—so you see the accounts that matter, not aggregate noise.
       </p>
 
       <div className="grid-cols-1 grid-rows-[auto] relative grid w-full max-w-5xl mt-16 gap-4 sm:grid-cols-2">
@@ -299,10 +299,10 @@ export function HowItUnderstandsSection() {
           </div>
         </div>
 
-        {/* Right Card - Keystone view */}
+        {/* Right Card - Proliferate view */}
         <div className="bg-zinc-900 rounded-2xl flex-col relative flex w-full overflow-hidden">
           <div className="flex-col px-5 pt-10 flex sm:p-6">
-            <h4 className="text-zinc-50 text-xl font-semibold mb-1 sm:mt-0">What Keystone shows you</h4>
+            <h4 className="text-zinc-50 text-xl font-semibold mb-1 sm:mt-0">What Proliferate shows you</h4>
             <p className="text-zinc-400 text-sm font-medium">
               Health per account. &quot;Acme Corp (your $50k pilot) hit 5 errors during their eval. Here&apos;s exactly what happened.&quot;
             </p>

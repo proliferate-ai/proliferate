@@ -71,13 +71,13 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
             </div>
             
             <p className="text-sm text-neutral-600">
-              We promise we won&apos;t spam you. We&apos;ll only reach out when Keystone is ready for your team.
+              We promise we won&apos;t spam you. We&apos;ll only reach out when Proliferate is ready for your team.
             </p>
             
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-keystone-dark text-white py-3 px-6 rounded-lg font-medium hover:bg-keystone-dark/90 transition-colors disabled:opacity-50"
+              className="w-full bg-proliferate-dark text-white py-3 px-6 rounded-lg font-medium hover:bg-proliferate-dark/90 transition-colors disabled:opacity-50"
             >
               {isSubmitting ? "Joining..." : "Join waitlist"}
             </button>
@@ -112,8 +112,8 @@ export function WaitlistButton({
   const baseClasses = "inline-flex items-center justify-center font-medium rounded-md transition-colors";
   const sizeClasses = size === "lg" ? "py-2 px-8 text-lg" : "py-2 px-4";
   const variantClasses = variant === "outline" 
-    ? "border border-keystone-dark text-keystone-dark hover:bg-keystone-dark hover:text-white" 
-    : "bg-keystone-dark text-white hover:bg-keystone-dark/90";
+    ? "border border-proliferate-dark text-proliferate-dark hover:bg-proliferate-dark hover:text-white" 
+    : "bg-proliferate-dark text-white hover:bg-proliferate-dark/90";
   
   return (
     <>

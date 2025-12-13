@@ -5,7 +5,7 @@ import { ArrowRight } from "lucide-react";
 export function FinalCTASection() {
   return (
     <section className="py-24 bg-zinc-950 border-t border-zinc-800">
-      <div className="keystone-container text-center px-5">
+      <div className="proliferate-container text-center px-5">
         <h2 className="text-2xl md:text-4xl font-bold text-white mb-4">
           Stop finding out about bugs from customer emails
         </h2>

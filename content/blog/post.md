@@ -1,5 +1,5 @@
 ---
-title: "Introducing Keystone"
+title: "Introducing Proliferate"
 excerpt: "Why we're building an AI engineer that actually understands your product—not just your codebase, but your entire production reality."
 author: "Pablo Hansen"
 date: "2025-09-25"
@@ -24,7 +24,7 @@ Not writing fixes—that part is easy. The time sink is context:
 
 ## **What problem are we solving?**
 
-**Keystone is the AI engineer that understands your product.**
+**Proliferate is the AI engineer that understands your product.**
 It connects to your production stack and institutional knowledge, **reproduces** user‑reported or observed issues, **proposes and validates** fixes in a sandbox, and **ships PRs**—closing the loop from “bug” → “merged” like a human on‑call engineer would.
 
 What makes it different:
@@ -33,7 +33,7 @@ What makes it different:
 * **Institution‑aware.** Indexes Slack, docs, tickets, runbooks, and team conventions—the tribal knowledge that actually governs behavior.
 * **Loop‑closed.** Moves from signal → context → reproduction → validated fix → PR, instead of handing you a suggested patch and hoping for the best.
 
-Think of Keystone as your **AI on‑call engineer**—but one that already knows your edge cases, your customers, and your business rules.
+Think of Proliferate as your **AI on‑call engineer**—but one that already knows your edge cases, your customers, and your business rules.
 
 ---
 
@@ -43,7 +43,7 @@ A few months ago we built an AI QA tool that grew quickly and attracted multiple
 
 Why? Because QA, in isolation, is a **point solution**. It doesn’t earn the right to the production and institutional context that actually solves maintenance. Teams using modern coding agents ship features faster—but their **maintenance debt explodes** without a system that understands production reality.
 
-Three shifts make Keystone inevitable:
+Three shifts make Proliferate inevitable:
 
 1. **Code generation is commoditizing.** The advantage moves to who can *validate, maintain, and evolve* software reliably.
 2. **Stacks are observable and API‑first.** The hooks now exist to give an AI engineer the same context a senior dev relies on.
@@ -53,17 +53,17 @@ Three shifts make Keystone inevitable:
 
 ## **The bigger vision**
 
-Today: **Keystone closes the loop** from bug to merged PR.
+Today: **Proliferate closes the loop** from bug to merged PR.
 
-Next: Keystone becomes your **validation and enforcement layer** for how the product should behave—catching regressions proactively and encoding institutional knowledge so it’s applied to every change.
+Next: Proliferate becomes your **validation and enforcement layer** for how the product should behave—catching regressions proactively and encoding institutional knowledge so it’s applied to every change.
 
 Imagine:
 
 * **Proactive fixes.** Issues are detected and remediated before customers notice.
 * **Institutional memory.** New engineers are productive on day one; unwritten rules are enforced automatically.
-* **Business rules as intent.** You describe behavior in plain English; Keystone ensures it holds across services, environments, and releases.
+* **Business rules as intent.** You describe behavior in plain English; Proliferate ensures it holds across services, environments, and releases.
 
-End state: you specify *what* you want; Keystone handles *how* it’s implemented, maintained, and evolved.
+End state: you specify *what* you want; Proliferate handles *how* it’s implemented, maintained, and evolved.
 
 ---
 

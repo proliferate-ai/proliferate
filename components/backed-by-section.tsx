@@ -221,7 +221,7 @@ function HorizontalRotatingLogos({ logos, title }: { logos: { src: string; alt: 
 export function BackedBySection() {
   return (
     <section className="py-16 border-t border-gray-800">
-      <div className="keystone-container">
+      <div className="proliferate-container">
         <h2 className="mb-12 text-sm max-w-6xl mx-auto font-semibold tracking-tight text-gray-400 uppercase text-center">Backed by</h2>
         
         {/* Desktop layout - unchanged */}

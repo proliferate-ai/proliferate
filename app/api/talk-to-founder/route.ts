@@ -13,7 +13,7 @@ Notes: ${notes || '-'}`;
 
     // If you have RESEND_API_KEY set, send email via Resend, otherwise log
     const RESEND_API_KEY = process.env.RESEND_API_KEY;
-    const TO_EMAIL = process.env.FOUNDER_EMAIL || 'founder@withkeystone.com';
+    const TO_EMAIL = process.env.FOUNDER_EMAIL || 'founder@withproliferate.com';
 
     if (RESEND_API_KEY) {
       const res = await fetch('https://api.resend.com/emails', {

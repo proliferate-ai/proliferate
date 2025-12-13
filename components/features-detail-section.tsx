@@ -20,13 +20,13 @@ export function FeaturesDetailSection() {
     {
       icon: GitBranch,
       title: "\"Is this fixed in main?\"",
-      description: "Before you panic, Keystone checks if a recent PR already addressed the issue. If not, click to open the fix flow with full context—error, code, user state, similar past issues.",
+      description: "Before you panic, Proliferate checks if a recent PR already addressed the issue. If not, click to open the fix flow with full context—error, code, user state, similar past issues.",
     },
   ];
 
   return (
     <section className="py-20 bg-black border-t border-zinc-800">
-      <div className="keystone-container mx-auto px-5">
+      <div className="proliferate-container mx-auto px-5">
         <div className="text-center mb-12">
           <p className="text-xs uppercase tracking-[0.15em] font-medium text-zinc-500 mb-4">
             THE DETAILS
