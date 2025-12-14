@@ -43,7 +43,7 @@ The app now includes comprehensive Open Graph and Twitter Card meta tags for pro
 ### Current Configuration:
 - **Title**: Proliferate AI - AI Web Testing
 - **Description**: AI Web Testing | Autonomous End-To-End Testing
-- **Image**: `/logo.png` (1024x1024px)
+- **Image**: `https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp` (1024x1024px)
 - **Twitter Card**: Large image format
 - **Open Graph**: Website type with proper locale and URL
 

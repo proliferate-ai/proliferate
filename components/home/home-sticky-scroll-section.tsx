@@ -6,10 +6,10 @@ import gsap from "gsap";
 
 // Preload all background images
 const backgroundImages = [
-  '/assets/hero/mars.jpeg',
-  '/assets/hero/mars-2.jpeg',
-  '/assets/hero/mars-3.jpeg',
-  '/assets/hero/mars-4.jpeg',
+  'https://d1uh4o7rpdqkkl.cloudfront.net/assets/hero/mars.webp',
+  'https://d1uh4o7rpdqkkl.cloudfront.net/assets/hero/mars-2.webp',
+  'https://d1uh4o7rpdqkkl.cloudfront.net/assets/hero/mars-3.webp',
+  'https://d1uh4o7rpdqkkl.cloudfront.net/assets/hero/mars-4.webp',
 ];
 
 const scrollSteps = [
@@ -329,40 +329,40 @@ function SetupVisual() {
           {/* Outer ring */}
           <div className="ring ring-3 absolute inset-0 rounded-full border-2 border-blue-500/40 opacity-0">
             <div className="logo-ring-3 absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-white/10 p-1 flex items-center justify-center">
-              <Image src="/assets/integrations/github.png" alt="GitHub" width={20} height={20} className="object-contain" />
+              <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/integrations/github.webp" alt="GitHub" width={20} height={20} className="object-contain" />
             </div>
             <div className="logo-ring-3 absolute top-1/4 -right-3 w-6 h-6 rounded-full bg-white/10 p-1 flex items-center justify-center">
-              <Image src="/assets/integrations/slack.png" alt="Slack" width={20} height={20} className="object-contain" />
+              <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/integrations/slack.webp" alt="Slack" width={20} height={20} className="object-contain" />
             </div>
             <div className="logo-ring-3 absolute bottom-6 -left-3 w-6 h-6 rounded-full bg-white/10 p-1 flex items-center justify-center">
-              <Image src="/assets/integrations/gmail.png" alt="Gmail" width={20} height={20} className="object-contain" />
+              <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/integrations/gmail.webp" alt="Gmail" width={20} height={20} className="object-contain" />
             </div>
           </div>
 
           {/* Middle ring */}
           <div className="ring ring-2 absolute inset-6 rounded-full  opacity-0">
             <div className="logo-ring-2 absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-white/10 p-1 flex items-center justify-center">
-              <Image src="/assets/integrations/react.png" alt="React" width={20} height={20} className="object-contain" />
+              <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/integrations/react.webp" alt="React" width={20} height={20} className="object-contain" />
             </div>
             <div className="logo-ring-2 absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 rounded-full bg-white/10 p-1 flex items-center justify-center">
-              <Image src="/assets/integrations/postgres.png" alt="PostgreSQL" width={20} height={20} className="object-contain" />
+              <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/integrations/postgres.webp" alt="PostgreSQL" width={20} height={20} className="object-contain" />
             </div>
             <div className="logo-ring-2 absolute -bottom-2 left-1/4 w-5 h-5 rounded-full bg-white/10 p-0.5 flex items-center justify-center">
-              <Image src="/assets/integrations/python.png" alt="Python" width={18} height={18} className="object-contain" />
+              <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/integrations/python.webp" alt="Python" width={18} height={18} className="object-contain" />
             </div>
           </div>
 
           {/* Inner ring */}
           <div className="ring ring-1 absolute inset-12 rounded-full  opacity-0">
             <div className="logo-ring-1 absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-white/10 p-0.5 flex items-center justify-center">
-              <Image src="/assets/integrations/linear.svg" alt="Linear" width={16} height={16} className="object-contain" />
+              <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/integrations/linear.svg" alt="Linear" width={16} height={16} className="object-contain" />
             </div>
           </div>
 
           {/* Center core - Proliferate logo style */}
           <div className="center-core absolute inset-0 flex items-center justify-center scale-0">
             <div className="w-14 h-14 rounded-xl bg-blue-500/35 border border-blue-700/40 flex items-center justify-center">
-              <Image src="/logo.png" alt="Proliferate" width={28} height={28} className="object-contain" />
+              <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp" alt="Proliferate" width={28} height={28} className="object-contain" />
               {/* <svg className="w-7 h-7 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.5">
                 <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
                 <path d="M2 17l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />

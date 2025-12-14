@@ -13,7 +13,7 @@ export default function HeroVideo() {
                                 <div className="w-1.5 h-1.5 rounded-full bg-neutral-500"></div>
                                 <span className="text-xs font-medium text-neutral-200">Issue</span>
                             </div>
-                            <Image src="/assets/steps/sentry.svg" alt="Sentry" width={48} height={48} className="invert w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12" />
+                            <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/steps/sentry.svg" alt="Sentry" width={48} height={48} className="invert w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12" />
 
                             {/* Arrow */}
                             <div className="absolute -right-[40px] sm:-right-[60px] md:-right-[60px] top-1/2 -translate-y-1/2">
@@ -108,7 +108,7 @@ export default function HeroVideo() {
                                 <span className="text-xs font-medium text-neutral-200">Codebase</span>
                             </div>
                             <div className="relative">
-                                <Image src="/assets/steps/github.svg" alt="PR" width={48} height={48} className="text-neutral-300 w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12" />
+                                <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/steps/github.svg" alt="PR" width={48} height={48} className="text-neutral-300 w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12" />
                                 <div className="absolute -top-1 -right-1">
                                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="text-neutral-500">
                                         <path d="M5 1V9M1 5H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

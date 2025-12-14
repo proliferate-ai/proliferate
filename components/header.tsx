@@ -40,7 +40,7 @@ export function SiteHeader() {
         <div className="flex items-center">
           <Link href="/" className="flex items-center">
             <Image
-              src="/logotype-inverted.png"
+              src="https://d1uh4o7rpdqkkl.cloudfront.net/logotype-inverted.webp"
               alt="Proliferate Logo"
               width={6290}
               height={1000}

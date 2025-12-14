@@ -22,7 +22,7 @@ export function HomeHeroSection() {
         <div className="absolute inset-0">
           <Image
             className="object-cover w-full h-full"
-            src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/hero.jpeg"
+            src="https://d1uh4o7rpdqkkl.cloudfront.net/hero.webp"
             alt="Background"
             fill
             priority
