@@ -135,7 +135,7 @@
 
 @layer components {
   .proliferate-container {
-    @apply container !max-w-[95vw] mx-auto px-1 sm:px-2 lg:px-4;
+    @apply container !max-w-[95vw] mx-auto px-4 sm:px-6 lg:px-8;
   }
 
   .proliferate-container-sm {

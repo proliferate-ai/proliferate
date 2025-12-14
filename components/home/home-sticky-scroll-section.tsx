@@ -210,15 +210,15 @@ function ActionVisual() {
       </div>
 
       {/* Glass shards that break off from dashboard */}
-      <div className="dash-shard dash-shard-0 absolute top-8 left-8 w-12 h-16 bg-red-950/40 border border-red-400/30 rounded opacity-0" style={{ clipPath: "polygon(0 0, 100% 10%, 90% 100%, 5% 85%)" }} />
-      <div className="dash-shard dash-shard-1 absolute top-12 right-12 w-14 h-12 bg-red-950/35 border border-red-400/25 rounded opacity-0" style={{ clipPath: "polygon(10% 0, 100% 5%, 95% 100%, 0 90%)" }} />
-      <div className="dash-shard dash-shard-2 absolute top-1/3 left-12 w-10 h-14 bg-red-950/45 border border-red-400/35 rounded opacity-0" style={{ clipPath: "polygon(5% 0, 95% 15%, 100% 100%, 0 85%)" }} />
-      <div className="dash-shard dash-shard-3 absolute bottom-1/3 right-8 w-12 h-10 bg-red-950/40 border border-red-400/30 rounded opacity-0" style={{ clipPath: "polygon(0 10%, 100% 0, 90% 100%, 10% 95%)" }} />
-      <div className="dash-shard dash-shard-4 absolute top-1/2 left-1/4 w-8 h-12 bg-red-950/35 border border-red-400/25 rounded opacity-0" style={{ clipPath: "polygon(15% 0, 100% 20%, 85% 100%, 0 80%)" }} />
-      <div className="dash-shard dash-shard-5 absolute top-1/3 right-1/4 w-10 h-8 bg-red-950/40 border border-red-400/30 rounded opacity-0" style={{ clipPath: "polygon(0 15%, 100% 0, 95% 100%, 10% 90%)" }} />
+      <div className="dash-shard dash-shard-0 absolute top-4 sm:top-8 left-4 sm:left-8 w-8 sm:w-12 h-10 sm:h-16 bg-red-950/40 border border-red-400/30 rounded opacity-0" style={{ clipPath: "polygon(0 0, 100% 10%, 90% 100%, 5% 85%)" }} />
+      <div className="dash-shard dash-shard-1 absolute top-6 sm:top-12 right-4 sm:right-12 w-10 sm:w-14 h-8 sm:h-12 bg-red-950/35 border border-red-400/25 rounded opacity-0" style={{ clipPath: "polygon(10% 0, 100% 5%, 95% 100%, 0 90%)" }} />
+      <div className="dash-shard dash-shard-2 absolute top-1/3 left-4 sm:left-12 w-6 sm:w-10 h-10 sm:h-14 bg-red-950/45 border border-red-400/35 rounded opacity-0" style={{ clipPath: "polygon(5% 0, 95% 15%, 100% 100%, 0 85%)" }} />
+      <div className="dash-shard dash-shard-3 absolute bottom-1/3 right-4 sm:right-8 w-8 sm:w-12 h-6 sm:h-10 bg-red-950/40 border border-red-400/30 rounded opacity-0" style={{ clipPath: "polygon(0 10%, 100% 0, 90% 100%, 10% 95%)" }} />
+      <div className="dash-shard dash-shard-4 absolute top-1/2 left-1/4 w-6 sm:w-8 h-8 sm:h-12 bg-red-950/35 border border-red-400/25 rounded opacity-0" style={{ clipPath: "polygon(15% 0, 100% 20%, 85% 100%, 0 80%)" }} />
+      <div className="dash-shard dash-shard-5 absolute top-1/3 right-1/4 w-6 sm:w-10 h-6 sm:h-8 bg-red-950/40 border border-red-400/30 rounded opacity-0" style={{ clipPath: "polygon(0 15%, 100% 0, 95% 100%, 10% 90%)" }} />
 
       {/* Action card (comes forward) */}
-      <div className="action-card relative bg-red-950/60 backdrop-blur-sm rounded-lg border border-red-400/30 p-4 w-56 sm:w-60 opacity-0">
+      <div className="action-card relative bg-red-950/60 backdrop-blur-sm rounded-lg border border-red-400/30 p-3 sm:p-4 w-full max-w-[14rem] sm:max-w-[15rem] opacity-0">
         <div className="action-inner flex items-center gap-2 mb-2 opacity-0">
           <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
           <span className="text-red-200/70 text-[11px] font-mono">TypeError</span>
@@ -600,7 +600,7 @@ function TriageVisual() {
     <div ref={containerRef} className="relative w-full h-full flex items-center justify-center overflow-hidden">
       <div className="triage-container relative opacity-0">
         {/* Stacked cards */}
-        <div className="relative w-56 h-36">
+        <div className="relative w-full max-w-[14rem] sm:max-w-[15rem] h-32 sm:h-36">
           {cards.map((card) => {
             const IconComponent = errorIcons[card.id];
             const isTopCard = card.id === topCardId;
@@ -613,7 +613,7 @@ function TriageVisual() {
                 onPointerDown={(e) => isTopCard && handlePointerDown(e, card.id, e.currentTarget)}
                 onPointerMove={(e) => isTopCard && handlePointerMove(e, card.id)}
                 onPointerUp={(e) => isTopCard && handlePointerUp(e, card.id)}
-                className={`error-card error-card-${card.id} absolute inset-0 bg-neutral-900 border border-neutral-700 rounded-lg p-3 opacity-0 ${isTopCard && !isDismissed ? 'cursor-grab active:cursor-grabbing' : ''} ${isDismissed ? 'pointer-events-none' : ''}`}
+                className={`error-card error-card-${card.id} absolute inset-0 bg-neutral-900 border border-neutral-700 rounded-lg p-2 sm:p-3 opacity-0 ${isTopCard && !isDismissed ? 'cursor-grab active:cursor-grabbing' : ''} ${isDismissed ? 'pointer-events-none' : ''}`}
                 style={{ touchAction: 'none', zIndex }}
               >
                 <div className="flex items-start justify-between">

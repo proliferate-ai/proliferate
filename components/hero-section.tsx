@@ -15,12 +15,12 @@ export function HeroSection() {
       <div className="proliferate-container mx-auto">
         <div className="flex flex-col items-center justify-center">
           <div className="flex flex-col items-center text-left max-w-6xl">
-            <div className="w-full grid grid-cols-4">
-              <div className="w-full col-span-2 ">
+            <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-4">
+              <div className="w-full">
                 {/* <span className="mb-4 text-xs font-semibold tracking-tight text-gray-400 uppercase">
                   The next generation
                 </span> */}
-                <h1 className="mb-4 text-left -mr-10  z text-[clamp(1.6rem,4vw,3.5rem)] font-bold tracking-[-0.04em] text-white leading-[1] sm:leading-[1.1]">
+                <h1 className="mb-4 text-left lg:-mr-10 text-[clamp(1.6rem,4vw,3.5rem)] font-bold tracking-[-0.04em] text-white leading-[1] sm:leading-[1.1]">
                   The next generation
                   <br />
                   of error monitoring
@@ -57,7 +57,7 @@ export function HeroSection() {
                 </div>
               </div>
 
-              <div className="col-span-2 w-full">
+              <div className="w-full">
                 <SignalPond />
               </div>
             </div>

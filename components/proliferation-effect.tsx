@@ -274,7 +274,7 @@ export default function PoeticRiver() {
   return (
     <div 
         ref={containerRef}
-        className="relative w-full h-[500px] bg-neutral-950 overflow-hidden rounded-xl border border-white/10 shadow-2xl cursor-crosshair"
+        className="relative w-full h-[300px] sm:h-[400px] lg:h-[500px] bg-neutral-950 overflow-hidden rounded-xl border border-white/10 shadow-2xl cursor-crosshair"
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
