@@ -46,7 +46,7 @@ export function CalendlyButton({
 
   return (
     <button
-      data-cal-link="pablo-proliferate/proliferate-intro"
+      data-cal-link="pablo-keystone/chat-with-proliferate-founder"
       data-cal-config='{"theme":"dark","overlayCalendar":true}'
       className={cn(
         baseStyles,

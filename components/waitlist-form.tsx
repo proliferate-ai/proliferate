@@ -54,7 +54,7 @@ export function WaitlistForm({ children }: WaitlistFormProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <Image 
-              src="https://d1uh4o7rpdqkkl.cloudfront.net/logos/proliferate.webp" 
+              src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.png" 
               alt="Proliferate Logo" 
               width={32} 
               height={32}
