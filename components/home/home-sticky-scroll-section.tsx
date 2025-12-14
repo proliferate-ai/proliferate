@@ -46,9 +46,12 @@ const scrollSteps = [
   },
 ];
 
-// Dashboard fades back, action card comes forward
+// Dashboard cracks, then action card fixes it
 function ActionVisual() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isFixed, setIsFixed] = useState(false);
+  const dashboardRef = useRef<HTMLDivElement>(null);
+  const shardsRef = useRef<HTMLDivElement[]>([]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -59,7 +62,10 @@ function ActionVisual() {
       gsap.set(".dashboard-line", { scaleX: 0, transformOrigin: "left" });
       gsap.set(".action-card", { opacity: 0, y: 20, scale: 0.95 });
       gsap.set(".action-inner", { opacity: 0 });
+      gsap.set(".dash-crack-line", { opacity: 0 });
+      gsap.set(".dash-shard", { opacity: 0 });
 
+      // Dashboard appears
       tl.to(".dashboard-mock", {
         opacity: 1,
         scale: 1,
@@ -74,21 +80,49 @@ function ActionVisual() {
         ease: "power2.out",
       }, "-=0.2");
 
+      // Dashboard cracks!
       tl.to(".dashboard-mock", {
-        opacity: 0.1,
-        scale: 0.92,
-        filter: "blur(2px)",
-        duration: 0.4,
-        ease: "power2.inOut",
-      }, "+=0.2");
+        x: "+=2",
+        duration: 0.05,
+        repeat: 3,
+        yoyo: true,
+      }, "+=0.3");
 
+      tl.to(".dash-crack-line", {
+        opacity: 1,
+        duration: 0.1,
+        stagger: 0.02,
+      });
+
+      // Shards break off and scatter
+      tl.to(".dash-shard", {
+        opacity: 1,
+        duration: 0.05,
+      });
+
+      tl.to(".dash-shard-0", { x: -80, y: 120, rotation: -45, duration: 0.6, ease: "power2.in" }, "shatter");
+      tl.to(".dash-shard-1", { x: 60, y: 100, rotation: 30, duration: 0.55, ease: "power2.in" }, "shatter");
+      tl.to(".dash-shard-2", { x: -50, y: 80, rotation: -60, duration: 0.5, ease: "power2.in" }, "shatter");
+      tl.to(".dash-shard-3", { x: 70, y: 130, rotation: 50, duration: 0.65, ease: "power2.in" }, "shatter");
+      tl.to(".dash-shard-4", { x: -30, y: 110, rotation: -25, duration: 0.55, ease: "power2.in" }, "shatter");
+      tl.to(".dash-shard-5", { x: 40, y: 90, rotation: 40, duration: 0.5, ease: "power2.in" }, "shatter");
+
+      // Dashboard fades/blurs
+      tl.to(".dashboard-mock", {
+        opacity: 0.15,
+        scale: 0.92,
+        filter: "blur(3px)",
+        duration: 0.3,
+      }, "shatter+=0.1");
+
+      // Action card appears
       tl.to(".action-card", {
         opacity: 1,
         y: 0,
         scale: 1,
         duration: 0.4,
         ease: "back.out(1.5)",
-      }, "-=0.2");
+      }, "-=0.1");
 
       tl.to(".action-inner", {
         opacity: 1,
@@ -102,10 +136,69 @@ function ActionVisual() {
     return () => ctx.revert();
   }, []);
 
+  const handleApplyFix = () => {
+    if (isFixed) return;
+    setIsFixed(true);
+
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline();
+
+      // Button shows success
+      tl.to(".apply-btn", {
+        backgroundColor: "rgba(255, 255, 255, 0.9)",
+        color: "#404040",
+        duration: 0.2,
+      });
+
+      // Shards fly back together
+      tl.to(".dash-shard-0", { x: 0, y: 0, rotation: 0, duration: 0.4, ease: "power2.out" }, "reassemble");
+      tl.to(".dash-shard-1", { x: 0, y: 0, rotation: 0, duration: 0.35, ease: "power2.out" }, "reassemble");
+      tl.to(".dash-shard-2", { x: 0, y: 0, rotation: 0, duration: 0.4, ease: "power2.out" }, "reassemble");
+      tl.to(".dash-shard-3", { x: 0, y: 0, rotation: 0, duration: 0.45, ease: "power2.out" }, "reassemble");
+      tl.to(".dash-shard-4", { x: 0, y: 0, rotation: 0, duration: 0.35, ease: "power2.out" }, "reassemble");
+      tl.to(".dash-shard-5", { x: 0, y: 0, rotation: 0, duration: 0.4, ease: "power2.out" }, "reassemble");
+
+      // Hide shards and cracks
+      tl.to(".dash-shard", { opacity: 0, duration: 0.2 });
+      tl.to(".dash-crack-line", { opacity: 0, duration: 0.2 }, "-=0.2");
+
+      // Dashboard comes back
+      tl.to(".dashboard-mock", {
+        opacity: 1,
+        scale: 1,
+        filter: "blur(0px)",
+        duration: 0.4,
+        ease: "power2.out",
+      }, "-=0.2");
+
+      // Flash of success
+      tl.to(".dashboard-mock", {
+        borderColor: "rgba(74, 222, 128, 0.5)",
+        duration: 0.2,
+      });
+
+      tl.to(".dashboard-mock", {
+        borderColor: "rgba(248, 113, 113, 0.2)",
+        duration: 0.5,
+        delay: 0.5,
+      });
+
+    }, containerRef);
+  };
+
   return (
-    <div ref={containerRef} className="relative w-full h-full flex items-center justify-center">
-      {/* Dashboard mockup (fades back) */}
-      <div className="dashboard-mock absolute inset-2 sm:inset-4 bg-red-950/30 rounded-lg border border-red-500/20 p-3 opacity-0">
+    <div ref={containerRef} className="relative w-full h-full flex items-center justify-center overflow-hidden">
+      {/* Dashboard mockup */}
+      <div ref={dashboardRef} className="dashboard-mock absolute inset-2 sm:inset-4 bg-red-950/30 rounded-lg border border-red-500/20 p-3 opacity-0">
+        {/* Crack lines on dashboard */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <path className="dash-crack-line opacity-0" d="M45 0 L48 20 L42 35 L50 50 L44 70 L48 85 L45 100" stroke="white" strokeWidth="0.8" fill="none" />
+          <path className="dash-crack-line opacity-0" d="M48 20 L30 25 L20 20" stroke="white" strokeWidth="0.6" fill="none" />
+          <path className="dash-crack-line opacity-0" d="M42 35 L60 40 L75 35" stroke="white" strokeWidth="0.6" fill="none" />
+          <path className="dash-crack-line opacity-0" d="M50 50 L35 60 L25 55" stroke="white" strokeWidth="0.5" fill="none" />
+          <path className="dash-crack-line opacity-0" d="M44 70 L65 75 L80 70" stroke="white" strokeWidth="0.5" fill="none" />
+        </svg>
+
         <div className="flex items-center gap-2 mb-3">
           <div className="w-1.5 h-1.5 rounded-full bg-red-400/40" />
           <div className="h-1.5 w-12 bg-red-400/20 rounded" />
@@ -116,6 +209,14 @@ function ActionVisual() {
           <div className="dashboard-line h-6 bg-red-400/10 rounded" style={{ width: "50%" }} />
         </div>
       </div>
+
+      {/* Glass shards that break off from dashboard */}
+      <div className="dash-shard dash-shard-0 absolute top-8 left-8 w-12 h-16 bg-red-950/40 border border-red-400/30 rounded opacity-0" style={{ clipPath: "polygon(0 0, 100% 10%, 90% 100%, 5% 85%)" }} />
+      <div className="dash-shard dash-shard-1 absolute top-12 right-12 w-14 h-12 bg-red-950/35 border border-red-400/25 rounded opacity-0" style={{ clipPath: "polygon(10% 0, 100% 5%, 95% 100%, 0 90%)" }} />
+      <div className="dash-shard dash-shard-2 absolute top-1/3 left-12 w-10 h-14 bg-red-950/45 border border-red-400/35 rounded opacity-0" style={{ clipPath: "polygon(5% 0, 95% 15%, 100% 100%, 0 85%)" }} />
+      <div className="dash-shard dash-shard-3 absolute bottom-1/3 right-8 w-12 h-10 bg-red-950/40 border border-red-400/30 rounded opacity-0" style={{ clipPath: "polygon(0 10%, 100% 0, 90% 100%, 10% 95%)" }} />
+      <div className="dash-shard dash-shard-4 absolute top-1/2 left-1/4 w-8 h-12 bg-red-950/35 border border-red-400/25 rounded opacity-0" style={{ clipPath: "polygon(15% 0, 100% 20%, 85% 100%, 0 80%)" }} />
+      <div className="dash-shard dash-shard-5 absolute top-1/3 right-1/4 w-10 h-8 bg-red-950/40 border border-red-400/30 rounded opacity-0" style={{ clipPath: "polygon(0 15%, 100% 0, 95% 100%, 10% 90%)" }} />
 
       {/* Action card (comes forward) */}
       <div className="action-card relative bg-red-950/60 backdrop-blur-sm rounded-lg border border-red-400/30 p-4 w-56 sm:w-60 opacity-0">
@@ -130,9 +231,13 @@ function ActionVisual() {
           src/api/users.ts:142
         </div>
         <div className="action-inner opacity-0">
-          <div className="bg-red-400 text-red-950 text-xs font-medium py-1.5 px-3 rounded-md text-center">
-            Apply fix
-          </div>
+          <button
+            onClick={handleApplyFix}
+            disabled={isFixed}
+            className="apply-btn w-full bg-red-400 hover:bg-red-300 disabled:bg-white/90 text-red-950 disabled:text-neutral-700 text-xs font-medium py-1.5 px-3 rounded-md text-center cursor-pointer disabled:cursor-default transition-colors"
+          >
+            {isFixed ? "Fixed!" : "Apply fix"}
+          </button>
         </div>
       </div>
     </div>
@@ -142,6 +247,7 @@ function ActionVisual() {
 // Orbital rings with varied shapes
 function SetupVisual() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const ringsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -152,6 +258,7 @@ function SetupVisual() {
       gsap.set(".ring", { scale: 0, opacity: 0, rotation: 0 });
       gsap.set(".center-core", { scale: 0 });
       gsap.set(".setup-label", { opacity: 0, y: 10 });
+      gsap.set(".ripple", { scale: 0, opacity: 0 });
 
       tl.to(".setup-container", { opacity: 1, duration: 0.3 });
 
@@ -176,59 +283,93 @@ function SetupVisual() {
     return () => ctx.revert();
   }, []);
 
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!ringsRef.current) return;
+    const rect = ringsRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
+    const distance = Math.sqrt(x * x + y * y);
+    const maxDistance = rect.width / 2;
+
+    // Only trigger ripple when moving through the rings area
+    if (distance > 20 && distance < maxDistance) {
+      const ripples = containerRef.current?.querySelectorAll('.ripple');
+      ripples?.forEach((ripple, i) => {
+        gsap.to(ripple, {
+          scale: 1 + (i * 0.3),
+          opacity: 0.3 - (i * 0.1),
+          duration: 0.4,
+          ease: "power2.out",
+        });
+        gsap.to(ripple, {
+          scale: 1.5 + (i * 0.3),
+          opacity: 0,
+          duration: 0.6,
+          delay: 0.1,
+          ease: "power2.out",
+        });
+      });
+    }
+  };
+
   return (
     <div ref={containerRef} className="relative w-full h-full flex items-center justify-center">
       <div className="setup-container relative opacity-0">
-        <div className="relative w-48 h-48">
+        <div ref={ringsRef} onMouseMove={handleMouseMove} className="relative w-48 h-48 cursor-pointer">
+          {/* Ripple effects */}
+          <div className="ripple absolute inset-0 rounded-full border-2 border-blue-400/50 pointer-events-none" />
+          <div className="ripple absolute inset-6 rounded-full border-2 border-blue-400/40 pointer-events-none" />
+          <div className="ripple absolute inset-12 rounded-full border-2 border-blue-400/30 pointer-events-none" />
+
           {/* Outer ring */}
           <div className="ring ring-3 absolute inset-0 rounded-full border-2 border-blue-500/40 opacity-0">
             {/* File icon */}
-            <svg className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.4">
+            <svg className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.4">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" />
               <path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" />
             </svg>
             {/* Git branch */}
-            <svg className="absolute top-1/4 -right-3 w-6 h-6 text-blue-400" viewBox="0 0 24 24" fill="none">
+            <svg className="absolute top-1/4 -right-3 w-6 h-6 text-blue-700" viewBox="0 0 24 24" fill="none">
               <circle cx="6" cy="6" r="2.5" fill="currentColor" fillOpacity="0.5" stroke="currentColor" strokeWidth="2" />
               <circle cx="18" cy="18" r="2.5" fill="currentColor" fillOpacity="0.5" stroke="currentColor" strokeWidth="2" />
               <circle cx="6" cy="18" r="2.5" fill="currentColor" fillOpacity="0.5" stroke="currentColor" strokeWidth="2" />
               <path d="M6 8.5v7M18 15.5V9a3 3 0 0 0-3-3H9" stroke="currentColor" strokeWidth="2" />
             </svg>
             {/* Terminal */}
-            <svg className="absolute bottom-6 -left-3 w-6 h-6 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.35">
+            <svg className="absolute bottom-6 -left-3 w-6 h-6 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.35">
               <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
               <path d="M6 9l3 3-3 3M12 15h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </div>
 
           {/* Middle ring */}
-          <div className="ring ring-2 absolute inset-6 rounded-full border-2 border-dashed border-blue-400/50 opacity-0">
+          <div className="ring ring-2 absolute inset-6 rounded-full border-2 border-dashed border-blue-700/50 opacity-0">
             {/* Bug icon */}
-            <svg className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.45">
+            <svg className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.45">
               <ellipse cx="12" cy="14" rx="5" ry="6" stroke="currentColor" strokeWidth="2" />
               <path d="M12 8V6M8 9L5 7M16 9l3-2M5 12H2M22 12h-3M5 17l-2 2M19 17l2 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
             {/* Database */}
-            <svg className="absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.4">
+            <svg className="absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.4">
               <ellipse cx="12" cy="6" rx="7" ry="3" stroke="currentColor" strokeWidth="2" />
               <path d="M5 6v12c0 1.66 3.13 3 7 3s7-1.34 7-3V6" stroke="currentColor" strokeWidth="2" />
               <path d="M5 12c0 1.66 3.13 3 7 3s7-1.34 7-3" stroke="currentColor" strokeWidth="2" />
             </svg>
             {/* Code brackets */}
-            <svg className="absolute -bottom-2 left-1/4 w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="none">
+            <svg className="absolute -bottom-2 left-1/4 w-5 h-5 text-blue-700" viewBox="0 0 24 24" fill="none">
               <path d="M8 4L3 12l5 8M16 4l5 8-5 8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
 
           {/* Inner ring */}
-          <div className="ring ring-1 absolute inset-12 rounded-full border-2 border-blue-400/60 opacity-0">
+          <div className="ring ring-1 absolute inset-12 rounded-full border-2 border-blue-700/60 opacity-0">
             {/* Checkmark */}
-            <svg className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.5">
+            <svg className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.5">
               <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
               <path d="M8 12l3 3 5-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             {/* Warning */}
-            <svg className="absolute top-1/2 -left-2.5 -translate-y-1/2 w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.45">
+            <svg className="absolute top-1/2 -left-2.5 -translate-y-1/2 w-5 h-5 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.45">
               <path d="M12 3L2 21h20L12 3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
               <path d="M12 10v4M12 17v.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
             </svg>
@@ -236,8 +377,8 @@ function SetupVisual() {
 
           {/* Center core - Proliferate logo style */}
           <div className="center-core absolute inset-0 flex items-center justify-center scale-0">
-            <div className="w-14 h-14 rounded-xl bg-blue-500/35 border-2 border-blue-400 flex items-center justify-center">
-              <svg className="w-7 h-7 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.5">
+            <div className="w-14 h-14 rounded-xl bg-blue-500/35 border-2 border-blue-700 flex items-center justify-center">
+              <svg className="w-7 h-7 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.5">
                 <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
                 <path d="M2 17l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
                 <path d="M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
@@ -329,6 +470,10 @@ const errorIcons = [AuthErrorIcon, InfraErrorIcon, DataErrorIcon, NetworkErrorIc
 // Scattered errors organize into card deck
 function TriageVisual() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [dismissedCards, setDismissedCards] = useState<number[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartX = useRef(0);
+  const currentCardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -395,6 +540,52 @@ function TriageVisual() {
     return () => ctx.revert();
   }, []);
 
+  const handlePointerDown = (e: React.PointerEvent, cardId: number, cardEl: HTMLDivElement) => {
+    if (dismissedCards.includes(cardId)) return;
+    setIsDragging(true);
+    dragStartX.current = e.clientX;
+    currentCardRef.current = cardEl;
+    cardEl.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent, cardId: number) => {
+    if (!isDragging || !currentCardRef.current || dismissedCards.includes(cardId)) return;
+    const deltaX = e.clientX - dragStartX.current;
+    const rotation = deltaX * 0.1;
+    gsap.set(currentCardRef.current, { x: deltaX, rotation });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent, cardId: number) => {
+    if (!isDragging || !currentCardRef.current) return;
+    setIsDragging(false);
+    const deltaX = e.clientX - dragStartX.current;
+    const card = currentCardRef.current;
+
+    if (Math.abs(deltaX) > 80) {
+      // Swipe away
+      const direction = deltaX > 0 ? 1 : -1;
+      gsap.to(card, {
+        x: direction * 300,
+        rotation: direction * 30,
+        opacity: 0,
+        duration: 0.3,
+        ease: "power2.in",
+        onComplete: () => {
+          setDismissedCards(prev => [...prev, cardId]);
+        }
+      });
+    } else {
+      // Snap back
+      gsap.to(card, {
+        x: cardId * 4,
+        rotation: 0,
+        duration: 0.3,
+        ease: "back.out(1.5)",
+      });
+    }
+    currentCardRef.current = null;
+  };
+
   const cards = [
     { id: 0, priority: "P0", label: "Auth", count: "847" },
     { id: 1, priority: "P1", label: "Infra", count: "234" },
@@ -403,17 +594,28 @@ function TriageVisual() {
     { id: 4, priority: "P2", label: "Runtime", count: "42" },
   ];
 
+  // Get the top visible card (first non-dismissed)
+  const topCardId = cards.find(c => !dismissedCards.includes(c.id))?.id ?? -1;
+
   return (
-    <div ref={containerRef} className="relative w-full h-full flex items-center justify-center">
+    <div ref={containerRef} className="relative w-full h-full flex items-center justify-center overflow-hidden">
       <div className="triage-container relative opacity-0">
         {/* Stacked cards */}
         <div className="relative w-56 h-36">
           {cards.map((card) => {
             const IconComponent = errorIcons[card.id];
+            const isTopCard = card.id === topCardId;
+            const isDismissed = dismissedCards.includes(card.id);
+            // Top card gets highest z-index, dismissed cards get lowest
+            const zIndex = isDismissed ? 0 : (isTopCard ? 20 : (10 - card.id));
             return (
               <div
                 key={card.id}
-                className={`error-card error-card-${card.id} absolute inset-0 bg-neutral-900 border border-neutral-700 rounded-lg p-3 opacity-0`}
+                onPointerDown={(e) => isTopCard && handlePointerDown(e, card.id, e.currentTarget)}
+                onPointerMove={(e) => isTopCard && handlePointerMove(e, card.id)}
+                onPointerUp={(e) => isTopCard && handlePointerUp(e, card.id)}
+                className={`error-card error-card-${card.id} absolute inset-0 bg-neutral-900 border border-neutral-700 rounded-lg p-3 opacity-0 ${isTopCard && !isDismissed ? 'cursor-grab active:cursor-grabbing' : ''} ${isDismissed ? 'pointer-events-none' : ''}`}
+                style={{ touchAction: 'none', zIndex }}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -435,7 +637,7 @@ function TriageVisual() {
 
         {/* Label */}
         <div className="triage-label text-center text-neutral-500 text-[11px] mt-8 opacity-0">
-          Sorted by business impact
+          {dismissedCards.length > 0 ? 'Swipe to dismiss' : 'Sorted by business impact'}
         </div>
       </div>
     </div>
