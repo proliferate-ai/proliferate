@@ -1,7 +1,7 @@
 
-const Mars = "https://d1uh4o7rpdqkkl.cloudfront.net/assets/hero/martian.webp"
-const Telescope = "https://d1uh4o7rpdqkkl.cloudfront.net/assets/hero/telescope.webp"
-const ToolBox = "https://d1uh4o7rpdqkkl.cloudfront.net/assets/hero/toolbox.webp"
+import Mars from "@/public/assets/hero/martian.webp"
+import Telescope from "@/public/assets/hero/telescope.webp"
+import ToolBox from "@/public/assets/hero/toolbox.webp"
 import Image from "next/image"
 
 export interface IconProps {

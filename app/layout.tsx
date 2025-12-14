@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   authors: [{ name: "Proliferate" }],
   creator: "Proliferate",
   publisher: "Proliferate",
+  metadataBase: new URL("https://withProliferate.com"),
 
   // Open Graph meta tags for social media sharing
   openGraph: {
@@ -30,7 +31,7 @@ export const metadata: Metadata = {
     siteName: "Proliferate",
     images: [
       {
-        url: "https://d1uh4o7rpdqkkl.cloudfront.net/og.webp",
+        url: "/og.webp",
         width: 1200,
         height: 630,
         alt: "Proliferate - Account-Level Bug Intelligence for B2B",
@@ -46,7 +47,7 @@ export const metadata: Metadata = {
     creator: "@withProliferate",
     title: "Proliferate | Know When Your Biggest Customers Are Struggling",
     description: "The B2B observability platform that shows you what's happening inside each account. Fix bugs before customers email you.",
-    images: ["https://d1uh4o7rpdqkkl.cloudfront.net/og.webp"]
+    images: ["/og.webp"]
   },
   
   // Additional meta tags
