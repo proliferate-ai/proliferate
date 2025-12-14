@@ -3,6 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 
+// Preload all background images
+const backgroundImages = [
+  '/assets/hero/mars.jpeg',
+  '/assets/hero/mars-2.jpeg',
+  '/assets/hero/mars-3.jpeg',
+  '/assets/hero/mars-4.jpeg',
+];
+
 const scrollSteps = [
   {
     id: "observe",
@@ -415,6 +423,7 @@ const visualComponents: Record<string, React.FC> = {
 export function HomeStickyScrollSection() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [displayIndex, setDisplayIndex] = useState(0);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const visualWrapperRef = useRef<HTMLDivElement>(null);
@@ -424,6 +433,22 @@ export function HomeStickyScrollSection() {
   const isAnimatingRef = useRef(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const MIN_STEP_DURATION = 600;
+
+  // Preload all background images on mount
+  useEffect(() => {
+    const preloadImages = backgroundImages.map((src) => {
+      return new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => resolve(); // Still resolve on error to not block
+        img.src = src;
+      });
+    });
+
+    Promise.all(preloadImages).then(() => {
+      setImagesLoaded(true);
+    });
+  }, []);
 
   useEffect(() => {
     const observers: IntersectionObserver[] = [];
@@ -558,7 +583,8 @@ export function HomeStickyScrollSection() {
                   <div
                     className="relative w-full h-full rounded-xl border border-neutral-900 overflow-hidden transition-all duration-500"
                     style={{
-                      backgroundImage: `url('/assets/hero/mars${displayIndex === 0 ? '' : `-${displayIndex + 1}`}.jpeg')`,
+                      backgroundColor: '#1a1512',
+                      backgroundImage: imagesLoaded ? `url('${backgroundImages[displayIndex]}')` : undefined,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                     }}
