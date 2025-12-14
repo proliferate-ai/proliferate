@@ -51,7 +51,6 @@ function ActionVisual() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFixed, setIsFixed] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
-  const shardsRef = useRef<HTMLDivElement[]>([]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -140,7 +139,7 @@ function ActionVisual() {
     if (isFixed) return;
     setIsFixed(true);
 
-    const ctx = gsap.context(() => {
+    gsap.context(() => {
       const tl = gsap.timeline();
 
       // Button shows success
