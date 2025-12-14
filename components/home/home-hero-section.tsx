@@ -79,7 +79,7 @@ export function HomeHeroSection() {
         </div>
 
         {/* Company Logos */}
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-full max-w-5xl px-4">
+        <div className="absolute pointer-events-none bottom-16 left-1/2 -translate-x-1/2 w-full max-w-5xl px-4">
           <HomeCompanyLogos />
         </div>
       </div>

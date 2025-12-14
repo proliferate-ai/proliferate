@@ -16,7 +16,7 @@ const features = [
     category: "CONTEXT",
     title: "Smart integrations",
     description:
-      "We don't just tell you when things break, but why, for whom, and where to look.",
+      "We have the context necessary to actually take things off your plate.",
       icon: <ToolBoxIcon size={256} color="white" />,
     },
   {
@@ -24,7 +24,7 @@ const features = [
     category: "FIX",
     title: "Auto-pilot fix",
     description:
-      "Just copy paste into Cursor",
+      "Stop doing grunt work. Let Proliferate take care of it.",
     icon: <MarsIcon size={256} color="white" />,
   },
 ];

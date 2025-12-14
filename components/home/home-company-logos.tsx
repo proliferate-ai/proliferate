@@ -19,7 +19,7 @@ export function HomeCompanyLogos() {
             key={index}
             src={logo.src}
             alt={logo.alt}
-            className="h-10 cursor-pointer w-auto object-contain rounded-xl p-1.5 opacity-70 hover:opacity-100 transition-all"
+            className="h-10 cursor-default w-auto object-contain rounded-xl p-1.5 opacity-70 hover:opacity-100 transition-all"
           />
         ))}
       </div>
