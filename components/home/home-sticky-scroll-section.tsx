@@ -139,7 +139,7 @@ function ActionVisual() {
   );
 }
 
-// Abstract rings loading animation
+// Orbital rings with varied shapes
 function SetupVisual() {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -150,7 +150,7 @@ function SetupVisual() {
     const ctx = gsap.context(() => {
       gsap.set(".setup-container", { opacity: 0 });
       gsap.set(".ring", { scale: 0, opacity: 0, rotation: 0 });
-      gsap.set(".center-dot", { scale: 0 });
+      gsap.set(".center-core", { scale: 0 });
       gsap.set(".setup-label", { opacity: 0, y: 10 });
 
       tl.to(".setup-container", { opacity: 1, duration: 0.3 });
@@ -160,16 +160,16 @@ function SetupVisual() {
       tl.to(".ring-2", { scale: 1, opacity: 1, duration: 0.5, ease: "power2.out" }, "-=0.3");
       tl.to(".ring-3", { scale: 1, opacity: 1, duration: 0.5, ease: "power2.out" }, "-=0.3");
 
-      // Rings rotate
-      tl.to(".ring-1", { rotation: 360, duration: 2, ease: "none", repeat: -1 }, "-=0.5");
-      tl.to(".ring-2", { rotation: -360, duration: 3, ease: "none", repeat: -1 }, "-=2");
-      tl.to(".ring-3", { rotation: 360, duration: 4, ease: "none", repeat: -1 }, "-=3");
+      // Rings rotate at different speeds
+      tl.to(".ring-1", { rotation: 360, duration: 8, ease: "none", repeat: -1 }, "-=0.5");
+      tl.to(".ring-2", { rotation: -360, duration: 12, ease: "none", repeat: -1 }, "-=8");
+      tl.to(".ring-3", { rotation: 360, duration: 16, ease: "none", repeat: -1 }, "-=12");
 
-      // Center dot
-      tl.to(".center-dot", { scale: 1, duration: 0.4, ease: "back.out(2)" }, "-=3.5");
+      // Center core
+      tl.to(".center-core", { scale: 1, duration: 0.4, ease: "back.out(2)" }, "-=15");
 
       // Label
-      tl.to(".setup-label", { opacity: 1, y: 0, duration: 0.4 }, "-=3");
+      tl.to(".setup-label", { opacity: 1, y: 0, duration: 0.4 }, "-=14.5");
 
     }, containerRef);
 
@@ -179,42 +179,152 @@ function SetupVisual() {
   return (
     <div ref={containerRef} className="relative w-full h-full flex items-center justify-center">
       <div className="setup-container relative opacity-0">
-        {/* Concentric rings */}
         <div className="relative w-48 h-48">
-          <div className="ring ring-3 absolute inset-0 rounded-full border-2 border-blue-500/30 opacity-0" />
-          <div className="ring ring-2 absolute inset-6 rounded-full border-2 border-dashed border-blue-400/40 opacity-0" />
-          <div className="ring ring-1 absolute inset-12 rounded-full border-2 border-blue-400/60 opacity-0" />
+          {/* Outer ring */}
+          <div className="ring ring-3 absolute inset-0 rounded-full border-2 border-blue-500/40 opacity-0">
+            {/* File icon */}
+            <svg className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.4">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" />
+              <path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" />
+            </svg>
+            {/* Git branch */}
+            <svg className="absolute top-1/4 -right-3 w-6 h-6 text-blue-400" viewBox="0 0 24 24" fill="none">
+              <circle cx="6" cy="6" r="2.5" fill="currentColor" fillOpacity="0.5" stroke="currentColor" strokeWidth="2" />
+              <circle cx="18" cy="18" r="2.5" fill="currentColor" fillOpacity="0.5" stroke="currentColor" strokeWidth="2" />
+              <circle cx="6" cy="18" r="2.5" fill="currentColor" fillOpacity="0.5" stroke="currentColor" strokeWidth="2" />
+              <path d="M6 8.5v7M18 15.5V9a3 3 0 0 0-3-3H9" stroke="currentColor" strokeWidth="2" />
+            </svg>
+            {/* Terminal */}
+            <svg className="absolute bottom-6 -left-3 w-6 h-6 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.35">
+              <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
+              <path d="M6 9l3 3-3 3M12 15h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </div>
 
-          {/* Dots on rings */}
-          <div className="ring ring-1 absolute inset-12 rounded-full opacity-0">
-            <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-blue-400" />
-          </div>
-          <div className="ring ring-2 absolute inset-6 rounded-full opacity-0">
-            <div className="absolute top-1/2 -right-1 -translate-y-1/2 w-2 h-2 rounded-full bg-blue-400/80" />
-            <div className="absolute -bottom-1 left-1/3 w-2 h-2 rounded-full bg-blue-400/80" />
-          </div>
-          <div className="ring ring-3 absolute inset-0 rounded-full opacity-0">
-            <div className="absolute top-4 right-4 w-1.5 h-1.5 rounded-full bg-blue-400/60" />
-            <div className="absolute bottom-8 left-2 w-1.5 h-1.5 rounded-full bg-blue-400/60" />
-            <div className="absolute top-1/2 -left-0.5 w-1.5 h-1.5 rounded-full bg-blue-400/60" />
+          {/* Middle ring */}
+          <div className="ring ring-2 absolute inset-6 rounded-full border-2 border-dashed border-blue-400/50 opacity-0">
+            {/* Bug icon */}
+            <svg className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.45">
+              <ellipse cx="12" cy="14" rx="5" ry="6" stroke="currentColor" strokeWidth="2" />
+              <path d="M12 8V6M8 9L5 7M16 9l3-2M5 12H2M22 12h-3M5 17l-2 2M19 17l2 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            {/* Database */}
+            <svg className="absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.4">
+              <ellipse cx="12" cy="6" rx="7" ry="3" stroke="currentColor" strokeWidth="2" />
+              <path d="M5 6v12c0 1.66 3.13 3 7 3s7-1.34 7-3V6" stroke="currentColor" strokeWidth="2" />
+              <path d="M5 12c0 1.66 3.13 3 7 3s7-1.34 7-3" stroke="currentColor" strokeWidth="2" />
+            </svg>
+            {/* Code brackets */}
+            <svg className="absolute -bottom-2 left-1/4 w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="none">
+              <path d="M8 4L3 12l5 8M16 4l5 8-5 8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </div>
 
-          {/* Center */}
-          <div className="center-dot absolute inset-0 flex items-center justify-center scale-0">
-            <div className="w-10 h-10 rounded-full bg-blue-500/30 border-2 border-blue-400 flex items-center justify-center">
-              <div className="w-4 h-4 rounded-full bg-blue-400" />
+          {/* Inner ring */}
+          <div className="ring ring-1 absolute inset-12 rounded-full border-2 border-blue-400/60 opacity-0">
+            {/* Checkmark */}
+            <svg className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.5">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+              <path d="M8 12l3 3 5-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {/* Warning */}
+            <svg className="absolute top-1/2 -left-2.5 -translate-y-1/2 w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.45">
+              <path d="M12 3L2 21h20L12 3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+              <path d="M12 10v4M12 17v.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+
+          {/* Center core - Proliferate logo style */}
+          <div className="center-core absolute inset-0 flex items-center justify-center scale-0">
+            <div className="w-14 h-14 rounded-xl bg-blue-500/35 border-2 border-blue-400 flex items-center justify-center">
+              <svg className="w-7 h-7 text-blue-400" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.5">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                <path d="M2 17l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                <path d="M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+              </svg>
             </div>
           </div>
         </div>
 
         {/* Label */}
-        <div className="setup-label absolute -bottom-8 left-1/2 -translate-x-1/2 text-blue-300 text-[11px] whitespace-nowrap opacity-0">
+        <div className="setup-label absolute -bottom-8 left-1/2 -translate-x-1/2 text-blue-300/70 text-[11px] whitespace-nowrap opacity-0">
           Connecting to your codebase
         </div>
       </div>
     </div>
   );
 }
+
+// Minimalist animated error type icons
+function AuthErrorIcon() {
+  return (
+    <div className="error-icon relative w-7 h-7">
+      <svg className="w-7 h-7 text-red-400" viewBox="0 0 24 24" fill="none">
+        <rect x="6" y="11" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M8 11V8a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+      <div className="icon-pulse absolute inset-0 rounded-full border border-red-400/50" />
+    </div>
+  );
+}
+
+function InfraErrorIcon() {
+  return (
+    <div className="error-icon relative w-7 h-7">
+      <svg className="w-7 h-7 text-orange-400" viewBox="0 0 24 24" fill="none">
+        <rect x="5" y="4" width="14" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="5" y="14" width="14" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="8" cy="7" r="1" fill="currentColor" />
+        <circle cx="8" cy="17" r="1" fill="currentColor" opacity="0.4" />
+      </svg>
+      <div className="icon-pulse absolute inset-0 rounded-full border border-orange-400/50" />
+    </div>
+  );
+}
+
+function DataErrorIcon() {
+  return (
+    <div className="error-icon relative w-7 h-7">
+      <svg className="w-7 h-7 text-yellow-400" viewBox="0 0 24 24" fill="none">
+        <ellipse cx="12" cy="6" rx="6" ry="2" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M6 6v12c0 1.1 2.69 2 6 2s6-.9 6-2V6" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M6 12c0 1.1 2.69 2 6 2s6-.9 6-2" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+      <div className="icon-pulse absolute inset-0 rounded-full border border-yellow-400/50" />
+    </div>
+  );
+}
+
+function NetworkErrorIcon() {
+  return (
+    <div className="error-icon relative w-7 h-7">
+      <svg className="w-7 h-7 text-purple-400" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="6" cy="6" r="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="18" cy="6" r="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <circle cx="6" cy="18" r="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M10.5 10.5L7.5 7.5M13.5 10.5l3-3M10.5 13.5L7.5 16.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M13.5 13.5l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 2" />
+      </svg>
+      <div className="icon-pulse absolute inset-0 rounded-full border border-purple-400/50" />
+    </div>
+  );
+}
+
+function RuntimeErrorIcon() {
+  return (
+    <div className="error-icon relative w-7 h-7">
+      <svg className="w-7 h-7 text-cyan-400" viewBox="0 0 24 24" fill="none">
+        <path d="M8 5L4 12l4 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M16 5l4 7-4 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+      <div className="icon-pulse absolute inset-0 rounded-full border border-cyan-400/50" />
+    </div>
+  );
+}
+
+const errorIcons = [AuthErrorIcon, InfraErrorIcon, DataErrorIcon, NetworkErrorIcon, RuntimeErrorIcon];
 
 // Scattered errors organize into card deck
 function TriageVisual() {
@@ -233,6 +343,7 @@ function TriageVisual() {
       gsap.set(".error-card-3", { x: 70, y: 30, rotation: 18, opacity: 0 });
       gsap.set(".error-card-4", { x: -20, y: 50, rotation: -5, opacity: 0 });
       gsap.set(".triage-label", { opacity: 0 });
+      gsap.set(".icon-pulse", { scale: 0.8, opacity: 0 });
 
       tl.to(".triage-container", { opacity: 1, duration: 0.3 });
 
@@ -241,6 +352,23 @@ function TriageVisual() {
         opacity: 1,
         duration: 0.3,
         stagger: 0.08,
+      });
+
+      // Icon pulse animation
+      tl.to(".icon-pulse", {
+        scale: 1.4,
+        opacity: 0.8,
+        duration: 0.3,
+        stagger: 0.06,
+        ease: "power2.out",
+      }, "-=0.2");
+
+      tl.to(".icon-pulse", {
+        scale: 1.8,
+        opacity: 0,
+        duration: 0.4,
+        stagger: 0.06,
+        ease: "power2.out",
       });
 
       // Brief chaos - cards shake
@@ -268,33 +396,41 @@ function TriageVisual() {
   }, []);
 
   const cards = [
-    { id: 0, priority: "P1", label: "Critical", count: "847" },
-    { id: 1, priority: "P2", label: "High", count: "234" },
-    { id: 2, priority: "P2", label: "High", count: "156" },
-    { id: 3, priority: "P3", label: "Medium", count: "89" },
-    { id: 4, priority: "P3", label: "Medium", count: "42" },
+    { id: 0, priority: "P0", label: "Auth", count: "847" },
+    { id: 1, priority: "P1", label: "Infra", count: "234" },
+    { id: 2, priority: "P1", label: "Data", count: "156" },
+    { id: 3, priority: "P2", label: "Network", count: "89" },
+    { id: 4, priority: "P2", label: "Runtime", count: "42" },
   ];
 
   return (
     <div ref={containerRef} className="relative w-full h-full flex items-center justify-center">
       <div className="triage-container relative opacity-0">
         {/* Stacked cards */}
-        <div className="relative w-52 h-32">
-          {cards.map((card) => (
-            <div
-              key={card.id}
-              className={`error-card error-card-${card.id} absolute inset-0 bg-neutral-900 border border-neutral-700 rounded-lg p-3 opacity-0`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-mono font-bold text-neutral-400 bg-neutral-800 px-1.5 py-0.5 rounded">
-                  {card.priority}
-                </span>
-                <span className="text-neutral-500 text-[10px]">{card.label}</span>
+        <div className="relative w-56 h-36">
+          {cards.map((card) => {
+            const IconComponent = errorIcons[card.id];
+            return (
+              <div
+                key={card.id}
+                className={`error-card error-card-${card.id} absolute inset-0 bg-neutral-900 border border-neutral-700 rounded-lg p-3 opacity-0`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-mono font-bold text-neutral-400 bg-neutral-800 px-1.5 py-0.5 rounded">
+                        {card.priority}
+                      </span>
+                      <span className="text-neutral-500 text-[10px]">{card.label}</span>
+                    </div>
+                    <div className="text-neutral-300 text-lg font-mono font-bold">{card.count}</div>
+                    <div className="text-neutral-500 text-[10px]">errors</div>
+                  </div>
+                  <IconComponent />
+                </div>
               </div>
-              <div className="text-neutral-300 text-lg font-mono font-bold">{card.count}</div>
-              <div className="text-neutral-500 text-[10px]">errors</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Label */}
