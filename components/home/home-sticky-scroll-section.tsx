@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import gsap from "gsap";
 
 // Preload all background images
@@ -271,6 +272,11 @@ function SetupVisual() {
       tl.to(".ring-2", { rotation: -360, duration: 12, ease: "none", repeat: -1 }, "-=8");
       tl.to(".ring-3", { rotation: 360, duration: 16, ease: "none", repeat: -1 }, "-=12");
 
+      // Counter-rotate logos to keep them upright
+      tl.to(".logo-ring-1", { rotation: -360, duration: 8, ease: "none", repeat: -1 }, "-=16");
+      tl.to(".logo-ring-2", { rotation: 360, duration: 12, ease: "none", repeat: -1 }, "-=8");
+      tl.to(".logo-ring-3", { rotation: -360, duration: 16, ease: "none", repeat: -1 }, "-=12");
+
       // Center core
       tl.to(".center-core", { scale: 1, duration: 0.4, ease: "back.out(2)" }, "-=15");
 
@@ -322,66 +328,46 @@ function SetupVisual() {
 
           {/* Outer ring */}
           <div className="ring ring-3 absolute inset-0 rounded-full border-2 border-blue-500/40 opacity-0">
-            {/* File icon */}
-            <svg className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.4">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" />
-              <path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" />
-            </svg>
-            {/* Git branch */}
-            <svg className="absolute top-1/4 -right-3 w-6 h-6 text-blue-700" viewBox="0 0 24 24" fill="none">
-              <circle cx="6" cy="6" r="2.5" fill="currentColor" fillOpacity="0.5" stroke="currentColor" strokeWidth="2" />
-              <circle cx="18" cy="18" r="2.5" fill="currentColor" fillOpacity="0.5" stroke="currentColor" strokeWidth="2" />
-              <circle cx="6" cy="18" r="2.5" fill="currentColor" fillOpacity="0.5" stroke="currentColor" strokeWidth="2" />
-              <path d="M6 8.5v7M18 15.5V9a3 3 0 0 0-3-3H9" stroke="currentColor" strokeWidth="2" />
-            </svg>
-            {/* Terminal */}
-            <svg className="absolute bottom-6 -left-3 w-6 h-6 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.35">
-              <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
-              <path d="M6 9l3 3-3 3M12 15h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
+            <div className="logo-ring-3 absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-white/10 p-1 flex items-center justify-center">
+              <Image src="/assets/integrations/github.png" alt="GitHub" width={20} height={20} className="object-contain" />
+            </div>
+            <div className="logo-ring-3 absolute top-1/4 -right-3 w-6 h-6 rounded-full bg-white/10 p-1 flex items-center justify-center">
+              <Image src="/assets/integrations/slack.png" alt="Slack" width={20} height={20} className="object-contain" />
+            </div>
+            <div className="logo-ring-3 absolute bottom-6 -left-3 w-6 h-6 rounded-full bg-white/10 p-1 flex items-center justify-center">
+              <Image src="/assets/integrations/gmail.png" alt="Gmail" width={20} height={20} className="object-contain" />
+            </div>
           </div>
 
           {/* Middle ring */}
-          <div className="ring ring-2 absolute inset-6 rounded-full border-2 border-dashed border-blue-700/50 opacity-0">
-            {/* Bug icon */}
-            <svg className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.45">
-              <ellipse cx="12" cy="14" rx="5" ry="6" stroke="currentColor" strokeWidth="2" />
-              <path d="M12 8V6M8 9L5 7M16 9l3-2M5 12H2M22 12h-3M5 17l-2 2M19 17l2 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            {/* Database */}
-            <svg className="absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.4">
-              <ellipse cx="12" cy="6" rx="7" ry="3" stroke="currentColor" strokeWidth="2" />
-              <path d="M5 6v12c0 1.66 3.13 3 7 3s7-1.34 7-3V6" stroke="currentColor" strokeWidth="2" />
-              <path d="M5 12c0 1.66 3.13 3 7 3s7-1.34 7-3" stroke="currentColor" strokeWidth="2" />
-            </svg>
-            {/* Code brackets */}
-            <svg className="absolute -bottom-2 left-1/4 w-5 h-5 text-blue-700" viewBox="0 0 24 24" fill="none">
-              <path d="M8 4L3 12l5 8M16 4l5 8-5 8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+          <div className="ring ring-2 absolute inset-6 rounded-full  opacity-0">
+            <div className="logo-ring-2 absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-white/10 p-1 flex items-center justify-center">
+              <Image src="/assets/integrations/react.png" alt="React" width={20} height={20} className="object-contain" />
+            </div>
+            <div className="logo-ring-2 absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-6 rounded-full bg-white/10 p-1 flex items-center justify-center">
+              <Image src="/assets/integrations/postgres.png" alt="PostgreSQL" width={20} height={20} className="object-contain" />
+            </div>
+            <div className="logo-ring-2 absolute -bottom-2 left-1/4 w-5 h-5 rounded-full bg-white/10 p-0.5 flex items-center justify-center">
+              <Image src="/assets/integrations/python.png" alt="Python" width={18} height={18} className="object-contain" />
+            </div>
           </div>
 
           {/* Inner ring */}
-          <div className="ring ring-1 absolute inset-12 rounded-full border-2 border-blue-700/60 opacity-0">
-            {/* Checkmark */}
-            <svg className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.5">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-              <path d="M8 12l3 3 5-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            {/* Warning */}
-            <svg className="absolute top-1/2 -left-2.5 -translate-y-1/2 w-5 h-5 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.45">
-              <path d="M12 3L2 21h20L12 3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-              <path d="M12 10v4M12 17v.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-            </svg>
+          <div className="ring ring-1 absolute inset-12 rounded-full  opacity-0">
+            <div className="logo-ring-1 absolute -top-2.5 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-white/10 p-0.5 flex items-center justify-center">
+              <Image src="/assets/integrations/linear.svg" alt="Linear" width={16} height={16} className="object-contain" />
+            </div>
           </div>
 
           {/* Center core - Proliferate logo style */}
           <div className="center-core absolute inset-0 flex items-center justify-center scale-0">
-            <div className="w-14 h-14 rounded-xl bg-blue-500/35 border-2 border-blue-700 flex items-center justify-center">
-              <svg className="w-7 h-7 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.5">
+            <div className="w-14 h-14 rounded-xl bg-blue-500/35 border border-blue-700/40 flex items-center justify-center">
+              <Image src="/logo.png" alt="Proliferate" width={28} height={28} className="object-contain" />
+              {/* <svg className="w-7 h-7 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.5">
                 <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
                 <path d="M2 17l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
                 <path d="M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-              </svg>
+              </svg> */}
             </div>
           </div>
         </div>
@@ -778,7 +764,7 @@ export function HomeStickyScrollSection() {
   useEffect(() => {
     const preloadImages = backgroundImages.map((src) => {
       return new Promise<void>((resolve) => {
-        const img = new Image();
+        const img = new window.Image();
         img.onload = () => resolve();
         img.onerror = () => resolve(); // Still resolve on error to not block
         img.src = src;
@@ -877,7 +863,7 @@ export function HomeStickyScrollSection() {
     }
   }, [activeIndex]);
 
-  const animateStepRef = useRef<() => void>(() => {});
+  const animateStepRef = useRef<() => void>(() => { });
 
   animateStepRef.current = () => {
     const target = targetIndexRef.current;
@@ -1011,11 +997,10 @@ export function HomeStickyScrollSection() {
                     {scrollSteps.map((step, index) => (
                       <div
                         key={step.id}
-                        className={`absolute inset-0 transition-all duration-500 ease-out ${
-                          activeIndex === index
+                        className={`absolute inset-0 transition-all duration-500 ease-out ${activeIndex === index
                             ? "opacity-100 translate-y-0"
                             : "opacity-0 translate-y-4 pointer-events-none"
-                        }`}
+                          }`}
                       >
                         <div className="text-center">
                           <span className="inline-block px-2.5 py-1 rounded-full text-xs font-medium mb-3 bg-white/10 text-white/80">
@@ -1036,11 +1021,10 @@ export function HomeStickyScrollSection() {
                         <button
                           key={index}
                           onClick={() => handleDotClick(index)}
-                          className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                            activeIndex === index
+                          className={`w-2 h-2 rounded-full transition-all duration-300 ${activeIndex === index
                               ? "bg-white/80 w-4"
                               : "bg-white/30 hover:bg-white/50"
-                          }`}
+                            }`}
                           aria-label={`Go to step ${index + 1}`}
                         />
                       ))}
@@ -1054,17 +1038,15 @@ export function HomeStickyScrollSection() {
                       ref={(el) => {
                         sectionRefs.current[index] = el;
                       }}
-                      className={`py-8 lg:py-16 lg:min-h-[380px] flex items-start lg:items-center transition-all duration-300 ${
-                        activeIndex === index ? "opacity-100" : "lg:opacity-30"
-                      }`}
+                      className={`py-8 lg:py-16 lg:min-h-[380px] flex items-start lg:items-center transition-all duration-300 ${activeIndex === index ? "opacity-100" : "lg:opacity-30"
+                        }`}
                     >
                       <div>
                         <span
-                          className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium mb-3 transition-all duration-300 ${
-                            activeIndex === index
+                          className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium mb-3 transition-all duration-300 ${activeIndex === index
                               ? "bg-white/10 text-white/80"
                               : "bg-white/5 text-white/40"
-                          }`}
+                            }`}
                         >
                           {step.subtitle}
                         </span>
