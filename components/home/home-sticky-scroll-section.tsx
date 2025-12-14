@@ -761,6 +761,7 @@ export function HomeStickyScrollSection() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [displayIndex, setDisplayIndex] = useState(0);
   const [imagesLoaded, setImagesLoaded] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const visualWrapperRef = useRef<HTMLDivElement>(null);
@@ -769,7 +770,9 @@ export function HomeStickyScrollSection() {
   const currentIndexRef = useRef(0);
   const isAnimatingRef = useRef(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const mobileTimerRef = useRef<NodeJS.Timeout | null>(null);
   const MIN_STEP_DURATION = 600;
+  const MOBILE_ROTATION_INTERVAL = 5000; // 5 seconds per step on mobile
 
   // Preload all background images on mount
   useEffect(() => {
@@ -787,7 +790,55 @@ export function HomeStickyScrollSection() {
     });
   }, []);
 
+  // Detect mobile breakpoint
   useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024); // lg breakpoint
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Mobile auto-rotation timer
+  useEffect(() => {
+    if (!isMobile) {
+      if (mobileTimerRef.current) {
+        clearInterval(mobileTimerRef.current);
+        mobileTimerRef.current = null;
+      }
+      return;
+    }
+
+    // Auto-advance on mobile
+    mobileTimerRef.current = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % scrollSteps.length);
+    }, MOBILE_ROTATION_INTERVAL);
+
+    return () => {
+      if (mobileTimerRef.current) {
+        clearInterval(mobileTimerRef.current);
+      }
+    };
+  }, [isMobile]);
+
+  // Reset timer when user manually selects a step (mobile)
+  const handleDotClick = (index: number) => {
+    setActiveIndex(index);
+    // Reset the timer
+    if (mobileTimerRef.current) {
+      clearInterval(mobileTimerRef.current);
+      mobileTimerRef.current = setInterval(() => {
+        setActiveIndex((prev) => (prev + 1) % scrollSteps.length);
+      }, MOBILE_ROTATION_INTERVAL);
+    }
+  };
+
+  // Desktop scroll-based IntersectionObserver
+  useEffect(() => {
+    if (isMobile) return; // Skip on mobile
+
     const observers: IntersectionObserver[] = [];
 
     sectionRefs.current.forEach((ref, index) => {
@@ -814,7 +865,7 @@ export function HomeStickyScrollSection() {
     return () => {
       observers.forEach((observer) => observer.disconnect());
     };
-  }, []);
+  }, [isMobile]);
 
   // Update target when scroll position changes
   useEffect(() => {
@@ -892,6 +943,9 @@ export function HomeStickyScrollSection() {
       if (tweenRef.current) {
         tweenRef.current.kill();
       }
+      if (mobileTimerRef.current) {
+        clearInterval(mobileTimerRef.current);
+      }
     };
   }, []);
 
@@ -949,35 +1003,81 @@ export function HomeStickyScrollSection() {
                 </div> */}
               </div>
 
-              {/* Right: Scrolling text sections */}
+              {/* Right: Text sections - rotating on mobile, scrolling on desktop */}
               <div className="order-2 lg:order-2">
-                {scrollSteps.map((step, index) => (
-                  <div
-                    key={step.id}
-                    ref={(el) => {
-                      sectionRefs.current[index] = el;
-                    }}
-                    className={`py-8 lg:py-16 lg:min-h-[380px] flex items-start lg:items-center transition-all duration-300 ${activeIndex === index ? "opacity-100" : "lg:opacity-30"
-                      }`}
-                  >
-                    <div>
-                      <span
-                        className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium mb-3 transition-all duration-300 ${activeIndex === index
-                          ? "bg-white/10 text-white/80"
-                          : "bg-white/5 text-white/40"
-                          }`}
+                {isMobile ? (
+                  /* Mobile: Show only active step with fade animation */
+                  <div className="relative min-h-[180px]">
+                    {scrollSteps.map((step, index) => (
+                      <div
+                        key={step.id}
+                        className={`absolute inset-0 transition-all duration-500 ease-out ${
+                          activeIndex === index
+                            ? "opacity-100 translate-y-0"
+                            : "opacity-0 translate-y-4 pointer-events-none"
+                        }`}
                       >
-                        {step.subtitle}
-                      </span>
-                      <h3 className="text-xl sm:text-2xl lg:text-3xl font-semibold text-white mb-3">
-                        {step.title}
-                      </h3>
-                      <p className="text-white/50 text-sm sm:text-base leading-relaxed max-w-sm">
-                        {step.description}
-                      </p>
+                        <div className="text-center">
+                          <span className="inline-block px-2.5 py-1 rounded-full text-xs font-medium mb-3 bg-white/10 text-white/80">
+                            {step.subtitle}
+                          </span>
+                          <h3 className="text-xl sm:text-2xl font-semibold text-white mb-3">
+                            {step.title}
+                          </h3>
+                          <p className="text-white/50 text-sm sm:text-base leading-relaxed max-w-sm mx-auto">
+                            {step.description}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    {/* Progress dots */}
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex gap-2">
+                      {scrollSteps.map((_, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleDotClick(index)}
+                          className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                            activeIndex === index
+                              ? "bg-white/80 w-4"
+                              : "bg-white/30 hover:bg-white/50"
+                          }`}
+                          aria-label={`Go to step ${index + 1}`}
+                        />
+                      ))}
                     </div>
                   </div>
-                ))}
+                ) : (
+                  /* Desktop: Scrolling sections */
+                  scrollSteps.map((step, index) => (
+                    <div
+                      key={step.id}
+                      ref={(el) => {
+                        sectionRefs.current[index] = el;
+                      }}
+                      className={`py-8 lg:py-16 lg:min-h-[380px] flex items-start lg:items-center transition-all duration-300 ${
+                        activeIndex === index ? "opacity-100" : "lg:opacity-30"
+                      }`}
+                    >
+                      <div>
+                        <span
+                          className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium mb-3 transition-all duration-300 ${
+                            activeIndex === index
+                              ? "bg-white/10 text-white/80"
+                              : "bg-white/5 text-white/40"
+                          }`}
+                        >
+                          {step.subtitle}
+                        </span>
+                        <h3 className="text-xl sm:text-2xl lg:text-3xl font-semibold text-white mb-3">
+                          {step.title}
+                        </h3>
+                        <p className="text-white/50 text-sm sm:text-base leading-relaxed max-w-sm">
+                          {step.description}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
