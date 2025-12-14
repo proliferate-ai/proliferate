@@ -1,30 +1,63 @@
+"use client";
+
+import { useState } from "react";
 import { WaitlistForm } from "./waitlist-form";
+import { TalkToFounderModal } from "./talk-to-founder-modal";
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
 export function FinalCTASection() {
+  const [isTalkOpen, setIsTalkOpen] = useState(false);
+
   return (
-    <section className="py-24 bg-zinc-950 border-t border-zinc-800">
-      <div className="proliferate-container text-center px-5">
-        <h2 className="text-2xl md:text-4xl font-bold text-white mb-4">
-          Stop finding out about bugs from customer emails
-        </h2>
-        <p className="text-lg text-zinc-400 mb-8 max-w-2xl mx-auto">
-          Your biggest accounts deserve better than aggregate error rates. See exactly what&apos;s happening, account by account.
-        </p>
-        <div className="flex justify-center">
-          <WaitlistForm>
-            <Button
-              size="lg"
-              className="h-12 px-8 text-[16px] rounded-xl bg-white text-black hover:bg-gray-100 font-medium border-[0.5px] border-white/20 inline-flex items-center justify-center"
-              style={{boxShadow: 'rgba(255, 255, 255, 0.04) 0px 3px 3px, rgba(255, 255, 255, 0.05) 0px 1px 2px, rgba(0, 0, 0, 0.05) 0px 6px 12px inset, rgba(0, 0, 0, 0.15) 0px 1px 1px inset'}}
-            >
-              Join early access
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </WaitlistForm>
-        </div>
+    <section className="bg-black px-6 pt-24 pb-16 text-center">
+      {/* Gradient Headline */}
+      <h2
+        className="text-[clamp(2.5rem,8vw,4.5rem)] leading-[1.05] font-bold tracking-[-0.02em] pb-8 bg-clip-text text-transparent"
+        style={{
+          backgroundImage: "linear-gradient(to right bottom, rgb(255, 255, 255) 30%, rgba(255, 255, 255, 0.5))",
+        }}
+      >
+        Errors understood.
+        <br />
+        Fixes delivered.
+      </h2>
+
+      {/* CTA Buttons */}
+      <div className="flex justify-center gap-4">
+        <WaitlistForm>
+          <Button
+            size="lg"
+            className="h-12 px-6 text-base rounded-full bg-white text-black hover:bg-gray-100 font-medium inline-flex items-center justify-center gap-2"
+          >
+            Join early access
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </WaitlistForm>
+        <Button
+          size="lg"
+          variant="outline"
+          className="h-12 px-6 text-base rounded-full border-white/20 bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white font-medium"
+          onClick={() => setIsTalkOpen(true)}
+        >
+          Talk to us
+        </Button>
       </div>
+
+      {/* Large Logo/Wordmark */}
+      <div className="mt-12 -mb-16 relative overflow-hidden">
+        <p
+          className="text-[clamp(4rem,15vw,10rem)] font-bold tracking-[-0.04em] text-white/[0.08] select-none"
+          style={{
+            maskImage: "linear-gradient(to bottom, black 20%, transparent 90%)",
+            WebkitMaskImage: "linear-gradient(to bottom, black 20%, transparent 90%)",
+          }}
+        >
+          Proliferate
+        </p>
+      </div>
+
+      <TalkToFounderModal open={isTalkOpen} onOpenChange={setIsTalkOpen} />
     </section>
   );
 }

@@ -7,6 +7,7 @@ import {
   HomePainSection,
   HomeStickyScrollSection,
 } from "@/components/home";
+import { FinalCTASection } from "@/components/final-cta-section";
 import { Footer } from "@/components/footer";
 import { SearchParamToastWrapper } from "@/components/toasts/SearchParamModal";
 
@@ -25,6 +26,7 @@ export default function HomePage() {
         {/* <HomeHowItWorks /> */}
         {/* <HomeB2BSection /> */}
         {/* <HomeCTASection /> */}
+        <FinalCTASection />
       </main>
       <Footer />
     </>

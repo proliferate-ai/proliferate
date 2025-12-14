@@ -1,11 +1,11 @@
 "use client";
 
 const logos = [
-  { src: "https://d1uh4o7rpdqkkl.cloudfront.net/investors_v2/investors/ycombinator.webp", alt: "Y Combinator" },
-  { src: "https://d1uh4o7rpdqkkl.cloudfront.net/investors_v2/investors/twent.webp", alt: "Twenty Two VC" },
-  { src: "https://d1uh4o7rpdqkkl.cloudfront.net/investors_v2/investors/true.webp", alt: "True Ventures" },
-  { src: "https://d1uh4o7rpdqkkl.cloudfront.net/investors_v2/operators/openai.webp", alt: "OpenAI" },
-  { src: "https://d1uh4o7rpdqkkl.cloudfront.net/investors_v2/founders/supabase.webp", alt: "Supabase" },
+  { src: 'https://d1uh4o7rpdqkkl.cloudfront.net/investors_v2/investors/twent.webp', alt: 'Twenty Two VC' },
+  { src: 'https://d1uh4o7rpdqkkl.cloudfront.net/investors_v2/investors/true.webp', alt: 'True Ventures' },
+  { src: 'https://d1uh4o7rpdqkkl.cloudfront.net/investors_v2/investors/ycombinator.webp', alt: 'Y Combinator' },
+  { src: 'https://d1uh4o7rpdqkkl.cloudfront.net/investors_v2/investors/valon.webp', alt: 'Valon' },
+  { src: 'https://d1uh4o7rpdqkkl.cloudfront.net/investors_v2/investors/phosphor.webp', alt: 'Phosphor' },
 ];
 
 export function HomeCompanyLogos() {
@@ -19,7 +19,7 @@ export function HomeCompanyLogos() {
             key={index}
             src={logo.src}
             alt={logo.alt}
-            className="h-10 cursor-pointer w-auto object-contain bg-white/60 hover:bg-white/90 rounded-xl p-1.5 opacity-70 hover:opacity-100 transition-all"
+            className="h-10 cursor-pointer w-auto object-contain rounded-xl p-1.5 opacity-70 hover:opacity-100 transition-all"
           />
         ))}
       </div>
