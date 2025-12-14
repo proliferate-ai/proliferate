@@ -227,7 +227,7 @@ function SetupVisual() {
   );
 }
 
-// Alert cards sorting by priority - techie style
+// Alert cards sorted by priority
 function TriageVisual() {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -236,131 +236,30 @@ function TriageVisual() {
 
     const tl = gsap.timeline();
     const ctx = gsap.context(() => {
-      // Cards start scattered with alert state
-      gsap.set(".alert-card", {
-        opacity: 0,
-        x: (i) => [70, -60, 45][i],
-        y: (i) => [-50, 20, 70][i],
-        rotation: (i) => [12, -15, 8][i],
-        scale: 0.9,
-      });
-      gsap.set(".alert-ping", { scale: 1, opacity: 0.8 });
-      gsap.set(".alert-inner", { opacity: 1 });
+      gsap.set(".alert-card", { opacity: 0, y: 15 });
       gsap.set(".alert-badge", { opacity: 0, scale: 0 });
-      gsap.set(".alert-sparkline", { strokeDashoffset: 50 });
-      gsap.set(".alert-count", { textContent: "0" });
-      gsap.set(".triage-label", { opacity: 0, y: 10 });
+      gsap.set(".triage-label", { opacity: 0 });
 
-      // Cards burst in scattered (already showing error state)
       tl.to(".alert-card", {
         opacity: 1,
-        scale: 1,
+        y: 0,
         duration: 0.3,
         stagger: 0.1,
-        ease: "back.out(1.5)",
+        ease: "power2.out",
       });
 
-      // Ping animations on each card (staggered)
-      tl.to(".alert-ping-0", {
-        scale: 2,
-        opacity: 0,
-        duration: 0.6,
-        repeat: 2,
-        ease: "power2.out",
-      }, "-=0.2");
-
-      tl.to(".alert-ping-1", {
-        scale: 2,
-        opacity: 0,
-        duration: 0.6,
-        repeat: 2,
-        ease: "power2.out",
-      }, "-=1.5");
-
-      tl.to(".alert-ping-2", {
-        scale: 2,
-        opacity: 0,
-        duration: 0.6,
-        repeat: 2,
-        ease: "power2.out",
-      }, "-=1.5");
-
-      // Cards shake while alerting
-      tl.to(".alert-card", {
-        x: (i) => [70, -60, 45][i] + "+=random(-4, 4)",
-        y: (i) => [-50, 20, 70][i] + "+=random(-3, 3)",
-        duration: 0.08,
-        repeat: 10,
-        yoyo: true,
-        ease: "none",
-      }, "-=1.8");
-
-      // Pause to show chaos
-      tl.to({}, { duration: 0.3 });
-
-      // Sort into organized positions
-      tl.to(".alert-card", {
-        x: 0,
-        y: 0,
-        rotation: 0,
-        duration: 0.7,
-        stagger: 0.1,
-        ease: "power3.inOut",
-      });
-
-      // Sparklines draw
-      tl.to(".alert-sparkline", {
-        strokeDashoffset: 0,
-        duration: 0.6,
-        stagger: 0.1,
-        ease: "power2.out",
-      }, "-=0.4");
-
-      // Badges pop in
       tl.to(".alert-badge", {
         opacity: 1,
         scale: 1,
-        duration: 0.3,
+        duration: 0.2,
         stagger: 0.08,
         ease: "back.out(2)",
-      }, "-=0.4");
-
-      // Count up animation
-      tl.to(".alert-count-0", {
-        textContent: "847",
-        duration: 0.5,
-        snap: { textContent: 1 },
-        ease: "power2.out",
-      }, "-=0.5");
-      tl.to(".alert-count-1", {
-        textContent: "234",
-        duration: 0.4,
-        snap: { textContent: 1 },
-        ease: "power2.out",
-      }, "-=0.4");
-      tl.to(".alert-count-2", {
-        textContent: "89",
-        duration: 0.3,
-        snap: { textContent: 1 },
-        ease: "power2.out",
-      }, "-=0.3");
-
-      // Label fades in
-      tl.to(".triage-label", {
-        opacity: 1,
-        y: 0,
-        duration: 0.4,
-        ease: "power2.out",
       }, "-=0.2");
 
-      // First card subtle glow pulse
-      tl.to(".alert-card-0", {
-        boxShadow: "0 0 20px rgba(239,68,68,0.15)",
-        duration: 1,
-        ease: "sine.inOut",
-        yoyo: true,
-        repeat: -1,
-      });
+      tl.to(".triage-label", {
+        opacity: 1,
+        duration: 0.3,
+      }, "-=0.1");
 
     }, containerRef);
 
@@ -368,123 +267,44 @@ function TriageVisual() {
   }, []);
 
   const alerts = [
-    {
-      type: "critical",
-      title: "TIMEOUT",
-      endpoint: "/api/payments/webhook",
-      count: 847,
-      trend: [2, 5, 8, 12, 18, 25, 35, 42],
-      priority: 1,
-      color: "#ef4444",
-    },
-    {
-      type: "high",
-      title: "AUTH_LOOP",
-      endpoint: "/api/auth/refresh",
-      count: 234,
-      trend: [8, 12, 10, 15, 18, 14, 16, 19],
-      priority: 2,
-      color: "#f97316",
-    },
-    {
-      type: "medium",
-      title: "SLOW_QUERY",
-      endpoint: "db.users.find()",
-      count: 89,
-      trend: [5, 4, 6, 5, 7, 6, 5, 6],
-      priority: 3,
-      color: "#fbbf24",
-    },
+    { title: "TIMEOUT", endpoint: "/api/payments", count: "847", priority: 1, color: "#ef4444" },
+    { title: "AUTH_ERR", endpoint: "/api/auth", count: "234", priority: 2, color: "#f97316" },
+    { title: "SLOW_QRY", endpoint: "db.users", count: "89", priority: 3, color: "#fbbf24" },
   ];
 
   return (
     <div ref={containerRef} className="relative w-full h-full flex items-center justify-center">
-      {/* Cards container */}
-      <div className="w-full max-w-sm space-y-2 relative">
+      <div className="w-full max-w-xs sm:max-w-sm space-y-2">
         {alerts.map((alert, i) => (
           <div
             key={i}
-            className={`alert-card alert-card-${i} relative rounded-lg bg-[#0a0a0a] border opacity-0 overflow-hidden`}
-            style={{ borderColor: `${alert.color}30` }}
+            className="alert-card rounded-lg bg-[#0a0a0a] border border-white/10 opacity-0 overflow-hidden"
           >
-            {/* Ping indicator for alerting state */}
-            <div
-              className={`alert-ping alert-ping-${i} absolute -top-1 -right-1 w-3 h-3 rounded-full`}
-              style={{ backgroundColor: alert.color }}
-            />
-
-            {/* Header bar with severity color */}
-            <div
-              className="h-0.5"
-              style={{ background: alert.color }}
-            />
-
-            <div className="p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  {/* Error type badge */}
-                  <div className="alert-inner flex items-center gap-2 mb-1.5">
-                    <span
-                      className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded"
-                      style={{
-                        backgroundColor: `${alert.color}20`,
-                        color: alert.color,
-                      }}
-                    >
-                      {alert.title}
-                    </span>
-                  </div>
-
-                  {/* Endpoint/location */}
-                  <div className="alert-inner text-white/40 text-[11px] font-mono truncate">
-                    {alert.endpoint}
-                  </div>
-
-                  {/* Stats row */}
-                  <div className="alert-inner flex items-center gap-3 mt-2">
-                    {/* Count */}
-                    <div className="flex items-baseline gap-1">
-                      <span className={`alert-count alert-count-${i} text-white/80 text-sm font-mono font-medium`}>
-                        0
-                      </span>
-                      <span className="text-white/30 text-[10px]">errors</span>
-                    </div>
-
-                    {/* Mini sparkline */}
-                    <svg width="48" height="16" className="overflow-visible">
-                      <path
-                        className="alert-sparkline"
-                        d={`M0,${14 - alert.trend[0] * 0.3} ${alert.trend.map((v, j) => `L${j * 7},${14 - v * 0.3}`).join(' ')}`}
-                        fill="none"
-                        stroke={`${alert.color}90`}
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeDasharray="50"
-                      />
-                    </svg>
-                  </div>
+            <div className="h-0.5" style={{ background: alert.color }} />
+            <div className="p-2.5 sm:p-3 flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span
+                    className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded"
+                    style={{ backgroundColor: `${alert.color}20`, color: alert.color }}
+                  >
+                    {alert.title}
+                  </span>
+                  <span className="text-white/30 text-[10px] font-mono truncate">{alert.endpoint}</span>
                 </div>
-
-                {/* Priority badge */}
-                <div
-                  className="alert-badge flex items-center justify-center w-6 h-6 rounded text-[10px] font-mono font-bold opacity-0"
-                  style={{
-                    backgroundColor: `${alert.color}20`,
-                    color: alert.color,
-                  }}
-                >
-                  P{alert.priority}
-                </div>
+                <div className="text-white/60 text-xs font-mono">{alert.count} errors</div>
+              </div>
+              <div
+                className="alert-badge w-6 h-6 rounded flex items-center justify-center text-[10px] font-mono font-bold opacity-0"
+                style={{ backgroundColor: `${alert.color}20`, color: alert.color }}
+              >
+                P{alert.priority}
               </div>
             </div>
           </div>
         ))}
-
-        <div className="triage-label flex items-center justify-center gap-2 text-white/30 text-xs pt-3 opacity-0">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-          </svg>
-          <span>Auto-prioritized by impact</span>
+        <div className="triage-label text-center text-white/30 text-[11px] pt-2 opacity-0">
+          Auto-prioritized by impact
         </div>
       </div>
     </div>
@@ -500,76 +320,51 @@ function FixedVisual() {
 
     const tl = gsap.timeline();
     const ctx = gsap.context(() => {
-      gsap.set(".code-window", { opacity: 0, y: 15, scale: 0.95 });
-      gsap.set(".code-line", { opacity: 0, x: -10 });
+      gsap.set(".code-window", { opacity: 0, y: 10 });
+      gsap.set(".code-line", { opacity: 0 });
       gsap.set(".code-old", { opacity: 0 });
-      gsap.set(".code-new", { opacity: 0, x: -20 });
+      gsap.set(".code-new", { opacity: 0 });
       gsap.set(".code-highlight", { scaleX: 0, transformOrigin: "left" });
-      gsap.set(".success-card", { opacity: 0, y: 15, scale: 0.95 });
-      gsap.set(".success-inner", { opacity: 0 });
+      gsap.set(".success-card", { opacity: 0, y: 10 });
 
-      // Window appears
       tl.to(".code-window", {
         opacity: 1,
         y: 0,
-        scale: 1,
-        duration: 0.5,
-        ease: "power3.out",
+        duration: 0.4,
+        ease: "power2.out",
       });
 
-      // Context lines fade in
       tl.to(".code-line", {
         opacity: 1,
-        x: 0,
-        duration: 0.3,
-        stagger: 0.05,
-        ease: "power2.out",
+        duration: 0.2,
+        stagger: 0.04,
       }, "-=0.2");
 
-      // Old line appears (with error)
-      tl.to(".code-old", {
-        opacity: 1,
-        duration: 0.3,
-      }, "-=0.1");
+      tl.to(".code-old", { opacity: 1, duration: 0.2 });
 
-      // Strike through old
       tl.to(".code-old", {
         textDecoration: "line-through",
-        opacity: 0.4,
-        duration: 0.3,
-      }, "+=0.3");
+        opacity: 0.3,
+        duration: 0.25,
+      }, "+=0.2");
 
-      // New line slides in
-      tl.to(".code-new", {
-        opacity: 1,
-        x: 0,
-        duration: 0.4,
+      tl.to(".code-highlight", {
+        scaleX: 1,
+        duration: 0.3,
         ease: "power2.out",
       });
 
-      // Highlight new line
-      tl.to(".code-highlight", {
-        scaleX: 1,
-        duration: 0.4,
-        ease: "power2.out",
-      }, "-=0.3");
+      tl.to(".code-new", {
+        opacity: 1,
+        duration: 0.2,
+      }, "-=0.2");
 
-      // Success card appears
       tl.to(".success-card", {
         opacity: 1,
         y: 0,
-        scale: 1,
-        duration: 0.5,
-        ease: "back.out(1.5)",
-      }, "+=0.2");
-
-      // Inner content
-      tl.to(".success-inner", {
-        opacity: 1,
         duration: 0.3,
-        stagger: 0.1,
         ease: "power2.out",
-      }, "-=0.2");
+      }, "+=0.1");
 
     }, containerRef);
 
@@ -578,55 +373,47 @@ function FixedVisual() {
 
   return (
     <div ref={containerRef} className="relative w-full h-full flex items-center justify-center">
-      <div className="w-full max-w-sm space-y-3">
+      <div className="w-full max-w-xs sm:max-w-sm space-y-2">
         {/* Code window */}
-        <div className="code-window bg-[#0a0a0a] rounded-xl border border-white/10 overflow-hidden opacity-0">
-          <div className="flex items-center justify-between px-4 py-2 bg-white/[0.02] border-b border-white/5">
-            <span className="text-white/30 text-xs font-mono">src/api/users.ts</span>
-            <span className="text-white/20 text-xs">Suggested fix</span>
+        <div className="code-window bg-[#0a0a0a] rounded-lg border border-white/10 overflow-hidden opacity-0">
+          <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.02] border-b border-white/5">
+            <span className="text-white/30 text-[10px] font-mono">src/api/users.ts</span>
+            <span className="text-white/20 text-[10px]">Suggested fix</span>
           </div>
-          <div className="p-4 font-mono text-xs space-y-1">
+          <div className="p-3 font-mono text-[10px] sm:text-[11px] space-y-0.5">
             <div className="code-line text-white/30 opacity-0">
-              <span className="text-white/20 mr-3">140</span>
-              {"  const user = await db.find(id);"}
-            </div>
-            <div className="code-line text-white/30 opacity-0">
-              <span className="text-white/20 mr-3">141</span>
-              {"  "}
+              <span className="text-white/20 mr-2">140</span>
+              const user = await db.find(id);
             </div>
             <div className="relative">
-              <div className="code-old text-red-400/70 opacity-0">
-                <span className="text-white/20 mr-3">142</span>
-                {"  return user.profile.name;"}
+              <div className="code-old text-red-400/60 opacity-0">
+                <span className="text-white/20 mr-2">141</span>
+                return user.profile.name;
               </div>
             </div>
             <div className="relative">
               <div className="code-highlight absolute inset-0 bg-green-500/10 rounded" />
-              <div className="code-new text-green-400/80 relative opacity-0">
-                <span className="text-white/20 mr-3">142</span>
-                {"  return user?.profile?.name ?? null;"}
+              <div className="code-new text-green-400/70 relative opacity-0">
+                <span className="text-white/20 mr-2">141</span>
+                return user?.profile?.name ?? null;
               </div>
             </div>
             <div className="code-line text-white/30 opacity-0">
-              <span className="text-white/20 mr-3">143</span>
+              <span className="text-white/20 mr-2">142</span>
               {"}"}
             </div>
           </div>
         </div>
 
         {/* Success card */}
-        <div className="success-card bg-white/[0.04] rounded-lg border border-white/10 p-3 opacity-0">
-          <div className="flex items-center gap-3">
-            <div className="success-inner w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center opacity-0">
-              <span className="text-white/70">✓</span>
+        <div className="success-card bg-white/[0.03] rounded-lg border border-white/10 p-2.5 opacity-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded bg-green-500/20 flex items-center justify-center">
+              <span className="text-green-400 text-xs">✓</span>
             </div>
-            <div className="flex-1">
-              <div className="success-inner text-white/80 text-sm font-medium opacity-0">
-                Fix applied
-              </div>
-              <div className="success-inner text-white/40 text-xs opacity-0">
-                Error rate: 2,847 → 0
-              </div>
+            <div>
+              <div className="text-white/70 text-xs font-medium">Fix applied</div>
+              <div className="text-white/40 text-[10px]">2,847 → 0 errors</div>
             </div>
           </div>
         </div>
