@@ -5,10 +5,7 @@ import { SiteHeader } from "@/components/header";
 import {
   HomeHeroSection,
   HomePainSection,
-  HomeValuePillars,
-  HomeHowItWorks,
-  HomeB2BSection,
-  HomeCTASection,
+  HomeStickyScrollSection,
 } from "@/components/home";
 import { Footer } from "@/components/footer";
 import { SearchParamToastWrapper } from "@/components/toasts/SearchParamModal";
@@ -23,10 +20,11 @@ export default function HomePage() {
       <main>
         <HomeHeroSection />
         <HomePainSection />
-        <HomeValuePillars />
-        <HomeHowItWorks />
-        <HomeB2BSection />
-        <HomeCTASection />
+        {/* <HomeValuePillars /> */}
+        <HomeStickyScrollSection />
+        {/* <HomeHowItWorks /> */}
+        {/* <HomeB2BSection /> */}
+        {/* <HomeCTASection /> */}
       </main>
       <Footer />
     </>

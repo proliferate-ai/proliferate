@@ -1,29 +1,31 @@
-import { Zap, Search, Wrench } from "lucide-react";
-
+import { MarsIcon } from "../ui/icons";
+import { TelescopeIcon } from "../ui/icons";
+import { ToolBoxIcon } from "../ui/icons";
 const features = [
   {
     number: "001",
     category: "SETUP",
-    title: "Connect in minutes, not days",
+    title: "Instant observability",
     description:
-      "No instrumentation hell. No config files. Connect your repo and start seeing issues immediately—five lines of code, zero infrastructure changes.",
-    icon: Zap,
+      "Proliferate instruments itself.",
+    icon: <TelescopeIcon size={256} color="white" />,
+
   },
   {
     number: "002",
     category: "CONTEXT",
-    title: "Understand what actually broke",
+    title: "Smart integrations",
     description:
-      "Not just \"error at line 42.\" See the full story—what the user did, what state they had, what broke, and why. AI summarizes every session so you don't read logs.",
-    icon: Search,
-  },
+      "We don't just tell you when things break, but why, for whom, and where to look.",
+      icon: <ToolBoxIcon size={256} color="white" />,
+    },
   {
     number: "003",
     category: "FIX",
-    title: "Get a first pass on the fix",
+    title: "Auto-pilot fix",
     description:
-      "Every issue comes with full context hydrated for Cursor or Claude Code. Know if it's already fixed in main. Ship the fix before your customer notices.",
-    icon: Wrench,
+      "Just copy paste into Cursor",
+    icon: <MarsIcon size={256} color="white" />,
   },
 ];
 
@@ -73,7 +75,7 @@ export function HomePainSection() {
                     <div className="flex flex-col gap-6">
                       {/* Icon Area */}
                       <div
-                        className="relative flex items-center justify-center h-40 rounded-lg overflow-hidden"
+                        className="relative flex items-center justify-center h-52 rounded-lg overflow-hidden"
                         style={{ backgroundColor: "#050505" }}
                       >
                         {/* Grid pattern overlay */}
@@ -108,12 +110,28 @@ export function HomePainSection() {
                         <div className="absolute inset-0">
                           <div className="w-full h-full bg-[radial-gradient(circle_at_center,_rgba(255,_255,_255,_0.08)_0%,_transparent_70%)]" />
                         </div>
-                        {/* Icon */}
-                        <div
-                          className="relative z-10 w-16 h-16 rounded-full flex items-center justify-center"
-                          style={{ backgroundColor: "rgba(255, 255, 255, 0.05)" }}
-                        >
-                          <feature.icon className="w-7 h-7 text-white/50" />
+                        {/* Icon with a light gradient fading to transparent toward the edges, same rounded shape but more pronounced edge transparency */}
+                        <div className="relative z-10 w-56 h-42 rounded-[2rem/1.5rem] overflow-hidden flex items-center justify-center">
+                          {/* Faint white-to-transparent edge gradient */}
+                          <div
+                            className="absolute inset-0 pointer-events-none"
+                            style={{
+                              borderRadius: '2rem 2rem 1.5rem 1.5rem / 1.5rem 1.5rem 1.5rem 1.5rem',
+                              // Radial gradient with white at center, very transparent at edge
+                              background: "radial-gradient(ellipse at center, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.08) 55%, rgba(255,255,255,0.01) 92%, transparent 100%)",
+                              zIndex: 1,
+                            }}
+                          />
+                          <div
+                            className="relative flex items-center justify-center w-full h-full"
+                            style={{
+                              backgroundColor: "rgba(255,255,255,0.05)",
+                              borderRadius: '2rem 2rem 1.5rem 1.5rem / 1.5rem 1.5rem 1.5rem 1.5rem',
+                              zIndex: 2,
+                            }}
+                          >
+                            {feature.icon}
+                          </div>
                         </div>
                       </div>
 

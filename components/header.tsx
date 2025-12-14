@@ -1,3 +1,5 @@
+// header2
+
 "use client";
 
 import { useState } from "react";
@@ -6,18 +8,11 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { TalkToFounderModal } from "./talk-to-founder-modal";
 import { WaitlistForm } from "./waitlist-form";
-import {
-  NavigationMenu,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-} from "@/components/ui/navigation-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Menu } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { smoothScrollToHash } from "@/lib/utils";
 import type { MouseEvent } from "react";
-import { Badge } from "./ui/badge";
 
 
 

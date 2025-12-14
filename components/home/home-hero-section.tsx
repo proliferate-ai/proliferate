@@ -22,8 +22,7 @@ export function HomeHeroSection() {
         <div className="absolute inset-0">
           <Image
             className="object-cover w-full h-full"
-            src="/hero.jpeg"
-            // src="https://framerusercontent.com/images/x1ioW6hoCO0EWJfApnLyqDWxrs.png?width=6740&height=3332"
+            src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/hero.jpeg"
             alt="Background"
             fill
             priority
