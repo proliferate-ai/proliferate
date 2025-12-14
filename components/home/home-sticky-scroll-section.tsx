@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 
 const scrollSteps = [
@@ -464,7 +464,7 @@ export function HomeStickyScrollSection() {
     }
   }, [activeIndex]);
 
-  const animateStepRef = useRef<() => void>();
+  const animateStepRef = useRef<() => void>(() => {});
 
   animateStepRef.current = () => {
     const target = targetIndexRef.current;
