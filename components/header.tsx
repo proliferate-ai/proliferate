@@ -84,7 +84,7 @@ export function SiteHeader() {
         <div className="flex items-center gap-4">
           <div className="hidden md:flex gap-2">
             <Link
-              href="/signin"
+              href="https://app.withkeystone.com"
               className="text-[13.5px] font-medium text-gray-50 hover:bg-neutral-800 h-9 rounded-lg px-3 bg-transparent flex items-center transition-colors"
               style={{ boxShadow: 'none' }}
             >
