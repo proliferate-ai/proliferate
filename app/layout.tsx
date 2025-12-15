@@ -84,13 +84,13 @@ export default function RootLayout({
 
         {/* Favicon and icons */}
         <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="icon" href="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp" type="image/webp" />
-        <link rel="apple-touch-icon" href="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp" />
+        <link rel="icon" href={`https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp`} type="image/webp" />
+        <link rel="apple-touch-icon" href={`https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp`} />
 
         {/* Additional meta tags for better social sharing */}
         <meta name="theme-color" content="#000000" />
         <meta name="msapplication-TileColor" content="#000000" />
-        <meta name="msapplication-TileImage" content="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp" />
+        <meta name="msapplication-TileImage" content={`https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp`} />
       </head>
       <body className={`${ibmPlexSans.variable} antialiased bg-black text-white`}>
         <PostHogProviderWrapper>
