@@ -84,7 +84,7 @@ export function SiteHeader() {
         <div className="flex items-center gap-4">
           <div className="hidden md:flex gap-2">
             <Link
-              href="https://app.withkeystone.com"
+              href="https://app.proliferate.com"
               className="text-[13.5px] font-medium text-gray-50 hover:text-white h-9 px-3 flex items-center whitespace-nowrap transition-colors"
             >
               Sign in
