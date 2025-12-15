@@ -362,7 +362,7 @@ function SetupVisual() {
           {/* Center core - Proliferate logo style */}
           <div className="center-core absolute inset-0 flex items-center justify-center scale-0">
             <div className="w-14 h-14 rounded-xl bg-blue-500/35 border border-blue-700/40 flex items-center justify-center">
-              <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp" alt="Proliferate" width={28} height={28} className="object-contain" />
+              <Image src={`https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp?t=${Date.now()}`} alt="Proliferate" width={28} height={28} className="object-contain" />
               {/* <svg className="w-7 h-7 text-blue-700" viewBox="0 0 24 24" fill="currentColor" fillOpacity="0.5">
                 <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
                 <path d="M2 17l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
