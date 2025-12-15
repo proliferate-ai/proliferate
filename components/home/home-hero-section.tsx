@@ -37,7 +37,7 @@ export function HomeHeroSection() {
       {/* Main Content */}
       <div className="absolute inset-0 flex flex-col items-center justify-center px-4">
         <div
-          className="flex flex-col items-center gap-6 w-full max-w-5xl -translate-y-8"
+          className="flex flex-col items-center gap-6 w-full max-w-5xl"
           style={{
             animation: 'fadeIn 0.8s ease-out forwards',
             opacity: 0,
