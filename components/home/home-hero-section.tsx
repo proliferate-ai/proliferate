@@ -52,7 +52,7 @@ export function HomeHeroSection() {
 
             </h1>
             <h2 className="text-lg sm:text-xl text-white/80 mt-4 text-center max-w-md">
-              AI-powered observability for B2B teams
+              Modern observability for AI-native teams
             </h2>
           </div>
 
@@ -67,14 +67,14 @@ export function HomeHeroSection() {
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </WaitlistForm>
-            <Button
+            {/* <Button
               size="lg"
               variant="outline"
               className="h-12 px-6 text-base rounded-full border-white/20 bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white font-medium"
               onClick={() => setIsTalkOpen(true)}
             >
               Talk to us
-            </Button>
+            </Button> */}
           </div>
         </div>
 

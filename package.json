@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "NODE_OPTIONS='--no-experimental-webstorage' next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -19,7 +19,6 @@
     "@vercel/analytics": "^1.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "fs": "^0.0.1-security",
     "gray-matter": "^4.0.3",
     "gsap": "^3.14.2",
     "lucide-react": "^0.503.0",
@@ -36,7 +35,8 @@
     "remark-html": "^16.0.1",
     "sharp": "^0.34.4",
     "sonner": "^2.0.3",
-    "tailwind-merge": "^3.2.0"
+    "tailwind-merge": "^3.2.0",
+    "vaul": "^1.1.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

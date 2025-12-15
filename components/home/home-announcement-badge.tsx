@@ -17,7 +17,7 @@ export function HomeAnnouncementBadge() {
 
         {/* Text */}
         <span className="text-xs text-white uppercase tracking-wide">
-          Launching soon - Join the waitlist
+          Launching soon - Join us
         </span>
 
         {/* Arrow */}

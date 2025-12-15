@@ -30,14 +30,14 @@ export function HomeCTASection() {
                 <ChevronRight className="w-4 h-4" />
               </Button>
             </WaitlistForm>
-            <Button
+            {/* <Button
               size="lg"
               variant="outline"
               className="h-12 px-6 text-base rounded-full border-white/20 bg-white/5 hover:bg-white/10 text-white font-medium"
               onClick={() => setIsTalkOpen(true)}
             >
               Talk to us
-            </Button>
+            </Button> */}
           </div>
         </div>
       </div>

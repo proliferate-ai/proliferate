@@ -18,6 +18,19 @@ interface Boat {
   targetAngle: number;
 }
 
+// --- Configuration (moved outside component to avoid useEffect dependency issues) ---
+const C = {
+  lineCount: 40,        // How many water lines to draw
+  lineSpacing: 14,      // Vertical space between lines
+  amplitude: 8,         // Height of the idle river waves
+  wavelength: 0.006,    // Width of the idle river waves
+  flowSpeed: 0.02,      // How fast the river moves
+  boatSpeed: 0.03,      // Inertia: lower = heavier boat
+  rippleSpeed: 0.8,     // Expansion speed of the rings
+  rippleDrift: 1.5,     // How fast ripples move downstream
+  boatXRatio: 0.5,      // Position of boat (0.5 = center)
+};
+
 export default function PoeticRiver() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -28,19 +41,6 @@ export default function PoeticRiver() {
   const mouse = useRef({ x: -1000, y: -1000, active: false });
   const time = useRef(0);
   const rafId = useRef<number>(0);
-
-  // --- Configuration ---
-  const C = {
-    lineCount: 40,        // How many water lines to draw
-    lineSpacing: 14,      // Vertical space between lines
-    amplitude: 8,         // Height of the idle river waves
-    wavelength: 0.006,    // Width of the idle river waves
-    flowSpeed: 0.02,      // How fast the river moves
-    boatSpeed: 0.03,      // Inertia: lower = heavier boat
-    rippleSpeed: 0.8,     // Expansion speed of the rings
-    rippleDrift: 1.5,     // How fast ripples move downstream
-    boatXRatio: 0.5,      // Position of boat (0.5 = center)
-  };
 
   useEffect(() => {
     const canvas = canvasRef.current;

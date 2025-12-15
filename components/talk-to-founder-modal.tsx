@@ -1,7 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import {
+  ResponsiveModal,
+  ResponsiveModalContent,
+  ResponsiveModalHeader,
+  ResponsiveModalTitle,
+  ResponsiveModalDescription,
+  ResponsiveModalFooter,
+} from '@/components/ui/responsive-modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CalendlyButton } from '@/components/calendly-button';
@@ -54,12 +61,12 @@ export function TalkToFounderModal({ open, onOpenChange }: TalkToFounderModalPro
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md border border-neutral-700 bg-neutral-900 text-neutral-100 focus:border-neutral-700">
-        <DialogHeader>
-          <DialogTitle className="text-base">Talk to the founder</DialogTitle>
-          <DialogDescription className="text-neutral-400">We&apos;ll be in touch shortly.</DialogDescription>
-        </DialogHeader>
+    <ResponsiveModal open={open} onOpenChange={onOpenChange}>
+      <ResponsiveModalContent className="sm:max-w-md">
+        <ResponsiveModalHeader>
+          <ResponsiveModalTitle>Talk to the founder</ResponsiveModalTitle>
+          <ResponsiveModalDescription>We&apos;ll be in touch shortly.</ResponsiveModalDescription>
+        </ResponsiveModalHeader>
 
         {step === 'form' && (
           <div className="space-y-5">
@@ -139,12 +146,12 @@ export function TalkToFounderModal({ open, onOpenChange }: TalkToFounderModalPro
               </div>
             </div>
 
-            <DialogFooter>
+            <ResponsiveModalFooter>
               <Button variant="ghost" onClick={close} className="text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800">Close</Button>
               <Button onClick={handleSubmit} disabled={isSubmitting || !email} className="bg-neutral-100 text-neutral-900 hover:bg-white">
                 {isSubmitting ? 'Sending…' : 'Send'}
               </Button>
-            </DialogFooter>
+            </ResponsiveModalFooter>
           </div>
         )}
 
@@ -159,7 +166,7 @@ export function TalkToFounderModal({ open, onOpenChange }: TalkToFounderModalPro
             <Button onClick={close} className="w-full bg-neutral-800 text-neutral-200 hover:bg-neutral-700">Close</Button>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </ResponsiveModalContent>
+    </ResponsiveModal>
   );
 }

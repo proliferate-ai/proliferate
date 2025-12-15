@@ -185,6 +185,29 @@
       transform: translateY(0);
     }
   }
+
+  /* Crossfade animations for feature card hover */
+  @keyframes midwayPeakIn {
+    0% { opacity: 0; }
+    25% { opacity: 1; }
+    75% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  @keyframes midwayPeakOut {
+    0% { opacity: 0; }
+    25% { opacity: 1; }
+    75% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  .animate-midway-in {
+    animation: midwayPeakIn 400ms ease-in-out forwards;
+  }
+
+  .animate-midway-out {
+    animation: midwayPeakOut 400ms ease-in-out forwards;
+  }
 }
 
 /* Override Radix UI Dialog/Sheet scroll lock behavior */

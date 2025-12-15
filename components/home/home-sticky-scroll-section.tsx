@@ -944,10 +944,10 @@ export function HomeStickyScrollSection() {
           {/* Section header */}
           <div className="text-center mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-3">
-              Stop watching. Start fixing.
+              Stop observing. Start fixing.
             </h2>
             <p className="text-white/40 max-w-lg mx-auto text-sm sm:text-base">
-              From error to resolution in minutes, not days.
+              From exception to fix in minutes, not days.
             </p>
           </div>
 

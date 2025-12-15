@@ -2,7 +2,14 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  ResponsiveModal,
+  ResponsiveModalContent,
+  ResponsiveModalHeader,
+  ResponsiveModalTitle,
+  ResponsiveModalDescription,
+  ResponsiveModalTrigger,
+} from "@/components/ui/responsive-modal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -11,6 +18,7 @@ interface WaitlistFormProps {
 }
 
 export function WaitlistForm({ children }: WaitlistFormProps) {
+  const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -21,7 +29,7 @@ export function WaitlistForm({ children }: WaitlistFormProps) {
     e.preventDefault()
     setIsSubmitting(true)
     setError("")
-    
+
     try {
       const response = await fetch("/api/waitlist", {
         method: "POST",
@@ -30,13 +38,13 @@ export function WaitlistForm({ children }: WaitlistFormProps) {
         },
         body: JSON.stringify({ name, email }),
       })
-      
+
       const data = await response.json()
-      
+
       if (!response.ok || !data.ok) {
         throw new Error(data.error || "Something went wrong. Please try again.")
       }
-      
+
       setIsSuccess(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred. Please try again.")
@@ -46,27 +54,27 @@ export function WaitlistForm({ children }: WaitlistFormProps) {
   }
 
   return (
-    <Dialog>
-      <DialogTrigger className="cursor-pointer" asChild>
+    <ResponsiveModal open={open} onOpenChange={setOpen}>
+      <ResponsiveModalTrigger className="cursor-pointer w-full block">
         {children}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md border-neutral-800 active:border-neutral-700 hover:border-neutral-700 bg-neutral-900 text-neutral-100">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <Image 
-              src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp" 
-              alt="Proliferate Logo" 
-              width={32} 
+      </ResponsiveModalTrigger>
+      <ResponsiveModalContent className="sm:max-w-md">
+        <ResponsiveModalHeader>
+          <ResponsiveModalTitle className="flex items-center gap-2 text-xl">
+            <Image
+              src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp"
+              alt="Proliferate Logo"
+              width={32}
               height={32}
               className="h-6 w-6"
             />
             Join Early Access
-          </DialogTitle>
-          <DialogDescription className="text-neutral-400">
+          </ResponsiveModalTitle>
+          <ResponsiveModalDescription>
             Join the waitlist to get early access. Limited availability.
-          </DialogDescription>
-        </DialogHeader>
-        
+          </ResponsiveModalDescription>
+        </ResponsiveModalHeader>
+
         {!isSuccess ? (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4 py-4">
             <div className="flex flex-col gap-2">
@@ -83,7 +91,7 @@ export function WaitlistForm({ children }: WaitlistFormProps) {
                 required
               />
             </div>
-            
+
             <div className="flex flex-col gap-2">
               <label htmlFor="email" className="text-sm font-medium text-neutral-300">
                 Email
@@ -99,11 +107,11 @@ export function WaitlistForm({ children }: WaitlistFormProps) {
                 required
               />
             </div>
-            
+
             {error && <p className="text-sm text-red-500">{error}</p>}
-            
-            <Button 
-              type="submit" 
+
+            <Button
+              type="submit"
               className="bg-neutral-100 text-neutral-900 hover:bg-white mt-2"
               disabled={isSubmitting}
             >
@@ -123,7 +131,7 @@ export function WaitlistForm({ children }: WaitlistFormProps) {
             </p>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </ResponsiveModalContent>
+    </ResponsiveModal>
   )
-} 
+}

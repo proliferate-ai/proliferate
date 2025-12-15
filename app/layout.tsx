@@ -3,7 +3,7 @@ import { IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 import "../styles/sonner.css";
 import { Toaster } from "sonner";
-import { PostHogProvider } from "../components/PostHogProvider";
+import { PostHogProviderWrapper } from "../components/PostHogProviderWrapper";
 import { Analytics } from "@vercel/analytics/next";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -93,12 +93,12 @@ export default function RootLayout({
         <meta name="msapplication-TileImage" content="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp" />
       </head>
       <body className={`${ibmPlexSans.variable} antialiased bg-black text-white`}>
-        <PostHogProvider>
+        <PostHogProviderWrapper>
           <Toaster />
           {/* <SiteHeader /> */}
           {children}
           <Analytics />
-        </PostHogProvider>
+        </PostHogProviderWrapper>
       </body>
     </html>
   );

@@ -12,14 +12,14 @@ export function HomeCompanyLogos() {
   return (
     <div className="flex flex-col items-center gap-4">
       <span className="text-xs text-white/30 uppercase tracking-wider">Backed by</span>
-      <div className="flex items-center justify-center gap-8">
+      <div className="flex items-center justify-center gap-4 sm:gap-8 flex-wrap px-4">
         {logos.map((logo, index) => (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             key={index}
             src={logo.src}
             alt={logo.alt}
-            className="h-10 cursor-default w-auto object-contain rounded-xl p-1.5 opacity-70 hover:opacity-100 transition-all"
+            className="h-8 sm:h-10 cursor-default w-auto object-contain rounded-xl p-1 sm:p-1.5 opacity-70 hover:opacity-100 transition-all"
           />
         ))}
       </div>

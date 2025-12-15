@@ -108,7 +108,7 @@ export default function HeroVideo() {
                                 <span className="text-xs font-medium text-neutral-200">Codebase</span>
                             </div>
                             <div className="relative">
-                                <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/steps/github.svg" alt="PR" width={48} height={48} className="text-neutral-300 w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12" />
+                                <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/steps/github.svg" alt="GitHub" width={48} height={48} className="text-neutral-300 w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12" />
                                 <div className="absolute -top-1 -right-1">
                                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="text-neutral-500">
                                         <path d="M5 1V9M1 5H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -161,7 +161,7 @@ export default function HeroVideo() {
                                 <div className="w-1.5 h-1.5 rounded-full bg-neutral-500"></div>
                                 <span className="text-xs font-medium text-neutral-200">Fix</span>
                             </div>
-                            <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/steps/claude.webp" alt="PR" width={48} height={48} className="text-neutral-300 grayscale w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12" />
+                            <Image src="https://d1uh4o7rpdqkkl.cloudfront.net/assets/steps/claude.webp" alt="Claude AI" width={48} height={48} className="text-neutral-300 grayscale w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12" />
                         </div>
                     </div>
                 </div>

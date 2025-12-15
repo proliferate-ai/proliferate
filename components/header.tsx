@@ -105,58 +105,60 @@ export function SiteHeader() {
                 <span className="sr-only">Toggle menu</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[300px] sm:w-[400px] bg-black border-gray-800 pt-20 px-6">
-              <nav className="flex flex-col gap-4">
-                <Link
-                  href="/#product"
-                  className="block px-2 py-1 text-lg font-medium text-gray-300 hover:text-white"
-                  onClick={(e) => { onAnchorClick(e as unknown as MouseEvent, '#product'); setIsOpen(false); }}
-                >
-                  Product
+            <SheetContent side="right" className="w-full sm:w-[400px] bg-neutral-950 border-neutral-800 p-0 flex flex-col">
+              {/* Header with logo and close button */}
+              <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-800/50">
+                <Link href="/" onClick={() => setIsOpen(false)}>
+                  <Image
+                    src="https://d1uh4o7rpdqkkl.cloudfront.net/logotype-inverted.webp"
+                    alt="Proliferate Logo"
+                    width={6290}
+                    height={1000}
+                    className="h-[18px] w-auto"
+                  />
                 </Link>
-                <Link
-                  href="/#how-it-works"
-                  className="block px-2 py-1 text-lg font-medium text-gray-300 hover:text-white"
-                  onClick={(e) => { onAnchorClick(e as unknown as MouseEvent, '#how-it-works'); setIsOpen(false); }}
-                >
-                  How it works
-                </Link>
-                {/* <Link
-                  href="/blog"
-                  className="block px-2 py-1 text-lg font-medium text-gray-300 hover:text-white"
-                  onClick={() => setIsOpen(false)}
-                >
-                  Blog
-                </Link> */}
-                {/* <Link
-                  target="_blank"
-                  href="https://docs.withproliferate.com"
-                  className="block px-2 py-1 text-lg font-medium text-gray-300 hover:text-white"
-                  onClick={() => setIsOpen(false)}
-                >
-                  Docs
-                </Link> */}
-                {/* <Link
-                  href="/#pricing"
-                  className="block px-2 py-1 text-lg font-medium text-gray-300 hover:text-white"
-                  onClick={(e) => { onAnchorClick(e as unknown as MouseEvent, '#pricing'); setIsOpen(false); }}
-                >
-                  Pricing
-                </Link> */}
-                <div className="flex flex-col gap-2 mt-4">
-                  <Button
-                    variant="outline"
-                    className="text-sm font-medium border border-gray-700 text-gray-300 hover:bg-neutral-800 w-full"
-                    onClick={() => { setIsTalkOpen(true); setIsOpen(false); }}>
+              </div>
+
+              {/* Navigation links */}
+              <nav className="flex-1 px-6 py-8">
+                <div className="space-y-1">
+                  <Link
+                    href="/#product"
+                    className="block py-3 text-2xl font-medium text-neutral-100 hover:text-white transition-colors"
+                    onClick={(e) => { onAnchorClick(e as unknown as MouseEvent, '#product'); setIsOpen(false); }}
+                  >
+                    Product
+                  </Link>
+                  <Link
+                    href="/#how-it-works"
+                    className="block py-3 text-2xl font-medium text-neutral-100 hover:text-white transition-colors"
+                    onClick={(e) => { onAnchorClick(e as unknown as MouseEvent, '#how-it-works'); setIsOpen(false); }}
+                  >
+                    How it works
+                  </Link>
+                  <button
+                    className="block py-3 text-2xl font-medium text-neutral-100 hover:text-white transition-colors w-full text-left"
+                    onClick={() => { setIsTalkOpen(true); setIsOpen(false); }}
+                  >
                     Request demo
-                  </Button>
-                  <WaitlistForm>
-                    <Button className="bg-white text-black hover:bg-gray-100 font-medium w-full">
-                      Join early access
-                    </Button>
-                  </WaitlistForm>
+                  </button>
                 </div>
               </nav>
+
+              {/* Footer with CTA */}
+              <div className="px-4 pb-8 pt-4 border-t border-neutral-800/50 mt-auto">
+                <WaitlistForm>
+                  <Button
+                    className="w-full h-12 text-[15px] font-semibold bg-white text-black hover:bg-neutral-100 rounded-xl transition-all"
+                    style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.1)' }}
+                  >
+                    Join early access
+                  </Button>
+                </WaitlistForm>
+                <p className="text-center text-xs text-neutral-500 mt-3">
+                  Get notified when we launch
+                </p>
+              </div>
             </SheetContent>
           </Sheet>
           <TalkToFounderModal open={isTalkOpen} onOpenChange={setIsTalkOpen} />

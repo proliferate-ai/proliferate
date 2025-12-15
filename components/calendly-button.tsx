@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import { getCalApi } from "@calcom/embed-react";
 import { cn } from "@/lib/utils";
 
 interface CalButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -10,15 +9,16 @@ interface CalButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   size?: "default" | "lg";
 }
 
-export function CalendlyButton({ 
-  className = "", 
+export function CalendlyButton({
+  className = "",
   text = "Schedule time with me",
   variant = "default",
   size = "default",
-  ...props 
+  ...props
 }: CalButtonProps) {
   useEffect(() => {
     (async function () {
+      const { getCalApi } = await import("@calcom/embed-react");
       const cal = await getCalApi();
       cal("ui", {
         theme: "dark",
