@@ -76,14 +76,14 @@ function ResponsiveModal({ children, open, onOpenChange }: ResponsiveModalProps)
   )
 }
 
-function ResponsiveModalTrigger({ children, className }: { children: React.ReactNode; className?: string }) {
+function ResponsiveModalTrigger({ children, className, asChild }: { children: React.ReactNode; className?: string; asChild?: boolean }) {
   const { isDesktop } = React.useContext(ResponsiveModalContext)
 
   if (isDesktop) {
-    return <DialogPrimitive.Trigger className={className}>{children}</DialogPrimitive.Trigger>
+    return <DialogPrimitive.Trigger className={className} asChild={asChild}>{children}</DialogPrimitive.Trigger>
   }
 
-  return <DrawerPrimitive.Trigger className={className}>{children}</DrawerPrimitive.Trigger>
+  return <DrawerPrimitive.Trigger className={className} asChild={asChild}>{children}</DrawerPrimitive.Trigger>
 }
 
 function ResponsiveModalClose({ children, className }: { children?: React.ReactNode; className?: string }) {

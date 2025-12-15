@@ -178,7 +178,7 @@
   @keyframes fadeIn {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(20px);
     }
     to {
       opacity: 1;
@@ -207,6 +207,11 @@
 
   .animate-midway-out {
     animation: midwayPeakOut 400ms ease-in-out forwards;
+  }
+
+  .animate-fade-in-up {
+    opacity: 0;
+    animation: fadeIn 0.8s ease-out forwards;
   }
 }
 

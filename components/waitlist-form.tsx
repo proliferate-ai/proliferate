@@ -55,7 +55,7 @@ export function WaitlistForm({ children }: WaitlistFormProps) {
 
   return (
     <ResponsiveModal open={open} onOpenChange={setOpen}>
-      <ResponsiveModalTrigger className="cursor-pointer w-full block">
+      <ResponsiveModalTrigger asChild>
         {children}
       </ResponsiveModalTrigger>
       <ResponsiveModalContent className="sm:max-w-md">
