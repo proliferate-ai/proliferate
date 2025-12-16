@@ -175,32 +175,6 @@
     display: none;
   }
 
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(0);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(-2rem);
-    }
-  }
-
-  /* Crossfade animations for feature card hover */
-  @keyframes midwayPeakIn {
-    0% { opacity: 0; }
-    25% { opacity: 1; }
-    75% { opacity: 1; }
-    100% { opacity: 0; }
-  }
-
-  @keyframes midwayPeakOut {
-    0% { opacity: 0; }
-    25% { opacity: 1; }
-    75% { opacity: 1; }
-    100% { opacity: 0; }
-  }
-
   .animate-midway-in {
     animation: midwayPeakIn 400ms ease-in-out forwards;
   }
@@ -208,11 +182,32 @@
   .animate-midway-out {
     animation: midwayPeakOut 400ms ease-in-out forwards;
   }
+}
 
-  .animate-fade-in-up {
+/* Keyframes must be at global scope */
+@keyframes fadeInUp {
+  from {
     opacity: 0;
-    animation: fadeIn 0.8s ease-out forwards;
+    transform: translateY(10px);
   }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes midwayPeakIn {
+  0% { opacity: 0; }
+  25% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes midwayPeakOut {
+  0% { opacity: 0; }
+  25% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* Override Radix UI Dialog/Sheet scroll lock behavior */

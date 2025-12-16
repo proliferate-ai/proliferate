@@ -821,6 +821,41 @@ export function HomeStickyScrollSection() {
     }
   };
 
+  // Slow down scroll speed within section (desktop only)
+  useEffect(() => {
+    if (isMobile) return;
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      const rect = container.getBoundingClientRect();
+      // Slow down when section is visible and we're scrolling toward/through it
+      const sectionVisible = rect.top < window.innerHeight && rect.bottom > 0;
+      const scrollingDown = e.deltaY > 0;
+      const scrollingUp = e.deltaY < 0;
+
+      // Apply slow scroll if section is on screen and we're scrolling in its direction
+      const shouldSlowScroll = sectionVisible && (
+        (scrollingDown && rect.top < window.innerHeight * 0.7) ||
+        (scrollingUp && rect.bottom > window.innerHeight * 0.3)
+      );
+
+      if (shouldSlowScroll) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Slow down scroll by 35%
+        window.scrollBy({
+          top: e.deltaY * 0.35,
+          behavior: 'instant'
+        });
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    return () => window.removeEventListener('wheel', handleWheel);
+  }, [isMobile]);
+
   // Desktop scroll-based IntersectionObserver
   useEffect(() => {
     if (isMobile) return; // Skip on mobile
