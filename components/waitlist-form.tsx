@@ -62,7 +62,7 @@ export function WaitlistForm({ children }: WaitlistFormProps) {
         <ResponsiveModalHeader>
           <ResponsiveModalTitle className="flex items-center gap-2 text-xl">
             <Image
-              src={`https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp`}
+              src={`https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp?timestamp=${Date.now()}`}
               alt="Proliferate Logo"
               width={32}
               height={32}
