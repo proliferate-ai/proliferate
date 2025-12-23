@@ -9,7 +9,13 @@ import { Button } from "@/components/ui/button";
 import { TalkToFounderModal } from "./talk-to-founder-modal";
 import { WaitlistForm } from "./waitlist-form";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu } from "lucide-react";
+import { Menu, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useRouter } from "next/navigation";
 import { smoothScrollToHash } from "@/lib/utils";
 import type { MouseEvent } from "react";
@@ -82,7 +88,29 @@ export function SiteHeader() {
         </nav> */}
 
         <div className="flex items-center gap-4">
-          <div className="hidden md:flex gap-2">
+          <div className="hidden md:flex gap-2 items-center">
+            {/* Company Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="group text-[13.5px] font-medium text-gray-300 hover:text-white h-9 px-3 flex items-center gap-1 whitespace-nowrap transition-all duration-200">
+                  Company
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-36 bg-black/80 backdrop-blur-xl border border-white/[0.08] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.03)_inset] p-1"
+                align="end"
+                sideOffset={8}
+              >
+                <DropdownMenuItem asChild className="text-neutral-400 rounded-lg px-3 py-2 text-[13px] cursor-pointer transition-all duration-150 focus:bg-white/[0.05] focus:text-white hover:bg-white/[0.05] hover:text-white focus:outline-none">
+                  <Link href="/blog">Blog</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="text-neutral-400 rounded-lg px-3 py-2 text-[13px] cursor-pointer transition-all duration-150 focus:bg-white/[0.05] focus:text-white hover:bg-white/[0.05] hover:text-white focus:outline-none">
+                  <Link href="https://www.ycombinator.com/companies/keystone/jobs">Careers</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Link
               href="https://app.proliferate.com"
               className="text-[13.5px] font-medium text-gray-50 hover:text-white h-9 px-3 flex items-center whitespace-nowrap transition-colors"
@@ -141,6 +169,25 @@ export function SiteHeader() {
                   >
                     Request demo
                   </button>
+
+                  {/* Company Section */}
+                  <div className="pt-6 mt-6 border-t border-neutral-800/50">
+                    <p className="text-sm text-neutral-500 mb-2">Company</p>
+                    <Link
+                      href="/blog"
+                      className="block py-3 text-2xl font-medium text-neutral-100 hover:text-white transition-colors"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      Blog
+                    </Link>
+                    <Link
+                      href="/"
+                      className="block py-3 text-2xl font-medium text-neutral-100 hover:text-white transition-colors"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      Careers
+                    </Link>
+                  </div>
                 </div>
               </nav>
 

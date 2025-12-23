@@ -1,96 +1,95 @@
-import { redirect } from "next/navigation";
-export default function BlogPage() {
-  redirect("/")
+import { Metadata } from "next";
+import Link from "next/link";
+import Image from "next/image";
+import { SiteHeader } from "@/components/header";
+import { Footer } from "@/components/footer";
+import { getAllPosts } from "@/lib/blog";
+
+export const metadata: Metadata = {
+  title: "Blog | Proliferate",
+  description: "Latest news, guides, and insights from the Proliferate team.",
+};
+
+function formatDate(dateString: string) {
+  return new Date(dateString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
-// import { BlogPostCard } from "@/components/blog-post-card";
-// import { Footer } from "@/components/footer";
-// import { getAllPosts } from "@/lib/blog";
-// import Link from "next/link";
-// import { redirect } from "next/navigation";
+export default async function BlogPage() {
+  const posts = await getAllPosts();
 
-// export default async function BlogPage() {
-//   const blogPosts = await getAllPosts();
-//   redirect("/")
-  
-//   return (
-//     <>
-//       <main className="min-h-screen bg-black">
-//         <section className="pt-24 pb-20">
-//           <div className="max-w-5xl mx-auto px-8">
-//             <div className="flex flex-col items-center text-center mb-20">
-//               <h1 className="mb-4 text-[clamp(1.7rem,4.5vw,3.5rem)] font-bold tracking-[-0.05em] text-white leading-[1] sm:leading-[1.1]">
-//                 Learnings from the Frontlines
-//               </h1>
-//               <p className="max-w-2xl text-lg text-white/60 leading-relaxed">
-//                 Deep dives into production debugging, AI engineering, and the future of software maintenance.
-//               </p>
-//             </div>
+  return (
+    <div className="min-h-screen bg-black">
+      <SiteHeader />
 
-//             {blogPosts.length === 0 ? (
-//               <div className="text-center py-20">
-//                 <p className="text-white/60">No blog posts yet. Add markdown files to /content/blog to get started.</p>
-//               </div>
-//             ) : (
-//               <>
-//                 {/* Hero card - first blog post */}
-//                 {blogPosts.length > 0 && (
-//                   <div className="flex gap-4 pb-12 mb-12">
-//                     <div className="flex-1">
-//                       <Link href={`/blog/${blogPosts[0].slug}`} className="block group">
-//                         <div className="relative rounded-lg overflow-hidden bg-gradient-to-br from-neutral-900 to-black">
-//                           {blogPosts[0].image ? (
-//                             <img 
-//                               src={blogPosts[0].image} 
-//                               alt={blogPosts[0].title}
-//                               className="w-full aspect-[16/9] object-cover rounded-lg"
-//                             />
-//                           ) : (
-//                             <>
-//                               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10" />
-//                               <div className="aspect-[16/9]" />
-//                             </>
-//                           )}
-//                         </div>
-//                       </Link>
-//                     </div>
-//                     <div className="w-96 flex items-end pb-8">
-//                       <div className="flex flex-col gap-6 px-10">
-//                         <h3 className="text-[clamp(1.2rem,2.5vw,1.8rem)] font-bold tracking-[-0.05em] text-white leading-[1] sm:leading-[1.1]">
-//                           <Link href={`/blog/${blogPosts[0].slug}`} className="hover:text-neutral-300 transition-colors">
-//                             {blogPosts[0].title}
-//                           </Link>
-//                         </h3>
-//                         <p className="text-base text-neutral-400 leading-relaxed">
-//                           {blogPosts[0].excerpt}
-//                         </p>
-//                         <div className="pt-2">
-//                           <Link 
-//                             href={`/blog/${blogPosts[0].slug}`}
-//                             className="inline-flex px-6 py-2 text-sm font-medium text-white border border-white/20 rounded-full hover:bg-white/10 transition-colors uppercase tracking-wide"
-//                           >
-//                             Read More
-//                           </Link>
-//                         </div>
-//                       </div>
-//                     </div>
-//                   </div>
-//                 )}
+      {/* Main Content */}
+      <main className="mx-auto w-full max-w-5xl px-6 md:max-w-7xl">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 py-16">
+          {/* Header */}
+          <div className="w-full flex flex-col items-center justify-between mb-8 mt-2 gap-3 md:flex-row md:gap-0">
+            <h1 className="text-5xl md:text-6xl font-bold tracking-[-0.03em] bg-gradient-to-b from-white to-neutral-400 bg-clip-text text-transparent pb-2">
+              Blog
+            </h1>
+          </div>
 
-//                 {/* Grid of smaller blog posts */}
-//                 {blogPosts.length > 1 && (
-//                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-12">
-//                     {blogPosts.slice(1).map((post) => (
-//                       <BlogPostCard key={post.slug} post={post} />
-//                     ))}
-//                   </div>
-//                 )}
-//               </>
-//             )}
-//           </div>
-//         </section>
-//       </main>
-//       <Footer />
-//     </>
-//   );
-// }
+          {/* Blog Posts Grid */}
+          {posts.length > 0 ? (
+            <ul className="relative grid h-max gap-8 md:grid-cols-2 items-stretch mt-8">
+              {posts.map((post) => (
+                <li key={post.slug} className="relative flex w-auto flex-col gap-2 group">
+                  <Link href={`/blog/${post.slug}`} className="block">
+                    {/* Image */}
+                    <div className="relative col-span-2 w-full overflow-hidden border border-white/10 rounded-xl aspect-video bg-gradient-to-br from-neutral-900 to-neutral-800 flex items-center justify-center">
+                      {post.image ? (
+                        <Image
+                          src={post.image}
+                          alt={post.title}
+                          fill
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 text-neutral-600">
+                          <Image
+                            src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp"
+                            alt="Proliferate"
+                            width={48}
+                            height={48}
+                            className="opacity-30"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <h2 className="text-2xl md:text-3xl font-semibold tracking-[-0.02em] text-white mt-4 line-clamp-2 leading-tight group-hover:text-neutral-200 transition-colors">
+                      {post.title}
+                    </h2>
+                  </Link>
+                  <p className="text-neutral-500 line-clamp-2 mt-1 text-pretty leading-relaxed">
+                    {post.excerpt}
+                  </p>
+                  <div className="mt-2 flex items-center justify-start gap-2 text-neutral-500">
+                    <span className="text-sm">{post.author}</span>
+                    <span>·</span>
+                    <time dateTime={post.date} className="text-sm">
+                      {formatDate(post.date)}
+                    </time>
+                    <span>·</span>
+                    <span className="text-sm">{post.readTime}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-24 text-neutral-500">
+              <p className="text-lg">No posts yet. Check back soon!</p>
+            </div>
+          )}
+        </div>
+      </main>
+
+      <Footer />
+    </div>
+  );
+}
