@@ -25,6 +25,7 @@ import type { MouseEvent } from "react";
 export function SiteHeader() {
   const [isOpen, setIsOpen] = useState(false);
   const [isTalkOpen, setIsTalkOpen] = useState(false);
+  const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
   const router = useRouter();
 
   const onAnchorClick = (e: MouseEvent, hash: string) => {
@@ -90,26 +91,31 @@ export function SiteHeader() {
         <div className="flex items-center gap-4">
           <div className="hidden md:flex gap-2 items-center">
             {/* Company Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="group text-[13.5px] font-medium text-gray-300 hover:text-white h-9 px-3 flex items-center gap-1 whitespace-nowrap transition-all duration-200">
-                  Company
-                  <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                className="w-36 bg-black/80 backdrop-blur-xl border border-white/[0.08] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.03)_inset] p-1"
-                align="end"
-                sideOffset={8}
-              >
-                <DropdownMenuItem asChild className="text-neutral-400 rounded-lg px-3 py-2 text-[13px] cursor-pointer transition-all duration-150 focus:bg-white/[0.05] focus:text-white hover:bg-white/[0.05] hover:text-white focus:outline-none">
-                  <Link href="/blog">Blog</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="text-neutral-400 rounded-lg px-3 py-2 text-[13px] cursor-pointer transition-all duration-150 focus:bg-white/[0.05] focus:text-white hover:bg-white/[0.05] hover:text-white focus:outline-none">
-                  <Link href="https://www.ycombinator.com/companies/keystone/jobs">Careers</Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div
+              onMouseEnter={() => setCompanyDropdownOpen(true)}
+              onMouseLeave={() => setCompanyDropdownOpen(false)}
+            >
+              <DropdownMenu open={companyDropdownOpen} onOpenChange={setCompanyDropdownOpen}>
+                <DropdownMenuTrigger asChild>
+                  <button className="group text-[13.5px] font-medium text-gray-300 hover:text-white h-9 px-3 flex items-center gap-1 whitespace-nowrap transition-all duration-200">
+                    Company
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${companyDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  className="w-36 bg-black/60 backdrop-blur-xl border border-white/[0.08] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.03)_inset] p-1"
+                  align="end"
+                  sideOffset={8}
+                >
+                  <DropdownMenuItem asChild className="text-neutral-400 rounded-lg px-3 py-2 text-[13px] cursor-pointer transition-all duration-150 focus:bg-white/[0.05] focus:text-white hover:bg-white/[0.05] hover:text-white focus:outline-none">
+                    <Link href="/blog">Blog</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="text-neutral-400 rounded-lg px-3 py-2 text-[13px] cursor-pointer transition-all duration-150 focus:bg-white/[0.05] focus:text-white hover:bg-white/[0.05] hover:text-white focus:outline-none">
+                    <Link href="https://www.ycombinator.com/companies/keystone/jobs">Careers</Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
             <Link
               href="https://app.proliferate.com"

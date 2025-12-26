@@ -165,18 +165,18 @@ export default async function BlogPost({
 
           {/* Divider and CTA */}
           <div className="pt-16 mx-auto max-w-2xl">
-            <div className="relative rounded-3xl border-t border-neutral-800 mx-auto flex flex-col items-center pt-10">
+            <div className="relative rounded-3xl border-t border-neutral-800 mx-auto flex flex-col items-center px-12 pt-10">
               {/* Gradient line effect */}
               <div
                 aria-hidden="true"
-                className="left-1/2 top-0 w-[300px] center pointer-events-none absolute h-px max-w-full -translate-x-1/2 -translate-y-1/2"
+                className="left-1/2 top-0 w-[400px] center pointer-events-none absolute h-px max-w-full -translate-x-1/2 -translate-y-1/2"
                 style={{
                   background:
                     "linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, rgba(255, 255, 255, 0) 0%, rgba(143, 143, 143, 0.67) 50%, rgba(0, 0, 0, 0) 100%)",
                 }}
               />
 
-              <p className="text-neutral-500 mb-6 text-center">
+              <p className="text-neutral-400 mb-6 text-center">
                 Ready to stop debugging and start shipping?
               </p>
 

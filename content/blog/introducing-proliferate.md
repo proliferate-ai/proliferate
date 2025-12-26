@@ -7,22 +7,24 @@ category: "Announcement"
 image: "/blog/proliferate-yc.jpeg"
 ---
 
-We got into YC. Still a bit surreal to type that out.
+We're excited to announce that Proliferate is now backed by Y Combinator.
 
-## So, what are we actually building?
+Our goal is to free engineers from the drudgery of digging through logs, debugging production issues, and connecting scattered context—so they can focus on building great products. With YC, we have the right partners to make this a reality.
 
-Proliferate is basically an AI that joins your engineering team—but instead of just reading your code, it watches what's actually happening in production. It digs through logs, errors, your docs, even old Slack threads, and pieces together what's going wrong. Then it tries to fix it and opens a PR.
+## What is Proliferate?
 
-The idea came from years of debugging production issues at 2am and thinking "why am I the one connecting all these dots?" There's so much context scattered everywhere—metrics, support tickets, that one doc someone wrote six months ago—and it felt like something should be able to do this legwork for us.
+Proliferate is an AI teammate for your engineering team. Think Sentry, but built from the ground up for a world where AI can actually understand your codebase, trace through logs, and tell you exactly what broke and how to fix it.
 
-What makes it different from other AI coding tools:
+It watches what's happening in production, digs through your logs, errors, docs, and chat history, figures out what's going wrong, and sends you fixes as pull requests.
 
-- **It sees the full picture.** Not just your codebase, but logs, errors, traces—the stuff that tells you what's *actually* happening.
-- **It picks up on how your team works.** The conventions, the patterns, the stuff that's never written down but everyone just knows.
-- **It doesn't stop at "here's the problem."** It reproduces issues, tests fixes, and ships PRs when it's confident.
+What makes it different:
+
+- **Sees the full picture.** Not just your codebase, but logs, errors, traces—the signals that tell you what's actually happening in production.
+- **Understands how your team works.** Picks up on conventions, patterns, and context from docs, support tickets, and team communication.
+- **Ships fixes, not just alerts.** Reproduces issues, tests solutions, and opens PRs when it's confident.
 
 ## Why YC?
 
-Honestly? I've followed YC companies for years. So many tools I use every day came out of there. Being part of that community, getting to build alongside people who genuinely obsess over making things better—it's the kind of environment I've always wanted to be in.
+YC has been the launchpad for many of the tools we use every day—Stripe, Dropbox, GitLab, Supabase. Being part of this community with a fantastic group of founders and partners is the right environment for what we're building.
 
-We're just getting started. There's a lot more to share soon.
+This is just the beginning. Looking forward to sharing more soon.
