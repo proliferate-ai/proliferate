@@ -13,7 +13,7 @@ const ibmPlexSans = IBM_Plex_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Proliferate | Account-Level Bug Intelligence for B2B",
+  title: "Proliferate",
   description: "The B2B observability platform that shows you exactly what's happening inside each account. See who's struggling, why, and fix it before they email you.",
   keywords: ["B2B observability", "account health", "customer success", "bug detection", "session replay", "AI debugging", "developer tools", "VIP alerts", "customer intelligence"],
   authors: [{ name: "Proliferate" }],
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
         url: "https://d1uh4o7rpdqkkl.cloudfront.net/og.webp",
         width: 1200,
         height: 630,
-        alt: "Proliferate - Account-Level Bug Intelligence for B2B",
+        alt: "Proliferate",
         type: "image/webp",
       },
     ],
