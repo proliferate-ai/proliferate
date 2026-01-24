@@ -149,7 +149,7 @@ export function WaitlistForm({ children }: WaitlistFormProps) {
             </div>
             <h3 className="text-lg font-medium text-neutral-100">You&apos;re on the list!</h3>
             <p className="text-center text-neutral-400">
-              We&apos;ll reach out soon with your exclusive early access invitation.
+              We&apos;ll let you know when you can onboard.
             </p>
           </div>
         )}

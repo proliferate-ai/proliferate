@@ -138,7 +138,7 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
               </svg>
             </div>
             <h3 className="text-lg font-semibold text-neutral-100">You&apos;re on the list!</h3>
-            <p className="text-neutral-400 mt-2">We&apos;ll be in touch soon.</p>
+            <p className="text-neutral-400 mt-2">We&apos;ll let you know when you can onboard.</p>
           </div>
         )}
       </ResponsiveModalContent>

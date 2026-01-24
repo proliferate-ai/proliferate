@@ -104,21 +104,14 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             from: 'hello@proliferatemail.com',
             to: [email],
-            subject: 'Welcome to Proliferate Early Access!',
+            subject: 'You\'re on the Proliferate waitlist',
             html: `
               <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h1 style="color: #1a1a1a;">Welcome to Proliferate!</h1>
+                <h1 style="color: #1a1a1a;">You're on the list!</h1>
                 <p>Hi ${name},</p>
-                <p>Thank you for your interest in Proliferate! You're now on our exclusive early access list.</p>
-                <p>We're building the AI platform that automatically fixes production bugs, and we can't wait to show you what we've been working on.</p>
-                <p><strong>What happens next?</strong></p>
-                <ul>
-                  <li>We'll review your application</li>
-                  <li>You'll receive an invitation when your spot is ready</li>
-                  <li>Get exclusive early access pricing and features</li>
-                </ul>
-                <p>In the meantime, feel free to reply to this email if you have any questions!</p>
-                <p>Best,<br>The Proliferate Team</p>
+                <p>Thanks for signing up for Proliferate. We're building an AI that automatically fixes production bugs — no more 3am pages.</p>
+                <p>We'll let you know when you can onboard. In the meantime, feel free to reply to this email with any questions.</p>
+                <p>— Pablo</p>
               </div>
             `,
           }),
