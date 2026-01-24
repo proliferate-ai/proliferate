@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       // Update DB to mark email as sent
       if (dbSuccess) {
         try {
-          await sql`UPDATE demo_requests SET email_sent = TRUE WHERE email = ${email} ORDER BY created_at DESC LIMIT 1`;
+          await sql`UPDATE demo_requests SET email_sent = TRUE WHERE id = (SELECT id FROM demo_requests WHERE email = ${email} ORDER BY created_at DESC LIMIT 1)`;
         } catch {
           console.error('[DemoRequest] Failed to update email_sent flag');
         }
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
 
       if (dbSuccess) {
         try {
-          await sql`UPDATE demo_requests SET email_error = ${emailError} WHERE email = ${email} ORDER BY created_at DESC LIMIT 1`;
+          await sql`UPDATE demo_requests SET email_error = ${emailError} WHERE id = (SELECT id FROM demo_requests WHERE email = ${email} ORDER BY created_at DESC LIMIT 1)`;
         } catch {
           console.error('[DemoRequest] Failed to update email_error in DB');
         }

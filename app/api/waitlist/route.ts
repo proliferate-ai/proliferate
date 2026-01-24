@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
       // Update DB to mark email as sent
       if (dbSuccess) {
         try {
-          await sql`UPDATE waitlist SET email_sent = TRUE WHERE email = ${email} ORDER BY created_at DESC LIMIT 1`;
+          await sql`UPDATE waitlist SET email_sent = TRUE WHERE id = (SELECT id FROM waitlist WHERE email = ${email} ORDER BY created_at DESC LIMIT 1)`;
         } catch {
           // Non-critical, just log
           console.error('[Waitlist] Failed to update email_sent flag');
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       // Update DB with email error
       if (dbSuccess) {
         try {
-          await sql`UPDATE waitlist SET email_error = ${emailError} WHERE email = ${email} ORDER BY created_at DESC LIMIT 1`;
+          await sql`UPDATE waitlist SET email_error = ${emailError} WHERE id = (SELECT id FROM waitlist WHERE email = ${email} ORDER BY created_at DESC LIMIT 1)`;
         } catch {
           console.error('[Waitlist] Failed to update email_error in DB');
         }
