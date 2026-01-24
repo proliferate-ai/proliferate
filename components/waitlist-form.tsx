@@ -13,6 +13,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
+const FALLBACK_EMAIL = "pablo@proliferate.ai"
+
 interface WaitlistFormProps {
   children: React.ReactNode
 }
@@ -24,11 +26,13 @@ export function WaitlistForm({ children }: WaitlistFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [error, setError] = useState("")
+  const [isCriticalError, setIsCriticalError] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     setError("")
+    setIsCriticalError(false)
 
     try {
       const response = await fetch("/api/waitlist", {
@@ -42,6 +46,9 @@ export function WaitlistForm({ children }: WaitlistFormProps) {
       const data = await response.json()
 
       if (!response.ok || !data.ok) {
+        if (data.critical) {
+          setIsCriticalError(true)
+        }
         throw new Error(data.error || "Something went wrong. Please try again.")
       }
 
@@ -108,7 +115,22 @@ export function WaitlistForm({ children }: WaitlistFormProps) {
               />
             </div>
 
-            {error && <p className="text-sm text-red-500">{error}</p>}
+            {error && (
+              isCriticalError ? (
+                <div className="rounded-lg bg-red-950 border-2 border-red-500 p-4 text-center">
+                  <p className="text-red-400 font-semibold mb-2">Something went wrong!</p>
+                  <p className="text-red-300 text-sm mb-3">{error}</p>
+                  <a
+                    href={`mailto:${FALLBACK_EMAIL}?subject=Early Access Request - ${encodeURIComponent(name)}&body=Hi, I tried to sign up for early access but encountered an error.%0A%0ACompany: ${encodeURIComponent(name)}%0AEmail: ${encodeURIComponent(email)}`}
+                    className="inline-block bg-red-600 hover:bg-red-500 text-white font-medium px-4 py-2 rounded-md text-sm"
+                  >
+                    Email Us Directly
+                  </a>
+                </div>
+              ) : (
+                <p className="text-sm text-red-500">{error}</p>
+              )
+            )}
 
             <Button
               type="submit"

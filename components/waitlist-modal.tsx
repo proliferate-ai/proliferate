@@ -8,19 +8,26 @@ import {
   ResponsiveModalTitle,
 } from "@/components/ui/responsive-modal";
 
+const FALLBACK_EMAIL = "pablo@proliferate.ai";
+
 interface WaitlistModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
 export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [error, setError] = useState("");
+  const [isCriticalError, setIsCriticalError] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setError("");
+    setIsCriticalError(false);
 
     try {
       const response = await fetch('/api/waitlist', {
@@ -28,23 +35,28 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ name, email }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to join waitlist');
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        if (data.critical) {
+          setIsCriticalError(true);
+        }
+        throw new Error(data.error || 'Failed to join waitlist');
       }
 
       setIsSubmitted(true);
 
       setTimeout(() => {
         setIsSubmitted(false);
+        setName("");
         setEmail("");
         onClose();
       }, 2000);
-    } catch (error) {
-      console.error('Error joining waitlist:', error);
-      alert('Sorry, there was an error joining the waitlist. Please try again.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -60,12 +72,27 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
         {!isSubmitted ? (
           <form onSubmit={handleSubmit} className="space-y-4 mt-2">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-neutral-400 mb-2">
+              <label htmlFor="modal-name" className="block text-sm font-medium text-neutral-400 mb-2">
+                Company name
+              </label>
+              <input
+                type="text"
+                id="modal-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your company"
+                className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-600 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="modal-email" className="block text-sm font-medium text-neutral-400 mb-2">
                 Work email
               </label>
               <input
                 type="email"
-                id="email"
+                id="modal-email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
@@ -73,6 +100,23 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
                 required
               />
             </div>
+
+            {error && (
+              isCriticalError ? (
+                <div className="rounded-lg bg-red-950 border-2 border-red-500 p-4 text-center">
+                  <p className="text-red-400 font-semibold mb-2">Something went wrong!</p>
+                  <p className="text-red-300 text-sm mb-3">{error}</p>
+                  <a
+                    href={`mailto:${FALLBACK_EMAIL}?subject=Early Access Request - ${encodeURIComponent(name)}&body=Hi, I tried to sign up for early access but encountered an error.%0A%0ACompany: ${encodeURIComponent(name)}%0AEmail: ${encodeURIComponent(email)}`}
+                    className="inline-block bg-red-600 hover:bg-red-500 text-white font-medium px-4 py-2 rounded-md text-sm"
+                  >
+                    Email Us Directly
+                  </a>
+                </div>
+              ) : (
+                <p className="text-sm text-red-500">{error}</p>
+              )
+            )}
 
             <p className="text-sm text-neutral-500">
               We promise we won&apos;t spam you. We&apos;ll only reach out when Proliferate is ready for your team.
