@@ -50,28 +50,32 @@ export function HomeHeroSection() {
             {/* Headlines */}
             <div className="flex flex-col items-center gap-2 text-white">
               <h1 className="text-center text-[clamp(2.4rem,6vw,5.2rem)] font-bold tracking-[-0.02em] text-white leading-[1] sm:leading-[1.1]">
-                <span className="block ">
-                  The next generation
-                </span>
-                <span className="block mt-2">
-                  of error monitoring.
-                </span>
-
+                The autonomous
+                <br />
+                engineering organization
               </h1>
-              <h2 className="text-lg sm:text-xl text-white/80 mt-4 text-center max-w-md">
-                Modern observability for AI-native teams
+              <h2 className="text-lg sm:text-xl text-white/80 mt-4 text-center max-w-xl">
+                A single workspace for coding agents, engineers, and operators to build together, faster.
               </h2>
             </div>
 
-            {/* CTA Button */}
+            {/* CTA Buttons */}
             <div className="flex gap-4">
+              <Button
+                size="lg"
+                className="h-12 px-6 text-base rounded-full bg-white text-black hover:bg-gray-100 font-medium inline-flex items-center justify-center gap-2"
+                onClick={() => setIsTalkOpen(true)}
+              >
+                Request demo
+                <ChevronRight className="w-4 h-4" />
+              </Button>
               <WaitlistForm>
                 <Button
                   size="lg"
-                  className="h-12 px-6 text-base rounded-full bg-white text-black hover:bg-gray-100 font-medium inline-flex items-center justify-center gap-2"
+                  variant="outline"
+                  className="h-12 px-6 text-base rounded-full border-white/20 bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white font-medium"
                 >
-                  Join early access
-                  <ChevronRight className="w-4 h-4" />
+                  Join waitlist
                 </Button>
               </WaitlistForm>
             </div>

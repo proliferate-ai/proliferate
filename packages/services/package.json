@@ -1,0 +1,30 @@
+{
+	"name": "@proliferate/services",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./src/index.ts",
+	"types": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@nangohq/node": "^0.69.22",
+		"@proliferate/db": "workspace:*",
+		"@proliferate/environment": "workspace:*",
+		"@proliferate/gateway-clients": "workspace:*",
+		"@proliferate/queue": "workspace:*",
+		"@proliferate/shared": "workspace:*",
+		"@proliferate/triggers": "workspace:*",
+		"drizzle-orm": "^0.44.0",
+		"ioredis": "^5.5.0"
+	},
+	"devDependencies": {
+		"typescript": "^5.3.3"
+	}
+}

@@ -1,0 +1,333 @@
+/**
+ * Automation workers (runs v2).
+ */
+
+import { env } from "@proliferate/environment/server";
+import { createSyncClient } from "@proliferate/gateway-clients";
+import type { SyncClient } from "@proliferate/gateway-clients";
+import {
+	createAutomationEnrichQueue,
+	createAutomationEnrichWorker,
+	createAutomationExecuteQueue,
+	createAutomationExecuteWorker,
+	getConnectionOptions,
+	queueAutomationEnrich,
+	queueAutomationExecute,
+} from "@proliferate/queue";
+import { outbox, runs, triggers } from "@proliferate/services";
+import type { Worker } from "bullmq";
+import { writeCompletionArtifact } from "./artifacts";
+
+const LEASE_TTL_MS = 5 * 60 * 1000;
+const OUTBOX_POLL_INTERVAL_MS = 2000;
+const FINALIZER_INTERVAL_MS = 60 * 1000;
+const INACTIVITY_MS = 30 * 60 * 1000;
+
+interface AutomationWorkers {
+	enrichWorker: Worker;
+	executeWorker: Worker;
+	outboxInterval: NodeJS.Timeout;
+	finalizerInterval: NodeJS.Timeout;
+}
+
+export function startAutomationWorkers(): AutomationWorkers {
+	const gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;
+	const serviceToken = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
+	if (!gatewayUrl || !serviceToken) {
+		throw new Error("Gateway URL or service token not configured");
+	}
+
+	const syncClient = createSyncClient({
+		baseUrl: gatewayUrl,
+		auth: { type: "service", name: "worker-automation", secret: serviceToken },
+		source: "automation",
+	});
+
+	const connection = getConnectionOptions();
+	const enrichQueue = createAutomationEnrichQueue(connection);
+	const executeQueue = createAutomationExecuteQueue(connection);
+
+	const enrichWorker = createAutomationEnrichWorker(async (job) => {
+		await handleEnrich(job.data.runId);
+	});
+
+	const executeWorker = createAutomationExecuteWorker(async (job) => {
+		await handleExecute(job.data.runId, syncClient);
+	});
+
+	const outboxInterval = setInterval(() => {
+		dispatchOutbox(enrichQueue, executeQueue).catch((err) => {
+			console.error("[AutomationOutbox] Dispatch failed:", err);
+		});
+	}, OUTBOX_POLL_INTERVAL_MS);
+
+	const finalizerInterval = setInterval(() => {
+		finalizeRuns(syncClient).catch((err) => {
+			console.error("[AutomationFinalizer] Tick failed:", err);
+		});
+	}, FINALIZER_INTERVAL_MS);
+
+	console.log("[Automation] Workers started: enrich, execute, outbox, finalizer");
+
+	return { enrichWorker, executeWorker, outboxInterval, finalizerInterval };
+}
+
+export async function stopAutomationWorkers(workers: AutomationWorkers): Promise<void> {
+	clearInterval(workers.outboxInterval);
+	clearInterval(workers.finalizerInterval);
+	await workers.enrichWorker.close();
+	await workers.executeWorker.close();
+}
+
+async function handleEnrich(runId: string): Promise<void> {
+	const workerId = `automation-enrich:${process.pid}`;
+	const run = await runs.claimRun(runId, ["queued"], workerId, LEASE_TTL_MS);
+	if (!run) return;
+
+	await runs.transitionRunStatus(runId, "enriching", {
+		enrichmentStartedAt: new Date(),
+		lastActivityAt: new Date(),
+	});
+
+	await runs.transitionRunStatus(runId, "ready", {
+		enrichmentCompletedAt: new Date(),
+		lastActivityAt: new Date(),
+	});
+
+	await outbox.enqueueOutbox({
+		organizationId: run.organizationId,
+		kind: "enqueue_execute",
+		payload: { runId },
+	});
+}
+
+async function handleExecute(runId: string, syncClient: SyncClient): Promise<void> {
+	const workerId = `automation-execute:${process.pid}`;
+	const run = await runs.claimRun(runId, ["ready"], workerId, LEASE_TTL_MS);
+	if (!run) return;
+
+	const context = await runs.findRunWithRelations(runId);
+	if (!context || !context.automation || !context.triggerEvent) {
+		await runs.markRunFailed({
+			runId,
+			reason: "missing_context",
+			stage: "execution",
+			errorMessage: "Missing automation or trigger event context",
+		});
+		return;
+	}
+
+	const automation = context.automation;
+	const prebuildId = automation.defaultPrebuildId;
+	if (!prebuildId) {
+		await runs.markRunFailed({
+			runId,
+			reason: "missing_prebuild",
+			stage: "execution",
+			errorMessage: "Automation missing default prebuild",
+		});
+		return;
+	}
+
+	await runs.transitionRunStatus(runId, "running", {
+		executionStartedAt: new Date(),
+		lastActivityAt: new Date(),
+	});
+
+	let sessionId = run.sessionId ?? null;
+	if (!sessionId) {
+		const session = await syncClient.createSession(
+			{
+				organizationId: run.organizationId,
+				prebuildId,
+				sessionType: "coding",
+				clientType: "automation",
+				sandboxMode: "immediate",
+				title: buildTitle(automation.name, context.triggerEvent.parsedContext),
+				automationId: automation.id,
+				triggerId: context.trigger?.id,
+				triggerEventId: context.triggerEvent.id,
+				triggerContext: context.triggerEvent.parsedContext as Record<string, unknown>,
+				agentConfig: automation.modelId ? { modelId: automation.modelId } : undefined,
+				clientMetadata: {
+					automationId: automation.id,
+					triggerId: context.trigger?.id,
+					triggerEventId: context.triggerEvent.id,
+					provider: context.trigger?.provider,
+					context: context.triggerEvent.parsedContext,
+				},
+			},
+			{ idempotencyKey: `run:${runId}:session` },
+		);
+
+		sessionId = session.sessionId;
+		await runs.updateRun(runId, {
+			sessionId,
+			sessionCreatedAt: new Date(),
+			lastActivityAt: new Date(),
+		});
+
+		await triggers.updateEvent(context.triggerEvent.id, {
+			status: "processing",
+			sessionId,
+			processedAt: new Date(),
+		});
+	}
+
+	if (!run.promptSentAt) {
+		const prompt = buildPrompt(automation.agentInstructions, runId);
+		await syncClient.postMessage(sessionId, {
+			content: prompt,
+			userId: "automation",
+			idempotencyKey: `run:${runId}:prompt:v1`,
+		});
+		await runs.updateRun(runId, {
+			promptSentAt: new Date(),
+			lastActivityAt: new Date(),
+		});
+	}
+}
+
+async function finalizeRuns(syncClient: SyncClient): Promise<void> {
+	const candidates = await runs.listStaleRunningRuns({
+		limit: 50,
+		inactivityMs: INACTIVITY_MS,
+	});
+
+	for (const run of candidates) {
+		try {
+			if (!run.sessionId) {
+				await runs.markRunFailed({
+					runId: run.id,
+					reason: "missing_session",
+					stage: "finalizer",
+					errorMessage: "Run has no session",
+				});
+				continue;
+			}
+
+			if (run.deadlineAt && run.deadlineAt < new Date()) {
+				await runs.transitionRunStatus(run.id, "timed_out", {
+					statusReason: "deadline_exceeded",
+					failureStage: "finalizer",
+					completedAt: new Date(),
+				});
+				await triggers.updateEvent(run.triggerEventId, {
+					status: "failed",
+					errorMessage: "Run timed out",
+					processedAt: new Date(),
+				});
+				continue;
+			}
+
+			const status = await syncClient.getSessionStatus(run.sessionId);
+			if (status.state === "terminated") {
+				await runs.markRunFailed({
+					runId: run.id,
+					reason: "session_terminated",
+					stage: "finalizer",
+					errorMessage: status.reason ?? "Session terminated without completion",
+				});
+				await triggers.updateEvent(run.triggerEventId, {
+					status: "failed",
+					errorMessage: status.reason ?? "Session terminated without completion",
+					processedAt: new Date(),
+				});
+			} else if (status.state !== "running") {
+				await runs.markRunFailed({
+					runId: run.id,
+					reason: `session_state_${status.state}`,
+					stage: "finalizer",
+					errorMessage: `Unexpected session state: ${status.state}`,
+				});
+				await triggers.updateEvent(run.triggerEventId, {
+					status: "failed",
+					errorMessage: `Unexpected session state: ${status.state}`,
+					processedAt: new Date(),
+				});
+			}
+		} catch (err) {
+			console.error(
+				`[AutomationFinalizer] Failed to finalize run ${run.id}:`,
+				err instanceof Error ? err.message : err,
+			);
+		}
+	}
+}
+
+async function dispatchOutbox(
+	enrichQueue: ReturnType<typeof createAutomationEnrichQueue>,
+	executeQueue: ReturnType<typeof createAutomationExecuteQueue>,
+): Promise<void> {
+	const pending = await outbox.listPendingOutbox(50);
+	for (const item of pending) {
+		try {
+			const payload = item.payload as { runId?: string };
+			const runId = payload.runId;
+			if (!runId) {
+				await outbox.markFailed(item.id, "Missing runId in outbox payload");
+				continue;
+			}
+
+			switch (item.kind) {
+				case "enqueue_enrich":
+					await queueAutomationEnrich(enrichQueue, runId);
+					break;
+				case "enqueue_execute":
+					await queueAutomationExecute(executeQueue, runId);
+					break;
+				case "write_artifacts":
+					await writeArtifacts(runId);
+					break;
+				default:
+					await outbox.markFailed(item.id, `Unknown outbox kind: ${item.kind}`);
+					continue;
+			}
+
+			await outbox.markDispatched(item.id);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			await outbox.markFailed(item.id, message, new Date(Date.now() + 30_000));
+		}
+	}
+}
+
+async function writeArtifacts(runId: string): Promise<void> {
+	const run = await runs.findRunWithRelations(runId);
+	if (!run) {
+		throw new Error("Run not found");
+	}
+	if (!run.completionJson) {
+		throw new Error("Run has no completion payload");
+	}
+
+	const completionKey = await writeCompletionArtifact(runId, run.completionJson);
+	await runs.updateRun(runId, {
+		completionArtifactRef: completionKey,
+	});
+}
+
+function buildPrompt(instructions: string | null | undefined, runId: string): string {
+	const parts: string[] = [];
+	if (instructions?.trim()) {
+		parts.push(instructions.trim());
+	}
+	parts.push("The trigger context is available at `.proliferate/trigger-context.json`");
+	parts.push(
+		[
+			"Completion requirements:",
+			"- You MUST call `automation.complete` when finished or blocked.",
+			`- Use run_id: ${runId}`,
+			`- Use completion_id: run:${runId}:completion:v1`,
+			"- Set outcome to succeeded | failed | needs_human.",
+			"- Include a concise summary_markdown and citations if applicable.",
+		].join("\n"),
+	);
+	return parts.join("\n\n");
+}
+
+function buildTitle(name: string, context: unknown): string {
+	const title = (context as { title?: string } | null)?.title;
+	if (title) return `${name} · ${title}`;
+	return name;
+}

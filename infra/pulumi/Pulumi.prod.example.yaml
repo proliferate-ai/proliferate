@@ -1,0 +1,30 @@
+# Example Pulumi stack config for `infra/pulumi/`.
+#
+# Copy to `Pulumi.prod.yaml` (ignored by git) and set secrets via:
+#   pulumi config set proliferate-infra:serviceAuthToken --secret <value>
+#
+# See `infra/pulumi/config.ts` for the full list of config keys.
+
+config:
+  aws:region: us-east-1
+
+  proliferate-infra:environment: production
+  proliferate-infra:deploymentProfile: cloud
+  proliferate-infra:appUrl: https://app.example.com
+  proliferate-infra:apiUrl: https://app.example.com
+  proliferate-infra:imageTag: latest
+
+  proliferate-infra:billingEnabled: "false"
+  proliferate-infra:integrationsEnabled: "false"
+
+  proliferate-infra:defaultSandboxProvider: e2b
+  proliferate-infra:e2bDomain: api.e2b.dev
+  proliferate-infra:e2bTemplate: proliferate-base
+  proliferate-infra:e2bTemplateAlias: proliferate-base
+
+  proliferate-infra:githubAppId: "000000"
+  proliferate-infra:githubAppSlug: replace-me
+  proliferate-infra:emailFrom: updates@example.com
+
+  # Secrets are intentionally omitted. Set them with `pulumi config set --secret`.
+

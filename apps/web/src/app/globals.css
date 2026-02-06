@@ -1,0 +1,115 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	:root {
+		--background: 0 0% 100%;
+		--foreground: 0 0% 3.9%;
+
+		/* Sidebar - #f9f9f9 in light mode */
+		--sidebar: 0 0% 97.6%;
+		--sidebar-foreground: 0 0% 3.9%;
+		--sidebar-border: 0 0% 92%;
+
+		--card: 0 0% 100%;
+		--card-foreground: 0 0% 3.9%;
+		--popover: 0 0% 100%;
+		--popover-foreground: 0 0% 3.9%;
+		--primary: 0 0% 9%;
+		--primary-foreground: 0 0% 98%;
+		--secondary: 0 0% 96.1%;
+		--secondary-foreground: 0 0% 9%;
+		--muted: 0 0% 96.1%;
+		--muted-foreground: 0 0% 45.1%;
+		--accent: 0 0% 92%;
+		--accent-foreground: 0 0% 9%;
+		--destructive: 0 84.2% 60.2%;
+		--destructive-foreground: 0 0% 98%;
+		--border: 0 0% 85%;
+		--input: 0 0% 89.8%;
+		--ring: 0 0% 3.9%;
+		--radius: 0.5rem;
+
+		/* Chat input background - uses card in light mode */
+		--chat-input: 0 0% 100%;
+	}
+
+	.dark {
+		/* Main content background - lighter than sidebar */
+		--background: 0 0% 12%;
+		--foreground: 0 0% 98%;
+
+		/* Sidebar - #181818 */
+		--sidebar: 0 0% 9.5%;
+		--sidebar-foreground: 0 0% 98%;
+		--sidebar-border: 0 0% 16%;
+
+		/* Cards and popovers - slightly elevated from background */
+		--card: 0 0% 11%;
+		--card-foreground: 0 0% 98%;
+		--popover: 0 0% 11%;
+		--popover-foreground: 0 0% 98%;
+
+		/* Primary action color - white in dark mode */
+		--primary: 0 0% 98%;
+		--primary-foreground: 0 0% 9%;
+
+		/* Secondary/muted surfaces */
+		--secondary: 0 0% 16%;
+		--secondary-foreground: 0 0% 98%;
+		--muted: 0 0% 16%;
+		--muted-foreground: 0 0% 63%;
+
+		/* Accent (hover states, highlights) */
+		--accent: 0 0% 16%;
+		--accent-foreground: 0 0% 98%;
+
+		/* Destructive */
+		--destructive: 0 62.8% 30.6%;
+		--destructive-foreground: 0 0% 98%;
+
+		/* Borders and inputs */
+		--border: 0 0% 20%;
+		--input: 0 0% 20%;
+		--ring: 0 0% 98%;
+
+		/* Chat input background - #303030 */
+		--chat-input: 0 0% 18.8%;
+	}
+}
+
+@layer base {
+	* {
+		@apply border-border;
+	}
+	body {
+		@apply bg-background text-foreground;
+	}
+}
+
+/* Allow Nango Connect UI iframe to receive pointer events when open */
+/* The hook adds this class to body when openConnectUI is active */
+body.nango-connect-open [data-radix-dialog-overlay] {
+	pointer-events: none;
+}
+
+/* Override browser autofill styling (Chrome adds ugly grey/blue backgrounds) */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+	-webkit-box-shadow: 0 0 0 1000px hsl(var(--background)) inset !important;
+	-webkit-text-fill-color: hsl(var(--foreground)) !important;
+	caret-color: hsl(var(--foreground)) !important;
+	transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Hide scrollbar but allow scrolling */
+.no-scrollbar {
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+	display: none;
+}

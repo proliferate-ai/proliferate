@@ -1,0 +1,228 @@
+name: Deploy ECS
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_all:
+        description: 'Deploy all services (ignore change detection)'
+        type: boolean
+        default: false
+      service:
+        description: 'Specific service to deploy (leave empty for all if deploy_all is true)'
+        type: choice
+        options:
+          - ''
+          - worker
+          - llm-proxy
+          - gateway
+          - web
+
+jobs:
+  deploy-worker:
+    name: Deploy Worker to ECS
+    runs-on: ubuntu-latest
+    if: >
+      (github.event_name == 'workflow_dispatch' && (inputs.deploy_all || inputs.service == 'worker')) ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for worker changes
+        id: changes
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && ("${{ inputs.deploy_all }}" == "true" || "${{ inputs.service }}" == "worker") ]]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          elif git diff --name-only HEAD~1 HEAD | grep -qE "^(apps/worker/|packages/queue/|packages/shared/|packages/services/)"; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS credentials
+        if: steps.changes.outputs.changed == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        if: steps.changes.outputs.changed == 'true'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          docker build --platform linux/amd64 -f apps/worker/Dockerfile \
+            -t ${{ steps.login-ecr.outputs.registry }}/proliferate-worker:${{ github.sha }} \
+            -t ${{ steps.login-ecr.outputs.registry }}/proliferate-worker:latest .
+          docker push ${{ steps.login-ecr.outputs.registry }}/proliferate-worker:${{ github.sha }}
+          docker push ${{ steps.login-ecr.outputs.registry }}/proliferate-worker:latest
+
+      - name: Deploy to ECS
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          aws ecs update-service --cluster proliferate --service proliferate-worker --force-new-deployment
+          echo "Waiting for deployment to stabilize..."
+          aws ecs wait services-stable --cluster proliferate --services proliferate-worker
+
+  deploy-llm-proxy:
+    name: Deploy LLM Proxy to ECS
+    runs-on: ubuntu-latest
+    if: >
+      (github.event_name == 'workflow_dispatch' && (inputs.deploy_all || inputs.service == 'llm-proxy')) ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for llm-proxy changes
+        id: changes
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && ("${{ inputs.deploy_all }}" == "true" || "${{ inputs.service }}" == "llm-proxy") ]]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          elif git diff --name-only HEAD~1 HEAD | grep -qE "^apps/llm-proxy/"; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS credentials
+        if: steps.changes.outputs.changed == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        if: steps.changes.outputs.changed == 'true'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          docker build --platform linux/amd64 -f apps/llm-proxy/Dockerfile \
+            -t ${{ steps.login-ecr.outputs.registry }}/proliferate-llm-proxy:${{ github.sha }} \
+            -t ${{ steps.login-ecr.outputs.registry }}/proliferate-llm-proxy:latest \
+            apps/llm-proxy
+          docker push ${{ steps.login-ecr.outputs.registry }}/proliferate-llm-proxy:${{ github.sha }}
+          docker push ${{ steps.login-ecr.outputs.registry }}/proliferate-llm-proxy:latest
+
+      - name: Deploy to ECS
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          aws ecs update-service --cluster proliferate --service proliferate-llm-proxy --force-new-deployment
+          echo "Waiting for deployment to stabilize..."
+          aws ecs wait services-stable --cluster proliferate --services proliferate-llm-proxy
+
+  deploy-gateway:
+    name: Deploy Gateway to ECS
+    runs-on: ubuntu-latest
+    if: >
+      (github.event_name == 'workflow_dispatch' && (inputs.deploy_all || inputs.service == 'gateway')) ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for gateway changes
+        id: changes
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && ("${{ inputs.deploy_all }}" == "true" || "${{ inputs.service }}" == "gateway") ]]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          elif git diff --name-only HEAD~1 HEAD | grep -qE "^(apps/gateway/|packages/shared/|packages/services/|packages/db/)"; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS credentials
+        if: steps.changes.outputs.changed == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        if: steps.changes.outputs.changed == 'true'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          docker build --platform linux/amd64 -f apps/gateway/Dockerfile \
+            -t ${{ steps.login-ecr.outputs.registry }}/proliferate-gateway:${{ github.sha }} \
+            -t ${{ steps.login-ecr.outputs.registry }}/proliferate-gateway:latest .
+          docker push ${{ steps.login-ecr.outputs.registry }}/proliferate-gateway:${{ github.sha }}
+          docker push ${{ steps.login-ecr.outputs.registry }}/proliferate-gateway:latest
+
+      - name: Deploy to ECS
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          aws ecs update-service --cluster proliferate --service proliferate-gateway --force-new-deployment
+          echo "Waiting for deployment to stabilize..."
+          aws ecs wait services-stable --cluster proliferate --services proliferate-gateway
+
+  deploy-web:
+    name: Deploy Web to ECS
+    runs-on: ubuntu-latest
+    if: >
+      (github.event_name == 'workflow_dispatch' && (inputs.deploy_all || inputs.service == 'web')) ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for web changes
+        id: changes
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && ("${{ inputs.deploy_all }}" == "true" || "${{ inputs.service }}" == "web") ]]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          elif git diff --name-only HEAD~1 HEAD | grep -qE "^(apps/web/|packages/shared/|packages/services/|packages/db/)"; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS credentials
+        if: steps.changes.outputs.changed == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        if: steps.changes.outputs.changed == 'true'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          docker build --platform linux/amd64 -f apps/web/Dockerfile \
+            -t ${{ steps.login-ecr.outputs.registry }}/proliferate-web:${{ github.sha }} \
+            -t ${{ steps.login-ecr.outputs.registry }}/proliferate-web:latest .
+          docker push ${{ steps.login-ecr.outputs.registry }}/proliferate-web:${{ github.sha }}
+          docker push ${{ steps.login-ecr.outputs.registry }}/proliferate-web:latest
+
+      - name: Deploy to ECS
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          aws ecs update-service --cluster proliferate --service proliferate-web --force-new-deployment
+          echo "Waiting for deployment to stabilize..."
+          aws ecs wait services-stable --cluster proliferate --services proliferate-web

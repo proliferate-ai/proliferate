@@ -1,0 +1,151 @@
+# LiteLLM Proxy Configuration
+# https://docs.litellm.ai/docs/proxy/configs
+#
+# Authentication: Uses Virtual Keys (free tier)
+# - Keys generated via /key/generate with team_id (org) and user_id (session)
+# - Spend tracked automatically per team and user in LiteLLM_SpendLogs
+# - No enterprise license required
+#
+# Model name mapping:
+#   OpenCode sends model IDs like "anthropic/claude-sonnet-4-5" (no date suffix)
+#   LiteLLM maps these to actual Anthropic API models (with date suffix)
+
+model_list:
+  # ============================================
+  # Claude 4.5 models (latest generation)
+  # ============================================
+  - model_name: anthropic/claude-sonnet-4-5
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5-20250929
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: anthropic/claude-opus-4-5
+    litellm_params:
+      model: anthropic/claude-opus-4-5-20251101
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # Claude Opus 4.6
+  - model_name: anthropic/claude-opus-4-6
+    litellm_params:
+      model: anthropic/claude-opus-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ============================================
+  # Claude 4 models
+  # ============================================
+  - model_name: anthropic/claude-sonnet-4
+    litellm_params:
+      model: anthropic/claude-sonnet-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: anthropic/claude-opus-4
+    litellm_params:
+      model: anthropic/claude-opus-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ============================================
+  # Claude 3.7 models
+  # ============================================
+  - model_name: anthropic/claude-3-7-sonnet
+    litellm_params:
+      model: anthropic/claude-3-7-sonnet-20250219
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ============================================
+  # Claude 3.5 models
+  # ============================================
+  - model_name: anthropic/claude-3-5-sonnet
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: anthropic/claude-3-5-haiku
+    litellm_params:
+      model: anthropic/claude-3-5-haiku-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # Backward-compatible alias for invalid 4.5 haiku label
+  - model_name: anthropic/claude-haiku-4-5
+    litellm_params:
+      model: anthropic/claude-3-5-haiku-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ============================================
+  # Claude 3 models (legacy)
+  # ============================================
+  - model_name: anthropic/claude-3-opus
+    litellm_params:
+      model: anthropic/claude-3-opus-20240229
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: anthropic/claude-3-sonnet
+    litellm_params:
+      model: anthropic/claude-3-sonnet-20240229
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: anthropic/claude-3-haiku
+    litellm_params:
+      model: anthropic/claude-3-haiku-20240307
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ============================================
+  # Convenience aliases (short names)
+  # ============================================
+  - model_name: claude-sonnet-4-5
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5-20250929
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-opus-4-5
+    litellm_params:
+      model: anthropic/claude-opus-4-5-20251101
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # Claude Opus 4.6 (short alias)
+  - model_name: claude-opus-4-6
+    litellm_params:
+      model: anthropic/claude-opus-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-sonnet-4
+    litellm_params:
+      model: anthropic/claude-sonnet-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-opus-4
+    litellm_params:
+      model: anthropic/claude-opus-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: anthropic/claude-3-5-haiku-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5-20250929
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+general_settings:
+  # Master key for admin operations (key generation, team creation, etc.)
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+  # Database for spend tracking (same PostgreSQL as the app)
+  # LiteLLM auto-logs to LiteLLM_SpendLogs table
+  database_url: os.environ/DATABASE_URL
+
+litellm_settings:
+  # No custom callbacks needed - LiteLLM auto-tracks to LiteLLM_SpendLogs
+  set_verbose: false
+
+  # Drop unmapped params to avoid errors
+  drop_params: true
+
+router_settings:
+  # Retry failed requests
+  num_retries: 2
+  retry_after: 1
+
+  # Timeout settings (5 minutes for long responses)
+  timeout: 300

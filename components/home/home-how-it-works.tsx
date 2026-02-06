@@ -1,18 +1,23 @@
 const steps = [
   {
     number: "01",
-    title: "Connect",
-    description: "Link your repo and logs. Five minutes, no config.",
+    title: "Connect your codebase",
+    description: "Sign in with GitHub",
   },
   {
     number: "02",
-    title: "Understand",
-    description: "AI learns your codebase, your users, your patterns.",
+    title: "Connect your signals",
+    description: "Link Sentry, Linear, Slack",
   },
   {
     number: "03",
-    title: "Fix",
-    description: "Get actionable issues with root cause and suggested fixes.",
+    title: "Set your triggers",
+    description: "Define what kicks off work",
+  },
+  {
+    number: "04",
+    title: "Review and ship",
+    description: "Approve PRs, not tickets",
   },
 ];
 
@@ -20,15 +25,15 @@ export function HomeHowItWorks() {
   return (
     <section className="py-20 md:py-28 bg-black border-t border-white/5">
       <div className="proliferate-container">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <h2 className="text-2xl sm:text-3xl font-bold text-white text-center mb-4">
-            How it works
+            Get started
           </h2>
           <p className="text-white/40 text-center mb-16 max-w-xl mx-auto">
-            From zero to actionable insights in minutes, not days.
+            From zero to shipping in minutes.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
             {steps.map((step, index) => (
               <div key={index} className="relative">
                 {/* Connector line */}

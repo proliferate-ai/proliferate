@@ -1,0 +1,355 @@
+/**
+ * Centralized icon exports
+ *
+ * Re-exports from lucide-react for consistent imports across the codebase.
+ * Also includes custom brand icons and other SVG icons.
+ *
+ * Usage:
+ * import { Check, Plus, GoogleIcon, GithubIcon } from "@/components/ui/icons";
+ */
+
+import { cn } from "@/lib/utils";
+import { Croissant } from "lucide-react";
+
+// Re-export LucideIcon type for typed icon props
+export type { LucideIcon } from "lucide-react";
+
+// Re-export commonly used icons from lucide-react
+export {
+	AlertCircle,
+	AlertTriangle,
+	ArrowLeft,
+	ArrowRight,
+	ArrowUp,
+	BarChart3,
+	Box,
+	Camera,
+	Check,
+	CheckCircle,
+	CheckCircle2,
+	ChevronDown,
+	ChevronLeft,
+	ChevronRight,
+	ChevronUp,
+	Circle,
+	Clock,
+	Copy,
+	Download,
+	ExternalLink,
+	Eye,
+	EyeOff,
+	File,
+	FileText,
+	Folder,
+	FolderOpen,
+	GitBranch,
+	Github,
+	Globe,
+	Grid,
+	Image,
+	Info,
+	Key,
+	Link,
+	Loader2,
+	Lock,
+	LogOut,
+	Mail,
+	Maximize2,
+	MessageSquare,
+	Mic,
+	Minimize2,
+	Moon,
+	MoreHorizontal,
+	MoreVertical,
+	Package,
+	PanelRight,
+	Paperclip,
+	Pencil,
+	Play,
+	Plus,
+	RefreshCw,
+	Search,
+	Settings,
+	Square,
+	Sun,
+	Trash2,
+	User,
+	Users,
+	Video,
+	X,
+} from "lucide-react";
+
+// ============================================================================
+// Custom Brand Icons
+// ============================================================================
+
+interface IconProps {
+	className?: string;
+}
+
+/**
+ * Google brand icon for OAuth buttons
+ */
+export function GoogleIcon({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 24 24">
+			<path
+				fill="#4285F4"
+				d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+			/>
+			<path
+				fill="#34A853"
+				d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+			/>
+			<path
+				fill="#FBBC05"
+				d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+			/>
+			<path
+				fill="#EA4335"
+				d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+			/>
+		</svg>
+	);
+}
+
+/**
+ * Slack brand icon
+ */
+export function SlackIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			fill="currentColor"
+			role="img"
+			aria-label="Slack"
+		>
+			<path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" />
+		</svg>
+	);
+}
+
+/**
+ * Sentry brand icon
+ */
+export function SentryIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			xmlns="http://www.w3.org/2000/svg"
+			viewBox="0 -1.5 27 27"
+			fill="currentColor"
+		>
+			<path d="m26.745 22.818c.238-.357.38-.796.38-1.268s-.142-.911-.386-1.276l.005.008-10.986-19.101c-.439-.714-1.217-1.183-2.103-1.183-.033 0-.065.001-.097.002h.005c-.903.044-1.692.497-2.19 1.176l-.006.008-3.55 6.252.845.507c2.706 1.536 4.886 3.716 6.379 6.339l.043.083c1.307 2.182 2.16 4.775 2.363 7.549l.003.057h-2.532c-.199-2.394-.93-4.581-2.072-6.493l.038.069c-1.229-2.376-3.079-4.284-5.338-5.549l-.067-.034-.847-.505-3.379 5.746.844.507c2.157 1.303 3.671 3.485 4.051 6.037l.006.046h-5.578c-.134-.019-.25-.081-.339-.17-.044-.043-.072-.103-.072-.17s.027-.127.072-.169l1.524-2.705c-.502-.484-1.131-.839-1.833-1.011l-.028-.006-1.521 2.716c-.238.357-.38.796-.38 1.268s.142.911.386 1.277l-.005-.008c.398.714 1.148 1.189 2.009 1.189.066 0 .131-.003.195-.008l-.008.001h7.775v-1.017c-.032-1.923-.53-3.724-1.386-5.301l.03.061c-.696-1.31-1.667-2.389-2.843-3.19l-.03-.02 1.188-2.194c1.548 1.16 2.842 2.562 3.849 4.162l.038.064c1.066 1.81 1.696 3.987 1.696 6.312 0 .039 0 .077-.001.116v-.006 1.017h6.59v-1.017c0-.038 0-.082 0-.127 0-3.576-1.006-6.917-2.75-9.756l.046.081c-1.459-2.72-3.523-4.944-6.021-6.551l-.069-.042 2.536-4.393c.086-.094.204-.156.337-.169h.002c.17 0 .17 0 .339.17l10.987 19.101c.044.043.072.103.072.17s-.027.127-.072.169c-.089.089-.205.15-.336.169h-.003-2.536v2.034h2.535c.139.036.299.056.463.056.755 0 1.409-.432 1.728-1.062l.005-.011z" />
+		</svg>
+	);
+}
+
+/**
+ * Linear brand icon
+ */
+export function LinearIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			xmlns="http://www.w3.org/2000/svg"
+			viewBox="0 0 24 24"
+			fill="currentColor"
+		>
+			<path d="M3.03509 12.9431C3.24245 14.9227 4.10472 16.8468 5.62188 18.364C7.13904 19.8811 9.0631 20.7434 11.0428 20.9508L3.03509 12.9431Z" />
+			<path d="M3 11.4938L12.4921 20.9858C13.2976 20.9407 14.0981 20.7879 14.8704 20.5273L3.4585 9.11548C3.19793 9.88771 3.0451 10.6883 3 11.4938Z" />
+			<path d="M3.86722 8.10999L15.8758 20.1186C16.4988 19.8201 17.0946 19.4458 17.6493 18.9956L4.99021 6.33659C4.54006 6.89125 4.16573 7.487 3.86722 8.10999Z" />
+			<path d="M5.66301 5.59517C9.18091 2.12137 14.8488 2.135 18.3498 5.63604C21.8508 9.13708 21.8645 14.8049 18.3907 18.3228L5.66301 5.59517Z" />
+		</svg>
+	);
+}
+
+/**
+ * OpenCode logo - terminal-style icon
+ */
+export function OpenCodeIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={cn("h-4 w-4", className)}
+			viewBox="0 0 240 300"
+			fill="none"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<g clipPath="url(#clip0_opencode)">
+				<mask
+					id="mask0_opencode"
+					style={{ maskType: "luminance" }}
+					maskUnits="userSpaceOnUse"
+					x="0"
+					y="0"
+					width="240"
+					height="300"
+				>
+					<path d="M240 0H0V300H240V0Z" fill="white" />
+				</mask>
+				<g mask="url(#mask0_opencode)">
+					<path d="M180 240H60V120H180V240Z" fill="currentColor" opacity="0.5" />
+					<path d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z" fill="currentColor" />
+				</g>
+			</g>
+			<defs>
+				<clipPath id="clip0_opencode">
+					<rect width="240" height="300" fill="white" />
+				</clipPath>
+			</defs>
+		</svg>
+	);
+}
+
+/**
+ * Claude/Anthropic logo
+ */
+export function ClaudeIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={cn("h-4 w-4", className)}
+			viewBox="0 0 24 24"
+			fill="none"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path
+				d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z"
+				fill="#D97757"
+				fillRule="nonzero"
+			/>
+		</svg>
+	);
+}
+
+// ============================================================================
+// Generic UI Icons
+// ============================================================================
+
+/**
+ * Pause circle icon (for paused sessions)
+ */
+export function PauseCircleIcon({ className }: IconProps) {
+	return (
+		<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={2}
+				d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"
+			/>
+		</svg>
+	);
+}
+
+export function BoltIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			xmlns="http://www.w3.org/2000/svg"
+			width="200"
+			height="200"
+			viewBox="0 0 16 16"
+			fill="none"
+		>
+			<path
+				fill="currentColor"
+				d="M11.251.068a.5.5 0 0 1 .227.58L9.677 6.5H13a.5.5 0 0 1 .364.843l-8 8.5a.5.5 0 0 1-.842-.49L6.323 9.5H3a.5.5 0 0 1-.364-.843l8-8.5a.5.5 0 0 1 .615-.09zM4.157 8.5H7a.5.5 0 0 1 .478.647L6.11 13.59l5.732-6.09H9a.5.5 0 0 1-.478-.647L9.89 2.41L4.157 8.5z"
+			/>
+		</svg>
+	);
+}
+
+/**
+ * Monitor/Desktop icon (for preview panel)
+ */
+export function MonitorIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			fill="none"
+			viewBox="0 0 24 24"
+			stroke="currentColor"
+			aria-hidden="true"
+		>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={2}
+				d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+			/>
+		</svg>
+	);
+}
+
+export function GithubIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			width="128"
+			height="128"
+			viewBox="0 0 128 128"
+			fill="none"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path
+				d="M56.7937 84.9688C44.4187 83.4688 35.7 74.5625 35.7 63.0313C35.7 58.3438 37.3875 53.2813 40.2 49.9063C38.9812 46.8125 39.1687 40.25 40.575 37.5313C44.325 37.0625 49.3875 39.0313 52.3875 41.75C55.95 40.625 59.7 40.0625 64.2937 40.0625C68.8875 40.0625 72.6375 40.625 76.0125 41.6563C78.9187 39.0313 84.075 37.0625 87.825 37.5313C89.1375 40.0625 89.325 46.625 88.1062 49.8125C91.1062 53.375 92.7 58.1563 92.7 63.0313C92.7 74.5625 83.9812 83.2813 71.4187 84.875C74.6062 86.9375 76.7625 91.4375 76.7625 96.5938L76.7625 106.344C76.7625 109.156 79.1062 110.75 81.9187 109.625C98.8875 103.156 112.2 86.1875 112.2 65.1875C112.2 38.6563 90.6375 17 64.1062 17C37.575 17 16.2 38.6562 16.2 65.1875C16.2 86 29.4187 103.25 47.2312 109.719C49.7625 110.656 52.2 108.969 52.2 106.438L52.2 98.9375C50.8875 99.5 49.2 99.875 47.7 99.875C41.5125 99.875 37.8562 96.5 35.2312 90.2188C34.2 87.6875 33.075 86.1875 30.9187 85.9063C29.7937 85.8125 29.4187 85.3438 29.4187 84.7813C29.4187 83.6563 31.2937 82.8125 33.1687 82.8125C35.8875 82.8125 38.2312 84.5 40.6687 87.9688C42.5437 90.6875 44.5125 91.9063 46.8562 91.9063C49.2 91.9063 50.7 91.0625 52.8562 88.9063C54.45 87.3125 55.6687 85.9063 56.7937 84.9688Z"
+				fill="currentColor"
+			/>
+		</svg>
+	);
+}
+
+/**
+ * Folder minus icon (folder with minus sign)
+ */
+export function FolderMinusIcon({ className }: IconProps) {
+	return (
+		<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={1.5}
+				d="M15 13.5H9m4.06-7.19l-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z"
+			/>
+		</svg>
+	);
+}
+
+/**
+ * Folder plus icon (folder with plus sign)
+ */
+export function FolderPlusIcon({ className }: IconProps) {
+	return (
+		<svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth={1.5}
+				d="M12 10.5v6m3-3H9m4.06-7.19l-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z"
+			/>
+		</svg>
+	);
+}
+
+/**
+ * Sidebar expand icon (panel on right - sidebar is collapsed)
+ */
+export function SidebarExpandIcon({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 16 16" fill="currentColor">
+			<path d="M16 3a2 2 0 0 0-2-2H2a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3zm-5-1v12H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h9zm1 0h2a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-2V2z" />
+		</svg>
+	);
+}
+
+/**
+ * Sidebar collapse icon (panel on left - sidebar is expanded)
+ */
+export function SidebarCollapseIcon({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 16 16" fill="currentColor">
+			<path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3zm5-1v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H5zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2V2z" />
+		</svg>
+	);
+}

@@ -1,0 +1,15 @@
+{{- if .Values.db.ssl.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "proliferate.fullname" . }}-db-ca
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+  labels:
+{{ include "proliferate.labels" . | indent 4 }}
+data:
+  {{ .Values.db.ssl.caBundleFile }}: |
+{{ .Files.Get (printf "files/%s" .Values.db.ssl.caBundleFile) | indent 4 }}
+{{- end }}

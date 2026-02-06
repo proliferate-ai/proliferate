@@ -14,35 +14,35 @@ const backgroundImages = [
 
 const scrollSteps = [
   {
-    id: "observe",
-    title: "Don't just observe",
-    subtitle: "Take action",
+    id: "sandboxes",
+    title: "Cloud sandboxes, not local filesystems",
+    subtitle: "Run 100 agents in parallel",
     description:
-      "Traditional monitoring tools show you dashboards and charts. Proliferate gives you fixes. Every error comes with root cause analysis and actionable next steps.",
-    visual: "action",
-  },
-  {
-    id: "setup",
-    title: "Easy setup",
-    subtitle: "5 minutes to value",
-    description:
-      "No SDK sprawl. No instrumentation nightmare. Connect your repo and see issues immediately. We handle the rest.",
+      "Every task gets its own environment. No more \"works on my machine.\"",
     visual: "setup",
   },
   {
-    id: "triage",
-    title: "Errors triaged",
-    subtitle: "Automatically prioritized",
+    id: "triggers",
+    title: "Work starts before tickets exist",
+    subtitle: "Proactive automation",
     description:
-      "AI analyzes impact, frequency, and business context to surface what matters. Stop drowning in alerts, start shipping fixes.",
+      "Triggers listen to Sentry, Slack, Linear, and support channels. PRs are ready before your PM wakes up.",
+    visual: "action",
+  },
+  {
+    id: "previews",
+    title: "Preview environments for everything",
+    subtitle: "Live demos for every PR",
+    description:
+      "Every PR becomes a live demo anyone can try. Verify work before it ships.",
     visual: "triage",
   },
   {
-    id: "fixed",
-    title: "Errors fixed",
-    subtitle: "Not just identified",
+    id: "org",
+    title: "The whole org ships together",
+    subtitle: "Close the loop",
     description:
-      "Get suggested code changes, not just stack traces. Understand the why, not just the what. Ship the fix in minutes.",
+      "Operators don't live in GitHub. They live in Slack. We close the loop for them.",
     visual: "fixed",
   },
 ];
@@ -979,11 +979,8 @@ export function HomeStickyScrollSection() {
           {/* Section header */}
           <div className="text-center mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-3">
-              Stop observing. Start fixing.
+              How it works
             </h2>
-            <p className="text-white/40 max-w-lg mx-auto text-sm sm:text-base">
-              From exception to fix in minutes, not days.
-            </p>
           </div>
 
           {/* Sticky scroll container */}

@@ -1,0 +1,8 @@
+dump.rdb
+.vercel
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+e2e/test-results/

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { WaitlistForm } from "./waitlist-form";
 import { TalkToFounderModal } from "./talk-to-founder-modal";
 import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
@@ -18,30 +17,21 @@ export function FinalCTASection() {
           backgroundImage: "linear-gradient(to right bottom, rgb(255, 255, 255) 30%, rgba(255, 255, 255, 0.5))",
         }}
       >
-        Errors understood.
+        Put your engineering org
         <br />
-        Fixes delivered.
+        on autopilot
       </h2>
 
-      {/* CTA Buttons */}
+      {/* CTA Button */}
       <div className="flex justify-center gap-4">
-        <WaitlistForm>
-          <Button
-            size="lg"
-            className="h-12 px-6 text-base rounded-full bg-white text-black hover:bg-gray-100 font-medium inline-flex items-center justify-center gap-2"
-          >
-            Join early access
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-        </WaitlistForm>
-        {/* <Button
+        <Button
           size="lg"
-          variant="outline"
-          className="h-12 px-6 text-base rounded-full border-white/20 bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white font-medium"
+          className="h-12 px-6 text-base rounded-full bg-white text-black hover:bg-gray-100 font-medium inline-flex items-center justify-center gap-2"
           onClick={() => setIsTalkOpen(true)}
         >
-          Talk to us
-        </Button> */}
+          Request demo
+          <ChevronRight className="w-4 h-4" />
+        </Button>
       </div>
 
       {/* Large Logo/Wordmark */}

@@ -1,0 +1,571 @@
+/**
+ * Session Creator
+ *
+ * Handles session creation logic including:
+ * - Creating session record in database
+ * - Optionally creating sandbox immediately
+ * - Setting up environment variables and secrets
+ * - Generating LLM proxy JWT
+ */
+
+import { automations, integrations, prebuilds, sessions } from "@proliferate/services";
+import type { CloneInstructions, ModelId, RepoSpec, SandboxProvider } from "@proliferate/shared";
+import type { GatewayEnv } from "./env";
+import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
+
+export type SessionType = "coding" | "setup" | "cli";
+export type ClientType = "web" | "slack" | "cli" | "automation";
+export type SandboxMode = "immediate" | "deferred";
+
+export interface CreateSessionOptions {
+	env: GatewayEnv;
+	provider: SandboxProvider;
+
+	// Required
+	organizationId: string;
+	prebuildId: string;
+	sessionType: SessionType;
+	clientType: ClientType;
+
+	// Optional
+	userId?: string;
+	snapshotId?: string | null;
+	initialPrompt?: string;
+	title?: string;
+	clientMetadata?: Record<string, unknown>;
+	agentConfig?: { modelId?: string };
+	sandboxMode?: SandboxMode;
+	automationId?: string;
+	triggerId?: string;
+	triggerEventId?: string;
+
+	/** Explicit integration IDs for OAuth token injection.
+	 * If not provided, will inherit from automationId's connections. */
+	integrationIds?: string[];
+
+	/** Trigger context written to .proliferate/trigger-context.json in sandbox */
+	triggerContext?: Record<string, unknown>;
+
+	// SSH access (can be enabled on any session type)
+	sshOptions?: {
+		publicKeys: string[];
+		cloneInstructions?: CloneInstructions;
+		localPath?: string;
+		localPathHash?: string;
+		gitToken?: string;
+		envVars?: Record<string, string>;
+	};
+}
+
+export interface IntegrationWarning {
+	integrationId: string;
+	message: string;
+}
+
+export interface CreateSessionResult {
+	sessionId: string;
+	prebuildId: string;
+	status: "pending" | "starting" | "running";
+	hasSnapshot: boolean;
+	isNewPrebuild: boolean;
+	sandbox?: {
+		sandboxId: string;
+		previewUrl: string | null;
+		sshHost?: string;
+		sshPort?: number;
+	};
+	/** Warnings for integrations that failed token resolution. */
+	integrationWarnings?: IntegrationWarning[];
+}
+
+interface PrebuildRepoRow {
+	workspacePath: string;
+	repo: {
+		id: string;
+		githubUrl: string;
+		githubRepoName: string;
+		defaultBranch: string | null;
+	} | null;
+}
+
+/**
+ * Create a new session
+ */
+export async function createSession(
+	options: CreateSessionOptions,
+	isNewPrebuild = false,
+): Promise<CreateSessionResult> {
+	const {
+		env,
+		provider,
+		organizationId,
+		prebuildId,
+		sessionType,
+		clientType,
+		userId,
+		snapshotId,
+		initialPrompt,
+		title,
+		clientMetadata,
+		agentConfig,
+		sandboxMode = "deferred",
+		automationId,
+		triggerId,
+		triggerEventId,
+		integrationIds: explicitIntegrationIds,
+		triggerContext,
+		sshOptions,
+	} = options;
+
+	const sessionId = crypto.randomUUID();
+	const shortId = sessionId.slice(0, 8);
+
+	console.log(`[SessionCreator:${shortId}] Creating session`, {
+		sessionType,
+		clientType,
+		sandboxMode,
+		hasSnapshot: Boolean(snapshotId),
+		sshEnabled: Boolean(sshOptions),
+		explicitIntegrations: explicitIntegrationIds?.length ?? 0,
+	});
+
+	// SSH sessions are always immediate (need to return SSH connection info)
+	const effectiveSandboxMode = sshOptions ? "immediate" : sandboxMode;
+	const initialStatus = effectiveSandboxMode === "immediate" ? "starting" : "pending";
+
+	// Resolve integration IDs (explicit or inherited from automation)
+	let resolvedIntegrationIds: string[] = [];
+	if (explicitIntegrationIds?.length) {
+		resolvedIntegrationIds = explicitIntegrationIds;
+	} else if (automationId) {
+		try {
+			const automationConnections =
+				await automations.listAutomationConnectionsInternal(automationId);
+			resolvedIntegrationIds = automationConnections
+				.filter((c) => c.integration?.status === "active")
+				.map((c) => c.integrationId);
+		} catch (err) {
+			console.warn(`[SessionCreator:${shortId}] Failed to load automation connections:`, err);
+		}
+	}
+
+	// Create session record via services
+	try {
+		await sessions.create({
+			id: sessionId,
+			prebuildId,
+			organizationId,
+			sessionType,
+			clientType,
+			status: initialStatus,
+			sandboxProvider: provider.type,
+			createdBy: userId,
+			snapshotId,
+			initialPrompt,
+			title,
+			clientMetadata,
+			agentConfig,
+			localPathHash: sshOptions?.localPathHash,
+			origin: sshOptions?.localPathHash ? "cli" : undefined,
+			automationId,
+			triggerId,
+			triggerEventId,
+		});
+	} catch (err) {
+		console.error(`[SessionCreator:${shortId}] Failed to create session:`, err);
+		throw new Error(
+			`Failed to create session: ${err instanceof Error ? err.message : String(err)}`,
+		);
+	}
+
+	// Create session connections (record which integrations are associated)
+	if (resolvedIntegrationIds.length > 0) {
+		try {
+			await sessions.createSessionConnections(sessionId, resolvedIntegrationIds);
+			console.log(
+				`[SessionCreator:${shortId}] Recorded ${resolvedIntegrationIds.length} session connection(s)`,
+			);
+		} catch (err) {
+			console.warn(`[SessionCreator:${shortId}] Failed to record session connections:`, err);
+		}
+	}
+
+	console.log(`[SessionCreator:${shortId}] Session record created`);
+
+	// If deferred, return immediately
+	if (effectiveSandboxMode === "deferred") {
+		return {
+			sessionId,
+			prebuildId,
+			status: "pending",
+			hasSnapshot: Boolean(snapshotId),
+			isNewPrebuild,
+		};
+	}
+
+	// Create sandbox immediately
+	let integrationWarnings: IntegrationWarning[] = [];
+	try {
+		const result = await createSandbox({
+			env,
+			provider,
+			sessionId,
+			prebuildId,
+			organizationId,
+			userId,
+			snapshotId,
+			agentConfig,
+			integrationIds: resolvedIntegrationIds,
+			triggerContext,
+			sshOptions,
+		});
+		integrationWarnings = result.integrationWarnings;
+
+		// Update session with sandbox info
+		await sessions.update(sessionId, {
+			status: "running",
+			sandboxId: result.sandboxId,
+			openCodeTunnelUrl: result.tunnelUrl || null,
+			previewTunnelUrl: result.previewUrl,
+		});
+
+		return {
+			sessionId,
+			prebuildId,
+			status: "running",
+			hasSnapshot: Boolean(snapshotId),
+			isNewPrebuild,
+			sandbox: {
+				sandboxId: result.sandboxId,
+				previewUrl: result.previewUrl,
+				sshHost: result.sshHost,
+				sshPort: result.sshPort,
+			},
+			integrationWarnings: integrationWarnings.length > 0 ? integrationWarnings : undefined,
+		};
+	} catch (err) {
+		// Clean up session on sandbox creation failure
+		console.error(`[SessionCreator:${shortId}] Sandbox creation failed:`, err);
+		await sessions.deleteById(sessionId, organizationId);
+		throw err;
+	}
+}
+
+interface CreateSandboxParams {
+	env: GatewayEnv;
+	provider: SandboxProvider;
+	sessionId: string;
+	prebuildId: string;
+	organizationId: string;
+	userId?: string;
+	snapshotId?: string | null;
+	agentConfig?: { modelId?: string };
+	/** Resolved integration IDs for token injection. */
+	integrationIds?: string[];
+	/** Trigger context written to .proliferate/trigger-context.json */
+	triggerContext?: Record<string, unknown>;
+	sshOptions?: CreateSessionOptions["sshOptions"];
+}
+
+interface CreateSandboxResult {
+	sandboxId: string;
+	tunnelUrl?: string;
+	previewUrl: string;
+	sshHost?: string;
+	sshPort?: number;
+	integrationWarnings: IntegrationWarning[];
+}
+
+/**
+ * Create a sandbox with all options unified.
+ * Handles both coding sessions (with repo cloning) and CLI sessions (with SSH).
+ */
+async function createSandbox(params: CreateSandboxParams): Promise<CreateSandboxResult> {
+	const {
+		env,
+		provider,
+		sessionId,
+		prebuildId,
+		organizationId,
+		userId,
+		snapshotId,
+		agentConfig,
+		integrationIds,
+		triggerContext,
+		sshOptions,
+	} = params;
+
+	// SSH public key (concatenate all keys for authorized_keys)
+	const sshPublicKey = sshOptions?.publicKeys?.join("\n");
+
+	// Resolve integration tokens
+	const { envVars: integrationEnvVars, warnings: integrationWarnings } =
+		await resolveIntegrationEnvVars(organizationId, integrationIds);
+
+	// For CLI/SSH sessions, we don't need to load repos (sync via rsync)
+	if (sshOptions && !sshOptions.cloneInstructions) {
+		const baseEnvResult = await sessions.buildSandboxEnvVars({
+			sessionId,
+			orgId: organizationId,
+			repoIds: [],
+			repoSpecs: [],
+			requireProxy: process.env.LLM_PROXY_REQUIRED === "true",
+			directApiKey: env.anthropicApiKey,
+		});
+		const mergedEnvVars = {
+			...baseEnvResult.envVars,
+			...integrationEnvVars,
+			...(sshOptions.envVars || {}),
+		};
+
+		const result = await provider.createSandbox({
+			sessionId,
+			repos: [],
+			branch: "main",
+			envVars: mergedEnvVars,
+			systemPrompt: "CLI terminal session",
+			snapshotId: snapshotId || undefined,
+			sshPublicKey,
+			triggerContext,
+		});
+
+		return {
+			sandboxId: result.sandboxId,
+			previewUrl: result.previewUrl,
+			sshHost: result.sshHost,
+			sshPort: result.sshPort,
+			integrationWarnings,
+		};
+	}
+
+	// Load prebuild repos for coding sessions
+	const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
+
+	if (!prebuildRepoRows || prebuildRepoRows.length === 0) {
+		throw new Error("Prebuild has no associated repos");
+	}
+
+	// Filter out repos with null values and convert to expected shape
+	const typedPrebuildRepos: PrebuildRepoRow[] = prebuildRepoRows
+		.filter((pr) => pr.repo !== null)
+		.map((pr) => ({
+			workspacePath: pr.workspacePath,
+			repo: pr.repo,
+		}));
+
+	if (typedPrebuildRepos.length === 0) {
+		throw new Error("Prebuild has no associated repos");
+	}
+
+	// Resolve GitHub tokens for each repo
+	const repoSpecs: RepoSpec[] = await Promise.all(
+		typedPrebuildRepos.map(async (pr) => {
+			const token = await resolveGitHubToken(env, organizationId, pr.repo!.id, userId);
+			return {
+				repoUrl: pr.repo!.githubUrl,
+				token,
+				workspacePath: pr.workspacePath,
+				repoId: pr.repo!.id,
+			};
+		}),
+	);
+
+	// Build environment variables
+	const envVars = await loadEnvironmentVariables(
+		env,
+		sessionId,
+		organizationId,
+		typedPrebuildRepos.map((pr) => pr.repo!.id),
+		repoSpecs,
+		integrationEnvVars,
+	);
+
+	// Build system prompt
+	const primaryRepo = typedPrebuildRepos[0].repo!;
+	const systemPrompt = `You are an AI coding assistant. Help the user with their coding tasks in the ${primaryRepo.githubRepoName} repository.`;
+
+	// Create sandbox with all options
+	const result = await provider.createSandbox({
+		sessionId,
+		repos: repoSpecs,
+		branch: primaryRepo.defaultBranch || "main",
+		envVars,
+		systemPrompt,
+		snapshotId: snapshotId || undefined,
+		agentConfig: agentConfig
+			? {
+					agentType: "opencode" as const,
+					modelId: (agentConfig.modelId || "claude-opus-4.6") as ModelId,
+				}
+			: undefined,
+		sshPublicKey,
+		triggerContext,
+	});
+
+	return {
+		sandboxId: result.sandboxId,
+		tunnelUrl: result.tunnelUrl,
+		previewUrl: result.previewUrl,
+		sshHost: result.sshHost,
+		sshPort: result.sshPort,
+		integrationWarnings,
+	};
+}
+
+/**
+ * Load environment variables for a session
+ */
+async function loadEnvironmentVariables(
+	env: GatewayEnv,
+	sessionId: string,
+	orgId: string,
+	repoIds: string[],
+	repoSpecs: RepoSpec[],
+	integrationEnvVars: Record<string, string>,
+): Promise<Record<string, string>> {
+	const result = await sessions.buildSandboxEnvVars({
+		sessionId,
+		orgId,
+		repoIds,
+		repoSpecs,
+		requireProxy: process.env.LLM_PROXY_REQUIRED === "true",
+		directApiKey: env.anthropicApiKey,
+	});
+
+	return {
+		...result.envVars,
+		...integrationEnvVars,
+	};
+}
+
+/**
+ * Resolve GitHub token for a repo
+ */
+async function resolveGitHubToken(
+	env: GatewayEnv,
+	orgId: string,
+	repoId: string,
+	userId: string | undefined,
+): Promise<string> {
+	try {
+		// Get repo connections with integration details
+		const repoConnections = await integrations.getRepoConnectionsWithIntegrations(repoId);
+
+		const activeConnections = repoConnections.filter(
+			(rc) => rc.integration && rc.integration.status === "active",
+		);
+
+		let selectedIntegration: GitHubIntegration | null = null;
+
+		if (activeConnections.length > 0) {
+			if (userId) {
+				const userConnection = activeConnections.find((rc) => rc.integration?.createdBy === userId);
+				if (userConnection?.integration) {
+					selectedIntegration = {
+						id: userConnection.integration.id,
+						github_installation_id: userConnection.integration.githubInstallationId,
+						connection_id: userConnection.integration.connectionId,
+					};
+				}
+			}
+
+			if (!selectedIntegration && activeConnections[0]?.integration) {
+				const int = activeConnections[0].integration;
+				selectedIntegration = {
+					id: int.id,
+					github_installation_id: int.githubInstallationId,
+					connection_id: int.connectionId,
+				};
+			}
+		}
+
+		if (!selectedIntegration) {
+			// Try GitHub App integration
+			const githubAppIntegration = await integrations.findActiveGitHubApp(orgId);
+
+			if (githubAppIntegration) {
+				selectedIntegration = {
+					id: githubAppIntegration.id,
+					github_installation_id: githubAppIntegration.githubInstallationId,
+					connection_id: githubAppIntegration.connectionId,
+				};
+			} else {
+				// Try Nango GitHub integration
+				if (env.nangoGithubIntegrationId) {
+					const nangoIntegration = await integrations.findActiveNangoGitHub(
+						orgId,
+						env.nangoGithubIntegrationId,
+					);
+
+					if (nangoIntegration) {
+						selectedIntegration = {
+							id: nangoIntegration.id,
+							github_installation_id: nangoIntegration.githubInstallationId,
+							connection_id: nangoIntegration.connectionId,
+						};
+					}
+				}
+			}
+		}
+
+		if (!selectedIntegration) {
+			return "";
+		}
+
+		return await getGitHubTokenForIntegration(env, selectedIntegration);
+	} catch (err) {
+		console.warn("Failed to resolve GitHub token:", err);
+		return "";
+	}
+}
+
+/**
+ * Resolve integration tokens and return as env vars.
+ */
+async function resolveIntegrationEnvVars(
+	orgId: string,
+	integrationIds?: string[],
+): Promise<{ envVars: Record<string, string>; warnings: IntegrationWarning[] }> {
+	if (!integrationIds?.length) {
+		return { envVars: {}, warnings: [] };
+	}
+
+	try {
+		// Fetch integration details for token resolution
+		const integrationsForTokens = await integrations.getIntegrationsForTokens(
+			integrationIds,
+			orgId,
+		);
+
+		// Resolve tokens
+		const { tokens, errors } = await integrations.resolveTokens(integrationsForTokens);
+
+		// Build env vars
+		const envVars: Record<string, string> = {};
+		for (const token of tokens) {
+			const envVarName = integrations.getEnvVarName(token.integrationTypeId, token.integrationId);
+			envVars[envVarName] = token.token;
+			console.log(
+				`[SessionCreator] Injected integration token: ${envVarName.replace(/_[^_]+$/, "_***")}`,
+			);
+		}
+
+		// Convert errors to warnings
+		const warnings: IntegrationWarning[] = errors.map((e) => ({
+			integrationId: e.integrationId,
+			message: e.message,
+		}));
+
+		if (warnings.length > 0) {
+			console.warn(
+				`[SessionCreator] Failed to resolve ${warnings.length} integration token(s):`,
+				warnings.map((w) => w.message),
+			);
+		}
+
+		return { envVars, warnings };
+	} catch (err) {
+		console.error("[SessionCreator] Error resolving integration tokens:", err);
+		return { envVars: {}, warnings: [] };
+	}
+}

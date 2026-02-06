@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "proliferate.fullname" . }}-llm-proxy
+  labels:
+{{ include "proliferate.labels" . | indent 4 }}
+    app.kubernetes.io/component: llm-proxy
+spec:
+  replicas: {{ .Values.replicaCount.llmProxy }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: llm-proxy
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: llm-proxy
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+{{ if .Values.db.ssl.enabled }}
+      initContainers:
+        - name: build-ca-bundle
+          image: "{{ .Values.image.llmProxy.repository }}:{{ .Values.image.llmProxy.tag }}"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              SYS_CA=$(for f in /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/cert.pem; do [ -f "$f" ] && echo "$f" && break; done)
+              if [ -z "$SYS_CA" ]; then echo "No system CA bundle found" >&2; exit 1; fi
+              cat "$SYS_CA" /certs/{{ .Values.db.ssl.caBundleFile }} > /combined-certs/combined-ca-bundle.pem
+          volumeMounts:
+            - name: db-ca-bundle
+              mountPath: /certs
+              readOnly: true
+            - name: combined-ca-bundle
+              mountPath: /combined-certs
+{{ end }}
+      containers:
+        - name: llm-proxy
+          image: "{{ .Values.image.llmProxy.repository }}:{{ .Values.image.llmProxy.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.llmProxy.port }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.env.llmProxySecretName }}
+          {{ if .Values.db.ssl.enabled }}
+          env:
+            - name: NODE_EXTRA_CA_CERTS
+              value: {{ .Values.db.ssl.mountPath }}
+            # Python's SSL_CERT_FILE replaces (not appends) the default trust store.
+            # Pointing it at the RDS-only bundle breaks connections to public APIs
+            # (e.g. api.anthropic.com). Use a combined bundle instead.
+            - name: SSL_CERT_FILE
+              value: /combined-certs/combined-ca-bundle.pem
+          volumeMounts:
+            - name: db-ca-bundle
+              mountPath: {{ .Values.db.ssl.mountPath }}
+              subPath: {{ .Values.db.ssl.caBundleFile }}
+              readOnly: true
+            - name: combined-ca-bundle
+              mountPath: /combined-certs
+              readOnly: true
+          {{ end }}
+          readinessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: {{ .Values.service.llmProxy.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: {{ .Values.service.llmProxy.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+{{ toYaml .Values.resources.llmProxy | indent 12 }}
+{{ if .Values.db.ssl.enabled }}
+      volumes:
+        - name: db-ca-bundle
+          configMap:
+            name: {{ include "proliferate.fullname" . }}-db-ca
+            items:
+              - key: {{ .Values.db.ssl.caBundleFile }}
+                path: {{ .Values.db.ssl.caBundleFile }}
+        - name: combined-ca-bundle
+          emptyDir: {}
+{{ end }}

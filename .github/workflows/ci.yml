@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Biome (changed files)
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            BASE="HEAD~1"
+          else
+            BASE="origin/main"
+          fi
+
+          set +e
+          OUTPUT=$(pnpm exec biome check --changed --since="$BASE" 2>&1)
+          STATUS=$?
+          set -e
+
+          if [ $STATUS -ne 0 ]; then
+            if echo "$OUTPUT" | grep -q "No files were processed in the specified paths"; then
+              echo "$OUTPUT"
+              echo "Biome skipped: no supported files changed."
+            else
+              echo "$OUTPUT"
+              exit $STATUS
+            fi
+          else
+            echo "$OUTPUT"
+          fi
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run typecheck
+        run: pnpm typecheck
+
+  test-web:
+    name: Web Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm --filter @proliferate/web test
+        env:
+          USER_SECRETS_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm build
+        env:
+          SKIP_ENV_VALIDATION: "true"
+          RESEND_API_KEY: "re_123"
+          BETTER_AUTH_SECRET: "dev-secret"
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+
+  e2e-staging:
+    name: E2E (Staging)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tracer bullet
+        run: pnpm -C scripts exec tsx tracer-bullet.ts
+
+      - name: Run automation E2E
+        run: pnpm -C scripts exec tsx automation-e2e.ts
+    env:
+      SKIP_ENV_VALIDATION: "true"
+      NEXT_PUBLIC_API_URL: ${{ secrets.E2E_NEXT_PUBLIC_API_URL }}
+      NEXT_PUBLIC_APP_URL: ${{ secrets.E2E_NEXT_PUBLIC_APP_URL }}
+      AUTH_TOKEN: ${{ secrets.E2E_AUTH_TOKEN }}
+      E2E_AUTH_TOKEN: ${{ secrets.E2E_AUTH_TOKEN }}
+      TEST_REPO_ID: ${{ secrets.E2E_TEST_REPO_ID }}
+      E2E_AUTOMATION_ID: ${{ secrets.E2E_AUTOMATION_ID }}
+      E2E_GATEWAY_URL: ${{ secrets.E2E_GATEWAY_URL }}
+      E2E_PREBUILD_ID: ${{ secrets.E2E_PREBUILD_ID }}
+      E2E_ORG_ID: ${{ secrets.E2E_ORG_ID }}

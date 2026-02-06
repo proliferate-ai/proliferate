@@ -1,0 +1,85 @@
+image:
+  pullPolicy: IfNotPresent
+  web:
+    repository: ""
+    tag: latest
+  gateway:
+    repository: ""
+    tag: latest
+  worker:
+    repository: ""
+    tag: latest
+  llmProxy:
+    repository: ""
+    tag: latest
+  triggerService:
+    repository: ""
+    tag: latest
+
+triggerService:
+  enabled: false
+
+env:
+  secretName: proliferate-env
+  llmProxySecretName: proliferate-llm-proxy-env
+
+replicaCount:
+  web: 1
+  gateway: 1
+  worker: 1
+  llmProxy: 1
+  triggerService: 1
+
+serviceAccount:
+  gateway:
+    create: true
+    name: gateway
+    annotations: {}
+
+service:
+  web:
+    port: 3000
+  gateway:
+    port: 8787
+  llmProxy:
+    port: 4000
+  triggerService:
+    port: 3001
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  gatewayAnnotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: "/$2"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  llmProxyAnnotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: "/$2"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  host: ""
+  gatewayPath: /gateway
+  llmProxyPath: /llm-proxy
+  tls: []
+
+resources:
+  web: {}
+  gateway: {}
+  worker: {}
+  llmProxy: {}
+  triggerService: {}
+
+migrations:
+  enabled: true
+  backoffLimit: 3
+
+db:
+  ssl:
+    enabled: true
+    caBundleFile: aws-rds-global-bundle.pem
+    mountPath: /etc/ssl/certs/aws-rds-global-bundle.pem

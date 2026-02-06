@@ -1,0 +1,41 @@
+import { isAuthError, requireAuth } from "@/lib/auth-helpers";
+import { env } from "@proliferate/environment/public";
+import { nodeEnv } from "@proliferate/environment/runtime";
+
+export async function GET() {
+	const authResult = await requireAuth();
+	if (isAuthError(authResult)) {
+		return Response.json({ error: authResult.error }, { status: authResult.status });
+	}
+
+	const raw = {
+		DEPLOYMENT_PROFILE: process.env.DEPLOYMENT_PROFILE,
+		NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+		NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+		NEXT_PUBLIC_GATEWAY_URL: process.env.NEXT_PUBLIC_GATEWAY_URL,
+		NEXT_PUBLIC_INTEGRATIONS_ENABLED: process.env.NEXT_PUBLIC_INTEGRATIONS_ENABLED,
+		NEXT_PUBLIC_USE_NANGO_GITHUB: process.env.NEXT_PUBLIC_USE_NANGO_GITHUB,
+		NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID: process.env.NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID,
+		NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID: process.env.NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID,
+		NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID: process.env.NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID,
+	};
+
+	return Response.json(
+		{
+			nodeEnv,
+			timestamp: new Date().toISOString(),
+			raw,
+			publicEnv: {
+				NEXT_PUBLIC_APP_URL: env.NEXT_PUBLIC_APP_URL,
+				NEXT_PUBLIC_API_URL: env.NEXT_PUBLIC_API_URL,
+				NEXT_PUBLIC_GATEWAY_URL: env.NEXT_PUBLIC_GATEWAY_URL,
+				NEXT_PUBLIC_INTEGRATIONS_ENABLED: env.NEXT_PUBLIC_INTEGRATIONS_ENABLED,
+				NEXT_PUBLIC_USE_NANGO_GITHUB: env.NEXT_PUBLIC_USE_NANGO_GITHUB,
+				NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID: env.NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID,
+				NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID: env.NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID,
+				NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID: env.NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID,
+			},
+		},
+		{ status: 200 },
+	);
+}

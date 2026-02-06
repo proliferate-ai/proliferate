@@ -1,0 +1,35 @@
+{{- if .Values.triggerService.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "proliferate.fullname" . }}-trigger-service
+  labels:
+{{ include "proliferate.labels" . | indent 4 }}
+    app.kubernetes.io/component: trigger-service
+spec:
+  replicas: {{ .Values.replicaCount.triggerService }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: trigger-service
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: trigger-service
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: trigger-service
+          image: "{{ .Values.image.triggerService.repository }}:{{ .Values.image.triggerService.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.triggerService.port }}
+          env:
+            - name: PORT
+              value: "{{ .Values.service.triggerService.port }}"
+          envFrom:
+            - secretRef:
+                name: {{ .Values.env.secretName }}
+          resources:
+{{ toYaml .Values.resources.triggerService | indent 12 }}
+{{- end }}

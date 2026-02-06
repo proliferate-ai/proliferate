@@ -6,6 +6,9 @@ import {
   HomeHeroSection,
   HomePainSection,
   HomeStickyScrollSection,
+  HomeUseCasesSection,
+  HomeIntegrationsSection,
+  HomeHowItWorks,
 } from "@/components/home";
 import { FinalCTASection } from "@/components/final-cta-section";
 import { Footer } from "@/components/footer";
@@ -21,15 +24,13 @@ export default function HomePage() {
       <main>
         <HomeHeroSection />
         <HomePainSection />
-        {/* <HomeValuePillars /> */}
         <HomeStickyScrollSection />
-        {/* <HomeHowItWorks /> */}
-        {/* <HomeB2BSection /> */}
-        {/* <HomeCTASection /> */}
+        <HomeUseCasesSection />
+        <HomeIntegrationsSection />
+        <HomeHowItWorks />
         <FinalCTASection />
       </main>
       <Footer />
     </>
   );
 }
-

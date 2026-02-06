@@ -1,0 +1,384 @@
+/**
+ * Session Runtime
+ *
+ * Owns sandbox lifecycle, OpenCode session lifecycle, and SSE connection.
+ * Provides a single ensureRuntimeReady() entry point for hot path callers.
+ */
+
+import { prebuilds, sessions } from "@proliferate/services";
+import type { SandboxProviderType, ServerMessage } from "@proliferate/shared";
+import { getSandboxProvider } from "@proliferate/shared/providers";
+import { scheduleSessionExpiry } from "../expiry/expiry-queue";
+import type { GatewayEnv } from "../lib/env";
+import { waitForMigrationLockRelease } from "../lib/lock";
+import { createOpenCodeSession, listOpenCodeSessions } from "../lib/opencode";
+import { type SessionContext, loadSessionContext } from "../lib/session-store";
+import type { OpenCodeEvent, SandboxInfo } from "../types";
+import { SseClient } from "./sse-client";
+
+export class MigrationInProgressError extends Error {
+	constructor(message = "Migration in progress") {
+		super(message);
+		this.name = "MigrationInProgressError";
+	}
+}
+
+export interface EnsureRuntimeOptions {
+	skipMigrationLock?: boolean;
+}
+
+export interface SessionRuntimeOptions {
+	env: GatewayEnv;
+	sessionId: string;
+	context: SessionContext;
+	onEvent: (event: OpenCodeEvent) => void;
+	onDisconnect: (reason: string) => void;
+	onStatus: (
+		status: "creating" | "resuming" | "running" | "paused" | "stopped" | "error" | "migrating",
+		message?: string,
+	) => void;
+	onBroadcast?: (message: ServerMessage) => void;
+}
+
+export class SessionRuntime {
+	private readonly env: GatewayEnv;
+	private readonly sessionId: string;
+	private readonly shortId: string;
+	private context: SessionContext;
+
+	private readonly sseClient: SseClient;
+	private readonly onStatus: SessionRuntimeOptions["onStatus"];
+	private readonly onBroadcast?: SessionRuntimeOptions["onBroadcast"];
+	private readonly onDisconnect: SessionRuntimeOptions["onDisconnect"];
+
+	private openCodeUrl: string | null = null;
+	private previewUrl: string | null = null;
+	private sshHost: string | null = null;
+	private sshPort: number | null = null;
+	private openCodeSessionId: string | null = null;
+	private openCodeSessionUrl: string | null = null;
+	private sandboxExpiresAt: number | null = null;
+	private lifecycleStartTime = 0;
+
+	private ensureReadyPromise: Promise<void> | null = null;
+
+	constructor(options: SessionRuntimeOptions) {
+		this.env = options.env;
+		this.sessionId = options.sessionId;
+		this.shortId = options.sessionId.slice(0, 8);
+		this.context = options.context;
+		this.onStatus = options.onStatus;
+		this.onBroadcast = options.onBroadcast;
+		this.onDisconnect = options.onDisconnect;
+
+		this.sseClient = new SseClient({
+			onEvent: options.onEvent,
+			onDisconnect: (reason) => this.handleSseDisconnect(reason),
+			env: this.env,
+		});
+	}
+
+	// ============================================
+	// Logging
+	// ============================================
+
+	private log(message: string, data?: Record<string, unknown>): void {
+		const elapsed = this.lifecycleStartTime ? `+${Date.now() - this.lifecycleStartTime}ms` : "";
+		const dataStr = data ? ` ${JSON.stringify(data)}` : "";
+		console.log(`[Runtime:${this.shortId}] ${elapsed} ${message}${dataStr}`);
+	}
+
+	private logError(message: string, error?: unknown): void {
+		const elapsed = this.lifecycleStartTime ? `+${Date.now() - this.lifecycleStartTime}ms` : "";
+		console.error(`[Runtime:${this.shortId}] ${elapsed} ${message}`, error);
+	}
+
+	// ============================================
+	// Accessors
+	// ============================================
+
+	getContext(): SessionContext {
+		return this.context;
+	}
+
+	getOpenCodeUrl(): string | null {
+		return this.openCodeUrl;
+	}
+
+	getOpenCodeSessionId(): string | null {
+		return this.openCodeSessionId;
+	}
+
+	getPreviewUrl(): string | null {
+		return this.previewUrl;
+	}
+
+	getSandboxExpiresAt(): number | null {
+		return this.sandboxExpiresAt;
+	}
+
+	isReady(): boolean {
+		return Boolean(this.openCodeUrl && this.openCodeSessionId && this.sseClient.isConnected());
+	}
+
+	isConnecting(): boolean {
+		return this.ensureReadyPromise !== null;
+	}
+
+	hasOpenCodeUrl(): boolean {
+		return Boolean(this.openCodeUrl);
+	}
+
+	isSseConnected(): boolean {
+		return this.sseClient.isConnected();
+	}
+
+	// ============================================
+	// Core lifecycle
+	// ============================================
+
+	/**
+	 * Ensure sandbox, OpenCode session, and SSE are ready.
+	 * Single entry point for the hot path.
+	 */
+	async ensureRuntimeReady(options?: EnsureRuntimeOptions): Promise<void> {
+		if (this.ensureReadyPromise) {
+			return this.ensureReadyPromise;
+		}
+
+		if (this.isReady()) {
+			return;
+		}
+
+		this.lifecycleStartTime = Date.now();
+		this.log("Starting runtime lifecycle");
+
+		this.ensureReadyPromise = this.doEnsureRuntimeReady(options);
+		try {
+			await this.ensureReadyPromise;
+		} finally {
+			this.ensureReadyPromise = null;
+		}
+	}
+
+	getSandboxInfo(): SandboxInfo {
+		return {
+			sessionId: this.sessionId,
+			sandboxId: this.context.session.sandbox_id || null,
+			status: this.context.session.status || "unknown",
+			previewUrl: this.previewUrl,
+			sshHost: this.sshHost,
+			sshPort: this.sshPort,
+			expiresAt: this.sandboxExpiresAt,
+		};
+	}
+
+	disconnectSse(): void {
+		this.sseClient.disconnect();
+	}
+
+	resetSandboxState(): void {
+		this.openCodeUrl = null;
+		this.previewUrl = null;
+		this.sshHost = null;
+		this.sshPort = null;
+		this.sandboxExpiresAt = null;
+		this.openCodeSessionId = null;
+		this.openCodeSessionUrl = null;
+		this.context.session.sandbox_id = null;
+	}
+
+	// ============================================
+	// Private lifecycle
+	// ============================================
+
+	private async doEnsureRuntimeReady(options?: EnsureRuntimeOptions): Promise<void> {
+		try {
+			if (!options?.skipMigrationLock) {
+				await waitForMigrationLockRelease(this.sessionId);
+			}
+
+			// Reload context fresh from database
+			this.log("Loading session context...");
+			this.context = await loadSessionContext(this.env, this.sessionId);
+			this.log("Session context loaded", {
+				prebuildId: this.context.session.prebuild_id,
+				repoCount: this.context.repos.length,
+				primaryRepo: this.context.primaryRepo.github_repo_name,
+				hasSandbox: Boolean(this.context.session.sandbox_id),
+				hasSnapshot: Boolean(this.context.session.snapshot_id),
+			});
+
+			const hasSandbox = Boolean(this.context.session.sandbox_id);
+			this.onStatus(hasSandbox ? "resuming" : "creating");
+
+			const providerType = this.context.session.sandbox_provider as SandboxProviderType | undefined;
+			const provider = getSandboxProvider(providerType);
+			this.log("Using sandbox provider", { provider: provider.type });
+
+			const result = await provider.ensureSandbox({
+				sessionId: this.sessionId,
+				repos: this.context.repos,
+				branch: this.context.primaryRepo.default_branch || "main",
+				envVars: this.context.envVars,
+				systemPrompt: this.context.systemPrompt,
+				snapshotId: this.context.session.snapshot_id || undefined,
+				agentConfig: this.context.agentConfig,
+				currentSandboxId: this.context.session.sandbox_id || undefined,
+				sshPublicKey: this.context.sshPublicKey,
+			});
+
+			this.openCodeUrl = result.tunnelUrl;
+			this.previewUrl = result.previewUrl;
+			const storedExpiry = this.context.session.sandbox_expires_at
+				? Date.parse(this.context.session.sandbox_expires_at)
+				: null;
+			this.sandboxExpiresAt = result.expiresAt || storedExpiry || null;
+			this.sshHost = result.sshHost || null;
+			this.sshPort = result.sshPort || null;
+
+			this.log(result.recovered ? "Sandbox recovered" : "Sandbox created", {
+				sandboxId: result.sandboxId,
+				tunnelUrl: this.openCodeUrl,
+				previewUrl: this.previewUrl,
+				sshHost: this.sshHost,
+				sshPort: this.sshPort,
+				expiresAt: this.sandboxExpiresAt ? new Date(this.sandboxExpiresAt).toISOString() : null,
+				recovered: result.recovered,
+			});
+
+			// Update session with sandbox info
+			await sessions.update(this.sessionId, {
+				sandboxId: result.sandboxId,
+				status: "running",
+				openCodeTunnelUrl: result.tunnelUrl,
+				previewTunnelUrl: result.previewUrl,
+				...(result.expiresAt && { sandboxExpiresAt: result.expiresAt }),
+				...(provider.supportsAutoPause &&
+					!this.context.session.snapshot_id && { snapshotId: result.sandboxId }),
+			});
+
+			// Update in-memory context
+			this.context.session.sandbox_id = result.sandboxId;
+			if (result.expiresAt) {
+				this.context.session.sandbox_expires_at = new Date(result.expiresAt).toISOString();
+			}
+			if (provider.supportsAutoPause && !this.context.session.snapshot_id) {
+				this.context.session.snapshot_id = result.sandboxId;
+			}
+
+			// Take early snapshot for setup sessions (fire-and-forget)
+			if (
+				!result.recovered &&
+				this.context.session.session_type === "setup" &&
+				this.context.session.prebuild_id &&
+				!this.context.session.snapshot_id
+			) {
+				this.takeEarlySnapshot(provider, result.sandboxId, this.context.session.prebuild_id).catch(
+					(err) => this.logError("Early snapshot failed (non-fatal)", err),
+				);
+			}
+
+			// Fallback to stored URLs if provider didn't return them
+			this.openCodeUrl = this.openCodeUrl || this.context.session.open_code_tunnel_url || null;
+			this.previewUrl = this.previewUrl || this.context.session.preview_tunnel_url || null;
+
+			// Schedule expiry snapshot/migration
+			scheduleSessionExpiry(this.env, this.sessionId, this.sandboxExpiresAt).catch((err) => {
+				this.logError("Failed to schedule expiry job", err);
+			});
+
+			if (this.previewUrl && this.onBroadcast) {
+				this.onBroadcast({ type: "preview_url", payload: { url: this.previewUrl } });
+				await sessions.update(this.sessionId, { previewTunnelUrl: this.previewUrl });
+			}
+
+			if (!this.openCodeUrl) {
+				throw new Error("Missing OpenCode tunnel URL");
+			}
+
+			// Ensure OpenCode session exists
+			await this.ensureOpenCodeSession();
+
+			// Connect to SSE
+			this.log("Connecting to OpenCode SSE...", { url: this.openCodeUrl });
+			await this.sseClient.connect(this.openCodeUrl);
+			this.log("SSE connected");
+
+			this.onStatus("running");
+			this.log("Runtime lifecycle complete - status: running");
+		} catch (err) {
+			this.onStatus("error", err instanceof Error ? err.message : "Unknown error");
+			throw err;
+		}
+	}
+
+	private async ensureOpenCodeSession(): Promise<void> {
+		if (!this.openCodeUrl) {
+			throw new Error("OpenCode URL missing");
+		}
+
+		if (this.openCodeSessionId && this.openCodeSessionUrl === this.openCodeUrl) {
+			return;
+		}
+
+		// Check if we have a stored OpenCode session ID
+		const storedId = this.context.session.coding_agent_session_id;
+
+		if (storedId) {
+			this.log("Verifying stored OpenCode session...", { storedId });
+			const sessions = await listOpenCodeSessions(this.openCodeUrl);
+			const exists = sessions.some((s) => s.id === storedId);
+
+			if (exists) {
+				this.log("Stored OpenCode session is valid", { storedId });
+				this.openCodeSessionId = storedId;
+				this.openCodeSessionUrl = this.openCodeUrl;
+				return;
+			}
+			this.log("Stored OpenCode session not found, creating new one");
+		}
+
+		// Create new OpenCode session
+		this.log("Creating new OpenCode session...");
+		const sessionId = await createOpenCodeSession(this.openCodeUrl);
+		this.log("OpenCode session created", { sessionId });
+
+		this.openCodeSessionId = sessionId;
+		this.openCodeSessionUrl = this.openCodeUrl;
+		this.context.session.coding_agent_session_id = sessionId;
+
+		// Store the new ID
+		await sessions.update(this.sessionId, { codingAgentSessionId: sessionId });
+	}
+
+	private async takeEarlySnapshot(
+		provider: ReturnType<typeof getSandboxProvider>,
+		sandboxId: string,
+		prebuildId: string,
+	): Promise<void> {
+		this.log("Taking early baseline snapshot...");
+
+		const result = await provider.snapshot(this.sessionId, sandboxId);
+
+		const updated = await prebuilds.updateSnapshotIdIfNull(prebuildId, result.snapshotId);
+
+		if (!updated) {
+			this.log("Early snapshot: prebuild already has snapshot, skipping update");
+		} else {
+			this.log("Early snapshot saved", { snapshotId: result.snapshotId });
+		}
+	}
+
+	// ============================================
+	// SSE handling
+	// ============================================
+
+	private handleSseDisconnect(reason: string): void {
+		this.log("SSE disconnected", { reason });
+		this.openCodeUrl = null;
+		this.openCodeSessionId = null;
+		this.openCodeSessionUrl = null;
+		this.onDisconnect(reason);
+	}
+}

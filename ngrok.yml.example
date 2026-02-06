@@ -1,0 +1,22 @@
+# Example ngrok configuration for local development.
+#
+# Copy this file to `ngrok.yml` (ignored by git) and authenticate:
+#   ngrok config add-authtoken <your-token>
+#
+# Start all tunnels:
+#   ngrok start --all --config ngrok.yml
+
+version: "2"
+tunnels:
+  llm-proxy:
+    addr: 127.0.0.1:4000
+    proto: http
+
+  web:
+    addr: 127.0.0.1:3000
+    proto: http
+
+  gateway:
+    addr: 127.0.0.1:8787
+    proto: http
+

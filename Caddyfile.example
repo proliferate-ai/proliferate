@@ -1,0 +1,26 @@
+# Caddyfile for production deployment with automatic HTTPS
+#
+# Usage:
+#   1. Copy to Caddyfile: cp Caddyfile.example Caddyfile
+#   2. Replace proliferate.example.com with your domain
+#   3. Use with docker-compose.override.yml
+
+proliferate.example.com {
+    # WebSocket gateway - strip /gateway prefix before proxying
+    handle_path /gateway/* {
+        reverse_proxy gateway:8787
+    }
+
+    # Everything else goes to web app
+    reverse_proxy web:3000
+
+    # Optional: Enable compression
+    encode gzip
+
+    # Optional: Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+}

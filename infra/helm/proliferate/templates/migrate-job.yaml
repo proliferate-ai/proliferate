@@ -1,0 +1,51 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "proliferate.fullname" . }}-migrate
+  labels:
+{{ include "proliferate.labels" . | indent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: migrate
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: "{{ .Values.image.worker.repository }}:{{ .Values.image.worker.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          workingDir: /app
+          command: ["pnpm", "-C", "packages/db", "db:migrate"]
+          envFrom:
+            - secretRef:
+                name: {{ .Values.env.secretName }}
+          {{ if .Values.db.ssl.enabled }}
+          env:
+            - name: NODE_EXTRA_CA_CERTS
+              value: {{ .Values.db.ssl.mountPath }}
+            - name: SSL_CERT_FILE
+              value: {{ .Values.db.ssl.mountPath }}
+          volumeMounts:
+            - name: db-ca-bundle
+              mountPath: {{ .Values.db.ssl.mountPath }}
+              subPath: {{ .Values.db.ssl.caBundleFile }}
+              readOnly: true
+          {{ end }}
+      {{ if .Values.db.ssl.enabled }}
+      volumes:
+        - name: db-ca-bundle
+          configMap:
+            name: {{ include "proliferate.fullname" . }}-db-ca
+            items:
+              - key: {{ .Values.db.ssl.caBundleFile }}
+                path: {{ .Values.db.ssl.caBundleFile }}
+      {{ end }}
+{{- end }}

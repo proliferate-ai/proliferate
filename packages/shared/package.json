@@ -1,0 +1,42 @@
+{
+	"name": "@proliferate/shared",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./src/index.ts",
+	"types": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./auth": "./src/auth.ts",
+		"./agents": "./src/agents.ts",
+		"./crypto": "./src/lib/crypto.ts",
+		"./llm-proxy": "./src/llm-proxy.ts",
+		"./prompts": "./src/prompts.ts",
+		"./verification": "./src/verification.ts",
+		"./contracts": "./src/contracts/index.ts",
+		"./providers": "./src/providers/index.ts",
+		"./billing": "./src/billing/index.ts"
+	},
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@proliferate/db": "workspace:*",
+		"@proliferate/environment": "workspace:*",
+		"@ts-rest/core": "^3.52.1",
+		"e2b": "^2.10.2",
+		"ioredis": "^5.4.1",
+		"jose": "^5.2.0",
+		"modal": "^0.6.0",
+		"zod": "^3.22.3"
+	},
+	"devDependencies": {
+		"@types/node": "^25.1.0",
+		"typescript": "^5.3.3",
+		"vitest": "^2.0.0"
+	}
+}

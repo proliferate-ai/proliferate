@@ -1,0 +1,351 @@
+/**
+ * Slack Client
+ *
+ * Extends AsyncClient for Slack integration.
+ * Uses gateway SDK for session creation.
+ */
+
+import { env } from "@proliferate/environment/server";
+import type { ServerMessage } from "@proliferate/gateway-clients";
+import { AsyncClient } from "@proliferate/gateway-clients/server";
+import { ensureSlackReceiver } from "@proliferate/queue";
+import type { SlackMessageJob, SlackReceiverJob } from "@proliferate/queue";
+import { integrations, sessions } from "@proliferate/services";
+import type { ClientSource, WakeOptions } from "@proliferate/shared";
+import { SlackApiClient } from "./api";
+import {
+	type HandlerContext,
+	type ToolHandler,
+	defaultToolHandler,
+	textPartCompleteHandler,
+	todoWriteToolHandler,
+	verifyToolHandler,
+} from "./handlers";
+import { downloadSlackImageAsBase64, postToSlack, postWelcomeMessage } from "./lib";
+
+const APP_URL = env.NEXT_PUBLIC_APP_URL;
+
+/**
+ * Metadata stored in sessions.client_metadata for Slack sessions
+ */
+export interface SlackClientMetadata {
+	installationId: string;
+	channelId: string;
+	threadTs: string;
+	/** Encrypted bot token - included when passed to receiver */
+	encryptedBotToken?: string;
+}
+
+// Tools we actually want to post about (most are too noisy)
+const SIGNIFICANT_TOOLS = ["verify", "todowrite"];
+
+// Tool handlers in priority order (first match wins)
+const toolHandlers: ToolHandler[] = [verifyToolHandler, todoWriteToolHandler, defaultToolHandler];
+
+/**
+ * Find handler for a tool
+ */
+function findToolHandler(toolName: string): ToolHandler {
+	const normalized = toolName.toLowerCase();
+	for (const handler of toolHandlers) {
+		if (handler.tools.length === 0) {
+			return handler;
+		}
+		if (handler.tools.some((t) => normalized === t || normalized.includes(t))) {
+			return handler;
+		}
+	}
+	return defaultToolHandler;
+}
+
+/**
+ * Check if a tool is significant enough to post about
+ */
+function isSignificantTool(toolName: string): boolean {
+	const normalized = toolName.toLowerCase();
+	return SIGNIFICANT_TOOLS.some((t) => normalized === t || normalized.includes(t));
+}
+
+/**
+ * Slack client extending AsyncClient
+ */
+export class SlackClient extends AsyncClient<
+	SlackClientMetadata,
+	SlackMessageJob,
+	SlackReceiverJob
+> {
+	readonly clientType = "slack" as ClientSource;
+
+	/**
+	 * Wake the Slack client for a session event.
+	 * Overrides base class to fetch encrypted bot token before queuing.
+	 * Also posts the user message to Slack immediately (before receiver connects).
+	 */
+	override async wake(
+		sessionId: string,
+		metadata: SlackClientMetadata,
+		source: ClientSource,
+		options?: WakeOptions,
+	): Promise<void> {
+		// Don't wake for Slack-originated events
+		if (source === "slack") {
+			console.log("[SlackClient] Skipping wake for Slack-originated event");
+			return;
+		}
+
+		// Get the encrypted bot token from the installation
+		const encryptedBotToken = await this.getEncryptedBotToken(metadata.installationId);
+		if (!encryptedBotToken) {
+			console.error(`[SlackClient] No bot token found for installation ${metadata.installationId}`);
+			return;
+		}
+
+		// Post the user message to Slack immediately (before receiver connects)
+		if (options?.content) {
+			console.log(`[SlackClient] Posting web user message to Slack thread ${metadata.threadTs}`);
+			await postToSlack(
+				encryptedBotToken,
+				metadata.channelId,
+				metadata.threadTs,
+				`💬 *User:*\n${options.content}`,
+			);
+		}
+
+		// Build receiver job data
+		const jobData: SlackReceiverJob = {
+			sessionId,
+			installationId: metadata.installationId,
+			channelId: metadata.channelId,
+			threadTs: metadata.threadTs,
+			encryptedBotToken,
+		};
+
+		// Ensure receiver job exists (deduped by jobId)
+		await ensureSlackReceiver(this.receiverQueue, jobData);
+	}
+
+	/**
+	 * Process an inbound Slack message.
+	 */
+	async processInbound(job: SlackMessageJob): Promise<void> {
+		const {
+			installationId,
+			channelId,
+			threadTs,
+			content,
+			encryptedBotToken,
+			slackUserId,
+			organizationId,
+			imageUrls,
+		} = job;
+
+		console.log(`[SlackClient] Processing inbound message for thread ${threadTs}`);
+
+		// 1. Find existing session for this Slack thread
+		const existingSession = await sessions.findSessionBySlackThread(
+			installationId,
+			channelId,
+			threadTs,
+		);
+
+		let sessionId: string;
+
+		if (existingSession) {
+			sessionId = existingSession.id;
+			console.log(`[SlackClient] Found existing session ${sessionId}`);
+		} else {
+			// No session - create one via gateway SDK (handles managed prebuild automatically)
+			console.log("[SlackClient] No existing session, creating via gateway SDK");
+
+			try {
+				const result = await this.syncClient.createSession({
+					organizationId,
+					managedPrebuild: {}, // Auto-find/create managed prebuild
+					sessionType: "coding",
+					clientType: "slack",
+					clientMetadata: {
+						installationId,
+						channelId,
+						threadTs,
+					},
+					initialPrompt: content,
+				});
+
+				sessionId = result.sessionId;
+				console.log(
+					`[SlackClient] Created session ${sessionId} (isNewPrebuild: ${result.isNewPrebuild}, hasSnapshot: ${result.hasSnapshot})`,
+				);
+
+				// Post welcome message with buttons
+				await postWelcomeMessage(
+					encryptedBotToken,
+					channelId,
+					threadTs,
+					sessionId,
+					APP_URL,
+					organizationId,
+				);
+
+				// Post status message if this is a new prebuild
+				if (result.isNewPrebuild) {
+					await postToSlack(
+						encryptedBotToken,
+						channelId,
+						threadTs,
+						"Setting up your workspace for the first time. This may take a moment...",
+					);
+				}
+			} catch (err) {
+				const message = err instanceof Error ? err.message : "Unknown error";
+
+				if (message.includes("No repos found")) {
+					await postToSlack(
+						encryptedBotToken,
+						channelId,
+						threadTs,
+						"I can't start a session yet - no repos have been added. Please add a repo in the web app first.",
+					);
+				} else {
+					console.error("[SlackClient] Failed to create session:", err);
+					await postToSlack(
+						encryptedBotToken,
+						channelId,
+						threadTs,
+						"Sorry, I ran into an issue. Please try again or check the web app.",
+					);
+				}
+				return;
+			}
+		}
+
+		// 2. Ensure receiver job exists (deduped by jobId)
+		const receiverJob: SlackReceiverJob = {
+			sessionId,
+			installationId,
+			channelId,
+			threadTs,
+			encryptedBotToken,
+		};
+
+		await ensureSlackReceiver(this.receiverQueue, receiverJob);
+
+		// 3. Download images if any
+		const images: string[] = [];
+		if (imageUrls && imageUrls.length > 0) {
+			console.log(`[SlackClient] Downloading ${imageUrls.length} images...`);
+			for (const url of imageUrls) {
+				const img = await downloadSlackImageAsBase64(url, encryptedBotToken);
+				if (img) {
+					images.push(`data:${img.mediaType};base64,${img.data}`);
+				}
+			}
+			console.log(`[SlackClient] Downloaded ${images.length} images`);
+		}
+
+		// 4. Cancel any in-progress operation, then post prompt to Gateway
+		await this.syncClient.postCancel(sessionId, slackUserId);
+		await this.syncClient.postMessage(sessionId, {
+			content,
+			userId: slackUserId,
+			images: images.length > 0 ? images : undefined,
+		});
+
+		console.log(`[SlackClient] Posted prompt to Gateway for session ${sessionId}`);
+	}
+
+	/**
+	 * Handle a Gateway event.
+	 */
+	async handleEvent(
+		sessionId: string,
+		metadata: SlackClientMetadata,
+		event: ServerMessage,
+	): Promise<"continue" | "stop"> {
+		if (!metadata.encryptedBotToken) {
+			throw new Error("encryptedBotToken is required for handling events");
+		}
+
+		const slackApiClient = new SlackApiClient(
+			metadata.encryptedBotToken,
+			metadata.channelId,
+			metadata.threadTs,
+		);
+
+		const ctx: HandlerContext = {
+			client: slackApiClient,
+			slackClient: slackApiClient,
+			syncClient: this.syncClient,
+			sessionId,
+			appUrl: APP_URL,
+		};
+
+		switch (event.type) {
+			case "status":
+				console.log(`[SlackClient] Status: ${event.payload.status}`);
+				return "continue";
+
+			case "init":
+				console.log("[SlackClient] Received init");
+				return "continue";
+
+			case "message":
+				// Web user messages are posted in wake() via Redis pub/sub
+				// No action needed here - just continue listening
+				return "continue";
+
+			case "text_part_complete":
+				await textPartCompleteHandler.handle(ctx, event);
+				return "continue";
+
+			case "tool_end":
+				await this.handleToolEnd(ctx, event.payload.tool, String(event.payload.result) || "");
+				return "continue";
+
+			case "message_complete":
+				console.log("[SlackClient] Message complete");
+				return "stop";
+
+			case "message_cancelled":
+				console.log("[SlackClient] Message cancelled, continuing to listen");
+				return "continue";
+
+			case "error":
+				console.error(`[SlackClient] Error: ${event.payload.message}`);
+				await slackApiClient.postMessage(`Error: ${event.payload.message}`);
+				return "stop";
+
+			default:
+				return "continue";
+		}
+	}
+
+	private async handleToolEnd(
+		ctx: HandlerContext,
+		toolName: string,
+		result: string,
+	): Promise<void> {
+		if (!isSignificantTool(toolName)) {
+			return;
+		}
+
+		const handler = findToolHandler(toolName);
+		console.log(`[SlackClient] Tool ${toolName} → ${handler.tools[0] || "default"} handler`);
+
+		try {
+			await handler.handle(ctx, toolName, result);
+		} catch (err) {
+			console.error("[SlackClient] Tool handler error:", err);
+			await ctx.slackClient.postMessage(`Tool ${toolName} completed`);
+		}
+	}
+
+	private async getEncryptedBotToken(installationId: string): Promise<string | null> {
+		try {
+			return await integrations.getSlackInstallationBotToken(installationId);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Unknown error";
+			console.error(`[SlackClient] Error fetching installation ${installationId}:`, message);
+			return null;
+		}
+	}
+}

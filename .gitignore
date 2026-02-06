@@ -1,57 +1,93 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Environment files (at any level)
+**/.env
+**/.env.*
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
+# Dependencies
+node_modules/
+.pnpm-store/
 
-# testing
-/coverage
+# Build outputs
+dist/
+build/
+.next/
+out/
+.turbo/
+.vercel/
 
-# next.js
-/.next/
-/out/
-
-# production
-/build
-/dist
-
-# misc
-.DS_Store
-*.pem
-Thumbs.db
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local env files
-.env*.local
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# vercel
-.vercel
-
-# typescript
+# TypeScript
 *.tsbuildinfo
-next-env.d.ts
 
-# IDE and development tools
-/.conductor/
-/.specstory/
-/.cursor/
-/.vscode/
+# Testing
+coverage/
+**/test-results/
+**/playwright-report/
+
+# IDE
+.idea/
+.vscode/
 *.swp
 *.swo
+.DS_Store
+.cursorindexingignore
+.specstory/
+
+# AI agent configs
+.claude/
 
 # Logs
-logs*.txt
 *.log
+npm-debug.log*
+pnpm-debug.log*
 
-# Temporary/test files
-temp.json
-*.html
+# Supabase
+.supabase/
+supabase/.temp/
+
+# CLI binary artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Misc
+.cache/
+tmp/
+.tmp/
+__pycache__/
+.local-backup/
+.worktrees/
+Notes.md
+
+# Root-level scratch files
+/*.txt
+
+# Redis
+**/dump.rdb
+
+# External repos
+open-source-examples/
+engineering-blog-examples/
+
+# Private planning documents
+private-planning/
+.pulumi-passphrase
+
+# Pulumi stack configs (local)
+infra/pulumi-k8s/Pulumi.*.yaml
+!infra/pulumi-k8s/Pulumi.yaml
+infra/pulumi-k8s-gcp/Pulumi.*.yaml
+!infra/pulumi-k8s-gcp/Pulumi.yaml
+
+# Local ngrok config
+ngrok.yml
+
+# Slack app manifest(s) (keep example only)
+slack-manifest*.json
+!slack-manifest.example.json
+
+# Vercel (optional, not required for self-hosting)
+vercel.json
+.vercelignore
+
+# Local secrets
+secrets/

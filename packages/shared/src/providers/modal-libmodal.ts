@@ -1,0 +1,912 @@
+/**
+ * Modal Sandbox Provider (libmodal SDK)
+ *
+ * Uses the Modal JavaScript SDK directly instead of HTTP calls to FastAPI.
+ * This eliminates the Python FastAPI layer and uses shared TypeScript modules.
+ *
+ * Prerequisites:
+ * 1. Modal Image must be deployed (see packages/modal-sandbox/image.py)
+ * 2. Set MODAL_TOKEN_ID and MODAL_TOKEN_SECRET environment variables
+ */
+
+import { env } from "@proliferate/environment/server";
+import { type App, type Image, ModalClient, type Sandbox } from "modal";
+import { getDefaultAgentConfig, toOpencodeModelId } from "../agents";
+import { getLLMProxyBaseURL } from "../llm-proxy";
+import {
+	AUTOMATION_COMPLETE_DESCRIPTION,
+	AUTOMATION_COMPLETE_TOOL,
+	ENV_FILE,
+	REQUEST_ENV_VARIABLES_DESCRIPTION,
+	REQUEST_ENV_VARIABLES_TOOL,
+	SAVE_SNAPSHOT_DESCRIPTION,
+	SAVE_SNAPSHOT_TOOL,
+	VERIFY_TOOL,
+	VERIFY_TOOL_DESCRIPTION,
+} from "../opencode-tools";
+import {
+	DEFAULT_CADDYFILE,
+	ENV_INSTRUCTIONS,
+	PLUGIN_MJS,
+	SANDBOX_PATHS,
+	SANDBOX_PORTS,
+	SANDBOX_TIMEOUT_MS,
+	type SandboxOperation,
+	SandboxProviderError,
+	type SessionMetadata,
+	getOpencodeConfig,
+	waitForOpenCodeReady,
+} from "../sandbox";
+import type {
+	CreateSandboxOpts,
+	CreateSandboxResult,
+	EnsureSandboxResult,
+	FileContent,
+	PauseResult,
+	SandboxProvider,
+	SnapshotResult,
+} from "../sandbox-provider";
+
+// TextEncoder/TextDecoder for file operations (Modal SDK requires Uint8Array)
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+// Configuration from environment
+const MODAL_APP_NAME = env.MODAL_APP_NAME;
+const MODAL_APP_SUFFIX = env.MODAL_APP_SUFFIX;
+
+function normalizeModalEnvValue(value: string | undefined): string | undefined {
+	if (!value) return undefined;
+	const trimmed = value.trim();
+	if (!trimmed) return undefined;
+
+	// Some secret managers / .env tooling can accidentally wrap values in quotes.
+	if (
+		(trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+		(trimmed.startsWith("'") && trimmed.endsWith("'"))
+	) {
+		const unquoted = trimmed.slice(1, -1).trim();
+		return unquoted || undefined;
+	}
+
+	return trimmed;
+}
+
+const looksLikeModalTokenId = (value: string | undefined) =>
+	!!value && /^ak-[a-zA-Z0-9_-]+$/.test(value);
+const looksLikeModalTokenSecret = (value: string | undefined) =>
+	!!value && /^as-[a-zA-Z0-9_-]+$/.test(value);
+
+function getModalAuthConfigHint(
+	tokenId: string | undefined,
+	tokenSecret: string | undefined,
+): string {
+	const hints: string[] = [];
+
+	if (tokenId?.startsWith("as-") && tokenSecret?.startsWith("ak-")) {
+		hints.push("MODAL_TOKEN_ID and MODAL_TOKEN_SECRET look swapped.");
+	}
+
+	if (tokenId && !looksLikeModalTokenId(tokenId)) {
+		hints.push("MODAL_TOKEN_ID should look like 'ak-...'.");
+	}
+
+	if (tokenSecret && !looksLikeModalTokenSecret(tokenSecret)) {
+		hints.push("MODAL_TOKEN_SECRET should look like 'as-...'.");
+	}
+
+	if (!tokenId || !tokenSecret) {
+		hints.push(
+			"Set MODAL_TOKEN_ID and MODAL_TOKEN_SECRET (or run `modal setup` to create ~/.modal.toml).",
+		);
+	}
+
+	return hints.join(" ");
+}
+
+/**
+ * Get the full Modal app name (with optional suffix for per-developer deployments)
+ */
+function getModalAppName(): string {
+	if (!MODAL_APP_NAME) {
+		throw new Error("MODAL_APP_NAME is required to use the Modal provider");
+	}
+	return MODAL_APP_SUFFIX ? `${MODAL_APP_NAME}-${MODAL_APP_SUFFIX}` : MODAL_APP_NAME;
+}
+
+/**
+ * Modal provider using the JavaScript SDK (libmodal).
+ *
+ * This provider creates sandboxes directly using the Modal SDK,
+ * eliminating the need for the Python FastAPI layer.
+ */
+export class ModalLibmodalProvider implements SandboxProvider {
+	readonly type = "modal" as const;
+	readonly supportsPause = false;
+	readonly supportsAutoPause = false;
+	private client: ModalClient;
+	private app: App | null = null;
+	private image: Image | null = null;
+	private authPreflight: Promise<void> | null = null;
+
+	constructor() {
+		// NOTE: libmodal reads from env and ~/.modal.toml, but we prefer env in production.
+		// Normalize to avoid accidental quotes/newlines in secret manager values.
+		const tokenId = normalizeModalEnvValue(env.MODAL_TOKEN_ID);
+		const tokenSecret = normalizeModalEnvValue(env.MODAL_TOKEN_SECRET);
+		const endpoint = normalizeModalEnvValue(env.MODAL_ENDPOINT_URL);
+
+		this.client = new ModalClient({ tokenId, tokenSecret, endpoint });
+	}
+
+	private async ensureModalAuth(operation: SandboxOperation): Promise<void> {
+		if (!this.authPreflight) {
+			this.authPreflight = this.runModalAuthPreflight(operation);
+		}
+
+		try {
+			await this.authPreflight;
+		} catch (error) {
+			// Allow retry after transient failures (or after fixing env in dev + restart).
+			this.authPreflight = null;
+			throw error;
+		}
+	}
+
+	private async runModalAuthPreflight(operation: SandboxOperation): Promise<void> {
+		const tokenId = normalizeModalEnvValue(env.MODAL_TOKEN_ID);
+		const tokenSecret = normalizeModalEnvValue(env.MODAL_TOKEN_SECRET);
+
+		// Fast fail on obvious misconfig to avoid triggering libmodal's background auth loop,
+		// which can otherwise surface as an unhandled promise rejection on auth failures.
+		if (
+			(tokenId || tokenSecret) &&
+			(!looksLikeModalTokenId(tokenId) || !looksLikeModalTokenSecret(tokenSecret))
+		) {
+			throw new SandboxProviderError({
+				provider: "modal",
+				operation,
+				message: getModalAuthConfigHint(tokenId, tokenSecret),
+				isRetryable: false,
+			});
+		}
+
+		try {
+			// AuthTokenGet does not start libmodal's background token refresh.
+			await this.client.cpClient.authTokenGet({});
+		} catch (error) {
+			const hint = getModalAuthConfigHint(tokenId, tokenSecret);
+			const rawMessage = error instanceof Error ? error.message : String(error);
+
+			throw new SandboxProviderError({
+				provider: "modal",
+				operation,
+				message: hint ? `${hint} (${rawMessage})` : rawMessage,
+				isRetryable: false,
+				raw: error,
+				cause: error instanceof Error ? error : undefined,
+			});
+		}
+	}
+
+	/**
+	 * Initialize the Modal app and image references.
+	 * Called lazily on first operation.
+	 */
+	private async ensureInitialized(): Promise<{ app: App; image: Image }> {
+		if (this.app && this.image) {
+			return { app: this.app, image: this.image };
+		}
+
+		await this.ensureModalAuth("createSandbox");
+
+		const appName = getModalAppName();
+
+		// Get the app reference (creates if missing)
+		this.app = await this.client.apps.fromName(appName, { createIfMissing: true });
+
+		// Get the base image ID from the deployed Modal function
+		// This avoids hardcoding or env vars - the deploy.py exposes the image ID
+		const getImageFn = await this.client.functions.fromName(appName, "get_image_id");
+		const webUrl = await getImageFn.getWebUrl();
+
+		if (!webUrl) {
+			throw new SandboxProviderError({
+				provider: "modal",
+				operation: "createSandbox",
+				message:
+					"get_image_id endpoint not found. Deploy the Modal app first: modal deploy packages/modal-sandbox/deploy.py",
+				isRetryable: false,
+			});
+		}
+
+		// Call the web endpoint to get the image ID
+		const response = await fetch(webUrl);
+		if (!response.ok) {
+			throw new SandboxProviderError({
+				provider: "modal",
+				operation: "createSandbox",
+				message: `Failed to get base image ID: ${response.status}`,
+				isRetryable: true,
+			});
+		}
+
+		const { image_id: imageId } = (await response.json()) as { image_id: string };
+		this.image = await this.client.images.fromId(imageId);
+
+		return { app: this.app, image: this.image };
+	}
+
+	async createSandbox(opts: CreateSandboxOpts): Promise<CreateSandboxResult> {
+		const startTime = Date.now();
+		const log = (msg: string) => {
+			const elapsed = Date.now() - startTime;
+			console.log(`[Modal:${elapsed}ms] ${msg}`);
+		};
+
+		log(`Creating session ${opts.sessionId}`);
+		log(`Repos: ${opts.repos.length} repo(s)`);
+		log(`Snapshot ID: ${opts.snapshotId || "none (fresh clone)"}`);
+
+		try {
+			await this.ensureModalAuth("createSandbox");
+			const { app } = await this.ensureInitialized();
+			const isSnapshot = !!opts.snapshotId;
+
+			// Use snapshot image if restoring, otherwise use base image
+			let sandboxImage: Image;
+			if (isSnapshot) {
+				log(`Restoring from snapshot: ${opts.snapshotId}`);
+				sandboxImage = await this.client.images.fromId(opts.snapshotId!);
+			} else {
+				sandboxImage = this.image!;
+			}
+
+			// LLM Proxy configuration
+			const llmProxyBaseUrl = getLLMProxyBaseURL();
+			const llmProxyApiKey = opts.envVars.LLM_PROXY_API_KEY;
+
+			// Build environment variables
+			// Note: S3 credentials are NOT passed to sandbox - verify tool is intercepted by gateway
+			const env: Record<string, string> = {
+				SESSION_ID: opts.sessionId,
+				// Critical: Disable OpenCode's npm-based auth plugins that don't survive snapshots
+				OPENCODE_DISABLE_DEFAULT_PLUGINS: "true",
+			};
+
+			// Only include ANTHROPIC_API_KEY if NOT using proxy
+			if (llmProxyBaseUrl && llmProxyApiKey) {
+				log(
+					`[Modal] Using LLM proxy: baseUrl=${llmProxyBaseUrl}, apiKey=${llmProxyApiKey ? "SET" : "NOT SET"}`,
+				);
+				env.ANTHROPIC_API_KEY = llmProxyApiKey;
+				env.ANTHROPIC_BASE_URL = llmProxyBaseUrl;
+			} else {
+				const hasDirectKey = !!opts.envVars.ANTHROPIC_API_KEY;
+				log(`[Modal] WARNING: No LLM proxy, using direct key: ${hasDirectKey ? "SET" : "NOT SET"}`);
+				env.ANTHROPIC_API_KEY = opts.envVars.ANTHROPIC_API_KEY || "";
+			}
+
+			// Add other env vars (filter out sensitive keys when using proxy)
+			for (const [key, value] of Object.entries(opts.envVars)) {
+				if (
+					key === "ANTHROPIC_API_KEY" ||
+					key === "LLM_PROXY_API_KEY" ||
+					key === "ANTHROPIC_BASE_URL"
+				)
+					continue;
+				env[key] = value;
+			}
+
+			// Calculate expiration time before creating sandbox
+			const sandboxCreatedAt = Date.now();
+
+			// Create sandbox with Modal SDK
+			// Note: command starts Docker daemon, experimentalOptions enables Docker support
+			// SSH uses unencryptedPorts for raw TCP (SSH handles its own encryption)
+			const sandbox = await this.client.sandboxes.create(app, sandboxImage, {
+				command: ["/usr/local/bin/start-dockerd.sh"],
+				encryptedPorts: [SANDBOX_PORTS.opencode, SANDBOX_PORTS.preview],
+				unencryptedPorts: [SANDBOX_PORTS.ssh],
+				env,
+				timeoutMs: SANDBOX_TIMEOUT_MS,
+				name: opts.sessionId,
+				cpu: 2,
+				memoryMiB: 4096,
+				experimentalOptions: { enable_docker: true },
+			});
+
+			log(`Sandbox created: ${sandbox.sandboxId}`);
+
+			// Get tunnel URLs
+			const tunnels = await sandbox.tunnels(30000);
+			const opencodeTunnel = tunnels[SANDBOX_PORTS.opencode];
+			const previewTunnel = tunnels[SANDBOX_PORTS.preview];
+			const sshTunnel = tunnels[SANDBOX_PORTS.ssh];
+
+			const tunnelUrl = opencodeTunnel?.url || "";
+			const previewUrl = previewTunnel?.url || "";
+			// SSH uses unencrypted port which returns raw TCP host:port (not HTTPS URL)
+			const sshHost = sshTunnel?.unencryptedHost || "";
+			const sshPort = sshTunnel?.unencryptedPort || 0;
+
+			log(`Tunnel URLs: opencode=${tunnelUrl}, preview=${previewUrl}, ssh=${sshHost}:${sshPort}`);
+
+			// Setup the sandbox (clone repos or restore from snapshot)
+			const repoDir = await this.setupSandbox(sandbox, opts, isSnapshot, log);
+
+			// Setup essential dependencies (blocking - must complete before API returns)
+			await this.setupEssentialDependencies(
+				sandbox,
+				repoDir,
+				opts,
+				log,
+				llmProxyBaseUrl,
+				llmProxyApiKey,
+			);
+
+			// Setup additional dependencies (async - fire and forget)
+			this.setupAdditionalDependencies(sandbox, log).catch((err) => {
+				log(`Warning: Additional dependencies setup failed: ${err}`);
+			});
+
+			// Wait for OpenCode to be ready
+			if (tunnelUrl) {
+				log("Waiting for OpenCode readiness...");
+				try {
+					await waitForOpenCodeReady(tunnelUrl, 30000, log);
+				} catch (error) {
+					log(
+						`WARNING: ${error instanceof Error ? error.message : "OpenCode readiness check failed"}`,
+					);
+				}
+			}
+
+			return {
+				sandboxId: sandbox.sandboxId,
+				tunnelUrl,
+				previewUrl,
+				sshHost: sshHost || undefined,
+				sshPort: sshPort || undefined,
+				expiresAt: sandboxCreatedAt + SANDBOX_TIMEOUT_MS,
+			};
+		} catch (error) {
+			throw SandboxProviderError.fromError(error, "modal", "createSandbox");
+		}
+	}
+
+	async ensureSandbox(opts: CreateSandboxOpts): Promise<EnsureSandboxResult> {
+		const startTime = Date.now();
+		const log = (msg: string) => {
+			const elapsed = Date.now() - startTime;
+			console.log(`[Modal:${elapsed}ms] ${msg}`);
+		};
+
+		log(`Ensuring sandbox for session ${opts.sessionId}`);
+
+		// For Modal, sessionId IS the sandbox identifier (we use it as the unique name)
+		// This is equivalent to E2B using currentSandboxId - both are "find by ID"
+		const existingSandboxId = await this.findSandbox(opts.sessionId);
+
+		if (existingSandboxId) {
+			log(`Found existing sandbox: ${existingSandboxId}`);
+			const tunnels = await this.resolveTunnels(existingSandboxId);
+			return {
+				sandboxId: existingSandboxId,
+				tunnelUrl: tunnels.openCodeUrl,
+				previewUrl: tunnels.previewUrl,
+				recovered: true,
+			};
+		}
+
+		log("No existing sandbox found, creating new...");
+		const result = await this.createSandbox(opts);
+		return { ...result, recovered: false };
+	}
+
+	/**
+	 * Find a running sandbox by session ID.
+	 * For Modal, we use sessionId as the sandbox name, making it a unique identifier.
+	 */
+	private async findSandbox(sessionId: string): Promise<string | null> {
+		try {
+			await this.ensureModalAuth("createSandbox");
+			const appName = getModalAppName();
+			const sandbox = await this.client.sandboxes.fromName(appName, sessionId);
+			return sandbox.sandboxId;
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			if (errorMessage.includes("not found") || errorMessage.includes("NotFound")) {
+				return null;
+			}
+			console.error(`[Modal] Failed to find sandbox: ${error}`);
+			return null;
+		}
+	}
+
+	/**
+	 * Setup the sandbox workspace:
+	 * - For fresh sandboxes: Clone repositories and save metadata
+	 * - For snapshots: Read metadata to get existing repoDir (repos already in snapshot)
+	 *
+	 * @returns The repoDir path
+	 */
+	private async setupSandbox(
+		sandbox: Sandbox,
+		opts: CreateSandboxOpts,
+		isSnapshot: boolean,
+		log: (msg: string) => void,
+	): Promise<string> {
+		const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
+
+		if (isSnapshot) {
+			// Snapshot restore: repos are already in the filesystem, just read metadata
+			log("Restoring from snapshot - reading metadata...");
+			try {
+				const metadataFile = await sandbox.open(SANDBOX_PATHS.metadataFile, "r");
+				const metadataBytes = await metadataFile.read();
+				await metadataFile.close();
+				const metadata: SessionMetadata = JSON.parse(decoder.decode(metadataBytes));
+				log(`Found repo at: ${metadata.repoDir} (from metadata)`);
+				return metadata.repoDir;
+			} catch {
+				// Fallback if metadata doesn't exist (legacy snapshots)
+				log("Metadata not found, using default workspace path");
+				return workspaceDir;
+			}
+		}
+
+		// Fresh sandbox: clone repositories
+		log("Setting up workspace...");
+		await sandbox.exec(["mkdir", "-p", workspaceDir]);
+
+		// Write git credentials file for per-repo auth (used by git-credential-proliferate helper)
+		const gitCredentials: Record<string, string> = {};
+		for (const repo of opts.repos) {
+			if (repo.token) {
+				// Store both with and without .git suffix for flexibility
+				gitCredentials[repo.repoUrl] = repo.token;
+				gitCredentials[repo.repoUrl.replace(/\.git$/, "")] = repo.token;
+			}
+		}
+		if (Object.keys(gitCredentials).length > 0) {
+			log(`Writing git credentials for ${opts.repos.length} repo(s)...`);
+			const credsFile = await sandbox.open("/tmp/.git-credentials.json", "w");
+			await credsFile.write(encoder.encode(JSON.stringify(gitCredentials)));
+			await credsFile.close();
+		}
+
+		// Clone each repository
+		let firstRepoDir: string | null = null;
+		for (let i = 0; i < opts.repos.length; i++) {
+			const repo = opts.repos[i];
+			const targetDir = `${workspaceDir}/${repo.workspacePath}`;
+			if (firstRepoDir === null) {
+				firstRepoDir = targetDir;
+			}
+
+			// Build clone URL with token if provided
+			let cloneUrl = repo.repoUrl;
+			if (repo.token) {
+				cloneUrl = repo.repoUrl.replace("https://", `https://x-access-token:${repo.token}@`);
+			}
+
+			log(`Cloning repo ${i + 1}/${opts.repos.length}: ${repo.workspacePath}`);
+			try {
+				await sandbox.exec([
+					"git",
+					"clone",
+					"--depth",
+					"1",
+					"--branch",
+					opts.branch,
+					cloneUrl,
+					targetDir,
+				]);
+			} catch {
+				log(`Branch clone failed, trying default for ${repo.workspacePath}...`);
+				await sandbox.exec(["git", "clone", "--depth", "1", cloneUrl, targetDir]);
+			}
+		}
+
+		// Set repoDir (first repo for single, workspace root for multi)
+		const repoDir = opts.repos.length > 1 ? workspaceDir : firstRepoDir || workspaceDir;
+		log("All repositories cloned");
+
+		// Save session metadata (use base64 + sh -c to make mkdir + write atomic)
+		const metadata: SessionMetadata = {
+			sessionId: opts.sessionId,
+			repoDir,
+			createdAt: Date.now(),
+		};
+		const metadataDir = SANDBOX_PATHS.metadataFile.replace(/\/[^/]+$/, "");
+		const metadataContent = JSON.stringify(metadata, null, 2);
+		const metadataBase64 = Buffer.from(metadataContent).toString("base64");
+		await sandbox.exec([
+			"sh",
+			"-c",
+			`mkdir -p ${metadataDir} && echo '${metadataBase64}' | base64 -d > ${SANDBOX_PATHS.metadataFile}`,
+		]);
+		log("Session metadata saved");
+
+		return repoDir;
+	}
+
+	/**
+	 * Setup essential dependencies (blocking - must complete before API returns):
+	 * - Write all config files in parallel (each ensures its directory exists)
+	 * - Start OpenCode server
+	 */
+	private async setupEssentialDependencies(
+		sandbox: Sandbox,
+		repoDir: string,
+		opts: CreateSandboxOpts,
+		log: (msg: string) => void,
+		llmProxyBaseUrl?: string,
+		llmProxyApiKey?: string,
+	): Promise<void> {
+		const localToolDir = `${repoDir}/.opencode/tool`;
+
+		// Prepare config content
+		const agentConfig = opts.agentConfig || getDefaultAgentConfig();
+		const opencodeModelId = toOpencodeModelId(agentConfig.modelId);
+		let opencodeConfig: string;
+		if (llmProxyBaseUrl && llmProxyApiKey) {
+			log(`Using LLM proxy: ${llmProxyBaseUrl}`);
+			opencodeConfig = getOpencodeConfig(opencodeModelId, llmProxyBaseUrl);
+		} else {
+			log("Direct API mode (no proxy)");
+			opencodeConfig = getOpencodeConfig(opencodeModelId);
+		}
+
+		const basePrompt = opts.systemPrompt || "You are a senior engineer working on this codebase.";
+		const instructions = `${basePrompt}\n\n${ENV_INSTRUCTIONS}`;
+
+		// Helper to write a file atomically (mkdir + write in single sh -c to avoid race conditions)
+		const writeFile = async (path: string, content: string) => {
+			const dir = path.substring(0, path.lastIndexOf("/"));
+			const base64Content = Buffer.from(content).toString("base64");
+			await sandbox.exec([
+				"sh",
+				"-c",
+				`mkdir -p '${dir}' && echo '${base64Content}' | base64 -d > '${path}'`,
+			]);
+		};
+
+		// Write all files in parallel (each write ensures its directory exists)
+		log("Writing OpenCode files (parallel)...");
+		const writePromises = [
+			// Plugin
+			writeFile(`${SANDBOX_PATHS.globalPluginDir}/proliferate.mjs`, PLUGIN_MJS),
+			// Tools (6 files)
+			writeFile(`${localToolDir}/verify.ts`, VERIFY_TOOL),
+			writeFile(`${localToolDir}/verify.txt`, VERIFY_TOOL_DESCRIPTION),
+			writeFile(`${localToolDir}/request_env_variables.ts`, REQUEST_ENV_VARIABLES_TOOL),
+			writeFile(`${localToolDir}/request_env_variables.txt`, REQUEST_ENV_VARIABLES_DESCRIPTION),
+			writeFile(`${localToolDir}/save_snapshot.ts`, SAVE_SNAPSHOT_TOOL),
+			writeFile(`${localToolDir}/save_snapshot.txt`, SAVE_SNAPSHOT_DESCRIPTION),
+			writeFile(`${localToolDir}/automation_complete.ts`, AUTOMATION_COMPLETE_TOOL),
+			writeFile(`${localToolDir}/automation_complete.txt`, AUTOMATION_COMPLETE_DESCRIPTION),
+			// Config (2 files)
+			writeFile(`${SANDBOX_PATHS.globalOpencodeDir}/opencode.json`, opencodeConfig),
+			writeFile(`${repoDir}/opencode.json`, opencodeConfig),
+			// Instructions
+			writeFile(`${repoDir}/.opencode/instructions.md`, instructions),
+			// Copy pre-installed tool dependencies (saves time vs installing on startup)
+			(async () => {
+				await sandbox.exec([
+					"sh",
+					"-c",
+					`mkdir -p '${localToolDir}' && ` +
+						`cp '${SANDBOX_PATHS.preinstalledToolsDir}/package.json' '${localToolDir}/' && ` +
+						`cp -r '${SANDBOX_PATHS.preinstalledToolsDir}/node_modules' '${localToolDir}/'`,
+				]);
+			})(),
+		];
+
+		// Add SSH public key if provided (for rsync from CLI)
+		if (opts.sshPublicKey) {
+			log("Writing SSH authorized_keys...");
+			writePromises.push(
+				writeFile("/root/.ssh/authorized_keys", opts.sshPublicKey),
+				writeFile("/home/user/.ssh/authorized_keys", opts.sshPublicKey),
+			);
+		}
+
+		// Write trigger context if provided (for automation-triggered sessions)
+		if (opts.triggerContext) {
+			log("Writing trigger context...");
+			writePromises.push(
+				writeFile(
+					`${repoDir}/.proliferate/trigger-context.json`,
+					JSON.stringify(opts.triggerContext, null, 2),
+				),
+			);
+		}
+
+		await Promise.all(writePromises);
+
+		// Start sshd if SSH key was provided (CLI sessions need SSH ready immediately)
+		if (opts.sshPublicKey) {
+			log("Starting sshd for CLI session...");
+			// Generate host keys if needed and start sshd
+			await sandbox.exec([
+				"sh",
+				"-c",
+				"ssh-keygen -A 2>/dev/null || true; mkdir -p /run/sshd; /usr/sbin/sshd",
+			]);
+			log("sshd started");
+		}
+
+		// Start OpenCode server in background
+		log("Starting OpenCode server...");
+		const opencodeEnv: Record<string, string> = {
+			SESSION_ID: opts.sessionId,
+		};
+		if (llmProxyBaseUrl && llmProxyApiKey) {
+			log(
+				`[Modal/startOpenCode] Using LLM proxy: baseUrl=${llmProxyBaseUrl}, apiKey=${llmProxyApiKey ? "SET" : "NOT SET"}`,
+			);
+			opencodeEnv.ANTHROPIC_API_KEY = llmProxyApiKey;
+			opencodeEnv.ANTHROPIC_BASE_URL = llmProxyBaseUrl;
+		} else if (opts.envVars.ANTHROPIC_API_KEY) {
+			log("[Modal/startOpenCode] WARNING: No LLM proxy, using direct key: SET");
+			opencodeEnv.ANTHROPIC_API_KEY = opts.envVars.ANTHROPIC_API_KEY;
+		} else {
+			log("[Modal/startOpenCode] WARNING: No LLM proxy AND no direct key!");
+		}
+		sandbox
+			.exec(["sh", "-c", `cd ${repoDir} && opencode serve --port 4096 --hostname 0.0.0.0`], {
+				env: opencodeEnv,
+			})
+			.catch(() => {
+				// Expected - runs until sandbox terminates
+			});
+	}
+
+	/**
+	 * Setup additional dependencies (async - fire and forget):
+	 * - Start services (Postgres, Redis, Mailcatcher)
+	 * - Start Caddy preview proxy
+	 */
+	private async setupAdditionalDependencies(
+		sandbox: Sandbox,
+		log: (msg: string) => void,
+	): Promise<void> {
+		// Start services
+		log("Starting services (async)...");
+		await sandbox.exec(["/usr/local/bin/start-services.sh"]);
+
+		// Write and start Caddy
+		log("Starting Caddy preview proxy (async)...");
+		const caddyFile = await sandbox.open(SANDBOX_PATHS.caddyfile, "w");
+		await caddyFile.write(encoder.encode(DEFAULT_CADDYFILE));
+		await caddyFile.close();
+
+		// Start Caddy in background (don't wait)
+		sandbox.exec(["caddy", "run", "--config", SANDBOX_PATHS.caddyfile]).catch(() => {
+			// Expected - runs until sandbox terminates
+		});
+	}
+
+	async snapshot(sessionId: string, sandboxId: string): Promise<SnapshotResult> {
+		console.log(`[Modal] Taking snapshot of session ${sessionId}`);
+
+		try {
+			await this.ensureModalAuth("snapshot");
+			// Get sandbox by ID and take a filesystem snapshot
+			const sandbox = await this.client.sandboxes.fromId(sandboxId);
+			const snapshotImage = await sandbox.snapshotFilesystem();
+
+			console.log(`[Modal] Snapshot created: ${snapshotImage.imageId}`);
+			return { snapshotId: snapshotImage.imageId };
+		} catch (error) {
+			throw SandboxProviderError.fromError(error, "modal", "snapshot");
+		}
+	}
+
+	async pause(_sessionId: string, _sandboxId: string): Promise<PauseResult> {
+		throw new SandboxProviderError({
+			provider: "modal",
+			operation: "pause",
+			message: "pause is not supported for modal sandboxes",
+			isRetryable: false,
+		});
+	}
+
+	async terminate(sessionId: string, sandboxId?: string): Promise<void> {
+		console.log(`[Modal] Terminating session ${sessionId}`);
+
+		if (!sandboxId) {
+			throw new SandboxProviderError({
+				provider: "modal",
+				operation: "terminate",
+				message: "sandboxId is required for terminate",
+				isRetryable: false,
+			});
+		}
+
+		try {
+			await this.ensureModalAuth("terminate");
+			const sandbox = await this.client.sandboxes.fromId(sandboxId);
+			await sandbox.terminate();
+			console.log(`[Modal] Sandbox ${sandboxId} terminated`);
+		} catch (error) {
+			// Check for "not found" - treat as idempotent success
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			if (errorMessage.includes("not found") || errorMessage.includes("404")) {
+				console.log(`[Modal] Sandbox ${sandboxId} already terminated (idempotent)`);
+				return;
+			}
+			throw SandboxProviderError.fromError(error, "modal", "terminate");
+		}
+	}
+
+	async writeEnvFile(sandboxId: string, envVars: Record<string, string>): Promise<void> {
+		console.log(`[Modal] Writing env vars to sandbox ${sandboxId.slice(0, 16)}...`);
+
+		try {
+			await this.ensureModalAuth("writeEnvFile");
+			const sandbox = await this.client.sandboxes.fromId(sandboxId);
+
+			// Read existing env vars if any
+			let existing: Record<string, string> = {};
+			try {
+				const existingFile = await sandbox.open(ENV_FILE, "r");
+				const existingBytes = await existingFile.read();
+				await existingFile.close();
+				if (existingBytes.length > 0) {
+					existing = JSON.parse(decoder.decode(existingBytes));
+				}
+			} catch {
+				// File doesn't exist yet
+			}
+
+			// Merge and write
+			const merged = { ...existing, ...envVars };
+			const envFile = await sandbox.open(ENV_FILE, "w");
+			await envFile.write(encoder.encode(JSON.stringify(merged)));
+			await envFile.close();
+
+			console.log(`[Modal] Wrote ${Object.keys(envVars).length} env vars to sandbox`);
+		} catch (error) {
+			throw SandboxProviderError.fromError(error, "modal", "writeEnvFile");
+		}
+	}
+
+	async health(): Promise<boolean> {
+		try {
+			await this.ensureModalAuth("health");
+			// Test the connection by listing sandboxes (limited)
+			await this.client.sandboxes.list();
+			return true;
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			console.warn(`[Modal] Health check failed: ${errorMessage}`);
+			return false;
+		}
+	}
+
+	async checkSandboxes(sandboxIds: string[]): Promise<string[]> {
+		if (sandboxIds.length === 0) {
+			return [];
+		}
+
+		try {
+			await this.ensureModalAuth("checkSandboxes");
+			// List all running sandboxes
+			const runningSandboxes: string[] = [];
+			for await (const sandbox of this.client.sandboxes.list()) {
+				runningSandboxes.push(sandbox.sandboxId);
+			}
+
+			// Filter to only the requested IDs that are running
+			const runningSet = new Set(runningSandboxes);
+			const alive = sandboxIds.filter((id) => runningSet.has(id));
+
+			// Log sandboxes that are no longer running
+			for (const id of sandboxIds) {
+				if (!runningSet.has(id)) {
+					console.log(`[Modal] Sandbox ${id.slice(0, 16)}... not running`);
+				}
+			}
+
+			return alive;
+		} catch (error) {
+			console.error(`[Modal] Failed to list sandboxes: ${error}`);
+			return [];
+		}
+	}
+
+	/**
+	 * Resolve tunnel URLs for an existing sandbox.
+	 * Used when recovering an orphaned sandbox to get its tunnel URLs.
+	 */
+	async resolveTunnels(sandboxId: string): Promise<{ openCodeUrl: string; previewUrl: string }> {
+		console.log(`[Modal] Resolving tunnels for sandbox ${sandboxId.slice(0, 16)}...`);
+
+		try {
+			await this.ensureModalAuth("resolveTunnels");
+			const sandbox = await this.client.sandboxes.fromId(sandboxId);
+			const tunnels = await sandbox.tunnels(30000);
+
+			const opencodeTunnel = tunnels[SANDBOX_PORTS.opencode];
+			const previewTunnel = tunnels[SANDBOX_PORTS.preview];
+
+			const openCodeUrl = opencodeTunnel?.url || "";
+			const previewUrl = previewTunnel?.url || "";
+
+			console.log(`[Modal] Tunnels resolved: opencode=${openCodeUrl}, preview=${previewUrl}`);
+
+			return { openCodeUrl, previewUrl };
+		} catch (error) {
+			throw SandboxProviderError.fromError(error, "modal", "resolveTunnels");
+		}
+	}
+
+	/**
+	 * Read files from a folder in the sandbox filesystem.
+	 * Used by the verify tool to upload verification evidence.
+	 */
+	async readFiles(sandboxId: string, folderPath: string): Promise<FileContent[]> {
+		console.log(`[Modal] Reading files from ${folderPath} in sandbox ${sandboxId.slice(0, 16)}...`);
+
+		try {
+			await this.ensureModalAuth("readFiles");
+			const sandbox = await this.client.sandboxes.fromId(sandboxId);
+
+			// Check if folder exists
+			try {
+				await sandbox.exec(["test", "-d", folderPath]);
+			} catch {
+				console.log(`[Modal] Folder ${folderPath} does not exist`);
+				return [];
+			}
+
+			// List files recursively
+			const process = await sandbox.exec(["find", folderPath, "-type", "f"]);
+			const stdout = await process.stdout.readText();
+			const stdoutTrimmed = stdout.trim();
+			if (!stdoutTrimmed) {
+				console.log(`[Modal] No files found in ${folderPath}`);
+				return [];
+			}
+
+			const filePaths = stdoutTrimmed.split("\n").filter(Boolean);
+			const files: FileContent[] = [];
+
+			// Normalize folder path for relative path calculation
+			const normalizedFolder = folderPath.replace(/\/$/, "");
+
+			for (const filePath of filePaths) {
+				try {
+					const file = await sandbox.open(filePath, "r");
+					const data = await file.read();
+					await file.close();
+
+					// Calculate relative path
+					const relativePath = filePath.replace(`${normalizedFolder}/`, "");
+
+					files.push({
+						path: relativePath,
+						data,
+					});
+				} catch (err) {
+					// Log appropriate message based on error type
+					const errMsg = err instanceof Error ? err.message : String(err);
+					if (errMsg.includes("size exceeds")) {
+						console.log(`[Modal] Skipping oversized file: ${filePath.split("/").pop()}`);
+					} else {
+						console.warn(`[Modal] Failed to read file ${filePath}:`, errMsg);
+					}
+					// Continue with other files
+				}
+			}
+
+			console.log(`[Modal] Read ${files.length} file(s) from ${folderPath}`);
+			return files;
+		} catch (error) {
+			throw SandboxProviderError.fromError(error, "modal", "readFiles");
+		}
+	}
+}

@@ -1,0 +1,14 @@
+# Example Pulumi stack config for `infra/pulumi/`.
+#
+# Copy to `Pulumi.staging.yaml` (ignored by git).
+# See `infra/pulumi/config.ts` for required values and secrets.
+
+config:
+  aws:region: us-east-1
+
+  proliferate-infra:environment: staging
+  proliferate-infra:deploymentProfile: cloud
+  proliferate-infra:appUrl: https://staging.example.com
+  proliferate-infra:apiUrl: https://staging.example.com
+  proliferate-infra:imageTag: latest
+
