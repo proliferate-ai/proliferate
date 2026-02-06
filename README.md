@@ -9,7 +9,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
-> **Beta** -- Proliferate is under active development. A managed hosted version is coming soon. We'd love your feedback via [issues](https://github.com/proliferate-ai/cloud/issues) or [contributions](CONTRIBUTING.md).
+> **Beta** -- Proliferate is under active development. A managed hosted version is coming extremely soon. We'd love your feedback via [issues](https://github.com/proliferate-ai/cloud/issues) or [contributions](CONTRIBUTING.md).
 
 Proliferate is an open source cloud harness for coding agents. It lets you run many agents in parallel, each in an isolated cloud session with a real dev environment and access to your toolchain (Docker, GitHub, Sentry, PostHog, Linear, Slack, Chrome, Gmail, internal docs, infra, etc.).
 
