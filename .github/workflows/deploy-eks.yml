@@ -1,0 +1,334 @@
+name: Deploy EKS (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Image tag SHA to deploy (defaults to current commit)"
+        required: false
+        type: string
+      skip_build:
+        description: "Skip build/push and reuse existing images"
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: "Validate config/outputs only (no build, no pulumi up)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+      PULUMI_STACK_SALT: ${{ secrets.PULUMI_STACK_SALT }}
+      PULUMI_STACK: ${{ vars.PULUMI_STACK || 'prod' }}
+      APP_ENV_SECRET_ID: ${{ vars.APP_ENV_SECRET_ID || 'proliferate-prod-app-env' }}
+      DEPLOY_SHA: ${{ inputs.sha || github.sha }}
+      SKIP_BUILD: ${{ inputs.skip_build }}
+      DRY_RUN: ${{ inputs.dry_run }}
+      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL || secrets.NEXT_PUBLIC_APP_URL || '' }}
+      NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || secrets.NEXT_PUBLIC_API_URL || '' }}
+      NEXT_PUBLIC_GATEWAY_URL: ${{ vars.NEXT_PUBLIC_GATEWAY_URL || secrets.NEXT_PUBLIC_GATEWAY_URL || '' }}
+      NEXT_PUBLIC_BILLING_ENABLED: ${{ vars.NEXT_PUBLIC_BILLING_ENABLED || secrets.NEXT_PUBLIC_BILLING_ENABLED || 'false' }}
+      NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION: ${{ vars.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION || secrets.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION || 'false' }}
+      NEXT_PUBLIC_INTEGRATIONS_ENABLED: ${{ vars.NEXT_PUBLIC_INTEGRATIONS_ENABLED || secrets.NEXT_PUBLIC_INTEGRATIONS_ENABLED || 'false' }}
+      NEXT_PUBLIC_GITHUB_APP_SLUG: ${{ vars.NEXT_PUBLIC_GITHUB_APP_SLUG || secrets.NEXT_PUBLIC_GITHUB_APP_SLUG || '' }}
+      NEXT_PUBLIC_INTERCOM_APP_ID: ${{ vars.NEXT_PUBLIC_INTERCOM_APP_ID || secrets.NEXT_PUBLIC_INTERCOM_APP_ID || '' }}
+      NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID || secrets.NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID || '' }}
+      NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID: ${{ vars.NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID || secrets.NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID || '' }}
+      NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID: ${{ vars.NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID || secrets.NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID || '' }}
+      NEXT_PUBLIC_POSTHOG_HOST: ${{ vars.NEXT_PUBLIC_POSTHOG_HOST || secrets.NEXT_PUBLIC_POSTHOG_HOST || '' }}
+      NEXT_PUBLIC_POSTHOG_KEY: ${{ vars.NEXT_PUBLIC_POSTHOG_KEY || secrets.NEXT_PUBLIC_POSTHOG_KEY || '' }}
+      NEXT_PUBLIC_SENTRY_DSN: ${{ vars.NEXT_PUBLIC_SENTRY_DSN || secrets.NEXT_PUBLIC_SENTRY_DSN || '' }}
+      NEXT_PUBLIC_USE_NANGO_GITHUB: ${{ vars.NEXT_PUBLIC_USE_NANGO_GITHUB || secrets.NEXT_PUBLIC_USE_NANGO_GITHUB || 'false' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install Pulumi dependencies
+        working-directory: infra/pulumi-k8s
+        run: npm install --no-audit --no-fund
+
+      - name: Pulumi install
+        working-directory: infra/pulumi-k8s
+        run: pulumi install
+
+      - name: Ensure stack config salt
+        working-directory: infra/pulumi-k8s
+        run: |
+          set -euo pipefail
+          STACK_FILE="Pulumi.${PULUMI_STACK}.yaml"
+          if [[ ! -f "$STACK_FILE" && -n "${PULUMI_STACK_SALT:-}" ]]; then
+            printf "encryptionsalt: %s\nconfig:\n" "$PULUMI_STACK_SALT" > "$STACK_FILE"
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push images
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${PULUMI_BACKEND_URL:-}" ]]; then
+            echo "PULUMI_BACKEND_URL is required." >&2
+            exit 1
+          fi
+          if [[ -z "${PULUMI_CONFIG_PASSPHRASE:-}" ]]; then
+            echo "PULUMI_CONFIG_PASSPHRASE is required." >&2
+            exit 1
+          fi
+          if [[ -z "${PULUMI_STACK:-}" ]]; then
+            echo "PULUMI_STACK is required." >&2
+            exit 1
+          fi
+          if [[ "${SKIP_BUILD:-false}" != "true" && "${DRY_RUN:-false}" != "true" ]]; then
+            if [[ -z "${NEXT_PUBLIC_APP_URL:-}" ]]; then
+              echo "NEXT_PUBLIC_APP_URL is required." >&2
+              exit 1
+            fi
+            if [[ -z "${NEXT_PUBLIC_API_URL:-}" ]]; then
+              echo "NEXT_PUBLIC_API_URL is required." >&2
+              exit 1
+            fi
+            if [[ -z "${NEXT_PUBLIC_GATEWAY_URL:-}" ]]; then
+              echo "NEXT_PUBLIC_GATEWAY_URL is required." >&2
+              exit 1
+            fi
+          fi
+
+          curl -fsSL https://get.pulumi.com | sh
+          echo "$HOME/.pulumi/bin" >> "$GITHUB_PATH"
+          export PATH="$PATH:$HOME/.pulumi/bin"
+
+          STACK_OUTPUTS=$(cd infra/pulumi-k8s && pulumi stack output --stack "$PULUMI_STACK" --json --show-secrets)
+          WEB_REPO=$(echo "$STACK_OUTPUTS" | jq -r '.outputs.webRepoUrl')
+          GATEWAY_REPO=$(echo "$STACK_OUTPUTS" | jq -r '.outputs.gatewayRepoUrl')
+          WORKER_REPO=$(echo "$STACK_OUTPUTS" | jq -r '.outputs.workerRepoUrl')
+          LLM_PROXY_REPO=$(echo "$STACK_OUTPUTS" | jq -r '.outputs.llmProxyRepoUrl')
+          TRIGGER_SERVICE_REPO=$(echo "$STACK_OUTPUTS" | jq -r '.outputs.triggerServiceRepoUrl')
+          INGRESS_HOSTNAME=$(echo "$STACK_OUTPUTS" | jq -r '.outputs.ingressHostname')
+
+          if [[ -z "$WEB_REPO" || "$WEB_REPO" == "null" ]]; then
+            echo "Missing webRepoUrl in Pulumi outputs." >&2
+            exit 1
+          fi
+          if [[ -z "$GATEWAY_REPO" || "$GATEWAY_REPO" == "null" ]]; then
+            echo "Missing gatewayRepoUrl in Pulumi outputs." >&2
+            exit 1
+          fi
+          if [[ -z "$WORKER_REPO" || "$WORKER_REPO" == "null" ]]; then
+            echo "Missing workerRepoUrl in Pulumi outputs." >&2
+            exit 1
+          fi
+          if [[ -z "$LLM_PROXY_REPO" || "$LLM_PROXY_REPO" == "null" ]]; then
+            echo "Missing llmProxyRepoUrl in Pulumi outputs." >&2
+            exit 1
+          fi
+          if [[ -z "$TRIGGER_SERVICE_REPO" || "$TRIGGER_SERVICE_REPO" == "null" ]]; then
+            echo "Missing triggerServiceRepoUrl in Pulumi outputs." >&2
+            exit 1
+          fi
+
+          echo "INGRESS_HOSTNAME=$INGRESS_HOSTNAME" >> "$GITHUB_ENV"
+
+          TAG="${DEPLOY_SHA:-$GITHUB_SHA}"
+
+          if [[ "${DRY_RUN:-false}" == "true" ]]; then
+            echo "Dry run enabled; skipping build/push."
+            exit 0
+          fi
+
+          if [[ "${SKIP_BUILD:-false}" == "true" ]]; then
+            echo "Skipping build/push; verifying images tagged: ${TAG}"
+            for repo in "$WEB_REPO" "$GATEWAY_REPO" "$WORKER_REPO" "$TRIGGER_SERVICE_REPO" "$LLM_PROXY_REPO"; do
+              repo_name="${repo#*/}"
+              aws ecr describe-images \
+                --region "$AWS_REGION" \
+                --repository-name "$repo_name" \
+                --image-ids imageTag="$TAG" \
+                >/dev/null
+            done
+            exit 0
+          fi
+
+          docker build --platform linux/amd64 -f apps/web/Dockerfile \
+            -t "${WEB_REPO}:${TAG}" \
+            --build-arg "NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}" \
+            --build-arg "NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}" \
+            --build-arg "NEXT_PUBLIC_GATEWAY_URL=${NEXT_PUBLIC_GATEWAY_URL}" \
+            --build-arg "NEXT_PUBLIC_BILLING_ENABLED=${NEXT_PUBLIC_BILLING_ENABLED}" \
+            --build-arg "NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION=${NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION}" \
+            --build-arg "NEXT_PUBLIC_INTEGRATIONS_ENABLED=${NEXT_PUBLIC_INTEGRATIONS_ENABLED}" \
+            --build-arg "NEXT_PUBLIC_GITHUB_APP_SLUG=${NEXT_PUBLIC_GITHUB_APP_SLUG}" \
+            --build-arg "NEXT_PUBLIC_INTERCOM_APP_ID=${NEXT_PUBLIC_INTERCOM_APP_ID}" \
+            --build-arg "NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID=${NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID}" \
+            --build-arg "NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID=${NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID}" \
+            --build-arg "NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID=${NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID}" \
+            --build-arg "NEXT_PUBLIC_POSTHOG_HOST=${NEXT_PUBLIC_POSTHOG_HOST}" \
+            --build-arg "NEXT_PUBLIC_POSTHOG_KEY=${NEXT_PUBLIC_POSTHOG_KEY}" \
+            --build-arg "NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}" \
+            --build-arg "NEXT_PUBLIC_USE_NANGO_GITHUB=${NEXT_PUBLIC_USE_NANGO_GITHUB}" \
+            .
+
+          docker build --platform linux/amd64 -f apps/gateway/Dockerfile \
+            -t "${GATEWAY_REPO}:${TAG}" \
+            .
+
+          docker build --platform linux/amd64 -f apps/worker/Dockerfile \
+            -t "${WORKER_REPO}:${TAG}" \
+            .
+
+          docker build --platform linux/amd64 -f apps/trigger-service/Dockerfile \
+            -t "${TRIGGER_SERVICE_REPO}:${TAG}" \
+            .
+
+          docker build --platform linux/amd64 -f apps/llm-proxy/Dockerfile \
+            -t "${LLM_PROXY_REPO}:${TAG}" \
+            apps/llm-proxy
+
+          docker push "${WEB_REPO}:${TAG}"
+          docker push "${GATEWAY_REPO}:${TAG}"
+          docker push "${WORKER_REPO}:${TAG}"
+          docker push "${TRIGGER_SERVICE_REPO}:${TAG}"
+          docker push "${LLM_PROXY_REPO}:${TAG}"
+
+      - name: Pulumi login + select stack
+        working-directory: infra/pulumi-k8s
+        run: |
+          set -euo pipefail
+          pulumi login "$PULUMI_BACKEND_URL"
+          pulumi stack select "$PULUMI_STACK"
+
+      - name: Ensure dbPassword config
+        if: ${{ !inputs.dry_run }}
+        working-directory: infra/pulumi-k8s
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${APP_ENV_SECRET_ID:-}" ]]; then
+            echo "APP_ENV_SECRET_ID is required." >&2
+            exit 1
+          fi
+
+          APP_ENV_JSON=$(aws secretsmanager get-secret-value \
+            --region "$AWS_REGION" \
+            --secret-id "$APP_ENV_SECRET_ID" \
+            --query SecretString \
+            --output text)
+
+          DB_URL=$(echo "$APP_ENV_JSON" | jq -r '.DATABASE_URL')
+          if [[ -z "$DB_URL" || "$DB_URL" == "null" ]]; then
+            echo "DATABASE_URL not found in secret ${APP_ENV_SECRET_ID}." >&2
+            exit 1
+          fi
+
+          export DB_URL
+          DB_PASSWORD=$(python -c 'import os, urllib.parse; print(urllib.parse.urlparse(os.environ["DB_URL"]).password or "")')
+
+          if [[ -z "$DB_PASSWORD" ]]; then
+            echo "Failed to parse database password from DATABASE_URL." >&2
+            exit 1
+          fi
+
+          pulumi config set --secret dbPassword "$DB_PASSWORD"
+
+      - name: Set image tag
+        if: ${{ !inputs.dry_run }}
+        working-directory: infra/pulumi-k8s
+        run: |
+          set -euo pipefail
+          pulumi config set imageTag "${DEPLOY_SHA:-$GITHUB_SHA}"
+          pulumi config set deployApps true
+
+      - name: Pulumi up
+        working-directory: infra/pulumi-k8s
+        run: |
+          set -euo pipefail
+          if [[ "${DRY_RUN:-false}" == "true" ]]; then
+            echo "Dry run enabled; skipping pulumi up."
+            exit 0
+          fi
+          pulumi up --yes
+
+      - name: Post-deploy health checks
+        run: |
+          set -euo pipefail
+          if [[ "${DRY_RUN:-false}" == "true" ]]; then
+            echo "Dry run enabled; skipping health checks."
+            exit 0
+          fi
+
+          if [[ -z "${INGRESS_HOSTNAME:-}" || "${INGRESS_HOSTNAME}" == "null" ]]; then
+            INGRESS_HOSTNAME=$(cd infra/pulumi-k8s && pulumi stack output --stack "$PULUMI_STACK" --json --show-secrets | jq -r '.outputs.ingressHostname')
+          fi
+
+          if [[ -z "${INGRESS_HOSTNAME:-}" || "${INGRESS_HOSTNAME}" == "null" ]]; then
+            KUBECONFIG_PATH="${RUNNER_TEMP:-/tmp}/kubeconfig"
+            KUBECONFIG_CONTENT=$(cd infra/pulumi-k8s && pulumi stack output --stack "$PULUMI_STACK" --json --show-secrets | jq -r '.outputs.kubeconfig')
+            if [[ -n "${KUBECONFIG_CONTENT:-}" && "${KUBECONFIG_CONTENT}" != "null" ]]; then
+              echo "${KUBECONFIG_CONTENT}" > "${KUBECONFIG_PATH}"
+              export KUBECONFIG="${KUBECONFIG_PATH}"
+              KUBE_SVC_JSON=$(kubectl -n ingress-nginx get svc -o json 2>/dev/null || true)
+              if [[ -n "${KUBE_SVC_JSON}" ]]; then
+                INGRESS_HOSTNAME=$(echo "${KUBE_SVC_JSON}" | jq -r '.items[] | select(.spec.type=="LoadBalancer") | .status.loadBalancer.ingress[0].hostname' | head -n1)
+              fi
+            fi
+          fi
+
+          if [[ -z "${INGRESS_HOSTNAME:-}" || "${INGRESS_HOSTNAME}" == "null" ]]; then
+            if [[ -n "${NEXT_PUBLIC_API_URL:-}" ]]; then
+              INGRESS_HOSTNAME="${NEXT_PUBLIC_API_URL#http://}"
+              INGRESS_HOSTNAME="${INGRESS_HOSTNAME#https://}"
+              INGRESS_HOSTNAME="${INGRESS_HOSTNAME%%/*}"
+            fi
+          fi
+
+          if [[ -z "${INGRESS_HOSTNAME:-}" || "${INGRESS_HOSTNAME}" == "null" ]]; then
+            echo "ingressHostname output is empty." >&2
+            exit 1
+          fi
+          APP_HOST=""
+          if [[ -n "${NEXT_PUBLIC_APP_URL:-}" ]]; then
+            APP_HOST="${NEXT_PUBLIC_APP_URL#http://}"
+            APP_HOST="${APP_HOST#https://}"
+            APP_HOST="${APP_HOST%%/*}"
+          fi
+
+          retry_curl() {
+            curl --fail --show-error --retry 20 --retry-delay 6 --retry-all-errors "$@"
+          }
+
+          if [[ -n "${APP_HOST}" ]]; then
+            # Use HTTPS to the LB with Host header for host-based routing; fall back to direct HTTP if needed.
+            if ! retry_curl -k -H "Host: ${APP_HOST}" "https://${INGRESS_HOSTNAME}/gateway/health"; then
+              retry_curl "http://${INGRESS_HOSTNAME}/gateway/health"
+            fi
+            if ! retry_curl -k -H "Host: ${APP_HOST}" "https://${INGRESS_HOSTNAME}/api/health"; then
+              retry_curl "http://${INGRESS_HOSTNAME}/api/health"
+            fi
+          else
+            retry_curl "http://${INGRESS_HOSTNAME}/gateway/health"
+            retry_curl "http://${INGRESS_HOSTNAME}/api/health"
+          fi

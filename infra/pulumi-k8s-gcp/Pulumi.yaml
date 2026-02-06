@@ -1,0 +1,3 @@
+name: proliferate-k8s-gcp
+runtime: nodejs
+main: index.ts

@@ -1,0 +1,77 @@
+{
+	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+	"organizeImports": {
+		"enabled": true
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"indentWidth": 2,
+		"lineWidth": 100
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"a11y": {
+				"recommended": false
+			},
+			"complexity": {
+				"noUselessFragments": "warn",
+				"noForEach": "warn"
+			},
+			"performance": {
+				"noDelete": "warn"
+			},
+			"correctness": {
+				"useExhaustiveDependencies": "warn"
+			},
+			"security": {
+				"noDangerouslySetInnerHtml": "warn"
+			},
+			"style": {
+				"noNonNullAssertion": "off",
+				"useNodejsImportProtocol": "off",
+				"noArguments": "warn",
+				"noParameterAssign": "warn"
+			},
+			"suspicious": {
+				"noExplicitAny": "off",
+				"noImplicitAnyLet": "warn",
+				"noArrayIndexKey": "warn",
+				"noAssignInExpressions": "warn",
+				"noEmptyBlockStatements": "warn",
+				"noFallthroughSwitchClause": "warn"
+			}
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"semicolons": "always",
+			"quoteStyle": "double"
+		}
+	},
+	"files": {
+		"ignore": [
+			".claude",
+			"node_modules",
+			"dist",
+			".next",
+			".local-backup",
+			".tmp",
+			".worktrees",
+			".wrangler",
+			"*.d.ts",
+			"**/test-results",
+			"**/playwright-report",
+			"pnpm-lock.yaml",
+			"packages/shared/dist",
+			"packages/shared/database.types.ts",
+			"packages/db/drizzle/meta/_journal.json",
+			"packages/db/drizzle/meta/*_snapshot.json",
+			"open-source-examples",
+			"lovable",
+			"secrets"
+		]
+	}
+}

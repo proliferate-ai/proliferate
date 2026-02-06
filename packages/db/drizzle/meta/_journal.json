@@ -1,0 +1,61 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "when": 1770001619101,
+      "tag": "0000_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "when": 1770068873526,
+      "tag": "0001_woozy_ben_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "when": 1770068873526,
+      "tag": "0002_allow_multi_org_github_installations",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "when": 1770148753739,
+      "tag": "0002_heavy_scourge",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "when": 1770148753739,
+      "tag": "0003_automation_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "when": 1770241910000,
+      "tag": "0004_automation_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "when": 1770291000000,
+      "tag": "0005_automation_ui_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1770341718679,
+      "tag": "0006_new_whirlwind",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "when": 1770400693898,
+      "tag": "0007_automation_ui_fields_backfill",
+      "breakpoints": true
+    }
+  ]
+}

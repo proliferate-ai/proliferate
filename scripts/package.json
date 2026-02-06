@@ -1,0 +1,21 @@
+{
+	"name": "@proliferate/scripts",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test:websocket": "tsx test-websocket.ts"
+	},
+	"dependencies": {
+		"@aws-sdk/client-ecs": "^3.758.0",
+		"@aws-sdk/client-s3": "^3.758.0",
+		"@aws-sdk/client-sts": "^3.758.0",
+		"@orpc/client": "^1.13.4",
+		"dotenv": "^16.6.1",
+		"ws": "^8.16.0"
+	},
+	"devDependencies": {
+		"@types/ws": "^8.5.10",
+		"tsx": "^4.7.0",
+		"typescript": "^5.3.3"
+	}
+}

@@ -1,0 +1,48 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs
+.next
+**/.next
+dist
+**/dist
+.turbo
+**/.turbo
+
+# Development
+.env
+.env.*
+**/.env
+**/.env.*
+*.log
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+__tests__
+
+# Misc
+lovable/
+open-source-examples/
+scripts/
+infra/

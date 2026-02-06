@@ -1,0 +1,160 @@
+name: E2E Tests
+
+on:
+  workflow_dispatch:
+  # Uncomment to run on PRs:
+  # pull_request:
+  #   paths:
+  #     - 'apps/web/**'
+  #     - 'apps/gateway/**'
+  #     - 'packages/**'
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: proliferate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Database
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/proliferate
+      POSTGRES_CONNECTION_STRING: postgresql://postgres:postgres@localhost:5432/proliferate
+      REDIS_URL: redis://localhost:6379
+
+      # URL routing:
+      #   :3000 = web app (Next.js)
+      #   :3002 = mock auth server (CLI token verification for gateway)
+      #   :8787 = gateway (WebSocket + HTTP API)
+      GATEWAY_PORT: "8787"
+      NEXT_PUBLIC_GATEWAY_URL: http://localhost:8787
+      NEXT_PUBLIC_API_URL: http://localhost:3002
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+      # Auth (mock)
+      BETTER_AUTH_SECRET: e2e-test-secret
+      SERVICE_TO_SERVICE_AUTH_TOKEN: e8a0343216bd770489a02b2c2123172fa31e3d29c81e7ef715295537d8173e84
+      USER_SECRETS_ENCRYPTION_KEY: e8a0343216bd770489a02b2c2123172fa31e3d29c81e7ef715295537d8173e84
+      SECRETS_ENCRYPTION_KEY: e8a0343216bd770489a02b2c2123172fa31e3d29c81e7ef715295537d8173e84
+
+      # Sandbox provider
+      DEFAULT_SANDBOX_PROVIDER: modal
+      MODAL_APP_NAME: proliferate-sandbox
+
+      # LLM
+      LLM_PROXY_URL: ""
+      LLM_PROXY_REQUIRED: "false"
+
+      # Skip env validation for build
+      SKIP_ENV_VALIDATION: "true"
+      RESEND_API_KEY: re_placeholder
+      NANGO_SECRET_KEY: placeholder
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm -C apps/web exec playwright install --with-deps chromium
+
+      - name: Build all packages (including Next.js app)
+        run: pnpm build
+
+      - name: Run database migrations
+        run: pnpm -C packages/db db:migrate
+
+      - name: Start mock auth server
+        run: |
+          npx tsx scripts/mock-auth-server.ts &
+          echo "Mock auth PID: $!"
+        env:
+          MOCK_AUTH_PORT: "3002"
+
+      - name: Start gateway
+        run: |
+          npx tsx apps/gateway/src/index.ts &
+          echo "Gateway PID: $!"
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3002
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+
+      - name: Start web app
+        # Production build artifacts (.next/) were created by 'pnpm build' above (turbo runs next build).
+        # NEXT_PUBLIC_API_URL points to itself (:3000) - the mock auth at :3002 is only for the gateway.
+        run: |
+          pnpm -C apps/web start &
+          echo "Web app PID: $!"
+        env:
+          DEV_USER_ID: e2e-user-001
+          PORT: "3000"
+          NEXT_PUBLIC_API_URL: http://localhost:3000
+
+      - name: Wait for services
+        run: |
+          echo "Waiting for mock auth..."
+          timeout 30 bash -c 'until curl -sf http://localhost:3002/health; do sleep 1; done'
+          echo "Waiting for gateway..."
+          timeout 30 bash -c 'until curl -sf http://localhost:8787/health; do sleep 1; done'
+          echo "Waiting for web app..."
+          timeout 60 bash -c 'until curl -sf http://localhost:3000/api/auth/get-session; do sleep 1; done'
+          echo "All services ready!"
+
+      - name: Run Playwright E2E tests
+        run: pnpm -C apps/web exec playwright test
+        env:
+          E2E_GATEWAY_URL: http://localhost:8787
+          E2E_WEB_URL: http://localhost:3000
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 14

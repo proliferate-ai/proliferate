@@ -1,0 +1,3 @@
+# Only needed for building the E2B template via CLI
+# The actual sandbox operations use the TypeScript SDK in packages/shared
+e2b-cli

@@ -1,0 +1,318 @@
+# Proliferate Self-Hosting - Production (Pre-built Images)
+#
+# Uses pre-built images from GitHub Container Registry.
+# No need to build locally - just configure .env and run:
+#   docker-compose -f docker-compose.prod.yml up -d
+
+services:
+  # ==========================================================================
+  # Database
+  # ==========================================================================
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: proliferate
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Redis (job queue + caching)
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Gateway (WebSocket server for real-time streaming)
+  # ==========================================================================
+  gateway:
+    image: ghcr.io/proliferate-ai/gateway:latest
+    platform: linux/amd64
+    ports:
+      - "8787:8787"
+    environment:
+      - GATEWAY_PORT=8787
+      - DEPLOYMENT_PROFILE=self_host
+      - STRICT_ENV=true
+      - DEFAULT_SANDBOX_PROVIDER=${DEFAULT_SANDBOX_PROVIDER:-modal}
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - SERVICE_TO_SERVICE_AUTH_TOKEN=${SERVICE_TO_SERVICE_AUTH_TOKEN}
+      - E2B_API_KEY=${E2B_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - NANGO_SECRET_KEY=${NANGO_SECRET_KEY:-}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - NEXT_PUBLIC_API_URL=http://web:3000
+      - NEXT_PUBLIC_GATEWAY_URL=${NEXT_PUBLIC_GATEWAY_URL:-ws://localhost:8787}
+      - NEXT_PUBLIC_BILLING_ENABLED=${NEXT_PUBLIC_BILLING_ENABLED:-false}
+      - NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION=${NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION:-false}
+      - NEXT_PUBLIC_INTEGRATIONS_ENABLED=${NEXT_PUBLIC_INTEGRATIONS_ENABLED:-false}
+      - NEXT_PUBLIC_GITHUB_APP_SLUG=${NEXT_PUBLIC_GITHUB_APP_SLUG:-local}
+      - NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID=${NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID:-local}
+      - NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID=${NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID:-local}
+      - NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID=${NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID:-local}
+      - NEXT_PUBLIC_USE_NANGO_GITHUB=${NEXT_PUBLIC_USE_NANGO_GITHUB:-false}
+      - USER_SECRETS_ENCRYPTION_KEY=${USER_SECRETS_ENCRYPTION_KEY}
+      - S3_BUCKET=${S3_BUCKET:-}
+      - S3_REGION=${S3_REGION:-}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-}
+      - GITHUB_APP_ID=${GITHUB_APP_ID:-}
+      - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY:-}
+      - GITHUB_APP_WEBHOOK_SECRET=${GITHUB_APP_WEBHOOK_SECRET:-}
+      - EMAIL_ENABLED=${EMAIL_ENABLED:-false}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - AUTUMN_API_URL=${AUTUMN_API_URL:-}
+      - AUTUMN_API_KEY=${AUTUMN_API_KEY:-}
+      - BILLING_JWT_SECRET=${BILLING_JWT_SECRET:-}
+      - S3_BUCKET=${S3_BUCKET:-}
+      - S3_REGION=${S3_REGION:-}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Web App (Next.js frontend + API routes)
+  # ==========================================================================
+  web:
+    image: ghcr.io/proliferate-ai/web:latest
+    platform: linux/amd64
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DEPLOYMENT_PROFILE=self_host
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate
+      - REDIS_URL=redis://redis:6379
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - NEXT_PUBLIC_GATEWAY_URL=${NEXT_PUBLIC_GATEWAY_URL:-ws://localhost:8787}
+      - NEXT_PUBLIC_BILLING_ENABLED=${NEXT_PUBLIC_BILLING_ENABLED:-false}
+      - NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION=${NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION:-false}
+      - NEXT_PUBLIC_INTEGRATIONS_ENABLED=${NEXT_PUBLIC_INTEGRATIONS_ENABLED:-false}
+      - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-https://example.invalid/1}
+      - NEXT_PUBLIC_GITHUB_APP_SLUG=${NEXT_PUBLIC_GITHUB_APP_SLUG:-local}
+      - NEXT_PUBLIC_INTERCOM_APP_ID=${NEXT_PUBLIC_INTERCOM_APP_ID:-local}
+      - NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID=${NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID:-local}
+      - NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID=${NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID:-local}
+      - NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID=${NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID:-local}
+      - NEXT_PUBLIC_POSTHOG_HOST=${NEXT_PUBLIC_POSTHOG_HOST:-}
+      - NEXT_PUBLIC_POSTHOG_KEY=${NEXT_PUBLIC_POSTHOG_KEY:-}
+      - NEXT_PUBLIC_USE_NANGO_GITHUB=${NEXT_PUBLIC_USE_NANGO_GITHUB:-false}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DEFAULT_SANDBOX_PROVIDER=${DEFAULT_SANDBOX_PROVIDER:-modal}
+      - E2B_API_KEY=${E2B_API_KEY}
+      - E2B_DOMAIN=${E2B_DOMAIN:-}
+      - E2B_TEMPLATE=${E2B_TEMPLATE:-}
+      - E2B_TEMPLATE_ALIAS=${E2B_TEMPLATE_ALIAS:-}
+      - MODAL_APP_NAME=${MODAL_APP_NAME:-}
+      - MODAL_APP_SUFFIX=${MODAL_APP_SUFFIX:-}
+      - MODAL_TOKEN_ID=${MODAL_TOKEN_ID:-}
+      - MODAL_TOKEN_SECRET=${MODAL_TOKEN_SECRET:-}
+      - LLM_PROXY_URL=${LLM_PROXY_URL:-http://llm-proxy:4000}
+      - LLM_PROXY_MASTER_KEY=${LLM_PROXY_MASTER_KEY:-sk-local-master-key}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - SERVICE_TO_SERVICE_AUTH_TOKEN=${SERVICE_TO_SERVICE_AUTH_TOKEN}
+      - USER_SECRETS_ENCRYPTION_KEY=${USER_SECRETS_ENCRYPTION_KEY:-}
+      - NANGO_SECRET_KEY=${NANGO_SECRET_KEY:-}
+      - AUTUMN_API_URL=${AUTUMN_API_URL:-}
+      - AUTUMN_API_KEY=${AUTUMN_API_KEY:-}
+      - BILLING_JWT_SECRET=${BILLING_JWT_SECRET:-}
+      # OAuth (optional)
+      - GITHUB_OAUTH_APP_ID=${GITHUB_OAUTH_APP_ID:-}
+      - GITHUB_OAUTH_APP_SECRET=${GITHUB_OAUTH_APP_SECRET:-}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      # GitHub App (server-side)
+      - GITHUB_APP_ID=${GITHUB_APP_ID:-}
+      - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY:-}
+      - GITHUB_APP_WEBHOOK_SECRET=${GITHUB_APP_WEBHOOK_SECRET:-}
+      - GITHUB_APP_SLUG=${GITHUB_APP_SLUG:-}
+      # Email (optional)
+      - EMAIL_ENABLED=${EMAIL_ENABLED:-false}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      # Admin + Slack Connect (optional)
+      - SUPER_ADMIN_EMAILS=${SUPER_ADMIN_EMAILS:-}
+      - PROLIFERATE_SLACK_CONNECT_EMAILS=${PROLIFERATE_SLACK_CONNECT_EMAILS:-}
+      # Storage (optional)
+      - S3_BUCKET=${S3_BUCKET:-}
+      - S3_REGION=${S3_REGION:-}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:3000/api/health', r => process.exit(r.statusCode===200?0:1)).on('error', () => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Worker (background job processor)
+  # ==========================================================================
+  worker:
+    image: ghcr.io/proliferate-ai/worker:latest
+    platform: linux/amd64
+    environment:
+      - DEPLOYMENT_PROFILE=self_host
+      - STRICT_ENV=true
+      - DEFAULT_SANDBOX_PROVIDER=${DEFAULT_SANDBOX_PROVIDER:-modal}
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+      - SERVICE_TO_SERVICE_AUTH_TOKEN=${SERVICE_TO_SERVICE_AUTH_TOKEN}
+      - NANGO_SECRET_KEY=${NANGO_SECRET_KEY:-}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://web:3000}
+      - NEXT_PUBLIC_API_URL=http://web:3000
+      - NEXT_PUBLIC_GATEWAY_URL=http://gateway:8787
+      - NEXT_PUBLIC_BILLING_ENABLED=${NEXT_PUBLIC_BILLING_ENABLED:-false}
+      - NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION=${NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION:-false}
+      - NEXT_PUBLIC_INTEGRATIONS_ENABLED=${NEXT_PUBLIC_INTEGRATIONS_ENABLED:-false}
+      - NEXT_PUBLIC_GITHUB_APP_SLUG=${NEXT_PUBLIC_GITHUB_APP_SLUG:-local}
+      - NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID=${NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID:-local}
+      - NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID=${NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID:-local}
+      - NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID=${NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID:-local}
+      - NEXT_PUBLIC_USE_NANGO_GITHUB=${NEXT_PUBLIC_USE_NANGO_GITHUB:-false}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - E2B_API_KEY=${E2B_API_KEY}
+      - E2B_DOMAIN=${E2B_DOMAIN:-}
+      - E2B_TEMPLATE=${E2B_TEMPLATE:-}
+      - E2B_TEMPLATE_ALIAS=${E2B_TEMPLATE_ALIAS:-}
+      - MODAL_APP_NAME=${MODAL_APP_NAME:-}
+      - MODAL_APP_SUFFIX=${MODAL_APP_SUFFIX:-}
+      - MODAL_TOKEN_ID=${MODAL_TOKEN_ID:-}
+      - MODAL_TOKEN_SECRET=${MODAL_TOKEN_SECRET:-}
+      - USER_SECRETS_ENCRYPTION_KEY=${USER_SECRETS_ENCRYPTION_KEY}
+      - GITHUB_APP_ID=${GITHUB_APP_ID:-}
+      - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY:-}
+      - GITHUB_APP_WEBHOOK_SECRET=${GITHUB_APP_WEBHOOK_SECRET:-}
+      - EMAIL_ENABLED=${EMAIL_ENABLED:-false}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - AUTUMN_API_URL=${AUTUMN_API_URL:-}
+      - AUTUMN_API_KEY=${AUTUMN_API_KEY:-}
+      - BILLING_JWT_SECRET=${BILLING_JWT_SECRET:-}
+      - S3_BUCKET=${S3_BUCKET:-}
+      - S3_REGION=${S3_REGION:-}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ==========================================================================
+  # LLM Proxy (LiteLLM for secure API key management)
+  # ==========================================================================
+  llm-proxy:
+    image: ghcr.io/proliferate-ai/llm-proxy:latest
+    platform: linux/amd64
+    ports:
+      - "4000:4000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate?schema=litellm
+      - LITELLM_MASTER_KEY=${LLM_PROXY_MASTER_KEY:-sk-local-master-key}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - LITELLM_MIGRATION_DIR=/tmp/litellm-migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://localhost:4000/health/liveliness'); sys.exit(0 if r.status==200 else 1)\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # MinIO (optional S3-compatible storage for verification media)
+  # ==========================================================================
+  minio:
+    image: minio/minio:RELEASE.2024-06-13T22-53-53Z
+    profiles: ["minio"]
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_REGION_NAME: ${S3_REGION:-us-east-1}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-06-13T22-53-53Z
+    profiles: ["minio"]
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${S3_BUCKET:-proliferate-verification}
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      /usr/bin/mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
+      /usr/bin/mc mb -p "local/$${S3_BUCKET}" || true
+    restart: "no"
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

@@ -1,0 +1,138 @@
+/**
+ * Proliferate WebSocket Handler
+ *
+ * WS /proliferate/:proliferateSessionId
+ *
+ * Real-time bidirectional communication with sessions.
+ */
+
+import type { Server } from "http";
+import type { IncomingMessage } from "http";
+import { URL } from "url";
+import { type WebSocket, WebSocketServer } from "ws";
+import type { HubManager } from "../../../hub";
+import type { GatewayEnv } from "../../../lib/env";
+import { verifyToken } from "../../../middleware/auth";
+import type { AuthResult } from "../../../types";
+
+interface WsConnectionContext {
+	proliferateSessionId: string;
+	auth: AuthResult;
+}
+
+/**
+ * Setup WebSocket handling for proliferate sessions.
+ */
+export function setupProliferateWebSocket(server: Server, hubManager: HubManager, env: GatewayEnv) {
+	const wss = new WebSocketServer({ noServer: true });
+
+	server.on("upgrade", async (req, socket, head) => {
+		try {
+			if (!req.url) {
+				socket.destroy();
+				return;
+			}
+
+			const url = new URL(req.url, `http://${req.headers.host}`);
+
+			// Match /proliferate/:proliferateSessionId
+			const match = matchProliferatePath(url.pathname);
+			if (!match) {
+				socket.destroy();
+				return;
+			}
+
+			// Authenticate
+			const auth = await authenticateUpgrade(req, url, env);
+			if (!auth) {
+				socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+				socket.destroy();
+				return;
+			}
+
+			// Handle upgrade
+			wss.handleUpgrade(req, socket, head, (ws) => {
+				wss.emit("connection", ws, req, {
+					proliferateSessionId: match.sessionId,
+					auth,
+				} as WsConnectionContext);
+			});
+		} catch (err) {
+			console.error("[WS] Upgrade error:", err);
+			socket.destroy();
+		}
+	});
+
+	wss.on(
+		"connection",
+		async (ws: WebSocket, _req: IncomingMessage, context: WsConnectionContext) => {
+			const { proliferateSessionId, auth } = context;
+
+			try {
+				console.log("[WS] Client connected", {
+					sessionId: proliferateSessionId,
+					userId: auth.userId,
+				});
+				const hub = await hubManager.getOrCreate(proliferateSessionId);
+
+				// Attach message handler before addClient so messages during
+				// runtime startup (e.g. pings) are not silently dropped.
+				ws.on("message", (data) => {
+					try {
+						const parsed = JSON.parse(data.toString());
+						hub.handleClientMessage(ws, parsed);
+					} catch (err) {
+						console.warn("[WS] Invalid client message:", err);
+					}
+				});
+				ws.on("close", (code, reason) => {
+					console.log("[WS] Client disconnected", {
+						sessionId: proliferateSessionId,
+						code,
+						reason: reason?.toString(),
+					});
+				});
+
+				// addClient → initializeClient sends status("resuming")
+				// immediately, then awaits ensureRuntimeReady internally
+				// before sending init + status("running").
+				hub.addClient(ws, auth.userId);
+			} catch (err) {
+				console.error("[WS] Failed to setup connection:", err);
+				ws.close(1011, "Failed to setup connection");
+			}
+		},
+	);
+
+	return wss;
+}
+
+/**
+ * Match /proliferate/:sessionId path
+ */
+function matchProliferatePath(pathname: string): { sessionId: string } | null {
+	const match = pathname.match(/^\/proliferate\/([^/]+)\/?$/);
+	if (!match) return null;
+	return { sessionId: match[1] };
+}
+
+/**
+ * Authenticate a WebSocket upgrade request.
+ */
+async function authenticateUpgrade(
+	req: IncomingMessage,
+	url: URL,
+	env: GatewayEnv,
+): Promise<AuthResult | null> {
+	// Token can be in query param or Authorization header
+	const queryToken = url.searchParams.get("token");
+	const authHeader = req.headers.authorization;
+	const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+	const token = queryToken || bearerToken;
+	if (!token) {
+		return null;
+	}
+
+	return verifyToken(token, env);
+}

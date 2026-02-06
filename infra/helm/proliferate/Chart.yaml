@@ -1,0 +1,5 @@
+apiVersion: v2
+name: proliferate
+description: Proliferate application stack
+version: 0.1.0
+appVersion: 0.1.0

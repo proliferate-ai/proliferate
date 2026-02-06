@@ -1,0 +1,19 @@
+# This is a config for E2B sandbox template.
+# You can use template ID (vicdyvztj87ani5uwzte) or template name (proliferate-base-test) to create a sandbox:
+
+# Python SDK
+# from e2b import Sandbox, AsyncSandbox
+# sandbox = Sandbox.create("proliferate-base-test") # Sync sandbox
+# sandbox = await AsyncSandbox.create("proliferate-base-test") # Async sandbox
+
+# JS SDK
+# import { Sandbox } from 'e2b'
+# const sandbox = await Sandbox.create('proliferate-base-test')
+
+team_id = "18587c49-ea26-407a-8f22-def12957005f"
+memory_mb = 8_192
+cpu_count = 4
+start_cmd = "/usr/local/bin/start-services.sh"
+dockerfile = "e2b.Dockerfile"
+template_name = "proliferate-base-test"
+template_id = "vicdyvztj87ani5uwzte"

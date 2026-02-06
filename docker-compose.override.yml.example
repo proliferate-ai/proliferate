@@ -1,0 +1,36 @@
+# Production override with Caddy reverse proxy for automatic HTTPS
+#
+# Usage:
+#   1. Copy to docker-compose.override.yml
+#   2. Configure Caddyfile with your domain
+#   3. Update .env with your domain:
+#      NEXT_PUBLIC_APP_URL=https://your-domain.com
+#      NEXT_PUBLIC_GATEWAY_URL=https://your-domain.com/gateway
+#   4. Run: docker-compose up -d
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - gateway
+    restart: unless-stopped
+
+  # Override web to not expose port directly (Caddy proxies)
+  web:
+    ports: []
+
+  # Override gateway to not expose port directly (Caddy proxies)
+  gateway:
+    ports: []
+
+volumes:
+  caddy_data:
+  caddy_config:

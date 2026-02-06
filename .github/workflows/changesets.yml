@@ -1,0 +1,86 @@
+# Changesets workflow for CLI versioning
+#
+# When changesets are merged to main:
+# 1. Creates/updates a "Version Packages" PR with bumped versions
+# 2. When that PR is merged, detects version change and creates git tag
+#
+# Developer workflow:
+#   pnpm changeset        # Create a changeset
+#   git add .changeset/   # Commit the changeset with your PR
+#   # ... PR merged to main ...
+#   # Bot creates "Version Packages" PR
+#   # Merge that PR → creates cli-vX.Y.Z tag → triggers release workflow
+
+name: Changesets
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changesets:
+    name: Changesets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for version changes
+        id: version-check
+        run: |
+          # Get CLI version from package.json
+          CLI_VERSION=$(node -p "require('./packages/cli/package.json').version")
+          echo "cli_version=$CLI_VERSION" >> $GITHUB_OUTPUT
+
+          # Check if this tag already exists
+          if git rev-parse "cli-v$CLI_VERSION" >/dev/null 2>&1; then
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+            echo "Tag cli-v$CLI_VERSION already exists"
+          else
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+            echo "Tag cli-v$CLI_VERSION does not exist"
+          fi
+
+      - name: Create Release PR
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          title: "chore: release CLI"
+          commit: "chore: release CLI"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create CLI release tag
+        if: steps.version-check.outputs.tag_exists == 'false' && steps.changesets.outputs.hasChangesets == 'false'
+        run: |
+          VERSION=${{ steps.version-check.outputs.cli_version }}
+          echo "Creating tag cli-v$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "cli-v$VERSION"
+          git push origin "cli-v$VERSION"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

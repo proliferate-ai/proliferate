@@ -1,0 +1,251 @@
+"use client";
+
+import { GATEWAY_URL } from "@/lib/gateway";
+import {
+	type ServerMessage,
+	type SyncClient,
+	type SyncWebSocket,
+	type ToolEndMessage,
+	type ToolMetadataMessage,
+	type ToolStartMessage,
+	createSyncClient,
+} from "@proliferate/gateway-clients";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ExtendedMessage } from "../message-converter";
+import {
+	type MessageHandlerContext,
+	handleInit,
+	handleMessage,
+	handleMessageCancelled,
+	handleMessageComplete,
+	handleToken,
+	handleToolEnd,
+	handleToolMetadata,
+	handleToolStart,
+} from "./message-handlers";
+import type { EnvRequest } from "./types";
+
+interface UseSessionWebSocketOptions {
+	sessionId: string;
+	token: string | null;
+	onTitleUpdate: (title: string) => void;
+}
+
+interface UseSessionWebSocketReturn {
+	messages: ExtendedMessage[];
+	streamingText: Record<string, string>;
+	isConnected: boolean;
+	isInitialized: boolean;
+	isRunning: boolean;
+	isMigrating: boolean;
+	error: string | null;
+	previewUrl: string | null;
+	envRequest: EnvRequest | null;
+	sendPrompt: (content: string, userId: string, images?: string[]) => void;
+	sendCancel: (userId: string) => void;
+	clearEnvRequest: () => void;
+}
+
+/**
+ * Manages WebSocket connection and message state for a coding session.
+ */
+export function useSessionWebSocket({
+	sessionId,
+	token,
+	onTitleUpdate,
+}: UseSessionWebSocketOptions): UseSessionWebSocketReturn {
+	const [messages, setMessages] = useState<ExtendedMessage[]>([]);
+	const [streamingText, setStreamingText] = useState<Record<string, string>>({});
+	const [isConnected, setIsConnected] = useState(false);
+	const [isInitialized, setIsInitialized] = useState(false);
+	const [isRunning, setIsRunning] = useState(false);
+	const [isMigrating, setIsMigrating] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+	const [envRequest, setEnvRequest] = useState<EnvRequest | null>(null);
+
+	const streamingTextRef = useRef<Record<string, string>>({});
+	const messagesRef = useRef<ExtendedMessage[]>([]);
+	const wsRef = useRef<SyncWebSocket | null>(null);
+
+	// Keep messagesRef in sync
+	useEffect(() => {
+		messagesRef.current = messages;
+	}, [messages]);
+
+	const getLastAssistantMessageId = useCallback((): string | null => {
+		const last = messagesRef.current.findLast((m) => m.role === "assistant");
+		return last?.id || null;
+	}, []);
+
+	useEffect(() => {
+		console.log("[WS] useEffect triggered, GATEWAY_URL:", GATEWAY_URL, "token:", !!token);
+		if (!GATEWAY_URL) {
+			console.error("[WS] No GATEWAY_URL configured");
+			return;
+		}
+		if (!token) {
+			console.log("[WS] Waiting for token...");
+			return;
+		}
+
+		console.log("[WS] Connecting to gateway for session:", sessionId);
+
+		const ctx: MessageHandlerContext = {
+			setMessages,
+			setStreamingText,
+			setIsRunning,
+			setIsMigrating,
+			setIsInitialized,
+			setPreviewUrl,
+			setEnvRequest,
+			setError,
+			onTitleUpdate,
+			streamingTextRef,
+			getLastAssistantMessageId,
+		};
+
+		const client = createSyncClient({
+			baseUrl: GATEWAY_URL,
+			auth: { type: "token", token },
+			source: "web",
+		});
+
+		const ws = client.connect(sessionId, {
+			onOpen: () => {
+				console.log("[WS] Connected! Waiting for init message...");
+				setIsConnected(true);
+				setError(null);
+			},
+			onClose: () => {
+				console.log("[WS] Connection closed");
+				setIsConnected(false);
+				setIsRunning(false);
+			},
+			onReconnect: (attempt) => {
+				console.log(`[WS] Reconnecting (attempt ${attempt})...`);
+			},
+			onReconnectFailed: () => {
+				console.error("[WS] Reconnection failed");
+				setError("Connection lost");
+			},
+			onEvent: (data: ServerMessage) => {
+				if (data.type === "init") {
+					console.log("[WS] Received init message");
+				} else if (data.type === "error") {
+					console.error("[WS] Received error:", data.payload);
+				}
+				handleServerMessage(data, ctx);
+			},
+		});
+
+		wsRef.current = ws;
+
+		return () => {
+			ws.close();
+		};
+	}, [token, sessionId, onTitleUpdate, getLastAssistantMessageId]);
+
+	const sendPrompt = useCallback((content: string, userId: string, images?: string[]) => {
+		wsRef.current?.sendPrompt(content, userId, images);
+		setIsRunning(true); // Show cursor immediately while waiting for assistant response
+	}, []);
+
+	const sendCancel = useCallback((userId: string) => {
+		wsRef.current?.sendCancel(userId);
+	}, []);
+
+	const clearEnvRequest = useCallback(() => {
+		setEnvRequest(null);
+	}, []);
+
+	return {
+		messages,
+		streamingText,
+		isConnected,
+		isInitialized,
+		isRunning,
+		isMigrating,
+		error,
+		previewUrl,
+		envRequest,
+		sendPrompt,
+		sendCancel,
+		clearEnvRequest,
+	};
+}
+
+/** Route server messages to appropriate handlers */
+function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
+	switch (data.type) {
+		case "init":
+			handleInit(data.payload, ctx);
+			break;
+
+		case "message":
+			handleMessage(data.payload, ctx);
+			break;
+
+		case "token":
+			handleToken(data.payload as { messageId?: string; token?: string }, ctx);
+			break;
+
+		case "tool_start":
+			handleToolStart(data as ToolStartMessage, ctx);
+			break;
+
+		case "tool_end":
+			handleToolEnd(data as ToolEndMessage, ctx);
+			break;
+
+		case "tool_metadata":
+			handleToolMetadata(data as ToolMetadataMessage, ctx);
+			break;
+
+		case "message_complete":
+			handleMessageComplete(data.payload as { messageId?: string }, ctx);
+			break;
+
+		case "message_cancelled":
+			handleMessageCancelled(data.payload as { messageId?: string }, ctx);
+			break;
+
+		case "error":
+			if (data.payload?.message) {
+				ctx.setError(data.payload.message);
+				ctx.setIsRunning(false);
+			}
+			break;
+
+		case "session_paused":
+			ctx.setIsRunning(false);
+			break;
+
+		case "session_resumed":
+			ctx.setError(null);
+			break;
+
+		case "status":
+			if (data.payload?.status === "resuming") {
+				ctx.setIsRunning(true);
+				ctx.setIsMigrating(false);
+			} else if (data.payload?.status === "migrating") {
+				ctx.setIsMigrating(true);
+			} else if (data.payload?.status === "running") {
+				ctx.setIsMigrating(false);
+			}
+			break;
+
+		case "preview_url":
+			if (data.payload?.url) {
+				ctx.setPreviewUrl(data.payload.url);
+			}
+			break;
+
+		case "title_update":
+			if (data.payload?.title) {
+				ctx.onTitleUpdate(data.payload.title);
+			}
+			break;
+	}
+}

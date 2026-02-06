@@ -1,0 +1,32 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"pipeline": {
+		"build": {
+			"dependsOn": ["^build"],
+			"outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+		},
+		"dev": {
+			"cache": false,
+			"persistent": true
+		},
+		"lint": {
+			"dependsOn": ["^build"]
+		},
+		"typecheck": {
+			"dependsOn": ["^build"]
+		},
+		"test": {
+			"dependsOn": ["^build"],
+			"inputs": ["src/**", "vitest.config.ts"],
+			"cache": true
+		},
+		"test:unit": {
+			"inputs": ["src/**", "src/test/unit/**", "vitest.config.ts"],
+			"cache": true
+		},
+		"test:integration": {
+			"inputs": ["src/**", "src/test/integration/**", "vitest.config.ts"],
+			"cache": true
+		}
+	}
+}

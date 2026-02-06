@@ -1,0 +1,18 @@
+{
+	"name": "@proliferate/e2b-sandbox",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build:template": "npx tsx build.ts"
+	},
+	"dependencies": {
+		"@proliferate/environment": "workspace:*",
+		"dotenv": "^16.3.1",
+		"e2b": "^2.10.2"
+	},
+	"devDependencies": {
+		"tsx": "^4.7.0",
+		"typescript": "^5.3.3"
+	}
+}

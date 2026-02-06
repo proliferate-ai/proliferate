@@ -1,0 +1,29 @@
+{
+	"name": "@proliferate/cli",
+	"version": "0.3.9",
+	"type": "module",
+	"bin": {
+		"proliferate": "./src/index.ts"
+	},
+	"main": "./src/index.ts",
+	"scripts": {
+		"dev": "echo 'CLI does not run in dev mode - use pnpm dev:cli to test'",
+		"start": "deno run --allow-all src/index.ts",
+		"typecheck": "echo 'CLI uses Deno - typecheck runs during release build'",
+		"compile": "deno compile --no-check --allow-all --include=package.json --output=binaries/proliferate src/index.ts",
+		"compile:darwin-arm64": "deno compile --no-check --allow-all --include=package.json --target=aarch64-apple-darwin --output=binaries/proliferate-darwin-arm64 src/index.ts",
+		"compile:darwin-x64": "deno compile --no-check --allow-all --include=package.json --target=x86_64-apple-darwin --output=binaries/proliferate-darwin-x64 src/index.ts",
+		"compile:linux-x64": "deno compile --no-check --allow-all --include=package.json --target=x86_64-unknown-linux-gnu --output=binaries/proliferate-linux-x64 src/index.ts",
+		"compile:linux-arm64": "deno compile --no-check --allow-all --include=package.json --target=aarch64-unknown-linux-gnu --output=binaries/proliferate-linux-arm64 src/index.ts"
+	},
+	"dependencies": {
+		"@proliferate/gateway-clients": "workspace:*",
+		"open": "^10.0.0",
+		"ora": "^8.0.0",
+		"chalk": "^5.3.0"
+	},
+	"devDependencies": {
+		"@types/node": "^20.11.0",
+		"typescript": "^5.3.3"
+	}
+}

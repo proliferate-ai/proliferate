@@ -1,0 +1,51 @@
+{
+	"name": "proliferate",
+	"license": "MIT",
+	"private": true,
+	"scripts": {
+		"build": "turbo run build",
+		"dev": "turbo run dev",
+		"dev:web": "pnpm --filter @proliferate/web dev",
+		"dev:cli": "pnpm --filter @proliferate/cli dev",
+		"dev:gateway": "pnpm --filter @proliferate/gateway dev",
+		"dev:worker": "pnpm --filter @proliferate/worker dev",
+		"services:up": "docker compose up -d postgres redis llm-proxy",
+		"services:down": "docker compose down",
+		"services:logs": "docker compose logs -f",
+		"llm-proxy:up": "docker compose up -d llm-proxy",
+		"llm-proxy:logs": "docker compose logs -f llm-proxy",
+		"ngrok": "ngrok start --all --config ngrok.yml.example",
+		"ngrok:llm-proxy": "ngrok http 4000",
+		"cli": "node packages/cli/dist/index.js",
+		"cli:dev": "cd packages/cli && deno run --allow-all src/index.ts",
+		"cli:local": "cd packages/cli && NEXT_PUBLIC_API_URL=http://localhost:3000 deno run --allow-all src/index.ts",
+		"cli:setup": "./scripts/setup-cli-dev.sh",
+		"setup": "cd scripts && pnpm exec tsx setup.ts",
+		"lint": "turbo run lint && biome check .",
+		"lint:fix": "biome check --write .",
+		"typecheck": "turbo run typecheck",
+		"test": "turbo run test",
+		"test:unit": "turbo run test:unit",
+		"test:integration": "turbo run test:integration",
+		"format": "biome format --write .",
+		"changeset": "changeset",
+		"version": "changeset version"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.5.3",
+		"@changesets/changelog-github": "^0.5.2",
+		"@changesets/cli": "^2.29.8",
+		"@types/ws": "^8.5.10",
+		"next": "16.1.6",
+		"turbo": "^1.12.0",
+		"typescript": "^5.3.3",
+		"ws": "^8.16.0"
+	},
+	"packageManager": "pnpm@8.15.1",
+	"dependencies": {
+		"@orpc/server": "^1.13.4",
+		"@orpc/zod": "^1.13.4",
+		"jose": "^5.2.0",
+		"zod": "^3.22.3"
+	}
+}

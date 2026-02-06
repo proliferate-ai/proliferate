@@ -1,0 +1,94 @@
+# Environment files (at any level)
+**/.env
+**/.env.*
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+.turbo/
+.vercel/
+
+# TypeScript
+*.tsbuildinfo
+
+# Testing
+coverage/
+**/test-results/
+**/playwright-report/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+.cursorindexingignore
+.specstory/
+
+# AI agent configs
+.claude/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Supabase
+.supabase/
+supabase/.temp/
+
+# CLI binary artifacts
+packages/cli/bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Misc
+.cache/
+tmp/
+.tmp/
+__pycache__/
+.local-backup/
+.worktrees/
+Notes.md
+
+# Root-level scratch files
+/*.txt
+
+# Redis
+**/dump.rdb
+
+# External repos
+open-source-examples/
+engineering-blog-examples/
+
+# Private planning documents
+private-planning/
+.pulumi-passphrase
+
+# Pulumi stack configs (local)
+infra/pulumi-k8s/Pulumi.*.yaml
+!infra/pulumi-k8s/Pulumi.yaml
+infra/pulumi-k8s-gcp/Pulumi.*.yaml
+!infra/pulumi-k8s-gcp/Pulumi.yaml
+
+# Local ngrok config
+ngrok.yml
+
+# Slack app manifest(s) (keep example only)
+slack-manifest*.json
+!slack-manifest.example.json
+
+# Vercel (optional, not required for self-hosting)
+vercel.json
+.vercelignore
+
+# Local secrets
+secrets/

@@ -1,0 +1,36 @@
+name: Deploy Modal
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment suffix (e.g., prod, dev)'
+        required: false
+        default: 'prod'
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/modal-sandbox/**'
+
+jobs:
+  deploy:
+    name: Deploy Modal Sandbox
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install modal fastapi pydantic
+
+      - name: Deploy to Modal
+        working-directory: packages/modal-sandbox
+        run: modal deploy main.py
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}

@@ -1,0 +1,32 @@
+import { env } from "@proliferate/environment/server";
+import { registerDefaultTriggers } from "@proliferate/triggers";
+import { startPollingWorker } from "./polling/worker.js";
+import { createServer } from "./server.js";
+
+const PORT = process.env.PORT || 3001;
+
+registerDefaultTriggers({
+	nangoSecret: env.NANGO_SECRET_KEY,
+	nangoGitHubIntegrationId: env.NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID,
+	nangoLinearIntegrationId: env.NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID,
+	nangoSentryIntegrationId: env.NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID,
+	composioApiKey: env.COMPOSIO_API_KEY,
+	composioBaseUrl: env.COMPOSIO_BASE_URL,
+});
+
+const server = createServer();
+const pollingWorker = startPollingWorker();
+
+server.listen(PORT, () => {
+	console.log(`Trigger service listening on port ${PORT}`);
+});
+
+process.on("SIGINT", async () => {
+	await pollingWorker.close();
+	process.exit(0);
+});
+
+process.on("SIGTERM", async () => {
+	await pollingWorker.close();
+	process.exit(0);
+});

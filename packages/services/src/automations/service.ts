@@ -1,0 +1,566 @@
+/**
+ * Automations service.
+ *
+ * Business logic that orchestrates DB operations.
+ */
+
+import { randomBytes, randomUUID } from "crypto";
+import type {
+	Automation,
+	AutomationEvent,
+	AutomationEventDetail,
+	AutomationListItem,
+	AutomationTrigger,
+	AutomationWithTriggers,
+} from "@proliferate/shared/contracts";
+import * as automationsDb from "./db";
+import {
+	toAutomation,
+	toAutomationEvent,
+	toAutomationEventDetail,
+	toAutomationListItems,
+	toAutomationTriggerFromRow,
+	toAutomationWithTriggers,
+	toNewAutomationListItem,
+} from "./mapper";
+
+// ============================================
+// Types
+// ============================================
+
+export interface CreateAutomationInput {
+	name?: string;
+	description?: string;
+	agentInstructions?: string;
+	defaultPrebuildId?: string;
+	allowAgenticRepoSelection?: boolean;
+}
+
+export interface UpdateAutomationInput {
+	name?: string;
+	description?: string | null;
+	enabled?: boolean;
+	agentInstructions?: string | null;
+	defaultPrebuildId?: string | null;
+	allowAgenticRepoSelection?: boolean;
+	agentType?: string;
+	modelId?: string;
+	llmFilterPrompt?: string | null;
+	enabledTools?: Record<string, unknown> | null;
+	llmAnalysisPrompt?: string | null;
+}
+
+// ============================================
+// Service functions
+// ============================================
+
+/**
+ * List all automations for an organization.
+ */
+export async function listAutomations(orgId: string): Promise<AutomationListItem[]> {
+	const rows = await automationsDb.listByOrganization(orgId);
+	return toAutomationListItems(rows);
+}
+
+/**
+ * Get a single automation by ID with triggers.
+ */
+export async function getAutomation(
+	id: string,
+	orgId: string,
+): Promise<AutomationWithTriggers | null> {
+	const row = await automationsDb.findById(id, orgId);
+	if (!row) return null;
+	return toAutomationWithTriggers(row);
+}
+
+/**
+ * Create a new automation.
+ */
+export async function createAutomation(
+	orgId: string,
+	userId: string,
+	input: CreateAutomationInput,
+): Promise<AutomationListItem> {
+	// Validate prebuild if provided
+	if (input.defaultPrebuildId) {
+		const prebuild = await automationsDb.validatePrebuild(input.defaultPrebuildId, orgId);
+		if (!prebuild) {
+			throw new Error("Prebuild not found");
+		}
+	}
+
+	const row = await automationsDb.create({
+		organizationId: orgId,
+		name: input.name || "Untitled Automation",
+		description: input.description,
+		agentInstructions: input.agentInstructions,
+		defaultPrebuildId: input.defaultPrebuildId,
+		allowAgenticRepoSelection: input.allowAgenticRepoSelection,
+		createdBy: userId,
+	});
+
+	return toNewAutomationListItem(row);
+}
+
+/**
+ * Update an automation.
+ */
+export async function updateAutomation(
+	id: string,
+	orgId: string,
+	input: UpdateAutomationInput,
+): Promise<Automation> {
+	// Validate prebuild if provided
+	if (input.defaultPrebuildId) {
+		const prebuild = await automationsDb.validatePrebuild(input.defaultPrebuildId, orgId);
+		if (!prebuild) {
+			throw new Error("Prebuild not found");
+		}
+		if (!prebuild.snapshotId) {
+			throw new Error("Prebuild has no snapshot. Complete setup first.");
+		}
+	}
+
+	const row = await automationsDb.update(id, orgId, {
+		name: input.name,
+		description: input.description,
+		enabled: input.enabled,
+		agentInstructions: input.agentInstructions,
+		defaultPrebuildId: input.defaultPrebuildId,
+		allowAgenticRepoSelection: input.allowAgenticRepoSelection,
+		agentType: input.agentType,
+		modelId: input.modelId,
+		llmFilterPrompt: input.llmFilterPrompt,
+		enabledTools: input.enabledTools,
+		llmAnalysisPrompt: input.llmAnalysisPrompt,
+	});
+
+	return toAutomation(row);
+}
+
+/**
+ * Delete an automation.
+ */
+export async function deleteAutomation(id: string, orgId: string): Promise<boolean> {
+	await automationsDb.deleteById(id, orgId);
+	return true;
+}
+
+/**
+ * Check if an automation exists.
+ */
+export async function automationExists(id: string, orgId: string): Promise<boolean> {
+	return automationsDb.exists(id, orgId);
+}
+
+/**
+ * Get automation name for display.
+ */
+export async function getAutomationName(
+	id: string,
+	orgId: string,
+): Promise<{ id: string; name: string } | null> {
+	return automationsDb.getAutomationName(id, orgId);
+}
+
+// ============================================
+// Trigger & Event operations for automations
+// ============================================
+
+export interface ListEventsOptions {
+	status?: string;
+	limit?: number;
+	offset?: number;
+}
+
+export interface ListEventsResult {
+	events: AutomationEvent[];
+	total: number;
+	limit: number;
+	offset: number;
+}
+
+/**
+ * List trigger events for an automation.
+ */
+export async function listAutomationEvents(
+	automationId: string,
+	orgId: string,
+	options: ListEventsOptions = {},
+): Promise<ListEventsResult> {
+	// Verify automation belongs to org
+	const exists = await automationsDb.exists(automationId, orgId);
+	if (!exists) {
+		throw new Error("Automation not found");
+	}
+
+	const limit = Math.min(options.limit ?? 50, 100);
+	const offset = options.offset ?? 0;
+
+	// Get trigger IDs for this automation
+	const triggerIds = await automationsDb.getTriggerIdsForAutomation(automationId);
+
+	if (triggerIds.length === 0) {
+		return { events: [], total: 0, limit, offset };
+	}
+
+	const result = await automationsDb.listEventsForTriggers(triggerIds, {
+		status: options.status,
+		limit,
+		offset,
+	});
+
+	return {
+		events: result.events.map(toAutomationEvent),
+		total: result.total,
+		limit,
+		offset,
+	};
+}
+
+export interface GetEventResult {
+	event: AutomationEventDetail;
+	automation: { id: string; name: string };
+}
+
+/**
+ * Get a specific trigger event for an automation.
+ */
+export async function getAutomationEvent(
+	automationId: string,
+	eventId: string,
+	orgId: string,
+): Promise<GetEventResult | null> {
+	// Verify automation belongs to org and get its name
+	const automationData = await automationsDb.getAutomationName(automationId, orgId);
+	if (!automationData) {
+		return null;
+	}
+
+	// Get the event
+	const event = await automationsDb.findEventById(eventId, orgId);
+	if (!event) {
+		return null;
+	}
+
+	// Verify the event belongs to the automation
+	const triggerData = Array.isArray(event.trigger) ? event.trigger[0] : event.trigger;
+	const triggerAutomation = triggerData?.automation
+		? Array.isArray(triggerData.automation)
+			? triggerData.automation[0]
+			: triggerData.automation
+		: null;
+
+	if (triggerAutomation?.id !== automationId) {
+		return null;
+	}
+
+	return {
+		event: toAutomationEventDetail(event),
+		automation: automationData,
+	};
+}
+
+/**
+ * List triggers for an automation.
+ */
+export async function listAutomationTriggers(
+	automationId: string,
+	orgId: string,
+	gatewayUrl: string | undefined,
+): Promise<AutomationTrigger[]> {
+	// Verify automation belongs to org
+	const exists = await automationsDb.exists(automationId, orgId);
+	if (!exists) {
+		throw new Error("Automation not found");
+	}
+
+	const triggers = await automationsDb.listTriggersForAutomation(automationId);
+	return triggers.map((t) => toAutomationTriggerFromRow(t, gatewayUrl));
+}
+
+/**
+ * List connections for an automation.
+ */
+export async function listAutomationConnections(
+	automationId: string,
+	orgId: string,
+): Promise<automationsDb.AutomationConnectionWithIntegration[]> {
+	const exists = await automationsDb.exists(automationId, orgId);
+	if (!exists) {
+		throw new Error("Automation not found");
+	}
+
+	return automationsDb.listAutomationConnections(automationId);
+}
+
+/**
+ * Add a connection to an automation.
+ */
+export async function addAutomationConnection(
+	automationId: string,
+	orgId: string,
+	integrationId: string,
+): Promise<void> {
+	const exists = await automationsDb.exists(automationId, orgId);
+	if (!exists) {
+		throw new Error("Automation not found");
+	}
+
+	const integration = await automationsDb.validateIntegration(integrationId, orgId);
+	if (!integration) {
+		throw new Error("Integration not found");
+	}
+
+	await automationsDb.createAutomationConnection({ automationId, integrationId });
+}
+
+/**
+ * Remove a connection from an automation.
+ */
+export async function removeAutomationConnection(
+	automationId: string,
+	orgId: string,
+	integrationId: string,
+): Promise<void> {
+	const exists = await automationsDb.exists(automationId, orgId);
+	if (!exists) {
+		throw new Error("Automation not found");
+	}
+
+	await automationsDb.deleteAutomationConnection(automationId, integrationId);
+}
+
+export interface CreateTriggerInput {
+	provider: string;
+	triggerType?: string;
+	integrationId?: string | null;
+	config?: Record<string, unknown>;
+	enabled?: boolean;
+	cronExpression?: string | null;
+}
+
+// ============================================
+// Webhook trigger types (for automation webhook endpoint)
+// ============================================
+
+export interface WebhookTriggerResult {
+	id: string;
+	organizationId: string;
+	provider: string;
+	webhookSecret: string | null;
+	config: Record<string, unknown> | null;
+	automation: {
+		id: string;
+		name: string;
+		enabled: boolean;
+		defaultPrebuildId: string | null;
+		agentInstructions: string | null;
+		modelId: string | null;
+	} | null;
+}
+
+export interface WebhookTriggerInfoResult {
+	id: string;
+	enabled: boolean;
+	automation: { id: string; name: string; enabled: boolean } | null;
+}
+
+export interface CreateTriggerEventInput {
+	triggerId: string;
+	organizationId: string;
+	externalEventId: string;
+	providerEventType: string;
+	rawPayload: unknown;
+	parsedContext: unknown;
+	dedupKey: string;
+}
+
+export interface TriggerEventResult {
+	id: string;
+	triggerId: string;
+	organizationId: string;
+}
+
+/**
+ * Create a trigger for an automation.
+ * Also auto-adds the trigger's connection to the automation's connections.
+ */
+export async function createAutomationTrigger(
+	automationId: string,
+	orgId: string,
+	userId: string,
+	input: CreateTriggerInput,
+	gatewayUrl: string | undefined,
+): Promise<AutomationTrigger> {
+	// Verify automation exists and get its name
+	const automationData = await automationsDb.getAutomationName(automationId, orgId);
+	if (!automationData) {
+		throw new Error("Automation not found");
+	}
+
+	// Validate integration if provided
+	if (input.integrationId) {
+		const integration = await automationsDb.validateIntegration(input.integrationId, orgId);
+		if (!integration) {
+			throw new Error("Integration not found");
+		}
+	}
+
+	// Generate webhook path and secret
+	const webhookUrlPath = `/webhooks/t_${randomUUID().slice(0, 12)}`;
+	const webhookSecret = randomBytes(32).toString("hex");
+
+	const trigger = await automationsDb.createTriggerForAutomation({
+		automationId,
+		organizationId: orgId,
+		name: `${automationData.name} - ${input.provider}`,
+		provider: input.provider,
+		triggerType: input.triggerType ?? "webhook",
+		enabled: input.enabled ?? true,
+		config: (input.config ?? {}) as automationsDb.Json,
+		integrationId: input.integrationId ?? null,
+		webhookUrlPath,
+		webhookSecret,
+		pollingCron: input.cronExpression ?? null,
+		createdBy: userId,
+	});
+
+	// Auto-add the trigger's connection to automation_connections if it has one
+	if (input.integrationId) {
+		try {
+			await automationsDb.createAutomationConnection({
+				automationId,
+				integrationId: input.integrationId,
+			});
+		} catch {
+			// Ignore duplicate constraint errors - connection may already exist
+		}
+	}
+
+	return toAutomationTriggerFromRow(trigger, gatewayUrl);
+}
+
+// ============================================
+// Webhook trigger operations (for automation webhook endpoint)
+// ============================================
+
+/**
+ * Find an enabled webhook trigger for an automation.
+ * Used by the automation webhook POST handler.
+ */
+export async function findWebhookTrigger(
+	automationId: string,
+): Promise<WebhookTriggerResult | null> {
+	const row = await automationsDb.findWebhookTriggerForAutomation(automationId);
+	if (!row) return null;
+
+	return {
+		id: row.id,
+		organizationId: row.organizationId,
+		provider: row.provider,
+		webhookSecret: row.webhookSecret,
+		config: row.config as Record<string, unknown> | null,
+		automation: row.automation
+			? {
+					id: row.automation.id,
+					name: row.automation.name,
+					enabled: row.automation.enabled ?? false,
+					defaultPrebuildId: row.automation.defaultPrebuildId,
+					agentInstructions: row.automation.agentInstructions,
+					modelId: row.automation.modelId,
+				}
+			: null,
+	};
+}
+
+/**
+ * Find an enabled provider trigger for an automation.
+ * Used by provider-specific webhook handlers.
+ */
+export async function findTriggerForAutomationByProvider(
+	automationId: string,
+	provider: string,
+): Promise<WebhookTriggerResult | null> {
+	const row = await automationsDb.findTriggerForAutomationByProvider(automationId, provider);
+	if (!row) return null;
+
+	return {
+		id: row.id,
+		organizationId: row.organizationId,
+		provider: row.provider,
+		webhookSecret: row.webhookSecret,
+		config: row.config as Record<string, unknown> | null,
+		automation: row.automation
+			? {
+					id: row.automation.id,
+					name: row.automation.name,
+					enabled: row.automation.enabled ?? false,
+					defaultPrebuildId: row.automation.defaultPrebuildId,
+					agentInstructions: row.automation.agentInstructions,
+					modelId: row.automation.modelId,
+				}
+			: null,
+	};
+}
+
+/**
+ * Get webhook trigger info for an automation.
+ * Used by the automation webhook GET handler.
+ */
+export async function getWebhookTriggerInfo(
+	automationId: string,
+): Promise<WebhookTriggerInfoResult | null> {
+	const row = await automationsDb.findWebhookTriggerInfo(automationId);
+	if (!row) return null;
+
+	return {
+		id: row.id,
+		enabled: row.enabled ?? false,
+		automation: row.automation
+			? {
+					id: row.automation.id,
+					name: row.automation.name,
+					enabled: row.automation.enabled ?? false,
+				}
+			: null,
+	};
+}
+
+/**
+ * Check if a duplicate trigger event exists within the dedup window.
+ */
+export async function isDuplicateTriggerEvent(
+	triggerId: string,
+	dedupKey: string,
+	dedupWindowMs = 5 * 60 * 1000,
+): Promise<boolean> {
+	const sinceTime = new Date(Date.now() - dedupWindowMs).toISOString();
+	const existing = await automationsDb.findDuplicateTriggerEvent(triggerId, dedupKey, sinceTime);
+	return existing !== null;
+}
+
+/**
+ * Create a trigger event from a webhook payload.
+ */
+export async function createTriggerEvent(
+	input: CreateTriggerEventInput,
+): Promise<TriggerEventResult> {
+	const row = await automationsDb.createTriggerEvent({
+		triggerId: input.triggerId,
+		organizationId: input.organizationId,
+		externalEventId: input.externalEventId,
+		providerEventType: input.providerEventType,
+		rawPayload: input.rawPayload as automationsDb.Json,
+		parsedContext: input.parsedContext as automationsDb.Json,
+		dedupKey: input.dedupKey,
+		status: "queued",
+	});
+
+	return {
+		id: row.id,
+		triggerId: row.triggerId,
+		organizationId: row.organizationId,
+	};
+}

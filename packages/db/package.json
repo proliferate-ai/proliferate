@@ -1,0 +1,31 @@
+{
+	"name": "@proliferate/db",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./src/index.ts",
+	"types": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./schema": "./src/schema/index.ts"
+	},
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"typecheck": "tsc --noEmit",
+		"db:pull": "drizzle-kit pull",
+		"db:generate": "drizzle-kit generate",
+		"db:migrate": "drizzle-kit migrate",
+		"db:push": "drizzle-kit push",
+		"db:studio": "drizzle-kit studio"
+	},
+	"dependencies": {
+		"@proliferate/environment": "workspace:*",
+		"drizzle-orm": "^0.44.0",
+		"postgres": "^3.4.5"
+	},
+	"devDependencies": {
+		"drizzle-kit": "^0.31.0",
+		"typescript": "^5.3.3"
+	}
+}
