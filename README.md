@@ -1,54 +1,30 @@
 # Proliferate
 
 <p align="center">
-  <strong>An open source cloud harness for coding agents.</strong>
+  <strong>Clawdbot for product builders. An open source cloud harness for coding agents.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/proliferate-ai/proliferate/actions"><img src="https://img.shields.io/github/actions/workflow/status/proliferate-ai/proliferate/ci.yml?branch=main&style=for-the-badge" alt="CI status"></a>
+  <a href="https://github.com/proliferate-ai/cloud/actions"><img src="https://img.shields.io/github/actions/workflow/status/proliferate-ai/cloud/ci.yml?branch=main&style=for-the-badge" alt="CI status"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
-> **Beta** -- Proliferate is under active development. A managed hosted version is coming soon. We'd love your feedback via [issues](https://github.com/proliferate-ai/proliferate/issues) or [contributions](CONTRIBUTING.md).
+> **Beta** -- Proliferate is under active development. A managed hosted version is coming soon. We'd love your feedback via [issues](https://github.com/proliferate-ai/cloud/issues) or [contributions](CONTRIBUTING.md).
 
-We're building a cloud harness that lets you run many coding agents in parallel and give them access to the same tools an engineer on your team would (Docker, GitHub, Sentry, PostHog, Linear, Slack, Chrome, Gmail, internal docs, infra, etc.).
+Proliferate is an open source cloud harness for coding agents. It lets you run many agents in parallel, each in an isolated cloud session with a real dev environment and access to your toolchain (Docker, GitHub, Sentry, PostHog, Linear, Slack, Chrome, Gmail, internal docs, infra, etc.).
 
-Some workflows we're enabling:
+Example workflows:
 
 - Watch a PostHog session replay -> identify a UX issue -> create a Linear ticket -> open a PR
 - Triggered by a Sentry exception -> reproduce it -> draft a PR + tag the teammate who introduced it (and optionally draft a customer update)
 - Tag an agent in Slack -> let it iterate -> jump into the same session from web or the terminal when you want
 
-## Some context: what's happening right now?
+Two things we focus on:
 
-The agents space is going a bit bonkers (I believe that's the technical term for it). Agents show up everywhere overnight -- your terminal, your messages, your browser -- and they're finally capable of doing real tasks end-to-end.
+- **Access + integration**: agents need safe, real access to your stack. Most teams wire this up with custom wrappers / MCP servers / glue code, and it tends to be brittle and hard to share.
+- **Verification**: even when an agent ships a PR, someone still has to answer "does this actually work?" Proliferate makes each run a shareable session with a live environment so review isn't "pull the branch locally just to verify."
 
-But the way people use agents personally and the way agents show up inside companies are still worlds apart. Inside a team, two things keep coming up:
-
-1) **Access + integration**: agents need safe, real access to your stack (Sentry, PostHog, Slack, GitHub, docs, infra). Most teams are wiring this up with custom wrappers / MCP servers / glue code. Every company rebuilds it, and it ends up fragile, insecure, and hard to share.
-
-2) **Verification**: even when an agent ships a PR, someone still has to answer "does this actually work?" Today that usually means reading a lot of agent-generated code, or pulling branches locally just to verify. That doesn't scale.
-
-## What we think agent-driven product work should look like
-
-- **Build from anywhere**: if an agent can do the work, you should be able to kick it off and interact from wherever you already are (Slack, web, terminal).
-- **Handle small reactive issues without you in the loop**: exceptions, rageclicks, support issues, small UI bugs. The default should be an agent run that attempts a fix and shows you the result.
-- **Verify at a higher level than code**: if the agent opened a PR, it should also give you evidence: a preview you can click through, screenshots/videos when it's visual, and test results when it's backend.
-
-## What we built
-
-**Proliferate** runs coding agents in isolated cloud sandboxes. Every run gets its own shareable session with a real environment: clone/build/run code, access your toolchain, open a PR, and a live preview you can share to verify changes without pulling anything locally.
-
-## Why open source
-
-We're open sourcing this and making it self-hostable because we think teams need to own their code, data, and infrastructure here. Also: everyone rebuilding this harness layer privately feels like the wrong equilibrium.
-
-## The ask
-
-- If this is useful, star the repo.
-- If you're already running agents and still pulling branches locally just to verify, we'd love to talk.
-- We'd also love feedback: what would you automate first, and which triggers/clients matter most for you?
-- Reach out at [pablo@proliferate.com](mailto:pablo@proliferate.com).
+If this is useful, please star the repo. For feedback or questions, reach out at [pablo@proliferate.com](mailto:pablo@proliferate.com) (or open an issue).
 
 [Docs](docs/) &middot; [Self-Hosting](docs/SELF_HOSTING.md) &middot; [Contributing](CONTRIBUTING.md)
 
@@ -73,8 +49,8 @@ We're open sourcing this and making it self-hostable because we think teams need
 curl -fsSL https://proliferate.com/install.sh | bash
 
 # Clone and configure
-git clone https://github.com/proliferate-ai/proliferate
-cd proliferate
+git clone https://github.com/proliferate-ai/cloud
+cd cloud
 cp .env.example .env
 ```
 
