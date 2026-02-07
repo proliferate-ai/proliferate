@@ -9,6 +9,8 @@ interface CollapsibleSectionProps {
 	defaultOpen?: boolean;
 	children: React.ReactNode;
 	className?: string;
+	/** Optional actions rendered on the right edge of the section header */
+	actions?: React.ReactNode;
 }
 
 export function CollapsibleSection({
@@ -16,24 +18,33 @@ export function CollapsibleSection({
 	defaultOpen = true,
 	children,
 	className,
+	actions,
 }: CollapsibleSectionProps) {
 	const [isOpen, setIsOpen] = useState(defaultOpen);
 
 	return (
 		<div className={cn("group/section", className)}>
 			{/* Section header */}
-			<button
-				onClick={() => setIsOpen(!isOpen)}
-				className="group/header flex items-center gap-0.5 w-full px-4 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-			>
-				<span>{title}</span>
-				<ChevronDown
-					className={cn(
-						"h-3 w-3 transition-all",
-						isOpen ? "opacity-0 group-hover/header:opacity-100" : "-rotate-90 opacity-100",
-					)}
-				/>
-			</button>
+			<div className="group/header flex items-center w-full px-4 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+				<button onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-0.5">
+					<span>{title}</span>
+					<ChevronDown
+						className={cn(
+							"h-3 w-3 transition-all",
+							isOpen ? "opacity-0 group-hover/header:opacity-100" : "-rotate-90 opacity-100",
+						)}
+					/>
+				</button>
+				{actions && (
+					<div
+						className="ml-auto flex items-center opacity-0 group-hover/header:opacity-100 transition-opacity"
+						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
+					>
+						{actions}
+					</div>
+				)}
+			</div>
 			{/* Section content with smooth collapse */}
 			<div
 				className={cn(

@@ -413,7 +413,7 @@ function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) {
 		filteredPublicRepos.length > 0;
 
 	return (
-		<div className="w-full max-w-[200px]">
+		<div className="w-full max-w-[300px]">
 			{/* Header */}
 			<div className="px-4 pt-4 pb-3 border-b border-border">
 				<Text className="font-semibold">Create new configuration</Text>

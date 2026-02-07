@@ -428,7 +428,7 @@ export default function AutomationRunsPage({
 	}
 
 	return (
-		<div className="flex-1 overflow-y-auto flex justify-center">
+		<div className="flex-1 overflow-y-auto flex max-h-screen justify-center">
 			<div className="w-full max-w-4xl p-6 py-8">
 				{/* Header */}
 				<header className="flex items-center justify-between mb-6">

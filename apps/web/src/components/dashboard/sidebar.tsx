@@ -58,7 +58,7 @@ import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AddSnapshotRow } from "./add-snapshot-button";
+import { AddSnapshotButton } from "./add-snapshot-button";
 import { AutomationRow } from "./automation-row";
 import { SearchTrigger } from "./command-search";
 import { ConfigurationGroup } from "./configuration-group";
@@ -360,9 +360,8 @@ function SidebarContent({
 				</CollapsibleSection>
 
 				{/* Configurations Section - prebuilds with grouped sessions */}
-				<CollapsibleSection title="Configurations" defaultOpen={true}>
+				<CollapsibleSection title="Sessions" defaultOpen={true} actions={<AddSnapshotButton />}>
 					<div className="px-2">
-						<AddSnapshotRow />
 						{prebuilds.map((prebuild) => (
 							<ConfigurationGroup
 								key={prebuild.id}

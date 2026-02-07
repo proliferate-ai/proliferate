@@ -27,7 +27,7 @@ import { cn, getRepoShortName } from "@/lib/utils";
 import { openEditSession, openSetupSession } from "@/stores/coding-session-store";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Session } from "@proliferate/shared/contracts";
-import { Camera, ChevronRight, MessageCircle, Pencil, Plus, Zap } from "lucide-react";
+import { Camera, ChevronRight, MessageCircle, Pencil, SquarePen, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -156,7 +156,7 @@ export function ConfigurationGroup({
 					: "text-muted-foreground/30 cursor-not-allowed",
 			)}
 		>
-			<Plus className="h-3.5 w-3.5" />
+			<SquarePen className="h-3.5 w-3.5" />
 		</button>
 	);
 
@@ -194,20 +194,18 @@ export function ConfigurationGroup({
 					</div>
 
 					<div className="shrink-0 flex items-center gap-0.5">
-						{isFinalized ? (
-							newSessionButton
-						) : (
-							<TooltipProvider>
-								<Tooltip>
-									<TooltipTrigger asChild>{newSessionButton}</TooltipTrigger>
-									<TooltipContent side="top" className="max-w-[200px]">
-										<p className="text-xs">
-											Finish setting up this configuration to start sessions from it
-										</p>
-									</TooltipContent>
-								</Tooltip>
-							</TooltipProvider>
-						)}
+						<TooltipProvider>
+							<Tooltip>
+								<TooltipTrigger asChild>{newSessionButton}</TooltipTrigger>
+								<TooltipContent side="top" className="max-w-[200px]">
+									<p className="text-xs">
+										{isFinalized
+											? "New Session"
+											: "Finish setting up this configuration to start sessions from it"}
+									</p>
+								</TooltipContent>
+							</Tooltip>
+						</TooltipProvider>
 						<div className="opacity-0 group-hover:opacity-100 transition-opacity">
 							<ItemActionsMenu
 								onRename={handleRename}

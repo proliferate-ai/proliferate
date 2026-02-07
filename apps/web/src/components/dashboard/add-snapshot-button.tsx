@@ -2,10 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { FolderPlusIcon } from "@/components/ui/icons";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getSetupInitialPrompt } from "@/lib/prompts";
 import { useDashboardStore } from "@/stores/dashboard";
 import * as Popover from "@radix-ui/react-popover";
-import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SnapshotSelector } from "./snapshot-selector";
@@ -24,11 +24,20 @@ export function AddSnapshotButton() {
 
 	return (
 		<Popover.Root open={open} onOpenChange={setOpen}>
-			<Popover.Trigger asChild>
-				<Button variant="ghost" size="icon" className="h-6 w-6" title="New configuration">
-					<Plus className="h-3.5 w-3.5" />
-				</Button>
-			</Popover.Trigger>
+			<TooltipProvider>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Popover.Trigger asChild>
+							<Button variant="ghost" size="icon" className="h-5 w-5">
+								<FolderPlusIcon className="h-3.5 w-3.5" />
+							</Button>
+						</Popover.Trigger>
+					</TooltipTrigger>
+					<TooltipContent side="right">
+						<p className="text-xs">New Configuration</p>
+					</TooltipContent>
+				</Tooltip>
+			</TooltipProvider>
 
 			<Popover.Portal>
 				<Popover.Content
