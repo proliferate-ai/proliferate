@@ -1,11 +1,14 @@
 "use client";
 
+import {
+	type Provider,
+	ProviderIcon,
+	getProviderDisplayName,
+} from "@/components/integrations/provider-icon";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FilterButtonGroup } from "@/components/ui/filter-button-group";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Text } from "@/components/ui/text";
 import { useAutomation, useAutomationRuns } from "@/hooks/use-automations";
 import { cn } from "@/lib/utils";
@@ -60,7 +63,7 @@ function getRunStatusInfo(status: string): {
 		case "ready":
 			return { icon: Clock, label: "Ready", className: "text-blue-400" };
 		case "queued":
-			return { icon: Clock, label: "Queued", className: "text-zinc-400" };
+			return { icon: Clock, label: "Queued", className: "text-muted-foreground" };
 		case "failed":
 			return { icon: XCircle, label: "Failed", className: "text-red-500" };
 		case "needs_human":
@@ -68,13 +71,13 @@ function getRunStatusInfo(status: string): {
 		case "timed_out":
 			return { icon: Timer, label: "Timed Out", className: "text-orange-500" };
 		case "canceled":
-			return { icon: XCircle, label: "Canceled", className: "text-zinc-400" };
+			return { icon: XCircle, label: "Canceled", className: "text-muted-foreground" };
 		case "skipped":
-			return { icon: AlertCircle, label: "Skipped", className: "text-zinc-400" };
+			return { icon: AlertCircle, label: "Skipped", className: "text-muted-foreground" };
 		case "filtered":
 			return { icon: Filter, label: "Filtered", className: "text-yellow-500" };
 		default:
-			return { icon: Clock, label: status, className: "text-zinc-400" };
+			return { icon: Clock, label: status, className: "text-muted-foreground" };
 	}
 }
 
@@ -124,23 +127,13 @@ function getSeverityColor(severity: string) {
 }
 
 // ============================================
-// Run Detail Dialog
+// Inline Detail Section
 // ============================================
 
-function RunDetailDialog({
-	run,
-	open,
-	onOpenChange,
-}: {
-	run: AutomationRun | null;
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-}) {
-	if (!run) return null;
-
+function RunDetailSection({ run }: { run: AutomationRun }) {
 	const parsedContext = run.trigger_event?.parsed_context as ParsedEventContext | null;
-	const statusInfo = getRunStatusInfo(run.status);
-	const StatusIcon = statusInfo.icon;
+	const provider = (run.trigger?.provider || "webhook") as Provider;
+	const eventType = getEventTypeLabel(run.trigger_event?.provider_event_type, provider);
 
 	const analysis = (parsedContext as Record<string, unknown> | null)?.llm_analysis_result as {
 		severity: string;
@@ -149,145 +142,156 @@ function RunDetailDialog({
 		recommendedActions: string[];
 	} | null;
 
+	// Build a context summary from provider-specific data
+	const contextParts: string[] = [];
+	if (parsedContext?.title) {
+		contextParts.push(parsedContext.title);
+	}
+	const ctx = parsedContext as Record<string, unknown> | null;
+	if (ctx?.posthog) {
+		const ph = ctx.posthog as Record<string, unknown>;
+		if (ph.current_url) contextParts.push(`URL: ${ph.current_url}`);
+		if (ph.person) {
+			const person = ph.person as Record<string, unknown>;
+			contextParts.push(`User: ${person.name || person.email || "Anonymous"}`);
+		}
+	}
+	if (ctx?.sentry) {
+		const s = ctx.sentry as Record<string, unknown>;
+		if (s.issue_title) contextParts.push(`Issue: ${s.issue_title}`);
+		if (s.project) contextParts.push(`Project: ${s.project}`);
+	}
+	if (ctx?.github) {
+		const gh = ctx.github as Record<string, unknown>;
+		if (gh.repo) contextParts.push(`Repo: ${gh.repo}`);
+		if (gh.title) contextParts.push(`Title: ${gh.title}`);
+	}
+
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-				<DialogHeader>
-					<DialogTitle className="flex items-center gap-2">
-						<StatusIcon className={cn("h-4 w-4", statusInfo.className)} />
-						<span className="truncate">{parsedContext?.title || "Run"}</span>
-					</DialogTitle>
-				</DialogHeader>
+		<div className="bg-muted border-b border-border px-6 py-4 space-y-4">
+			{/* Trigger Source */}
+			<div>
+				<Text variant="small" color="muted" className="mb-1.5 font-medium uppercase tracking-wide">
+					Trigger Source
+				</Text>
+				<div className="flex items-center gap-2 mb-1">
+					<ProviderIcon provider={provider} size="sm" />
+					<Text variant="body" className="font-medium">
+						{getProviderDisplayName(provider)}
+					</Text>
+					<Badge variant="outline" className="text-xs">
+						{eventType}
+					</Badge>
+				</div>
+				{contextParts.length > 0 && (
+					<div className="text-sm text-muted-foreground mt-1 space-y-0.5">
+						{contextParts.map((part) => (
+							<div key={part}>{part}</div>
+						))}
+					</div>
+				)}
+			</div>
 
-				<Tabs defaultValue="overview" className="mt-4">
-					<TabsList className="grid w-full grid-cols-2">
-						<TabsTrigger value="overview">Overview</TabsTrigger>
-						<TabsTrigger value="analysis" disabled={!analysis}>
-							Analysis
-						</TabsTrigger>
-					</TabsList>
-
-					<TabsContent value="overview" className="mt-4 space-y-4">
-						<div>
-							<Text variant="small" color="muted" className="mb-1">
-								Status
+			{/* Analysis */}
+			{analysis && (
+				<div>
+					<Text
+						variant="small"
+						color="muted"
+						className="mb-1.5 font-medium uppercase tracking-wide"
+					>
+						Analysis
+					</Text>
+					<div className="space-y-2">
+						<div className="flex items-center gap-2">
+							<div
+								className={cn("w-2.5 h-2.5 rounded-full", getSeverityColor(analysis.severity))}
+							/>
+							<Text variant="body" className="capitalize font-medium">
+								{analysis.severity}
 							</Text>
-							<Badge
-								variant={run.status === "succeeded" ? "default" : "secondary"}
-								className="capitalize"
-							>
-								{statusInfo.label}
-							</Badge>
 						</div>
-
-						{run.error_message && (
-							<div>
-								<Text variant="small" color="muted" className="mb-1">
-									Error
-								</Text>
-								<Text variant="small" color="destructive">
-									{run.error_message}
-								</Text>
-							</div>
-						)}
-
-						{run.status_reason && (
-							<div>
-								<Text variant="small" color="muted" className="mb-1">
-									Reason
-								</Text>
-								<Text variant="small">{run.status_reason}</Text>
-							</div>
-						)}
-
-						{run.assignee && (
-							<div>
-								<Text variant="small" color="muted" className="mb-1">
-									Assignee
-								</Text>
-								<div className="flex items-center gap-2">
-									<Avatar className="h-5 w-5">
-										<AvatarImage src={run.assignee.image ?? undefined} />
-										<AvatarFallback className="text-[10px]">
-											{run.assignee.name?.[0]?.toUpperCase() ?? "?"}
-										</AvatarFallback>
-									</Avatar>
-									<Text variant="small">{run.assignee.name}</Text>
-								</div>
-							</div>
-						)}
-
-						{parsedContext && (
-							<div>
-								<Text variant="small" color="muted" className="mb-1">
-									Event Context
-								</Text>
-								<pre className="text-xs bg-muted p-3 rounded overflow-auto max-h-64">
-									{JSON.stringify(parsedContext, null, 2)}
-								</pre>
-							</div>
-						)}
-					</TabsContent>
-
-					<TabsContent value="analysis" className="mt-4 space-y-4">
-						{analysis ? (
-							<>
-								<div className="flex items-center gap-4">
-									<div>
-										<Text variant="small" color="muted" className="mb-1">
-											Severity
-										</Text>
-										<div className="flex items-center gap-2">
-											<div
-												className={cn("w-3 h-3 rounded-full", getSeverityColor(analysis.severity))}
-											/>
-											<Text variant="body" className="capitalize font-medium">
-												{analysis.severity}
-											</Text>
-										</div>
-									</div>
-								</div>
-
-								<div>
-									<Text variant="small" color="muted" className="mb-1">
-										Summary
-									</Text>
-									<Text variant="body">{analysis.summary}</Text>
-								</div>
-
-								{analysis.rootCause && (
-									<div>
-										<Text variant="small" color="muted" className="mb-1">
-											Root Cause
-										</Text>
-										<Text variant="body">{analysis.rootCause}</Text>
-									</div>
-								)}
-
-								{analysis.recommendedActions?.length > 0 && (
-									<div>
-										<Text variant="small" color="muted" className="mb-1">
-											Recommended Actions
-										</Text>
-										<div className="flex flex-wrap gap-2">
-											{analysis.recommendedActions.map((action) => (
-												<Badge key={action} variant="outline">
-													{action}
-												</Badge>
-											))}
-										</div>
-									</div>
-								)}
-							</>
-						) : (
-							<Text variant="small" color="muted">
-								No analysis available
+						{analysis.summary && (
+							<Text variant="body" className="text-foreground">
+								{analysis.summary}
 							</Text>
 						)}
-					</TabsContent>
-				</Tabs>
-			</DialogContent>
-		</Dialog>
+						{analysis.rootCause && (
+							<div>
+								<Text variant="small" color="muted" className="mb-0.5">
+									Root Cause
+								</Text>
+								<Text variant="body">{analysis.rootCause}</Text>
+							</div>
+						)}
+						{analysis.recommendedActions?.length > 0 && (
+							<div>
+								<Text variant="small" color="muted" className="mb-1">
+									Recommended Actions
+								</Text>
+								<div className="flex flex-wrap gap-1.5">
+									{analysis.recommendedActions.map((action) => (
+										<Badge key={action} variant="outline">
+											{action}
+										</Badge>
+									))}
+								</div>
+							</div>
+						)}
+					</div>
+				</div>
+			)}
+
+			{/* Agent Session Link */}
+			{run.session_id && (
+				<div>
+					<Text
+						variant="small"
+						color="muted"
+						className="mb-1.5 font-medium uppercase tracking-wide"
+					>
+						Agent Session
+					</Text>
+					<Link href={`/dashboard/sessions/${run.session_id}`}>
+						<Button variant="outline" size="sm" className="gap-1.5">
+							<Bot className="w-3.5 h-3.5" />
+							View agent session
+						</Button>
+					</Link>
+				</div>
+			)}
+
+			{/* Status Info */}
+			{(run.status_reason || run.error_message) && (
+				<div>
+					<Text
+						variant="small"
+						color="muted"
+						className="mb-1.5 font-medium uppercase tracking-wide"
+					>
+						Status Info
+					</Text>
+					{run.status_reason && (
+						<div className="mb-1">
+							<Text variant="small" color="muted" className="mb-0.5">
+								Reason
+							</Text>
+							<Text variant="body">{run.status_reason}</Text>
+						</div>
+					)}
+					{run.error_message && (
+						<div>
+							<Text variant="small" color="muted" className="mb-0.5">
+								Error
+							</Text>
+							<Text variant="small" color="destructive">
+								{run.error_message}
+							</Text>
+						</div>
+					)}
+				</div>
+			)}
+		</div>
 	);
 }
 
@@ -297,10 +301,12 @@ function RunDetailDialog({
 
 function RunRow({
 	run,
-	onClick,
+	isExpanded,
+	onToggle,
 }: {
 	run: AutomationRun;
-	onClick: () => void;
+	isExpanded: boolean;
+	onToggle: () => void;
 }) {
 	const parsedContext = run.trigger_event?.parsed_context as ParsedEventContext | null;
 	const provider = run.trigger?.provider || "unknown";
@@ -317,60 +323,71 @@ function RunRow({
 	const hasSession = !!run.session_id;
 
 	return (
-		<button
-			type="button"
-			onClick={onClick}
-			className={cn(
-				"w-full grid grid-cols-[minmax(0,1fr)_120px_100px_36px_120px_24px] items-center gap-3",
-				"px-4 py-3 border-b border-slate-950/[0.075] last:border-b-0",
-				"hover:bg-slate-950/[0.043] transition-colors cursor-pointer text-left",
-			)}
-		>
-			{/* Summary */}
-			<div className="min-w-0">
-				<div className="flex items-center gap-2">
-					<span className="text-sm font-medium text-zinc-900 truncate">{title}</span>
-					{hasSession && (
-						<span className="inline-flex items-center gap-0.5 rounded-full border border-slate-950/[0.1] px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">
-							<Bot className="w-2.5 h-2.5" />
-							Session
-						</span>
+		<>
+			<button
+				type="button"
+				onClick={onToggle}
+				className={cn(
+					"w-full grid grid-cols-[minmax(0,1fr)_120px_100px_36px_120px_24px] items-center gap-3",
+					"px-4 py-3 border-b border-border last:border-b-0",
+					"hover:bg-accent transition-colors cursor-pointer text-left",
+					isExpanded && "bg-accent",
+				)}
+			>
+				{/* Summary */}
+				<div className="min-w-0">
+					<div className="flex items-center gap-2">
+						<span className="text-sm font-medium text-foreground truncate">{title}</span>
+						{hasSession && (
+							<span className="inline-flex items-center gap-0.5 rounded-full border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+								<Bot className="w-2.5 h-2.5" />
+								Session
+							</span>
+						)}
+					</div>
+					<span className="text-xs text-muted-foreground truncate block">{eventType}</span>
+				</div>
+
+				{/* Run Status */}
+				<div className="flex items-center gap-1.5">
+					<StatusIcon className={cn("w-3.5 h-3.5", statusInfo.className)} />
+					<span className="text-sm text-muted-foreground">{statusInfo.label}</span>
+				</div>
+
+				{/* Assignee */}
+				<div className="flex items-center justify-center">
+					{run.assignee ? (
+						<Avatar className="h-6 w-6">
+							<AvatarImage src={run.assignee.image ?? undefined} />
+							<AvatarFallback className="text-[10px] bg-muted text-muted-foreground">
+								{run.assignee.name?.[0]?.toUpperCase() ?? "?"}
+							</AvatarFallback>
+						</Avatar>
+					) : (
+						<span className="text-xs text-muted-foreground/50">--</span>
 					)}
 				</div>
-				<span className="text-xs text-gray-950/[0.53] truncate block">{eventType}</span>
-			</div>
 
-			{/* Run Status */}
-			<div className="flex items-center gap-1.5">
-				<StatusIcon className={cn("w-3.5 h-3.5", statusInfo.className)} />
-				<span className="text-sm text-zinc-600">{statusInfo.label}</span>
-			</div>
+				{/* Spacer */}
+				<span />
 
-			{/* Assignee */}
-			<div className="flex items-center justify-center">
-				{run.assignee ? (
-					<Avatar className="h-6 w-6">
-						<AvatarImage src={run.assignee.image ?? undefined} />
-						<AvatarFallback className="text-[10px] bg-zinc-100 text-zinc-600">
-							{run.assignee.name?.[0]?.toUpperCase() ?? "?"}
-						</AvatarFallback>
-					</Avatar>
-				) : (
-					<span className="text-xs text-gray-950/[0.3]">--</span>
-				)}
-			</div>
+				{/* Time */}
+				<span className="text-sm text-muted-foreground" title={exactTime}>
+					{timeAgo}
+				</span>
 
-			{/* Spacer */}
-			<span />
+				{/* Chevron */}
+				<ChevronRight
+					className={cn(
+						"w-4 h-4 text-muted-foreground/50 transition-transform duration-200",
+						isExpanded && "rotate-90",
+					)}
+				/>
+			</button>
 
-			{/* Time */}
-			<span className="text-sm text-gray-950/[0.53]" title={exactTime}>
-				{timeAgo}
-			</span>
-
-			{/* Chevron */}
-			<ChevronRight className="w-4 h-4 text-zinc-300" />
-		</button>
+			{/* Expanded Detail Section */}
+			{isExpanded && <RunDetailSection run={run} />}
+		</>
 	);
 }
 
@@ -385,7 +402,7 @@ export default function AutomationRunsPage({
 }) {
 	const { id: automationId } = use(params);
 	const [statusFilter, setStatusFilter] = useState<string[]>(["all"]);
-	const [selectedRun, setSelectedRun] = useState<AutomationRun | null>(null);
+	const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
 
 	const filterValue = statusFilter.includes("all")
 		? undefined
@@ -406,8 +423,12 @@ export default function AutomationRunsPage({
 	const runsList = runsData?.runs ?? [];
 	const total = runsData?.total ?? 0;
 
+	function handleToggleRun(runId: string) {
+		setExpandedRunId((prev) => (prev === runId ? null : runId));
+	}
+
 	return (
-		<div className="flex-1 flex justify-center">
+		<div className="flex-1 overflow-y-auto flex justify-center">
 			<div className="w-full max-w-4xl p-6 py-8">
 				{/* Header */}
 				<header className="flex items-center justify-between mb-6">
@@ -418,8 +439,8 @@ export default function AutomationRunsPage({
 							</Button>
 						</Link>
 						<div>
-							<h1 className="text-lg font-semibold text-zinc-900">Runs</h1>
-							<p className="text-sm text-gray-950/[0.53]">
+							<h1 className="text-lg font-semibold text-foreground">Runs</h1>
+							<p className="text-sm text-muted-foreground">
 								{automation?.name || "Automation"} · {total} {total === 1 ? "run" : "runs"}
 							</p>
 						</div>
@@ -448,28 +469,28 @@ export default function AutomationRunsPage({
 
 				{/* Table */}
 				{isLoading ? (
-					<div className="rounded-2xl border-2 border-slate-950/[0.1] bg-white overflow-hidden">
+					<div className="rounded-2xl border-2 border-border bg-card overflow-hidden">
 						<div className="space-y-0">
 							{[1, 2, 3].map((i) => (
 								<div
 									key={i}
-									className="h-16 border-b border-slate-950/[0.075] last:border-b-0 animate-pulse bg-zinc-50"
+									className="h-16 border-b border-border last:border-b-0 animate-pulse bg-muted"
 								/>
 							))}
 						</div>
 					</div>
 				) : error ? (
-					<div className="text-center py-12 rounded-2xl border-2 border-slate-950/[0.1] bg-zinc-50">
+					<div className="text-center py-12 rounded-2xl border-2 border-border bg-muted">
 						<Text variant="body" color="destructive">
 							Failed to load runs
 						</Text>
 					</div>
 				) : runsList.length === 0 ? (
-					<div className="text-center py-12 rounded-2xl border-2 border-slate-950/[0.1] bg-zinc-50">
-						<div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center mx-auto mb-3">
-							<Inbox className="w-5 h-5 text-zinc-400" />
+					<div className="text-center py-12 rounded-2xl border-2 border-border bg-muted">
+						<div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center mx-auto mb-3">
+							<Inbox className="w-5 h-5 text-muted-foreground" />
 						</div>
-						<Text variant="body" className="font-medium text-zinc-700 mb-1">
+						<Text variant="body" className="font-medium text-foreground mb-1">
 							No runs yet
 						</Text>
 						<Text variant="small" color="muted">
@@ -477,38 +498,38 @@ export default function AutomationRunsPage({
 						</Text>
 					</div>
 				) : (
-					<div className="rounded-2xl border-2 border-slate-950/[0.1] bg-white overflow-hidden">
+					<div className="rounded-2xl border-2 border-border bg-card overflow-hidden">
 						{/* Table Header */}
 						<div
 							className={cn(
 								"grid grid-cols-[minmax(0,1fr)_120px_100px_36px_120px_24px] items-center gap-3",
-								"px-4 py-2 bg-zinc-50 border-b-2 border-slate-950/[0.075]",
+								"px-4 py-2 bg-muted border-b-2 border-border",
 								"sticky top-0 z-10",
 							)}
 						>
-							<span className="text-sm font-medium text-gray-950/[0.53]">Summary</span>
-							<span className="text-sm font-medium text-gray-950/[0.53]">Status</span>
-							<span className="text-sm font-medium text-gray-950/[0.53] text-center">Assignee</span>
+							<span className="text-sm font-medium text-muted-foreground">Summary</span>
+							<span className="text-sm font-medium text-muted-foreground">Status</span>
+							<span className="text-sm font-medium text-muted-foreground text-center">
+								Assignee
+							</span>
 							<span />
-							<span className="text-sm font-medium text-gray-950/[0.53]">Time</span>
+							<span className="text-sm font-medium text-muted-foreground">Time</span>
 							<span />
 						</div>
 
 						{/* Table Body */}
 						<div>
 							{runsList.map((run) => (
-								<RunRow key={run.id} run={run} onClick={() => setSelectedRun(run)} />
+								<RunRow
+									key={run.id}
+									run={run}
+									isExpanded={expandedRunId === run.id}
+									onToggle={() => handleToggleRun(run.id)}
+								/>
 							))}
 						</div>
 					</div>
 				)}
-
-				{/* Run Detail Dialog */}
-				<RunDetailDialog
-					run={selectedRun}
-					open={!!selectedRun}
-					onOpenChange={(open) => !open && setSelectedRun(null)}
-				/>
 			</div>
 		</div>
 	);
