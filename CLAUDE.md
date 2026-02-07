@@ -2,12 +2,15 @@
 
 > Code style, patterns, and conventions for AI coding agents working on this codebase.
 
+**Proliferate is fully open source under the MIT license.** Every commit is public. Never commit secrets, credentials, or proprietary material to any branch.
+
 ## Core Philosophy
 
 - **Minimal and elegant**: Less code is better. Every line should earn its place.
 - **Reads like English**: Code should be self-explanatory through explicit naming.
 - **Follow existing patterns**: Never duplicate functionality. Find and extend what exists.
 - **No surprises**: Ask before making architecture decisions.
+- **Open source first**: Only use MIT/Apache-2.0/BSD-compatible dependencies. No GPL, AGPL, SSPL, or BSL.
 
 ## Stack & Architecture
 
@@ -146,8 +149,14 @@ Key commands:
 - `K8S_CLOUD=aws make k8s-pods`
 - `make deploy-cloud SHA=<sha> STACK=prod`
 
-## Secrets & Env
+## Secrets & Sensitive Information
 
+**This repo is public. Treat every branch as public.**
+
+- **Never commit**: API keys, tokens, passwords, private keys, connection strings, customer data, internal URLs, or `.env` files.
+- **Never hardcode** secrets or credentials anywhere in source — use environment variables.
+- If you accidentally stage a secret, remove it from the commit **and** rotate the secret immediately.
+- Verify `.gitignore` covers any new secret/config files before committing.
 - Local dev: `.env.local`
 - Cloud runtime: AWS Secrets Manager → External Secrets → K8s
 - App runtime env **overrides Modal secrets** when creating sessions
@@ -186,7 +195,7 @@ Run `make` or `make help` for the full list. Common targets:
 ## Architecture Decisions
 
 Ask before:
-- Adding dependencies
+- Adding dependencies — verify the license is MIT/Apache-2.0/BSD-compatible (no GPL, AGPL, SSPL, BSL)
 - Creating new patterns/abstractions
 - Changing core systems (Gateway ↔ Sandbox, DB schema, event types)
 
@@ -206,3 +215,5 @@ Do not update docs unless explicitly asked.
 - Raw `fetch("/api/..." )` in components
 - API calls inside `components/ui/`
 - Server state in Zustand
+- Committing secrets, `.env` files, or credentials to any branch
+- Adding dependencies with GPL/AGPL/SSPL/BSL licenses
