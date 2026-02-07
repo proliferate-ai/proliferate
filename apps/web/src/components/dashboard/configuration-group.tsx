@@ -17,7 +17,6 @@ import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDeletePrebuild, useUpdatePrebuild } from "@/hooks/use-prebuilds";
-import { openEditSession, openSetupSession } from "@/stores/coding-session-store";
 import {
 	useCreateSession,
 	useDeleteSession,
@@ -25,6 +24,7 @@ import {
 	useSnapshotSession,
 } from "@/hooks/use-sessions";
 import { cn, getRepoShortName } from "@/lib/utils";
+import { openEditSession, openSetupSession } from "@/stores/coding-session-store";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Session } from "@proliferate/shared/contracts";
 import { Camera, ChevronRight, MessageCircle, Pencil, Plus, Zap } from "lucide-react";
@@ -78,9 +78,7 @@ export function ConfigurationGroup({
 		: "Untitled";
 	const displayName = prebuild.name || repoShortName;
 
-	const setupSessionId = prebuild.setupSessions?.find(
-		(s) => s.sessionType === "setup",
-	)?.id;
+	const setupSessionId = prebuild.setupSessions?.find((s) => s.sessionType === "setup")?.id;
 
 	const updatePrebuild = useUpdatePrebuild();
 	const deletePrebuild = useDeletePrebuild();
@@ -203,7 +201,9 @@ export function ConfigurationGroup({
 								<Tooltip>
 									<TooltipTrigger asChild>{newSessionButton}</TooltipTrigger>
 									<TooltipContent side="top" className="max-w-[200px]">
-										<p className="text-xs">Finish setting up this configuration to start sessions from it</p>
+										<p className="text-xs">
+											Finish setting up this configuration to start sessions from it
+										</p>
 									</TooltipContent>
 								</Tooltip>
 							</TooltipProvider>

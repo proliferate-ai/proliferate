@@ -244,7 +244,9 @@ export async function createSessionHandler(
 			orgId,
 			repoIds,
 			repoSpecs,
-			requireProxy: env.LLM_PROXY_REQUIRED === true || env.LLM_PROXY_REQUIRED === "true" as unknown as boolean,
+			requireProxy:
+				env.LLM_PROXY_REQUIRED === true ||
+				env.LLM_PROXY_REQUIRED === ("true" as unknown as boolean),
 		});
 		envVars = envResult.envVars;
 		console.log(

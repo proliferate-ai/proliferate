@@ -151,12 +151,7 @@ export function SentryIcon({ className }: IconProps) {
  */
 export function PostHogIcon({ className }: IconProps) {
 	return (
-		<svg
-			className={className}
-			viewBox="0 0 50 30"
-			fill="none"
-			xmlns="http://www.w3.org/2000/svg"
-		>
+		<svg className={className} viewBox="0 0 50 30" fill="none" xmlns="http://www.w3.org/2000/svg">
 			<path
 				d="M10.8914 17.2057c-.3685.7371-1.42031.7371-1.78884 0L8.2212 15.443c-.14077-.2815-.14077-.6129 0-.8944l.88136-1.7627c.36853-.7371 1.42034-.7371 1.78884 0l.8814 1.7627c.1407.2815.1407.6129 0 .8944l-.8814 1.7627zM10.8914 27.2028c-.3685.737-1.42031.737-1.78884 0L8.2212 25.44c-.14077-.2815-.14077-.6129 0-.8944l.88136-1.7627c.36853-.7371 1.42034-.7371 1.78884 0l.8814 1.7627c.1407.2815.1407.6129 0 .8944l-.8814 1.7628z"
 				fill="#1D4AFF"
