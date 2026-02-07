@@ -1,7 +1,9 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Repo } from "@/hooks/use-onboarding";
+import { cn } from "@/lib/utils";
 import { ExternalLink } from "lucide-react";
 
 interface RepoListProps {
@@ -41,29 +43,40 @@ export function RepoList({ repos }: RepoListProps) {
 								<p className="text-sm text-muted-foreground">{repo.default_branch}</p>
 							</div>
 							<div className="flex items-center gap-2">
-								{repo.prebuild_status === "ready" ? (
-									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-										Ready
-									</span>
-								) : (
-									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-										Pending setup
-									</span>
-								)}
+								<Badge
+									variant="secondary"
+									className={cn(
+										"text-xs",
+										repo.prebuild_status === "ready"
+											? "bg-green-500/10 text-green-600 dark:text-green-400"
+											: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400",
+									)}
+								>
+									{repo.prebuild_status === "ready" ? "Ready" : "Pending setup"}
+								</Badge>
 								{repo.repo_snapshot_status === "building" && (
-									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+									<Badge
+										variant="secondary"
+										className="text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400"
+									>
 										Caching...
-									</span>
+									</Badge>
 								)}
 								{repo.repo_snapshot_status === "ready" && (
-									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+									<Badge
+										variant="secondary"
+										className="text-xs bg-green-500/10 text-green-600 dark:text-green-400"
+									>
 										Cached
-									</span>
+									</Badge>
 								)}
 								{repo.repo_snapshot_status === "failed" && (
-									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+									<Badge
+										variant="secondary"
+										className="text-xs bg-red-500/10 text-red-600 dark:text-red-400"
+									>
 										Cache failed
-									</span>
+									</Badge>
 								)}
 							</div>
 						</li>
