@@ -59,6 +59,13 @@ async function handleRepoSnapshotBuild(
 	const branch = repo.defaultBranch || "main";
 	const token = await resolveGitHubToken(repo.organizationId, repoId);
 
+	if (repo.isPrivate && !token) {
+		const message = "Missing GitHub token for private repo snapshot build";
+		await repos.markRepoSnapshotFailed({ repoId, error: message });
+		log.warn({ branch }, message);
+		return;
+	}
+
 	const provider = new ModalLibmodalProvider();
 	try {
 		const result = await provider.createRepoSnapshot({
