@@ -4,17 +4,25 @@ import { useAutomations } from "@/hooks/use-automations";
 import { useIntegrations } from "@/hooks/use-integrations";
 import { useRepos } from "@/hooks/use-repos";
 import { useCreateSession } from "@/hooks/use-sessions";
+import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { OnboardingCards } from "./onboarding-cards";
 import { PromptInput } from "./prompt-input";
-import { SnapshotSelector } from "./snapshot-selector";
 import { WelcomeDialog } from "./welcome-dialog";
+
+function getGreeting(name: string): string {
+	const hour = new Date().getHours();
+	if (hour < 12) return `Good morning, ${name}`;
+	if (hour < 18) return `Good afternoon, ${name}`;
+	return `Good evening, ${name}`;
+}
 
 export function EmptyDashboard() {
 	const router = useRouter();
+	const { data: authSession } = useSession();
 	const {
 		selectedRepoId,
 		selectedSnapshotId,
@@ -62,6 +70,9 @@ export function EmptyDashboard() {
 		setShowCards(false);
 	}, [hasCards]);
 
+	const firstName = authSession?.user?.name?.split(" ")[0] ?? "";
+	const greeting = firstName ? getGreeting(firstName) : "How can I help you today?";
+
 	const handleSubmit = async (prompt: string) => {
 		if (!selectedRepoId || !selectedSnapshotId) return;
 
@@ -86,40 +97,32 @@ export function EmptyDashboard() {
 	};
 
 	return (
-		<div className="h-full flex flex-col items-center p-8">
+		<div className="h-full flex flex-col items-center justify-center p-8">
 			<WelcomeDialog />
 
-			{/* Center content area */}
-			<div className="flex-1 flex flex-col items-center justify-center w-full max-w-2xl overflow-y-auto">
+			{/* Centered content */}
+			<div className="flex flex-col items-center w-full max-w-2xl">
+				{/* Personalized greeting */}
+				<h2 className="text-3xl font-semibold mb-8">{greeting}</h2>
+
+				{/* Prompt input */}
 				<div className="w-full">
-					{/* Hero heading with snapshot selector */}
-					<div className="text-center flex justify-center  flex-col space-y-2">
-						<h2 className="text-2xl font-semibold">Let's get started</h2>
-						<SnapshotSelector
-							mode="select"
-							triggerClassName="border-0 mx-auto bg-transparent hover:bg-muted/50 text-lg text-muted-foreground/35 font-medium h-auto px-2 py-1"
-						/>
-					</div>
+					<PromptInput onSubmit={handleSubmit} isLoading={createSession.isPending} />
 				</div>
 
 				{/* Onboarding cards - animated entrance */}
 				<div
 					className={cn(
-						"w-full grid transition-[grid-template-rows,opacity] duration-500 ease-out",
+						"w-full grid transition-[grid-template-rows,opacity] duration-500 ease-out mt-4",
 						showCards && hasCards ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
 					)}
 				>
 					<div className="overflow-hidden">
-						<div className="pt-8">
+						<div className="pt-4">
 							<OnboardingCards />
 						</div>
 					</div>
 				</div>
-			</div>
-
-			{/* Bottom-anchored prompt input */}
-			<div className="w-full max-w-2xl shrink-0 pb-2">
-				<PromptInput onSubmit={handleSubmit} isLoading={createSession.isPending} />
 			</div>
 		</div>
 	);

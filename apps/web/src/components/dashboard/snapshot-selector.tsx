@@ -286,9 +286,11 @@ export function SnapshotSelector({
 
 interface CreateSnapshotContentProps {
 	onCreate?: (prebuildId: string, sessionId: string) => void;
+	/** Hide the built-in header (useful when rendered inside a Dialog with its own title) */
+	hideHeader?: boolean;
 }
 
-function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) {
+export function CreateSnapshotContent({ onCreate, hideHeader }: CreateSnapshotContentProps) {
 	const [selectedRepoIds, setSelectedRepoIds] = useState<Set<string>>(new Set());
 	const [searchQuery, setSearchQuery] = useState("");
 	const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -415,15 +417,17 @@ function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) {
 		filteredPublicRepos.length > 0;
 
 	return (
-		<div className="w-full max-w-[300px]">
+		<div className={cn("w-full", !hideHeader && "max-w-[300px]")}>
 			{/* Header */}
-			<div className="px-4 pt-4 pb-3 border-b border-border">
-				<Text className="font-semibold">Create new configuration</Text>
-				<Text variant="small" color="muted" className="mt-1">
-					A configuration saves your cloud environment — installed dependencies, running services,
-					and all. Sessions start from it instantly.
-				</Text>
-			</div>
+			{!hideHeader && (
+				<div className="px-4 pt-4 pb-3 border-b border-border">
+					<Text className="font-semibold">Create new configuration</Text>
+					<Text variant="small" color="muted" className="mt-1">
+						A configuration saves your cloud environment — installed dependencies, running services,
+						and all. Sessions start from it instantly.
+					</Text>
+				</div>
+			)}
 
 			{/* Search input */}
 			<div className="px-4 py-3">

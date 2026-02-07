@@ -24,7 +24,7 @@ import { cn, formatRelativeTime, getRepoShortName } from "@/lib/utils";
 import { openEditSession, openSetupSession } from "@/stores/coding-session-store";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Session } from "@proliferate/shared/contracts";
-import { Camera, Folder, FolderOpen, Pencil, Plus, Zap } from "lucide-react";
+import { Camera, ChevronRight, Pencil, Plus, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -147,11 +147,12 @@ export function ConfigurationGroup({
 					onClick={() => setIsOpen(!isOpen)}
 					className="group relative flex items-center gap-[0.38rem] px-3 py-1.5 rounded-lg text-sm cursor-pointer transition-colors text-muted-foreground hover:text-foreground hover:bg-accent"
 				>
-					{isOpen ? (
-						<FolderOpen className="h-4 w-4 shrink-0" />
-					) : (
-						<Folder className="h-4 w-4 shrink-0" />
-					)}
+					<ChevronRight
+						className={cn(
+							"h-3.5 w-3.5 shrink-0 transition-transform duration-200",
+							isOpen && "rotate-90",
+						)}
+					/>
 
 					<div className="flex-1 min-w-0 flex items-center gap-1.5">
 						{isEditing ? (

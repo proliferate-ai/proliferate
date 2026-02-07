@@ -36,6 +36,7 @@ import type { Session } from "@proliferate/shared/contracts";
 import {
 	Camera,
 	ChevronRight,
+	FileStackIcon,
 	LifeBuoy,
 	LogOut,
 	Menu,
@@ -315,7 +316,7 @@ function SidebarContent({
 							: "text-muted-foreground hover:text-foreground hover:bg-accent",
 					)}
 				>
-					<BoltIcon className="h-5 w-5" />
+					<FileStackIcon className="h-5 w-5" />
 					<span>Automations</span>
 				</button>
 			</div>
