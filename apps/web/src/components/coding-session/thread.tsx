@@ -1,6 +1,6 @@
 "use client";
 
-import { AgentModelSelector } from "@/components/automations/agent-model-selector";
+import { ModelSelector } from "@/components/automations/model-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Text } from "@/components/ui/text";
@@ -144,12 +144,7 @@ interface ComposerActionsLeftProps {
 
 const ComposerActionsLeft: FC<ComposerActionsLeftProps> = ({ selectedModel, onModelChange }) => (
 	<div className="flex items-center gap-1">
-		<AgentModelSelector
-			agentType="opencode"
-			modelId={selectedModel}
-			onChange={(_agentType, modelId) => onModelChange(modelId as ModelId)}
-			variant="ghost"
-		/>
+		<ModelSelector modelId={selectedModel} onChange={onModelChange} variant="ghost" />
 	</div>
 );
 

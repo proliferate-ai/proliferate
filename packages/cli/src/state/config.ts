@@ -15,6 +15,7 @@ const CONFIG_FILE = join(PROLIFERATE_DIR, "config.json");
 export interface Config {
 	apiUrl?: string;
 	syncMode?: "gitignore" | "all";
+	modelId?: string;
 }
 
 /**

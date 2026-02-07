@@ -446,7 +446,7 @@ export class SessionHub {
 		const openCodeUrl = this.runtime.getOpenCodeUrl();
 
 		if (!openCodeSessionId || !openCodeUrl) {
-			throw new Error("OpenCode session unavailable");
+			throw new Error("Agent session unavailable");
 		}
 
 		// Build user message
@@ -729,7 +729,7 @@ export class SessionHub {
 		const openCodeSessionId = this.runtime.getOpenCodeSessionId();
 		const previewUrl = this.runtime.getPreviewUrl();
 		if (!openCodeUrl || !openCodeSessionId) {
-			throw new Error("Missing OpenCode session info");
+			throw new Error("Missing agent session info");
 		}
 
 		this.log("Fetching OpenCode messages for init...", {

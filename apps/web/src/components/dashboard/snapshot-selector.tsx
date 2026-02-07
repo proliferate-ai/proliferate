@@ -296,6 +296,7 @@ function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) {
 	const [addingRepoId, setAddingRepoId] = useState<number | null>(null);
 	const searchInputRef = useRef<HTMLInputElement>(null);
 	const queryClient = useQueryClient();
+	const { selectedModel } = useDashboardStore();
 
 	// Debounce search
 	useEffect(() => {
@@ -350,6 +351,7 @@ function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) {
 		const sessionResult = await createSession.mutateAsync({
 			prebuildId: prebuildResult.prebuildId,
 			sessionType: "setup",
+			modelId: selectedModel,
 		});
 		onCreate?.(prebuildResult.prebuildId, sessionResult.sessionId);
 		setSelectedRepoIds(new Set());

@@ -8,6 +8,7 @@ import {
 	getDefaultAgentConfig,
 	getSetupSystemPrompt,
 	isValidModelId,
+	parseModelId,
 } from "@proliferate/shared";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
@@ -215,7 +216,11 @@ export async function loadSessionContext(
 	const defaultAgentConfig = getDefaultAgentConfig();
 	const rawModelId = session.agent_config?.modelId;
 	const modelId: ModelId =
-		rawModelId && isValidModelId(rawModelId) ? rawModelId : defaultAgentConfig.modelId;
+		rawModelId && isValidModelId(rawModelId)
+			? rawModelId
+			: rawModelId
+				? parseModelId(rawModelId)
+				: defaultAgentConfig.modelId;
 	const agentConfig = {
 		agentType: "opencode" as const,
 		modelId,

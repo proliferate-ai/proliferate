@@ -5,6 +5,7 @@ import { SessionLoadingShell } from "@/components/coding-session/session-loading
 import { Button } from "@/components/ui/button";
 import { useCreatePrebuild } from "@/hooks/use-prebuilds";
 import { useCreateSession, useFinalizeSetup } from "@/hooks/use-sessions";
+import { useDashboardStore } from "@/stores/dashboard";
 import { ArrowLeft, Check } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -17,6 +18,7 @@ export default function SetupPage() {
 
 	const [sessionId, setSessionId] = useState<string | null>(null);
 	const creationStartedRef = useRef(false);
+	const { selectedModel } = useDashboardStore();
 
 	const createPrebuildMutation = useCreatePrebuild();
 	const createSessionMutation = useCreateSession();
@@ -40,6 +42,7 @@ export default function SetupPage() {
 				const sessionResult = await createSessionMutation.mutateAsync({
 					prebuildId: prebuildResult.prebuildId,
 					sessionType: "setup",
+					modelId: selectedModel,
 				});
 
 				setSessionId(sessionResult.sessionId);
@@ -49,7 +52,7 @@ export default function SetupPage() {
 		};
 
 		createPrebuildAndSession();
-	}, [repoId, sessionId, createPrebuildMutation, createSessionMutation]);
+	}, [repoId, sessionId, selectedModel, createPrebuildMutation, createSessionMutation]);
 
 	const handleFinalize = async () => {
 		if (!sessionId) return;

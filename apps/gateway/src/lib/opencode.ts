@@ -76,7 +76,7 @@ export async function createOpenCodeSession(baseUrl: string, title?: string): Pr
 			status: response.status,
 			durationMs: Date.now() - startMs,
 		});
-		throw new Error(`OpenCode session create failed: ${errorText}`);
+		throw new Error(`Agent session create failed: ${errorText}`);
 	}
 
 	const data = (await response.json()) as { id: string };
@@ -121,7 +121,7 @@ export async function listOpenCodeSessions(baseUrl: string): Promise<OpenCodeSes
 			status: response.status,
 			durationMs: Date.now() - startMs,
 		});
-		throw new Error(`OpenCode session list failed: ${response.status}`);
+		throw new Error(`Agent session list failed: ${response.status}`);
 	}
 	const sessions = (await response.json()) as OpenCodeSessionInfo[];
 	logLatency("opencode.session.list.ok", {
@@ -294,7 +294,7 @@ export async function fetchOpenCodeMessages(
 			status: response.status,
 			durationMs: Date.now() - startMs,
 		});
-		throw new Error(`OpenCode messages fetch failed: ${response.status}`);
+		throw new Error(`Agent messages fetch failed: ${response.status}`);
 	}
 
 	const messages = (await response.json()) as OpenCodeMessage[];
@@ -364,7 +364,7 @@ export async function sendPromptAsync(
 			status: response.status,
 			durationMs: Date.now() - startMs,
 		});
-		throw new Error(`OpenCode prompt failed: ${errorText}`);
+		throw new Error(`Agent prompt failed: ${errorText}`);
 	}
 	console.log("[OpenCode] Prompt sent", {
 		sessionId,
@@ -389,7 +389,7 @@ export async function abortOpenCodeSession(baseUrl: string, sessionId: string): 
 			status: response.status,
 			durationMs: Date.now() - startMs,
 		});
-		throw new Error(`OpenCode abort failed: ${errorText}`);
+		throw new Error(`Agent abort failed: ${errorText}`);
 	}
 	logLatency("opencode.abort.ok", {
 		host: getBaseUrlHost(baseUrl),

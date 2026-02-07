@@ -78,7 +78,7 @@ export function ConfigurationGroup({
 	const updatePrebuild = useUpdatePrebuild();
 	const deletePrebuild = useDeletePrebuild();
 	const createSession = useCreateSession();
-	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
+	const { selectedModel, setActiveSession, clearPendingPrompt } = useDashboardStore();
 
 	useEffect(() => {
 		if (isEditing && inputRef.current) {
@@ -131,6 +131,7 @@ export function ConfigurationGroup({
 		const result = await createSession.mutateAsync({
 			prebuildId: prebuild.id,
 			sessionType: "coding",
+			modelId: selectedModel,
 		});
 		clearPendingPrompt();
 		setActiveSession(result.sessionId);

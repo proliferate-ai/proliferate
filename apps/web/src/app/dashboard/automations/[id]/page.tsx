@@ -1,7 +1,7 @@
 "use client";
 
 import { AddTriggerButton } from "@/components/automations/add-trigger-button";
-import { AgentModelSelector } from "@/components/automations/agent-model-selector";
+import { ModelSelector } from "@/components/automations/model-selector";
 import { TriggerChip } from "@/components/automations/trigger-chip";
 import {
 	AlertDialog,
@@ -29,7 +29,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAutomation, useUpdateAutomation } from "@/hooks/use-automations";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
-import type { AutomationWithTriggers, UpdateAutomationInput } from "@proliferate/shared";
+import {
+	type AutomationWithTriggers,
+	type ModelId,
+	type UpdateAutomationInput,
+	getDefaultAgentConfig,
+	isValidModelId,
+	parseModelId,
+} from "@proliferate/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { HelpCircle, History, Mail, MoreVertical, Trash2 } from "lucide-react";
 import Link from "next/link";
@@ -376,9 +383,9 @@ export default function AutomationDetailPage({
 		}
 	}, [nameValue, automation?.name, handleUpdate]);
 
-	const handleAgentModelChange = useCallback(
-		(agentType: string, modelId: string) => {
-			handleUpdate({ agentType, modelId });
+	const handleModelChange = useCallback(
+		(modelId: ModelId) => {
+			handleUpdate({ modelId });
 		},
 		[handleUpdate],
 	);
@@ -601,13 +608,18 @@ export default function AutomationDetailPage({
 
 						{/* Agent */}
 						<div>
-							<label className="text-sm text-muted-foreground font-medium mb-2 block">Agent</label>
+							<label className="text-sm text-muted-foreground font-medium mb-2 block">Model</label>
 							<div className="flex flex-col">
 								<StackedListItem isFirst isLast>
-									<AgentModelSelector
-										agentType={automation.agent_type || "opencode"}
-										modelId={automation.model_id || "claude-sonnet-4-20250514"}
-										onChange={handleAgentModelChange}
+									<ModelSelector
+										modelId={
+											automation.model_id && isValidModelId(automation.model_id)
+												? automation.model_id
+												: automation.model_id
+													? parseModelId(automation.model_id)
+													: getDefaultAgentConfig().modelId
+										}
+										onChange={handleModelChange}
 										triggerClassName="w-full h-full border-0 shadow-none bg-transparent hover:bg-transparent px-0"
 									/>
 								</StackedListItem>

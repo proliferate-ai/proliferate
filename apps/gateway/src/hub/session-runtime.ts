@@ -342,7 +342,7 @@ export class SessionRuntime {
 			}
 
 			if (!this.openCodeUrl) {
-				throw new Error("Missing OpenCode tunnel URL");
+				throw new Error("Missing agent tunnel URL");
 			}
 
 			// Ensure OpenCode session exists
@@ -376,7 +376,7 @@ export class SessionRuntime {
 
 	private async ensureOpenCodeSession(): Promise<void> {
 		if (!this.openCodeUrl) {
-			throw new Error("OpenCode URL missing");
+			throw new Error("Agent URL missing");
 		}
 
 		if (this.openCodeSessionId && this.openCodeSessionUrl === this.openCodeUrl) {

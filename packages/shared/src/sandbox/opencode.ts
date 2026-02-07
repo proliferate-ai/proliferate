@@ -97,7 +97,7 @@ export async function waitForOpenCodeReady(
 				signal: AbortSignal.timeout(5000),
 			});
 			if (response.ok) {
-				log(`[P-LATENCY] OpenCode ready after ${attempt} attempts (${Date.now() - startTime}ms)`);
+				log(`[P-LATENCY] Agent ready after ${attempt} attempts (${Date.now() - startTime}ms)`);
 				return;
 			}
 		} catch {
@@ -108,7 +108,7 @@ export async function waitForOpenCodeReady(
 		await new Promise((r) => setTimeout(r, delay));
 	}
 
-	throw new Error(`[P-LATENCY] OpenCode not ready after ${maxWaitMs}ms (${attempt} attempts)`);
+	throw new Error(`[P-LATENCY] Agent not ready after ${maxWaitMs}ms (${attempt} attempts)`);
 }
 
 /**
