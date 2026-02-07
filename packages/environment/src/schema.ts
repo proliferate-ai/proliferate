@@ -115,6 +115,7 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 			"Required when email is enabled (EMAIL_ENABLED=true, NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION=true, or cloud profile)",
 		),
 		GATEWAY_PORT: optionalPort(8787),
+		GATEWAY_JWT_SECRET: requiredString, // Signs user WebSocket auth JWTs for the gateway
 		GITHUB_APP_ID: requiredForGitHubApp(env),
 		GITHUB_APP_PRIVATE_KEY: requiredForGitHubApp(env),
 		GITHUB_APP_WEBHOOK_SECRET: requiredForGitHubApp(env),

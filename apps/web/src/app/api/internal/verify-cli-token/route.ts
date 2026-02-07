@@ -13,15 +13,11 @@ import { NextResponse } from "next/server";
  * Response: { valid: true, userId: string, orgId?: string } | { valid: false, error: string }
  */
 export async function POST(request: Request) {
-	console.log("[verify-cli-token] Received request");
-
 	// Verify internal service token
 	const serviceToken = request.headers.get("x-service-token");
 	const expectedToken = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
-	console.log("[verify-cli-token] Service token match:", serviceToken === expectedToken);
 
 	if (serviceToken !== expectedToken) {
-		console.log("[verify-cli-token] Service token mismatch");
 		return NextResponse.json({ valid: false, error: "Unauthorized" }, { status: 401 });
 	}
 
@@ -34,22 +30,11 @@ export async function POST(request: Request) {
 		}
 
 		// Verify the API key using better-auth
-		console.log(
-			"[verify-cli-token] Token received:",
-			JSON.stringify(token.slice(0, 30)),
-			"length:",
-			token.length,
-		);
 		const result = await auth.api.verifyApiKey({
 			body: { key: token },
 		});
-		console.log("[verify-cli-token] API key result:", {
-			valid: result.valid,
-			hasKey: !!result.key,
-		});
 
 		if (!result.valid || !result.key) {
-			console.log("[verify-cli-token] API key invalid");
 			return NextResponse.json({ valid: false, error: "Invalid token" });
 		}
 
@@ -64,7 +49,7 @@ export async function POST(request: Request) {
 			orgId,
 		});
 	} catch (error) {
-		console.error("CLI token verification failed:", error);
+		console.error("[verify-cli-token] CLI token verification failed:", error);
 		return NextResponse.json({ valid: false, error: "Verification failed" }, { status: 500 });
 	}
 }

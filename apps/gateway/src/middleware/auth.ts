@@ -52,13 +52,17 @@ export async function verifyCliToken(
  * Verify a token (JWT or CLI API key) and return auth result.
  */
 export async function verifyToken(token: string, env: GatewayEnv): Promise<AuthResult | null> {
-	// Try JWT first (web clients - signed tokens we can verify locally)
-	const jwtPayload = await verifyJwt(token, env.serviceToken);
-	if (jwtPayload?.sub) {
-		if (jwtPayload.service) {
-			return { source: "service" };
-		}
-		return { userId: jwtPayload.sub, source: "jwt" };
+	// User JWTs: minted by the web app for browser clients (Gateway WS auth).
+	const userPayload = await verifyJwt(token, env.gatewayJwtSecret);
+	if (userPayload?.sub) {
+		return { userId: userPayload.sub, source: "jwt" };
+	}
+
+	// Service JWTs: minted by backend services/workers.
+	// Never treat service-secret JWTs as user identity unless explicitly marked as service.
+	const servicePayload = await verifyJwt(token, env.serviceToken);
+	if (servicePayload?.sub && servicePayload.service) {
+		return { source: "service" };
 	}
 
 	// Try CLI API key (requires HTTP call to web app - keys stored in DB)

@@ -2,7 +2,7 @@ import { requireAuth } from "@/lib/auth-helpers";
 import { SignJWT } from "jose";
 import { NextResponse } from "next/server";
 
-const JWT_SECRET = process.env.SERVICE_TO_SERVICE_AUTH_TOKEN;
+const JWT_SECRET = process.env.GATEWAY_JWT_SECRET;
 const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL;
 const TOKEN_LIFETIME = "1h";
 
@@ -21,7 +21,7 @@ export async function GET(req: Request) {
 	}
 
 	if (!JWT_SECRET) {
-		console.error("[verification-media] Missing SERVICE_TO_SERVICE_AUTH_TOKEN");
+		console.error("[verification-media] Missing GATEWAY_JWT_SECRET");
 		return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
 	}
 

@@ -9,6 +9,7 @@ export interface GatewayEnv {
 	apiUrl: string;
 	gatewayUrl: string;
 	serviceToken: string;
+	gatewayJwtSecret: string;
 	userSecretsEncryptionKey: string;
 	anthropicApiKey: string;
 	githubAppId?: string;
@@ -33,6 +34,7 @@ export function loadGatewayEnv(): GatewayEnv {
 		apiUrl: env.NEXT_PUBLIC_API_URL,
 		gatewayUrl: env.NEXT_PUBLIC_GATEWAY_URL,
 		serviceToken: env.SERVICE_TO_SERVICE_AUTH_TOKEN,
+		gatewayJwtSecret: env.GATEWAY_JWT_SECRET,
 		userSecretsEncryptionKey: env.USER_SECRETS_ENCRYPTION_KEY,
 		anthropicApiKey: env.ANTHROPIC_API_KEY,
 		githubAppId: env.GITHUB_APP_ID,

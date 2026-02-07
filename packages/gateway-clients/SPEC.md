@@ -103,14 +103,14 @@ const ws = client.connect(proliferateSessionId, {
   onReconnectFailed: () => console.log("gave up"),
 });
 
-ws.sendPrompt("Hello", userId);
-ws.sendCancel(userId);
+ws.sendPrompt("Hello");
+ws.sendCancel();
 ws.sendPing();
 ws.sendSaveSnapshot("checkpoint");
 ws.close();
 
 // HTTP
-await client.postMessage(proliferateSessionId, { content: "Hello", userId });
+await client.postMessage(proliferateSessionId, { content: "Hello" });
 await client.postCancel(proliferateSessionId);
 const info = await client.getInfo(proliferateSessionId);
 

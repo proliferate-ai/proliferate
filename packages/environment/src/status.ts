@@ -54,6 +54,7 @@ export function getEnvStatus(env: NodeJS.ProcessEnv = process.env): EnvStatus {
 	requireKey("DATABASE_URL", "PostgreSQL connection string", "core", true);
 	requireKey("REDIS_URL", "Redis connection string", "core", true);
 	requireKey("SERVICE_TO_SERVICE_AUTH_TOKEN", "Service-to-service auth token", "core", true);
+	requireKey("GATEWAY_JWT_SECRET", "Signs user WebSocket auth JWTs for the gateway", "core", true);
 	requireKey("USER_SECRETS_ENCRYPTION_KEY", "Encrypts user secrets at rest", "core", true);
 	requireKey("BETTER_AUTH_SECRET", "Auth session signing secret", "core", true);
 	requireKey("DEFAULT_SANDBOX_PROVIDER", "Selects sandbox provider (e2b|modal)", "core");
