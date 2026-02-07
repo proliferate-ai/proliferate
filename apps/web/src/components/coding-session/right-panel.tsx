@@ -7,13 +7,31 @@ import { ArrowLeft, Grid, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FileViewer } from "./file-viewer";
 import { PreviewPanel } from "./preview-panel";
+import { SessionInfoPanel } from "./session-info-panel";
+import { SnapshotsPanel } from "./snapshots-panel";
 import { VerificationGallery } from "./verification-gallery";
+
+export interface SessionPanelProps {
+	sessionStatus?: string;
+	repoName?: string | null;
+	branchName?: string | null;
+	snapshotId?: string | null;
+	startedAt?: string | null;
+	concurrentUsers?: number;
+	isModal?: boolean;
+	onSecretsClick?: () => void;
+	isMigrating?: boolean;
+	canSnapshot?: boolean;
+	isSnapshotting?: boolean;
+	onSnapshot?: () => void;
+}
 
 interface RightPanelProps {
 	isMobileFullScreen?: boolean;
+	sessionProps?: SessionPanelProps;
 }
 
-export function RightPanel({ isMobileFullScreen }: RightPanelProps) {
+export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps) {
 	const { mode, close, openGallery, setMobileView } = usePreviewPanelStore();
 	// Track the gallery files when viewing a single file (for back navigation)
 	const [galleryContext, setGalleryContext] = useState<VerificationFile[] | null>(null);
@@ -30,10 +48,28 @@ export function RightPanel({ isMobileFullScreen }: RightPanelProps) {
 		setMobileView("chat");
 	};
 
+	// Session info panel
+	if (mode.type === "session-info" && sessionProps) {
+		return <SessionInfoPanel {...sessionProps} onClose={handleClose} />;
+	}
+
+	// Snapshots panel
+	if (mode.type === "snapshots" && sessionProps) {
+		return (
+			<SnapshotsPanel
+				snapshotId={sessionProps.snapshotId}
+				canSnapshot={sessionProps.canSnapshot}
+				isSnapshotting={sessionProps.isSnapshotting}
+				onSnapshot={sessionProps.onSnapshot}
+				onClose={handleClose}
+			/>
+		);
+	}
+
 	// URL preview uses PreviewPanel which has its own header
 	if (mode.type === "url") {
 		return (
-			<div className="flex flex-col h-full md:border-l bg-background">
+			<div className="flex flex-col h-full">
 				<PreviewPanel
 					url={mode.url}
 					className="h-full"
@@ -46,7 +82,7 @@ export function RightPanel({ isMobileFullScreen }: RightPanelProps) {
 	// File viewer or gallery
 	if (mode.type === "file" || mode.type === "gallery") {
 		return (
-			<div className="flex flex-col h-full md:border-l bg-background">
+			<div className="flex flex-col h-full">
 				{/* Header */}
 				<div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 shrink-0">
 					<div className="flex items-center gap-2 min-w-0">

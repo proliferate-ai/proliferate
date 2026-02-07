@@ -5,7 +5,9 @@ export type PreviewMode =
 	| { type: "none" }
 	| { type: "url"; url: string }
 	| { type: "file"; file: VerificationFile }
-	| { type: "gallery"; files: VerificationFile[] };
+	| { type: "gallery"; files: VerificationFile[] }
+	| { type: "session-info" }
+	| { type: "snapshots" };
 
 // Mobile view state - on mobile we either show chat or preview (full screen)
 export type MobileView = "chat" | "preview";
@@ -18,10 +20,13 @@ interface PreviewPanelState {
 	openUrl: (url: string) => void;
 	openFile: (file: VerificationFile) => void;
 	openGallery: (files: VerificationFile[]) => void;
+	openSessionInfo: () => void;
+	openSnapshots: () => void;
 	close: () => void;
 
-	// URL preview toggle (for the preview button in header)
+	// Toggle helpers (for header buttons — toggles open/close)
 	toggleUrlPreview: (url: string | null) => void;
+	togglePanel: (type: "session-info" | "snapshots") => void;
 
 	// Mobile view toggle
 	setMobileView: (view: MobileView) => void;
@@ -38,17 +43,29 @@ export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
 
 	openGallery: (files: VerificationFile[]) => set({ mode: { type: "gallery", files } }),
 
+	openSessionInfo: () => set({ mode: { type: "session-info" } }),
+
+	openSnapshots: () => set({ mode: { type: "snapshots" } }),
+
 	close: () => set({ mode: { type: "none" }, mobileView: "chat" }),
 
 	// Toggle URL preview specifically - used by the preview button
 	toggleUrlPreview: (url: string | null) => {
 		const { mode } = get();
 		if (mode.type === "url") {
-			// If showing URL preview, close it
 			set({ mode: { type: "none" }, mobileView: "chat" });
 		} else if (url) {
-			// Otherwise, open URL preview
 			set({ mode: { type: "url", url } });
+		}
+	},
+
+	// Generic toggle for session-info / snapshots panels
+	togglePanel: (type: "session-info" | "snapshots") => {
+		const { mode } = get();
+		if (mode.type === type) {
+			set({ mode: { type: "none" }, mobileView: "chat" });
+		} else {
+			set({ mode: { type } });
 		}
 	},
 

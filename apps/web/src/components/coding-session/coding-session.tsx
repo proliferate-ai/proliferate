@@ -10,6 +10,7 @@ import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useState } from "react";
 import { toast } from "sonner";
+import type { SessionPanelProps } from "./right-panel";
 import { RightPanel } from "./right-panel";
 import { SessionHeader } from "./session-header";
 import { Thread } from "./thread";
@@ -78,13 +79,32 @@ export function CodingSession({
 		}
 	};
 
-	const { mode, toggleUrlPreview, mobileView, toggleMobileView } = usePreviewPanelStore();
+	const { mode, toggleUrlPreview, togglePanel, mobileView, toggleMobileView } =
+		usePreviewPanelStore();
 	const isPanelOpen = mode.type !== "none";
 	const [secretsModalOpen, setSecretsModalOpen] = useState(false);
 
 	// Combine all loading states
 	const isLoading =
 		authLoading || sessionLoading || status === "loading" || status === "connecting";
+
+	// Session props for the right panel (session-info & snapshots modes)
+	const sessionPanelProps: SessionPanelProps | undefined = sessionData
+		? {
+				sessionStatus: sessionData.status ?? undefined,
+				repoName: repoData?.githubRepoName || sessionData.repo?.githubRepoName,
+				branchName: sessionData.branchName,
+				snapshotId: sessionData.sandboxId,
+				startedAt: sessionData.startedAt,
+				concurrentUsers: 1,
+				isModal: asModal,
+				onSecretsClick: () => setSecretsModalOpen(true),
+				isMigrating,
+				canSnapshot,
+				isSnapshotting: snapshotSession.isPending,
+				onSnapshot: handleSnapshot,
+			}
+		: undefined;
 
 	const content = isLoading ? (
 		<div className="flex h-full items-center justify-center">
@@ -109,53 +129,64 @@ export function CodingSession({
 		</div>
 	) : (
 		<AssistantRuntimeProvider runtime={runtime}>
-			<div className="flex h-full flex-col">
-				<SessionHeader
-					sessionId={sessionId}
-					sessionStatus={sessionData.status ?? undefined}
-					error={error}
-					title={sessionTitle || sessionData.title}
-					repoName={repoData?.githubRepoName || sessionData.repo?.githubRepoName}
-					branchName={sessionData.branchName}
-					snapshotId={sessionData.sandboxId}
-					startedAt={sessionData.startedAt}
-					concurrentUsers={1}
-					isModal={asModal}
-					onSnapshot={handleSnapshot}
-					isSnapshotting={snapshotSession.isPending}
-					canSnapshot={canSnapshot}
-					onSecretsClick={() => setSecretsModalOpen(true)}
-					showPreview={isPanelOpen}
-					onTogglePreview={() => toggleUrlPreview(previewUrl)}
-					hasPreviewUrl={!!previewUrl}
-					mobileView={mobileView}
-					onToggleMobileView={toggleMobileView}
-					isMigrating={isMigrating}
+			<div className="relative flex h-full">
+				{/* Chat area */}
+				<div
+					className={
+						isPanelOpen
+							? `relative hidden md:block md:w-1/2 ${mobileView === "chat" ? "!block w-full" : ""}`
+							: "relative w-full"
+					}
 				>
-					{headerSlot}
-				</SessionHeader>
-
-				<div className="flex-1 min-h-0 flex">
-					<div
-						className={
-							isPanelOpen
-								? `hidden md:block md:w-1/2 ${mobileView === "chat" ? "!block w-full" : ""}`
-								: "w-full"
-						}
-					>
-						<SessionContext.Provider value={{ sessionId, repoId: sessionData.repoId ?? undefined }}>
-							<Thread title={title} description={description} />
-						</SessionContext.Provider>
-					</div>
-
-					{isPanelOpen && (
-						<div
-							className={`hidden md:block md:w-1/2 ${mobileView === "preview" ? "!block w-full" : ""}`}
-						>
-							<RightPanel isMobileFullScreen={mobileView === "preview"} />
+					{/* Float buttons over chat when no panel is open */}
+					{!isPanelOpen && (
+						<div className="absolute top-2 right-3 z-10">
+							<SessionHeader
+								sessionStatus={sessionData.status ?? undefined}
+								error={error}
+								panelMode={mode}
+								hasPreviewUrl={!!previewUrl}
+								onTogglePreview={() => toggleUrlPreview(previewUrl)}
+								onToggleSessionInfo={() => togglePanel("session-info")}
+								onToggleSnapshots={() => togglePanel("snapshots")}
+								mobileView={mobileView}
+								onToggleMobileView={toggleMobileView}
+								isMigrating={isMigrating}
+							/>
 						</div>
 					)}
+					<SessionContext.Provider value={{ sessionId, repoId: sessionData.repoId ?? undefined }}>
+						<Thread title={title} description={description} />
+					</SessionContext.Provider>
 				</div>
+
+				{/* Right panel — buttons above + rounded card */}
+				{isPanelOpen && (
+					<div
+						className={`hidden md:flex md:flex-col md:w-1/2 p-2 gap-1 ${mobileView === "preview" ? "!flex w-full" : ""}`}
+					>
+						<div className="flex justify-end shrink-0 px-1">
+							<SessionHeader
+								sessionStatus={sessionData.status ?? undefined}
+								error={error}
+								panelMode={mode}
+								hasPreviewUrl={!!previewUrl}
+								onTogglePreview={() => toggleUrlPreview(previewUrl)}
+								onToggleSessionInfo={() => togglePanel("session-info")}
+								onToggleSnapshots={() => togglePanel("snapshots")}
+								mobileView={mobileView}
+								onToggleMobileView={toggleMobileView}
+								isMigrating={isMigrating}
+							/>
+						</div>
+						<div className="flex-1 min-h-0 rounded-xl border bg-background overflow-hidden">
+							<RightPanel
+								isMobileFullScreen={mobileView === "preview"}
+								sessionProps={sessionPanelProps}
+							/>
+						</div>
+					</div>
+				)}
 			</div>
 
 			<SettingsModal
