@@ -38,7 +38,7 @@ import {
 } from "@/hooks/use-sessions";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useSession } from "@/lib/auth-client";
-import { cn, getRepoShortName } from "@/lib/utils";
+import { cn, formatRelativeTime, getRepoShortName } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Session } from "@proliferate/shared/contracts";
 import {
@@ -359,8 +359,14 @@ function SidebarContent({
 					</div>
 				</CollapsibleSection>
 
-				{/* Configurations Section - prebuilds with grouped sessions */}
-				<CollapsibleSection title="Sessions" defaultOpen={true} actions={<AddSnapshotButton />}>
+				{/* Threads Section */}
+				<div>
+					<div className="flex items-center w-full px-4 py-1.5 text-xs text-muted-foreground">
+						<span>Threads</span>
+						<div className="ml-auto">
+							<AddSnapshotButton />
+						</div>
+					</div>
 					<div className="px-2">
 						{prebuilds.map((prebuild) => (
 							<ConfigurationGroup
@@ -368,7 +374,6 @@ function SidebarContent({
 								prebuild={prebuild}
 								sessions={sessionsByPrebuild.get(prebuild.id) ?? []}
 								activeSessionId={urlSessionId}
-								claimedSessionProviders={claimedSessionProviders}
 								onNavigate={onNavigate}
 							/>
 						))}
@@ -396,7 +401,7 @@ function SidebarContent({
 							</>
 						)}
 					</div>
-				</CollapsibleSection>
+				</div>
 			</div>
 
 			{/* Footer with Support button and user card */}
@@ -846,17 +851,9 @@ function SessionItem({
 				)}
 				onClick={handleClick}
 			>
-				{/* Icon */}
-				<div className="flex items-center justify-center shrink-0">
-					{triggerProvider ? (
-						<ProviderIcon provider={triggerProvider as Provider} size="sm" />
-					) : (
-						<MessageCircle className="h-5 w-5" />
-					)}
-				</div>
-
-				{/* Name */}
-				<div className="flex-1 min-w-0 flex items-center">
+				{/* Name with optional running dot */}
+				<div className="flex-1 min-w-0 flex items-center gap-1.5">
+					{session.status === "running" && <StatusDot status="running" size="sm" />}
 					{isEditing ? (
 						<input
 							ref={inputRef}
@@ -873,10 +870,12 @@ function SessionItem({
 					)}
 				</div>
 
-				{/* Trailing: running indicator or actions on hover */}
+				{/* Trailing: timestamp (default) or actions (on hover) */}
 				<div className="shrink-0 flex items-center">
-					{session.status === "running" && <StatusDot status="running" className="mr-1" />}
-					<div className="opacity-0 group-hover:opacity-100 transition-opacity">
+					<span className="text-xs text-muted-foreground/60 group-hover:hidden">
+						{formatRelativeTime(session.lastActivityAt || session.startedAt || "")}
+					</span>
+					<div className="hidden group-hover:flex items-center">
 						<ItemActionsMenu
 							onRename={handleRename}
 							onDelete={() => setDeleteDialogOpen(true)}

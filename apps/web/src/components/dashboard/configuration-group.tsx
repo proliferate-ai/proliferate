@@ -1,6 +1,5 @@
 "use client";
 
-import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -11,11 +10,9 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FolderMinusIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
 import { StatusDot } from "@/components/ui/status-dot";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDeletePrebuild, useUpdatePrebuild } from "@/hooks/use-prebuilds";
 import {
 	useCreateSession,
@@ -23,11 +20,11 @@ import {
 	useRenameSession,
 	useSnapshotSession,
 } from "@/hooks/use-sessions";
-import { cn, getRepoShortName } from "@/lib/utils";
+import { cn, formatRelativeTime, getRepoShortName } from "@/lib/utils";
 import { openEditSession, openSetupSession } from "@/stores/coding-session-store";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Session } from "@proliferate/shared/contracts";
-import { Camera, ChevronRight, MessageCircle, Pencil, SquarePen, Zap } from "lucide-react";
+import { Camera, Folder, FolderOpen, Pencil, Plus, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -51,7 +48,6 @@ interface ConfigurationGroupProps {
 	prebuild: Prebuild;
 	sessions: Session[];
 	activeSessionId: string | null | undefined;
-	claimedSessionProviders: Map<string, string>;
 	onNavigate?: () => void;
 }
 
@@ -59,7 +55,6 @@ export function ConfigurationGroup({
 	prebuild,
 	sessions,
 	activeSessionId,
-	claimedSessionProviders,
 	onNavigate,
 }: ConfigurationGroupProps) {
 	const [isOpen, setIsOpen] = useState(sessions.length > 0);
@@ -131,8 +126,7 @@ export function ConfigurationGroup({
 		}
 	};
 
-	const handleCreateSession = async (e: React.MouseEvent) => {
-		e.stopPropagation();
+	const handleCreateSession = async () => {
 		if (!isFinalized || createSession.isPending) return;
 		const result = await createSession.mutateAsync({
 			prebuildId: prebuild.id,
@@ -144,22 +138,6 @@ export function ConfigurationGroup({
 		onNavigate?.();
 	};
 
-	const newSessionButton = (
-		<button
-			type="button"
-			onClick={handleCreateSession}
-			disabled={!isFinalized || createSession.isPending}
-			className={cn(
-				"shrink-0 p-0.5 rounded transition-colors",
-				isFinalized
-					? "text-muted-foreground hover:text-foreground"
-					: "text-muted-foreground/30 cursor-not-allowed",
-			)}
-		>
-			<SquarePen className="h-3.5 w-3.5" />
-		</button>
-	);
-
 	return (
 		<>
 			<div className="mt-0.5">
@@ -168,10 +146,11 @@ export function ConfigurationGroup({
 					onClick={() => setIsOpen(!isOpen)}
 					className="group relative flex items-center gap-[0.38rem] px-3 py-1.5 rounded-lg text-sm cursor-pointer transition-colors text-muted-foreground hover:text-foreground hover:bg-accent"
 				>
-					<ChevronRight
-						className={cn("h-3 w-3 shrink-0 transition-transform", isOpen && "rotate-90")}
-					/>
-					<FolderMinusIcon className="h-4 w-4 shrink-0" />
+					{isOpen ? (
+						<FolderOpen className="h-4 w-4 shrink-0" />
+					) : (
+						<Folder className="h-4 w-4 shrink-0" />
+					)}
 
 					<div className="flex-1 min-w-0 flex items-center gap-1.5">
 						{isEditing ? (
@@ -194,18 +173,6 @@ export function ConfigurationGroup({
 					</div>
 
 					<div className="shrink-0 flex items-center gap-0.5">
-						<TooltipProvider>
-							<Tooltip>
-								<TooltipTrigger asChild>{newSessionButton}</TooltipTrigger>
-								<TooltipContent side="top" className="max-w-[200px]">
-									<p className="text-xs">
-										{isFinalized
-											? "New Session"
-											: "Finish setting up this configuration to start sessions from it"}
-									</p>
-								</TooltipContent>
-							</Tooltip>
-						</TooltipProvider>
 						<div className="opacity-0 group-hover:opacity-100 transition-opacity">
 							<ItemActionsMenu
 								onRename={handleRename}
@@ -219,6 +186,19 @@ export function ConfigurationGroup({
 								]}
 							/>
 						</div>
+						{isFinalized && (
+							<button
+								type="button"
+								onClick={(e) => {
+									e.stopPropagation();
+									handleCreateSession();
+								}}
+								disabled={createSession.isPending}
+								className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+							>
+								<Plus className="h-3.5 w-3.5" />
+							</button>
+						)}
 					</div>
 				</div>
 
@@ -229,15 +209,20 @@ export function ConfigurationGroup({
 						isOpen ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0",
 					)}
 				>
-					{sessions.map((session) => (
-						<ConfigSessionItem
-							key={session.id}
-							session={session}
-							isActive={activeSessionId === session.id}
-							onNavigate={onNavigate}
-							triggerProvider={claimedSessionProviders.get(session.id)}
-						/>
-					))}
+					{sessions.length > 0 ? (
+						sessions.map((session) => (
+							<ConfigSessionItem
+								key={session.id}
+								session={session}
+								isActive={activeSessionId === session.id}
+								onNavigate={onNavigate}
+							/>
+						))
+					) : (
+						<div className="pl-7 pr-3 py-1.5 text-xs text-muted-foreground/60">
+							No sessions
+						</div>
+					)}
 				</div>
 			</div>
 
@@ -270,12 +255,10 @@ function ConfigSessionItem({
 	session,
 	isActive,
 	onNavigate,
-	triggerProvider,
 }: {
 	session: Session;
 	isActive: boolean;
 	onNavigate?: () => void;
-	triggerProvider?: string;
 }) {
 	const [isEditing, setIsEditing] = useState(false);
 	const [editValue, setEditValue] = useState(session.title || "");
@@ -379,17 +362,9 @@ function ConfigSessionItem({
 				)}
 				onClick={handleClick}
 			>
-				{/* Icon */}
-				<div className="flex items-center justify-center shrink-0">
-					{triggerProvider ? (
-						<ProviderIcon provider={triggerProvider as Provider} size="sm" />
-					) : (
-						<MessageCircle className="h-4 w-4" />
-					)}
-				</div>
-
-				{/* Name */}
-				<div className="flex-1 min-w-0 flex items-center">
+				{/* Name with optional running dot */}
+				<div className="flex-1 min-w-0 flex items-center gap-1.5">
+					{session.status === "running" && <StatusDot status="running" size="sm" />}
 					{isEditing ? (
 						<Input
 							ref={inputRef}
@@ -408,10 +383,12 @@ function ConfigSessionItem({
 					)}
 				</div>
 
-				{/* Trailing: running indicator or actions on hover */}
+				{/* Trailing: timestamp (default) or actions (on hover) */}
 				<div className="shrink-0 flex items-center">
-					{session.status === "running" && <StatusDot status="running" className="mr-1" />}
-					<div className="opacity-0 group-hover:opacity-100 transition-opacity">
+					<span className="text-xs text-muted-foreground/60 group-hover:hidden">
+						{formatRelativeTime(session.lastActivityAt || session.startedAt || "")}
+					</span>
+					<div className="hidden group-hover:flex items-center">
 						<ItemActionsMenu
 							onRename={handleRename}
 							onDelete={() => setDeleteDialogOpen(true)}
