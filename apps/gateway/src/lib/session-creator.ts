@@ -114,7 +114,7 @@ export async function createSession(
 		sessionType,
 		clientType,
 		userId,
-		snapshotId,
+		snapshotId: inputSnapshotId,
 		initialPrompt,
 		title,
 		clientMetadata,
@@ -137,14 +137,14 @@ export async function createSession(
 			sessionType,
 			clientType,
 			sandboxMode,
-			hasSnapshot: Boolean(snapshotId),
+			hasSnapshot: Boolean(inputSnapshotId),
 			sshEnabled: Boolean(sshOptions),
 			explicitIntegrations: explicitIntegrationIds?.length ?? 0,
 		},
 		"Creating session",
 	);
 	log.debug(
-		{ isNewPrebuild, hasSnapshotId: Boolean(snapshotId) },
+		{ isNewPrebuild, hasSnapshotId: Boolean(inputSnapshotId) },
 		"session_creator.create_session.start",
 	);
 
@@ -174,6 +174,30 @@ export async function createSession(
 				.map((c) => c.integrationId);
 		} catch (err) {
 			log.warn({ err }, "Failed to load automation connections");
+		}
+	}
+
+	// Resolve snapshotId: use input snapshot, or fall back to repo snapshot
+	// Repo snapshots are only eligible for Modal provider, non-CLI, single-repo with workspacePath "."
+	let snapshotId = inputSnapshotId;
+	if (!snapshotId && provider.type === "modal" && clientType !== "cli") {
+		try {
+			const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
+			if (prebuildRepoRows.length === 1) {
+				const singleRepo = prebuildRepoRows[0];
+				if (
+					singleRepo.workspacePath === "." &&
+					singleRepo.repo?.repoSnapshotStatus === "ready" &&
+					singleRepo.repo.repoSnapshotId &&
+					(!singleRepo.repo.repoSnapshotProvider ||
+						singleRepo.repo.repoSnapshotProvider === "modal")
+				) {
+					snapshotId = singleRepo.repo.repoSnapshotId;
+					log.info({ repoId: singleRepo.repo.id, snapshotId }, "Using repo snapshot");
+				}
+			}
+		} catch (err) {
+			log.warn({ err }, "Failed to resolve repo snapshot (non-fatal)");
 		}
 	}
 

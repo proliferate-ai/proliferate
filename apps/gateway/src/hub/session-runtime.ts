@@ -6,7 +6,7 @@
  */
 
 import { type Logger, createLogger } from "@proliferate/logger";
-import { prebuilds, sessions } from "@proliferate/services";
+import { sessions } from "@proliferate/services";
 import type { SandboxProviderType, ServerMessage } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { scheduleSessionExpiry } from "../expiry/expiry-queue";
@@ -309,18 +309,6 @@ export class SessionRuntime {
 				this.context.session.snapshot_id = result.sandboxId;
 			}
 
-			// Take early snapshot for setup sessions (fire-and-forget)
-			if (
-				!result.recovered &&
-				this.context.session.session_type === "setup" &&
-				this.context.session.prebuild_id &&
-				!this.context.session.snapshot_id
-			) {
-				this.takeEarlySnapshot(provider, result.sandboxId, this.context.session.prebuild_id).catch(
-					(err) => this.logError("Early snapshot failed (non-fatal)", err),
-				);
-			}
-
 			// Fallback to stored URLs if provider didn't return them
 			this.openCodeUrl = this.openCodeUrl || this.context.session.open_code_tunnel_url || null;
 			this.previewUrl = this.previewUrl || this.context.session.preview_tunnel_url || null;
@@ -420,24 +408,6 @@ export class SessionRuntime {
 
 		// Store the new ID
 		await sessions.update(this.sessionId, { codingAgentSessionId: sessionId });
-	}
-
-	private async takeEarlySnapshot(
-		provider: ReturnType<typeof getSandboxProvider>,
-		sandboxId: string,
-		prebuildId: string,
-	): Promise<void> {
-		this.log("Taking early baseline snapshot...");
-
-		const result = await provider.snapshot(this.sessionId, sandboxId);
-
-		const updated = await prebuilds.updateSnapshotIdIfNull(prebuildId, result.snapshotId);
-
-		if (!updated) {
-			this.log("Early snapshot: prebuild already has snapshot, skipping update");
-		} else {
-			this.log("Early snapshot saved", { snapshotId: result.snapshotId });
-		}
 	}
 
 	// ============================================

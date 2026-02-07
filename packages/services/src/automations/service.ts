@@ -117,9 +117,6 @@ export async function updateAutomation(
 		if (!prebuild) {
 			throw new Error("Prebuild not found");
 		}
-		if (!prebuild.snapshotId) {
-			throw new Error("Prebuild has no snapshot. Complete setup first.");
-		}
 	}
 
 	const row = await automationsDb.update(id, orgId, {
