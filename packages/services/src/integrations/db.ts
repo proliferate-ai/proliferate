@@ -661,15 +661,21 @@ export async function findFirstActiveNangoGitHubForRepos(
 export async function upsertGitHubAppInstallation(
 	input: UpsertGitHubAppInstallationInput,
 ): Promise<IntegrationRow | null> {
-	const logger = getServicesLogger().child({ module: "integrations-db", orgId: input.organizationId });
+	const logger = getServicesLogger().child({
+		module: "integrations-db",
+		orgId: input.organizationId,
+	});
 	const db = getDb();
 	const connectionId = `github-app-${input.installationId}`;
 
-	logger.debug({
-		installationId: input.installationId,
-		displayName: input.displayName,
-		connectionId,
-	}, "Upserting GitHub App installation");
+	logger.debug(
+		{
+			installationId: input.installationId,
+			displayName: input.displayName,
+			connectionId,
+		},
+		"Upserting GitHub App installation",
+	);
 
 	// Check if row already exists for this org
 	const existing = await db.query.integrations.findFirst({

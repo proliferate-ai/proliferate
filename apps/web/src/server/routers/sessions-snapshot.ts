@@ -5,11 +5,11 @@
  * Extracted from ts-rest router for use in oRPC.
  */
 
+import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
 import { sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
-import { logger } from "@/lib/logger";
 
 const log = logger.child({ handler: "sessions-snapshot" });
 

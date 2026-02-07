@@ -70,12 +70,16 @@ export async function pauseAllOrgSessions(
 				paused++;
 			} else {
 				failed++;
-				getServicesLogger().child({ module: "org-pause" }).error({ err: r.reason }, "Failed to pause session");
+				getServicesLogger()
+					.child({ module: "org-pause" })
+					.error({ err: r.reason }, "Failed to pause session");
 			}
 		}
 	}
 
-	getServicesLogger().child({ module: "org-pause", orgId }).info({ paused, failed, reason }, "Bulk pause complete");
+	getServicesLogger()
+		.child({ module: "org-pause", orgId })
+		.info({ paused, failed, reason }, "Bulk pause complete");
 
 	return { paused, failed };
 }
@@ -264,10 +268,7 @@ export async function handleCreditsExhaustedV2(
 					await provider.terminate(session.id, session.sandboxId);
 					providerTerminated = true;
 				} catch (err) {
-					logger.error(
-						{ err, sessionId: session.id },
-						"Failed to terminate provider sandbox",
-					);
+					logger.error({ err, sessionId: session.id }, "Failed to terminate provider sandbox");
 				}
 			} else if (session.sandboxId) {
 				logger.error(
@@ -298,15 +299,9 @@ export async function handleCreditsExhaustedV2(
 	}
 
 	if (failed > 0) {
-		logger.warn(
-			{ failed },
-			"Sessions left running due to provider termination failures",
-		);
+		logger.warn({ failed }, "Sessions left running due to provider termination failures");
 	}
-	logger.info(
-		{ terminated, failed, reason: "credits_exhausted" },
-		"Enforcement complete",
-	);
+	logger.info({ terminated, failed, reason: "credits_exhausted" }, "Enforcement complete");
 	return { terminated, failed };
 }
 
@@ -347,10 +342,7 @@ export async function terminateAllOrgSessions(
 					await provider.terminate(session.id, session.sandboxId);
 					providerTerminated = true;
 				} catch (err) {
-					logger.error(
-						{ err, sessionId: session.id },
-						"Failed to terminate provider sandbox",
-					);
+					logger.error({ err, sessionId: session.id }, "Failed to terminate provider sandbox");
 				}
 			} else if (session.sandboxId) {
 				logger.error(
@@ -382,14 +374,8 @@ export async function terminateAllOrgSessions(
 	}
 
 	if (failed > 0) {
-		logger.warn(
-			{ failed },
-			"Sessions left running due to provider termination failures",
-		);
+		logger.warn({ failed }, "Sessions left running due to provider termination failures");
 	}
-	logger.info(
-		{ terminated, failed, reason },
-		"Terminate all sessions complete",
-	);
+	logger.info({ terminated, failed, reason }, "Terminate all sessions complete");
 	return { terminated, failed };
 }

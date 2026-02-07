@@ -5,7 +5,7 @@
  * Provides a single ensureRuntimeReady() entry point for hot path callers.
  */
 
-import { createLogger, type Logger } from "@proliferate/logger";
+import { type Logger, createLogger } from "@proliferate/logger";
 import { prebuilds, sessions } from "@proliferate/services";
 import type { SandboxProviderType, ServerMessage } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
@@ -67,7 +67,10 @@ export class SessionRuntime {
 		this.env = options.env;
 		this.sessionId = options.sessionId;
 		this.context = options.context;
-		this.logger = createLogger({ service: "gateway" }).child({ module: "runtime", sessionId: options.sessionId });
+		this.logger = createLogger({ service: "gateway" }).child({
+			module: "runtime",
+			sessionId: options.sessionId,
+		});
 		this.onStatus = options.onStatus;
 		this.onBroadcast = options.onBroadcast;
 		this.onDisconnect = options.onDisconnect;

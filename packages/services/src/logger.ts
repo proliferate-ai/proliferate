@@ -1,4 +1,4 @@
-import { createLogger, type Logger } from "@proliferate/logger";
+import { type Logger, createLogger } from "@proliferate/logger";
 
 let _logger: Logger = createLogger({ service: "services" });
 

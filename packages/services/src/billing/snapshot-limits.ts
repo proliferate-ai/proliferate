@@ -160,7 +160,9 @@ export async function cleanupExpiredSnapshots(
 			try {
 				await deleteSnapshotFn(session.sandboxProvider, session.snapshotId);
 			} catch (err) {
-				getServicesLogger().child({ module: "snapshot-limits", orgId }).error({ err }, "Failed to delete expired snapshot");
+				getServicesLogger()
+					.child({ module: "snapshot-limits", orgId })
+					.error({ err }, "Failed to delete expired snapshot");
 				continue;
 			}
 		}
@@ -172,7 +174,9 @@ export async function cleanupExpiredSnapshots(
 	}
 
 	if (deletedCount > 0) {
-		getServicesLogger().child({ module: "snapshot-limits", orgId }).info({ deletedCount }, "Cleaned up expired snapshots");
+		getServicesLogger()
+			.child({ module: "snapshot-limits", orgId })
+			.info({ deletedCount }, "Cleaned up expired snapshots");
 	}
 
 	return { deletedCount };

@@ -64,7 +64,9 @@ export async function runMeteringCycle(
 	);
 
 	if (!acquired) {
-		getServicesLogger().child({ module: "metering" }).debug("Another worker has the lock, skipping");
+		getServicesLogger()
+			.child({ module: "metering" })
+			.debug("Another worker has the lock, skipping");
 		return;
 	}
 
@@ -219,10 +221,12 @@ async function checkSandboxesWithGrace(
 				result.set(session.sandboxId!, !isDead);
 
 				if (!isDead) {
-					getServicesLogger().child({ module: "metering", sessionId: session.id }).debug(
-						{ failures: newFailures, maxFailures: METERING_CONFIG.graceFailures },
-						"Alive check failed",
-					);
+					getServicesLogger()
+						.child({ module: "metering", sessionId: session.id })
+						.debug(
+							{ failures: newFailures, maxFailures: METERING_CONFIG.graceFailures },
+							"Alive check failed",
+						);
 				}
 			}
 		}
@@ -306,7 +310,9 @@ async function billFinalInterval(
 		})
 		.where(eq(sessions.id, session.id));
 
-	getServicesLogger().child({ module: "metering", sessionId: session.id }).info("Session marked as stopped (sandbox dead)");
+	getServicesLogger()
+		.child({ module: "metering", sessionId: session.id })
+		.info("Session marked as stopped (sandbox dead)");
 }
 
 /**
@@ -342,7 +348,11 @@ async function billComputeInterval(
 		},
 	});
 
-	const log = getServicesLogger().child({ module: "metering", sessionId: session.id, orgId: session.organizationId });
+	const log = getServicesLogger().child({
+		module: "metering",
+		sessionId: session.id,
+		orgId: session.organizationId,
+	});
 
 	// Idempotent - already processed
 	if (!result.success) {
@@ -350,7 +360,10 @@ async function billComputeInterval(
 			.update(sessions)
 			.set({ meteredThroughAt: new Date(billedThroughMs) })
 			.where(eq(sessions.id, session.id));
-		log.debug({ idempotencyKey, fromMs: meteredThroughMs, toMs: billedThroughMs, billableSeconds }, "Idempotent skip");
+		log.debug(
+			{ idempotencyKey, fromMs: meteredThroughMs, toMs: billedThroughMs, billableSeconds },
+			"Idempotent skip",
+		);
 		return;
 	}
 
@@ -371,7 +384,10 @@ async function billComputeInterval(
 				return;
 			}
 		}
-		log.info({ enforcementReason: result.enforcementReason }, "Balance exhausted - terminating sessions");
+		log.info(
+			{ enforcementReason: result.enforcementReason },
+			"Balance exhausted - terminating sessions",
+		);
 		await handleCreditsExhaustedV2(session.organizationId, providers);
 	} else if (result.shouldBlockNewSessions) {
 		log.info({ enforcementReason: result.enforcementReason }, "Entering grace period");
@@ -407,7 +423,9 @@ export async function finalizeSessionBilling(
 	})) as SessionForMetering | null;
 
 	if (!session) {
-		getServicesLogger().child({ module: "metering", sessionId }).error("Session not found for billing finalization");
+		getServicesLogger()
+			.child({ module: "metering", sessionId })
+			.error("Session not found for billing finalization");
 		return { creditsBilled: 0, secondsBilled: 0 };
 	}
 
@@ -455,10 +473,12 @@ export async function finalizeSessionBilling(
 		.set({ meteredThroughAt: new Date(nowMs) })
 		.where(eq(sessions.id, session.id));
 
-	getServicesLogger().child({ module: "metering", sessionId: session.id }).info(
-		{ seconds: remainingSeconds, credits, balance: result.newBalance },
-		"Finalized session billing",
-	);
+	getServicesLogger()
+		.child({ module: "metering", sessionId: session.id })
+		.info(
+			{ seconds: remainingSeconds, credits, balance: result.newBalance },
+			"Finalized session billing",
+		);
 
 	return { creditsBilled: credits, secondsBilled: remainingSeconds };
 }
@@ -485,5 +505,7 @@ export async function autoPauseSession(
 		})
 		.where(eq(sessions.id, session.id));
 
-	getServicesLogger().child({ module: "metering", sessionId: session.id }).info({ reason }, "Session auto-paused");
+	getServicesLogger()
+		.child({ module: "metering", sessionId: session.id })
+		.info({ reason }, "Session auto-paused");
 }

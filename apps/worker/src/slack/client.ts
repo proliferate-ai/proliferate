@@ -8,6 +8,7 @@
 import { env } from "@proliferate/environment/server";
 import type { ServerMessage } from "@proliferate/gateway-clients";
 import { AsyncClient } from "@proliferate/gateway-clients/server";
+import type { AsyncClientDeps } from "@proliferate/gateway-clients/server";
 import type { Logger } from "@proliferate/logger";
 import { ensureSlackReceiver } from "@proliferate/queue";
 import type { SlackMessageJob, SlackReceiverJob } from "@proliferate/queue";
@@ -23,7 +24,6 @@ import {
 	verifyToolHandler,
 } from "./handlers";
 import { downloadSlackImageAsBase64, postToSlack, postWelcomeMessage } from "./lib";
-import type { AsyncClientDeps } from "@proliferate/gateway-clients/server";
 
 const APP_URL = env.NEXT_PUBLIC_APP_URL;
 
@@ -104,7 +104,10 @@ export class SlackClient extends AsyncClient<
 		// Get the encrypted bot token from the installation
 		const encryptedBotToken = await this.getEncryptedBotToken(metadata.installationId);
 		if (!encryptedBotToken) {
-			this.logger.error({ installationId: metadata.installationId }, "No bot token found for installation");
+			this.logger.error(
+				{ installationId: metadata.installationId },
+				"No bot token found for installation",
+			);
 			return;
 		}
 

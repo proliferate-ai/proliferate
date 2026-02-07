@@ -433,7 +433,9 @@ export async function createSinglePrebuildRepo(
 			workspacePath,
 		});
 	} catch (error) {
-		getServicesLogger().child({ module: "prebuilds-db" }).error({ err: error, prebuildId, repoId }, "Failed to create prebuild_repos entry");
+		getServicesLogger()
+			.child({ module: "prebuilds-db" })
+			.error({ err: error, prebuildId, repoId }, "Failed to create prebuild_repos entry");
 	}
 }
 

@@ -6,7 +6,7 @@
  */
 
 import { randomUUID } from "crypto";
-import { createLogger, type Logger } from "@proliferate/logger";
+import { type Logger, createLogger } from "@proliferate/logger";
 import { prebuilds, sessions } from "@proliferate/services";
 import type {
 	ClientMessage,
@@ -67,7 +67,10 @@ export class SessionHub {
 	constructor(deps: HubDependencies) {
 		this.env = deps.env;
 		this.sessionId = deps.sessionId;
-		this.logger = createLogger({ service: "gateway" }).child({ module: "hub", sessionId: deps.sessionId });
+		this.logger = createLogger({ service: "gateway" }).child({
+			module: "hub",
+			sessionId: deps.sessionId,
+		});
 
 		this.eventProcessor = new EventProcessor(
 			{
@@ -435,7 +438,10 @@ export class SessionHub {
 
 		const ensureStartMs = Date.now();
 		await this.ensureRuntimeReady();
-		this.logger.debug({ latency: true, durationMs: Date.now() - ensureStartMs }, "prompt.ensure_runtime_ready");
+		this.logger.debug(
+			{ latency: true, durationMs: Date.now() - ensureStartMs },
+			"prompt.ensure_runtime_ready",
+		);
 
 		const openCodeSessionId = this.runtime.getOpenCodeSessionId();
 		const openCodeUrl = this.runtime.getOpenCodeUrl();
@@ -489,7 +495,15 @@ export class SessionHub {
 		const sendStartMs = Date.now();
 		await sendPromptAsync(openCodeUrl, openCodeSessionId, content, options?.images);
 		this.log("Prompt sent to OpenCode");
-		this.logger.debug({ latency: true, durationMs: Date.now() - sendStartMs, contentLength: content.length, imageCount: options?.images?.length || 0 }, "prompt.send_prompt_async");
+		this.logger.debug(
+			{
+				latency: true,
+				durationMs: Date.now() - sendStartMs,
+				contentLength: content.length,
+				imageCount: options?.images?.length || 0,
+			},
+			"prompt.send_prompt_async",
+		);
 	}
 
 	private async handleCancel(): Promise<void> {

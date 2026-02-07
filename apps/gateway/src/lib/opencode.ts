@@ -56,7 +56,10 @@ export interface OpenCodeMessage {
 
 export async function createOpenCodeSession(baseUrl: string, title?: string): Promise<string> {
 	const startMs = Date.now();
-	logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), hasTitle: Boolean(title) }, "opencode.session.create.start");
+	logger.debug(
+		{ latency: true, host: getBaseUrlHost(baseUrl), hasTitle: Boolean(title) },
+		"opencode.session.create.start",
+	);
 	const response = await fetch(`${baseUrl}/session`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -65,19 +68,44 @@ export async function createOpenCodeSession(baseUrl: string, title?: string): Pr
 
 	if (!response.ok) {
 		const errorText = await response.text();
-		logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), status: response.status, durationMs: Date.now() - startMs }, "opencode.session.create.error");
+		logger.debug(
+			{
+				latency: true,
+				host: getBaseUrlHost(baseUrl),
+				status: response.status,
+				durationMs: Date.now() - startMs,
+			},
+			"opencode.session.create.error",
+		);
 		throw new Error(`OpenCode session create failed: ${errorText}`);
 	}
 
 	const data = (await response.json()) as { id: string };
-	logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), status: response.status, durationMs: Date.now() - startMs }, "opencode.session.create.ok");
+	logger.debug(
+		{
+			latency: true,
+			host: getBaseUrlHost(baseUrl),
+			status: response.status,
+			durationMs: Date.now() - startMs,
+		},
+		"opencode.session.create.ok",
+	);
 	return data.id;
 }
 
 export async function getOpenCodeSession(baseUrl: string, sessionId: string): Promise<boolean> {
 	const startMs = Date.now();
 	const response = await fetch(`${baseUrl}/session/${sessionId}`);
-	logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), ok: response.ok, status: response.status, durationMs: Date.now() - startMs }, "opencode.session.get");
+	logger.debug(
+		{
+			latency: true,
+			host: getBaseUrlHost(baseUrl),
+			ok: response.ok,
+			status: response.status,
+			durationMs: Date.now() - startMs,
+		},
+		"opencode.session.get",
+	);
 	return response.ok;
 }
 
@@ -97,11 +125,28 @@ export async function listOpenCodeSessions(baseUrl: string): Promise<OpenCodeSes
 	const startMs = Date.now();
 	const response = await fetch(`${baseUrl}/session`);
 	if (!response.ok) {
-		logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), status: response.status, durationMs: Date.now() - startMs }, "opencode.session.list.error");
+		logger.debug(
+			{
+				latency: true,
+				host: getBaseUrlHost(baseUrl),
+				status: response.status,
+				durationMs: Date.now() - startMs,
+			},
+			"opencode.session.list.error",
+		);
 		throw new Error(`OpenCode session list failed: ${response.status}`);
 	}
 	const sessions = (await response.json()) as OpenCodeSessionInfo[];
-	logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), status: response.status, durationMs: Date.now() - startMs, count: sessions.length }, "opencode.session.list.ok");
+	logger.debug(
+		{
+			latency: true,
+			host: getBaseUrlHost(baseUrl),
+			status: response.status,
+			durationMs: Date.now() - startMs,
+			count: sessions.length,
+		},
+		"opencode.session.list.ok",
+	);
 	return sessions;
 }
 
@@ -121,7 +166,10 @@ export async function updateToolResult(
 	const retryDelayMs = 1000;
 
 	logger.info({ sessionId, messageId, partId }, "Updating tool result");
-	logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), sessionId, messageId, partId }, "opencode.tool_result.update.start");
+	logger.debug(
+		{ latency: true, host: getBaseUrlHost(baseUrl), sessionId, messageId, partId },
+		"opencode.tool_result.update.start",
+	);
 
 	for (let attempt = 0; attempt < maxRetries; attempt++) {
 		try {
@@ -129,14 +177,33 @@ export async function updateToolResult(
 			// Fetch the current part to get its full structure
 			const getUrl = `${baseUrl}/session/${sessionId}/message/${messageId}`;
 			const getResponse = await fetch(getUrl);
-			logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), sessionId, messageId, partId, attempt: attempt + 1, status: getResponse.status, ok: getResponse.ok, durationMs: Date.now() - getStartMs }, "opencode.tool_result.update.get");
+			logger.debug(
+				{
+					latency: true,
+					host: getBaseUrlHost(baseUrl),
+					sessionId,
+					messageId,
+					partId,
+					attempt: attempt + 1,
+					status: getResponse.status,
+					ok: getResponse.ok,
+					durationMs: Date.now() - getStartMs,
+				},
+				"opencode.tool_result.update.get",
+			);
 			if (!getResponse.ok) {
 				if (attempt < maxRetries - 1) {
-					logger.info({ attempt: attempt + 1, maxRetries, status: getResponse.status }, "Retrying part update");
+					logger.info(
+						{ attempt: attempt + 1, maxRetries, status: getResponse.status },
+						"Retrying part update",
+					);
 					await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
 					continue;
 				}
-				logger.warn({ status: getResponse.status, partId, messageId }, "Failed to fetch message for part update");
+				logger.warn(
+					{ status: getResponse.status, partId, messageId },
+					"Failed to fetch message for part update",
+				);
 				return;
 			}
 
@@ -144,7 +211,10 @@ export async function updateToolResult(
 			const part = message.parts.find((p) => p.id === partId);
 			if (!part) {
 				logger.warn({ partId, messageId }, "Part not found in message");
-				logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), sessionId, messageId, partId }, "opencode.tool_result.update.part_missing");
+				logger.debug(
+					{ latency: true, host: getBaseUrlHost(baseUrl), sessionId, messageId, partId },
+					"opencode.tool_result.update.part_missing",
+				);
 				return;
 			}
 
@@ -177,15 +247,51 @@ export async function updateToolResult(
 			);
 
 			if (!patchResponse.ok) {
-				logger.warn({ status: patchResponse.status, partId, messageId }, "Failed to update tool result");
-				logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), sessionId, messageId, partId, status: patchResponse.status, durationMs: Date.now() - patchStartMs }, "opencode.tool_result.update.patch_error");
+				logger.warn(
+					{ status: patchResponse.status, partId, messageId },
+					"Failed to update tool result",
+				);
+				logger.debug(
+					{
+						latency: true,
+						host: getBaseUrlHost(baseUrl),
+						sessionId,
+						messageId,
+						partId,
+						status: patchResponse.status,
+						durationMs: Date.now() - patchStartMs,
+					},
+					"opencode.tool_result.update.patch_error",
+				);
 			} else {
 				logger.info({ partId }, "Tool result updated successfully");
-				logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), sessionId, messageId, partId, status: patchResponse.status, durationMs: Date.now() - patchStartMs }, "opencode.tool_result.update.patch_ok");
+				logger.debug(
+					{
+						latency: true,
+						host: getBaseUrlHost(baseUrl),
+						sessionId,
+						messageId,
+						partId,
+						status: patchResponse.status,
+						durationMs: Date.now() - patchStartMs,
+					},
+					"opencode.tool_result.update.patch_ok",
+				);
 			}
 			return;
 		} catch (err) {
-			logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), sessionId, messageId, partId, attempt: attempt + 1, error: err instanceof Error ? err.message : String(err) }, "opencode.tool_result.update.exception");
+			logger.debug(
+				{
+					latency: true,
+					host: getBaseUrlHost(baseUrl),
+					sessionId,
+					messageId,
+					partId,
+					attempt: attempt + 1,
+					error: err instanceof Error ? err.message : String(err),
+				},
+				"opencode.tool_result.update.exception",
+			);
 			if (attempt < maxRetries - 1) {
 				logger.info({ attempt: attempt + 1 }, "Retrying part update after error");
 				await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
@@ -205,13 +311,32 @@ export async function fetchOpenCodeMessages(
 	const response = await fetch(`${baseUrl}/session/${sessionId}/message`);
 	logger.debug({ sessionId, status: response.status, ok: response.ok }, "Messages response");
 	if (!response.ok) {
-		logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), sessionId, status: response.status, durationMs: Date.now() - startMs }, "opencode.messages.fetch.error");
+		logger.debug(
+			{
+				latency: true,
+				host: getBaseUrlHost(baseUrl),
+				sessionId,
+				status: response.status,
+				durationMs: Date.now() - startMs,
+			},
+			"opencode.messages.fetch.error",
+		);
 		throw new Error(`OpenCode messages fetch failed: ${response.status}`);
 	}
 
 	const messages = (await response.json()) as OpenCodeMessage[];
 	logger.info({ sessionId, count: messages.length }, "Messages fetched");
-	logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), sessionId, status: response.status, durationMs: Date.now() - startMs, count: messages.length }, "opencode.messages.fetch.ok");
+	logger.debug(
+		{
+			latency: true,
+			host: getBaseUrlHost(baseUrl),
+			sessionId,
+			status: response.status,
+			durationMs: Date.now() - startMs,
+			count: messages.length,
+		},
+		"opencode.messages.fetch.ok",
+	);
 	return messages;
 }
 
@@ -242,7 +367,16 @@ export async function sendPromptAsync(
 	}
 
 	logger.info({ sessionId, partsCount: parts.length }, "Sending prompt");
-	logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), sessionId, contentLength: content.length, partsCount: parts.length }, "opencode.prompt_async.start");
+	logger.debug(
+		{
+			latency: true,
+			host: getBaseUrlHost(baseUrl),
+			sessionId,
+			contentLength: content.length,
+			partsCount: parts.length,
+		},
+		"opencode.prompt_async.start",
+	);
 	const response = await fetch(`${baseUrl}/session/${sessionId}/prompt_async`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -251,11 +385,29 @@ export async function sendPromptAsync(
 
 	if (!response.ok && response.status !== 204) {
 		const errorText = await response.text();
-		logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), sessionId, status: response.status, durationMs: Date.now() - startMs }, "opencode.prompt_async.error");
+		logger.debug(
+			{
+				latency: true,
+				host: getBaseUrlHost(baseUrl),
+				sessionId,
+				status: response.status,
+				durationMs: Date.now() - startMs,
+			},
+			"opencode.prompt_async.error",
+		);
 		throw new Error(`OpenCode prompt failed: ${errorText}`);
 	}
 	logger.info({ sessionId, status: response.status }, "Prompt sent");
-	logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), sessionId, status: response.status, durationMs: Date.now() - startMs }, "opencode.prompt_async.ok");
+	logger.debug(
+		{
+			latency: true,
+			host: getBaseUrlHost(baseUrl),
+			sessionId,
+			status: response.status,
+			durationMs: Date.now() - startMs,
+		},
+		"opencode.prompt_async.ok",
+	);
 }
 
 export async function abortOpenCodeSession(baseUrl: string, sessionId: string): Promise<void> {
@@ -263,10 +415,28 @@ export async function abortOpenCodeSession(baseUrl: string, sessionId: string): 
 	const response = await fetch(`${baseUrl}/session/${sessionId}/abort`, { method: "POST" });
 	if (!response.ok) {
 		const errorText = await response.text();
-		logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), sessionId, status: response.status, durationMs: Date.now() - startMs }, "opencode.abort.error");
+		logger.debug(
+			{
+				latency: true,
+				host: getBaseUrlHost(baseUrl),
+				sessionId,
+				status: response.status,
+				durationMs: Date.now() - startMs,
+			},
+			"opencode.abort.error",
+		);
 		throw new Error(`OpenCode abort failed: ${errorText}`);
 	}
-	logger.debug({ latency: true, host: getBaseUrlHost(baseUrl), sessionId, status: response.status, durationMs: Date.now() - startMs }, "opencode.abort.ok");
+	logger.debug(
+		{
+			latency: true,
+			host: getBaseUrlHost(baseUrl),
+			sessionId,
+			status: response.status,
+			durationMs: Date.now() - startMs,
+		},
+		"opencode.abort.ok",
+	);
 }
 
 function mapToolStatus(status?: string): "pending" | "running" | "completed" | "error" {

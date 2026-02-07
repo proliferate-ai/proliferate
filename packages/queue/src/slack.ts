@@ -6,9 +6,9 @@
  * - SlackReceiverJob: Per-session - listens for Gateway events and posts to Slack
  */
 
+import { createLogger } from "@proliferate/logger";
 import type { ConnectionOptions, Job, JobsOptions } from "bullmq";
 import { Queue, Worker } from "bullmq";
-import { createLogger } from "@proliferate/logger";
 import { getConnectionOptions } from "./index";
 
 const logger = createLogger({ service: "queue" }).child({ module: "slack" });

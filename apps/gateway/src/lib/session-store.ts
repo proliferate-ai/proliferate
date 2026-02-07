@@ -87,7 +87,10 @@ export async function loadSessionContext(
 	log.info("Loading session from database...");
 	const sessionRowStartMs = Date.now();
 	const sessionRow = await sessions.findByIdInternal(sessionId);
-	log.debug({ latency: true, durationMs: Date.now() - sessionRowStartMs, found: Boolean(sessionRow) }, "store.load_context.session_row");
+	log.debug(
+		{ latency: true, durationMs: Date.now() - sessionRowStartMs, found: Boolean(sessionRow) },
+		"store.load_context.session_row",
+	);
 
 	if (!sessionRow) {
 		log.warn("Session not found");
@@ -117,12 +120,15 @@ export async function loadSessionContext(
 		client_metadata: sessionRow.clientMetadata,
 	};
 
-	log.info({
-		prebuildId: session.prebuild_id,
-		sandboxId: session.sandbox_id,
-		status: session.status,
-		sessionType: session.session_type,
-	}, "Session loaded");
+	log.info(
+		{
+			prebuildId: session.prebuild_id,
+			sandboxId: session.sandbox_id,
+			status: session.status,
+			sessionType: session.session_type,
+		},
+		"Session loaded",
+	);
 
 	if (!session.prebuild_id) {
 		throw new Error("Session has no associated prebuild");
@@ -132,7 +138,14 @@ export async function loadSessionContext(
 	log.info({ prebuildId: session.prebuild_id }, "Loading repos from prebuild_repos...");
 	const prebuildReposStartMs = Date.now();
 	const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(session.prebuild_id);
-	log.debug({ latency: true, durationMs: Date.now() - prebuildReposStartMs, count: prebuildRepoRows?.length ?? 0 }, "store.load_context.prebuild_repos");
+	log.debug(
+		{
+			latency: true,
+			durationMs: Date.now() - prebuildReposStartMs,
+			count: prebuildRepoRows?.length ?? 0,
+		},
+		"store.load_context.prebuild_repos",
+	);
 
 	if (!prebuildRepoRows || prebuildRepoRows.length === 0) {
 		log.warn("Prebuild has no repos");
@@ -152,13 +165,16 @@ export async function loadSessionContext(
 			},
 		}));
 
-	log.info({
-		count: typedPrebuildRepos.length,
-		repos: typedPrebuildRepos.map((pr) => ({
-			name: pr.repo.github_repo_name,
-			path: pr.workspace_path,
-		})),
-	}, "Prebuild repos loaded");
+	log.info(
+		{
+			count: typedPrebuildRepos.length,
+			repos: typedPrebuildRepos.map((pr) => ({
+				name: pr.repo.github_repo_name,
+				path: pr.workspace_path,
+			})),
+		},
+		"Prebuild repos loaded",
+	);
 
 	// Primary repo (first one) for system prompt context
 	const primaryRepo = typedPrebuildRepos[0].repo;
@@ -174,7 +190,10 @@ export async function loadSessionContext(
 				pr.repo.id,
 				session.created_by,
 			);
-			log.info({ repo: pr.repo.github_repo_name, hasToken: Boolean(token) }, "Token resolved for repo");
+			log.info(
+				{ repo: pr.repo.github_repo_name, hasToken: Boolean(token) },
+				"Token resolved for repo",
+			);
 			return {
 				repoUrl: pr.repo.github_url,
 				token,
@@ -183,7 +202,15 @@ export async function loadSessionContext(
 			};
 		}),
 	);
-	log.debug({ latency: true, durationMs: Date.now() - tokenResolutionStartMs, repoCount: repoSpecs.length, tokensPresent: repoSpecs.filter((r) => Boolean(r.token)).length }, "store.load_context.github_tokens");
+	log.debug(
+		{
+			latency: true,
+			durationMs: Date.now() - tokenResolutionStartMs,
+			repoCount: repoSpecs.length,
+			tokensPresent: repoSpecs.filter((r) => Boolean(r.token)).length,
+		},
+		"store.load_context.github_tokens",
+	);
 
 	const systemPrompt =
 		session.system_prompt ||
@@ -218,11 +245,21 @@ export async function loadSessionContext(
 		repoIds,
 		repoSpecs,
 	);
-	log.debug({ latency: true, durationMs: Date.now() - envVarsStartMs, keyCount: Object.keys(envVars).length }, "store.load_context.env_vars");
-	log.info({
-		count: Object.keys(envVars).length,
-		keys: Object.keys(envVars).filter((k) => k !== "ANTHROPIC_API_KEY"),
-	}, "Environment variables loaded");
+	log.debug(
+		{
+			latency: true,
+			durationMs: Date.now() - envVarsStartMs,
+			keyCount: Object.keys(envVars).length,
+		},
+		"store.load_context.env_vars",
+	);
+	log.info(
+		{
+			count: Object.keys(envVars).length,
+			keys: Object.keys(envVars).filter((k) => k !== "ANTHROPIC_API_KEY"),
+		},
+		"Environment variables loaded",
+	);
 
 	// Load SSH public key for CLI sessions
 	let sshPublicKey: string | undefined;
@@ -230,7 +267,10 @@ export async function loadSessionContext(
 		log.info("Loading SSH public key for CLI session...");
 		const sshStartMs = Date.now();
 		const sshKeys = await cli.getSshPublicKeys(session.created_by);
-		log.debug({ latency: true, durationMs: Date.now() - sshStartMs, count: sshKeys?.length ?? 0 }, "store.load_context.ssh_keys");
+		log.debug(
+			{ latency: true, durationMs: Date.now() - sshStartMs, count: sshKeys?.length ?? 0 },
+			"store.load_context.ssh_keys",
+		);
 
 		const publicKey = sshKeys?.[0];
 		if (publicKey) {
@@ -242,7 +282,10 @@ export async function loadSessionContext(
 	}
 
 	log.info("Session context ready");
-	log.debug({ latency: true, durationMs: Date.now() - startMs, repoCount: repoSpecs.length }, "store.load_context.complete");
+	log.debug(
+		{ latency: true, durationMs: Date.now() - startMs, repoCount: repoSpecs.length },
+		"store.load_context.complete",
+	);
 	return {
 		session,
 		repos: repoSpecs,

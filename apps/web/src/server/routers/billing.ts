@@ -5,6 +5,7 @@
  */
 
 import { isBillingEnabled } from "@/lib/billing";
+import { logger } from "@/lib/logger";
 import { getUserOrgRole } from "@/lib/permissions";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
@@ -22,7 +23,6 @@ import {
 	getStateMessage,
 } from "@proliferate/shared/billing";
 import { z } from "zod";
-import { logger } from "@/lib/logger";
 import { orgProcedure } from "./middleware";
 
 const log = logger.child({ handler: "billing" });

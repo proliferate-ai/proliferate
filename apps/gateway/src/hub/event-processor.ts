@@ -5,7 +5,7 @@
  * Handles tool interception and state tracking.
  */
 
-import { createLogger, type Logger } from "@proliferate/logger";
+import { type Logger, createLogger } from "@proliferate/logger";
 import type {
 	Message,
 	ServerMessage,
@@ -152,12 +152,15 @@ export class EventProcessor {
 
 		// Validate required fields exist
 		if (!part || !part.id || !part.messageID || !part.type) {
-			this.logger.warn({
-				hasPart: !!part,
-				hasId: !!part?.id,
-				hasMessageID: !!part?.messageID,
-				hasType: !!part?.type,
-			}, "Invalid part update - missing required fields");
+			this.logger.warn(
+				{
+					hasPart: !!part,
+					hasId: !!part?.id,
+					hasMessageID: !!part?.messageID,
+					hasType: !!part?.type,
+				},
+				"Invalid part update - missing required fields",
+			);
 			return;
 		}
 

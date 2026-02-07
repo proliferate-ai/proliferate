@@ -1,5 +1,5 @@
-import { env } from "@proliferate/environment/server";
 import { logger } from "@/lib/logger";
+import { env } from "@proliferate/environment/server";
 
 const log = logger.child({ module: "slack" });
 const SLACK_API_BASE = "https://slack.com/api";
@@ -233,10 +233,7 @@ export async function sendSlackConnectInvite(
 				{ headers: { Authorization: `Bearer ${proliferateBotToken}` } },
 			);
 			const userResult = await userLookup.json();
-			log.info(
-				{ email, found: userResult.ok, userId: userResult.user?.id },
-				"User lookup result",
-			);
+			log.info({ email, found: userResult.ok, userId: userResult.user?.id }, "User lookup result");
 
 			if (userResult.ok && userResult.user?.id) {
 				// Add user to channel
@@ -252,10 +249,7 @@ export async function sendSlackConnectInvite(
 					}),
 				});
 				const inviteJson = await inviteResult.json();
-				log.info(
-					{ email, ok: inviteJson.ok, error: inviteJson.error },
-					"Added user to channel",
-				);
+				log.info({ email, ok: inviteJson.ok, error: inviteJson.error }, "Added user to channel");
 			}
 		} catch (err) {
 			log.error({ err, email }, "Failed to add user to channel");

@@ -4,6 +4,7 @@
  * Handles prebuild CRUD operations.
  */
 
+import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
 import { prebuilds } from "@proliferate/services";
 import {
@@ -12,7 +13,6 @@ import {
 	UpdatePrebuildInputSchema,
 } from "@proliferate/shared";
 import { z } from "zod";
-import { logger } from "@/lib/logger";
 import { orgProcedure } from "./middleware";
 
 const log = logger.child({ handler: "prebuilds" });

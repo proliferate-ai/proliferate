@@ -260,10 +260,7 @@ export async function createSessionHandler(
 			log.info("LLM proxy enabled");
 		} else {
 			const hasDirectKey = !!envVars.ANTHROPIC_API_KEY;
-			log.warn(
-				{ hasDirectKey },
-				"LLM proxy not configured, using direct API key",
-			);
+			log.warn({ hasDirectKey }, "LLM proxy not configured, using direct API key");
 		}
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
@@ -277,7 +274,10 @@ export async function createSessionHandler(
 	let warning: string | null = null;
 
 	try {
-		log.info({ durationMs: Date.now() - startTime, provider: provider.type }, "Calling sandbox provider");
+		log.info(
+			{ durationMs: Date.now() - startTime, provider: provider.type },
+			"Calling sandbox provider",
+		);
 		const providerStartTime = Date.now();
 
 		log.info({ modelId: agentConfig.modelId }, "Using model");
@@ -296,7 +296,11 @@ export async function createSessionHandler(
 		previewUrl = result.previewUrl;
 		sandboxId = result.sandboxId;
 		log.info(
-			{ durationMs: Date.now() - startTime, providerDurationMs: Date.now() - providerStartTime, provider: provider.type },
+			{
+				durationMs: Date.now() - startTime,
+				providerDurationMs: Date.now() - providerStartTime,
+				provider: provider.type,
+			},
 			"Provider returned",
 		);
 

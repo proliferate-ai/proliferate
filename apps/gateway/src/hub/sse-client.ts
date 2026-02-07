@@ -6,8 +6,8 @@
  * SessionHub owns reconnection logic.
  */
 
+import { type Logger, createLogger } from "@proliferate/logger";
 import { createParser } from "eventsource-parser";
-import { createLogger, type Logger } from "@proliferate/logger";
 import type { GatewayEnv } from "../lib/env";
 import type { OpenCodeEvent } from "../types";
 

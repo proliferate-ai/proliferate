@@ -86,7 +86,10 @@ export function setupProliferateWebSocket(server: Server, hubManager: HubManager
 					}
 				});
 				ws.on("close", (code, reason) => {
-					logger.info({ sessionId: proliferateSessionId, code, reason: reason?.toString() }, "Client disconnected");
+					logger.info(
+						{ sessionId: proliferateSessionId, code, reason: reason?.toString() },
+						"Client disconnected",
+					);
 				});
 
 				// addClient → initializeClient sends status("resuming")

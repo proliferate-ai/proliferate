@@ -77,7 +77,10 @@ export async function GET(request: NextRequest) {
 
 	// Use targetOrgId from state if provided (CLI flow), otherwise use browser's active org
 	const orgId = targetOrgId || authResult.session.session.activeOrganizationId;
-	log.info({ orgId, targetOrgId, activeOrgId: authResult.session.session.activeOrganizationId }, "Using orgId");
+	log.info(
+		{ orgId, targetOrgId, activeOrgId: authResult.session.session.activeOrganizationId },
+		"Using orgId",
+	);
 	if (!orgId) {
 		return NextResponse.redirect(new URL("/dashboard?error=no_org", baseUrl));
 	}

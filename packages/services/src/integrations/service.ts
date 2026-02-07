@@ -454,7 +454,10 @@ export async function saveGitHubAppInstallation(
 	input: SaveGitHubAppInstallationInput,
 ): Promise<{ success: boolean }> {
 	const logger = getServicesLogger().child({ module: "integrations" });
-	logger.info({ orgId: input.organizationId, installationId: input.installationId }, "Saving GitHub App installation");
+	logger.info(
+		{ orgId: input.organizationId, installationId: input.installationId },
+		"Saving GitHub App installation",
+	);
 	const result = await integrationsDb.upsertGitHubAppInstallation(input);
 	logger.debug({ resultId: result?.id ?? null }, "GitHub App installation saved");
 

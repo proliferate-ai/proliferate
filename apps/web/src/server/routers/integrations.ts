@@ -6,6 +6,7 @@
  */
 
 import { decrypt, getEncryptionKey } from "@/lib/crypto";
+import { logger } from "@/lib/logger";
 import getNango, {
 	NANGO_GITHUB_INTEGRATION_ID,
 	NANGO_LINEAR_INTEGRATION_ID,
@@ -25,7 +26,6 @@ import {
 	SlackStatusSchema,
 } from "@proliferate/shared";
 import { z } from "zod";
-import { logger } from "@/lib/logger";
 import { orgProcedure } from "./middleware";
 
 const log = logger.child({ handler: "integrations" });

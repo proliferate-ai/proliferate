@@ -132,15 +132,21 @@ export async function createSession(
 	const startMs = Date.now();
 
 	const log = logger.child({ sessionId });
-	log.info({
-		sessionType,
-		clientType,
-		sandboxMode,
-		hasSnapshot: Boolean(snapshotId),
-		sshEnabled: Boolean(sshOptions),
-		explicitIntegrations: explicitIntegrationIds?.length ?? 0,
-	}, "Creating session");
-	log.debug({ latency: true, isNewPrebuild, hasSnapshotId: Boolean(snapshotId) }, "session_creator.create_session.start");
+	log.info(
+		{
+			sessionType,
+			clientType,
+			sandboxMode,
+			hasSnapshot: Boolean(snapshotId),
+			sshEnabled: Boolean(sshOptions),
+			explicitIntegrations: explicitIntegrationIds?.length ?? 0,
+		},
+		"Creating session",
+	);
+	log.debug(
+		{ latency: true, isNewPrebuild, hasSnapshotId: Boolean(snapshotId) },
+		"session_creator.create_session.start",
+	);
 
 	// SSH sessions are always immediate (need to return SSH connection info)
 	const effectiveSandboxMode = sshOptions ? "immediate" : sandboxMode;
@@ -155,7 +161,15 @@ export async function createSession(
 			const listStartMs = Date.now();
 			const automationConnections =
 				await automations.listAutomationConnectionsInternal(automationId);
-			log.debug({ latency: true, durationMs: Date.now() - listStartMs, automationId, connectionCount: automationConnections.length }, "session_creator.create_session.integration_ids.resolve");
+			log.debug(
+				{
+					latency: true,
+					durationMs: Date.now() - listStartMs,
+					automationId,
+					connectionCount: automationConnections.length,
+				},
+				"session_creator.create_session.integration_ids.resolve",
+			);
 			resolvedIntegrationIds = automationConnections
 				.filter((c) => c.integration?.status === "active")
 				.map((c) => c.integrationId);
@@ -187,7 +201,10 @@ export async function createSession(
 			triggerId,
 			triggerEventId,
 		});
-		log.debug({ latency: true, durationMs: Date.now() - dbStartMs }, "session_creator.create_session.db.create");
+		log.debug(
+			{ latency: true, durationMs: Date.now() - dbStartMs },
+			"session_creator.create_session.db.create",
+		);
 	} catch (err) {
 		log.error({ err, durationMs: Date.now() - startMs }, "Failed to create session");
 		throw new Error(
@@ -200,7 +217,14 @@ export async function createSession(
 		try {
 			const connectionsStartMs = Date.now();
 			await sessions.createSessionConnections(sessionId, resolvedIntegrationIds);
-			log.debug({ latency: true, durationMs: Date.now() - connectionsStartMs, connectionCount: resolvedIntegrationIds.length }, "session_creator.create_session.db.create_connections");
+			log.debug(
+				{
+					latency: true,
+					durationMs: Date.now() - connectionsStartMs,
+					connectionCount: resolvedIntegrationIds.length,
+				},
+				"session_creator.create_session.db.create_connections",
+			);
 			log.info({ connectionCount: resolvedIntegrationIds.length }, "Recorded session connections");
 		} catch (err) {
 			log.warn({ err }, "Failed to record session connections");
@@ -211,7 +235,10 @@ export async function createSession(
 
 	// If deferred, return immediately
 	if (effectiveSandboxMode === "deferred") {
-		log.info({ latency: true, durationMs: Date.now() - startMs, mode: "deferred" }, "session_creator.create_session.complete");
+		log.info(
+			{ latency: true, durationMs: Date.now() - startMs, mode: "deferred" },
+			"session_creator.create_session.complete",
+		);
 		return {
 			sessionId,
 			prebuildId,
@@ -238,7 +265,18 @@ export async function createSession(
 			triggerContext,
 			sshOptions,
 		});
-		log.debug({ latency: true, provider: provider.type, durationMs: Date.now() - createSandboxStartMs, hasTunnelUrl: Boolean(result.tunnelUrl), hasPreviewUrl: Boolean(result.previewUrl), sshEnabled: Boolean(sshOptions), warningCount: result.integrationWarnings.length }, "session_creator.create_session.create_sandbox");
+		log.debug(
+			{
+				latency: true,
+				provider: provider.type,
+				durationMs: Date.now() - createSandboxStartMs,
+				hasTunnelUrl: Boolean(result.tunnelUrl),
+				hasPreviewUrl: Boolean(result.previewUrl),
+				sshEnabled: Boolean(sshOptions),
+				warningCount: result.integrationWarnings.length,
+			},
+			"session_creator.create_session.create_sandbox",
+		);
 		integrationWarnings = result.integrationWarnings;
 
 		// Update session with sandbox info
@@ -249,9 +287,15 @@ export async function createSession(
 			openCodeTunnelUrl: result.tunnelUrl || null,
 			previewTunnelUrl: result.previewUrl,
 		});
-		log.debug({ latency: true, durationMs: Date.now() - updateStartMs }, "session_creator.create_session.db.update_session");
+		log.debug(
+			{ latency: true, durationMs: Date.now() - updateStartMs },
+			"session_creator.create_session.db.update_session",
+		);
 
-		log.info({ latency: true, durationMs: Date.now() - startMs, mode: "immediate" }, "session_creator.create_session.complete");
+		log.info(
+			{ latency: true, durationMs: Date.now() - startMs, mode: "immediate" },
+			"session_creator.create_session.complete",
+		);
 		return {
 			sessionId,
 			prebuildId,
@@ -271,8 +315,14 @@ export async function createSession(
 		log.error({ err }, "Sandbox creation failed");
 		const deleteStartMs = Date.now();
 		await sessions.deleteById(sessionId, organizationId);
-		log.debug({ latency: true, durationMs: Date.now() - deleteStartMs }, "session_creator.create_session.cleanup.delete_session");
-		log.debug({ latency: true, durationMs: Date.now() - startMs }, "session_creator.create_session.error");
+		log.debug(
+			{ latency: true, durationMs: Date.now() - deleteStartMs },
+			"session_creator.create_session.cleanup.delete_session",
+		);
+		log.debug(
+			{ latency: true, durationMs: Date.now() - startMs },
+			"session_creator.create_session.error",
+		);
 		throw err;
 	}
 }
@@ -323,7 +373,17 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 
 	const startMs = Date.now();
 	const log = logger.child({ sessionId });
-	log.debug({ latency: true, provider: provider.type, hasSnapshotId: Boolean(snapshotId), sshEnabled: Boolean(sshOptions), hasCloneInstructions: Boolean(sshOptions?.cloneInstructions), explicitIntegrationCount: integrationIds?.length ?? 0 }, "session_creator.create_sandbox.start");
+	log.debug(
+		{
+			latency: true,
+			provider: provider.type,
+			hasSnapshotId: Boolean(snapshotId),
+			sshEnabled: Boolean(sshOptions),
+			hasCloneInstructions: Boolean(sshOptions?.cloneInstructions),
+			explicitIntegrationCount: integrationIds?.length ?? 0,
+		},
+		"session_creator.create_sandbox.start",
+	);
 
 	// SSH public key (concatenate all keys for authorized_keys)
 	const sshPublicKey = sshOptions?.publicKeys?.join("\n");
@@ -332,7 +392,15 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	const integrationsStartMs = Date.now();
 	const { envVars: integrationEnvVars, warnings: integrationWarnings } =
 		await resolveIntegrationEnvVars(sessionId, organizationId, integrationIds);
-	log.debug({ latency: true, durationMs: Date.now() - integrationsStartMs, envKeyCount: Object.keys(integrationEnvVars).length, warningCount: integrationWarnings.length }, "session_creator.create_sandbox.integration_env_vars");
+	log.debug(
+		{
+			latency: true,
+			durationMs: Date.now() - integrationsStartMs,
+			envKeyCount: Object.keys(integrationEnvVars).length,
+			warningCount: integrationWarnings.length,
+		},
+		"session_creator.create_sandbox.integration_env_vars",
+	);
 
 	// For CLI/SSH sessions, we don't need to load repos (sync via rsync)
 	if (sshOptions && !sshOptions.cloneInstructions) {
@@ -345,7 +413,14 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			requireProxy: process.env.LLM_PROXY_REQUIRED === "true",
 			directApiKey: env.anthropicApiKey,
 		});
-		log.debug({ latency: true, durationMs: Date.now() - envStartMs, envKeyCount: Object.keys(baseEnvResult.envVars).length }, "session_creator.create_sandbox.env_vars");
+		log.debug(
+			{
+				latency: true,
+				durationMs: Date.now() - envStartMs,
+				envKeyCount: Object.keys(baseEnvResult.envVars).length,
+			},
+			"session_creator.create_sandbox.env_vars",
+		);
 		const mergedEnvVars = {
 			...baseEnvResult.envVars,
 			...integrationEnvVars,
@@ -363,9 +438,22 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			sshPublicKey,
 			triggerContext,
 		});
-		log.debug({ latency: true, provider: provider.type, durationMs: Date.now() - providerStartMs, isSsh: true, hasTunnelUrl: Boolean(result.tunnelUrl), hasPreviewUrl: Boolean(result.previewUrl) }, "session_creator.create_sandbox.provider.create_sandbox");
+		log.debug(
+			{
+				latency: true,
+				provider: provider.type,
+				durationMs: Date.now() - providerStartMs,
+				isSsh: true,
+				hasTunnelUrl: Boolean(result.tunnelUrl),
+				hasPreviewUrl: Boolean(result.previewUrl),
+			},
+			"session_creator.create_sandbox.provider.create_sandbox",
+		);
 
-		log.info({ latency: true, durationMs: Date.now() - startMs, isSsh: true }, "session_creator.create_sandbox.complete");
+		log.info(
+			{ latency: true, durationMs: Date.now() - startMs, isSsh: true },
+			"session_creator.create_sandbox.complete",
+		);
 		return {
 			sandboxId: result.sandboxId,
 			previewUrl: result.previewUrl,
@@ -378,7 +466,14 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	// Load prebuild repos for coding sessions
 	const prebuildStartMs = Date.now();
 	const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
-	log.debug({ latency: true, durationMs: Date.now() - prebuildStartMs, count: prebuildRepoRows?.length ?? 0 }, "session_creator.create_sandbox.prebuild_repos");
+	log.debug(
+		{
+			latency: true,
+			durationMs: Date.now() - prebuildStartMs,
+			count: prebuildRepoRows?.length ?? 0,
+		},
+		"session_creator.create_sandbox.prebuild_repos",
+	);
 
 	if (!prebuildRepoRows || prebuildRepoRows.length === 0) {
 		throw new Error("Prebuild has no associated repos");
@@ -409,7 +504,15 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			};
 		}),
 	);
-	log.debug({ latency: true, durationMs: Date.now() - githubStartMs, repoCount: repoSpecs.length, tokensPresent: repoSpecs.filter((r) => Boolean(r.token)).length }, "session_creator.create_sandbox.github_tokens");
+	log.debug(
+		{
+			latency: true,
+			durationMs: Date.now() - githubStartMs,
+			repoCount: repoSpecs.length,
+			tokensPresent: repoSpecs.filter((r) => Boolean(r.token)).length,
+		},
+		"session_creator.create_sandbox.github_tokens",
+	);
 
 	// Build environment variables
 	const envStartMs = Date.now();
@@ -421,7 +524,14 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		repoSpecs,
 		integrationEnvVars,
 	);
-	log.debug({ latency: true, durationMs: Date.now() - envStartMs, envKeyCount: Object.keys(envVars).length }, "session_creator.create_sandbox.env_vars");
+	log.debug(
+		{
+			latency: true,
+			durationMs: Date.now() - envStartMs,
+			envKeyCount: Object.keys(envVars).length,
+		},
+		"session_creator.create_sandbox.env_vars",
+	);
 
 	// Build system prompt
 	const primaryRepo = typedPrebuildRepos[0].repo!;
@@ -454,9 +564,22 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		sshPublicKey,
 		triggerContext,
 	});
-	log.debug({ latency: true, provider: provider.type, durationMs: Date.now() - providerStartMs, isSsh: Boolean(sshOptions), hasTunnelUrl: Boolean(result.tunnelUrl), hasPreviewUrl: Boolean(result.previewUrl) }, "session_creator.create_sandbox.provider.create_sandbox");
+	log.debug(
+		{
+			latency: true,
+			provider: provider.type,
+			durationMs: Date.now() - providerStartMs,
+			isSsh: Boolean(sshOptions),
+			hasTunnelUrl: Boolean(result.tunnelUrl),
+			hasPreviewUrl: Boolean(result.previewUrl),
+		},
+		"session_creator.create_sandbox.provider.create_sandbox",
+	);
 
-	log.info({ latency: true, durationMs: Date.now() - startMs, isSsh: Boolean(sshOptions) }, "session_creator.create_sandbox.complete");
+	log.info(
+		{ latency: true, durationMs: Date.now() - startMs, isSsh: Boolean(sshOptions) },
+		"session_creator.create_sandbox.complete",
+	);
 	return {
 		sandboxId: result.sandboxId,
 		tunnelUrl: result.tunnelUrl,
@@ -589,19 +712,33 @@ async function resolveIntegrationEnvVars(
 	try {
 		const startMs = Date.now();
 		const log = logger.child({ sessionId });
-		log.debug({ latency: true, integrationCount: integrationIds.length }, "session_creator.integration_tokens.start");
+		log.debug(
+			{ latency: true, integrationCount: integrationIds.length },
+			"session_creator.integration_tokens.start",
+		);
 		// Fetch integration details for token resolution
 		const fetchStartMs = Date.now();
 		const integrationsForTokens = await integrations.getIntegrationsForTokens(
 			integrationIds,
 			orgId,
 		);
-		log.debug({ latency: true, durationMs: Date.now() - fetchStartMs, count: integrationsForTokens.length }, "session_creator.integration_tokens.fetch");
+		log.debug(
+			{ latency: true, durationMs: Date.now() - fetchStartMs, count: integrationsForTokens.length },
+			"session_creator.integration_tokens.fetch",
+		);
 
 		// Resolve tokens
 		const resolveStartMs = Date.now();
 		const { tokens, errors } = await integrations.resolveTokens(integrationsForTokens);
-		log.debug({ latency: true, durationMs: Date.now() - resolveStartMs, tokenCount: tokens.length, errorCount: errors.length }, "session_creator.integration_tokens.resolve");
+		log.debug(
+			{
+				latency: true,
+				durationMs: Date.now() - resolveStartMs,
+				tokenCount: tokens.length,
+				errorCount: errors.length,
+			},
+			"session_creator.integration_tokens.resolve",
+		);
 
 		// Build env vars
 		const envVars: Record<string, string> = {};
@@ -618,10 +755,21 @@ async function resolveIntegrationEnvVars(
 		}));
 
 		if (warnings.length > 0) {
-			log.warn({ warningCount: warnings.length, warnings: warnings.map((w) => w.message) }, "Failed to resolve integration tokens");
+			log.warn(
+				{ warningCount: warnings.length, warnings: warnings.map((w) => w.message) },
+				"Failed to resolve integration tokens",
+			);
 		}
 
-		log.debug({ latency: true, durationMs: Date.now() - startMs, envKeyCount: Object.keys(envVars).length, warningCount: warnings.length }, "session_creator.integration_tokens.complete");
+		log.debug(
+			{
+				latency: true,
+				durationMs: Date.now() - startMs,
+				envKeyCount: Object.keys(envVars).length,
+				warningCount: warnings.length,
+			},
+			"session_creator.integration_tokens.complete",
+		);
 		return { envVars, warnings };
 	} catch (err) {
 		logger.error({ err, sessionId }, "Error resolving integration tokens");

@@ -248,10 +248,7 @@ async function finalizeRuns(syncClient: SyncClient, logger: Logger): Promise<voi
 				});
 			}
 		} catch (err) {
-			logger.error(
-				{ err, runId: run.id },
-				"Failed to finalize run",
-			);
+			logger.error({ err, runId: run.id }, "Failed to finalize run");
 		}
 	}
 }

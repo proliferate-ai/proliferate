@@ -106,10 +106,7 @@ export function startSessionExpiryWorker(env: GatewayEnv, hubManager: HubManager
 		);
 
 		worker.on("failed", (job, err) => {
-			logger.error(
-				{ err, jobId: job?.id, sessionId: job?.data?.sessionId },
-				"Expiry job failed",
-			);
+			logger.error({ err, jobId: job?.id, sessionId: job?.data?.sessionId }, "Expiry job failed");
 		});
 	}
 }

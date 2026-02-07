@@ -293,7 +293,13 @@ export async function postVerificationResult(
 		};
 
 		if (!files || files.length === 0) {
-			await postToSlack(encryptedBotToken, channelId, threadTs, "Verification complete (no files)", logger);
+			await postToSlack(
+				encryptedBotToken,
+				channelId,
+				threadTs,
+				"Verification complete (no files)",
+				logger,
+			);
 			return;
 		}
 

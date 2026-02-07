@@ -47,12 +47,15 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 	);
 	const proxyUrl = process.env.LLM_PROXY_URL;
 
-	logger.debug({
-		repoCount: input.repoIds.length,
-		requireProxy,
-		hasProxyUrl: Boolean(proxyUrl),
-		hasDirectApiKey: Boolean(input.directApiKey ?? process.env.ANTHROPIC_API_KEY),
-	}, "Building sandbox env vars");
+	logger.debug(
+		{
+			repoCount: input.repoIds.length,
+			requireProxy,
+			hasProxyUrl: Boolean(proxyUrl),
+			hasDirectApiKey: Boolean(input.directApiKey ?? process.env.ANTHROPIC_API_KEY),
+		},
+		"Building sandbox env vars",
+	);
 
 	if (!proxyUrl) {
 		if (requireProxy) {
@@ -67,7 +70,10 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 			envVars.LLM_PROXY_API_KEY = apiKey;
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
-			logger.error({ err, durationMs: Date.now() - startMs }, "Failed to generate LLM proxy session key");
+			logger.error(
+				{ err, durationMs: Date.now() - startMs },
+				"Failed to generate LLM proxy session key",
+			);
 			throw new Error(`LLM proxy enabled but failed to generate session key: ${message}`);
 		}
 	}
@@ -75,7 +81,10 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 	// Decrypt and add secrets (both org-scoped and repo-scoped)
 	const secretsStartMs = Date.now();
 	const secretRows = await secrets.getSecretsForSession(input.orgId, input.repoIds);
-	logger.debug({ durationMs: Date.now() - secretsStartMs, count: secretRows?.length ?? 0 }, "Fetched secrets");
+	logger.debug(
+		{ durationMs: Date.now() - secretsStartMs, count: secretRows?.length ?? 0 },
+		"Fetched secrets",
+	);
 	if (secretRows && secretRows.length > 0) {
 		const encryptionKey = getEncryptionKey();
 		for (const secret of secretRows) {
@@ -94,10 +103,13 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 		envVars.GH_TOKEN = defaultGitToken;
 	}
 
-	logger.debug({
-		durationMs: Date.now() - startMs,
-		envKeyCount: Object.keys(envVars).length,
-		usesProxy: Boolean(proxyUrl),
-	}, "Sandbox env vars build complete");
+	logger.debug(
+		{
+			durationMs: Date.now() - startMs,
+			envKeyCount: Object.keys(envVars).length,
+			usesProxy: Boolean(proxyUrl),
+		},
+		"Sandbox env vars build complete",
+	);
 	return { envVars, usesProxy: Boolean(proxyUrl) };
 }

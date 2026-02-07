@@ -194,7 +194,9 @@ export async function createTrigger(input: CreateTriggerInput): Promise<CreateTr
 		try {
 			await schedulePollingJob(getPollingQueue(), trigger.id, input.pollingCron);
 		} catch (err) {
-			getServicesLogger().child({ module: "triggers" }).error({ err }, "Failed to schedule polling job");
+			getServicesLogger()
+				.child({ module: "triggers" })
+				.error({ err }, "Failed to schedule polling job");
 		}
 	}
 
@@ -236,7 +238,9 @@ export async function updateTrigger(
 				await removePollingJob(getPollingQueue(), updated.id);
 			}
 		} catch (err) {
-			getServicesLogger().child({ module: "triggers" }).error({ err }, "Failed to update polling job");
+			getServicesLogger()
+				.child({ module: "triggers" })
+				.error({ err }, "Failed to update polling job");
 		}
 	}
 
@@ -254,7 +258,9 @@ export async function deleteTrigger(id: string, orgId: string): Promise<boolean>
 		try {
 			await removePollingJob(getPollingQueue(), existing.id);
 		} catch (err) {
-			getServicesLogger().child({ module: "triggers" }).error({ err }, "Failed to remove polling job");
+			getServicesLogger()
+				.child({ module: "triggers" })
+				.error({ err }, "Failed to remove polling job");
 		}
 	}
 	return true;

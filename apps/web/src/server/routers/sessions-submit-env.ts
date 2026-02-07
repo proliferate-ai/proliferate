@@ -41,13 +41,16 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 	const { sessionId, orgId, userId, secrets: secretsInput, envVars, saveToPrebuild } = input;
 	const startMs = Date.now();
 
-	log.info({
-		sessionId,
-		shortId: sessionId.slice(0, 8),
-		envVarCount: envVars.length,
-		secretCount: secretsInput.length,
-		saveToPrebuild,
-	}, "submit_env.start");
+	log.info(
+		{
+			sessionId,
+			shortId: sessionId.slice(0, 8),
+			envVarCount: envVars.length,
+			secretCount: secretsInput.length,
+			saveToPrebuild,
+		},
+		"submit_env.start",
+	);
 
 	// Get full session data to find sandbox
 	const session = await sessions.getFullSession(sessionId, orgId);
@@ -99,13 +102,16 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 			const provider = getSandboxProvider(session.sandboxProvider as SandboxProviderType);
 			const writeStartMs = Date.now();
 			await provider.writeEnvFile(session.sandboxId, envVarsMap);
-			log.info({
-				sessionId,
-				shortId: sessionId.slice(0, 8),
-				provider: provider.type,
-				keyCount: Object.keys(envVarsMap).length,
-				durationMs: Date.now() - writeStartMs,
-			}, "submit_env.write_env_file");
+			log.info(
+				{
+					sessionId,
+					shortId: sessionId.slice(0, 8),
+					provider: provider.type,
+					keyCount: Object.keys(envVarsMap).length,
+					durationMs: Date.now() - writeStartMs,
+				},
+				"submit_env.write_env_file",
+			);
 		} catch (err) {
 			log.error({ err }, "Failed to write env file to sandbox");
 			throw new ORPCError("INTERNAL_SERVER_ERROR", {
@@ -114,10 +120,13 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 		}
 	}
 
-	log.info({
-		sessionId,
-		shortId: sessionId.slice(0, 8),
-		durationMs: Date.now() - startMs,
-	}, "submit_env.complete");
+	log.info(
+		{
+			sessionId,
+			shortId: sessionId.slice(0, 8),
+			durationMs: Date.now() - startMs,
+		},
+		"submit_env.complete",
+	);
 	return { submitted: true };
 }

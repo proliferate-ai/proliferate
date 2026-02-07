@@ -1,8 +1,8 @@
 import { env } from "@proliferate/environment/server";
+import type { Logger } from "@proliferate/logger";
 import { FileType, Sandbox, type SandboxApiOpts, type SandboxConnectOpts } from "e2b";
 import { getDefaultAgentConfig, toOpencodeModelId } from "../agents";
 import { getLLMProxyBaseURL } from "../llm-proxy";
-import type { Logger } from "@proliferate/logger";
 import { getSharedLogger } from "../logger";
 import {
 	AUTOMATION_COMPLETE_DESCRIPTION,
@@ -97,7 +97,10 @@ export class E2BProvider implements SandboxProvider {
 			timeoutMs: SANDBOX_TIMEOUT_MS,
 		});
 
-		log.debug({ repoCount: opts.repos.length, snapshotId: opts.snapshotId || "none" }, "Creating session");
+		log.debug(
+			{ repoCount: opts.repos.length, snapshotId: opts.snapshotId || "none" },
+			"Creating session",
+		);
 
 		// LLM Proxy configuration - when set, sandboxes route through proxy instead of direct API
 		// This avoids exposing real API keys in sandboxes
@@ -325,7 +328,10 @@ export class E2BProvider implements SandboxProvider {
 			}
 		}
 
-		log.info({ sandboxId: sandbox.sandboxId, elapsedMs: Date.now() - startTime }, "Sandbox creation complete");
+		log.info(
+			{ sandboxId: sandbox.sandboxId, elapsedMs: Date.now() - startTime },
+			"Sandbox creation complete",
+		);
 		logLatency("provider.create_sandbox.complete", {
 			provider: this.type,
 			sessionId: opts.sessionId,
@@ -505,7 +511,10 @@ export class E2BProvider implements SandboxProvider {
 				cloneUrl = repo.repoUrl.replace("https://", `https://x-access-token:${repo.token}@`);
 			}
 
-			log.debug({ repo: repo.workspacePath, index: i + 1, total: opts.repos.length }, "Cloning repo");
+			log.debug(
+				{ repo: repo.workspacePath, index: i + 1, total: opts.repos.length },
+				"Cloning repo",
+			);
 			try {
 				await sandbox.commands.run(
 					`git clone --depth 1 --branch ${opts.branch} '${cloneUrl}' ${targetDir}`,
@@ -640,10 +649,7 @@ export class E2BProvider implements SandboxProvider {
 	 * - Start services (Postgres, Redis, Mailcatcher)
 	 * - Start Caddy preview proxy
 	 */
-	private async setupAdditionalDependencies(
-		sandbox: Sandbox,
-		log: Logger,
-	): Promise<void> {
+	private async setupAdditionalDependencies(sandbox: Sandbox, log: Logger): Promise<void> {
 		// Start services (PostgreSQL, Redis, Mailcatcher)
 		log.debug("Starting services (async)");
 		await sandbox.commands.run("/usr/local/bin/start-services.sh", {
@@ -836,7 +842,10 @@ export class E2BProvider implements SandboxProvider {
 	 * Used by the verify tool to upload verification evidence.
 	 */
 	async readFiles(sandboxId: string, folderPath: string): Promise<FileContent[]> {
-		providerLogger.debug({ folderPath, sandboxId: sandboxId.slice(0, 16) }, "Reading files from sandbox");
+		providerLogger.debug(
+			{ folderPath, sandboxId: sandboxId.slice(0, 16) },
+			"Reading files from sandbox",
+		);
 		const startMs = Date.now();
 
 		const sandbox = await Sandbox.connect(sandboxId, getE2BConnectOpts());

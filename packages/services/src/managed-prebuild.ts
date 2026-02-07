@@ -166,7 +166,9 @@ async function createAndStartSetupSession(
 			userId: "managed-prebuild-setup",
 		})
 		.catch((err: Error) => {
-			getServicesLogger().child({ module: "managed-prebuild", prebuildId, sessionId }).error({ err }, "Failed to start setup session");
+			getServicesLogger()
+				.child({ module: "managed-prebuild", prebuildId, sessionId })
+				.error({ err }, "Failed to start setup session");
 		});
 
 	return sessionId;

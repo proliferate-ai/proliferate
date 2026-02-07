@@ -147,24 +147,59 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(400, "organizationId is required");
 			}
 
-			logger.debug({ latency: true, orgId: organizationId.slice(0, 8), sessionType: body.sessionType, clientType: body.clientType, sandboxMode: body.sandboxMode || "deferred", hasIdempotencyKey: Boolean(req.header("Idempotency-Key")), hasSnapshot: Boolean(body.snapshotId), sshEnabled: Boolean(body.sshOptions) }, "sessions.create.start");
+			logger.debug(
+				{
+					latency: true,
+					orgId: organizationId.slice(0, 8),
+					sessionType: body.sessionType,
+					clientType: body.clientType,
+					sandboxMode: body.sandboxMode || "deferred",
+					hasIdempotencyKey: Boolean(req.header("Idempotency-Key")),
+					hasSnapshot: Boolean(body.snapshotId),
+					sshEnabled: Boolean(body.sshOptions),
+				},
+				"sessions.create.start",
+			);
 
 			const idempotencyKey = req.header("Idempotency-Key");
 			if (idempotencyKey) {
 				const idempotencyStartMs = Date.now();
 				const existing = await readIdempotencyResponse(organizationId, idempotencyKey);
 				if (existing) {
-					logger.debug({ latency: true, orgId: organizationId.slice(0, 8), durationMs: Date.now() - idempotencyStartMs }, "sessions.create.idempotency.replay");
+					logger.debug(
+						{
+							latency: true,
+							orgId: organizationId.slice(0, 8),
+							durationMs: Date.now() - idempotencyStartMs,
+						},
+						"sessions.create.idempotency.replay",
+					);
 					res.status(201).json(existing as CreateSessionResponse);
 					return;
 				}
 
 				const reservation = await reserveIdempotencyKey(organizationId, idempotencyKey);
-				logger.debug({ latency: true, orgId: organizationId.slice(0, 8), result: reservation, durationMs: Date.now() - idempotencyStartMs, inFlightTtlSeconds: IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS }, "sessions.create.idempotency.reserve");
+				logger.debug(
+					{
+						latency: true,
+						orgId: organizationId.slice(0, 8),
+						result: reservation,
+						durationMs: Date.now() - idempotencyStartMs,
+						inFlightTtlSeconds: IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS,
+					},
+					"sessions.create.idempotency.reserve",
+				);
 				if (reservation === "exists") {
 					const replay = await readIdempotencyResponse(organizationId, idempotencyKey);
 					if (replay) {
-						logger.debug({ latency: true, orgId: organizationId.slice(0, 8), durationMs: Date.now() - idempotencyStartMs }, "sessions.create.idempotency.replay");
+						logger.debug(
+							{
+								latency: true,
+								orgId: organizationId.slice(0, 8),
+								durationMs: Date.now() - idempotencyStartMs,
+							},
+							"sessions.create.idempotency.replay",
+						);
 						res.status(201).json(replay as CreateSessionResponse);
 						return;
 					}
@@ -189,9 +224,26 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 
 			const prebuildStartMs = Date.now();
 			const prebuild = await resolvePrebuild(prebuildResolutionOptions);
-			logger.debug({ latency: true, orgId: organizationId.slice(0, 8), durationMs: Date.now() - prebuildStartMs, isNew: prebuild.isNew, hasSnapshot: Boolean(prebuild.snapshotId), repoCount: prebuild.repoIds.length }, "sessions.create.prebuild.resolved");
+			logger.debug(
+				{
+					latency: true,
+					orgId: organizationId.slice(0, 8),
+					durationMs: Date.now() - prebuildStartMs,
+					isNew: prebuild.isNew,
+					hasSnapshot: Boolean(prebuild.snapshotId),
+					repoCount: prebuild.repoIds.length,
+				},
+				"sessions.create.prebuild.resolved",
+			);
 
-			logger.info({ prebuildId: prebuild.id.slice(0, 8), isNew: prebuild.isNew, hasSnapshot: Boolean(prebuild.snapshotId) }, "Prebuild resolved");
+			logger.info(
+				{
+					prebuildId: prebuild.id.slice(0, 8),
+					isNew: prebuild.isNew,
+					hasSnapshot: Boolean(prebuild.snapshotId),
+				},
+				"Prebuild resolved",
+			);
 
 			// Create session
 			const createSessionStartMs = Date.now();
@@ -224,12 +276,39 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				prebuild.isNew,
 			);
 			const createSessionDurationMs = Date.now() - createSessionStartMs;
-			logger.debug({ latency: true, orgId: organizationId.slice(0, 8), sessionId: result.sessionId.slice(0, 8), status: result.status, durationMs: createSessionDurationMs, createdSandbox: Boolean(result.sandbox), hasSnapshot: result.hasSnapshot }, "sessions.create.session.created");
+			logger.debug(
+				{
+					latency: true,
+					orgId: organizationId.slice(0, 8),
+					sessionId: result.sessionId.slice(0, 8),
+					status: result.status,
+					durationMs: createSessionDurationMs,
+					createdSandbox: Boolean(result.sandbox),
+					hasSnapshot: result.hasSnapshot,
+				},
+				"sessions.create.session.created",
+			);
 			if (idempotencyKey && createSessionDurationMs > IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS * 1000) {
-				logger.warn({ latency: true, orgId: organizationId.slice(0, 8), sessionId: result.sessionId.slice(0, 8), durationMs: createSessionDurationMs, inFlightTtlSeconds: IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS }, "sessions.create.idempotency.in_flight_ttl_risk");
+				logger.warn(
+					{
+						latency: true,
+						orgId: organizationId.slice(0, 8),
+						sessionId: result.sessionId.slice(0, 8),
+						durationMs: createSessionDurationMs,
+						inFlightTtlSeconds: IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS,
+					},
+					"sessions.create.idempotency.in_flight_ttl_risk",
+				);
 			}
 
-			logger.info({ sessionId: result.sessionId.slice(0, 8), status: result.status, hasSandbox: Boolean(result.sandbox) }, "Session created");
+			logger.info(
+				{
+					sessionId: result.sessionId.slice(0, 8),
+					status: result.status,
+					hasSandbox: Boolean(result.sandbox),
+				},
+				"Session created",
+			);
 
 			// For new managed prebuilds, kick off setup session
 			if (prebuild.isNew && body.managedPrebuild) {
@@ -250,13 +329,29 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				await storeIdempotencyResponse(idempotencyState.orgId, idempotencyState.key, response);
 			}
 
-			logger.debug({ latency: true, orgId: organizationId.slice(0, 8), sessionId: result.sessionId.slice(0, 8), durationMs: Date.now() - requestStartMs }, "sessions.create.complete");
+			logger.debug(
+				{
+					latency: true,
+					orgId: organizationId.slice(0, 8),
+					sessionId: result.sessionId.slice(0, 8),
+					durationMs: Date.now() - requestStartMs,
+				},
+				"sessions.create.complete",
+			);
 			res.status(201).json(response);
 		} catch (err) {
 			if (idempotencyState) {
 				await clearIdempotencyKey(idempotencyState.orgId, idempotencyState.key);
 			}
-			logger.error({ latency: true, orgId: idempotencyState?.orgId?.slice(0, 8), durationMs: Date.now() - requestStartMs, err }, "sessions.create.error");
+			logger.error(
+				{
+					latency: true,
+					orgId: idempotencyState?.orgId?.slice(0, 8),
+					durationMs: Date.now() - requestStartMs,
+					err,
+				},
+				"sessions.create.error",
+			);
 			next(err);
 		}
 	});

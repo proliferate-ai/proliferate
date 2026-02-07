@@ -7,11 +7,11 @@
 
 import { randomUUID } from "crypto";
 import { encrypt, getEncryptionKey } from "@/lib/crypto";
+import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
 import { prebuilds, repos, secrets, sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
-import { logger } from "@/lib/logger";
 
 const log = logger.child({ handler: "repos-finalize" });
 

@@ -9,10 +9,10 @@
  */
 
 import type { ServerResponse } from "http";
+import { createLogger } from "@proliferate/logger";
 import type { Request, Response } from "express";
 import { Router, type Router as RouterType } from "express";
 import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
-import { createLogger } from "@proliferate/logger";
 import type { HubManager } from "../../hub";
 import type { GatewayEnv } from "../../lib/env";
 import { ApiError, createEnsureSessionReady, createRequireProxyAuth } from "../../middleware";

@@ -179,10 +179,7 @@ async function syncLLMSpend(): Promise<void> {
 						if (result.previousState === "trial" && result.newState === "exhausted") {
 							const activation = await billing.tryActivatePlanAfterTrial(log.team_id);
 							if (activation.activated) {
-								llmLog.info(
-									{ orgId: log.team_id },
-									"Trial auto-activated; skipping termination",
-								);
+								llmLog.info({ orgId: log.team_id }, "Trial auto-activated; skipping termination");
 								continue;
 							}
 						}

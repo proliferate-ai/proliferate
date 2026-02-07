@@ -660,7 +660,9 @@ export async function createCliSessionFull(
 		});
 	} catch (error) {
 		// Non-fatal - log and continue
-		getServicesLogger().child({ module: "cli" }).error({ err: error, prebuildId, repoId }, "Failed to link repo to prebuild");
+		getServicesLogger()
+			.child({ module: "cli" })
+			.error({ err: error, prebuildId, repoId }, "Failed to link repo to prebuild");
 	}
 
 	// 4. Create session with type "cli"

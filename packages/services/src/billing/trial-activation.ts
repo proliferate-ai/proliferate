@@ -12,8 +12,8 @@ import {
 	autumnAttach,
 	autumnGetCustomer,
 } from "@proliferate/shared/billing";
-import { getBillingInfoV2, initializeBillingState, updateAutumnCustomerId } from "../orgs/service";
 import { getServicesLogger } from "../logger";
+import { getBillingInfoV2, initializeBillingState, updateAutumnCustomerId } from "../orgs/service";
 
 export interface TrialActivationResult {
 	activated: boolean;
@@ -44,7 +44,9 @@ export async function tryActivatePlanAfterTrial(orgId: string): Promise<TrialAct
 				return creditsFeature.balance ?? includedCredits;
 			}
 		} catch (err) {
-			getServicesLogger().child({ module: "trial-activation", orgId }).error({ err }, "Failed to fetch customer during trial activation");
+			getServicesLogger()
+				.child({ module: "trial-activation", orgId })
+				.error({ err }, "Failed to fetch customer during trial activation");
 		}
 		return includedCredits;
 	};
@@ -62,7 +64,9 @@ export async function tryActivatePlanAfterTrial(orgId: string): Promise<TrialAct
 			return { activated: true, requiresCheckout: false };
 		}
 	} catch (err) {
-		getServicesLogger().child({ module: "trial-activation", orgId }).warn({ err }, "Failed to pre-check customer products");
+		getServicesLogger()
+			.child({ module: "trial-activation", orgId })
+			.warn({ err }, "Failed to pre-check customer products");
 	}
 
 	try {
@@ -92,7 +96,9 @@ export async function tryActivatePlanAfterTrial(orgId: string): Promise<TrialAct
 			await initializeBillingState(orgId, "active", balance);
 			return { activated: true, requiresCheckout: false };
 		}
-		getServicesLogger().child({ module: "trial-activation", orgId }).error({ err }, "Trial auto-activation failed");
+		getServicesLogger()
+			.child({ module: "trial-activation", orgId })
+			.error({ err }, "Trial auto-activation failed");
 		return { activated: false, requiresCheckout: false };
 	}
 }

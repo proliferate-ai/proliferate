@@ -1,5 +1,5 @@
-import type IORedis from "ioredis";
 import { createLogger } from "@proliferate/logger";
+import type IORedis from "ioredis";
 // @ts-expect-error - redlock types don't resolve properly due to ESM exports
 import Redlock from "redlock";
 import { ensureRedisConnected } from "./redis";

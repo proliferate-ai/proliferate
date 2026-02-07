@@ -132,7 +132,11 @@ async function processEvent(
 	event: PendingBillingEvent,
 	providers?: Map<string, SandboxProvider>,
 ): Promise<void> {
-	const logger = getServicesLogger().child({ module: "outbox", eventId: event.id, orgId: event.organizationId });
+	const logger = getServicesLogger().child({
+		module: "outbox",
+		eventId: event.id,
+		orgId: event.organizationId,
+	});
 	const db = getDb();
 	try {
 		const credits = Number(event.credits);

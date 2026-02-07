@@ -110,7 +110,9 @@ async function processEventForTrigger(
 
 		return { processed: 1, skipped: 0 };
 	} catch (err) {
-		getServicesLogger().child({ module: "trigger-processor", triggerId: trigger.id }).error({ err }, "Failed to create automation run for trigger event");
+		getServicesLogger()
+			.child({ module: "trigger-processor", triggerId: trigger.id })
+			.error({ err }, "Failed to create automation run for trigger event");
 		return { processed: 0, skipped: 1 };
 	}
 }
@@ -140,7 +142,9 @@ async function safeCreateSkippedEvent(
 			skipReason,
 		});
 	} catch (err) {
-		getServicesLogger().child({ module: "trigger-processor", triggerId: trigger.id }).error({ err }, "Failed to create skipped event");
+		getServicesLogger()
+			.child({ module: "trigger-processor", triggerId: trigger.id })
+			.error({ err }, "Failed to create skipped event");
 	}
 }
 

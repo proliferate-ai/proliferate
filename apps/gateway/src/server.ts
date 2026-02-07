@@ -5,8 +5,8 @@
  */
 
 import http from "http";
+import { type Logger, createHttpLogger } from "@proliferate/logger";
 import express, { type Express } from "express";
-import { createHttpLogger, type Logger } from "@proliferate/logger";
 import { mountRoutes, setupWebSocket } from "./api";
 import { startSessionExpiryWorker } from "./expiry/expiry-queue";
 import { HubManager } from "./hub";

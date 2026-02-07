@@ -305,7 +305,10 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			timeoutMs: SANDBOX_TIMEOUT_MS,
 		});
 
-		log.debug({ repoCount: opts.repos.length, snapshotId: opts.snapshotId || "none" }, "Creating session");
+		log.debug(
+			{ repoCount: opts.repos.length, snapshotId: opts.snapshotId || "none" },
+			"Creating session",
+		);
 
 		try {
 			const authStartMs = Date.now();
@@ -664,7 +667,10 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				cloneUrl = repo.repoUrl.replace("https://", `https://x-access-token:${repo.token}@`);
 			}
 
-			log.debug({ repo: repo.workspacePath, index: i + 1, total: opts.repos.length }, "Cloning repo");
+			log.debug(
+				{ repo: repo.workspacePath, index: i + 1, total: opts.repos.length },
+				"Cloning repo",
+			);
 			try {
 				await sandbox.exec([
 					"git",
@@ -840,10 +846,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 	 * - Start services (Postgres, Redis, Mailcatcher)
 	 * - Start Caddy preview proxy
 	 */
-	private async setupAdditionalDependencies(
-		sandbox: Sandbox,
-		log: Logger,
-	): Promise<void> {
+	private async setupAdditionalDependencies(sandbox: Sandbox, log: Logger): Promise<void> {
 		// Start services
 		log.debug("Starting services (async)");
 		await sandbox.exec(["/usr/local/bin/start-services.sh"]);
@@ -1139,7 +1142,10 @@ export class ModalLibmodalProvider implements SandboxProvider {
 	 * Used by the verify tool to upload verification evidence.
 	 */
 	async readFiles(sandboxId: string, folderPath: string): Promise<FileContent[]> {
-		providerLogger.debug({ folderPath, sandboxId: sandboxId.slice(0, 16) }, "Reading files from sandbox");
+		providerLogger.debug(
+			{ folderPath, sandboxId: sandboxId.slice(0, 16) },
+			"Reading files from sandbox",
+		);
 		const startMs = Date.now();
 
 		try {

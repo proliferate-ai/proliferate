@@ -77,7 +77,9 @@ export async function createRepo(input: CreateRepoInput): Promise<CreateRepoResu
 		try {
 			await reposDb.createConnection(repoId, input.integrationId);
 		} catch (error) {
-			getServicesLogger().child({ module: "repos" }).error({ err: error, repoId }, "Failed to create repo_connection");
+			getServicesLogger()
+				.child({ module: "repos" })
+				.error({ err: error, repoId }, "Failed to create repo_connection");
 			// Don't fail - repo was created successfully
 		}
 	}

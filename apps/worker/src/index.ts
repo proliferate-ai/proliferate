@@ -62,7 +62,10 @@ const syncClient = createSyncClient({
 // Create session subscriber for async clients
 // Uses a separate Redis connection for pubsub (ioredis requirement)
 const subscriberRedis = getRedisClient().duplicate();
-const sessionSubscriber = new SessionSubscriber(subscriberRedis, logger.child({ module: "session-subscriber" }));
+const sessionSubscriber = new SessionSubscriber(
+	subscriberRedis,
+	logger.child({ module: "session-subscriber" }),
+);
 
 // Create and setup async clients
 const slackClient = new SlackClient({ syncClient, db }, logger.child({ module: "slack" }));
@@ -126,9 +129,7 @@ const healthServer: Server = createServer((req, res) => {
 		res.end();
 	}
 });
-healthServer.listen(PORT, () =>
-	logger.info({ port: PORT }, "Health check server listening"),
-);
+healthServer.listen(PORT, () => logger.info({ port: PORT }, "Health check server listening"));
 
 // Graceful shutdown
 async function shutdown(): Promise<void> {
