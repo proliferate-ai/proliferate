@@ -18,6 +18,7 @@ import {
 	getDefaultAgentConfig,
 	isValidModelId,
 	parseModelId,
+	resolveSnapshotId,
 } from "@proliferate/shared";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
@@ -177,24 +178,19 @@ export async function createSession(
 		}
 	}
 
-	// Resolve snapshotId: use input snapshot, or fall back to repo snapshot
-	// Repo snapshots are only eligible for Modal provider, non-CLI, single-repo with workspacePath "."
-	let snapshotId = inputSnapshotId;
-	if (!snapshotId && provider.type === "modal" && clientType !== "cli") {
+	// Resolve snapshotId via layering (prebuild snapshot → repo snapshot → null).
+	// Repo snapshots are only eligible for Modal provider, non-CLI sessions.
+	let snapshotId = inputSnapshotId ?? null;
+	if (!snapshotId && provider.type === "modal" && sessionType !== "cli") {
 		try {
 			const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
-			if (prebuildRepoRows.length === 1) {
-				const singleRepo = prebuildRepoRows[0];
-				if (
-					singleRepo.workspacePath === "." &&
-					singleRepo.repo?.repoSnapshotStatus === "ready" &&
-					singleRepo.repo.repoSnapshotId &&
-					(!singleRepo.repo.repoSnapshotProvider ||
-						singleRepo.repo.repoSnapshotProvider === "modal")
-				) {
-					snapshotId = singleRepo.repo.repoSnapshotId;
-					log.info({ repoId: singleRepo.repo.id, snapshotId }, "Using repo snapshot");
-				}
+			snapshotId = resolveSnapshotId({
+				prebuildSnapshotId: null,
+				sandboxProvider: provider.type,
+				prebuildRepos: prebuildRepoRows,
+			});
+			if (snapshotId) {
+				log.info({ snapshotId }, "Using repo snapshot");
 			}
 		} catch (err) {
 			log.warn({ err }, "Failed to resolve repo snapshot (non-fatal)");

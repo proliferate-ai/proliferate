@@ -24,6 +24,7 @@ import {
 	getSetupSystemPrompt,
 	isValidModelId,
 	parseModelId,
+	resolveSnapshotId,
 } from "@proliferate/shared";
 import {
 	generateSessionAPIKey,
@@ -100,21 +101,16 @@ export async function createSessionHandler(
 	}
 
 	// Resolve snapshotId using layering rules:
-	// 1. Prebuild snapshot (explicit session snapshot from pause/resume is already stored on prebuild)
+	// 1. Prebuild snapshot (from setup finalize or manual snapshot)
 	// 2. Repo snapshot (Modal only, single-repo, workspacePath ".")
 	// 3. No snapshot (base image + live clone)
-	let snapshotId = prebuild.snapshotId;
-	if (!snapshotId && prebuildRepos.length === 1) {
-		const singleRepo = prebuildRepos[0];
-		if (
-			singleRepo.workspacePath === "." &&
-			singleRepo.repo?.repoSnapshotStatus === "ready" &&
-			singleRepo.repo.repoSnapshotId &&
-			(!singleRepo.repo.repoSnapshotProvider || singleRepo.repo.repoSnapshotProvider === "modal")
-		) {
-			snapshotId = singleRepo.repo.repoSnapshotId;
-			log.info({ repoId: singleRepo.repo.id, snapshotId }, "Using repo snapshot");
-		}
+	const snapshotId = resolveSnapshotId({
+		prebuildSnapshotId: prebuild.snapshotId,
+		sandboxProvider: prebuildProvider,
+		prebuildRepos,
+	});
+	if (snapshotId && snapshotId !== prebuild.snapshotId) {
+		log.info({ snapshotId }, "Using repo snapshot");
 	}
 
 	// Verify all repos belong to this org
