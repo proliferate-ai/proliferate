@@ -1,4 +1,4 @@
-import { BarChart3, GithubIcon, LinearIcon, SentryIcon, SlackIcon } from "@/components/ui/icons";
+import { GithubIcon, LinearIcon, PostHogIcon, SentryIcon, SlackIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 
 export type Provider =
@@ -37,7 +37,7 @@ export function ProviderIcon({ provider, className, size = "md" }: ProviderIconP
 			return <LinearIcon className={iconClass} />;
 
 		case "posthog":
-			return <BarChart3 className={iconClass} />;
+			return <PostHogIcon className={iconClass} />;
 
 		case "slack":
 			return <SlackIcon className={iconClass} />;
