@@ -112,13 +112,13 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 			billingEnabled,
 			"Required when billing is enabled (NEXT_PUBLIC_BILLING_ENABLED=true or cloud profile)",
 		),
-			BILLING_JWT_SECRET: requiredWhen(
-				billingEnabled,
-				"Required when billing is enabled (NEXT_PUBLIC_BILLING_ENABLED=true or cloud profile)",
-			),
-			CI: optionalBoolean,
-			COMPOSIO_API_KEY: optionalString,
-			COMPOSIO_BASE_URL: optionalString,
+		BILLING_JWT_SECRET: requiredWhen(
+			billingEnabled,
+			"Required when billing is enabled (NEXT_PUBLIC_BILLING_ENABLED=true or cloud profile)",
+		),
+		CI: optionalBoolean,
+		COMPOSIO_API_KEY: optionalString,
+		COMPOSIO_BASE_URL: optionalString,
 		DEFAULT_SANDBOX_PROVIDER: z.enum(["e2b", "modal"]),
 		DEV_USER_ID: optionalString, // Local dev convenience
 		E2B_API_KEY: requiredForProvider(env, "e2b"),
@@ -141,15 +141,15 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 		INTERCOM_SECRET_KEY: optionalString, // Only needed if using Intercom identity verification
 		LLM_PROXY_MASTER_KEY: optionalString, // Only needed if using LLM proxy
 		LLM_PROXY_URL: optionalString, // Only needed if using LLM proxy
-			LLM_PROXY_KEY_DURATION: optionalString, // Only needed if using LLM proxy
-			LLM_PROXY_REQUIRED: optionalBoolean,
-			LLM_PROXY_ADMIN_URL: optionalString,
-			LLM_PROXY_PUBLIC_URL: optionalString,
-			LOG_LEVEL: optionalLogLevel,
-			LOG_PRETTY: optionalBoolean,
-			MODAL_APP_NAME: requiredForProvider(env, "modal"),
-			MODAL_APP_SUFFIX: optionalString, // Optional per-dev suffix (e.g., "pablo" → "proliferate-sandbox-pablo")
-			MODAL_ENDPOINT_URL: optionalString, // Only used in test scripts, not production
+		LLM_PROXY_KEY_DURATION: optionalString, // Only needed if using LLM proxy
+		LLM_PROXY_REQUIRED: optionalBoolean,
+		LLM_PROXY_ADMIN_URL: optionalString,
+		LLM_PROXY_PUBLIC_URL: optionalString,
+		LOG_LEVEL: optionalLogLevel,
+		LOG_PRETTY: optionalBoolean,
+		MODAL_APP_NAME: requiredForProvider(env, "modal"),
+		MODAL_APP_SUFFIX: optionalString, // Optional per-dev suffix (e.g., "pablo" → "proliferate-sandbox-pablo")
+		MODAL_ENDPOINT_URL: optionalString, // Only used in test scripts, not production
 		MODAL_TOKEN_ID: requiredForProvider(env, "modal"),
 		MODAL_TOKEN_SECRET: requiredForProvider(env, "modal"),
 		NANGO_SECRET_KEY: requiredWhen(integrationsEnabled, "Required when integrations are enabled"),
