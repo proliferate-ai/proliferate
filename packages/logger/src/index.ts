@@ -42,6 +42,7 @@ export function createLogger(options: CreateLoggerOptions): Logger {
 				colorize: true,
 				translateTime: "SYS:yyyy-mm-dd HH:MM:ss.l",
 				ignore: "pid,hostname",
+				messageFormat: "{msg}{if durationMs} ({durationMs}ms){end}{if count} (count: {count}){end}",
 				hideObject: true,
 			},
 		};
