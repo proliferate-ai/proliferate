@@ -71,8 +71,8 @@ export async function requestRepoSnapshotBuild(
 	repoId: string,
 	options?: { force?: boolean },
 ): Promise<void> {
-	const queue = getRepoSnapshotBuildQueue();
 	try {
+		const queue = getRepoSnapshotBuildQueue();
 		await queue.add(
 			`repo:${repoId}`,
 			{ repoId, force: options?.force ?? false },
