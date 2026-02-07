@@ -324,12 +324,13 @@ function RunRow({
 
 	return (
 		<>
-			<button
+			<Button
 				type="button"
+				variant="ghost"
 				onClick={onToggle}
 				className={cn(
-					"w-full grid grid-cols-[minmax(0,1fr)_120px_100px_36px_120px_24px] items-center gap-3",
-					"px-4 py-3 border-b border-border last:border-b-0",
+					"w-full h-auto grid grid-cols-[minmax(0,1fr)_120px_100px_36px_120px_24px] items-center gap-3",
+					"px-4 py-3 rounded-none border-b border-border last:border-b-0",
 					"hover:bg-accent transition-colors cursor-pointer text-left",
 					isExpanded && "bg-accent",
 				)}
@@ -383,7 +384,7 @@ function RunRow({
 						isExpanded && "rotate-90",
 					)}
 				/>
-			</button>
+			</Button>
 
 			{/* Expanded Detail Section */}
 			{isExpanded && <RunDetailSection run={run} />}

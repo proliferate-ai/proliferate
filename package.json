@@ -45,7 +45,8 @@
 		"ws": "^8.16.0"
 	},
 	"lint-staged": {
-		"*.{ts,tsx,js,jsx,json,css}": "biome check --write --no-errors-on-unmatched"
+		"*.{ts,tsx,js,jsx,json,css}": "biome check --write --no-errors-on-unmatched",
+		"apps/web/src/**/*.tsx": "eslint --config apps/web/eslint.config.mjs --no-warn-ignored --rule 'max-lines: off' --rule 'max-lines-per-function: off' --max-warnings 0"
 	},
 	"packageManager": "pnpm@8.15.1",
 	"dependencies": {
