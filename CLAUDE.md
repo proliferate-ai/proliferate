@@ -39,7 +39,8 @@ packages/             # shared, services, db, gateway-clients, environment, cli,
 charts/               # Helm chart
 infra/                # pulumi-k8s (EKS), pulumi-k8s-gcp (GKE), legacy ECS
 scripts/              # one-off scripts
-AGENTS.md             # this file
+AGENTS.md             # agent guidelines (Codex, etc.)
+CLAUDE.md             # this file (Claude Code)
 ```
 
 ## Code Style
@@ -96,6 +97,36 @@ ws.sendPrompt(content, userId);
 - oRPC procedures live in `apps/web/src/server/routers/` and are consumed via hooks or direct oRPC client.
 - Drizzle only; no raw SQL unless absolutely necessary.
 - Throw errors, don’t return `{ ok: false }` objects.
+
+## Logging
+
+- Prefer structured logs (JSON) in Node services. Don’t add new `console.*` in `apps/gateway`, `apps/worker`, `apps/trigger-service`, or `packages/services`.
+- Use `@proliferate/logger` (`packages/logger/`) as the default logger:
+
+```ts
+import { createLogger } from "@proliferate/logger";
+
+const logger = createLogger({ service: "gateway" });
+const log = logger.child({ sessionId });
+
+log.info({ userId }, "Client connected");
+log.error({ err }, "Failed to handle prompt");
+```
+
+- Add context via `logger.child({ ... })` (recommended keys: `requestId`, `sessionId`, `orgId`, `userId`, `jobId`).
+- Log errors as `logger.error({ err }, "...")` so stacks/causes serialize consistently.
+- Never log secrets or sensitive payloads. Treat `authorization` headers, cookies, tokens, private keys, `DATABASE_URL`, and user prompt content as sensitive. Redaction helps, but don’t rely on it.
+- Avoid high-cardinality blobs in logs (full request bodies, prompts, huge arrays). Prefer IDs and lengths.
+- Env:
+  - `LOG_LEVEL`: `trace|debug|info|warn|error|fatal|silent` (default `info`)
+  - `LOG_PRETTY`: `true|false` (default `true` in non-production)
+- Express services should use request logging middleware (`pino-http`) via `createHttpLogger()`:
+
+```ts
+import { createHttpLogger } from "@proliferate/logger";
+
+app.use(createHttpLogger({ logger }));
+```
 
 ## Sandboxes
 
