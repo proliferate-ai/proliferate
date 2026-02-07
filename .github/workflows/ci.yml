@@ -146,10 +146,48 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check staging E2E prerequisites
+        id: e2e_prereq
+        run: |
+          if [ ! -d scripts ]; then
+            echo "scripts/ directory not found; skipping staging E2E."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          REQUIRED_VARS=(
+            NEXT_PUBLIC_API_URL
+            NEXT_PUBLIC_APP_URL
+            E2E_AUTH_TOKEN
+            TEST_REPO_ID
+            E2E_GATEWAY_URL
+            E2E_AUTOMATION_ID
+            E2E_PREBUILD_ID
+            E2E_ORG_ID
+          )
+
+          missing=0
+          for v in "${REQUIRED_VARS[@]}"; do
+            if [ -z "${!v}" ]; then
+              echo "Missing required env var: $v"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "Staging E2E secrets not configured; skipping staging E2E."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
       - name: Run tracer bullet
+        if: steps.e2e_prereq.outputs.run == 'true'
         run: pnpm -C scripts exec tsx tracer-bullet.ts
 
       - name: Run automation E2E
+        if: steps.e2e_prereq.outputs.run == 'true'
         run: pnpm -C scripts exec tsx automation-e2e.ts
     env:
       SKIP_ENV_VALIDATION: "true"
