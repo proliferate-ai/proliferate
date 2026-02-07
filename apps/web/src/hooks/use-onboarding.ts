@@ -20,7 +20,9 @@ export function useOnboarding() {
 	return useQuery({
 		...orpc.onboarding.getStatus.queryOptions({ input: undefined }),
 		select: (data): OnboardingState => {
-			const hasReadyPrebuild = data.repos.some((repo) => repo.prebuild_status === "ready");
+			const hasReadyPrebuild = data.repos.some(
+				(repo) => repo.prebuild_status === "ready" || repo.repo_snapshot_status === "ready",
+			);
 			return {
 				...data,
 				hasRepos: data.repos.length > 0,

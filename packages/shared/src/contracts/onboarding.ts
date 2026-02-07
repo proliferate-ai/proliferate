@@ -16,6 +16,7 @@ export const OnboardingRepoSchema = z.object({
 	created_at: z.string().nullable(),
 	prebuild_id: z.string().nullable(),
 	prebuild_status: z.enum(["ready", "pending"]),
+	repo_snapshot_status: z.enum(["building", "ready", "failed"]).nullable(),
 });
 
 export type OnboardingRepo = z.infer<typeof OnboardingRepoSchema>;

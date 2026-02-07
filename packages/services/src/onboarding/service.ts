@@ -57,6 +57,7 @@ export async function getOnboardingStatus(
 			created_at: toIsoString(repo.createdAt),
 			prebuild_id: readyPrebuild?.prebuild?.id || null,
 			prebuild_status: readyPrebuild ? ("ready" as const) : ("pending" as const),
+			repo_snapshot_status: (repo.repoSnapshotStatus as "building" | "ready" | "failed") ?? null,
 		};
 	});
 

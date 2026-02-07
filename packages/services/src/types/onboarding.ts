@@ -15,6 +15,7 @@ export interface RepoWithPrebuildRow {
 	githubUrl: string;
 	defaultBranch: string | null;
 	createdAt: Date | null;
+	repoSnapshotStatus: string | null;
 	prebuildRepos: Array<{
 		prebuild: {
 			id: string;

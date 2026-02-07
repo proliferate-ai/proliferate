@@ -38,7 +38,9 @@ export function EmptyDashboard() {
 		const hasGitHub = integrations.some((i) => i.provider === "github" && i.status === "active");
 		const hasSlack = integrations.some((i) => i.provider === "slack" && i.status === "active");
 		const hasAutomation = (automations ?? []).length > 0;
-		const hasRepoWithSnapshot = (repos ?? []).some((r) => r.prebuildStatus === "ready");
+		const hasRepoWithSnapshot = (repos ?? []).some(
+			(r) => r.prebuildStatus === "ready" || r.repoSnapshotStatus === "ready",
+		);
 
 		let count = 0;
 		if (!hasRepoWithSnapshot) count++;
