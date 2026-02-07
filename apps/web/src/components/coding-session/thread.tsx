@@ -188,12 +188,12 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 			)}
 			onClick={onToggleRecording}
 			disabled={!browserSupportsSpeechRecognition}
-			>
-				<Mic className={cn("h-4 w-4", listening && "animate-pulse")} />
-			</Button>
-			<ThreadPrimitive.If running={false}>
-				{hasAttachments ? (
-					<Button
+		>
+			<Mic className={cn("h-4 w-4", listening && "animate-pulse")} />
+		</Button>
+		<ThreadPrimitive.If running={false}>
+			{hasAttachments ? (
+				<Button
 					size="icon"
 					className="h-8 w-8 rounded-full"
 					onClick={onSendWithAttachments}

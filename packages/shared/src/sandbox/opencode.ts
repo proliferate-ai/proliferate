@@ -95,15 +95,13 @@ export async function waitForOpenCodeReady(
 		try {
 			const response = await fetch(`${tunnelUrl}/session`, {
 				signal: AbortSignal.timeout(5000),
-				});
-				if (response.ok) {
-					log(
-						`[P-LATENCY] Agent ready after ${attempt} attempts (${Date.now() - startTime}ms)`,
-					);
-					return;
-				}
-			} catch {
-				// Not ready yet, retry
+			});
+			if (response.ok) {
+				log(`[P-LATENCY] Agent ready after ${attempt} attempts (${Date.now() - startTime}ms)`);
+				return;
+			}
+		} catch {
+			// Not ready yet, retry
 		}
 		// Exponential backoff: 200ms, 300ms, 450ms, ... up to 2s max
 		const delay = Math.min(200 * 1.5 ** (attempt - 1), 2000);
