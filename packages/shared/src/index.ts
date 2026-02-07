@@ -52,7 +52,11 @@ export interface Message {
 export interface PromptMessage {
 	type: "prompt";
 	content: string;
-	userId: string;
+	/**
+	 * Deprecated: the gateway should derive identity from the authenticated connection.
+	 * This field is ignored server-side when present.
+	 */
+	userId?: string;
 	/** Images as data URIs (e.g., "data:image/png;base64,ABC...") */
 	images?: string[];
 }
@@ -63,7 +67,11 @@ export interface PingMessage {
 
 export interface CancelMessage {
 	type: "cancel";
-	userId: string;
+	/**
+	 * Deprecated: the gateway should derive identity from the authenticated connection.
+	 * This field is ignored server-side when present.
+	 */
+	userId?: string;
 }
 
 export interface GetStatusMessage {

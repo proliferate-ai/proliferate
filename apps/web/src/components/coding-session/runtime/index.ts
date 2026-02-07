@@ -12,7 +12,6 @@ export type { EnvRequest, EnvRequestKey, SessionStatus } from "./types";
 
 interface UseCodingSessionRuntimeOptions {
 	sessionId: string;
-	userId: string;
 	initialPrompt?: string;
 	initialImages?: string[];
 	initialTitle?: string | null;
@@ -25,7 +24,6 @@ interface UseCodingSessionRuntimeOptions {
  */
 export function useCodingSessionRuntime({
 	sessionId,
-	userId,
 	initialPrompt,
 	initialImages,
 	initialTitle,
@@ -72,24 +70,22 @@ export function useCodingSessionRuntime({
 			initialPrompt &&
 			!initialPromptSentRef.current &&
 			messages.length === 0 &&
-			clientType !== "automation"
-		) {
-			initialPromptSentRef.current = true;
-			sendPrompt(
-				initialPrompt,
-				userId,
-				initialImages && initialImages.length > 0 ? initialImages : undefined,
-			);
-		}
-	}, [
-		isInitialized,
-		initialPrompt,
-		initialImages,
-		messages.length,
-		userId,
-		sendPrompt,
-		clientType,
-	]);
+				clientType !== "automation"
+			) {
+				initialPromptSentRef.current = true;
+				sendPrompt(
+					initialPrompt,
+					initialImages && initialImages.length > 0 ? initialImages : undefined,
+				);
+			}
+		}, [
+			isInitialized,
+			initialPrompt,
+			initialImages,
+			messages.length,
+			sendPrompt,
+			clientType,
+		]);
 
 	// Convert messages for assistant-ui
 	const threadMessages = useMemo(() => {
@@ -106,22 +102,22 @@ export function useCodingSessionRuntime({
 				.map((part) => part.text)
 				.join("\n");
 
-			const images = message.content
-				.filter((part): part is { type: "image"; image: string } => part.type === "image")
-				.map((part) => part.image);
+				const images = message.content
+					.filter((part): part is { type: "image"; image: string } => part.type === "image")
+					.map((part) => part.image);
 
-			if (!textContent.trim() && images.length === 0) return;
+				if (!textContent.trim() && images.length === 0) return;
 
-			sendPrompt(textContent, userId, images.length > 0 ? images : undefined);
-		},
-		[isConnected, sendPrompt, userId],
-	);
+				sendPrompt(textContent, images.length > 0 ? images : undefined);
+			},
+			[isConnected, sendPrompt],
+		);
 
 	// onCancel callback for assistant-ui
 	const onCancel = useCallback(async () => {
 		if (!isConnected) return;
-		sendCancel(userId);
-	}, [isConnected, sendCancel, userId]);
+		sendCancel();
+	}, [isConnected, sendCancel]);
 
 	const runtime = useExternalStoreRuntime({
 		messages: threadMessages,

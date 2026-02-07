@@ -41,8 +41,8 @@ interface UseSessionWebSocketReturn {
 	error: string | null;
 	previewUrl: string | null;
 	envRequest: EnvRequest | null;
-	sendPrompt: (content: string, userId: string, images?: string[]) => void;
-	sendCancel: (userId: string) => void;
+	sendPrompt: (content: string, images?: string[]) => void;
+	sendCancel: () => void;
 	clearEnvRequest: () => void;
 }
 
@@ -146,13 +146,13 @@ export function useSessionWebSocket({
 		};
 	}, [token, sessionId, onTitleUpdate, getLastAssistantMessageId]);
 
-	const sendPrompt = useCallback((content: string, userId: string, images?: string[]) => {
-		wsRef.current?.sendPrompt(content, userId, images);
+	const sendPrompt = useCallback((content: string, images?: string[]) => {
+		wsRef.current?.sendPrompt(content, images);
 		setIsRunning(true); // Show cursor immediately while waiting for assistant response
 	}, []);
 
-	const sendCancel = useCallback((userId: string) => {
-		wsRef.current?.sendCancel(userId);
+	const sendCancel = useCallback(() => {
+		wsRef.current?.sendCancel();
 	}, []);
 
 	const clearEnvRequest = useCallback(() => {

@@ -1,4 +1,4 @@
-import { type JWTPayload, SignJWT, decodeJwt, importJWK, jwtVerify } from "jose";
+import { type JWTPayload, SignJWT, jwtVerify } from "jose";
 
 export interface TokenPayload extends JWTPayload {
 	sub: string;
@@ -7,94 +7,22 @@ export interface TokenPayload extends JWTPayload {
 	service?: boolean;
 }
 
-interface JWK {
-	kty: string;
-	crv?: string;
-	x?: string;
-	y?: string;
-	kid?: string;
-	alg?: string;
-	use?: string;
-}
-
-interface JWKS {
-	keys: JWK[];
-}
-
 /**
- * Verify a JWT token (ES256 or HS256)
- * Returns the payload if valid, null if invalid
+ * Verify a JWT token (HS256 only).
  *
- * For ES256 tokens, fetches public keys from the JWKS endpoint.
- * For HS256 tokens, uses the provided secret directly.
+ * Returns the payload if valid, null if invalid.
  */
 export async function verifyToken(token: string, jwtSecret: string): Promise<TokenPayload | null> {
 	try {
-		// First, decode without verification to check the algorithm
-		const decoded = decodeJwt(token);
-
-		if (!decoded.sub) {
-			console.log("No sub in token");
-			return null;
-		}
-
-		// Check if this is an ES256 token (requires JWKS verification)
-		const header = JSON.parse(atob(token.split(".")[0]));
-		console.log("JWT header:", header);
-
-		if (header.alg === "ES256") {
-			// For ES256, we need to verify using the JWKS endpoint
-			const issuer = decoded.iss as string;
-			console.log("JWT issuer:", issuer);
-
-			if (!issuer) {
-				console.log("No issuer in token");
-				return null;
-			}
-
-			// Fetch JWKS directly
-			const jwksUrl = `${issuer}/.well-known/jwks.json`;
-			console.log("Fetching JWKS from:", jwksUrl);
-
-			const jwksResponse = await fetch(jwksUrl);
-			if (!jwksResponse.ok) {
-				console.log("Failed to fetch JWKS:", jwksResponse.status);
-				return null;
-			}
-
-			const jwks = (await jwksResponse.json()) as JWKS;
-			console.log("JWKS keys count:", jwks.keys?.length);
-
-			// Find the key that matches the kid
-			const key = jwks.keys.find((k) => k.kid === header.kid);
-			if (!key) {
-				console.log("No matching key found for kid:", header.kid);
-				return null;
-			}
-
-			// Import the key
-			const publicKey = await importJWK(key, "ES256");
-
-			// Verify the token
-			const { payload } = await jwtVerify(token, publicKey, {
-				issuer,
-				audience: "authenticated",
-			});
-
-			console.log("Token verified successfully, sub:", payload.sub);
-			return payload as TokenPayload;
-		}
-		// For HS256, use the secret directly
 		const secretKey = new TextEncoder().encode(jwtSecret);
-		const { payload } = await jwtVerify(token, secretKey);
+		const { payload } = await jwtVerify(token, secretKey, { algorithms: ["HS256"] });
 
 		if (!payload.sub) {
 			return null;
 		}
 
 		return payload as TokenPayload;
-	} catch (err) {
-		console.error("JWT verification error:", err instanceof Error ? err.message : err);
+	} catch {
 		return null;
 	}
 }

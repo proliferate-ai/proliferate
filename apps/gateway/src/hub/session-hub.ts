@@ -178,15 +178,29 @@ export class SessionHub {
 				return;
 			case "prompt": {
 				const images = this.normalizeImages(message.images);
-				this.handlePrompt(message.content, message.userId, { images, source: "web" }).catch(
-					(err) => {
-						console.error("Failed to handle prompt", err);
-						this.broadcast({
-							type: "error",
-							payload: { message: "Failed to send prompt" },
-						});
-					},
-				);
+				const connection = this.clients.get(ws);
+				if (!connection?.userId) {
+					this.sendError(ws, "Unauthorized");
+					return;
+				}
+				const effectiveUserId = connection.userId;
+
+				// Never trust a client-supplied userId; derive it from the authenticated connection.
+				if (message.userId && message.userId !== effectiveUserId) {
+					this.log("Ignoring mismatched client userId", {
+						connectionId: connection.connectionId,
+						claimedUserId: message.userId,
+						userId: effectiveUserId,
+					});
+				}
+
+				this.handlePrompt(message.content, effectiveUserId, { images, source: "web" }).catch((err) => {
+					console.error("Failed to handle prompt", err);
+					this.broadcast({
+						type: "error",
+						payload: { message: "Failed to send prompt" },
+					});
+				});
 				return;
 			}
 			case "cancel":

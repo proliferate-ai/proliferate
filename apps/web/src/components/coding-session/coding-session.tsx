@@ -44,14 +44,13 @@ export function CodingSession({
 	const { data: sessionData, isLoading: sessionLoading } = useSessionData(sessionId);
 	const { data: repoData } = useRepo(sessionData?.repoId || "");
 
-	const { status, runtime, error, previewUrl, sessionTitle, isMigrating } = useCodingSessionRuntime(
-		{
-			sessionId,
-			userId: authSession?.user?.id || "",
-			initialPrompt,
-			initialImages,
-			initialTitle: sessionData?.title ?? null,
-			clientType: sessionData?.clientType ?? null,
+		const { status, runtime, error, previewUrl, sessionTitle, isMigrating } = useCodingSessionRuntime(
+			{
+				sessionId,
+				initialPrompt,
+				initialImages,
+				initialTitle: sessionData?.title ?? null,
+				clientType: sessionData?.clientType ?? null,
 		},
 	);
 

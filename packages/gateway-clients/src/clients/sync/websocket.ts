@@ -17,9 +17,9 @@ const WebSocketImpl = typeof WebSocket !== "undefined" ? WebSocket : WS;
  */
 export interface SyncWebSocket {
 	/** Send a prompt message */
-	sendPrompt(content: string, userId: string, images?: string[]): void;
+	sendPrompt(content: string, images?: string[]): void;
 	/** Send a cancel message */
-	sendCancel(userId: string): void;
+	sendCancel(): void;
 	/** Send a ping */
 	sendPing(): void;
 	/** Send a save snapshot request */
@@ -90,17 +90,16 @@ export class SyncWebSocketImpl implements SyncWebSocket {
 		return this.ws?.readyState === WebSocketImpl.OPEN;
 	}
 
-	sendPrompt(content: string, userId: string, images?: string[]): void {
+	sendPrompt(content: string, images?: string[]): void {
 		console.log("[SyncClient] sendPrompt:", {
 			contentLen: content.length,
-			userId,
 			imageCount: images?.length,
 		});
-		this.send({ type: "prompt", content, userId, images });
+		this.send({ type: "prompt", content, images });
 	}
 
-	sendCancel(userId: string): void {
-		this.send({ type: "cancel", userId });
+	sendCancel(): void {
+		this.send({ type: "cancel" });
 	}
 
 	sendPing(): void {
