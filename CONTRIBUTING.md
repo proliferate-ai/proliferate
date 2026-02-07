@@ -33,7 +33,8 @@
 
 - Tabs for indentation
 - Semicolons required
-- Run `pnpm lint` before opening a PR
+- A **pre-commit hook** runs automatically after `pnpm install` — it checks staged files with [Biome](https://biomejs.dev/) and auto-fixes formatting/import ordering before each commit
+- Run `pnpm lint` before opening a PR for a full repo-wide check
 
 ## Checks
 
