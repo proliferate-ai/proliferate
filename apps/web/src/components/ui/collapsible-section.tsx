@@ -39,7 +39,12 @@ export function CollapsibleSection({
 					<div
 						className="ml-auto flex items-center opacity-0 group-hover/header:opacity-100 transition-opacity"
 						onClick={(e) => e.stopPropagation()}
-						onKeyDown={(e) => e.stopPropagation()}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+							}
+							e.stopPropagation();
+						}}
 					>
 						{actions}
 					</div>

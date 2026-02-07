@@ -219,9 +219,7 @@ export function ConfigurationGroup({
 							/>
 						))
 					) : (
-						<div className="pl-7 pr-3 py-1.5 text-xs text-muted-foreground/60">
-							No sessions
-						</div>
+						<div className="pl-7 pr-3 py-1.5 text-xs text-muted-foreground/60">No sessions</div>
 					)}
 				</div>
 			</div>
