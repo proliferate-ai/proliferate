@@ -1,6 +1,9 @@
 import { requireAuth } from "@/lib/auth-helpers";
+import { logger } from "@/lib/logger";
 import { SignJWT } from "jose";
 import { NextResponse } from "next/server";
+
+const log = logger.child({ route: "auth/ws-token" });
 
 const JWT_SECRET = process.env.GATEWAY_JWT_SECRET;
 const TOKEN_LIFETIME = "1h";
@@ -18,7 +21,7 @@ export async function GET() {
 	}
 
 	if (!JWT_SECRET) {
-		console.error("[ws-token] Missing GATEWAY_JWT_SECRET");
+		log.error("Missing GATEWAY_JWT_SECRET");
 		return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
 	}
 

@@ -6,8 +6,11 @@
 
 import { requireAuth } from "@/lib/auth-helpers";
 import { getOrgBillingStatus, isBillingEnabled } from "@/lib/billing";
+import { logger } from "@/lib/logger";
 import { billing } from "@proliferate/services";
 import { NextResponse } from "next/server";
+
+const log = logger.child({ route: "billing/usage" });
 
 export async function GET() {
 	const authResult = await requireAuth();
@@ -47,7 +50,7 @@ export async function GET() {
 			new Date(new Date().getFullYear(), new Date().getMonth(), 1),
 		);
 	} catch (error) {
-		console.error("[Billing] Failed to fetch events:", error);
+		log.error({ err: error }, "Failed to fetch events");
 	}
 
 	// Calculate breakdown

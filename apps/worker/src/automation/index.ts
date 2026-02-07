@@ -5,6 +5,7 @@
 import { env } from "@proliferate/environment/server";
 import { createSyncClient } from "@proliferate/gateway-clients";
 import type { SyncClient } from "@proliferate/gateway-clients";
+import type { Logger } from "@proliferate/logger";
 import {
 	createAutomationEnrichQueue,
 	createAutomationEnrichWorker,
@@ -30,7 +31,7 @@ interface AutomationWorkers {
 	finalizerInterval: NodeJS.Timeout;
 }
 
-export function startAutomationWorkers(): AutomationWorkers {
+export function startAutomationWorkers(logger: Logger): AutomationWorkers {
 	const gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;
 	const serviceToken = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
 	if (!gatewayUrl || !serviceToken) {
@@ -57,17 +58,17 @@ export function startAutomationWorkers(): AutomationWorkers {
 
 	const outboxInterval = setInterval(() => {
 		dispatchOutbox(enrichQueue, executeQueue).catch((err) => {
-			console.error("[AutomationOutbox] Dispatch failed:", err);
+			logger.error({ err }, "Outbox dispatch failed");
 		});
 	}, OUTBOX_POLL_INTERVAL_MS);
 
 	const finalizerInterval = setInterval(() => {
-		finalizeRuns(syncClient).catch((err) => {
-			console.error("[AutomationFinalizer] Tick failed:", err);
+		finalizeRuns(syncClient, logger).catch((err) => {
+			logger.error({ err }, "Finalizer tick failed");
 		});
 	}, FINALIZER_INTERVAL_MS);
 
-	console.log("[Automation] Workers started: enrich, execute, outbox, finalizer");
+	logger.info("Workers started: enrich, execute, outbox, finalizer");
 
 	return { enrichWorker, executeWorker, outboxInterval, finalizerInterval };
 }
@@ -188,7 +189,7 @@ async function handleExecute(runId: string, syncClient: SyncClient): Promise<voi
 	}
 }
 
-async function finalizeRuns(syncClient: SyncClient): Promise<void> {
+async function finalizeRuns(syncClient: SyncClient, logger: Logger): Promise<void> {
 	const candidates = await runs.listStaleRunningRuns({
 		limit: 50,
 		inactivityMs: INACTIVITY_MS,
@@ -247,9 +248,9 @@ async function finalizeRuns(syncClient: SyncClient): Promise<void> {
 				});
 			}
 		} catch (err) {
-			console.error(
-				`[AutomationFinalizer] Failed to finalize run ${run.id}:`,
-				err instanceof Error ? err.message : err,
+			logger.error(
+				{ err, runId: run.id },
+				"Failed to finalize run",
 			);
 		}
 	}

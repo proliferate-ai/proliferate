@@ -9,6 +9,9 @@ import { ORPCError } from "@orpc/server";
 import { sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ handler: "sessions-snapshot" });
 
 interface SnapshotSessionHandlerInput {
 	sessionId: string;
@@ -38,24 +41,22 @@ export async function snapshotSessionHandler(
 	// Take snapshot via provider
 	try {
 		const startTime = Date.now();
-		console.log(`[Timing] Snapshot ${sessionId.slice(0, 8)} started`);
+		log.info({ sessionId }, "Snapshot started");
 
 		const providerType = session.sandboxProvider as SandboxProviderType | undefined;
 		const provider = getSandboxProvider(providerType);
 		const result = await provider.snapshot(sessionId, session.sandboxId);
 		const providerMs = Date.now() - startTime;
-		console.log(`[Timing] +${providerMs}ms ${provider.type} provider.snapshot complete`);
+		log.info({ sessionId, providerMs, providerType: provider.type }, "Provider snapshot complete");
 
 		// Update session with snapshot_id
 		await sessions.updateSession(sessionId, { snapshotId: result.snapshotId });
 		const totalMs = Date.now() - startTime;
-		console.log(
-			`[Timing] +${totalMs}ms snapshot complete (provider: ${providerMs}ms, db: ${totalMs - providerMs}ms)`,
-		);
+		log.info({ sessionId, totalMs, providerMs, dbMs: totalMs - providerMs }, "Snapshot complete");
 
 		return { snapshot_id: result.snapshotId };
 	} catch (err) {
-		console.error("Snapshot error:", err);
+		log.error({ err, sessionId }, "Snapshot error");
 		throw new ORPCError("INTERNAL_SERVER_ERROR", {
 			message: err instanceof Error ? err.message : "Failed to create snapshot",
 		});

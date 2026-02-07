@@ -15,8 +15,11 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Storage } from "@google-cloud/storage";
+import { createLogger } from "@proliferate/logger";
 import type { FileContent } from "@proliferate/shared";
 import type { GatewayEnv } from "./env";
+
+const logger = createLogger({ service: "gateway" }).child({ module: "s3" });
 
 const CONTENT_TYPES: Record<string, string> = {
 	".png": "image/png",
@@ -111,7 +114,7 @@ export async function uploadVerificationFiles(
 				await bucket.file(key).save(Buffer.from(file.data), { contentType });
 				uploadedCount++;
 			} catch (err) {
-				console.error(`[GCS] Failed to upload ${file.path}:`, err);
+				logger.error({ err, path: file.path }, "Failed to upload file to GCS");
 			}
 		}
 
@@ -148,7 +151,7 @@ export async function uploadVerificationFiles(
 			);
 			uploadedCount++;
 		} catch (err) {
-			console.error(`[S3] Failed to upload ${file.path}:`, err);
+			logger.error({ err, path: file.path }, "Failed to upload file to S3");
 			// Continue uploading other files
 		}
 	}

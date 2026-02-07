@@ -7,8 +7,11 @@
  * - CLI device-scoped prebuild find/create
  */
 
+import { createLogger } from "@proliferate/logger";
 import { cli, prebuilds } from "@proliferate/services";
 import type { SandboxProvider } from "@proliferate/shared";
+
+const logger = createLogger({ service: "gateway" }).child({ module: "prebuild-resolver" });
 
 export interface ResolvedPrebuild {
 	id: string;
@@ -265,7 +268,7 @@ async function resolveCli(
 			workspacePath: ".",
 		});
 	} catch (err) {
-		console.error("Failed to link repo to prebuild:", err);
+		logger.error({ err }, "Failed to link repo to prebuild");
 		// Non-fatal
 	}
 

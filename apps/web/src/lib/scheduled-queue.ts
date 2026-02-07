@@ -5,7 +5,10 @@
  * Used to manage cron jobs for scheduled triggers.
  */
 
+import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
+
+const log = logger.child({ module: "scheduled-queue" });
 import {
 	type AddScheduledJobResult,
 	type Queue,
@@ -23,7 +26,7 @@ let scheduledQueue: Queue<ScheduledJob> | null = null;
  */
 function getScheduledQueue(): Queue<ScheduledJob> | null {
 	if (!env.REDIS_URL) {
-		console.warn("[ScheduledQueue] REDIS_URL not configured, scheduled triggers will not work");
+		log.warn("REDIS_URL not configured, scheduled triggers will not work");
 		return null;
 	}
 
@@ -44,7 +47,7 @@ export async function addScheduledTriggerJob(
 ): Promise<AddScheduledJobResult | null> {
 	const queue = getScheduledQueue();
 	if (!queue) {
-		console.warn("[ScheduledQueue] Queue not available, skipping job creation");
+		log.warn("Queue not available, skipping job creation");
 		return null;
 	}
 
@@ -57,7 +60,7 @@ export async function addScheduledTriggerJob(
 export async function removeScheduledTriggerJob(repeatJobKey: string): Promise<void> {
 	const queue = getScheduledQueue();
 	if (!queue) {
-		console.warn("[ScheduledQueue] Queue not available, skipping job removal");
+		log.warn("Queue not available, skipping job removal");
 		return;
 	}
 

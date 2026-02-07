@@ -1,8 +1,11 @@
 import { encrypt, getEncryptionKey } from "@/lib/crypto";
+import { logger } from "@/lib/logger";
 import { exchangeCodeForToken } from "@/lib/slack";
 import { env } from "@proliferate/environment/server";
 import { integrations } from "@proliferate/services";
 import { NextResponse } from "next/server";
+
+const log = logger.child({ handler: "slack-oauth-callback" });
 
 export async function GET(request: Request) {
 	const { searchParams } = new URL(request.url);
@@ -15,7 +18,7 @@ export async function GET(request: Request) {
 
 	// Handle OAuth errors from Slack
 	if (error) {
-		console.error("Slack OAuth error:", error);
+		log.error({ error }, "Slack OAuth error");
 		return NextResponse.redirect(`${settingsUrl}?error=slack_oauth_denied`);
 	}
 
@@ -52,7 +55,7 @@ export async function GET(request: Request) {
 	const tokenResponse = await exchangeCodeForToken(code);
 
 	if (!tokenResponse.ok) {
-		console.error("Slack token exchange failed:", tokenResponse.error);
+		log.error({ error: tokenResponse.error }, "Slack token exchange failed");
 		return NextResponse.redirect(`${redirectBase}?error=slack_oauth_token_failed`);
 	}
 
@@ -71,12 +74,13 @@ export async function GET(request: Request) {
 			scopes: tokenResponse.scope.split(","),
 		});
 	} catch (dbError) {
-		console.error("Failed to save Slack installation:", dbError);
+		log.error({ err: dbError }, "Failed to save Slack installation");
 		return NextResponse.redirect(`${redirectBase}?error=slack_db_error`);
 	}
 
-	console.log(
-		`Slack installation complete for team ${tokenResponse.team.id} (${tokenResponse.team.name})`,
+	log.info(
+		{ teamId: tokenResponse.team.id, teamName: tokenResponse.team.name },
+		"Slack installation complete",
 	);
 
 	return NextResponse.redirect(`${redirectBase}?success=slack&tab=connections`);

@@ -6,8 +6,11 @@
  */
 
 import { requireAuth } from "@/lib/auth-helpers";
+import { logger } from "@/lib/logger";
 import { orgs } from "@proliferate/services";
 import { NextResponse } from "next/server";
+
+const log = logger.child({ route: "onboarding/mark-complete" });
 
 export async function POST() {
 	const authResult = await requireAuth();
@@ -23,7 +26,7 @@ export async function POST() {
 	try {
 		await orgs.markOnboardingComplete(orgId, true);
 	} catch (error) {
-		console.error("[Onboarding] Failed to mark complete:", error);
+		log.error({ err: error }, "Failed to mark onboarding complete");
 		return NextResponse.json({ error: "Failed to complete onboarding" }, { status: 500 });
 	}
 

@@ -7,6 +7,9 @@
 
 import { randomUUID } from "crypto";
 import { checkCanStartSession } from "@/lib/billing";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ handler: "sessions-create" });
 import { getSessionGatewayUrl } from "@/lib/gateway";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "@/lib/github";
 import { ORPCError } from "@orpc/server";
@@ -96,7 +99,7 @@ export async function createSessionHandler(
 	try {
 		prebuildRepos = await prebuilds.getPrebuildReposWithDetails(prebuildId);
 	} catch (err) {
-		console.error("Failed to fetch prebuild repos:", err);
+		log.error({ err }, "Failed to fetch prebuild repos");
 		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to fetch prebuild repos" });
 	}
 
@@ -178,7 +181,7 @@ export async function createSessionHandler(
 			await integrations.markRepoOrphaned(targetRepoId);
 			return "";
 		} catch (err) {
-			console.warn(`Failed to get GitHub token for repo ${targetRepoId}:`, err);
+			log.warn({ err, repoId: targetRepoId }, "Failed to get GitHub token for repo");
 			return "";
 		}
 	}
@@ -203,7 +206,7 @@ export async function createSessionHandler(
 	const sessionId = randomUUID();
 	const doUrl = getSessionGatewayUrl(sessionId);
 	const startTime = Date.now();
-	console.log(`[Timing] Session ${sessionId.slice(0, 8)} creation started`);
+	log.info({ sessionId, shortId: sessionId.slice(0, 8) }, "Session creation started");
 
 	// Create sandbox via provider
 	const providerType = prebuildProvider as SandboxProviderType | undefined;
@@ -230,10 +233,10 @@ export async function createSessionHandler(
 			snapshotId,
 		});
 	} catch (err) {
-		console.error("Failed to create session:", err);
+		log.error({ err }, "Failed to create session");
 		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create session" });
 	}
-	console.log(`[Timing] +${Date.now() - startTime}ms DB insert complete`);
+	log.info({ durationMs: Date.now() - startTime }, "DB insert complete");
 
 	// Prepare environment variables for sandbox (shared logic with gateway)
 	const repoIds = reposToClone.map((r) => r.repoId);
@@ -249,19 +252,17 @@ export async function createSessionHandler(
 				env.LLM_PROXY_REQUIRED === ("true" as unknown as boolean),
 		});
 		envVars = envResult.envVars;
-		console.log(
-			`[Session] LLM proxy config: url=${
-				envResult.usesProxy ? "SET" : "NOT SET"
-			}, required=${env.LLM_PROXY_REQUIRED}`,
+		log.info(
+			{ usesProxy: envResult.usesProxy, proxyRequired: env.LLM_PROXY_REQUIRED },
+			"LLM proxy config",
 		);
 		if (envResult.usesProxy) {
-			console.log(`[Session] LLM proxy enabled: ${env.LLM_PROXY_URL}`);
+			log.info("LLM proxy enabled");
 		} else {
 			const hasDirectKey = !!envVars.ANTHROPIC_API_KEY;
-			console.log(
-				`[Session] WARNING: LLM proxy not configured, using direct API key: ${
-					hasDirectKey ? "SET" : "NOT SET"
-				}`,
+			log.warn(
+				{ hasDirectKey },
+				"LLM proxy not configured, using direct API key",
 			);
 		}
 	} catch (err) {
@@ -276,11 +277,11 @@ export async function createSessionHandler(
 	let warning: string | null = null;
 
 	try {
-		console.log(`[Timing] +${Date.now() - startTime}ms calling ${provider.type} provider`);
+		log.info({ durationMs: Date.now() - startTime, provider: provider.type }, "Calling sandbox provider");
 		const providerStartTime = Date.now();
 
-		console.log(`[Session] Using model: ${agentConfig.modelId}`);
-		console.log(`[Session] Cloning ${repoSpecs.length} repo(s)`);
+		log.info({ modelId: agentConfig.modelId }, "Using model");
+		log.info({ repoCount: repoSpecs.length }, "Cloning repos");
 		const result = await provider.createSandbox({
 			sessionId,
 			repos: repoSpecs,
@@ -294,8 +295,9 @@ export async function createSessionHandler(
 		tunnelUrl = result.tunnelUrl;
 		previewUrl = result.previewUrl;
 		sandboxId = result.sandboxId;
-		console.log(
-			`[Timing] +${Date.now() - startTime}ms ${provider.type} returned (${Date.now() - providerStartTime}ms for provider)`,
+		log.info(
+			{ durationMs: Date.now() - startTime, providerDurationMs: Date.now() - providerStartTime, provider: provider.type },
+			"Provider returned",
 		);
 
 		// Update session with sandbox info
@@ -306,7 +308,7 @@ export async function createSessionHandler(
 			previewTunnelUrl: previewUrl,
 			codingAgentSessionId: null,
 		});
-		console.log(`[Timing] +${Date.now() - startTime}ms session status updated to running`);
+		log.info({ durationMs: Date.now() - startTime }, "Session status updated to running");
 
 		// For setup sessions: take initial snapshot async (don't block)
 		if (sessionType === "setup" && sandboxId && !snapshotId) {
@@ -321,33 +323,28 @@ export async function createSessionHandler(
 					);
 
 					if (updated) {
-						console.log(
-							`[Session] Initial snapshot saved for prebuild ${prebuildId.slice(0, 8)} in ${Date.now() - snapshotStartTime}ms`,
+						log.info(
+							{ prebuildId, durationMs: Date.now() - snapshotStartTime },
+							"Initial snapshot saved for prebuild",
 						);
 					}
 				})
 				.catch((err) => {
-					console.warn("[Session] Failed to take initial snapshot (non-fatal):", err);
+					log.warn({ err }, "Failed to take initial snapshot (non-fatal)");
 				});
 		}
 	} catch (err) {
-		console.error("Sandbox provider error:", err);
+		log.error({ err }, "Sandbox provider error");
 
 		if (err instanceof Error) {
-			console.error("Error message:", err.message);
-			console.error("Stack trace:", err.stack);
-			if (Object.keys(err).length > 0) {
-				console.error("Error fields:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
-			}
 			warning = `Sandbox creation failed: ${err.message}`;
 		} else {
-			console.error("Non-Error thrown:", err);
+			log.error({ thrown: err }, "Non-Error thrown from sandbox provider");
 			warning = `Sandbox creation failed: ${typeof err === "string" ? err : "Unknown error"}`;
 		}
 	}
 
-	console.log("returning response");
-	console.log({ sessionId, doUrl, tunnelUrl, previewUrl, sandboxId, warning });
+	log.info({ sessionId, doUrl, tunnelUrl, previewUrl, sandboxId, warning }, "Returning response");
 
 	return { sessionId, doUrl, tunnelUrl, previewUrl, sandboxId, warning };
 }

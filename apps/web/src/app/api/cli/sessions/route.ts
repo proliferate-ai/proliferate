@@ -1,9 +1,12 @@
 import { requireAuth } from "@/lib/auth-helpers";
 import { GATEWAY_URL } from "@/lib/gateway";
+import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
 import { createSyncClient } from "@proliferate/gateway-clients";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
+
+const log = logger.child({ route: "cli/sessions" });
 
 const SERVICE_TOKEN = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
 
@@ -79,7 +82,7 @@ export async function POST(request: Request) {
 			hasSnapshot: result.hasSnapshot,
 		});
 	} catch (err) {
-		console.error("Failed to create CLI session:", err);
+		log.error({ err }, "Failed to create CLI session");
 		const message = err instanceof Error ? err.message : "Unknown error";
 		return NextResponse.json({ error: message }, { status: 500 });
 	}

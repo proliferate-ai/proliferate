@@ -15,6 +15,8 @@ import { getDb } from "@proliferate/db";
 import { getEnvStatus } from "@proliferate/environment";
 import { env } from "@proliferate/environment/server";
 import { createSyncClient } from "@proliferate/gateway-clients";
+import { createLogger } from "@proliferate/logger";
+import type { Logger } from "@proliferate/logger";
 import {
 	SLACK_MESSAGE_JOB_OPTIONS,
 	SLACK_RECEIVER_JOB_OPTIONS,
@@ -22,22 +24,30 @@ import {
 	getConnectionOptions,
 	getRedisClient,
 } from "@proliferate/queue";
+import { setServicesLogger } from "@proliferate/services/logger";
+import { setSharedLogger } from "@proliferate/shared/logger";
 import { startAutomationWorkers, stopAutomationWorkers } from "./automation";
 import { isBillingWorkerHealthy, startBillingWorker, stopBillingWorker } from "./billing";
 import { SessionSubscriber } from "./pubsub";
 import { SlackClient } from "./slack";
 
+// Create root logger
+const logger: Logger = createLogger({ service: "worker" });
+
+// Inject logger into shared packages
+setServicesLogger(logger.child({ module: "services" }));
+setSharedLogger(logger.child({ module: "shared" }));
+
 // Environment variables
 const GATEWAY_URL = env.NEXT_PUBLIC_GATEWAY_URL;
 const SERVICE_TO_SERVICE_AUTH_TOKEN = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
 
-console.log("[Worker] Starting worker service...");
+logger.info("Starting worker service");
 const status = getEnvStatus();
 if (status.missing.length > 0) {
-	console.warn(
-		`[Worker] Missing required environment variables (${status.profile}): ${status.missing
-			.map((item) => item.key)
-			.join(", ")}`,
+	logger.warn(
+		{ profile: status.profile, missingKeys: status.missing.map((item) => item.key) },
+		"Missing required environment variables",
 	);
 }
 
@@ -52,10 +62,10 @@ const syncClient = createSyncClient({
 // Create session subscriber for async clients
 // Uses a separate Redis connection for pubsub (ioredis requirement)
 const subscriberRedis = getRedisClient().duplicate();
-const sessionSubscriber = new SessionSubscriber(subscriberRedis);
+const sessionSubscriber = new SessionSubscriber(subscriberRedis, logger.child({ module: "session-subscriber" }));
 
 // Create and setup async clients
-const slackClient = new SlackClient({ syncClient, db });
+const slackClient = new SlackClient({ syncClient, db }, logger.child({ module: "slack" }));
 slackClient.setup({
 	connection: getConnectionOptions(),
 	inboundConcurrency: 5,
@@ -71,26 +81,29 @@ sessionSubscriber.registerClient(slackClient);
 // Start billing worker (interval-based, not queue-based)
 const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
 if (billingEnabled) {
-	startBillingWorker();
+	startBillingWorker(logger.child({ module: "billing" }));
 } else {
-	console.log("[Worker] Billing disabled - skipping billing worker startup");
+	logger.info("Billing disabled - skipping billing worker startup");
 }
 
-const automationWorkers = startAutomationWorkers();
+const automationWorkers = startAutomationWorkers(logger.child({ module: "automation" }));
 
-console.log("[Worker] Workers started:");
-console.log("  - Slack Client (inbound: 5, receiver: 10)");
-if (billingEnabled) {
-	console.log("  - Billing Worker (interval-based)");
-}
-console.log("  - Automation Workers (enrich, execute, outbox, finalizer)");
+logger.info(
+	{
+		slackInbound: 5,
+		slackReceiver: 10,
+		billingEnabled,
+		automationWorkers: ["enrich", "execute", "outbox", "finalizer"],
+	},
+	"Workers started",
+);
 
 // Start the subscriber
 sessionSubscriber.start().catch((err) => {
-	console.error("[Worker] Failed to start session subscriber:", err);
+	logger.error({ err }, "Failed to start session subscriber");
 });
 
-console.log("[Worker] Session subscriber started");
+logger.info("Session subscriber started");
 
 // Health check HTTP server for container orchestration
 const PORT = env.WORKER_PORT;
@@ -114,12 +127,12 @@ const healthServer: Server = createServer((req, res) => {
 	}
 });
 healthServer.listen(PORT, () =>
-	console.log(`[Worker] Health check server listening on port ${PORT}`),
+	logger.info({ port: PORT }, "Health check server listening"),
 );
 
 // Graceful shutdown
 async function shutdown(): Promise<void> {
-	console.log("[Worker] Shutting down...");
+	logger.info("Shutting down");
 
 	// Close health check server
 	await new Promise<void>((resolve) => healthServer.close(() => resolve()));
@@ -138,7 +151,7 @@ async function shutdown(): Promise<void> {
 	// Close Redis client
 	await closeRedisClient();
 
-	console.log("[Worker] Shutdown complete");
+	logger.info("Shutdown complete");
 	process.exit(0);
 }
 

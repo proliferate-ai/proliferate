@@ -25,7 +25,10 @@ import {
 	SlackStatusSchema,
 } from "@proliferate/shared";
 import { z } from "zod";
+import { logger } from "@/lib/logger";
 import { orgProcedure } from "./middleware";
+
+const log = logger.child({ handler: "integrations" });
 
 const GITHUB_APP_PROVIDER = "github-app";
 
@@ -43,7 +46,7 @@ function handleNangoError(err: unknown, operation: string): never {
 	const axiosResponse = (err as { response?: { status?: number; data?: unknown } }).response;
 	if (axiosResponse) {
 		const { status, data } = axiosResponse;
-		console.error(`[Nango ${operation}] HTTP ${status}`, JSON.stringify(data, null, 2));
+		log.error({ status, data, operation }, "Nango API error");
 		const message =
 			(typeof data === "object" &&
 			data !== null &&
@@ -706,7 +709,7 @@ export const integrationsRouter = {
 				const botToken = decrypt(installation.encryptedBotToken, getEncryptionKey());
 				await revokeToken(botToken);
 			} catch (err) {
-				console.error("Failed to revoke Slack token:", err);
+				log.error({ err }, "Failed to revoke Slack token");
 				// Continue with local revocation even if Slack API fails
 			}
 

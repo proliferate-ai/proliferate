@@ -6,7 +6,10 @@
  */
 
 import { requireAuth } from "@/lib/auth-helpers";
+import { logger } from "@/lib/logger";
 import { orgs } from "@proliferate/services";
+
+const log = logger.child({ route: "billing" });
 import {
 	AUTUMN_FEATURES,
 	type BillingState,
@@ -32,7 +35,7 @@ export async function GET() {
 	// Get organization details with billing settings
 	const org = await orgs.getBillingInfoV2(orgId);
 	if (!org) {
-		console.error("[billing] Org lookup failed");
+		log.error("Org lookup failed");
 		return NextResponse.json({ error: "Organization not found" }, { status: 404 });
 	}
 
@@ -42,7 +45,7 @@ export async function GET() {
 		try {
 			autumnCustomer = await autumnGetCustomer(org.autumnCustomerId);
 		} catch (err) {
-			console.error("[billing] Failed to fetch Autumn customer:", err);
+			log.error({ err }, "Failed to fetch Autumn customer");
 			// Continue without Autumn data - show defaults
 		}
 	}

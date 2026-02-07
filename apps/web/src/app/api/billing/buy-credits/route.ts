@@ -7,11 +7,14 @@
 
 import { requireAuth } from "@/lib/auth-helpers";
 import { isBillingEnabled } from "@/lib/billing";
+import { logger } from "@/lib/logger";
 import { getUserOrgRole } from "@/lib/permissions";
 import { env } from "@proliferate/environment/server";
 import { orgs } from "@proliferate/services";
 import { TOP_UP_PRODUCT, autumnAttach } from "@proliferate/shared/billing";
 import { NextResponse } from "next/server";
+
+const log = logger.child({ route: "billing/buy-credits" });
 
 export async function POST() {
 	const authResult = await requireAuth();
@@ -81,7 +84,7 @@ export async function POST() {
 			credits: TOP_UP_PRODUCT.credits,
 		});
 	} catch (err) {
-		console.error("[BuyCredits] Failed:", err);
+		log.error({ err }, "Failed to process purchase");
 		return NextResponse.json({ error: "Failed to process purchase" }, { status: 500 });
 	}
 }

@@ -11,6 +11,8 @@ export const verifyToolHandler: ToolHandler = {
 	tools: ["verify"],
 
 	async handle(ctx: HandlerContext, _toolName: string, result: string): Promise<void> {
+		const logger = ctx.logger.child({ handler: "verify" });
+
 		// Parse the result to get the S3 key prefix
 		let key: string;
 		try {
@@ -27,14 +29,14 @@ export const verifyToolHandler: ToolHandler = {
 			return;
 		}
 
-		console.log(`[SlackHandler:verify] Fetching files for key: ${key}`);
+		logger.info({ key }, "Fetching files for key");
 
 		// Fetch file list from gateway
 		let files: VerificationFile[];
 		try {
 			files = await ctx.syncClient.tools.verification.list(ctx.sessionId, { prefix: key });
 		} catch (err) {
-			console.error("[SlackHandler:verify] Failed to list files:", err);
+			logger.error({ err }, "Failed to list files");
 			await ctx.slackClient.postMessage("Verification complete (unable to load previews)");
 			return;
 		}
@@ -56,7 +58,7 @@ export const verifyToolHandler: ToolHandler = {
 
 		// Upload media files to Slack in parallel, batched into a single message
 		const filesToUpload = mediaFiles.slice(0, 5);
-		console.log(`[SlackHandler:verify] Uploading ${filesToUpload.length} media files`);
+		logger.info({ count: filesToUpload.length }, "Uploading media files");
 
 		// Fetch all files from gateway in parallel
 		const fileContents = await Promise.all(
@@ -68,7 +70,7 @@ export const verifyToolHandler: ToolHandler = {
 					);
 					return { filename: file.name, content: data, contentType };
 				} catch (err) {
-					console.error(`[SlackHandler:verify] Failed to fetch ${file.name}:`, err);
+					logger.error({ err, filename: file.name }, "Failed to fetch file");
 					return null;
 				}
 			}),
@@ -81,7 +83,7 @@ export const verifyToolHandler: ToolHandler = {
 		}>;
 
 		const uploaded = await ctx.slackClient.uploadFiles(validFiles);
-		console.log(`[SlackHandler:verify] Uploaded ${uploaded}/${filesToUpload.length} files`);
+		logger.info({ uploaded, total: filesToUpload.length }, "Uploaded files");
 
 		// Build summary
 		const summaryParts: string[] = [];

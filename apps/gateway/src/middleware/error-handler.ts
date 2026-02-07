@@ -4,7 +4,10 @@
  * Consistent error responses across all routes.
  */
 
+import { createLogger } from "@proliferate/logger";
 import type { ErrorRequestHandler } from "express";
+
+const logger = createLogger({ service: "gateway" }).child({ module: "error-handler" });
 
 /**
  * API error with status code and optional details
@@ -32,6 +35,6 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 		return;
 	}
 
-	console.error("[Gateway] Unhandled error:", err);
+	logger.error({ err }, "Unhandled error");
 	res.status(500).json({ error: "Internal server error" });
 };

@@ -5,6 +5,7 @@
  * Handles tool interception and state tracking.
  */
 
+import { createLogger, type Logger } from "@proliferate/logger";
 import type {
 	Message,
 	ServerMessage,
@@ -49,12 +50,14 @@ export class EventProcessor {
 	private readonly toolStates = new Map<string, ToolState>();
 	private readonly sentToolEvents = new Set<string>();
 	private readonly interceptedTools: Set<string>;
+	private readonly logger: Logger;
 
 	constructor(
 		private readonly callbacks: EventProcessorCallbacks,
 		interceptedToolNames: string[],
 	) {
 		this.interceptedTools = new Set(interceptedToolNames);
+		this.logger = createLogger({ service: "gateway" }).child({ module: "event-processor" });
 	}
 
 	/**
@@ -83,7 +86,7 @@ export class EventProcessor {
 					return;
 			}
 		} catch (err) {
-			console.error("[EventProcessor] Error processing event:", event.type, err);
+			this.logger.error({ err, eventType: event.type }, "Error processing event");
 		}
 	}
 
@@ -149,12 +152,12 @@ export class EventProcessor {
 
 		// Validate required fields exist
 		if (!part || !part.id || !part.messageID || !part.type) {
-			console.warn("[EventProcessor] Invalid part update - missing required fields", {
+			this.logger.warn({
 				hasPart: !!part,
 				hasId: !!part?.id,
 				hasMessageID: !!part?.messageID,
 				hasType: !!part?.type,
-			});
+			}, "Invalid part update - missing required fields");
 			return;
 		}
 

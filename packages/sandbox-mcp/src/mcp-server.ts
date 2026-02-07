@@ -2,7 +2,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { createLogger } from "@proliferate/logger";
 import { exposePort, getServices, startService, stopService } from "./service-manager.js";
+
+const logger = createLogger({ service: "sandbox-mcp" }).child({ module: "mcp-server" });
 
 const PREVIEW_URL_FILE = "/tmp/.proliferate_preview_url";
 
@@ -213,5 +216,5 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 export async function startMcpServer(): Promise<void> {
 	const transport = new StdioServerTransport();
 	await server.connect(transport);
-	console.error("sandbox-mcp MCP server running on stdio");
+	logger.info("MCP server running on stdio");
 }

@@ -5,8 +5,11 @@
  * Users can optionally configure HMAC-SHA256 signature verification.
  */
 
+import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
 import { triggers } from "@proliferate/services";
+
+const log = logger.child({ handler: "custom-webhook" });
 import { NextResponse } from "next/server";
 
 const SERVICE_TO_SERVICE_AUTH_TOKEN = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
@@ -80,30 +83,30 @@ export async function POST(
 	try {
 		trigger = await triggers.findTriggerWithAutomationById(triggerId);
 	} catch (err) {
-		console.error(`[CustomWebhook] Failed to fetch trigger ${triggerId}:`, err);
+		log.error({ err, triggerId }, "Failed to fetch trigger");
 		return NextResponse.json({ error: "Failed to fetch trigger" }, { status: 500 });
 	}
 
 	if (!trigger) {
-		console.error(`[CustomWebhook] Trigger not found: ${triggerId}`);
+		log.error({ triggerId }, "Trigger not found");
 		return NextResponse.json({ error: "Trigger not found" }, { status: 404 });
 	}
 
 	// Check if trigger is enabled
 	if (!trigger.enabled) {
-		console.log(`[CustomWebhook] Trigger ${triggerId} is disabled`);
+		log.info({ triggerId }, "Trigger is disabled");
 		return NextResponse.json({ error: "Trigger is disabled" }, { status: 403 });
 	}
 
 	// Check if automation is enabled
 	if (!trigger.automation?.enabled) {
-		console.log(`[CustomWebhook] Automation for trigger ${triggerId} is disabled`);
+		log.info({ triggerId }, "Automation for trigger is disabled");
 		return NextResponse.json({ error: "Automation is disabled" }, { status: 403 });
 	}
 
 	// Check if this is indeed a webhook trigger
 	if (trigger.provider !== "webhook") {
-		console.log(`[CustomWebhook] Trigger ${triggerId} is not a webhook trigger`);
+		log.info({ triggerId }, "Trigger is not a webhook trigger");
 		return NextResponse.json({ error: "Not a webhook trigger" }, { status: 400 });
 	}
 
@@ -111,7 +114,7 @@ export async function POST(
 	if (trigger.webhookSecret) {
 		const isValid = await verifyWebhookSignature(request, body, trigger.webhookSecret);
 		if (!isValid) {
-			console.error(`[CustomWebhook] Invalid signature for trigger ${triggerId}`);
+			log.error({ triggerId }, "Invalid signature for trigger");
 			return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
 		}
 	}
@@ -143,7 +146,7 @@ export async function POST(
 			fiveMinutesAgo,
 		);
 		if (existing) {
-			console.log(`[CustomWebhook] Duplicate webhook for trigger ${triggerId}`);
+			log.info({ triggerId }, "Duplicate webhook for trigger");
 			return NextResponse.json({
 				success: true,
 				message: "Duplicate webhook ignored",
@@ -151,7 +154,7 @@ export async function POST(
 			});
 		}
 	} catch (err) {
-		console.error("[CustomWebhook] Failed to check for duplicate:", err);
+		log.error({ err }, "Failed to check for duplicate");
 		// Continue - better to risk duplicates than fail the webhook
 	}
 
@@ -175,11 +178,11 @@ export async function POST(
 			status: "queued",
 		});
 	} catch (err) {
-		console.error(`[CustomWebhook] Failed to create event for trigger ${triggerId}:`, err);
+		log.error({ err, triggerId }, "Failed to create event for trigger");
 		return NextResponse.json({ error: "Failed to create event" }, { status: 500 });
 	}
 
-	console.log(`[CustomWebhook] Created event ${event.id} for trigger ${triggerId}`);
+	log.info({ eventId: event.id, triggerId }, "Created event for trigger");
 
 	// Queue for processing via internal API
 	if (SERVICE_TO_SERVICE_AUTH_TOKEN && NEXTJS_APP_URL) {
@@ -197,7 +200,7 @@ export async function POST(
 				}),
 			});
 		} catch (err) {
-			console.error("[CustomWebhook] Failed to notify API for event processing:", err);
+			log.error({ err }, "Failed to notify API for event processing");
 			// Don't fail - event is recorded, can be processed later
 		}
 	}
@@ -220,7 +223,7 @@ export async function GET(
 	try {
 		trigger = await triggers.findTriggerBasicById(triggerId);
 	} catch (err) {
-		console.error(`[CustomWebhook] Failed to fetch trigger ${triggerId}:`, err);
+		log.error({ err, triggerId }, "Failed to fetch trigger");
 		return NextResponse.json({ error: "Failed to fetch trigger" }, { status: 500 });
 	}
 

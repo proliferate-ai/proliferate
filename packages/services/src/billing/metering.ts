@@ -17,6 +17,7 @@ import {
 } from "@proliferate/shared/billing";
 import type IORedis from "ioredis";
 import { eq, getDb, sessions } from "../db/client";
+import { getServicesLogger } from "../logger";
 import { handleCreditsExhaustedV2 } from "./org-pause";
 import { deductShadowBalance } from "./shadow-balance";
 import { tryActivatePlanAfterTrial } from "./trial-activation";
@@ -63,7 +64,7 @@ export async function runMeteringCycle(
 	);
 
 	if (!acquired) {
-		console.log("[Metering] Another worker has the lock, skipping");
+		getServicesLogger().child({ module: "metering" }).debug("Another worker has the lock, skipping");
 		return;
 	}
 
@@ -73,7 +74,7 @@ export async function runMeteringCycle(
 		try {
 			await renewLock(redis, BILLING_REDIS_KEYS.meteringLock, lockToken, METERING_CONFIG.lockTtlMs);
 		} catch (err) {
-			console.error("[Metering] Lock renewal failed:", err);
+			getServicesLogger().child({ module: "metering" }).error({ err }, "Lock renewal failed");
 			renewalFailed = true;
 		}
 	}, METERING_CONFIG.lockRenewIntervalMs);
@@ -104,12 +105,14 @@ export async function runMeteringCycle(
 			},
 		})) as SessionForMetering[];
 
+		const logger = getServicesLogger().child({ module: "metering" });
+
 		if (!sessionsToMeter.length) {
-			console.log("[Metering] No running sessions");
+			logger.debug("No running sessions");
 			return;
 		}
 
-		console.log(`[Metering] Processing ${sessionsToMeter.length} running sessions`);
+		logger.info({ sessionCount: sessionsToMeter.length }, "Processing running sessions");
 
 		// Check sandbox liveness
 		const aliveStatus = await checkSandboxesWithGrace(sessionsToMeter, providers);
@@ -133,7 +136,7 @@ export async function runMeteringCycle(
 					await billRegularInterval(session, nowMs, providers);
 				}
 			} catch (err) {
-				console.error(`[Metering] Error processing session ${session.id}:`, err);
+				logger.error({ err, sessionId: session.id }, "Error processing session");
 			}
 		}
 	} finally {
@@ -216,8 +219,9 @@ async function checkSandboxesWithGrace(
 				result.set(session.sandboxId!, !isDead);
 
 				if (!isDead) {
-					console.log(
-						`[Metering] Session ${session.id} check failed (${newFailures}/${METERING_CONFIG.graceFailures})`,
+					getServicesLogger().child({ module: "metering", sessionId: session.id }).debug(
+						{ failures: newFailures, maxFailures: METERING_CONFIG.graceFailures },
+						"Alive check failed",
 					);
 				}
 			}
@@ -302,7 +306,7 @@ async function billFinalInterval(
 		})
 		.where(eq(sessions.id, session.id));
 
-	console.log(`[Metering] Session ${session.id} marked as stopped (sandbox dead)`);
+	getServicesLogger().child({ module: "metering", sessionId: session.id }).info("Session marked as stopped (sandbox dead)");
 }
 
 /**
@@ -338,15 +342,15 @@ async function billComputeInterval(
 		},
 	});
 
+	const log = getServicesLogger().child({ module: "metering", sessionId: session.id, orgId: session.organizationId });
+
 	// Idempotent - already processed
 	if (!result.success) {
 		await db
 			.update(sessions)
 			.set({ meteredThroughAt: new Date(billedThroughMs) })
 			.where(eq(sessions.id, session.id));
-		console.log(
-			`[Metering] Idempotent skip: ${idempotencyKey} (interval ${meteredThroughMs}-${billedThroughMs}ms, ${billableSeconds}s)`,
-		);
+		log.debug({ idempotencyKey, fromMs: meteredThroughMs, toMs: billedThroughMs, billableSeconds }, "Idempotent skip");
 		return;
 	}
 
@@ -356,29 +360,21 @@ async function billComputeInterval(
 		.set({ meteredThroughAt: new Date(billedThroughMs) })
 		.where(eq(sessions.id, session.id));
 
-	console.log(
-		`[Metering] Session ${session.id}: ${billableSeconds}s = ${credits.toFixed(2)} credits (balance: ${result.newBalance.toFixed(2)})`,
-	);
+	log.debug({ billableSeconds, credits, balance: result.newBalance }, "Billed compute interval");
 
 	// Handle state transitions
 	if (result.shouldTerminateSessions) {
 		if (result.previousState === "trial" && result.newState === "exhausted") {
 			const activation = await tryActivatePlanAfterTrial(session.organizationId);
 			if (activation.activated) {
-				console.log(
-					`[Metering] Org ${session.organizationId} trial auto-activated; skipping termination`,
-				);
+				log.info("Trial auto-activated; skipping termination");
 				return;
 			}
 		}
-		console.log(
-			`[Metering] Org ${session.organizationId} balance exhausted - terminating sessions: ${result.enforcementReason}`,
-		);
+		log.info({ enforcementReason: result.enforcementReason }, "Balance exhausted - terminating sessions");
 		await handleCreditsExhaustedV2(session.organizationId, providers);
 	} else if (result.shouldBlockNewSessions) {
-		console.log(
-			`[Metering] Org ${session.organizationId} entering grace period: ${result.enforcementReason}`,
-		);
+		log.info({ enforcementReason: result.enforcementReason }, "Entering grace period");
 		// Grace period started - new sessions will be blocked but existing ones continue
 	}
 }
@@ -411,7 +407,7 @@ export async function finalizeSessionBilling(
 	})) as SessionForMetering | null;
 
 	if (!session) {
-		console.error(`[BillingFinalize] Session not found: ${sessionId}`);
+		getServicesLogger().child({ module: "metering", sessionId }).error("Session not found for billing finalization");
 		return { creditsBilled: 0, secondsBilled: 0 };
 	}
 
@@ -459,8 +455,9 @@ export async function finalizeSessionBilling(
 		.set({ meteredThroughAt: new Date(nowMs) })
 		.where(eq(sessions.id, session.id));
 
-	console.log(
-		`[BillingFinalize] Session ${session.id}: ${remainingSeconds}s = ${credits.toFixed(2)} credits (balance: ${result.newBalance.toFixed(2)})`,
+	getServicesLogger().child({ module: "metering", sessionId: session.id }).info(
+		{ seconds: remainingSeconds, credits, balance: result.newBalance },
+		"Finalized session billing",
 	);
 
 	return { creditsBilled: credits, secondsBilled: remainingSeconds };
@@ -488,5 +485,5 @@ export async function autoPauseSession(
 		})
 		.where(eq(sessions.id, session.id));
 
-	console.log(`[AutoPause] Session ${session.id} paused: ${reason}`);
+	getServicesLogger().child({ module: "metering", sessionId: session.id }).info({ reason }, "Session auto-paused");
 }

@@ -7,6 +7,7 @@
 
 import { type BillingPlan, PLAN_CONFIGS } from "@proliferate/shared/billing";
 import { and, asc, eq, getDb, isNotNull, lt, sessions, sql } from "../db/client";
+import { getServicesLogger } from "../logger";
 
 // ============================================
 // Types
@@ -70,7 +71,8 @@ export async function ensureSnapshotCapacity(
 		return { deletedSnapshotId: null };
 	}
 
-	console.log(`[SnapshotLimits] Org ${orgId} at limit (${current}/${max}), deleting oldest`);
+	const logger = getServicesLogger().child({ module: "snapshot-limits", orgId });
+	logger.info({ current, max }, "At snapshot limit, deleting oldest");
 
 	const db = getDb();
 	const oldest = (await db.query.sessions.findFirst({
@@ -85,7 +87,7 @@ export async function ensureSnapshotCapacity(
 	})) as SessionWithSnapshot | null;
 
 	if (!oldest?.snapshotId) {
-		console.warn(`[SnapshotLimits] No snapshots found to delete for org ${orgId}`);
+		logger.warn("No snapshots found to delete");
 		return { deletedSnapshotId: null };
 	}
 
@@ -94,14 +96,14 @@ export async function ensureSnapshotCapacity(
 		try {
 			await deleteSnapshotFn(oldest.sandboxProvider, oldest.snapshotId);
 		} catch (err) {
-			console.error("[SnapshotLimits] Failed to delete snapshot from provider:", err);
+			logger.error({ err }, "Failed to delete snapshot from provider");
 		}
 	}
 
 	// Clear snapshot reference in session
 	await db.update(sessions).set({ snapshotId: null }).where(eq(sessions.id, oldest.id));
 
-	console.log(`[SnapshotLimits] Deleted snapshot ${oldest.snapshotId} from session ${oldest.id}`);
+	logger.info({ snapshotId: oldest.snapshotId, sessionId: oldest.id }, "Deleted snapshot");
 
 	return { deletedSnapshotId: oldest.snapshotId };
 }
@@ -158,7 +160,7 @@ export async function cleanupExpiredSnapshots(
 			try {
 				await deleteSnapshotFn(session.sandboxProvider, session.snapshotId);
 			} catch (err) {
-				console.error("[SnapshotLimits] Failed to delete expired snapshot:", err);
+				getServicesLogger().child({ module: "snapshot-limits", orgId }).error({ err }, "Failed to delete expired snapshot");
 				continue;
 			}
 		}
@@ -170,7 +172,7 @@ export async function cleanupExpiredSnapshots(
 	}
 
 	if (deletedCount > 0) {
-		console.log(`[SnapshotLimits] Cleaned up ${deletedCount} expired snapshots for org ${orgId}`);
+		getServicesLogger().child({ module: "snapshot-limits", orgId }).info({ deletedCount }, "Cleaned up expired snapshots");
 	}
 
 	return { deletedCount };

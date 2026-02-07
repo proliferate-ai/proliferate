@@ -1,7 +1,10 @@
 import type IORedis from "ioredis";
+import { createLogger } from "@proliferate/logger";
 // @ts-expect-error - redlock types don't resolve properly due to ESM exports
 import Redlock from "redlock";
 import { ensureRedisConnected } from "./redis";
+
+const logger = createLogger({ service: "gateway" }).child({ module: "lock" });
 
 let redlockInstance: Redlock | null = null;
 
@@ -14,7 +17,7 @@ async function getRedlock(): Promise<Redlock> {
 			driftFactor: 0.01,
 		});
 		redlockInstance.on("error", (err: unknown) => {
-			console.error("[Redlock] Error:", err instanceof Error ? err.message : err);
+			logger.error({ err }, "Redlock error");
 		});
 	}
 

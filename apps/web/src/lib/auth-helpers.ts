@@ -1,5 +1,8 @@
 import { auth } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 import { getImpersonationCookie, isSuperAdmin } from "@/lib/super-admin";
+
+const log = logger.child({ module: "auth-helpers" });
 import { nodeEnv } from "@proliferate/environment/runtime";
 import { env } from "@proliferate/environment/server";
 import { orgs, users } from "@proliferate/services";
@@ -64,7 +67,7 @@ async function getApiKeyUser() {
 			},
 		};
 	} catch (error) {
-		console.error("API key verification failed:", error);
+		log.error({ err: error }, "API key verification failed");
 		return null;
 	}
 }
@@ -143,7 +146,7 @@ export async function getSession() {
 		const user = await users.findById(devUserId);
 
 		if (!user) {
-			console.error(`[DEV MODE] User not found: ${devUserId}`);
+			log.error({ devUserId }, "DEV MODE: User not found");
 			return null;
 		}
 

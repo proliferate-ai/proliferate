@@ -22,7 +22,10 @@ import {
 	getStateMessage,
 } from "@proliferate/shared/billing";
 import { z } from "zod";
+import { logger } from "@/lib/logger";
 import { orgProcedure } from "./middleware";
+
+const log = logger.child({ handler: "billing" });
 
 // ============================================
 // Response Schemas
@@ -106,7 +109,7 @@ export const billingRouter = {
 			// Get organization details with billing settings (V2)
 			const org = await orgs.getBillingInfoV2(context.orgId);
 			if (!org) {
-				console.error("[billing] Org lookup failed");
+				log.error("Org lookup failed");
 				throw new ORPCError("NOT_FOUND", {
 					message: "Organization not found",
 				});
@@ -120,7 +123,7 @@ export const billingRouter = {
 				try {
 					autumnCustomer = await autumnGetCustomer(org.autumnCustomerId);
 				} catch (err) {
-					console.error("[billing] Failed to fetch Autumn customer:", err);
+					log.error({ err }, "Failed to fetch Autumn customer");
 					// Continue without Autumn data - show defaults
 				}
 			}
@@ -307,7 +310,7 @@ export const billingRouter = {
 					includedCredits = creditsFeature.included_usage ?? includedCredits;
 				}
 			} catch (err) {
-				console.error("[billing] Failed to fetch customer after plan activation:", err);
+				log.error({ err }, "Failed to fetch customer after plan activation");
 			}
 
 			await orgs.initializeBillingState(context.orgId, "active", includedCredits);
@@ -401,7 +404,7 @@ export const billingRouter = {
 						context.user.id,
 					);
 				} catch (err) {
-					console.error("[BuyCredits] Failed to update shadow balance:", err);
+					log.error({ err }, "Failed to update shadow balance");
 				}
 
 				return {
@@ -410,7 +413,7 @@ export const billingRouter = {
 					credits: totalCredits,
 				};
 			} catch (err) {
-				console.error("[BuyCredits] Failed:", err);
+				log.error({ err }, "Failed to process credit purchase");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
 					message: "Failed to process purchase",
 				});

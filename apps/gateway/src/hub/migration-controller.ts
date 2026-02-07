@@ -4,6 +4,7 @@
  * Schedules snapshot-before-expiry and handles sandbox migration.
  */
 
+import type { Logger } from "@proliferate/logger";
 import { sessions } from "@proliferate/services";
 import type { SandboxProviderType, ServerMessage } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
@@ -22,8 +23,7 @@ export interface MigrationControllerOptions {
 		status: "creating" | "resuming" | "running" | "paused" | "stopped" | "error" | "migrating",
 		message?: string,
 	) => void;
-	log: (message: string, data?: Record<string, unknown>) => void;
-	logError: (message: string, error?: unknown) => void;
+	logger: Logger;
 	getClientCount: () => number;
 }
 
@@ -45,7 +45,7 @@ export class MigrationController {
 			return;
 		}
 		this.started = true;
-		this.options.log("Migration controller started");
+		this.options.logger.info("Migration controller started");
 	}
 
 	stop(): void {
@@ -53,28 +53,20 @@ export class MigrationController {
 			return;
 		}
 		this.started = false;
-		this.options.log("Migration controller stopped");
+		this.options.logger.info("Migration controller stopped");
 	}
 
 	async runExpiryMigration(): Promise<void> {
 		if (this.migrationState !== "normal") {
-			this.options.log("Migration skipped: already migrating");
+			this.options.logger.info("Migration skipped: already migrating");
 			return;
 		}
 
 		const startMs = Date.now();
 		const hasClients = this.options.getClientCount() > 0;
-		console.log("[P-LATENCY] migration.run_expiry.start", {
-			sessionId: this.options.sessionId,
-			shortId: this.options.sessionId.slice(0, 8),
-			hasClients,
-		});
+		this.options.logger.debug({ latency: true, hasClients }, "migration.run_expiry.start");
 		await this.migrateToNewSandbox({ createNewSandbox: hasClients });
-		console.log("[P-LATENCY] migration.run_expiry.complete", {
-			sessionId: this.options.sessionId,
-			shortId: this.options.sessionId.slice(0, 8),
-			durationMs: Date.now() - startMs,
-		});
+		this.options.logger.info({ latency: true, durationMs: Date.now() - startMs }, "migration.run_expiry.complete");
 	}
 
 	private async migrateToNewSandbox(options: { createNewSandbox: boolean }): Promise<void> {
@@ -82,7 +74,7 @@ export class MigrationController {
 		const context = this.options.runtime.getContext();
 		const sandboxId = context.session.sandbox_id;
 		if (!sandboxId) {
-			this.options.log("Migration skipped: no sandbox");
+			this.options.logger.info("Migration skipped: no sandbox");
 			return;
 		}
 
@@ -93,12 +85,7 @@ export class MigrationController {
 				const providerType = context.session.sandbox_provider as SandboxProviderType;
 				const provider = getSandboxProvider(providerType);
 
-				console.log("[P-LATENCY] migration.lock_acquired", {
-					sessionId: this.options.sessionId,
-					shortId: this.options.sessionId.slice(0, 8),
-					createNewSandbox,
-					provider: provider.type,
-				});
+				this.options.logger.debug({ latency: true, createNewSandbox, provider: provider.type }, "migration.lock_acquired");
 
 				if (createNewSandbox) {
 					this.migrationState = "migrating";
@@ -108,33 +95,20 @@ export class MigrationController {
 				// Give OpenCode a chance to finish, then abort if needed before snapshotting
 				const stopStartMs = Date.now();
 				await this.ensureOpenCodeStopped(MigrationConfig.MESSAGE_COMPLETE_TIMEOUT_MS);
-				console.log("[P-LATENCY] migration.ensure_opencode_stopped", {
-					sessionId: this.options.sessionId,
-					shortId: this.options.sessionId.slice(0, 8),
-					durationMs: Date.now() - stopStartMs,
-				});
+				this.options.logger.debug({ latency: true, durationMs: Date.now() - stopStartMs }, "migration.ensure_opencode_stopped");
 
 				if (createNewSandbox) {
 					// Take snapshot
-					this.options.log("Taking snapshot before migration", { createNewSandbox });
+					this.options.logger.info({ createNewSandbox }, "Taking snapshot before migration");
 					const snapshotStartMs = Date.now();
 					const { snapshotId } = await provider.snapshot(this.options.sessionId, sandboxId);
-					console.log("[P-LATENCY] migration.snapshot", {
-						sessionId: this.options.sessionId,
-						shortId: this.options.sessionId.slice(0, 8),
-						provider: provider.type,
-						durationMs: Date.now() - snapshotStartMs,
-					});
+					this.options.logger.debug({ latency: true, provider: provider.type, durationMs: Date.now() - snapshotStartMs }, "migration.snapshot");
 
 					// Update session with new snapshot
 					const dbStartMs = Date.now();
 					await sessions.update(this.options.sessionId, { snapshotId });
-					console.log("[P-LATENCY] migration.db.update_snapshot", {
-						sessionId: this.options.sessionId,
-						shortId: this.options.sessionId.slice(0, 8),
-						durationMs: Date.now() - dbStartMs,
-					});
-					this.options.log("Snapshot saved", { snapshotId });
+					this.options.logger.debug({ latency: true, durationMs: Date.now() - dbStartMs }, "migration.db.update_snapshot");
+					this.options.logger.info({ snapshotId }, "Snapshot saved");
 
 					// Disconnect and create new sandbox
 					this.options.runtime.disconnectSse();
@@ -143,108 +117,63 @@ export class MigrationController {
 					this.options.runtime.resetSandboxState();
 
 					// Re-initialize
-					this.options.log("Creating new sandbox from snapshot...");
+					this.options.logger.info("Creating new sandbox from snapshot...");
 					const reinitStartMs = Date.now();
 					await this.options.runtime.ensureRuntimeReady({ skipMigrationLock: true });
-					console.log("[P-LATENCY] migration.reinit_runtime_ready", {
-						sessionId: this.options.sessionId,
-						shortId: this.options.sessionId.slice(0, 8),
-						durationMs: Date.now() - reinitStartMs,
-					});
+					this.options.logger.debug({ latency: true, durationMs: Date.now() - reinitStartMs }, "migration.reinit_runtime_ready");
 
 					this.migrationState = "normal";
 					this.options.broadcastStatus("running");
-					this.options.log("Migration complete", {
-						oldSandboxId,
-						newSandboxId: this.options.runtime.getContext().session.sandbox_id,
-					});
+					this.options.logger.info({ oldSandboxId, newSandboxId: this.options.runtime.getContext().session.sandbox_id }, "Migration complete");
 				} else {
 					// Idle migration: pause (if supported) or snapshot, then stop the sandbox.
 					let snapshotId: string;
 					if (provider.supportsPause) {
-						this.options.log("Pausing sandbox before idle shutdown");
+						this.options.logger.info("Pausing sandbox before idle shutdown");
 						const pauseStartMs = Date.now();
 						const result = await provider.pause(this.options.sessionId, sandboxId);
-						console.log("[P-LATENCY] migration.pause", {
-							sessionId: this.options.sessionId,
-							shortId: this.options.sessionId.slice(0, 8),
-							provider: provider.type,
-							durationMs: Date.now() - pauseStartMs,
-						});
+						this.options.logger.debug({ latency: true, provider: provider.type, durationMs: Date.now() - pauseStartMs }, "migration.pause");
 						snapshotId = result.snapshotId;
-						this.options.log("Sandbox paused", { snapshotId });
+						this.options.logger.info({ snapshotId }, "Sandbox paused");
 					} else {
-						this.options.log("Taking snapshot before idle shutdown");
+						this.options.logger.info("Taking snapshot before idle shutdown");
 						const snapshotStartMs = Date.now();
 						const result = await provider.snapshot(this.options.sessionId, sandboxId);
-						console.log("[P-LATENCY] migration.snapshot", {
-							sessionId: this.options.sessionId,
-							shortId: this.options.sessionId.slice(0, 8),
-							provider: provider.type,
-							durationMs: Date.now() - snapshotStartMs,
-						});
+						this.options.logger.debug({ latency: true, provider: provider.type, durationMs: Date.now() - snapshotStartMs }, "migration.snapshot");
 						snapshotId = result.snapshotId;
-						this.options.log("Snapshot saved", { snapshotId });
+						this.options.logger.info({ snapshotId }, "Snapshot saved");
 					}
 
 					const dbStartMs = Date.now();
 					await sessions.update(this.options.sessionId, { snapshotId });
-					console.log("[P-LATENCY] migration.db.update_snapshot", {
-						sessionId: this.options.sessionId,
-						shortId: this.options.sessionId.slice(0, 8),
-						durationMs: Date.now() - dbStartMs,
-					});
+					this.options.logger.debug({ latency: true, durationMs: Date.now() - dbStartMs }, "migration.db.update_snapshot");
 
 					if (!provider.supportsPause) {
 						try {
 							const terminateStartMs = Date.now();
 							await provider.terminate(this.options.sessionId, sandboxId);
-							console.log("[P-LATENCY] migration.terminate", {
-								sessionId: this.options.sessionId,
-								shortId: this.options.sessionId.slice(0, 8),
-								provider: provider.type,
-								durationMs: Date.now() - terminateStartMs,
-							});
-							this.options.log("Sandbox terminated after idle snapshot", {
-								sandboxId: oldSandboxId,
-							});
+							this.options.logger.debug({ latency: true, provider: provider.type, durationMs: Date.now() - terminateStartMs }, "migration.terminate");
+							this.options.logger.info({ sandboxId: oldSandboxId }, "Sandbox terminated after idle snapshot");
 						} catch (err) {
-							this.options.logError("Failed to terminate sandbox after idle snapshot", err);
+							this.options.logger.error({ err }, "Failed to terminate sandbox after idle snapshot");
 						}
 					}
 					this.options.runtime.resetSandboxState();
 					this.options.runtime.disconnectSse();
 					this.stop();
-					this.options.log("Idle snapshot complete, sandbox stopped", {
-						oldSandboxId,
-						snapshotId,
-					});
+					this.options.logger.info({ oldSandboxId, snapshotId }, "Idle snapshot complete, sandbox stopped");
 				}
 
-				console.log("[P-LATENCY] migration.complete", {
-					sessionId: this.options.sessionId,
-					shortId: this.options.sessionId.slice(0, 8),
-					durationMs: Date.now() - migrationStartMs,
-					createNewSandbox,
-					provider: provider.type,
-				});
+				this.options.logger.info({ latency: true, durationMs: Date.now() - migrationStartMs, createNewSandbox, provider: provider.type }, "migration.complete");
 			} catch (err) {
-				this.options.logError("Migration failed (best-effort)", err);
-				console.error("[P-LATENCY] migration.error", {
-					sessionId: this.options.sessionId,
-					shortId: this.options.sessionId.slice(0, 8),
-					error: err instanceof Error ? err.message : "Unknown error",
-				});
+				this.options.logger.error({ err }, "Migration failed (best-effort)");
 				this.migrationState = "normal";
 			}
 		});
 
 		if (ran === null) {
-			this.options.log("Migration skipped: lock already held");
-			console.log("[P-LATENCY] migration.lock_skipped", {
-				sessionId: this.options.sessionId,
-				shortId: this.options.sessionId.slice(0, 8),
-			});
+			this.options.logger.info("Migration skipped: lock already held");
+			this.options.logger.debug({ latency: true }, "migration.lock_skipped");
 		}
 	}
 
@@ -264,9 +193,9 @@ export class MigrationController {
 		}
 
 		if (this.options.eventProcessor.getCurrentAssistantMessageId()) {
-			this.options.log("Message did not complete before timeout, will abort");
+			this.options.logger.info("Message did not complete before timeout, will abort");
 		} else {
-			this.options.log("Message completed, proceeding with migration");
+			this.options.logger.info("Message completed, proceeding with migration");
 		}
 	}
 
@@ -278,12 +207,12 @@ export class MigrationController {
 		}
 
 		if (this.options.eventProcessor.getCurrentAssistantMessageId()) {
-			this.options.log("Waiting for OpenCode to finish before snapshot");
+			this.options.logger.info("Waiting for OpenCode to finish before snapshot");
 			await this.waitForMessageComplete(timeoutMs);
 		}
 
 		if (this.options.eventProcessor.getCurrentAssistantMessageId()) {
-			this.options.log("Aborting OpenCode session before snapshot");
+			this.options.logger.info("Aborting OpenCode session before snapshot");
 			try {
 				await abortOpenCodeSession(openCodeUrl, openCodeSessionId);
 
@@ -294,9 +223,9 @@ export class MigrationController {
 				});
 
 				this.options.eventProcessor.clearCurrentAssistantMessageId();
-				this.options.log("OpenCode session aborted");
+				this.options.logger.info("OpenCode session aborted");
 			} catch (err) {
-				this.options.logError("Failed to abort OpenCode session (proceeding anyway)", err);
+				this.options.logger.error({ err }, "Failed to abort OpenCode session (proceeding anyway)");
 			}
 		}
 	}

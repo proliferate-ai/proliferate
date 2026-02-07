@@ -2,6 +2,7 @@
  * Shared Slack utilities
  */
 
+import type { Logger } from "@proliferate/logger";
 import { decrypt, getEncryptionKey } from "@proliferate/shared/crypto";
 
 /**
@@ -14,6 +15,7 @@ import { decrypt, getEncryptionKey } from "@proliferate/shared/crypto";
 export async function downloadSlackImageAsBase64(
 	url: string,
 	encryptedBotToken: string,
+	logger: Logger,
 ): Promise<{ data: string; mediaType: string } | null> {
 	try {
 		const botToken = decrypt(encryptedBotToken, getEncryptionKey());
@@ -30,17 +32,17 @@ export async function downloadSlackImageAsBase64(
 			// Got a redirect - follow it without auth (CDN doesn't need it)
 			const redirectUrl = authResponse.headers.get("location");
 			if (!redirectUrl) {
-				console.error("[Slack] Redirect without location header");
+				logger.error("Redirect without location header");
 				return null;
 			}
-			console.log("[Slack] Following redirect to CDN");
+			logger.debug("Following redirect to CDN");
 			finalResponse = await fetch(redirectUrl);
 		} else {
 			finalResponse = authResponse;
 		}
 
 		if (!finalResponse.ok) {
-			console.error(`[Slack] Failed to download image: ${finalResponse.status}`);
+			logger.error({ status: finalResponse.status }, "Failed to download image");
 			return null;
 		}
 
@@ -48,17 +50,17 @@ export async function downloadSlackImageAsBase64(
 
 		// Validate we actually got an image, not an HTML error page
 		if (!mediaType.startsWith("image/")) {
-			console.error(`[Slack] Expected image but got ${mediaType} for ${url}`);
+			logger.error({ mediaType, url }, "Expected image but got different content type");
 			return null;
 		}
 
 		const buffer = await finalResponse.arrayBuffer();
 		const base64 = Buffer.from(buffer).toString("base64");
 
-		console.log(`[Slack] Downloaded image: ${mediaType}, ${base64.length} bytes`);
+		logger.info({ mediaType, bytes: base64.length }, "Downloaded image");
 		return { data: base64, mediaType };
 	} catch (err) {
-		console.error("[Slack] Failed to download image:", err);
+		logger.error({ err }, "Failed to download image");
 		return null;
 	}
 }
@@ -71,6 +73,7 @@ export async function postToSlack(
 	channelId: string,
 	threadTs: string,
 	text: string,
+	logger: Logger,
 ): Promise<void> {
 	const botToken = decrypt(encryptedBotToken, getEncryptionKey());
 
@@ -89,7 +92,7 @@ export async function postToSlack(
 
 	const result = await response.json();
 	if (!result.ok) {
-		console.error("[Slack] Failed to post message:", result.error);
+		logger.error({ error: result.error }, "Failed to post message");
 	}
 }
 
@@ -102,7 +105,8 @@ export async function postWelcomeMessage(
 	threadTs: string,
 	sessionId: string,
 	appUrl: string,
-	orgId?: string,
+	orgId: string | undefined,
+	logger: Logger,
 ): Promise<void> {
 	const botToken = decrypt(encryptedBotToken, getEncryptionKey());
 
@@ -152,7 +156,7 @@ export async function postWelcomeMessage(
 
 	const result = await response.json();
 	if (!result.ok) {
-		console.error("[Slack] Failed to post welcome message:", result.error);
+		logger.error({ error: result.error }, "Failed to post welcome message");
 	}
 }
 
@@ -186,6 +190,7 @@ export async function uploadFileToSlack(
 	filename: string,
 	content: Uint8Array | ArrayBuffer,
 	_contentType: string,
+	logger: Logger,
 ): Promise<boolean> {
 	const botToken = decrypt(encryptedBotToken, getEncryptionKey());
 	const byteLength = content instanceof ArrayBuffer ? content.byteLength : content.length;
@@ -208,7 +213,7 @@ export async function uploadFileToSlack(
 		};
 
 		if (!urlResult.ok || !urlResult.upload_url || !urlResult.file_id) {
-			console.error("[Slack] Failed to get upload URL:", urlResult.error);
+			logger.error({ error: urlResult.error }, "Failed to get upload URL");
 			return false;
 		}
 
@@ -219,7 +224,7 @@ export async function uploadFileToSlack(
 		});
 
 		if (!uploadResponse.ok) {
-			console.error("[Slack] Failed to upload to presigned URL:", uploadResponse.status);
+			logger.error({ status: uploadResponse.status }, "Failed to upload to presigned URL");
 			return false;
 		}
 
@@ -239,13 +244,13 @@ export async function uploadFileToSlack(
 
 		const completeResult = (await completeResponse.json()) as { ok: boolean; error?: string };
 		if (!completeResult.ok) {
-			console.error("[Slack] Failed to complete upload:", completeResult.error);
+			logger.error({ error: completeResult.error }, "Failed to complete upload");
 			return false;
 		}
 
 		return true;
 	} catch (err) {
-		console.error("[Slack] Upload error:", err);
+		logger.error({ err }, "Upload error");
 		return false;
 	}
 }
@@ -261,6 +266,7 @@ export async function postVerificationResult(
 	appUrl: string,
 	apiUrl: string,
 	verificationKey: string,
+	logger: Logger,
 	orgId?: string,
 ): Promise<void> {
 	const botToken = decrypt(encryptedBotToken, getEncryptionKey());
@@ -271,12 +277,13 @@ export async function postVerificationResult(
 			`${apiUrl}/api/verification-media?prefix=${encodeURIComponent(verificationKey)}`,
 		);
 		if (!listResponse.ok) {
-			console.error(`[Slack] Failed to list verification files: ${listResponse.status}`);
+			logger.error({ status: listResponse.status }, "Failed to list verification files");
 			await postToSlack(
 				encryptedBotToken,
 				channelId,
 				threadTs,
 				"Verification complete (unable to load previews)",
+				logger,
 			);
 			return;
 		}
@@ -286,7 +293,7 @@ export async function postVerificationResult(
 		};
 
 		if (!files || files.length === 0) {
-			await postToSlack(encryptedBotToken, channelId, threadTs, "Verification complete (no files)");
+			await postToSlack(encryptedBotToken, channelId, threadTs, "Verification complete (no files)", logger);
 			return;
 		}
 
@@ -316,9 +323,10 @@ export async function postVerificationResult(
 					file.name,
 					buffer,
 					file.contentType,
+					logger,
 				);
 			} catch (err) {
-				console.error(`[Slack] Failed to upload ${file.name}:`, err);
+				logger.error({ err, filename: file.name }, "Failed to upload file");
 			}
 		}
 
@@ -376,10 +384,10 @@ export async function postVerificationResult(
 
 		const result = (await response.json()) as { ok: boolean; error?: string };
 		if (!result.ok) {
-			console.error("[Slack] Failed to post verification summary:", result.error);
+			logger.error({ error: result.error }, "Failed to post verification summary");
 		}
 	} catch (err) {
-		console.error("[Slack] Failed to post verification result:", err);
-		await postToSlack(encryptedBotToken, channelId, threadTs, "Verification complete");
+		logger.error({ err }, "Failed to post verification result");
+		await postToSlack(encryptedBotToken, channelId, threadTs, "Verification complete", logger);
 	}
 }

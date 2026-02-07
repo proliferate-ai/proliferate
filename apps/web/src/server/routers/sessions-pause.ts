@@ -5,8 +5,11 @@
  * Extracted from ts-rest router for use in oRPC.
  */
 
+import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
 import { billing, sessions } from "@proliferate/services";
+
+const log = logger.child({ handler: "sessions-pause" });
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 
@@ -58,10 +61,10 @@ export async function pauseSessionHandler(
 		try {
 			await provider.terminate(sessionId, session.sandboxId);
 		} catch (err) {
-			console.error("[pause] Failed to terminate sandbox:", err);
+			log.error({ err }, "Failed to terminate sandbox");
 		}
 	} catch (err) {
-		console.error("[pause] Snapshot error:", err);
+		log.error({ err }, "Snapshot error");
 		throw new ORPCError("INTERNAL_SERVER_ERROR", {
 			message: `Failed to snapshot session: ${err instanceof Error ? err.message : "Unknown error"}. Session kept running.`,
 		});
@@ -71,7 +74,7 @@ export async function pauseSessionHandler(
 	try {
 		await billing.finalizeSessionBilling(sessionId);
 	} catch (err) {
-		console.error("[pause] Failed to finalize billing:", err);
+		log.error({ err }, "Failed to finalize billing");
 	}
 
 	// Update session record
@@ -86,7 +89,7 @@ export async function pauseSessionHandler(
 			pausedAt: new Date().toISOString(),
 		});
 	} catch (updateError) {
-		console.error("[pause] Failed to update session:", updateError);
+		log.error({ err: updateError }, "Failed to update session");
 		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to update session" });
 	}
 

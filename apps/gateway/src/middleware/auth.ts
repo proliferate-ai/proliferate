@@ -5,11 +5,14 @@
  * Supports both JWT tokens (web clients) and CLI API keys.
  */
 
+import { createLogger } from "@proliferate/logger";
 import { verifyToken as verifyJwt } from "@proliferate/shared";
 import type { RequestHandler } from "express";
 import type { GatewayEnv } from "../lib/env";
 import type { AuthResult } from "../types";
 import { ApiError } from "./error-handler";
+
+const logger = createLogger({ service: "gateway" }).child({ module: "auth" });
 
 /**
  * CLI token verification result
@@ -43,7 +46,7 @@ export async function verifyCliToken(
 
 		return (await response.json()) as VerifyCliTokenResult;
 	} catch (err) {
-		console.error("[Auth] Failed to verify CLI token:", err);
+		logger.error({ err }, "Failed to verify CLI token");
 		return { valid: false, error: "Token verification failed" };
 	}
 }

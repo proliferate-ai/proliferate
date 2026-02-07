@@ -1,6 +1,9 @@
 import { requireAuth } from "@/lib/auth-helpers";
+import { logger } from "@/lib/logger";
 import { SignJWT } from "jose";
 import { NextResponse } from "next/server";
+
+const log = logger.child({ route: "verification-media" });
 
 const JWT_SECRET = process.env.GATEWAY_JWT_SECRET;
 const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL;
@@ -21,12 +24,12 @@ export async function GET(req: Request) {
 	}
 
 	if (!JWT_SECRET) {
-		console.error("[verification-media] Missing GATEWAY_JWT_SECRET");
+		log.error("Missing GATEWAY_JWT_SECRET");
 		return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
 	}
 
 	if (!GATEWAY_URL) {
-		console.error("[verification-media] Missing NEXT_PUBLIC_GATEWAY_URL");
+		log.error("Missing NEXT_PUBLIC_GATEWAY_URL");
 		return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
 	}
 

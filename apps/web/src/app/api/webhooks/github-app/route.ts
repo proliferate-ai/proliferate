@@ -5,8 +5,11 @@
  * Maps installation_id to integrations and triggers events.
  */
 
+import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
 import { integrations, triggers } from "@proliferate/services";
+
+const log = logger.child({ handler: "github-app" });
 import { GitHubProvider, type GitHubTriggerConfig, getProviderByType } from "@proliferate/triggers";
 import { NextResponse } from "next/server";
 
@@ -58,13 +61,13 @@ export async function POST(request: Request) {
 
 	// Verify webhook signature
 	if (!GITHUB_APP_WEBHOOK_SECRET) {
-		console.error("[GitHubApp] GITHUB_APP_WEBHOOK_SECRET not configured");
+		log.error("GITHUB_APP_WEBHOOK_SECRET not configured");
 		return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 });
 	}
 
 	const isValid = await GitHubProvider.verifyWebhook(request, GITHUB_APP_WEBHOOK_SECRET, body);
 	if (!isValid) {
-		console.error("[GitHubApp] Invalid webhook signature");
+		log.error("Invalid webhook signature");
 		return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
 	}
 
@@ -78,7 +81,7 @@ export async function POST(request: Request) {
 
 	// Get event type from GitHub header
 	const eventType = request.headers.get("X-GitHub-Event");
-	console.log(`[GitHubApp] Received webhook: ${eventType}`);
+	log.info({ eventType }, "Received webhook");
 
 	// Handle installation lifecycle events
 	if (eventType === "installation") {
@@ -89,14 +92,14 @@ export async function POST(request: Request) {
 			const status = action === "deleted" ? "deleted" : "suspended";
 			await integrations.updateStatusByGitHubInstallationId(installationId, status);
 
-			console.log(`[GitHubApp] Installation ${action}: ${installationId}`);
+			log.info({ action, installationId }, "Installation lifecycle event");
 			return NextResponse.json({ success: true, message: `Installation ${action}` });
 		}
 
 		if (installationId && action === "unsuspend") {
 			await integrations.updateStatusByGitHubInstallationId(installationId, "active");
 
-			console.log(`[GitHubApp] Installation unsuspended: ${installationId}`);
+			log.info({ installationId }, "Installation unsuspended");
 			return NextResponse.json({ success: true, message: "Installation unsuspended" });
 		}
 
@@ -107,7 +110,7 @@ export async function POST(request: Request) {
 	// Extract installation ID for non-installation events
 	const installationId = extractInstallationId(payload);
 	if (!installationId) {
-		console.log("[GitHubApp] No installation ID in payload, skipping");
+		log.info("No installation ID in payload, skipping");
 		return NextResponse.json({
 			success: true,
 			message: "No installation ID, event skipped",
@@ -118,7 +121,7 @@ export async function POST(request: Request) {
 	const integration = await integrations.findActiveByGitHubInstallationId(installationId);
 
 	if (!integration) {
-		console.log(`[GitHubApp] No integration for installation: ${installationId}`);
+		log.info({ installationId }, "No integration for installation");
 		return NextResponse.json({
 			success: true,
 			message: "No integration found for installation",
@@ -129,7 +132,7 @@ export async function POST(request: Request) {
 	const activeTriggers = await triggers.findActiveByIntegrationId(integration.id);
 
 	if (activeTriggers.length === 0) {
-		console.log(`[GitHubApp] No active triggers for integration: ${integration.id}`);
+		log.info({ integrationId: integration.id }, "No active triggers for integration");
 		return NextResponse.json({
 			success: true,
 			message: "No active triggers for this integration",
@@ -139,7 +142,7 @@ export async function POST(request: Request) {
 	// Get the provider for parsing
 	const provider = getProviderByType("github");
 	if (!provider) {
-		console.error("[GitHubApp] GitHub provider not found");
+		log.error("GitHub provider not found");
 		return NextResponse.json({ error: "Provider not found" }, { status: 500 });
 	}
 
@@ -147,7 +150,7 @@ export async function POST(request: Request) {
 	const items = provider.parseWebhook(payload);
 
 	if (items.length === 0) {
-		console.log(`[GitHubApp] Event type not supported: ${eventType}`);
+		log.info({ eventType }, "Event type not supported");
 		return NextResponse.json({
 			success: true,
 			message: "Event type not supported",
@@ -201,7 +204,7 @@ export async function POST(request: Request) {
 					status: "queued",
 				});
 			} catch (err) {
-				console.error("[GitHubApp] Failed to create event:", err);
+				log.error({ err }, "Failed to create event");
 				continue;
 			}
 
@@ -223,7 +226,7 @@ export async function POST(request: Request) {
 						}),
 					});
 				} catch (err) {
-					console.error("[GitHubApp] Failed to queue event:", err);
+					log.error({ err }, "Failed to queue event");
 					// Don't fail - event is recorded, can be processed later
 				}
 			}

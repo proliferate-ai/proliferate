@@ -12,7 +12,10 @@ import {
 	UpdatePrebuildInputSchema,
 } from "@proliferate/shared";
 import { z } from "zod";
+import { logger } from "@/lib/logger";
 import { orgProcedure } from "./middleware";
+
+const log = logger.child({ handler: "prebuilds" });
 
 export const prebuildsRouter = {
 	/**
@@ -67,7 +70,7 @@ export const prebuildsRouter = {
 					throw new ORPCError("BAD_REQUEST", { message });
 				}
 
-				console.error("Failed to create prebuild:", error);
+				log.error({ err: error }, "Failed to create prebuild");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", { message });
 			}
 		}),
@@ -114,7 +117,7 @@ export const prebuildsRouter = {
 					throw new ORPCError("BAD_REQUEST", { message });
 				}
 
-				console.error("Failed to update prebuild:", error);
+				log.error({ err: error }, "Failed to update prebuild");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", { message });
 			}
 		}),
@@ -136,7 +139,7 @@ export const prebuildsRouter = {
 				await prebuilds.deletePrebuild(input.id);
 				return { success: true };
 			} catch (error) {
-				console.error("Failed to delete prebuild:", error);
+				log.error({ err: error }, "Failed to delete prebuild");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
 					message: "Failed to delete prebuild",
 				});

@@ -23,6 +23,7 @@ import {
 	sql,
 	user,
 } from "../db/client";
+import { getServicesLogger } from "../logger";
 
 // ============================================
 // Type Exports (from Drizzle schema)
@@ -660,20 +661,15 @@ export async function findFirstActiveNangoGitHubForRepos(
 export async function upsertGitHubAppInstallation(
 	input: UpsertGitHubAppInstallationInput,
 ): Promise<IntegrationRow | null> {
+	const logger = getServicesLogger().child({ module: "integrations-db", orgId: input.organizationId });
 	const db = getDb();
 	const connectionId = `github-app-${input.installationId}`;
 
-	console.log(
-		"[upsertGitHubAppInstallation] DATABASE_URL:",
-		`${process.env.DATABASE_URL?.substring(0, 50)}...`,
-	);
-	console.log("[upsertGitHubAppInstallation] Input:", {
-		organizationId: input.organizationId,
+	logger.debug({
 		installationId: input.installationId,
 		displayName: input.displayName,
-		createdBy: input.createdBy,
 		connectionId,
-	});
+	}, "Upserting GitHub App installation");
 
 	// Check if row already exists for this org
 	const existing = await db.query.integrations.findFirst({
@@ -682,7 +678,7 @@ export async function upsertGitHubAppInstallation(
 			eq(integrations.organizationId, input.organizationId),
 		),
 	});
-	console.log("[upsertGitHubAppInstallation] Existing row for this org:", existing ?? "none");
+	logger.debug({ existingId: existing?.id ?? null }, "Checked for existing installation");
 
 	try {
 		const [result] = await db
@@ -707,7 +703,7 @@ export async function upsertGitHubAppInstallation(
 			})
 			.returning();
 
-		console.log("[upsertGitHubAppInstallation] Upsert result:", result ?? "null");
+		logger.debug({ resultId: result?.id ?? null }, "Upsert complete");
 
 		// Verify it was actually written
 		const verify = await db.query.integrations.findFirst({
@@ -716,11 +712,11 @@ export async function upsertGitHubAppInstallation(
 				eq(integrations.organizationId, input.organizationId),
 			),
 		});
-		console.log("[upsertGitHubAppInstallation] Verification read:", verify ?? "NOT FOUND");
+		logger.debug({ verified: !!verify }, "Verification read");
 
 		return result ?? null;
 	} catch (error) {
-		console.error("[upsertGitHubAppInstallation] Error:", error);
+		logger.error({ err: error }, "Failed to upsert GitHub App installation");
 		throw error;
 	}
 }

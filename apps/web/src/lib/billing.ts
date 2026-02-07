@@ -9,8 +9,11 @@
  * - Unified gating for all session operations
  */
 
+import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
 import { orgs, sessions } from "@proliferate/services";
+
+const log = logger.child({ module: "billing" });
 import {
 	type BillingPlan,
 	type BillingState,
@@ -83,7 +86,7 @@ export async function checkCanStartSession(
 	const org = await orgs.getBillingInfoV2(orgId);
 
 	if (!org) {
-		console.error(`[Billing] FAIL-CLOSED: Failed to fetch org ${orgId}`);
+		log.error({ orgId }, "FAIL-CLOSED: Failed to fetch org");
 		return {
 			allowed: false,
 			error: "Failed to verify billing status",
@@ -130,7 +133,7 @@ export async function checkCanStartSession(
 			try {
 				await orgs.expireGraceForOrg(orgId);
 			} catch (err) {
-				console.error(`[Billing] Failed to expire grace for org ${orgId}:`, err);
+				log.error({ err, orgId }, "Failed to expire grace for org");
 			}
 		}
 		return {
@@ -200,7 +203,7 @@ export async function getOrgBillingStatus(orgId: string): Promise<{
 			plan: activeProduct?.id ?? undefined,
 		};
 	} catch (err) {
-		console.error(`[Billing] Failed to get billing status for org ${orgId}:`, err);
+		log.error({ err, orgId }, "Failed to get billing status for org");
 		return { configured: false };
 	}
 }

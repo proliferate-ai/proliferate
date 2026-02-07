@@ -6,6 +6,7 @@
  */
 
 import type { WakeableClient } from "@proliferate/gateway-clients/server";
+import type { Logger } from "@proliferate/logger";
 import { sessions } from "@proliferate/services";
 import {
 	type ClientSource,
@@ -17,11 +18,13 @@ import type IORedis from "ioredis";
 
 export class SessionSubscriber {
 	private readonly redis: IORedis;
+	private readonly logger: Logger;
 	private readonly clients = new Map<ClientSource, WakeableClient>();
 	private isRunning = false;
 
-	constructor(redis: IORedis) {
+	constructor(redis: IORedis, logger: Logger) {
 		this.redis = redis;
+		this.logger = logger;
 	}
 
 	/**
@@ -29,7 +32,7 @@ export class SessionSubscriber {
 	 */
 	registerClient(client: WakeableClient): void {
 		this.clients.set(client.clientType, client);
-		console.log(`[SessionSubscriber] Registered client: ${client.clientType}`);
+		this.logger.info({ clientType: client.clientType }, "Registered client");
 	}
 
 	/**
@@ -41,7 +44,7 @@ export class SessionSubscriber {
 		}
 
 		this.isRunning = true;
-		console.log(`[SessionSubscriber] Starting, subscribing to ${SESSION_EVENTS_CHANNEL}`);
+		this.logger.info({ channel: SESSION_EVENTS_CHANNEL }, "Starting, subscribing to channel");
 
 		// Subscribe to the channel
 		await this.redis.subscribe(SESSION_EVENTS_CHANNEL);
@@ -53,11 +56,11 @@ export class SessionSubscriber {
 			}
 
 			this.handleMessage(message).catch((err) => {
-				console.error("[SessionSubscriber] Error handling message:", err);
+				this.logger.error({ err }, "Error handling message");
 			});
 		});
 
-		console.log("[SessionSubscriber] Started");
+		this.logger.info("Started");
 	}
 
 	/**
@@ -69,10 +72,10 @@ export class SessionSubscriber {
 		}
 
 		this.isRunning = false;
-		console.log("[SessionSubscriber] Stopping...");
+		this.logger.info("Stopping");
 
 		await this.redis.unsubscribe(SESSION_EVENTS_CHANNEL);
-		console.log("[SessionSubscriber] Stopped");
+		this.logger.info("Stopped");
 	}
 
 	private async handleMessage(message: string): Promise<void> {
@@ -80,7 +83,7 @@ export class SessionSubscriber {
 		try {
 			event = JSON.parse(message) as SessionEventMessage;
 		} catch {
-			console.warn("[SessionSubscriber] Invalid JSON message:", message);
+			this.logger.warn({ message }, "Invalid JSON message");
 			return;
 		}
 
@@ -100,12 +103,13 @@ export class SessionSubscriber {
 		// Find the registered client for this type
 		const client = this.clients.get(session.clientType);
 		if (!client) {
-			console.warn(`[SessionSubscriber] No client registered for type: ${session.clientType}`);
+			this.logger.warn({ clientType: session.clientType }, "No client registered for type");
 			return;
 		}
 
-		console.log(
-			`[SessionSubscriber] Waking ${session.clientType} client for session ${sessionId} (source: ${source})`,
+		this.logger.info(
+			{ clientType: session.clientType, sessionId, source },
+			"Waking client for session",
 		);
 
 		// Build wake options with message content

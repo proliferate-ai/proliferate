@@ -5,8 +5,11 @@
  * Uses automation ID so the URL is known before the trigger is created.
  */
 
+import { logger } from "@/lib/logger";
 import { automations, runs } from "@proliferate/services";
 import { NextResponse } from "next/server";
+
+const log = logger.child({ handler: "automation-webhook" });
 
 async function hmacSha256(secret: string, body: string): Promise<string> {
 	const encoder = new TextEncoder();
@@ -63,13 +66,13 @@ export async function POST(
 	const trigger = await automations.findWebhookTrigger(automationId);
 
 	if (!trigger) {
-		console.error(`[Webhook] No enabled webhook trigger for automation: ${automationId}`);
+		log.error({ automationId }, "No enabled webhook trigger for automation");
 		return NextResponse.json({ error: "No webhook trigger found" }, { status: 404 });
 	}
 
 	// Check if automation is enabled
 	if (!trigger.automation?.enabled) {
-		console.log(`[Webhook] Automation ${automationId} is disabled`);
+		log.info({ automationId }, "Automation is disabled");
 		return NextResponse.json({ error: "Automation is disabled" }, { status: 403 });
 	}
 
@@ -79,7 +82,7 @@ export async function POST(
 	if (requireSignature && trigger.webhookSecret) {
 		const isValid = await verifyWebhookSignature(request, body, trigger.webhookSecret);
 		if (!isValid) {
-			console.error(`[Webhook] Invalid signature for automation ${automationId}`);
+			log.error({ automationId }, "Invalid signature for automation");
 			return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
 		}
 	}
@@ -105,7 +108,7 @@ export async function POST(
 	const isDuplicate = await automations.isDuplicateTriggerEvent(trigger.id, dedupKey);
 
 	if (isDuplicate) {
-		console.log(`[Webhook] Duplicate webhook for automation ${automationId}`);
+		log.info({ automationId }, "Duplicate webhook for automation");
 		return NextResponse.json({
 			success: true,
 			message: "Duplicate webhook ignored",
@@ -141,7 +144,7 @@ export async function POST(
 			dedupKey,
 		});
 
-		console.log(`[Webhook] Created run ${run.id} for event ${event.id}`);
+		log.info({ runId: run.id, eventId: event.id }, "Created run for event");
 
 		return NextResponse.json({
 			success: true,
@@ -150,7 +153,7 @@ export async function POST(
 		});
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		console.error(`[Webhook] Failed to create run for automation ${automationId}:`, message);
+		log.error({ err, automationId }, "Failed to create run for automation");
 		return NextResponse.json({ error: "Failed to create run" }, { status: 500 });
 	}
 }

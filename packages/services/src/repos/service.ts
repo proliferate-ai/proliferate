@@ -6,6 +6,7 @@
 
 import { randomUUID } from "crypto";
 import type { Repo } from "@proliferate/shared";
+import { getServicesLogger } from "../logger";
 import type { CreateRepoInput, CreateRepoResult } from "../types/repos";
 import * as reposDb from "./db";
 import { toRepo, toRepoPartial, toRepos } from "./mapper";
@@ -76,7 +77,7 @@ export async function createRepo(input: CreateRepoInput): Promise<CreateRepoResu
 		try {
 			await reposDb.createConnection(repoId, input.integrationId);
 		} catch (error) {
-			console.error("Failed to create repo_connection:", error);
+			getServicesLogger().child({ module: "repos" }).error({ err: error, repoId }, "Failed to create repo_connection");
 			// Don't fail - repo was created successfully
 		}
 	}

@@ -6,6 +6,7 @@
 
 import http from "http";
 import express, { type Express } from "express";
+import { createHttpLogger, type Logger } from "@proliferate/logger";
 import { mountRoutes, setupWebSocket } from "./api";
 import { startSessionExpiryWorker } from "./expiry/expiry-queue";
 import { HubManager } from "./hub";
@@ -14,6 +15,7 @@ import { cors, errorHandler } from "./middleware";
 
 export interface ServerDependencies {
 	env: GatewayEnv;
+	logger: Logger;
 }
 
 export interface ServerResult {
@@ -26,7 +28,7 @@ export interface ServerResult {
  * Create and configure the Express app and HTTP server.
  */
 export function createServer(deps: ServerDependencies): ServerResult {
-	const { env } = deps;
+	const { env, logger } = deps;
 
 	// Create hub manager (now uses Drizzle via services module)
 	const hubManager = new HubManager(env);
@@ -36,6 +38,7 @@ export function createServer(deps: ServerDependencies): ServerResult {
 
 	// Middleware
 	app.use(cors);
+	app.use(createHttpLogger({ logger }));
 	app.use(express.json());
 
 	// Mount routes

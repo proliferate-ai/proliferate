@@ -4,14 +4,17 @@
  * All oRPC procedures are handled through this single endpoint.
  */
 
+import { logger } from "@/lib/logger";
 import { appRouter } from "@/server/routers";
 import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 
+const log = logger.child({ route: "rpc" });
+
 const handler = new RPCHandler(appRouter, {
 	interceptors: [
 		onError((error) => {
-			console.error("[oRPC Error]", error);
+			log.error({ err: error }, "oRPC error");
 		}),
 	],
 });

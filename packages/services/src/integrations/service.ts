@@ -7,6 +7,7 @@
 import { randomUUID } from "crypto";
 import type { Integration, IntegrationWithCreator } from "@proliferate/shared";
 import { toIsoString } from "../db/serialize";
+import { getServicesLogger } from "../logger";
 import * as sessions from "../sessions";
 import * as integrationsDb from "./db";
 import {
@@ -452,9 +453,10 @@ export interface SaveGitHubAppInstallationInput {
 export async function saveGitHubAppInstallation(
 	input: SaveGitHubAppInstallationInput,
 ): Promise<{ success: boolean }> {
-	console.log("saving github app installation");
+	const logger = getServicesLogger().child({ module: "integrations" });
+	logger.info({ orgId: input.organizationId, installationId: input.installationId }, "Saving GitHub App installation");
 	const result = await integrationsDb.upsertGitHubAppInstallation(input);
-	console.log(result);
+	logger.debug({ resultId: result?.id ?? null }, "GitHub App installation saved");
 
 	return { success: result !== null };
 }

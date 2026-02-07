@@ -5,8 +5,11 @@
  * Uses shared trigger processor for event handling.
  */
 
+import { logger } from "@/lib/logger";
 import { getProviderFromIntegrationId } from "@/lib/nango";
 import { env } from "@proliferate/environment/server";
+
+const log = logger.child({ handler: "nango-webhook" });
 import { integrations, triggers } from "@proliferate/services";
 import { getProviderByType } from "@proliferate/triggers";
 import { NextResponse } from "next/server";
@@ -87,13 +90,13 @@ async function hmacSha256(secret: string, body: string): Promise<string> {
 
 async function verifyNangoWebhook(request: Request, body: string): Promise<boolean> {
 	if (!NANGO_SECRET_KEY) {
-		console.warn("NANGO_SECRET_KEY not configured, skipping verification");
+		log.warn("NANGO_SECRET_KEY not configured, skipping verification");
 		return true;
 	}
 
 	const signature = request.headers.get("X-Nango-Hmac-Sha256");
 	if (!signature) {
-		console.error("Missing X-Nango-Hmac-Sha256 header");
+		log.error("Missing X-Nango-Hmac-Sha256 header");
 		return false;
 	}
 
@@ -112,7 +115,7 @@ async function handleAuthWebhook(webhook: NangoAuthWebhook): Promise<void> {
 	);
 
 	if (!integration) {
-		console.log("Integration not found for connection:", webhook.connectionId);
+		log.info({ connectionId: webhook.connectionId }, "Integration not found for connection");
 		return;
 	}
 
@@ -124,16 +127,17 @@ async function handleAuthWebhook(webhook: NangoAuthWebhook): Promise<void> {
 		newStatus = "active";
 	} else if (webhook.operation === "refresh" && !webhook.success) {
 		newStatus = "error";
-		console.error(
-			`Token refresh failed for ${webhook.providerConfigKey}:`,
-			webhook.error?.description,
+		log.error(
+			{ providerConfigKey: webhook.providerConfigKey, error: webhook.error?.description },
+			"Token refresh failed",
 		);
 	}
 
 	if (newStatus && newStatus !== integration.status) {
 		await integrations.updateStatus(integration.id, newStatus);
-		console.log(
-			`Updated integration ${integration.id} status: ${integration.status} → ${newStatus}`,
+		log.info(
+			{ integrationId: integration.id, oldStatus: integration.status, newStatus },
+			"Updated integration status",
 		);
 	}
 }
@@ -148,14 +152,14 @@ async function handleForwardWebhook(
 	// Map Nango integration ID to our provider type
 	const providerType = getProviderFromIntegrationId(webhook.from);
 	if (!providerType) {
-		console.log("Unsupported forward webhook provider:", webhook.from);
+		log.info({ from: webhook.from }, "Unsupported forward webhook provider");
 		return { processed: 0, skipped: 0 };
 	}
 
 	// Get the provider implementation
 	const provider = getProviderByType(providerType);
 	if (!provider) {
-		console.error("Provider not found:", providerType);
+		log.error({ providerType }, "Provider not found");
 		return { processed: 0, skipped: 0 };
 	}
 
@@ -166,21 +170,21 @@ async function handleForwardWebhook(
 	);
 
 	if (!integration) {
-		console.log("Integration not found for connection:", webhook.connectionId);
+		log.info({ connectionId: webhook.connectionId }, "Integration not found for connection");
 		return { processed: 0, skipped: 0 };
 	}
 
 	// Find active triggers for this integration
 	const triggerRows = await triggers.findActiveWebhookTriggers(integration.id);
 	if (triggerRows.length === 0) {
-		console.log("No active webhook triggers for integration:", integration.id);
+		log.info({ integrationId: integration.id }, "No active webhook triggers for integration");
 		return { processed: 0, skipped: 0 };
 	}
 
 	// Parse the forwarded payload using the provider
 	const items = provider.parseWebhook(webhook.payload);
 	if (items.length === 0) {
-		console.log("Event type not supported by provider:", webhook.from);
+		log.info({ from: webhook.from }, "Event type not supported by provider");
 		return { processed: 0, skipped: 0 };
 	}
 
@@ -199,7 +203,7 @@ export async function POST(request: Request) {
 	// Verify signature
 	const isValid = await verifyNangoWebhook(request, body);
 	if (!isValid) {
-		console.error("Invalid Nango webhook signature");
+		log.error("Invalid Nango webhook signature");
 		return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
 	}
 
@@ -211,7 +215,7 @@ export async function POST(request: Request) {
 		return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 	}
 
-	console.log(`Received Nango webhook: type=${webhook.type}`);
+	log.info({ type: webhook.type }, "Received Nango webhook");
 
 	try {
 		switch (webhook.type) {
@@ -220,7 +224,7 @@ export async function POST(request: Request) {
 				return NextResponse.json({ success: true, type: "auth" });
 
 			case "sync":
-				console.log(`Sync ${webhook.syncName} completed: success=${webhook.success}`);
+				log.info({ syncName: webhook.syncName, success: webhook.success }, "Sync completed");
 				return NextResponse.json({ success: true, type: "sync" });
 
 			case "forward": {
@@ -234,11 +238,11 @@ export async function POST(request: Request) {
 			}
 
 			default:
-				console.log("Unknown webhook type:", (webhook as NangoWebhook).type);
+				log.info({ type: (webhook as NangoWebhook).type }, "Unknown webhook type");
 				return NextResponse.json({ success: true, type: "unknown" });
 		}
 	} catch (err) {
-		console.error("Error processing Nango webhook:", err);
+		log.error({ err }, "Error processing Nango webhook");
 		return NextResponse.json({ error: "Internal server error" }, { status: 500 });
 	}
 }

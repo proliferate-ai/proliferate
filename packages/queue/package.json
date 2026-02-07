@@ -13,6 +13,7 @@
 	},
 	"dependencies": {
 		"@proliferate/environment": "workspace:*",
+		"@proliferate/logger": "workspace:*",
 		"bullmq": "^5.30.1",
 		"ioredis": "^5.4.1"
 	},

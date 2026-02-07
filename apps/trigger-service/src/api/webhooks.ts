@@ -1,7 +1,10 @@
+import { createLogger } from "@proliferate/logger";
 import { integrations, triggers as triggerService } from "@proliferate/services";
 import { type IRouter, Router } from "express";
 import { processTriggerEvents } from "../lib/trigger-processor.js";
 import { dispatchIntegrationWebhook } from "../lib/webhook-dispatcher.js";
+
+const logger = createLogger({ service: "trigger-service", base: { module: "webhooks" } });
 
 export const webhookRouter: IRouter = Router();
 
@@ -22,7 +25,7 @@ webhookRouter.post("/nango", async (req, res) => {
 		);
 
 		if (!integration) {
-			console.log("[Webhook] Integration not found for connection:", dispatch.connectionId);
+			logger.info({ connectionId: dispatch.connectionId }, "Integration not found for connection");
 			return res.json({ processed: 0, skipped: 0 });
 		}
 
@@ -47,7 +50,7 @@ webhookRouter.post("/nango", async (req, res) => {
 		if (error instanceof Error && error.message === "Invalid signature") {
 			return res.status(401).json({ error: "Invalid signature" });
 		}
-		console.error("Webhook error:", error);
+		logger.error({ err: error }, "Webhook error");
 		res.status(500).json({ error: "Internal server error" });
 	}
 });

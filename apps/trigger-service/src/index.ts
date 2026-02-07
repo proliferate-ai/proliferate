@@ -1,7 +1,12 @@
 import { env } from "@proliferate/environment/server";
+import { createLogger } from "@proliferate/logger";
+import { setServicesLogger } from "@proliferate/services/logger";
 import { registerDefaultTriggers } from "@proliferate/triggers";
 import { startPollingWorker } from "./polling/worker.js";
 import { createServer } from "./server.js";
+
+const logger = createLogger({ service: "trigger-service" });
+setServicesLogger(logger);
 
 const PORT = process.env.PORT || 3001;
 
@@ -18,7 +23,7 @@ const server = createServer();
 const pollingWorker = startPollingWorker();
 
 server.listen(PORT, () => {
-	console.log(`Trigger service listening on port ${PORT}`);
+	logger.info({ port: PORT }, "Trigger service listening");
 });
 
 process.on("SIGINT", async () => {

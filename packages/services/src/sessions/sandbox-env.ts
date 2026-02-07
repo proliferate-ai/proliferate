@@ -8,6 +8,7 @@
 import type { RepoSpec } from "@proliferate/shared";
 import { generateSessionAPIKey } from "@proliferate/shared/llm-proxy";
 import { decrypt, getEncryptionKey } from "../db/crypto";
+import { getServicesLogger } from "../logger";
 import * as secrets from "../secrets";
 
 export interface SandboxEnvInput {
@@ -38,6 +39,7 @@ function resolveDefaultGitToken(repoSpecs?: RepoSpec[]): string | null {
 
 export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<SandboxEnvResult> {
 	const startMs = Date.now();
+	const logger = getServicesLogger().child({ module: "sandbox-env", sessionId: input.sessionId });
 	const envVars: Record<string, string> = {};
 	const requireProxy = normalizeBoolean(
 		input.requireProxy ?? process.env.LLM_PROXY_REQUIRED,
@@ -45,14 +47,12 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 	);
 	const proxyUrl = process.env.LLM_PROXY_URL;
 
-	console.log("[P-LATENCY] sandbox_env.build.start", {
-		sessionId: input.sessionId,
-		shortId: input.sessionId.slice(0, 8),
+	logger.debug({
 		repoCount: input.repoIds.length,
 		requireProxy,
 		hasProxyUrl: Boolean(proxyUrl),
 		hasDirectApiKey: Boolean(input.directApiKey ?? process.env.ANTHROPIC_API_KEY),
-	});
+	}, "Building sandbox env vars");
 
 	if (!proxyUrl) {
 		if (requireProxy) {
@@ -63,20 +63,11 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 		try {
 			const keyStartMs = Date.now();
 			const apiKey = await generateSessionAPIKey(input.sessionId, input.orgId);
-			console.log("[P-LATENCY] sandbox_env.llm_proxy.generate_session_key", {
-				sessionId: input.sessionId,
-				shortId: input.sessionId.slice(0, 8),
-				durationMs: Date.now() - keyStartMs,
-			});
+			logger.debug({ durationMs: Date.now() - keyStartMs }, "Generated LLM proxy session key");
 			envVars.LLM_PROXY_API_KEY = apiKey;
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
-			console.error("[P-LATENCY] sandbox_env.llm_proxy.generate_session_key.error", {
-				sessionId: input.sessionId,
-				shortId: input.sessionId.slice(0, 8),
-				durationMs: Date.now() - startMs,
-				error: message,
-			});
+			logger.error({ err, durationMs: Date.now() - startMs }, "Failed to generate LLM proxy session key");
 			throw new Error(`LLM proxy enabled but failed to generate session key: ${message}`);
 		}
 	}
@@ -84,19 +75,14 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 	// Decrypt and add secrets (both org-scoped and repo-scoped)
 	const secretsStartMs = Date.now();
 	const secretRows = await secrets.getSecretsForSession(input.orgId, input.repoIds);
-	console.log("[P-LATENCY] sandbox_env.secrets.fetch", {
-		sessionId: input.sessionId,
-		shortId: input.sessionId.slice(0, 8),
-		durationMs: Date.now() - secretsStartMs,
-		count: secretRows?.length ?? 0,
-	});
+	logger.debug({ durationMs: Date.now() - secretsStartMs, count: secretRows?.length ?? 0 }, "Fetched secrets");
 	if (secretRows && secretRows.length > 0) {
 		const encryptionKey = getEncryptionKey();
 		for (const secret of secretRows) {
 			try {
 				envVars[secret.key] = decrypt(secret.encryptedValue, encryptionKey);
 			} catch (err) {
-				console.error("Failed to decrypt secret", secret.key, err);
+				logger.error({ err, secretKey: secret.key }, "Failed to decrypt secret");
 			}
 		}
 	}
@@ -108,12 +94,10 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 		envVars.GH_TOKEN = defaultGitToken;
 	}
 
-	console.log("[P-LATENCY] sandbox_env.build.complete", {
-		sessionId: input.sessionId,
-		shortId: input.sessionId.slice(0, 8),
+	logger.debug({
 		durationMs: Date.now() - startMs,
 		envKeyCount: Object.keys(envVars).length,
 		usesProxy: Boolean(proxyUrl),
-	});
+	}, "Sandbox env vars build complete");
 	return { envVars, usesProxy: Boolean(proxyUrl) };
 }

@@ -7,6 +7,7 @@
  */
 
 import { createParser } from "eventsource-parser";
+import { createLogger, type Logger } from "@proliferate/logger";
 import type { GatewayEnv } from "../lib/env";
 import type { OpenCodeEvent } from "../types";
 
@@ -24,11 +25,14 @@ export class SseClient {
 	private heartbeatInterval: NodeJS.Timeout | null = null;
 	private currentUrl: string | null = null;
 	private connectStartTime = 0;
+	private readonly logger: Logger;
 
-	constructor(private readonly options: SseClientOptions) {}
+	constructor(private readonly options: SseClientOptions) {
+		this.logger = createLogger({ service: "gateway" }).child({ module: "sse-client" });
+	}
 
 	private logLatency(event: string, data?: Record<string, unknown>): void {
-		console.log(`[P-LATENCY] ${event}`, data || {});
+		this.logger.debug({ latency: true, ...data }, event);
 	}
 
 	/**
@@ -126,7 +130,7 @@ export class SseClient {
 					this.lastEventTime = Date.now();
 					this.options.onEvent(parsed);
 				} catch (err) {
-					console.warn("[SseClient] Invalid JSON payload", err);
+					this.logger.warn({ err }, "Invalid JSON payload");
 				}
 			},
 		});
@@ -155,16 +159,16 @@ export class SseClient {
 				}
 				const errorInfo = this.buildErrorInfo(err, controller);
 				if (err instanceof Error && err.message === "SSE_READ_TIMEOUT") {
-					console.error("[SseClient] Read timeout", errorInfo);
+					this.logger.error(errorInfo, "Read timeout");
 					this.logLatency("sse.read_timeout", errorInfo);
 				}
 				if (isStreamTerminationError(err)) {
-					console.warn("[SseClient] Stream closed", errorInfo);
+					this.logger.warn(errorInfo, "Stream closed");
 					this.logLatency("sse.stream_closed", errorInfo);
 					this.handleDisconnect("stream_closed");
 					return;
 				}
-				console.error("[SseClient] Stream error", errorInfo, err);
+				this.logger.error({ err, ...errorInfo }, "Stream error");
 				this.logLatency("sse.stream_error", errorInfo);
 				this.handleDisconnect("stream_error");
 				return;
@@ -175,13 +179,13 @@ export class SseClient {
 			if (controller.signal.aborted) {
 				return;
 			}
-			console.warn("[SseClient] Stream ended", this.buildErrorInfo(null, controller));
+			this.logger.warn(this.buildErrorInfo(null, controller), "Stream ended");
 			this.logLatency("sse.stream_ended", this.buildErrorInfo(null, controller));
 			this.handleDisconnect("stream_closed");
 		};
 
 		readLoop().catch((err) => {
-			console.error("[SseClient] Read loop error", err);
+			this.logger.error({ err }, "Read loop error");
 			this.logLatency("sse.read_loop_error", {
 				error: err instanceof Error ? err.message : String(err),
 			});
@@ -221,7 +225,7 @@ export class SseClient {
 		this.heartbeatInterval = setInterval(() => {
 			const timeSinceLastEvent = Date.now() - this.lastEventTime;
 			if (this.connected && timeSinceLastEvent > this.options.env.heartbeatTimeoutMs) {
-				console.error(`[SseClient] Heartbeat timeout after ${timeSinceLastEvent}ms`);
+				this.logger.error({ timeSinceLastEventMs: timeSinceLastEvent }, "Heartbeat timeout");
 				this.logLatency("sse.heartbeat_timeout", {
 					url: this.currentUrl,
 					timeSinceLastEventMs: timeSinceLastEvent,

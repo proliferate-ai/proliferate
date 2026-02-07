@@ -8,6 +8,7 @@
  */
 
 import { env } from "@proliferate/environment/server";
+import type { Logger } from "@proliferate/logger";
 import { getRedisClient } from "@proliferate/queue";
 import { billing, orgs } from "@proliferate/services";
 import type { SandboxProvider } from "@proliferate/shared";
@@ -22,6 +23,7 @@ let llmSyncInterval: NodeJS.Timeout | null = null;
 let outboxInterval: NodeJS.Timeout | null = null;
 let graceInterval: NodeJS.Timeout | null = null;
 let isRunning = false;
+let _logger: Logger;
 
 // ============================================
 // Billing Functions
@@ -42,7 +44,7 @@ async function runMeteringCycle(): Promise<void> {
 
 		await billing.runMeteringCycle(redis, providers);
 	} catch (error) {
-		console.error("[BillingWorker] Metering cycle error:", error);
+		_logger.error({ err: error }, "Metering cycle error");
 	}
 }
 
@@ -61,7 +63,7 @@ async function processOutbox(): Promise<void> {
 
 		await billing.processOutbox(redis, providers);
 	} catch (error) {
-		console.error("[BillingWorker] Outbox processing error:", error);
+		_logger.error({ err: error }, "Outbox processing error");
 	}
 }
 
@@ -80,6 +82,8 @@ async function syncLLMSpend(): Promise<void> {
 	if (!env.NEXT_PUBLIC_BILLING_ENABLED) {
 		return;
 	}
+
+	const llmLog = _logger.child({ op: "llm-sync" });
 
 	try {
 		const { calculateLLMCredits, METERING_CONFIG } = await import("@proliferate/shared/billing");
@@ -100,18 +104,19 @@ async function syncLLMSpend(): Promise<void> {
 					recordsProcessed: 0,
 					syncedAt: new Date(),
 				};
-				console.log(`[LLMSync] Bootstrap(full): seeding cursor at ${earliestLog.toISOString()}`);
+				llmLog.info({ seedTime: earliestLog.toISOString() }, "Bootstrap(full): seeding cursor");
 			} else {
-				console.log("[LLMSync] Bootstrap(full): no spend logs found");
+				llmLog.info("Bootstrap(full): no spend logs found");
 			}
 		}
 
 		const isBootstrap = !cursor;
 		if (isBootstrap) {
-			console.log(`[LLMSync] No cursor found; mode=${bootstrapMode}`);
+			llmLog.info({ bootstrapMode }, "No cursor found");
 			if (bootstrapMode !== "full") {
-				console.log(
-					`[LLMSync] Using recent lookback (${METERING_CONFIG.llmSyncBootstrapLookbackMs}ms). Set LLM_SYNC_BOOTSTRAP_MODE=full for backfill.`,
+				llmLog.info(
+					{ lookbackMs: METERING_CONFIG.llmSyncBootstrapLookbackMs },
+					"Using recent lookback. Set LLM_SYNC_BOOTSTRAP_MODE=full for backfill",
 				);
 			}
 		}
@@ -135,7 +140,7 @@ async function syncLLMSpend(): Promise<void> {
 
 			batchCount++;
 			lastBatchSize = logs.length;
-			console.log(`[LLMSync] Processing batch ${batchCount}: ${logs.length} spend logs`);
+			llmLog.info({ batch: batchCount, count: logs.length }, "Processing batch");
 
 			for (const log of logs) {
 				// Validate spend is a positive finite number (guard against NaN/Infinity from external input)
@@ -174,19 +179,22 @@ async function syncLLMSpend(): Promise<void> {
 						if (result.previousState === "trial" && result.newState === "exhausted") {
 							const activation = await billing.tryActivatePlanAfterTrial(log.team_id);
 							if (activation.activated) {
-								console.log(
-									`[LLMSync] Org ${log.team_id} trial auto-activated; skipping termination`,
+								llmLog.info(
+									{ orgId: log.team_id },
+									"Trial auto-activated; skipping termination",
 								);
 								continue;
 							}
 						}
-						console.log(
-							`[LLMSync] Org ${log.team_id} balance exhausted, should terminate sessions: ${result.enforcementReason}`,
+						llmLog.info(
+							{ orgId: log.team_id, reason: result.enforcementReason },
+							"Balance exhausted, should terminate sessions",
 						);
 						await billing.handleCreditsExhaustedV2(log.team_id, providers);
 					} else if (result.shouldBlockNewSessions) {
-						console.log(
-							`[LLMSync] Org ${log.team_id} entering grace period: ${result.enforcementReason}`,
+						llmLog.info(
+							{ orgId: log.team_id, reason: result.enforcementReason },
+							"Entering grace period",
 						);
 					}
 				}
@@ -244,15 +252,16 @@ async function syncLLMSpend(): Promise<void> {
 		}
 
 		if (totalProcessed > 0) {
-			console.log(`[LLMSync] Synced ${totalProcessed} LLM spend logs in ${batchCount} batches`);
+			llmLog.info({ totalProcessed, batchCount }, "Synced LLM spend logs");
 		}
 		if (batchCount >= maxBatches && lastBatchSize === METERING_CONFIG.llmSyncBatchSize) {
-			console.log(
-				`[LLMSync] Reached max batches (${maxBatches})${isBootstrap ? " during bootstrap" : ""}; more logs may remain. Increase LLM_SYNC_MAX_BATCHES if needed.`,
+			llmLog.info(
+				{ maxBatches, isBootstrap },
+				"Reached max batches; more logs may remain. Increase LLM_SYNC_MAX_BATCHES if needed",
 			);
 		}
 	} catch (error) {
-		console.error("[LLMSync] Error syncing LLM spend:", error);
+		llmLog.error({ err: error }, "Error syncing LLM spend");
 	}
 }
 
@@ -264,6 +273,8 @@ async function checkGraceExpirations(): Promise<void> {
 		return;
 	}
 
+	const graceLog = _logger.child({ op: "grace" });
+
 	try {
 		const expiredOrgs = await orgs.listGraceExpiredOrgs();
 		if (!expiredOrgs.length) return;
@@ -273,13 +284,13 @@ async function checkGraceExpirations(): Promise<void> {
 			try {
 				await orgs.expireGraceForOrg(org.id);
 				await billing.handleCreditsExhaustedV2(org.id, providers);
-				console.log(`[Grace] Org ${org.id} grace expired -> exhausted`);
+				graceLog.info({ orgId: org.id }, "Grace expired -> exhausted");
 			} catch (err) {
-				console.error(`[Grace] Failed to expire grace for org ${org.id}:`, err);
+				graceLog.error({ err, orgId: org.id }, "Failed to expire grace for org");
 			}
 		}
 	} catch (err) {
-		console.error("[Grace] Error checking grace expirations:", err);
+		graceLog.error({ err }, "Error checking grace expirations");
 	}
 }
 
@@ -320,13 +331,15 @@ async function getProvidersMap(): Promise<Map<string, SandboxProvider>> {
  * Start the billing worker.
  * Runs metering every 30s, LLM sync every 30s, and outbox every 60s.
  */
-export function startBillingWorker(): void {
+export function startBillingWorker(logger: Logger): void {
+	_logger = logger;
+
 	if (isRunning) {
-		console.warn("[BillingWorker] Already running");
+		_logger.warn("Already running");
 		return;
 	}
 
-	console.log("[BillingWorker] Starting billing worker...");
+	_logger.info("Starting billing worker");
 
 	// Run metering every 30 seconds
 	meteringInterval = setInterval(async () => {
@@ -353,10 +366,10 @@ export function startBillingWorker(): void {
 
 	isRunning = true;
 
-	console.log("[BillingWorker] Billing worker started:");
-	console.log("  - Metering cycle: every 30 seconds");
-	console.log("  - LLM spend sync: every 30 seconds");
-	console.log("  - Outbox processing: every 60 seconds");
+	_logger.info(
+		{ meteringIntervalSec: 30, llmSyncIntervalSec: 30, outboxIntervalSec: 60 },
+		"Billing worker started",
+	);
 
 	// Run initial cycles after a short delay
 	setTimeout(runMeteringCycle, 5_000);
@@ -371,7 +384,7 @@ export function stopBillingWorker(): void {
 		return;
 	}
 
-	console.log("[BillingWorker] Stopping billing worker...");
+	_logger.info("Stopping billing worker");
 
 	if (meteringInterval) {
 		clearInterval(meteringInterval);
@@ -393,7 +406,7 @@ export function stopBillingWorker(): void {
 	}
 
 	isRunning = false;
-	console.log("[BillingWorker] Billing worker stopped");
+	_logger.info("Billing worker stopped");
 }
 
 /**

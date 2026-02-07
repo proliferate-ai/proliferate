@@ -1,7 +1,10 @@
 import { requireAuth } from "@/lib/auth-helpers";
 import { verifyInstallation } from "@/lib/github-app";
+import { logger } from "@/lib/logger";
 import { integrations } from "@proliferate/services";
 import { type NextRequest, NextResponse } from "next/server";
+
+const log = logger.child({ route: "integrations/github/callback" });
 
 /**
  * Get the base URL for redirects, respecting proxy headers (ngrok, etc.)
@@ -74,14 +77,7 @@ export async function GET(request: NextRequest) {
 
 	// Use targetOrgId from state if provided (CLI flow), otherwise use browser's active org
 	const orgId = targetOrgId || authResult.session.session.activeOrganizationId;
-	console.log(
-		"[GitHub Callback] Using orgId:",
-		orgId,
-		"targetOrgId:",
-		targetOrgId,
-		"activeOrgId:",
-		authResult.session.session.activeOrganizationId,
-	);
+	log.info({ orgId, targetOrgId, activeOrgId: authResult.session.session.activeOrganizationId }, "Using orgId");
 	if (!orgId) {
 		return NextResponse.redirect(new URL("/dashboard?error=no_org", baseUrl));
 	}
@@ -100,12 +96,12 @@ export async function GET(request: NextRequest) {
 
 	try {
 		// Verify the installation exists and get details
-		console.log("[GitHub Callback] Verifying installation:", installationId);
+		log.info({ installationId }, "Verifying installation");
 		const installation = await verifyInstallation(installationId);
-		console.log("[GitHub Callback] Installation verified:", installation.account.login);
+		log.info({ account: installation.account.login }, "Installation verified");
 
 		const displayName = `${installation.account.login} (${installation.account.type})`;
-		console.log("[GitHub Callback] Saving integration for org:", orgId);
+		log.info({ orgId }, "Saving integration");
 
 		// Save the GitHub App installation using the service layer
 		const result = await integrations.saveGitHubAppInstallation({
@@ -116,16 +112,16 @@ export async function GET(request: NextRequest) {
 		});
 
 		if (!result.success) {
-			console.error("[GitHub Callback] Failed to save GitHub installation");
+			log.error("Failed to save GitHub installation");
 			return NextResponse.redirect(new URL("/dashboard?error=save_failed", baseUrl));
 		}
 
-		console.log("[GitHub Callback] Integration saved successfully");
+		log.info("Integration saved successfully");
 		const redirectUrl = new URL(returnUrl, baseUrl);
 		redirectUrl.searchParams.set("success", "github");
 		return NextResponse.redirect(redirectUrl);
 	} catch (error) {
-		console.error("GitHub callback error:", error);
+		log.error({ err: error }, "GitHub callback error");
 		return NextResponse.redirect(new URL("/dashboard?error=github_callback_failed", baseUrl));
 	}
 }
