@@ -1,6 +1,5 @@
 "use client";
 
-import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
 import { openIntercomMessenger } from "@/components/providers";
 import {
 	AlertDialog,
@@ -14,20 +13,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { BoltIcon, SidebarCollapseIcon, SidebarExpandIcon, SlackIcon } from "@/components/ui/icons";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Text } from "@/components/ui/text";
-import {
-	useAutomations,
-	useCreateAutomation,
-	useDeleteAutomation,
-	useMyClaimedRuns,
-	useUpdateAutomation,
-} from "@/hooks/use-automations";
+import { useMyClaimedRuns } from "@/hooks/use-automations";
 import { useSlackStatus } from "@/hooks/use-integrations";
 import { usePrebuilds } from "@/hooks/use-prebuilds";
 import {
@@ -49,6 +41,7 @@ import {
 	Menu,
 	MessageCircle,
 	Moon,
+	Plug,
 	Plus,
 	Settings,
 	Sun,
@@ -59,24 +52,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AddSnapshotButton } from "./add-snapshot-button";
-import { AutomationRow } from "./automation-row";
 import { SearchTrigger } from "./command-search";
 import { ConfigurationGroup } from "./configuration-group";
-
-interface Creator {
-	id: string;
-	name: string | null;
-	image: string | null;
-}
-
-interface Automation {
-	id: string;
-	name: string;
-	enabled: boolean;
-	updated_at: string;
-	activeProviders?: string[];
-	creator?: Creator | null;
-}
 
 // Mobile sidebar trigger button - shown in mobile header
 export function MobileSidebarTrigger() {
@@ -187,9 +164,6 @@ function SidebarContent({
 				.slice(0, 2)
 		: user?.email?.[0]?.toUpperCase() || "?";
 
-	// Fetch automations
-	const { data: automations = [] } = useAutomations();
-
 	// Fetch claimed runs for sidebar
 	const { data: claimedRuns = [] } = useMyClaimedRuns();
 
@@ -215,19 +189,6 @@ function SidebarContent({
 		}>;
 	}
 	const { data: prebuildsData } = usePrebuilds();
-
-	// Create automation mutation
-	const createAutomationMutation = useCreateAutomation();
-
-	const handleCreateAutomation = async () => {
-		try {
-			const automation = await createAutomationMutation.mutateAsync({});
-			router.push(`/dashboard/automations/${automation.id}`);
-			onNavigate?.();
-		} catch {
-			// Handle error silently - mutation already shows error state
-		}
-	};
 
 	const prebuilds = (prebuildsData as Prebuild[] | undefined) || [];
 
@@ -260,9 +221,9 @@ function SidebarContent({
 		}
 	}
 
-	const isAutomationDetailPage =
-		pathname?.startsWith("/dashboard/automations/") && pathname !== "/dashboard/automations";
-	const activeAutomationId = isAutomationDetailPage ? pathname?.split("/").pop() : null;
+	// Detect active pages from URL
+	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
+	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 
 	// Detect active session from URL
 	const isSessionDetailPage =
@@ -320,7 +281,7 @@ function SidebarContent({
 				</div>
 			</div>
 
-			{/* New Session + Search */}
+			{/* New Session + Search + Nav */}
 			<div className="px-2 mb-2 space-y-1">
 				<button
 					type="button"
@@ -331,34 +292,36 @@ function SidebarContent({
 					<span className="text-sm">New session</span>
 				</button>
 				<SearchTrigger onClick={() => setCommandSearchOpen(true)} />
+				<button
+					type="button"
+					onClick={() => handleNavigate("/dashboard/integrations")}
+					className={cn(
+						"flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-sm transition-colors",
+						isIntegrationsPage
+							? "bg-muted text-foreground"
+							: "text-muted-foreground hover:text-foreground hover:bg-accent",
+					)}
+				>
+					<Plug className="h-5 w-5" />
+					<span>Integrations</span>
+				</button>
+				<button
+					type="button"
+					onClick={() => handleNavigate("/dashboard/automations")}
+					className={cn(
+						"flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-sm transition-colors",
+						isAutomationsPage
+							? "bg-muted text-foreground"
+							: "text-muted-foreground hover:text-foreground hover:bg-accent",
+					)}
+				>
+					<BoltIcon className="h-5 w-5" />
+					<span>Automations</span>
+				</button>
 			</div>
 
 			{/* Scrollable content */}
 			<div className="flex-1 overflow-y-auto text-sm">
-				{/* Automations Section */}
-				<CollapsibleSection title="Automations" defaultOpen={true}>
-					<div className="px-2">
-						<button
-							type="button"
-							onClick={handleCreateAutomation}
-							disabled={createAutomationMutation.isPending}
-							className="flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
-						>
-							<Plus className="h-5 w-5" />
-							<span>New automation</span>
-						</button>
-						{automations.map((automation) => (
-							<AutomationItem
-								key={automation.id}
-								automation={automation}
-								isActive={activeAutomationId === automation.id}
-								onNavigate={onNavigate}
-							/>
-						))}
-						{/* New Automation row */}
-					</div>
-				</CollapsibleSection>
-
 				{/* Threads Section */}
 				<div>
 					<div className="flex items-center w-full px-4 py-1.5 text-xs text-muted-foreground">
@@ -590,150 +553,6 @@ function SidebarContent({
 					</Popover>
 				</div>
 			</div>
-		</>
-	);
-}
-
-function AutomationItem({
-	automation,
-	isActive,
-	onNavigate,
-}: {
-	automation: Automation;
-	isActive: boolean;
-	onNavigate?: () => void;
-}) {
-	const [isEditing, setIsEditing] = useState(false);
-	const [editValue, setEditValue] = useState(automation.name);
-	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-	const inputRef = useRef<HTMLInputElement>(null);
-	const router = useRouter();
-
-	const providers = automation.activeProviders?.slice(0, 3) || [];
-
-	const updateAutomation = useUpdateAutomation(automation.id);
-	const deleteAutomation = useDeleteAutomation();
-
-	const handleDelete = async () => {
-		await deleteAutomation.mutateAsync(automation.id);
-		if (isActive) {
-			router.push("/dashboard");
-		}
-	};
-
-	useEffect(() => {
-		if (isEditing && inputRef.current) {
-			inputRef.current.focus();
-			inputRef.current.select();
-		}
-	}, [isEditing]);
-
-	const handleRename = () => {
-		setEditValue(automation.name);
-		setIsEditing(true);
-	};
-
-	const handleSave = () => {
-		const trimmed = editValue.trim();
-		if (trimmed && trimmed !== automation.name) {
-			updateAutomation.mutate({ name: trimmed });
-		}
-		setIsEditing(false);
-	};
-
-	const handleKeyDown = (e: React.KeyboardEvent) => {
-		if (e.key === "Enter") {
-			handleSave();
-		} else if (e.key === "Escape") {
-			setIsEditing(false);
-			setEditValue(automation.name);
-		}
-	};
-
-	const handleClick = () => {
-		router.push(`/dashboard/automations/${automation.id}`);
-		onNavigate?.();
-	};
-
-	return (
-		<>
-			<div
-				onClick={handleClick}
-				className={cn(
-					"group relative flex items-center gap-[0.38rem] px-3 py-1.5 rounded-lg text-sm cursor-pointer transition-colors",
-					isActive
-						? "bg-muted text-foreground"
-						: "text-muted-foreground hover:text-foreground hover:bg-accent",
-				)}
-			>
-				{/* Icon - show overlapping provider icons if available, otherwise BoltIcon */}
-				<div className="flex items-center justify-center shrink-0 w-5 h-5">
-					{providers.length > 0 ? (
-						<div className="flex items-center">
-							{providers.map((provider, index) => (
-								<div
-									key={provider}
-									className="relative rounded-full bg-sidebar"
-									style={{ marginLeft: index > 0 ? "-6px" : 0, zIndex: providers.length - index }}
-								>
-									<ProviderIcon provider={provider as Provider} size="sm" />
-								</div>
-							))}
-						</div>
-					) : (
-						<BoltIcon className="h-5 w-5" />
-					)}
-				</div>
-
-				{/* Name */}
-				<div className="flex-1 min-w-0 flex items-center">
-					{isEditing ? (
-						<input
-							ref={inputRef}
-							type="text"
-							value={editValue}
-							onChange={(e) => setEditValue(e.target.value)}
-							onBlur={handleSave}
-							onKeyDown={handleKeyDown}
-							onClick={(e) => e.stopPropagation()}
-							className="w-full bg-transparent text-sm outline-none border-b border-primary"
-						/>
-					) : (
-						<span className="truncate">{automation.name}</span>
-					)}
-				</div>
-
-				{/* Trailing actions - visible on hover */}
-				<div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-					<ItemActionsMenu
-						onRename={handleRename}
-						onDelete={() => setDeleteDialogOpen(true)}
-						isVisible={isActive}
-					/>
-				</div>
-			</div>
-
-			{/* Delete Confirmation Dialog */}
-			<AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Delete Automation</AlertDialogTitle>
-						<AlertDialogDescription>
-							This will permanently delete &quot;{automation.name}&quot; and all its triggers. This
-							action cannot be undone.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							onClick={handleDelete}
-							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-						>
-							Delete
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
 		</>
 	);
 }
