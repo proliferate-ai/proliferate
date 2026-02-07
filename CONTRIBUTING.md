@@ -46,8 +46,8 @@ pnpm build
 
 ## Pull Requests
 
+- Use the PR template (auto-populated from `.github/PULL_REQUEST_TEMPLATE.md`). Fill every section.
 - Keep PRs small and focused.
 - Add tests for pure logic where it makes sense (Vitest).
 - Avoid adding dependencies without discussion.
 - Do not commit secrets (`.env*`, tokens, cloud stack configs, etc.).
-

@@ -86,6 +86,7 @@ ws.sendPrompt(content, userId);
 
 - **Client-only state**: Zustand (onboarding, UI state). Server state stays in TanStack Query.
 - **UI**: Tailwind + shadcn/ui only. No native `alert/confirm/prompt`.
+- **Colors & theming**: Always use the CSS custom properties from `globals.css` via Tailwind classes (`bg-background`, `text-foreground`, `border-border`, `bg-muted`, etc.). Never hardcode hex/rgb/hsl values. Key tokens: `background`, `foreground`, `card`, `popover`, `primary`, `secondary`, `muted`, `accent`, `destructive`, `border`, `input`, `ring`, `sidebar`, `chat-input`. All tokens have light and dark mode variants already defined.
 - **Component reuse**: check `components/ui/` before creating new patterns.
 - **Hooks**: kebab-case filenames (`use-repos.ts`).
 
@@ -146,9 +147,10 @@ Run `make` or `make help` for the full list. Common targets:
 ## Git Workflow
 
 - **Do not create branches** unless explicitly asked.
-- Use conventional commits (`feat:`, `fix:`, `chore:`).
+- Use conventional commits (`feat:`, `fix:`, `chore:`) for commits and PR titles.
+- When opening a PR: use the PR template (`.github/PULL_REQUEST_TEMPLATE.md`) and fill every section.
 - On merge conflicts: summarize each conflict before choosing a resolution.
-- Before committing: `pnpm typecheck`, `pnpm build`, `pnpm lint`.
+- Before committing: `pnpm typecheck`, `pnpm lint`, `pnpm test` (where applicable), `pnpm build`.
 
 ## Architecture Decisions
 
