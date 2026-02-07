@@ -205,11 +205,18 @@ export class SessionHub {
 				);
 				return;
 			}
-			case "cancel":
+			case "cancel": {
+				const connection = this.clients.get(ws);
+				if (!connection?.userId) {
+					this.sendError(ws, "Unauthorized");
+					return;
+				}
+
 				this.handleCancel().catch((err) => {
 					console.error("Failed to cancel", err);
 				});
 				return;
+			}
 			case "get_status":
 				this.handleGetStatus(ws);
 				return;
