@@ -52,6 +52,7 @@ export const env = new Proxy(rawEnv as typeof rawEnv, {
 		if (prop === "CI") return normalizeBoolean(value);
 		if (prop === "EMAIL_ENABLED") return normalizeBoolean(value);
 		if (prop === "LLM_PROXY_REQUIRED") return normalizeBoolean(value);
+		if (prop === "LOG_PRETTY") return normalizeBoolean(value);
 		if (prop === "NEXT_BUILD_STANDALONE") return normalizeBoolean(value);
 		if (prop === "STRICT_ENV") return normalizeBoolean(value);
 

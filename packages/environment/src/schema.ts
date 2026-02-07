@@ -19,6 +19,21 @@ const isTruthy = (value: string | undefined) => value === "true" || value === "1
 
 type EnvLike = Record<string, string | undefined>;
 
+const optionalLogLevel = optionalString
+	.transform((value) => value?.toLowerCase())
+	.refine(
+		(value) =>
+			value === undefined ||
+			value === "trace" ||
+			value === "debug" ||
+			value === "info" ||
+			value === "warn" ||
+			value === "error" ||
+			value === "fatal" ||
+			value === "silent",
+		{ message: "Must be one of: trace, debug, info, warn, error, fatal, silent" },
+	);
+
 const requiredWhen = (enabled: boolean, message: string) =>
 	optionalString.refine((val) => !enabled || (val && val.length > 0), { message });
 
@@ -130,6 +145,8 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 		LLM_PROXY_REQUIRED: optionalBoolean,
 		LLM_PROXY_ADMIN_URL: optionalString,
 		LLM_PROXY_PUBLIC_URL: optionalString,
+		LOG_LEVEL: optionalLogLevel,
+		LOG_PRETTY: optionalBoolean,
 		MODAL_APP_NAME: requiredForProvider(env, "modal"),
 		MODAL_APP_SUFFIX: optionalString, // Optional per-dev suffix (e.g., "pablo" → "proliferate-sandbox-pablo")
 		MODAL_ENDPOINT_URL: optionalString, // Only used in test scripts, not production
