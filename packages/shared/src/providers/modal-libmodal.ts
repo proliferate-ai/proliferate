@@ -296,6 +296,92 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		return this.baseImage;
 	}
 
+	/**
+	 * Create a reusable "base snapshot" (Layer 1) with no repos.
+	 *
+	 * This is an explicit, admin/deploy-time action. It should never be done during a user session.
+	 */
+	async createBaseSnapshot(): Promise<{ snapshotId: string }> {
+		const startMs = Date.now();
+		providerLogger.info("Creating base snapshot");
+
+		await this.ensureModalAuth("createSandbox");
+		const app = await this.ensureAppInitialized();
+		const image = await this.ensureBaseImageInitialized();
+
+		const sandboxName = `base-snapshot-${Date.now()}`;
+		const createStartMs = Date.now();
+		const sandbox = await this.client.sandboxes.create(app, image, {
+			command: ["/usr/local/bin/start-dockerd.sh"],
+			encryptedPorts: [SANDBOX_PORTS.opencode, SANDBOX_PORTS.preview],
+			unencryptedPorts: [],
+			env: {
+				OPENCODE_DISABLE_DEFAULT_PLUGINS: "true",
+				SESSION_ID: sandboxName,
+			},
+			timeoutMs: SANDBOX_TIMEOUT_MS,
+			name: sandboxName,
+			cpu: 2,
+			memoryMiB: 4096,
+			experimentalOptions: { enable_docker: true },
+		});
+		logLatency("provider.base_snapshot.sandbox_created", {
+			provider: this.type,
+			durationMs: Date.now() - createStartMs,
+		});
+
+		try {
+			const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
+
+			// Keep workspace empty so `git clone ... /home/user/workspace/.` remains valid for single-repo sessions.
+			await sandbox.exec(["sh", "-c", `rm -rf '${workspaceDir}' && mkdir -p '${workspaceDir}'`]);
+
+			// Helper to write a file atomically (mkdir + write in single sh -c to avoid race conditions).
+			const writeFile = async (path: string, content: string) => {
+				const dir = path.substring(0, path.lastIndexOf("/"));
+				const base64Content = Buffer.from(content).toString("base64");
+				await sandbox.exec([
+					"sh",
+					"-c",
+					`mkdir -p '${dir}' && echo '${base64Content}' | base64 -d > '${path}'`,
+				]);
+			};
+
+			// Bake global OpenCode configuration and plugin into the snapshot.
+			const agentConfig = getDefaultAgentConfig();
+			const opencodeModelId = toOpencodeModelId(agentConfig.modelId);
+			await Promise.all([
+				writeFile(`${SANDBOX_PATHS.globalPluginDir}/proliferate.mjs`, PLUGIN_MJS),
+				writeFile(
+					`${SANDBOX_PATHS.globalOpencodeDir}/opencode.json`,
+					getOpencodeConfig(opencodeModelId),
+				),
+				writeFile(SANDBOX_PATHS.caddyfile, DEFAULT_CADDYFILE),
+				// Ensure we don't accidentally treat this snapshot as a repo snapshot.
+				sandbox
+					.exec(["rm", "-f", SANDBOX_PATHS.metadataFile])
+					.catch(() => {}),
+			]);
+
+			const snapshotStartMs = Date.now();
+			const snapshotImage = await sandbox.snapshotFilesystem();
+			logLatency("provider.base_snapshot.filesystem", {
+				provider: this.type,
+				durationMs: Date.now() - snapshotStartMs,
+			});
+
+			logLatency("provider.base_snapshot.complete", {
+				provider: this.type,
+				durationMs: Date.now() - startMs,
+			});
+
+			return { snapshotId: snapshotImage.imageId };
+		} finally {
+			// Best-effort cleanup.
+			await sandbox.terminate().catch(() => {});
+		}
+	}
+
 	async createSandbox(opts: CreateSandboxOpts): Promise<CreateSandboxResult> {
 		const startTime = Date.now();
 		const log = providerLogger.child({ sessionId: opts.sessionId });
