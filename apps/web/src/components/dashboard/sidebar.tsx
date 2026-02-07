@@ -404,83 +404,44 @@ function SidebarContent({
 									</div>
 								</button>
 
-								<div className="my-1 h-px bg-border" />
+								{/* Slack Connect - only show when fully set up */}
+								{slackStatus?.connected && slackStatus?.supportChannel && (
+									<>
+										<div className="my-1 h-px bg-border" />
 
-								{/* Slack option - three states */}
-								{slackStatus?.connected && slackStatus?.supportChannel ? (
-									// Fully connected with support channel - open deep link
-									<button
-										type="button"
-										className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg hover:bg-muted transition-colors text-left"
-										onClick={() => {
-											setSupportMenuOpen(false);
-											// Use stored invite URL if available, otherwise construct a Slack deep link
-											const slackUrl =
-												slackStatus.supportChannel?.inviteUrl ||
-												(slackStatus.teamId && slackStatus.supportChannel?.channelId
-													? `https://app.slack.com/client/${slackStatus.teamId}/${slackStatus.supportChannel.channelId}`
-													: null);
-											if (slackUrl) {
-												window.open(slackUrl, "_blank");
-											} else {
-												onNavigate?.();
-												router.push("/dashboard/integrations");
-											}
-										}}
-									>
-										<SlackIcon className="h-4 w-4" />
-										<div className="flex-1">
-											<div className="font-medium flex items-center gap-2">
-												Slack Connect
-												<span className="text-xs bg-green-500/10 text-green-600 dark:text-green-400 px-1.5 py-0.5 rounded">
-													Active
-												</span>
+										<button
+											type="button"
+											className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg hover:bg-muted transition-colors text-left"
+											onClick={() => {
+												setSupportMenuOpen(false);
+												// Use stored invite URL if available, otherwise construct a Slack deep link
+												const slackUrl =
+													slackStatus.supportChannel?.inviteUrl ||
+													(slackStatus.teamId && slackStatus.supportChannel?.channelId
+														? `https://app.slack.com/client/${slackStatus.teamId}/${slackStatus.supportChannel.channelId}`
+														: null);
+												if (slackUrl) {
+													window.open(slackUrl, "_blank");
+												} else {
+													onNavigate?.();
+													router.push("/dashboard/integrations");
+												}
+											}}
+										>
+											<SlackIcon className="h-4 w-4" />
+											<div className="flex-1">
+												<div className="font-medium flex items-center gap-2">
+													Slack Connect
+													<span className="text-xs bg-green-500/10 text-green-600 dark:text-green-400 px-1.5 py-0.5 rounded">
+														Active
+													</span>
+												</div>
+												<div className="text-xs text-muted-foreground">
+													#{slackStatus.supportChannel.channelName}
+												</div>
 											</div>
-											<div className="text-xs text-muted-foreground">
-												#{slackStatus.supportChannel.channelName}
-											</div>
-										</div>
-									</button>
-								) : slackStatus?.connected ? (
-									// Slack connected but no support channel
-									<button
-										type="button"
-										className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg hover:bg-muted transition-colors text-left"
-										onClick={() => {
-											setSupportMenuOpen(false);
-											onNavigate?.();
-											router.push("/dashboard/integrations");
-										}}
-									>
-										<SlackIcon className="h-4 w-4" />
-										<div className="flex-1">
-											<div className="font-medium">Set up Support Channel</div>
-											<div className="text-xs text-muted-foreground">
-												Get a dedicated Slack Connect channel
-											</div>
-										</div>
-										<ChevronRight className="h-4 w-4 text-muted-foreground" />
-									</button>
-								) : (
-									// Slack not connected
-									<button
-										type="button"
-										className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg hover:bg-muted transition-colors text-left"
-										onClick={() => {
-											setSupportMenuOpen(false);
-											onNavigate?.();
-											router.push("/dashboard/integrations");
-										}}
-									>
-										<SlackIcon className="h-4 w-4" />
-										<div className="flex-1">
-											<div className="font-medium">Connect Slack</div>
-											<div className="text-xs text-muted-foreground">
-												For dedicated support channel
-											</div>
-										</div>
-										<ChevronRight className="h-4 w-4 text-muted-foreground" />
-									</button>
+										</button>
+									</>
 								)}
 							</div>
 						</PopoverContent>
