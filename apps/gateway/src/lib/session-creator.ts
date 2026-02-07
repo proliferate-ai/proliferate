@@ -18,6 +18,7 @@ import {
 	getDefaultAgentConfig,
 	isValidModelId,
 	parseModelId,
+	resolveSnapshotId,
 } from "@proliferate/shared";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
@@ -114,7 +115,7 @@ export async function createSession(
 		sessionType,
 		clientType,
 		userId,
-		snapshotId,
+		snapshotId: inputSnapshotId,
 		initialPrompt,
 		title,
 		clientMetadata,
@@ -137,14 +138,14 @@ export async function createSession(
 			sessionType,
 			clientType,
 			sandboxMode,
-			hasSnapshot: Boolean(snapshotId),
+			hasSnapshot: Boolean(inputSnapshotId),
 			sshEnabled: Boolean(sshOptions),
 			explicitIntegrations: explicitIntegrationIds?.length ?? 0,
 		},
 		"Creating session",
 	);
 	log.debug(
-		{ isNewPrebuild, hasSnapshotId: Boolean(snapshotId) },
+		{ isNewPrebuild, hasSnapshotId: Boolean(inputSnapshotId) },
 		"session_creator.create_session.start",
 	);
 
@@ -174,6 +175,25 @@ export async function createSession(
 				.map((c) => c.integrationId);
 		} catch (err) {
 			log.warn({ err }, "Failed to load automation connections");
+		}
+	}
+
+	// Resolve snapshotId via layering (prebuild snapshot → repo snapshot → null).
+	// Repo snapshots are only eligible for Modal provider, non-CLI sessions.
+	let snapshotId = inputSnapshotId ?? null;
+	if (!snapshotId && provider.type === "modal" && sessionType !== "cli") {
+		try {
+			const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
+			snapshotId = resolveSnapshotId({
+				prebuildSnapshotId: null,
+				sandboxProvider: provider.type,
+				prebuildRepos: prebuildRepoRows,
+			});
+			if (snapshotId) {
+				log.info({ snapshotId }, "Using repo snapshot");
+			}
+		} catch (err) {
+			log.warn({ err }, "Failed to resolve repo snapshot (non-fatal)");
 		}
 	}
 

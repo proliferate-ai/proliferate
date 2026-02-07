@@ -4,7 +4,7 @@
  * Raw Drizzle queries - no business logic.
  */
 
-import { and, desc, eq, getDb, repoConnections, repos } from "../db/client";
+import { and, desc, eq, getDb, isNull, ne, or, repoConnections, repos } from "../db/client";
 import type { InferSelectModel } from "../db/client";
 import type { DbCreateRepoInput } from "../types/repos";
 
@@ -20,6 +20,20 @@ export interface RepoWithPrebuildsRow extends RepoRow {
 			snapshotId: string | null;
 		} | null;
 	}>;
+}
+
+export interface RepoSnapshotBuildInfoRow {
+	id: string;
+	organizationId: string;
+	githubUrl: string;
+	defaultBranch: string | null;
+	source: string | null;
+	isPrivate: boolean | null;
+	repoSnapshotId: string | null;
+	repoSnapshotStatus: string | null;
+	repoSnapshotCommitSha: string | null;
+	repoSnapshotBuiltAt: Date | null;
+	repoSnapshotProvider: string | null;
 }
 
 // ============================================
@@ -175,4 +189,94 @@ export async function getGithubRepoName(repoId: string): Promise<string | null> 
 	});
 
 	return result?.githubRepoName || null;
+}
+
+/**
+ * Fetch repo fields required for building a repo snapshot.
+ */
+export async function getSnapshotBuildInfo(
+	repoId: string,
+): Promise<RepoSnapshotBuildInfoRow | null> {
+	const db = getDb();
+	const result = await db.query.repos.findFirst({
+		where: eq(repos.id, repoId),
+		columns: {
+			id: true,
+			organizationId: true,
+			githubUrl: true,
+			defaultBranch: true,
+			source: true,
+			isPrivate: true,
+			repoSnapshotId: true,
+			repoSnapshotStatus: true,
+			repoSnapshotCommitSha: true,
+			repoSnapshotBuiltAt: true,
+			repoSnapshotProvider: true,
+		},
+	});
+
+	return result ?? null;
+}
+
+/**
+ * Mark a repo snapshot as building unless it is already ready.
+ * Returns true if the row was updated.
+ */
+export async function markRepoSnapshotBuilding(repoId: string, provider: string): Promise<boolean> {
+	const db = getDb();
+	const result = await db
+		.update(repos)
+		.set({
+			repoSnapshotStatus: "building",
+			repoSnapshotError: null,
+			repoSnapshotProvider: provider,
+			updatedAt: new Date(),
+		})
+		.where(
+			and(
+				eq(repos.id, repoId),
+				or(isNull(repos.repoSnapshotStatus), ne(repos.repoSnapshotStatus, "ready")),
+			),
+		)
+		.returning({ id: repos.id });
+
+	return result.length > 0;
+}
+
+export async function markRepoSnapshotReady(input: {
+	repoId: string;
+	snapshotId: string;
+	commitSha: string | null;
+	provider: string;
+}): Promise<void> {
+	const db = getDb();
+	await db
+		.update(repos)
+		.set({
+			repoSnapshotId: input.snapshotId,
+			repoSnapshotCommitSha: input.commitSha,
+			repoSnapshotBuiltAt: new Date(),
+			repoSnapshotStatus: "ready",
+			repoSnapshotError: null,
+			repoSnapshotProvider: input.provider,
+			updatedAt: new Date(),
+		})
+		.where(eq(repos.id, input.repoId));
+}
+
+export async function markRepoSnapshotFailed(input: {
+	repoId: string;
+	error: string;
+	provider: string;
+}): Promise<void> {
+	const db = getDb();
+	await db
+		.update(repos)
+		.set({
+			repoSnapshotStatus: "failed",
+			repoSnapshotError: input.error,
+			repoSnapshotProvider: input.provider,
+			updatedAt: new Date(),
+		})
+		.where(eq(repos.id, input.repoId));
 }

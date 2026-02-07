@@ -94,6 +94,9 @@ export interface PrebuildRepoDetailRow {
 		githubRepoName: string;
 		defaultBranch: string | null;
 		organizationId: string;
+		repoSnapshotId: string | null;
+		repoSnapshotStatus: string | null;
+		repoSnapshotProvider: string | null;
 	} | null;
 }
 
@@ -358,6 +361,9 @@ export async function getPrebuildReposWithDetails(
 					githubRepoName: true,
 					defaultBranch: true,
 					organizationId: true,
+					repoSnapshotId: true,
+					repoSnapshotStatus: true,
+					repoSnapshotProvider: true,
 				},
 			},
 		},

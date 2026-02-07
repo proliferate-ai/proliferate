@@ -736,6 +736,12 @@ export interface AutomationWithRelations extends Automation {
 export * from "./agents";
 
 // ============================================
+// Snapshot Resolution
+// ============================================
+
+export * from "./snapshot-resolution";
+
+// ============================================
 // Prompts
 // ============================================
 

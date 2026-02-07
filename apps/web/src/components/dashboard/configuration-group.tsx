@@ -127,7 +127,7 @@ export function ConfigurationGroup({
 	};
 
 	const handleCreateSession = async () => {
-		if (!isFinalized || createSession.isPending) return;
+		if (createSession.isPending) return;
 		const result = await createSession.mutateAsync({
 			prebuildId: prebuild.id,
 			sessionType: "coding",
@@ -187,19 +187,17 @@ export function ConfigurationGroup({
 								]}
 							/>
 						</div>
-						{isFinalized && (
-							<button
-								type="button"
-								onClick={(e) => {
-									e.stopPropagation();
-									handleCreateSession();
-								}}
-								disabled={createSession.isPending}
-								className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
-							>
-								<Plus className="h-3.5 w-3.5" />
-							</button>
-						)}
+						<button
+							type="button"
+							onClick={(e) => {
+								e.stopPropagation();
+								handleCreateSession();
+							}}
+							disabled={createSession.isPending}
+							className="p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+						>
+							<Plus className="h-3.5 w-3.5" />
+						</button>
 					</div>
 				</div>
 

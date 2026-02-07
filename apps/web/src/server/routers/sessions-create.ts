@@ -24,6 +24,7 @@ import {
 	getSetupSystemPrompt,
 	isValidModelId,
 	parseModelId,
+	resolveSnapshotId,
 } from "@proliferate/shared";
 import {
 	generateSessionAPIKey,
@@ -84,14 +85,6 @@ export async function createSessionHandler(
 		throw new ORPCError("BAD_REQUEST", { message: "Prebuild not found" });
 	}
 
-	// For coding sessions, prebuild must have a snapshot
-	if (sessionType === "coding" && !prebuild.snapshotId) {
-		throw new ORPCError("BAD_REQUEST", {
-			message: "Prebuild has no snapshot. Complete setup first.",
-		});
-	}
-
-	const snapshotId = prebuild.snapshotId;
 	const prebuildProvider = prebuild.sandboxProvider;
 
 	// Get repos from prebuild_repos junction table
@@ -105,6 +98,19 @@ export async function createSessionHandler(
 
 	if (prebuildRepos.length === 0) {
 		throw new ORPCError("BAD_REQUEST", { message: "Prebuild has no repos" });
+	}
+
+	// Resolve snapshotId using layering rules:
+	// 1. Prebuild snapshot (from setup finalize or manual snapshot)
+	// 2. Repo snapshot (Modal only, single-repo, workspacePath ".")
+	// 3. No snapshot (base image + live clone)
+	const snapshotId = resolveSnapshotId({
+		prebuildSnapshotId: prebuild.snapshotId,
+		sandboxProvider: prebuildProvider,
+		prebuildRepos,
+	});
+	if (snapshotId && snapshotId !== prebuild.snapshotId) {
+		log.info({ snapshotId }, "Using repo snapshot");
 	}
 
 	// Verify all repos belong to this org
@@ -315,29 +321,6 @@ export async function createSessionHandler(
 		});
 		reqLog.info({ durationMs: Date.now() - startTime }, "Session status updated to running");
 
-		// For setup sessions: take initial snapshot async (don't block)
-		if (sessionType === "setup" && sandboxId && !snapshotId) {
-			const snapshotStartTime = Date.now();
-			provider
-				.snapshot(sessionId, sandboxId)
-				.then(async (snapshotResult) => {
-					// Only update if snapshot_id is still null
-					const updated = await prebuilds.updateSnapshotIdIfNull(
-						prebuildId,
-						snapshotResult.snapshotId,
-					);
-
-					if (updated) {
-						reqLog.info(
-							{ prebuildId, durationMs: Date.now() - snapshotStartTime },
-							"Initial snapshot saved for prebuild",
-						);
-					}
-				})
-				.catch((err) => {
-					reqLog.warn({ err }, "Failed to take initial snapshot (non-fatal)");
-				});
-		}
 	} catch (err) {
 		reqLog.error({ err }, "Sandbox provider error");
 
