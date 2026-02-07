@@ -19,7 +19,10 @@ The fastest way to get started is using E2B's managed cloud service:
 
 ## Self-Hosted Deployment
 
-For customers who need to run their own E2B infrastructure (data residency, air-gapped environments, etc.), see the [Self-Hosting Guide](../../docs/SELF_HOSTING_E2B.md).
+For customers who need to run their own E2B infrastructure (data residency, air-gapped environments, etc.), see:
+
+- https://docs.proliferate.com/self-hosting/environment (E2B env vars)
+- https://docs.proliferate.com/self-hosting/deployment-options
 
 ### Quick Self-Hosted Setup
 

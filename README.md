@@ -129,6 +129,7 @@ Every run gets an **isolated sandbox** on [Modal](https://modal.com) or [E2B](ht
 
 ## Docs
 
+- [docs.proliferate.com](https://docs.proliferate.com) (source: `~/documentation`)
 - [Self-hosting (Docker Compose)](docker-compose.yml)
 - [Self-hosting (pre-built images)](docker-compose.prod.yml)
 - [Gateway spec](apps/gateway/SPEC.md)

@@ -133,7 +133,7 @@ app.use(createHttpLogger({ logger }));
 - Providers: Modal (default) and E2B (`packages/shared/src/providers/`).
 - Python only in `packages/modal-sandbox/` (image + `deploy.py`).
 - Deploy Modal: `cd packages/modal-sandbox && modal deploy deploy.py`
-- Per-dev Modal deployment: `./scripts/deploy-modal-dev.sh <suffix>`
+- Modal docs: https://docs.proliferate.com/self-hosting/modal-setup
 - OpenCode plugin is **minimal SSE** (no event pushing). See `packages/shared/src/sandbox/config.ts`.
 
 ## Workers & Infra (K8s/EKS)
@@ -151,7 +151,7 @@ Key commands:
 - Local dev: `.env.local`
 - Cloud runtime: AWS Secrets Manager → External Secrets → K8s
 - App runtime env **overrides Modal secrets** when creating sessions
-- Source of truth for env keys: `packages/environment/src/schema.ts` and `docs/ENVIRONMENT.md`
+- Source of truth for env keys: `packages/environment/src/schema.ts` and https://docs.proliferate.com/self-hosting/environment (source: `~/documentation/self-hosting/environment.mdx`)
 - Vercel is optional; if used, avoid `echo` when setting env vars (newline issue)
 
 ## CI/CD Overview
