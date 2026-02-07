@@ -128,7 +128,16 @@ export function ConfigTab() {
 						);
 					})}
 					<Text variant="small" color="muted" className="text-xs">
-						See docs/ENVIRONMENT.md for required variables by deployment mode.
+						See{" "}
+						<a
+							href="https://docs.proliferate.com/self-hosting/environment"
+							target="_blank"
+							rel="noreferrer"
+							className="underline underline-offset-2"
+						>
+							docs.proliferate.com/self-hosting/environment
+						</a>{" "}
+						for required variables by deployment mode.
 					</Text>
 					<Text variant="small" color="muted" className="text-xs">
 						Updating environment variables requires a service restart. Changes to{" "}
