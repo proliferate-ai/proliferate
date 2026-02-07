@@ -36,6 +36,11 @@ export interface CreateSandboxOpts {
 	envVars: Record<string, string>;
 	systemPrompt: string;
 	snapshotId?: string; // If provided, restore from snapshot instead of cloning
+	/**
+	 * Optional filesystem base snapshot to start from while still doing a fresh clone.
+	 * Used for "base snapshot" layering (pre-baked OpenCode + services), without skipping repo clone.
+	 */
+	baseSnapshotId?: string;
 	agentConfig?: AgentConfig;
 	/** Current sandbox ID from DB, if any. Used by ensureSandbox to check if existing sandbox is still alive. */
 	currentSandboxId?: string;

@@ -56,6 +56,7 @@ const decoder = new TextDecoder();
 // Configuration from environment
 const MODAL_APP_NAME = env.MODAL_APP_NAME;
 const MODAL_APP_SUFFIX = env.MODAL_APP_SUFFIX;
+const MODAL_BASE_SNAPSHOT_ID = env.MODAL_BASE_SNAPSHOT_ID;
 
 const providerLogger = getSharedLogger().child({ module: "modal" });
 const logLatency = (event: string, data?: Record<string, unknown>) => {
@@ -133,7 +134,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 	readonly supportsAutoPause = false;
 	private client: ModalClient;
 	private app: App | null = null;
-	private image: Image | null = null;
+	private baseImage: Image | null = null;
 	private authPreflight: Promise<void> | null = null;
 
 	constructor() {
@@ -208,14 +209,8 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		}
 	}
 
-	/**
-	 * Initialize the Modal app and image references.
-	 * Called lazily on first operation.
-	 */
-	private async ensureInitialized(): Promise<{ app: App; image: Image }> {
-		if (this.app && this.image) {
-			return { app: this.app, image: this.image };
-		}
+	private async ensureAppInitialized(): Promise<App> {
+		if (this.app) return this.app;
 
 		const startMs = Date.now();
 		await this.ensureModalAuth("createSandbox");
@@ -225,8 +220,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		});
 
 		const appName = getModalAppName();
-
-		// Get the app reference (creates if missing)
 		const appStartMs = Date.now();
 		this.app = await this.client.apps.fromName(appName, { createIfMissing: true });
 		logLatency("provider.initialize.app_loaded", {
@@ -234,8 +227,19 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			durationMs: Date.now() - appStartMs,
 		});
 
-		// Get the base image ID from the deployed Modal function
-		// This avoids hardcoding or env vars - the deploy.py exposes the image ID
+		return this.app;
+	}
+
+	private async ensureBaseImageInitialized(): Promise<Image> {
+		if (this.baseImage) return this.baseImage;
+
+		const startMs = Date.now();
+		await this.ensureModalAuth("createSandbox");
+
+		const appName = getModalAppName();
+
+		// Get the base image ID from the deployed Modal function.
+		// This is only used when no base snapshot is configured.
 		const fnStartMs = Date.now();
 		const getImageFn = await this.client.functions.fromName(appName, "get_image_id");
 		const webUrl = await getImageFn.getWebUrl();
@@ -255,7 +259,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			});
 		}
 
-		// Call the web endpoint to get the image ID
 		const fetchStartMs = Date.now();
 		const response = await fetch(webUrl);
 		if (!response.ok) {
@@ -277,18 +280,20 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			provider: this.type,
 			durationMs: Date.now() - fetchStartMs,
 		});
+
 		const imageStartMs = Date.now();
-		this.image = await this.client.images.fromId(imageId);
+		this.baseImage = await this.client.images.fromId(imageId);
 		logLatency("provider.initialize.image_loaded", {
 			provider: this.type,
 			durationMs: Date.now() - imageStartMs,
 		});
+
 		logLatency("provider.initialize.complete", {
 			provider: this.type,
 			durationMs: Date.now() - startMs,
 		});
 
-		return { app: this.app, image: this.image };
+		return this.baseImage;
 	}
 
 	async createSandbox(opts: CreateSandboxOpts): Promise<CreateSandboxResult> {
@@ -300,6 +305,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			sessionId: opts.sessionId,
 			repoCount: opts.repos.length,
 			hasSnapshotId: Boolean(opts.snapshotId),
+			hasBaseSnapshotId: Boolean(opts.baseSnapshotId || MODAL_BASE_SNAPSHOT_ID),
 			timeoutMs: SANDBOX_TIMEOUT_MS,
 		});
 
@@ -316,23 +322,43 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				sessionId: opts.sessionId,
 				durationMs: Date.now() - authStartMs,
 			});
-			const { app } = await this.ensureInitialized();
-			const isSnapshot = !!opts.snapshotId;
+			const app = await this.ensureAppInitialized();
 
-			// Use snapshot image if restoring, otherwise use base image
+			const restoreSnapshotId = opts.snapshotId;
+			const baseSnapshotId = opts.baseSnapshotId || MODAL_BASE_SNAPSHOT_ID;
+			const isRestoreSnapshot = Boolean(restoreSnapshotId);
+
+			// Use restore snapshot if provided, otherwise use base snapshot (if configured), otherwise base image
 			let sandboxImage: Image;
-			if (isSnapshot) {
-				log.debug({ snapshotId: opts.snapshotId }, "Restoring from snapshot");
+			let imageSource: "restore_snapshot" | "base_snapshot" | "base_image";
+			if (restoreSnapshotId) {
+				log.debug({ snapshotId: restoreSnapshotId }, "Restoring from snapshot");
 				const imageStartMs = Date.now();
-				sandboxImage = await this.client.images.fromId(opts.snapshotId!);
+				sandboxImage = await this.client.images.fromId(restoreSnapshotId);
 				logLatency("provider.create_sandbox.snapshot_image_loaded", {
 					provider: this.type,
 					sessionId: opts.sessionId,
 					durationMs: Date.now() - imageStartMs,
 				});
+				imageSource = "restore_snapshot";
+			} else if (baseSnapshotId) {
+				const imageStartMs = Date.now();
+				sandboxImage = await this.client.images.fromId(baseSnapshotId);
+				logLatency("provider.create_sandbox.base_snapshot_image_loaded", {
+					provider: this.type,
+					sessionId: opts.sessionId,
+					durationMs: Date.now() - imageStartMs,
+				});
+				imageSource = "base_snapshot";
 			} else {
-				sandboxImage = this.image!;
+				sandboxImage = await this.ensureBaseImageInitialized();
+				imageSource = "base_image";
 			}
+			logLatency("provider.create_sandbox.image_selected", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				imageSource,
+			});
 
 			// LLM Proxy configuration
 			const llmProxyBaseUrl = getLLMProxyBaseURL();
@@ -416,11 +442,11 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 			// Setup the sandbox (clone repos or restore from snapshot)
 			const setupWorkspaceStartMs = Date.now();
-			const repoDir = await this.setupSandbox(sandbox, opts, isSnapshot, log);
+			const repoDir = await this.setupSandbox(sandbox, opts, isRestoreSnapshot, log);
 			logLatency("provider.create_sandbox.setup_workspace", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				isSnapshot,
+				isSnapshot: isRestoreSnapshot,
 				durationMs: Date.now() - setupWorkspaceStartMs,
 			});
 
@@ -481,7 +507,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				provider: this.type,
 				sessionId: opts.sessionId,
 				durationMs: Date.now() - startTime,
-				isSnapshot,
+				isSnapshot: isRestoreSnapshot,
 			});
 			return {
 				sandboxId: sandbox.sandboxId,
@@ -584,6 +610,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 	 * Setup the sandbox workspace:
 	 * - For fresh sandboxes: Clone repositories and save metadata
 	 * - For snapshots: Read metadata to get existing repoDir (repos already in snapshot)
+	 * - For restore snapshots: Read metadata to get existing repoDir (repos already in snapshot)
 	 *
 	 * @returns The repoDir path
 	 */

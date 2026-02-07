@@ -149,6 +149,7 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 		LOG_PRETTY: optionalBoolean,
 		MODAL_APP_NAME: requiredForProvider(env, "modal"),
 		MODAL_APP_SUFFIX: optionalString, // Optional per-dev suffix (e.g., "pablo" → "proliferate-sandbox-pablo")
+		MODAL_BASE_SNAPSHOT_ID: optionalString, // Optional base snapshot (pre-baked filesystem) for near-zero session startup
 		MODAL_ENDPOINT_URL: optionalString, // Only used in test scripts, not production
 		MODAL_TOKEN_ID: requiredForProvider(env, "modal"),
 		MODAL_TOKEN_SECRET: requiredForProvider(env, "modal"),
