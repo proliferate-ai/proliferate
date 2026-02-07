@@ -424,7 +424,7 @@ function SidebarContent({
 												window.open(slackUrl, "_blank");
 											} else {
 												onNavigate?.();
-												router.push("/settings/connections");
+												router.push("/dashboard/integrations");
 											}
 										}}
 									>
@@ -449,7 +449,7 @@ function SidebarContent({
 										onClick={() => {
 											setSupportMenuOpen(false);
 											onNavigate?.();
-											router.push("/settings/connections");
+											router.push("/dashboard/integrations");
 										}}
 									>
 										<SlackIcon className="h-4 w-4" />
@@ -469,7 +469,7 @@ function SidebarContent({
 										onClick={() => {
 											setSupportMenuOpen(false);
 											onNavigate?.();
-											router.push("/settings/connections");
+											router.push("/dashboard/integrations");
 										}}
 									>
 										<SlackIcon className="h-4 w-4" />
