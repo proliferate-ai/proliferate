@@ -1,15 +1,15 @@
 "use client";
 
+import {
+	type Provider,
+	ProviderIcon,
+	getProviderDisplayName,
+} from "@/components/integrations/provider-icon";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FilterButtonGroup } from "@/components/ui/filter-button-group";
 import { Text } from "@/components/ui/text";
-import {
-	ProviderIcon,
-	getProviderDisplayName,
-	type Provider,
-} from "@/components/integrations/provider-icon";
 import { useAutomation, useAutomationRuns } from "@/hooks/use-automations";
 import { cn } from "@/lib/utils";
 import type { AutomationRun, AutomationRunStatus, ParsedEventContext } from "@proliferate/shared";
@@ -195,12 +195,18 @@ function RunDetailSection({ run }: { run: AutomationRun }) {
 			{/* Analysis */}
 			{analysis && (
 				<div>
-					<Text variant="small" color="muted" className="mb-1.5 font-medium uppercase tracking-wide">
+					<Text
+						variant="small"
+						color="muted"
+						className="mb-1.5 font-medium uppercase tracking-wide"
+					>
 						Analysis
 					</Text>
 					<div className="space-y-2">
 						<div className="flex items-center gap-2">
-							<div className={cn("w-2.5 h-2.5 rounded-full", getSeverityColor(analysis.severity))} />
+							<div
+								className={cn("w-2.5 h-2.5 rounded-full", getSeverityColor(analysis.severity))}
+							/>
 							<Text variant="body" className="capitalize font-medium">
 								{analysis.severity}
 							</Text>
@@ -239,7 +245,11 @@ function RunDetailSection({ run }: { run: AutomationRun }) {
 			{/* Agent Session Link */}
 			{run.session_id && (
 				<div>
-					<Text variant="small" color="muted" className="mb-1.5 font-medium uppercase tracking-wide">
+					<Text
+						variant="small"
+						color="muted"
+						className="mb-1.5 font-medium uppercase tracking-wide"
+					>
 						Agent Session
 					</Text>
 					<Link href={`/dashboard/sessions/${run.session_id}`}>
@@ -254,7 +264,11 @@ function RunDetailSection({ run }: { run: AutomationRun }) {
 			{/* Status Info */}
 			{(run.status_reason || run.error_message) && (
 				<div>
-					<Text variant="small" color="muted" className="mb-1.5 font-medium uppercase tracking-wide">
+					<Text
+						variant="small"
+						color="muted"
+						className="mb-1.5 font-medium uppercase tracking-wide"
+					>
 						Status Info
 					</Text>
 					{run.status_reason && (
@@ -495,7 +509,9 @@ export default function AutomationRunsPage({
 						>
 							<span className="text-sm font-medium text-muted-foreground">Summary</span>
 							<span className="text-sm font-medium text-muted-foreground">Status</span>
-							<span className="text-sm font-medium text-muted-foreground text-center">Assignee</span>
+							<span className="text-sm font-medium text-muted-foreground text-center">
+								Assignee
+							</span>
 							<span />
 							<span className="text-sm font-medium text-muted-foreground">Time</span>
 							<span />

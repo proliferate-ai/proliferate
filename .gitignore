@@ -90,5 +90,5 @@ slack-manifest*.json
 vercel.json
 .vercelignore
 
-# Local secrets
-secrets/
+# Local secrets (root only)
+/secrets/

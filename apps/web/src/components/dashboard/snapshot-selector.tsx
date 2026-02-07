@@ -208,9 +208,7 @@ export function SnapshotSelector({
 											key={snapshot.id}
 											className={cn(
 												"flex items-center gap-1 rounded transition-colors",
-												selectedSnapshotId === snapshot.id
-													? "bg-accent"
-													: "hover:bg-muted/50",
+												selectedSnapshotId === snapshot.id ? "bg-accent" : "hover:bg-muted/50",
 											)}
 										>
 											<SelectableItem
@@ -219,9 +217,7 @@ export function SnapshotSelector({
 												className="flex-1 py-1.5"
 											>
 												<div>
-													<div className="truncate">
-														{getSnapshotDisplayName(snapshot)}
-													</div>
+													<div className="truncate">{getSnapshotDisplayName(snapshot)}</div>
 													<Text variant="small" color="muted" className="text-xs">
 														{getRepoSummary(snapshot.repos || [])}
 													</Text>
@@ -417,7 +413,7 @@ function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) {
 		filteredPublicRepos.length > 0;
 
 	return (
-		<div className="w-full">
+		<div className="w-full max-w-[200px]">
 			{/* Header */}
 			<div className="px-4 pt-4 pb-3 border-b border-border">
 				<Text className="font-semibold">Create new configuration</Text>
