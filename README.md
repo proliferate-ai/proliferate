@@ -1,17 +1,45 @@
-# Proliferate
+<a name="readme-top"></a>
+
+<h2 align="center">
+  <a href="https://proliferate.com" target="_blank" rel="noreferrer">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://d1uh4o7rpdqkkl.cloudfront.net/logotype-inverted.webp" />
+      <img width="55%" src="https://d1uh4o7rpdqkkl.cloudfront.net/logotype.webp" alt="Proliferate" />
+    </picture>
+  </a>
+</h2>
+
+<p align="center"><strong>Clawdbot for product builders. An open source cloud harness for coding agents.</strong></p>
 
 <p align="center">
-  <strong>Clawdbot for product builders. An open source cloud harness for coding agents.</strong>
+  <a href="https://github.com/proliferate-ai/proliferate/actions/workflows/ci.yml" target="_blank" rel="noreferrer">
+    <img src="https://img.shields.io/github/actions/workflow/status/proliferate-ai/proliferate/ci.yml?branch=main" alt="CI" />
+  </a>
+  <a href="#docs">
+    <img src="https://img.shields.io/badge/docs-view-blue" alt="Documentation" />
+  </a>
+  <a href="https://proliferate.com" target="_blank" rel="noreferrer">
+    <img src="https://img.shields.io/website?url=https%3A%2F%2Fproliferate.com&up_message=visit&up_color=blue" alt="Website" />
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/static/v1?label=license&message=MIT&color=blue" alt="License" />
+  </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/proliferate-ai/cloud/actions"><img src="https://img.shields.io/github/actions/workflow/status/proliferate-ai/cloud/ci.yml?branch=main&style=for-the-badge" alt="CI status"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
+  <a href="#quick-start">Quick start</a> &middot;
+  <a href="#features">Features</a> &middot;
+  <a href="#deployment">Deployment</a> &middot;
+  <a href="#architecture">Architecture</a> &middot;
+  <a href="#docs">Docs</a> &middot;
+  <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
-> **Beta** -- Proliferate is under active development. A managed hosted version is coming extremely soon. We'd love your feedback via [issues](https://github.com/proliferate-ai/cloud/issues) or [contributions](CONTRIBUTING.md).
+> [!WARNING]
+> **Beta:** Proliferate is under active development. A managed hosted version is coming soon.
+> Feedback via [issues](https://github.com/proliferate-ai/proliferate/issues) or [contributions](CONTRIBUTING.md).
 
-Proliferate is an open source cloud harness for coding agents. It lets you run many agents in parallel, each in an isolated cloud session with a real dev environment and access to your toolchain (Docker, GitHub, Sentry, PostHog, Linear, Slack, Chrome, Gmail, internal docs, infra, etc.).
+**Proliferate** is an open source cloud harness for coding agents. It lets you run many agents in parallel, each in an isolated cloud session with a real dev environment and access to your toolchain (Docker, GitHub, Sentry, PostHog, Linear, Slack, Chrome, Gmail, internal docs, infra, etc.).
 
 Example workflows:
 
@@ -24,53 +52,46 @@ Two things we focus on:
 - **Access + integration**: agents need safe, real access to your stack. Most teams wire this up with custom wrappers / MCP servers / glue code, and it tends to be brittle and hard to share.
 - **Verification**: even when an agent ships a PR, someone still has to answer "does this actually work?" Proliferate makes each run a shareable session with a live environment so review isn't "pull the branch locally just to verify."
 
-If this is useful, please star the repo. For feedback or questions, reach out at [pablo@proliferate.com](mailto:pablo@proliferate.com) (or open an issue).
+> [!TIP]
+> Install the CLI (optional):
+> ```bash
+> curl -fsSL https://proliferate.com/install.sh | bash
+> ```
 
-[Docs](docs/) &middot; [Self-Hosting](docs/SELF_HOSTING.md) &middot; [Contributing](CONTRIBUTING.md)
+****
 
 <p align="center">
   <img src="product-screenshot.png" alt="Proliferate in action" width="100%">
 </p>
 
-## What you can do
+<a name="features"></a>
+## ⭐ Features
 
-- **Snapshot your dev environment** -- Connect your GitHub repos via GitHub App. Agents get a real, isolated sandbox to clone, build, run, and push code -- not just a repo checkout.
-
-- **Wire up triggers and automations** -- Kick off agents from the events that matter: GitHub issues, Sentry exceptions, PostHog session replays, Linear tickets, Slack messages, webhooks, or cron schedules.
-
-- **Review what agents actually did** -- Stream agent output live to the web UI or CLI. Every session is a link you can share with anyone on the team: same session, different surfaces (Slack, GitHub, web).
-
-- **Deploy it your way** -- Self-host on your own infra, or wait for the managed version (coming soon). `docker compose up` to run locally; see the docs for AWS, GCP, and other production setups.
+- **Snapshot your dev environment:** Connect your GitHub repos via GitHub App. Agents get a real, isolated sandbox to clone, build, run, and push code (not just a repo checkout).
+- **Triggers and automations:** Kick off agents from GitHub issues, Sentry exceptions, PostHog session replays, Linear tickets, Slack messages, webhooks, or cron schedules.
+- **Review what agents actually did:** Stream output live to the web UI or CLI. Every session is a link you can share with anyone on the team.
+- **Deploy it your way:** Self-host on your own infra, or wait for the managed version (coming soon).
 
 ## Quick start
 
 ```bash
-# Install the CLI (optional)
-curl -fsSL https://proliferate.com/install.sh | bash
-
-# Clone and configure
-git clone https://github.com/proliferate-ai/cloud
-cd cloud
+git clone https://github.com/proliferate-ai/proliferate
+cd proliferate
 cp .env.example .env
-```
 
-Edit `.env` with your keys -- you need an `ANTHROPIC_API_KEY` and a sandbox provider ([Modal](https://modal.com) or [E2B](https://e2b.dev) credentials). Then:
-
-```bash
 docker compose up -d
 ```
 
 Open http://localhost:3000.
 
-For production deployments (AWS, GCP), run the interactive deployment wizard:
+<a name="deployment"></a>
+## 🚀 Deployment
 
-```bash
-node scripts/install-platform.cjs
-```
+- **Local (build images from this repo):** `docker compose up -d` using `docker-compose.yml`
+- **Production (pull pre-built images):** `docker compose -f docker-compose.prod.yml up -d` using `docker-compose.prod.yml`
+- **Custom domain / HTTPS:** see `Caddyfile.example` and `docker-compose.override.yml.example`
 
-See the [Self-Hosting Guide](docs/SELF_HOSTING.md) for full details, and [Infrastructure docs](docs/pulumi-overview.md) for the Pulumi architecture.
-
-## From source
+## 🧑‍💻 Development (from source)
 
 ```bash
 pnpm install
@@ -79,9 +100,10 @@ pnpm -C packages/db db:migrate
 pnpm dev                   # Web + Gateway + Worker
 ```
 
-Requires **Node.js 20+** and **pnpm**. See [Environment Reference](docs/ENVIRONMENT.md) for all config options.
+Requires **Node.js 20+**, **pnpm**, and Docker.
 
-## How it works
+<a name="architecture"></a>
+## 🏗️ Architecture
 
 ```
 Sentry / PostHog / GitHub / Linear / Slack / Webhooks / Cron
@@ -103,18 +125,20 @@ Sentry / PostHog / GitHub / Linear / Slack / Webhooks / Cron
           +---------+
 ```
 
-Every run gets an **isolated sandbox** on [Modal](https://modal.com) or [E2B](https://e2b.dev) -- a real environment where agents can clone, build, and run your code. The **gateway** streams output live over WebSocket. The **worker** handles the automation pipeline: enrich context, execute the agent, finalize results. An optional **[LLM proxy](docs/llm-proxy-guide.md)** can issue scoped virtual keys for cost tracking.
+Every run gets an **isolated sandbox** on [Modal](https://modal.com) or [E2B](https://e2b.dev) -- a real environment where agents can clone, build, and run your code. The **gateway** streams output live over WebSocket. The **worker** handles the automation pipeline: enrich context, execute the agent, finalize results. An optional **[LLM proxy](apps/llm-proxy/README.md)** can issue scoped virtual keys for cost tracking.
 
 ## Docs
 
-- [Self-Hosting Guide](docs/SELF_HOSTING.md) -- Docker Compose, custom domains, production deployment
-- [Infrastructure (Pulumi)](docs/pulumi-overview.md) -- AWS/GCP infrastructure architecture
-- [Architecture](docs/guides/ARCHITECTURE_OVERVIEW.md) -- System design and data flow
-- [Environment Reference](docs/ENVIRONMENT.md) -- All environment variables
-- [Automation Triggers](docs/AUTOMATION_TRIGGERS.md) -- Trigger types and configuration
-- [Automation Runs](docs/AUTOMATION_RUNS.md) -- Run lifecycle and state machine
-- [LLM Proxy](docs/llm-proxy-guide.md) -- Virtual keys, cost tracking, provider setup
-- [Slack Integration](docs/guides/SLACK_INTEGRATION.md) -- Bot setup
+- [Self-hosting (Docker Compose)](docker-compose.yml)
+- [Self-hosting (pre-built images)](docker-compose.prod.yml)
+- [Gateway spec](apps/gateway/SPEC.md)
+- [Infrastructure spec (Pulumi migration + one-click deploy)](infra/SPEC.md)
+- [Environment package spec](packages/environment/SPEC.md)
+- [LLM proxy](apps/llm-proxy/README.md)
+
+## Community
+
+If this is useful, please star the repo. For feedback or questions, reach out at [pablo@proliferate.com](mailto:pablo@proliferate.com) (or open an issue).
 
 ## Contributing
 
