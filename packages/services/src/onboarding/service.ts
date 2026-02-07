@@ -6,6 +6,7 @@
 
 import type { OnboardingRepo, OnboardingStatus } from "@proliferate/shared";
 import { toIsoString } from "../db/serialize";
+import { requestRepoSnapshotBuild } from "../repos";
 import * as onboardingDb from "./db";
 
 // ============================================
@@ -113,12 +114,14 @@ export async function upsertRepoFromGitHub(
 	const existingRepo = await onboardingDb.findRepoByGitHubId(orgId, githubRepoIdStr);
 
 	let repoId: string;
+	let isNew = false;
 
 	if (existingRepo) {
 		repoId = existingRepo.id;
 	} else {
 		// Create new repo
 		repoId = crypto.randomUUID();
+		isNew = true;
 		await onboardingDb.createRepo({
 			id: repoId,
 			organizationId: orgId,
@@ -133,6 +136,10 @@ export async function upsertRepoFromGitHub(
 
 	// Create/update repo connection
 	await onboardingDb.upsertRepoConnection(repoId, integrationId);
+
+	if (isNew) {
+		void requestRepoSnapshotBuild(repoId);
+	}
 
 	return repoId;
 }

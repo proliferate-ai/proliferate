@@ -241,12 +241,22 @@ export const repos = pgTable(
 		source: text().default("github"),
 		isPrivate: boolean("is_private").default(false),
 		localPathHash: text("local_path_hash"),
+		repoSnapshotId: text("repo_snapshot_id"),
+		repoSnapshotStatus: text("repo_snapshot_status"),
+		repoSnapshotError: text("repo_snapshot_error"),
+		repoSnapshotCommitSha: text("repo_snapshot_commit_sha"),
+		repoSnapshotBuiltAt: timestamp("repo_snapshot_built_at", { withTimezone: true, mode: "date" }),
+		repoSnapshotProvider: text("repo_snapshot_provider"),
 	},
 	(table) => [
 		index("idx_repos_local_path_hash")
 			.using("btree", table.localPathHash.asc().nullsLast().op("text_ops"))
 			.where(sql`(local_path_hash IS NOT NULL)`),
 		index("idx_repos_org").using("btree", table.organizationId.asc().nullsLast().op("text_ops")),
+		index("idx_repos_repo_snapshot_status").using(
+			"btree",
+			table.repoSnapshotStatus.asc().nullsLast().op("text_ops"),
+		),
 		foreignKey({
 			columns: [table.organizationId],
 			foreignColumns: [organization.id],
