@@ -29,6 +29,7 @@ import { setSharedLogger } from "@proliferate/shared/logger";
 import { startAutomationWorkers, stopAutomationWorkers } from "./automation";
 import { isBillingWorkerHealthy, startBillingWorker, stopBillingWorker } from "./billing";
 import { SessionSubscriber } from "./pubsub";
+import { startRepoSnapshotWorkers, stopRepoSnapshotWorkers } from "./repo-snapshots";
 import { SlackClient } from "./slack";
 
 // Create root logger
@@ -90,6 +91,7 @@ if (billingEnabled) {
 }
 
 const automationWorkers = startAutomationWorkers(logger.child({ module: "automation" }));
+const repoSnapshotWorkers = startRepoSnapshotWorkers(logger.child({ module: "repo-snapshots" }));
 
 logger.info(
 	{
@@ -97,6 +99,7 @@ logger.info(
 		slackReceiver: 10,
 		billingEnabled,
 		automationWorkers: ["enrich", "execute", "outbox", "finalizer"],
+		repoSnapshotWorkers: ["build"],
 	},
 	"Workers started",
 );
@@ -148,6 +151,7 @@ async function shutdown(): Promise<void> {
 	// Close async clients (closes their queues and workers)
 	await slackClient.close();
 	await stopAutomationWorkers(automationWorkers);
+	await stopRepoSnapshotWorkers(repoSnapshotWorkers);
 
 	// Close Redis client
 	await closeRedisClient();

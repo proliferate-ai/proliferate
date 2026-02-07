@@ -10,6 +10,7 @@ export const QUEUE_NAMES = {
 	AUTOMATION_ENRICH: "automation-enrich",
 	AUTOMATION_EXECUTE: "automation-execute",
 	AUTOMATION_FINALIZE: "automation-finalize",
+	REPO_SNAPSHOT_BUILDS: "repo-snapshot-builds",
 } as const;
 
 // ============================================
@@ -59,6 +60,14 @@ export interface AutomationExecuteJob {
  */
 export interface AutomationFinalizeJob {
 	runId: string;
+}
+
+/**
+ * Job to build a deterministic repo snapshot (clone-only baseline).
+ */
+export interface RepoSnapshotBuildJob {
+	repoId: string;
+	force?: boolean;
 }
 
 /**
@@ -212,6 +221,22 @@ const automationJobOptions: JobsOptions = {
 	},
 };
 
+const repoSnapshotBuildJobOptions: JobsOptions = {
+	attempts: 3,
+	backoff: {
+		type: "exponential",
+		delay: 5000,
+	},
+	removeOnComplete: {
+		age: 86400, // 24 hours
+		count: 1000,
+	},
+	removeOnFail: {
+		age: 604800, // 7 days
+		count: 1000,
+	},
+};
+
 // ============================================
 // Queue Factories
 // ============================================
@@ -279,6 +304,18 @@ export function createAutomationFinalizeQueue(
 	return new Queue<AutomationFinalizeJob>(QUEUE_NAMES.AUTOMATION_FINALIZE, {
 		connection: connection ?? getConnectionOptions(),
 		defaultJobOptions: automationJobOptions,
+	});
+}
+
+/**
+ * Create the repo snapshot build queue
+ */
+export function createRepoSnapshotBuildQueue(
+	connection?: ConnectionOptions,
+): Queue<RepoSnapshotBuildJob> {
+	return new Queue<RepoSnapshotBuildJob>(QUEUE_NAMES.REPO_SNAPSHOT_BUILDS, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: repoSnapshotBuildJobOptions,
 	});
 }
 
@@ -359,6 +396,16 @@ export function createAutomationFinalizeWorker(
 	connection?: ConnectionOptions,
 ): Worker<AutomationFinalizeJob> {
 	return new Worker<AutomationFinalizeJob>(QUEUE_NAMES.AUTOMATION_FINALIZE, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 2,
+	});
+}
+
+export function createRepoSnapshotBuildWorker(
+	processor: (job: Job<RepoSnapshotBuildJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<RepoSnapshotBuildJob> {
+	return new Worker<RepoSnapshotBuildJob>(QUEUE_NAMES.REPO_SNAPSHOT_BUILDS, processor, {
 		connection: connection ?? getConnectionOptions(),
 		concurrency: 2,
 	});
