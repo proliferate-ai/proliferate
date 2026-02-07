@@ -55,6 +55,11 @@ const decoder = new TextDecoder();
 const MODAL_APP_NAME = env.MODAL_APP_NAME;
 const MODAL_APP_SUFFIX = env.MODAL_APP_SUFFIX;
 
+const latencyPrefix = "[P-LATENCY]";
+const logLatency = (event: string, data?: Record<string, unknown>) => {
+	console.log(`${latencyPrefix} ${event}`, data || {});
+};
+
 function normalizeModalEnvValue(value: string | undefined): string | undefined {
 	if (!value) return undefined;
 	const trimmed = value.trim();
@@ -156,6 +161,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 	private async runModalAuthPreflight(operation: SandboxOperation): Promise<void> {
 		const tokenId = normalizeModalEnvValue(env.MODAL_TOKEN_ID);
 		const tokenSecret = normalizeModalEnvValue(env.MODAL_TOKEN_SECRET);
+		const startMs = Date.now();
 
 		// Fast fail on obvious misconfig to avoid triggering libmodal's background auth loop,
 		// which can otherwise surface as an unhandled promise rejection on auth failures.
@@ -174,9 +180,20 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		try {
 			// AuthTokenGet does not start libmodal's background token refresh.
 			await this.client.cpClient.authTokenGet({});
+			logLatency("provider.auth_preflight.ok", {
+				provider: this.type,
+				operation,
+				durationMs: Date.now() - startMs,
+			});
 		} catch (error) {
 			const hint = getModalAuthConfigHint(tokenId, tokenSecret);
 			const rawMessage = error instanceof Error ? error.message : String(error);
+			logLatency("provider.auth_preflight.error", {
+				provider: this.type,
+				operation,
+				durationMs: Date.now() - startMs,
+				error: rawMessage,
+			});
 
 			throw new SandboxProviderError({
 				provider: "modal",
@@ -198,17 +215,33 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			return { app: this.app, image: this.image };
 		}
 
+		const startMs = Date.now();
 		await this.ensureModalAuth("createSandbox");
+		logLatency("provider.initialize.auth_ok", {
+			provider: this.type,
+			durationMs: Date.now() - startMs,
+		});
 
 		const appName = getModalAppName();
 
 		// Get the app reference (creates if missing)
+		const appStartMs = Date.now();
 		this.app = await this.client.apps.fromName(appName, { createIfMissing: true });
+		logLatency("provider.initialize.app_loaded", {
+			provider: this.type,
+			durationMs: Date.now() - appStartMs,
+		});
 
 		// Get the base image ID from the deployed Modal function
 		// This avoids hardcoding or env vars - the deploy.py exposes the image ID
+		const fnStartMs = Date.now();
 		const getImageFn = await this.client.functions.fromName(appName, "get_image_id");
 		const webUrl = await getImageFn.getWebUrl();
+		logLatency("provider.initialize.get_image_id_url", {
+			provider: this.type,
+			durationMs: Date.now() - fnStartMs,
+			hasWebUrl: Boolean(webUrl),
+		});
 
 		if (!webUrl) {
 			throw new SandboxProviderError({
@@ -221,8 +254,14 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		}
 
 		// Call the web endpoint to get the image ID
+		const fetchStartMs = Date.now();
 		const response = await fetch(webUrl);
 		if (!response.ok) {
+			logLatency("provider.initialize.get_image_id_http_error", {
+				provider: this.type,
+				status: response.status,
+				durationMs: Date.now() - fetchStartMs,
+			});
 			throw new SandboxProviderError({
 				provider: "modal",
 				operation: "createSandbox",
@@ -232,24 +271,54 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		}
 
 		const { image_id: imageId } = (await response.json()) as { image_id: string };
+		logLatency("provider.initialize.get_image_id_ok", {
+			provider: this.type,
+			durationMs: Date.now() - fetchStartMs,
+		});
+		const imageStartMs = Date.now();
 		this.image = await this.client.images.fromId(imageId);
+		logLatency("provider.initialize.image_loaded", {
+			provider: this.type,
+			durationMs: Date.now() - imageStartMs,
+		});
+		logLatency("provider.initialize.complete", {
+			provider: this.type,
+			durationMs: Date.now() - startMs,
+		});
 
 		return { app: this.app, image: this.image };
 	}
 
 	async createSandbox(opts: CreateSandboxOpts): Promise<CreateSandboxResult> {
 		const startTime = Date.now();
+		const shortId = opts.sessionId.slice(0, 8);
 		const log = (msg: string) => {
 			const elapsed = Date.now() - startTime;
 			console.log(`[Modal:${elapsed}ms] ${msg}`);
 		};
+
+		logLatency("provider.create_sandbox.start", {
+			provider: this.type,
+			sessionId: opts.sessionId,
+			shortId,
+			repoCount: opts.repos.length,
+			hasSnapshotId: Boolean(opts.snapshotId),
+			timeoutMs: SANDBOX_TIMEOUT_MS,
+		});
 
 		log(`Creating session ${opts.sessionId}`);
 		log(`Repos: ${opts.repos.length} repo(s)`);
 		log(`Snapshot ID: ${opts.snapshotId || "none (fresh clone)"}`);
 
 		try {
+			const authStartMs = Date.now();
 			await this.ensureModalAuth("createSandbox");
+			logLatency("provider.create_sandbox.auth_ok", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+				durationMs: Date.now() - authStartMs,
+			});
 			const { app } = await this.ensureInitialized();
 			const isSnapshot = !!opts.snapshotId;
 
@@ -257,7 +326,14 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			let sandboxImage: Image;
 			if (isSnapshot) {
 				log(`Restoring from snapshot: ${opts.snapshotId}`);
+				const imageStartMs = Date.now();
 				sandboxImage = await this.client.images.fromId(opts.snapshotId!);
+				logLatency("provider.create_sandbox.snapshot_image_loaded", {
+					provider: this.type,
+					sessionId: opts.sessionId,
+					shortId,
+					durationMs: Date.now() - imageStartMs,
+				});
 			} else {
 				sandboxImage = this.image!;
 			}
@@ -304,6 +380,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			// Create sandbox with Modal SDK
 			// Note: command starts Docker daemon, experimentalOptions enables Docker support
 			// SSH uses unencryptedPorts for raw TCP (SSH handles its own encryption)
+			const createStartMs = Date.now();
 			const sandbox = await this.client.sandboxes.create(app, sandboxImage, {
 				command: ["/usr/local/bin/start-dockerd.sh"],
 				encryptedPorts: [SANDBOX_PORTS.opencode, SANDBOX_PORTS.preview],
@@ -315,11 +392,24 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				memoryMiB: 4096,
 				experimentalOptions: { enable_docker: true },
 			});
+			logLatency("provider.create_sandbox.sandbox_created", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+				durationMs: Date.now() - createStartMs,
+			});
 
 			log(`Sandbox created: ${sandbox.sandboxId}`);
 
 			// Get tunnel URLs
+			const tunnelsStartMs = Date.now();
 			const tunnels = await sandbox.tunnels(30000);
+			logLatency("provider.create_sandbox.tunnels", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+				durationMs: Date.now() - tunnelsStartMs,
+			});
 			const opencodeTunnel = tunnels[SANDBOX_PORTS.opencode];
 			const previewTunnel = tunnels[SANDBOX_PORTS.preview];
 			const sshTunnel = tunnels[SANDBOX_PORTS.ssh];
@@ -333,9 +423,18 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			log(`Tunnel URLs: opencode=${tunnelUrl}, preview=${previewUrl}, ssh=${sshHost}:${sshPort}`);
 
 			// Setup the sandbox (clone repos or restore from snapshot)
+			const setupWorkspaceStartMs = Date.now();
 			const repoDir = await this.setupSandbox(sandbox, opts, isSnapshot, log);
+			logLatency("provider.create_sandbox.setup_workspace", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+				isSnapshot,
+				durationMs: Date.now() - setupWorkspaceStartMs,
+			});
 
 			// Setup essential dependencies (blocking - must complete before API returns)
+			const essentialStartMs = Date.now();
 			await this.setupEssentialDependencies(
 				sandbox,
 				repoDir,
@@ -344,24 +443,63 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				llmProxyBaseUrl,
 				llmProxyApiKey,
 			);
+			logLatency("provider.create_sandbox.setup_essential", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+				durationMs: Date.now() - essentialStartMs,
+			});
 
 			// Setup additional dependencies (async - fire and forget)
+			logLatency("provider.create_sandbox.setup_additional.start_async", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+			});
 			this.setupAdditionalDependencies(sandbox, log).catch((err) => {
 				log(`Warning: Additional dependencies setup failed: ${err}`);
+				logLatency("provider.create_sandbox.setup_additional.error", {
+					provider: this.type,
+					sessionId: opts.sessionId,
+					shortId,
+					error: err instanceof Error ? err.message : String(err),
+				});
 			});
 
 			// Wait for OpenCode to be ready
 			if (tunnelUrl) {
 				log("Waiting for OpenCode readiness...");
 				try {
+					const readyStartMs = Date.now();
 					await waitForOpenCodeReady(tunnelUrl, 30000, log);
+					logLatency("provider.create_sandbox.opencode_ready", {
+						provider: this.type,
+						sessionId: opts.sessionId,
+						shortId,
+						durationMs: Date.now() - readyStartMs,
+						timeoutMs: 30000,
+					});
 				} catch (error) {
+					logLatency("provider.create_sandbox.opencode_ready.warn", {
+						provider: this.type,
+						sessionId: opts.sessionId,
+						shortId,
+						timeoutMs: 30000,
+						error: error instanceof Error ? error.message : String(error),
+					});
 					log(
 						`WARNING: ${error instanceof Error ? error.message : "OpenCode readiness check failed"}`,
 					);
 				}
 			}
 
+			logLatency("provider.create_sandbox.complete", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+				durationMs: Date.now() - startTime,
+				isSnapshot,
+			});
 			return {
 				sandboxId: sandbox.sandboxId,
 				tunnelUrl,
@@ -371,26 +509,64 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				expiresAt: sandboxCreatedAt + SANDBOX_TIMEOUT_MS,
 			};
 		} catch (error) {
+			logLatency("provider.create_sandbox.error", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+				durationMs: Date.now() - startTime,
+				error: error instanceof Error ? error.message : String(error),
+			});
 			throw SandboxProviderError.fromError(error, "modal", "createSandbox");
 		}
 	}
 
 	async ensureSandbox(opts: CreateSandboxOpts): Promise<EnsureSandboxResult> {
 		const startTime = Date.now();
+		const shortId = opts.sessionId.slice(0, 8);
 		const log = (msg: string) => {
 			const elapsed = Date.now() - startTime;
 			console.log(`[Modal:${elapsed}ms] ${msg}`);
 		};
 
 		log(`Ensuring sandbox for session ${opts.sessionId}`);
+		logLatency("provider.ensure_sandbox.start", {
+			provider: this.type,
+			sessionId: opts.sessionId,
+			shortId,
+			hasSnapshotId: Boolean(opts.snapshotId),
+		});
 
 		// For Modal, sessionId IS the sandbox identifier (we use it as the unique name)
 		// This is equivalent to E2B using currentSandboxId - both are "find by ID"
+		const findStartMs = Date.now();
 		const existingSandboxId = await this.findSandbox(opts.sessionId);
+		logLatency("provider.ensure_sandbox.find_existing", {
+			provider: this.type,
+			sessionId: opts.sessionId,
+			shortId,
+			durationMs: Date.now() - findStartMs,
+			found: Boolean(existingSandboxId),
+		});
 
 		if (existingSandboxId) {
 			log(`Found existing sandbox: ${existingSandboxId}`);
+			const resolveStartMs = Date.now();
 			const tunnels = await this.resolveTunnels(existingSandboxId);
+			logLatency("provider.ensure_sandbox.resolve_tunnels", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+				durationMs: Date.now() - resolveStartMs,
+				hasTunnelUrl: Boolean(tunnels.openCodeUrl),
+				hasPreviewUrl: Boolean(tunnels.previewUrl),
+			});
+			logLatency("provider.ensure_sandbox.complete", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+				recovered: true,
+				durationMs: Date.now() - startTime,
+			});
 			return {
 				sandboxId: existingSandboxId,
 				tunnelUrl: tunnels.openCodeUrl,
@@ -401,6 +577,13 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 		log("No existing sandbox found, creating new...");
 		const result = await this.createSandbox(opts);
+		logLatency("provider.ensure_sandbox.complete", {
+			provider: this.type,
+			sessionId: opts.sessionId,
+			shortId,
+			recovered: false,
+			durationMs: Date.now() - startTime,
+		});
 		return { ...result, recovered: false };
 	}
 
@@ -691,16 +874,44 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 	async snapshot(sessionId: string, sandboxId: string): Promise<SnapshotResult> {
 		console.log(`[Modal] Taking snapshot of session ${sessionId}`);
+		const startMs = Date.now();
 
 		try {
 			await this.ensureModalAuth("snapshot");
 			// Get sandbox by ID and take a filesystem snapshot
+			const fromIdStartMs = Date.now();
 			const sandbox = await this.client.sandboxes.fromId(sandboxId);
+			logLatency("provider.snapshot.from_id", {
+				provider: this.type,
+				sessionId,
+				shortId: sessionId.slice(0, 8),
+				durationMs: Date.now() - fromIdStartMs,
+			});
+			const snapshotStartMs = Date.now();
 			const snapshotImage = await sandbox.snapshotFilesystem();
+			logLatency("provider.snapshot.filesystem", {
+				provider: this.type,
+				sessionId,
+				shortId: sessionId.slice(0, 8),
+				durationMs: Date.now() - snapshotStartMs,
+			});
 
 			console.log(`[Modal] Snapshot created: ${snapshotImage.imageId}`);
+			logLatency("provider.snapshot.complete", {
+				provider: this.type,
+				sessionId,
+				shortId: sessionId.slice(0, 8),
+				durationMs: Date.now() - startMs,
+			});
 			return { snapshotId: snapshotImage.imageId };
 		} catch (error) {
+			logLatency("provider.snapshot.error", {
+				provider: this.type,
+				sessionId,
+				shortId: sessionId.slice(0, 8),
+				durationMs: Date.now() - startMs,
+				error: error instanceof Error ? error.message : String(error),
+			});
 			throw SandboxProviderError.fromError(error, "modal", "snapshot");
 		}
 	}
@@ -716,6 +927,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 	async terminate(sessionId: string, sandboxId?: string): Promise<void> {
 		console.log(`[Modal] Terminating session ${sessionId}`);
+		const startMs = Date.now();
 
 		if (!sandboxId) {
 			throw new SandboxProviderError({
@@ -728,33 +940,79 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 		try {
 			await this.ensureModalAuth("terminate");
+			const fromIdStartMs = Date.now();
 			const sandbox = await this.client.sandboxes.fromId(sandboxId);
+			logLatency("provider.terminate.from_id", {
+				provider: this.type,
+				sessionId,
+				shortId: sessionId.slice(0, 8),
+				durationMs: Date.now() - fromIdStartMs,
+			});
+			const terminateStartMs = Date.now();
 			await sandbox.terminate();
+			logLatency("provider.terminate.call", {
+				provider: this.type,
+				sessionId,
+				shortId: sessionId.slice(0, 8),
+				durationMs: Date.now() - terminateStartMs,
+			});
 			console.log(`[Modal] Sandbox ${sandboxId} terminated`);
+			logLatency("provider.terminate.complete", {
+				provider: this.type,
+				sessionId,
+				shortId: sessionId.slice(0, 8),
+				durationMs: Date.now() - startMs,
+			});
 		} catch (error) {
 			// Check for "not found" - treat as idempotent success
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			if (errorMessage.includes("not found") || errorMessage.includes("404")) {
 				console.log(`[Modal] Sandbox ${sandboxId} already terminated (idempotent)`);
+				logLatency("provider.terminate.idempotent", {
+					provider: this.type,
+					sessionId,
+					shortId: sessionId.slice(0, 8),
+					durationMs: Date.now() - startMs,
+				});
 				return;
 			}
+			logLatency("provider.terminate.error", {
+				provider: this.type,
+				sessionId,
+				shortId: sessionId.slice(0, 8),
+				durationMs: Date.now() - startMs,
+				error: errorMessage,
+			});
 			throw SandboxProviderError.fromError(error, "modal", "terminate");
 		}
 	}
 
 	async writeEnvFile(sandboxId: string, envVars: Record<string, string>): Promise<void> {
 		console.log(`[Modal] Writing env vars to sandbox ${sandboxId.slice(0, 16)}...`);
+		const startMs = Date.now();
 
 		try {
 			await this.ensureModalAuth("writeEnvFile");
+			const fromIdStartMs = Date.now();
 			const sandbox = await this.client.sandboxes.fromId(sandboxId);
+			logLatency("provider.write_env_file.from_id", {
+				provider: this.type,
+				sandboxId,
+				durationMs: Date.now() - fromIdStartMs,
+			});
 
 			// Read existing env vars if any
 			let existing: Record<string, string> = {};
 			try {
+				const readStartMs = Date.now();
 				const existingFile = await sandbox.open(ENV_FILE, "r");
 				const existingBytes = await existingFile.read();
 				await existingFile.close();
+				logLatency("provider.write_env_file.read_existing", {
+					provider: this.type,
+					sandboxId,
+					durationMs: Date.now() - readStartMs,
+				});
 				if (existingBytes.length > 0) {
 					existing = JSON.parse(decoder.decode(existingBytes));
 				}
@@ -764,12 +1022,31 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 			// Merge and write
 			const merged = { ...existing, ...envVars };
+			const writeStartMs = Date.now();
 			const envFile = await sandbox.open(ENV_FILE, "w");
 			await envFile.write(encoder.encode(JSON.stringify(merged)));
 			await envFile.close();
+			logLatency("provider.write_env_file.write", {
+				provider: this.type,
+				sandboxId,
+				keyCount: Object.keys(envVars).length,
+				durationMs: Date.now() - writeStartMs,
+			});
 
 			console.log(`[Modal] Wrote ${Object.keys(envVars).length} env vars to sandbox`);
+			logLatency("provider.write_env_file.complete", {
+				provider: this.type,
+				sandboxId,
+				keyCount: Object.keys(envVars).length,
+				durationMs: Date.now() - startMs,
+			});
 		} catch (error) {
+			logLatency("provider.write_env_file.error", {
+				provider: this.type,
+				sandboxId,
+				durationMs: Date.now() - startMs,
+				error: error instanceof Error ? error.message : String(error),
+			});
 			throw SandboxProviderError.fromError(error, "modal", "writeEnvFile");
 		}
 	}
@@ -824,11 +1101,24 @@ export class ModalLibmodalProvider implements SandboxProvider {
 	 */
 	async resolveTunnels(sandboxId: string): Promise<{ openCodeUrl: string; previewUrl: string }> {
 		console.log(`[Modal] Resolving tunnels for sandbox ${sandboxId.slice(0, 16)}...`);
+		const startMs = Date.now();
 
 		try {
 			await this.ensureModalAuth("resolveTunnels");
+			const fromIdStartMs = Date.now();
 			const sandbox = await this.client.sandboxes.fromId(sandboxId);
+			logLatency("provider.resolve_tunnels.from_id", {
+				provider: this.type,
+				sandboxId,
+				durationMs: Date.now() - fromIdStartMs,
+			});
+			const tunnelsStartMs = Date.now();
 			const tunnels = await sandbox.tunnels(30000);
+			logLatency("provider.resolve_tunnels.tunnels", {
+				provider: this.type,
+				sandboxId,
+				durationMs: Date.now() - tunnelsStartMs,
+			});
 
 			const opencodeTunnel = tunnels[SANDBOX_PORTS.opencode];
 			const previewTunnel = tunnels[SANDBOX_PORTS.preview];
@@ -838,8 +1128,21 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 			console.log(`[Modal] Tunnels resolved: opencode=${openCodeUrl}, preview=${previewUrl}`);
 
+			logLatency("provider.resolve_tunnels.complete", {
+				provider: this.type,
+				sandboxId,
+				durationMs: Date.now() - startMs,
+				hasTunnelUrl: Boolean(openCodeUrl),
+				hasPreviewUrl: Boolean(previewUrl),
+			});
 			return { openCodeUrl, previewUrl };
 		} catch (error) {
+			logLatency("provider.resolve_tunnels.error", {
+				provider: this.type,
+				sandboxId,
+				durationMs: Date.now() - startMs,
+				error: error instanceof Error ? error.message : String(error),
+			});
 			throw SandboxProviderError.fromError(error, "modal", "resolveTunnels");
 		}
 	}
@@ -850,6 +1153,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 	 */
 	async readFiles(sandboxId: string, folderPath: string): Promise<FileContent[]> {
 		console.log(`[Modal] Reading files from ${folderPath} in sandbox ${sandboxId.slice(0, 16)}...`);
+		const startMs = Date.now();
 
 		try {
 			await this.ensureModalAuth("readFiles");
@@ -860,6 +1164,12 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				await sandbox.exec(["test", "-d", folderPath]);
 			} catch {
 				console.log(`[Modal] Folder ${folderPath} does not exist`);
+				logLatency("provider.read_files.missing", {
+					provider: this.type,
+					sandboxId,
+					folderPath,
+					durationMs: Date.now() - startMs,
+				});
 				return [];
 			}
 
@@ -869,6 +1179,12 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			const stdoutTrimmed = stdout.trim();
 			if (!stdoutTrimmed) {
 				console.log(`[Modal] No files found in ${folderPath}`);
+				logLatency("provider.read_files.empty", {
+					provider: this.type,
+					sandboxId,
+					folderPath,
+					durationMs: Date.now() - startMs,
+				});
 				return [];
 			}
 
@@ -904,8 +1220,22 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			}
 
 			console.log(`[Modal] Read ${files.length} file(s) from ${folderPath}`);
+			logLatency("provider.read_files.complete", {
+				provider: this.type,
+				sandboxId,
+				folderPath,
+				fileCount: files.length,
+				durationMs: Date.now() - startMs,
+			});
 			return files;
 		} catch (error) {
+			logLatency("provider.read_files.error", {
+				provider: this.type,
+				sandboxId,
+				folderPath,
+				durationMs: Date.now() - startMs,
+				error: error instanceof Error ? error.message : String(error),
+			});
 			throw SandboxProviderError.fromError(error, "modal", "readFiles");
 		}
 	}

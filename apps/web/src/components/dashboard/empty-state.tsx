@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { OnboardingCards } from "./onboarding-cards";
 import { PromptInput } from "./prompt-input";
+import { SnapshotSelector } from "./snapshot-selector";
 import { WelcomeDialog } from "./welcome-dialog";
 
 export function EmptyDashboard() {
@@ -83,23 +84,26 @@ export function EmptyDashboard() {
 	};
 
 	return (
-		<div className="h-full flex flex-col items-center p-8 overflow-y-auto">
+		<div className="h-full flex flex-col items-center p-8">
 			<WelcomeDialog />
-			<div className="w-full max-w-2xl my-auto">
-				<div className="space-y-8">
-					{/* Main heading */}
-					<div className="text-center">
-						<h2 className="text-2xl font-semibold">What do you want to build?</h2>
-					</div>
 
-					{/* Prompt input */}
-					<PromptInput onSubmit={handleSubmit} isLoading={createSession.isPending} />
+			{/* Center content area */}
+			<div className="flex-1 flex flex-col items-center justify-center w-full max-w-2xl overflow-y-auto">
+				<div className="w-full">
+					{/* Hero heading with snapshot selector */}
+					<div className="text-center space-y-2">
+						<h2 className="text-2xl font-semibold">Let's build</h2>
+						<SnapshotSelector
+							mode="select"
+							triggerClassName="border-0 bg-transparent hover:bg-muted/50 text-lg text-muted-foreground font-medium h-auto px-2 py-1"
+						/>
+					</div>
 				</div>
 
 				{/* Onboarding cards - animated entrance */}
 				<div
 					className={cn(
-						"grid transition-[grid-template-rows,opacity] duration-500 ease-out",
+						"w-full grid transition-[grid-template-rows,opacity] duration-500 ease-out",
 						showCards && hasCards ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
 					)}
 				>
@@ -109,6 +113,11 @@ export function EmptyDashboard() {
 						</div>
 					</div>
 				</div>
+			</div>
+
+			{/* Bottom-anchored prompt input */}
+			<div className="w-full max-w-2xl shrink-0 pb-2">
+				<PromptInput onSubmit={handleSubmit} isLoading={createSession.isPending} />
 			</div>
 		</div>
 	);

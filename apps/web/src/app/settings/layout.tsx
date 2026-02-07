@@ -13,7 +13,6 @@ import {
 	ExternalLink,
 	FolderGit2,
 	Key,
-	Link as LinkIcon,
 	Search,
 	User,
 	Users,
@@ -36,7 +35,6 @@ const NAV_ITEMS = [
 				? [{ id: "billing", label: "Billing", icon: CreditCard, href: "/settings/billing" }]
 				: []),
 			{ id: "members", label: "Members", icon: Users, href: "/settings/members" },
-			{ id: "connections", label: "Connections", icon: LinkIcon, href: "/settings/connections" },
 			{ id: "secrets", label: "Secrets", icon: Key, href: "/settings/secrets" },
 			{
 				id: "repositories",
@@ -52,7 +50,6 @@ const PAGE_TITLES: Record<string, string> = {
 	profile: "Profile",
 	general: "General",
 	members: "Members",
-	connections: "Connections",
 	secrets: "Secrets",
 	repositories: "Repositories",
 	...(BILLING_ENABLED ? { billing: "Billing" } : {}),

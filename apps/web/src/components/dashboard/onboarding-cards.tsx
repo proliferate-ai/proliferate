@@ -146,7 +146,7 @@ export function OnboardingCards() {
 				title="Link your Slack"
 				description="Get notifications and trigger automations."
 				ctaLabel="Connect"
-				onCtaClick={() => router.push("/settings/connections")}
+				onCtaClick={() => router.push("/dashboard/integrations")}
 				onDismiss={() => dismissOnboardingCard("slack")}
 				gradient="slack"
 			/>,
