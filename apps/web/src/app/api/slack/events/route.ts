@@ -6,7 +6,10 @@
  */
 
 import { createHmac, timingSafeEqual } from "crypto";
+import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
+
+const log = logger.child({ handler: "slack-events" });
 import {
 	type SlackMessageJob,
 	createSlackMessagesQueue,
@@ -85,7 +88,7 @@ export async function POST(request: Request): Promise<Response> {
 	// Verify signature
 	const isValid = verifySlackSignature(body, timestamp, signature);
 	if (!isValid) {
-		console.error("[Slack events] Invalid signature");
+		log.error("Invalid signature");
 		return new Response("Invalid signature", { status: 401 });
 	}
 
@@ -100,18 +103,18 @@ export async function POST(request: Request): Promise<Response> {
 
 	// Only process app_mention and message events
 	if (!event || (event.type !== "app_mention" && event.type !== "message")) {
-		console.log(`[Slack events] Skipping: not relevant event type (${event?.type})`);
+		log.info({ eventType: event?.type }, "Skipping: not relevant event type");
 		return new Response("OK");
 	}
 
 	// Skip bot messages to prevent loops
 	if (event.bot_id || event.subtype === "bot_message" || !event.user || !event.text) {
-		console.log("[Slack events] Skipping: bot message or missing user/text");
+		log.info("Skipping: bot message or missing user/text");
 		return new Response("OK");
 	}
 
 	if (!event_id || !team_id) {
-		console.error("[Slack events] Missing required fields");
+		log.error("Missing required fields");
 		return new Response("Missing required fields", { status: 400 });
 	}
 
@@ -119,7 +122,7 @@ export async function POST(request: Request): Promise<Response> {
 	const installation = await integrations.findSlackInstallationByTeamId(team_id);
 
 	if (!installation) {
-		console.error(`[Slack events] No active installation for team ${team_id}`);
+		log.error({ teamId: team_id }, "No active installation for team");
 		return new Response("No installation found", { status: 404 });
 	}
 
@@ -130,7 +133,7 @@ export async function POST(request: Request): Promise<Response> {
 	if (event.type === "message") {
 		if (!event.thread_ts) {
 			// Not in a thread - skip (user should @mention to start a conversation)
-			console.log("[Slack events] Skipping: message event not in a thread");
+			log.info("Skipping: message event not in a thread");
 			return new Response("OK");
 		}
 
@@ -141,16 +144,16 @@ export async function POST(request: Request): Promise<Response> {
 		);
 
 		if (!existingSession) {
-			console.log("[Slack events] Skipping: message in thread but no existing session");
+			log.info("Skipping: message in thread but no existing session");
 			return new Response("OK");
 		}
-		console.log(`[Slack events] Found existing session ${existingSession.id} for thread`);
+		log.info({ sessionId: existingSession.id }, "Found existing session for thread");
 	}
 
 	const prompt = extractPrompt(event.text);
 	if (!prompt) {
 		// Empty prompt after removing mention - acknowledge but don't process
-		console.log("[Slack events] Skipping: empty prompt after mention removal");
+		log.info("Skipping: empty prompt after mention removal");
 		return new Response("OK");
 	}
 
@@ -179,9 +182,9 @@ export async function POST(request: Request): Promise<Response> {
 		await queueSlackMessage(queue, jobData);
 		await queue.close();
 
-		console.log(`[Slack events] Queued message for thread ${event.thread_ts || event.ts}`);
+		log.info({ threadTs: event.thread_ts || event.ts }, "Queued message for thread");
 	} catch (err) {
-		console.error("[Slack events] Failed to queue message:", err);
+		log.error({ err }, "Failed to queue message");
 		return new Response("Failed to queue message", { status: 500 });
 	}
 

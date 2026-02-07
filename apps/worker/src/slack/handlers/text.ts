@@ -13,7 +13,7 @@ export const textPartCompleteHandler: EventHandler<TextPartCompleteMessage> = {
 		const text = event.payload.text?.trim();
 		if (!text) return true;
 
-		console.log(`[SlackHandler:text] Posting ${text.length} chars`);
+		ctx.logger.info({ chars: text.length }, "Posting text part to Slack");
 		const slackText = slackifyMarkdown(text);
 		await ctx.slackClient.postMessage(slackText);
 

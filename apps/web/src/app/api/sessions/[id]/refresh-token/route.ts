@@ -5,6 +5,7 @@
  * Called by the sandbox when the token is near expiry.
  */
 
+import { logger } from "@/lib/logger";
 import { sessions } from "@proliferate/services";
 import {
 	extractBillingToken,
@@ -12,6 +13,8 @@ import {
 	verifyBillingToken,
 } from "@proliferate/shared/billing";
 import { NextResponse } from "next/server";
+
+const log = logger.child({ route: "sessions/refresh-token" });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
 	const { id: sessionId } = await params;
@@ -64,7 +67,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
 		return NextResponse.json({ token: newToken });
 	} catch (err) {
-		console.error("[RefreshToken] Error:", err);
+		log.error({ err }, "Failed to refresh token");
 		return NextResponse.json(
 			{ error: err instanceof Error ? err.message : "Invalid token" },
 			{ status: 401 },

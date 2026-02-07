@@ -15,6 +15,7 @@ import {
 } from "@proliferate/shared/billing";
 import type { OrgBillingSettings, PauseReason } from "@proliferate/shared/billing";
 import { and, eq, getDb, sessions } from "../db/client";
+import { getServicesLogger } from "../logger";
 import { getBillingInfo, updateBillingSettings } from "../orgs/service";
 
 // ============================================
@@ -69,12 +70,16 @@ export async function pauseAllOrgSessions(
 				paused++;
 			} else {
 				failed++;
-				console.error(`[BulkPause] Failed to pause session: ${r.reason}`);
+				getServicesLogger()
+					.child({ module: "org-pause" })
+					.error({ err: r.reason }, "Failed to pause session");
 			}
 		}
 	}
 
-	console.log(`[BulkPause] Org ${orgId}: ${paused} paused, ${failed} failed (reason: ${reason})`);
+	getServicesLogger()
+		.child({ module: "org-pause", orgId })
+		.info({ paused, failed, reason }, "Bulk pause complete");
 
 	return { paused, failed };
 }
@@ -150,8 +155,10 @@ export async function handleCreditsExhausted(orgId: string): Promise<ChargeOvera
 	// Get org billing settings
 	const org = await getBillingInfo(orgId);
 
+	const logger = getServicesLogger().child({ module: "org-pause", orgId });
+
 	if (!org) {
-		console.error("[Overage] Failed to fetch org settings");
+		logger.error("Failed to fetch org settings");
 		// Fail safe - pause sessions if we can't fetch settings
 		await pauseAllOrgSessions(orgId, "credit_limit");
 		return { success: false, error: "Failed to fetch org settings" };
@@ -161,7 +168,7 @@ export async function handleCreditsExhausted(orgId: string): Promise<ChargeOvera
 
 	// Policy: "pause" - hard stop, pause all sessions
 	if (settings.overage_policy === "pause") {
-		console.log(`[Overage] Policy is 'pause' for org ${orgId}, pausing all sessions`);
+		logger.info("Overage policy is pause, pausing all sessions");
 		await pauseAllOrgSessions(orgId, "credit_limit");
 		return { success: true };
 	}
@@ -173,13 +180,13 @@ export async function handleCreditsExhausted(orgId: string): Promise<ChargeOvera
 
 	// Check if we'd exceed the overage cap
 	if (capCents !== null && usedCents + chargeAmountCents > capCents) {
-		console.log(`[Overage] Cap reached for org ${orgId}: used ${usedCents}, cap ${capCents}`);
+		logger.info({ usedCents, capCents }, "Overage cap reached");
 		await pauseAllOrgSessions(orgId, "overage_cap");
 		return { success: false, error: "Overage cap reached" };
 	}
 
 	// Attempt auto-charge via Autumn
-	console.log(`[Overage] Attempting auto top-up for org ${orgId}`);
+	logger.info("Attempting auto top-up");
 	const topUpResult = await autumnAutoTopUp(
 		orgId,
 		TOP_UP_PRODUCT.productId,
@@ -187,7 +194,7 @@ export async function handleCreditsExhausted(orgId: string): Promise<ChargeOvera
 	);
 
 	if (!topUpResult.success) {
-		console.log(`[Overage] Auto top-up failed for org ${orgId}, pausing sessions`);
+		logger.warn("Auto top-up failed, pausing sessions");
 		await pauseAllOrgSessions(orgId, "credit_limit");
 		return {
 			success: false,
@@ -202,8 +209,9 @@ export async function handleCreditsExhausted(orgId: string): Promise<ChargeOvera
 		overage_used_this_month_cents: newUsedCents,
 	});
 
-	console.log(
-		`[Overage] Auto top-up succeeded for org ${orgId}: +${TOP_UP_PRODUCT.credits} credits, overage total: $${(newUsedCents / 100).toFixed(2)}`,
+	logger.info(
+		{ creditsAdded: TOP_UP_PRODUCT.credits, overageTotalCents: newUsedCents },
+		"Auto top-up succeeded",
 	);
 
 	return {
@@ -238,6 +246,8 @@ export async function handleCreditsExhaustedV2(
 		},
 	});
 
+	const logger = getServicesLogger().child({ module: "org-pause", orgId });
+
 	if (!sessionRows.length) {
 		return { terminated: 0, failed: 0 };
 	}
@@ -258,14 +268,12 @@ export async function handleCreditsExhaustedV2(
 					await provider.terminate(session.id, session.sandboxId);
 					providerTerminated = true;
 				} catch (err) {
-					console.error(
-						`[Enforcement] Failed to terminate provider sandbox for session ${session.id}:`,
-						err,
-					);
+					logger.error({ err, sessionId: session.id }, "Failed to terminate provider sandbox");
 				}
 			} else if (session.sandboxId) {
-				console.error(
-					`[Enforcement] Missing provider for session ${session.id} (provider: ${session.sandboxProvider ?? "unknown"})`,
+				logger.error(
+					{ sessionId: session.id, provider: session.sandboxProvider ?? "unknown" },
+					"Missing provider for session",
 				);
 			}
 
@@ -285,19 +293,15 @@ export async function handleCreditsExhaustedV2(
 				.where(eq(sessions.id, session.id));
 			terminated++;
 		} catch (err) {
-			console.error(`[Enforcement] Failed to terminate session ${session.id}:`, err);
+			logger.error({ err, sessionId: session.id }, "Failed to terminate session");
 			failed++;
 		}
 	}
 
 	if (failed > 0) {
-		console.warn(
-			`[Enforcement] Org ${orgId}: ${failed} sessions left running due to provider termination failures`,
-		);
+		logger.warn({ failed }, "Sessions left running due to provider termination failures");
 	}
-	console.log(
-		`[Enforcement] Org ${orgId}: terminated ${terminated} sessions (credits exhausted), failed ${failed}`,
-	);
+	logger.info({ terminated, failed, reason: "credits_exhausted" }, "Enforcement complete");
 	return { terminated, failed };
 }
 
@@ -322,6 +326,8 @@ export async function terminateAllOrgSessions(
 		},
 	});
 
+	const logger = getServicesLogger().child({ module: "org-pause", orgId });
+
 	let terminated = 0;
 	let failed = 0;
 
@@ -336,14 +342,12 @@ export async function terminateAllOrgSessions(
 					await provider.terminate(session.id, session.sandboxId);
 					providerTerminated = true;
 				} catch (err) {
-					console.error(
-						`[Enforcement] Failed to terminate provider sandbox for session ${session.id}:`,
-						err,
-					);
+					logger.error({ err, sessionId: session.id }, "Failed to terminate provider sandbox");
 				}
 			} else if (session.sandboxId) {
-				console.error(
-					`[Enforcement] Missing provider for session ${session.id} (provider: ${session.sandboxProvider ?? "unknown"})`,
+				logger.error(
+					{ sessionId: session.id, provider: session.sandboxProvider ?? "unknown" },
+					"Missing provider for session",
 				);
 			}
 
@@ -364,18 +368,14 @@ export async function terminateAllOrgSessions(
 
 			terminated++;
 		} catch (err) {
-			console.error(`[Enforcement] Failed to terminate session ${session.id}:`, err);
+			logger.error({ err, sessionId: session.id }, "Failed to terminate session");
 			failed++;
 		}
 	}
 
 	if (failed > 0) {
-		console.warn(
-			`[Enforcement] Org ${orgId}: ${failed} sessions left running due to provider termination failures`,
-		);
+		logger.warn({ failed }, "Sessions left running due to provider termination failures");
 	}
-	console.log(
-		`[Enforcement] Org ${orgId}: terminated ${terminated} sessions (reason: ${reason}), failed ${failed}`,
-	);
+	logger.info({ terminated, failed, reason }, "Terminate all sessions complete");
 	return { terminated, failed };
 }

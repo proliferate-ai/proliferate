@@ -31,5 +31,8 @@ export {
 	type ManagedPrebuild,
 } from "./managed-prebuild";
 
+// Logger
+export { setServicesLogger, getServicesLogger } from "./logger";
+
 // Shared DB client
 export { getDb, resetDb } from "./db/client";

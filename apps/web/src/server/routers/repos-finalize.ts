@@ -7,10 +7,13 @@
 
 import { randomUUID } from "crypto";
 import { encrypt, getEncryptionKey } from "@/lib/crypto";
+import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
 import { prebuilds, repos, secrets, sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
+
+const log = logger.child({ handler: "repos-finalize" });
 
 export interface FinalizeSetupInput {
 	repoId: string;
@@ -170,7 +173,7 @@ export async function finalizeSetupHandler(
 		try {
 			await provider.terminate(sessionId, sandboxId);
 		} catch (err) {
-			console.warn("Failed to terminate sandbox:", err);
+			log.warn({ err, sessionId, sandboxId }, "Failed to terminate sandbox");
 		}
 
 		await sessions.markSessionStopped(sessionId);

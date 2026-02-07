@@ -1,5 +1,8 @@
+import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
 import { betterAuth } from "better-auth";
+
+const log = logger.child({ module: "auth" });
 import { apiKey, organization } from "better-auth/plugins";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { Pool } from "pg";
@@ -127,7 +130,7 @@ export const auth = betterAuth({
 			invitationExpiresIn: 7 * 24 * 60 * 60, // 7 days
 			sendInvitationEmail: async (data) => {
 				if (!resend) {
-					console.warn("[auth] Email is disabled; skipping invite email.");
+					log.warn("Email is disabled; skipping invite email");
 					return;
 				}
 				const inviteUrl = `${env.NEXT_PUBLIC_APP_URL}/invite/${data.id}`;
@@ -187,7 +190,7 @@ export const auth = betterAuth({
 							[`mem_${user.id}`, `org_${user.id}`, user.id],
 						);
 					} catch (error) {
-						console.error("Failed to create default organization:", error);
+						log.error({ err: error }, "Failed to create default organization");
 					}
 				},
 			},

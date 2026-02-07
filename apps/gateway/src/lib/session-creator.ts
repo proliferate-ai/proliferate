@@ -8,6 +8,7 @@
  * - Generating LLM proxy JWT
  */
 
+import { createLogger } from "@proliferate/logger";
 import { automations, integrations, prebuilds, sessions } from "@proliferate/services";
 import {
 	type CloneInstructions,
@@ -21,10 +22,7 @@ import {
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
 
-const latencyPrefix = "[P-LATENCY]";
-const logLatency = (event: string, data?: Record<string, unknown>) => {
-	console.log(`${latencyPrefix} ${event}`, data || {});
-};
+const logger = createLogger({ service: "gateway" }).child({ module: "session-creator" });
 
 export type SessionType = "coding" | "setup" | "cli";
 export type ClientType = "web" | "slack" | "cli" | "automation";
@@ -131,28 +129,24 @@ export async function createSession(
 	} = options;
 
 	const sessionId = crypto.randomUUID();
-	const shortId = sessionId.slice(0, 8);
 	const startMs = Date.now();
 
-	console.log(`[SessionCreator:${shortId}] Creating session`, {
-		sessionType,
-		clientType,
-		sandboxMode,
-		hasSnapshot: Boolean(snapshotId),
-		sshEnabled: Boolean(sshOptions),
-		explicitIntegrations: explicitIntegrationIds?.length ?? 0,
-	});
-	logLatency("session_creator.create_session.start", {
-		sessionId,
-		shortId,
-		sessionType,
-		clientType,
-		sandboxMode,
-		isNewPrebuild,
-		hasSnapshotId: Boolean(snapshotId),
-		sshEnabled: Boolean(sshOptions),
-		explicitIntegrations: explicitIntegrationIds?.length ?? 0,
-	});
+	const log = logger.child({ sessionId });
+	log.info(
+		{
+			sessionType,
+			clientType,
+			sandboxMode,
+			hasSnapshot: Boolean(snapshotId),
+			sshEnabled: Boolean(sshOptions),
+			explicitIntegrations: explicitIntegrationIds?.length ?? 0,
+		},
+		"Creating session",
+	);
+	log.debug(
+		{ isNewPrebuild, hasSnapshotId: Boolean(snapshotId) },
+		"session_creator.create_session.start",
+	);
 
 	// SSH sessions are always immediate (need to return SSH connection info)
 	const effectiveSandboxMode = sshOptions ? "immediate" : sandboxMode;
@@ -167,18 +161,19 @@ export async function createSession(
 			const listStartMs = Date.now();
 			const automationConnections =
 				await automations.listAutomationConnectionsInternal(automationId);
-			logLatency("session_creator.create_session.integration_ids.resolve", {
-				sessionId,
-				shortId,
-				durationMs: Date.now() - listStartMs,
-				automationId,
-				connectionCount: automationConnections.length,
-			});
+			log.debug(
+				{
+					durationMs: Date.now() - listStartMs,
+					automationId,
+					connectionCount: automationConnections.length,
+				},
+				"session_creator.create_session.integration_ids.resolve",
+			);
 			resolvedIntegrationIds = automationConnections
 				.filter((c) => c.integration?.status === "active")
 				.map((c) => c.integrationId);
 		} catch (err) {
-			console.warn(`[SessionCreator:${shortId}] Failed to load automation connections:`, err);
+			log.warn({ err }, "Failed to load automation connections");
 		}
 	}
 
@@ -205,19 +200,9 @@ export async function createSession(
 			triggerId,
 			triggerEventId,
 		});
-		logLatency("session_creator.create_session.db.create", {
-			sessionId,
-			shortId,
-			durationMs: Date.now() - dbStartMs,
-		});
+		log.debug({ durationMs: Date.now() - dbStartMs }, "session_creator.create_session.db.create");
 	} catch (err) {
-		console.error(`[SessionCreator:${shortId}] Failed to create session:`, err);
-		logLatency("session_creator.create_session.error", {
-			sessionId,
-			shortId,
-			durationMs: Date.now() - startMs,
-			error: err instanceof Error ? err.message : String(err),
-		});
+		log.error({ err, durationMs: Date.now() - startMs }, "Failed to create session");
 		throw new Error(
 			`Failed to create session: ${err instanceof Error ? err.message : String(err)}`,
 		);
@@ -228,30 +213,27 @@ export async function createSession(
 		try {
 			const connectionsStartMs = Date.now();
 			await sessions.createSessionConnections(sessionId, resolvedIntegrationIds);
-			logLatency("session_creator.create_session.db.create_connections", {
-				sessionId,
-				shortId,
-				durationMs: Date.now() - connectionsStartMs,
-				connectionCount: resolvedIntegrationIds.length,
-			});
-			console.log(
-				`[SessionCreator:${shortId}] Recorded ${resolvedIntegrationIds.length} session connection(s)`,
+			log.debug(
+				{
+					durationMs: Date.now() - connectionsStartMs,
+					connectionCount: resolvedIntegrationIds.length,
+				},
+				"session_creator.create_session.db.create_connections",
 			);
+			log.info({ connectionCount: resolvedIntegrationIds.length }, "Recorded session connections");
 		} catch (err) {
-			console.warn(`[SessionCreator:${shortId}] Failed to record session connections:`, err);
+			log.warn({ err }, "Failed to record session connections");
 		}
 	}
 
-	console.log(`[SessionCreator:${shortId}] Session record created`);
+	log.info("Session record created");
 
 	// If deferred, return immediately
 	if (effectiveSandboxMode === "deferred") {
-		logLatency("session_creator.create_session.complete", {
-			sessionId,
-			shortId,
-			durationMs: Date.now() - startMs,
-			mode: "deferred",
-		});
+		log.info(
+			{ durationMs: Date.now() - startMs, mode: "deferred" },
+			"session_creator.create_session.complete",
+		);
 		return {
 			sessionId,
 			prebuildId,
@@ -278,16 +260,17 @@ export async function createSession(
 			triggerContext,
 			sshOptions,
 		});
-		logLatency("session_creator.create_session.create_sandbox", {
-			sessionId,
-			shortId,
-			provider: provider.type,
-			durationMs: Date.now() - createSandboxStartMs,
-			hasTunnelUrl: Boolean(result.tunnelUrl),
-			hasPreviewUrl: Boolean(result.previewUrl),
-			sshEnabled: Boolean(sshOptions),
-			warningCount: result.integrationWarnings.length,
-		});
+		log.debug(
+			{
+				provider: provider.type,
+				durationMs: Date.now() - createSandboxStartMs,
+				hasTunnelUrl: Boolean(result.tunnelUrl),
+				hasPreviewUrl: Boolean(result.previewUrl),
+				sshEnabled: Boolean(sshOptions),
+				warningCount: result.integrationWarnings.length,
+			},
+			"session_creator.create_session.create_sandbox",
+		);
 		integrationWarnings = result.integrationWarnings;
 
 		// Update session with sandbox info
@@ -298,18 +281,15 @@ export async function createSession(
 			openCodeTunnelUrl: result.tunnelUrl || null,
 			previewTunnelUrl: result.previewUrl,
 		});
-		logLatency("session_creator.create_session.db.update_session", {
-			sessionId,
-			shortId,
-			durationMs: Date.now() - updateStartMs,
-		});
+		log.debug(
+			{ durationMs: Date.now() - updateStartMs },
+			"session_creator.create_session.db.update_session",
+		);
 
-		logLatency("session_creator.create_session.complete", {
-			sessionId,
-			shortId,
-			durationMs: Date.now() - startMs,
-			mode: "immediate",
-		});
+		log.info(
+			{ durationMs: Date.now() - startMs, mode: "immediate" },
+			"session_creator.create_session.complete",
+		);
 		return {
 			sessionId,
 			prebuildId,
@@ -326,20 +306,14 @@ export async function createSession(
 		};
 	} catch (err) {
 		// Clean up session on sandbox creation failure
-		console.error(`[SessionCreator:${shortId}] Sandbox creation failed:`, err);
+		log.error({ err }, "Sandbox creation failed");
 		const deleteStartMs = Date.now();
 		await sessions.deleteById(sessionId, organizationId);
-		logLatency("session_creator.create_session.cleanup.delete_session", {
-			sessionId,
-			shortId,
-			durationMs: Date.now() - deleteStartMs,
-		});
-		logLatency("session_creator.create_session.error", {
-			sessionId,
-			shortId,
-			durationMs: Date.now() - startMs,
-			error: err instanceof Error ? err.message : String(err),
-		});
+		log.debug(
+			{ durationMs: Date.now() - deleteStartMs },
+			"session_creator.create_session.cleanup.delete_session",
+		);
+		log.debug({ durationMs: Date.now() - startMs }, "session_creator.create_session.error");
 		throw err;
 	}
 }
@@ -389,16 +363,17 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	} = params;
 
 	const startMs = Date.now();
-	const shortId = sessionId.slice(0, 8);
-	logLatency("session_creator.create_sandbox.start", {
-		sessionId,
-		shortId,
-		provider: provider.type,
-		hasSnapshotId: Boolean(snapshotId),
-		sshEnabled: Boolean(sshOptions),
-		hasCloneInstructions: Boolean(sshOptions?.cloneInstructions),
-		explicitIntegrationCount: integrationIds?.length ?? 0,
-	});
+	const log = logger.child({ sessionId });
+	log.debug(
+		{
+			provider: provider.type,
+			hasSnapshotId: Boolean(snapshotId),
+			sshEnabled: Boolean(sshOptions),
+			hasCloneInstructions: Boolean(sshOptions?.cloneInstructions),
+			explicitIntegrationCount: integrationIds?.length ?? 0,
+		},
+		"session_creator.create_sandbox.start",
+	);
 
 	// SSH public key (concatenate all keys for authorized_keys)
 	const sshPublicKey = sshOptions?.publicKeys?.join("\n");
@@ -407,13 +382,14 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	const integrationsStartMs = Date.now();
 	const { envVars: integrationEnvVars, warnings: integrationWarnings } =
 		await resolveIntegrationEnvVars(sessionId, organizationId, integrationIds);
-	logLatency("session_creator.create_sandbox.integration_env_vars", {
-		sessionId,
-		shortId,
-		durationMs: Date.now() - integrationsStartMs,
-		envKeyCount: Object.keys(integrationEnvVars).length,
-		warningCount: integrationWarnings.length,
-	});
+	log.debug(
+		{
+			durationMs: Date.now() - integrationsStartMs,
+			envKeyCount: Object.keys(integrationEnvVars).length,
+			warningCount: integrationWarnings.length,
+		},
+		"session_creator.create_sandbox.integration_env_vars",
+	);
 
 	// For CLI/SSH sessions, we don't need to load repos (sync via rsync)
 	if (sshOptions && !sshOptions.cloneInstructions) {
@@ -426,12 +402,13 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			requireProxy: process.env.LLM_PROXY_REQUIRED === "true",
 			directApiKey: env.anthropicApiKey,
 		});
-		logLatency("session_creator.create_sandbox.env_vars", {
-			sessionId,
-			shortId,
-			durationMs: Date.now() - envStartMs,
-			envKeyCount: Object.keys(baseEnvResult.envVars).length,
-		});
+		log.debug(
+			{
+				durationMs: Date.now() - envStartMs,
+				envKeyCount: Object.keys(baseEnvResult.envVars).length,
+			},
+			"session_creator.create_sandbox.env_vars",
+		);
 		const mergedEnvVars = {
 			...baseEnvResult.envVars,
 			...integrationEnvVars,
@@ -449,22 +426,21 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			sshPublicKey,
 			triggerContext,
 		});
-		logLatency("session_creator.create_sandbox.provider.create_sandbox", {
-			sessionId,
-			shortId,
-			provider: provider.type,
-			durationMs: Date.now() - providerStartMs,
-			isSsh: true,
-			hasTunnelUrl: Boolean(result.tunnelUrl),
-			hasPreviewUrl: Boolean(result.previewUrl),
-		});
+		log.debug(
+			{
+				provider: provider.type,
+				durationMs: Date.now() - providerStartMs,
+				isSsh: true,
+				hasTunnelUrl: Boolean(result.tunnelUrl),
+				hasPreviewUrl: Boolean(result.previewUrl),
+			},
+			"session_creator.create_sandbox.provider.create_sandbox",
+		);
 
-		logLatency("session_creator.create_sandbox.complete", {
-			sessionId,
-			shortId,
-			durationMs: Date.now() - startMs,
-			isSsh: true,
-		});
+		log.info(
+			{ durationMs: Date.now() - startMs, isSsh: true },
+			"session_creator.create_sandbox.complete",
+		);
 		return {
 			sandboxId: result.sandboxId,
 			previewUrl: result.previewUrl,
@@ -477,12 +453,13 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	// Load prebuild repos for coding sessions
 	const prebuildStartMs = Date.now();
 	const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
-	logLatency("session_creator.create_sandbox.prebuild_repos", {
-		sessionId,
-		shortId,
-		durationMs: Date.now() - prebuildStartMs,
-		count: prebuildRepoRows?.length ?? 0,
-	});
+	log.debug(
+		{
+			durationMs: Date.now() - prebuildStartMs,
+			count: prebuildRepoRows?.length ?? 0,
+		},
+		"session_creator.create_sandbox.prebuild_repos",
+	);
 
 	if (!prebuildRepoRows || prebuildRepoRows.length === 0) {
 		throw new Error("Prebuild has no associated repos");
@@ -513,13 +490,14 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			};
 		}),
 	);
-	logLatency("session_creator.create_sandbox.github_tokens", {
-		sessionId,
-		shortId,
-		durationMs: Date.now() - githubStartMs,
-		repoCount: repoSpecs.length,
-		tokensPresent: repoSpecs.filter((r) => Boolean(r.token)).length,
-	});
+	log.debug(
+		{
+			durationMs: Date.now() - githubStartMs,
+			repoCount: repoSpecs.length,
+			tokensPresent: repoSpecs.filter((r) => Boolean(r.token)).length,
+		},
+		"session_creator.create_sandbox.github_tokens",
+	);
 
 	// Build environment variables
 	const envStartMs = Date.now();
@@ -531,12 +509,13 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		repoSpecs,
 		integrationEnvVars,
 	);
-	logLatency("session_creator.create_sandbox.env_vars", {
-		sessionId,
-		shortId,
-		durationMs: Date.now() - envStartMs,
-		envKeyCount: Object.keys(envVars).length,
-	});
+	log.debug(
+		{
+			durationMs: Date.now() - envStartMs,
+			envKeyCount: Object.keys(envVars).length,
+		},
+		"session_creator.create_sandbox.env_vars",
+	);
 
 	// Build system prompt
 	const primaryRepo = typedPrebuildRepos[0].repo!;
@@ -569,22 +548,21 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		sshPublicKey,
 		triggerContext,
 	});
-	logLatency("session_creator.create_sandbox.provider.create_sandbox", {
-		sessionId,
-		shortId,
-		provider: provider.type,
-		durationMs: Date.now() - providerStartMs,
-		isSsh: Boolean(sshOptions),
-		hasTunnelUrl: Boolean(result.tunnelUrl),
-		hasPreviewUrl: Boolean(result.previewUrl),
-	});
+	log.debug(
+		{
+			provider: provider.type,
+			durationMs: Date.now() - providerStartMs,
+			isSsh: Boolean(sshOptions),
+			hasTunnelUrl: Boolean(result.tunnelUrl),
+			hasPreviewUrl: Boolean(result.previewUrl),
+		},
+		"session_creator.create_sandbox.provider.create_sandbox",
+	);
 
-	logLatency("session_creator.create_sandbox.complete", {
-		sessionId,
-		shortId,
-		durationMs: Date.now() - startMs,
-		isSsh: Boolean(sshOptions),
-	});
+	log.info(
+		{ durationMs: Date.now() - startMs, isSsh: Boolean(sshOptions) },
+		"session_creator.create_sandbox.complete",
+	);
 	return {
 		sandboxId: result.sandboxId,
 		tunnelUrl: result.tunnelUrl,
@@ -697,7 +675,7 @@ async function resolveGitHubToken(
 
 		return await getGitHubTokenForIntegration(env, selectedIntegration);
 	} catch (err) {
-		console.warn("Failed to resolve GitHub token:", err);
+		logger.warn({ err }, "Failed to resolve GitHub token");
 		return "";
 	}
 }
@@ -716,45 +694,40 @@ async function resolveIntegrationEnvVars(
 
 	try {
 		const startMs = Date.now();
-		const shortId = sessionId.slice(0, 8);
-		logLatency("session_creator.integration_tokens.start", {
-			sessionId,
-			shortId,
-			orgId: orgId.slice(0, 8),
-			integrationCount: integrationIds.length,
-		});
+		const log = logger.child({ sessionId });
+		log.debug(
+			{ integrationCount: integrationIds.length },
+			"session_creator.integration_tokens.start",
+		);
 		// Fetch integration details for token resolution
 		const fetchStartMs = Date.now();
 		const integrationsForTokens = await integrations.getIntegrationsForTokens(
 			integrationIds,
 			orgId,
 		);
-		logLatency("session_creator.integration_tokens.fetch", {
-			sessionId,
-			shortId,
-			durationMs: Date.now() - fetchStartMs,
-			count: integrationsForTokens.length,
-		});
+		log.debug(
+			{ durationMs: Date.now() - fetchStartMs, count: integrationsForTokens.length },
+			"session_creator.integration_tokens.fetch",
+		);
 
 		// Resolve tokens
 		const resolveStartMs = Date.now();
 		const { tokens, errors } = await integrations.resolveTokens(integrationsForTokens);
-		logLatency("session_creator.integration_tokens.resolve", {
-			sessionId,
-			shortId,
-			durationMs: Date.now() - resolveStartMs,
-			tokenCount: tokens.length,
-			errorCount: errors.length,
-		});
+		log.debug(
+			{
+				durationMs: Date.now() - resolveStartMs,
+				tokenCount: tokens.length,
+				errorCount: errors.length,
+			},
+			"session_creator.integration_tokens.resolve",
+		);
 
 		// Build env vars
 		const envVars: Record<string, string> = {};
 		for (const token of tokens) {
 			const envVarName = integrations.getEnvVarName(token.integrationTypeId, token.integrationId);
 			envVars[envVarName] = token.token;
-			console.log(
-				`[SessionCreator] Injected integration token: ${envVarName.replace(/_[^_]+$/, "_***")}`,
-			);
+			log.info({ envVarName: envVarName.replace(/_[^_]+$/, "_***") }, "Injected integration token");
 		}
 
 		// Convert errors to warnings
@@ -764,28 +737,23 @@ async function resolveIntegrationEnvVars(
 		}));
 
 		if (warnings.length > 0) {
-			console.warn(
-				`[SessionCreator] Failed to resolve ${warnings.length} integration token(s):`,
-				warnings.map((w) => w.message),
+			log.warn(
+				{ warningCount: warnings.length, warnings: warnings.map((w) => w.message) },
+				"Failed to resolve integration tokens",
 			);
 		}
 
-		logLatency("session_creator.integration_tokens.complete", {
-			sessionId,
-			shortId,
-			durationMs: Date.now() - startMs,
-			envKeyCount: Object.keys(envVars).length,
-			warningCount: warnings.length,
-		});
+		log.debug(
+			{
+				durationMs: Date.now() - startMs,
+				envKeyCount: Object.keys(envVars).length,
+				warningCount: warnings.length,
+			},
+			"session_creator.integration_tokens.complete",
+		);
 		return { envVars, warnings };
 	} catch (err) {
-		console.error("[SessionCreator] Error resolving integration tokens:", err);
-		logLatency("session_creator.integration_tokens.error", {
-			sessionId,
-			shortId: sessionId.slice(0, 8),
-			orgId: orgId.slice(0, 8),
-			error: err instanceof Error ? err.message : String(err),
-		});
+		logger.error({ err, sessionId }, "Error resolving integration tokens");
 		return { envVars: {}, warnings: [] };
 	}
 }

@@ -5,8 +5,11 @@
  * Secrets are stored encrypted in the database, env vars are written to the sandbox.
  */
 
+import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
 import { secrets, sessions } from "@proliferate/services";
+
+const log = logger.child({ handler: "sessions-submit-env" });
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 
@@ -36,15 +39,17 @@ interface SubmitEnvResult {
 
 export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<SubmitEnvResult> {
 	const { sessionId, orgId, userId, secrets: secretsInput, envVars, saveToPrebuild } = input;
+	const reqLog = log.child({ sessionId });
 	const startMs = Date.now();
 
-	console.log("[P-LATENCY] submit_env.start", {
-		sessionId,
-		shortId: sessionId.slice(0, 8),
-		envVarCount: envVars.length,
-		secretCount: secretsInput.length,
-		saveToPrebuild,
-	});
+	reqLog.info(
+		{
+			envVarCount: envVars.length,
+			secretCount: secretsInput.length,
+			saveToPrebuild,
+		},
+		"submit_env.start",
+	);
 
 	// Get full session data to find sandbox
 	const session = await sessions.getFullSession(sessionId, orgId);
@@ -84,7 +89,7 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 			} catch (err) {
 				// Ignore duplicate errors - secret may already exist
 				if (!(err instanceof secrets.DuplicateSecretError)) {
-					console.error(`[submitEnv] Failed to save secret ${secret.key}:`, err);
+					reqLog.error({ err, key: secret.key }, "Failed to save secret");
 				}
 			}
 		}
@@ -96,25 +101,27 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 			const provider = getSandboxProvider(session.sandboxProvider as SandboxProviderType);
 			const writeStartMs = Date.now();
 			await provider.writeEnvFile(session.sandboxId, envVarsMap);
-			console.log("[P-LATENCY] submit_env.write_env_file", {
-				sessionId,
-				shortId: sessionId.slice(0, 8),
-				provider: provider.type,
-				keyCount: Object.keys(envVarsMap).length,
-				durationMs: Date.now() - writeStartMs,
-			});
+			reqLog.info(
+				{
+					provider: provider.type,
+					keyCount: Object.keys(envVarsMap).length,
+					durationMs: Date.now() - writeStartMs,
+				},
+				"submit_env.write_env_file",
+			);
 		} catch (err) {
-			console.error("[submitEnv] Failed to write env file to sandbox:", err);
+			reqLog.error({ err }, "Failed to write env file to sandbox");
 			throw new ORPCError("INTERNAL_SERVER_ERROR", {
 				message: `Failed to write environment variables: ${err instanceof Error ? err.message : "Unknown error"}`,
 			});
 		}
 	}
 
-	console.log("[P-LATENCY] submit_env.complete", {
-		sessionId,
-		shortId: sessionId.slice(0, 8),
-		durationMs: Date.now() - startMs,
-	});
+	reqLog.info(
+		{
+			durationMs: Date.now() - startMs,
+		},
+		"submit_env.complete",
+	);
 	return { submitted: true };
 }

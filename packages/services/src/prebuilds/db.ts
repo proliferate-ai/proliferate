@@ -17,6 +17,7 @@ import {
 	repos,
 	type sessions,
 } from "../db/client";
+import { getServicesLogger } from "../logger";
 import type {
 	CreateManagedPrebuildInput,
 	CreatePrebuildFullInput,
@@ -432,7 +433,9 @@ export async function createSinglePrebuildRepo(
 			workspacePath,
 		});
 	} catch (error) {
-		console.error("Failed to create prebuild_repos entry:", error);
+		getServicesLogger()
+			.child({ module: "prebuilds-db" })
+			.error({ err: error, prebuildId, repoId }, "Failed to create prebuild_repos entry");
 	}
 }
 

@@ -18,6 +18,7 @@ import {
 } from "@proliferate/shared/billing";
 import type IORedis from "ioredis";
 import { and, asc, billingEvents, eq, getDb, inArray, lt, organization } from "../db/client";
+import { getServicesLogger } from "../logger";
 import { handleCreditsExhaustedV2 } from "./org-pause";
 
 // ============================================
@@ -60,8 +61,10 @@ export async function processOutbox(
 		METERING_CONFIG.lockTtlMs,
 	);
 
+	const logger = getServicesLogger().child({ module: "outbox" });
+
 	if (!acquired) {
-		console.log("[Outbox] Another worker has the lock, skipping");
+		logger.debug("Another worker has the lock, skipping");
 		return;
 	}
 
@@ -71,7 +74,7 @@ export async function processOutbox(
 		try {
 			await renewLock(redis, BILLING_REDIS_KEYS.outboxLock, lockToken, METERING_CONFIG.lockTtlMs);
 		} catch (err) {
-			console.error("[Outbox] Lock renewal failed:", err);
+			logger.error({ err }, "Lock renewal failed");
 			renewalFailed = true;
 		}
 	}, METERING_CONFIG.lockRenewIntervalMs);
@@ -109,7 +112,7 @@ export async function processOutbox(
 			return;
 		}
 
-		console.log(`[Outbox] Processing ${events.length} pending events`);
+		logger.info({ eventCount: events.length }, "Processing pending events");
 
 		for (const event of events) {
 			// Check lock validity before each event to fail fast if lock is lost
@@ -129,6 +132,11 @@ async function processEvent(
 	event: PendingBillingEvent,
 	providers?: Map<string, SandboxProvider>,
 ): Promise<void> {
+	const logger = getServicesLogger().child({
+		module: "outbox",
+		eventId: event.id,
+		orgId: event.organizationId,
+	});
 	const db = getDb();
 	try {
 		const credits = Number(event.credits);
@@ -149,13 +157,11 @@ async function processEvent(
 			})
 			.where(eq(billingEvents.id, event.id));
 
-		console.log(`[Outbox] Posted event ${event.id}`);
+		logger.debug("Posted event");
 
 		// If Autumn denies, enforce exhausted state
 		if (!result.allowed) {
-			console.warn(
-				`[Outbox] Autumn denied credits for org ${event.organizationId}; enforcing exhausted state`,
-			);
+			logger.warn("Autumn denied credits; enforcing exhausted state");
 			await db
 				.update(organization)
 				.set({
@@ -187,9 +193,9 @@ async function processEvent(
 			.where(eq(billingEvents.id, event.id));
 
 		if (status === "failed") {
-			console.error(`[Outbox] Event ${event.id} permanently failed after ${retryCount} retries`);
+			logger.error({ err, retryCount }, "Event permanently failed");
 		} else {
-			console.warn(`[Outbox] Event ${event.id} failed (retry ${retryCount}): ${err}`);
+			logger.warn({ err, retryCount }, "Event failed, will retry");
 		}
 	}
 }

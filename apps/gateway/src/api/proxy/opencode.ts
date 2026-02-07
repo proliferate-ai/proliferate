@@ -9,12 +9,15 @@
  */
 
 import type { ServerResponse } from "http";
+import { createLogger } from "@proliferate/logger";
 import type { Request, Response } from "express";
 import { Router, type Router as RouterType } from "express";
 import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
 import type { HubManager } from "../../hub";
 import type { GatewayEnv } from "../../lib/env";
 import { ApiError, createEnsureSessionReady, createRequireProxyAuth } from "../../middleware";
+
+const logger = createLogger({ service: "gateway" }).child({ module: "proxy" });
 
 export function createProxyRoutes(hubManager: HubManager, env: GatewayEnv): RouterType {
 	const router: RouterType = Router();
@@ -44,7 +47,7 @@ export function createProxyRoutes(hubManager: HubManager, env: GatewayEnv): Rout
 		on: {
 			proxyReq: fixRequestBody,
 			error: (err: Error, _req, res) => {
-				console.error("[Proxy] Error:", err.message);
+				logger.error({ err }, "Proxy error");
 				if ("headersSent" in res && !res.headersSent && "writeHead" in res) {
 					(res as ServerResponse).writeHead(502, { "Content-Type": "application/json" });
 					(res as ServerResponse).end(

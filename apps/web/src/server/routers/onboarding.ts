@@ -6,6 +6,9 @@
 
 import { isBillingEnabled } from "@/lib/billing";
 import { type GitHubIntegration, listGitHubRepos } from "@/lib/github";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ handler: "onboarding" });
 import { NANGO_GITHUB_INTEGRATION_ID } from "@/lib/nango";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
@@ -50,7 +53,7 @@ export const onboardingRouter = {
 					await orgs.markOnboardingComplete(context.orgId, true);
 					await orgs.updateBillingPlan(context.orgId, selectedPlan);
 				} catch (err) {
-					console.error("[Onboarding] Failed to mark onboarding as complete:", err);
+					log.error({ err }, "Failed to mark onboarding as complete");
 				}
 
 				return {
@@ -63,7 +66,7 @@ export const onboardingRouter = {
 			const org = await orgs.getBillingInfoV2(context.orgId);
 
 			if (!org) {
-				console.error("[Onboarding] Failed to fetch organization row:", context.orgId);
+				log.error({ orgId: context.orgId }, "Failed to fetch organization row");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
 					message: "Failed to check organization billing state",
 				});
@@ -85,7 +88,7 @@ export const onboardingRouter = {
 						await orgs.updateAutumnCustomerId(context.orgId, customerId);
 					}
 				} catch (err) {
-					console.warn("[Onboarding] Failed to create Autumn customer:", err);
+					log.warn({ err }, "Failed to create Autumn customer");
 				}
 
 				const setup = await autumnAttach({
@@ -120,7 +123,7 @@ export const onboardingRouter = {
 					message: "Trial started",
 				};
 			} catch (err) {
-				console.error("[Onboarding] Failed to start trial:", err);
+				log.error({ err }, "Failed to start trial");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
 					message: "Failed to start trial",
 				});
@@ -142,7 +145,7 @@ export const onboardingRouter = {
 					await orgs.initializeBillingState(context.orgId, "trial", TRIAL_CREDITS);
 				}
 			} catch (err) {
-				console.error("[Onboarding] Failed to mark complete:", err);
+				log.error({ err }, "Failed to mark complete");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
 					message: "Failed to complete onboarding",
 				});
@@ -213,7 +216,7 @@ export const onboardingRouter = {
 				const result = await listGitHubRepos(gitHubIntegration);
 				allRepos = result.repositories;
 			} catch (err) {
-				console.error("Failed to fetch GitHub repos:", err);
+				log.error({ err }, "Failed to fetch GitHub repos");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
 					message: "Failed to fetch GitHub repositories",
 				});
@@ -236,7 +239,7 @@ export const onboardingRouter = {
 					const repoId = await onboarding.upsertRepoFromGitHub(orgId, userId, repo, integrationId);
 					createdRepoIds.push(repoId);
 				} catch (err) {
-					console.error("Failed to insert repo:", err);
+					log.error({ err }, "Failed to insert repo");
 				}
 			}
 
@@ -269,7 +272,7 @@ export const onboardingRouter = {
 					isNew: prebuild.isNew,
 				};
 			} catch (err) {
-				console.error("Failed to create managed prebuild:", err);
+				log.error({ err }, "Failed to create managed prebuild");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
 					message: err instanceof Error ? err.message : "Failed to create managed prebuild",
 				});

@@ -6,6 +6,9 @@
 
 import { randomUUID } from "node:crypto";
 import { auth } from "@/lib/auth";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ handler: "cli" });
 import { checkCanConnectCLI, checkCanResumeSession } from "@/lib/billing";
 import { getSessionGatewayUrl } from "@/lib/gateway";
 import { getGitHubTokenForIntegration } from "@/lib/github";
@@ -140,7 +143,7 @@ export const cliAuthRouter = {
 			const result = await cli.createDeviceCode(devUserId);
 
 			if (devUserId) {
-				console.log(`[CLI Auth] DEV_USER_ID bypass: auto-approved for user ${devUserId}`);
+				log.info({ devUserId }, "DEV_USER_ID bypass: auto-approved");
 			}
 
 			// Get headers from Next.js headers() function
@@ -411,7 +414,7 @@ export const cliSessionsRouter = {
 						connectionId: integration.connection_id,
 					});
 				} catch (err) {
-					console.error("Failed to get GitHub token:", err);
+					log.error({ err }, "Failed to get GitHub token");
 					throw new ORPCError("INTERNAL_SERVER_ERROR", {
 						message: "Failed to fetch GitHub credentials. Please reconnect GitHub.",
 					});
@@ -496,14 +499,14 @@ export const cliSessionsRouter = {
 				try {
 					await provider.terminate(session.id, session.sandbox_id ?? undefined);
 				} catch (err) {
-					console.error(`Failed to terminate session ${session.id}:`, err);
+					log.error({ err, sessionId: session.id }, "Failed to terminate session");
 				}
 			}
 
 			try {
 				await cli.stopAllCliSessions(context.orgId);
 			} catch (err) {
-				console.error("Error stopping CLI sessions:", err);
+				log.error({ err }, "Error stopping CLI sessions");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to stop sessions" });
 			}
 
@@ -548,7 +551,7 @@ export const cliSessionsRouter = {
 					const provider = getSandboxProvider(session.sandbox_provider as SandboxProviderType);
 					await provider.terminate(session.id, session.sandbox_id);
 				} catch (err) {
-					console.error(`Failed to terminate sandbox for session ${input.id}:`, err);
+					log.error({ err, sessionId: input.id }, "Failed to terminate sandbox for session");
 				}
 			}
 
@@ -704,7 +707,7 @@ export const cliGitHubRouter = {
 
 				return { connected: true, connectionId: newest.connection_id };
 			} catch (err) {
-				console.error("Failed to check GitHub connection status:", err);
+				log.error({ err }, "Failed to check GitHub connection status");
 				return { connected: false, error: "Failed to check connection status" };
 			}
 		}),
@@ -719,7 +722,7 @@ export const cliGitHubRouter = {
 			try {
 				await cli.storeCliGitHubSelection(context.user.id, context.orgId, input.connectionId);
 			} catch (err) {
-				console.error("Failed to store GitHub selection:", err);
+				log.error({ err }, "Failed to store GitHub selection");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to store selection" });
 			}
 
@@ -754,9 +757,9 @@ export const cliPrebuildsRouter = {
 			const provider = getSandboxProvider();
 
 			try {
-				console.log(`[CLI Prebuild] Taking snapshot of session ${sessionId}`);
+				log.info({ sessionId }, "Taking snapshot of session");
 				const snapshotResult = await provider.snapshot(sessionId, sandboxId);
-				console.log(`[CLI Prebuild] Snapshot created: ${snapshotResult.snapshotId}`);
+				log.info({ snapshotId: snapshotResult.snapshotId }, "Snapshot created");
 
 				const prebuild = await cli.upsertCliPrebuild(
 					context.user.id,
@@ -770,7 +773,7 @@ export const cliPrebuildsRouter = {
 					snapshotId: snapshotResult.snapshotId,
 				};
 			} catch (err) {
-				console.error("Error creating snapshot:", err);
+				log.error({ err }, "Error creating snapshot");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
 					message: `Failed to create snapshot: ${err instanceof Error ? err.message : "Unknown error"}`,
 				});

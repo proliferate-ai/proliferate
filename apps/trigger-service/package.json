@@ -13,6 +13,7 @@
 		"@proliferate/db": "workspace:*",
 		"@proliferate/environment": "workspace:*",
 		"@proliferate/gateway-clients": "workspace:*",
+		"@proliferate/logger": "workspace:*",
 		"@proliferate/queue": "workspace:*",
 		"@proliferate/services": "workspace:*",
 		"@proliferate/triggers": "workspace:*",

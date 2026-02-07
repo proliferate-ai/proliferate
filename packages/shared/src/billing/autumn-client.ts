@@ -8,6 +8,7 @@
  */
 
 import { env } from "@proliferate/environment/server";
+import { getSharedLogger } from "../logger";
 import type {
 	AutumnAttachRequest,
 	AutumnAttachResponse,
@@ -285,7 +286,7 @@ export async function autumnAutoTopUp(
 		const checkoutUrl = result.checkout_url ?? result.url;
 		// If checkout URL is returned, customer has no payment method on file
 		if (checkoutUrl) {
-			console.log(`[Autumn] Auto top-up requires checkout for customer ${customerId}`);
+			getSharedLogger().info({ customerId, module: "autumn" }, "Auto top-up requires checkout");
 			return {
 				success: false,
 				requiresCheckout: true,
@@ -294,14 +295,14 @@ export async function autumnAutoTopUp(
 		}
 
 		// No checkout URL = charged successfully
-		console.log(`[Autumn] Auto top-up successful for customer ${customerId}: ${credits} credits`);
+		getSharedLogger().info({ customerId, credits, module: "autumn" }, "Auto top-up successful");
 		return {
 			success: true,
 			requiresCheckout: false,
 			creditsAdded: credits,
 		};
 	} catch (err) {
-		console.error(`[Autumn] Auto top-up failed for customer ${customerId}:`, err);
+		getSharedLogger().error({ err, customerId, module: "autumn" }, "Auto top-up failed");
 		return {
 			success: false,
 			requiresCheckout: false,

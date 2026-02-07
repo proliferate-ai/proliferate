@@ -1,7 +1,10 @@
+import { createLogger } from "@proliferate/logger";
 import { Queue, Worker } from "bullmq";
 import type { HubManager } from "../hub";
 import { MigrationConfig } from "../hub/types";
 import type { GatewayEnv } from "../lib/env";
+
+const logger = createLogger({ service: "gateway" }).child({ module: "expiry" });
 
 interface SessionExpiryJob {
 	sessionId: string;
@@ -59,14 +62,16 @@ export async function scheduleSessionExpiry(
 		},
 	);
 
-	console.log("[P-LATENCY] expiry.schedule", {
-		sessionId,
-		shortId: sessionId.slice(0, 8),
-		expiresAt: new Date(expiresAtMs).toISOString(),
-		graceMs: MigrationConfig.GRACE_MS,
-		delayMs: delay,
-		durationMs: Date.now() - startMs,
-	});
+	logger.info(
+		{
+			sessionId,
+			expiresAt: new Date(expiresAtMs).toISOString(),
+			graceMs: MigrationConfig.GRACE_MS,
+			delayMs: delay,
+			durationMs: Date.now() - startMs,
+		},
+		"expiry.schedule",
+	);
 }
 
 export function startSessionExpiryWorker(env: GatewayEnv, hubManager: HubManager): void {
@@ -78,29 +83,23 @@ export function startSessionExpiryWorker(env: GatewayEnv, hubManager: HubManager
 			async (job) => {
 				const startMs = Date.now();
 				const sessionId = job.data.sessionId;
-				console.log("[P-LATENCY] expiry.job.start", {
-					sessionId,
-					shortId: sessionId.slice(0, 8),
-					jobId: job.id,
-				});
+				logger.debug({ sessionId, jobId: job.id }, "expiry.job.start");
 				const hub = await hubManager.getOrCreate(sessionId);
 				await hub.runExpiryMigration();
-				console.log("[P-LATENCY] expiry.job.complete", {
-					sessionId,
-					shortId: sessionId.slice(0, 8),
-					jobId: job.id,
-					durationMs: Date.now() - startMs,
-				});
+				logger.info(
+					{
+						sessionId,
+						jobId: job.id,
+						durationMs: Date.now() - startMs,
+					},
+					"expiry.job.complete",
+				);
 			},
 			{ connection },
 		);
 
 		worker.on("failed", (job, err) => {
-			console.error(
-				"[ExpiryWorker] Job failed",
-				{ jobId: job?.id, sessionId: job?.data?.sessionId },
-				err,
-			);
+			logger.error({ err, jobId: job?.id, sessionId: job?.data?.sessionId }, "Expiry job failed");
 		});
 	}
 }

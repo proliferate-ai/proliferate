@@ -11,6 +11,7 @@ const nextConfig = {
 		"@proliferate/services",
 		"@proliferate/queue",
 		"@proliferate/db",
+		"@proliferate/logger",
 	],
 	serverExternalPackages: ["bullmq", "ioredis"],
 	// Allow ngrok domains for local dev

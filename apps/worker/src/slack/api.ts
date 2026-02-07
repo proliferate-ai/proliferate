@@ -5,6 +5,7 @@
  * This is used by handlers to post messages, upload files, etc.
  */
 
+import type { Logger } from "@proliferate/logger";
 import { decrypt, getEncryptionKey } from "@proliferate/shared/crypto";
 
 export interface SlackBlock {
@@ -27,11 +28,13 @@ export class SlackApiClient {
 	private readonly botToken: string;
 	private readonly channelId: string;
 	private readonly threadTs: string;
+	private readonly logger: Logger;
 
-	constructor(encryptedBotToken: string, channelId: string, threadTs: string) {
+	constructor(encryptedBotToken: string, channelId: string, threadTs: string, logger: Logger) {
 		this.botToken = decrypt(encryptedBotToken, getEncryptionKey());
 		this.channelId = channelId;
 		this.threadTs = threadTs;
+		this.logger = logger;
 	}
 
 	/**
@@ -73,7 +76,7 @@ export class SlackApiClient {
 			};
 
 			if (!urlResult.ok || !urlResult.upload_url || !urlResult.file_id) {
-				console.error("[SlackApiClient] Failed to get upload URL:", urlResult.error);
+				this.logger.error({ error: urlResult.error }, "Failed to get upload URL");
 				return false;
 			}
 
@@ -84,7 +87,7 @@ export class SlackApiClient {
 			});
 
 			if (!uploadResponse.ok) {
-				console.error("[SlackApiClient] Failed to upload to presigned URL:", uploadResponse.status);
+				this.logger.error({ status: uploadResponse.status }, "Failed to upload to presigned URL");
 				return false;
 			}
 
@@ -104,13 +107,13 @@ export class SlackApiClient {
 
 			const completeResult = (await completeResponse.json()) as { ok: boolean; error?: string };
 			if (!completeResult.ok) {
-				console.error("[SlackApiClient] Failed to complete upload:", completeResult.error);
+				this.logger.error({ error: completeResult.error }, "Failed to complete upload");
 				return false;
 			}
 
 			return true;
 		} catch (err) {
-			console.error("[SlackApiClient] Upload error:", err);
+			this.logger.error({ err }, "Upload error");
 			return false;
 		}
 	}
@@ -140,7 +143,7 @@ export class SlackApiClient {
 				file_id?: string;
 			};
 			if (!result.ok || !result.upload_url || !result.file_id) {
-				console.error("[SlackApiClient] Failed to get upload URL:", result.error);
+				this.logger.error({ error: result.error }, "Failed to get upload URL");
 				return null;
 			}
 			return { ...file, upload_url: result.upload_url, file_id: result.file_id };
@@ -162,7 +165,7 @@ export class SlackApiClient {
 				body: file.content,
 			});
 			if (!response.ok) {
-				console.error("[SlackApiClient] Failed to upload to presigned URL:", response.status);
+				this.logger.error({ status: response.status }, "Failed to upload to presigned URL");
 				return null;
 			}
 			return file;
@@ -191,7 +194,7 @@ export class SlackApiClient {
 
 		const completeResult = (await completeResponse.json()) as { ok: boolean; error?: string };
 		if (!completeResult.ok) {
-			console.error("[SlackApiClient] Failed to complete upload:", completeResult.error);
+			this.logger.error({ error: completeResult.error }, "Failed to complete upload");
 			return 0;
 		}
 
@@ -215,7 +218,7 @@ export class SlackApiClient {
 
 		const result = (await response.json()) as { ok: boolean; error?: string };
 		if (!result.ok) {
-			console.error("[SlackApiClient] Failed to post message:", result.error);
+			this.logger.error({ error: result.error }, "Failed to post message");
 			return false;
 		}
 		return true;

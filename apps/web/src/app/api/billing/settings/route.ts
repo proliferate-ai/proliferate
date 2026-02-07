@@ -7,9 +7,12 @@
 
 import { requireAuth } from "@/lib/auth-helpers";
 import { isBillingEnabled } from "@/lib/billing";
+import { logger } from "@/lib/logger";
 import { getUserOrgRole } from "@/lib/permissions";
 import { orgs } from "@proliferate/services";
 import { NextResponse } from "next/server";
+
+const log = logger.child({ route: "billing/settings" });
 
 const DEFAULT_BILLING_SETTINGS = {
 	overage_policy: "pause" as const,
@@ -36,7 +39,7 @@ export async function GET() {
 	}
 	const org = await orgs.getBillingInfo(orgId);
 	if (!org) {
-		console.error("[Billing] Failed to fetch org");
+		log.error("Failed to fetch org");
 		return NextResponse.json({ error: "Failed to fetch billing settings" }, { status: 500 });
 	}
 
@@ -109,7 +112,7 @@ export async function PUT(request: Request) {
 	try {
 		await orgs.updateBillingSettings(orgId, newSettings);
 	} catch (error) {
-		console.error("[Billing] Failed to update settings:", error);
+		log.error({ err: error }, "Failed to update settings");
 		return NextResponse.json({ error: "Failed to update billing settings" }, { status: 500 });
 	}
 

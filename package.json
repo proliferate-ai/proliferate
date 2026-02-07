@@ -3,9 +3,9 @@
 	"license": "MIT",
 	"private": true,
 	"scripts": {
-		"prepare": "husky",
+		"prepare": "husky || true",
 		"build": "turbo run build",
-		"dev": "turbo run dev",
+		"dev": "turbo run dev --concurrency 11",
 		"dev:web": "pnpm --filter @proliferate/web dev",
 		"dev:cli": "pnpm --filter @proliferate/cli dev",
 		"dev:gateway": "pnpm --filter @proliferate/gateway dev",

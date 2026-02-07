@@ -5,8 +5,11 @@
  * Uses automation ID so the URL is known before the trigger is created.
  */
 
+import { logger } from "@/lib/logger";
 import { automations, runs, triggers } from "@proliferate/services";
 import { PostHogProvider } from "@proliferate/triggers";
+
+const log = logger.child({ handler: "posthog-webhook" });
 import { NextResponse } from "next/server";
 
 export async function POST(
@@ -18,17 +21,17 @@ export async function POST(
 
 	const trigger = await automations.findTriggerForAutomationByProvider(automationId, "posthog");
 	if (!trigger) {
-		console.error(`[PostHog] No enabled trigger for automation: ${automationId}`);
+		log.error({ automationId }, "No enabled trigger for automation");
 		return NextResponse.json({ error: "No PostHog trigger found" }, { status: 404 });
 	}
 
 	if (!trigger.automation) {
-		console.log(`[PostHog] Automation ${automationId} not found`);
+		log.info({ automationId }, "Automation not found");
 		return NextResponse.json({ error: "Automation not found" }, { status: 404 });
 	}
 
 	if (!trigger.automation.enabled) {
-		console.log(`[PostHog] Automation ${automationId} is disabled`);
+		log.info({ automationId }, "Automation is disabled");
 		return NextResponse.json({ error: "Automation is disabled" }, { status: 403 });
 	}
 
@@ -40,13 +43,13 @@ export async function POST(
 
 	if (config.requireSignatureVerification) {
 		if (!trigger.webhookSecret) {
-			console.error(`[PostHog] Missing webhook secret for automation ${automationId}`);
+			log.error({ automationId }, "Missing webhook secret for automation");
 			return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 });
 		}
 
 		const isValid = await PostHogProvider.verifyWebhook(request, trigger.webhookSecret, body);
 		if (!isValid) {
-			console.error(`[PostHog] Invalid signature for automation ${automationId}`);
+			log.error({ automationId }, "Invalid signature for automation");
 			return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
 		}
 	}
@@ -113,7 +116,7 @@ export async function POST(
 			processed += 1;
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
-			console.error(`[PostHog] Failed to create run for automation ${automationId}:`, message);
+			log.error({ err, automationId }, "Failed to create run for automation");
 			skipped += 1;
 		}
 	}

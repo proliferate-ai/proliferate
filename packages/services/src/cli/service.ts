@@ -6,6 +6,7 @@
 
 import crypto from "node:crypto";
 import { randomBytes } from "node:crypto";
+import { getServicesLogger } from "../logger";
 import type {
 	CliPrebuildRow,
 	CliSessionFullRow,
@@ -659,7 +660,9 @@ export async function createCliSessionFull(
 		});
 	} catch (error) {
 		// Non-fatal - log and continue
-		console.error("Failed to link repo to prebuild:", error);
+		getServicesLogger()
+			.child({ module: "cli" })
+			.error({ err: error, prebuildId, repoId }, "Failed to link repo to prebuild");
 	}
 
 	// 4. Create session with type "cli"

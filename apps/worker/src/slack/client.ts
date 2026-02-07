@@ -8,6 +8,8 @@
 import { env } from "@proliferate/environment/server";
 import type { ServerMessage } from "@proliferate/gateway-clients";
 import { AsyncClient } from "@proliferate/gateway-clients/server";
+import type { AsyncClientDeps } from "@proliferate/gateway-clients/server";
+import type { Logger } from "@proliferate/logger";
 import { ensureSlackReceiver } from "@proliferate/queue";
 import type { SlackMessageJob, SlackReceiverJob } from "@proliferate/queue";
 import { integrations, sessions } from "@proliferate/services";
@@ -75,6 +77,12 @@ export class SlackClient extends AsyncClient<
 	SlackReceiverJob
 > {
 	readonly clientType = "slack" as ClientSource;
+	private readonly logger: Logger;
+
+	constructor(deps: AsyncClientDeps, logger: Logger) {
+		super(deps);
+		this.logger = logger;
+	}
 
 	/**
 	 * Wake the Slack client for a session event.
@@ -89,25 +97,29 @@ export class SlackClient extends AsyncClient<
 	): Promise<void> {
 		// Don't wake for Slack-originated events
 		if (source === "slack") {
-			console.log("[SlackClient] Skipping wake for Slack-originated event");
+			this.logger.debug("Skipping wake for Slack-originated event");
 			return;
 		}
 
 		// Get the encrypted bot token from the installation
 		const encryptedBotToken = await this.getEncryptedBotToken(metadata.installationId);
 		if (!encryptedBotToken) {
-			console.error(`[SlackClient] No bot token found for installation ${metadata.installationId}`);
+			this.logger.error(
+				{ installationId: metadata.installationId },
+				"No bot token found for installation",
+			);
 			return;
 		}
 
 		// Post the user message to Slack immediately (before receiver connects)
 		if (options?.content) {
-			console.log(`[SlackClient] Posting web user message to Slack thread ${metadata.threadTs}`);
+			this.logger.info({ threadTs: metadata.threadTs }, "Posting web user message to Slack thread");
 			await postToSlack(
 				encryptedBotToken,
 				metadata.channelId,
 				metadata.threadTs,
-				`💬 *User:*\n${options.content}`,
+				`\u{1F4AC} *User:*\n${options.content}`,
+				this.logger,
 			);
 		}
 
@@ -139,7 +151,7 @@ export class SlackClient extends AsyncClient<
 			imageUrls,
 		} = job;
 
-		console.log(`[SlackClient] Processing inbound message for thread ${threadTs}`);
+		this.logger.info({ threadTs }, "Processing inbound message");
 
 		// 1. Find existing session for this Slack thread
 		const existingSession = await sessions.findSessionBySlackThread(
@@ -152,10 +164,10 @@ export class SlackClient extends AsyncClient<
 
 		if (existingSession) {
 			sessionId = existingSession.id;
-			console.log(`[SlackClient] Found existing session ${sessionId}`);
+			this.logger.info({ sessionId }, "Found existing session");
 		} else {
 			// No session - create one via gateway SDK (handles managed prebuild automatically)
-			console.log("[SlackClient] No existing session, creating via gateway SDK");
+			this.logger.info("No existing session, creating via gateway SDK");
 
 			try {
 				const result = await this.syncClient.createSession({
@@ -172,8 +184,9 @@ export class SlackClient extends AsyncClient<
 				});
 
 				sessionId = result.sessionId;
-				console.log(
-					`[SlackClient] Created session ${sessionId} (isNewPrebuild: ${result.isNewPrebuild}, hasSnapshot: ${result.hasSnapshot})`,
+				this.logger.info(
+					{ sessionId, isNewPrebuild: result.isNewPrebuild, hasSnapshot: result.hasSnapshot },
+					"Created session",
 				);
 
 				// Post welcome message with buttons
@@ -184,6 +197,7 @@ export class SlackClient extends AsyncClient<
 					sessionId,
 					APP_URL,
 					organizationId,
+					this.logger,
 				);
 
 				// Post status message if this is a new prebuild
@@ -193,6 +207,7 @@ export class SlackClient extends AsyncClient<
 						channelId,
 						threadTs,
 						"Setting up your workspace for the first time. This may take a moment...",
+						this.logger,
 					);
 				}
 			} catch (err) {
@@ -204,14 +219,16 @@ export class SlackClient extends AsyncClient<
 						channelId,
 						threadTs,
 						"I can't start a session yet - no repos have been added. Please add a repo in the web app first.",
+						this.logger,
 					);
 				} else {
-					console.error("[SlackClient] Failed to create session:", err);
+					this.logger.error({ err }, "Failed to create session");
 					await postToSlack(
 						encryptedBotToken,
 						channelId,
 						threadTs,
 						"Sorry, I ran into an issue. Please try again or check the web app.",
+						this.logger,
 					);
 				}
 				return;
@@ -232,14 +249,14 @@ export class SlackClient extends AsyncClient<
 		// 3. Download images if any
 		const images: string[] = [];
 		if (imageUrls && imageUrls.length > 0) {
-			console.log(`[SlackClient] Downloading ${imageUrls.length} images...`);
+			this.logger.info({ count: imageUrls.length }, "Downloading images");
 			for (const url of imageUrls) {
-				const img = await downloadSlackImageAsBase64(url, encryptedBotToken);
+				const img = await downloadSlackImageAsBase64(url, encryptedBotToken, this.logger);
 				if (img) {
 					images.push(`data:${img.mediaType};base64,${img.data}`);
 				}
 			}
-			console.log(`[SlackClient] Downloaded ${images.length} images`);
+			this.logger.info({ downloaded: images.length }, "Downloaded images");
 		}
 
 		// 4. Cancel any in-progress operation, then post prompt to Gateway
@@ -250,7 +267,7 @@ export class SlackClient extends AsyncClient<
 			images: images.length > 0 ? images : undefined,
 		});
 
-		console.log(`[SlackClient] Posted prompt to Gateway for session ${sessionId}`);
+		this.logger.info({ sessionId }, "Posted prompt to Gateway");
 	}
 
 	/**
@@ -269,6 +286,7 @@ export class SlackClient extends AsyncClient<
 			metadata.encryptedBotToken,
 			metadata.channelId,
 			metadata.threadTs,
+			this.logger.child({ component: "api" }),
 		);
 
 		const ctx: HandlerContext = {
@@ -277,15 +295,16 @@ export class SlackClient extends AsyncClient<
 			syncClient: this.syncClient,
 			sessionId,
 			appUrl: APP_URL,
+			logger: this.logger,
 		};
 
 		switch (event.type) {
 			case "status":
-				console.log(`[SlackClient] Status: ${event.payload.status}`);
+				this.logger.debug({ status: event.payload.status }, "Status");
 				return "continue";
 
 			case "init":
-				console.log("[SlackClient] Received init");
+				this.logger.debug("Received init");
 				return "continue";
 
 			case "message":
@@ -302,15 +321,15 @@ export class SlackClient extends AsyncClient<
 				return "continue";
 
 			case "message_complete":
-				console.log("[SlackClient] Message complete");
+				this.logger.info("Message complete");
 				return "stop";
 
 			case "message_cancelled":
-				console.log("[SlackClient] Message cancelled, continuing to listen");
+				this.logger.info("Message cancelled, continuing to listen");
 				return "continue";
 
 			case "error":
-				console.error(`[SlackClient] Error: ${event.payload.message}`);
+				this.logger.error({ message: event.payload.message }, "Gateway error");
 				await slackApiClient.postMessage(`Error: ${event.payload.message}`);
 				return "stop";
 
@@ -329,12 +348,12 @@ export class SlackClient extends AsyncClient<
 		}
 
 		const handler = findToolHandler(toolName);
-		console.log(`[SlackClient] Tool ${toolName} → ${handler.tools[0] || "default"} handler`);
+		this.logger.info({ toolName, handler: handler.tools[0] || "default" }, "Tool handler matched");
 
 		try {
 			await handler.handle(ctx, toolName, result);
 		} catch (err) {
-			console.error("[SlackClient] Tool handler error:", err);
+			this.logger.error({ err, toolName }, "Tool handler error");
 			await ctx.slackClient.postMessage(`Tool ${toolName} completed`);
 		}
 	}
@@ -344,7 +363,7 @@ export class SlackClient extends AsyncClient<
 			return await integrations.getSlackInstallationBotToken(installationId);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "Unknown error";
-			console.error(`[SlackClient] Error fetching installation ${installationId}:`, message);
+			this.logger.error({ installationId, message }, "Error fetching installation");
 			return null;
 		}
 	}

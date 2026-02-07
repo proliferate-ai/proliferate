@@ -7,6 +7,7 @@
 
 import type { TriggerProvider } from "@proliferate/triggers";
 import * as automationsDb from "../automations/db";
+import { getServicesLogger } from "../logger";
 import * as runsService from "../runs/service";
 import type { TriggerRow } from "../types/triggers";
 import * as triggersDb from "./db";
@@ -109,8 +110,9 @@ async function processEventForTrigger(
 
 		return { processed: 1, skipped: 0 };
 	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		console.error("Failed to create automation run for trigger event:", message);
+		getServicesLogger()
+			.child({ module: "trigger-processor", triggerId: trigger.id })
+			.error({ err }, "Failed to create automation run for trigger event");
 		return { processed: 0, skipped: 1 };
 	}
 }
@@ -140,7 +142,9 @@ async function safeCreateSkippedEvent(
 			skipReason,
 		});
 	} catch (err) {
-		console.error("Failed to create skipped event:", err);
+		getServicesLogger()
+			.child({ module: "trigger-processor", triggerId: trigger.id })
+			.error({ err }, "Failed to create skipped event");
 	}
 }
 

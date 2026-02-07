@@ -10,6 +10,7 @@
  */
 
 import type { SyncClient } from "@proliferate/gateway-clients";
+import { getServicesLogger } from "./logger";
 import * as prebuildsDb from "./prebuilds/db";
 import * as sessionsDb from "./sessions/db";
 
@@ -165,7 +166,9 @@ async function createAndStartSetupSession(
 			userId: "managed-prebuild-setup",
 		})
 		.catch((err: Error) => {
-			console.error("[ManagedPrebuild] Failed to start setup session:", err);
+			getServicesLogger()
+				.child({ module: "managed-prebuild", prebuildId, sessionId })
+				.error({ err }, "Failed to start setup session");
 		});
 
 	return sessionId;

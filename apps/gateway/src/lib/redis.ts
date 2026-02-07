@@ -3,8 +3,11 @@
  */
 
 import { env } from "@proliferate/environment/server";
+import { createLogger } from "@proliferate/logger";
 import { SESSION_EVENTS_CHANNEL, type SessionEventMessage } from "@proliferate/shared";
 import type IORedis from "ioredis";
+
+const logger = createLogger({ service: "gateway" }).child({ module: "redis" });
 
 let redisClient: IORedis | null = null;
 let connectionPromise: Promise<void> | null = null;
@@ -29,11 +32,11 @@ async function getRedisClient(): Promise<IORedis> {
 		});
 
 		redisClient.on("error", (err: Error) => {
-			console.error("[Redis] Connection error:", err.message);
+			logger.error({ err }, "Connection error");
 		});
 
 		redisClient.on("connect", () => {
-			console.log("[Redis] Connected");
+			logger.info("Connected");
 		});
 	}
 
@@ -54,7 +57,7 @@ export async function ensureRedisConnected(): Promise<IORedis> {
 
 	if (!connectionPromise) {
 		connectionPromise = client.connect().catch((err: Error) => {
-			console.error("[Redis] Failed to connect:", err.message);
+			logger.error({ err }, "Failed to connect");
 			connectionPromise = null;
 		});
 	}
@@ -80,10 +83,7 @@ export async function publishSessionEvent(event: SessionEventMessage): Promise<v
 		await client.publish(SESSION_EVENTS_CHANNEL, JSON.stringify(event));
 	} catch (err) {
 		// Log but don't throw - this is non-critical
-		console.error(
-			"[Redis] Failed to publish session event:",
-			err instanceof Error ? err.message : err,
-		);
+		logger.error({ err }, "Failed to publish session event");
 	}
 }
 

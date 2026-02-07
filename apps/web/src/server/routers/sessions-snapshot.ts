@@ -5,10 +5,13 @@
  * Extracted from ts-rest router for use in oRPC.
  */
 
+import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
 import { sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
+
+const log = logger.child({ handler: "sessions-snapshot" });
 
 interface SnapshotSessionHandlerInput {
 	sessionId: string;
@@ -23,6 +26,7 @@ export async function snapshotSessionHandler(
 	input: SnapshotSessionHandlerInput,
 ): Promise<SnapshotSessionResult> {
 	const { sessionId, orgId } = input;
+	const reqLog = log.child({ sessionId });
 
 	// Get full session data
 	const session = await sessions.getFullSession(sessionId, orgId);
@@ -38,24 +42,22 @@ export async function snapshotSessionHandler(
 	// Take snapshot via provider
 	try {
 		const startTime = Date.now();
-		console.log(`[Timing] Snapshot ${sessionId.slice(0, 8)} started`);
+		reqLog.info("Snapshot started");
 
 		const providerType = session.sandboxProvider as SandboxProviderType | undefined;
 		const provider = getSandboxProvider(providerType);
 		const result = await provider.snapshot(sessionId, session.sandboxId);
 		const providerMs = Date.now() - startTime;
-		console.log(`[Timing] +${providerMs}ms ${provider.type} provider.snapshot complete`);
+		reqLog.info({ providerMs, providerType: provider.type }, "Provider snapshot complete");
 
 		// Update session with snapshot_id
 		await sessions.updateSession(sessionId, { snapshotId: result.snapshotId });
 		const totalMs = Date.now() - startTime;
-		console.log(
-			`[Timing] +${totalMs}ms snapshot complete (provider: ${providerMs}ms, db: ${totalMs - providerMs}ms)`,
-		);
+		reqLog.info({ totalMs, providerMs, dbMs: totalMs - providerMs }, "Snapshot complete");
 
 		return { snapshot_id: result.snapshotId };
 	} catch (err) {
-		console.error("Snapshot error:", err);
+		reqLog.error({ err }, "Snapshot error");
 		throw new ORPCError("INTERNAL_SERVER_ERROR", {
 			message: err instanceof Error ? err.message : "Failed to create snapshot",
 		});

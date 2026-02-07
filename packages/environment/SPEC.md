@@ -51,7 +51,7 @@ const isEdge = nextRuntime === "edge";
 ```
 
 ## Canonical Env Names
-See `docs/ENVIRONMENT.md` for the full, up-to-date list of required vs optional variables.
+See https://docs.proliferate.com/self-hosting/environment (source: `~/documentation/self-hosting/environment.mdx`) for the full, up-to-date list of required vs optional variables.
 
 ## Notes
 - Any variable that can be public must use NEXT_PUBLIC_ and should not have a non-public alias.

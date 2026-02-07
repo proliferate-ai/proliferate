@@ -9,11 +9,14 @@
 import type { Server } from "http";
 import type { IncomingMessage } from "http";
 import { URL } from "url";
+import { createLogger } from "@proliferate/logger";
 import { type WebSocket, WebSocketServer } from "ws";
 import type { HubManager } from "../../../hub";
 import type { GatewayEnv } from "../../../lib/env";
 import { verifyToken } from "../../../middleware/auth";
 import type { AuthResult } from "../../../types";
+
+const logger = createLogger({ service: "gateway" }).child({ module: "ws" });
 
 interface WsConnectionContext {
 	proliferateSessionId: string;
@@ -58,7 +61,7 @@ export function setupProliferateWebSocket(server: Server, hubManager: HubManager
 				} as WsConnectionContext);
 			});
 		} catch (err) {
-			console.error("[WS] Upgrade error:", err);
+			logger.error({ err }, "Upgrade error");
 			socket.destroy();
 		}
 	});
@@ -69,10 +72,7 @@ export function setupProliferateWebSocket(server: Server, hubManager: HubManager
 			const { proliferateSessionId, auth } = context;
 
 			try {
-				console.log("[WS] Client connected", {
-					sessionId: proliferateSessionId,
-					userId: auth.userId,
-				});
+				logger.info({ sessionId: proliferateSessionId, userId: auth.userId }, "Client connected");
 				const hub = await hubManager.getOrCreate(proliferateSessionId);
 
 				// Attach message handler before addClient so messages during
@@ -82,15 +82,14 @@ export function setupProliferateWebSocket(server: Server, hubManager: HubManager
 						const parsed = JSON.parse(data.toString());
 						hub.handleClientMessage(ws, parsed);
 					} catch (err) {
-						console.warn("[WS] Invalid client message:", err);
+						logger.warn({ err }, "Invalid client message");
 					}
 				});
 				ws.on("close", (code, reason) => {
-					console.log("[WS] Client disconnected", {
-						sessionId: proliferateSessionId,
-						code,
-						reason: reason?.toString(),
-					});
+					logger.info(
+						{ sessionId: proliferateSessionId, code, reason: reason?.toString() },
+						"Client disconnected",
+					);
 				});
 
 				// addClient → initializeClient sends status("resuming")
@@ -98,7 +97,7 @@ export function setupProliferateWebSocket(server: Server, hubManager: HubManager
 				// before sending init + status("running").
 				hub.addClient(ws, auth.userId);
 			} catch (err) {
-				console.error("[WS] Failed to setup connection:", err);
+				logger.error({ err }, "Failed to setup connection");
 				ws.close(1011, "Failed to setup connection");
 			}
 		},

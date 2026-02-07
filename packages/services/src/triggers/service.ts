@@ -7,6 +7,7 @@
 import { randomBytes, randomUUID } from "crypto";
 import { createPollingQueue, removePollingJob, schedulePollingJob } from "@proliferate/queue";
 import type { Trigger, TriggerEvent, TriggerWithIntegration } from "@proliferate/shared";
+import { getServicesLogger } from "../logger";
 import * as triggersDb from "./db";
 import {
 	toTrigger,
@@ -193,7 +194,9 @@ export async function createTrigger(input: CreateTriggerInput): Promise<CreateTr
 		try {
 			await schedulePollingJob(getPollingQueue(), trigger.id, input.pollingCron);
 		} catch (err) {
-			console.error("Failed to schedule polling job:", err);
+			getServicesLogger()
+				.child({ module: "triggers" })
+				.error({ err }, "Failed to schedule polling job");
 		}
 	}
 
@@ -235,7 +238,9 @@ export async function updateTrigger(
 				await removePollingJob(getPollingQueue(), updated.id);
 			}
 		} catch (err) {
-			console.error("Failed to update polling job:", err);
+			getServicesLogger()
+				.child({ module: "triggers" })
+				.error({ err }, "Failed to update polling job");
 		}
 	}
 
@@ -253,7 +258,9 @@ export async function deleteTrigger(id: string, orgId: string): Promise<boolean>
 		try {
 			await removePollingJob(getPollingQueue(), existing.id);
 		} catch (err) {
-			console.error("Failed to remove polling job:", err);
+			getServicesLogger()
+				.child({ module: "triggers" })
+				.error({ err }, "Failed to remove polling job");
 		}
 	}
 	return true;

@@ -4,6 +4,7 @@
  * POST /proliferate/sessions - Unified session creation endpoint
  */
 
+import { createLogger } from "@proliferate/logger";
 import { prebuilds, sessions } from "@proliferate/services";
 import type { CloneInstructions } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
@@ -11,6 +12,8 @@ import type { Router as RouterType } from "express";
 import { Router } from "express";
 import type { HubManager } from "../../../hub";
 import type { GatewayEnv } from "../../../lib/env";
+
+const logger = createLogger({ service: "gateway" }).child({ module: "sessions-route" });
 import {
 	IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS,
 	clearIdempotencyKey,
@@ -89,7 +92,6 @@ interface CreateSessionResponse {
 export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): RouterType {
 	const router: RouterType = Router();
 	const provider = getSandboxProvider();
-	const latencyPrefix = "[P-LATENCY]";
 
 	// Gateway URL for responses
 	const gatewayUrl = env.gatewayUrl;
@@ -145,43 +147,55 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(400, "organizationId is required");
 			}
 
-			console.log(`${latencyPrefix} sessions.create.start`, {
-				orgId: organizationId.slice(0, 8),
-				sessionType: body.sessionType,
-				clientType: body.clientType,
-				sandboxMode: body.sandboxMode || "deferred",
-				hasIdempotencyKey: Boolean(req.header("Idempotency-Key")),
-				hasSnapshot: Boolean(body.snapshotId),
-				sshEnabled: Boolean(body.sshOptions),
-			});
+			logger.debug(
+				{
+					orgId: organizationId.slice(0, 8),
+					sessionType: body.sessionType,
+					clientType: body.clientType,
+					sandboxMode: body.sandboxMode || "deferred",
+					hasIdempotencyKey: Boolean(req.header("Idempotency-Key")),
+					hasSnapshot: Boolean(body.snapshotId),
+					sshEnabled: Boolean(body.sshOptions),
+				},
+				"sessions.create.start",
+			);
 
 			const idempotencyKey = req.header("Idempotency-Key");
 			if (idempotencyKey) {
 				const idempotencyStartMs = Date.now();
 				const existing = await readIdempotencyResponse(organizationId, idempotencyKey);
 				if (existing) {
-					console.log(`${latencyPrefix} sessions.create.idempotency.replay`, {
-						orgId: organizationId.slice(0, 8),
-						durationMs: Date.now() - idempotencyStartMs,
-					});
+					logger.debug(
+						{
+							orgId: organizationId.slice(0, 8),
+							durationMs: Date.now() - idempotencyStartMs,
+						},
+						"sessions.create.idempotency.replay",
+					);
 					res.status(201).json(existing as CreateSessionResponse);
 					return;
 				}
 
 				const reservation = await reserveIdempotencyKey(organizationId, idempotencyKey);
-				console.log(`${latencyPrefix} sessions.create.idempotency.reserve`, {
-					orgId: organizationId.slice(0, 8),
-					result: reservation,
-					durationMs: Date.now() - idempotencyStartMs,
-					inFlightTtlSeconds: IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS,
-				});
+				logger.debug(
+					{
+						orgId: organizationId.slice(0, 8),
+						result: reservation,
+						durationMs: Date.now() - idempotencyStartMs,
+						inFlightTtlSeconds: IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS,
+					},
+					"sessions.create.idempotency.reserve",
+				);
 				if (reservation === "exists") {
 					const replay = await readIdempotencyResponse(organizationId, idempotencyKey);
 					if (replay) {
-						console.log(`${latencyPrefix} sessions.create.idempotency.replay`, {
-							orgId: organizationId.slice(0, 8),
-							durationMs: Date.now() - idempotencyStartMs,
-						});
+						logger.debug(
+							{
+								orgId: organizationId.slice(0, 8),
+								durationMs: Date.now() - idempotencyStartMs,
+							},
+							"sessions.create.idempotency.replay",
+						);
 						res.status(201).json(replay as CreateSessionResponse);
 						return;
 					}
@@ -202,23 +216,29 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				cliPrebuild: body.cliPrebuild,
 			};
 
-			console.log(`[Sessions] Resolving prebuild for org ${organizationId.slice(0, 8)}`);
+			logger.info({ orgId: organizationId.slice(0, 8) }, "Resolving prebuild");
 
 			const prebuildStartMs = Date.now();
 			const prebuild = await resolvePrebuild(prebuildResolutionOptions);
-			console.log(`${latencyPrefix} sessions.create.prebuild.resolved`, {
-				orgId: organizationId.slice(0, 8),
-				durationMs: Date.now() - prebuildStartMs,
-				isNew: prebuild.isNew,
-				hasSnapshot: Boolean(prebuild.snapshotId),
-				repoCount: prebuild.repoIds.length,
-			});
+			logger.debug(
+				{
+					orgId: organizationId.slice(0, 8),
+					durationMs: Date.now() - prebuildStartMs,
+					isNew: prebuild.isNew,
+					hasSnapshot: Boolean(prebuild.snapshotId),
+					repoCount: prebuild.repoIds.length,
+				},
+				"sessions.create.prebuild.resolved",
+			);
 
-			console.log("[Sessions] Prebuild resolved:", {
-				prebuildId: prebuild.id.slice(0, 8),
-				isNew: prebuild.isNew,
-				hasSnapshot: Boolean(prebuild.snapshotId),
-			});
+			logger.info(
+				{
+					prebuildId: prebuild.id.slice(0, 8),
+					isNew: prebuild.isNew,
+					hasSnapshot: Boolean(prebuild.snapshotId),
+				},
+				"Prebuild resolved",
+			);
 
 			// Create session
 			const createSessionStartMs = Date.now();
@@ -251,28 +271,37 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				prebuild.isNew,
 			);
 			const createSessionDurationMs = Date.now() - createSessionStartMs;
-			console.log(`${latencyPrefix} sessions.create.session.created`, {
-				orgId: organizationId.slice(0, 8),
-				sessionId: result.sessionId.slice(0, 8),
-				status: result.status,
-				durationMs: createSessionDurationMs,
-				createdSandbox: Boolean(result.sandbox),
-				hasSnapshot: result.hasSnapshot,
-			});
-			if (idempotencyKey && createSessionDurationMs > IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS * 1000) {
-				console.warn(`${latencyPrefix} sessions.create.idempotency.in_flight_ttl_risk`, {
+			logger.debug(
+				{
 					orgId: organizationId.slice(0, 8),
 					sessionId: result.sessionId.slice(0, 8),
+					status: result.status,
 					durationMs: createSessionDurationMs,
-					inFlightTtlSeconds: IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS,
-				});
+					createdSandbox: Boolean(result.sandbox),
+					hasSnapshot: result.hasSnapshot,
+				},
+				"sessions.create.session.created",
+			);
+			if (idempotencyKey && createSessionDurationMs > IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS * 1000) {
+				logger.warn(
+					{
+						orgId: organizationId.slice(0, 8),
+						sessionId: result.sessionId.slice(0, 8),
+						durationMs: createSessionDurationMs,
+						inFlightTtlSeconds: IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS,
+					},
+					"sessions.create.idempotency.in_flight_ttl_risk",
+				);
 			}
 
-			console.log("[Sessions] Session created:", {
-				sessionId: result.sessionId.slice(0, 8),
-				status: result.status,
-				hasSandbox: Boolean(result.sandbox),
-			});
+			logger.info(
+				{
+					sessionId: result.sessionId.slice(0, 8),
+					status: result.status,
+					hasSandbox: Boolean(result.sandbox),
+				},
+				"Session created",
+			);
 
 			// For new managed prebuilds, kick off setup session
 			if (prebuild.isNew && body.managedPrebuild) {
@@ -293,21 +322,27 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				await storeIdempotencyResponse(idempotencyState.orgId, idempotencyState.key, response);
 			}
 
-			console.log(`${latencyPrefix} sessions.create.complete`, {
-				orgId: organizationId.slice(0, 8),
-				sessionId: result.sessionId.slice(0, 8),
-				durationMs: Date.now() - requestStartMs,
-			});
+			logger.debug(
+				{
+					orgId: organizationId.slice(0, 8),
+					sessionId: result.sessionId.slice(0, 8),
+					durationMs: Date.now() - requestStartMs,
+				},
+				"sessions.create.complete",
+			);
 			res.status(201).json(response);
 		} catch (err) {
 			if (idempotencyState) {
 				await clearIdempotencyKey(idempotencyState.orgId, idempotencyState.key);
 			}
-			console.error(`${latencyPrefix} sessions.create.error`, {
-				orgId: idempotencyState?.orgId?.slice(0, 8),
-				durationMs: Date.now() - requestStartMs,
-				error: err instanceof Error ? err.message : "Unknown error",
-			});
+			logger.error(
+				{
+					orgId: idempotencyState?.orgId?.slice(0, 8),
+					durationMs: Date.now() - requestStartMs,
+					err,
+				},
+				"sessions.create.error",
+			);
 			next(err);
 		}
 	});
@@ -379,6 +414,6 @@ async function startSetupSession(
 			hub.postPrompt(prompt, "managed-prebuild-setup");
 		})
 		.catch((err) => {
-			console.error("[Sessions] Failed to start setup session:", err);
+			logger.error({ err }, "Failed to start setup session");
 		});
 }

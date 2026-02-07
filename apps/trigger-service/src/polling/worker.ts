@@ -2,7 +2,10 @@ import { REDIS_KEYS, createPollingWorker, getRedisClient } from "@proliferate/qu
 import { triggers as triggerService } from "@proliferate/services";
 import type { PollingTrigger } from "@proliferate/triggers";
 import { registry } from "@proliferate/triggers";
+import { logger as rootLogger } from "../lib/logger.js";
 import { processTriggerEvents } from "../lib/trigger-processor.js";
+
+const logger = rootLogger.child({ module: "polling" });
 
 interface PollStateRecord {
 	cursor: string | null;
@@ -25,7 +28,7 @@ export function startPollingWorker() {
 
 		const connectionId = triggerRow.integration?.connectionId ?? undefined;
 		if (!connectionId) {
-			console.warn("[Polling] Missing integration connectionId for trigger", triggerId);
+			logger.warn({ triggerId }, "Missing integration connectionId for trigger");
 			return;
 		}
 

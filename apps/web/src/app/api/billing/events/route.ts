@@ -7,8 +7,11 @@
 
 import { requireAuth } from "@/lib/auth-helpers";
 import { isBillingEnabled } from "@/lib/billing";
+import { logger } from "@/lib/logger";
 import { billing } from "@proliferate/services";
 import { NextResponse } from "next/server";
+
+const log = logger.child({ route: "billing/events" });
 
 export async function GET(request: Request) {
 	const authResult = await requireAuth();
@@ -45,7 +48,7 @@ export async function GET(request: Request) {
 			sessionId: sessionId ?? undefined,
 		});
 	} catch (error) {
-		console.error("[Billing] Failed to fetch events:", error);
+		log.error({ err: error }, "Failed to fetch events");
 		return NextResponse.json({ error: "Failed to fetch billing events" }, { status: 500 });
 	}
 	const { events, total } = result;

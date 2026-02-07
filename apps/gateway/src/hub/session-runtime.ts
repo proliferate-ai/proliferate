@@ -5,6 +5,7 @@
  * Provides a single ensureRuntimeReady() entry point for hot path callers.
  */
 
+import { type Logger, createLogger } from "@proliferate/logger";
 import { prebuilds, sessions } from "@proliferate/services";
 import type { SandboxProviderType, ServerMessage } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
@@ -43,8 +44,8 @@ export interface SessionRuntimeOptions {
 export class SessionRuntime {
 	private readonly env: GatewayEnv;
 	private readonly sessionId: string;
-	private readonly shortId: string;
 	private context: SessionContext;
+	private readonly logger: Logger;
 
 	private readonly sseClient: SseClient;
 	private readonly onStatus: SessionRuntimeOptions["onStatus"];
@@ -65,8 +66,11 @@ export class SessionRuntime {
 	constructor(options: SessionRuntimeOptions) {
 		this.env = options.env;
 		this.sessionId = options.sessionId;
-		this.shortId = options.sessionId.slice(0, 8);
 		this.context = options.context;
+		this.logger = createLogger({ service: "gateway" }).child({
+			module: "runtime",
+			sessionId: options.sessionId,
+		});
 		this.onStatus = options.onStatus;
 		this.onBroadcast = options.onBroadcast;
 		this.onDisconnect = options.onDisconnect;
@@ -75,17 +79,13 @@ export class SessionRuntime {
 			onEvent: options.onEvent,
 			onDisconnect: (reason) => this.handleSseDisconnect(reason),
 			env: this.env,
+			logger: this.logger,
 		});
 	}
 
 	private logLatency(event: string, data?: Record<string, unknown>): void {
 		const elapsedMs = this.lifecycleStartTime ? Date.now() - this.lifecycleStartTime : undefined;
-		console.log(`[P-LATENCY] ${event}`, {
-			sessionId: this.sessionId,
-			shortId: this.shortId,
-			...(elapsedMs !== undefined ? { elapsedMs } : {}),
-			...(data || {}),
-		});
+		this.logger.debug({ elapsedMs, ...data }, event);
 	}
 
 	// ============================================
@@ -93,14 +93,13 @@ export class SessionRuntime {
 	// ============================================
 
 	private log(message: string, data?: Record<string, unknown>): void {
-		const elapsed = this.lifecycleStartTime ? `+${Date.now() - this.lifecycleStartTime}ms` : "";
-		const dataStr = data ? ` ${JSON.stringify(data)}` : "";
-		console.log(`[Runtime:${this.shortId}] ${elapsed} ${message}${dataStr}`);
+		const elapsedMs = this.lifecycleStartTime ? Date.now() - this.lifecycleStartTime : undefined;
+		this.logger.info({ ...data, elapsedMs }, message);
 	}
 
 	private logError(message: string, error?: unknown): void {
-		const elapsed = this.lifecycleStartTime ? `+${Date.now() - this.lifecycleStartTime}ms` : "";
-		console.error(`[Runtime:${this.shortId}] ${elapsed} ${message}`, error);
+		const elapsedMs = this.lifecycleStartTime ? Date.now() - this.lifecycleStartTime : undefined;
+		this.logger.error({ err: error, elapsedMs }, message);
 	}
 
 	// ============================================

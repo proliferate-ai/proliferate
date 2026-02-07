@@ -2,6 +2,9 @@ import { env } from "@proliferate/environment/server";
 import { createSyncClient } from "@proliferate/gateway-clients";
 import { automations, sessions, triggers } from "@proliferate/services";
 import type { TriggerDefinition, TriggerEvent } from "@proliferate/triggers";
+import { logger as rootLogger } from "./logger.js";
+
+const logger = rootLogger.child({ module: "trigger-processor" });
 
 const GATEWAY_URL = env.NEXT_PUBLIC_GATEWAY_URL;
 const SERVICE_TO_SERVICE_AUTH_TOKEN = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
@@ -163,7 +166,7 @@ async function safeCreateSkippedEvent(input: Parameters<typeof triggers.createSk
 	try {
 		await triggers.createSkippedEvent(input);
 	} catch (err) {
-		console.error("Failed to create skipped event:", err);
+		logger.error({ err }, "Failed to create skipped event");
 	}
 }
 

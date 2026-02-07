@@ -16,6 +16,7 @@ import {
 	or,
 	secrets,
 } from "../db/client";
+import { getServicesLogger } from "../logger";
 import { toIsoString } from "../db/serialize";
 import type {
 	CheckSecretsFilter,
@@ -203,7 +204,7 @@ export async function upsertByRepoAndKey(input: UpsertSecretInput): Promise<bool
 			});
 		return true;
 	} catch (error) {
-		console.error(`Failed to store secret ${input.key}:`, error);
+		getServicesLogger().child({ module: "secrets-db" }).error({ err: error, secretKey: input.key }, "Failed to store secret");
 		return false;
 	}
 }

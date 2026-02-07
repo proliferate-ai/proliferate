@@ -6,6 +6,7 @@
  */
 
 import { randomUUID } from "crypto";
+import { type Logger, createLogger } from "@proliferate/logger";
 import { prebuilds, sessions } from "@proliferate/services";
 import type {
 	ClientMessage,
@@ -46,7 +47,7 @@ interface HubDependencies {
 export class SessionHub {
 	private readonly env: GatewayEnv;
 	private readonly sessionId: string;
-	private readonly shortId: string;
+	private readonly logger: Logger;
 
 	// Client connections
 	private readonly clients = new Map<WebSocket, ClientConnection>();
@@ -66,7 +67,10 @@ export class SessionHub {
 	constructor(deps: HubDependencies) {
 		this.env = deps.env;
 		this.sessionId = deps.sessionId;
-		this.shortId = deps.sessionId.slice(0, 8);
+		this.logger = createLogger({ service: "gateway" }).child({
+			module: "hub",
+			sessionId: deps.sessionId,
+		});
 
 		this.eventProcessor = new EventProcessor(
 			{
@@ -76,6 +80,7 @@ export class SessionHub {
 				getOpenCodeSessionId: () => this.runtime.getOpenCodeSessionId(),
 			},
 			getInterceptedToolNames(),
+			this.logger,
 		);
 
 		this.runtime = new SessionRuntime({
@@ -94,8 +99,7 @@ export class SessionHub {
 			eventProcessor: this.eventProcessor,
 			broadcast: (message) => this.broadcast(message),
 			broadcastStatus: (status, message) => this.broadcastStatus(status, message),
-			log: (message, data) => this.log(message, data),
-			logError: (message, error) => this.logError(message, error),
+			logger: this.logger.child({ module: "migration" }),
 			getClientCount: () => this.clients.size,
 		});
 	}
@@ -109,14 +113,13 @@ export class SessionHub {
 	// ============================================
 
 	private log(message: string, data?: Record<string, unknown>): void {
-		const elapsed = this.lifecycleStartTime ? `+${Date.now() - this.lifecycleStartTime}ms` : "";
-		const dataStr = data ? ` ${JSON.stringify(data)}` : "";
-		console.log(`[Hub:${this.shortId}] ${elapsed} ${message}${dataStr}`);
+		const elapsedMs = this.lifecycleStartTime ? Date.now() - this.lifecycleStartTime : undefined;
+		this.logger.info({ ...data, elapsedMs }, message);
 	}
 
 	private logError(message: string, error?: unknown): void {
-		const elapsed = this.lifecycleStartTime ? `+${Date.now() - this.lifecycleStartTime}ms` : "";
-		console.error(`[Hub:${this.shortId}] ${elapsed} ${message}`, error);
+		const elapsedMs = this.lifecycleStartTime ? Date.now() - this.lifecycleStartTime : undefined;
+		this.logger.error({ err: error, elapsedMs }, message);
 	}
 
 	// ============================================
@@ -196,7 +199,7 @@ export class SessionHub {
 
 				this.handlePrompt(message.content, effectiveUserId, { images, source: "web" }).catch(
 					(err) => {
-						console.error("Failed to handle prompt", err);
+						this.logError("Failed to handle prompt", err);
 						this.broadcast({
 							type: "error",
 							payload: { message: "Failed to send prompt" },
@@ -213,7 +216,7 @@ export class SessionHub {
 				}
 
 				this.handleCancel().catch((err) => {
-					console.error("Failed to cancel", err);
+					this.logError("Failed to cancel", err);
 				});
 				return;
 			}
@@ -249,7 +252,7 @@ export class SessionHub {
 	postPrompt(content: string, userId: string, source?: ClientSource, images?: string[]): void {
 		const normalizedImages = this.normalizeImages(images);
 		this.handlePrompt(content, userId, { images: normalizedImages, source }).catch((err) => {
-			console.error("Failed to handle HTTP prompt", err);
+			this.logError("Failed to handle HTTP prompt", err);
 			this.broadcast({
 				type: "error",
 				payload: { message: "Failed to send prompt" },
@@ -262,7 +265,7 @@ export class SessionHub {
 	 */
 	postCancel(): void {
 		this.handleCancel().catch((err) => {
-			console.error("Failed to handle HTTP cancel", err);
+			this.logError("Failed to handle HTTP cancel", err);
 		});
 	}
 
@@ -436,11 +439,7 @@ export class SessionHub {
 
 		const ensureStartMs = Date.now();
 		await this.ensureRuntimeReady();
-		console.log("[P-LATENCY] prompt.ensure_runtime_ready", {
-			sessionId: this.sessionId,
-			shortId: this.shortId,
-			durationMs: Date.now() - ensureStartMs,
-		});
+		this.logger.debug({ durationMs: Date.now() - ensureStartMs }, "prompt.ensure_runtime_ready");
 
 		const openCodeSessionId = this.runtime.getOpenCodeSessionId();
 		const openCodeUrl = this.runtime.getOpenCodeUrl();
@@ -494,13 +493,14 @@ export class SessionHub {
 		const sendStartMs = Date.now();
 		await sendPromptAsync(openCodeUrl, openCodeSessionId, content, options?.images);
 		this.log("Prompt sent to OpenCode");
-		console.log("[P-LATENCY] prompt.send_prompt_async", {
-			sessionId: this.sessionId,
-			shortId: this.shortId,
-			durationMs: Date.now() - sendStartMs,
-			contentLength: content.length,
-			imageCount: options?.images?.length || 0,
-		});
+		this.logger.debug(
+			{
+				durationMs: Date.now() - sendStartMs,
+				contentLength: content.length,
+				imageCount: options?.images?.length || 0,
+			},
+			"prompt.send_prompt_async",
+		);
 	}
 
 	private async handleCancel(): Promise<void> {

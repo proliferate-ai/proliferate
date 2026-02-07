@@ -1,7 +1,10 @@
 import { auth } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
 import { cli } from "@proliferate/services";
 import { NextResponse } from "next/server";
+
+const log = logger.child({ route: "internal/verify-cli-token" });
 
 /**
  * POST /api/internal/verify-cli-token
@@ -49,7 +52,7 @@ export async function POST(request: Request) {
 			orgId,
 		});
 	} catch (error) {
-		console.error("[verify-cli-token] CLI token verification failed:", error);
+		log.error({ err: error }, "CLI token verification failed");
 		return NextResponse.json({ valid: false, error: "Verification failed" }, { status: 500 });
 	}
 }

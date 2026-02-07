@@ -42,6 +42,8 @@ export function createLogger(options: CreateLoggerOptions): Logger {
 				colorize: true,
 				translateTime: "SYS:yyyy-mm-dd HH:MM:ss.l",
 				ignore: "pid,hostname",
+				messageFormat: "{msg}{if durationMs} ({durationMs}ms){end}{if count} (count: {count}){end}",
+				hideObject: true,
 			},
 		};
 	}
@@ -56,11 +58,19 @@ export interface CreateHttpLoggerOptions extends Omit<PinoHttpOptions, "logger">
 export function createHttpLogger({ logger, ...options }: CreateHttpLoggerOptions) {
 	return pinoHttp({
 		logger,
-		...options,
-		redact: options.redact ?? {
-			paths: ["req.headers.authorization", "req.headers.cookie", "res.headers['set-cookie']"],
-			remove: true,
+		// Put everything in the message so it's a clean one-liner
+		customSuccessMessage(req, res, responseTime) {
+			return `${req.method} ${req.url} ${res.statusCode} ${Math.round(responseTime)}ms`;
 		},
+		customErrorMessage(req, res, err) {
+			return `${req.method} ${req.url} ${res.statusCode} ${err.message}`;
+		},
+		// Suppress req/res objects — the message has method/url/status/time
+		serializers: {
+			req: () => undefined as never,
+			res: () => undefined as never,
+		},
+		...options,
 	});
 }
 

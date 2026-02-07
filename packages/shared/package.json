@@ -7,6 +7,7 @@
 	"types": "./src/index.ts",
 	"exports": {
 		".": "./src/index.ts",
+		"./logger": "./src/logger.ts",
 		"./auth": "./src/auth.ts",
 		"./agents": "./src/agents.ts",
 		"./crypto": "./src/lib/crypto.ts",
@@ -27,6 +28,7 @@
 	"dependencies": {
 		"@proliferate/db": "workspace:*",
 		"@proliferate/environment": "workspace:*",
+		"@proliferate/logger": "workspace:*",
 		"@ts-rest/core": "^3.52.1",
 		"e2b": "^2.10.2",
 		"ioredis": "^5.4.1",

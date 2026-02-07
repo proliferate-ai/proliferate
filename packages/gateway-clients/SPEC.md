@@ -1,4 +1,4 @@
-# Gateway SDK
+# Gateway Clients
 
 Typed clients for interacting with the Proliferate Gateway.
 
@@ -17,7 +17,7 @@ All clients share a common `Client` interface with capabilities (e.g. verificati
 ## File Structure
 
 ```
-gateway-sdk/src/
+src/
 ├── index.ts                    # Browser-safe exports
 ├── server.ts                   # Server-only exports (AsyncClient, BullMQ)
 ├── client.ts                   # Base Client interface
@@ -86,7 +86,7 @@ Type guards: `isSyncClient()`, `isAsyncClient()`, `isExternalClient()`
 Real-time WebSocket + HTTP client. Browser-safe.
 
 ```typescript
-import { createSyncClient } from "@proliferate/gateway-sdk";
+import { createSyncClient } from "@proliferate/gateway-clients";
 
 const client = createSyncClient({
   baseUrl: "https://gateway.example.com",
@@ -134,7 +134,7 @@ const url = await client.tools.verification.getUrl(proliferateSessionId, key);
 Passthrough to OpenCode via gateway proxy. Browser-safe.
 
 ```typescript
-import { createOpenCodeClient } from "@proliferate/gateway-sdk";
+import { createOpenCodeClient } from "@proliferate/gateway-clients";
 
 const client = createOpenCodeClient({
   baseUrl: "https://gateway.example.com",
@@ -158,8 +158,8 @@ const files = await client.tools.verification.list(proliferateSessionId);
 BullMQ-based client for async platforms. Server-only.
 
 ```typescript
-import { AsyncClient } from "@proliferate/gateway-sdk/server";
-import { createSyncClient } from "@proliferate/gateway-sdk";
+import { AsyncClient } from "@proliferate/gateway-clients/server";
+import { createSyncClient } from "@proliferate/gateway-clients";
 
 class SlackClient extends AsyncClient<SlackMetadata, SlackInbound, SlackReceiver> {
   readonly clientType = "slack";
@@ -195,7 +195,7 @@ await slackClient.wake(proliferateSessionId, metadata, source);
 
 ## Exports
 
-### `@proliferate/gateway-sdk` (browser-safe)
+### `@proliferate/gateway-clients` (browser-safe)
 
 ```typescript
 // Clients
@@ -219,7 +219,7 @@ SyncWebSocket, WebSocketOptions
 ServerMessage, ClientMessage, Message, InitMessage, TokenMessage, ...
 ```
 
-### `@proliferate/gateway-sdk/server` (Node.js only)
+### `@proliferate/gateway-clients/server` (Node.js only)
 
 ```typescript
 AsyncClient

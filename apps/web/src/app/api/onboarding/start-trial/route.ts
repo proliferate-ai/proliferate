@@ -7,6 +7,9 @@
 
 import { requireAuth } from "@/lib/auth-helpers";
 import { isBillingEnabled } from "@/lib/billing";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ handler: "start-trial" });
 import { env } from "@proliferate/environment/server";
 import { orgs } from "@proliferate/services";
 import { TRIAL_CREDITS, autumnAttach, autumnCreateCustomer } from "@proliferate/shared/billing";
@@ -17,22 +20,22 @@ interface StartdevRequest {
 }
 
 export async function POST(request: Request) {
-	console.log("[Onboarding] /api/onboarding/start-dev POST called");
+	log.info("POST called");
 
 	const authResult = await requireAuth();
 	if ("error" in authResult) {
-		console.log("[Onboarding] Auth error:", authResult.error);
+		log.info({ error: authResult.error }, "Auth error");
 		return NextResponse.json({ error: authResult.error }, { status: authResult.status });
 	}
 
 	const orgId = authResult.session.session.activeOrganizationId;
 	const userEmail = authResult.session.user.email;
 
-	console.log("[Onboarding] Active org:", orgId);
-	console.log("[Onboarding] User email:", userEmail);
+	log.info({ orgId }, "Active org");
+	log.info({ userEmail }, "User email");
 
 	if (!orgId) {
-		console.warn("[Onboarding] No active organization found for user:", userEmail);
+		log.warn({ userEmail }, "No active organization found for user");
 		return NextResponse.json({ error: "No active organization" }, { status: 400 });
 	}
 
@@ -40,22 +43,22 @@ export async function POST(request: Request) {
 	let body: StartdevRequest = {};
 	try {
 		body = await request.json();
-		console.log("[Onboarding] Request body:", body);
+		log.info({ plan: body.plan }, "Request body parsed");
 	} catch (err) {
-		console.log("[Onboarding] Could not parse request body, defaulting to dev plan");
+		log.info("Could not parse request body, defaulting to dev plan");
 		// Default to dev if no body
 	}
 	const selectedPlan = body.plan || "dev";
-	console.log("[Onboarding] Selected plan:", selectedPlan);
+	log.info({ selectedPlan }, "Selected plan");
 
 	// If billing not configured, just mark onboarding complete
 	if (!isBillingEnabled()) {
-		console.log("[Onboarding] Billing not enabled. Marking onboarding complete for org:", orgId);
+		log.info({ orgId }, "Billing not enabled, marking onboarding complete");
 		try {
 			await orgs.markOnboardingComplete(orgId, true);
 			await orgs.updateBillingPlan(orgId, selectedPlan);
 		} catch (err) {
-			console.error("[Onboarding] Failed to mark onboarding as complete:", err);
+			log.error({ err }, "Failed to mark onboarding as complete");
 		}
 
 		return NextResponse.json({
@@ -66,14 +69,14 @@ export async function POST(request: Request) {
 
 	const org = await orgs.getBillingInfoV2(orgId);
 	if (!org) {
-		console.error("[Onboarding] Failed to fetch organization row");
+		log.error({ orgId }, "Failed to fetch organization row");
 		return NextResponse.json(
 			{ error: "Failed to check organization billing state" },
 			{ status: 500 },
 		);
 	}
 
-	console.log("[Onboarding] Fetched organization billing row:", org);
+	log.info({ orgId, billingState: org.billingState }, "Fetched organization billing row");
 
 	try {
 		await orgs.updateBillingPlan(orgId, selectedPlan);
@@ -91,7 +94,7 @@ export async function POST(request: Request) {
 				await orgs.updateAutumnCustomerId(orgId, customerId);
 			}
 		} catch (err) {
-			console.warn("[Onboarding] Failed to create Autumn customer:", err);
+			log.warn({ err }, "Failed to create Autumn customer");
 		}
 
 		const setup = await autumnAttach({
@@ -124,7 +127,7 @@ export async function POST(request: Request) {
 			message: "Trial started",
 		});
 	} catch (err) {
-		console.error("[Onboarding] Failed to start dev:", err);
+		log.error({ err }, "Failed to start dev");
 		return NextResponse.json({ error: "Failed to start dev" }, { status: 500 });
 	}
 }

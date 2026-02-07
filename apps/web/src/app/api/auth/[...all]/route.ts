@@ -1,8 +1,11 @@
 import { auth } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 import { nodeEnv } from "@proliferate/environment/runtime";
 import { env } from "@proliferate/environment/server";
 import { orgs, users } from "@proliferate/services";
 import { toNextJsHandler } from "better-auth/next-js";
+
+const log = logger.child({ route: "auth" });
 
 const { GET: originalGET, POST } = toNextJsHandler(auth);
 
@@ -18,7 +21,7 @@ export async function GET(request: Request) {
 		const user = await users.findById(devUserId);
 
 		if (!user) {
-			console.error(`[DEV_USER_ID] User not found: ${devUserId}`);
+			log.error({ devUserId }, "DEV_USER_ID user not found");
 			return Response.json({ session: null, user: null });
 		}
 

@@ -5,6 +5,7 @@
  */
 
 import type { ServerMessage, SyncClient } from "@proliferate/gateway-clients";
+import type { Logger } from "@proliferate/logger";
 import type { SlackApiClient } from "../api";
 
 /**
@@ -16,6 +17,7 @@ export interface HandlerContext {
 	syncClient: SyncClient;
 	sessionId: string;
 	appUrl: string;
+	logger: Logger;
 }
 
 /**

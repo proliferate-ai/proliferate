@@ -1,6 +1,9 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { env } from "@proliferate/environment/server";
+import { createLogger } from "@proliferate/logger";
 import express, { type Request, type Response } from "express";
+
+const logger = createLogger({ service: "sandbox-mcp" }).child({ module: "api-server" });
 import {
 	exposePort,
 	getExposedPort,
@@ -179,6 +182,6 @@ app.get("/api/logs/:name", checkAuth, (req: Request, res: Response) => {
 
 export function startApiServer(port = 4000): void {
 	app.listen(port, "0.0.0.0", () => {
-		console.log(`sandbox-mcp API server listening on port ${port}`);
+		logger.info({ port }, "API server listening");
 	});
 }

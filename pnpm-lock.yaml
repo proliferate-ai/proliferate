@@ -72,6 +72,9 @@ importers:
       '@proliferate/environment':
         specifier: workspace:*
         version: link:../../packages/environment
+      '@proliferate/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
       '@proliferate/services':
         specifier: workspace:*
         version: link:../../packages/services
@@ -136,6 +139,9 @@ importers:
       '@proliferate/gateway-clients':
         specifier: workspace:*
         version: link:../../packages/gateway-clients
+      '@proliferate/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
       '@proliferate/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -215,6 +221,9 @@ importers:
       '@proliferate/gateway-clients':
         specifier: workspace:*
         version: link:../../packages/gateway-clients
+      '@proliferate/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
       '@proliferate/queue':
         specifier: workspace:^
         version: link:../../packages/queue
@@ -423,6 +432,9 @@ importers:
       '@proliferate/gateway-clients':
         specifier: workspace:*
         version: link:../../packages/gateway-clients
+      '@proliferate/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
       '@proliferate/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -577,6 +589,9 @@ importers:
       '@proliferate/environment':
         specifier: workspace:*
         version: link:../environment
+      '@proliferate/logger':
+        specifier: workspace:*
+        version: link:../logger
       bullmq:
         specifier: ^5.30.1
         version: 5.66.5
@@ -596,6 +611,9 @@ importers:
       '@proliferate/environment':
         specifier: workspace:*
         version: link:../environment
+      '@proliferate/logger':
+        specifier: workspace:*
+        version: link:../logger
       express:
         specifier: ^4.18.2
         version: 4.22.1
@@ -627,6 +645,9 @@ importers:
       '@proliferate/gateway-clients':
         specifier: workspace:*
         version: link:../gateway-clients
+      '@proliferate/logger':
+        specifier: workspace:*
+        version: link:../logger
       '@proliferate/queue':
         specifier: workspace:*
         version: link:../queue
@@ -655,6 +676,9 @@ importers:
       '@proliferate/environment':
         specifier: workspace:*
         version: link:../environment
+      '@proliferate/logger':
+        specifier: workspace:*
+        version: link:../logger
       '@ts-rest/core':
         specifier: ^3.52.1
         version: 3.52.1(@types/node@25.1.0)(zod@3.25.76)

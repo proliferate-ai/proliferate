@@ -6,9 +6,12 @@
  * - SlackReceiverJob: Per-session - listens for Gateway events and posts to Slack
  */
 
+import { createLogger } from "@proliferate/logger";
 import type { ConnectionOptions, Job, JobsOptions } from "bullmq";
 import { Queue, Worker } from "bullmq";
 import { getConnectionOptions } from "./index";
+
+const logger = createLogger({ service: "queue" }).child({ module: "slack" });
 
 // ============================================
 // Queue Names
@@ -194,24 +197,22 @@ export async function ensureSlackReceiver(
 	if (existing) {
 		const state = await existing.getState();
 		if (state === "active" || state === "waiting" || state === "delayed") {
-			console.log(
-				`[ensureSlackReceiver] Receiver job already ${state} for session ${job.sessionId}`,
-			);
+			logger.info({ state, sessionId: job.sessionId }, "Receiver job already exists for session");
 			return;
 		}
 
 		// Job completed/failed - remove so we can re-add
 		await existing.remove();
-		console.log(`[ensureSlackReceiver] Removed ${state} receiver job for session ${job.sessionId}`);
+		logger.info({ state, sessionId: job.sessionId }, "Removed stale receiver job for session");
 	}
 
 	try {
 		await queue.add(`receiver_${job.sessionId}`, job, { jobId });
-		console.log(`[ensureSlackReceiver] Ensured receiver job ${jobId}`);
+		logger.info({ jobId }, "Ensured receiver job");
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		if (message.toLowerCase().includes("exists")) {
-			console.log(`[ensureSlackReceiver] Receiver job already exists for session ${job.sessionId}`);
+			logger.info({ sessionId: job.sessionId }, "Receiver job already exists for session");
 			return;
 		}
 		throw err;

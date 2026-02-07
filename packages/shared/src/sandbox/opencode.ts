@@ -5,6 +5,7 @@
  * in sandboxes. Used by all sandbox providers.
  */
 
+import { getSharedLogger } from "../logger";
 import { SANDBOX_PATHS } from "./config";
 
 /**
@@ -80,12 +81,12 @@ export function getOpencodeConfig(
  *
  * @param tunnelUrl - The HTTPS URL to the OpenCode server
  * @param maxWaitMs - Maximum time to wait in milliseconds (default: 30000)
- * @param log - Optional logging function (default: console.log)
+ * @param log - Optional logging function
  */
 export async function waitForOpenCodeReady(
 	tunnelUrl: string,
 	maxWaitMs = 30000,
-	log: (msg: string) => void = console.log,
+	log: (msg: string) => void = (msg) => getSharedLogger().debug({ module: "opencode" }, msg),
 ): Promise<void> {
 	const startTime = Date.now();
 	let attempt = 0;
