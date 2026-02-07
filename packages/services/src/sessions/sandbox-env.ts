@@ -32,7 +32,12 @@ function resolveDefaultGitToken(repoSpecs?: RepoSpec[]): string | null {
 
 export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<SandboxEnvResult> {
 	const envVars: Record<string, string> = {};
-	const requireProxy = input.requireProxy ?? process.env.LLM_PROXY_REQUIRED === "true";
+	const requireProxy =
+		input.requireProxy === true || input.requireProxy === ("true" as unknown as boolean)
+			? true
+			: input.requireProxy === false || input.requireProxy === ("false" as unknown as boolean)
+				? false
+				: process.env.LLM_PROXY_REQUIRED === "true";
 	const proxyUrl = process.env.LLM_PROXY_URL;
 
 	if (!proxyUrl) {
