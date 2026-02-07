@@ -39,12 +39,11 @@ interface SubmitEnvResult {
 
 export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<SubmitEnvResult> {
 	const { sessionId, orgId, userId, secrets: secretsInput, envVars, saveToPrebuild } = input;
+	const reqLog = log.child({ sessionId });
 	const startMs = Date.now();
 
-	log.info(
+	reqLog.info(
 		{
-			sessionId,
-			shortId: sessionId.slice(0, 8),
 			envVarCount: envVars.length,
 			secretCount: secretsInput.length,
 			saveToPrebuild,
@@ -90,7 +89,7 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 			} catch (err) {
 				// Ignore duplicate errors - secret may already exist
 				if (!(err instanceof secrets.DuplicateSecretError)) {
-					log.error({ err, key: secret.key }, "Failed to save secret");
+					reqLog.error({ err, key: secret.key }, "Failed to save secret");
 				}
 			}
 		}
@@ -102,10 +101,8 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 			const provider = getSandboxProvider(session.sandboxProvider as SandboxProviderType);
 			const writeStartMs = Date.now();
 			await provider.writeEnvFile(session.sandboxId, envVarsMap);
-			log.info(
+			reqLog.info(
 				{
-					sessionId,
-					shortId: sessionId.slice(0, 8),
 					provider: provider.type,
 					keyCount: Object.keys(envVarsMap).length,
 					durationMs: Date.now() - writeStartMs,
@@ -113,17 +110,15 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 				"submit_env.write_env_file",
 			);
 		} catch (err) {
-			log.error({ err }, "Failed to write env file to sandbox");
+			reqLog.error({ err }, "Failed to write env file to sandbox");
 			throw new ORPCError("INTERNAL_SERVER_ERROR", {
 				message: `Failed to write environment variables: ${err instanceof Error ? err.message : "Unknown error"}`,
 			});
 		}
 	}
 
-	log.info(
+	reqLog.info(
 		{
-			sessionId,
-			shortId: sessionId.slice(0, 8),
 			durationMs: Date.now() - startMs,
 		},
 		"submit_env.complete",

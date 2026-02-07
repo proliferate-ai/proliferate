@@ -149,7 +149,6 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 
 			logger.debug(
 				{
-					latency: true,
 					orgId: organizationId.slice(0, 8),
 					sessionType: body.sessionType,
 					clientType: body.clientType,
@@ -168,7 +167,6 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				if (existing) {
 					logger.debug(
 						{
-							latency: true,
 							orgId: organizationId.slice(0, 8),
 							durationMs: Date.now() - idempotencyStartMs,
 						},
@@ -181,7 +179,6 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				const reservation = await reserveIdempotencyKey(organizationId, idempotencyKey);
 				logger.debug(
 					{
-						latency: true,
 						orgId: organizationId.slice(0, 8),
 						result: reservation,
 						durationMs: Date.now() - idempotencyStartMs,
@@ -194,7 +191,6 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 					if (replay) {
 						logger.debug(
 							{
-								latency: true,
 								orgId: organizationId.slice(0, 8),
 								durationMs: Date.now() - idempotencyStartMs,
 							},
@@ -226,7 +222,6 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 			const prebuild = await resolvePrebuild(prebuildResolutionOptions);
 			logger.debug(
 				{
-					latency: true,
 					orgId: organizationId.slice(0, 8),
 					durationMs: Date.now() - prebuildStartMs,
 					isNew: prebuild.isNew,
@@ -278,7 +273,6 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 			const createSessionDurationMs = Date.now() - createSessionStartMs;
 			logger.debug(
 				{
-					latency: true,
 					orgId: organizationId.slice(0, 8),
 					sessionId: result.sessionId.slice(0, 8),
 					status: result.status,
@@ -291,7 +285,6 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 			if (idempotencyKey && createSessionDurationMs > IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS * 1000) {
 				logger.warn(
 					{
-						latency: true,
 						orgId: organizationId.slice(0, 8),
 						sessionId: result.sessionId.slice(0, 8),
 						durationMs: createSessionDurationMs,
@@ -331,7 +324,6 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 
 			logger.debug(
 				{
-					latency: true,
 					orgId: organizationId.slice(0, 8),
 					sessionId: result.sessionId.slice(0, 8),
 					durationMs: Date.now() - requestStartMs,
@@ -345,7 +337,6 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 			}
 			logger.error(
 				{
-					latency: true,
 					orgId: idempotencyState?.orgId?.slice(0, 8),
 					durationMs: Date.now() - requestStartMs,
 					err,

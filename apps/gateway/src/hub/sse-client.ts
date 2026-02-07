@@ -6,7 +6,7 @@
  * SessionHub owns reconnection logic.
  */
 
-import { type Logger, createLogger } from "@proliferate/logger";
+import type { Logger } from "@proliferate/logger";
 import { createParser } from "eventsource-parser";
 import type { GatewayEnv } from "../lib/env";
 import type { OpenCodeEvent } from "../types";
@@ -15,6 +15,7 @@ export interface SseClientOptions {
 	onEvent: (event: OpenCodeEvent) => void;
 	onDisconnect: (reason: string) => void;
 	env: GatewayEnv;
+	logger: Logger;
 }
 
 export class SseClient {
@@ -28,11 +29,11 @@ export class SseClient {
 	private readonly logger: Logger;
 
 	constructor(private readonly options: SseClientOptions) {
-		this.logger = createLogger({ service: "gateway" }).child({ module: "sse-client" });
+		this.logger = options.logger.child({ module: "sse-client" });
 	}
 
 	private logLatency(event: string, data?: Record<string, unknown>): void {
-		this.logger.debug({ latency: true, ...data }, event);
+		this.logger.debug(data ?? {}, event);
 	}
 
 	/**

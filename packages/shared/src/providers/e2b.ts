@@ -57,7 +57,7 @@ const E2B_DOMAIN = env.E2B_DOMAIN;
 
 const providerLogger = getSharedLogger().child({ module: "e2b" });
 const logLatency = (event: string, data?: Record<string, unknown>) => {
-	providerLogger.info({ ...data, latency: true }, event);
+	providerLogger.info(data ?? {}, event);
 };
 
 const getE2BApiOpts = (): SandboxApiOpts => ({
@@ -85,13 +85,11 @@ export class E2BProvider implements SandboxProvider {
 
 	async createSandbox(opts: CreateSandboxOpts): Promise<CreateSandboxResult> {
 		const startTime = Date.now();
-		const shortId = opts.sessionId.slice(0, 8);
-		const log = providerLogger.child({ sessionId: opts.sessionId, shortId });
+		const log = providerLogger.child({ sessionId: opts.sessionId });
 
 		logLatency("provider.create_sandbox.start", {
 			provider: this.type,
 			sessionId: opts.sessionId,
-			shortId,
 			repoCount: opts.repos.length,
 			hasSnapshotId: Boolean(opts.snapshotId),
 			timeoutMs: SANDBOX_TIMEOUT_MS,
@@ -163,7 +161,6 @@ export class E2BProvider implements SandboxProvider {
 				logLatency("provider.create_sandbox.resume.connect", {
 					provider: this.type,
 					sessionId: opts.sessionId,
-					shortId,
 					durationMs: Date.now() - connectStartMs,
 				});
 				log.debug({ sandboxId: sandbox.sandboxId }, "Sandbox resumed");
@@ -185,7 +182,6 @@ export class E2BProvider implements SandboxProvider {
 				logLatency("provider.create_sandbox.resume.env_write", {
 					provider: this.type,
 					sessionId: opts.sessionId,
-					shortId,
 					keyCount: Object.keys(envsForProfile).length,
 					durationMs: Date.now() - envWriteStartMs,
 				});
@@ -198,7 +194,6 @@ export class E2BProvider implements SandboxProvider {
 				logLatency("provider.create_sandbox.resume.env_export", {
 					provider: this.type,
 					sessionId: opts.sessionId,
-					shortId,
 					timeoutMs: 10000,
 					durationMs: Date.now() - envExportStartMs,
 				});
@@ -208,7 +203,6 @@ export class E2BProvider implements SandboxProvider {
 				logLatency("provider.create_sandbox.resume.fallback", {
 					provider: this.type,
 					sessionId: opts.sessionId,
-					shortId,
 					error: message,
 				});
 				isSnapshot = false;
@@ -229,7 +223,6 @@ export class E2BProvider implements SandboxProvider {
 			logLatency("provider.create_sandbox.fresh.create", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 				durationMs: Date.now() - createStartMs,
 			});
 			log.debug({ sandboxId: sandbox.sandboxId }, "Sandbox created");
@@ -245,7 +238,6 @@ export class E2BProvider implements SandboxProvider {
 		logLatency("provider.create_sandbox.setup_workspace", {
 			provider: this.type,
 			sessionId: opts.sessionId,
-			shortId,
 			isSnapshot,
 			durationMs: Date.now() - setupWorkspaceStartMs,
 		});
@@ -263,7 +255,6 @@ export class E2BProvider implements SandboxProvider {
 		logLatency("provider.create_sandbox.setup_essential", {
 			provider: this.type,
 			sessionId: opts.sessionId,
-			shortId,
 			durationMs: Date.now() - setupEssentialStartMs,
 		});
 
@@ -271,14 +262,12 @@ export class E2BProvider implements SandboxProvider {
 		logLatency("provider.create_sandbox.setup_additional.start_async", {
 			provider: this.type,
 			sessionId: opts.sessionId,
-			shortId,
 		});
 		this.setupAdditionalDependencies(sandbox, log).catch((err) => {
 			log.warn({ err }, "Additional dependencies setup failed");
 			logLatency("provider.create_sandbox.setup_additional.error", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 				error: err instanceof Error ? err.message : String(err),
 			});
 		});
@@ -294,7 +283,6 @@ export class E2BProvider implements SandboxProvider {
 		logLatency("provider.create_sandbox.tunnels", {
 			provider: this.type,
 			sessionId: opts.sessionId,
-			shortId,
 			durationMs: Date.now() - tunnelsStartMs,
 			hasTunnelUrl: Boolean(tunnelUrl),
 			hasPreviewUrl: Boolean(previewUrl),
@@ -311,7 +299,6 @@ export class E2BProvider implements SandboxProvider {
 				logLatency("provider.create_sandbox.opencode_ready", {
 					provider: this.type,
 					sessionId: opts.sessionId,
-					shortId,
 					durationMs: Date.now() - readyStartMs,
 					timeoutMs: 30000,
 				});
@@ -320,7 +307,6 @@ export class E2BProvider implements SandboxProvider {
 				logLatency("provider.create_sandbox.opencode_ready.warn", {
 					provider: this.type,
 					sessionId: opts.sessionId,
-					shortId,
 					timeoutMs: 30000,
 					error: error instanceof Error ? error.message : String(error),
 				});
@@ -335,7 +321,6 @@ export class E2BProvider implements SandboxProvider {
 		logLatency("provider.create_sandbox.complete", {
 			provider: this.type,
 			sessionId: opts.sessionId,
-			shortId,
 			durationMs: Date.now() - startTime,
 			isSnapshot,
 		});
@@ -350,11 +335,9 @@ export class E2BProvider implements SandboxProvider {
 	async ensureSandbox(opts: CreateSandboxOpts): Promise<EnsureSandboxResult> {
 		providerLogger.debug({ sessionId: opts.sessionId }, "Ensuring sandbox");
 		const startMs = Date.now();
-		const shortId = opts.sessionId.slice(0, 8);
 		logLatency("provider.ensure_sandbox.start", {
 			provider: this.type,
 			sessionId: opts.sessionId,
-			shortId,
 			hasCurrentSandboxId: Boolean(opts.currentSandboxId),
 			hasSnapshotId: Boolean(opts.snapshotId),
 		});
@@ -366,7 +349,6 @@ export class E2BProvider implements SandboxProvider {
 		logLatency("provider.ensure_sandbox.find_existing", {
 			provider: this.type,
 			sessionId: opts.sessionId,
-			shortId,
 			durationMs: Date.now() - findStartMs,
 			found: Boolean(existingSandboxId),
 		});
@@ -378,7 +360,6 @@ export class E2BProvider implements SandboxProvider {
 			logLatency("provider.ensure_sandbox.resolve_tunnels", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 				durationMs: Date.now() - resolveStartMs,
 				hasTunnelUrl: Boolean(tunnels.openCodeUrl),
 				hasPreviewUrl: Boolean(tunnels.previewUrl),
@@ -386,7 +367,6 @@ export class E2BProvider implements SandboxProvider {
 			logLatency("provider.ensure_sandbox.complete", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 				recovered: true,
 				durationMs: Date.now() - startMs,
 			});
@@ -403,7 +383,6 @@ export class E2BProvider implements SandboxProvider {
 		logLatency("provider.ensure_sandbox.complete", {
 			provider: this.type,
 			sessionId: opts.sessionId,
-			shortId,
 			recovered: false,
 			durationMs: Date.now() - startMs,
 		});
@@ -686,7 +665,6 @@ export class E2BProvider implements SandboxProvider {
 		logLatency("provider.pause.complete", {
 			provider: this.type,
 			sessionId,
-			shortId: sessionId.slice(0, 8),
 			durationMs: Date.now() - startMs,
 		});
 		return { snapshotId: sandboxId };
@@ -712,7 +690,6 @@ export class E2BProvider implements SandboxProvider {
 			logLatency("provider.terminate.complete", {
 				provider: this.type,
 				sessionId,
-				shortId: sessionId.slice(0, 8),
 				durationMs: Date.now() - killStartMs,
 			});
 		} catch (error) {
@@ -727,7 +704,6 @@ export class E2BProvider implements SandboxProvider {
 				logLatency("provider.terminate.idempotent", {
 					provider: this.type,
 					sessionId,
-					shortId: sessionId.slice(0, 8),
 					durationMs: Date.now() - startMs,
 				});
 				return;

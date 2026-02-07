@@ -64,9 +64,7 @@ export async function scheduleSessionExpiry(
 
 	logger.info(
 		{
-			latency: true,
 			sessionId,
-			shortId: sessionId.slice(0, 8),
 			expiresAt: new Date(expiresAtMs).toISOString(),
 			graceMs: MigrationConfig.GRACE_MS,
 			delayMs: delay,
@@ -85,17 +83,12 @@ export function startSessionExpiryWorker(env: GatewayEnv, hubManager: HubManager
 			async (job) => {
 				const startMs = Date.now();
 				const sessionId = job.data.sessionId;
-				logger.debug(
-					{ latency: true, sessionId, shortId: sessionId.slice(0, 8), jobId: job.id },
-					"expiry.job.start",
-				);
+				logger.debug({ sessionId, jobId: job.id }, "expiry.job.start");
 				const hub = await hubManager.getOrCreate(sessionId);
 				await hub.runExpiryMigration();
 				logger.info(
 					{
-						latency: true,
 						sessionId,
-						shortId: sessionId.slice(0, 8),
 						jobId: job.id,
 						durationMs: Date.now() - startMs,
 					},

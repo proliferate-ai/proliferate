@@ -1,10 +1,10 @@
 import { env } from "@proliferate/environment/server";
 import { createSyncClient } from "@proliferate/gateway-clients";
-import { createLogger } from "@proliferate/logger";
 import { automations, sessions, triggers } from "@proliferate/services";
 import type { TriggerDefinition, TriggerEvent } from "@proliferate/triggers";
+import { logger as rootLogger } from "./logger.js";
 
-const logger = createLogger({ service: "trigger-service", base: { module: "trigger-processor" } });
+const logger = rootLogger.child({ module: "trigger-processor" });
 
 const GATEWAY_URL = env.NEXT_PUBLIC_GATEWAY_URL;
 const SERVICE_TO_SERVICE_AUTH_TOKEN = env.SERVICE_TO_SERVICE_AUTH_TOKEN;

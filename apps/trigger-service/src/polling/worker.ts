@@ -1,11 +1,11 @@
-import { createLogger } from "@proliferate/logger";
 import { REDIS_KEYS, createPollingWorker, getRedisClient } from "@proliferate/queue";
 import { triggers as triggerService } from "@proliferate/services";
 import type { PollingTrigger } from "@proliferate/triggers";
 import { registry } from "@proliferate/triggers";
+import { logger as rootLogger } from "../lib/logger.js";
 import { processTriggerEvents } from "../lib/trigger-processor.js";
 
-const logger = createLogger({ service: "trigger-service", base: { module: "polling-worker" } });
+const logger = rootLogger.child({ module: "polling" });
 
 interface PollStateRecord {
 	cursor: string | null;

@@ -204,9 +204,10 @@ export async function createSessionHandler(
 
 	// Generate IDs
 	const sessionId = randomUUID();
+	const reqLog = log.child({ sessionId });
 	const doUrl = getSessionGatewayUrl(sessionId);
 	const startTime = Date.now();
-	log.info({ sessionId, shortId: sessionId.slice(0, 8) }, "Session creation started");
+	reqLog.info("Session creation started");
 
 	// Create sandbox via provider
 	const providerType = prebuildProvider as SandboxProviderType | undefined;
@@ -233,10 +234,10 @@ export async function createSessionHandler(
 			snapshotId,
 		});
 	} catch (err) {
-		log.error({ err }, "Failed to create session");
+		reqLog.error({ err }, "Failed to create session");
 		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create session" });
 	}
-	log.info({ durationMs: Date.now() - startTime }, "DB insert complete");
+	reqLog.info({ durationMs: Date.now() - startTime }, "DB insert complete");
 
 	// Prepare environment variables for sandbox (shared logic with gateway)
 	const repoIds = reposToClone.map((r) => r.repoId);
@@ -252,15 +253,15 @@ export async function createSessionHandler(
 				env.LLM_PROXY_REQUIRED === ("true" as unknown as boolean),
 		});
 		envVars = envResult.envVars;
-		log.info(
+		reqLog.info(
 			{ usesProxy: envResult.usesProxy, proxyRequired: env.LLM_PROXY_REQUIRED },
 			"LLM proxy config",
 		);
 		if (envResult.usesProxy) {
-			log.info("LLM proxy enabled");
+			reqLog.info("LLM proxy enabled");
 		} else {
 			const hasDirectKey = !!envVars.ANTHROPIC_API_KEY;
-			log.warn({ hasDirectKey }, "LLM proxy not configured, using direct API key");
+			reqLog.warn({ hasDirectKey }, "LLM proxy not configured, using direct API key");
 		}
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
@@ -274,14 +275,14 @@ export async function createSessionHandler(
 	let warning: string | null = null;
 
 	try {
-		log.info(
+		reqLog.info(
 			{ durationMs: Date.now() - startTime, provider: provider.type },
 			"Calling sandbox provider",
 		);
 		const providerStartTime = Date.now();
 
-		log.info({ modelId: agentConfig.modelId }, "Using model");
-		log.info({ repoCount: repoSpecs.length }, "Cloning repos");
+		reqLog.info({ modelId: agentConfig.modelId }, "Using model");
+		reqLog.info({ repoCount: repoSpecs.length }, "Cloning repos");
 		const result = await provider.createSandbox({
 			sessionId,
 			repos: repoSpecs,
@@ -295,7 +296,7 @@ export async function createSessionHandler(
 		tunnelUrl = result.tunnelUrl;
 		previewUrl = result.previewUrl;
 		sandboxId = result.sandboxId;
-		log.info(
+		reqLog.info(
 			{
 				durationMs: Date.now() - startTime,
 				providerDurationMs: Date.now() - providerStartTime,
@@ -312,7 +313,7 @@ export async function createSessionHandler(
 			previewTunnelUrl: previewUrl,
 			codingAgentSessionId: null,
 		});
-		log.info({ durationMs: Date.now() - startTime }, "Session status updated to running");
+		reqLog.info({ durationMs: Date.now() - startTime }, "Session status updated to running");
 
 		// For setup sessions: take initial snapshot async (don't block)
 		if (sessionType === "setup" && sandboxId && !snapshotId) {
@@ -327,28 +328,28 @@ export async function createSessionHandler(
 					);
 
 					if (updated) {
-						log.info(
+						reqLog.info(
 							{ prebuildId, durationMs: Date.now() - snapshotStartTime },
 							"Initial snapshot saved for prebuild",
 						);
 					}
 				})
 				.catch((err) => {
-					log.warn({ err }, "Failed to take initial snapshot (non-fatal)");
+					reqLog.warn({ err }, "Failed to take initial snapshot (non-fatal)");
 				});
 		}
 	} catch (err) {
-		log.error({ err }, "Sandbox provider error");
+		reqLog.error({ err }, "Sandbox provider error");
 
 		if (err instanceof Error) {
 			warning = `Sandbox creation failed: ${err.message}`;
 		} else {
-			log.error({ thrown: err }, "Non-Error thrown from sandbox provider");
+			reqLog.error({ thrown: err }, "Non-Error thrown from sandbox provider");
 			warning = `Sandbox creation failed: ${typeof err === "string" ? err : "Unknown error"}`;
 		}
 	}
 
-	log.info({ sessionId, doUrl, tunnelUrl, previewUrl, sandboxId, warning }, "Returning response");
+	reqLog.info({ doUrl, tunnelUrl, previewUrl, sandboxId, warning }, "Returning response");
 
 	return { sessionId, doUrl, tunnelUrl, previewUrl, sandboxId, warning };
 }

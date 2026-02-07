@@ -26,6 +26,7 @@ export async function snapshotSessionHandler(
 	input: SnapshotSessionHandlerInput,
 ): Promise<SnapshotSessionResult> {
 	const { sessionId, orgId } = input;
+	const reqLog = log.child({ sessionId });
 
 	// Get full session data
 	const session = await sessions.getFullSession(sessionId, orgId);
@@ -41,22 +42,22 @@ export async function snapshotSessionHandler(
 	// Take snapshot via provider
 	try {
 		const startTime = Date.now();
-		log.info({ sessionId }, "Snapshot started");
+		reqLog.info("Snapshot started");
 
 		const providerType = session.sandboxProvider as SandboxProviderType | undefined;
 		const provider = getSandboxProvider(providerType);
 		const result = await provider.snapshot(sessionId, session.sandboxId);
 		const providerMs = Date.now() - startTime;
-		log.info({ sessionId, providerMs, providerType: provider.type }, "Provider snapshot complete");
+		reqLog.info({ providerMs, providerType: provider.type }, "Provider snapshot complete");
 
 		// Update session with snapshot_id
 		await sessions.updateSession(sessionId, { snapshotId: result.snapshotId });
 		const totalMs = Date.now() - startTime;
-		log.info({ sessionId, totalMs, providerMs, dbMs: totalMs - providerMs }, "Snapshot complete");
+		reqLog.info({ totalMs, providerMs, dbMs: totalMs - providerMs }, "Snapshot complete");
 
 		return { snapshot_id: result.snapshotId };
 	} catch (err) {
-		log.error({ err, sessionId }, "Snapshot error");
+		reqLog.error({ err }, "Snapshot error");
 		throw new ORPCError("INTERNAL_SERVER_ERROR", {
 			message: err instanceof Error ? err.message : "Failed to create snapshot",
 		});

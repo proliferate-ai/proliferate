@@ -81,14 +81,14 @@ export async function loadSessionContext(
 ): Promise<SessionContext> {
 	const startMs = Date.now();
 	const log = logger.child({ sessionId });
-	log.debug({ latency: true }, "store.load_context.start");
+	log.debug("store.load_context.start");
 
 	// Load session without repo relationship (repos now come from prebuild_repos)
 	log.info("Loading session from database...");
 	const sessionRowStartMs = Date.now();
 	const sessionRow = await sessions.findByIdInternal(sessionId);
 	log.debug(
-		{ latency: true, durationMs: Date.now() - sessionRowStartMs, found: Boolean(sessionRow) },
+		{ durationMs: Date.now() - sessionRowStartMs, found: Boolean(sessionRow) },
 		"store.load_context.session_row",
 	);
 
@@ -140,7 +140,6 @@ export async function loadSessionContext(
 	const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(session.prebuild_id);
 	log.debug(
 		{
-			latency: true,
 			durationMs: Date.now() - prebuildReposStartMs,
 			count: prebuildRepoRows?.length ?? 0,
 		},
@@ -204,7 +203,6 @@ export async function loadSessionContext(
 	);
 	log.debug(
 		{
-			latency: true,
 			durationMs: Date.now() - tokenResolutionStartMs,
 			repoCount: repoSpecs.length,
 			tokensPresent: repoSpecs.filter((r) => Boolean(r.token)).length,
@@ -247,7 +245,6 @@ export async function loadSessionContext(
 	);
 	log.debug(
 		{
-			latency: true,
 			durationMs: Date.now() - envVarsStartMs,
 			keyCount: Object.keys(envVars).length,
 		},
@@ -268,7 +265,7 @@ export async function loadSessionContext(
 		const sshStartMs = Date.now();
 		const sshKeys = await cli.getSshPublicKeys(session.created_by);
 		log.debug(
-			{ latency: true, durationMs: Date.now() - sshStartMs, count: sshKeys?.length ?? 0 },
+			{ durationMs: Date.now() - sshStartMs, count: sshKeys?.length ?? 0 },
 			"store.load_context.ssh_keys",
 		);
 
@@ -283,7 +280,7 @@ export async function loadSessionContext(
 
 	log.info("Session context ready");
 	log.debug(
-		{ latency: true, durationMs: Date.now() - startMs, repoCount: repoSpecs.length },
+		{ durationMs: Date.now() - startMs, repoCount: repoSpecs.length },
 		"store.load_context.complete",
 	);
 	return {

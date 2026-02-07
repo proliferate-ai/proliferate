@@ -27,6 +27,7 @@ export async function pauseSessionHandler(
 	input: PauseSessionHandlerInput,
 ): Promise<PauseSessionResult> {
 	const { sessionId, orgId } = input;
+	const reqLog = log.child({ sessionId });
 
 	// Get full session data
 	const session = await sessions.getFullSession(sessionId, orgId);
@@ -61,10 +62,10 @@ export async function pauseSessionHandler(
 		try {
 			await provider.terminate(sessionId, session.sandboxId);
 		} catch (err) {
-			log.error({ err }, "Failed to terminate sandbox");
+			reqLog.error({ err }, "Failed to terminate sandbox");
 		}
 	} catch (err) {
-		log.error({ err }, "Snapshot error");
+		reqLog.error({ err }, "Snapshot error");
 		throw new ORPCError("INTERNAL_SERVER_ERROR", {
 			message: `Failed to snapshot session: ${err instanceof Error ? err.message : "Unknown error"}. Session kept running.`,
 		});
@@ -74,7 +75,7 @@ export async function pauseSessionHandler(
 	try {
 		await billing.finalizeSessionBilling(sessionId);
 	} catch (err) {
-		log.error({ err }, "Failed to finalize billing");
+		reqLog.error({ err }, "Failed to finalize billing");
 	}
 
 	// Update session record
@@ -89,7 +90,7 @@ export async function pauseSessionHandler(
 			pausedAt: new Date().toISOString(),
 		});
 	} catch (updateError) {
-		log.error({ err: updateError }, "Failed to update session");
+		reqLog.error({ err: updateError }, "Failed to update session");
 		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to update session" });
 	}
 

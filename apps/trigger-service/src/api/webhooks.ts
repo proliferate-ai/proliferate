@@ -1,10 +1,10 @@
-import { createLogger } from "@proliferate/logger";
 import { integrations, triggers as triggerService } from "@proliferate/services";
 import { type IRouter, Router } from "express";
+import { logger as rootLogger } from "../lib/logger.js";
 import { processTriggerEvents } from "../lib/trigger-processor.js";
 import { dispatchIntegrationWebhook } from "../lib/webhook-dispatcher.js";
 
-const logger = createLogger({ service: "trigger-service", base: { module: "webhooks" } });
+const logger = rootLogger.child({ module: "webhooks" });
 
 export const webhookRouter: IRouter = Router();
 

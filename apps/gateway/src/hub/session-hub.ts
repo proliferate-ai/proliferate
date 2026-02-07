@@ -80,6 +80,7 @@ export class SessionHub {
 				getOpenCodeSessionId: () => this.runtime.getOpenCodeSessionId(),
 			},
 			getInterceptedToolNames(),
+			this.logger,
 		);
 
 		this.runtime = new SessionRuntime({
@@ -438,10 +439,7 @@ export class SessionHub {
 
 		const ensureStartMs = Date.now();
 		await this.ensureRuntimeReady();
-		this.logger.debug(
-			{ latency: true, durationMs: Date.now() - ensureStartMs },
-			"prompt.ensure_runtime_ready",
-		);
+		this.logger.debug({ durationMs: Date.now() - ensureStartMs }, "prompt.ensure_runtime_ready");
 
 		const openCodeSessionId = this.runtime.getOpenCodeSessionId();
 		const openCodeUrl = this.runtime.getOpenCodeUrl();
@@ -497,7 +495,6 @@ export class SessionHub {
 		this.log("Prompt sent to OpenCode");
 		this.logger.debug(
 			{
-				latency: true,
 				durationMs: Date.now() - sendStartMs,
 				contentLength: content.length,
 				imageCount: options?.images?.length || 0,

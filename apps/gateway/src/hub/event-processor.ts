@@ -5,7 +5,7 @@
  * Handles tool interception and state tracking.
  */
 
-import { type Logger, createLogger } from "@proliferate/logger";
+import type { Logger } from "@proliferate/logger";
 import type {
 	Message,
 	ServerMessage,
@@ -55,9 +55,10 @@ export class EventProcessor {
 	constructor(
 		private readonly callbacks: EventProcessorCallbacks,
 		interceptedToolNames: string[],
+		logger: Logger,
 	) {
 		this.interceptedTools = new Set(interceptedToolNames);
-		this.logger = createLogger({ service: "gateway" }).child({ module: "event-processor" });
+		this.logger = logger.child({ module: "event-processor" });
 	}
 
 	/**

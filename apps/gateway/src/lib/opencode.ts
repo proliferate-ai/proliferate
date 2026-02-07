@@ -57,7 +57,7 @@ export interface OpenCodeMessage {
 export async function createOpenCodeSession(baseUrl: string, title?: string): Promise<string> {
 	const startMs = Date.now();
 	logger.debug(
-		{ latency: true, host: getBaseUrlHost(baseUrl), hasTitle: Boolean(title) },
+		{ host: getBaseUrlHost(baseUrl), hasTitle: Boolean(title) },
 		"opencode.session.create.start",
 	);
 	const response = await fetch(`${baseUrl}/session`, {
@@ -70,7 +70,6 @@ export async function createOpenCodeSession(baseUrl: string, title?: string): Pr
 		const errorText = await response.text();
 		logger.debug(
 			{
-				latency: true,
 				host: getBaseUrlHost(baseUrl),
 				status: response.status,
 				durationMs: Date.now() - startMs,
@@ -83,7 +82,6 @@ export async function createOpenCodeSession(baseUrl: string, title?: string): Pr
 	const data = (await response.json()) as { id: string };
 	logger.debug(
 		{
-			latency: true,
 			host: getBaseUrlHost(baseUrl),
 			status: response.status,
 			durationMs: Date.now() - startMs,
@@ -98,7 +96,6 @@ export async function getOpenCodeSession(baseUrl: string, sessionId: string): Pr
 	const response = await fetch(`${baseUrl}/session/${sessionId}`);
 	logger.debug(
 		{
-			latency: true,
 			host: getBaseUrlHost(baseUrl),
 			ok: response.ok,
 			status: response.status,
@@ -127,7 +124,6 @@ export async function listOpenCodeSessions(baseUrl: string): Promise<OpenCodeSes
 	if (!response.ok) {
 		logger.debug(
 			{
-				latency: true,
 				host: getBaseUrlHost(baseUrl),
 				status: response.status,
 				durationMs: Date.now() - startMs,
@@ -139,7 +135,6 @@ export async function listOpenCodeSessions(baseUrl: string): Promise<OpenCodeSes
 	const sessions = (await response.json()) as OpenCodeSessionInfo[];
 	logger.debug(
 		{
-			latency: true,
 			host: getBaseUrlHost(baseUrl),
 			status: response.status,
 			durationMs: Date.now() - startMs,
@@ -167,7 +162,7 @@ export async function updateToolResult(
 
 	logger.info({ sessionId, messageId, partId }, "Updating tool result");
 	logger.debug(
-		{ latency: true, host: getBaseUrlHost(baseUrl), sessionId, messageId, partId },
+		{ host: getBaseUrlHost(baseUrl), sessionId, messageId, partId },
 		"opencode.tool_result.update.start",
 	);
 
@@ -179,7 +174,6 @@ export async function updateToolResult(
 			const getResponse = await fetch(getUrl);
 			logger.debug(
 				{
-					latency: true,
 					host: getBaseUrlHost(baseUrl),
 					sessionId,
 					messageId,
@@ -212,7 +206,7 @@ export async function updateToolResult(
 			if (!part) {
 				logger.warn({ partId, messageId }, "Part not found in message");
 				logger.debug(
-					{ latency: true, host: getBaseUrlHost(baseUrl), sessionId, messageId, partId },
+					{ host: getBaseUrlHost(baseUrl), sessionId, messageId, partId },
 					"opencode.tool_result.update.part_missing",
 				);
 				return;
@@ -253,7 +247,6 @@ export async function updateToolResult(
 				);
 				logger.debug(
 					{
-						latency: true,
 						host: getBaseUrlHost(baseUrl),
 						sessionId,
 						messageId,
@@ -267,7 +260,6 @@ export async function updateToolResult(
 				logger.info({ partId }, "Tool result updated successfully");
 				logger.debug(
 					{
-						latency: true,
 						host: getBaseUrlHost(baseUrl),
 						sessionId,
 						messageId,
@@ -282,7 +274,6 @@ export async function updateToolResult(
 		} catch (err) {
 			logger.debug(
 				{
-					latency: true,
 					host: getBaseUrlHost(baseUrl),
 					sessionId,
 					messageId,
@@ -313,7 +304,6 @@ export async function fetchOpenCodeMessages(
 	if (!response.ok) {
 		logger.debug(
 			{
-				latency: true,
 				host: getBaseUrlHost(baseUrl),
 				sessionId,
 				status: response.status,
@@ -328,7 +318,6 @@ export async function fetchOpenCodeMessages(
 	logger.info({ sessionId, count: messages.length }, "Messages fetched");
 	logger.debug(
 		{
-			latency: true,
 			host: getBaseUrlHost(baseUrl),
 			sessionId,
 			status: response.status,
@@ -369,7 +358,6 @@ export async function sendPromptAsync(
 	logger.info({ sessionId, partsCount: parts.length }, "Sending prompt");
 	logger.debug(
 		{
-			latency: true,
 			host: getBaseUrlHost(baseUrl),
 			sessionId,
 			contentLength: content.length,
@@ -387,7 +375,6 @@ export async function sendPromptAsync(
 		const errorText = await response.text();
 		logger.debug(
 			{
-				latency: true,
 				host: getBaseUrlHost(baseUrl),
 				sessionId,
 				status: response.status,
@@ -400,7 +387,6 @@ export async function sendPromptAsync(
 	logger.info({ sessionId, status: response.status }, "Prompt sent");
 	logger.debug(
 		{
-			latency: true,
 			host: getBaseUrlHost(baseUrl),
 			sessionId,
 			status: response.status,
@@ -417,7 +403,6 @@ export async function abortOpenCodeSession(baseUrl: string, sessionId: string): 
 		const errorText = await response.text();
 		logger.debug(
 			{
-				latency: true,
 				host: getBaseUrlHost(baseUrl),
 				sessionId,
 				status: response.status,
@@ -429,7 +414,6 @@ export async function abortOpenCodeSession(baseUrl: string, sessionId: string): 
 	}
 	logger.debug(
 		{
-			latency: true,
 			host: getBaseUrlHost(baseUrl),
 			sessionId,
 			status: response.status,

@@ -59,7 +59,7 @@ const MODAL_APP_SUFFIX = env.MODAL_APP_SUFFIX;
 
 const providerLogger = getSharedLogger().child({ module: "modal" });
 const logLatency = (event: string, data?: Record<string, unknown>) => {
-	providerLogger.info({ ...data, latency: true }, event);
+	providerLogger.info(data ?? {}, event);
 };
 
 function normalizeModalEnvValue(value: string | undefined): string | undefined {
@@ -293,13 +293,11 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 	async createSandbox(opts: CreateSandboxOpts): Promise<CreateSandboxResult> {
 		const startTime = Date.now();
-		const shortId = opts.sessionId.slice(0, 8);
-		const log = providerLogger.child({ sessionId: opts.sessionId, shortId });
+		const log = providerLogger.child({ sessionId: opts.sessionId });
 
 		logLatency("provider.create_sandbox.start", {
 			provider: this.type,
 			sessionId: opts.sessionId,
-			shortId,
 			repoCount: opts.repos.length,
 			hasSnapshotId: Boolean(opts.snapshotId),
 			timeoutMs: SANDBOX_TIMEOUT_MS,
@@ -316,7 +314,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.create_sandbox.auth_ok", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 				durationMs: Date.now() - authStartMs,
 			});
 			const { app } = await this.ensureInitialized();
@@ -331,7 +328,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				logLatency("provider.create_sandbox.snapshot_image_loaded", {
 					provider: this.type,
 					sessionId: opts.sessionId,
-					shortId,
 					durationMs: Date.now() - imageStartMs,
 				});
 			} else {
@@ -393,7 +389,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.create_sandbox.sandbox_created", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 				durationMs: Date.now() - createStartMs,
 			});
 
@@ -405,7 +400,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.create_sandbox.tunnels", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 				durationMs: Date.now() - tunnelsStartMs,
 			});
 			const opencodeTunnel = tunnels[SANDBOX_PORTS.opencode];
@@ -426,7 +420,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.create_sandbox.setup_workspace", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 				isSnapshot,
 				durationMs: Date.now() - setupWorkspaceStartMs,
 			});
@@ -444,7 +437,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.create_sandbox.setup_essential", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 				durationMs: Date.now() - essentialStartMs,
 			});
 
@@ -452,14 +444,12 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.create_sandbox.setup_additional.start_async", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 			});
 			this.setupAdditionalDependencies(sandbox, log).catch((err) => {
 				log.warn({ err }, "Additional dependencies setup failed");
 				logLatency("provider.create_sandbox.setup_additional.error", {
 					provider: this.type,
 					sessionId: opts.sessionId,
-					shortId,
 					error: err instanceof Error ? err.message : String(err),
 				});
 			});
@@ -473,7 +463,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 					logLatency("provider.create_sandbox.opencode_ready", {
 						provider: this.type,
 						sessionId: opts.sessionId,
-						shortId,
 						durationMs: Date.now() - readyStartMs,
 						timeoutMs: 30000,
 					});
@@ -481,7 +470,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 					logLatency("provider.create_sandbox.opencode_ready.warn", {
 						provider: this.type,
 						sessionId: opts.sessionId,
-						shortId,
 						timeoutMs: 30000,
 						error: error instanceof Error ? error.message : String(error),
 					});
@@ -492,7 +480,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.create_sandbox.complete", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 				durationMs: Date.now() - startTime,
 				isSnapshot,
 			});
@@ -508,7 +495,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.create_sandbox.error", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 				durationMs: Date.now() - startTime,
 				error: error instanceof Error ? error.message : String(error),
 			});
@@ -518,14 +504,12 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 	async ensureSandbox(opts: CreateSandboxOpts): Promise<EnsureSandboxResult> {
 		const startTime = Date.now();
-		const shortId = opts.sessionId.slice(0, 8);
-		const log = providerLogger.child({ sessionId: opts.sessionId, shortId });
+		const log = providerLogger.child({ sessionId: opts.sessionId });
 
 		log.debug("Ensuring sandbox");
 		logLatency("provider.ensure_sandbox.start", {
 			provider: this.type,
 			sessionId: opts.sessionId,
-			shortId,
 			hasSnapshotId: Boolean(opts.snapshotId),
 		});
 
@@ -536,7 +520,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		logLatency("provider.ensure_sandbox.find_existing", {
 			provider: this.type,
 			sessionId: opts.sessionId,
-			shortId,
 			durationMs: Date.now() - findStartMs,
 			found: Boolean(existingSandboxId),
 		});
@@ -548,7 +531,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.ensure_sandbox.resolve_tunnels", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 				durationMs: Date.now() - resolveStartMs,
 				hasTunnelUrl: Boolean(tunnels.openCodeUrl),
 				hasPreviewUrl: Boolean(tunnels.previewUrl),
@@ -556,7 +538,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.ensure_sandbox.complete", {
 				provider: this.type,
 				sessionId: opts.sessionId,
-				shortId,
 				recovered: true,
 				durationMs: Date.now() - startTime,
 			});
@@ -573,7 +554,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		logLatency("provider.ensure_sandbox.complete", {
 			provider: this.type,
 			sessionId: opts.sessionId,
-			shortId,
 			recovered: false,
 			durationMs: Date.now() - startTime,
 		});
@@ -875,7 +855,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.snapshot.from_id", {
 				provider: this.type,
 				sessionId,
-				shortId: sessionId.slice(0, 8),
 				durationMs: Date.now() - fromIdStartMs,
 			});
 			const snapshotStartMs = Date.now();
@@ -883,7 +862,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.snapshot.filesystem", {
 				provider: this.type,
 				sessionId,
-				shortId: sessionId.slice(0, 8),
 				durationMs: Date.now() - snapshotStartMs,
 			});
 
@@ -891,7 +869,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.snapshot.complete", {
 				provider: this.type,
 				sessionId,
-				shortId: sessionId.slice(0, 8),
 				durationMs: Date.now() - startMs,
 			});
 			return { snapshotId: snapshotImage.imageId };
@@ -899,7 +876,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.snapshot.error", {
 				provider: this.type,
 				sessionId,
-				shortId: sessionId.slice(0, 8),
 				durationMs: Date.now() - startMs,
 				error: error instanceof Error ? error.message : String(error),
 			});
@@ -936,7 +912,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.terminate.from_id", {
 				provider: this.type,
 				sessionId,
-				shortId: sessionId.slice(0, 8),
 				durationMs: Date.now() - fromIdStartMs,
 			});
 			const terminateStartMs = Date.now();
@@ -944,14 +919,12 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.terminate.call", {
 				provider: this.type,
 				sessionId,
-				shortId: sessionId.slice(0, 8),
 				durationMs: Date.now() - terminateStartMs,
 			});
 			providerLogger.info({ sandboxId }, "Sandbox terminated");
 			logLatency("provider.terminate.complete", {
 				provider: this.type,
 				sessionId,
-				shortId: sessionId.slice(0, 8),
 				durationMs: Date.now() - startMs,
 			});
 		} catch (error) {
@@ -962,7 +935,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				logLatency("provider.terminate.idempotent", {
 					provider: this.type,
 					sessionId,
-					shortId: sessionId.slice(0, 8),
 					durationMs: Date.now() - startMs,
 				});
 				return;
@@ -970,7 +942,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			logLatency("provider.terminate.error", {
 				provider: this.type,
 				sessionId,
-				shortId: sessionId.slice(0, 8),
 				durationMs: Date.now() - startMs,
 				error: errorMessage,
 			});

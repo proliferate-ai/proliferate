@@ -1,11 +1,10 @@
 import { env } from "@proliferate/environment/server";
-import { createLogger } from "@proliferate/logger";
 import { setServicesLogger } from "@proliferate/services/logger";
 import { registerDefaultTriggers } from "@proliferate/triggers";
+import { logger } from "./lib/logger.js";
 import { startPollingWorker } from "./polling/worker.js";
 import { createServer } from "./server.js";
 
-const logger = createLogger({ service: "trigger-service" });
 setServicesLogger(logger);
 
 const PORT = process.env.PORT || 3001;

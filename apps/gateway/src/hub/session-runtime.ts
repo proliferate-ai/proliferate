@@ -79,12 +79,13 @@ export class SessionRuntime {
 			onEvent: options.onEvent,
 			onDisconnect: (reason) => this.handleSseDisconnect(reason),
 			env: this.env,
+			logger: this.logger,
 		});
 	}
 
 	private logLatency(event: string, data?: Record<string, unknown>): void {
 		const elapsedMs = this.lifecycleStartTime ? Date.now() - this.lifecycleStartTime : undefined;
-		this.logger.debug({ latency: true, elapsedMs, ...data }, event);
+		this.logger.debug({ elapsedMs, ...data }, event);
 	}
 
 	// ============================================
