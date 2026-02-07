@@ -93,11 +93,11 @@ export function EmptyDashboard() {
 			<div className="flex-1 flex flex-col items-center justify-center w-full max-w-2xl overflow-y-auto">
 				<div className="w-full">
 					{/* Hero heading with snapshot selector */}
-					<div className="text-center space-y-2">
-						<h2 className="text-2xl font-semibold">Let's build</h2>
+					<div className="text-center flex justify-center  flex-col space-y-2">
+						<h2 className="text-2xl font-semibold">Let's get started</h2>
 						<SnapshotSelector
 							mode="select"
-							triggerClassName="border-0 bg-transparent hover:bg-muted/50 text-lg text-muted-foreground font-medium h-auto px-2 py-1"
+							triggerClassName="border-0 mx-auto bg-transparent hover:bg-muted/50 text-lg text-muted-foreground/35 font-medium h-auto px-2 py-1"
 						/>
 					</div>
 				</div>
