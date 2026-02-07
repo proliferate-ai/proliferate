@@ -12,6 +12,7 @@ import { Router } from "express";
 import type { HubManager } from "../../../hub";
 import type { GatewayEnv } from "../../../lib/env";
 import {
+	IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS,
 	clearIdempotencyKey,
 	readIdempotencyResponse,
 	reserveIdempotencyKey,
@@ -88,12 +89,14 @@ interface CreateSessionResponse {
 export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): RouterType {
 	const router: RouterType = Router();
 	const provider = getSandboxProvider();
+	const latencyPrefix = "[P-LATENCY]";
 
 	// Gateway URL for responses
 	const gatewayUrl = env.gatewayUrl;
 
 	router.post("/", async (req, res, next) => {
 		let idempotencyState: { orgId: string; key: string } | null = null;
+		const requestStartMs = Date.now();
 		try {
 			const auth = req.auth;
 			if (!auth) {
@@ -142,18 +145,43 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(400, "organizationId is required");
 			}
 
+			console.log(`${latencyPrefix} sessions.create.start`, {
+				orgId: organizationId.slice(0, 8),
+				sessionType: body.sessionType,
+				clientType: body.clientType,
+				sandboxMode: body.sandboxMode || "deferred",
+				hasIdempotencyKey: Boolean(req.header("Idempotency-Key")),
+				hasSnapshot: Boolean(body.snapshotId),
+				sshEnabled: Boolean(body.sshOptions),
+			});
+
 			const idempotencyKey = req.header("Idempotency-Key");
 			if (idempotencyKey) {
+				const idempotencyStartMs = Date.now();
 				const existing = await readIdempotencyResponse(organizationId, idempotencyKey);
 				if (existing) {
+					console.log(`${latencyPrefix} sessions.create.idempotency.replay`, {
+						orgId: organizationId.slice(0, 8),
+						durationMs: Date.now() - idempotencyStartMs,
+					});
 					res.status(201).json(existing as CreateSessionResponse);
 					return;
 				}
 
 				const reservation = await reserveIdempotencyKey(organizationId, idempotencyKey);
+				console.log(`${latencyPrefix} sessions.create.idempotency.reserve`, {
+					orgId: organizationId.slice(0, 8),
+					result: reservation,
+					durationMs: Date.now() - idempotencyStartMs,
+					inFlightTtlSeconds: IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS,
+				});
 				if (reservation === "exists") {
 					const replay = await readIdempotencyResponse(organizationId, idempotencyKey);
 					if (replay) {
+						console.log(`${latencyPrefix} sessions.create.idempotency.replay`, {
+							orgId: organizationId.slice(0, 8),
+							durationMs: Date.now() - idempotencyStartMs,
+						});
 						res.status(201).json(replay as CreateSessionResponse);
 						return;
 					}
@@ -176,7 +204,15 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 
 			console.log(`[Sessions] Resolving prebuild for org ${organizationId.slice(0, 8)}`);
 
+			const prebuildStartMs = Date.now();
 			const prebuild = await resolvePrebuild(prebuildResolutionOptions);
+			console.log(`${latencyPrefix} sessions.create.prebuild.resolved`, {
+				orgId: organizationId.slice(0, 8),
+				durationMs: Date.now() - prebuildStartMs,
+				isNew: prebuild.isNew,
+				hasSnapshot: Boolean(prebuild.snapshotId),
+				repoCount: prebuild.repoIds.length,
+			});
 
 			console.log("[Sessions] Prebuild resolved:", {
 				prebuildId: prebuild.id.slice(0, 8),
@@ -185,6 +221,7 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 			});
 
 			// Create session
+			const createSessionStartMs = Date.now();
 			const result = await createSession(
 				{
 					env,
@@ -213,6 +250,23 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				},
 				prebuild.isNew,
 			);
+			const createSessionDurationMs = Date.now() - createSessionStartMs;
+			console.log(`${latencyPrefix} sessions.create.session.created`, {
+				orgId: organizationId.slice(0, 8),
+				sessionId: result.sessionId.slice(0, 8),
+				status: result.status,
+				durationMs: createSessionDurationMs,
+				createdSandbox: Boolean(result.sandbox),
+				hasSnapshot: result.hasSnapshot,
+			});
+			if (idempotencyKey && createSessionDurationMs > IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS * 1000) {
+				console.warn(`${latencyPrefix} sessions.create.idempotency.in_flight_ttl_risk`, {
+					orgId: organizationId.slice(0, 8),
+					sessionId: result.sessionId.slice(0, 8),
+					durationMs: createSessionDurationMs,
+					inFlightTtlSeconds: IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS,
+				});
+			}
 
 			console.log("[Sessions] Session created:", {
 				sessionId: result.sessionId.slice(0, 8),
@@ -239,11 +293,21 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				await storeIdempotencyResponse(idempotencyState.orgId, idempotencyState.key, response);
 			}
 
+			console.log(`${latencyPrefix} sessions.create.complete`, {
+				orgId: organizationId.slice(0, 8),
+				sessionId: result.sessionId.slice(0, 8),
+				durationMs: Date.now() - requestStartMs,
+			});
 			res.status(201).json(response);
 		} catch (err) {
 			if (idempotencyState) {
 				await clearIdempotencyKey(idempotencyState.orgId, idempotencyState.key);
 			}
+			console.error(`${latencyPrefix} sessions.create.error`, {
+				orgId: idempotencyState?.orgId?.slice(0, 8),
+				durationMs: Date.now() - requestStartMs,
+				error: err instanceof Error ? err.message : "Unknown error",
+			});
 			next(err);
 		}
 	});

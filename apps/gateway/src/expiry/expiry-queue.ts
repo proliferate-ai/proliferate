@@ -37,6 +37,7 @@ export async function scheduleSessionExpiry(
 	if (!expiresAtMs) {
 		return;
 	}
+	const startMs = Date.now();
 	const q = getQueue(env);
 
 	const delay = Math.max(0, expiresAtMs - Date.now() - MigrationConfig.GRACE_MS);
@@ -57,6 +58,15 @@ export async function scheduleSessionExpiry(
 			removeOnFail: true,
 		},
 	);
+
+	console.log("[P-LATENCY] expiry.schedule", {
+		sessionId,
+		shortId: sessionId.slice(0, 8),
+		expiresAt: new Date(expiresAtMs).toISOString(),
+		graceMs: MigrationConfig.GRACE_MS,
+		delayMs: delay,
+		durationMs: Date.now() - startMs,
+	});
 }
 
 export function startSessionExpiryWorker(env: GatewayEnv, hubManager: HubManager): void {
@@ -66,9 +76,21 @@ export function startSessionExpiryWorker(env: GatewayEnv, hubManager: HubManager
 		worker = new Worker<SessionExpiryJob>(
 			QUEUE_NAME,
 			async (job) => {
+				const startMs = Date.now();
 				const sessionId = job.data.sessionId;
+				console.log("[P-LATENCY] expiry.job.start", {
+					sessionId,
+					shortId: sessionId.slice(0, 8),
+					jobId: job.id,
+				});
 				const hub = await hubManager.getOrCreate(sessionId);
 				await hub.runExpiryMigration();
+				console.log("[P-LATENCY] expiry.job.complete", {
+					sessionId,
+					shortId: sessionId.slice(0, 8),
+					jobId: job.id,
+					durationMs: Date.now() - startMs,
+				});
 			},
 			{ connection },
 		);

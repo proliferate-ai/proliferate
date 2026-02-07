@@ -37,12 +37,22 @@ function resolveDefaultGitToken(repoSpecs?: RepoSpec[]): string | null {
 }
 
 export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<SandboxEnvResult> {
+	const startMs = Date.now();
 	const envVars: Record<string, string> = {};
 	const requireProxy = normalizeBoolean(
 		input.requireProxy ?? process.env.LLM_PROXY_REQUIRED,
 		false,
 	);
 	const proxyUrl = process.env.LLM_PROXY_URL;
+
+	console.log("[P-LATENCY] sandbox_env.build.start", {
+		sessionId: input.sessionId,
+		shortId: input.sessionId.slice(0, 8),
+		repoCount: input.repoIds.length,
+		requireProxy,
+		hasProxyUrl: Boolean(proxyUrl),
+		hasDirectApiKey: Boolean(input.directApiKey ?? process.env.ANTHROPIC_API_KEY),
+	});
 
 	if (!proxyUrl) {
 		if (requireProxy) {
@@ -51,16 +61,35 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 		envVars.ANTHROPIC_API_KEY = input.directApiKey ?? process.env.ANTHROPIC_API_KEY ?? "";
 	} else {
 		try {
+			const keyStartMs = Date.now();
 			const apiKey = await generateSessionAPIKey(input.sessionId, input.orgId);
+			console.log("[P-LATENCY] sandbox_env.llm_proxy.generate_session_key", {
+				sessionId: input.sessionId,
+				shortId: input.sessionId.slice(0, 8),
+				durationMs: Date.now() - keyStartMs,
+			});
 			envVars.LLM_PROXY_API_KEY = apiKey;
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
+			console.error("[P-LATENCY] sandbox_env.llm_proxy.generate_session_key.error", {
+				sessionId: input.sessionId,
+				shortId: input.sessionId.slice(0, 8),
+				durationMs: Date.now() - startMs,
+				error: message,
+			});
 			throw new Error(`LLM proxy enabled but failed to generate session key: ${message}`);
 		}
 	}
 
 	// Decrypt and add secrets (both org-scoped and repo-scoped)
+	const secretsStartMs = Date.now();
 	const secretRows = await secrets.getSecretsForSession(input.orgId, input.repoIds);
+	console.log("[P-LATENCY] sandbox_env.secrets.fetch", {
+		sessionId: input.sessionId,
+		shortId: input.sessionId.slice(0, 8),
+		durationMs: Date.now() - secretsStartMs,
+		count: secretRows?.length ?? 0,
+	});
 	if (secretRows && secretRows.length > 0) {
 		const encryptionKey = getEncryptionKey();
 		for (const secret of secretRows) {
@@ -79,5 +108,12 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 		envVars.GH_TOKEN = defaultGitToken;
 	}
 
+	console.log("[P-LATENCY] sandbox_env.build.complete", {
+		sessionId: input.sessionId,
+		shortId: input.sessionId.slice(0, 8),
+		durationMs: Date.now() - startMs,
+		envKeyCount: Object.keys(envVars).length,
+		usesProxy: Boolean(proxyUrl),
+	});
 	return { envVars, usesProxy: Boolean(proxyUrl) };
 }

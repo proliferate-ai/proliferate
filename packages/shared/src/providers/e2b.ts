@@ -53,6 +53,11 @@ import type {
 const E2B_TEMPLATE = env.E2B_TEMPLATE;
 const E2B_DOMAIN = env.E2B_DOMAIN;
 
+const latencyPrefix = "[P-LATENCY]";
+const logLatency = (event: string, data?: Record<string, unknown>) => {
+	console.log(`${latencyPrefix} ${event}`, data || {});
+};
+
 const getE2BApiOpts = (): SandboxApiOpts => ({
 	domain: E2B_DOMAIN,
 });
@@ -78,10 +83,20 @@ export class E2BProvider implements SandboxProvider {
 
 	async createSandbox(opts: CreateSandboxOpts): Promise<CreateSandboxResult> {
 		const startTime = Date.now();
+		const shortId = opts.sessionId.slice(0, 8);
 		const log = (msg: string) => {
 			const elapsed = Date.now() - startTime;
 			console.log(`[E2B:${elapsed}ms] ${msg}`);
 		};
+
+		logLatency("provider.create_sandbox.start", {
+			provider: this.type,
+			sessionId: opts.sessionId,
+			shortId,
+			repoCount: opts.repos.length,
+			hasSnapshotId: Boolean(opts.snapshotId),
+			timeoutMs: SANDBOX_TIMEOUT_MS,
+		});
 
 		log(`Creating session ${opts.sessionId}`);
 		log(`Repos: ${opts.repos.length} repo(s)`);
@@ -145,7 +160,14 @@ export class E2BProvider implements SandboxProvider {
 			try {
 				// Resume from paused sandbox - connecting auto-resumes
 				log(`Resuming from snapshot: ${opts.snapshotId}`);
+				const connectStartMs = Date.now();
 				sandbox = await Sandbox.connect(opts.snapshotId!, getE2BConnectOpts());
+				logLatency("provider.create_sandbox.resume.connect", {
+					provider: this.type,
+					sessionId: opts.sessionId,
+					shortId,
+					durationMs: Date.now() - connectStartMs,
+				});
 				log(`Sandbox resumed: ${sandbox.sandboxId}`);
 
 				// Re-inject environment variables (they don't persist across pause/resume)
@@ -160,15 +182,37 @@ export class E2BProvider implements SandboxProvider {
 					} = envsForProfile;
 					envsForProfile = rest;
 				}
+				const envWriteStartMs = Date.now();
 				await sandbox.files.write(SANDBOX_PATHS.envProfileFile, JSON.stringify(envsForProfile));
+				logLatency("provider.create_sandbox.resume.env_write", {
+					provider: this.type,
+					sessionId: opts.sessionId,
+					shortId,
+					keyCount: Object.keys(envsForProfile).length,
+					durationMs: Date.now() - envWriteStartMs,
+				});
 				// Use jq to safely export env vars from JSON (handles special chars properly)
+				const envExportStartMs = Date.now();
 				await sandbox.commands.run(
 					`for key in $(jq -r 'keys[]' ${SANDBOX_PATHS.envProfileFile}); do export "$key=$(jq -r --arg k "$key" '.[$k]' ${SANDBOX_PATHS.envProfileFile})"; done`,
 					{ timeoutMs: 10000 },
 				);
+				logLatency("provider.create_sandbox.resume.env_export", {
+					provider: this.type,
+					sessionId: opts.sessionId,
+					shortId,
+					timeoutMs: 10000,
+					durationMs: Date.now() - envExportStartMs,
+				});
 			} catch (err) {
 				const message = err instanceof Error ? err.message : String(err);
 				log(`Snapshot resume failed (${message}). Falling back to fresh sandbox.`);
+				logLatency("provider.create_sandbox.resume.fallback", {
+					provider: this.type,
+					sessionId: opts.sessionId,
+					shortId,
+					error: message,
+				});
 				isSnapshot = false;
 			}
 		}
@@ -182,7 +226,14 @@ export class E2BProvider implements SandboxProvider {
 			if (!E2B_TEMPLATE) {
 				throw new Error("E2B_TEMPLATE is required to create a sandbox");
 			}
+			const createStartMs = Date.now();
 			sandbox = await Sandbox.create(E2B_TEMPLATE, sandboxOpts);
+			logLatency("provider.create_sandbox.fresh.create", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+				durationMs: Date.now() - createStartMs,
+			});
 			log(`Sandbox created: ${sandbox.sandboxId}`);
 		}
 
@@ -191,9 +242,18 @@ export class E2BProvider implements SandboxProvider {
 		}
 
 		// Setup the sandbox (clone repos or restore from snapshot)
+		const setupWorkspaceStartMs = Date.now();
 		const repoDir = await this.setupSandbox(sandbox, opts, isSnapshot, log);
+		logLatency("provider.create_sandbox.setup_workspace", {
+			provider: this.type,
+			sessionId: opts.sessionId,
+			shortId,
+			isSnapshot,
+			durationMs: Date.now() - setupWorkspaceStartMs,
+		});
 
 		// Setup essential dependencies (blocking - must complete before API returns)
+		const setupEssentialStartMs = Date.now();
 		await this.setupEssentialDependencies(
 			sandbox,
 			repoDir,
@@ -202,19 +262,45 @@ export class E2BProvider implements SandboxProvider {
 			llmProxyBaseUrl,
 			llmProxyApiKey,
 		);
+		logLatency("provider.create_sandbox.setup_essential", {
+			provider: this.type,
+			sessionId: opts.sessionId,
+			shortId,
+			durationMs: Date.now() - setupEssentialStartMs,
+		});
 
 		// Setup additional dependencies (async - fire and forget)
+		logLatency("provider.create_sandbox.setup_additional.start_async", {
+			provider: this.type,
+			sessionId: opts.sessionId,
+			shortId,
+		});
 		this.setupAdditionalDependencies(sandbox, log).catch((err) => {
 			log(`Warning: Additional dependencies setup failed: ${err}`);
+			logLatency("provider.create_sandbox.setup_additional.error", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+				error: err instanceof Error ? err.message : String(err),
+			});
 		});
 
 		// Get tunnel URLs
 		log("Getting tunnel URLs...");
+		const tunnelsStartMs = Date.now();
 		const tunnelHost = sandbox.getHost(4096);
 		const previewHost = sandbox.getHost(20000);
 
 		const tunnelUrl = tunnelHost ? `https://${tunnelHost}` : "";
 		const previewUrl = previewHost ? `https://${previewHost}` : "";
+		logLatency("provider.create_sandbox.tunnels", {
+			provider: this.type,
+			sessionId: opts.sessionId,
+			shortId,
+			durationMs: Date.now() - tunnelsStartMs,
+			hasTunnelUrl: Boolean(tunnelUrl),
+			hasPreviewUrl: Boolean(previewUrl),
+		});
 
 		log(`Tunnel URLs: opencode=${tunnelUrl}, preview=${previewUrl}`);
 
@@ -222,9 +308,24 @@ export class E2BProvider implements SandboxProvider {
 		if (tunnelUrl) {
 			log("Waiting for OpenCode readiness...");
 			try {
+				const readyStartMs = Date.now();
 				await waitForOpenCodeReady(tunnelUrl, 30000, log);
+				logLatency("provider.create_sandbox.opencode_ready", {
+					provider: this.type,
+					sessionId: opts.sessionId,
+					shortId,
+					durationMs: Date.now() - readyStartMs,
+					timeoutMs: 30000,
+				});
 			} catch (error) {
 				// Log but don't fail - client can retry connection
+				logLatency("provider.create_sandbox.opencode_ready.warn", {
+					provider: this.type,
+					sessionId: opts.sessionId,
+					shortId,
+					timeoutMs: 30000,
+					error: error instanceof Error ? error.message : String(error),
+				});
 				log(
 					`WARNING: ${error instanceof Error ? error.message : "OpenCode readiness check failed"}`,
 				);
@@ -232,6 +333,13 @@ export class E2BProvider implements SandboxProvider {
 		}
 
 		log(`Returning sandboxId=${sandbox.sandboxId}`);
+		logLatency("provider.create_sandbox.complete", {
+			provider: this.type,
+			sessionId: opts.sessionId,
+			shortId,
+			durationMs: Date.now() - startTime,
+			isSnapshot,
+		});
 		return {
 			sandboxId: sandbox.sandboxId,
 			tunnelUrl,
@@ -242,14 +350,47 @@ export class E2BProvider implements SandboxProvider {
 
 	async ensureSandbox(opts: CreateSandboxOpts): Promise<EnsureSandboxResult> {
 		console.log(`[E2B] Ensuring sandbox for session ${opts.sessionId}`);
+		const startMs = Date.now();
+		const shortId = opts.sessionId.slice(0, 8);
+		logLatency("provider.ensure_sandbox.start", {
+			provider: this.type,
+			sessionId: opts.sessionId,
+			shortId,
+			hasCurrentSandboxId: Boolean(opts.currentSandboxId),
+			hasSnapshotId: Boolean(opts.snapshotId),
+		});
 
 		// For E2B, we use currentSandboxId from DB as the identifier
 		// (E2B auto-generates IDs, unlike Modal where we set sessionId as the name)
+		const findStartMs = Date.now();
 		const existingSandboxId = await this.findSandbox(opts.currentSandboxId);
+		logLatency("provider.ensure_sandbox.find_existing", {
+			provider: this.type,
+			sessionId: opts.sessionId,
+			shortId,
+			durationMs: Date.now() - findStartMs,
+			found: Boolean(existingSandboxId),
+		});
 
 		if (existingSandboxId) {
 			console.log(`[E2B] Found existing sandbox: ${existingSandboxId}`);
+			const resolveStartMs = Date.now();
 			const tunnels = await this.resolveTunnels(existingSandboxId);
+			logLatency("provider.ensure_sandbox.resolve_tunnels", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+				durationMs: Date.now() - resolveStartMs,
+				hasTunnelUrl: Boolean(tunnels.openCodeUrl),
+				hasPreviewUrl: Boolean(tunnels.previewUrl),
+			});
+			logLatency("provider.ensure_sandbox.complete", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				shortId,
+				recovered: true,
+				durationMs: Date.now() - startMs,
+			});
 			return {
 				sandboxId: existingSandboxId,
 				tunnelUrl: tunnels.openCodeUrl,
@@ -260,6 +401,13 @@ export class E2BProvider implements SandboxProvider {
 
 		console.log("[E2B] No existing sandbox found, creating new...");
 		const result = await this.createSandbox(opts);
+		logLatency("provider.ensure_sandbox.complete", {
+			provider: this.type,
+			sessionId: opts.sessionId,
+			shortId,
+			recovered: false,
+			durationMs: Date.now() - startMs,
+		});
 		return { ...result, recovered: false };
 	}
 
@@ -531,17 +679,25 @@ export class E2BProvider implements SandboxProvider {
 
 	async pause(sessionId: string, sandboxId: string): Promise<PauseResult> {
 		console.log(`[E2B] Pausing sandbox for session ${sessionId}`);
+		const startMs = Date.now();
 
 		// The sandboxId becomes the snapshot ID for E2B (can resume with connect)
 		console.log("[E2B] Pausing sandbox (creating snapshot)...");
 		await Sandbox.betaPause(sandboxId, getE2BApiOpts());
 
 		console.log(`[E2B] Snapshot created: ${sandboxId}`);
+		logLatency("provider.pause.complete", {
+			provider: this.type,
+			sessionId,
+			shortId: sessionId.slice(0, 8),
+			durationMs: Date.now() - startMs,
+		});
 		return { snapshotId: sandboxId };
 	}
 
 	async terminate(sessionId: string, sandboxId?: string): Promise<void> {
 		console.log(`[E2B] Terminating session ${sessionId}`);
+		const startMs = Date.now();
 
 		if (!sandboxId) {
 			throw new SandboxProviderError({
@@ -553,8 +709,15 @@ export class E2BProvider implements SandboxProvider {
 		}
 
 		try {
+			const killStartMs = Date.now();
 			await Sandbox.kill(sandboxId, getE2BApiOpts());
 			console.log(`[E2B] Sandbox ${sandboxId} terminated`);
+			logLatency("provider.terminate.complete", {
+				provider: this.type,
+				sessionId,
+				shortId: sessionId.slice(0, 8),
+				durationMs: Date.now() - killStartMs,
+			});
 		} catch (error) {
 			// Check if it's a "not found" error - sandbox already terminated is idempotent
 			const errorMessage = error instanceof Error ? error.message : String(error);
@@ -564,6 +727,12 @@ export class E2BProvider implements SandboxProvider {
 				errorMessage.includes("does not exist")
 			) {
 				console.log(`[E2B] Sandbox ${sandboxId} already terminated (idempotent)`);
+				logLatency("provider.terminate.idempotent", {
+					provider: this.type,
+					sessionId,
+					shortId: sessionId.slice(0, 8),
+					durationMs: Date.now() - startMs,
+				});
 				return;
 			}
 
@@ -573,13 +742,26 @@ export class E2BProvider implements SandboxProvider {
 
 	async writeEnvFile(sandboxId: string, envVars: Record<string, string>): Promise<void> {
 		console.log(`[E2B] Writing env vars to sandbox ${sandboxId.slice(0, 16)}...`);
+		const startMs = Date.now();
 
+		const connectStartMs = Date.now();
 		const sandbox = await Sandbox.connect(sandboxId, getE2BConnectOpts());
+		logLatency("provider.write_env_file.connect", {
+			provider: this.type,
+			sandboxId,
+			durationMs: Date.now() - connectStartMs,
+		});
 
 		// Merge with existing env vars if any
 		let existing: Record<string, string> = {};
 		try {
+			const readStartMs = Date.now();
 			const existingJson = await sandbox.files.read(ENV_FILE);
+			logLatency("provider.write_env_file.read_existing", {
+				provider: this.type,
+				sandboxId,
+				durationMs: Date.now() - readStartMs,
+			});
 			if (existingJson.trim()) {
 				existing = JSON.parse(existingJson);
 			}
@@ -588,9 +770,22 @@ export class E2BProvider implements SandboxProvider {
 		}
 
 		const merged = { ...existing, ...envVars };
+		const writeStartMs = Date.now();
 		await sandbox.files.write(ENV_FILE, JSON.stringify(merged));
+		logLatency("provider.write_env_file.write", {
+			provider: this.type,
+			sandboxId,
+			keyCount: Object.keys(envVars).length,
+			durationMs: Date.now() - writeStartMs,
+		});
 
 		console.log(`[E2B] Wrote ${Object.keys(envVars).length} env vars to sandbox`);
+		logLatency("provider.write_env_file.complete", {
+			provider: this.type,
+			sandboxId,
+			keyCount: Object.keys(envVars).length,
+			durationMs: Date.now() - startMs,
+		});
 	}
 
 	async health(): Promise<boolean> {
@@ -615,14 +810,35 @@ export class E2BProvider implements SandboxProvider {
 	}
 
 	async resolveTunnels(sandboxId: string): Promise<{ openCodeUrl: string; previewUrl: string }> {
+		const startMs = Date.now();
+		const connectStartMs = Date.now();
 		const sandbox = await Sandbox.connect(sandboxId, getE2BConnectOpts());
+		logLatency("provider.resolve_tunnels.connect", {
+			provider: this.type,
+			sandboxId,
+			durationMs: Date.now() - connectStartMs,
+		});
+		const hostStartMs = Date.now();
 		const tunnelHost = sandbox.getHost(4096);
 		const previewHost = sandbox.getHost(20000);
+		logLatency("provider.resolve_tunnels.get_host", {
+			provider: this.type,
+			sandboxId,
+			durationMs: Date.now() - hostStartMs,
+		});
 
-		return {
+		const result = {
 			openCodeUrl: tunnelHost ? `https://${tunnelHost}` : "",
 			previewUrl: previewHost ? `https://${previewHost}` : "",
 		};
+		logLatency("provider.resolve_tunnels.complete", {
+			provider: this.type,
+			sandboxId,
+			durationMs: Date.now() - startMs,
+			hasTunnelUrl: Boolean(result.openCodeUrl),
+			hasPreviewUrl: Boolean(result.previewUrl),
+		});
+		return result;
 	}
 
 	/**
@@ -631,12 +847,19 @@ export class E2BProvider implements SandboxProvider {
 	 */
 	async readFiles(sandboxId: string, folderPath: string): Promise<FileContent[]> {
 		console.log(`[E2B] Reading files from ${folderPath} in sandbox ${sandboxId.slice(0, 16)}...`);
+		const startMs = Date.now();
 
 		const sandbox = await Sandbox.connect(sandboxId, getE2BConnectOpts());
 		const exists = await sandbox.files.exists(folderPath);
 
 		if (!exists) {
 			console.log(`[E2B] Folder ${folderPath} does not exist`);
+			logLatency("provider.read_files.missing", {
+				provider: this.type,
+				sandboxId,
+				folderPath,
+				durationMs: Date.now() - startMs,
+			});
 			return [];
 		}
 
@@ -676,6 +899,13 @@ export class E2BProvider implements SandboxProvider {
 		}
 
 		console.log(`[E2B] Read ${files.length} file(s) from ${folderPath}`);
+		logLatency("provider.read_files.complete", {
+			provider: this.type,
+			sandboxId,
+			folderPath,
+			fileCount: files.length,
+			durationMs: Date.now() - startMs,
+		});
 		return files;
 	}
 

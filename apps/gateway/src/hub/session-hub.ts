@@ -411,7 +411,13 @@ export class SessionHub {
 			imageCount: options?.images?.length,
 		});
 
+		const ensureStartMs = Date.now();
 		await this.ensureRuntimeReady();
+		console.log("[P-LATENCY] prompt.ensure_runtime_ready", {
+			sessionId: this.sessionId,
+			shortId: this.shortId,
+			durationMs: Date.now() - ensureStartMs,
+		});
 
 		const openCodeSessionId = this.runtime.getOpenCodeSessionId();
 		const openCodeUrl = this.runtime.getOpenCodeUrl();
@@ -462,8 +468,16 @@ export class SessionHub {
 		this.eventProcessor.resetForNewPrompt();
 
 		this.log("Sending prompt to OpenCode...");
+		const sendStartMs = Date.now();
 		await sendPromptAsync(openCodeUrl, openCodeSessionId, content, options?.images);
 		this.log("Prompt sent to OpenCode");
+		console.log("[P-LATENCY] prompt.send_prompt_async", {
+			sessionId: this.sessionId,
+			shortId: this.shortId,
+			durationMs: Date.now() - sendStartMs,
+			contentLength: content.length,
+			imageCount: options?.images?.length || 0,
+		});
 	}
 
 	private async handleCancel(): Promise<void> {

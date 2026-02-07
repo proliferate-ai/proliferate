@@ -76,6 +76,8 @@ export async function loadSessionContext(
 	sessionId: string,
 ): Promise<SessionContext> {
 	const shortId = sessionId.slice(0, 8);
+	const startMs = Date.now();
+	console.log("[P-LATENCY] store.load_context.start", { sessionId, shortId });
 	const log = (msg: string, data?: Record<string, unknown>) => {
 		const dataStr = data ? ` ${JSON.stringify(data)}` : "";
 		console.log(`[Store:${shortId}] ${msg}${dataStr}`);
@@ -83,7 +85,14 @@ export async function loadSessionContext(
 
 	// Load session without repo relationship (repos now come from prebuild_repos)
 	log("Loading session from database...", { fullSessionId: sessionId, idLength: sessionId.length });
+	const sessionRowStartMs = Date.now();
 	const sessionRow = await sessions.findByIdInternal(sessionId);
+	console.log("[P-LATENCY] store.load_context.session_row", {
+		sessionId,
+		shortId,
+		durationMs: Date.now() - sessionRowStartMs,
+		found: Boolean(sessionRow),
+	});
 
 	if (!sessionRow) {
 		log("Session not found", { fullId: sessionId });
@@ -126,7 +135,14 @@ export async function loadSessionContext(
 
 	// Load repos via prebuild_repos junction table
 	log("Loading repos from prebuild_repos...", { prebuildId: session.prebuild_id });
+	const prebuildReposStartMs = Date.now();
 	const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(session.prebuild_id);
+	console.log("[P-LATENCY] store.load_context.prebuild_repos", {
+		sessionId,
+		shortId,
+		durationMs: Date.now() - prebuildReposStartMs,
+		count: prebuildRepoRows?.length ?? 0,
+	});
 
 	if (!prebuildRepoRows || prebuildRepoRows.length === 0) {
 		log("Prebuild has no repos");
@@ -159,6 +175,7 @@ export async function loadSessionContext(
 
 	// Resolve GitHub token for each repo (may differ per installation)
 	log("Resolving GitHub tokens for repos...");
+	const tokenResolutionStartMs = Date.now();
 	const repoSpecs: RepoSpec[] = await Promise.all(
 		typedPrebuildRepos.map(async (pr) => {
 			const token = await resolveGitHubToken(
@@ -179,6 +196,13 @@ export async function loadSessionContext(
 			};
 		}),
 	);
+	console.log("[P-LATENCY] store.load_context.github_tokens", {
+		sessionId,
+		shortId,
+		durationMs: Date.now() - tokenResolutionStartMs,
+		repoCount: repoSpecs.length,
+		tokensPresent: repoSpecs.filter((r) => Boolean(r.token)).length,
+	});
 
 	const systemPrompt =
 		session.system_prompt ||
@@ -201,6 +225,7 @@ export async function loadSessionContext(
 	// Load env vars for all repos in the prebuild
 	const repoIds = typedPrebuildRepos.map((pr) => pr.repo.id);
 	log("Loading environment variables...", { repoIds });
+	const envVarsStartMs = Date.now();
 	const envVars = await loadEnvironmentVariables(
 		env,
 		session.id,
@@ -208,6 +233,12 @@ export async function loadSessionContext(
 		repoIds,
 		repoSpecs,
 	);
+	console.log("[P-LATENCY] store.load_context.env_vars", {
+		sessionId,
+		shortId,
+		durationMs: Date.now() - envVarsStartMs,
+		keyCount: Object.keys(envVars).length,
+	});
 	log("Environment variables loaded", {
 		count: Object.keys(envVars).length,
 		keys: Object.keys(envVars).filter((k) => k !== "ANTHROPIC_API_KEY"),
@@ -217,7 +248,14 @@ export async function loadSessionContext(
 	let sshPublicKey: string | undefined;
 	if (session.session_type === "cli" && session.created_by) {
 		log("Loading SSH public key for CLI session...");
+		const sshStartMs = Date.now();
 		const sshKeys = await cli.getSshPublicKeys(session.created_by);
+		console.log("[P-LATENCY] store.load_context.ssh_keys", {
+			sessionId,
+			shortId,
+			durationMs: Date.now() - sshStartMs,
+			count: sshKeys?.length ?? 0,
+		});
 
 		const publicKey = sshKeys?.[0];
 		if (publicKey) {
@@ -229,6 +267,12 @@ export async function loadSessionContext(
 	}
 
 	log("Session context ready");
+	console.log("[P-LATENCY] store.load_context.complete", {
+		sessionId,
+		shortId,
+		durationMs: Date.now() - startMs,
+		repoCount: repoSpecs.length,
+	});
 	return {
 		session,
 		repos: repoSpecs,

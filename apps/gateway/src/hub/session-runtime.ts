@@ -78,6 +78,16 @@ export class SessionRuntime {
 		});
 	}
 
+	private logLatency(event: string, data?: Record<string, unknown>): void {
+		const elapsedMs = this.lifecycleStartTime ? Date.now() - this.lifecycleStartTime : undefined;
+		console.log(`[P-LATENCY] ${event}`, {
+			sessionId: this.sessionId,
+			shortId: this.shortId,
+			...(elapsedMs !== undefined ? { elapsedMs } : {}),
+			...(data || {}),
+		});
+	}
+
 	// ============================================
 	// Logging
 	// ============================================
@@ -152,6 +162,13 @@ export class SessionRuntime {
 
 		this.lifecycleStartTime = Date.now();
 		this.log("Starting runtime lifecycle");
+		this.logLatency("runtime.ensure_ready.start", {
+			skipMigrationLock: Boolean(options?.skipMigrationLock),
+			hasSandboxId: Boolean(this.context.session.sandbox_id),
+			hasSnapshotId: Boolean(this.context.session.snapshot_id),
+			hasOpenCodeUrl: Boolean(this.openCodeUrl),
+			hasOpenCodeSessionId: Boolean(this.openCodeSessionId),
+		});
 
 		this.ensureReadyPromise = this.doEnsureRuntimeReady(options);
 		try {
@@ -195,12 +212,24 @@ export class SessionRuntime {
 	private async doEnsureRuntimeReady(options?: EnsureRuntimeOptions): Promise<void> {
 		try {
 			if (!options?.skipMigrationLock) {
+				const lockStartMs = Date.now();
 				await waitForMigrationLockRelease(this.sessionId);
+				this.logLatency("runtime.ensure_ready.migration_lock_wait", {
+					durationMs: Date.now() - lockStartMs,
+				});
 			}
 
 			// Reload context fresh from database
+			const contextStartMs = Date.now();
 			this.log("Loading session context...");
 			this.context = await loadSessionContext(this.env, this.sessionId);
+			this.logLatency("runtime.ensure_ready.load_context", {
+				durationMs: Date.now() - contextStartMs,
+				prebuildId: this.context.session.prebuild_id,
+				repoCount: this.context.repos.length,
+				hasSandbox: Boolean(this.context.session.sandbox_id),
+				hasSnapshot: Boolean(this.context.session.snapshot_id),
+			});
 			this.log("Session context loaded", {
 				prebuildId: this.context.session.prebuild_id,
 				repoCount: this.context.repos.length,
@@ -216,6 +245,7 @@ export class SessionRuntime {
 			const provider = getSandboxProvider(providerType);
 			this.log("Using sandbox provider", { provider: provider.type });
 
+			const ensureSandboxStartMs = Date.now();
 			const result = await provider.ensureSandbox({
 				sessionId: this.sessionId,
 				repos: this.context.repos,
@@ -226,6 +256,15 @@ export class SessionRuntime {
 				agentConfig: this.context.agentConfig,
 				currentSandboxId: this.context.session.sandbox_id || undefined,
 				sshPublicKey: this.context.sshPublicKey,
+			});
+			this.logLatency("runtime.ensure_ready.provider.ensure_sandbox", {
+				provider: provider.type,
+				durationMs: Date.now() - ensureSandboxStartMs,
+				recovered: result.recovered,
+				sandboxId: result.sandboxId,
+				hasTunnelUrl: Boolean(result.tunnelUrl),
+				hasPreviewUrl: Boolean(result.previewUrl),
+				hasExpiresAt: Boolean(result.expiresAt),
 			});
 
 			this.openCodeUrl = result.tunnelUrl;
@@ -248,6 +287,7 @@ export class SessionRuntime {
 			});
 
 			// Update session with sandbox info
+			const updateStartMs = Date.now();
 			await sessions.update(this.sessionId, {
 				sandboxId: result.sandboxId,
 				status: "running",
@@ -256,6 +296,9 @@ export class SessionRuntime {
 				...(result.expiresAt && { sandboxExpiresAt: result.expiresAt }),
 				...(provider.supportsAutoPause &&
 					!this.context.session.snapshot_id && { snapshotId: result.sandboxId }),
+			});
+			this.logLatency("runtime.ensure_ready.db.update_session", {
+				durationMs: Date.now() - updateStartMs,
 			});
 
 			// Update in-memory context
@@ -284,8 +327,13 @@ export class SessionRuntime {
 			this.previewUrl = this.previewUrl || this.context.session.preview_tunnel_url || null;
 
 			// Schedule expiry snapshot/migration
+			const expiryScheduleStartMs = Date.now();
 			scheduleSessionExpiry(this.env, this.sessionId, this.sandboxExpiresAt).catch((err) => {
 				this.logError("Failed to schedule expiry job", err);
+			});
+			this.logLatency("runtime.ensure_ready.expiry.schedule", {
+				durationMs: Date.now() - expiryScheduleStartMs,
+				expiresAt: this.sandboxExpiresAt ? new Date(this.sandboxExpiresAt).toISOString() : null,
 			});
 
 			if (this.previewUrl && this.onBroadcast) {
@@ -298,17 +346,30 @@ export class SessionRuntime {
 			}
 
 			// Ensure OpenCode session exists
+			const ensureOpenCodeStartMs = Date.now();
 			await this.ensureOpenCodeSession();
+			this.logLatency("runtime.ensure_ready.opencode_session.ensure", {
+				durationMs: Date.now() - ensureOpenCodeStartMs,
+				hasOpenCodeSessionId: Boolean(this.openCodeSessionId),
+			});
 
 			// Connect to SSE
+			const sseStartMs = Date.now();
 			this.log("Connecting to OpenCode SSE...", { url: this.openCodeUrl });
 			await this.sseClient.connect(this.openCodeUrl);
 			this.log("SSE connected");
+			this.logLatency("runtime.ensure_ready.sse.connect", {
+				durationMs: Date.now() - sseStartMs,
+			});
 
 			this.onStatus("running");
 			this.log("Runtime lifecycle complete - status: running");
+			this.logLatency("runtime.ensure_ready.complete");
 		} catch (err) {
 			this.onStatus("error", err instanceof Error ? err.message : "Unknown error");
+			this.logLatency("runtime.ensure_ready.error", {
+				error: err instanceof Error ? err.message : "Unknown error",
+			});
 			throw err;
 		}
 	}
@@ -326,8 +387,14 @@ export class SessionRuntime {
 		const storedId = this.context.session.coding_agent_session_id;
 
 		if (storedId) {
+			const listStartMs = Date.now();
 			this.log("Verifying stored OpenCode session...", { storedId });
 			const sessions = await listOpenCodeSessions(this.openCodeUrl);
+			this.logLatency("runtime.opencode_session.list", {
+				durationMs: Date.now() - listStartMs,
+				count: sessions.length,
+				hadStoredId: true,
+			});
 			const exists = sessions.some((s) => s.id === storedId);
 
 			if (exists) {
@@ -340,9 +407,13 @@ export class SessionRuntime {
 		}
 
 		// Create new OpenCode session
+		const createStartMs = Date.now();
 		this.log("Creating new OpenCode session...");
 		const sessionId = await createOpenCodeSession(this.openCodeUrl);
 		this.log("OpenCode session created", { sessionId });
+		this.logLatency("runtime.opencode_session.create", {
+			durationMs: Date.now() - createStartMs,
+		});
 
 		this.openCodeSessionId = sessionId;
 		this.openCodeSessionUrl = this.openCodeUrl;
@@ -376,6 +447,7 @@ export class SessionRuntime {
 
 	private handleSseDisconnect(reason: string): void {
 		this.log("SSE disconnected", { reason });
+		this.logLatency("runtime.sse.disconnect", { reason });
 		this.openCodeUrl = null;
 		this.openCodeSessionId = null;
 		this.openCodeSessionUrl = null;
