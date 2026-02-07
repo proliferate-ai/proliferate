@@ -33,6 +33,9 @@ export function toRepo(row: RepoWithPrebuildsRow): Repo {
 		isPrivate: false, // Field not in Drizzle schema, default to false for API compatibility
 		prebuildStatus: readyPrebuild ? "ready" : "pending",
 		prebuildId: readyPrebuild?.prebuild?.id || null,
+		repoSnapshotStatus: (row.repoSnapshotStatus as "building" | "ready" | "failed") ?? null,
+		repoSnapshotBuiltAt: toIsoString(row.repoSnapshotBuiltAt),
+		repoSnapshotError: row.repoSnapshotError ?? null,
 	};
 }
 

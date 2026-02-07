@@ -70,6 +70,7 @@ export async function getReposWithPrebuildStatus(orgId: string): Promise<RepoWit
 			githubUrl: true,
 			defaultBranch: true,
 			createdAt: true,
+			repoSnapshotStatus: true,
 		},
 		with: {
 			prebuildRepos: {

@@ -40,7 +40,7 @@ export function RepoList({ repos }: RepoListProps) {
 								</div>
 								<p className="text-sm text-muted-foreground">{repo.default_branch}</p>
 							</div>
-							<div>
+							<div className="flex items-center gap-2">
 								{repo.prebuild_status === "ready" ? (
 									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
 										Ready
@@ -48,6 +48,21 @@ export function RepoList({ repos }: RepoListProps) {
 								) : (
 									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
 										Pending setup
+									</span>
+								)}
+								{repo.repo_snapshot_status === "building" && (
+									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+										Caching...
+									</span>
+								)}
+								{repo.repo_snapshot_status === "ready" && (
+									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+										Cached
+									</span>
+								)}
+								{repo.repo_snapshot_status === "failed" && (
+									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+										Cache failed
 									</span>
 								)}
 							</div>
