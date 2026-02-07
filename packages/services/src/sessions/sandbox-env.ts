@@ -24,6 +24,12 @@ export interface SandboxEnvResult {
 	usesProxy: boolean;
 }
 
+const normalizeBoolean = (value: unknown, fallback = false) => {
+	if (value === true || value === "true" || value === "1") return true;
+	if (value === false || value === "false" || value === "0") return false;
+	return fallback;
+};
+
 function resolveDefaultGitToken(repoSpecs?: RepoSpec[]): string | null {
 	if (!repoSpecs || repoSpecs.length === 0) return null;
 	const primaryToken = repoSpecs.find((spec) => Boolean(spec.token))?.token;
@@ -32,12 +38,10 @@ function resolveDefaultGitToken(repoSpecs?: RepoSpec[]): string | null {
 
 export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<SandboxEnvResult> {
 	const envVars: Record<string, string> = {};
-	const requireProxy =
-		input.requireProxy === true || input.requireProxy === ("true" as unknown as boolean)
-			? true
-			: input.requireProxy === false || input.requireProxy === ("false" as unknown as boolean)
-				? false
-				: process.env.LLM_PROXY_REQUIRED === "true";
+	const requireProxy = normalizeBoolean(
+		input.requireProxy ?? process.env.LLM_PROXY_REQUIRED,
+		false,
+	);
 	const proxyUrl = process.env.LLM_PROXY_URL;
 
 	if (!proxyUrl) {
