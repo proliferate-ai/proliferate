@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef } from "react";
 export default function NewSessionPage() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
-	const { pendingPrompt } = useDashboardStore();
+	const { pendingPrompt, selectedModel } = useDashboardStore();
 
 	const repoId = searchParams.get("repoId");
 	const sessionType = (searchParams.get("type") as "setup" | "coding") || "coding";
@@ -37,9 +37,10 @@ export default function NewSessionPage() {
 		const sessionResult = await createSession.mutateAsync({
 			prebuildId: prebuildResult.prebuildId,
 			sessionType,
+			modelId: selectedModel,
 		});
 		return sessionResult;
-	}, [repoId, sessionType, createPrebuild, createSession]);
+	}, [repoId, sessionType, selectedModel, createPrebuild, createSession]);
 
 	// Trigger creation once
 	useEffect(() => {

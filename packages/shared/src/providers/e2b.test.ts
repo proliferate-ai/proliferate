@@ -195,7 +195,7 @@ describe("E2B Provider - Helper Functions", () => {
 
 			await expect(promise).resolves.toBeUndefined();
 			expect(fetch).toHaveBeenCalledWith("http://localhost:4096/session", expect.anything());
-			expect(log).toHaveBeenCalledWith(expect.stringContaining("OpenCode ready after 1 attempts"));
+			expect(log).toHaveBeenCalledWith(expect.stringContaining("Agent ready after 1 attempts"));
 		});
 
 		it("should retry on failure and succeed on second attempt", async () => {
@@ -214,7 +214,7 @@ describe("E2B Provider - Helper Functions", () => {
 
 			await expect(promise).resolves.toBeUndefined();
 			expect(fetch).toHaveBeenCalledTimes(2);
-			expect(log).toHaveBeenCalledWith(expect.stringContaining("OpenCode ready after 2 attempts"));
+			expect(log).toHaveBeenCalledWith(expect.stringContaining("Agent ready after 2 attempts"));
 		});
 
 		it("should throw error after timeout", async () => {
@@ -225,7 +225,7 @@ describe("E2B Provider - Helper Functions", () => {
 
 			// Use a very short timeout to make the test fast
 			await expect(waitForOpenCodeReady("http://localhost:4096", 500, log)).rejects.toThrow(
-				"OpenCode not ready after 500ms",
+				"Agent not ready after 500ms",
 			);
 		});
 
@@ -280,7 +280,7 @@ describe("E2B Provider - Helper Functions", () => {
 			await vi.advanceTimersByTimeAsync(0);
 			await promise;
 
-			expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("OpenCode ready"));
+			expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Agent ready"));
 		});
 	});
 });

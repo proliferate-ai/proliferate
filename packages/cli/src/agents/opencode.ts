@@ -44,9 +44,7 @@ export function getOpenCodeBinaryPath(): string {
 		return sameDirPath;
 	}
 
-	throw new Error(
-		`OpenCode binary not found. Tried:\n  - ${devPath}\n  - ${installedPath}\n  - ${sameDirPath}\nPlease reinstall proliferate or ensure opencode binary is available.`,
-	);
+	throw new Error("Coding agent binary not found. Please reinstall proliferate.");
 }
 
 /**
@@ -68,7 +66,7 @@ export function launchOpenCode(attachUrl: string): Promise<number> {
 		});
 
 		opencode.on("error", (err) => {
-			console.error(chalk.red(`Failed to start opencode: ${err.message}`));
+			console.error(chalk.red(`Failed to start coding agent: ${err.message}`));
 			reject(err);
 		});
 

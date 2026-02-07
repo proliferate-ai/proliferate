@@ -95,20 +95,22 @@ export async function waitForOpenCodeReady(
 		try {
 			const response = await fetch(`${tunnelUrl}/session`, {
 				signal: AbortSignal.timeout(5000),
-			});
-			if (response.ok) {
-				log(`[P-LATENCY] OpenCode ready after ${attempt} attempts (${Date.now() - startTime}ms)`);
-				return;
-			}
-		} catch {
-			// Not ready yet, retry
+				});
+				if (response.ok) {
+					log(
+						`[P-LATENCY] Agent ready after ${attempt} attempts (${Date.now() - startTime}ms)`,
+					);
+					return;
+				}
+			} catch {
+				// Not ready yet, retry
 		}
 		// Exponential backoff: 200ms, 300ms, 450ms, ... up to 2s max
 		const delay = Math.min(200 * 1.5 ** (attempt - 1), 2000);
 		await new Promise((r) => setTimeout(r, delay));
 	}
 
-	throw new Error(`[P-LATENCY] OpenCode not ready after ${maxWaitMs}ms (${attempt} attempts)`);
+	throw new Error(`[P-LATENCY] Agent not ready after ${maxWaitMs}ms (${attempt} attempts)`);
 }
 
 /**

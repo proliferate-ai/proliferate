@@ -9,7 +9,15 @@
  */
 
 import { automations, integrations, prebuilds, sessions } from "@proliferate/services";
-import type { CloneInstructions, ModelId, RepoSpec, SandboxProvider } from "@proliferate/shared";
+import {
+	type CloneInstructions,
+	type ModelId,
+	type RepoSpec,
+	type SandboxProvider,
+	getDefaultAgentConfig,
+	isValidModelId,
+	parseModelId,
+} from "@proliferate/shared";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
 
@@ -534,6 +542,15 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	const primaryRepo = typedPrebuildRepos[0].repo!;
 	const systemPrompt = `You are an AI coding assistant. Help the user with their coding tasks in the ${primaryRepo.githubRepoName} repository.`;
 
+	const defaultAgentConfig = getDefaultAgentConfig();
+	const rawModelId = agentConfig?.modelId;
+	const modelId: ModelId =
+		rawModelId && isValidModelId(rawModelId)
+			? rawModelId
+			: rawModelId
+				? parseModelId(rawModelId)
+				: defaultAgentConfig.modelId;
+
 	// Create sandbox with all options
 	const providerStartMs = Date.now();
 	const result = await provider.createSandbox({
@@ -546,7 +563,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		agentConfig: agentConfig
 			? {
 					agentType: "opencode" as const,
-					modelId: (agentConfig.modelId || "claude-opus-4.6") as ModelId,
+					modelId,
 				}
 			: undefined,
 		sshPublicKey,

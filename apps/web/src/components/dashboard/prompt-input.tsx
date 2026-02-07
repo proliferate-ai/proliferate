@@ -1,12 +1,11 @@
 "use client";
 
-import { AgentModelSelector } from "@/components/automations/agent-model-selector";
+import { ModelSelector } from "@/components/automations/model-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
-import type { ModelId } from "@proliferate/shared";
 import { ArrowUp, Mic, Paperclip } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
@@ -136,10 +135,9 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 				<div className="flex items-center justify-between px-3 py-2">
 					{/* Left side - Context selectors */}
 					<div className="flex items-center gap-1">
-						<AgentModelSelector
-							agentType="opencode"
+						<ModelSelector
 							modelId={selectedModel}
-							onChange={(_agentType, modelId) => setSelectedModel(modelId as ModelId)}
+							onChange={setSelectedModel}
 							disabled={isLoading}
 							variant="ghost"
 						/>

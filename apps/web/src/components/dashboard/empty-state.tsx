@@ -18,6 +18,7 @@ export function EmptyDashboard() {
 	const {
 		selectedRepoId,
 		selectedSnapshotId,
+		selectedModel,
 		setActiveSession,
 		setPendingPrompt,
 		dismissedOnboardingCards,
@@ -71,6 +72,7 @@ export function EmptyDashboard() {
 			// Create session with prebuild (selectedSnapshotId is the prebuild ID)
 			const result = await createSession.mutateAsync({
 				prebuildId: selectedSnapshotId,
+				modelId: selectedModel,
 			});
 
 			// Set active session and navigate to session page

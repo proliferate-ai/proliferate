@@ -54,6 +54,7 @@ export async function main(): Promise<void> {
 			sessionType: "cli",
 			clientType: "cli",
 			sandboxMode: "immediate",
+			agentConfig: config.modelId ? { modelId: config.modelId } : undefined,
 			sshOptions: {
 				publicKeys: [sshKeyInfo.publicKey],
 			},
@@ -115,7 +116,6 @@ export async function main(): Promise<void> {
 	// 7. Launch opencode
 	console.log();
 	console.log(chalk.dim(`Session: ${session.sessionId.slice(0, 8)}`));
-	console.log(chalk.dim(`OpenCode URL: ${attachUrl}`));
 	console.log();
 
 	const exitCode = await launchOpenCode(attachUrl);
