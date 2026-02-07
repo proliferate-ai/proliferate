@@ -142,10 +142,7 @@ interface ComposerActionsLeftProps {
 	onModelChange: (modelId: ModelId) => void;
 }
 
-const ComposerActionsLeft: FC<ComposerActionsLeftProps> = ({
-	selectedModel,
-	onModelChange,
-}) => (
+const ComposerActionsLeft: FC<ComposerActionsLeftProps> = ({ selectedModel, onModelChange }) => (
 	<div className="flex items-center gap-1">
 		<AgentModelSelector
 			agentType="opencode"
@@ -401,10 +398,7 @@ const Composer: FC = () => {
 				/>
 
 				<div className="flex items-center justify-between px-2 py-1.5">
-					<ComposerActionsLeft
-						selectedModel={selectedModel}
-						onModelChange={setSelectedModel}
-					/>
+					<ComposerActionsLeft selectedModel={selectedModel} onModelChange={setSelectedModel} />
 					<ComposerActionsRight
 						hasAttachments={attachments.length > 0}
 						hasContent={!!hasContent}
