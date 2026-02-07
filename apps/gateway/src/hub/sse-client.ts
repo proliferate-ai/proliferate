@@ -27,6 +27,10 @@ export class SseClient {
 
 	constructor(private readonly options: SseClientOptions) {}
 
+	private logLatency(event: string, data?: Record<string, unknown>): void {
+		console.log(`[P-LATENCY] ${event}`, data || {});
+	}
+
 	/**
 	 * Connect to the SSE stream at the given URL.
 	 * Throws on failure - caller (SessionHub) handles reconnection.
@@ -81,6 +85,7 @@ export class SseClient {
 		const sseUrl = `${url}/event`;
 		this.currentUrl = sseUrl;
 		this.connectStartTime = Date.now();
+		this.logLatency("sse.connect.start", { url: sseUrl });
 
 		const response = await fetch(sseUrl, {
 			headers: { Accept: "text/event-stream" },
@@ -88,12 +93,22 @@ export class SseClient {
 		});
 
 		if (!response.ok || !response.body) {
+			this.logLatency("sse.connect.http_error", {
+				url: sseUrl,
+				status: response.status,
+				durationMs: Date.now() - this.connectStartTime,
+			});
 			throw new Error(`SSE connection failed: ${response.status}`);
 		}
 
 		this.connected = true;
 		this.lastEventTime = Date.now();
 		this.startHeartbeatMonitor();
+		this.logLatency("sse.connect.connected", {
+			url: sseUrl,
+			status: response.status,
+			durationMs: Date.now() - this.connectStartTime,
+		});
 
 		// Start reading stream in background
 		this.readStream(response.body, controller);
@@ -139,12 +154,18 @@ export class SseClient {
 					return;
 				}
 				const errorInfo = this.buildErrorInfo(err, controller);
+				if (err instanceof Error && err.message === "SSE_READ_TIMEOUT") {
+					console.error("[SseClient] Read timeout", errorInfo);
+					this.logLatency("sse.read_timeout", errorInfo);
+				}
 				if (isStreamTerminationError(err)) {
 					console.warn("[SseClient] Stream closed", errorInfo);
+					this.logLatency("sse.stream_closed", errorInfo);
 					this.handleDisconnect("stream_closed");
 					return;
 				}
 				console.error("[SseClient] Stream error", errorInfo, err);
+				this.logLatency("sse.stream_error", errorInfo);
 				this.handleDisconnect("stream_error");
 				return;
 			} finally {
@@ -155,11 +176,15 @@ export class SseClient {
 				return;
 			}
 			console.warn("[SseClient] Stream ended", this.buildErrorInfo(null, controller));
+			this.logLatency("sse.stream_ended", this.buildErrorInfo(null, controller));
 			this.handleDisconnect("stream_closed");
 		};
 
 		readLoop().catch((err) => {
 			console.error("[SseClient] Read loop error", err);
+			this.logLatency("sse.read_loop_error", {
+				error: err instanceof Error ? err.message : String(err),
+			});
 		});
 	}
 
@@ -197,6 +222,11 @@ export class SseClient {
 			const timeSinceLastEvent = Date.now() - this.lastEventTime;
 			if (this.connected && timeSinceLastEvent > this.options.env.heartbeatTimeoutMs) {
 				console.error(`[SseClient] Heartbeat timeout after ${timeSinceLastEvent}ms`);
+				this.logLatency("sse.heartbeat_timeout", {
+					url: this.currentUrl,
+					timeSinceLastEventMs: timeSinceLastEvent,
+					heartbeatTimeoutMs: this.options.env.heartbeatTimeoutMs,
+				});
 				this.handleDisconnect("heartbeat_timeout");
 			}
 		}, checkInterval);
@@ -208,6 +238,12 @@ export class SseClient {
 			clearInterval(this.heartbeatInterval);
 			this.heartbeatInterval = null;
 		}
+		this.logLatency("sse.disconnect", {
+			reason,
+			url: this.currentUrl,
+			timeSinceConnectMs: this.connectStartTime ? Date.now() - this.connectStartTime : null,
+			timeSinceLastEventMs: this.lastEventTime ? Date.now() - this.lastEventTime : null,
+		});
 		this.options.onDisconnect(reason);
 	}
 

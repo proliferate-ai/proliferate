@@ -11,6 +11,9 @@ const IN_FLIGHT = "__in_flight__";
 const DEFAULT_TTL_SECONDS = 60 * 60 * 24; // 24h
 const IN_FLIGHT_TTL_SECONDS = 60; // 1m
 
+export const IDEMPOTENCY_DEFAULT_TTL_SECONDS = DEFAULT_TTL_SECONDS;
+export const IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS = IN_FLIGHT_TTL_SECONDS;
+
 function buildKey(orgId: string, key: string): string {
 	return `${IDEMPOTENCY_PREFIX}:${orgId}:${key}`;
 }
