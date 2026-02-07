@@ -119,7 +119,7 @@ ngrok:
 	@echo "Starting all ngrok tunnels (llm-proxy, web, gateway)..."
 	@echo "Config: $(NGROK_CONFIG)"
 	@echo ""
-	ngrok start --all --config $(NGROK_CONFIG)
+	ngrok start --all --config "$(HOME)/Library/Application Support/ngrok/ngrok.yml" --config $(NGROK_CONFIG)
 
 ngrok-llm:
 	ngrok http 4000
