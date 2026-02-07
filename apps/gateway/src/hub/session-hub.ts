@@ -194,13 +194,15 @@ export class SessionHub {
 					});
 				}
 
-				this.handlePrompt(message.content, effectiveUserId, { images, source: "web" }).catch((err) => {
-					console.error("Failed to handle prompt", err);
-					this.broadcast({
-						type: "error",
-						payload: { message: "Failed to send prompt" },
-					});
-				});
+				this.handlePrompt(message.content, effectiveUserId, { images, source: "web" }).catch(
+					(err) => {
+						console.error("Failed to handle prompt", err);
+						this.broadcast({
+							type: "error",
+							payload: { message: "Failed to send prompt" },
+						});
+					},
+				);
 				return;
 			}
 			case "cancel":
