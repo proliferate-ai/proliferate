@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Text } from "@/components/ui/text";
+import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAutomation, useUpdateAutomation } from "@/hooks/use-automations";
 import { orpc } from "@/lib/orpc";
@@ -220,16 +221,16 @@ function TextAreaWithFooter({
 	return (
 		<div className="space-y-2">
 			<div className="space-y-0.5">
-				<label className="text-sm text-foreground font-medium">{label}</label>
+				<Label className="text-sm text-foreground">{label}</Label>
 				{description && <p className="text-sm text-muted-foreground">{description}</p>}
 			</div>
 			<div className="relative border rounded-2xl overflow-hidden focus-within:border-foreground focus-within:ring-[0.5px] focus-within:ring-foreground transition-all">
-				<textarea
+				<Textarea
 					value={value}
 					onChange={(e) => onChange(e.target.value)}
 					placeholder={placeholder}
 					className={cn(
-						"w-full text-sm focus:outline-none border-none resize-none px-5 py-4 bg-transparent",
+						"w-full text-sm focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 border-none resize-none px-5 py-4 bg-transparent rounded-none min-h-0",
 						"placeholder:text-muted-foreground/60",
 					)}
 					style={{ minHeight }}
@@ -583,9 +584,7 @@ export default function AutomationDetailPage({
 					<div className="lg:w-80 min-w-0 flex flex-col gap-5 shrink-0">
 						{/* Triggers */}
 						<div>
-							<label className="text-sm text-muted-foreground font-medium mb-2 block">
-								Triggers
-							</label>
+							<Label className="text-sm text-muted-foreground mb-2 block">Triggers</Label>
 							<div className="flex flex-col">
 								{triggers.map((trigger, index) => (
 									<TriggerChip
@@ -608,7 +607,7 @@ export default function AutomationDetailPage({
 
 						{/* Agent */}
 						<div>
-							<label className="text-sm text-muted-foreground font-medium mb-2 block">Model</label>
+							<Label className="text-sm text-muted-foreground mb-2 block">Model</Label>
 							<div className="flex flex-col">
 								<StackedListItem isFirst isLast>
 									<ModelSelector
@@ -628,9 +627,7 @@ export default function AutomationDetailPage({
 
 						{/* Actions/Tools */}
 						<div>
-							<label className="text-sm text-muted-foreground font-medium mb-2 block">
-								Actions
-							</label>
+							<Label className="text-sm text-muted-foreground mb-2 block">Actions</Label>
 							<div className="flex flex-col">
 								<ToolListItem
 									icon={SlackIcon}

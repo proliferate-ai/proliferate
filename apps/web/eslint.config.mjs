@@ -25,7 +25,7 @@ export default [
 	// React-specific rules (TSX only, exclude UI primitives)
 	{
 		files: ["src/**/*.tsx"],
-		ignores: ["src/components/ui/**"],
+		ignores: ["src/components/**"],
 		languageOptions: {
 			parser: tsParser,
 			parserOptions: {

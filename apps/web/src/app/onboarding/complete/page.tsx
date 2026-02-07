@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { orpc } from "@/lib/orpc";
 import { useMutation } from "@tanstack/react-query";
@@ -50,12 +51,9 @@ export default function OnboardingCompletePage() {
 			<div className="min-h-screen flex items-center justify-center">
 				<div className="text-center">
 					<p className="text-destructive mb-4">{error}</p>
-					<button
-						onClick={() => router.push("/onboarding")}
-						className="text-sm text-primary hover:underline"
-					>
+					<Button variant="link" onClick={() => router.push("/onboarding")} className="text-sm">
 						Return to onboarding
-					</button>
+					</Button>
 				</div>
 			</div>
 		);
