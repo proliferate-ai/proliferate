@@ -41,8 +41,8 @@ export function createLogger(options: CreateLoggerOptions): Logger {
 			options: {
 				colorize: true,
 				translateTime: "SYS:yyyy-mm-dd HH:MM:ss.l",
-				ignore: "pid,hostname,service",
-				singleLine: true,
+				ignore: "pid,hostname",
+				hideObject: true,
 			},
 		};
 	}
@@ -64,12 +64,11 @@ export function createHttpLogger({ logger, ...options }: CreateHttpLoggerOptions
 		customErrorMessage(req, res, err) {
 			return `${req.method} ${req.url} ${res.statusCode} ${err.message}`;
 		},
-		// Suppress req/res/responseTime from output — the message has everything
+		// Suppress req/res objects — the message has method/url/status/time
 		serializers: {
 			req: () => undefined as never,
 			res: () => undefined as never,
 		},
-		customProps: () => ({ responseTime: undefined }),
 		...options,
 	});
 }
