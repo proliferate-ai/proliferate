@@ -136,23 +136,45 @@ const AttachmentPreview: FC<AttachmentPreviewProps> = ({ preview, index, onRemov
 	</div>
 );
 
-// Composer action buttons (attach, mic, model selector)
+// Context selectors (model selector) - left side of toolbar
 interface ComposerActionsLeftProps {
-	onAttachClick: () => void;
-	onToggleRecording: () => void;
-	listening: boolean;
-	browserSupportsSpeechRecognition: boolean;
 	selectedModel: ModelId;
 	onModelChange: (modelId: ModelId) => void;
 }
 
 const ComposerActionsLeft: FC<ComposerActionsLeftProps> = ({
+	selectedModel,
+	onModelChange,
+}) => (
+	<div className="flex items-center gap-1">
+		<AgentModelSelector
+			agentType="opencode"
+			modelId={selectedModel}
+			onChange={(_agentType, modelId) => onModelChange(modelId as ModelId)}
+			variant="ghost"
+		/>
+	</div>
+);
+
+// Action buttons (attach, mic, send/cancel) - right side of toolbar
+interface ComposerActionsRightProps {
+	hasAttachments: boolean;
+	hasContent: boolean;
+	onSendWithAttachments: () => void;
+	onAttachClick: () => void;
+	onToggleRecording: () => void;
+	listening: boolean;
+	browserSupportsSpeechRecognition: boolean;
+}
+
+const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
+	hasAttachments,
+	hasContent,
+	onSendWithAttachments,
 	onAttachClick,
 	onToggleRecording,
 	listening,
 	browserSupportsSpeechRecognition,
-	selectedModel,
-	onModelChange,
 }) => (
 	<div className="flex items-center gap-1">
 		<Button
@@ -177,33 +199,11 @@ const ComposerActionsLeft: FC<ComposerActionsLeftProps> = ({
 		>
 			<Mic className={cn("h-4 w-4", listening && "animate-pulse")} />
 		</Button>
-		<AgentModelSelector
-			agentType="opencode"
-			modelId={selectedModel}
-			onChange={(_agentType, modelId) => onModelChange(modelId as ModelId)}
-			variant="ghost"
-		/>
-	</div>
-);
-
-// Send/cancel buttons
-interface ComposerActionsRightProps {
-	hasAttachments: boolean;
-	hasContent: boolean;
-	onSendWithAttachments: () => void;
-}
-
-const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
-	hasAttachments,
-	hasContent,
-	onSendWithAttachments,
-}) => (
-	<div className="flex items-center gap-1">
 		<ThreadPrimitive.If running={false}>
 			{hasAttachments ? (
 				<Button
 					size="icon"
-					className="h-7 w-7 rounded-lg"
+					className="h-8 w-8 rounded-full"
 					onClick={onSendWithAttachments}
 					disabled={!hasContent}
 				>
@@ -211,7 +211,7 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 				</Button>
 			) : (
 				<ComposerPrimitive.Send asChild>
-					<Button size="icon" className="h-7 w-7 rounded-lg">
+					<Button size="icon" className="h-8 w-8 rounded-full">
 						<ArrowUp className="h-4 w-4" />
 					</Button>
 				</ComposerPrimitive.Send>
@@ -219,7 +219,7 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 		</ThreadPrimitive.If>
 		<ThreadPrimitive.If running>
 			<ComposerPrimitive.Cancel asChild>
-				<Button size="icon" variant="destructive" className="h-7 w-7 rounded-lg">
+				<Button size="icon" variant="destructive" className="h-8 w-8 rounded-full">
 					<Square className="h-3 w-3 fill-current" />
 				</Button>
 			</ComposerPrimitive.Cancel>
@@ -402,10 +402,6 @@ const Composer: FC = () => {
 
 				<div className="flex items-center justify-between px-2 py-1.5">
 					<ComposerActionsLeft
-						onAttachClick={handleAttachClick}
-						onToggleRecording={toggleRecording}
-						listening={listening}
-						browserSupportsSpeechRecognition={browserSupportsSpeechRecognition}
 						selectedModel={selectedModel}
 						onModelChange={setSelectedModel}
 					/>
@@ -413,6 +409,10 @@ const Composer: FC = () => {
 						hasAttachments={attachments.length > 0}
 						hasContent={!!hasContent}
 						onSendWithAttachments={handleSendWithAttachments}
+						onAttachClick={handleAttachClick}
+						onToggleRecording={toggleRecording}
+						listening={listening}
+						browserSupportsSpeechRecognition={browserSupportsSpeechRecognition}
 					/>
 				</div>
 			</div>

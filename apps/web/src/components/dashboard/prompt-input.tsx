@@ -3,7 +3,6 @@
 import { AgentModelSelector } from "@/components/automations/agent-model-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LoadingDots } from "@/components/ui/loading-dots";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
@@ -11,7 +10,6 @@ import type { ModelId } from "@proliferate/shared";
 import { ArrowUp, Mic, Paperclip } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
-import { SnapshotSelector } from "./snapshot-selector";
 
 interface PromptInputProps {
 	onSubmit: (prompt: string) => void;
@@ -96,11 +94,6 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 					"has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:border-transparent",
 				)}
 			>
-				{/* Top row - Context selectors */}
-				<div className="px-2 md:px-3 py-2 border-b border-border/50">
-					<SnapshotSelector mode="select" />
-				</div>
-
 				{/* Attachment previews */}
 				{attachments.length > 0 && (
 					<div className="flex gap-2 p-3 pb-0">
@@ -129,7 +122,7 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 					value={prompt}
 					onChange={(e) => setPrompt(e.target.value)}
 					placeholder="Ask or build anything"
-					className="w-full min-h-[100px] p-4 pb-2 bg-transparent resize-none focus:outline-none text-[15px] leading-relaxed border-0 focus-visible:ring-0"
+					className="w-full min-h-[120px] p-4 pb-2 bg-transparent resize-none focus:outline-none text-[15px] leading-relaxed border-0 focus-visible:ring-0"
 					disabled={disabled || isLoading}
 					onKeyDown={(e) => {
 						if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -141,7 +134,18 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 
 				{/* Bottom toolbar */}
 				<div className="flex items-center justify-between px-3 py-2">
-					{/* Left side - Attachment & voice */}
+					{/* Left side - Context selectors */}
+					<div className="flex items-center gap-1">
+						<AgentModelSelector
+							agentType="opencode"
+							modelId={selectedModel}
+							onChange={(_agentType, modelId) => setSelectedModel(modelId as ModelId)}
+							disabled={isLoading}
+							variant="ghost"
+						/>
+					</div>
+
+					{/* Right side - Actions & Submit */}
 					<div className="flex items-center gap-1">
 						<Button
 							type="button"
@@ -168,26 +172,12 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 						>
 							<Mic className={cn("h-4 w-4", listening && "animate-pulse")} />
 						</Button>
-						<AgentModelSelector
-							agentType="opencode"
-							modelId={selectedModel}
-							onChange={(_agentType, modelId) => setSelectedModel(modelId as ModelId)}
-							disabled={isLoading}
-							variant="ghost"
-						/>
-					</div>
-
-					{/* Right side - Submit */}
-					<div className="flex items-center gap-2">
-						<span className="text-xs text-muted-foreground hidden sm:block">
-							{isLoading ? <LoadingDots size="sm" /> : "⌘ Enter"}
-						</span>
 						<Button
 							type="submit"
 							size="icon"
 							disabled={!canSubmit}
 							className={cn(
-								"h-8 w-8 rounded-lg transition-all",
+								"h-8 w-8 rounded-full transition-all",
 								canSubmit ? "bg-primary hover:bg-primary/90" : "bg-muted text-muted-foreground",
 							)}
 						>
