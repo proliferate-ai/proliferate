@@ -12,7 +12,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
-import { useDeleteSession, useRenameSession, useSnapshotSession } from "@/hooks/use-sessions";
+import {
+	useDeleteSession,
+	usePrefetchSession,
+	useRenameSession,
+	useSnapshotSession,
+} from "@/hooks/use-sessions";
 import { cn, formatRelativeTime, getRepoShortName } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Session } from "@proliferate/shared/contracts";
@@ -38,6 +43,7 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 	const renameSession = useRenameSession();
 	const deleteSession = useDeleteSession();
 	const snapshotSession = useSnapshotSession();
+	const prefetchSession = usePrefetchSession();
 
 	const handleSnapshot = async () => {
 		const toastId = toast.loading("Preparing snapshot...");
@@ -133,6 +139,7 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 						: "text-muted-foreground hover:text-foreground hover:bg-accent",
 				)}
 				onClick={handleClick}
+				onMouseEnter={() => prefetchSession(session.id)}
 			>
 				<div className="flex-1 min-w-0">
 					{isEditing ? (
