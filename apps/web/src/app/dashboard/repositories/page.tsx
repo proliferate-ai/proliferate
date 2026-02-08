@@ -19,10 +19,8 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { IconAction } from "@/components/ui/icon-action";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import { SelectableItem } from "@/components/ui/selectable-item";
 import {
 	useAvailableRepos,
 	useCreateRepo,
@@ -37,7 +35,6 @@ import { useDashboardStore } from "@/stores/dashboard";
 import type { GitHubRepo, Repo } from "@/types";
 import { useQuery } from "@tanstack/react-query";
 import {
-	Camera,
 	ChevronDown,
 	ChevronRight,
 	Globe,
@@ -411,32 +408,29 @@ function RepoDetails({
 				{snapshotsLoading ? (
 					<LoadingDots size="sm" className="text-muted-foreground" />
 				) : snapshots && snapshots.length > 0 ? (
-					<div className="space-y-1">
+					<div className="space-y-0.5">
 						{snapshots.map((snapshot) => {
 							const setupSessionId = snapshot.setupSessions?.find(
 								(s) => s.sessionType === "setup",
 							)?.id;
 							return (
-								<div
-									key={snapshot.id}
-									className="group flex items-center gap-1 rounded-md hover:bg-muted/50 transition-colors"
-								>
-									<SelectableItem
+								<div key={snapshot.id} className="group flex items-center gap-2 py-0.5">
+									<button
+										type="button"
+										className="text-xs truncate hover:underline text-left"
 										onClick={() => {
 											if (setupSessionId) {
 												openHistoricalSession(setupSessionId, getSnapshotDisplayName(snapshot));
 											}
 										}}
-										icon={<Camera className="h-3.5 w-3.5" />}
-										className="flex-1 py-1.5 px-2"
 									>
-										<span className="text-xs truncate">{getSnapshotDisplayName(snapshot)}</span>
-									</SelectableItem>
+										{getSnapshotDisplayName(snapshot)}
+									</button>
 									{setupSessionId && (
-										<IconAction
-											icon={<Pencil className="h-3 w-3" />}
-											onClick={(e) => {
-												e.stopPropagation();
+										<button
+											type="button"
+											className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
+											onClick={() => {
 												openEditSession({
 													sessionId: setupSessionId,
 													snapshotId: snapshot.id,
@@ -444,9 +438,9 @@ function RepoDetails({
 													prebuildId: snapshot.id,
 												});
 											}}
-											tooltip="Edit environment"
-											className="opacity-0 group-hover:opacity-100 mr-1"
-										/>
+										>
+											<Pencil className="h-3 w-3" />
+										</button>
 									)}
 								</div>
 							);
