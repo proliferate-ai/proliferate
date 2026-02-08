@@ -11,7 +11,6 @@ import {
 	Building2,
 	CreditCard,
 	ExternalLink,
-	FolderGit2,
 	Key,
 	Search,
 	User,
@@ -36,12 +35,6 @@ const NAV_ITEMS = [
 				: []),
 			{ id: "members", label: "Members", icon: Users, href: "/settings/members" },
 			{ id: "secrets", label: "Secrets", icon: Key, href: "/settings/secrets" },
-			{
-				id: "repositories",
-				label: "Repositories",
-				icon: FolderGit2,
-				href: "/settings/repositories",
-			},
 		],
 	},
 ];
@@ -51,7 +44,6 @@ const PAGE_TITLES: Record<string, string> = {
 	general: "General",
 	members: "Members",
 	secrets: "Secrets",
-	repositories: "Repositories",
 	...(BILLING_ENABLED ? { billing: "Billing" } : {}),
 };
 
