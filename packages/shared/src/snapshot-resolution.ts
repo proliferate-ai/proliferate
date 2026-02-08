@@ -2,7 +2,7 @@
  * Snapshot layering resolution.
  *
  * Pure function that picks the best snapshot for a session using a priority chain:
- * 1. Prebuild snapshot (from setup finalize or manual snapshot)
+ * 1. Restore snapshot (from prebuild finalize or manual snapshot save)
  * 2. Repo snapshot (Modal only, single-repo, workspacePath ".")
  * 3. No snapshot (base image + live clone)
  */
@@ -32,13 +32,14 @@ export interface ResolveSnapshotInput {
  * from a base image with a live clone.
  */
 export function resolveSnapshotId(input: ResolveSnapshotInput): string | null {
-	// Layer 1: prebuild snapshot always wins
+	// Restore snapshot (prebuild/session) always wins.
 	if (input.prebuildSnapshotId) {
 		return input.prebuildSnapshotId;
 	}
 
-	// Layer 2: repo snapshot — only for Modal provider, single-repo, workspacePath "."
-	if (input.sandboxProvider && input.sandboxProvider !== "modal") {
+	// Repo snapshot — only for Modal provider, single-repo, workspacePath ".".
+	// Unknown/null provider = no repo snapshot (require explicit "modal").
+	if (input.sandboxProvider !== "modal") {
 		return null;
 	}
 
@@ -56,6 +57,6 @@ export function resolveSnapshotId(input: ResolveSnapshotInput): string | null {
 		return singleRepo.repo.repoSnapshotId;
 	}
 
-	// Layer 3: no snapshot
+	// No snapshot — start from base image with live clone.
 	return null;
 }

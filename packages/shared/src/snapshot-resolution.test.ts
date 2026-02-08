@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { type ResolveSnapshotInput, resolveSnapshotId } from "./snapshot-resolution";
 
-function makeRepo(overrides: {
-	workspacePath?: string;
-	repoSnapshotId?: string | null;
-	repoSnapshotStatus?: string | null;
-	repoSnapshotProvider?: string | null;
-} = {}): ResolveSnapshotInput["prebuildRepos"][number] {
+function makeRepo(
+	overrides: {
+		workspacePath?: string;
+		repoSnapshotId?: string | null;
+		repoSnapshotStatus?: string | null;
+		repoSnapshotProvider?: string | null;
+	} = {},
+): ResolveSnapshotInput["prebuildRepos"][number] {
 	return {
 		workspacePath: overrides.workspacePath ?? ".",
 		repo: {
@@ -18,46 +20,38 @@ function makeRepo(overrides: {
 }
 
 describe("resolveSnapshotId", () => {
-	it("returns prebuild snapshot when present (layer 1)", () => {
+	it("returns restore snapshot when present", () => {
 		const result = resolveSnapshotId({
 			prebuildSnapshotId: "prebuild-snap-1",
 			sandboxProvider: "modal",
-			prebuildRepos: [
-				makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" }),
-			],
+			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
 		});
 		expect(result).toBe("prebuild-snap-1");
 	});
 
-	it("returns repo snapshot for Modal single-repo with workspacePath '.' (layer 2)", () => {
+	it("returns repo snapshot for Modal single-repo with workspacePath '.'", () => {
 		const result = resolveSnapshotId({
 			prebuildSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [
-				makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" }),
-			],
+			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
 		});
 		expect(result).toBe("repo-snap-1");
 	});
 
-	it("returns repo snapshot when sandboxProvider is null (defaults to Modal)", () => {
+	it("returns null when sandboxProvider is null (unknown provider = no repo snapshot)", () => {
 		const result = resolveSnapshotId({
 			prebuildSnapshotId: null,
 			sandboxProvider: null,
-			prebuildRepos: [
-				makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" }),
-			],
+			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
 		});
-		expect(result).toBe("repo-snap-1");
+		expect(result).toBeNull();
 	});
 
 	it("returns null for E2B provider even with ready repo snapshot", () => {
 		const result = resolveSnapshotId({
 			prebuildSnapshotId: null,
 			sandboxProvider: "e2b",
-			prebuildRepos: [
-				makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" }),
-			],
+			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
 		});
 		expect(result).toBeNull();
 	});
@@ -97,9 +91,7 @@ describe("resolveSnapshotId", () => {
 		const result = resolveSnapshotId({
 			prebuildSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [
-				makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "building" }),
-			],
+			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "building" })],
 		});
 		expect(result).toBeNull();
 	});
@@ -189,9 +181,7 @@ describe("resolveSnapshotId", () => {
 		const result = resolveSnapshotId({
 			prebuildSnapshotId: "prebuild-snap",
 			sandboxProvider: "e2b",
-			prebuildRepos: [
-				makeRepo({ repoSnapshotId: "repo-snap", repoSnapshotStatus: "ready" }),
-			],
+			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap", repoSnapshotStatus: "ready" })],
 		});
 		expect(result).toBe("prebuild-snap");
 	});

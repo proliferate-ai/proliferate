@@ -5,6 +5,7 @@
  */
 
 import { randomUUID } from "crypto";
+import { env } from "@proliferate/environment/server";
 import { createRepoSnapshotBuildQueue } from "@proliferate/queue";
 import type { Repo } from "@proliferate/shared";
 import { getServicesLogger } from "../logger";
@@ -71,13 +72,14 @@ export async function requestRepoSnapshotBuild(
 	repoId: string,
 	options?: { force?: boolean },
 ): Promise<void> {
+	// Repo snapshot builds only work with Modal provider.
+	if (!env.MODAL_APP_NAME) return;
+
 	try {
 		const queue = getRepoSnapshotBuildQueue();
-		await queue.add(
-			`repo:${repoId}`,
-			{ repoId, force: options?.force ?? false },
-			{ jobId: `repo:${repoId}` },
-		);
+		// Use timestamp-based jobId so failed jobs don't block future rebuilds.
+		const jobId = `repo:${repoId}:${Date.now()}`;
+		await queue.add(`repo:${repoId}`, { repoId, force: options?.force ?? false }, { jobId });
 		await reposDb.markRepoSnapshotBuilding(repoId, "modal");
 	} catch (error) {
 		getServicesLogger()

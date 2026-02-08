@@ -42,11 +42,11 @@ export function RepoList({ repos }: RepoListProps) {
 							</div>
 							<div>
 								{repo.prebuild_status === "ready" ? (
-									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
 										Ready
 									</span>
 								) : (
-									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground">
 										Pending setup
 									</span>
 								)}
