@@ -138,14 +138,21 @@ export function CodingSession({
 							: "relative w-full"
 					}
 				>
-					{/* Float buttons over chat when no panel is open */}
+					{/* Floating title — top left */}
+					{(sessionTitle || title) && (
+						<div className="absolute top-2 left-3 z-10">
+							<span className="text-sm font-medium text-foreground truncate max-w-[200px] block">
+								{sessionTitle || title}
+							</span>
+						</div>
+					)}
+					{/* Floating buttons — top right (only when panel is closed) */}
 					{!isPanelOpen && (
 						<div className="absolute top-2 right-3 z-10">
 							<SessionHeader
 								sessionStatus={sessionData.status ?? undefined}
 								error={error}
 								panelMode={mode}
-								hasPreviewUrl={!!previewUrl}
 								onTogglePreview={() => toggleUrlPreview(previewUrl)}
 								onToggleSessionInfo={() => togglePanel("session-info")}
 								onToggleSnapshots={() => togglePanel("snapshots")}
@@ -170,7 +177,6 @@ export function CodingSession({
 								sessionStatus={sessionData.status ?? undefined}
 								error={error}
 								panelMode={mode}
-								hasPreviewUrl={!!previewUrl}
 								onTogglePreview={() => toggleUrlPreview(previewUrl)}
 								onToggleSessionInfo={() => togglePanel("session-info")}
 								onToggleSnapshots={() => togglePanel("snapshots")}

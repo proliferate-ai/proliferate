@@ -3,7 +3,7 @@ import { create } from "zustand";
 
 export type PreviewMode =
 	| { type: "none" }
-	| { type: "url"; url: string }
+	| { type: "url"; url: string | null }
 	| { type: "file"; file: VerificationFile }
 	| { type: "gallery"; files: VerificationFile[] }
 	| { type: "session-info" }
@@ -54,7 +54,7 @@ export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
 		const { mode } = get();
 		if (mode.type === "url") {
 			set({ mode: { type: "none" }, mobileView: "chat" });
-		} else if (url) {
+		} else {
 			set({ mode: { type: "url", url } });
 		}
 	},

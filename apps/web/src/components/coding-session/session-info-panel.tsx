@@ -47,7 +47,7 @@ export function SessionInfoPanel({
 	onClose,
 	isMigrating,
 }: SessionInfoPanelProps) {
-	const isLive = sessionStatus === "running" || sessionStatus === "starting";
+	const isRunning = sessionStatus === "running" || sessionStatus === "starting";
 	const { theme, setTheme } = useTheme();
 
 	return (
@@ -82,12 +82,12 @@ export function SessionInfoPanel({
 										"h-2.5 w-2.5 fill-current",
 										isMigrating
 											? "text-yellow-500 animate-pulse"
-											: isLive
+											: isRunning
 												? "text-green-500"
-												: "text-red-500",
+												: "text-muted-foreground/50",
 									)}
 								/>
-								<span>{isMigrating ? "Extending..." : isLive ? "Live" : "Offline"}</span>
+								<span>{isMigrating ? "Extending..." : isRunning ? "Open" : "Closed"}</span>
 							</div>
 						</div>
 						{startedAt && (

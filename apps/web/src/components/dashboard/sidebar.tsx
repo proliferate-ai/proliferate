@@ -8,11 +8,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
 import { useSlackStatus } from "@/hooks/use-integrations";
+import { usePrebuilds } from "@/hooks/use-prebuilds";
 import { useSessions } from "@/hooks/use-sessions";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
+import type { Session } from "@proliferate/shared/contracts";
 import {
 	FileStackIcon,
 	LifeBuoy,
@@ -28,8 +30,10 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { AddSnapshotButton } from "./add-snapshot-button";
 import { SearchTrigger } from "./command-search";
+import { ConfigurationGroup } from "./configuration-group";
 import { SessionItem } from "./session-item";
 
 // Mobile sidebar trigger button - shown in mobile header
@@ -67,31 +71,80 @@ export function MobileSidebar() {
 
 // Desktop sidebar - hidden on mobile
 export function Sidebar() {
-	const { sidebarCollapsed, toggleSidebar } = useDashboardStore();
+	const { sidebarCollapsed, toggleSidebar, clearPendingPrompt, setActiveSession } =
+		useDashboardStore();
+	const pathname = usePathname();
+	const router = useRouter();
+
+	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
+	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
 
 	return (
 		<aside
 			className={cn(
 				"hidden md:flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground overflow-hidden",
 				"transition-[width] duration-200 ease-out",
-				sidebarCollapsed ? "w-12" : "w-64",
+				sidebarCollapsed ? "w-12 cursor-pointer" : "w-64",
 			)}
+			onClick={sidebarCollapsed ? toggleSidebar : undefined}
 		>
-			{/* Expand button - visible when collapsed */}
+			{/* Collapsed view — icon-only nav */}
 			<div
 				className={cn(
-					"absolute p-2 transition-opacity duration-150",
-					sidebarCollapsed ? "opacity-100" : "opacity-0 pointer-events-none",
+					"flex flex-col items-center h-full py-2 gap-1 transition-opacity duration-150",
+					sidebarCollapsed ? "opacity-100" : "opacity-0 pointer-events-none absolute inset-0",
 				)}
 			>
 				<Button
 					variant="ghost"
 					size="icon"
 					className="h-8 w-8 text-muted-foreground hover:text-foreground"
-					onClick={toggleSidebar}
+					onClick={(e) => {
+						e.stopPropagation();
+						toggleSidebar();
+					}}
 					title="Expand sidebar"
 				>
 					<SidebarExpandIcon className="h-4 w-4" />
+				</Button>
+				<div className="my-1" />
+				<Button
+					variant="ghost"
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.stopPropagation();
+						clearPendingPrompt();
+						setActiveSession(null);
+						router.push("/dashboard");
+					}}
+					title="New session"
+				>
+					<Plus className="h-4 w-4" />
+				</Button>
+				<Button
+					variant={isIntegrationsPage ? "secondary" : "ghost"}
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.stopPropagation();
+						router.push("/dashboard/integrations");
+					}}
+					title="Integrations"
+				>
+					<Plug className="h-4 w-4" />
+				</Button>
+				<Button
+					variant={isAutomationsPage ? "secondary" : "ghost"}
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.stopPropagation();
+						router.push("/dashboard/automations");
+					}}
+					title="Automations"
+				>
+					<FileStackIcon className="h-4 w-4" />
 				</Button>
 			</div>
 
@@ -141,20 +194,43 @@ function SidebarContent({
 				.slice(0, 2)
 		: user?.email?.[0]?.toUpperCase() || "?";
 
-	// Fetch sessions — flat list sorted by recency
+	// Fetch sessions and prebuilds
 	const { data: sessions } = useSessions();
-	const [showAll, setShowAll] = useState(false);
 
-	const sortedSessions = useMemo(() => {
-		const coding = sessions?.filter((s) => s.sessionType !== "setup" && s.origin !== "cli");
-		return (coding ?? []).sort((a, b) => {
-			const aTime = new Date(a.lastActivityAt || a.startedAt || 0).getTime();
-			const bTime = new Date(b.lastActivityAt || b.startedAt || 0).getTime();
-			return bTime - aTime;
-		});
-	}, [sessions]);
+	interface Prebuild {
+		id: string;
+		name: string | null;
+		snapshotId: string | null;
+		createdAt: string;
+		type?: "manual" | "managed";
+		prebuildRepos?: Array<{
+			repo: { id: string; githubRepoName: string } | null;
+		}>;
+		setupSessions?: Array<{
+			id: string;
+			sessionType: string;
+		}>;
+	}
+	const { data: prebuildsData } = usePrebuilds();
+	const prebuilds = (prebuildsData as Prebuild[] | undefined) || [];
 
-	const visibleSessions = showAll ? sortedSessions : sortedSessions.slice(0, 20);
+	// Filter to coding sessions, group by prebuild
+	const codingSessions = sessions?.filter((s) => s.sessionType !== "setup" && s.origin !== "cli");
+
+	const sessionsByPrebuild = new Map<string, Session[]>();
+	const orphanedSessions: Session[] = [];
+	for (const session of codingSessions ?? []) {
+		if (session.prebuildId) {
+			const existing = sessionsByPrebuild.get(session.prebuildId);
+			if (existing) {
+				existing.push(session);
+			} else {
+				sessionsByPrebuild.set(session.prebuildId, [session]);
+			}
+		} else {
+			orphanedSessions.push(session);
+		}
+	}
 
 	// Detect active pages from URL
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
@@ -255,25 +331,47 @@ function SidebarContent({
 				</button>
 			</div>
 
-			{/* Scrollable session list */}
-			<div className="flex-1 overflow-y-auto text-sm px-2">
-				{visibleSessions.map((session) => (
-					<SessionItem
-						key={session.id}
-						session={session}
-						isActive={urlSessionId === session.id}
-						onNavigate={onNavigate}
-					/>
-				))}
-				{!showAll && sortedSessions.length > 20 && (
-					<button
-						type="button"
-						onClick={() => setShowAll(true)}
-						className="w-full px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-					>
-						Show more
-					</button>
-				)}
+			{/* Scrollable content */}
+			<div className="flex-1 overflow-y-auto text-sm">
+				<div className="flex items-center w-full px-4 py-1.5 text-xs text-muted-foreground">
+					<span>Threads</span>
+					<div className="ml-auto">
+						<AddSnapshotButton />
+					</div>
+				</div>
+				<div className="px-2">
+					{prebuilds.map((prebuild) => (
+						<ConfigurationGroup
+							key={prebuild.id}
+							prebuild={prebuild}
+							sessions={sessionsByPrebuild.get(prebuild.id) ?? []}
+							activeSessionId={urlSessionId}
+							onNavigate={onNavigate}
+						/>
+					))}
+					{orphanedSessions.length > 0 && (
+						<>
+							<div className="px-3 py-1 text-xs text-muted-foreground/60">Other</div>
+							{orphanedSessions.slice(0, 10).map((session) => (
+								<SessionItem
+									key={session.id}
+									session={session}
+									isActive={urlSessionId === session.id}
+									onNavigate={onNavigate}
+								/>
+							))}
+							{orphanedSessions.length > 10 && (
+								<button
+									type="button"
+									onClick={() => handleNavigate("/dashboard/sessions")}
+									className="w-full px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+								>
+									Show more
+								</button>
+							)}
+						</>
+					)}
+				</div>
 			</div>
 
 			{/* Footer with Support button and user card */}

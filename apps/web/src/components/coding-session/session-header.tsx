@@ -4,14 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { PreviewMode } from "@/stores/preview-panel";
-import { Camera, Circle, Info, MessageSquare, PanelRight } from "lucide-react";
+import { Circle, Globe, HardDrive, MessageSquare, PanelRight, Settings } from "lucide-react";
 
 interface SessionHeaderProps {
 	sessionStatus?: string;
 	error: string | null;
 	// Panel state
 	panelMode: PreviewMode;
-	hasPreviewUrl?: boolean;
 	onTogglePreview?: () => void;
 	onToggleSessionInfo?: () => void;
 	onToggleSnapshots?: () => void;
@@ -25,7 +24,6 @@ export function SessionHeader({
 	sessionStatus,
 	error,
 	panelMode,
-	hasPreviewUrl,
 	onTogglePreview,
 	onToggleSessionInfo,
 	onToggleSnapshots,
@@ -33,8 +31,15 @@ export function SessionHeader({
 	onToggleMobileView,
 	isMigrating,
 }: SessionHeaderProps) {
-	const isLive = sessionStatus === "running" || sessionStatus === "starting";
+	const isRunning = sessionStatus === "running" || sessionStatus === "starting";
 	const isPanelOpen = panelMode.type !== "none";
+
+	const statusLabel = isMigrating ? "Extending" : isRunning ? "Open" : "Closed";
+	const statusTooltip = isMigrating
+		? "Session is extending"
+		: isRunning
+			? "Session is running"
+			: "Session is closed";
 
 	return (
 		<TooltipProvider delayDuration={150}>
@@ -48,9 +53,8 @@ export function SessionHeader({
 								size="icon"
 								className="hidden md:flex h-7 w-7"
 								onClick={onTogglePreview}
-								disabled={!hasPreviewUrl && panelMode.type !== "url"}
 							>
-								<PanelRight className="h-3.5 w-3.5" />
+								<Globe className="h-3.5 w-3.5" />
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent>Preview</TooltipContent>
@@ -65,7 +69,7 @@ export function SessionHeader({
 								className="hidden md:flex h-7 w-7"
 								onClick={onToggleSessionInfo}
 							>
-								<Info className="h-3.5 w-3.5" />
+								<Settings className="h-3.5 w-3.5" />
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent>Session Info</TooltipContent>
@@ -80,7 +84,7 @@ export function SessionHeader({
 								className="hidden md:flex h-7 w-7"
 								onClick={onToggleSnapshots}
 							>
-								<Camera className="h-3.5 w-3.5" />
+								<HardDrive className="h-3.5 w-3.5" />
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent>Snapshots</TooltipContent>
@@ -116,9 +120,9 @@ export function SessionHeader({
 								"flex items-center gap-1.5 rounded-full px-2 py-0.5",
 								isMigrating
 									? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-									: isLive
+									: isRunning
 										? "bg-green-500/10 text-green-600 dark:text-green-400"
-										: "bg-red-500/10 text-red-600 dark:text-red-400",
+										: "bg-muted text-muted-foreground",
 							)}
 						>
 							<Circle
@@ -126,23 +130,17 @@ export function SessionHeader({
 									"h-2 w-2 fill-current",
 									isMigrating
 										? "text-yellow-500 animate-pulse"
-										: isLive
+										: isRunning
 											? "text-green-500"
-											: "text-red-500",
+											: "text-muted-foreground/50",
 								)}
 							/>
 							<span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">
-								{isMigrating ? "Extending..." : isLive ? "Live" : "Offline"}
+								{statusLabel}
 							</span>
 						</div>
 					</TooltipTrigger>
-					<TooltipContent>
-						{isMigrating
-							? "Session is extending"
-							: isLive
-								? "Session is live"
-								: "Session is offline"}
-					</TooltipContent>
+					<TooltipContent>{statusTooltip}</TooltipContent>
 				</Tooltip>
 
 				{/* Error indicator */}
