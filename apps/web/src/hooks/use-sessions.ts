@@ -64,6 +64,7 @@ export function useCreateSession() {
 				pausedAt: null,
 				origin: "web",
 				clientType: null,
+				repo: undefined,
 			};
 
 			queryClient.setQueryData(
