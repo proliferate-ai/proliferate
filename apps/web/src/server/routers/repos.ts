@@ -331,4 +331,19 @@ export const reposRouter = {
 				userId: context.user.id,
 			});
 		}),
+
+	/**
+	 * Trigger a repo snapshot cache rebuild.
+	 */
+	rebuildSnapshot: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			const exists = await repos.repoExists(input.id, context.orgId);
+			if (!exists) {
+				throw new ORPCError("NOT_FOUND", { message: "Repo not found" });
+			}
+			await repos.requestRepoSnapshotBuild(input.id, { force: true });
+			return { success: true };
+		}),
 };
