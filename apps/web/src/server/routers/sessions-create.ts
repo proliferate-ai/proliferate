@@ -328,7 +328,6 @@ export async function createSessionHandler(
 			codingAgentSessionId: null,
 		});
 		reqLog.info({ durationMs: Date.now() - startTime }, "Session status updated to running");
-
 	} catch (err) {
 		reqLog.error({ err }, "Sandbox provider error");
 

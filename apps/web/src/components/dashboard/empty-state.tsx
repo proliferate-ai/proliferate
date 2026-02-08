@@ -24,7 +24,6 @@ export function EmptyDashboard() {
 	const router = useRouter();
 	const { data: authSession } = useSession();
 	const {
-		selectedRepoId,
 		selectedSnapshotId,
 		selectedModel,
 		setActiveSession,
@@ -74,7 +73,7 @@ export function EmptyDashboard() {
 	const greeting = firstName ? getGreeting(firstName) : "How can I help you today?";
 
 	const handleSubmit = async (prompt: string) => {
-		if (!selectedRepoId || !selectedSnapshotId) return;
+		if (!selectedSnapshotId) return;
 
 		// Store the prompt in dashboard store so it can be passed to CodingSession
 		setPendingPrompt(prompt);

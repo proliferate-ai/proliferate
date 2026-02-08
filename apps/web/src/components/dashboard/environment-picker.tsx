@@ -44,6 +44,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 	};
 
 	const selectConfig = (prebuild: (typeof multiRepoConfigs)[0]) => {
+		setSelectedRepo(null);
 		setSelectedSnapshot(prebuild.id);
 		setOpen(false);
 	};

@@ -44,7 +44,9 @@ export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
 		}
 	}, []);
 
-	// Poll the URL to check if the server is actually serving
+	// Poll the URL to check if the server is actually serving.
+	// refreshKey is intentionally in deps to allow re-triggering via Retry button.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey re-triggers polling
 	useEffect(() => {
 		if (!url) return;
 
