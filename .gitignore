@@ -72,6 +72,7 @@ engineering-blog-examples/
 
 # Private planning documents
 private-planning/
+docs/proposals/
 .pulumi-passphrase
 
 # Pulumi stack configs (local)
