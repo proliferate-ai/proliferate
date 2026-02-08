@@ -15,6 +15,7 @@ export function installIngressController(k8sProvider: k8s.Provider): {
 	const release = new k8s.helm.v3.Release(
 		"ingress-nginx",
 		{
+			name: "ingress-nginx",
 			chart: "ingress-nginx",
 			repositoryOpts: { repo: "https://kubernetes.github.io/ingress-nginx" },
 			namespace: "ingress-nginx",
@@ -48,6 +49,7 @@ export function installExternalSecrets(
 	return new k8s.helm.v3.Release(
 		"external-secrets",
 		{
+			name: "external-secrets",
 			chart: "external-secrets",
 			repositoryOpts: { repo: "https://charts.external-secrets.io" },
 			namespace: "external-secrets",
