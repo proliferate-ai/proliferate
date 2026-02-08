@@ -1,6 +1,7 @@
 "use client";
 
 import { ModelSelector } from "@/components/automations/model-selector";
+import { EnvironmentPicker } from "@/components/dashboard/environment-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -120,8 +121,8 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 				<Textarea
 					value={prompt}
 					onChange={(e) => setPrompt(e.target.value)}
-					placeholder="Ask or build anything"
-					className="w-full min-h-[120px] p-4 pb-2 bg-transparent resize-none focus:outline-none text-[15px] leading-relaxed border-0 focus-visible:ring-0"
+					placeholder="How can I help you today?"
+					className="w-full min-h-[60px] p-4 pb-2 bg-transparent resize-none focus:outline-none text-[15px] leading-relaxed border-0 focus-visible:ring-0"
 					disabled={disabled || isLoading}
 					onKeyDown={(e) => {
 						if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -135,6 +136,7 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 				<div className="flex items-center justify-between px-3 py-2">
 					{/* Left side - Context selectors */}
 					<div className="flex items-center gap-1">
+						<EnvironmentPicker disabled={isLoading} />
 						<ModelSelector
 							modelId={selectedModel}
 							onChange={setSelectedModel}

@@ -1,41 +1,22 @@
 "use client";
 
 import { openIntercomMessenger } from "@/components/providers";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { BoltIcon, SidebarCollapseIcon, SidebarExpandIcon, SlackIcon } from "@/components/ui/icons";
-import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
+import { SidebarCollapseIcon, SidebarExpandIcon, SlackIcon } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { StatusDot } from "@/components/ui/status-dot";
 import { Text } from "@/components/ui/text";
-import { useMyClaimedRuns } from "@/hooks/use-automations";
 import { useSlackStatus } from "@/hooks/use-integrations";
 import { usePrebuilds } from "@/hooks/use-prebuilds";
-import {
-	useDeleteSession,
-	useRenameSession,
-	useSessions,
-	useSnapshotSession,
-} from "@/hooks/use-sessions";
+import { useSessions } from "@/hooks/use-sessions";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useSession } from "@/lib/auth-client";
-import { cn, formatRelativeTime, getRepoShortName } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Session } from "@proliferate/shared/contracts";
 import {
-	Camera,
-	ChevronRight,
+	FileStackIcon,
 	LifeBuoy,
 	LogOut,
 	Menu,
@@ -49,11 +30,11 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { useEffect, useState } from "react";
 import { AddSnapshotButton } from "./add-snapshot-button";
 import { SearchTrigger } from "./command-search";
 import { ConfigurationGroup } from "./configuration-group";
+import { SessionItem } from "./session-item";
 
 // Mobile sidebar trigger button - shown in mobile header
 export function MobileSidebarTrigger() {
@@ -90,31 +71,80 @@ export function MobileSidebar() {
 
 // Desktop sidebar - hidden on mobile
 export function Sidebar() {
-	const { sidebarCollapsed, toggleSidebar } = useDashboardStore();
+	const { sidebarCollapsed, toggleSidebar, clearPendingPrompt, setActiveSession } =
+		useDashboardStore();
+	const pathname = usePathname();
+	const router = useRouter();
+
+	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
+	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
 
 	return (
 		<aside
 			className={cn(
 				"hidden md:flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground overflow-hidden",
 				"transition-[width] duration-200 ease-out",
-				sidebarCollapsed ? "w-12" : "w-64",
+				sidebarCollapsed ? "w-12 cursor-pointer hover:bg-accent/50 transition-colors" : "w-64",
 			)}
+			onClick={sidebarCollapsed ? toggleSidebar : undefined}
 		>
-			{/* Expand button - visible when collapsed */}
+			{/* Collapsed view — icon-only nav */}
 			<div
 				className={cn(
-					"absolute p-2 transition-opacity duration-150",
-					sidebarCollapsed ? "opacity-100" : "opacity-0 pointer-events-none",
+					"flex flex-col items-center h-full py-2 gap-1 transition-opacity duration-150",
+					sidebarCollapsed ? "opacity-100" : "opacity-0 pointer-events-none absolute inset-0",
 				)}
 			>
 				<Button
 					variant="ghost"
 					size="icon"
 					className="h-8 w-8 text-muted-foreground hover:text-foreground"
-					onClick={toggleSidebar}
+					onClick={(e) => {
+						e.stopPropagation();
+						toggleSidebar();
+					}}
 					title="Expand sidebar"
 				>
 					<SidebarExpandIcon className="h-4 w-4" />
+				</Button>
+				<div className="my-1" />
+				<Button
+					variant="ghost"
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.stopPropagation();
+						clearPendingPrompt();
+						setActiveSession(null);
+						router.push("/dashboard");
+					}}
+					title="New session"
+				>
+					<Plus className="h-4 w-4" />
+				</Button>
+				<Button
+					variant={isIntegrationsPage ? "secondary" : "ghost"}
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.stopPropagation();
+						router.push("/dashboard/integrations");
+					}}
+					title="Integrations"
+				>
+					<Plug className="h-4 w-4" />
+				</Button>
+				<Button
+					variant={isAutomationsPage ? "secondary" : "ghost"}
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.stopPropagation();
+						router.push("/dashboard/automations");
+					}}
+					title="Automations"
+				>
+					<FileStackIcon className="h-4 w-4" />
 				</Button>
 			</div>
 
@@ -164,13 +194,9 @@ function SidebarContent({
 				.slice(0, 2)
 		: user?.email?.[0]?.toUpperCase() || "?";
 
-	// Fetch claimed runs for sidebar
-	const { data: claimedRuns = [] } = useMyClaimedRuns();
-
-	// Fetch sessions
+	// Fetch sessions and prebuilds
 	const { data: sessions } = useSessions();
 
-	// Fetch prebuilds for snapshots section
 	interface Prebuild {
 		id: string;
 		name: string | null;
@@ -183,21 +209,14 @@ function SidebarContent({
 		setupSessions?: Array<{
 			id: string;
 			sessionType: string;
-			status: string;
-			title: string | null;
-			startedAt: string;
 		}>;
 	}
 	const { data: prebuildsData } = usePrebuilds();
-
 	const prebuilds = (prebuildsData as Prebuild[] | undefined) || [];
 
-	// Filter to coding sessions only (not setup sessions, not CLI)
-	const codingSessions = sessions?.filter(
-		(session) => session.sessionType !== "setup" && session.origin !== "cli",
-	);
+	// Filter to coding sessions, group by prebuild
+	const codingSessions = sessions?.filter((s) => s.sessionType !== "setup" && s.origin !== "cli");
 
-	// Group sessions by prebuildId for the Configurations section
 	const sessionsByPrebuild = new Map<string, Session[]>();
 	const orphanedSessions: Session[] = [];
 	for (const session of codingSessions ?? []) {
@@ -210,14 +229,6 @@ function SidebarContent({
 			}
 		} else {
 			orphanedSessions.push(session);
-		}
-	}
-
-	// Build a map of session ID → trigger provider for claimed runs
-	const claimedSessionProviders = new Map<string, string>();
-	for (const run of claimedRuns) {
-		if (run.session_id && run.trigger?.provider) {
-			claimedSessionProviders.set(run.session_id, run.trigger.provider);
 		}
 	}
 
@@ -315,55 +326,51 @@ function SidebarContent({
 							: "text-muted-foreground hover:text-foreground hover:bg-accent",
 					)}
 				>
-					<BoltIcon className="h-5 w-5" />
+					<FileStackIcon className="h-5 w-5" />
 					<span>Automations</span>
 				</button>
 			</div>
 
 			{/* Scrollable content */}
 			<div className="flex-1 overflow-y-auto text-sm">
-				{/* Threads Section */}
-				<div>
-					<div className="flex items-center w-full px-4 py-1.5 text-xs text-muted-foreground">
-						<span>Threads</span>
-						<div className="ml-auto">
-							<AddSnapshotButton />
-						</div>
+				<div className="flex items-center w-full px-4 py-1.5 text-xs text-muted-foreground">
+					<span>Threads</span>
+					<div className="ml-auto">
+						<AddSnapshotButton />
 					</div>
-					<div className="px-2">
-						{prebuilds.map((prebuild) => (
-							<ConfigurationGroup
-								key={prebuild.id}
-								prebuild={prebuild}
-								sessions={sessionsByPrebuild.get(prebuild.id) ?? []}
-								activeSessionId={urlSessionId}
-								onNavigate={onNavigate}
-							/>
-						))}
-						{orphanedSessions.length > 0 && (
-							<>
-								<div className="px-3 py-1 text-xs text-muted-foreground/60">Other</div>
-								{orphanedSessions.slice(0, 10).map((session) => (
-									<SessionItem
-										key={session.id}
-										session={session}
-										isActive={urlSessionId === session.id}
-										onNavigate={onNavigate}
-										triggerProvider={claimedSessionProviders.get(session.id)}
-									/>
-								))}
-								{orphanedSessions.length > 10 && (
-									<button
-										type="button"
-										onClick={() => handleNavigate("/dashboard/sessions")}
-										className="flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-									>
-										<span>View all ({orphanedSessions.length})</span>
-									</button>
-								)}
-							</>
-						)}
-					</div>
+				</div>
+				<div className="px-2">
+					{prebuilds.map((prebuild) => (
+						<ConfigurationGroup
+							key={prebuild.id}
+							prebuild={prebuild}
+							sessions={sessionsByPrebuild.get(prebuild.id) ?? []}
+							activeSessionId={urlSessionId}
+							onNavigate={onNavigate}
+						/>
+					))}
+					{orphanedSessions.length > 0 && (
+						<>
+							<div className="px-3 py-1 text-xs text-muted-foreground/60">Other</div>
+							{orphanedSessions.slice(0, 10).map((session) => (
+								<SessionItem
+									key={session.id}
+									session={session}
+									isActive={urlSessionId === session.id}
+									onNavigate={onNavigate}
+								/>
+							))}
+							{orphanedSessions.length > 10 && (
+								<button
+									type="button"
+									onClick={() => handleNavigate("/dashboard/sessions")}
+									className="w-full px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+								>
+									Show more
+								</button>
+							)}
+						</>
+					)}
 				</div>
 			</div>
 
@@ -514,178 +521,6 @@ function SidebarContent({
 					</Popover>
 				</div>
 			</div>
-		</>
-	);
-}
-
-function SessionItem({
-	session,
-	isActive,
-	onNavigate,
-	triggerProvider,
-}: {
-	session: Session;
-	isActive: boolean;
-	onNavigate?: () => void;
-	triggerProvider?: string;
-}) {
-	const [isEditing, setIsEditing] = useState(false);
-	const [editValue, setEditValue] = useState(session.title || "");
-	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-	const inputRef = useRef<HTMLInputElement>(null);
-	const router = useRouter();
-	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
-
-	const renameSession = useRenameSession();
-	const deleteSession = useDeleteSession();
-	const snapshotSession = useSnapshotSession();
-
-	const handleSnapshot = async () => {
-		const toastId = toast.loading("Preparing snapshot...");
-		const stages = [
-			{ delay: 3000, message: "Capturing filesystem..." },
-			{ delay: 10000, message: "Compressing data..." },
-			{ delay: 25000, message: "Almost done..." },
-		];
-		const timeouts = stages.map(({ delay, message }) =>
-			setTimeout(() => toast.loading(message, { id: toastId }), delay),
-		);
-		try {
-			await snapshotSession.mutateAsync(session.id);
-			toast.success("Snapshot saved", { id: toastId });
-		} catch {
-			toast.error("Failed to save snapshot", { id: toastId });
-		} finally {
-			timeouts.forEach(clearTimeout);
-		}
-	};
-
-	const snapshotAction =
-		session.status === "running"
-			? [
-					{
-						label: snapshotSession.isPending ? "Saving..." : "Save Snapshot",
-						icon: <Camera className="h-4 w-4" />,
-						onClick: handleSnapshot,
-					},
-				]
-			: undefined;
-
-	const handleDelete = async () => {
-		await deleteSession.mutateAsync(session.id);
-		if (isActive) {
-			router.push("/dashboard");
-		}
-	};
-
-	useEffect(() => {
-		if (isEditing && inputRef.current) {
-			inputRef.current.focus();
-			inputRef.current.select();
-		}
-	}, [isEditing]);
-
-	const handleClick = () => {
-		clearPendingPrompt();
-		setActiveSession(session.id);
-		router.push(`/dashboard/sessions/${session.id}`);
-		onNavigate?.();
-	};
-
-	const handleRename = () => {
-		setEditValue(session.title || "Untitled session");
-		setIsEditing(true);
-	};
-
-	const handleSave = () => {
-		const trimmed = editValue.trim();
-		if (trimmed && trimmed !== session.title) {
-			renameSession.mutate(session.id, trimmed);
-		}
-		setIsEditing(false);
-	};
-
-	const handleKeyDown = (e: React.KeyboardEvent) => {
-		if (e.key === "Enter") {
-			handleSave();
-		} else if (e.key === "Escape") {
-			setIsEditing(false);
-			setEditValue(session.title || "");
-		}
-	};
-
-	const repoShortName = session.repo?.githubRepoName
-		? getRepoShortName(session.repo.githubRepoName)
-		: "unknown";
-	const branchName = session.branchName || "";
-	const displayTitle = session.title || `${repoShortName}${branchName ? ` (${branchName})` : ""}`;
-
-	return (
-		<>
-			<div
-				className={cn(
-					"group relative flex items-center gap-[0.38rem] px-3 py-1.5 rounded-lg text-sm cursor-pointer transition-colors",
-					isActive
-						? "bg-muted text-foreground"
-						: "text-muted-foreground hover:text-foreground hover:bg-accent",
-				)}
-				onClick={handleClick}
-			>
-				{/* Name with optional running dot */}
-				<div className="flex-1 min-w-0 flex items-center gap-1.5">
-					{session.status === "running" && <StatusDot status="running" size="sm" />}
-					{isEditing ? (
-						<input
-							ref={inputRef}
-							type="text"
-							value={editValue}
-							onChange={(e) => setEditValue(e.target.value)}
-							onBlur={handleSave}
-							onKeyDown={handleKeyDown}
-							onClick={(e) => e.stopPropagation()}
-							className="w-full bg-transparent text-sm outline-none border-b border-primary"
-						/>
-					) : (
-						<span className="truncate">{displayTitle}</span>
-					)}
-				</div>
-
-				{/* Trailing: timestamp (default) or actions (on hover) */}
-				<div className="shrink-0 flex items-center">
-					<span className="text-xs text-muted-foreground/60 group-hover:hidden">
-						{formatRelativeTime(session.lastActivityAt || session.startedAt || "")}
-					</span>
-					<div className="hidden group-hover:flex items-center">
-						<ItemActionsMenu
-							onRename={handleRename}
-							onDelete={() => setDeleteDialogOpen(true)}
-							customActions={snapshotAction}
-							isVisible={isActive}
-						/>
-					</div>
-				</div>
-			</div>
-
-			{/* Delete Confirmation Dialog */}
-			<AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Delete Session</AlertDialogTitle>
-						<AlertDialogDescription>
-							This will permanently delete this session. This action cannot be undone.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							onClick={handleDelete}
-							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-						>
-							Delete
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
 		</>
 	);
 }

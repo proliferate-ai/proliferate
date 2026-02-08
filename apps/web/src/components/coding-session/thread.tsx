@@ -14,7 +14,17 @@ import {
 	useThreadRuntime,
 } from "@assistant-ui/react";
 import type { ModelId } from "@proliferate/shared";
-import { ArrowUp, Camera, Loader2, Mic, Paperclip, Square, X } from "lucide-react";
+import {
+	ArrowUp,
+	Camera,
+	ChevronDown,
+	ChevronRight,
+	Loader2,
+	Mic,
+	Paperclip,
+	Square,
+	X,
+} from "lucide-react";
 import type { FC } from "react";
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
@@ -211,7 +221,10 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 		</ThreadPrimitive.If>
 		<ThreadPrimitive.If running>
 			<ComposerPrimitive.Cancel asChild>
-				<Button size="icon" variant="destructive" className="h-8 w-8 rounded-full">
+				<Button
+					size="icon"
+					className="h-8 w-8 rounded-full bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+				>
 					<Square className="h-3 w-3 fill-current" />
 				</Button>
 			</ComposerPrimitive.Cancel>
@@ -258,8 +271,8 @@ export const Thread: FC<ThreadProps> = ({
 
 				{/* Blinking cursor while waiting for response */}
 				<ThreadPrimitive.If running>
-					<div className="py-4 px-4">
-						<div className="max-w-3xl mx-auto">
+					<div className="py-3 px-3">
+						<div className="max-w-2xl mx-auto">
 							<BlinkingCursor />
 						</div>
 					</div>
@@ -267,7 +280,7 @@ export const Thread: FC<ThreadProps> = ({
 			</ThreadPrimitive.Viewport>
 
 			{/* Fixed composer at bottom */}
-			<div className="shrink-0 p-4">
+			<div className="shrink-0 px-3 pb-3 pt-2">
 				{showSnapshot && onSnapshot && (
 					<div className="flex justify-center mb-3">
 						<Button
@@ -356,7 +369,7 @@ const Composer: FC = () => {
 	const hasContent = composerRuntime.getState().text.trim() || attachments.length > 0;
 
 	return (
-		<ComposerPrimitive.Root className="max-w-3xl mx-auto w-full">
+		<ComposerPrimitive.Root className="max-w-2xl mx-auto w-full">
 			<Input
 				ref={fileInputRef}
 				type="file"
@@ -410,12 +423,12 @@ const Composer: FC = () => {
 };
 
 const UserMessage: FC = () => (
-	<MessagePrimitive.Root className="py-3 px-4">
-		<div className="max-w-3xl mx-auto flex flex-col items-end gap-2">
+	<MessagePrimitive.Root className="mt-6 mb-2 px-3">
+		<div className="max-w-2xl mx-auto flex flex-col items-end gap-2">
 			<MessagePrimitive.Content
 				components={{
 					Text: ({ text }) => (
-						<div className="bg-muted rounded-2xl px-4 py-2 text-sm max-w-[80%]">
+						<div className="bg-muted inline-flex rounded-xl py-1.5 pl-3 pr-3.5 text-sm max-w-[85%]">
 							<MarkdownContent text={text} variant="user" />
 						</div>
 					),
@@ -432,11 +445,11 @@ const UserMessage: FC = () => (
 	</MessagePrimitive.Root>
 );
 
-const BlinkingCursor = () => <span className="inline-block w-2 h-4 bg-foreground animate-pulse" />;
+const BlinkingCursor = () => <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
 
 const AssistantMessage: FC = () => (
-	<MessagePrimitive.Root className="py-4 px-4">
-		<div className="max-w-3xl mx-auto">
+	<MessagePrimitive.Root className="pb-4 px-3">
+		<div className="max-w-2xl mx-auto">
 			<div className="text-sm">
 				<MessagePrimitive.Content
 					components={{
@@ -453,26 +466,36 @@ const ToolFallback: FC<{ toolName: string; args: unknown; result?: unknown }> = 
 	toolName,
 	result,
 }) => {
-	const resultString =
-		result === undefined
-			? null
-			: typeof result === "string"
-				? result
-				: JSON.stringify(result, null, 2);
+	const [expanded, setExpanded] = useState(false);
+	const hasResult = result !== undefined;
+	const resultString = hasResult
+		? typeof result === "string"
+			? result
+			: JSON.stringify(result, null, 2)
+		: null;
 
 	return (
-		<div className="my-2 p-2 rounded-lg border bg-background text-xs">
-			<div className="flex items-center gap-2">
-				{result ? (
-					<span className="text-green-500">✓</span>
+		<div className="my-0.5 ml-4">
+			<button
+				type="button"
+				onClick={() => hasResult && setExpanded(!expanded)}
+				className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+				disabled={!hasResult}
+			>
+				{hasResult ? (
+					expanded ? (
+						<ChevronDown className="h-3 w-3" />
+					) : (
+						<ChevronRight className="h-3 w-3" />
+					)
 				) : (
 					<Loader2 className="h-3 w-3 animate-spin" />
 				)}
-				<code className="text-muted-foreground">{toolName}</code>
-			</div>
-			{resultString && (
-				<pre className="mt-2 overflow-auto max-h-24 text-[10px] text-muted-foreground">
-					{resultString}
+				<code className="text-xs">{toolName}</code>
+			</button>
+			{expanded && resultString && (
+				<pre className="ml-4 mt-1 max-h-40 overflow-auto rounded border border-border/40 bg-muted/30 p-2 font-mono text-xs text-muted-foreground">
+					{resultString.slice(0, 3000)}
 				</pre>
 			)}
 		</div>

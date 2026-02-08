@@ -10,7 +10,7 @@ import {
 	RefreshCw,
 } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface PreviewPanelProps {
 	url: string | null;
@@ -20,32 +20,82 @@ interface PreviewPanelProps {
 
 export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
 	const iframeRef = useRef<HTMLIFrameElement>(null);
-	const [isLoading, setIsLoading] = useState(true);
 	const [isFullscreen, setIsFullscreen] = useState(false);
+	// "checking" = polling the URL, "ready" = server is up, "unavailable" = not serving
+	const [status, setStatus] = useState<"checking" | "ready" | "unavailable">("checking");
+	const [refreshKey, setRefreshKey] = useState(0);
 
-	const handleRefresh = () => {
-		if (iframeRef.current) {
-			setIsLoading(true);
-			// biome-ignore lint/correctness/noSelfAssign: Intentional reload of iframe
-			iframeRef.current.src = iframeRef.current.src;
+	const checkUrl = useCallback(async (targetUrl: string): Promise<boolean> => {
+		try {
+			const res = await fetch(targetUrl, { mode: "cors" });
+			return res.ok;
+		} catch {
+			// CORS blocks the response — but the server DID respond, so it's up
+			// A true network error (server down) would also land here, but
+			// we distinguish by trying no-cors which always succeeds if reachable
+			try {
+				await fetch(targetUrl, { mode: "no-cors" });
+				// If this didn't throw, the server is reachable
+				return true;
+			} catch {
+				// Actual network failure — server is not reachable
+				return false;
+			}
 		}
-	};
+	}, []);
 
-	const handleLoad = () => {
-		setIsLoading(false);
-	};
+	// Poll the URL to check if the server is actually serving.
+	// refreshKey is intentionally in deps to allow re-triggering via Retry button.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey re-triggers polling
+	useEffect(() => {
+		if (!url) return;
+
+		let cancelled = false;
+		let attempts = 0;
+		const maxAttempts = 5;
+		setStatus("checking");
+
+		const poll = async () => {
+			const ok = await checkUrl(url);
+			if (cancelled) return;
+
+			if (ok) {
+				setStatus("ready");
+				return;
+			}
+
+			attempts++;
+			if (attempts >= maxAttempts) {
+				setStatus("unavailable");
+				return;
+			}
+
+			setTimeout(() => {
+				if (!cancelled) poll();
+			}, 3000);
+		};
+
+		poll();
+		return () => {
+			cancelled = true;
+		};
+	}, [url, checkUrl, refreshKey]);
+
+	const handleRefresh = useCallback(() => {
+		setRefreshKey((k) => k + 1);
+	}, []);
 
 	if (!url) {
 		return (
-			<div className={cn("flex flex-col h-full bg-muted/30", className)}>
+			<div className={cn("flex flex-col h-full", className)}>
 				<div className="flex items-center justify-center h-full">
-					<div className="text-center space-y-2 px-4">
-						<div className="mx-auto h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-							<MonitorIcon className="h-5 w-5 text-muted-foreground" />
+					<div className="text-center space-y-3 px-4">
+						<div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+							<MonitorIcon className="h-6 w-6 text-muted-foreground" />
 						</div>
 						<div>
-							<p className="text-sm font-medium text-muted-foreground">No Preview Available</p>
-							<p className="text-xs text-muted-foreground/70 mt-1">
+							<p className="text-sm font-medium">No Preview Available</p>
+							<p className="text-xs text-muted-foreground mt-1">
 								Start a dev server to see your app here
 							</p>
 						</div>
@@ -83,7 +133,7 @@ export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
 					onClick={handleRefresh}
 					title="Refresh"
 				>
-					<RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+					<RefreshCw className={cn("h-4 w-4", status === "checking" && "animate-spin")} />
 				</Button>
 
 				<div className="flex-1 min-w-0">
@@ -107,21 +157,44 @@ export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
 				</Button>
 			</div>
 
-			{/* Iframe */}
+			{/* Content */}
 			<div className="flex-1 relative min-h-0">
-				{isLoading && (
-					<div className="absolute inset-0 flex items-center justify-center bg-muted/50">
-						<RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+				{status === "checking" && (
+					<div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background">
+						<RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+						<p className="text-xs text-muted-foreground">Connecting to preview...</p>
 					</div>
 				)}
-				<iframe
-					ref={iframeRef}
-					src={url}
-					className="w-full h-full border-0"
-					onLoad={handleLoad}
-					sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-					title="Preview"
-				/>
+
+				{status === "unavailable" && (
+					<div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background">
+						<div className="text-center space-y-3 px-4">
+							<div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+								<MonitorIcon className="h-6 w-6 text-muted-foreground" />
+							</div>
+							<div>
+								<p className="text-sm font-medium">Preview Not Ready</p>
+								<p className="text-xs text-muted-foreground mt-1">
+									No server is running on this port yet
+								</p>
+							</div>
+							<Button variant="outline" size="sm" onClick={handleRefresh} className="mt-2 gap-2">
+								<RefreshCw className="h-3.5 w-3.5" />
+								Retry
+							</Button>
+						</div>
+					</div>
+				)}
+
+				{status === "ready" && (
+					<iframe
+						ref={iframeRef}
+						src={url}
+						className="w-full h-full border-0"
+						sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+						title="Preview"
+					/>
+				)}
 			</div>
 		</div>
 	);

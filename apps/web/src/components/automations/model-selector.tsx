@@ -56,7 +56,7 @@ export function ModelSelector({
 								key={model.id}
 								variant="ghost"
 								className={cn(
-									"w-full h-auto flex items-start justify-start gap-2 px-3 py-2 text-sm rounded-none",
+									"w-full h-auto flex items-start justify-start gap-2 px-3 py-2 text-sm font-normal rounded-none",
 									isSelected && "bg-primary/10",
 								)}
 								onClick={() => {

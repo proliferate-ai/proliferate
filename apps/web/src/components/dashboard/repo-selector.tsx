@@ -186,7 +186,7 @@ export function RepoSelector({
 									value={searchQuery}
 									onChange={(e) => setSearchQuery(e.target.value)}
 									placeholder="Search repos..."
-									className="w-full pl-8 pr-3 py-1.5 text-sm"
+									className="w-full pl-8 pr-3 py-1.5 !text-sm"
 								/>
 							</div>
 						</div>

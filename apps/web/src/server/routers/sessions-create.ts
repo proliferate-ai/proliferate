@@ -24,7 +24,6 @@ import {
 	getSetupSystemPrompt,
 	isValidModelId,
 	parseModelId,
-	resolveSnapshotId,
 } from "@proliferate/shared";
 import {
 	generateSessionAPIKey,
@@ -100,35 +99,48 @@ export async function createSessionHandler(
 		throw new ORPCError("BAD_REQUEST", { message: "Prebuild has no repos" });
 	}
 
-	// Resolve snapshotId using layering rules:
-	// 1. Prebuild snapshot (from setup finalize or manual snapshot)
-	// 2. Repo snapshot (Modal only, single-repo, workspacePath ".")
-	// 3. No snapshot (base image + live clone)
-	const snapshotId = resolveSnapshotId({
-		prebuildSnapshotId: prebuild.snapshotId,
-		sandboxProvider: prebuildProvider,
-		prebuildRepos,
-	});
-	if (snapshotId && snapshotId !== prebuild.snapshotId) {
-		log.info({ snapshotId }, "Using repo snapshot");
-	}
-
-	// Verify all repos belong to this org
-	for (const pr of prebuildRepos) {
-		if (pr.repo?.organizationId !== orgId) {
+	const verifiedPrebuildRepos = prebuildRepos.map((pr) => {
+		if (!pr.repo) {
+			throw new ORPCError("BAD_REQUEST", { message: "Prebuild has missing repo data" });
+		}
+		if (pr.repo.organizationId !== orgId) {
 			throw new ORPCError("UNAUTHORIZED", { message: "Unauthorized access to prebuild repos" });
 		}
-	}
+		return { ...pr, repo: pr.repo };
+	});
 
 	// Primary repo (first one) for system prompt
-	const primaryRepo = prebuildRepos[0]?.repo;
+	const primaryRepo = verifiedPrebuildRepos[0]?.repo;
+
+	// Create sandbox via provider
+	const providerType = prebuildProvider as SandboxProviderType | undefined;
+	const provider = getSandboxProvider(providerType);
+
+	// Resolve snapshot layering:
+	// 1) Prebuild snapshot (explicit environment/config snapshot)
+	// 2) Repo snapshot (deterministic clone-only baseline, single-repo prebuilds only)
+	// 3) No snapshot (base snapshot/base image + live clone)
+	const prebuildSnapshotId = prebuild.snapshotId;
+	const eligibleRepos = verifiedPrebuildRepos;
+	const repoSnapshotId =
+		!prebuildSnapshotId &&
+		provider.type === "modal" &&
+		eligibleRepos.length === 1 &&
+		eligibleRepos[0].workspacePath === "." &&
+		eligibleRepos[0].repo.repoSnapshotStatus === "ready" &&
+		eligibleRepos[0].repo.repoSnapshotId &&
+		(!eligibleRepos[0].repo.repoSnapshotProvider ||
+			eligibleRepos[0].repo.repoSnapshotProvider === "modal")
+			? eligibleRepos[0].repo.repoSnapshotId
+			: null;
+	const snapshotId = prebuildSnapshotId || repoSnapshotId;
 
 	// Build repos to clone list
-	const reposToClone = prebuildRepos.map((pr) => ({
-		repoId: pr.repo?.id ?? "",
-		repoUrl: pr.repo?.githubUrl ?? "",
+	const reposToClone = verifiedPrebuildRepos.map((pr) => ({
+		repoId: pr.repo.id,
+		repoUrl: pr.repo.githubUrl,
 		workspacePath: pr.workspacePath,
-		defaultBranch: pr.repo?.defaultBranch ?? null,
+		defaultBranch: pr.repo.defaultBranch,
 	}));
 
 	// Helper to get token for a single repo
@@ -214,10 +226,6 @@ export async function createSessionHandler(
 	const doUrl = getSessionGatewayUrl(sessionId);
 	const startTime = Date.now();
 	reqLog.info("Session creation started");
-
-	// Create sandbox via provider
-	const providerType = prebuildProvider as SandboxProviderType | undefined;
-	const provider = getSandboxProvider(providerType);
 
 	// Create session record
 	try {
@@ -320,7 +328,6 @@ export async function createSessionHandler(
 			codingAgentSessionId: null,
 		});
 		reqLog.info({ durationMs: Date.now() - startTime }, "Session status updated to running");
-
 	} catch (err) {
 		reqLog.error({ err }, "Sandbox provider error");
 
