@@ -100,7 +100,7 @@ export default function DashboardLayout({
 				<Sidebar />
 
 				{/* Main content */}
-				<main className="flex-1 overflow-hidden animate-in fade-in duration-200">{children}</main>
+				<main className="flex-1 overflow-y-auto animate-in fade-in duration-200">{children}</main>
 			</div>
 
 			{/* Mobile Sidebar Drawer */}

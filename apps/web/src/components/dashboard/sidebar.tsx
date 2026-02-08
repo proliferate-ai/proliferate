@@ -17,6 +17,7 @@ import { useDashboardStore } from "@/stores/dashboard";
 import type { Session } from "@proliferate/shared/contracts";
 import {
 	FileStackIcon,
+	FolderGit2,
 	LifeBuoy,
 	LogOut,
 	Menu,
@@ -78,6 +79,7 @@ export function Sidebar() {
 
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
+	const isRepositoriesPage = pathname?.startsWith("/dashboard/repositories");
 
 	return (
 		<aside
@@ -145,6 +147,18 @@ export function Sidebar() {
 					title="Automations"
 				>
 					<FileStackIcon className="h-4 w-4" />
+				</Button>
+				<Button
+					variant={isRepositoriesPage ? "secondary" : "ghost"}
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.stopPropagation();
+						router.push("/dashboard/repositories");
+					}}
+					title="Repositories"
+				>
+					<FolderGit2 className="h-4 w-4" />
 				</Button>
 			</div>
 
@@ -235,6 +249,7 @@ function SidebarContent({
 	// Detect active pages from URL
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
+	const isRepositoriesPage = pathname?.startsWith("/dashboard/repositories");
 
 	// Detect active session from URL
 	const isSessionDetailPage =
@@ -328,6 +343,19 @@ function SidebarContent({
 				>
 					<FileStackIcon className="h-5 w-5" />
 					<span>Automations</span>
+				</button>
+				<button
+					type="button"
+					onClick={() => handleNavigate("/dashboard/repositories")}
+					className={cn(
+						"flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-sm transition-colors",
+						isRepositoriesPage
+							? "bg-muted text-foreground"
+							: "text-muted-foreground hover:text-foreground hover:bg-accent",
+					)}
+				>
+					<FolderGit2 className="h-5 w-5" />
+					<span>Repositories</span>
 				</button>
 			</div>
 
