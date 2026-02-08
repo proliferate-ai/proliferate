@@ -84,7 +84,7 @@ export function Sidebar() {
 			className={cn(
 				"hidden md:flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground overflow-hidden",
 				"transition-[width] duration-200 ease-out",
-				sidebarCollapsed ? "w-12 cursor-pointer" : "w-64",
+				sidebarCollapsed ? "w-12 cursor-pointer hover:bg-accent/50 transition-colors" : "w-64",
 			)}
 			onClick={sidebarCollapsed ? toggleSidebar : undefined}
 		>
