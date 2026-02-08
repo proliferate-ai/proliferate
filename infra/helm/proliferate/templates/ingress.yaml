@@ -7,6 +7,9 @@ metadata:
 {{- range $key, $value := .Values.ingress.annotations }}
     {{ $key }}: {{ $value | quote }}
 {{- end }}
+{{- if .Values.ingress.tls }}
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+{{- end }}
 spec:
 {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}
@@ -37,6 +40,9 @@ metadata:
 {{- range $key, $value := .Values.ingress.gatewayAnnotations }}
     {{ $key }}: {{ $value | quote }}
 {{- end }}
+{{- if .Values.ingress.tls }}
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+{{- end }}
 spec:
 {{- if .Values.ingress.className }}
   ingressClassName: {{ .Values.ingress.className }}
@@ -66,6 +72,9 @@ metadata:
   annotations:
 {{- range $key, $value := .Values.ingress.llmProxyAnnotations }}
     {{ $key }}: {{ $value | quote }}
+{{- end }}
+{{- if .Values.ingress.tls }}
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
 {{- end }}
 spec:
 {{- if .Values.ingress.className }}

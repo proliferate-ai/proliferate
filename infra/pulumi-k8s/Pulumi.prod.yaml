@@ -1,1 +1,4 @@
 encryptionsalt: v1:xBN3t5bId+o=:v1:5NMYqQt20NmxOCOk:4cJWyJp/4QO8m5siLFsNQc+mcQDsyA==
+config:
+  proliferate-k8s:ingressHost: app.proliferate.com
+  proliferate-k8s:ingressTlsSecretName: proliferate-tls
