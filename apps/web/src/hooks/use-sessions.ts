@@ -2,7 +2,9 @@
 
 import { orpc } from "@/lib/orpc";
 import type { CreateSessionInput, FinalizeSetupInput } from "@proliferate/shared";
+import type { Session } from "@proliferate/shared/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 
 export function useSessions(params?: { status?: string; repoId?: string }) {
 	return useQuery({
@@ -23,13 +25,51 @@ export function useSessionData(id: string) {
 	});
 }
 
+export function usePrefetchSession() {
+	const queryClient = useQueryClient();
+
+	return useCallback(
+		(sessionId: string) => {
+			queryClient.prefetchQuery(orpc.sessions.get.queryOptions({ input: { id: sessionId } }));
+		},
+		[queryClient],
+	);
+}
+
 export function useCreateSession() {
 	const queryClient = useQueryClient();
 
 	const mutation = useMutation({
 		...orpc.sessions.create.mutationOptions(),
-		onSuccess: () => {
+		onSuccess: (result, variables) => {
 			queryClient.invalidateQueries({ queryKey: orpc.sessions.list.key() });
+
+			// Seed the session cache so the detail page renders instantly.
+			// This is partial — TanStack Query will background-refetch the full data.
+			const partialSession: Session = {
+				id: result.sessionId,
+				repoId: null,
+				organizationId: "",
+				createdBy: null,
+				sessionType: variables.sessionType ?? null,
+				status: "starting",
+				sandboxId: result.sandboxId ?? null,
+				snapshotId: null,
+				prebuildId: variables.prebuildId,
+				branchName: null,
+				parentSessionId: null,
+				title: null,
+				startedAt: new Date().toISOString(),
+				lastActivityAt: new Date().toISOString(),
+				pausedAt: null,
+				origin: "web",
+				clientType: null,
+			};
+
+			queryClient.setQueryData(
+				orpc.sessions.get.queryOptions({ input: { id: result.sessionId } }).queryKey,
+				{ session: partialSession },
+			);
 		},
 	});
 

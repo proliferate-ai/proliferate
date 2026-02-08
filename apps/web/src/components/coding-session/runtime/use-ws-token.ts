@@ -1,6 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+
+const WS_TOKEN_QUERY_KEY = ["ws-token"] as const;
+const STALE_TIME = 30 * 60 * 1000; // 30 minutes (token valid for 60 min)
+const GC_TIME = 60 * 60 * 1000; // 1 hour — match token lifetime
+
+async function fetchWsToken(): Promise<string> {
+	const res = await fetch("/api/auth/ws-token", { credentials: "include" });
+	if (!res.ok) {
+		throw new Error("Failed to get WebSocket token");
+	}
+	const data = await res.json();
+	return data.token;
+}
 
 interface WsTokenState {
 	token: string | null;
@@ -8,47 +21,26 @@ interface WsTokenState {
 	error: string | null;
 }
 
-/** Fetches a WebSocket auth token from the API */
+/** Fetches a WebSocket auth token from the API, cached for 30 minutes */
 export function useWsToken(): WsTokenState {
-	const [token, setToken] = useState<string | null>(null);
-	const [isLoading, setIsLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
+	const {
+		data: token,
+		isLoading,
+		error,
+	} = useQuery({
+		queryKey: WS_TOKEN_QUERY_KEY,
+		queryFn: fetchWsToken,
+		staleTime: STALE_TIME,
+		gcTime: GC_TIME,
+		refetchOnWindowFocus: false,
+		retry: 2,
+	});
 
-	useEffect(() => {
-		let cancelled = false;
-
-		async function fetchToken() {
-			console.log("[WsToken] Fetching token...");
-			try {
-				const res = await fetch("/api/auth/ws-token", { credentials: "include" });
-				if (!res.ok) {
-					const text = await res.text();
-					console.error("[WsToken] Failed to get token:", res.status, text);
-					throw new Error("Failed to get WebSocket token");
-				}
-				const data = await res.json();
-				if (!cancelled) {
-					console.log("[WsToken] Token received, length:", data.token?.length);
-					setToken(data.token);
-				}
-			} catch (err) {
-				console.error("[WsToken] Error:", err);
-				if (!cancelled) {
-					setError(err instanceof Error ? err.message : "Unknown error");
-				}
-			} finally {
-				if (!cancelled) {
-					setIsLoading(false);
-				}
-			}
-		}
-
-		fetchToken();
-
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-
-	return { token, isLoading, error };
+	return {
+		token: token ?? null,
+		isLoading,
+		error: error ? (error instanceof Error ? error.message : "Unknown error") : null,
+	};
 }
+
+export { WS_TOKEN_QUERY_KEY };

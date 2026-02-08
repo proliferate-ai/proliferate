@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { usePrefetchSession } from "@/hooks/use-sessions";
 import { cn } from "@/lib/utils";
 import type { Session } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
@@ -50,6 +51,7 @@ function getStatusLabel(status: Session["status"]): string {
 }
 
 export function SessionCard({ session }: SessionCardProps) {
+	const prefetchSession = usePrefetchSession();
 	const activityDate = session.lastActivityAt || session.startedAt;
 	const timeAgo = activityDate
 		? formatDistanceToNow(new Date(activityDate), { addSuffix: true })
@@ -69,6 +71,7 @@ export function SessionCard({ session }: SessionCardProps) {
 					"group p-4 rounded-lg border border-border bg-card",
 					"hover:border-primary/50 hover:bg-muted/30 transition-colors cursor-pointer",
 				)}
+				onMouseEnter={() => prefetchSession(session.id)}
 			>
 				{/* Header: Title + Timestamp */}
 				<div className="flex items-start justify-between gap-4 mb-3">
