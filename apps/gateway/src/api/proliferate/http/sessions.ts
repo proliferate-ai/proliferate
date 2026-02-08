@@ -104,16 +104,13 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 			if (!auth) {
 				throw new ApiError(401, "Authentication required");
 			}
-			const orgId = auth.orgId;
-			if (!orgId) {
-				throw new ApiError(401, "Organization required");
-			}
 
 			const body = req.body as CreateSessionRequest;
 
-			// Validate required fields
-			if (!body.organizationId) {
-				throw new ApiError(400, "organizationId is required");
+			// Service auth can use body.organizationId; user/CLI auth must have orgId on the token
+			const organizationId = auth.orgId ?? body.organizationId;
+			if (!organizationId) {
+				throw new ApiError(401, "Organization required");
 			}
 			if (!body.sessionType) {
 				throw new ApiError(400, "sessionType is required");
@@ -139,12 +136,6 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 			// Validate SSH options
 			if (body.sshOptions && !body.sshOptions.publicKeys?.length) {
 				throw new ApiError(400, "sshOptions.publicKeys is required when SSH is enabled");
-			}
-
-			// For CLI auth, use the org from the token if not provided
-			const organizationId = body.organizationId || auth.orgId;
-			if (!organizationId) {
-				throw new ApiError(400, "organizationId is required");
 			}
 
 			logger.debug(
@@ -353,7 +344,8 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 			if (!auth) {
 				throw new ApiError(401, "Authentication required");
 			}
-			const orgId = auth.orgId;
+			// Service auth can use query param; user/CLI auth must have orgId on the token
+			const orgId = auth.orgId ?? (req.query.organizationId as string);
 			if (!orgId) {
 				throw new ApiError(401, "Organization required");
 			}

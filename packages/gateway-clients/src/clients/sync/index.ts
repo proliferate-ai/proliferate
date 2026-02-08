@@ -80,7 +80,10 @@ export interface SyncClient extends Client {
 	/**
 	 * Get session status via HTTP
 	 */
-	getSessionStatus(proliferateSessionId: string): Promise<SessionStatusResponse>;
+	getSessionStatus(
+		proliferateSessionId: string,
+		organizationId?: string,
+	): Promise<SessionStatusResponse>;
 }
 
 /**
@@ -130,8 +133,11 @@ class SyncClientImpl implements SyncClient {
 		return getInfo(this.http, proliferateSessionId);
 	}
 
-	async getSessionStatus(proliferateSessionId: string): Promise<SessionStatusResponse> {
-		return getSessionStatus(this.http, proliferateSessionId);
+	async getSessionStatus(
+		proliferateSessionId: string,
+		organizationId?: string,
+	): Promise<SessionStatusResponse> {
+		return getSessionStatus(this.http, proliferateSessionId, organizationId);
 	}
 
 	async checkHealth(): Promise<HealthCheckResult> {
