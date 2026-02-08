@@ -101,8 +101,8 @@ export default function RepositoriesPage() {
 				setPublicSearchQuery("");
 				setShowPublicSearch(false);
 			}
-		} catch (err) {
-			console.error("Failed to add repo:", err);
+		} catch {
+			// Error is surfaced by TanStack Query's mutation state
 		} finally {
 			setAddingRepoId(null);
 		}
