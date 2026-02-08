@@ -112,9 +112,14 @@ export function useCodingSessionRuntime({
 		sendCancel();
 	}, [isConnected, sendCancel]);
 
+	// Don't show running state when there are no messages and no prompt was sent —
+	// the gateway may send status events that set isRunning before user interaction.
+	const effectiveIsRunning =
+		isRunning && (threadMessages.length > 0 || initialPromptSentRef.current);
+
 	const runtime = useExternalStoreRuntime({
 		messages: threadMessages,
-		isRunning,
+		isRunning: effectiveIsRunning,
 		onNew,
 		onCancel,
 		convertMessage: (message) => message,

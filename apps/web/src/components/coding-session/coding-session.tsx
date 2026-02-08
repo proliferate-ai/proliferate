@@ -2,17 +2,18 @@
 
 import { SettingsModal } from "@/components/dashboard/settings-modal";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { LoadingDots } from "@/components/ui/loading-dots";
 import { useRepo } from "@/hooks/use-repos";
 import { useSessionData, useSnapshotSession } from "@/hooks/use-sessions";
 import { useSession as useBetterAuthSession } from "@/lib/auth-client";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { SessionPanelProps } from "./right-panel";
 import { RightPanel } from "./right-panel";
 import { SessionHeader } from "./session-header";
+import { SessionLoadingShell } from "./session-loading-shell";
 import { Thread } from "./thread";
 import { SessionContext } from "./tool-ui";
 import { useCodingSessionRuntime } from "./use-coding-session-runtime";
@@ -87,6 +88,7 @@ export function CodingSession({
 	// Combine all loading states
 	const isLoading =
 		authLoading || sessionLoading || status === "loading" || status === "connecting";
+	const isSessionCreating = sessionData?.status === "starting" && !sessionData?.sandboxId;
 
 	// Session props for the right panel (session-info & snapshots modes)
 	const sessionPanelProps: SessionPanelProps | undefined = sessionData
@@ -107,14 +109,20 @@ export function CodingSession({
 		: undefined;
 
 	const content = isLoading ? (
-		<div className="flex h-full items-center justify-center">
-			<LoadingDots
-				size="lg"
-				layout="centered"
-				label={status === "connecting" ? "Connecting..." : "Loading..."}
-				className="text-primary"
+		sessionData ? (
+			<SessionLoadingShell
+				mode={isSessionCreating ? "creating" : "resuming"}
+				stage={
+					isSessionCreating ? (status === "connecting" ? "provisioning" : "preparing") : undefined
+				}
+				repoName={repoData?.githubRepoName || sessionData.repo?.githubRepoName}
+				initialPrompt={initialPrompt}
 			/>
-		</div>
+		) : (
+			<div className="flex h-full items-center justify-center">
+				<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+			</div>
+		)
 	) : !authSession ? (
 		<div className="flex h-full items-center justify-center">
 			<p className="text-sm text-destructive">Not authenticated</p>
