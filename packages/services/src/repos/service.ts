@@ -73,10 +73,11 @@ export async function requestRepoSnapshotBuild(
 ): Promise<void> {
 	try {
 		const queue = getRepoSnapshotBuildQueue();
+		const force = options?.force ?? false;
 		await queue.add(
 			`repo:${repoId}`,
-			{ repoId, force: options?.force ?? false },
-			{ jobId: `repo:${repoId}` },
+			{ repoId, force },
+			{ jobId: force ? `repo:${repoId}:${Date.now()}` : `repo:${repoId}` },
 		);
 		await reposDb.markRepoSnapshotBuilding(repoId, "modal");
 	} catch (error) {

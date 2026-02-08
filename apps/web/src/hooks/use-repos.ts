@@ -65,6 +65,18 @@ export function useAvailableRepos(integrationId?: string) {
 	});
 }
 
+export function useRebuildRepoSnapshot() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.repos.rebuildSnapshot.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: orpc.repos.list.key() });
+			},
+		}),
+	);
+}
+
 export function useSearchRepos(query: string, enabled = true) {
 	return useQuery({
 		...orpc.repos.search.queryOptions({ input: { q: query } }),

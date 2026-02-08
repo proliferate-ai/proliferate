@@ -36,6 +36,7 @@ export function toRepo(row: RepoWithPrebuildsRow): Repo {
 		repoSnapshotStatus: (row.repoSnapshotStatus as "building" | "ready" | "failed") ?? null,
 		repoSnapshotBuiltAt: toIsoString(row.repoSnapshotBuiltAt),
 		repoSnapshotError: row.repoSnapshotError ?? null,
+		repoSnapshotCommitSha: row.repoSnapshotCommitSha ?? null,
 	};
 }
 

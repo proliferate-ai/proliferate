@@ -109,6 +109,7 @@ export const RepoSchema = z.object({
 	repoSnapshotStatus: z.enum(["building", "ready", "failed"]).nullable(),
 	repoSnapshotBuiltAt: z.string().nullable().optional(),
 	repoSnapshotError: z.string().nullable().optional(),
+	repoSnapshotCommitSha: z.string().nullable().optional(),
 });
 
 export type Repo = z.infer<typeof RepoSchema>;

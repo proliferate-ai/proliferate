@@ -7,7 +7,12 @@ import { IconAction } from "@/components/ui/icon-action";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { SelectableItem } from "@/components/ui/selectable-item";
-import { useAvailableRepos, useCreateRepo, useSearchRepos } from "@/hooks/use-repos";
+import {
+	useAvailableRepos,
+	useCreateRepo,
+	useRebuildRepoSnapshot,
+	useSearchRepos,
+} from "@/hooks/use-repos";
 import { orpc } from "@/lib/orpc";
 import { cn, getSnapshotDisplayName } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
@@ -22,11 +27,13 @@ import {
 	Lock,
 	Pencil,
 	Plus,
+	RefreshCw,
 	Search,
 	Star,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 export default function RepositoriesPage() {
 	const router = useRouter();
@@ -286,6 +293,17 @@ function RepoCard({
 	onCreateSnapshot: (repoId: string) => void;
 }) {
 	const [expanded, setExpanded] = useState(false);
+	const rebuildMutation = useRebuildRepoSnapshot();
+
+	const handleRebuild = async (e: React.MouseEvent) => {
+		e.stopPropagation();
+		try {
+			await rebuildMutation.mutateAsync({ id: repo.id });
+			toast.success("Cache rebuild started");
+		} catch {
+			toast.error("Failed to start cache rebuild");
+		}
+	};
 
 	const { data: snapshotsData, isLoading } = useQuery({
 		...orpc.repos.listSnapshots.queryOptions({ input: { id: repo.id } }),
@@ -307,6 +325,12 @@ function RepoCard({
 					<p className="text-sm font-medium truncate">{repo.githubRepoName}</p>
 					<p className="text-xs text-muted-foreground">{repo.defaultBranch || "main"}</p>
 				</div>
+				<IconAction
+					icon={<RefreshCw className="h-3.5 w-3.5" />}
+					onClick={handleRebuild}
+					tooltip="Rebuild cache"
+					disabled={rebuildMutation.isPending || repo.repoSnapshotStatus === "building"}
+				/>
 				<span className="text-xs text-muted-foreground">
 					{expanded ? "Hide" : "Show"} snapshots
 				</span>
