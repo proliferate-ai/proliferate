@@ -62,6 +62,13 @@
       "when": 1770500000000,
       "tag": "0008_repo_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1770600000000,
+      "tag": "0009_sandbox_base_snapshots",
+      "breakpoints": true
     }
   ]
 }
