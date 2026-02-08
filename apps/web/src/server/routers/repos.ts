@@ -302,6 +302,68 @@ export const reposRouter = {
 		}),
 
 	/**
+	 * Get service commands for a repo.
+	 */
+	getServiceCommands: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(
+			z.object({
+				commands: z.array(
+					z.object({
+						name: z.string(),
+						command: z.string(),
+						cwd: z.string().optional(),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const exists = await repos.repoExists(input.id, context.orgId);
+			if (!exists) {
+				throw new ORPCError("NOT_FOUND", { message: "Repo not found" });
+			}
+
+			const row = await repos.getServiceCommands(input.id, context.orgId);
+			const { parseServiceCommands } = await import("@proliferate/shared/sandbox");
+			const commands = parseServiceCommands(row?.serviceCommands);
+			return { commands };
+		}),
+
+	/**
+	 * Update service commands for a repo.
+	 */
+	updateServiceCommands: orgProcedure
+		.input(
+			z.object({
+				id: z.string().uuid(),
+				commands: z
+					.array(
+						z.object({
+							name: z.string().min(1).max(100),
+							command: z.string().min(1).max(1000),
+							cwd: z.string().max(500).optional(),
+						}),
+					)
+					.max(10),
+			}),
+		)
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			const exists = await repos.repoExists(input.id, context.orgId);
+			if (!exists) {
+				throw new ORPCError("NOT_FOUND", { message: "Repo not found" });
+			}
+
+			await repos.updateServiceCommands({
+				repoId: input.id,
+				orgId: context.orgId,
+				serviceCommands: input.commands,
+				updatedBy: context.user.id,
+			});
+			return { success: true };
+		}),
+
+	/**
 	 * Finalize setup session and create a prebuild snapshot.
 	 * Note: This is a complex operation - keeping most logic here for now.
 	 * Could be moved to services later.

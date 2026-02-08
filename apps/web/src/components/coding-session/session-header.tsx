@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { PreviewMode } from "@/stores/preview-panel";
-import { Globe, HardDrive, MessageSquare, PanelRight, Settings } from "lucide-react";
+import { Globe, HardDrive, MessageSquare, PanelRight, Settings, Wrench } from "lucide-react";
 
 interface SessionHeaderProps {
 	error: string | null;
@@ -12,6 +12,7 @@ interface SessionHeaderProps {
 	onTogglePreview?: () => void;
 	onToggleSessionInfo?: () => void;
 	onToggleSnapshots?: () => void;
+	onToggleAutoStart?: () => void;
 	// Mobile
 	mobileView?: "chat" | "preview";
 	onToggleMobileView?: () => void;
@@ -23,6 +24,7 @@ export function SessionHeader({
 	onTogglePreview,
 	onToggleSessionInfo,
 	onToggleSnapshots,
+	onToggleAutoStart,
 	mobileView,
 	onToggleMobileView,
 }: SessionHeaderProps) {
@@ -75,6 +77,21 @@ export function SessionHeader({
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent>Snapshots</TooltipContent>
+					</Tooltip>
+				)}
+				{onToggleAutoStart && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								variant={panelMode.type === "service-commands" ? "secondary" : "ghost"}
+								size="icon"
+								className="hidden md:flex h-7 w-7"
+								onClick={onToggleAutoStart}
+							>
+								<Wrench className="h-3.5 w-3.5" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent>Auto-start settings</TooltipContent>
 					</Tooltip>
 				)}
 

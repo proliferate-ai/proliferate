@@ -247,6 +247,12 @@ export const repos = pgTable(
 		repoSnapshotCommitSha: text("repo_snapshot_commit_sha"),
 		repoSnapshotBuiltAt: timestamp("repo_snapshot_built_at", { withTimezone: true, mode: "date" }),
 		repoSnapshotProvider: text("repo_snapshot_provider"),
+		serviceCommands: jsonb("service_commands"),
+		serviceCommandsUpdatedAt: timestamp("service_commands_updated_at", {
+			withTimezone: true,
+			mode: "date",
+		}),
+		serviceCommandsUpdatedBy: text("service_commands_updated_by"),
 	},
 	(table) => [
 		index("idx_repos_local_path_hash")

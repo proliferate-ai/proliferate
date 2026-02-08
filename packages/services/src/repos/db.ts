@@ -280,3 +280,40 @@ export async function markRepoSnapshotFailed(input: {
 		})
 		.where(eq(repos.id, input.repoId));
 }
+
+/**
+ * Get service commands for a repo.
+ * Returns raw jsonb — caller must validate with parseServiceCommands().
+ */
+export async function getServiceCommands(
+	repoId: string,
+	orgId: string,
+): Promise<{ serviceCommands: unknown } | null> {
+	const db = getDb();
+	const result = await db.query.repos.findFirst({
+		where: and(eq(repos.id, repoId), eq(repos.organizationId, orgId)),
+		columns: { serviceCommands: true },
+	});
+	return result ?? null;
+}
+
+/**
+ * Update service commands for a repo.
+ */
+export async function updateServiceCommands(input: {
+	repoId: string;
+	orgId: string;
+	serviceCommands: unknown;
+	updatedBy: string;
+}): Promise<void> {
+	const db = getDb();
+	await db
+		.update(repos)
+		.set({
+			serviceCommands: input.serviceCommands,
+			serviceCommandsUpdatedAt: new Date(),
+			serviceCommandsUpdatedBy: input.updatedBy,
+			updatedAt: new Date(),
+		})
+		.where(and(eq(repos.id, input.repoId), eq(repos.organizationId, input.orgId)));
+}

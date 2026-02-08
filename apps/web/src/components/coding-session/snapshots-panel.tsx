@@ -2,10 +2,13 @@
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Box, Camera, Loader2, X } from "lucide-react";
+import { useServiceCommands } from "@/hooks/use-repos";
+import { usePreviewPanelStore } from "@/stores/preview-panel";
+import { Box, Camera, Loader2, Play, X } from "lucide-react";
 
 interface SnapshotsPanelProps {
 	snapshotId?: string | null;
+	repoId?: string | null;
 	canSnapshot?: boolean;
 	isSnapshotting?: boolean;
 	onSnapshot?: () => void;
@@ -14,11 +17,14 @@ interface SnapshotsPanelProps {
 
 export function SnapshotsPanel({
 	snapshotId,
+	repoId,
 	canSnapshot,
 	isSnapshotting,
 	onSnapshot,
 	onClose,
 }: SnapshotsPanelProps) {
+	const { data: commands } = useServiceCommands(repoId || "", !!repoId);
+	const { openServiceCommands } = usePreviewPanelStore();
 	return (
 		<div className="flex flex-col h-full">
 			{/* Header */}
@@ -77,6 +83,27 @@ export function SnapshotsPanel({
 							<Box className="h-3.5 w-3.5 shrink-0" />
 							<span className="font-mono text-xs truncate">{snapshotId}</span>
 						</div>
+					</div>
+				)}
+
+				{/* Auto-start hint */}
+				{repoId && (
+					<div className="space-y-3">
+						<h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+							Auto-start
+						</h3>
+						<button
+							type="button"
+							onClick={openServiceCommands}
+							className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
+						>
+							<Play className="h-3.5 w-3.5 shrink-0" />
+							<span>
+								{commands && commands.length > 0
+									? `${commands.length} command${commands.length === 1 ? "" : "s"} configured`
+									: "Not configured"}
+							</span>
+						</button>
 					</div>
 				)}
 			</div>

@@ -20,6 +20,7 @@ import {
 	parseModelId,
 	resolveSnapshotId,
 } from "@proliferate/shared";
+import { parseServiceCommands } from "@proliferate/shared/sandbox";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
 
@@ -97,6 +98,7 @@ interface PrebuildRepoRow {
 		githubUrl: string;
 		githubRepoName: string;
 		defaultBranch: string | null;
+		serviceCommands?: unknown;
 	} | null;
 }
 
@@ -266,6 +268,10 @@ export async function createSession(
 	// Create sandbox immediately
 	let integrationWarnings: IntegrationWarning[] = [];
 	try {
+		// snapshotHasDeps: true when using a prebuild snapshot (has deps installed),
+		// false when using a repo snapshot (clone-only) or no snapshot.
+		const snapshotHasDeps = Boolean(snapshotId) && Boolean(inputSnapshotId);
+
 		const createSandboxStartMs = Date.now();
 		const result = await createSandbox({
 			env,
@@ -279,6 +285,7 @@ export async function createSession(
 			integrationIds: resolvedIntegrationIds,
 			triggerContext,
 			sshOptions,
+			snapshotHasDeps,
 		});
 		log.debug(
 			{
@@ -352,6 +359,8 @@ interface CreateSandboxParams {
 	/** Trigger context written to .proliferate/trigger-context.json */
 	triggerContext?: Record<string, unknown>;
 	sshOptions?: CreateSessionOptions["sshOptions"];
+	/** True if the snapshot includes installed dependencies. */
+	snapshotHasDeps?: boolean;
 }
 
 interface CreateSandboxResult {
@@ -502,11 +511,13 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	const repoSpecs: RepoSpec[] = await Promise.all(
 		typedPrebuildRepos.map(async (pr) => {
 			const token = await resolveGitHubToken(env, organizationId, pr.repo!.id, userId);
+			const serviceCommands = parseServiceCommands(pr.repo!.serviceCommands);
 			return {
 				repoUrl: pr.repo!.githubUrl,
 				token,
 				workspacePath: pr.workspacePath,
 				repoId: pr.repo!.id,
+				...(serviceCommands.length > 0 ? { serviceCommands } : {}),
 			};
 		}),
 	);
@@ -567,6 +578,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			: undefined,
 		sshPublicKey,
 		triggerContext,
+		snapshotHasDeps: params.snapshotHasDeps,
 	});
 	log.debug(
 		{

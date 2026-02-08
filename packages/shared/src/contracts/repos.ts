@@ -106,6 +106,7 @@ export const RepoSchema = z.object({
 	isPrivate: z.boolean(),
 	prebuildStatus: z.enum(["ready", "pending"]),
 	prebuildId: z.string().nullable(),
+	isConfigured: z.boolean(),
 });
 
 export type Repo = z.infer<typeof RepoSchema>;

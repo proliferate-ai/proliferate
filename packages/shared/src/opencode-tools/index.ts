@@ -392,3 +392,83 @@ Required fields:
 
 Include summary_markdown and citations when possible.
 `;
+
+/**
+ * Save Service Commands Tool
+ *
+ * Saves auto-start commands for the current repo.
+ * The gateway intercepts this tool and persists the commands to the database.
+ */
+export const SAVE_SERVICE_COMMANDS_TOOL = `
+// Save Service Commands Tool for OpenCode
+// Gateway intercepts this tool and saves commands to the database
+
+import { tool } from "@opencode-ai/plugin"
+
+export default tool({
+  description: \`Save auto-start service commands for this repository.
+
+These commands will run automatically when future sessions start with a prebuild snapshot.
+Use this to configure dev servers, watchers, or background services that should always be running.
+
+Call this AFTER you have verified the commands work correctly in the current session.
+
+Example:
+  save_service_commands({
+    commands: [
+      { name: "dev-server", command: "pnpm dev --host 0.0.0.0" },
+      { name: "tailwind", command: "pnpm tailwindcss --watch", cwd: "frontend" }
+    ]
+  })
+\`,
+
+  args: {
+    commands: tool.schema
+      .array(tool.schema.object({
+        name: tool.schema.string().describe("Short name for this service (e.g. dev-server)"),
+        command: tool.schema.string().describe("Shell command to run"),
+        cwd: tool.schema.string().optional().describe("Working directory relative to repo root"),
+      }))
+      .describe("List of service commands to auto-start on session creation"),
+  },
+
+  async execute(args) {
+    if (!args?.commands || args.commands.length === 0) {
+      return "Error: commands array is required and must not be empty.";
+    }
+    const names = args.commands.map(c => c.name).join(", ");
+    return \\\`Service commands saved: \\\${names}\\\`;
+  },
+});
+`;
+
+/**
+ * Save Service Commands Tool Description (for .txt file)
+ */
+export const SAVE_SERVICE_COMMANDS_DESCRIPTION = `
+Use the save_service_commands tool to configure auto-start commands for this repository.
+
+## When to Use
+
+Call this tool when the user asks you to save startup commands for their project.
+These commands will auto-run in future sessions that use a prebuild snapshot.
+
+## How to Use
+
+\\\`\\\`\\\`typescript
+save_service_commands({
+  commands: [
+    { name: "dev-server", command: "pnpm dev --host 0.0.0.0" },
+    { name: "db-migrate", command: "pnpm prisma migrate dev", cwd: "backend" }
+  ]
+})
+\\\`\\\`\\\`
+
+## Important
+
+- Only save commands you have verified work in the current session
+- Commands run in the background (fire-and-forget) after sandbox initialization
+- Output is logged to /tmp/svc-*.log files
+- Maximum 10 commands per repo
+- Call save_snapshot after this to persist the environment
+`;

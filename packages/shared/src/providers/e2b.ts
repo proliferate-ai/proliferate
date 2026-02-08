@@ -10,6 +10,8 @@ import {
 	ENV_FILE,
 	REQUEST_ENV_VARIABLES_DESCRIPTION,
 	REQUEST_ENV_VARIABLES_TOOL,
+	SAVE_SERVICE_COMMANDS_DESCRIPTION,
+	SAVE_SERVICE_COMMANDS_TOOL,
 	SAVE_SNAPSHOT_DESCRIPTION,
 	SAVE_SNAPSHOT_TOOL,
 	VERIFY_TOOL,
@@ -24,6 +26,7 @@ import {
 	SandboxProviderError,
 	type SessionMetadata,
 	getOpencodeConfig,
+	shellEscape,
 	waitForOpenCodeReady,
 } from "../sandbox";
 import type {
@@ -263,7 +266,7 @@ export class E2BProvider implements SandboxProvider {
 			provider: this.type,
 			sessionId: opts.sessionId,
 		});
-		this.setupAdditionalDependencies(sandbox, log).catch((err) => {
+		this.setupAdditionalDependencies(sandbox, opts, log).catch((err) => {
 			log.warn({ err }, "Additional dependencies setup failed");
 			logLatency("provider.create_sandbox.setup_additional.error", {
 				provider: this.type,
@@ -580,6 +583,8 @@ export class E2BProvider implements SandboxProvider {
 			writeFile(`${localToolDir}/save_snapshot.txt`, SAVE_SNAPSHOT_DESCRIPTION),
 			writeFile(`${localToolDir}/automation_complete.ts`, AUTOMATION_COMPLETE_TOOL),
 			writeFile(`${localToolDir}/automation_complete.txt`, AUTOMATION_COMPLETE_DESCRIPTION),
+			writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
+			writeFile(`${localToolDir}/save_service_commands.txt`, SAVE_SERVICE_COMMANDS_DESCRIPTION),
 			// Config (2 files)
 			writeFile(`${globalOpencodeDir}/opencode.json`, opencodeConfig),
 			writeFile(`${repoDir}/opencode.json`, opencodeConfig),
@@ -627,8 +632,13 @@ export class E2BProvider implements SandboxProvider {
 	 * Setup additional dependencies (async - fire and forget):
 	 * - Start services (Postgres, Redis, Mailcatcher)
 	 * - Start Caddy preview proxy
+	 * - Run per-repo service commands (if snapshot has deps)
 	 */
-	private async setupAdditionalDependencies(sandbox: Sandbox, log: Logger): Promise<void> {
+	private async setupAdditionalDependencies(
+		sandbox: Sandbox,
+		opts: CreateSandboxOpts,
+		log: Logger,
+	): Promise<void> {
 		// Start services (PostgreSQL, Redis, Mailcatcher)
 		log.debug("Starting services (async)");
 		await sandbox.commands.run("/usr/local/bin/start-services.sh", {
@@ -646,6 +656,46 @@ export class E2BProvider implements SandboxProvider {
 				providerLogger.debug({ err }, "Caddy process ended");
 			});
 		// Don't await - runs in background
+
+		// Run per-repo service commands (only when snapshot includes deps)
+		if (opts.snapshotHasDeps) {
+			this.runServiceCommands(sandbox, opts, log);
+		}
+	}
+
+	/**
+	 * Run per-repo service commands in the background.
+	 * Each command is fire-and-forget with output redirected to /tmp/svc-*.log.
+	 */
+	private runServiceCommands(sandbox: Sandbox, opts: CreateSandboxOpts, log: Logger): void {
+		const workspaceDir = "/home/user/workspace";
+
+		for (const repo of opts.repos) {
+			if (!repo.serviceCommands?.length) continue;
+
+			const repoDir =
+				opts.repos.length === 1 && repo.workspacePath === "."
+					? workspaceDir
+					: `${workspaceDir}/${repo.workspacePath}`;
+
+			for (let i = 0; i < repo.serviceCommands.length; i++) {
+				const cmd = repo.serviceCommands[i];
+				const slug = cmd.name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+				const logFile = `/tmp/svc-${repo.workspacePath.replace(/[/.]/g, "_")}-${i}-${slug}.log`;
+				const cwd = cmd.cwd ? `${repoDir}/${cmd.cwd}` : repoDir;
+
+				log.info({ name: cmd.name, cwd, logFile }, "Starting service command");
+
+				// Fire-and-forget with long timeout (matching Caddy pattern)
+				sandbox.commands
+					.run(`cd ${shellEscape(cwd)} && ${cmd.command} > ${shellEscape(logFile)} 2>&1`, {
+						timeoutMs: 3600000,
+					})
+					.catch(() => {
+						// Expected - runs until sandbox terminates
+					});
+			}
+		}
 	}
 
 	async snapshot(sessionId: string, sandboxId: string): Promise<SnapshotResult> {

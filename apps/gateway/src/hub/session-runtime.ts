@@ -255,6 +255,7 @@ export class SessionRuntime {
 				agentConfig: this.context.agentConfig,
 				currentSandboxId: this.context.session.sandbox_id || undefined,
 				sshPublicKey: this.context.sshPublicKey,
+				snapshotHasDeps: this.context.snapshotHasDeps,
 			});
 			this.logLatency("runtime.ensure_ready.provider.ensure_sandbox", {
 				provider: provider.type,

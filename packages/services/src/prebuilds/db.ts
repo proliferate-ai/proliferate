@@ -97,6 +97,7 @@ export interface PrebuildRepoDetailRow {
 		repoSnapshotId: string | null;
 		repoSnapshotStatus: string | null;
 		repoSnapshotProvider: string | null;
+		serviceCommands: unknown;
 	} | null;
 }
 
@@ -364,6 +365,7 @@ export async function getPrebuildReposWithDetails(
 					repoSnapshotId: true,
 					repoSnapshotStatus: true,
 					repoSnapshotProvider: true,
+					serviceCommands: true,
 				},
 			},
 		},

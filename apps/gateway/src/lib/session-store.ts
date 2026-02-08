@@ -11,6 +11,7 @@ import {
 	isValidModelId,
 	parseModelId,
 } from "@proliferate/shared";
+import { parseServiceCommands } from "@proliferate/shared/sandbox";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
 
@@ -21,6 +22,7 @@ export interface RepoRecord {
 	github_url: string;
 	github_repo_name: string;
 	default_branch: string | null;
+	service_commands?: unknown;
 }
 
 export interface SessionRecord {
@@ -54,6 +56,8 @@ export interface SessionContext {
 	envVars: Record<string, string>;
 	/** SSH public key for CLI sessions (for rsync access) */
 	sshPublicKey?: string;
+	/** True if the snapshot includes installed dependencies. Gates service command auto-start. */
+	snapshotHasDeps: boolean;
 }
 
 interface PrebuildRepoRow {
@@ -161,6 +165,7 @@ export async function loadSessionContext(
 				github_url: pr.repo!.githubUrl,
 				github_repo_name: pr.repo!.githubRepoName,
 				default_branch: pr.repo!.defaultBranch,
+				service_commands: pr.repo!.serviceCommands,
 			},
 		}));
 
@@ -193,11 +198,13 @@ export async function loadSessionContext(
 				{ repo: pr.repo.github_repo_name, hasToken: Boolean(token) },
 				"Token resolved for repo",
 			);
+			const serviceCommands = parseServiceCommands(pr.repo.service_commands);
 			return {
 				repoUrl: pr.repo.github_url,
 				token,
 				workspacePath: pr.workspace_path,
 				repoId: pr.repo.id,
+				...(serviceCommands.length > 0 ? { serviceCommands } : {}),
 			};
 		}),
 	);
@@ -278,9 +285,20 @@ export async function loadSessionContext(
 		}
 	}
 
+	// Derive snapshotHasDeps: true when snapshot includes installed deps.
+	// Repo snapshots (clone-only) don't have deps; prebuild/session/pause snapshots do.
+	const repoSnapshotFallback =
+		prebuildRepoRows.length === 1 &&
+		prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
+		prebuildRepoRows[0].repo?.repoSnapshotId
+			? prebuildRepoRows[0].repo.repoSnapshotId
+			: null;
+	const snapshotHasDeps =
+		Boolean(session.snapshot_id) && session.snapshot_id !== repoSnapshotFallback;
+
 	log.info("Session context ready");
 	log.debug(
-		{ durationMs: Date.now() - startMs, repoCount: repoSpecs.length },
+		{ durationMs: Date.now() - startMs, repoCount: repoSpecs.length, snapshotHasDeps },
 		"store.load_context.complete",
 	);
 	return {
@@ -291,6 +309,7 @@ export async function loadSessionContext(
 		agentConfig,
 		envVars,
 		sshPublicKey,
+		snapshotHasDeps,
 	};
 }
 

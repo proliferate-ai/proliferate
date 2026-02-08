@@ -7,23 +7,32 @@ import { IconAction } from "@/components/ui/icon-action";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { SelectableItem } from "@/components/ui/selectable-item";
-import { useAvailableRepos, useCreateRepo, useSearchRepos } from "@/hooks/use-repos";
+import {
+	useAvailableRepos,
+	useCreateRepo,
+	useSearchRepos,
+	useServiceCommands,
+	useUpdateServiceCommands,
+} from "@/hooks/use-repos";
 import { orpc } from "@/lib/orpc";
 import { cn, getSnapshotDisplayName } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
-import type { GitHubRepo, Repo, Snapshot } from "@/types";
+import type { GitHubRepo, Repo } from "@/types";
 import { useQuery } from "@tanstack/react-query";
 import {
 	Camera,
+	Check,
 	ChevronDown,
 	FolderGit2,
 	GitBranch,
 	Globe,
 	Lock,
 	Pencil,
+	Play,
 	Plus,
 	Search,
 	Star,
+	Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -278,6 +287,8 @@ export default function RepositoriesPage() {
 	);
 }
 
+type RepoTab = "snapshots" | "auto-start";
+
 function RepoCard({
 	repo,
 	onCreateSnapshot,
@@ -286,6 +297,7 @@ function RepoCard({
 	onCreateSnapshot: (repoId: string) => void;
 }) {
 	const [expanded, setExpanded] = useState(false);
+	const [tab, setTab] = useState<RepoTab>("snapshots");
 
 	const { data: snapshotsData, isLoading } = useQuery({
 		...orpc.repos.listSnapshots.queryOptions({ input: { id: repo.id } }),
@@ -304,12 +316,17 @@ function RepoCard({
 					<GitBranch className="h-4 w-4" />
 				</div>
 				<div className="flex-1 min-w-0">
-					<p className="text-sm font-medium truncate">{repo.githubRepoName}</p>
+					<div className="flex items-center gap-2">
+						<p className="text-sm font-medium truncate">{repo.githubRepoName}</p>
+						{repo.isConfigured && (
+							<span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+								<Check className="h-2.5 w-2.5" />
+								Configured
+							</span>
+						)}
+					</div>
 					<p className="text-xs text-muted-foreground">{repo.defaultBranch || "main"}</p>
 				</div>
-				<span className="text-xs text-muted-foreground">
-					{expanded ? "Hide" : "Show"} snapshots
-				</span>
 				<ChevronDown
 					className={cn(
 						"h-4 w-4 text-muted-foreground transition-transform",
@@ -319,73 +336,306 @@ function RepoCard({
 			</Button>
 
 			{expanded && (
-				<div className="border-t border-border/60 bg-muted/20 p-4">
-					{isLoading ? (
-						<div className="py-4 text-center">
-							<LoadingDots size="sm" className="text-muted-foreground" />
-						</div>
-					) : snapshots && snapshots.length > 0 ? (
-						<div className="space-y-2">
-							{snapshots.map((snapshot) => {
-								const setupSessionId = snapshot.setupSessions?.find(
-									(s) => s.sessionType === "setup",
-								)?.id;
-								return (
-									<div
-										key={snapshot.id}
-										className="group flex items-center gap-1 rounded-lg hover:bg-background transition-colors"
-									>
-										<SelectableItem
-											onClick={() => {
-												if (setupSessionId) {
-													openHistoricalSession(setupSessionId, getSnapshotDisplayName(snapshot));
-												}
-											}}
-											icon={<Camera className="h-4 w-4" />}
-											className="flex-1 p-3"
-										>
-											<span className="truncate">{getSnapshotDisplayName(snapshot)}</span>
-										</SelectableItem>
-										{setupSessionId && (
-											<IconAction
-												icon={<Pencil className="h-3.5 w-3.5" />}
-												onClick={(e) => {
-													e.stopPropagation();
-													openEditSession({
-														sessionId: setupSessionId,
-														snapshotId: snapshot.id,
-														snapshotName: getSnapshotDisplayName(snapshot),
-														prebuildId: snapshot.id,
-													});
-												}}
-												tooltip="Edit environment"
-												className="opacity-0 group-hover:opacity-100 mr-1"
-											/>
-										)}
-									</div>
-								);
-							})}
-							<Button
-								variant="outline"
-								size="sm"
-								className="w-full mt-2"
-								onClick={() => onCreateSnapshot(repo.id)}
-							>
-								<Plus className="h-3.5 w-3.5 mr-2" />
-								Create New Snapshot
-							</Button>
-						</div>
-					) : (
-						<div className="text-center py-4">
-							<p className="text-sm text-muted-foreground mb-3">No snapshots yet</p>
-							<Button variant="outline" size="sm" onClick={() => onCreateSnapshot(repo.id)}>
-								<Plus className="h-3.5 w-3.5 mr-2" />
-								Create Snapshot
-							</Button>
-						</div>
-					)}
+				<div className="border-t border-border/60">
+					<div className="flex border-b border-border/60">
+						<button
+							type="button"
+							onClick={() => setTab("snapshots")}
+							className={cn(
+								"flex-1 px-4 py-2 text-xs font-medium transition-colors",
+								tab === "snapshots"
+									? "text-foreground border-b-2 border-foreground"
+									: "text-muted-foreground hover:text-foreground",
+							)}
+						>
+							Snapshots
+						</button>
+						<button
+							type="button"
+							onClick={() => setTab("auto-start")}
+							className={cn(
+								"flex-1 px-4 py-2 text-xs font-medium transition-colors",
+								tab === "auto-start"
+									? "text-foreground border-b-2 border-foreground"
+									: "text-muted-foreground hover:text-foreground",
+							)}
+						>
+							Auto-start
+						</button>
+					</div>
+
+					<div className="bg-muted/20 p-4">
+						{tab === "snapshots" ? (
+							<SnapshotsTab
+								snapshots={snapshots}
+								isLoading={isLoading}
+								repoId={repo.id}
+								onCreateSnapshot={onCreateSnapshot}
+							/>
+						) : (
+							<ServiceCommandsTab repoId={repo.id} />
+						)}
+					</div>
 				</div>
 			)}
+		</div>
+	);
+}
+
+function SnapshotsTab({
+	snapshots,
+	isLoading,
+	repoId,
+	onCreateSnapshot,
+}: {
+	snapshots:
+		| Array<{
+				id: string;
+				name: string | null;
+				notes: string | null;
+				createdAt: string;
+				setupSessions?: Array<{ id: string; sessionType: string | null }>;
+		  }>
+		| undefined;
+	isLoading: boolean;
+	repoId: string;
+	onCreateSnapshot: (repoId: string) => void;
+}) {
+	if (isLoading) {
+		return (
+			<div className="py-4 text-center">
+				<LoadingDots size="sm" className="text-muted-foreground" />
+			</div>
+		);
+	}
+
+	if (snapshots && snapshots.length > 0) {
+		return (
+			<div className="space-y-2">
+				{snapshots.map((snapshot) => {
+					const setupSessionId = snapshot.setupSessions?.find((s) => s.sessionType === "setup")?.id;
+					return (
+						<div
+							key={snapshot.id}
+							className="group flex items-center gap-1 rounded-lg hover:bg-background transition-colors"
+						>
+							<SelectableItem
+								onClick={() => {
+									if (setupSessionId) {
+										openHistoricalSession(setupSessionId, getSnapshotDisplayName(snapshot));
+									}
+								}}
+								icon={<Camera className="h-4 w-4" />}
+								className="flex-1 p-3"
+							>
+								<span className="truncate">{getSnapshotDisplayName(snapshot)}</span>
+							</SelectableItem>
+							{setupSessionId && (
+								<IconAction
+									icon={<Pencil className="h-3.5 w-3.5" />}
+									onClick={(e) => {
+										e.stopPropagation();
+										openEditSession({
+											sessionId: setupSessionId,
+											snapshotId: snapshot.id,
+											snapshotName: getSnapshotDisplayName(snapshot),
+											prebuildId: snapshot.id,
+										});
+									}}
+									tooltip="Edit environment"
+									className="opacity-0 group-hover:opacity-100 mr-1"
+								/>
+							)}
+						</div>
+					);
+				})}
+				<Button
+					variant="outline"
+					size="sm"
+					className="w-full mt-2"
+					onClick={() => onCreateSnapshot(repoId)}
+				>
+					<Plus className="h-3.5 w-3.5 mr-2" />
+					Create New Snapshot
+				</Button>
+			</div>
+		);
+	}
+
+	return (
+		<div className="text-center py-4">
+			<p className="text-sm text-muted-foreground mb-3">No snapshots yet</p>
+			<Button variant="outline" size="sm" onClick={() => onCreateSnapshot(repoId)}>
+				<Plus className="h-3.5 w-3.5 mr-2" />
+				Create Snapshot
+			</Button>
+		</div>
+	);
+}
+
+interface CommandDraft {
+	name: string;
+	command: string;
+	cwd: string;
+}
+
+function ServiceCommandsTab({ repoId }: { repoId: string }) {
+	const { data: commands, isLoading } = useServiceCommands(repoId);
+	const updateCommands = useUpdateServiceCommands();
+	const [editing, setEditing] = useState(false);
+	const [drafts, setDrafts] = useState<CommandDraft[]>([]);
+
+	const startEditing = () => {
+		setDrafts(
+			commands?.length
+				? commands.map((c) => ({ name: c.name, command: c.command, cwd: c.cwd || "" }))
+				: [{ name: "", command: "", cwd: "" }],
+		);
+		setEditing(true);
+	};
+
+	const handleSave = async () => {
+		const valid = drafts.filter((d) => d.name.trim() && d.command.trim());
+		await updateCommands.mutateAsync({
+			id: repoId,
+			commands: valid.map((d) => ({
+				name: d.name.trim(),
+				command: d.command.trim(),
+				...(d.cwd.trim() ? { cwd: d.cwd.trim() } : {}),
+			})),
+		});
+		setEditing(false);
+	};
+
+	const addRow = () => {
+		if (drafts.length >= 10) return;
+		setDrafts([...drafts, { name: "", command: "", cwd: "" }]);
+	};
+
+	const removeRow = (index: number) => {
+		setDrafts(drafts.filter((_, i) => i !== index));
+	};
+
+	const updateDraft = (index: number, field: keyof CommandDraft, value: string) => {
+		setDrafts(drafts.map((d, i) => (i === index ? { ...d, [field]: value } : d)));
+	};
+
+	if (isLoading) {
+		return (
+			<div className="py-4 text-center">
+				<LoadingDots size="sm" className="text-muted-foreground" />
+			</div>
+		);
+	}
+
+	if (editing) {
+		return (
+			<div className="space-y-3">
+				<p className="text-xs text-muted-foreground">
+					Commands run automatically when a session starts with a prebuild snapshot.
+				</p>
+				{drafts.map((draft, index) => (
+					<div key={index} className="flex items-start gap-2">
+						<div className="flex-1 space-y-1.5">
+							<Input
+								value={draft.name}
+								onChange={(e) => updateDraft(index, "name", e.target.value)}
+								placeholder="Name (e.g. dev-server)"
+								className="h-7 text-xs"
+							/>
+							<Input
+								value={draft.command}
+								onChange={(e) => updateDraft(index, "command", e.target.value)}
+								placeholder="Command (e.g. pnpm dev)"
+								className="h-7 text-xs font-mono"
+							/>
+							<Input
+								value={draft.cwd}
+								onChange={(e) => updateDraft(index, "cwd", e.target.value)}
+								placeholder="Working directory (optional, relative)"
+								className="h-7 text-xs"
+							/>
+						</div>
+						<Button
+							variant="ghost"
+							size="sm"
+							className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+							onClick={() => removeRow(index)}
+						>
+							<Trash2 className="h-3.5 w-3.5" />
+						</Button>
+					</div>
+				))}
+				<div className="flex items-center gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						className="h-7 text-xs"
+						onClick={addRow}
+						disabled={drafts.length >= 10}
+					>
+						<Plus className="h-3 w-3 mr-1" />
+						Add command
+					</Button>
+					<div className="flex-1" />
+					<Button
+						variant="ghost"
+						size="sm"
+						className="h-7 text-xs"
+						onClick={() => setEditing(false)}
+					>
+						Cancel
+					</Button>
+					<Button
+						size="sm"
+						className="h-7 text-xs"
+						onClick={handleSave}
+						disabled={updateCommands.isPending}
+					>
+						{updateCommands.isPending ? "Saving..." : "Save"}
+					</Button>
+				</div>
+			</div>
+		);
+	}
+
+	if (commands && commands.length > 0) {
+		return (
+			<div className="space-y-2">
+				{commands.map((cmd, index) => (
+					<div
+						key={index}
+						className="flex items-center gap-3 p-2 rounded-md bg-background border border-border/60"
+					>
+						<Play className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+						<div className="flex-1 min-w-0">
+							<p className="text-xs font-medium truncate">{cmd.name}</p>
+							<p className="text-xs text-muted-foreground font-mono truncate">{cmd.command}</p>
+							{cmd.cwd && (
+								<p className="text-[10px] text-muted-foreground truncate">cwd: {cmd.cwd}</p>
+							)}
+						</div>
+					</div>
+				))}
+				<Button variant="outline" size="sm" className="w-full mt-1" onClick={startEditing}>
+					<Pencil className="h-3 w-3 mr-2" />
+					Edit commands
+				</Button>
+			</div>
+		);
+	}
+
+	return (
+		<div className="text-center py-4">
+			<Play className="h-6 w-6 mx-auto mb-2 text-muted-foreground/50" />
+			<p className="text-sm text-muted-foreground mb-1">No auto-start commands</p>
+			<p className="text-xs text-muted-foreground mb-3">
+				Add commands to auto-run when sessions start
+			</p>
+			<Button variant="outline" size="sm" onClick={startEditing}>
+				<Plus className="h-3.5 w-3.5 mr-2" />
+				Add commands
+			</Button>
 		</div>
 	);
 }

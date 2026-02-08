@@ -72,3 +72,26 @@ export function useSearchRepos(query: string, enabled = true) {
 		select: (data) => data.repositories,
 	});
 }
+
+export function useServiceCommands(repoId: string, enabled = true) {
+	return useQuery({
+		...orpc.repos.getServiceCommands.queryOptions({ input: { id: repoId } }),
+		enabled: enabled && !!repoId,
+		select: (data) => data.commands,
+	});
+}
+
+export function useUpdateServiceCommands() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.repos.updateServiceCommands.mutationOptions({
+			onSuccess: (_data, input) => {
+				queryClient.invalidateQueries({
+					queryKey: orpc.repos.getServiceCommands.key({ input: { id: input.id } }),
+				});
+				queryClient.invalidateQueries({ queryKey: orpc.repos.list.key() });
+			},
+		}),
+	);
+}

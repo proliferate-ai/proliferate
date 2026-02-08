@@ -7,6 +7,7 @@
 
 import type { SessionHub } from "../../session-hub";
 import { automationCompleteHandler } from "./automation-complete";
+import { saveServiceCommandsHandler } from "./save-service-commands";
 import { saveSnapshotHandler } from "./save-snapshot";
 import { verifyHandler } from "./verify";
 
@@ -37,6 +38,7 @@ interceptedTools.set(saveSnapshotHandler.name, saveSnapshotHandler);
 interceptedTools.set(verifyHandler.name, verifyHandler);
 interceptedTools.set(automationCompleteHandler.name, automationCompleteHandler);
 interceptedTools.set("automation_complete", automationCompleteHandler);
+interceptedTools.set(saveServiceCommandsHandler.name, saveServiceCommandsHandler);
 
 /**
  * Check if a tool should be intercepted

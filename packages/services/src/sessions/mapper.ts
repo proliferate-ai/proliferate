@@ -24,6 +24,7 @@ function mapRepo(repo: RepoRow) {
 		isPrivate: false, // repos schema doesn't have isPrivate yet
 		prebuildStatus: "pending" as const,
 		prebuildId: null,
+		isConfigured: false,
 	};
 }
 

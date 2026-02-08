@@ -7,7 +7,8 @@ export type PreviewMode =
 	| { type: "file"; file: VerificationFile }
 	| { type: "gallery"; files: VerificationFile[] }
 	| { type: "session-info" }
-	| { type: "snapshots" };
+	| { type: "snapshots" }
+	| { type: "service-commands" };
 
 // Mobile view state - on mobile we either show chat or preview (full screen)
 export type MobileView = "chat" | "preview";
@@ -22,11 +23,12 @@ interface PreviewPanelState {
 	openGallery: (files: VerificationFile[]) => void;
 	openSessionInfo: () => void;
 	openSnapshots: () => void;
+	openServiceCommands: () => void;
 	close: () => void;
 
 	// Toggle helpers (for header buttons — toggles open/close)
 	toggleUrlPreview: (url: string | null) => void;
-	togglePanel: (type: "session-info" | "snapshots") => void;
+	togglePanel: (type: "session-info" | "snapshots" | "service-commands") => void;
 
 	// Mobile view toggle
 	setMobileView: (view: MobileView) => void;
@@ -47,6 +49,8 @@ export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
 
 	openSnapshots: () => set({ mode: { type: "snapshots" } }),
 
+	openServiceCommands: () => set({ mode: { type: "service-commands" } }),
+
 	close: () => set({ mode: { type: "none" }, mobileView: "chat" }),
 
 	// Toggle URL preview specifically - used by the preview button
@@ -59,8 +63,8 @@ export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
 		}
 	},
 
-	// Generic toggle for session-info / snapshots panels
-	togglePanel: (type: "session-info" | "snapshots") => {
+	// Generic toggle for session-info / snapshots / service-commands panels
+	togglePanel: (type: "session-info" | "snapshots" | "service-commands") => {
 		const { mode } = get();
 		if (mode.type === type) {
 			set({ mode: { type: "none" }, mobileView: "chat" });

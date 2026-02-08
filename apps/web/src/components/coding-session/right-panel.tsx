@@ -6,6 +6,7 @@ import { usePreviewPanelStore } from "@/stores/preview-panel";
 import type { VerificationFile } from "@proliferate/shared";
 import { ArrowLeft, Grid, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { AutoStartPanel } from "./auto-start-panel";
 import { FileViewer } from "./file-viewer";
 import { PreviewPanel } from "./preview-panel";
 import { SessionInfoPanel } from "./session-info-panel";
@@ -14,6 +15,7 @@ import { VerificationGallery } from "./verification-gallery";
 
 export interface SessionPanelProps {
 	sessionStatus?: string;
+	repoId?: string | null;
 	repoName?: string | null;
 	branchName?: string | null;
 	snapshotId?: string | null;
@@ -59,12 +61,18 @@ export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps
 		return (
 			<SnapshotsPanel
 				snapshotId={sessionProps.snapshotId}
+				repoId={sessionProps.repoId}
 				canSnapshot={sessionProps.canSnapshot}
 				isSnapshotting={sessionProps.isSnapshotting}
 				onSnapshot={sessionProps.onSnapshot}
 				onClose={handleClose}
 			/>
 		);
+	}
+
+	// Auto-start panel
+	if (mode.type === "service-commands") {
+		return <AutoStartPanel repoId={sessionProps?.repoId} onClose={handleClose} />;
 	}
 
 	// URL preview uses PreviewPanel which has its own header

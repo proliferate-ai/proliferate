@@ -17,6 +17,8 @@ export {
 	SANDBOX_PORTS,
 	SANDBOX_TIMEOUT_MS,
 	SANDBOX_TIMEOUT_SECONDS,
+	shellEscape,
+	parseServiceCommands,
 } from "./config";
 
 // OpenCode utilities

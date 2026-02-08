@@ -163,3 +163,25 @@ export async function deleteRepo(id: string, orgId: string): Promise<boolean> {
 export async function repoExists(id: string, orgId: string): Promise<boolean> {
 	return reposDb.exists(id, orgId);
 }
+
+/**
+ * Get service commands for a repo (raw jsonb).
+ */
+export async function getServiceCommands(
+	repoId: string,
+	orgId: string,
+): Promise<{ serviceCommands: unknown } | null> {
+	return reposDb.getServiceCommands(repoId, orgId);
+}
+
+/**
+ * Update service commands for a repo.
+ */
+export async function updateServiceCommands(input: {
+	repoId: string;
+	orgId: string;
+	serviceCommands: unknown;
+	updatedBy: string;
+}): Promise<void> {
+	await reposDb.updateServiceCommands(input);
+}

@@ -20,6 +20,7 @@ function hasUsablePrebuild(pr: { prebuild: { snapshotId: string | null } | null 
  */
 export function toRepo(row: RepoWithPrebuildsRow): Repo {
 	const readyPrebuild = row.prebuildRepos?.find(hasUsablePrebuild);
+	const hasServiceCommands = Array.isArray(row.serviceCommands) && row.serviceCommands.length > 0;
 
 	return {
 		id: row.id,
@@ -33,6 +34,7 @@ export function toRepo(row: RepoWithPrebuildsRow): Repo {
 		isPrivate: false, // Field not in Drizzle schema, default to false for API compatibility
 		prebuildStatus: readyPrebuild ? "ready" : "pending",
 		prebuildId: readyPrebuild?.prebuild?.id || null,
+		isConfigured: hasServiceCommands && !!readyPrebuild,
 	};
 }
 
