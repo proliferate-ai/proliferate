@@ -210,7 +210,6 @@ export function ConfigurationGroup({
 								session={session}
 								isActive={activeSessionId === session.id}
 								onNavigate={onNavigate}
-								indented
 							/>
 						))
 					) : (
