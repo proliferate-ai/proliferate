@@ -1,14 +1,20 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { FolderPlusIcon } from "@/components/ui/icons";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getSetupInitialPrompt } from "@/lib/prompts";
 import { useDashboardStore } from "@/stores/dashboard";
-import * as Popover from "@radix-ui/react-popover";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { SnapshotSelector } from "./snapshot-selector";
+import { CreateSnapshotContent } from "./snapshot-selector";
 
 export function AddSnapshotButton() {
 	const router = useRouter();
@@ -23,15 +29,13 @@ export function AddSnapshotButton() {
 	};
 
 	return (
-		<Popover.Root open={open} onOpenChange={setOpen}>
+		<>
 			<TooltipProvider>
 				<Tooltip>
 					<TooltipTrigger asChild>
-						<Popover.Trigger asChild>
-							<Button variant="ghost" size="icon" className="h-5 w-5">
-								<FolderPlusIcon className="h-3.5 w-3.5" />
-							</Button>
-						</Popover.Trigger>
+						<Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setOpen(true)}>
+							<FolderPlusIcon className="h-3.5 w-3.5" />
+						</Button>
 					</TooltipTrigger>
 					<TooltipContent side="right">
 						<p className="text-xs">New Configuration</p>
@@ -39,16 +43,16 @@ export function AddSnapshotButton() {
 				</Tooltip>
 			</TooltipProvider>
 
-			<Popover.Portal>
-				<Popover.Content
-					className="z-50 rounded-lg border border-border bg-popover shadow-lg overflow-hidden animate-in fade-in-0 zoom-in-95"
-					sideOffset={8}
-					align="start"
-				>
-					<SnapshotSelector mode="create" onCreate={handleCreate} />
-				</Popover.Content>
-			</Popover.Portal>
-		</Popover.Root>
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
+					<DialogHeader className="sr-only">
+						<DialogTitle>New configuration</DialogTitle>
+						<DialogDescription>Group the repositories that make up your project</DialogDescription>
+					</DialogHeader>
+					<CreateSnapshotContent onCreate={handleCreate} />
+				</DialogContent>
+			</Dialog>
+		</>
 	);
 }
 
@@ -65,26 +69,25 @@ export function AddSnapshotRow() {
 	};
 
 	return (
-		<Popover.Root open={open} onOpenChange={setOpen}>
-			<Popover.Trigger asChild>
-				<Button
-					variant="ghost"
-					className="w-full h-auto flex items-center justify-start gap-[0.38rem] px-3 py-1.5 rounded-lg text-muted-foreground hover:text-foreground"
-				>
-					<FolderPlusIcon className="h-5 w-5" />
-					<span>New configuration</span>
-				</Button>
-			</Popover.Trigger>
+		<>
+			<Button
+				variant="ghost"
+				className="w-full h-auto flex items-center justify-start gap-[0.38rem] px-3 py-1.5 rounded-lg text-muted-foreground hover:text-foreground"
+				onClick={() => setOpen(true)}
+			>
+				<FolderPlusIcon className="h-5 w-5" />
+				<span>New configuration</span>
+			</Button>
 
-			<Popover.Portal>
-				<Popover.Content
-					className="z-50 rounded-xl border border-border bg-popover shadow-lg overflow-hidden animate-in fade-in-0 zoom-in-95"
-					sideOffset={8}
-					align="start"
-				>
-					<SnapshotSelector mode="create" onCreate={handleCreate} />
-				</Popover.Content>
-			</Popover.Portal>
-		</Popover.Root>
+			<Dialog open={open} onOpenChange={setOpen}>
+				<DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
+					<DialogHeader className="sr-only">
+						<DialogTitle>New configuration</DialogTitle>
+						<DialogDescription>Group the repositories that make up your project</DialogDescription>
+					</DialogHeader>
+					<CreateSnapshotContent onCreate={handleCreate} />
+				</DialogContent>
+			</Dialog>
+		</>
 	);
 }

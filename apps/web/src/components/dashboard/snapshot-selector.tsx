@@ -266,12 +266,10 @@ export function SnapshotSelector({
 			</Popover.Root>
 
 			<Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
-				<DialogContent className="max-w-sm p-0 gap-0 overflow-hidden">
+				<DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
 					<DialogHeader className="sr-only">
-						<DialogTitle>Create new configuration</DialogTitle>
-						<DialogDescription>
-							Select repositories to include in your configuration
-						</DialogDescription>
+						<DialogTitle>New configuration</DialogTitle>
+						<DialogDescription>Group the repositories that make up your project</DialogDescription>
 					</DialogHeader>
 					<CreateSnapshotContent onCreate={handleCreateSuccess} />
 				</DialogContent>
@@ -286,11 +284,9 @@ export function SnapshotSelector({
 
 interface CreateSnapshotContentProps {
 	onCreate?: (prebuildId: string, sessionId: string) => void;
-	/** Hide the built-in header (useful when rendered inside a Dialog with its own title) */
-	hideHeader?: boolean;
 }
 
-export function CreateSnapshotContent({ onCreate, hideHeader }: CreateSnapshotContentProps) {
+export function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) {
 	const [selectedRepoIds, setSelectedRepoIds] = useState<Set<string>>(new Set());
 	const [searchQuery, setSearchQuery] = useState("");
 	const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -417,17 +413,15 @@ export function CreateSnapshotContent({ onCreate, hideHeader }: CreateSnapshotCo
 		filteredPublicRepos.length > 0;
 
 	return (
-		<div className={cn("w-full", !hideHeader && "max-w-[300px]")}>
+		<div className="w-full">
 			{/* Header */}
-			{!hideHeader && (
-				<div className="px-4 pt-4 pb-3 border-b border-border">
-					<Text className="font-semibold">Create new configuration</Text>
-					<Text variant="small" color="muted" className="mt-1">
-						A configuration saves your cloud environment — installed dependencies, running services,
-						and all. Sessions start from it instantly.
-					</Text>
-				</div>
-			)}
+			<div className="px-4 pt-4 pb-3 border-b border-border">
+				<Text className="font-semibold">New configuration</Text>
+				<Text variant="small" color="muted" className="mt-1">
+					Group the repositories that make up your project. Each session launches with all of them
+					ready to go.
+				</Text>
+			</div>
 
 			{/* Search input */}
 			<div className="px-4 py-3">
@@ -576,7 +570,7 @@ export function CreateSnapshotContent({ onCreate, hideHeader }: CreateSnapshotCo
 									: `Create with ${selectedRepoIds.size} ${selectedRepoIds.size === 1 ? "repo" : "repos"}`}
 					</Button>
 					<HelpLink topic="snapshots" className="justify-center">
-						What are snapshots?
+						What are configurations?
 					</HelpLink>
 				</div>
 			</div>

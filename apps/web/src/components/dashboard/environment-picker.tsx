@@ -1,7 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { GithubIcon } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { usePrebuilds } from "@/hooks/use-prebuilds";
@@ -129,11 +135,12 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 			</Popover>
 
 			<Dialog open={createOpen} onOpenChange={setCreateOpen}>
-				<DialogContent className="max-w-lg">
-					<DialogHeader>
+				<DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
+					<DialogHeader className="sr-only">
 						<DialogTitle>New configuration</DialogTitle>
+						<DialogDescription>Group the repositories that make up your project</DialogDescription>
 					</DialogHeader>
-					<CreateSnapshotContent hideHeader onCreate={() => setCreateOpen(false)} />
+					<CreateSnapshotContent onCreate={() => setCreateOpen(false)} />
 				</DialogContent>
 			</Dialog>
 		</>

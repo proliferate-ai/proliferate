@@ -92,7 +92,7 @@ export function WelcomeDialog() {
 			</Dialog>
 
 			<Dialog open={showCreate} onOpenChange={setShowCreate}>
-				<DialogContent className="max-w-sm p-0 gap-0 overflow-hidden">
+				<DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
 					<DialogHeader className="sr-only">
 						<DialogTitle>Create your first snapshot</DialogTitle>
 						<DialogDescription>
