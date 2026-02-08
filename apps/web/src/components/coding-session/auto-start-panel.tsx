@@ -3,14 +3,21 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-	usePrebuildServiceCommands,
+	useEffectiveServiceCommands,
 	useServiceCommands,
 	useUpdatePrebuildServiceCommands,
 	useUpdateServiceCommands,
 } from "@/hooks/use-repos";
-import { Pencil, Play, Plus, Settings, Trash2, X } from "lucide-react";
+import { FolderOpen, Pencil, Play, Plus, Settings, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 interface AutoStartPanelProps {
@@ -23,25 +30,36 @@ interface CommandDraft {
 	name: string;
 	command: string;
 	cwd: string;
+	workspacePath: string;
 }
 
 export function AutoStartPanel({ repoId, prebuildId, onClose }: AutoStartPanelProps) {
-	// Prefer prebuild-level commands when available, fall back to repo-level
-	const usePrebuild = !!prebuildId;
-	const { data: prebuildCommands, isLoading: prebuildLoading } = usePrebuildServiceCommands(
+	const hasPrebuild = !!prebuildId;
+
+	// Effective commands (server-side resolved) when prebuild exists
+	const { data: effective, isLoading: effectiveLoading } = useEffectiveServiceCommands(
 		prebuildId || "",
-		usePrebuild,
+		hasPrebuild,
 	);
+
+	// Fallback: repo-level commands when no prebuild
 	const { data: repoCommands, isLoading: repoLoading } = useServiceCommands(
 		repoId || "",
-		!usePrebuild && !!repoId,
+		!hasPrebuild && !!repoId,
 	);
+
 	const updatePrebuildCommands = useUpdatePrebuildServiceCommands();
 	const updateRepoCommands = useUpdateServiceCommands();
 
-	const commands = usePrebuild ? prebuildCommands : repoCommands;
-	const isLoading = usePrebuild ? prebuildLoading : repoLoading;
-	const canEdit = usePrebuild ? !!prebuildId : !!repoId;
+	const commands = hasPrebuild ? effective?.commands : repoCommands;
+	const source = hasPrebuild
+		? (effective?.source ?? "none")
+		: repoCommands?.length
+			? "repo"
+			: "none";
+	const workspaces = effective?.workspaces ?? [];
+	const isLoading = hasPrebuild ? effectiveLoading : repoLoading;
+	const canEdit = hasPrebuild ? !!prebuildId : !!repoId;
 
 	const [editing, setEditing] = useState(false);
 	const [drafts, setDrafts] = useState<CommandDraft[]>([]);
@@ -49,8 +67,13 @@ export function AutoStartPanel({ repoId, prebuildId, onClose }: AutoStartPanelPr
 	const startEditing = () => {
 		setDrafts(
 			commands?.length
-				? commands.map((c) => ({ name: c.name, command: c.command, cwd: c.cwd || "" }))
-				: [{ name: "", command: "", cwd: "" }],
+				? commands.map((c) => ({
+						name: c.name,
+						command: c.command,
+						cwd: c.cwd || "",
+						workspacePath: ("workspacePath" in c ? (c.workspacePath as string) : undefined) || "",
+					}))
+				: [{ name: "", command: "", cwd: "", workspacePath: "" }],
 		);
 		setEditing(true);
 	};
@@ -61,12 +84,16 @@ export function AutoStartPanel({ repoId, prebuildId, onClose }: AutoStartPanelPr
 			name: d.name.trim(),
 			command: d.command.trim(),
 			...(d.cwd.trim() ? { cwd: d.cwd.trim() } : {}),
+			...(d.workspacePath.trim() ? { workspacePath: d.workspacePath.trim() } : {}),
 		}));
 
-		if (usePrebuild && prebuildId) {
+		if (hasPrebuild && prebuildId) {
+			// Promotion model: editing always writes to prebuild
 			await updatePrebuildCommands.mutateAsync({ prebuildId, commands: cmds });
 		} else if (repoId) {
-			await updateRepoCommands.mutateAsync({ id: repoId, commands: cmds });
+			// No prebuild — save to repo (commands without workspacePath)
+			const repoCmds = cmds.map(({ workspacePath: _, ...rest }) => rest);
+			await updateRepoCommands.mutateAsync({ id: repoId, commands: repoCmds });
 		}
 		setEditing(false);
 	};
@@ -75,7 +102,15 @@ export function AutoStartPanel({ repoId, prebuildId, onClose }: AutoStartPanelPr
 
 	const addRow = () => {
 		if (drafts.length >= 10) return;
-		setDrafts([...drafts, { name: "", command: "", cwd: "" }]);
+		setDrafts([
+			...drafts,
+			{
+				name: "",
+				command: "",
+				cwd: "",
+				workspacePath: workspaces.length === 1 ? workspaces[0] : "",
+			},
+		]);
 	};
 
 	const removeRow = (index: number) => {
@@ -110,6 +145,14 @@ export function AutoStartPanel({ repoId, prebuildId, onClose }: AutoStartPanelPr
 					snapshot.
 				</p>
 
+				{source !== "none" && !editing && (
+					<p className="text-[10px] text-muted-foreground/70">
+						{source === "prebuild"
+							? "Using configuration overrides"
+							: "Using repo defaults — saving will create configuration overrides"}
+					</p>
+				)}
+
 				{!canEdit ? (
 					<div className="rounded-lg border border-dashed border-border/80 p-4 text-center">
 						<Settings className="h-6 w-6 mx-auto mb-2 text-muted-foreground/50" />
@@ -124,6 +167,7 @@ export function AutoStartPanel({ repoId, prebuildId, onClose }: AutoStartPanelPr
 				) : editing ? (
 					<EditForm
 						drafts={drafts}
+						workspaces={workspaces}
 						onUpdateDraft={updateDraft}
 						onAddRow={addRow}
 						onRemoveRow={removeRow}
@@ -145,7 +189,7 @@ function CommandsList({
 	commands,
 	onEdit,
 }: {
-	commands: Array<{ name: string; command: string; cwd?: string }>;
+	commands: Array<{ name: string; command: string; cwd?: string; workspacePath?: string }>;
 	onEdit: () => void;
 }) {
 	return (
@@ -161,6 +205,12 @@ function CommandsList({
 						<p className="text-xs text-muted-foreground font-mono truncate">{cmd.command}</p>
 						{cmd.cwd && (
 							<p className="text-[10px] text-muted-foreground truncate">cwd: {cmd.cwd}</p>
+						)}
+						{cmd.workspacePath && cmd.workspacePath !== "." && (
+							<p className="text-[10px] text-muted-foreground truncate flex items-center gap-1">
+								<FolderOpen className="h-2.5 w-2.5 inline" />
+								{cmd.workspacePath}
+							</p>
 						)}
 					</div>
 				</div>
@@ -191,6 +241,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 
 function EditForm({
 	drafts,
+	workspaces,
 	onUpdateDraft,
 	onAddRow,
 	onRemoveRow,
@@ -199,6 +250,7 @@ function EditForm({
 	isSaving,
 }: {
 	drafts: CommandDraft[];
+	workspaces: string[];
 	onUpdateDraft: (index: number, field: keyof CommandDraft, value: string) => void;
 	onAddRow: () => void;
 	onRemoveRow: (index: number) => void;
@@ -206,6 +258,8 @@ function EditForm({
 	onCancel: () => void;
 	isSaving: boolean;
 }) {
+	const showWorkspace = workspaces.length > 1;
+
 	return (
 		<div className="space-y-3">
 			{drafts.map((draft, index) => (
@@ -229,6 +283,23 @@ function EditForm({
 							placeholder="Working directory (optional, relative)"
 							className="h-7 text-xs"
 						/>
+						{showWorkspace && (
+							<Select
+								value={draft.workspacePath || undefined}
+								onValueChange={(v) => onUpdateDraft(index, "workspacePath", v)}
+							>
+								<SelectTrigger className="h-7 text-xs">
+									<SelectValue placeholder="Workspace" />
+								</SelectTrigger>
+								<SelectContent>
+									{workspaces.map((ws) => (
+										<SelectItem key={ws} value={ws} className="text-xs">
+											{ws}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						)}
 					</div>
 					<Button
 						variant="ghost"

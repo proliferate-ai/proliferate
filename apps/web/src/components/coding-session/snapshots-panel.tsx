@@ -2,13 +2,14 @@
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useServiceCommands } from "@/hooks/use-repos";
+import { useEffectiveServiceCommands, useServiceCommands } from "@/hooks/use-repos";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { Box, Camera, Loader2, Play, X } from "lucide-react";
 
 interface SnapshotsPanelProps {
 	snapshotId?: string | null;
 	repoId?: string | null;
+	prebuildId?: string | null;
 	canSnapshot?: boolean;
 	isSnapshotting?: boolean;
 	onSnapshot?: () => void;
@@ -18,12 +19,23 @@ interface SnapshotsPanelProps {
 export function SnapshotsPanel({
 	snapshotId,
 	repoId,
+	prebuildId,
 	canSnapshot,
 	isSnapshotting,
 	onSnapshot,
 	onClose,
 }: SnapshotsPanelProps) {
-	const { data: commands } = useServiceCommands(repoId || "", !!repoId);
+	const hasPrebuild = !!prebuildId;
+	const { data: effective, isLoading: effectiveLoading } = useEffectiveServiceCommands(
+		prebuildId || "",
+		hasPrebuild,
+	);
+	const { data: repoCommands, isLoading: repoLoading } = useServiceCommands(
+		repoId || "",
+		!hasPrebuild && !!repoId,
+	);
+	const commands = hasPrebuild ? effective?.commands : repoCommands;
+	const commandsLoading = hasPrebuild ? effectiveLoading : repoLoading;
 	const { openServiceCommands } = usePreviewPanelStore();
 	return (
 		<div className="flex flex-col h-full">
@@ -99,9 +111,11 @@ export function SnapshotsPanel({
 						>
 							<Play className="h-3.5 w-3.5 shrink-0" />
 							<span>
-								{commands && commands.length > 0
-									? `${commands.length} command${commands.length === 1 ? "" : "s"} configured`
-									: "Not configured"}
+								{commandsLoading
+									? "Loading..."
+									: commands && commands.length > 0
+										? `${commands.length} command${commands.length === 1 ? "" : "s"} configured`
+										: "Not configured"}
 							</span>
 						</button>
 					</div>

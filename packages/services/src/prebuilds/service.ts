@@ -6,7 +6,12 @@
 
 import { randomUUID } from "crypto";
 import { env } from "@proliferate/environment/server";
-import type { Prebuild } from "@proliferate/shared";
+import type { Prebuild, PrebuildServiceCommand } from "@proliferate/shared";
+import {
+	parsePrebuildServiceCommands,
+	parseServiceCommands,
+	resolveServiceCommands,
+} from "@proliferate/shared/sandbox";
 import * as prebuildsDb from "./db";
 import { toPrebuild, toPrebuildPartial, toPrebuilds } from "./mapper";
 
@@ -29,6 +34,12 @@ export interface CreatePrebuildResult {
 export interface UpdatePrebuildInput {
 	name?: string;
 	notes?: string;
+}
+
+export interface EffectiveServiceCommandsResult {
+	source: "prebuild" | "repo" | "none";
+	commands: PrebuildServiceCommand[];
+	workspaces: string[];
 }
 
 // ============================================
@@ -158,4 +169,34 @@ export async function prebuildBelongsToOrg(prebuildId: string, orgId: string): P
 	const prebuild = await prebuildsDb.findById(prebuildId);
 	if (!prebuild) return false;
 	return prebuild.prebuildRepos.some((pr) => pr.repo?.organizationId === orgId);
+}
+
+/**
+ * Get the effective service commands for a prebuild, using the same
+ * resolution logic as the gateway runtime: prebuild overrides win if
+ * non-empty, otherwise per-repo defaults are merged with workspace context.
+ */
+export async function getEffectiveServiceCommands(
+	prebuildId: string,
+): Promise<EffectiveServiceCommandsResult> {
+	const [prebuildRow, repoRows] = await Promise.all([
+		prebuildsDb.getPrebuildServiceCommands(prebuildId),
+		prebuildsDb.getPrebuildReposWithDetails(prebuildId),
+	]);
+
+	const repoSpecs = repoRows.map((r) => ({
+		workspacePath: r.workspacePath,
+		serviceCommands: parseServiceCommands(r.repo?.serviceCommands),
+	}));
+
+	const commands = resolveServiceCommands(prebuildRow?.serviceCommands, repoSpecs);
+
+	const prebuildCmds = parsePrebuildServiceCommands(prebuildRow?.serviceCommands);
+	const hasRepoDefaults = repoSpecs.some((r) => r.serviceCommands.length > 0);
+	const source: EffectiveServiceCommandsResult["source"] =
+		prebuildCmds.length > 0 ? "prebuild" : hasRepoDefaults ? "repo" : "none";
+
+	const workspaces = [...new Set(repoRows.map((r) => r.workspacePath))];
+
+	return { source, commands, workspaces };
 }

@@ -176,6 +176,34 @@ export const prebuildsRouter = {
 		}),
 
 	/**
+	 * Get effective service commands for a prebuild (resolved: prebuild overrides > repo defaults).
+	 */
+	getEffectiveServiceCommands: orgProcedure
+		.input(z.object({ prebuildId: z.string().uuid() }))
+		.output(
+			z.object({
+				source: z.enum(["prebuild", "repo", "none"]),
+				commands: z.array(
+					z.object({
+						name: z.string(),
+						command: z.string(),
+						cwd: z.string().optional(),
+						workspacePath: z.string().optional(),
+					}),
+				),
+				workspaces: z.array(z.string()),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+			if (!belongsToOrg) {
+				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+			}
+
+			return prebuilds.getEffectiveServiceCommands(input.prebuildId);
+		}),
+
+	/**
 	 * Update service commands for a prebuild.
 	 */
 	updateServiceCommands: orgProcedure

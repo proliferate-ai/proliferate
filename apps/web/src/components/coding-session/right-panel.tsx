@@ -63,6 +63,7 @@ export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps
 			<SnapshotsPanel
 				snapshotId={sessionProps.snapshotId}
 				repoId={sessionProps.repoId}
+				prebuildId={sessionProps.prebuildId}
 				canSnapshot={sessionProps.canSnapshot}
 				isSnapshotting={sessionProps.isSnapshotting}
 				onSnapshot={sessionProps.onSnapshot}
