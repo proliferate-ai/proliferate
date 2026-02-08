@@ -147,7 +147,9 @@ export function AutoStartPanel({ repoId, prebuildId, onClose }: AutoStartPanelPr
 
 				{source !== "none" && !editing && (
 					<p className="text-[10px] text-muted-foreground/70">
-						{source === "prebuild" ? "Using configuration overrides" : "Using repo defaults"}
+						{source === "prebuild"
+							? "Using configuration overrides"
+							: "Using repo defaults — saving will create configuration overrides"}
 					</p>
 				)}
 

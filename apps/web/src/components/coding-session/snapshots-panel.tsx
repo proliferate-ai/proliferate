@@ -26,9 +26,16 @@ export function SnapshotsPanel({
 	onClose,
 }: SnapshotsPanelProps) {
 	const hasPrebuild = !!prebuildId;
-	const { data: effective } = useEffectiveServiceCommands(prebuildId || "", hasPrebuild);
-	const { data: repoCommands } = useServiceCommands(repoId || "", !hasPrebuild && !!repoId);
+	const { data: effective, isLoading: effectiveLoading } = useEffectiveServiceCommands(
+		prebuildId || "",
+		hasPrebuild,
+	);
+	const { data: repoCommands, isLoading: repoLoading } = useServiceCommands(
+		repoId || "",
+		!hasPrebuild && !!repoId,
+	);
 	const commands = hasPrebuild ? effective?.commands : repoCommands;
+	const commandsLoading = hasPrebuild ? effectiveLoading : repoLoading;
 	const { openServiceCommands } = usePreviewPanelStore();
 	return (
 		<div className="flex flex-col h-full">
@@ -104,9 +111,11 @@ export function SnapshotsPanel({
 						>
 							<Play className="h-3.5 w-3.5 shrink-0" />
 							<span>
-								{commands && commands.length > 0
-									? `${commands.length} command${commands.length === 1 ? "" : "s"} configured`
-									: "Not configured"}
+								{commandsLoading
+									? "Loading..."
+									: commands && commands.length > 0
+										? `${commands.length} command${commands.length === 1 ? "" : "s"} configured`
+										: "Not configured"}
 							</span>
 						</button>
 					</div>
