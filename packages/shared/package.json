@@ -16,7 +16,8 @@
 		"./verification": "./src/verification.ts",
 		"./contracts": "./src/contracts/index.ts",
 		"./providers": "./src/providers/index.ts",
-		"./billing": "./src/billing/index.ts"
+		"./billing": "./src/billing/index.ts",
+		"./sandbox": "./src/sandbox/index.ts"
 	},
 	"scripts": {
 		"build": "tsc",

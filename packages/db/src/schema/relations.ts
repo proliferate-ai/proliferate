@@ -19,6 +19,7 @@ import {
 	prebuilds,
 	repoConnections,
 	repos,
+	sandboxBaseSnapshots,
 	schedules,
 	secrets,
 	session,
@@ -466,3 +467,5 @@ export const cliGithubSelectionsRelations = relations(cliGithubSelections, ({ on
 		references: [organization.id],
 	}),
 }));
+
+export const sandboxBaseSnapshotsRelations = relations(sandboxBaseSnapshots, () => ({}));

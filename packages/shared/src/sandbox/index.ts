@@ -34,6 +34,9 @@ export {
 	type SandboxOperation,
 } from "./errors";
 
+// Version key
+export { computeBaseSnapshotVersionKey } from "./version-key";
+
 // Fetch utilities
 export {
 	fetchWithTimeout,

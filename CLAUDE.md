@@ -92,7 +92,7 @@ ws.sendPrompt(content, userId);
 - **UI**: Tailwind + shadcn/ui only. No native `alert/confirm/prompt`.
 - **Colors & theming**: Always use the CSS custom properties from `globals.css` via Tailwind classes (`bg-background`, `text-foreground`, `border-border`, `bg-muted`, etc.). Never hardcode hex/rgb/hsl values. Key tokens: `background`, `foreground`, `card`, `popover`, `primary`, `secondary`, `muted`, `accent`, `destructive`, `border`, `input`, `ring`, `sidebar`, `chat-input`. All tokens have light and dark mode variants already defined.
 - **Component reuse**: check `components/ui/` before creating new patterns.
-- **No raw HTML form elements in pages**: Outside `components/`, use UI components (`Button`, `Input`, `Label`, `Select`, `Textarea`) from `@/components/ui/` instead of raw `<button>`, `<input>`, `<label>`, `<select>`, `<textarea>`. Raw elements are fine inside `components/ui/` primitives themselves.
+- **No raw HTML form elements in pages**: In route components under `apps/web/src/app/**` (pages/layouts/templates) and feature components under `apps/web/src/components/` (except `ui/`), prefer shadcn/ui primitives (`Button`, `Input`, `Label`, `Select`, `Textarea`) from `@/components/ui/` over raw `<button>`, `<input>`, `<label>`, `<select>`, `<textarea>`. Raw elements are expected inside `apps/web/src/components/ui/**` primitives themselves.
 - **Hooks**: kebab-case filenames (`use-repos.ts`).
 
 ## Backend Rules

@@ -11,6 +11,7 @@ export const QUEUE_NAMES = {
 	AUTOMATION_EXECUTE: "automation-execute",
 	AUTOMATION_FINALIZE: "automation-finalize",
 	REPO_SNAPSHOT_BUILDS: "repo-snapshot-builds",
+	BASE_SNAPSHOT_BUILDS: "base-snapshot-builds",
 } as const;
 
 // ============================================
@@ -68,6 +69,16 @@ export interface AutomationFinalizeJob {
 export interface RepoSnapshotBuildJob {
 	repoId: string;
 	force?: boolean;
+}
+
+/**
+ * Job to build a base sandbox snapshot (Layer 1).
+ * Worker computes version key and builds if needed.
+ */
+export interface BaseSnapshotBuildJob {
+	versionKey: string;
+	provider: string;
+	modalAppName: string;
 }
 
 /**
@@ -221,6 +232,22 @@ const automationJobOptions: JobsOptions = {
 	},
 };
 
+const baseSnapshotBuildJobOptions: JobsOptions = {
+	attempts: 3,
+	backoff: {
+		type: "exponential",
+		delay: 10000, // 10s initial — base snapshot builds are slow (~60s)
+	},
+	removeOnComplete: {
+		age: 86400, // 24 hours
+		count: 100,
+	},
+	removeOnFail: {
+		age: 604800, // 7 days
+		count: 100,
+	},
+};
+
 const repoSnapshotBuildJobOptions: JobsOptions = {
 	attempts: 3,
 	backoff: {
@@ -304,6 +331,18 @@ export function createAutomationFinalizeQueue(
 	return new Queue<AutomationFinalizeJob>(QUEUE_NAMES.AUTOMATION_FINALIZE, {
 		connection: connection ?? getConnectionOptions(),
 		defaultJobOptions: automationJobOptions,
+	});
+}
+
+/**
+ * Create the base snapshot build queue
+ */
+export function createBaseSnapshotBuildQueue(
+	connection?: ConnectionOptions,
+): Queue<BaseSnapshotBuildJob> {
+	return new Queue<BaseSnapshotBuildJob>(QUEUE_NAMES.BASE_SNAPSHOT_BUILDS, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: baseSnapshotBuildJobOptions,
 	});
 }
 
@@ -398,6 +437,16 @@ export function createAutomationFinalizeWorker(
 	return new Worker<AutomationFinalizeJob>(QUEUE_NAMES.AUTOMATION_FINALIZE, processor, {
 		connection: connection ?? getConnectionOptions(),
 		concurrency: 2,
+	});
+}
+
+export function createBaseSnapshotBuildWorker(
+	processor: (job: Job<BaseSnapshotBuildJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<BaseSnapshotBuildJob> {
+	return new Worker<BaseSnapshotBuildJob>(QUEUE_NAMES.BASE_SNAPSHOT_BUILDS, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 1,
 	});
 }
 
@@ -520,6 +569,18 @@ export async function removeScheduledJob(
 	repeatJobKey: string,
 ): Promise<void> {
 	await queue.removeRepeatableByKey(repeatJobKey);
+}
+
+/**
+ * Queue a base snapshot build.
+ * Uses jobId for deduplication so only one build runs per version+provider+app.
+ */
+export async function queueBaseSnapshotBuild(
+	queue: Queue<BaseSnapshotBuildJob>,
+	input: BaseSnapshotBuildJob,
+): Promise<void> {
+	const jobId = `base-snapshot:${input.provider}:${input.modalAppName}:${input.versionKey.slice(0, 16)}`;
+	await queue.add(jobId, input, { jobId });
 }
 
 // ============================================
