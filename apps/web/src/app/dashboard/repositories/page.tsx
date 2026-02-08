@@ -38,18 +38,14 @@ import type { GitHubRepo, Repo } from "@/types";
 import { useQuery } from "@tanstack/react-query";
 import {
 	Camera,
-	Check,
 	ChevronDown,
-	FolderGit2,
-	GitBranch,
+	ChevronRight,
 	Globe,
 	Lock,
 	MoreVertical,
 	Pencil,
-	Play,
 	Plus,
 	Search,
-	Settings2,
 	Star,
 	Trash2,
 } from "lucide-react";
@@ -65,7 +61,6 @@ export default function RepositoriesPage() {
 	const [publicSearchQuery, setPublicSearchQuery] = useState("");
 	const [debouncedQuery, setDebouncedQuery] = useState("");
 
-	// Debounce search query
 	useEffect(() => {
 		const timer = setTimeout(() => {
 			setDebouncedQuery(publicSearchQuery);
@@ -126,20 +121,16 @@ export default function RepositoriesPage() {
 
 	return (
 		<div className="mx-auto max-w-3xl px-6 py-6 space-y-8">
-			<div className="flex items-center justify-between">
-				<h1 className="text-lg font-semibold">Repositories</h1>
-			</div>
+			<h1 className="text-lg font-semibold">Repositories</h1>
 
-			{/* Repository List */}
 			{reposList.length > 0 ? (
-				<div className="space-y-2">
+				<div className="rounded-lg border border-border/80 bg-background divide-y divide-border/60">
 					{reposList.map((repo) => (
 						<RepoRow key={repo.id} repo={repo} onConfigure={handleConfigure} />
 					))}
 				</div>
 			) : (
-				<div className="rounded-lg border border-dashed border-border/80 bg-background py-12 text-center">
-					<FolderGit2 className="h-8 w-8 mx-auto mb-3 text-muted-foreground/50" />
+				<div className="rounded-lg border border-dashed border-border/80 py-12 text-center">
 					<p className="text-sm text-muted-foreground">No repositories added yet</p>
 					<p className="text-xs text-muted-foreground mt-1">
 						Add a repository from GitHub to get started
@@ -156,10 +147,7 @@ export default function RepositoriesPage() {
 						onClick={() => setShowAvailable(!showAvailable)}
 						className="w-full h-auto flex items-center justify-between px-4 py-3 rounded-none hover:bg-muted/50 transition-colors"
 					>
-						<div className="flex items-center gap-2">
-							<Lock className="h-4 w-4 text-muted-foreground" />
-							<span className="text-sm font-medium">From Connected Repos</span>
-						</div>
+						<span className="text-sm font-medium">From Connected Repos</span>
 						<ChevronDown
 							className={cn(
 								"h-4 w-4 text-muted-foreground transition-transform",
@@ -169,7 +157,7 @@ export default function RepositoriesPage() {
 					</Button>
 
 					{showAvailable && (
-						<div className="border-t border-border/60 bg-muted/20 p-4">
+						<div className="border-t border-border/60 p-4">
 							{availableLoading ? (
 								<div className="py-4 text-center">
 									<LoadingDots size="sm" className="text-muted-foreground" />
@@ -179,22 +167,21 @@ export default function RepositoriesPage() {
 									{availableRepos.map((repo) => (
 										<div
 											key={repo.id}
-											className="flex items-center justify-between p-2 rounded-md hover:bg-background transition-colors"
+											className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors"
 										>
-											<div className="flex items-center gap-3 min-w-0 flex-1">
-												<GitBranch className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-												<div className="min-w-0 flex-1">
-													<p className="text-sm font-medium truncate">{repo.full_name}</p>
-													<p className="text-xs text-muted-foreground">{repo.default_branch}</p>
-												</div>
-												{repo.private && (
-													<Lock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-												)}
+											<div className="min-w-0 flex-1">
+												<p className="text-sm truncate">
+													{repo.full_name}
+													{repo.private && (
+														<Lock className="inline h-3 w-3 text-muted-foreground ml-1.5" />
+													)}
+												</p>
+												<p className="text-xs text-muted-foreground">{repo.default_branch}</p>
 											</div>
 											<Button
 												variant="outline"
 												size="sm"
-												className="ml-2 flex-shrink-0 h-7 text-xs"
+												className="ml-3 flex-shrink-0 h-7 text-xs"
 												onClick={() => handleAddRepo(repo)}
 												disabled={addingRepoId === repo.id}
 											>
@@ -218,10 +205,7 @@ export default function RepositoriesPage() {
 						onClick={() => setShowPublicSearch(!showPublicSearch)}
 						className="w-full h-auto flex items-center justify-between px-4 py-3 rounded-none hover:bg-muted/50 transition-colors"
 					>
-						<div className="flex items-center gap-2">
-							<Globe className="h-4 w-4 text-muted-foreground" />
-							<span className="text-sm font-medium">Public Repository</span>
-						</div>
+						<span className="text-sm font-medium">Public Repository</span>
 						<ChevronDown
 							className={cn(
 								"h-4 w-4 text-muted-foreground transition-transform",
@@ -231,7 +215,7 @@ export default function RepositoriesPage() {
 					</Button>
 
 					{showPublicSearch && (
-						<div className="border-t border-border/60 bg-muted/20 p-4 space-y-4">
+						<div className="border-t border-border/60 p-4 space-y-4">
 							<div className="relative">
 								<Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
 								<Input
@@ -254,28 +238,25 @@ export default function RepositoriesPage() {
 										.map((repo) => (
 											<div
 												key={repo.id}
-												className="flex items-center justify-between p-2 rounded-md hover:bg-background transition-colors"
+												className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors"
 											>
-												<div className="flex items-center gap-3 min-w-0 flex-1">
-													<Globe className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-													<div className="min-w-0 flex-1">
-														<p className="text-sm font-medium truncate">{repo.full_name}</p>
-														<div className="flex items-center gap-2 text-xs text-muted-foreground">
-															{repo.stargazers_count !== undefined && (
-																<span className="flex items-center gap-0.5">
-																	<Star className="h-3 w-3" />
-																	{repo.stargazers_count.toLocaleString()}
-																</span>
-															)}
-															{repo.language && <span>{repo.language}</span>}
-															<span>{repo.default_branch}</span>
-														</div>
+												<div className="min-w-0 flex-1">
+													<p className="text-sm truncate">{repo.full_name}</p>
+													<div className="flex items-center gap-2 text-xs text-muted-foreground">
+														{repo.stargazers_count !== undefined && (
+															<span className="flex items-center gap-0.5">
+																<Star className="h-3 w-3" />
+																{repo.stargazers_count.toLocaleString()}
+															</span>
+														)}
+														{repo.language && <span>{repo.language}</span>}
+														<span>{repo.default_branch}</span>
 													</div>
 												</div>
 												<Button
 													variant="outline"
 													size="sm"
-													className="ml-2 flex-shrink-0 h-7 text-xs"
+													className="ml-3 flex-shrink-0 h-7 text-xs"
 													onClick={() => handleAddRepo(repo, true)}
 													disabled={addingRepoId === repo.id}
 												>
@@ -315,15 +296,8 @@ function RepoRow({
 	onConfigure: (repoId: string) => void;
 }) {
 	const [expanded, setExpanded] = useState(false);
-	const [tab, setTab] = useState<"snapshots" | "defaults">("snapshots");
 	const [deleteOpen, setDeleteOpen] = useState(false);
 	const deleteRepo = useDeleteRepo();
-
-	const { data: snapshotsData, isLoading: snapshotsLoading } = useQuery({
-		...orpc.repos.listSnapshots.queryOptions({ input: { id: repo.id } }),
-		enabled: expanded && tab === "snapshots",
-	});
-	const snapshots = snapshotsData?.prebuilds;
 
 	const handleDelete = async () => {
 		await deleteRepo.mutateAsync({ id: repo.id });
@@ -332,113 +306,63 @@ function RepoRow({
 
 	return (
 		<>
-			<div className="rounded-lg border border-border/80 bg-background overflow-hidden">
-				<div className="flex items-center gap-3 px-4 py-3">
+			<div>
+				<div className="flex items-center gap-3 px-4 py-2.5">
 					<button
 						type="button"
 						onClick={() => setExpanded(!expanded)}
-						className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
+						className="flex items-center gap-2 flex-1 min-w-0 text-left group"
 					>
-						<div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
-							<GitBranch className="h-4 w-4" />
-						</div>
-						<div className="flex-1 min-w-0">
-							<div className="flex items-center gap-2">
-								<p className="text-sm font-medium truncate">{repo.githubRepoName}</p>
-								{repo.isConfigured && (
-									<span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex-shrink-0">
-										<Check className="h-2.5 w-2.5" />
-										Configured
-									</span>
-								)}
-								{repo.prebuildStatus === "ready" && (
-									<span className="inline-flex items-center rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400 flex-shrink-0">
-										Ready
-									</span>
-								)}
-							</div>
-							<p className="text-xs text-muted-foreground">{repo.defaultBranch || "main"}</p>
-						</div>
-						<ChevronDown
+						<ChevronRight
 							className={cn(
-								"h-4 w-4 text-muted-foreground transition-transform flex-shrink-0",
-								expanded && "rotate-180",
+								"h-3.5 w-3.5 text-muted-foreground transition-transform flex-shrink-0",
+								expanded && "rotate-90",
 							)}
 						/>
+						<span className="text-sm font-medium truncate">{repo.githubRepoName}</span>
+						<span className="text-xs text-muted-foreground flex-shrink-0">
+							{repo.defaultBranch || "main"}
+						</span>
+						{repo.prebuildStatus === "ready" && (
+							<span className="text-xs text-muted-foreground flex-shrink-0">&middot; ready</span>
+						)}
 					</button>
 
-					<DropdownMenu>
-						<DropdownMenuTrigger asChild>
-							<Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
-								<MoreVertical className="h-4 w-4" />
-							</Button>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end">
-							<DropdownMenuItem onClick={() => onConfigure(repo.id)}>
-								<Settings2 className="h-4 w-4 mr-2" />
-								Configure
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								onClick={() => {
-									setExpanded(true);
-									setTab("defaults");
-								}}
-							>
-								<Pencil className="h-4 w-4 mr-2" />
-								Edit defaults
-							</DropdownMenuItem>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem onClick={() => setDeleteOpen(true)} className="text-destructive">
-								<Trash2 className="h-4 w-4 mr-2" />
-								Delete
-							</DropdownMenuItem>
-						</DropdownMenuContent>
-					</DropdownMenu>
+					<div className="flex items-center gap-1.5 flex-shrink-0">
+						<Button
+							variant="outline"
+							size="sm"
+							className="h-7 text-xs"
+							onClick={() => onConfigure(repo.id)}
+						>
+							Configure
+						</Button>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button variant="ghost" size="icon" className="h-7 w-7">
+									<MoreVertical className="h-3.5 w-3.5" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								<DropdownMenuItem
+									onClick={() => {
+										setExpanded(true);
+									}}
+								>
+									<Pencil className="h-4 w-4 mr-2" />
+									Edit defaults
+								</DropdownMenuItem>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem onClick={() => setDeleteOpen(true)} className="text-destructive">
+									<Trash2 className="h-4 w-4 mr-2" />
+									Delete
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
 				</div>
 
-				{expanded && (
-					<div className="border-t border-border/60">
-						<div className="flex border-b border-border/60">
-							<button
-								type="button"
-								onClick={() => setTab("snapshots")}
-								className={cn(
-									"flex-1 px-4 py-2 text-xs font-medium transition-colors",
-									tab === "snapshots"
-										? "text-foreground border-b-2 border-foreground"
-										: "text-muted-foreground hover:text-foreground",
-								)}
-							>
-								Snapshots
-							</button>
-							<button
-								type="button"
-								onClick={() => setTab("defaults")}
-								className={cn(
-									"flex-1 px-4 py-2 text-xs font-medium transition-colors",
-									tab === "defaults"
-										? "text-foreground border-b-2 border-foreground"
-										: "text-muted-foreground hover:text-foreground",
-								)}
-							>
-								Default Auto-start
-							</button>
-						</div>
-
-						<div className="bg-muted/20 p-4">
-							{tab === "snapshots" ? (
-								<SnapshotsTab
-									snapshots={snapshots}
-									isLoading={snapshotsLoading}
-									repoId={repo.id}
-									onCreateSnapshot={onConfigure}
-								/>
-							) : (
-								<ServiceCommandsTab repoId={repo.id} />
-							)}
-						</div>
-					</div>
-				)}
+				{expanded && <RepoDetails repo={repo} onConfigure={onConfigure} />}
 			</div>
 
 			<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
@@ -465,93 +389,85 @@ function RepoRow({
 	);
 }
 
-function SnapshotsTab({
-	snapshots,
-	isLoading,
-	repoId,
-	onCreateSnapshot,
+function RepoDetails({
+	repo,
+	onConfigure,
 }: {
-	snapshots:
-		| Array<{
-				id: string;
-				name: string | null;
-				notes: string | null;
-				createdAt: string;
-				setupSessions?: Array<{ id: string; sessionType: string | null }>;
-		  }>
-		| undefined;
-	isLoading: boolean;
-	repoId: string;
-	onCreateSnapshot: (repoId: string) => void;
+	repo: Repo;
+	onConfigure: (repoId: string) => void;
 }) {
-	if (isLoading) {
-		return (
-			<div className="py-4 text-center">
-				<LoadingDots size="sm" className="text-muted-foreground" />
-			</div>
-		);
-	}
-
-	if (snapshots && snapshots.length > 0) {
-		return (
-			<div className="space-y-2">
-				{snapshots.map((snapshot) => {
-					const setupSessionId = snapshot.setupSessions?.find((s) => s.sessionType === "setup")?.id;
-					return (
-						<div
-							key={snapshot.id}
-							className="group flex items-center gap-1 rounded-lg hover:bg-background transition-colors"
-						>
-							<SelectableItem
-								onClick={() => {
-									if (setupSessionId) {
-										openHistoricalSession(setupSessionId, getSnapshotDisplayName(snapshot));
-									}
-								}}
-								icon={<Camera className="h-4 w-4" />}
-								className="flex-1 p-3"
-							>
-								<span className="truncate">{getSnapshotDisplayName(snapshot)}</span>
-							</SelectableItem>
-							{setupSessionId && (
-								<IconAction
-									icon={<Pencil className="h-3.5 w-3.5" />}
-									onClick={(e) => {
-										e.stopPropagation();
-										openEditSession({
-											sessionId: setupSessionId,
-											snapshotId: snapshot.id,
-											snapshotName: getSnapshotDisplayName(snapshot),
-											prebuildId: snapshot.id,
-										});
-									}}
-									tooltip="Edit environment"
-									className="opacity-0 group-hover:opacity-100 mr-1"
-								/>
-							)}
-						</div>
-					);
-				})}
-				<Button
-					variant="outline"
-					size="sm"
-					className="w-full mt-2"
-					onClick={() => onCreateSnapshot(repoId)}
-				>
-					<Plus className="h-3.5 w-3.5 mr-2" />
-					Create New Snapshot
-				</Button>
-			</div>
-		);
-	}
+	const { data: snapshotsData, isLoading: snapshotsLoading } = useQuery({
+		...orpc.repos.listSnapshots.queryOptions({ input: { id: repo.id } }),
+	});
+	const snapshots = snapshotsData?.prebuilds;
 
 	return (
-		<div className="text-center py-4">
-			<p className="text-sm text-muted-foreground mb-3">No snapshots yet</p>
-			<Button variant="outline" size="sm" onClick={() => onCreateSnapshot(repoId)}>
-				<Plus className="h-3.5 w-3.5 mr-2" />
-				Create Snapshot
-			</Button>
+		<div className="px-4 pb-3 space-y-4">
+			{/* Snapshots */}
+			<div className="pl-5.5">
+				<p className="text-xs text-muted-foreground mb-2">Snapshots</p>
+				{snapshotsLoading ? (
+					<LoadingDots size="sm" className="text-muted-foreground" />
+				) : snapshots && snapshots.length > 0 ? (
+					<div className="space-y-1">
+						{snapshots.map((snapshot) => {
+							const setupSessionId = snapshot.setupSessions?.find(
+								(s) => s.sessionType === "setup",
+							)?.id;
+							return (
+								<div
+									key={snapshot.id}
+									className="group flex items-center gap-1 rounded-md hover:bg-muted/50 transition-colors"
+								>
+									<SelectableItem
+										onClick={() => {
+											if (setupSessionId) {
+												openHistoricalSession(setupSessionId, getSnapshotDisplayName(snapshot));
+											}
+										}}
+										icon={<Camera className="h-3.5 w-3.5" />}
+										className="flex-1 py-1.5 px-2"
+									>
+										<span className="text-xs truncate">{getSnapshotDisplayName(snapshot)}</span>
+									</SelectableItem>
+									{setupSessionId && (
+										<IconAction
+											icon={<Pencil className="h-3 w-3" />}
+											onClick={(e) => {
+												e.stopPropagation();
+												openEditSession({
+													sessionId: setupSessionId,
+													snapshotId: snapshot.id,
+													snapshotName: getSnapshotDisplayName(snapshot),
+													prebuildId: snapshot.id,
+												});
+											}}
+											tooltip="Edit environment"
+											className="opacity-0 group-hover:opacity-100 mr-1"
+										/>
+									)}
+								</div>
+							);
+						})}
+					</div>
+				) : (
+					<p className="text-xs text-muted-foreground">None</p>
+				)}
+				<Button
+					variant="ghost"
+					size="sm"
+					className="h-6 text-xs text-muted-foreground hover:text-foreground mt-1 -ml-2"
+					onClick={() => onConfigure(repo.id)}
+				>
+					<Plus className="h-3 w-3 mr-1" />
+					New snapshot
+				</Button>
+			</div>
+
+			{/* Auto-start commands */}
+			<div className="pl-5.5">
+				<ServiceCommandsSection repoId={repo.id} />
+			</div>
 		</div>
 	);
 }
@@ -562,7 +478,7 @@ interface CommandDraft {
 	cwd: string;
 }
 
-function ServiceCommandsTab({ repoId }: { repoId: string }) {
+function ServiceCommandsSection({ repoId }: { repoId: string }) {
 	const { data: commands, isLoading } = useServiceCommands(repoId);
 	const updateCommands = useUpdateServiceCommands();
 	const [editing, setEditing] = useState(false);
@@ -604,19 +520,14 @@ function ServiceCommandsTab({ repoId }: { repoId: string }) {
 	};
 
 	if (isLoading) {
-		return (
-			<div className="py-4 text-center">
-				<LoadingDots size="sm" className="text-muted-foreground" />
-			</div>
-		);
+		return <LoadingDots size="sm" className="text-muted-foreground" />;
 	}
 
 	if (editing) {
 		return (
-			<div className="space-y-3">
+			<div className="space-y-2">
 				<p className="text-xs text-muted-foreground">
-					Default auto-start commands (repo defaults). These run automatically when a session starts
-					with a prebuild snapshot.
+					Default auto-start commands. Run automatically when a session starts.
 				</p>
 				{drafts.map((draft, index) => (
 					<div key={index} className="flex items-start gap-2">
@@ -636,7 +547,7 @@ function ServiceCommandsTab({ repoId }: { repoId: string }) {
 							<Input
 								value={draft.cwd}
 								onChange={(e) => updateDraft(index, "cwd", e.target.value)}
-								placeholder="Working directory (optional, relative)"
+								placeholder="Working directory (optional)"
 								className="h-7 text-xs"
 							/>
 						</div>
@@ -683,42 +594,30 @@ function ServiceCommandsTab({ repoId }: { repoId: string }) {
 		);
 	}
 
-	if (commands && commands.length > 0) {
-		return (
-			<div className="space-y-2">
-				{commands.map((cmd, index) => (
-					<div
-						key={index}
-						className="flex items-center gap-3 p-2 rounded-md bg-background border border-border/60"
-					>
-						<Play className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-						<div className="flex-1 min-w-0">
-							<p className="text-xs font-medium truncate">{cmd.name}</p>
-							<p className="text-xs text-muted-foreground font-mono truncate">{cmd.command}</p>
-							{cmd.cwd && (
-								<p className="text-[10px] text-muted-foreground truncate">cwd: {cmd.cwd}</p>
-							)}
-						</div>
-					</div>
-				))}
-				<Button variant="outline" size="sm" className="w-full mt-1" onClick={startEditing}>
-					<Pencil className="h-3 w-3 mr-2" />
-					Edit commands
-				</Button>
-			</div>
-		);
-	}
-
 	return (
-		<div className="text-center py-4">
-			<Play className="h-6 w-6 mx-auto mb-2 text-muted-foreground/50" />
-			<p className="text-sm text-muted-foreground mb-1">No auto-start commands</p>
-			<p className="text-xs text-muted-foreground mb-3">
-				Add commands to auto-run when sessions start
-			</p>
-			<Button variant="outline" size="sm" onClick={startEditing}>
-				<Plus className="h-3.5 w-3.5 mr-2" />
-				Add commands
+		<div>
+			<p className="text-xs text-muted-foreground mb-2">Auto-start commands</p>
+			{commands && commands.length > 0 ? (
+				<div className="space-y-1">
+					{commands.map((cmd, index) => (
+						<div key={index} className="text-xs py-0.5">
+							<span className="font-medium">{cmd.name}</span>
+							<span className="text-muted-foreground ml-2 font-mono">{cmd.command}</span>
+							{cmd.cwd && <span className="text-muted-foreground ml-2">({cmd.cwd})</span>}
+						</div>
+					))}
+				</div>
+			) : (
+				<p className="text-xs text-muted-foreground">None</p>
+			)}
+			<Button
+				variant="ghost"
+				size="sm"
+				className="h-6 text-xs text-muted-foreground hover:text-foreground mt-1 -ml-2"
+				onClick={startEditing}
+			>
+				<Pencil className="h-3 w-3 mr-1" />
+				{commands && commands.length > 0 ? "Edit" : "Add commands"}
 			</Button>
 		</div>
 	);
