@@ -61,6 +61,7 @@ Notes.md
 
 # Root-level scratch files
 /*.txt
+/*.html
 
 # Redis
 **/dump.rdb
