@@ -2,12 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import type { PreviewMode } from "@/stores/preview-panel";
-import { Circle, Globe, HardDrive, MessageSquare, PanelRight, Settings } from "lucide-react";
+import { Globe, HardDrive, MessageSquare, PanelRight, Settings } from "lucide-react";
 
 interface SessionHeaderProps {
-	sessionStatus?: string;
 	error: string | null;
 	// Panel state
 	panelMode: PreviewMode;
@@ -17,11 +15,9 @@ interface SessionHeaderProps {
 	// Mobile
 	mobileView?: "chat" | "preview";
 	onToggleMobileView?: () => void;
-	isMigrating?: boolean;
 }
 
 export function SessionHeader({
-	sessionStatus,
 	error,
 	panelMode,
 	onTogglePreview,
@@ -29,17 +25,8 @@ export function SessionHeader({
 	onToggleSnapshots,
 	mobileView,
 	onToggleMobileView,
-	isMigrating,
 }: SessionHeaderProps) {
-	const isRunning = sessionStatus === "running" || sessionStatus === "starting";
 	const isPanelOpen = panelMode.type !== "none";
-
-	const statusLabel = isMigrating ? "Extending" : isRunning ? "Open" : "Closed";
-	const statusTooltip = isMigrating
-		? "Session is extending"
-		: isRunning
-			? "Session is running"
-			: "Session is closed";
 
 	return (
 		<TooltipProvider delayDuration={150}>
@@ -111,37 +98,6 @@ export function SessionHeader({
 						<TooltipContent>{mobileView === "chat" ? "Show Panel" : "Show Chat"}</TooltipContent>
 					</Tooltip>
 				)}
-
-				{/* Status badge */}
-				<Tooltip>
-					<TooltipTrigger asChild>
-						<div
-							className={cn(
-								"flex items-center gap-1.5 rounded-full px-2 py-0.5",
-								isMigrating
-									? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-									: isRunning
-										? "bg-green-500/10 text-green-600 dark:text-green-400"
-										: "bg-muted text-muted-foreground",
-							)}
-						>
-							<Circle
-								className={cn(
-									"h-2 w-2 fill-current",
-									isMigrating
-										? "text-yellow-500 animate-pulse"
-										: isRunning
-											? "text-green-500"
-											: "text-muted-foreground/50",
-								)}
-							/>
-							<span className="hidden md:inline text-[10px] font-medium uppercase tracking-wide">
-								{statusLabel}
-							</span>
-						</div>
-					</TooltipTrigger>
-					<TooltipContent>{statusTooltip}</TooltipContent>
-				</Tooltip>
 
 				{/* Error indicator */}
 				{error && (

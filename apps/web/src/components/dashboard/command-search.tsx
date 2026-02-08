@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import {
 	CommandDialog,
 	CommandEmpty,
@@ -143,16 +142,16 @@ interface SearchTriggerProps {
 
 export function SearchTrigger({ onClick }: SearchTriggerProps) {
 	return (
-		<Button
-			variant="ghost"
+		<button
+			type="button"
 			onClick={onClick}
-			className="group w-full h-auto flex items-center justify-start gap-[0.38rem] px-3 py-1.5 rounded-lg text-muted-foreground hover:text-foreground"
+			className="group flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
 		>
 			<Search className="h-5 w-5" />
 			<span className="flex-1 text-left text-sm">Search</span>
 			<kbd className="hidden sm:inline-flex opacity-0 group-hover:opacity-100 transition-opacity h-5 items-center gap-1 rounded border bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
 				<span className="text-xs">⌘</span>K
 			</kbd>
-		</Button>
+		</button>
 	);
 }

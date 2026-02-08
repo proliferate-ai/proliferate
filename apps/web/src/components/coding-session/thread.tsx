@@ -423,7 +423,7 @@ const Composer: FC = () => {
 };
 
 const UserMessage: FC = () => (
-	<MessagePrimitive.Root className="mt-3 mb-1 px-3">
+	<MessagePrimitive.Root className="mt-6 mb-2 px-3">
 		<div className="max-w-2xl mx-auto flex flex-col items-end gap-2">
 			<MessagePrimitive.Content
 				components={{
@@ -448,7 +448,7 @@ const UserMessage: FC = () => (
 const BlinkingCursor = () => <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
 
 const AssistantMessage: FC = () => (
-	<MessagePrimitive.Root className="pb-3 px-3">
+	<MessagePrimitive.Root className="pb-4 px-3">
 		<div className="max-w-2xl mx-auto">
 			<div className="text-sm">
 				<MessagePrimitive.Content

@@ -150,7 +150,6 @@ export function CodingSession({
 					{!isPanelOpen && (
 						<div className="absolute top-2 right-3 z-10">
 							<SessionHeader
-								sessionStatus={sessionData.status ?? undefined}
 								error={error}
 								panelMode={mode}
 								onTogglePreview={() => toggleUrlPreview(previewUrl)}
@@ -158,7 +157,6 @@ export function CodingSession({
 								onToggleSnapshots={() => togglePanel("snapshots")}
 								mobileView={mobileView}
 								onToggleMobileView={toggleMobileView}
-								isMigrating={isMigrating}
 							/>
 						</div>
 					)}
@@ -174,7 +172,6 @@ export function CodingSession({
 					>
 						<div className="flex justify-start shrink-0 px-1">
 							<SessionHeader
-								sessionStatus={sessionData.status ?? undefined}
 								error={error}
 								panelMode={mode}
 								onTogglePreview={() => toggleUrlPreview(previewUrl)}
@@ -182,7 +179,6 @@ export function CodingSession({
 								onToggleSnapshots={() => togglePanel("snapshots")}
 								mobileView={mobileView}
 								onToggleMobileView={toggleMobileView}
-								isMigrating={isMigrating}
 							/>
 						</div>
 						<div className="flex-1 min-h-0 rounded-xl border bg-background overflow-hidden">

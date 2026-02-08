@@ -155,7 +155,7 @@ export function SnapshotSelector({
 			<Popover.Root open={open} onOpenChange={setOpen}>
 				<Popover.Trigger asChild>
 					<SelectorTrigger
-						hasValue={!!selectedSnapshotId}
+						hasValue={!!selectedSnapshotId && !!selectedSnapshot}
 						placeholder="Select configuration..."
 						className={triggerClassName}
 					>

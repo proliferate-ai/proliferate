@@ -36,7 +36,7 @@ export const SelectorTrigger = forwardRef<HTMLButtonElement, SelectorTriggerProp
 					// Shape
 					"rounded-md border border-input",
 					// Colors
-					"bg-background text-sm",
+					"bg-background",
 					// States
 					"hover:bg-muted transition-colors",
 					"focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -47,8 +47,8 @@ export const SelectorTrigger = forwardRef<HTMLButtonElement, SelectorTriggerProp
 				{icon && <span className="flex-shrink-0 text-muted-foreground">{icon}</span>}
 				<span
 					className={cn(
-						"flex-1 text-left truncate",
-						hasValue ? "text-foreground" : "text-muted-foreground",
+						"flex-1 !text-2xl text-left truncate",
+						hasValue ? "text-foreground" : "text-neutral-400",
 					)}
 				>
 					{hasValue ? children : placeholder || children}

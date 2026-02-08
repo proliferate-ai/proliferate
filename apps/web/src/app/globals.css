@@ -15,15 +15,15 @@
 		--card: 60 9% 98%;
 		--card-foreground: 24 10% 4%;
 		--popover: 0 0% 100%;
-		--popover-foreground: 24 10% 4%;
-		--primary: 24 10% 10%;
-		--primary-foreground: 60 9% 98%;
-		--secondary: 60 5% 96%;
-		--secondary-foreground: 24 10% 10%;
-		--muted: 20 6% 93%;
-		--muted-foreground: 25 5% 45%;
-		--accent: 20 6% 90%;
-		--accent-foreground: 24 10% 10%;
+		--popover-foreground: 0 0% 3.9%;
+		--primary: 0 0% 9%;
+		--primary-foreground: 0 0% 98%;
+		--secondary: 0 0% 96.1%;
+		--secondary-foreground: 0 0% 9%;
+		--muted: 0 0% 96.1%;
+		--muted-foreground: 48 9% 30%; /* a more neutral, warmer dark (soft taupe) */
+		--accent: 0 0% 92%;
+		--accent-foreground: 0 0% 9%;
 		--destructive: 0 84.2% 60.2%;
 		--destructive-foreground: 0 0% 98%;
 		--border: 24 6% 85%;
@@ -51,15 +51,15 @@
 		--popover: 20 5% 11%;
 		--popover-foreground: 60 5% 98%;
 
-		/* Primary action color - warm white in dark mode */
-		--primary: 60 5% 98%;
-		--primary-foreground: 24 6% 10%;
+		/* Primary action color - white in dark mode */
+		--primary: 0 0% 98%;
+		--primary-foreground: 0 0% 9%;
 
 		/* Secondary/muted surfaces */
-		--secondary: 20 4% 16%;
-		--secondary-foreground: 60 5% 98%;
-		--muted: 20 4% 16%;
-		--muted-foreground: 25 4% 63%;
+		--secondary: 0 0% 16%;
+		--secondary-foreground: 0 0% 98%;
+		--muted: 0 0% 16%;
+		--muted-foreground: 0 0% 83%;
 
 		/* Accent (hover states, highlights) */
 		--accent: 20 4% 16%;
