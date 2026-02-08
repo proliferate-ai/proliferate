@@ -4,12 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useServiceCommands, useUpdateServiceCommands } from "@/hooks/use-repos";
+import {
+	usePrebuildServiceCommands,
+	useServiceCommands,
+	useUpdatePrebuildServiceCommands,
+	useUpdateServiceCommands,
+} from "@/hooks/use-repos";
 import { Pencil, Play, Plus, Settings, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 interface AutoStartPanelProps {
 	repoId?: string | null;
+	prebuildId?: string | null;
 	onClose: () => void;
 }
 
@@ -19,9 +25,24 @@ interface CommandDraft {
 	cwd: string;
 }
 
-export function AutoStartPanel({ repoId, onClose }: AutoStartPanelProps) {
-	const { data: commands, isLoading } = useServiceCommands(repoId || "", !!repoId);
-	const updateCommands = useUpdateServiceCommands();
+export function AutoStartPanel({ repoId, prebuildId, onClose }: AutoStartPanelProps) {
+	// Prefer prebuild-level commands when available, fall back to repo-level
+	const usePrebuild = !!prebuildId;
+	const { data: prebuildCommands, isLoading: prebuildLoading } = usePrebuildServiceCommands(
+		prebuildId || "",
+		usePrebuild,
+	);
+	const { data: repoCommands, isLoading: repoLoading } = useServiceCommands(
+		repoId || "",
+		!usePrebuild && !!repoId,
+	);
+	const updatePrebuildCommands = useUpdatePrebuildServiceCommands();
+	const updateRepoCommands = useUpdateServiceCommands();
+
+	const commands = usePrebuild ? prebuildCommands : repoCommands;
+	const isLoading = usePrebuild ? prebuildLoading : repoLoading;
+	const canEdit = usePrebuild ? !!prebuildId : !!repoId;
+
 	const [editing, setEditing] = useState(false);
 	const [drafts, setDrafts] = useState<CommandDraft[]>([]);
 
@@ -35,18 +56,22 @@ export function AutoStartPanel({ repoId, onClose }: AutoStartPanelProps) {
 	};
 
 	const handleSave = async () => {
-		if (!repoId) return;
 		const valid = drafts.filter((d) => d.name.trim() && d.command.trim());
-		await updateCommands.mutateAsync({
-			id: repoId,
-			commands: valid.map((d) => ({
-				name: d.name.trim(),
-				command: d.command.trim(),
-				...(d.cwd.trim() ? { cwd: d.cwd.trim() } : {}),
-			})),
-		});
+		const cmds = valid.map((d) => ({
+			name: d.name.trim(),
+			command: d.command.trim(),
+			...(d.cwd.trim() ? { cwd: d.cwd.trim() } : {}),
+		}));
+
+		if (usePrebuild && prebuildId) {
+			await updatePrebuildCommands.mutateAsync({ prebuildId, commands: cmds });
+		} else if (repoId) {
+			await updateRepoCommands.mutateAsync({ id: repoId, commands: cmds });
+		}
 		setEditing(false);
 	};
+
+	const isSaving = updatePrebuildCommands.isPending || updateRepoCommands.isPending;
 
 	const addRow = () => {
 		if (drafts.length >= 10) return;
@@ -85,12 +110,11 @@ export function AutoStartPanel({ repoId, onClose }: AutoStartPanelProps) {
 					snapshot.
 				</p>
 
-				{!repoId ? (
+				{!canEdit ? (
 					<div className="rounded-lg border border-dashed border-border/80 p-4 text-center">
 						<Settings className="h-6 w-6 mx-auto mb-2 text-muted-foreground/50" />
-						<p className="text-sm text-muted-foreground">Auto-start config is per-repo.</p>
-						<p className="text-xs text-muted-foreground mt-1">
-							This session isn&apos;t linked to a single repo.
+						<p className="text-sm text-muted-foreground">
+							No configuration linked to this session.
 						</p>
 					</div>
 				) : isLoading ? (
@@ -105,7 +129,7 @@ export function AutoStartPanel({ repoId, onClose }: AutoStartPanelProps) {
 						onRemoveRow={removeRow}
 						onSave={handleSave}
 						onCancel={() => setEditing(false)}
-						isSaving={updateCommands.isPending}
+						isSaving={isSaving}
 					/>
 				) : commands && commands.length > 0 ? (
 					<CommandsList commands={commands} onEdit={startEditing} />

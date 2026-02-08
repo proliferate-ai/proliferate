@@ -1083,12 +1083,42 @@ export class ModalLibmodalProvider implements SandboxProvider {
 	}
 
 	/**
-	 * Run per-repo service commands in the background.
+	 * Run service commands in the background.
+	 * Prefers top-level resolved commands (prebuild-level); falls back to per-repo.
 	 * Each command is fire-and-forget with output redirected to /tmp/svc-*.log.
 	 */
 	private runServiceCommands(sandbox: Sandbox, opts: CreateSandboxOpts, log: Logger): void {
 		const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
 
+		// Prefer top-level prebuild-resolved commands
+		if (opts.serviceCommands?.length) {
+			for (let i = 0; i < opts.serviceCommands.length; i++) {
+				const cmd = opts.serviceCommands[i];
+				const baseDir =
+					cmd.workspacePath && cmd.workspacePath !== "."
+						? `${workspaceDir}/${cmd.workspacePath}`
+						: workspaceDir;
+				const cwd = cmd.cwd ? `${baseDir}/${cmd.cwd}` : baseDir;
+				const slug = cmd.name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+				const wpSlug = (cmd.workspacePath || "root").replace(/[/.]/g, "_");
+				const logFile = `/tmp/svc-${wpSlug}-${i}-${slug}.log`;
+
+				log.info({ name: cmd.name, cwd, logFile }, "Starting service command");
+
+				sandbox
+					.exec([
+						"sh",
+						"-c",
+						`cd ${shellEscape(cwd)} && ${cmd.command} > ${shellEscape(logFile)} 2>&1`,
+					])
+					.catch(() => {
+						// Expected - runs until sandbox terminates
+					});
+			}
+			return;
+		}
+
+		// Fallback: per-repo service commands (backwards compat)
 		for (const repo of opts.repos) {
 			if (!repo.serviceCommands?.length) continue;
 
@@ -1105,7 +1135,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 				log.info({ name: cmd.name, cwd, logFile }, "Starting service command");
 
-				// Fire-and-forget: run in shell with output redirected
 				sandbox
 					.exec([
 						"sh",

@@ -95,3 +95,27 @@ export function useUpdateServiceCommands() {
 		}),
 	);
 }
+
+export function usePrebuildServiceCommands(prebuildId: string, enabled = true) {
+	return useQuery({
+		...orpc.prebuilds.getServiceCommands.queryOptions({ input: { prebuildId } }),
+		enabled: enabled && !!prebuildId,
+		select: (data) => data.commands,
+	});
+}
+
+export function useUpdatePrebuildServiceCommands() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.prebuilds.updateServiceCommands.mutationOptions({
+			onSuccess: (_data, input) => {
+				queryClient.invalidateQueries({
+					queryKey: orpc.prebuilds.getServiceCommands.key({
+						input: { prebuildId: input.prebuildId },
+					}),
+				});
+			},
+		}),
+	);
+}

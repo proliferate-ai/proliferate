@@ -2,10 +2,10 @@
  * Save Service Commands Tool Handler
  *
  * Intercepts save_service_commands tool calls from the agent and persists
- * the auto-start commands to the database for the session's primary repo.
+ * the auto-start commands to the prebuild configuration.
  */
 
-import { repos } from "@proliferate/services";
+import { prebuilds } from "@proliferate/services";
 import { z } from "zod";
 import type { SessionHub } from "../../session-hub";
 import type { InterceptedToolHandler, InterceptedToolResult } from "./index";
@@ -14,6 +14,7 @@ const CommandSchema = z.object({
 	name: z.string().min(1).max(100),
 	command: z.string().min(1).max(1000),
 	cwd: z.string().max(500).optional(),
+	workspacePath: z.string().max(500).optional(),
 });
 
 const ArgsSchema = z.object({
@@ -33,14 +34,19 @@ export const saveServiceCommandsHandler: InterceptedToolHandler = {
 		}
 
 		const context = hub.getContext();
-		const orgId = context.session.organization_id;
+		const prebuildId = context.session.prebuild_id;
 		const updatedBy = context.session.created_by || "agent";
-		const repoId = context.primaryRepo.id;
+
+		if (!prebuildId) {
+			return {
+				success: false,
+				result: "Session has no prebuild — cannot save service commands.",
+			};
+		}
 
 		try {
-			await repos.updateServiceCommands({
-				repoId,
-				orgId,
+			await prebuilds.updatePrebuildServiceCommands({
+				prebuildId,
 				serviceCommands: parsed.data.commands,
 				updatedBy,
 			});
@@ -48,8 +54,8 @@ export const saveServiceCommandsHandler: InterceptedToolHandler = {
 			const names = parsed.data.commands.map((c) => c.name).join(", ");
 			return {
 				success: true,
-				result: `Service commands saved for repo: ${names}. These will auto-run in future sessions with a prebuild snapshot.`,
-				data: { repoId, commandCount: parsed.data.commands.length },
+				result: `Service commands saved for configuration: ${names}. These will auto-run in future sessions with this prebuild.`,
+				data: { prebuildId, commandCount: parsed.data.commands.length },
 			};
 		} catch (err) {
 			return {

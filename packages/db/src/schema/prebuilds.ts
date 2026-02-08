@@ -3,7 +3,7 @@
  */
 
 import { relations } from "drizzle-orm";
-import { index, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { repos } from "./repos";
 
@@ -35,6 +35,13 @@ export const prebuilds = pgTable(
 		// CLI prebuilds
 		userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
 		localPathHash: text("local_path_hash"),
+
+		// Auto-start service commands
+		serviceCommands: jsonb("service_commands"),
+		serviceCommandsUpdatedAt: timestamp("service_commands_updated_at", {
+			withTimezone: true,
+		}),
+		serviceCommandsUpdatedBy: text("service_commands_updated_by"),
 
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 	},

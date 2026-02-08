@@ -16,6 +16,7 @@ import { VerificationGallery } from "./verification-gallery";
 export interface SessionPanelProps {
 	sessionStatus?: string;
 	repoId?: string | null;
+	prebuildId?: string | null;
 	repoName?: string | null;
 	branchName?: string | null;
 	snapshotId?: string | null;
@@ -72,7 +73,13 @@ export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps
 
 	// Auto-start panel
 	if (mode.type === "service-commands") {
-		return <AutoStartPanel repoId={sessionProps?.repoId} onClose={handleClose} />;
+		return (
+			<AutoStartPanel
+				repoId={sessionProps?.repoId}
+				prebuildId={sessionProps?.prebuildId}
+				onClose={handleClose}
+			/>
+		);
 	}
 
 	// URL preview uses PreviewPanel which has its own header

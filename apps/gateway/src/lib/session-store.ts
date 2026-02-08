@@ -11,7 +11,8 @@ import {
 	isValidModelId,
 	parseModelId,
 } from "@proliferate/shared";
-import { parseServiceCommands } from "@proliferate/shared/sandbox";
+import type { PrebuildServiceCommand } from "@proliferate/shared";
+import { parseServiceCommands, resolveServiceCommands } from "@proliferate/shared/sandbox";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
 
@@ -58,6 +59,8 @@ export interface SessionContext {
 	sshPublicKey?: string;
 	/** True if the snapshot includes installed dependencies. Gates service command auto-start. */
 	snapshotHasDeps: boolean;
+	/** Resolved service commands (prebuild-level or fallback from repos). */
+	serviceCommands?: PrebuildServiceCommand[];
 }
 
 interface PrebuildRepoRow {
@@ -296,6 +299,13 @@ export async function loadSessionContext(
 	const snapshotHasDeps =
 		Boolean(session.snapshot_id) && session.snapshot_id !== repoSnapshotFallback;
 
+	// Resolve service commands: prebuild-level first, then per-repo fallback
+	const prebuildSvcRow = await prebuilds.getPrebuildServiceCommands(session.prebuild_id!);
+	const resolvedServiceCommands = resolveServiceCommands(
+		prebuildSvcRow?.serviceCommands,
+		repoSpecs,
+	);
+
 	log.info("Session context ready");
 	log.debug(
 		{ durationMs: Date.now() - startMs, repoCount: repoSpecs.length, snapshotHasDeps },
@@ -310,6 +320,7 @@ export async function loadSessionContext(
 		envVars,
 		sshPublicKey,
 		snapshotHasDeps,
+		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
 	};
 }
 

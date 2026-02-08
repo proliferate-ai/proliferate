@@ -401,14 +401,14 @@ Include summary_markdown and citations when possible.
  */
 export const SAVE_SERVICE_COMMANDS_TOOL = `
 // Save Service Commands Tool for OpenCode
-// Gateway intercepts this tool and saves commands to the database
+// Gateway intercepts this tool and saves commands to the prebuild configuration
 
 import { tool } from "@opencode-ai/plugin"
 
 export default tool({
-  description: \`Save auto-start service commands for this repository.
+  description: \`Save auto-start service commands for this configuration.
 
-These commands will run automatically when future sessions start with a prebuild snapshot.
+These commands will run automatically when future sessions start with this prebuild snapshot.
 Use this to configure dev servers, watchers, or background services that should always be running.
 
 Call this AFTER you have verified the commands work correctly in the current session.
@@ -427,7 +427,8 @@ Example:
       .array(tool.schema.object({
         name: tool.schema.string().describe("Short name for this service (e.g. dev-server)"),
         command: tool.schema.string().describe("Shell command to run"),
-        cwd: tool.schema.string().optional().describe("Working directory relative to repo root"),
+        cwd: tool.schema.string().optional().describe("Working directory relative to workspace root or workspacePath"),
+        workspacePath: tool.schema.string().optional().describe("Target repo directory in multi-repo setups (e.g. frontend, backend)"),
       }))
       .describe("List of service commands to auto-start on session creation"),
   },
@@ -446,12 +447,12 @@ Example:
  * Save Service Commands Tool Description (for .txt file)
  */
 export const SAVE_SERVICE_COMMANDS_DESCRIPTION = `
-Use the save_service_commands tool to configure auto-start commands for this repository.
+Use the save_service_commands tool to configure auto-start commands for this configuration.
 
 ## When to Use
 
 Call this tool when the user asks you to save startup commands for their project.
-These commands will auto-run in future sessions that use a prebuild snapshot.
+These commands will auto-run in future sessions that use this prebuild snapshot.
 
 ## How to Use
 
@@ -464,11 +465,21 @@ save_service_commands({
 })
 \\\`\\\`\\\`
 
+For multi-repo setups, specify workspacePath to target a specific repo:
+\\\`\\\`\\\`typescript
+save_service_commands({
+  commands: [
+    { name: "frontend", command: "pnpm dev", workspacePath: "frontend" },
+    { name: "api", command: "pnpm start", workspacePath: "backend" }
+  ]
+})
+\\\`\\\`\\\`
+
 ## Important
 
 - Only save commands you have verified work in the current session
 - Commands run in the background (fire-and-forget) after sandbox initialization
 - Output is logged to /tmp/svc-*.log files
-- Maximum 10 commands per repo
+- Maximum 10 commands per configuration
 - Call save_snapshot after this to persist the environment
 `;

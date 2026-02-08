@@ -68,6 +68,12 @@
       "when": 1770600000000,
       "tag": "0009_service_commands",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "when": 1770700000000,
+      "tag": "0010_prebuild_service_commands",
+      "breakpoints": true
     }
   ]
 }

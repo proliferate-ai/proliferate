@@ -12,6 +12,7 @@ import {
 	PrebuildSchema,
 	UpdatePrebuildInputSchema,
 } from "@proliferate/shared";
+import { parsePrebuildServiceCommands } from "@proliferate/shared/sandbox";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 
@@ -144,5 +145,67 @@ export const prebuildsRouter = {
 					message: "Failed to delete prebuild",
 				});
 			}
+		}),
+
+	/**
+	 * Get service commands for a prebuild.
+	 */
+	getServiceCommands: orgProcedure
+		.input(z.object({ prebuildId: z.string().uuid() }))
+		.output(
+			z.object({
+				commands: z.array(
+					z.object({
+						name: z.string(),
+						command: z.string(),
+						cwd: z.string().optional(),
+						workspacePath: z.string().optional(),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+			if (!belongsToOrg) {
+				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+			}
+
+			const row = await prebuilds.getPrebuildServiceCommands(input.prebuildId);
+			const commands = parsePrebuildServiceCommands(row?.serviceCommands);
+			return { commands };
+		}),
+
+	/**
+	 * Update service commands for a prebuild.
+	 */
+	updateServiceCommands: orgProcedure
+		.input(
+			z.object({
+				prebuildId: z.string().uuid(),
+				commands: z
+					.array(
+						z.object({
+							name: z.string().min(1).max(100),
+							command: z.string().min(1).max(1000),
+							cwd: z.string().max(500).optional(),
+							workspacePath: z.string().max(500).optional(),
+						}),
+					)
+					.max(10),
+			}),
+		)
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+			if (!belongsToOrg) {
+				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+			}
+
+			await prebuilds.updatePrebuildServiceCommands({
+				prebuildId: input.prebuildId,
+				serviceCommands: input.commands,
+				updatedBy: context.user.id,
+			});
+			return { success: true };
 		}),
 };

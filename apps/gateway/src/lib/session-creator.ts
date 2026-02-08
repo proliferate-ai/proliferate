@@ -20,7 +20,7 @@ import {
 	parseModelId,
 	resolveSnapshotId,
 } from "@proliferate/shared";
-import { parseServiceCommands } from "@proliferate/shared/sandbox";
+import { parseServiceCommands, resolveServiceCommands } from "@proliferate/shared/sandbox";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
 
@@ -268,10 +268,6 @@ export async function createSession(
 	// Create sandbox immediately
 	let integrationWarnings: IntegrationWarning[] = [];
 	try {
-		// snapshotHasDeps: true when using a prebuild snapshot (has deps installed),
-		// false when using a repo snapshot (clone-only) or no snapshot.
-		const snapshotHasDeps = Boolean(snapshotId) && Boolean(inputSnapshotId);
-
 		const createSandboxStartMs = Date.now();
 		const result = await createSandbox({
 			env,
@@ -285,7 +281,6 @@ export async function createSession(
 			integrationIds: resolvedIntegrationIds,
 			triggerContext,
 			sshOptions,
-			snapshotHasDeps,
 		});
 		log.debug(
 			{
@@ -359,8 +354,6 @@ interface CreateSandboxParams {
 	/** Trigger context written to .proliferate/trigger-context.json */
 	triggerContext?: Record<string, unknown>;
 	sshOptions?: CreateSessionOptions["sshOptions"];
-	/** True if the snapshot includes installed dependencies. */
-	snapshotHasDeps?: boolean;
 }
 
 interface CreateSandboxResult {
@@ -530,6 +523,23 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		"session_creator.create_sandbox.github_tokens",
 	);
 
+	// Derive snapshotHasDeps: true when snapshot includes installed deps.
+	// Repo snapshots (clone-only) don't have deps; prebuild/session/pause snapshots do.
+	const repoSnapshotFallback =
+		prebuildRepoRows.length === 1 &&
+		prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
+		prebuildRepoRows[0].repo?.repoSnapshotId
+			? prebuildRepoRows[0].repo.repoSnapshotId
+			: null;
+	const snapshotHasDeps = Boolean(snapshotId) && snapshotId !== repoSnapshotFallback;
+
+	// Resolve service commands: prebuild-level first, then per-repo fallback
+	const prebuildSvcRow = await prebuilds.getPrebuildServiceCommands(prebuildId);
+	const resolvedServiceCommands = resolveServiceCommands(
+		prebuildSvcRow?.serviceCommands,
+		repoSpecs,
+	);
+
 	// Build environment variables
 	const envStartMs = Date.now();
 	const envVars = await loadEnvironmentVariables(
@@ -578,7 +588,8 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			: undefined,
 		sshPublicKey,
 		triggerContext,
-		snapshotHasDeps: params.snapshotHasDeps,
+		snapshotHasDeps,
+		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
 	});
 	log.debug(
 		{

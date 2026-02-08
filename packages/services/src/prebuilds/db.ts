@@ -378,6 +378,39 @@ export async function getPrebuildReposWithDetails(
 }
 
 /**
+ * Get prebuild-level service commands.
+ */
+export async function getPrebuildServiceCommands(
+	prebuildId: string,
+): Promise<{ serviceCommands: unknown } | null> {
+	const db = getDb();
+	const result = await db.query.prebuilds.findFirst({
+		where: eq(prebuilds.id, prebuildId),
+		columns: { serviceCommands: true },
+	});
+	return result ?? null;
+}
+
+/**
+ * Update prebuild-level service commands.
+ */
+export async function updatePrebuildServiceCommands(input: {
+	prebuildId: string;
+	serviceCommands: unknown;
+	updatedBy: string;
+}): Promise<void> {
+	const db = getDb();
+	await db
+		.update(prebuilds)
+		.set({
+			serviceCommands: input.serviceCommands,
+			serviceCommandsUpdatedAt: new Date(),
+			serviceCommandsUpdatedBy: input.updatedBy,
+		})
+		.where(eq(prebuilds.id, input.prebuildId));
+}
+
+/**
  * Update prebuild snapshot_id only if currently null.
  * Returns true if updated, false if already had a snapshot.
  */
