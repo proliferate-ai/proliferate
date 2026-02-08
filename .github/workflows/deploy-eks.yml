@@ -87,6 +87,13 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Pulumi login + select stack
+        working-directory: infra/pulumi-k8s
+        run: |
+          set -euo pipefail
+          pulumi login "$PULUMI_BACKEND_URL"
+          pulumi stack select "$PULUMI_STACK"
+
       - name: Build and push images
         run: |
           set -euo pipefail
@@ -117,10 +124,6 @@ jobs:
               exit 1
             fi
           fi
-
-          curl -fsSL https://get.pulumi.com | sh
-          echo "$HOME/.pulumi/bin" >> "$GITHUB_PATH"
-          export PATH="$PATH:$HOME/.pulumi/bin"
 
           STACK_OUTPUTS=$(cd infra/pulumi-k8s && pulumi stack output --stack "$PULUMI_STACK" --json --show-secrets)
           WEB_REPO=$(echo "$STACK_OUTPUTS" | jq -r '.outputs.webRepoUrl')
@@ -213,13 +216,6 @@ jobs:
           docker push "${WORKER_REPO}:${TAG}"
           docker push "${TRIGGER_SERVICE_REPO}:${TAG}"
           docker push "${LLM_PROXY_REPO}:${TAG}"
-
-      - name: Pulumi login + select stack
-        working-directory: infra/pulumi-k8s
-        run: |
-          set -euo pipefail
-          pulumi login "$PULUMI_BACKEND_URL"
-          pulumi stack select "$PULUMI_STACK"
 
       - name: Ensure dbPassword config
         if: ${{ !inputs.dry_run }}
