@@ -1512,3 +1512,39 @@ export const billingReconciliations = pgTable(
 		}).onDelete("set null"),
 	],
 );
+
+// ============================================
+// Sandbox Base Snapshots
+// ============================================
+
+export const sandboxBaseSnapshots = pgTable(
+	"sandbox_base_snapshots",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		versionKey: text("version_key").notNull(),
+		snapshotId: text("snapshot_id"),
+		status: text().default("building").notNull(),
+		error: text(),
+		provider: text().default("modal").notNull(),
+		modalAppName: text("modal_app_name").notNull(),
+		builtAt: timestamp("built_at", { withTimezone: true, mode: "date" }),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		uniqueIndex("idx_sandbox_base_snapshots_version_provider_app").using(
+			"btree",
+			table.versionKey.asc().nullsLast().op("text_ops"),
+			table.provider.asc().nullsLast().op("text_ops"),
+			table.modalAppName.asc().nullsLast().op("text_ops"),
+		),
+		index("idx_sandbox_base_snapshots_status").using(
+			"btree",
+			table.status.asc().nullsLast().op("text_ops"),
+		),
+		check(
+			"sandbox_base_snapshots_status_check",
+			sql`status = ANY (ARRAY['building'::text, 'ready'::text, 'failed'::text])`,
+		),
+	],
+);

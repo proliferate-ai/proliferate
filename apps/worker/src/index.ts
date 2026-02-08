@@ -27,6 +27,7 @@ import {
 import { setServicesLogger } from "@proliferate/services/logger";
 import { setSharedLogger } from "@proliferate/shared/logger";
 import { startAutomationWorkers, stopAutomationWorkers } from "./automation";
+import { startBaseSnapshotWorkers, stopBaseSnapshotWorkers } from "./base-snapshots";
 import { isBillingWorkerHealthy, startBillingWorker, stopBillingWorker } from "./billing";
 import { SessionSubscriber } from "./pubsub";
 import { startRepoSnapshotWorkers, stopRepoSnapshotWorkers } from "./repo-snapshots";
@@ -93,6 +94,15 @@ if (billingEnabled) {
 const automationWorkers = startAutomationWorkers(logger.child({ module: "automation" }));
 const repoSnapshotWorkers = startRepoSnapshotWorkers(logger.child({ module: "repo-snapshots" }));
 
+// Start base snapshot worker only when Modal provider is configured
+const isModalConfigured = Boolean(env.MODAL_APP_NAME);
+const baseSnapshotWorkers = isModalConfigured
+	? startBaseSnapshotWorkers(logger.child({ module: "base-snapshots" }))
+	: null;
+if (!isModalConfigured) {
+	logger.info("Modal not configured - skipping base snapshot worker startup");
+}
+
 logger.info(
 	{
 		slackInbound: 5,
@@ -100,6 +110,7 @@ logger.info(
 		billingEnabled,
 		automationWorkers: ["enrich", "execute", "outbox", "finalizer"],
 		repoSnapshotWorkers: ["build"],
+		baseSnapshotWorkers: isModalConfigured ? ["build"] : [],
 	},
 	"Workers started",
 );
@@ -152,6 +163,9 @@ async function shutdown(): Promise<void> {
 	await slackClient.close();
 	await stopAutomationWorkers(automationWorkers);
 	await stopRepoSnapshotWorkers(repoSnapshotWorkers);
+	if (baseSnapshotWorkers) {
+		await stopBaseSnapshotWorkers(baseSnapshotWorkers);
+	}
 
 	// Close Redis client
 	await closeRedisClient();

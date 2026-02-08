@@ -7,6 +7,7 @@
 
 // Feature modules
 export * as admin from "./admin";
+export * as baseSnapshots from "./base-snapshots";
 export * as automations from "./automations";
 export * as billing from "./billing";
 export * as cli from "./cli";
