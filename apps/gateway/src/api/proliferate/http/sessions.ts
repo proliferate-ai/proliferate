@@ -344,7 +344,8 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 			if (!auth) {
 				throw new ApiError(401, "Authentication required");
 			}
-			const orgId = auth.orgId;
+			// Service auth can use query param; user/CLI auth must have orgId on the token
+			const orgId = auth.orgId ?? (req.query.organizationId as string);
 			if (!orgId) {
 				throw new ApiError(401, "Organization required");
 			}

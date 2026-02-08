@@ -151,6 +151,8 @@ export async function createSession(
 export async function getSessionStatus(
 	http: HttpClient,
 	proliferateSessionId: string,
+	organizationId?: string,
 ): Promise<SessionStatusResponse> {
-	return http.get(`/proliferate/sessions/${proliferateSessionId}/status`);
+	const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
+	return http.get(`/proliferate/sessions/${proliferateSessionId}/status${query}`);
 }
