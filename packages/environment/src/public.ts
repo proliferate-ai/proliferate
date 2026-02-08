@@ -32,8 +32,15 @@ const rawEnv = createEnv({
 			.map((issue) => `  ${issue.path?.join(".") || "unknown"}: ${issue.message}`)
 			.join("\n");
 		const message = `Invalid environment variables:\n${details}`;
-		console.error(message);
-		throw new Error(message);
+		// On the client (browser), NEXT_PUBLIC_ vars are baked at build time and can't be
+		// fixed at runtime. Throwing here bricks the entire app. Warn instead and let
+		// features degrade gracefully. Server-side validation (server.ts) still throws.
+		if (typeof window !== "undefined") {
+			console.error(message);
+		} else {
+			console.error(message);
+			throw new Error(message);
+		}
 	},
 });
 

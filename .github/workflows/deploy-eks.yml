@@ -94,6 +94,30 @@ jobs:
           pulumi login "$PULUMI_BACKEND_URL"
           pulumi stack select "$PULUMI_STACK"
 
+      - name: Validate NEXT_PUBLIC_ env vars
+        if: ${{ !inputs.skip_build && !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          echo "Validating NEXT_PUBLIC_ build-time environment variables..."
+          node -e "
+            const env = {
+              NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+              NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+              NEXT_PUBLIC_GATEWAY_URL: process.env.NEXT_PUBLIC_GATEWAY_URL,
+              NEXT_PUBLIC_USE_NANGO_GITHUB: process.env.NEXT_PUBLIC_USE_NANGO_GITHUB,
+              NEXT_PUBLIC_GITHUB_APP_SLUG: process.env.NEXT_PUBLIC_GITHUB_APP_SLUG,
+              NEXT_PUBLIC_INTEGRATIONS_ENABLED: process.env.NEXT_PUBLIC_INTEGRATIONS_ENABLED,
+            };
+            const errors = [];
+            if (!env.NEXT_PUBLIC_APP_URL) errors.push('NEXT_PUBLIC_APP_URL is required');
+            if (!env.NEXT_PUBLIC_API_URL) errors.push('NEXT_PUBLIC_API_URL is required');
+            if (!env.NEXT_PUBLIC_GATEWAY_URL) errors.push('NEXT_PUBLIC_GATEWAY_URL is required');
+            if (env.NEXT_PUBLIC_USE_NANGO_GITHUB !== 'true' && !env.NEXT_PUBLIC_GITHUB_APP_SLUG)
+              errors.push('NEXT_PUBLIC_GITHUB_APP_SLUG is required when NEXT_PUBLIC_USE_NANGO_GITHUB is not true');
+            if (errors.length) { console.error('Environment validation failed:\n' + errors.map(e => '  - ' + e).join('\n')); process.exit(1); }
+            console.log('All NEXT_PUBLIC_ variables validated successfully.');
+          "
+
       - name: Build and push images
         run: |
           set -euo pipefail
@@ -109,20 +133,6 @@ jobs:
           if [[ -z "${PULUMI_STACK:-}" ]]; then
             echo "PULUMI_STACK is required." >&2
             exit 1
-          fi
-          if [[ "${SKIP_BUILD:-false}" != "true" && "${DRY_RUN:-false}" != "true" ]]; then
-            if [[ -z "${NEXT_PUBLIC_APP_URL:-}" ]]; then
-              echo "NEXT_PUBLIC_APP_URL is required." >&2
-              exit 1
-            fi
-            if [[ -z "${NEXT_PUBLIC_API_URL:-}" ]]; then
-              echo "NEXT_PUBLIC_API_URL is required." >&2
-              exit 1
-            fi
-            if [[ -z "${NEXT_PUBLIC_GATEWAY_URL:-}" ]]; then
-              echo "NEXT_PUBLIC_GATEWAY_URL is required." >&2
-              exit 1
-            fi
           fi
 
           STACK_OUTPUTS=$(cd infra/pulumi-k8s && pulumi stack output --stack "$PULUMI_STACK" --json --show-secrets)
