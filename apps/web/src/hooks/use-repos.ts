@@ -104,6 +104,13 @@ export function usePrebuildServiceCommands(prebuildId: string, enabled = true) {
 	});
 }
 
+export function useEffectiveServiceCommands(prebuildId: string, enabled = true) {
+	return useQuery({
+		...orpc.prebuilds.getEffectiveServiceCommands.queryOptions({ input: { prebuildId } }),
+		enabled: enabled && !!prebuildId,
+	});
+}
+
 export function useUpdatePrebuildServiceCommands() {
 	const queryClient = useQueryClient();
 
@@ -112,6 +119,11 @@ export function useUpdatePrebuildServiceCommands() {
 			onSuccess: (_data, input) => {
 				queryClient.invalidateQueries({
 					queryKey: orpc.prebuilds.getServiceCommands.key({
+						input: { prebuildId: input.prebuildId },
+					}),
+				});
+				queryClient.invalidateQueries({
+					queryKey: orpc.prebuilds.getEffectiveServiceCommands.key({
 						input: { prebuildId: input.prebuildId },
 					}),
 				});
