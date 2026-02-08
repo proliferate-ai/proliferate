@@ -73,7 +73,7 @@ jobs:
           tar -czvf proliferate-${{ matrix.platform }}.tar.gz proliferate-${{ matrix.platform }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: proliferate-${{ matrix.platform }}
           path: packages/cli/binaries/proliferate-${{ matrix.platform }}.tar.gz
