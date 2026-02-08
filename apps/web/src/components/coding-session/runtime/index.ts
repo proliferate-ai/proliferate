@@ -46,8 +46,10 @@ export function useCodingSessionRuntime({
 		error: wsError,
 		previewUrl,
 		envRequest,
+		autoStartOutput,
 		sendPrompt,
 		sendCancel,
+		sendRunAutoStart,
 		clearEnvRequest,
 	} = useSessionWebSocket({
 		sessionId,
@@ -145,6 +147,8 @@ export function useCodingSessionRuntime({
 		sessionTitle,
 		envRequest,
 		clearEnvRequest,
+		autoStartOutput,
+		sendRunAutoStart,
 		isMigrating,
 	};
 }

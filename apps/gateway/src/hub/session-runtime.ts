@@ -7,7 +7,12 @@
 
 import { type Logger, createLogger } from "@proliferate/logger";
 import { sessions } from "@proliferate/services";
-import type { SandboxProviderType, ServerMessage } from "@proliferate/shared";
+import type {
+	AutoStartOutputEntry,
+	SandboxProvider,
+	SandboxProviderType,
+	ServerMessage,
+} from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { scheduleSessionExpiry } from "../expiry/expiry-queue";
 import type { GatewayEnv } from "../lib/env";
@@ -52,6 +57,7 @@ export class SessionRuntime {
 	private readonly onBroadcast?: SessionRuntimeOptions["onBroadcast"];
 	private readonly onDisconnect: SessionRuntimeOptions["onDisconnect"];
 
+	private provider: SandboxProvider | null = null;
 	private openCodeUrl: string | null = null;
 	private previewUrl: string | null = null;
 	private sshHost: string | null = null;
@@ -140,6 +146,31 @@ export class SessionRuntime {
 
 	isSseConnected(): boolean {
 		return this.sseClient.isConnected();
+	}
+
+	// ============================================
+	// Auto-start testing
+	// ============================================
+
+	/**
+	 * Run the session's resolved service commands in the sandbox and capture output.
+	 * Uses only the pre-resolved command list — never accepts arbitrary commands.
+	 */
+	async testAutoStartCommands(runId: string): Promise<AutoStartOutputEntry[]> {
+		const sandboxId = this.context.session.sandbox_id;
+		const commands = this.context.serviceCommands;
+
+		if (!this.provider?.testServiceCommands || !sandboxId) {
+			throw new Error("Runtime not ready");
+		}
+		if (!commands?.length) {
+			return [];
+		}
+
+		return this.provider.testServiceCommands(sandboxId, commands, {
+			timeoutMs: 30_000,
+			runId,
+		});
 	}
 
 	// ============================================
@@ -242,6 +273,7 @@ export class SessionRuntime {
 
 			const providerType = this.context.session.sandbox_provider as SandboxProviderType | undefined;
 			const provider = getSandboxProvider(providerType);
+			this.provider = provider;
 			this.log("Using sandbox provider", { provider: provider.type });
 
 			const ensureSandboxStartMs = Date.now();

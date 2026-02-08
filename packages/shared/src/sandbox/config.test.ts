@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	capOutput,
 	parsePrebuildServiceCommands,
 	parseServiceCommands,
 	resolveServiceCommands,
@@ -203,5 +204,34 @@ describe("resolveServiceCommands", () => {
 		expect(resolveServiceCommands("not-an-array", repoSpecs)).toEqual([
 			{ name: "dev", command: "pnpm dev", cwd: undefined, workspacePath: "." },
 		]);
+	});
+});
+
+describe("capOutput", () => {
+	it("returns short output unchanged", () => {
+		expect(capOutput("hello")).toBe("hello");
+	});
+
+	it("returns empty string unchanged", () => {
+		expect(capOutput("")).toBe("");
+	});
+
+	it("truncates output exceeding default limit", () => {
+		const long = "x".repeat(16 * 1024 + 100);
+		const result = capOutput(long);
+		expect(result.length).toBeLessThan(long.length);
+		expect(result).toContain("...[truncated]");
+		// First 16KB should be preserved
+		expect(result.startsWith("x".repeat(16 * 1024))).toBe(true);
+	});
+
+	it("respects custom maxBytes", () => {
+		const result = capOutput("hello world", 5);
+		expect(result).toBe("hello\n...[truncated]");
+	});
+
+	it("does not truncate at exact boundary", () => {
+		const exact = "x".repeat(16 * 1024);
+		expect(capOutput(exact)).toBe(exact);
 	});
 });

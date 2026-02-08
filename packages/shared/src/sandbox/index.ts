@@ -18,6 +18,7 @@ export {
 	SANDBOX_TIMEOUT_MS,
 	SANDBOX_TIMEOUT_SECONDS,
 	shellEscape,
+	capOutput,
 	parseServiceCommands,
 	parsePrebuildServiceCommands,
 	resolveServiceCommands,

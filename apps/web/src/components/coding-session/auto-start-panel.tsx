@@ -17,13 +17,28 @@ import {
 	useUpdatePrebuildServiceCommands,
 	useUpdateServiceCommands,
 } from "@/hooks/use-repos";
-import { FolderOpen, Pencil, Play, Plus, Settings, Trash2, X } from "lucide-react";
-import { useState } from "react";
+import type { AutoStartOutputEntry, AutoStartOutputMessage } from "@proliferate/shared";
+import {
+	CheckCircle2,
+	ChevronDown,
+	ChevronRight,
+	FolderOpen,
+	Pencil,
+	Play,
+	Plus,
+	Settings,
+	Trash2,
+	X,
+	XCircle,
+} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 interface AutoStartPanelProps {
 	repoId?: string | null;
 	prebuildId?: string | null;
 	onClose: () => void;
+	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
+	sendRunAutoStart?: (runId: string, mode?: "test" | "start") => void;
 }
 
 interface CommandDraft {
@@ -33,7 +48,13 @@ interface CommandDraft {
 	workspacePath: string;
 }
 
-export function AutoStartPanel({ repoId, prebuildId, onClose }: AutoStartPanelProps) {
+export function AutoStartPanel({
+	repoId,
+	prebuildId,
+	onClose,
+	autoStartOutput,
+	sendRunAutoStart,
+}: AutoStartPanelProps) {
 	const hasPrebuild = !!prebuildId;
 
 	// Effective commands (server-side resolved) when prebuild exists
@@ -63,6 +84,7 @@ export function AutoStartPanel({ repoId, prebuildId, onClose }: AutoStartPanelPr
 
 	const [editing, setEditing] = useState(false);
 	const [drafts, setDrafts] = useState<CommandDraft[]>([]);
+	const [isTesting, setIsTesting] = useState(false);
 
 	const startEditing = () => {
 		setDrafts(
@@ -97,6 +119,20 @@ export function AutoStartPanel({ repoId, prebuildId, onClose }: AutoStartPanelPr
 		}
 		setEditing(false);
 	};
+
+	const handleTest = useCallback(() => {
+		if (!sendRunAutoStart) return;
+		const runId = crypto.randomUUID();
+		setIsTesting(true);
+		sendRunAutoStart(runId, "test");
+	}, [sendRunAutoStart]);
+
+	// Clear testing state when results arrive
+	useEffect(() => {
+		if (isTesting && autoStartOutput) {
+			setIsTesting(false);
+		}
+	}, [isTesting, autoStartOutput]);
 
 	const isSaving = updatePrebuildCommands.isPending || updateRepoCommands.isPending;
 
@@ -176,7 +212,31 @@ export function AutoStartPanel({ repoId, prebuildId, onClose }: AutoStartPanelPr
 						isSaving={isSaving}
 					/>
 				) : commands && commands.length > 0 ? (
-					<CommandsList commands={commands} onEdit={startEditing} />
+					<>
+						<CommandsList commands={commands} onEdit={startEditing} />
+						{sendRunAutoStart && (
+							<Button
+								variant="outline"
+								size="sm"
+								className="w-full"
+								onClick={handleTest}
+								disabled={isTesting}
+							>
+								{isTesting ? (
+									<>
+										<LoadingDots size="sm" className="mr-2" />
+										Testing...
+									</>
+								) : (
+									<>
+										<Play className="h-3 w-3 mr-2" />
+										Test auto-start
+									</>
+								)}
+							</Button>
+						)}
+						{autoStartOutput && <TestResults entries={autoStartOutput.entries} />}
+					</>
 				) : (
 					<EmptyState onAdd={startEditing} />
 				)}
@@ -223,6 +283,58 @@ function CommandsList({
 	);
 }
 
+function TestResults({ entries }: { entries: AutoStartOutputEntry[] }) {
+	return (
+		<div className="space-y-2">
+			<p className="text-xs font-medium text-muted-foreground">Test results</p>
+			{entries.map((entry, index) => (
+				<TestResultEntry key={`${entry.name}-${index}`} entry={entry} />
+			))}
+		</div>
+	);
+}
+
+function TestResultEntry({ entry }: { entry: AutoStartOutputEntry }) {
+	const [expanded, setExpanded] = useState(false);
+	const passed = entry.exitCode === 0;
+
+	return (
+		<div className="rounded-md border border-border/60 overflow-hidden">
+			<button
+				type="button"
+				className="flex items-center gap-2 w-full p-2 text-left hover:bg-muted/30 transition-colors"
+				onClick={() => setExpanded(!expanded)}
+			>
+				{passed ? (
+					<CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
+				) : (
+					<XCircle className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
+				)}
+				<span className="text-xs font-medium flex-1 truncate">{entry.name}</span>
+				<span className="text-[10px] text-muted-foreground">exit {entry.exitCode ?? "?"}</span>
+				{expanded ? (
+					<ChevronDown className="h-3 w-3 text-muted-foreground" />
+				) : (
+					<ChevronRight className="h-3 w-3 text-muted-foreground" />
+				)}
+			</button>
+			{expanded && (
+				<div className="border-t border-border/40 p-2 space-y-1">
+					{entry.output && (
+						<pre className="text-[10px] font-mono text-muted-foreground bg-muted/30 rounded p-2 max-h-40 overflow-auto whitespace-pre-wrap break-all">
+							{entry.output}
+						</pre>
+					)}
+					{entry.logFile && (
+						<p className="text-[10px] text-muted-foreground">Log: {entry.logFile}</p>
+					)}
+					{entry.cwd && <p className="text-[10px] text-muted-foreground">cwd: {entry.cwd}</p>}
+				</div>
+			)}
+		</div>
+	);
+}
+
 function EmptyState({ onAdd }: { onAdd: () => void }) {
 	return (
 		<div className="text-center py-6">
@@ -263,6 +375,7 @@ function EditForm({
 	return (
 		<div className="space-y-3">
 			{drafts.map((draft, index) => (
+				// biome-ignore lint/suspicious/noArrayIndexKey: draft items have no stable ID
 				<div key={index} className="flex items-start gap-2">
 					<div className="flex-1 space-y-1.5">
 						<Input

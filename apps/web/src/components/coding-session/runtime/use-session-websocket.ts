@@ -10,6 +10,7 @@ import {
 	type ToolStartMessage,
 	createSyncClient,
 } from "@proliferate/gateway-clients";
+import type { AutoStartOutputMessage } from "@proliferate/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ExtendedMessage } from "../message-converter";
 import {
@@ -41,8 +42,10 @@ interface UseSessionWebSocketReturn {
 	error: string | null;
 	previewUrl: string | null;
 	envRequest: EnvRequest | null;
+	autoStartOutput: AutoStartOutputMessage["payload"] | null;
 	sendPrompt: (content: string, images?: string[]) => void;
 	sendCancel: () => void;
+	sendRunAutoStart: (runId: string, mode?: "test" | "start") => void;
 	clearEnvRequest: () => void;
 }
 
@@ -63,6 +66,9 @@ export function useSessionWebSocket({
 	const [error, setError] = useState<string | null>(null);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 	const [envRequest, setEnvRequest] = useState<EnvRequest | null>(null);
+	const [autoStartOutput, setAutoStartOutput] = useState<AutoStartOutputMessage["payload"] | null>(
+		null,
+	);
 
 	const streamingTextRef = useRef<Record<string, string>>({});
 	const messagesRef = useRef<ExtendedMessage[]>([]);
@@ -99,6 +105,7 @@ export function useSessionWebSocket({
 			setIsInitialized,
 			setPreviewUrl,
 			setEnvRequest,
+			setAutoStartOutput,
 			setError,
 			onTitleUpdate,
 			streamingTextRef,
@@ -155,6 +162,11 @@ export function useSessionWebSocket({
 		wsRef.current?.sendCancel();
 	}, []);
 
+	const sendRunAutoStart = useCallback((runId: string, mode?: "test" | "start") => {
+		setAutoStartOutput(null);
+		wsRef.current?.sendRunAutoStart(runId, mode);
+	}, []);
+
 	const clearEnvRequest = useCallback(() => {
 		setEnvRequest(null);
 	}, []);
@@ -169,8 +181,10 @@ export function useSessionWebSocket({
 		error,
 		previewUrl,
 		envRequest,
+		autoStartOutput,
 		sendPrompt,
 		sendCancel,
+		sendRunAutoStart,
 		clearEnvRequest,
 	};
 }
@@ -245,6 +259,12 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 		case "title_update":
 			if (data.payload?.title) {
 				ctx.onTitleUpdate(data.payload.title);
+			}
+			break;
+
+		case "auto_start_output":
+			if (data.payload) {
+				ctx.setAutoStartOutput(data.payload);
 			}
 			break;
 	}

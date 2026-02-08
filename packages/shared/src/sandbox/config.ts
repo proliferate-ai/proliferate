@@ -158,6 +158,17 @@ export function shellEscape(s: string): string {
 	return `'${s.replace(/'/g, "'\\''")}'`;
 }
 
+const MAX_OUTPUT_BYTES = 16 * 1024;
+
+/**
+ * Cap command output to a maximum byte size.
+ * Appends a truncation marker if output is trimmed.
+ */
+export function capOutput(output: string, maxBytes = MAX_OUTPUT_BYTES): string {
+	if (output.length <= maxBytes) return output;
+	return `${output.slice(0, maxBytes)}\n...[truncated]`;
+}
+
 /** Zod schema for validating a single service command from untrusted jsonb. */
 const ServiceCommandSchema = z.object({
 	name: z.string().min(1).max(100),

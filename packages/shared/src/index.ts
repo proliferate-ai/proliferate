@@ -87,13 +87,20 @@ export interface SaveSnapshotMessage {
 	message?: string;
 }
 
+export interface RunAutoStartMessage {
+	type: "run_auto_start";
+	runId: string;
+	mode?: "test" | "start";
+}
+
 export type ClientMessage =
 	| PromptMessage
 	| PingMessage
 	| CancelMessage
 	| GetStatusMessage
 	| GetMessagesMessage
-	| SaveSnapshotMessage;
+	| SaveSnapshotMessage
+	| RunAutoStartMessage;
 
 // DO -> Client messages
 export interface InitMessage {
@@ -252,6 +259,16 @@ export interface SnapshotResultMessage {
 	};
 }
 
+// AutoStartOutputEntry is defined in sandbox-provider.ts and re-exported via export * below.
+
+export interface AutoStartOutputMessage {
+	type: "auto_start_output";
+	payload: {
+		runId: string;
+		entries: AutoStartOutputEntry[];
+	};
+}
+
 export type ServerMessage =
 	| InitMessage
 	| NewMessageEvent
@@ -271,7 +288,8 @@ export type ServerMessage =
 	| TitleUpdateMessage
 	| PreviewUrlMessage
 	| StatusMessage
-	| SnapshotResultMessage;
+	| SnapshotResultMessage
+	| AutoStartOutputMessage;
 
 export * from "./auth";
 
