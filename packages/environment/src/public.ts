@@ -19,30 +19,41 @@ const runtimeEnv = {
 	NEXT_PUBLIC_USE_NANGO_GITHUB: process.env.NEXT_PUBLIC_USE_NANGO_GITHUB,
 };
 
-const rawEnv = createEnv({
-	server: {},
-	client: createPublicSchema(runtimeEnv),
-	runtimeEnv,
-	clientPrefix: "NEXT_PUBLIC_",
-	skipValidation:
-		process.env.SKIP_ENV_VALIDATION === "true" ||
-		(process.env.NODE_ENV !== "production" && process.env.STRICT_ENV !== "true"),
-	onValidationError: (issues) => {
-		const details = issues
-			.map((issue) => `  ${issue.path?.join(".") || "unknown"}: ${issue.message}`)
-			.join("\n");
-		const message = `Invalid environment variables:\n${details}`;
-		// On the client (browser), NEXT_PUBLIC_ vars are baked at build time and can't be
-		// fixed at runtime. Throwing here bricks the entire app. Warn instead and let
-		// features degrade gracefully. Server-side validation (server.ts) still throws.
-		if (typeof window !== "undefined") {
-			console.error(message);
-		} else {
+// On the client (browser), NEXT_PUBLIC_ vars are baked at build time and can't be
+// fixed at runtime. Throwing bricks the entire app. Warn instead and let features
+// degrade gracefully. Server-side validation (server.ts) still throws.
+const isClient = typeof (globalThis as Record<string, unknown>).window !== "undefined";
+
+function createRawEnv() {
+	return createEnv({
+		server: {},
+		client: createPublicSchema(runtimeEnv),
+		runtimeEnv,
+		clientPrefix: "NEXT_PUBLIC_",
+		skipValidation:
+			process.env.SKIP_ENV_VALIDATION === "true" ||
+			(process.env.NODE_ENV !== "production" && process.env.STRICT_ENV !== "true"),
+		onValidationError: (issues) => {
+			const details = issues
+				.map((issue) => `  ${issue.path?.join(".") || "unknown"}: ${issue.message}`)
+				.join("\n");
+			const message = `Invalid environment variables:\n${details}`;
 			console.error(message);
 			throw new Error(message);
-		}
-	},
-});
+		},
+	});
+}
+
+const rawEnv = isClient
+	? (() => {
+			try {
+				return createRawEnv();
+			} catch {
+				// Return the raw env values so the app can degrade gracefully
+				return runtimeEnv as unknown as ReturnType<typeof createRawEnv>;
+			}
+		})()
+	: createRawEnv();
 
 const normalizeBoolean = (value: unknown, fallback = false) => {
 	if (value === true || value === "true" || value === "1") return true;
