@@ -1109,7 +1109,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 					.exec([
 						"sh",
 						"-c",
-						`cd ${shellEscape(cwd)} && ${cmd.command} > ${shellEscape(logFile)} 2>&1`,
+						`cd ${shellEscape(cwd)} && exec sh -c ${shellEscape(cmd.command)} > ${shellEscape(logFile)} 2>&1`,
 					])
 					.catch(() => {
 						// Expected - runs until sandbox terminates
@@ -1139,7 +1139,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 					.exec([
 						"sh",
 						"-c",
-						`cd ${shellEscape(cwd)} && ${cmd.command} > ${shellEscape(logFile)} 2>&1`,
+						`cd ${shellEscape(cwd)} && exec sh -c ${shellEscape(cmd.command)} > ${shellEscape(logFile)} 2>&1`,
 					])
 					.catch(() => {
 						// Expected - runs until sandbox terminates

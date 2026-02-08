@@ -687,9 +687,12 @@ export class E2BProvider implements SandboxProvider {
 				log.info({ name: cmd.name, cwd, logFile }, "Starting service command");
 
 				sandbox.commands
-					.run(`cd ${shellEscape(cwd)} && ${cmd.command} > ${shellEscape(logFile)} 2>&1`, {
-						timeoutMs: 3600000,
-					})
+					.run(
+						`cd ${shellEscape(cwd)} && exec sh -c ${shellEscape(cmd.command)} > ${shellEscape(logFile)} 2>&1`,
+						{
+							timeoutMs: 3600000,
+						},
+					)
 					.catch(() => {
 						// Expected - runs until sandbox terminates
 					});
@@ -715,9 +718,12 @@ export class E2BProvider implements SandboxProvider {
 				log.info({ name: cmd.name, cwd, logFile }, "Starting service command");
 
 				sandbox.commands
-					.run(`cd ${shellEscape(cwd)} && ${cmd.command} > ${shellEscape(logFile)} 2>&1`, {
-						timeoutMs: 3600000,
-					})
+					.run(
+						`cd ${shellEscape(cwd)} && exec sh -c ${shellEscape(cmd.command)} > ${shellEscape(logFile)} 2>&1`,
+						{
+							timeoutMs: 3600000,
+						},
+					)
 					.catch(() => {
 						// Expected - runs until sandbox terminates
 					});
