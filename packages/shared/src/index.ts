@@ -1,5 +1,7 @@
 // Message types for Client <-> Durable Object WebSocket communication
 
+import type { AutoStartOutputEntry } from "./sandbox-provider";
+
 // Client source - where the message originated from
 export type ClientSource = "slack" | "web" | "api" | "cli" | "automation";
 
@@ -258,8 +260,6 @@ export interface SnapshotResultMessage {
 		target: "prebuild" | "session";
 	};
 }
-
-// AutoStartOutputEntry is defined in sandbox-provider.ts and re-exported via export * below.
 
 export interface AutoStartOutputMessage {
 	type: "auto_start_output";

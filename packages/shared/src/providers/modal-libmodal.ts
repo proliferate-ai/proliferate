@@ -1180,7 +1180,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 					: workspaceDir;
 			const cwd = cmd.cwd ? `${baseDir}/${cmd.cwd}` : baseDir;
 			const slug = cmd.name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
-			const wpSlug = (cmd.workspacePath || "root").replace(/[/.]/g, "_");
 			const logFile = `/tmp/auto-start-test-${opts.runId}-${i}-${slug}.log`;
 
 			log.info({ name: cmd.name, cwd, logFile }, "Running test command");
