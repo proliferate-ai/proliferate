@@ -165,7 +165,7 @@ export function CodingSession({
 					<div
 						className={`hidden md:flex md:flex-col md:w-1/2 p-2 gap-1 ${mobileView === "preview" ? "!flex w-full" : ""}`}
 					>
-						<div className="flex justify-end shrink-0 px-1">
+						<div className="flex justify-start shrink-0 px-1">
 							<SessionHeader
 								sessionStatus={sessionData.status ?? undefined}
 								error={error}

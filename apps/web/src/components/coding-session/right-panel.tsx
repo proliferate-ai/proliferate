@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import type { VerificationFile } from "@proliferate/shared";
 import { ArrowLeft, Grid, X } from "lucide-react";
@@ -82,55 +83,64 @@ export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps
 	// File viewer or gallery
 	if (mode.type === "file" || mode.type === "gallery") {
 		return (
-			<div className="flex flex-col h-full">
-				{/* Header */}
-				<div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 shrink-0">
-					<div className="flex items-center gap-2 min-w-0">
-						{mode.type === "file" && galleryContext && (
-							<Button
-								variant="ghost"
-								size="icon"
-								className="h-7 w-7 shrink-0"
-								onClick={() => openGallery(galleryContext)}
-								title="Back to gallery"
-							>
-								<ArrowLeft className="h-4 w-4" />
-							</Button>
-						)}
-						<span className="text-sm font-medium truncate">
-							{mode.type === "file" ? mode.file.name : "Verification Evidence"}
-						</span>
+			<TooltipProvider delayDuration={150}>
+				<div className="flex flex-col h-full">
+					{/* Header */}
+					<div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 shrink-0">
+						<div className="flex items-center gap-2 min-w-0">
+							{mode.type === "file" && galleryContext && (
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<Button
+											variant="ghost"
+											size="icon"
+											className="h-7 w-7 shrink-0"
+											onClick={() => openGallery(galleryContext)}
+										>
+											<ArrowLeft className="h-4 w-4" />
+										</Button>
+									</TooltipTrigger>
+									<TooltipContent>Back to gallery</TooltipContent>
+								</Tooltip>
+							)}
+							<span className="text-sm font-medium truncate">
+								{mode.type === "file" ? mode.file.name : "Verification Evidence"}
+							</span>
+						</div>
+						<div className="flex items-center gap-1 shrink-0">
+							{mode.type === "file" && galleryContext && (
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<Button
+											variant="ghost"
+											size="icon"
+											className="h-7 w-7"
+											onClick={() => openGallery(galleryContext)}
+										>
+											<Grid className="h-4 w-4" />
+										</Button>
+									</TooltipTrigger>
+									<TooltipContent>View all files</TooltipContent>
+								</Tooltip>
+							)}
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleClose}>
+										<X className="h-4 w-4" />
+									</Button>
+								</TooltipTrigger>
+								<TooltipContent>Close panel</TooltipContent>
+							</Tooltip>
+						</div>
 					</div>
-					<div className="flex items-center gap-1 shrink-0">
-						{mode.type === "file" && galleryContext && (
-							<Button
-								variant="ghost"
-								size="icon"
-								className="h-7 w-7"
-								onClick={() => openGallery(galleryContext)}
-								title="View all files"
-							>
-								<Grid className="h-4 w-4" />
-							</Button>
-						)}
-						<Button
-							variant="ghost"
-							size="icon"
-							className="h-7 w-7"
-							onClick={handleClose}
-							title="Close panel"
-						>
-							<X className="h-4 w-4" />
-						</Button>
-					</div>
-				</div>
 
-				{/* Content */}
-				<div className="flex-1 min-h-0">
-					{mode.type === "file" && <FileViewer file={mode.file} />}
-					{mode.type === "gallery" && <VerificationGallery files={mode.files} />}
+					{/* Content */}
+					<div className="flex-1 min-h-0">
+						{mode.type === "file" && <FileViewer file={mode.file} />}
+						{mode.type === "gallery" && <VerificationGallery files={mode.files} />}
+					</div>
 				</div>
-			</div>
+			</TooltipProvider>
 		);
 	}
 
