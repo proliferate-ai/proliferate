@@ -36,6 +36,8 @@ interface SessionLoadingShellProps {
 	}>;
 	/** Initial prompt to show eagerly (for setup sessions) */
 	initialPrompt?: string;
+	/** When false, skip rendering the header bar (parent renders its own) */
+	showHeader?: boolean;
 }
 
 export function SessionLoadingShell({
@@ -44,6 +46,7 @@ export function SessionLoadingShell({
 	stage,
 	existingMessages,
 	initialPrompt,
+	showHeader = true,
 }: SessionLoadingShellProps) {
 	const [messageIndex, setMessageIndex] = useState(0);
 	const [activeStep, setActiveStep] = useState(0);
@@ -93,25 +96,26 @@ export function SessionLoadingShell({
 
 	return (
 		<div className="flex h-full flex-col">
-			{/* Header skeleton - matches SessionHeader structure */}
-			<div className="shrink-0 border-b bg-background px-4 py-3">
-				<div className="flex items-center justify-between">
-					<div className="flex items-center gap-3">
-						<div className="flex items-center gap-2">
-							<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-							<span className="text-sm text-muted-foreground">
-								{mode === "creating" ? "Starting session" : "Resuming"}
-							</span>
+			{showHeader && (
+				<div className="shrink-0 border-b bg-background px-4 py-3">
+					<div className="flex items-center justify-between">
+						<div className="flex items-center gap-3">
+							<div className="flex items-center gap-2">
+								<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+								<span className="text-sm text-muted-foreground">
+									{mode === "creating" ? "Starting session" : "Resuming"}
+								</span>
+							</div>
+							{repoName && (
+								<>
+									<span className="text-muted-foreground">·</span>
+									<span className="text-sm text-muted-foreground">{repoName}</span>
+								</>
+							)}
 						</div>
-						{repoName && (
-							<>
-								<span className="text-muted-foreground">·</span>
-								<span className="text-sm text-muted-foreground">{repoName}</span>
-							</>
-						)}
 					</div>
 				</div>
-			</div>
+			)}
 
 			{/* Main content - matches Thread structure */}
 			<div className="flex-1 min-h-0 flex flex-col">

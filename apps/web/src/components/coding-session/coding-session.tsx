@@ -119,7 +119,10 @@ export function CodingSession({
 			}
 		: undefined;
 
-	const content = isLoading ? (
+	const displayTitle = sessionTitle || sessionData?.title || title;
+	const headerDisabled = isLoading || !authSession || !sessionData || status === "error";
+
+	const innerContent = isLoading ? (
 		sessionData ? (
 			<SessionLoadingShell
 				mode={isSessionCreating ? "creating" : "resuming"}
@@ -128,6 +131,7 @@ export function CodingSession({
 				}
 				repoName={repoData?.githubRepoName || sessionData.repo?.githubRepoName}
 				initialPrompt={initialPrompt}
+				showHeader={false}
 			/>
 		) : (
 			<div className="flex h-full items-center justify-center">
@@ -157,29 +161,6 @@ export function CodingSession({
 							: "relative w-full"
 					}
 				>
-					{/* Floating title — top left */}
-					{(sessionTitle || title) && (
-						<div className="absolute top-2 left-3 z-10">
-							<span className="text-sm font-medium text-foreground truncate max-w-[200px] block">
-								{sessionTitle || title}
-							</span>
-						</div>
-					)}
-					{/* Floating buttons — top right (only when panel is closed) */}
-					{!isPanelOpen && (
-						<div className="absolute top-2 right-3 z-10">
-							<SessionHeader
-								error={error}
-								panelMode={mode}
-								onTogglePreview={() => toggleUrlPreview(previewUrl)}
-								onToggleSessionInfo={() => togglePanel("session-info")}
-								onToggleSnapshots={() => togglePanel("snapshots")}
-								onToggleAutoStart={() => togglePanel("service-commands")}
-								mobileView={mobileView}
-								onToggleMobileView={toggleMobileView}
-							/>
-						</div>
-					)}
 					<SessionContext.Provider value={{ sessionId, repoId: sessionData.repoId ?? undefined }}>
 						<Thread title={title} description={description} />
 					</SessionContext.Provider>
@@ -218,6 +199,39 @@ export function CodingSession({
 				defaultTab="secrets"
 			/>
 		</AssistantRuntimeProvider>
+	);
+
+	const content = (
+		<div className="relative flex h-full flex-col">
+			{/* Always-visible floating title — top left */}
+			{displayTitle && (
+				<div className="absolute top-2 left-3 z-10">
+					<span className="text-sm font-medium text-foreground truncate max-w-[200px] block">
+						{displayTitle}
+					</span>
+				</div>
+			)}
+
+			{/* Always-visible floating buttons — top right (only when panel is closed) */}
+			{!isPanelOpen && (
+				<div className="absolute top-2 right-3 z-10">
+					<SessionHeader
+						error={headerDisabled ? null : error}
+						disabled={headerDisabled}
+						panelMode={mode}
+						onTogglePreview={() => toggleUrlPreview(previewUrl)}
+						onToggleSessionInfo={() => togglePanel("session-info")}
+						onToggleSnapshots={() => togglePanel("snapshots")}
+						onToggleAutoStart={() => togglePanel("service-commands")}
+						mobileView={mobileView}
+						onToggleMobileView={toggleMobileView}
+					/>
+				</div>
+			)}
+
+			{/* Main content (loading shell or runtime) */}
+			<div className="flex-1 min-h-0">{innerContent}</div>
+		</div>
 	);
 
 	if (asModal) {
