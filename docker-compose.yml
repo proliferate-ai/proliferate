@@ -112,6 +112,9 @@ services:
       - AUTUMN_API_URL=${AUTUMN_API_URL:-}
       - AUTUMN_API_KEY=${AUTUMN_API_KEY:-}
       - BILLING_JWT_SECRET=${BILLING_JWT_SECRET:-}
+      - SLACK_CLIENT_ID=${SLACK_CLIENT_ID:-}
+      - SLACK_CLIENT_SECRET=${SLACK_CLIENT_SECRET:-}
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET:-}
     depends_on:
       redis:
         condition: service_healthy
@@ -206,6 +209,9 @@ services:
       # Admin + Slack Connect (optional)
       - SUPER_ADMIN_EMAILS=${SUPER_ADMIN_EMAILS:-}
       - PROLIFERATE_SLACK_CONNECT_EMAILS=${PROLIFERATE_SLACK_CONNECT_EMAILS:-}
+      - SLACK_CLIENT_ID=${SLACK_CLIENT_ID:-}
+      - SLACK_CLIENT_SECRET=${SLACK_CLIENT_SECRET:-}
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET:-}
       # Storage (optional)
       - S3_BUCKET=${S3_BUCKET:-}
       - S3_REGION=${S3_REGION:-}
@@ -284,6 +290,9 @@ services:
       - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
       - S3_ACCESS_KEY=${S3_ACCESS_KEY:-}
       - S3_SECRET_KEY=${S3_SECRET_KEY:-}
+      - SLACK_CLIENT_ID=${SLACK_CLIENT_ID:-}
+      - SLACK_CLIENT_SECRET=${SLACK_CLIENT_SECRET:-}
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET:-}
     depends_on:
       redis:
         condition: service_healthy
