@@ -10,8 +10,9 @@ COPY packages/environment ./packages/environment
 COPY packages/logger ./packages/logger
 COPY packages/db ./packages/db
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile --filter @proliferate/db...
+# Install dependencies (same pattern as other Dockerfiles in this repo —
+# pnpm resolves only the workspace packages present in the build context)
+RUN pnpm install --frozen-lockfile
 
 # Build the environment package (required by drizzle config)
 RUN pnpm --filter @proliferate/environment build
