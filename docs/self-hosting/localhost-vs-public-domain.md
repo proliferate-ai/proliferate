@@ -43,8 +43,7 @@ You cannot share a single Proliferate GitHub App across self-hosted instances:
 
 ## Setup: Localhost Quickstart (No Webhooks)
 
-If you're using the onboarding UI, go to Onboarding → Connect GitHub and click **Create GitHub App**.
-It opens a prefilled GitHub App registration page with the correct Setup URL and recommended permissions.
+Follow [README Step 2](https://github.com/proliferate-ai/proliferate#step-2-create-a-github-app-required-for-repo-access) before first boot to create your GitHub App using the prefilled link.
 
 1. Create a GitHub App on GitHub (personal account or org)
 1. Set the GitHub App **Setup URL** to: `http://localhost:3000/api/integrations/github/callback`

@@ -3,17 +3,7 @@
 import { GitHubConnectButton } from "@/components/integrations/github-connect-button";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, GithubIcon } from "@/components/ui/icons";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-	buildGitHubAppRegistrationUrl,
-	buildSuggestedGitHubAppName,
-	getGitHubAppSetupUrl,
-	getGitHubAppWebhookUrl,
-	isLocalhostUrl,
-} from "@/lib/github-app-registration";
 import { env } from "@proliferate/environment/public";
-import { useMemo, useState } from "react";
 
 interface StepGitHubConnectProps {
 	onComplete: () => void;
@@ -21,24 +11,8 @@ interface StepGitHubConnectProps {
 }
 
 export function StepGitHubConnect({ onComplete, hasGitHubConnection }: StepGitHubConnectProps) {
-	const appUrl = env.NEXT_PUBLIC_APP_URL;
-	const isLocalhost = isLocalhostUrl(appUrl);
-	const setupUrl = getGitHubAppSetupUrl(appUrl);
-	const webhookUrl = getGitHubAppWebhookUrl(appUrl);
-	const [orgSlug, setOrgSlug] = useState("");
-	const suggestedAppName = useMemo(() => buildSuggestedGitHubAppName(), []);
-
-	const registrationUrl = useMemo(() => {
-		return buildGitHubAppRegistrationUrl({
-			appUrl,
-			organization: orgSlug.trim() ? orgSlug.trim() : undefined,
-			webhooksEnabled: !isLocalhost,
-			appName: suggestedAppName,
-		});
-	}, [appUrl, isLocalhost, orgSlug, suggestedAppName]);
-
 	const githubAppSlug = env.NEXT_PUBLIC_GITHUB_APP_SLUG;
-	const hasPlaceholderGitHubAppSlug =
+	const hasPlaceholderSlug =
 		!githubAppSlug || githubAppSlug === "local" || githubAppSlug === "proliferate-local-dev";
 
 	// Already connected
@@ -112,92 +86,29 @@ export function StepGitHubConnect({ onComplete, hasGitHubConnection }: StepGitHu
 						</p>
 					</div>
 
-					<div className="rounded-lg border border-border bg-muted/30 p-4 mb-4">
-						<div className="space-y-1">
-							<p className="text-sm font-medium text-foreground">
-								Self-hosters: create your own GitHub App
-							</p>
-							<p className="text-sm text-muted-foreground">
-								GitHub App installation and repo access work on localhost. Webhooks and
-								webhook-based automations require a public URL (domain or tunnel).
-							</p>
-						</div>
-
-						<div className="mt-4 space-y-3">
-							<div className="space-y-1">
-								<Label className="text-xs text-muted-foreground">GitHub org (optional)</Label>
-								<Input
-									value={orgSlug}
-									onChange={(e) => setOrgSlug(e.target.value)}
-									placeholder="my-org"
-									className="h-9"
-								/>
-								<p className="text-xs text-muted-foreground">
-									Leave blank to create the app under your personal GitHub account.
-								</p>
-							</div>
-
-							<div className="flex flex-col gap-2">
-								<Button
-									type="button"
-									variant="outline"
-									className="w-full"
-									onClick={() => window.open(registrationUrl, "_blank", "noreferrer")}
+					{hasPlaceholderSlug && (
+						<div className="rounded-lg border border-border bg-muted/30 p-4 mb-4">
+							<p className="text-sm font-medium text-foreground">GitHub App not configured</p>
+							<p className="mt-1 text-sm text-muted-foreground">
+								Create a GitHub App before connecting.{" "}
+								<a
+									href="https://github.com/proliferate-ai/proliferate#step-2-create-a-github-app-required-for-repo-access"
+									target="_blank"
+									rel="noreferrer"
+									className="underline text-foreground"
 								>
-									Create GitHub App
-								</Button>
-								<div className="space-y-2 text-xs text-muted-foreground">
-									<div className="space-y-1">
-										<p className="break-all">
-											Setup URL: <span className="font-mono">{setupUrl}</span>
-										</p>
-										{!isLocalhost && (
-											<p className="break-all">
-												Webhook URL: <span className="font-mono">{webhookUrl}</span>
-											</p>
-										)}
-									</div>
-
-									<ol className="list-decimal pl-4 space-y-1">
-										<li>Create the app on GitHub and download the private key.</li>
-										<li>
-											Update <span className="font-mono">.env</span>:{" "}
-											<span className="font-mono">GITHUB_APP_ID</span>,{" "}
-											<span className="font-mono">GITHUB_APP_PRIVATE_KEY</span>,{" "}
-											<span className="font-mono">GITHUB_APP_WEBHOOK_SECRET</span>,{" "}
-											<span className="font-mono">NEXT_PUBLIC_GITHUB_APP_SLUG</span>
-										</li>
-										<li>
-											Rebuild the web app (required for{" "}
-											<span className="font-mono">NEXT_PUBLIC_*</span>
-											): <span className="font-mono">docker compose up -d --build web</span>
-										</li>
-										<li>Refresh this page, then click Connect GitHub to install.</li>
-									</ol>
-
-									{isLocalhost && (
-										<p>
-											Localhost note: disable webhooks in the GitHub App settings, or use a tunnel /
-											custom domain to receive them.
-										</p>
-									)}
-								</div>
-							</div>
+									Follow README Step 2
+								</a>{" "}
+								for prefilled setup links and the env vars to add to{" "}
+								<span className="font-mono text-xs">.env</span>.
+							</p>
 						</div>
-					</div>
-
-					{hasPlaceholderGitHubAppSlug && (
-						<p className="text-xs text-muted-foreground mb-2">
-							Set <span className="font-mono">NEXT_PUBLIC_GITHUB_APP_SLUG</span> to your app&apos;s
-							slug, then rebuild the web app:{" "}
-							<span className="font-mono">docker compose up -d --build web</span>
-						</p>
 					)}
 
 					<GitHubConnectButton
 						onSuccess={onComplete}
 						includeIcon={false}
-						disabled={hasPlaceholderGitHubAppSlug}
+						disabled={hasPlaceholderSlug}
 					/>
 				</div>
 			</div>
