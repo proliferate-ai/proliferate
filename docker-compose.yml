@@ -63,7 +63,7 @@ services:
       - MODAL_TOKEN_ID=${MODAL_TOKEN_ID:-}
       - MODAL_TOKEN_SECRET=${MODAL_TOKEN_SECRET:-}
       - REDIS_URL=redis://redis:6379
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate?sslmode=disable
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
       - SERVICE_TO_SERVICE_AUTH_TOKEN=${SERVICE_TO_SERVICE_AUTH_TOKEN}
       - GATEWAY_JWT_SECRET=${GATEWAY_JWT_SECRET}
@@ -139,7 +139,7 @@ services:
     environment:
       - NODE_ENV=production
       - DEPLOYMENT_PROFILE=self_host
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
@@ -229,7 +229,7 @@ services:
       - STRICT_ENV=true
       - DEFAULT_SANDBOX_PROVIDER=${DEFAULT_SANDBOX_PROVIDER:-modal}
       - REDIS_URL=redis://redis:6379
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate?sslmode=disable
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
       - SERVICE_TO_SERVICE_AUTH_TOKEN=${SERVICE_TO_SERVICE_AUTH_TOKEN}
       - GATEWAY_JWT_SECRET=${GATEWAY_JWT_SECRET}
@@ -284,7 +284,7 @@ services:
     ports:
       - "4000:4000"
     environment:
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate?schema=litellm
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate?schema=litellm&sslmode=disable
       - LITELLM_MASTER_KEY=${LLM_PROXY_MASTER_KEY:-sk-local-master-key}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - LITELLM_MIGRATION_DIR=/tmp/litellm-migrations

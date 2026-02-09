@@ -148,11 +148,11 @@ export function StepGitHubConnect({ onComplete, hasGitHubConnection }: StepGitHu
 								</Button>
 								<div className="space-y-2 text-xs text-muted-foreground">
 									<div className="space-y-1">
-										<p>
+										<p className="break-all">
 											Setup URL: <span className="font-mono">{setupUrl}</span>
 										</p>
 										{!isLocalhost && (
-											<p>
+											<p className="break-all">
 												Webhook URL: <span className="font-mono">{webhookUrl}</span>
 											</p>
 										)}
