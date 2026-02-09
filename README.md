@@ -101,7 +101,73 @@ GITHUB_APP_WEBHOOK_SECRET=any-random-string          # Any random string (webhoo
 
 For webhooks, public domains, and advanced setup, see [`docs/self-hosting/localhost-vs-public-domain.md`](docs/self-hosting/localhost-vs-public-domain.md).
 
-### Step 3. Start Proliferate
+### Step 3. Set up a sandbox provider
+
+Proliferate is a self-hosted control plane, but each agent session runs in a cloud sandbox on [Modal](https://modal.com) (default) or [E2B](https://e2b.dev). You need an account with one of them.
+
+You also need an **Anthropic API key** so agents can call Claude inside the sandbox.
+
+<details>
+<summary><strong>Option A: Modal (default)</strong></summary>
+
+1. Create a [Modal](https://modal.com) account and generate an API token from [modal.com/settings](https://modal.com/settings)
+2. Install the Modal CLI and authenticate:
+
+```bash
+pip install modal
+modal setup
+```
+
+3. Deploy the sandbox image (the suffix must match `MODAL_APP_SUFFIX` in your `.env` — the default is `local`):
+
+```bash
+cd packages/modal-sandbox
+MODAL_APP_SUFFIX=local modal deploy deploy.py
+```
+
+4. Add to your `.env`:
+
+```bash
+DEFAULT_SANDBOX_PROVIDER=modal
+MODAL_TOKEN_ID=ak-...              # From your Modal token
+MODAL_TOKEN_SECRET=as-...          # From your Modal token
+MODAL_APP_NAME=proliferate-sandbox
+MODAL_APP_SUFFIX=local             # Must match the suffix used during deploy
+ANTHROPIC_API_KEY=sk-ant-...       # From console.anthropic.com
+```
+
+For more details, see the [Modal setup guide](https://docs.proliferate.com/self-hosting/modal-setup).
+
+</details>
+
+<details>
+<summary><strong>Option B: E2B</strong></summary>
+
+1. Create an [E2B](https://e2b.dev) account and grab your API key from the dashboard
+
+2. Add to your `.env`:
+
+```bash
+DEFAULT_SANDBOX_PROVIDER=e2b
+E2B_API_KEY=e2b_...                # From your E2B dashboard
+E2B_DOMAIN=api.e2b.dev             # Default managed cloud (change for self-hosted)
+E2B_TEMPLATE=proliferate-base
+E2B_TEMPLATE_ALIAS=proliferate-base
+ANTHROPIC_API_KEY=sk-ant-...       # From console.anthropic.com
+```
+
+3. Build and push the sandbox template (requires `E2B_API_KEY` to be set):
+
+```bash
+cd packages/e2b-sandbox
+pnpm build:template
+```
+
+For more details, see [`packages/e2b-sandbox/README.md`](packages/e2b-sandbox/README.md).
+
+</details>
+
+### Step 4. Start Proliferate
 
 ```bash
 docker compose up -d
