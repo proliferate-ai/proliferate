@@ -9,6 +9,7 @@ import { type Logger, createLogger } from "@proliferate/logger";
 import { sessions } from "@proliferate/services";
 import type {
 	AutoStartOutputEntry,
+	PrebuildServiceCommand,
 	SandboxProvider,
 	SandboxProviderType,
 	ServerMessage,
@@ -153,12 +154,15 @@ export class SessionRuntime {
 	// ============================================
 
 	/**
-	 * Run the session's resolved service commands in the sandbox and capture output.
-	 * Uses only the pre-resolved command list — never accepts arbitrary commands.
+	 * Run service commands in the sandbox and capture output.
+	 * Uses inline commands if provided, otherwise falls back to session context.
 	 */
-	async testAutoStartCommands(runId: string): Promise<AutoStartOutputEntry[]> {
+	async testAutoStartCommands(
+		runId: string,
+		overrideCommands?: PrebuildServiceCommand[],
+	): Promise<AutoStartOutputEntry[]> {
 		const sandboxId = this.context.session.sandbox_id;
-		const commands = this.context.serviceCommands;
+		const commands = overrideCommands?.length ? overrideCommands : this.context.serviceCommands;
 
 		if (!this.provider?.testServiceCommands || !sandboxId) {
 			throw new Error("Runtime not ready");
@@ -168,7 +172,7 @@ export class SessionRuntime {
 		}
 
 		return this.provider.testServiceCommands(sandboxId, commands, {
-			timeoutMs: 30_000,
+			timeoutMs: 10_000,
 			runId,
 		});
 	}

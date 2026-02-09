@@ -17,7 +17,11 @@ import {
 	useUpdatePrebuildServiceCommands,
 	useUpdateServiceCommands,
 } from "@/hooks/use-repos";
-import type { AutoStartOutputEntry, AutoStartOutputMessage } from "@proliferate/shared";
+import type {
+	AutoStartOutputEntry,
+	AutoStartOutputMessage,
+	PrebuildServiceCommand,
+} from "@proliferate/shared";
 import {
 	CheckCircle2,
 	ChevronDown,
@@ -38,7 +42,11 @@ interface AutoStartPanelProps {
 	prebuildId?: string | null;
 	onClose: () => void;
 	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
-	sendRunAutoStart?: (runId: string, mode?: "test" | "start") => void;
+	sendRunAutoStart?: (
+		runId: string,
+		mode?: "test" | "start",
+		commands?: PrebuildServiceCommand[],
+	) => void;
 }
 
 interface CommandDraft {
@@ -124,8 +132,16 @@ export function AutoStartPanel({
 		if (!sendRunAutoStart) return;
 		const runId = crypto.randomUUID();
 		setIsTesting(true);
-		sendRunAutoStart(runId, "test");
-	}, [sendRunAutoStart]);
+		const cmds = drafts
+			.filter((d) => d.name.trim() && d.command.trim())
+			.map((d) => ({
+				name: d.name.trim(),
+				command: d.command.trim(),
+				...(d.cwd.trim() ? { cwd: d.cwd.trim() } : {}),
+				...(d.workspacePath.trim() ? { workspacePath: d.workspacePath.trim() } : {}),
+			}));
+		sendRunAutoStart(runId, "test", cmds);
+	}, [sendRunAutoStart, drafts]);
 
 	// Clear testing state when results arrive
 	useEffect(() => {

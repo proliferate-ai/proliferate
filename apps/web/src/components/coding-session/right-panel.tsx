@@ -29,7 +29,11 @@ export interface SessionPanelProps {
 	isSnapshotting?: boolean;
 	onSnapshot?: () => void;
 	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
-	sendRunAutoStart?: (runId: string, mode?: "test" | "start") => void;
+	sendRunAutoStart?: (
+		runId: string,
+		mode?: "test" | "start",
+		commands?: import("@proliferate/shared").PrebuildServiceCommand[],
+	) => void;
 }
 
 interface RightPanelProps {
