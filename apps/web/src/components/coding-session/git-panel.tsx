@@ -191,15 +191,20 @@ export function GitPanel({
 
 function StatusIndicators({ gitState }: { gitState: GitState }) {
 	const warnings: string[] = [];
-	if (gitState.isShallow) warnings.push("Shallow clone (limited history)");
 	if (gitState.isBusy) warnings.push("Git is busy (index.lock)");
 	if (gitState.rebaseInProgress) warnings.push("Rebase in progress");
 	if (gitState.mergeInProgress) warnings.push("Merge in progress");
 
-	if (warnings.length === 0) return null;
+	if (warnings.length === 0 && !gitState.isShallow) return null;
 
 	return (
 		<div className="space-y-1">
+			{gitState.isShallow && (
+				<div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+					<AlertTriangle className="h-3 w-3 shrink-0" />
+					<span>Shallow clone (limited history)</span>
+				</div>
+			)}
 			{warnings.map((w) => (
 				<div key={w} className="flex items-center gap-1.5 text-xs text-destructive">
 					<AlertTriangle className="h-3 w-3 shrink-0" />
