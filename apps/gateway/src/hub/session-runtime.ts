@@ -150,6 +150,16 @@ export class SessionRuntime {
 	}
 
 	// ============================================
+	// Provider access (for git operations, etc.)
+	// ============================================
+
+	getProviderAndSandboxId(): { provider: SandboxProvider; sandboxId: string } | null {
+		const sandboxId = this.context.session.sandbox_id;
+		if (!this.provider || !sandboxId) return null;
+		return { provider: this.provider, sandboxId };
+	}
+
+	// ============================================
 	// Auto-start testing
 	// ============================================
 

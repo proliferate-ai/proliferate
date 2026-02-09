@@ -260,4 +260,24 @@ export interface SandboxProvider {
 		commands: PrebuildServiceCommand[],
 		opts: { timeoutMs: number; runId: string },
 	): Promise<AutoStartOutputEntry[]>;
+
+	/**
+	 * Execute a command in the sandbox as an argv array (no shell interpolation).
+	 * Used for git operations, gh CLI, etc.
+	 *
+	 * @param sandboxId - The sandbox to execute in
+	 * @param argv - Command and arguments as an array (e.g. ["git", "status"])
+	 * @param opts.cwd - Working directory (optional)
+	 * @param opts.timeoutMs - Timeout in milliseconds (default: 30000)
+	 * @param opts.env - Additional environment variables
+	 */
+	execCommand?(
+		sandboxId: string,
+		argv: string[],
+		opts?: {
+			cwd?: string;
+			timeoutMs?: number;
+			env?: Record<string, string>;
+		},
+	): Promise<{ stdout: string; stderr: string; exitCode: number }>;
 }

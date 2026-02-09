@@ -3,11 +3,17 @@
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
-import type { AutoStartOutputMessage, VerificationFile } from "@proliferate/shared";
+import type {
+	AutoStartOutputMessage,
+	GitResultMessage,
+	GitState,
+	VerificationFile,
+} from "@proliferate/shared";
 import { ArrowLeft, Grid, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AutoStartPanel } from "./auto-start-panel";
 import { FileViewer } from "./file-viewer";
+import { GitPanel } from "./git-panel";
 import { PreviewPanel } from "./preview-panel";
 import { SessionInfoPanel } from "./session-info-panel";
 import { SnapshotsPanel } from "./snapshots-panel";
@@ -34,6 +40,22 @@ export interface SessionPanelProps {
 		mode?: "test" | "start",
 		commands?: import("@proliferate/shared").PrebuildServiceCommand[],
 	) => void;
+	gitState?: GitState | null;
+	gitResult?: GitResultMessage["payload"] | null;
+	sendGetGitStatus?: (workspacePath?: string) => void;
+	sendGitCreateBranch?: (branchName: string, workspacePath?: string) => void;
+	sendGitCommit?: (
+		message: string,
+		opts?: { includeUntracked?: boolean; files?: string[]; workspacePath?: string },
+	) => void;
+	sendGitPush?: (workspacePath?: string) => void;
+	sendGitCreatePr?: (
+		title: string,
+		body?: string,
+		baseBranch?: string,
+		workspacePath?: string,
+	) => void;
+	clearGitResult?: () => void;
 }
 
 interface RightPanelProps {
@@ -74,6 +96,23 @@ export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps
 				isSnapshotting={sessionProps.isSnapshotting}
 				onSnapshot={sessionProps.onSnapshot}
 				onClose={handleClose}
+			/>
+		);
+	}
+
+	// Git panel
+	if (mode.type === "git" && sessionProps) {
+		return (
+			<GitPanel
+				onClose={handleClose}
+				gitState={sessionProps.gitState ?? null}
+				gitResult={sessionProps.gitResult ?? null}
+				sendGetGitStatus={sessionProps.sendGetGitStatus}
+				sendGitCreateBranch={sessionProps.sendGitCreateBranch}
+				sendGitCommit={sessionProps.sendGitCommit}
+				sendGitPush={sessionProps.sendGitPush}
+				sendGitCreatePr={sessionProps.sendGitCreatePr}
+				clearGitResult={sessionProps.clearGitResult}
 			/>
 		);
 	}

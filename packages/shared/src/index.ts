@@ -96,6 +96,116 @@ export interface RunAutoStartMessage {
 	commands?: PrebuildServiceCommand[];
 }
 
+// ============================================
+// Git Management Types
+// ============================================
+
+export interface GitFileChange {
+	path: string;
+	/** Index (staged) status character from XY in git status --porcelain */
+	indexStatus: string;
+	/** Worktree (unstaged) status character from XY in git status --porcelain */
+	worktreeStatus: string;
+}
+
+export interface GitCommitSummary {
+	sha: string;
+	message: string;
+	author: string;
+	date: string;
+}
+
+export type GitResultCode =
+	| "SUCCESS"
+	| "NOTHING_TO_COMMIT"
+	| "NO_REMOTE"
+	| "NOT_A_REPO"
+	| "SHALLOW_PUSH_FAILED"
+	| "AUTH_FAILED"
+	| "GH_NOT_AVAILABLE"
+	| "NOT_GITHUB_REMOTE"
+	| "BRANCH_EXISTS"
+	| "MERGE_CONFLICT"
+	| "REPO_BUSY"
+	| "UNKNOWN_ERROR";
+
+export interface GitState {
+	branch: string;
+	detached: boolean;
+	stagedChanges: GitFileChange[];
+	unstagedChanges: GitFileChange[];
+	untrackedFiles: string[];
+	conflictedFiles: string[];
+	commits: GitCommitSummary[];
+	/** Commits ahead of upstream. null = unknown (shallow or no upstream) */
+	ahead: number | null;
+	/** Commits behind upstream. null = unknown (shallow or no upstream) */
+	behind: number | null;
+	isShallow: boolean;
+	/** True when .git/index.lock exists (another git process is running) */
+	isBusy: boolean;
+	rebaseInProgress: boolean;
+	mergeInProgress: boolean;
+}
+
+// ============================================
+// Git Client Messages
+// ============================================
+
+export interface GetGitStatusMessage {
+	type: "get_git_status";
+	workspacePath?: string;
+}
+
+export interface GitCreateBranchMessage {
+	type: "git_create_branch";
+	branchName: string;
+	workspacePath?: string;
+}
+
+export interface GitCommitMessage {
+	type: "git_commit";
+	message: string;
+	/** If true, stages untracked files too (git add -A). Default: false (git add -u). */
+	includeUntracked?: boolean;
+	/** Specific files to stage. If provided, only these files are staged. */
+	files?: string[];
+	workspacePath?: string;
+}
+
+export interface GitPushMessage {
+	type: "git_push";
+	workspacePath?: string;
+}
+
+export interface GitCreatePrMessage {
+	type: "git_create_pr";
+	title: string;
+	body?: string;
+	baseBranch?: string;
+	workspacePath?: string;
+}
+
+// ============================================
+// Git Server Messages
+// ============================================
+
+export interface GitStatusMessage {
+	type: "git_status";
+	payload: GitState;
+}
+
+export interface GitResultMessage {
+	type: "git_result";
+	payload: {
+		action: string;
+		success: boolean;
+		code: GitResultCode;
+		message: string;
+		prUrl?: string;
+	};
+}
+
 export type ClientMessage =
 	| PromptMessage
 	| PingMessage
@@ -103,7 +213,12 @@ export type ClientMessage =
 	| GetStatusMessage
 	| GetMessagesMessage
 	| SaveSnapshotMessage
-	| RunAutoStartMessage;
+	| RunAutoStartMessage
+	| GetGitStatusMessage
+	| GitCreateBranchMessage
+	| GitCommitMessage
+	| GitPushMessage
+	| GitCreatePrMessage;
 
 // DO -> Client messages
 export interface InitMessage {
@@ -290,7 +405,9 @@ export type ServerMessage =
 	| PreviewUrlMessage
 	| StatusMessage
 	| SnapshotResultMessage
-	| AutoStartOutputMessage;
+	| AutoStartOutputMessage
+	| GitStatusMessage
+	| GitResultMessage;
 
 export * from "./auth";
 

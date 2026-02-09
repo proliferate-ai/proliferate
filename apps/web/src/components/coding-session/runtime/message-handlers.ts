@@ -3,7 +3,7 @@ import type {
 	ToolMetadataMessage,
 	ToolStartMessage,
 } from "@proliferate/gateway-clients";
-import type { AutoStartOutputMessage } from "@proliferate/shared";
+import type { AutoStartOutputMessage, GitResultMessage, GitState } from "@proliferate/shared";
 import type { ExtendedMessage, MessagePart, TaskToolMetadata } from "../message-converter";
 import { type EnvRequest, type ServerPart, convertServerParts } from "./types";
 
@@ -22,6 +22,8 @@ export interface MessageHandlerContext {
 	setPreviewUrl: (url: string | null) => void;
 	setEnvRequest: (request: EnvRequest | null) => void;
 	setAutoStartOutput: (output: AutoStartOutputMessage["payload"] | null) => void;
+	setGitState: (state: GitState | null) => void;
+	setGitResult: (result: GitResultMessage["payload"] | null) => void;
 	setError: (error: string | null) => void;
 	onTitleUpdate: (title: string) => void;
 	streamingTextRef: React.MutableRefObject<Record<string, string>>;

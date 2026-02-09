@@ -30,6 +30,19 @@ export interface SyncWebSocket {
 		mode?: "test" | "start",
 		commands?: import("@proliferate/shared").PrebuildServiceCommand[],
 	): void;
+	/** Request current git status */
+	sendGetGitStatus(workspacePath?: string): void;
+	/** Create and checkout a new branch */
+	sendGitCreateBranch(branchName: string, workspacePath?: string): void;
+	/** Stage and commit changes */
+	sendGitCommit(
+		message: string,
+		opts?: { includeUntracked?: boolean; files?: string[]; workspacePath?: string },
+	): void;
+	/** Push to remote */
+	sendGitPush(workspacePath?: string): void;
+	/** Push and create a pull request */
+	sendGitCreatePr(title: string, body?: string, baseBranch?: string, workspacePath?: string): void;
 	/** Close the connection (no reconnect) */
 	close(): void;
 	/** Force reconnect now */
@@ -122,6 +135,41 @@ export class SyncWebSocketImpl implements SyncWebSocket {
 		commands?: import("@proliferate/shared").PrebuildServiceCommand[],
 	): void {
 		this.send({ type: "run_auto_start", runId, mode, commands });
+	}
+
+	sendGetGitStatus(workspacePath?: string): void {
+		this.send({ type: "get_git_status", ...(workspacePath && { workspacePath }) });
+	}
+
+	sendGitCreateBranch(branchName: string, workspacePath?: string): void {
+		this.send({ type: "git_create_branch", branchName, ...(workspacePath && { workspacePath }) });
+	}
+
+	sendGitCommit(
+		message: string,
+		opts?: { includeUntracked?: boolean; files?: string[]; workspacePath?: string },
+	): void {
+		this.send({
+			type: "git_commit",
+			message,
+			...(opts?.includeUntracked && { includeUntracked: true }),
+			...(opts?.files && { files: opts.files }),
+			...(opts?.workspacePath && { workspacePath: opts.workspacePath }),
+		});
+	}
+
+	sendGitPush(workspacePath?: string): void {
+		this.send({ type: "git_push", ...(workspacePath && { workspacePath }) });
+	}
+
+	sendGitCreatePr(title: string, body?: string, baseBranch?: string, workspacePath?: string): void {
+		this.send({
+			type: "git_create_pr",
+			title,
+			...(body && { body }),
+			...(baseBranch && { baseBranch }),
+			...(workspacePath && { workspacePath }),
+		});
 	}
 
 	close(): void {

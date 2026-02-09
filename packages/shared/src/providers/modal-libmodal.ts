@@ -1216,6 +1216,35 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		return entries;
 	}
 
+	async execCommand(
+		sandboxId: string,
+		argv: string[],
+		opts?: {
+			cwd?: string;
+			timeoutMs?: number;
+			env?: Record<string, string>;
+		},
+	): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+		await this.ensureModalAuth("execCommand");
+		const sandbox = await this.client.sandboxes.fromId(sandboxId);
+
+		// Wrap with timeout to prevent hung processes (default 30s)
+		const timeoutSec = Math.ceil((opts?.timeoutMs ?? 30_000) / 1000);
+		let finalArgv = ["timeout", String(timeoutSec), ...argv];
+
+		if (opts?.cwd) {
+			// Use positional args — shell script is constant, no user input interpolated
+			finalArgv = ["sh", "-c", 'cd "$1" && shift && exec "$@"', "--", opts.cwd, ...finalArgv];
+		}
+
+		const proc = await sandbox.exec(finalArgv);
+		const exitCode = await proc.wait();
+		const stdout = await proc.stdout.readText();
+		const stderr = await proc.stderr.readText();
+		// timeout command returns exit code 124 on timeout
+		return { stdout: capOutput(stdout), stderr: capOutput(stderr), exitCode };
+	}
+
 	async snapshot(sessionId: string, sandboxId: string): Promise<SnapshotResult> {
 		providerLogger.info({ sessionId }, "Taking snapshot");
 		const startMs = Date.now();

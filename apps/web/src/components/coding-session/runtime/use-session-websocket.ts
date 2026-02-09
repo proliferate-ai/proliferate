@@ -10,7 +10,12 @@ import {
 	type ToolStartMessage,
 	createSyncClient,
 } from "@proliferate/gateway-clients";
-import type { AutoStartOutputMessage } from "@proliferate/shared";
+import type {
+	AutoStartOutputMessage,
+	GitResultMessage,
+	GitState,
+	GitStatusMessage,
+} from "@proliferate/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ExtendedMessage } from "../message-converter";
 import {
@@ -43,6 +48,8 @@ interface UseSessionWebSocketReturn {
 	previewUrl: string | null;
 	envRequest: EnvRequest | null;
 	autoStartOutput: AutoStartOutputMessage["payload"] | null;
+	gitState: GitState | null;
+	gitResult: GitResultMessage["payload"] | null;
 	sendPrompt: (content: string, images?: string[]) => void;
 	sendCancel: () => void;
 	sendRunAutoStart: (
@@ -50,7 +57,21 @@ interface UseSessionWebSocketReturn {
 		mode?: "test" | "start",
 		commands?: import("@proliferate/shared").PrebuildServiceCommand[],
 	) => void;
+	sendGetGitStatus: (workspacePath?: string) => void;
+	sendGitCreateBranch: (branchName: string, workspacePath?: string) => void;
+	sendGitCommit: (
+		message: string,
+		opts?: { includeUntracked?: boolean; files?: string[]; workspacePath?: string },
+	) => void;
+	sendGitPush: (workspacePath?: string) => void;
+	sendGitCreatePr: (
+		title: string,
+		body?: string,
+		baseBranch?: string,
+		workspacePath?: string,
+	) => void;
 	clearEnvRequest: () => void;
+	clearGitResult: () => void;
 }
 
 /**
@@ -73,6 +94,8 @@ export function useSessionWebSocket({
 	const [autoStartOutput, setAutoStartOutput] = useState<AutoStartOutputMessage["payload"] | null>(
 		null,
 	);
+	const [gitState, setGitState] = useState<GitState | null>(null);
+	const [gitResult, setGitResult] = useState<GitResultMessage["payload"] | null>(null);
 
 	const streamingTextRef = useRef<Record<string, string>>({});
 	const messagesRef = useRef<ExtendedMessage[]>([]);
@@ -110,6 +133,8 @@ export function useSessionWebSocket({
 			setPreviewUrl,
 			setEnvRequest,
 			setAutoStartOutput,
+			setGitState,
+			setGitResult,
 			setError,
 			onTitleUpdate,
 			streamingTextRef,
@@ -178,8 +203,41 @@ export function useSessionWebSocket({
 		[],
 	);
 
+	const sendGetGitStatus = useCallback((workspacePath?: string) => {
+		wsRef.current?.sendGetGitStatus(workspacePath);
+	}, []);
+
+	const sendGitCreateBranch = useCallback((branchName: string, workspacePath?: string) => {
+		wsRef.current?.sendGitCreateBranch(branchName, workspacePath);
+	}, []);
+
+	const sendGitCommit = useCallback(
+		(
+			message: string,
+			opts?: { includeUntracked?: boolean; files?: string[]; workspacePath?: string },
+		) => {
+			wsRef.current?.sendGitCommit(message, opts);
+		},
+		[],
+	);
+
+	const sendGitPush = useCallback((workspacePath?: string) => {
+		wsRef.current?.sendGitPush(workspacePath);
+	}, []);
+
+	const sendGitCreatePr = useCallback(
+		(title: string, body?: string, baseBranch?: string, workspacePath?: string) => {
+			wsRef.current?.sendGitCreatePr(title, body, baseBranch, workspacePath);
+		},
+		[],
+	);
+
 	const clearEnvRequest = useCallback(() => {
 		setEnvRequest(null);
+	}, []);
+
+	const clearGitResult = useCallback(() => {
+		setGitResult(null);
 	}, []);
 
 	return {
@@ -193,10 +251,18 @@ export function useSessionWebSocket({
 		previewUrl,
 		envRequest,
 		autoStartOutput,
+		gitState,
+		gitResult,
 		sendPrompt,
 		sendCancel,
 		sendRunAutoStart,
+		sendGetGitStatus,
+		sendGitCreateBranch,
+		sendGitCommit,
+		sendGitPush,
+		sendGitCreatePr,
 		clearEnvRequest,
+		clearGitResult,
 	};
 }
 
@@ -276,6 +342,18 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 		case "auto_start_output":
 			if (data.payload) {
 				ctx.setAutoStartOutput(data.payload);
+			}
+			break;
+
+		case "git_status":
+			if (data.payload) {
+				ctx.setGitState(data.payload as GitState);
+			}
+			break;
+
+		case "git_result":
+			if (data.payload) {
+				ctx.setGitResult(data.payload as GitResultMessage["payload"]);
 			}
 			break;
 	}

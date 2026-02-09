@@ -787,6 +787,32 @@ export class E2BProvider implements SandboxProvider {
 		return entries;
 	}
 
+	async execCommand(
+		sandboxId: string,
+		argv: string[],
+		opts?: {
+			cwd?: string;
+			timeoutMs?: number;
+			env?: Record<string, string>;
+		},
+	): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+		const sandbox = await Sandbox.connect(sandboxId, getE2BConnectOpts());
+		const timeoutSec = Math.ceil((opts?.timeoutMs ?? 30_000) / 1000);
+		// Build a safe shell command from argv using shellEscape for each arg
+		const escapedArgs = ["timeout", String(timeoutSec), ...argv].map(shellEscape).join(" ");
+		const cmd = opts?.cwd ? `cd ${shellEscape(opts.cwd)} && ${escapedArgs}` : escapedArgs;
+
+		const result = await sandbox.commands.run(cmd, {
+			timeoutMs: (opts?.timeoutMs ?? 30_000) + 5_000, // E2B-level timeout slightly above our timeout command
+			envs: opts?.env,
+		});
+		return {
+			stdout: capOutput(result.stdout),
+			stderr: capOutput(result.stderr),
+			exitCode: result.exitCode,
+		};
+	}
+
 	async snapshot(sessionId: string, sandboxId: string): Promise<SnapshotResult> {
 		providerLogger.info({ sessionId }, "Taking snapshot");
 		return this.pause(sessionId, sandboxId);

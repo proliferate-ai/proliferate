@@ -55,6 +55,14 @@ export function CodingSession({
 		isMigrating,
 		autoStartOutput,
 		sendRunAutoStart,
+		gitState,
+		gitResult,
+		sendGetGitStatus,
+		sendGitCreateBranch,
+		sendGitCommit,
+		sendGitPush,
+		sendGitCreatePr,
+		clearGitResult,
 	} = useCodingSessionRuntime({
 		sessionId,
 		initialPrompt,
@@ -116,6 +124,14 @@ export function CodingSession({
 				onSnapshot: handleSnapshot,
 				autoStartOutput,
 				sendRunAutoStart,
+				gitState,
+				gitResult,
+				sendGetGitStatus,
+				sendGitCreateBranch,
+				sendGitCommit,
+				sendGitPush,
+				sendGitCreatePr,
+				clearGitResult,
 			}
 		: undefined;
 
@@ -179,6 +195,7 @@ export function CodingSession({
 								onToggleSessionInfo={() => togglePanel("session-info")}
 								onToggleSnapshots={() => togglePanel("snapshots")}
 								onToggleAutoStart={() => togglePanel("service-commands")}
+								onToggleGit={() => togglePanel("git")}
 								mobileView={mobileView}
 								onToggleMobileView={toggleMobileView}
 							/>
@@ -223,6 +240,7 @@ export function CodingSession({
 						onToggleSessionInfo={() => togglePanel("session-info")}
 						onToggleSnapshots={() => togglePanel("snapshots")}
 						onToggleAutoStart={() => togglePanel("service-commands")}
+						onToggleGit={() => togglePanel("git")}
 						mobileView={mobileView}
 						onToggleMobileView={toggleMobileView}
 					/>
