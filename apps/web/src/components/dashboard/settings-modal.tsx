@@ -79,17 +79,9 @@ export function SettingsModal({
 	// Combined connect/disconnect functions that route to the correct handler
 	// Uses shouldUseNangoForProvider to determine which flow to use for GitHub
 	const connect = async (provider: Provider) => {
-		const useNango = shouldUseNangoForProvider(provider);
-		console.log(
-			`[GitHub Connect] provider=${provider}, shouldUseNango=${useNango}, USE_NANGO_GITHUB=${env.NEXT_PUBLIC_USE_NANGO_GITHUB}`,
-		);
-		if (useNango) {
-			// Use Nango for this provider (includes GitHub when USE_NANGO_GITHUB=true)
-			console.log("[GitHub Connect] Using Nango flow");
+		if (shouldUseNangoForProvider(provider)) {
 			await nangoConnect(provider as NangoProvider);
 		} else {
-			// GitHub App flow (only for GitHub when USE_NANGO_GITHUB=false)
-			console.log("[GitHub Connect] Using GitHub App flow");
 			await githubConnect();
 		}
 	};

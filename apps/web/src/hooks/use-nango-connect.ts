@@ -57,7 +57,8 @@ export function shouldUseNangoForProvider(provider: Provider): boolean {
 		return false;
 	}
 	if (provider === "github") {
-		return USE_NANGO_GITHUB;
+		// Must have both the flag enabled AND the integration ID configured
+		return USE_NANGO_GITHUB && !!NANGO_INTEGRATION_IDS.github;
 	}
 	// All other providers always use Nango
 	return true;
@@ -131,13 +132,9 @@ export function useNangoConnect(options: UseNangoConnectOptions = {}): UseNangoC
 				const { sessionToken } = await sessionProcedure.call({});
 
 				const nango = new Nango({ connectSessionToken: sessionToken });
-				const integrationId = NANGO_INTEGRATION_IDS[provider as NangoManagedProvider];
-				if (!integrationId) {
-					throw new Error(`Missing Nango integration ID for ${provider}`);
-				}
 
 				if (flow === "connectUI") {
-					// NEW FLOW: Use Nango's managed Connect UI
+					// NEW FLOW: Use Nango's managed Connect UI (doesn't need integrationId)
 					setIsConnectUIOpen(true);
 					await new Promise<void>((resolve, reject) => {
 						connectUIRef.current = nango.openConnectUI({
@@ -161,7 +158,11 @@ export function useNangoConnect(options: UseNangoConnectOptions = {}): UseNangoC
 						});
 					});
 				} else {
-					// OLD FLOW: Use headless auth popup
+					// OLD FLOW: Use headless auth popup (requires integrationId)
+					const integrationId = NANGO_INTEGRATION_IDS[provider as NangoManagedProvider];
+					if (!integrationId) {
+						throw new Error(`Missing Nango integration ID for ${provider}`);
+					}
 					const result = await nango.auth(integrationId, {
 						detectClosedAuthWindow: true,
 					});
