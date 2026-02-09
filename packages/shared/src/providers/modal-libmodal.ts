@@ -38,16 +38,19 @@ import {
 	type SandboxOperation,
 	SandboxProviderError,
 	type SessionMetadata,
+	capOutput,
 	getOpencodeConfig,
 	shellEscape,
 	waitForOpenCodeReady,
 } from "../sandbox";
 import type {
+	AutoStartOutputEntry,
 	CreateSandboxOpts,
 	CreateSandboxResult,
 	EnsureSandboxResult,
 	FileContent,
 	PauseResult,
+	PrebuildServiceCommand,
 	SandboxProvider,
 	SnapshotResult,
 } from "../sandbox-provider";
@@ -1154,6 +1157,63 @@ export class ModalLibmodalProvider implements SandboxProvider {
 					});
 			}
 		}
+	}
+
+	async testServiceCommands(
+		sandboxId: string,
+		commands: PrebuildServiceCommand[],
+		opts: { timeoutMs: number; runId: string },
+	): Promise<AutoStartOutputEntry[]> {
+		const log = providerLogger.child({ sandboxId: sandboxId.slice(0, 16), runId: opts.runId });
+		log.info({ commandCount: commands.length }, "Testing service commands");
+
+		await this.ensureModalAuth("testServiceCommands");
+		const sandbox = await this.client.sandboxes.fromId(sandboxId);
+		const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
+		const entries: AutoStartOutputEntry[] = [];
+
+		for (let i = 0; i < commands.length; i++) {
+			const cmd = commands[i];
+			const baseDir =
+				cmd.workspacePath && cmd.workspacePath !== "."
+					? `${workspaceDir}/${cmd.workspacePath}`
+					: workspaceDir;
+			const cwd = cmd.cwd ? `${baseDir}/${cmd.cwd}` : baseDir;
+			const slug = cmd.name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+			const logFile = `/tmp/auto-start-test-${opts.runId}-${i}-${slug}.log`;
+
+			log.info({ name: cmd.name, cwd, logFile }, "Running test command");
+
+			try {
+				const proc = await sandbox.exec([
+					"sh",
+					"-c",
+					`cd ${shellEscape(cwd)} && timeout ${Math.ceil(opts.timeoutMs / 1000)} sh -c ${shellEscape(cmd.command)} > ${shellEscape(logFile)} 2>&1; EXIT_CODE=$?; cat ${shellEscape(logFile)}; exit $EXIT_CODE`,
+				]);
+				const exitCode = await proc.wait();
+				const stdout = await proc.stdout.readText();
+				entries.push({
+					name: cmd.name,
+					workspacePath: cmd.workspacePath,
+					cwd,
+					output: capOutput(stdout),
+					exitCode,
+					logFile,
+				});
+			} catch (err) {
+				log.error({ err, name: cmd.name }, "Test command failed");
+				entries.push({
+					name: cmd.name,
+					workspacePath: cmd.workspacePath,
+					cwd,
+					output: err instanceof Error ? err.message : "Command execution failed",
+					exitCode: 1,
+					logFile,
+				});
+			}
+		}
+
+		return entries;
 	}
 
 	async snapshot(sessionId: string, sandboxId: string): Promise<SnapshotResult> {

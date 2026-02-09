@@ -1,5 +1,7 @@
 // Message types for Client <-> Durable Object WebSocket communication
 
+import type { AutoStartOutputEntry } from "./sandbox-provider";
+
 // Client source - where the message originated from
 export type ClientSource = "slack" | "web" | "api" | "cli" | "automation";
 
@@ -87,13 +89,20 @@ export interface SaveSnapshotMessage {
 	message?: string;
 }
 
+export interface RunAutoStartMessage {
+	type: "run_auto_start";
+	runId: string;
+	mode?: "test" | "start";
+}
+
 export type ClientMessage =
 	| PromptMessage
 	| PingMessage
 	| CancelMessage
 	| GetStatusMessage
 	| GetMessagesMessage
-	| SaveSnapshotMessage;
+	| SaveSnapshotMessage
+	| RunAutoStartMessage;
 
 // DO -> Client messages
 export interface InitMessage {
@@ -252,6 +261,14 @@ export interface SnapshotResultMessage {
 	};
 }
 
+export interface AutoStartOutputMessage {
+	type: "auto_start_output";
+	payload: {
+		runId: string;
+		entries: AutoStartOutputEntry[];
+	};
+}
+
 export type ServerMessage =
 	| InitMessage
 	| NewMessageEvent
@@ -271,7 +288,8 @@ export type ServerMessage =
 	| TitleUpdateMessage
 	| PreviewUrlMessage
 	| StatusMessage
-	| SnapshotResultMessage;
+	| SnapshotResultMessage
+	| AutoStartOutputMessage;
 
 export * from "./auth";
 

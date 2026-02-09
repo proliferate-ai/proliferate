@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
-import type { VerificationFile } from "@proliferate/shared";
+import type { AutoStartOutputMessage, VerificationFile } from "@proliferate/shared";
 import { ArrowLeft, Grid, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AutoStartPanel } from "./auto-start-panel";
@@ -28,6 +28,8 @@ export interface SessionPanelProps {
 	canSnapshot?: boolean;
 	isSnapshotting?: boolean;
 	onSnapshot?: () => void;
+	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
+	sendRunAutoStart?: (runId: string, mode?: "test" | "start") => void;
 }
 
 interface RightPanelProps {
@@ -79,6 +81,8 @@ export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps
 				repoId={sessionProps?.repoId}
 				prebuildId={sessionProps?.prebuildId}
 				onClose={handleClose}
+				autoStartOutput={sessionProps?.autoStartOutput}
+				sendRunAutoStart={sessionProps?.sendRunAutoStart}
 			/>
 		);
 	}

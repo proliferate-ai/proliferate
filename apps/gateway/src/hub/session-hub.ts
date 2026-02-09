@@ -239,6 +239,30 @@ export class SessionHub {
 					});
 				});
 				return;
+			case "run_auto_start": {
+				const connection = this.clients.get(ws);
+				if (!connection?.userId) {
+					this.sendError(ws, "Unauthorized");
+					return;
+				}
+				this.handleRunAutoStart(message.runId).catch((err) => {
+					this.logError("Failed to run auto-start test", err);
+					this.broadcast({
+						type: "auto_start_output",
+						payload: {
+							runId: message.runId,
+							entries: [
+								{
+									name: "Error",
+									output: err instanceof Error ? err.message : "Unknown error",
+									exitCode: 1,
+								},
+							],
+						},
+					});
+				});
+				return;
+			}
 		}
 	}
 
@@ -501,6 +525,15 @@ export class SessionHub {
 			},
 			"prompt.send_prompt_async",
 		);
+	}
+
+	private async handleRunAutoStart(runId: string): Promise<void> {
+		await this.ensureRuntimeReady();
+		const entries = await this.runtime.testAutoStartCommands(runId);
+		this.broadcast({
+			type: "auto_start_output",
+			payload: { runId, entries },
+		});
 	}
 
 	private async handleCancel(): Promise<void> {

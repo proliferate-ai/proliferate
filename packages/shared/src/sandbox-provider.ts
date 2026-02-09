@@ -41,6 +41,18 @@ export interface PrebuildServiceCommand {
 }
 
 /**
+ * Result entry from testing a single auto-start service command.
+ */
+export interface AutoStartOutputEntry {
+	name: string;
+	workspacePath?: string;
+	cwd?: string;
+	output: string;
+	exitCode: number | null;
+	logFile?: string;
+}
+
+/**
  * Specification for a single repo in a multi-repo workspace.
  */
 export interface RepoSpec {
@@ -238,4 +250,14 @@ export interface SandboxProvider {
 	 * Not all providers support this - check availability before calling.
 	 */
 	createTerminalSandbox?(opts: CreateTerminalSandboxOpts): Promise<CreateTerminalSandboxResult>;
+
+	/**
+	 * Run saved service commands in the sandbox and capture output.
+	 * Purpose-specific: only runs pre-resolved commands, not arbitrary input.
+	 */
+	testServiceCommands?(
+		sandboxId: string,
+		commands: PrebuildServiceCommand[],
+		opts: { timeoutMs: number; runId: string },
+	): Promise<AutoStartOutputEntry[]>;
 }

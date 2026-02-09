@@ -16,7 +16,8 @@ export type SandboxOperation =
 	| "health"
 	| "checkSandboxes"
 	| "resolveTunnels"
-	| "readFiles";
+	| "readFiles"
+	| "testServiceCommands";
 
 /**
  * Patterns that should be redacted from error messages.
