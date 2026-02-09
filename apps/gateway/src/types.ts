@@ -98,11 +98,26 @@ export interface SessionErrorProperties {
 }
 
 /**
+ * OpenCode message update event properties
+ */
+export interface MessageUpdateProperties {
+	info?: {
+		id?: string;
+		sessionID?: string;
+		sessionId?: string;
+		role?: string;
+		time?: { completed?: number | string | null };
+		error?: unknown;
+	};
+}
+
+/**
  * Discriminated union of OpenCode SSE events
  */
 export type OpenCodeEvent =
 	| { type: "server.connected"; properties: Record<string, unknown> }
 	| { type: "server.heartbeat"; properties: Record<string, unknown> }
+	| { type: "message.updated"; properties: MessageUpdateProperties }
 	| { type: "message.part.updated"; properties: PartUpdateProperties }
 	| { type: "session.idle"; properties: SessionStatusProperties }
 	| { type: "session.status"; properties: SessionStatusProperties }

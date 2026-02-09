@@ -1030,6 +1030,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		log.debug("Starting OpenCode server");
 		const opencodeEnv: Record<string, string> = {
 			SESSION_ID: opts.sessionId,
+			OPENCODE_DISABLE_DEFAULT_PLUGINS: "true",
 		};
 		if (llmProxyBaseUrl && llmProxyApiKey) {
 			log.debug({ llmProxyBaseUrl, hasApiKey: !!llmProxyApiKey }, "OpenCode using LLM proxy");
@@ -1042,9 +1043,16 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			log.warn("OpenCode has no LLM proxy AND no direct key");
 		}
 		sandbox
-			.exec(["sh", "-c", `cd ${repoDir} && opencode serve --port 4096 --hostname 0.0.0.0`], {
-				env: opencodeEnv,
-			})
+			.exec(
+				[
+					"sh",
+					"-c",
+					`cd ${repoDir} && opencode serve --port 4096 --hostname 0.0.0.0 > /tmp/opencode.log 2>&1`,
+				],
+				{
+					env: opencodeEnv,
+				},
+			)
 			.catch(() => {
 				// Expected - runs until sandbox terminates
 			});

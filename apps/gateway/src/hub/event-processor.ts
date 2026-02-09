@@ -14,6 +14,7 @@ import type {
 	ToolStartMessage,
 } from "@proliferate/shared";
 import type {
+	MessageUpdateProperties,
 	OpenCodeEvent,
 	PartUpdateProperties,
 	SessionErrorProperties,
@@ -70,6 +71,9 @@ export class EventProcessor {
 				case "server.connected":
 				case "server.heartbeat":
 					return;
+				case "message.updated":
+					this.handleMessageUpdate(event.properties);
+					return;
 				case "message.part.updated":
 					this.handlePartUpdate(event.properties);
 					return;
@@ -88,6 +92,70 @@ export class EventProcessor {
 			}
 		} catch (err) {
 			this.logger.error({ err, eventType: event.type }, "Error processing event");
+		}
+	}
+
+	private handleMessageUpdate(properties: MessageUpdateProperties): void {
+		const info = properties?.info;
+		if (!info) {
+			return;
+		}
+
+		const messageId = typeof info.id === "string" ? info.id : null;
+		const role = typeof info.role === "string" ? info.role : null;
+		if (!messageId || !role) {
+			return;
+		}
+
+		const openCodeSessionId = this.callbacks.getOpenCodeSessionId();
+		const sessionId =
+			typeof info.sessionID === "string"
+				? info.sessionID
+				: typeof info.sessionId === "string"
+					? info.sessionId
+					: null;
+		if (openCodeSessionId && sessionId && sessionId !== openCodeSessionId) {
+			return;
+		}
+
+		// Track the user message ID so we can ignore its parts.
+		if (role === "user") {
+			if (this.currentOpenCodeUserMessageId === null) {
+				this.currentOpenCodeUserMessageId = messageId;
+			}
+			return;
+		}
+
+		if (role !== "assistant") {
+			return;
+		}
+
+		// If OpenCode creates an assistant message but fails before emitting any parts, we still want
+		// clients to see the assistant "start" (and any error attached to the message).
+		if (!this.currentAssistantMessageId) {
+			this.currentAssistantMessageId = messageId;
+			const assistantMessage: Message = {
+				id: messageId,
+				role: "assistant",
+				content: "",
+				isComplete: false,
+				createdAt: Date.now(),
+			};
+			this.callbacks.broadcast({ type: "message", payload: assistantMessage });
+		}
+
+		if (this.currentAssistantMessageId !== messageId) {
+			return;
+		}
+
+		const errorMessage = getOpenCodeErrorMessage(info.error);
+		if (errorMessage) {
+			this.callbacks.broadcast({ type: "error", payload: { message: errorMessage } });
+		}
+
+		const completed = info.time?.completed;
+		if (completed) {
+			this.completeCurrentMessage();
 		}
 	}
 
@@ -409,4 +477,32 @@ export class EventProcessor {
 		const errorMessage = error?.data?.message || error?.name || "Unknown error";
 		this.callbacks.broadcast({ type: "error", payload: { message: errorMessage } });
 	}
+}
+
+function getOpenCodeErrorMessage(error: unknown): string | null {
+	if (!error) {
+		return null;
+	}
+	if (typeof error === "string") {
+		return error;
+	}
+	if (typeof error !== "object") {
+		return String(error);
+	}
+
+	const err = error as {
+		name?: unknown;
+		message?: unknown;
+		data?: { message?: unknown } | null;
+	};
+	if (typeof err.data?.message === "string" && err.data.message) {
+		return err.data.message;
+	}
+	if (typeof err.message === "string" && err.message) {
+		return err.message;
+	}
+	if (typeof err.name === "string" && err.name) {
+		return err.name;
+	}
+	return null;
 }
