@@ -25,7 +25,11 @@ export interface SyncWebSocket {
 	/** Send a save snapshot request */
 	sendSaveSnapshot(message?: string): void;
 	/** Send a run auto-start test request */
-	sendRunAutoStart(runId: string, mode?: "test" | "start"): void;
+	sendRunAutoStart(
+		runId: string,
+		mode?: "test" | "start",
+		commands?: import("@proliferate/shared").PrebuildServiceCommand[],
+	): void;
 	/** Close the connection (no reconnect) */
 	close(): void;
 	/** Force reconnect now */
@@ -112,8 +116,12 @@ export class SyncWebSocketImpl implements SyncWebSocket {
 		this.send({ type: "save_snapshot", message });
 	}
 
-	sendRunAutoStart(runId: string, mode?: "test" | "start"): void {
-		this.send({ type: "run_auto_start", runId, mode });
+	sendRunAutoStart(
+		runId: string,
+		mode?: "test" | "start",
+		commands?: import("@proliferate/shared").PrebuildServiceCommand[],
+	): void {
+		this.send({ type: "run_auto_start", runId, mode, commands });
 	}
 
 	close(): void {

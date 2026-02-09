@@ -45,7 +45,11 @@ interface UseSessionWebSocketReturn {
 	autoStartOutput: AutoStartOutputMessage["payload"] | null;
 	sendPrompt: (content: string, images?: string[]) => void;
 	sendCancel: () => void;
-	sendRunAutoStart: (runId: string, mode?: "test" | "start") => void;
+	sendRunAutoStart: (
+		runId: string,
+		mode?: "test" | "start",
+		commands?: import("@proliferate/shared").PrebuildServiceCommand[],
+	) => void;
 	clearEnvRequest: () => void;
 }
 
@@ -162,10 +166,17 @@ export function useSessionWebSocket({
 		wsRef.current?.sendCancel();
 	}, []);
 
-	const sendRunAutoStart = useCallback((runId: string, mode?: "test" | "start") => {
-		setAutoStartOutput(null);
-		wsRef.current?.sendRunAutoStart(runId, mode);
-	}, []);
+	const sendRunAutoStart = useCallback(
+		(
+			runId: string,
+			mode?: "test" | "start",
+			commands?: import("@proliferate/shared").PrebuildServiceCommand[],
+		) => {
+			setAutoStartOutput(null);
+			wsRef.current?.sendRunAutoStart(runId, mode, commands);
+		},
+		[],
+	);
 
 	const clearEnvRequest = useCallback(() => {
 		setEnvRequest(null);

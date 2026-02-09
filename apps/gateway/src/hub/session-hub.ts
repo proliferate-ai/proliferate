@@ -245,7 +245,7 @@ export class SessionHub {
 					this.sendError(ws, "Unauthorized");
 					return;
 				}
-				this.handleRunAutoStart(message.runId).catch((err) => {
+				this.handleRunAutoStart(message.runId, message.commands).catch((err) => {
 					this.logError("Failed to run auto-start test", err);
 					this.broadcast({
 						type: "auto_start_output",
@@ -527,9 +527,14 @@ export class SessionHub {
 		);
 	}
 
-	private async handleRunAutoStart(runId: string): Promise<void> {
+	private async handleRunAutoStart(runId: string, inlineCommands?: unknown): Promise<void> {
 		await this.ensureRuntimeReady();
-		const entries = await this.runtime.testAutoStartCommands(runId);
+		const { parsePrebuildServiceCommands } = await import("@proliferate/shared/sandbox");
+		const parsed = inlineCommands ? parsePrebuildServiceCommands(inlineCommands) : undefined;
+		const entries = await this.runtime.testAutoStartCommands(
+			runId,
+			parsed?.length ? parsed : undefined,
+		);
 		this.broadcast({
 			type: "auto_start_output",
 			payload: { runId, entries },
