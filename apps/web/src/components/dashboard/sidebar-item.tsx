@@ -80,6 +80,7 @@ export function SidebarItem({
 	const [isEditing, setIsEditing] = useState(false);
 	const [editValue, setEditValue] = useState(displayName);
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+	const [menuOpen, setMenuOpen] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const router = useRouter();
 	const queryClient = useQueryClient();
@@ -180,11 +181,17 @@ export function SidebarItem({
 				<div className="shrink-0 flex items-center">
 					{statusIndicator}
 					{!hideActions && (
-						<div className="opacity-0 group-hover:opacity-100 transition-opacity">
+						<div
+							className={cn(
+								"opacity-0 group-hover:opacity-100 transition-opacity",
+								menuOpen && "opacity-100",
+							)}
+						>
 							<ItemActionsMenu
 								onRename={handleRename}
 								onDelete={() => setDeleteDialogOpen(true)}
 								isVisible={isActive}
+								onOpenChange={setMenuOpen}
 							/>
 						</div>
 					)}

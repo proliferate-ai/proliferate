@@ -26,6 +26,7 @@ interface ItemActionsMenuProps {
 	disabled?: boolean;
 	className?: string;
 	align?: "start" | "center" | "end";
+	onOpenChange?: (open: boolean) => void;
 }
 
 export function ItemActionsMenu({
@@ -37,6 +38,7 @@ export function ItemActionsMenu({
 	disabled = false,
 	className,
 	align = "end",
+	onOpenChange,
 }: ItemActionsMenuProps) {
 	const hasActions =
 		onRename || onDelete || onDuplicate || (customActions && customActions.length > 0);
@@ -44,7 +46,7 @@ export function ItemActionsMenu({
 	if (!hasActions) return null;
 
 	return (
-		<DropdownMenu>
+		<DropdownMenu onOpenChange={onOpenChange}>
 			<DropdownMenuTrigger
 				onClick={(e) => e.stopPropagation()}
 				disabled={disabled}

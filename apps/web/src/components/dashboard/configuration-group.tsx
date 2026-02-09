@@ -55,6 +55,7 @@ export function ConfigurationGroup({
 	const [isEditing, setIsEditing] = useState(false);
 	const [editValue, setEditValue] = useState(prebuild.name || "");
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+	const [menuOpen, setMenuOpen] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const router = useRouter();
 
@@ -169,7 +170,12 @@ export function ConfigurationGroup({
 					</div>
 
 					<div className="shrink-0 flex items-center gap-0.5">
-						<div className="opacity-0 group-hover:opacity-100 transition-opacity">
+						<div
+							className={cn(
+								"opacity-0 group-hover:opacity-100 transition-opacity",
+								menuOpen && "opacity-100",
+							)}
+						>
 							<ItemActionsMenu
 								onRename={handleRename}
 								onDelete={() => setDeleteDialogOpen(true)}
@@ -180,6 +186,7 @@ export function ConfigurationGroup({
 										onClick: handleEditEnvironment,
 									},
 								]}
+								onOpenChange={setMenuOpen}
 							/>
 						</div>
 						<button

@@ -36,6 +36,7 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 	const [isEditing, setIsEditing] = useState(false);
 	const [editValue, setEditValue] = useState(session.title || "");
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+	const [menuOpen, setMenuOpen] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const router = useRouter();
 	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
@@ -162,15 +163,21 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 
 				{/* Trailing: timestamp (default) or actions (on hover) */}
 				<div className="shrink-0 flex items-center">
-					<span className="text-xs text-muted-foreground/60 group-hover:hidden">
+					<span
+						className={cn(
+							"text-xs text-muted-foreground/60 group-hover:hidden",
+							menuOpen && "hidden",
+						)}
+					>
 						{formatRelativeTime(session.lastActivityAt || session.startedAt || "")}
 					</span>
-					<div className="hidden group-hover:flex items-center">
+					<div className={cn("hidden group-hover:flex items-center", menuOpen && "flex")}>
 						<ItemActionsMenu
 							onRename={handleRename}
 							onDelete={() => setDeleteDialogOpen(true)}
 							customActions={snapshotAction}
 							isVisible={isActive}
+							onOpenChange={setMenuOpen}
 						/>
 					</div>
 				</div>
