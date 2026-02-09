@@ -5,6 +5,7 @@
  */
 
 import { randomUUID } from "crypto";
+import { env } from "@proliferate/environment/server";
 import type { Integration, IntegrationWithCreator } from "@proliferate/shared";
 import { toIsoString } from "../db/serialize";
 import { getServicesLogger } from "../logger";
@@ -46,6 +47,7 @@ export interface GitHubStatusResult {
 }
 
 export interface SlackStatusResult {
+	configured: boolean;
 	connected: boolean;
 	teamId?: string;
 	teamName?: string;
@@ -282,14 +284,16 @@ export async function getLinearStatus(
  * Get Slack connection status.
  */
 export async function getSlackStatus(orgId: string | null): Promise<SlackStatusResult> {
+	const configured = !!env.SLACK_CLIENT_ID;
+
 	if (!orgId) {
-		return { connected: false };
+		return { configured, connected: false };
 	}
 
 	const installation = await integrationsDb.getActiveSlackInstallation(orgId);
 
 	if (!installation) {
-		return { connected: false };
+		return { configured, connected: false };
 	}
 
 	// Try to get support channel info
@@ -312,6 +316,7 @@ export async function getSlackStatus(orgId: string | null): Promise<SlackStatusR
 	}
 
 	return {
+		configured,
 		connected: true,
 		teamId: installation.teamId,
 		teamName: installation.teamName ?? undefined,

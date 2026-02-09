@@ -71,6 +71,7 @@ export const GitHubStatusSchema = z.object({
  * Slack status includes team info and support channel.
  */
 export const SlackStatusSchema = z.object({
+	configured: z.boolean(),
 	connected: z.boolean(),
 	teamId: z.string().optional(),
 	teamName: z.string().optional(),

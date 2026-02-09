@@ -169,12 +169,32 @@ export default function IntegrationsPage() {
 
 					{/* Slack Connection */}
 					<div className="space-y-3">
+						{slackStatus && !slackStatus.configured && !slackStatus.connected && (
+							<div className="rounded-lg border border-border bg-muted/30 p-3">
+								<p className="text-sm text-muted-foreground">
+									Slack not configured. Set{" "}
+									<span className="font-mono text-xs">SLACK_CLIENT_ID</span>,{" "}
+									<span className="font-mono text-xs">SLACK_CLIENT_SECRET</span>, and{" "}
+									<span className="font-mono text-xs">SLACK_SIGNING_SECRET</span> in{" "}
+									<span className="font-mono text-xs">.env</span>.{" "}
+									<a
+										href="https://docs.proliferate.com/self-hosting/slackbot"
+										target="_blank"
+										rel="noreferrer"
+										className="underline text-foreground"
+									>
+										See docs
+									</a>
+								</p>
+							</div>
+						)}
 						<ConnectionCard
 							provider="slack"
 							variant="settings"
 							isConnected={slackStatus?.connected ?? false}
 							connectedByName={slackStatus?.teamName}
 							isLoading={slackDisconnect.isPending}
+							disabled={slackStatus ? !slackStatus.configured : false}
 							onConnect={handleSlackConnect}
 							onReconnect={handleSlackConnect}
 							onDisconnect={handleSlackDisconnect}
