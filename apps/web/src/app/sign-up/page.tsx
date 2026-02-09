@@ -182,7 +182,7 @@ function SignUpContent() {
 							onChange={(e) => setName(e.target.value)}
 							placeholder=""
 							required
-							disabled={formLoading || googleLoading}
+							disabled={formLoading || googleLoading || githubLoading}
 							className="h-11 rounded-lg px-4 text-sm"
 						/>
 					</div>
@@ -198,7 +198,7 @@ function SignUpContent() {
 							onChange={(e) => setEmail(e.target.value)}
 							placeholder=""
 							required
-							disabled={formLoading || googleLoading}
+							disabled={formLoading || googleLoading || githubLoading}
 							className="h-11 rounded-lg px-4 text-sm"
 						/>
 					</div>
@@ -215,7 +215,7 @@ function SignUpContent() {
 								onChange={(e) => setPassword(e.target.value)}
 								placeholder=""
 								required
-								disabled={formLoading || googleLoading}
+								disabled={formLoading || googleLoading || githubLoading}
 								className="h-11 rounded-lg px-4 pr-10 text-sm"
 							/>
 							<Button
@@ -238,7 +238,7 @@ function SignUpContent() {
 							type="submit"
 							variant="dark"
 							className="h-11 w-full rounded-lg"
-							disabled={formLoading || googleLoading}
+							disabled={formLoading || googleLoading || githubLoading}
 						>
 							{formLoading ? "Creating account..." : "Create account"}
 						</Button>

@@ -151,7 +151,7 @@ function SignInContent() {
 							onChange={(e) => setEmail(e.target.value)}
 							placeholder=""
 							required
-							disabled={formLoading || googleLoading}
+							disabled={formLoading || googleLoading || githubLoading}
 							className="h-11 rounded-lg px-4 text-sm"
 						/>
 					</div>
@@ -176,7 +176,7 @@ function SignInContent() {
 								onChange={(e) => setPassword(e.target.value)}
 								placeholder=""
 								required
-								disabled={formLoading || googleLoading}
+								disabled={formLoading || googleLoading || githubLoading}
 								className="h-11 rounded-lg px-4 pr-10 text-sm"
 							/>
 							<Button
@@ -196,7 +196,7 @@ function SignInContent() {
 							type="submit"
 							variant="dark"
 							className="h-11 w-full rounded-lg"
-							disabled={formLoading || googleLoading}
+							disabled={formLoading || googleLoading || githubLoading}
 						>
 							{formLoading ? "Signing in..." : "Sign in"}
 						</Button>
