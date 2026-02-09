@@ -280,7 +280,7 @@ services:
     ports:
       - "4000:4000"
     environment:
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate?schema=litellm
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate?schema=litellm&sslmode=disable
       - LITELLM_MASTER_KEY=${LLM_PROXY_MASTER_KEY:-sk-local-master-key}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - LITELLM_MIGRATION_DIR=/tmp/litellm-migrations
