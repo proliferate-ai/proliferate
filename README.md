@@ -137,7 +137,7 @@ If this is useful, please star the repo. For feedback or questions, reach out at
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Security
 
