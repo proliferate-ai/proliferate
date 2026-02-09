@@ -80,9 +80,27 @@ export function GitPanel({
 		};
 	}, [requestStatus]);
 
+	// Track last poll error inline (no toast for polling failures)
+	const [pollError, setPollError] = useState<string | null>(null);
+
 	// Handle git action results
 	useEffect(() => {
 		if (!gitResult) return;
+
+		// Polling errors are shown inline, not as toasts
+		if (gitResult.action === "get_status") {
+			if (!gitResult.success) {
+				setPollError(gitResult.message);
+			} else {
+				setPollError(null);
+			}
+			clearGitResult?.();
+			return;
+		}
+
+		// Clear poll error on any successful action
+		if (gitResult.success) setPollError(null);
+
 		if (gitResult.success) {
 			if (gitResult.prUrl) {
 				toast.success("Pull request created", {
@@ -96,7 +114,7 @@ export function GitPanel({
 			}
 		} else {
 			// Non-scary messages for expected states
-			const quietCodes = ["NOTHING_TO_COMMIT", "NO_REMOTE", "BRANCH_EXISTS"];
+			const quietCodes = ["NOTHING_TO_COMMIT", "NO_REMOTE", "MULTIPLE_REMOTES", "BRANCH_EXISTS"];
 			if (quietCodes.includes(gitResult.code)) {
 				toast.info(gitResult.message);
 			} else {
@@ -137,6 +155,9 @@ export function GitPanel({
 					) : (
 						<div className="p-3 space-y-4">
 							<StatusIndicators gitState={gitState} />
+							{pollError && (
+								<div className="text-xs text-muted-foreground">Last update failed: {pollError}</div>
+							)}
 							<BranchSection
 								gitState={gitState}
 								canMutate={canMutate}
@@ -179,7 +200,7 @@ function StatusIndicators({ gitState }: { gitState: GitState }) {
 	return (
 		<div className="space-y-1">
 			{warnings.map((w) => (
-				<div key={w} className="flex items-center gap-1.5 text-xs text-amber-500">
+				<div key={w} className="flex items-center gap-1.5 text-xs text-destructive">
 					<AlertTriangle className="h-3 w-3 shrink-0" />
 					<span>{w}</span>
 				</div>
@@ -213,7 +234,7 @@ function BranchSection({
 				<div className="flex items-center gap-1.5">
 					<GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
 					<span className="text-sm font-medium">{gitState.branch || "unknown"}</span>
-					{gitState.detached && <span className="text-xs text-amber-500">(detached)</span>}
+					{gitState.detached && <span className="text-xs text-destructive">(detached)</span>}
 				</div>
 				{canMutate && !showCreate && (
 					<Button
@@ -307,11 +328,11 @@ function ChangesSection({ gitState }: { gitState: GitState }) {
 
 			{gitState.stagedChanges.length > 0 && (
 				<div className="space-y-0.5">
-					<span className="text-xs font-medium text-emerald-500">
+					<span className="text-xs font-medium text-foreground">
 						Staged ({gitState.stagedChanges.length})
 					</span>
 					{gitState.stagedChanges.map((c) => (
-						<div key={c.path} className="text-xs font-mono text-emerald-500 pl-2 truncate">
+						<div key={c.path} className="text-xs font-mono text-foreground pl-2 truncate">
 							{c.indexStatus} {c.path}
 						</div>
 					))}
@@ -320,11 +341,11 @@ function ChangesSection({ gitState }: { gitState: GitState }) {
 
 			{gitState.unstagedChanges.length > 0 && (
 				<div className="space-y-0.5">
-					<span className="text-xs font-medium text-amber-500">
+					<span className="text-xs font-medium text-muted-foreground">
 						Modified ({gitState.unstagedChanges.length})
 					</span>
 					{gitState.unstagedChanges.map((c) => (
-						<div key={c.path} className="text-xs font-mono text-amber-500 pl-2 truncate">
+						<div key={c.path} className="text-xs font-mono text-muted-foreground pl-2 truncate">
 							{c.worktreeStatus} {c.path}
 						</div>
 					))}

@@ -127,6 +127,7 @@ export type GitResultCode =
 	| "BRANCH_EXISTS"
 	| "MERGE_CONFLICT"
 	| "REPO_BUSY"
+	| "MULTIPLE_REMOTES"
 	| "UNKNOWN_ERROR";
 
 export interface GitState {

@@ -120,6 +120,9 @@ export class GitOperations {
 
 		return {
 			...statusParsed,
+			// Shallow clones have incomplete tracking info — report unknown
+			ahead: busyState.isShallow ? null : statusParsed.ahead,
+			behind: busyState.isShallow ? null : statusParsed.behind,
 			commits,
 			isShallow: busyState.isShallow,
 			isBusy: busyState.isBusy,
@@ -283,13 +286,13 @@ export class GitOperations {
 		}
 
 		// Detect push strategy
-		const pushArgs = await this.determinePushArgs(cwd, branch);
-		if (!pushArgs) {
-			return { success: false, code: "NO_REMOTE", message: "No remote configured" };
+		const pushStrategy = await this.determinePushArgs(cwd, branch);
+		if ("error" in pushStrategy) {
+			return pushStrategy.error;
 		}
 
 		// Attempt push
-		let result = await this.exec(["git", "push", ...pushArgs], {
+		let result = await this.exec(["git", "push", ...pushStrategy.args], {
 			cwd,
 			timeoutMs: 60_000,
 			env: GIT_BASE_ENV,
@@ -302,7 +305,7 @@ export class GitOperations {
 				timeoutMs: 30_000,
 				env: GIT_BASE_ENV,
 			});
-			result = await this.exec(["git", "push", ...pushArgs], {
+			result = await this.exec(["git", "push", ...pushStrategy.args], {
 				cwd,
 				timeoutMs: 60_000,
 				env: GIT_BASE_ENV,
@@ -330,7 +333,10 @@ export class GitOperations {
 		return { success: true, code: "SUCCESS", message: `Pushed to ${branch}` };
 	}
 
-	private async determinePushArgs(cwd: string, branch: string): Promise<string[] | null> {
+	private async determinePushArgs(
+		cwd: string,
+		branch: string,
+	): Promise<{ args: string[] } | { error: GitActionResult }> {
 		// Check if upstream exists
 		const upstreamResult = await this.exec(["git", "rev-parse", "--abbrev-ref", "@{upstream}"], {
 			cwd,
@@ -339,7 +345,7 @@ export class GitOperations {
 		});
 		if (upstreamResult.exitCode === 0) {
 			// Upstream exists, just push
-			return [];
+			return { args: [] };
 		}
 
 		// No upstream — check for remotes
@@ -351,16 +357,24 @@ export class GitOperations {
 		const remotes = remoteResult.stdout.trim().split("\n").filter(Boolean);
 
 		if (remotes.length === 0) {
-			return null;
+			return {
+				error: { success: false, code: "NO_REMOTE", message: "No remote configured" },
+			};
 		}
 		if (remotes.includes("origin")) {
-			return ["-u", "origin", branch];
+			return { args: ["-u", "origin", branch] };
 		}
 		if (remotes.length === 1) {
-			return ["-u", remotes[0], branch];
+			return { args: ["-u", remotes[0], branch] };
 		}
 		// Multiple remotes, no upstream, no origin — ambiguous
-		return null;
+		return {
+			error: {
+				success: false,
+				code: "MULTIPLE_REMOTES",
+				message: `Multiple remotes found (${remotes.join(", ")}). Set an upstream or push to a specific remote.`,
+			},
+		};
 	}
 
 	// ============================================
