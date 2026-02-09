@@ -2,8 +2,8 @@
 # setup-env.sh — Generate a .env file with random secrets for self-hosting.
 #
 # Usage:
-#   ./scripts/setup-env.sh          # Creates .env from .env.example
-#   ./scripts/setup-env.sh --force  # Overwrites existing .env
+#   ./scripts/setup-env.sh          # Creates .env or fills missing secrets
+#   ./scripts/setup-env.sh --force  # Overwrites existing .env from scratch
 
 set -euo pipefail
 
@@ -26,10 +26,24 @@ generate_hex() {
   fi
 }
 
+# Returns true if the key is missing or has an empty value in the .env file.
+is_empty() {
+  local key="$1"
+  local line
+  line=$(grep "^${key}=" "$ENV_FILE" 2>/dev/null || true)
+  if [ -z "$line" ]; then
+    return 0 # key not present at all
+  fi
+  local value="${line#*=}"
+  # Strip inline comments (e.g. "KEY=   # comment")
+  value="${value%%#*}"
+  # Trim whitespace
+  value="$(echo "$value" | xargs)"
+  [ -z "$value" ]
+}
+
 replace_env() {
   local key="$1" value="$2"
-  # Match KEY= or KEY=<anything> (no quotes or with quotes) and replace the value.
-  # Uses | as sed delimiter to avoid conflicts with base64/hex chars.
   if grep -q "^${key}=" "$ENV_FILE"; then
     sed -i.bak "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
     rm -f "$ENV_FILE.bak"
@@ -45,34 +59,34 @@ if [ ! -f "$ENV_EXAMPLE" ]; then
   exit 1
 fi
 
-if [ -f "$ENV_FILE" ] && [ "${1:-}" != "--force" ]; then
-  echo ".env already exists. Use --force to overwrite."
-  exit 0
+if [ "${1:-}" = "--force" ] || [ ! -f "$ENV_FILE" ]; then
+  cp "$ENV_EXAMPLE" "$ENV_FILE"
+  echo "Created .env from .env.example"
+else
+  echo ".env already exists — checking for missing secrets..."
 fi
-
-cp "$ENV_EXAMPLE" "$ENV_FILE"
-echo "Created .env from .env.example"
 echo ""
 
-# Generate secrets
+# Generate secrets for any that are empty or missing
+SECRET_KEYS=(BETTER_AUTH_SECRET SERVICE_TO_SERVICE_AUTH_TOKEN GATEWAY_JWT_SECRET GITHUB_APP_WEBHOOK_SECRET USER_SECRETS_ENCRYPTION_KEY)
 SECRETS_GENERATED=()
 
-for key in BETTER_AUTH_SECRET SERVICE_TO_SERVICE_AUTH_TOKEN GATEWAY_JWT_SECRET GITHUB_APP_WEBHOOK_SECRET; do
-  value=$(generate_hex 32)
-  replace_env "$key" "$value"
-  SECRETS_GENERATED+=("$key")
+for key in "${SECRET_KEYS[@]}"; do
+  if is_empty "$key"; then
+    value=$(generate_hex 32)
+    replace_env "$key" "$value"
+    SECRETS_GENERATED+=("$key")
+  fi
 done
 
-# USER_SECRETS_ENCRYPTION_KEY needs 64 hex chars (32 bytes)
-key="USER_SECRETS_ENCRYPTION_KEY"
-value=$(generate_hex 32)
-replace_env "$key" "$value"
-SECRETS_GENERATED+=("$key")
-
-echo "Generated random values for:"
-for s in "${SECRETS_GENERATED[@]}"; do
-  echo "  - $s"
-done
+if [ ${#SECRETS_GENERATED[@]} -eq 0 ]; then
+  echo "All secrets are already set."
+else
+  echo "Generated random values for:"
+  for s in "${SECRETS_GENERATED[@]}"; do
+    echo "  - $s"
+  done
+fi
 
 echo ""
 echo "Next steps:"

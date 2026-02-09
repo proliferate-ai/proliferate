@@ -1,8 +1,11 @@
 # Proliferate Self-Hosting - Production (Pre-built Images)
 #
-# Uses pre-built images from GitHub Container Registry.
-# No need to build locally - just configure .env and run:
-#   docker-compose -f docker-compose.prod.yml up -d
+# Uses pre-built images from GitHub Container Registry (except db-migrate,
+# which builds a lightweight migration runner from the repo checkout).
+# Quick start:
+#   1. ./scripts/setup-env.sh   (creates .env with auto-generated secrets)
+#   2. Edit .env with your API keys
+#   3. docker compose -f docker-compose.prod.yml up -d
 
 services:
   # ==========================================================================
@@ -45,6 +48,8 @@ services:
   # Database Migrations (runs once on startup)
   # Built from local source — requires the repo checkout (which you already
   # have since this compose file lives in the repo).
+  # NOTE: ensure your checkout matches the image tags you're pulling to avoid
+  # schema/app version skew. A published db-migrate image is planned.
   # ==========================================================================
   db-migrate:
     build:

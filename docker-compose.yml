@@ -1,9 +1,9 @@
 # Proliferate Self-Hosting Docker Compose
 #
 # Quick start:
-#   1. cp .env.example .env
-#   2. Edit .env with your API keys
-#   3. docker-compose up -d
+#   1. ./scripts/setup-env.sh   (creates .env with auto-generated secrets)
+#   2. Edit .env with your API keys (Anthropic, Modal/E2B, GitHub App)
+#   3. docker compose up -d
 #
 # For production with HTTPS, also use docker-compose.override.yml with Caddy
 
