@@ -84,12 +84,10 @@ export function getEnvStatus(env: NodeJS.ProcessEnv = process.env): EnvStatus {
 		requireKey("LLM_PROXY_MASTER_KEY", "LLM proxy master key", "feature", true);
 	}
 
-	// Integrations (Nango) requirements
+	// Integrations (Nango) requirements — only NANGO_SECRET_KEY is needed at startup;
+	// individual integration IDs are validated at point-of-use when a user connects.
 	if (integrationsEnabled) {
 		requireKey("NANGO_SECRET_KEY", "Nango secret key", "feature", true);
-		requireKey("NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID", "Nango GitHub integration ID", "feature");
-		requireKey("NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID", "Nango Linear integration ID", "feature");
-		requireKey("NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID", "Nango Sentry integration ID", "feature");
 	}
 
 	const useNangoGitHub =
