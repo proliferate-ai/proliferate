@@ -17,15 +17,9 @@ ENV_FILE="$ROOT_DIR/.env"
 # Helpers
 # --------------------------------------------------------------------------
 
-# Generate random hex string. Argument is number of random bytes (output
-# is twice as many hex characters, e.g. 32 bytes → 64 hex chars).
 generate_hex() {
   local bytes="${1:-32}"
-  if command -v openssl &>/dev/null; then
-    openssl rand -hex "$bytes"
-  else
-    head -c "$bytes" /dev/urandom | od -An -tx1 | tr -d ' \n' | head -c "$((bytes * 2))"
-  fi
+  openssl rand -hex "$bytes"
 }
 
 # Returns true if the key is missing or has an empty value in the .env file.
@@ -40,7 +34,7 @@ is_empty() {
   # Strip inline comments (e.g. "KEY=   # comment")
   value="${value%%#*}"
   # Trim whitespace
-  value="$(echo "$value" | xargs)"
+  value="$(printf '%s' "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
   [ -z "$value" ]
 }
 

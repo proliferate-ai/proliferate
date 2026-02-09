@@ -51,6 +51,7 @@ services:
     build:
       context: .
       dockerfile: packages/db/Dockerfile
+    command: ["pnpm", "--filter", "@proliferate/db", "db:migrate"]
     environment:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate?sslmode=disable
       - SKIP_ENV_VALIDATION=true
