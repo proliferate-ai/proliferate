@@ -64,21 +64,21 @@ export function OnboardingCards() {
 	const hasGitHub = integrations.some((i) => i.provider === "github" && i.status === "active");
 	const hasSlack = integrations.some((i) => i.provider === "slack" && i.status === "active");
 	const hasAutomation = (automations ?? []).length > 0;
-	const hasRepoWithSnapshot = (repos ?? []).some((r) => r.prebuildStatus === "ready");
+	const hasAnyRepo = (repos ?? []).length > 0;
 
 	// Build cards array based on what's needed
 	const cards: React.ReactNode[] = [];
 
-	// Setup first repo card
-	if (!hasRepoWithSnapshot) {
+	// Connect first repo card (only shown when no repos exist at all)
+	if (!hasAnyRepo) {
 		cards.push(
 			<Popover.Root key="setup" open={repoSelectorOpen} onOpenChange={setRepoSelectorOpen}>
 				<Popover.Trigger asChild>
 					<div>
 						<OnboardingCard
 							icon={<FolderGit className="h-6 w-6" />}
-							title="Set up your first repo"
-							description="Create a cloud environment with all dependencies ready."
+							title="Connect your first repo"
+							description="Add a repository so agents can start coding in your codebase."
 							ctaLabel="Get Started"
 							onCtaClick={() => setRepoSelectorOpen(true)}
 							image="/onboarding/setup.png"

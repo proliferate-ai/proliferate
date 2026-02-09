@@ -37,7 +37,7 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 	}, [listening, transcript, resetTranscript]);
 
 	const canSubmit =
-		!disabled && !isLoading && prompt.trim() && selectedRepoId && selectedSnapshotId;
+		!disabled && !isLoading && prompt.trim() && (selectedRepoId || selectedSnapshotId);
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();

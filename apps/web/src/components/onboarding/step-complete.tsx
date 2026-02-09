@@ -34,8 +34,8 @@ export function StepComplete({ onComplete }: StepCompleteProps) {
 					<div className="mb-5 text-center">
 						<h1 className="text-2xl font-semibold text-foreground">You're all set!</h1>
 						<p className="mt-2 text-sm text-muted-foreground">
-							Your repositories are connected. Set up a snapshot from the dashboard to configure
-							your cloud environment — agents will launch from it instantly.
+							Your repositories are connected. Head to the dashboard to start a session — just pick
+							a repo, describe what you need, and an agent gets to work.
 						</p>
 					</div>
 

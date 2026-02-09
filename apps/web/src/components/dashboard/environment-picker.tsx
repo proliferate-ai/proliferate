@@ -14,7 +14,7 @@ import { usePrebuilds } from "@/hooks/use-prebuilds";
 import { useRepos } from "@/hooks/use-repos";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
-import { Check, FolderGit, Layers, Plus } from "lucide-react";
+import { Check, Layers, Plus } from "lucide-react";
 import { useState } from "react";
 import { CreateSnapshotContent } from "./snapshot-selector";
 
@@ -27,13 +27,14 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 	const [createOpen, setCreateOpen] = useState(false);
 	const { data: repos } = useRepos();
 	const { data: prebuilds } = usePrebuilds("ready");
-	const { selectedSnapshotId, setSelectedRepo, setSelectedSnapshot } = useDashboardStore();
+	const { selectedRepoId, selectedSnapshotId, setSelectedRepo, setSelectedSnapshot } =
+		useDashboardStore();
 
-	const readyRepos = repos?.filter((r) => r.prebuildStatus === "ready") ?? [];
+	const allRepos = repos ?? [];
 	const multiRepoConfigs = prebuilds?.filter((p) => (p.prebuildRepos?.length ?? 0) >= 2) ?? [];
 
 	// Find display name for the trigger
-	const selectedRepo = readyRepos.find((r) => r.prebuildId === selectedSnapshotId);
+	const selectedRepo = allRepos.find((r) => r.id === selectedRepoId);
 	const selectedConfig = multiRepoConfigs.find((c) => c.id === selectedSnapshotId);
 	const triggerLabel = selectedRepo
 		? selectedRepo.githubRepoName
@@ -41,7 +42,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 			? (selectedConfig.name ?? "Untitled")
 			: "Select environment";
 
-	const selectRepo = (repo: (typeof readyRepos)[0]) => {
+	const selectRepo = (repo: (typeof allRepos)[0]) => {
 		setSelectedRepo(repo.id);
 		if (repo.prebuildId) {
 			setSelectedSnapshot(repo.prebuildId);
@@ -66,8 +67,8 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 				</PopoverTrigger>
 				<PopoverContent className="w-56 p-0" align="start">
 					<div className="py-1">
-						{readyRepos.map((repo) => {
-							const isSelected = repo.prebuildId === selectedSnapshotId;
+						{allRepos.map((repo) => {
+							const isSelected = repo.id === selectedRepoId;
 							return (
 								<Button
 									key={repo.id}
@@ -84,11 +85,16 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 										<GithubIcon className="h-4 w-4 shrink-0" />
 									)}
 									<span className="truncate">{repo.githubRepoName}</span>
+									{repo.prebuildStatus === "ready" && (
+										<span className="text-muted-foreground text-xs ml-auto shrink-0">
+											Configured
+										</span>
+									)}
 								</Button>
 							);
 						})}
 
-						{multiRepoConfigs.length > 0 && readyRepos.length > 0 && (
+						{multiRepoConfigs.length > 0 && allRepos.length > 0 && (
 							<div className="h-px bg-border mx-3 my-1" />
 						)}
 

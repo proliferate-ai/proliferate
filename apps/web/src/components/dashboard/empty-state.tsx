@@ -2,6 +2,7 @@
 
 import { useAutomations } from "@/hooks/use-automations";
 import { useIntegrations } from "@/hooks/use-integrations";
+import { useCreatePrebuild } from "@/hooks/use-prebuilds";
 import { useRepos } from "@/hooks/use-repos";
 import { useCreateSession } from "@/hooks/use-sessions";
 import { useSession } from "@/lib/auth-client";
@@ -24,12 +25,14 @@ export function EmptyDashboard() {
 	const router = useRouter();
 	const { data: authSession } = useSession();
 	const {
+		selectedRepoId,
 		selectedSnapshotId,
 		selectedModel,
 		setActiveSession,
 		setPendingPrompt,
 		dismissedOnboardingCards,
 	} = useDashboardStore();
+	const createPrebuild = useCreatePrebuild();
 	const createSession = useCreateSession();
 
 	// Query data to determine if onboarding cards exist (TanStack Query deduplicates)
@@ -45,10 +48,10 @@ export function EmptyDashboard() {
 		const hasGitHub = integrations.some((i) => i.provider === "github" && i.status === "active");
 		const hasSlack = integrations.some((i) => i.provider === "slack" && i.status === "active");
 		const hasAutomation = (automations ?? []).length > 0;
-		const hasRepoWithSnapshot = (repos ?? []).some((r) => r.prebuildStatus === "ready");
+		const hasAnyRepo = (repos ?? []).length > 0;
 
 		let count = 0;
-		if (!hasRepoWithSnapshot) count++;
+		if (!hasAnyRepo) count++;
 		if (!hasGitHub && !dismissedOnboardingCards.includes("github")) count++;
 		if (!hasSlack && !dismissedOnboardingCards.includes("slack")) count++;
 		if (!hasAutomation && !dismissedOnboardingCards.includes("automation")) count++;
@@ -73,15 +76,27 @@ export function EmptyDashboard() {
 	const greeting = firstName ? getGreeting(firstName) : "How can I help you today?";
 
 	const handleSubmit = async (prompt: string) => {
-		if (!selectedSnapshotId) return;
+		if (!selectedSnapshotId && !selectedRepoId) return;
 
 		// Store the prompt in dashboard store so it can be passed to CodingSession
 		setPendingPrompt(prompt);
 
 		try {
-			// Create session with prebuild (selectedSnapshotId is the prebuild ID)
+			let prebuildId = selectedSnapshotId;
+
+			// If no prebuild selected, create one on-the-fly for the selected repo
+			if (!prebuildId && selectedRepoId) {
+				const prebuildResult = await createPrebuild.mutateAsync({
+					repoIds: [selectedRepoId],
+				});
+				prebuildId = prebuildResult.prebuildId;
+			}
+
+			if (!prebuildId) return;
+
+			// Create session with prebuild
 			const result = await createSession.mutateAsync({
-				prebuildId: selectedSnapshotId,
+				prebuildId,
 				modelId: selectedModel,
 			});
 
@@ -95,6 +110,8 @@ export function EmptyDashboard() {
 		}
 	};
 
+	const isSubmitting = createPrebuild.isPending || createSession.isPending;
+
 	return (
 		<div className="h-full flex flex-col items-center justify-center p-8">
 			<WelcomeDialog />
@@ -106,7 +123,7 @@ export function EmptyDashboard() {
 
 				{/* Prompt input */}
 				<div className="w-full">
-					<PromptInput onSubmit={handleSubmit} isLoading={createSession.isPending} />
+					<PromptInput onSubmit={handleSubmit} isLoading={isSubmitting} />
 				</div>
 
 				{/* Onboarding cards - animated entrance */}
