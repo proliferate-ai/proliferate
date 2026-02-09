@@ -1,3 +1,4 @@
+import { env } from "@proliferate/environment/server";
 import { NextResponse } from "next/server";
 
 /**
@@ -7,8 +8,8 @@ import { NextResponse } from "next/server";
 export async function GET() {
 	return NextResponse.json({
 		providers: {
-			google: true,
-			github: true,
+			google: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
+			github: !!(env.GITHUB_OAUTH_APP_ID && env.GITHUB_OAUTH_APP_SECRET),
 			email: true, // Always available
 		},
 	});

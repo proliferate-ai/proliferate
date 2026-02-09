@@ -45,6 +45,21 @@ services:
     restart: unless-stopped
 
   # ==========================================================================
+  # Database Migrations (runs once on startup)
+  # ==========================================================================
+  db-migrate:
+    build:
+      context: .
+      dockerfile: packages/db/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/proliferate?sslmode=disable
+      - SKIP_ENV_VALIDATION=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # ==========================================================================
   # Gateway (WebSocket server for real-time streaming)
   # ==========================================================================
   gateway:
@@ -104,6 +119,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
       interval: 30s
@@ -204,6 +221,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
@@ -272,6 +291,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   # ==========================================================================

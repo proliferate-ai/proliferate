@@ -74,7 +74,7 @@ Two things we focus on:
 ```bash
 git clone https://github.com/proliferate-ai/proliferate
 cd proliferate
-cp .env.example .env
+./scripts/setup-env.sh   # Creates .env with auto-generated secrets
 ```
 
 <a name="step-2-create-a-github-app-required-for-repo-access"></a>
@@ -84,13 +84,16 @@ Each self-hosted instance needs its own GitHub App to access repos, create branc
 
 Create one using a prefilled link:
 
-- **Personal account:** [Create GitHub App](https://github.com/settings/apps/new?name=proliferate-self-host&description=Proliferate+self-hosted+GitHub+App&url=http%3A%2F%2Flocalhost%3A3000&public=false&setup_url=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fintegrations%2Fgithub%2Fcallback&metadata=read&contents=write&pull_requests=write&issues=read&webhook_active=false)
-- **Organization:** [Create GitHub App for org](https://github.com/organizations/YOUR_ORG/settings/apps/new?name=proliferate-self-host&description=Proliferate+self-hosted+GitHub+App&url=http%3A%2F%2Flocalhost%3A3000&public=false&setup_url=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fintegrations%2Fgithub%2Fcallback&metadata=read&contents=write&pull_requests=write&issues=read&webhook_active=false) (replace `YOUR_ORG` in the URL with your GitHub org slug)
+- **Personal account:** [Create GitHub App](https://github.com/settings/apps/new?name=proliferate-self-host&description=Proliferate+self-hosted+GitHub+App&url=http%3A%2F%2Flocalhost%3A3000&public=false&setup_url=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fintegrations%2Fgithub%2Fcallback&setup_on_update=true&metadata=read&contents=write&pull_requests=write&issues=read&webhook_active=false)
+- **Organization:** [Create GitHub App for org](https://github.com/organizations/YOUR_ORG/settings/apps/new?name=proliferate-self-host&description=Proliferate+self-hosted+GitHub+App&url=http%3A%2F%2Flocalhost%3A3000&public=false&setup_url=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fintegrations%2Fgithub%2Fcallback&setup_on_update=true&metadata=read&contents=write&pull_requests=write&issues=read&webhook_active=false) (replace `YOUR_ORG` in the URL with your GitHub org slug)
 
 After creating the app, generate a private key and add these to your `.env`:
 
 ```bash
-NEXT_PUBLIC_GITHUB_APP_SLUG=proliferate-self-host   # Your app's slug (from the URL)
+# IMPORTANT: The slug must match your GitHub App's URL name exactly.
+# If you used the prefilled link above, the slug is "proliferate-self-host".
+# Find it at: https://github.com/settings/apps → your app → the URL shows /apps/<slug>
+NEXT_PUBLIC_GITHUB_APP_SLUG=proliferate-self-host
 GITHUB_APP_ID=123456                                 # From the app's General page
 GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA..."           # PEM contents (\\n sequences supported)
 GITHUB_APP_WEBHOOK_SECRET=any-random-string          # Any random string (webhooks are disabled by default)
