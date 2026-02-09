@@ -111,11 +111,6 @@ services:
       - AUTUMN_API_URL=${AUTUMN_API_URL:-}
       - AUTUMN_API_KEY=${AUTUMN_API_KEY:-}
       - BILLING_JWT_SECRET=${BILLING_JWT_SECRET:-}
-      - S3_BUCKET=${S3_BUCKET:-}
-      - S3_REGION=${S3_REGION:-}
-      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-}
-      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-}
-      - S3_SECRET_KEY=${S3_SECRET_KEY:-}
     depends_on:
       redis:
         condition: service_healthy
