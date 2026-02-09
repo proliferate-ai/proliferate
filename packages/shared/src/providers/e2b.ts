@@ -619,7 +619,7 @@ export class E2BProvider implements SandboxProvider {
 		}
 		sandbox.commands
 			.run(
-				`cd ${repoDir} && opencode serve --port 4096 --hostname 0.0.0.0 > /tmp/opencode.log 2>&1`,
+				`cd ${repoDir} && opencode serve --print-logs --log-level ERROR --port 4096 --hostname 0.0.0.0 > /tmp/opencode.log 2>&1`,
 				{ timeoutMs: 3600000, envs: opencodeEnv }, // Long timeout, runs in background
 			)
 			.catch((err: unknown) => {

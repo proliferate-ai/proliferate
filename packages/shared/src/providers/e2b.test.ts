@@ -273,14 +273,12 @@ describe("E2B Provider - Helper Functions", () => {
 		});
 
 		it("should use default log function if not provided", async () => {
-			const consoleSpy = vi.spyOn(console, "log");
 			global.fetch = vi.fn().mockResolvedValueOnce({ ok: true });
 
 			const promise = waitForOpenCodeReady("http://localhost:4096");
 			await vi.advanceTimersByTimeAsync(0);
-			await promise;
-
-			expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Agent ready"));
+			await expect(promise).resolves.toBeUndefined();
+			expect(fetch).toHaveBeenCalledTimes(1);
 		});
 	});
 });

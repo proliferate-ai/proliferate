@@ -1047,7 +1047,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				[
 					"sh",
 					"-c",
-					`cd ${repoDir} && opencode serve --port 4096 --hostname 0.0.0.0 > /tmp/opencode.log 2>&1`,
+					`cd ${repoDir} && opencode serve --print-logs --log-level ERROR --port 4096 --hostname 0.0.0.0 > /tmp/opencode.log 2>&1`,
 				],
 				{
 					env: opencodeEnv,
