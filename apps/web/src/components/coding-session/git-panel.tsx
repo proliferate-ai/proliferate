@@ -55,6 +55,7 @@ export function GitPanel({
 	// Polling
 	const pollPending = useRef(false);
 	const pollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+	const [pollError, setPollError] = useState<string | null>(null);
 
 	const requestStatus = useCallback(() => {
 		if (pollPending.current || !sendGetGitStatus) return;
@@ -62,9 +63,12 @@ export function GitPanel({
 		sendGetGitStatus();
 	}, [sendGetGitStatus]);
 
-	// Clear pending flag when we get any response (status or error)
+	// Clear pending flag + poll error when we get a successful status update
 	useEffect(() => {
-		if (gitState) pollPending.current = false;
+		if (gitState) {
+			pollPending.current = false;
+			setPollError(null);
+		}
 	}, [gitState]);
 
 	useEffect(() => {
@@ -79,9 +83,6 @@ export function GitPanel({
 			if (pollInterval.current) clearInterval(pollInterval.current);
 		};
 	}, [requestStatus]);
-
-	// Track last poll error inline (no toast for polling failures)
-	const [pollError, setPollError] = useState<string | null>(null);
 
 	// Handle git action results
 	useEffect(() => {
@@ -258,7 +259,9 @@ function BranchSection({
 				</div>
 			)}
 			{gitState.ahead === null && !gitState.detached && (
-				<div className="text-xs text-muted-foreground">No upstream tracking</div>
+				<div className="text-xs text-muted-foreground">
+					{gitState.isShallow ? "Tracking unknown (shallow clone)" : "No upstream tracking"}
+				</div>
 			)}
 
 			{/* Create branch inline */}
