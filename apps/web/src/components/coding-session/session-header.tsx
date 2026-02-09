@@ -2,11 +2,13 @@
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import type { PreviewMode } from "@/stores/preview-panel";
 import { Globe, HardDrive, MessageSquare, PanelRight, Settings, Wrench } from "lucide-react";
 
 interface SessionHeaderProps {
 	error: string | null;
+	disabled?: boolean;
 	// Panel state
 	panelMode: PreviewMode;
 	onTogglePreview?: () => void;
@@ -20,6 +22,7 @@ interface SessionHeaderProps {
 
 export function SessionHeader({
 	error,
+	disabled,
 	panelMode,
 	onTogglePreview,
 	onToggleSessionInfo,
@@ -32,7 +35,7 @@ export function SessionHeader({
 
 	return (
 		<TooltipProvider delayDuration={150}>
-			<div className="flex items-center gap-1">
+			<div className={cn("flex items-center gap-1", disabled && "opacity-50")}>
 				{/* Panel toggle buttons - desktop */}
 				{onTogglePreview && (
 					<Tooltip>
@@ -42,6 +45,7 @@ export function SessionHeader({
 								size="icon"
 								className="hidden md:flex h-7 w-7"
 								onClick={onTogglePreview}
+								disabled={disabled}
 							>
 								<Globe className="h-3.5 w-3.5" />
 							</Button>
@@ -57,6 +61,7 @@ export function SessionHeader({
 								size="icon"
 								className="hidden md:flex h-7 w-7"
 								onClick={onToggleSessionInfo}
+								disabled={disabled}
 							>
 								<Settings className="h-3.5 w-3.5" />
 							</Button>
@@ -72,6 +77,7 @@ export function SessionHeader({
 								size="icon"
 								className="hidden md:flex h-7 w-7"
 								onClick={onToggleSnapshots}
+								disabled={disabled}
 							>
 								<HardDrive className="h-3.5 w-3.5" />
 							</Button>
@@ -87,6 +93,7 @@ export function SessionHeader({
 								size="icon"
 								className="hidden md:flex h-7 w-7"
 								onClick={onToggleAutoStart}
+								disabled={disabled}
 							>
 								<Wrench className="h-3.5 w-3.5" />
 							</Button>
