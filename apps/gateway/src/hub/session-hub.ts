@@ -696,7 +696,9 @@ export class SessionHub {
 			return false;
 		}
 		const context = this.runtime.getContext();
-		if (context.session.created_by !== userId) {
+		// If created_by is null (e.g. Slack/automation sessions), allow any
+		// authenticated user — they already passed org-level auth to connect.
+		if (context.session.created_by && context.session.created_by !== userId) {
 			this.sendError(ws, "Not authorized to modify this session");
 			return false;
 		}
