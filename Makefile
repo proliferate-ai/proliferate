@@ -24,6 +24,7 @@ help:
 	@echo "  make services-rebuild - Rebuild + start postgres/redis/llm-proxy"
 	@echo "  make llm-proxy   - Start just LLM proxy"
 	@echo "  make llm-proxy-rebuild - Rebuild + start LLM proxy"
+	@echo "  make docker-nuke - Stop + remove ALL containers"
 	@echo "  make stop        - Stop docker services"
 	@echo "  make logs        - Tail all logs"
 	@echo "  make logs-llm    - Tail LLM proxy logs"
@@ -129,6 +130,10 @@ ngrok-web:
 
 ngrok-gateway:
 	ngrok http 8787
+
+docker-nuke:
+	docker rm -f $$(docker ps -aq) 2>/dev/null || true
+	@echo "✅ All containers stopped and removed"
 
 stop:
 	docker compose down
@@ -319,4 +324,4 @@ last-good-sha-set:
 last-good-sha-get:
 	@aws ssm get-parameter --name /proliferate/last-good-sha --query Parameter.Value --output text
 
-.PHONY: help services services-rebuild llm-proxy llm-proxy-rebuild ngrok ngrok-llm ngrok-web ngrok-gateway stop logs logs-llm web gateway worker db-local db-migrate db-prod db-local-status db-prod-status db-local-tables db-prod-tables k8s-cloud k8s-ns k8s-pods k8s-logs-web k8s-logs-gateway k8s-logs-worker k8s-logs-llm k8s-logs-all k8s-shell-web k8s-shell-gateway k8s-shell-worker k8s-env-keys k8s-env k8s-ingress k8s-health aws-logs-web aws-logs-gateway aws-logs-worker aws-logs-llm aws-logs-all aws-shell-web aws-shell-gateway aws-shell-worker aws-env-keys aws-env aws-ingress aws-health deploy-cloud release-tag push-secrets last-good-sha-set last-good-sha-get
+.PHONY: help services services-rebuild llm-proxy llm-proxy-rebuild ngrok ngrok-llm ngrok-web ngrok-gateway docker-nuke stop logs logs-llm web gateway worker db-local db-migrate db-prod db-local-status db-prod-status db-local-tables db-prod-tables k8s-cloud k8s-ns k8s-pods k8s-logs-web k8s-logs-gateway k8s-logs-worker k8s-logs-llm k8s-logs-all k8s-shell-web k8s-shell-gateway k8s-shell-worker k8s-env-keys k8s-env k8s-ingress k8s-health aws-logs-web aws-logs-gateway aws-logs-worker aws-logs-llm aws-logs-all aws-shell-web aws-shell-gateway aws-shell-worker aws-env-keys aws-env aws-ingress aws-health deploy-cloud release-tag push-secrets last-good-sha-set last-good-sha-get
