@@ -16,9 +16,11 @@ export async function GET(request: Request) {
 
 	const userId = authResult.session.user.id;
 
-	// Get optional return URL from query params
+	// Get optional return URL from query params (must be a relative path)
 	const { searchParams } = new URL(request.url);
-	const returnUrl = searchParams.get("returnUrl");
+	const rawReturnUrl = searchParams.get("returnUrl");
+	const returnUrl =
+		rawReturnUrl?.startsWith("/") && !rawReturnUrl.startsWith("//") ? rawReturnUrl : null;
 
 	// Generate state token for CSRF protection
 	// Contains org context, nonce, and optional return URL

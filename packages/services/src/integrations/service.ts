@@ -284,7 +284,8 @@ export async function getLinearStatus(
  * Get Slack connection status.
  */
 export async function getSlackStatus(orgId: string | null): Promise<SlackStatusResult> {
-	const configured = !!env.SLACK_CLIENT_ID;
+	const configured =
+		!!env.SLACK_CLIENT_ID && !!env.SLACK_CLIENT_SECRET && !!env.SLACK_SIGNING_SECRET;
 
 	if (!orgId) {
 		return { configured, connected: false };
