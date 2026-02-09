@@ -438,7 +438,7 @@ Example:
       return "Error: commands array is required and must not be empty.";
     }
     const names = args.commands.map(c => c.name).join(", ");
-    return \\\`Service commands saved: \\\${names}\\\`;
+    return \`Service commands saved: \${names}\`;
   },
 });
 `;
