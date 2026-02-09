@@ -43,16 +43,20 @@ You cannot share a single Proliferate GitHub App across self-hosted instances:
 
 ## Setup: Localhost Quickstart (No Webhooks)
 
+If you're using the onboarding UI, go to Onboarding → Connect GitHub and click **Create GitHub App**.
+It opens a prefilled GitHub App registration page with the correct Setup URL and recommended permissions.
+
 1. Create a GitHub App on GitHub (personal account or org)
 1. Set the GitHub App **Setup URL** to: `http://localhost:3000/api/integrations/github/callback`
 1. Disable webhooks in the GitHub App settings (optional, recommended for localhost)
 1. Recommended permissions:
    - Repository permissions: `Metadata (read)`, `Contents (read/write)`, `Pull requests (read/write)`, `Issues (read)`
-1. Configure `.env` and restart:
+1. Configure `.env` and rebuild/restart:
    - `GITHUB_APP_ID`
    - `GITHUB_APP_PRIVATE_KEY`
    - `GITHUB_APP_WEBHOOK_SECRET` (any random string if webhooks are disabled, but required for strict env validation)
    - `NEXT_PUBLIC_GITHUB_APP_SLUG`
+   - Rebuild the web app (required for `NEXT_PUBLIC_*` changes): `docker compose up -d --build web`
 
 Result: repo access, sessions, and PRs work. Webhook-driven features do not.
 
@@ -74,4 +78,3 @@ Result: webhook-driven automations work.
 
 - With Docker Compose, changing `NEXT_PUBLIC_*` values usually requires rebuilding the web image.
 - Server-only changes (non-`NEXT_PUBLIC_*`) typically only require a restart.
-

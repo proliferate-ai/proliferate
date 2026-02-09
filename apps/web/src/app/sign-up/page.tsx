@@ -149,10 +149,7 @@ function SignUpContent() {
 									{googleLoading ? "Signing up..." : "Sign up with Google"}
 								</Button>
 							)}
-						</div>
-
-						{hasGitHubOAuth && (
-							<div className="space-y-2">
+							{hasGitHubOAuth && (
 								<Button
 									variant="outline"
 									className="relative h-11 w-full justify-center gap-2.5 rounded-lg text-sm font-medium"
@@ -163,8 +160,8 @@ function SignUpContent() {
 									<GithubIcon className="absolute left-4 h-5 w-5" />
 									{githubLoading ? "Signing up..." : "Sign up with GitHub"}
 								</Button>
-							</div>
-						)}
+							)}
+						</div>
 
 						<div className="my-6 flex items-center">
 							<div className="h-px flex-1 bg-border" />

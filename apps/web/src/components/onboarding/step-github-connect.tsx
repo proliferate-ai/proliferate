@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
 	buildGitHubAppRegistrationUrl,
+	buildSuggestedGitHubAppName,
 	getGitHubAppSetupUrl,
 	getGitHubAppWebhookUrl,
 	isLocalhostUrl,
@@ -25,14 +26,16 @@ export function StepGitHubConnect({ onComplete, hasGitHubConnection }: StepGitHu
 	const setupUrl = getGitHubAppSetupUrl(appUrl);
 	const webhookUrl = getGitHubAppWebhookUrl(appUrl);
 	const [orgSlug, setOrgSlug] = useState("");
+	const suggestedAppName = useMemo(() => buildSuggestedGitHubAppName(), []);
 
 	const registrationUrl = useMemo(() => {
 		return buildGitHubAppRegistrationUrl({
 			appUrl,
 			organization: orgSlug.trim() ? orgSlug.trim() : undefined,
 			webhooksEnabled: !isLocalhost,
+			appName: suggestedAppName,
 		});
-	}, [appUrl, isLocalhost, orgSlug]);
+	}, [appUrl, isLocalhost, orgSlug, suggestedAppName]);
 
 	const githubAppSlug = env.NEXT_PUBLIC_GITHUB_APP_SLUG;
 	const hasPlaceholderGitHubAppSlug =
@@ -143,21 +146,35 @@ export function StepGitHubConnect({ onComplete, hasGitHubConnection }: StepGitHu
 								>
 									Create GitHub App
 								</Button>
-								<div className="space-y-1 text-xs text-muted-foreground">
-									<p>
-										After creating the app, set <span className="font-mono">GITHUB_APP_ID</span>,{" "}
-										<span className="font-mono">GITHUB_APP_PRIVATE_KEY</span>,{" "}
-										<span className="font-mono">GITHUB_APP_WEBHOOK_SECRET</span>, and{" "}
-										<span className="font-mono">NEXT_PUBLIC_GITHUB_APP_SLUG</span>, then restart.
-									</p>
-									<p>
-										Setup URL: <span className="font-mono">{setupUrl}</span>
-									</p>
-									{!isLocalhost && (
+								<div className="space-y-2 text-xs text-muted-foreground">
+									<div className="space-y-1">
 										<p>
-											Webhook URL: <span className="font-mono">{webhookUrl}</span>
+											Setup URL: <span className="font-mono">{setupUrl}</span>
 										</p>
-									)}
+										{!isLocalhost && (
+											<p>
+												Webhook URL: <span className="font-mono">{webhookUrl}</span>
+											</p>
+										)}
+									</div>
+
+									<ol className="list-decimal pl-4 space-y-1">
+										<li>Create the app on GitHub and download the private key.</li>
+										<li>
+											Update <span className="font-mono">.env</span>:{" "}
+											<span className="font-mono">GITHUB_APP_ID</span>,{" "}
+											<span className="font-mono">GITHUB_APP_PRIVATE_KEY</span>,{" "}
+											<span className="font-mono">GITHUB_APP_WEBHOOK_SECRET</span>,{" "}
+											<span className="font-mono">NEXT_PUBLIC_GITHUB_APP_SLUG</span>
+										</li>
+										<li>
+											Rebuild the web app (required for{" "}
+											<span className="font-mono">NEXT_PUBLIC_*</span>
+											): <span className="font-mono">docker compose up -d --build web</span>
+										</li>
+										<li>Refresh this page, then click Connect GitHub to install.</li>
+									</ol>
+
 									{isLocalhost && (
 										<p>
 											Localhost note: disable webhooks in the GitHub App settings, or use a tunnel /
@@ -172,7 +189,8 @@ export function StepGitHubConnect({ onComplete, hasGitHubConnection }: StepGitHu
 					{hasPlaceholderGitHubAppSlug && (
 						<p className="text-xs text-muted-foreground mb-2">
 							Set <span className="font-mono">NEXT_PUBLIC_GITHUB_APP_SLUG</span> to your app&apos;s
-							slug before installing.
+							slug, then rebuild the web app:{" "}
+							<span className="font-mono">docker compose up -d --build web</span>
 						</p>
 					)}
 

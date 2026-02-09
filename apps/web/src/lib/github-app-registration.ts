@@ -19,7 +19,7 @@ export function getGitHubAppWebhookUrl(appUrl: string): string {
 	return `${appUrl.replace(/\/$/, "")}/api/webhooks/github-app`;
 }
 
-function buildSuggestedAppName(): string {
+export function buildSuggestedGitHubAppName(): string {
 	const suffix =
 		typeof crypto !== "undefined" && "randomUUID" in crypto
 			? crypto.randomUUID().slice(0, 8)
@@ -37,6 +37,7 @@ export function buildGitHubAppRegistrationUrl(input: {
 	appUrl: string;
 	organization?: string;
 	webhooksEnabled?: boolean;
+	appName?: string;
 }): string {
 	const baseUrl = input.organization?.trim()
 		? `https://github.com/organizations/${encodeURIComponent(
@@ -48,9 +49,10 @@ export function buildGitHubAppRegistrationUrl(input: {
 	const setupUrl = getGitHubAppSetupUrl(appUrl);
 	const webhookUrl = getGitHubAppWebhookUrl(appUrl);
 	const webhooksEnabled = input.webhooksEnabled ?? !isLocalhostUrl(appUrl);
+	const appName = input.appName?.trim() ? input.appName.trim() : buildSuggestedGitHubAppName();
 
 	const url = new URL(baseUrl);
-	url.searchParams.set("name", buildSuggestedAppName());
+	url.searchParams.set("name", appName);
 	url.searchParams.set("description", "Proliferate self-hosted GitHub App");
 	url.searchParams.set("url", appUrl);
 	url.searchParams.set("public", "false");
@@ -65,8 +67,8 @@ export function buildGitHubAppRegistrationUrl(input: {
 	url.searchParams.set("issues", "read");
 
 	// Optional webhooks. GitHub can't deliver to localhost without a tunnel or public domain.
+	url.searchParams.set("webhook_active", webhooksEnabled ? "true" : "false");
 	if (webhooksEnabled) {
-		url.searchParams.set("webhook_active", "true");
 		url.searchParams.set("webhook_url", webhookUrl);
 		url.searchParams.append("events[]", "issues");
 		url.searchParams.append("events[]", "pull_request");
