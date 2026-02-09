@@ -103,7 +103,7 @@ For webhooks, public domains, and advanced setup, see [`docs/self-hosting/localh
 
 ### Step 3. Set up a sandbox provider
 
-Every session runs inside an isolated cloud sandbox. You need either [Modal](https://modal.com) (default) or [E2B](https://e2b.dev) configured.
+Proliferate is a self-hosted control plane, but each agent session runs in a cloud sandbox on [Modal](https://modal.com) (default) or [E2B](https://e2b.dev). You need an account with one of them.
 
 You also need an **Anthropic API key** so agents can call Claude inside the sandbox.
 
@@ -118,11 +118,11 @@ pip install modal
 modal setup
 ```
 
-3. Deploy the sandbox image:
+3. Deploy the sandbox image (the suffix must match `MODAL_APP_SUFFIX` in your `.env` — the default is `local`):
 
 ```bash
 cd packages/modal-sandbox
-modal deploy deploy.py
+MODAL_APP_SUFFIX=local modal deploy deploy.py
 ```
 
 4. Add to your `.env`:
@@ -132,6 +132,7 @@ DEFAULT_SANDBOX_PROVIDER=modal
 MODAL_TOKEN_ID=ak-...              # From your Modal token
 MODAL_TOKEN_SECRET=as-...          # From your Modal token
 MODAL_APP_NAME=proliferate-sandbox
+MODAL_APP_SUFFIX=local             # Must match the suffix used during deploy
 ANTHROPIC_API_KEY=sk-ant-...       # From console.anthropic.com
 ```
 
@@ -143,24 +144,26 @@ For more details, see the [Modal setup guide](https://docs.proliferate.com/self-
 <summary><strong>Option B: E2B</strong></summary>
 
 1. Create an [E2B](https://e2b.dev) account and grab your API key from the dashboard
-2. Build and push the sandbox template:
+
+2. Add to your `.env`:
+
+```bash
+DEFAULT_SANDBOX_PROVIDER=e2b
+E2B_API_KEY=e2b_...                # From your E2B dashboard
+E2B_DOMAIN=api.e2b.dev             # Default managed cloud (change for self-hosted)
+E2B_TEMPLATE=proliferate-base
+E2B_TEMPLATE_ALIAS=proliferate-base
+ANTHROPIC_API_KEY=sk-ant-...       # From console.anthropic.com
+```
+
+3. Build and push the sandbox template (requires `E2B_API_KEY` to be set):
 
 ```bash
 cd packages/e2b-sandbox
 pnpm build:template
 ```
 
-3. Add to your `.env`:
-
-```bash
-DEFAULT_SANDBOX_PROVIDER=e2b
-E2B_API_KEY=e2b_...                # From your E2B dashboard
-E2B_TEMPLATE=proliferate-base
-E2B_TEMPLATE_ALIAS=proliferate-base
-ANTHROPIC_API_KEY=sk-ant-...       # From console.anthropic.com
-```
-
-> **Self-hosted E2B:** If running your own E2B infrastructure, also set `E2B_DOMAIN` to your custom domain.
+For more details, see [`packages/e2b-sandbox/README.md`](packages/e2b-sandbox/README.md).
 
 </details>
 
