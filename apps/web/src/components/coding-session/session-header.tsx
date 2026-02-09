@@ -40,15 +40,17 @@ export function SessionHeader({
 				{onTogglePreview && (
 					<Tooltip>
 						<TooltipTrigger asChild>
-							<Button
-								variant={panelMode.type === "url" ? "secondary" : "ghost"}
-								size="icon"
-								className="hidden md:flex h-7 w-7"
-								onClick={onTogglePreview}
-								disabled={disabled}
-							>
-								<Globe className="h-3.5 w-3.5" />
-							</Button>
+							<span className="hidden md:inline-flex">
+								<Button
+									variant={panelMode.type === "url" ? "secondary" : "ghost"}
+									size="icon"
+									className="h-7 w-7"
+									onClick={onTogglePreview}
+									disabled={disabled}
+								>
+									<Globe className="h-3.5 w-3.5" />
+								</Button>
+							</span>
 						</TooltipTrigger>
 						<TooltipContent>Preview</TooltipContent>
 					</Tooltip>
@@ -56,15 +58,17 @@ export function SessionHeader({
 				{onToggleSessionInfo && (
 					<Tooltip>
 						<TooltipTrigger asChild>
-							<Button
-								variant={panelMode.type === "session-info" ? "secondary" : "ghost"}
-								size="icon"
-								className="hidden md:flex h-7 w-7"
-								onClick={onToggleSessionInfo}
-								disabled={disabled}
-							>
-								<Settings className="h-3.5 w-3.5" />
-							</Button>
+							<span className="hidden md:inline-flex">
+								<Button
+									variant={panelMode.type === "session-info" ? "secondary" : "ghost"}
+									size="icon"
+									className="h-7 w-7"
+									onClick={onToggleSessionInfo}
+									disabled={disabled}
+								>
+									<Settings className="h-3.5 w-3.5" />
+								</Button>
+							</span>
 						</TooltipTrigger>
 						<TooltipContent>Session Info</TooltipContent>
 					</Tooltip>
@@ -72,15 +76,17 @@ export function SessionHeader({
 				{onToggleSnapshots && (
 					<Tooltip>
 						<TooltipTrigger asChild>
-							<Button
-								variant={panelMode.type === "snapshots" ? "secondary" : "ghost"}
-								size="icon"
-								className="hidden md:flex h-7 w-7"
-								onClick={onToggleSnapshots}
-								disabled={disabled}
-							>
-								<HardDrive className="h-3.5 w-3.5" />
-							</Button>
+							<span className="hidden md:inline-flex">
+								<Button
+									variant={panelMode.type === "snapshots" ? "secondary" : "ghost"}
+									size="icon"
+									className="h-7 w-7"
+									onClick={onToggleSnapshots}
+									disabled={disabled}
+								>
+									<HardDrive className="h-3.5 w-3.5" />
+								</Button>
+							</span>
 						</TooltipTrigger>
 						<TooltipContent>Snapshots</TooltipContent>
 					</Tooltip>
@@ -88,15 +94,17 @@ export function SessionHeader({
 				{onToggleAutoStart && (
 					<Tooltip>
 						<TooltipTrigger asChild>
-							<Button
-								variant={panelMode.type === "service-commands" ? "secondary" : "ghost"}
-								size="icon"
-								className="hidden md:flex h-7 w-7"
-								onClick={onToggleAutoStart}
-								disabled={disabled}
-							>
-								<Wrench className="h-3.5 w-3.5" />
-							</Button>
+							<span className="hidden md:inline-flex">
+								<Button
+									variant={panelMode.type === "service-commands" ? "secondary" : "ghost"}
+									size="icon"
+									className="h-7 w-7"
+									onClick={onToggleAutoStart}
+									disabled={disabled}
+								>
+									<Wrench className="h-3.5 w-3.5" />
+								</Button>
+							</span>
 						</TooltipTrigger>
 						<TooltipContent>Auto-start settings</TooltipContent>
 					</Tooltip>

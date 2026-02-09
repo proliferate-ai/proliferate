@@ -16,9 +16,11 @@ export async function GET(request: Request) {
 
 	const userId = authResult.session.user.id;
 
-	// Get optional return URL from query params
+	// Get optional return URL from query params (must be a relative path)
 	const { searchParams } = new URL(request.url);
-	const returnUrl = searchParams.get("returnUrl");
+	const rawReturnUrl = searchParams.get("returnUrl");
+	const returnUrl =
+		rawReturnUrl?.startsWith("/") && !rawReturnUrl.startsWith("//") ? rawReturnUrl : null;
 
 	// Generate state token for CSRF protection
 	// Contains org context, nonce, and optional return URL
@@ -32,7 +34,15 @@ export async function GET(request: Request) {
 		}),
 	).toString("base64url");
 
-	const oauthUrl = getSlackOAuthUrl(state);
+	let oauthUrl: string;
+	try {
+		oauthUrl = getSlackOAuthUrl(state);
+	} catch {
+		// Missing SLACK_CLIENT_ID or other required env vars
+		const base = new URL(request.url).origin;
+		const redirect = returnUrl || "/dashboard/integrations";
+		return NextResponse.redirect(new URL(`${redirect}?error=slack_not_configured`, base));
+	}
 
 	return NextResponse.redirect(oauthUrl);
 }
