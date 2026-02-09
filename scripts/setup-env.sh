@@ -17,12 +17,14 @@ ENV_FILE="$ROOT_DIR/.env"
 # Helpers
 # --------------------------------------------------------------------------
 
+# Generate random hex string. Argument is number of random bytes (output
+# is twice as many hex characters, e.g. 32 bytes → 64 hex chars).
 generate_hex() {
-  local length="${1:-32}"
+  local bytes="${1:-32}"
   if command -v openssl &>/dev/null; then
-    openssl rand -hex "$length"
+    openssl rand -hex "$bytes"
   else
-    head -c "$length" /dev/urandom | od -An -tx1 | tr -d ' \n' | head -c "$((length * 2))"
+    head -c "$bytes" /dev/urandom | od -An -tx1 | tr -d ' \n' | head -c "$((bytes * 2))"
   fi
 }
 
@@ -47,6 +49,9 @@ replace_env() {
   if grep -q "^${key}=" "$ENV_FILE"; then
     sed -i.bak "s|^${key}=.*|${key}=${value}|" "$ENV_FILE"
     rm -f "$ENV_FILE.bak"
+  else
+    # Key missing from file — append it
+    echo "${key}=${value}" >> "$ENV_FILE"
   fi
 }
 
