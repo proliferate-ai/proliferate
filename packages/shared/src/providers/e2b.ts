@@ -798,7 +798,9 @@ export class E2BProvider implements SandboxProvider {
 	): Promise<{ stdout: string; stderr: string; exitCode: number }> {
 		const sandbox = await Sandbox.connect(sandboxId, getE2BConnectOpts());
 		const timeoutSec = Math.ceil((opts?.timeoutMs ?? 30_000) / 1000);
-		// Build a safe shell command from argv using shellEscape for each arg
+		// E2B's commands.run() only accepts a shell string, not argv.
+		// We shellEscape each argument to maintain the no-injection contract.
+		// All values come from our code or validated user input (branch names, commit messages).
 		const escapedArgs = ["timeout", String(timeoutSec), ...argv].map(shellEscape).join(" ");
 		const cmd = opts?.cwd ? `cd ${shellEscape(opts.cwd)} && ${escapedArgs}` : escapedArgs;
 

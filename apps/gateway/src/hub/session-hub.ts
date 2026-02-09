@@ -269,48 +269,72 @@ export class SessionHub {
 				// Read-only — connection auth only
 				this.handleGitStatus(ws, message.workspacePath).catch((err) => {
 					this.logError("Failed to get git status", err);
+					// Always respond so client can clear poll-pending flag
+					this.sendMessage(ws, {
+						type: "git_result",
+						payload: {
+							action: "get_status",
+							success: false,
+							code: "UNKNOWN_ERROR" as GitResultCode,
+							message: err instanceof Error ? err.message : "Failed to get git status",
+						},
+					});
 				});
 				return;
 			}
 			case "git_create_branch": {
 				const connection = this.clients.get(ws);
 				if (!this.assertCanMutateSession(ws, connection?.userId)) return;
-				this.handleGitAction(ws, "create_branch", () =>
-					this.getGitOps().createBranch(message.branchName, message.workspacePath),
+				this.handleGitAction(
+					ws,
+					"create_branch",
+					() => this.getGitOps().createBranch(message.branchName, message.workspacePath),
+					message.workspacePath,
 				).catch((err) => this.logError("Git create branch failed", err));
 				return;
 			}
 			case "git_commit": {
 				const connection = this.clients.get(ws);
 				if (!this.assertCanMutateSession(ws, connection?.userId)) return;
-				this.handleGitAction(ws, "commit", () =>
-					this.getGitOps().commit(
-						message.message,
-						message.includeUntracked ?? false,
-						message.files,
-						message.workspacePath,
-					),
+				this.handleGitAction(
+					ws,
+					"commit",
+					() =>
+						this.getGitOps().commit(
+							message.message,
+							message.includeUntracked ?? false,
+							message.files,
+							message.workspacePath,
+						),
+					message.workspacePath,
 				).catch((err) => this.logError("Git commit failed", err));
 				return;
 			}
 			case "git_push": {
 				const connection = this.clients.get(ws);
 				if (!this.assertCanMutateSession(ws, connection?.userId)) return;
-				this.handleGitAction(ws, "push", () => this.getGitOps().push(message.workspacePath)).catch(
-					(err) => this.logError("Git push failed", err),
-				);
+				this.handleGitAction(
+					ws,
+					"push",
+					() => this.getGitOps().push(message.workspacePath),
+					message.workspacePath,
+				).catch((err) => this.logError("Git push failed", err));
 				return;
 			}
 			case "git_create_pr": {
 				const connection = this.clients.get(ws);
 				if (!this.assertCanMutateSession(ws, connection?.userId)) return;
-				this.handleGitAction(ws, "create_pr", () =>
-					this.getGitOps().createPr(
-						message.title,
-						message.body,
-						message.baseBranch,
-						message.workspacePath,
-					),
+				this.handleGitAction(
+					ws,
+					"create_pr",
+					() =>
+						this.getGitOps().createPr(
+							message.title,
+							message.body,
+							message.baseBranch,
+							message.workspacePath,
+						),
+					message.workspacePath,
 				).catch((err) => this.logError("Git create PR failed", err));
 				return;
 			}
@@ -689,14 +713,15 @@ export class SessionHub {
 		ws: WebSocket,
 		action: string,
 		fn: () => Promise<{ success: boolean; code: GitResultCode; message: string; prUrl?: string }>,
+		workspacePath?: string,
 	): Promise<void> {
 		await this.ensureRuntimeReady();
 		try {
 			const result = await fn();
 			this.sendMessage(ws, { type: "git_result", payload: { action, ...result } });
-			// Auto-refresh status on success
+			// Auto-refresh status on success (preserve workspacePath)
 			if (result.success) {
-				const status = await this.getGitOps().getStatus();
+				const status = await this.getGitOps().getStatus(workspacePath);
 				this.sendMessage(ws, { type: "git_status", payload: status });
 			}
 		} catch (err) {

@@ -1,17 +1,15 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import type { GitResultMessage, GitState } from "@proliferate/shared";
 import {
 	AlertTriangle,
 	ChevronDown,
 	ChevronRight,
-	ExternalLink,
 	GitBranch,
 	GitCommit,
 	GitPullRequest,
@@ -64,10 +62,14 @@ export function GitPanel({
 		sendGetGitStatus();
 	}, [sendGetGitStatus]);
 
-	// Clear pending flag when we get a response
+	// Clear pending flag when we get any response (status or error)
 	useEffect(() => {
 		if (gitState) pollPending.current = false;
 	}, [gitState]);
+
+	useEffect(() => {
+		if (gitResult) pollPending.current = false;
+	}, [gitResult]);
 
 	// Request on mount + poll every 5s
 	useEffect(() => {
@@ -177,10 +179,7 @@ function StatusIndicators({ gitState }: { gitState: GitState }) {
 	return (
 		<div className="space-y-1">
 			{warnings.map((w) => (
-				<div
-					key={w}
-					className="flex items-center gap-1.5 text-xs text-yellow-600 dark:text-yellow-500"
-				>
+				<div key={w} className="flex items-center gap-1.5 text-xs text-amber-500">
 					<AlertTriangle className="h-3 w-3 shrink-0" />
 					<span>{w}</span>
 				</div>
@@ -214,9 +213,7 @@ function BranchSection({
 				<div className="flex items-center gap-1.5">
 					<GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
 					<span className="text-sm font-medium">{gitState.branch || "unknown"}</span>
-					{gitState.detached && (
-						<span className="text-xs text-yellow-600 dark:text-yellow-500">(detached)</span>
-					)}
+					{gitState.detached && <span className="text-xs text-amber-500">(detached)</span>}
 				</div>
 				{canMutate && !showCreate && (
 					<Button
@@ -310,14 +307,11 @@ function ChangesSection({ gitState }: { gitState: GitState }) {
 
 			{gitState.stagedChanges.length > 0 && (
 				<div className="space-y-0.5">
-					<span className="text-xs font-medium text-green-600 dark:text-green-500">
+					<span className="text-xs font-medium text-emerald-500">
 						Staged ({gitState.stagedChanges.length})
 					</span>
 					{gitState.stagedChanges.map((c) => (
-						<div
-							key={c.path}
-							className="text-xs font-mono text-green-600 dark:text-green-500 pl-2 truncate"
-						>
+						<div key={c.path} className="text-xs font-mono text-emerald-500 pl-2 truncate">
 							{c.indexStatus} {c.path}
 						</div>
 					))}
@@ -326,14 +320,11 @@ function ChangesSection({ gitState }: { gitState: GitState }) {
 
 			{gitState.unstagedChanges.length > 0 && (
 				<div className="space-y-0.5">
-					<span className="text-xs font-medium text-yellow-600 dark:text-yellow-500">
+					<span className="text-xs font-medium text-amber-500">
 						Modified ({gitState.unstagedChanges.length})
 					</span>
 					{gitState.unstagedChanges.map((c) => (
-						<div
-							key={c.path}
-							className="text-xs font-mono text-yellow-600 dark:text-yellow-500 pl-2 truncate"
-						>
+						<div key={c.path} className="text-xs font-mono text-amber-500 pl-2 truncate">
 							{c.worktreeStatus} {c.path}
 						</div>
 					))}
@@ -397,11 +388,10 @@ function CommitSection({
 			/>
 			{gitState.untrackedFiles.length > 0 && (
 				<label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
-					<input
-						type="checkbox"
+					<Checkbox
 						checked={includeUntracked}
-						onChange={(e) => setIncludeUntracked(e.target.checked)}
-						className="rounded border-border"
+						onCheckedChange={(v) => setIncludeUntracked(v === true)}
+						className="h-3.5 w-3.5"
 					/>
 					Include untracked files
 				</label>
@@ -430,7 +420,8 @@ function PushSection({
 	sendGitPush?: () => void;
 }) {
 	const canPush = canMutate && !gitState.detached;
-	const nothingToPush = gitState.ahead === 0;
+	const upToDate = gitState.ahead === 0 && gitState.behind === 0;
+	const isBehind = gitState.behind !== null && gitState.behind > 0;
 
 	return (
 		<div className="space-y-2">
@@ -439,19 +430,29 @@ function PushSection({
 			</span>
 			{gitState.detached ? (
 				<div className="text-xs text-muted-foreground">Cannot push from detached HEAD</div>
-			) : nothingToPush ? (
+			) : upToDate ? (
 				<div className="text-xs text-muted-foreground">Up to date with remote</div>
 			) : (
-				<Button
-					variant="outline"
-					size="sm"
-					className="w-full h-7 text-xs"
-					onClick={() => sendGitPush?.()}
-					disabled={!canPush}
-				>
-					<Upload className="h-3 w-3 mr-1.5" />
-					Push
-				</Button>
+				<>
+					{isBehind && (
+						<div className="text-xs text-destructive">
+							Behind remote by {gitState.behind} commit{gitState.behind !== 1 ? "s" : ""} — consider
+							pulling first
+						</div>
+					)}
+					<Button
+						variant="outline"
+						size="sm"
+						className="w-full h-7 text-xs"
+						onClick={() => sendGitPush?.()}
+						disabled={!canPush}
+					>
+						<Upload className="h-3 w-3 mr-1.5" />
+						{gitState.ahead !== null && gitState.ahead > 0
+							? `Push ${gitState.ahead} commit${gitState.ahead !== 1 ? "s" : ""}`
+							: "Push"}
+					</Button>
+				</>
 			)}
 		</div>
 	);
@@ -564,25 +565,23 @@ function CommitsSection({ gitState }: { gitState: GitState }) {
 				{expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
 				Recent Commits ({gitState.commits.length})
 			</button>
-			{(expanded || gitState.commits.length <= 5) && (
-				<div className="space-y-1">
-					{displayCommits.map((c) => (
-						<div key={c.sha} className="flex items-start gap-1.5 text-xs">
-							<span className="font-mono text-muted-foreground shrink-0">{c.sha.slice(0, 7)}</span>
-							<span className="truncate">{c.message}</span>
-						</div>
-					))}
-					{!expanded && gitState.commits.length > 5 && (
-						<button
-							type="button"
-							className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-							onClick={() => setExpanded(true)}
-						>
-							Show all {gitState.commits.length} commits
-						</button>
-					)}
-				</div>
-			)}
+			<div className="space-y-1">
+				{displayCommits.map((c) => (
+					<div key={c.sha} className="flex items-start gap-1.5 text-xs">
+						<span className="font-mono text-muted-foreground shrink-0">{c.sha.slice(0, 7)}</span>
+						<span className="truncate">{c.message}</span>
+					</div>
+				))}
+				{!expanded && gitState.commits.length > 5 && (
+					<button
+						type="button"
+						className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+						onClick={() => setExpanded(true)}
+					>
+						Show all {gitState.commits.length} commits
+					</button>
+				)}
+			</div>
 		</div>
 	);
 }

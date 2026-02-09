@@ -1232,6 +1232,12 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		const timeoutSec = Math.ceil((opts?.timeoutMs ?? 30_000) / 1000);
 		let finalArgv = ["timeout", String(timeoutSec), ...argv];
 
+		// Prefix with env vars if provided (Modal's exec API doesn't support envVars directly)
+		if (opts?.env && Object.keys(opts.env).length > 0) {
+			const envArgs = Object.entries(opts.env).map(([k, v]) => `${k}=${v}`);
+			finalArgv = ["env", ...envArgs, ...finalArgv];
+		}
+
 		if (opts?.cwd) {
 			// Use positional args — shell script is constant, no user input interpolated
 			finalArgv = ["sh", "-c", 'cd "$1" && shift && exec "$@"', "--", opts.cwd, ...finalArgv];

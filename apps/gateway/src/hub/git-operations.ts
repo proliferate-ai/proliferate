@@ -218,6 +218,7 @@ export class GitOperations {
 		}
 
 		// Check if there's anything to commit
+		// Exit 0 = no diff (nothing staged), exit 1 = has diff, exit >1 = error
 		const diffCheck = await this.exec(["git", "diff", "--cached", "--quiet"], {
 			cwd,
 			timeoutMs: 10_000,
@@ -225,6 +226,13 @@ export class GitOperations {
 		});
 		if (diffCheck.exitCode === 0) {
 			return { success: false, code: "NOTHING_TO_COMMIT", message: "Nothing to commit" };
+		}
+		if (diffCheck.exitCode > 1) {
+			return {
+				success: false,
+				code: "UNKNOWN_ERROR",
+				message: diffCheck.stderr || "Failed to check staged changes",
+			};
 		}
 
 		const commitResult = await this.exec(["git", "commit", "-m", message], {
@@ -234,10 +242,21 @@ export class GitOperations {
 		});
 
 		if (commitResult.exitCode !== 0) {
+			const stderr = commitResult.stderr;
+			if (stderr.includes("fix conflicts") || stderr.includes("Merge conflict")) {
+				return { success: false, code: "MERGE_CONFLICT", message: "Resolve merge conflicts first" };
+			}
+			if (stderr.includes("index.lock")) {
+				return {
+					success: false,
+					code: "REPO_BUSY",
+					message: "Git is busy — try again in a moment",
+				};
+			}
 			return {
 				success: false,
 				code: "UNKNOWN_ERROR",
-				message: commitResult.stderr || "Commit failed",
+				message: stderr || "Commit failed",
 			};
 		}
 
@@ -362,11 +381,8 @@ export class GitOperations {
 			return pushResult;
 		}
 
-		// Build gh args
-		const args = ["gh", "pr", "create", "--title", title];
-		if (body) {
-			args.push("--body", body);
-		}
+		// Build gh args — always pass --body to prevent interactive prompt
+		const args = ["gh", "pr", "create", "--title", title, "--body", body || ""];
 		if (baseBranch) {
 			args.push("--base", baseBranch);
 		}
@@ -374,7 +390,7 @@ export class GitOperations {
 		const result = await this.exec(args, {
 			cwd,
 			timeoutMs: 30_000,
-			env: GIT_BASE_ENV,
+			env: { ...GIT_BASE_ENV, GH_PROMPT_DISABLED: "1" },
 		});
 
 		if (result.exitCode === 127) {
@@ -403,8 +419,13 @@ export class GitOperations {
 			};
 		}
 
-		// gh pr create outputs the PR URL on success
-		const prUrl = result.stdout.trim();
+		// Get the PR URL reliably via structured output
+		const urlResult = await this.exec(["gh", "pr", "view", "--json", "url", "--jq", ".url"], {
+			cwd,
+			timeoutMs: 10_000,
+			env: { ...GIT_BASE_ENV, GH_PROMPT_DISABLED: "1" },
+		});
+		const prUrl = urlResult.exitCode === 0 ? urlResult.stdout.trim() : result.stdout.trim();
 		return { success: true, code: "SUCCESS", message: "Pull request created", prUrl };
 	}
 }
