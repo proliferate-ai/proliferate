@@ -52,12 +52,6 @@ Two things we focus on:
 - **Access + integration**: agents need safe, real access to your stack. Most teams wire this up with custom wrappers / MCP servers / glue code, and it tends to be brittle and hard to share.
 - **Verification**: even when an agent ships a PR, someone still has to answer "does this actually work?" Proliferate makes each run a shareable session with a live environment so review isn't "pull the branch locally just to verify."
 
-> [!TIP]
-> Install the CLI (optional):
-> ```bash
-> curl -fsSL https://proliferate.com/install.sh | bash
-> ```
-
 ****
 
 <p align="center">
