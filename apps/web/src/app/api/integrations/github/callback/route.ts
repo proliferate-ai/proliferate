@@ -51,10 +51,10 @@ export async function GET(request: NextRequest) {
 	const baseUrl = getBaseUrl(request);
 	const authResult = await requireAuth();
 	if ("error" in authResult) {
-		// Redirect to login with return URL
-		const returnUrl = `${baseUrl}${request.nextUrl.pathname}${request.nextUrl.search}`;
+		// Redirect to sign-in with return URL (relative), so the callback can be retried after auth.
+		const returnUrl = `${request.nextUrl.pathname}${request.nextUrl.search}`;
 		return NextResponse.redirect(
-			new URL(`/login?returnUrl=${encodeURIComponent(returnUrl)}`, baseUrl),
+			new URL(`/sign-in?redirect=${encodeURIComponent(returnUrl)}`, baseUrl),
 		);
 	}
 

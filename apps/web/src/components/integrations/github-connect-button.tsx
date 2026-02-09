@@ -19,6 +19,7 @@ interface GitHubConnectButtonProps {
 	returnUrl?: string;
 	/** Target org ID for CLI flows - ensures integration is saved to correct org */
 	targetOrgId?: string;
+	disabled?: boolean;
 }
 
 export function GitHubConnectButton({
@@ -29,6 +30,7 @@ export function GitHubConnectButton({
 	includeIcon = true,
 	returnUrl,
 	targetOrgId,
+	disabled = false,
 }: GitHubConnectButtonProps) {
 	// GitHub App flow (production default)
 	const { connect: githubAppConnect, isLoading: githubAppLoading } = useGitHubAppConnect({
@@ -62,7 +64,7 @@ export function GitHubConnectButton({
 				size="icon"
 				className="h-8 w-8 text-muted-foreground hover:text-foreground"
 				onClick={handleConnect}
-				disabled={isLoading}
+				disabled={isLoading || disabled}
 			>
 				{isLoading ? (
 					<RefreshCw className="h-4 w-4 animate-spin" />
@@ -74,7 +76,7 @@ export function GitHubConnectButton({
 	}
 
 	return (
-		<Button onClick={handleConnect} disabled={isLoading} className="w-full">
+		<Button onClick={handleConnect} disabled={isLoading || disabled} className="w-full">
 			{includeIcon && <GithubIcon className="mr-2 h-4 w-4" />}
 			{isLoading
 				? "Connecting..."

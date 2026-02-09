@@ -3,6 +3,16 @@
 import { GitHubConnectButton } from "@/components/integrations/github-connect-button";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, GithubIcon } from "@/components/ui/icons";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+	buildGitHubAppRegistrationUrl,
+	getGitHubAppSetupUrl,
+	getGitHubAppWebhookUrl,
+	isLocalhostUrl,
+} from "@/lib/github-app-registration";
+import { env } from "@proliferate/environment/public";
+import { useMemo, useState } from "react";
 
 interface StepGitHubConnectProps {
 	onComplete: () => void;
@@ -10,6 +20,24 @@ interface StepGitHubConnectProps {
 }
 
 export function StepGitHubConnect({ onComplete, hasGitHubConnection }: StepGitHubConnectProps) {
+	const appUrl = env.NEXT_PUBLIC_APP_URL;
+	const isLocalhost = isLocalhostUrl(appUrl);
+	const setupUrl = getGitHubAppSetupUrl(appUrl);
+	const webhookUrl = getGitHubAppWebhookUrl(appUrl);
+	const [orgSlug, setOrgSlug] = useState("");
+
+	const registrationUrl = useMemo(() => {
+		return buildGitHubAppRegistrationUrl({
+			appUrl,
+			organization: orgSlug.trim() ? orgSlug.trim() : undefined,
+			webhooksEnabled: !isLocalhost,
+		});
+	}, [appUrl, isLocalhost, orgSlug]);
+
+	const githubAppSlug = env.NEXT_PUBLIC_GITHUB_APP_SLUG;
+	const hasPlaceholderGitHubAppSlug =
+		!githubAppSlug || githubAppSlug === "local" || githubAppSlug === "proliferate-local-dev";
+
 	// Already connected
 	if (hasGitHubConnection) {
 		return (
@@ -81,7 +109,78 @@ export function StepGitHubConnect({ onComplete, hasGitHubConnection }: StepGitHu
 						</p>
 					</div>
 
-					<GitHubConnectButton onSuccess={onComplete} includeIcon={false} />
+					<div className="rounded-lg border border-border bg-muted/30 p-4 mb-4">
+						<div className="space-y-1">
+							<p className="text-sm font-medium text-foreground">
+								Self-hosters: create your own GitHub App
+							</p>
+							<p className="text-sm text-muted-foreground">
+								GitHub App installation and repo access work on localhost. Webhooks and
+								webhook-based automations require a public URL (domain or tunnel).
+							</p>
+						</div>
+
+						<div className="mt-4 space-y-3">
+							<div className="space-y-1">
+								<Label className="text-xs text-muted-foreground">GitHub org (optional)</Label>
+								<Input
+									value={orgSlug}
+									onChange={(e) => setOrgSlug(e.target.value)}
+									placeholder="my-org"
+									className="h-9"
+								/>
+								<p className="text-xs text-muted-foreground">
+									Leave blank to create the app under your personal GitHub account.
+								</p>
+							</div>
+
+							<div className="flex flex-col gap-2">
+								<Button
+									type="button"
+									variant="outline"
+									className="w-full"
+									onClick={() => window.open(registrationUrl, "_blank", "noreferrer")}
+								>
+									Create GitHub App
+								</Button>
+								<div className="space-y-1 text-xs text-muted-foreground">
+									<p>
+										After creating the app, set <span className="font-mono">GITHUB_APP_ID</span>,{" "}
+										<span className="font-mono">GITHUB_APP_PRIVATE_KEY</span>,{" "}
+										<span className="font-mono">GITHUB_APP_WEBHOOK_SECRET</span>, and{" "}
+										<span className="font-mono">NEXT_PUBLIC_GITHUB_APP_SLUG</span>, then restart.
+									</p>
+									<p>
+										Setup URL: <span className="font-mono">{setupUrl}</span>
+									</p>
+									{!isLocalhost && (
+										<p>
+											Webhook URL: <span className="font-mono">{webhookUrl}</span>
+										</p>
+									)}
+									{isLocalhost && (
+										<p>
+											Localhost note: disable webhooks in the GitHub App settings, or use a tunnel /
+											custom domain to receive them.
+										</p>
+									)}
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{hasPlaceholderGitHubAppSlug && (
+						<p className="text-xs text-muted-foreground mb-2">
+							Set <span className="font-mono">NEXT_PUBLIC_GITHUB_APP_SLUG</span> to your app&apos;s
+							slug before installing.
+						</p>
+					)}
+
+					<GitHubConnectButton
+						onSuccess={onComplete}
+						includeIcon={false}
+						disabled={hasPlaceholderGitHubAppSlug}
+					/>
 				</div>
 			</div>
 		</div>

@@ -78,12 +78,15 @@ docker compose up -d
 
 Open http://localhost:3000.
 
+To connect repos, self-hosters must create their own GitHub App. See `docs/self-hosting/localhost-vs-public-domain.md`.
+
 <a name="deployment"></a>
 ## 🚀 Deployment
 
 - **Local (build images from this repo):** `docker compose up -d` using `docker-compose.yml`
 - **Production (pull pre-built images):** `docker compose -f docker-compose.prod.yml up -d` using `docker-compose.prod.yml`
 - **Custom domain / HTTPS:** see `Caddyfile.example` and `docker-compose.override.yml.example`
+- **Localhost vs public domain (webhooks, Slack, etc.):** see `docs/self-hosting/localhost-vs-public-domain.md`
 
 ## 🧑‍💻 Development (from source)
 

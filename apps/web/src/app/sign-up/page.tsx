@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, GoogleIcon } from "@/components/ui/icons";
+import { Eye, EyeOff, GithubIcon, GoogleIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Text } from "@/components/ui/text";
@@ -23,6 +23,7 @@ function SignUpContent() {
 	const { data: session, isPending } = useSession();
 	const { data: authProviders } = useAuthProviders();
 	const [googleLoading, setGoogleLoading] = useState(false);
+	const [githubLoading, setGithubLoading] = useState(false);
 	const [formLoading, setFormLoading] = useState(false);
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("");
@@ -33,6 +34,8 @@ function SignUpContent() {
 	const redirectUrl = searchParams.get("redirect") || "/dashboard";
 
 	const hasGoogleOAuth = authProviders?.providers.google ?? false;
+	const hasGitHubOAuth = authProviders?.providers.github ?? false;
+	const hasAnySocialOAuth = hasGoogleOAuth || hasGitHubOAuth;
 
 	useEffect(() => {
 		if (session && !isPending) {
@@ -55,6 +58,20 @@ function SignUpContent() {
 			console.error("Google sign up failed:", err);
 			toast.error("Google sign up failed. Please try again.");
 			setGoogleLoading(false);
+		}
+	};
+
+	const handleGitHubSignIn = async () => {
+		setGithubLoading(true);
+		try {
+			await signIn.social({
+				provider: "github",
+				callbackURL: redirectUrl,
+			});
+		} catch (err) {
+			console.error("GitHub sign up failed:", err);
+			toast.error("GitHub sign up failed. Please try again.");
+			setGithubLoading(false);
 		}
 	};
 
@@ -117,20 +134,37 @@ function SignUpContent() {
 					<Text variant="h3">Create your account</Text>
 				</div>
 
-				{hasGoogleOAuth && (
+				{hasAnySocialOAuth && (
 					<>
 						<div className="space-y-2">
-							<Button
-								variant="outline"
-								className="relative h-11 w-full justify-center gap-2.5 rounded-lg text-sm font-medium"
-								onClick={handleGoogleSignIn}
-								disabled={googleLoading || formLoading}
-								type="button"
-							>
-								<GoogleIcon className="absolute left-4 h-5 w-5" />
-								{googleLoading ? "Signing up..." : "Sign up with Google"}
-							</Button>
+							{hasGoogleOAuth && (
+								<Button
+									variant="outline"
+									className="relative h-11 w-full justify-center gap-2.5 rounded-lg text-sm font-medium"
+									onClick={handleGoogleSignIn}
+									disabled={googleLoading || githubLoading || formLoading}
+									type="button"
+								>
+									<GoogleIcon className="absolute left-4 h-5 w-5" />
+									{googleLoading ? "Signing up..." : "Sign up with Google"}
+								</Button>
+							)}
 						</div>
+
+						{hasGitHubOAuth && (
+							<div className="space-y-2">
+								<Button
+									variant="outline"
+									className="relative h-11 w-full justify-center gap-2.5 rounded-lg text-sm font-medium"
+									onClick={handleGitHubSignIn}
+									disabled={githubLoading || googleLoading || formLoading}
+									type="button"
+								>
+									<GithubIcon className="absolute left-4 h-5 w-5" />
+									{githubLoading ? "Signing up..." : "Sign up with GitHub"}
+								</Button>
+							</div>
+						)}
 
 						<div className="my-6 flex items-center">
 							<div className="h-px flex-1 bg-border" />
