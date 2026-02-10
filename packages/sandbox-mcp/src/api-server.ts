@@ -2,7 +2,6 @@ import { execFile } from "node:child_process";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import { env } from "@proliferate/environment/server";
 import { createLogger } from "@proliferate/logger";
 import express, { type Request, type Response } from "express";
 
@@ -34,7 +33,7 @@ app.use((_req, res, next) => {
 
 app.use(express.json());
 
-const AUTH_TOKEN = process.env.SANDBOX_MCP_AUTH_TOKEN || env.SERVICE_TO_SERVICE_AUTH_TOKEN;
+const AUTH_TOKEN = process.env.SANDBOX_MCP_AUTH_TOKEN || process.env.SERVICE_TO_SERVICE_AUTH_TOKEN;
 
 function checkAuth(req: Request, res: Response, next: () => void): void {
 	// Deny by default if no token is configured (secure-by-default)
@@ -189,7 +188,7 @@ app.get("/api/logs/:name", checkAuth, (req: Request, res: Response) => {
 // Git endpoints
 // ============================================
 
-const WORKSPACE_DIR = env.WORKSPACE_DIR ?? "/home/user/workspace";
+const WORKSPACE_DIR = process.env.WORKSPACE_DIR ?? "/home/user/workspace";
 const MAX_DIFF_BYTES = 64 * 1024;
 
 /** Validate that a resolved path is inside the workspace directory. */

@@ -20,7 +20,7 @@ app = modal.App(app_name)
 
 # Build image from Dockerfile
 dockerfile_path = Path(__file__).parent / "Dockerfile"
-BASE_IMAGE = modal.Image.from_dockerfile(dockerfile_path)
+BASE_IMAGE = modal.Image.from_dockerfile(dockerfile_path, force_build=True)
 
 
 @app.function(image=BASE_IMAGE)
