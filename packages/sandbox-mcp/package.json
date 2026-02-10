@@ -1,6 +1,6 @@
 {
 	"name": "proliferate-sandbox-mcp",
-	"version": "0.1.13",
+	"version": "0.1.14",
 	"description": "MCP server for managing services in Proliferate cloud sandboxes",
 	"type": "module",
 	"bin": {
@@ -10,7 +10,7 @@
 	"types": "./dist/index.d.ts",
 	"scripts": {
 		"build": "tsc",
-		"bundle": "rm -f dist/bundle.cjs && esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/bundle.cjs --banner:js='#!/usr/bin/env node' --external:pino-pretty && chmod +x dist/bundle.cjs",
+		"bundle": "rm -f dist/bundle.cjs && esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/bundle.cjs --banner:js='#!/usr/bin/env node\nprocess.env.NODE_ENV=process.env.NODE_ENV||\"production\";' --external:pino-pretty && chmod +x dist/bundle.cjs",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {

@@ -75,7 +75,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
 RUN npm install -g opencode-ai@latest @anthropic-ai/claude-code @openai/codex
 
 # Install MCP servers (Playwright + sandbox-mcp) — cache-bust: v0.1.11
-RUN npm install -g proliferate-sandbox-mcp@0.1.13 playwright-mcp --unsafe-perm
+RUN npm install -g proliferate-sandbox-mcp@0.1.14 playwright-mcp --unsafe-perm
 
 # Make python3.11 the default python
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
