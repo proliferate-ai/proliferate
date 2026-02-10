@@ -83,7 +83,7 @@ export function ChangesPanel({ sessionId, activityTick, onClose }: ChangesPanelP
 		return () => {
 			if (debounceRef.current) clearTimeout(debounceRef.current);
 		};
-	}, [activityTick, queryClient]);
+	}, [activityTick, queryClient, sessionId]);
 
 	const canFetch = !!token && !!GATEWAY_URL;
 

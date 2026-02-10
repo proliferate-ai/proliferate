@@ -281,18 +281,16 @@ app.get("/api/git/status", checkAuth, async (req: Request, res: Response) => {
 			} else if (line.startsWith("1 ")) {
 				// Changed entry: 1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>
 				const fields = line.split(" ");
-				const xy = fields[1] || "";
-				const status = xy[0] !== "." ? xy[0] : xy[1] || "M";
+				const xy = fields[1] || "M.";
 				const filePath = fields.slice(8).join(" ");
-				files.push({ status, path: filePath });
+				files.push({ status: xy, path: filePath });
 			} else if (line.startsWith("2 ")) {
 				// Renamed/copied: 2 <XY> ... <path>\t<origPath>
 				const tabParts = line.split("\t");
 				const fields = tabParts[0].split(" ");
-				const xy = fields[1] || "";
-				const status = xy[0] !== "." ? xy[0] : xy[1] || "R";
+				const xy = fields[1] || "R.";
 				const filePath = tabParts[1] || fields.slice(9).join(" ");
-				files.push({ status, path: filePath });
+				files.push({ status: xy, path: filePath });
 			} else if (line.startsWith("? ")) {
 				// Untracked
 				const filePath = line.slice(2);
@@ -322,25 +320,43 @@ app.get("/api/git/diff", checkAuth, async (req: Request, res: Response) => {
 		return;
 	}
 
-	// Validate file path if provided (no directory traversal)
+	// Validate file path if provided (no directory traversal or symlink escape)
 	if (filePath) {
 		const resolved = path.resolve(repoPath, filePath);
-		if (!resolved.startsWith(`${repoPath}/`)) {
-			res.status(400).json({ error: "Invalid file path" });
-			return;
+		try {
+			const realResolved = realpathSync(resolved);
+			const realRepo = realpathSync(repoPath);
+			if (!realResolved.startsWith(`${realRepo}/`)) {
+				res.status(400).json({ error: "Invalid file path" });
+				return;
+			}
+		} catch {
+			// File may not exist yet; fall back to string prefix check
+			if (!resolved.startsWith(`${repoPath}/`)) {
+				res.status(400).json({ error: "Invalid file path" });
+				return;
+			}
 		}
 	}
 
 	try {
-		const args = ["-C", repoPath, "diff", "HEAD"];
-		if (filePath) {
-			args.push("--", filePath);
+		// Try diff against HEAD first; fall back to plain diff for repos with no commits
+		let stdout: string;
+		try {
+			const args = ["-C", repoPath, "diff", "HEAD"];
+			if (filePath) args.push("--", filePath);
+			({ stdout } = await execFileAsync("git", args, {
+				timeout: 10000,
+				maxBuffer: MAX_DIFF_BYTES * 2,
+			}));
+		} catch {
+			const args = ["-C", repoPath, "diff"];
+			if (filePath) args.push("--", filePath);
+			({ stdout } = await execFileAsync("git", args, {
+				timeout: 10000,
+				maxBuffer: MAX_DIFF_BYTES * 2,
+			}));
 		}
-
-		const { stdout } = await execFileAsync("git", args, {
-			timeout: 10000,
-			maxBuffer: MAX_DIFF_BYTES * 2,
-		});
 
 		// Cap output
 		const diff =
