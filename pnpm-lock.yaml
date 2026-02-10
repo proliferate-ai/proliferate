@@ -612,9 +612,6 @@ importers:
         specifier: ^4.18.2
         version: 4.22.1
     devDependencies:
-      '@proliferate/environment':
-        specifier: workspace:*
-        version: link:../environment
       '@proliferate/logger':
         specifier: workspace:*
         version: link:../logger

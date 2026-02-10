@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { createLogger } from "@proliferate/logger";
@@ -191,9 +191,16 @@ app.get("/api/logs/:name", checkAuth, (req: Request, res: Response) => {
 const WORKSPACE_DIR = process.env.WORKSPACE_DIR ?? "/home/user/workspace";
 const MAX_DIFF_BYTES = 64 * 1024;
 
-/** Validate that a resolved path is inside the workspace directory. */
+/** Validate that a resolved path is inside the workspace directory (dereferences symlinks). */
 function validateInsideWorkspace(resolved: string): boolean {
-	return resolved === WORKSPACE_DIR || resolved.startsWith(`${WORKSPACE_DIR}/`);
+	try {
+		const real = realpathSync(resolved);
+		const realWorkspace = realpathSync(WORKSPACE_DIR);
+		return real === realWorkspace || real.startsWith(`${realWorkspace}/`);
+	} catch {
+		// Path doesn't exist yet — fall back to string prefix check
+		return resolved === WORKSPACE_DIR || resolved.startsWith(`${WORKSPACE_DIR}/`);
+	}
 }
 
 /** Decode a base64-encoded repo ID back to a path, validate it's in workspace. */

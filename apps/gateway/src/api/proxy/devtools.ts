@@ -38,6 +38,8 @@ export function createDevtoolsProxyRoutes(hubManager: HubManager, env: GatewayEn
 			return previewUrl;
 		},
 		changeOrigin: true,
+		timeout: 15_000, // 15s upstream socket timeout
+		proxyTimeout: 15_000,
 		pathRewrite: (path: string) => {
 			// Express already strips the matched route prefix, so path is just the tail
 			// (e.g., "/api/git/repos"). Prepend the Caddy internal route.
