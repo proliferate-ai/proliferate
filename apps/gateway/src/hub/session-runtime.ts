@@ -6,7 +6,7 @@
  */
 
 import { type Logger, createLogger } from "@proliferate/logger";
-import { sessions } from "@proliferate/services";
+import { sessions, users } from "@proliferate/services";
 import type {
 	AutoStartOutputEntry,
 	PrebuildServiceCommand,
@@ -291,6 +291,20 @@ export class SessionRuntime {
 			this.provider = provider;
 			this.log("Using sandbox provider", { provider: provider.type });
 
+			// Resolve git identity for commits inside the sandbox
+			let userName: string | undefined;
+			let userEmail: string | undefined;
+			const userId = this.context.session.created_by;
+			if (userId) {
+				try {
+					const user = await users.findById(userId);
+					userName = user?.name;
+					userEmail = user?.email;
+				} catch (err) {
+					this.logger.debug({ err, userId }, "Failed to load user for git identity (non-fatal)");
+				}
+			}
+
 			// Derive per-session sandbox-mcp auth token and merge into env vars
 			const sandboxMcpToken = deriveSandboxMcpToken(this.env.serviceToken, this.sessionId);
 			const envVarsWithToken = {
@@ -301,6 +315,8 @@ export class SessionRuntime {
 			const ensureSandboxStartMs = Date.now();
 			const result = await provider.ensureSandbox({
 				sessionId: this.sessionId,
+				userName,
+				userEmail,
 				repos: this.context.repos,
 				branch: this.context.primaryRepo.default_branch || "main",
 				envVars: envVarsWithToken,

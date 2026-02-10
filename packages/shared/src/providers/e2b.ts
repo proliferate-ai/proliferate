@@ -642,6 +642,26 @@ export class E2BProvider implements SandboxProvider {
 		opts: CreateSandboxOpts,
 		log: Logger,
 	): Promise<void> {
+		// Configure git identity (required for commits inside the sandbox)
+		const userName = opts.userName?.trim();
+		const userEmail = opts.userEmail?.trim();
+		if (userName || userEmail) {
+			try {
+				if (userName) {
+					await sandbox.commands.run(`git config --global user.name ${shellEscape(userName)}`, {
+						timeoutMs: 10000,
+					});
+				}
+				if (userEmail) {
+					await sandbox.commands.run(`git config --global user.email ${shellEscape(userEmail)}`, {
+						timeoutMs: 10000,
+					});
+				}
+			} catch (err) {
+				log.warn({ err }, "Failed to configure git identity (non-fatal)");
+			}
+		}
+
 		// Start services (PostgreSQL, Redis, Mailcatcher)
 		log.debug("Starting services (async)");
 		await sandbox.commands.run("/usr/local/bin/start-services.sh", {

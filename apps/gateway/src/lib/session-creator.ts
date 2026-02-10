@@ -9,7 +9,7 @@
  */
 
 import { createLogger } from "@proliferate/logger";
-import { automations, integrations, prebuilds, sessions } from "@proliferate/services";
+import { automations, integrations, prebuilds, sessions, users } from "@proliferate/services";
 import {
 	type CloneInstructions,
 	type ModelId,
@@ -397,6 +397,19 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		"session_creator.create_sandbox.start",
 	);
 
+	// Resolve git identity for commits inside the sandbox
+	let userName: string | undefined;
+	let userEmail: string | undefined;
+	if (userId) {
+		try {
+			const user = await users.findById(userId);
+			userName = user?.name;
+			userEmail = user?.email;
+		} catch (err) {
+			log.warn({ err, userId }, "Failed to load user for git identity (non-fatal)");
+		}
+	}
+
 	// SSH public key (concatenate all keys for authorized_keys)
 	const sshPublicKey = sshOptions?.publicKeys?.join("\n");
 
@@ -440,6 +453,8 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		const providerStartMs = Date.now();
 		const result = await provider.createSandbox({
 			sessionId,
+			userName,
+			userEmail,
 			repos: [],
 			branch: "main",
 			envVars: mergedEnvVars,
@@ -575,6 +590,8 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	const providerStartMs = Date.now();
 	const result = await provider.createSandbox({
 		sessionId,
+		userName,
+		userEmail,
 		repos: repoSpecs,
 		branch: primaryRepo.defaultBranch || "main",
 		envVars,
