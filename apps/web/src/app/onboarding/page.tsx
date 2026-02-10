@@ -7,7 +7,6 @@ import { StepCreateOrg } from "@/components/onboarding/step-create-org";
 import { StepGitHubConnect } from "@/components/onboarding/step-github-connect";
 import { StepPathChoice } from "@/components/onboarding/step-path-choice";
 import { StepPayment } from "@/components/onboarding/step-payment";
-import { StepRepoSelection } from "@/components/onboarding/step-repo-selection";
 import { StepSlackConnect } from "@/components/onboarding/step-slack-connect";
 import { useOnboarding } from "@/hooks/use-onboarding";
 import { type FlowType, useOnboardingStore } from "@/stores/onboarding";
@@ -34,14 +33,18 @@ export default function OnboardingPage() {
 			new URLSearchParams(window.location.search).get("success") === "slack",
 	);
 
-	// Handle GitHub OAuth callback - go to repos step
+	// Handle GitHub OAuth callback - repos are auto-added, skip to next step
 	useEffect(() => {
 		if (searchParams.get("success") === "github") {
 			refetch();
-			setStep("repos");
+			if (billingEnabled) {
+				setStep("payment");
+			} else {
+				setStep("complete");
+			}
 			window.history.replaceState({}, "", "/onboarding");
 		}
-	}, [searchParams, refetch, setStep]);
+	}, [searchParams, refetch, setStep, billingEnabled]);
 
 	// Handle billing success callback - go to complete step
 	useEffect(() => {
@@ -87,11 +90,6 @@ export default function OnboardingPage() {
 	};
 
 	const handleGitHubConnected = () => {
-		refetch();
-		setStep("repos");
-	};
-
-	const handleRepoSelectionComplete = () => {
 		refetch();
 		if (billingEnabled) {
 			setStep("payment");
@@ -141,7 +139,6 @@ export default function OnboardingPage() {
 					hasGitHubConnection={hasGitHubConnection}
 				/>
 			)}
-			{step === "repos" && <StepRepoSelection onComplete={handleRepoSelectionComplete} />}
 			{step === "payment" && billingEnabled && <StepPayment onComplete={handlePaymentComplete} />}
 			{step === "complete" && <StepComplete onComplete={handleFinish} />}
 		</div>

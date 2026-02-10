@@ -68,12 +68,11 @@ function OnboardingLayoutInner({ children }: OnboardingLayoutProps) {
 		}
 	}, [session, authPending, router]);
 
-	// Redirect to dashboard if onboarding is already complete (except for repos/payment/complete steps or OAuth return)
+	// Redirect to dashboard if onboarding is already complete (except for payment/complete steps or OAuth return)
 	useEffect(() => {
 		if (
 			!onboardingLoading &&
 			onboarding?.hasGitHubConnection &&
-			step !== "repos" &&
 			step !== "payment" &&
 			step !== "complete" &&
 			!isReturningFromOAuth
@@ -91,10 +90,9 @@ function OnboardingLayoutInner({ children }: OnboardingLayoutProps) {
 		return null;
 	}
 
-	// Don't render onboarding shell if user is already complete (except for repos/payment/complete steps or OAuth return)
+	// Don't render onboarding shell if user is already complete (except for payment/complete steps or OAuth return)
 	if (
 		onboarding?.hasGitHubConnection &&
-		step !== "repos" &&
 		step !== "payment" &&
 		step !== "complete" &&
 		!isReturningFromOAuth
@@ -105,37 +103,28 @@ function OnboardingLayoutInner({ children }: OnboardingLayoutProps) {
 	// Calculate step progress
 	const getStepInfo = () => {
 		if (flowType === "personal") {
-			// Personal: path(1) → github(2) → repos(3) → payment(4) → complete(5)
-			const steps = { path: 1, github: 2, repos: 3, payment: 4, complete: 5 };
-			return { current: steps[step as keyof typeof steps] || 1, total: 5 };
+			// Personal: path(1) → github(2) → payment(3) → complete(4)
+			const steps = { path: 1, github: 2, payment: 3, complete: 4 };
+			return { current: steps[step as keyof typeof steps] || 1, total: 4 };
 		}
-		// Organization: path(1) → create-org(2) → slack(3) → github(4) → repos(5) → payment(6) → complete(7)
+		// Organization: path(1) → create-org(2) → slack(3) → github(4) → payment(5) → complete(6)
 		const steps = {
 			path: 1,
 			"create-org": 2,
 			slack: 3,
 			github: 4,
-			repos: 5,
-			payment: 6,
-			complete: 7,
+			payment: 5,
+			complete: 6,
 		};
-		return { current: steps[step as keyof typeof steps] || 1, total: 7 };
+		return { current: steps[step as keyof typeof steps] || 1, total: 6 };
 	};
 
 	const handleStepClick = (stepNum: number) => {
 		if (flowType === "personal") {
-			const stepMap = ["path", "github", "repos", "payment", "complete"] as const;
+			const stepMap = ["path", "github", "payment", "complete"] as const;
 			setStep(stepMap[stepNum - 1]);
 		} else {
-			const stepMap = [
-				"path",
-				"create-org",
-				"slack",
-				"github",
-				"repos",
-				"payment",
-				"complete",
-			] as const;
+			const stepMap = ["path", "create-org", "slack", "github", "payment", "complete"] as const;
 			setStep(stepMap[stepNum - 1]);
 		}
 	};

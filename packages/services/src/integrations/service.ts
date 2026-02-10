@@ -452,7 +452,7 @@ export interface SaveGitHubAppInstallationInput {
  */
 export async function saveGitHubAppInstallation(
 	input: SaveGitHubAppInstallationInput,
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; integrationId?: string }> {
 	const logger = getServicesLogger().child({ module: "integrations" });
 	logger.info(
 		{ orgId: input.organizationId, installationId: input.installationId },
@@ -461,7 +461,7 @@ export async function saveGitHubAppInstallation(
 	const result = await integrationsDb.upsertGitHubAppInstallation(input);
 	logger.debug({ resultId: result?.id ?? null }, "GitHub App installation saved");
 
-	return { success: result !== null };
+	return { success: result !== null, integrationId: result?.id };
 }
 
 // ============================================
