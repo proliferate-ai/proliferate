@@ -48,14 +48,14 @@ export function createDevtoolsProxyRoutes(hubManager: HubManager, env: GatewayEn
 		on: {
 			proxyReq: (proxyReq, req) => {
 				fixRequestBody(proxyReq, req as Request);
-				// Strip browser headers that Modal tunnels may reject
-				proxyReq.removeHeader("origin");
-				proxyReq.removeHeader("referer");
-				// Inject sandbox-mcp auth token
-				const sessionId = (req as Request).proliferateSessionId;
-				if (sessionId) {
-					const token = deriveSandboxMcpToken(env.serviceToken, sessionId);
-					proxyReq.setHeader("Authorization", `Bearer ${token}`);
+				if (!proxyReq.headersSent) {
+					proxyReq.removeHeader("origin");
+					proxyReq.removeHeader("referer");
+					const sessionId = (req as Request).proliferateSessionId;
+					if (sessionId) {
+						const token = deriveSandboxMcpToken(env.serviceToken, sessionId);
+						proxyReq.setHeader("Authorization", `Bearer ${token}`);
+					}
 				}
 			},
 			proxyRes: (proxyRes, req) => {

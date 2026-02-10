@@ -60,12 +60,14 @@ export function createVscodeProxyRoutes(hubManager: HubManager, env: GatewayEnv)
 		on: {
 			proxyReq: (proxyReq, req) => {
 				fixRequestBody(proxyReq, req as Request);
-				proxyReq.removeHeader("origin");
-				proxyReq.removeHeader("referer");
-				const sessionId = (req as Request).proliferateSessionId;
-				if (sessionId) {
-					const token = deriveSandboxMcpToken(env.serviceToken, sessionId);
-					proxyReq.setHeader("Authorization", `Bearer ${token}`);
+				if (!proxyReq.headersSent) {
+					proxyReq.removeHeader("origin");
+					proxyReq.removeHeader("referer");
+					const sessionId = (req as Request).proliferateSessionId;
+					if (sessionId) {
+						const token = deriveSandboxMcpToken(env.serviceToken, sessionId);
+						proxyReq.setHeader("Authorization", `Bearer ${token}`);
+					}
 				}
 			},
 			proxyRes: (proxyRes, req) => {
