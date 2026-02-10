@@ -54,12 +54,15 @@ export function VscodePanel({ sessionId, onClose }: VscodePanelProps) {
 			}
 
 			// Start openvscode-server via service manager
+			// --server-base-path tells VS Code to prefix asset URLs with the proxy path
+			// so they route through the gateway instead of hitting the root and 404ing
+			const basePath = `/proxy/${sessionId}/${token}/devtools/vscode`;
 			const startRes = await fetch(devtoolsUrl(sessionId, token, "/api/services"), {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					name: "openvscode-server",
-					command: "openvscode-server --port 3901 --without-connection-token --host 127.0.0.1",
+					command: `openvscode-server --port 3901 --without-connection-token --host 127.0.0.1 --server-base-path=${basePath}`,
 				}),
 			});
 
