@@ -271,12 +271,21 @@ app.get("/api/git/status", checkAuth, async (req: Request, res: Response) => {
 					ahead = Number.parseInt(match[1], 10);
 					behind = Number.parseInt(match[2], 10);
 				}
-			} else if (line.startsWith("1 ") || line.startsWith("2 ")) {
-				// Changed or renamed entry
-				const parts = line.split("\t");
-				const statusField = line.split(" ")[1] || "";
-				const filePath = parts[parts.length - 1] || line.split(" ").pop() || "";
-				files.push({ status: statusField, path: filePath });
+			} else if (line.startsWith("1 ")) {
+				// Changed entry: 1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>
+				const fields = line.split(" ");
+				const xy = fields[1] || "";
+				const status = xy[0] !== "." ? xy[0] : xy[1] || "M";
+				const filePath = fields.slice(8).join(" ");
+				files.push({ status, path: filePath });
+			} else if (line.startsWith("2 ")) {
+				// Renamed/copied: 2 <XY> ... <path>\t<origPath>
+				const tabParts = line.split("\t");
+				const fields = tabParts[0].split(" ");
+				const xy = fields[1] || "";
+				const status = xy[0] !== "." ? xy[0] : xy[1] || "R";
+				const filePath = tabParts[1] || fields.slice(9).join(" ");
+				files.push({ status, path: filePath });
 			} else if (line.startsWith("? ")) {
 				// Untracked
 				const filePath = line.slice(2);

@@ -35,27 +35,20 @@ export function createDevtoolsProxyRoutes(hubManager: HubManager, env: GatewayEn
 				);
 				throw new ApiError(503, "Sandbox not ready");
 			}
-			logger.debug(
-				{ previewUrl, sessionId: (req as Request).proliferateSessionId },
-				"Devtools proxy target",
-			);
 			return previewUrl;
 		},
 		changeOrigin: true,
 		pathRewrite: (path: string) => {
-			// Strip /proxy/:sessionId/:token/devtools/mcp and forward to /_proliferate/mcp
-			const idx = path.indexOf("/devtools/mcp");
-			if (idx >= 0) {
-				const tail = path.slice(idx + "/devtools/mcp".length);
-				const rewritten = `/_proliferate/mcp${tail || "/"}`;
-				logger.debug({ originalPath: path, rewrittenPath: rewritten }, "Devtools path rewrite");
-				return rewritten;
-			}
-			return path;
+			// Express already strips the matched route prefix, so path is just the tail
+			// (e.g., "/api/git/repos"). Prepend the Caddy internal route.
+			return `/_proliferate/mcp${path || "/"}`;
 		},
 		on: {
 			proxyReq: (proxyReq, req) => {
 				fixRequestBody(proxyReq, req as Request);
+				// Strip browser headers that Modal tunnels may reject
+				proxyReq.removeHeader("origin");
+				proxyReq.removeHeader("referer");
 				// Inject sandbox-mcp auth token
 				const sessionId = (req as Request).proliferateSessionId;
 				if (sessionId) {

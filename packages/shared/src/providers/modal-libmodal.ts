@@ -1115,16 +1115,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			log.warn("No SANDBOX_MCP_AUTH_TOKEN in envVars — sandbox-mcp will deny all requests");
 		}
 
-		// Check if sandbox-mcp binary exists (use full path — exec() may have minimal PATH)
-		sandbox
-			.exec(["ls", "-la", "/usr/bin/sandbox-mcp"])
-			.then((result) => {
-				log.info("sandbox-mcp binary found at /usr/bin/sandbox-mcp");
-			})
-			.catch((err) => {
-				log.error({ err }, "sandbox-mcp binary NOT found at /usr/bin/sandbox-mcp");
-			});
-
 		sandbox
 			.exec(["sh", "-c", "/usr/bin/sandbox-mcp api > /tmp/sandbox-mcp.log 2>&1"], { env: mcpEnvs })
 			.then(() => {
