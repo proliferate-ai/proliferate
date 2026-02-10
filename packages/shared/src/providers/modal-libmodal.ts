@@ -1103,9 +1103,9 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			mcpEnvs.SANDBOX_MCP_AUTH_TOKEN = opts.envVars.SANDBOX_MCP_AUTH_TOKEN;
 		}
 		sandbox
-			.exec(["sh", "-c", "sandbox-mcp api > /tmp/sandbox-mcp.log 2>&1 &"], { env: mcpEnvs })
+			.exec(["sh", "-c", "sandbox-mcp api > /tmp/sandbox-mcp.log 2>&1"], { env: mcpEnvs })
 			.catch(() => {
-				// Expected - fire and forget
+				// Expected - runs until sandbox terminates
 			});
 
 		// Run per-repo service commands (only when snapshot includes deps)
