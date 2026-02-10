@@ -47,16 +47,15 @@ export function createDevtoolsProxyRoutes(hubManager: HubManager, env: GatewayEn
 		},
 		on: {
 			proxyReq: (proxyReq, req) => {
-				fixRequestBody(proxyReq, req as Request);
-				if (!proxyReq.headersSent) {
-					proxyReq.removeHeader("origin");
-					proxyReq.removeHeader("referer");
-					const sessionId = (req as Request).proliferateSessionId;
-					if (sessionId) {
-						const token = deriveSandboxMcpToken(env.serviceToken, sessionId);
-						proxyReq.setHeader("Authorization", `Bearer ${token}`);
-					}
+				// Set headers before fixRequestBody — it may flush headers on POST
+				proxyReq.removeHeader("origin");
+				proxyReq.removeHeader("referer");
+				const sessionId = (req as Request).proliferateSessionId;
+				if (sessionId) {
+					const token = deriveSandboxMcpToken(env.serviceToken, sessionId);
+					proxyReq.setHeader("Authorization", `Bearer ${token}`);
 				}
+				fixRequestBody(proxyReq, req as Request);
 			},
 			proxyRes: (proxyRes, req) => {
 				if (proxyRes.statusCode && proxyRes.statusCode >= 400) {
