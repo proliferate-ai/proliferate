@@ -17,6 +17,8 @@ import {
 	stopService,
 } from "./service-manager.js";
 
+import { validateBearerToken } from "./auth.js";
+
 const app = express();
 
 // CORS - allow requests from any origin (for sandbox UI)
@@ -33,27 +35,11 @@ app.use((_req, res, next) => {
 
 app.use(express.json());
 
-const AUTH_TOKEN = process.env.SANDBOX_MCP_AUTH_TOKEN || process.env.SERVICE_TO_SERVICE_AUTH_TOKEN;
-
 function checkAuth(req: Request, res: Response, next: () => void): void {
-	// Deny by default if no token is configured (secure-by-default)
-	if (!AUTH_TOKEN) {
-		res.status(401).json({ error: "No auth token configured" });
-		return;
-	}
-
-	const authHeader = req.headers.authorization;
-	if (!authHeader?.startsWith("Bearer ")) {
+	if (!validateBearerToken(req.headers.authorization)) {
 		res.status(401).json({ error: "Unauthorized" });
 		return;
 	}
-
-	const token = authHeader.slice(7);
-	if (token !== AUTH_TOKEN) {
-		res.status(401).json({ error: "Unauthorized" });
-		return;
-	}
-
 	next();
 }
 
@@ -370,8 +356,9 @@ app.get("/api/git/diff", checkAuth, async (req: Request, res: Response) => {
 	}
 });
 
-export function startApiServer(port = 4000): void {
-	app.listen(port, "0.0.0.0", () => {
+export function startApiServer(port = 4000): import("http").Server {
+	const server = app.listen(port, "0.0.0.0", () => {
 		logger.info({ port }, "API server listening");
 	});
+	return server;
 }

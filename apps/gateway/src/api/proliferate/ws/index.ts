@@ -6,15 +6,16 @@
  * Real-time bidirectional communication with sessions.
  */
 
-import type { Server } from "http";
-import type { IncomingMessage } from "http";
-import { URL } from "url";
+import type { IncomingMessage, Server } from "node:http";
+import type { Duplex } from "node:stream";
+import { URL } from "node:url";
 import { createLogger } from "@proliferate/logger";
 import { type WebSocket, WebSocketServer } from "ws";
 import type { HubManager } from "../../../hub";
 import type { GatewayEnv } from "../../../lib/env";
 import { verifyToken } from "../../../middleware/auth";
 import type { AuthResult } from "../../../types";
+import type { UpgradeHandler } from "../../ws-multiplexer";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "ws" });
 
@@ -24,47 +25,46 @@ interface WsConnectionContext {
 }
 
 /**
- * Setup WebSocket handling for proliferate sessions.
+ * Create a WS upgrade handler for proliferate sessions.
+ * Returns a handler compatible with the WsMultiplexer.
  */
-export function setupProliferateWebSocket(server: Server, hubManager: HubManager, env: GatewayEnv) {
+export function createProliferateWsHandler(
+	hubManager: HubManager,
+	env: GatewayEnv,
+): { handleUpgrade: UpgradeHandler; wss: WebSocketServer } {
 	const wss = new WebSocketServer({ noServer: true });
 
-	server.on("upgrade", async (req, socket, head) => {
-		try {
-			if (!req.url) {
-				socket.destroy();
-				return;
-			}
+	const handleUpgrade: UpgradeHandler = async (
+		req: IncomingMessage,
+		socket: Duplex,
+		head: Buffer,
+	): Promise<boolean> => {
+		if (!req.url) return false;
 
-			const url = new URL(req.url, `http://${req.headers.host}`);
+		const url = new URL(req.url, `http://${req.headers.host}`);
 
-			// Match /proliferate/:proliferateSessionId
-			const match = matchProliferatePath(url.pathname);
-			if (!match) {
-				socket.destroy();
-				return;
-			}
+		// Match /proliferate/:proliferateSessionId
+		const match = matchProliferatePath(url.pathname);
+		if (!match) return false;
 
-			// Authenticate
-			const auth = await authenticateUpgrade(req, url, env);
-			if (!auth) {
-				socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-				socket.destroy();
-				return;
-			}
-
-			// Handle upgrade
-			wss.handleUpgrade(req, socket, head, (ws) => {
-				wss.emit("connection", ws, req, {
-					proliferateSessionId: match.sessionId,
-					auth,
-				} as WsConnectionContext);
-			});
-		} catch (err) {
-			logger.error({ err }, "Upgrade error");
+		// Authenticate
+		const auth = await authenticateUpgrade(req, url, env);
+		if (!auth) {
+			socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
 			socket.destroy();
+			return true; // Handled (with auth error)
 		}
-	});
+
+		// Handle upgrade
+		wss.handleUpgrade(req, socket, head, (ws) => {
+			wss.emit("connection", ws, req, {
+				proliferateSessionId: match.sessionId,
+				auth,
+			} as WsConnectionContext);
+		});
+
+		return true;
+	};
 
 	wss.on(
 		"connection",
@@ -102,6 +102,28 @@ export function setupProliferateWebSocket(server: Server, hubManager: HubManager
 			}
 		},
 	);
+
+	return { handleUpgrade, wss };
+}
+
+/**
+ * Legacy wrapper — setup WebSocket handling directly on a server.
+ * Used for backward compatibility. Prefer createProliferateWsHandler + WsMultiplexer.
+ */
+export function setupProliferateWebSocket(server: Server, hubManager: HubManager, env: GatewayEnv) {
+	const { handleUpgrade, wss } = createProliferateWsHandler(hubManager, env);
+
+	server.on("upgrade", async (req, socket, head) => {
+		try {
+			const handled = await handleUpgrade(req, socket, head);
+			if (!handled) {
+				socket.destroy();
+			}
+		} catch (err) {
+			logger.error({ err }, "Upgrade error");
+			socket.destroy();
+		}
+	});
 
 	return wss;
 }

@@ -63,8 +63,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm (yarn already in base image)
-RUN npm install -g pnpm
+# Install pnpm (yarn already in base image) + terminal deps
+RUN npm install -g pnpm ws node-pty
 
 # Install Mailcatcher
 RUN gem install mailcatcher --no-document
@@ -85,7 +85,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
     && rm -rf /var/lib/apt/lists/*
 
 # Install OpenCode CLI + sandbox-mcp
-RUN npm install -g opencode-ai@latest proliferate-sandbox-mcp@0.1.15
+RUN npm install -g opencode-ai@latest proliferate-sandbox-mcp@0.1.16
 
 # Install Python tools
 RUN pip install httpx uv playwright psycopg2-binary redis

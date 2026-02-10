@@ -18,6 +18,7 @@ import { GitPanel } from "./git-panel";
 import { PreviewPanel } from "./preview-panel";
 import { SessionInfoPanel } from "./session-info-panel";
 import { SnapshotsPanel } from "./snapshots-panel";
+import { TerminalPanel } from "./terminal-panel";
 import { VerificationGallery } from "./verification-gallery";
 
 export interface SessionPanelProps {
@@ -129,6 +130,11 @@ export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps
 				onClose={handleClose}
 			/>
 		);
+	}
+
+	// Terminal panel
+	if (mode.type === "terminal" && sessionProps?.sessionId) {
+		return <TerminalPanel sessionId={sessionProps.sessionId} onClose={handleClose} />;
 	}
 
 	// Auto-start panel
