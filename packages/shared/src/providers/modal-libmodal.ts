@@ -557,6 +557,14 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				sandboxImage = await this.ensureBaseImageInitialized();
 				imageSource = "base_image";
 			}
+			log.info(
+				{
+					imageSource,
+					restoreSnapshotId: restoreSnapshotId || null,
+					baseSnapshotId: baseSnapshotId || null,
+				},
+				"Sandbox image selected",
+			);
 			logLatency("provider.create_sandbox.image_selected", {
 				provider: this.type,
 				sessionId: opts.sessionId,
