@@ -1095,17 +1095,34 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		});
 
 		// Start sandbox-mcp API server in background
-		log.debug("Starting sandbox-mcp API (async)");
+		log.info("Starting sandbox-mcp API server");
 		const mcpEnvs: Record<string, string> = {
 			WORKSPACE_DIR: "/home/user/workspace",
 		};
 		if (opts.envVars.SANDBOX_MCP_AUTH_TOKEN) {
 			mcpEnvs.SANDBOX_MCP_AUTH_TOKEN = opts.envVars.SANDBOX_MCP_AUTH_TOKEN;
+			log.debug("SANDBOX_MCP_AUTH_TOKEN injected");
+		} else {
+			log.warn("No SANDBOX_MCP_AUTH_TOKEN in envVars — sandbox-mcp will deny all requests");
 		}
+
+		// Check if sandbox-mcp binary exists
+		sandbox
+			.exec(["which", "sandbox-mcp"])
+			.then((result) => {
+				log.info({ stdout: result.stdout.trim() }, "sandbox-mcp binary found");
+			})
+			.catch((err) => {
+				log.error({ err }, "sandbox-mcp binary NOT found in PATH");
+			});
+
 		sandbox
 			.exec(["sh", "-c", "sandbox-mcp api > /tmp/sandbox-mcp.log 2>&1"], { env: mcpEnvs })
-			.catch(() => {
-				// Expected - runs until sandbox terminates
+			.then(() => {
+				log.warn("sandbox-mcp API exited unexpectedly");
+			})
+			.catch((err) => {
+				log.error({ err }, "sandbox-mcp API failed to start");
 			});
 
 		// Run per-repo service commands (only when snapshot includes deps)

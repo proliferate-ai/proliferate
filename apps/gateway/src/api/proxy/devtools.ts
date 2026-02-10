@@ -29,8 +29,16 @@ export function createDevtoolsProxyRoutes(hubManager: HubManager, env: GatewayEn
 		router: (req: Request) => {
 			const previewUrl = req.hub?.getPreviewUrl();
 			if (!previewUrl) {
+				logger.warn(
+					{ sessionId: (req as Request).proliferateSessionId },
+					"No preview URL for devtools proxy",
+				);
 				throw new ApiError(503, "Sandbox not ready");
 			}
+			logger.debug(
+				{ previewUrl, sessionId: (req as Request).proliferateSessionId },
+				"Devtools proxy target",
+			);
 			return previewUrl;
 		},
 		changeOrigin: true,
@@ -39,7 +47,9 @@ export function createDevtoolsProxyRoutes(hubManager: HubManager, env: GatewayEn
 			const idx = path.indexOf("/devtools/mcp");
 			if (idx >= 0) {
 				const tail = path.slice(idx + "/devtools/mcp".length);
-				return `/_proliferate/mcp${tail || "/"}`;
+				const rewritten = `/_proliferate/mcp${tail || "/"}`;
+				logger.debug({ originalPath: path, rewrittenPath: rewritten }, "Devtools path rewrite");
+				return rewritten;
 			}
 			return path;
 		},
@@ -51,6 +61,14 @@ export function createDevtoolsProxyRoutes(hubManager: HubManager, env: GatewayEn
 				if (sessionId) {
 					const token = deriveSandboxMcpToken(env.serviceToken, sessionId);
 					proxyReq.setHeader("Authorization", `Bearer ${token}`);
+				}
+			},
+			proxyRes: (proxyRes, req) => {
+				if (proxyRes.statusCode && proxyRes.statusCode >= 400) {
+					logger.warn(
+						{ status: proxyRes.statusCode, path: (req as Request).originalUrl },
+						"Devtools proxy upstream error",
+					);
 				}
 			},
 			error: (err: Error, _req, res) => {
