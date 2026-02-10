@@ -28,38 +28,39 @@ function getCssColor(property: string): string {
 
 export function TerminalPanel({ sessionId, onClose }: TerminalPanelProps) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
-	const terminalRef = useRef<Terminal | null>(null);
-	const fitRef = useRef<FitAddon | null>(null);
-	const wsRef = useRef<WebSocket | null>(null);
-	const observerRef = useRef<ResizeObserver | null>(null);
 	const [status, setStatus] = useState<"connecting" | "connected" | "error" | "closed">(
 		"connecting",
 	);
 	const { token } = useWsToken();
 
 	useEffect(() => {
-		if (!containerRef.current || !token || !GATEWAY_URL) return;
+		const container = containerRef.current;
+		if (!container || !token || !GATEWAY_URL) return;
 
+		let isActive = true;
 		setStatus("connecting");
 
 		// Resolve theme colors from CSS custom properties
-		const bg = getCssColor("--background") || "#1a1a1a";
-		const fg = getCssColor("--foreground") || "#e5e7eb";
+		const bg = getCssColor("--background");
+		const fg = getCssColor("--foreground");
 
 		const term = new Terminal({
 			convertEol: true,
 			cursorBlink: true,
 			fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
 			fontSize: 12,
-			theme: {
-				background: bg,
-				foreground: fg,
-				cursor: fg,
-			},
+			theme:
+				bg && fg
+					? {
+							background: bg,
+							foreground: fg,
+							cursor: fg,
+						}
+					: undefined,
 		});
 		const fit = new FitAddon();
 		term.loadAddon(fit);
-		term.open(containerRef.current);
+		term.open(container);
 
 		// Initial fit
 		try {
@@ -71,9 +72,9 @@ export function TerminalPanel({ sessionId, onClose }: TerminalPanelProps) {
 
 		const wsUrl = buildTerminalWsUrl(sessionId, token);
 		const ws = new WebSocket(wsUrl);
-		wsRef.current = ws;
 
 		ws.onopen = () => {
+			if (!isActive) return;
 			setStatus("connected");
 			try {
 				const dims = fit.proposeDimensions();
@@ -86,15 +87,32 @@ export function TerminalPanel({ sessionId, onClose }: TerminalPanelProps) {
 		};
 
 		ws.onclose = () => {
+			if (!isActive) return;
 			setStatus("closed");
 		};
 
 		ws.onerror = () => {
+			if (!isActive) return;
 			setStatus("error");
 		};
 
 		ws.onmessage = (event) => {
-			term.write(event.data);
+			if (typeof event.data === "string") {
+				term.write(event.data);
+				return;
+			}
+			if (event.data instanceof ArrayBuffer) {
+				term.write(new Uint8Array(event.data));
+				return;
+			}
+			if (event.data instanceof Blob) {
+				void event.data
+					.arrayBuffer()
+					.then((buf) => term.write(new Uint8Array(buf)))
+					.catch(() => {
+						// Ignore parse errors
+					});
+			}
 		};
 
 		term.onData((data) => {
@@ -116,13 +134,10 @@ export function TerminalPanel({ sessionId, onClose }: TerminalPanelProps) {
 				// Terminal not ready
 			}
 		});
-		observer.observe(containerRef.current);
-		observerRef.current = observer;
-
-		terminalRef.current = term;
-		fitRef.current = fit;
+		observer.observe(container);
 
 		return () => {
+			isActive = false;
 			observer.disconnect();
 			try {
 				ws.close();
@@ -130,9 +145,6 @@ export function TerminalPanel({ sessionId, onClose }: TerminalPanelProps) {
 				// Ignore close errors
 			}
 			term.dispose();
-			terminalRef.current = null;
-			fitRef.current = null;
-			wsRef.current = null;
 		};
 	}, [sessionId, token]);
 

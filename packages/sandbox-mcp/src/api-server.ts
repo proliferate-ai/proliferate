@@ -4,10 +4,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { createLogger } from "@proliferate/logger";
 import express, { type Request, type Response } from "express";
-
-const execFileAsync = promisify(execFile);
-
-const logger = createLogger({ service: "sandbox-mcp" }).child({ module: "api-server" });
+import { validateBearerToken } from "./auth.js";
 import {
 	exposePort,
 	getExposedPort,
@@ -17,7 +14,9 @@ import {
 	stopService,
 } from "./service-manager.js";
 
-import { validateBearerToken } from "./auth.js";
+const execFileAsync = promisify(execFile);
+
+const logger = createLogger({ service: "sandbox-mcp" }).child({ module: "api-server" });
 
 const app = express();
 

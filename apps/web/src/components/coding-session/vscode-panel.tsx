@@ -26,11 +26,15 @@ export function VscodePanel({ sessionId, onClose }: VscodePanelProps) {
 	const { token } = useWsToken();
 	const [status, setStatus] = useState<PanelStatus>("starting");
 	const [iframeKey, setIframeKey] = useState(0);
-	const iframeRef = useRef<HTMLIFrameElement | null>(null);
 	const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	const startVscodeServer = useCallback(async () => {
 		if (!token || !GATEWAY_URL) return;
+
+		if (pollingRef.current) {
+			clearInterval(pollingRef.current);
+			pollingRef.current = null;
+		}
 
 		setStatus("starting");
 
@@ -69,7 +73,10 @@ export function VscodePanel({ sessionId, onClose }: VscodePanelProps) {
 			pollingRef.current = setInterval(async () => {
 				attempts++;
 				if (attempts > 30) {
-					if (pollingRef.current) clearInterval(pollingRef.current);
+					if (pollingRef.current) {
+						clearInterval(pollingRef.current);
+						pollingRef.current = null;
+					}
 					setStatus("error");
 					return;
 				}
@@ -82,7 +89,10 @@ export function VscodePanel({ sessionId, onClose }: VscodePanelProps) {
 								s.name === "openvscode-server" && s.status === "running",
 						);
 						if (svc) {
-							if (pollingRef.current) clearInterval(pollingRef.current);
+							if (pollingRef.current) {
+								clearInterval(pollingRef.current);
+								pollingRef.current = null;
+							}
 							setStatus("ready");
 						}
 					}
@@ -91,7 +101,6 @@ export function VscodePanel({ sessionId, onClose }: VscodePanelProps) {
 				}
 			}, 1000);
 		} catch (err) {
-			console.error("Failed to start VS Code server:", err);
 			setStatus("error");
 		}
 	}, [sessionId, token]);
@@ -102,6 +111,7 @@ export function VscodePanel({ sessionId, onClose }: VscodePanelProps) {
 		return () => {
 			if (pollingRef.current) {
 				clearInterval(pollingRef.current);
+				pollingRef.current = null;
 			}
 		};
 	}, [startVscodeServer]);
@@ -174,7 +184,6 @@ export function VscodePanel({ sessionId, onClose }: VscodePanelProps) {
 					)}
 					{status === "ready" && iframeSrc && (
 						<iframe
-							ref={iframeRef}
 							key={iframeKey}
 							src={iframeSrc}
 							title="VS Code"

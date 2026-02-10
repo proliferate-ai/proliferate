@@ -63,8 +63,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm (yarn already in base image) + terminal deps
-RUN npm install -g pnpm ws node-pty
+# Install pnpm (yarn already in base image)
+RUN npm install -g pnpm
 
 # Install Mailcatcher
 RUN gem install mailcatcher --no-document

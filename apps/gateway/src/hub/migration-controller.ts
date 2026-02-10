@@ -165,7 +165,11 @@ export class MigrationController {
 					}
 
 					const dbStartMs = Date.now();
-					await sessions.update(this.options.sessionId, { snapshotId });
+					await sessions.update(this.options.sessionId, {
+						snapshotId,
+						status: provider.supportsPause ? "paused" : "stopped",
+						pausedAt: provider.supportsPause ? new Date().toISOString() : null,
+					});
 					this.logger.debug({ durationMs: Date.now() - dbStartMs }, "migration.db.update_snapshot");
 
 					if (!provider.supportsPause) {
@@ -185,6 +189,13 @@ export class MigrationController {
 							);
 						} catch (err) {
 							this.logger.error({ err }, "Failed to terminate sandbox after idle snapshot");
+						}
+
+						// Mark session ended for consumers relying on endedAt (best-effort).
+						try {
+							await sessions.markSessionStopped(this.options.sessionId);
+						} catch (err) {
+							this.logger.error({ err }, "Failed to mark session stopped after idle snapshot");
 						}
 					}
 					this.options.runtime.resetSandboxState();

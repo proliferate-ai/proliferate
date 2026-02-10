@@ -15,7 +15,7 @@ import type { Server } from "node:http";
 import { URL } from "node:url";
 import { createLogger } from "@proliferate/logger";
 import { type IPty, spawn as ptySpawn } from "node-pty";
-import { type WebSocket, WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import { validateBearerToken } from "./auth.js";
 
 const logger = createLogger({ service: "sandbox-mcp" }).child({ module: "terminal" });
@@ -64,14 +64,14 @@ function handleTerminalConnection(ws: WebSocket): void {
 	logger.info({ pid: pty.pid }, "Terminal PTY spawned");
 
 	pty.onData((data) => {
-		if (ws.readyState === ws.OPEN) {
+		if (ws.readyState === WebSocket.OPEN) {
 			ws.send(data);
 		}
 	});
 
 	pty.onExit(({ exitCode }) => {
 		logger.info({ exitCode }, "Terminal PTY exited");
-		if (ws.readyState === ws.OPEN) {
+		if (ws.readyState === WebSocket.OPEN) {
 			ws.close(1000, "PTY exited");
 		}
 	});
