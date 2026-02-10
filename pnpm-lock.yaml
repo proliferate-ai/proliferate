@@ -611,6 +611,12 @@ importers:
       express:
         specifier: ^4.18.2
         version: 4.22.1
+      node-pty:
+        specifier: '*'
+        version: 1.1.0
+      ws:
+        specifier: ^8.16.0
+        version: 8.19.0
     devDependencies:
       '@proliferate/logger':
         specifier: workspace:*
@@ -621,6 +627,9 @@ importers:
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.29
+      '@types/ws':
+        specifier: ^8.5.10
+        version: 8.18.1
       esbuild:
         specifier: ^0.27.3
         version: 0.27.3
@@ -12944,6 +12953,10 @@ packages:
     resolution: {integrity: sha512-AGK2yQKIjRuqnc6VkX2Xj5d+QW8xZ87pa1UK6yA6ouUyuxfHuMP6umE5QK7UmTeOAymo+Zx1Fxiuw9rVx8taHQ==}
     dev: false
 
+  /node-addon-api@7.1.1:
+    resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
+    dev: false
+
   /node-fetch@2.7.0:
     resolution: {integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==}
     engines: {node: 4.x || >=6.0.0}
@@ -12972,6 +12985,13 @@ packages:
       detect-libc: 2.1.2
     dev: false
     optional: true
+
+  /node-pty@1.1.0:
+    resolution: {integrity: sha512-20JqtutY6JPXTUnL0ij1uad7Qe1baT46lyolh2sSENDd4sTzKZ4nmAFkeAARDKwmlLjPx6XKRlwRUxwjOy+lUg==}
+    requiresBuild: true
+    dependencies:
+      node-addon-api: 7.1.1
+    dev: false
 
   /node-releases@2.0.27:
     resolution: {integrity: sha512-nmh3lCkYZ3grZvqcCH+fjmQ7X+H0OeZgP40OierEaAptX4XofMh5kwNbWh7lBduUzCcV/8kZ+NDLCwm2iorIlA==}

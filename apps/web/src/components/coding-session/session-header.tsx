@@ -12,6 +12,7 @@ import {
 	MessageSquare,
 	PanelRight,
 	Settings,
+	SquareTerminal,
 	Wrench,
 } from "lucide-react";
 
@@ -26,6 +27,7 @@ interface SessionHeaderProps {
 	onToggleAutoStart?: () => void;
 	onToggleGit?: () => void;
 	onToggleChanges?: () => void;
+	onToggleTerminal?: () => void;
 	// Mobile
 	mobileView?: "chat" | "preview";
 	onToggleMobileView?: () => void;
@@ -41,6 +43,7 @@ export function SessionHeader({
 	onToggleAutoStart,
 	onToggleGit,
 	onToggleChanges,
+	onToggleTerminal,
 	mobileView,
 	onToggleMobileView,
 }: SessionHeaderProps) {
@@ -153,6 +156,23 @@ export function SessionHeader({
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent>Changes</TooltipContent>
+					</Tooltip>
+				)}
+
+				{onToggleTerminal && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								variant={panelMode.type === "terminal" ? "secondary" : "ghost"}
+								size="icon"
+								className="hidden md:flex h-7 w-7"
+								onClick={onToggleTerminal}
+								disabled={disabled}
+							>
+								<SquareTerminal className="h-3.5 w-3.5" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent>Terminal</TooltipContent>
 					</Tooltip>
 				)}
 
