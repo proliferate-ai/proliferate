@@ -3,7 +3,6 @@
 import { GATEWAY_URL } from "@/lib/gateway";
 import {
 	type ServerMessage,
-	type SyncClient,
 	type SyncWebSocket,
 	type ToolEndMessage,
 	type ToolMetadataMessage,
@@ -114,17 +113,13 @@ export function useSessionWebSocket({
 	}, []);
 
 	useEffect(() => {
-		console.log("[WS] useEffect triggered, GATEWAY_URL:", GATEWAY_URL, "token:", !!token);
 		if (!GATEWAY_URL) {
-			console.error("[WS] No GATEWAY_URL configured");
+			setError("No gateway URL configured");
 			return;
 		}
 		if (!token) {
-			console.log("[WS] Waiting for token...");
 			return;
 		}
-
-		console.log("[WS] Connecting to gateway for session:", sessionId);
 
 		const ctx: MessageHandlerContext = {
 			setMessages,
@@ -152,28 +147,17 @@ export function useSessionWebSocket({
 
 		const ws = client.connect(sessionId, {
 			onOpen: () => {
-				console.log("[WS] Connected! Waiting for init message...");
 				setIsConnected(true);
 				setError(null);
 			},
 			onClose: () => {
-				console.log("[WS] Connection closed");
 				setIsConnected(false);
 				setIsRunning(false);
 			},
-			onReconnect: (attempt) => {
-				console.log(`[WS] Reconnecting (attempt ${attempt})...`);
-			},
 			onReconnectFailed: () => {
-				console.error("[WS] Reconnection failed");
 				setError("Connection lost");
 			},
 			onEvent: (data: ServerMessage) => {
-				if (data.type === "init") {
-					console.log("[WS] Received init message");
-				} else if (data.type === "error") {
-					console.error("[WS] Received error:", data.payload);
-				}
 				handleServerMessage(data, ctx);
 			},
 		});
@@ -182,6 +166,7 @@ export function useSessionWebSocket({
 
 		return () => {
 			ws.close();
+			wsRef.current = null;
 		};
 	}, [token, sessionId, onTitleUpdate, getLastAssistantMessageId]);
 

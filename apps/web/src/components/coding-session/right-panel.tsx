@@ -10,6 +10,7 @@ import type {
 	VerificationFile,
 } from "@proliferate/shared";
 import { ArrowLeft, Grid, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { AutoStartPanel } from "./auto-start-panel";
 import { ChangesPanel } from "./changes-panel";
@@ -19,6 +20,11 @@ import { PreviewPanel } from "./preview-panel";
 import { SessionInfoPanel } from "./session-info-panel";
 import { SnapshotsPanel } from "./snapshots-panel";
 import { VerificationGallery } from "./verification-gallery";
+import { VscodePanel } from "./vscode-panel";
+
+const TerminalPanel = dynamic(() => import("./terminal-panel").then((m) => m.TerminalPanel), {
+	ssr: false,
+});
 
 export interface SessionPanelProps {
 	sessionId?: string;
@@ -129,6 +135,16 @@ export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps
 				onClose={handleClose}
 			/>
 		);
+	}
+
+	// Terminal panel
+	if (mode.type === "terminal" && sessionProps?.sessionId) {
+		return <TerminalPanel sessionId={sessionProps.sessionId} onClose={handleClose} />;
+	}
+
+	// VS Code panel
+	if (mode.type === "vscode" && sessionProps?.sessionId) {
+		return <VscodePanel sessionId={sessionProps.sessionId} onClose={handleClose} />;
 	}
 
 	// Auto-start panel

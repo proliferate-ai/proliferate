@@ -102,12 +102,32 @@ export class SessionHub {
 			broadcast: (message) => this.broadcast(message),
 			broadcastStatus: (status, message) => this.broadcastStatus(status, message),
 			logger: this.logger.child({ module: "migration" }),
-			getClientCount: () => this.clients.size,
+			// Treat headless automation sessions as active for expiry migration decisions.
+			// These sessions usually have 0 WS clients, but must still migrate/reconnect reliably.
+			getClientCount: () => this.getEffectiveClientCount(),
 		});
 	}
 
 	getSessionId(): string {
 		return this.sessionId;
+	}
+
+	private getEffectiveClientCount(): number {
+		if (this.clients.size > 0) {
+			return this.clients.size;
+		}
+
+		const clientType = this.runtime.getContext().session.client_type ?? null;
+		if (clientType === "automation") {
+			return 1;
+		}
+
+		return 0;
+	}
+
+	private shouldReconnectWithoutClients(): boolean {
+		const clientType = this.runtime.getContext().session.client_type ?? null;
+		return clientType === "automation";
 	}
 
 	// ============================================
@@ -757,8 +777,8 @@ export class SessionHub {
 	private handleSseDisconnect(reason: string): void {
 		this.log("SSE disconnected", { reason });
 
-		// Only reconnect if we still have clients
-		if (this.clients.size === 0) {
+		// Only reconnect if we still have clients (or this is a headless automation session).
+		if (this.clients.size === 0 && !this.shouldReconnectWithoutClients()) {
 			this.log("No clients connected, skipping reconnection");
 			return;
 		}

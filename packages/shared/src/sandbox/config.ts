@@ -43,6 +43,18 @@ export const DEFAULT_CADDYFILE = `{
         reverse_proxy localhost:4000
     }
 
+    handle_path /_proliferate/vscode/* {
+        forward_auth localhost:4000 {
+            uri /api/auth/check
+            copy_headers Authorization
+        }
+        reverse_proxy localhost:3901
+        header {
+            -X-Frame-Options
+            -Content-Security-Policy
+        }
+    }
+
     # User-exposed port snippet (written by exposePort). When populated, its
     # bare "handle" block intentionally takes priority over the default fallback
     # below, routing all non-devtools traffic to the user's chosen port.
@@ -152,6 +164,8 @@ export const SANDBOX_PORTS = {
 	preview: 20000,
 	/** SSH (for terminal sessions) */
 	ssh: 22,
+	/** openvscode-server (web-based editor) */
+	vscode: 3901,
 } as const;
 
 /**

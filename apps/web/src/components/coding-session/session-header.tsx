@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import type { PreviewMode } from "@/stores/preview-panel";
 import {
+	Code,
 	FileDiff,
 	GitBranch,
 	Globe,
@@ -12,6 +13,7 @@ import {
 	MessageSquare,
 	PanelRight,
 	Settings,
+	SquareTerminal,
 	Wrench,
 } from "lucide-react";
 
@@ -26,6 +28,8 @@ interface SessionHeaderProps {
 	onToggleAutoStart?: () => void;
 	onToggleGit?: () => void;
 	onToggleChanges?: () => void;
+	onToggleTerminal?: () => void;
+	onToggleVscode?: () => void;
 	// Mobile
 	mobileView?: "chat" | "preview";
 	onToggleMobileView?: () => void;
@@ -41,6 +45,8 @@ export function SessionHeader({
 	onToggleAutoStart,
 	onToggleGit,
 	onToggleChanges,
+	onToggleTerminal,
+	onToggleVscode,
 	mobileView,
 	onToggleMobileView,
 }: SessionHeaderProps) {
@@ -153,6 +159,40 @@ export function SessionHeader({
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent>Changes</TooltipContent>
+					</Tooltip>
+				)}
+
+				{onToggleTerminal && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								variant={panelMode.type === "terminal" ? "secondary" : "ghost"}
+								size="icon"
+								className="hidden md:flex h-7 w-7"
+								onClick={onToggleTerminal}
+								disabled={disabled}
+							>
+								<SquareTerminal className="h-3.5 w-3.5" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent>Terminal</TooltipContent>
+					</Tooltip>
+				)}
+
+				{onToggleVscode && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								variant={panelMode.type === "vscode" ? "secondary" : "ghost"}
+								size="icon"
+								className="hidden md:flex h-7 w-7"
+								onClick={onToggleVscode}
+								disabled={disabled}
+							>
+								<Code className="h-3.5 w-3.5" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent>VS Code</TooltipContent>
 					</Tooltip>
 				)}
 

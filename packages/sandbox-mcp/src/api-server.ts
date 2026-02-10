@@ -4,10 +4,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { createLogger } from "@proliferate/logger";
 import express, { type Request, type Response } from "express";
-
-const execFileAsync = promisify(execFile);
-
-const logger = createLogger({ service: "sandbox-mcp" }).child({ module: "api-server" });
+import { validateBearerToken } from "./auth.js";
 import {
 	exposePort,
 	getExposedPort,
@@ -16,6 +13,10 @@ import {
 	startService,
 	stopService,
 } from "./service-manager.js";
+
+const execFileAsync = promisify(execFile);
+
+const logger = createLogger({ service: "sandbox-mcp" }).child({ module: "api-server" });
 
 const app = express();
 
@@ -33,32 +34,21 @@ app.use((_req, res, next) => {
 
 app.use(express.json());
 
-const AUTH_TOKEN = process.env.SANDBOX_MCP_AUTH_TOKEN || process.env.SERVICE_TO_SERVICE_AUTH_TOKEN;
-
 function checkAuth(req: Request, res: Response, next: () => void): void {
-	// Deny by default if no token is configured (secure-by-default)
-	if (!AUTH_TOKEN) {
-		res.status(401).json({ error: "No auth token configured" });
-		return;
-	}
-
-	const authHeader = req.headers.authorization;
-	if (!authHeader?.startsWith("Bearer ")) {
+	if (!validateBearerToken(req.headers.authorization)) {
 		res.status(401).json({ error: "Unauthorized" });
 		return;
 	}
-
-	const token = authHeader.slice(7);
-	if (token !== AUTH_TOKEN) {
-		res.status(401).json({ error: "Unauthorized" });
-		return;
-	}
-
 	next();
 }
 
 // Health check endpoint (no auth required)
 app.get("/api/health", (_req: Request, res: Response) => {
+	res.json({ status: "ok" });
+});
+
+// Auth check endpoint (used by Caddy forward_auth for VS Code route)
+app.get("/api/auth/check", checkAuth, (_req: Request, res: Response) => {
 	res.json({ status: "ok" });
 });
 
@@ -370,8 +360,9 @@ app.get("/api/git/diff", checkAuth, async (req: Request, res: Response) => {
 	}
 });
 
-export function startApiServer(port = 4000): void {
-	app.listen(port, "0.0.0.0", () => {
+export function startApiServer(port = 4000): import("http").Server {
+	const server = app.listen(port, "0.0.0.0", () => {
 		logger.info({ port }, "API server listening");
 	});
+	return server;
 }
