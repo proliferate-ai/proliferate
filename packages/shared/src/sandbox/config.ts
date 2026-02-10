@@ -43,8 +43,13 @@ export const DEFAULT_CADDYFILE = `{
         reverse_proxy localhost:4000
     }
 
+    # User-exposed port snippet (written by exposePort). When populated, its
+    # bare "handle" block intentionally takes priority over the default fallback
+    # below, routing all non-devtools traffic to the user's chosen port.
+    # Starts as an empty file so the default fallback applies until exposePort is called.
     import /home/user/.proliferate/caddy/user.caddy
 
+    # Default fallback: try common dev server ports when no explicit port is exposed.
     handle {
         reverse_proxy localhost:3000 localhost:5173 localhost:8000 localhost:4321 {
             lb_policy first

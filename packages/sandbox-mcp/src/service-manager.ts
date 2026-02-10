@@ -155,7 +155,8 @@ export async function exposePort(port: number): Promise<void> {
 	}
 
 	// Write user Caddy snippet (imported by main Caddyfile via `import` directive).
-	// This is additive — it does NOT overwrite /home/user/Caddyfile.
+	// This bare "handle" block intentionally takes priority over the default
+	// multi-port fallback, routing all non-devtools traffic to the user's chosen port.
 	const caddySnippet = `handle {
     reverse_proxy localhost:${port} {
         header_up Host {upstream_hostport}
