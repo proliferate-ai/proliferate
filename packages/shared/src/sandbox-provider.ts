@@ -65,6 +65,9 @@ export interface RepoSpec {
 
 export interface CreateSandboxOpts {
 	sessionId: string;
+	/** Git identity for commits made inside the sandbox. */
+	userName?: string;
+	userEmail?: string;
 	repos: RepoSpec[]; // Repos to clone (always use this, even for single repo)
 	branch: string;
 	envVars: Record<string, string>;
