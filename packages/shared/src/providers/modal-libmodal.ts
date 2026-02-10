@@ -1118,7 +1118,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		sandbox
 			.exec(["ls", "-la", "/usr/bin/sandbox-mcp"])
 			.then((result) => {
-				log.info({ stdout: result.stdout.trim() }, "sandbox-mcp binary found");
+				log.info("sandbox-mcp binary found at /usr/bin/sandbox-mcp");
 			})
 			.catch((err) => {
 				log.error({ err }, "sandbox-mcp binary NOT found at /usr/bin/sandbox-mcp");
