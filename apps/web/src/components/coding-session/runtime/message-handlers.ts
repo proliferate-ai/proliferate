@@ -26,6 +26,7 @@ export interface MessageHandlerContext {
 	onTitleUpdate: (title: string) => void;
 	streamingTextRef: React.MutableRefObject<Record<string, string>>;
 	getLastAssistantMessageId: () => string | null;
+	incrementActivityTick: () => void;
 }
 
 /** Handle init message - sets initial messages and config */

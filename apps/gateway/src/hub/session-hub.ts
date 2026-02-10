@@ -322,6 +322,13 @@ export class SessionHub {
 	}
 
 	/**
+	 * Get the preview tunnel URL for the current session.
+	 */
+	getPreviewUrl(): string | null {
+		return this.runtime.getPreviewUrl();
+	}
+
+	/**
 	 * Get the session context.
 	 */
 	getContext(): SessionContext {

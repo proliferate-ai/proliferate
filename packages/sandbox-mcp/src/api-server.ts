@@ -1,7 +1,12 @@
+import { execFile } from "node:child_process";
 import { createReadStream, existsSync, statSync } from "node:fs";
+import path from "node:path";
+import { promisify } from "node:util";
 import { env } from "@proliferate/environment/server";
 import { createLogger } from "@proliferate/logger";
 import express, { type Request, type Response } from "express";
+
+const execFileAsync = promisify(execFile);
 
 const logger = createLogger({ service: "sandbox-mcp" }).child({ module: "api-server" });
 import {
@@ -29,12 +34,12 @@ app.use((_req, res, next) => {
 
 app.use(express.json());
 
-const AUTH_TOKEN = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
+const AUTH_TOKEN = process.env.SANDBOX_MCP_AUTH_TOKEN || env.SERVICE_TO_SERVICE_AUTH_TOKEN;
 
 function checkAuth(req: Request, res: Response, next: () => void): void {
-	// Allow unauthenticated access if no token configured
+	// Deny by default if no token is configured (secure-by-default)
 	if (!AUTH_TOKEN) {
-		next();
+		res.status(401).json({ error: "No auth token configured" });
 		return;
 	}
 
@@ -178,6 +183,160 @@ app.get("/api/logs/:name", checkAuth, (req: Request, res: Response) => {
 		res.write(`data: ${JSON.stringify({ type: "error", message: error.message })}\n\n`);
 		res.end();
 	});
+});
+
+// ============================================
+// Git endpoints
+// ============================================
+
+const WORKSPACE_DIR = env.WORKSPACE_DIR ?? "/home/user/workspace";
+const MAX_DIFF_BYTES = 64 * 1024;
+
+/** Validate that a resolved path is inside the workspace directory. */
+function validateInsideWorkspace(resolved: string): boolean {
+	return resolved === WORKSPACE_DIR || resolved.startsWith(`${WORKSPACE_DIR}/`);
+}
+
+/** Decode a base64-encoded repo ID back to a path, validate it's in workspace. */
+function decodeRepoId(repoId: string): string | null {
+	try {
+		const decoded = Buffer.from(repoId, "base64").toString("utf-8");
+		const resolved = path.resolve(decoded);
+		if (!validateInsideWorkspace(resolved)) return null;
+		return resolved;
+	} catch {
+		return null;
+	}
+}
+
+// Discover git repos under workspace
+app.get("/api/git/repos", checkAuth, async (_req: Request, res: Response) => {
+	try {
+		const { stdout } = await execFileAsync(
+			"find",
+			[WORKSPACE_DIR, "-maxdepth", "3", "-name", ".git", "-type", "d"],
+			{ timeout: 5000 },
+		);
+		const repos = stdout
+			.trim()
+			.split("\n")
+			.filter(Boolean)
+			.map((gitDir) => {
+				const repoPath = path.dirname(gitDir);
+				if (!validateInsideWorkspace(repoPath)) return null;
+				return {
+					id: Buffer.from(repoPath).toString("base64"),
+					path: repoPath,
+				};
+			})
+			.filter(Boolean);
+		res.json({ repos });
+	} catch (error) {
+		res.status(500).json({ error: (error as Error).message });
+	}
+});
+
+// Git status for a repo
+app.get("/api/git/status", checkAuth, async (req: Request, res: Response) => {
+	const repoId = req.query.repo as string;
+	if (!repoId) {
+		res.status(400).json({ error: "repo query parameter is required" });
+		return;
+	}
+
+	const repoPath = decodeRepoId(repoId);
+	if (!repoPath) {
+		res.status(400).json({ error: "Invalid repo ID" });
+		return;
+	}
+
+	try {
+		const { stdout } = await execFileAsync(
+			"git",
+			["-C", repoPath, "status", "--porcelain=v2", "--branch"],
+			{ timeout: 10000 },
+		);
+
+		const lines = stdout.split("\n");
+		let branch = "";
+		let ahead = 0;
+		let behind = 0;
+		const files: Array<{ status: string; path: string }> = [];
+
+		for (const line of lines) {
+			if (line.startsWith("# branch.head ")) {
+				branch = line.slice("# branch.head ".length);
+			} else if (line.startsWith("# branch.ab ")) {
+				const match = line.match(/\+(\d+) -(\d+)/);
+				if (match) {
+					ahead = Number.parseInt(match[1], 10);
+					behind = Number.parseInt(match[2], 10);
+				}
+			} else if (line.startsWith("1 ") || line.startsWith("2 ")) {
+				// Changed or renamed entry
+				const parts = line.split("\t");
+				const statusField = line.split(" ")[1] || "";
+				const filePath = parts[parts.length - 1] || line.split(" ").pop() || "";
+				files.push({ status: statusField, path: filePath });
+			} else if (line.startsWith("? ")) {
+				// Untracked
+				const filePath = line.slice(2);
+				files.push({ status: "?", path: filePath });
+			}
+		}
+
+		res.json({ branch, ahead, behind, files });
+	} catch (error) {
+		res.status(500).json({ error: (error as Error).message });
+	}
+});
+
+// Git diff for a file or whole repo
+app.get("/api/git/diff", checkAuth, async (req: Request, res: Response) => {
+	const repoId = req.query.repo as string;
+	const filePath = req.query.path as string | undefined;
+
+	if (!repoId) {
+		res.status(400).json({ error: "repo query parameter is required" });
+		return;
+	}
+
+	const repoPath = decodeRepoId(repoId);
+	if (!repoPath) {
+		res.status(400).json({ error: "Invalid repo ID" });
+		return;
+	}
+
+	// Validate file path if provided (no directory traversal)
+	if (filePath) {
+		const resolved = path.resolve(repoPath, filePath);
+		if (!resolved.startsWith(`${repoPath}/`)) {
+			res.status(400).json({ error: "Invalid file path" });
+			return;
+		}
+	}
+
+	try {
+		const args = ["-C", repoPath, "diff", "HEAD"];
+		if (filePath) {
+			args.push("--", filePath);
+		}
+
+		const { stdout } = await execFileAsync("git", args, {
+			timeout: 10000,
+			maxBuffer: MAX_DIFF_BYTES * 2,
+		});
+
+		// Cap output
+		const diff =
+			stdout.length > MAX_DIFF_BYTES
+				? `${stdout.slice(0, MAX_DIFF_BYTES)}\n...[truncated]`
+				: stdout;
+
+		res.json({ diff });
+	} catch (error) {
+		res.status(500).json({ error: (error as Error).message });
+	}
 });
 
 export function startApiServer(port = 4000): void {

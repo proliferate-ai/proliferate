@@ -1,0 +1,77 @@
+/**
+ * Devtools Proxy Route
+ *
+ * /proxy/:proliferateSessionId/:token/devtools/mcp[/*]
+ *
+ * Proxies devtools requests through Gateway to sandbox-mcp API.
+ * Auth is handled via token in the URL path (same as opencode proxy).
+ * Injects HMAC-derived Bearer token for sandbox-mcp authentication.
+ */
+
+import type { ServerResponse } from "node:http";
+import { createLogger } from "@proliferate/logger";
+import type { Request, Response } from "express";
+import { Router, type Router as RouterType } from "express";
+import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
+import type { HubManager } from "../../hub";
+import type { GatewayEnv } from "../../lib/env";
+import { deriveSandboxMcpToken } from "../../lib/sandbox-mcp-token";
+import { ApiError, createEnsureSessionReady, createRequireProxyAuth } from "../../middleware";
+
+const logger = createLogger({ service: "gateway" }).child({ module: "devtools-proxy" });
+
+export function createDevtoolsProxyRoutes(hubManager: HubManager, env: GatewayEnv): RouterType {
+	const router: RouterType = Router();
+	const requireProxyAuth = createRequireProxyAuth(env);
+	const ensureSessionReady = createEnsureSessionReady(hubManager);
+
+	const proxy = createProxyMiddleware<Request, Response>({
+		router: (req: Request) => {
+			const previewUrl = req.hub?.getPreviewUrl();
+			if (!previewUrl) {
+				throw new ApiError(503, "Sandbox not ready");
+			}
+			return previewUrl;
+		},
+		changeOrigin: true,
+		pathRewrite: (path: string) => {
+			// Strip /proxy/:sessionId/:token/devtools/mcp and forward to /_proliferate/mcp
+			const idx = path.indexOf("/devtools/mcp");
+			if (idx >= 0) {
+				const tail = path.slice(idx + "/devtools/mcp".length);
+				return `/_proliferate/mcp${tail || "/"}`;
+			}
+			return path;
+		},
+		on: {
+			proxyReq: (proxyReq, req) => {
+				fixRequestBody(proxyReq, req as Request);
+				// Inject sandbox-mcp auth token
+				const sessionId = (req as Request).proliferateSessionId;
+				if (sessionId) {
+					const token = deriveSandboxMcpToken(env.serviceToken, sessionId);
+					proxyReq.setHeader("Authorization", `Bearer ${token}`);
+				}
+			},
+			error: (err: Error, _req, res) => {
+				logger.error({ err }, "Devtools proxy error");
+				if ("headersSent" in res && !res.headersSent && "writeHead" in res) {
+					(res as ServerResponse).writeHead(502, { "Content-Type": "application/json" });
+					(res as ServerResponse).end(
+						JSON.stringify({ error: "Proxy error", message: err.message }),
+					);
+				}
+			},
+		},
+	});
+
+	// Match both /devtools/mcp and /devtools/mcp/*
+	router.use(
+		"/:proliferateSessionId/:token/devtools/mcp",
+		requireProxyAuth,
+		ensureSessionReady,
+		proxy,
+	);
+
+	return router;
+}

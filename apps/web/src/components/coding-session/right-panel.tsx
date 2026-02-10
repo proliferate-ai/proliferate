@@ -7,6 +7,7 @@ import type { AutoStartOutputMessage, VerificationFile } from "@proliferate/shar
 import { ArrowLeft, Grid, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AutoStartPanel } from "./auto-start-panel";
+import { ChangesPanel } from "./changes-panel";
 import { FileViewer } from "./file-viewer";
 import { PreviewPanel } from "./preview-panel";
 import { SessionInfoPanel } from "./session-info-panel";
@@ -14,6 +15,8 @@ import { SnapshotsPanel } from "./snapshots-panel";
 import { VerificationGallery } from "./verification-gallery";
 
 export interface SessionPanelProps {
+	sessionId?: string;
+	activityTick?: number;
 	sessionStatus?: string;
 	repoId?: string | null;
 	prebuildId?: string | null;
@@ -73,6 +76,17 @@ export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps
 				canSnapshot={sessionProps.canSnapshot}
 				isSnapshotting={sessionProps.isSnapshotting}
 				onSnapshot={sessionProps.onSnapshot}
+				onClose={handleClose}
+			/>
+		);
+	}
+
+	// Changes panel
+	if (mode.type === "changes" && sessionProps?.sessionId) {
+		return (
+			<ChangesPanel
+				sessionId={sessionProps.sessionId}
+				activityTick={sessionProps.activityTick ?? 0}
 				onClose={handleClose}
 			/>
 		);
