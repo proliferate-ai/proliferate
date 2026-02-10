@@ -670,6 +670,7 @@ export class E2BProvider implements SandboxProvider {
 		log.debug("Starting sandbox-mcp API (async)");
 		const sandboxMcpEnvs: Record<string, string> = {
 			WORKSPACE_DIR: "/home/user/workspace",
+			NODE_ENV: "production",
 		};
 		if (opts.envVars.SANDBOX_MCP_AUTH_TOKEN) {
 			sandboxMcpEnvs.SANDBOX_MCP_AUTH_TOKEN = opts.envVars.SANDBOX_MCP_AUTH_TOKEN;

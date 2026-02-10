@@ -1106,6 +1106,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		log.info("Starting sandbox-mcp API server");
 		const mcpEnvs: Record<string, string> = {
 			WORKSPACE_DIR: "/home/user/workspace",
+			NODE_ENV: "production",
 		};
 		if (opts.envVars.SANDBOX_MCP_AUTH_TOKEN) {
 			mcpEnvs.SANDBOX_MCP_AUTH_TOKEN = opts.envVars.SANDBOX_MCP_AUTH_TOKEN;
