@@ -39,16 +39,28 @@ export const DEFAULT_CADDYFILE = `{
 }
 
 :20000 {
-    reverse_proxy localhost:3000 localhost:5173 localhost:8000 localhost:4321 {
-        lb_policy first
-        lb_try_duration 1s
-        lb_try_interval 100ms
-        fail_duration 2s
+    handle_path /_proliferate/mcp/* {
+        reverse_proxy localhost:4000
     }
 
-    header {
-        -X-Frame-Options
-        -Content-Security-Policy
+    # User-exposed port snippet (written by exposePort). When populated, its
+    # bare "handle" block intentionally takes priority over the default fallback
+    # below, routing all non-devtools traffic to the user's chosen port.
+    # Starts as an empty file so the default fallback applies until exposePort is called.
+    import /home/user/.proliferate/caddy/user.caddy
+
+    # Default fallback: try common dev server ports when no explicit port is exposed.
+    handle {
+        reverse_proxy localhost:3000 localhost:5173 localhost:8000 localhost:4321 {
+            lb_policy first
+            lb_try_duration 1s
+            lb_try_interval 100ms
+            fail_duration 2s
+        }
+        header {
+            -X-Frame-Options
+            -Content-Security-Policy
+        }
     }
 }
 `;
@@ -124,6 +136,10 @@ export const SANDBOX_PATHS = {
 	preinstalledToolsDir: "/home/user/.opencode-tools",
 	/** Caddyfile for preview proxy (avoid /tmp - Docker daemon can restrict it) */
 	caddyfile: "/home/user/Caddyfile",
+	/** Directory for user-managed Caddy snippets (imported by main Caddyfile) */
+	userCaddyDir: "/home/user/.proliferate/caddy",
+	/** User Caddy config file (written by exposePort, imported by main Caddyfile) */
+	userCaddyFile: "/home/user/.proliferate/caddy/user.caddy",
 } as const;
 
 /**

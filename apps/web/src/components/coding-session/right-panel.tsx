@@ -12,6 +12,7 @@ import type {
 import { ArrowLeft, Grid, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AutoStartPanel } from "./auto-start-panel";
+import { ChangesPanel } from "./changes-panel";
 import { FileViewer } from "./file-viewer";
 import { GitPanel } from "./git-panel";
 import { PreviewPanel } from "./preview-panel";
@@ -20,6 +21,8 @@ import { SnapshotsPanel } from "./snapshots-panel";
 import { VerificationGallery } from "./verification-gallery";
 
 export interface SessionPanelProps {
+	sessionId?: string;
+	activityTick?: number;
 	sessionStatus?: string;
 	repoId?: string | null;
 	prebuildId?: string | null;
@@ -113,6 +116,17 @@ export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps
 				sendGitPush={sessionProps.sendGitPush}
 				sendGitCreatePr={sessionProps.sendGitCreatePr}
 				clearGitResult={sessionProps.clearGitResult}
+			/>
+		);
+	}
+
+	// Changes panel
+	if (mode.type === "changes" && sessionProps?.sessionId) {
+		return (
+			<ChangesPanel
+				sessionId={sessionProps.sessionId}
+				activityTick={sessionProps.activityTick ?? 0}
+				onClose={handleClose}
 			/>
 		);
 	}

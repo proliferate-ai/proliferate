@@ -9,7 +9,8 @@ export type PreviewMode =
 	| { type: "session-info" }
 	| { type: "snapshots" }
 	| { type: "service-commands" }
-	| { type: "git" };
+	| { type: "git" }
+	| { type: "changes" };
 
 // Mobile view state - on mobile we either show chat or preview (full screen)
 export type MobileView = "chat" | "preview";
@@ -30,7 +31,9 @@ interface PreviewPanelState {
 
 	// Toggle helpers (for header buttons — toggles open/close)
 	toggleUrlPreview: (url: string | null) => void;
-	togglePanel: (type: "session-info" | "snapshots" | "service-commands" | "git") => void;
+	togglePanel: (
+		type: "session-info" | "snapshots" | "service-commands" | "git" | "changes",
+	) => void;
 
 	// Mobile view toggle
 	setMobileView: (view: MobileView) => void;
@@ -67,8 +70,8 @@ export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
 		}
 	},
 
-	// Generic toggle for session-info / snapshots / service-commands panels
-	togglePanel: (type: "session-info" | "snapshots" | "service-commands" | "git") => {
+	// Generic toggle for session-info / snapshots / service-commands / git / changes panels
+	togglePanel: (type: "session-info" | "snapshots" | "service-commands" | "git" | "changes") => {
 		const { mode } = get();
 		if (mode.type === type) {
 			set({ mode: { type: "none" }, mobileView: "chat" });

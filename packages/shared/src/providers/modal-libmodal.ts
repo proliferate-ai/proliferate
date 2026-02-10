@@ -557,6 +557,14 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				sandboxImage = await this.ensureBaseImageInitialized();
 				imageSource = "base_image";
 			}
+			log.info(
+				{
+					imageSource,
+					restoreSnapshotId: restoreSnapshotId || null,
+					baseSnapshotId: baseSnapshotId || null,
+				},
+				"Sandbox image selected",
+			);
 			logLatency("provider.create_sandbox.image_selected", {
 				provider: this.type,
 				sessionId: opts.sessionId,
@@ -1076,6 +1084,13 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		log.debug("Starting services (async)");
 		await sandbox.exec(["/usr/local/bin/start-services.sh"]);
 
+		// Create caddy import directory (must exist before Caddy starts)
+		await sandbox.exec([
+			"sh",
+			"-c",
+			`mkdir -p ${SANDBOX_PATHS.userCaddyDir} && touch ${SANDBOX_PATHS.userCaddyFile}`,
+		]);
+
 		// Write and start Caddy
 		log.debug("Starting Caddy preview proxy (async)");
 		const caddyFile = await sandbox.open(SANDBOX_PATHS.caddyfile, "w");
@@ -1086,6 +1101,28 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		sandbox.exec(["caddy", "run", "--config", SANDBOX_PATHS.caddyfile]).catch(() => {
 			// Expected - runs until sandbox terminates
 		});
+
+		// Start sandbox-mcp API server in background
+		log.info("Starting sandbox-mcp API server");
+		const mcpEnvs: Record<string, string> = {
+			WORKSPACE_DIR: "/home/user/workspace",
+			NODE_ENV: "production",
+		};
+		if (opts.envVars.SANDBOX_MCP_AUTH_TOKEN) {
+			mcpEnvs.SANDBOX_MCP_AUTH_TOKEN = opts.envVars.SANDBOX_MCP_AUTH_TOKEN;
+			log.debug("SANDBOX_MCP_AUTH_TOKEN injected");
+		} else {
+			log.warn("No SANDBOX_MCP_AUTH_TOKEN in envVars — sandbox-mcp will deny all requests");
+		}
+
+		sandbox
+			.exec(["sh", "-c", "/usr/bin/sandbox-mcp api > /tmp/sandbox-mcp.log 2>&1"], { env: mcpEnvs })
+			.then(() => {
+				log.warn("sandbox-mcp API exited unexpectedly");
+			})
+			.catch((err) => {
+				log.error({ err }, "sandbox-mcp API failed to start");
+			});
 
 		// Run per-repo service commands (only when snapshot includes deps)
 		if (opts.snapshotHasDeps) {

@@ -53,6 +53,7 @@ export function CodingSession({
 		previewUrl,
 		sessionTitle,
 		isMigrating,
+		activityTick,
 		autoStartOutput,
 		sendRunAutoStart,
 		gitState,
@@ -108,6 +109,8 @@ export function CodingSession({
 	// Session props for the right panel (session-info & snapshots modes)
 	const sessionPanelProps: SessionPanelProps | undefined = sessionData
 		? {
+				sessionId,
+				activityTick,
 				sessionStatus: sessionData.status ?? undefined,
 				repoId: sessionData.repoId,
 				prebuildId: sessionData.prebuildId,
@@ -196,6 +199,7 @@ export function CodingSession({
 								onToggleSnapshots={() => togglePanel("snapshots")}
 								onToggleAutoStart={() => togglePanel("service-commands")}
 								onToggleGit={() => togglePanel("git")}
+								onToggleChanges={() => togglePanel("changes")}
 								mobileView={mobileView}
 								onToggleMobileView={toggleMobileView}
 							/>
@@ -241,6 +245,7 @@ export function CodingSession({
 						onToggleSnapshots={() => togglePanel("snapshots")}
 						onToggleAutoStart={() => togglePanel("service-commands")}
 						onToggleGit={() => togglePanel("git")}
+						onToggleChanges={() => togglePanel("changes")}
 						mobileView={mobileView}
 						onToggleMobileView={toggleMobileView}
 					/>

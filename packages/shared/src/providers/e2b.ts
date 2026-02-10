@@ -648,6 +648,12 @@ export class E2BProvider implements SandboxProvider {
 			timeoutMs: 30000,
 		});
 
+		// Create caddy import directory (must exist before Caddy starts)
+		await sandbox.commands.run(
+			`mkdir -p ${SANDBOX_PATHS.userCaddyDir} && touch ${SANDBOX_PATHS.userCaddyFile}`,
+			{ timeoutMs: 5000 },
+		);
+
 		// Start Caddy for preview proxy (run in background, non-blocking)
 		log.debug("Starting Caddy preview proxy (async)");
 		await sandbox.files.write(SANDBOX_PATHS.caddyfile, DEFAULT_CADDYFILE);
@@ -657,6 +663,25 @@ export class E2BProvider implements SandboxProvider {
 			})
 			.catch((err: unknown) => {
 				providerLogger.debug({ err }, "Caddy process ended");
+			});
+		// Don't await - runs in background
+
+		// Start sandbox-mcp API server in background
+		log.debug("Starting sandbox-mcp API (async)");
+		const sandboxMcpEnvs: Record<string, string> = {
+			WORKSPACE_DIR: "/home/user/workspace",
+			NODE_ENV: "production",
+		};
+		if (opts.envVars.SANDBOX_MCP_AUTH_TOKEN) {
+			sandboxMcpEnvs.SANDBOX_MCP_AUTH_TOKEN = opts.envVars.SANDBOX_MCP_AUTH_TOKEN;
+		}
+		sandbox.commands
+			.run("sandbox-mcp api > /tmp/sandbox-mcp.log 2>&1", {
+				timeoutMs: 3600000,
+				envs: sandboxMcpEnvs,
+			})
+			.catch((err: unknown) => {
+				providerLogger.debug({ err }, "sandbox-mcp process ended");
 			});
 		// Don't await - runs in background
 

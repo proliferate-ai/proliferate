@@ -608,16 +608,13 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.26.0
         version: 1.26.0(zod@3.25.76)
-      '@proliferate/environment':
-        specifier: workspace:*
-        version: link:../environment
-      '@proliferate/logger':
-        specifier: workspace:*
-        version: link:../logger
       express:
         specifier: ^4.18.2
         version: 4.22.1
     devDependencies:
+      '@proliferate/logger':
+        specifier: workspace:*
+        version: link:../logger
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25

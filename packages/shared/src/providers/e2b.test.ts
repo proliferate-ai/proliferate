@@ -125,7 +125,17 @@ describe("E2B Provider - Helper Functions", () => {
 			expect(DEFAULT_CADDYFILE).toContain(":20000 {");
 		});
 
-		it("should proxy to common dev ports", () => {
+		it("should route /_proliferate/mcp to sandbox-mcp on port 4000", () => {
+			expect(DEFAULT_CADDYFILE).toContain("handle_path /_proliferate/mcp/*");
+			expect(DEFAULT_CADDYFILE).toContain("reverse_proxy localhost:4000");
+		});
+
+		it("should import user caddy config", () => {
+			expect(DEFAULT_CADDYFILE).toContain("import /home/user/.proliferate/caddy/user.caddy");
+		});
+
+		it("should proxy to common dev ports in a handle block", () => {
+			expect(DEFAULT_CADDYFILE).toContain("handle {");
 			expect(DEFAULT_CADDYFILE).toContain("localhost:3000");
 			expect(DEFAULT_CADDYFILE).toContain("localhost:5173");
 			expect(DEFAULT_CADDYFILE).toContain("localhost:8000");

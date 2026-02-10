@@ -47,6 +47,7 @@ interface UseSessionWebSocketReturn {
 	error: string | null;
 	previewUrl: string | null;
 	envRequest: EnvRequest | null;
+	activityTick: number;
 	autoStartOutput: AutoStartOutputMessage["payload"] | null;
 	gitState: GitState | null;
 	gitResult: GitResultMessage["payload"] | null;
@@ -91,6 +92,7 @@ export function useSessionWebSocket({
 	const [error, setError] = useState<string | null>(null);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 	const [envRequest, setEnvRequest] = useState<EnvRequest | null>(null);
+	const [activityTick, setActivityTick] = useState(0);
 	const [autoStartOutput, setAutoStartOutput] = useState<AutoStartOutputMessage["payload"] | null>(
 		null,
 	);
@@ -139,6 +141,7 @@ export function useSessionWebSocket({
 			onTitleUpdate,
 			streamingTextRef,
 			getLastAssistantMessageId,
+			incrementActivityTick: () => setActivityTick((t) => t + 1),
 		};
 
 		const client = createSyncClient({
@@ -250,6 +253,7 @@ export function useSessionWebSocket({
 		error,
 		previewUrl,
 		envRequest,
+		activityTick,
 		autoStartOutput,
 		gitState,
 		gitResult,
@@ -287,6 +291,7 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 
 		case "tool_end":
 			handleToolEnd(data as ToolEndMessage, ctx);
+			ctx.incrementActivityTick();
 			break;
 
 		case "tool_metadata":
@@ -295,6 +300,7 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 
 		case "message_complete":
 			handleMessageComplete(data.payload as { messageId?: string }, ctx);
+			ctx.incrementActivityTick();
 			break;
 
 		case "message_cancelled":
