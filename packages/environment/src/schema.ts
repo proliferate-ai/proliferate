@@ -56,6 +56,9 @@ const requiredForGitHubApp = (env: EnvLike) =>
 		});
 
 export const createPublicSchema = (env: EnvLike = process.env) => {
+	const isCloudProfile = env.DEPLOYMENT_PROFILE === "cloud";
+	const integrationsEnabled = isTruthy(env.NEXT_PUBLIC_INTEGRATIONS_ENABLED) || isCloudProfile;
+
 	return {
 		NEXT_PUBLIC_APP_URL: requiredString,
 		NEXT_PUBLIC_GATEWAY_URL: requiredString,
@@ -66,9 +69,18 @@ export const createPublicSchema = (env: EnvLike = process.env) => {
 		NEXT_PUBLIC_SENTRY_DSN: optionalString,
 		NEXT_PUBLIC_GITHUB_APP_SLUG: requiredForGitHubApp(env), // Required when using GitHub App (default)
 		NEXT_PUBLIC_INTERCOM_APP_ID: optionalString,
-		NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID: optionalString,
-		NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID: optionalString,
-		NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID: optionalString,
+		NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID: requiredWhen(
+			integrationsEnabled,
+			"Required when integrations are enabled",
+		),
+		NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID: requiredWhen(
+			integrationsEnabled,
+			"Required when integrations are enabled",
+		),
+		NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID: requiredWhen(
+			integrationsEnabled,
+			"Required when integrations are enabled",
+		),
 		NEXT_PUBLIC_POSTHOG_HOST: optionalString,
 		NEXT_PUBLIC_POSTHOG_KEY: optionalString,
 		NEXT_PUBLIC_USE_NANGO_GITHUB: optionalBoolean,
@@ -78,6 +90,7 @@ export const createPublicSchema = (env: EnvLike = process.env) => {
 export const createServerSchema = (env: EnvLike = process.env) => {
 	const isCloudProfile = env.DEPLOYMENT_PROFILE === "cloud";
 	const billingEnabled = isTruthy(env.NEXT_PUBLIC_BILLING_ENABLED) || isCloudProfile;
+	const integrationsEnabled = isTruthy(env.NEXT_PUBLIC_INTEGRATIONS_ENABLED) || isCloudProfile;
 	const emailEnabled =
 		isTruthy(env.EMAIL_ENABLED) ||
 		isTruthy(env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION) ||
@@ -140,7 +153,7 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 		MODAL_ENDPOINT_URL: optionalString, // Only used in test scripts, not production
 		MODAL_TOKEN_ID: requiredForProvider(env, "modal"),
 		MODAL_TOKEN_SECRET: requiredForProvider(env, "modal"),
-		NANGO_SECRET_KEY: optionalString, // Validated at point-of-use by getNango()
+		NANGO_SECRET_KEY: requiredWhen(integrationsEnabled, "Required when integrations are enabled"),
 		NEXT_BUILD_STANDALONE: optionalBoolean,
 		OPENAI_API_KEY: optionalString, // Only needed for specific features
 		WEB_PORT: optionalPort(3000),

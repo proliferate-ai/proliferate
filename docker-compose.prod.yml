@@ -180,7 +180,7 @@ services:
       - GITHUB_APP_ID=${GITHUB_APP_ID:-}
       - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY:-}
       - GITHUB_APP_WEBHOOK_SECRET=${GITHUB_APP_WEBHOOK_SECRET:-}
-      - GITHUB_APP_SLUG=${GITHUB_APP_SLUG:-}
+      - NEXT_PUBLIC_GITHUB_APP_SLUG=${NEXT_PUBLIC_GITHUB_APP_SLUG:-}
       # Email (optional)
       - EMAIL_ENABLED=${EMAIL_ENABLED:-false}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
@@ -289,11 +289,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://localhost:4000/health/liveliness'); sys.exit(0 if r.status==200 else 1)\"",
-        ]
+      test: ["CMD-SHELL", "curl -sf http://localhost:4000/health/liveliness || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

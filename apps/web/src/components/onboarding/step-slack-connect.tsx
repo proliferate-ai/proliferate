@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Loader2, SlackIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
-import { useSlackConnect, useSlackStatus } from "@/hooks/use-integrations";
+import { useSlackConnect } from "@/hooks/use-integrations";
 import { useEffect, useRef, useState } from "react";
 
 interface StepSlackConnectProps {
@@ -22,8 +22,6 @@ export function StepSlackConnect({
 	const [channelName, setChannelName] = useState("");
 	const inputRef = useRef<HTMLInputElement>(null);
 	const slackConnect = useSlackConnect();
-	const { data: slackStatus } = useSlackStatus();
-	const slackConfigured = slackStatus?.configured ?? true;
 
 	useEffect(() => {
 		if (justConnected && inputRef.current) {
@@ -210,33 +208,8 @@ export function StepSlackConnect({
 						</p>
 					</div>
 
-					{!slackConfigured && (
-						<div className="rounded-lg border border-border bg-muted/30 p-4 mb-4">
-							<p className="text-sm font-medium text-foreground">Slack not configured</p>
-							<p className="mt-1 text-sm text-muted-foreground">
-								Set <span className="font-mono text-xs">SLACK_CLIENT_ID</span>,{" "}
-								<span className="font-mono text-xs">SLACK_CLIENT_SECRET</span>, and{" "}
-								<span className="font-mono text-xs">SLACK_SIGNING_SECRET</span> in{" "}
-								<span className="font-mono text-xs">.env</span>.{" "}
-								<a
-									href="https://docs.proliferate.com/self-hosting/slackbot"
-									target="_blank"
-									rel="noreferrer"
-									className="underline text-foreground"
-								>
-									See docs
-								</a>
-							</p>
-						</div>
-					)}
-
 					<div className="space-y-3">
-						<Button
-							variant="dark"
-							onClick={handleConnect}
-							disabled={!slackConfigured}
-							className="h-11 w-full rounded-lg"
-						>
+						<Button variant="dark" onClick={handleConnect} className="h-11 w-full rounded-lg">
 							Add to Slack
 						</Button>
 						<Button

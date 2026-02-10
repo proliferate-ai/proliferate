@@ -5,7 +5,6 @@
  */
 
 import { randomUUID } from "crypto";
-import { env } from "@proliferate/environment/server";
 import type { Integration, IntegrationWithCreator } from "@proliferate/shared";
 import { toIsoString } from "../db/serialize";
 import { getServicesLogger } from "../logger";
@@ -47,7 +46,6 @@ export interface GitHubStatusResult {
 }
 
 export interface SlackStatusResult {
-	configured: boolean;
 	connected: boolean;
 	teamId?: string;
 	teamName?: string;
@@ -284,17 +282,14 @@ export async function getLinearStatus(
  * Get Slack connection status.
  */
 export async function getSlackStatus(orgId: string | null): Promise<SlackStatusResult> {
-	const configured =
-		!!env.SLACK_CLIENT_ID && !!env.SLACK_CLIENT_SECRET && !!env.SLACK_SIGNING_SECRET;
-
 	if (!orgId) {
-		return { configured, connected: false };
+		return { connected: false };
 	}
 
 	const installation = await integrationsDb.getActiveSlackInstallation(orgId);
 
 	if (!installation) {
-		return { configured, connected: false };
+		return { connected: false };
 	}
 
 	// Try to get support channel info
@@ -317,7 +312,6 @@ export async function getSlackStatus(orgId: string | null): Promise<SlackStatusR
 	}
 
 	return {
-		configured,
 		connected: true,
 		teamId: installation.teamId,
 		teamName: installation.teamName ?? undefined,
@@ -458,7 +452,7 @@ export interface SaveGitHubAppInstallationInput {
  */
 export async function saveGitHubAppInstallation(
 	input: SaveGitHubAppInstallationInput,
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; integrationId?: string }> {
 	const logger = getServicesLogger().child({ module: "integrations" });
 	logger.info(
 		{ orgId: input.organizationId, installationId: input.installationId },
@@ -467,7 +461,7 @@ export async function saveGitHubAppInstallation(
 	const result = await integrationsDb.upsertGitHubAppInstallation(input);
 	logger.debug({ resultId: result?.id ?? null }, "GitHub App installation saved");
 
-	return { success: result !== null };
+	return { success: result !== null, integrationId: result?.id };
 }
 
 // ============================================

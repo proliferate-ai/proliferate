@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { GithubIcon, RefreshCw } from "@/components/ui/icons";
 import { useGitHubAppConnect } from "@/hooks/use-github-app-connect";
-import { shouldUseNangoForProvider, useNangoConnect } from "@/hooks/use-nango-connect";
+import { USE_NANGO_GITHUB, useNangoConnect } from "@/hooks/use-nango-connect";
 import type { ReactNode } from "react";
 
 interface GitHubConnectButtonProps {
@@ -39,16 +39,15 @@ export function GitHubConnectButton({
 		targetOrgId,
 	});
 
-	// Nango flow (when USE_NANGO_GITHUB=true AND integrations are enabled)
-	const useNango = shouldUseNangoForProvider("github");
+	// Nango flow (local dev when USE_NANGO_GITHUB=true)
 	const { connect: nangoConnect, isLoading: nangoLoading } = useNangoConnect({
 		onSuccess: () => onSuccess?.(),
 	});
 
-	const isLoading = useNango ? nangoLoading : githubAppLoading;
+	const isLoading = USE_NANGO_GITHUB ? nangoLoading : githubAppLoading;
 
 	const handleConnect = () => {
-		if (useNango) {
+		if (USE_NANGO_GITHUB) {
 			nangoConnect("github" as any);
 		} else {
 			githubAppConnect();

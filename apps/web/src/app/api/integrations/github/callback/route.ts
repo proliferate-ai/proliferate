@@ -1,7 +1,7 @@
 import { requireAuth } from "@/lib/auth-helpers";
-import { verifyInstallation } from "@/lib/github-app";
+import { listInstallationRepos, verifyInstallation } from "@/lib/github-app";
 import { logger } from "@/lib/logger";
-import { integrations } from "@proliferate/services";
+import { integrations, repos } from "@proliferate/services";
 import { type NextRequest, NextResponse } from "next/server";
 
 const log = logger.child({ route: "integrations/github/callback" });
@@ -120,6 +120,41 @@ export async function GET(request: NextRequest) {
 		}
 
 		log.info("Integration saved successfully");
+
+		// Auto-add all repos from the installation
+		if (result.integrationId) {
+			try {
+				const { repositories } = await listInstallationRepos(installationId);
+				log.info({ count: repositories.length }, "Auto-adding repos from installation");
+
+				await Promise.all(
+					repositories.map((repo) =>
+						repos
+							.createRepo({
+								organizationId: orgId,
+								userId: authResult.session.user.id,
+								githubRepoId: String(repo.id),
+								githubRepoName: repo.full_name,
+								githubUrl: repo.html_url,
+								defaultBranch: repo.default_branch,
+								integrationId: result.integrationId,
+								isPrivate: repo.private,
+								source: "github",
+							})
+							.catch((err) => {
+								log.warn({ err, repoName: repo.full_name }, "Failed to auto-add repo");
+							}),
+					),
+				);
+
+				log.info("Auto-added repos from installation");
+			} catch (error) {
+				log.warn({ err: error }, "Failed to auto-sync repos, user can add manually");
+			}
+		} else {
+			log.warn("Integration saved but no integrationId returned, skipping repo auto-add");
+		}
+
 		const redirectUrl = new URL(returnUrl, baseUrl);
 		redirectUrl.searchParams.set("success", "github");
 		return NextResponse.redirect(redirectUrl);

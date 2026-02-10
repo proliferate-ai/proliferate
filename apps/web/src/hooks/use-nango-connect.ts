@@ -57,8 +57,7 @@ export function shouldUseNangoForProvider(provider: Provider): boolean {
 		return false;
 	}
 	if (provider === "github") {
-		// Must have both the flag enabled AND the integration ID configured
-		return USE_NANGO_GITHUB && !!NANGO_INTEGRATION_IDS.github;
+		return USE_NANGO_GITHUB;
 	}
 	// All other providers always use Nango
 	return true;
