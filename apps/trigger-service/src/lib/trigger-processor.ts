@@ -1,19 +1,8 @@
-import { env } from "@proliferate/environment/server";
-import { createSyncClient } from "@proliferate/gateway-clients";
-import { automations, sessions, triggers } from "@proliferate/services";
+import { automations, runs, triggers } from "@proliferate/services";
 import type { TriggerDefinition, TriggerEvent } from "@proliferate/triggers";
 import { logger as rootLogger } from "./logger.js";
 
 const logger = rootLogger.child({ module: "trigger-processor" });
-
-const GATEWAY_URL = env.NEXT_PUBLIC_GATEWAY_URL;
-const SERVICE_TO_SERVICE_AUTH_TOKEN = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
-
-const syncClient = createSyncClient({
-	baseUrl: GATEWAY_URL,
-	auth: { type: "service", name: "trigger-service", secret: SERVICE_TO_SERVICE_AUTH_TOKEN },
-	source: "automation",
-});
 
 interface ProcessResult {
 	processed: number;
@@ -96,66 +85,32 @@ export async function processTriggerEvents(
 		const parsedContext = triggerDef.context(event) as Record<string, unknown>;
 		const providerEventType = inferProviderEventType(triggerRow.provider, event.payload);
 
-		const triggerEvent = await triggers.createEvent({
-			triggerId: triggerRow.id,
-			organizationId: triggerRow.organizationId,
-			externalEventId: event.externalId,
-			providerEventType,
-			rawPayload: toRawPayload(event.payload),
-			parsedContext,
-			dedupKey,
-			status: "processing",
-		});
-
 		try {
-			const prebuildId = automation.default_prebuild_id ?? null;
-			if (!prebuildId) {
-				throw new Error("Automation missing default prebuild");
-			}
-
-			const prompt = buildPrompt(automation.agent_instructions, parsedContext);
-			const title = buildTitle(automation.name, parsedContext);
-
-			const session = await syncClient.createSession({
+			await runs.createRunFromTriggerEvent({
+				triggerId: triggerRow.id,
 				organizationId: triggerRow.organizationId,
-				prebuildId,
-				sessionType: "coding",
-				clientType: "automation",
-				initialPrompt: prompt,
-				title,
 				automationId: automation.id,
-				triggerId: triggerRow.id,
-				triggerEventId: triggerEvent.id,
-				agentConfig: automation.model_id ? { modelId: automation.model_id } : undefined,
-				clientMetadata: {
-					automationId: automation.id,
-					triggerId: triggerRow.id,
-					triggerEventId: triggerEvent.id,
-					provider: triggerRow.provider,
-					context: parsedContext,
-				},
-			});
-
-			await sessions.update(session.sessionId, {
-				automationId: automation.id,
-				triggerId: triggerRow.id,
-				triggerEventId: triggerEvent.id,
-			});
-
-			await triggers.updateEvent(triggerEvent.id, {
-				status: "completed",
-				sessionId: session.sessionId,
-				processedAt: new Date(),
+				externalEventId: event.externalId,
+				providerEventType,
+				rawPayload: toRawPayload(event.payload),
+				parsedContext,
+				dedupKey,
 			});
 
 			processed++;
 		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			await triggers.updateEvent(triggerEvent.id, {
-				status: "failed",
-				errorMessage: message,
-				processedAt: new Date(),
+			logger.error({ err, triggerId: triggerRow.id }, "Failed to create automation run");
+			await safeCreateSkippedEvent({
+				triggerId: triggerRow.id,
+				organizationId: triggerRow.organizationId,
+				externalEventId: event.externalId,
+				providerEventType,
+				rawPayload: toRawPayload(event.payload),
+				parsedContext,
+				dedupKey,
+				skipReason: "run_create_failed",
 			});
+			skipped++;
 		}
 	}
 
@@ -184,24 +139,6 @@ function inferProviderEventType(provider: string, payload: unknown): string | nu
 		return "message_received";
 	}
 	return null;
-}
-
-function buildPrompt(
-	instructions: string | null | undefined,
-	context: Record<string, unknown>,
-): string {
-	const parts: string[] = [];
-	if (instructions?.trim()) {
-		parts.push(instructions.trim());
-	}
-	parts.push(`Trigger context:\n${JSON.stringify(context, null, 2)}`);
-	return parts.join("\n\n");
-}
-
-function buildTitle(name: string, context: Record<string, unknown>): string {
-	const title = (context as { title?: string }).title;
-	if (title) return `${name} · ${title}`;
-	return name;
 }
 
 function toRawPayload(payload: unknown): Record<string, unknown> {
