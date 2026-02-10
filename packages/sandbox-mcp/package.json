@@ -1,16 +1,17 @@
 {
 	"name": "proliferate-sandbox-mcp",
-	"version": "0.1.16",
+	"version": "0.1.17",
 	"description": "MCP server for managing services in Proliferate cloud sandboxes",
 	"type": "module",
 	"bin": {
-		"sandbox-mcp": "./dist/bundle.cjs"
+		"sandbox-mcp": "./dist/bundle.cjs",
+		"proliferate": "./dist/proliferate.cjs"
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"scripts": {
 		"build": "tsc",
-		"bundle": "rm -f dist/bundle.cjs && esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/bundle.cjs --banner:js='#!/usr/bin/env node\nprocess.env.NODE_ENV=process.env.NODE_ENV||\"production\";' --external:pino-pretty --external:node-pty --external:ws && chmod +x dist/bundle.cjs",
+		"bundle": "rm -f dist/bundle.cjs dist/proliferate.cjs && esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/bundle.cjs --banner:js='#!/usr/bin/env node\nprocess.env.NODE_ENV=process.env.NODE_ENV||\"production\";' --external:pino-pretty --external:node-pty --external:ws && esbuild src/proliferate-cli.ts --bundle --platform=node --target=node20 --outfile=dist/proliferate.cjs --banner:js='#!/usr/bin/env node' && chmod +x dist/bundle.cjs dist/proliferate.cjs",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
