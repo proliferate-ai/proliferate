@@ -484,11 +484,18 @@ export const automationsRouter = {
 				throw new ORPCError("NOT_FOUND", { message: "Automation not found" });
 			}
 
-			const updated = await runs.assignRunToUser(input.runId, context.orgId, context.user.id);
-			if (!updated) {
-				throw new ORPCError("NOT_FOUND", { message: "Run not found" });
+			try {
+				const updated = await runs.assignRunToUser(input.runId, context.orgId, context.user.id);
+				if (!updated) {
+					throw new ORPCError("NOT_FOUND", { message: "Run not found" });
+				}
+				return { success: true };
+			} catch (err) {
+				if (err instanceof runs.RunAlreadyAssignedError) {
+					throw new ORPCError("CONFLICT", { message: "Run already claimed" });
+				}
+				throw err;
 			}
-			return { success: true };
 		}),
 
 	/**

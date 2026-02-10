@@ -276,7 +276,13 @@ export async function assignRunToUser(
 			assignedAt: new Date(),
 			updatedAt: new Date(),
 		})
-		.where(and(eq(automationRuns.id, runId), eq(automationRuns.organizationId, orgId)))
+		.where(
+			and(
+				eq(automationRuns.id, runId),
+				eq(automationRuns.organizationId, orgId),
+				or(isNull(automationRuns.assignedTo), eq(automationRuns.assignedTo, userId)),
+			),
+		)
 		.returning();
 	return row ?? null;
 }

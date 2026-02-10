@@ -7,6 +7,15 @@ import { getDb } from "../db/client";
 import type { TriggerEventRow } from "../triggers/db";
 import * as runsDb from "./db";
 
+export class RunAlreadyAssignedError extends Error {
+	readonly assignedTo: string;
+
+	constructor(assignedTo: string) {
+		super("Run is already assigned");
+		this.assignedTo = assignedTo;
+	}
+}
+
 export interface CreateRunFromTriggerEventInput {
 	triggerId: string;
 	organizationId: string;
@@ -153,7 +162,21 @@ export async function assignRunToUser(
 	orgId: string,
 	userId: string,
 ): Promise<runsDb.AutomationRunRow | null> {
-	return runsDb.assignRunToUser(runId, orgId, userId);
+	const updated = await runsDb.assignRunToUser(runId, orgId, userId);
+	if (updated) {
+		return updated;
+	}
+
+	const existing = await runsDb.findById(runId);
+	if (!existing || existing.organizationId !== orgId) {
+		return null;
+	}
+
+	if (existing.assignedTo && existing.assignedTo !== userId) {
+		throw new RunAlreadyAssignedError(existing.assignedTo);
+	}
+
+	return null;
 }
 
 export async function unassignRun(

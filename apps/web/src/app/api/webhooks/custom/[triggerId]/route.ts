@@ -6,14 +6,10 @@
  */
 
 import { logger } from "@/lib/logger";
-import { env } from "@proliferate/environment/server";
-import { triggers } from "@proliferate/services";
-
-const log = logger.child({ handler: "custom-webhook" });
+import { runs, triggers } from "@proliferate/services";
 import { NextResponse } from "next/server";
 
-const SERVICE_TO_SERVICE_AUTH_TOKEN = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
-const NEXTJS_APP_URL = env.NEXT_PUBLIC_APP_URL;
+const log = logger.child({ handler: "custom-webhook" });
 
 // ============================================
 // HMAC-SHA256 verification (optional)
@@ -159,11 +155,13 @@ export async function POST(
 	}
 
 	// Create trigger event
-	let event: { id: string };
+	let runId: string | null = null;
+	let eventId: string | null = null;
 	try {
-		event = await triggers.createEvent({
+		const { run, event } = await runs.createRunFromTriggerEvent({
 			triggerId,
 			organizationId: trigger.organizationId,
+			automationId: trigger.automationId,
 			externalEventId: `webhook:${receivedAt}`,
 			providerEventType: "webhook:received",
 			rawPayload: payload,
@@ -175,39 +173,20 @@ export async function POST(
 				payload,
 			},
 			dedupKey,
-			status: "queued",
 		});
+		runId = run.id;
+		eventId = event.id;
+		log.info({ eventId: event.id, runId: run.id, triggerId }, "Created run for trigger event");
 	} catch (err) {
 		log.error({ err, triggerId }, "Failed to create event for trigger");
 		return NextResponse.json({ error: "Failed to create event" }, { status: 500 });
 	}
 
-	log.info({ eventId: event.id, triggerId }, "Created event for trigger");
-
-	// Queue for processing via internal API
-	if (SERVICE_TO_SERVICE_AUTH_TOKEN && NEXTJS_APP_URL) {
-		try {
-			await fetch(`${NEXTJS_APP_URL}/api/internal/process-trigger-event`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${SERVICE_TO_SERVICE_AUTH_TOKEN}`,
-				},
-				body: JSON.stringify({
-					eventId: event.id,
-					triggerId: trigger.id,
-					organizationId: trigger.organizationId,
-				}),
-			});
-		} catch (err) {
-			log.error({ err }, "Failed to notify API for event processing");
-			// Don't fail - event is recorded, can be processed later
-		}
-	}
-
 	return NextResponse.json({
 		success: true,
-		eventId: event.id,
+		triggerId,
+		runId,
+		eventId,
 	});
 }
 

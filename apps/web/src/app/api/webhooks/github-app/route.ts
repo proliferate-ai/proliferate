@@ -7,15 +7,13 @@
 
 import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
-import { integrations, triggers } from "@proliferate/services";
-
-const log = logger.child({ handler: "github-app" });
+import { integrations, runs, triggers } from "@proliferate/services";
 import { GitHubProvider, type GitHubTriggerConfig, getProviderByType } from "@proliferate/triggers";
 import { NextResponse } from "next/server";
 
+const log = logger.child({ handler: "github-app" });
+
 const GITHUB_APP_WEBHOOK_SECRET = env.GITHUB_APP_WEBHOOK_SECRET;
-const SERVICE_TO_SERVICE_AUTH_TOKEN = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
-const NEXTJS_APP_URL = env.NEXT_PUBLIC_APP_URL;
 
 /**
  * Extract installation ID from GitHub webhook payload.
@@ -190,46 +188,23 @@ export async function POST(request: Request) {
 			// Parse context
 			const parsedContext = provider.parseContext(item);
 
-			// Create event record
-			let event: { id: string };
 			try {
-				event = await triggers.createEvent({
+				await runs.createRunFromTriggerEvent({
 					triggerId: trigger.id,
 					organizationId: trigger.organizationId,
+					automationId: trigger.automationId,
 					externalEventId: provider.extractExternalId(item),
 					providerEventType: provider.getEventType(item),
 					rawPayload: item as unknown as Record<string, unknown>,
 					parsedContext: parsedContext as unknown as Record<string, unknown>,
 					dedupKey,
-					status: "queued",
 				});
 			} catch (err) {
-				log.error({ err }, "Failed to create event");
+				log.error({ err }, "Failed to create run for trigger event");
 				continue;
 			}
 
 			processed++;
-
-			// Queue for processing via internal API
-			if (SERVICE_TO_SERVICE_AUTH_TOKEN && NEXTJS_APP_URL) {
-				try {
-					await fetch(`${NEXTJS_APP_URL}/api/internal/process-trigger-event`, {
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-							Authorization: `Bearer ${SERVICE_TO_SERVICE_AUTH_TOKEN}`,
-						},
-						body: JSON.stringify({
-							eventId: event.id,
-							triggerId: trigger.id,
-							organizationId: trigger.organizationId,
-						}),
-					});
-				} catch (err) {
-					log.error({ err }, "Failed to queue event");
-					// Don't fail - event is recorded, can be processed later
-				}
-			}
 		}
 	}
 
