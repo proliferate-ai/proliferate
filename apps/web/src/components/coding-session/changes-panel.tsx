@@ -77,7 +77,8 @@ export function ChangesPanel({ sessionId, activityTick, onClose }: ChangesPanelP
 		if (activityTick === 0) return;
 		if (debounceRef.current) clearTimeout(debounceRef.current);
 		debounceRef.current = setTimeout(() => {
-			queryClient.invalidateQueries({ queryKey: ["git-status"] });
+			queryClient.invalidateQueries({ queryKey: ["git-status", sessionId] });
+			queryClient.invalidateQueries({ queryKey: ["git-diff", sessionId] });
 		}, 500);
 		return () => {
 			if (debounceRef.current) clearTimeout(debounceRef.current);

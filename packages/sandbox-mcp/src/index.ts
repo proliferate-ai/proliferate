@@ -7,6 +7,7 @@ const logger = createLogger({ service: "sandbox-mcp" });
 const mode = process.argv[2];
 
 if (mode === "api") {
+	// Port 4000 is hardcoded — the Caddyfile routes /_proliferate/mcp/* to localhost:4000
 	startApiServer();
 } else if (mode === "mcp") {
 	startMcpServer().catch((err) => {
