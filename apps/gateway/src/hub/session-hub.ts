@@ -800,7 +800,7 @@ export class SessionHub {
 
 		setTimeout(() => {
 			// Check again - clients may have disconnected during delay
-			if (this.clients.size === 0) {
+			if (this.clients.size === 0 && !this.shouldReconnectWithoutClients()) {
 				this.log("No clients connected, aborting reconnection");
 				this.reconnectAttempt = 0;
 				return;
