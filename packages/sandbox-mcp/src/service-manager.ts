@@ -7,7 +7,8 @@ import type { ServiceInfo, State } from "./types.js";
 // Use /tmp for state/logs (user-writable, doesn't require root)
 const STATE_FILE = "/tmp/proliferate/state.json";
 const LOG_DIR = "/tmp/proliferate/logs";
-const CADDYFILE = "/home/user/Caddyfile"; // Match sandbox provider setup (avoid /tmp - Docker can restrict it)
+const USER_CADDY_DIR = "/home/user/.proliferate/caddy";
+const USER_CADDY_FILE = `${USER_CADDY_DIR}/user.caddy`;
 const DEFAULT_WORKSPACE_DIR = env.WORKSPACE_DIR ?? process.cwd();
 
 const processes: Map<string, ChildProcess> = new Map();
@@ -147,7 +148,7 @@ export async function exposePort(port: number): Promise<void> {
 
 	// Check if already exposed to this port
 	try {
-		const currentConfig = existsSync(CADDYFILE) ? readFileSync(CADDYFILE, "utf-8") : "";
+		const currentConfig = existsSync(USER_CADDY_FILE) ? readFileSync(USER_CADDY_FILE, "utf-8") : "";
 		if (currentConfig.includes(`localhost:${port}`)) {
 			return; // Already configured
 		}
@@ -155,41 +156,29 @@ export async function exposePort(port: number): Promise<void> {
 		// Ignore read errors, proceed to write
 	}
 
-	// Update Caddyfile to proxy to this port
-	// CRITICAL: Preserve the /api/* handler for internal sandbox-mcp API
-	const caddyfile = `:20000 {
-    # Keep the internal API accessible
-    handle /api/* {
-        reverse_proxy localhost:4000
+	// Write user Caddy snippet (imported by main Caddyfile via `import` directive).
+	// This is additive — it does NOT overwrite /home/user/Caddyfile.
+	const caddySnippet = `handle {
+    reverse_proxy localhost:${port} {
+        header_up Host {upstream_hostport}
     }
-
-    # Route all other traffic to the user's exposed port
-    handle {
-        reverse_proxy localhost:${port} {
-            header_up Host {upstream_hostport}
-        }
-        header {
-            -X-Frame-Options
-            -Content-Security-Policy
-        }
+    header {
+        -X-Frame-Options
+        -Content-Security-Policy
     }
 }`;
 
-	// Write directly to Caddyfile (it's world-writable in Modal sandbox)
-	// Modal has "no new privileges" flag which blocks sudo entirely
 	try {
-		// Write directly to Caddyfile
-		writeFileSync(CADDYFILE, caddyfile);
+		mkdirSync(USER_CADDY_DIR, { recursive: true });
+		writeFileSync(USER_CADDY_FILE, caddySnippet);
 
 		// Reload Caddy using SIGUSR1 (no sudo required)
-		// This tells Caddy to gracefully reload its configuration
 		try {
 			execSync("pkill -USR1 caddy", { stdio: "pipe" });
 		} catch {
-			// If pkill fails (caddy not running), start it
-			execSync(`caddy start --config ${CADDYFILE}`, { stdio: "pipe" });
+			// Caddy not running — it will pick up the import on next start
 		}
 	} catch (error: any) {
-		throw new Error(`Failed to update Caddyfile: ${error.message}`);
+		throw new Error(`Failed to update user Caddy config: ${error.message}`);
 	}
 }

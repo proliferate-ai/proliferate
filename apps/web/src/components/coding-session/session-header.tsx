@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import type { PreviewMode } from "@/stores/preview-panel";
 import {
+	FileDiff,
 	GitBranch,
 	Globe,
 	HardDrive,
@@ -24,6 +25,7 @@ interface SessionHeaderProps {
 	onToggleSnapshots?: () => void;
 	onToggleAutoStart?: () => void;
 	onToggleGit?: () => void;
+	onToggleChanges?: () => void;
 	// Mobile
 	mobileView?: "chat" | "preview";
 	onToggleMobileView?: () => void;
@@ -38,6 +40,7 @@ export function SessionHeader({
 	onToggleSnapshots,
 	onToggleAutoStart,
 	onToggleGit,
+	onToggleChanges,
 	mobileView,
 	onToggleMobileView,
 }: SessionHeaderProps) {
@@ -133,6 +136,23 @@ export function SessionHeader({
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent>Git</TooltipContent>
+					</Tooltip>
+				)}
+
+				{onToggleChanges && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								variant={panelMode.type === "changes" ? "secondary" : "ghost"}
+								size="icon"
+								className="hidden md:flex h-7 w-7"
+								onClick={onToggleChanges}
+								disabled={disabled}
+							>
+								<FileDiff className="h-3.5 w-3.5" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent>Changes</TooltipContent>
 					</Tooltip>
 				)}
 

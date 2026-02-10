@@ -19,6 +19,7 @@ import { scheduleSessionExpiry } from "../expiry/expiry-queue";
 import type { GatewayEnv } from "../lib/env";
 import { waitForMigrationLockRelease } from "../lib/lock";
 import { createOpenCodeSession, listOpenCodeSessions } from "../lib/opencode";
+import { deriveSandboxMcpToken } from "../lib/sandbox-mcp-token";
 import { type SessionContext, loadSessionContext } from "../lib/session-store";
 import type { OpenCodeEvent, SandboxInfo } from "../types";
 import { SseClient } from "./sse-client";
@@ -290,12 +291,19 @@ export class SessionRuntime {
 			this.provider = provider;
 			this.log("Using sandbox provider", { provider: provider.type });
 
+			// Derive per-session sandbox-mcp auth token and merge into env vars
+			const sandboxMcpToken = deriveSandboxMcpToken(this.env.serviceToken, this.sessionId);
+			const envVarsWithToken = {
+				...this.context.envVars,
+				SANDBOX_MCP_AUTH_TOKEN: sandboxMcpToken,
+			};
+
 			const ensureSandboxStartMs = Date.now();
 			const result = await provider.ensureSandbox({
 				sessionId: this.sessionId,
 				repos: this.context.repos,
 				branch: this.context.primaryRepo.default_branch || "main",
-				envVars: this.context.envVars,
+				envVars: envVarsWithToken,
 				systemPrompt: this.context.systemPrompt,
 				snapshotId: this.context.session.snapshot_id || undefined,
 				agentConfig: this.context.agentConfig,
