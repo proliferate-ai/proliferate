@@ -48,6 +48,11 @@ app.get("/api/health", (_req: Request, res: Response) => {
 	res.json({ status: "ok" });
 });
 
+// Auth check endpoint (used by Caddy forward_auth for VS Code route)
+app.get("/api/auth/check", checkAuth, (_req: Request, res: Response) => {
+	res.json({ status: "ok" });
+});
+
 // List all services
 app.get("/api/services", checkAuth, (_req: Request, res: Response) => {
 	try {

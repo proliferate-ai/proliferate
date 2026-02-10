@@ -201,6 +201,7 @@ export function CodingSession({
 								onToggleGit={() => togglePanel("git")}
 								onToggleChanges={() => togglePanel("changes")}
 								onToggleTerminal={() => togglePanel("terminal")}
+								onToggleVscode={() => togglePanel("vscode")}
 								mobileView={mobileView}
 								onToggleMobileView={toggleMobileView}
 							/>
@@ -248,6 +249,7 @@ export function CodingSession({
 						onToggleGit={() => togglePanel("git")}
 						onToggleChanges={() => togglePanel("changes")}
 						onToggleTerminal={() => togglePanel("terminal")}
+						onToggleVscode={() => togglePanel("vscode")}
 						mobileView={mobileView}
 						onToggleMobileView={toggleMobileView}
 					/>

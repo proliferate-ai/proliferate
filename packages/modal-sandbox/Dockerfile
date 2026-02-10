@@ -71,6 +71,14 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
     && apt-get install -y gh \
     && rm -rf /var/lib/apt/lists/*
 
+# Install openvscode-server (web-based VS Code editor)
+RUN OVSCODE_VERSION="1.106.3" \
+    && wget -q "https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v${OVSCODE_VERSION}/openvscode-server-v${OVSCODE_VERSION}-linux-x64.tar.gz" -O /tmp/ovscode.tar.gz \
+    && mkdir -p /opt/openvscode-server \
+    && tar xzf /tmp/ovscode.tar.gz -C /opt/openvscode-server --strip-components=1 \
+    && ln -s /opt/openvscode-server/bin/openvscode-server /usr/local/bin/openvscode-server \
+    && rm /tmp/ovscode.tar.gz
+
 # Install AI coding agents
 RUN npm install -g opencode-ai@latest @anthropic-ai/claude-code @openai/codex
 

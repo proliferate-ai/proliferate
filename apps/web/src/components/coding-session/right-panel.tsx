@@ -20,6 +20,7 @@ import { SessionInfoPanel } from "./session-info-panel";
 import { SnapshotsPanel } from "./snapshots-panel";
 import { TerminalPanel } from "./terminal-panel";
 import { VerificationGallery } from "./verification-gallery";
+import { VscodePanel } from "./vscode-panel";
 
 export interface SessionPanelProps {
 	sessionId?: string;
@@ -135,6 +136,11 @@ export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps
 	// Terminal panel
 	if (mode.type === "terminal" && sessionProps?.sessionId) {
 		return <TerminalPanel sessionId={sessionProps.sessionId} onClose={handleClose} />;
+	}
+
+	// VS Code panel
+	if (mode.type === "vscode" && sessionProps?.sessionId) {
+		return <VscodePanel sessionId={sessionProps.sessionId} onClose={handleClose} />;
 	}
 
 	// Auto-start panel

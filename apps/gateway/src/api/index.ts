@@ -14,6 +14,7 @@ import { createProliferateWsHandler } from "./proliferate/ws";
 import { createDevtoolsProxyRoutes } from "./proxy/devtools";
 import { createProxyRoutes } from "./proxy/opencode";
 import { createTerminalWsProxy } from "./proxy/terminal";
+import { createVscodeProxyRoutes, createVscodeWsProxy } from "./proxy/vscode";
 import { WsMultiplexer } from "./ws-multiplexer";
 
 export function mountRoutes(app: Express, hubManager: HubManager, env: GatewayEnv): void {
@@ -24,6 +25,7 @@ export function mountRoutes(app: Express, hubManager: HubManager, env: GatewayEn
 	app.use("/proliferate", createProliferateHttpRoutes(hubManager, env));
 	app.use("/proxy", createProxyRoutes(hubManager, env));
 	app.use("/proxy", createDevtoolsProxyRoutes(hubManager, env));
+	app.use("/proxy", createVscodeProxyRoutes(hubManager, env));
 }
 
 export function setupWebSocket(server: Server, hubManager: HubManager, env: GatewayEnv): void {
@@ -36,6 +38,10 @@ export function setupWebSocket(server: Server, hubManager: HubManager, env: Gate
 	// Terminal WS proxy (/proxy/:sessionId/:token/devtools/terminal)
 	const terminalWs = createTerminalWsProxy(hubManager, env);
 	mux.addHandler(terminalWs.handleUpgrade);
+
+	// VS Code WS proxy (/proxy/:sessionId/:token/devtools/vscode/*)
+	const vscodeWs = createVscodeWsProxy(hubManager, env);
+	mux.addHandler(vscodeWs.handleUpgrade);
 
 	mux.attach(server);
 }
