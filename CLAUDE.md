@@ -164,6 +164,14 @@ Key commands:
 - Source of truth for env keys: `packages/environment/src/schema.ts` and https://docs.proliferate.com/self-hosting/environment (source: `~/documentation/self-hosting/environment.mdx`)
 - Vercel is optional; if used, avoid `echo` when setting env vars (newline issue)
 
+**`NEXT_PUBLIC_` vars are baked at build time.** Next.js inlines all `NEXT_PUBLIC_` values into the client JavaScript bundle during `next build`. Changing them in AWS Secrets Manager or K8s runtime env has **no effect** on the client — you must also update them in the build environment and rebuild the Docker image.
+
+- **Build-time source**: GitHub Actions vars/secrets (used as Docker `--build-arg` in `deploy-eks.yml`)
+- **Runtime source**: AWS Secrets Manager → ExternalSecret → K8s secret (only affects server-side `process.env`)
+- **Both must be in sync.** When adding or changing a `NEXT_PUBLIC_` var, update it in **both** GitHub Actions vars and the AWS secret.
+- Workflow precedence: `vars.X || secrets.X || default` — vars take priority over secrets.
+- After updating, a full rebuild + deploy is required (`deploy-eks.yml` without `skip_build`).
+
 ## CI/CD Overview
 
 - `ci.yml`: lint/typecheck/tests/build
@@ -218,3 +226,4 @@ Do not update docs unless explicitly asked.
 - Server state in Zustand
 - Committing secrets, `.env` files, or credentials to any branch
 - Adding dependencies with GPL/AGPL/SSPL/BSL licenses
+- Changing `NEXT_PUBLIC_` vars only in AWS/K8s and expecting the client to pick them up (must also update GitHub Actions vars and rebuild)
