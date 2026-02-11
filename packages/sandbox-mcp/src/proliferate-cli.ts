@@ -401,9 +401,9 @@ async function actionsList(): Promise<void> {
 async function actionsGuide(flags: Record<string, string | boolean>): Promise<void> {
 	const integration = requireFlag(flags, "integration");
 	const { status, data } = await gatewayRequest("GET", `/guide/${encodeURIComponent(integration)}`);
-	if (status === 404) {
-		const body = data as { error?: string };
-		fatal(body.error || `No guide available for: ${integration}`, 1);
+	if (status >= 400) {
+		const body = data as { error?: string; message?: string };
+		fatal(body.error || body.message || `Failed to fetch guide (HTTP ${status})`, 1);
 	}
 	const body = data as { guide?: string };
 	if (body.guide) {
