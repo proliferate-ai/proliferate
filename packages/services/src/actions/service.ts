@@ -87,12 +87,9 @@ export interface InvokeActionResult {
 export async function invokeAction(input: InvokeActionInput): Promise<InvokeActionResult> {
 	const log = getServicesLogger().child({ module: "actions" });
 
-	const redactedParams = redactData(input.params);
-
 	if (input.riskLevel === "danger") {
 		const invocation = await actionsDb.createInvocation({
 			...input,
-			params: redactedParams,
 			status: "denied",
 		});
 		log.info({ invocationId: invocation.id, action: input.action }, "Action denied (danger)");
@@ -102,18 +99,16 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 	if (input.riskLevel === "read") {
 		const invocation = await actionsDb.createInvocation({
 			...input,
-			params: redactedParams,
 			status: "approved",
 		});
 		log.info({ invocationId: invocation.id, action: input.action }, "Action auto-approved (read)");
 		return { invocation, needsApproval: false };
 	}
 
-	// Write actions need approval
+	// Write actions need approval — store original params (needed for execution after approval)
 	const expiresAt = new Date(Date.now() + PENDING_EXPIRY_MS);
 	const invocation = await actionsDb.createInvocation({
 		...input,
-		params: redactedParams,
 		status: "pending",
 		expiresAt,
 	});
@@ -177,6 +172,12 @@ export async function approveAction(
 	}
 	if (invocation.status !== "pending") {
 		throw new Error(`Cannot approve invocation in status: ${invocation.status}`);
+	}
+	if (invocation.expiresAt && invocation.expiresAt <= new Date()) {
+		await actionsDb.updateInvocationStatus(invocationId, "expired", {
+			completedAt: new Date(),
+		});
+		throw new Error("Invocation has expired");
 	}
 
 	const updated = await actionsDb.updateInvocationStatus(invocationId, "approved", {

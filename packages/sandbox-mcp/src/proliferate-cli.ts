@@ -400,7 +400,14 @@ async function actionsList(): Promise<void> {
 async function actionsRun(flags: Record<string, string | boolean>): Promise<void> {
 	const integration = requireFlag(flags, "integration");
 	const action = requireFlag(flags, "action");
-	const params = typeof flags.params === "string" ? JSON.parse(flags.params) : {};
+	let params: Record<string, unknown> = {};
+	if (typeof flags.params === "string") {
+		try {
+			params = JSON.parse(flags.params) as Record<string, unknown>;
+		} catch {
+			fatal("Invalid JSON in --params", 1);
+		}
+	}
 
 	const { status, data } = await gatewayRequest("POST", "/invoke", {
 		integration,

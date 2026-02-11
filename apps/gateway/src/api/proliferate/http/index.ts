@@ -30,7 +30,7 @@ export function createProliferateHttpRoutes(hubManager: HubManager, env: Gateway
 	router.use(createVerificationMediaRouter(env));
 
 	// Actions routes — don't require sandbox running (DB + external API only)
-	router.use("/:proliferateSessionId/actions", createActionsRouter(env));
+	router.use("/:proliferateSessionId/actions", createActionsRouter(env, hubManager));
 
 	// Routes that need the sandbox running
 	// Mount ensureSessionReady on the param path so params are extracted first

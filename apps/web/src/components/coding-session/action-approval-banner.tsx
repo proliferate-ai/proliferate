@@ -95,14 +95,14 @@ function ApprovalCard({
 				setLoading(null);
 			}
 		},
-		[sessionId, token, approval.invocationId, GATEWAY_URL],
+		[sessionId, token, approval.invocationId],
 	);
 
 	const paramsPreview = formatParams(approval.params);
 
 	return (
 		<div className="flex items-center gap-3 rounded-lg border bg-muted/50 px-3 py-2 text-sm">
-			<Shield className="h-4 w-4 shrink-0 text-amber-500" />
+			<Shield className="h-4 w-4 shrink-0 text-accent-foreground" />
 			<div className="flex-1 min-w-0">
 				<div className="flex items-center gap-2">
 					<span className="font-medium">

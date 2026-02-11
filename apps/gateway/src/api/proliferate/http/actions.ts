@@ -16,6 +16,7 @@
 import { createLogger } from "@proliferate/logger";
 import { actions, integrations, sessions } from "@proliferate/services";
 import { Router, type Router as RouterType } from "express";
+import type { HubManager } from "../../../hub";
 import type { GatewayEnv } from "../../../lib/env";
 import { ApiError } from "../../../middleware";
 
@@ -53,25 +54,64 @@ setInterval(() => {
 }, RATE_LIMIT_WINDOW_MS);
 
 // ============================================
+// Helpers
+// ============================================
+
+/**
+ * Verify that the authenticated user belongs to the session's org.
+ * Returns the session row or throws 403/404.
+ */
+async function requireSessionOrgAccess(
+	sessionId: string,
+	userOrgId: string | undefined,
+): Promise<{ organizationId: string }> {
+	const session = await sessions.findByIdInternal(sessionId);
+	if (!session) {
+		throw new ApiError(404, "Session not found");
+	}
+	if (!userOrgId || userOrgId !== session.organizationId) {
+		throw new ApiError(403, "You do not have access to this session");
+	}
+	return session;
+}
+
+// ============================================
 // Router
 // ============================================
 
-export function createActionsRouter(_env: GatewayEnv): RouterType {
+export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): RouterType {
 	const router: RouterType = Router({ mergeParams: true });
 
-	// Set proliferateSessionId from URL params (actions routes skip ensureSessionReady)
+	// Set proliferateSessionId from URL params
 	router.use((req, _res, next) => {
 		req.proliferateSessionId = req.params.proliferateSessionId;
 		next();
 	});
 
 	/**
+	 * Try to attach the session hub for WS broadcasts (best-effort, non-blocking).
+	 */
+	async function tryGetHub(sessionId: string) {
+		try {
+			return await hubManager.getOrCreate(sessionId);
+		} catch {
+			return null;
+		}
+	}
+
+	/**
 	 * GET /available — list available integrations + actions for this session.
-	 * Auth: sandbox token or user token.
+	 * Auth: sandbox token or user token (user must belong to session's org).
 	 */
 	router.get("/available", async (req, res, next) => {
 		try {
 			const sessionId = req.proliferateSessionId!;
+
+			// Org check for non-sandbox callers
+			if (req.auth?.source !== "sandbox") {
+				await requireSessionOrgAccess(sessionId, req.auth?.orgId);
+			}
+
 			const connections = await sessions.listSessionConnections(sessionId);
 
 			// Filter to active integrations that have an adapter
@@ -102,7 +142,7 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 
 	/**
 	 * POST /invoke — invoke an action.
-	 * Auth: sandbox token (agent calling from sandbox).
+	 * Auth: sandbox token only.
 	 */
 	router.post("/invoke", async (req, res, next) => {
 		try {
@@ -161,7 +201,7 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 				}
 			}
 
-			// Create invocation (risk-based policy)
+			// Create invocation (risk-based policy) — store original params for execution
 			const result = await actions.invokeAction({
 				sessionId,
 				organizationId: session.organizationId,
@@ -214,22 +254,20 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 				return;
 			}
 
-			// Pending approval (write)
+			// Pending approval (write) — broadcast to connected WebSocket clients
 			if (result.needsApproval) {
-				// Broadcast approval request to connected WebSocket clients
-				if (req.hub) {
-					req.hub.broadcastMessage({
-						type: "action_approval_request",
-						payload: {
-							invocationId: result.invocation.id,
-							integration,
-							action,
-							riskLevel: actionDef.riskLevel,
-							params: params ?? {},
-							expiresAt: result.invocation.expiresAt?.toISOString() ?? "",
-						},
-					});
-				}
+				const hub = await tryGetHub(sessionId);
+				hub?.broadcastMessage({
+					type: "action_approval_request",
+					payload: {
+						invocationId: result.invocation.id,
+						integration,
+						action,
+						riskLevel: actionDef.riskLevel,
+						params: params ?? {},
+						expiresAt: result.invocation.expiresAt?.toISOString() ?? "",
+					},
+				});
 
 				res.status(202).json({
 					invocation: result.invocation,
@@ -246,23 +284,30 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 
 	/**
 	 * GET /invocations/:invocationId — poll invocation status.
-	 * Auth: sandbox token or user token.
+	 * Auth: sandbox token (scoped to session) or user token (org check).
 	 */
 	router.get("/invocations/:invocationId", async (req, res, next) => {
 		try {
+			const sessionId = req.proliferateSessionId!;
 			const { invocationId } = req.params;
-			const invocation = await actions.getActionStatus(invocationId, req.auth?.orgId || "");
-			if (!invocation) {
-				// Also try by ID only (for sandbox callers who don't have orgId)
-				const byId = await actions.listSessionActions(req.proliferateSessionId!);
-				const found = byId.find((i) => i.id === invocationId);
+
+			if (req.auth?.source === "sandbox") {
+				// Sandbox callers: scoped to their session
+				const bySession = await actions.listSessionActions(sessionId);
+				const found = bySession.find((i) => i.id === invocationId);
 				if (!found) {
 					throw new ApiError(404, "Invocation not found");
 				}
 				res.json({ invocation: found });
-				return;
+			} else {
+				// User callers: verify org membership
+				const session = await requireSessionOrgAccess(sessionId, req.auth?.orgId);
+				const invocation = await actions.getActionStatus(invocationId, session.organizationId);
+				if (!invocation) {
+					throw new ApiError(404, "Invocation not found");
+				}
+				res.json({ invocation });
 			}
-			res.json({ invocation });
 		} catch (err) {
 			next(err);
 		}
@@ -270,7 +315,7 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 
 	/**
 	 * POST /invocations/:invocationId/approve — approve a pending write.
-	 * Auth: user token only (JWT or CLI).
+	 * Auth: user token only (JWT or CLI). Must belong to session's org.
 	 */
 	router.post("/invocations/:invocationId/approve", async (req, res, next) => {
 		try {
@@ -280,12 +325,9 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 			}
 
 			const { invocationId } = req.params;
-			const session = await sessions.findByIdInternal(req.proliferateSessionId!);
-			if (!session) {
-				throw new ApiError(404, "Session not found");
-			}
+			const session = await requireSessionOrgAccess(req.proliferateSessionId!, auth.orgId);
 
-			// Approve the invocation
+			// Approve the invocation (checks status + org + expiry)
 			const invocation = await actions.approveAction(
 				invocationId,
 				session.organizationId,
@@ -298,7 +340,7 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 				await actions.markExecuting(invocationId);
 
 				// Resolve session connections to find the integration
-				const connections = await sessions.listSessionConnections(session.id);
+				const connections = await sessions.listSessionConnections(req.proliferateSessionId!);
 				const conn = connections.find((c) => c.integrationId === invocation.integrationId);
 				if (!conn?.integration) {
 					throw new Error("Integration no longer available");
@@ -326,16 +368,15 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 				const completed = await actions.markCompleted(invocationId, actionResult, durationMs);
 
 				// Broadcast completion
-				if (req.hub) {
-					req.hub.broadcastMessage({
-						type: "action_completed",
-						payload: {
-							invocationId,
-							status: "completed",
-							result: actionResult,
-						},
-					});
-				}
+				const hub = await tryGetHub(req.proliferateSessionId!);
+				hub?.broadcastMessage({
+					type: "action_completed",
+					payload: {
+						invocationId,
+						status: "completed",
+						result: actionResult,
+					},
+				});
 
 				res.json({ invocation: completed, result: actionResult });
 			} catch (err) {
@@ -343,16 +384,15 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 				const errorMsg = err instanceof Error ? err.message : String(err);
 				await actions.markFailed(invocationId, errorMsg, durationMs);
 
-				if (req.hub) {
-					req.hub.broadcastMessage({
-						type: "action_completed",
-						payload: {
-							invocationId,
-							status: "failed",
-							error: errorMsg,
-						},
-					});
-				}
+				const hub = await tryGetHub(req.proliferateSessionId!);
+				hub?.broadcastMessage({
+					type: "action_completed",
+					payload: {
+						invocationId,
+						status: "failed",
+						error: errorMsg,
+					},
+				});
 
 				logger.error({ err, invocationId }, "Action execution failed after approval");
 				throw new ApiError(502, `Action failed: ${errorMsg}`);
@@ -364,7 +404,7 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 
 	/**
 	 * POST /invocations/:invocationId/deny — deny a pending write.
-	 * Auth: user token only (JWT or CLI).
+	 * Auth: user token only (JWT or CLI). Must belong to session's org.
 	 */
 	router.post("/invocations/:invocationId/deny", async (req, res, next) => {
 		try {
@@ -374,10 +414,7 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 			}
 
 			const { invocationId } = req.params;
-			const session = await sessions.findByIdInternal(req.proliferateSessionId!);
-			if (!session) {
-				throw new ApiError(404, "Session not found");
-			}
+			const session = await requireSessionOrgAccess(req.proliferateSessionId!, auth.orgId);
 
 			const invocation = await actions.denyAction(
 				invocationId,
@@ -386,16 +423,15 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 			);
 
 			// Broadcast denial
-			if (req.hub) {
-				req.hub.broadcastMessage({
-					type: "action_approval_result",
-					payload: {
-						invocationId,
-						status: "denied",
-						approvedBy: auth.userId,
-					},
-				});
-			}
+			const hub = await tryGetHub(req.proliferateSessionId!);
+			hub?.broadcastMessage({
+				type: "action_approval_result",
+				payload: {
+					invocationId,
+					status: "denied",
+					approvedBy: auth.userId,
+				},
+			});
 
 			res.json({ invocation });
 		} catch (err) {
@@ -405,11 +441,17 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 
 	/**
 	 * GET /invocations — list all invocations for this session.
-	 * Auth: sandbox token or user token.
+	 * Auth: sandbox token (scoped to session) or user token (org check).
 	 */
 	router.get("/invocations", async (req, res, next) => {
 		try {
 			const sessionId = req.proliferateSessionId!;
+
+			// Org check for non-sandbox callers
+			if (req.auth?.source !== "sandbox") {
+				await requireSessionOrgAccess(sessionId, req.auth?.orgId);
+			}
+
 			const invocations = await actions.listSessionActions(sessionId);
 			res.json({ invocations });
 		} catch (err) {

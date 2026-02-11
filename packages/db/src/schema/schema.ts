@@ -1094,7 +1094,7 @@ export const actionInvocations = pgTable(
 	"action_invocations",
 	{
 		id: uuid().defaultRandom().primaryKey().notNull(),
-		sessionId: text("session_id").notNull(),
+		sessionId: uuid("session_id").notNull(),
 		organizationId: text("organization_id").notNull(),
 		integrationId: uuid("integration_id"),
 		integration: text("integration").notNull(),
@@ -1114,7 +1114,7 @@ export const actionInvocations = pgTable(
 	(table) => [
 		index("idx_action_invocations_session").using(
 			"btree",
-			table.sessionId.asc().nullsLast().op("text_ops"),
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
 		),
 		index("idx_action_invocations_org_created").using(
 			"btree",
