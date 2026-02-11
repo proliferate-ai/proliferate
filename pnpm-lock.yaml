@@ -444,6 +444,9 @@ importers:
       '@proliferate/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@proliferate/triggers':
+        specifier: workspace:*
+        version: link:../../packages/triggers
       bullmq:
         specifier: ^5.30.1
         version: 5.66.5
