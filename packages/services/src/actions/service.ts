@@ -7,6 +7,7 @@
 import { getServicesLogger } from "../logger";
 import type { ActionInvocationRow, ActionInvocationWithSession } from "./db";
 import * as actionsDb from "./db";
+import * as grantsService from "./grants";
 
 // ============================================
 // Error Classes
@@ -33,7 +34,15 @@ export class ActionConflictError extends Error {
 	}
 }
 
+export class PendingLimitError extends Error {
+	constructor(message = "Too many pending approvals. Resolve existing ones first.") {
+		super(message);
+		this.name = "PendingLimitError";
+	}
+}
+
 const PENDING_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes for approval timeout
+const MAX_PENDING_PER_SESSION = 10;
 const MAX_RESULT_SIZE = 10 * 1024; // 10KB max for stored results
 const SENSITIVE_KEYS = new Set([
 	"token",
@@ -130,7 +139,36 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 		return { invocation, needsApproval: false };
 	}
 
-	// Write actions need approval — store original params (needed for execution after approval)
+	// Write actions — check for a matching grant before requiring approval
+	const grantResult = await grantsService.evaluateGrant(
+		input.organizationId,
+		input.integration,
+		input.action,
+		input.sessionId,
+	);
+
+	if (grantResult.granted) {
+		const invocation = await actionsDb.createInvocation({
+			...input,
+			status: "approved",
+		});
+		log.info(
+			{
+				invocationId: invocation.id,
+				action: input.action,
+				grantId: grantResult.grantId,
+			},
+			"Action auto-approved via grant (write)",
+		);
+		return { invocation, needsApproval: false };
+	}
+
+	// No matching grant — enforce pending cap before creating pending invocation
+	const pending = await actionsDb.listPendingBySession(input.sessionId);
+	if (pending.length >= MAX_PENDING_PER_SESSION) {
+		throw new PendingLimitError();
+	}
+
 	const expiresAt = new Date(Date.now() + PENDING_EXPIRY_MS);
 	const invocation = await actionsDb.createInvocation({
 		...input,

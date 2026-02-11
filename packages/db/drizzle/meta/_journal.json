@@ -123,6 +123,13 @@
       "when": 1770940800000,
       "tag": "0018_secret_bundles",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1770845057346,
+      "tag": "0019_lucky_war_machine",
+      "breakpoints": true
     }
   ]
 }
