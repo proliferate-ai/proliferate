@@ -60,6 +60,7 @@ export const SecretBundleSchema = z.object({
 	id: z.string().uuid(),
 	name: z.string(),
 	description: z.string().nullable(),
+	target_path: z.string().nullable(),
 	secret_count: z.number().int(),
 	created_at: z.string().nullable(),
 	updated_at: z.string().nullable(),
@@ -70,6 +71,7 @@ export type SecretBundle = z.infer<typeof SecretBundleSchema>;
 export const CreateBundleInputSchema = z.object({
 	name: z.string().min(1).max(100),
 	description: z.string().optional(),
+	targetPath: z.string().optional(),
 });
 
 export type CreateBundleInput = z.infer<typeof CreateBundleInputSchema>;
@@ -77,6 +79,23 @@ export type CreateBundleInput = z.infer<typeof CreateBundleInputSchema>;
 export const UpdateBundleInputSchema = z.object({
 	name: z.string().min(1).max(100).optional(),
 	description: z.string().nullable().optional(),
+	targetPath: z.string().nullable().optional(),
+});
+
+// ============================================
+// Bulk Import Schemas
+// ============================================
+
+export const BulkImportInputSchema = z.object({
+	envText: z.string().min(1),
+	bundleId: z.string().uuid().optional(),
+});
+
+export type BulkImportInput = z.infer<typeof BulkImportInputSchema>;
+
+export const BulkImportResultSchema = z.object({
+	created: z.number().int(),
+	skipped: z.array(z.string()),
 });
 
 export type UpdateBundleInput = z.infer<typeof UpdateBundleInputSchema>;

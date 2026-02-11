@@ -14,6 +14,7 @@ import {
 	baseSnapshots,
 	integrations,
 	prebuilds,
+	secrets,
 	sessions,
 	users,
 } from "@proliferate/services";
@@ -598,6 +599,12 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 
 	// Load env file generation spec (if configured)
 	const prebuildEnvFiles = await prebuilds.getPrebuildEnvFiles(prebuildId);
+	const bundleEnvFiles = await secrets.buildEnvFilesFromBundles(organizationId);
+	const prebuildList = Array.isArray(prebuildEnvFiles) ? prebuildEnvFiles : [];
+	const envFiles =
+		prebuildList.length > 0 || bundleEnvFiles.length > 0
+			? [...prebuildList, ...bundleEnvFiles]
+			: undefined;
 
 	// Build environment variables
 	const envStartMs = Date.now();
@@ -652,7 +659,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		triggerContext,
 		snapshotHasDeps,
 		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
-		envFiles: prebuildEnvFiles ?? undefined,
+		envFiles,
 	});
 	log.debug(
 		{

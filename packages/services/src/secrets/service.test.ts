@@ -14,6 +14,8 @@ vi.mock("./db", () => ({
 	createBundle: vi.fn(),
 	updateBundle: vi.fn(),
 	deleteBundle: vi.fn(),
+	bulkCreateSecrets: vi.fn(),
+	getBundlesWithTargetPath: vi.fn(),
 }));
 
 // Mock crypto
@@ -28,6 +30,8 @@ import {
 	BundleOrgMismatchError,
 	DuplicateBundleError,
 	DuplicateSecretError,
+	buildEnvFilesFromBundles,
+	bulkImportSecrets,
 	checkSecrets,
 	createBundle,
 	createSecret,
@@ -51,6 +55,8 @@ const mockDb = secretsDb as unknown as {
 	createBundle: ReturnType<typeof vi.fn>;
 	updateBundle: ReturnType<typeof vi.fn>;
 	deleteBundle: ReturnType<typeof vi.fn>;
+	bulkCreateSecrets: ReturnType<typeof vi.fn>;
+	getBundlesWithTargetPath: ReturnType<typeof vi.fn>;
 };
 
 describe("secrets service", () => {
@@ -395,6 +401,129 @@ describe("secrets service", () => {
 
 			expect(result).toBe(true);
 			expect(mockDb.deleteBundle).toHaveBeenCalledWith("b1", "org-1");
+		});
+	});
+
+	// ============================================
+	// Bulk import
+	// ============================================
+
+	describe("bulkImportSecrets", () => {
+		it("parses env text, encrypts, and creates secrets", async () => {
+			mockDb.bulkCreateSecrets.mockResolvedValue(["KEY_A", "KEY_B"]);
+
+			const result = await bulkImportSecrets({
+				organizationId: "org-1",
+				userId: "user-1",
+				envText: "KEY_A=value_a\nKEY_B=value_b",
+			});
+
+			expect(result).toEqual({ created: 2, skipped: [] });
+			expect(mockDb.bulkCreateSecrets).toHaveBeenCalledWith(
+				expect.arrayContaining([
+					expect.objectContaining({ key: "KEY_A", organizationId: "org-1" }),
+					expect.objectContaining({ key: "KEY_B", organizationId: "org-1" }),
+				]),
+			);
+		});
+
+		it("reports skipped duplicates", async () => {
+			mockDb.bulkCreateSecrets.mockResolvedValue(["KEY_A"]);
+
+			const result = await bulkImportSecrets({
+				organizationId: "org-1",
+				userId: "user-1",
+				envText: "KEY_A=a\nKEY_B=b",
+			});
+
+			expect(result).toEqual({ created: 1, skipped: ["KEY_B"] });
+		});
+
+		it("returns zero created for empty input", async () => {
+			const result = await bulkImportSecrets({
+				organizationId: "org-1",
+				userId: "user-1",
+				envText: "# just a comment\n\n",
+			});
+
+			expect(result).toEqual({ created: 0, skipped: [] });
+			expect(mockDb.bulkCreateSecrets).not.toHaveBeenCalled();
+		});
+
+		it("validates bundle ownership", async () => {
+			mockDb.bundleBelongsToOrg.mockResolvedValue(false);
+
+			await expect(
+				bulkImportSecrets({
+					organizationId: "org-1",
+					userId: "user-1",
+					envText: "KEY=val",
+					bundleId: "foreign-bundle",
+				}),
+			).rejects.toThrow(BundleOrgMismatchError);
+
+			expect(mockDb.bulkCreateSecrets).not.toHaveBeenCalled();
+		});
+
+		it("passes bundleId through to DB entries", async () => {
+			mockDb.bundleBelongsToOrg.mockResolvedValue(true);
+			mockDb.bulkCreateSecrets.mockResolvedValue(["KEY"]);
+
+			await bulkImportSecrets({
+				organizationId: "org-1",
+				userId: "user-1",
+				envText: "KEY=val",
+				bundleId: "bundle-1",
+			});
+
+			expect(mockDb.bulkCreateSecrets).toHaveBeenCalledWith(
+				expect.arrayContaining([
+					expect.objectContaining({ bundleId: "bundle-1" }),
+				]),
+			);
+		});
+	});
+
+	// ============================================
+	// Runtime env file generation
+	// ============================================
+
+	describe("buildEnvFilesFromBundles", () => {
+		it("returns EnvFileSpec entries from bundles with target_path", async () => {
+			mockDb.getBundlesWithTargetPath.mockResolvedValue([
+				{ id: "b1", targetPath: ".env.local", keys: ["DB_URL", "API_KEY"] },
+				{ id: "b2", targetPath: "apps/web/.env", keys: ["NEXT_PUBLIC_URL"] },
+			]);
+
+			const result = await buildEnvFilesFromBundles("org-1");
+
+			expect(result).toEqual([
+				{
+					workspacePath: ".",
+					path: ".env.local",
+					format: "env",
+					mode: "secret",
+					keys: [
+						{ key: "DB_URL", required: false },
+						{ key: "API_KEY", required: false },
+					],
+				},
+				{
+					workspacePath: ".",
+					path: "apps/web/.env",
+					format: "env",
+					mode: "secret",
+					keys: [{ key: "NEXT_PUBLIC_URL", required: false }],
+				},
+			]);
+		});
+
+		it("returns empty array when no bundles have target_path", async () => {
+			mockDb.getBundlesWithTargetPath.mockResolvedValue([]);
+
+			const result = await buildEnvFilesFromBundles("org-1");
+
+			expect(result).toEqual([]);
 		});
 	});
 });

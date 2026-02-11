@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+	BulkImportInputSchema,
+	BulkImportResultSchema,
 	CreateBundleInputSchema,
 	CreateSecretInputSchema,
 	SecretBundleSchema,
@@ -86,6 +88,7 @@ describe("SecretBundleSchema", () => {
 			id: "550e8400-e29b-41d4-a716-446655440000",
 			name: "Production",
 			description: "Production environment secrets",
+			target_path: ".env.local",
 			secret_count: 5,
 			created_at: "2026-01-01T00:00:00.000Z",
 			updated_at: "2026-01-02T00:00:00.000Z",
@@ -93,11 +96,12 @@ describe("SecretBundleSchema", () => {
 		expect(result.success).toBe(true);
 	});
 
-	it("accepts a bundle with null description", () => {
+	it("accepts a bundle with null description and target_path", () => {
 		const result = SecretBundleSchema.safeParse({
 			id: "550e8400-e29b-41d4-a716-446655440000",
 			name: "Dev",
 			description: null,
+			target_path: null,
 			secret_count: 0,
 			created_at: "2026-01-01T00:00:00.000Z",
 			updated_at: null,
@@ -111,6 +115,14 @@ describe("CreateBundleInputSchema", () => {
 		const result = CreateBundleInputSchema.safeParse({
 			name: "Production",
 			description: "Prod secrets",
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it("accepts input with targetPath", () => {
+		const result = CreateBundleInputSchema.safeParse({
+			name: "Production",
+			targetPath: ".env.local",
 		});
 		expect(result.success).toBe(true);
 	});
@@ -153,6 +165,16 @@ describe("UpdateBundleInputSchema", () => {
 		expect(result.success).toBe(true);
 	});
 
+	it("accepts targetPath update", () => {
+		const result = UpdateBundleInputSchema.safeParse({ targetPath: "apps/web/.env" });
+		expect(result.success).toBe(true);
+	});
+
+	it("accepts null targetPath (clear)", () => {
+		const result = UpdateBundleInputSchema.safeParse({ targetPath: null });
+		expect(result.success).toBe(true);
+	});
+
 	it("accepts empty object", () => {
 		const result = UpdateBundleInputSchema.safeParse({});
 		expect(result.success).toBe(true);
@@ -172,6 +194,54 @@ describe("UpdateSecretBundleInputSchema", () => {
 		const result = UpdateSecretBundleInputSchema.safeParse({
 			id: "550e8400-e29b-41d4-a716-446655440000",
 			bundleId: null,
+		});
+		expect(result.success).toBe(true);
+	});
+});
+
+describe("BulkImportInputSchema", () => {
+	it("accepts envText only", () => {
+		const result = BulkImportInputSchema.safeParse({
+			envText: "KEY=value\nOTHER=123",
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it("accepts envText with bundleId", () => {
+		const result = BulkImportInputSchema.safeParse({
+			envText: "KEY=value",
+			bundleId: "550e8400-e29b-41d4-a716-446655440000",
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it("rejects missing envText", () => {
+		const result = BulkImportInputSchema.safeParse({});
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects invalid bundleId", () => {
+		const result = BulkImportInputSchema.safeParse({
+			envText: "KEY=value",
+			bundleId: "not-a-uuid",
+		});
+		expect(result.success).toBe(false);
+	});
+});
+
+describe("BulkImportResultSchema", () => {
+	it("accepts valid result", () => {
+		const result = BulkImportResultSchema.safeParse({
+			created: 3,
+			skipped: ["EXISTING_KEY"],
+		});
+		expect(result.success).toBe(true);
+	});
+
+	it("accepts empty skipped array", () => {
+		const result = BulkImportResultSchema.safeParse({
+			created: 5,
+			skipped: [],
 		});
 		expect(result.success).toBe(true);
 	});

@@ -7,6 +7,8 @@
 import { ORPCError } from "@orpc/server";
 import { secrets } from "@proliferate/services";
 import {
+	BulkImportInputSchema,
+	BulkImportResultSchema,
 	CheckSecretsInputSchema,
 	CheckSecretsResultSchema,
 	CreateBundleInputSchema,
@@ -139,11 +141,15 @@ export const secretsRouter = {
 					userId: context.user.id,
 					name: input.name,
 					description: input.description,
+					targetPath: input.targetPath,
 				});
 				return { bundle };
 			} catch (err) {
 				if (err instanceof secrets.DuplicateBundleError) {
 					throw new ORPCError("CONFLICT", { message: err.message });
+				}
+				if (err instanceof secrets.InvalidTargetPathError) {
+					throw new ORPCError("BAD_REQUEST", { message: err.message });
 				}
 				throw err;
 			}
@@ -160,6 +166,7 @@ export const secretsRouter = {
 				const bundle = await secrets.updateBundleMeta(input.id, context.orgId, {
 					name: input.name,
 					description: input.description,
+					targetPath: input.targetPath,
 				});
 				return { bundle };
 			} catch (err) {
@@ -168,6 +175,9 @@ export const secretsRouter = {
 				}
 				if (err instanceof secrets.DuplicateBundleError) {
 					throw new ORPCError("CONFLICT", { message: err.message });
+				}
+				if (err instanceof secrets.InvalidTargetPathError) {
+					throw new ORPCError("BAD_REQUEST", { message: err.message });
 				}
 				throw err;
 			}
@@ -182,5 +192,34 @@ export const secretsRouter = {
 		.handler(async ({ input, context }) => {
 			await secrets.deleteBundle(input.id, context.orgId);
 			return { deleted: true };
+		}),
+
+	// ============================================
+	// Bulk import
+	// ============================================
+
+	/**
+	 * Bulk-import secrets from pasted .env text.
+	 */
+	bulkImport: orgProcedure
+		.input(BulkImportInputSchema)
+		.output(BulkImportResultSchema)
+		.handler(async ({ input, context }) => {
+			try {
+				return await secrets.bulkImportSecrets({
+					organizationId: context.orgId,
+					userId: context.user.id,
+					envText: input.envText,
+					bundleId: input.bundleId,
+				});
+			} catch (err) {
+				if (err instanceof secrets.EncryptionError) {
+					throw new ORPCError("INTERNAL_SERVER_ERROR", { message: err.message });
+				}
+				if (err instanceof secrets.BundleOrgMismatchError) {
+					throw new ORPCError("BAD_REQUEST", { message: err.message });
+				}
+				throw err;
+			}
 		}),
 };

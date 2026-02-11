@@ -38,6 +38,7 @@ export function toBundle(row: SecretBundleListRow): SecretBundle {
 		id: row.id,
 		name: row.name,
 		description: row.description,
+		target_path: row.target_path,
 		secret_count: row.secret_count,
 		created_at: row.created_at,
 		updated_at: row.updated_at ?? null,

@@ -5,6 +5,7 @@
  */
 
 import type { Secret, SecretBundle } from "@proliferate/shared";
+import { isValidTargetPath, parseEnvFile } from "@proliferate/shared";
 import { encrypt, getEncryptionKey } from "../db/crypto";
 import * as secretsDb from "./db";
 import { toBundle, toBundles, toSecret, toSecrets } from "./mapper";
@@ -41,11 +42,32 @@ export interface CreateBundleInput {
 	userId: string;
 	name: string;
 	description?: string;
+	targetPath?: string;
 }
 
 export interface UpdateBundleInput {
 	name?: string;
 	description?: string | null;
+	targetPath?: string | null;
+}
+
+export interface BulkImportSecretsInput {
+	organizationId: string;
+	userId: string;
+	envText: string;
+	bundleId?: string;
+}
+
+export interface BulkImportResult {
+	created: number;
+	skipped: string[];
+}
+
+export class InvalidTargetPathError extends Error {
+	constructor(path: string) {
+		super(`Invalid target path: "${path}"`);
+		this.name = "InvalidTargetPathError";
+	}
 }
 
 // ============================================
@@ -200,11 +222,15 @@ export async function listBundles(orgId: string): Promise<SecretBundle[]> {
  * Create a new bundle.
  */
 export async function createBundle(input: CreateBundleInput): Promise<SecretBundle> {
+	if (input.targetPath && !isValidTargetPath(input.targetPath)) {
+		throw new InvalidTargetPathError(input.targetPath);
+	}
 	try {
 		const row = await secretsDb.createBundle({
 			organizationId: input.organizationId,
 			name: input.name,
 			description: input.description,
+			targetPath: input.targetPath,
 			createdBy: input.userId,
 		});
 		return toBundle(row);
@@ -224,6 +250,9 @@ export async function updateBundleMeta(
 	orgId: string,
 	input: UpdateBundleInput,
 ): Promise<SecretBundle> {
+	if (input.targetPath && !isValidTargetPath(input.targetPath)) {
+		throw new InvalidTargetPathError(input.targetPath);
+	}
 	const row = await secretsDb.updateBundle(id, orgId, input);
 	if (!row) throw new BundleNotFoundError();
 	return toBundle(row);
@@ -235,4 +264,68 @@ export async function updateBundleMeta(
 export async function deleteBundle(id: string, orgId: string): Promise<boolean> {
 	await secretsDb.deleteBundle(id, orgId);
 	return true;
+}
+
+// ============================================
+// Bulk import
+// ============================================
+
+/**
+ * Bulk-import secrets from pasted .env text.
+ * Parses the text, encrypts values, inserts secrets (skipping duplicates).
+ */
+export async function bulkImportSecrets(input: BulkImportSecretsInput): Promise<BulkImportResult> {
+	const entries = parseEnvFile(input.envText);
+	if (entries.length === 0) {
+		return { created: 0, skipped: [] };
+	}
+
+	// Validate bundle ownership
+	if (input.bundleId) {
+		const owned = await secretsDb.bundleBelongsToOrg(input.bundleId, input.organizationId);
+		if (!owned) throw new BundleOrgMismatchError();
+	}
+
+	// Encrypt all values
+	let encryptionKey: string;
+	try {
+		encryptionKey = getEncryptionKey();
+	} catch {
+		throw new EncryptionError("Encryption not configured");
+	}
+
+	const dbEntries = entries.map((e) => ({
+		organizationId: input.organizationId,
+		key: e.key,
+		encryptedValue: encrypt(e.value, encryptionKey),
+		bundleId: input.bundleId,
+		createdBy: input.userId,
+	}));
+
+	const createdKeys = await secretsDb.bulkCreateSecrets(dbEntries);
+	const createdSet = new Set(createdKeys);
+	const skipped = entries.filter((e) => !createdSet.has(e.key)).map((e) => e.key);
+
+	return { created: createdKeys.length, skipped };
+}
+
+// ============================================
+// Runtime env file generation
+// ============================================
+
+/**
+ * Build EnvFileSpec entries from bundles that have a target_path.
+ * Used at session creation to inject bundled secrets as .env files.
+ */
+export async function buildEnvFilesFromBundles(
+	orgId: string,
+): Promise<Array<{ workspacePath: string; path: string; format: string; mode: string; keys: Array<{ key: string; required: boolean }> }>> {
+	const bundles = await secretsDb.getBundlesWithTargetPath(orgId);
+	return bundles.map((b) => ({
+		workspacePath: ".",
+		path: b.targetPath,
+		format: "env",
+		mode: "secret",
+		keys: b.keys.map((key) => ({ key, required: false })),
+	}));
 }
