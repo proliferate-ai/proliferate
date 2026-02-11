@@ -1140,6 +1140,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				}
 
 				// Pull each repo (ff-only, non-fatal)
+				let allPullsSucceeded = true;
 				for (const repo of opts.repos) {
 					const targetDir =
 						repo.workspacePath === "." ? workspaceDir : `${workspaceDir}/${repo.workspacePath}`;
@@ -1160,6 +1161,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 							"Git freshness pull complete",
 						);
 					} catch (err) {
+						allPullsSucceeded = false;
 						log.warn(
 							{
 								err,
@@ -1171,8 +1173,9 @@ export class ModalLibmodalProvider implements SandboxProvider {
 					}
 				}
 
-				// Update metadata with lastGitFetchAt so next restore can check cadence
-				if (metadata) {
+				// Only advance cadence when every pull succeeded so transient
+				// failures don't suppress retries for an entire cadence window.
+				if (allPullsSucceeded && metadata) {
 					try {
 						const updated: SessionMetadata = {
 							...metadata,

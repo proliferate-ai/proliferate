@@ -824,6 +824,7 @@ export class E2BProvider implements SandboxProvider {
 		}
 
 		// Pull each repo (ff-only, non-fatal)
+		let allPullsSucceeded = true;
 		for (const repo of opts.repos) {
 			const targetDir =
 				repo.workspacePath === "." ? workspaceDir : `${workspaceDir}/${repo.workspacePath}`;
@@ -842,6 +843,7 @@ export class E2BProvider implements SandboxProvider {
 					"Git freshness pull complete",
 				);
 			} catch (err) {
+				allPullsSucceeded = false;
 				log.warn(
 					{ err, repo: repo.workspacePath, durationMs: Date.now() - pullStartMs },
 					"Git freshness pull failed (non-fatal)",
@@ -849,8 +851,9 @@ export class E2BProvider implements SandboxProvider {
 			}
 		}
 
-		// Update metadata with lastGitFetchAt so next restore can check cadence
-		if (metadata) {
+		// Only advance cadence when every pull succeeded so transient failures
+		// don't suppress retries for an entire cadence window.
+		if (allPullsSucceeded && metadata) {
 			try {
 				const updated: SessionMetadata = { ...metadata, lastGitFetchAt: Date.now() };
 				await sandbox.files.write(SANDBOX_PATHS.metadataFile, JSON.stringify(updated, null, 2));
