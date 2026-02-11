@@ -8,6 +8,31 @@ import { getServicesLogger } from "../logger";
 import type { ActionInvocationRow } from "./db";
 import * as actionsDb from "./db";
 
+// ============================================
+// Error Classes
+// ============================================
+
+export class ActionNotFoundError extends Error {
+	constructor(message = "Invocation not found") {
+		super(message);
+		this.name = "ActionNotFoundError";
+	}
+}
+
+export class ActionExpiredError extends Error {
+	constructor(message = "Invocation has expired") {
+		super(message);
+		this.name = "ActionExpiredError";
+	}
+}
+
+export class ActionConflictError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "ActionConflictError";
+	}
+}
+
 const PENDING_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes for approval timeout
 const MAX_RESULT_SIZE = 10 * 1024; // 10KB max for stored results
 const SENSITIVE_KEYS = new Set([
@@ -168,16 +193,16 @@ export async function approveAction(
 ): Promise<ActionInvocationRow> {
 	const invocation = await actionsDb.getInvocation(invocationId, orgId);
 	if (!invocation) {
-		throw new Error("Invocation not found");
+		throw new ActionNotFoundError();
 	}
 	if (invocation.status !== "pending") {
-		throw new Error(`Cannot approve invocation in status: ${invocation.status}`);
+		throw new ActionConflictError(`Cannot approve invocation in status: ${invocation.status}`);
 	}
 	if (invocation.expiresAt && invocation.expiresAt <= new Date()) {
 		await actionsDb.updateInvocationStatus(invocationId, "expired", {
 			completedAt: new Date(),
 		});
-		throw new Error("Invocation has expired");
+		throw new ActionExpiredError();
 	}
 
 	const updated = await actionsDb.updateInvocationStatus(invocationId, "approved", {
@@ -185,7 +210,7 @@ export async function approveAction(
 		approvedAt: new Date(),
 	});
 	if (!updated) {
-		throw new Error("Failed to update invocation");
+		throw new ActionConflictError("Failed to update invocation");
 	}
 	return updated;
 }
@@ -200,10 +225,10 @@ export async function denyAction(
 ): Promise<ActionInvocationRow> {
 	const invocation = await actionsDb.getInvocation(invocationId, orgId);
 	if (!invocation) {
-		throw new Error("Invocation not found");
+		throw new ActionNotFoundError();
 	}
 	if (invocation.status !== "pending") {
-		throw new Error(`Cannot deny invocation in status: ${invocation.status}`);
+		throw new ActionConflictError(`Cannot deny invocation in status: ${invocation.status}`);
 	}
 
 	const updated = await actionsDb.updateInvocationStatus(invocationId, "denied", {
@@ -211,7 +236,7 @@ export async function denyAction(
 		completedAt: new Date(),
 	});
 	if (!updated) {
-		throw new Error("Failed to update invocation");
+		throw new ActionConflictError("Failed to update invocation");
 	}
 	return updated;
 }
