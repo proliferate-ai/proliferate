@@ -90,6 +90,16 @@ export async function updateRun(
 	return runsDb.updateRun(runId, updates);
 }
 
+export async function insertRunEvent(
+	runId: string,
+	type: string,
+	fromStatus?: string | null,
+	toStatus?: string | null,
+	data?: Record<string, unknown> | null,
+): Promise<runsDb.AutomationRunEventRow> {
+	return runsDb.insertRunEvent(runId, type, fromStatus, toStatus, data);
+}
+
 export async function transitionRunStatus(
 	runId: string,
 	toStatus: string,
