@@ -179,6 +179,14 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 		),
 		S3_SECRET_KEY: optionalString,
 		SANDBOX_GIT_PULL_ON_RESTORE: optionalBoolean, // Opt-in: run git pull --ff-only on restored snapshots
+		SANDBOX_GIT_PULL_CADENCE_SECONDS: z.coerce
+			.number()
+			.int()
+			.min(0)
+			.default(0)
+			.describe(
+				"Minimum seconds between git pulls on snapshot restore. 0 = always pull when enabled.",
+			),
 		SANDBOX_TIMEOUT_SECONDS: optionalSeconds(3600),
 		SENTRY_AUTH_TOKEN: optionalString,
 		SENTRY_ORG: optionalString,

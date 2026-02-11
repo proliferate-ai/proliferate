@@ -109,4 +109,6 @@ export interface SessionMetadata {
 	sessionId: string;
 	repoDir: string;
 	createdAt: number;
+	/** Epoch ms of last successful git clone or pull. Used by cadence gate. */
+	lastGitFetchAt?: number;
 }

@@ -39,6 +39,9 @@ export {
 	type SandboxOperation,
 } from "./errors";
 
+// Git freshness
+export { shouldPullOnRestore, type ShouldPullOpts } from "./git-freshness";
+
 // Version key
 export { computeBaseSnapshotVersionKey } from "./version-key";
 
