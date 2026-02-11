@@ -28,6 +28,7 @@ import {
 	Settings,
 	Sun,
 	X,
+	Zap,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
@@ -79,6 +80,7 @@ export function Sidebar() {
 
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
+	const isActionsPage = pathname?.startsWith("/dashboard/actions");
 	const isRepositoriesPage = pathname?.startsWith("/dashboard/repositories");
 
 	return (
@@ -147,6 +149,18 @@ export function Sidebar() {
 					title="Automations"
 				>
 					<FileStackIcon className="h-4 w-4" />
+				</Button>
+				<Button
+					variant={isActionsPage ? "secondary" : "ghost"}
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.stopPropagation();
+						router.push("/dashboard/actions");
+					}}
+					title="Actions"
+				>
+					<Zap className="h-4 w-4" />
 				</Button>
 				<Button
 					variant={isRepositoriesPage ? "secondary" : "ghost"}
@@ -248,6 +262,7 @@ function SidebarContent({
 
 	// Detect active pages from URL
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
+	const isActionsPage = pathname?.startsWith("/dashboard/actions");
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 	const isRepositoriesPage = pathname?.startsWith("/dashboard/repositories");
 
@@ -343,6 +358,19 @@ function SidebarContent({
 				>
 					<FileStackIcon className="h-5 w-5" />
 					<span>Automations</span>
+				</button>
+				<button
+					type="button"
+					onClick={() => handleNavigate("/dashboard/actions")}
+					className={cn(
+						"flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-sm transition-colors",
+						isActionsPage
+							? "bg-muted text-foreground"
+							: "text-muted-foreground hover:text-foreground hover:bg-accent",
+					)}
+				>
+					<Zap className="h-5 w-5" />
+					<span>Actions</span>
 				</button>
 				<button
 					type="button"

@@ -4,6 +4,7 @@
  * Combines all feature routers into a single router.
  */
 
+import { actionsRouter } from "./actions";
 import { adminRouter } from "./admin";
 import { automationsRouter } from "./automations";
 import { billingRouter } from "./billing";
@@ -20,6 +21,7 @@ import { sessionsRouter } from "./sessions";
 import { triggersRouter } from "./triggers";
 
 export const appRouter = {
+	actions: actionsRouter,
 	admin: adminRouter,
 	automations: automationsRouter,
 	billing: billingRouter,

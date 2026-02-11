@@ -12,4 +12,4 @@ export {
 	type ActionParam,
 } from "./adapters";
 
-export type { ActionInvocationRow, CreateInvocationInput } from "./db";
+export type { ActionInvocationRow, ActionInvocationWithSession, CreateInvocationInput } from "./db";
