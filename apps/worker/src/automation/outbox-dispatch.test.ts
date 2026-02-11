@@ -66,6 +66,7 @@ vi.mock("@proliferate/services", () => ({
 
 vi.mock("./artifacts", () => ({
 	writeCompletionArtifact: vi.fn().mockResolvedValue("s3://key"),
+	writeEnrichmentArtifact: vi.fn().mockResolvedValue("s3://enrichment-key"),
 }));
 
 vi.mock("./notifications", () => ({
@@ -208,6 +209,57 @@ describe("dispatchOutbox", () => {
 		await dispatchOutbox(mockEnrichQueue, mockExecuteQueue, mockLogger);
 
 		expect(mockMarkFailed).toHaveBeenCalledWith("outbox-1", "Unknown outbox kind: unknown_kind");
+	});
+
+	it("dispatches write_artifacts with only completionJson (backward compat)", async () => {
+		const row = makeOutboxRow({ kind: "write_artifacts" });
+		mockClaimPendingOutbox.mockResolvedValue([row]);
+
+		const { runs } = await import("@proliferate/services");
+		(runs.findRunWithRelations as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			id: "run-1",
+			completionJson: { outcome: "succeeded" },
+			enrichmentJson: null,
+		});
+		(runs.updateRun as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+		await dispatchOutbox(mockEnrichQueue, mockExecuteQueue, mockLogger);
+
+		expect(mockMarkDispatched).toHaveBeenCalledWith("outbox-1");
+	});
+
+	it("dispatches write_artifacts with enrichmentJson", async () => {
+		const row = makeOutboxRow({ kind: "write_artifacts" });
+		mockClaimPendingOutbox.mockResolvedValue([row]);
+
+		const { runs } = await import("@proliferate/services");
+		(runs.findRunWithRelations as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			id: "run-1",
+			completionJson: null,
+			enrichmentJson: { analysis: "data" },
+		});
+		(runs.updateRun as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+		await dispatchOutbox(mockEnrichQueue, mockExecuteQueue, mockLogger);
+
+		expect(mockMarkDispatched).toHaveBeenCalledWith("outbox-1");
+	});
+
+	it("dispatches write_artifacts with both completion and enrichment", async () => {
+		const row = makeOutboxRow({ kind: "write_artifacts" });
+		mockClaimPendingOutbox.mockResolvedValue([row]);
+
+		const { runs } = await import("@proliferate/services");
+		(runs.findRunWithRelations as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			id: "run-1",
+			completionJson: { outcome: "succeeded" },
+			enrichmentJson: { analysis: "data" },
+		});
+		(runs.updateRun as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+		await dispatchOutbox(mockEnrichQueue, mockExecuteQueue, mockLogger);
+
+		expect(mockMarkDispatched).toHaveBeenCalledWith("outbox-1");
 	});
 
 	it("concurrent dispatchers: each row dispatched exactly once", async () => {

@@ -895,6 +895,7 @@ export const automationRuns = pgTable(
 		completionId: text("completion_id"),
 		completionJson: jsonb("completion_json"),
 		completionArtifactRef: text("completion_artifact_ref"),
+		enrichmentJson: jsonb("enrichment_json"),
 		enrichmentArtifactRef: text("enrichment_artifact_ref"),
 		sourcesArtifactRef: text("sources_artifact_ref"),
 		policyArtifactRef: text("policy_artifact_ref"),

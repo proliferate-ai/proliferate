@@ -44,3 +44,25 @@ export async function writeCompletionArtifact(runId: string, payload: unknown): 
 
 	return key;
 }
+
+export async function writeEnrichmentArtifact(runId: string, payload: unknown): Promise<string> {
+	const bucket = env.S3_BUCKET;
+	if (!bucket) {
+		throw new Error("S3_BUCKET must be set to write artifacts");
+	}
+
+	const client = createS3Client();
+	const key = `runs/${runId}/enrichment.json`;
+	const body = JSON.stringify(payload, null, 2);
+
+	await client.send(
+		new PutObjectCommand({
+			Bucket: bucket,
+			Key: key,
+			Body: body,
+			ContentType: "application/json",
+		}),
+	);
+
+	return key;
+}

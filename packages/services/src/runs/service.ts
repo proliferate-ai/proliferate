@@ -157,6 +157,38 @@ export interface CompleteRunInput {
 }
 
 // ============================================
+// Enrichment persistence
+// ============================================
+
+export interface SaveEnrichmentResultInput {
+	runId: string;
+	enrichmentPayload: Record<string, unknown>;
+}
+
+export async function saveEnrichmentResult(
+	input: SaveEnrichmentResultInput,
+): Promise<runsDb.AutomationRunRow | null> {
+	const run = await runsDb.findById(input.runId);
+	if (!run) return null;
+
+	const updated = await runsDb.updateRun(input.runId, {
+		enrichmentJson: input.enrichmentPayload,
+	});
+
+	await runsDb.insertRunEvent(input.runId, "enrichment_saved", run.status, run.status, {
+		payloadSize: JSON.stringify(input.enrichmentPayload).length,
+	});
+
+	return updated;
+}
+
+export async function getEnrichmentResult(runId: string): Promise<Record<string, unknown> | null> {
+	const run = await runsDb.findById(runId);
+	if (!run) return null;
+	return (run.enrichmentJson as Record<string, unknown>) ?? null;
+}
+
+// ============================================
 // Run listing & assignment (user-facing)
 // ============================================
 

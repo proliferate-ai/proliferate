@@ -579,5 +579,6 @@ function mapRunToSchema(run: runs.RunListItem) {
 					image: run.assignee.image,
 				}
 			: null,
+		enrichment_json: (run.enrichmentJson as Record<string, unknown>) ?? null,
 	};
 }
