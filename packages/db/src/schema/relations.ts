@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm/relations";
 import {
 	account,
+	actionInvocations,
 	apikey,
 	automationConnections,
 	automationRunEvents,
@@ -469,3 +470,18 @@ export const cliGithubSelectionsRelations = relations(cliGithubSelections, ({ on
 }));
 
 export const sandboxBaseSnapshotsRelations = relations(sandboxBaseSnapshots, () => ({}));
+
+export const actionInvocationsRelations = relations(actionInvocations, ({ one }) => ({
+	organization: one(organization, {
+		fields: [actionInvocations.organizationId],
+		references: [organization.id],
+	}),
+	integration: one(integrations, {
+		fields: [actionInvocations.integrationId],
+		references: [integrations.id],
+	}),
+	session: one(sessions, {
+		fields: [actionInvocations.sessionId],
+		references: [sessions.id],
+	}),
+}));

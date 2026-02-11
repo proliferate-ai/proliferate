@@ -30,6 +30,9 @@ Commands:
 
   env apply --spec <json>                          Generate env files from spec
   env scrub --spec <json>                          Delete secret env files
+
+  actions list                                     List available integrations and actions
+  actions run --integration <i> --action <a> [--params <json>]  Run an action
 `);
 	process.exit(2);
 }
@@ -354,6 +357,108 @@ async function envScrub(flags: Record<string, string | boolean>): Promise<void> 
 	writeJson({ scrubbed });
 }
 
+// ── Actions commands (calls Gateway, not sandbox-mcp) ──
+
+const GATEWAY_URL = process.env.PROLIFERATE_GATEWAY_URL;
+const SESSION_ID = process.env.PROLIFERATE_SESSION_ID;
+
+const ACTIONS_TIMEOUT_MS = 120_000;
+const POLL_INTERVAL_MS = 2_000;
+
+async function gatewayRequest(
+	method: string,
+	path: string,
+	body?: Record<string, unknown>,
+): Promise<{ status: number; data: unknown }> {
+	if (!GATEWAY_URL || !SESSION_ID) {
+		fatal("Actions require PROLIFERATE_GATEWAY_URL and PROLIFERATE_SESSION_ID", 1);
+	}
+	if (!AUTH_TOKEN) {
+		fatal("Auth token not set. Set SANDBOX_MCP_AUTH_TOKEN.", 2);
+	}
+
+	const url = `${GATEWAY_URL}/proliferate/${SESSION_ID}/actions${path}`;
+	const res = await fetch(url, {
+		method,
+		headers: {
+			Authorization: `Bearer ${AUTH_TOKEN}`,
+			"Content-Type": "application/json",
+		},
+		body: body ? JSON.stringify(body) : undefined,
+		signal: AbortSignal.timeout(ACTIONS_TIMEOUT_MS),
+	});
+
+	const data = await res.json();
+	return { status: res.status, data };
+}
+
+async function actionsList(): Promise<void> {
+	const { data } = await gatewayRequest("GET", "/available");
+	writeJson(data);
+}
+
+async function actionsRun(flags: Record<string, string | boolean>): Promise<void> {
+	const integration = requireFlag(flags, "integration");
+	const action = requireFlag(flags, "action");
+	const params = typeof flags.params === "string" ? JSON.parse(flags.params) : {};
+
+	const { status, data } = await gatewayRequest("POST", "/invoke", {
+		integration,
+		action,
+		params,
+	});
+
+	const body = data as {
+		invocation?: { id: string; status: string };
+		result?: unknown;
+		error?: string;
+		message?: string;
+	};
+
+	// Immediate result (auto-approved reads)
+	if (status === 200 && body.result !== undefined) {
+		writeJson(body.result);
+		return;
+	}
+
+	// Denied
+	if (status === 403) {
+		fatal(body.error || "Action denied", 1);
+	}
+
+	// Error
+	if (status >= 400) {
+		fatal(body.error || body.message || `HTTP ${status}`, 1);
+	}
+
+	// Pending approval (202) — poll until resolved
+	if (status === 202 && body.invocation?.id) {
+		const invocationId = body.invocation.id;
+		process.stderr.write("Waiting for approval...\n");
+
+		while (true) {
+			await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+			const poll = await gatewayRequest("GET", `/invocations/${invocationId}`);
+			const inv = (
+				poll.data as { invocation?: { status: string; result?: unknown; error?: string } }
+			).invocation;
+			if (!inv) continue;
+
+			if (inv.status === "completed") {
+				writeJson(inv.result);
+				return;
+			}
+			if (inv.status === "denied" || inv.status === "failed" || inv.status === "expired") {
+				fatal(`Action ${inv.status}: ${inv.error || ""}`, 1);
+			}
+			// Still pending — keep polling
+		}
+	}
+
+	// Fallback
+	writeJson(body);
+}
+
 // ── Main dispatch ──
 
 async function main(): Promise<void> {
@@ -397,6 +502,17 @@ async function main(): Promise<void> {
 				break;
 			case "scrub":
 				await envScrub(flags);
+				break;
+			default:
+				usage();
+		}
+	} else if (group === "actions") {
+		switch (action) {
+			case "list":
+				await actionsList();
+				break;
+			case "run":
+				await actionsRun(flags);
 				break;
 			default:
 				usage();

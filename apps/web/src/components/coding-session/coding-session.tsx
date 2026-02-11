@@ -10,6 +10,7 @@ import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { ActionApprovalBanner } from "./action-approval-banner";
 import type { SessionPanelProps } from "./right-panel";
 import { RightPanel } from "./right-panel";
 import { SessionHeader } from "./session-header";
@@ -64,6 +65,8 @@ export function CodingSession({
 		sendGitPush,
 		sendGitCreatePr,
 		clearGitResult,
+		pendingApprovals,
+		wsToken,
 	} = useCodingSessionRuntime({
 		sessionId,
 		initialPrompt,
@@ -135,6 +138,7 @@ export function CodingSession({
 				sendGitPush,
 				sendGitCreatePr,
 				clearGitResult,
+				pendingApprovals,
 			}
 		: undefined;
 
@@ -183,6 +187,16 @@ export function CodingSession({
 					<SessionContext.Provider value={{ sessionId, repoId: sessionData.repoId ?? undefined }}>
 						<Thread title={title} description={description} />
 					</SessionContext.Provider>
+					{/* Action approval requests */}
+					{pendingApprovals.length > 0 && (
+						<div className="absolute bottom-20 left-0 right-0 z-10">
+							<ActionApprovalBanner
+								sessionId={sessionId}
+								token={wsToken}
+								pendingApprovals={pendingApprovals}
+							/>
+						</div>
+					)}
 				</div>
 
 				{/* Right panel — buttons above + rounded card */}

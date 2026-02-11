@@ -32,6 +32,7 @@ import { isBillingWorkerHealthy, startBillingWorker, stopBillingWorker } from ".
 import { SessionSubscriber } from "./pubsub";
 import { startRepoSnapshotWorkers, stopRepoSnapshotWorkers } from "./repo-snapshots";
 import { SlackClient } from "./slack";
+import { startActionExpirySweeper, stopActionExpirySweeper } from "./sweepers";
 
 // Create root logger
 const logger: Logger = createLogger({ service: "worker" });
@@ -105,6 +106,9 @@ if (!isModalConfigured) {
 	logger.info("Modal not configured - skipping snapshot worker startup");
 }
 
+// Action invocation expiry sweeper
+startActionExpirySweeper(logger.child({ module: "action-expiry" }));
+
 logger.info(
 	{
 		slackInbound: 5,
@@ -156,6 +160,9 @@ async function shutdown(): Promise<void> {
 
 	// Stop billing worker
 	stopBillingWorker();
+
+	// Stop action expiry sweeper
+	stopActionExpirySweeper();
 
 	// Stop session subscriber
 	await sessionSubscriber.stop();

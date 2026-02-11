@@ -8,6 +8,7 @@ import { Router, type Router as RouterType } from "express";
 import type { HubManager } from "../../../hub";
 import type { GatewayEnv } from "../../../lib/env";
 import { createEnsureSessionReady, createRequireAuth } from "../../../middleware";
+import { createActionsRouter } from "./actions";
 import cancelRouter from "./cancel";
 import infoRouter from "./info";
 import messageRouter from "./message";
@@ -28,11 +29,15 @@ export function createProliferateHttpRoutes(hubManager: HubManager, env: Gateway
 	// Verification media doesn't need session hub (reads from S3)
 	router.use(createVerificationMediaRouter(env));
 
+	// Actions routes — don't require sandbox running (DB + external API only)
+	router.use("/:proliferateSessionId/actions", createActionsRouter(env));
+
 	// Routes that need the sandbox running
 	// Mount ensureSessionReady on the param path so params are extracted first
 	router.use("/:proliferateSessionId", ensureSessionReady, infoRouter);
 	router.use("/:proliferateSessionId", ensureSessionReady, messageRouter);
 	router.use("/:proliferateSessionId", ensureSessionReady, cancelRouter);
+	router.use("/:proliferateSessionId/actions", ensureSessionReady, createActionsRouter(env));
 
 	return router;
 }

@@ -1090,6 +1090,60 @@ export const slackConversations = pgTable(
 	],
 );
 
+export const actionInvocations = pgTable(
+	"action_invocations",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		sessionId: text("session_id").notNull(),
+		organizationId: text("organization_id").notNull(),
+		integrationId: uuid("integration_id"),
+		integration: text("integration").notNull(),
+		action: text("action").notNull(),
+		riskLevel: text("risk_level").notNull(),
+		params: jsonb("params"),
+		status: text("status").default("pending").notNull(),
+		result: jsonb("result"),
+		error: text("error"),
+		durationMs: integer("duration_ms"),
+		approvedBy: text("approved_by"),
+		approvedAt: timestamp("approved_at", { withTimezone: true, mode: "date" }),
+		completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+		expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_action_invocations_session").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("text_ops"),
+		),
+		index("idx_action_invocations_org_created").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
+			table.createdAt.asc().nullsLast().op("timestamptz_ops"),
+		),
+		index("idx_action_invocations_status_expires").using(
+			"btree",
+			table.status.asc().nullsLast().op("text_ops"),
+			table.expiresAt.asc().nullsLast().op("timestamptz_ops"),
+		),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "action_invocations_organization_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.integrationId],
+			foreignColumns: [integrations.id],
+			name: "action_invocations_integration_id_fkey",
+		}).onDelete("set null"),
+		foreignKey({
+			columns: [table.sessionId],
+			foreignColumns: [sessions.id],
+			name: "action_invocations_session_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
 export const userSshKeys = pgTable(
 	"user_ssh_keys",
 	{

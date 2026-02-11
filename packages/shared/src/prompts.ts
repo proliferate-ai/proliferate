@@ -27,6 +27,13 @@ Use the \`proliferate\` CLI to manage background services:
 
 All commands output JSON. Prefer this CLI over MCP service tools. If \`proliferate\` is not found, fall back to the MCP service tools.
 
+## External Integrations
+
+Use \`proliferate actions list\` to discover available integrations (Sentry, Linear, etc.).
+Use \`proliferate actions run --integration <name> --action <action> --params '<json>'\` to interact with external services.
+Tokens are resolved server-side — never ask the user for API keys for connected integrations.
+Write actions may require user approval and will block until approved.
+
 After identifying which env files the project needs (e.g. \`.env.local\`, \`.env\`), call \`save_env_files()\` to record the spec. Future sessions will automatically generate these files from stored secrets on boot. Secret env files are automatically scrubbed before snapshots and restored after, so \`save_snapshot()\` is always safe to call.
 
 Background any long-running processes. Don't block on dev servers or watchers.
@@ -100,6 +107,13 @@ Then call: \`verify()\` (uses default folder) or \`verify({ folder: ".proliferat
 2. **Make targeted changes** - Only modify what's necessary
 3. **Test your work** - Run tests, use browser for UI verification
 4. **Commit logically** - Clear, focused commits with good messages
+
+## External Integrations
+
+Use \`proliferate actions list\` to discover available integrations (Sentry, Linear, etc.).
+Use \`proliferate actions run --integration <name> --action <action> --params '<json>'\` to interact with external services.
+Tokens are resolved server-side — never ask the user for API keys for connected integrations.
+Write actions may require user approval and will block until approved.
 
 ## Secrets
 

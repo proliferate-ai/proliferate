@@ -386,6 +386,37 @@ export interface AutoStartOutputMessage {
 	};
 }
 
+export interface ActionApprovalRequestMessage {
+	type: "action_approval_request";
+	payload: {
+		invocationId: string;
+		integration: string;
+		action: string;
+		riskLevel: string;
+		params: unknown;
+		expiresAt: string;
+	};
+}
+
+export interface ActionApprovalResultMessage {
+	type: "action_approval_result";
+	payload: {
+		invocationId: string;
+		status: "approved" | "denied";
+		approvedBy?: string;
+	};
+}
+
+export interface ActionCompletedMessage {
+	type: "action_completed";
+	payload: {
+		invocationId: string;
+		status: "completed" | "failed";
+		result?: unknown;
+		error?: string;
+	};
+}
+
 export type ServerMessage =
 	| InitMessage
 	| NewMessageEvent
@@ -408,7 +439,10 @@ export type ServerMessage =
 	| SnapshotResultMessage
 	| AutoStartOutputMessage
 	| GitStatusMessage
-	| GitResultMessage;
+	| GitResultMessage
+	| ActionApprovalRequestMessage
+	| ActionApprovalResultMessage
+	| ActionCompletedMessage;
 
 export * from "./auth";
 

@@ -10,6 +10,7 @@ import {
 	createSyncClient,
 } from "@proliferate/gateway-clients";
 import type {
+	ActionApprovalRequestMessage,
 	AutoStartOutputMessage,
 	GitResultMessage,
 	GitState,
@@ -50,6 +51,7 @@ interface UseSessionWebSocketReturn {
 	autoStartOutput: AutoStartOutputMessage["payload"] | null;
 	gitState: GitState | null;
 	gitResult: GitResultMessage["payload"] | null;
+	pendingApprovals: ActionApprovalRequestMessage["payload"][];
 	sendPrompt: (content: string, images?: string[]) => void;
 	sendCancel: () => void;
 	sendRunAutoStart: (
@@ -97,6 +99,9 @@ export function useSessionWebSocket({
 	);
 	const [gitState, setGitState] = useState<GitState | null>(null);
 	const [gitResult, setGitResult] = useState<GitResultMessage["payload"] | null>(null);
+	const [pendingApprovals, setPendingApprovals] = useState<
+		ActionApprovalRequestMessage["payload"][]
+	>([]);
 
 	const streamingTextRef = useRef<Record<string, string>>({});
 	const messagesRef = useRef<ExtendedMessage[]>([]);
@@ -132,6 +137,7 @@ export function useSessionWebSocket({
 			setAutoStartOutput,
 			setGitState,
 			setGitResult,
+			setPendingApprovals,
 			setError,
 			onTitleUpdate,
 			streamingTextRef,
@@ -242,6 +248,7 @@ export function useSessionWebSocket({
 		autoStartOutput,
 		gitState,
 		gitResult,
+		pendingApprovals,
 		sendPrompt,
 		sendCancel,
 		sendRunAutoStart,
@@ -345,6 +352,24 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 		case "git_result":
 			if (data.payload) {
 				ctx.setGitResult(data.payload as GitResultMessage["payload"]);
+			}
+			break;
+
+		case "action_approval_request":
+			if (data.payload) {
+				ctx.setPendingApprovals((prev) => [
+					...prev,
+					data.payload as ActionApprovalRequestMessage["payload"],
+				]);
+			}
+			break;
+
+		case "action_approval_result":
+		case "action_completed":
+			if (data.payload?.invocationId) {
+				ctx.setPendingApprovals((prev) =>
+					prev.filter((a) => a.invocationId !== data.payload.invocationId),
+				);
 			}
 			break;
 	}
