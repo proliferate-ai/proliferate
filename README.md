@@ -17,17 +17,15 @@ Proliferate is a multiplayer cloud harness for coding agents. Give agents the sa
 
 ## Features
 
-| Feature | Description |
-| --- | --- |
-| **Multiplayer** | Multiple teammates can watch, steer, or take over the same session in real time |
-| **Preview Environments** | Every run gets an isolated cloud sandbox (Modal or E2B), not just a repo checkout |
-| **Multi-Agent Harness** | Run many coding sessions in parallel across separate tasks and repos |
-| **Model Agnostic** | Use your preferred coding models and providers |
-| **Automations** | Configure schedules and triggers from GitHub, Sentry, PostHog, Linear, Slack, or webhooks |
-| **Action Framework** | Connect internal APIs, SaaS tools, and MCP-style integrations |
-| **Multi-Client** | Work from web, CLI, or Slack against the same session state |
-| **Permissioning** | Scoped, auditable access controls for agent actions across your org |
-| **Fully Open Source** | MIT licensed and self-hostable on your own infrastructure |
+- **Multiplayer:** Multiple teammates can watch, steer, or take over the same session in real time.
+- **Preview environments:** Every run gets an isolated cloud sandbox (Modal or E2B), not just a repo checkout.
+- **Multi-agent harness:** Run many coding sessions in parallel across separate tasks and repos.
+- **Model agnostic:** Use your preferred coding models and providers.
+- **Automations:** Configure schedules and triggers from GitHub, Sentry, PostHog, Linear, Slack, or webhooks.
+- **Action framework:** Connect internal APIs, SaaS tools, and MCP-style integrations.
+- **Multi-client:** Work from web, CLI, or Slack against the same session state.
+- **Permissioning:** Scoped, auditable access controls for agent actions across your org.
+- **Fully open source:** MIT licensed and self-hostable on your own infrastructure.
 
 > 📖 Full docs: [docs.proliferate.com](https://docs.proliferate.com)
 
@@ -152,14 +150,12 @@ For webhooks/public domains: [`docs/self-hosting/localhost-vs-public-domain.md`]
 
 ## Deployment
 
-| Method | Command / Guide |
-| --- | --- |
-| **Local (build from source)** | `docker compose up -d` |
-| **Production (pre-built images)** | `docker compose -f docker-compose.prod.yml up -d` |
-| **AWS (EKS via Pulumi + Helm)** | [`infra/pulumi-k8s/README.md`](infra/pulumi-k8s/README.md) |
-| **GCP (GKE via Pulumi + Helm)** | [`infra/pulumi-k8s-gcp/README.md`](infra/pulumi-k8s-gcp/README.md) |
-| **Terraform (legacy ECS/manual path)** | [`infra/terraform/README.md`](infra/terraform/README.md) |
-| **Cloud deploy helper** | `make deploy-cloud SHA=<sha> STACK=prod` |
+- **Local (build from source):** `docker compose up -d`
+- **Production (pre-built images):** `docker compose -f docker-compose.prod.yml up -d`
+- **AWS (EKS via Pulumi + Helm):** [`infra/pulumi-k8s/README.md`](infra/pulumi-k8s/README.md)
+- **GCP (GKE via Pulumi + Helm):** [`infra/pulumi-k8s-gcp/README.md`](infra/pulumi-k8s-gcp/README.md)
+- **Terraform (legacy ECS/manual path):** [`infra/terraform/README.md`](infra/terraform/README.md)
+- **Cloud deploy helper:** `make deploy-cloud SHA=<sha> STACK=prod`
 
 Supports AWS and GCP for current Kubernetes self-hosting. ECS/Terraform paths are legacy/manual.
 
