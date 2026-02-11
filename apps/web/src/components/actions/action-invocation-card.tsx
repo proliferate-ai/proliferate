@@ -112,7 +112,17 @@ export function ActionInvocationCard({
 		setLoading("approve");
 		setError(null);
 		try {
-			const maxCalls = grantMaxCalls.trim() === "" ? null : Number.parseInt(grantMaxCalls, 10);
+			const trimmed = grantMaxCalls.trim();
+			let maxCalls: number | null = null;
+			if (trimmed !== "") {
+				const parsed = Number(trimmed);
+				if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1) {
+					setError("Uses must be a positive whole number or blank for unlimited");
+					setLoading(null);
+					return;
+				}
+				maxCalls = parsed;
+			}
 			await onApproveWithGrant({ scope: grantScope, maxCalls });
 			setShowGrantConfig(false);
 		} catch (err) {

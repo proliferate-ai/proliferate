@@ -359,7 +359,11 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				if (mode === "grant") {
 					const grantPayload = body?.grant;
 					const scope = grantPayload?.scope === "org" ? ("org" as const) : ("session" as const);
-					const maxCalls = grantPayload?.maxCalls ?? null;
+					const rawMaxCalls = grantPayload?.maxCalls ?? null;
+					if (rawMaxCalls != null && (!Number.isInteger(rawMaxCalls) || rawMaxCalls < 1)) {
+						throw new ApiError(400, "grant.maxCalls must be a positive integer or null");
+					}
+					const maxCalls = rawMaxCalls;
 					const result = await actions.approveActionWithGrant(
 						invocationId,
 						session.organizationId,
