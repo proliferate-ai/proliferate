@@ -49,6 +49,7 @@ export interface UpdateAutomationInput {
 	enabledTools?: Record<string, unknown> | null;
 	llmAnalysisPrompt?: string | null;
 	notificationChannelId?: string | null;
+	notificationSlackInstallationId?: string | null;
 }
 
 // ============================================
@@ -133,6 +134,7 @@ export async function updateAutomation(
 		enabledTools: input.enabledTools,
 		llmAnalysisPrompt: input.llmAnalysisPrompt,
 		notificationChannelId: input.notificationChannelId,
+		notificationSlackInstallationId: input.notificationSlackInstallationId,
 	});
 
 	return toAutomation(row);

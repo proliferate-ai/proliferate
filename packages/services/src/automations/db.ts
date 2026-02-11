@@ -385,6 +385,8 @@ export async function update(
 	if (input.llmAnalysisPrompt !== undefined) updates.llmAnalysisPrompt = input.llmAnalysisPrompt;
 	if (input.notificationChannelId !== undefined)
 		updates.notificationChannelId = input.notificationChannelId;
+	if (input.notificationSlackInstallationId !== undefined)
+		updates.notificationSlackInstallationId = input.notificationSlackInstallationId;
 
 	await db
 		.update(automations)

@@ -69,6 +69,7 @@ export function toAutomation(
 		enabled_tools: (row.enabledTools as Record<string, unknown>) ?? null,
 		llm_analysis_prompt: row.llmAnalysisPrompt ?? null,
 		notification_channel_id: row.notificationChannelId ?? null,
+		notification_slack_installation_id: row.notificationSlackInstallationId ?? null,
 	};
 }
 
@@ -117,6 +118,7 @@ export function toAutomationListItem(row: AutomationWithRelations): AutomationLi
 		enabled_tools: (row.enabledTools as Record<string, unknown>) ?? null,
 		llm_analysis_prompt: row.llmAnalysisPrompt ?? null,
 		notification_channel_id: row.notificationChannelId ?? null,
+		notification_slack_installation_id: row.notificationSlackInstallationId ?? null,
 		_count: {
 			triggers: triggers.length,
 			schedules: schedules.length,
@@ -180,6 +182,7 @@ export function toAutomationWithTriggers(row: AutomationWithTriggersRow): Automa
 		enabled_tools: (row.enabledTools as Record<string, unknown>) ?? null,
 		llm_analysis_prompt: row.llmAnalysisPrompt ?? null,
 		notification_channel_id: row.notificationChannelId ?? null,
+		notification_slack_installation_id: row.notificationSlackInstallationId ?? null,
 		triggers: (row.triggers || []).map(toAutomationTrigger),
 	};
 }
@@ -222,6 +225,7 @@ export function toNewAutomationListItem(
 		enabled_tools: (row.enabledTools as Record<string, unknown>) ?? null,
 		llm_analysis_prompt: row.llmAnalysisPrompt ?? null,
 		notification_channel_id: row.notificationChannelId ?? null,
+		notification_slack_installation_id: row.notificationSlackInstallationId ?? null,
 		_count: { triggers: 0, schedules: 0 },
 		activeProviders: [],
 	};

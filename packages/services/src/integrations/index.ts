@@ -63,3 +63,6 @@ export { getSlackInstallationBotToken } from "./db";
 
 // DB functions needed by notification dispatch
 export { getSlackInstallationForNotifications } from "./db";
+
+// DB functions needed for notification workspace selector
+export { listActiveSlackInstallations } from "./db";

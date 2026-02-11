@@ -23,11 +23,19 @@ import {
 import { LinearIcon, OpenCodeIcon, SlackIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Text } from "@/components/ui/text";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAutomation, useUpdateAutomation } from "@/hooks/use-automations";
+import { useSlackInstallations } from "@/hooks/use-integrations";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 import {
@@ -95,6 +103,8 @@ function mapInputToOutput(data: UpdateAutomationInput): Record<string, unknown> 
 		else if (key === "llmFilterPrompt") mapped.llm_filter_prompt = value;
 		else if (key === "enabledTools") mapped.enabled_tools = value;
 		else if (key === "llmAnalysisPrompt") mapped.llm_analysis_prompt = value;
+		else if (key === "notificationSlackInstallationId")
+			mapped.notification_slack_installation_id = value;
 		else mapped[key] = value;
 	}
 	return mapped;
@@ -267,10 +277,16 @@ export default function AutomationDetailPage({
 	const [llmAnalysisPrompt, setLlmAnalysisPrompt] = useState("");
 	const [enabledTools, setEnabledTools] = useState<EnabledTools>({});
 	const [hasPendingChanges, setHasPendingChanges] = useState(false);
+	const [notificationSlackInstallationId, setNotificationSlackInstallationId] = useState<
+		string | null
+	>(null);
 	const hydratedRef = useRef(false);
 
 	// Fetch automation using oRPC
 	const { data: automation, isLoading, error } = useAutomation(id);
+
+	// Fetch Slack installations for workspace selector
+	const { data: slackInstallations } = useSlackInstallations();
 
 	// Update mutation using oRPC
 	const updateMutation = useUpdateAutomation(id);
@@ -284,6 +300,7 @@ export default function AutomationDetailPage({
 			setLlmFilterPrompt(automation.llm_filter_prompt || "");
 			setLlmAnalysisPrompt(automation.llm_analysis_prompt || "");
 			setEnabledTools((automation.enabled_tools as EnabledTools) || {});
+			setNotificationSlackInstallationId(automation.notification_slack_installation_id ?? null);
 		}
 	}, [automation]);
 
@@ -637,16 +654,45 @@ export default function AutomationDetailPage({
 									onToggle={(checked) => handleToolToggle("slack_notify", checked)}
 									isFirst
 								>
-									<div className="space-y-1.5">
-										<Label className="text-xs text-muted-foreground">Channel ID</Label>
-										<Input
-											value={enabledTools.slack_notify?.channelId || ""}
-											onChange={(e) =>
-												handleToolConfigChange("slack_notify", "channelId", e.target.value)
-											}
-											placeholder="C01234567890"
-											className="h-8"
-										/>
+									<div className="space-y-3">
+										{slackInstallations && slackInstallations.length > 1 && (
+											<div className="space-y-1.5">
+												<Label className="text-xs text-muted-foreground">Workspace</Label>
+												<Select
+													value={notificationSlackInstallationId ?? "auto"}
+													onValueChange={(value) => {
+														const installationId = value === "auto" ? null : value;
+														setNotificationSlackInstallationId(installationId);
+														handleUpdate({
+															notificationSlackInstallationId: installationId,
+														});
+													}}
+												>
+													<SelectTrigger className="h-8">
+														<SelectValue placeholder="Auto-detect" />
+													</SelectTrigger>
+													<SelectContent>
+														<SelectItem value="auto">Auto-detect</SelectItem>
+														{slackInstallations.map((inst) => (
+															<SelectItem key={inst.id} value={inst.id}>
+																{inst.team_name ?? inst.team_id}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+											</div>
+										)}
+										<div className="space-y-1.5">
+											<Label className="text-xs text-muted-foreground">Channel ID</Label>
+											<Input
+												value={enabledTools.slack_notify?.channelId || ""}
+												onChange={(e) =>
+													handleToolConfigChange("slack_notify", "channelId", e.target.value)
+												}
+												placeholder="C01234567890"
+												className="h-8"
+											/>
+										</div>
 									</div>
 								</ToolListItem>
 

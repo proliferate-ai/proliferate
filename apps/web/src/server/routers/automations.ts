@@ -108,6 +108,7 @@ export const automationsRouter = {
 					enabledTools: updateData.enabledTools as Record<string, unknown> | undefined,
 					llmAnalysisPrompt: updateData.llmAnalysisPrompt,
 					notificationChannelId: updateData.notificationChannelId,
+					notificationSlackInstallationId: updateData.notificationSlackInstallationId,
 				});
 				return { automation };
 			} catch (err) {

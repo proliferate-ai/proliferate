@@ -144,6 +144,13 @@ export function useSlackStatus() {
 	});
 }
 
+export function useSlackInstallations() {
+	return useQuery({
+		...orpc.integrations.slackInstallations.queryOptions({ input: undefined }),
+		select: (data) => data.installations,
+	});
+}
+
 export function useSlackConnect() {
 	const queryClient = useQueryClient();
 

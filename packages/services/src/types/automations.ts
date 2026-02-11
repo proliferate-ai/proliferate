@@ -56,6 +56,7 @@ export interface UpdateAutomationInput {
 	enabledTools?: Record<string, unknown> | null;
 	llmAnalysisPrompt?: string | null;
 	notificationChannelId?: string | null;
+	notificationSlackInstallationId?: string | null;
 }
 
 // ============================================

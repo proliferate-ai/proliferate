@@ -24,6 +24,7 @@ export interface RunNotification {
 	automationName: string;
 	organizationId: string;
 	channelId: string;
+	slackInstallationId: string | null;
 	statusReason: string | null;
 	errorMessage: string | null;
 	summaryMarkdown: string | null;
@@ -108,8 +109,21 @@ class SlackNotificationChannel implements NotificationChannel {
 	async send(notification: RunNotification, logger: Logger): Promise<NotificationResult> {
 		const installation = await integrations.getSlackInstallationForNotifications(
 			notification.organizationId,
+			notification.slackInstallationId,
 		);
 		if (!installation) {
+			if (notification.slackInstallationId) {
+				const message = `Slack installation ${notification.slackInstallationId} not found or revoked for org ${notification.organizationId}. Update the automation notification settings.`;
+				logger.warn(
+					{
+						orgId: notification.organizationId,
+						installationId: notification.slackInstallationId,
+						runId: notification.runId,
+					},
+					message,
+				);
+				return { sent: false, error: message };
+			}
 			logger.debug({ orgId: notification.organizationId }, "No Slack installation for org");
 			return { sent: false };
 		}
@@ -213,6 +227,7 @@ export async function dispatchRunNotification(runId: string, logger: Logger): Pr
 		errorMessage: run.errorMessage ?? null,
 		summaryMarkdown: extractSummary(run.completionJson),
 		channelId,
+		slackInstallationId: run.automation?.notificationSlackInstallationId ?? null,
 	};
 
 	for (const channel of channels) {

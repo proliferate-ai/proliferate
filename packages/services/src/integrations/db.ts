@@ -395,12 +395,30 @@ export async function getSlackInstallationForDisconnect(
 
 /**
  * Get active Slack installation for notifications.
- * Returns the bot token needed to post messages.
+ * When installationId is provided, uses that specific installation (scoped to org).
+ * Falls back to first active installation for the org when no ID given.
  */
 export async function getSlackInstallationForNotifications(
 	orgId: string,
+	installationId?: string | null,
 ): Promise<Pick<SlackInstallationRow, "id" | "encryptedBotToken"> | null> {
 	const db = getDb();
+
+	if (installationId) {
+		const result = await db.query.slackInstallations.findFirst({
+			where: and(
+				eq(slackInstallations.id, installationId),
+				eq(slackInstallations.organizationId, orgId),
+				eq(slackInstallations.status, "active"),
+			),
+			columns: {
+				id: true,
+				encryptedBotToken: true,
+			},
+		});
+		return result ?? null;
+	}
+
 	const result = await db.query.slackInstallations.findFirst({
 		where: and(
 			eq(slackInstallations.organizationId, orgId),
@@ -411,8 +429,29 @@ export async function getSlackInstallationForNotifications(
 			encryptedBotToken: true,
 		},
 	});
-
 	return result ?? null;
+}
+
+/**
+ * List all active Slack installations for an organization.
+ * Used for the notification workspace selector UI.
+ */
+export async function listActiveSlackInstallations(
+	orgId: string,
+): Promise<Pick<SlackInstallationRow, "id" | "teamId" | "teamName">[]> {
+	const db = getDb();
+	return db.query.slackInstallations.findMany({
+		where: and(
+			eq(slackInstallations.organizationId, orgId),
+			eq(slackInstallations.status, "active"),
+		),
+		columns: {
+			id: true,
+			teamId: true,
+			teamName: true,
+		},
+		orderBy: [slackInstallations.createdAt],
+	});
 }
 
 /**

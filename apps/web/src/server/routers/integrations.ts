@@ -643,6 +643,32 @@ export const integrationsRouter = {
 	}),
 
 	/**
+	 * List active Slack installations for workspace selector.
+	 */
+	slackInstallations: orgProcedure
+		.output(
+			z.object({
+				installations: z.array(
+					z.object({
+						id: z.string().uuid(),
+						team_id: z.string(),
+						team_name: z.string().nullable(),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ context }) => {
+			const installations = await integrations.listActiveSlackInstallations(context.orgId);
+			return {
+				installations: installations.map((i) => ({
+					id: i.id,
+					team_id: i.teamId,
+					team_name: i.teamName,
+				})),
+			};
+		}),
+
+	/**
 	 * Send a Slack Connect invite.
 	 */
 	slackConnect: orgProcedure

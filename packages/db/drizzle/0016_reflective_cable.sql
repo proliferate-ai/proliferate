@@ -1,0 +1,2 @@
+ALTER TABLE "automations" ADD COLUMN "notification_slack_installation_id" uuid;--> statement-breakpoint
+ALTER TABLE "automations" ADD CONSTRAINT "automations_notification_slack_installation_id_fkey" FOREIGN KEY ("notification_slack_installation_id") REFERENCES "public"."slack_installations"("id") ON DELETE set null ON UPDATE no action;

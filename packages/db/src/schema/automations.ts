@@ -6,6 +6,7 @@ import { relations } from "drizzle-orm";
 import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organization, user } from "./auth";
 import { prebuilds } from "./prebuilds";
+import { slackInstallations } from "./slack";
 
 // ============================================
 // Automations
@@ -44,6 +45,10 @@ export const automations = pgTable(
 
 		// Notifications
 		notificationChannelId: text("notification_channel_id"),
+		notificationSlackInstallationId: uuid("notification_slack_installation_id").references(
+			() => slackInstallations.id,
+			{ onDelete: "set null" },
+		),
 
 		// Metadata
 		createdBy: text("created_by").references(() => user.id),
