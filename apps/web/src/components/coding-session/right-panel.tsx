@@ -19,6 +19,7 @@ import { ChangesPanel } from "./changes-panel";
 import { FileViewer } from "./file-viewer";
 import { GitPanel } from "./git-panel";
 import { PreviewPanel } from "./preview-panel";
+import { ServicesPanel } from "./services-panel";
 import { SessionInfoPanel } from "./session-info-panel";
 import { SnapshotsPanel } from "./snapshots-panel";
 import { VerificationGallery } from "./verification-gallery";
@@ -159,6 +160,11 @@ export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps
 				onClose={handleClose}
 			/>
 		);
+	}
+
+	// Services panel
+	if (mode.type === "services" && sessionProps?.sessionId) {
+		return <ServicesPanel sessionId={sessionProps.sessionId} onClose={handleClose} />;
 	}
 
 	// Auto-start panel

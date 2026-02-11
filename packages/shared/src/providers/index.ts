@@ -48,7 +48,7 @@ export function getSandboxProviderForSnapshot(provider: SandboxProviderType): Sa
 }
 
 // Re-export provider classes for direct instantiation if needed
-export { ModalLibmodalProvider } from "./modal-libmodal";
+export { ModalLibmodalProvider, getModalAppName } from "./modal-libmodal";
 export { E2BProvider } from "./e2b";
 
 // Re-export types

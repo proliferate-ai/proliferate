@@ -357,13 +357,30 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 			}
 
 			const terminated = session.status === "stopped" || Boolean(session.endedAt);
+			const sandboxId = session.sandboxId ?? undefined;
 
-			res.json({
+			// Check provider-level sandbox liveness when the session looks running and has a sandbox
+			let sandboxAlive: boolean | null | undefined;
+			if (!terminated && sandboxId && provider.checkSandboxes) {
+				try {
+					const alive = await provider.checkSandboxes([sandboxId]);
+					sandboxAlive = alive.includes(sandboxId);
+				} catch {
+					sandboxAlive = null;
+				}
+			}
+
+			const response: Record<string, unknown> = {
 				state: terminated ? "terminated" : "running",
 				status: session.status ?? "unknown",
 				terminatedAt: session.endedAt?.toISOString(),
 				reason: session.stopReason ?? undefined,
-			});
+				sandboxId,
+			};
+			if (sandboxAlive !== undefined) {
+				response.sandboxAlive = sandboxAlive;
+			}
+			res.json(response);
 		} catch (err) {
 			next(err);
 		}
