@@ -52,7 +52,7 @@ interface SlackBlock {
 
 function buildSlackBlocks(notification: RunNotification): SlackBlock[] {
 	const appUrl = env.NEXT_PUBLIC_APP_URL;
-	const runUrl = `${appUrl}/automations/${notification.automationId}/runs/${notification.runId}`;
+	const runUrl = `${appUrl}/dashboard/automations/${notification.automationId}/events`;
 
 	const statusLabels: Record<string, string> = {
 		succeeded: "Run Succeeded",

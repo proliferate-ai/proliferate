@@ -74,6 +74,7 @@ export const AutomationSchema = z.object({
 	llm_filter_prompt: z.string().nullable().optional(),
 	enabled_tools: z.record(z.unknown()).nullable().optional(),
 	llm_analysis_prompt: z.string().nullable().optional(),
+	notification_channel_id: z.string().nullable().optional(),
 });
 
 export type Automation = z.infer<typeof AutomationSchema>;
@@ -120,6 +121,7 @@ export const UpdateAutomationInputSchema = z.object({
 	llmFilterPrompt: z.string().nullable().optional(),
 	enabledTools: z.record(z.unknown()).nullable().optional(),
 	llmAnalysisPrompt: z.string().nullable().optional(),
+	notificationChannelId: z.string().nullable().optional(),
 });
 
 export type UpdateAutomationInput = z.infer<typeof UpdateAutomationInputSchema>;

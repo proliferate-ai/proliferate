@@ -124,7 +124,11 @@ export async function markRunFailed(options: {
 	);
 
 	if (updated) {
-		await enqueueRunNotification(updated.organizationId, options.runId, "failed");
+		try {
+			await enqueueRunNotification(updated.organizationId, options.runId, "failed");
+		} catch {
+			// Non-critical: don't let notification failures break callers
+		}
 	}
 
 	return updated;

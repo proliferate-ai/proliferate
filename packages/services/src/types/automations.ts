@@ -55,6 +55,7 @@ export interface UpdateAutomationInput {
 	llmFilterPrompt?: string | null;
 	enabledTools?: Record<string, unknown> | null;
 	llmAnalysisPrompt?: string | null;
+	notificationChannelId?: string | null;
 }
 
 // ============================================

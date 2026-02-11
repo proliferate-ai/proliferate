@@ -219,7 +219,11 @@ async function finalizeRuns(syncClient: SyncClient, logger: Logger): Promise<voi
 					errorMessage: "Run timed out",
 					processedAt: new Date(),
 				});
-				await notifications.enqueueRunNotification(run.organizationId, run.id, "timed_out");
+				try {
+					await notifications.enqueueRunNotification(run.organizationId, run.id, "timed_out");
+				} catch {
+					// Non-critical: don't let notification failures break finalizer
+				}
 				continue;
 			}
 

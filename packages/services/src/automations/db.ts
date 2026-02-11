@@ -383,6 +383,8 @@ export async function update(
 	if (input.llmFilterPrompt !== undefined) updates.llmFilterPrompt = input.llmFilterPrompt;
 	if (input.enabledTools !== undefined) updates.enabledTools = input.enabledTools;
 	if (input.llmAnalysisPrompt !== undefined) updates.llmAnalysisPrompt = input.llmAnalysisPrompt;
+	if (input.notificationChannelId !== undefined)
+		updates.notificationChannelId = input.notificationChannelId;
 
 	await db
 		.update(automations)
