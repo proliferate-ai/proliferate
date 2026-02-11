@@ -5,6 +5,7 @@ import { finalizeOneRun } from "./finalizer";
 function makeRun(overrides: Partial<FinalizerRun> = {}): FinalizerRun {
 	return {
 		id: "id" in overrides ? overrides.id! : "run-1",
+		organizationId: "organizationId" in overrides ? overrides.organizationId! : "org-1",
 		sessionId: "sessionId" in overrides ? (overrides.sessionId as string | null) : "session-1",
 		triggerEventId: "triggerEventId" in overrides ? overrides.triggerEventId! : "event-1",
 		deadlineAt: "deadlineAt" in overrides ? (overrides.deadlineAt as Date | null) : null,
@@ -17,6 +18,7 @@ function makeDeps(statusResponse?: SessionStatus | Error): FinalizerDeps & {
 	markRunFailed: ReturnType<typeof vi.fn>;
 	transitionRunStatus: ReturnType<typeof vi.fn>;
 	updateTriggerEvent: ReturnType<typeof vi.fn>;
+	enqueueNotification: ReturnType<typeof vi.fn>;
 } {
 	const getSessionStatus =
 		statusResponse instanceof Error
@@ -28,6 +30,7 @@ function makeDeps(statusResponse?: SessionStatus | Error): FinalizerDeps & {
 		markRunFailed: vi.fn().mockResolvedValue(null),
 		transitionRunStatus: vi.fn().mockResolvedValue(null),
 		updateTriggerEvent: vi.fn().mockResolvedValue(undefined),
+		enqueueNotification: vi.fn().mockResolvedValue(undefined),
 		log: {
 			info: vi.fn(),
 			warn: vi.fn(),
@@ -216,6 +219,26 @@ describe("finalizeOneRun", () => {
 			expect.objectContaining({ runId: "run-1" }),
 			"Session status check failed, will retry",
 		);
+	});
+
+	it("enqueues timed_out notification on deadline exceeded", async () => {
+		const run = makeRun({ deadlineAt: new Date(Date.now() - 60_000) });
+		const deps = makeDeps();
+
+		await finalizeOneRun(run, deps);
+
+		expect(deps.enqueueNotification).toHaveBeenCalledWith("org-1", "run-1", "timed_out");
+	});
+
+	it("does not break when notification enqueue fails on timeout", async () => {
+		const run = makeRun({ deadlineAt: new Date(Date.now() - 60_000) });
+		const deps = makeDeps();
+		deps.enqueueNotification.mockRejectedValue(new Error("outbox write failed"));
+
+		await finalizeOneRun(run, deps);
+
+		expect(deps.transitionRunStatus).toHaveBeenCalledWith("run-1", "timed_out", expect.any(Object));
+		expect(deps.enqueueNotification).toHaveBeenCalled();
 	});
 
 	it("checks deadline before session status", async () => {

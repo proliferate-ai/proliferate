@@ -19,6 +19,7 @@ export interface SessionStatus {
  */
 export interface FinalizerRun {
 	id: string;
+	organizationId: string;
 	sessionId: string | null;
 	triggerEventId: string;
 	deadlineAt: Date | null;
@@ -45,6 +46,7 @@ export interface FinalizerDeps {
 		eventId: string,
 		updates: { status: string; errorMessage: string; processedAt: Date },
 	): Promise<unknown>;
+	enqueueNotification?(organizationId: string, runId: string, status: string): Promise<void>;
 	log: {
 		info(obj: Record<string, unknown>, msg: string): void;
 		warn(obj: Record<string, unknown>, msg: string): void;
@@ -96,6 +98,11 @@ export async function finalizeOneRun(run: FinalizerRun, deps: FinalizerDeps): Pr
 			errorMessage: "Run timed out (deadline exceeded)",
 			processedAt: new Date(),
 		});
+		try {
+			await deps.enqueueNotification?.(run.organizationId, run.id, "timed_out");
+		} catch {
+			// Non-critical: don't let notification failures break finalizer
+		}
 		deps.log.info({ runId: run.id }, "Run finalized: deadline_exceeded");
 		return;
 	}

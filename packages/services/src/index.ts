@@ -25,6 +25,7 @@ export * as sideEffects from "./side-effects";
 export * as triggers from "./triggers";
 export * as users from "./users";
 export * as outbox from "./outbox";
+export * as notifications from "./notifications";
 
 // Legacy exports (to be migrated)
 export {

@@ -15,10 +15,11 @@ import {
 	queueAutomationEnrich,
 	queueAutomationExecute,
 } from "@proliferate/queue";
-import { outbox, runs, triggers } from "@proliferate/services";
+import { notifications, outbox, runs, triggers } from "@proliferate/services";
 import type { Worker } from "bullmq";
 import { writeCompletionArtifact } from "./artifacts";
 import { type FinalizerDeps, finalizeOneRun } from "./finalizer";
+import { dispatchRunNotification } from "./notifications";
 
 const LEASE_TTL_MS = 5 * 60 * 1000;
 const OUTBOX_POLL_INTERVAL_MS = 2000;
@@ -58,7 +59,7 @@ export function startAutomationWorkers(logger: Logger): AutomationWorkers {
 	});
 
 	const outboxInterval = setInterval(() => {
-		dispatchOutbox(enrichQueue, executeQueue).catch((err) => {
+		dispatchOutbox(enrichQueue, executeQueue, logger).catch((err) => {
 			logger.error({ err }, "Outbox dispatch failed");
 		});
 	}, OUTBOX_POLL_INTERVAL_MS);
@@ -197,6 +198,8 @@ async function finalizeRuns(syncClient: SyncClient, logger: Logger): Promise<voi
 		transitionRunStatus: (runId, toStatus, updates) =>
 			runs.transitionRunStatus(runId, toStatus, updates),
 		updateTriggerEvent: (eventId, updates) => triggers.updateEvent(eventId, updates),
+		enqueueNotification: (orgId, runId, status) =>
+			notifications.enqueueRunNotification(orgId, runId, status),
 		log: logger,
 	};
 
@@ -217,6 +220,7 @@ async function finalizeRuns(syncClient: SyncClient, logger: Logger): Promise<voi
 async function dispatchOutbox(
 	enrichQueue: ReturnType<typeof createAutomationEnrichQueue>,
 	executeQueue: ReturnType<typeof createAutomationExecuteQueue>,
+	logger: Logger,
 ): Promise<void> {
 	const pending = await outbox.listPendingOutbox(50);
 	for (const item of pending) {
@@ -237,6 +241,9 @@ async function dispatchOutbox(
 					break;
 				case "write_artifacts":
 					await writeArtifacts(runId);
+					break;
+				case "notify_run_terminal":
+					await dispatchRunNotification(runId, logger);
 					break;
 				default:
 					await outbox.markFailed(item.id, `Unknown outbox kind: ${item.kind}`);

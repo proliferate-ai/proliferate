@@ -48,6 +48,7 @@ export interface UpdateAutomationInput {
 	llmFilterPrompt?: string | null;
 	enabledTools?: Record<string, unknown> | null;
 	llmAnalysisPrompt?: string | null;
+	notificationChannelId?: string | null;
 }
 
 // ============================================
@@ -131,6 +132,7 @@ export async function updateAutomation(
 		llmFilterPrompt: input.llmFilterPrompt,
 		enabledTools: input.enabledTools,
 		llmAnalysisPrompt: input.llmAnalysisPrompt,
+		notificationChannelId: input.notificationChannelId,
 	});
 
 	return toAutomation(row);

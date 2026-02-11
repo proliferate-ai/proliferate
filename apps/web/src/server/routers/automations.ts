@@ -107,6 +107,7 @@ export const automationsRouter = {
 					llmFilterPrompt: updateData.llmFilterPrompt,
 					enabledTools: updateData.enabledTools as Record<string, unknown> | undefined,
 					llmAnalysisPrompt: updateData.llmAnalysisPrompt,
+					notificationChannelId: updateData.notificationChannelId,
 				});
 				return { automation };
 			} catch (err) {
