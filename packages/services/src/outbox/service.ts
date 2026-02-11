@@ -112,7 +112,11 @@ export async function recoverStuckOutbox(leaseMs = CLAIM_LEASE_MS): Promise<numb
 	const cutoff = new Date(Date.now() - leaseMs);
 	const result = await db.execute<{ count: string }>(sql`
 		UPDATE ${outbox}
-		SET ${outbox.status} = 'pending',
+		SET ${outbox.status} = CASE
+		      WHEN ${outbox.attempts} + 1 >= ${MAX_ATTEMPTS} THEN 'failed'
+		      ELSE 'pending'
+		    END,
+		    ${outbox.attempts} = ${outbox.attempts} + 1,
 		    ${outbox.claimedAt} = NULL
 		WHERE ${outbox.status} = 'processing'
 		  AND ${outbox.claimedAt} < ${cutoff}

@@ -655,33 +655,34 @@ export default function AutomationDetailPage({
 									isFirst
 								>
 									<div className="space-y-3">
-										{slackInstallations && slackInstallations.length > 1 && (
-											<div className="space-y-1.5">
-												<Label className="text-xs text-muted-foreground">Workspace</Label>
-												<Select
-													value={notificationSlackInstallationId ?? "auto"}
-													onValueChange={(value) => {
-														const installationId = value === "auto" ? null : value;
-														setNotificationSlackInstallationId(installationId);
-														handleUpdate({
-															notificationSlackInstallationId: installationId,
-														});
-													}}
-												>
-													<SelectTrigger className="h-8">
-														<SelectValue placeholder="Auto-detect" />
-													</SelectTrigger>
-													<SelectContent>
-														<SelectItem value="auto">Auto-detect</SelectItem>
-														{slackInstallations.map((inst) => (
-															<SelectItem key={inst.id} value={inst.id}>
-																{inst.team_name ?? inst.team_id}
-															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
-											</div>
-										)}
+										{slackInstallations &&
+											(slackInstallations.length > 1 || notificationSlackInstallationId) && (
+												<div className="space-y-1.5">
+													<Label className="text-xs text-muted-foreground">Workspace</Label>
+													<Select
+														value={notificationSlackInstallationId ?? "auto"}
+														onValueChange={(value) => {
+															const installationId = value === "auto" ? null : value;
+															setNotificationSlackInstallationId(installationId);
+															handleUpdate({
+																notificationSlackInstallationId: installationId,
+															});
+														}}
+													>
+														<SelectTrigger className="h-8">
+															<SelectValue placeholder="Auto-detect" />
+														</SelectTrigger>
+														<SelectContent>
+															<SelectItem value="auto">Auto-detect</SelectItem>
+															{slackInstallations.map((inst) => (
+																<SelectItem key={inst.id} value={inst.id}>
+																	{inst.team_name ?? inst.team_id}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
+												</div>
+											)}
 										<div className="space-y-1.5">
 											<Label className="text-xs text-muted-foreground">Channel ID</Label>
 											<Input
