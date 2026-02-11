@@ -180,6 +180,7 @@ export type {
 	CreateBundleInput,
 	UpdateBundleInput,
 	UpdateSecretBundleInput,
+	BulkImportInput,
 } from "./secrets";
 export {
 	SecretSchema,
@@ -190,6 +191,8 @@ export {
 	CreateBundleInputSchema,
 	UpdateBundleInputSchema,
 	UpdateSecretBundleInputSchema,
+	BulkImportInputSchema,
+	BulkImportResultSchema,
 } from "./secrets";
 
 // Re-export trigger types

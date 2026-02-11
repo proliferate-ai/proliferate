@@ -14,6 +14,7 @@ export type {
 	SecretBundleListRow,
 	DbCreateBundleInput,
 	DbUpdateBundleInput,
+	BundleWithKeys,
 } from "../types/secrets";
 export {
 	EncryptionError,
@@ -21,6 +22,7 @@ export {
 	DuplicateBundleError,
 	BundleNotFoundError,
 	BundleOrgMismatchError,
+	InvalidTargetPathError,
 } from "./service";
 
 // DB functions needed by sessions-create and repos-finalize

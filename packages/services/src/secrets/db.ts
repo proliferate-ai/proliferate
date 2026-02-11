@@ -21,6 +21,7 @@ import {
 import { getServicesLogger } from "../logger";
 import { toIsoString } from "../db/serialize";
 import type {
+	BundleWithKeys,
 	CheckSecretsFilter,
 	DbCreateBundleInput,
 	DbCreateSecretInput,
@@ -264,6 +265,7 @@ export async function listBundlesByOrganization(
 			id: secretBundles.id,
 			name: secretBundles.name,
 			description: secretBundles.description,
+			targetPath: secretBundles.targetPath,
 			secretCount: sql<number>`count(${secrets.id})::int`,
 			createdAt: secretBundles.createdAt,
 			updatedAt: secretBundles.updatedAt,
@@ -278,6 +280,7 @@ export async function listBundlesByOrganization(
 		id: row.id,
 		name: row.name,
 		description: row.description,
+		target_path: row.targetPath,
 		secret_count: row.secretCount,
 		created_at: toIsoString(row.createdAt),
 		updated_at: toIsoString(row.updatedAt),
@@ -297,12 +300,14 @@ export async function createBundle(
 			organizationId: input.organizationId,
 			name: input.name,
 			description: input.description ?? null,
+			targetPath: input.targetPath ?? null,
 			createdBy: input.createdBy,
 		})
 		.returning({
 			id: secretBundles.id,
 			name: secretBundles.name,
 			description: secretBundles.description,
+			targetPath: secretBundles.targetPath,
 			createdAt: secretBundles.createdAt,
 			updatedAt: secretBundles.updatedAt,
 		});
@@ -311,6 +316,7 @@ export async function createBundle(
 		id: row.id,
 		name: row.name,
 		description: row.description,
+		target_path: row.targetPath,
 		secret_count: 0,
 		created_at: toIsoString(row.createdAt),
 		updated_at: toIsoString(row.updatedAt),
@@ -329,6 +335,7 @@ export async function updateBundle(
 	const set: Record<string, unknown> = { updatedAt: new Date() };
 	if (input.name !== undefined) set.name = input.name;
 	if (input.description !== undefined) set.description = input.description;
+	if (input.targetPath !== undefined) set.targetPath = input.targetPath;
 
 	const [row] = await db
 		.update(secretBundles)
@@ -338,6 +345,7 @@ export async function updateBundle(
 			id: secretBundles.id,
 			name: secretBundles.name,
 			description: secretBundles.description,
+			targetPath: secretBundles.targetPath,
 			createdAt: secretBundles.createdAt,
 			updatedAt: secretBundles.updatedAt,
 		});
@@ -354,6 +362,7 @@ export async function updateBundle(
 		id: row.id,
 		name: row.name,
 		description: row.description,
+		target_path: row.targetPath,
 		secret_count: countRow?.count ?? 0,
 		created_at: toIsoString(row.createdAt),
 		updated_at: toIsoString(row.updatedAt),
@@ -369,4 +378,74 @@ export async function deleteBundle(id: string, orgId: string): Promise<void> {
 	await db
 		.delete(secretBundles)
 		.where(and(eq(secretBundles.id, id), eq(secretBundles.organizationId, orgId)));
+}
+
+/**
+ * Bulk-create secrets, skipping keys that already exist (org + null repoId scope).
+ * Returns the list of keys that were actually inserted.
+ */
+export async function bulkCreateSecrets(
+	entries: DbCreateSecretInput[],
+): Promise<string[]> {
+	if (entries.length === 0) return [];
+	const db = getDb();
+	const rows = await db
+		.insert(secrets)
+		.values(
+			entries.map((e) => ({
+				organizationId: e.organizationId,
+				key: e.key,
+				encryptedValue: e.encryptedValue,
+				description: e.description ?? null,
+				repoId: e.repoId ?? null,
+				secretType: e.secretType ?? "env",
+				bundleId: e.bundleId ?? null,
+				createdBy: e.createdBy,
+			})),
+		)
+		.onConflictDoNothing({
+			target: [secrets.organizationId, secrets.repoId, secrets.key],
+		})
+		.returning({ key: secrets.key });
+	return rows.map((r) => r.key);
+}
+
+/**
+ * Get bundles that have a target_path set, with their associated secret keys.
+ * Used at session creation time to build EnvFileSpec entries.
+ */
+export async function getBundlesWithTargetPath(orgId: string): Promise<BundleWithKeys[]> {
+	const db = getDb();
+	const rows = await db
+		.select({
+			bundleId: secretBundles.id,
+			targetPath: secretBundles.targetPath,
+			secretKey: secrets.key,
+		})
+		.from(secretBundles)
+		.innerJoin(secrets, eq(secrets.bundleId, secretBundles.id))
+		.where(
+			and(
+				eq(secretBundles.organizationId, orgId),
+				sql`${secretBundles.targetPath} IS NOT NULL`,
+			),
+		);
+
+	// Group by bundle
+	const map = new Map<string, { targetPath: string; keys: string[] }>();
+	for (const row of rows) {
+		if (!row.targetPath) continue;
+		let entry = map.get(row.bundleId);
+		if (!entry) {
+			entry = { targetPath: row.targetPath, keys: [] };
+			map.set(row.bundleId, entry);
+		}
+		entry.keys.push(row.secretKey);
+	}
+
+	return Array.from(map.entries()).map(([id, data]) => ({
+		id,
+		targetPath: data.targetPath,
+		keys: data.keys,
+	}));
 }

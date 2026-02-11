@@ -49,6 +49,7 @@ export interface SecretBundleListRow {
 	id: string;
 	name: string;
 	description: string | null;
+	target_path: string | null;
 	secret_count: number;
 	created_at: string | null;
 	updated_at: string | null;
@@ -58,12 +59,21 @@ export interface DbCreateBundleInput {
 	organizationId: string;
 	name: string;
 	description?: string;
+	targetPath?: string;
 	createdBy: string;
 }
 
 export interface DbUpdateBundleInput {
 	name?: string;
 	description?: string | null;
+	targetPath?: string | null;
+}
+
+/** A bundle with target_path and its associated secret keys (for runtime env file generation). */
+export interface BundleWithKeys {
+	id: string;
+	targetPath: string;
+	keys: string[];
 }
 
 // ============================================

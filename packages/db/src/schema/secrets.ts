@@ -20,6 +20,7 @@ export const secretBundles = pgTable(
 			.references(() => organization.id, { onDelete: "cascade" }),
 		name: text("name").notNull(),
 		description: text("description"),
+		targetPath: text("target_path"),
 		createdBy: text("created_by").references(() => user.id),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),

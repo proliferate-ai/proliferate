@@ -933,6 +933,12 @@ export * from "./sandbox-provider";
 export * from "./opencode-tools";
 
 // ============================================
+// Env Parser
+// ============================================
+
+export { parseEnvFile, isValidTargetPath, type EnvEntry } from "./env-parser";
+
+// ============================================
 // Async Clients
 // ============================================
 

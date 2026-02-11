@@ -420,6 +420,7 @@ export const secretBundles = pgTable(
 		organizationId: text("organization_id").notNull(),
 		name: text().notNull(),
 		description: text(),
+		targetPath: text("target_path"),
 		createdBy: text("created_by"),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
