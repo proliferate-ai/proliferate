@@ -222,7 +222,7 @@ export async function listBundles(orgId: string): Promise<SecretBundle[]> {
  * Create a new bundle.
  */
 export async function createBundle(input: CreateBundleInput): Promise<SecretBundle> {
-	if (input.targetPath && !isValidTargetPath(input.targetPath)) {
+	if (input.targetPath !== undefined && input.targetPath !== null && !isValidTargetPath(input.targetPath)) {
 		throw new InvalidTargetPathError(input.targetPath);
 	}
 	try {
@@ -250,7 +250,7 @@ export async function updateBundleMeta(
 	orgId: string,
 	input: UpdateBundleInput,
 ): Promise<SecretBundle> {
-	if (input.targetPath && !isValidTargetPath(input.targetPath)) {
+	if (input.targetPath !== undefined && input.targetPath !== null && !isValidTargetPath(input.targetPath)) {
 		throw new InvalidTargetPathError(input.targetPath);
 	}
 	const row = await secretsDb.updateBundle(id, orgId, input);

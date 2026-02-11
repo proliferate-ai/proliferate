@@ -79,6 +79,27 @@ DB_URL=postgres
 			{ key: "B", value: "2" },
 		]);
 	});
+
+	it("strips inline comments from unquoted values", () => {
+		const result = parseEnvFile("PORT=3000 # local dev\nHOST=localhost # default");
+		expect(result).toEqual([
+			{ key: "PORT", value: "3000" },
+			{ key: "HOST", value: "localhost" },
+		]);
+	});
+
+	it("preserves # inside quoted values", () => {
+		const result = parseEnvFile('COLOR="#ff0000"\nTAG=\'v1#beta\'');
+		expect(result).toEqual([
+			{ key: "COLOR", value: "#ff0000" },
+			{ key: "TAG", value: "v1#beta" },
+		]);
+	});
+
+	it("handles unquoted values with # but no space before it", () => {
+		const result = parseEnvFile("CHANNEL=my#channel");
+		expect(result).toEqual([{ key: "CHANNEL", value: "my#channel" }]);
+	});
 });
 
 describe("isValidTargetPath", () => {

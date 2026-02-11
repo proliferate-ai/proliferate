@@ -30,6 +30,7 @@ import {
 	BundleOrgMismatchError,
 	DuplicateBundleError,
 	DuplicateSecretError,
+	InvalidTargetPathError,
 	buildEnvFilesFromBundles,
 	bulkImportSecrets,
 	checkSecrets,
@@ -350,6 +351,19 @@ describe("secrets service", () => {
 			expect(result.secret_count).toBe(0);
 		});
 
+		it("rejects empty targetPath", async () => {
+			await expect(
+				createBundle({
+					organizationId: "org-1",
+					userId: "user-1",
+					name: "Bad",
+					targetPath: "",
+				}),
+			).rejects.toThrow(InvalidTargetPathError);
+
+			expect(mockDb.createBundle).not.toHaveBeenCalled();
+		});
+
 		it("throws DuplicateBundleError on unique constraint violation", async () => {
 			const pgError = Object.assign(new Error("unique_violation"), { code: "23505" });
 			mockDb.createBundle.mockRejectedValue(pgError);
@@ -382,6 +396,14 @@ describe("secrets service", () => {
 
 			expect(result.name).toBe("Updated");
 			expect(result.description).toBe("New desc");
+		});
+
+		it("rejects empty targetPath on update", async () => {
+			await expect(
+				updateBundleMeta("b1", "org-1", { targetPath: "" }),
+			).rejects.toThrow(InvalidTargetPathError);
+
+			expect(mockDb.updateBundle).not.toHaveBeenCalled();
 		});
 
 		it("throws BundleNotFoundError when bundle does not exist", async () => {

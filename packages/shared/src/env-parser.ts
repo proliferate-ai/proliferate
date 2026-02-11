@@ -42,12 +42,18 @@ export function parseEnvFile(text: string): EnvEntry[] {
 
 		let value = stripped.slice(eqIndex + 1).trim();
 
-		// Strip surrounding quotes
+		// Strip surrounding quotes (preserve inline # inside quoted values)
 		if (
 			(value.startsWith('"') && value.endsWith('"')) ||
 			(value.startsWith("'") && value.endsWith("'"))
 		) {
 			value = value.slice(1, -1);
+		} else {
+			// Strip inline comments from unquoted values
+			const hashIndex = value.indexOf(" #");
+			if (hashIndex !== -1) {
+				value = value.slice(0, hashIndex).trimEnd();
+			}
 		}
 
 		entries.push({ key, value });
