@@ -106,6 +106,11 @@ export function createActionsRouter(_env: GatewayEnv): RouterType {
 	 */
 	router.post("/invoke", async (req, res, next) => {
 		try {
+			// Only sandbox agents can invoke actions
+			if (req.auth?.source !== "sandbox") {
+				throw new ApiError(403, "Only sandbox agents can invoke actions");
+			}
+
 			const sessionId = req.proliferateSessionId!;
 
 			// Rate limit

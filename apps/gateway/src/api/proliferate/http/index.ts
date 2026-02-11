@@ -37,7 +37,6 @@ export function createProliferateHttpRoutes(hubManager: HubManager, env: Gateway
 	router.use("/:proliferateSessionId", ensureSessionReady, infoRouter);
 	router.use("/:proliferateSessionId", ensureSessionReady, messageRouter);
 	router.use("/:proliferateSessionId", ensureSessionReady, cancelRouter);
-	router.use("/:proliferateSessionId/actions", ensureSessionReady, createActionsRouter(env));
 
 	return router;
 }

@@ -95,7 +95,7 @@ function ApprovalCard({
 				setLoading(null);
 			}
 		},
-		[sessionId, token, approval.invocationId],
+		[sessionId, token, approval.invocationId, GATEWAY_URL],
 	);
 
 	const paramsPreview = formatParams(approval.params);
