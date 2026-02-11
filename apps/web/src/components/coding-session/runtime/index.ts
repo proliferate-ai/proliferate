@@ -50,6 +50,7 @@ export function useCodingSessionRuntime({
 		autoStartOutput,
 		gitState,
 		gitResult,
+		pendingApprovals,
 		sendPrompt,
 		sendCancel,
 		sendRunAutoStart,
@@ -168,5 +169,7 @@ export function useCodingSessionRuntime({
 		sendGitPush,
 		sendGitCreatePr,
 		clearGitResult,
+		pendingApprovals,
+		wsToken: token,
 	};
 }

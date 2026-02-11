@@ -9,6 +9,7 @@ import { createLogger } from "@proliferate/logger";
 import { verifyToken as verifyJwt } from "@proliferate/shared";
 import type { RequestHandler } from "express";
 import type { GatewayEnv } from "../lib/env";
+import { deriveSandboxMcpToken } from "../lib/sandbox-mcp-token";
 import type { AuthResult } from "../types";
 import { ApiError } from "./error-handler";
 
@@ -54,7 +55,11 @@ export async function verifyCliToken(
 /**
  * Verify a token (JWT or CLI API key) and return auth result.
  */
-export async function verifyToken(token: string, env: GatewayEnv): Promise<AuthResult | null> {
+export async function verifyToken(
+	token: string,
+	env: GatewayEnv,
+	sessionId?: string,
+): Promise<AuthResult | null> {
 	// User JWTs: minted by the web app for browser clients (Gateway WS auth).
 	const userPayload = await verifyJwt(token, env.gatewayJwtSecret);
 	if (userPayload?.sub) {
@@ -66,6 +71,15 @@ export async function verifyToken(token: string, env: GatewayEnv): Promise<AuthR
 	const servicePayload = await verifyJwt(token, env.serviceToken);
 	if (servicePayload?.sub && servicePayload.service) {
 		return { source: "service" };
+	}
+
+	// Sandbox HMAC token: derived from HMAC-SHA256(serviceToken, sessionId).
+	// Used by the agent CLI inside the sandbox to call gateway actions.
+	if (sessionId) {
+		const expected = deriveSandboxMcpToken(env.serviceToken, sessionId);
+		if (token === expected) {
+			return { source: "sandbox", sessionId };
+		}
 	}
 
 	// Try CLI API key (requires HTTP call to web app - keys stored in DB)
@@ -96,7 +110,9 @@ export function createRequireAuth(env: GatewayEnv): RequestHandler {
 			return next(new ApiError(401, "Missing authorization"));
 		}
 
-		const auth = await verifyToken(token, env);
+		// Pass session ID from URL params (if present) for sandbox HMAC verification
+		const sessionId = req.params.proliferateSessionId;
+		const auth = await verifyToken(token, env, sessionId);
 		if (!auth) {
 			return next(new ApiError(401, "Invalid token"));
 		}

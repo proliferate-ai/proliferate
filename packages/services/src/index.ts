@@ -6,6 +6,7 @@
  */
 
 // Feature modules
+export * as actions from "./actions";
 export * as admin from "./admin";
 export * as baseSnapshots from "./base-snapshots";
 export * as automations from "./automations";

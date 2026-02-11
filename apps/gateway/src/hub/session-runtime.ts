@@ -310,6 +310,8 @@ export class SessionRuntime {
 			const envVarsWithToken = {
 				...this.context.envVars,
 				SANDBOX_MCP_AUTH_TOKEN: sandboxMcpToken,
+				PROLIFERATE_GATEWAY_URL: this.env.gatewayUrl,
+				PROLIFERATE_SESSION_ID: this.sessionId,
 			};
 
 			const ensureSandboxStartMs = Date.now();

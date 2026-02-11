@@ -430,6 +430,14 @@ export class SessionHub {
 		return this.runtime.getContext();
 	}
 
+	/**
+	 * Broadcast a server message to all connected WebSocket clients.
+	 * Used by actions routes to push approval requests and results.
+	 */
+	broadcastMessage(message: ServerMessage): void {
+		this.broadcast(message);
+	}
+
 	// ============================================
 	// Snapshot Operations
 	// ============================================

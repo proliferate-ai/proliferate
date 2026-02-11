@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import type {
+	ActionApprovalRequestMessage,
 	AutoStartOutputMessage,
 	GitResultMessage,
 	GitState,
@@ -65,6 +66,7 @@ export interface SessionPanelProps {
 		workspacePath?: string,
 	) => void;
 	clearGitResult?: () => void;
+	pendingApprovals?: ActionApprovalRequestMessage["payload"][];
 }
 
 interface RightPanelProps {
