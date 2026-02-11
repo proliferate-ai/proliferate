@@ -1,244 +1,215 @@
-<a name="readme-top"></a>
+# Proliferate
 
-<h2 align="center">
-  <a href="https://proliferate.com" target="_blank" rel="noreferrer">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://d1uh4o7rpdqkkl.cloudfront.net/logotype-inverted.webp" />
-      <img width="55%" src="https://d1uh4o7rpdqkkl.cloudfront.net/logotype.webp" alt="Proliferate" />
-    </picture>
-  </a>
-</h2>
+**The open-source agentic coding platform.**
 
-<p align="center"><strong>Clawdbot for product builders. An open source cloud harness for coding agents.</strong></p>
+Proliferate is a multiplayer cloud harness for coding agents. Give agents the same access an engineer on your team would have (code, environments, observability, tickets, chat, and internal tools), and let them run autonomously in isolated sandboxes.
 
-<p align="center">
-  <a href="https://github.com/proliferate-ai/proliferate/actions/workflows/ci.yml" target="_blank" rel="noreferrer">
-    <img src="https://img.shields.io/github/actions/workflow/status/proliferate-ai/proliferate/ci.yml?branch=main" alt="CI" />
-  </a>
-  <a href="#docs">
-    <img src="https://img.shields.io/badge/docs-view-blue" alt="Documentation" />
-  </a>
-  <a href="https://proliferate.com" target="_blank" rel="noreferrer">
-    <img src="https://img.shields.io/website?url=https%3A%2F%2Fproliferate.com&up_message=visit&up_color=blue" alt="Website" />
-  </a>
-  <a href="LICENSE">
-    <img src="https://img.shields.io/static/v1?label=license&message=MIT&color=blue" alt="License" />
-  </a>
-</p>
+### What can you do with it?
 
-<p align="center">
-  <a href="#quick-start">Quick start</a> &middot;
-  <a href="#features">Features</a> &middot;
-  <a href="#deployment">Deployment</a> &middot;
-  <a href="#architecture">Architecture</a> &middot;
-  <a href="#docs">Docs</a> &middot;
-  <a href="CONTRIBUTING.md">Contributing</a>
-</p>
+- 📊 Analyze PostHog sessions and ship fixes with linked Linear tickets.
+- 🚨 Triage production alerts from Sentry and draft PRs in a real runtime.
+- 🧪 Run multiple feature requests in parallel to compare outcomes before shipping.
+- 🛠️ Let product builders execute safely with the same environments engineers use.
 
-> [!WARNING]
-> **Beta:** Proliferate is under active development. A managed hosted version is coming soon.
-> Feedback via [issues](https://github.com/proliferate-ai/proliferate/issues) or [contributions](CONTRIBUTING.md).
+![Proliferate in action](product-screenshot.png)
 
-**Proliferate** is an open source cloud harness for coding agents. It lets you run many agents in parallel, each in an isolated cloud session with a real dev environment and access to your toolchain (Docker, GitHub, Sentry, PostHog, Linear, Slack, Chrome, Gmail, internal docs, infra, etc.).
+---
 
-Example workflows:
+## Features
 
-- Watch a PostHog session replay -> identify a UX issue -> create a Linear ticket -> open a PR
-- Triggered by a Sentry exception -> reproduce it -> draft a PR + tag the teammate who introduced it (and optionally draft a customer update)
-- Tag an agent in Slack -> let it iterate -> jump into the same session from web or the terminal when you want
+| Feature | Description |
+| --- | --- |
+| **Multiplayer Sessions** | Multiple people can watch, steer, or take over any agent session in real time |
+| **Isolated Sandboxes** | Every run gets a dedicated cloud sandbox (Modal or E2B), not just a repo checkout |
+| **Multi-Agent Workflows** | Run many coding sessions in parallel across different tasks |
+| **Model Flexible** | Use your preferred coding models and providers |
+| **Automations + Triggers** | Launch runs from GitHub, Sentry, PostHog, Linear, Slack, webhooks, or schedules |
+| **Live Streaming** | Follow execution in web or CLI with a shareable session link |
+| **Action Framework** | Plug into tools and MCP-style integrations across your stack |
+| **Self-Hosted** | Deploy with Docker Compose or Kubernetes on your own infrastructure |
+| **Open Source** | MIT licensed and fully self-hostable |
 
-Two things we focus on:
+> 📖 Full docs: [docs.proliferate.com](https://docs.proliferate.com)
 
-- **Access + integration**: agents need safe, real access to your stack. Most teams wire this up with custom wrappers / MCP servers / glue code, and it tends to be brittle and hard to share.
-- **Verification**: even when an agent ships a PR, someone still has to answer "does this actually work?" Proliferate makes each run a shareable session with a live environment so review isn't "pull the branch locally just to verify."
+---
 
-****
+## Quick Start (about 5 minutes)
 
-<p align="center">
-  <img src="product-screenshot.png" alt="Proliferate in action" width="100%">
-</p>
+<details>
+<summary><strong>⚡ Quick Setup</strong></summary>
 
-<a name="features"></a>
-## ⭐ Features
+### Prerequisites
 
-- **Snapshot your dev environment:** Connect your GitHub repos via GitHub App. Agents get a real, isolated sandbox to clone, build, run, and push code (not just a repo checkout).
-- **Triggers and automations:** Kick off agents from GitHub issues, Sentry exceptions, PostHog session replays, Linear tickets, Slack messages, webhooks, or cron schedules.
-- **Review what agents actually did:** Stream output live to the web UI or CLI. Every session is a link you can share with anyone on the team.
-- **Deploy it your way:** Self-host on your own infra, or wait for the managed version (coming soon).
+1. Docker + Docker Compose
+2. Anthropic API key ([console.anthropic.com](https://console.anthropic.com))
+3. Sandbox provider account: [Modal](https://modal.com) (default) or [E2B](https://e2b.dev)
+4. GitHub App (required for repository access)
 
-<a name="quick-start"></a>
-## Quick start
-
-### Step 1. Clone and configure
+### 1) Clone and initialize
 
 ```bash
 git clone https://github.com/proliferate-ai/proliferate
 cd proliferate
-./scripts/setup-env.sh   # Creates .env with auto-generated secrets
+./scripts/setup-env.sh
 ```
 
-<a name="step-2-create-a-github-app-required-for-repo-access"></a>
-### Step 2. Create a GitHub App (Required for Repo Access)
+This creates `.env` from `.env.example` and auto-generates local secrets.
 
-Each self-hosted instance needs its own GitHub App to access repos, create branches, and open PRs.
+### 2) Create a GitHub App
 
-Create one using a prefilled link:
+Use the prefilled app link:
 
-- **Personal account:** [Create GitHub App](https://github.com/settings/apps/new?name=proliferate-self-host&description=Proliferate+self-hosted+GitHub+App&url=http%3A%2F%2Flocalhost%3A3000&public=false&setup_url=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fintegrations%2Fgithub%2Fcallback&setup_on_update=true&metadata=read&contents=write&pull_requests=write&issues=read&webhook_active=false)
-- **Organization:** [Create GitHub App for org](https://github.com/organizations/YOUR_ORG/settings/apps/new?name=proliferate-self-host&description=Proliferate+self-hosted+GitHub+App&url=http%3A%2F%2Flocalhost%3A3000&public=false&setup_url=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fintegrations%2Fgithub%2Fcallback&setup_on_update=true&metadata=read&contents=write&pull_requests=write&issues=read&webhook_active=false) (replace `YOUR_ORG` in the URL with your GitHub org slug)
+- Personal account: [Create GitHub App](https://github.com/settings/apps/new?name=proliferate-self-host&description=Proliferate+self-hosted+GitHub+App&url=http%3A%2F%2Flocalhost%3A3000&public=false&setup_url=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fintegrations%2Fgithub%2Fcallback&setup_on_update=true&metadata=read&contents=write&pull_requests=write&issues=read&webhook_active=false)
+- Organization app: create it from your org settings at `https://github.com/organizations/<your-org>/settings/apps/new`
 
-After creating the app, generate a private key and add these to your `.env`:
+Then set these values in `.env`:
 
 ```bash
-# IMPORTANT: The slug must match your GitHub App's URL name exactly.
-# If you used the prefilled link above, the slug is "proliferate-self-host".
-# Find it at: https://github.com/settings/apps → your app → the URL shows /apps/<slug>
 NEXT_PUBLIC_GITHUB_APP_SLUG=proliferate-self-host
-GITHUB_APP_ID=123456                                 # From the app's General page
-GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA..."           # PEM contents (\\n sequences supported)
-GITHUB_APP_WEBHOOK_SECRET=any-random-string          # Any random string (webhooks are disabled by default)
+GITHUB_APP_ID=123456
+GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA..."
+GITHUB_APP_WEBHOOK_SECRET=any-random-string
 ```
 
-> **Note:** If you change `NEXT_PUBLIC_*` values after the web image is already built, rebuild it:
-> `docker compose up -d --build web`
+If you change `NEXT_PUBLIC_*` after building the web image:
 
-For webhooks, public domains, and advanced setup, see [`docs/self-hosting/localhost-vs-public-domain.md`](docs/self-hosting/localhost-vs-public-domain.md).
+```bash
+docker compose up -d --build web
+```
 
-### Step 3. Set up a sandbox provider
+### 3) Configure sandbox provider
 
-Proliferate is a self-hosted control plane, but each agent session runs in a cloud sandbox on [Modal](https://modal.com) (default) or [E2B](https://e2b.dev). You need an account with one of them.
-
-You also need an **Anthropic API key** so agents can call Claude inside the sandbox.
-
-<details>
-<summary><strong>Option A: Modal (default)</strong></summary>
-
-1. Create a [Modal](https://modal.com) account and generate an API token from [modal.com/settings](https://modal.com/settings)
-2. Install the Modal CLI and authenticate:
+Option A (default): **Modal**
 
 ```bash
 pip install modal
 modal setup
-```
-
-3. Deploy the sandbox image (the suffix must match `MODAL_APP_SUFFIX` in your `.env` — the default is `local`):
-
-```bash
 cd packages/modal-sandbox
 MODAL_APP_SUFFIX=local modal deploy deploy.py
+cd ../..
 ```
 
-4. Add to your `.env`:
+Set in `.env`:
 
 ```bash
 DEFAULT_SANDBOX_PROVIDER=modal
-MODAL_TOKEN_ID=ak-...              # From your Modal token
-MODAL_TOKEN_SECRET=as-...          # From your Modal token
+MODAL_TOKEN_ID=ak-...
+MODAL_TOKEN_SECRET=as-...
 MODAL_APP_NAME=proliferate-sandbox
-MODAL_APP_SUFFIX=local             # Must match the suffix used during deploy
-ANTHROPIC_API_KEY=sk-ant-...       # From console.anthropic.com
+MODAL_APP_SUFFIX=local
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-For more details, see the [Modal setup guide](https://docs.proliferate.com/self-hosting/modal-setup).
+Modal setup guide: [docs.proliferate.com/self-hosting/modal-setup](https://docs.proliferate.com/self-hosting/modal-setup)
 
-</details>
-
-<details>
-<summary><strong>Option B: E2B</strong></summary>
-
-1. Create an [E2B](https://e2b.dev) account and grab your API key from the dashboard
-
-2. Add to your `.env`:
+Option B: **E2B**
 
 ```bash
 DEFAULT_SANDBOX_PROVIDER=e2b
-E2B_API_KEY=e2b_...                # From your E2B dashboard
-E2B_DOMAIN=api.e2b.dev             # Default managed cloud (change for self-hosted)
+E2B_API_KEY=e2b_...
+E2B_DOMAIN=api.e2b.dev
 E2B_TEMPLATE=proliferate-base
 E2B_TEMPLATE_ALIAS=proliferate-base
-ANTHROPIC_API_KEY=sk-ant-...       # From console.anthropic.com
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-3. Build and push the sandbox template (requires `E2B_API_KEY` to be set):
+Build and push the E2B template:
 
 ```bash
 cd packages/e2b-sandbox
 pnpm build:template
+cd ../..
 ```
 
-For more details, see [`packages/e2b-sandbox/README.md`](packages/e2b-sandbox/README.md).
+More E2B details: [`packages/e2b-sandbox/README.md`](packages/e2b-sandbox/README.md)
 
-</details>
-
-### Step 4. Start Proliferate
+### 4) Launch
 
 ```bash
 docker compose up -d
 ```
 
-Open http://localhost:3000 — sign up, then install your GitHub App on the repos you want agents to access.
+Open [http://localhost:3000](http://localhost:3000), sign up, and install your GitHub App on target repos.
 
-<a name="deployment"></a>
-## 🚀 Deployment
+For webhooks/public domains: [`docs/self-hosting/localhost-vs-public-domain.md`](docs/self-hosting/localhost-vs-public-domain.md)
 
-- **Local (build images from this repo):** `docker compose up -d` using `docker-compose.yml`
-- **Production (pull pre-built images):** `docker compose -f docker-compose.prod.yml up -d` using `docker-compose.prod.yml`
-- **Custom domain / HTTPS:** see `Caddyfile.example` and `docker-compose.override.yml.example`
-- **Localhost vs public domain (webhooks, Slack, etc.):** see [`docs/self-hosting/localhost-vs-public-domain.md`](docs/self-hosting/localhost-vs-public-domain.md)
+</details>
 
-## 🧑‍💻 Development (from source)
+---
+
+## Deployment
+
+| Method | Command / Guide |
+| --- | --- |
+| **Local (build from source)** | `docker compose up -d` |
+| **Production (pre-built images)** | `docker compose -f docker-compose.prod.yml up -d` |
+| **AWS (EKS, Pulumi + Helm)** | [`infra/pulumi-k8s/README.md`](infra/pulumi-k8s/README.md) |
+| **GCP (GKE, Pulumi + Helm)** | [`infra/pulumi-k8s-gcp/README.md`](infra/pulumi-k8s-gcp/README.md) |
+| **Cloud deploy helper** | `make deploy-cloud SHA=<sha> STACK=prod` |
+
+---
+
+## Development
 
 ```bash
 pnpm install
-pnpm services:up          # Postgres + Redis via Docker
+pnpm services:up
 pnpm -C packages/db db:migrate
-pnpm dev                   # Web + Gateway + Worker
+pnpm dev
 ```
 
-Requires **Node.js 20+**, **pnpm**, and Docker.
+Requires Node.js 20+, pnpm, and Docker.
 
-<a name="architecture"></a>
-## 🏗️ Architecture
+---
 
-```
-Sentry / PostHog / GitHub / Linear / Slack / Webhooks / Cron
-                         |
-                         v
-                  +------+------+
-                  |   Web App   |    Sessions, automations, integrations
-                  +------+------+
-                         |
-               +---------+---------+
-               |                   |
-          +----+----+        +----+----+
-          | Gateway |        | Worker  |
-          |  (ws)   |        | (BullMQ)|
-          +----+----+        +---------+
-               |
-          +----+----+
-          | Sandbox |    Isolated cloud session (Modal or E2B)
-          +---------+
+## Architecture
+
+```text
+Client (Web / CLI / Slack)
+        │
+        ▼
+Gateway (WebSocket streaming path)
+        │
+        ▼
+Sandbox (Modal or E2B, isolated per run)
+
+API routes handle session lifecycle + metadata.
+Worker handles triggers, automations, and background jobs.
 ```
 
-Every run gets an **isolated sandbox** on [Modal](https://modal.com) or [E2B](https://e2b.dev) -- a real environment where agents can clone, build, and run your code. The **gateway** streams output live over WebSocket. The **worker** handles the automation pipeline: enrich context, execute the agent, finalize results. An optional **[LLM proxy](apps/llm-proxy/README.md)** can issue scoped virtual keys for cost tracking.
+More details:
 
-## Docs
-
-- [docs.proliferate.com](https://docs.proliferate.com) (source: `~/documentation`)
-- [Self-hosting (Docker Compose)](docker-compose.yml)
-- [Self-hosting (pre-built images)](docker-compose.prod.yml)
 - [Gateway spec](apps/gateway/SPEC.md)
-- [Infrastructure spec (Pulumi migration + one-click deploy)](infra/SPEC.md)
-- [Environment package spec](packages/environment/SPEC.md)
 - [LLM proxy](apps/llm-proxy/README.md)
+- [Environment variables](https://docs.proliferate.com/self-hosting/environment)
 
-## Community
-
-If this is useful, please star the repo. For feedback or questions, reach out at [pablo@proliferate.com](mailto:pablo@proliferate.com) (or open an issue).
+---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+1. Read [CONTRIBUTING.md](CONTRIBUTING.md).
+2. Run checks before opening a PR:
+	```bash
+	pnpm typecheck
+	pnpm lint
+	pnpm test
+	pnpm build
+	```
+3. Open a PR using `.github/PULL_REQUEST_TEMPLATE.md`.
+
+---
+
+## Cloud & Enterprise
+
+- Managed cloud: coming soon at [proliferate.com](https://proliferate.com)
+- Self-hosting docs: [docs.proliferate.com](https://docs.proliferate.com)
+
+---
+
+## Community
+
+- 💬 Feedback and bugs: [GitHub Issues](https://github.com/proliferate-ai/proliferate/issues)
+- 📫 Contact: [pablo@proliferate.com](mailto:pablo@proliferate.com)
 
 ## Security
 
