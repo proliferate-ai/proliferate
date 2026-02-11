@@ -92,6 +92,10 @@ export interface SessionStatusResponse {
 	status: string;
 	terminatedAt?: string;
 	reason?: string;
+	/** Provider sandbox ID (if session has one) */
+	sandboxId?: string;
+	/** Whether the sandbox is alive at the provider level (null = unknown/check failed) */
+	sandboxAlive?: boolean | null;
 }
 
 // ============================================
