@@ -93,7 +93,7 @@ RUN OVSCODE_VERSION="1.106.3" \
     && rm /tmp/ovscode.tar.gz
 
 # Install OpenCode CLI + sandbox-mcp
-RUN npm install -g opencode-ai@latest proliferate-sandbox-mcp@0.1.16
+RUN npm install -g opencode-ai@latest proliferate-sandbox-mcp@0.1.18
 
 # Install Python tools
 RUN pip install httpx uv playwright psycopg2-binary redis

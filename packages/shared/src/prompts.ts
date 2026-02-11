@@ -16,6 +16,17 @@ You have tools to request environment variables from the user (\`request_env_var
 
 Don't edit source code. Developers set up local environments without modifying the codebase, and you should too. Config files and .env files are fine.
 
+Use the \`proliferate\` CLI to manage background services:
+- \`proliferate services start --name <name> --command "<cmd>"\` — start a background service
+- \`proliferate services list\` — list all services and their status
+- \`proliferate services logs --name <name>\` — view recent logs
+- \`proliferate services logs --name <name> --follow\` — tail logs in real time
+- \`proliferate services stop --name <name>\` — stop a service
+- \`proliferate services restart --name <name>\` — restart a service
+- \`proliferate services expose --port <port>\` — expose a port for preview
+
+All commands output JSON. Prefer this CLI over MCP service tools. If \`proliferate\` is not found, fall back to the MCP service tools.
+
 Background any long-running processes. Don't block on dev servers or watchers.
 
 "Services start" is not the same as "services work." Actually test that things function — hit endpoints, check health, verify the app loads. Use the \`verify\` tool to upload evidence.
@@ -56,6 +67,7 @@ Full access to codebase, terminal, and git. The dev environment is already confi
 - Read/edit files, run shell commands, start/stop services
 - Commit and push changes
 - Browser automation via Playwright MCP
+- \`proliferate\` CLI for managing services (\`proliferate services start/stop/list/logs/expose\`)
 
 ## Verification Evidence
 
