@@ -63,7 +63,7 @@ export async function verifyToken(
 	// User JWTs: minted by the web app for browser clients (Gateway WS auth).
 	const userPayload = await verifyJwt(token, env.gatewayJwtSecret);
 	if (userPayload?.sub) {
-		return { userId: userPayload.sub, source: "jwt" };
+		return { userId: userPayload.sub, orgId: userPayload.orgId, source: "jwt" };
 	}
 
 	// Service JWTs: minted by backend services/workers.

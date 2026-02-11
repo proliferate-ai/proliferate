@@ -14,7 +14,7 @@
  */
 
 import { createLogger } from "@proliferate/logger";
-import { actions, integrations, sessions } from "@proliferate/services";
+import { actions, integrations, orgs, sessions } from "@proliferate/services";
 import { Router, type Router as RouterType } from "express";
 import type { HubManager } from "../../../hub";
 import type { GatewayEnv } from "../../../lib/env";
@@ -73,6 +73,17 @@ async function requireSessionOrgAccess(
 		throw new ApiError(403, "You do not have access to this session");
 	}
 	return session;
+}
+
+/**
+ * Verify user has admin or owner role in the org.
+ * Used for approve/deny — members can view but not approve.
+ */
+async function requireAdminRole(userId: string, orgId: string): Promise<void> {
+	const role = await orgs.getUserRole(userId, orgId);
+	if (role !== "owner" && role !== "admin") {
+		throw new ApiError(403, "Admin or owner role required for action approvals");
+	}
 }
 
 // ============================================
@@ -326,13 +337,18 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 
 			const { invocationId } = req.params;
 			const session = await requireSessionOrgAccess(req.proliferateSessionId!, auth.orgId);
+			await requireAdminRole(auth.userId, session.organizationId);
 
 			// Approve the invocation (checks status + org + expiry)
-			const invocation = await actions.approveAction(
-				invocationId,
-				session.organizationId,
-				auth.userId,
-			);
+			let invocation: Awaited<ReturnType<typeof actions.approveAction>>;
+			try {
+				invocation = await actions.approveAction(invocationId, session.organizationId, auth.userId);
+			} catch (err) {
+				if (err instanceof actions.ActionNotFoundError) throw new ApiError(404, err.message);
+				if (err instanceof actions.ActionExpiredError) throw new ApiError(410, err.message);
+				if (err instanceof actions.ActionConflictError) throw new ApiError(409, err.message);
+				throw err;
+			}
 
 			// Execute the action immediately after approval
 			const startMs = Date.now();
@@ -415,12 +431,16 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 
 			const { invocationId } = req.params;
 			const session = await requireSessionOrgAccess(req.proliferateSessionId!, auth.orgId);
+			await requireAdminRole(auth.userId, session.organizationId);
 
-			const invocation = await actions.denyAction(
-				invocationId,
-				session.organizationId,
-				auth.userId,
-			);
+			let invocation: Awaited<ReturnType<typeof actions.denyAction>>;
+			try {
+				invocation = await actions.denyAction(invocationId, session.organizationId, auth.userId);
+			} catch (err) {
+				if (err instanceof actions.ActionNotFoundError) throw new ApiError(404, err.message);
+				if (err instanceof actions.ActionConflictError) throw new ApiError(409, err.message);
+				throw err;
+			}
 
 			// Broadcast denial
 			const hub = await tryGetHub(req.proliferateSessionId!);

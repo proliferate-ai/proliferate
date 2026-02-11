@@ -88,13 +88,6 @@
       "when": 1770774626624,
       "tag": "0013_slippery_randall",
       "breakpoints": true
-    },
-    {
-      "idx": 14,
-      "version": "7",
-      "when": 1770777610936,
-      "tag": "0014_stale_deadpool",
-      "breakpoints": true
     }
   ]
 }
