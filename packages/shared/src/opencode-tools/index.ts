@@ -483,3 +483,101 @@ save_service_commands({
 - Maximum 10 commands per configuration
 - Call save_snapshot after this to persist the environment
 `;
+
+/**
+ * Save Env Files Tool
+ *
+ * Saves env file generation spec for the current prebuild.
+ * The gateway intercepts this tool and persists the spec to the database.
+ */
+export const SAVE_ENV_FILES_TOOL = `
+// Save Env Files Tool for OpenCode
+// Gateway intercepts this tool and saves env file spec to the prebuild configuration
+
+import { tool } from "@opencode-ai/plugin"
+
+export default tool({
+  description: \`Save environment file generation spec for this configuration.
+
+Records which env files this project needs and which keys they require.
+Values will be sourced from environment variables or stored secrets at boot time.
+
+Call this AFTER you have identified which env files the project needs and which keys they require.
+
+Example:
+  save_env_files({
+    files: [
+      {
+        path: ".env.local",
+        format: "dotenv",
+        mode: "secret",
+        keys: [
+          { key: "DATABASE_URL", required: true },
+          { key: "STRIPE_SECRET_KEY", required: false }
+        ]
+      }
+    ]
+  })
+\`,
+
+  args: {
+    files: tool.schema
+      .array(tool.schema.object({
+        workspacePath: tool.schema.string().optional().describe("Target repo directory (default '.', i.e. workspace root)"),
+        path: tool.schema.string().describe("File path relative to workspace root (e.g. '.env.local')"),
+        format: tool.schema.enum(["dotenv"]).describe("File format (only 'dotenv' supported)"),
+        mode: tool.schema.enum(["secret"]).describe("File mode ('secret' = scrubbed before snapshots)"),
+        keys: tool.schema.array(tool.schema.object({
+          key: tool.schema.string().describe("Environment variable name"),
+          required: tool.schema.boolean().describe("Whether this key must be present for the app to work"),
+        })).describe("List of env var keys to include in the file"),
+      }))
+      .describe("List of env files to generate on session boot"),
+  },
+
+  async execute(args) {
+    if (!args?.files || args.files.length === 0) {
+      return "Error: files array is required and must not be empty.";
+    }
+    const paths = args.files.map(f => f.path).join(", ");
+    return \`Env file spec saved: \${paths}\`;
+  },
+});
+`;
+
+/**
+ * Save Env Files Tool Description (for .txt file)
+ */
+export const SAVE_ENV_FILES_DESCRIPTION = `
+Use the save_env_files tool to record which env files this project needs.
+
+## When to Use
+
+Call this tool when you identify that the project needs env files (e.g. .env.local, .env) containing secrets or credentials.
+This saves the spec to the prebuild configuration for use during session boot.
+
+## How to Use
+
+\\\`\\\`\\\`typescript
+save_env_files({
+  files: [
+    {
+      path: ".env.local",
+      format: "dotenv",
+      mode: "secret",
+      keys: [
+        { key: "DATABASE_URL", required: true },
+        { key: "STRIPE_SECRET_KEY", required: false }
+      ]
+    }
+  ]
+})
+\\\`\\\`\\\`
+
+## Important
+
+- Only 'dotenv' format and 'secret' mode are supported
+- Values come from sandbox environment variables (set via request_env_variables or org secrets)
+- Maximum 10 files, 50 keys per file
+- Call save_snapshot after this to persist the environment
+`;

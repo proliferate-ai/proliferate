@@ -74,6 +74,13 @@
       "when": 1770700000000,
       "tag": "0010_prebuild_service_commands",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1770769966137,
+      "tag": "0012_sudden_mathemanic",
+      "breakpoints": true
     }
   ]
 }

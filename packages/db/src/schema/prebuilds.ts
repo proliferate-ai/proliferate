@@ -43,6 +43,13 @@ export const prebuilds = pgTable(
 		}),
 		serviceCommandsUpdatedBy: text("service_commands_updated_by"),
 
+		// Env file generation spec
+		envFiles: jsonb("env_files"),
+		envFilesUpdatedAt: timestamp("env_files_updated_at", {
+			withTimezone: true,
+		}),
+		envFilesUpdatedBy: text("env_files_updated_by"),
+
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 	},
 	(table) => [

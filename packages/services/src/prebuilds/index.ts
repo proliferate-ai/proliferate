@@ -34,7 +34,9 @@ export type {
 export {
 	findByIdForSession,
 	getPrebuildReposWithDetails,
+	getPrebuildEnvFiles,
 	getPrebuildServiceCommands,
+	updatePrebuildEnvFiles,
 	updatePrebuildServiceCommands,
 	updateSnapshotIdIfNull,
 	update as updatePrebuild,

@@ -21,6 +21,8 @@ import {
 	ENV_FILE,
 	REQUEST_ENV_VARIABLES_DESCRIPTION,
 	REQUEST_ENV_VARIABLES_TOOL,
+	SAVE_ENV_FILES_DESCRIPTION,
+	SAVE_ENV_FILES_TOOL,
 	SAVE_SERVICE_COMMANDS_DESCRIPTION,
 	SAVE_SERVICE_COMMANDS_TOOL,
 	SAVE_SNAPSHOT_DESCRIPTION,
@@ -986,6 +988,8 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			writeFile(`${localToolDir}/automation_complete.txt`, AUTOMATION_COMPLETE_DESCRIPTION),
 			writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
 			writeFile(`${localToolDir}/save_service_commands.txt`, SAVE_SERVICE_COMMANDS_DESCRIPTION),
+			writeFile(`${localToolDir}/save_env_files.ts`, SAVE_ENV_FILES_TOOL),
+			writeFile(`${localToolDir}/save_env_files.txt`, SAVE_ENV_FILES_DESCRIPTION),
 			// Config (2 files)
 			writeFile(`${SANDBOX_PATHS.globalOpencodeDir}/opencode.json`, opencodeConfig),
 			writeFile(`${repoDir}/opencode.json`, opencodeConfig),
