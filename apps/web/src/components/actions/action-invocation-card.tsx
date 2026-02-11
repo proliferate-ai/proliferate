@@ -2,17 +2,48 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ActionInvocation } from "@/hooks/use-actions";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Check, CheckCircle, Clock, Loader2, Timer, X, XCircle } from "lucide-react";
+import {
+	AlertTriangle,
+	Check,
+	CheckCircle,
+	ChevronDown,
+	Clock,
+	Loader2,
+	Timer,
+	X,
+	XCircle,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+
+export interface GrantConfig {
+	scope: "session" | "org";
+	maxCalls: number | null;
+}
 
 interface ActionInvocationCardProps {
 	invocation: ActionInvocation;
 	showSession?: boolean;
 	canApprove?: boolean;
 	onApprove?: () => Promise<void>;
+	onApproveWithGrant?: (config: GrantConfig) => Promise<void>;
 	onDeny?: () => Promise<void>;
 	onSessionClick?: () => void;
 }
@@ -45,11 +76,15 @@ export function ActionInvocationCard({
 	showSession,
 	canApprove,
 	onApprove,
+	onApproveWithGrant,
 	onDeny,
 	onSessionClick,
 }: ActionInvocationCardProps) {
 	const [loading, setLoading] = useState<"approve" | "deny" | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [showGrantConfig, setShowGrantConfig] = useState(false);
+	const [grantScope, setGrantScope] = useState<"session" | "org">("session");
+	const [grantMaxCalls, setGrantMaxCalls] = useState("10");
 
 	const isPending = invocation.status === "pending";
 	const config = statusConfig[invocation.status] ?? statusConfig.pending;
@@ -71,6 +106,21 @@ export function ActionInvocationCard({
 		},
 		[onApprove, onDeny],
 	);
+
+	const handleApproveWithGrant = useCallback(async () => {
+		if (!onApproveWithGrant) return;
+		setLoading("approve");
+		setError(null);
+		try {
+			const maxCalls = grantMaxCalls.trim() === "" ? null : Number.parseInt(grantMaxCalls, 10);
+			await onApproveWithGrant({ scope: grantScope, maxCalls });
+			setShowGrantConfig(false);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Failed");
+		} finally {
+			setLoading(null);
+		}
+	}, [onApproveWithGrant, grantScope, grantMaxCalls]);
 
 	return (
 		<div className="flex items-start gap-3 px-3 py-2.5 text-sm">
@@ -135,6 +185,57 @@ export function ActionInvocationCard({
 					{invocation.durationMs != null && <span>{invocation.durationMs}ms</span>}
 					{isPending && invocation.expiresAt && <CountdownTimer expiresAt={invocation.expiresAt} />}
 				</div>
+
+				{/* Inline grant config form */}
+				{showGrantConfig && (
+					<div className="mt-2 p-2 border rounded-md bg-muted/30 space-y-2">
+						<div className="flex items-center gap-2">
+							<Label className="text-xs w-14 shrink-0">Scope</Label>
+							<Select
+								value={grantScope}
+								onValueChange={(v) => setGrantScope(v as "session" | "org")}
+							>
+								<SelectTrigger className="h-7 text-xs">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="session">This session</SelectItem>
+									<SelectItem value="org">All sessions</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="flex items-center gap-2">
+							<Label className="text-xs w-14 shrink-0">Uses</Label>
+							<Input
+								type="number"
+								className="h-7 text-xs w-20"
+								value={grantMaxCalls}
+								onChange={(e) => setGrantMaxCalls(e.target.value)}
+								min={1}
+							/>
+							<span className="text-xs text-muted-foreground">blank = unlimited</span>
+						</div>
+						<div className="flex items-center gap-1.5 justify-end">
+							<Button
+								size="sm"
+								variant="outline"
+								className="h-6 text-xs"
+								onClick={() => setShowGrantConfig(false)}
+							>
+								Cancel
+							</Button>
+							<Button
+								size="sm"
+								className="h-6 text-xs"
+								onClick={handleApproveWithGrant}
+								disabled={loading !== null}
+							>
+								{loading === "approve" && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+								Grant & Approve
+							</Button>
+						</div>
+					</div>
+				)}
 			</div>
 
 			{isPending && canApprove && (
@@ -153,19 +254,40 @@ export function ActionInvocationCard({
 						)}
 						<span className="ml-1">Deny</span>
 					</Button>
-					<Button
-						size="sm"
-						className="h-7 px-2"
-						disabled={loading !== null}
-						onClick={() => handleAction("approve")}
-					>
-						{loading === "approve" ? (
-							<Loader2 className="h-3 w-3 animate-spin" />
-						) : (
-							<Check className="h-3 w-3" />
-						)}
-						<span className="ml-1">Approve</span>
-					</Button>
+					<div className="flex items-center">
+						<Button
+							size="sm"
+							className="h-7 px-2 rounded-r-none"
+							disabled={loading !== null}
+							onClick={() => handleAction("approve")}
+						>
+							{loading === "approve" ? (
+								<Loader2 className="h-3 w-3 animate-spin" />
+							) : (
+								<Check className="h-3 w-3" />
+							)}
+							<span className="ml-1">Approve</span>
+						</Button>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									size="sm"
+									className="h-7 px-1 rounded-l-none border-l border-primary-foreground/20"
+									disabled={loading !== null}
+								>
+									<ChevronDown className="h-3 w-3" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								<DropdownMenuItem onClick={() => handleAction("approve")}>
+									Approve once
+								</DropdownMenuItem>
+								<DropdownMenuItem onClick={() => setShowGrantConfig(true)}>
+									Approve with grant...
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
 				</div>
 			)}
 		</div>

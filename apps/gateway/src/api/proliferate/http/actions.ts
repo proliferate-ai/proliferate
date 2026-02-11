@@ -338,10 +338,48 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			const session = await requireSessionOrgAccess(req.proliferateSessionId!, auth.orgId);
 			await requireAdminRole(auth.userId, session.organizationId);
 
+			// Parse optional approval mode from body
+			const body = req.body as
+				| {
+						mode?: string;
+						grant?: { scope?: string; maxCalls?: number | null };
+				  }
+				| undefined;
+			const mode = body?.mode ?? "once";
+			if (mode !== "once" && mode !== "grant") {
+				throw new ApiError(400, `Invalid approval mode: ${mode}`);
+			}
+
 			// Approve the invocation (checks status + org + expiry)
 			let invocation: Awaited<ReturnType<typeof actions.approveAction>>;
+			let grantInfo:
+				| { id: string; integration: string; action: string; maxCalls: number | null }
+				| undefined;
 			try {
-				invocation = await actions.approveAction(invocationId, session.organizationId, auth.userId);
+				if (mode === "grant") {
+					const grantPayload = body?.grant;
+					const scope = grantPayload?.scope === "org" ? ("org" as const) : ("session" as const);
+					const maxCalls = grantPayload?.maxCalls ?? null;
+					const result = await actions.approveActionWithGrant(
+						invocationId,
+						session.organizationId,
+						auth.userId,
+						{ scope, maxCalls },
+					);
+					invocation = result.invocation;
+					grantInfo = {
+						id: result.grant.id,
+						integration: result.grant.integration,
+						action: result.grant.action,
+						maxCalls: result.grant.maxCalls,
+					};
+				} else {
+					invocation = await actions.approveAction(
+						invocationId,
+						session.organizationId,
+						auth.userId,
+					);
+				}
 			} catch (err) {
 				if (err instanceof actions.ActionNotFoundError) throw new ApiError(404, err.message);
 				if (err instanceof actions.ActionExpiredError) throw new ApiError(410, err.message);
@@ -393,7 +431,11 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 					},
 				});
 
-				res.json({ invocation: completed, result: actionResult });
+				res.json({
+					invocation: completed,
+					result: actionResult,
+					...(grantInfo ? { grant: grantInfo } : {}),
+				});
 			} catch (err) {
 				const durationMs = Date.now() - startMs;
 				const errorMsg = err instanceof Error ? err.message : String(err);

@@ -1,6 +1,9 @@
 "use client";
 
-import { ActionInvocationCard } from "@/components/actions/action-invocation-card";
+import {
+	ActionInvocationCard,
+	type GrantConfig,
+} from "@/components/actions/action-invocation-card";
 import { useWsToken } from "@/components/coding-session/runtime/use-ws-token";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,6 +58,26 @@ export default function ActionsPage() {
 				token,
 			});
 			toast.success("Action approved");
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : "Failed to approve");
+		}
+	};
+
+	const handleApproveWithGrant = async (
+		sessionId: string,
+		invocationId: string,
+		config: GrantConfig,
+	) => {
+		if (!token) return;
+		try {
+			await approveAction.mutateAsync({
+				sessionId,
+				invocationId,
+				token,
+				mode: "grant",
+				grant: { scope: config.scope, maxCalls: config.maxCalls },
+			});
+			toast.success("Action approved with grant created");
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : "Failed to approve");
 		}
@@ -126,6 +149,9 @@ export default function ActionsPage() {
 								showSession
 								canApprove={canApprove && inv.status === "pending"}
 								onApprove={() => handleApprove(inv.sessionId, inv.id)}
+								onApproveWithGrant={(config) =>
+									handleApproveWithGrant(inv.sessionId, inv.id, config)
+								}
 								onDeny={() => handleDeny(inv.sessionId, inv.id)}
 								onSessionClick={() => router.push(`/dashboard/sessions/${inv.sessionId}`)}
 							/>

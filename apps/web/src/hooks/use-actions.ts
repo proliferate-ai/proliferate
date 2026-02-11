@@ -77,10 +77,14 @@ export function useApproveAction() {
 			sessionId,
 			invocationId,
 			token,
+			mode,
+			grant,
 		}: {
 			sessionId: string;
 			invocationId: string;
 			token: string;
+			mode?: "once" | "grant";
+			grant?: { scope?: "session" | "org"; maxCalls?: number | null };
 		}) => {
 			const res = await fetch(
 				`${GATEWAY_URL}/proliferate/${sessionId}/actions/invocations/${invocationId}/approve`,
@@ -90,6 +94,7 @@ export function useApproveAction() {
 						Authorization: `Bearer ${token}`,
 						"Content-Type": "application/json",
 					},
+					...(mode ? { body: JSON.stringify({ mode, grant }) } : {}),
 				},
 			);
 			if (!res.ok) {

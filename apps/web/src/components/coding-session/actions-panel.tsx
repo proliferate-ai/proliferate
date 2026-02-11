@@ -1,6 +1,9 @@
 "use client";
 
-import { ActionInvocationCard } from "@/components/actions/action-invocation-card";
+import {
+	ActionInvocationCard,
+	type GrantConfig,
+} from "@/components/actions/action-invocation-card";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApproveAction, useDenyAction, useSessionActions } from "@/hooks/use-actions";
@@ -64,6 +67,22 @@ export function ActionsPanel({ sessionId, activityTick, onClose }: ActionsPanelP
 		}
 	};
 
+	const handleApproveWithGrant = async (invocationId: string, config: GrantConfig) => {
+		if (!token) return;
+		try {
+			await approveAction.mutateAsync({
+				sessionId,
+				invocationId,
+				token,
+				mode: "grant",
+				grant: { scope: config.scope, maxCalls: config.maxCalls },
+			});
+			toast.success("Action approved with grant created");
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : "Failed to approve");
+		}
+	};
+
 	const handleDeny = async (invocationId: string) => {
 		if (!token) return;
 		try {
@@ -120,6 +139,7 @@ export function ActionsPanel({ sessionId, activityTick, onClose }: ActionsPanelP
 									invocation={inv}
 									canApprove={canApprove && inv.status === "pending"}
 									onApprove={() => handleApprove(inv.id)}
+									onApproveWithGrant={(config) => handleApproveWithGrant(inv.id, config)}
 									onDeny={() => handleDeny(inv.id)}
 								/>
 							))}

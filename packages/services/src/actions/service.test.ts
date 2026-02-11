@@ -10,12 +10,16 @@ const {
 	mockUpdateInvocationStatus,
 	mockListPendingBySession,
 	mockEvaluateGrant,
+	mockCreateGrant,
+	mockRevokeGrant,
 } = vi.hoisted(() => ({
 	mockCreateInvocation: vi.fn(),
 	mockGetInvocation: vi.fn(),
 	mockUpdateInvocationStatus: vi.fn(),
 	mockListPendingBySession: vi.fn(),
 	mockEvaluateGrant: vi.fn(),
+	mockCreateGrant: vi.fn(),
+	mockRevokeGrant: vi.fn(),
 }));
 
 vi.mock("./db", () => ({
@@ -31,6 +35,8 @@ vi.mock("./db", () => ({
 
 vi.mock("./grants", () => ({
 	evaluateGrant: mockEvaluateGrant,
+	createGrant: mockCreateGrant,
+	revokeGrant: mockRevokeGrant,
 }));
 
 vi.mock("../logger", () => ({
@@ -43,7 +49,14 @@ vi.mock("../logger", () => ({
 	}),
 }));
 
-const { invokeAction, PendingLimitError } = await import("./service");
+const {
+	invokeAction,
+	approveActionWithGrant,
+	PendingLimitError,
+	ActionNotFoundError,
+	ActionExpiredError,
+	ActionConflictError,
+} = await import("./service");
 
 // ============================================
 // Helpers
@@ -185,5 +198,136 @@ describe("invokeAction with grants", () => {
 
 		await expect(invokeAction(baseInput)).rejects.toThrow(PendingLimitError);
 		expect(mockCreateInvocation).not.toHaveBeenCalled();
+	});
+});
+
+// ============================================
+// approveActionWithGrant
+// ============================================
+
+describe("approveActionWithGrant", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	const pendingInvocation = makeInvocationRow({
+		status: "pending",
+		expiresAt: new Date(Date.now() + 300_000),
+	});
+
+	const grantRow = {
+		id: "grant-1",
+		organizationId: "org-1",
+		createdBy: "user-1",
+		sessionId: "session-1",
+		integration: "linear",
+		action: "create_issue",
+		maxCalls: 10,
+		usedCalls: 0,
+		expiresAt: null,
+		revokedAt: null,
+		createdAt: new Date(),
+	};
+
+	it("creates a session-scoped grant and approves invocation", async () => {
+		mockGetInvocation.mockResolvedValue(pendingInvocation);
+		mockCreateGrant.mockResolvedValue(grantRow);
+		const approved = makeInvocationRow({ status: "approved", approvedBy: "user-1" });
+		mockUpdateInvocationStatus.mockResolvedValue(approved);
+
+		const result = await approveActionWithGrant("inv-1", "org-1", "user-1", {
+			scope: "session",
+			maxCalls: 10,
+		});
+
+		expect(result.invocation.status).toBe("approved");
+		expect(result.grant.id).toBe("grant-1");
+		expect(mockCreateGrant).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sessionId: "session-1",
+				integration: "linear",
+				action: "create_issue",
+				maxCalls: 10,
+			}),
+		);
+	});
+
+	it("creates an org-wide grant when scope='org'", async () => {
+		mockGetInvocation.mockResolvedValue(pendingInvocation);
+		mockCreateGrant.mockResolvedValue({ ...grantRow, sessionId: null });
+		const approved = makeInvocationRow({ status: "approved" });
+		mockUpdateInvocationStatus.mockResolvedValue(approved);
+
+		await approveActionWithGrant("inv-1", "org-1", "user-1", {
+			scope: "org",
+			maxCalls: null,
+		});
+
+		expect(mockCreateGrant).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sessionId: undefined,
+				maxCalls: null,
+			}),
+		);
+	});
+
+	it("rolls back grant if invocation update fails", async () => {
+		mockGetInvocation.mockResolvedValue(pendingInvocation);
+		mockCreateGrant.mockResolvedValue(grantRow);
+		mockRevokeGrant.mockResolvedValue(undefined);
+		mockUpdateInvocationStatus.mockResolvedValue(undefined); // update returns nothing
+
+		await expect(
+			approveActionWithGrant("inv-1", "org-1", "user-1", { scope: "session" }),
+		).rejects.toThrow(ActionConflictError);
+
+		expect(mockRevokeGrant).toHaveBeenCalledWith("grant-1", "org-1");
+	});
+
+	it("throws ActionNotFoundError for missing invocation", async () => {
+		mockGetInvocation.mockResolvedValue(undefined);
+
+		await expect(
+			approveActionWithGrant("inv-1", "org-1", "user-1", { scope: "session" }),
+		).rejects.toThrow(ActionNotFoundError);
+
+		expect(mockCreateGrant).not.toHaveBeenCalled();
+	});
+
+	it("throws ActionExpiredError for expired invocation", async () => {
+		const expired = makeInvocationRow({
+			status: "pending",
+			expiresAt: new Date(Date.now() - 1000),
+		});
+		mockGetInvocation.mockResolvedValue(expired);
+		mockUpdateInvocationStatus.mockResolvedValue(expired);
+
+		await expect(
+			approveActionWithGrant("inv-1", "org-1", "user-1", { scope: "session" }),
+		).rejects.toThrow(ActionExpiredError);
+
+		expect(mockCreateGrant).not.toHaveBeenCalled();
+	});
+
+	it("throws ActionConflictError for non-pending invocation", async () => {
+		const approved = makeInvocationRow({ status: "approved" });
+		mockGetInvocation.mockResolvedValue(approved);
+
+		await expect(
+			approveActionWithGrant("inv-1", "org-1", "user-1", { scope: "session" }),
+		).rejects.toThrow(ActionConflictError);
+
+		expect(mockCreateGrant).not.toHaveBeenCalled();
+	});
+
+	it("defaults maxCalls to null when not provided", async () => {
+		mockGetInvocation.mockResolvedValue(pendingInvocation);
+		mockCreateGrant.mockResolvedValue({ ...grantRow, maxCalls: null });
+		const approved = makeInvocationRow({ status: "approved" });
+		mockUpdateInvocationStatus.mockResolvedValue(approved);
+
+		await approveActionWithGrant("inv-1", "org-1", "user-1", { scope: "session" });
+
+		expect(mockCreateGrant).toHaveBeenCalledWith(expect.objectContaining({ maxCalls: null }));
 	});
 });
