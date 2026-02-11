@@ -63,11 +63,19 @@ export async function startService(opts: {
 	// Ensure log directory exists
 	mkdirSync(LOG_DIR, { recursive: true });
 
-	// Stop existing service with same name
+	// Stop existing service with same name (handles both in-memory and orphaned PIDs)
+	const oldState = loadState();
+	const existing = oldState.services[name];
 	if (processes.has(name)) {
-		const oldProc = processes.get(name);
-		oldProc?.kill("SIGTERM");
+		processes.get(name)?.kill("SIGTERM");
 		processes.delete(name);
+	} else if (existing?.status === "running") {
+		try {
+			process.kill(existing.pid, 0);
+			process.kill(existing.pid, "SIGTERM");
+		} catch {
+			// Already dead
+		}
 	}
 
 	const logFile = `${LOG_DIR}/${name}.log`;
@@ -130,8 +138,17 @@ export async function stopService(opts: { name: string }): Promise<void> {
 	}
 
 	const state = loadState();
-	if (state.services[name]) {
-		state.services[name].status = "stopped";
+	const service = state.services[name];
+	if (service) {
+		// Kill by PID if we don't have the ChildProcess reference (e.g. after restart)
+		if (!proc && service.status === "running") {
+			try {
+				process.kill(service.pid, "SIGTERM");
+			} catch {
+				// Already dead
+			}
+		}
+		service.status = "stopped";
 		saveState(state);
 	}
 }

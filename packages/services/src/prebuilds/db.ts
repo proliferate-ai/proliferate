@@ -411,6 +411,37 @@ export async function updatePrebuildServiceCommands(input: {
 }
 
 /**
+ * Update prebuild-level env file spec.
+ */
+export async function updatePrebuildEnvFiles(input: {
+	prebuildId: string;
+	envFiles: unknown;
+	updatedBy: string;
+}): Promise<void> {
+	const db = getDb();
+	await db
+		.update(prebuilds)
+		.set({
+			envFiles: input.envFiles,
+			envFilesUpdatedAt: new Date(),
+			envFilesUpdatedBy: input.updatedBy,
+		})
+		.where(eq(prebuilds.id, input.prebuildId));
+}
+
+/**
+ * Get prebuild env file spec.
+ */
+export async function getPrebuildEnvFiles(prebuildId: string): Promise<unknown | null> {
+	const db = getDb();
+	const result = await db.query.prebuilds.findFirst({
+		where: eq(prebuilds.id, prebuildId),
+		columns: { envFiles: true },
+	});
+	return result?.envFiles ?? null;
+}
+
+/**
  * Update prebuild snapshot_id only if currently null.
  * Returns true if updated, false if already had a snapshot.
  */

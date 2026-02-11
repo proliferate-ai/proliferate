@@ -1,3 +1,13 @@
+import {
+	appendFileSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	unlinkSync,
+	writeFileSync,
+} from "node:fs";
+import { dirname, join, resolve } from "node:path";
+
 const BASE_URL = process.env.PROLIFERATE_SANDBOX_MCP_URL || "http://127.0.0.1:4000";
 
 const AUTH_TOKEN = process.env.SANDBOX_MCP_AUTH_TOKEN || process.env.SERVICE_TO_SERVICE_AUTH_TOKEN;
@@ -17,6 +27,9 @@ Commands:
   services restart --name <n>                      Restart a service
   services expose --port <port>                    Expose a port for preview
   services logs --name <n> [--follow]              View service logs
+
+  env apply --spec <json>                          Generate env files from spec
+  env scrub --spec <json>                          Delete secret env files
 `);
 	process.exit(2);
 }
@@ -200,41 +213,154 @@ async function servicesLogs(flags: Record<string, string | boolean>): Promise<vo
 	await streamSSE(`/api/logs/${encodeURIComponent(name)}`, follow);
 }
 
+// ── Env commands ──
+
+const WORKSPACE_DIR = process.env.WORKSPACE_DIR || "/home/user/workspace";
+const PROLIFERATE_ENV_FILE = "/tmp/.proliferate_env.json";
+
+interface EnvFileSpec {
+	workspacePath: string;
+	path: string;
+	format: string;
+	mode: string;
+	keys: Array<{ key: string; required: boolean }>;
+}
+
+function parseSpec(flags: Record<string, string | boolean>): EnvFileSpec[] {
+	const raw = requireFlag(flags, "spec");
+	try {
+		const parsed = JSON.parse(raw);
+		if (!Array.isArray(parsed)) fatal("--spec must be a JSON array", 2);
+		return parsed as EnvFileSpec[];
+	} catch (err) {
+		if (err instanceof SyntaxError) fatal(`Invalid JSON in --spec: ${err.message}`, 2);
+		throw err;
+	}
+}
+
+function resolveWorkspacePath(workspacePath: string): string {
+	if (workspacePath === "." || workspacePath === "") return WORKSPACE_DIR;
+	return join(WORKSPACE_DIR, workspacePath);
+}
+
+function addToGitExclude(repoDir: string, filePath: string): void {
+	const excludeFile = join(repoDir, ".git", "info", "exclude");
+	const excludeDir = dirname(excludeFile);
+	if (!existsSync(join(repoDir, ".git"))) return;
+	mkdirSync(excludeDir, { recursive: true });
+	const existing = existsSync(excludeFile) ? readFileSync(excludeFile, "utf-8") : "";
+	if (!existing.split("\n").includes(filePath)) {
+		appendFileSync(
+			excludeFile,
+			`${existing.endsWith("\n") || existing === "" ? "" : "\n"}${filePath}\n`,
+		);
+	}
+}
+
+async function envApply(flags: Record<string, string | boolean>): Promise<void> {
+	const spec = parseSpec(flags);
+	const missing: string[] = [];
+	const applied: Array<{ path: string; keyCount: number }> = [];
+
+	for (const entry of spec) {
+		const repoDir = resolveWorkspacePath(entry.workspacePath);
+		const filePath = resolve(repoDir, entry.path);
+		const lines: string[] = [];
+
+		for (const { key, required } of entry.keys) {
+			const val = process.env[key];
+			if (val === undefined) {
+				if (required) missing.push(key);
+				continue;
+			}
+			lines.push(`${key}=${val}`);
+		}
+
+		if (missing.length > 0) continue;
+
+		mkdirSync(dirname(filePath), { recursive: true });
+		writeFileSync(filePath, `${lines.join("\n")}\n`);
+		addToGitExclude(repoDir, entry.path);
+		applied.push({ path: entry.path, keyCount: lines.length });
+	}
+
+	if (missing.length > 0) {
+		fatal(`Missing required environment variables: ${missing.join(", ")}`, 1);
+	}
+	writeJson({ applied });
+}
+
+async function envScrub(flags: Record<string, string | boolean>): Promise<void> {
+	const spec = parseSpec(flags);
+	const scrubbed: string[] = [];
+
+	for (const entry of spec) {
+		if (entry.mode !== "secret") continue;
+		const repoDir = resolveWorkspacePath(entry.workspacePath);
+		const filePath = resolve(repoDir, entry.path);
+		if (existsSync(filePath)) {
+			unlinkSync(filePath);
+			scrubbed.push(entry.path);
+		}
+	}
+
+	if (existsSync(PROLIFERATE_ENV_FILE)) {
+		unlinkSync(PROLIFERATE_ENV_FILE);
+		scrubbed.push(PROLIFERATE_ENV_FILE);
+	}
+
+	writeJson({ scrubbed });
+}
+
+// ── Main dispatch ──
+
 async function main(): Promise<void> {
 	const args = process.argv.slice(2);
 	if (args.length === 0) usage();
 
 	const group = args[0];
 	const action = args[1];
-	if (group !== "services") usage();
-
-	if (!AUTH_TOKEN) {
-		fatal("Auth token not set. Set SANDBOX_MCP_AUTH_TOKEN or SERVICE_TO_SERVICE_AUTH_TOKEN.", 2);
-	}
-
 	const flags = parseFlags(args.slice(2));
 
-	switch (action) {
-		case "list":
-			await servicesList();
-			break;
-		case "start":
-			await servicesStart(flags);
-			break;
-		case "stop":
-			await servicesStop(flags);
-			break;
-		case "restart":
-			await servicesRestart(flags);
-			break;
-		case "expose":
-			await servicesExpose(flags);
-			break;
-		case "logs":
-			await servicesLogs(flags);
-			break;
-		default:
-			usage();
+	if (group === "services") {
+		if (!AUTH_TOKEN) {
+			fatal("Auth token not set. Set SANDBOX_MCP_AUTH_TOKEN or SERVICE_TO_SERVICE_AUTH_TOKEN.", 2);
+		}
+		switch (action) {
+			case "list":
+				await servicesList();
+				break;
+			case "start":
+				await servicesStart(flags);
+				break;
+			case "stop":
+				await servicesStop(flags);
+				break;
+			case "restart":
+				await servicesRestart(flags);
+				break;
+			case "expose":
+				await servicesExpose(flags);
+				break;
+			case "logs":
+				await servicesLogs(flags);
+				break;
+			default:
+				usage();
+		}
+	} else if (group === "env") {
+		switch (action) {
+			case "apply":
+				await envApply(flags);
+				break;
+			case "scrub":
+				await envScrub(flags);
+				break;
+			default:
+				usage();
+		}
+	} else {
+		usage();
 	}
 }
 

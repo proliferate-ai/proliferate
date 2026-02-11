@@ -302,6 +302,12 @@ export const prebuilds = pgTable(
 			mode: "date",
 		}),
 		serviceCommandsUpdatedBy: text("service_commands_updated_by"),
+		envFiles: jsonb("env_files"),
+		envFilesUpdatedAt: timestamp("env_files_updated_at", {
+			withTimezone: true,
+			mode: "date",
+		}),
+		envFilesUpdatedBy: text("env_files_updated_by"),
 	},
 	(table) => [
 		index("idx_prebuilds_sandbox_provider").using(
