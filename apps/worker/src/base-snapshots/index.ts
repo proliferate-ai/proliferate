@@ -5,7 +5,6 @@
  * start near-instantly without relying on MODAL_BASE_SNAPSHOT_ID env var.
  */
 
-import { env } from "@proliferate/environment/server";
 import type { Logger } from "@proliferate/logger";
 import {
 	createBaseSnapshotBuildQueue,
@@ -13,7 +12,7 @@ import {
 	queueBaseSnapshotBuild,
 } from "@proliferate/queue";
 import { baseSnapshots } from "@proliferate/services";
-import { ModalLibmodalProvider } from "@proliferate/shared/providers";
+import { ModalLibmodalProvider, getModalAppName } from "@proliferate/shared/providers";
 import type { Worker } from "bullmq";
 
 interface BaseSnapshotWorkers {
@@ -109,13 +108,4 @@ async function handleBaseSnapshotBuild(
 		log.error({ err: error }, "Base snapshot build failed");
 		throw error; // Let BullMQ retry
 	}
-}
-
-function getModalAppName(): string {
-	const appName = env.MODAL_APP_NAME;
-	const suffix = env.MODAL_APP_SUFFIX;
-	if (!appName) {
-		throw new Error("MODAL_APP_NAME is required");
-	}
-	return suffix ? `${appName}-${suffix}` : appName;
 }

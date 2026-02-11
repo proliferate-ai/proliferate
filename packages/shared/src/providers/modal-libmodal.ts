@@ -123,7 +123,7 @@ function getModalAuthConfigHint(
 /**
  * Get the full Modal app name (with optional suffix for per-developer deployments)
  */
-function getModalAppName(): string {
+export function getModalAppName(): string {
 	if (!MODAL_APP_NAME) {
 		throw new Error("MODAL_APP_NAME is required to use the Modal provider");
 	}
@@ -1097,6 +1097,53 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				}
 			} catch (err) {
 				log.warn({ err }, "Failed to configure git identity (non-fatal)");
+			}
+		}
+
+		// Git freshness pull on restored snapshots (opt-in, non-fatal)
+		if (env.SANDBOX_GIT_PULL_ON_RESTORE && opts.snapshotId && opts.repos.length > 0) {
+			const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
+
+			// Re-write git credentials with fresh tokens (snapshot tokens may be stale)
+			const gitCredentials: Record<string, string> = {};
+			for (const repo of opts.repos) {
+				if (repo.token) {
+					gitCredentials[repo.repoUrl] = repo.token;
+					gitCredentials[repo.repoUrl.replace(/\.git$/, "")] = repo.token;
+				}
+			}
+			if (Object.keys(gitCredentials).length > 0) {
+				const credsFile = await sandbox.open("/tmp/.git-credentials.json", "w");
+				await credsFile.write(encoder.encode(JSON.stringify(gitCredentials)));
+				await credsFile.close();
+			}
+
+			// Pull each repo (ff-only, non-fatal)
+			for (const repo of opts.repos) {
+				const targetDir =
+					repo.workspacePath === "." ? workspaceDir : `${workspaceDir}/${repo.workspacePath}`;
+				const pullStartMs = Date.now();
+				try {
+					const result = await sandbox.exec([
+						"sh",
+						"-c",
+						`cd ${shellEscape(targetDir)} && git pull --ff-only 2>&1`,
+					]);
+					const stdout = capOutput(await result.stdout.readText());
+					log.info(
+						{
+							repo: repo.workspacePath,
+							durationMs: Date.now() - pullStartMs,
+							output: stdout,
+						},
+						"Git freshness pull complete",
+					);
+				} catch (err) {
+					log.warn(
+						{ err, repo: repo.workspacePath, durationMs: Date.now() - pullStartMs },
+						"Git freshness pull failed (non-fatal)",
+					);
+				}
 			}
 		}
 
