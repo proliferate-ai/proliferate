@@ -22,6 +22,7 @@ import {
 	repos,
 	sandboxBaseSnapshots,
 	schedules,
+	secretBundles,
 	secrets,
 	session,
 	sessionConnections,
@@ -195,6 +196,18 @@ export const integrationsRelations = relations(integrations, ({ one, many }) => 
 	triggers: many(triggers),
 }));
 
+export const secretBundlesRelations = relations(secretBundles, ({ one, many }) => ({
+	organization: one(organization, {
+		fields: [secretBundles.organizationId],
+		references: [organization.id],
+	}),
+	user: one(user, {
+		fields: [secretBundles.createdBy],
+		references: [user.id],
+	}),
+	secrets: many(secrets),
+}));
+
 export const secretsRelations = relations(secrets, ({ one }) => ({
 	organization: one(organization, {
 		fields: [secrets.organizationId],
@@ -211,6 +224,10 @@ export const secretsRelations = relations(secrets, ({ one }) => ({
 	prebuild: one(prebuilds, {
 		fields: [secrets.prebuildId],
 		references: [prebuilds.id],
+	}),
+	bundle: one(secretBundles, {
+		fields: [secrets.bundleId],
+		references: [secretBundles.id],
 	}),
 }));
 

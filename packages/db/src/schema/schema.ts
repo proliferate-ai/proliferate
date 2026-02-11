@@ -413,6 +413,36 @@ export const integrations = pgTable(
 	],
 );
 
+export const secretBundles = pgTable(
+	"secret_bundles",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id").notNull(),
+		name: text().notNull(),
+		description: text(),
+		createdBy: text("created_by"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_secret_bundles_org").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
+		),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "secret_bundles_organization_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [user.id],
+			name: "secret_bundles_created_by_fkey",
+		}),
+		unique("secret_bundles_org_name_unique").on(table.organizationId, table.name),
+	],
+);
+
 export const secrets = pgTable(
 	"secrets",
 	{
@@ -427,10 +457,12 @@ export const secrets = pgTable(
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		prebuildId: uuid("prebuild_id"),
+		bundleId: uuid("bundle_id"),
 	},
 	(table) => [
 		index("idx_secrets_org").using("btree", table.organizationId.asc().nullsLast().op("text_ops")),
 		index("idx_secrets_repo").using("btree", table.repoId.asc().nullsLast().op("uuid_ops")),
+		index("idx_secrets_bundle").using("btree", table.bundleId.asc().nullsLast().op("uuid_ops")),
 		foreignKey({
 			columns: [table.organizationId],
 			foreignColumns: [organization.id],
@@ -451,6 +483,11 @@ export const secrets = pgTable(
 			foreignColumns: [prebuilds.id],
 			name: "secrets_prebuild_id_fkey",
 		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.bundleId],
+			foreignColumns: [secretBundles.id],
+			name: "secrets_bundle_id_fkey",
+		}).onDelete("set null"),
 		unique("secrets_org_repo_prebuild_key_unique").on(
 			table.organizationId,
 			table.repoId,
