@@ -40,8 +40,6 @@ export function getOpencodeConfig(
 		providerConfig = '"anthropic": {}';
 	}
 
-	const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
-
 	return `{
   "$schema": "https://opencode.ai/config.json",
   "model": "${opencodeModelId}",
@@ -62,14 +60,6 @@ export function getOpencodeConfig(
       "type": "local",
       "command": ["playwright-mcp", "--headless", "--browser", "chromium", "--no-sandbox", "--isolated", "--caps", "vision"],
       "enabled": true
-    },
-    "sandbox_mcp": {
-      "type": "local",
-      "command": ["sandbox-mcp", "mcp"],
-      "enabled": true,
-      "environment": {
-        "WORKSPACE_DIR": "${workspaceDir}"
-      }
     }
   }
 }`;

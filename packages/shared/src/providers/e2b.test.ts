@@ -49,12 +49,10 @@ describe("E2B Provider - Helper Functions", () => {
 			expect(parsed.mcp.playwright.command).toContain("playwright-mcp");
 		});
 
-		it("should include sandbox MCP configuration", () => {
+		it("should NOT include sandbox_mcp MCP entry (regression)", () => {
 			const config = getOpencodeConfig("test-model");
 			const parsed = JSON.parse(config);
-			expect(parsed.mcp.sandbox_mcp).toBeDefined();
-			expect(parsed.mcp.sandbox_mcp.type).toBe("local");
-			expect(parsed.mcp.sandbox_mcp.command).toContain("sandbox-mcp");
+			expect(parsed.mcp.sandbox_mcp).toBeUndefined();
 		});
 
 		it("should work with different model IDs", () => {
