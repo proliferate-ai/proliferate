@@ -12,7 +12,8 @@ export type PreviewMode =
 	| { type: "git" }
 	| { type: "changes" }
 	| { type: "terminal" }
-	| { type: "vscode" };
+	| { type: "vscode" }
+	| { type: "services" };
 
 // Mobile view state - on mobile we either show chat or preview (full screen)
 export type MobileView = "chat" | "preview";
@@ -41,7 +42,8 @@ interface PreviewPanelState {
 			| "git"
 			| "changes"
 			| "terminal"
-			| "vscode",
+			| "vscode"
+			| "services",
 	) => void;
 
 	// Mobile view toggle
@@ -88,7 +90,8 @@ export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
 			| "git"
 			| "changes"
 			| "terminal"
-			| "vscode",
+			| "vscode"
+			| "services",
 	) => {
 		const { mode } = get();
 		if (mode.type === type) {
