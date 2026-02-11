@@ -89,7 +89,7 @@ DB_URL=postgres
 	});
 
 	it("preserves # inside quoted values", () => {
-		const result = parseEnvFile('COLOR="#ff0000"\nTAG=\'v1#beta\'');
+		const result = parseEnvFile("COLOR=\"#ff0000\"\nTAG='v1#beta'");
 		expect(result).toEqual([
 			{ key: "COLOR", value: "#ff0000" },
 			{ key: "TAG", value: "v1#beta" },
