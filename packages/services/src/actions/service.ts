@@ -5,7 +5,7 @@
  */
 
 import { getServicesLogger } from "../logger";
-import type { ActionInvocationRow } from "./db";
+import type { ActionInvocationRow, ActionInvocationWithSession } from "./db";
 import * as actionsDb from "./db";
 
 // ============================================
@@ -270,4 +270,19 @@ export async function listPendingActions(sessionId: string): Promise<ActionInvoc
  */
 export async function expireStaleInvocations(): Promise<number> {
 	return actionsDb.expirePendingInvocations(new Date());
+}
+
+/**
+ * List invocations for an org with optional status filter + pagination.
+ * Used by the org-level dashboard inbox.
+ */
+export async function listOrgActions(
+	orgId: string,
+	options?: { status?: string; limit?: number; offset?: number },
+): Promise<{ invocations: ActionInvocationWithSession[]; total: number }> {
+	const [invocations, total] = await Promise.all([
+		actionsDb.listByOrg(orgId, options),
+		actionsDb.countByOrg(orgId, options?.status),
+	]);
+	return { invocations, total };
 }

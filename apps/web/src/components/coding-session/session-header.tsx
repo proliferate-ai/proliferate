@@ -12,9 +12,11 @@ import {
 	HardDrive,
 	MessageSquare,
 	PanelRight,
+	Server,
 	Settings,
 	SquareTerminal,
 	Wrench,
+	Zap,
 } from "lucide-react";
 
 interface SessionHeaderProps {
@@ -30,6 +32,8 @@ interface SessionHeaderProps {
 	onToggleChanges?: () => void;
 	onToggleTerminal?: () => void;
 	onToggleVscode?: () => void;
+	onToggleActions?: () => void;
+	onToggleServices?: () => void;
 	// Mobile
 	mobileView?: "chat" | "preview";
 	onToggleMobileView?: () => void;
@@ -47,6 +51,8 @@ export function SessionHeader({
 	onToggleChanges,
 	onToggleTerminal,
 	onToggleVscode,
+	onToggleActions,
+	onToggleServices,
 	mobileView,
 	onToggleMobileView,
 }: SessionHeaderProps) {
@@ -193,6 +199,40 @@ export function SessionHeader({
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent>VS Code</TooltipContent>
+					</Tooltip>
+				)}
+
+				{onToggleActions && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								variant={panelMode.type === "actions" ? "secondary" : "ghost"}
+								size="icon"
+								className="hidden md:flex h-7 w-7"
+								onClick={onToggleActions}
+								disabled={disabled}
+							>
+								<Zap className="h-3.5 w-3.5" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent>Actions</TooltipContent>
+					</Tooltip>
+				)}
+
+				{onToggleServices && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								variant={panelMode.type === "services" ? "secondary" : "ghost"}
+								size="icon"
+								className="hidden md:flex h-7 w-7"
+								onClick={onToggleServices}
+								disabled={disabled}
+							>
+								<Server className="h-3.5 w-3.5" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent>Services</TooltipContent>
 					</Tooltip>
 				)}
 

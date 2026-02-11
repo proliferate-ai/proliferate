@@ -178,6 +178,7 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 			"Required for verification media storage in cloud profile",
 		),
 		S3_SECRET_KEY: optionalString,
+		SANDBOX_GIT_PULL_ON_RESTORE: optionalBoolean, // Opt-in: run git pull --ff-only on restored snapshots
 		SANDBOX_TIMEOUT_SECONDS: optionalSeconds(3600),
 		SENTRY_AUTH_TOKEN: optionalString,
 		SENTRY_ORG: optionalString,

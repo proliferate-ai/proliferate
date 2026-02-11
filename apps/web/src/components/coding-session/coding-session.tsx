@@ -216,6 +216,8 @@ export function CodingSession({
 								onToggleChanges={() => togglePanel("changes")}
 								onToggleTerminal={() => togglePanel("terminal")}
 								onToggleVscode={() => togglePanel("vscode")}
+								onToggleActions={() => togglePanel("actions")}
+								onToggleServices={() => togglePanel("services")}
 								mobileView={mobileView}
 								onToggleMobileView={toggleMobileView}
 							/>
@@ -264,6 +266,8 @@ export function CodingSession({
 						onToggleChanges={() => togglePanel("changes")}
 						onToggleTerminal={() => togglePanel("terminal")}
 						onToggleVscode={() => togglePanel("vscode")}
+						onToggleActions={() => togglePanel("actions")}
+						onToggleServices={() => togglePanel("services")}
 						mobileView={mobileView}
 						onToggleMobileView={toggleMobileView}
 					/>

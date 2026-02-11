@@ -1,0 +1,139 @@
+"use client";
+
+import { ActionInvocationCard } from "@/components/actions/action-invocation-card";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useApproveAction, useDenyAction, useSessionActions } from "@/hooks/use-actions";
+import { useOrgMembersAndInvitations } from "@/hooks/use-orgs";
+import { useSession } from "@/lib/auth-client";
+import { hasRoleOrHigher } from "@/lib/roles";
+import { useQueryClient } from "@tanstack/react-query";
+import { Loader2, X, Zap } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { toast } from "sonner";
+import { useWsToken } from "./runtime/use-ws-token";
+
+interface ActionsPanelProps {
+	sessionId: string;
+	activityTick: number;
+	onClose: () => void;
+}
+
+export function ActionsPanel({ sessionId, activityTick, onClose }: ActionsPanelProps) {
+	const { token } = useWsToken();
+	const queryClient = useQueryClient();
+	const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const { data: invocations, isLoading, error } = useSessionActions(sessionId, token);
+	const approveAction = useApproveAction();
+	const denyAction = useDenyAction();
+
+	// Check if user can approve/deny
+	const { data: authSession } = useSession();
+	const { data: orgData } = useOrgMembersAndInvitations(
+		authSession?.session?.activeOrganizationId ?? "",
+	);
+	const currentUserRole = orgData?.currentUserRole;
+	const canApprove = !!currentUserRole && hasRoleOrHigher(currentUserRole, "admin");
+
+	// Debounced invalidation on activity tick
+	useEffect(() => {
+		if (activityTick === 0) return;
+		if (debounceRef.current) clearTimeout(debounceRef.current);
+		debounceRef.current = setTimeout(() => {
+			queryClient.invalidateQueries({
+				queryKey: ["session-actions", sessionId],
+			});
+		}, 500);
+		return () => {
+			if (debounceRef.current) clearTimeout(debounceRef.current);
+		};
+	}, [activityTick, queryClient, sessionId]);
+
+	const handleApprove = async (invocationId: string) => {
+		if (!token) return;
+		try {
+			await approveAction.mutateAsync({
+				sessionId,
+				invocationId,
+				token,
+			});
+			toast.success("Action approved");
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : "Failed to approve");
+		}
+	};
+
+	const handleDeny = async (invocationId: string) => {
+		if (!token) return;
+		try {
+			await denyAction.mutateAsync({
+				sessionId,
+				invocationId,
+				token,
+			});
+			toast.success("Action denied");
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : "Failed to deny");
+		}
+	};
+
+	return (
+		<TooltipProvider delayDuration={150}>
+			<div className="flex flex-col h-full">
+				{/* Header */}
+				<div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 shrink-0">
+					<div className="flex items-center gap-2 min-w-0">
+						<Zap className="h-4 w-4" />
+						<span className="text-sm font-medium truncate">Actions</span>
+						{invocations && invocations.length > 0 && (
+							<span className="text-xs text-muted-foreground">({invocations.length})</span>
+						)}
+					</div>
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
+								<X className="h-4 w-4" />
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent>Close panel</TooltipContent>
+					</Tooltip>
+				</div>
+
+				{/* Content */}
+				<div className="flex-1 min-h-0 overflow-auto">
+					{isLoading ? (
+						<div className="flex items-center justify-center py-8">
+							<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+						</div>
+					) : error ? (
+						<div className="px-3 py-4 text-sm text-destructive">Failed to load actions</div>
+					) : !invocations || invocations.length === 0 ? (
+						<div className="px-3 py-8 text-center text-sm text-muted-foreground">
+							No actions yet
+						</div>
+					) : (
+						<div className="divide-y">
+							{invocations.map((inv) => (
+								<ActionInvocationCard
+									key={inv.id}
+									invocation={inv}
+									canApprove={canApprove && inv.status === "pending"}
+									onApprove={() => handleApprove(inv.id)}
+									onDeny={() => handleDeny(inv.id)}
+								/>
+							))}
+						</div>
+					)}
+				</div>
+
+				{/* Footer */}
+				{invocations && invocations.length > 0 && (
+					<div className="px-3 py-1.5 border-t text-xs text-muted-foreground shrink-0">
+						{invocations.filter((i) => i.status === "pending").length} pending
+					</div>
+				)}
+			</div>
+		</TooltipProvider>
+	);
+}

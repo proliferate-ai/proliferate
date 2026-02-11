@@ -4,13 +4,27 @@
  * Raw Drizzle queries for action_invocations.
  */
 
-import { type InferSelectModel, actionInvocations, and, desc, eq, getDb, lte } from "../db/client";
+import {
+	type InferSelectModel,
+	actionInvocations,
+	and,
+	desc,
+	eq,
+	getDb,
+	lte,
+	sessions,
+	sql,
+} from "../db/client";
 
 // ============================================
 // Type Exports
 // ============================================
 
 export type ActionInvocationRow = InferSelectModel<typeof actionInvocations>;
+
+export type ActionInvocationWithSession = ActionInvocationRow & {
+	sessionTitle: string | null;
+};
 
 // ============================================
 // Queries
@@ -120,4 +134,46 @@ export async function expirePendingInvocations(now: Date): Promise<number> {
 		.where(and(eq(actionInvocations.status, "pending"), lte(actionInvocations.expiresAt, now)))
 		.returning({ id: actionInvocations.id });
 	return rows.length;
+}
+
+export async function listByOrg(
+	organizationId: string,
+	options?: {
+		status?: string;
+		limit?: number;
+		offset?: number;
+	},
+): Promise<ActionInvocationWithSession[]> {
+	const db = getDb();
+	const conditions = [eq(actionInvocations.organizationId, organizationId)];
+	if (options?.status) {
+		conditions.push(eq(actionInvocations.status, options.status));
+	}
+	const limit = options?.limit ?? 50;
+	const offset = options?.offset ?? 0;
+	const rows = await db
+		.select({
+			invocation: actionInvocations,
+			sessionTitle: sessions.title,
+		})
+		.from(actionInvocations)
+		.leftJoin(sessions, eq(actionInvocations.sessionId, sessions.id))
+		.where(and(...conditions))
+		.orderBy(desc(actionInvocations.createdAt))
+		.limit(limit)
+		.offset(offset);
+	return rows.map((r) => ({ ...r.invocation, sessionTitle: r.sessionTitle }));
+}
+
+export async function countByOrg(organizationId: string, status?: string): Promise<number> {
+	const db = getDb();
+	const conditions = [eq(actionInvocations.organizationId, organizationId)];
+	if (status) {
+		conditions.push(eq(actionInvocations.status, status));
+	}
+	const [result] = await db
+		.select({ count: sql<number>`count(*)::int` })
+		.from(actionInvocations)
+		.where(and(...conditions));
+	return result.count;
 }

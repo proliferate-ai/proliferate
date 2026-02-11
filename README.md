@@ -17,17 +17,15 @@ Proliferate is a multiplayer cloud harness for coding agents. Give agents the sa
 
 ## Features
 
-| Feature | Description |
-| --- | --- |
-| **Multiplayer Sessions** | Multiple people can watch, steer, or take over any agent session in real time |
-| **Isolated Sandboxes** | Every run gets a dedicated cloud sandbox (Modal or E2B), not just a repo checkout |
-| **Multi-Agent Workflows** | Run many coding sessions in parallel across different tasks |
-| **Model Flexible** | Use your preferred coding models and providers |
-| **Automations + Triggers** | Launch runs from GitHub, Sentry, PostHog, Linear, Slack, webhooks, or schedules |
-| **Live Streaming** | Follow execution in web or CLI with a shareable session link |
-| **Action Framework** | Plug into tools and MCP-style integrations across your stack |
-| **Self-Hosted** | Deploy with Docker Compose or Kubernetes on your own infrastructure |
-| **Open Source** | MIT licensed and fully self-hostable |
+- **Multiplayer:** Multiple teammates can watch, steer, or take over the same session in real time.
+- **Preview environments:** Every run gets an isolated cloud sandbox (Modal or E2B), not just a repo checkout.
+- **Multi-agent harness:** Run many coding sessions in parallel across separate tasks and repos.
+- **Model agnostic:** Use your preferred coding models and providers.
+- **Automations:** Configure schedules and triggers from GitHub, Sentry, PostHog, Linear, Slack, or webhooks.
+- **Action framework:** Connect internal APIs, SaaS tools, and MCP-style integrations.
+- **Multi-client:** Work from web, CLI, or Slack against the same session state.
+- **Permissioning:** Scoped, auditable access controls for agent actions across your org.
+- **Fully open source:** MIT licensed and self-hostable on your own infrastructure.
 
 > 📖 Full docs: [docs.proliferate.com](https://docs.proliferate.com)
 
@@ -152,13 +150,14 @@ For webhooks/public domains: [`docs/self-hosting/localhost-vs-public-domain.md`]
 
 ## Deployment
 
-| Method | Command / Guide |
-| --- | --- |
-| **Local (build from source)** | `docker compose up -d` |
-| **Production (pre-built images)** | `docker compose -f docker-compose.prod.yml up -d` |
-| **AWS (EKS, Pulumi + Helm)** | [`infra/pulumi-k8s/README.md`](infra/pulumi-k8s/README.md) |
-| **GCP (GKE, Pulumi + Helm)** | [`infra/pulumi-k8s-gcp/README.md`](infra/pulumi-k8s-gcp/README.md) |
-| **Cloud deploy helper** | `make deploy-cloud SHA=<sha> STACK=prod` |
+- **Local (build from source):** `docker compose up -d`
+- **Production (pre-built images):** `docker compose -f docker-compose.prod.yml up -d`
+- **AWS (EKS via Pulumi + Helm):** [`infra/pulumi-k8s/README.md`](infra/pulumi-k8s/README.md)
+- **GCP (GKE via Pulumi + Helm):** [`infra/pulumi-k8s-gcp/README.md`](infra/pulumi-k8s-gcp/README.md)
+- **Terraform (legacy ECS/manual path):** [`infra/terraform/README.md`](infra/terraform/README.md)
+- **Cloud deploy helper:** `make deploy-cloud SHA=<sha> STACK=prod`
+
+Supports AWS and GCP for current Kubernetes self-hosting. ECS/Terraform paths are legacy/manual.
 
 ---
 
@@ -175,22 +174,7 @@ Requires Node.js 20+, pnpm, and Docker.
 
 ---
 
-## Architecture
-
-```text
-Client (Web / CLI / Slack)
-        │
-        ▼
-Gateway (WebSocket streaming path)
-        │
-        ▼
-Sandbox (Modal or E2B, isolated per run)
-
-API routes handle session lifecycle + metadata.
-Worker handles triggers, automations, and background jobs.
-```
-
-More details:
+## Technical Docs
 
 - [Gateway spec](apps/gateway/SPEC.md)
 - [LLM proxy](apps/llm-proxy/README.md)
@@ -212,9 +196,17 @@ More details:
 
 ---
 
-## Cloud & Enterprise
+## Roadmap
 
-- Managed cloud: coming soon at [proliferate.com](https://proliferate.com)
+- Roadmap issues: [github.com/proliferate-ai/proliferate/issues?q=is%3Aissue+is%3Aopen+label%3Aroadmap](https://github.com/proliferate-ai/proliferate/issues?q=is%3Aissue+is%3Aopen+label%3Aroadmap)
+- All open issues: [github.com/proliferate-ai/proliferate/issues](https://github.com/proliferate-ai/proliferate/issues)
+
+---
+
+## Enterprise
+
+- Enterprise deployment/support: [proliferate.com/enterprise](https://proliferate.com/enterprise)
+- Contact: [pablo@proliferate.com](mailto:pablo@proliferate.com)
 - Self-hosting docs: [docs.proliferate.com](https://docs.proliferate.com)
 
 ---
@@ -222,7 +214,7 @@ More details:
 ## Community
 
 - 💬 Feedback and bugs: [GitHub Issues](https://github.com/proliferate-ai/proliferate/issues)
-- 📫 Contact: [pablo@proliferate.com](mailto:pablo@proliferate.com)
+- 🌐 Product site: [proliferate.com](https://proliferate.com)
 
 ## Security
 

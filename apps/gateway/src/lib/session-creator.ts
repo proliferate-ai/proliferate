@@ -9,7 +9,14 @@
  */
 
 import { createLogger } from "@proliferate/logger";
-import { automations, integrations, prebuilds, sessions, users } from "@proliferate/services";
+import {
+	automations,
+	baseSnapshots,
+	integrations,
+	prebuilds,
+	sessions,
+	users,
+} from "@proliferate/services";
 import {
 	type CloneInstructions,
 	type ModelId,
@@ -20,7 +27,12 @@ import {
 	parseModelId,
 	resolveSnapshotId,
 } from "@proliferate/shared";
-import { parseServiceCommands, resolveServiceCommands } from "@proliferate/shared/sandbox";
+import { getModalAppName } from "@proliferate/shared/providers";
+import {
+	computeBaseSnapshotVersionKey,
+	parseServiceCommands,
+	resolveServiceCommands,
+} from "@proliferate/shared/sandbox";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
 
@@ -397,6 +409,34 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		"session_creator.create_sandbox.start",
 	);
 
+	// Resolve base snapshot from DB for Modal provider
+	let baseSnapshotId: string | undefined;
+	if (provider.type === "modal") {
+		try {
+			const versionKey = computeBaseSnapshotVersionKey();
+			const modalAppName = getModalAppName();
+			const dbSnapshotId = await baseSnapshots.getReadySnapshotId(
+				versionKey,
+				"modal",
+				modalAppName,
+			);
+			if (dbSnapshotId) {
+				baseSnapshotId = dbSnapshotId;
+				log.info(
+					{ baseSnapshotId, versionKey: versionKey.slice(0, 12) },
+					"Base snapshot resolved from DB",
+				);
+			} else {
+				log.debug(
+					{ versionKey: versionKey.slice(0, 12) },
+					"No ready base snapshot in DB, using env fallback",
+				);
+			}
+		} catch (err) {
+			log.warn({ err }, "Failed to resolve base snapshot from DB (non-fatal)");
+		}
+	}
+
 	// Resolve git identity for commits inside the sandbox
 	let userName: string | undefined;
 	let userEmail: string | undefined;
@@ -460,6 +500,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			envVars: mergedEnvVars,
 			systemPrompt: "CLI terminal session",
 			snapshotId: snapshotId || undefined,
+			baseSnapshotId,
 			sshPublicKey,
 			triggerContext,
 		});
@@ -600,6 +641,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		envVars,
 		systemPrompt,
 		snapshotId: snapshotId || undefined,
+		baseSnapshotId,
 		agentConfig: agentConfig
 			? {
 					agentType: "opencode" as const,
