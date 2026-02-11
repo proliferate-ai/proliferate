@@ -3,6 +3,12 @@
  *
  * Submits secrets and environment variables to a running session.
  * Secrets are stored encrypted in the database, env vars are written to the sandbox.
+ *
+ * Persistence semantics:
+ * - Each secret can individually opt into org-level persistence via `persist`.
+ * - If `persist` is absent, the global `saveToPrebuild` flag is used as fallback.
+ * - Regular env vars are always session-only (never persisted to DB).
+ * - All values (persisted or not) are written to the sandbox for the current session.
  */
 
 import { logger } from "@/lib/logger";
@@ -13,10 +19,15 @@ const log = logger.child({ handler: "sessions-submit-env" });
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 
-interface SecretInput {
+// ============================================
+// Types
+// ============================================
+
+export interface SecretInput {
 	key: string;
 	value: string;
 	description?: string;
+	persist?: boolean;
 }
 
 interface EnvVarInput {
@@ -24,7 +35,7 @@ interface EnvVarInput {
 	value: string;
 }
 
-interface SubmitEnvHandlerInput {
+export interface SubmitEnvHandlerInput {
 	sessionId: string;
 	orgId: string;
 	userId: string;
@@ -33,9 +44,20 @@ interface SubmitEnvHandlerInput {
 	saveToPrebuild: boolean;
 }
 
-interface SubmitEnvResult {
-	submitted: boolean;
+export interface SecretResult {
+	key: string;
+	persisted: boolean;
+	alreadyExisted: boolean;
 }
+
+export interface SubmitEnvResult {
+	submitted: boolean;
+	results: SecretResult[];
+}
+
+// ============================================
+// Handler
+// ============================================
 
 export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<SubmitEnvResult> {
 	const { sessionId, orgId, userId, secrets: secretsInput, envVars, saveToPrebuild } = input;
@@ -46,6 +68,7 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 		{
 			envVarCount: envVars.length,
 			secretCount: secretsInput.length,
+			persistCount: secretsInput.filter((s) => s.persist ?? saveToPrebuild).length,
 			saveToPrebuild,
 		},
 		"submit_env.start",
@@ -65,17 +88,20 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 	// Build env vars map to write to sandbox
 	const envVarsMap: Record<string, string> = {};
 
-	// Add regular env vars
+	// Add regular env vars (always session-only)
 	for (const env of envVars) {
 		envVarsMap[env.key] = env.value;
 	}
 
 	// Process secrets: add to env vars map and optionally save to database
+	const results: SecretResult[] = [];
+
 	for (const secret of secretsInput) {
 		envVarsMap[secret.key] = secret.value;
 
-		// Save to database if requested
-		if (saveToPrebuild) {
+		const shouldPersist = secret.persist ?? saveToPrebuild;
+
+		if (shouldPersist) {
 			try {
 				await secrets.createSecret({
 					organizationId: orgId,
@@ -83,15 +109,19 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 					key: secret.key,
 					value: secret.value,
 					description: secret.description,
-					repoId: session.prebuildId ? undefined : undefined, // Secrets are org-scoped
 					secretType: "secret",
 				});
+				results.push({ key: secret.key, persisted: true, alreadyExisted: false });
 			} catch (err) {
-				// Ignore duplicate errors - secret may already exist
-				if (!(err instanceof secrets.DuplicateSecretError)) {
+				if (err instanceof secrets.DuplicateSecretError) {
+					results.push({ key: secret.key, persisted: false, alreadyExisted: true });
+				} else {
 					reqLog.error({ err, key: secret.key }, "Failed to save secret");
+					results.push({ key: secret.key, persisted: false, alreadyExisted: false });
 				}
 			}
+		} else {
+			results.push({ key: secret.key, persisted: false, alreadyExisted: false });
 		}
 	}
 
@@ -120,8 +150,10 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 	reqLog.info(
 		{
 			durationMs: Date.now() - startMs,
+			persistedCount: results.filter((r) => r.persisted).length,
+			duplicateCount: results.filter((r) => r.alreadyExisted).length,
 		},
 		"submit_env.complete",
 	);
-	return { submitted: true };
+	return { submitted: true, results };
 }

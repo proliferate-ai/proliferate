@@ -167,6 +167,7 @@ export const sessionsRouter = {
 						key: z.string(),
 						value: z.string(),
 						description: z.string().optional(),
+						persist: z.boolean().optional(),
 					}),
 				),
 				envVars: z.array(
@@ -178,7 +179,20 @@ export const sessionsRouter = {
 				saveToPrebuild: z.boolean(),
 			}),
 		)
-		.output(z.object({ submitted: z.boolean() }))
+		.output(
+			z.object({
+				submitted: z.boolean(),
+				results: z
+					.array(
+						z.object({
+							key: z.string(),
+							persisted: z.boolean(),
+							alreadyExisted: z.boolean(),
+						}),
+					)
+					.optional(),
+			}),
+		)
 		.handler(async ({ input, context }) => {
 			return submitEnvHandler({
 				sessionId: input.sessionId,

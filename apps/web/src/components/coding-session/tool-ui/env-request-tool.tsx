@@ -1,9 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 import { makeAssistantToolUI, useThreadRuntime } from "@assistant-ui/react";
@@ -52,9 +52,13 @@ export const EnvRequestToolUI = makeAssistantToolUI<EnvRequestArgs, string>({
 		const [existingKeys, setExistingKeys] = useState<Set<string>>(new Set());
 		const [overrides, setOverrides] = useState<Set<string>>(new Set());
 		const [skipped, setSkipped] = useState<Set<string>>(new Set());
-		const [saveToSnapshot, setSaveToSnapshot] = useState(true);
+		const [persistMap, setPersistMap] = useState<Record<string, boolean>>({});
 		const [submitting, setSubmitting] = useState(false);
-		const [submitted, setSubmitted] = useState(false);
+		const [submitResults, setSubmitResults] = useState<Array<{
+			key: string;
+			persisted: boolean;
+			alreadyExisted: boolean;
+		}> | null>(null);
 		const [loading, setLoading] = useState(true);
 
 		// Get session context - may be null if not provided
@@ -72,6 +76,15 @@ export const EnvRequestToolUI = makeAssistantToolUI<EnvRequestArgs, string>({
 			[variables],
 		);
 		const repoId = sessionCtx?.repoId;
+
+		// Initialize persist defaults for secrets (default: true)
+		useEffect(() => {
+			const defaults: Record<string, boolean> = {};
+			for (const v of variables) {
+				if (v.type === "secret") defaults[v.key] = true;
+			}
+			setPersistMap(defaults);
+		}, [variables]);
 
 		const checkSecretsMutation = useMutation(orpc.secrets.check.mutationOptions());
 		const submitEnvMutation = useMutation(orpc.sessions.submitEnv.mutationOptions());
@@ -126,6 +139,7 @@ export const EnvRequestToolUI = makeAssistantToolUI<EnvRequestArgs, string>({
 						key: v.key,
 						value: values[v.key],
 						description: v.description,
+						persist: persistMap[v.key] ?? true,
 					}));
 
 				const envsToSubmit = variables
@@ -135,14 +149,14 @@ export const EnvRequestToolUI = makeAssistantToolUI<EnvRequestArgs, string>({
 						value: values[v.key],
 					}));
 
-				await submitEnvMutation.mutateAsync({
+				const response = await submitEnvMutation.mutateAsync({
 					sessionId: sessionCtx.sessionId,
 					secrets: secretsToSubmit,
 					envVars: envsToSubmit,
-					saveToPrebuild: saveToSnapshot,
+					saveToPrebuild: true,
 				});
 
-				setSubmitted(true);
+				setSubmitResults(response.results ?? []);
 
 				// Send a user message to signal the agent to continue
 				threadRuntime.append({
@@ -190,14 +204,31 @@ export const EnvRequestToolUI = makeAssistantToolUI<EnvRequestArgs, string>({
 
 		const hasSecrets = variables.some((v) => v.type === "secret");
 
-		// If submitted, show success state
-		if (submitted) {
+		// If submitted, show per-secret results
+		if (submitResults) {
 			return (
-				<div className="my-2 py-3">
+				<div className="my-2 py-3 space-y-2">
 					<div className="flex items-center gap-2 text-green-600">
 						<CheckCircle className="h-4 w-4" />
 						<span className="text-sm font-medium">Configuration submitted</span>
 					</div>
+					{submitResults.length > 0 && (
+						<ul className="space-y-1 pl-6">
+							{submitResults.map((r) => (
+								<li key={r.key} className="text-xs text-muted-foreground">
+									<span className="font-medium text-foreground">{r.key}</span>
+									{" — "}
+									{r.alreadyExisted ? (
+										<span>Already saved</span>
+									) : r.persisted ? (
+										<span className="text-green-600">Saved for future sessions</span>
+									) : (
+										<span>This session only</span>
+									)}
+								</li>
+							))}
+						</ul>
+					)}
 				</div>
 			);
 		}
@@ -349,26 +380,36 @@ export const EnvRequestToolUI = makeAssistantToolUI<EnvRequestArgs, string>({
 													)}
 												</div>
 											)}
+
+											{/* Per-secret persistence toggle */}
+											{variable.type === "secret" && (
+												<div className="flex items-center gap-2">
+													<Switch
+														id={`persist-${variable.key}`}
+														checked={persistMap[variable.key] ?? true}
+														onCheckedChange={(checked) =>
+															setPersistMap((prev) => ({
+																...prev,
+																[variable.key]: checked,
+															}))
+														}
+														className="h-4 w-7 [&>span]:h-3 [&>span]:w-3"
+													/>
+													<Label
+														htmlFor={`persist-${variable.key}`}
+														className="text-[10px] font-normal text-muted-foreground"
+													>
+														{(persistMap[variable.key] ?? true)
+															? "Save for future sessions"
+															: "This session only"}
+													</Label>
+												</div>
+											)}
 										</>
 									)}
 								</div>
 							);
 						})}
-					</div>
-				)}
-
-				{/* Save to snapshot option */}
-				{hasSecrets && !loading && (
-					<div className="flex items-center gap-2">
-						<Checkbox
-							id="save-snapshot-inline"
-							checked={saveToSnapshot}
-							onCheckedChange={(checked) => setSaveToSnapshot(checked === true)}
-							className="h-3 w-3"
-						/>
-						<Label htmlFor="save-snapshot-inline" className="text-[10px] font-normal">
-							Save secrets to this snapshot
-						</Label>
 					</div>
 				)}
 
