@@ -524,5 +524,86 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 		}
 	});
 
+	// ============================================
+	// Grant Management
+	// ============================================
+
+	/**
+	 * POST /grants — create a scoped action grant.
+	 * Auth: sandbox token only (sandbox agents self-create grants).
+	 */
+	router.post("/grants", async (req, res, next) => {
+		try {
+			if (req.auth?.source !== "sandbox") {
+				throw new ApiError(403, "Only sandbox agents can create grants");
+			}
+
+			const sessionId = req.proliferateSessionId!;
+			const { integration, action, scope, maxCalls } = req.body as {
+				integration?: string;
+				action?: string;
+				scope?: string;
+				maxCalls?: number;
+			};
+
+			if (!integration || !action) {
+				throw new ApiError(400, "Missing required fields: integration, action");
+			}
+
+			if (scope !== undefined && scope !== "session" && scope !== "org") {
+				throw new ApiError(400, "scope must be 'session' or 'org'");
+			}
+
+			if (maxCalls != null && (!Number.isInteger(maxCalls) || maxCalls < 1)) {
+				throw new ApiError(400, "maxCalls must be a positive integer");
+			}
+
+			const session = await sessions.findByIdInternal(sessionId);
+			if (!session) {
+				throw new ApiError(404, "Session not found");
+			}
+
+			const grant = await actions.createGrant({
+				organizationId: session.organizationId,
+				createdBy: sessionId,
+				sessionId: scope === "org" ? null : sessionId,
+				integration,
+				action,
+				maxCalls: maxCalls ?? null,
+			});
+
+			res.status(201).json({ grant });
+		} catch (err) {
+			next(err);
+		}
+	});
+
+	/**
+	 * GET /grants — list active grants for this session.
+	 * Auth: sandbox token (session-scoped) or user token (org check).
+	 */
+	router.get("/grants", async (req, res, next) => {
+		try {
+			const sessionId = req.proliferateSessionId!;
+
+			let orgId: string;
+			if (req.auth?.source === "sandbox") {
+				const session = await sessions.findByIdInternal(sessionId);
+				if (!session) {
+					throw new ApiError(404, "Session not found");
+				}
+				orgId = session.organizationId;
+			} else {
+				const session = await requireSessionOrgAccess(sessionId, req.auth?.orgId);
+				orgId = session.organizationId;
+			}
+
+			const grants = await actions.listActiveGrants(orgId, sessionId);
+			res.json({ grants });
+		} catch (err) {
+			next(err);
+		}
+	});
+
 	return router;
 }

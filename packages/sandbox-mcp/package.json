@@ -12,6 +12,7 @@
 	"scripts": {
 		"build": "tsc",
 		"bundle": "rm -f dist/bundle.cjs dist/proliferate.cjs && esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/bundle.cjs --banner:js='#!/usr/bin/env node\nprocess.env.NODE_ENV=process.env.NODE_ENV||\"production\";' --external:pino-pretty --external:node-pty --external:ws && esbuild src/proliferate-cli.ts --bundle --platform=node --target=node20 --outfile=dist/proliferate.cjs --banner:js='#!/usr/bin/env node' && chmod +x dist/bundle.cjs dist/proliferate.cjs",
+		"test": "vitest run",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
@@ -25,7 +26,8 @@
 		"@types/node": "^20.11.0",
 		"@types/ws": "^8.5.10",
 		"esbuild": "^0.27.3",
-		"typescript": "^5.3.3"
+		"typescript": "^5.3.3",
+		"vitest": "^4.0.18"
 	},
 	"files": ["dist"],
 	"publishConfig": {
