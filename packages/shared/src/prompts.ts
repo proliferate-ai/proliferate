@@ -25,7 +25,7 @@ Use the \`proliferate\` CLI to manage background services:
 - \`proliferate services restart --name <name>\` — restart a service
 - \`proliferate services expose --port <port>\` — expose a port for preview
 
-All commands output JSON. Prefer this CLI over MCP service tools.
+All commands output JSON. Prefer this CLI over MCP service tools. If \`proliferate\` is not found, fall back to the MCP service tools.
 
 Background any long-running processes. Don't block on dev servers or watchers.
 

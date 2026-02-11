@@ -43,12 +43,33 @@ function requireFlag(flags: Record<string, string | boolean>, key: string): stri
 	return val;
 }
 
+const MAX_RETRIES = 10;
+const RETRY_DELAY_MS = 1000;
+const REQUEST_TIMEOUT_MS = 30_000;
+
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			return await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+		} catch (err: unknown) {
+			const isConnError =
+				err instanceof TypeError &&
+				(err.message.includes("ECONNREFUSED") || err.message.includes("fetch failed"));
+			if (isConnError && attempt < MAX_RETRIES) {
+				await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+				continue;
+			}
+			throw err;
+		}
+	}
+}
+
 async function request(
 	method: string,
 	path: string,
 	body?: Record<string, unknown>,
 ): Promise<unknown> {
-	const res = await fetch(`${BASE_URL}${path}`, {
+	const res = await fetchWithRetry(`${BASE_URL}${path}`, {
 		method,
 		headers: {
 			Authorization: `Bearer ${AUTH_TOKEN}`,
@@ -68,7 +89,7 @@ async function request(
 }
 
 async function streamSSE(path: string, follow: boolean): Promise<void> {
-	const res = await fetch(`${BASE_URL}${path}`, {
+	const res = await fetchWithRetry(`${BASE_URL}${path}`, {
 		headers: {
 			Authorization: `Bearer ${AUTH_TOKEN}`,
 			Accept: "text/event-stream",
