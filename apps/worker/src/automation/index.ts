@@ -18,6 +18,7 @@ import {
 import { outbox, runs, triggers } from "@proliferate/services";
 import type { Worker } from "bullmq";
 import { writeCompletionArtifact } from "./artifacts";
+import { type FinalizerDeps, finalizeOneRun } from "./finalizer";
 
 const LEASE_TTL_MS = 5 * 60 * 1000;
 const OUTBOX_POLL_INTERVAL_MS = 2000;
@@ -190,6 +191,15 @@ async function handleExecute(runId: string, syncClient: SyncClient): Promise<voi
 }
 
 async function finalizeRuns(syncClient: SyncClient, logger: Logger): Promise<void> {
+	const deps: FinalizerDeps = {
+		getSessionStatus: (sessionId) => syncClient.getSessionStatus(sessionId),
+		markRunFailed: (opts) => runs.markRunFailed(opts),
+		transitionRunStatus: (runId, toStatus, updates) =>
+			runs.transitionRunStatus(runId, toStatus, updates),
+		updateTriggerEvent: (eventId, updates) => triggers.updateEvent(eventId, updates),
+		log: logger,
+	};
+
 	const candidates = await runs.listStaleRunningRuns({
 		limit: 50,
 		inactivityMs: INACTIVITY_MS,
@@ -197,56 +207,7 @@ async function finalizeRuns(syncClient: SyncClient, logger: Logger): Promise<voi
 
 	for (const run of candidates) {
 		try {
-			if (!run.sessionId) {
-				await runs.markRunFailed({
-					runId: run.id,
-					reason: "missing_session",
-					stage: "finalizer",
-					errorMessage: "Run has no session",
-				});
-				continue;
-			}
-
-			if (run.deadlineAt && run.deadlineAt < new Date()) {
-				await runs.transitionRunStatus(run.id, "timed_out", {
-					statusReason: "deadline_exceeded",
-					failureStage: "finalizer",
-					completedAt: new Date(),
-				});
-				await triggers.updateEvent(run.triggerEventId, {
-					status: "failed",
-					errorMessage: "Run timed out",
-					processedAt: new Date(),
-				});
-				continue;
-			}
-
-			const status = await syncClient.getSessionStatus(run.sessionId);
-			if (status.state === "terminated") {
-				await runs.markRunFailed({
-					runId: run.id,
-					reason: "session_terminated",
-					stage: "finalizer",
-					errorMessage: status.reason ?? "Session terminated without completion",
-				});
-				await triggers.updateEvent(run.triggerEventId, {
-					status: "failed",
-					errorMessage: status.reason ?? "Session terminated without completion",
-					processedAt: new Date(),
-				});
-			} else if (status.state !== "running") {
-				await runs.markRunFailed({
-					runId: run.id,
-					reason: `session_state_${status.state}`,
-					stage: "finalizer",
-					errorMessage: `Unexpected session state: ${status.state}`,
-				});
-				await triggers.updateEvent(run.triggerEventId, {
-					status: "failed",
-					errorMessage: `Unexpected session state: ${status.state}`,
-					processedAt: new Date(),
-				});
-			}
+			await finalizeOneRun(run, deps);
 		} catch (err) {
 			logger.error({ err, runId: run.id }, "Failed to finalize run");
 		}
