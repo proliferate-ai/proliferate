@@ -72,7 +72,12 @@ export async function startService(opts: {
 	} else if (existing?.status === "running") {
 		try {
 			process.kill(existing.pid, 0);
-			process.kill(existing.pid, "SIGTERM");
+			// Kill process group (negative PID) to catch detached children
+			try {
+				process.kill(-existing.pid, "SIGTERM");
+			} catch {
+				process.kill(existing.pid, "SIGTERM");
+			}
 		} catch {
 			// Already dead
 		}
@@ -143,7 +148,12 @@ export async function stopService(opts: { name: string }): Promise<void> {
 		// Kill by PID if we don't have the ChildProcess reference (e.g. after restart)
 		if (!proc && service.status === "running") {
 			try {
-				process.kill(service.pid, "SIGTERM");
+				// Kill process group (negative PID) to catch detached children
+				try {
+					process.kill(-service.pid, "SIGTERM");
+				} catch {
+					process.kill(service.pid, "SIGTERM");
+				}
 			} catch {
 				// Already dead
 			}

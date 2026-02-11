@@ -499,9 +499,8 @@ import { tool } from "@opencode-ai/plugin"
 export default tool({
   description: \`Save environment file generation spec for this configuration.
 
-These env files will be automatically generated when future sessions boot with this prebuild snapshot.
-Values are sourced from environment variables injected into the sandbox (from stored secrets).
-Secret files are automatically scrubbed before snapshots.
+Records which env files this project needs and which keys they require.
+Values will be sourced from environment variables or stored secrets at boot time.
 
 Call this AFTER you have identified which env files the project needs and which keys they require.
 
@@ -550,12 +549,12 @@ Example:
  * Save Env Files Tool Description (for .txt file)
  */
 export const SAVE_ENV_FILES_DESCRIPTION = `
-Use the save_env_files tool to configure which env files should be generated on session boot.
+Use the save_env_files tool to record which env files this project needs.
 
 ## When to Use
 
 Call this tool when you identify that the project needs env files (e.g. .env.local, .env) containing secrets or credentials.
-The values will be sourced from environment variables already injected into the sandbox.
+This saves the spec to the prebuild configuration for use during session boot.
 
 ## How to Use
 
@@ -578,7 +577,6 @@ save_env_files({
 ## Important
 
 - Only 'dotenv' format and 'secret' mode are supported
-- Secret files are automatically deleted before snapshots (and restored after)
 - Values come from sandbox environment variables (set via request_env_variables or org secrets)
 - Maximum 10 files, 50 keys per file
 - Call save_snapshot after this to persist the environment

@@ -6,7 +6,7 @@ import {
 	unlinkSync,
 	writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 const BASE_URL = process.env.PROLIFERATE_SANDBOX_MCP_URL || "http://127.0.0.1:4000";
 
@@ -238,9 +238,20 @@ function parseSpec(flags: Record<string, string | boolean>): EnvFileSpec[] {
 	}
 }
 
+function safePath(base: string, untrusted: string): string {
+	if (isAbsolute(untrusted)) fatal(`Path must be relative: ${untrusted}`, 2);
+	if (untrusted.split("/").includes("..")) fatal(`Path must not contain '..': ${untrusted}`, 2);
+	const resolved = resolve(base, untrusted);
+	const rel = relative(base, resolved);
+	if (rel.startsWith("..") || isAbsolute(rel)) {
+		fatal(`Path escapes workspace: ${untrusted}`, 2);
+	}
+	return resolved;
+}
+
 function resolveWorkspacePath(workspacePath: string): string {
 	if (workspacePath === "." || workspacePath === "") return WORKSPACE_DIR;
-	return join(WORKSPACE_DIR, workspacePath);
+	return safePath(WORKSPACE_DIR, workspacePath);
 }
 
 function addToGitExclude(repoDir: string, filePath: string): void {
@@ -257,18 +268,44 @@ function addToGitExclude(repoDir: string, filePath: string): void {
 	}
 }
 
+function loadEnvOverrides(): Record<string, string> {
+	try {
+		if (existsSync(PROLIFERATE_ENV_FILE)) {
+			const data = JSON.parse(readFileSync(PROLIFERATE_ENV_FILE, "utf-8"));
+			if (typeof data === "object" && data !== null) {
+				const overrides: Record<string, string> = {};
+				for (const [k, v] of Object.entries(data)) {
+					if (typeof v === "string") overrides[k] = v;
+				}
+				return overrides;
+			}
+		}
+	} catch {
+		// Ignore parse/read errors — fall back to process.env only
+	}
+	return {};
+}
+
 async function envApply(flags: Record<string, string | boolean>): Promise<void> {
 	const spec = parseSpec(flags);
+	const envOverrides = loadEnvOverrides();
 	const missing: string[] = [];
-	const applied: Array<{ path: string; keyCount: number }> = [];
+
+	// First pass: validate all entries and collect missing keys before writing anything
+	const prepared: Array<{
+		repoDir: string;
+		filePath: string;
+		entryPath: string;
+		lines: string[];
+	}> = [];
 
 	for (const entry of spec) {
 		const repoDir = resolveWorkspacePath(entry.workspacePath);
-		const filePath = resolve(repoDir, entry.path);
+		const filePath = safePath(repoDir, entry.path);
 		const lines: string[] = [];
 
 		for (const { key, required } of entry.keys) {
-			const val = process.env[key];
+			const val = envOverrides[key] ?? process.env[key];
 			if (val === undefined) {
 				if (required) missing.push(key);
 				continue;
@@ -276,17 +313,22 @@ async function envApply(flags: Record<string, string | boolean>): Promise<void> 
 			lines.push(`${key}=${val}`);
 		}
 
-		if (missing.length > 0) continue;
-
-		mkdirSync(dirname(filePath), { recursive: true });
-		writeFileSync(filePath, `${lines.join("\n")}\n`);
-		addToGitExclude(repoDir, entry.path);
-		applied.push({ path: entry.path, keyCount: lines.length });
+		prepared.push({ repoDir, filePath, entryPath: entry.path, lines });
 	}
 
 	if (missing.length > 0) {
 		fatal(`Missing required environment variables: ${missing.join(", ")}`, 1);
 	}
+
+	// Second pass: write files (only reached if no required keys are missing)
+	const applied: Array<{ path: string; keyCount: number }> = [];
+	for (const { repoDir, filePath, entryPath, lines } of prepared) {
+		mkdirSync(dirname(filePath), { recursive: true });
+		writeFileSync(filePath, `${lines.join("\n")}\n`);
+		addToGitExclude(repoDir, entryPath);
+		applied.push({ path: entryPath, keyCount: lines.length });
+	}
+
 	writeJson({ applied });
 }
 
@@ -297,7 +339,7 @@ async function envScrub(flags: Record<string, string | boolean>): Promise<void> 
 	for (const entry of spec) {
 		if (entry.mode !== "secret") continue;
 		const repoDir = resolveWorkspacePath(entry.workspacePath);
-		const filePath = resolve(repoDir, entry.path);
+		const filePath = safePath(repoDir, entry.path);
 		if (existsSync(filePath)) {
 			unlinkSync(filePath);
 			scrubbed.push(entry.path);

@@ -15,9 +15,15 @@ const KeySchema = z.object({
 	required: z.boolean(),
 });
 
+const relativePath = z
+	.string()
+	.max(500)
+	.refine((p) => !p.startsWith("/"), "Path must be relative")
+	.refine((p) => !p.split("/").includes(".."), "Path must not contain '..'");
+
 const EnvFileSchema = z.object({
-	workspacePath: z.string().max(500).default("."),
-	path: z.string().min(1).max(500),
+	workspacePath: relativePath.default("."),
+	path: relativePath.pipe(z.string().min(1)),
 	format: z.literal("dotenv"),
 	mode: z.literal("secret"),
 	keys: z.array(KeySchema).min(1).max(50),
@@ -60,7 +66,7 @@ export const saveEnvFilesHandler: InterceptedToolHandler = {
 			const paths = parsed.data.files.map((f) => f.path).join(", ");
 			return {
 				success: true,
-				result: `Env file spec saved: ${paths}. These files will be generated on boot in future sessions.`,
+				result: `Env file spec saved: ${paths}. Recorded ${parsed.data.files.length} file(s) in prebuild configuration.`,
 				data: { prebuildId, fileCount: parsed.data.files.length },
 			};
 		} catch (err) {
