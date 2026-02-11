@@ -6,7 +6,7 @@ Proliferate is a multiplayer cloud harness for coding agents. Give agents the sa
 
 #### What can you do with it?
 
-Every coding agent session has access to a fully configurable deveoper environment, so it can run the same docker containers you would for local development, as well as secured access to your company's tools. You can spin up agnets from Slack, create trigger-based automations, and share them with team members! 
+Every coding agent session has access to a fully configurable deveoper environment, so it can run the same docker containers you would for local development, as well as secured access to your company's tools. You can spin up agents from Slack, create trigger-based automations, and share them with team members! 
 
 This means you can do things like:
  
