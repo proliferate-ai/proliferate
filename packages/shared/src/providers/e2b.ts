@@ -20,6 +20,7 @@ import {
 	VERIFY_TOOL_DESCRIPTION,
 } from "../opencode-tools";
 import {
+	ACTIONS_BOOTSTRAP,
 	DEFAULT_CADDYFILE,
 	ENV_INSTRUCTIONS,
 	PLUGIN_MJS,
@@ -597,6 +598,8 @@ export class E2BProvider implements SandboxProvider {
 			writeFile(`${repoDir}/opencode.json`, opencodeConfig),
 			// Instructions
 			writeFile(`${localOpencodeDir}/instructions.md`, instructions),
+			// Actions bootstrap hint
+			writeFile(`${repoDir}/.proliferate/actions-guide.md`, ACTIONS_BOOTSTRAP),
 			// Copy pre-installed tool dependencies (runs in parallel with file writes)
 			(async () => {
 				await sandbox.commands.run(`mkdir -p ${localToolDir}`, { timeoutMs: 10000 });

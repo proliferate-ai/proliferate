@@ -145,8 +145,69 @@ async function execute(
 	}
 }
 
+const guide = `# Sentry Integration Guide
+
+## Overview
+Query and manage Sentry issues directly from the sandbox.
+Authentication is handled server-side — no API keys needed.
+
+## Available Actions
+
+### list_issues (read)
+List issues for a project.
+
+\`\`\`bash
+proliferate actions run --integration sentry --action list_issues \\
+  --params '{"organization_slug":"my-org","project_slug":"my-project"}'
+\`\`\`
+
+Add a search query:
+\`\`\`bash
+proliferate actions run --integration sentry --action list_issues \\
+  --params '{"organization_slug":"my-org","project_slug":"my-project","query":"is:unresolved level:error"}'
+\`\`\`
+
+### get_issue (read)
+Get details of a specific issue.
+
+\`\`\`bash
+proliferate actions run --integration sentry --action get_issue \\
+  --params '{"issue_id":"12345"}'
+\`\`\`
+
+### list_issue_events (read)
+List events for a specific issue.
+
+\`\`\`bash
+proliferate actions run --integration sentry --action list_issue_events \\
+  --params '{"issue_id":"12345"}'
+\`\`\`
+
+### get_event (read)
+Get details of a specific event.
+
+\`\`\`bash
+proliferate actions run --integration sentry --action get_event \\
+  --params '{"issue_id":"12345","event_id":"abc123"}'
+\`\`\`
+
+### update_issue (write — requires approval)
+Resolve, assign, or update an issue.
+
+\`\`\`bash
+proliferate actions run --integration sentry --action update_issue \\
+  --params '{"issue_id":"12345","status":"resolved"}'
+\`\`\`
+
+## Tips
+- Read actions are auto-approved and return immediately.
+- Write actions require user approval and will block until approved or denied.
+- Use \`proliferate actions list\` to verify the Sentry integration is connected.
+`;
+
 export const sentryAdapter: ActionAdapter = {
 	integration: "sentry",
 	actions,
+	guide,
 	execute,
 };

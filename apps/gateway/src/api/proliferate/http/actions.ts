@@ -6,6 +6,7 @@
  *
  * Routes (all under /:proliferateSessionId/actions/):
  *   GET  /available            — list available integrations + actions
+ *   GET  /guide/:integration   — get provider guide for an integration
  *   POST /invoke               — invoke an action
  *   GET  /invocations/:id      — poll invocation status
  *   POST /invocations/:id/approve — approve a pending write
@@ -145,6 +146,30 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				.filter(Boolean);
 
 			res.json({ integrations: available });
+		} catch (err) {
+			next(err);
+		}
+	});
+
+	/**
+	 * GET /guide/:integration — get the provider guide for an integration.
+	 * Auth: sandbox token or user token (user must belong to session's org).
+	 */
+	router.get("/guide/:integration", async (req, res, next) => {
+		try {
+			const sessionId = req.proliferateSessionId!;
+
+			if (req.auth?.source !== "sandbox") {
+				await requireSessionOrgAccess(sessionId, req.auth?.orgId);
+			}
+
+			const { integration } = req.params;
+			const guide = actions.getGuide(integration);
+			if (!guide) {
+				throw new ApiError(404, `No guide available for integration: ${integration}`);
+			}
+
+			res.json({ integration, guide });
 		} catch (err) {
 			next(err);
 		}

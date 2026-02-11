@@ -131,6 +131,40 @@ docker compose up -d
 `;
 
 /**
+ * Actions bootstrap hint written to .proliferate/actions-guide.md during sandbox setup.
+ * Agents can read this file to discover the actions workflow.
+ */
+export const ACTIONS_BOOTSTRAP = `# Proliferate Actions
+
+External integrations (Sentry, Linear, etc.) are available via the \`proliferate\` CLI.
+
+## Quick Start
+
+\`\`\`bash
+# List connected integrations and their actions
+proliferate actions list
+
+# Get a detailed usage guide for a specific integration
+proliferate actions guide --integration <name>
+
+# Run an action
+proliferate actions run --integration <name> --action <action> --params '<json>'
+\`\`\`
+
+## How It Works
+
+- **Read** actions (e.g. list issues, get details) are auto-approved and return immediately.
+- **Write** actions (e.g. create issue, resolve issue) require user approval and block until approved or denied.
+- **Danger** actions are denied by default.
+- Authentication tokens are resolved server-side — never ask for API keys.
+
+## Available Providers
+
+Run \`proliferate actions list\` to see which integrations are connected to this session.
+Run \`proliferate actions guide --integration <name>\` for provider-specific examples.
+`;
+
+/**
  * Sandbox paths - standardized across providers
  */
 export const SANDBOX_PATHS = {

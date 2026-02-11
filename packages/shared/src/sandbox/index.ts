@@ -10,6 +10,7 @@
 
 // Configuration templates
 export {
+	ACTIONS_BOOTSTRAP,
 	PLUGIN_MJS,
 	DEFAULT_CADDYFILE,
 	ENV_INSTRUCTIONS,

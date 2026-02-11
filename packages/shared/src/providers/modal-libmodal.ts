@@ -31,6 +31,7 @@ import {
 	VERIFY_TOOL_DESCRIPTION,
 } from "../opencode-tools";
 import {
+	ACTIONS_BOOTSTRAP,
 	DEFAULT_CADDYFILE,
 	ENV_INSTRUCTIONS,
 	PLUGIN_MJS,
@@ -995,6 +996,8 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			writeFile(`${repoDir}/opencode.json`, opencodeConfig),
 			// Instructions
 			writeFile(`${repoDir}/.opencode/instructions.md`, instructions),
+			// Actions bootstrap hint
+			writeFile(`${repoDir}/.proliferate/actions-guide.md`, ACTIONS_BOOTSTRAP),
 			// Copy pre-installed tool dependencies (saves time vs installing on startup)
 			(async () => {
 				await sandbox.exec([

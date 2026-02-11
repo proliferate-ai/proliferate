@@ -6,6 +6,7 @@ export * from "./service";
 
 export {
 	getAdapter,
+	getGuide,
 	listAdapters,
 	type ActionAdapter,
 	type ActionDefinition,

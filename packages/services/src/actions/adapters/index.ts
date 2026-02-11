@@ -28,4 +28,12 @@ export function listAdapters(): AdapterSummary[] {
 	}));
 }
 
+/**
+ * Get the guide markdown for a specific integration.
+ * Returns undefined if the integration doesn't exist or has no guide.
+ */
+export function getGuide(integration: string): string | undefined {
+	return registry.get(integration)?.guide;
+}
+
 export type { ActionAdapter, ActionDefinition, ActionParam } from "./types";

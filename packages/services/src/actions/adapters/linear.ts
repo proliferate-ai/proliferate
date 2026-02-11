@@ -230,8 +230,64 @@ async function execute(
 	}
 }
 
+const guide = `# Linear Integration Guide
+
+## Overview
+Create, read, and update Linear issues directly from the sandbox.
+Authentication is handled server-side — no API keys needed.
+
+## Available Actions
+
+### list_issues (read)
+List issues, optionally filtered by team or project.
+
+\`\`\`bash
+proliferate actions run --integration linear --action list_issues \\
+  --params '{"teamId":"TEAM_ID","first":10}'
+\`\`\`
+
+### get_issue (read)
+Get a specific issue by ID or identifier (e.g. ENG-123).
+
+\`\`\`bash
+proliferate actions run --integration linear --action get_issue \\
+  --params '{"issueId":"ENG-123"}'
+\`\`\`
+
+### create_issue (write — requires approval)
+Create a new issue.
+
+\`\`\`bash
+proliferate actions run --integration linear --action create_issue \\
+  --params '{"teamId":"TEAM_ID","title":"Fix login bug","description":"Users cannot log in with SSO"}'
+\`\`\`
+
+### update_issue (write — requires approval)
+Update an existing issue.
+
+\`\`\`bash
+proliferate actions run --integration linear --action update_issue \\
+  --params '{"issueId":"ENG-123","stateId":"STATE_ID"}'
+\`\`\`
+
+### add_comment (write — requires approval)
+Add a comment to an issue.
+
+\`\`\`bash
+proliferate actions run --integration linear --action add_comment \\
+  --params '{"issueId":"ENG-123","body":"Fixed in commit abc123"}'
+\`\`\`
+
+## Tips
+- Read actions are auto-approved and return immediately.
+- Write actions require user approval and will block until approved or denied.
+- Use \`proliferate actions list\` to verify the Linear integration is connected.
+- Issue identifiers like \`ENG-123\` work anywhere an \`issueId\` is accepted.
+`;
+
 export const linearAdapter: ActionAdapter = {
 	integration: "linear",
 	actions,
+	guide,
 	execute,
 };

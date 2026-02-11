@@ -22,5 +22,7 @@ export interface ActionDefinition {
 export interface ActionAdapter {
 	integration: string;
 	actions: ActionDefinition[];
+	/** Markdown guide explaining how to use this integration's actions. */
+	guide?: string;
 	execute(action: string, params: Record<string, unknown>, token: string): Promise<unknown>;
 }
