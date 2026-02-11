@@ -557,6 +557,7 @@ export const automations = pgTable(
 		llmFilterPrompt: text("llm_filter_prompt"),
 		enabledTools: jsonb("enabled_tools").default({}),
 		llmAnalysisPrompt: text("llm_analysis_prompt"),
+		notificationChannelId: text("notification_channel_id"),
 	},
 	(table) => [
 		index("idx_automations_enabled")

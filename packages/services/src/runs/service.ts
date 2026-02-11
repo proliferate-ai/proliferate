@@ -4,6 +4,7 @@
 
 import { automationRunEvents, automationRuns, eq, outbox, triggerEvents } from "../db/client";
 import { getDb } from "../db/client";
+import { enqueueRunNotification } from "../notifications/service";
 import type { TriggerEventRow } from "../triggers/db";
 import * as runsDb from "./db";
 
@@ -110,7 +111,7 @@ export async function markRunFailed(options: {
 	errorMessage?: string;
 	data?: Record<string, unknown> | null;
 }): Promise<runsDb.AutomationRunRow | null> {
-	return transitionRunStatus(
+	const updated = await transitionRunStatus(
 		options.runId,
 		"failed",
 		{
@@ -121,6 +122,12 @@ export async function markRunFailed(options: {
 		},
 		options.data ?? null,
 	);
+
+	if (updated) {
+		await enqueueRunNotification(updated.organizationId, options.runId, "failed");
+	}
+
+	return updated;
 }
 
 export async function findRunWithRelations(
@@ -253,6 +260,12 @@ export async function completeRun(
 			organizationId: run.organizationId,
 			kind: "write_artifacts",
 			payload: { runId: run.id, kind: "completion" },
+		});
+
+		await tx.insert(outbox).values({
+			organizationId: run.organizationId,
+			kind: "notify_run_terminal",
+			payload: { runId: run.id, status },
 		});
 
 		return updated ?? null;

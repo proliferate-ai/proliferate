@@ -60,3 +60,6 @@ export { findByConnectionIdAndProvider, updateStatus } from "./db";
 
 // DB functions needed by SlackClient
 export { getSlackInstallationBotToken } from "./db";
+
+// DB functions needed by notification dispatch
+export { getSlackInstallationForNotifications } from "./db";

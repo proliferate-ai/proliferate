@@ -42,6 +42,9 @@ export const automations = pgTable(
 		enabledTools: jsonb("enabled_tools").default({}),
 		llmAnalysisPrompt: text("llm_analysis_prompt"),
 
+		// Notifications
+		notificationChannelId: text("notification_channel_id"),
+
 		// Metadata
 		createdBy: text("created_by").references(() => user.id),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),

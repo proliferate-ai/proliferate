@@ -394,6 +394,28 @@ export async function getSlackInstallationForDisconnect(
 }
 
 /**
+ * Get active Slack installation for notifications.
+ * Returns the bot token needed to post messages.
+ */
+export async function getSlackInstallationForNotifications(
+	orgId: string,
+): Promise<Pick<SlackInstallationRow, "id" | "encryptedBotToken"> | null> {
+	const db = getDb();
+	const result = await db.query.slackInstallations.findFirst({
+		where: and(
+			eq(slackInstallations.organizationId, orgId),
+			eq(slackInstallations.status, "active"),
+		),
+		columns: {
+			id: true,
+			encryptedBotToken: true,
+		},
+	});
+
+	return result ?? null;
+}
+
+/**
  * Mark Slack installation as revoked.
  */
 export async function revokeSlackInstallation(installationId: string): Promise<void> {
