@@ -28,7 +28,6 @@ const logger = createLogger({ service: "gateway" }).child({ module: "actions" })
 
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX = 60; // 60 invocations per minute per session
-const MAX_PENDING_PER_SESSION = 10;
 
 const invokeCounters = new Map<string, { count: number; resetAt: number }>();
 
@@ -204,26 +203,26 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(404, "Session not found");
 			}
 
-			// Check pending approval limit for write actions
-			if (actionDef.riskLevel === "write") {
-				const pending = await actions.listPendingActions(sessionId);
-				if (pending.length >= MAX_PENDING_PER_SESSION) {
-					throw new ApiError(429, "Too many pending approvals. Resolve existing ones first.");
+			// Create invocation (risk-based policy + grant evaluation)
+			let result: Awaited<ReturnType<typeof actions.invokeAction>>;
+			try {
+				result = await actions.invokeAction({
+					sessionId,
+					organizationId: session.organizationId,
+					integrationId: conn.integrationId,
+					integration,
+					action,
+					riskLevel: actionDef.riskLevel,
+					params: params ?? {},
+				});
+			} catch (err) {
+				if (err instanceof actions.PendingLimitError) {
+					throw new ApiError(429, err.message);
 				}
+				throw err;
 			}
 
-			// Create invocation (risk-based policy) — store original params for execution
-			const result = await actions.invokeAction({
-				sessionId,
-				organizationId: session.organizationId,
-				integrationId: conn.integrationId,
-				integration,
-				action,
-				riskLevel: actionDef.riskLevel,
-				params: params ?? {},
-			});
-
-			// Auto-approved reads: execute immediately
+			// Auto-approved (reads + grant-approved writes): execute immediately
 			if (!result.needsApproval && result.invocation.status === "approved") {
 				const startMs = Date.now();
 				try {

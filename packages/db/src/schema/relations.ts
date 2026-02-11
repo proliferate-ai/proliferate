@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm/relations";
 import {
 	account,
+	actionGrants,
 	actionInvocations,
 	apikey,
 	automationConnections,
@@ -499,6 +500,21 @@ export const actionInvocationsRelations = relations(actionInvocations, ({ one })
 	}),
 	session: one(sessions, {
 		fields: [actionInvocations.sessionId],
+		references: [sessions.id],
+	}),
+}));
+
+export const actionGrantsRelations = relations(actionGrants, ({ one }) => ({
+	organization: one(organization, {
+		fields: [actionGrants.organizationId],
+		references: [organization.id],
+	}),
+	creator: one(user, {
+		fields: [actionGrants.createdBy],
+		references: [user.id],
+	}),
+	session: one(sessions, {
+		fields: [actionGrants.sessionId],
 		references: [sessions.id],
 	}),
 }));
