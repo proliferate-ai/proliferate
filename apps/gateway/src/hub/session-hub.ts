@@ -453,7 +453,52 @@ export class SessionHub {
 
 		const providerType = context.session.sandbox_provider as SandboxProviderType;
 		const provider = getSandboxProvider(providerType);
-		const result = await provider.snapshot(this.sessionId, context.session.sandbox_id);
+		const sandboxId = context.session.sandbox_id;
+
+		// Load env files spec for scrub/apply around snapshot
+		let envFilesSpec: unknown = null;
+		if (context.session.prebuild_id) {
+			envFilesSpec = await prebuilds.getPrebuildEnvFiles(context.session.prebuild_id);
+		}
+
+		// Scrub secrets before snapshot (security-critical: abort if this fails)
+		if (envFilesSpec && provider.execCommand) {
+			const specJson = JSON.stringify(envFilesSpec);
+			const scrubResult = await provider.execCommand(
+				sandboxId,
+				["proliferate", "env", "scrub", "--spec", specJson],
+				{ timeoutMs: 15_000 },
+			);
+			if (scrubResult.exitCode !== 0) {
+				throw new Error(`Env scrub failed before snapshot: ${scrubResult.stderr}`);
+			}
+			this.log("Env files scrubbed before snapshot");
+		}
+
+		let result: { snapshotId: string };
+		try {
+			result = await provider.snapshot(this.sessionId, sandboxId);
+		} finally {
+			// Re-apply env files to keep running sandbox functional (even if snapshot failed)
+			if (envFilesSpec && provider.execCommand) {
+				try {
+					const specJson = JSON.stringify(envFilesSpec);
+					const applyResult = await provider.execCommand(
+						sandboxId,
+						["proliferate", "env", "apply", "--spec", specJson],
+						{ timeoutMs: 15_000 },
+					);
+					if (applyResult.exitCode !== 0) {
+						this.logger.error({ stderr: applyResult.stderr }, "Env re-apply after snapshot failed");
+					} else {
+						this.log("Env files re-applied after snapshot");
+					}
+				} catch (err) {
+					this.logger.error({ err }, "Env re-apply after snapshot failed");
+				}
+			}
+		}
+
 		const providerMs = Date.now() - startTime;
 		this.log(`[Timing] +${providerMs}ms provider.snapshot complete`);
 

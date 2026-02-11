@@ -89,6 +89,8 @@ export interface CreateSandboxOpts {
 	snapshotHasDeps?: boolean;
 	/** Resolved service commands (prebuild-level or fallback from repos). Cross-repo aware. */
 	serviceCommands?: PrebuildServiceCommand[];
+	/** Env file generation spec from prebuild config. Applied on boot before service autostart. */
+	envFiles?: unknown;
 }
 
 export interface CreateSandboxResult {
