@@ -555,6 +555,9 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		repoSpecs,
 	);
 
+	// Load env file generation spec (if configured)
+	const prebuildEnvFiles = await prebuilds.getPrebuildEnvFiles(prebuildId);
+
 	// Build environment variables
 	const envStartMs = Date.now();
 	const envVars = await loadEnvironmentVariables(
@@ -607,6 +610,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		triggerContext,
 		snapshotHasDeps,
 		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
+		envFiles: prebuildEnvFiles ?? undefined,
 	});
 	log.debug(
 		{

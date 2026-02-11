@@ -709,77 +709,66 @@ export class E2BProvider implements SandboxProvider {
 			});
 		// Don't await - runs in background
 
-		// Run per-repo service commands (only when snapshot includes deps)
-		if (opts.snapshotHasDeps) {
-			this.runServiceCommands(sandbox, opts, log);
-		}
+		// Apply env files + start services via proliferate CLI (tracked in service-manager)
+		this.bootServices(sandbox, opts, log);
 	}
 
 	/**
-	 * Run service commands in the background.
-	 * Prefers top-level resolved commands (prebuild-level); falls back to per-repo.
-	 * Each command is fire-and-forget with output redirected to /tmp/svc-*.log.
+	 * Boot services via the proliferate CLI.
+	 * 1. Apply env files (blocking — services may depend on these)
+	 * 2. Start each service command via `proliferate services start` (fire-and-forget)
+	 *
+	 * Services started this way are tracked by service-manager and visible in the
+	 * Services panel + logs SSE, unlike the old /tmp/svc-*.log approach.
 	 */
-	private runServiceCommands(sandbox: Sandbox, opts: CreateSandboxOpts, log: Logger): void {
+	private async bootServices(
+		sandbox: Sandbox,
+		opts: CreateSandboxOpts,
+		log: Logger,
+	): Promise<void> {
 		const workspaceDir = "/home/user/workspace";
 
-		// Prefer top-level prebuild-resolved commands
-		if (opts.serviceCommands?.length) {
-			for (let i = 0; i < opts.serviceCommands.length; i++) {
-				const cmd = opts.serviceCommands[i];
-				const baseDir =
-					cmd.workspacePath && cmd.workspacePath !== "."
-						? `${workspaceDir}/${cmd.workspacePath}`
-						: workspaceDir;
-				const cwd = cmd.cwd ? `${baseDir}/${cmd.cwd}` : baseDir;
-				const slug = cmd.name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
-				const wpSlug = (cmd.workspacePath || "root").replace(/[/.]/g, "_");
-				const logFile = `/tmp/svc-${wpSlug}-${i}-${slug}.log`;
-
-				log.info({ name: cmd.name, cwd, logFile }, "Starting service command");
-
-				sandbox.commands
-					.run(
-						`cd ${shellEscape(cwd)} && exec sh -c ${shellEscape(cmd.command)} > ${shellEscape(logFile)} 2>&1`,
-						{
-							timeoutMs: 3600000,
-						},
-					)
-					.catch(() => {
-						// Expected - runs until sandbox terminates
-					});
+		// 1. Apply env files (blocking — services may depend on these)
+		if (opts.envFiles) {
+			try {
+				const specJson = JSON.stringify(opts.envFiles);
+				const result = await sandbox.commands.run(
+					`proliferate env apply --spec ${shellEscape(specJson)}`,
+					{ timeoutMs: 30000 },
+				);
+				if (result.exitCode !== 0) {
+					log.error(
+						{ exitCode: result.exitCode, stderr: result.stderr },
+						"proliferate env apply failed",
+					);
+				} else {
+					log.info("Env files applied");
+				}
+			} catch (err) {
+				log.error({ err }, "proliferate env apply failed");
 			}
-			return;
 		}
 
-		// Fallback: per-repo service commands (backwards compat)
-		for (const repo of opts.repos) {
-			if (!repo.serviceCommands?.length) continue;
+		// 2. Start services via tracked CLI (fire-and-forget per service)
+		if (!opts.snapshotHasDeps || !opts.serviceCommands?.length) return;
 
-			const repoDir =
-				opts.repos.length === 1 && repo.workspacePath === "."
-					? workspaceDir
-					: `${workspaceDir}/${repo.workspacePath}`;
+		for (const cmd of opts.serviceCommands) {
+			const baseDir =
+				cmd.workspacePath && cmd.workspacePath !== "."
+					? `${workspaceDir}/${cmd.workspacePath}`
+					: workspaceDir;
+			const cwd = cmd.cwd ? `${baseDir}/${cmd.cwd}` : baseDir;
 
-			for (let i = 0; i < repo.serviceCommands.length; i++) {
-				const cmd = repo.serviceCommands[i];
-				const slug = cmd.name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
-				const logFile = `/tmp/svc-${repo.workspacePath.replace(/[/.]/g, "_")}-${i}-${slug}.log`;
-				const cwd = cmd.cwd ? `${repoDir}/${cmd.cwd}` : repoDir;
+			log.info({ name: cmd.name, cwd }, "Starting service (tracked)");
 
-				log.info({ name: cmd.name, cwd, logFile }, "Starting service command");
-
-				sandbox.commands
-					.run(
-						`cd ${shellEscape(cwd)} && exec sh -c ${shellEscape(cmd.command)} > ${shellEscape(logFile)} 2>&1`,
-						{
-							timeoutMs: 3600000,
-						},
-					)
-					.catch(() => {
-						// Expected - runs until sandbox terminates
-					});
-			}
+			sandbox.commands
+				.run(
+					`proliferate services start --name ${shellEscape(cmd.name)} --command ${shellEscape(cmd.command)} --cwd ${shellEscape(cwd)}`,
+					{ timeoutMs: 60000 },
+				)
+				.catch((err) => {
+					log.error({ err, name: cmd.name }, "proliferate services start failed");
+				});
 		}
 	}
 

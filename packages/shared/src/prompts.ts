@@ -27,6 +27,8 @@ Use the \`proliferate\` CLI to manage background services:
 
 All commands output JSON. Prefer this CLI over MCP service tools. If \`proliferate\` is not found, fall back to the MCP service tools.
 
+After identifying which env files the project needs (e.g. \`.env.local\`, \`.env\`), call \`save_env_files()\` to record the spec. Future sessions will automatically generate these files from stored secrets on boot. Secret env files are automatically scrubbed before snapshots and restored after, so \`save_snapshot()\` is always safe to call.
+
 Background any long-running processes. Don't block on dev servers or watchers.
 
 "Services start" is not the same as "services work." Actually test that things function — hit endpoints, check health, verify the app loads. Use the \`verify\` tool to upload evidence.
@@ -101,7 +103,7 @@ Then call: \`verify()\` (uses default folder) or \`verify({ folder: ".proliferat
 
 ## Secrets
 
-Organization secrets are injected as environment variables at session start. If you need a credential that's missing, use the \`request_env_variables\` tool to ask the user to add it.
+Organization secrets are injected as environment variables at session start and env files are auto-generated on boot if configured. If you need a credential that's missing, use the \`request_env_variables\` tool to ask the user to add it.
 
 When done, briefly summarize what you changed and any next steps.
 `;
