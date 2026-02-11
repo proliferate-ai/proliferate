@@ -14,6 +14,7 @@ export const SecretSchema = z.object({
 	description: z.string().nullable(),
 	secret_type: z.string().nullable(),
 	repo_id: z.string().uuid().nullable(),
+	bundle_id: z.string().uuid().nullable(),
 	created_at: z.string().nullable(),
 	updated_at: z.string().nullable(),
 });
@@ -26,9 +27,17 @@ export const CreateSecretInputSchema = z.object({
 	description: z.string().optional(),
 	repoId: z.string().uuid().optional(),
 	secretType: z.string().optional(),
+	bundleId: z.string().uuid().optional(),
 });
 
 export type CreateSecretInput = z.infer<typeof CreateSecretInputSchema>;
+
+export const UpdateSecretBundleInputSchema = z.object({
+	id: z.string().uuid(),
+	bundleId: z.string().uuid().nullable(),
+});
+
+export type UpdateSecretBundleInput = z.infer<typeof UpdateSecretBundleInputSchema>;
 
 export const CheckSecretsInputSchema = z.object({
 	keys: z.array(z.string()),
@@ -42,6 +51,35 @@ export const CheckSecretsResultSchema = z.object({
 	key: z.string(),
 	exists: z.boolean(),
 });
+
+// ============================================
+// Bundle Schemas
+// ============================================
+
+export const SecretBundleSchema = z.object({
+	id: z.string().uuid(),
+	name: z.string(),
+	description: z.string().nullable(),
+	secret_count: z.number().int(),
+	created_at: z.string().nullable(),
+	updated_at: z.string().nullable(),
+});
+
+export type SecretBundle = z.infer<typeof SecretBundleSchema>;
+
+export const CreateBundleInputSchema = z.object({
+	name: z.string().min(1).max(100),
+	description: z.string().optional(),
+});
+
+export type CreateBundleInput = z.infer<typeof CreateBundleInputSchema>;
+
+export const UpdateBundleInputSchema = z.object({
+	name: z.string().min(1).max(100).optional(),
+	description: z.string().nullable().optional(),
+});
+
+export type UpdateBundleInput = z.infer<typeof UpdateBundleInputSchema>;
 
 // ============================================
 // Contract

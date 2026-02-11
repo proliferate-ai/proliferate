@@ -116,6 +116,13 @@
       "when": 1770842889940,
       "tag": "0017_dry_mathemanic",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1770940800000,
+      "tag": "0018_secret_bundles",
+      "breakpoints": true
     }
   ]
 }

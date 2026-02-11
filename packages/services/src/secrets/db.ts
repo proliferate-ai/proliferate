@@ -14,13 +14,18 @@ import {
 	inArray,
 	isNull,
 	or,
+	secretBundles,
 	secrets,
+	sql,
 } from "../db/client";
 import { getServicesLogger } from "../logger";
 import { toIsoString } from "../db/serialize";
 import type {
 	CheckSecretsFilter,
+	DbCreateBundleInput,
 	DbCreateSecretInput,
+	DbUpdateBundleInput,
+	SecretBundleListRow,
 	SecretForSessionRow,
 	SecretListRow,
 	UpsertSecretInput,
@@ -33,7 +38,7 @@ import type {
 export type SecretRow = InferSelectModel<typeof secrets>;
 
 // ============================================
-// Queries
+// Secrets Queries
 // ============================================
 
 /**
@@ -48,6 +53,7 @@ export async function listByOrganization(orgId: string): Promise<SecretListRow[]
 			description: secrets.description,
 			secretType: secrets.secretType,
 			repoId: secrets.repoId,
+			bundleId: secrets.bundleId,
 			createdAt: secrets.createdAt,
 			updatedAt: secrets.updatedAt,
 		})
@@ -62,6 +68,7 @@ export async function listByOrganization(orgId: string): Promise<SecretListRow[]
 		description: row.description,
 		secret_type: row.secretType,
 		repo_id: row.repoId,
+		bundle_id: row.bundleId,
 		created_at: toIsoString(row.createdAt),
 		updated_at: toIsoString(row.updatedAt),
 	}));
@@ -81,6 +88,7 @@ export async function create(input: DbCreateSecretInput): Promise<SecretListRow>
 			description: input.description ?? null,
 			repoId: input.repoId ?? null,
 			secretType: input.secretType ?? "env",
+			bundleId: input.bundleId ?? null,
 			createdBy: input.createdBy,
 		})
 		.returning({
@@ -89,6 +97,7 @@ export async function create(input: DbCreateSecretInput): Promise<SecretListRow>
 			description: secrets.description,
 			secretType: secrets.secretType,
 			repoId: secrets.repoId,
+			bundleId: secrets.bundleId,
 			createdAt: secrets.createdAt,
 			updatedAt: secrets.updatedAt,
 		});
@@ -100,6 +109,7 @@ export async function create(input: DbCreateSecretInput): Promise<SecretListRow>
 		description: row.description,
 		secret_type: row.secretType,
 		repo_id: row.repoId,
+		bundle_id: row.bundleId,
 		created_at: toIsoString(row.createdAt),
 		updated_at: toIsoString(row.updatedAt),
 	};
@@ -207,4 +217,144 @@ export async function upsertByRepoAndKey(input: UpsertSecretInput): Promise<bool
 		getServicesLogger().child({ module: "secrets-db" }).error({ err: error, secretKey: input.key }, "Failed to store secret");
 		return false;
 	}
+}
+
+/**
+ * Update a secret's bundle assignment.
+ */
+export async function updateSecretBundle(
+	id: string,
+	orgId: string,
+	bundleId: string | null,
+): Promise<boolean> {
+	const db = getDb();
+	const rows = await db
+		.update(secrets)
+		.set({ bundleId, updatedAt: new Date() })
+		.where(and(eq(secrets.id, id), eq(secrets.organizationId, orgId)))
+		.returning({ id: secrets.id });
+	return rows.length > 0;
+}
+
+// ============================================
+// Bundles Queries
+// ============================================
+
+/**
+ * List all bundles for an organization with secret counts.
+ */
+export async function listBundlesByOrganization(
+	orgId: string,
+): Promise<SecretBundleListRow[]> {
+	const db = getDb();
+	const rows = await db
+		.select({
+			id: secretBundles.id,
+			name: secretBundles.name,
+			description: secretBundles.description,
+			secretCount: sql<number>`count(${secrets.id})::int`,
+			createdAt: secretBundles.createdAt,
+			updatedAt: secretBundles.updatedAt,
+		})
+		.from(secretBundles)
+		.leftJoin(secrets, eq(secrets.bundleId, secretBundles.id))
+		.where(eq(secretBundles.organizationId, orgId))
+		.groupBy(secretBundles.id)
+		.orderBy(desc(secretBundles.createdAt));
+
+	return rows.map((row) => ({
+		id: row.id,
+		name: row.name,
+		description: row.description,
+		secret_count: row.secretCount,
+		created_at: toIsoString(row.createdAt),
+		updated_at: toIsoString(row.updatedAt),
+	}));
+}
+
+/**
+ * Create a new bundle.
+ */
+export async function createBundle(
+	input: DbCreateBundleInput,
+): Promise<SecretBundleListRow> {
+	const db = getDb();
+	const [row] = await db
+		.insert(secretBundles)
+		.values({
+			organizationId: input.organizationId,
+			name: input.name,
+			description: input.description ?? null,
+			createdBy: input.createdBy,
+		})
+		.returning({
+			id: secretBundles.id,
+			name: secretBundles.name,
+			description: secretBundles.description,
+			createdAt: secretBundles.createdAt,
+			updatedAt: secretBundles.updatedAt,
+		});
+
+	return {
+		id: row.id,
+		name: row.name,
+		description: row.description,
+		secret_count: 0,
+		created_at: toIsoString(row.createdAt),
+		updated_at: toIsoString(row.updatedAt),
+	};
+}
+
+/**
+ * Update a bundle's name and/or description.
+ */
+export async function updateBundle(
+	id: string,
+	orgId: string,
+	input: DbUpdateBundleInput,
+): Promise<SecretBundleListRow | null> {
+	const db = getDb();
+	const set: Record<string, unknown> = { updatedAt: new Date() };
+	if (input.name !== undefined) set.name = input.name;
+	if (input.description !== undefined) set.description = input.description;
+
+	const [row] = await db
+		.update(secretBundles)
+		.set(set)
+		.where(and(eq(secretBundles.id, id), eq(secretBundles.organizationId, orgId)))
+		.returning({
+			id: secretBundles.id,
+			name: secretBundles.name,
+			description: secretBundles.description,
+			createdAt: secretBundles.createdAt,
+			updatedAt: secretBundles.updatedAt,
+		});
+
+	if (!row) return null;
+
+	// Fetch secret count separately
+	const [countRow] = await db
+		.select({ count: sql<number>`count(*)::int` })
+		.from(secrets)
+		.where(eq(secrets.bundleId, id));
+
+	return {
+		id: row.id,
+		name: row.name,
+		description: row.description,
+		secret_count: countRow?.count ?? 0,
+		created_at: toIsoString(row.createdAt),
+		updated_at: toIsoString(row.updatedAt),
+	};
+}
+
+/**
+ * Delete a bundle by ID within an organization.
+ * Secrets linked to this bundle will have bundle_id set to null (ON DELETE SET NULL).
+ */
+export async function deleteBundle(id: string, orgId: string): Promise<void> {
+	const db = getDb();
+	await db
+		.delete(secretBundles)
+		.where(and(eq(secretBundles.id, id), eq(secretBundles.organizationId, orgId)));
 }

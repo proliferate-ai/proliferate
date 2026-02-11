@@ -17,6 +17,7 @@ export interface SecretRow {
 	secret_type: string | null;
 	repo_id: string | null;
 	prebuild_id: string | null;
+	bundle_id: string | null;
 	created_by: string;
 	created_at: string | null;
 	updated_at: string | null;
@@ -29,6 +30,7 @@ export interface SecretListRow {
 	description: string | null;
 	secret_type: string | null;
 	repo_id: string | null;
+	bundle_id: string | null;
 	created_at: string | null;
 	updated_at: string | null;
 }
@@ -37,6 +39,31 @@ export interface SecretListRow {
 export interface SecretForSessionRow {
 	key: string;
 	encryptedValue: string;
+}
+
+// ============================================
+// Bundle Types
+// ============================================
+
+export interface SecretBundleListRow {
+	id: string;
+	name: string;
+	description: string | null;
+	secret_count: number;
+	created_at: string | null;
+	updated_at: string | null;
+}
+
+export interface DbCreateBundleInput {
+	organizationId: string;
+	name: string;
+	description?: string;
+	createdBy: string;
+}
+
+export interface DbUpdateBundleInput {
+	name?: string;
+	description?: string | null;
 }
 
 // ============================================
@@ -50,6 +77,7 @@ export interface DbCreateSecretInput {
 	description?: string;
 	repoId?: string;
 	secretType?: string;
+	bundleId?: string;
 	createdBy: string;
 }
 

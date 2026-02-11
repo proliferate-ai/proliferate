@@ -4,10 +4,10 @@
  * Business logic that orchestrates DB operations.
  */
 
-import type { Secret } from "@proliferate/shared";
+import type { Secret, SecretBundle } from "@proliferate/shared";
 import { encrypt, getEncryptionKey } from "../db/crypto";
 import * as secretsDb from "./db";
-import { toSecret, toSecrets } from "./mapper";
+import { toBundle, toBundles, toSecret, toSecrets } from "./mapper";
 
 // ============================================
 // Types
@@ -21,6 +21,7 @@ export interface CreateSecretInput {
 	description?: string;
 	repoId?: string;
 	secretType?: string;
+	bundleId?: string;
 }
 
 export interface CheckSecretsInput {
@@ -33,6 +34,18 @@ export interface CheckSecretsInput {
 export interface CheckSecretsResult {
 	key: string;
 	exists: boolean;
+}
+
+export interface CreateBundleInput {
+	organizationId: string;
+	userId: string;
+	name: string;
+	description?: string;
+}
+
+export interface UpdateBundleInput {
+	name?: string;
+	description?: string | null;
 }
 
 // ============================================
@@ -53,8 +66,22 @@ export class DuplicateSecretError extends Error {
 	}
 }
 
+export class DuplicateBundleError extends Error {
+	constructor(name: string) {
+		super(`A bundle with name "${name}" already exists`);
+		this.name = "DuplicateBundleError";
+	}
+}
+
+export class BundleNotFoundError extends Error {
+	constructor() {
+		super("Bundle not found");
+		this.name = "BundleNotFoundError";
+	}
+}
+
 // ============================================
-// Service functions
+// Secrets service functions
 // ============================================
 
 /**
@@ -88,6 +115,7 @@ export async function createSecret(input: CreateSecretInput): Promise<Secret> {
 			description: input.description,
 			repoId: input.repoId,
 			secretType: input.secretType,
+			bundleId: input.bundleId,
 			createdBy: input.userId,
 		});
 
@@ -125,4 +153,68 @@ export async function checkSecrets(input: CheckSecretsInput): Promise<CheckSecre
 		key,
 		exists: existingSet.has(key),
 	}));
+}
+
+/**
+ * Update a secret's bundle assignment.
+ */
+export async function updateSecretBundle(
+	id: string,
+	orgId: string,
+	bundleId: string | null,
+): Promise<boolean> {
+	return secretsDb.updateSecretBundle(id, orgId, bundleId);
+}
+
+// ============================================
+// Bundle service functions
+// ============================================
+
+/**
+ * List all bundles for an organization.
+ */
+export async function listBundles(orgId: string): Promise<SecretBundle[]> {
+	const rows = await secretsDb.listBundlesByOrganization(orgId);
+	return toBundles(rows);
+}
+
+/**
+ * Create a new bundle.
+ */
+export async function createBundle(input: CreateBundleInput): Promise<SecretBundle> {
+	try {
+		const row = await secretsDb.createBundle({
+			organizationId: input.organizationId,
+			name: input.name,
+			description: input.description,
+			createdBy: input.userId,
+		});
+		return toBundle(row);
+	} catch (err: unknown) {
+		if (err && typeof err === "object" && "code" in err && err.code === "23505") {
+			throw new DuplicateBundleError(input.name);
+		}
+		throw err;
+	}
+}
+
+/**
+ * Update a bundle.
+ */
+export async function updateBundleMeta(
+	id: string,
+	orgId: string,
+	input: UpdateBundleInput,
+): Promise<SecretBundle> {
+	const row = await secretsDb.updateBundle(id, orgId, input);
+	if (!row) throw new BundleNotFoundError();
+	return toBundle(row);
+}
+
+/**
+ * Delete a bundle. Secrets linked to this bundle become unbundled.
+ */
+export async function deleteBundle(id: string, orgId: string): Promise<boolean> {
+	await secretsDb.deleteBundle(id, orgId);
+	return true;
 }
