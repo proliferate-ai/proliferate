@@ -217,13 +217,24 @@ async function finalizeRuns(syncClient: SyncClient, logger: Logger): Promise<voi
 	}
 }
 
-async function dispatchOutbox(
+/** Exponential backoff: min(30s * 2^attempts, 5min) */
+export function retryDelay(attempts: number): Date {
+	const delayMs = Math.min(30_000 * 2 ** attempts, 5 * 60 * 1000);
+	return new Date(Date.now() + delayMs);
+}
+
+export async function dispatchOutbox(
 	enrichQueue: ReturnType<typeof createAutomationEnrichQueue>,
 	executeQueue: ReturnType<typeof createAutomationExecuteQueue>,
 	logger: Logger,
 ): Promise<void> {
-	const pending = await outbox.listPendingOutbox(50);
-	for (const item of pending) {
+	const recovered = await outbox.recoverStuckOutbox();
+	if (recovered > 0) {
+		logger.warn({ recovered }, "Recovered stuck outbox rows");
+	}
+
+	const claimed = await outbox.claimPendingOutbox(50);
+	for (const item of claimed) {
 		try {
 			const payload = item.payload as { runId?: string };
 			const runId = payload.runId;
@@ -253,7 +264,7 @@ async function dispatchOutbox(
 			await outbox.markDispatched(item.id);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
-			await outbox.markFailed(item.id, message, new Date(Date.now() + 30_000));
+			await outbox.markFailed(item.id, message, retryDelay(item.attempts));
 		}
 	}
 }

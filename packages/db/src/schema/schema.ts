@@ -1022,6 +1022,7 @@ export const outbox = pgTable(
 		status: text().default("pending").notNull(),
 		attempts: integer("attempts").default(0).notNull(),
 		availableAt: timestamp("available_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		claimedAt: timestamp("claimed_at", { withTimezone: true, mode: "date" }),
 		lastError: text("last_error"),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 	},
