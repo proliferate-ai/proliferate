@@ -28,6 +28,7 @@ export interface AutomationRunWithRelations extends AutomationRunRow {
 		agentInstructions: string | null;
 		modelId: string | null;
 		notificationChannelId: string | null;
+		enabledTools: unknown;
 	} | null;
 	triggerEvent: {
 		id: string;
@@ -67,6 +68,7 @@ export async function findByIdWithRelations(
 					agentInstructions: true,
 					modelId: true,
 					notificationChannelId: true,
+					enabledTools: true,
 				},
 			},
 			triggerEvent: {

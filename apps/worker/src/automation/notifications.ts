@@ -10,6 +10,9 @@ import type { Logger } from "@proliferate/logger";
 import { integrations, runs } from "@proliferate/services";
 import { decrypt, getEncryptionKey } from "@proliferate/shared/crypto";
 
+/** Timeout for outbound Slack API calls (ms). */
+const SLACK_TIMEOUT_MS = 10_000;
+
 // ============================================
 // Channel abstraction
 // ============================================
@@ -115,18 +118,29 @@ class SlackNotificationChannel implements NotificationChannel {
 		const blocks = buildSlackBlocks(notification);
 		const fallbackText = `${blocks[0]?.text?.text ?? "Automation run notification"}`;
 
-		const response = await fetch("https://slack.com/api/chat.postMessage", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${botToken}`,
-			},
-			body: JSON.stringify({
-				channel: notification.channelId,
-				text: fallbackText,
-				blocks,
-			}),
-		});
+		let response: Response;
+		try {
+			response = await fetch("https://slack.com/api/chat.postMessage", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${botToken}`,
+				},
+				body: JSON.stringify({
+					channel: notification.channelId,
+					text: fallbackText,
+					blocks,
+				}),
+				signal: AbortSignal.timeout(SLACK_TIMEOUT_MS),
+			});
+		} catch (err) {
+			const isTimeout = err instanceof DOMException && err.name === "TimeoutError";
+			const message = isTimeout
+				? `Slack API timed out after ${SLACK_TIMEOUT_MS}ms (retryable)`
+				: `Slack API network error (retryable): ${err instanceof Error ? err.message : String(err)}`;
+			logger.warn({ err, runId: notification.runId, timeoutMs: SLACK_TIMEOUT_MS }, message);
+			return { sent: false, error: message };
+		}
 
 		const result = (await response.json()) as { ok: boolean; error?: string };
 		if (!result.ok) {
@@ -135,6 +149,37 @@ class SlackNotificationChannel implements NotificationChannel {
 
 		return { sent: true };
 	}
+}
+
+// ============================================
+// Channel resolution
+// ============================================
+
+/**
+ * Resolve the Slack channel ID for an automation.
+ *
+ * Prefers the dedicated `notificationChannelId` column. Falls back to
+ * `enabled_tools.slack_notify.channelId` for backward compatibility with
+ * automations configured before the column existed.
+ */
+export function resolveNotificationChannelId(
+	notificationChannelId: string | null | undefined,
+	enabledTools: unknown,
+): string | null {
+	if (notificationChannelId) return notificationChannelId;
+
+	if (enabledTools && typeof enabledTools === "object") {
+		const tools = enabledTools as Record<string, unknown>;
+		const slackNotify = tools.slack_notify;
+		if (slackNotify && typeof slackNotify === "object") {
+			const config = slackNotify as Record<string, unknown>;
+			if (config.enabled && typeof config.channelId === "string" && config.channelId) {
+				return config.channelId;
+			}
+		}
+	}
+
+	return null;
 }
 
 // ============================================
@@ -149,7 +194,10 @@ export async function dispatchRunNotification(runId: string, logger: Logger): Pr
 		throw new Error(`Run not found: ${runId}`);
 	}
 
-	const channelId = run.automation?.notificationChannelId;
+	const channelId = resolveNotificationChannelId(
+		run.automation?.notificationChannelId,
+		run.automation?.enabledTools,
+	);
 	if (!channelId) {
 		logger.debug({ runId }, "No notification channel configured");
 		return;
