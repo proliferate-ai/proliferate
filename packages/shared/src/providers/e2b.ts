@@ -30,6 +30,7 @@ import {
 	capOutput,
 	getOpencodeConfig,
 	shellEscape,
+	shouldPullOnRestore,
 	waitForOpenCodeReady,
 } from "../sandbox";
 import type {
@@ -666,6 +667,9 @@ export class E2BProvider implements SandboxProvider {
 			}
 		}
 
+		// Git freshness pull on restored snapshots (opt-in, non-fatal)
+		await this.pullOnRestore(sandbox, opts, log);
+
 		// Start services (PostgreSQL, Redis, Mailcatcher)
 		log.debug("Starting services (async)");
 		await sandbox.commands.run("/usr/local/bin/start-services.sh", {
@@ -769,6 +773,90 @@ export class E2BProvider implements SandboxProvider {
 				.catch((err) => {
 					log.error({ err, name: cmd.name }, "proliferate services start failed");
 				});
+		}
+	}
+
+	/**
+	 * Pull latest changes on snapshot restore (non-fatal).
+	 *
+	 * Mirrors Modal's pull-on-restore behavior:
+	 * 1. Check cadence gate via shouldPullOnRestore()
+	 * 2. Re-write git credentials with fresh tokens
+	 * 3. git pull --ff-only each repo
+	 * 4. Update metadata with lastGitFetchAt
+	 */
+	private async pullOnRestore(
+		sandbox: Sandbox,
+		opts: CreateSandboxOpts,
+		log: Logger,
+	): Promise<void> {
+		// Read metadata for cadence check
+		let metadata: SessionMetadata | null = null;
+		try {
+			const raw = await sandbox.files.read(SANDBOX_PATHS.metadataFile);
+			metadata = JSON.parse(raw) as SessionMetadata;
+		} catch {
+			// No metadata → legacy snapshot or fresh sandbox
+		}
+
+		const doPull = shouldPullOnRestore({
+			enabled: env.SANDBOX_GIT_PULL_ON_RESTORE,
+			hasSnapshot: Boolean(opts.snapshotId),
+			repoCount: opts.repos.length,
+			cadenceSeconds: env.SANDBOX_GIT_PULL_CADENCE_SECONDS,
+			lastGitFetchAt: metadata?.lastGitFetchAt,
+		});
+
+		if (!doPull) return;
+
+		const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
+
+		// Re-write git credentials with fresh tokens (snapshot tokens may be stale)
+		const gitCredentials: Record<string, string> = {};
+		for (const repo of opts.repos) {
+			if (repo.token) {
+				gitCredentials[repo.repoUrl] = repo.token;
+				gitCredentials[repo.repoUrl.replace(/\.git$/, "")] = repo.token;
+			}
+		}
+		if (Object.keys(gitCredentials).length > 0) {
+			await sandbox.files.write("/tmp/.git-credentials.json", JSON.stringify(gitCredentials));
+		}
+
+		// Pull each repo (ff-only, non-fatal)
+		for (const repo of opts.repos) {
+			const targetDir =
+				repo.workspacePath === "." ? workspaceDir : `${workspaceDir}/${repo.workspacePath}`;
+			const pullStartMs = Date.now();
+			try {
+				const result = await sandbox.commands.run(
+					`cd ${shellEscape(targetDir)} && git pull --ff-only 2>&1`,
+					{ timeoutMs: 60000 },
+				);
+				log.info(
+					{
+						repo: repo.workspacePath,
+						durationMs: Date.now() - pullStartMs,
+						output: capOutput(result.stdout),
+					},
+					"Git freshness pull complete",
+				);
+			} catch (err) {
+				log.warn(
+					{ err, repo: repo.workspacePath, durationMs: Date.now() - pullStartMs },
+					"Git freshness pull failed (non-fatal)",
+				);
+			}
+		}
+
+		// Update metadata with lastGitFetchAt so next restore can check cadence
+		if (metadata) {
+			try {
+				const updated: SessionMetadata = { ...metadata, lastGitFetchAt: Date.now() };
+				await sandbox.files.write(SANDBOX_PATHS.metadataFile, JSON.stringify(updated, null, 2));
+			} catch {
+				// Non-fatal — cadence will just re-pull next time
+			}
 		}
 	}
 

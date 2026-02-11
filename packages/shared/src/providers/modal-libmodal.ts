@@ -43,6 +43,7 @@ import {
 	capOutput,
 	getOpencodeConfig,
 	shellEscape,
+	shouldPullOnRestore,
 	waitForOpenCodeReady,
 } from "../sandbox";
 import type {
@@ -1100,49 +1101,94 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			}
 		}
 
-		// Git freshness pull on restored snapshots (opt-in, non-fatal)
-		if (env.SANDBOX_GIT_PULL_ON_RESTORE && opts.snapshotId && opts.repos.length > 0) {
-			const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
+		// Git freshness pull on restored snapshots (opt-in, non-fatal, cadence-gated)
+		{
+			// Read metadata for cadence check
+			let metadata: SessionMetadata | null = null;
+			try {
+				const metadataFile = await sandbox.open(SANDBOX_PATHS.metadataFile, "r");
+				const metadataBytes = await metadataFile.read();
+				await metadataFile.close();
+				metadata = JSON.parse(decoder.decode(metadataBytes)) as SessionMetadata;
+			} catch {
+				// No metadata → legacy snapshot or fresh sandbox
+			}
 
-			// Re-write git credentials with fresh tokens (snapshot tokens may be stale)
-			const gitCredentials: Record<string, string> = {};
-			for (const repo of opts.repos) {
-				if (repo.token) {
-					gitCredentials[repo.repoUrl] = repo.token;
-					gitCredentials[repo.repoUrl.replace(/\.git$/, "")] = repo.token;
+			const doPull = shouldPullOnRestore({
+				enabled: env.SANDBOX_GIT_PULL_ON_RESTORE,
+				hasSnapshot: Boolean(opts.snapshotId),
+				repoCount: opts.repos.length,
+				cadenceSeconds: env.SANDBOX_GIT_PULL_CADENCE_SECONDS,
+				lastGitFetchAt: metadata?.lastGitFetchAt,
+			});
+
+			if (doPull) {
+				const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
+
+				// Re-write git credentials with fresh tokens (snapshot tokens may be stale)
+				const gitCredentials: Record<string, string> = {};
+				for (const repo of opts.repos) {
+					if (repo.token) {
+						gitCredentials[repo.repoUrl] = repo.token;
+						gitCredentials[repo.repoUrl.replace(/\.git$/, "")] = repo.token;
+					}
 				}
-			}
-			if (Object.keys(gitCredentials).length > 0) {
-				const credsFile = await sandbox.open("/tmp/.git-credentials.json", "w");
-				await credsFile.write(encoder.encode(JSON.stringify(gitCredentials)));
-				await credsFile.close();
-			}
+				if (Object.keys(gitCredentials).length > 0) {
+					const credsFile = await sandbox.open("/tmp/.git-credentials.json", "w");
+					await credsFile.write(encoder.encode(JSON.stringify(gitCredentials)));
+					await credsFile.close();
+				}
 
-			// Pull each repo (ff-only, non-fatal)
-			for (const repo of opts.repos) {
-				const targetDir =
-					repo.workspacePath === "." ? workspaceDir : `${workspaceDir}/${repo.workspacePath}`;
-				const pullStartMs = Date.now();
-				try {
-					const result = await sandbox.exec([
-						"sh",
-						"-c",
-						`cd ${shellEscape(targetDir)} && git pull --ff-only 2>&1`,
-					]);
-					const stdout = capOutput(await result.stdout.readText());
-					log.info(
-						{
-							repo: repo.workspacePath,
-							durationMs: Date.now() - pullStartMs,
-							output: stdout,
-						},
-						"Git freshness pull complete",
-					);
-				} catch (err) {
-					log.warn(
-						{ err, repo: repo.workspacePath, durationMs: Date.now() - pullStartMs },
-						"Git freshness pull failed (non-fatal)",
-					);
+				// Pull each repo (ff-only, non-fatal)
+				for (const repo of opts.repos) {
+					const targetDir =
+						repo.workspacePath === "." ? workspaceDir : `${workspaceDir}/${repo.workspacePath}`;
+					const pullStartMs = Date.now();
+					try {
+						const result = await sandbox.exec([
+							"sh",
+							"-c",
+							`cd ${shellEscape(targetDir)} && git pull --ff-only 2>&1`,
+						]);
+						const stdout = capOutput(await result.stdout.readText());
+						log.info(
+							{
+								repo: repo.workspacePath,
+								durationMs: Date.now() - pullStartMs,
+								output: stdout,
+							},
+							"Git freshness pull complete",
+						);
+					} catch (err) {
+						log.warn(
+							{
+								err,
+								repo: repo.workspacePath,
+								durationMs: Date.now() - pullStartMs,
+							},
+							"Git freshness pull failed (non-fatal)",
+						);
+					}
+				}
+
+				// Update metadata with lastGitFetchAt so next restore can check cadence
+				if (metadata) {
+					try {
+						const updated: SessionMetadata = {
+							...metadata,
+							lastGitFetchAt: Date.now(),
+						};
+						const updatedContent = JSON.stringify(updated, null, 2);
+						const updatedBase64 = Buffer.from(updatedContent).toString("base64");
+						const metadataDir = SANDBOX_PATHS.metadataFile.replace(/\/[^/]+$/, "");
+						await sandbox.exec([
+							"sh",
+							"-c",
+							`mkdir -p ${metadataDir} && echo '${updatedBase64}' | base64 -d > ${SANDBOX_PATHS.metadataFile}`,
+						]);
+					} catch {
+						// Non-fatal — cadence will just re-pull next time
+					}
 				}
 			}
 		}
