@@ -42,10 +42,12 @@ export async function enqueueOutbox(input: EnqueueOutboxInput): Promise<OutboxRo
  */
 export async function claimPendingOutbox(limit = 50): Promise<OutboxRow[]> {
 	const db = getDb();
+	// NOTE: SET targets must use unqualified column names (PostgreSQL requirement).
+	// Drizzle's ${outbox.col} produces "outbox"."col" which is invalid on the LHS of SET.
 	const rows = await db.execute<OutboxRow>(sql`
 		UPDATE ${outbox}
-		SET ${outbox.status} = 'processing',
-		    ${outbox.claimedAt} = now()
+		SET "status" = 'processing',
+		    "claimed_at" = now()
 		WHERE ${outbox.id} IN (
 			SELECT ${outbox.id}
 			FROM ${outbox}
@@ -110,14 +112,16 @@ export async function markFailed(
 export async function recoverStuckOutbox(leaseMs = CLAIM_LEASE_MS): Promise<number> {
 	const db = getDb();
 	const cutoff = new Date(Date.now() - leaseMs);
+	// NOTE: SET targets must use unqualified column names (PostgreSQL requirement).
+	// RHS and WHERE can use table-qualified refs via Drizzle's ${outbox.col}.
 	const result = await db.execute<{ count: string }>(sql`
 		UPDATE ${outbox}
-		SET ${outbox.status} = CASE
+		SET "status" = CASE
 		      WHEN ${outbox.attempts} + 1 >= ${MAX_ATTEMPTS} THEN 'failed'
 		      ELSE 'pending'
 		    END,
-		    ${outbox.attempts} = ${outbox.attempts} + 1,
-		    ${outbox.claimedAt} = NULL
+		    "attempts" = ${outbox.attempts} + 1,
+		    "claimed_at" = NULL
 		WHERE ${outbox.status} = 'processing'
 		  AND ${outbox.claimedAt} < ${cutoff}
 		RETURNING 1 AS count
