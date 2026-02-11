@@ -6,7 +6,7 @@
  */
 
 import { type Logger, createLogger } from "@proliferate/logger";
-import { sessions, users } from "@proliferate/services";
+import { baseSnapshots, sessions, users } from "@proliferate/services";
 import type {
 	AutoStartOutputEntry,
 	PrebuildServiceCommand,
@@ -14,7 +14,8 @@ import type {
 	SandboxProviderType,
 	ServerMessage,
 } from "@proliferate/shared";
-import { getSandboxProvider } from "@proliferate/shared/providers";
+import { getModalAppName, getSandboxProvider } from "@proliferate/shared/providers";
+import { computeBaseSnapshotVersionKey } from "@proliferate/shared/sandbox";
 import { scheduleSessionExpiry } from "../expiry/expiry-queue";
 import type { GatewayEnv } from "../lib/env";
 import { waitForMigrationLockRelease } from "../lib/lock";
@@ -305,6 +306,34 @@ export class SessionRuntime {
 				}
 			}
 
+			// Resolve base snapshot from DB for Modal provider
+			let baseSnapshotId: string | undefined;
+			if (provider.type === "modal") {
+				try {
+					const versionKey = computeBaseSnapshotVersionKey();
+					const modalAppName = getModalAppName();
+					const dbSnapshotId = await baseSnapshots.getReadySnapshotId(
+						versionKey,
+						"modal",
+						modalAppName,
+					);
+					if (dbSnapshotId) {
+						baseSnapshotId = dbSnapshotId;
+						this.logger.info(
+							{ baseSnapshotId, versionKey: versionKey.slice(0, 12) },
+							"Base snapshot resolved from DB",
+						);
+					} else {
+						this.logger.debug(
+							{ versionKey: versionKey.slice(0, 12) },
+							"No ready base snapshot in DB, using env fallback",
+						);
+					}
+				} catch (err) {
+					this.logger.warn({ err }, "Failed to resolve base snapshot from DB (non-fatal)");
+				}
+			}
+
 			// Derive per-session sandbox-mcp auth token and merge into env vars
 			const sandboxMcpToken = deriveSandboxMcpToken(this.env.serviceToken, this.sessionId);
 			const envVarsWithToken = {
@@ -324,6 +353,7 @@ export class SessionRuntime {
 				envVars: envVarsWithToken,
 				systemPrompt: this.context.systemPrompt,
 				snapshotId: this.context.session.snapshot_id || undefined,
+				baseSnapshotId,
 				agentConfig: this.context.agentConfig,
 				currentSandboxId: this.context.session.sandbox_id || undefined,
 				sshPublicKey: this.context.sshPublicKey,
