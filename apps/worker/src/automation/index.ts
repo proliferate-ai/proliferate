@@ -17,7 +17,7 @@ import {
 } from "@proliferate/queue";
 import { notifications, outbox, runs, triggers } from "@proliferate/services";
 import type { Worker } from "bullmq";
-import { writeCompletionArtifact } from "./artifacts";
+import { writeCompletionArtifact, writeEnrichmentArtifact } from "./artifacts";
 import { type FinalizerDeps, finalizeOneRun } from "./finalizer";
 import { dispatchRunNotification } from "./notifications";
 
@@ -274,14 +274,20 @@ async function writeArtifacts(runId: string): Promise<void> {
 	if (!run) {
 		throw new Error("Run not found");
 	}
-	if (!run.completionJson) {
-		throw new Error("Run has no completion payload");
+
+	if (!run.completionJson && !run.enrichmentJson) {
+		throw new Error("Run has no artifact payload to write");
 	}
 
-	const completionKey = await writeCompletionArtifact(runId, run.completionJson);
-	await runs.updateRun(runId, {
-		completionArtifactRef: completionKey,
-	});
+	if (run.completionJson) {
+		const completionKey = await writeCompletionArtifact(runId, run.completionJson);
+		await runs.updateRun(runId, { completionArtifactRef: completionKey });
+	}
+
+	if (run.enrichmentJson) {
+		const enrichmentKey = await writeEnrichmentArtifact(runId, run.enrichmentJson);
+		await runs.updateRun(runId, { enrichmentArtifactRef: enrichmentKey });
+	}
 }
 
 function buildPrompt(instructions: string | null | undefined, runId: string): string {

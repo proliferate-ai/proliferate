@@ -259,6 +259,7 @@ export const AutomationRunSchema = z.object({
 	trigger: TriggerSummarySchema.nullable(),
 	session: SessionSummarySchema,
 	assignee: AssigneeSummarySchema,
+	enrichment_json: z.record(z.unknown()).nullable().optional(),
 });
 
 export type AutomationRun = z.infer<typeof AutomationRunSchema>;
