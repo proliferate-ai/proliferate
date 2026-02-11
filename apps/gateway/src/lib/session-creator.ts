@@ -446,7 +446,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		);
 		const mergedEnvVars = {
 			...baseEnvResult.envVars,
-			...integrationEnvVars,
+			...(process.env.ACTIONS_PLANE_ENABLED === "true" ? {} : integrationEnvVars),
 			...(sshOptions.envVars || {}),
 		};
 
@@ -659,7 +659,7 @@ async function loadEnvironmentVariables(
 
 	return {
 		...result.envVars,
-		...integrationEnvVars,
+		...(process.env.ACTIONS_PLANE_ENABLED === "true" ? {} : integrationEnvVars),
 	};
 }
 
