@@ -80,6 +80,13 @@ export class BundleNotFoundError extends Error {
 	}
 }
 
+export class BundleOrgMismatchError extends Error {
+	constructor() {
+		super("Bundle does not belong to this organization");
+		this.name = "BundleOrgMismatchError";
+	}
+}
+
 // ============================================
 // Secrets service functions
 // ============================================
@@ -105,6 +112,12 @@ export async function createSecret(input: CreateSecretInput): Promise<Secret> {
 		encryptedValue = encrypt(input.value, encryptionKey);
 	} catch (err) {
 		throw new EncryptionError("Encryption not configured");
+	}
+
+	// Validate bundle belongs to the same org
+	if (input.bundleId) {
+		const owned = await secretsDb.bundleBelongsToOrg(input.bundleId, input.organizationId);
+		if (!owned) throw new BundleOrgMismatchError();
 	}
 
 	try {
@@ -163,6 +176,11 @@ export async function updateSecretBundle(
 	orgId: string,
 	bundleId: string | null,
 ): Promise<boolean> {
+	// Validate bundle belongs to the same org
+	if (bundleId) {
+		const owned = await secretsDb.bundleBelongsToOrg(bundleId, orgId);
+		if (!owned) throw new BundleOrgMismatchError();
+	}
 	return secretsDb.updateSecretBundle(id, orgId, bundleId);
 }
 

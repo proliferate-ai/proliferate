@@ -9,6 +9,7 @@ vi.mock("./db", () => ({
 	getSecretsForSession: vi.fn(),
 	upsertByRepoAndKey: vi.fn(),
 	updateSecretBundle: vi.fn(),
+	bundleBelongsToOrg: vi.fn(),
 	listBundlesByOrganization: vi.fn(),
 	createBundle: vi.fn(),
 	updateBundle: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock("../db/crypto", () => ({
 import * as secretsDb from "./db";
 import {
 	BundleNotFoundError,
+	BundleOrgMismatchError,
 	DuplicateBundleError,
 	DuplicateSecretError,
 	checkSecrets,
@@ -44,6 +46,7 @@ const mockDb = secretsDb as unknown as {
 	findExistingKeys: ReturnType<typeof vi.fn>;
 	getSecretsForSession: ReturnType<typeof vi.fn>;
 	updateSecretBundle: ReturnType<typeof vi.fn>;
+	bundleBelongsToOrg: ReturnType<typeof vi.fn>;
 	listBundlesByOrganization: ReturnType<typeof vi.fn>;
 	createBundle: ReturnType<typeof vi.fn>;
 	updateBundle: ReturnType<typeof vi.fn>;
@@ -140,6 +143,7 @@ describe("secrets service", () => {
 		});
 
 		it("creates a secret with bundleId", async () => {
+			mockDb.bundleBelongsToOrg.mockResolvedValue(true);
 			mockDb.create.mockResolvedValue({
 				id: "s1",
 				key: "DB_PASSWORD",
@@ -159,12 +163,29 @@ describe("secrets service", () => {
 				bundleId: "bundle-1",
 			});
 
+			expect(mockDb.bundleBelongsToOrg).toHaveBeenCalledWith("bundle-1", "org-1");
 			expect(mockDb.create).toHaveBeenCalledWith(
 				expect.objectContaining({
 					bundleId: "bundle-1",
 				}),
 			);
 			expect(result.bundle_id).toBe("bundle-1");
+		});
+
+		it("rejects create with cross-org bundleId", async () => {
+			mockDb.bundleBelongsToOrg.mockResolvedValue(false);
+
+			await expect(
+				createSecret({
+					organizationId: "org-1",
+					userId: "user-1",
+					key: "LEAKED",
+					value: "val",
+					bundleId: "foreign-bundle",
+				}),
+			).rejects.toThrow(BundleOrgMismatchError);
+
+			expect(mockDb.create).not.toHaveBeenCalled();
 		});
 
 		it("throws DuplicateSecretError on unique constraint violation", async () => {
@@ -213,11 +234,13 @@ describe("secrets service", () => {
 
 	describe("updateSecretBundle", () => {
 		it("assigns a secret to a bundle", async () => {
+			mockDb.bundleBelongsToOrg.mockResolvedValue(true);
 			mockDb.updateSecretBundle.mockResolvedValue(true);
 
 			const result = await updateSecretBundle("s1", "org-1", "bundle-1");
 
 			expect(result).toBe(true);
+			expect(mockDb.bundleBelongsToOrg).toHaveBeenCalledWith("bundle-1", "org-1");
 			expect(mockDb.updateSecretBundle).toHaveBeenCalledWith("s1", "org-1", "bundle-1");
 		});
 
@@ -231,11 +254,31 @@ describe("secrets service", () => {
 		});
 
 		it("returns false when secret not found", async () => {
+			mockDb.bundleBelongsToOrg.mockResolvedValue(true);
 			mockDb.updateSecretBundle.mockResolvedValue(false);
 
 			const result = await updateSecretBundle("nonexistent", "org-1", "bundle-1");
 
 			expect(result).toBe(false);
+		});
+
+		it("rejects reassignment with cross-org bundleId", async () => {
+			mockDb.bundleBelongsToOrg.mockResolvedValue(false);
+
+			await expect(
+				updateSecretBundle("s1", "org-1", "foreign-bundle"),
+			).rejects.toThrow(BundleOrgMismatchError);
+
+			expect(mockDb.updateSecretBundle).not.toHaveBeenCalled();
+		});
+
+		it("skips ownership check when removing from bundle (null)", async () => {
+			mockDb.updateSecretBundle.mockResolvedValue(true);
+
+			const result = await updateSecretBundle("s1", "org-1", null);
+
+			expect(result).toBe(true);
+			expect(mockDb.bundleBelongsToOrg).not.toHaveBeenCalled();
 		});
 	});
 

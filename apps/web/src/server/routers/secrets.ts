@@ -59,6 +59,9 @@ export const secretsRouter = {
 				if (err instanceof secrets.EncryptionError) {
 					throw new ORPCError("INTERNAL_SERVER_ERROR", { message: err.message });
 				}
+				if (err instanceof secrets.BundleOrgMismatchError) {
+					throw new ORPCError("BAD_REQUEST", { message: err.message });
+				}
 				throw err;
 			}
 		}),
@@ -97,8 +100,15 @@ export const secretsRouter = {
 		.input(UpdateSecretBundleInputSchema)
 		.output(z.object({ updated: z.boolean() }))
 		.handler(async ({ input, context }) => {
-			const updated = await secrets.updateSecretBundle(input.id, context.orgId, input.bundleId);
-			return { updated };
+			try {
+				const updated = await secrets.updateSecretBundle(input.id, context.orgId, input.bundleId);
+				return { updated };
+			} catch (err) {
+				if (err instanceof secrets.BundleOrgMismatchError) {
+					throw new ORPCError("BAD_REQUEST", { message: err.message });
+				}
+				throw err;
+			}
 		}),
 
 	// ============================================

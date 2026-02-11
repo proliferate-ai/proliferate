@@ -236,6 +236,18 @@ export async function updateSecretBundle(
 	return rows.length > 0;
 }
 
+/**
+ * Check if a bundle belongs to the given organization.
+ */
+export async function bundleBelongsToOrg(bundleId: string, orgId: string): Promise<boolean> {
+	const db = getDb();
+	const row = await db.query.secretBundles.findFirst({
+		columns: { id: true },
+		where: and(eq(secretBundles.id, bundleId), eq(secretBundles.organizationId, orgId)),
+	});
+	return !!row;
+}
+
 // ============================================
 // Bundles Queries
 // ============================================

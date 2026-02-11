@@ -20,6 +20,7 @@ export {
 	DuplicateSecretError,
 	DuplicateBundleError,
 	BundleNotFoundError,
+	BundleOrgMismatchError,
 } from "./service";
 
 // DB functions needed by sessions-create and repos-finalize
