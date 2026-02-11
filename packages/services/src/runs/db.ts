@@ -30,6 +30,8 @@ export interface AutomationRunWithRelations extends AutomationRunRow {
 		notificationChannelId: string | null;
 		notificationSlackInstallationId: string | null;
 		enabledTools: unknown;
+		llmFilterPrompt: string | null;
+		llmAnalysisPrompt: string | null;
 	} | null;
 	triggerEvent: {
 		id: string;
@@ -71,6 +73,8 @@ export async function findByIdWithRelations(
 					notificationChannelId: true,
 					notificationSlackInstallationId: true,
 					enabledTools: true,
+					llmFilterPrompt: true,
+					llmAnalysisPrompt: true,
 				},
 			},
 			triggerEvent: {

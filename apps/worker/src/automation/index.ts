@@ -18,6 +18,7 @@ import {
 import { notifications, outbox, runs, triggers } from "@proliferate/services";
 import type { Worker } from "bullmq";
 import { writeCompletionArtifact, writeEnrichmentArtifact } from "./artifacts";
+import { EnrichmentError, buildEnrichmentPayload } from "./enrich";
 import { type FinalizerDeps, finalizeOneRun } from "./finalizer";
 import { dispatchRunNotification } from "./notifications";
 
@@ -82,26 +83,65 @@ export async function stopAutomationWorkers(workers: AutomationWorkers): Promise
 	await workers.executeWorker.close();
 }
 
-async function handleEnrich(runId: string): Promise<void> {
+export async function handleEnrich(runId: string): Promise<void> {
 	const workerId = `automation-enrich:${process.pid}`;
-	const run = await runs.claimRun(runId, ["queued"], workerId, LEASE_TTL_MS);
+	const run = await runs.claimRun(runId, ["queued", "enriching"], workerId, LEASE_TTL_MS);
 	if (!run) return;
 
-	await runs.transitionRunStatus(runId, "enriching", {
-		enrichmentStartedAt: new Date(),
-		lastActivityAt: new Date(),
-	});
+	if (run.status !== "enriching") {
+		await runs.transitionRunStatus(runId, "enriching", {
+			enrichmentStartedAt: new Date(),
+			lastActivityAt: new Date(),
+		});
+	}
 
-	await runs.transitionRunStatus(runId, "ready", {
-		enrichmentCompletedAt: new Date(),
-		lastActivityAt: new Date(),
-	});
+	const context = await runs.findRunWithRelations(runId);
+	if (!context?.triggerEvent || !context.trigger || !context.automation) {
+		await runs.markRunFailed({
+			runId,
+			reason: "missing_context",
+			stage: "enrichment",
+			errorMessage: "Missing automation, trigger, or trigger event context",
+		});
+		return;
+	}
 
-	await outbox.enqueueOutbox({
-		organizationId: run.organizationId,
-		kind: "enqueue_execute",
-		payload: { runId },
-	});
+	try {
+		const enrichment = buildEnrichmentPayload(context);
+
+		await runs.saveEnrichmentResult({
+			runId,
+			enrichmentPayload: enrichment as unknown as Record<string, unknown>,
+		});
+
+		await outbox.enqueueOutbox({
+			organizationId: run.organizationId,
+			kind: "write_artifacts",
+			payload: { runId },
+		});
+
+		await runs.transitionRunStatus(runId, "ready", {
+			enrichmentCompletedAt: new Date(),
+			lastActivityAt: new Date(),
+		});
+
+		await outbox.enqueueOutbox({
+			organizationId: run.organizationId,
+			kind: "enqueue_execute",
+			payload: { runId },
+		});
+	} catch (err) {
+		if (err instanceof EnrichmentError) {
+			await runs.markRunFailed({
+				runId,
+				reason: "enrichment_failed",
+				stage: "enrichment",
+				errorMessage: err.message,
+			});
+			return;
+		}
+		throw err;
+	}
 }
 
 async function handleExecute(runId: string, syncClient: SyncClient): Promise<void> {
