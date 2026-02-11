@@ -32,6 +32,7 @@ export interface AutomationRunWithRelations extends AutomationRunRow {
 		enabledTools: unknown;
 		llmFilterPrompt: string | null;
 		llmAnalysisPrompt: string | null;
+		allowAgenticRepoSelection: boolean | null;
 	} | null;
 	triggerEvent: {
 		id: string;
@@ -75,6 +76,7 @@ export async function findByIdWithRelations(
 					enabledTools: true,
 					llmFilterPrompt: true,
 					llmAnalysisPrompt: true,
+					allowAgenticRepoSelection: true,
 				},
 			},
 			triggerEvent: {

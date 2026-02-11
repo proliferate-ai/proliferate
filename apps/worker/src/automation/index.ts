@@ -21,6 +21,7 @@ import { writeCompletionArtifact, writeEnrichmentArtifact } from "./artifacts";
 import { EnrichmentError, buildEnrichmentPayload } from "./enrich";
 import { type FinalizerDeps, finalizeOneRun } from "./finalizer";
 import { dispatchRunNotification } from "./notifications";
+import { resolveTarget } from "./resolve-target";
 
 const LEASE_TTL_MS = 5 * 60 * 1000;
 const OUTBOX_POLL_INTERVAL_MS = 2000;
@@ -161,13 +162,31 @@ async function handleExecute(runId: string, syncClient: SyncClient): Promise<voi
 	}
 
 	const automation = context.automation;
-	const prebuildId = automation.defaultPrebuildId;
-	if (!prebuildId) {
+
+	const target = await resolveTarget({
+		automation: context.automation,
+		enrichmentJson: context.enrichmentJson,
+		organizationId: run.organizationId,
+	});
+
+	await runs.insertRunEvent(runId, "target_resolved", run.status, run.status, {
+		type: target.type,
+		reason: target.reason,
+		suggestedRepoId: target.suggestedRepoId ?? null,
+		prebuildId: target.prebuildId ?? null,
+		repoIds: target.repoIds ?? null,
+	});
+
+	const hasTarget =
+		(target.type === "selected" && (target.repoIds?.length || target.prebuildId)) ||
+		(target.type !== "selected" && target.prebuildId);
+
+	if (!hasTarget) {
 		await runs.markRunFailed({
 			runId,
 			reason: "missing_prebuild",
 			stage: "execution",
-			errorMessage: "Automation missing default prebuild",
+			errorMessage: "Automation missing default prebuild and no valid selection",
 		});
 		return;
 	}
@@ -179,29 +198,40 @@ async function handleExecute(runId: string, syncClient: SyncClient): Promise<voi
 
 	let sessionId = run.sessionId ?? null;
 	if (!sessionId) {
-		const session = await syncClient.createSession(
-			{
-				organizationId: run.organizationId,
-				prebuildId,
-				sessionType: "coding",
-				clientType: "automation",
-				sandboxMode: "immediate",
-				title: buildTitle(automation.name, context.triggerEvent.parsedContext),
+		const sessionRequest: Parameters<typeof syncClient.createSession>[0] = {
+			organizationId: run.organizationId,
+			sessionType: "coding",
+			clientType: "automation",
+			sandboxMode: "immediate",
+			title: buildTitle(automation.name, context.triggerEvent.parsedContext),
+			automationId: automation.id,
+			triggerId: context.trigger?.id,
+			triggerEventId: context.triggerEvent.id,
+			triggerContext: context.triggerEvent.parsedContext as Record<string, unknown>,
+			agentConfig: automation.modelId ? { modelId: automation.modelId } : undefined,
+			clientMetadata: {
 				automationId: automation.id,
 				triggerId: context.trigger?.id,
 				triggerEventId: context.triggerEvent.id,
-				triggerContext: context.triggerEvent.parsedContext as Record<string, unknown>,
-				agentConfig: automation.modelId ? { modelId: automation.modelId } : undefined,
-				clientMetadata: {
-					automationId: automation.id,
-					triggerId: context.trigger?.id,
-					triggerEventId: context.triggerEvent.id,
-					provider: context.trigger?.provider,
-					context: context.triggerEvent.parsedContext,
+				provider: context.trigger?.provider,
+				context: context.triggerEvent.parsedContext,
+				targetResolution: {
+					type: target.type,
+					reason: target.reason,
+					suggestedRepoId: target.suggestedRepoId,
 				},
 			},
-			{ idempotencyKey: `run:${runId}:session` },
-		);
+		};
+
+		if (target.type === "selected" && target.repoIds) {
+			sessionRequest.managedPrebuild = { repoIds: target.repoIds };
+		} else {
+			sessionRequest.prebuildId = target.prebuildId;
+		}
+
+		const session = await syncClient.createSession(sessionRequest, {
+			idempotencyKey: `run:${runId}:session`,
+		});
 
 		sessionId = session.sessionId;
 		await runs.updateRun(runId, {
