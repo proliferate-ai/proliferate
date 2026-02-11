@@ -57,17 +57,22 @@ This creates `.env` from `.env.example` and auto-generates local secrets.
 
 ### 2) Create a GitHub App
 
-Use the prefilled app link:
+Each self-hosted instance needs its own GitHub App to access repos, create branches, and open PRs.
+
+Create one using the same prefilled links:
 
 - Personal account: [Create GitHub App](https://github.com/settings/apps/new?name=proliferate-self-host&description=Proliferate+self-hosted+GitHub+App&url=http%3A%2F%2Flocalhost%3A3000&public=false&setup_url=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fintegrations%2Fgithub%2Fcallback&setup_on_update=true&metadata=read&contents=write&pull_requests=write&issues=read&webhook_active=false)
-- Organization app: create it from your org settings at `https://github.com/organizations/<your-org>/settings/apps/new`
+- Organization: [Create GitHub App for org](https://github.com/organizations/YOUR_ORG/settings/apps/new?name=proliferate-self-host&description=Proliferate+self-hosted+GitHub+App&url=http%3A%2F%2Flocalhost%3A3000&public=false&setup_url=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fintegrations%2Fgithub%2Fcallback&setup_on_update=true&metadata=read&contents=write&pull_requests=write&issues=read&webhook_active=false) (replace `YOUR_ORG` in the URL)
 
-Then set these values in `.env`:
+After creating the app, generate a private key and add these to `.env`:
 
 ```bash
+# IMPORTANT: The slug must match your GitHub App's URL name exactly.
+# If you used the prefilled link above, the slug is "proliferate-self-host".
+# Find it at: https://github.com/settings/apps -> your app -> the URL shows /apps/<slug>
 NEXT_PUBLIC_GITHUB_APP_SLUG=proliferate-self-host
-GITHUB_APP_ID=123456
-GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA..."
+GITHUB_APP_ID=123456                                 # From the app's General page
+GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA..."           # PEM contents (\\n sequences supported)
 GITHUB_APP_WEBHOOK_SECRET=any-random-string
 ```
 
@@ -81,23 +86,31 @@ docker compose up -d --build web
 
 Option A (default): **Modal**
 
+1. Create a [Modal](https://modal.com) account and generate an API token from [modal.com/settings](https://modal.com/settings)
+2. Install the Modal CLI and authenticate:
+
 ```bash
 pip install modal
 modal setup
+```
+
+3. Deploy the sandbox image (the suffix must match `MODAL_APP_SUFFIX` in your `.env`; default is `local`):
+
+```bash
 cd packages/modal-sandbox
 MODAL_APP_SUFFIX=local modal deploy deploy.py
 cd ../..
 ```
 
-Set in `.env`:
+4. Set in `.env`:
 
 ```bash
 DEFAULT_SANDBOX_PROVIDER=modal
-MODAL_TOKEN_ID=ak-...
-MODAL_TOKEN_SECRET=as-...
+MODAL_TOKEN_ID=ak-...              # From your Modal token
+MODAL_TOKEN_SECRET=as-...          # From your Modal token
 MODAL_APP_NAME=proliferate-sandbox
-MODAL_APP_SUFFIX=local
-ANTHROPIC_API_KEY=sk-ant-...
+MODAL_APP_SUFFIX=local             # Must match the suffix used during deploy
+ANTHROPIC_API_KEY=sk-ant-...       # From console.anthropic.com
 ```
 
 Modal setup guide: [docs.proliferate.com/self-hosting/modal-setup](https://docs.proliferate.com/self-hosting/modal-setup)
