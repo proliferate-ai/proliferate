@@ -328,11 +328,15 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			const session = await requireSessionOrgAccess(req.proliferateSessionId!, auth.orgId);
 
 			// Approve the invocation (checks status + org + expiry)
-			const invocation = await actions.approveAction(
-				invocationId,
-				session.organizationId,
-				auth.userId,
-			);
+			let invocation: Awaited<ReturnType<typeof actions.approveAction>>;
+			try {
+				invocation = await actions.approveAction(invocationId, session.organizationId, auth.userId);
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				if (msg.includes("not found")) throw new ApiError(404, msg);
+				if (msg.includes("expired")) throw new ApiError(410, msg);
+				throw new ApiError(409, msg);
+			}
 
 			// Execute the action immediately after approval
 			const startMs = Date.now();
@@ -416,11 +420,14 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			const { invocationId } = req.params;
 			const session = await requireSessionOrgAccess(req.proliferateSessionId!, auth.orgId);
 
-			const invocation = await actions.denyAction(
-				invocationId,
-				session.organizationId,
-				auth.userId,
-			);
+			let invocation: Awaited<ReturnType<typeof actions.denyAction>>;
+			try {
+				invocation = await actions.denyAction(invocationId, session.organizationId, auth.userId);
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				if (msg.includes("not found")) throw new ApiError(404, msg);
+				throw new ApiError(409, msg);
+			}
 
 			// Broadcast denial
 			const hub = await tryGetHub(req.proliferateSessionId!);

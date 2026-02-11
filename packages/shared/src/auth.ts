@@ -3,6 +3,7 @@ import { type JWTPayload, SignJWT, jwtVerify } from "jose";
 export interface TokenPayload extends JWTPayload {
 	sub: string;
 	email?: string;
+	orgId?: string;
 	role?: string;
 	service?: boolean;
 }

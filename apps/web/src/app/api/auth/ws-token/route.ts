@@ -27,10 +27,11 @@ export async function GET() {
 
 	const userId = authResult.session.user.id;
 	const email = authResult.session.user.email || undefined;
+	const orgId = authResult.session.session.activeOrganizationId || undefined;
 
 	// Generate JWT that matches sandbox lifetime (1 hour)
 	// This ensures the token doesn't expire before the sandbox does
-	const token = await new SignJWT({ sub: userId, email })
+	const token = await new SignJWT({ sub: userId, email, orgId })
 		.setProtectedHeader({ alg: "HS256" })
 		.setIssuedAt()
 		.setExpirationTime(TOKEN_LIFETIME)

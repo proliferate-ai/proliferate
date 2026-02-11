@@ -1,6 +1,6 @@
 CREATE TABLE "action_invocations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"session_id" text NOT NULL,
+	"session_id" uuid NOT NULL,
 	"organization_id" text NOT NULL,
 	"integration_id" uuid,
 	"integration" text NOT NULL,
@@ -21,6 +21,6 @@ CREATE TABLE "action_invocations" (
 ALTER TABLE "action_invocations" ADD CONSTRAINT "action_invocations_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "action_invocations" ADD CONSTRAINT "action_invocations_integration_id_fkey" FOREIGN KEY ("integration_id") REFERENCES "public"."integrations"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "action_invocations" ADD CONSTRAINT "action_invocations_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "idx_action_invocations_session" ON "action_invocations" USING btree ("session_id" text_ops);--> statement-breakpoint
+CREATE INDEX "idx_action_invocations_session" ON "action_invocations" USING btree ("session_id" uuid_ops);--> statement-breakpoint
 CREATE INDEX "idx_action_invocations_org_created" ON "action_invocations" USING btree ("organization_id" text_ops,"created_at" timestamptz_ops);--> statement-breakpoint
 CREATE INDEX "idx_action_invocations_status_expires" ON "action_invocations" USING btree ("status" text_ops,"expires_at" timestamptz_ops);
