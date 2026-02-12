@@ -4,6 +4,7 @@
 
 ## Core Philosophy
 
+- **Spec-first**: Read the relevant system spec before changing any subsystem. Update the spec in the same PR if behavior changes. See **Specs** section below.
 - **Minimal and elegant**: Less code is better. Every line should earn its place.
 - **Reads like English**: Code should be self-explanatory through explicit naming.
 - **Follow existing patterns**: Never duplicate functionality. Find and extend what exists.
@@ -36,6 +37,7 @@ PostgreSQL: metadata persistence only (not in streaming path)
 ```
 apps/                 # web, gateway, worker, llm-proxy, trigger-service
 packages/             # shared, services, db, gateway-clients, environment, cli, modal-sandbox
+docs/specs/           # system specs (authoritative subsystem docs)
 charts/               # Helm chart
 infra/                # pulumi-k8s (EKS), pulumi-k8s-gcp (GKE), legacy ECS
 scripts/              # one-off scripts
@@ -152,6 +154,39 @@ Run `make` or `make help` for the full list. Common targets:
 - On merge conflicts: summarize each conflict before choosing a resolution.
 - Before committing: `pnpm typecheck`, `pnpm lint`, `pnpm test` (where applicable), `pnpm build`.
 
+## Specs (Mandatory — Read Before Coding)
+
+System specs in `docs/specs/` are the **single source of truth** for how each subsystem works. Every agent **must** read the relevant spec before making changes and update it in the same PR if behavior changes.
+
+**Workflow:**
+1. **Find your spec.** Use the table below or see `docs/specs/boundary-brief.md` §1 for the full registry.
+2. **Read it.** Understand ownership boundaries, invariants, state machines, and conventions (§1-§5).
+3. **Code.** Follow the patterns and constraints documented in the spec.
+4. **Update the spec in the same PR** if your change affects: file tree (§3), data models (§4), deep dives (§6), cross-cutting deps (§7), or known limitations (§9).
+5. **Update `docs/specs/feature-registry.md`** if you add, remove, or change the status of a feature.
+
+**Which spec to read:**
+
+| If you're working on... | Read this spec |
+|------------------------|---------------|
+| Session create/pause/resume/delete, WebSocket streaming, gateway hub, migration, preview URLs, port forwarding | `sessions-gateway.md` |
+| Modal or E2B providers, sandbox boot, sandbox-mcp, terminal, service manager, snapshot resolution, git freshness | `sandbox-providers.md` |
+| System prompts, OpenCode tools (verify, save_snapshot, etc.), capability injection, intercepted tools | `agent-contract.md` |
+| Automation definitions, run pipeline (enrich/execute/finalize), outbox, Slack client, notifications, artifacts | `automations-runs.md` |
+| Trigger service, webhooks, polling, cron, trigger providers (GitHub/Linear/Sentry/PostHog) | `triggers.md` |
+| Action invocations, approval flow, grants, risk classification, Linear/Sentry adapters | `actions.md` |
+| LiteLLM virtual keys, model routing, per-org spend tracking | `llm-proxy.md` |
+| CLI device auth, file sync, OpenCode launch, CLI API routes | `cli.md` |
+| Repo CRUD, prebuild configs, base/repo snapshot builds, service commands, env file persistence | `repos-prebuilds.md` |
+| Secret CRUD, bundles, encryption, env file deployment | `secrets-environment.md` |
+| OAuth connections (GitHub/Sentry/Linear/Slack), Nango, connection binding | `integrations.md` |
+| User auth, orgs, members, invitations, onboarding, admin, API keys | `auth-orgs.md` |
+| Billing, metering, credit gating, trial credits, org pause, Autumn | `billing-metering.md` |
+
+**Key files:**
+- `docs/specs/boundary-brief.md` — canonical glossary, boundary rules between specs, cross-reference rules
+- `docs/specs/feature-registry.md` — every feature with implementation status and file evidence
+
 ## Architecture Decisions
 
 Ask before:
@@ -161,7 +196,7 @@ Ask before:
 
 ## Documentation
 
-Do not update docs unless explicitly asked.
+Do not update docs unless explicitly asked. **Exception:** spec files in `docs/specs/` must be updated when behavior changes (see Specs section above).
 
 ## Database Notes (Condensed)
 
