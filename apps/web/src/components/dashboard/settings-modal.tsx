@@ -22,6 +22,7 @@ import { env } from "@proliferate/environment/public";
 import { useQueryClient } from "@tanstack/react-query";
 import { Building2, FolderGit2, Key, Link, SlidersHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 type SettingsTab = "repositories" | "connections" | "secrets" | "organization" | "configuration";
 
@@ -79,19 +80,30 @@ export function SettingsModal({
 	// Combined connect/disconnect functions that route to the correct handler
 	// Uses shouldUseNangoForProvider to determine which flow to use for GitHub
 	const connect = async (provider: Provider) => {
-		if (shouldUseNangoForProvider(provider)) {
-			await nangoConnect(provider as NangoProvider);
-		} else {
+		if (provider === "github") {
+			if (shouldUseNangoForProvider("github")) {
+				await nangoConnect("github" as NangoProvider);
+				return;
+			}
 			await githubConnect();
+			return;
 		}
+
+		if (!shouldUseNangoForProvider(provider)) {
+			toast.error("Integrations are disabled. Configure Nango to connect this provider.");
+			return;
+		}
+
+		await nangoConnect(provider as NangoProvider);
 	};
 
 	const disconnect = async (provider: Provider, integrationId: string) => {
-		if (shouldUseNangoForProvider(provider)) {
-			await nangoDisconnect(provider as NangoProvider, integrationId);
-		} else {
+		if (provider === "github") {
 			await githubDisconnect(integrationId);
+			return;
 		}
+
+		await nangoDisconnect(provider as NangoProvider, integrationId);
 	};
 
 	const loadingProvider: Provider | null = githubLoading ? "github" : nangoLoadingProvider;
