@@ -141,6 +141,7 @@ interface CreateSandboxOpts {
   snapshotHasDeps?: boolean;   // Gates service command auto-start
   serviceCommands?: PrebuildServiceCommand[];
   envFiles?: unknown;          // Env file generation spec
+  sessionType?: "coding" | "setup" | "cli" | null;  // Controls tool injection
 }
 
 interface CreateSandboxResult {
@@ -352,8 +353,8 @@ throw SandboxProviderError.fromError(error, "modal", "createSandbox");
 **What it does:** Both providers follow the same two-phase boot sequence after sandbox creation.
 
 **Phase 1 — Essential (blocking):**
-1. Clone repos (or read metadata from snapshot) — `setupSandbox()`.
-2. Write config files in parallel: plugin, 6 tool pairs (.ts + .txt), OpenCode config (global + local), instructions.md, actions-guide.md, pre-installed tool deps.
+1. Clone repos (or read metadata from snapshot) — `setupSandbox()`. For scratch sessions (`repos: []`), cloning is skipped and the workspace defaults to `/workspace/`.
+2. Write config files in parallel: plugin, tool pairs (.ts + .txt), OpenCode config (global + local), instructions.md, actions-guide.md, pre-installed tool deps. **Setup-only tools** (`save_service_commands`, `save_env_files`) are only written when `opts.sessionType === "setup"` — coding/CLI sessions never see them.
 3. **Modal only:** Write SSH keys if CLI session (`modal-libmodal.ts:1062`), write trigger context if automation-triggered (`modal-libmodal.ts:1071`). E2B does not handle SSH or trigger context.
 4. Start OpenCode server (`opencode serve --port 4096`).
 

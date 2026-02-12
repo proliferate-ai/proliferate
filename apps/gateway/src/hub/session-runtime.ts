@@ -346,6 +346,7 @@ export class SessionRuntime {
 			const ensureSandboxStartMs = Date.now();
 			const result = await provider.ensureSandbox({
 				sessionId: this.sessionId,
+				sessionType: this.context.session.session_type as "coding" | "setup" | "cli" | null,
 				userName,
 				userEmail,
 				repos: this.context.repos,

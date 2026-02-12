@@ -288,6 +288,7 @@ export async function createSession(
 			sessionId,
 			prebuildId,
 			organizationId,
+			sessionType,
 			userId,
 			snapshotId,
 			agentConfig,
@@ -359,6 +360,7 @@ interface CreateSandboxParams {
 	sessionId: string;
 	prebuildId: string;
 	organizationId: string;
+	sessionType: SessionType;
 	userId?: string;
 	snapshotId?: string | null;
 	agentConfig?: { modelId?: string };
@@ -389,6 +391,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		sessionId,
 		prebuildId,
 		organizationId,
+		sessionType,
 		userId,
 		snapshotId,
 		agentConfig,
@@ -494,6 +497,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		const providerStartMs = Date.now();
 		const result = await provider.createSandbox({
 			sessionId,
+			sessionType,
 			userName,
 			userEmail,
 			repos: [],
@@ -647,6 +651,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	const providerStartMs = Date.now();
 	const result = await provider.createSandbox({
 		sessionId,
+		sessionType,
 		userName,
 		userEmail,
 		repos: repoSpecs,

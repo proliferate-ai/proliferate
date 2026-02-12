@@ -55,7 +55,7 @@ export function useCreateSession() {
 				status: "starting",
 				sandboxId: result.sandboxId ?? null,
 				snapshotId: null,
-				prebuildId: variables.prebuildId,
+				prebuildId: variables.prebuildId ?? null,
 				branchName: null,
 				parentSessionId: null,
 				title: null,

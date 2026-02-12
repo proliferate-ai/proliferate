@@ -98,6 +98,15 @@ export default function OnboardingPage() {
 		}
 	};
 
+	const handleSkipGitHub = () => {
+		// GitHub is optional; continue onboarding to billing/complete.
+		if (billingEnabled) {
+			setStep("payment");
+		} else {
+			setStep("complete");
+		}
+	};
+
 	const handlePaymentComplete = () => {
 		refetch();
 		setStep("complete");
@@ -136,6 +145,7 @@ export default function OnboardingPage() {
 			{step === "github" && (
 				<StepGitHubConnect
 					onComplete={handleGitHubConnected}
+					onSkip={handleSkipGitHub}
 					hasGitHubConnection={hasGitHubConnection}
 				/>
 			)}

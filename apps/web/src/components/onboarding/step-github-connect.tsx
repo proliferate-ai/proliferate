@@ -7,10 +7,15 @@ import { env } from "@proliferate/environment/public";
 
 interface StepGitHubConnectProps {
 	onComplete: () => void;
+	onSkip?: () => void;
 	hasGitHubConnection?: boolean;
 }
 
-export function StepGitHubConnect({ onComplete, hasGitHubConnection }: StepGitHubConnectProps) {
+export function StepGitHubConnect({
+	onComplete,
+	onSkip,
+	hasGitHubConnection,
+}: StepGitHubConnectProps) {
 	const githubAppSlug = env.NEXT_PUBLIC_GITHUB_APP_SLUG;
 	const hasPlaceholderSlug =
 		!githubAppSlug || githubAppSlug === "local" || githubAppSlug === "proliferate-local-dev";
@@ -110,6 +115,16 @@ export function StepGitHubConnect({ onComplete, hasGitHubConnection }: StepGitHu
 						includeIcon={false}
 						disabled={hasPlaceholderSlug}
 					/>
+
+					{onSkip && (
+						<Button
+							variant="ghost"
+							onClick={onSkip}
+							className="w-full mt-2 text-sm text-muted-foreground hover:text-foreground"
+						>
+							Skip for now
+						</Button>
+					)}
 				</div>
 			</div>
 		</div>

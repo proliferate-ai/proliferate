@@ -5,7 +5,7 @@ import { BillingBanner } from "@/components/dashboard/billing-banner";
 import { CommandSearch } from "@/components/dashboard/command-search";
 import { MobileSidebar, MobileSidebarTrigger, Sidebar } from "@/components/dashboard/sidebar";
 import { Button } from "@/components/ui/button";
-import { useOnboarding } from "@/hooks/use-onboarding";
+import { useBilling } from "@/hooks/use-billing";
 import { useSession } from "@/lib/auth-client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { env } from "@proliferate/environment/public";
@@ -20,8 +20,10 @@ export default function DashboardLayout({
 }) {
 	const router = useRouter();
 	const { data: session, isPending: authPending } = useSession();
-	const { data: onboarding, isLoading: onboardingLoading } = useOnboarding();
+	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
+	const { data: billingInfo, isLoading: billingLoading } = useBilling();
 	const { commandSearchOpen, setCommandSearchOpen } = useDashboardStore();
+	const needsOnboarding = billingEnabled && billingInfo?.state.billingState === "unconfigured";
 
 	// Cmd+K keyboard shortcut for search
 	useEffect(() => {
@@ -51,15 +53,15 @@ export default function DashboardLayout({
 		}
 	}, [session, authPending, router, requireEmailVerification]);
 
-	// Redirect to onboarding if not complete
+	// Keep onboarding/billing progression required, while allowing GitHub to be optional.
 	useEffect(() => {
-		if (!onboardingLoading && onboarding && !onboarding.hasGitHubConnection) {
+		if (!authPending && session && !billingLoading && needsOnboarding) {
 			router.push("/onboarding");
 		}
-	}, [onboarding, onboardingLoading, router]);
+	}, [authPending, session, billingLoading, needsOnboarding, router]);
 
-	// Wait for both auth AND onboarding to load before rendering anything
-	if (authPending || onboardingLoading) {
+	// Wait for required gate checks before rendering anything
+	if (authPending || (billingEnabled && billingLoading)) {
 		return <div className="min-h-screen bg-background" />;
 	}
 
@@ -67,8 +69,8 @@ export default function DashboardLayout({
 		return null;
 	}
 
-	// Don't render dashboard shell if user needs onboarding
-	if (!onboarding?.hasGitHubConnection) {
+	// Redirect in effect above; keep shell hidden while routing.
+	if (needsOnboarding) {
 		return null;
 	}
 

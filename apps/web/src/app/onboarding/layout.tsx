@@ -1,11 +1,10 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useOnboarding } from "@/hooks/use-onboarding";
 import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useOnboardingStore } from "@/stores/onboarding";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Suspense, useEffect } from "react";
 
 interface OnboardingLayoutProps {
@@ -50,16 +49,10 @@ function StepIndicator({
 
 function OnboardingLayoutInner({ children }: OnboardingLayoutProps) {
 	const router = useRouter();
-	const searchParams = useSearchParams();
 	const { data: session, isPending: authPending } = useSession();
-	const { data: onboarding, isLoading: onboardingLoading } = useOnboarding();
 	const step = useOnboardingStore((state) => state.step);
 	const flowType = useOnboardingStore((state) => state.flowType);
 	const setStep = useOnboardingStore((state) => state.setStep);
-
-	// Check if we're returning from a successful OAuth flow
-	const isReturningFromOAuth =
-		searchParams.get("success") === "github" || searchParams.get("success") === "slack";
 
 	// Redirect to sign-in if not authenticated
 	useEffect(() => {
@@ -68,35 +61,12 @@ function OnboardingLayoutInner({ children }: OnboardingLayoutProps) {
 		}
 	}, [session, authPending, router]);
 
-	// Redirect to dashboard if onboarding is already complete (except for payment/complete steps or OAuth return)
-	useEffect(() => {
-		if (
-			!onboardingLoading &&
-			onboarding?.hasGitHubConnection &&
-			step !== "payment" &&
-			step !== "complete" &&
-			!isReturningFromOAuth
-		) {
-			router.push("/dashboard");
-		}
-	}, [onboarding, onboardingLoading, router, step, isReturningFromOAuth]);
-
-	// Wait for both auth AND onboarding to load before rendering anything
-	if (authPending || onboardingLoading) {
+	// Wait for auth to load before rendering anything
+	if (authPending) {
 		return <div className="min-h-screen bg-background dark:bg-neutral-950" />;
 	}
 
 	if (!session) {
-		return null;
-	}
-
-	// Don't render onboarding shell if user is already complete (except for payment/complete steps or OAuth return)
-	if (
-		onboarding?.hasGitHubConnection &&
-		step !== "payment" &&
-		step !== "complete" &&
-		!isReturningFromOAuth
-	) {
 		return null;
 	}
 

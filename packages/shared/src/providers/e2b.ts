@@ -222,9 +222,6 @@ export class E2BProvider implements SandboxProvider {
 		if (!isSnapshot) {
 			// Create fresh sandbox
 			log.debug("Creating fresh sandbox (no snapshot)");
-			if (!opts.repos || opts.repos.length === 0) {
-				throw new Error("repos[] is required");
-			}
 			if (!E2B_TEMPLATE) {
 				throw new Error("E2B_TEMPLATE is required to create a sandbox");
 			}
@@ -465,15 +462,27 @@ export class E2BProvider implements SandboxProvider {
 			}
 		}
 
-		// Fresh sandbox: clone repositories
-		log.info({ repoCount: opts.repos.length }, "Setting up workspace");
+		// Fresh sandbox: clone repositories (or just set up workspace for scratch sessions)
+		const repos = opts.repos ?? [];
+		log.info({ repoCount: repos.length }, "Setting up workspace");
 		await sandbox.commands.run(`mkdir -p ${workspaceDir}`, {
 			timeoutMs: 10000,
 		});
 
+		if (repos.length === 0) {
+			log.info("Scratch session — no repos to clone");
+			const metadata: SessionMetadata = {
+				sessionId: opts.sessionId,
+				repoDir: workspaceDir,
+				createdAt: Date.now(),
+			};
+			await sandbox.files.write(SANDBOX_PATHS.metadataFile, JSON.stringify(metadata));
+			return workspaceDir;
+		}
+
 		// Write git credentials file for per-repo auth (used by git-credential-proliferate helper)
 		const gitCredentials: Record<string, string> = {};
-		for (const repo of opts.repos) {
+		for (const repo of repos) {
 			if (repo.token) {
 				// Store both with and without .git suffix for flexibility
 				gitCredentials[repo.repoUrl] = repo.token;
@@ -481,14 +490,14 @@ export class E2BProvider implements SandboxProvider {
 			}
 		}
 		if (Object.keys(gitCredentials).length > 0) {
-			log.debug({ repoCount: opts.repos.length }, "Writing git credentials");
+			log.debug({ repoCount: repos.length }, "Writing git credentials");
 			await sandbox.files.write("/tmp/.git-credentials.json", JSON.stringify(gitCredentials));
 		}
 
 		// Clone each repo
 		let firstRepoDir: string | null = null;
-		for (let i = 0; i < opts.repos.length; i++) {
-			const repo = opts.repos[i];
+		for (let i = 0; i < repos.length; i++) {
+			const repo = repos[i];
 			const targetDir = `${workspaceDir}/${repo.workspacePath}`;
 			if (firstRepoDir === null) {
 				firstRepoDir = targetDir;
@@ -506,7 +515,7 @@ export class E2BProvider implements SandboxProvider {
 					repoUrl: repo.repoUrl,
 					hasToken: Boolean(repo.token),
 					index: i + 1,
-					total: opts.repos.length,
+					total: repos.length,
 					targetDir,
 				},
 				"Cloning repo",
@@ -544,8 +553,8 @@ export class E2BProvider implements SandboxProvider {
 		}
 
 		// Set repoDir (first repo for single, workspace root for multi)
-		const repoDir = opts.repos.length > 1 ? workspaceDir : firstRepoDir || workspaceDir;
-		log.info({ repoDir, repoCount: opts.repos.length }, "All repositories cloned");
+		const repoDir = repos.length > 1 ? workspaceDir : firstRepoDir || workspaceDir;
+		log.info({ repoDir, repoCount: repos.length }, "All repositories cloned");
 
 		// Save session metadata for robust state tracking across pause/resume
 		const metadata: SessionMetadata = {
@@ -603,10 +612,11 @@ export class E2BProvider implements SandboxProvider {
 
 		// Write all files in parallel (each write ensures its directory exists)
 		log.debug("Writing OpenCode files (parallel)");
-		await Promise.all([
+		const isSetupSession = opts.sessionType === "setup";
+		const writePromises = [
 			// Plugin
 			writeFile(`${globalPluginDir}/proliferate.mjs`, PLUGIN_MJS),
-			// Tools (6 files)
+			// Core tools (available in all session modes)
 			writeFile(`${localToolDir}/verify.ts`, VERIFY_TOOL),
 			writeFile(`${localToolDir}/verify.txt`, VERIFY_TOOL_DESCRIPTION),
 			writeFile(`${localToolDir}/request_env_variables.ts`, REQUEST_ENV_VARIABLES_TOOL),
@@ -615,10 +625,6 @@ export class E2BProvider implements SandboxProvider {
 			writeFile(`${localToolDir}/save_snapshot.txt`, SAVE_SNAPSHOT_DESCRIPTION),
 			writeFile(`${localToolDir}/automation_complete.ts`, AUTOMATION_COMPLETE_TOOL),
 			writeFile(`${localToolDir}/automation_complete.txt`, AUTOMATION_COMPLETE_DESCRIPTION),
-			writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
-			writeFile(`${localToolDir}/save_service_commands.txt`, SAVE_SERVICE_COMMANDS_DESCRIPTION),
-			writeFile(`${localToolDir}/save_env_files.ts`, SAVE_ENV_FILES_TOOL),
-			writeFile(`${localToolDir}/save_env_files.txt`, SAVE_ENV_FILES_DESCRIPTION),
 			// Config (2 files)
 			writeFile(`${globalOpencodeDir}/opencode.json`, opencodeConfig),
 			writeFile(`${repoDir}/opencode.json`, opencodeConfig),
@@ -635,7 +641,29 @@ export class E2BProvider implements SandboxProvider {
 					{ timeoutMs: 30000 },
 				);
 			})(),
-		]);
+		];
+
+		if (isSetupSession) {
+			// Setup-only tools persist prebuild configuration.
+			writePromises.push(
+				writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
+				writeFile(`${localToolDir}/save_service_commands.txt`, SAVE_SERVICE_COMMANDS_DESCRIPTION),
+				writeFile(`${localToolDir}/save_env_files.ts`, SAVE_ENV_FILES_TOOL),
+				writeFile(`${localToolDir}/save_env_files.txt`, SAVE_ENV_FILES_DESCRIPTION),
+			);
+		} else {
+			// Ensure setup-only tools are removed when restoring from setup snapshots.
+			writePromises.push(
+				(async () => {
+					await sandbox.commands.run(
+						`rm -f ${localToolDir}/save_service_commands.ts ${localToolDir}/save_service_commands.txt ${localToolDir}/save_env_files.ts ${localToolDir}/save_env_files.txt`,
+						{ timeoutMs: 10000 },
+					);
+				})(),
+			);
+		}
+
+		await Promise.all(writePromises);
 
 		// Start OpenCode server in background
 		log.debug("Starting OpenCode server");

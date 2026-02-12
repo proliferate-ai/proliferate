@@ -14,7 +14,7 @@ import { usePrebuilds } from "@/hooks/use-prebuilds";
 import { useRepos } from "@/hooks/use-repos";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
-import { Check, Layers, Plus } from "lucide-react";
+import { Check, Layers, Plus, Terminal } from "lucide-react";
 import { useState } from "react";
 import { CreateSnapshotContent } from "./snapshot-selector";
 
@@ -36,11 +36,12 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 	// Find display name for the trigger
 	const selectedRepo = allRepos.find((r) => r.id === selectedRepoId);
 	const selectedConfig = multiRepoConfigs.find((c) => c.id === selectedSnapshotId);
+	const hasSelection = Boolean(selectedRepo || selectedConfig);
 	const triggerLabel = selectedRepo
 		? selectedRepo.githubRepoName
 		: selectedConfig
 			? (selectedConfig.name ?? "Untitled")
-			: "Select environment";
+			: "General assistant";
 
 	const selectRepo = (repo: (typeof allRepos)[0]) => {
 		setSelectedRepo(repo.id);
@@ -61,12 +62,35 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 			<Popover open={open} onOpenChange={setOpen}>
 				<PopoverTrigger asChild>
 					<Button variant="ghost" size="sm" className="h-8 gap-2 font-normal" disabled={disabled}>
-						<GithubIcon className="h-4 w-4" />
+						{hasSelection ? <GithubIcon className="h-4 w-4" /> : <Terminal className="h-4 w-4" />}
 						<span className="truncate max-w-[200px]">{triggerLabel}</span>
 					</Button>
 				</PopoverTrigger>
 				<PopoverContent className="w-56 p-0" align="start">
 					<div className="py-1">
+						{/* Scratch / General assistant option */}
+						<Button
+							variant="ghost"
+							className={cn(
+								"w-full h-auto flex items-center justify-start gap-2 px-3 py-2 text-sm font-normal rounded-none",
+								!hasSelection && "bg-primary/10",
+							)}
+							onClick={() => {
+								setSelectedRepo(null);
+								setSelectedSnapshot(null);
+								setOpen(false);
+							}}
+						>
+							{!hasSelection ? (
+								<Check className="h-4 w-4 text-primary shrink-0" />
+							) : (
+								<Terminal className="h-4 w-4 shrink-0" />
+							)}
+							<span>General assistant</span>
+						</Button>
+
+						{allRepos.length > 0 && <div className="h-px bg-border mx-3 my-1" />}
+
 						{allRepos.map((repo) => {
 							const isSelected = repo.id === selectedRepoId;
 							return (
@@ -85,11 +109,9 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 										<GithubIcon className="h-4 w-4 shrink-0" />
 									)}
 									<span className="truncate">{repo.githubRepoName}</span>
-									{repo.prebuildStatus === "ready" && (
-										<span className="text-muted-foreground text-xs ml-auto shrink-0">
-											Configured
-										</span>
-									)}
+									<span className="text-muted-foreground text-xs ml-auto shrink-0">
+										{repo.prebuildStatus === "ready" ? "Ready" : "Fresh start"}
+									</span>
 								</Button>
 							);
 						})}

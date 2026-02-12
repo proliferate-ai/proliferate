@@ -34,8 +34,16 @@ export const saveServiceCommandsHandler: InterceptedToolHandler = {
 		}
 
 		const context = hub.getContext();
+		const sessionType = context.session.session_type;
 		const prebuildId = context.session.prebuild_id;
 		const updatedBy = context.session.created_by || "agent";
+
+		if (sessionType !== "setup") {
+			return {
+				success: false,
+				result: "save_service_commands is only available in setup sessions.",
+			};
+		}
 
 		if (!prebuildId) {
 			return {
