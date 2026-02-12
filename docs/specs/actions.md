@@ -7,7 +7,7 @@
 - Risk classification: read / write / danger
 - Grant system: create, evaluate, revoke, call budgets
 - Gateway action routes (invoke, approve, deny, list, grants, guide)
-- Provider guide/bootstrap flow
+- Integration guide/bootstrap flow
 - Linear adapter
 - Sentry adapter
 - Invocation sweeper (expiry job)
@@ -22,9 +22,9 @@
 
 ### Mental Model
 
-Actions are platform-mediated operations that the agent performs on external services (Linear, Sentry). Unlike tools that run inside the sandbox, actions are executed server-side by the gateway using OAuth tokens resolved from Nango connections. Every action goes through a risk-based approval pipeline before execution.
+Actions are platform-mediated operations that the agent performs on external services (Linear, Sentry). Unlike tools that run inside the sandbox, actions are executed server-side by the gateway using OAuth tokens resolved from Nango connections (`packages/services/src/integrations/tokens.ts:getToken`). Every action goes through a risk-based approval pipeline before execution (`packages/services/src/actions/service.ts:invokeAction`).
 
-The agent invokes actions via the `proliferate` CLI inside the sandbox. The CLI sends HTTP requests to the gateway, which evaluates risk, checks for matching grants, and either auto-executes or queues the invocation for human approval. Users approve or deny pending invocations through the web dashboard or WebSocket events.
+The agent invokes actions via the `proliferate` CLI inside the sandbox. The CLI sends HTTP requests to the gateway (`apps/gateway/src/api/proliferate/http/actions.ts`), which evaluates risk, checks for matching grants, and either auto-executes or queues the invocation for human approval. Users approve or deny pending invocations through the web dashboard or WebSocket events.
 
 **Core entities:**
 - **Invocation** — a single request to execute an action, with its approval state. Lifecycle: pending → approved → executing → completed (or denied/expired/failed).
@@ -32,11 +32,11 @@ The agent invokes actions via the `proliferate` CLI inside the sandbox. The CLI 
 - **Adapter** — an integration-specific module that declares available actions and implements execution against the external API.
 
 **Key invariants:**
-- Read actions are always auto-approved. Danger actions are always denied. Only write actions enter the approval pipeline.
-- Grants are evaluated atomically via CAS (compare-and-swap) to prevent concurrent overuse of call budgets.
-- A session can have at most 10 pending invocations simultaneously.
-- Pending invocations expire after 5 minutes if not approved or denied.
-- Results stored in the DB are redacted (sensitive keys removed) and truncated (max 10KB).
+- Read actions are always auto-approved. Danger actions are always denied. Only write actions enter the approval pipeline. Source: `packages/services/src/actions/service.ts:125-141`
+- Grants are evaluated atomically via CAS (compare-and-swap) to prevent concurrent overuse of call budgets. Source: `packages/services/src/actions/grants-db.ts:consumeGrantCall`
+- A session can have at most 10 pending invocations simultaneously (`MAX_PENDING_PER_SESSION`). Source: `packages/services/src/actions/service.ts:46`
+- Pending invocations expire after 5 minutes if not approved or denied (`PENDING_EXPIRY_MS`). Source: `packages/services/src/actions/service.ts:45`
+- Results stored in the DB are redacted (sensitive keys removed) and truncated (max 10KB). Source: `packages/services/src/actions/service.ts:62-84`
 
 ---
 
@@ -130,7 +130,7 @@ action_invocations
 action_grants
 ├── id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
 ├── organization_id   TEXT NOT NULL FK → organization(id) ON DELETE CASCADE
-├── created_by        TEXT NOT NULL FK → user(id) ON DELETE CASCADE
+├── created_by        TEXT NOT NULL FK → user(id) ON DELETE CASCADE  -- see §9 caveat
 ├── session_id        UUID FK → sessions(id) ON DELETE CASCADE  -- NULL = org-wide
 ├── integration       TEXT NOT NULL                     -- adapter name or "*" wildcard
 ├── action            TEXT NOT NULL                     -- action name or "*" wildcard
@@ -209,11 +209,11 @@ try {
 ```
 
 ### Reliability
-- **Invocation expiry**: 5-minute TTL on pending invocations (`PENDING_EXPIRY_MS`). Source: `packages/services/src/actions/service.ts:45`
-- **Pending cap**: Max 10 pending invocations per session (`MAX_PENDING_PER_SESSION`). Source: `service.ts:46`
-- **Rate limiting**: 60 invocations per minute per session (in-memory counter in gateway). Source: `apps/gateway/src/api/proliferate/http/actions.ts`
-- **Grant CAS**: Atomic `UPDATE ... WHERE usedCalls < maxCalls` prevents budget overuse. Source: `grants-db.ts:consumeGrantCall`
-- **Grant rollback**: If invocation approval fails after grant creation, the grant is revoked (best-effort). Source: `service.ts:approveActionWithGrant`
+- **Invocation expiry**: 5-minute TTL on pending invocations (`PENDING_EXPIRY_MS`). Source: `packages/services/src/actions/service.ts:PENDING_EXPIRY_MS`
+- **Pending cap**: Max 10 pending invocations per session (`MAX_PENDING_PER_SESSION`). Source: `packages/services/src/actions/service.ts:MAX_PENDING_PER_SESSION`
+- **Rate limiting**: 60 invocations per minute per session (in-memory counter in gateway). Source: `apps/gateway/src/api/proliferate/http/actions.ts:checkInvokeRateLimit`
+- **Grant CAS**: Atomic `UPDATE ... WHERE usedCalls < maxCalls` prevents budget overuse. Source: `packages/services/src/actions/grants-db.ts:consumeGrantCall`
+- **Grant rollback**: If invocation approval fails after grant creation, the grant is revoked (best-effort). Source: `packages/services/src/actions/service.ts:approveActionWithGrant`
 - **External API timeout**: 30s on both Linear and Sentry adapters.
 
 ### Testing Conventions
@@ -230,24 +230,33 @@ try {
 
 **What it does:** Routes an action through risk classification, grant evaluation, approval, execution, and result storage.
 
+**Invoke response contracts:**
+
+| Outcome | HTTP | Response shape |
+|---------|------|----------------|
+| Auto-approved (read or grant-matched write) | 200 | `{ invocation, result }` |
+| Pending approval (write, no grant) | 202 | `{ invocation, message: "Action requires approval" }` |
+| Denied (danger) | 403 | `{ invocation, error }` |
+| Pending cap exceeded | 429 | `{ error }` |
+
 **Happy path (write action, no grant):**
 1. Agent calls `proliferate actions run --integration linear --action create_issue --params '{...}'`
-2. Sandbox-MCP CLI sends `POST /:sessionId/actions/invoke` to gateway (`actions.ts`)
-3. Gateway validates adapter exists, finds session connections, resolves org
-4. Calls `actions.invokeAction()` (`service.ts:122`) — risk = write, no matching grant → creates pending invocation with 5-min expiry
-5. Gateway broadcasts `action_approval_request` to WebSocket clients
-6. Returns `202 { invocation, needsApproval: true }` — sandbox CLI blocks polling `GET /invocations/:id`
-7. User approves via `POST /invocations/:id/approve` (admin/owner role required)
-8. Gateway calls `actions.approveAction()`, then `markExecuting()`, resolves integration token via `integrations.getToken()`, calls `adapter.execute()`
-9. On success: `markCompleted()` with redacted/truncated result, broadcasts `action_completed`
-10. On failure: `markFailed()` with error message, broadcasts failure, returns 502
+2. Sandbox-MCP CLI sends `POST /:sessionId/actions/invoke` to gateway (`actions.ts` invoke handler)
+3. Gateway validates adapter via `getAdapter(integration)` (`adapters/index.ts:getAdapter`), finds session connections via `sessions.listSessionConnections(sessionId)`, resolves org via `sessions.findByIdInternal(sessionId)`
+4. Calls `invokeAction()` (`service.ts:invokeAction`) — risk = write, no matching grant → creates pending invocation with 5-min expiry
+5. Gateway broadcasts `action_approval_request` to WebSocket clients via `hub.broadcastMessage()`
+6. Returns HTTP 202 `{ invocation, message: "Action requires approval" }` — sandbox CLI blocks polling `GET /:sessionId/actions/invocations/:id`
+7. User approves via `POST /:sessionId/actions/invocations/:id/approve` — admin/owner role required (`actions.ts:requireAdminRole`)
+8. Gateway calls `approveAction()` (`service.ts:approveAction`), then `markExecuting()` (`service.ts:markExecuting`), resolves integration token via `integrations.getToken()`, calls `adapter.execute()`
+9. On success: `markCompleted()` (`service.ts:markCompleted`) with redacted/truncated result, broadcasts `action_completed` via `hub.broadcastMessage()`. Returns HTTP 200 `{ invocation, result, grant? }`
+10. On failure: `markFailed()` (`service.ts:markFailed`) with error message, broadcasts failure, returns HTTP 502
 
 **Edge cases:**
-- **Read action** → auto-approved at step 4, executed immediately, returns 200
-- **Danger action** → denied at step 4, returns 403
-- **Grant match** → auto-approved at step 4 after CAS consumption, executed immediately
-- **Pending cap exceeded** → throws `PendingLimitError` (429) at step 4
-- **Expired before approval** → `approveAction()` marks expired, throws `ActionExpiredError` (410)
+- **Read action** → auto-approved by `invokeAction()` (`service.ts:invokeAction`), executed immediately, returns HTTP 200 `{ invocation, result }`
+- **Danger action** → denied by `invokeAction()` (`service.ts:invokeAction`), returns HTTP 403 `{ invocation, error }`
+- **Grant match** → auto-approved after CAS consumption via `evaluateGrant()` (`grants.ts:evaluateGrant`), executed immediately
+- **Pending cap exceeded** → throws `PendingLimitError`, gateway returns HTTP 429
+- **Expired before approval** → `approveAction()` marks expired via `db.ts:updateInvocationStatus`, throws `ActionExpiredError` (410)
 - **Already approved/denied** → throws `ActionConflictError` (409)
 
 **Files touched:** `packages/services/src/actions/service.ts`, `apps/gateway/src/api/proliferate/http/actions.ts`
@@ -257,13 +266,13 @@ try {
 **What it does:** Provides reusable permissions that auto-approve write actions without per-invocation human approval.
 
 **Grant creation paths:**
-1. **Via approval**: User approves an invocation with `mode: "grant"` — creates a grant scoped to the invocation's integration/action. Source: `service.ts:approveActionWithGrant`
-2. **Via sandbox CLI**: Agent calls `POST /:sessionId/actions/grants` — creates a grant directly. Source: `actions.ts` grants POST route
+1. **Via approval**: User approves an invocation with `mode: "grant"` — creates a grant with `createdBy` = the approving user's ID. Source: `service.ts:approveActionWithGrant`
+2. **Via sandbox CLI**: Agent calls `POST /:sessionId/actions/grants` — creates a grant with `createdBy` = the session ID (not a user ID). Source: `actions.ts` grants POST handler → `actions.createGrant({ createdBy: sessionId })`. This violates the `action_grants.created_by` FK to `user(id)` — see §9.
 
 **Grant evaluation flow:**
-1. `invokeAction()` calls `evaluateGrant(orgId, integration, action, sessionId)` for write actions
-2. `evaluateGrant()` calls `findMatchingGrants()` — DB query matching exact or wildcard (`*`) on integration and action, filtered by org, non-revoked, non-expired, non-exhausted, scoped to session or org-wide
-3. For each candidate: `consumeGrantCall()` atomically increments `usedCalls` via CAS
+1. `invokeAction()` (`service.ts:invokeAction`) calls `evaluateGrant()` (`grants.ts:evaluateGrant`) for write actions
+2. `evaluateGrant()` calls `findMatchingGrants()` (`grants-db.ts:findMatchingGrants`) — DB query matching exact or wildcard (`*`) on integration and action, filtered by org, non-revoked, non-expired, non-exhausted, scoped to session or org-wide
+3. For each candidate: `consumeGrantCall()` (`grants-db.ts:consumeGrantCall`) atomically increments `usedCalls` via CAS
 4. First successful CAS returns `{ granted: true, grantId }` — invocation auto-approved
 5. All CAS failures → `{ granted: false }` — falls through to pending approval
 
@@ -361,17 +370,17 @@ try {
 
 **Files touched:** `apps/web/src/server/routers/actions.ts`, `packages/services/src/actions/db.ts:listByOrg`
 
-### 6.9 Provider Guide Flow — `Implemented`
+### 6.9 Integration Guide Flow — `Implemented`
 
 **What it does:** Serves integration-specific markdown guides to the agent.
 
 **Flow:**
 1. Agent calls `proliferate actions guide --integration linear`
-2. CLI sends `GET /:sessionId/actions/guide/linear` to gateway
-3. Gateway calls `actions.getGuide("linear")` — looks up adapter, returns `adapter.guide`
+2. CLI sends `GET /:sessionId/actions/guide/linear` to gateway (`actions.ts` guide handler)
+3. Gateway calls `getGuide("linear")` (`adapters/index.ts:getGuide`) — looks up adapter in registry, returns `adapter.guide`
 4. Returns markdown guide with CLI examples for each action
 
-Each adapter embeds its own guide as a static string (e.g., `linearAdapter.guide`, `sentryAdapter.guide`).
+Each adapter embeds its own guide as a static string (e.g., `linearAdapter.guide`, `sentryAdapter.guide`). Source: `packages/services/src/actions/adapters/linear.ts:233-286`, `sentry.ts:148-206`
 
 **Files touched:** `packages/services/src/actions/adapters/index.ts:getGuide`, adapter files
 
@@ -381,9 +390,9 @@ Each adapter embeds its own guide as a static string (e.g., `linearAdapter.guide
 
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
-| `integrations.md` | Actions → Integrations | `integrations.getToken(integrationId)` | Token resolution for adapter execution |
-| `integrations.md` | Actions → Integrations | `sessions.listSessionConnections()` | Discovers which integrations are available |
-| `sessions-gateway.md` | Actions → Gateway | WebSocket broadcast events | `action_approval_request`, `action_completed`, `action_approval_result` |
+| `integrations.md` | Actions → Integrations | `integrations.getToken()` (`packages/services/src/integrations/tokens.ts:getToken`) | Token resolution for adapter execution |
+| `integrations.md` | Actions → Integrations | `sessions.listSessionConnections()` (`packages/services/src/sessions/db.ts`) | Discovers which integrations are available for a session |
+| `sessions-gateway.md` | Actions → Gateway | WebSocket broadcast events | `action_approval_request` (pending write), `action_completed` (execution success/failure, includes `status` field), `action_approval_result` (denial only) |
 | `agent-contract.md` | Contract → Actions | `ACTIONS_BOOTSTRAP` in sandbox config | Bootstrap guide written to `.proliferate/actions-guide.md` |
 | `agent-contract.md` | Contract → Actions | `proliferate` CLI in system prompts | Prompts document CLI usage for actions |
 | `auth-orgs.md` | Actions → Auth | `orgs.getUserRole(userId, orgId)` | Admin/owner role check for approve/deny |
@@ -393,8 +402,8 @@ Each adapter embeds its own guide as a static string (e.g., `linearAdapter.guide
 - **User tokens** with admin/owner role can approve/deny invocations.
 - **Member role** users cannot approve/deny (403).
 - **Token resolution** happens server-side via Nango — the sandbox never sees integration OAuth tokens.
-- **Result redaction**: sensitive keys (`token`, `secret`, `password`, `authorization`, `api_key`, `apikey`) are stripped before DB storage. Source: `service.ts:redactData`
-- **Result truncation**: results exceeding 10KB are replaced with `{ _truncated: true, _originalSize }`. Source: `service.ts:truncateResult`
+- **Result redaction**: sensitive keys (`token`, `secret`, `password`, `authorization`, `api_key`, `apikey`) are stripped before DB storage. Source: `packages/services/src/actions/service.ts:redactData`
+- **Result truncation**: results exceeding 10KB are replaced with `{ _truncated: true, _originalSize }`. Source: `packages/services/src/actions/service.ts:truncateResult`
 
 ### Observability
 - Service functions log via `getServicesLogger().child({ module: "actions" })` or `{ module: "actions.grants" }`.
@@ -421,3 +430,4 @@ Each adapter embeds its own guide as a static string (e.g., `linearAdapter.guide
 - [ ] **Static adapter registry** — adding a new integration requires code changes. No dynamic adapter loading or plugin system. Impact: new integrations require a deploy. Expected fix: not planned — adapter count is low.
 - [ ] **Grant rollback is best-effort** — if invocation approval fails after grant creation, the grant revocation is attempted but failures are silently caught. Impact: orphaned grants may exist in rare edge cases. Expected fix: wrap in a transaction or add cleanup sweep.
 - [ ] **No pagination on grants list** — `listActiveGrants` and `listGrantsByOrg` return all matching rows with no limit/offset. Impact: could return large result sets for orgs with many grants. Expected fix: add pagination parameters.
+- [ ] **`created_by` FK mismatch on sandbox-created grants** — `action_grants.created_by` has a FK to `user(id)` in the Drizzle schema (`schema.ts:1225-1229`), but the sandbox grant creation route (`actions.ts:593`) sets `createdBy` to `sessionId` (a UUID from the `sessions` table, not the `user` table). If this FK constraint exists in the actual database, sandbox grant creation would fail. If the migration was not applied or the constraint is deferred, the value simply doesn't point to a valid user row, breaking joins and audit queries. Impact: either a runtime error on sandbox grant creation or data integrity issue depending on migration state. Expected fix: store the session's `userId` instead, or change the FK target to `sessions(id)`.

@@ -46,8 +46,8 @@ Inside every sandbox, **sandbox-mcp** runs as a sidecar providing an HTTP API (p
 ## 2. Core Concepts
 
 ### Provider Factory
-Callers obtain a provider via `getSandboxProvider(type?)` (`packages/shared/src/providers/index.ts`). If no `type` is passed, it reads `DEFAULT_SANDBOX_PROVIDER` from the environment schema (`packages/environment/src/schema.ts`). The provider type is persisted in the session DB record (`sessions.sandbox_provider`) so that resume always uses the same provider that created the sandbox. A convenience alias `getSandboxProviderForSnapshot()` exists for snapshot restore paths.
-- Key detail agents get wrong: Never instantiate `ModalLibmodalProvider` or `E2BProvider` directly in application code. Always go through the factory.
+Callers obtain a provider via `getSandboxProvider(type?)` (`packages/shared/src/providers/index.ts`). If no `type` is passed, it reads `DEFAULT_SANDBOX_PROVIDER` from the environment schema (`packages/environment/src/schema.ts`). The provider type is persisted in the session DB record (`sessions.sandbox_provider`) so that resume always uses the same provider that created the sandbox. A thin alias `getSandboxProviderForSnapshot()` exists but is currently unused — gateway code calls `getSandboxProvider(providerType)` directly.
+- Key detail agents get wrong: Session-facing code (gateway, API routes) should go through the factory — not instantiate providers directly. However, snapshot build workers (`apps/worker/src/base-snapshots/`, `apps/worker/src/repo-snapshots/`) and the CLI snapshot script (`apps/gateway/src/bin/create-modal-base-snapshot.ts`) instantiate `ModalLibmodalProvider` directly because they need provider-specific methods like `createBaseSnapshot()` / `createRepoSnapshot()` that aren't on the `SandboxProvider` interface.
 - Reference: `packages/shared/src/providers/index.ts`
 
 ### SandboxProvider Interface
@@ -266,13 +266,15 @@ The Dockerfile builds an Ubuntu 22.04 image with:
 
 ```typescript
 // packages/shared/src/sandbox/errors.ts
-// All provider methods wrap errors consistently:
+// Modal wraps errors consistently:
 throw SandboxProviderError.fromError(error, "modal", "createSandbox");
 // Redacts API keys, tokens, JWTs from messages automatically
 ```
 
+**Caveat:** E2B's `createSandbox` throws raw `Error` for validation failures (missing repos, missing template) at `e2b.ts:226-242`. Only `terminate` and `pause` wrap with `SandboxProviderError`. Modal is more consistent in wrapping.
+
 ### Reliability
-- **Timeouts**: Sandbox lifetime defaults to 3600s (`SANDBOX_TIMEOUT_SECONDS`). OpenCode readiness poll: 30s with exponential backoff (200ms base, 1.5x, max 2s). Provider HTTP calls use `fetchWithTimeout()` / `providerFetch()` with `DEFAULT_TIMEOUTS` — createSandbox: 180s, snapshot: 120s, terminate/writeEnvFile: 30s, health: 10s (`packages/shared/src/sandbox/fetch.ts`).
+- **Timeouts**: Sandbox lifetime defaults to 3600s (`SANDBOX_TIMEOUT_SECONDS`). OpenCode readiness poll: 30s with exponential backoff (200ms base, 1.5x, max 2s). Both providers use their respective SDK calls (libmodal / E2B SDK) — not the `fetchWithTimeout()`/`providerFetch()` utilities in `packages/shared/src/sandbox/fetch.ts`. Those utilities and `DEFAULT_TIMEOUTS` are exported but currently unused by provider implementations.
 - **Retries**: `proliferate` CLI retries API calls up to 10 times with 1s delay for `ECONNREFUSED`/`fetch failed` (`proliferate-cli.ts:fetchWithRetry`).
 - **Idempotency**: `terminate()` treats "not found" as success. `ensureSandbox()` recovers existing sandboxes.
 
@@ -298,7 +300,7 @@ throw SandboxProviderError.fromError(error, "modal", "createSandbox");
 **Usage in gateway:**
 - Session creation: `getSandboxProvider()` — uses default from env (`apps/gateway/src/api/proliferate/http/sessions.ts`).
 - Session resume/runtime: `getSandboxProvider(session.sandbox_provider)` — uses type from DB record (`apps/gateway/src/hub/session-runtime.ts`).
-- Snapshot operations: `getSandboxProviderForSnapshot(providerType)` — alias for the same factory (`apps/gateway/src/hub/session-hub.ts`).
+- Snapshot operations: `getSandboxProvider(providerType)` — uses type from session/snapshot record (`apps/gateway/src/hub/session-hub.ts`).
 
 **Files touched:** `packages/shared/src/providers/index.ts`
 
@@ -318,7 +320,7 @@ throw SandboxProviderError.fromError(error, "modal", "createSandbox");
 
 **Edge cases:**
 - Branch clone fails → falls back to default branch (`modal-libmodal.ts:909-919`).
-- Modal does not support `pause()` — throws `SandboxProviderError` (`modal-libmodal.ts:1462`).
+- Modal does not support `pause()` — throws `SandboxProviderError` (`modal-libmodal.ts:1496`).
 - `findSandbox()` uses `sessionId` as Modal sandbox name for 1:1 lookup (`modal-libmodal.ts:810`).
 
 **Files touched:** `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/sandbox/config.ts`, `packages/shared/src/sandbox/opencode.ts`
@@ -352,9 +354,8 @@ throw SandboxProviderError.fromError(error, "modal", "createSandbox");
 **Phase 1 — Essential (blocking):**
 1. Clone repos (or read metadata from snapshot) — `setupSandbox()`.
 2. Write config files in parallel: plugin, 6 tool pairs (.ts + .txt), OpenCode config (global + local), instructions.md, actions-guide.md, pre-installed tool deps.
-3. Write SSH keys if CLI session.
-4. Write trigger context if automation-triggered.
-5. Start OpenCode server (`opencode serve --port 4096`).
+3. **Modal only:** Write SSH keys if CLI session (`modal-libmodal.ts:1062`), write trigger context if automation-triggered (`modal-libmodal.ts:1071`). E2B does not handle SSH or trigger context.
+4. Start OpenCode server (`opencode serve --port 4096`).
 
 **Phase 2 — Additional (fire-and-forget):**
 1. Configure git identity (`git config --global user.name/email`).
@@ -420,7 +421,7 @@ Both providers re-write git credentials before pulling (snapshot tokens may be s
 | GET | `/api/git/status` | Yes | Git status (porcelain v2) |
 | GET | `/api/git/diff` | Yes | Git diff (capped at 64KB) |
 
-**Security:** All endpoints except `/api/health` require `Authorization: Bearer <token>` validated against `SANDBOX_MCP_AUTH_TOKEN` (`packages/sandbox-mcp/src/auth.ts`). Repo ID is base64-encoded path, validated against workspace directory to prevent traversal.
+**Security:** All endpoints except `/api/health` require `Authorization: Bearer <token>` validated against `SANDBOX_MCP_AUTH_TOKEN` (falls back to `SERVICE_TO_SERVICE_AUTH_TOKEN`) (`packages/sandbox-mcp/src/auth.ts`). Repo ID is base64-encoded path, validated against workspace directory to prevent traversal.
 
 ### 6.9 Terminal WebSocket — `Implemented`
 
@@ -487,9 +488,9 @@ Both providers re-write git credentials before pulling (snapshot tokens may be s
 | Actions | CLI → Gateway | `proliferate actions run` | CLI calls gateway action endpoints. See `actions.md`. |
 
 ### Security & Auth
-- **sandbox-mcp auth**: Bearer token via `SANDBOX_MCP_AUTH_TOKEN` env var. Secure-by-default — returns `false` if no token configured (`packages/sandbox-mcp/src/auth.ts`).
+- **sandbox-mcp auth**: Bearer token via `SANDBOX_MCP_AUTH_TOKEN` env var (falls back to `SERVICE_TO_SERVICE_AUTH_TOKEN`). Secure-by-default — returns `false` if no token configured (`packages/sandbox-mcp/src/auth.ts`).
 - **Secret redaction**: `SandboxProviderError` auto-redacts API keys, tokens, JWTs from error messages via regex patterns (`packages/shared/src/sandbox/errors.ts:redactSecrets`).
-- **Git credentials**: Written to `/tmp/.git-credentials.json`, not persisted in snapshots (re-written with fresh tokens on restore).
+- **Git credentials**: Written to `/tmp/.git-credentials.json`. Credentials DO persist in snapshots but become stale — both providers re-write with fresh tokens inside the `if (doPull)` block on restore (`modal-libmodal.ts:1178`, `e2b.ts:842`).
 - **Path traversal prevention**: sandbox-mcp validates all repo paths stay within workspace directory, dereferencing symlinks (`api-server.ts:validateInsideWorkspace`).
 
 ### Observability
@@ -510,9 +511,9 @@ Both providers re-write git credentials before pulling (snapshot tokens may be s
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **Modal does not support pause** — `pause()` throws. Sessions on Modal must snapshot + terminate, then create fresh from snapshot on resume. No impact on correctness but slower than E2B's native pause/resume.
+- [ ] **Modal does not support pause** — `pause()` throws (`modal-libmodal.ts:1496`). Sessions on Modal must snapshot + terminate, then create fresh from snapshot on resume. No impact on correctness but slower than E2B's native pause/resume.
 - [ ] **E2B snapshot resume fallback** — If `Sandbox.connect()` fails on a paused sandbox, E2B falls back to fresh creation silently. This loses the snapshot state without user notification.
-- [ ] **Git freshness re-writes credentials for every restore** — Even when cadence gate decides not to pull, credentials are still refreshed on Modal (they're written unconditionally before the pull decision). Minor inefficiency.
+- [ ] **Stale git credentials in snapshots** — Credentials persist in snapshots at `/tmp/.git-credentials.json` but may be expired. Both providers only re-write credentials when git pull is actually performed (inside the `if (doPull)` block). If cadence gate says no pull, stale credentials remain until the next pull window.
 - [ ] **Service manager state in /tmp** — Process state is stored in `/tmp/proliferate/state.json`. This survives within a session but is lost on Modal sandbox recreation. E2B pause/resume preserves it.
 - [ ] **No health monitoring for sandbox-mcp** — If sandbox-mcp crashes after boot, there's no automatic restart. The process runs fire-and-forget.
 - [ ] **Caddy fallback ports hardcoded** — The default Caddyfile tries ports 3000, 5173, 8000, 4321 in order. No mechanism to configure this per-prebuild without using `exposePort()`.

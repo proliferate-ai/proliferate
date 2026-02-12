@@ -35,14 +35,14 @@
 
 An **automation** is a reusable configuration that describes *what* the agent should do when a trigger fires. A **run** is a single execution of that automation, moving through a pipeline: enrich the trigger context, resolve a target repo/prebuild, create a session, send the prompt, then finalize when the agent calls `automation.complete` or the session terminates.
 
-The pipeline is driven by an **outbox** pattern: each stage writes the next stage's work item atomically, and a poller dispatches items to BullMQ queues. This decouples stages and provides at-least-once delivery with retry.
+The pipeline is driven by an **outbox** pattern: stages enqueue the next stage's work via the `outbox` table, and a poller dispatches items to BullMQ queues. This decouples stages and provides at-least-once delivery with retry. Only `createRunFromTriggerEvent` and `completeRun` write outbox rows in the same transaction as status updates; the enrichment flow writes status, outbox, and artifact entries as separate sequential calls (`apps/worker/src/automation/index.ts:114-134`).
 
 **Core entities:**
 - **Automation** — org-scoped configuration with agent instructions, model, default prebuild, notification settings. Owns triggers and connections.
 - **Run** (`automation_runs`) — a single pipeline execution. Tracks status, timestamps, lease, session reference, completion, enrichment, and assignment.
 - **Outbox** (`outbox`) — transactional outbox table for reliable dispatch between pipeline stages.
 - **Run event** (`automation_run_events`) — append-only audit log of status transitions and milestones.
-- **Side effect** (`automation_side_effects`) — idempotent record of external actions taken during a run.
+- **Side effect** (`automation_side_effects`) — idempotent record of external actions taken during a run. Table and service exist but have no callsites in the current run pipeline (see §9).
 
 **Key invariants:**
 - A run is always tied to exactly one trigger event (unique index on `trigger_event_id`).
@@ -55,7 +55,7 @@ The pipeline is driven by an **outbox** pattern: each stage writes the next stag
 ## 2. Core Concepts
 
 ### Outbox Pattern
-All inter-stage communication flows through the `outbox` table. Workers insert rows transactionally alongside status updates, a poller claims them atomically via `SELECT ... FOR UPDATE SKIP LOCKED`, and dispatches to BullMQ queues or inline handlers.
+All inter-stage communication flows through the `outbox` table. Workers insert outbox rows (ideally in the same transaction as status updates — see §1 for which stages achieve this), a poller claims them atomically via `SELECT ... FOR UPDATE SKIP LOCKED`, and dispatches to BullMQ queues or inline handlers.
 - Key detail agents get wrong: the outbox is not a queue — it's a database table polled every 2 seconds. BullMQ queues are downstream consumers.
 - Reference: `packages/services/src/outbox/service.ts`, `apps/worker/src/automation/index.ts:dispatchOutbox`
 
@@ -238,18 +238,67 @@ queued → enriching → ready → running → succeeded
 
 Terminal statuses: `succeeded`, `failed`, `needs_human`, `timed_out`. Any non-terminal status can transition to `failed` on error. Source: `packages/services/src/runs/service.ts:transitionRunStatus`
 
+> **Note on glossary alignment:** The canonical glossary (`boundary-brief.md` §3) describes the run lifecycle as `pending → enriching → executing → completed/failed`. The actual DB status values are `queued → enriching → ready → running → succeeded/failed/needs_human/timed_out`. This spec uses the DB values throughout.
+
+### Core TypeScript Types
+
+```typescript
+// packages/services/src/runs/db.ts
+interface AutomationRunWithRelations extends AutomationRunRow {
+  automation: { id; name; defaultPrebuildId; agentInstructions; modelId; ... } | null;
+  triggerEvent: { id; parsedContext; rawPayload; providerEventType; ... } | null;
+  trigger: { id; provider; name } | null;
+}
+
+// apps/worker/src/automation/enrich.ts
+interface EnrichmentPayload {
+  version: 1;
+  provider: string;
+  summary: { title: string; description: string | null };
+  source: { url: string | null; externalId: string | null; eventType: string | null };
+  relatedFiles: string[];
+  suggestedRepoId: string | null;
+  providerContext: Record<string, unknown>;
+  automationContext: { automationId; automationName; hasLlmFilter; hasLlmAnalysis };
+}
+
+// apps/worker/src/automation/resolve-target.ts
+interface TargetResolution {
+  type: "default" | "selected" | "fallback";
+  prebuildId?: string;
+  repoIds?: string[];
+  reason: string;
+  suggestedRepoId?: string;
+}
+
+// packages/services/src/outbox/service.ts
+type OutboxRow = InferSelectModel<typeof outbox>;
+// Status: "pending" | "processing" | "dispatched" | "failed"
+```
+
+### Key Indexes & Query Patterns
+
+| Query | Index | Notes |
+|-------|-------|-------|
+| Claim run by status + expired lease | `idx_automation_runs_status_lease (status, lease_expires_at)` | Used by `claimRun()` |
+| List runs by org + status | `idx_automation_runs_org_status (organization_id, status)` | Admin/listing |
+| Find run by session | `idx_automation_runs_session (session_id)` | Gateway completion lookup |
+| Unique run per trigger event | `idx_automation_runs_trigger_event (trigger_event_id)` UNIQUE | Enforces 1:1 |
+| Claim pending outbox rows | `idx_outbox_status_available (status, available_at)` | `SELECT ... FOR UPDATE SKIP LOCKED` |
+| Side effect idempotency | `automation_side_effects_org_effect_key (organization_id, effect_id)` UNIQUE | Dedup |
+
 ---
 
 ## 5. Conventions & Patterns
 
 ### Do
 - Use `runs.claimRun()` before mutating a run — this prevents concurrent workers from processing the same run.
-- Insert outbox rows inside the same transaction as status updates — this is the core reliability guarantee.
-- Use `recordOrReplaySideEffect()` for any external mutation — provides idempotent replay on retry.
+- Insert outbox rows inside the same transaction as status updates where possible — `createRunFromTriggerEvent` and `completeRun` do this. Enrichment currently uses sequential writes; failures between writes are recoverable via lease expiry and re-claim.
+- Use `recordOrReplaySideEffect()` for any external mutation — provides idempotent replay on retry. (Currently unused in the run pipeline; infrastructure exists for future use.)
 
 ### Don't
 - Don't call the Slack API without decrypting the bot token first — tokens are stored encrypted via `@proliferate/shared/crypto`.
-- Don't skip the outbox for inter-stage dispatch — direct BullMQ enqueue loses the transactional guarantee.
+- Don't skip the outbox for inter-stage dispatch — direct BullMQ enqueue loses the at-least-once guarantee provided by stuck-row recovery.
 - Don't write artifacts inline during enrichment — use the `write_artifacts` outbox kind so failures don't block the pipeline.
 
 ### Error Handling
@@ -326,7 +375,7 @@ try {
 **What it does:** Determines which repo/prebuild to use for session creation based on enrichment output and automation configuration.
 
 **Decision tree** (`apps/worker/src/automation/resolve-target.ts:resolveTarget`):
-1. If `allowAgenticRepoSelection` is false → use `defaultPrebuildId` ("default")
+1. If `allowAgenticRepoSelection` is false → use `defaultPrebuildId` ("selection_disabled")
 2. If no `suggestedRepoId` in enrichment → use `defaultPrebuildId` ("no_suggestion")
 3. If suggested repo doesn't exist in org → fallback to `defaultPrebuildId` ("repo_not_found_or_wrong_org")
 4. If existing managed prebuild contains the repo → reuse it ("enrichment_suggestion_reused")
@@ -442,6 +491,8 @@ try {
 - `myClaimedRuns` — list runs assigned to the current user.
 - `listRuns` — list runs for an automation with status/pagination filters.
 
+**Scoping note:** The route validates that the automation exists in the org (`automationExists(id, orgId)`), but the actual DB update in `assignRunToUser` (`packages/services/src/runs/db.ts:278`) is scoped by `run_id + organization_id` only — it does not re-check the automation ID. This means the automation ID in the route acts as a parent-resource guard but is not enforced at the DB level.
+
 **Gap:** No manual status update route (e.g., marking a `needs_human` run as resolved). Feature registry notes this as incomplete.
 
 ---
@@ -488,3 +539,5 @@ try {
 - [ ] **Single-channel notifications** — Only Slack is implemented. The `NotificationChannel` interface exists for future email/in-app channels but no other implementations exist. Impact: orgs without Slack get no run notifications.
 - [ ] **Notification channel resolution fallback** — The `resolveNotificationChannelId` function falls back to `enabled_tools.slack_notify.channelId` for backward compatibility. Impact: minor code complexity. Expected fix: migrate old automations and remove fallback.
 - [ ] **Artifact writes are not retried independently** — If S3 write fails, the entire outbox item is retried (up to 5x). Impact: a transient S3 failure delays downstream notifications. Expected fix: split artifact writes into separate outbox items per artifact type.
+- [ ] **Side effects table unused** — `automation_side_effects` table, service (`packages/services/src/side-effects/service.ts`), and `recordOrReplaySideEffect()` exist but have zero callsites in the run pipeline. Impact: dead infrastructure. Expected fix: wire into action invocations during automation runs, or remove if no longer planned.
+- [ ] **Enrichment writes are not transactional** — `handleEnrich` performs `saveEnrichmentResult`, `enqueueOutbox(write_artifacts)`, `transitionRunStatus(ready)`, and `enqueueOutbox(enqueue_execute)` as four separate writes (`apps/worker/src/automation/index.ts:114-134`). A crash between writes can leave a run in an inconsistent state, recoverable only via lease expiry and re-claim. Impact: low (lease recovery works), but violates the outbox pattern's transactional intent.

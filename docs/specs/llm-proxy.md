@@ -12,6 +12,21 @@
 - Environment configuration (`LLM_PROXY_URL`, `LLM_PROXY_MASTER_KEY`, `LLM_PROXY_KEY_DURATION`, etc.)
 - How providers (Modal, E2B) pass the virtual key to sandboxes
 
+### Feature Status
+
+| Feature | Status | Evidence |
+|---------|--------|----------|
+| Virtual key generation | Implemented | `packages/shared/src/llm-proxy.ts:generateVirtualKey` |
+| Key scoping (team/user) | Implemented | `packages/shared/src/llm-proxy.ts:generateVirtualKey` — `team_id=orgId`, `user_id=sessionId` |
+| Key duration config | Implemented | `packages/environment/src/schema.ts:LLM_PROXY_KEY_DURATION` |
+| Team (org) provisioning | Implemented | `packages/shared/src/llm-proxy.ts:ensureTeamExists` |
+| Sandbox key injection (Modal) | Implemented | `packages/shared/src/providers/modal-libmodal.ts:createSandbox` |
+| Sandbox key injection (E2B) | Implemented | `packages/shared/src/providers/e2b.ts:createSandbox` |
+| Spend sync (cursor-based) | Implemented | `apps/worker/src/billing/worker.ts:syncLLMSpend` |
+| LLM spend cursors (DB) | Implemented | `packages/db/src/schema/billing.ts:llmSpendCursors` |
+| Model routing config | Implemented | `apps/llm-proxy/litellm/config.yaml` |
+| Key revocation on session end | Planned | No code — see §9 |
+
 ### Out of Scope
 - LiteLLM service internals (model routing config, caching, rate limiting) — external dependency, not our code
 - Billing policy, credit gating, charging — see `billing-metering.md`
@@ -53,7 +68,7 @@ Two separate URLs exist for the proxy: the **admin URL** for key generation and 
 - Reference: `packages/shared/src/llm-proxy.ts:generateVirtualKey`, `packages/shared/src/llm-proxy.ts:getLLMProxyBaseURL`
 
 ### Model Routing Configuration
-The LiteLLM config (`apps/llm-proxy/litellm/config.yaml`) maps OpenCode model IDs (without date suffixes, e.g., `anthropic/claude-sonnet-4-5`) to actual Anthropic API model IDs (with date suffixes, e.g., `anthropic/claude-sonnet-4-5-20250929`). The proxy also accepts short aliases (e.g., `claude-sonnet-4-5`).
+The LiteLLM config (`apps/llm-proxy/litellm/config.yaml`) maps OpenCode model IDs (e.g., `anthropic/claude-sonnet-4-5`) to actual Anthropic API model IDs (often with date suffixes, e.g., `anthropic/claude-sonnet-4-5-20250929`, though some like `anthropic/claude-opus-4-6` map without a suffix). The proxy also accepts short aliases (e.g., `claude-sonnet-4-5`).
 - Key detail agents get wrong: model routing is configured in `config.yaml`, not in our TypeScript code. Adding a new model requires editing the YAML config and redeploying the proxy container.
 - Reference: `apps/llm-proxy/litellm/config.yaml`
 
@@ -150,6 +165,10 @@ interface LLMSpendCursor {
 }
 ```
 
+### Key Indexes & Query Patterns
+- `llm_spend_cursors` has no additional indexes — single-row table queried by `WHERE id = 'global'`.
+- `LiteLLM_SpendLogs` (external, LiteLLM-managed) is queried with `ORDER BY "startTime" ASC, request_id ASC` for deterministic cursor pagination. Index coverage depends on LiteLLM's schema — not under our control.
+
 ---
 
 ## 5. Conventions & Patterns
@@ -227,11 +246,11 @@ _Source: `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`_
 2. `getLLMProxyBaseURL()` returns `LLM_PROXY_PUBLIC_URL || LLM_PROXY_URL` normalized with `/v1` suffix
 3. Provider sets two env vars on the sandbox: `ANTHROPIC_API_KEY = virtualKey`, `ANTHROPIC_BASE_URL = proxyBaseUrl`
 4. OpenCode inside the sandbox uses these standard env vars to route all Anthropic API calls through the proxy
-5. The same env vars are set again when starting the OpenCode server process (`setupEssentialDependencies`)
+5. The same env vars are set again as process-level env when launching the OpenCode server (after `setupEssentialDependencies` writes config files)
 
 **Edge cases:**
 - No proxy configured → `ANTHROPIC_API_KEY` is set to the direct key, `ANTHROPIC_BASE_URL` is not set
-- E2B snapshot resume → env vars are re-injected after resume since E2B doesn't persist env across pause/resume (`packages/shared/src/providers/e2b.ts`, line ~181)
+- E2B snapshot resume → proxy vars (`ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`) are **excluded** from the shell profile re-injection and only passed as process-level env vars to the OpenCode server process via `envs: opencodeEnv`. Other env vars are re-exported to the shell. (`packages/shared/src/providers/e2b.ts:createSandbox`, lines ~182-189 and ~646-659)
 
 **Files touched:** `packages/shared/src/providers/modal-libmodal.ts:createSandbox`, `packages/shared/src/providers/e2b.ts:createSandbox`, `packages/shared/src/llm-proxy.ts:getLLMProxyBaseURL`
 
@@ -290,7 +309,7 @@ Additional env vars used by the spend sync (read via raw `process.env`, not in t
 | Sandbox Providers | Providers → This | `getLLMProxyBaseURL()`, reads `envVars.LLM_PROXY_API_KEY` | Both Modal and E2B inject the virtual key and base URL at sandbox boot. See `sandbox-providers.md` §6. |
 | Sessions | Sessions → This | `buildSandboxEnvVars()` → `generateSessionAPIKey()` | Session creation triggers key generation. See `sessions-gateway.md` §6. |
 | Billing & Metering | Billing → This | `syncLLMSpend()` reads `LiteLLM_SpendLogs`, writes `billing_events` | Billing worker polls spend data. Charging policy owned by `billing-metering.md`. |
-| Environment | This → Environment | `env.LLM_PROXY_*` | All proxy config read from env schema. See `packages/environment/src/schema.ts`. |
+| Environment | This → Environment | `env.LLM_PROXY_*` | Typed `LLM_PROXY_*` vars read from env schema (`packages/environment/src/schema.ts`). Sync tuning vars (`LITELLM_DB_SCHEMA`, `LLM_SYNC_*`) are raw `process.env` reads — see §6.4. |
 
 ### Security & Auth
 - The master key (`LLM_PROXY_MASTER_KEY`) is never exposed to sandboxes — it stays server-side for admin API calls only.
