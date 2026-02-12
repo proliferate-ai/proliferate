@@ -62,7 +62,8 @@ export function startAutomationWorkers(logger: Logger): AutomationWorkers {
 
 	const outboxInterval = setInterval(() => {
 		dispatchOutbox(enrichQueue, executeQueue, logger).catch((err) => {
-			logger.error({ err }, "Outbox dispatch failed");
+			const cause = err?.cause?.message ?? err?.message ?? String(err);
+			logger.error({ err }, `Outbox dispatch failed: ${cause}`);
 		});
 	}, OUTBOX_POLL_INTERVAL_MS);
 

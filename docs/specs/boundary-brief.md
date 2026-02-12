@@ -43,7 +43,7 @@ These boundaries resolve the most likely overlaps. Follow them exactly.
 | **LLM Proxy vs Billing** | `llm-proxy.md` owns key generation, routing, and spend *events*. `billing-metering.md` owns charging policy, credit gating, and balance enforcement. |
 | **Triggers vs Automations** | `triggers.md` owns event ingestion, matching, and dispatch. Once a trigger fires, the resulting automation run belongs to `automations-runs.md`. The handoff point is the `AUTOMATION_ENRICH` queue enqueue. |
 | **Sessions vs Sandbox Providers** | `sessions-gateway.md` owns the session lifecycle and gateway runtime. `sandbox-providers.md` owns the provider interface and sandbox boot mechanics. Sessions *calls* the provider interface; the provider spec defines the contract. |
-| **Repos/Prebuilds vs Sessions** | `repos-prebuilds.md` owns repo records, prebuild configs, and snapshot *builds*. `sessions-gateway.md` owns snapshot *resolution* at session start (which snapshot to use). |
+| **Repos/Prebuilds vs Sessions** | `repos-prebuilds.md` owns repo records, prebuild configs, and snapshot *builds*. `sandbox-providers.md` owns snapshot *resolution* (`resolveSnapshotId()` in `packages/shared/src/snapshot-resolution.ts`). `sessions-gateway.md` owns the prebuild *resolver* (`apps/gateway/src/lib/prebuild-resolver.ts`) which determines which prebuild to use at session start. |
 | **Secrets vs Sandbox Providers** | `secrets-environment.md` owns secret CRUD and bundle management. How secrets get deployed into a running sandbox is `sandbox-providers.md` (env injection at boot) + `agent-contract.md` (the `save_env_files` tool). |
 | **Auth/Orgs vs Billing** | `auth-orgs.md` owns user/org model, membership, and onboarding flow. `billing-metering.md` owns trial credit provisioning, plan management, and checkout. Onboarding *triggers* trial activation but billing *owns* the credit grant. |
 | **CLI vs Sessions** | `cli.md` owns the CLI-specific entry point (device auth, local config, file sync). Session creation from CLI uses the same session lifecycle defined in `sessions-gateway.md`. |
@@ -58,7 +58,7 @@ Use these terms consistently. Do not introduce synonyms.
 |------|---------|----------------|
 | **sandbox** | The remote compute environment (Modal container or E2B sandbox) where the agent runs. | environment, container, instance, VM |
 | **session** | A user-initiated or automation-initiated interaction backed by a sandbox. Has a lifecycle (creating → running → paused → completed). | workspace, project, run (when interactive) |
-| **run** | A single execution of an automation. Has a lifecycle (pending → enriching → executing → completed/failed). | session (when automated), job |
+| **run** | A single execution of an automation. Has a lifecycle (queued → enriching → ready → running → succeeded/failed/needs_human/timed_out/canceled/skipped). | session (when automated), job |
 | **hub** | The gateway-side object managing a session's runtime state, WebSocket connections, and event processing. | session manager, controller |
 | **provider** | The sandbox compute backend (Modal or E2B). Implements the `SandboxProvider` interface. | runtime, backend, platform |
 | **prebuild** | A reusable configuration + snapshot combination for faster session starts. Previously called "configuration" in some code. | configuration (in specs — use "prebuild" consistently) |

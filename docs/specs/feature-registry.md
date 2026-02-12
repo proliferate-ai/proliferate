@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
-> **Updated:** 2026-02-11 from `main` branch.
+> **Updated:** 2026-02-11 from `main` branch. Corrected after consistency review.
 
 ---
 
@@ -112,12 +112,12 @@
 | Webhook ingestion (Nango) | Implemented | `apps/trigger-service/src/lib/webhook-dispatcher.ts` | `POST /webhooks/nango` |
 | Webhook dispatch + matching | Implemented | `apps/trigger-service/src/lib/trigger-processor.ts` | Matches events to triggers |
 | Polling scheduler | Implemented | `apps/trigger-service/src/polling/worker.ts` | Cursor-based stateful polling |
-| Cron scheduling | Implemented | `apps/trigger-service/src/` | SCHEDULED queue + cron expressions |
+| Cron scheduling | Partial | `apps/trigger-service/src/` | Queue type defined, DB schema exists, but no BullMQ worker instantiated to process SCHEDULED jobs |
 | GitHub provider | Implemented | `packages/triggers/src/github.ts` | Webhook triggers |
 | Linear provider | Implemented | `packages/triggers/src/linear.ts` | Webhook + polling |
-| Sentry provider | Implemented | `packages/triggers/src/sentry.ts` | Webhook + polling |
+| Sentry provider | Implemented | `packages/triggers/src/sentry.ts` | Webhook only — `poll()` explicitly throws |
 | PostHog provider | Implemented | `packages/triggers/src/posthog.ts` | Webhook only, HMAC validation |
-| Gmail provider | Planned | `packages/triggers/src/adapters/gmail.ts` | Stub exists, not in registry |
+| Gmail provider | Partial | `packages/triggers/src/service/adapters/gmail.ts` | Full polling impl via Composio, but not in HTTP provider registry (`getProviderByType()` returns null) |
 | Provider registry | Implemented | `packages/triggers/src/index.ts` | Maps provider types to implementations |
 | PubSub session events | Implemented | `apps/worker/src/pubsub/` | Subscriber for session lifecycle events |
 
@@ -207,7 +207,7 @@
 | Bulk import | Implemented | `apps/web/src/server/routers/secrets.ts:bulkImport` | `.env` paste flow |
 | Secret encryption | Implemented | `packages/services/src/secrets/` | Encrypted at rest |
 | Per-secret persistence toggle | Implemented | Recent PR `c4d0abb` | Toggle whether secret persists across sessions |
-| S3 integration for secrets | Implemented | `apps/gateway/src/lib/s3.ts` | Secret storage integration |
+| Secret encryption (DB) | Implemented | `packages/services/src/secrets/service.ts` | AES-256 encrypted in PostgreSQL; S3 is NOT used for secrets (only verification uploads) |
 
 ---
 
@@ -266,7 +266,7 @@
 | Checkout flow | Implemented | `apps/web/src/server/routers/billing.ts:startCheckout` | Initiate payment |
 | Credit usage | Implemented | `apps/web/src/server/routers/billing.ts:useCredits` | Deduct credits |
 | Usage metering | Implemented | `packages/services/src/billing/metering.ts` | Real-time compute metering |
-| Credit gating | Implemented | `packages/shared/src/billing/` | Gate features on balance |
+| Credit gating | Partial | `packages/shared/src/billing/` | Gating logic exists but neither gateway HTTP nor oRPC session creation routes enforce it |
 | Shadow balance | Implemented | `packages/services/src/billing/shadow-balance.ts` | Fast balance approximation |
 | Org pause on zero balance | Implemented | `packages/services/src/billing/org-pause.ts` | Auto-pause all sessions |
 | Trial credits | Implemented | `packages/services/src/billing/trial-activation.ts` | Auto-provision on signup |

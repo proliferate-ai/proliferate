@@ -532,10 +532,11 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	// Load prebuild repos for coding sessions
 	const prebuildStartMs = Date.now();
 	const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
-	log.debug(
+	log.info(
 		{
 			durationMs: Date.now() - prebuildStartMs,
 			count: prebuildRepoRows?.length ?? 0,
+			repos: prebuildRepoRows?.map((r) => r.repo?.githubRepoName).filter(Boolean),
 		},
 		"session_creator.create_sandbox.prebuild_repos",
 	);
@@ -571,11 +572,16 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			};
 		}),
 	);
-	log.debug(
+	log.info(
 		{
 			durationMs: Date.now() - githubStartMs,
 			repoCount: repoSpecs.length,
 			tokensPresent: repoSpecs.filter((r) => Boolean(r.token)).length,
+			repos: repoSpecs.map((r) => ({
+				url: r.repoUrl,
+				hasToken: Boolean(r.token),
+				workspacePath: r.workspacePath,
+			})),
 		},
 		"session_creator.create_sandbox.github_tokens",
 	);

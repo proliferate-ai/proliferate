@@ -433,15 +433,15 @@ export class E2BProvider implements SandboxProvider {
 
 		if (isSnapshot) {
 			// Snapshot restore: repos are already in the filesystem, just read metadata
-			log.debug("Restoring from snapshot - reading metadata");
+			log.info("Restoring from snapshot - reading metadata (skipping clone)");
 			try {
 				const metadataStr = await sandbox.files.read(SANDBOX_PATHS.metadataFile);
 				const metadata: SessionMetadata = JSON.parse(metadataStr);
-				log.debug({ repoDir: metadata.repoDir }, "Found repo from metadata");
+				log.info({ repoDir: metadata.repoDir }, "Found repoDir from snapshot metadata");
 				return metadata.repoDir;
-			} catch {
+			} catch (metadataErr) {
 				// Fallback to find command if metadata doesn't exist (legacy snapshots)
-				log.debug("Metadata not found, falling back to find command");
+				log.warn({ err: metadataErr }, "Snapshot metadata not found, falling back to find command");
 				const findResult = await sandbox.commands.run(
 					"find /home/user -maxdepth 5 -name '.git' -type d 2>/dev/null | head -1",
 					{ timeoutMs: 30000 },
@@ -450,7 +450,7 @@ export class E2BProvider implements SandboxProvider {
 				if (findResult.stdout.trim()) {
 					const gitDir = findResult.stdout.trim();
 					const repoDir = gitDir.replace("/.git", "");
-					log.debug({ repoDir }, "Found repo");
+					log.info({ repoDir }, "Found repo via find fallback");
 					return repoDir;
 				}
 
@@ -460,13 +460,13 @@ export class E2BProvider implements SandboxProvider {
 					{ timeoutMs: 10000 },
 				);
 				const repoDir = lsResult.stdout.trim() || "/home/user";
-				log.debug({ repoDir }, "Using repo fallback");
+				log.warn({ repoDir }, "Using last-resort repo fallback (repos likely missing)");
 				return repoDir;
 			}
 		}
 
 		// Fresh sandbox: clone repositories
-		log.debug("Setting up workspace");
+		log.info({ repoCount: opts.repos.length }, "Setting up workspace");
 		await sandbox.commands.run(`mkdir -p ${workspaceDir}`, {
 			timeoutMs: 10000,
 		});
@@ -500,27 +500,52 @@ export class E2BProvider implements SandboxProvider {
 				cloneUrl = repo.repoUrl.replace("https://", `https://x-access-token:${repo.token}@`);
 			}
 
-			log.debug(
-				{ repo: repo.workspacePath, index: i + 1, total: opts.repos.length },
+			log.info(
+				{
+					repo: repo.workspacePath,
+					repoUrl: repo.repoUrl,
+					hasToken: Boolean(repo.token),
+					index: i + 1,
+					total: opts.repos.length,
+					targetDir,
+				},
 				"Cloning repo",
 			);
-			try {
-				await sandbox.commands.run(
-					`git clone --depth 1 --branch ${opts.branch} '${cloneUrl}' ${targetDir}`,
-					{ timeoutMs: 120000 },
+			const cloneResult = await sandbox.commands.run(
+				`git clone --depth 1 --branch ${opts.branch} '${cloneUrl}' ${targetDir}`,
+				{ timeoutMs: 120000 },
+			);
+			if (cloneResult.exitCode !== 0) {
+				log.warn(
+					{ repo: repo.workspacePath, exitCode: cloneResult.exitCode, stderr: cloneResult.stderr },
+					"Branch clone failed, trying default",
 				);
-			} catch {
-				// Try without branch
-				log.debug({ repo: repo.workspacePath }, "Branch clone failed, trying default");
-				await sandbox.commands.run(`git clone --depth 1 '${cloneUrl}' ${targetDir}`, {
-					timeoutMs: 120000,
-				});
+				const fallbackResult = await sandbox.commands.run(
+					`git clone --depth 1 '${cloneUrl}' ${targetDir}`,
+					{
+						timeoutMs: 120000,
+					},
+				);
+				if (fallbackResult.exitCode !== 0) {
+					log.error(
+						{
+							repo: repo.workspacePath,
+							exitCode: fallbackResult.exitCode,
+							stderr: fallbackResult.stderr,
+						},
+						"Repo clone failed completely",
+					);
+					throw new Error(`git clone failed for ${repo.repoUrl}: ${fallbackResult.stderr}`);
+				}
+				log.info({ repo: repo.workspacePath }, "Repo cloned successfully (default branch)");
+			} else {
+				log.info({ repo: repo.workspacePath }, "Repo cloned successfully");
 			}
 		}
 
 		// Set repoDir (first repo for single, workspace root for multi)
 		const repoDir = opts.repos.length > 1 ? workspaceDir : firstRepoDir || workspaceDir;
-		log.debug("All repositories cloned");
+		log.info({ repoDir, repoCount: opts.repos.length }, "All repositories cloned");
 
 		// Save session metadata for robust state tracking across pause/resume
 		const metadata: SessionMetadata = {
