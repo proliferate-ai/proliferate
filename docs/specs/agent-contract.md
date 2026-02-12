@@ -275,6 +275,8 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 
 **Behavior:** Gateway intercepts, validates with Zod, persists to prebuild `service_commands` JSONB. Requires `session.prebuild_id`. Returns `{ prebuildId, commandCount }`.
 
+**Scope:** Setup sessions only. The tool file is only injected into sandboxes when `sessionType === "setup"`. The gateway handler also rejects calls from non-setup sessions at runtime as a defense-in-depth measure.
+
 #### `save_env_files` tool — `Implemented`
 
 **Schema:**
@@ -294,6 +296,8 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 ```
 
 **Behavior:** Gateway intercepts, validates with Zod (including path traversal checks), persists to prebuild `env_files` JSONB. Returns `{ prebuildId, fileCount }`.
+
+**Scope:** Setup sessions only. Same injection/runtime scoping as `save_service_commands`.
 
 #### `automation.complete` tool — `Implemented`
 

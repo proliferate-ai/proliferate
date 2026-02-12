@@ -91,6 +91,8 @@ export interface CreateSandboxOpts {
 	serviceCommands?: PrebuildServiceCommand[];
 	/** Env file generation spec from prebuild config. Applied on boot before service autostart. */
 	envFiles?: unknown;
+	/** Session type — controls which tools are injected (e.g. setup-only tools). */
+	sessionType?: "coding" | "setup" | "cli";
 }
 
 export interface CreateSandboxResult {

@@ -1023,10 +1023,11 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 		// Write all files in parallel (each write ensures its directory exists)
 		log.debug("Writing OpenCode files (parallel)");
+		const isSetup = opts.sessionType === "setup";
 		const writePromises = [
 			// Plugin
 			writeFile(`${SANDBOX_PATHS.globalPluginDir}/proliferate.mjs`, PLUGIN_MJS),
-			// Tools (6 files)
+			// Tools (common)
 			writeFile(`${localToolDir}/verify.ts`, VERIFY_TOOL),
 			writeFile(`${localToolDir}/verify.txt`, VERIFY_TOOL_DESCRIPTION),
 			writeFile(`${localToolDir}/request_env_variables.ts`, REQUEST_ENV_VARIABLES_TOOL),
@@ -1035,10 +1036,18 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			writeFile(`${localToolDir}/save_snapshot.txt`, SAVE_SNAPSHOT_DESCRIPTION),
 			writeFile(`${localToolDir}/automation_complete.ts`, AUTOMATION_COMPLETE_TOOL),
 			writeFile(`${localToolDir}/automation_complete.txt`, AUTOMATION_COMPLETE_DESCRIPTION),
-			writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
-			writeFile(`${localToolDir}/save_service_commands.txt`, SAVE_SERVICE_COMMANDS_DESCRIPTION),
-			writeFile(`${localToolDir}/save_env_files.ts`, SAVE_ENV_FILES_TOOL),
-			writeFile(`${localToolDir}/save_env_files.txt`, SAVE_ENV_FILES_DESCRIPTION),
+			// Setup-only tools
+			...(isSetup
+				? [
+						writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
+						writeFile(
+							`${localToolDir}/save_service_commands.txt`,
+							SAVE_SERVICE_COMMANDS_DESCRIPTION,
+						),
+						writeFile(`${localToolDir}/save_env_files.ts`, SAVE_ENV_FILES_TOOL),
+						writeFile(`${localToolDir}/save_env_files.txt`, SAVE_ENV_FILES_DESCRIPTION),
+					]
+				: []),
 			// Config (2 files)
 			writeFile(`${SANDBOX_PATHS.globalOpencodeDir}/opencode.json`, opencodeConfig),
 			writeFile(`${repoDir}/opencode.json`, opencodeConfig),

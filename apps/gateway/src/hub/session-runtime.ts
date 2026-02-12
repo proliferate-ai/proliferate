@@ -9,6 +9,7 @@ import { type Logger, createLogger } from "@proliferate/logger";
 import { baseSnapshots, sessions, users } from "@proliferate/services";
 import type {
 	AutoStartOutputEntry,
+	CreateSandboxOpts,
 	PrebuildServiceCommand,
 	SandboxProvider,
 	SandboxProviderType,
@@ -359,6 +360,8 @@ export class SessionRuntime {
 				sshPublicKey: this.context.sshPublicKey,
 				snapshotHasDeps: this.context.snapshotHasDeps,
 				serviceCommands: this.context.serviceCommands,
+				sessionType:
+					(this.context.session.session_type as CreateSandboxOpts["sessionType"]) ?? undefined,
 			});
 			this.logLatency("runtime.ensure_ready.provider.ensure_sandbox", {
 				provider: provider.type,

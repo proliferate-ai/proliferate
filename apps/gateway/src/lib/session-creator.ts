@@ -288,6 +288,7 @@ export async function createSession(
 			sessionId,
 			prebuildId,
 			organizationId,
+			sessionType,
 			userId,
 			snapshotId,
 			agentConfig,
@@ -359,6 +360,7 @@ interface CreateSandboxParams {
 	sessionId: string;
 	prebuildId: string;
 	organizationId: string;
+	sessionType: SessionType;
 	userId?: string;
 	snapshotId?: string | null;
 	agentConfig?: { modelId?: string };
@@ -389,6 +391,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		sessionId,
 		prebuildId,
 		organizationId,
+		sessionType,
 		userId,
 		snapshotId,
 		agentConfig,
@@ -504,6 +507,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			baseSnapshotId,
 			sshPublicKey,
 			triggerContext,
+			sessionType,
 		});
 		log.debug(
 			{
@@ -666,6 +670,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		snapshotHasDeps,
 		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
 		envFiles,
+		sessionType,
 	});
 	log.debug(
 		{
