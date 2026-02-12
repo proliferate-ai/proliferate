@@ -63,15 +63,32 @@ export async function createGrant(input: CreateGrantInput): Promise<ActionGrantR
 export async function listActiveGrants(
 	organizationId: string,
 	sessionId?: string,
+	options?: { limit?: number; offset?: number },
 ): Promise<ActionGrantRow[]> {
-	return grantsDb.listActiveGrants(organizationId, sessionId);
+	return grantsDb.listActiveGrants(organizationId, sessionId, options);
 }
 
 /**
  * List all grants for an org (including revoked/expired).
  */
-export async function listGrantsByOrg(organizationId: string): Promise<ActionGrantRow[]> {
-	return grantsDb.listGrantsByOrg(organizationId);
+export async function listGrantsByOrg(
+	organizationId: string,
+	options?: { limit?: number; offset?: number },
+): Promise<ActionGrantRow[]> {
+	return grantsDb.listGrantsByOrg(organizationId, options);
+}
+
+/**
+ * Delete expired grants (cleanup job).
+ * Safe/idempotent — only removes grants whose expiresAt has passed.
+ */
+export async function cleanupExpiredGrants(): Promise<number> {
+	const log = getServicesLogger().child({ module: "actions.grants" });
+	const deleted = await grantsDb.deleteExpiredGrants(new Date());
+	if (deleted > 0) {
+		log.info({ deleted }, "Expired grants cleaned up");
+	}
+	return deleted;
 }
 
 /**
@@ -114,6 +131,12 @@ export async function evaluateGrant(
 				},
 				"Grant matched and consumed",
 			);
+			if (consumed.maxCalls != null && consumed.usedCalls >= consumed.maxCalls) {
+				log.info(
+					{ grantId: consumed.id, usedCalls: consumed.usedCalls, maxCalls: consumed.maxCalls },
+					"Grant exhausted",
+				);
+			}
 			return { granted: true, grantId: consumed.id };
 		}
 	}

@@ -12,8 +12,10 @@ import {
 	eq,
 	getDb,
 	gt,
+	isNotNull,
 	isNull,
 	lt,
+	lte,
 	or,
 	sql,
 } from "../db/client";
@@ -74,6 +76,7 @@ export async function getGrant(
 export async function listActiveGrants(
 	organizationId: string,
 	sessionId?: string,
+	options?: { limit?: number; offset?: number },
 ): Promise<ActionGrantRow[]> {
 	const db = getDb();
 	const now = new Date();
@@ -90,7 +93,9 @@ export async function listActiveGrants(
 		.select()
 		.from(actionGrants)
 		.where(and(...conditions))
-		.orderBy(desc(actionGrants.createdAt));
+		.orderBy(desc(actionGrants.createdAt))
+		.limit(options?.limit ?? 100)
+		.offset(options?.offset ?? 0);
 }
 
 /**
@@ -176,11 +181,30 @@ export async function revokeGrant(
 /**
  * List all grants for an org (including inactive ones).
  */
-export async function listGrantsByOrg(organizationId: string): Promise<ActionGrantRow[]> {
+export async function listGrantsByOrg(
+	organizationId: string,
+	options?: { limit?: number; offset?: number },
+): Promise<ActionGrantRow[]> {
 	const db = getDb();
 	return db
 		.select()
 		.from(actionGrants)
 		.where(eq(actionGrants.organizationId, organizationId))
-		.orderBy(desc(actionGrants.createdAt));
+		.orderBy(desc(actionGrants.createdAt))
+		.limit(options?.limit ?? 100)
+		.offset(options?.offset ?? 0);
+}
+
+/**
+ * Delete expired grants.
+ * Safe/idempotent — only removes grants whose expiresAt has passed.
+ * Does not affect active, revoked, or exhausted-but-unexpired grants.
+ */
+export async function deleteExpiredGrants(before: Date): Promise<number> {
+	const db = getDb();
+	const rows = await db
+		.delete(actionGrants)
+		.where(and(isNotNull(actionGrants.expiresAt), lte(actionGrants.expiresAt, before)))
+		.returning({ id: actionGrants.id });
+	return rows.length;
 }

@@ -65,7 +65,7 @@ vi.mock("@proliferate/services", () => ({
 		listActiveGrants: vi.fn().mockResolvedValue([]),
 	},
 	sessions: {
-		findByIdInternal: vi.fn().mockResolvedValue({ organizationId: "org-1" }),
+		findByIdInternal: vi.fn().mockResolvedValue({ organizationId: "org-1", createdBy: "user-1" }),
 		listSessionConnections: vi.fn().mockResolvedValue([
 			{
 				integrationId: "int-1",
@@ -592,6 +592,108 @@ describe("actions HTTP routes", () => {
 			expect(res.status).toBe(502);
 			const body = (await res.json()) as { error: string };
 			expect(body.error).toMatch(/API rate limited/);
+		});
+	});
+
+	// ------------------------------------------
+	// POST /grants — sandbox grant creation identity
+	// ------------------------------------------
+
+	describe("POST /grants (sandbox grant creation)", () => {
+		it("uses session.createdBy (userId) as grant creator, not sessionId", async () => {
+			const { sessions, actions: actionsService } = await import("@proliferate/services");
+			vi.mocked(sessions.findByIdInternal).mockResolvedValueOnce({
+				organizationId: "org-1",
+				createdBy: "user-owner-1",
+			} as never);
+			vi.mocked(actionsService.createGrant).mockResolvedValueOnce(
+				makeGrant({ createdBy: "user-owner-1" }) as never,
+			);
+
+			// Build sandbox-auth app
+			const sandboxApp = express();
+			sandboxApp.use(express.json());
+			sandboxApp.use("/:proliferateSessionId/actions", (req, _res, next) => {
+				req.auth = { source: "sandbox" as const, sessionId: "session-1" };
+				next();
+			});
+			const mockHub = {
+				getOrCreate: vi.fn().mockResolvedValue({ broadcastMessage: vi.fn() }),
+				get: vi.fn(),
+				remove: vi.fn(),
+				getActiveSessionIds: vi.fn().mockReturnValue([]),
+			};
+			sandboxApp.use(
+				"/:proliferateSessionId/actions",
+				createActionsRouter({} as never, mockHub as never),
+			);
+			sandboxApp.use(errorHandler);
+
+			const srv = createServer(sandboxApp);
+			await new Promise<void>((r) => srv.listen(0, r));
+			const addr = srv.address();
+			if (!addr || typeof addr === "string") throw new Error("No addr");
+
+			const res = await fetch(`http://127.0.0.1:${addr.port}/session-1/actions/grants`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ integration: "linear", action: "create_issue" }),
+			});
+
+			expect(res.status).toBe(201);
+			expect(vi.mocked(actionsService.createGrant)).toHaveBeenCalledWith(
+				expect.objectContaining({ createdBy: "user-owner-1" }),
+			);
+
+			await new Promise<void>((resolve, reject) => {
+				srv.close((err) => (err ? reject(err) : resolve()));
+			});
+		});
+
+		it("returns 400 when session has no owner identity", async () => {
+			const { sessions } = await import("@proliferate/services");
+			vi.mocked(sessions.findByIdInternal).mockResolvedValueOnce({
+				organizationId: "org-1",
+				createdBy: null,
+			} as never);
+
+			// Build sandbox-auth app
+			const sandboxApp = express();
+			sandboxApp.use(express.json());
+			sandboxApp.use("/:proliferateSessionId/actions", (req, _res, next) => {
+				req.auth = { source: "sandbox" as const, sessionId: "session-1" };
+				next();
+			});
+			const mockHub = {
+				getOrCreate: vi.fn().mockResolvedValue({ broadcastMessage: vi.fn() }),
+				get: vi.fn(),
+				remove: vi.fn(),
+				getActiveSessionIds: vi.fn().mockReturnValue([]),
+			};
+			sandboxApp.use(
+				"/:proliferateSessionId/actions",
+				createActionsRouter({} as never, mockHub as never),
+			);
+			sandboxApp.use(errorHandler);
+
+			const srv = createServer(sandboxApp);
+			await new Promise<void>((r) => srv.listen(0, r));
+			const addr = srv.address();
+			if (!addr || typeof addr === "string") throw new Error("No addr");
+
+			const res = await fetch(`http://127.0.0.1:${addr.port}/session-1/actions/grants`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ integration: "linear", action: "create_issue" }),
+			});
+
+			expect(res.status).toBe(400);
+			const body = (await res.json()) as { error: string };
+			expect(body.error).toMatch(/no owner identity/);
+
+			await new Promise<void>((resolve, reject) => {
+				srv.close((err) => (err ? reject(err) : resolve()));
+			});
 		});
 	});
 });

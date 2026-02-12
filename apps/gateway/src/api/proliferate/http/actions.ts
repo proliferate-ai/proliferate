@@ -588,9 +588,13 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(404, "Session not found");
 			}
 
+			if (!session.createdBy) {
+				throw new ApiError(400, "Cannot create grant: session has no owner identity");
+			}
+
 			const grant = await actions.createGrant({
 				organizationId: session.organizationId,
-				createdBy: sessionId,
+				createdBy: session.createdBy,
 				sessionId: scope === "org" ? null : sessionId,
 				integration,
 				action,
@@ -623,7 +627,9 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				orgId = session.organizationId;
 			}
 
-			const grants = await actions.listActiveGrants(orgId, sessionId);
+			const limit = Math.min(Number(req.query.limit) || 100, 100);
+			const offset = Number(req.query.offset) || 0;
+			const grants = await actions.listActiveGrants(orgId, sessionId, { limit, offset });
 			res.json({ grants });
 		} catch (err) {
 			next(err);
