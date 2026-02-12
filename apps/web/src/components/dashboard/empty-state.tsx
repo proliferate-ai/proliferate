@@ -75,11 +75,11 @@ export function EmptyDashboard() {
 	const firstName = authSession?.user?.name?.split(" ")[0] ?? "";
 	const greeting = firstName ? getGreeting(firstName) : "How can I help you today?";
 
-	const handleSubmit = async (prompt: string) => {
+	const handleSubmit = async (prompt: string, images?: string[]) => {
 		if (!selectedSnapshotId && !selectedRepoId) return;
 
 		// Store the prompt in dashboard store so it can be passed to CodingSession
-		setPendingPrompt(prompt);
+		setPendingPrompt(prompt, images ?? null);
 
 		try {
 			let prebuildId = selectedSnapshotId;

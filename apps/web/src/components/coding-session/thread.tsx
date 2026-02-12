@@ -4,6 +4,7 @@ import { ModelSelector } from "@/components/automations/model-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Text } from "@/components/ui/text";
+import { type ImageAttachment, useImageAttachments } from "@/hooks/use-image-attachments";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import {
@@ -25,7 +26,7 @@ import {
 	Square,
 	X,
 } from "lucide-react";
-import type { FC } from "react";
+import type { DragEvent, FC } from "react";
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
@@ -122,23 +123,22 @@ const MarkdownContent: FC<MarkdownContentProps> = ({ text, variant = "assistant"
 
 // Attachment preview with remove button
 interface AttachmentPreviewProps {
-	preview: string;
-	index: number;
-	onRemove: (index: number) => void;
+	attachment: ImageAttachment;
+	onRemove: (id: string) => void;
 }
 
-const AttachmentPreview: FC<AttachmentPreviewProps> = ({ preview, index, onRemove }) => (
+const AttachmentPreview: FC<AttachmentPreviewProps> = ({ attachment, onRemove }) => (
 	<div className="relative group">
 		<img
-			src={preview}
-			alt={`Attachment ${index + 1}`}
+			src={attachment.preview}
+			alt={attachment.name}
 			className="h-16 w-16 object-cover rounded-lg border border-border"
 		/>
 		<Button
 			type="button"
 			variant="destructive"
 			size="icon"
-			onClick={() => onRemove(index)}
+			onClick={() => onRemove(attachment.id)}
 			className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity"
 		>
 			<X className="h-3 w-3" />
@@ -306,8 +306,18 @@ export const Thread: FC<ThreadProps> = ({
 };
 
 const Composer: FC = () => {
-	const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const dragDepthRef = useRef(0);
+	const [isDragOver, setIsDragOver] = useState(false);
+	const {
+		attachments,
+		error: attachmentError,
+		imageDataUris,
+		addFiles,
+		handleFileInputChange,
+		removeAttachment,
+		clearAttachments,
+	} = useImageAttachments();
 
 	const threadRuntime = useThreadRuntime();
 	const composerRuntime = useComposerRuntime();
@@ -327,20 +337,34 @@ const Composer: FC = () => {
 
 	const handleAttachClick = () => fileInputRef.current?.click();
 
-	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const file = e.target.files?.[0];
-		if (file?.type.startsWith("image/")) {
-			const reader = new FileReader();
-			reader.onloadend = () => {
-				setAttachments((prev) => [...prev, { file, preview: reader.result as string }]);
-			};
-			reader.readAsDataURL(file);
-		}
-		e.target.value = "";
+	const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
+		if (!event.dataTransfer.types.includes("Files")) return;
+		event.preventDefault();
+		dragDepthRef.current += 1;
+		setIsDragOver(true);
 	};
 
-	const removeAttachment = (index: number) => {
-		setAttachments((prev) => prev.filter((_, i) => i !== index));
+	const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+		if (!event.dataTransfer.types.includes("Files")) return;
+		event.preventDefault();
+		dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+		if (dragDepthRef.current === 0) {
+			setIsDragOver(false);
+		}
+	};
+
+	const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+		if (!event.dataTransfer.types.includes("Files")) return;
+		event.preventDefault();
+		event.dataTransfer.dropEffect = "copy";
+	};
+
+	const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+		if (!event.dataTransfer.types.includes("Files")) return;
+		event.preventDefault();
+		dragDepthRef.current = 0;
+		setIsDragOver(false);
+		void addFiles(event.dataTransfer.files);
 	};
 
 	const toggleRecording = () => {
@@ -357,16 +381,16 @@ const Composer: FC = () => {
 
 		const content: Array<{ type: "text"; text: string } | { type: "image"; image: string }> = [];
 		if (text) content.push({ type: "text", text });
-		for (const attachment of attachments) {
-			content.push({ type: "image", image: attachment.preview });
+		for (const image of imageDataUris) {
+			content.push({ type: "image", image });
 		}
 
 		threadRuntime.append({ role: "user", content });
 		composerRuntime.setText("");
-		setAttachments([]);
+		clearAttachments();
 	};
 
-	const hasContent = composerRuntime.getState().text.trim() || attachments.length > 0;
+	const hasContent = composerRuntime.getState().text.trim().length > 0 || attachments.length > 0;
 
 	return (
 		<ComposerPrimitive.Root className="max-w-2xl mx-auto w-full">
@@ -374,22 +398,40 @@ const Composer: FC = () => {
 				ref={fileInputRef}
 				type="file"
 				accept="image/*"
-				onChange={handleFileChange}
+				multiple
+				onChange={handleFileInputChange}
 				className="hidden"
 			/>
 
-			<div className="flex flex-col rounded-2xl border bg-muted/40 dark:bg-chat-input">
+			<div
+				className={cn(
+					"relative flex flex-col rounded-2xl border bg-muted/40 dark:bg-chat-input",
+					isDragOver && "border-transparent ring-2 ring-ring",
+				)}
+				onDragEnter={handleDragEnter}
+				onDragLeave={handleDragLeave}
+				onDragOver={handleDragOver}
+				onDrop={handleDrop}
+			>
+				{isDragOver && (
+					<div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/80 text-sm text-foreground">
+						Drop images to attach
+					</div>
+				)}
+
 				{attachments.length > 0 && (
 					<div className="flex gap-2 p-3 pb-0 flex-wrap">
-						{attachments.map((attachment, index) => (
+						{attachments.map((attachment) => (
 							<AttachmentPreview
-								key={attachment.preview}
-								preview={attachment.preview}
-								index={index}
+								key={attachment.id}
+								attachment={attachment}
 								onRemove={removeAttachment}
 							/>
 						))}
 					</div>
+				)}
+				{attachmentError && (
+					<div className="px-3 pt-2 text-xs text-destructive">{attachmentError}</div>
 				)}
 
 				<ComposerPrimitive.Input

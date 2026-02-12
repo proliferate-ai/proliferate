@@ -14,7 +14,8 @@ export default function SessionDetailPage({
 	params: Promise<{ id: string }>;
 }) {
 	const { id } = use(params);
-	const { setActiveSession, pendingPrompt, clearPendingPrompt } = useDashboardStore();
+	const { setActiveSession, pendingPrompt, pendingImages, clearPendingPrompt } =
+		useDashboardStore();
 	const searchParams = useSearchParams();
 	const targetOrgId = searchParams.get("orgId");
 	const { data: activeOrg, isPending: isOrgPending } = useActiveOrganization();
@@ -66,6 +67,7 @@ export default function SessionDetailPage({
 			<CodingSession
 				sessionId={id}
 				initialPrompt={pendingPrompt || undefined}
+				initialImages={pendingImages || undefined}
 				onError={(error) => {
 					console.error("Session error:", error);
 					clearPendingPrompt();

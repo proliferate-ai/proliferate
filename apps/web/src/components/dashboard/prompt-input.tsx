@@ -5,14 +5,16 @@ import { EnvironmentPicker } from "@/components/dashboard/environment-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useImageAttachments } from "@/hooks/use-image-attachments";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { ArrowUp, Mic, Paperclip } from "lucide-react";
+import type { DragEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 
 interface PromptInputProps {
-	onSubmit: (prompt: string) => void;
+	onSubmit: (prompt: string, images?: string[]) => void;
 	disabled?: boolean;
 	isLoading?: boolean;
 }
@@ -20,7 +22,16 @@ interface PromptInputProps {
 export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps) {
 	const [prompt, setPrompt] = useState("");
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
+	const dragDepthRef = useRef(0);
+	const [isDragOver, setIsDragOver] = useState(false);
+	const {
+		attachments,
+		error: attachmentError,
+		imageDataUris,
+		addFiles,
+		handleFileInputChange,
+		removeAttachment,
+	} = useImageAttachments();
 
 	const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } =
 		useSpeechRecognition();
@@ -42,7 +53,7 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
 		if (canSubmit) {
-			onSubmit(prompt.trim());
+			onSubmit(prompt.trim(), imageDataUris.length > 0 ? imageDataUris : undefined);
 			// Don't clear prompt - keep it visible during loading
 			// It will be cleared when session becomes active
 		}
@@ -52,21 +63,34 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 		fileInputRef.current?.click();
 	};
 
-	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const file = e.target.files?.[0];
-		if (file?.type.startsWith("image/")) {
-			const reader = new FileReader();
-			reader.onloadend = () => {
-				setAttachments((prev) => [...prev, { file, preview: reader.result as string }]);
-			};
-			reader.readAsDataURL(file);
-		}
-		// Reset input so same file can be selected again
-		e.target.value = "";
+	const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
+		if (!event.dataTransfer.types.includes("Files")) return;
+		event.preventDefault();
+		dragDepthRef.current += 1;
+		setIsDragOver(true);
 	};
 
-	const removeAttachment = (index: number) => {
-		setAttachments((prev) => prev.filter((_, i) => i !== index));
+	const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+		if (!event.dataTransfer.types.includes("Files")) return;
+		event.preventDefault();
+		dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+		if (dragDepthRef.current === 0) {
+			setIsDragOver(false);
+		}
+	};
+
+	const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+		if (!event.dataTransfer.types.includes("Files")) return;
+		event.preventDefault();
+		event.dataTransfer.dropEffect = "copy";
+	};
+
+	const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+		if (!event.dataTransfer.types.includes("Files")) return;
+		event.preventDefault();
+		dragDepthRef.current = 0;
+		setIsDragOver(false);
+		void addFiles(event.dataTransfer.files);
 	};
 
 	const toggleRecording = () => {
@@ -84,21 +108,33 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 				ref={fileInputRef}
 				type="file"
 				accept="image/*"
-				onChange={handleFileChange}
+				multiple
+				onChange={handleFileInputChange}
 				className="hidden"
 			/>
 
 			<div
 				className={cn(
-					"rounded-2xl border border-border bg-card dark:bg-chat-input shadow-sm transition-all overflow-hidden",
+					"relative rounded-2xl border border-border bg-card dark:bg-chat-input shadow-sm transition-all overflow-hidden",
 					"has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:border-transparent",
+					isDragOver && "border-transparent ring-2 ring-ring",
 				)}
+				onDragEnter={handleDragEnter}
+				onDragLeave={handleDragLeave}
+				onDragOver={handleDragOver}
+				onDrop={handleDrop}
 			>
+				{isDragOver && (
+					<div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 text-sm text-foreground">
+						Drop images to attach
+					</div>
+				)}
+
 				{/* Attachment previews */}
 				{attachments.length > 0 && (
-					<div className="flex gap-2 p-3 pb-0">
+					<div className="flex gap-2 p-3 pb-0 flex-wrap">
 						{attachments.map((attachment, index) => (
-							<div key={attachment.preview} className="relative group">
+							<div key={attachment.id} className="relative group">
 								<img
 									src={attachment.preview}
 									alt={`Attachment ${index + 1}`}
@@ -107,7 +143,7 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 								<Button
 									type="button"
 									variant="ghost"
-									onClick={() => removeAttachment(index)}
+									onClick={() => removeAttachment(attachment.id)}
 									className="absolute -top-1.5 -right-1.5 h-5 w-5 p-0 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/90"
 								>
 									×
@@ -115,6 +151,9 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 							</div>
 						))}
 					</div>
+				)}
+				{attachmentError && (
+					<div className="px-3 pt-2 text-xs text-destructive">{attachmentError}</div>
 				)}
 
 				{/* Text input area */}
