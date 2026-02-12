@@ -209,15 +209,11 @@ export function CodingSession({
 								error={error}
 								panelMode={mode}
 								onTogglePreview={() => toggleUrlPreview(previewUrl)}
-								onToggleSessionInfo={() => togglePanel("session-info")}
-								onToggleSnapshots={() => togglePanel("snapshots")}
-								onToggleAutoStart={() => togglePanel("service-commands")}
+								onToggleSettings={() => togglePanel("settings")}
 								onToggleGit={() => togglePanel("git")}
-								onToggleChanges={() => togglePanel("changes")}
 								onToggleTerminal={() => togglePanel("terminal")}
 								onToggleVscode={() => togglePanel("vscode")}
-								onToggleActions={() => togglePanel("actions")}
-								onToggleServices={() => togglePanel("services")}
+								onToggleArtifacts={() => togglePanel("artifacts")}
 								mobileView={mobileView}
 								onToggleMobileView={toggleMobileView}
 							/>
@@ -259,15 +255,11 @@ export function CodingSession({
 						disabled={headerDisabled}
 						panelMode={mode}
 						onTogglePreview={() => toggleUrlPreview(previewUrl)}
-						onToggleSessionInfo={() => togglePanel("session-info")}
-						onToggleSnapshots={() => togglePanel("snapshots")}
-						onToggleAutoStart={() => togglePanel("service-commands")}
+						onToggleSettings={() => togglePanel("settings")}
 						onToggleGit={() => togglePanel("git")}
-						onToggleChanges={() => togglePanel("changes")}
 						onToggleTerminal={() => togglePanel("terminal")}
 						onToggleVscode={() => togglePanel("vscode")}
-						onToggleActions={() => togglePanel("actions")}
-						onToggleServices={() => togglePanel("services")}
+						onToggleArtifacts={() => togglePanel("artifacts")}
 						mobileView={mobileView}
 						onToggleMobileView={toggleMobileView}
 					/>

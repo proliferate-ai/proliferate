@@ -49,6 +49,17 @@ interface AutoStartPanelProps {
 	) => void;
 }
 
+export interface AutoStartContentProps {
+	repoId?: string | null;
+	prebuildId?: string | null;
+	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
+	sendRunAutoStart?: (
+		runId: string,
+		mode?: "test" | "start",
+		commands?: PrebuildServiceCommand[],
+	) => void;
+}
+
 interface CommandDraft {
 	name: string;
 	command: string;
@@ -56,13 +67,12 @@ interface CommandDraft {
 	workspacePath: string;
 }
 
-export function AutoStartPanel({
+export function AutoStartContent({
 	repoId,
 	prebuildId,
-	onClose,
 	autoStartOutput,
 	sendRunAutoStart,
-}: AutoStartPanelProps) {
+}: AutoStartContentProps) {
 	const hasPrebuild = !!prebuildId;
 
 	// Effective commands (server-side resolved) when prebuild exists
@@ -174,6 +184,81 @@ export function AutoStartPanel({
 	};
 
 	return (
+		<div className="flex-1 overflow-y-auto p-4 space-y-4">
+			<p className="text-xs text-muted-foreground">
+				These commands run automatically when future sessions start from a saved environment
+				snapshot.
+			</p>
+
+			{source !== "none" && !editing && (
+				<p className="text-[10px] text-muted-foreground/70">
+					{source === "prebuild"
+						? "Using configuration overrides"
+						: "Using repo defaults — saving will create configuration overrides"}
+				</p>
+			)}
+
+			{!canEdit ? (
+				<div className="rounded-lg border border-dashed border-border/80 p-4 text-center">
+					<Settings className="h-6 w-6 mx-auto mb-2 text-muted-foreground/50" />
+					<p className="text-sm text-muted-foreground">No configuration linked to this session.</p>
+				</div>
+			) : isLoading ? (
+				<div className="py-4 text-center">
+					<LoadingDots size="sm" className="text-muted-foreground" />
+				</div>
+			) : editing ? (
+				<EditForm
+					drafts={drafts}
+					workspaces={workspaces}
+					onUpdateDraft={updateDraft}
+					onAddRow={addRow}
+					onRemoveRow={removeRow}
+					onSave={handleSave}
+					onCancel={() => setEditing(false)}
+					isSaving={isSaving}
+				/>
+			) : commands && commands.length > 0 ? (
+				<>
+					<CommandsList commands={commands} onEdit={startEditing} />
+					{sendRunAutoStart && (
+						<Button
+							variant="outline"
+							size="sm"
+							className="w-full"
+							onClick={handleTest}
+							disabled={isTesting}
+						>
+							{isTesting ? (
+								<>
+									<LoadingDots size="sm" className="mr-2" />
+									Testing...
+								</>
+							) : (
+								<>
+									<Play className="h-3 w-3 mr-2" />
+									Test auto-start
+								</>
+							)}
+						</Button>
+					)}
+					{autoStartOutput && <TestResults entries={autoStartOutput.entries} />}
+				</>
+			) : (
+				<EmptyState onAdd={startEditing} />
+			)}
+		</div>
+	);
+}
+
+export function AutoStartPanel({
+	repoId,
+	prebuildId,
+	onClose,
+	autoStartOutput,
+	sendRunAutoStart,
+}: AutoStartPanelProps) {
+	return (
 		<div className="flex flex-col h-full">
 			{/* Header */}
 			<TooltipProvider delayDuration={150}>
@@ -190,73 +275,12 @@ export function AutoStartPanel({
 				</div>
 			</TooltipProvider>
 
-			{/* Content */}
-			<div className="flex-1 overflow-y-auto p-4 space-y-4">
-				<p className="text-xs text-muted-foreground">
-					These commands run automatically when future sessions start from a saved environment
-					snapshot.
-				</p>
-
-				{source !== "none" && !editing && (
-					<p className="text-[10px] text-muted-foreground/70">
-						{source === "prebuild"
-							? "Using configuration overrides"
-							: "Using repo defaults — saving will create configuration overrides"}
-					</p>
-				)}
-
-				{!canEdit ? (
-					<div className="rounded-lg border border-dashed border-border/80 p-4 text-center">
-						<Settings className="h-6 w-6 mx-auto mb-2 text-muted-foreground/50" />
-						<p className="text-sm text-muted-foreground">
-							No configuration linked to this session.
-						</p>
-					</div>
-				) : isLoading ? (
-					<div className="py-4 text-center">
-						<LoadingDots size="sm" className="text-muted-foreground" />
-					</div>
-				) : editing ? (
-					<EditForm
-						drafts={drafts}
-						workspaces={workspaces}
-						onUpdateDraft={updateDraft}
-						onAddRow={addRow}
-						onRemoveRow={removeRow}
-						onSave={handleSave}
-						onCancel={() => setEditing(false)}
-						isSaving={isSaving}
-					/>
-				) : commands && commands.length > 0 ? (
-					<>
-						<CommandsList commands={commands} onEdit={startEditing} />
-						{sendRunAutoStart && (
-							<Button
-								variant="outline"
-								size="sm"
-								className="w-full"
-								onClick={handleTest}
-								disabled={isTesting}
-							>
-								{isTesting ? (
-									<>
-										<LoadingDots size="sm" className="mr-2" />
-										Testing...
-									</>
-								) : (
-									<>
-										<Play className="h-3 w-3 mr-2" />
-										Test auto-start
-									</>
-								)}
-							</Button>
-						)}
-						{autoStartOutput && <TestResults entries={autoStartOutput.entries} />}
-					</>
-				) : (
-					<EmptyState onAdd={startEditing} />
-				)}
-			</div>
+			<AutoStartContent
+				repoId={repoId}
+				prebuildId={prebuildId}
+				autoStartOutput={autoStartOutput}
+				sendRunAutoStart={sendRunAutoStart}
+			/>
 		</div>
 	);
 }

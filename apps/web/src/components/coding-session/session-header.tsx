@@ -6,16 +6,12 @@ import { cn } from "@/lib/utils";
 import type { PreviewMode } from "@/stores/preview-panel";
 import {
 	Code,
-	FileDiff,
 	GitBranch,
 	Globe,
-	HardDrive,
 	MessageSquare,
 	PanelRight,
-	Server,
 	Settings,
 	SquareTerminal,
-	Wrench,
 	Zap,
 } from "lucide-react";
 
@@ -25,15 +21,11 @@ interface SessionHeaderProps {
 	// Panel state
 	panelMode: PreviewMode;
 	onTogglePreview?: () => void;
-	onToggleSessionInfo?: () => void;
-	onToggleSnapshots?: () => void;
-	onToggleAutoStart?: () => void;
+	onToggleSettings?: () => void;
 	onToggleGit?: () => void;
-	onToggleChanges?: () => void;
 	onToggleTerminal?: () => void;
 	onToggleVscode?: () => void;
-	onToggleActions?: () => void;
-	onToggleServices?: () => void;
+	onToggleArtifacts?: () => void;
 	// Mobile
 	mobileView?: "chat" | "preview";
 	onToggleMobileView?: () => void;
@@ -44,19 +36,17 @@ export function SessionHeader({
 	disabled,
 	panelMode,
 	onTogglePreview,
-	onToggleSessionInfo,
-	onToggleSnapshots,
-	onToggleAutoStart,
+	onToggleSettings,
 	onToggleGit,
-	onToggleChanges,
 	onToggleTerminal,
 	onToggleVscode,
-	onToggleActions,
-	onToggleServices,
+	onToggleArtifacts,
 	mobileView,
 	onToggleMobileView,
 }: SessionHeaderProps) {
 	const isPanelOpen = panelMode.type !== "none";
+	const isArtifactsActive =
+		panelMode.type === "artifacts" || panelMode.type === "file" || panelMode.type === "gallery";
 
 	return (
 		<TooltipProvider delayDuration={150}>
@@ -80,60 +70,24 @@ export function SessionHeader({
 						<TooltipContent>Preview</TooltipContent>
 					</Tooltip>
 				)}
-				{onToggleSessionInfo && (
+
+				{onToggleSettings && (
 					<Tooltip>
 						<TooltipTrigger asChild>
-							<span className="hidden md:inline-flex">
-								<Button
-									variant={panelMode.type === "session-info" ? "secondary" : "ghost"}
-									size="icon"
-									className="h-7 w-7"
-									onClick={onToggleSessionInfo}
-									disabled={disabled}
-								>
-									<Settings className="h-3.5 w-3.5" />
-								</Button>
-							</span>
+							<Button
+								variant={panelMode.type === "settings" ? "secondary" : "ghost"}
+								size="icon"
+								className="hidden md:flex h-7 w-7"
+								onClick={onToggleSettings}
+								disabled={disabled}
+							>
+								<Settings className="h-3.5 w-3.5" />
+							</Button>
 						</TooltipTrigger>
-						<TooltipContent>Session Info</TooltipContent>
+						<TooltipContent>Settings</TooltipContent>
 					</Tooltip>
 				)}
-				{onToggleSnapshots && (
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<span className="hidden md:inline-flex">
-								<Button
-									variant={panelMode.type === "snapshots" ? "secondary" : "ghost"}
-									size="icon"
-									className="h-7 w-7"
-									onClick={onToggleSnapshots}
-									disabled={disabled}
-								>
-									<HardDrive className="h-3.5 w-3.5" />
-								</Button>
-							</span>
-						</TooltipTrigger>
-						<TooltipContent>Snapshots</TooltipContent>
-					</Tooltip>
-				)}
-				{onToggleAutoStart && (
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<span className="hidden md:inline-flex">
-								<Button
-									variant={panelMode.type === "service-commands" ? "secondary" : "ghost"}
-									size="icon"
-									className="h-7 w-7"
-									onClick={onToggleAutoStart}
-									disabled={disabled}
-								>
-									<Wrench className="h-3.5 w-3.5" />
-								</Button>
-							</span>
-						</TooltipTrigger>
-						<TooltipContent>Auto-start settings</TooltipContent>
-					</Tooltip>
-				)}
+
 				{onToggleGit && (
 					<Tooltip>
 						<TooltipTrigger asChild>
@@ -148,23 +102,6 @@ export function SessionHeader({
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent>Git</TooltipContent>
-					</Tooltip>
-				)}
-
-				{onToggleChanges && (
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<Button
-								variant={panelMode.type === "changes" ? "secondary" : "ghost"}
-								size="icon"
-								className="hidden md:flex h-7 w-7"
-								onClick={onToggleChanges}
-								disabled={disabled}
-							>
-								<FileDiff className="h-3.5 w-3.5" />
-							</Button>
-						</TooltipTrigger>
-						<TooltipContent>Changes</TooltipContent>
 					</Tooltip>
 				)}
 
@@ -202,37 +139,20 @@ export function SessionHeader({
 					</Tooltip>
 				)}
 
-				{onToggleActions && (
+				{onToggleArtifacts && (
 					<Tooltip>
 						<TooltipTrigger asChild>
 							<Button
-								variant={panelMode.type === "actions" ? "secondary" : "ghost"}
+								variant={isArtifactsActive ? "secondary" : "ghost"}
 								size="icon"
 								className="hidden md:flex h-7 w-7"
-								onClick={onToggleActions}
+								onClick={onToggleArtifacts}
 								disabled={disabled}
 							>
 								<Zap className="h-3.5 w-3.5" />
 							</Button>
 						</TooltipTrigger>
-						<TooltipContent>Actions</TooltipContent>
-					</Tooltip>
-				)}
-
-				{onToggleServices && (
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<Button
-								variant={panelMode.type === "services" ? "secondary" : "ghost"}
-								size="icon"
-								className="hidden md:flex h-7 w-7"
-								onClick={onToggleServices}
-								disabled={disabled}
-							>
-								<Server className="h-3.5 w-3.5" />
-							</Button>
-						</TooltipTrigger>
-						<TooltipContent>Services</TooltipContent>
+						<TooltipContent>Artifacts</TooltipContent>
 					</Tooltip>
 				)}
 

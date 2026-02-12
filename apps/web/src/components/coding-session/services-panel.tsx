@@ -5,7 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { GATEWAY_URL } from "@/lib/gateway";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, Circle, Loader2, RefreshCw, RotateCw, Square, X } from "lucide-react";
+import {
+	ChevronDown,
+	ChevronLeft,
+	ChevronRight,
+	Circle,
+	Loader2,
+	RefreshCw,
+	RotateCw,
+	Square,
+	X,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWsToken } from "./runtime/use-ws-token";
 
@@ -355,6 +365,257 @@ export function ServicesPanel({ sessionId, onClose }: ServicesPanelProps) {
 					<div className="px-3 py-1.5 border-t text-xs text-muted-foreground shrink-0">
 						{services.length} service
 						{services.length !== 1 ? "s" : ""}
+					</div>
+				)}
+			</div>
+		</TooltipProvider>
+	);
+}
+
+export function ServicesStrip({ sessionId }: { sessionId: string }) {
+	const { token } = useWsToken();
+
+	const [services, setServices] = useState<ServiceInfo[]>([]);
+	const [exposedPort, setExposedPort] = useState<number | null>(null);
+	const [expanded, setExpanded] = useState(false);
+
+	const [selectedService, setSelectedService] = useState<string | null>(null);
+	const [logContent, setLogContent] = useState("");
+
+	const eventSourceRef = useRef<EventSource | null>(null);
+	const logEndRef = useRef<HTMLDivElement | null>(null);
+
+	const [portInput, setPortInput] = useState("");
+	const [exposing, setExposing] = useState(false);
+	const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+	const fetchServices = useCallback(async () => {
+		if (!token || !GATEWAY_URL) return;
+		try {
+			const res = await fetch(devtoolsUrl(sessionId, token, "/api/services"));
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const data = await res.json();
+			setServices(data.services);
+			setExposedPort(data.exposedPort);
+		} catch {
+			// Silently fail — strip is supplementary UI
+		}
+	}, [sessionId, token]);
+
+	// Poll service list
+	useEffect(() => {
+		fetchServices();
+		const interval = setInterval(fetchServices, 5000);
+		return () => clearInterval(interval);
+	}, [fetchServices]);
+
+	// SSE log streaming
+	useEffect(() => {
+		if (eventSourceRef.current) {
+			eventSourceRef.current.close();
+			eventSourceRef.current = null;
+		}
+
+		if (!selectedService || !token || !GATEWAY_URL) {
+			setLogContent("");
+			return;
+		}
+
+		const url = devtoolsUrl(sessionId, token, `/api/logs/${encodeURIComponent(selectedService)}`);
+		const es = new EventSource(url);
+		eventSourceRef.current = es;
+
+		es.onmessage = (event) => {
+			try {
+				const data = JSON.parse(event.data);
+				if (data.type === "initial") {
+					setLogContent(data.content);
+				} else if (data.type === "append") {
+					setLogContent((prev) => prev + data.content);
+				}
+			} catch {
+				// Ignore parse errors
+			}
+		};
+
+		es.onerror = () => {
+			// EventSource auto-reconnects; no action needed
+		};
+
+		return () => {
+			es.close();
+			eventSourceRef.current = null;
+		};
+	}, [selectedService, sessionId, token]);
+
+	// Auto-scroll logs when new content arrives
+	// biome-ignore lint/correctness/useExhaustiveDependencies: logContent triggers scroll on change
+	useEffect(() => {
+		logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+	}, [logContent]);
+
+	const handleStop = async (name: string) => {
+		if (!token || !GATEWAY_URL) return;
+		setActionLoading(name);
+		try {
+			const res = await fetch(
+				devtoolsUrl(sessionId, token, `/api/services/${encodeURIComponent(name)}`),
+				{ method: "DELETE" },
+			);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		} catch {
+			// Refresh to get actual state
+		} finally {
+			setActionLoading(null);
+			await fetchServices();
+		}
+	};
+
+	const handleRestart = async (service: ServiceInfo) => {
+		if (!token || !GATEWAY_URL) return;
+		setActionLoading(service.name);
+		try {
+			const res = await fetch(devtoolsUrl(sessionId, token, "/api/services"), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: service.name,
+					command: service.command,
+					cwd: service.cwd,
+				}),
+			});
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		} catch {
+			// Refresh to get actual state
+		} finally {
+			setActionLoading(null);
+			await fetchServices();
+		}
+	};
+
+	const handleExpose = async () => {
+		const port = Number.parseInt(portInput, 10);
+		if (!token || !GATEWAY_URL || Number.isNaN(port) || port < 1 || port > 65535) return;
+		setExposing(true);
+		try {
+			const res = await fetch(devtoolsUrl(sessionId, token, "/api/expose"), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ port }),
+			});
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			setExposedPort(port);
+			setPortInput("");
+		} catch {
+			// User can retry
+		} finally {
+			setExposing(false);
+		}
+	};
+
+	// Show nothing when there are no services
+	if (services.length === 0) {
+		return null;
+	}
+
+	return (
+		<TooltipProvider delayDuration={150}>
+			<div className="border-b bg-muted/30">
+				{/* Header — always visible */}
+				<button
+					type="button"
+					className="flex items-center gap-2 w-full px-3 py-1.5 text-left hover:bg-muted/50 transition-colors"
+					onClick={() => {
+						setExpanded((prev) => !prev);
+						if (expanded) {
+							setSelectedService(null);
+						}
+					}}
+				>
+					{expanded ? (
+						<ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+					) : (
+						<ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+					)}
+					<span className="text-xs font-medium">Services</span>
+					<span className="text-xs text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 leading-none">
+						{services.length}
+					</span>
+					{exposedPort !== null && (
+						<span className="text-xs text-muted-foreground ml-auto">port {exposedPort}</span>
+					)}
+				</button>
+
+				{/* Expanded content */}
+				{expanded && (
+					<div className="border-t">
+						{selectedService ? (
+							/* Log view */
+							<div>
+								<div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/20">
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="ghost"
+												size="icon"
+												className="h-6 w-6 shrink-0"
+												onClick={() => setSelectedService(null)}
+											>
+												<ChevronLeft className="h-3.5 w-3.5" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>Back to services</TooltipContent>
+									</Tooltip>
+									<span className="text-xs font-medium truncate">Logs: {selectedService}</span>
+								</div>
+								<div className="overflow-y-auto" style={{ maxHeight: "200px" }}>
+									<pre className="text-xs font-mono p-2 whitespace-pre-wrap break-all">
+										{logContent || <span className="text-muted-foreground">No logs yet</span>}
+										<div ref={logEndRef} />
+									</pre>
+								</div>
+							</div>
+						) : (
+							/* Service list + port input */
+							<div>
+								<div className="divide-y">
+									{services.map((svc) => (
+										<ServiceRow
+											key={svc.name}
+											service={svc}
+											isActionLoading={actionLoading === svc.name}
+											onViewLogs={() => setSelectedService(svc.name)}
+											onStop={() => handleStop(svc.name)}
+											onRestart={() => handleRestart(svc)}
+										/>
+									))}
+								</div>
+
+								{/* Expose port */}
+								<div className="px-3 py-2 border-t">
+									<p className="text-xs text-muted-foreground mb-1.5">Expose port</p>
+									<div className="flex items-center gap-2">
+										<Input
+											type="number"
+											value={portInput}
+											onChange={(e) => setPortInput(e.target.value)}
+											placeholder="Port (e.g. 3000)"
+											className="h-7 text-xs flex-1"
+											min={1}
+											max={65535}
+										/>
+										<Button
+											size="sm"
+											className="h-7 text-xs"
+											onClick={handleExpose}
+											disabled={exposing || !portInput}
+										>
+											{exposing ? <Loader2 className="h-3 w-3 animate-spin" /> : "Expose"}
+										</Button>
+									</div>
+								</div>
+							</div>
+						)}
 					</div>
 				)}
 			</div>

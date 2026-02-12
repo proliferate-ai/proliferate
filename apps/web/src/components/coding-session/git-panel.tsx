@@ -3,8 +3,10 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import type { PreviewMode } from "@/stores/preview-panel";
 import type { GitResultMessage, GitState } from "@proliferate/shared";
 import {
 	AlertTriangle,
@@ -20,9 +22,13 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { ChangesContent } from "./changes-panel";
 
 interface GitPanelProps {
 	onClose: () => void;
+	panelMode: PreviewMode;
+	sessionId?: string;
+	activityTick?: number;
 	gitState: GitState | null;
 	gitResult: GitResultMessage["payload"] | null;
 	sendGetGitStatus?: (workspacePath?: string) => void;
@@ -43,6 +49,9 @@ interface GitPanelProps {
 
 export function GitPanel({
 	onClose,
+	panelMode,
+	sessionId,
+	activityTick,
 	gitState,
 	gitResult,
 	sendGetGitStatus,
@@ -52,6 +61,7 @@ export function GitPanel({
 	sendGitCreatePr,
 	clearGitResult,
 }: GitPanelProps) {
+	const defaultTab = panelMode.type === "git" && panelMode.tab ? panelMode.tab : "git";
 	// Polling
 	const pollPending = useRef(false);
 	const pollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -147,39 +157,64 @@ export function GitPanel({
 					</Tooltip>
 				</div>
 
-				{/* Content */}
-				<div className="flex-1 min-h-0 overflow-y-auto">
-					{!gitState ? (
-						<div className="flex items-center justify-center h-full">
-							<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-						</div>
-					) : (
-						<div className="p-3 space-y-4">
-							<StatusIndicators gitState={gitState} />
-							{pollError && (
-								<div className="text-xs text-muted-foreground">Last update failed: {pollError}</div>
-							)}
-							<BranchSection
-								gitState={gitState}
-								canMutate={canMutate}
-								sendGitCreateBranch={sendGitCreateBranch}
-							/>
-							<ChangesSection gitState={gitState} />
-							<CommitSection
-								gitState={gitState}
-								canMutate={canMutate}
-								sendGitCommit={sendGitCommit}
-							/>
-							<PushSection gitState={gitState} canMutate={canMutate} sendGitPush={sendGitPush} />
-							<PrSection
-								gitState={gitState}
-								canMutate={canMutate}
-								sendGitCreatePr={sendGitCreatePr}
-							/>
-							<CommitsSection gitState={gitState} />
-						</div>
-					)}
-				</div>
+				{/* Tabs */}
+				<Tabs defaultValue={defaultTab} className="flex-1 flex flex-col min-h-0">
+					<div className="px-3 pt-2">
+						<TabsList className="w-full">
+							<TabsTrigger value="git" className="flex-1 text-xs">
+								Git
+							</TabsTrigger>
+							<TabsTrigger value="changes" className="flex-1 text-xs">
+								Changes
+							</TabsTrigger>
+						</TabsList>
+					</div>
+
+					<TabsContent value="git" className="flex-1 min-h-0 overflow-y-auto mt-0">
+						{!gitState ? (
+							<div className="flex items-center justify-center h-full">
+								<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+							</div>
+						) : (
+							<div className="p-3 space-y-4">
+								<StatusIndicators gitState={gitState} />
+								{pollError && (
+									<div className="text-xs text-muted-foreground">
+										Last update failed: {pollError}
+									</div>
+								)}
+								<BranchSection
+									gitState={gitState}
+									canMutate={canMutate}
+									sendGitCreateBranch={sendGitCreateBranch}
+								/>
+								<ChangesSection gitState={gitState} />
+								<CommitSection
+									gitState={gitState}
+									canMutate={canMutate}
+									sendGitCommit={sendGitCommit}
+								/>
+								<PushSection gitState={gitState} canMutate={canMutate} sendGitPush={sendGitPush} />
+								<PrSection
+									gitState={gitState}
+									canMutate={canMutate}
+									sendGitCreatePr={sendGitCreatePr}
+								/>
+								<CommitsSection gitState={gitState} />
+							</div>
+						)}
+					</TabsContent>
+
+					<TabsContent value="changes" className="flex-1 min-h-0 mt-0">
+						{sessionId ? (
+							<ChangesContent sessionId={sessionId} activityTick={activityTick ?? 0} />
+						) : (
+							<div className="px-3 py-8 text-center text-sm text-muted-foreground">
+								No session available
+							</div>
+						)}
+					</TabsContent>
+				</Tabs>
 			</div>
 		</TooltipProvider>
 	);

@@ -6,15 +6,11 @@ export type PreviewMode =
 	| { type: "url"; url: string | null }
 	| { type: "file"; file: VerificationFile }
 	| { type: "gallery"; files: VerificationFile[] }
-	| { type: "session-info" }
-	| { type: "snapshots" }
-	| { type: "service-commands" }
-	| { type: "git" }
-	| { type: "changes" }
+	| { type: "settings"; tab?: "info" | "snapshots" | "auto-start" }
+	| { type: "git"; tab?: "git" | "changes" }
 	| { type: "terminal" }
 	| { type: "vscode" }
-	| { type: "actions" }
-	| { type: "services" };
+	| { type: "artifacts" };
 
 // Mobile view state - on mobile we either show chat or preview (full screen)
 export type MobileView = "chat" | "preview";
@@ -27,26 +23,11 @@ interface PreviewPanelState {
 	openUrl: (url: string) => void;
 	openFile: (file: VerificationFile) => void;
 	openGallery: (files: VerificationFile[]) => void;
-	openSessionInfo: () => void;
-	openSnapshots: () => void;
-	openServiceCommands: () => void;
-	openGit: () => void;
 	close: () => void;
 
 	// Toggle helpers (for header buttons — toggles open/close)
 	toggleUrlPreview: (url: string | null) => void;
-	togglePanel: (
-		type:
-			| "session-info"
-			| "snapshots"
-			| "service-commands"
-			| "git"
-			| "changes"
-			| "terminal"
-			| "vscode"
-			| "actions"
-			| "services",
-	) => void;
+	togglePanel: (type: "settings" | "git" | "terminal" | "vscode" | "artifacts") => void;
 
 	// Mobile view toggle
 	setMobileView: (view: MobileView) => void;
@@ -63,14 +44,6 @@ export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
 
 	openGallery: (files: VerificationFile[]) => set({ mode: { type: "gallery", files } }),
 
-	openSessionInfo: () => set({ mode: { type: "session-info" } }),
-
-	openSnapshots: () => set({ mode: { type: "snapshots" } }),
-
-	openServiceCommands: () => set({ mode: { type: "service-commands" } }),
-
-	openGit: () => set({ mode: { type: "git" } }),
-
 	close: () => set({ mode: { type: "none" }, mobileView: "chat" }),
 
 	// Toggle URL preview specifically - used by the preview button
@@ -83,19 +56,8 @@ export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
 		}
 	},
 
-	// Generic toggle for session-info / snapshots / service-commands / git / changes panels
-	togglePanel: (
-		type:
-			| "session-info"
-			| "snapshots"
-			| "service-commands"
-			| "git"
-			| "changes"
-			| "terminal"
-			| "vscode"
-			| "actions"
-			| "services",
-	) => {
+	// Generic toggle for composite panels
+	togglePanel: (type: "settings" | "git" | "terminal" | "vscode" | "artifacts") => {
 		const { mode } = get();
 		if (mode.type === type) {
 			set({ mode: { type: "none" }, mobileView: "chat" });

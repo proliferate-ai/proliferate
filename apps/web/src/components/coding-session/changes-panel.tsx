@@ -65,6 +65,167 @@ function statusLabel(status: string): { label: string; color: string } {
 	return { label: status.replace(/\./g, " ").trim() || "?", color: "text-muted-foreground" };
 }
 
+export interface ChangesContentProps {
+	sessionId: string;
+	activityTick: number;
+}
+
+export function ChangesContent({ sessionId, activityTick }: ChangesContentProps) {
+	const { token } = useWsToken();
+	const queryClient = useQueryClient();
+	const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+	const [selectedFile, setSelectedFile] = useState<string | null>(null);
+	const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// Debounced invalidation on activity tick
+	useEffect(() => {
+		if (activityTick === 0) return;
+		if (debounceRef.current) clearTimeout(debounceRef.current);
+		debounceRef.current = setTimeout(() => {
+			queryClient.invalidateQueries({ queryKey: ["git-status", sessionId] });
+			queryClient.invalidateQueries({ queryKey: ["git-diff", sessionId] });
+		}, 500);
+		return () => {
+			if (debounceRef.current) clearTimeout(debounceRef.current);
+		};
+	}, [activityTick, queryClient, sessionId]);
+
+	const canFetch = !!token && !!GATEWAY_URL;
+
+	// Fetch repos
+	const {
+		data: reposData,
+		isLoading: reposLoading,
+		error: reposError,
+	} = useQuery({
+		queryKey: ["git-repos", sessionId],
+		queryFn: () =>
+			fetchJson<{ repos: GitRepo[] }>(devtoolsUrl(sessionId, token!, "/api/git/repos")),
+		enabled: canFetch,
+		staleTime: 60_000,
+		retry: 2,
+	});
+
+	const repos = reposData?.repos ?? [];
+
+	// Auto-select first repo
+	useEffect(() => {
+		if (repos.length > 0 && !selectedRepo) {
+			setSelectedRepo(repos[0].id);
+		}
+	}, [repos, selectedRepo]);
+
+	// Fetch status
+	const {
+		data: statusData,
+		isLoading: statusLoading,
+		error: statusError,
+	} = useQuery({
+		queryKey: ["git-status", sessionId, selectedRepo],
+		queryFn: () =>
+			fetchJson<GitStatusResponse>(
+				devtoolsUrl(sessionId, token!, `/api/git/status?repo=${encodeURIComponent(selectedRepo!)}`),
+			),
+		enabled: canFetch && !!selectedRepo,
+		staleTime: 10_000,
+		retry: 1,
+	});
+
+	// Fetch diff for selected file
+	const {
+		data: diffData,
+		isLoading: diffLoading,
+		error: diffError,
+	} = useQuery({
+		queryKey: ["git-diff", sessionId, selectedRepo, selectedFile],
+		queryFn: () => {
+			const params = new URLSearchParams({ repo: selectedRepo! });
+			if (selectedFile) params.set("path", selectedFile);
+			return fetchJson<{ diff: string }>(
+				devtoolsUrl(sessionId, token!, `/api/git/diff?${params.toString()}`),
+			);
+		},
+		enabled: canFetch && !!selectedRepo && !!selectedFile,
+		staleTime: 5_000,
+		retry: 1,
+	});
+
+	const handleFileClick = useCallback((filePath: string) => {
+		setSelectedFile((prev) => (prev === filePath ? null : filePath));
+	}, []);
+
+	const files = statusData?.files ?? [];
+	const error = reposError || statusError;
+
+	return (
+		<>
+			{/* Repo selector (if multiple) */}
+			{repos.length > 1 && !selectedFile && (
+				<div className="px-3 py-2 border-b">
+					<Select value={selectedRepo ?? ""} onValueChange={setSelectedRepo}>
+						<SelectTrigger className="h-8 text-xs">
+							<SelectValue placeholder="Select repo" />
+						</SelectTrigger>
+						<SelectContent>
+							{repos.map((repo) => (
+								<SelectItem key={repo.id} value={repo.id}>
+									{repo.path.split("/").pop()}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</div>
+			)}
+
+			{/* Content */}
+			<div className="flex-1 min-h-0 overflow-auto">
+				{(reposLoading || statusLoading) && !selectedFile ? (
+					<div className="flex items-center justify-center py-8">
+						<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+					</div>
+				) : error ? (
+					<div className="px-3 py-4 text-sm text-destructive">
+						{error instanceof Error ? error.message : "Failed to load changes"}
+					</div>
+				) : selectedFile ? (
+					<DiffView diff={diffData?.diff} loading={diffLoading} error={diffError} />
+				) : files.length === 0 ? (
+					<div className="px-3 py-8 text-center text-sm text-muted-foreground">
+						No changes detected
+					</div>
+				) : (
+					<div className="divide-y">
+						{files.map((file) => {
+							const { label, color } = statusLabel(file.status);
+							return (
+								<button
+									key={file.path}
+									type="button"
+									className="flex items-center gap-2 w-full px-3 py-1.5 text-left hover:bg-muted/50 transition-colors"
+									onClick={() => handleFileClick(file.path)}
+								>
+									<span className={cn("text-xs font-mono w-4 shrink-0 text-center", color)}>
+										{label}
+									</span>
+									<FileCode className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+									<span className="text-sm truncate text-foreground">{file.path}</span>
+								</button>
+							);
+						})}
+					</div>
+				)}
+			</div>
+
+			{/* Footer: file count */}
+			{!selectedFile && files.length > 0 && (
+				<div className="px-3 py-1.5 border-t text-xs text-muted-foreground shrink-0">
+					{files.length} file{files.length !== 1 ? "s" : ""} changed
+				</div>
+			)}
+		</>
+	);
+}
+
 export function ChangesPanel({ sessionId, activityTick, onClose }: ChangesPanelProps) {
 	const { token } = useWsToken();
 	const queryClient = useQueryClient();
