@@ -28,12 +28,12 @@ describe("deriveRiskLevel", () => {
 		expect(deriveRiskLevel("some_tool", annotations, undefined)).toBe("danger");
 	});
 
-	it("prefers readOnlyHint over destructiveHint when both are true", () => {
+	it("prefers destructiveHint over readOnlyHint when both are true (fail-safe)", () => {
 		const annotations: McpToolAnnotations = {
 			readOnlyHint: true,
 			destructiveHint: true,
 		};
-		expect(deriveRiskLevel("some_tool", annotations, undefined)).toBe("read");
+		expect(deriveRiskLevel("some_tool", annotations, undefined)).toBe("danger");
 	});
 
 	it("returns policy defaultRisk when no override or annotations match", () => {

@@ -137,6 +137,13 @@
       "when": 1771027200000,
       "tag": "0020_bundle_target_path",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1771113600000,
+      "tag": "0021_prebuild_connectors",
+      "breakpoints": true
     }
   ]
 }

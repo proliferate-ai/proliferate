@@ -15,8 +15,8 @@ import { z } from "zod";
 export type ConnectorTransport = "remote_http";
 
 export interface ConnectorAuth {
-	/** Auth mechanism for the remote MCP endpoint. */
-	type: "api_key" | "bearer";
+	/** Auth mechanism for the remote MCP endpoint. V1 supports bearer only. */
+	type: "bearer";
 	/** Reference to a secret key in the org secrets system (NOT a raw value). */
 	secretKey: string;
 }
@@ -52,7 +52,7 @@ export interface ConnectorConfig {
 const riskLevelSchema = z.enum(["read", "write", "danger"]);
 
 export const ConnectorAuthSchema = z.object({
-	type: z.enum(["api_key", "bearer"]),
+	type: z.literal("bearer"),
 	secretKey: z.string().min(1).max(200),
 });
 

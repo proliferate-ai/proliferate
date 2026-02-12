@@ -3,7 +3,7 @@
  *
  * Priority:
  * 1. Connector-level per-tool override (riskPolicy.overrides[toolName])
- * 2. MCP annotations (readOnlyHint → read, destructiveHint → danger)
+ * 2. MCP annotations (destructiveHint → danger, readOnlyHint → read; destructive first for fail-safe)
  * 3. Connector-level default (riskPolicy.defaultRisk)
  * 4. Safe fallback: "write" (requires approval)
  */
@@ -27,10 +27,10 @@ export function deriveRiskLevel(
 		return policy.overrides[toolName];
 	}
 
-	// 2. MCP annotations (untrusted hints, but useful defaults)
+	// 2. MCP annotations (untrusted hints — check destructive first for fail-safe)
 	if (annotations) {
-		if (annotations.readOnlyHint === true) return "read";
 		if (annotations.destructiveHint === true) return "danger";
+		if (annotations.readOnlyHint === true) return "read";
 	}
 
 	// 3. Connector-level default

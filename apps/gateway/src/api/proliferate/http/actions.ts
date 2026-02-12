@@ -691,11 +691,9 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 
 				if (isConnectorAction) {
 					// ── Connector execution path ──
+					// Use invocation's session ID (not route session) to resolve the correct prebuild
 					const connectorId = invocation.integration.slice("connector:".length);
-					const { connector, secret } = await resolveConnector(
-						req.proliferateSessionId!,
-						connectorId,
-					);
+					const { connector, secret } = await resolveConnector(invocation.sessionId, connectorId);
 					const callResult = await actions.connectors.callConnectorTool(
 						connector,
 						secret,
