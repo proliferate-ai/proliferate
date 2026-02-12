@@ -3,6 +3,8 @@
 > **Reviewed:** 2026-02-11
 > **Scope:** All 13 specs + boundary-brief + feature-registry
 > **Reviewer:** Automated consistency check
+>
+> **Note:** This is a point-in-time consistency report. It is not automatically kept in sync as specs and code evolve; treat it as historical context, not as an up-to-date spec.
 
 ---
 

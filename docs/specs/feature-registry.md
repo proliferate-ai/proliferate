@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
-> **Updated:** 2026-02-11 from `main` branch. Corrected after consistency review.
+> **Updated:** 2026-02-12 from `main` branch. Corrected after consistency review.
 
 ---
 
@@ -87,13 +87,13 @@
 | Run execution | Implemented | `apps/worker/src/automation/index.ts` | Creates session for run |
 | Run finalization | Implemented | `apps/worker/src/automation/finalizer.ts` | Post-execution cleanup |
 | Run events log | Implemented | `packages/db/src/schema/automations.ts` | `automation_run_events` table |
-| Outbox dispatch | Implemented | `apps/worker/src/automation/outbox-dispatch.ts` | Reliable event delivery |
+| Outbox dispatch | Implemented | `apps/worker/src/automation/index.ts:dispatchOutbox` | Reliable event delivery |
 | Outbox atomic claim | Implemented | `packages/services/src/outbox/service.ts` | Claim + stuck-row recovery |
 | Side effects tracking | Implemented | `packages/db/src/schema/automations.ts` | `automation_side_effects` table |
 | Artifact storage (S3) | Implemented | `apps/worker/src/automation/artifacts.ts` | Completion + enrichment artifacts |
 | Target resolution | Implemented | `apps/worker/src/automation/resolve-target.ts` | Resolves which repo/prebuild to use |
 | Slack notifications | Implemented | `apps/worker/src/automation/notifications.ts` | Run status posted to Slack |
-| Notification dispatch | Implemented | `apps/worker/src/automation/notifications-dispatch.ts` | Delivery orchestration |
+| Notification dispatch | Implemented | `apps/worker/src/automation/notifications.ts:dispatchRunNotification` | Delivery orchestration |
 | Slack async client | Implemented | `apps/worker/src/slack/client.ts` | Full bidirectional session via Slack |
 | Slack inbound handlers | Implemented | `apps/worker/src/slack/handlers/` | Text, todo, verify, default-tool |
 | Slack receiver worker | Implemented | `apps/worker/src/slack/` | BullMQ-based message processing |
@@ -219,7 +219,7 @@
 | GitHub OAuth (GitHub App) | Implemented | `apps/web/src/server/routers/integrations.ts:githubStatus/githubSession` | Via Nango |
 | Sentry OAuth | Implemented | `apps/web/src/server/routers/integrations.ts:sentryStatus/sentrySession` | Via Nango |
 | Linear OAuth | Implemented | `apps/web/src/server/routers/integrations.ts:linearStatus/linearSession` | Via Nango |
-| Slack OAuth | Implemented | `apps/web/src/server/routers/integrations.ts:slackConnect/slackDisconnect` | Via Nango |
+| Slack OAuth | Implemented | `apps/web/src/app/api/integrations/slack/oauth/callback/route.ts` | Workspace install stored in `slack_installations` (not Nango-managed) |
 | Slack installations | Implemented | `packages/db/src/schema/slack.ts:slackInstallations` | Workspace-level |
 | Slack conversations cache | Implemented | `packages/db/src/schema/slack.ts:slackConversations` | Channel cache |
 | Nango callback handling | Implemented | `apps/web/src/server/routers/integrations.ts:callback` | OAuth callback |
