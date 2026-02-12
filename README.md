@@ -115,6 +115,8 @@ More E2B details: [`packages/e2b-sandbox/README.md`](packages/e2b-sandbox/README
 docker compose up -d
 ```
 
+> The first build compiles all images from source and may take 5–10 minutes.
+
 Open [http://localhost:3000](http://localhost:3000), sign up, and install your GitHub App on target repos.
 
 For webhooks/public domains: [`docs/self-hosting/localhost-vs-public-domain.md`](docs/self-hosting/localhost-vs-public-domain.md)

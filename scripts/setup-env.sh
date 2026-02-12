@@ -89,8 +89,8 @@ fi
 
 echo ""
 echo "Next steps:"
-echo "  1. Set ANTHROPIC_API_KEY in .env (from console.anthropic.com)"
-echo "  2. Set up a sandbox provider (Modal or E2B) — see README Step 3"
-echo "  3. Create a GitHub App and set NEXT_PUBLIC_GITHUB_APP_SLUG — see README Step 2"
+echo "  1. Create a GitHub App and set NEXT_PUBLIC_GITHUB_APP_SLUG — see README Step 2"
 echo "     The slug must match your GitHub App's URL name exactly."
-echo "  4. Run: docker compose up -d"
+echo "  2. Set up a sandbox provider (Modal or E2B) — see README Step 3"
+echo "     Set ANTHROPIC_API_KEY in .env (from console.anthropic.com)"
+echo "  3. Run: docker compose up -d"
