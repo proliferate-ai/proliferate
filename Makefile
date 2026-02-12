@@ -24,7 +24,7 @@ help:
 	@echo "  make services-rebuild - Rebuild + start postgres/redis/llm-proxy"
 	@echo "  make llm-proxy   - Start just LLM proxy"
 	@echo "  make llm-proxy-rebuild - Rebuild + start LLM proxy"
-	@echo "  make docker-nuke - Stop + remove ALL containers"
+	@echo "  make docker-nuke - Stop + remove ALL containers and volumes"
 	@echo "  make stop        - Stop docker services"
 	@echo "  make logs        - Tail all logs"
 	@echo "  make logs-llm    - Tail LLM proxy logs"
@@ -133,7 +133,8 @@ ngrok-gateway:
 
 docker-nuke:
 	docker rm -f $$(docker ps -aq) 2>/dev/null || true
-	@echo "✅ All containers stopped and removed"
+	docker volume rm $$(docker volume ls -q) 2>/dev/null || true
+	@echo "✅ All containers and volumes removed"
 
 stop:
 	docker compose down
