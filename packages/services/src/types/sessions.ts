@@ -11,7 +11,7 @@
 
 export interface CreateSessionInput {
 	id: string;
-	prebuildId: string;
+	prebuildId: string | null;
 	organizationId: string;
 	sessionType: string;
 	status: string;

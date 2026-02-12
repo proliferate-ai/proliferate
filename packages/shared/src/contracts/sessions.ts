@@ -42,13 +42,23 @@ export const SessionSchema = z.object({
 
 export type Session = z.infer<typeof SessionSchema>;
 
-export const CreateSessionInputSchema = z.object({
-	prebuildId: z.string().uuid(),
-	sessionType: z.enum(["setup", "coding"]).optional(),
-	modelId: z.string().optional(),
-	/** Integration IDs to associate with the session for OAuth token injection. */
-	integrationIds: z.array(z.string().uuid()).optional(),
-});
+export const CreateSessionInputSchema = z
+	.object({
+		prebuildId: z.string().uuid().optional(),
+		sessionType: z.enum(["setup", "coding"]).optional(),
+		modelId: z.string().optional(),
+		/** Integration IDs to associate with the session for OAuth token injection. */
+		integrationIds: z.array(z.string().uuid()).optional(),
+	})
+	.superRefine((data, ctx) => {
+		if (data.sessionType === "setup" && !data.prebuildId) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Setup sessions require a prebuildId",
+				path: ["prebuildId"],
+			});
+		}
+	});
 
 export type CreateSessionInput = z.infer<typeof CreateSessionInputSchema>;
 

@@ -3,6 +3,10 @@
  *
  * Creates a session record and returns immediately.
  * Sandbox provisioning is handled by the gateway when the client connects.
+ *
+ * Two paths:
+ * - Prebuild-backed: existing flow with repo validation and snapshot resolution.
+ * - Scratch: no prebuild, no repos. Only allowed for coding sessions.
  */
 
 import { randomUUID } from "crypto";
@@ -23,7 +27,7 @@ import {
 import { getSandboxProvider } from "@proliferate/shared/providers";
 
 interface CreateSessionHandlerInput {
-	prebuildId: string;
+	prebuildId?: string;
 	sessionType?: "setup" | "coding";
 	modelId?: string;
 	orgId: string;
@@ -63,6 +67,76 @@ export async function createSessionHandler(
 					? parseModelId(requestedModelId)
 					: getDefaultAgentConfig().modelId,
 	};
+
+	// Scratch path: no prebuild, just boot from base snapshot
+	if (!prebuildId) {
+		return createScratchSession({ sessionType, agentConfig, orgId, userId });
+	}
+
+	// Prebuild-backed path: existing flow
+	return createPrebuildSession({ prebuildId, sessionType, agentConfig, orgId, userId });
+}
+
+async function createScratchSession(input: {
+	sessionType: string;
+	agentConfig: AgentConfig;
+	orgId: string;
+	userId: string;
+}): Promise<CreateSessionResult> {
+	const { sessionType, agentConfig, orgId, userId } = input;
+
+	const provider = getSandboxProvider();
+	const sessionId = randomUUID();
+	const reqLog = log.child({ sessionId });
+	const doUrl = getSessionGatewayUrl(sessionId);
+	reqLog.info({ sessionType }, "Creating scratch session");
+
+	try {
+		const recheck = await checkCanStartSession(orgId);
+		if (!recheck.allowed) {
+			throw new ORPCError("PAYMENT_REQUIRED", {
+				message: recheck.message || "Insufficient credits",
+				data: { billingCode: recheck.code },
+			});
+		}
+
+		await sessions.createSessionRecord({
+			id: sessionId,
+			prebuildId: null,
+			organizationId: orgId,
+			createdBy: userId,
+			sessionType,
+			status: "starting",
+			sandboxProvider: provider.type,
+			snapshotId: null,
+			agentConfig: { modelId: agentConfig.modelId },
+		});
+	} catch (err) {
+		if (err instanceof ORPCError) throw err;
+		reqLog.error({ err }, "Failed to create scratch session");
+		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create session" });
+	}
+
+	reqLog.info("Scratch session record created");
+
+	return {
+		sessionId,
+		doUrl,
+		tunnelUrl: null,
+		previewUrl: null,
+		sandboxId: null,
+		warning: null,
+	};
+}
+
+async function createPrebuildSession(input: {
+	prebuildId: string;
+	sessionType: string;
+	agentConfig: AgentConfig;
+	orgId: string;
+	userId: string;
+}): Promise<CreateSessionResult> {
+	const { prebuildId, sessionType, agentConfig, orgId, userId } = input;
 
 	// Get prebuild by ID
 	const prebuild = await prebuilds.findByIdForSession(prebuildId);

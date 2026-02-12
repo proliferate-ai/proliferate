@@ -7,6 +7,7 @@ import {
 	getAutomationSystemPrompt,
 	getCodingSystemPrompt,
 	getDefaultAgentConfig,
+	getScratchSystemPrompt,
 	getSetupSystemPrompt,
 	isValidModelId,
 	parseModelId,
@@ -137,11 +138,42 @@ export async function loadSessionContext(
 		"Session loaded",
 	);
 
+	// Scratch session: no prebuild, no repos — boot from base snapshot only
 	if (!session.prebuild_id) {
-		throw new Error("Session has no associated prebuild");
+		log.info("Scratch session (no prebuild)");
+
+		const scratchPrimaryRepo: RepoRecord = {
+			id: "scratch",
+			github_url: "",
+			github_repo_name: "scratch",
+			default_branch: "main",
+		};
+
+		const defaultAgentConfig = getDefaultAgentConfig();
+		const rawModelId = session.agent_config?.modelId;
+		const modelId: ModelId =
+			rawModelId && isValidModelId(rawModelId)
+				? rawModelId
+				: rawModelId
+					? parseModelId(rawModelId)
+					: defaultAgentConfig.modelId;
+
+		const envVars = await loadEnvironmentVariables(env, session.id, session.organization_id, [], []);
+
+		log.info("Scratch session context ready");
+		log.debug({ durationMs: Date.now() - startMs }, "store.load_context.complete");
+		return {
+			session,
+			repos: [],
+			primaryRepo: scratchPrimaryRepo,
+			systemPrompt: session.system_prompt || getScratchSystemPrompt(),
+			agentConfig: { agentType: "opencode" as const, modelId, tools: session.agent_config?.tools },
+			envVars,
+			snapshotHasDeps: false,
+		};
 	}
 
-	// Load repos via prebuild_repos junction table
+	// Prebuild-backed session: load repos, tokens, service commands
 	log.info({ prebuildId: session.prebuild_id }, "Loading repos from prebuild_repos...");
 	const prebuildReposStartMs = Date.now();
 	const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(session.prebuild_id);
@@ -300,7 +332,7 @@ export async function loadSessionContext(
 		Boolean(session.snapshot_id) && session.snapshot_id !== repoSnapshotFallback;
 
 	// Resolve service commands: prebuild-level first, then per-repo fallback
-	const prebuildSvcRow = await prebuilds.getPrebuildServiceCommands(session.prebuild_id!);
+	const prebuildSvcRow = await prebuilds.getPrebuildServiceCommands(session.prebuild_id);
 	const resolvedServiceCommands = resolveServiceCommands(
 		prebuildSvcRow?.serviceCommands,
 		repoSpecs,
