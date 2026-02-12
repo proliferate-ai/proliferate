@@ -11,7 +11,11 @@ interface StepGitHubConnectProps {
 	hasGitHubConnection?: boolean;
 }
 
-export function StepGitHubConnect({ onComplete, onSkip, hasGitHubConnection }: StepGitHubConnectProps) {
+export function StepGitHubConnect({
+	onComplete,
+	onSkip,
+	hasGitHubConnection,
+}: StepGitHubConnectProps) {
 	const githubAppSlug = env.NEXT_PUBLIC_GITHUB_APP_SLUG;
 	const hasPlaceholderSlug =
 		!githubAppSlug || githubAppSlug === "local" || githubAppSlug === "proliferate-local-dev";

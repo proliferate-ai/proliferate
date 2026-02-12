@@ -62,11 +62,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 			<Popover open={open} onOpenChange={setOpen}>
 				<PopoverTrigger asChild>
 					<Button variant="ghost" size="sm" className="h-8 gap-2 font-normal" disabled={disabled}>
-						{hasSelection ? (
-							<GithubIcon className="h-4 w-4" />
-						) : (
-							<Terminal className="h-4 w-4" />
-						)}
+						{hasSelection ? <GithubIcon className="h-4 w-4" /> : <Terminal className="h-4 w-4" />}
 						<span className="truncate max-w-[200px]">{triggerLabel}</span>
 					</Button>
 				</PopoverTrigger>

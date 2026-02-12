@@ -151,10 +151,7 @@ export function EmptyDashboard() {
 					<div className="w-full mt-3 flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
 						<Github className="h-3.5 w-3.5 shrink-0" />
 						<span>
-							<Link
-								href="/dashboard/integrations"
-								className="underline hover:text-foreground"
-							>
+							<Link href="/dashboard/integrations" className="underline hover:text-foreground">
 								Connect GitHub
 							</Link>{" "}
 							to work on your repos

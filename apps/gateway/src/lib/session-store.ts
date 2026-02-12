@@ -158,7 +158,13 @@ export async function loadSessionContext(
 					? parseModelId(rawModelId)
 					: defaultAgentConfig.modelId;
 
-		const envVars = await loadEnvironmentVariables(env, session.id, session.organization_id, [], []);
+		const envVars = await loadEnvironmentVariables(
+			env,
+			session.id,
+			session.organization_id,
+			[],
+			[],
+		);
 
 		log.info("Scratch session context ready");
 		log.debug({ durationMs: Date.now() - startMs }, "store.load_context.complete");
