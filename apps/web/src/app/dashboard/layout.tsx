@@ -5,7 +5,6 @@ import { BillingBanner } from "@/components/dashboard/billing-banner";
 import { CommandSearch } from "@/components/dashboard/command-search";
 import { MobileSidebar, MobileSidebarTrigger, Sidebar } from "@/components/dashboard/sidebar";
 import { Button } from "@/components/ui/button";
-import { useOnboarding } from "@/hooks/use-onboarding";
 import { useSession } from "@/lib/auth-client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { env } from "@proliferate/environment/public";
@@ -20,7 +19,6 @@ export default function DashboardLayout({
 }) {
 	const router = useRouter();
 	const { data: session, isPending: authPending } = useSession();
-	const { data: onboarding, isLoading: onboardingLoading } = useOnboarding();
 	const { commandSearchOpen, setCommandSearchOpen } = useDashboardStore();
 
 	// Cmd+K keyboard shortcut for search
@@ -51,24 +49,12 @@ export default function DashboardLayout({
 		}
 	}, [session, authPending, router, requireEmailVerification]);
 
-	// Redirect to onboarding if not complete
-	useEffect(() => {
-		if (!onboardingLoading && onboarding && !onboarding.hasGitHubConnection) {
-			router.push("/onboarding");
-		}
-	}, [onboarding, onboardingLoading, router]);
-
-	// Wait for both auth AND onboarding to load before rendering anything
-	if (authPending || onboardingLoading) {
+	// Wait for auth to load before rendering anything
+	if (authPending) {
 		return <div className="min-h-screen bg-background" />;
 	}
 
 	if (!session) {
-		return null;
-	}
-
-	// Don't render dashboard shell if user needs onboarding
-	if (!onboarding?.hasGitHubConnection) {
 		return null;
 	}
 

@@ -25,8 +25,7 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 	const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } =
 		useSpeechRecognition();
 
-	const { selectedRepoId, selectedSnapshotId, selectedModel, setSelectedModel } =
-		useDashboardStore();
+	const { selectedModel, setSelectedModel } = useDashboardStore();
 
 	// Append transcript to prompt when speech recognition completes
 	useEffect(() => {
@@ -36,8 +35,7 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 		}
 	}, [listening, transcript, resetTranscript]);
 
-	const canSubmit =
-		!disabled && !isLoading && prompt.trim() && (selectedRepoId || selectedSnapshotId);
+	const canSubmit = !disabled && !isLoading && prompt.trim();
 
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();

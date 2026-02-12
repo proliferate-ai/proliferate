@@ -320,11 +320,9 @@ function RepoRow({
 						<span className="text-xs text-muted-foreground flex-shrink-0">
 							{repo.defaultBranch || "main"}
 						</span>
-						{repo.prebuildStatus === "ready" && (
-							<span className="inline-flex items-center rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground flex-shrink-0">
-								Configured
-							</span>
-						)}
+						<span className="inline-flex items-center rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground flex-shrink-0">
+							{repo.prebuildStatus === "ready" ? "Ready" : "Fresh start"}
+						</span>
 					</button>
 
 					<div className="flex items-center gap-1.5 flex-shrink-0">
