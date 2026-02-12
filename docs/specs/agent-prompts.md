@@ -386,7 +386,7 @@ YOUR ASSIGNMENT:
   - Sandbox boot mechanics (sandbox-providers.md)
   - Session lifecycle (sessions-gateway.md)
 
-NOTE: The LLM proxy is an external LiteLLM service. This spec documents our integration contract with it, not the service itself. There is no apps/llm-proxy/ directory.
+NOTE: The LLM proxy is an external LiteLLM service. This spec documents our integration contract with it, not the service itself. `apps/llm-proxy/` contains the Dockerfile and LiteLLM config.yaml for deploying the proxy.
 
 KEY FILES TO READ:
 - packages/shared/src/llm-proxy.ts (main integration)

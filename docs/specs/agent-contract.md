@@ -42,22 +42,22 @@ The gateway selects a system prompt based on session type and client type, then 
 
 ## 2. Core Concepts
 
-### System Prompt Modes
+### System Prompt Modes — `Implemented`
 Three prompt builders produce mode-specific system messages. The gateway selects one based on `session_type` and `client_type`.
 - Key detail agents get wrong: automation mode extends coding mode (it appends to it), not replaces it.
 - Reference: `packages/shared/src/prompts.ts`
 
-### Intercepted Tools Pattern
+### Intercepted Tools Pattern — `Implemented`
 Most platform tools are stubs in the sandbox. When OpenCode calls them, the gateway's event processor detects the tool name in the SSE stream, short-circuits sandbox execution, runs the handler server-side, and patches the tool result back into OpenCode.
 - Key detail agents get wrong: `request_env_variables` is NOT intercepted — it runs in the sandbox and returns immediately. The gateway listens for it via SSE events to trigger the UI form.
 - Reference: `apps/gateway/src/hub/capabilities/tools/index.ts`
 
-### OpenCode Tool Discovery
+### OpenCode Tool Discovery — `Implemented`
 OpenCode automatically discovers tools by scanning `{repoDir}/.opencode/tool/*.ts` at startup. Tools are not registered in `opencode.json` — they are filesystem-discovered.
 - Key detail agents get wrong: the `opencode.json` config does not list tools. Tool registration is purely file-based.
 - Reference: `packages/shared/src/sandbox/opencode.ts:getOpencodeConfig`
 
-### Agent/Model Configuration
+### Agent/Model Configuration — `Implemented`
 A static registry maps agent types to supported models. Currently only the `opencode` agent type exists, with three model options. Model IDs are transformed between internal canonical format, OpenCode format, and Anthropic API format.
 - Key detail agents get wrong: OpenCode model IDs use a different format (`anthropic/claude-opus-4-6`) than canonical IDs (`claude-opus-4.6`) or API IDs (`claude-opus-4-6`).
 - Reference: `packages/shared/src/agents.ts`
@@ -147,7 +147,7 @@ Source: `apps/gateway/src/lib/session-store.ts:SessionRecord`
 ### Do
 - Define new tool schemas in `packages/shared/src/opencode-tools/index.ts` as string template exports — this keeps all tool definitions in one place.
 - Export both a `.ts` tool definition and a `.txt` description file for each tool — OpenCode uses both.
-- Use Zod validation in gateway handlers for all tool arguments — never trust sandbox input.
+- Use Zod validation in gateway handlers for tools with complex schemas (e.g., `save_service_commands`, `save_env_files`). Simpler tools (`verify`, `save_snapshot`) use inline type coercion.
 - Return `InterceptedToolResult` from all handlers — the `success` field drives error reporting.
 
 ### Don't
@@ -186,11 +186,17 @@ async execute(hub, args): Promise<InterceptedToolResult> {
 - **Idempotency**: `automation.complete` accepts a `completion_id` as an idempotency key.
 - **Timeouts**: OpenCode readiness check uses exponential backoff (200ms base, 1.5x, max 2s per attempt, 30s total). Source: `packages/shared/src/sandbox/opencode.ts:waitForOpenCodeReady`
 
+### Testing Conventions
+- Tool handler tests live alongside handlers in gateway tests.
+- Test intercepted tool handlers by mocking `SessionHub` methods (e.g., `hub.uploadVerificationFiles`, `hub.saveSnapshot`).
+- Verify Zod validation rejects malformed args for `save_service_commands` and `save_env_files`.
+- System prompt tests: assert each mode includes the expected tool references and omits out-of-scope ones.
+
 ---
 
 ## 6. Subsystem Deep Dives
 
-### 6.1 System Prompt Mode Selection
+### 6.1 System Prompt Mode Selection — `Implemented`
 
 **What it does:** Selects the appropriate system prompt based on session type and client type.
 
@@ -330,12 +336,12 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 
 **Files touched:** `packages/shared/src/opencode-tools/index.ts`
 
-### 6.3 Capability Injection Pipeline
+### 6.3 Capability Injection Pipeline — `Implemented`
 
 **What it does:** Writes tool files, config, plugin, and instructions into the sandbox so OpenCode can discover them.
 
 **Happy path:**
-1. Provider (Modal or E2B) calls `setupOpenCodeConfig()` during sandbox boot
+1. Provider (Modal or E2B) calls `setupEssentialDependencies()` during sandbox boot (`packages/shared/src/providers/modal-libmodal.ts:988`, `packages/shared/src/providers/e2b.ts:568`)
 2. Plugin written to `/home/user/.config/opencode/plugin/proliferate.mjs` — minimal SSE-mode plugin (`PLUGIN_MJS` from `packages/shared/src/sandbox/config.ts:16-31`)
 3. Six tool `.ts` files + six `.txt` description files written to `{repoDir}/.opencode/tool/`
 4. Pre-installed `package.json` + `node_modules/` copied from `/home/user/.opencode-tools/` to `{repoDir}/.opencode/tool/`
@@ -370,12 +376,12 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 ```
 
 **Edge cases:**
-- Tool files are written atomically via `mkdir -p && base64 -d >` in a single shell invocation to prevent race conditions.
 - Config is written to both global and local paths for OpenCode discovery reliability.
+- File write mechanics differ by provider (Modal uses shell commands, E2B uses `files.write` SDK). For provider-specific boot details, see `sandbox-providers.md` §6.
 
 **Files touched:** `packages/shared/src/sandbox/config.ts`, `packages/shared/src/sandbox/opencode.ts`, `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`
 
-### 6.4 OpenCode Configuration
+### 6.4 OpenCode Configuration — `Implemented`
 
 **What it does:** Generates the `opencode.json` that configures the agent's model, provider, permissions, and MCP servers.
 
@@ -413,20 +419,9 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 
 **Files touched:** `packages/shared/src/sandbox/opencode.ts:getOpencodeConfig`
 
-### 6.5 Intercepted Tools Execution Flow
+### 6.5 Intercepted Tools Contract — `Implemented`
 
-**What it does:** Routes tool calls from the sandbox SSE stream to gateway-side handlers.
-
-**Happy path:**
-1. Agent calls a tool inside OpenCode (e.g., `save_snapshot()`)
-2. OpenCode emits SSE events including tool call with name and args
-3. Gateway `EventProcessor` checks tool name against `interceptedTools` set (`apps/gateway/src/hub/event-processor.ts`)
-4. If intercepted: broadcasts `tool_start` to connected clients, calls `onInterceptedTool` callback
-5. `SessionHub.handleInterceptedTool()` looks up handler via `getInterceptedToolHandler(toolName)`
-6. Handler executes server-side (DB writes, S3 uploads, provider API calls)
-7. Handler returns `InterceptedToolResult { success, result, data? }`
-8. Gateway calls `updateToolResult()` to PATCH the result back into OpenCode (`apps/gateway/src/lib/opencode.ts`)
-9. OpenCode receives the result, agent sees the output
+**What it does:** Defines which tools the gateway intercepts and the contract between tool stubs (sandbox-side) and handlers (gateway-side).
 
 **Intercepted vs sandbox-executed tools:**
 
@@ -439,9 +434,13 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 | `save_env_files` | Yes | Needs database access |
 | `request_env_variables` | No | Returns immediately; gateway detects via SSE |
 
+**Handler contract:** Every intercepted tool handler implements `InterceptedToolHandler` — a `name` string and an `execute(hub, args)` method returning `InterceptedToolResult { success, result, data? }`. Handlers are registered in `apps/gateway/src/hub/capabilities/tools/index.ts`.
+
 **Registration:** `automation.complete` is registered under two names (`automation.complete` and `automation_complete`) to handle both dot-notation and underscore-notation from agents. Source: `apps/gateway/src/hub/capabilities/tools/index.ts:40-41`
 
-**Files touched:** `apps/gateway/src/hub/capabilities/tools/index.ts`, `apps/gateway/src/hub/event-processor.ts`, `apps/gateway/src/hub/session-hub.ts`, `apps/gateway/src/lib/opencode.ts`
+**Result delivery:** After a handler executes, the gateway patches the result back into OpenCode via `updateToolResult()` (`apps/gateway/src/lib/opencode.ts`). This uses a PATCH to the OpenCode session API. Retries up to 5 times with 1s delay since the message may still be streaming.
+
+For the full runtime execution flow (SSE detection, EventProcessor routing, SessionHub orchestration), see `sessions-gateway.md` §6.
 
 ---
 
