@@ -10,6 +10,7 @@ interface DashboardState {
 
 	// Prompt state (for session creation flow)
 	pendingPrompt: string | null;
+	pendingImages: string[] | null;
 	selectedModel: ModelId;
 
 	// UI state
@@ -25,7 +26,7 @@ interface DashboardState {
 	setSelectedRepo: (repoId: string | null) => void;
 	setSelectedSnapshot: (snapshotId: string | null) => void;
 	setActiveSession: (sessionId: string | null) => void;
-	setPendingPrompt: (prompt: string | null) => void;
+	setPendingPrompt: (prompt: string | null, images?: string[] | null) => void;
 	setSelectedModel: (model: ModelId) => void;
 	clearPendingPrompt: () => void;
 	toggleSidebar: () => void;
@@ -46,6 +47,7 @@ export const useDashboardStore = create<DashboardState>()(
 			selectedSnapshotId: null,
 			activeSessionId: null,
 			pendingPrompt: null,
+			pendingImages: null,
 			selectedModel: "claude-opus-4.6",
 			sidebarCollapsed: false,
 			mobileSidebarOpen: false,
@@ -67,11 +69,15 @@ export const useDashboardStore = create<DashboardState>()(
 
 			setActiveSession: (sessionId) => set({ activeSessionId: sessionId }),
 
-			setPendingPrompt: (prompt) => set({ pendingPrompt: prompt }),
+			setPendingPrompt: (prompt, images = null) =>
+				set({
+					pendingPrompt: prompt,
+					pendingImages: prompt ? images : null,
+				}),
 
 			setSelectedModel: (model) => set({ selectedModel: model }),
 
-			clearPendingPrompt: () => set({ pendingPrompt: null }),
+			clearPendingPrompt: () => set({ pendingPrompt: null, pendingImages: null }),
 
 			toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
@@ -98,6 +104,7 @@ export const useDashboardStore = create<DashboardState>()(
 					selectedSnapshotId: null,
 					activeSessionId: null,
 					pendingPrompt: null,
+					pendingImages: null,
 					selectedModel: "claude-opus-4.6",
 					sidebarCollapsed: false,
 					mobileSidebarOpen: false,
