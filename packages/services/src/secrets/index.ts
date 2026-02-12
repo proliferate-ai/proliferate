@@ -27,3 +27,6 @@ export {
 
 // DB functions needed by sessions-create and repos-finalize
 export { getSecretsForSession, upsertByRepoAndKey as upsertSecretByRepoAndKey } from "./db";
+
+// Connector secret resolution (used by gateway actions routes)
+export { resolveSecretValue } from "./service";

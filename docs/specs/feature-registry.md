@@ -141,7 +141,7 @@
 | Invocation sweeper | Implemented | `apps/worker/src/sweepers/index.ts` | Expires stale invocations |
 | Sandbox-MCP grants handler | Implemented | `packages/sandbox-mcp/src/actions-grants.ts` | Grant handling inside sandbox |
 | Actions list (web) | Implemented | `apps/web/src/server/routers/actions.ts` | Org-level actions inbox |
-| Connector-backed action sources (`remote_http` MCP via Actions) | Planned | `docs/specs/external-tools-rfc.md` | Planned to reuse existing approval/grant/audit pipeline |
+| Connector-backed action sources (`remote_http` MCP via Actions) | Implemented | `packages/services/src/actions/connectors/`, `apps/gateway/src/api/proliferate/http/actions.ts` | Gateway-mediated remote MCP connectors through Actions pipeline |
 
 ---
 
@@ -194,7 +194,7 @@
 | Prebuild resolver | Implemented | `apps/gateway/src/lib/prebuild-resolver.ts` | Resolves config at session start |
 | Service commands persistence | Implemented | `packages/db/src/schema/prebuilds.ts:serviceCommands` | JSONB on prebuilds |
 | Env file persistence | Implemented | `packages/db/src/schema/prebuilds.ts:envFiles` | JSONB on prebuilds |
-| Prebuild connector configuration (project-scoped external tool config) | Planned | `docs/specs/external-tools-rfc.md` | Planned source of truth for connector-backed Actions |
+| Prebuild connector configuration (project-scoped external tool config) | Implemented | `packages/db/src/schema/prebuilds.ts:connectors`, `apps/web/src/server/routers/prebuilds.ts:getConnectors/updateConnectors` | JSONB on prebuilds table with oRPC CRUD |
 | Base snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:sandboxBaseSnapshots` | Building/ready/failed |
 | Repo snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:repoSnapshots` | Building/ready/failed + commit SHA |
 

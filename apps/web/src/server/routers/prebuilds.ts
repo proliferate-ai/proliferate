@@ -8,9 +8,11 @@ import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
 import { prebuilds } from "@proliferate/services";
 import {
+	ConnectorConfigSchema,
 	CreatePrebuildInputSchema,
 	PrebuildSchema,
 	UpdatePrebuildInputSchema,
+	parsePrebuildConnectors,
 } from "@proliferate/shared";
 import { parsePrebuildServiceCommands } from "@proliferate/shared/sandbox";
 import { z } from "zod";
@@ -232,6 +234,48 @@ export const prebuildsRouter = {
 			await prebuilds.updatePrebuildServiceCommands({
 				prebuildId: input.prebuildId,
 				serviceCommands: input.commands,
+				updatedBy: context.user.id,
+			});
+			return { success: true };
+		}),
+
+	/**
+	 * Get connectors for a prebuild.
+	 */
+	getConnectors: orgProcedure
+		.input(z.object({ prebuildId: z.string().uuid() }))
+		.output(z.object({ connectors: z.array(ConnectorConfigSchema) }))
+		.handler(async ({ input, context }) => {
+			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+			if (!belongsToOrg) {
+				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+			}
+
+			const row = await prebuilds.getPrebuildConnectors(input.prebuildId);
+			const connectors = parsePrebuildConnectors(row?.connectors);
+			return { connectors };
+		}),
+
+	/**
+	 * Update connectors for a prebuild.
+	 */
+	updateConnectors: orgProcedure
+		.input(
+			z.object({
+				prebuildId: z.string().uuid(),
+				connectors: z.array(ConnectorConfigSchema).max(20),
+			}),
+		)
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+			if (!belongsToOrg) {
+				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+			}
+
+			await prebuilds.updatePrebuildConnectors({
+				prebuildId: input.prebuildId,
+				connectors: input.connectors,
 				updatedBy: context.user.id,
 			});
 			return { success: true };

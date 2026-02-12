@@ -6,7 +6,7 @@
 
 import type { Secret, SecretBundle } from "@proliferate/shared";
 import { isValidTargetPath, parseEnvFile } from "@proliferate/shared";
-import { encrypt, getEncryptionKey } from "../db/crypto";
+import { decrypt, encrypt, getEncryptionKey } from "../db/crypto";
 import * as secretsDb from "./db";
 import { toBundle, toBundles, toSecret, toSecrets } from "./mapper";
 
@@ -328,4 +328,23 @@ export async function buildEnvFilesFromBundles(
 		mode: "secret",
 		keys: b.keys.map((key) => ({ key, required: false })),
 	}));
+}
+
+// ============================================
+// Connector secret resolution
+// ============================================
+
+/**
+ * Resolve a single org-wide secret value by key.
+ * Used by the gateway to resolve connector auth credentials at runtime.
+ * Returns the decrypted plaintext or null if not found.
+ */
+export async function resolveSecretValue(orgId: string, key: string): Promise<string | null> {
+	const row = await secretsDb.getSecretByOrgAndKey(orgId, key);
+	if (!row) return null;
+	try {
+		return decrypt(row.encryptedValue, getEncryptionKey());
+	} catch {
+		return null;
+	}
 }

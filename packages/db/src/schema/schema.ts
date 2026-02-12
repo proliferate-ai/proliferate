@@ -308,6 +308,12 @@ export const prebuilds = pgTable(
 			mode: "date",
 		}),
 		envFilesUpdatedBy: text("env_files_updated_by"),
+		connectors: jsonb("connectors"),
+		connectorsUpdatedAt: timestamp("connectors_updated_at", {
+			withTimezone: true,
+			mode: "date",
+		}),
+		connectorsUpdatedBy: text("connectors_updated_by"),
 	},
 	(table) => [
 		index("idx_prebuilds_sandbox_provider").using(

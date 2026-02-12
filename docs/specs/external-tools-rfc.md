@@ -351,6 +351,17 @@ Adopt **Option 2 with a strict V1 scope**:
 
 This path gives broad integration coverage with minimal architectural churn while preserving approval, grants, and audit guarantees.
 
+### Implementation Status (2026-02-12)
+
+**Option 2 V1 is implemented.** Key artifacts:
+- Connector types + Zod schemas: `packages/shared/src/connectors.ts`
+- DB migration: `packages/db/drizzle/0021_prebuild_connectors.sql` (JSONB on prebuilds)
+- MCP client module: `packages/services/src/actions/connectors/` (list tools, call tool, risk derivation)
+- Secret resolver: `packages/services/src/secrets/service.ts:resolveSecretValue`
+- Gateway wiring: `apps/gateway/src/api/proliferate/http/actions.ts` (available, guide, invoke, approve)
+- oRPC CRUD: `apps/web/src/server/routers/prebuilds.ts` (getConnectors, updateConnectors)
+- See `actions.md` §6.11 for the full deep dive.
+
 ### Why not "CLI-dynamic MCP everywhere" as the default cloud model?
 
 - It bypasses the existing governance plane (risk checks, approvals, grants, invocation audit) unless we re-implement those controls in a second tool path.

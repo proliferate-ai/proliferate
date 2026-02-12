@@ -15,7 +15,8 @@
  */
 
 import { createLogger } from "@proliferate/logger";
-import { actions, integrations, orgs, sessions } from "@proliferate/services";
+import { actions, integrations, orgs, prebuilds, secrets, sessions } from "@proliferate/services";
+import { type ConnectorConfig, parsePrebuildConnectors } from "@proliferate/shared";
 import { Router, type Router as RouterType } from "express";
 import type { HubManager } from "../../../hub";
 import type { GatewayEnv } from "../../../lib/env";
@@ -52,6 +53,118 @@ setInterval(() => {
 		if (now >= entry.resetAt) invokeCounters.delete(key);
 	}
 }, RATE_LIMIT_WINDOW_MS);
+
+// ============================================
+// Connector Tool Cache (per session, in-memory)
+// ============================================
+
+interface CachedConnectorTools {
+	connectorId: string;
+	connectorName: string;
+	actions: actions.ActionDefinition[];
+	expiresAt: number;
+}
+
+const CONNECTOR_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const connectorToolCache = new Map<string, CachedConnectorTools[]>();
+
+// Periodic cleanup
+setInterval(() => {
+	const now = Date.now();
+	for (const [key, entries] of connectorToolCache) {
+		const valid = entries.filter((e) => now < e.expiresAt);
+		if (valid.length === 0) connectorToolCache.delete(key);
+		else connectorToolCache.set(key, valid);
+	}
+}, CONNECTOR_CACHE_TTL_MS);
+
+/**
+ * Load enabled connector configs for a session (session → prebuildId → connectors JSONB).
+ */
+async function loadSessionConnectors(
+	sessionId: string,
+): Promise<{ connectors: ConnectorConfig[]; orgId: string; prebuildId: string } | null> {
+	const session = await sessions.findByIdInternal(sessionId);
+	if (!session?.prebuildId) return null;
+
+	const row = await prebuilds.getPrebuildConnectors(session.prebuildId);
+	const connectors = parsePrebuildConnectors(row?.connectors).filter((c) => c.enabled);
+
+	return { connectors, orgId: session.organizationId, prebuildId: session.prebuildId };
+}
+
+/**
+ * Resolve the secret value for a connector's auth.
+ */
+async function resolveConnectorSecret(
+	orgId: string,
+	connector: ConnectorConfig,
+): Promise<string | null> {
+	return secrets.resolveSecretValue(orgId, connector.auth.secretKey);
+}
+
+/**
+ * List tools for all enabled connectors for a session (with caching).
+ */
+async function listSessionConnectorTools(sessionId: string): Promise<CachedConnectorTools[]> {
+	// Check cache
+	const cached = connectorToolCache.get(sessionId);
+	if (cached?.every((c) => Date.now() < c.expiresAt)) {
+		return cached;
+	}
+
+	const ctx = await loadSessionConnectors(sessionId);
+	if (!ctx || ctx.connectors.length === 0) return [];
+
+	const results = await Promise.allSettled(
+		ctx.connectors.map(async (connector) => {
+			const secret = await resolveConnectorSecret(ctx.orgId, connector);
+			if (!secret) {
+				logger.warn(
+					{ connectorId: connector.id, secretKey: connector.auth.secretKey },
+					"Connector secret not found, skipping",
+				);
+				return {
+					connectorId: connector.id,
+					connectorName: connector.name,
+					actions: [] as actions.ActionDefinition[],
+				};
+			}
+			return actions.connectors.listConnectorTools(connector, secret);
+		}),
+	);
+
+	const toolLists = results
+		.filter(
+			(r): r is PromiseFulfilledResult<actions.connectors.ConnectorToolList> =>
+				r.status === "fulfilled",
+		)
+		.map((r) => ({ ...r.value, expiresAt: Date.now() + CONNECTOR_CACHE_TTL_MS }));
+
+	connectorToolCache.set(sessionId, toolLists);
+	return toolLists;
+}
+
+/**
+ * Resolve a connector config by its ID from a session's prebuild.
+ */
+async function resolveConnector(
+	sessionId: string,
+	connectorId: string,
+): Promise<{ connector: ConnectorConfig; orgId: string; secret: string }> {
+	const ctx = await loadSessionConnectors(sessionId);
+	if (!ctx) throw new ApiError(400, "Session has no prebuild");
+
+	const connector = ctx.connectors.find((c) => c.id === connectorId);
+	if (!connector) throw new ApiError(400, `Unknown connector: ${connectorId}`);
+
+	const secret = await resolveConnectorSecret(ctx.orgId, connector);
+	if (!secret) {
+		throw new ApiError(500, `Secret "${connector.auth.secretKey}" not found for connector`);
+	}
+
+	return { connector, orgId: ctx.orgId, secret };
+}
 
 // ============================================
 // Helpers
@@ -145,7 +258,23 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				})
 				.filter(Boolean);
 
-			res.json({ integrations: available });
+			// Merge connector-backed tools
+			const connectorTools = await listSessionConnectorTools(sessionId);
+			const connectorIntegrations = connectorTools
+				.filter((ct) => ct.actions.length > 0)
+				.map((ct) => ({
+					integrationId: null,
+					integration: `connector:${ct.connectorId}`,
+					displayName: ct.connectorName,
+					actions: ct.actions.map((a) => ({
+						name: a.name,
+						description: a.description,
+						riskLevel: a.riskLevel,
+						params: a.params,
+					})),
+				}));
+
+			res.json({ integrations: [...available, ...connectorIntegrations] });
 		} catch (err) {
 			next(err);
 		}
@@ -164,6 +293,36 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			}
 
 			const { integration } = req.params;
+
+			// Connector-backed guide (auto-generated from tool definitions)
+			if (integration.startsWith("connector:")) {
+				const connectorId = integration.slice("connector:".length);
+				const tools = await listSessionConnectorTools(sessionId);
+				const ct = tools.find((t) => t.connectorId === connectorId);
+				if (!ct || ct.actions.length === 0) {
+					throw new ApiError(404, `No guide available for connector: ${connectorId}`);
+				}
+
+				const lines = [`# ${ct.connectorName} (MCP Connector)`, "", "## Available Actions", ""];
+				for (const a of ct.actions) {
+					lines.push(`### ${a.name} (${a.riskLevel})`);
+					lines.push(a.description);
+					if (a.params.length > 0) {
+						lines.push("");
+						lines.push("**Parameters:**");
+						for (const p of a.params) {
+							lines.push(
+								`- \`${p.name}\` (${p.type}${p.required ? ", required" : ""}): ${p.description}`,
+							);
+						}
+					}
+					lines.push("");
+				}
+
+				res.json({ integration, guide: lines.join("\n") });
+				return;
+			}
+
 			const guide = actions.getGuide(integration);
 			if (!guide) {
 				throw new ApiError(404, `No guide available for integration: ${integration}`);
@@ -200,6 +359,112 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			if (!integration || !action) {
 				throw new ApiError(400, "Missing integration or action");
 			}
+
+			// ── Connector-backed action path ──
+			if (integration.startsWith("connector:")) {
+				const connectorId = integration.slice("connector:".length);
+				const { connector, orgId, secret } = await resolveConnector(sessionId, connectorId);
+
+				// Look up action definition from cached tools
+				const tools = await listSessionConnectorTools(sessionId);
+				const ct = tools.find((t) => t.connectorId === connectorId);
+				const actionDef = ct?.actions.find((a) => a.name === action);
+				if (!actionDef) {
+					throw new ApiError(400, `Unknown action: ${integration}/${action}`);
+				}
+
+				// Create invocation via standard risk pipeline
+				let result: Awaited<ReturnType<typeof actions.invokeAction>>;
+				try {
+					result = await actions.invokeAction({
+						sessionId,
+						organizationId: orgId,
+						integrationId: null,
+						integration,
+						action,
+						riskLevel: actionDef.riskLevel,
+						params: params ?? {},
+					});
+				} catch (err) {
+					if (err instanceof actions.PendingLimitError) {
+						throw new ApiError(429, err.message);
+					}
+					throw err;
+				}
+
+				// Auto-approved: execute via MCP
+				if (!result.needsApproval && result.invocation.status === "approved") {
+					const startMs = Date.now();
+					try {
+						await actions.markExecuting(result.invocation.id);
+						const callResult = await actions.connectors.callConnectorTool(
+							connector,
+							secret,
+							action,
+							params ?? {},
+						);
+
+						if (callResult.isError) {
+							throw new Error(
+								typeof callResult.content === "string"
+									? callResult.content
+									: JSON.stringify(callResult.content),
+							);
+						}
+
+						const durationMs = Date.now() - startMs;
+						const invocation = await actions.markCompleted(
+							result.invocation.id,
+							callResult.content,
+							durationMs,
+						);
+						res.json({ invocation, result: callResult.content });
+					} catch (err) {
+						const durationMs = Date.now() - startMs;
+						const errorMsg = err instanceof Error ? err.message : String(err);
+						await actions.markFailed(result.invocation.id, errorMsg, durationMs);
+						logger.error({ err, invocationId: result.invocation.id }, "Connector action failed");
+						throw new ApiError(502, `Action failed: ${errorMsg}`);
+					}
+					return;
+				}
+
+				// Denied
+				if (result.invocation.status === "denied") {
+					res.status(403).json({
+						invocation: result.invocation,
+						error: "Action denied: danger-level actions are not allowed",
+					});
+					return;
+				}
+
+				// Pending approval
+				if (result.needsApproval) {
+					const hub = await tryGetHub(sessionId);
+					hub?.broadcastMessage({
+						type: "action_approval_request",
+						payload: {
+							invocationId: result.invocation.id,
+							integration,
+							action,
+							riskLevel: actionDef.riskLevel,
+							params: params ?? {},
+							expiresAt: result.invocation.expiresAt?.toISOString() ?? "",
+						},
+					});
+
+					res.status(202).json({
+						invocation: result.invocation,
+						message: "Action requires approval",
+					});
+					return;
+				}
+
+				res.json({ invocation: result.invocation });
+				return;
+			}
+
+			// ── Static adapter path (unchanged) ──
 
 			// Find adapter
 			const adapter = actions.getAdapter(integration);
@@ -421,31 +686,58 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			try {
 				await actions.markExecuting(invocationId);
 
-				// Resolve session connections to find the integration
-				const connections = await sessions.listSessionConnections(req.proliferateSessionId!);
-				const conn = connections.find((c) => c.integrationId === invocation.integrationId);
-				if (!conn?.integration) {
-					throw new Error("Integration no longer available");
+				let actionResult: unknown;
+				const isConnectorAction = invocation.integration.startsWith("connector:");
+
+				if (isConnectorAction) {
+					// ── Connector execution path ──
+					const connectorId = invocation.integration.slice("connector:".length);
+					const { connector, secret } = await resolveConnector(
+						req.proliferateSessionId!,
+						connectorId,
+					);
+					const callResult = await actions.connectors.callConnectorTool(
+						connector,
+						secret,
+						invocation.action,
+						(invocation.params as Record<string, unknown>) ?? {},
+					);
+					if (callResult.isError) {
+						throw new Error(
+							typeof callResult.content === "string"
+								? callResult.content
+								: JSON.stringify(callResult.content),
+						);
+					}
+					actionResult = callResult.content;
+				} else {
+					// ── Static adapter execution path ──
+					const connections = await sessions.listSessionConnections(req.proliferateSessionId!);
+					const conn = connections.find((c) => c.integrationId === invocation.integrationId);
+					if (!conn?.integration) {
+						throw new Error("Integration no longer available");
+					}
+
+					const adapter = actions.getAdapter(invocation.integration);
+					if (!adapter) {
+						throw new Error(`No adapter for ${invocation.integration}`);
+					}
+
+					const token = await integrations.getToken({
+						id: conn.integration.id,
+						provider: conn.integration.provider,
+						integrationId: conn.integration.integrationId,
+						connectionId: conn.integration.connectionId,
+						githubInstallationId: conn.integration.githubInstallationId,
+					});
+
+					actionResult = await adapter.execute(
+						invocation.action,
+						(invocation.params as Record<string, unknown>) ?? {},
+						token,
+					);
 				}
 
-				const adapter = actions.getAdapter(invocation.integration);
-				if (!adapter) {
-					throw new Error(`No adapter for ${invocation.integration}`);
-				}
-
-				const token = await integrations.getToken({
-					id: conn.integration.id,
-					provider: conn.integration.provider,
-					integrationId: conn.integration.integrationId,
-					connectionId: conn.integration.connectionId,
-					githubInstallationId: conn.integration.githubInstallationId,
-				});
-
-				const actionResult = await adapter.execute(
-					invocation.action,
-					(invocation.params as Record<string, unknown>) ?? {},
-					token,
-				);
 				const durationMs = Date.now() - startMs;
 				const completed = await actions.markCompleted(invocationId, actionResult, durationMs);
 
@@ -587,10 +879,13 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			if (!session) {
 				throw new ApiError(404, "Session not found");
 			}
+			if (!session.createdBy) {
+				throw new ApiError(400, "Cannot create grant: session has no creator user");
+			}
 
 			const grant = await actions.createGrant({
 				organizationId: session.organizationId,
-				createdBy: sessionId,
+				createdBy: session.createdBy,
 				sessionId: scope === "org" ? null : sessionId,
 				integration,
 				action,
