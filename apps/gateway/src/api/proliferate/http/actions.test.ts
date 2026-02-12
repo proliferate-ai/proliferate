@@ -696,4 +696,73 @@ describe("actions HTTP routes", () => {
 			});
 		});
 	});
+
+	// ------------------------------------------
+	// GET /grants — pagination validation
+	// ------------------------------------------
+
+	describe("GET /grants pagination", () => {
+		it("rejects negative limit", async () => {
+			const res = await fetch(url("/grants?limit=-5"));
+			expect(res.status).toBe(400);
+			const body = (await res.json()) as { error: string };
+			expect(body.error).toMatch(/limit must be a positive integer/);
+		});
+
+		it("rejects non-numeric limit", async () => {
+			const res = await fetch(url("/grants?limit=abc"));
+			expect(res.status).toBe(400);
+		});
+
+		it("rejects negative offset", async () => {
+			const res = await fetch(url("/grants?offset=-1"));
+			expect(res.status).toBe(400);
+			const body = (await res.json()) as { error: string };
+			expect(body.error).toMatch(/offset must be a non-negative integer/);
+		});
+
+		it("rejects limit=0", async () => {
+			const res = await fetch(url("/grants?limit=0"));
+			expect(res.status).toBe(400);
+		});
+
+		it("accepts valid limit and offset", async () => {
+			const { actions: actionsService } = await import("@proliferate/services");
+			vi.mocked(actionsService.listActiveGrants).mockResolvedValueOnce([]);
+
+			const res = await fetch(url("/grants?limit=10&offset=20"));
+			expect(res.status).toBe(200);
+			expect(vi.mocked(actionsService.listActiveGrants)).toHaveBeenCalledWith(
+				"org-1",
+				"session-1",
+				{ limit: 10, offset: 20 },
+			);
+		});
+
+		it("clamps limit to max 100", async () => {
+			const { actions: actionsService } = await import("@proliferate/services");
+			vi.mocked(actionsService.listActiveGrants).mockResolvedValueOnce([]);
+
+			const res = await fetch(url("/grants?limit=500"));
+			expect(res.status).toBe(200);
+			expect(vi.mocked(actionsService.listActiveGrants)).toHaveBeenCalledWith(
+				"org-1",
+				"session-1",
+				{ limit: 100, offset: 0 },
+			);
+		});
+
+		it("floors fractional values", async () => {
+			const { actions: actionsService } = await import("@proliferate/services");
+			vi.mocked(actionsService.listActiveGrants).mockResolvedValueOnce([]);
+
+			const res = await fetch(url("/grants?limit=5.9&offset=2.3"));
+			expect(res.status).toBe(200);
+			expect(vi.mocked(actionsService.listActiveGrants)).toHaveBeenCalledWith(
+				"org-1",
+				"session-1",
+				{ limit: 5, offset: 2 },
+			);
+		});
+	});
 });

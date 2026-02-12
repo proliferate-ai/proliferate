@@ -627,9 +627,16 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				orgId = session.organizationId;
 			}
 
-			const limit = Math.min(Number(req.query.limit) || 100, 100);
-			const offset = Number(req.query.offset) || 0;
-			const grants = await actions.listActiveGrants(orgId, sessionId, { limit, offset });
+			const rawLimit = req.query.limit != null ? Math.floor(Number(req.query.limit)) : 100;
+			const rawOffset = req.query.offset != null ? Math.floor(Number(req.query.offset)) : 0;
+			if (!Number.isFinite(rawLimit) || rawLimit < 1) {
+				throw new ApiError(400, "limit must be a positive integer");
+			}
+			if (!Number.isFinite(rawOffset) || rawOffset < 0) {
+				throw new ApiError(400, "offset must be a non-negative integer");
+			}
+			const limit = Math.min(rawLimit, 100);
+			const grants = await actions.listActiveGrants(orgId, sessionId, { limit, offset: rawOffset });
 			res.json({ grants });
 		} catch (err) {
 			next(err);
