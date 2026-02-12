@@ -11,6 +11,7 @@ import {
 	getDb,
 	inArray,
 	integrations,
+	organization,
 	repoConnections,
 	repos,
 	slackInstallations,
@@ -151,6 +152,18 @@ export async function createRepo(input: {
 		addedBy: input.addedBy,
 		source: "github",
 	});
+}
+
+/**
+ * Check if onboarding is complete for an organization.
+ */
+export async function getOrgOnboardingComplete(orgId: string): Promise<boolean> {
+	const db = getDb();
+	const result = await db.query.organization.findFirst({
+		where: eq(organization.id, orgId),
+		columns: { onboardingComplete: true },
+	});
+	return result?.onboardingComplete ?? false;
 }
 
 /**

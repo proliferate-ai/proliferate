@@ -99,9 +99,12 @@ export default function OnboardingPage() {
 	};
 
 	const handleSkipGitHub = () => {
-		// Skip GitHub entirely — go straight to dashboard
-		reset();
-		router.push("/dashboard");
+		// Skip GitHub — advance to payment (or complete if billing disabled)
+		if (billingEnabled) {
+			setStep("payment");
+		} else {
+			setStep("complete");
+		}
 	};
 
 	const handlePaymentComplete = () => {

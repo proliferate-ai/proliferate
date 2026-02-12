@@ -31,14 +31,16 @@ export async function getOnboardingStatus(
 			hasOrg: false,
 			hasSlackConnection: false,
 			hasGitHubConnection: false,
+			onboardingComplete: false,
 			repos: [],
 		};
 	}
 
-	const [hasSlackConnection, hasGitHubConnection, reposWithStatus] = await Promise.all([
+	const [hasSlackConnection, hasGitHubConnection, reposWithStatus, orgInfo] = await Promise.all([
 		onboardingDb.hasSlackConnection(orgId),
 		onboardingDb.hasGitHubConnection(orgId, nangoGithubIntegrationId),
 		onboardingDb.getReposWithPrebuildStatus(orgId),
+		onboardingDb.getOrgOnboardingComplete(orgId),
 	]);
 
 	// Helper to check if a prebuild_repo entry has a usable prebuild (has snapshot)
@@ -64,6 +66,7 @@ export async function getOnboardingStatus(
 		hasOrg: true,
 		hasSlackConnection,
 		hasGitHubConnection,
+		onboardingComplete: orgInfo ?? false,
 		repos,
 	};
 }

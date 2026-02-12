@@ -5,6 +5,7 @@ import { BillingBanner } from "@/components/dashboard/billing-banner";
 import { CommandSearch } from "@/components/dashboard/command-search";
 import { MobileSidebar, MobileSidebarTrigger, Sidebar } from "@/components/dashboard/sidebar";
 import { Button } from "@/components/ui/button";
+import { useOnboarding } from "@/hooks/use-onboarding";
 import { useSession } from "@/lib/auth-client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { env } from "@proliferate/environment/public";
@@ -19,7 +20,15 @@ export default function DashboardLayout({
 }) {
 	const router = useRouter();
 	const { data: session, isPending: authPending } = useSession();
+	const { data: onboarding, isLoading: onboardingLoading } = useOnboarding();
 	const { commandSearchOpen, setCommandSearchOpen } = useDashboardStore();
+
+	// Redirect to onboarding if not complete
+	useEffect(() => {
+		if (!onboardingLoading && onboarding && !onboarding.onboardingComplete) {
+			router.push("/onboarding");
+		}
+	}, [onboarding, onboardingLoading, router]);
 
 	// Cmd+K keyboard shortcut for search
 	useEffect(() => {
@@ -49,12 +58,12 @@ export default function DashboardLayout({
 		}
 	}, [session, authPending, router, requireEmailVerification]);
 
-	// Wait for auth to load before rendering anything
-	if (authPending) {
+	// Wait for auth and onboarding to load before rendering anything
+	if (authPending || onboardingLoading) {
 		return <div className="min-h-screen bg-background" />;
 	}
 
-	if (!session) {
+	if (!session || !onboarding?.onboardingComplete) {
 		return null;
 	}
 
