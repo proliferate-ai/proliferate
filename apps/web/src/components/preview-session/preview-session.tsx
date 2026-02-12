@@ -56,7 +56,7 @@ export function PreviewSession({ sessionId }: PreviewSessionProps) {
 	const [activeServicePort, setActiveServicePort] = useState<number | null>(null);
 
 	const doUrl = getSessionGatewayUrl(sessionId);
-	const doWsBase = doUrl.replace("https://", "wss://");
+	const doWsBase = doUrl.replace("https://", "wss://").replace("http://", "ws://");
 
 	const { data, isLoading, error, refetch } = useQuery({
 		queryKey: ["preview-services", doUrl],
