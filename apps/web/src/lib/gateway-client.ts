@@ -7,6 +7,7 @@
 
 import { type SyncClient, createSyncClient } from "@proliferate/gateway-clients";
 import { GATEWAY_URL } from "./gateway";
+import { orpc } from "./orpc";
 
 let clientPromise: Promise<SyncClient> | null = null;
 let tokenExpiresAt = 0;
@@ -23,12 +24,7 @@ async function getClient(): Promise<SyncClient> {
 
 	// Fetch new token and create client
 	clientPromise = (async () => {
-		const res = await fetch("/api/auth/ws-token", { credentials: "include" });
-		if (!res.ok) {
-			throw new Error("Failed to get auth token");
-		}
-
-		const { token } = await res.json();
+		const { token } = await orpc.auth.wsToken.call({});
 
 		// Token expires in 1 hour, track it
 		tokenExpiresAt = Date.now() + 55 * 60 * 1000;

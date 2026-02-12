@@ -5,6 +5,8 @@
 ### In Scope
 - User authentication via better-auth (email/password + GitHub/Google OAuth)
 - Email verification flow (conditional, Resend-based)
+- Auth provider metadata (`google`/`github`/`email`) for web login UI
+- Gateway WebSocket token issuance via authenticated oRPC procedure
 - Organization model: personal orgs, team orgs, slug-based identity
 - Member management: roles (owner/admin/member), role changes, removal
 - Invitation system: create, email delivery, accept/reject, expiry
@@ -77,6 +79,7 @@ apps/web/src/lib/
 
 apps/web/src/server/routers/
 ├── middleware.ts                    # protectedProcedure, orgProcedure
+├── auth.ts                          # Auth provider metadata + ws token issuance
 ├── orgs.ts                         # Org list/get, members, invitations, domains
 ├── onboarding.ts                   # Status, startTrial, markComplete, finalize
 ├── admin.ts                        # Super-admin status, listing, impersonation

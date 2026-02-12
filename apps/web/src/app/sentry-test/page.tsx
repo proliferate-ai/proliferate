@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { orpc } from "@/lib/orpc";
 import * as Sentry from "@sentry/nextjs";
 
 export default function SentryTestPage() {
@@ -15,9 +16,7 @@ export default function SentryTestPage() {
 
 	const triggerServerError = async () => {
 		try {
-			const response = await fetch("/api/sentry-test");
-			const data = await response.json();
-			alert(JSON.stringify(data));
+			await orpc.admin.sentryTestError.call({});
 		} catch (e) {
 			alert("Server error triggered - check Sentry!");
 		}

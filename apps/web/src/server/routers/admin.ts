@@ -13,6 +13,8 @@ import {
 	setImpersonationCookie,
 } from "@/lib/super-admin";
 import { os, ORPCError } from "@orpc/server";
+import { type EnvStatus, getEnvStatus } from "@proliferate/environment";
+import { nodeEnv } from "@proliferate/environment/runtime";
 import { admin } from "@proliferate/services";
 import {
 	AdminOrganizationSchema,
@@ -120,6 +122,33 @@ export const adminRouter = {
 			const organizations = await admin.listOrganizations();
 			return { organizations };
 		}),
+
+	/**
+	 * Get environment configuration status for settings UI.
+	 * In production, this is restricted to super admins.
+	 */
+	configStatus: os
+		.input(z.object({}).optional())
+		.output(z.custom<EnvStatus>())
+		.handler(async () => {
+			const session = await getSession();
+			if (!session?.user) {
+				throw new ORPCError("UNAUTHORIZED", { message: "Unauthorized" });
+			}
+
+			if (nodeEnv === "production" && !isSuperAdmin(session.user.email)) {
+				throw new ORPCError("FORBIDDEN", { message: "Forbidden" });
+			}
+
+			return getEnvStatus();
+		}),
+
+	/**
+	 * Throw a server-side error intentionally for Sentry verification.
+	 */
+	sentryTestError: os.input(z.object({}).optional()).handler(async () => {
+		throw new Error("Sentry Test: Server-side API error thrown intentionally!");
+	}),
 
 	/**
 	 * Start impersonating a user in an organization.

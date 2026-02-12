@@ -52,6 +52,9 @@ jobs:
             echo "$OUTPUT"
           fi
 
+      - name: Enforce no raw local /api fetch
+        run: pnpm lint:no-raw-api-fetch
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest

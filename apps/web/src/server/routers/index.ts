@@ -6,6 +6,7 @@
 
 import { actionsRouter } from "./actions";
 import { adminRouter } from "./admin";
+import { authRouter } from "./auth";
 import { automationsRouter } from "./automations";
 import { billingRouter } from "./billing";
 import { cliRouter } from "./cli";
@@ -23,6 +24,7 @@ import { triggersRouter } from "./triggers";
 export const appRouter = {
 	actions: actionsRouter,
 	admin: adminRouter,
+	auth: authRouter,
 	automations: automationsRouter,
 	billing: billingRouter,
 	cli: cliRouter,

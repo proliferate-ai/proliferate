@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { Text } from "@/components/ui/text";
+import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 import type { EnvStatus, RequirementScope } from "@proliferate/environment";
 import { useQuery } from "@tanstack/react-query";
@@ -21,14 +22,7 @@ const scopeClasses: Record<RequirementScope, string> = {
 
 export function ConfigTab() {
 	const { data, isLoading, error } = useQuery<EnvStatus>({
-		queryKey: ["config-status"],
-		queryFn: async () => {
-			const response = await fetch("/api/config/status");
-			if (!response.ok) {
-				throw new Error("Failed to load configuration status");
-			}
-			return (await response.json()) as EnvStatus;
-		},
+		...orpc.admin.configStatus.queryOptions({ input: undefined }),
 	});
 
 	if (isLoading) {

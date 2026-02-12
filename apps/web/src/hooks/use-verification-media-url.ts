@@ -110,11 +110,7 @@ export function getCachedVerificationUrl(key: string): string | null {
  * Fetch text content from a verification file.
  */
 export async function fetchVerificationTextContent(key: string): Promise<string> {
-	const response = await fetch(buildProxyUrl(key));
-	if (!response.ok) {
-		throw new Error(`Failed to load media: ${response.status}`);
-	}
-	return response.text();
+	return gatewayClient.getVerificationFileText(key);
 }
 
 /**

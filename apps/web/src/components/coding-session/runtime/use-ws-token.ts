@@ -1,5 +1,6 @@
 "use client";
 
+import { orpc } from "@/lib/orpc";
 import { useQuery } from "@tanstack/react-query";
 
 const WS_TOKEN_QUERY_KEY = ["ws-token"] as const;
@@ -7,12 +8,8 @@ const STALE_TIME = 30 * 60 * 1000; // 30 minutes (token valid for 60 min)
 const GC_TIME = 60 * 60 * 1000; // 1 hour — match token lifetime
 
 async function fetchWsToken(): Promise<string> {
-	const res = await fetch("/api/auth/ws-token", { credentials: "include" });
-	if (!res.ok) {
-		throw new Error("Failed to get WebSocket token");
-	}
-	const data = await res.json();
-	return data.token;
+	const { token } = await orpc.auth.wsToken.call({});
+	return token;
 }
 
 interface WsTokenState {

@@ -1,3 +1,4 @@
+import { orpc } from "@/lib/orpc";
 import { useQuery } from "@tanstack/react-query";
 
 interface AuthProviders {
@@ -10,14 +11,7 @@ interface AuthProviders {
 
 export function useAuthProviders() {
 	return useQuery<AuthProviders>({
-		queryKey: ["auth-providers"],
-		queryFn: async () => {
-			const response = await fetch("/api/auth/providers");
-			if (!response.ok) {
-				throw new Error("Failed to fetch auth providers");
-			}
-			return response.json();
-		},
+		...orpc.auth.providers.queryOptions({ input: undefined }),
 		staleTime: Number.POSITIVE_INFINITY, // Never refetch - providers don't change at runtime
 	});
 }

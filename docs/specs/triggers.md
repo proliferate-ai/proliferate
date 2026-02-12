@@ -126,7 +126,7 @@ packages/services/src/types/
 └── schedules.ts                      # Schedule input/output types
 
 apps/web/src/server/routers/
-├── triggers.ts                       # Trigger CRUD oRPC routes
+├── triggers.ts                       # Trigger CRUD + provider metadata oRPC routes
 └── schedules.ts                      # Schedule CRUD oRPC routes
 
 apps/web/src/app/api/webhooks/

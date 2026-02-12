@@ -16,9 +16,57 @@ import {
 	UpdateTriggerInputSchema,
 } from "@proliferate/shared";
 import { z } from "zod";
-import { orgProcedure } from "./middleware";
+import { orgProcedure, publicProcedure } from "./middleware";
+
+const TriggerProviderMetadataSchema = z.object({
+	name: z.string(),
+	description: z.string(),
+	icon: z.string(),
+});
+
+const TriggerProviderInfoSchema = z.object({
+	id: z.string(),
+	provider: z.string(),
+	triggerType: z.enum(["webhook", "polling"]).optional(),
+	metadata: TriggerProviderMetadataSchema,
+	configSchema: z.unknown(),
+});
+
+const TriggerProvidersResponseSchema = z.object({
+	providers: z.record(TriggerProviderInfoSchema),
+});
 
 export const triggersRouter = {
+	/**
+	 * List all available trigger providers from trigger-service.
+	 */
+	providers: publicProcedure
+		.input(z.object({}).optional())
+		.output(TriggerProvidersResponseSchema)
+		.handler(async () => {
+			if (!env.TRIGGER_SERVICE_URL) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "Trigger service not configured",
+				});
+			}
+
+			const baseUrl = env.TRIGGER_SERVICE_URL.replace(/\/$/, "");
+			const response = await fetch(`${baseUrl}/providers`, {
+				headers: { "Content-Type": "application/json" },
+				cache: "no-store",
+				signal: AbortSignal.timeout(30_000),
+			});
+
+			if (!response.ok) {
+				const text = await response.text().catch(() => "");
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: text || "Failed to fetch trigger providers",
+				});
+			}
+
+			return (await response.json()) as z.infer<typeof TriggerProvidersResponseSchema>;
+		}),
+
 	/**
 	 * List all triggers for the current organization.
 	 */

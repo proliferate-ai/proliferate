@@ -1,5 +1,6 @@
 "use client";
 
+import { orpc } from "@/lib/orpc";
 import { useQuery } from "@tanstack/react-query";
 
 export interface TriggerProviderMetadata {
@@ -22,15 +23,7 @@ export interface TriggerProvidersResponse {
 
 export function useTriggerProviders() {
 	return useQuery({
-		queryKey: ["trigger-providers"],
-		queryFn: async (): Promise<TriggerProvidersResponse> => {
-			const response = await fetch("/api/trigger-providers");
-			if (!response.ok) {
-				const text = await response.text();
-				throw new Error(text || "Failed to load trigger providers");
-			}
-			return response.json();
-		},
+		...orpc.triggers.providers.queryOptions({ input: undefined }),
 		staleTime: 5 * 60 * 1000,
 	});
 }
