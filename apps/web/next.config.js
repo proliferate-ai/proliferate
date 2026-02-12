@@ -1,9 +1,18 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { withSentryConfig } from "@sentry/nextjs";
+
+const nextConfigDir = path.dirname(fileURLToPath(import.meta.url));
+const monorepoRoot = path.resolve(nextConfigDir, "../..");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	// Enable standalone output for Docker deployments
 	output: process.env.NEXT_BUILD_STANDALONE === "true" ? "standalone" : undefined,
+	turbopack: {
+		// Pin root so Turbopack module resolution is stable in monorepo dev.
+		root: monorepoRoot,
+	},
 	transpilePackages: [
 		"@proliferate/shared",
 		"@proliferate/gateway-clients",
