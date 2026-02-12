@@ -2,7 +2,15 @@
  * Automation runs service.
  */
 
-import { automationRunEvents, automationRuns, eq, outbox, triggerEvents } from "../db/client";
+import {
+	and,
+	automationRunEvents,
+	automationRuns,
+	eq,
+	inArray,
+	outbox,
+	triggerEvents,
+} from "../db/client";
 import { getDb } from "../db/client";
 import { enqueueRunNotification } from "../notifications/service";
 import type { TriggerEventRow } from "../triggers/db";
@@ -351,6 +359,7 @@ export class RunNotResolvableError extends Error {
 
 export interface ResolveRunInput {
 	runId: string;
+	automationId: string;
 	orgId: string;
 	userId: string;
 	outcome: string;
@@ -363,40 +372,67 @@ export async function resolveRun(input: ResolveRunInput): Promise<runsDb.Automat
 		throw new Error(`Invalid resolution outcome: ${input.outcome}`);
 	}
 
-	const run = await runsDb.findById(input.runId);
-	if (!run) return null;
+	const db = getDb();
+	return db.transaction(async (tx) => {
+		// Read inside transaction for consistency
+		const run = await tx.query.automationRuns.findFirst({
+			where: eq(automationRuns.id, input.runId),
+		});
+		if (!run) return null;
 
-	if (run.organizationId !== input.orgId) return null;
+		if (run.organizationId !== input.orgId) return null;
+		if (run.automationId !== input.automationId) return null;
 
-	if (!RESOLVABLE_STATUSES.includes(run.status)) {
-		throw new RunNotResolvableError(run.status);
-	}
+		if (!RESOLVABLE_STATUSES.includes(run.status)) {
+			throw new RunNotResolvableError(run.status);
+		}
 
-	const fromStatus = run.status;
-	const toStatus = input.outcome;
+		const fromStatus = run.status;
+		const toStatus = input.outcome;
 
-	const updated = await runsDb.updateRun(input.runId, {
-		status: toStatus,
-		statusReason: `manual_resolution:${input.reason ?? "resolved"}`,
-		completedAt: run.completedAt ?? new Date(),
-	});
+		// Conditional update: only mutate if status hasn't changed (TOCTOU guard)
+		const [updated] = await tx
+			.update(automationRuns)
+			.set({
+				status: toStatus,
+				statusReason: `manual_resolution:${input.reason ?? "resolved"}`,
+				completedAt: run.completedAt ?? new Date(),
+				updatedAt: new Date(),
+			})
+			.where(
+				and(
+					eq(automationRuns.id, input.runId),
+					inArray(automationRuns.status, [...RESOLVABLE_STATUSES]),
+				),
+			)
+			.returning();
 
-	await runsDb.insertRunEvent(input.runId, "manual_resolution", fromStatus, toStatus, {
-		userId: input.userId,
-		reason: input.reason ?? null,
-		comment: input.comment ?? null,
-		previousStatus: fromStatus,
-	});
+		if (!updated) {
+			// Status changed between read and write — concurrent mutation
+			throw new RunNotResolvableError(run.status);
+		}
 
-	if (updated) {
+		await tx.insert(automationRunEvents).values({
+			runId: input.runId,
+			type: "manual_resolution",
+			fromStatus,
+			toStatus,
+			data: {
+				userId: input.userId,
+				reason: input.reason ?? null,
+				comment: input.comment ?? null,
+				previousStatus: fromStatus,
+			},
+		});
+
 		try {
 			await enqueueRunNotification(updated.organizationId, input.runId, toStatus);
 		} catch {
 			// Non-critical
 		}
-	}
 
-	return updated;
+		return updated;
+	});
 }
 
 export async function completeRun(

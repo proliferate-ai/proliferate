@@ -561,6 +561,7 @@ export const automationsRouter = {
 			try {
 				const updated = await runs.resolveRun({
 					runId: input.runId,
+					automationId: input.id,
 					orgId: context.orgId,
 					userId: context.user.id,
 					outcome: input.outcome,

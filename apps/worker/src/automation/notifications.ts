@@ -234,16 +234,8 @@ export async function dispatchRunNotification(runId: string, logger: Logger): Pr
 		const effectId = `notify:${runId}:${channel.name}:${run.status}`;
 
 		// Check idempotency: skip if this notification was already sent
-		const { replayed } = await sideEffects.recordOrReplaySideEffect({
-			organizationId: run.organizationId,
-			runId,
-			effectId,
-			kind: "notification",
-			provider: channel.name,
-			requestHash: `${channelId}:${run.status}`,
-		});
-
-		if (replayed) {
+		const existing = await sideEffects.findSideEffect(run.organizationId, effectId);
+		if (existing) {
 			logger.info(
 				{ runId, channel: channel.name, status: run.status, effectId },
 				"Notification already sent (idempotent replay)",
@@ -254,6 +246,16 @@ export async function dispatchRunNotification(runId: string, logger: Logger): Pr
 		try {
 			const result = await channel.send(notification, logger);
 			if (result.sent) {
+				// Record side effect only after successful send so transient
+				// failures do not permanently suppress the notification on retry.
+				await sideEffects.recordOrReplaySideEffect({
+					organizationId: run.organizationId,
+					runId,
+					effectId,
+					kind: "notification",
+					provider: channel.name,
+					requestHash: `${channelId}:${run.status}`,
+				});
 				logger.info(
 					{ runId, channel: channel.name, status: run.status },
 					"Notification dispatched",
