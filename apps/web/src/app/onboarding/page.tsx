@@ -98,6 +98,12 @@ export default function OnboardingPage() {
 		}
 	};
 
+	const handleSkipGitHub = () => {
+		// Skip GitHub entirely — go straight to dashboard
+		reset();
+		router.push("/dashboard");
+	};
+
 	const handlePaymentComplete = () => {
 		refetch();
 		setStep("complete");
@@ -136,6 +142,7 @@ export default function OnboardingPage() {
 			{step === "github" && (
 				<StepGitHubConnect
 					onComplete={handleGitHubConnected}
+					onSkip={handleSkipGitHub}
 					hasGitHubConnection={hasGitHubConnection}
 				/>
 			)}
