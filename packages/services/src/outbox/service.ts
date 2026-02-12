@@ -111,7 +111,7 @@ export async function markFailed(
  */
 export async function recoverStuckOutbox(leaseMs = CLAIM_LEASE_MS): Promise<number> {
 	const db = getDb();
-	const cutoff = new Date(Date.now() - leaseMs);
+	const cutoff = new Date(Date.now() - leaseMs).toISOString();
 	// NOTE: SET targets must use unqualified column names (PostgreSQL requirement).
 	// RHS and WHERE can use table-qualified refs via Drizzle's ${outbox.col}.
 	const result = await db.execute<{ count: string }>(sql`

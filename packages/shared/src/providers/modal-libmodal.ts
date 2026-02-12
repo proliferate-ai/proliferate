@@ -446,7 +446,12 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 		try {
 			const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
-			await sandbox.exec(["sh", "-c", `rm -rf '${workspaceDir}' && mkdir -p '${workspaceDir}'`]);
+			const cleanProc = await sandbox.exec([
+				"sh",
+				"-c",
+				`rm -rf '${workspaceDir}' && mkdir -p '${workspaceDir}'`,
+			]);
+			await cleanProc.wait();
 
 			const setupStartMs = Date.now();
 			const repoDir = await this.setupSandbox(
@@ -534,6 +539,14 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			const restoreSnapshotId = opts.snapshotId;
 			const baseSnapshotId = opts.baseSnapshotId || MODAL_BASE_SNAPSHOT_ID;
 			const isRestoreSnapshot = Boolean(restoreSnapshotId);
+			log.info(
+				{
+					restoreSnapshotId: restoreSnapshotId || null,
+					baseSnapshotId: baseSnapshotId || null,
+					isRestoreSnapshot,
+				},
+				"Snapshot resolution",
+			);
 
 			// Use restore snapshot if provided, otherwise use base snapshot (if configured), otherwise base image
 			let sandboxImage: Image;
@@ -839,24 +852,27 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 		if (isSnapshot) {
 			// Snapshot restore: repos are already in the filesystem, just read metadata
-			log.debug("Restoring from snapshot - reading metadata");
+			log.info("Restoring from snapshot - reading metadata (skipping clone)");
 			try {
 				const metadataFile = await sandbox.open(SANDBOX_PATHS.metadataFile, "r");
 				const metadataBytes = await metadataFile.read();
 				await metadataFile.close();
 				const metadata: SessionMetadata = JSON.parse(decoder.decode(metadataBytes));
-				log.debug({ repoDir: metadata.repoDir }, "Found repo from metadata");
+				log.info({ repoDir: metadata.repoDir }, "Found repoDir from snapshot metadata");
 				return metadata.repoDir;
-			} catch {
-				// Fallback if metadata doesn't exist (legacy snapshots)
-				log.debug("Metadata not found, using default workspace path");
+			} catch (metadataErr) {
+				log.warn(
+					{ err: metadataErr },
+					"Snapshot metadata not found, falling back to workspace dir (repos may be missing)",
+				);
 				return workspaceDir;
 			}
 		}
 
 		// Fresh sandbox: clone repositories
-		log.debug("Setting up workspace");
-		await sandbox.exec(["mkdir", "-p", workspaceDir]);
+		log.info({ repoCount: opts.repos.length }, "Setting up workspace");
+		const mkdirProc = await sandbox.exec(["mkdir", "-p", workspaceDir]);
+		await mkdirProc.wait();
 
 		// Write git credentials file for per-repo auth (used by git-credential-proliferate helper)
 		const gitCredentials: Record<string, string> = {};
@@ -889,30 +905,60 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				cloneUrl = repo.repoUrl.replace("https://", `https://x-access-token:${repo.token}@`);
 			}
 
-			log.debug(
-				{ repo: repo.workspacePath, index: i + 1, total: opts.repos.length },
+			log.info(
+				{
+					repo: repo.workspacePath,
+					repoUrl: repo.repoUrl,
+					hasToken: Boolean(repo.token),
+					index: i + 1,
+					total: opts.repos.length,
+					targetDir,
+				},
 				"Cloning repo",
 			);
-			try {
-				await sandbox.exec([
+			const cloneProc = await sandbox.exec([
+				"git",
+				"clone",
+				"--depth",
+				"1",
+				"--branch",
+				opts.branch,
+				cloneUrl,
+				targetDir,
+			]);
+			const cloneExit = await cloneProc.wait();
+			if (cloneExit !== 0) {
+				const stderr = await cloneProc.stderr.readText();
+				log.warn(
+					{ repo: repo.workspacePath, exitCode: cloneExit, stderr },
+					"Branch clone failed, trying default",
+				);
+				const fallbackProc = await sandbox.exec([
 					"git",
 					"clone",
 					"--depth",
 					"1",
-					"--branch",
-					opts.branch,
 					cloneUrl,
 					targetDir,
 				]);
-			} catch {
-				log.debug({ repo: repo.workspacePath }, "Branch clone failed, trying default");
-				await sandbox.exec(["git", "clone", "--depth", "1", cloneUrl, targetDir]);
+				const fallbackExit = await fallbackProc.wait();
+				if (fallbackExit !== 0) {
+					const fallbackStderr = await fallbackProc.stderr.readText();
+					log.error(
+						{ repo: repo.workspacePath, exitCode: fallbackExit, stderr: fallbackStderr },
+						"Repo clone failed completely",
+					);
+					throw new Error(`git clone failed for ${repo.repoUrl}: ${fallbackStderr}`);
+				}
+				log.info({ repo: repo.workspacePath }, "Repo cloned successfully (default branch)");
+			} else {
+				log.info({ repo: repo.workspacePath }, "Repo cloned successfully");
 			}
 		}
 
 		// Set repoDir (first repo for single, workspace root for multi)
 		const repoDir = opts.repos.length > 1 ? workspaceDir : firstRepoDir || workspaceDir;
-		log.debug("All repositories cloned");
+		log.info({ repoDir, repoCount: opts.repos.length }, "All repositories cloned");
 
 		// Save session metadata (use base64 + sh -c to make mkdir + write atomic)
 		const metadata: SessionMetadata = {
@@ -923,11 +969,12 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		const metadataDir = SANDBOX_PATHS.metadataFile.replace(/\/[^/]+$/, "");
 		const metadataContent = JSON.stringify(metadata, null, 2);
 		const metadataBase64 = Buffer.from(metadataContent).toString("base64");
-		await sandbox.exec([
+		const metaProc = await sandbox.exec([
 			"sh",
 			"-c",
 			`mkdir -p ${metadataDir} && echo '${metadataBase64}' | base64 -d > ${SANDBOX_PATHS.metadataFile}`,
 		]);
+		await metaProc.wait();
 		log.debug("Session metadata saved");
 
 		return repoDir;
