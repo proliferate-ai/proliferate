@@ -443,14 +443,13 @@ The service layer has parallel implementations (`updateMemberRole`, `removeMembe
 
 **Status check:**
 1. `onboardingRouter.getStatus` calls `onboarding.getOnboardingStatus(orgId, nangoGithubIntegrationId)` — `apps/web/src/server/routers/onboarding.ts`
-2. Checks: `hasOrg` (org exists), `hasSlackConnection` (active Slack installation), `hasGitHubConnection` (GitHub integration), `onboardingComplete` (org flag) — `packages/services/src/onboarding/service.ts`
+2. Checks: `hasOrg` (org exists), `hasSlackConnection` (active Slack installation), `hasGitHubConnection` (GitHub integration) — `packages/services/src/onboarding/service.ts`
 3. Returns repos with prebuild status (`ready` if snapshotId exists, else `pending`).
 
 **Dashboard gating:**
-- Dashboard layout redirects to `/onboarding` when `onboardingComplete === false` — `apps/web/src/app/dashboard/layout.tsx`
-- Onboarding layout redirects to `/dashboard` when `onboardingComplete === true` — `apps/web/src/app/onboarding/layout.tsx`
+- Dashboard layout redirects to `/onboarding` when billing is enabled and `billingState === "unconfigured"` — `apps/web/src/app/dashboard/layout.tsx`
 - GitHub connection is **optional** in the onboarding flow. "Skip GitHub" advances to the payment/complete step, not to the dashboard.
-- Billing/trial step is still required when billing is enabled. Users cannot reach the dashboard without completing onboarding (which includes billing setup when enabled). See `repos-prebuilds.md` for prebuild/snapshot model.
+- Billing/trial step is still required when billing is enabled. Users cannot reach the dashboard without completing billing setup.
 
 **Trial activation:**
 1. `onboardingRouter.startTrial({ plan })` — `apps/web/src/server/routers/onboarding.ts`

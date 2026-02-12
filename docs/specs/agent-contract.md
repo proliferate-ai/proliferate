@@ -218,8 +218,8 @@ async execute(hub, args): Promise<InterceptedToolResult> {
 | `verify` | Required before snapshot | Encouraged | Available |
 | `save_snapshot` | Required at end | Available | Available |
 | `request_env_variables` | Emphasized | Available | Available |
-| `save_service_commands` | Emphasized | Available | Available |
-| `save_env_files` | Emphasized | Available | Available |
+| `save_service_commands` | Emphasized | Not available | Not available |
+| `save_env_files` | Emphasized | Not available | Not available |
 | `automation.complete` | Not mentioned | Not mentioned | **Mandatory** |
 | Source code edits | Forbidden | Encouraged | Encouraged |
 | `proliferate` CLI | Documented | Documented | Documented |
@@ -486,7 +486,7 @@ For the full runtime execution flow (SSE detection, EventProcessor routing, Sess
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **No per-mode tool filtering** — All six tools are injected regardless of session mode. Setup-only tools (`save_service_commands`, `save_env_files`) are available in coding mode, and `automation.complete` is available in non-automation sessions. The system prompt is the only control. Impact: agents occasionally call tools outside their intended mode. Expected fix: conditional tool injection based on session type.
+- [ ] **Partial per-mode tool filtering** — Setup-only tools (`save_service_commands`, `save_env_files`) are now injected only for setup sessions, but `automation.complete` is still available in non-automation sessions. Impact: reduced mode mismatch, but some out-of-mode tool calls remain possible. Expected fix: conditional automation tool injection by client/session mode.
 - [ ] **Two tool definition styles** — `verify` uses raw `export default { name, description, parameters }` while other tools use the `tool()` plugin API from `@opencode-ai/plugin`. Impact: inconsistent authoring; no functional difference. Expected fix: migrate `verify` to `tool()` API.
 - [ ] **Dual registration for automation.complete** — Registered under both `automation.complete` and `automation_complete` to handle agent variation. Impact: minor registry bloat. Expected fix: standardize on one name once agent behavior is stable.
 - [ ] **No tool versioning** — Tool schemas are string templates with no version tracking. If a schema changes, running sessions continue with the old version until sandbox restart. Impact: potential schema mismatch during deploys. Expected fix: version stamp in tool file path or metadata.

@@ -65,6 +65,8 @@ export interface RepoSpec {
 
 export interface CreateSandboxOpts {
 	sessionId: string;
+	/** Session mode, used for mode-specific tool injection and behavior. */
+	sessionType?: "coding" | "setup" | "cli" | null;
 	/** Git identity for commits made inside the sandbox. */
 	userName?: string;
 	userEmail?: string;
@@ -91,8 +93,6 @@ export interface CreateSandboxOpts {
 	serviceCommands?: PrebuildServiceCommand[];
 	/** Env file generation spec from prebuild config. Applied on boot before service autostart. */
 	envFiles?: unknown;
-	/** Session type — controls which tools are injected (e.g. setup-only tools). */
-	sessionType?: "coding" | "setup" | "cli";
 }
 
 export interface CreateSandboxResult {

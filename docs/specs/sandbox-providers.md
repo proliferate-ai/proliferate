@@ -141,7 +141,7 @@ interface CreateSandboxOpts {
   snapshotHasDeps?: boolean;   // Gates service command auto-start
   serviceCommands?: PrebuildServiceCommand[];
   envFiles?: unknown;          // Env file generation spec
-  sessionType?: "coding" | "setup" | "cli";  // Controls tool injection
+  sessionType?: "coding" | "setup" | "cli" | null;  // Controls tool injection
 }
 
 interface CreateSandboxResult {

@@ -497,6 +497,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		const providerStartMs = Date.now();
 		const result = await provider.createSandbox({
 			sessionId,
+			sessionType,
 			userName,
 			userEmail,
 			repos: [],
@@ -507,7 +508,6 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			baseSnapshotId,
 			sshPublicKey,
 			triggerContext,
-			sessionType,
 		});
 		log.debug(
 			{
@@ -651,6 +651,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	const providerStartMs = Date.now();
 	const result = await provider.createSandbox({
 		sessionId,
+		sessionType,
 		userName,
 		userEmail,
 		repos: repoSpecs,
@@ -670,7 +671,6 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		snapshotHasDeps,
 		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
 		envFiles,
-		sessionType,
 	});
 	log.debug(
 		{

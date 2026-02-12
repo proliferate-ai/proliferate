@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useOnboarding } from "@/hooks/use-onboarding";
 import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useOnboardingStore } from "@/stores/onboarding";
@@ -51,7 +50,6 @@ function StepIndicator({
 function OnboardingLayoutInner({ children }: OnboardingLayoutProps) {
 	const router = useRouter();
 	const { data: session, isPending: authPending } = useSession();
-	const { data: onboarding, isLoading: onboardingLoading } = useOnboarding();
 	const step = useOnboardingStore((state) => state.step);
 	const flowType = useOnboardingStore((state) => state.flowType);
 	const setStep = useOnboardingStore((state) => state.setStep);
@@ -62,13 +60,6 @@ function OnboardingLayoutInner({ children }: OnboardingLayoutProps) {
 			router.push("/sign-in");
 		}
 	}, [session, authPending, router]);
-
-	// Redirect to dashboard if onboarding is already complete
-	useEffect(() => {
-		if (!onboardingLoading && onboarding?.onboardingComplete) {
-			router.push("/dashboard");
-		}
-	}, [onboarding, onboardingLoading, router]);
 
 	// Wait for auth to load before rendering anything
 	if (authPending) {

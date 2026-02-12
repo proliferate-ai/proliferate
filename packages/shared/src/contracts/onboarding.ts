@@ -24,7 +24,6 @@ export const OnboardingStatusSchema = z.object({
 	hasOrg: z.boolean(),
 	hasSlackConnection: z.boolean(),
 	hasGitHubConnection: z.boolean(),
-	onboardingComplete: z.boolean(),
 	repos: z.array(OnboardingRepoSchema),
 });
 

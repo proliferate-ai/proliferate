@@ -1023,11 +1023,11 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 		// Write all files in parallel (each write ensures its directory exists)
 		log.debug("Writing OpenCode files (parallel)");
-		const isSetup = opts.sessionType === "setup";
+		const isSetupSession = opts.sessionType === "setup";
 		const writePromises = [
 			// Plugin
 			writeFile(`${SANDBOX_PATHS.globalPluginDir}/proliferate.mjs`, PLUGIN_MJS),
-			// Tools (common)
+			// Core tools (available in all session modes)
 			writeFile(`${localToolDir}/verify.ts`, VERIFY_TOOL),
 			writeFile(`${localToolDir}/verify.txt`, VERIFY_TOOL_DESCRIPTION),
 			writeFile(`${localToolDir}/request_env_variables.ts`, REQUEST_ENV_VARIABLES_TOOL),
@@ -1036,18 +1036,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			writeFile(`${localToolDir}/save_snapshot.txt`, SAVE_SNAPSHOT_DESCRIPTION),
 			writeFile(`${localToolDir}/automation_complete.ts`, AUTOMATION_COMPLETE_TOOL),
 			writeFile(`${localToolDir}/automation_complete.txt`, AUTOMATION_COMPLETE_DESCRIPTION),
-			// Setup-only tools
-			...(isSetup
-				? [
-						writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
-						writeFile(
-							`${localToolDir}/save_service_commands.txt`,
-							SAVE_SERVICE_COMMANDS_DESCRIPTION,
-						),
-						writeFile(`${localToolDir}/save_env_files.ts`, SAVE_ENV_FILES_TOOL),
-						writeFile(`${localToolDir}/save_env_files.txt`, SAVE_ENV_FILES_DESCRIPTION),
-					]
-				: []),
 			// Config (2 files)
 			writeFile(`${SANDBOX_PATHS.globalOpencodeDir}/opencode.json`, opencodeConfig),
 			writeFile(`${repoDir}/opencode.json`, opencodeConfig),
@@ -1066,6 +1054,27 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				]);
 			})(),
 		];
+
+		if (isSetupSession) {
+			// Setup-only tools persist prebuild configuration.
+			writePromises.push(
+				writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
+				writeFile(`${localToolDir}/save_service_commands.txt`, SAVE_SERVICE_COMMANDS_DESCRIPTION),
+				writeFile(`${localToolDir}/save_env_files.ts`, SAVE_ENV_FILES_TOOL),
+				writeFile(`${localToolDir}/save_env_files.txt`, SAVE_ENV_FILES_DESCRIPTION),
+			);
+		} else {
+			// Ensure setup-only tools are removed when restoring from setup snapshots.
+			writePromises.push(
+				(async () => {
+					await sandbox.exec([
+						"sh",
+						"-c",
+						`rm -f '${localToolDir}/save_service_commands.ts' '${localToolDir}/save_service_commands.txt' '${localToolDir}/save_env_files.ts' '${localToolDir}/save_env_files.txt'`,
+					]);
+				})(),
+			);
+		}
 
 		// Add SSH public key if provided (for rsync from CLI)
 		if (opts.sshPublicKey) {

@@ -99,7 +99,7 @@ export default function OnboardingPage() {
 	};
 
 	const handleSkipGitHub = () => {
-		// Skip GitHub — advance to payment (or complete if billing disabled)
+		// GitHub is optional; continue onboarding to billing/complete.
 		if (billingEnabled) {
 			setStep("payment");
 		} else {
