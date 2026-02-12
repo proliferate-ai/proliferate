@@ -4,7 +4,10 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "next dev",
+		"dev": "sh -c 'if [ \"$1\" = \"--\" ]; then shift; fi; if [ \"$NEXT_WEB_BUNDLER\" = \"webpack\" ]; then exec next dev --webpack \"$@\"; fi; exec next dev \"$@\"' --",
+		"dev:webpack": "sh -c 'if [ \"$1\" = \"--\" ]; then shift; fi; exec next dev --webpack \"$@\"' --",
+		"dev:polling": "sh -c 'if [ \"$1\" = \"--\" ]; then shift; fi; WATCHPACK_POLLING=true exec next dev \"$@\"' --",
+		"dev:webpack:polling": "sh -c 'if [ \"$1\" = \"--\" ]; then shift; fi; WATCHPACK_POLLING=true exec next dev --webpack \"$@\"' --",
 		"build": "next build",
 		"start": "next start",
 		"typecheck": "tsc --noEmit",
