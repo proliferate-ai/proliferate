@@ -1,6 +1,6 @@
 # Proliferate
 
-## **The open-source agentic coding platform that does real work**
+## **The open-source company coding agent**
 
 Proliferate is a multiplayer cloud harness for coding agents. Give agents the same tools an engineer on your team would have (code, environments, observability, tickets, chat, and internal tools), and let them run autonomously in isolated sandboxes.
 
