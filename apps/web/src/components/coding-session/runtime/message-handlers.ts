@@ -142,7 +142,7 @@ export function handleTextPartComplete(
 			const textPartIndex = parts.findLastIndex((p) => p.type === "text");
 			if (textPartIndex >= 0) {
 				// Replace with authoritative text (handles both fresh and init-overlap cases)
-				parts[textPartIndex] = { ...parts[textPartIndex], text: payload.text! };
+				parts[textPartIndex] = { type: "text", text: payload.text! };
 			} else {
 				parts.push({ type: "text", text: payload.text! });
 			}
