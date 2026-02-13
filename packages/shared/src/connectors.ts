@@ -145,7 +145,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		defaults: {
 			name: "PostHog MCP",
 			transport: "remote_http",
-			url: "https://mcp.posthog.com/mcp",
+			url: "https://mcp.posthog.com/sse",
 			auth: { type: "bearer", secretKey: "" },
 			riskPolicy: { defaultRisk: "read" },
 			enabled: true,

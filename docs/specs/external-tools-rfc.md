@@ -408,10 +408,10 @@ This is the concrete path from current backend-first implementation to the inten
 
 **Status: Implemented.**
 
-1. `callConnectorTool` in `packages/services/src/actions/connectors/client.ts` uses `Mcp-Session-Id` header when the server issues one during `initialize`.
-2. On `404` session invalidation, re-initializes without stale session ID and retries once.
+1. Architecture is stateless per call — each `listConnectorTools`/`callConnectorTool` creates a fresh `StreamableHTTPClientTransport` + `Client`, initializes, performs the operation, and closes. The SDK handles `Mcp-Session-Id` internally within each connection lifecycle.
+2. On `404` session invalidation during `callConnectorTool`, re-initializes a fresh connection and retries once.
 3. Hard timeouts preserved (15s for `tools/list`, 30s for `tools/call`). Connector failures do not block other sources.
-4. Architecture remains stateless per call (no connection pooling) — session ID is extracted from transport and forwarded on retry.
+4. `listConnectorToolsOrThrow` provides a throwing variant for validation diagnostics; `listConnectorTools` remains safe (returns empty on error) for gateway runtime discovery.
 
 #### Phase 4 — Catalog and Presets ✅
 

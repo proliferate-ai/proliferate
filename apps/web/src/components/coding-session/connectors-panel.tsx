@@ -80,14 +80,21 @@ export function ConnectorsContent({
 		updateMutation.mutate({ prebuildId, connectors: updated });
 	};
 
-	const handleSave = (connector: ConnectorConfig) => {
+	const [saveError, setSaveError] = useState<string | null>(null);
+
+	const handleSave = async (connector: ConnectorConfig) => {
 		const exists = currentConnectors.some((c) => c.id === connector.id);
 		const updated = exists
 			? currentConnectors.map((c) => (c.id === connector.id ? connector : c))
 			: [...currentConnectors, connector];
-		updateMutation.mutate({ prebuildId, connectors: updated });
-		setEditingId(null);
-		setShowAdd(false);
+		setSaveError(null);
+		try {
+			await updateMutation.mutateAsync({ prebuildId, connectors: updated });
+			setEditingId(null);
+			setShowAdd(false);
+		} catch (err) {
+			setSaveError(err instanceof Error ? err.message : "Failed to save connector");
+		}
 	};
 
 	if (showAdd) {
@@ -118,6 +125,8 @@ export function ConnectorsContent({
 					preset={preset ?? undefined}
 					onSave={handleSave}
 					onCancel={() => setEditingId(null)}
+					isSaving={updateMutation.isPending}
+					saveError={saveError}
 				/>
 			</div>
 		);
@@ -265,12 +274,16 @@ function ConnectorForm({
 	preset,
 	onSave,
 	onCancel,
+	isSaving,
+	saveError,
 }: {
 	prebuildId: string;
 	initial?: ConnectorConfig;
 	preset?: ConnectorPreset;
 	onSave: (connector: ConnectorConfig) => void;
 	onCancel: () => void;
+	isSaving?: boolean;
+	saveError?: string | null;
 }) {
 	const defaults = preset?.defaults;
 	const [name, setName] = useState(initial?.name ?? defaults?.name ?? "");
@@ -338,8 +351,13 @@ function ConnectorForm({
 		}
 	};
 
-	const canSave = name.trim() && url.trim() && secretKey.trim();
-	const canValidate = url.trim() && secretKey.trim();
+	const canSave =
+		name.trim() &&
+		url.trim() &&
+		secretKey.trim() &&
+		(authType !== "custom_header" || headerName.trim());
+	const canValidate =
+		url.trim() && secretKey.trim() && (authType !== "custom_header" || headerName.trim());
 
 	return (
 		<div className="space-y-3">
@@ -451,6 +469,13 @@ function ConnectorForm({
 			{/* Validation results */}
 			{validationResult && <ValidationResult result={validationResult} />}
 
+			{/* Save error */}
+			{saveError && (
+				<div className="rounded-md border border-destructive/30 bg-destructive/5 p-2">
+					<p className="text-xs text-destructive">{saveError}</p>
+				</div>
+			)}
+
 			{/* Actions */}
 			<div className="flex items-center gap-2 pt-1">
 				<Button
@@ -458,21 +483,28 @@ function ConnectorForm({
 					size="sm"
 					className="h-7 text-xs"
 					onClick={handleValidate}
-					disabled={!canValidate || validateMutation.isPending}
+					disabled={!canValidate || validateMutation.isPending || isSaving}
 				>
 					{validateMutation.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
 					Validate
 				</Button>
 				<div className="flex-1" />
-				<Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onCancel}>
+				<Button
+					variant="ghost"
+					size="sm"
+					className="h-7 text-xs"
+					onClick={onCancel}
+					disabled={isSaving}
+				>
 					Cancel
 				</Button>
 				<Button
 					size="sm"
 					className="h-7 text-xs"
 					onClick={() => onSave(buildConnector())}
-					disabled={!canSave}
+					disabled={!canSave || isSaving}
 				>
+					{isSaving ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
 					{initial ? "Save" : "Add"}
 				</Button>
 			</div>

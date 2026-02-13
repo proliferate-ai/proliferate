@@ -142,7 +142,7 @@
 | Sandbox-MCP grants handler | Implemented | `packages/sandbox-mcp/src/actions-grants.ts` | Grant handling inside sandbox |
 | Actions list (web) | Implemented | `apps/web/src/server/routers/actions.ts` | Org-level actions inbox |
 | Connector-backed action sources (`remote_http` MCP via Actions) | Implemented | `packages/services/src/actions/connectors/`, `apps/gateway/src/api/proliferate/http/actions.ts` | Gateway-mediated remote MCP connectors through Actions pipeline |
-| MCP connector session stickiness (`Mcp-Session-Id` reuse + 404 re-init) | Implemented | `packages/services/src/actions/connectors/client.ts:callConnectorTool` | Session ID header reuse + 404 retry-once |
+| MCP connector 404 session recovery (re-init + retry-once) | Implemented | `packages/services/src/actions/connectors/client.ts:callConnectorTool` | Stateless per call; SDK handles session ID internally; 404 triggers fresh re-init |
 
 ---
 

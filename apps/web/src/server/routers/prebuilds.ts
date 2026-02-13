@@ -357,9 +357,12 @@ export const prebuildsRouter = {
 				};
 			}
 
-			// Attempt tools/list against the remote MCP server
+			// Attempt tools/list against the remote MCP server (throwing variant for diagnostics)
 			try {
-				const result = await actions.connectors.listConnectorTools(connector, resolvedSecret);
+				const result = await actions.connectors.listConnectorToolsOrThrow(
+					connector,
+					resolvedSecret,
+				);
 
 				if (result.actions.length === 0) {
 					return {

@@ -4,10 +4,14 @@
  * Connects to remote MCP servers via Streamable HTTP transport,
  * lists their tools, and executes tool calls.
  *
- * Session semantics: when a remote server returns `Mcp-Session-Id`
- * during `initialize`, the client stores it and reuses it on
- * subsequent requests. If the server responds with HTTP 404 on a
- * session-bound call, the client re-initializes once and retries.
+ * Connection model: stateless per call. Each `listConnectorTools` or
+ * `callConnectorTool` invocation creates a fresh transport + client,
+ * initializes, performs the operation, and closes. The SDK's
+ * `StreamableHTTPClientTransport` handles `Mcp-Session-Id` internally
+ * within a single connection lifecycle.
+ *
+ * If a `callConnectorTool` fails with a 404 (session invalidation),
+ * the client re-initializes once with a fresh connection and retries.
  */
 
 import { Client } from "@modelcontextprotocol/sdk/client";
@@ -115,16 +119,6 @@ function createTransport(
 	});
 }
 
-/**
- * Extract Mcp-Session-Id from the transport's last response headers, if present.
- * The SDK stores the session ID internally; we read it via the transport's
- * public `sessionId` property when available.
- */
-function extractSessionId(transport: StreamableHTTPClientTransport): string | undefined {
-	// StreamableHTTPClientTransport stores sessionId as a public property
-	return (transport as unknown as { sessionId?: string }).sessionId ?? undefined;
-}
-
 // ============================================
 // Error classification
 // ============================================
@@ -141,11 +135,11 @@ function isSessionInvalidation(err: unknown): boolean {
 // ============================================
 
 /**
- * List tools from a remote MCP connector.
+ * List tools from a remote MCP connector (throwing variant).
  * Connects, initializes, calls tools/list, then closes.
- * On error: returns empty actions array and logs a warning.
+ * Throws on error — caller decides how to handle failures.
  */
-export async function listConnectorTools(
+export async function listConnectorToolsOrThrow(
 	config: ConnectorConfig,
 	resolvedSecret: string,
 ): Promise<ConnectorToolList> {
@@ -172,15 +166,31 @@ export async function listConnectorTools(
 
 		log.info({ toolCount: toolActions.length }, "Listed connector tools");
 		return { connectorId: config.id, connectorName: config.name, actions: toolActions };
-	} catch (err) {
-		log.warn({ err }, "Failed to list connector tools");
-		return { connectorId: config.id, connectorName: config.name, actions: [] };
 	} finally {
 		try {
 			await client.close();
 		} catch {
 			// best-effort close
 		}
+	}
+}
+
+/**
+ * List tools from a remote MCP connector (safe variant).
+ * Connects, initializes, calls tools/list, then closes.
+ * On error: returns empty actions array and logs a warning.
+ * Used by the gateway for runtime discovery where failures should not propagate.
+ */
+export async function listConnectorTools(
+	config: ConnectorConfig,
+	resolvedSecret: string,
+): Promise<ConnectorToolList> {
+	const log = logger().child({ connectorId: config.id, connectorName: config.name });
+	try {
+		return await listConnectorToolsOrThrow(config, resolvedSecret);
+	} catch (err) {
+		log.warn({ err }, "Failed to list connector tools");
+		return { connectorId: config.id, connectorName: config.name, actions: [] };
 	}
 }
 
@@ -218,8 +228,7 @@ export async function callConnectorTool(
 			const content = extractToolCallContent(result as McpCallToolResultShape);
 
 			const isError = "isError" in result && result.isError === true;
-			const currentSessionId = extractSessionId(transport);
-			log.info({ isError, hasSessionId: !!currentSessionId }, "Connector tool call complete");
+			log.info({ isError }, "Connector tool call complete");
 			return { content, isError };
 		} finally {
 			try {
