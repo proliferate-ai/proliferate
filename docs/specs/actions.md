@@ -450,7 +450,7 @@ Org connector catalog (integrations-owned) → Gateway resolves by org/session r
 
 **Graceful degradation:** If an MCP server is unreachable during `tools/list`, its tools simply don't appear in the available list. Other connectors and static adapters continue working.
 
-**CRUD surface:** Org-level connector CRUD lives in `apps/web/src/server/routers/integrations.ts` (`listConnectors`, `createConnector`, `updateConnector`, `deleteConnector`, `validateConnector`). Management UI is at Settings → Connectors (`apps/web/src/app/settings/connectors/page.tsx`).
+**CRUD surface:** Org-level connector CRUD lives in `apps/web/src/server/routers/integrations.ts` (`listConnectors`, `createConnector`, `updateConnector`, `deleteConnector`, `validateConnector`). Management UI is at Settings → Tools (`apps/web/src/app/settings/tools/page.tsx`).
 
 **Files touched:** `packages/services/src/actions/connectors/`, `packages/services/src/connectors/`, `packages/shared/src/connectors.ts`, `packages/services/src/secrets/service.ts`, `apps/gateway/src/api/proliferate/http/actions.ts`, `apps/web/src/server/routers/integrations.ts`
 
@@ -503,5 +503,5 @@ Org connector catalog (integrations-owned) → Gateway resolves by org/session r
 - [ ] **Grant rollback is best-effort** — if invocation approval fails after grant creation, the grant revocation is attempted but failures are silently caught. Impact: orphaned grants may exist in rare edge cases. Expected fix: wrap in a transaction or add cleanup sweep.
 - [ ] **No pagination on grants list** — `listActiveGrants` and `listGrantsByOrg` return all matching rows with no limit/offset. Impact: could return large result sets for orgs with many grants. Expected fix: add pagination parameters.
 - [x] **Connector 404 session recovery** — addressed. `callConnectorTool` retries once on 404 session invalidation by re-initializing a fresh connection. The SDK handles `Mcp-Session-Id` internally within each connection lifecycle. Source: `packages/services/src/actions/connectors/client.ts`.
-- [x] **Dedicated connector management UI** — addressed at org scope. Settings → Connectors page provides add/edit/remove/validate flow with presets, org secret picker, and inline validation diagnostics. Source: `apps/web/src/app/settings/connectors/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts`.
+- [x] **Dedicated connector management UI** — addressed at org scope. Settings → Tools page provides add/edit/remove/validate flow with presets, org secret picker, and inline validation diagnostics. Source: `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts`.
 - [x] **Connector scope is org-scoped** — addressed. Connectors are stored in the `org_connectors` table, managed via Integrations CRUD routes, and loaded by org in the gateway. Backfill migration (`0022_org_connectors.sql`) copied legacy prebuild-scoped connectors to org scope.

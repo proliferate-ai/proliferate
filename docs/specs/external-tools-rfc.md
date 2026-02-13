@@ -354,13 +354,13 @@ This path preserves approval, grants, and audit guarantees while removing prebui
 
 ### Implementation Status (2026-02-13)
 
-**Current baseline (implemented): Option 2 transport path with prebuild-scoped connector config.**
+**Current baseline (implemented): Option 2 transport path with org-scoped connector catalog.**
 - Connector types + Zod schemas: `packages/shared/src/connectors.ts`
-- DB migration: `packages/db/drizzle/0021_prebuild_connectors.sql` (JSONB on prebuilds)
+- DB: `org_connectors` table (`packages/db/drizzle/0022_org_connectors.sql`), legacy `prebuilds.connectors` JSONB retained but no longer read
 - MCP client module: `packages/services/src/actions/connectors/` (list tools, call tool, risk derivation)
 - Secret resolver: `packages/services/src/secrets/service.ts:resolveSecretValue`
 - Gateway wiring: `apps/gateway/src/api/proliferate/http/actions.ts` (available, guide, invoke, approve)
-- Current CRUD/UI: `apps/web/src/server/routers/prebuilds.ts` + `apps/web/src/components/coding-session/connectors-panel.tsx`
+- CRUD/UI: `apps/web/src/server/routers/integrations.ts` + `apps/web/src/app/settings/tools/page.tsx`
 
 **Approved next step (planned): migrate connector source-of-truth from prebuild scope to org scope under Integrations ownership.**
 
@@ -385,35 +385,30 @@ Reference docs:
 - Playwright MCP server setup: <https://github.com/microsoft/playwright-mcp>
 - PostHog MCP endpoint/auth docs: <https://posthog.com/docs/model-context-protocol>
 
-### Delivery Plan (2026-02-13)
+### Delivery Plan (2026-02-13) — Completed
 
-This is the concrete migration path from today's prebuild-scoped connector management to org-wide connector management.
+Migration from prebuild-scoped to org-wide connector management is complete.
 
-#### Phase 1 — Org Connector Data Model + Service Layer (`Planned`)
+#### Phase 1 — Org Connector Data Model + Service Layer (`Done`)
 
-1. Add org-scoped connector persistence in the Integrations domain (table/model + services), reusing `ConnectorConfig` schema.
-2. Keep prebuild connector reads as compatibility fallback during migration.
-3. Add migration/backfill to copy existing `prebuilds.connectors` into org-scoped records (dedupe by connector identity).
+1. Org-scoped `org_connectors` table + `packages/services/src/connectors/` service layer.
+2. Backfill migration `0022_org_connectors.sql` copied prebuild connectors to org scope, deduplicating by `(organization_id, url, name)`.
 
-#### Phase 2 — Org-Level API + UI Surface (`Planned`)
+#### Phase 2 — Org-Level API + UI Surface (`Done`)
 
-1. Add Integrations-owned connector routes (list/update/validate).
-2. Add org-level "Connectors/Tools" UI under Integrations settings (admin/owner only).
-3. Keep current prebuild panel read-only or hidden once org-level UI is available.
+1. Integrations-owned connector routes in `apps/web/src/server/routers/integrations.ts`.
+2. Settings → Tools UI (`apps/web/src/app/settings/tools/page.tsx`) with preset quick-setup, advanced form, and connection validation.
 
-#### Phase 3 — Gateway Resolution Switch (`Planned`)
+#### Phase 3 — Gateway Resolution Switch (`Done`)
 
-1. Update Actions gateway connector resolver to load enabled connectors by org/session, not by prebuild.
-2. Preserve current risk/grant/approval/audit behavior and `connector:<uuid>` integration prefix.
-3. Preserve validation, diagnostics, and timeout/session-recovery behavior in connector client.
+1. Gateway loads enabled connectors by org/session context, not by prebuild.
+2. Risk/grant/approval/audit behavior and `connector:<uuid>` integration prefix preserved.
 
-#### Phase 4 — Cleanup + Deletion of Legacy Path (`Planned`)
+#### Phase 4 — Cleanup (`Partial`)
 
-1. Remove prebuild connector CRUD routes/hooks/panel paths after migration cutover.
-2. Remove `prebuilds.connectors` dependency from Actions cross-spec boundary.
-3. Update specs/feature-registry evidence to Integrations-owned code paths only.
+1. Prebuild connector CRUD routes removed. Legacy `prebuilds.connectors` JSONB column retained for data preservation but no longer read at runtime.
 
-#### Non-goals for this iteration
+#### Non-goals (unchanged)
 
 1. No separate connector-runner service.
 2. No gateway `stdio` connector support.
