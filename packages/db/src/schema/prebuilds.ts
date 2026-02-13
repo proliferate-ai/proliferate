@@ -50,6 +50,13 @@ export const prebuilds = pgTable(
 		}),
 		envFilesUpdatedBy: text("env_files_updated_by"),
 
+		// MCP connector configs
+		connectors: jsonb("connectors"),
+		connectorsUpdatedAt: timestamp("connectors_updated_at", {
+			withTimezone: true,
+		}),
+		connectorsUpdatedBy: text("connectors_updated_by"),
+
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 	},
 	(table) => [

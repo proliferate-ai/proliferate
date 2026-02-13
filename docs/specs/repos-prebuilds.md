@@ -8,6 +8,7 @@
 - Prebuild CRUD (manual, managed, and CLI types)
 - Prebuild-repo associations (many-to-many via `prebuild_repos`)
 - Effective service commands resolution (prebuild overrides > repo defaults)
+- Planned prebuild-level connector configuration for gateway-mediated MCP action sources
 - Base snapshot build worker (queue, deduplication, status tracking)
 - Repo snapshot build worker (GitHub token hierarchy, commit tracking)
 - Prebuild resolver (resolves prebuild at session start)
@@ -29,6 +30,8 @@
 **Repos** are org-scoped references to GitHub repositories (or local directories for CLI). They carry metadata (URL, default branch, detected stack) and optional repo-level service commands. Each repo can be linked to one or more GitHub integrations via **repo connections**, which provide the authentication tokens needed for private repo access.
 
 **Prebuilds** group one or more repos (via `prebuild_repos` junction), carry a snapshot ID (saved filesystem state), and store per-prebuild service commands and env file specs. There are three prebuild types: `manual` (user-created), `managed` (auto-created for Slack/universal clients), and CLI (device-scoped via `localPathHash`).
+
+Planned extension: prebuilds will also carry connector configuration for external MCP tool access. This configuration is intended to be consumed by the gateway Actions path (not direct sandbox-native invocation).
 
 **Snapshots** are pre-built filesystem states at three layers: base (OpenCode + services, no repo), repo (base + cloned repo), and prebuild/session (full working state). This spec owns the *build* side — the workers that create base and repo snapshots. The *resolution* side (picking which layer to use) belongs to `sandbox-providers.md`.
 
@@ -62,6 +65,11 @@ Determines where each repo is cloned inside the sandbox. Single-repo prebuilds a
 A SHA-256 hash of `PLUGIN_MJS` + `DEFAULT_CADDYFILE` + `getOpencodeConfig(defaultModelId)`. When this changes, the base snapshot is stale and must be rebuilt. Computed by `computeBaseSnapshotVersionKey()`.
 - Key detail agents get wrong: The version key is computed from source code constants, not runtime config. Changing `PLUGIN_MJS` or the Caddyfile template triggers a rebuild.
 - Reference: `packages/shared/src/sandbox/version-key.ts`
+
+### Prebuild Connector Config (Planned)
+Prebuilds are the intended scope boundary for connector-backed tool access: all sessions using a prebuild inherit the same connector definitions. This keeps tool configuration project-scoped and reproducible.
+- Key detail agents get wrong: this config is planned and not present in `main` today; only `service_commands` and `env_files` are persisted on prebuilds.
+- Key detail agents get wrong: planned connectors are for gateway-mediated Actions execution (approval/audit path), not a second direct invocation path through sandbox-native MCP.
 
 ### GitHub Token Hierarchy
 Repo snapshot builds resolve GitHub tokens with a two-level hierarchy: (1) repo-linked integration connections (prefer GitHub App installation, fall back to Nango OAuth), (2) org-wide GitHub integration. Private repos without a token skip the build.
@@ -415,6 +423,7 @@ The resolver supports three modes (direct ID, managed, CLI) and returns a `Resol
 |---|---|---|---|
 | `sessions-gateway.md` | Gateway → This | `resolvePrebuild()` → `prebuilds.*`, `cli.*` | Session creation calls resolver which creates/queries prebuild records via this spec's services. Resolver logic owned by `sessions-gateway.md` §6.1. |
 | `sessions-gateway.md` | Gateway → This | `prebuilds.getPrebuildReposWithDetails()` | Session store loads repo details for sandbox provisioning |
+| `actions.md` | Actions ↔ This | prebuild-level connector config (planned) | Planned connector-backed action sources use prebuild config as the project-scoped source of truth. |
 | `sandbox-providers.md` | Worker → Provider | `ModalLibmodalProvider.createBaseSnapshot()`, `.createRepoSnapshot()` | Snapshot workers call Modal provider directly |
 | `sandbox-providers.md` | Provider ← This | `resolveSnapshotId()` consumes repo snapshot status | Snapshot resolution reads `repoSnapshotId` from repo record |
 | `integrations.md` | This → Integrations | `integrations.getRepoConnectionsWithIntegrations()` | Token resolution for repo snapshot builds |
@@ -450,3 +459,4 @@ The resolver supports three modes (direct ID, managed, CLI) and returns a `Resol
 - [ ] **Setup finalization lives in the router** — `repos-finalize.ts` contains complex orchestration (snapshot + secrets + prebuild creation) that should be in the services layer. Impact: harder to reuse from non-web contexts. Marked with a TODO in code.
 - [ ] **GitHub search uses unauthenticated API** — `repos.search` calls GitHub API without auth, subject to lower rate limits (60 req/hour per IP). Impact: may fail under heavy usage. Expected fix: use org's GitHub integration token for authenticated search.
 - [ ] **No webhook-driven repo snapshot rebuilds** — Repo snapshots are only built on repo creation. Subsequent pushes to `defaultBranch` don't trigger rebuilds. Impact: repo snapshots become stale over time; git freshness pull compensates at session start. Expected fix: trigger rebuilds from GitHub push webhooks.
+- [ ] **No persisted connector config on prebuilds yet** — external tool configuration is limited to service commands and env files. Impact: adding external tool access still requires hand-written adapters and a deploy; there is no per-project connector configuration surface. Expected fix: add prebuild-level connector persistence and resolver plumbing.

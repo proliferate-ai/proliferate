@@ -28,3 +28,6 @@ export {
 } from "./grants";
 
 export type { ActionGrantRow, CreateGrantInput } from "./grants-db";
+
+// MCP connector module
+export * as connectors from "./connectors";

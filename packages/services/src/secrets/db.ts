@@ -168,6 +168,25 @@ export async function existsByKey(orgId: string, key: string): Promise<boolean> 
 }
 
 /**
+ * Get a single org-wide secret by key for connector auth resolution.
+ * Returns the encrypted value for server-side decryption.
+ */
+export async function getSecretByOrgAndKey(
+	orgId: string,
+	key: string,
+): Promise<{ encryptedValue: string } | null> {
+	const db = getDb();
+	const row = await db
+		.select({ encryptedValue: secrets.encryptedValue })
+		.from(secrets)
+		.where(
+			and(eq(secrets.organizationId, orgId), eq(secrets.key, key), isNull(secrets.repoId)),
+		)
+		.limit(1);
+	return row[0] ?? null;
+}
+
+/**
  * Get secrets for session injection (org-scoped and repo-scoped).
  */
 export async function getSecretsForSession(

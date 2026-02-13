@@ -3,6 +3,7 @@
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
 > **Updated:** 2026-02-12 from `main` branch. Corrected after consistency review.
+> **Evidence convention:** `Planned` entries may cite RFC/spec files until code exists; once implemented, update evidence to concrete code paths.
 
 ---
 
@@ -112,7 +113,7 @@
 | Webhook ingestion (Nango) | Implemented | `apps/trigger-service/src/lib/webhook-dispatcher.ts` | `POST /webhooks/nango` |
 | Webhook dispatch + matching | Implemented | `apps/trigger-service/src/lib/trigger-processor.ts` | Matches events to triggers |
 | Polling scheduler | Implemented | `apps/trigger-service/src/polling/worker.ts` | Cursor-based stateful polling |
-| Cron scheduling | Partial | `apps/trigger-service/src/` | Queue type defined, DB schema exists, but no BullMQ worker instantiated to process SCHEDULED jobs |
+| Cron scheduling | Implemented | `apps/trigger-service/src/scheduled/worker.ts` | SCHEDULED worker creates runs from cron-only triggers |
 | GitHub provider | Implemented | `packages/triggers/src/github.ts` | Webhook triggers |
 | Linear provider | Implemented | `packages/triggers/src/linear.ts` | Webhook + polling |
 | Sentry provider | Implemented | `packages/triggers/src/sentry.ts` | Webhook only — `poll()` explicitly throws |
@@ -136,9 +137,11 @@
 | Provider guide/bootstrap | Implemented | `apps/gateway/src/api/proliferate/http/` | `GET /:sessionId/actions/guide/:integration` |
 | Linear adapter | Implemented | `packages/services/src/actions/adapters/linear.ts` | Linear API operations |
 | Sentry adapter | Implemented | `packages/services/src/actions/adapters/sentry.ts` | Sentry API operations |
+| Slack adapter | Implemented | `packages/services/src/actions/adapters/slack.ts` | Slack `send_message` action via `chat.postMessage` |
 | Invocation sweeper | Implemented | `apps/worker/src/sweepers/index.ts` | Expires stale invocations |
 | Sandbox-MCP grants handler | Implemented | `packages/sandbox-mcp/src/actions-grants.ts` | Grant handling inside sandbox |
 | Actions list (web) | Implemented | `apps/web/src/server/routers/actions.ts` | Org-level actions inbox |
+| Connector-backed action sources (`remote_http` MCP via Actions) | Implemented | `packages/services/src/actions/connectors/`, `apps/gateway/src/api/proliferate/http/actions.ts` | Gateway-mediated remote MCP connectors through Actions pipeline |
 
 ---
 
@@ -191,6 +194,7 @@
 | Prebuild resolver | Implemented | `apps/gateway/src/lib/prebuild-resolver.ts` | Resolves config at session start |
 | Service commands persistence | Implemented | `packages/db/src/schema/prebuilds.ts:serviceCommands` | JSONB on prebuilds |
 | Env file persistence | Implemented | `packages/db/src/schema/prebuilds.ts:envFiles` | JSONB on prebuilds |
+| Prebuild connector configuration (project-scoped external tool config) | Implemented | `packages/db/src/schema/prebuilds.ts:connectors`, `apps/web/src/server/routers/prebuilds.ts:getConnectors/updateConnectors` | JSONB on prebuilds table with oRPC CRUD |
 | Base snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:sandboxBaseSnapshots` | Building/ready/failed |
 | Repo snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:repoSnapshots` | Building/ready/failed + commit SHA |
 
