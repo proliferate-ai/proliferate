@@ -139,11 +139,10 @@ export function handleTextPartComplete(
 			if (m.id !== msgId) return m;
 
 			const parts = [...(m.parts || [])];
-			const lastPart = parts[parts.length - 1];
-
-			if (lastPart?.type === "text") {
+			const textPartIndex = parts.findLastIndex((p) => p.type === "text");
+			if (textPartIndex >= 0) {
 				// Replace with authoritative text (handles both fresh and init-overlap cases)
-				parts[parts.length - 1] = { ...lastPart, text: payload.text! };
+				parts[textPartIndex] = { ...parts[textPartIndex], text: payload.text! };
 			} else {
 				parts.push({ type: "text", text: payload.text! });
 			}
