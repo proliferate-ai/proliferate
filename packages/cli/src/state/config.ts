@@ -7,10 +7,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { env } from "@proliferate/environment/server";
 
 const PROLIFERATE_DIR = join(homedir(), ".proliferate");
 const CONFIG_FILE = join(PROLIFERATE_DIR, "config.json");
+const DEFAULT_API_URL = "https://app.proliferate.com";
+const ENV_API_URL = process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
 
 export interface Config {
 	apiUrl?: string;
@@ -49,7 +50,7 @@ export function getConfig(): Config & { apiUrl: string } {
 		}
 	}
 
-	const apiUrl = fileConfig.apiUrl ?? env.NEXT_PUBLIC_API_URL;
+	const apiUrl = fileConfig.apiUrl ?? ENV_API_URL;
 
 	return {
 		...fileConfig,
@@ -66,7 +67,7 @@ export function saveConfig(config: Partial<Config>): void {
 	const merged = { ...existing, ...config };
 	// Remove the computed apiUrl if it's the default
 	const { apiUrl, ...toSave } = merged;
-	if (apiUrl !== env.NEXT_PUBLIC_API_URL) {
+	if (apiUrl !== ENV_API_URL) {
 		(toSave as Config).apiUrl = apiUrl;
 	}
 	writeFileSync(CONFIG_FILE, JSON.stringify(toSave, null, 2), { mode: 0o600 });
