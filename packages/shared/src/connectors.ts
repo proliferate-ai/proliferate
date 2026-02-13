@@ -133,7 +133,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 			name: "Context7",
 			transport: "remote_http",
 			url: "https://mcp.context7.com/mcp",
-			auth: { type: "custom_header", secretKey: "", headerName: "X-Api-Key" },
+			auth: { type: "custom_header", secretKey: "", headerName: "CONTEXT7_API_KEY" },
 			riskPolicy: { defaultRisk: "read" },
 			enabled: true,
 		},
@@ -145,7 +145,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		defaults: {
 			name: "PostHog MCP",
 			transport: "remote_http",
-			url: "https://mcp.posthog.com/sse",
+			url: "https://mcp.posthog.com/mcp",
 			auth: { type: "bearer", secretKey: "" },
 			riskPolicy: { defaultRisk: "read" },
 			enabled: true,
