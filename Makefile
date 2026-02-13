@@ -46,6 +46,7 @@ help:
 	@echo "  make db-prod     - Connect to production Postgres"
 	@echo ""
 	@echo "Kubernetes (cloud):"
+	@echo "  make k8s-setup                      - Generate AWS kubeconfig (.tmp/aws-kubeconfig)"
 	@echo "  make k8s-cloud K8S_CLOUD=aws|gcp   - Show which kubeconfig is used"
 	@echo "  make k8s-ns K8S_CLOUD=aws|gcp      - List namespaces"
 	@echo "  make k8s-pods K8S_CLOUD=aws|gcp    - List app pods"
@@ -197,6 +198,8 @@ K8S_CLOUD ?= aws
 KUBECONFIG_AWS ?= .tmp/aws-kubeconfig
 KUBECONFIG_GCP ?= .tmp/gcp-kubeconfig
 APP_HOST ?= app.example.com
+EKS_CLUSTER ?= proliferate-prod-eks
+EKS_REGION ?= us-east-1
 
 ifeq ($(K8S_CLOUD),gcp)
 KUBECONFIG := $(KUBECONFIG_GCP)
@@ -207,6 +210,11 @@ $(error K8S_CLOUD must be 'aws' or 'gcp')
 endif
 
 KUBECTL := KUBECONFIG=$(KUBECONFIG) kubectl
+
+k8s-setup:
+	@mkdir -p .tmp
+	@aws eks update-kubeconfig --name $(EKS_CLUSTER) --region $(EKS_REGION) --kubeconfig $(KUBECONFIG_AWS)
+	@echo "Kubeconfig written to $(KUBECONFIG_AWS)"
 
 k8s-cloud:
 	@echo "K8S_CLOUD=$(K8S_CLOUD)"
@@ -325,4 +333,4 @@ last-good-sha-set:
 last-good-sha-get:
 	@aws ssm get-parameter --name /proliferate/last-good-sha --query Parameter.Value --output text
 
-.PHONY: help services services-rebuild llm-proxy llm-proxy-rebuild ngrok ngrok-llm ngrok-web ngrok-gateway docker-nuke stop logs logs-llm web gateway worker db-local db-migrate db-prod db-local-status db-prod-status db-local-tables db-prod-tables k8s-cloud k8s-ns k8s-pods k8s-logs-web k8s-logs-gateway k8s-logs-worker k8s-logs-llm k8s-logs-all k8s-shell-web k8s-shell-gateway k8s-shell-worker k8s-env-keys k8s-env k8s-ingress k8s-health aws-logs-web aws-logs-gateway aws-logs-worker aws-logs-llm aws-logs-all aws-shell-web aws-shell-gateway aws-shell-worker aws-env-keys aws-env aws-ingress aws-health deploy-cloud release-tag push-secrets last-good-sha-set last-good-sha-get
+.PHONY: help services services-rebuild llm-proxy llm-proxy-rebuild ngrok ngrok-llm ngrok-web ngrok-gateway docker-nuke stop logs logs-llm web gateway worker db-local db-migrate db-prod db-local-status db-prod-status db-local-tables db-prod-tables k8s-setup k8s-cloud k8s-ns k8s-pods k8s-logs-web k8s-logs-gateway k8s-logs-worker k8s-logs-llm k8s-logs-all k8s-shell-web k8s-shell-gateway k8s-shell-worker k8s-env-keys k8s-env k8s-ingress k8s-health aws-logs-web aws-logs-gateway aws-logs-worker aws-logs-llm aws-logs-all aws-shell-web aws-shell-gateway aws-shell-worker aws-env-keys aws-env aws-ingress aws-health deploy-cloud release-tag push-secrets last-good-sha-set last-good-sha-get

@@ -18,7 +18,7 @@ import {
 	useUpdateOrgConnector,
 	useValidateOrgConnector,
 } from "@/hooks/use-org-connectors";
-import { useSecrets } from "@/hooks/use-secrets";
+import { useCreateSecret, useSecrets } from "@/hooks/use-secrets";
 import {
 	CONNECTOR_PRESETS,
 	type ConnectorAuth,
@@ -30,6 +30,7 @@ import {
 	Check,
 	ChevronDown,
 	ChevronRight,
+	ExternalLink,
 	Loader2,
 	Pencil,
 	Plug,
@@ -38,6 +39,35 @@ import {
 	Unplug,
 } from "lucide-react";
 import { useCallback, useState } from "react";
+
+type QuickPresetKey = "context7" | "posthog";
+
+const QUICK_PRESET_DETAILS: Record<
+	QuickPresetKey,
+	{
+		recommendedSecretKey: string;
+		docsUrl: string;
+		docsLabel: string;
+	}
+> = {
+	context7: {
+		recommendedSecretKey: "CONTEXT7_API_KEY",
+		docsUrl: "https://context7.com/docs/api",
+		docsLabel: "Get a Context7 API key",
+	},
+	posthog: {
+		recommendedSecretKey: "POSTHOG_API_KEY",
+		docsUrl: "https://posthog.com/docs/model-context-protocol",
+		docsLabel: "Get a PostHog API key",
+	},
+};
+
+function getQuickPresetDetails(key: string | null) {
+	if (key === "context7" || key === "posthog") {
+		return QUICK_PRESET_DETAILS[key];
+	}
+	return null;
+}
 
 // ============================================
 // Main Page
@@ -291,7 +321,7 @@ function ConnectorForm({
 }: {
 	initial?: ConnectorConfig;
 	isNew: boolean;
-	onSave: (connector: ConnectorConfig, isNew: boolean) => void;
+	onSave: (connector: ConnectorConfig, isNew: boolean) => Promise<void> | void;
 	onCancel: () => void;
 }) {
 	const [name, setName] = useState(initial?.name ?? "");
@@ -307,61 +337,129 @@ function ConnectorForm({
 		initial?.riskPolicy?.defaultRisk ?? "write",
 	);
 	const [enabled, setEnabled] = useState(initial?.enabled ?? true);
+	const [selectedPresetKey, setSelectedPresetKey] = useState<string | null>(null);
+	const [inlineApiKey, setInlineApiKey] = useState("");
 	const [guidance, setGuidance] = useState<string | null>(null);
 	const [saveError, setSaveError] = useState<string | null>(null);
+	const [isSaving, setIsSaving] = useState(false);
 
 	const validateMutation = useValidateOrgConnector();
 	const { data: orgSecrets } = useSecrets();
+	const createSecret = useCreateSecret();
 	const secretOptions = orgSecrets ?? [];
 	const hasListedSecret = secretOptions.some((s) => s.key === secretKey);
+	const quickPreset = isNew ? getQuickPresetDetails(selectedPresetKey) : null;
 
-	const buildAuth = useCallback((): ConnectorAuth => {
-		if (authType === "custom_header") {
-			return { type: "custom_header", secretKey, headerName: headerName || "X-Api-Key" };
+	const buildAuth = useCallback(
+		(resolvedSecretKey: string): ConnectorAuth => {
+			if (authType === "custom_header") {
+				return {
+					type: "custom_header",
+					secretKey: resolvedSecretKey,
+					headerName: headerName || "X-Api-Key",
+				};
+			}
+			return { type: "bearer", secretKey: resolvedSecretKey };
+		},
+		[authType, headerName],
+	);
+
+	const buildConnector = useCallback(
+		(resolvedSecretKey: string): ConnectorConfig => {
+			return {
+				id: initial?.id ?? crypto.randomUUID(),
+				name,
+				transport: "remote_http",
+				url,
+				auth: buildAuth(resolvedSecretKey),
+				riskPolicy: { defaultRisk },
+				enabled,
+			};
+		},
+		[initial, name, url, buildAuth, defaultRisk, enabled],
+	);
+
+	const resolveSecretKeyForSubmit = useCallback(async (): Promise<string | null> => {
+		const resolvedSecretKey = (secretKey || quickPreset?.recommendedSecretKey || "").trim();
+		if (!resolvedSecretKey) {
+			setSaveError("Secret key is required.");
+			return null;
 		}
-		return { type: "bearer", secretKey };
-	}, [authType, secretKey, headerName]);
 
-	const buildConnector = useCallback((): ConnectorConfig => {
-		return {
-			id: initial?.id ?? crypto.randomUUID(),
-			name,
-			transport: "remote_http",
-			url,
-			auth: buildAuth(),
-			riskPolicy: { defaultRisk },
-			enabled,
-		};
-	}, [initial, name, url, buildAuth, defaultRisk, enabled]);
+		if (!inlineApiKey.trim()) {
+			return resolvedSecretKey;
+		}
+
+		try {
+			await createSecret.mutateAsync({
+				key: resolvedSecretKey,
+				value: inlineApiKey.trim(),
+				description: `API key for ${name || "MCP connector"}`,
+			});
+			setInlineApiKey("");
+			return resolvedSecretKey;
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Failed to save API key as secret";
+			const normalized = message.toLowerCase();
+			if (normalized.includes("already exists") || normalized.includes("duplicate")) {
+				setSaveError(
+					`Secret "${resolvedSecretKey}" already exists. Leave API key blank to use it, or choose a different secret key name.`,
+				);
+				return null;
+			}
+			setSaveError(message);
+			return null;
+		}
+	}, [createSecret, inlineApiKey, name, quickPreset, secretKey]);
 
 	const handlePreset = (preset: ConnectorPreset) => {
 		setName(preset.defaults.name);
 		setUrl(preset.defaults.url);
 		setAuthType(preset.defaults.auth.type);
-		setSecretKey(preset.defaults.auth.secretKey);
+		setSelectedPresetKey(preset.key);
+		const details = getQuickPresetDetails(preset.key);
+		setSecretKey(details?.recommendedSecretKey ?? preset.defaults.auth.secretKey);
 		if (preset.defaults.auth.type === "custom_header") {
 			setHeaderName(preset.defaults.auth.headerName);
+		} else {
+			setHeaderName("");
 		}
 		setDefaultRisk(preset.defaults.riskPolicy?.defaultRisk ?? "write");
 		setEnabled(preset.defaults.enabled);
 		setGuidance(preset.guidance ?? null);
-	};
-
-	const handleValidate = () => {
+		setInlineApiKey("");
 		setSaveError(null);
-		validateMutation.mutate({ connector: buildConnector() });
 	};
 
-	const handleSave = () => {
-		if (!name.trim() || !url.trim() || !secretKey.trim()) {
-			setSaveError("Name, URL, and secret are required.");
+	const handleValidate = async () => {
+		setSaveError(null);
+		const resolvedSecretKey = await resolveSecretKeyForSubmit();
+		if (!resolvedSecretKey) return;
+		setSecretKey(resolvedSecretKey);
+		validateMutation.mutate({ connector: buildConnector(resolvedSecretKey) });
+	};
+
+	const handleSave = async () => {
+		if (!name.trim() || !url.trim()) {
+			setSaveError("Name and URL are required.");
 			return;
 		}
 		setSaveError(null);
-		onSave(buildConnector(), isNew);
+		const resolvedSecretKey = await resolveSecretKeyForSubmit();
+		if (!resolvedSecretKey) return;
+		setSecretKey(resolvedSecretKey);
+
+		setIsSaving(true);
+		try {
+			await onSave(buildConnector(resolvedSecretKey), isNew);
+		} catch (err) {
+			setSaveError(err instanceof Error ? err.message : "Failed to save connector");
+		} finally {
+			setIsSaving(false);
+		}
 	};
 
-	const canValidate = !!url.trim() && !!secretKey.trim();
+	const canValidate = !!url.trim() && !!(secretKey.trim() || quickPreset?.recommendedSecretKey);
 
 	return (
 		<div className="p-4 space-y-4">
@@ -371,102 +469,185 @@ function ConnectorForm({
 				<div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-md">{guidance}</div>
 			)}
 
-			<div className="grid grid-cols-2 gap-3">
-				<div>
-					<Label className="text-xs">Name</Label>
-					<Input
-						value={name}
-						onChange={(e) => setName(e.target.value)}
-						placeholder="e.g. Notion"
-						className="h-8 text-sm mt-1"
-					/>
-				</div>
-				<div>
-					<Label className="text-xs">URL</Label>
-					<Input
-						value={url}
-						onChange={(e) => setUrl(e.target.value)}
-						placeholder="https://mcp.example.com/mcp"
-						className="h-8 text-sm mt-1"
-					/>
-				</div>
-			</div>
+			{quickPreset ? (
+				<div className="space-y-3 rounded-md border border-border p-3 bg-muted/30">
+					<div className="flex items-center justify-between gap-2">
+						<p className="text-xs text-muted-foreground">
+							Quick setup: paste your API key and add the connector.
+						</p>
+						<a
+							href={quickPreset.docsUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+						>
+							{quickPreset.docsLabel}
+							<ExternalLink className="h-3 w-3" />
+						</a>
+					</div>
 
-			<div className="grid grid-cols-2 gap-3">
-				<div>
-					<Label className="text-xs">Auth type</Label>
-					<Select
-						value={authType}
-						onValueChange={(v) => setAuthType(v as "bearer" | "custom_header")}
-					>
-						<SelectTrigger className="h-8 text-sm mt-1">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="bearer">Bearer token</SelectItem>
-							<SelectItem value="custom_header">Custom header</SelectItem>
-						</SelectContent>
-					</Select>
-				</div>
-				<div>
-					<Label className="text-xs">Secret</Label>
-					<Select
-						value={hasListedSecret ? secretKey : "__custom"}
-						onValueChange={(value) => {
-							if (value !== "__custom") setSecretKey(value);
-						}}
-					>
-						<SelectTrigger className="h-8 text-sm mt-1">
-							<SelectValue placeholder="Select a secret..." />
-						</SelectTrigger>
-						<SelectContent>
-							{secretOptions.map((s) => (
-								<SelectItem key={s.key} value={s.key}>
-									{s.key}
-								</SelectItem>
-							))}
-							<SelectItem value="__custom">Custom secret key</SelectItem>
-						</SelectContent>
-					</Select>
-					<Input
-						value={secretKey}
-						onChange={(e) => setSecretKey(e.target.value)}
-						placeholder="Type or paste secret key name"
-						className="h-8 text-sm mt-2"
-					/>
-				</div>
-			</div>
+					<div className="grid grid-cols-2 gap-3">
+						<div>
+							<Label className="text-xs">Name</Label>
+							<Input
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+								className="h-8 text-sm mt-1"
+							/>
+						</div>
+						<div>
+							<Label className="text-xs">URL</Label>
+							<Input value={url} readOnly className="h-8 text-sm mt-1 bg-muted/50" />
+						</div>
+					</div>
 
-			{authType === "custom_header" && (
-				<div>
-					<Label className="text-xs">Header name</Label>
-					<Input
-						value={headerName}
-						onChange={(e) => setHeaderName(e.target.value)}
-						placeholder="X-Api-Key"
-						className="h-8 text-sm mt-1"
-					/>
+					<div className="grid grid-cols-2 gap-3">
+						<div>
+							<Label className="text-xs">Secret key name</Label>
+							<Input
+								value={secretKey}
+								onChange={(e) => setSecretKey(e.target.value)}
+								placeholder={quickPreset.recommendedSecretKey}
+								className="h-8 text-sm mt-1"
+							/>
+						</div>
+						<div>
+							<Label className="text-xs">API key value</Label>
+							<Input
+								type="password"
+								value={inlineApiKey}
+								onChange={(e) => setInlineApiKey(e.target.value)}
+								placeholder="Paste API key to save as org secret"
+								className="h-8 text-sm mt-1"
+							/>
+						</div>
+					</div>
+
+					<div>
+						<Label className="text-xs">Or use existing secret</Label>
+						<Select
+							value={hasListedSecret ? secretKey : "__custom"}
+							onValueChange={(value) => {
+								if (value !== "__custom") setSecretKey(value);
+							}}
+						>
+							<SelectTrigger className="h-8 text-sm mt-1">
+								<SelectValue placeholder="Select existing secret..." />
+							</SelectTrigger>
+							<SelectContent>
+								{secretOptions.map((s) => (
+									<SelectItem key={s.key} value={s.key}>
+										{s.key}
+									</SelectItem>
+								))}
+								<SelectItem value="__custom">Custom secret key</SelectItem>
+							</SelectContent>
+						</Select>
+						<p className="text-[11px] text-muted-foreground mt-1">
+							Leave API key blank to reuse an existing secret key.
+						</p>
+					</div>
 				</div>
+			) : (
+				<>
+					<div className="grid grid-cols-2 gap-3">
+						<div>
+							<Label className="text-xs">Name</Label>
+							<Input
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+								placeholder="e.g. Notion"
+								className="h-8 text-sm mt-1"
+							/>
+						</div>
+						<div>
+							<Label className="text-xs">URL</Label>
+							<Input
+								value={url}
+								onChange={(e) => setUrl(e.target.value)}
+								placeholder="https://mcp.example.com/mcp"
+								className="h-8 text-sm mt-1"
+							/>
+						</div>
+					</div>
+
+					<div className="grid grid-cols-2 gap-3">
+						<div>
+							<Label className="text-xs">Auth type</Label>
+							<Select
+								value={authType}
+								onValueChange={(v) => setAuthType(v as "bearer" | "custom_header")}
+							>
+								<SelectTrigger className="h-8 text-sm mt-1">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="bearer">Bearer token</SelectItem>
+									<SelectItem value="custom_header">Custom header</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+						<div>
+							<Label className="text-xs">Secret</Label>
+							<Select
+								value={hasListedSecret ? secretKey : "__custom"}
+								onValueChange={(value) => {
+									if (value !== "__custom") setSecretKey(value);
+								}}
+							>
+								<SelectTrigger className="h-8 text-sm mt-1">
+									<SelectValue placeholder="Select a secret..." />
+								</SelectTrigger>
+								<SelectContent>
+									{secretOptions.map((s) => (
+										<SelectItem key={s.key} value={s.key}>
+											{s.key}
+										</SelectItem>
+									))}
+									<SelectItem value="__custom">Custom secret key</SelectItem>
+								</SelectContent>
+							</Select>
+							<Input
+								value={secretKey}
+								onChange={(e) => setSecretKey(e.target.value)}
+								placeholder="Type or paste secret key name"
+								className="h-8 text-sm mt-2"
+							/>
+						</div>
+					</div>
+
+					{authType === "custom_header" && (
+						<div>
+							<Label className="text-xs">Header name</Label>
+							<Input
+								value={headerName}
+								onChange={(e) => setHeaderName(e.target.value)}
+								placeholder="X-Api-Key"
+								className="h-8 text-sm mt-1"
+							/>
+						</div>
+					)}
+
+					<div className="grid grid-cols-2 gap-3">
+						<div>
+							<Label className="text-xs">Default risk level</Label>
+							<Select
+								value={defaultRisk}
+								onValueChange={(v) => setDefaultRisk(v as "read" | "write" | "danger")}
+							>
+								<SelectTrigger className="h-8 text-sm mt-1">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="read">Read (auto-approved)</SelectItem>
+									<SelectItem value="write">Write (requires approval)</SelectItem>
+									<SelectItem value="danger">Danger (always denied)</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+					</div>
+				</>
 			)}
-
-			<div className="grid grid-cols-2 gap-3">
-				<div>
-					<Label className="text-xs">Default risk level</Label>
-					<Select
-						value={defaultRisk}
-						onValueChange={(v) => setDefaultRisk(v as "read" | "write" | "danger")}
-					>
-						<SelectTrigger className="h-8 text-sm mt-1">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="read">Read (auto-approved)</SelectItem>
-							<SelectItem value="write">Write (requires approval)</SelectItem>
-							<SelectItem value="danger">Danger (always denied)</SelectItem>
-						</SelectContent>
-					</Select>
-				</div>
-			</div>
 
 			{/* Validation */}
 			{validateMutation.data && <ValidationResult result={validateMutation.data} />}
@@ -477,7 +658,9 @@ function ConnectorForm({
 					variant="outline"
 					size="sm"
 					onClick={handleValidate}
-					disabled={!canValidate || validateMutation.isPending}
+					disabled={
+						!canValidate || validateMutation.isPending || isSaving || createSecret.isPending
+					}
 				>
 					{validateMutation.isPending ? (
 						<Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -490,8 +673,14 @@ function ConnectorForm({
 					<Button variant="ghost" size="sm" onClick={onCancel}>
 						Cancel
 					</Button>
-					<Button size="sm" onClick={handleSave}>
-						{isNew ? "Add" : "Save"}
+					<Button size="sm" onClick={handleSave} disabled={isSaving || createSecret.isPending}>
+						{isSaving || createSecret.isPending ? (
+							<Loader2 className="h-3.5 w-3.5 animate-spin" />
+						) : isNew ? (
+							"Add"
+						) : (
+							"Save"
+						)}
 					</Button>
 				</div>
 			</div>
