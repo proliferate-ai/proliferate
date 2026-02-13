@@ -21,7 +21,7 @@ export default function DashboardLayout({
 	const router = useRouter();
 	const { data: session, isPending: authPending } = useSession();
 	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
-	const { data: billingInfo, isLoading: billingLoading } = useBilling();
+	const { data: billingInfo, isLoading: billingLoading, isError: billingError } = useBilling();
 	const { commandSearchOpen, setCommandSearchOpen } = useDashboardStore();
 	const needsOnboarding = billingEnabled && billingInfo?.state.billingState === "unconfigured";
 
@@ -46,7 +46,6 @@ export default function DashboardLayout({
 
 	// Redirect to verify-email if email not verified (when verification is required)
 	const requireEmailVerification = env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION;
-	console.log("requireEmailVerification", requireEmailVerification);
 	useEffect(() => {
 		if (!authPending && session && requireEmailVerification && !session.user?.emailVerified) {
 			router.push("/auth/verify-email");
@@ -60,8 +59,10 @@ export default function DashboardLayout({
 		}
 	}, [authPending, session, billingLoading, needsOnboarding, router]);
 
-	// Wait for required gate checks before rendering anything
-	if (authPending || (billingEnabled && billingLoading)) {
+	// Wait for required gate checks before rendering anything.
+	// Billing error is treated as "still loading" (fail-closed) — TanStack Query
+	// retries automatically, so the gate stays shut until we get a definitive answer.
+	if (authPending || (billingEnabled && (billingLoading || billingError))) {
 		return <div className="min-h-screen bg-background" />;
 	}
 
