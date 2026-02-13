@@ -19,6 +19,17 @@ const logger = () => getServicesLogger().child({ module: "mcp-connector" });
 const TOOL_LIST_TIMEOUT_MS = 15_000;
 const TOOL_CALL_TIMEOUT_MS = 30_000;
 
+interface McpContentBlock {
+	type?: string;
+	text?: string;
+	[key: string]: unknown;
+}
+
+interface McpCallToolResultShape {
+	content?: McpContentBlock[];
+	structuredContent?: Record<string, unknown>;
+}
+
 // ============================================
 // Schema conversion helpers
 // ============================================
@@ -45,6 +56,36 @@ export function schemaToParams(
 		required: required.has(name),
 		description: ((prop as Record<string, unknown>).description as string) ?? "",
 	}));
+}
+
+/**
+ * Normalize MCP tool result content for storage and CLI output.
+ * Priority: structuredContent -> text content -> raw content blocks.
+ */
+export function extractToolCallContent(result: McpCallToolResultShape): unknown {
+	if (result.structuredContent !== undefined) {
+		return result.structuredContent;
+	}
+
+	const contentBlocks = Array.isArray(result.content) ? result.content : [];
+	const textContent = contentBlocks
+		.filter((c) => c.type === "text" && typeof c.text === "string")
+		.map((c) => c.text as string)
+		.join("\n");
+
+	if (textContent.length > 0) {
+		try {
+			return JSON.parse(textContent);
+		} catch {
+			return textContent;
+		}
+	}
+
+	if (contentBlocks.length > 0) {
+		return contentBlocks;
+	}
+
+	return null;
 }
 
 // ============================================
@@ -137,20 +178,7 @@ export async function callConnectorTool(
 				setTimeout(() => reject(new Error("tools/call timeout")), TOOL_CALL_TIMEOUT_MS),
 			),
 		]);
-
-		// Extract text content from MCP result
-		const textContent = (result.content as Array<{ type: string; text?: string }>)
-			.filter((c) => c.type === "text" && c.text)
-			.map((c) => c.text!)
-			.join("\n");
-
-		// Try to parse as JSON, fall back to raw text
-		let content: unknown;
-		try {
-			content = JSON.parse(textContent);
-		} catch {
-			content = textContent;
-		}
+		const content = extractToolCallContent(result as McpCallToolResultShape);
 
 		const isError = "isError" in result && result.isError === true;
 		log.info({ isError }, "Connector tool call complete");
