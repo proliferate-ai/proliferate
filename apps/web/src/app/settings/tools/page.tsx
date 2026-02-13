@@ -1,5 +1,7 @@
 "use client";
 
+import { ConnectorIcon } from "@/components/integrations/connector-icon";
+import { ProviderIcon } from "@/components/integrations/provider-icon";
 import { SettingsCard, SettingsSection } from "@/components/settings/settings-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +13,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { useIntegrations } from "@/hooks/use-integrations";
+import { useNangoConnect } from "@/hooks/use-nango-connect";
 import {
 	useCreateOrgConnector,
 	useCreateOrgConnectorWithSecret,
@@ -20,15 +24,21 @@ import {
 	useValidateOrgConnector,
 } from "@/hooks/use-org-connectors";
 import { useSecrets } from "@/hooks/use-secrets";
+import { ACTION_ADAPTERS, type AdapterMeta } from "@/lib/action-adapters";
+import { orpc } from "@/lib/orpc";
+import { cn } from "@/lib/utils";
+import { env } from "@proliferate/environment/public";
 import {
 	CONNECTOR_PRESETS,
 	type ConnectorAuth,
 	type ConnectorConfig,
 	type ConnectorPreset,
 } from "@proliferate/shared";
+import { useQueryClient } from "@tanstack/react-query";
 import {
 	AlertTriangle,
 	Check,
+	ChevronRight,
 	ExternalLink,
 	Loader2,
 	Pencil,
@@ -45,6 +55,140 @@ import { useCallback, useState } from "react";
 const quickPresets = CONNECTOR_PRESETS.filter((p) => p.quickSetup);
 const advancedPresets = CONNECTOR_PRESETS.filter((p) => !p.quickSetup);
 
+/** Best-effort preset key lookup for a connected tool (matches by URL). */
+function findPresetKey(connector: ConnectorConfig): string {
+	const match = CONNECTOR_PRESETS.find((p) => p.defaults.url && connector.url === p.defaults.url);
+	return match?.key ?? "custom";
+}
+
+// ============================================
+// AdapterCard (built-in integrations)
+// ============================================
+
+function AdapterCard({
+	adapter,
+	isConnected,
+	isLoading,
+	onConnect,
+	onDisconnect,
+}: {
+	adapter: AdapterMeta;
+	isConnected: boolean;
+	isLoading: boolean;
+	onConnect: () => void;
+	onDisconnect: () => void;
+}) {
+	const [expanded, setExpanded] = useState(false);
+	const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+	const readCount = adapter.actions.filter((a) => a.riskLevel === "read").length;
+	const writeCount = adapter.actions.filter((a) => a.riskLevel === "write").length;
+
+	return (
+		<div className="rounded-lg border border-border/80 bg-background">
+			{/* Header */}
+			<div className="flex items-center justify-between px-4 py-3">
+				<div className="flex items-center gap-3 min-w-0">
+					<div className="flex items-center justify-center h-8 w-8 rounded-md bg-muted shrink-0">
+						<ProviderIcon provider={adapter.integration} size="sm" />
+					</div>
+					<div className="min-w-0">
+						<p className="text-sm font-medium">{adapter.displayName}</p>
+						<p className="text-xs text-muted-foreground">{adapter.description}</p>
+					</div>
+				</div>
+				<div className="flex items-center gap-2 shrink-0">
+					{isConnected ? (
+						<>
+							<span className="text-xs text-green-600">Connected</span>
+							{confirmDisconnect ? (
+								<div className="flex items-center gap-1">
+									<Button
+										variant="destructive"
+										size="sm"
+										className="h-7 px-2 text-xs"
+										onClick={() => {
+											onDisconnect();
+											setConfirmDisconnect(false);
+										}}
+										disabled={isLoading}
+									>
+										Confirm
+									</Button>
+									<Button
+										variant="ghost"
+										size="sm"
+										className="h-7 px-2 text-xs"
+										onClick={() => setConfirmDisconnect(false)}
+									>
+										Cancel
+									</Button>
+								</div>
+							) : (
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-7 px-2 text-xs text-muted-foreground"
+									onClick={() => setConfirmDisconnect(true)}
+									disabled={isLoading}
+								>
+									Disconnect
+								</Button>
+							)}
+						</>
+					) : (
+						<Button
+							variant="outline"
+							size="sm"
+							className="h-7 px-3 text-xs"
+							onClick={onConnect}
+							disabled={isLoading}
+						>
+							{isLoading && <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />}
+							Connect
+						</Button>
+					)}
+				</div>
+			</div>
+
+			{/* Action summary + expand toggle */}
+			<button
+				type="button"
+				className="flex items-center gap-2 px-4 py-2 w-full border-t border-border/60 text-xs text-muted-foreground hover:text-foreground transition-colors"
+				onClick={() => setExpanded(!expanded)}
+			>
+				<ChevronRight className={cn("h-3 w-3 transition-transform", expanded && "rotate-90")} />
+				<span>
+					{adapter.actions.length} actions ({readCount} read, {writeCount} write)
+				</span>
+			</button>
+
+			{/* Expanded action list */}
+			{expanded && (
+				<div className="border-t border-border/60 px-4 py-2 space-y-1">
+					{adapter.actions.map((action) => (
+						<div key={action.name} className="flex items-center justify-between py-1">
+							<div className="flex items-center gap-2 min-w-0">
+								<span className="text-xs font-mono text-foreground">{action.name}</span>
+								<span className="text-xs text-muted-foreground truncate">{action.description}</span>
+							</div>
+							<span
+								className={cn(
+									"text-[10px] px-1.5 py-0.5 rounded border shrink-0",
+									action.riskLevel === "read"
+										? "text-green-600 border-green-600/30"
+										: "text-amber-600 border-amber-600/30",
+								)}
+							>
+								{action.riskLevel}
+							</span>
+						</div>
+					))}
+				</div>
+			)}
+		</div>
+	);
+}
+
 // ============================================
 // Main Page
 // ============================================
@@ -58,6 +202,21 @@ export default function ConnectorsPage() {
 	const createMutation = useCreateOrgConnector();
 	const updateMutation = useUpdateOrgConnector();
 	const deleteMutation = useDeleteOrgConnector();
+
+	// Integrations (action adapters)
+	const integrationsEnabled = env.NEXT_PUBLIC_INTEGRATIONS_ENABLED;
+	const { data: integrationsData } = useIntegrations();
+	const queryClient = useQueryClient();
+	const {
+		connect: nangoConnect,
+		disconnect: nangoDisconnect,
+		loadingProvider: nangoLoadingProvider,
+	} = useNangoConnect({
+		flow: "connectUI",
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: orpc.integrations.list.key() });
+		},
+	});
 
 	const handleRemove = useCallback(
 		async (id: string) => {
@@ -105,7 +264,7 @@ export default function ConnectorsPage() {
 
 	if (isLoading) {
 		return (
-			<SettingsSection title="Connectors">
+			<SettingsSection title="Tools">
 				<SettingsCard>
 					<div className="p-6 flex justify-center">
 						<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -119,6 +278,35 @@ export default function ConnectorsPage() {
 
 	return (
 		<div className="space-y-6">
+			{/* Section 0: Built-in integrations (action adapters) */}
+			{integrationsEnabled && (
+				<SettingsSection title="Integrations">
+					<p className="text-sm text-muted-foreground -mt-1 mb-3">
+						OAuth-connected services that provide built-in actions to your agents.
+					</p>
+					<div className="space-y-2">
+						{ACTION_ADAPTERS.map((adapter) => {
+							const providerIntegrations = integrationsData?.byProvider[adapter.integration] ?? [];
+							const activeIntegration = providerIntegrations.find((i) => i.status === "active");
+							return (
+								<AdapterCard
+									key={adapter.integration}
+									adapter={adapter}
+									isConnected={!!activeIntegration}
+									isLoading={nangoLoadingProvider === adapter.integration}
+									onConnect={() => nangoConnect(adapter.integration)}
+									onDisconnect={() => {
+										if (activeIntegration) {
+											nangoDisconnect(adapter.integration, activeIntegration.id);
+										}
+									}}
+								/>
+							);
+						})}
+					</div>
+				</SettingsSection>
+			)}
+
 			{/* Section 1: Add a tool */}
 			<SettingsSection title="Add a tool">
 				<p className="text-sm text-muted-foreground -mt-1 mb-3">
@@ -137,10 +325,13 @@ export default function ConnectorsPage() {
 								setAdvancedPreset(null);
 							}}
 						>
-							<p className="text-sm font-medium">{preset.name}</p>
-							<p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-								{preset.description}
-							</p>
+							<div className="flex items-center gap-2.5 mb-1">
+								<div className="flex items-center justify-center h-7 w-7 rounded-md bg-muted shrink-0">
+									<ConnectorIcon presetKey={preset.key} size="sm" />
+								</div>
+								<p className="text-sm font-medium">{preset.name}</p>
+							</div>
+							<p className="text-xs text-muted-foreground line-clamp-2">{preset.description}</p>
 						</button>
 					))}
 
@@ -155,10 +346,13 @@ export default function ConnectorsPage() {
 								setQuickSetupPreset(null);
 							}}
 						>
-							<p className="text-sm font-medium">{preset.name}</p>
-							<p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-								{preset.description}
-							</p>
+							<div className="flex items-center gap-2.5 mb-1">
+								<div className="flex items-center justify-center h-7 w-7 rounded-md bg-muted shrink-0">
+									<ConnectorIcon presetKey={preset.key} size="sm" />
+								</div>
+								<p className="text-sm font-medium">{preset.name}</p>
+							</div>
+							<p className="text-xs text-muted-foreground line-clamp-2">{preset.description}</p>
 						</button>
 					))}
 				</div>
@@ -191,7 +385,7 @@ export default function ConnectorsPage() {
 					<div className="rounded-lg border border-border/80 bg-background p-6 text-center">
 						<Unplug className="h-6 w-6 mx-auto mb-2 text-muted-foreground/40" />
 						<p className="text-sm text-muted-foreground">
-							No connectors configured yet. Add a tool above to get started.
+							No tools configured yet. Add one above to get started.
 						</p>
 					</div>
 				) : (
@@ -287,9 +481,14 @@ function QuickSetupForm({
 	return (
 		<div className="rounded-lg border border-border/80 bg-background p-4">
 			<div className="flex items-center justify-between mb-3">
-				<div>
-					<h4 className="text-sm font-medium">{preset.name}</h4>
-					<p className="text-xs text-muted-foreground">{preset.description}</p>
+				<div className="flex items-center gap-2.5">
+					<div className="flex items-center justify-center h-8 w-8 rounded-lg bg-muted shrink-0">
+						<ConnectorIcon presetKey={preset.key} size="sm" />
+					</div>
+					<div>
+						<h4 className="text-sm font-medium">{preset.name}</h4>
+						<p className="text-xs text-muted-foreground">{preset.description}</p>
+					</div>
 				</div>
 				{preset.docsUrl && (
 					<a
@@ -421,7 +620,9 @@ function ConnectorRow({
 	return (
 		<div className="flex items-center justify-between px-4 py-3">
 			<div className="flex items-center gap-3 min-w-0">
-				<Plug className="h-4 w-4 text-muted-foreground shrink-0" />
+				<div className="flex items-center justify-center h-7 w-7 rounded-md bg-muted shrink-0">
+					<ConnectorIcon presetKey={findPresetKey(connector)} size="sm" />
+				</div>
 				<div className="min-w-0">
 					<p className="text-sm font-medium truncate">{connector.name}</p>
 					<p className="text-xs text-muted-foreground truncate">{connector.url}</p>
