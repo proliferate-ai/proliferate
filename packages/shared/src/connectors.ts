@@ -14,12 +14,21 @@ import { z } from "zod";
 
 export type ConnectorTransport = "remote_http";
 
-export interface ConnectorAuth {
-	/** Auth mechanism for the remote MCP endpoint. V1 supports bearer only. */
+export interface ConnectorAuthBearer {
 	type: "bearer";
 	/** Reference to a secret key in the org secrets system (NOT a raw value). */
 	secretKey: string;
 }
+
+export interface ConnectorAuthCustomHeader {
+	type: "custom_header";
+	/** Reference to a secret key in the org secrets system (NOT a raw value). */
+	secretKey: string;
+	/** HTTP header name to set (e.g., "X-Api-Key", "CONTEXT7_API_KEY"). */
+	headerName: string;
+}
+
+export type ConnectorAuth = ConnectorAuthBearer | ConnectorAuthCustomHeader;
 
 export interface ConnectorRiskPolicy {
 	/** Default risk level applied to all tools from this connector. */
@@ -51,10 +60,21 @@ export interface ConnectorConfig {
 
 const riskLevelSchema = z.enum(["read", "write", "danger"]);
 
-export const ConnectorAuthSchema = z.object({
+const ConnectorAuthBearerSchema = z.object({
 	type: z.literal("bearer"),
 	secretKey: z.string().min(1).max(200),
 });
+
+const ConnectorAuthCustomHeaderSchema = z.object({
+	type: z.literal("custom_header"),
+	secretKey: z.string().min(1).max(200),
+	headerName: z.string().min(1).max(200),
+});
+
+export const ConnectorAuthSchema = z.discriminatedUnion("type", [
+	ConnectorAuthBearerSchema,
+	ConnectorAuthCustomHeaderSchema,
+]);
 
 export const ConnectorRiskPolicySchema = z.object({
 	defaultRisk: riskLevelSchema.optional(),

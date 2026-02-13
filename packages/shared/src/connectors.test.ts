@@ -51,6 +51,25 @@ describe("parsePrebuildConnectors", () => {
 		expect(result[0].riskPolicy?.overrides?.dangerous_tool).toBe("danger");
 	});
 
+	it("parses connector with custom_header auth", () => {
+		const customHeaderConnector = {
+			...validConnector,
+			name: "Context7",
+			url: "https://mcp.context7.com/mcp",
+			auth: {
+				type: "custom_header" as const,
+				secretKey: "CONTEXT7_API_KEY",
+				headerName: "CONTEXT7_API_KEY",
+			},
+		};
+		const result = parsePrebuildConnectors([customHeaderConnector]);
+		expect(result).toHaveLength(1);
+		expect(result[0].auth.type).toBe("custom_header");
+		if (result[0].auth.type === "custom_header") {
+			expect(result[0].auth.headerName).toBe("CONTEXT7_API_KEY");
+		}
+	});
+
 	it("parses multiple connectors", () => {
 		const second = {
 			...validConnector,
@@ -95,6 +114,34 @@ describe("ConnectorsArraySchema", () => {
 				transport: "remote_http",
 				url: "https://example.com",
 				auth: { type: "oauth", secretKey: "KEY" },
+				enabled: true,
+			},
+		]);
+		expect(result.success).toBe(false);
+	});
+
+	it("accepts custom_header auth with headerName", () => {
+		const result = ConnectorsArraySchema.safeParse([
+			{
+				id: "550e8400-e29b-41d4-a716-446655440000",
+				name: "Context7",
+				transport: "remote_http",
+				url: "https://mcp.context7.com/mcp",
+				auth: { type: "custom_header", secretKey: "KEY", headerName: "CONTEXT7_API_KEY" },
+				enabled: true,
+			},
+		]);
+		expect(result.success).toBe(true);
+	});
+
+	it("rejects custom_header auth without headerName", () => {
+		const result = ConnectorsArraySchema.safeParse([
+			{
+				id: "550e8400-e29b-41d4-a716-446655440000",
+				name: "Bad",
+				transport: "remote_http",
+				url: "https://example.com",
+				auth: { type: "custom_header", secretKey: "KEY" },
 				enabled: true,
 			},
 		]);

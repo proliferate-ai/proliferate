@@ -55,9 +55,10 @@ function createTransport(
 	config: ConnectorConfig,
 	resolvedSecret: string,
 ): StreamableHTTPClientTransport {
-	const headers: Record<string, string> = {
-		Authorization: `Bearer ${resolvedSecret}`,
-	};
+	const headers: Record<string, string> =
+		config.auth.type === "custom_header"
+			? { [config.auth.headerName]: resolvedSecret }
+			: { Authorization: `Bearer ${resolvedSecret}` };
 
 	return new StreamableHTTPClientTransport(new URL(config.url), {
 		requestInit: { headers },
