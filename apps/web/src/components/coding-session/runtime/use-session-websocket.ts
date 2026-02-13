@@ -24,6 +24,7 @@ import {
 	handleMessage,
 	handleMessageCancelled,
 	handleMessageComplete,
+	handleTextPartComplete,
 	handleToken,
 	handleToolEnd,
 	handleToolMetadata,
@@ -275,6 +276,13 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 
 		case "token":
 			handleToken(data.payload as { messageId?: string; token?: string }, ctx);
+			break;
+
+		case "text_part_complete":
+			handleTextPartComplete(
+				data.payload as { messageId?: string; partId?: string; text?: string },
+				ctx,
+			);
 			break;
 
 		case "tool_start":
