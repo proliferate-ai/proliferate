@@ -37,9 +37,17 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 	useEffect(() => {
 		if (!repos) return;
 		if (selectedRepoId && !repos.some((r) => r.id === selectedRepoId)) {
+			// Repo no longer exists — clear both
 			setSelectedRepo(null);
 			setSelectedSnapshot(null);
+		} else if (selectedRepoId && selectedSnapshotId) {
+			// Repo exists — sync snapshot to repo's current prebuild
+			const repo = repos.find((r) => r.id === selectedRepoId);
+			if (repo && selectedSnapshotId !== repo.prebuildId) {
+				setSelectedSnapshot(repo.prebuildId ?? null);
+			}
 		} else if (selectedSnapshotId && !selectedRepoId) {
+			// Multi-repo config — check if it still exists
 			if (prebuilds && !prebuilds.some((c) => c.id === selectedSnapshotId)) {
 				setSelectedSnapshot(null);
 			}
