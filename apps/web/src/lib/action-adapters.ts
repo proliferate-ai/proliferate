@@ -1,4 +1,4 @@
-import type { Provider } from "@/components/integrations/provider-icon";
+export type AdapterProvider = "linear" | "sentry";
 
 export interface ActionMeta {
 	name: string;
@@ -7,7 +7,7 @@ export interface ActionMeta {
 }
 
 export interface AdapterMeta {
-	integration: Provider;
+	integration: AdapterProvider;
 	displayName: string;
 	description: string;
 	actions: ActionMeta[];

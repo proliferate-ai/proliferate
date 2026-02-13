@@ -14,7 +14,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { useIntegrations } from "@/hooks/use-integrations";
-import { type NangoProvider, useNangoConnect } from "@/hooks/use-nango-connect";
+import { useNangoConnect } from "@/hooks/use-nango-connect";
 import {
 	useCreateOrgConnector,
 	useCreateOrgConnectorWithSecret,
@@ -286,8 +286,7 @@ export default function ConnectorsPage() {
 					</p>
 					<div className="space-y-2">
 						{ACTION_ADAPTERS.map((adapter) => {
-							const providerIntegrations =
-								integrationsData?.byProvider[adapter.integration as "sentry" | "linear"] ?? [];
+							const providerIntegrations = integrationsData?.byProvider[adapter.integration] ?? [];
 							const activeIntegration = providerIntegrations.find((i) => i.status === "active");
 							return (
 								<AdapterCard
@@ -295,10 +294,10 @@ export default function ConnectorsPage() {
 									adapter={adapter}
 									isConnected={!!activeIntegration}
 									isLoading={nangoLoadingProvider === adapter.integration}
-									onConnect={() => nangoConnect(adapter.integration as NangoProvider)}
+									onConnect={() => nangoConnect(adapter.integration)}
 									onDisconnect={() => {
 										if (activeIntegration) {
-											nangoDisconnect(adapter.integration as NangoProvider, activeIntegration.id);
+											nangoDisconnect(adapter.integration, activeIntegration.id);
 										}
 									}}
 								/>
