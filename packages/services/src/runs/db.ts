@@ -6,9 +6,11 @@ import {
 	and,
 	automationRunEvents,
 	automationRuns,
+	automations,
 	desc,
 	eq,
 	getDb,
+	gte,
 	inArray,
 	isNull,
 	lt,
@@ -356,4 +358,75 @@ export async function listRunsAssignedToUser(
 	});
 
 	return runs as RunListItem[];
+}
+
+// ============================================
+// Org-level pending runs (attention tray)
+// ============================================
+
+/** Terminal statuses that need human attention. */
+const ATTENTION_STATUSES = ["failed", "needs_human", "timed_out"];
+
+export interface PendingRunSummary {
+	id: string;
+	automationId: string;
+	automationName: string;
+	status: string;
+	statusReason: string | null;
+	errorMessage: string | null;
+	sessionId: string | null;
+	queuedAt: Date;
+	completedAt: Date | null;
+	triggerProvider: string | null;
+	triggerName: string | null;
+	triggerTitle: string | null;
+}
+
+export async function listOrgPendingRuns(
+	orgId: string,
+	options: { limit?: number; maxAgeDays?: number } = {},
+): Promise<PendingRunSummary[]> {
+	const db = getDb();
+	const limit = Math.min(options.limit ?? 20, 50);
+	const maxAgeDays = options.maxAgeDays ?? 7;
+	const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000);
+
+	const rows = await db
+		.select({
+			id: automationRuns.id,
+			automationId: automationRuns.automationId,
+			automationName: automations.name,
+			status: automationRuns.status,
+			statusReason: automationRuns.statusReason,
+			errorMessage: automationRuns.errorMessage,
+			sessionId: automationRuns.sessionId,
+			queuedAt: automationRuns.queuedAt,
+			completedAt: automationRuns.completedAt,
+		})
+		.from(automationRuns)
+		.innerJoin(automations, eq(automationRuns.automationId, automations.id))
+		.where(
+			and(
+				eq(automationRuns.organizationId, orgId),
+				inArray(automationRuns.status, ATTENTION_STATUSES),
+				gte(automationRuns.createdAt, cutoff),
+			),
+		)
+		.orderBy(desc(automationRuns.completedAt))
+		.limit(limit);
+
+	return rows.map((r) => ({
+		id: r.id,
+		automationId: r.automationId,
+		automationName: r.automationName,
+		status: r.status,
+		statusReason: r.statusReason,
+		errorMessage: r.errorMessage,
+		sessionId: r.sessionId,
+		queuedAt: r.queuedAt,
+		completedAt: r.completedAt,
+		triggerProvider: null,
+		triggerName: null,
+		triggerTitle: null,
+	}));
 }

@@ -264,6 +264,24 @@ export const AutomationRunSchema = z.object({
 
 export type AutomationRun = z.infer<typeof AutomationRunSchema>;
 
+// Pending run summary schema (for attention tray)
+export const PendingRunSummarySchema = z.object({
+	id: z.string().uuid(),
+	automation_id: z.string().uuid(),
+	automation_name: z.string(),
+	status: z.enum(["failed", "needs_human", "timed_out"]),
+	status_reason: z.string().nullable(),
+	error_message: z.string().nullable(),
+	session_id: z.string().uuid().nullable(),
+	queued_at: z.string(),
+	completed_at: z.string().nullable(),
+	trigger_provider: z.string().nullable(),
+	trigger_name: z.string().nullable(),
+	trigger_title: z.string().nullable(),
+});
+
+export type PendingRunSummary = z.infer<typeof PendingRunSummarySchema>;
+
 // Trigger event action schema (tool execution audit log)
 export const AutomationEventActionSchema = z.object({
 	id: z.string().uuid(),

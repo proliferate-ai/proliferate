@@ -30,7 +30,8 @@ import {
 	XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { use, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { use, useEffect, useState } from "react";
 
 // ============================================
 // Helpers
@@ -402,8 +403,17 @@ export default function AutomationRunsPage({
 	params: Promise<{ id: string }>;
 }) {
 	const { id: automationId } = use(params);
+	const searchParams = useSearchParams();
+	const deepLinkRunId = searchParams.get("runId");
 	const [statusFilter, setStatusFilter] = useState<string[]>(["all"]);
-	const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+	const [expandedRunId, setExpandedRunId] = useState<string | null>(deepLinkRunId);
+
+	// Auto-expand deep-linked run when data loads
+	useEffect(() => {
+		if (deepLinkRunId) {
+			setExpandedRunId(deepLinkRunId);
+		}
+	}, [deepLinkRunId]);
 
 	const filterValue = statusFilter.includes("all")
 		? undefined

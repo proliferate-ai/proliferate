@@ -13,6 +13,7 @@ import {
 	useComposerRuntime,
 	useThreadRuntime,
 } from "@assistant-ui/react";
+import type { ActionApprovalRequestMessage } from "@proliferate/shared";
 import type { ModelId } from "@proliferate/shared";
 import {
 	ArrowUp,
@@ -29,6 +30,7 @@ import type { FC } from "react";
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
+import { InboxTray } from "./inbox-tray";
 import { allToolUIs } from "./tool-ui";
 
 // Shared markdown components for consistent rendering
@@ -238,6 +240,9 @@ interface ThreadProps {
 	onSnapshot?: () => void;
 	isSnapshotting?: boolean;
 	showSnapshot?: boolean;
+	sessionId?: string;
+	token?: string | null;
+	pendingApprovals?: ActionApprovalRequestMessage["payload"][];
 }
 
 export const Thread: FC<ThreadProps> = ({
@@ -246,6 +251,9 @@ export const Thread: FC<ThreadProps> = ({
 	onSnapshot,
 	isSnapshotting,
 	showSnapshot = false,
+	sessionId,
+	token,
+	pendingApprovals,
 }) => {
 	return (
 		<ThreadPrimitive.Root className="flex h-full flex-col">
@@ -278,6 +286,15 @@ export const Thread: FC<ThreadProps> = ({
 					</div>
 				</ThreadPrimitive.If>
 			</ThreadPrimitive.Viewport>
+
+			{/* Attention tray — between viewport and composer */}
+			{sessionId && (
+				<InboxTray
+					sessionId={sessionId}
+					token={token ?? null}
+					pendingApprovals={pendingApprovals ?? []}
+				/>
+			)}
 
 			{/* Fixed composer at bottom */}
 			<div className="shrink-0 px-3 pb-3 pt-2">

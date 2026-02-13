@@ -22,6 +22,7 @@ import {
 	CreateAutomationInputSchema,
 	CreateAutomationScheduleInputSchema,
 	CreateAutomationTriggerInputSchema,
+	PendingRunSummarySchema,
 	ScheduleSchema,
 	type TriggerProviderSchema,
 	UpdateAutomationInputSchema,
@@ -427,6 +428,47 @@ export const automationsRouter = {
 					message: "Failed to remove connection",
 				});
 			}
+		}),
+
+	// ============================================
+	// Org-level pending runs (attention tray)
+	// ============================================
+
+	/**
+	 * List runs needing attention across the org (failed, needs_human, timed_out).
+	 * Used by the in-session attention tray.
+	 */
+	listOrgPendingRuns: orgProcedure
+		.input(
+			z
+				.object({
+					limit: z.number().int().positive().max(50).optional(),
+					maxAgeDays: z.number().int().positive().max(30).optional(),
+				})
+				.optional(),
+		)
+		.output(z.object({ runs: z.array(PendingRunSummarySchema) }))
+		.handler(async ({ input, context }) => {
+			const pendingRuns = await runs.listOrgPendingRuns(context.orgId, {
+				limit: input?.limit,
+				maxAgeDays: input?.maxAgeDays,
+			});
+			return {
+				runs: pendingRuns.map((r) => ({
+					id: r.id,
+					automation_id: r.automationId,
+					automation_name: r.automationName,
+					status: r.status as "failed" | "needs_human" | "timed_out",
+					status_reason: r.statusReason,
+					error_message: r.errorMessage,
+					session_id: r.sessionId,
+					queued_at: r.queuedAt.toISOString(),
+					completed_at: r.completedAt?.toISOString() ?? null,
+					trigger_provider: r.triggerProvider,
+					trigger_name: r.triggerName,
+					trigger_title: r.triggerTitle,
+				})),
+			};
 		}),
 
 	// ============================================

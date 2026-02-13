@@ -338,6 +338,15 @@ export async function listRunsAssignedToUser(
 	return runsDb.listRunsAssignedToUser(userId, orgId);
 }
 
+export type { PendingRunSummary } from "./db";
+
+export async function listOrgPendingRuns(
+	orgId: string,
+	options?: { limit?: number; maxAgeDays?: number },
+): Promise<runsDb.PendingRunSummary[]> {
+	return runsDb.listOrgPendingRuns(orgId, options);
+}
+
 // ============================================
 // Manual run resolution
 // ============================================

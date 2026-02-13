@@ -200,6 +200,16 @@ export function useMyClaimedRuns() {
 	});
 }
 
+export function useOrgPendingRuns(options?: { limit?: number; maxAgeDays?: number }) {
+	return useQuery({
+		...orpc.automations.listOrgPendingRuns.queryOptions({
+			input: options ?? {},
+		}),
+		refetchInterval: 30_000,
+		select: (data) => data.runs,
+	});
+}
+
 // ============================================
 // Trigger Hooks
 // ============================================

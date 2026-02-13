@@ -481,7 +481,19 @@ try {
 
 **S3 config:** `S3_BUCKET`, `S3_REGION`, optional `S3_ENDPOINT_URL`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`. Source: `apps/worker/src/automation/artifacts.ts`
 
-### 6.10 Run Claiming & Assignment — `Partial`
+### 6.10 Org Pending Runs Query — `Implemented`
+
+**What it does:** Provides an org-scoped query for runs in attention-requiring states (`failed`, `needs_human`, `timed_out`), surfaced in the inline attention inbox tray.
+
+**Query:** `listOrgPendingRuns(orgId, { limit?, maxAgeDays? })` — returns runs matching attention statuses within the age window (default 7 days, max 50 rows), joined with automation name. Source: `packages/services/src/runs/db.ts:listOrgPendingRuns`
+
+**oRPC route:** `automations.listOrgPendingRuns` — org-scoped procedure, optional `limit` (1–50) and `maxAgeDays` (1–30). Returns `{ runs: PendingRunSummary[] }` with snake_case fields. Source: `apps/web/src/server/routers/automations.ts`
+
+**Frontend:** Consumed by `useOrgPendingRuns` hook (30s polling interval), merged into the attention inbox tray alongside pending action approvals. Source: `apps/web/src/hooks/use-automations.ts`, `apps/web/src/hooks/use-attention-inbox.ts`
+
+**Files touched:** `packages/services/src/runs/db.ts`, `packages/services/src/runs/service.ts`, `apps/web/src/server/routers/automations.ts`, `apps/web/src/hooks/use-automations.ts`
+
+### 6.11 Run Claiming & Assignment — `Partial`
 
 **What it does:** Lets users claim runs for manual review.
 

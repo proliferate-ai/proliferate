@@ -357,10 +357,16 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 
 		case "action_approval_request":
 			if (data.payload) {
-				ctx.setPendingApprovals((prev) => [
-					...prev,
-					data.payload as ActionApprovalRequestMessage["payload"],
-				]);
+				const incoming = data.payload as ActionApprovalRequestMessage["payload"];
+				ctx.setPendingApprovals((prev) => {
+					const existing = prev.findIndex((a) => a.invocationId === incoming.invocationId);
+					if (existing >= 0) {
+						const updated = [...prev];
+						updated[existing] = incoming;
+						return updated;
+					}
+					return [...prev, incoming];
+				});
 			}
 			break;
 

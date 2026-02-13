@@ -397,11 +397,13 @@ try {
 
 ### 6.9 Actions List (Org Inbox) — `Implemented`
 
-**What it does:** oRPC route for querying action invocations at the org level.
+**What it does:** oRPC route for querying action invocations at the org level, consumed by the inline attention inbox tray.
 
 **Route:** `actions.list` — org-scoped procedure accepting optional `status` filter and `limit`/`offset` pagination (default 50/0, max 100). Returns invocations with session title joined, plus total count for pagination. Dates serialized to ISO strings.
 
-**Files touched:** `apps/web/src/server/routers/actions.ts`, `packages/services/src/actions/db.ts:listByOrg`
+**Frontend surface:** Pending approvals are surfaced via an inline **inbox tray** rendered inside the coding session thread (`apps/web/src/components/coding-session/inbox-tray.tsx`). The tray merges three data sources: current-session WebSocket approval requests, org-level polled pending approvals (via `useOrgActions`), and org-level pending automation runs (via `useOrgPendingRuns`). The merge logic deduplicates WebSocket vs polled approvals by `invocationId` and sorts all items newest-first. There is no standalone actions page — sidebar navigation was removed in favor of this inline tray.
+
+**Files touched:** `apps/web/src/server/routers/actions.ts`, `packages/services/src/actions/db.ts:listByOrg`, `apps/web/src/components/coding-session/inbox-tray.tsx`, `apps/web/src/hooks/use-attention-inbox.ts`
 
 ### 6.10 Integration Guide Flow — `Implemented`
 
