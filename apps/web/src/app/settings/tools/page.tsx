@@ -775,13 +775,16 @@ function ConnectorForm({
 		validateMutation.mutate({ connector: buildConnector() });
 	};
 
-	const handleSave = () => {
+	const handleSave = async () => {
 		if (!name.trim() || !url.trim() || !secretKey.trim()) {
 			setSaveError("Name, URL, and secret are required.");
 			return;
 		}
 		setSaveError(null);
-		onSave(buildConnector(), isNew);
+		const connector = buildConnector();
+		const result = await validateMutation.mutateAsync({ connector });
+		if (!result.ok) return;
+		onSave(connector, isNew);
 	};
 
 	const canValidate = !!url.trim() && !!secretKey.trim();
@@ -913,8 +916,9 @@ function ConnectorForm({
 					<Button variant="ghost" size="sm" onClick={onCancel}>
 						Cancel
 					</Button>
-					<Button size="sm" onClick={handleSave}>
-						{isNew ? "Add" : "Save"}
+					<Button size="sm" onClick={handleSave} disabled={validateMutation.isPending}>
+						{validateMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+						{isNew ? "Test & Add" : "Test & Save"}
 					</Button>
 				</div>
 			</div>
