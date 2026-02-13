@@ -24,6 +24,23 @@ export function useCreateOrgConnector() {
 	);
 }
 
+export function useCreateOrgConnectorWithSecret() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.integrations.createConnectorWithSecret.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({
+					queryKey: orpc.integrations.listConnectors.key(),
+				});
+				queryClient.invalidateQueries({
+					queryKey: orpc.secrets.list.key(),
+				});
+			},
+		}),
+	);
+}
+
 export function useUpdateOrgConnector() {
 	const queryClient = useQueryClient();
 

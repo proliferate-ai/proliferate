@@ -13,12 +13,13 @@ import {
 } from "@/components/ui/select";
 import {
 	useCreateOrgConnector,
+	useCreateOrgConnectorWithSecret,
 	useDeleteOrgConnector,
 	useOrgConnectors,
 	useUpdateOrgConnector,
 	useValidateOrgConnector,
 } from "@/hooks/use-org-connectors";
-import { useCreateSecret, useSecrets } from "@/hooks/use-secrets";
+import { useSecrets } from "@/hooks/use-secrets";
 import {
 	CONNECTOR_PRESETS,
 	type ConnectorAuth,
@@ -28,46 +29,21 @@ import {
 import {
 	AlertTriangle,
 	Check,
-	ChevronDown,
-	ChevronRight,
 	ExternalLink,
 	Loader2,
 	Pencil,
 	Plug,
-	Plus,
 	Trash2,
 	Unplug,
 } from "lucide-react";
 import { useCallback, useState } from "react";
 
-type QuickPresetKey = "context7" | "posthog";
+// ============================================
+// Preset categorization
+// ============================================
 
-const QUICK_PRESET_DETAILS: Record<
-	QuickPresetKey,
-	{
-		recommendedSecretKey: string;
-		docsUrl: string;
-		docsLabel: string;
-	}
-> = {
-	context7: {
-		recommendedSecretKey: "CONTEXT7_API_KEY",
-		docsUrl: "https://context7.com/docs/api",
-		docsLabel: "Get a Context7 API key",
-	},
-	posthog: {
-		recommendedSecretKey: "POSTHOG_API_KEY",
-		docsUrl: "https://posthog.com/docs/model-context-protocol",
-		docsLabel: "Get a PostHog API key",
-	},
-};
-
-function getQuickPresetDetails(key: string | null) {
-	if (key === "context7" || key === "posthog") {
-		return QUICK_PRESET_DETAILS[key];
-	}
-	return null;
-}
+const quickPresets = CONNECTOR_PRESETS.filter((p) => p.quickSetup);
+const advancedPresets = CONNECTOR_PRESETS.filter((p) => !p.quickSetup);
 
 // ============================================
 // Main Page
@@ -75,7 +51,8 @@ function getQuickPresetDetails(key: string | null) {
 
 export default function ConnectorsPage() {
 	const [editingId, setEditingId] = useState<string | null>(null);
-	const [showAdd, setShowAdd] = useState(false);
+	const [advancedPreset, setAdvancedPreset] = useState<ConnectorPreset | null>(null);
+	const [quickSetupPreset, setQuickSetupPreset] = useState<ConnectorPreset | null>(null);
 
 	const { data: connectors, isLoading } = useOrgConnectors();
 	const createMutation = useCreateOrgConnector();
@@ -121,7 +98,7 @@ export default function ConnectorsPage() {
 				});
 			}
 			setEditingId(null);
-			setShowAdd(false);
+			setAdvancedPreset(null);
 		},
 		[createMutation, updateMutation],
 	);
@@ -141,69 +118,285 @@ export default function ConnectorsPage() {
 	const list = connectors ?? [];
 
 	return (
-		<SettingsSection title="Connectors">
-			<p className="text-sm text-muted-foreground -mt-1 mb-2">
-				Connect remote MCP servers to give your agents access to external tools. All sessions in
-				this organization share these connectors.
-			</p>
-			<SettingsCard>
-				{list.length === 0 && !showAdd ? (
-					<EmptyState onAdd={() => setShowAdd(true)} />
+		<div className="space-y-6">
+			{/* Section 1: Add a tool */}
+			<SettingsSection title="Add a tool">
+				<p className="text-sm text-muted-foreground -mt-1 mb-3">
+					Connect remote MCP servers to give your agents access to external tools.
+				</p>
+
+				{/* Quick-setup preset grid */}
+				<div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+					{quickPresets.map((preset) => (
+						<button
+							key={preset.key}
+							type="button"
+							className="text-left p-3 rounded-lg border border-border hover:border-foreground/20 hover:bg-muted/50 transition-colors"
+							onClick={() => {
+								setQuickSetupPreset(preset);
+								setAdvancedPreset(null);
+							}}
+						>
+							<p className="text-sm font-medium">{preset.name}</p>
+							<p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+								{preset.description}
+							</p>
+						</button>
+					))}
+
+					{/* Advanced presets */}
+					{advancedPresets.map((preset) => (
+						<button
+							key={preset.key}
+							type="button"
+							className="text-left p-3 rounded-lg border border-dashed border-border hover:border-foreground/20 hover:bg-muted/50 transition-colors"
+							onClick={() => {
+								setAdvancedPreset(preset);
+								setQuickSetupPreset(null);
+							}}
+						>
+							<p className="text-sm font-medium">{preset.name}</p>
+							<p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+								{preset.description}
+							</p>
+						</button>
+					))}
+				</div>
+
+				{/* Quick-setup inline form */}
+				{quickSetupPreset && (
+					<div className="mt-3">
+						<QuickSetupForm preset={quickSetupPreset} onClose={() => setQuickSetupPreset(null)} />
+					</div>
+				)}
+
+				{/* Advanced add form */}
+				{advancedPreset && !quickSetupPreset && (
+					<div className="mt-3">
+						<SettingsCard>
+							<ConnectorForm
+								isNew
+								preset={advancedPreset}
+								onSave={handleSave}
+								onCancel={() => setAdvancedPreset(null)}
+							/>
+						</SettingsCard>
+					</div>
+				)}
+			</SettingsSection>
+
+			{/* Section 2: Connected connectors */}
+			<SettingsSection title="Connected">
+				{list.length === 0 ? (
+					<div className="rounded-lg border border-border/80 bg-background p-6 text-center">
+						<Unplug className="h-6 w-6 mx-auto mb-2 text-muted-foreground/40" />
+						<p className="text-sm text-muted-foreground">
+							No connectors configured yet. Add a tool above to get started.
+						</p>
+					</div>
 				) : (
-					<div className="divide-y divide-border">
-						{list.map((c) =>
-							editingId === c.id ? (
-								<ConnectorForm
-									key={c.id}
-									initial={c}
-									isNew={false}
-									onSave={handleSave}
-									onCancel={() => setEditingId(null)}
-								/>
-							) : (
-								<ConnectorRow
-									key={c.id}
-									connector={c}
-									onEdit={() => setEditingId(c.id)}
-									onRemove={() => handleRemove(c.id)}
-									onToggle={() => handleToggle(c)}
-								/>
-							),
-						)}
-						{showAdd && (
-							<ConnectorForm isNew onSave={handleSave} onCancel={() => setShowAdd(false)} />
-						)}
-					</div>
+					<SettingsCard>
+						<div className="divide-y divide-border">
+							{list.map((c) =>
+								editingId === c.id ? (
+									<ConnectorForm
+										key={c.id}
+										initial={c}
+										isNew={false}
+										onSave={handleSave}
+										onCancel={() => setEditingId(null)}
+									/>
+								) : (
+									<ConnectorRow
+										key={c.id}
+										connector={c}
+										onEdit={() => setEditingId(c.id)}
+										onRemove={() => handleRemove(c.id)}
+										onToggle={() => handleToggle(c)}
+									/>
+								),
+							)}
+						</div>
+					</SettingsCard>
 				)}
-				{list.length > 0 && !showAdd && !editingId && (
-					<div className="p-3 border-t border-border">
-						<Button variant="outline" size="sm" onClick={() => setShowAdd(true)}>
-							<Plus className="h-3.5 w-3.5 mr-1.5" />
-							Add connector
-						</Button>
-					</div>
-				)}
-			</SettingsCard>
-		</SettingsSection>
+			</SettingsSection>
+		</div>
 	);
 }
 
 // ============================================
-// EmptyState
+// QuickSetupForm
 // ============================================
 
-function EmptyState({ onAdd }: { onAdd: () => void }) {
+function QuickSetupForm({
+	preset,
+	onClose,
+}: {
+	preset: ConnectorPreset;
+	onClose: () => void;
+}) {
+	const [useExisting, setUseExisting] = useState(false);
+	const [secretValue, setSecretValue] = useState("");
+	const [existingSecretKey, setExistingSecretKey] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	const [successKey, setSuccessKey] = useState<string | null>(null);
+	const quickMutation = useCreateOrgConnectorWithSecret();
+	const { data: orgSecrets } = useSecrets();
+	const secretOptions = orgSecrets ?? [];
+
+	const handleSubmit = async () => {
+		if (useExisting) {
+			if (!existingSecretKey) {
+				setError("Select an existing secret.");
+				return;
+			}
+		} else {
+			if (!secretValue.trim()) {
+				setError("API key is required.");
+				return;
+			}
+		}
+		setError(null);
+		try {
+			const result = await quickMutation.mutateAsync({
+				presetKey: preset.key,
+				...(useExisting ? { secretKey: existingSecretKey } : { secretValue: secretValue.trim() }),
+			});
+			setSecretValue("");
+			setSuccessKey(result.resolvedSecretKey);
+			setTimeout(onClose, 1500);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Failed to create connector");
+		}
+	};
+
+	if (successKey) {
+		return (
+			<div className="rounded-lg border border-green-600/30 bg-green-600/5 p-4">
+				<div className="flex items-center gap-2">
+					<Check className="h-4 w-4 text-green-600" />
+					<span className="text-sm font-medium text-green-600">{preset.name} connected</span>
+				</div>
+				<p className="text-xs text-muted-foreground mt-1">
+					Secret key: <code className="font-mono">{successKey}</code>
+				</p>
+			</div>
+		);
+	}
+
 	return (
-		<div className="p-8 text-center">
-			<Unplug className="h-8 w-8 mx-auto mb-3 text-muted-foreground/40" />
-			<p className="text-sm font-medium mb-1">No connectors configured</p>
-			<p className="text-xs text-muted-foreground mb-4">
-				Add a remote MCP server to extend your agents with external tools.
-			</p>
-			<Button variant="outline" size="sm" onClick={onAdd}>
-				<Plus className="h-3.5 w-3.5 mr-1.5" />
-				Add connector
-			</Button>
+		<div className="rounded-lg border border-border/80 bg-background p-4">
+			<div className="flex items-center justify-between mb-3">
+				<div>
+					<h4 className="text-sm font-medium">{preset.name}</h4>
+					<p className="text-xs text-muted-foreground">{preset.description}</p>
+				</div>
+				{preset.docsUrl && (
+					<a
+						href={preset.docsUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+					>
+						Docs
+						<ExternalLink className="h-3 w-3" />
+					</a>
+				)}
+			</div>
+
+			<div className="space-y-3">
+				{/* Toggle: new key vs existing */}
+				{secretOptions.length > 0 && (
+					<div className="flex items-center gap-3 text-xs">
+						<button
+							type="button"
+							className={`pb-0.5 ${!useExisting ? "text-foreground border-b border-foreground font-medium" : "text-muted-foreground"}`}
+							onClick={() => setUseExisting(false)}
+						>
+							New API key
+						</button>
+						<button
+							type="button"
+							className={`pb-0.5 ${useExisting ? "text-foreground border-b border-foreground font-medium" : "text-muted-foreground"}`}
+							onClick={() => setUseExisting(true)}
+						>
+							Use existing secret
+						</button>
+					</div>
+				)}
+
+				{useExisting ? (
+					<div>
+						<Label className="text-xs">Existing secret</Label>
+						<Select value={existingSecretKey} onValueChange={setExistingSecretKey}>
+							<SelectTrigger className="h-8 text-sm mt-1">
+								<SelectValue placeholder="Select a secret..." />
+							</SelectTrigger>
+							<SelectContent>
+								{secretOptions.map((s) => (
+									<SelectItem key={s.key} value={s.key}>
+										{s.key}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+				) : (
+					<div>
+						<Label className="text-xs">{preset.secretLabel || "API key"}</Label>
+						<Input
+							type="password"
+							value={secretValue}
+							onChange={(e) => setSecretValue(e.target.value)}
+							placeholder="Paste your API key"
+							className="h-8 text-sm mt-1 font-mono"
+							autoFocus
+						/>
+					</div>
+				)}
+
+				{/* Show defaults for transparency */}
+				<div className="text-xs text-muted-foreground space-y-0.5">
+					<p>
+						<span className="text-muted-foreground/70">URL:</span> {preset.defaults.url}
+					</p>
+					<p>
+						<span className="text-muted-foreground/70">Auth:</span>{" "}
+						{preset.defaults.auth.type === "bearer"
+							? "Bearer token"
+							: `Custom header (${preset.defaults.auth.type === "custom_header" ? preset.defaults.auth.headerName : ""})`}
+					</p>
+					<p>
+						<span className="text-muted-foreground/70">Risk:</span>{" "}
+						{preset.defaults.riskPolicy?.defaultRisk ?? "write"}
+					</p>
+					{!useExisting && (
+						<p>
+							<span className="text-muted-foreground/70">Secret key:</span>{" "}
+							{preset.recommendedSecretKey}
+						</p>
+					)}
+				</div>
+
+				{error && <p className="text-xs text-destructive">{error}</p>}
+
+				<div className="flex items-center justify-end gap-2 pt-1">
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={() => {
+							setSecretValue("");
+							onClose();
+						}}
+					>
+						Cancel
+					</Button>
+					<Button size="sm" onClick={handleSubmit} disabled={quickMutation.isPending}>
+						{quickMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+						Add {preset.name}
+					</Button>
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -274,380 +467,188 @@ function ConnectorRow({
 }
 
 // ============================================
-// PresetPicker
-// ============================================
-
-function PresetPicker({ onSelect }: { onSelect: (preset: ConnectorPreset) => void }) {
-	const [expanded, setExpanded] = useState(false);
-
-	return (
-		<div className="mb-4">
-			<button
-				type="button"
-				className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-				onClick={() => setExpanded(!expanded)}
-			>
-				{expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-				Start from a preset
-			</button>
-			{expanded && (
-				<div className="mt-2 grid grid-cols-2 gap-2">
-					{CONNECTOR_PRESETS.map((p) => (
-						<button
-							key={p.key}
-							type="button"
-							className="text-left p-2 rounded-md border border-border hover:bg-muted/50 transition-colors"
-							onClick={() => onSelect(p)}
-						>
-							<p className="text-xs font-medium">{p.name}</p>
-							<p className="text-[11px] text-muted-foreground">{p.description}</p>
-						</button>
-					))}
-				</div>
-			)}
-		</div>
-	);
-}
-
-// ============================================
-// ConnectorForm
+// ConnectorForm (Advanced)
 // ============================================
 
 function ConnectorForm({
 	initial,
 	isNew,
+	preset,
 	onSave,
 	onCancel,
 }: {
 	initial?: ConnectorConfig;
 	isNew: boolean;
-	onSave: (connector: ConnectorConfig, isNew: boolean) => Promise<void> | void;
+	preset?: ConnectorPreset;
+	onSave: (connector: ConnectorConfig, isNew: boolean) => void;
 	onCancel: () => void;
 }) {
-	const [name, setName] = useState(initial?.name ?? "");
-	const [url, setUrl] = useState(initial?.url ?? "");
+	const defaults = preset?.defaults;
+	const [name, setName] = useState(initial?.name ?? defaults?.name ?? "");
+	const [url, setUrl] = useState(initial?.url ?? defaults?.url ?? "");
 	const [authType, setAuthType] = useState<"bearer" | "custom_header">(
-		initial?.auth.type ?? "bearer",
+		initial?.auth.type ?? defaults?.auth.type ?? "bearer",
 	);
-	const [secretKey, setSecretKey] = useState(initial?.auth.secretKey ?? "");
+	const [secretKey, setSecretKey] = useState(
+		initial?.auth.secretKey ?? defaults?.auth.secretKey ?? "",
+	);
 	const [headerName, setHeaderName] = useState(
-		initial?.auth.type === "custom_header" ? initial.auth.headerName : "",
+		initial?.auth.type === "custom_header"
+			? initial.auth.headerName
+			: defaults?.auth.type === "custom_header"
+				? defaults.auth.headerName
+				: "",
 	);
 	const [defaultRisk, setDefaultRisk] = useState<"read" | "write" | "danger">(
-		initial?.riskPolicy?.defaultRisk ?? "write",
+		initial?.riskPolicy?.defaultRisk ?? defaults?.riskPolicy?.defaultRisk ?? "write",
 	);
-	const [enabled, setEnabled] = useState(initial?.enabled ?? true);
-	const [selectedPresetKey, setSelectedPresetKey] = useState<string | null>(null);
-	const [inlineApiKey, setInlineApiKey] = useState("");
-	const [guidance, setGuidance] = useState<string | null>(null);
+	const [enabled, setEnabled] = useState(initial?.enabled ?? defaults?.enabled ?? true);
 	const [saveError, setSaveError] = useState<string | null>(null);
-	const [isSaving, setIsSaving] = useState(false);
 
 	const validateMutation = useValidateOrgConnector();
 	const { data: orgSecrets } = useSecrets();
-	const createSecret = useCreateSecret();
 	const secretOptions = orgSecrets ?? [];
 	const hasListedSecret = secretOptions.some((s) => s.key === secretKey);
-	const quickPreset = isNew ? getQuickPresetDetails(selectedPresetKey) : null;
 
-	const buildAuth = useCallback(
-		(resolvedSecretKey: string): ConnectorAuth => {
-			if (authType === "custom_header") {
-				return {
-					type: "custom_header",
-					secretKey: resolvedSecretKey,
-					headerName: headerName || "X-Api-Key",
-				};
-			}
-			return { type: "bearer", secretKey: resolvedSecretKey };
-		},
-		[authType, headerName],
-	);
-
-	const buildConnector = useCallback(
-		(resolvedSecretKey: string): ConnectorConfig => {
-			return {
-				id: initial?.id ?? crypto.randomUUID(),
-				name,
-				transport: "remote_http",
-				url,
-				auth: buildAuth(resolvedSecretKey),
-				riskPolicy: { defaultRisk },
-				enabled,
-			};
-		},
-		[initial, name, url, buildAuth, defaultRisk, enabled],
-	);
-
-	const resolveSecretKeyForSubmit = useCallback(async (): Promise<string | null> => {
-		const resolvedSecretKey = (secretKey || quickPreset?.recommendedSecretKey || "").trim();
-		if (!resolvedSecretKey) {
-			setSaveError("Secret key is required.");
-			return null;
+	const buildAuth = useCallback((): ConnectorAuth => {
+		if (authType === "custom_header") {
+			return { type: "custom_header", secretKey, headerName: headerName || "X-Api-Key" };
 		}
+		return { type: "bearer", secretKey };
+	}, [authType, secretKey, headerName]);
 
-		if (!inlineApiKey.trim()) {
-			return resolvedSecretKey;
-		}
+	const buildConnector = useCallback((): ConnectorConfig => {
+		return {
+			id: initial?.id ?? crypto.randomUUID(),
+			name,
+			transport: "remote_http",
+			url,
+			auth: buildAuth(),
+			riskPolicy: { defaultRisk },
+			enabled,
+		};
+	}, [initial, name, url, buildAuth, defaultRisk, enabled]);
 
-		try {
-			await createSecret.mutateAsync({
-				key: resolvedSecretKey,
-				value: inlineApiKey.trim(),
-				description: `API key for ${name || "MCP connector"}`,
-			});
-			setInlineApiKey("");
-			return resolvedSecretKey;
-		} catch (err) {
-			const message = err instanceof Error ? err.message : "Failed to save API key as secret";
-			const normalized = message.toLowerCase();
-			if (normalized.includes("already exists") || normalized.includes("duplicate")) {
-				setSaveError(
-					`Secret "${resolvedSecretKey}" already exists. Leave API key blank to use it, or choose a different secret key name.`,
-				);
-				return null;
-			}
-			setSaveError(message);
-			return null;
-		}
-	}, [createSecret, inlineApiKey, name, quickPreset, secretKey]);
-
-	const handlePreset = (preset: ConnectorPreset) => {
-		setName(preset.defaults.name);
-		setUrl(preset.defaults.url);
-		setAuthType(preset.defaults.auth.type);
-		setSelectedPresetKey(preset.key);
-		const details = getQuickPresetDetails(preset.key);
-		setSecretKey(details?.recommendedSecretKey ?? preset.defaults.auth.secretKey);
-		if (preset.defaults.auth.type === "custom_header") {
-			setHeaderName(preset.defaults.auth.headerName);
-		} else {
-			setHeaderName("");
-		}
-		setDefaultRisk(preset.defaults.riskPolicy?.defaultRisk ?? "write");
-		setEnabled(preset.defaults.enabled);
-		setGuidance(preset.guidance ?? null);
-		setInlineApiKey("");
+	const handleValidate = () => {
 		setSaveError(null);
+		validateMutation.mutate({ connector: buildConnector() });
 	};
 
-	const handleValidate = async () => {
-		setSaveError(null);
-		const resolvedSecretKey = await resolveSecretKeyForSubmit();
-		if (!resolvedSecretKey) return;
-		setSecretKey(resolvedSecretKey);
-		validateMutation.mutate({ connector: buildConnector(resolvedSecretKey) });
-	};
-
-	const handleSave = async () => {
-		if (!name.trim() || !url.trim()) {
-			setSaveError("Name and URL are required.");
+	const handleSave = () => {
+		if (!name.trim() || !url.trim() || !secretKey.trim()) {
+			setSaveError("Name, URL, and secret are required.");
 			return;
 		}
 		setSaveError(null);
-		const resolvedSecretKey = await resolveSecretKeyForSubmit();
-		if (!resolvedSecretKey) return;
-		setSecretKey(resolvedSecretKey);
-
-		setIsSaving(true);
-		try {
-			await onSave(buildConnector(resolvedSecretKey), isNew);
-		} catch (err) {
-			setSaveError(err instanceof Error ? err.message : "Failed to save connector");
-		} finally {
-			setIsSaving(false);
-		}
+		onSave(buildConnector(), isNew);
 	};
 
-	const canValidate = !!url.trim() && !!(secretKey.trim() || quickPreset?.recommendedSecretKey);
+	const canValidate = !!url.trim() && !!secretKey.trim();
 
 	return (
 		<div className="p-4 space-y-4">
-			{isNew && <PresetPicker onSelect={handlePreset} />}
-
-			{guidance && (
-				<div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-md">{guidance}</div>
-			)}
-
-			{quickPreset ? (
-				<div className="space-y-3 rounded-md border border-border p-3 bg-muted/30">
-					<div className="flex items-center justify-between gap-2">
-						<p className="text-xs text-muted-foreground">
-							Quick setup: paste your API key and add the connector.
-						</p>
-						<a
-							href={quickPreset.docsUrl}
-							target="_blank"
-							rel="noopener noreferrer"
-							className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-						>
-							{quickPreset.docsLabel}
-							<ExternalLink className="h-3 w-3" />
-						</a>
-					</div>
-
-					<div className="grid grid-cols-2 gap-3">
-						<div>
-							<Label className="text-xs">Name</Label>
-							<Input
-								value={name}
-								onChange={(e) => setName(e.target.value)}
-								className="h-8 text-sm mt-1"
-							/>
-						</div>
-						<div>
-							<Label className="text-xs">URL</Label>
-							<Input value={url} readOnly className="h-8 text-sm mt-1 bg-muted/50" />
-						</div>
-					</div>
-
-					<div className="grid grid-cols-2 gap-3">
-						<div>
-							<Label className="text-xs">Secret key name</Label>
-							<Input
-								value={secretKey}
-								onChange={(e) => setSecretKey(e.target.value)}
-								placeholder={quickPreset.recommendedSecretKey}
-								className="h-8 text-sm mt-1"
-							/>
-						</div>
-						<div>
-							<Label className="text-xs">API key value</Label>
-							<Input
-								type="password"
-								value={inlineApiKey}
-								onChange={(e) => setInlineApiKey(e.target.value)}
-								placeholder="Paste API key to save as org secret"
-								className="h-8 text-sm mt-1"
-							/>
-						</div>
-					</div>
-
-					<div>
-						<Label className="text-xs">Or use existing secret</Label>
-						<Select
-							value={hasListedSecret ? secretKey : "__custom"}
-							onValueChange={(value) => {
-								if (value !== "__custom") setSecretKey(value);
-							}}
-						>
-							<SelectTrigger className="h-8 text-sm mt-1">
-								<SelectValue placeholder="Select existing secret..." />
-							</SelectTrigger>
-							<SelectContent>
-								{secretOptions.map((s) => (
-									<SelectItem key={s.key} value={s.key}>
-										{s.key}
-									</SelectItem>
-								))}
-								<SelectItem value="__custom">Custom secret key</SelectItem>
-							</SelectContent>
-						</Select>
-						<p className="text-[11px] text-muted-foreground mt-1">
-							Leave API key blank to reuse an existing secret key.
-						</p>
-					</div>
+			{preset?.guidance && (
+				<div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-md">
+					{preset.guidance}
 				</div>
-			) : (
-				<>
-					<div className="grid grid-cols-2 gap-3">
-						<div>
-							<Label className="text-xs">Name</Label>
-							<Input
-								value={name}
-								onChange={(e) => setName(e.target.value)}
-								placeholder="e.g. Notion"
-								className="h-8 text-sm mt-1"
-							/>
-						</div>
-						<div>
-							<Label className="text-xs">URL</Label>
-							<Input
-								value={url}
-								onChange={(e) => setUrl(e.target.value)}
-								placeholder="https://mcp.example.com/mcp"
-								className="h-8 text-sm mt-1"
-							/>
-						</div>
-					</div>
-
-					<div className="grid grid-cols-2 gap-3">
-						<div>
-							<Label className="text-xs">Auth type</Label>
-							<Select
-								value={authType}
-								onValueChange={(v) => setAuthType(v as "bearer" | "custom_header")}
-							>
-								<SelectTrigger className="h-8 text-sm mt-1">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="bearer">Bearer token</SelectItem>
-									<SelectItem value="custom_header">Custom header</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-						<div>
-							<Label className="text-xs">Secret</Label>
-							<Select
-								value={hasListedSecret ? secretKey : "__custom"}
-								onValueChange={(value) => {
-									if (value !== "__custom") setSecretKey(value);
-								}}
-							>
-								<SelectTrigger className="h-8 text-sm mt-1">
-									<SelectValue placeholder="Select a secret..." />
-								</SelectTrigger>
-								<SelectContent>
-									{secretOptions.map((s) => (
-										<SelectItem key={s.key} value={s.key}>
-											{s.key}
-										</SelectItem>
-									))}
-									<SelectItem value="__custom">Custom secret key</SelectItem>
-								</SelectContent>
-							</Select>
-							<Input
-								value={secretKey}
-								onChange={(e) => setSecretKey(e.target.value)}
-								placeholder="Type or paste secret key name"
-								className="h-8 text-sm mt-2"
-							/>
-						</div>
-					</div>
-
-					{authType === "custom_header" && (
-						<div>
-							<Label className="text-xs">Header name</Label>
-							<Input
-								value={headerName}
-								onChange={(e) => setHeaderName(e.target.value)}
-								placeholder="X-Api-Key"
-								className="h-8 text-sm mt-1"
-							/>
-						</div>
-					)}
-
-					<div className="grid grid-cols-2 gap-3">
-						<div>
-							<Label className="text-xs">Default risk level</Label>
-							<Select
-								value={defaultRisk}
-								onValueChange={(v) => setDefaultRisk(v as "read" | "write" | "danger")}
-							>
-								<SelectTrigger className="h-8 text-sm mt-1">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="read">Read (auto-approved)</SelectItem>
-									<SelectItem value="write">Write (requires approval)</SelectItem>
-									<SelectItem value="danger">Danger (always denied)</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-					</div>
-				</>
 			)}
+
+			<div className="grid grid-cols-2 gap-3">
+				<div>
+					<Label className="text-xs">Name</Label>
+					<Input
+						value={name}
+						onChange={(e) => setName(e.target.value)}
+						placeholder="e.g. Notion"
+						className="h-8 text-sm mt-1"
+					/>
+				</div>
+				<div>
+					<Label className="text-xs">URL</Label>
+					<Input
+						value={url}
+						onChange={(e) => setUrl(e.target.value)}
+						placeholder="https://mcp.example.com/mcp"
+						className="h-8 text-sm mt-1"
+					/>
+				</div>
+			</div>
+
+			<div className="grid grid-cols-2 gap-3">
+				<div>
+					<Label className="text-xs">Auth type</Label>
+					<Select
+						value={authType}
+						onValueChange={(v) => setAuthType(v as "bearer" | "custom_header")}
+					>
+						<SelectTrigger className="h-8 text-sm mt-1">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="bearer">Bearer token</SelectItem>
+							<SelectItem value="custom_header">Custom header</SelectItem>
+						</SelectContent>
+					</Select>
+				</div>
+				<div>
+					<Label className="text-xs">Secret</Label>
+					<Select
+						value={hasListedSecret ? secretKey : "__custom"}
+						onValueChange={(value) => {
+							if (value !== "__custom") setSecretKey(value);
+						}}
+					>
+						<SelectTrigger className="h-8 text-sm mt-1">
+							<SelectValue placeholder="Select a secret..." />
+						</SelectTrigger>
+						<SelectContent>
+							{secretOptions.map((s) => (
+								<SelectItem key={s.key} value={s.key}>
+									{s.key}
+								</SelectItem>
+							))}
+							<SelectItem value="__custom">Custom secret key</SelectItem>
+						</SelectContent>
+					</Select>
+					<Input
+						value={secretKey}
+						onChange={(e) => setSecretKey(e.target.value)}
+						placeholder="Type or paste secret key name"
+						className="h-8 text-sm mt-2"
+					/>
+				</div>
+			</div>
+
+			{authType === "custom_header" && (
+				<div>
+					<Label className="text-xs">Header name</Label>
+					<Input
+						value={headerName}
+						onChange={(e) => setHeaderName(e.target.value)}
+						placeholder="X-Api-Key"
+						className="h-8 text-sm mt-1"
+					/>
+				</div>
+			)}
+
+			<div className="grid grid-cols-2 gap-3">
+				<div>
+					<Label className="text-xs">Default risk level</Label>
+					<Select
+						value={defaultRisk}
+						onValueChange={(v) => setDefaultRisk(v as "read" | "write" | "danger")}
+					>
+						<SelectTrigger className="h-8 text-sm mt-1">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="read">Read (auto-approved)</SelectItem>
+							<SelectItem value="write">Write (requires approval)</SelectItem>
+							<SelectItem value="danger">Danger (always denied)</SelectItem>
+						</SelectContent>
+					</Select>
+				</div>
+			</div>
 
 			{/* Validation */}
 			{validateMutation.data && <ValidationResult result={validateMutation.data} />}
@@ -658,9 +659,7 @@ function ConnectorForm({
 					variant="outline"
 					size="sm"
 					onClick={handleValidate}
-					disabled={
-						!canValidate || validateMutation.isPending || isSaving || createSecret.isPending
-					}
+					disabled={!canValidate || validateMutation.isPending}
 				>
 					{validateMutation.isPending ? (
 						<Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -673,14 +672,8 @@ function ConnectorForm({
 					<Button variant="ghost" size="sm" onClick={onCancel}>
 						Cancel
 					</Button>
-					<Button size="sm" onClick={handleSave} disabled={isSaving || createSecret.isPending}>
-						{isSaving || createSecret.isPending ? (
-							<Loader2 className="h-3.5 w-3.5 animate-spin" />
-						) : isNew ? (
-							"Add"
-						) : (
-							"Save"
-						)}
+					<Button size="sm" onClick={handleSave}>
+						{isNew ? "Add" : "Save"}
 					</Button>
 				</div>
 			</div>

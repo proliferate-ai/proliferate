@@ -764,6 +764,54 @@ export const integrationsRouter = {
 		}),
 
 	/**
+	 * Create a new MCP connector with an inline secret from a preset.
+	 * Atomically provisions the secret and connector in one transaction.
+	 * Restricted to admin/owner role.
+	 */
+	createConnectorWithSecret: orgProcedure
+		.input(
+			z.object({
+				presetKey: z.string().min(1),
+				/** Raw API key value. Omit to reuse an existing secret (secretKey required). */
+				secretValue: z.string().min(1).optional(),
+				/** Existing secret key to reuse, or override for the auto-generated key name. */
+				secretKey: z.string().min(1).max(200).optional(),
+				name: z.string().min(1).max(100).optional(),
+				url: z.string().url().optional(),
+				riskPolicy: ConnectorRiskPolicySchema.optional(),
+			}),
+		)
+		.output(
+			z.object({
+				connector: ConnectorConfigSchema,
+				resolvedSecretKey: z.string(),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			await requireConnectorAdmin(context.user.id, context.orgId);
+			try {
+				return await connectors.createConnectorWithSecret({
+					organizationId: context.orgId,
+					createdBy: context.user.id,
+					presetKey: input.presetKey,
+					secretValue: input.secretValue,
+					secretKey: input.secretKey,
+					name: input.name,
+					url: input.url,
+					riskPolicy: input.riskPolicy,
+				});
+			} catch (err) {
+				if (
+					err instanceof connectors.PresetNotFoundError ||
+					err instanceof connectors.ConnectorValidationError
+				) {
+					throw new ORPCError("BAD_REQUEST", { message: err.message });
+				}
+				throw err;
+			}
+		}),
+
+	/**
 	 * Create a new MCP connector.
 	 * Restricted to admin/owner role.
 	 */
