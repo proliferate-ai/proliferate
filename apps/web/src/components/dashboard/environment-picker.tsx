@@ -36,24 +36,15 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 	// Clear stale persisted selections when data loads (e.g. repo/prebuild was deleted)
 	useEffect(() => {
 		if (!repos) return;
-		if (selectedRepoId && !allRepos.some((r) => r.id === selectedRepoId)) {
+		if (selectedRepoId && !repos.some((r) => r.id === selectedRepoId)) {
 			setSelectedRepo(null);
 			setSelectedSnapshot(null);
 		} else if (selectedSnapshotId && !selectedRepoId) {
-			if (prebuilds && !multiRepoConfigs.some((c) => c.id === selectedSnapshotId)) {
+			if (prebuilds && !prebuilds.some((c) => c.id === selectedSnapshotId)) {
 				setSelectedSnapshot(null);
 			}
 		}
-	}, [
-		repos,
-		prebuilds,
-		selectedRepoId,
-		selectedSnapshotId,
-		allRepos,
-		multiRepoConfigs,
-		setSelectedRepo,
-		setSelectedSnapshot,
-	]);
+	}, [repos, prebuilds, selectedRepoId, selectedSnapshotId, setSelectedRepo, setSelectedSnapshot]);
 
 	// Find display name for the trigger
 	const selectedRepo = allRepos.find((r) => r.id === selectedRepoId);
