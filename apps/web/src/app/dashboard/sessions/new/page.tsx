@@ -49,6 +49,12 @@ export default function NewSessionPage() {
 			return;
 		}
 
+		// Setup sessions have a dedicated page with title, description, and "Done" button
+		if (sessionType === "setup") {
+			router.replace(`/repos/${repoId}/setup`);
+			return;
+		}
+
 		// Only create once
 		if (creationStartedRef.current || isPending || isSuccess) {
 			return;
@@ -63,7 +69,7 @@ export default function NewSessionPage() {
 				creationStartedRef.current = false;
 			}
 		})();
-	}, [repoId, isPending, isSuccess, router, createSessionFromRepo]);
+	}, [repoId, sessionType, isPending, isSuccess, router, createSessionFromRepo]);
 
 	// Reset on error
 	useEffect(() => {
