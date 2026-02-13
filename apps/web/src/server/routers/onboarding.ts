@@ -91,19 +91,40 @@ export const onboardingRouter = {
 					log.warn({ err }, "Failed to create Autumn customer");
 				}
 
-				const setup = await autumnAttach({
-					customer_id: customerId,
-					product_id: selectedPlan,
-					success_url: `${baseUrl}/onboarding/complete`,
-					cancel_url: `${baseUrl}/onboarding`,
-					customer_data: {
-						email: context.user.email,
-						name: org.name,
-					},
-					// We want to collect a payment method as part of onboarding, even if a payment
-					// method already exists (e.g. retries). Autumn will no-op if it can.
-					force_checkout: true,
-				});
+				let setup: Awaited<ReturnType<typeof autumnAttach>>;
+				try {
+					setup = await autumnAttach({
+						customer_id: customerId,
+						product_id: selectedPlan,
+						success_url: `${baseUrl}/onboarding/complete`,
+						cancel_url: `${baseUrl}/onboarding`,
+						customer_data: {
+							email: context.user.email,
+							name: org.name,
+						},
+						// Collect a payment method as part of onboarding, even if one
+						// already exists (e.g. retries). Autumn will no-op if it can.
+						force_checkout: true,
+					});
+				} catch (attachErr) {
+					// Autumn rejects force_checkout on upgrade/downgrade (e.g. onboarding
+					// retry when customer already has a product). Retry without it.
+					if (attachErr instanceof Error && attachErr.message.includes("force_checkout")) {
+						log.warn("force_checkout rejected, retrying without it");
+						setup = await autumnAttach({
+							customer_id: customerId,
+							product_id: selectedPlan,
+							success_url: `${baseUrl}/onboarding/complete`,
+							cancel_url: `${baseUrl}/onboarding`,
+							customer_data: {
+								email: context.user.email,
+								name: org.name,
+							},
+						});
+					} else {
+						throw attachErr;
+					}
+				}
 
 				const checkoutUrl = setup.checkout_url ?? setup.url;
 				if (checkoutUrl) {

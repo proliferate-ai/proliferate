@@ -97,17 +97,38 @@ export async function POST(request: Request) {
 			log.warn({ err }, "Failed to create Autumn customer");
 		}
 
-		const setup = await autumnAttach({
-			customer_id: customerId,
-			product_id: selectedPlan,
-			success_url: `${baseUrl}/onboarding/complete`,
-			cancel_url: `${baseUrl}/onboarding`,
-			customer_data: {
-				email: userEmail,
-				name: org.name,
-			},
-			force_checkout: true,
-		});
+		let setup: Awaited<ReturnType<typeof autumnAttach>>;
+		try {
+			setup = await autumnAttach({
+				customer_id: customerId,
+				product_id: selectedPlan,
+				success_url: `${baseUrl}/onboarding/complete`,
+				cancel_url: `${baseUrl}/onboarding`,
+				customer_data: {
+					email: userEmail,
+					name: org.name,
+				},
+				force_checkout: true,
+			});
+		} catch (attachErr) {
+			// Autumn rejects force_checkout on upgrade/downgrade (e.g. onboarding
+			// retry when customer already has a product). Retry without it.
+			if (attachErr instanceof Error && attachErr.message.includes("force_checkout")) {
+				log.warn("force_checkout rejected, retrying without it");
+				setup = await autumnAttach({
+					customer_id: customerId,
+					product_id: selectedPlan,
+					success_url: `${baseUrl}/onboarding/complete`,
+					cancel_url: `${baseUrl}/onboarding`,
+					customer_data: {
+						email: userEmail,
+						name: org.name,
+					},
+				});
+			} else {
+				throw attachErr;
+			}
+		}
 
 		const checkoutUrl = setup.checkout_url ?? setup.url;
 		if (checkoutUrl) {
