@@ -435,6 +435,7 @@ function QuickSetupForm({
 	const [error, setError] = useState<string | null>(null);
 	const [successKey, setSuccessKey] = useState<string | null>(null);
 	const quickMutation = useCreateOrgConnectorWithSecret();
+	const validateMutation = useValidateOrgConnector();
 	const { data: orgSecrets } = useSecrets();
 	const secretOptions = orgSecrets ?? [];
 
@@ -458,7 +459,28 @@ function QuickSetupForm({
 			});
 			setSecretValue("");
 			setSuccessKey(result.resolvedSecretKey);
-			setTimeout(onClose, 1500);
+
+			// Auto-test the connection
+			const resolvedKey = useExisting ? existingSecretKey : result.resolvedSecretKey;
+			const auth: ConnectorAuth =
+				preset.defaults.auth.type === "custom_header"
+					? {
+							type: "custom_header",
+							secretKey: resolvedKey,
+							headerName: preset.defaults.auth.headerName,
+						}
+					: { type: "bearer", secretKey: resolvedKey };
+			validateMutation.mutate({
+				connector: {
+					id: crypto.randomUUID(),
+					name: preset.name,
+					transport: "remote_http",
+					url: preset.defaults.url,
+					auth,
+					riskPolicy: preset.defaults.riskPolicy ?? { defaultRisk: "write" },
+					enabled: true,
+				},
+			});
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to create connector");
 		}
@@ -466,14 +488,32 @@ function QuickSetupForm({
 
 	if (successKey) {
 		return (
-			<div className="rounded-lg border border-green-600/30 bg-green-600/5 p-4">
-				<div className="flex items-center gap-2">
-					<Check className="h-4 w-4 text-green-600" />
-					<span className="text-sm font-medium text-green-600">{preset.name} connected</span>
+			<div className="space-y-2">
+				<div className="rounded-lg border border-green-600/30 bg-green-600/5 p-4">
+					<div className="flex items-center gap-2">
+						<Check className="h-4 w-4 text-green-600" />
+						<span className="text-sm font-medium text-green-600">{preset.name} connected</span>
+					</div>
+					<p className="text-xs text-muted-foreground mt-1">
+						Secret key: <code className="font-mono">{successKey}</code>
+					</p>
 				</div>
-				<p className="text-xs text-muted-foreground mt-1">
-					Secret key: <code className="font-mono">{successKey}</code>
-				</p>
+				{validateMutation.isPending && (
+					<div className="rounded-md border border-border/80 bg-background p-3 flex items-center gap-2">
+						<Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+						<span className="text-xs text-muted-foreground">Testing connection...</span>
+					</div>
+				)}
+				{validateMutation.data && (
+					<>
+						<ValidationResult result={validateMutation.data} />
+						<div className="flex justify-end">
+							<Button variant="ghost" size="sm" onClick={onClose}>
+								Done
+							</Button>
+						</div>
+					</>
+				)}
 			</div>
 		);
 	}
