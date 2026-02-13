@@ -7,14 +7,13 @@ import { useCreatePrebuild } from "@/hooks/use-prebuilds";
 import { useRepos } from "@/hooks/use-repos";
 import { useCreateSession } from "@/hooks/use-sessions";
 import { useSession } from "@/lib/auth-client";
-import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
-import { Github, Settings, X } from "lucide-react";
+import { Settings, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { GithubIcon } from "../ui/icons";
-import { OnboardingCards } from "./onboarding-cards";
+// import { OnboardingCards } from "./onboarding-cards";
 import { PromptInput } from "./prompt-input";
 import { WelcomeDialog } from "./welcome-dialog";
 
@@ -217,7 +216,7 @@ export function EmptyDashboard() {
 				</div>
 
 				{/* Onboarding cards - animated entrance */}
-				<div
+				{/* <div
 					className={cn(
 						"w-full grid transition-[grid-template-rows,opacity] duration-500 ease-out mt-4",
 						showCards && hasCards ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
@@ -228,7 +227,7 @@ export function EmptyDashboard() {
 							<OnboardingCards />
 						</div>
 					</div>
-				</div>
+				</div> */}
 			</div>
 		</div>
 	);
