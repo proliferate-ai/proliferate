@@ -165,7 +165,7 @@ interface StoredAuth {
 
 // packages/cli/src/state/config.ts
 interface Config {
-  apiUrl?: string;       // Override for NEXT_PUBLIC_API_URL
+  apiUrl?: string;       // Override API base URL (defaults to https://app.proliferate.com)
   syncMode?: "gitignore" | "all";
   modelId?: string;      // Agent model override
 }
@@ -291,11 +291,12 @@ Source: `packages/cli/src/main.ts:38-68`
 
 ### 6.3 Local Config Management
 
-**What it does:** Manages CLI configuration in `~/.proliferate/config.json` with environment variable fallbacks. **Status: Implemented**
+**What it does:** Manages CLI configuration in `~/.proliferate/config.json` with environment variable and cloud-default fallbacks. **Status: Implemented**
 
 **Config resolution (priority order):**
 1. `config.json` values (user-set overrides)
 2. Environment variables (e.g., `NEXT_PUBLIC_API_URL` for `apiUrl`)
+3. Cloud default (`https://app.proliferate.com`) when no local override is set
 
 **Files in `~/.proliferate/`:**
 

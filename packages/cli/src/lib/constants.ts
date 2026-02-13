@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { env } from "@proliferate/environment/server";
 
 // CLI version - read from package.json (bumped by changesets)
 // Uses import.meta.dirname which works in both dev and compiled binaries
@@ -18,8 +17,13 @@ function getVersion(): string {
 
 export const CLI_VERSION = getVersion();
 
-// Gateway URL for session creation and OpenCode attach
-export const GATEWAY_URL = env.NEXT_PUBLIC_GATEWAY_URL;
+// Cloud defaults keep the released CLI usable without local env wiring.
+const DEFAULT_API_URL = "https://app.proliferate.com";
+const resolvedApiUrl = process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
+const resolvedGatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL ?? `${resolvedApiUrl}/gateway`;
+
+// Gateway URL for session creation and OpenCode attach.
+export const GATEWAY_URL = resolvedGatewayUrl;
 
 // GitHub repository for releases (public repo)
 export const GITHUB_REPO = "proliferate-ai/cli";

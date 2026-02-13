@@ -14,7 +14,11 @@
 	},
 	"imports": {
 		"@proliferate/gateway-clients": "../gateway-clients/src/index.ts",
+		"@proliferate/gateway-clients/": "../gateway-clients/src/",
 		"@proliferate/shared": "../shared/src/index.ts",
+		"@proliferate/shared/": "../shared/src/",
+		"@proliferate/environment": "../environment/src/index.ts",
+		"@proliferate/environment/": "../environment/src/",
 		"chalk": "npm:chalk@^5.3.0",
 		"open": "npm:open@^10.0.0",
 		"ora": "npm:ora@^8.0.0",
