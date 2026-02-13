@@ -123,6 +123,21 @@ export interface ConnectorPreset {
 	defaults: Omit<ConnectorConfig, "id">;
 	/** Guidance text shown in the UI when this preset is selected. */
 	guidance?: string;
+	/** When true, preset supports the quick "API key + save" flow. */
+	quickSetup?: boolean;
+	/** Label for the API key input (e.g. "PostHog API key"). */
+	secretLabel?: string;
+	/** Recommended secret key name for auto-generation (e.g. "POSTHOG_API_KEY"). */
+	recommendedSecretKey?: string;
+	/** Link to provider docs for getting an API key. */
+	docsUrl?: string;
+}
+
+/**
+ * Look up a connector preset by its key.
+ */
+export function getConnectorPresetByKey(key: string): ConnectorPreset | undefined {
+	return CONNECTOR_PRESETS.find((p) => p.key === key);
 }
 
 export const CONNECTOR_PRESETS: ConnectorPreset[] = [
@@ -138,19 +153,78 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 			riskPolicy: { defaultRisk: "read" },
 			enabled: true,
 		},
+		quickSetup: true,
+		secretLabel: "Context7 API key",
+		recommendedSecretKey: "CONTEXT7_API_KEY",
+		docsUrl: "https://context7.com/docs",
 	},
 	{
 		key: "posthog",
-		name: "PostHog MCP",
+		name: "PostHog",
 		description: "Query PostHog analytics, feature flags, and experiments",
 		defaults: {
-			name: "PostHog MCP",
+			name: "PostHog",
 			transport: "remote_http",
 			url: "https://mcp.posthog.com/mcp",
 			auth: { type: "bearer", secretKey: "" },
 			riskPolicy: { defaultRisk: "read" },
 			enabled: true,
 		},
+		quickSetup: true,
+		secretLabel: "PostHog personal API key",
+		recommendedSecretKey: "POSTHOG_API_KEY",
+		docsUrl: "https://posthog.com/docs/api",
+	},
+	{
+		key: "firecrawl",
+		name: "Firecrawl",
+		description: "Web scraping and crawling for LLM-ready content",
+		defaults: {
+			name: "Firecrawl",
+			transport: "remote_http",
+			url: "https://mcp.firecrawl.dev/v2/mcp",
+			auth: { type: "bearer", secretKey: "" },
+			riskPolicy: { defaultRisk: "read" },
+			enabled: true,
+		},
+		quickSetup: true,
+		secretLabel: "Firecrawl API key",
+		recommendedSecretKey: "FIRECRAWL_API_KEY",
+		docsUrl: "https://docs.firecrawl.dev",
+	},
+	{
+		key: "neon",
+		name: "Neon",
+		description: "Manage Neon Postgres databases, branches, and queries",
+		defaults: {
+			name: "Neon",
+			transport: "remote_http",
+			url: "https://mcp.neon.tech/mcp",
+			auth: { type: "bearer", secretKey: "" },
+			riskPolicy: { defaultRisk: "write" },
+			enabled: true,
+		},
+		quickSetup: true,
+		secretLabel: "Neon API key",
+		recommendedSecretKey: "NEON_API_KEY",
+		docsUrl: "https://neon.tech/docs/manage/api-keys",
+	},
+	{
+		key: "stripe",
+		name: "Stripe",
+		description: "Manage Stripe payments, customers, and subscriptions",
+		defaults: {
+			name: "Stripe",
+			transport: "remote_http",
+			url: "https://mcp.stripe.com",
+			auth: { type: "bearer", secretKey: "" },
+			riskPolicy: { defaultRisk: "write" },
+			enabled: true,
+		},
+		quickSetup: true,
+		secretLabel: "Stripe secret key",
+		recommendedSecretKey: "STRIPE_SECRET_KEY",
+		docsUrl: "https://docs.stripe.com/keys",
 	},
 	{
 		key: "custom",

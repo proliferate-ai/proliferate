@@ -240,8 +240,8 @@
 | Sentry metadata | Implemented | `apps/web/src/server/routers/integrations.ts:sentryMetadata` | Sentry project/org metadata |
 | Linear metadata | Implemented | `apps/web/src/server/routers/integrations.ts:linearMetadata` | Linear team/project metadata |
 | GitHub auth (gateway) | Implemented | `apps/gateway/src/lib/github-auth.ts` | Gateway-side GitHub token resolution |
-| Org-scoped MCP connector catalog | Planned | `docs/specs/integrations.md`, `docs/specs/external-tools-rfc.md` | Planned source of truth for connector config across all sessions in an org |
-| Org-scoped connector management UI | Planned | `docs/specs/integrations.md`, `docs/specs/external-tools-rfc.md` | Planned admin surface for add/edit/validate once per org |
+| Org-scoped MCP connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | Org-level connector CRUD with atomic secret provisioning |
+| Org-scoped connector management UI | Implemented | `apps/web/src/app/settings/connectors/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings page with preset quick-setup, advanced form, and connection validation |
 
 ---
 

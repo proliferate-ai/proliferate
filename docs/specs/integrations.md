@@ -499,17 +499,24 @@ function handleNangoError(err: unknown, operation: string): never {
 
 **Files touched:** `apps/web/src/app/api/webhooks/github-app/route.ts`, `packages/services/src/integrations/db.ts:updateStatusByGitHubInstallationId`
 
-### 6.14 Org-Scoped Connector Catalog — `Planned`
+### 6.14 Org-Scoped Connector Catalog — `Implemented`
 
 **What it does:** Defines a single org-level source of truth for MCP connector configuration used by Actions discovery/invocation.
 
-**Expected behavior:**
-1. Admin/owner configures connectors once per org in Integrations settings.
-2. Config stores endpoint/auth/risk defaults using the shared `ConnectorConfig` schema (`packages/shared/src/connectors.ts`).
+**Behavior:**
+1. Admin/owner configures connectors once per org via Settings → Connectors.
+2. Config is stored in `org_connectors` table using the shared `ConnectorConfig` schema (`packages/shared/src/connectors.ts`).
 3. Gateway Actions loads enabled connectors by org/session context, not by prebuild.
 4. Connector-backed actions continue using the same `connector:<uuid>` integration prefix and existing approval/audit pipeline in `actions.md`.
+5. Quick-setup flow: preset grid with inline API key entry, atomic secret + connector creation in a single transaction.
+6. Advanced flow: full form with secret picker, custom auth, risk policy, and connection validation.
 
-**Current state:** Connector CRUD exists under prebuild routes (`apps/web/src/server/routers/prebuilds.ts`) and prebuild JSONB storage (`prebuilds.connectors`) as a transitional implementation.
+**Key files:**
+- DB: `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/db.ts`
+- Service: `packages/services/src/connectors/service.ts`
+- Router: `apps/web/src/server/routers/integrations.ts` (connectors section)
+- UI: `apps/web/src/app/settings/connectors/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts`
+- Presets: `packages/shared/src/connectors.ts:CONNECTOR_PRESETS`
 
 ---
 
@@ -523,7 +530,7 @@ function handleNangoError(err: unknown, operation: string): never {
 | `triggers.md` | Triggers → This | `integrations.triggers` relation, `findActiveByGitHubInstallationId()` | Trigger-service resolves integration for webhook dispatch |
 | `triggers.md` | Triggers → This | `findByConnectionIdAndProvider()`, `updateStatus()` | Nango webhook handler updates connection status on token lifecycle events |
 | `actions.md` | Actions → This | `getToken()` | Action adapters resolve tokens for API calls |
-| `actions.md` | Actions ↔ This | *(Planned)* org-scoped connector catalog read path | Target source for connector-backed action discovery |
+| `actions.md` | Actions ↔ This | `connectors.listEnabledConnectors()` | Org-scoped connector catalog read path for action discovery |
 | `auth-orgs.md` | This → Auth | `orgProcedure` middleware | All integration routes require org membership |
 | `secrets-environment.md` | This → Secrets | `getEnvVarName()` | Token env var naming for sandbox injection |
 
@@ -559,4 +566,3 @@ function handleNangoError(err: unknown, operation: string): never {
 - [ ] **No token refresh error handling** — If Nango returns an expired/invalid token, the error propagates directly to the caller. No automatic retry or re-auth flow exists. — Medium impact for long-running sessions.
 - [ ] **Visibility filtering in memory** — `filterByVisibility` loads all org integrations then filters in JS. Fine at current scale but won't scale if an org has hundreds of integrations. — Low impact.
 - [ ] **Orphaned repo detection is O(n)** — `handleOrphanedRepos` iterates all non-orphaned repos and runs a count query per repo. Should be a single query. — Low impact at current scale.
-- [ ] **Org connector catalog not migrated yet** — connector persistence and UI are still prebuild-scoped (`prebuilds.connectors`, prebuild routes/panel). Impact: repetitive per-prebuild setup and no single org-level connector management surface. Expected fix: move connector CRUD/storage ownership into Integrations.
