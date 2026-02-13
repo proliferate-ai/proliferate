@@ -33,6 +33,11 @@ const nextConfig = {
 					"https://raw.githubusercontent.com/proliferate-ai/cloud/main/scripts/install.sh",
 				permanent: false,
 			},
+			{
+				source: "/settings/connectors",
+				destination: "/settings/tools",
+				permanent: true,
+			},
 		];
 	},
 };
