@@ -28,7 +28,6 @@ interface CodingSessionProps {
 	asModal?: boolean;
 	open?: boolean;
 	onOpenChange?: (open: boolean) => void;
-	headerSlot?: React.ReactNode;
 	onError?: (error: string) => void;
 }
 
@@ -41,7 +40,6 @@ export function CodingSession({
 	asModal = false,
 	open = true,
 	onOpenChange,
-	headerSlot,
 }: CodingSessionProps) {
 	const { data: authSession, isPending: authLoading } = useBetterAuthSession();
 	const { data: sessionData, isLoading: sessionLoading } = useSessionData(sessionId);
