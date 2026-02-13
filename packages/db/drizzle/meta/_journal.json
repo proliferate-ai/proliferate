@@ -144,6 +144,13 @@
       "when": 1771113600000,
       "tag": "0021_prebuild_connectors",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1771200000000,
+      "tag": "0022_org_connectors",
+      "breakpoints": true
     }
   ]
 }

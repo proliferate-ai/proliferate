@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
-> **Updated:** 2026-02-13 from `main` branch. Connector spec alignment + delivery plan update.
+> **Updated:** 2026-02-13 from `main` branch. Connector scope alignment (current prebuild path + planned org-scoped migration).
 > **Evidence convention:** `Planned` entries may cite RFC/spec files until code exists; once implemented, update evidence to concrete code paths.
 
 ---
@@ -141,7 +141,7 @@
 | Invocation sweeper | Implemented | `apps/worker/src/sweepers/index.ts` | Expires stale invocations |
 | Sandbox-MCP grants handler | Implemented | `packages/sandbox-mcp/src/actions-grants.ts` | Grant handling inside sandbox |
 | Actions list (web) | Implemented | `apps/web/src/server/routers/actions.ts` | Org-level actions inbox |
-| Connector-backed action sources (`remote_http` MCP via Actions) | Implemented | `packages/services/src/actions/connectors/`, `apps/gateway/src/api/proliferate/http/actions.ts` | Gateway-mediated remote MCP connectors through Actions pipeline |
+| Connector-backed action sources (`remote_http` MCP via Actions) | Implemented | `packages/services/src/actions/connectors/`, `apps/gateway/src/api/proliferate/http/actions.ts` | Gateway-mediated remote MCP connectors through Actions pipeline (connector source: org-scoped `org_connectors` table) |
 | MCP connector 404 session recovery (re-init + retry-once) | Implemented | `packages/services/src/actions/connectors/client.ts:callConnectorTool` | Stateless per call; SDK handles session ID internally; 404 triggers fresh re-init |
 
 ---
@@ -195,9 +195,10 @@
 | Prebuild resolver | Implemented | `apps/gateway/src/lib/prebuild-resolver.ts` | Resolves config at session start |
 | Service commands persistence | Implemented | `packages/db/src/schema/prebuilds.ts:serviceCommands` | JSONB on prebuilds |
 | Env file persistence | Implemented | `packages/db/src/schema/prebuilds.ts:envFiles` | JSONB on prebuilds |
-| Prebuild connector configuration (project-scoped external tool config) | Implemented | `packages/db/src/schema/prebuilds.ts:connectors`, `apps/web/src/server/routers/prebuilds.ts:getConnectors/updateConnectors` | JSONB on prebuilds table with oRPC CRUD |
-| Prebuild connector management UI | Implemented | `apps/web/src/components/coding-session/connectors-panel.tsx`, `apps/web/src/hooks/use-connectors.ts` | Settings panel "Tools" tab with add/edit/remove, presets, secret picker |
-| Prebuild connector validation endpoint (`tools/list` preflight) | Implemented | `apps/web/src/server/routers/prebuilds.ts:validateConnector` | Resolves org secret, calls `tools/list`, returns diagnostics |
+| Prebuild connector configuration (deprecated) | Deprecated | `packages/db/src/schema/prebuilds.ts:connectors` | Legacy JSONB on prebuilds table; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
+| Org-scoped connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | `org_connectors` table with full CRUD via Integrations routes |
+| Org connector management UI | Implemented | `apps/web/src/app/settings/connectors/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Connectors page with presets, secret picker, validation |
+| Org connector validation endpoint | Implemented | `apps/web/src/server/routers/integrations.ts:validateConnector` | `tools/list` preflight with diagnostics |
 | Base snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:sandboxBaseSnapshots` | Building/ready/failed |
 | Repo snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:repoSnapshots` | Building/ready/failed + commit SHA |
 
@@ -237,6 +238,8 @@
 | Sentry metadata | Implemented | `apps/web/src/server/routers/integrations.ts:sentryMetadata` | Sentry project/org metadata |
 | Linear metadata | Implemented | `apps/web/src/server/routers/integrations.ts:linearMetadata` | Linear team/project metadata |
 | GitHub auth (gateway) | Implemented | `apps/gateway/src/lib/github-auth.ts` | Gateway-side GitHub token resolution |
+| Org-scoped MCP connector catalog | Planned | `docs/specs/integrations.md`, `docs/specs/external-tools-rfc.md` | Planned source of truth for connector config across all sessions in an org |
+| Org-scoped connector management UI | Planned | `docs/specs/integrations.md`, `docs/specs/external-tools-rfc.md` | Planned admin surface for add/edit/validate once per org |
 
 ---
 

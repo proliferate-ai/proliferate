@@ -8,7 +8,6 @@ import type { AutoStartOutputMessage, PrebuildServiceCommand } from "@proliferat
 import { X } from "lucide-react";
 import { useState } from "react";
 import { AutoStartContent } from "./auto-start-panel";
-import { ConnectorsContent } from "./connectors-panel";
 import { SessionInfoContent } from "./session-info-panel";
 import { SnapshotsContent } from "./snapshots-panel";
 
@@ -96,9 +95,6 @@ export function SettingsPanel({
 							<TabsTrigger value="auto-start" className="flex-1 text-xs">
 								Auto-start
 							</TabsTrigger>
-							<TabsTrigger value="tools" className="flex-1 text-xs">
-								Tools
-							</TabsTrigger>
 						</TabsList>
 					</div>
 
@@ -135,10 +131,6 @@ export function SettingsPanel({
 							autoStartOutput={autoStartOutput}
 							sendRunAutoStart={sendRunAutoStart}
 						/>
-					</TabsContent>
-
-					<TabsContent value="tools" className="flex-1 min-h-0 overflow-y-auto mt-0">
-						<ConnectorsContent prebuildId={prebuildId} />
 					</TabsContent>
 				</Tabs>
 			</div>

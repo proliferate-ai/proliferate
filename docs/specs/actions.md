@@ -23,7 +23,7 @@
 
 ### Mental Model
 
-Actions are platform-mediated operations that the agent performs on external services. Implemented action sources are (a) hand-written Linear/Sentry/Slack adapters and (b) connector-backed MCP `remote_http` sources discovered from prebuild connector config. Unlike tools that run inside the sandbox, actions are executed server-side by the gateway using either OAuth tokens (`integrations.getToken`) or org-scoped secrets (`secrets.resolveSecretValue`) depending on source type. Every action goes through a risk-based approval pipeline before execution (`packages/services/src/actions/service.ts:invokeAction`).
+Actions are platform-mediated operations that the agent performs on external services. Implemented action sources are (a) hand-written Linear/Sentry/Slack adapters and (b) connector-backed MCP `remote_http` sources discovered from prebuild connector config. Planned direction: connector discovery moves to an org-scoped catalog owned by `integrations.md`, so all sessions in an org see the same connector-backed sources by default. Unlike tools that run inside the sandbox, actions are executed server-side by the gateway using either OAuth tokens (`integrations.getToken`) or org-scoped secrets (`secrets.resolveSecretValue`) depending on source type. Every action goes through a risk-based approval pipeline before execution (`packages/services/src/actions/service.ts:invokeAction`).
 
 The agent invokes actions via the `proliferate` CLI inside the sandbox. The CLI sends HTTP requests to the gateway (`apps/gateway/src/api/proliferate/http/actions.ts`), which evaluates risk, checks for matching grants, and either auto-executes or queues the invocation for human approval. Users approve or deny pending invocations through the web dashboard or WebSocket events.
 
@@ -62,7 +62,7 @@ Adapters are statically registered in a `Map`. Currently three adapters exist: `
 ### Action Source Boundary
 Two action source types coexist:
 1. **Static adapters** — hand-written Linear, Sentry, Slack adapters registered in `packages/services/src/actions/adapters/index.ts`. Require OAuth integration connections per session.
-2. **Connector-backed actions** — prebuild-configured MCP `remote_http` connectors discovered at runtime. The gateway connects to remote MCP servers, lists tools via `tools/list`, and normalizes them into `ActionDefinition[]`. Connector actions use the `connector:<uuid>` integration prefix to distinguish them from static adapters in the `integration` column.
+2. **Connector-backed actions** — MCP `remote_http` connectors discovered at runtime. Current implementation resolves connector config from prebuilds. Planned direction resolves the same connector shape from an org-scoped catalog. Connector actions use the `connector:<uuid>` integration prefix to distinguish them from static adapters in the `integration` column.
 
 Both source types share the same risk/approval/grant/audit lifecycle. The merge point is `GET /available` in `apps/gateway/src/api/proliferate/http/actions.ts`, which returns adapter-based and connector-based integrations in a single list.
 
@@ -417,34 +417,40 @@ Each adapter embeds its own guide as a static string (e.g., `linearAdapter.guide
 
 **Files touched:** `packages/services/src/actions/adapters/index.ts:getGuide`, adapter files
 
-### 6.11 MCP Connector System — `Implemented`
+### 6.11 MCP Connector System — `Implemented` (Prebuild-Scoped) / `Planned` (Org-Scoped Catalog)
 
-**What it does:** Enables prebuild-configured remote MCP servers to surface tools through the Actions pipeline, giving agents access to any MCP-compatible service while preserving the existing risk/approval/grant/audit flow.
+**What it does:** Enables remote MCP servers to surface tools through the Actions pipeline, giving agents access to MCP-compatible services while preserving the existing risk/approval/grant/audit flow.
 
 **Architecture:**
 ```
+Current:
 Prebuild (connectors JSONB) → Gateway resolves at session runtime
   → MCP Client connects to remote server (StreamableHTTPClientTransport)
   → tools/list → ActionDefinition[] (cached 5 min per session)
   → Merged into GET /available alongside adapter actions
   → POST /invoke → risk/grant evaluation → tools/call on MCP server
+
+Planned:
+Org connector catalog (integrations-owned) → Gateway resolves by org/session runtime
+  → Same MCP client + risk/grant/audit path
+  → Same GET /available merge and invoke behavior
 ```
 
 **Key components:**
-- **Connector config** (`packages/shared/src/connectors.ts`): `ConnectorConfig` type + Zod schemas. Stored as JSONB on prebuilds table. Max 20 connectors per prebuild.
+- **Connector config** (`packages/shared/src/connectors.ts`): `ConnectorConfig` type + Zod schemas. Currently stored as JSONB on `prebuilds`. Planned migration is org-scoped connector catalog persistence in the Integrations domain.
 - **MCP client** (`packages/services/src/actions/connectors/client.ts`): Stateless — creates a fresh `Client` per `listConnectorTools()` or `callConnectorTool()` call. Uses `@modelcontextprotocol/sdk` (MIT). 15s timeout for tool listing, 30s for calls.
 - **Risk derivation** (`packages/services/src/actions/connectors/risk.ts`): Priority: per-tool policy override → MCP annotations (`destructiveHint`→danger, `readOnlyHint`→read; destructive checked first for fail-safe) → connector default risk → "write" fallback.
 - **Secret resolution**: Connector `auth.secretKey` references an org-level secret by key name. Resolved at call time via `secrets.resolveSecretValue()`. Keys never enter the sandbox.
-- **Gateway integration** (`apps/gateway/src/api/proliferate/http/actions.ts`): In-memory tool cache (`Map<sessionId, CachedConnectorTools[]>`, 5-min TTL). Connector branches in `GET /available`, `GET /guide/:integration`, `POST /invoke`, `POST /approve`.
+- **Gateway integration** (`apps/gateway/src/api/proliferate/http/actions.ts`): In-memory tool cache (`Map<sessionId, CachedConnectorTools[]>`, 5-min TTL). Connector branches in `GET /available`, `GET /guide/:integration`, `POST /invoke`, `POST /approve`. Current connector loading path is session → prebuild. Planned path is session/org → org connector catalog.
 - **Integration prefix**: Connector actions use `connector:<uuid>` in the `integration` column. Grants match this as a string (wildcards work). `integrationId` is `null` for connector invocations.
 
 **Connector guide auto-generation:** `GET /guide/connector:<id>` generates a markdown guide from cached tool definitions (name, description, risk level, parameters) instead of using a static adapter guide string.
 
 **Graceful degradation:** If an MCP server is unreachable during `tools/list`, its tools simply don't appear in the available list. Other connectors and static adapters continue working.
 
-**oRPC CRUD:** `apps/web/src/server/routers/prebuilds.ts` provides `getConnectors` and `updateConnectors` routes for managing prebuild connector configs.
+**CRUD surface:** Org-level connector CRUD lives in `apps/web/src/server/routers/integrations.ts` (`listConnectors`, `createConnector`, `updateConnector`, `deleteConnector`, `validateConnector`). Management UI is at Settings → Connectors (`apps/web/src/app/settings/connectors/page.tsx`).
 
-**Files touched:** `packages/services/src/actions/connectors/`, `packages/shared/src/connectors.ts`, `packages/services/src/secrets/service.ts`, `packages/services/src/prebuilds/db.ts`, `apps/gateway/src/api/proliferate/http/actions.ts`, `apps/web/src/server/routers/prebuilds.ts`
+**Files touched:** `packages/services/src/actions/connectors/`, `packages/services/src/connectors/`, `packages/shared/src/connectors.ts`, `packages/services/src/secrets/service.ts`, `apps/gateway/src/api/proliferate/http/actions.ts`, `apps/web/src/server/routers/integrations.ts`
 
 ---
 
@@ -454,7 +460,7 @@ Prebuild (connectors JSONB) → Gateway resolves at session runtime
 |---|---|---|---|
 | `integrations.md` | Actions → Integrations | `integrations.getToken()` (`packages/services/src/integrations/tokens.ts:getToken`) | Token resolution for adapter execution |
 | `integrations.md` | Actions → Integrations | `sessions.listSessionConnections()` (`packages/services/src/sessions/db.ts`) | Discovers which integrations are available for a session |
-| `repos-prebuilds.md` | Actions ↔ Prebuilds | `prebuilds.connectors` JSONB, `getPrebuildConnectors()`, `parsePrebuildConnectors()` | Connector configs stored on prebuilds, resolved by gateway at session runtime via `loadSessionConnectors()` |
+| `integrations.md` | Actions ← Integrations | `connectors.listEnabledConnectors(orgId)`, `connectors.getConnector(id, orgId)` | Org-scoped connector catalog; gateway loads enabled connectors by org at session runtime via `loadSessionConnectors()` |
 | `secrets-environment.md` | Actions → Secrets | `secrets.resolveSecretValue(orgId, key)` | Resolves + decrypts org secrets for connector auth at call time |
 | `sessions-gateway.md` | Actions → Gateway | WebSocket broadcast events | `action_approval_request` (pending write), `action_completed` (execution success/failure, includes `status` field), `action_approval_result` (denial only) |
 | `agent-contract.md` | Contract → Actions | `ACTIONS_BOOTSTRAP` in sandbox config | Bootstrap guide written to `.proliferate/actions-guide.md` |
@@ -491,8 +497,9 @@ Prebuild (connectors JSONB) → Gateway resolves at session runtime
 - [ ] **No "danger" actions defined** — the risk level exists in types and service logic but no adapter declares any danger-level action. Impact: the deny-by-default path is untested in production. Expected fix: define danger actions when destructive operations are added (e.g., delete resources).
 - [ ] **In-memory rate limiting** — the per-session invocation rate limit (60/min) uses an in-memory Map in the gateway. Multiple gateway instances do not share counters. Impact: effective limit is multiplied by instance count. Expected fix: move to Redis-based rate limiting.
 - [ ] **No grant expiry sweeper** — grants with `expiresAt` are filtered out at query time but never cleaned up. Expired grant rows accumulate. Impact: minor DB bloat. Expected fix: add periodic cleanup job similar to invocation sweeper.
-- [x] **Static adapter registry** — addressed by MCP connector system (§6.11). Remote MCP connectors are configured per-prebuild and discovered at runtime. Static adapters remain for Linear/Sentry/Slack but new integrations can be added via connector config without code changes.
+- [x] **Static adapter registry** — addressed by MCP connector system (§6.11). Remote MCP connectors are configured without adapter code changes. Scope is org-wide catalog (`org_connectors` table).
 - [ ] **Grant rollback is best-effort** — if invocation approval fails after grant creation, the grant revocation is attempted but failures are silently caught. Impact: orphaned grants may exist in rare edge cases. Expected fix: wrap in a transaction or add cleanup sweep.
 - [ ] **No pagination on grants list** — `listActiveGrants` and `listGrantsByOrg` return all matching rows with no limit/offset. Impact: could return large result sets for orgs with many grants. Expected fix: add pagination parameters.
 - [x] **Connector 404 session recovery** — addressed. `callConnectorTool` retries once on 404 session invalidation by re-initializing a fresh connection. The SDK handles `Mcp-Session-Id` internally within each connection lifecycle. Source: `packages/services/src/actions/connectors/client.ts`.
-- [x] **Dedicated connector management UI** — addressed. Settings panel "Tools" tab provides add/edit/remove/validate flow with presets, secret picker, and inline validation diagnostics. Source: `apps/web/src/components/coding-session/connectors-panel.tsx`, `apps/web/src/hooks/use-connectors.ts`.
+- [x] **Dedicated connector management UI** — addressed at org scope. Settings → Connectors page provides add/edit/remove/validate flow with presets, org secret picker, and inline validation diagnostics. Source: `apps/web/src/app/settings/connectors/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts`.
+- [x] **Connector scope is org-scoped** — addressed. Connectors are stored in the `org_connectors` table, managed via Integrations CRUD routes, and loaded by org in the gateway. Backfill migration (`0022_org_connectors.sql`) copied legacy prebuild-scoped connectors to org scope.

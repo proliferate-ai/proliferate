@@ -2,7 +2,7 @@
 
 > **Purpose:** Frame the problem space, landscape, and options for extending Proliferate's agent tool access beyond the current hand-written adapters. Written to enable a decision, not to advocate for a specific approach.
 >
-> **Date:** 2026-02-12
+> **Date:** 2026-02-13
 
 ---
 
@@ -148,7 +148,7 @@ Native MCP support. Users configure MCP servers in settings, agent discovers too
 - **Server-side token management**: OAuth tokens never leave the server
 - **Approval flow**: Risk-classified operations require human approval
 - **Audit trail**: Every action invocation is logged
-- **Team-wide configuration**: Prebuilds ensure consistent tool access across sessions
+- **Team-wide configuration**: Platform can provide centrally managed connector access (current implementation is prebuild-scoped; target is org-scoped)
 - **Automation integration**: Tools are available in triggered automation runs, not just interactive sessions
 
 ---
@@ -228,7 +228,7 @@ The gateway is the MCP client. MCP tools are surfaced through the existing Actio
 For `remote_http` MCP servers, the gateway makes direct HTTP JSON-RPC calls to the vendor endpoint. There is no separate runner service and no child-process lifecycle to manage in this phase.
 
 **What changes in V1:**
-- `mcp_connectors` config on prebuilds, resolved by gateway at session runtime
+- Org-scoped connector catalog resolved by gateway at session runtime
 - `McpHttpAdapter` (or equivalent) using `@modelcontextprotocol/sdk` for remote transport
 - `GET /available` merges OAuth adapters and connector-discovered tools
 - Secrets resolved server-side and mapped to connector auth (headers/env-derived config)
@@ -341,26 +341,28 @@ Options can still be layered, but the cleanest first step is a narrow Option 2 s
 
 Each step is independently valuable. No step requires undoing previous work.
 
-### Recommendation (2026-02-12)
+### Recommendation (2026-02-13)
 
-Adopt **Option 2 with a strict V1 scope**:
-1. Implement prebuild-configured `remote_http` connectors surfaced through Actions.
+Adopt **Option 2 with a strict V1 transport scope and org-wide config scope**:
+1. Keep `remote_http` connectors as the only MCP transport in cloud V1.
 2. Keep OAuth adapters and the current `proliferate actions` contract unchanged.
 3. Do **not** introduce a separate connector-runner service in V1.
-4. Defer gateway `stdio` connectors and native sandbox MCP expansion to later phases.
+4. Use a single org-scoped connector catalog so all sessions in an org share the same connector set by default.
+5. Defer gateway `stdio` connectors and native sandbox MCP expansion to later phases.
 
-This path gives broad integration coverage with minimal architectural churn while preserving approval, grants, and audit guarantees.
+This path preserves approval, grants, and audit guarantees while removing prebuild-level setup friction.
 
-### Implementation Status (2026-02-12)
+### Implementation Status (2026-02-13)
 
-**Option 2 V1 is implemented.** Key artifacts:
+**Current baseline (implemented): Option 2 transport path with prebuild-scoped connector config.**
 - Connector types + Zod schemas: `packages/shared/src/connectors.ts`
 - DB migration: `packages/db/drizzle/0021_prebuild_connectors.sql` (JSONB on prebuilds)
 - MCP client module: `packages/services/src/actions/connectors/` (list tools, call tool, risk derivation)
 - Secret resolver: `packages/services/src/secrets/service.ts:resolveSecretValue`
 - Gateway wiring: `apps/gateway/src/api/proliferate/http/actions.ts` (available, guide, invoke, approve)
-- oRPC CRUD: `apps/web/src/server/routers/prebuilds.ts` (getConnectors, updateConnectors)
-- See `actions.md` §6.11 for the full deep dive.
+- Current CRUD/UI: `apps/web/src/server/routers/prebuilds.ts` + `apps/web/src/components/coding-session/connectors-panel.tsx`
+
+**Approved next step (planned): migrate connector source-of-truth from prebuild scope to org scope under Integrations ownership.**
 
 ### MCP Server Reality Check (2026-02-13)
 
@@ -385,53 +387,31 @@ Reference docs:
 
 ### Delivery Plan (2026-02-13)
 
-This is the concrete path from current backend-first implementation to the intended end-state UX.
+This is the concrete migration path from today's prebuild-scoped connector management to org-wide connector management.
 
-#### Phase 1 — Productize Connector Management (UI + API) ✅
+#### Phase 1 — Org Connector Data Model + Service Layer (`Planned`)
 
-**Status: Implemented.**
+1. Add org-scoped connector persistence in the Integrations domain (table/model + services), reusing `ConnectorConfig` schema.
+2. Keep prebuild connector reads as compatibility fallback during migration.
+3. Add migration/backfill to copy existing `prebuilds.connectors` into org-scoped records (dedupe by connector identity).
 
-1. Prebuild connector hooks: `apps/web/src/hooks/use-connectors.ts` (wraps `getConnectors`, `updateConnectors`, `validateConnector`).
-2. Settings panel "Tools" tab: `apps/web/src/components/coding-session/connectors-panel.tsx` with add/edit/remove/enable flow.
-3. Connector form: name, URL, auth type (bearer/custom_header), header name, secret picker, default risk level, enabled toggle.
-4. Admin/owner role check enforced on `updateConnectors` and `validateConnector` in `apps/web/src/server/routers/prebuilds.ts`.
+#### Phase 2 — Org-Level API + UI Surface (`Planned`)
 
-#### Phase 2 — Validation and Failure Visibility ✅
+1. Add Integrations-owned connector routes (list/update/validate).
+2. Add org-level "Connectors/Tools" UI under Integrations settings (admin/owner only).
+3. Keep current prebuild panel read-only or hidden once org-level UI is available.
 
-**Status: Implemented.**
+#### Phase 3 — Gateway Resolution Switch (`Planned`)
 
-1. Validation endpoint: `prebuilds.validateConnector` in `apps/web/src/server/routers/prebuilds.ts`. Resolves org secret, calls `tools/list`, returns tool metadata + diagnostics with error classification (auth/timeout/unreachable/protocol/unknown).
-2. Inline validation UX: "Validate Connection" button in connector form. Displays tool list on success, classified error on failure.
-3. Connector client already logs with structured fields (connector ID, name) via `@proliferate/logger`.
+1. Update Actions gateway connector resolver to load enabled connectors by org/session, not by prebuild.
+2. Preserve current risk/grant/approval/audit behavior and `connector:<uuid>` integration prefix.
+3. Preserve validation, diagnostics, and timeout/session-recovery behavior in connector client.
 
-#### Phase 3 — MCP Session Robustness ✅
+#### Phase 4 — Cleanup + Deletion of Legacy Path (`Planned`)
 
-**Status: Implemented.**
-
-1. Architecture is stateless per call — each `listConnectorTools`/`callConnectorTool` creates a fresh `StreamableHTTPClientTransport` + `Client`, initializes, performs the operation, and closes. The SDK handles `Mcp-Session-Id` internally within each connection lifecycle.
-2. On `404` session invalidation during `callConnectorTool`, re-initializes a fresh connection and retries once.
-3. Hard timeouts preserved (15s for `tools/list`, 30s for `tools/call`). Connector failures do not block other sources.
-4. `listConnectorToolsOrThrow` provides a throwing variant for validation diagnostics; `listConnectorTools` remains safe (returns empty on error) for gateway runtime discovery.
-
-#### Phase 4 — Catalog and Presets ✅
-
-**Status: Implemented.**
-
-1. Preset catalog: `CONNECTOR_PRESETS` in `packages/shared/src/connectors.ts` with 4 presets:
-   - **Context7** (`https://mcp.context7.com/mcp`, custom_header auth)
-   - **PostHog MCP** (`https://mcp.posthog.com/mcp`, bearer auth)
-   - **Custom MCP** (fully manual)
-   - **Playwright** (self-host, with guidance text)
-2. Preset picker UI in connector panel with one-click add.
-3. Arbitrary custom connector path always available.
-
-#### Phase 5 — Operator UX and Governance Polish ✅
-
-**Status: Implemented.**
-
-1. Connector status: enabled/disabled toggle per connector in the list view.
-2. Secret picker: dropdown populated from org secrets list (via `useSecrets` hook), with manual text input fallback.
-3. Invocation UX parity: connector actions use the existing `connector:<uuid>` integration prefix and appear in the same actions inbox/approval flow.
+1. Remove prebuild connector CRUD routes/hooks/panel paths after migration cutover.
+2. Remove `prebuilds.connectors` dependency from Actions cross-spec boundary.
+3. Update specs/feature-registry evidence to Integrations-owned code paths only.
 
 #### Non-goals for this iteration
 
@@ -464,7 +444,7 @@ For self-hosted teams that want maximum flexibility, native sandbox MCP remains 
 
 6. **How does this affect the system prompt?** The agent needs to know what tools are available and how to use them. With sandbox MCP (Option 1), OpenCode handles discovery natively. With gateway MCP (Option 2), the existing `proliferate actions list` handles it. With hybrid (Option 3), the system prompt needs to explain both.
 
-7. **How should remote MCP session state be handled (`initialize` + `MCP-Session-Id`)?** Some remote servers expect an initialize handshake and session ID reuse on subsequent calls. Should the gateway keep connector client state per Proliferate session, or re-initialize per call and accept extra latency?
+7. **Should we optimize remote MCP session reuse beyond the current stateless-per-call design?** Today we initialize per call and retry once on `404`, which is robust and simple. Is additional pooled session/client state worth the complexity for latency-sensitive connectors?
 
 ---
 

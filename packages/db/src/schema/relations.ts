@@ -15,6 +15,7 @@ import {
 	integrations,
 	invitation,
 	member,
+	orgConnectors,
 	organization,
 	outbox,
 	prebuildRepos,
@@ -103,6 +104,18 @@ export const organizationRelations = relations(organization, ({ many }) => ({
 	sessions: many(sessions),
 	billingEvents: many(billingEvents),
 	cliGithubSelections: many(cliGithubSelections),
+	orgConnectors: many(orgConnectors),
+}));
+
+export const orgConnectorsRelations = relations(orgConnectors, ({ one }) => ({
+	organization: one(organization, {
+		fields: [orgConnectors.organizationId],
+		references: [organization.id],
+	}),
+	createdByUser: one(user, {
+		fields: [orgConnectors.createdBy],
+		references: [user.id],
+	}),
 }));
 
 export const memberRelations = relations(member, ({ one }) => ({

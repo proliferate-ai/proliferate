@@ -16,8 +16,11 @@ import getNango, {
 } from "@/lib/nango";
 import { revokeToken, sendSlackConnectInvite } from "@/lib/slack";
 import { ORPCError } from "@orpc/server";
-import { integrations } from "@proliferate/services";
+import { actions, connectors, integrations, orgs, secrets } from "@proliferate/services";
 import {
+	ConnectorAuthSchema,
+	ConnectorConfigSchema,
+	ConnectorRiskPolicySchema,
 	GitHubStatusSchema,
 	IntegrationSchema,
 	IntegrationWithCreatorSchema,
@@ -25,6 +28,7 @@ import {
 	SentryMetadataSchema,
 	SlackStatusSchema,
 } from "@proliferate/shared";
+import type { ConnectorConfig } from "@proliferate/shared";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 
@@ -744,4 +748,212 @@ export const integrationsRouter = {
 
 			return { success: true };
 		}),
+
+	// ============================================
+	// Org-Scoped MCP Connectors
+	// ============================================
+
+	/**
+	 * List all MCP connectors for the organization.
+	 */
+	listConnectors: orgProcedure
+		.output(z.object({ connectors: z.array(ConnectorConfigSchema) }))
+		.handler(async ({ context }) => {
+			const list = await connectors.listConnectors(context.orgId);
+			return { connectors: list };
+		}),
+
+	/**
+	 * Create a new MCP connector.
+	 * Restricted to admin/owner role.
+	 */
+	createConnector: orgProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(100),
+				transport: z.literal("remote_http"),
+				url: z.string().url(),
+				auth: ConnectorAuthSchema,
+				riskPolicy: ConnectorRiskPolicySchema.optional(),
+				enabled: z.boolean(),
+			}),
+		)
+		.output(z.object({ connector: ConnectorConfigSchema }))
+		.handler(async ({ input, context }) => {
+			await requireConnectorAdmin(context.user.id, context.orgId);
+			const connector = await connectors.createConnector({
+				organizationId: context.orgId,
+				name: input.name,
+				transport: input.transport,
+				url: input.url,
+				auth: input.auth,
+				riskPolicy: input.riskPolicy,
+				enabled: input.enabled,
+				createdBy: context.user.id,
+			});
+			return { connector };
+		}),
+
+	/**
+	 * Update an existing MCP connector.
+	 * Restricted to admin/owner role.
+	 */
+	updateConnector: orgProcedure
+		.input(
+			z.object({
+				id: z.string().uuid(),
+				name: z.string().min(1).max(100).optional(),
+				url: z.string().url().optional(),
+				auth: ConnectorAuthSchema.optional(),
+				riskPolicy: ConnectorRiskPolicySchema.nullable().optional(),
+				enabled: z.boolean().optional(),
+			}),
+		)
+		.output(z.object({ connector: ConnectorConfigSchema.nullable() }))
+		.handler(async ({ input, context }) => {
+			await requireConnectorAdmin(context.user.id, context.orgId);
+			const connector = await connectors.updateConnector(input.id, context.orgId, {
+				name: input.name,
+				url: input.url,
+				auth: input.auth,
+				riskPolicy: input.riskPolicy,
+				enabled: input.enabled,
+			});
+			if (!connector) {
+				throw new ORPCError("NOT_FOUND", { message: "Connector not found" });
+			}
+			return { connector };
+		}),
+
+	/**
+	 * Delete an MCP connector.
+	 * Restricted to admin/owner role.
+	 */
+	deleteConnector: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			await requireConnectorAdmin(context.user.id, context.orgId);
+			const deleted = await connectors.deleteConnector(input.id, context.orgId);
+			if (!deleted) {
+				throw new ORPCError("NOT_FOUND", { message: "Connector not found" });
+			}
+			return { success: true };
+		}),
+
+	/**
+	 * Validate an MCP connector by resolving its secret and calling tools/list.
+	 * Returns discovered tool metadata and diagnostics.
+	 * Restricted to admin/owner role.
+	 */
+	validateConnector: orgProcedure
+		.input(z.object({ connector: ConnectorConfigSchema }))
+		.output(
+			z.object({
+				ok: z.boolean(),
+				tools: z.array(
+					z.object({
+						name: z.string(),
+						description: z.string(),
+						riskLevel: z.enum(["read", "write", "danger"]),
+						params: z.array(
+							z.object({
+								name: z.string(),
+								type: z.enum(["string", "number", "boolean", "object"]),
+								required: z.boolean(),
+								description: z.string(),
+							}),
+						),
+					}),
+				),
+				error: z.string().nullable(),
+				diagnostics: z
+					.object({
+						class: z.enum(["auth", "timeout", "unreachable", "protocol", "unknown"]),
+						message: z.string(),
+					})
+					.nullable(),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			await requireConnectorAdmin(context.user.id, context.orgId);
+
+			const connector: ConnectorConfig = input.connector;
+
+			// Resolve the secret
+			const resolvedSecret = await secrets.resolveSecretValue(
+				context.orgId,
+				connector.auth.secretKey,
+			);
+			if (!resolvedSecret) {
+				return {
+					ok: false,
+					tools: [],
+					error: `Secret "${connector.auth.secretKey}" not found or could not be decrypted`,
+					diagnostics: { class: "auth" as const, message: "Secret not found" },
+				};
+			}
+
+			try {
+				const result = await actions.connectors.listConnectorToolsOrThrow(
+					connector,
+					resolvedSecret,
+				);
+
+				if (result.actions.length === 0) {
+					return {
+						ok: false,
+						tools: [],
+						error: "Connected successfully but no tools were returned",
+						diagnostics: {
+							class: "protocol" as const,
+							message: "Server returned zero tools from tools/list",
+						},
+					};
+				}
+
+				return {
+					ok: true,
+					tools: result.actions,
+					error: null,
+					diagnostics: null,
+				};
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				let diagClass: "auth" | "timeout" | "unreachable" | "protocol" | "unknown" = "unknown";
+
+				if (message.includes("timeout")) {
+					diagClass = "timeout";
+				} else if (
+					message.includes("ECONNREFUSED") ||
+					message.includes("ENOTFOUND") ||
+					message.includes("fetch failed")
+				) {
+					diagClass = "unreachable";
+				} else if (message.includes("401") || message.includes("403")) {
+					diagClass = "auth";
+				} else if (message.includes("JSON") || message.includes("parse")) {
+					diagClass = "protocol";
+				}
+
+				log.warn({ err, connectorId: connector.id }, "Connector validation failed");
+				return {
+					ok: false,
+					tools: [],
+					error: message,
+					diagnostics: { class: diagClass, message },
+				};
+			}
+		}),
 };
+
+// ============================================
+// Helpers
+// ============================================
+
+async function requireConnectorAdmin(userId: string, orgId: string): Promise<void> {
+	const role = await orgs.getUserRole(userId, orgId);
+	if (role !== "owner" && role !== "admin") {
+		throw new ORPCError("FORBIDDEN", { message: "Admin or owner role required" });
+	}
+}

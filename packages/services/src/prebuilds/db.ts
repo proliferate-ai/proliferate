@@ -442,39 +442,6 @@ export async function getPrebuildEnvFiles(prebuildId: string): Promise<unknown |
 }
 
 /**
- * Get prebuild connector configs.
- */
-export async function getPrebuildConnectors(
-	prebuildId: string,
-): Promise<{ connectors: unknown } | null> {
-	const db = getDb();
-	const result = await db.query.prebuilds.findFirst({
-		where: eq(prebuilds.id, prebuildId),
-		columns: { connectors: true },
-	});
-	return result ?? null;
-}
-
-/**
- * Update prebuild connector configs.
- */
-export async function updatePrebuildConnectors(input: {
-	prebuildId: string;
-	connectors: unknown;
-	updatedBy: string;
-}): Promise<void> {
-	const db = getDb();
-	await db
-		.update(prebuilds)
-		.set({
-			connectors: input.connectors,
-			connectorsUpdatedAt: new Date(),
-			connectorsUpdatedBy: input.updatedBy,
-		})
-		.where(eq(prebuilds.id, input.prebuildId));
-}
-
-/**
  * Update prebuild snapshot_id only if currently null.
  * Returns true if updated, false if already had a snapshot.
  */

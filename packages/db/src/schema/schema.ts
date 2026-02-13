@@ -1717,3 +1717,37 @@ export const sandboxBaseSnapshots = pgTable(
 		),
 	],
 );
+
+// ============================================
+// Org Connectors (org-scoped MCP connector catalog)
+// ============================================
+
+export const orgConnectors = pgTable(
+	"org_connectors",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id").notNull(),
+		name: text().notNull(),
+		transport: text().notNull().default("remote_http"),
+		url: text().notNull(),
+		auth: jsonb().notNull(),
+		riskPolicy: jsonb("risk_policy"),
+		enabled: boolean().notNull().default(true),
+		createdBy: text("created_by"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_org_connectors_org").on(table.organizationId),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "org_connectors_organization_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [user.id],
+			name: "org_connectors_created_by_fkey",
+		}),
+	],
+);

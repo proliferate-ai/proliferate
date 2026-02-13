@@ -37,8 +37,8 @@ These boundaries resolve the most likely overlaps. Follow them exactly.
 
 | Boundary | Rule |
 |----------|------|
-| **Integrations vs Actions/Automations/Sessions** | `integrations.md` owns OAuth flows + connection lifecycle only. Runtime behavior that *uses* a connection belongs to the consuming spec (Actions, Automations, Sessions). |
-| **Actions vs Repos/Prebuilds (connectors)** | `actions.md` owns action execution, risk, approval, grants, and audit behavior. `repos-prebuilds.md` owns persistence and scope of prebuild-level connector configuration. |
+| **Integrations vs Actions/Automations/Sessions** | `integrations.md` owns external credential/connectivity lifecycle (OAuth integrations + MCP connector catalog). Runtime behavior that *uses* those records belongs to the consuming spec (Actions, Automations, Sessions). |
+| **Actions vs Integrations (connectors)** | `actions.md` owns action execution, risk, approval, grants, and audit behavior. `integrations.md` owns persistence and scope of org-level connector configuration (target ownership). Current implementation still stores connectors on prebuilds as a legacy transitional path documented in `repos-prebuilds.md`. |
 | **Agent Contract vs Sessions/Automations** | `agent-contract.md` owns prompt templates, tool schemas, and capability injection. Runtime behavior that *executes* tools belongs to `sessions-gateway.md` (interactive) or `automations-runs.md` (automated). |
 | **Agent Contract vs Sandbox Providers** | `agent-contract.md` owns what tools exist and their schemas. `sandbox-providers.md` owns how tools are injected into the sandbox environment (plugin config, MCP server). |
 | **LLM Proxy vs Billing** | `llm-proxy.md` owns key generation, routing, and spend *events*. `billing-metering.md` owns charging policy, credit gating, and balance enforcement. |
@@ -66,8 +66,8 @@ Use these terms consistently. Do not introduce synonyms.
 | **snapshot** | A saved filesystem state. Three layers: base snapshot, repo snapshot, prebuild snapshot. | image, checkpoint, save point |
 | **action** | A platform-mediated operation the agent performs on external services (e.g., create Linear issue, update Sentry). | tool (tools are the broader category; actions are the external-service subset) |
 | **integration** | An OAuth-backed external connection record (GitHub/Linear/Sentry/Slack) used to resolve tokens server-side. | adapter, connector, provider |
-| **connector** | A configuration entry (typically prebuild-scoped) describing how to reach an MCP server and which secrets/auth mapping to use. | integration, adapter |
-| **action source** | The origin of an action definition surfaced to the agent (adapter today, connector-backed source planned). | integration, transport |
+| **connector** | A configuration entry (org-scoped) describing how to reach an MCP server and which secrets/auth mapping to use. | integration, adapter |
+| **action source** | The origin of an action definition surfaced to the agent (adapter or connector-backed source). | integration, transport |
 | **tool** | A capability available to the agent inside the sandbox. Includes both platform tools (verify, save_snapshot) and action tools. | action (unless it's specifically an external-service action) |
 | **trigger** | An event source that can start an automation run. Types: webhook, polling, scheduled (cron). | event, hook, listener |
 | **outbox** | The transactional outbox table used for reliable event dispatch. | queue, event log |

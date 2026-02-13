@@ -8,7 +8,7 @@
 - Prebuild CRUD (manual, managed, and CLI types)
 - Prebuild-repo associations (many-to-many via `prebuild_repos`)
 - Effective service commands resolution (prebuild overrides > repo defaults)
-- Prebuild-level connector configuration for gateway-mediated MCP action sources
+- Legacy prebuild-level connector persistence for gateway-mediated MCP action sources (transitional; migrating to org scope)
 - Base snapshot build worker (queue, deduplication, status tracking)
 - Repo snapshot build worker (GitHub token hierarchy, commit tracking)
 - Prebuild resolver (resolves prebuild at session start)
@@ -23,15 +23,16 @@
 - Session creation that uses prebuilds — see `sessions-gateway.md` §6.1
 - Secret values, bundles, and encryption — see `secrets-environment.md`
 - Integration OAuth lifecycle — see `integrations.md`
+- Org-scoped connector catalog lifecycle and management UI — see `integrations.md`
 - Sandbox boot sequence that consumes service commands/env files — see `sandbox-providers.md` §6.4
 
 ### Mental Model
 
 **Repos** are org-scoped references to GitHub repositories (or local directories for CLI). They carry metadata (URL, default branch, detected stack) and optional repo-level service commands. Each repo can be linked to one or more GitHub integrations via **repo connections**, which provide the authentication tokens needed for private repo access.
 
-**Prebuilds** group one or more repos (via `prebuild_repos` junction), carry a snapshot ID (saved filesystem state), and store per-prebuild service commands, env file specs, and connector configs. There are three prebuild types: `manual` (user-created), `managed` (auto-created for Slack/universal clients), and CLI (device-scoped via `localPathHash`).
+**Prebuilds** group one or more repos (via `prebuild_repos` junction), carry a snapshot ID (saved filesystem state), and store per-prebuild service commands and env file specs. There are three prebuild types: `manual` (user-created), `managed` (auto-created for Slack/universal clients), and CLI (device-scoped via `localPathHash`).
 
-Connector configuration is consumed by the gateway Actions path (not direct sandbox-native invocation). Sessions inherit connector-backed tool access from their prebuild.
+Connector configuration currently exists on prebuilds as a legacy transitional model, consumed by the gateway Actions path (not direct sandbox-native invocation). Planned direction is org-scoped connector catalog ownership in `integrations.md`.
 
 **Snapshots** are pre-built filesystem states at three layers: base (OpenCode + services, no repo), repo (base + cloned repo), and prebuild/session (full working state). This spec owns the *build* side — the workers that create base and repo snapshots. The *resolution* side (picking which layer to use) belongs to `sandbox-providers.md`.
 
@@ -66,11 +67,11 @@ A SHA-256 hash of `PLUGIN_MJS` + `DEFAULT_CADDYFILE` + `getOpencodeConfig(defaul
 - Key detail agents get wrong: The version key is computed from source code constants, not runtime config. Changing `PLUGIN_MJS` or the Caddyfile template triggers a rebuild.
 - Reference: `packages/shared/src/sandbox/version-key.ts`
 
-### Prebuild Connector Config
-Prebuilds are the intended scope boundary for connector-backed tool access: all sessions using a prebuild inherit the same connector definitions. This keeps tool configuration project-scoped and reproducible.
-- Key detail agents get wrong: connector config is persisted today in `prebuilds.connectors` (JSONB), with `connectors_updated_at` and `connectors_updated_by` metadata.
-- Key detail agents get wrong: connectors are for gateway-mediated Actions execution (approval/audit path), not a second direct invocation path through sandbox-native MCP.
-- Key detail agents get wrong: web support includes oRPC CRUD (`getConnectors` / `updateConnectors` / `validateConnector`), frontend hooks (`apps/web/src/hooks/use-connectors.ts`), and a dedicated Settings panel "Tools" tab with add/edit/remove/validate flow and presets (`apps/web/src/components/coding-session/connectors-panel.tsx`).
+### Prebuild Connector Config (Deprecated — Migrated to Org Scope)
+Connector-backed tool access has been migrated from prebuild-scoped JSONB (`prebuilds.connectors`) to org-scoped relational storage (`org_connectors` table). The gateway now loads connectors by organization, not by prebuild. Legacy JSONB columns remain in the schema for data preservation but are no longer read at runtime.
+- Key detail agents get wrong: connector CRUD and management UI are now in `integrations.md` scope. The prebuild router no longer has connector routes.
+- Key detail agents get wrong: the backfill migration (`0022_org_connectors.sql`) copied prebuild connectors to `org_connectors`, deduplicating by `(organization_id, url, name)`.
+- Reference: `docs/specs/integrations.md`, `packages/services/src/connectors/`
 
 ### GitHub Token Hierarchy
 Repo snapshot builds resolve GitHub tokens with a two-level hierarchy: (1) repo-linked integration connections (prefer GitHub App installation, fall back to Nango OAuth), (2) org-wide GitHub integration. Private repos without a token skip the build.
@@ -85,14 +86,10 @@ Repo snapshot builds resolve GitHub tokens with a two-level hierarchy: (1) repo-
 apps/web/src/server/routers/
 ├── repos.ts                         # Repo oRPC routes (list/get/create/delete/search/available/finalize)
 ├── repos-finalize.ts                # Setup session finalization (snapshot + prebuild create/update)
-└── prebuilds.ts                     # Prebuild oRPC routes (list/create/update/delete/service-commands/connectors/validateConnector)
-
-apps/web/src/hooks/
-└── use-connectors.ts                # Connector hooks (useConnectors, useUpdateConnectors, useValidateConnector)
+└── prebuilds.ts                     # Prebuild oRPC routes (list/create/update/delete/service-commands)
 
 apps/web/src/components/coding-session/
-├── connectors-panel.tsx             # Connector management UI (add/edit/remove/validate, presets, secret picker)
-└── settings-panel.tsx               # Settings panel (Info, Snapshots, Auto-start, Tools tabs)
+└── settings-panel.tsx               # Settings panel (Info, Snapshots, Auto-start tabs)
 
 apps/worker/src/
 ├── base-snapshots/
@@ -178,7 +175,7 @@ prebuilds
 ├── env_files                  JSONB
 ├── env_files_updated_at       TIMESTAMPTZ
 ├── env_files_updated_by       TEXT
-├── connectors                 JSONB                  -- connector configs (gateway-mediated MCP)
+├── connectors                 JSONB                  -- legacy connector configs (gateway-mediated MCP)
 ├── connectors_updated_at      TIMESTAMPTZ
 ├── connectors_updated_by      TEXT
 └── created_at                 TIMESTAMPTZ
@@ -437,20 +434,15 @@ The resolver supports three modes (direct ID, managed, CLI) and returns a `Resol
 
 **Files touched:** `packages/services/src/prebuilds/db.ts:updatePrebuildEnvFiles`, `packages/db/src/schema/prebuilds.ts`
 
-### 6.10 Prebuild Connector Persistence — `Implemented`
+### 6.10 Prebuild Connector Persistence — `Deprecated` (Migrated to Org Scope)
 
-**What it does:** Stores and serves project-scoped connector definitions used by gateway-mediated MCP action sources.
+**What it did:** Previously stored prebuild-scoped connector definitions in `prebuilds.connectors` JSONB. This has been migrated to org-scoped storage in the `org_connectors` table (owned by `integrations.md`).
 
-**Persistence model:**
-1. Connectors are stored as JSONB at `prebuilds.connectors`.
-2. Updates write audit metadata (`connectorsUpdatedAt`, `connectorsUpdatedBy`).
-3. Reads and writes are exposed through prebuild oRPC routes:
-   - `prebuilds.getConnectors`
-   - `prebuilds.updateConnectors`
+**Migration:** Backfill migration `0022_org_connectors.sql` copied connector configs from `prebuilds.connectors` to `org_connectors`, deduplicating by `(organization_id, url, name)`. Legacy JSONB columns remain in the schema but are no longer read at runtime.
 
-**Runtime consumption:** Gateway resolves connector config at session runtime via session `prebuildId`, then merges discovered connector tools into `/actions/available` (see `actions.md` §6.11).
+**Runtime consumption:** Gateway now loads enabled connectors by `session.organizationId` via `connectors.listEnabledConnectors()` (see `actions.md` §6.11).
 
-**Files touched:** `packages/services/src/prebuilds/db.ts:getPrebuildConnectors/updatePrebuildConnectors`, `apps/web/src/server/routers/prebuilds.ts`, `packages/db/src/schema/prebuilds.ts`
+**Files touched:** `packages/db/drizzle/0022_org_connectors.sql` (migration), `packages/services/src/connectors/` (new org-scoped module)
 
 ---
 
@@ -460,7 +452,7 @@ The resolver supports three modes (direct ID, managed, CLI) and returns a `Resol
 |---|---|---|---|
 | `sessions-gateway.md` | Gateway → This | `resolvePrebuild()` → `prebuilds.*`, `cli.*` | Session creation calls resolver which creates/queries prebuild records via this spec's services. Resolver logic owned by `sessions-gateway.md` §6.1. |
 | `sessions-gateway.md` | Gateway → This | `prebuilds.getPrebuildReposWithDetails()` | Session store loads repo details for sandbox provisioning |
-| `actions.md` | Actions ↔ This | `prebuilds.connectors` JSONB + `getPrebuildConnectors()` | Connector-backed action sources use prebuild config as the project-scoped source of truth. |
+| `actions.md` | Actions ↔ Integrations | `org_connectors` table via `connectors.listEnabledConnectors()` | Connector-backed action sources migrated to org-scoped catalog in `integrations.md`. Legacy `prebuilds.connectors` JSONB retained for data preservation only. |
 | `sandbox-providers.md` | Worker → Provider | `ModalLibmodalProvider.createBaseSnapshot()`, `.createRepoSnapshot()` | Snapshot workers call Modal provider directly |
 | `sandbox-providers.md` | Provider ← This | `resolveSnapshotId()` consumes repo snapshot status | Snapshot resolution reads `repoSnapshotId` from repo record |
 | `integrations.md` | This → Integrations | `integrations.getRepoConnectionsWithIntegrations()` | Token resolution for repo snapshot builds |
@@ -496,4 +488,4 @@ The resolver supports three modes (direct ID, managed, CLI) and returns a `Resol
 - [ ] **Setup finalization lives in the router** — `repos-finalize.ts` contains complex orchestration (snapshot + secrets + prebuild creation) that should be in the services layer. Impact: harder to reuse from non-web contexts. Marked with a TODO in code.
 - [ ] **GitHub search uses unauthenticated API** — `repos.search` calls GitHub API without auth, subject to lower rate limits (60 req/hour per IP). Impact: may fail under heavy usage. Expected fix: use org's GitHub integration token for authenticated search.
 - [ ] **No webhook-driven repo snapshot rebuilds** — Repo snapshots are only built on repo creation. Subsequent pushes to `defaultBranch` don't trigger rebuilds. Impact: repo snapshots become stale over time; git freshness pull compensates at session start. Expected fix: trigger rebuilds from GitHub push webhooks.
-- [x] **Connector editing is productized** — addressed. Settings panel "Tools" tab provides a full connector editor with add/edit/remove/validate flow, presets (Context7, PostHog, Playwright, Custom), secret picker, and inline validation diagnostics. Admin/owner role check enforced on writes. Source: `apps/web/src/components/coding-session/connectors-panel.tsx`, `apps/web/src/hooks/use-connectors.ts`, `apps/web/src/server/routers/prebuilds.ts:validateConnector`.
+- [ ] **Connector scope is prebuild-scoped (legacy path)** — connector setup must be repeated across prebuilds in the same org. Impact: operational overhead and inconsistent tool availability across sessions. Expected fix: migrate connector storage + UI to org scope in `integrations.md` and retire prebuild connector persistence/routes.

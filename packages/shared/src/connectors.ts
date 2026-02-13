@@ -1,7 +1,7 @@
 /**
  * MCP Connector types and validation schemas.
  *
- * Connectors are prebuild-scoped configurations that describe how to reach
+ * Connectors are org-scoped configurations that describe how to reach
  * a remote MCP server. The gateway resolves connector configs at runtime,
  * lists their tools, and surfaces them through the Actions pipeline.
  */
@@ -38,7 +38,7 @@ export interface ConnectorRiskPolicy {
 }
 
 export interface ConnectorConfig {
-	/** Unique identifier within this prebuild (UUID). */
+	/** Unique identifier for this connector (UUID). */
 	id: string;
 	/** Display name (e.g., "Notion", "Stripe"). */
 	name: string;
@@ -98,7 +98,8 @@ export const ConnectorsArraySchema = z.array(ConnectorConfigSchema).max(20);
 // ============================================
 
 /**
- * Parse and validate raw JSONB connector config from the prebuilds table.
+ * Legacy helper: parse and validate raw connector JSONB from prebuild storage.
+ * New connector source-of-truth is org-scoped catalog persistence.
  * Returns an empty array for null, undefined, or invalid input.
  */
 export function parsePrebuildConnectors(raw: unknown): ConnectorConfig[] {
