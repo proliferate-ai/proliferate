@@ -36,7 +36,7 @@ const NAV_ITEMS = [
 				: []),
 			{ id: "members", label: "Members", icon: Users, href: "/settings/members" },
 			{ id: "secrets", label: "Secrets", icon: Key, href: "/settings/secrets" },
-			{ id: "connectors", label: "Connectors", icon: Plug, href: "/settings/connectors" },
+			{ id: "tools", label: "Tools", icon: Plug, href: "/settings/tools" },
 		],
 	},
 ];
@@ -47,7 +47,7 @@ const PAGE_TITLES: Record<string, string> = {
 	members: "Members",
 	secrets: "Secrets",
 	...(BILLING_ENABLED ? { billing: "Billing" } : {}),
-	connectors: "Connectors",
+	tools: "Tools",
 };
 
 function getPageTitle(pathname: string) {

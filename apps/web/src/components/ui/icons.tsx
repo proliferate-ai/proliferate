@@ -177,6 +177,88 @@ export function PostHogIcon({ className }: IconProps) {
 }
 
 /**
+ * Stripe brand icon (S mark)
+ */
+export function StripeIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.594-7.305h.003z" />
+		</svg>
+	);
+}
+
+/**
+ * Firecrawl brand icon (flame)
+ */
+export function FirecrawlIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path d="M12 0C8.5 4 6 7.5 6 11c0 1.5.5 3 1.5 4.2C6.5 13.5 7 11 9 8.5c0 3.5 1.5 7 4 9.5 1.5-1.5 2.5-3.5 2.5-5.5 1.5 1 2.5 3 2.5 5 1.5-1.5 2.5-3.5 2.5-5.5 0-1-.2-2-.5-3C18.5 5.5 15.5 2 12 0z" />
+		</svg>
+	);
+}
+
+/**
+ * Neon brand icon (stylized lightning N)
+ */
+export function NeonIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path d="M5 2v14.5l4.5-7V20h1.25L15 12.5V22h4V2h-4l-5 8V2H5z" />
+		</svg>
+	);
+}
+
+/**
+ * Context7 brand icon (document with 7)
+ */
+export function Context7Icon({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+			<rect x="3" y="1" width="18" height="22" rx="3" stroke="currentColor" strokeWidth="2" />
+			<path
+				d="M9 8h6.5L11 17"
+				stroke="currentColor"
+				strokeWidth="2.5"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	);
+}
+
+/**
+ * Playwright brand icon (theater masks)
+ */
+export function PlaywrightIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path d="M16.5 2.5C14 2.5 12 4.5 12 7c0 .5.1 1 .2 1.5C10.1 7 7.5 6 5 6 2.2 6 0 8.2 0 11s2.2 5 5 5c2.5 0 4.5-1.8 4.9-4.2.6 1.8 2.1 3.2 4.1 3.2 2.5 0 4.5-2 4.5-4.5 0-.5-.1-1-.2-1.4C20.2 10.8 22 12.7 22 15c0 2.8-2.2 5-5 5-1.5 0-2.9-.7-3.8-1.8-.3.6-.7 1.2-1.2 1.7C13.2 21.2 14.9 22 17 22c3.9 0 7-3.1 7-7 0-4.5-4-7.5-7.5-7.5v-5zM5 14c-1.7 0-3-1.3-3-3s1.3-3 3-3c2 0 4 1.5 5 3-1 1.5-3 3-5 3zm9.5-3.5c-1.4 0-2.5-1.1-2.5-2.5S13.1 5.5 14.5 5.5 17 6.6 17 8s-1.1 2.5-2.5 2.5z" />
+		</svg>
+	);
+}
+
+/**
  * Linear brand icon
  */
 export function LinearIcon({ className }: IconProps) {
