@@ -97,7 +97,7 @@ export async function POST(request: Request) {
 			log.warn({ err }, "Failed to create Autumn customer");
 		}
 
-		let setup: Awaited<ReturnType<typeof autumnAttach>>;
+		let setup: Awaited<ReturnType<typeof autumnAttach>> | null = null;
 		try {
 			setup = await autumnAttach({
 				customer_id: customerId,
@@ -111,26 +111,38 @@ export async function POST(request: Request) {
 				force_checkout: true,
 			});
 		} catch (attachErr) {
-			// Autumn rejects force_checkout on upgrade/downgrade (e.g. onboarding
-			// retry when customer already has a product). Retry without it.
-			if (attachErr instanceof Error && attachErr.message.includes("force_checkout")) {
+			const msg = attachErr instanceof Error ? attachErr.message : "";
+			if (msg.includes("already scheduled") || msg.includes("can't attach again")) {
+				// Product already attached from a previous attempt — treat as success.
+				log.info("Product already attached, skipping autumnAttach");
+			} else if (msg.includes("force_checkout")) {
+				// Autumn rejects force_checkout on upgrade/downgrade. Retry without it.
 				log.warn("force_checkout rejected, retrying without it");
-				setup = await autumnAttach({
-					customer_id: customerId,
-					product_id: selectedPlan,
-					success_url: `${baseUrl}/onboarding/complete`,
-					cancel_url: `${baseUrl}/onboarding`,
-					customer_data: {
-						email: userEmail,
-						name: org.name,
-					},
-				});
+				try {
+					setup = await autumnAttach({
+						customer_id: customerId,
+						product_id: selectedPlan,
+						success_url: `${baseUrl}/onboarding/complete`,
+						cancel_url: `${baseUrl}/onboarding`,
+						customer_data: {
+							email: userEmail,
+							name: org.name,
+						},
+					});
+				} catch (retryErr) {
+					const retryMsg = retryErr instanceof Error ? retryErr.message : "";
+					if (retryMsg.includes("already scheduled") || retryMsg.includes("can't attach again")) {
+						log.info("Product already attached on retry, skipping");
+					} else {
+						throw retryErr;
+					}
+				}
 			} else {
 				throw attachErr;
 			}
 		}
 
-		const checkoutUrl = setup.checkout_url ?? setup.url;
+		const checkoutUrl = setup?.checkout_url ?? setup?.url;
 		if (checkoutUrl) {
 			return NextResponse.json({
 				success: true,
