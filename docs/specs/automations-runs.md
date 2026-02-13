@@ -493,19 +493,18 @@ try {
 
 **Files touched:** `packages/services/src/runs/db.ts`, `packages/services/src/runs/service.ts`, `apps/web/src/server/routers/automations.ts`, `apps/web/src/hooks/use-automations.ts`
 
-### 6.11 Run Claiming & Assignment — `Partial`
+### 6.11 Run Claiming, Assignment & Resolution — `Implemented`
 
-**What it does:** Lets users claim runs for manual review.
+**What it does:** Lets users claim runs for manual review and resolve attention-requiring runs.
 
 **Implemented routes** (`apps/web/src/server/routers/automations.ts`):
 - `assignRun` — claim a run for the current user. Throws `CONFLICT` if already claimed by another user.
 - `unassignRun` — unclaim a run.
 - `myClaimedRuns` — list runs assigned to the current user.
 - `listRuns` — list runs for an automation with status/pagination filters.
+- `resolveRun` — manually transition a `needs_human`, `failed`, or `timed_out` run to `succeeded` or `failed` with an optional resolution note.
 
 **Scoping note:** The route validates that the automation exists in the org (`automationExists(id, orgId)`), but the actual DB update in `assignRunToUser` (`packages/services/src/runs/db.ts:278`) is scoped by `run_id + organization_id` only — it does not re-check the automation ID. This means the automation ID in the route acts as a parent-resource guard but is not enforced at the DB level.
-
-**Gap:** No manual status update route (e.g., marking a `needs_human` run as resolved). Feature registry notes this as incomplete.
 
 ---
 
@@ -545,7 +544,7 @@ try {
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **No manual run status update** — Users can claim runs but cannot manually resolve `needs_human` runs via the API. Impact: requires direct DB access to close stuck runs. Expected fix: add `updateRunStatus` oRPC route with allowed transitions.
+- [x] **Manual run status update** — Addressed. `resolveRun` oRPC route allows transitioning `needs_human`, `failed`, or `timed_out` runs to `succeeded` or `failed` with a resolution note. Source: `apps/web/src/server/routers/automations.ts:resolveRun`.
 - [ ] **LLM filter/analysis fields unused** — `llm_filter_prompt` and `llm_analysis_prompt` columns exist on automations but are not executed during enrichment. Impact: configuration exists in UI but has no runtime effect. Expected fix: add LLM evaluation step to trigger processing pipeline (likely in `triggers.md` scope).
 - [ ] **No run deadline enforcement at creation** — The `deadline_at` column exists but is never set during run creation. Only the finalizer checks it. Impact: runs rely solely on inactivity detection (30 min). Expected fix: set deadline from automation config at run creation.
 - [ ] **Single-channel notifications** — Only Slack is implemented. The `NotificationChannel` interface exists for future email/in-app channels but no other implementations exist. Impact: orgs without Slack get no run notifications.

@@ -275,9 +275,6 @@ export const PendingRunSummarySchema = z.object({
 	session_id: z.string().uuid().nullable(),
 	queued_at: z.string(),
 	completed_at: z.string().nullable(),
-	trigger_provider: z.string().nullable(),
-	trigger_name: z.string().nullable(),
-	trigger_title: z.string().nullable(),
 });
 
 export type PendingRunSummary = z.infer<typeof PendingRunSummarySchema>;

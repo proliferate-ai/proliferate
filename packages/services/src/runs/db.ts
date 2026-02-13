@@ -377,9 +377,6 @@ export interface PendingRunSummary {
 	sessionId: string | null;
 	queuedAt: Date;
 	completedAt: Date | null;
-	triggerProvider: string | null;
-	triggerName: string | null;
-	triggerTitle: string | null;
 }
 
 export async function listOrgPendingRuns(
@@ -425,8 +422,5 @@ export async function listOrgPendingRuns(
 		sessionId: r.sessionId,
 		queuedAt: r.queuedAt,
 		completedAt: r.completedAt,
-		triggerProvider: null,
-		triggerName: null,
-		triggerTitle: null,
 	}));
 }

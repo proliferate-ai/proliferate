@@ -98,7 +98,7 @@
 | Slack async client | Implemented | `apps/worker/src/slack/client.ts` | Full bidirectional session via Slack |
 | Slack inbound handlers | Implemented | `apps/worker/src/slack/handlers/` | Text, todo, verify, default-tool |
 | Slack receiver worker | Implemented | `apps/worker/src/slack/` | BullMQ-based message processing |
-| Run claiming / manual update | Partial | `apps/web/src/server/routers/automations.ts` | Run events queryable; manual update route incomplete |
+| Run claiming / manual update | Implemented | `apps/web/src/server/routers/automations.ts` | Claim, unclaim, resolve runs via `assignRun`/`unassignRun`/`resolveRun` routes |
 | Org pending runs query | Implemented | `packages/services/src/runs/db.ts:listOrgPendingRuns`, `apps/web/src/server/routers/automations.ts` | Failed/needs_human/timed_out runs for attention inbox |
 | Schedules for automations | Implemented | `packages/db/src/schema/schedules.ts` | Cron schedules with timezone |
 

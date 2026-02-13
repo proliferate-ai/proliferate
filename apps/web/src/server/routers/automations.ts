@@ -464,9 +464,6 @@ export const automationsRouter = {
 					session_id: r.sessionId,
 					queued_at: r.queuedAt.toISOString(),
 					completed_at: r.completedAt?.toISOString() ?? null,
-					trigger_provider: r.triggerProvider,
-					trigger_name: r.triggerName,
-					trigger_title: r.triggerTitle,
 				})),
 			};
 		}),

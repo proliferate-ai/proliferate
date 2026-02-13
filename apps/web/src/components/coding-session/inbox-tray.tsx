@@ -2,8 +2,11 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useAttentionInbox } from "@/hooks/use-attention-inbox";
-import { GATEWAY_URL } from "@/lib/gateway";
+import { useApproveAction, useDenyAction } from "@/hooks/use-actions";
+import { type ApprovalWithSession, useAttentionInbox } from "@/hooks/use-attention-inbox";
+import { useOrgMembersAndInvitations } from "@/hooks/use-orgs";
+import { useSession } from "@/lib/auth-client";
+import { hasRoleOrHigher } from "@/lib/roles";
 import type { PendingRunSummary } from "@proliferate/shared";
 import type { ActionApprovalRequestMessage } from "@proliferate/shared";
 import {
@@ -18,7 +21,7 @@ import {
 	XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 type ActionApproval = ActionApprovalRequestMessage["payload"];
 
@@ -36,6 +39,13 @@ export function InboxTray({ sessionId, token, pendingApprovals }: InboxTrayProps
 		sessionId,
 	});
 
+	const { data: authSession } = useSession();
+	const { data: orgData } = useOrgMembersAndInvitations(
+		authSession?.session?.activeOrganizationId ?? "",
+	);
+	const canApprove =
+		!!orgData?.currentUserRole && hasRoleOrHigher(orgData.currentUserRole, "admin");
+
 	if (items.length === 0) return null;
 
 	const visible = items.slice(0, MAX_VISIBLE_CARDS);
@@ -48,9 +58,9 @@ export function InboxTray({ sessionId, token, pendingApprovals }: InboxTrayProps
 					item.type === "approval" ? (
 						<ApprovalCard
 							key={item.data.approval.invocationId}
-							sessionId={item.data.sessionId}
+							approvalWithSession={item.data}
 							token={token}
-							approval={item.data.approval}
+							canApprove={canApprove}
 						/>
 					) : (
 						<RunCard key={item.data.id} run={item.data} />
@@ -71,17 +81,27 @@ export function InboxTray({ sessionId, token, pendingApprovals }: InboxTrayProps
 // ============================================
 
 function ApprovalCard({
-	sessionId,
+	approvalWithSession,
 	token,
-	approval,
+	canApprove,
 }: {
-	sessionId: string;
+	approvalWithSession: ApprovalWithSession;
 	token: string | null;
-	approval: ActionApproval;
+	canApprove: boolean;
 }) {
-	const [loading, setLoading] = useState<"approve" | "deny" | "grant" | null>(null);
-	const [error, setError] = useState<string | null>(null);
+	const { approval, sessionId, sessionTitle } = approvalWithSession;
 	const [timeLeft, setTimeLeft] = useState<string>("");
+
+	const approveMutation = useApproveAction();
+	const denyMutation = useDenyAction();
+	const loading = approveMutation.isPending
+		? approveMutation.variables?.mode === "grant"
+			? "grant"
+			: "approve"
+		: denyMutation.isPending
+			? "deny"
+			: null;
+	const error = approveMutation.error?.message ?? denyMutation.error?.message ?? null;
 
 	useEffect(() => {
 		if (!approval.expiresAt) return;
@@ -100,42 +120,29 @@ function ApprovalCard({
 		return () => clearInterval(interval);
 	}, [approval.expiresAt]);
 
-	const respond = useCallback(
-		async (action: "approve" | "deny", mode?: "once" | "grant") => {
-			if (!token || !GATEWAY_URL) return;
-			setLoading(mode === "grant" ? "grant" : action);
-			setError(null);
-			try {
-				const url = `${GATEWAY_URL}/proliferate/${sessionId}/actions/invocations/${approval.invocationId}/${action}`;
-				const body: Record<string, unknown> = {};
-				if (mode) body.mode = mode;
-				if (mode === "grant") body.grant = { scope: "session", maxCalls: null };
+	const handleApprove = (mode: "once" | "grant") => {
+		if (!token) return;
+		approveMutation.mutate({
+			sessionId,
+			invocationId: approval.invocationId,
+			token,
+			mode,
+			grant: mode === "grant" ? { scope: "session", maxCalls: 10 } : undefined,
+		});
+	};
 
-				const res = await fetch(url, {
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${token}`,
-						"Content-Type": "application/json",
-					},
-					...(Object.keys(body).length > 0 ? { body: JSON.stringify(body) } : {}),
-				});
-				if (!res.ok) {
-					const data = (await res.json().catch(() => ({}))) as {
-						error?: string;
-					};
-					throw new Error(data.error || `HTTP ${res.status}`);
-				}
-			} catch (err) {
-				setError(err instanceof Error ? err.message : "Failed");
-			} finally {
-				setLoading(null);
-			}
-		},
-		[sessionId, token, approval.invocationId],
-	);
+	const handleDeny = () => {
+		if (!token) return;
+		denyMutation.mutate({
+			sessionId,
+			invocationId: approval.invocationId,
+			token,
+		});
+	};
 
 	const paramsPreview = formatParams(approval.params);
 	const expired = timeLeft === "expired";
+	const buttonsDisabled = loading !== null || expired || !canApprove;
 
 	return (
 		<div className="flex items-center gap-3 rounded-lg border bg-muted/50 px-3 py-2 text-sm">
@@ -150,18 +157,24 @@ function ApprovalCard({
 					</Badge>
 					{timeLeft && <span className="text-xs text-muted-foreground shrink-0">{timeLeft}</span>}
 				</div>
+				{sessionTitle && (
+					<p className="text-xs text-muted-foreground truncate mt-0.5">{sessionTitle}</p>
+				)}
 				{paramsPreview && (
 					<p className="text-xs text-muted-foreground truncate mt-0.5">{paramsPreview}</p>
 				)}
 				{error && <p className="text-xs text-destructive mt-0.5">{error}</p>}
+				{!canApprove && (
+					<p className="text-xs text-muted-foreground mt-0.5">Admin role required to approve</p>
+				)}
 			</div>
 			<div className="flex items-center gap-1 shrink-0">
 				<Button
 					size="sm"
 					variant="outline"
 					className="h-7 px-2"
-					disabled={loading !== null || expired}
-					onClick={() => respond("deny")}
+					disabled={buttonsDisabled}
+					onClick={handleDeny}
 				>
 					{loading === "deny" ? (
 						<Loader2 className="h-3 w-3 animate-spin" />
@@ -173,8 +186,8 @@ function ApprovalCard({
 				<Button
 					size="sm"
 					className="h-7 px-2"
-					disabled={loading !== null || expired}
-					onClick={() => respond("approve", "once")}
+					disabled={buttonsDisabled}
+					onClick={() => handleApprove("once")}
 				>
 					{loading === "approve" ? (
 						<Loader2 className="h-3 w-3 animate-spin" />
@@ -187,9 +200,9 @@ function ApprovalCard({
 					size="sm"
 					variant="secondary"
 					className="h-7 px-2"
-					disabled={loading !== null || expired}
-					onClick={() => respond("approve", "grant")}
-					title="Approve and grant for this session"
+					disabled={buttonsDisabled}
+					onClick={() => handleApprove("grant")}
+					title="Approve and grant for this session (10 uses)"
 				>
 					{loading === "grant" ? (
 						<Loader2 className="h-3 w-3 animate-spin" />
@@ -210,29 +223,13 @@ function ApprovalCard({
 function getRunStatusInfo(status: string) {
 	switch (status) {
 		case "failed":
-			return {
-				icon: XCircle,
-				label: "Failed",
-				className: "text-red-500",
-			};
+			return { icon: XCircle, label: "Failed", className: "text-red-500" };
 		case "needs_human":
-			return {
-				icon: Hand,
-				label: "Needs Human",
-				className: "text-amber-500",
-			};
+			return { icon: Hand, label: "Needs Human", className: "text-amber-500" };
 		case "timed_out":
-			return {
-				icon: Timer,
-				label: "Timed Out",
-				className: "text-orange-500",
-			};
+			return { icon: Timer, label: "Timed Out", className: "text-orange-500" };
 		default:
-			return {
-				icon: AlertCircle,
-				label: status,
-				className: "text-muted-foreground",
-			};
+			return { icon: AlertCircle, label: status, className: "text-muted-foreground" };
 	}
 }
 

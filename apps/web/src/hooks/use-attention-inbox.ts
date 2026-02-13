@@ -12,6 +12,7 @@ type ActionApproval = ActionApprovalRequestMessage["payload"];
 export interface ApprovalWithSession {
 	approval: ActionApproval;
 	sessionId: string;
+	sessionTitle?: string | null;
 }
 
 export type AttentionItem =
@@ -53,8 +54,6 @@ export function useAttentionInbox(options: {
 		if (orgActions?.invocations) {
 			for (const inv of orgActions.invocations) {
 				if (seenInvocationIds.has(inv.id)) continue;
-				// Skip invocations from current session (already handled by WS)
-				if (sessionId && inv.sessionId === sessionId) continue;
 				seenInvocationIds.add(inv.id);
 				const approval: ActionApproval = {
 					invocationId: inv.id,
@@ -66,7 +65,7 @@ export function useAttentionInbox(options: {
 				};
 				result.push({
 					type: "approval",
-					data: { approval, sessionId: inv.sessionId },
+					data: { approval, sessionId: inv.sessionId, sessionTitle: inv.sessionTitle },
 					timestamp: inv.createdAt ? new Date(inv.createdAt).getTime() : Date.now(),
 				});
 			}
