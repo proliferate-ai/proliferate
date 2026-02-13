@@ -37,6 +37,7 @@ import { AddSnapshotButton } from "./add-snapshot-button";
 import { SearchTrigger } from "./command-search";
 import { ConfigurationGroup } from "./configuration-group";
 import { SessionItem } from "./session-item";
+import { SidebarOrganizeMenu } from "./sidebar-organize-menu";
 
 // Mobile sidebar trigger button - shown in mobile header
 export function MobileSidebarTrigger() {
@@ -209,8 +210,15 @@ function SidebarContent({
 
 	// Fetch Slack status for support popup
 	const { data: slackStatus } = useSlackStatus();
-	const { toggleSidebar, setActiveSession, clearPendingPrompt, setCommandSearchOpen } =
-		useDashboardStore();
+	const {
+		toggleSidebar,
+		setActiveSession,
+		clearPendingPrompt,
+		setCommandSearchOpen,
+		sidebarOrganize,
+		sidebarSort,
+		sidebarStatusFilter,
+	} = useDashboardStore();
 
 	const user = authSession?.user;
 	const userInitials = user?.name
@@ -242,8 +250,13 @@ function SidebarContent({
 	const { data: prebuildsData } = usePrebuilds();
 	const prebuilds = (prebuildsData as Prebuild[] | undefined) || [];
 
-	// Filter to coding sessions, group by prebuild
-	const codingSessions = sessions?.filter((s) => s.sessionType !== "setup" && s.origin !== "cli");
+	// Filter to coding sessions, apply status filter, group by prebuild
+	const codingSessions = sessions?.filter((s) => {
+		if (s.sessionType === "setup" || s.origin === "cli") return false;
+		if (sidebarStatusFilter === "running") return s.status === "running";
+		if (sidebarStatusFilter === "paused") return s.status === "paused";
+		return true;
+	});
 
 	const sessionsByPrebuild = new Map<string, Session[]>();
 	const orphanedSessions: Session[] = [];
@@ -259,6 +272,15 @@ function SidebarContent({
 			orphanedSessions.push(session);
 		}
 	}
+
+	// Flat sorted list for chronological mode
+	const sortedSessions = [...(codingSessions ?? [])].sort((a, b) => {
+		const dateA =
+			sidebarSort === "updated" ? a.lastActivityAt || a.startedAt || "" : a.startedAt || "";
+		const dateB =
+			sidebarSort === "updated" ? b.lastActivityAt || b.startedAt || "" : b.startedAt || "";
+		return new Date(dateB).getTime() - new Date(dateA).getTime();
+	});
 
 	// Detect active pages from URL
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
@@ -391,39 +413,61 @@ function SidebarContent({
 			<div className="flex-1 overflow-y-auto text-sm">
 				<div className="flex items-center w-full px-4 py-1.5 text-xs text-muted-foreground">
 					<span>Threads</span>
-					<div className="ml-auto">
+					<div className="ml-auto flex items-center gap-0.5">
+						<SidebarOrganizeMenu />
 						<AddSnapshotButton />
 					</div>
 				</div>
 				<div className="px-2">
-					{prebuilds.map((prebuild) => (
-						<ConfigurationGroup
-							key={prebuild.id}
-							prebuild={prebuild}
-							sessions={sessionsByPrebuild.get(prebuild.id) ?? []}
-							activeSessionId={urlSessionId}
-							onNavigate={onNavigate}
-						/>
-					))}
-					{orphanedSessions.length > 0 && (
+					{sidebarOrganize === "by-project" ? (
 						<>
-							<div className="px-3 py-1 text-xs text-muted-foreground/60">Other</div>
-							{orphanedSessions.slice(0, 10).map((session) => (
-								<SessionItem
-									key={session.id}
-									session={session}
-									isActive={urlSessionId === session.id}
+							{prebuilds.map((prebuild) => (
+								<ConfigurationGroup
+									key={prebuild.id}
+									prebuild={prebuild}
+									sessions={sessionsByPrebuild.get(prebuild.id) ?? []}
+									activeSessionId={urlSessionId}
 									onNavigate={onNavigate}
 								/>
 							))}
-							{orphanedSessions.length > 10 && (
-								<button
-									type="button"
-									onClick={() => handleNavigate("/dashboard/sessions")}
-									className="w-full px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-								>
-									Show more
-								</button>
+							{orphanedSessions.length > 0 && (
+								<>
+									<div className="px-3 py-1 text-xs text-muted-foreground/60">Other</div>
+									{orphanedSessions.slice(0, 10).map((session) => (
+										<SessionItem
+											key={session.id}
+											session={session}
+											isActive={urlSessionId === session.id}
+											onNavigate={onNavigate}
+										/>
+									))}
+									{orphanedSessions.length > 10 && (
+										<button
+											type="button"
+											onClick={() => handleNavigate("/dashboard/sessions")}
+											className="w-full px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+										>
+											Show more
+										</button>
+									)}
+								</>
+							)}
+						</>
+					) : (
+						<>
+							{sortedSessions.length > 0 ? (
+								sortedSessions.map((session) => (
+									<SessionItem
+										key={session.id}
+										session={session}
+										isActive={urlSessionId === session.id}
+										onNavigate={onNavigate}
+									/>
+								))
+							) : (
+								<div className="px-3 py-4 text-center text-sm text-muted-foreground/60">
+									No sessions
+								</div>
 							)}
 						</>
 					)}

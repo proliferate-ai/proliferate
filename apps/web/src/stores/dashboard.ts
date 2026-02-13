@@ -21,6 +21,11 @@ interface DashboardState {
 	dismissedOnboardingCards: string[];
 	hasSeenWelcome: boolean;
 
+	// Sidebar organize preferences
+	sidebarOrganize: "by-project" | "chronological";
+	sidebarSort: "created" | "updated";
+	sidebarStatusFilter: "all" | "running" | "paused";
+
 	// Actions
 	setSelectedRepo: (repoId: string | null) => void;
 	setSelectedSnapshot: (snapshotId: string | null) => void;
@@ -35,6 +40,9 @@ interface DashboardState {
 	setCommandSearchOpen: (open: boolean) => void;
 	dismissOnboardingCard: (cardId: string) => void;
 	markWelcomeSeen: () => void;
+	setSidebarOrganize: (organize: "by-project" | "chronological") => void;
+	setSidebarSort: (sort: "created" | "updated") => void;
+	setSidebarStatusFilter: (filter: "all" | "running" | "paused") => void;
 	reset: () => void;
 }
 
@@ -54,6 +62,9 @@ export const useDashboardStore = create<DashboardState>()(
 			commandSearchOpen: false,
 			dismissedOnboardingCards: [],
 			hasSeenWelcome: false,
+			sidebarOrganize: "chronological",
+			sidebarSort: "updated",
+			sidebarStatusFilter: "all",
 
 			// Actions
 			setSelectedRepo: (repoId) =>
@@ -92,6 +103,10 @@ export const useDashboardStore = create<DashboardState>()(
 
 			markWelcomeSeen: () => set({ hasSeenWelcome: true }),
 
+			setSidebarOrganize: (organize) => set({ sidebarOrganize: organize }),
+			setSidebarSort: (sort) => set({ sidebarSort: sort }),
+			setSidebarStatusFilter: (filter) => set({ sidebarStatusFilter: filter }),
+
 			reset: () =>
 				set({
 					selectedRepoId: null,
@@ -106,6 +121,9 @@ export const useDashboardStore = create<DashboardState>()(
 					commandSearchOpen: false,
 					dismissedOnboardingCards: [],
 					hasSeenWelcome: false,
+					sidebarOrganize: "chronological",
+					sidebarSort: "updated",
+					sidebarStatusFilter: "all",
 				}),
 		}),
 		{
@@ -118,6 +136,9 @@ export const useDashboardStore = create<DashboardState>()(
 				sidebarCollapsed: state.sidebarCollapsed,
 				dismissedOnboardingCards: state.dismissedOnboardingCards,
 				hasSeenWelcome: state.hasSeenWelcome,
+				sidebarOrganize: state.sidebarOrganize,
+				sidebarSort: state.sidebarSort,
+				sidebarStatusFilter: state.sidebarStatusFilter,
 			}),
 		},
 	),
