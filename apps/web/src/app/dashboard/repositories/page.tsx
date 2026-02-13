@@ -321,7 +321,7 @@ function RepoRow({
 							{repo.defaultBranch || "main"}
 						</span>
 						<span className="inline-flex items-center rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground flex-shrink-0">
-							{repo.prebuildStatus === "ready" ? "Ready" : "Fresh start"}
+							{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
 						</span>
 					</button>
 
@@ -402,7 +402,7 @@ function RepoDetails({
 		<div className="px-4 pb-3 space-y-4">
 			{/* Snapshots */}
 			<div className="pl-5.5">
-				<p className="text-xs text-muted-foreground mb-2">Snapshots</p>
+				<p className="text-xs text-muted-foreground mb-2">Configurations</p>
 				{snapshotsLoading ? (
 					<LoadingDots size="sm" className="text-muted-foreground" />
 				) : snapshots && snapshots.length > 0 ? (
@@ -454,7 +454,7 @@ function RepoDetails({
 					onClick={() => onConfigure(repo.id)}
 				>
 					<Plus className="h-3 w-3 mr-1" />
-					New snapshot
+					New configuration
 				</Button>
 			</div>
 

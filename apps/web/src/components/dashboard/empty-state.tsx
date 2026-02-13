@@ -1,5 +1,6 @@
 "use client";
 
+import { HelpLink } from "@/components/help/help-link";
 import { useAutomations } from "@/hooks/use-automations";
 import { useIntegrations } from "@/hooks/use-integrations";
 import { useCreatePrebuild } from "@/hooks/use-prebuilds";
@@ -8,10 +9,11 @@ import { useCreateSession } from "@/hooks/use-sessions";
 import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
-import { Github, X } from "lucide-react";
+import { Github, Settings, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { GithubIcon } from "../ui/icons";
 import { OnboardingCards } from "./onboarding-cards";
 import { PromptInput } from "./prompt-input";
 import { WelcomeDialog } from "./welcome-dialog";
@@ -21,6 +23,14 @@ function getGreeting(name: string): string {
 	if (hour < 12) return `Good morning, ${name}`;
 	if (hour < 18) return `Good afternoon, ${name}`;
 	return `Good evening, ${name}`;
+}
+
+function hasGitHubConnection(
+	integrations: Array<{ provider: string; status: string | null }>,
+): boolean {
+	return integrations.some(
+		(i) => (i.provider === "github" || i.provider === "github-app") && i.status === "active",
+	);
 }
 
 export function EmptyDashboard() {
@@ -47,7 +57,7 @@ export function EmptyDashboard() {
 	const hasCards = useMemo(() => {
 		if (dataLoading) return false;
 		const integrations = integrationsData?.integrations ?? [];
-		const hasGitHub = integrations.some((i) => i.provider === "github" && i.status === "active");
+		const hasGitHub = hasGitHubConnection(integrations);
 		const hasSlack = integrations.some((i) => i.provider === "slack" && i.status === "active");
 		const hasAutomation = (automations ?? []).length > 0;
 		const hasAnyRepo = (repos ?? []).length > 0;
@@ -127,10 +137,21 @@ export function EmptyDashboard() {
 	// GitHub nudge: show when no GitHub is connected and not dismissed
 	const hasGitHub = useMemo(() => {
 		const integrations = integrationsData?.integrations ?? [];
-		return integrations.some((i) => i.provider === "github" && i.status === "active");
+		return hasGitHubConnection(integrations);
 	}, [integrationsData]);
 	const showGitHubNudge =
 		!dataLoading && !hasGitHub && !dismissedOnboardingCards.includes("github-nudge");
+
+	// Setup hint: show when selected repo is not configured
+	const selectedRepo = useMemo(() => {
+		if (!selectedRepoId || !repos) return null;
+		return repos.find((r) => r.id === selectedRepoId) ?? null;
+	}, [selectedRepoId, repos]);
+	const showSetupHint =
+		!dataLoading &&
+		selectedRepo &&
+		selectedRepo.prebuildStatus !== "ready" &&
+		!dismissedOnboardingCards.includes("setup-hint");
 
 	return (
 		<div className="h-full flex flex-col items-center justify-center p-8">
@@ -146,10 +167,34 @@ export function EmptyDashboard() {
 					<PromptInput onSubmit={handleSubmit} isLoading={isSubmitting} />
 				</div>
 
+				{/* Setup hint for unconfigured repo */}
+				{showSetupHint && (
+					<div className="w-full mt-3 flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+						<Settings className="h-3.5 w-3.5 shrink-0" />
+						<span>
+							<strong>{selectedRepo.githubRepoName}</strong> isn&apos;t configured yet &mdash;{" "}
+							<Link
+								href={`/dashboard/sessions/new?repoId=${selectedRepoId}&type=setup`}
+								className="underline hover:text-foreground"
+							>
+								set it up
+							</Link>{" "}
+							for faster sessions
+						</span>
+						<button
+							type="button"
+							className="ml-auto shrink-0 hover:text-foreground"
+							onClick={() => useDashboardStore.getState().dismissOnboardingCard("setup-hint")}
+						>
+							<X className="h-3.5 w-3.5" />
+						</button>
+					</div>
+				)}
+
 				{/* GitHub nudge */}
 				{showGitHubNudge && (
 					<div className="w-full mt-3 flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-						<Github className="h-3.5 w-3.5 shrink-0" />
+						<GithubIcon className="h-3.5 w-3.5 shrink-0" />
 						<span>
 							<Link href="/dashboard/integrations" className="underline hover:text-foreground">
 								Connect GitHub
@@ -165,6 +210,11 @@ export function EmptyDashboard() {
 						</button>
 					</div>
 				)}
+
+				{/* Help link */}
+				<div className="mt-4 flex justify-center">
+					<HelpLink topic="getting-started">How does this work?</HelpLink>
+				</div>
 
 				{/* Onboarding cards - animated entrance */}
 				<div

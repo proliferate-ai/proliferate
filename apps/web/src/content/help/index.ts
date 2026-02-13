@@ -108,20 +108,27 @@ Yes! If you prefer, you can start coding sessions without a snapshot. Your envir
 
 	"setup-sessions": `# Setup Sessions
 
-Setup sessions are where you configure your cloud development environment before you start coding.
+Setup sessions configure your cloud environment so coding sessions start instantly.
+
+## Configured vs. not configured
+
+- **Configured** — a setup session has run, dependencies are installed, and a snapshot is saved. New coding sessions boot in seconds.
+- **Not configured** — no setup has run yet. You can still start a coding session, but it'll begin from a blank slate and the agent will need to install everything first.
+
+You can always start a coding session without any repo at all ("General assistant" mode) — useful for quick questions or scratch work.
 
 ## What happens in a setup session?
 
-Our AI agent helps you:
+An AI agent helps you:
 
-1. **Install dependencies** - npm, pip, cargo, whatever your project needs
-2. **Configure services** - databases, caches, queues
-3. **Set up tools** - linters, formatters, test runners
-4. **Verify everything works** - run your tests, start your dev server
+1. **Install dependencies** — npm, pip, cargo, whatever your project needs
+2. **Configure services** — databases, caches, queues
+3. **Set up tools** — linters, formatters, test runners
+4. **Verify everything works** — run your tests, start your dev server
 
 ## How it works
 
-Just tell the agent what you need in plain English:
+Tell the agent what you need in plain English:
 
 > "Install all dependencies and make sure the tests pass"
 
@@ -137,9 +144,9 @@ When your environment is ready, save a snapshot. This captures everything so you
 
 ## Tips
 
-- **Be specific** - "Install Node 20" is better than "install node"
-- **Check the logs** - if something fails, the error messages help the agent fix it
-- **Iterate** - you can always adjust and save a new snapshot`,
+- **Be specific** — "Install Node 20" is better than "install node"
+- **Check the logs** — if something fails, the error messages help the agent fix it
+- **Iterate** — you can always adjust and save a new snapshot`,
 
 	"coding-sessions": `# Coding Sessions
 

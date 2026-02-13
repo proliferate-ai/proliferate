@@ -131,7 +131,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 									)}
 									<span className="truncate">{repo.githubRepoName}</span>
 									<span className="text-muted-foreground text-xs ml-auto shrink-0">
-										{repo.prebuildStatus === "ready" ? "Ready" : "Fresh start"}
+										{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
 									</span>
 								</Button>
 							);
