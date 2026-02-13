@@ -51,7 +51,7 @@ export default function NewSessionPage() {
 
 		// Setup sessions have a dedicated page with title, description, and "Done" button
 		if (sessionType === "setup") {
-			router.replace(`/repos/${repoId}/setup`);
+			router.replace(`/dashboard/setup/${repoId}`);
 			return;
 		}
 
