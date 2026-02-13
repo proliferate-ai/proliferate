@@ -7,7 +7,7 @@
 
 import { createLogger } from "@proliferate/logger";
 import { verifyToken as verifyJwt } from "@proliferate/shared";
-import type { RequestHandler } from "express";
+import type { Request, RequestHandler } from "express";
 import type { GatewayEnv } from "../lib/env";
 import { deriveSandboxMcpToken } from "../lib/sandbox-mcp-token";
 import type { AuthResult } from "../types";
@@ -23,6 +23,28 @@ export interface VerifyCliTokenResult {
 	userId?: string;
 	orgId?: string;
 	error?: string;
+}
+
+const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolve session ID for sandbox token checks.
+ *
+ * Route-level middleware runs before params are attached for nested param routes,
+ * so fall back to the first URL segment when needed.
+ */
+function getSessionIdForSandboxAuth(req: Request): string | undefined {
+	const paramValue = req.params.proliferateSessionId;
+	if (paramValue && SESSION_ID_PATTERN.test(paramValue)) {
+		return paramValue;
+	}
+
+	const firstSegment = req.path.split("/").filter(Boolean)[0];
+	if (firstSegment && SESSION_ID_PATTERN.test(firstSegment)) {
+		return firstSegment;
+	}
+
+	return undefined;
 }
 
 /**
@@ -110,8 +132,7 @@ export function createRequireAuth(env: GatewayEnv): RequestHandler {
 			return next(new ApiError(401, "Missing authorization"));
 		}
 
-		// Pass session ID from URL params (if present) for sandbox HMAC verification
-		const sessionId = req.params.proliferateSessionId;
+		const sessionId = getSessionIdForSandboxAuth(req);
 		const auth = await verifyToken(token, env, sessionId);
 		if (!auth) {
 			return next(new ApiError(401, "Invalid token"));
