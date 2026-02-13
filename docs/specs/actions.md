@@ -23,7 +23,7 @@
 
 ### Mental Model
 
-Actions are platform-mediated operations that the agent performs on external services. Today, implemented action sources are the hand-written Linear, Sentry, and Slack adapters. Unlike tools that run inside the sandbox, actions are executed server-side by the gateway using OAuth tokens resolved by the integrations token layer (`packages/services/src/integrations/tokens.ts:getToken`). Every action goes through a risk-based approval pipeline before execution (`packages/services/src/actions/service.ts:invokeAction`).
+Actions are platform-mediated operations that the agent performs on external services. Implemented action sources are (a) hand-written Linear/Sentry/Slack adapters and (b) connector-backed MCP `remote_http` sources discovered from prebuild connector config. Unlike tools that run inside the sandbox, actions are executed server-side by the gateway using either OAuth tokens (`integrations.getToken`) or org-scoped secrets (`secrets.resolveSecretValue`) depending on source type. Every action goes through a risk-based approval pipeline before execution (`packages/services/src/actions/service.ts:invokeAction`).
 
 The agent invokes actions via the `proliferate` CLI inside the sandbox. The CLI sends HTTP requests to the gateway (`apps/gateway/src/api/proliferate/http/actions.ts`), which evaluates risk, checks for matching grants, and either auto-executes or queues the invocation for human approval. Users approve or deny pending invocations through the web dashboard or WebSocket events.
 
@@ -31,7 +31,7 @@ The agent invokes actions via the `proliferate` CLI inside the sandbox. The CLI 
 - **Invocation** — a single request to execute an action, with its approval state. Lifecycle: pending → approved → executing → completed (or denied/expired/failed).
 - **Grant** — a reusable permission allowing the agent to perform a specific action without per-invocation approval. Scoped to session or org, with optional call budgets.
 - **Adapter** — an integration-specific module that declares available actions and implements execution against the external API.
-- **Action source** — the origin of an action definition. Today this is always an adapter; planned work adds connector-backed sources (MCP remote HTTP) that still execute through the same lifecycle.
+- **Action source** — the origin of an action definition. Implemented sources are static adapters and connector-backed MCP sources (both execute through the same lifecycle).
 
 **Key invariants:**
 - Read actions are always auto-approved. Danger actions are always denied. Only write actions enter the approval pipeline. Source: `packages/services/src/actions/service.ts:125-141`
@@ -56,7 +56,7 @@ When a write action is invoked, the service checks for a matching grant before r
 
 ### Adapter Registry
 Adapters are statically registered in a `Map`. Currently three adapters exist: `linear`, `sentry`, and `slack`. Each adapter declares its actions, their risk levels, parameter schemas, an `execute()` function, and an optional markdown `guide`.
-- Key detail agents get wrong: adapters are not dynamically discovered. Adding a new integration requires code changes to the registry.
+- Key detail agents get wrong: adapters are not dynamically discovered. Adding a new OAuth-style adapter requires code changes to the registry, but adding a connector-backed source does not.
 - Reference: `packages/services/src/actions/adapters/index.ts`
 
 ### Action Source Boundary
@@ -494,3 +494,5 @@ Prebuild (connectors JSONB) → Gateway resolves at session runtime
 - [x] **Static adapter registry** — addressed by MCP connector system (§6.11). Remote MCP connectors are configured per-prebuild and discovered at runtime. Static adapters remain for Linear/Sentry/Slack but new integrations can be added via connector config without code changes.
 - [ ] **Grant rollback is best-effort** — if invocation approval fails after grant creation, the grant revocation is attempted but failures are silently caught. Impact: orphaned grants may exist in rare edge cases. Expected fix: wrap in a transaction or add cleanup sweep.
 - [ ] **No pagination on grants list** — `listActiveGrants` and `listGrantsByOrg` return all matching rows with no limit/offset. Impact: could return large result sets for orgs with many grants. Expected fix: add pagination parameters.
+- [x] **Connector session stickiness** — addressed. `callConnectorTool` now passes `Mcp-Session-Id` when the server issues one during `initialize`, and retries once on 404 session invalidation. Source: `packages/services/src/actions/connectors/client.ts`.
+- [x] **Dedicated connector management UI** — addressed. Settings panel "Tools" tab provides add/edit/remove/validate flow with presets, secret picker, and inline validation diagnostics. Source: `apps/web/src/components/coding-session/connectors-panel.tsx`, `apps/web/src/hooks/use-connectors.ts`.

@@ -362,6 +362,83 @@ This path gives broad integration coverage with minimal architectural churn whil
 - oRPC CRUD: `apps/web/src/server/routers/prebuilds.ts` (getConnectors, updateConnectors)
 - See `actions.md` §6.11 for the full deep dive.
 
+### MCP Server Reality Check (2026-02-13)
+
+Based on upstream docs reviewed through Context7 and vendor documentation:
+
+| Server | Transport Reality | Auth Reality | V1 (`remote_http`) Fit |
+|---|---|---|---|
+| **Context7** | Hosted MCP endpoint at `https://mcp.context7.com/mcp` | Header-based API key (`CONTEXT7_API_KEY`, or bearer in some clients) | **Strong fit** (catalog candidate) |
+| **PostHog MCP** | Hosted MCP endpoint documented as `https://mcp.posthog.com/sse` | Personal API key bearer token or OAuth-scoped access | **Conditional fit** (verify Streamable HTTP compatibility vs SSE endpoint behavior) |
+| **Playwright MCP** | Primarily local stdio, but can run as standalone HTTP server (`npx @playwright/mcp --port 8931`) | No central SaaS key model by default; typically local/self-host runtime | **Self-host fit** (requires org-hosted endpoint, not turnkey cloud preset) |
+
+Protocol constraints that matter for gateway connectors:
+- Streamable HTTP servers may return `Mcp-Session-Id` during `initialize`; when present, clients must send it on subsequent requests.
+- Session termination can return `404`, after which clients should re-initialize.
+- `tools/list` may paginate via cursor; `tools/call` can return `isError` and/or structured content.
+
+Reference docs:
+- MCP spec (transports/session semantics): <https://github.com/modelcontextprotocol/specification>
+- Context7 MCP server setup: <https://github.com/upstash/context7>
+- Playwright MCP server setup: <https://github.com/microsoft/playwright-mcp>
+- PostHog MCP endpoint/auth docs: <https://posthog.com/docs/model-context-protocol>
+
+### Delivery Plan (2026-02-13)
+
+This is the concrete path from current backend-first implementation to the intended end-state UX.
+
+#### Phase 1 — Productize Connector Management (UI + API) ✅
+
+**Status: Implemented.**
+
+1. Prebuild connector hooks: `apps/web/src/hooks/use-connectors.ts` (wraps `getConnectors`, `updateConnectors`, `validateConnector`).
+2. Settings panel "Tools" tab: `apps/web/src/components/coding-session/connectors-panel.tsx` with add/edit/remove/enable flow.
+3. Connector form: name, URL, auth type (bearer/custom_header), header name, secret picker, default risk level, enabled toggle.
+4. Admin/owner role check enforced on `updateConnectors` and `validateConnector` in `apps/web/src/server/routers/prebuilds.ts`.
+
+#### Phase 2 — Validation and Failure Visibility ✅
+
+**Status: Implemented.**
+
+1. Validation endpoint: `prebuilds.validateConnector` in `apps/web/src/server/routers/prebuilds.ts`. Resolves org secret, calls `tools/list`, returns tool metadata + diagnostics with error classification (auth/timeout/unreachable/protocol/unknown).
+2. Inline validation UX: "Validate Connection" button in connector form. Displays tool list on success, classified error on failure.
+3. Connector client already logs with structured fields (connector ID, name) via `@proliferate/logger`.
+
+#### Phase 3 — MCP Session Robustness ✅
+
+**Status: Implemented.**
+
+1. `callConnectorTool` in `packages/services/src/actions/connectors/client.ts` uses `Mcp-Session-Id` header when the server issues one during `initialize`.
+2. On `404` session invalidation, re-initializes without stale session ID and retries once.
+3. Hard timeouts preserved (15s for `tools/list`, 30s for `tools/call`). Connector failures do not block other sources.
+4. Architecture remains stateless per call (no connection pooling) — session ID is extracted from transport and forwarded on retry.
+
+#### Phase 4 — Catalog and Presets ✅
+
+**Status: Implemented.**
+
+1. Preset catalog: `CONNECTOR_PRESETS` in `packages/shared/src/connectors.ts` with 4 presets:
+   - **Context7** (`https://mcp.context7.com/mcp`, custom_header auth)
+   - **PostHog MCP** (`https://mcp.posthog.com/mcp`, bearer auth)
+   - **Custom MCP** (fully manual)
+   - **Playwright** (self-host, with guidance text)
+2. Preset picker UI in connector panel with one-click add.
+3. Arbitrary custom connector path always available.
+
+#### Phase 5 — Operator UX and Governance Polish ✅
+
+**Status: Implemented.**
+
+1. Connector status: enabled/disabled toggle per connector in the list view.
+2. Secret picker: dropdown populated from org secrets list (via `useSecrets` hook), with manual text input fallback.
+3. Invocation UX parity: connector actions use the existing `connector:<uuid>` integration prefix and appear in the same actions inbox/approval flow.
+
+#### Non-goals for this iteration
+
+1. No separate connector-runner service.
+2. No gateway `stdio` connector support.
+3. No parallel "second tool plane" in CLI; keep `proliferate actions` as the single governed path.
+
 ### Why not "CLI-dynamic MCP everywhere" as the default cloud model?
 
 - It bypasses the existing governance plane (risk checks, approvals, grants, invocation audit) unless we re-implement those controls in a second tool path.

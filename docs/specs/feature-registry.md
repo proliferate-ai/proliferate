@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
-> **Updated:** 2026-02-12 from `main` branch. Corrected after consistency review.
+> **Updated:** 2026-02-13 from `main` branch. Connector spec alignment + delivery plan update.
 > **Evidence convention:** `Planned` entries may cite RFC/spec files until code exists; once implemented, update evidence to concrete code paths.
 
 ---
@@ -142,6 +142,7 @@
 | Sandbox-MCP grants handler | Implemented | `packages/sandbox-mcp/src/actions-grants.ts` | Grant handling inside sandbox |
 | Actions list (web) | Implemented | `apps/web/src/server/routers/actions.ts` | Org-level actions inbox |
 | Connector-backed action sources (`remote_http` MCP via Actions) | Implemented | `packages/services/src/actions/connectors/`, `apps/gateway/src/api/proliferate/http/actions.ts` | Gateway-mediated remote MCP connectors through Actions pipeline |
+| MCP connector session stickiness (`Mcp-Session-Id` reuse + 404 re-init) | Implemented | `packages/services/src/actions/connectors/client.ts:callConnectorTool` | Session ID header reuse + 404 retry-once |
 
 ---
 
@@ -195,6 +196,8 @@
 | Service commands persistence | Implemented | `packages/db/src/schema/prebuilds.ts:serviceCommands` | JSONB on prebuilds |
 | Env file persistence | Implemented | `packages/db/src/schema/prebuilds.ts:envFiles` | JSONB on prebuilds |
 | Prebuild connector configuration (project-scoped external tool config) | Implemented | `packages/db/src/schema/prebuilds.ts:connectors`, `apps/web/src/server/routers/prebuilds.ts:getConnectors/updateConnectors` | JSONB on prebuilds table with oRPC CRUD |
+| Prebuild connector management UI | Implemented | `apps/web/src/components/coding-session/connectors-panel.tsx`, `apps/web/src/hooks/use-connectors.ts` | Settings panel "Tools" tab with add/edit/remove, presets, secret picker |
+| Prebuild connector validation endpoint (`tools/list` preflight) | Implemented | `apps/web/src/server/routers/prebuilds.ts:validateConnector` | Resolves org secret, calls `tools/list`, returns diagnostics |
 | Base snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:sandboxBaseSnapshots` | Building/ready/failed |
 | Repo snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:repoSnapshots` | Building/ready/failed + commit SHA |
 
