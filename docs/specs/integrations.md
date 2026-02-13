@@ -31,7 +31,7 @@ Integrations is the external credential/connectivity control plane. Implemented 
 - **Integration** — A stored OAuth connection scoped to an organization. Provider is either `nango` (Sentry/Linear/GitHub-via-Nango) or `github-app` (GitHub App installation). Lifecycle: `active` → `expired`/`revoked`/`deleted`/`suspended`.
 - **Slack Installation** — A workspace-level Slack bot installation, stored separately from `integrations` because Slack uses its own OAuth flow with encrypted bot tokens. Lifecycle: `active` → `revoked`.
 - **Connection binding** — A junction row linking an integration to a repo, automation, or session. Cascades on delete.
-- **Connector** — An org-scoped MCP endpoint configuration (`org_connectors` table) with auth mapping, used by Actions to discover and invoke connector-backed tools. Managed via Settings → Connectors UI.
+- **Connector** — An org-scoped MCP endpoint configuration (`org_connectors` table) with auth mapping, used by Actions to discover and invoke connector-backed tools. Managed via Settings → Tools UI.
 
 **Key invariants:**
 - One integration record per `(connection_id, organization_id)` pair (unique constraint).
@@ -68,7 +68,7 @@ Integrations have a `visibility` field: `org` (visible to all org members) or `p
 Org-scoped MCP connector definitions are stored in the `org_connectors` table and managed through Integrations CRUD routes. Each connector defines a remote MCP server endpoint, auth method (org secret reference or custom header), and optional risk policy. The gateway loads enabled connectors by org at session runtime and merges their tools into `/actions/available`.
 - Key detail agents get wrong: connectors complement OAuth integrations; they do not replace them. OAuth integrations resolve tokens via Nango/GitHub App, while connectors resolve org secrets for MCP auth.
 - Key detail agents get wrong: connector execution (risk/approval/grants/audit) is still owned by Actions (`actions.md`). Integrations owns the catalog lifecycle only.
-- Reference: `packages/services/src/connectors/`, `apps/web/src/server/routers/integrations.ts`, `apps/web/src/app/settings/connectors/page.tsx`
+- Reference: `packages/services/src/connectors/`, `apps/web/src/server/routers/integrations.ts`, `apps/web/src/app/settings/tools/page.tsx`
 
 ---
 
@@ -105,7 +105,7 @@ apps/web/src/server/routers/
 └── integrations.ts              # oRPC router (all integration + connector endpoints)
 
 apps/web/src/app/settings/
-└── connectors/page.tsx          # Org-level connector management UI
+└── tools/page.tsx               # Org-level connector management UI (route: /settings/tools)
 
 apps/web/src/hooks/
 └── use-org-connectors.ts        # React hooks for org-level connector CRUD
@@ -504,7 +504,7 @@ function handleNangoError(err: unknown, operation: string): never {
 **What it does:** Defines a single org-level source of truth for MCP connector configuration used by Actions discovery/invocation.
 
 **Behavior:**
-1. Admin/owner configures connectors once per org via Settings → Connectors.
+1. Admin/owner configures connectors once per org via Settings → Tools.
 2. Config is stored in `org_connectors` table using the shared `ConnectorConfig` schema (`packages/shared/src/connectors.ts`).
 3. Gateway Actions loads enabled connectors by org/session context, not by prebuild.
 4. Connector-backed actions continue using the same `connector:<uuid>` integration prefix and existing approval/audit pipeline in `actions.md`.
@@ -515,7 +515,7 @@ function handleNangoError(err: unknown, operation: string): never {
 - DB: `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/db.ts`
 - Service: `packages/services/src/connectors/service.ts`
 - Router: `apps/web/src/server/routers/integrations.ts` (connectors section)
-- UI: `apps/web/src/app/settings/connectors/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts`
+- UI: `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts`
 - Presets: `packages/shared/src/connectors.ts:CONNECTOR_PRESETS`
 
 ---

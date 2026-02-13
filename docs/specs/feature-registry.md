@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
-> **Updated:** 2026-02-13 from `main` branch. Connector scope alignment (current prebuild path + planned org-scoped migration).
+> **Updated:** 2026-02-13 from `main` branch. UI renamed connectors to tools; code model remains `connector`.
 > **Evidence convention:** `Planned` entries may cite RFC/spec files until code exists; once implemented, update evidence to concrete code paths.
 
 ---
@@ -199,7 +199,7 @@
 | Env file persistence | Implemented | `packages/db/src/schema/prebuilds.ts:envFiles` | JSONB on prebuilds |
 | Prebuild connector configuration (deprecated) | Deprecated | `packages/db/src/schema/prebuilds.ts:connectors` | Legacy JSONB on prebuilds table; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
 | Org-scoped connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | `org_connectors` table with full CRUD via Integrations routes |
-| Org connector management UI | Implemented | `apps/web/src/app/settings/connectors/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Connectors page with presets, secret picker, validation |
+| Org connector management UI | Implemented | `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools page with presets, secret picker, validation |
 | Org connector validation endpoint | Implemented | `apps/web/src/server/routers/integrations.ts:validateConnector` | `tools/list` preflight with diagnostics |
 | Base snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:sandboxBaseSnapshots` | Building/ready/failed |
 | Repo snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:repoSnapshots` | Building/ready/failed + commit SHA |
@@ -241,7 +241,7 @@
 | Linear metadata | Implemented | `apps/web/src/server/routers/integrations.ts:linearMetadata` | Linear team/project metadata |
 | GitHub auth (gateway) | Implemented | `apps/gateway/src/lib/github-auth.ts` | Gateway-side GitHub token resolution |
 | Org-scoped MCP connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | Org-level connector CRUD with atomic secret provisioning |
-| Org-scoped connector management UI | Implemented | `apps/web/src/app/settings/connectors/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings page with preset quick-setup, advanced form, and connection validation |
+| Org-scoped connector management UI | Implemented | `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools page with preset quick-setup, advanced form, and connection validation |
 
 ---
 
