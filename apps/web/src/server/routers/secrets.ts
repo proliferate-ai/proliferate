@@ -5,7 +5,7 @@
  */
 
 import { ORPCError } from "@orpc/server";
-import { secrets } from "@proliferate/services";
+import { prebuilds, secretFiles, secrets } from "@proliferate/services";
 import {
 	BulkImportInputSchema,
 	BulkImportResultSchema,
@@ -221,5 +221,140 @@ export const secretsRouter = {
 				}
 				throw err;
 			}
+		}),
+};
+
+// ============================================
+// Secret Files Router (PR1 expand — config-scoped env files)
+// ============================================
+
+const SecretFileKeySchema = z.object({
+	id: z.string().uuid(),
+	key: z.string(),
+	hasValue: z.boolean(),
+	required: z.boolean(),
+});
+
+const SecretFileSchema = z.object({
+	id: z.string().uuid(),
+	prebuildId: z.string().uuid(),
+	workspacePath: z.string(),
+	filePath: z.string(),
+	mode: z.string(),
+	keys: z.array(SecretFileKeySchema),
+});
+
+/** Verify the prebuild belongs to the caller's org. */
+async function requirePrebuildAccess(prebuildId: string, orgId: string) {
+	const prebuild = await prebuilds.findById(prebuildId);
+	if (!prebuild) {
+		throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+	}
+	const prebuildOrgId = prebuild.prebuildRepos?.[0]?.repo?.organizationId;
+	if (prebuildOrgId !== orgId) {
+		throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+	}
+}
+
+export const secretFilesRouter = {
+	/**
+	 * List secret files for a prebuild with their keys.
+	 */
+	list: orgProcedure
+		.input(z.object({ prebuildId: z.string().uuid() }))
+		.output(z.object({ files: z.array(SecretFileSchema) }))
+		.handler(async ({ input, context }) => {
+			await requirePrebuildAccess(input.prebuildId, context.orgId);
+			const rows = await secretFiles.listSecretFiles(input.prebuildId);
+			const files = rows.map((r) => ({
+				id: r.id,
+				prebuildId: r.prebuildId,
+				workspacePath: r.workspacePath,
+				filePath: r.filePath,
+				mode: r.mode,
+				keys: r.configurationSecrets.map((s) => ({
+					id: s.id,
+					key: s.key,
+					hasValue:
+						s.encryptedValue !== null && s.encryptedValue !== "[encrypted]"
+							? false
+							: s.encryptedValue === "[encrypted]",
+					required: s.required,
+				})),
+			}));
+			return { files };
+		}),
+
+	/**
+	 * Create a new secret file definition.
+	 */
+	createFile: orgProcedure
+		.input(
+			z.object({
+				prebuildId: z.string().uuid(),
+				filePath: z.string().min(1).max(500),
+				workspacePath: z.string().max(500).default("."),
+				mode: z.enum(["secret"]).default("secret"),
+			}),
+		)
+		.output(z.object({ id: z.string().uuid() }))
+		.handler(async ({ input, context }) => {
+			await requirePrebuildAccess(input.prebuildId, context.orgId);
+			const file = await secretFiles.createSecretFile({
+				prebuildId: input.prebuildId,
+				filePath: input.filePath,
+				workspacePath: input.workspacePath,
+				mode: input.mode,
+			});
+			return { id: file.id };
+		}),
+
+	/**
+	 * Delete a secret file and all its secrets.
+	 */
+	deleteFile: orgProcedure
+		.input(z.object({ id: z.string().uuid(), prebuildId: z.string().uuid() }))
+		.output(z.object({ deleted: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			await requirePrebuildAccess(input.prebuildId, context.orgId);
+			await secretFiles.deleteSecretFile(input.id);
+			return { deleted: true };
+		}),
+
+	/**
+	 * Set a secret value (encrypts before storing).
+	 */
+	upsertSecret: orgProcedure
+		.input(
+			z.object({
+				prebuildId: z.string().uuid(),
+				secretFileId: z.string().uuid(),
+				key: z.string().min(1).max(200),
+				value: z.string(),
+				required: z.boolean().optional(),
+			}),
+		)
+		.output(z.object({ id: z.string().uuid() }))
+		.handler(async ({ input, context }) => {
+			await requirePrebuildAccess(input.prebuildId, context.orgId);
+			const row = await secretFiles.upsertSecretValue({
+				secretFileId: input.secretFileId,
+				key: input.key,
+				value: input.value,
+				required: input.required,
+			});
+			return { id: row.id };
+		}),
+
+	/**
+	 * Delete a configuration secret.
+	 */
+	deleteSecret: orgProcedure
+		.input(z.object({ id: z.string().uuid(), prebuildId: z.string().uuid() }))
+		.output(z.object({ deleted: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			await requirePrebuildAccess(input.prebuildId, context.orgId);
+			await secretFiles.deleteSecret(input.id);
+			return { deleted: true };
 		}),
 };

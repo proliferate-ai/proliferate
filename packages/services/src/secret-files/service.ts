@@ -4,7 +4,7 @@
  * Business logic for config-scoped env file definitions and their secrets.
  */
 
-import { decrypt, getEncryptionKey } from "../db/crypto";
+import { decrypt, encrypt, getEncryptionKey } from "../db/crypto";
 import { getServicesLogger } from "../logger";
 import * as secretFilesDb from "./db";
 
@@ -59,6 +59,25 @@ export async function upsertSecret(input: {
 	required?: boolean;
 }) {
 	return secretFilesDb.upsertSecret(input);
+}
+
+/**
+ * Upsert a secret with a plaintext value (encrypts before storing).
+ */
+export async function upsertSecretValue(input: {
+	secretFileId: string;
+	key: string;
+	value: string;
+	required?: boolean;
+}) {
+	const encryptionKey = getEncryptionKey();
+	const encryptedValue = encrypt(input.value, encryptionKey);
+	return secretFilesDb.upsertSecret({
+		secretFileId: input.secretFileId,
+		key: input.key,
+		encryptedValue,
+		required: input.required,
+	});
 }
 
 /**

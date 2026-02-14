@@ -17,7 +17,7 @@ import { orgsRouter } from "./orgs";
 import { prebuildsRouter } from "./prebuilds";
 import { reposRouter } from "./repos";
 import { schedulesRouter } from "./schedules";
-import { secretsRouter } from "./secrets";
+import { secretFilesRouter, secretsRouter } from "./secrets";
 import { sessionsRouter } from "./sessions";
 import { triggersRouter } from "./triggers";
 
@@ -35,6 +35,7 @@ export const appRouter = {
 	prebuilds: prebuildsRouter,
 	repos: reposRouter,
 	schedules: schedulesRouter,
+	secretFiles: secretFilesRouter,
 	secrets: secretsRouter,
 	sessions: sessionsRouter,
 	triggers: triggersRouter,
