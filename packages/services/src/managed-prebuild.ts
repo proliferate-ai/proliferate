@@ -110,7 +110,7 @@ async function createManagedPrebuildRecord(
 
 	// Create prebuild record
 	const prebuildId = crypto.randomUUID();
-	await prebuildsDb.createManagedPrebuild({ id: prebuildId });
+	await prebuildsDb.createManagedPrebuild({ id: prebuildId, organizationId });
 
 	// Create prebuild_repos entries
 	const prebuildRepos = repos.map((repo) => {

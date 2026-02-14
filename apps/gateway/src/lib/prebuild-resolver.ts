@@ -185,7 +185,7 @@ async function createManagedPrebuildRecord(
 
 	// Create prebuild record
 	const prebuildId = crypto.randomUUID();
-	await prebuilds.createManagedPrebuild({ id: prebuildId });
+	await prebuilds.createManagedPrebuild({ id: prebuildId, organizationId });
 
 	// Create prebuild_repos entries
 	const prebuildReposEntries = repoRows.map((repo) => {
@@ -243,6 +243,7 @@ async function resolveCli(
 		userId,
 		localPathHash,
 		sandboxProvider: provider.type,
+		organizationId,
 	});
 
 	// Find or create local repo

@@ -7,7 +7,7 @@
 
 import { randomUUID } from "crypto";
 import { type Logger, createLogger } from "@proliferate/logger";
-import { prebuilds, sessions } from "@proliferate/services";
+import { prebuilds, sessions, snapshots } from "@proliferate/services";
 import type {
 	ClientMessage,
 	ClientSource,
@@ -518,6 +518,22 @@ export class SessionHub {
 				snapshotId: result.snapshotId,
 				status: "ready",
 			});
+
+			// Dual-write: also create snapshot in new snapshots table
+			try {
+				const snapshotRecord = await snapshots.createSnapshot({
+					prebuildId: context.session.prebuild_id,
+					sandboxProvider: providerType,
+				});
+				await snapshots.markSnapshotReady({
+					snapshotId: snapshotRecord.id,
+					providerSnapshotId: result.snapshotId,
+					hasDeps: true,
+					repoCommits: [],
+				});
+			} catch (err) {
+				this.logger.warn({ err }, "Failed to dual-write snapshot to new table (non-fatal)");
+			}
 		} else {
 			await sessions.update(this.sessionId, {
 				snapshotId: result.snapshotId,

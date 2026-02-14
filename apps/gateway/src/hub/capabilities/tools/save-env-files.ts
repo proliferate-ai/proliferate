@@ -5,7 +5,7 @@
  * the env file generation spec to the prebuild configuration.
  */
 
-import { prebuilds } from "@proliferate/services";
+import { prebuilds, secretFiles } from "@proliferate/services";
 import { z } from "zod";
 import type { SessionHub } from "../../session-hub";
 import type { InterceptedToolHandler, InterceptedToolResult } from "./index";
@@ -70,6 +70,22 @@ export const saveEnvFilesHandler: InterceptedToolHandler = {
 				envFiles: parsed.data.files,
 				updatedBy,
 			});
+
+			// Dual-write: also save to new secret_files + configuration_secrets tables
+			try {
+				await secretFiles.saveEnvFileSpec(
+					prebuildId,
+					parsed.data.files.map((f) => ({
+						workspacePath: f.workspacePath,
+						path: f.path,
+						format: f.format,
+						mode: f.mode,
+						keys: f.keys,
+					})),
+				);
+			} catch {
+				// Non-fatal: old path is the source of truth during expand phase
+			}
 
 			const paths = parsed.data.files.map((f) => f.path).join(", ");
 			return {

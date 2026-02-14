@@ -99,6 +99,7 @@ export async function createPrebuild(input: CreatePrebuildInput): Promise<Create
 	const prebuildId = randomUUID();
 	await prebuildsDb.create({
 		id: prebuildId,
+		organizationId,
 		name,
 		createdBy: userId,
 		sandboxProvider: env.DEFAULT_SANDBOX_PROVIDER,

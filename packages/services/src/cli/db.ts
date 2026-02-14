@@ -501,11 +501,13 @@ export async function upsertCliPrebuild(input: {
 	localPathHash: string;
 	snapshotId: string;
 	sandboxProvider: string;
+	organizationId: string;
 }): Promise<CliPrebuildRow> {
 	const db = getDb();
 	const [row] = await db
 		.insert(prebuilds)
 		.values({
+			organizationId: input.organizationId,
 			userId: input.userId,
 			localPathHash: input.localPathHash,
 			snapshotId: input.snapshotId,
@@ -548,11 +550,13 @@ export async function createCliPrebuildPending(input: {
 	userId: string;
 	localPathHash: string;
 	sandboxProvider: string;
+	organizationId: string;
 }): Promise<{ id: string }> {
 	const db = getDb();
 	const [row] = await db
 		.insert(prebuilds)
 		.values({
+			organizationId: input.organizationId,
 			userId: input.userId,
 			localPathHash: input.localPathHash,
 			status: "pending",

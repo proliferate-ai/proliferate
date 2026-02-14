@@ -314,6 +314,11 @@ export const prebuilds = pgTable(
 			mode: "date",
 		}),
 		connectorsUpdatedBy: text("connectors_updated_by"),
+		// PR1 expand columns
+		organizationId: text("organization_id").notNull(),
+		activeSnapshotId: uuid("active_snapshot_id").references((): AnyPgColumn => snapshots.id, {
+			onDelete: "set null",
+		}),
 	},
 	(table) => [
 		index("idx_prebuilds_sandbox_provider").using(
@@ -341,6 +346,16 @@ export const prebuilds = pgTable(
 		check(
 			"prebuilds_cli_requires_path",
 			sql`((user_id IS NOT NULL) AND (local_path_hash IS NOT NULL)) OR ((user_id IS NULL) AND (local_path_hash IS NULL))`,
+		),
+		// PR1 expand constraints
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "prebuilds_organization_id_fkey",
+		}).onDelete("cascade"),
+		index("idx_prebuilds_org").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
 		),
 	],
 );
@@ -1749,5 +1764,128 @@ export const orgConnectors = pgTable(
 			foreignColumns: [user.id],
 			name: "org_connectors_created_by_fkey",
 		}),
+	],
+);
+
+// ============================================
+// Snapshots (first-class snapshot entity, PR1 expand)
+// ============================================
+
+export const snapshots = pgTable(
+	"snapshots",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		prebuildId: uuid("prebuild_id").notNull(),
+		providerSnapshotId: text("provider_snapshot_id"),
+		sandboxProvider: text("sandbox_provider"),
+		status: text().default("building").notNull(),
+		hasDeps: boolean("has_deps").default(false).notNull(),
+		error: text(),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_snapshots_prebuild").using(
+			"btree",
+			table.prebuildId.asc().nullsLast().op("uuid_ops"),
+		),
+		foreignKey({
+			columns: [table.prebuildId],
+			foreignColumns: [prebuilds.id],
+			name: "snapshots_prebuild_id_fkey",
+		}).onDelete("cascade"),
+		check(
+			"snapshots_status_check",
+			sql`status = ANY (ARRAY['building'::text, 'ready'::text, 'failed'::text])`,
+		),
+	],
+);
+
+// ============================================
+// Snapshot Repos (per-repo commit tracking, PR1 expand)
+// ============================================
+
+export const snapshotRepos = pgTable(
+	"snapshot_repos",
+	{
+		snapshotId: uuid("snapshot_id").notNull(),
+		repoId: uuid("repo_id").notNull(),
+		commitSha: text("commit_sha"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		foreignKey({
+			columns: [table.snapshotId],
+			foreignColumns: [snapshots.id],
+			name: "snapshot_repos_snapshot_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.repoId],
+			foreignColumns: [repos.id],
+			name: "snapshot_repos_repo_id_fkey",
+		}).onDelete("cascade"),
+		primaryKey({ columns: [table.snapshotId, table.repoId], name: "snapshot_repos_pkey" }),
+	],
+);
+
+// ============================================
+// Secret Files (config-scoped env file definitions, PR1 expand)
+// ============================================
+
+export const secretFiles = pgTable(
+	"secret_files",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		prebuildId: uuid("prebuild_id").notNull(),
+		workspacePath: text("workspace_path").default(".").notNull(),
+		filePath: text("file_path").notNull(),
+		mode: text().default("secret").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_secret_files_prebuild").using(
+			"btree",
+			table.prebuildId.asc().nullsLast().op("uuid_ops"),
+		),
+		foreignKey({
+			columns: [table.prebuildId],
+			foreignColumns: [prebuilds.id],
+			name: "secret_files_prebuild_id_fkey",
+		}).onDelete("cascade"),
+		unique("secret_files_prebuild_workspace_file_unique").on(
+			table.prebuildId,
+			table.workspacePath,
+			table.filePath,
+		),
+	],
+);
+
+// ============================================
+// Configuration Secrets (per-key values for secret files, PR1 expand)
+// ============================================
+
+export const configurationSecrets = pgTable(
+	"configuration_secrets",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		secretFileId: uuid("secret_file_id").notNull(),
+		key: text().notNull(),
+		encryptedValue: text("encrypted_value"),
+		required: boolean().default(false).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_configuration_secrets_file").using(
+			"btree",
+			table.secretFileId.asc().nullsLast().op("uuid_ops"),
+		),
+		foreignKey({
+			columns: [table.secretFileId],
+			foreignColumns: [secretFiles.id],
+			name: "configuration_secrets_secret_file_id_fkey",
+		}).onDelete("cascade"),
+		unique("configuration_secrets_file_key_unique").on(table.secretFileId, table.key),
 	],
 );

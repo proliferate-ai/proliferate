@@ -280,6 +280,7 @@ export async function create(input: CreatePrebuildInput): Promise<void> {
 	const db = getDb();
 	await db.insert(prebuilds).values({
 		id: input.id,
+		organizationId: input.organizationId,
 		snapshotId: null,
 		status: "building",
 		name: input.name || "Untitled",
@@ -466,6 +467,7 @@ export async function createFull(input: CreatePrebuildFullInput): Promise<void> 
 	const db = getDb();
 	await db.insert(prebuilds).values({
 		id: input.id,
+		organizationId: input.organizationId,
 		snapshotId: input.snapshotId,
 		status: input.status,
 		name: input.name || "Untitled",
@@ -657,6 +659,7 @@ export async function createManagedPrebuild(input: CreateManagedPrebuildInput): 
 	const db = getDb();
 	await db.insert(prebuilds).values({
 		id: input.id,
+		organizationId: input.organizationId,
 		type: "managed",
 		status: "building",
 		snapshotId: null,

@@ -16,6 +16,7 @@ import {
 	prebuilds,
 	secrets,
 	sessions,
+	snapshots,
 	users,
 } from "@proliferate/services";
 import {
@@ -193,22 +194,35 @@ export async function createSession(
 		}
 	}
 
-	// Resolve snapshotId via layering (prebuild snapshot → repo snapshot → null).
-	// Repo snapshots are only eligible for Modal provider, non-CLI sessions.
+	// Resolve snapshotId: try active_snapshot_id (new) → old layered resolution (fallback).
 	let snapshotId = inputSnapshotId ?? null;
-	if (!snapshotId && provider.type === "modal" && sessionType !== "cli") {
+	if (!snapshotId) {
+		// Try new active_snapshot_id on prebuild first
 		try {
-			const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
-			snapshotId = resolveSnapshotId({
-				prebuildSnapshotId: null,
-				sandboxProvider: provider.type,
-				prebuildRepos: prebuildRepoRows,
-			});
-			if (snapshotId) {
-				log.info({ snapshotId }, "Using repo snapshot");
+			const activeSnapshot = await snapshots.getActiveSnapshot(prebuildId);
+			if (activeSnapshot?.providerSnapshotId) {
+				snapshotId = activeSnapshot.providerSnapshotId;
+				log.info({ snapshotId, snapshotTableId: activeSnapshot.id }, "Using active snapshot (new)");
 			}
 		} catch (err) {
-			log.warn({ err }, "Failed to resolve repo snapshot (non-fatal)");
+			log.warn({ err }, "Failed to read active snapshot (non-fatal, falling back)");
+		}
+
+		// Fallback: old layered resolution (prebuild snapshot → repo snapshot → null)
+		if (!snapshotId && provider.type === "modal" && sessionType !== "cli") {
+			try {
+				const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
+				snapshotId = resolveSnapshotId({
+					prebuildSnapshotId: null,
+					sandboxProvider: provider.type,
+					prebuildRepos: prebuildRepoRows,
+				});
+				if (snapshotId) {
+					log.info({ snapshotId }, "Using repo snapshot (legacy fallback)");
+				}
+			} catch (err) {
+				log.warn({ err }, "Failed to resolve repo snapshot (non-fatal)");
+			}
 		}
 	}
 
@@ -590,15 +604,32 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		"session_creator.create_sandbox.github_tokens",
 	);
 
-	// Derive snapshotHasDeps: true when snapshot includes installed deps.
-	// Repo snapshots (clone-only) don't have deps; prebuild/session/pause snapshots do.
-	const repoSnapshotFallback =
-		prebuildRepoRows.length === 1 &&
-		prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
-		prebuildRepoRows[0].repo?.repoSnapshotId
-			? prebuildRepoRows[0].repo.repoSnapshotId
-			: null;
-	const snapshotHasDeps = Boolean(snapshotId) && snapshotId !== repoSnapshotFallback;
+	// Derive snapshotHasDeps: try new snapshot.has_deps first, fallback to old heuristic.
+	let snapshotHasDeps = false;
+	try {
+		const activeSnapshot = await snapshots.getActiveSnapshot(prebuildId);
+		if (activeSnapshot) {
+			snapshotHasDeps = activeSnapshot.hasDeps;
+		} else {
+			// Fallback: old heuristic
+			const repoSnapshotFallback =
+				prebuildRepoRows.length === 1 &&
+				prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
+				prebuildRepoRows[0].repo?.repoSnapshotId
+					? prebuildRepoRows[0].repo.repoSnapshotId
+					: null;
+			snapshotHasDeps = Boolean(snapshotId) && snapshotId !== repoSnapshotFallback;
+		}
+	} catch {
+		// Fallback: old heuristic
+		const repoSnapshotFallback =
+			prebuildRepoRows.length === 1 &&
+			prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
+			prebuildRepoRows[0].repo?.repoSnapshotId
+				? prebuildRepoRows[0].repo.repoSnapshotId
+				: null;
+		snapshotHasDeps = Boolean(snapshotId) && snapshotId !== repoSnapshotFallback;
+	}
 
 	// Resolve service commands: prebuild-level first, then per-repo fallback
 	const prebuildSvcRow = await prebuilds.getPrebuildServiceCommands(prebuildId);
@@ -608,6 +639,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	);
 
 	// Load env file generation spec (if configured)
+	// Note: PR1 keeps using old paths. PR2 switches to secret_files table.
 	const prebuildEnvFiles = await prebuilds.getPrebuildEnvFiles(prebuildId);
 	const bundleEnvFiles = await secrets.buildEnvFilesFromBundles(organizationId);
 	const prebuildList = Array.isArray(prebuildEnvFiles) ? prebuildEnvFiles : [];

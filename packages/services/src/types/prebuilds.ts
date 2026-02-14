@@ -11,6 +11,7 @@
 
 export interface CreatePrebuildInput {
 	id: string;
+	organizationId: string;
 	name?: string | null;
 	createdBy: string;
 	sandboxProvider?: string;
@@ -31,6 +32,7 @@ export interface UpdatePrebuildInput {
 
 export interface CreatePrebuildFullInput {
 	id: string;
+	organizationId: string;
 	snapshotId: string;
 	status: string;
 	name?: string | null;
@@ -46,6 +48,7 @@ export interface CreatePrebuildFullInput {
 /** Input for creating a managed prebuild. */
 export interface CreateManagedPrebuildInput {
 	id: string;
+	organizationId: string;
 }
 
 // ============================================

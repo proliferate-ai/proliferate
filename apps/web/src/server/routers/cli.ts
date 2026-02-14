@@ -749,7 +749,7 @@ export const cliPrebuildsRouter = {
 	/**
 	 * Create or update a prebuild (snapshot cache).
 	 */
-	create: protectedProcedure
+	create: orgProcedure
 		.input(z.object({ localPathHash: z.string(), sessionId: z.string(), sandboxId: z.string() }))
 		.output(z.object({ prebuild: CliPrebuildSchema, snapshotId: z.string() }))
 		.handler(async ({ input, context }) => {
@@ -766,6 +766,7 @@ export const cliPrebuildsRouter = {
 					localPathHash,
 					snapshotResult.snapshotId,
 					provider.type,
+					context.orgId,
 				);
 
 				return {

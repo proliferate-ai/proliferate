@@ -1,5 +1,5 @@
 import { createLogger } from "@proliferate/logger";
-import { cli, integrations, prebuilds, sessions } from "@proliferate/services";
+import { cli, integrations, prebuilds, sessions, snapshots } from "@proliferate/services";
 import {
 	type AgentConfig,
 	type ModelId,
@@ -326,16 +326,34 @@ export async function loadSessionContext(
 		}
 	}
 
-	// Derive snapshotHasDeps: true when snapshot includes installed deps.
-	// Repo snapshots (clone-only) don't have deps; prebuild/session/pause snapshots do.
-	const repoSnapshotFallback =
-		prebuildRepoRows.length === 1 &&
-		prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
-		prebuildRepoRows[0].repo?.repoSnapshotId
-			? prebuildRepoRows[0].repo.repoSnapshotId
-			: null;
-	const snapshotHasDeps =
-		Boolean(session.snapshot_id) && session.snapshot_id !== repoSnapshotFallback;
+	// Derive snapshotHasDeps: try new snapshot.has_deps first, fallback to old heuristic.
+	let snapshotHasDeps = false;
+	if (session.prebuild_id) {
+		try {
+			const activeSnapshot = await snapshots.getActiveSnapshot(session.prebuild_id);
+			if (activeSnapshot) {
+				snapshotHasDeps = activeSnapshot.hasDeps;
+			} else {
+				const repoSnapshotFallback =
+					prebuildRepoRows.length === 1 &&
+					prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
+					prebuildRepoRows[0].repo?.repoSnapshotId
+						? prebuildRepoRows[0].repo.repoSnapshotId
+						: null;
+				snapshotHasDeps =
+					Boolean(session.snapshot_id) && session.snapshot_id !== repoSnapshotFallback;
+			}
+		} catch {
+			const repoSnapshotFallback =
+				prebuildRepoRows.length === 1 &&
+				prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
+				prebuildRepoRows[0].repo?.repoSnapshotId
+					? prebuildRepoRows[0].repo.repoSnapshotId
+					: null;
+			snapshotHasDeps =
+				Boolean(session.snapshot_id) && session.snapshot_id !== repoSnapshotFallback;
+		}
+	}
 
 	// Resolve service commands: prebuild-level first, then per-repo fallback
 	const prebuildSvcRow = await prebuilds.getPrebuildServiceCommands(session.prebuild_id);

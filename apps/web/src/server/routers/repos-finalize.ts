@@ -9,7 +9,7 @@ import { randomUUID } from "crypto";
 import { encrypt, getEncryptionKey } from "@/lib/crypto";
 import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
-import { prebuilds, repos, secrets, sessions } from "@proliferate/services";
+import { prebuilds, repos, secrets, sessions, snapshots } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 
@@ -146,6 +146,7 @@ export async function finalizeSetupHandler(
 		try {
 			await prebuilds.createPrebuildFull({
 				id: prebuildId,
+				organizationId,
 				snapshotId,
 				status: "ready",
 				name: name || null,
@@ -166,6 +167,22 @@ export async function finalizeSetupHandler(
 
 		// Update session with the new prebuild_id
 		await sessions.updateSessionPrebuildId(sessionId, prebuildId);
+	}
+
+	// Dual-write: create snapshot in new snapshots table
+	try {
+		const snapshotRecord = await snapshots.createSnapshot({
+			prebuildId,
+			sandboxProvider: provider.type,
+		});
+		await snapshots.markSnapshotReady({
+			snapshotId: snapshotRecord.id,
+			providerSnapshotId: snapshotId,
+			hasDeps: true,
+			repoCommits: [],
+		});
+	} catch (err) {
+		log.warn({ err }, "Failed to dual-write snapshot to new table (non-fatal)");
 	}
 
 	// 7. Terminate sandbox and end session (unless keepRunning)

@@ -468,12 +468,14 @@ export async function upsertCliPrebuild(
 	localPathHash: string,
 	snapshotId: string,
 	sandboxProvider: string,
+	organizationId: string,
 ): Promise<CliPrebuildRow> {
 	return cliDb.upsertCliPrebuild({
 		userId,
 		localPathHash,
 		snapshotId,
 		sandboxProvider,
+		organizationId,
 	});
 }
 
@@ -630,6 +632,7 @@ export async function createCliSessionFull(
 			userId,
 			localPathHash,
 			sandboxProvider,
+			organizationId: orgId,
 		});
 		prebuildId = newPrebuild.id;
 	}

@@ -151,6 +151,20 @@
       "when": 1771200000000,
       "tag": "0022_org_connectors",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1771200000001,
+      "tag": "0023_org_secret_key_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1771286400000,
+      "tag": "0024_configurations_snapshots_expand",
+      "breakpoints": true
     }
   ]
 }

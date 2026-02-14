@@ -12,6 +12,7 @@ import {
 	billingEvents,
 	cliDeviceCodes,
 	cliGithubSelections,
+	configurationSecrets,
 	integrations,
 	invitation,
 	member,
@@ -25,12 +26,15 @@ import {
 	sandboxBaseSnapshots,
 	schedules,
 	secretBundles,
+	secretFiles,
 	secrets,
 	session,
 	sessionConnections,
 	sessions,
 	slackConversations,
 	slackInstallations,
+	snapshotRepos,
+	snapshots,
 	triggerEvents,
 	triggers,
 	user,
@@ -91,6 +95,7 @@ export const organizationRelations = relations(organization, ({ many }) => ({
 	invitations: many(invitation),
 	members: many(member),
 	repos: many(repos),
+	prebuilds: many(prebuilds),
 	integrations: many(integrations),
 	secrets: many(secrets),
 	triggers: many(triggers),
@@ -143,6 +148,7 @@ export const reposRelations = relations(repos, ({ one, many }) => ({
 	slackConversations: many(slackConversations),
 	sessions: many(sessions),
 	prebuildRepos: many(prebuildRepos),
+	snapshotRepos: many(snapshotRepos),
 }));
 
 export const prebuildsRelations = relations(prebuilds, ({ one, many }) => ({
@@ -156,10 +162,23 @@ export const prebuildsRelations = relations(prebuilds, ({ one, many }) => ({
 		references: [user.id],
 		relationName: "prebuilds_userId_user_id",
 	}),
+	organization: one(organization, {
+		fields: [prebuilds.organizationId],
+		references: [organization.id],
+	}),
+	activeSnapshot: one(snapshots, {
+		fields: [prebuilds.activeSnapshotId],
+		references: [snapshots.id],
+		relationName: "prebuilds_activeSnapshotId_snapshots_id",
+	}),
 	secrets: many(secrets),
 	automations: many(automations),
 	sessions: many(sessions),
 	prebuildRepos: many(prebuildRepos),
+	snapshots: many(snapshots, {
+		relationName: "snapshots_prebuildId_prebuilds_id",
+	}),
+	secretFiles: many(secretFiles),
 }));
 
 export const repoConnectionsRelations = relations(repoConnections, ({ one }) => ({
@@ -529,5 +548,44 @@ export const actionGrantsRelations = relations(actionGrants, ({ one }) => ({
 	session: one(sessions, {
 		fields: [actionGrants.sessionId],
 		references: [sessions.id],
+	}),
+}));
+
+// ============================================
+// PR1 expand relations
+// ============================================
+
+export const snapshotsRelations = relations(snapshots, ({ one, many }) => ({
+	prebuild: one(prebuilds, {
+		fields: [snapshots.prebuildId],
+		references: [prebuilds.id],
+		relationName: "snapshots_prebuildId_prebuilds_id",
+	}),
+	snapshotRepos: many(snapshotRepos),
+}));
+
+export const snapshotReposRelations = relations(snapshotRepos, ({ one }) => ({
+	snapshot: one(snapshots, {
+		fields: [snapshotRepos.snapshotId],
+		references: [snapshots.id],
+	}),
+	repo: one(repos, {
+		fields: [snapshotRepos.repoId],
+		references: [repos.id],
+	}),
+}));
+
+export const secretFilesRelations = relations(secretFiles, ({ one, many }) => ({
+	prebuild: one(prebuilds, {
+		fields: [secretFiles.prebuildId],
+		references: [prebuilds.id],
+	}),
+	configurationSecrets: many(configurationSecrets),
+}));
+
+export const configurationSecretsRelations = relations(configurationSecrets, ({ one }) => ({
+	secretFile: one(secretFiles, {
+		fields: [configurationSecrets.secretFileId],
+		references: [secretFiles.id],
 	}),
 }));
