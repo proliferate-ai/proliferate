@@ -209,19 +209,26 @@ export async function createSession(
 		}
 
 		// Fallback: old layered resolution (prebuild snapshot → repo snapshot → null)
-		if (!snapshotId && provider.type === "modal" && sessionType !== "cli") {
+		if (!snapshotId) {
 			try {
-				const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
-				snapshotId = resolveSnapshotId({
-					prebuildSnapshotId: null,
-					sandboxProvider: provider.type,
-					prebuildRepos: prebuildRepoRows,
-				});
-				if (snapshotId) {
-					log.info({ snapshotId }, "Using repo snapshot (legacy fallback)");
+				const prebuildRow = await prebuilds.findByIdForSession(prebuildId);
+				const prebuildSnapshotId = prebuildRow?.snapshotId ?? null;
+				if (prebuildSnapshotId) {
+					snapshotId = prebuildSnapshotId;
+					log.info({ snapshotId }, "Using prebuild snapshot (legacy fallback)");
+				} else if (provider.type === "modal" && sessionType !== "cli") {
+					const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
+					snapshotId = resolveSnapshotId({
+						prebuildSnapshotId: null,
+						sandboxProvider: provider.type,
+						prebuildRepos: prebuildRepoRows,
+					});
+					if (snapshotId) {
+						log.info({ snapshotId }, "Using repo snapshot (legacy fallback)");
+					}
 				}
 			} catch (err) {
-				log.warn({ err }, "Failed to resolve repo snapshot (non-fatal)");
+				log.warn({ err }, "Failed to resolve legacy snapshot (non-fatal)");
 			}
 		}
 	}
@@ -604,14 +611,20 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		"session_creator.create_sandbox.github_tokens",
 	);
 
-	// Derive snapshotHasDeps: try new snapshot.has_deps first, fallback to old heuristic.
+	// Derive snapshotHasDeps: use new snapshot.has_deps only when snapshotId matches active snapshot.
 	let snapshotHasDeps = false;
-	try {
-		const activeSnapshot = await snapshots.getActiveSnapshot(prebuildId);
-		if (activeSnapshot) {
-			snapshotHasDeps = activeSnapshot.hasDeps;
-		} else {
-			// Fallback: old heuristic
+	{
+		let matched = false;
+		try {
+			const activeSnapshot = await snapshots.getActiveSnapshot(prebuildId);
+			if (activeSnapshot && snapshotId === activeSnapshot.providerSnapshotId) {
+				snapshotHasDeps = activeSnapshot.hasDeps;
+				matched = true;
+			}
+		} catch {
+			// Fall through to legacy heuristic
+		}
+		if (!matched) {
 			const repoSnapshotFallback =
 				prebuildRepoRows.length === 1 &&
 				prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
@@ -620,15 +633,6 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 					: null;
 			snapshotHasDeps = Boolean(snapshotId) && snapshotId !== repoSnapshotFallback;
 		}
-	} catch {
-		// Fallback: old heuristic
-		const repoSnapshotFallback =
-			prebuildRepoRows.length === 1 &&
-			prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
-			prebuildRepoRows[0].repo?.repoSnapshotId
-				? prebuildRepoRows[0].repo.repoSnapshotId
-				: null;
-		snapshotHasDeps = Boolean(snapshotId) && snapshotId !== repoSnapshotFallback;
 	}
 
 	// Resolve service commands: prebuild-level first, then per-repo fallback

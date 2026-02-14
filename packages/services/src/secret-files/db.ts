@@ -125,6 +125,58 @@ export async function deleteSecretFile(id: string): Promise<void> {
 	await db.delete(secretFiles).where(eq(secretFiles.id, id));
 }
 
+/**
+ * Delete a secret file scoped to a prebuild (ownership check).
+ * Returns true if a row was deleted, false if not found.
+ */
+export async function deleteSecretFileByPrebuild(id: string, prebuildId: string): Promise<boolean> {
+	const db = getDb();
+	const rows = await db
+		.delete(secretFiles)
+		.where(and(eq(secretFiles.id, id), eq(secretFiles.prebuildId, prebuildId)))
+		.returning({ id: secretFiles.id });
+	return rows.length > 0;
+}
+
+/**
+ * Find a secret file by ID scoped to a prebuild (ownership check).
+ */
+export async function findSecretFileByPrebuild(
+	id: string,
+	prebuildId: string,
+): Promise<SecretFileRow | null> {
+	const db = getDb();
+	const row = await db.query.secretFiles.findFirst({
+		where: and(eq(secretFiles.id, id), eq(secretFiles.prebuildId, prebuildId)),
+	});
+	return row ?? null;
+}
+
+/**
+ * Delete a configuration secret scoped to a prebuild (ownership check via join).
+ * Returns true if a row was deleted, false if not found.
+ */
+export async function deleteSecretByPrebuild(
+	secretId: string,
+	prebuildId: string,
+): Promise<boolean> {
+	const db = getDb();
+	// Verify the secret belongs to a secret_file owned by this prebuild
+	const secret = await db.query.configurationSecrets.findFirst({
+		where: eq(configurationSecrets.id, secretId),
+		with: {
+			secretFile: {
+				columns: { prebuildId: true },
+			},
+		},
+	});
+	if (!secret || secret.secretFile?.prebuildId !== prebuildId) {
+		return false;
+	}
+	await db.delete(configurationSecrets).where(eq(configurationSecrets.id, secretId));
+	return true;
+}
+
 // ============================================
 // Configuration Secrets Queries
 // ============================================

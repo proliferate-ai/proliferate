@@ -50,6 +50,30 @@ export async function deleteSecretFile(id: string): Promise<void> {
 }
 
 /**
+ * Delete a secret file scoped to a prebuild (ownership check).
+ */
+export async function deleteSecretFileByPrebuild(id: string, prebuildId: string): Promise<boolean> {
+	return secretFilesDb.deleteSecretFileByPrebuild(id, prebuildId);
+}
+
+/**
+ * Find a secret file by ID scoped to a prebuild (ownership check).
+ */
+export async function findSecretFileByPrebuild(id: string, prebuildId: string) {
+	return secretFilesDb.findSecretFileByPrebuild(id, prebuildId);
+}
+
+/**
+ * Delete a configuration secret scoped to a prebuild (ownership check).
+ */
+export async function deleteSecretByPrebuild(
+	secretId: string,
+	prebuildId: string,
+): Promise<boolean> {
+	return secretFilesDb.deleteSecretByPrebuild(secretId, prebuildId);
+}
+
+/**
  * Upsert a secret value for a secret file.
  */
 export async function upsertSecret(input: {

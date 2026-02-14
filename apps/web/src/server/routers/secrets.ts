@@ -317,7 +317,10 @@ export const secretFilesRouter = {
 		.output(z.object({ deleted: z.boolean() }))
 		.handler(async ({ input, context }) => {
 			await requirePrebuildAccess(input.prebuildId, context.orgId);
-			await secretFiles.deleteSecretFile(input.id);
+			const deleted = await secretFiles.deleteSecretFileByPrebuild(input.id, input.prebuildId);
+			if (!deleted) {
+				throw new ORPCError("NOT_FOUND", { message: "Secret file not found" });
+			}
 			return { deleted: true };
 		}),
 
@@ -337,6 +340,11 @@ export const secretFilesRouter = {
 		.output(z.object({ id: z.string().uuid() }))
 		.handler(async ({ input, context }) => {
 			await requirePrebuildAccess(input.prebuildId, context.orgId);
+			// Verify secretFileId belongs to this prebuild
+			const file = await secretFiles.findSecretFileByPrebuild(input.secretFileId, input.prebuildId);
+			if (!file) {
+				throw new ORPCError("NOT_FOUND", { message: "Secret file not found" });
+			}
 			const row = await secretFiles.upsertSecretValue({
 				secretFileId: input.secretFileId,
 				key: input.key,
@@ -354,7 +362,10 @@ export const secretFilesRouter = {
 		.output(z.object({ deleted: z.boolean() }))
 		.handler(async ({ input, context }) => {
 			await requirePrebuildAccess(input.prebuildId, context.orgId);
-			await secretFiles.deleteSecret(input.id);
+			const deleted = await secretFiles.deleteSecretByPrebuild(input.id, input.prebuildId);
+			if (!deleted) {
+				throw new ORPCError("NOT_FOUND", { message: "Secret not found" });
+			}
 			return { deleted: true };
 		}),
 };

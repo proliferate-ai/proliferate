@@ -5,10 +5,13 @@
  * the env file generation spec to the prebuild configuration.
  */
 
+import { createLogger } from "@proliferate/logger";
 import { prebuilds, secretFiles } from "@proliferate/services";
 import { z } from "zod";
 import type { SessionHub } from "../../session-hub";
 import type { InterceptedToolHandler, InterceptedToolResult } from "./index";
+
+const logger = createLogger({ service: "gateway" }).child({ module: "save-env-files" });
 
 const KeySchema = z.object({
 	key: z.string().min(1).max(200),
@@ -83,8 +86,8 @@ export const saveEnvFilesHandler: InterceptedToolHandler = {
 						keys: f.keys,
 					})),
 				);
-			} catch {
-				// Non-fatal: old path is the source of truth during expand phase
+			} catch (err) {
+				logger.warn({ err, prebuildId }, "Dual-write to secret_files failed (non-fatal)");
 			}
 
 			const paths = parsed.data.files.map((f) => f.path).join(", ");

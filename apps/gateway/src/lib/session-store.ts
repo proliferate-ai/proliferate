@@ -326,24 +326,20 @@ export async function loadSessionContext(
 		}
 	}
 
-	// Derive snapshotHasDeps: try new snapshot.has_deps first, fallback to old heuristic.
+	// Derive snapshotHasDeps: use new snapshot.has_deps only when snapshotId matches active snapshot.
 	let snapshotHasDeps = false;
 	if (session.prebuild_id) {
+		let matched = false;
 		try {
 			const activeSnapshot = await snapshots.getActiveSnapshot(session.prebuild_id);
-			if (activeSnapshot) {
+			if (activeSnapshot && session.snapshot_id === activeSnapshot.providerSnapshotId) {
 				snapshotHasDeps = activeSnapshot.hasDeps;
-			} else {
-				const repoSnapshotFallback =
-					prebuildRepoRows.length === 1 &&
-					prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
-					prebuildRepoRows[0].repo?.repoSnapshotId
-						? prebuildRepoRows[0].repo.repoSnapshotId
-						: null;
-				snapshotHasDeps =
-					Boolean(session.snapshot_id) && session.snapshot_id !== repoSnapshotFallback;
+				matched = true;
 			}
 		} catch {
+			// Fall through to legacy heuristic
+		}
+		if (!matched) {
 			const repoSnapshotFallback =
 				prebuildRepoRows.length === 1 &&
 				prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
