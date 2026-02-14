@@ -16,10 +16,8 @@ import {
 	prebuilds,
 	secrets,
 	sessions,
-	users,
 } from "@proliferate/services";
 import {
-	type CloneInstructions,
 	type ModelId,
 	type RepoSpec,
 	type SandboxProvider,
@@ -75,7 +73,6 @@ export interface CreateSessionOptions {
 	// SSH access (can be enabled on any session type)
 	sshOptions?: {
 		publicKeys: string[];
-		cloneInstructions?: CloneInstructions;
 		localPath?: string;
 		localPathHash?: string;
 		gitToken?: string;
@@ -407,7 +404,6 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			provider: provider.type,
 			hasSnapshotId: Boolean(snapshotId),
 			sshEnabled: Boolean(sshOptions),
-			hasCloneInstructions: Boolean(sshOptions?.cloneInstructions),
 			explicitIntegrationCount: integrationIds?.length ?? 0,
 		},
 		"session_creator.create_sandbox.start",
@@ -441,19 +437,6 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		}
 	}
 
-	// Resolve git identity for commits inside the sandbox
-	let userName: string | undefined;
-	let userEmail: string | undefined;
-	if (userId) {
-		try {
-			const user = await users.findById(userId);
-			userName = user?.name;
-			userEmail = user?.email;
-		} catch (err) {
-			log.warn({ err, userId }, "Failed to load user for git identity (non-fatal)");
-		}
-	}
-
 	// SSH public key (concatenate all keys for authorized_keys)
 	const sshPublicKey = sshOptions?.publicKeys?.join("\n");
 
@@ -471,7 +454,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	);
 
 	// For CLI/SSH sessions, we don't need to load repos (sync via rsync)
-	if (sshOptions && !sshOptions.cloneInstructions) {
+	if (sshOptions) {
 		const envStartMs = Date.now();
 		const baseEnvResult = await sessions.buildSandboxEnvVars({
 			sessionId,
@@ -498,8 +481,6 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		const result = await provider.createSandbox({
 			sessionId,
 			sessionType,
-			userName,
-			userEmail,
 			repos: [],
 			branch: "main",
 			envVars: mergedEnvVars,
@@ -652,8 +633,6 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	const result = await provider.createSandbox({
 		sessionId,
 		sessionType,
-		userName,
-		userEmail,
 		repos: repoSpecs,
 		branch: primaryRepo.defaultBranch || "main",
 		envVars,

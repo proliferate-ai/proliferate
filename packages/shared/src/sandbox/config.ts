@@ -86,18 +86,9 @@ export const ENV_INSTRUCTIONS = `
 
 **This is a cloud sandbox environment with full Docker support.**
 
-Services are pre-installed and available:
-
-### Available Services
-- **PostgreSQL 15**: \`localhost:5432\` (user: \`postgres\`, no password needed - trust auth)
-- **Redis**: \`localhost:6379\`
-- **Mailcatcher**: SMTP on \`localhost:1025\`, Web UI on \`localhost:1080\`
-- **Docker**: Full Docker support - you can use \`docker\` and \`docker compose\`
-
 ### Available Tools
 - **Node.js 20** with \`pnpm\` (preferred) and \`yarn\`
 - **Python 3.11** with \`uv\` (preferred) and \`pip\`
-- **Playwright** with Chromium browser
 - **Docker & Docker Compose**
 
 ### How to Set Up Projects
@@ -122,12 +113,6 @@ docker compose up -d
    pnpm install
    pnpm dev --host 0.0.0.0
    \`\`\`
-
-3. **Database connection string:**
-   \`\`\`
-   postgresql://postgres@localhost:5432/app
-   \`\`\`
-   Create the database first: \`sudo -u postgres createdb app\`
 `;
 
 /**

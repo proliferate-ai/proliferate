@@ -135,8 +135,6 @@ export {
 	DevicePollResponseSchema,
 	SshKeySchema,
 	CliSessionSchema,
-	CreateCliSessionInputSchema,
-	CreateCliSessionResponseSchema,
 	CliPrebuildSchema,
 } from "./cli";
 

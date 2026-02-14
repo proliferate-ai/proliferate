@@ -67,9 +67,6 @@ export interface CreateSandboxOpts {
 	sessionId: string;
 	/** Session mode, used for mode-specific tool injection and behavior. */
 	sessionType?: "coding" | "setup" | "cli" | null;
-	/** Git identity for commits made inside the sandbox. */
-	userName?: string;
-	userEmail?: string;
 	repos: RepoSpec[]; // Repos to clone (always use this, even for single repo)
 	branch: string;
 	envVars: Record<string, string>;
@@ -118,39 +115,6 @@ export interface SnapshotResult {
 
 export interface PauseResult {
 	snapshotId: string;
-}
-
-/**
- * Instructions for cloning a repo in terminal sessions.
- */
-export interface CloneInstructions {
-	cloneUrl: string;
-	branch: string;
-	checkoutSha: string;
-	subdirectory: string;
-}
-
-/**
- * Options for creating a terminal sandbox (SSH-enabled, for CLI sessions).
- */
-export interface CreateTerminalSandboxOpts {
-	sessionId: string;
-	userPublicKeys: string[];
-	localPath?: string;
-	snapshotId?: string;
-	gitToken?: string;
-	envVars?: Record<string, string>;
-	cloneInstructions?: CloneInstructions;
-}
-
-/**
- * Result from creating a terminal sandbox.
- */
-export interface CreateTerminalSandboxResult {
-	sandboxId: string;
-	sshHost: string;
-	sshPort: number;
-	previewUrl: string;
 }
 
 export interface SandboxProvider {
@@ -235,28 +199,6 @@ export interface SandboxProvider {
 	 * @returns Array of files found in the folder (recursively)
 	 */
 	readFiles?(sandboxId: string, folderPath: string): Promise<FileContent[]>;
-
-	/**
-	 * Create a terminal sandbox with SSH access (used by CLI sessions).
-	 * Not all providers support this - check availability before calling.
-	 */
-	createTerminalSandbox?(opts: CreateTerminalSandboxOpts): Promise<CreateTerminalSandboxResult>;
-
-	/**
-	 * Read files from a folder in the sandbox filesystem.
-	 * Returns array of files with their relative paths and binary contents.
-	 *
-	 * @param sandboxId - The sandbox ID
-	 * @param folderPath - Absolute path to folder in sandbox
-	 * @returns Array of files found in the folder (recursively)
-	 */
-	readFiles?(sandboxId: string, folderPath: string): Promise<FileContent[]>;
-
-	/**
-	 * Create a terminal sandbox with SSH access (used by CLI sessions).
-	 * Not all providers support this - check availability before calling.
-	 */
-	createTerminalSandbox?(opts: CreateTerminalSandboxOpts): Promise<CreateTerminalSandboxResult>;
 
 	/**
 	 * Run saved service commands in the sandbox and capture output.

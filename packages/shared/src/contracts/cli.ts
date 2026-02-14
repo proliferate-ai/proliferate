@@ -93,35 +93,6 @@ const CliSessionSchema = z.object({
 	last_activity_at: z.string().nullable(),
 });
 
-const CreateCliSessionInputSchema = z.object({
-	localPathHash: z.string(),
-	localPath: z.string().optional(),
-	resume: z.boolean().optional(),
-	snapshotId: z.string().optional(),
-	gitAuth: z.enum(["local", "proliferate"]).optional(),
-	githubConnectionId: z.string().optional(),
-	envVars: z.record(z.string()).optional(),
-	cloneInstructions: z
-		.object({
-			cloneUrl: z.string(),
-			branch: z.string(),
-			checkoutSha: z.string(),
-			subdirectory: z.string(),
-		})
-		.optional(),
-});
-
-const CreateCliSessionResponseSchema = z.object({
-	sessionId: z.string().uuid(),
-	resumed: z.boolean(),
-	status: z.string(),
-	provider: z.string().optional(),
-	sshHost: z.string().nullable().optional(),
-	sshPort: z.number().nullable().optional(),
-	previewUrl: z.string().nullable().optional(),
-	sandboxId: z.string().nullable().optional(),
-});
-
 const CheckSandboxesInputSchema = z.object({
 	sandboxIds: z.array(z.string()),
 });
@@ -356,20 +327,6 @@ export const cliContract = c.router(
 				summary: "List CLI sessions, optionally filtered by local path hash",
 			},
 
-			create: {
-				method: "POST",
-				path: "/cli/sessions",
-				body: CreateCliSessionInputSchema,
-				responses: {
-					200: CreateCliSessionResponseSchema,
-					400: ErrorResponseSchema,
-					401: ErrorResponseSchema,
-					403: ErrorResponseSchema,
-					500: ErrorResponseSchema,
-				},
-				summary: "Create a new terminal session or resume an existing one",
-			},
-
 			deleteAll: {
 				method: "DELETE",
 				path: "/cli/sessions",
@@ -561,7 +518,5 @@ export {
 	DevicePollResponseSchema,
 	SshKeySchema,
 	CliSessionSchema,
-	CreateCliSessionInputSchema,
-	CreateCliSessionResponseSchema,
 	CliPrebuildSchema,
 };

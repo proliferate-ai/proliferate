@@ -11,12 +11,6 @@ RUN apt-get update && apt-get install -y \
     git curl wget build-essential ca-certificates \
     openssh-client openssh-server sudo \
     net-tools iproute2 \
-    postgresql postgresql-contrib libpq-dev \
-    redis-server \
-    ruby ruby-dev \
-    libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
-    libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-    libgbm1 libasound2 libpango-1.0-0 libcairo2 libxshmfence1 fonts-liberation \
     procps lsof netcat-openbsd jq rsync tmux \
     python3.11 python3.11-venv python3-pip \
     && rm -rf /var/lib/apt/lists/*
@@ -51,9 +45,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 # Install global npm packages
 RUN npm install -g pnpm yarn @aws-sdk/client-s3 ws node-pty
 
-# Install Mailcatcher
-RUN gem install mailcatcher --no-document
-
 # Install Caddy (for preview proxy)
 RUN apt-get update \
     && apt-get install -y debian-keyring debian-archive-keyring apt-transport-https \
@@ -79,11 +70,11 @@ RUN OVSCODE_VERSION="1.106.3" \
     && ln -s /opt/openvscode-server/bin/openvscode-server /usr/local/bin/openvscode-server \
     && rm /tmp/ovscode.tar.gz
 
-# Install AI coding agents
-RUN npm install -g opencode-ai@latest @anthropic-ai/claude-code @openai/codex
+# Install OpenCode CLI
+RUN npm install -g opencode-ai@latest
 
-# Install MCP servers (Playwright + sandbox-mcp) — cache-bust: v0.1.19
-RUN npm install -g proliferate-sandbox-mcp@0.1.19 playwright-mcp --unsafe-perm
+# Install sandbox-mcp — cache-bust: v0.1.19
+RUN npm install -g proliferate-sandbox-mcp@0.1.19
 
 # Make python3.11 the default python
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
@@ -92,25 +83,9 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
 # Install Python tools (including fastapi for Modal endpoints)
 RUN pip3 install httpx uv playwright psycopg2-binary redis fastapi
 
-# Install Playwright browsers (Chromium only)
-RUN playwright install chromium && playwright install-deps chromium
-
-# Initialize PostgreSQL
-RUN mkdir -p /var/run/postgresql && chown postgres:postgres /var/run/postgresql \
-    && mkdir -p /var/lib/postgresql/data && chown postgres:postgres /var/lib/postgresql/data \
-    && sudo -u postgres /usr/lib/postgresql/14/bin/initdb -D /var/lib/postgresql/data \
-    && echo "local all all trust" > /var/lib/postgresql/data/pg_hba.conf \
-    && echo "host all all 127.0.0.1/32 trust" >> /var/lib/postgresql/data/pg_hba.conf \
-    && echo "host all all ::1/128 trust" >> /var/lib/postgresql/data/pg_hba.conf \
-    && sed -i "s/#listen_addresses = 'localhost'/listen_addresses = 'localhost'/" /var/lib/postgresql/data/postgresql.conf
-
 # Create startup script for services
 RUN echo '#!/bin/bash\n\
-mkdir -p /var/log/postgresql && chown postgres:postgres /var/log/postgresql\n\
-sudo -u postgres /usr/lib/postgresql/14/bin/pg_ctl -D /var/lib/postgresql/data -l /var/log/postgresql/postgresql.log start || true\n\
-redis-server --daemonize yes\n\
-/usr/sbin/sshd\n\
-mailcatcher --ip 0.0.0.0 || true' > /usr/local/bin/start-services.sh \
+/usr/sbin/sshd' > /usr/local/bin/start-services.sh \
     && chmod +x /usr/local/bin/start-services.sh
 
 # Create Docker daemon startup script
@@ -232,4 +207,4 @@ ENV GIT_ASKPASS="/usr/local/bin/git-askpass"
 WORKDIR /home/user
 
 # Cache bust - change this to force rebuild
-RUN echo "image-v2026-01-28"
+RUN echo "image-v2026-02-13"

@@ -694,7 +694,7 @@ export class E2BProvider implements SandboxProvider {
 
 	/**
 	 * Setup additional dependencies (async - fire and forget):
-	 * - Start services (Postgres, Redis, Mailcatcher)
+	 * - Start services (Docker daemon)
 	 * - Start Caddy preview proxy
 	 * - Run per-repo service commands (if snapshot has deps)
 	 */
@@ -703,30 +703,10 @@ export class E2BProvider implements SandboxProvider {
 		opts: CreateSandboxOpts,
 		log: Logger,
 	): Promise<void> {
-		// Configure git identity (required for commits inside the sandbox)
-		const userName = opts.userName?.trim();
-		const userEmail = opts.userEmail?.trim();
-		if (userName || userEmail) {
-			try {
-				if (userName) {
-					await sandbox.commands.run(`git config --global user.name ${shellEscape(userName)}`, {
-						timeoutMs: 10000,
-					});
-				}
-				if (userEmail) {
-					await sandbox.commands.run(`git config --global user.email ${shellEscape(userEmail)}`, {
-						timeoutMs: 10000,
-					});
-				}
-			} catch (err) {
-				log.warn({ err }, "Failed to configure git identity (non-fatal)");
-			}
-		}
-
 		// Git freshness pull on restored snapshots (opt-in, non-fatal)
 		await this.pullOnRestore(sandbox, opts, log);
 
-		// Start services (PostgreSQL, Redis, Mailcatcher)
+		// Start services (Docker daemon)
 		log.debug("Starting services (async)");
 		await sandbox.commands.run("/usr/local/bin/start-services.sh", {
 			timeoutMs: 30000,

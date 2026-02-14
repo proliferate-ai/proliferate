@@ -6,7 +6,6 @@
 
 import { createLogger } from "@proliferate/logger";
 import { prebuilds, sessions } from "@proliferate/services";
-import type { CloneInstructions } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import type { Router as RouterType } from "express";
 import { Router } from "express";
@@ -61,7 +60,6 @@ interface CreateSessionRequest {
 	// SSH access (can be enabled on any session type)
 	sshOptions?: {
 		publicKeys: string[];
-		cloneInstructions?: CloneInstructions;
 		localPath?: string;
 		gitToken?: string;
 		envVars?: Record<string, string>;

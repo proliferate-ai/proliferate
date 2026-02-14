@@ -55,13 +55,7 @@ export function getOpencodeConfig(
     "*": "allow",
     "question": "deny"
   },
-  "mcp": {
-    "playwright": {
-      "type": "local",
-      "command": ["playwright-mcp", "--headless", "--browser", "chromium", "--no-sandbox", "--isolated", "--caps", "vision"],
-      "enabled": true
-    }
-  }
+  "mcp": {}
 }`;
 }
 
