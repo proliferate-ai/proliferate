@@ -87,7 +87,10 @@ export const saveEnvFilesHandler: InterceptedToolHandler = {
 					})),
 				);
 			} catch (err) {
-				logger.warn({ err, prebuildId }, "Dual-write to secret_files failed (non-fatal)");
+				logger.warn(
+					{ err, prebuildId, sessionId: context.session.id },
+					"Dual-write to secret_files failed (non-fatal)",
+				);
 			}
 
 			const paths = parsed.data.files.map((f) => f.path).join(", ");
