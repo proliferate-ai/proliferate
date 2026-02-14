@@ -6,7 +6,7 @@
  */
 
 import { type Logger, createLogger } from "@proliferate/logger";
-import { baseSnapshots, sessions, users } from "@proliferate/services";
+import { baseSnapshots, sessions } from "@proliferate/services";
 import type {
 	AutoStartOutputEntry,
 	PrebuildServiceCommand,
@@ -292,20 +292,6 @@ export class SessionRuntime {
 			this.provider = provider;
 			this.log("Using sandbox provider", { provider: provider.type });
 
-			// Resolve git identity for commits inside the sandbox
-			let userName: string | undefined;
-			let userEmail: string | undefined;
-			const userId = this.context.session.created_by;
-			if (userId) {
-				try {
-					const user = await users.findById(userId);
-					userName = user?.name;
-					userEmail = user?.email;
-				} catch (err) {
-					this.logger.debug({ err, userId }, "Failed to load user for git identity (non-fatal)");
-				}
-			}
-
 			// Resolve base snapshot from DB for Modal provider
 			let baseSnapshotId: string | undefined;
 			if (provider.type === "modal") {
@@ -347,8 +333,6 @@ export class SessionRuntime {
 			const result = await provider.ensureSandbox({
 				sessionId: this.sessionId,
 				sessionType: this.context.session.session_type as "coding" | "setup" | "cli" | null,
-				userName,
-				userEmail,
 				repos: this.context.repos,
 				branch: this.context.primaryRepo.default_branch || "main",
 				envVars: envVarsWithToken,

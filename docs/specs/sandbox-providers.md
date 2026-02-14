@@ -51,7 +51,7 @@ Callers obtain a provider via `getSandboxProvider(type?)` (`packages/shared/src/
 - Reference: `packages/shared/src/providers/index.ts`
 
 ### SandboxProvider Interface
-The common contract for all providers. Defines required methods (`ensureSandbox`, `createSandbox`, `snapshot`, `pause`, `terminate`, `writeEnvFile`, `health`) and optional methods (`checkSandboxes`, `resolveTunnels`, `readFiles`, `createTerminalSandbox`, `testServiceCommands`, `execCommand`).
+The common contract for all providers. Defines required methods (`ensureSandbox`, `createSandbox`, `snapshot`, `pause`, `terminate`, `writeEnvFile`, `health`) and optional methods (`checkSandboxes`, `resolveTunnels`, `testServiceCommands`, `execCommand`).
 - Key detail agents get wrong: `ensureSandbox` is the preferred entry point, not `createSandbox`. The former handles recovery; the latter always creates fresh.
 - Reference: `packages/shared/src/sandbox-provider.ts`
 
@@ -126,8 +126,6 @@ type SandboxProviderType = "modal" | "e2b";
 
 interface CreateSandboxOpts {
   sessionId: string;
-  userName?: string;           // Git identity
-  userEmail?: string;
   repos: RepoSpec[];           // Always an array, even for single repo
   branch: string;
   envVars: Record<string, string>;
@@ -234,15 +232,13 @@ The Dockerfile builds an Ubuntu 22.04 image with:
 | Category | Contents |
 |----------|----------|
 | **Languages** | Node.js 20 (pnpm, yarn), Python 3.11 (uv, pip) |
-| **AI Agents** | OpenCode, Claude Code (`@anthropic-ai/claude-code`), Codex (`@openai/codex`) |
-| **Sandbox Tooling** | `proliferate-sandbox-mcp` (npm global), Playwright MCP server |
-| **Services** | PostgreSQL 14 (trust auth), Redis, Mailcatcher |
+| **AI Agents** | OpenCode |
+| **Sandbox Tooling** | `proliferate-sandbox-mcp` (npm global) |
 | **Docker** | Docker CE 27.5.0, Compose plugin, Buildx, runc 1.3.0 |
 | **Web** | Caddy (preview proxy), openvscode-server 1.106.3 |
 | **Git** | Git, GitHub CLI (`gh`), custom credential helpers (`git-credential-proliferate`, `git-askpass`) |
-| **Browser** | Playwright Chromium (headless) |
 | **System** | SSH server (key-only auth), rsync, tmux, jq, procps |
-| **Scripts** | `start-services.sh` (Postgres+Redis+SSH+Mailcatcher), `start-dockerd.sh` (Docker daemon with iptables NAT), `proliferate-info` |
+| **Scripts** | `start-services.sh` (sshd), `start-dockerd.sh` (Docker daemon with iptables NAT), `proliferate-info` |
 | **User** | Non-root `user` with passwordless sudo |
 | **Pre-installed** | `@aws-sdk/client-s3` + `@opencode-ai/plugin` at `/home/user/.opencode-tools/` |
 
@@ -316,7 +312,7 @@ throw SandboxProviderError.fromError(error, "modal", "createSandbox");
 4. Create sandbox with `client.sandboxes.create()` — Docker enabled, 2 CPU, 4GB RAM, encrypted ports for OpenCode+preview, unencrypted for SSH (`modal-libmodal.ts:621-631`).
 5. Get tunnel URLs via `sandbox.tunnels(30000)` (`modal-libmodal.ts:642-656`).
 6. **Essential setup (blocking)**: Clone repos, write plugin/tools/config/instructions, start OpenCode server (`modal-libmodal.ts:662-678`).
-7. **Additional setup (async)**: Git identity, git freshness pull, start services (Postgres/Redis/Mailcatcher), start Caddy, start sandbox-mcp, boot service commands (`modal-libmodal.ts:691`).
+7. **Additional setup (async)**: Git freshness pull, start services (sshd), start Caddy, start sandbox-mcp, boot service commands (`modal-libmodal.ts:691`).
 8. Wait for OpenCode readiness (poll `/session` endpoint, 30s timeout) (`modal-libmodal.ts:701`).
 
 **Edge cases:**
@@ -359,10 +355,9 @@ throw SandboxProviderError.fromError(error, "modal", "createSandbox");
 4. Start OpenCode server (`opencode serve --port 4096`).
 
 **Phase 2 — Additional (fire-and-forget):**
-1. Configure git identity (`git config --global user.name/email`).
-2. Git freshness pull (if enabled and cadence elapsed).
-3. Start infrastructure services (`/usr/local/bin/start-services.sh`).
-4. Create Caddy import directory, write Caddyfile, start Caddy.
+1. Git freshness pull (if enabled and cadence elapsed).
+2. Start infrastructure services (`/usr/local/bin/start-services.sh` — sshd for Modal, Docker daemon for E2B).
+3. Create Caddy import directory, write Caddyfile, start Caddy.
 5. Start sandbox-mcp API server (`sandbox-mcp api`, port 4000).
 6. Apply env files via `proliferate env apply` (blocking within phase 2).
 7. Start service commands via `proliferate services start` (fire-and-forget).

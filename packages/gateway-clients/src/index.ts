@@ -47,7 +47,6 @@ export type {
 	SessionType,
 	ClientType,
 	SandboxMode,
-	CloneInstructions,
 	CreateSessionRequest,
 	CreateSessionResponse,
 } from "./types";

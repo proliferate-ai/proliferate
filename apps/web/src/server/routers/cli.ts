@@ -4,14 +4,10 @@
  * Handles CLI authentication, SSH keys, repos, sessions, GitHub, and prebuilds.
  */
 
-import { randomUUID } from "node:crypto";
 import { auth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ handler: "cli" });
-import { checkCanConnectCLI, checkCanResumeSession } from "@/lib/billing";
-import { getSessionGatewayUrl } from "@/lib/gateway";
-import { getGitHubTokenForIntegration } from "@/lib/github";
 import getNango, { NANGO_GITHUB_INTEGRATION_ID, requireNangoIntegrationId } from "@/lib/nango";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
@@ -22,8 +18,6 @@ import {
 	CliRepoConnectionSchema,
 	CliRepoSchema,
 	CliSessionSchema,
-	CreateCliSessionInputSchema,
-	CreateCliSessionResponseSchema,
 	SshKeySchema,
 } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
@@ -330,160 +324,6 @@ export const cliSessionsRouter = {
 		.handler(async ({ input, context }) => {
 			const sessions = await cli.listCliSessions(context.orgId, input?.localPathHash);
 			return { sessions };
-		}),
-
-	/**
-	 * Create a new terminal session or resume an existing one.
-	 */
-	create: orgProcedure
-		.input(CreateCliSessionInputSchema)
-		.output(CreateCliSessionResponseSchema)
-		.handler(async ({ input, context }) => {
-			const {
-				localPathHash,
-				localPath,
-				resume,
-				snapshotId,
-				gitAuth,
-				githubConnectionId,
-				envVars,
-				cloneInstructions,
-			} = input;
-
-			// Billing gate: resume vs new CLI session
-			if (resume) {
-				const billingCheck = await checkCanResumeSession(context.orgId);
-				if (!billingCheck.allowed) {
-					throw new ORPCError("PAYMENT_REQUIRED", {
-						message: billingCheck.message || "Insufficient credits",
-						data: { billingCode: billingCheck.code },
-					});
-				}
-			} else {
-				const billingCheck = await checkCanConnectCLI(context.orgId);
-				if (!billingCheck.allowed) {
-					throw new ORPCError("PAYMENT_REQUIRED", {
-						message: billingCheck.message || "Insufficient credits",
-						data: { billingCode: billingCheck.code },
-					});
-				}
-			}
-
-			if (resume) {
-				const resumable = await cli.findResumableSession(context.orgId, localPathHash);
-				if (resumable) {
-					return {
-						sessionId: resumable.sessionId,
-						resumed: true,
-						status: resumable.status,
-					};
-				}
-			}
-
-			// Get user's SSH keys
-			const sshKeys = await cli.getSshPublicKeys(context.user.id);
-
-			if (sshKeys.length === 0) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: "No SSH keys registered. Run 'proliferate --login' first.",
-				});
-			}
-
-			const sessionId = randomUUID();
-			const _gatewayUrl = getSessionGatewayUrl(sessionId);
-			const provider = getSandboxProvider();
-
-			// Get GitHub token if needed
-			let githubToken: string | undefined;
-			if (gitAuth === "proliferate" && githubConnectionId) {
-				const integration = await cli.getGitHubIntegrationForToken(
-					context.orgId,
-					githubConnectionId,
-				);
-
-				if (!integration) {
-					throw new ORPCError("FORBIDDEN", {
-						message: "GitHub connection is not valid for this organization.",
-					});
-				}
-
-				try {
-					githubToken = await getGitHubTokenForIntegration({
-						id: integration.id,
-						githubInstallationId: integration.github_installation_id,
-						connectionId: integration.connection_id,
-					});
-				} catch (err) {
-					log.error({ err }, "Failed to get GitHub token");
-					throw new ORPCError("INTERNAL_SERVER_ERROR", {
-						message: "Failed to fetch GitHub credentials. Please reconnect GitHub.",
-					});
-				}
-			}
-
-			// Create session in DB
-			try {
-				await cli.createCliSession({
-					id: sessionId,
-					repoId: null,
-					organizationId: context.orgId,
-					createdBy: context.user.id,
-					sessionType: "terminal",
-					origin: "cli",
-					localPathHash,
-					status: "starting",
-					sandboxProvider: provider.type,
-					title: localPath ? `CLI: ${localPath}` : "CLI Session",
-				});
-			} catch {
-				throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create session" });
-			}
-
-			let sshHost: string | null = null;
-			let sshPort: number | null = null;
-			let previewUrl: string | null = null;
-			let sandboxId: string | null = null;
-
-			try {
-				if (!provider.createTerminalSandbox) {
-					throw new ORPCError("BAD_REQUEST", {
-						message: `Provider ${provider.type} does not support terminal sessions`,
-					});
-				}
-
-				const result = await provider.createTerminalSandbox({
-					sessionId,
-					userPublicKeys: sshKeys,
-					localPath,
-					snapshotId,
-					gitToken: githubToken,
-					envVars,
-					cloneInstructions,
-				});
-
-				sandboxId = result.sandboxId;
-				sshHost = result.sshHost;
-				sshPort = result.sshPort;
-				previewUrl = result.previewUrl;
-			} catch (err) {
-				await cli.deleteSession(sessionId);
-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: `Failed to create sandbox: ${err instanceof Error ? err.message : "Unknown error"}`,
-				});
-			}
-
-			await cli.updateSessionWithSandbox(sessionId, sandboxId, "running", previewUrl);
-
-			return {
-				sessionId,
-				resumed: false,
-				status: "running",
-				provider: provider.type,
-				sshHost,
-				sshPort,
-				previewUrl,
-				sandboxId,
-			};
 		}),
 
 	/**

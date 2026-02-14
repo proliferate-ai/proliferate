@@ -23,41 +23,6 @@ RUN apt-get update && apt-get install -y \
 RUN id -u user >/dev/null 2>&1 || useradd -m -s /bin/bash user && \
     grep -q "^user ALL" /etc/sudoers || echo "user ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# PostgreSQL
-RUN apt-get update && apt-get install -y \
-    postgresql \
-    postgresql-contrib \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Redis
-RUN apt-get update && apt-get install -y redis-server \
-    && rm -rf /var/lib/apt/lists/*
-
-# Ruby (for Mailcatcher)
-RUN apt-get update && apt-get install -y ruby ruby-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Playwright browser dependencies
-RUN apt-get update && apt-get install -y \
-    libnss3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libxshmfence1 \
-    fonts-liberation \
-    && rm -rf /var/lib/apt/lists/*
-
 # Install Node.js 20
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
@@ -65,9 +30,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 
 # Install pnpm (yarn already in base image)
 RUN npm install -g pnpm
-
-# Install Mailcatcher
-RUN gem install mailcatcher --no-document
 
 # Install Caddy (for preview proxy)
 RUN apt-get update && apt-get install -y debian-keyring debian-archive-keyring apt-transport-https \
@@ -98,36 +60,15 @@ RUN npm install -g opencode-ai@latest proliferate-sandbox-mcp@0.1.19
 # Install Python tools
 RUN pip install httpx uv playwright psycopg2-binary redis
 
-# Install Playwright browsers (Chromium only)
-RUN playwright install chromium && playwright install-deps chromium
-
-# Initialize PostgreSQL
-RUN mkdir -p /var/run/postgresql && chown postgres:postgres /var/run/postgresql \
-    && mkdir -p /var/lib/postgresql/data && chown postgres:postgres /var/lib/postgresql/data \
-    && sudo -u postgres /usr/lib/postgresql/*/bin/initdb -D /var/lib/postgresql/data \
-    && echo "local all all trust" > /var/lib/postgresql/data/pg_hba.conf \
-    && echo "host all all 127.0.0.1/32 trust" >> /var/lib/postgresql/data/pg_hba.conf \
-    && echo "host all all ::1/128 trust" >> /var/lib/postgresql/data/pg_hba.conf
-
-# Create startup script for services with proper error logging
-# Note: Don't use 'set -e' as we want services to start even if some fail
-RUN echo '#!/bin/bash' > /usr/local/bin/start-services.sh \
-    && echo 'echo "[start-services] Starting Docker daemon..."' >> /usr/local/bin/start-services.sh \
-    && echo 'if ! pgrep -x dockerd > /dev/null 2>&1; then' >> /usr/local/bin/start-services.sh \
-    && echo '  sudo dockerd > /var/log/docker.log 2>&1 &' >> /usr/local/bin/start-services.sh \
-    && echo '  sleep 2' >> /usr/local/bin/start-services.sh \
-    && echo 'fi' >> /usr/local/bin/start-services.sh \
-    && echo 'mkdir -p /var/log/postgresql && chown postgres:postgres /var/log/postgresql 2>/dev/null || true' >> /usr/local/bin/start-services.sh \
-    && echo 'echo "[start-services] Starting PostgreSQL..."' >> /usr/local/bin/start-services.sh \
-    && echo 'if ! sudo -u postgres /usr/lib/postgresql/*/bin/pg_ctl -D /var/lib/postgresql/data -l /var/log/postgresql/postgresql.log start 2>/dev/null; then' >> /usr/local/bin/start-services.sh \
-    && echo '  echo "[start-services] WARNING: PostgreSQL failed to start"' >> /usr/local/bin/start-services.sh \
-    && echo 'fi' >> /usr/local/bin/start-services.sh \
-    && echo 'echo "[start-services] Starting Redis..."' >> /usr/local/bin/start-services.sh \
-    && echo 'redis-server --daemonize yes 2>/dev/null || echo "[start-services] WARNING: Redis failed to start"' >> /usr/local/bin/start-services.sh \
-    && echo 'echo "[start-services] Starting Mailcatcher..."' >> /usr/local/bin/start-services.sh \
-    && echo 'mailcatcher --ip 0.0.0.0 2>/dev/null || echo "[start-services] WARNING: Mailcatcher failed to start"' >> /usr/local/bin/start-services.sh \
-    && echo 'echo "[start-services] Done"' >> /usr/local/bin/start-services.sh \
-    && echo 'exit 0' >> /usr/local/bin/start-services.sh \
+# Create startup script for services
+RUN echo '#!/bin/bash\n\
+echo "[start-services] Starting Docker daemon..."\n\
+if ! pgrep -x dockerd > /dev/null 2>&1; then\n\
+  sudo dockerd > /var/log/docker.log 2>&1 &\n\
+  sleep 2\n\
+fi\n\
+echo "[start-services] Done"\n\
+exit 0' > /usr/local/bin/start-services.sh \
     && chmod +x /usr/local/bin/start-services.sh
 
 # Install Docker (E2B supports this, unlike Modal)
@@ -147,9 +88,6 @@ RUN mkdir -p /home/user/.opencode-tools && \
 # Create metadata directory for session/repo tracking across pause/resume
 RUN mkdir -p /home/user/.proliferate && \
     chown -R user:user /home/user/.proliferate
-
-# Install Playwright MCP server globally for browser automation
-RUN npm install -g playwright-mcp
 
 # Configure SSH for terminal sessions (used by CLI)
 RUN mkdir -p /home/user/.ssh && \

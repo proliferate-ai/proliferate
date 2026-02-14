@@ -1144,7 +1144,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 	/**
 	 * Setup additional dependencies (async - fire and forget):
-	 * - Start services (Postgres, Redis, Mailcatcher)
+	 * - Start services (sshd)
 	 * - Start Caddy preview proxy
 	 * - Run per-repo service commands (if snapshot has deps)
 	 */
@@ -1153,22 +1153,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		opts: CreateSandboxOpts,
 		log: Logger,
 	): Promise<void> {
-		// Configure git identity (required for commits inside the sandbox)
-		const userName = opts.userName?.trim();
-		const userEmail = opts.userEmail?.trim();
-		if (userName || userEmail) {
-			try {
-				if (userName) {
-					await sandbox.exec(["git", "config", "--global", "user.name", userName]);
-				}
-				if (userEmail) {
-					await sandbox.exec(["git", "config", "--global", "user.email", userEmail]);
-				}
-			} catch (err) {
-				log.warn({ err }, "Failed to configure git identity (non-fatal)");
-			}
-		}
-
 		// Git freshness pull on restored snapshots (opt-in, non-fatal, cadence-gated)
 		{
 			// Read metadata for cadence check
@@ -1264,7 +1248,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			}
 		}
 
-		// Start services
+		// Start services (sshd)
 		log.debug("Starting services (async)");
 		await sandbox.exec(["/usr/local/bin/start-services.sh"]);
 

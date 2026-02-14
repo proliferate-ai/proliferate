@@ -41,12 +41,10 @@ describe("E2B Provider - Helper Functions", () => {
 			expect(parsed.permission.question).toBe("deny");
 		});
 
-		it("should include playwright MCP configuration", () => {
+		it("should have empty MCP configuration", () => {
 			const config = getOpencodeConfig("test-model");
 			const parsed = JSON.parse(config);
-			expect(parsed.mcp.playwright).toBeDefined();
-			expect(parsed.mcp.playwright.type).toBe("local");
-			expect(parsed.mcp.playwright.command).toContain("playwright-mcp");
+			expect(parsed.mcp).toEqual({});
 		});
 
 		it("should NOT include sandbox_mcp MCP entry (regression)", () => {
@@ -151,17 +149,6 @@ describe("E2B Provider - Helper Functions", () => {
 	});
 
 	describe("ENV_INSTRUCTIONS", () => {
-		it("should document PostgreSQL configuration", () => {
-			expect(ENV_INSTRUCTIONS).toContain("PostgreSQL");
-			expect(ENV_INSTRUCTIONS).toContain("localhost:5432");
-			expect(ENV_INSTRUCTIONS).toContain("postgres");
-		});
-
-		it("should document Redis configuration", () => {
-			expect(ENV_INSTRUCTIONS).toContain("Redis");
-			expect(ENV_INSTRUCTIONS).toContain("localhost:6379");
-		});
-
 		it("should document Docker support", () => {
 			expect(ENV_INSTRUCTIONS).toContain("Docker");
 			expect(ENV_INSTRUCTIONS).toContain("docker compose");

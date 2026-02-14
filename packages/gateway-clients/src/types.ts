@@ -107,16 +107,6 @@ export type ClientType = "web" | "slack" | "cli" | "automation";
 export type SandboxMode = "immediate" | "deferred";
 
 /**
- * Clone instructions for SSH-enabled sessions
- */
-export interface CloneInstructions {
-	cloneUrl: string;
-	branch: string;
-	checkoutSha: string;
-	subdirectory: string;
-}
-
-/**
  * Request to create a new session
  */
 export interface CreateSessionRequest {
@@ -147,7 +137,6 @@ export interface CreateSessionRequest {
 	// SSH access (can be enabled on any session type)
 	sshOptions?: {
 		publicKeys: string[];
-		cloneInstructions?: CloneInstructions;
 		localPath?: string;
 		gitToken?: string;
 		envVars?: Record<string, string>;
