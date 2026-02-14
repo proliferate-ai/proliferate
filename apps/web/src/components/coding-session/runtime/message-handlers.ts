@@ -117,6 +117,40 @@ export function handleToken(
 	}));
 }
 
+/** Handle text part complete - authoritative text for a completed part */
+export function handleTextPartComplete(
+	payload: { messageId?: string; partId?: string; text?: string },
+	ctx: MessageHandlerContext,
+) {
+	if (!payload?.messageId || !payload?.text) return;
+
+	const msgId = payload.messageId;
+
+	// Clear streaming text — the part is complete, use authoritative text instead
+	delete ctx.streamingTextRef.current[msgId];
+	ctx.setStreamingText((prev) => {
+		const { [msgId]: _, ...rest } = prev;
+		return rest;
+	});
+
+	// Set the text part to the authoritative value from the server
+	ctx.setMessages((msgs) =>
+		msgs.map((m) => {
+			if (m.id !== msgId) return m;
+
+			const parts = [...(m.parts || [])];
+			const textPartIndex = parts.findLastIndex((p) => p.type === "text");
+			if (textPartIndex >= 0) {
+				// Replace with authoritative text (handles both fresh and init-overlap cases)
+				parts[textPartIndex] = { type: "text", text: payload.text! };
+			} else {
+				parts.push({ type: "text", text: payload.text! });
+			}
+			return { ...m, parts };
+		}),
+	);
+}
+
 /** Handle tool start - add tool part to message */
 export function handleToolStart(data: ToolStartMessage, ctx: MessageHandlerContext) {
 	const payload = data.payload;

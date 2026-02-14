@@ -32,13 +32,6 @@ export function convertToThreadMessage(
 	message: ExtendedMessage,
 	streamingText?: string,
 ): ThreadMessageLike {
-	// Debug logging to identify duplicate rendering
-	const partsTextLen =
-		message.parts?.reduce((acc, p) => acc + (p.type === "text" ? p.text.length : 0), 0) || 0;
-	console.log(
-		`[Render] msgId=${message.id} role=${message.role} contentLen=${message.content?.length || 0} streamingLen=${streamingText?.length || 0} partsCount=${message.parts?.length || 0} partsTextLen=${partsTextLen}`,
-	);
-
 	const content: ThreadMessageLike["content"] = [];
 
 	// If we have ordered parts, use them directly
@@ -71,11 +64,15 @@ export function convertToThreadMessage(
 			}
 		}
 		// Append streaming text at the end if available (for text being typed after tools)
-		// Skip if this text was already flushed to parts (prevents duplicate due to React batching)
+		// Skip if this text already overlaps with an existing part (e.g. init sent the same
+		// text that is now also accumulating via token events — streaming text is a growing
+		// prefix of the part text, or a suffix when flushing completes)
 		if (streamingText) {
-			const lastPart = message.parts[message.parts.length - 1];
-			const alreadyFlushed = lastPart?.type === "text" && lastPart.text.endsWith(streamingText);
-			if (!alreadyFlushed) {
+			const lastTextPart = message.parts.findLast((p) => p.type === "text");
+			const alreadyPresent =
+				lastTextPart?.type === "text" &&
+				(lastTextPart.text.endsWith(streamingText) || lastTextPart.text.startsWith(streamingText));
+			if (!alreadyPresent) {
 				(content as unknown[]).push({ type: "text", text: streamingText });
 			}
 		}
