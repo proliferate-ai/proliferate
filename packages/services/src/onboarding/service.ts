@@ -45,19 +45,19 @@ export async function getOnboardingStatus(
 
 	// Helper to check if a prebuild_repo entry has a usable prebuild (has snapshot)
 	const hasUsablePrebuild = (pr: {
-		prebuild: { snapshotId: string | null } | null;
-	}): boolean => !!pr.prebuild?.snapshotId;
+		configuration: { snapshotId: string | null } | null;
+	}): boolean => !!pr.configuration?.snapshotId;
 
 	// Transform to include prebuild status
 	const repos: OnboardingRepo[] = reposWithStatus.map((repo) => {
-		const readyPrebuild = repo.prebuildRepos?.find(hasUsablePrebuild);
+		const readyPrebuild = repo.configurationRepos?.find(hasUsablePrebuild);
 		return {
 			id: repo.id,
 			github_repo_name: repo.githubRepoName,
 			github_url: repo.githubUrl,
 			default_branch: repo.defaultBranch,
 			created_at: toIsoString(repo.createdAt),
-			prebuild_id: readyPrebuild?.prebuild?.id || null,
+			prebuild_id: readyPrebuild?.configuration?.id || null,
 			prebuild_status: readyPrebuild ? ("ready" as const) : ("pending" as const),
 		};
 	});

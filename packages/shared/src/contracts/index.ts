@@ -174,25 +174,12 @@ export type { Schedule, UpdateScheduleInput } from "./schedules";
 export { ScheduleSchema, UpdateScheduleInputSchema } from "./schedules";
 
 // Re-export secret types
-export type {
-	Secret,
-	CreateSecretInput,
-	CheckSecretsInput,
-	SecretBundle,
-	CreateBundleInput,
-	UpdateBundleInput,
-	UpdateSecretBundleInput,
-	BulkImportInput,
-} from "./secrets";
+export type { Secret, CreateSecretInput, CheckSecretsInput, BulkImportInput } from "./secrets";
 export {
 	SecretSchema,
 	CreateSecretInputSchema,
 	CheckSecretsInputSchema,
 	CheckSecretsResultSchema,
-	SecretBundleSchema,
-	CreateBundleInputSchema,
-	UpdateBundleInputSchema,
-	UpdateSecretBundleInputSchema,
 	BulkImportInputSchema,
 	BulkImportResultSchema,
 } from "./secrets";

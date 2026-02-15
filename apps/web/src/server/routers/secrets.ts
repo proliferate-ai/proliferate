@@ -11,12 +11,8 @@ import {
 	BulkImportResultSchema,
 	CheckSecretsInputSchema,
 	CheckSecretsResultSchema,
-	CreateBundleInputSchema,
 	CreateSecretInputSchema,
-	SecretBundleSchema,
 	SecretSchema,
-	UpdateBundleInputSchema,
-	UpdateSecretBundleInputSchema,
 } from "@proliferate/shared";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
@@ -51,7 +47,6 @@ export const secretsRouter = {
 					description: input.description,
 					repoId: input.repoId,
 					secretType: input.secretType,
-					bundleId: input.bundleId,
 				});
 				return { secret };
 			} catch (err) {
@@ -60,9 +55,6 @@ export const secretsRouter = {
 				}
 				if (err instanceof secrets.EncryptionError) {
 					throw new ORPCError("INTERNAL_SERVER_ERROR", { message: err.message });
-				}
-				if (err instanceof secrets.BundleOrgMismatchError) {
-					throw new ORPCError("BAD_REQUEST", { message: err.message });
 				}
 				throw err;
 			}
@@ -95,105 +87,6 @@ export const secretsRouter = {
 			return { keys: results };
 		}),
 
-	/**
-	 * Update a secret's bundle assignment.
-	 */
-	updateBundle: orgProcedure
-		.input(UpdateSecretBundleInputSchema)
-		.output(z.object({ updated: z.boolean() }))
-		.handler(async ({ input, context }) => {
-			try {
-				const updated = await secrets.updateSecretBundle(input.id, context.orgId, input.bundleId);
-				return { updated };
-			} catch (err) {
-				if (err instanceof secrets.BundleOrgMismatchError) {
-					throw new ORPCError("BAD_REQUEST", { message: err.message });
-				}
-				throw err;
-			}
-		}),
-
-	// ============================================
-	// Bundle operations
-	// ============================================
-
-	/**
-	 * List all secret bundles for the current organization.
-	 */
-	listBundles: orgProcedure
-		.input(z.object({}).optional())
-		.output(z.object({ bundles: z.array(SecretBundleSchema) }))
-		.handler(async ({ context }) => {
-			const bundles = await secrets.listBundles(context.orgId);
-			return { bundles };
-		}),
-
-	/**
-	 * Create a new secret bundle.
-	 */
-	createBundle: orgProcedure
-		.input(CreateBundleInputSchema)
-		.output(z.object({ bundle: SecretBundleSchema }))
-		.handler(async ({ input, context }) => {
-			try {
-				const bundle = await secrets.createBundle({
-					organizationId: context.orgId,
-					userId: context.user.id,
-					name: input.name,
-					description: input.description,
-					targetPath: input.targetPath,
-				});
-				return { bundle };
-			} catch (err) {
-				if (err instanceof secrets.DuplicateBundleError) {
-					throw new ORPCError("CONFLICT", { message: err.message });
-				}
-				if (err instanceof secrets.InvalidTargetPathError) {
-					throw new ORPCError("BAD_REQUEST", { message: err.message });
-				}
-				throw err;
-			}
-		}),
-
-	/**
-	 * Update a secret bundle.
-	 */
-	updateBundleMeta: orgProcedure
-		.input(z.object({ id: z.string().uuid() }).merge(UpdateBundleInputSchema))
-		.output(z.object({ bundle: SecretBundleSchema }))
-		.handler(async ({ input, context }) => {
-			try {
-				const bundle = await secrets.updateBundleMeta(input.id, context.orgId, {
-					name: input.name,
-					description: input.description,
-					targetPath: input.targetPath,
-				});
-				return { bundle };
-			} catch (err) {
-				if (err instanceof secrets.BundleNotFoundError) {
-					throw new ORPCError("NOT_FOUND", { message: err.message });
-				}
-				if (err instanceof secrets.DuplicateBundleError) {
-					throw new ORPCError("CONFLICT", { message: err.message });
-				}
-				if (err instanceof secrets.InvalidTargetPathError) {
-					throw new ORPCError("BAD_REQUEST", { message: err.message });
-				}
-				throw err;
-			}
-		}),
-
-	/**
-	 * Delete a secret bundle. Secrets become unbundled.
-	 */
-	deleteBundle: orgProcedure
-		.input(z.object({ id: z.string().uuid() }))
-		.output(z.object({ deleted: z.boolean() }))
-		.handler(async ({ input, context }) => {
-			await secrets.deleteBundle(input.id, context.orgId);
-			return { deleted: true };
-		}),
-
 	// ============================================
 	// Bulk import
 	// ============================================
@@ -210,14 +103,10 @@ export const secretsRouter = {
 					organizationId: context.orgId,
 					userId: context.user.id,
 					envText: input.envText,
-					bundleId: input.bundleId,
 				});
 			} catch (err) {
 				if (err instanceof secrets.EncryptionError) {
 					throw new ORPCError("INTERNAL_SERVER_ERROR", { message: err.message });
-				}
-				if (err instanceof secrets.BundleOrgMismatchError) {
-					throw new ORPCError("BAD_REQUEST", { message: err.message });
 				}
 				throw err;
 			}

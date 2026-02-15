@@ -11,19 +11,8 @@ export type {
 	SecretForSessionRow,
 	UpsertSecretInput,
 	CheckSecretsFilter,
-	SecretBundleListRow,
-	DbCreateBundleInput,
-	DbUpdateBundleInput,
-	BundleWithKeys,
 } from "../types/secrets";
-export {
-	EncryptionError,
-	DuplicateSecretError,
-	DuplicateBundleError,
-	BundleNotFoundError,
-	BundleOrgMismatchError,
-	InvalidTargetPathError,
-} from "./service";
+export { EncryptionError, DuplicateSecretError } from "./service";
 
 // DB functions needed by sessions-create and repos-finalize
 export { getSecretsForSession, upsertByRepoAndKey as upsertSecretByRepoAndKey } from "./db";

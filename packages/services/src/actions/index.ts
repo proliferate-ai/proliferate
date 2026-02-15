@@ -15,19 +15,5 @@ export {
 
 export type { ActionInvocationRow, ActionInvocationWithSession, CreateInvocationInput } from "./db";
 
-export {
-	createGrant,
-	listActiveGrants,
-	listGrantsByOrg,
-	evaluateGrant,
-	revokeGrant,
-	getGrant,
-	GrantNotFoundError,
-	GrantExhaustedError,
-	type EvaluateGrantResult,
-} from "./grants";
-
-export type { ActionGrantRow, CreateGrantInput } from "./grants-db";
-
 // MCP connector module
 export * as connectors from "./connectors";
