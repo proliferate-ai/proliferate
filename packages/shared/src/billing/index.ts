@@ -30,13 +30,4 @@ export {
 	type AutoTopUpResult,
 } from "./autumn-client";
 
-// Distributed locking
-export {
-	acquireLock,
-	renewLock,
-	releaseLock,
-	withLock,
-	BILLING_REDIS_KEYS,
-} from "./distributed-lock";
-
 // Database-backed billing workflows now live in @proliferate/services/billing.

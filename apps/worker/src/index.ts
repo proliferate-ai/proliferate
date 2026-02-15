@@ -84,10 +84,12 @@ slackClient.setup({
 });
 sessionSubscriber.registerClient(slackClient);
 
-// Start billing worker (interval-based, not queue-based)
+// Start billing worker (BullMQ-based)
 const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
 if (billingEnabled) {
-	startBillingWorker(logger.child({ module: "billing" }));
+	startBillingWorker(logger.child({ module: "billing" })).catch((err) => {
+		logger.error({ err }, "Failed to start billing worker");
+	});
 } else {
 	logger.info("Billing disabled - skipping billing worker startup");
 }
@@ -159,7 +161,7 @@ async function shutdown(): Promise<void> {
 	await new Promise<void>((resolve) => healthServer.close(() => resolve()));
 
 	// Stop billing worker
-	stopBillingWorker();
+	await stopBillingWorker();
 
 	// Stop action expiry sweeper
 	stopActionExpirySweeper();

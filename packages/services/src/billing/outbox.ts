@@ -8,15 +8,10 @@
 import type { SandboxProvider } from "@proliferate/shared";
 import {
 	AUTUMN_FEATURES,
-	BILLING_REDIS_KEYS,
 	type BillingEventType,
 	METERING_CONFIG,
-	acquireLock,
 	autumnDeductCredits,
-	releaseLock,
-	renewLock,
 } from "@proliferate/shared/billing";
-import type IORedis from "ioredis";
 import { and, asc, billingEvents, eq, getDb, inArray, lt, organization } from "../db/client";
 import { getServicesLogger } from "../logger";
 import { handleCreditsExhaustedV2 } from "./org-pause";
@@ -47,81 +42,40 @@ interface PendingBillingEvent {
  * @param batchSize - Max events to process per cycle (default: 100)
  */
 export async function processOutbox(
-	redis: IORedis,
 	providers?: Map<string, SandboxProvider>,
 	batchSize = 100,
 ): Promise<void> {
-	const lockToken = crypto.randomUUID();
-
-	// Acquire lock
-	const acquired = await acquireLock(
-		redis,
-		BILLING_REDIS_KEYS.outboxLock,
-		lockToken,
-		METERING_CONFIG.lockTtlMs,
-	);
-
 	const logger = getServicesLogger().child({ module: "outbox" });
+	const db = getDb();
 
-	if (!acquired) {
-		logger.debug("Another worker has the lock, skipping");
+	// Get pending/failed events ready for retry
+	const events = (await db.query.billingEvents.findMany({
+		where: and(
+			inArray(billingEvents.status, ["pending", "failed"]),
+			lt(billingEvents.retryCount, METERING_CONFIG.maxRetries),
+			lt(billingEvents.nextRetryAt, new Date()),
+		),
+		columns: {
+			id: true,
+			organizationId: true,
+			eventType: true,
+			credits: true,
+			idempotencyKey: true,
+			retryCount: true,
+			lastError: true,
+		},
+		orderBy: [asc(billingEvents.createdAt)],
+		limit: batchSize,
+	})) as PendingBillingEvent[];
+
+	if (!events.length) {
 		return;
 	}
 
-	// Set up renewal interval with error handling
-	let renewalFailed = false;
-	const renewInterval = setInterval(async () => {
-		try {
-			await renewLock(redis, BILLING_REDIS_KEYS.outboxLock, lockToken, METERING_CONFIG.lockTtlMs);
-		} catch (err) {
-			logger.error({ err }, "Lock renewal failed");
-			renewalFailed = true;
-		}
-	}, METERING_CONFIG.lockRenewIntervalMs);
+	logger.info({ eventCount: events.length }, "Processing pending events");
 
-	try {
-		// Helper to check if we should abort due to lock renewal failure
-		const checkLockValid = () => {
-			if (renewalFailed) {
-				throw new Error("Lock renewal failed - aborting outbox cycle to prevent conflicts");
-			}
-		};
-
-		const db = getDb();
-		// Get pending/failed events ready for retry
-		const events = (await db.query.billingEvents.findMany({
-			where: and(
-				inArray(billingEvents.status, ["pending", "failed"]),
-				lt(billingEvents.retryCount, METERING_CONFIG.maxRetries),
-				lt(billingEvents.nextRetryAt, new Date()),
-			),
-			columns: {
-				id: true,
-				organizationId: true,
-				eventType: true,
-				credits: true,
-				idempotencyKey: true,
-				retryCount: true,
-				lastError: true,
-			},
-			orderBy: [asc(billingEvents.createdAt)],
-			limit: batchSize,
-		})) as PendingBillingEvent[];
-
-		if (!events.length) {
-			return;
-		}
-
-		logger.info({ eventCount: events.length }, "Processing pending events");
-
-		for (const event of events) {
-			// Check lock validity before each event to fail fast if lock is lost
-			checkLockValid();
-			await processEvent(event, providers);
-		}
-	} finally {
-		clearInterval(renewInterval);
-		await releaseLock(redis, BILLING_REDIS_KEYS.outboxLock, lockToken);
+	for (const event of events) {
+		await processEvent(event, providers);
 	}
 }
 
