@@ -11,11 +11,12 @@ import {
 	getDb,
 	inArray,
 	integrations,
+	organization,
 	repoConnections,
 	repos,
 	slackInstallations,
 } from "../db/client";
-import type { IntegrationRow, RepoWithPrebuildRow } from "../types/onboarding";
+import type { IntegrationRow, OnboardingMeta, RepoWithPrebuildRow } from "../types/onboarding";
 
 // ============================================
 // Queries
@@ -167,4 +168,30 @@ export async function upsertRepoConnection(repoId: string, integrationId: string
 		.onConflictDoNothing({
 			target: [repoConnections.repoId, repoConnections.integrationId],
 		});
+}
+
+/**
+ * Get onboarding meta for an organization.
+ */
+export async function getOnboardingMeta(orgId: string): Promise<OnboardingMeta | null> {
+	const db = getDb();
+	const result = await db.query.organization.findFirst({
+		where: eq(organization.id, orgId),
+		columns: { onboardingMeta: true },
+	});
+	if (!result?.onboardingMeta) return null;
+	return result.onboardingMeta as OnboardingMeta;
+}
+
+/**
+ * Merge onboarding meta into existing JSONB.
+ */
+export async function updateOnboardingMeta(
+	orgId: string,
+	meta: Partial<OnboardingMeta>,
+): Promise<void> {
+	const db = getDb();
+	const existing = await getOnboardingMeta(orgId);
+	const merged = { ...existing, ...meta };
+	await db.update(organization).set({ onboardingMeta: merged }).where(eq(organization.id, orgId));
 }

@@ -1,0 +1,152 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { authClient } from "@/lib/auth-client";
+import { Mail, X } from "lucide-react";
+import { useState } from "react";
+
+interface StepInviteMembersProps {
+	onComplete: () => void;
+}
+
+interface PendingInvite {
+	email: string;
+	role: "admin" | "member";
+	status: "sent" | "error";
+	error?: string;
+}
+
+export function StepInviteMembers({ onComplete }: StepInviteMembersProps) {
+	const [email, setEmail] = useState("");
+	const [role, setRole] = useState<"admin" | "member">("member");
+	const [invites, setInvites] = useState<PendingInvite[]>([]);
+	const [isInviting, setIsInviting] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+
+	const handleInvite = async () => {
+		const trimmed = email.trim();
+		if (!trimmed) return;
+
+		setIsInviting(true);
+		setError(null);
+
+		try {
+			await authClient.organization.inviteMember({
+				email: trimmed,
+				role,
+			});
+			setInvites((prev) => [...prev, { email: trimmed, role, status: "sent" }]);
+			setEmail("");
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Failed to send invitation";
+			setError(message);
+			setInvites((prev) => [...prev, { email: trimmed, role, status: "error", error: message }]);
+		} finally {
+			setIsInviting(false);
+		}
+	};
+
+	const removeInvite = (index: number) => {
+		setInvites((prev) => prev.filter((_, i) => i !== index));
+	};
+
+	const sentCount = invites.filter((i) => i.status === "sent").length;
+
+	return (
+		<div className="w-full max-w-md">
+			<div className="text-center mb-8">
+				<h1 className="text-2xl sm:text-3xl font-bold text-foreground">Invite your team</h1>
+				<p className="mt-3 text-muted-foreground text-sm sm:text-base">
+					Add team members to collaborate on projects.
+				</p>
+			</div>
+
+			<div className="rounded-xl border border-border bg-card p-5 space-y-4">
+				<div className="flex items-center gap-2">
+					<Input
+						type="email"
+						placeholder="email@example.com"
+						value={email}
+						onChange={(e) => {
+							setEmail(e.target.value);
+							setError(null);
+						}}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") handleInvite();
+						}}
+						className="flex-1 h-9 text-sm"
+					/>
+					<Select value={role} onValueChange={(v) => setRole(v as "admin" | "member")}>
+						<SelectTrigger className="w-24 h-9 text-xs">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="member">Member</SelectItem>
+							<SelectItem value="admin">Admin</SelectItem>
+						</SelectContent>
+					</Select>
+					<Button
+						size="sm"
+						className="h-9"
+						onClick={handleInvite}
+						disabled={isInviting || !email.trim()}
+					>
+						{isInviting ? "..." : "Invite"}
+					</Button>
+				</div>
+
+				{error && <p className="text-sm text-destructive">{error}</p>}
+
+				{invites.length > 0 && (
+					<div className="space-y-2 pt-2 border-t border-border">
+						{invites.map((invite, i) => (
+							<div
+								key={`${invite.email}-${i}`}
+								className="flex items-center justify-between text-sm"
+							>
+								<div className="flex items-center gap-2 min-w-0">
+									<Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+									<span className="truncate">{invite.email}</span>
+									<span className="text-xs text-muted-foreground">({invite.role})</span>
+								</div>
+								<div className="flex items-center gap-2 shrink-0">
+									{invite.status === "sent" ? (
+										<span className="text-xs text-green-600 dark:text-green-400">Sent</span>
+									) : (
+										<span className="text-xs text-destructive">Failed</span>
+									)}
+									<button
+										type="button"
+										onClick={() => removeInvite(i)}
+										className="text-muted-foreground hover:text-foreground"
+									>
+										<X className="h-3.5 w-3.5" />
+									</button>
+								</div>
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+
+			<div className="mt-8 flex gap-3">
+				<Button variant="outline" onClick={onComplete} className="h-11 flex-1 rounded-lg">
+					{sentCount > 0 ? "Continue" : "Skip for now"}
+				</Button>
+				{sentCount > 0 && (
+					<Button variant="dark" onClick={onComplete} className="h-11 flex-1 rounded-lg">
+						Continue
+					</Button>
+				)}
+			</div>
+		</div>
+	);
+}

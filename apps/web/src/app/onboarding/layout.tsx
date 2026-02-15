@@ -72,29 +72,38 @@ function OnboardingLayoutInner({ children }: OnboardingLayoutProps) {
 
 	// Calculate step progress
 	const getStepInfo = () => {
-		if (flowType === "personal") {
-			// Personal: path(1) → github(2) → payment(3) → complete(4)
-			const steps = { path: 1, github: 2, payment: 3, complete: 4 };
+		if (flowType === "developer") {
+			// Developer: path(1) → tools(2) → billing(3) → complete(4)
+			const steps = { path: 1, tools: 2, billing: 3, complete: 4 };
 			return { current: steps[step as keyof typeof steps] || 1, total: 4 };
 		}
-		// Organization: path(1) → create-org(2) → slack(3) → github(4) → payment(5) → complete(6)
+		// Organization: path(1) → create-org(2) → questionnaire(3) → tools(4) → invite(5) → billing(6) → complete(7)
 		const steps = {
 			path: 1,
 			"create-org": 2,
-			slack: 3,
-			github: 4,
-			payment: 5,
-			complete: 6,
+			questionnaire: 3,
+			tools: 4,
+			invite: 5,
+			billing: 6,
+			complete: 7,
 		};
-		return { current: steps[step as keyof typeof steps] || 1, total: 6 };
+		return { current: steps[step as keyof typeof steps] || 1, total: 7 };
 	};
 
 	const handleStepClick = (stepNum: number) => {
-		if (flowType === "personal") {
-			const stepMap = ["path", "github", "payment", "complete"] as const;
+		if (flowType === "developer") {
+			const stepMap = ["path", "tools", "billing", "complete"] as const;
 			setStep(stepMap[stepNum - 1]);
 		} else {
-			const stepMap = ["path", "create-org", "slack", "github", "payment", "complete"] as const;
+			const stepMap = [
+				"path",
+				"create-org",
+				"questionnaire",
+				"tools",
+				"invite",
+				"billing",
+				"complete",
+			] as const;
 			setStep(stepMap[stepNum - 1]);
 		}
 	};

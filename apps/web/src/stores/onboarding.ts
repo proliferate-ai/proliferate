@@ -3,8 +3,15 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type FlowType = "personal" | "organization" | null;
-export type OnboardingStep = "path" | "create-org" | "slack" | "github" | "payment" | "complete";
+export type FlowType = "developer" | "organization" | null;
+export type OnboardingStep =
+	| "path"
+	| "create-org"
+	| "questionnaire"
+	| "tools"
+	| "invite"
+	| "billing"
+	| "complete";
 
 interface OnboardingStore {
 	flowType: FlowType;

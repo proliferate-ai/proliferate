@@ -2,7 +2,14 @@
 
 import { OnboardingCard } from "@/components/dashboard/onboarding-card";
 import { RepoSelector } from "@/components/dashboard/repo-selector";
-import { BoltIcon, GithubIcon, SlackIcon } from "@/components/ui/icons";
+import {
+	BoltIcon,
+	GithubIcon,
+	LinearIcon,
+	PostHogIcon,
+	SentryIcon,
+	SlackIcon,
+} from "@/components/ui/icons";
 import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
 import { useGitHubAppConnect } from "@/hooks/use-github-app-connect";
 import { useIntegrations } from "@/hooks/use-integrations";
@@ -11,6 +18,7 @@ import {
 	shouldUseNangoForProvider,
 	useNangoConnect,
 } from "@/hooks/use-nango-connect";
+import { useOnboarding } from "@/hooks/use-onboarding";
 import { useRepos } from "@/hooks/use-repos";
 import { orpc } from "@/lib/orpc";
 import { useDashboardStore } from "@/stores/dashboard";
@@ -25,6 +33,18 @@ export function OnboardingCards() {
 	const queryClient = useQueryClient();
 	const [repoSelectorOpen, setRepoSelectorOpen] = useState(false);
 	const { dismissedOnboardingCards, dismissOnboardingCard } = useDashboardStore();
+
+	// Get selected tools from onboarding
+	const { data: onboardingData } = useOnboarding();
+	const selectedTools = onboardingData?.selectedTools;
+
+	// Helper: should we show a card for this tool?
+	// If selectedTools is set, only show cards for tools the user selected.
+	// If not set (legacy users), show all.
+	const shouldShowTool = (toolId: string) => {
+		if (!selectedTools || selectedTools.length === 0) return true;
+		return selectedTools.includes(toolId);
+	};
 
 	// GitHub connect hooks - use "auth" flow for direct OAuth popup (no extra click)
 	const invalidateIntegrations = () => {
@@ -65,6 +85,9 @@ export function OnboardingCards() {
 		(i) => (i.provider === "github" || i.provider === "github-app") && i.status === "active",
 	);
 	const hasSlack = integrations.some((i) => i.provider === "slack" && i.status === "active");
+	const hasLinear = integrations.some((i) => i.provider === "linear" && i.status === "active");
+	const hasSentry = integrations.some((i) => i.provider === "sentry" && i.status === "active");
+	const hasPostHog = integrations.some((i) => i.provider === "posthog" && i.status === "active");
 	const hasAutomation = (automations ?? []).length > 0;
 	const hasAnyRepo = (repos ?? []).length > 0;
 
@@ -130,21 +153,8 @@ export function OnboardingCards() {
 		}
 	}
 
-	// TODO: Re-enable demo card once public snapshot support is ready
-	// cards.push(
-	// 	<OnboardingCard
-	// 		key="demo"
-	// 		icon={<Play className="h-6 w-6" />}
-	// 		title="Try a demo"
-	// 		description="Explore with a pre-configured project."
-	// 		ctaLabel="Launch Demo"
-	// 		onCtaClick={() => {}}
-	// 		image="/onboarding/demo.png"
-	// 	/>,
-	// );
-
-	// Link GitHub card
-	if (!hasGitHub && !dismissedOnboardingCards.includes("github")) {
+	// Link GitHub card (only if user selected this tool)
+	if (shouldShowTool("github") && !hasGitHub && !dismissedOnboardingCards.includes("github")) {
 		cards.push(
 			<OnboardingCard
 				key="github"
@@ -161,7 +171,7 @@ export function OnboardingCards() {
 	}
 
 	// Link Slack card
-	if (!hasSlack && !dismissedOnboardingCards.includes("slack")) {
+	if (shouldShowTool("slack") && !hasSlack && !dismissedOnboardingCards.includes("slack")) {
 		cards.push(
 			<OnboardingCard
 				key="slack"
@@ -172,6 +182,51 @@ export function OnboardingCards() {
 				onCtaClick={() => router.push("/dashboard/integrations")}
 				onDismiss={() => dismissOnboardingCard("slack")}
 				gradient="slack"
+			/>,
+		);
+	}
+
+	// Link Linear card
+	if (shouldShowTool("linear") && !hasLinear && !dismissedOnboardingCards.includes("linear")) {
+		cards.push(
+			<OnboardingCard
+				key="linear"
+				icon={<LinearIcon className="h-6 w-6" />}
+				title="Connect Linear"
+				description="Trigger automations from Linear issues."
+				ctaLabel="Connect"
+				onCtaClick={() => router.push("/dashboard/integrations")}
+				onDismiss={() => dismissOnboardingCard("linear")}
+			/>,
+		);
+	}
+
+	// Link Sentry card
+	if (shouldShowTool("sentry") && !hasSentry && !dismissedOnboardingCards.includes("sentry")) {
+		cards.push(
+			<OnboardingCard
+				key="sentry"
+				icon={<SentryIcon className="h-6 w-6" />}
+				title="Connect Sentry"
+				description="Auto-fix errors detected by Sentry."
+				ctaLabel="Connect"
+				onCtaClick={() => router.push("/dashboard/integrations")}
+				onDismiss={() => dismissOnboardingCard("sentry")}
+			/>,
+		);
+	}
+
+	// Link PostHog card
+	if (shouldShowTool("posthog") && !hasPostHog && !dismissedOnboardingCards.includes("posthog")) {
+		cards.push(
+			<OnboardingCard
+				key="posthog"
+				icon={<PostHogIcon className="h-6 w-6" />}
+				title="Connect PostHog"
+				description="Trigger automations from product analytics."
+				ctaLabel="Connect"
+				onCtaClick={() => router.push("/dashboard/integrations")}
+				onDismiss={() => dismissOnboardingCard("posthog")}
 			/>,
 		);
 	}
