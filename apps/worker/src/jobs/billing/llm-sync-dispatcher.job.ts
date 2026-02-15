@@ -6,7 +6,12 @@
 
 import { env } from "@proliferate/environment/server";
 import type { Logger } from "@proliferate/logger";
-import type { BillingLLMSyncDispatchJob, BillingLLMSyncOrgJob, Job, Queue } from "@proliferate/queue";
+import type {
+	BillingLLMSyncDispatchJob,
+	BillingLLMSyncOrgJob,
+	Job,
+	Queue,
+} from "@proliferate/queue";
 import { billing } from "@proliferate/services";
 
 export async function processLLMSyncDispatchJob(
@@ -14,10 +19,6 @@ export async function processLLMSyncDispatchJob(
 	llmSyncOrgQueue: Queue<BillingLLMSyncOrgJob>,
 	logger: Logger,
 ): Promise<void> {
-	if (!env.NEXT_PUBLIC_BILLING_ENABLED) {
-		return;
-	}
-
 	// Guard: REST API requires an admin-capable URL + master key
 	const proxyUrl = env.LLM_PROXY_ADMIN_URL || env.LLM_PROXY_URL;
 	if (!proxyUrl || !env.LLM_PROXY_MASTER_KEY) {

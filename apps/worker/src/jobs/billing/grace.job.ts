@@ -4,21 +4,13 @@
  * Runs every 60s. Checks for expired grace periods and enforces exhausted state.
  */
 
-import { env } from "@proliferate/environment/server";
 import type { Logger } from "@proliferate/logger";
 import type { Job } from "@proliferate/queue";
 import type { BillingGraceJob } from "@proliferate/queue";
 import { billing, orgs } from "@proliferate/services";
 import { getProvidersMap } from "./providers";
 
-export async function processGraceJob(
-	_job: Job<BillingGraceJob>,
-	logger: Logger,
-): Promise<void> {
-	if (!env.AUTUMN_API_URL || !env.AUTUMN_API_KEY) {
-		return;
-	}
-
+export async function processGraceJob(_job: Job<BillingGraceJob>, logger: Logger): Promise<void> {
 	const graceLog = logger.child({ op: "grace" });
 
 	try {
