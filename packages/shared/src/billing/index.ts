@@ -30,16 +30,6 @@ export {
 	type AutoTopUpResult,
 } from "./autumn-client";
 
-// Billing token system
-export {
-	mintBillingToken,
-	verifyBillingToken,
-	validateBillingToken,
-	extractBillingToken,
-	type BillingTokenClaims,
-	type SessionForBillingValidation,
-} from "./billing-token";
-
 // Distributed locking
 export {
 	acquireLock,

@@ -313,13 +313,29 @@ export interface SessionBillingFields {
 // Gating Errors
 // ============================================
 
-export type BillingErrorCode = "NO_CREDITS" | "CONCURRENT_LIMIT" | "OVERAGE_CAP" | "PAYMENT_FAILED";
+export type BillingErrorCode =
+	| "NO_CREDITS"
+	| "CONCURRENT_LIMIT"
+	| "BILLING_NOT_CONFIGURED"
+	| "STATE_BLOCKED"
+	| "GRACE_EXPIRED";
 
-export interface BillingError {
-	error: string;
-	code: BillingErrorCode;
-	message: string;
-	upgradeUrl?: string;
+export interface BillingGateResult {
+	allowed: boolean;
+	error?: string;
+	code?: BillingErrorCode;
+	message?: string;
+	action?: "block" | "terminate_sessions";
+}
+
+export class BillingGateError extends Error {
+	public readonly code: BillingErrorCode;
+
+	constructor(message: string, code: BillingErrorCode) {
+		super(message);
+		this.name = "BillingGateError";
+		this.code = code;
+	}
 }
 
 // ============================================

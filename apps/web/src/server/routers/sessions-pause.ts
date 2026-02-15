@@ -7,11 +7,12 @@
 
 import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
-import { billing, sessions } from "@proliferate/services";
+import { billing, orgs, sessions } from "@proliferate/services";
+import type { SandboxProviderType } from "@proliferate/shared";
+import type { BillingPlan } from "@proliferate/shared/billing";
+import { getSandboxProvider } from "@proliferate/shared/providers";
 
 const log = logger.child({ handler: "sessions-pause" });
-import type { SandboxProviderType } from "@proliferate/shared";
-import { getSandboxProvider } from "@proliferate/shared/providers";
 
 interface PauseSessionHandlerInput {
 	sessionId: string;
@@ -48,27 +49,32 @@ export async function pauseSessionHandler(
 		throw new ORPCError("BAD_REQUEST", { message: "Session has no active sandbox" });
 	}
 
+	// Ensure snapshot quota before taking a new snapshot
+	const org = await orgs.getBillingInfoV2(orgId);
+	const plan: BillingPlan = org?.billingPlan === "pro" ? "pro" : "dev";
+	const provider = getSandboxProvider(session.sandboxProvider as SandboxProviderType);
+
+	const capacity = await billing.ensureSnapshotCapacity(orgId, plan);
+
 	let snapshotId: string | null = null;
 
-	// Take snapshot before terminating
-	try {
-		const provider = getSandboxProvider(session.sandboxProvider as SandboxProviderType);
-
-		// Snapshot the sandbox
-		const snapshotResult = await provider.snapshot(sessionId, session.sandboxId);
-		snapshotId = snapshotResult.snapshotId;
-
-		// Terminate sandbox after successful snapshot
+	if (capacity.allowed) {
+		// Take snapshot before terminating
 		try {
-			await provider.terminate(sessionId, session.sandboxId);
+			const snapshotResult = await provider.snapshot(sessionId, session.sandboxId);
+			snapshotId = snapshotResult.snapshotId;
 		} catch (err) {
-			reqLog.error({ err }, "Failed to terminate sandbox");
+			reqLog.error({ err }, "Snapshot error, pausing without snapshot");
 		}
+	} else {
+		reqLog.warn("Snapshot quota exceeded, pausing without snapshot");
+	}
+
+	// Always terminate sandbox
+	try {
+		await provider.terminate(sessionId, session.sandboxId);
 	} catch (err) {
-		reqLog.error({ err }, "Snapshot error");
-		throw new ORPCError("INTERNAL_SERVER_ERROR", {
-			message: `Failed to snapshot session: ${err instanceof Error ? err.message : "Unknown error"}. Session kept running.`,
-		});
+		reqLog.error({ err }, "Failed to terminate sandbox");
 	}
 
 	// Finalize compute billing before changing status

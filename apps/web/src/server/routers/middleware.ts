@@ -4,6 +4,7 @@
 
 import { type ImpersonationContext, isAuthError, requireAuth } from "@/lib/auth-helpers";
 import { os, ORPCError } from "@orpc/server";
+import { BillingGateError } from "@proliferate/shared/billing";
 
 // ============================================
 // Context Types
@@ -82,4 +83,22 @@ export const orgProcedure = os.use(async ({ next }) => {
 			orgId,
 		} satisfies OrgContext,
 	});
+});
+
+// ============================================
+// Billing-gated procedure (org + billing gate)
+// ============================================
+
+export const billingGatedProcedure = orgProcedure.use(async ({ next }) => {
+	try {
+		return await next();
+	} catch (err) {
+		if (err instanceof BillingGateError) {
+			throw new ORPCError("PAYMENT_REQUIRED", {
+				message: err.message,
+				data: { billingCode: err.code },
+			});
+		}
+		throw err;
+	}
 });
