@@ -317,10 +317,7 @@ export async function bulkDeductShadowBalance(
 		}
 
 		// 3. Sum credits only for successfully inserted rows
-		const totalCreditsDeducted = inserted.reduce(
-			(sum, row) => sum + Number(row.credits),
-			0,
-		);
+		const totalCreditsDeducted = inserted.reduce((sum, row) => sum + Number(row.credits), 0);
 		const newBalance = previousBalance - totalCreditsDeducted;
 
 		// 4. Evaluate state transitions
@@ -387,10 +384,7 @@ export async function bulkDeductShadowBalance(
 			}
 		}
 
-		await tx
-			.update(organization)
-			.set(updateFields)
-			.where(eq(organization.id, organizationId));
+		await tx.update(organization).set(updateFields).where(eq(organization.id, organizationId));
 
 		return {
 			insertedCount: inserted.length,
