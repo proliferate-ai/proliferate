@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
-> **Updated:** 2026-02-13 from `main` branch. UI renamed connectors to tools; code model remains `connector`.
+> **Updated:** 2026-02-15. UI renamed connectors to tools; code model remains `connector`.
 > **Evidence convention:** `Planned` entries may cite RFC/spec files until code exists; once implemented, update evidence to concrete code paths.
 
 ---
@@ -152,12 +152,14 @@
 
 | Feature | Status | Evidence | Notes |
 |---------|--------|----------|-------|
-| Virtual key generation | Implemented | `packages/shared/src/llm-proxy.ts` | Per-session/org temp keys via LiteLLM API |
-| Key scoping (team/user) | Implemented | `packages/shared/src/llm-proxy.ts` | Team = org, user = session for cost isolation |
+| Virtual key generation | Implemented | `packages/shared/src/llm-proxy.ts:generateVirtualKey` | Per-session/org temp keys via LiteLLM API |
+| Key scoping (team/user) | Implemented | `packages/shared/src/llm-proxy.ts:generateVirtualKey` | Team = org, user = session for cost isolation |
 | Key duration config | Implemented | `packages/environment/src/schema.ts:LLM_PROXY_KEY_DURATION` | Configurable via env |
+| Dynamic `max_budget` enforcement | Implemented | `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars` | Maps shadow balance -> USD and passes as `max_budget` |
+| Key revocation on session end (best-effort) | Implemented | `packages/shared/src/llm-proxy.ts:revokeVirtualKey`, `packages/services/src/billing/org-pause.ts` | Revoked on pause/finalize/enforcement/migration paths |
 | Model routing | Implemented | External LiteLLM service | Not a local app — external dependency |
-| Spend tracking (per-org) | Implemented | `packages/shared/src/llm-proxy.ts` | Via LiteLLM virtual key spend APIs |
-| LLM spend cursors (DB) | Implemented | `packages/db/src/schema/billing.ts:llmSpendCursors` | Tracks spend sync state |
+| Spend logs ingestion (REST) | Implemented | `packages/services/src/billing/litellm-api.ts:listSpendLogsV2`, `apps/worker/src/billing/worker.ts` | Uses LiteLLM Admin REST API (`/spend/logs/v2`) |
+| LLM spend cursors (per-org) | Implemented | `packages/db/src/schema/schema.ts:llmSpendCursors` | One cursor row per org (no global singleton) |
 
 > **Note:** The LLM proxy is an external LiteLLM service, not a locally built app. This spec covers the integration contract (key generation, spend queries) and the conventions for how sessions use it.
 
@@ -299,17 +301,19 @@
 | Checkout flow | Implemented | `apps/web/src/server/routers/billing.ts:startCheckout` | Initiate payment |
 | Credit usage | Implemented | `apps/web/src/server/routers/billing.ts:useCredits` | Deduct credits |
 | Usage metering | Implemented | `packages/services/src/billing/metering.ts` | Real-time compute metering |
-| Credit gating | Partial | `packages/shared/src/billing/` | Gating logic exists but neither gateway HTTP nor oRPC session creation routes enforce it |
+| Credit gating | Implemented | `packages/services/src/billing/gate.ts`, `apps/gateway/src/api/proliferate/http/sessions.ts` | Enforced in web oRPC and gateway HTTP session creation |
 | Shadow balance | Implemented | `packages/services/src/billing/shadow-balance.ts` | Fast balance approximation |
-| Org pause on zero balance | Implemented | `packages/services/src/billing/org-pause.ts` | Auto-pause all sessions |
+| Bulk shadow balance deductions | Implemented | `packages/services/src/billing/shadow-balance.ts:bulkDeductShadowBalance` | Single org lock + bulk insert for high-frequency sources |
+| Org termination on zero balance (V2) | Implemented | `packages/services/src/billing/org-pause.ts:handleCreditsExhaustedV2` | Terminates running sessions on exhaustion |
 | Trial credits | Implemented | `packages/services/src/billing/trial-activation.ts` | Auto-provision on signup |
-| Billing reconciliation | Implemented | `packages/db/src/schema/billing.ts:billingReconciliations` | Manual adjustments with audit |
-| Billing events | Implemented | `packages/db/src/schema/billing.ts:billingEvents` | Usage event log |
-| LLM spend sync | Implemented | `packages/db/src/schema/billing.ts:llmSpendCursors` | Syncs spend from LiteLLM |
-| Distributed locks (billing) | Implemented | `packages/shared/src/billing/` | Prevents concurrent billing ops |
-| Billing worker | Implemented | `apps/worker/src/billing/worker.ts` | Interval-based reconciliation |
+| Billing reconciliation | Implemented | `packages/db/src/schema/schema.ts:billingReconciliations` | Manual adjustments with audit |
+| Nightly Autumn reconciliation | Implemented | `apps/worker/src/billing/worker.ts` | Drift sync via `autumn-reconcile` job |
+| Billing events | Implemented | `packages/db/src/schema/schema.ts:billingEvents` | Usage event log |
+| LLM spend sync (REST + per-org fan-out) | Implemented | `apps/worker/src/billing/worker.ts`, `packages/services/src/billing/litellm-api.ts` | BullMQ dispatcher + per-org jobs |
+| Distributed locks (billing) | Deprecated | `packages/queue/src/index.ts` | Replaced by BullMQ repeatable jobs |
+| Billing worker | Implemented | `apps/worker/src/billing/worker.ts` | BullMQ repeatable jobs (metering/outbox/grace/reconcile) |
 | Autumn integration | Implemented | `packages/shared/src/billing/` | External billing provider client |
-| Overage policy (pause/allow) | Implemented | `packages/services/src/billing/org-pause.ts` | Configurable per-org |
+| Overage policy (pause/allow) | Deprecated | `apps/web/src/components/settings/billing/overage-section.tsx` | UI exists, but enforcement is V2 terminate-only |
 
 ---
 

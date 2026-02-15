@@ -1,16 +1,25 @@
 # Sessions & Gateway — System Spec
 
+> **vNext (target architecture)** — This spec describes the intended multi-instance-hardened gateway behavior and may not match `main` yet.
+>
+> Current implemented spec: `../sessions-gateway.md`  
+> Design change set: `../../../session_changes.md`
+
 ## 1. Scope & Purpose
 
 ### In Scope
 - Session lifecycle: create, pause, resume, snapshot, delete, rename
 - Session state machine and status transitions
 - Gateway hub manager, session hub, session runtime
+- Multi-instance coordination (session ownership leases, runtime boot locks)
+- Hub eviction (idle TTL, hard cap) and memory safety
 - Event processor (sandbox SSE → client WebSocket)
 - SSE bridge to sandbox OpenCode
 - WebSocket streaming (client ↔ gateway)
 - HTTP message/status/cancel routes
 - Session migration controller (expiry, idle)
+- Gateway-mediated tool execution plumbing (synchronous callbacks, idempotency)
+- Streaming backpressure (token batching, slow-consumer handling)
 - Preview/sharing URLs
 - Port forwarding proxy (gateway → sandbox)
 - Git operations (gateway-side)
@@ -20,18 +29,18 @@
 - Gateway client libraries (`packages/gateway-clients`)
 
 ### Out of Scope
-- Sandbox boot mechanics and provider interface — see `sandbox-providers.md`
-- Tool schemas and prompt modes — see `agent-contract.md`
+- Sandbox boot mechanics and provider interface — see `./sandbox-providers.md`
+- Tool schemas and prompt modes — see `./agent-contract.md`
 - Automation-initiated session orchestration (run lifecycle) — see `automations-runs.md`
-- Repo/prebuild config resolution — see `repos-prebuilds.md`
+- Repo/configuration resolution — see `repos-prebuilds.md` and `configurations-snapshots.md`
 - LLM key generation — see `llm-proxy.md`
 - Billing gating for session creation — see `billing-metering.md`
 
 ### Mental Model
 
-The gateway is a stateful Express + WebSocket server that bridges web clients and sandbox agents. When a user opens a session, the gateway creates a **hub** — a per-session runtime that owns the sandbox connection (SSE to OpenCode), client connections (WebSocket), and event translation. The hub lazily provisions the sandbox on first client connect, then streams events bidirectionally until the session pauses, migrates, or stops.
+The gateway is a stateful Express + WebSocket server that bridges web clients and sandbox agents. When a client connects to a session, the gateway ensures there is exactly one **hub** (a per-session runtime) responsible for that session across the entire gateway deployment. The hub owns the sandbox connection (SSE to OpenCode), client WebSocket connections, event translation, and migration orchestration.
 
-Sessions can be created via two different pipelines. The **oRPC path** (`apps/web/src/server/routers/sessions-create.ts`) is lightweight: billing check, agent config, prebuild lookup, snapshot resolution, and a `sessions.createSessionRecord()` call — no idempotency, no session connections, no sandbox provisioning. The **gateway HTTP path** (`POST /proliferate/sessions` via `apps/gateway/src/lib/session-creator.ts`) is the full pipeline: prebuild resolution, idempotency, integration token resolution, session connections, SSH options, and optionally immediate sandbox creation. Both pipelines converge at runtime: the first WebSocket connection triggers `ensureRuntimeReady()`.
+Sessions are created through a single canonical pipeline (`SessionService.create()`), called by both the web oRPC handlers and the gateway HTTP API. Session creation is **database-idempotent** via an `idempotency_key` unique index on the `sessions` table, and always establishes session invariants (session record, session connections, integration token validation, and optional immediate sandbox provisioning). Runtime provisioning remains lazy by default: the first hub connection triggers `ensureRuntimeReady()` unless the session was created with `"immediate"` provisioning.
 
 **Core entities:**
 - **Session** — a DB record tracking sandbox association, status, snapshot, and config. Statuses: `pending`, `starting`, `running`, `paused`, `stopped`, `failed`. Resume is implicit — connecting to a paused session's hub triggers `ensureRuntimeReady()`, which provisions a new sandbox from the stored snapshot.
@@ -41,23 +50,68 @@ Sessions can be created via two different pipelines. The **oRPC path** (`apps/we
 
 **Key invariants:**
 - Messages never flow through API routes. All real-time streaming is Client ↔ Gateway ↔ Sandbox.
-- `HubManager` deduplicates concurrent `getOrCreate` calls for the same session ID via a pending-promise map.
-- `ensureRuntimeReady()` is idempotent — coalesces concurrent callers into a single promise.
-- Sandbox creation is always delegated to the `SandboxProvider` interface (see `sandbox-providers.md`).
+- Exactly one gateway instance may act as the **owner** for a session at a time (Redis ownership lease).
+- `HubManager` deduplicates concurrent `getOrCreate` calls for the same session ID within an instance via a pending-promise map.
+- `ensureRuntimeReady()` is idempotent within an instance and is protected across instances by a Redis runtime boot lock.
+- Hubs are evicted on idle TTL or when exceeding a hard cap to bound gateway memory usage.
+- Sandbox creation is always delegated to the `SandboxProvider` interface (see `./sandbox-providers.md`).
 
 ---
 
 ## 2. Core Concepts
 
 ### Hub Manager
-Singleton registry mapping session IDs to `SessionHub` instances. Lazy-creates hubs on first access. `getOrCreate()` deduplicates concurrent requests via a `pending` promise map. A `remove()` method exists but has **no call sites** — hubs persist in-memory for the lifetime of the gateway process.
-- Key detail agents get wrong: Hubs are never cleaned up at runtime. Gateway restart is the only thing that clears hub state. Sessions survive because DB + snapshot provide recovery.
+Singleton registry mapping session IDs to `SessionHub` instances. Lazy-creates hubs on first access and deduplicates concurrent `getOrCreate()` calls via a `pending` promise map **within an instance**.
+
+In vNext, the hub manager is also responsible for:
+- **Ownership gating**: a hub may only be created/used by the instance holding the session ownership lease.
+- **Eviction**: hubs are evicted on idle TTL (no connected WS clients) and under a hard cap using LRU selection to bound memory.
+- **Full cleanup**: `remove()` is a real lifecycle operation (disconnect SSE, cancel timers, release leases, dereference hub).
+
+- Key detail agents get wrong: Hub state remains in-memory, but hubs do not leak indefinitely. Eviction is expected in steady state.
 - Reference: `apps/gateway/src/hub/hub-manager.ts`
 
+### Session Ownership Lease — `Planned`
+Distributed coordination primitive that ensures exactly one gateway instance is allowed to "own" a session's hub at a time.
+
+- Acquisition: `SET owner:{sessionId} {instanceId} NX PX 30000`
+- Renewal: heartbeat every ~10s while the hub is alive
+- Release: best-effort `DEL owner:{sessionId}` on hub cleanup
+
+Lease loss detection (split-brain prevention):
+- The hub must detect missed heartbeats (event loop lag) by tracking the last successful renewal timestamp.
+- If a heartbeat tick runs late enough that the lease may have expired (e.g., `Date.now() - lastRenewAt > LEASE_TTL`), the hub must immediately self-terminate:
+  - Abort all in-flight work (AbortController)
+  - Disconnect SSE
+  - Close all WebSockets with a close reason like `"lease_lost"`
+  - Stop accepting sandbox callbacks/actions/tools for the session
+
+Only the owner instance may:
+- Connect SSE to the sandbox OpenCode server
+- Run `ensureRuntimeReady()` (sandbox provisioning)
+- Execute gateway-mediated tool callbacks
+- Execute sandbox-originated action invocations (server-side)
+- Perform migration
+
+Non-owner instances must reject:
+- WebSocket connections with a close reason like `"wrong_instance"`
+- Sandbox-originated HTTP calls (actions/tools) with a conflict status (e.g. 409)
+
+Reference: new helper module (e.g. `apps/gateway/src/lib/session-leases.ts`)
+
+### Runtime Boot Lock — `Planned`
+Short-lived distributed lock to prevent concurrent sandbox provisioning across instances:
+
+- Acquisition: `SET runtime:{sessionId} {instanceId} NX PX 30000`
+- Renewal: heartbeat during provisioning
+- Release: `DEL runtime:{sessionId}` once runtime is ready
+
+This lock is intentionally separate from the ownership lease: ownership is "hub lifetime," runtime lock is "boot sequence only."
+
 ### Deferred vs Immediate Sandbox Mode
-Session creation defaults to `"deferred"` — the DB record is written immediately, but sandbox provisioning waits until the first WebSocket client connects. `"immediate"` mode (used for SSH/CLI sessions) creates the sandbox in the creation request and returns connection info.
-- Key detail agents get wrong: Even in deferred mode, the sandbox is NOT created by the oRPC route. The gateway hub's `ensureRuntimeReady()` creates it.
-- Reference: `apps/gateway/src/lib/session-creator.ts:sandboxMode`
+Session creation defaults to `"deferred"` — the DB record is written immediately, but sandbox provisioning waits until the first WebSocket client connects. `"immediate"` mode provisions the sandbox during session creation and returns connection info for SSH/CLI/automation flows.
+- Key detail agents get wrong: Even in deferred mode, the sandbox is NOT created by the web oRPC route. The gateway hub's `ensureRuntimeReady()` creates it.
+- Reference: new session creation service (e.g. `packages/services/src/sessions/session-service.ts:createSession`)
 
 ### SSE Bridge
 The gateway maintains a persistent SSE connection to OpenCode (`GET /event` on the sandbox tunnel URL). The `SseClient` reads the stream, parses events via `eventsource-parser`, and forwards them to the `EventProcessor`. Disconnections trigger reconnection via the hub.
@@ -66,7 +120,7 @@ The gateway maintains a persistent SSE connection to OpenCode (`GET /event` on t
 
 ### Migration Controller
 Handles sandbox expiry by either migrating to a new sandbox (if clients are connected) or snapshotting and stopping (if idle). Uses a distributed lock to prevent concurrent migrations.
-- Key detail agents get wrong: Migration does NOT use a timer in the controller itself — expiry is scheduled via a BullMQ job in `expiry-queue.ts`. The controller only runs when triggered.
+- Key detail agents get wrong: vNext uses **two expiry triggers**. An in-process timer on the hub is the primary trigger (precise). A BullMQ job remains as a fallback for sessions whose hubs were evicted.
 - Reference: `apps/gateway/src/hub/migration-controller.ts`, `apps/gateway/src/expiry/expiry-queue.ts`
 
 ---
@@ -86,13 +140,14 @@ apps/gateway/src/
 │   ├── git-operations.ts                 # GitOperations — stateless git/gh via sandbox exec
 │   ├── types.ts                          # PromptOptions, MigrationState, MigrationConfig
 │   └── capabilities/tools/
-│       ├── index.ts                      # Intercepted tools registry (see agent-contract.md §6.5)
+│       ├── index.ts                      # Tool handler registry (invoked via tool callbacks; see ./agent-contract.md)
 │       ├── automation-complete.ts        # automation.complete handler
-│       ├── save-env-files.ts             # save_env_files handler
 │       ├── save-service-commands.ts      # save_service_commands handler
 │       ├── save-snapshot.ts              # save_snapshot handler
 │       └── verify.ts                     # verify handler
 ├── api/
+│   ├── internal/
+│   │   └── tools.ts                      # POST /internal/tools/:toolName (sandbox callbacks)
 │   ├── proliferate/
 │   │   ├── http/
 │   │   │   ├── index.ts                 # Router aggregation
@@ -111,15 +166,15 @@ apps/gateway/src/
 │       ├── terminal.ts                  # /proxy/:sid/:token/devtools/terminal WS proxy
 │       └── vscode.ts                    # /proxy/:sid/:token/devtools/vscode HTTP + WS proxy
 ├── lib/
-│   ├── session-creator.ts               # createSession() — DB + optional sandbox
+│   ├── session-creator.ts               # Session creation HTTP wrapper (calls SessionService.create())
 │   ├── session-store.ts                 # loadSessionContext() — DB → SessionContext
 │   ├── env.ts                           # GatewayEnv config
 │   ├── opencode.ts                      # OpenCode HTTP helpers (create session, send prompt, etc.)
 │   ├── redis.ts                         # Redis pub/sub for session events
 │   ├── s3.ts                            # S3 verification file upload
 │   ├── lock.ts                          # Distributed migration lock
-│   ├── idempotency.ts                   # Redis-based idempotency keys
-│   ├── prebuild-resolver.ts             # Prebuild resolution (see repos-prebuilds.md)
+│   ├── session-leases.ts                # Redis ownership lease + runtime lock helpers
+│   ├── configuration-resolver.ts        # Configuration resolution (see configurations-snapshots.md)
 │   ├── github-auth.ts                   # GitHub token resolution
 │   └── sandbox-mcp-token.ts             # HMAC-SHA256 token derivation
 ├── expiry/
@@ -130,7 +185,6 @@ apps/gateway/src/
 │   ├── error-handler.ts                 # ApiError class + error handler middleware
 │   ├── lifecycle.ts                     # createEnsureSessionReady() — hub + sandbox readiness middleware
 │   └── index.ts                         # Barrel exports
-├── intercepted-tools.ts                 # InterceptedToolHandler interface + framework
 └── types.ts                             # AuthResult, OpenCodeEvent, SandboxInfo, etc.
 
 apps/web/src/server/routers/
@@ -160,7 +214,10 @@ packages/gateway-clients/src/
     └── verify.ts                        # Verification file tools
 
 packages/db/src/schema/
-└── sessions.ts                          # sessions + sessionConnections tables
+└── sessions.ts                          # sessions + sessionConnections tables (adds idempotency_key, tool invocations)
+
+packages/services/src/sessions/
+└── session-service.ts                   # SessionService.create() — canonical creation logic
 ```
 
 ---
@@ -174,7 +231,7 @@ sessions
 ├── id                    UUID PRIMARY KEY
 ├── organization_id       TEXT NOT NULL (FK → organization)
 ├── created_by            TEXT (FK → user)
-├── prebuild_id           UUID (FK → prebuilds, SET NULL on delete)
+├── configuration_id      UUID (FK → configurations, SET NULL on delete)
 ├── repo_id               UUID (FK → repos, CASCADE — legacy)
 ├── session_type           TEXT DEFAULT 'coding'   -- 'setup' | 'coding' | 'cli' | 'terminal' (see note)
 ├── status                TEXT DEFAULT 'starting'  -- 'pending' | 'starting' | 'running' | 'paused' | 'stopped' | 'failed'
@@ -196,6 +253,7 @@ sessions
 ├── trigger_id            UUID
 ├── trigger_event_id      UUID
 ├── parent_session_id     UUID (self-FK)
+├── idempotency_key       TEXT                     -- unique per (organization_id, idempotency_key) when not null
 ├── origin                TEXT DEFAULT 'web'       -- 'web' | 'cli'
 ├── local_path_hash       TEXT
 ├── sandbox_expires_at    TIMESTAMPTZ
@@ -219,6 +277,18 @@ session_connections
 ├── integration_id        UUID NOT NULL (FK → integrations, CASCADE)
 ├── created_at            TIMESTAMPTZ DEFAULT now()
 └── UNIQUE(session_id, integration_id)
+
+session_tool_invocations
+├── id                    UUID PRIMARY KEY
+├── session_id            UUID NOT NULL (FK → sessions, CASCADE)
+├── tool_call_id          TEXT NOT NULL            -- OpenCode tool call ID (global unique)
+├── tool_name             TEXT NOT NULL
+├── params                JSONB
+├── status                TEXT NOT NULL            -- 'executing' | 'completed' | 'failed'
+├── result                JSONB
+├── error                 TEXT
+├── created_at            TIMESTAMPTZ DEFAULT now()
+└── completed_at          TIMESTAMPTZ
 ```
 
 Source: `packages/db/src/schema/sessions.ts`
@@ -227,15 +297,17 @@ Source: `packages/db/src/schema/sessions.ts`
 
 ### Key Indexes
 - `idx_sessions_org` on `organization_id`
+- `idx_sessions_idempotency` UNIQUE on `(organization_id, idempotency_key)` where `idempotency_key IS NOT NULL`
 - `idx_sessions_repo` on `repo_id`
 - `idx_sessions_status` on `status`
 - `idx_sessions_parent` on `parent_session_id`
 - `idx_sessions_automation` on `automation_id`
 - `idx_sessions_trigger` on `trigger_id`
-- `idx_sessions_prebuild` on `prebuild_id`
+- `idx_sessions_configuration` on `configuration_id`
 - `idx_sessions_local_path_hash` on `local_path_hash`
 - `idx_sessions_client_type` on `client_type`
 - `idx_sessions_sandbox_expires_at` on `sandbox_expires_at`
+- `idx_tool_invocations_session` on `session_id`
 
 ### Core TypeScript Types
 
@@ -249,16 +321,15 @@ interface SessionContext {
   agentConfig: AgentConfig & { tools?: string[] };
   envVars: Record<string, string>;
   sshPublicKey?: string;
-  snapshotHasDeps: boolean;
-  serviceCommands?: PrebuildServiceCommand[];
+  activeSnapshotId: string | null;
+  serviceCommands?: ServiceCommand[];
 }
 
 // apps/gateway/src/hub/types.ts
-type MigrationState = "normal" | "migrating";
+type HubState = "running" | "migrating";
 
 const MigrationConfig = {
   GRACE_MS: 5 * 60 * 1000,              // Start migration 5 min before expiry
-  CHECK_INTERVAL_MS: 30_000,             // Polling interval (unused — BullMQ now)
   MESSAGE_COMPLETE_TIMEOUT_MS: 30_000,   // Wait for agent to finish before abort
 };
 ```
@@ -291,9 +362,13 @@ class ApiError extends Error {
 - **SSE read timeout**: Configurable via `env.sseReadTimeoutMs`. Stream read uses `readWithTimeout()` to detect stuck connections.
 - **Heartbeat monitoring**: `SseClient` checks for event activity every ~`heartbeatTimeoutMs / 3`. Exceeding the timeout triggers reconnection.
 - **Reconnection**: Exponential backoff via `env.reconnectDelaysMs` array. Stops if all clients disconnect (unless automation session).
-- **Tool result patching**: `updateToolResult()` retries up to 5× with 1s delay (see `agent-contract.md` §5).
-- **Idempotency**: Session creation supports `Idempotency-Key` header with Redis-based deduplication. In-flight TTL guards against stale locks.
-- **Migration lock**: Distributed Redis lock with 60s TTL prevents concurrent migrations for the same session.
+- **Ownership lease**: a hub must hold a Redis ownership lease (`owner:{sessionId}`) to act as the session owner; renewed by heartbeat while hub is alive.
+- **Runtime boot lock**: sandbox provisioning is guarded by a short-lived Redis lock (`runtime:{sessionId}`) with heartbeat renewal during boot.
+- **Hub eviction**: hubs are evicted on idle TTL (no connected WS clients) and under a hard cap (LRU) to bound memory usage.
+- **Session create idempotency**: idempotency is persisted in PostgreSQL (`sessions.idempotency_key` unique per org), not Redis.
+- **Migration lock**: migration is guarded by a heartbeat-renewed Redis lease (`migration:{sessionId}`) and uses a two-phase cutover (old runtime kept alive until new runtime is confirmed).
+- **Expiry triggers**: hub schedules an in-process expiry timer (primary) plus a BullMQ job fallback for evicted hubs.
+- **Streaming backpressure**: token batching (50-100ms) and slow-consumer disconnect based on `ws.bufferedAmount` thresholds.
 
 ### Testing Conventions
 - Gateway tests are colocated with source files (e.g., `git-operations.test.ts`, `ws-handler.test.ts`, `actions.test.ts`). No central `__tests__/` directory.
@@ -305,56 +380,60 @@ class ApiError extends Error {
 
 ## 6. Subsystem Deep Dives
 
-### 6.1 Session Creation — `Implemented`
+### 6.1 Session Creation — `Planned`
 
-**What it does:** Creates a session record and optionally provisions a sandbox.
+**What it does:** Creates a session record and establishes session invariants in one place (DB idempotency, session connections, integration validation), with optional immediate sandbox provisioning.
 
-**Gateway HTTP path** (`POST /proliferate/sessions`):
-1. Auth middleware validates JWT/CLI token (`apps/gateway/src/middleware/auth.ts:createRequireAuth`).
-2. Route validates exactly one prebuild option (explicit ID, managed, or CLI) (`apps/gateway/src/api/proliferate/http/sessions.ts:123-134`).
-3. `resolvePrebuild()` resolves or creates a prebuild record (`apps/gateway/src/lib/prebuild-resolver.ts`).
-4. `createSession()` writes DB record, creates session connections, and optionally creates sandbox (`apps/gateway/src/lib/session-creator.ts:121`).
-5. For new managed prebuilds, fires a setup session with auto-generated prompt (`sessions.ts:startSetupSession`).
+**Canonical entry point:** `SessionService.create()` (new; `packages/services/src/sessions/session-service.ts`).
 
-**Scratch sessions** (no prebuild):
-- `prebuildId` is optional in `CreateSessionInputSchema`. When omitted, the oRPC path creates a **scratch session** with `prebuildId: null`, `snapshotId: null`.
-- `sessionType: "setup"` is rejected at schema level (via `superRefine`) when `prebuildId` is absent — setup sessions always require a prebuild.
-- Gateway `loadSessionContext()` handles `prebuild_id = null` with an early-return path: `repos: []`, synthetic scratch `primaryRepo`, `getScratchSystemPrompt()`, `snapshotHasDeps: false`.
+**Call sites:**
+1. Web oRPC session create: calls `SessionService.create({ provisioning: "deferred", clientType: "browser", ... })`.
+2. Gateway HTTP `POST /proliferate/sessions`: calls `SessionService.create({ provisioning: "immediate" | "deferred", clientType: "cli" | "browser", ... })`.
+3. Automation worker: calls `SessionService.create({ provisioning: "immediate", clientType: "automation", ... })`.
 
-**oRPC path** (`apps/web/src/server/routers/sessions.ts`):
-- `create` → calls `createSessionHandler()` (`sessions-create.ts`) which writes a DB record only. This is a **separate, lighter pipeline** than the gateway HTTP route — no idempotency, no session connections, no sandbox provisioning.
-- `pause` → loads session, enforces snapshot quota (`billing.ensureSnapshotCapacity()`), then calls `provider.pause()` if supported, else `provider.snapshot()` + `provider.terminate()`. Finalizes billing, updates DB status to `"paused"` (`sessions-pause.ts`).
-- `resume` → no dedicated handler. Resume is implicit: connecting a WebSocket client to a paused session triggers `ensureRuntimeReady()`, which creates a new sandbox from the stored snapshot.
-- `delete` → calls `sessions.deleteSession()`.
-- `rename` → calls `sessions.renameSession()`.
-- `snapshot` → calls `snapshotSessionHandler()` (`sessions-snapshot.ts`).
-- `submitEnv` → writes secrets to DB, writes env file to sandbox via provider.
+**Idempotency (DB, not Redis):**
+1. Caller provides an idempotency key (header or explicit field).
+2. `SessionService.create()` inserts the session using a unique index on `(organization_id, idempotency_key)` where the key is non-null.
+3. If the insert conflicts, the existing session row is returned and `alreadyExisted: true` is surfaced to callers.
 
-**Files touched:** `apps/gateway/src/api/proliferate/http/sessions.ts`, `apps/gateway/src/lib/session-creator.ts`, `apps/web/src/server/routers/sessions.ts`
+**Session connections + validation:**
+1. For each requested integration, create a `session_connections` row.
+2. Validate token resolution (`integrations.getToken()` for each) and exclude failing integrations from the session (graceful degradation).
 
-### 6.2 Session Runtime Lifecycle — `Implemented`
+**Provisioning:**
+- `"deferred"`: no sandbox work during creation; first hub connection runs `ensureRuntimeReady()`.
+- `"immediate"`: create sandbox and OpenCode session as part of creation, returning SSH/tunnel info.
+
+**Files touched:** `packages/services/src/sessions/session-service.ts`, `apps/gateway/src/api/proliferate/http/sessions.ts`, `apps/web/src/server/routers/sessions.ts`
+
+### 6.2 Session Runtime Lifecycle — `Planned`
 
 **What it does:** Lazily provisions sandbox, OpenCode session, and SSE bridge on first client connect.
 
 **Happy path** (`apps/gateway/src/hub/session-runtime.ts:doEnsureRuntimeReady`):
-1. Wait for migration lock release (`lib/lock.ts:waitForMigrationLockRelease`).
-2. Reload `SessionContext` from database (`lib/session-store.ts:loadSessionContext`).
-3. Resolve provider, git identity, base snapshot, sandbox-mcp token.
-4. Call `provider.ensureSandbox()` — recovers existing or creates new sandbox.
-5. Update session DB record with `sandboxId`, `status: "running"`, tunnel URLs.
-6. Schedule expiry job via BullMQ (`expiry/expiry-queue.ts:scheduleSessionExpiry`).
-7. Ensure OpenCode session exists (verify stored ID or create new one).
-8. Connect SSE to `{tunnelUrl}/event`.
-9. Broadcast `status: "running"` to all WebSocket clients.
+1. Assert this instance holds the session ownership lease (`owner:{sessionId}`); if not, abort and tear down.
+2. Acquire the runtime boot lock (`runtime:{sessionId}`) with heartbeat renewal for the duration of provisioning.
+3. Wait for migration lock release (`lib/lock.ts:waitForMigrationLockRelease`).
+4. Reload `SessionContext` from database (`lib/session-store.ts:loadSessionContext`).
+5. Resolve provider, git identity, base snapshot, sandbox-mcp token.
+6. Call `provider.ensureSandbox()` — recovers existing or creates new sandbox.
+7. Update session DB record with `sandboxId`, `status: "running"`, tunnel URLs.
+8. Schedule expiry:
+   - In-process timer on the hub (primary)
+   - BullMQ job as a fallback (for evicted hubs)
+9. Ensure OpenCode session exists (verify stored ID or create new one).
+10. Connect SSE to `{tunnelUrl}/event`.
+11. Release runtime boot lock.
+12. Broadcast `status: "running"` to all WebSocket clients.
 
 **Edge cases:**
-- Concurrent `ensureRuntimeReady()` calls coalesce into a single promise (`ensureReadyPromise`).
+- Concurrent `ensureRuntimeReady()` calls coalesce into a single promise (`ensureReadyPromise`) within an instance; the runtime boot lock prevents cross-instance duplication.
 - E2B auto-pause: if provider supports auto-pause, `sandboxId` is stored as `snapshotId` for implicit recovery.
 - Stored tunnel URLs are used as fallback if provider returns empty values on recovery.
 
 **Files touched:** `apps/gateway/src/hub/session-runtime.ts`, `apps/gateway/src/lib/session-store.ts`
 
-### 6.3 Event Processing Pipeline — `Implemented`
+### 6.3 Event Processing Pipeline — `Planned`
 
 **What it does:** Translates OpenCode SSE events into client-facing `ServerMessage` payloads.
 
@@ -369,20 +448,20 @@ class ApiError extends Error {
 | `session.error` | `error` | Skips `MessageAbortedError` |
 | `server.connected`, `server.heartbeat` | (ignored) | Transport-level |
 
-**Intercepted tool flow:**
-1. `EventProcessor` detects tool name in `interceptedTools` set.
-2. Emits `tool_start` to clients, calls `onInterceptedTool` callback.
-3. `SessionHub.handleInterceptedTool()` finds handler, executes server-side.
-4. Result patched back to OpenCode via `updateToolResult()`.
-5. `tool_end` broadcast to clients.
+**Tool events:**
+- The SSE tool lifecycle events (`tool_start` / `tool_metadata` / `tool_end`) are forwarded to clients as UI observability.
+- Gateway-mediated tools are executed via synchronous sandbox callbacks (`POST /internal/tools/:toolName`) rather than SSE interception. Idempotency is provided by `session_tool_invocations` keyed by `tool_call_id`.
+- See `./agent-contract.md` for the tool callback contract and tool schemas.
 
 **Files touched:** `apps/gateway/src/hub/event-processor.ts`, `apps/gateway/src/hub/session-hub.ts`
 
-### 6.4 WebSocket Protocol — `Implemented`
+### 6.4 WebSocket Protocol — `Planned`
 
 **What it does:** Bidirectional real-time communication between browser clients and the gateway.
 
 **Connection**: `WS /proliferate/:sessionId?token=<JWT>` (`apps/gateway/src/api/proliferate/ws/index.ts`).
+
+**Multi-instance behavior:** If the request lands on a non-owner gateway instance, the server must reject the connection (close reason like `"wrong_instance"`) so the client can reconnect and be routed to the correct owner.
 
 **Client → Server messages** (`session-hub.ts:handleClientMessage`):
 
@@ -405,28 +484,35 @@ class ApiError extends Error {
 
 **Server → Client messages**: `status`, `message`, `token`, `text_part_complete`, `tool_start`, `tool_metadata`, `tool_end`, `message_complete`, `message_cancelled`, `error`, `snapshot_result`, `init`, `preview_url`, `git_status`, `git_result`, `auto_start_output`, `pong`.
 
-### 6.5 Session Migration — `Implemented`
+**Migration backpressure:** When the hub enters `migrating` state, incoming user messages are queued in a bounded in-memory buffer (default max 100) and flushed after cutover. If the buffer is full, new messages are rejected with a clear error.
 
-**What it does:** Handles sandbox expiry by snapshotting and optionally creating a new sandbox.
+### 6.5 Session Migration — `Planned`
 
-**Expiry scheduling** (`apps/gateway/src/expiry/expiry-queue.ts`):
-- BullMQ queue `"session-expiry"` with per-session jobs.
-- Job delay: `max(0, expiresAtMs - now - GRACE_MS)` where `GRACE_MS = 5 min`.
-- Worker calls `hub.runExpiryMigration()`.
+**What it does:** Handles sandbox expiry and hub eviction safely in a multi-instance gateway by snapshotting and (if needed) booting a replacement sandbox with a two-phase cutover.
 
-**Active migration (clients connected):**
-1. Acquire distributed lock (60s TTL).
-2. Wait for agent message completion (30s timeout), abort if still running.
-3. Snapshot current sandbox.
-4. Disconnect SSE, reset sandbox state.
-5. Call `ensureRuntimeReady()` — creates new sandbox from snapshot.
-6. Broadcast `status: "running"`.
+**Guards:**
+1. Ownership lease: only the session owner may migrate.
+2. Migration lock: heartbeat-renewed Redis lease (`migration:{sessionId}`) prevents concurrent migrations.
 
-**Idle migration (no clients):**
-1. Acquire lock, stop OpenCode.
-2. Pause (if E2B) or snapshot + terminate (if Modal).
-3. Update DB: `status: "paused"` (E2B) or `status: "stopped"` (Modal).
-4. Clean up hub state.
+**Expiry triggers:**
+1. Primary: in-process timer on the hub (fires at expiry minus `GRACE_MS`).
+2. Fallback: BullMQ job (needed when the hub was evicted before expiry).
+
+**State machine:** `running → migrating → running` (or `paused`/`failed` on terminal outcomes).
+
+**Active migration (WS clients connected):**
+1. Acquire migration lock (with heartbeat renewal).
+2. Set hub state to `migrating` and broadcast `status: "migrating"`.
+3. Queue incoming WS messages in a bounded buffer (default max 100).
+4. Best-effort quiescence + snapshot old sandbox (retry with backoff; fall back to last known snapshot when possible).
+5. Boot new sandbox from snapshot and verify SSE is connectable.
+6. If new boot fails: resume on old sandbox, clear migrating state, and schedule a retry.
+7. Cutover: switch SSE to new sandbox, persist new sandbox metadata, then tear down old sandbox.
+8. Flush queued WS messages to the new sandbox, set state `running`, release lock.
+
+**Idle migration (no WS clients):**
+1. Snapshot sandbox and persist snapshot ID.
+2. Pause session, terminate sandbox, and evict hub (memory reclamation); no two-phase cutover required.
 
 Source: `apps/gateway/src/hub/migration-controller.ts`
 
@@ -486,10 +572,10 @@ Token verification chain: (1) User JWT (signed with `gatewayJwtSecret`), (2) Ser
 
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
-| `sandbox-providers.md` | This → Provider | `SandboxProvider.ensureSandbox()`, `.snapshot()`, `.pause()`, `.terminate()` | Runtime calls provider for sandbox lifecycle |
-| `agent-contract.md` | This → Tools | `getInterceptedToolHandler()` | Hub executes intercepted tools; schemas defined in agent-contract |
+| `./sandbox-providers.md` | This → Provider | `SandboxProvider.ensureSandbox()`, `.snapshot()`, `.pause()`, `.terminate()` | Runtime calls provider for sandbox lifecycle |
+| `./agent-contract.md` | This → Tools | `POST /internal/tools/:toolName` | Gateway-mediated tools are executed via synchronous sandbox callbacks; schemas in agent-contract |
 | `automations-runs.md` | Runs → This | `createSyncClient().createSession()` + `.postMessage()` | Worker creates session and posts initial prompt |
-| `repos-prebuilds.md` | This → Prebuilds | `resolvePrebuild()`, `prebuilds.getPrebuildReposWithDetails()` | Session creator resolves prebuild at creation |
+| `repos-prebuilds.md` | This → Configurations | `resolveConfiguration()`, `configurations.getConfigurationReposWithDetails()` | Session creator resolves configuration at creation |
 | `llm-proxy.md` | Proxy → This | `sessions.buildSandboxEnvVars()` | Env vars include `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` |
 | `secrets-environment.md` | Secrets → This | `secrets.buildEnvFilesFromBundles()` | Env files passed to provider at sandbox creation |
 | `integrations.md` | This → Integrations | `integrations.getRepoConnectionsWithIntegrations()` | Token resolution for git clone |
@@ -520,10 +606,11 @@ Token verification chain: (1) User JWT (signed with `gatewayJwtSecret`), (2) Ser
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **Hub state is in-memory only** — Gateway restart loses all hub state. Running sessions must re-establish SSE from scratch on next client connect. Impact: brief reconnection delay. Expected fix: acceptable for single-gateway deployment; multi-gateway would need shared state.
-- [ ] **Hub cleanup never runs** — `HubManager.remove()` exists but has no call sites. Hubs accumulate in memory for the process lifetime. Impact: memory growth on long-running gateways. Expected fix: call `remove()` on session termination or idle timeout.
+- [ ] **Hub state remains in-memory** — The hub is an in-process object and must be re-created after a gateway restart. DB + snapshots provide recovery, but streaming state is not persisted. Impact: brief reconnection delay.
+- [ ] **Sticky routing recommended** — Ownership leases enforce correctness, but without L7 stickiness sessions may bounce across instances and see `"wrong_instance"` reconnect churn. Impact: latency spikes during reconnect storms. Expected fix: consistent hashing on `sessionId`.
+- [ ] **Lease loss is disruptive by design** — If Redis is unavailable and the owner cannot renew, the gateway may tear down its hub to avoid split-brain. Impact: short interruptions; clients reconnect and another instance claims ownership.
 - [ ] **Duplicate GitHub token resolution** — Both `session-store.ts:resolveGitHubToken` and `session-creator.ts:resolveGitHubToken` contain near-identical token resolution logic. Impact: code duplication. Expected fix: extract into shared `github-auth.ts` utility.
 - [ ] **No WebSocket message persistence** — Messages live only in OpenCode's in-memory session. If OpenCode restarts, message history is lost. Impact: users see empty chat on sandbox recreation. Expected fix: message persistence layer (out of scope for current design).
 - [ ] **CORS allows all origins** — `Access-Control-Allow-Origin: *` is permissive. Impact: any domain can make requests if they have a valid token. Expected fix: restrict to known domains in production.
 - [ ] **Session status enum not enforced at DB level** — `status` is a `TEXT` column with no CHECK constraint. Impact: invalid states possible via direct DB writes. Expected fix: add DB-level enum or check constraint.
-- [ ] **Legacy `repo_id` FK on sessions** — Sessions table still has `repo_id` FK to repos (with CASCADE delete). Repos are now associated via `prebuild_repos` junction. Impact: schema inconsistency. Expected fix: drop `repo_id` column after confirming no reads.
+- [ ] **Legacy `repo_id` FK on sessions** — Sessions table still has `repo_id` FK to repos (with CASCADE delete). Repos are now associated via `configuration_repos` junction. Impact: schema inconsistency. Expected fix: drop `repo_id` column after confirming no reads.
