@@ -76,6 +76,7 @@ export async function generateVirtualKey(
 		body: JSON.stringify({
 			team_id: orgId,
 			user_id: sessionId,
+			key_alias: sessionId,
 			duration,
 			max_budget: options?.maxBudget,
 			metadata: {
@@ -223,4 +224,35 @@ export function getLLMProxyBaseURL(): string | undefined {
 	if (!baseUrl) return undefined;
 	const trimmed = baseUrl.replace(/\/+$/, "");
 	return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
+}
+
+/**
+ * Revoke a virtual key by session alias.
+ *
+ * Uses LiteLLM's `POST /key/delete` with `key_aliases` to delete all keys
+ * associated with a session. 404s are treated as success (key already gone).
+ *
+ * This is best-effort — callers should fire-and-forget.
+ *
+ * @param sessionId - Session ID used as the key_alias during generation
+ */
+export async function revokeVirtualKey(sessionId: string): Promise<void> {
+	const proxyUrl = env.LLM_PROXY_ADMIN_URL || env.LLM_PROXY_URL;
+	const masterKey = env.LLM_PROXY_MASTER_KEY;
+	if (!proxyUrl || !masterKey) return;
+
+	const adminUrl = proxyUrl.replace(/\/+$/, "").replace(/\/v1$/, "");
+	const response = await fetch(`${adminUrl}/key/delete`, {
+		method: "POST",
+		headers: {
+			Authorization: `Bearer ${masterKey}`,
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({ key_aliases: [sessionId] }),
+	});
+
+	if (!response.ok && response.status !== 404) {
+		const error = await response.text();
+		throw new Error(`Failed to revoke virtual key: ${response.status} ${error}`);
+	}
 }
