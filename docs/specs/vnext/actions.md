@@ -109,6 +109,53 @@ Action definitions use Zod for parameter validation and JSON Schema export (UI +
 - Key detail agents get wrong: schema conversion must be stable for hashing; use one shared `zodToJsonSchema()` implementation.
 - Reference: `../../../integrations_architecture.md` §4, §5
 
+### Reference ActionSource Contract (Normative Shape)
+The execution pipeline remains source-agnostic because every source satisfies one contract:
+- `ActionSource.id`: stable source identifier (`linear`, `connector:<uuid>`, `db:<uuid>` planned).
+- `listActions(ctx)`: returns source-local `ActionDefinition[]`.
+- `execute(actionId, params, ctx)`: runs one action against the underlying system.
+
+Reference shape (illustrative; exact types live in `packages/providers/src/`):
+
+```ts
+type RiskLevel = "read" | "write";
+
+interface ActionDefinition {
+	id: string;
+	description: string;
+	riskLevel: RiskLevel; // hint only, not enforcement
+	params: z.ZodTypeAny;
+}
+
+interface ActionExecutionContext {
+	orgId: string;
+	sessionId: string;
+	token?: string; // injected for provider-backed calls
+}
+
+interface ActionSource {
+	id: string;
+	displayName: string;
+	guide?: string;
+	listActions(ctx: ActionExecutionContext): Promise<ActionDefinition[]>;
+	execute(
+		actionId: string,
+		params: Record<string, unknown>,
+		ctx: ActionExecutionContext,
+	): Promise<unknown>;
+}
+```
+
+- Key detail agents get wrong: this interface is the seam; permissioning/mode resolution happens in framework code, not inside source implementations.
+
+### Reference Archetypes
+Three archetypes share the same `ActionSource` seam:
+- **Provider-backed sources (implemented):** code-defined integrations (e.g. Sentry/Linear/Slack) with stateless modules and injected tokens.
+- **MCP connector sources (implemented):** dynamic `tools/list` discovery + `tools/call` execution, with schema conversion and drift hashing.
+- **Database sources (planned):** future connector-backed data-plane actions (e.g. `db:<uuid>`) that still flow through the same mode and audit pipeline.
+
+- Key detail agents get wrong: "implemented now" for vNext means provider-backed + MCP connector-backed sources; database sources remain planned.
+
 ---
 
 ## 3. File Tree
@@ -254,13 +301,20 @@ interface ModeResolution {
 
 **What it does:** Validates an invocation, resolves mode, and either executes, denies, or creates a pending approval.
 
-**Happy path:**
+**Pipeline (`POST /invoke`):**
 1. Resolve `ActionSource` by `sourceId` and locate `ActionDefinition` by `actionId`.
-2. Validate params via Zod.
-3. Resolve mode (automation override → org default → inferred default).
-4. If `mode = deny`, persist invocation with `status = denied` and return an error.
-5. If `mode = allow`, execute `source.execute()`, redact/JSON-truncate, persist invocation as executed, return result.
-6. If `mode = require_approval`, persist invocation with `status = pending`, broadcast approval request, return `{ status: "pending", invocationId }`.
+2. Validate params via Zod (`safeParse`) and reject invalid payloads early.
+3. If source is a connector tool, compute drift status using normalized schema hashing:
+   - Deterministic JSON stringifier (stable key order).
+   - Strip `description`, `default`, and `enum` before hashing.
+   - Compare against stored `tool_risk_overrides` hash.
+4. Resolve mode (automation override → org default → inferred default).
+5. Apply drift guardrail (connector tools only): drifted `allow` downgrades to `require_approval`; drifted `deny` stays `deny`.
+6. Execute mode branch:
+   - `deny` → persist invocation as denied and return 403.
+   - `require_approval` → persist invocation as pending, broadcast approval request, return 202 with pending metadata.
+   - `allow` → execute `source.execute()` immediately.
+7. For executed responses, redact and structurally JSON-truncate results to <=10KB (never string-slice JSON), persist audit row, then return.
 
 ### 6.3 Approve/Deny Pending Invocations
 

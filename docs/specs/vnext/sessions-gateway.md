@@ -99,6 +99,17 @@ Non-owner instances must reject:
 
 Reference: new helper module (e.g. `apps/gateway/src/lib/session-leases.ts`)
 
+### Lease Heartbeat Lag Guard (Split-Brain Suicide) — `Planned`
+Node event-loop lag can delay lease renewal long enough for Redis TTL to expire. If renewal lateness exceeds lease TTL, the current owner must assume ownership may already have moved and terminate itself immediately.
+
+Fail-safe behavior when `Date.now() - lastRenewAt > LEASE_TTL_MS`:
+- Abort in-flight operations via `AbortController`.
+- Disconnect SSE from sandbox.
+- Drop all WebSocket clients with reason like `"lease_lost"`.
+- Remove hub from `HubManager` and stop handling callbacks for the session.
+
+This is intentionally disruptive and prevents split-brain execution.
+
 ### Runtime Boot Lock — `Planned`
 Short-lived distributed lock to prevent concurrent sandbox provisioning across instances:
 
@@ -122,6 +133,30 @@ The gateway maintains a persistent SSE connection to OpenCode (`GET /event` on t
 Handles sandbox expiry by either migrating to a new sandbox (if clients are connected) or snapshotting and stopping (if idle). Uses a distributed lock to prevent concurrent migrations.
 - Key detail agents get wrong: vNext uses **two expiry triggers**. An in-process timer on the hub is the primary trigger (precise). A BullMQ job remains as a fallback for sessions whose hubs were evicted.
 - Reference: `apps/gateway/src/hub/migration-controller.ts`, `apps/gateway/src/expiry/expiry-queue.ts`
+
+### Synchronous Tool Callbacks + Idempotency — `Planned`
+Gateway-mediated tools execute through synchronous sandbox callbacks (`POST /internal/tools/:toolName`) authenticated by `SANDBOX_MCP_AUTH_TOKEN`.
+
+Idempotency model:
+- Persist invocation state in `session_tool_invocations` keyed by `tool_call_id`.
+- Keep an in-memory map per hub: `Map<tool_call_id, Promise<ToolResult>>`.
+- If a duplicate callback arrives while status is `executing`, await the existing in-flight promise rather than re-running the tool.
+- Retries after completion return the persisted completed/failed record.
+
+Key detail agents get wrong: callback retries are expected under network blips and must not create duplicate side effects.
+
+### Idle Snapshotting Guardrails — `Planned`
+Idle hub eviction and snapshotting must account for synchronous callback execution time.
+
+Rules:
+- Track `activeHttpToolCalls` in the hub.
+- Idle snapshot timer must not pause/snapshot/evict while `activeHttpToolCalls > 0`, even if SSE appears quiet.
+- On normal idle (no active callbacks, no WS clients), snapshot then pause + evict.
+
+Automation fast-path:
+- When `automation.complete` is executed, bypass idle snapshot timers.
+- Immediately terminate provider runtime, mark session `stopped`, and evict hub.
+- Goal: reduce compute/runtime tail and avoid unnecessary snapshot writes for completed automation sessions.
 
 ---
 
@@ -430,6 +465,7 @@ class ApiError extends Error {
 - Concurrent `ensureRuntimeReady()` calls coalesce into a single promise (`ensureReadyPromise`) within an instance; the runtime boot lock prevents cross-instance duplication.
 - E2B auto-pause: if provider supports auto-pause, `sandboxId` is stored as `snapshotId` for implicit recovery.
 - Stored tunnel URLs are used as fallback if provider returns empty values on recovery.
+- If lease renewal lag exceeds TTL during runtime work, self-terminate immediately (`lease_lost`) to prevent split-brain ownership.
 
 **Files touched:** `apps/gateway/src/hub/session-runtime.ts`, `apps/gateway/src/lib/session-store.ts`
 
@@ -512,7 +548,12 @@ class ApiError extends Error {
 
 **Idle migration (no WS clients):**
 1. Snapshot sandbox and persist snapshot ID.
-2. Pause session, terminate sandbox, and evict hub (memory reclamation); no two-phase cutover required.
+2. Guard against false-idle by checking `activeHttpToolCalls`; defer idle migration while callback tools are still executing.
+3. Pause session, terminate sandbox, and evict hub (memory reclamation); no two-phase cutover required.
+
+**Automation completion fast-path:**
+- If `automation.complete` is invoked, bypass idle snapshotting and migration timers.
+- Terminate runtime immediately, set session `status: "stopped"`, then evict hub.
 
 Source: `apps/gateway/src/hub/migration-controller.ts`
 

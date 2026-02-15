@@ -38,7 +38,7 @@ The gateway selects a system prompt based on session type and client type, then 
 - **Agent config** — model ID and optional tools array stored per-session in the database.
 
 **Key invariants:**
-- All five tools are always injected regardless of session mode. The system prompt alone controls which tools the agent is encouraged to use.
+- Mode-scoped tool injection applies in vNext: setup-only tools are injected only for setup sessions, and automation-finalization tools are injected only for automation clients. Shared tools remain available across modes.
 - Four of five tools are gateway-mediated (executed server-side) and invoked via synchronous sandbox → gateway callbacks. Only `request_env_variables` runs in the sandbox.
 - Tool definitions are string templates exported from `packages/shared/src/opencode-tools/index.ts`. They are the single source of truth for tool schemas.
 - The system prompt can be overridden per-session via `session.system_prompt` in the database.
@@ -67,6 +67,19 @@ Sandbox-side retry requirement:
 
 - Key detail agents get wrong: `request_env_variables` is NOT gateway-mediated — it runs in the sandbox. The gateway may still react to it via SSE to show the UI prompt.
 - Reference: `apps/gateway/src/api/internal/tools.ts`, `apps/gateway/src/hub/capabilities/tools/`, `packages/db/src/schema/sessions.ts`
+
+### Snapshot TCP-Drop Retry Trap — `Planned`
+`save_snapshot` can freeze the sandbox at the provider layer, which tears down active TCP sockets. When the sandbox resumes, an in-flight callback request from the sandbox tool wrapper may surface as `fetch failed`, `ECONNRESET`, or `ETIMEDOUT`.
+
+Sandbox-side requirement:
+- Generate `tool_call_id` once per logical tool execution.
+- Retry network-level callback failures with the **same** `tool_call_id`.
+- Keep retrying until success or a non-retriable application error.
+
+Gateway-side requirement:
+- Use `session_tool_invocations` idempotency + in-memory in-flight dedupe (`tool_call_id -> Promise`) to ensure retries do not duplicate side effects.
+
+This pair guarantees that snapshot-boundary drops are recoverable without double execution.
 
 ### OpenCode Tool Discovery — `Implemented`
 OpenCode automatically discovers tools by scanning `{repoDir}/.opencode/tool/*.ts` at startup. Tools are not registered in `opencode.json` — they are filesystem-discovered.
@@ -377,6 +390,11 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 - Config is written to both global and local paths for OpenCode discovery reliability.
 - File write mechanics differ by provider (Modal uses shell commands, E2B uses `files.write` SDK). For provider-specific boot details, see `./sandbox-providers.md`.
 
+**Mode-scoped injection rules (vNext target):**
+- `save_service_commands` is injected only when `sessionType === "setup"`.
+- `automation.complete` is injected only when `clientType === "automation"`.
+- Shared tools (`verify`, `save_snapshot`, `request_env_variables`) remain available in all supported modes.
+
 **Files touched:** `packages/shared/src/sandbox/config.ts`, `packages/shared/src/sandbox/opencode.ts`, `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`
 
 ### 6.4 OpenCode Configuration — `Implemented`
@@ -490,7 +508,7 @@ For runtime ownership leases, migration queuing semantics, and tool-call wakeups
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **Partial per-mode tool filtering** — The setup-only tool (`save_service_commands`) is now injected only for setup sessions, but `automation.complete` is still available in non-automation sessions. Impact: reduced mode mismatch, but some out-of-mode tool calls remain possible. Expected fix: conditional automation tool injection by client/session mode.
+- [ ] **Automation tool filtering rollout** — vNext target is automation-only injection for `automation.complete`, but some environments may still include dual registration (`automation.complete` / `automation_complete`) broadly for compatibility. Impact: possible out-of-mode calls during transition. Expected fix: strict mode-gated registration once compatibility window ends.
 - [ ] **Two tool definition styles** — `verify` uses raw `export default { name, description, parameters }` while other tools use the `tool()` plugin API from `@opencode-ai/plugin`. Impact: inconsistent authoring; no functional difference. Expected fix: migrate `verify` to `tool()` API.
 - [ ] **Dual registration for automation.complete** — Registered under both `automation.complete` and `automation_complete` to handle agent variation. Impact: minor registry bloat. Expected fix: standardize on one name once agent behavior is stable.
 - [ ] **No tool versioning** — Tool schemas are string templates with no version tracking. If a schema changes, running sessions continue with the old version until sandbox restart. Impact: potential schema mismatch during deploys. Expected fix: version stamp in tool file path or metadata.

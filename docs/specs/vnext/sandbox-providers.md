@@ -60,6 +60,11 @@ The common contract for all providers. Defines required methods (`ensureSandbox`
 - Key detail agents get wrong: `ensureSandbox` is the preferred entry point, not `createSandbox`. The former handles recovery; the latter always creates fresh.
 - Reference: `packages/shared/src/sandbox-provider.ts`
 
+Memory snapshot support in vNext is provider-capability based:
+- Providers may advertise `supportsMemorySnapshot`.
+- Providers may implement dedicated memory snapshot methods (`memorySnapshot`, `restoreFromMemorySnapshot`) in addition to existing snapshot/pause paths.
+- Session orchestration must treat these as provider-specific capabilities and branch explicitly rather than assuming universal support.
+
 ### Agent & Model Configuration
 The `AgentConfig` type (`packages/shared/src/agents.ts`) carries agent type and model ID through the stack. The default is `opencode` agent with `claude-opus-4.6` model. Model IDs are canonical (e.g., `"claude-opus-4.6"`) and transformed to provider-specific formats: `toOpencodeModelId()` produces `"anthropic/claude-opus-4-6"` for OpenCode's config file.
 - Key detail agents get wrong: OpenCode model IDs have NO date suffix — OpenCode handles the mapping internally. Don't use Anthropic API format (`claude-opus-4-6-20250514`) in OpenCode config.
@@ -74,6 +79,15 @@ Snapshot resolution is simple: if the configuration has `active_snapshot_id` set
 When restoring from a snapshot, repos may be stale. The `shouldPullOnRestore()` function gates `git pull --ff-only` on: (1) feature flag `SANDBOX_GIT_PULL_ON_RESTORE`, (2) having a snapshot, (3) cadence timer `SANDBOX_GIT_PULL_CADENCE_SECONDS`.
 - Key detail agents get wrong: Cadence is only advanced when _all_ repo pulls succeed. A single failure leaves the timer unchanged so the next restore retries.
 - Reference: `packages/shared/src/sandbox/git-freshness.ts`
+
+### Thawed-TCP + Restore Freshness Guardrail
+Memory snapshot restore resumes process memory and open-process state, which can make the runtime appear instantly ready while still reflecting stale repo state from the freeze point.
+
+vNext requirement:
+- Immediately after restore is confirmed, run stateless freshness reconciliation (`git pull --ff-only` when cadence/flag policy allows) before unblocking prompts.
+- This reconciliation must happen in provider restore flow, not deferred to agent behavior.
+
+Key detail agents get wrong: restore shortcuts boot-time setup, so freshness checks cannot rely on "normal boot" hooks alone.
 
 ### OpenCode Plugin (PLUGIN_MJS)
 A minimal ESM plugin injected into every sandbox at `~/.config/opencode/plugin/proliferate.mjs`. It exports a `ProliferatePlugin` async function with empty hooks. All event streaming flows via SSE (gateway pulls from OpenCode) — the plugin does NOT push events.
@@ -402,6 +416,10 @@ When this key changes, the base snapshot is stale and must be rebuilt. Used by b
 **Env vars:** `SANDBOX_GIT_PULL_ON_RESTORE` (boolean), `SANDBOX_GIT_PULL_CADENCE_SECONDS` (number, 0 = always).
 
 Both providers re-write git credentials before pulling (snapshot tokens may be stale) and only advance the cadence timer when all pulls succeed.
+
+**Restore ordering requirement (vNext hardening):**
+- For memory-restore paths, freshness reconciliation runs before control returns to the hub for prompt handling.
+- If freshness pull is skipped by policy (flag/cadence), the restore proceeds but retains the previous freshness timestamp semantics.
 
 ### 6.8 Sandbox-MCP API Server — `Implemented`
 

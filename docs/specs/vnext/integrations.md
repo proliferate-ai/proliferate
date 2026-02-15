@@ -69,6 +69,57 @@ When an admin onboards a connector, the system lists tools and stores per-tool m
 - Key detail agents get wrong: Integrations owns persistence and CRUD; Actions owns enforcement and runtime mode resolution.
 - Reference: `../../../integrations_architecture.md` §5, §12
 
+### Reference IntegrationProvider Contract (Normative Shape)
+Providers declare what credentials they require; they do not declare how those credentials are fulfilled by a specific OAuth broker.
+
+Reference shape (illustrative; exact types live in `packages/providers/src/types.ts`):
+
+```ts
+interface ConnectionRequirement {
+	type: "oauth2" | "app_installation" | "bot_token" | "api_key" | "none";
+	preset?: string; // stable framework lookup key, e.g. "sentry"
+	scopes?: string[];
+}
+
+interface IntegrationProvider {
+	id: string;
+	displayName: string;
+	category: "issue_tracker" | "source_control" | "monitoring" | "custom";
+	connections: {
+		org?: ConnectionRequirement;
+		user?: ConnectionRequirement; // optional user attribution path
+	};
+	actions?: unknown; // owned by Actions domain
+	triggers?: unknown; // owned by Triggers domain
+}
+```
+
+- Key detail agents get wrong: provider modules are broker-agnostic declarations; Nango/Arctic mapping belongs to Integrations framework code.
+
+### Reference Token Resolution Contract (`getToken`)
+`getToken()` is the runtime enforcement boundary that resolves a live token and keeps provider modules stateless.
+
+Reference flow:
+
+```ts
+async function getToken(
+	integrationId: string,
+	orgId: string,
+	opts?: { userId?: string },
+): Promise<string> {
+	if (opts?.userId) {
+		const userConnection = await findUserConnection(opts.userId, integrationId);
+		if (userConnection) {
+			return resolveToken(userConnection);
+		}
+	}
+	const orgConnection = await findOrgConnection(orgId, integrationId);
+	return resolveToken(orgConnection);
+}
+```
+
+- Key detail agents get wrong: runtime consumers never read token storage directly; all token paths must flow through `getToken()`.
+
 ---
 
 ## 3. File Tree
@@ -186,12 +237,18 @@ interface ConnectionRequirement {
 
 **Happy path:**
 1. UI selects a provider (by `IntegrationProvider.meta.id`) and reads its `connections.org` requirement for scopes + preset.
-2. Integrations auth layer maps `preset` to broker config and starts the OAuth handshake.
+2. Integrations auth layer maps the provider `preset` to broker-specific config and starts the OAuth handshake.
 3. Callback persists an `integrations` row referencing the broker connection ID and marks it `active`.
 4. Session/automation binds the integration via `session_connections` / `automation_connections`.
 
 **Edge cases:**
 - Provider declares `type: "oauth2"` but no scopes → warn during provider registry validation (boot-time), fail safe at connect-time.
+- Broker implementation swap (Nango → Arctic) → preset key remains stable; only framework mapping changes.
+
+**Preset mapping boundary:**
+- Providers define a stable `preset` string.
+- Integrations maps that preset to the active broker config at runtime.
+- Provider code must not import broker SDKs or broker identifiers.
 
 ### 6.2 Resolve A Token For Runtime Use
 
@@ -199,8 +256,13 @@ interface ConnectionRequirement {
 
 **Happy path:**
 1. Actions/Triggers call `getToken(integration, { userId? })`.
-2. If `userId` is present and a user connection exists for this provider, return the user token.
+2. If `userId` is present, check `user_connections` first for a provider-matching user credential.
 3. Otherwise return the org-scoped token (OAuth broker token or GitHub App installation token).
+
+**Behavioral notes:**
+- This enables user-attributed execution when available (for example, user-authored GitHub actions).
+- Fallback to org scope is required for reliability; missing user connections are not fatal by default.
+- Integrations returns tokens to runtime callers only; API responses expose metadata, never token material.
 
 ### 6.3 Onboard An MCP Connector (Persist Tool Modes)
 
@@ -208,9 +270,14 @@ interface ConnectionRequirement {
 
 **Happy path:**
 1. Admin creates `org_connectors` (url + auth mapping).
-2. System lists tools and computes definition hashes.
+2. System lists tools and computes definition hashes from normalized tool schemas.
 3. Admin confirms per-tool mode; Integrations persists `{ mode, hash }` to `tool_risk_overrides`.
 4. Actions consumes these values at runtime (see `./actions.md`).
+
+**Hash normalization rules:**
+- Use deterministic serialization (stable key ordering).
+- Strip `description`, `default`, and `enum` prior to hashing to reduce false-positive drift from non-semantic changes.
+- Integrations stores hashes; Actions evaluates drift and enforces mode downgrades.
 
 ---
 

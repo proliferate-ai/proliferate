@@ -1,0 +1,174 @@
+===== docs/playbooks/vnext/01-phase-triggers-ingestion.md =====
+
+# Phase 1: Triggers (The Ingestion Firehose)
+
+**Branch:** `vnext/phase-1-triggers`
+**Base:** `main` (after Phase 0 is merged)
+**PR Title:** `feat: vNext Phase 1 — triggers ingestion firehose`
+
+**Role:** You are a Staff Principal Engineer working on Proliferate.
+
+**Context:** You are executing Phase 1. We have merged the Phase 0 database schemas. You are separating the webhook ingestion boundary from the processing boundary to survive API rate-limit storms.
+
+## Instructions
+
+1. Create branch `vnext/phase-1-triggers` from `main`.
+2. Read `docs/specs/triggers.md` (old) and `docs/specs/vnext/triggers.md` (new).
+3. Consolidate all webhook routes into `apps/trigger-service/src/api/webhooks.ts`. Delete the old Next.js API webhook routes.
+4. Build the BullMQ worker that processes `webhook_inbox` rows asynchronously (calling `parse`, `hydrate`, `matches`, and executing the outbox handoff).
+5. Update the polling worker to orchestrate by `trigger_poll_groups`.
+6. Run `pnpm typecheck` and `pnpm lint` to verify everything compiles.
+7. Commit, push, and open a PR against `main`.
+
+## Critical Trap Patches (MUST IMPLEMENT)
+
+- **The Synchronous Rate Limit Bomb:** The Express webhook routes must ONLY verify signatures, extract identity, `INSERT INTO webhook_inbox`, and return `200 OK` immediately. Do NOT call `hydrate()` or block the HTTP response on upstream API calls.
+- **The Polling Fan-Out Multiplier:** Fetch events once per connection (polling group), and then fan out in-memory to evaluate `matches()` across triggers. Do not schedule a separate BullMQ job for every individual trigger.
+- **Inbox Garbage Collection:** Add a lightweight cron worker to `DELETE FROM webhook_inbox WHERE status IN ('completed', 'failed') AND processed_at < NOW() - INTERVAL '7 days'` to prevent DB bloat.
+- **Orphaned Pollers:** Ensure that when the *last* polling trigger for a specific group is disabled/deleted, the `trigger_poll_groups` row is removed and the BullMQ job is unscheduled.
+
+
+===== docs/playbooks/vnext/02-phase-actions-and-integrations.md =====
+
+# Phase 2: Actions & Integrations (The Execution Plane)
+
+**Branch:** `vnext/phase-2-actions-integrations`
+**Base:** `main` (after Phase 1 is merged)
+**PR Title:** `feat: vNext Phase 2 — actions & integrations execution plane`
+
+**Role:** You are a Staff Principal Engineer working on Proliferate.
+
+**Context:** You are executing Phase 2. We are replacing the old CAS grant system with a Three-Mode Permissioning Cascade and unifying our integrations behind the `ActionSource` interface.
+
+## Instructions
+
+1. Create branch `vnext/phase-2-actions-integrations` from `main`.
+2. Read the old and vNext specs for `actions.md` and `integrations.md`.
+3. Delete the old CAS grant system in `packages/services/src/actions/grants.ts` entirely.
+4. Implement the new mode resolution cascade (`allow | deny | require_approval`) in `packages/services/src/actions/modes.ts`.
+5. Update `getToken()` in `packages/services/src/integrations/tokens.ts` to support optional user-scoped tokens.
+6. Port Linear, Sentry, and Slack into `packages/providers/src/providers/<name>/actions.ts` and wrap them in the `ProviderActionSource` adapter.
+7. Run `pnpm typecheck` and `pnpm lint` to verify everything compiles.
+8. Commit, push, and open a PR against `main`.
+
+## Critical Trap Patches (MUST IMPLEMENT)
+
+- **Privilege Escalation on Drift:** Implement MCP tool drift hashing using a deterministic JSON stringifier. Explicitly strip `enum`, `default`, and `description` from the schema before hashing. If drift is detected, downgrade `allow` to `require_approval`, but KEEP `deny` as `deny`. Do not accidentally escalate privileges.
+- **JSON-Destructive Truncation:** Implement JSON-aware truncation for action results (max 10KB). Do not blindly string-slice objects/arrays. Prune them structurally so they remain valid JSON with a `_truncated: true` flag.
+- **Provider Code is Stateless:** Treat provider-declared connection requirements as declarative inputs only. Provider modules must never directly call Nango or Arctic.
+
+
+===== docs/playbooks/vnext/03-phase-gateway-and-agent.md =====
+
+# Phase 3: Gateway & Agent Boundary
+
+**Branch:** `vnext/phase-3-gateway-agent`
+**Base:** `main` (after Phase 2 is merged)
+**PR Title:** `feat: vNext Phase 3 — gateway & agent boundary`
+
+**Role:** You are a Staff Principal Engineer working on Proliferate.
+
+**Context:** You are executing Phase 3. We are changing how the agent communicates with the platform by moving from SSE-intercepted tools to synchronous HTTP callbacks, hardening the Gateway for multi-instance deployments, and implementing Idle Snapshotting.
+
+## Instructions
+
+1. Create branch `vnext/phase-3-gateway-agent` from `main`.
+2. Read the old and vNext specs for `sessions-gateway.md`, `agent-contract.md`, and `sandbox-providers.md`.
+3. Rip the old SSE tool interception out of the Gateway's `EventProcessor`.
+4. Build the `POST /internal/tools/:toolName` Express routes. Use `session_tool_invocations.tool_call_id` for idempotency.
+5. Rewrite the sandbox tool definitions in `packages/shared/src/opencode-tools/*.ts` to make synchronous `fetch()` calls to the new Gateway route.
+6. Implement `session-leases.ts` (Redis `owner:{sessionId}` and `runtime:{sessionId}` locks).
+7. Implement the Idle Snapshot timer and logic inside `SessionHub` and `MigrationController` (using `mem:` prefixes for Modal).
+8. Run `pnpm typecheck` and `pnpm lint` to verify everything compiles.
+9. Commit, push, and open a PR against `main`.
+
+## Critical Trap Patches (MUST IMPLEMENT)
+
+- **The Snapshot TCP Drop:** Taking a memory snapshot freezes the container and destroys active TCP sockets. The sandbox-side tool wrapper scripts MUST catch network errors (`ECONNRESET`, `fetch failed`) and sleep/retry with the EXACT same `tool_call_id` to fetch the cached result from the Gateway when they thaw.
+- **Git Freshness Post-Thaw:** In `restoreFromMemorySnapshot()`, immediately after restore succeeds, execute a stateless command against the sandbox to run `git pull --ff-only` (if enabled) before returning control to the gateway.
+- **The In-Flight Executing Race Condition:** The `SessionHub` MUST keep an in-memory `Map<tool_call_id, Promise<Result>>`. If a retry arrives, `await` the existing promise instead of executing the tool twice.
+- **Split-Brain Suicide:** Implement clock-drift detection in `SessionHub`. If the event loop lags (`Date.now() - lastRenewAt > LEASE_TTL`), the hub MUST synchronously self-terminate (abort in-flight work, drop WS clients, disconnect SSE).
+- **False Idle Blindspot:** Track `activeHttpToolCalls` in `SessionHub`. `shouldIdleSnapshot()` MUST return false if `activeHttpToolCalls > 0` so we don't snapshot a sandbox mid-tool-execution.
+- **Hub Eviction Collision:** In `runIdleSnapshot()`, after the DB is marked `paused` and the lease is released, you MUST explicitly call `HubManager.remove(sessionId)`. Do not leave the hub in memory.
+- **The Automation Fast-Path:** In the `automation.complete` HTTP handler, bypass the snapshot entirely. Automations are terminal. Terminate the sandbox, update the DB, and evict the hub immediately.
+
+
+===== docs/playbooks/vnext/04-phase-convergence.md =====
+
+# Phase 4: Convergence & Cleanup
+
+**Branch:** `vnext/phase-4-convergence`
+**Base:** `main` (after Phase 3 is merged)
+**PR Title:** `feat: vNext Phase 4 — convergence & cleanup`
+
+**Role:** You are a Staff Principal Engineer working on Proliferate. We have just finished migrating our backend to the vNext architecture across several PRs.
+
+**Context:** You are executing Phase 4. This is the final backend integration step. You are ensuring all subsystems wire together correctly and there are no dangling legacy imports.
+
+## Instructions
+
+1. Create branch `vnext/phase-4-convergence` from `main`.
+2. Run `pnpm typecheck` and `pnpm lint`.
+3. Find any wiring gaps between the subsystems and fix them. Specifically:
+   - Ensure the Gateway accurately merges code-defined providers (`ProviderRegistry`) and MCP connectors into the `/actions/available` route.
+   - Verify the Trigger Service Outbox handoff is compiling correctly against the Automations run pipeline.
+   - Verify `SessionService.create()` is correctly invoked by the web oRPC routes.
+4. Delete any remaining legacy files (e.g., old webhook adapters, the old `TriggerProvider` interface if unused).
+5. Ensure the backend app boots successfully.
+6. Systematically resolve all TypeScript compiler errors.
+7. Run `pnpm typecheck` and `pnpm lint` one final time to confirm a clean build.
+8. Commit, push, and open a PR against `main`.
+
+
+===== docs/playbooks/vnext/05-phase-frontend-ui.md =====
+
+# Phase 5: Frontend UI & Information Architecture
+
+**Branch:** `vnext/phase-5-frontend-ui`
+**Base:** `main` (after Phase 4 is merged)
+**PR Title:** `feat: vNext Phase 5 — frontend UI & information architecture`
+
+**Role:** You are a Staff Principal Frontend Engineer and UX Architect working on Proliferate. We have completed our vNext backend refactor.
+
+**Context:** You are executing Phase 5. The backend now treats OAuth apps and MCP Connectors as unified "Integrations", handles Zapier-style automations, and uses a 3-Mode Permissioning cascade. You are redesigning the Next.js frontend IA so the user's mental model matches this perfectly.
+
+## Instructions
+
+1. Create branch `vnext/phase-5-frontend-ui` from `main`.
+
+2. **The Sidebar & Routing:** Group the main navigation sidebar (`apps/web/src/components/layout/`) into three pillars:
+   - **WORKSPACE:** Chats (`/dashboard/sessions`), Inbox (`/dashboard/inbox` with a red badge for pending items).
+   - **AGENTS:** Automations (`/dashboard/automations`), Repositories (`/dashboard/repositories`), Integrations (`/dashboard/integrations`).
+   - **SETTINGS:** Workspace Settings, Members, Global Secrets, Billing.
+   - *Ensure `/dashboard/triggers` redirects to Automations, and `/settings/tools` redirects to Integrations.*
+
+3. **The Unified "App Store" (`/dashboard/integrations`):**
+   - Merge First-Party OAuth (Linear, GitHub) and MCP Connectors into a single grid. To the user, they are all just "Capabilities".
+   - Build `/dashboard/integrations/:id` with two tabs:
+     1. **Connection:** (OAuth status button or API Key input).
+     2. **Agent Permissions:** A data table listing every action this integration exposes. Next to each row, render a segmented control: `[ Allow | Require Approval | Deny ]`. This must write to `organizations.action_modes`.
+   - **CRITICAL TRAP PATCH:** If `org_connectors.tool_risk_overrides` indicates a tool hash has drifted, you MUST flag it in the Agent Permissions table with a yellow warning icon ("Review Required") and visually force the admin to re-approve the segmented control.
+
+4. **Zapier-style Automations Builder (`/dashboard/automations/new`):**
+   - Remove "Triggers" as a standalone noun in the UI. It is now just the "WHEN" block of an Automation.
+   - Rebuild the Automation creation flow as a wizard:
+     - **WHEN (Trigger):** Select Integration -> Select Event -> Set Filters.
+     - **WHERE (Repo):** Select codebase/configuration.
+     - **WHAT (Prompt):** Agent instructions.
+     - **HOW (Permission Overrides):** A UI stating *"This automation inherits your Workspace Permissions. Add overrides below."* Let users set `allow/deny` overrides specifically for this automation (writes to `automations.action_modes`).
+
+5. **The Inbox Hero Feature (`/dashboard/inbox`):**
+   - Update `/dashboard` to automatically redirect to `/dashboard/inbox` if the user has pending action approvals.
+   - Build the Inbox Item Card. It must clearly state: *"Agent wants to run `[actionId]` with params `[JSON]`."*
+   - **CRITICAL TRAP PATCH:** Add three resolution buttons: `[ Approve Once ]`, `[ Deny ]`, and **`[ Approve & Always Allow ]`**. The latter must approve the current `action_invocation` AND send a mutation to update `organizations.action_modes` for that specific `sourceId:actionId` pair to `allow` so they aren't pinged again.
+
+6. **Secret Files UI:**
+   - In the Configuration Settings view, build the Vercel-style Secret Files editor. Include a File Path Picker (e.g. `app/.env.local`) and a Key/Value paste-supported editor that writes to the new `secret_files` and `configuration_secrets` tables.
+
+7. Run `pnpm typecheck` and `pnpm lint` to verify everything compiles.
+8. Commit, push, and open a PR against `main`.
+
+## Critical Guardrail
+
+- The user should never see the words "MCP", "OAuth", or "IntegrationProvider" in the main UI. To them, they are just "Integrations" the agent has access to.
+
