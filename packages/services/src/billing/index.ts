@@ -1,5 +1,6 @@
 export * from "./db";
 export * from "./gate";
+export * from "./litellm-api";
 export * from "./metering";
 export * from "./org-pause";
 export * from "./outbox";

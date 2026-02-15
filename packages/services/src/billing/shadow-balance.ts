@@ -47,6 +47,27 @@ export interface DeductResult {
 	enforcementReason?: string;
 }
 
+export interface BulkDeductEvent {
+	credits: number;
+	quantity: number;
+	eventType: "compute" | "llm";
+	idempotencyKey: string;
+	sessionIds?: string[];
+	metadata?: Record<string, unknown>;
+}
+
+export interface BulkDeductResult {
+	insertedCount: number;
+	totalCreditsDeducted: number;
+	previousBalance: number;
+	newBalance: number;
+	stateChanged: boolean;
+	newState?: BillingState;
+	shouldTerminateSessions: boolean;
+	shouldBlockNewSessions: boolean;
+	enforcementReason?: string;
+}
+
 export interface ReconcileResult {
 	success: boolean;
 	previousBalance: number;
@@ -202,6 +223,176 @@ export async function deductShadowBalance(update: ShadowBalanceUpdate): Promise<
 		return {
 			success: true,
 			previousState: currentState,
+			previousBalance,
+			newBalance,
+			stateChanged,
+			newState: stateChanged ? newState : undefined,
+			shouldTerminateSessions,
+			shouldBlockNewSessions,
+			enforcementReason,
+		};
+	});
+}
+
+/**
+ * Bulk-deduct credits from shadow balance for multiple events in a single transaction.
+ *
+ * Opens exactly ONE Postgres transaction:
+ * 1. Locks the org row (FOR UPDATE)
+ * 2. Bulk INSERTs billing events with ON CONFLICT (idempotency_key) DO NOTHING
+ * 3. Sums credits only for the newly inserted rows
+ * 4. Deducts that sum from the shadow balance
+ *
+ * This eliminates per-event row-lock contention for high-throughput LLM spend sync.
+ */
+export async function bulkDeductShadowBalance(
+	organizationId: string,
+	events: BulkDeductEvent[],
+): Promise<BulkDeductResult> {
+	if (events.length === 0) {
+		return {
+			insertedCount: 0,
+			totalCreditsDeducted: 0,
+			previousBalance: 0,
+			newBalance: 0,
+			stateChanged: false,
+			shouldTerminateSessions: false,
+			shouldBlockNewSessions: false,
+		};
+	}
+
+	const db = getDb();
+
+	return await db.transaction(async (tx) => {
+		// 1. Lock the org row
+		const [org] = await tx
+			.select({
+				billingState: organization.billingState,
+				shadowBalance: organization.shadowBalance,
+				graceExpiresAt: organization.graceExpiresAt,
+			})
+			.from(organization)
+			.where(eq(organization.id, organizationId))
+			.for("update");
+
+		if (!org) {
+			throw new Error(`Organization not found: ${organizationId}`);
+		}
+
+		const previousBalance = Number(org.shadowBalance ?? 0);
+		const currentState = org.billingState as BillingState;
+		const outboxStatus =
+			currentState === "trial" || currentState === "unconfigured" ? "skipped" : "pending";
+
+		// 2. Bulk insert billing events, skipping duplicates via idempotency key
+		const inserted = await tx
+			.insert(billingEvents)
+			.values(
+				events.map((e) => ({
+					organizationId,
+					eventType: e.eventType,
+					quantity: e.quantity.toString(),
+					credits: e.credits.toString(),
+					idempotencyKey: e.idempotencyKey,
+					sessionIds: e.sessionIds ?? [],
+					status: outboxStatus,
+					metadata: e.metadata ?? {},
+				})),
+			)
+			.onConflictDoNothing({ target: billingEvents.idempotencyKey })
+			.returning({ id: billingEvents.id, credits: billingEvents.credits });
+
+		if (inserted.length === 0) {
+			return {
+				insertedCount: 0,
+				totalCreditsDeducted: 0,
+				previousBalance,
+				newBalance: previousBalance,
+				stateChanged: false,
+				shouldTerminateSessions: false,
+				shouldBlockNewSessions: false,
+			};
+		}
+
+		// 3. Sum credits only for successfully inserted rows
+		const totalCreditsDeducted = inserted.reduce(
+			(sum, row) => sum + Number(row.credits),
+			0,
+		);
+		const newBalance = previousBalance - totalCreditsDeducted;
+
+		// 4. Evaluate state transitions
+		let stateChanged = false;
+		let newState = currentState;
+		let shouldTerminateSessions = false;
+		let shouldBlockNewSessions = false;
+		let enforcementReason: string | undefined;
+		let graceExpiresAt = org.graceExpiresAt;
+
+		if (newBalance <= 0 && (currentState === "active" || currentState === "trial")) {
+			const transition = processStateTransition(currentState, { type: "balance_depleted" });
+			if (transition.transitioned) {
+				stateChanged = true;
+				newState = transition.newState;
+				graceExpiresAt = transition.graceExpiresAt ?? null;
+				if (transition.action.type === "terminate_sessions") {
+					shouldTerminateSessions = true;
+					enforcementReason = transition.action.reason;
+				} else if (transition.action.type === "block_new_sessions") {
+					shouldBlockNewSessions = true;
+					enforcementReason = transition.action.reason;
+				}
+			}
+		}
+
+		const overdraftLimit = GRACE_WINDOW_CONFIG.maxOverdraftCredits;
+		const overdraftExceeded = overdraftLimit > 0 && newBalance <= -overdraftLimit;
+
+		if (overdraftExceeded && (currentState === "grace" || newState === "grace")) {
+			const transition = processStateTransition("grace", { type: "grace_expired" });
+			if (transition.transitioned) {
+				stateChanged = true;
+				newState = transition.newState;
+				graceExpiresAt = null;
+				shouldBlockNewSessions = false;
+				if (transition.action.type === "terminate_sessions") {
+					shouldTerminateSessions = true;
+					enforcementReason = transition.action.reason;
+				}
+			}
+		}
+
+		// 5. Update shadow balance and state atomically
+		const updateFields: Record<string, unknown> = {
+			shadowBalance: newBalance.toString(),
+			shadowBalanceUpdatedAt: new Date(),
+		};
+
+		if (stateChanged) {
+			const stateFields = getStateUpdateFields({
+				previousState: currentState,
+				newState,
+				transitioned: true,
+				action: { type: "none" },
+				graceExpiresAt: graceExpiresAt ?? undefined,
+			});
+			updateFields.billingState = stateFields.billingState;
+			if (stateFields.graceEnteredAt !== undefined) {
+				updateFields.graceEnteredAt = stateFields.graceEnteredAt;
+			}
+			if (stateFields.graceExpiresAt !== undefined) {
+				updateFields.graceExpiresAt = stateFields.graceExpiresAt;
+			}
+		}
+
+		await tx
+			.update(organization)
+			.set(updateFields)
+			.where(eq(organization.id, organizationId));
+
+		return {
+			insertedCount: inserted.length,
+			totalCreditsDeducted,
 			previousBalance,
 			newBalance,
 			stateChanged,

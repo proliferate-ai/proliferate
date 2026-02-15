@@ -2,47 +2,18 @@
  * Billing DB operations.
  *
  * Raw Drizzle queries for billing-related tables.
- * Note: LiteLLM_SpendLogs is read via raw SQL as it's managed by LiteLLM proxy.
+ * LLM spend logs are now fetched via the LiteLLM REST API (see litellm-api.ts).
  */
 
-import { METERING_CONFIG } from "@proliferate/shared/billing";
 import { arrayContains } from "drizzle-orm";
 import { and, billingEvents, desc, eq, getDb, gte, llmSpendCursors, sql } from "../db/client";
-
-const DEFAULT_LITELLM_SCHEMA = "litellm";
-const LITELLM_SPEND_LOGS_TABLE = "LiteLLM_SpendLogs";
-
-function assertValidPgIdentifier(value: string, envName: string): void {
-	if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
-		throw new Error(`${envName} must be a valid Postgres identifier (got "${value}")`);
-	}
-}
-
-const LITELLM_SPEND_LOGS_REF = (() => {
-	const schema = (process.env.LITELLM_DB_SCHEMA || DEFAULT_LITELLM_SCHEMA).trim();
-	assertValidPgIdentifier(schema, "LITELLM_DB_SCHEMA");
-	return sql`${sql.identifier(schema)}.${sql.identifier(LITELLM_SPEND_LOGS_TABLE)}`;
-})();
 
 // ============================================
 // Types
 // ============================================
 
-export interface LLMSpendLog {
-	request_id: string;
-	team_id: string | null; // our org_id (from JWT tenant_id)
-	user: string | null; // our session_id (from JWT sub)
-	spend: number; // cost in USD
-	model: string;
-	model_group: string | null;
-	total_tokens: number;
-	prompt_tokens: number;
-	completion_tokens: number;
-	// Raw start time from LiteLLM logs (timestamp)
-	startTime?: Date | string;
-}
-
 export interface LLMSpendCursor {
+	organizationId: string;
 	lastStartTime: Date;
 	lastRequestId: string | null;
 	recordsProcessed: number;
@@ -75,34 +46,6 @@ export interface BillingEventRow {
 // ============================================
 // Queries
 // ============================================
-
-/**
- * Get unprocessed LLM spend logs from LiteLLM_SpendLogs.
- * Uses raw SQL as this table is managed by LiteLLM proxy.
- * Returns logs from the specified time that have a team_id (org).
- */
-export async function getUnprocessedLLMSpendLogs(since: Date, limit = 100): Promise<LLMSpendLog[]> {
-	const db = getDb();
-	const result = await db.execute(sql`
-		SELECT
-			request_id,
-			team_id,
-			"user",
-			spend,
-			model,
-			model_group,
-			total_tokens,
-			prompt_tokens,
-			completion_tokens
-		FROM ${LITELLM_SPEND_LOGS_REF}
-		WHERE "startTime" >= ${since.toISOString()}
-		AND team_id IS NOT NULL
-		ORDER BY "startTime" ASC
-		LIMIT ${limit}
-	`);
-
-	return result as unknown as LLMSpendLog[];
-}
 
 /**
  * Insert a billing event. Uses idempotencyKey to prevent duplicates.
@@ -217,22 +160,26 @@ export async function listBillingEvents(options: ListBillingEventsOptions): Prom
 }
 
 // ============================================
-// Cursor-based LLM Spend Sync (V2)
+// Per-Org LLM Spend Cursors
 // ============================================
 
 /**
- * Get the current LLM spend cursor.
- * Returns null if no cursor exists (first run).
+ * Get the LLM spend cursor for a specific org.
+ * Returns null if no cursor exists (first run for this org).
  */
-export async function getLLMSpendCursor(): Promise<LLMSpendCursor | null> {
+export async function getLLMSpendCursor(organizationId: string): Promise<LLMSpendCursor | null> {
 	const db = getDb();
-	const [cursor] = await db.select().from(llmSpendCursors).where(eq(llmSpendCursors.id, "global"));
+	const [cursor] = await db
+		.select()
+		.from(llmSpendCursors)
+		.where(eq(llmSpendCursors.organizationId, organizationId));
 
 	if (!cursor) {
 		return null;
 	}
 
 	return {
+		organizationId,
 		lastStartTime: cursor.lastStartTime,
 		lastRequestId: cursor.lastRequestId,
 		recordsProcessed: cursor.recordsProcessed,
@@ -241,7 +188,7 @@ export async function getLLMSpendCursor(): Promise<LLMSpendCursor | null> {
 }
 
 /**
- * Update the LLM spend cursor.
+ * Update the LLM spend cursor for a specific org.
  * Uses upsert to handle first run.
  */
 export async function updateLLMSpendCursor(cursor: LLMSpendCursor): Promise<void> {
@@ -249,14 +196,14 @@ export async function updateLLMSpendCursor(cursor: LLMSpendCursor): Promise<void
 	await db
 		.insert(llmSpendCursors)
 		.values({
-			id: "global",
+			organizationId: cursor.organizationId,
 			lastStartTime: cursor.lastStartTime,
 			lastRequestId: cursor.lastRequestId,
 			recordsProcessed: cursor.recordsProcessed,
 			syncedAt: cursor.syncedAt,
 		})
 		.onConflictDoUpdate({
-			target: llmSpendCursors.id,
+			target: llmSpendCursors.organizationId,
 			set: {
 				lastStartTime: cursor.lastStartTime,
 				lastRequestId: cursor.lastRequestId,
@@ -264,153 +211,4 @@ export async function updateLLMSpendCursor(cursor: LLMSpendCursor): Promise<void
 				syncedAt: cursor.syncedAt,
 			},
 		});
-}
-
-/**
- * Get the earliest LLM spend log start time.
- * Used for full backfill bootstrap when cursor is missing.
- */
-export async function getLLMSpendMinStartTime(): Promise<Date | null> {
-	const db = getDb();
-	const result = (await db.execute(sql`
-		SELECT MIN("startTime") AS min_start
-		FROM ${LITELLM_SPEND_LOGS_REF}
-		WHERE team_id IS NOT NULL
-	`)) as unknown as Array<{ min_start: Date | string | null }>;
-
-	const minStart = result[0]?.min_start;
-	if (!minStart) return null;
-	return minStart instanceof Date ? minStart : new Date(minStart);
-}
-
-/**
- * Get LLM spend logs using cursor-based pagination.
- * Returns logs after the cursor position, ordered by startTime and request_id.
- *
- * @param cursor - Current cursor position (null for first run with lookback)
- * @param batchSize - Number of records to fetch
- * @returns Array of spend logs
- */
-export async function getLLMSpendLogsByCursor(
-	cursor: LLMSpendCursor | null,
-	batchSize: number = METERING_CONFIG.llmSyncBatchSize,
-): Promise<LLMSpendLog[]> {
-	const db = getDb();
-
-	// If no cursor, start from lookback window
-	const lookbackTime =
-		cursor?.lastStartTime ?? new Date(Date.now() - METERING_CONFIG.llmSyncBootstrapLookbackMs);
-	const lastRequestId = cursor?.lastRequestId;
-
-	// Query with cursor-based pagination
-	// Order by startTime, then request_id for deterministic ordering
-	let result: LLMSpendLog[];
-
-	if (lastRequestId) {
-		// Have both timestamp and request_id - skip records at same timestamp with lower request_id
-		result = (await db.execute(sql`
-			SELECT
-				request_id,
-				team_id,
-				"user",
-				spend,
-				model,
-				model_group,
-				total_tokens,
-				prompt_tokens,
-				completion_tokens,
-				"startTime"
-			FROM ${LITELLM_SPEND_LOGS_REF}
-			WHERE team_id IS NOT NULL
-			AND (
-				"startTime" > ${lookbackTime.toISOString()}
-				OR ("startTime" = ${lookbackTime.toISOString()} AND request_id > ${lastRequestId})
-			)
-			ORDER BY "startTime" ASC, request_id ASC
-			LIMIT ${batchSize}
-		`)) as unknown as LLMSpendLog[];
-	} else {
-		// Only have timestamp - get all records at or after that time
-		result = (await db.execute(sql`
-			SELECT
-				request_id,
-				team_id,
-				"user",
-				spend,
-				model,
-				model_group,
-				total_tokens,
-				prompt_tokens,
-				completion_tokens,
-				"startTime"
-			FROM ${LITELLM_SPEND_LOGS_REF}
-			WHERE team_id IS NOT NULL
-			AND "startTime" >= ${lookbackTime.toISOString()}
-			ORDER BY "startTime" ASC, request_id ASC
-			LIMIT ${batchSize}
-		`)) as unknown as LLMSpendLog[];
-	}
-
-	return result;
-}
-
-/**
- * Get LLM spend logs from a lookback window (for late-arriving logs).
- * This does NOT advance the cursor (idempotency handles duplicates).
- */
-export async function getLLMSpendLogsLookback(
-	lookbackMs: number = METERING_CONFIG.llmSyncLookbackMs,
-	batchSize: number = METERING_CONFIG.llmSyncBatchSize,
-): Promise<LLMSpendLog[]> {
-	const db = getDb();
-	const lookbackTime = new Date(Date.now() - lookbackMs);
-
-	const result = (await db.execute(sql`
-		SELECT
-			request_id,
-			team_id,
-			"user",
-			spend,
-			model,
-			model_group,
-			total_tokens,
-			prompt_tokens,
-			completion_tokens,
-			"startTime"
-		FROM ${LITELLM_SPEND_LOGS_REF}
-		WHERE team_id IS NOT NULL
-		AND "startTime" >= ${lookbackTime.toISOString()}
-		ORDER BY "startTime" ASC, request_id ASC
-		LIMIT ${batchSize}
-	`)) as unknown as LLMSpendLog[];
-
-	return result;
-}
-
-/**
- * Get the new cursor position from processed logs.
- * Returns null if no logs were processed.
- */
-export function getNewCursorFromLogs(
-	logs: LLMSpendLog[],
-	previousCursor: LLMSpendCursor | null,
-): LLMSpendCursor | null {
-	if (logs.length === 0) {
-		return previousCursor;
-	}
-
-	const lastLog = logs[logs.length - 1];
-	const lastStartTime =
-		lastLog.startTime instanceof Date
-			? lastLog.startTime
-			: lastLog.startTime
-				? new Date(lastLog.startTime)
-				: new Date();
-
-	return {
-		lastStartTime,
-		lastRequestId: lastLog.request_id,
-		recordsProcessed: (previousCursor?.recordsProcessed ?? 0) + logs.length,
-		syncedAt: new Date(),
-	};
 }
