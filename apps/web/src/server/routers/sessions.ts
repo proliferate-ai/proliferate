@@ -14,7 +14,7 @@ import {
 	SessionSchema,
 } from "@proliferate/shared";
 import { z } from "zod";
-import { orgProcedure, publicProcedure } from "./middleware";
+import { billingGatedProcedure, orgProcedure, publicProcedure } from "./middleware";
 
 // Import complex handlers that need sandbox provider integration
 import { createSessionHandler } from "./sessions-create";
@@ -62,7 +62,7 @@ export const sessionsRouter = {
 	 * Create a new session from a prebuild.
 	 * Complex operation with sandbox provisioning.
 	 */
-	create: orgProcedure
+	create: billingGatedProcedure
 		.input(CreateSessionInputSchema)
 		.output(CreateSessionResponseSchema)
 		.handler(async ({ input, context }) => {

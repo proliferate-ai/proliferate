@@ -1,4 +1,5 @@
 export * from "./db";
+export * from "./gate";
 export * from "./metering";
 export * from "./org-pause";
 export * from "./outbox";

@@ -5,7 +5,7 @@
  */
 
 import { createLogger } from "@proliferate/logger";
-import { prebuilds, sessions } from "@proliferate/services";
+import { billing, prebuilds, sessions } from "@proliferate/services";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import type { Router as RouterType } from "express";
 import { Router } from "express";
@@ -194,6 +194,10 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				}
 				idempotencyState = { orgId: organizationId, key: idempotencyKey };
 			}
+
+			// Billing gate — blocks automations and API clients when org is out of credits
+			const operation = body.automationId ? "automation_trigger" : "session_start";
+			await billing.assertBillingGateForOrg(organizationId, operation);
 
 			// Resolve prebuild
 			const prebuildResolutionOptions: PrebuildResolutionOptions = {

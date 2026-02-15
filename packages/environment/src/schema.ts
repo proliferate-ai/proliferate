@@ -188,6 +188,14 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 				"Minimum seconds between git pulls on snapshot restore. 0 = always pull when enabled.",
 			),
 		SANDBOX_TIMEOUT_SECONDS: optionalSeconds(3600),
+		SNAPSHOT_RETENTION_DAYS: z.coerce
+			.number()
+			.int()
+			.min(1)
+			.default(14)
+			.describe(
+				"Maximum age in days for session snapshots. Snapshots older than this are evicted on the next pause/snapshot.",
+			),
 		SENTRY_AUTH_TOKEN: optionalString,
 		SENTRY_ORG: optionalString,
 		SENTRY_PROJECT: optionalString,

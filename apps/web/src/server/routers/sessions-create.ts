@@ -10,13 +10,12 @@
  */
 
 import { randomUUID } from "crypto";
-import { checkCanStartSession } from "@/lib/billing";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ handler: "sessions-create" });
 import { getSessionGatewayUrl } from "@/lib/gateway";
 import { ORPCError } from "@orpc/server";
-import { prebuilds, sessions } from "@proliferate/services";
+import { billing, prebuilds, sessions } from "@proliferate/services";
 import {
 	type AgentConfig,
 	type SandboxProviderType,
@@ -49,13 +48,7 @@ export async function createSessionHandler(
 	const { prebuildId, sessionType = "coding", modelId: requestedModelId, orgId, userId } = input;
 
 	// Check billing/credits before creating session
-	const billingCheck = await checkCanStartSession(orgId);
-	if (!billingCheck.allowed) {
-		throw new ORPCError("PAYMENT_REQUIRED", {
-			message: billingCheck.message || "Insufficient credits",
-			data: { billingCode: billingCheck.code },
-		});
-	}
+	await billing.assertBillingGateForOrg(orgId, "session_start");
 
 	// Build agent config from request or defaults
 	const agentConfig: AgentConfig = {
@@ -91,15 +84,10 @@ async function createScratchSession(input: {
 	const doUrl = getSessionGatewayUrl(sessionId);
 	reqLog.info({ sessionType }, "Creating scratch session");
 
-	try {
-		const recheck = await checkCanStartSession(orgId);
-		if (!recheck.allowed) {
-			throw new ORPCError("PAYMENT_REQUIRED", {
-				message: recheck.message || "Insufficient credits",
-				data: { billingCode: recheck.code },
-			});
-		}
+	// Re-check billing right before insert (race protection)
+	await billing.assertBillingGateForOrg(orgId, "session_start");
 
+	try {
 		await sessions.createSessionRecord({
 			id: sessionId,
 			prebuildId: null,
@@ -195,17 +183,12 @@ async function createPrebuildSession(input: {
 	const doUrl = getSessionGatewayUrl(sessionId);
 	reqLog.info("Session creation started");
 
+	// Re-check billing right before insert (race protection)
+	await billing.assertBillingGateForOrg(orgId, "session_start");
+
 	// Create session record and return immediately.
 	// Sandbox provisioning is handled by the gateway when the client connects.
 	try {
-		const recheck = await checkCanStartSession(orgId);
-		if (!recheck.allowed) {
-			throw new ORPCError("PAYMENT_REQUIRED", {
-				message: recheck.message || "Insufficient credits",
-				data: { billingCode: recheck.code },
-			});
-		}
-
 		await sessions.createSessionRecord({
 			id: sessionId,
 			prebuildId,

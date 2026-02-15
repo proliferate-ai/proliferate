@@ -2,9 +2,16 @@
  * Snapshot quota management.
  *
  * Snapshots are FREE within quota (no credits).
- * Only count and retention limits apply per plan.
+ * Count limits apply per plan, and a global retention cap
+ * (SNAPSHOT_RETENTION_DAYS, default 14) ensures stale snapshots
+ * are evicted opportunistically.
+ *
+ * Delete contract: DB snapshot references are ONLY cleared after
+ * confirmed provider-side deletion. If no deleteSnapshotFn is provided,
+ * the DB ref is preserved for later cleanup.
  */
 
+import { env } from "@proliferate/environment/server";
 import { type BillingPlan, PLAN_CONFIGS } from "@proliferate/shared/billing";
 import { and, asc, eq, getDb, isNotNull, lt, sessions, sql } from "../db/client";
 import { getServicesLogger } from "../logger";
@@ -18,6 +25,27 @@ interface SessionWithSnapshot {
 	snapshotId: string | null;
 	sandboxProvider: string | null;
 	pausedAt: Date | null;
+}
+
+export interface SnapshotCapacityResult {
+	/** Whether there is room for a new snapshot */
+	allowed: boolean;
+	/** Snapshot that was evicted to make room (if any) */
+	deletedSnapshotId: string | null;
+}
+
+// ============================================
+// Retention
+// ============================================
+
+/**
+ * Effective retention days: the stricter of plan config and global env cap.
+ */
+function getRetentionDays(plan?: BillingPlan): number {
+	const globalCap = env.SNAPSHOT_RETENTION_DAYS;
+	if (!plan) return globalCap;
+	const planRetention = PLAN_CONFIGS[plan].snapshotRetentionDays;
+	return Math.min(planRetention, globalCap);
 }
 
 // ============================================
@@ -55,27 +83,45 @@ export async function canCreateSnapshot(
 }
 
 /**
- * Ensure org can create a snapshot by deleting oldest if at limit.
- * Returns the snapshot that was deleted (if any).
+ * Ensure org can create a snapshot by evicting at most ONE stale snapshot.
  *
- * NO CREDIT CHARGE - snapshots are free within quota.
+ * Eviction priority:
+ * 1. Oldest snapshot past the retention cap (min of plan and SNAPSHOT_RETENTION_DAYS).
+ * 2. Oldest snapshot by pausedAt (regardless of age).
+ *
+ * Fail-closed: if eviction fails or no candidate is found, returns `{ allowed: false }`.
+ * Callers should check `result.allowed` before proceeding with snapshot creation.
+ *
+ * DB refs are only cleared after confirmed provider deletion via deleteSnapshotFn.
+ * If deleteSnapshotFn is not provided, the DB ref is preserved (no silent orphaning).
  */
 export async function ensureSnapshotCapacity(
 	orgId: string,
 	plan: BillingPlan = "dev",
 	deleteSnapshotFn?: (provider: string, snapshotId: string) => Promise<void>,
-): Promise<{ deletedSnapshotId: string | null }> {
+): Promise<SnapshotCapacityResult> {
 	const { allowed, current, max } = await canCreateSnapshot(orgId, plan);
 
 	if (allowed) {
-		return { deletedSnapshotId: null };
+		return { allowed: true, deletedSnapshotId: null };
 	}
 
 	const logger = getServicesLogger().child({ module: "snapshot-limits", orgId });
-	logger.info({ current, max }, "At snapshot limit, deleting oldest");
+	logger.info({ current, max }, "At snapshot limit, attempting eviction");
 
+	// Pass 1: try expired snapshots (past retention cap), oldest first
+	const retentionDays = getRetentionDays(plan);
+	const expired = await getExpiredSnapshots(orgId, retentionDays);
+
+	for (const candidate of expired) {
+		if (!candidate.snapshotId) continue;
+		const result = await evictSnapshot(candidate, deleteSnapshotFn, logger);
+		if (result) return { allowed: true, deletedSnapshotId: result.deletedSnapshotId };
+	}
+
+	// Pass 2: fall back to all snapshots by pausedAt (oldest first)
 	const db = getDb();
-	const oldest = (await db.query.sessions.findFirst({
+	const allSnapshots = (await db.query.sessions.findMany({
 		where: and(eq(sessions.organizationId, orgId), isNotNull(sessions.snapshotId)),
 		columns: {
 			id: true,
@@ -84,28 +130,18 @@ export async function ensureSnapshotCapacity(
 			pausedAt: true,
 		},
 		orderBy: [asc(sessions.pausedAt)],
-	})) as SessionWithSnapshot | null;
+		limit: 3, // Cap work in hot path
+	})) as SessionWithSnapshot[];
 
-	if (!oldest?.snapshotId) {
-		logger.warn("No snapshots found to delete");
-		return { deletedSnapshotId: null };
+	for (const candidate of allSnapshots) {
+		if (!candidate.snapshotId) continue;
+		const result = await evictSnapshot(candidate, deleteSnapshotFn, logger);
+		if (result) return { allowed: true, deletedSnapshotId: result.deletedSnapshotId };
 	}
 
-	// Delete from provider if function provided
-	if (deleteSnapshotFn && oldest.sandboxProvider) {
-		try {
-			await deleteSnapshotFn(oldest.sandboxProvider, oldest.snapshotId);
-		} catch (err) {
-			logger.error({ err }, "Failed to delete snapshot from provider");
-		}
-	}
-
-	// Clear snapshot reference in session
-	await db.update(sessions).set({ snapshotId: null }).where(eq(sessions.id, oldest.id));
-
-	logger.info({ snapshotId: oldest.snapshotId, sessionId: oldest.id }, "Deleted snapshot");
-
-	return { deletedSnapshotId: oldest.snapshotId };
+	// Could not free capacity — fail-closed
+	logger.warn({ current, max }, "Failed to evict snapshot, quota exceeded");
+	return { allowed: false, deletedSnapshotId: null };
 }
 
 // ============================================
@@ -113,15 +149,18 @@ export async function ensureSnapshotCapacity(
 // ============================================
 
 /**
- * Get snapshots that have exceeded their retention period.
+ * Get snapshots that have exceeded a retention period.
+ *
+ * @param retentionDays - Override retention period.
+ *   Defaults to global SNAPSHOT_RETENTION_DAYS env var.
  */
 export async function getExpiredSnapshots(
 	orgId: string,
-	plan: BillingPlan = "dev",
+	retentionDays?: number,
 ): Promise<SessionWithSnapshot[]> {
-	const limits = PLAN_CONFIGS[plan];
+	const days = retentionDays ?? env.SNAPSHOT_RETENTION_DAYS;
 	const cutoffDate = new Date();
-	cutoffDate.setDate(cutoffDate.getDate() - limits.snapshotRetentionDays);
+	cutoffDate.setDate(cutoffDate.getDate() - days);
 
 	const db = getDb();
 	const results = (await db.query.sessions.findMany({
@@ -136,48 +175,96 @@ export async function getExpiredSnapshots(
 			sandboxProvider: true,
 			pausedAt: true,
 		},
+		orderBy: [asc(sessions.pausedAt)],
 	})) as SessionWithSnapshot[];
 
 	return results ?? [];
 }
 
 /**
- * Clean up expired snapshots for an organization.
+ * Clean up expired snapshots for an organization (batch, for worker use).
+ *
+ * Uses the stricter of the plan retention and the global SNAPSHOT_RETENTION_DAYS cap.
  */
 export async function cleanupExpiredSnapshots(
 	orgId: string,
 	plan: BillingPlan = "dev",
 	deleteSnapshotFn?: (provider: string, snapshotId: string) => Promise<void>,
 ): Promise<{ deletedCount: number }> {
-	const expired = await getExpiredSnapshots(orgId, plan);
+	const retentionDays = getRetentionDays(plan);
+	const expired = await getExpiredSnapshots(orgId, retentionDays);
 
 	let deletedCount = 0;
+	const logger = getServicesLogger().child({ module: "snapshot-limits", orgId });
+
 	for (const session of expired) {
 		if (!session.snapshotId) continue;
 
-		// Delete from provider
-		if (deleteSnapshotFn && session.sandboxProvider) {
-			try {
-				await deleteSnapshotFn(session.sandboxProvider, session.snapshotId);
-			} catch (err) {
-				getServicesLogger()
-					.child({ module: "snapshot-limits", orgId })
-					.error({ err }, "Failed to delete expired snapshot");
-				continue;
-			}
-		}
-
-		// Clear reference
-		const db = getDb();
-		await db.update(sessions).set({ snapshotId: null }).where(eq(sessions.id, session.id));
-		deletedCount++;
+		const result = await evictSnapshot(session, deleteSnapshotFn, logger);
+		if (result) deletedCount++;
 	}
 
 	if (deletedCount > 0) {
-		getServicesLogger()
-			.child({ module: "snapshot-limits", orgId })
-			.info({ deletedCount }, "Cleaned up expired snapshots");
+		logger.info({ deletedCount, retentionDays }, "Cleaned up expired snapshots");
 	}
 
 	return { deletedCount };
+}
+
+// ============================================
+// Internal Helpers
+// ============================================
+
+/**
+ * Evict a single snapshot: delete from provider, then clear DB reference.
+ *
+ * Contract:
+ * - If deleteSnapshotFn is provided and succeeds → clear DB ref.
+ * - If deleteSnapshotFn is provided and fails → keep DB ref, return null.
+ * - If deleteSnapshotFn is NOT provided → clear DB ref only if no provider
+ *   is recorded (nothing to clean up). Otherwise keep DB ref.
+ */
+async function evictSnapshot(
+	session: SessionWithSnapshot,
+	deleteSnapshotFn: ((provider: string, snapshotId: string) => Promise<void>) | undefined,
+	logger: {
+		info: (...args: unknown[]) => void;
+		warn: (...args: unknown[]) => void;
+		error: (...args: unknown[]) => void;
+	},
+): Promise<{ deletedSnapshotId: string } | null> {
+	if (!session.snapshotId) return null;
+
+	if (session.sandboxProvider) {
+		if (!deleteSnapshotFn) {
+			// Can't confirm provider deletion — preserve DB ref for later cleanup
+			logger.warn(
+				{
+					snapshotId: session.snapshotId,
+					sessionId: session.id,
+					provider: session.sandboxProvider,
+				},
+				"Skipping eviction: no deleteSnapshotFn provided, preserving DB ref",
+			);
+			return null;
+		}
+
+		try {
+			await deleteSnapshotFn(session.sandboxProvider, session.snapshotId);
+		} catch (err) {
+			logger.error(
+				{ err, snapshotId: session.snapshotId, sessionId: session.id },
+				"Failed to delete snapshot from provider, keeping DB reference",
+			);
+			return null;
+		}
+	}
+
+	// Clear snapshot reference in session
+	const db = getDb();
+	const snapshotId = session.snapshotId;
+	await db.update(sessions).set({ snapshotId: null }).where(eq(sessions.id, session.id));
+
+	logger.info({ snapshotId, sessionId: session.id }, "Evicted snapshot");
+	return { deletedSnapshotId: snapshotId };
 }

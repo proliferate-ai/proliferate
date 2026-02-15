@@ -7,8 +7,9 @@
 
 import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
-import { sessions } from "@proliferate/services";
+import { billing, orgs, sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
+import type { BillingPlan } from "@proliferate/shared/billing";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 
 const log = logger.child({ handler: "sessions-snapshot" });
@@ -37,6 +38,17 @@ export async function snapshotSessionHandler(
 
 	if (!session.sandboxId) {
 		throw new ORPCError("BAD_REQUEST", { message: "Session has no sandbox" });
+	}
+
+	// Ensure snapshot quota before taking a new snapshot
+	const org = await orgs.getBillingInfoV2(orgId);
+	const plan: BillingPlan = org?.billingPlan === "pro" ? "pro" : "dev";
+
+	const capacity = await billing.ensureSnapshotCapacity(orgId, plan);
+	if (!capacity.allowed) {
+		throw new ORPCError("CONFLICT", {
+			message: "Snapshot quota exceeded. Delete an existing snapshot and try again.",
+		});
 	}
 
 	// Take snapshot via provider

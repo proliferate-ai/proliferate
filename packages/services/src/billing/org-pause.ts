@@ -8,15 +8,9 @@
  */
 
 import type { SandboxProvider } from "@proliferate/shared";
-import {
-	DEFAULT_BILLING_SETTINGS,
-	TOP_UP_PRODUCT,
-	autumnAutoTopUp,
-} from "@proliferate/shared/billing";
-import type { OrgBillingSettings, PauseReason } from "@proliferate/shared/billing";
+import type { PauseReason } from "@proliferate/shared/billing";
 import { and, eq, getDb, sessions } from "../db/client";
 import { getServicesLogger } from "../logger";
-import { getBillingInfo, updateBillingSettings } from "../orgs/service";
 
 // ============================================
 // Bulk Pause
@@ -135,89 +129,6 @@ export async function canOrgStartSession(
 	}
 
 	return { allowed: true };
-}
-
-// ============================================
-// Overage Handling
-// ============================================
-
-interface ChargeOverageResult {
-	success: boolean;
-	creditsAdded?: number;
-	error?: string;
-}
-
-/**
- * Handle credits exhausted for an organization.
- * Either pauses sessions or auto-charges based on overage policy.
- */
-export async function handleCreditsExhausted(orgId: string): Promise<ChargeOverageResult> {
-	// Get org billing settings
-	const org = await getBillingInfo(orgId);
-
-	const logger = getServicesLogger().child({ module: "org-pause", orgId });
-
-	if (!org) {
-		logger.error("Failed to fetch org settings");
-		// Fail safe - pause sessions if we can't fetch settings
-		await pauseAllOrgSessions(orgId, "credit_limit");
-		return { success: false, error: "Failed to fetch org settings" };
-	}
-
-	const settings: OrgBillingSettings = org.billingSettings ?? DEFAULT_BILLING_SETTINGS;
-
-	// Policy: "pause" - hard stop, pause all sessions
-	if (settings.overage_policy === "pause") {
-		logger.info("Overage policy is pause, pausing all sessions");
-		await pauseAllOrgSessions(orgId, "credit_limit");
-		return { success: true };
-	}
-
-	// Policy: "allow" - attempt auto-charge
-	const capCents = settings.overage_cap_cents;
-	const usedCents = settings.overage_used_this_month_cents ?? 0;
-	const chargeAmountCents = TOP_UP_PRODUCT.priceCents;
-
-	// Check if we'd exceed the overage cap
-	if (capCents !== null && usedCents + chargeAmountCents > capCents) {
-		logger.info({ usedCents, capCents }, "Overage cap reached");
-		await pauseAllOrgSessions(orgId, "overage_cap");
-		return { success: false, error: "Overage cap reached" };
-	}
-
-	// Attempt auto-charge via Autumn
-	logger.info("Attempting auto top-up");
-	const topUpResult = await autumnAutoTopUp(
-		orgId,
-		TOP_UP_PRODUCT.productId,
-		TOP_UP_PRODUCT.credits,
-	);
-
-	if (!topUpResult.success) {
-		logger.warn("Auto top-up failed, pausing sessions");
-		await pauseAllOrgSessions(orgId, "credit_limit");
-		return {
-			success: false,
-			error: topUpResult.requiresCheckout ? "No payment method on file" : "Auto-charge failed",
-		};
-	}
-
-	// Charge succeeded - update overage tracking
-	const newUsedCents = usedCents + chargeAmountCents;
-	await updateBillingSettings(orgId, {
-		...settings,
-		overage_used_this_month_cents: newUsedCents,
-	});
-
-	logger.info(
-		{ creditsAdded: TOP_UP_PRODUCT.credits, overageTotalCents: newUsedCents },
-		"Auto top-up succeeded",
-	);
-
-	return {
-		success: true,
-		creditsAdded: TOP_UP_PRODUCT.credits,
-	};
 }
 
 // ============================================
