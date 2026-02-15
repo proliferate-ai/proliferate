@@ -250,6 +250,16 @@ interface ConnectionRequirement {
 - Integrations maps that preset to the active broker config at runtime.
 - Provider code must not import broker SDKs or broker identifiers.
 
+Reference mapping snippet:
+
+```ts
+const OAUTH_PRESETS = {
+	sentry: { brokerKey: "sentry", requiredScopes: ["event:read"] },
+	linear: { brokerKey: "linear", requiredScopes: ["read", "write"] },
+	github: { brokerKey: "github", requiredScopes: ["repo", "read:user"] },
+} as const;
+```
+
 ### 6.2 Resolve A Token For Runtime Use
 
 **What it does:** Returns a live access token to Actions/Triggers.

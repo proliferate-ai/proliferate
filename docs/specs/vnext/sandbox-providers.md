@@ -65,6 +65,20 @@ Memory snapshot support in vNext is provider-capability based:
 - Providers may implement dedicated memory snapshot methods (`memorySnapshot`, `restoreFromMemorySnapshot`) in addition to existing snapshot/pause paths.
 - Session orchestration must treat these as provider-specific capabilities and branch explicitly rather than assuming universal support.
 
+Reference capability shape:
+
+```ts
+interface SandboxProvider {
+	supportsMemorySnapshot?: boolean;
+	memorySnapshot?(sessionId: string, sandboxId: string): Promise<{ snapshotId: string }>;
+	restoreFromMemorySnapshot?(
+		sessionId: string,
+		snapshotId: string,
+		opts?: { envVars?: Record<string, string> },
+	): Promise<CreateSandboxResult>;
+}
+```
+
 ### Agent & Model Configuration
 The `AgentConfig` type (`packages/shared/src/agents.ts`) carries agent type and model ID through the stack. The default is `opencode` agent with `claude-opus-4.6` model. Model IDs are canonical (e.g., `"claude-opus-4.6"`) and transformed to provider-specific formats: `toOpencodeModelId()` produces `"anthropic/claude-opus-4-6"` for OpenCode's config file.
 - Key detail agents get wrong: OpenCode model IDs have NO date suffix — OpenCode handles the mapping internally. Don't use Anthropic API format (`claude-opus-4-6-20250514`) in OpenCode config.
@@ -74,6 +88,18 @@ The `AgentConfig` type (`packages/shared/src/agents.ts`) carries agent type and 
 Snapshot resolution is simple: if the configuration has `active_snapshot_id` set, the sandbox boots from that snapshot; if `active_snapshot_id` is null, the sandbox boots from the base image with a live clone. There is no multi-layer fallback chain.
 - Key detail agents get wrong: There is no separate repo snapshot layer. Snapshots are either base snapshots (pre-baked image) or configuration/session snapshots (full working state).
 - Reference: snapshot resolution logic lives inline in the gateway session creation code.
+
+Reference resolution logic:
+
+```ts
+const snapshotId = configuration.activeSnapshotId ?? null;
+if (snapshotId) {
+	// strict path: restore from active snapshot
+	return await provider.ensureSandbox({ ...opts, snapshotId });
+}
+// strict path: no snapshot fallback chain, boot fresh
+return await provider.ensureSandbox({ ...opts, snapshotId: undefined });
+```
 
 ### Git Freshness
 When restoring from a snapshot, repos may be stale. The `shouldPullOnRestore()` function gates `git pull --ff-only` on: (1) feature flag `SANDBOX_GIT_PULL_ON_RESTORE`, (2) having a snapshot, (3) cadence timer `SANDBOX_GIT_PULL_CADENCE_SECONDS`.

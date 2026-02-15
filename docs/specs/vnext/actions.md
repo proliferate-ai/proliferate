@@ -156,6 +156,98 @@ Three archetypes share the same `ActionSource` seam:
 
 - Key detail agents get wrong: "implemented now" for vNext means provider-backed + MCP connector-backed sources; database sources remain planned.
 
+Reference snippets:
+
+```ts
+// Archetype A: provider-backed source (Sentry-style)
+const sentrySource: ActionSource = {
+	id: "sentry",
+	displayName: "Sentry",
+	async listActions() {
+		return [
+			{
+				id: "update_issue",
+				description: "Update a Sentry issue status",
+				riskLevel: "write",
+				params: z.object({
+					issue_id: z.string(),
+					status: z.enum(["resolved", "ignored", "unresolved"]),
+				}),
+			},
+		];
+	},
+	async execute(actionId, params, ctx) {
+		if (actionId !== "update_issue") {
+			throw new Error("Unsupported action");
+		}
+		const typed = params as { issue_id: string; status: string };
+		const res = await fetch(`https://sentry.io/api/0/issues/${typed.issue_id}/`, {
+			method: "PUT",
+			headers: {
+				Authorization: `Bearer ${ctx.token}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ status: typed.status }),
+		});
+		if (!res.ok) {
+			throw new Error(`Sentry API error: ${res.status}`);
+		}
+		return await res.json();
+	},
+};
+```
+
+```ts
+// Archetype B: connector-backed source (MCP tools/list + tools/call)
+class McpConnectorActionSource implements ActionSource {
+	id: string;
+	displayName: string;
+
+	constructor(private readonly connector: { id: string; name: string }) {
+		this.id = `connector:${connector.id}`;
+		this.displayName = connector.name;
+	}
+
+	async listActions(ctx: ActionExecutionContext): Promise<ActionDefinition[]> {
+		const tools = await this.listConnectorTools(ctx);
+		return tools.map((tool) => ({
+			id: tool.name,
+			description: tool.description ?? "",
+			riskLevel: tool.readOnlyHint ? "read" : "write",
+			params: jsonSchemaToZod(tool.inputSchema),
+		}));
+	}
+
+	async execute(actionId: string, params: Record<string, unknown>, ctx: ActionExecutionContext): Promise<unknown> {
+		return await this.callConnectorTool(ctx, { name: actionId, arguments: params });
+	}
+}
+```
+
+```ts
+// Archetype C: database source (planned)
+class DatabaseActionSource implements ActionSource {
+	id = "db:<uuid>";
+	displayName = "Database";
+	async listActions(): Promise<ActionDefinition[]> {
+		return [
+			{
+				id: "run_query",
+				description: "Run a readonly SQL query",
+				riskLevel: "write",
+				params: z.object({ sql: z.string() }),
+			},
+		];
+	}
+	async execute(actionId: string, params: Record<string, unknown>): Promise<unknown> {
+		if (actionId !== "run_query") {
+			throw new Error("Unsupported action");
+		}
+		return { rows: [] };
+	}
+}
+```
+
 ---
 
 ## 3. File Tree

@@ -110,6 +110,26 @@ Fail-safe behavior when `Date.now() - lastRenewAt > LEASE_TTL_MS`:
 
 This is intentionally disruptive and prevents split-brain execution.
 
+Reference heartbeat shape:
+
+```ts
+private startHeartbeat() {
+	this.heartbeatTimer = setInterval(async () => {
+		const lag = Date.now() - this.lastRenewAt;
+		if (lag > LEASE_TTL_MS) {
+			this.logger.fatal("Lease heartbeat lag exceeded TTL; terminating hub");
+			this.abortController.abort();
+			this.disconnectSse();
+			this.dropWebSockets({ reason: "lease_lost" });
+			await this.hubManager.remove(this.sessionId);
+			return;
+		}
+		await renewLease(this.sessionId, this.instanceId);
+		this.lastRenewAt = Date.now();
+	}, 10_000);
+}
+```
+
 ### Runtime Boot Lock — `Planned`
 Short-lived distributed lock to prevent concurrent sandbox provisioning across instances:
 
@@ -144,6 +164,22 @@ Idempotency model:
 - Retries after completion return the persisted completed/failed record.
 
 Key detail agents get wrong: callback retries are expected under network blips and must not create duplicate side effects.
+
+Reference in-flight dedupe:
+
+```ts
+const inFlightToolCalls = new Map<string, Promise<ToolResult>>();
+
+async function handleToolCall(toolCallId: string, run: () => Promise<ToolResult>) {
+	const existing = inFlightToolCalls.get(toolCallId);
+	if (existing) {
+		return await existing;
+	}
+	const promise = run().finally(() => inFlightToolCalls.delete(toolCallId));
+	inFlightToolCalls.set(toolCallId, promise);
+	return await promise;
+}
+```
 
 ### Idle Snapshotting Guardrails — `Planned`
 Idle hub eviction and snapshotting must account for synchronous callback execution time.

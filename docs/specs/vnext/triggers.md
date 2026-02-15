@@ -92,6 +92,42 @@ Polling is cursor-based and framework-owned, but is scheduled per polling group 
 - Key detail agents get wrong: the cursor is opaque provider data (not always a timestamp).
 - Reference: `../../../integrations_architecture.md` §10
 
+### Reference Implementations (Show, Don't Tell)
+
+```ts
+// Provider trigger contract example (Sentry-style direct webhook)
+export const sentryTriggers: ProviderTriggers = {
+	types: [
+		{
+			id: "error_created",
+			configSchema: z.object({ minSeverity: z.enum(["info", "error", "fatal"]) }),
+			matches: (event, config) => {
+				// Pure function: no DB/network access.
+				return severityRank(event.context.severity) >= severityRank(config.minSeverity);
+			},
+		},
+	],
+	webhook: {
+		verify: async (req, secret) => {
+			const signature = req.headers["sentry-hook-signature"];
+			const expected = hmacSha256(req.rawBody, secret);
+			return { ok: constantTimeEqual(expected, signature) };
+		},
+		parse: async ({ json, providerEventType }) => [
+			{
+				provider: "sentry",
+				eventType: "error_created",
+				providerEventType: providerEventType ?? "unknown",
+				occurredAt: new Date().toISOString(),
+				dedupKey: `sentry:${String((json as any).data?.event?.id ?? "unknown")}`,
+				title: String((json as any).data?.event?.title ?? "Sentry event"),
+				context: { severity: (json as any).data?.event?.level ?? "error" },
+			},
+		],
+	},
+};
+```
+
 ---
 
 ## 3. File Tree
@@ -269,6 +305,30 @@ interface NormalizedTriggerEvent {
 4. Return 2xx immediately.
 5. Async worker claims the inbox row, calls `provider.triggers.webhook.parse(...)`, resolves identity, optionally calls `hydrate()` with backoff on 429, then runs `matches()`/dedup and creates runs via transactional outbox.
 
+Reference HTTP handler shape:
+
+```ts
+app.post("/webhooks/direct/:providerId", async (req, res) => {
+	const provider = ProviderRegistry.get(req.params.providerId);
+	const secret = await resolveWebhookSecret(req.params.providerId, req.headers);
+	const verification = await provider.triggers.webhook?.verify(req, secret);
+	if (!verification?.ok) {
+		return res.status(401).send();
+	}
+
+	await db.insert(webhookInbox).values({
+		provider: provider.id,
+		providerEventType: req.header("x-event-type") ?? null,
+		headers: req.headers,
+		payload: req.body,
+		status: "queued",
+	});
+
+	// Acknowledge quickly; parse/hydrate/match runs asynchronously.
+	return res.status(200).send("OK");
+});
+```
+
 ### 6.2 Direct Webhook Ingestion
 
 **What it does:** Verifies direct provider webhooks, enqueues them, and processes them asynchronously into trigger events.
@@ -306,6 +366,11 @@ interface NormalizedTriggerEvent {
 5. Persist `nextCursor` on the polling group record.
 6. Load active triggers in the group and evaluate `matches()` for each event/trigger pair in-memory.
 7. Dedup and create runs via the generic pipeline.
+
+Fan-out guarantee:
+- One poll request per polling group per interval.
+- Many `matches()` evaluations in-memory.
+- Never one poll request per trigger.
 
 ---
 

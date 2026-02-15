@@ -81,6 +81,44 @@ Gateway-side requirement:
 
 This pair guarantees that snapshot-boundary drops are recoverable without double execution.
 
+Reference wrapper loop:
+
+```ts
+async function executeGatewayTool(toolName: string, params: Record<string, unknown>) {
+	const toolCallId = crypto.randomUUID(); // create once per logical call
+	while (true) {
+		try {
+			const res = await fetch(`${process.env.PROLIFERATE_GATEWAY_URL}/internal/tools/${toolName}`, {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${process.env.SANDBOX_MCP_AUTH_TOKEN}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					session_id: process.env.SESSION_ID,
+					tool_call_id: toolCallId,
+					params,
+				}),
+			});
+			if (!res.ok) {
+				throw new Error(`Gateway returned ${res.status}`);
+			}
+			return await res.json();
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			const retryable =
+				message.includes("fetch failed") ||
+				message.includes("ECONNRESET") ||
+				message.includes("ETIMEDOUT");
+			if (!retryable) {
+				throw err;
+			}
+			await new Promise((resolve) => setTimeout(resolve, 2_000));
+		}
+	}
+}
+```
+
 ### OpenCode Tool Discovery — `Implemented`
 OpenCode automatically discovers tools by scanning `{repoDir}/.opencode/tool/*.ts` at startup. Tools are not registered in `opencode.json` — they are filesystem-discovered.
 - Key detail agents get wrong: the `opencode.json` config does not list tools. Tool registration is purely file-based.
