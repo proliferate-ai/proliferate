@@ -165,6 +165,13 @@
       "when": 1771286400000,
       "tag": "0024_configurations_snapshots_expand",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1771372800000,
+      "tag": "0025_configurations_snapshots_contract",
+      "breakpoints": true
     }
   ]
 }
