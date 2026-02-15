@@ -276,7 +276,6 @@ export const configurations = pgTable(
 			"btree",
 			table.organizationId.asc().nullsLast().op("text_ops"),
 		),
-		unique("configurations_org_name_unique").on(table.organizationId, table.name),
 	],
 );
 

@@ -255,9 +255,5 @@ BEGIN
 END $$;
 --> statement-breakpoint
 
--- ============================================
--- 14. Add unique constraint on configurations(organization_id, name)
--- ============================================
-
-ALTER TABLE "configurations" ADD CONSTRAINT "configurations_org_name_unique"
-	UNIQUE ("organization_id", "name");
+-- Note: No unique constraint on (organization_id, name) — the creation
+-- flow uses "Untitled" as default and doesn't generate unique names.
