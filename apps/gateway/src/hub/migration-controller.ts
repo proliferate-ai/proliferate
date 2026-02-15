@@ -71,6 +71,22 @@ export class MigrationController {
 		this.logger.info({ durationMs: Date.now() - startMs }, "migration.run_expiry.complete");
 	}
 
+	/**
+	 * Run idle snapshot: no clients, no active tool calls.
+	 * After pausing/snapshotting, evicts the hub from the HubManager.
+	 */
+	async runIdleSnapshot(): Promise<void> {
+		if (this.migrationState !== "normal") {
+			this.logger.info("Idle snapshot skipped: already migrating");
+			return;
+		}
+
+		const startMs = Date.now();
+		this.logger.info("idle_snapshot.start");
+		await this.migrateToNewSandbox({ createNewSandbox: false });
+		this.logger.info({ durationMs: Date.now() - startMs }, "idle_snapshot.complete");
+	}
+
 	private async migrateToNewSandbox(options: { createNewSandbox: boolean }): Promise<void> {
 		const { createNewSandbox } = options;
 		const context = this.options.runtime.getContext();

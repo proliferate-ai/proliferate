@@ -3,9 +3,72 @@
  *
  * Tool definitions that get injected into sandboxes.
  * Both Modal and E2B providers use these.
+ *
+ * vNext: Intercepted tools make synchronous HTTP callbacks to the Gateway
+ * (POST /proliferate/:sessionId/tools/:toolName) instead of being stubs.
+ * The Gateway executes the tool and returns the result.
+ * Tool wrappers retry on ECONNRESET (Snapshot TCP Drop).
  */
 
 export const ENV_FILE = "/tmp/.proliferate_env.json";
+
+/**
+ * Shared HTTP callback helper injected into tool execute() functions.
+ * Handles the Snapshot TCP Drop: retries on network errors with the same
+ * tool_call_id so the Gateway returns the cached result on thaw.
+ */
+export const TOOL_CALLBACK_HELPER = `
+const GATEWAY_URL = process.env.PROLIFERATE_GATEWAY_URL;
+const SESSION_ID = process.env.PROLIFERATE_SESSION_ID;
+const AUTH_TOKEN = process.env.SANDBOX_MCP_AUTH_TOKEN;
+const MAX_RETRIES = 5;
+const RETRY_BASE_MS = 500;
+
+async function callGatewayTool(toolName, toolCallId, args) {
+  if (!GATEWAY_URL || !SESSION_ID || !AUTH_TOKEN) {
+    return { success: false, result: "Missing gateway environment variables" };
+  }
+
+  const url = GATEWAY_URL.replace(/\\/$/, "") + "/proliferate/" + SESSION_ID + "/tools/" + toolName;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + AUTH_TOKEN,
+        },
+        body: JSON.stringify({ tool_call_id: toolCallId, args }),
+        signal: AbortSignal.timeout(120000),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        return { success: false, result: "Gateway error " + res.status + ": " + text.slice(0, 200) };
+      }
+
+      return await res.json();
+    } catch (err) {
+      const isRetryable = err?.cause?.code === "ECONNRESET"
+        || err?.message?.includes("fetch failed")
+        || err?.message?.includes("ECONNRESET")
+        || err?.message?.includes("ECONNREFUSED")
+        || err?.name === "AbortError";
+
+      if (isRetryable && attempt < MAX_RETRIES) {
+        const delay = RETRY_BASE_MS * Math.pow(2, attempt);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+
+      return { success: false, result: "Network error: " + (err?.message || String(err)) };
+    }
+  }
+
+  return { success: false, result: "Max retries exceeded" };
+}
+`;
 
 /**
  * Request Environment Variables Tool
@@ -85,12 +148,15 @@ Example:
  * Verify Tool
  *
  * Uploads verification evidence to S3 for display in the UI.
- * The actual upload is handled by the gateway (intercepted tool).
- * This is just a stub that the gateway intercepts.
+ * Calls back to Gateway via HTTP.
  */
 export const VERIFY_TOOL = `
 // Verify Tool for OpenCode
-// Gateway intercepts this tool and handles the actual S3 upload
+// Calls Gateway HTTP callback to upload verification files
+
+import { randomUUID } from "crypto"
+
+${TOOL_CALLBACK_HELPER}
 
 export default {
   name: "verify",
@@ -118,8 +184,9 @@ Example:
   },
 
   async execute(args) {
-    // Gateway intercepts this - tool never actually runs in sandbox
-    return "Verification initiated...";
+    const toolCallId = randomUUID();
+    const result = await callGatewayTool("verify", toolCallId, args || {});
+    return result.result || "Verification initiated...";
   },
 };
 `;
@@ -242,9 +309,12 @@ verify({ folder: "/workspace/my-custom-evidence" })
  */
 export const SAVE_SNAPSHOT_TOOL = `
 // Save Snapshot Tool for OpenCode
-// Saves a snapshot of the current sandbox environment
+// Calls Gateway HTTP callback to save snapshot
 
 import { tool } from "@opencode-ai/plugin"
+import { randomUUID } from "crypto"
+
+${TOOL_CALLBACK_HELPER}
 
 export default tool({
   description: \`Save a snapshot of the current sandbox environment.
@@ -274,7 +344,9 @@ Example:
   },
 
   async execute(args) {
-    return args?.message || "Snapshot will be saved automatically.";
+    const toolCallId = randomUUID();
+    const result = await callGatewayTool("save_snapshot", toolCallId, args || {});
+    return result.result || "Snapshot saved.";
   },
 });
 `;
@@ -327,9 +399,12 @@ save_snapshot({
  */
 export const AUTOMATION_COMPLETE_TOOL = `
 // Automation Complete Tool for OpenCode
-// Gateway intercepts this tool and handles the run completion
+// Calls Gateway HTTP callback to complete the automation run
 
 import { tool } from "@opencode-ai/plugin"
+import { randomUUID } from "crypto"
+
+${TOOL_CALLBACK_HELPER}
 
 export default tool({
   name: "automation.complete",
@@ -374,7 +449,9 @@ Include a concise summary and any citations your output relied on.\`,
     if (!args?.run_id || !args?.completion_id) {
       return "Error: run_id and completion_id are required.";
     }
-    return "Automation completion submitted.";
+    const toolCallId = args.completion_id;
+    const result = await callGatewayTool("automation.complete", toolCallId, args);
+    return result.result || "Automation completion submitted.";
   },
 });
 `;
@@ -401,9 +478,12 @@ Include summary_markdown and citations when possible.
  */
 export const SAVE_SERVICE_COMMANDS_TOOL = `
 // Save Service Commands Tool for OpenCode
-// Gateway intercepts this tool and saves commands to the prebuild configuration
+// Calls Gateway HTTP callback to save commands to the prebuild configuration
 
 import { tool } from "@opencode-ai/plugin"
+import { randomUUID } from "crypto"
+
+${TOOL_CALLBACK_HELPER}
 
 export default tool({
   description: \`Save auto-start service commands for this configuration.
@@ -437,8 +517,9 @@ Example:
     if (!args?.commands || args.commands.length === 0) {
       return "Error: commands array is required and must not be empty.";
     }
-    const names = args.commands.map(c => c.name).join(", ");
-    return \`Service commands saved: \${names}\`;
+    const toolCallId = randomUUID();
+    const result = await callGatewayTool("save_service_commands", toolCallId, args);
+    return result.result || "Service commands saved.";
   },
 });
 `;
@@ -492,9 +573,12 @@ save_service_commands({
  */
 export const SAVE_ENV_FILES_TOOL = `
 // Save Env Files Tool for OpenCode
-// Gateway intercepts this tool and saves env file spec to the prebuild configuration
+// Calls Gateway HTTP callback to save env file spec to the prebuild configuration
 
 import { tool } from "@opencode-ai/plugin"
+import { randomUUID } from "crypto"
+
+${TOOL_CALLBACK_HELPER}
 
 export default tool({
   description: \`Save environment file generation spec for this configuration.
@@ -539,8 +623,9 @@ Example:
     if (!args?.files || args.files.length === 0) {
       return "Error: files array is required and must not be empty.";
     }
-    const paths = args.files.map(f => f.path).join(", ");
-    return \`Env file spec saved: \${paths}\`;
+    const toolCallId = randomUUID();
+    const result = await callGatewayTool("save_env_files", toolCallId, args);
+    return result.result || "Env file spec saved.";
   },
 });
 `;
