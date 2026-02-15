@@ -429,7 +429,7 @@ For the full runtime execution flow (SSE detection, EventProcessor routing, Sess
 | `sessions-gateway.md` | This → Gateway | `InterceptedToolHandler.execute(hub)` | Gateway hub executes tool handlers; tool schemas defined here |
 | `sandbox-providers.md` | This → Providers | Tool file templates + `getOpencodeConfig()` | Providers consume definitions, write files into sandbox |
 | `automations-runs.md` | Runs → This | `automation.complete` tool schema | Automation runs inject `run_id`/`completion_id` via system prompt; agent calls tool to finalize |
-| `repos-prebuilds.md` | This → Configurations | `save_service_commands` | Tool persists config to configuration records |
+| `repos.md` | This → Configurations | `save_service_commands` | Tool persists config to configuration records |
 | `secrets-environment.md` | Secrets → This | `request_env_variables` + `/tmp/.proliferate_env.json` | Secrets written to env file; tool requests new ones |
 | `llm-proxy.md` | Proxy → This | `anthropicBaseUrl` / `anthropicApiKey` in OpenCode config | LLM proxy URL embedded in agent config |
 | `actions.md` | This → Actions | `proliferate actions` CLI in system prompts | Prompts document CLI usage; actions spec owns the runtime |

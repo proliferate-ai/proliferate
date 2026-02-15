@@ -1,6 +1,6 @@
 // Message types for Client <-> Durable Object WebSocket communication
 
-import type { AutoStartOutputEntry, PrebuildServiceCommand } from "./sandbox-provider";
+import type { AutoStartOutputEntry, ServiceCommand } from "./sandbox-provider";
 
 // Client source - where the message originated from
 export type ClientSource = "slack" | "web" | "api" | "cli" | "automation";
@@ -93,7 +93,7 @@ export interface RunAutoStartMessage {
 	type: "run_auto_start";
 	runId: string;
 	mode?: "test" | "start";
-	commands?: PrebuildServiceCommand[];
+	commands?: ServiceCommand[];
 }
 
 // ============================================
@@ -917,7 +917,6 @@ export * from "./prompts";
 // ============================================
 
 export * from "./sandbox-provider";
-export type { PrebuildServiceCommand as ConfigurationServiceCommand } from "./sandbox-provider";
 // NOTE: Provider implementations are server-only due to Node.js dependencies.
 // Import from "@proliferate/shared/providers" in API routes.
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { capOutput, parsePrebuildServiceCommands, shellEscape } from "./config";
+import { capOutput, parseServiceCommands, shellEscape } from "./config";
 
 describe("shellEscape", () => {
 	it("wraps simple strings in single quotes", () => {
@@ -23,16 +23,16 @@ describe("shellEscape", () => {
 	});
 });
 
-describe("parsePrebuildServiceCommands", () => {
+describe("parseServiceCommands", () => {
 	it("returns empty array for non-array input", () => {
-		expect(parsePrebuildServiceCommands(null)).toEqual([]);
-		expect(parsePrebuildServiceCommands(undefined)).toEqual([]);
-		expect(parsePrebuildServiceCommands("string")).toEqual([]);
-		expect(parsePrebuildServiceCommands({})).toEqual([]);
+		expect(parseServiceCommands(null)).toEqual([]);
+		expect(parseServiceCommands(undefined)).toEqual([]);
+		expect(parseServiceCommands("string")).toEqual([]);
+		expect(parseServiceCommands({})).toEqual([]);
 	});
 
 	it("returns empty array for empty array", () => {
-		expect(parsePrebuildServiceCommands([])).toEqual([]);
+		expect(parseServiceCommands([])).toEqual([]);
 	});
 
 	it("parses valid commands with workspacePath", () => {
@@ -40,12 +40,12 @@ describe("parsePrebuildServiceCommands", () => {
 			{ name: "dev", command: "pnpm dev", workspacePath: "frontend" },
 			{ name: "api", command: "pnpm start", workspacePath: "backend", cwd: "src" },
 		];
-		expect(parsePrebuildServiceCommands(input)).toEqual(input);
+		expect(parseServiceCommands(input)).toEqual(input);
 	});
 
 	it("parses commands without workspacePath", () => {
 		const input = [{ name: "dev", command: "pnpm dev" }];
-		expect(parsePrebuildServiceCommands(input)).toEqual(input);
+		expect(parseServiceCommands(input)).toEqual(input);
 	});
 
 	it("rejects more than 10 commands", () => {
@@ -53,7 +53,7 @@ describe("parsePrebuildServiceCommands", () => {
 			name: `cmd-${i}`,
 			command: `echo ${i}`,
 		}));
-		expect(parsePrebuildServiceCommands(input)).toEqual([]);
+		expect(parseServiceCommands(input)).toEqual([]);
 	});
 });
 

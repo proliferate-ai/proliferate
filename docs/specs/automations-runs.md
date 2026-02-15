@@ -517,7 +517,7 @@ try {
 | `sessions-gateway.md` | This → Gateway | `syncClient.createSession()`, `postMessage()`, `getSessionStatus()` | Worker creates sessions and sends prompts via gateway SDK. |
 | `sandbox-providers.md` | This → Provider (indirect) | Via gateway session creation | Target resolution determines configuration; gateway handles sandbox boot. |
 | `integrations.md` | This → Integrations | `automations.addAutomationConnection()` | Automation connections bind integrations. OAuth lifecycle owned by integrations spec. |
-| `repos-prebuilds.md` | This → Configurations | `configurations.findManagedConfigurations()` | Target resolution looks up managed configurations for repo reuse. |
+| `repos.md` | This → Configurations | `configurations.findManagedConfigurations()` | Target resolution looks up managed configurations for repo reuse. |
 | `billing-metering.md` | This → Billing (indirect) | Via session creation | Session creation triggers billing; this spec does not gate on balance. |
 
 ### Security & Auth

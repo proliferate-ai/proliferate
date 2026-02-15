@@ -41,8 +41,8 @@ import type {
 	EnsureSandboxResult,
 	FileContent,
 	PauseResult,
-	PrebuildServiceCommand,
 	SandboxProvider,
+	ServiceCommand,
 	SnapshotResult,
 } from "../sandbox-provider";
 
@@ -900,7 +900,7 @@ export class E2BProvider implements SandboxProvider {
 
 	async testServiceCommands(
 		sandboxId: string,
-		commands: PrebuildServiceCommand[],
+		commands: ServiceCommand[],
 		opts: { timeoutMs: number; runId: string },
 	): Promise<AutoStartOutputEntry[]> {
 		const log = providerLogger.child({ sandboxId: sandboxId.slice(0, 16), runId: opts.runId });

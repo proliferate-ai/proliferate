@@ -29,10 +29,7 @@ import {
 	parseModelId,
 } from "@proliferate/shared";
 import { getModalAppName } from "@proliferate/shared/providers";
-import {
-	computeBaseSnapshotVersionKey,
-	parsePrebuildServiceCommands,
-} from "@proliferate/shared/sandbox";
+import { computeBaseSnapshotVersionKey, parseServiceCommands } from "@proliferate/shared/sandbox";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
 
@@ -587,7 +584,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 
 	// Read service commands directly from the configuration record
 	const configSvcRow = await configurations.getConfigurationServiceCommands(configurationId);
-	const configServiceCommands = parsePrebuildServiceCommands(configSvcRow?.serviceCommands);
+	const configServiceCommands = parseServiceCommands(configSvcRow?.serviceCommands);
 
 	// Load secret files for boot (config-scoped) and merge into env vars
 	const secretEnvVars: Record<string, string> = {};

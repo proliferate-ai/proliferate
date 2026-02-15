@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { PreviewMode } from "@/stores/preview-panel";
-import type { AutoStartOutputMessage, ConfigurationServiceCommand } from "@proliferate/shared";
+import type { AutoStartOutputMessage, ServiceCommand } from "@proliferate/shared";
 import { X } from "lucide-react";
 import { useState } from "react";
 import { AutoStartContent } from "./auto-start-panel";
@@ -32,11 +32,7 @@ export interface SettingsPanelProps {
 	repoId?: string | null;
 	configurationId?: string | null;
 	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
-	sendRunAutoStart?: (
-		runId: string,
-		mode?: "test" | "start",
-		commands?: ConfigurationServiceCommand[],
-	) => void;
+	sendRunAutoStart?: (runId: string, mode?: "test" | "start", commands?: ServiceCommand[]) => void;
 }
 
 export function SettingsPanel({

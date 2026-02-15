@@ -12,8 +12,8 @@ import {
 	isValidModelId,
 	parseModelId,
 } from "@proliferate/shared";
-import type { PrebuildServiceCommand } from "@proliferate/shared";
-import { parsePrebuildServiceCommands } from "@proliferate/shared/sandbox";
+import type { ServiceCommand } from "@proliferate/shared";
+import { parseServiceCommands } from "@proliferate/shared/sandbox";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
 
@@ -60,7 +60,7 @@ export interface SessionContext {
 	/** True if the snapshot includes installed dependencies. Gates service command auto-start. */
 	autoStartServices: boolean;
 	/** Resolved service commands from the configuration record. */
-	serviceCommands?: PrebuildServiceCommand[];
+	serviceCommands?: ServiceCommand[];
 }
 
 interface ConfigurationRepoRow {
@@ -314,7 +314,7 @@ export async function loadSessionContext(
 	const configSvcRow = await configurations.getConfigurationServiceCommands(
 		session.configuration_id,
 	);
-	const configServiceCommands = parsePrebuildServiceCommands(configSvcRow?.serviceCommands);
+	const configServiceCommands = parseServiceCommands(configSvcRow?.serviceCommands);
 
 	log.info("Session context ready");
 	log.debug(

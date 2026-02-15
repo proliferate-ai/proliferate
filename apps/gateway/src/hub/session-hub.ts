@@ -695,8 +695,8 @@ export class SessionHub {
 
 	private async handleRunAutoStart(runId: string, inlineCommands?: unknown): Promise<void> {
 		await this.ensureRuntimeReady();
-		const { parsePrebuildServiceCommands } = await import("@proliferate/shared/sandbox");
-		const parsed = inlineCommands ? parsePrebuildServiceCommands(inlineCommands) : undefined;
+		const { parseServiceCommands } = await import("@proliferate/shared/sandbox");
+		const parsed = inlineCommands ? parseServiceCommands(inlineCommands) : undefined;
 		const entries = await this.runtime.testAutoStartCommands(
 			runId,
 			parsed?.length ? parsed : undefined,

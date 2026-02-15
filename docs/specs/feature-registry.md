@@ -182,7 +182,7 @@
 
 ---
 
-## 9. Repos & Configurations (`repos-prebuilds.md`)
+## 9. Repos & Configurations (`repos.md`)
 
 | Feature | Status | Evidence | Notes |
 |---------|--------|----------|-------|

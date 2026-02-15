@@ -9,10 +9,10 @@ import { type Logger, createLogger } from "@proliferate/logger";
 import { baseSnapshots, sessions, users } from "@proliferate/services";
 import type {
 	AutoStartOutputEntry,
-	PrebuildServiceCommand,
 	SandboxProvider,
 	SandboxProviderType,
 	ServerMessage,
+	ServiceCommand,
 } from "@proliferate/shared";
 import { getModalAppName, getSandboxProvider } from "@proliferate/shared/providers";
 import { computeBaseSnapshotVersionKey } from "@proliferate/shared/sandbox";
@@ -171,7 +171,7 @@ export class SessionRuntime {
 	 */
 	async testAutoStartCommands(
 		runId: string,
-		overrideCommands?: PrebuildServiceCommand[],
+		overrideCommands?: ServiceCommand[],
 	): Promise<AutoStartOutputEntry[]> {
 		const sandboxId = this.context.session.sandbox_id;
 		const commands = overrideCommands?.length ? overrideCommands : this.context.serviceCommands;

@@ -18,7 +18,7 @@ This spec documents the **Configurations & Snapshots** subsystem — the target-
 - Session creation mechanics (owned by `sessions-gateway.md`)
 - Sandbox boot and env apply/scrub (owned by `sandbox-providers.md`)
 - Connector credentials in the `secrets` table (unchanged, owned by `secrets-environment.md`)
-- Repo CRUD, base snapshot build worker (owned by `repos-prebuilds.md`)
+- Repo CRUD, base snapshot build worker (owned by `repos.md`)
 
 ### Mental Model
 
@@ -543,7 +543,7 @@ The entire user-facing CLI product has been removed. All user interaction is thr
 
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
-| `repos-prebuilds.md` | This extends | `configurations` table | This spec owns configuration/snapshot concerns. `repos-prebuilds.md` covers repo CRUD + base snapshots only. |
+| `repos.md` | This extends | `configurations` table | This spec owns configuration/snapshot concerns. `repos.md` covers repo CRUD + base snapshots only. |
 | `sessions-gateway.md` | Gateway → This | `snapshots.getActiveSnapshot()` | Session creation reads active snapshot directly |
 | `sessions-gateway.md` | Gateway → This | `active_snapshot_id` presence | Service auto-start gated by whether active snapshot exists |
 | `secrets-environment.md` | This ← Secrets | `encrypt()`, `decrypt()`, `getEncryptionKey()` | Secret files service uses same AES-256-GCM encryption |

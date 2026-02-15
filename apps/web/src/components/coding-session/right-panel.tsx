@@ -39,7 +39,7 @@ export interface SessionPanelProps {
 	sendRunAutoStart?: (
 		runId: string,
 		mode?: "test" | "start",
-		commands?: import("@proliferate/shared").ConfigurationServiceCommand[],
+		commands?: import("@proliferate/shared").ServiceCommand[],
 	) => void;
 	gitState?: GitState | null;
 	gitResult?: GitResultMessage["payload"] | null;

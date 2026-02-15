@@ -73,7 +73,7 @@ YOUR ASSIGNMENT:
 - Out of scope:
   - Session lifecycle that calls the provider (sessions-gateway.md)
   - Tool schemas and prompt templates (agent-contract.md)
-  - Snapshot build jobs — base snapshot workers (`repos-prebuilds.md`)
+  - Snapshot build jobs — base snapshot workers (`repos.md`)
   - Secret values and bundle management (secrets-environment.md)
   - LLM key generation (llm-proxy.md)
 
@@ -141,7 +141,7 @@ YOUR ASSIGNMENT:
   - Sandbox boot mechanics and provider interface (sandbox-providers.md)
   - Tool schemas and prompt modes (agent-contract.md)
   - Automation-initiated sessions (automations-runs.md owns the run lifecycle)
-  - Repo/configuration resolution (repos-prebuilds.md)
+  - Repo/configuration resolution (repos.md)
   - LLM key generation (llm-proxy.md)
   - Billing gating for session creation (billing-metering.md)
 
@@ -430,7 +430,7 @@ YOUR ASSIGNMENT:
 - Out of scope:
   - Session lifecycle after creation (sessions-gateway.md)
   - Sandbox boot (sandbox-providers.md)
-  - Repo/configuration management beyond CLI-specific routes (repos-prebuilds.md)
+  - Repo/configuration management beyond CLI-specific routes (repos.md)
   - Auth system internals / better-auth (auth-orgs.md)
 
 KEY FILES TO READ:
@@ -469,7 +469,7 @@ READ THESE FILES FIRST (in order):
 5. docs/specs/sessions-gateway.md — cross-reference for configuration resolver
 
 YOUR ASSIGNMENT:
-- Spec file: docs/specs/repos-prebuilds.md
+- Spec file: docs/specs/repos.md
 - In scope:
   - Repo CRUD and search
   - Repo connections (integration bindings)
@@ -532,7 +532,7 @@ YOUR ASSIGNMENT:
   - Secret file management (configurations-snapshots.md)
   - The request_env_variables tool schema (agent-contract.md)
   - Sandbox env var injection mechanics (sandbox-providers.md)
-  - Configuration secret files (repos-prebuilds.md)
+  - Configuration secret files (repos.md)
 
 KEY FILES TO READ:
 - apps/web/src/server/routers/secrets.ts

@@ -541,7 +541,7 @@ The service layer has parallel implementations (`updateMemberRole`, `removeMembe
 | `billing-metering.md` | This → Billing | `autumnCreateCustomer()`, `autumnAttach()`, `TRIAL_CREDITS`, `initializeBillingState()` | Onboarding triggers trial; billing owns credit policy |
 | `sessions-gateway.md` | Gateway → This | `verifyToken()`, `verifyInternalToken()` | Gateway auth middleware uses shared JWT/token helpers |
 | `integrations.md` | This → Integrations | `onboarding.getIntegrationForFinalization()` | Onboarding finalize fetches GitHub integration for repo listing |
-| `repos-prebuilds.md` | This → Repos | `getOrCreateManagedConfiguration()` | Onboarding finalize creates repos and managed configurations |
+| `repos.md` | This → Repos | `getOrCreateManagedConfiguration()` | Onboarding finalize creates repos and managed configurations |
 
 ### Security & Auth
 - **AuthN:** better-auth manages session tokens (httpOnly cookies), password hashing, and OAuth flows

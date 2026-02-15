@@ -23,7 +23,7 @@
 - Sandbox boot mechanics and provider interface — see `sandbox-providers.md`
 - Tool schemas and prompt modes — see `agent-contract.md`
 - Automation-initiated session orchestration (run lifecycle) — see `automations-runs.md`
-- Repo/configuration config resolution — see `repos-prebuilds.md`
+- Repo/configuration config resolution — see `repos.md`
 - LLM key generation — see `llm-proxy.md`
 - Billing gating for session creation — see `billing-metering.md`
 
@@ -118,7 +118,7 @@ apps/gateway/src/
 │   ├── s3.ts                            # S3 verification file upload
 │   ├── lock.ts                          # Distributed migration lock
 │   ├── idempotency.ts                   # Redis-based idempotency keys
-│   ├── configuration-resolver.ts        # Configuration resolution (see repos-prebuilds.md)
+│   ├── configuration-resolver.ts        # Configuration resolution (see repos.md)
 │   ├── github-auth.ts                   # GitHub token resolution
 │   └── sandbox-mcp-token.ts             # HMAC-SHA256 token derivation
 ├── expiry/
@@ -249,7 +249,7 @@ interface SessionContext {
   envVars: Record<string, string>;
   sshPublicKey?: string;
   activeSnapshotId: string | null;
-  serviceCommands?: PrebuildServiceCommand[];
+  serviceCommands?: ServiceCommand[];
 }
 
 // apps/gateway/src/hub/types.ts
@@ -488,7 +488,7 @@ Token verification chain: (1) User JWT (signed with `gatewayJwtSecret`), (2) Ser
 | `sandbox-providers.md` | This → Provider | `SandboxProvider.ensureSandbox()`, `.snapshot()`, `.pause()`, `.terminate()` | Runtime calls provider for sandbox lifecycle |
 | `agent-contract.md` | This → Tools | `getInterceptedToolHandler()` | Hub executes intercepted tools; schemas defined in agent-contract |
 | `automations-runs.md` | Runs → This | `createSyncClient().createSession()` + `.postMessage()` | Worker creates session and posts initial prompt |
-| `repos-prebuilds.md` | This → Configurations | `resolveConfiguration()`, `configurations.getConfigurationReposWithDetails()` | Session creator resolves configuration at creation |
+| `repos.md` | This → Configurations | `resolveConfiguration()`, `configurations.getConfigurationReposWithDetails()` | Session creator resolves configuration at creation |
 | `llm-proxy.md` | Proxy → This | `sessions.buildSandboxEnvVars()` | Env vars include `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` |
 | `secrets-environment.md` | Secrets → This | `secrets.buildEnvFilesFromBundles()` | Env files passed to provider at sandbox creation |
 | `integrations.md` | This → Integrations | `integrations.getRepoConnectionsWithIntegrations()` | Token resolution for git clone |

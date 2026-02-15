@@ -18,7 +18,7 @@ import {
 import type {
 	AutoStartOutputEntry,
 	AutoStartOutputMessage,
-	ConfigurationServiceCommand,
+	ServiceCommand,
 } from "@proliferate/shared";
 import {
 	CheckCircle2,
@@ -40,22 +40,14 @@ interface AutoStartPanelProps {
 	configurationId?: string | null;
 	onClose: () => void;
 	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
-	sendRunAutoStart?: (
-		runId: string,
-		mode?: "test" | "start",
-		commands?: ConfigurationServiceCommand[],
-	) => void;
+	sendRunAutoStart?: (runId: string, mode?: "test" | "start", commands?: ServiceCommand[]) => void;
 }
 
 export interface AutoStartContentProps {
 	repoId?: string | null;
 	configurationId?: string | null;
 	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
-	sendRunAutoStart?: (
-		runId: string,
-		mode?: "test" | "start",
-		commands?: ConfigurationServiceCommand[],
-	) => void;
+	sendRunAutoStart?: (runId: string, mode?: "test" | "start", commands?: ServiceCommand[]) => void;
 }
 
 interface CommandDraft {

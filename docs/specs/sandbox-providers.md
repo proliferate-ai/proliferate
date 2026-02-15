@@ -18,7 +18,7 @@
 ### Out of Scope
 - Session lifecycle that calls the provider — see `sessions-gateway.md`
 - Tool schemas and prompt templates — see `agent-contract.md`
-- Snapshot build jobs (base snapshot workers) — see `repos-prebuilds.md`
+- Snapshot build jobs (base snapshot workers) — see `repos.md`
 - Secret values and bundle management — see `secrets-environment.md`
 - LLM key generation — see `llm-proxy.md`
 
@@ -137,7 +137,7 @@ interface CreateSandboxOpts {
   currentSandboxId?: string;   // For ensureSandbox recovery (E2B)
   sshPublicKey?: string;
   triggerContext?: Record<string, unknown>;
-  serviceCommands?: PrebuildServiceCommand[];
+  serviceCommands?: ServiceCommand[];
   hasActiveSnapshot?: boolean; // Auto-start services if active snapshot exists
   sessionType?: "coding" | "setup" | "cli" | null;  // Controls tool injection
 }
@@ -382,7 +382,7 @@ There is no multi-layer fallback chain. The `resolveSnapshotId()` function and `
 
 **Inputs hashed:** `PLUGIN_MJS` + `DEFAULT_CADDYFILE` + `getOpencodeConfig(defaultModelId)`.
 
-When this key changes, the base snapshot is stale and must be rebuilt. Used by base snapshot build workers (see `repos-prebuilds.md`).
+When this key changes, the base snapshot is stale and must be rebuilt. Used by base snapshot build workers (see `repos.md`).
 
 ### 6.7 Git Freshness — `Implemented`
 
@@ -476,7 +476,7 @@ Both providers re-write git credentials before pulling (snapshot tokens may be s
 |---|---|---|---|
 | Sessions/Gateway | Gateway → Provider | `SandboxProvider.ensureSandbox()` | Gateway calls provider to create/recover sandboxes. See `sessions-gateway.md`. |
 | Agent Contract | Provider → Sandbox | Tool files written to `.opencode/tool/` | Provider injects tool implementations at boot. Tool schemas defined in `agent-contract.md`. |
-| Repos/Configurations | Provider ← Worker | `createBaseSnapshot()` | Base snapshot workers call Modal provider directly. See `repos-prebuilds.md`. |
+| Repos/Configurations | Provider ← Worker | `createBaseSnapshot()` | Base snapshot workers call Modal provider directly. See `repos.md`. |
 | Secrets/Environment | Provider ← Gateway | `CreateSandboxOpts.envVars` | Gateway assembles env vars from secrets. See `secrets-environment.md`. |
 | LLM Proxy | Provider → Sandbox | `ANTHROPIC_BASE_URL`/`ANTHROPIC_API_KEY` env vars | Virtual key injected as env var. See `llm-proxy.md`. |
 | Actions | CLI → Gateway | `proliferate actions run` | CLI calls gateway action endpoints. See `actions.md`. |

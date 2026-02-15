@@ -20,20 +20,11 @@ export interface FileContent {
 }
 
 /**
- * A single service command to auto-run after sandbox init.
+ * A service command that supports multi-repo workspaces.
+ * Includes an optional workspacePath to target a specific repo directory
+ * in multi-repo configurations.
  */
 export interface ServiceCommand {
-	name: string;
-	command: string;
-	cwd?: string;
-}
-
-/**
- * A configuration-level service command that supports multi-repo workspaces.
- * Unlike ServiceCommand (per-repo), this includes an optional workspacePath
- * to target a specific repo directory in multi-repo configurations.
- */
-export interface PrebuildServiceCommand {
 	name: string;
 	command: string;
 	workspacePath?: string;
@@ -89,7 +80,7 @@ export interface CreateSandboxOpts {
 	/** Whether to auto-start service commands after sandbox init. */
 	autoStartServices?: boolean;
 	/** Resolved service commands (configuration-level or fallback from repos). Cross-repo aware. */
-	serviceCommands?: PrebuildServiceCommand[];
+	serviceCommands?: ServiceCommand[];
 }
 
 export interface CreateSandboxResult {
@@ -261,7 +252,7 @@ export interface SandboxProvider {
 	 */
 	testServiceCommands?(
 		sandboxId: string,
-		commands: PrebuildServiceCommand[],
+		commands: ServiceCommand[],
 		opts: { timeoutMs: number; runId: string },
 	): Promise<AutoStartOutputEntry[]>;
 

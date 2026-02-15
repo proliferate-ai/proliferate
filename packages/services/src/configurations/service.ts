@@ -6,8 +6,8 @@
 
 import { randomUUID } from "crypto";
 import { env } from "@proliferate/environment/server";
-import type { PrebuildServiceCommand } from "@proliferate/shared";
-import { parsePrebuildServiceCommands } from "@proliferate/shared/sandbox";
+import type { ServiceCommand } from "@proliferate/shared";
+import { parseServiceCommands } from "@proliferate/shared/sandbox";
 import * as configurationsDb from "./db";
 import type { Configuration } from "./mapper";
 import { toConfiguration, toConfigurationPartial, toConfigurations } from "./mapper";
@@ -35,7 +35,7 @@ export interface UpdateConfigurationInput {
 
 export interface EffectiveServiceCommandsResult {
 	source: "configuration" | "none";
-	commands: PrebuildServiceCommand[];
+	commands: ServiceCommand[];
 	workspaces: string[];
 }
 
@@ -185,7 +185,7 @@ export async function getEffectiveServiceCommands(
 		configurationsDb.getConfigurationReposWithDetails(configurationId),
 	]);
 
-	const commands = parsePrebuildServiceCommands(configurationRow?.serviceCommands);
+	const commands = parseServiceCommands(configurationRow?.serviceCommands);
 	const source: EffectiveServiceCommandsResult["source"] =
 		commands.length > 0 ? "configuration" : "none";
 

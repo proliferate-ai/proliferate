@@ -16,7 +16,7 @@
 - Org-scoped MCP connector catalog lifecycle (CRUD, validation, settings UI)
 
 ### Out of Scope
-- What repos/automations/sessions **do** with connections at runtime — see `repos-prebuilds.md`, `automations-runs.md`, `sessions-gateway.md`
+- What repos/automations/sessions **do** with connections at runtime — see `repos.md`, `automations-runs.md`, `sessions-gateway.md`
 - Slack async client and message handling — see `automations-runs.md`
 - Action adapters for Linear/Sentry — see `actions.md`
 - Connector execution lifecycle (risk/approval/grants/audit) — see `actions.md`
@@ -524,7 +524,7 @@ function handleNangoError(err: unknown, operation: string): never {
 
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
-| `repos-prebuilds.md` | Repos → This | `repo_connections` table, `getRepoConnectionsWithIntegrations()` | Repos bind to integrations for GitHub access |
+| `repos.md` | Repos → This | `repo_connections` table, `getRepoConnectionsWithIntegrations()` | Repos bind to integrations for GitHub access |
 | `automations-runs.md` | Automations → This | `automation_connections` table, `resolveTokens()` | Runs resolve tokens for enrichment context |
 | `sessions-gateway.md` | Sessions → This | `session_connections` table, `getGitHubTokenForIntegration()` | Sessions use tokens for git operations |
 | `triggers.md` | Triggers → This | `integrations.triggers` relation, `findActiveByGitHubInstallationId()` | Trigger-service resolves integration for webhook dispatch |

@@ -12,7 +12,7 @@ import {
 	CreateConfigurationInputSchema,
 	UpdateConfigurationInputSchema,
 } from "@proliferate/shared";
-import { parsePrebuildServiceCommands } from "@proliferate/shared/sandbox";
+import { parseServiceCommands } from "@proliferate/shared/sandbox";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 
@@ -171,7 +171,7 @@ export const configurationsRouter = {
 			}
 
 			const row = await configurations.getConfigurationServiceCommands(input.configurationId);
-			const commands = parsePrebuildServiceCommands(row?.serviceCommands);
+			const commands = parseServiceCommands(row?.serviceCommands);
 			return { commands };
 		}),
 

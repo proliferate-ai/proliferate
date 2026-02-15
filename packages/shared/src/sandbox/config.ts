@@ -7,7 +7,7 @@
 
 import { env } from "@proliferate/environment/server";
 import { z } from "zod";
-import type { PrebuildServiceCommand } from "../sandbox-provider";
+import type { ServiceCommand } from "../sandbox-provider";
 
 /**
  * Proliferate plugin for OpenCode.
@@ -233,8 +233,8 @@ export function capOutput(output: string, maxBytes = MAX_OUTPUT_BYTES): string {
 	return `${output.slice(0, maxBytes)}\n...[truncated]`;
 }
 
-/** Zod schema for configuration-level service commands (includes optional workspacePath). */
-const PrebuildServiceCommandSchema = z.object({
+/** Zod schema for service commands (includes optional workspacePath). */
+const ServiceCommandSchema = z.object({
 	name: z.string().min(1).max(100),
 	command: z.string().min(1).max(1000),
 	cwd: z.string().max(500).optional(),
@@ -242,11 +242,11 @@ const PrebuildServiceCommandSchema = z.object({
 });
 
 /**
- * Parse and validate configuration-level service commands from untrusted jsonb.
+ * Parse and validate service commands from untrusted jsonb.
  * Returns [] on invalid input — never throws.
  */
-export function parsePrebuildServiceCommands(input: unknown): PrebuildServiceCommand[] {
+export function parseServiceCommands(input: unknown): ServiceCommand[] {
 	if (!Array.isArray(input)) return [];
-	const result = z.array(PrebuildServiceCommandSchema).max(10).safeParse(input);
+	const result = z.array(ServiceCommandSchema).max(10).safeParse(input);
 	return result.success ? result.data : [];
 }
