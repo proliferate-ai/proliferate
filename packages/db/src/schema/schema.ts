@@ -202,6 +202,7 @@ export const organization = pgTable(
 		}),
 		graceEnteredAt: timestamp("grace_entered_at", { withTimezone: true, mode: "date" }),
 		graceExpiresAt: timestamp("grace_expires_at", { withTimezone: true, mode: "date" }),
+		onboardingMeta: jsonb("onboarding_meta"),
 	},
 	(table) => [
 		index("organization_allowed_domains_idx").using(

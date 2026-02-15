@@ -18,6 +18,8 @@ import {
 	FinalizeOnboardingInputSchema,
 	FinalizeOnboardingResponseSchema,
 	OnboardingStatusSchema,
+	SaveQuestionnaireInputSchema,
+	SaveToolSelectionsInputSchema,
 } from "@proliferate/shared";
 import { TRIAL_CREDITS, autumnAttach, autumnCreateCustomer } from "@proliferate/shared/billing";
 import { z } from "zod";
@@ -199,6 +201,32 @@ export const onboardingRouter = {
 		const status = await onboarding.getOnboardingStatus(orgId, NANGO_GITHUB_INTEGRATION_ID);
 		return status;
 	}),
+
+	/**
+	 * Save tool selections during onboarding.
+	 */
+	saveToolSelections: orgProcedure
+		.input(SaveToolSelectionsInputSchema)
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			await onboarding.saveToolSelections(context.orgId, input.selectedTools);
+			return { success: true };
+		}),
+
+	/**
+	 * Save questionnaire answers during onboarding.
+	 */
+	saveQuestionnaire: orgProcedure
+		.input(SaveQuestionnaireInputSchema)
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			await onboarding.saveQuestionnaire(context.orgId, {
+				referralSource: input.referralSource,
+				companyWebsite: input.companyWebsite,
+				teamSize: input.teamSize,
+			});
+			return { success: true };
+		}),
 
 	/**
 	 * Finalize onboarding by selecting repos and creating a managed prebuild.

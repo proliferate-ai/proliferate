@@ -23,17 +23,17 @@ export function StepPathChoice({ onSelect }: StepPathChoiceProps) {
 			</div>
 
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-				{/* Personal Card */}
+				{/* Developer Card */}
 				<CardButton
-					onClick={() => onSelect("personal")}
+					onClick={() => onSelect("developer")}
 					className="group w-full rounded-2xl overflow-hidden border border-border hover:border-foreground/20 transition-all"
 				>
 					{/* Card Image Area */}
 					<div className="relative bg-black w-full" style={{ aspectRatio: "1360 / 880" }}>
-						<Image src="/single.png" alt="Personal" fill className="object-cover" />
+						<Image src="/single.png" alt="Developer" fill className="object-cover" />
 						<div className="absolute top-2 left-0 right-0 flex justify-center pointer-events-none">
 							<span className="px-4 py-1.5 font-bold text-xs tracking-[0.25em] uppercase text-white/80">
-								Personal
+								Developer
 							</span>
 						</div>
 					</div>

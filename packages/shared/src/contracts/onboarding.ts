@@ -25,6 +25,7 @@ export const OnboardingStatusSchema = z.object({
 	hasSlackConnection: z.boolean(),
 	hasGitHubConnection: z.boolean(),
 	repos: z.array(OnboardingRepoSchema),
+	selectedTools: z.array(z.string()).optional(),
 });
 
 export type OnboardingStatus = z.infer<typeof OnboardingStatusSchema>;
@@ -43,6 +44,20 @@ export const FinalizeOnboardingResponseSchema = z.object({
 });
 
 export type FinalizeOnboardingResponse = z.infer<typeof FinalizeOnboardingResponseSchema>;
+
+export const SaveToolSelectionsInputSchema = z.object({
+	selectedTools: z.array(z.string()),
+});
+
+export type SaveToolSelectionsInput = z.infer<typeof SaveToolSelectionsInputSchema>;
+
+export const SaveQuestionnaireInputSchema = z.object({
+	referralSource: z.string().optional(),
+	companyWebsite: z.string().optional(),
+	teamSize: z.string().optional(),
+});
+
+export type SaveQuestionnaireInput = z.infer<typeof SaveQuestionnaireInputSchema>;
 
 // ============================================
 // Contract

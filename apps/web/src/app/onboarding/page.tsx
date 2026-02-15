@@ -2,22 +2,25 @@
 
 export const dynamic = "force-dynamic";
 
+import { StepBilling } from "@/components/onboarding/step-billing";
 import { StepComplete } from "@/components/onboarding/step-complete";
 import { StepCreateOrg } from "@/components/onboarding/step-create-org";
-import { StepGitHubConnect } from "@/components/onboarding/step-github-connect";
+import { StepInviteMembers } from "@/components/onboarding/step-invite-members";
 import { StepPathChoice } from "@/components/onboarding/step-path-choice";
-import { StepPayment } from "@/components/onboarding/step-payment";
-import { StepSlackConnect } from "@/components/onboarding/step-slack-connect";
+import { StepQuestionnaire } from "@/components/onboarding/step-questionnaire";
+import { StepToolSelection } from "@/components/onboarding/step-tool-selection";
 import { useOnboarding } from "@/hooks/use-onboarding";
+import { orpc } from "@/lib/orpc";
 import { type FlowType, useOnboardingStore } from "@/stores/onboarding";
 import { env } from "@proliferate/environment/public";
+import { useMutation } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 export default function OnboardingPage() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
-	const { data: onboarding, refetch } = useOnboarding();
+	const { refetch } = useOnboarding();
 	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
 
 	const flowType = useOnboardingStore((state) => state.flowType);
@@ -25,26 +28,6 @@ export default function OnboardingPage() {
 	const setFlowType = useOnboardingStore((state) => state.setFlowType);
 	const setStep = useOnboardingStore((state) => state.setStep);
 	const reset = useOnboardingStore((state) => state.reset);
-
-	// Track if we just returned from Slack OAuth
-	const [justConnectedSlack, setJustConnectedSlack] = useState(
-		() =>
-			typeof window !== "undefined" &&
-			new URLSearchParams(window.location.search).get("success") === "slack",
-	);
-
-	// Handle GitHub OAuth callback - repos are auto-added, skip to next step
-	useEffect(() => {
-		if (searchParams.get("success") === "github") {
-			refetch();
-			if (billingEnabled) {
-				setStep("payment");
-			} else {
-				setStep("complete");
-			}
-			window.history.replaceState({}, "", "/onboarding");
-		}
-	}, [searchParams, refetch, setStep, billingEnabled]);
 
 	// Handle billing success callback - go to complete step
 	useEffect(() => {
@@ -55,101 +38,104 @@ export default function OnboardingPage() {
 		}
 	}, [searchParams, refetch, setStep]);
 
-	// Clean up the URL after reading Slack success
+	// If billing is disabled, skip the billing step
 	useEffect(() => {
-		if (searchParams.get("success") === "slack") {
-			window.history.replaceState({}, "", "/onboarding");
-		}
-	}, [searchParams]);
-
-	const handlePathSelect = (type: FlowType) => {
-		setFlowType(type);
-
-		if (type === "personal") {
-			// Personal flow skips org creation, goes directly to GitHub
-			setStep("github");
-		} else {
-			// Organization flow creates a new org first
-			setStep("create-org");
-		}
-	};
-
-	const handleOrgCreated = () => {
-		// After creating org, go to Slack step
-		setStep("slack");
-	};
-
-	const handleSlackConnected = () => {
-		setJustConnectedSlack(false);
-		refetch();
-		setStep("github");
-	};
-
-	const handleSkipSlack = () => {
-		setStep("github");
-	};
-
-	const handleGitHubConnected = () => {
-		refetch();
-		if (billingEnabled) {
-			setStep("payment");
-		} else {
-			setStep("complete");
-		}
-	};
-
-	const handleSkipGitHub = () => {
-		// GitHub is optional; continue onboarding to billing/complete.
-		if (billingEnabled) {
-			setStep("payment");
-		} else {
-			setStep("complete");
-		}
-	};
-
-	const handlePaymentComplete = () => {
-		refetch();
-		setStep("complete");
-	};
-
-	const handleFinish = () => {
-		// Reset onboarding state and go to dashboard
-		reset();
-		refetch();
-		router.push("/dashboard");
-	};
-
-	useEffect(() => {
-		if (!billingEnabled && step === "payment") {
+		if (!billingEnabled && step === "billing") {
 			refetch();
 			setStep("complete");
 		}
 	}, [billingEnabled, step, refetch, setStep]);
 
-	// Check connection status
-	const hasSlackConnection = onboarding?.hasSlackConnection ?? false;
-	const hasGitHubConnection = onboarding?.hasGitHubConnection ?? false;
+	const saveToolsMutation = useMutation({
+		...orpc.onboarding.saveToolSelections.mutationOptions(),
+	});
+
+	const saveQuestionnaireMutation = useMutation({
+		...orpc.onboarding.saveQuestionnaire.mutationOptions(),
+	});
+
+	const handlePathSelect = (type: FlowType) => {
+		setFlowType(type);
+
+		if (type === "developer") {
+			// Developer flow: skip org creation, go to tool selection
+			setStep("tools");
+		} else {
+			// Organization flow: create org first
+			setStep("create-org");
+		}
+	};
+
+	const handleOrgCreated = () => {
+		setStep("questionnaire");
+	};
+
+	const handleQuestionnaireComplete = (data: {
+		referralSource?: string;
+		companyWebsite?: string;
+		teamSize?: string;
+	}) => {
+		saveQuestionnaireMutation.mutate(data, {
+			onSettled: () => {
+				setStep("tools");
+			},
+		});
+	};
+
+	const handleToolsComplete = (selectedTools: string[]) => {
+		saveToolsMutation.mutate(
+			{ selectedTools },
+			{
+				onSettled: () => {
+					if (flowType === "organization") {
+						setStep("invite");
+					} else if (billingEnabled) {
+						setStep("billing");
+					} else {
+						setStep("complete");
+					}
+				},
+			},
+		);
+	};
+
+	const handleInviteComplete = () => {
+		if (billingEnabled) {
+			setStep("billing");
+		} else {
+			setStep("complete");
+		}
+	};
+
+	const handleBillingComplete = () => {
+		refetch();
+		setStep("complete");
+	};
+
+	const handleFinish = () => {
+		reset();
+		refetch();
+		router.push("/dashboard");
+	};
 
 	return (
 		<div key={step} className="animate-in fade-in duration-300">
 			{step === "path" && <StepPathChoice onSelect={handlePathSelect} />}
 			{step === "create-org" && <StepCreateOrg onComplete={handleOrgCreated} />}
-			{step === "slack" && (
-				<StepSlackConnect
-					onConnected={handleSlackConnected}
-					onSkip={handleSkipSlack}
-					hasSlackConnection={hasSlackConnection}
-					justConnected={justConnectedSlack}
+			{step === "questionnaire" && (
+				<StepQuestionnaire
+					onComplete={handleQuestionnaireComplete}
+					isSubmitting={saveQuestionnaireMutation.isPending}
 				/>
 			)}
-			{step === "github" && (
-				<StepGitHubConnect
-					onComplete={handleGitHubConnected}
-					onSkip={handleSkipGitHub}
-					hasGitHubConnection={hasGitHubConnection}
+			{step === "tools" && (
+				<StepToolSelection
+					onComplete={handleToolsComplete}
+					isSubmitting={saveToolsMutation.isPending}
 				/>
 			)}
-			{step === "payment" && billingEnabled && <StepPayment onComplete={handlePaymentComplete} />}
+			{step === "invite" && <StepInviteMembers onComplete={handleInviteComplete} />}
+			{step === "billing" && billingEnabled && <StepBilling onComplete={handleBillingComplete} />}
 			{step === "complete" && <StepComplete onComplete={handleFinish} />}
 		</div>
 	);

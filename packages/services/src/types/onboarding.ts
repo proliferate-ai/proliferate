@@ -34,3 +34,10 @@ export interface IntegrationRow {
 	connectionId: string | null;
 	provider: string | null;
 }
+
+export interface OnboardingMeta {
+	selectedTools?: string[];
+	referralSource?: string;
+	companyWebsite?: string;
+	teamSize?: string;
+}

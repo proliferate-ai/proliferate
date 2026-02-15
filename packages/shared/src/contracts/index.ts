@@ -119,12 +119,16 @@ export type {
 	OnboardingStatus,
 	FinalizeOnboardingInput,
 	FinalizeOnboardingResponse,
+	SaveToolSelectionsInput,
+	SaveQuestionnaireInput,
 } from "./onboarding";
 export {
 	OnboardingRepoSchema,
 	OnboardingStatusSchema,
 	FinalizeOnboardingInputSchema,
 	FinalizeOnboardingResponseSchema,
+	SaveToolSelectionsInputSchema,
+	SaveQuestionnaireInputSchema,
 } from "./onboarding";
 
 // Re-export CLI types

@@ -7,6 +7,7 @@
 import type { OnboardingRepo, OnboardingStatus } from "@proliferate/shared";
 import { toIsoString } from "../db/serialize";
 import { requestRepoSnapshotBuild } from "../repos";
+import type { OnboardingMeta } from "../types/onboarding";
 import * as onboardingDb from "./db";
 
 // ============================================
@@ -35,10 +36,11 @@ export async function getOnboardingStatus(
 		};
 	}
 
-	const [hasSlackConnection, hasGitHubConnection, reposWithStatus] = await Promise.all([
+	const [hasSlackConnection, hasGitHubConnection, reposWithStatus, meta] = await Promise.all([
 		onboardingDb.hasSlackConnection(orgId),
 		onboardingDb.hasGitHubConnection(orgId, nangoGithubIntegrationId),
 		onboardingDb.getReposWithPrebuildStatus(orgId),
+		onboardingDb.getOnboardingMeta(orgId),
 	]);
 
 	// Helper to check if a prebuild_repo entry has a usable prebuild (has snapshot)
@@ -65,7 +67,25 @@ export async function getOnboardingStatus(
 		hasSlackConnection,
 		hasGitHubConnection,
 		repos,
+		selectedTools: meta?.selectedTools,
 	};
+}
+
+/**
+ * Save tool selections to onboarding meta.
+ */
+export async function saveToolSelections(orgId: string, selectedTools: string[]): Promise<void> {
+	await onboardingDb.updateOnboardingMeta(orgId, { selectedTools });
+}
+
+/**
+ * Save questionnaire answers to onboarding meta.
+ */
+export async function saveQuestionnaire(
+	orgId: string,
+	data: Pick<OnboardingMeta, "referralSource" | "companyWebsite" | "teamSize">,
+): Promise<void> {
+	await onboardingDb.updateOnboardingMeta(orgId, data);
 }
 
 /**
