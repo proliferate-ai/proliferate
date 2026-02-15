@@ -26,7 +26,11 @@ const mockUpdate = vi.fn().mockReturnValue({ set: mockSet });
 const mockSelectFrom = vi.fn();
 const mockSelectWhere = vi.fn();
 const mockSelectLimit = vi.fn();
-const mockSelectOrderBy = vi.fn();
+const mockSelectOrderBy = vi.fn().mockReturnValue([]);
+
+const mockDeleteFrom = vi.fn();
+const mockDeleteWhere = vi.fn();
+const mockDeleteReturning = vi.fn().mockReturnValue([]);
 
 const mockInsertValues = vi.fn();
 const mockInsertReturning = vi.fn();
@@ -47,7 +51,8 @@ vi.mock("../db/client", () => {
 							},
 							orderBy: (...oArgs: unknown[]) => {
 								mockSelectOrderBy(...oArgs);
-								return [];
+								return mockSelectOrderBy.mock.results[mockSelectOrderBy.mock.results.length - 1]
+									.value;
 							},
 						};
 					},
@@ -65,6 +70,21 @@ vi.mock("../db/client", () => {
 				};
 			},
 		}),
+		delete: (...args: unknown[]) => {
+			mockDeleteFrom(...args);
+			return {
+				where: (...wArgs: unknown[]) => {
+					mockDeleteWhere(...wArgs);
+					return {
+						returning: (...rArgs: unknown[]) => {
+							mockDeleteReturning(...rArgs);
+							return mockDeleteReturning.mock.results[mockDeleteReturning.mock.results.length - 1]
+								.value;
+						},
+					};
+				},
+			};
+		},
 	};
 
 	return {
@@ -86,8 +106,10 @@ vi.mock("../db/client", () => {
 		and: (...args: unknown[]) => ({ _and: args }),
 		eq: (a: unknown, b: unknown) => ({ _eq: [a, b] }),
 		isNull: (a: unknown) => ({ _isNull: a }),
+		isNotNull: (a: unknown) => ({ _isNotNull: a }),
 		gt: (a: unknown, b: unknown) => ({ _gt: [a, b] }),
 		lt: (a: unknown, b: unknown) => ({ _lt: [a, b] }),
+		lte: (a: unknown, b: unknown) => ({ _lte: [a, b] }),
 		or: (...args: unknown[]) => ({ _or: args }),
 		desc: (a: unknown) => ({ _desc: a }),
 		sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
@@ -98,8 +120,20 @@ vi.mock("../db/client", () => {
 	};
 });
 
+vi.mock("../logger", () => ({
+	getServicesLogger: () => ({
+		child: () => ({
+			info: vi.fn(),
+			warn: vi.fn(),
+			error: vi.fn(),
+		}),
+	}),
+}));
+
 // Now import the actual functions under test
-const { consumeGrantCall, findMatchingGrants, createGrant } = await import("./grants-db");
+const { consumeGrantCall, findMatchingGrants, createGrant, deleteExpiredGrants } = await import(
+	"./grants-db"
+);
 
 // ============================================
 // Helpers
@@ -129,6 +163,7 @@ function makeGrantRow(overrides: Record<string, unknown> = {}) {
 describe("grants-db", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockSelectOrderBy.mockReturnValue([]);
 	});
 
 	describe("consumeGrantCall CAS semantics", () => {
@@ -215,38 +250,127 @@ describe("grants-db", () => {
 			// The WHERE clause should include session filtering
 		});
 	});
+
+	describe("deleteExpiredGrants", () => {
+		it("calls delete with expiry conditions", async () => {
+			mockDeleteReturning.mockReturnValue([{ id: "g-1" }, { id: "g-2" }]);
+
+			const count = await deleteExpiredGrants(new Date());
+
+			expect(count).toBe(2);
+			expect(mockDeleteFrom).toHaveBeenCalled();
+			expect(mockDeleteWhere).toHaveBeenCalled();
+		});
+
+		it("returns 0 when no expired grants exist", async () => {
+			mockDeleteReturning.mockReturnValue([]);
+
+			const count = await deleteExpiredGrants(new Date());
+
+			expect(count).toBe(0);
+		});
+	});
 });
 
 /**
- * Full-stack evaluate+consume concurrency test.
+ * Integrated concurrency test.
  *
  * Verifies that evaluateGrant (service layer) correctly handles
- * the race between findMatchingGrants and consumeGrantCall.
+ * the race between findMatchingGrants and consumeGrantCall when
+ * called through the actual grants-db functions with mocked Drizzle.
+ *
+ * Key property: "only N calls win when budget = N" must hold
+ * even when multiple evaluations run concurrently.
  */
-describe("evaluateGrant concurrency (integrated with grants-db mock)", () => {
-	// These tests use the grants service (not grants-db directly)
-	// with a separately configured mock of grants-db.
-	// The key property: "only N calls win when budget = N" must hold
-	// even when multiple evaluations run concurrently.
+describe("evaluateGrant concurrency (integrated with grants-db)", () => {
+	// Import the service layer — it uses the real grants-db functions
+	// which in turn hit our mocked Drizzle ORM.
+	let evaluateGrant: typeof import("./grants")["evaluateGrant"];
 
-	it("documents the CAS pattern used for concurrency safety", () => {
-		// The consumeGrantCall function uses:
-		//   UPDATE action_grants
-		//   SET used_calls = used_calls + 1
-		//   WHERE id = $1
-		//     AND revoked_at IS NULL
-		//     AND (expires_at IS NULL OR expires_at > now())
-		//     AND (max_calls IS NULL OR used_calls < max_calls)
-		//   RETURNING *
-		//
-		// This is a CAS (compare-and-swap) pattern:
-		// - The WHERE clause ensures the grant is still valid
-		// - The atomic SET ensures only one caller increments per row version
-		// - RETURNING tells the caller whether they won the race
-		//
-		// PostgreSQL's row-level locking ensures that concurrent UPDATEs
-		// on the same row are serialized — the second UPDATE sees the
-		// first UPDATE's committed state.
-		expect(true).toBe(true);
+	beforeEach(async () => {
+		vi.clearAllMocks();
+		mockSelectOrderBy.mockReturnValue([]);
+		const grants = await import("./grants");
+		evaluateGrant = grants.evaluateGrant;
+	});
+
+	it("budget=1: exactly one of two concurrent evaluations wins", async () => {
+		const grant = makeGrantRow({ id: "grant-1", maxCalls: 1, usedCalls: 0 });
+
+		// Both findMatchingGrants calls return the same candidate
+		mockSelectOrderBy.mockReturnValue([grant]);
+
+		// CAS: first consumer wins, second loses
+		mockReturning
+			.mockResolvedValueOnce([makeGrantRow({ id: "grant-1", usedCalls: 1, maxCalls: 1 })])
+			.mockResolvedValueOnce([]);
+
+		const [r1, r2] = await Promise.all([
+			evaluateGrant("org-1", "linear", "create_issue", "session-1"),
+			evaluateGrant("org-1", "linear", "create_issue", "session-1"),
+		]);
+
+		const granted = [r1, r2].filter((r) => r.granted);
+		const denied = [r1, r2].filter((r) => !r.granted);
+		expect(granted).toHaveLength(1);
+		expect(denied).toHaveLength(1);
+		expect(granted[0].grantId).toBe("grant-1");
+	});
+
+	it("budget=3: exactly three of five concurrent evaluations win", async () => {
+		const grant = makeGrantRow({ id: "grant-1", maxCalls: 3, usedCalls: 0 });
+
+		// All findMatchingGrants calls return the same candidate
+		mockSelectOrderBy.mockReturnValue([grant]);
+
+		// CAS: first 3 succeed, last 2 fail
+		mockReturning
+			.mockResolvedValueOnce([makeGrantRow({ id: "grant-1", usedCalls: 1, maxCalls: 3 })])
+			.mockResolvedValueOnce([makeGrantRow({ id: "grant-1", usedCalls: 2, maxCalls: 3 })])
+			.mockResolvedValueOnce([makeGrantRow({ id: "grant-1", usedCalls: 3, maxCalls: 3 })])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([]);
+
+		const results = await Promise.all([
+			evaluateGrant("org-1", "linear", "create_issue", "session-1"),
+			evaluateGrant("org-1", "linear", "create_issue", "session-1"),
+			evaluateGrant("org-1", "linear", "create_issue", "session-1"),
+			evaluateGrant("org-1", "linear", "create_issue", "session-1"),
+			evaluateGrant("org-1", "linear", "create_issue", "session-1"),
+		]);
+
+		const granted = results.filter((r) => r.granted);
+		const denied = results.filter((r) => !r.granted);
+		expect(granted).toHaveLength(3);
+		expect(denied).toHaveLength(2);
+	});
+
+	it("no candidates: all concurrent evaluations denied", async () => {
+		// findMatchingGrants returns empty
+		mockSelectOrderBy.mockReturnValue([]);
+
+		const results = await Promise.all([
+			evaluateGrant("org-1", "linear", "create_issue", "session-1"),
+			evaluateGrant("org-1", "linear", "create_issue", "session-1"),
+		]);
+
+		expect(results.every((r) => !r.granted)).toBe(true);
+		// consumeGrantCall should never be called
+		expect(mockReturning).not.toHaveBeenCalled();
+	});
+
+	it("TOCTOU: grant exhausted between find and consume", async () => {
+		const grant = makeGrantRow({ id: "grant-1", maxCalls: 1, usedCalls: 0 });
+
+		// findMatchingGrants returns the candidate
+		mockSelectOrderBy.mockReturnValue([grant]);
+
+		// But CAS fails because another consumer already took the last call
+		mockReturning.mockResolvedValue([]);
+
+		const result = await evaluateGrant("org-1", "linear", "create_issue", "session-1");
+
+		expect(result.granted).toBe(false);
+		expect(mockReturning).toHaveBeenCalledTimes(1);
 	});
 });

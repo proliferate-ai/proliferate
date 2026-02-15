@@ -12,6 +12,7 @@ const {
 	mockConsumeGrantCall,
 	mockRevokeGrant,
 	mockListGrantsByOrg,
+	mockDeleteExpiredGrants,
 } = vi.hoisted(() => ({
 	mockCreateGrant: vi.fn(),
 	mockGetGrant: vi.fn(),
@@ -20,6 +21,7 @@ const {
 	mockConsumeGrantCall: vi.fn(),
 	mockRevokeGrant: vi.fn(),
 	mockListGrantsByOrg: vi.fn(),
+	mockDeleteExpiredGrants: vi.fn(),
 }));
 
 vi.mock("./grants-db", () => ({
@@ -30,6 +32,7 @@ vi.mock("./grants-db", () => ({
 	consumeGrantCall: mockConsumeGrantCall,
 	revokeGrant: mockRevokeGrant,
 	listGrantsByOrg: mockListGrantsByOrg,
+	deleteExpiredGrants: mockDeleteExpiredGrants,
 }));
 
 vi.mock("../logger", () => ({
@@ -42,7 +45,8 @@ vi.mock("../logger", () => ({
 	}),
 }));
 
-const { evaluateGrant, createGrant, revokeGrant, GrantNotFoundError } = await import("./grants");
+const { evaluateGrant, createGrant, revokeGrant, cleanupExpiredGrants, GrantNotFoundError } =
+	await import("./grants");
 
 // ============================================
 // Test helpers
@@ -261,6 +265,41 @@ describe("grants service", () => {
 			mockRevokeGrant.mockResolvedValue(undefined);
 
 			await expect(revokeGrant("grant-x", "org-1")).rejects.toThrow(GrantNotFoundError);
+		});
+	});
+
+	// ------------------------------------------
+	// cleanupExpiredGrants
+	// ------------------------------------------
+
+	describe("cleanupExpiredGrants", () => {
+		it("deletes expired grants and returns count", async () => {
+			mockDeleteExpiredGrants.mockResolvedValue(3);
+
+			const count = await cleanupExpiredGrants();
+
+			expect(count).toBe(3);
+			expect(mockDeleteExpiredGrants).toHaveBeenCalledWith(expect.any(Date));
+		});
+
+		it("returns 0 when no expired grants exist", async () => {
+			mockDeleteExpiredGrants.mockResolvedValue(0);
+
+			const count = await cleanupExpiredGrants();
+
+			expect(count).toBe(0);
+		});
+
+		it("is idempotent — safe to call repeatedly", async () => {
+			mockDeleteExpiredGrants.mockResolvedValue(2).mockResolvedValueOnce(2);
+
+			const c1 = await cleanupExpiredGrants();
+			mockDeleteExpiredGrants.mockResolvedValue(0);
+			const c2 = await cleanupExpiredGrants();
+
+			expect(c1).toBe(2);
+			expect(c2).toBe(0);
+			expect(mockDeleteExpiredGrants).toHaveBeenCalledTimes(2);
 		});
 	});
 });

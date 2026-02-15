@@ -895,6 +895,10 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(400, "Cannot create grant: session has no creator user");
 			}
 
+			if (!session.createdBy) {
+				throw new ApiError(400, "Cannot create grant: session has no owner identity");
+			}
+
 			const grant = await actions.createGrant({
 				organizationId: session.organizationId,
 				createdBy: session.createdBy,
@@ -930,7 +934,16 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				orgId = session.organizationId;
 			}
 
-			const grants = await actions.listActiveGrants(orgId, sessionId);
+			const rawLimit = req.query.limit != null ? Math.floor(Number(req.query.limit)) : 100;
+			const rawOffset = req.query.offset != null ? Math.floor(Number(req.query.offset)) : 0;
+			if (!Number.isFinite(rawLimit) || rawLimit < 1) {
+				throw new ApiError(400, "limit must be a positive integer");
+			}
+			if (!Number.isFinite(rawOffset) || rawOffset < 0) {
+				throw new ApiError(400, "offset must be a non-negative integer");
+			}
+			const limit = Math.min(rawLimit, 100);
+			const grants = await actions.listActiveGrants(orgId, sessionId, { limit, offset: rawOffset });
 			res.json({ grants });
 		} catch (err) {
 			next(err);

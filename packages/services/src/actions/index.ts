@@ -22,6 +22,7 @@ export {
 	evaluateGrant,
 	revokeGrant,
 	getGrant,
+	cleanupExpiredGrants,
 	GrantNotFoundError,
 	GrantExhaustedError,
 	type EvaluateGrantResult,
