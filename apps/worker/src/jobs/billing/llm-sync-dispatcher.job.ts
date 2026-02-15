@@ -31,7 +31,7 @@ export async function processLLMSyncDispatchJob(
 			return;
 		}
 
-		logger.debug({ orgCount: orgIds.length }, "Dispatching LLM sync jobs");
+		logger.info({ orgCount: orgIds.length }, "Dispatching LLM sync jobs");
 
 		for (const orgId of orgIds) {
 			await llmSyncOrgQueue.add(`llm-sync:${orgId}`, { orgId });

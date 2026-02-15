@@ -38,7 +38,7 @@ interface PendingBillingEvent {
  * Process pending billing events that failed to post to Autumn.
  * Should be called every 60 seconds by a worker.
  *
- * @param redis - Redis client for distributed locking
+ * @param providers - Map of provider type to provider instance
  * @param batchSize - Max events to process per cycle (default: 100)
  */
 export async function processOutbox(

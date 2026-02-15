@@ -41,7 +41,6 @@ interface SessionForMetering {
  * Run a single metering cycle.
  * Should be called every 30 seconds by a worker.
  *
- * @param redis - Redis client for distributed locking
  * @param providers - Map of provider type to provider instance
  */
 export async function runMeteringCycle(

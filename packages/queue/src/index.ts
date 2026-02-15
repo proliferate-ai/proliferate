@@ -495,6 +495,11 @@ export function createRepoSnapshotBuildWorker(
 // ============================================
 
 const billingRepeatableJobOptions: JobsOptions = {
+	attempts: 3,
+	backoff: {
+		type: "exponential",
+		delay: 5000,
+	},
 	removeOnComplete: {
 		age: 3600, // 1 hour
 		count: 100,
@@ -512,8 +517,7 @@ const billingLLMSyncOrgJobOptions: JobsOptions = {
 		delay: 5000,
 	},
 	removeOnComplete: {
-		age: 3600, // 1 hour
-		count: 1000,
+		count: 0, // Remove immediately so jobId can be reused across dispatch cycles
 	},
 	removeOnFail: {
 		age: 86400, // 24 hours
