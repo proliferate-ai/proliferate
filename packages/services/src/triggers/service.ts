@@ -5,9 +5,10 @@
  */
 
 import { randomBytes, randomUUID } from "crypto";
-import { createPollingQueue, removePollingJob, schedulePollingJob } from "@proliferate/queue";
+import { createPollGroupQueue, schedulePollGroupJob } from "@proliferate/queue";
 import type { Trigger, TriggerEvent, TriggerWithIntegration } from "@proliferate/shared";
 import { getServicesLogger } from "../logger";
+import * as pollGroupsDb from "../poll-groups/db";
 import * as triggersDb from "./db";
 import {
 	toTrigger,
@@ -17,13 +18,13 @@ import {
 	toTriggersWithIntegration,
 } from "./mapper";
 
-let pollingQueue: ReturnType<typeof createPollingQueue> | null = null;
+let pollGroupQueue: ReturnType<typeof createPollGroupQueue> | null = null;
 
-function getPollingQueue() {
-	if (!pollingQueue) {
-		pollingQueue = createPollingQueue();
+function getPollGroupQueue() {
+	if (!pollGroupQueue) {
+		pollGroupQueue = createPollGroupQueue();
 	}
-	return pollingQueue;
+	return pollGroupQueue;
 }
 
 // ============================================
@@ -192,11 +193,18 @@ export async function createTrigger(input: CreateTriggerInput): Promise<CreateTr
 
 	if (triggerType === "polling" && input.pollingCron) {
 		try {
-			await schedulePollingJob(getPollingQueue(), trigger.id, input.pollingCron);
+			// vNext: Create/reuse a poll group for this org+provider+integration
+			const group = await pollGroupsDb.findOrCreateGroup(
+				input.organizationId,
+				input.provider,
+				input.integrationId ?? null,
+				input.pollingCron,
+			);
+			await schedulePollGroupJob(getPollGroupQueue(), group.id, group.cronExpression);
 		} catch (err) {
 			getServicesLogger()
 				.child({ module: "triggers" })
-				.error({ err }, "Failed to schedule polling job");
+				.error({ err }, "Failed to schedule poll group");
 		}
 	}
 
@@ -233,14 +241,21 @@ export async function updateTrigger(
 	if (updated.triggerType === "polling") {
 		try {
 			if (updated.enabled && updated.pollingCron) {
-				await schedulePollingJob(getPollingQueue(), updated.id, updated.pollingCron);
-			} else {
-				await removePollingJob(getPollingQueue(), updated.id);
+				// vNext: Create/reuse poll group and schedule
+				const group = await pollGroupsDb.findOrCreateGroup(
+					orgId,
+					updated.provider,
+					updated.integrationId ?? null,
+					updated.pollingCron,
+				);
+				await schedulePollGroupJob(getPollGroupQueue(), group.id, group.cronExpression);
 			}
+			// Clean up orphaned groups when triggers are disabled
+			await pollGroupsDb.deleteOrphanedGroups();
 		} catch (err) {
 			getServicesLogger()
 				.child({ module: "triggers" })
-				.error({ err }, "Failed to update polling job");
+				.error({ err }, "Failed to update poll group");
 		}
 	}
 
@@ -256,11 +271,17 @@ export async function deleteTrigger(id: string, orgId: string): Promise<boolean>
 
 	if (existing?.triggerType === "polling") {
 		try {
-			await removePollingJob(getPollingQueue(), existing.id);
+			// vNext: Clean up orphaned poll groups after trigger deletion
+			const orphaned = await pollGroupsDb.deleteOrphanedGroups();
+			if (orphaned > 0) {
+				getServicesLogger()
+					.child({ module: "triggers" })
+					.info({ orphanedGroups: orphaned }, "Cleaned up orphaned poll groups");
+			}
 		} catch (err) {
 			getServicesLogger()
 				.child({ module: "triggers" })
-				.error({ err }, "Failed to remove polling job");
+				.error({ err }, "Failed to clean up poll groups");
 		}
 	}
 	return true;
