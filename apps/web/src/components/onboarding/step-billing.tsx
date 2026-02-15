@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { orpc } from "@/lib/orpc";
 import { useMutation } from "@tanstack/react-query";
-import { Gift, Sparkles, Zap } from "lucide-react";
+import { Coins, Gift, LayoutGrid } from "lucide-react";
 
 interface StepBillingProps {
 	onComplete: () => void;
@@ -43,7 +43,7 @@ export function StepBilling({ onComplete }: StepBillingProps) {
 			<div className="rounded-2xl border border-border bg-card p-6 space-y-4">
 				<div className="flex items-start gap-3">
 					<div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
-						<Sparkles className="h-4 w-4 text-primary" />
+						<Coins className="h-4 w-4 text-primary" />
 					</div>
 					<div>
 						<p className="text-sm font-medium text-foreground">1,000 free credits</p>
@@ -55,7 +55,7 @@ export function StepBilling({ onComplete }: StepBillingProps) {
 
 				<div className="flex items-start gap-3">
 					<div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 shrink-0">
-						<Zap className="h-4 w-4 text-primary" />
+						<LayoutGrid className="h-4 w-4 text-primary" />
 					</div>
 					<div>
 						<p className="text-sm font-medium text-foreground">Full access to all features</p>
