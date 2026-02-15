@@ -4,6 +4,8 @@ import { registerDefaultTriggers } from "@proliferate/triggers";
 import { logger } from "./lib/logger.js";
 import { startPollingWorker } from "./polling/worker.js";
 import { createServer } from "./server.js";
+import { startInboxGc } from "./webhook-inbox/gc.js";
+import { startWebhookInboxWorker } from "./webhook-inbox/worker.js";
 
 setServicesLogger(logger);
 
@@ -20,17 +22,21 @@ registerDefaultTriggers({
 
 const server = createServer();
 const pollingWorker = startPollingWorker();
+const inboxWorker = startWebhookInboxWorker();
+const gcInterval = startInboxGc();
 
 server.listen(PORT, () => {
 	logger.info({ port: PORT }, "Trigger service listening");
 });
 
 process.on("SIGINT", async () => {
-	await pollingWorker.close();
+	clearInterval(gcInterval);
+	await Promise.all([pollingWorker.close(), inboxWorker.close()]);
 	process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
-	await pollingWorker.close();
+	clearInterval(gcInterval);
+	await Promise.all([pollingWorker.close(), inboxWorker.close()]);
 	process.exit(0);
 });
