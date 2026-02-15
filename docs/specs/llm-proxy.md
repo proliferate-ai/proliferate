@@ -25,7 +25,9 @@
 | Spend sync (cursor-based) | Implemented | `apps/worker/src/billing/worker.ts:syncLLMSpend` |
 | LLM spend cursors (DB) | Implemented | `packages/db/src/schema/billing.ts:llmSpendCursors` |
 | Model routing config | Implemented | `apps/llm-proxy/litellm/config.yaml` |
-| Key revocation on session end | Planned | No code — see §9 |
+| Key revocation on session end | Implemented | `packages/shared/src/llm-proxy.ts:revokeVirtualKey`, called from `sessions-pause.ts`, `org-pause.ts` |
+| Dynamic max budget from shadow balance | Implemented | `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars` |
+| Key alias (sessionId) | Implemented | `packages/shared/src/llm-proxy.ts:generateVirtualKey` — `key_alias=sessionId` |
 
 ### Out of Scope
 - LiteLLM service internals (model routing config, caching, rate limiting) — external dependency, not our code
@@ -224,8 +226,9 @@ _Source: `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`_
 1. `buildSandboxEnvVars()` is called during session creation (`packages/services/src/sessions/sandbox-env.ts`)
 2. It checks if `LLM_PROXY_URL` is set. If yes, calls `generateSessionAPIKey(sessionId, orgId)` (`packages/shared/src/llm-proxy.ts:generateSessionAPIKey`)
 3. `generateSessionAPIKey` first calls `ensureTeamExists(orgId)` — `GET /team/info?team_id={orgId}` to check, then `POST /team/new` if needed (`packages/shared/src/llm-proxy.ts:ensureTeamExists`)
-4. Then calls `generateVirtualKey(sessionId, orgId)` — `POST /key/generate` with `team_id=orgId`, `user_id=sessionId`, `duration` from env (`packages/shared/src/llm-proxy.ts:generateVirtualKey`)
-5. Returns the `key` string. The caller stores it as `envVars.LLM_PROXY_API_KEY`
+4. When billing is enabled, fetches org's `shadow_balance` via `getBillingInfoV2`, computes `maxBudget = Math.max(0, shadow_balance * 0.01)` (`packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`)
+5. Calls `generateVirtualKey(sessionId, orgId, { maxBudget })` — `POST /key/generate` with `team_id=orgId`, `user_id=sessionId`, `key_alias=sessionId`, `max_budget`, `duration` from env (`packages/shared/src/llm-proxy.ts:generateVirtualKey`)
+6. Returns the `key` string. The caller stores it as `envVars.LLM_PROXY_API_KEY`
 
 **Edge cases:**
 - `LLM_PROXY_URL` unset + `LLM_PROXY_REQUIRED=false` → falls back to direct `ANTHROPIC_API_KEY`
@@ -278,7 +281,31 @@ _Source: `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`_
 
 **Status:** Implemented
 
-### 6.4 Environment Configuration
+### 6.4 Synchronous Key Revocation
+
+**What it does:** Revokes a session's virtual key when the session is terminated, paused, or exhausted.
+
+**Happy path:**
+1. A session ends (user pause, billing termination, or credit exhaustion)
+2. The caller invokes `revokeVirtualKey(sessionId)` as fire-and-forget after `provider.terminate()` (`packages/shared/src/llm-proxy.ts:revokeVirtualKey`)
+3. `revokeVirtualKey` calls `POST /key/delete` with `{ key_aliases: [sessionId] }` — the alias was set during key generation via `key_alias: sessionId`
+4. 404 responses are treated as success (key already deleted or expired)
+
+**Edge cases:**
+- Proxy not configured (`LLM_PROXY_URL` unset) → returns immediately, no-op
+- Master key missing → returns immediately, no-op
+- Network failure → error is caught and logged at debug level by callers; does not block session termination
+
+**Call sites:**
+- `apps/web/src/server/routers/sessions-pause.ts:pauseSessionHandler` — after snapshot + terminate
+- `packages/services/src/billing/org-pause.ts:handleCreditsExhaustedV2` — per-session during exhaustion enforcement
+- `packages/services/src/billing/org-pause.ts:terminateAllOrgSessions` — per-session during bulk termination
+
+**Files touched:** `packages/shared/src/llm-proxy.ts:revokeVirtualKey`, `apps/web/src/server/routers/sessions-pause.ts`, `packages/services/src/billing/org-pause.ts`
+
+**Status:** Implemented
+
+### 6.5 Environment Configuration
 
 **What it does:** Six env vars control the LLM proxy integration.
 
@@ -336,7 +363,7 @@ Additional env vars used by the spend sync (read via raw `process.env`, not in t
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **No key revocation on session end** — virtual keys remain valid until their duration expires, even after a session is terminated. Impact: minimal (keys are short-lived and sandboxes are destroyed), but a revocation call on session delete would be cleaner. Expected fix: call `POST /key/delete` on session terminate.
+- [x] ~~**No key revocation on session end**~~ — Resolved. `revokeVirtualKey(sessionId)` is called fire-and-forget on session pause, exhaustion, and bulk termination.
 - [ ] **Shared database coupling** — the spend sync reads directly from LiteLLM's PostgreSQL schema, coupling our billing worker to LiteLLM's internal table format. Impact: LiteLLM schema changes could break the sync. Expected fix: use LiteLLM's HTTP spend API instead of raw SQL if one becomes available.
 - [ ] **Single global cursor** — the `llm_spend_cursors` table uses a singleton row (`id = 'global'`). This means only one billing worker instance can sync spend logs at a time. Impact: acceptable at current scale. Expected fix: per-org cursors or distributed lock if needed.
-- [ ] **No budget enforcement on virtual keys** — `maxBudget` is passed through to LiteLLM but not actively used in session creation. Budget enforcement is handled by Proliferate's billing system, not the proxy. Impact: none currently, as billing gating is separate.
+- [x] ~~**No budget enforcement on virtual keys**~~ — Resolved. `buildSandboxEnvVars` fetches `shadow_balance` when billing is enabled and passes `maxBudget = Math.max(0, shadow_balance * 0.01)` to `generateVirtualKey`.

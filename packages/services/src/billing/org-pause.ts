@@ -8,6 +8,7 @@
  */
 
 import type { SandboxProvider } from "@proliferate/shared";
+import { revokeVirtualKey } from "@proliferate/shared/llm-proxy";
 import type { PauseReason } from "@proliferate/shared/billing";
 import { and, eq, getDb, sessions } from "../db/client";
 import { getServicesLogger } from "../logger";
@@ -193,6 +194,11 @@ export async function handleCreditsExhaustedV2(
 				continue;
 			}
 
+			// Best-effort key revocation (fire-and-forget)
+			revokeVirtualKey(session.id).catch((err) => {
+				logger.debug({ err, sessionId: session.id }, "Failed to revoke virtual key");
+			});
+
 			await db
 				.update(sessions)
 				.set({
@@ -266,6 +272,11 @@ export async function terminateAllOrgSessions(
 				failed++;
 				continue;
 			}
+
+			// Best-effort key revocation (fire-and-forget)
+			revokeVirtualKey(session.id).catch((err) => {
+				logger.debug({ err, sessionId: session.id }, "Failed to revoke virtual key");
+			});
 
 			await db
 				.update(sessions)

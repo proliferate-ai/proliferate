@@ -9,6 +9,7 @@ import type { RepoSpec } from "@proliferate/shared";
 import { generateSessionAPIKey } from "@proliferate/shared/llm-proxy";
 import { decrypt, getEncryptionKey } from "../db/crypto";
 import { getServicesLogger } from "../logger";
+import { getBillingInfoV2 } from "../orgs/service";
 import * as secrets from "../secrets";
 
 export interface SandboxEnvInput {
@@ -65,8 +66,25 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 	} else {
 		try {
 			const keyStartMs = Date.now();
-			const apiKey = await generateSessionAPIKey(input.sessionId, input.orgId);
-			logger.debug({ durationMs: Date.now() - keyStartMs }, "Generated LLM proxy session key");
+
+			// Derive max budget from shadow balance when billing is enabled
+			let maxBudget: number | undefined;
+			const billingEnabled =
+				process.env.NEXT_PUBLIC_BILLING_ENABLED === "true" ||
+				process.env.NEXT_PUBLIC_BILLING_ENABLED === "1" ||
+				process.env.DEPLOYMENT_PROFILE === "cloud";
+			if (billingEnabled) {
+				const orgBilling = await getBillingInfoV2(input.orgId);
+				if (orgBilling?.shadowBalance != null) {
+					maxBudget = Math.max(0, Number(orgBilling.shadowBalance) * 0.01);
+				}
+			}
+
+			const apiKey = await generateSessionAPIKey(input.sessionId, input.orgId, { maxBudget });
+			logger.debug(
+				{ durationMs: Date.now() - keyStartMs, maxBudget },
+				"Generated LLM proxy session key",
+			);
 			envVars.LLM_PROXY_API_KEY = apiKey;
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);

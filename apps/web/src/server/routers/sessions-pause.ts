@@ -10,6 +10,7 @@ import { ORPCError } from "@orpc/server";
 import { billing, orgs, sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import type { BillingPlan } from "@proliferate/shared/billing";
+import { revokeVirtualKey } from "@proliferate/shared/llm-proxy";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 
 const log = logger.child({ handler: "sessions-pause" });
@@ -73,6 +74,11 @@ export async function pauseSessionHandler(
 	// Always terminate sandbox
 	try {
 		await provider.terminate(sessionId, session.sandboxId);
+
+		// Best-effort key revocation (fire-and-forget)
+		revokeVirtualKey(sessionId).catch((err) => {
+			reqLog.debug({ err }, "Failed to revoke virtual key");
+		});
 	} catch (err) {
 		reqLog.error({ err }, "Failed to terminate sandbox");
 	}
