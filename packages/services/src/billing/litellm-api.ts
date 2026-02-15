@@ -80,7 +80,6 @@ export async function fetchSpendLogs(
 		method: "GET",
 		headers: {
 			Authorization: `Bearer ${key}`,
-			"Content-Type": "application/json",
 		},
 	});
 

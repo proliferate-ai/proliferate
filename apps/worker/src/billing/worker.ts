@@ -12,6 +12,7 @@ import type { Logger } from "@proliferate/logger";
 import { getRedisClient } from "@proliferate/queue";
 import { billing, orgs } from "@proliferate/services";
 import type { SandboxProvider } from "@proliferate/shared";
+import { calculateLLMCredits } from "@proliferate/shared/billing";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 
 // ============================================
@@ -68,18 +69,152 @@ async function processOutbox(): Promise<void> {
 }
 
 /**
- * Sync LLM spend to billing_events.
- * Pending migration to per-org REST API client (litellm-api.ts) + bulkDeductShadowBalance.
+ * Default lookback window for first-run orgs with no cursor (5 minutes).
+ */
+const LLM_SYNC_DEFAULT_LOOKBACK_MS = 5 * 60 * 1000;
+
+/**
+ * Sync LLM spend to billing_events via REST API + bulk ledger deduction.
+ *
+ * For each billable org:
+ * 1. Read per-org cursor (or default to 5-min lookback)
+ * 2. Fetch spend logs from LiteLLM REST API
+ * 3. Convert to BulkDeductEvent[] and bulk-deduct from shadow balance
+ * 4. Advance cursor
+ * 5. Handle state transitions (terminate sessions if exhausted)
  */
 async function syncLLMSpend(): Promise<void> {
 	if (!env.NEXT_PUBLIC_BILLING_ENABLED) {
 		return;
 	}
 
-	// TODO: Rewrite to use per-org REST API client (billing.fetchSpendLogs)
-	// and per-org cursors (billing.getLLMSpendCursor/updateLLMSpendCursor).
-	// The old cross-schema SQL queries have been removed in favour of litellm-api.ts.
-	_logger.child({ op: "llm-sync" }).warn("LLM spend sync disabled — pending REST API migration");
+	// Guard: REST API requires admin URL + master key
+	if (!env.LLM_PROXY_ADMIN_URL || !env.LLM_PROXY_MASTER_KEY) {
+		return;
+	}
+
+	const log = _logger.child({ op: "llm-sync" });
+
+	try {
+		const orgIds = await billing.listBillableOrgIds();
+		if (!orgIds.length) {
+			log.debug("No billable orgs");
+			return;
+		}
+
+		let totalSynced = 0;
+		let totalOrgs = 0;
+
+		for (const orgId of orgIds) {
+			try {
+				const synced = await syncOrgLLMSpend(orgId);
+				if (synced > 0) {
+					totalSynced += synced;
+					totalOrgs++;
+				}
+			} catch (err) {
+				log.error({ err, orgId }, "Failed to sync LLM spend for org");
+			}
+		}
+
+		if (totalSynced > 0) {
+			log.info({ totalSynced, totalOrgs }, "LLM spend sync complete");
+		}
+	} catch (err) {
+		log.error({ err }, "LLM spend sync cycle error");
+	}
+}
+
+/**
+ * Sync LLM spend for a single org. Returns number of events inserted.
+ */
+async function syncOrgLLMSpend(orgId: string): Promise<number> {
+	const log = _logger.child({ op: "llm-sync", orgId });
+
+	// 1. Read cursor
+	const cursor = await billing.getLLMSpendCursor(orgId);
+	const startDate = cursor
+		? cursor.lastStartTime
+		: new Date(Date.now() - LLM_SYNC_DEFAULT_LOOKBACK_MS);
+
+	// 2. Fetch spend logs from REST API
+	const logs = await billing.fetchSpendLogs(orgId, startDate);
+	if (!logs.length) {
+		return 0;
+	}
+
+	// 3. Filter and convert to BulkDeductEvent[]
+	const events: billing.BulkDeductEvent[] = [];
+	let latestStartTime = startDate;
+	let latestRequestId: string | null = cursor?.lastRequestId ?? null;
+
+	for (const entry of logs) {
+		if (entry.spend <= 0) continue;
+		// Skip entries already processed (same request_id as cursor)
+		if (cursor?.lastRequestId && entry.request_id === cursor.lastRequestId) continue;
+
+		const credits = calculateLLMCredits(entry.spend);
+		events.push({
+			credits,
+			quantity: entry.spend,
+			eventType: "llm",
+			idempotencyKey: `llm:${entry.request_id}`,
+			sessionIds: entry.end_user ? [entry.end_user] : [],
+			metadata: {
+				model: entry.model,
+				total_tokens: entry.total_tokens,
+				prompt_tokens: entry.prompt_tokens,
+				completion_tokens: entry.completion_tokens,
+				litellm_request_id: entry.request_id,
+			},
+		});
+
+		// Track latest log for cursor advancement
+		if (entry.startTime) {
+			const entryTime = new Date(entry.startTime);
+			if (entryTime >= latestStartTime) {
+				latestStartTime = entryTime;
+				latestRequestId = entry.request_id;
+			}
+		}
+	}
+
+	if (!events.length) {
+		return 0;
+	}
+
+	// 4. Bulk deduct
+	const result = await billing.bulkDeductShadowBalance(orgId, events);
+
+	log.info(
+		{
+			fetched: logs.length,
+			inserted: result.insertedCount,
+			creditsDeducted: result.totalCreditsDeducted,
+			balance: result.newBalance,
+		},
+		"Synced LLM spend",
+	);
+
+	// 5. Advance cursor
+	await billing.updateLLMSpendCursor({
+		organizationId: orgId,
+		lastStartTime: latestStartTime,
+		lastRequestId: latestRequestId,
+		recordsProcessed: (cursor?.recordsProcessed ?? 0) + result.insertedCount,
+		syncedAt: new Date(),
+	});
+
+	// 6. Handle state transitions
+	if (result.shouldTerminateSessions) {
+		log.info({ enforcementReason: result.enforcementReason }, "Balance exhausted — terminating sessions");
+		const providers = await getProvidersMap();
+		await billing.handleCreditsExhaustedV2(orgId, providers);
+	} else if (result.shouldBlockNewSessions) {
+		log.info({ enforcementReason: result.enforcementReason }, "Entering grace period");
+	}
+
+	return result.insertedCount;
 }
 
 /**

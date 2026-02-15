@@ -270,19 +270,27 @@ Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or
 
 **Files touched:** `packages/shared/src/billing/gating.ts`, `apps/web/src/lib/billing.ts`
 
-### 6.4 LLM Spend Sync — `Partial` (data layer ready, worker pending)
+### 6.4 LLM Spend Sync — `Implemented`
 
-**What it does:** Ingests LLM cost data into billing events. Data layer uses the LiteLLM Admin REST API (`GET /spend/logs/v2`) via `litellm-api.ts` and per-org cursors instead of cross-schema SQL.
+**What it does:** Ingests LLM cost data into billing events via the LiteLLM Admin REST API and per-org cursors.
 
-**Data layer (implemented):**
-- `fetchSpendLogs(teamId, startDate, endDate)` — REST client calling LiteLLM Admin API with Bearer auth (`packages/services/src/billing/litellm-api.ts`).
-- `getLLMSpendCursor(organizationId)` / `updateLLMSpendCursor(cursor)` — per-org cursor CRUD (`packages/services/src/billing/db.ts`).
-- `bulkDeductShadowBalance(orgId, events)` — single-transaction bulk insert + atomic balance deduction (`packages/services/src/billing/shadow-balance.ts`).
+**Happy path:**
+1. Worker calls `syncLLMSpend()` every 30 seconds, guarded by `NEXT_PUBLIC_BILLING_ENABLED` + `LLM_PROXY_ADMIN_URL` (`apps/worker/src/billing/worker.ts`).
+2. Lists billable orgs (`billing.listBillableOrgIds()` — states `active`, `trial`, `grace`) (`packages/services/src/billing/db.ts`).
+3. For each org:
+   a. Reads per-org cursor (`billing.getLLMSpendCursor(orgId)`) or defaults to 5-min lookback.
+   b. Fetches spend logs via `billing.fetchSpendLogs(orgId, startDate)` (`packages/services/src/billing/litellm-api.ts`).
+   c. Converts logs with positive `spend` to `BulkDeductEvent[]` using `calculateLLMCredits()`.
+   d. Calls `billing.bulkDeductShadowBalance(orgId, events)` — single transaction with idempotent insert (`packages/services/src/billing/shadow-balance.ts`).
+   e. Advances per-org cursor to latest log's `startTime`.
+4. Handles state transitions: `shouldTerminateSessions` → `handleCreditsExhaustedV2()`.
 
-**Worker (pending migration):**
-The worker's `syncLLMSpend()` is currently a stub. It needs to be rewritten to: iterate active orgs, call `fetchSpendLogs()` per org, map to `BulkDeductEvent[]`, call `bulkDeductShadowBalance()`, advance per-org cursor.
+**Edge cases:**
+- First run for an org (no cursor) → starts from 5-min lookback.
+- REST API failure for one org → logged and skipped; other orgs continue.
+- Duplicate logs → idempotency key `llm:{request_id}` prevents double-billing.
 
-**Files touched:** `packages/services/src/billing/litellm-api.ts`, `packages/services/src/billing/db.ts`, `packages/services/src/billing/shadow-balance.ts`, `apps/worker/src/billing/worker.ts`
+**Files touched:** `apps/worker/src/billing/worker.ts`, `packages/services/src/billing/litellm-api.ts`, `packages/services/src/billing/db.ts`, `packages/services/src/billing/shadow-balance.ts`
 
 ### 6.5 Outbox Processing — `Implemented`
 

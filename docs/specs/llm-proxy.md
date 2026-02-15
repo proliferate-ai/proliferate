@@ -7,8 +7,8 @@
 - Key scoping model: team = org, user = session for cost isolation
 - Key duration and lifecycle
 - LiteLLM API integration contract (endpoints called, auth model)
-- Spend tracking via LiteLLM's `LiteLLM_SpendLogs` table
-- LLM spend cursors (DB sync state for billing reconciliation)
+- Spend tracking via LiteLLM's Admin REST API (`GET /spend/logs/v2`)
+- LLM spend cursors (per-org DB sync state for billing reconciliation)
 - Environment configuration (`LLM_PROXY_URL`, `LLM_PROXY_MASTER_KEY`, `LLM_PROXY_KEY_DURATION`, etc.)
 - How providers (Modal, E2B) pass the virtual key to sandboxes
 
@@ -22,8 +22,8 @@
 | Team (org) provisioning | Implemented | `packages/shared/src/llm-proxy.ts:ensureTeamExists` |
 | Sandbox key injection (Modal) | Implemented | `packages/shared/src/providers/modal-libmodal.ts:createSandbox` |
 | Sandbox key injection (E2B) | Implemented | `packages/shared/src/providers/e2b.ts:createSandbox` |
-| Spend sync (cursor-based) | Implemented | `apps/worker/src/billing/worker.ts:syncLLMSpend` |
-| LLM spend cursors (DB) | Implemented | `packages/db/src/schema/billing.ts:llmSpendCursors` |
+| Spend sync (per-org REST API) | Implemented | `apps/worker/src/billing/worker.ts:syncLLMSpend`, `packages/services/src/billing/litellm-api.ts:fetchSpendLogs` |
+| LLM spend cursors (per-org) | Implemented | `packages/db/src/schema/billing.ts:llmSpendCursors` (keyed by `organization_id`) |
 | Model routing config | Implemented | `apps/llm-proxy/litellm/config.yaml` |
 | Key revocation on session end | Implemented | `packages/shared/src/llm-proxy.ts:revokeVirtualKey`, called from `sessions-pause.ts`, `org-pause.ts` |
 | Dynamic max budget from shadow balance | Implemented | `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars` |
@@ -47,7 +47,7 @@ The flow is: session creation → generate virtual key → pass key + proxy base
 **Core entities:**
 - **Virtual key** — a temporary LiteLLM API key (e.g., `sk-xxx`) scoped to one session and one org. Generated via LiteLLM's `/key/generate` admin endpoint.
 - **Team** — LiteLLM's grouping for cost tracking. Maps 1:1 to a Proliferate org. Created via `/team/new` if it doesn't exist.
-- **LLM spend cursor** — a single-row DB table tracking the sync position when reading spend logs from LiteLLM's `LiteLLM_SpendLogs` table.
+- **LLM spend cursor** — a per-org DB table tracking the sync position when reading spend logs from LiteLLM's REST API.
 
 **Key invariants:**
 - Virtual keys are always scoped: `team_id = orgId`, `user_id = sessionId`.
@@ -60,7 +60,7 @@ The flow is: session creation → generate virtual key → pass key + proxy base
 ## 2. Core Concepts
 
 ### LiteLLM Virtual Keys
-LiteLLM's virtual key system (free tier) generates temporary API keys that the proxy validates on each request. Each key carries `team_id` and `user_id` metadata, which LiteLLM uses to attribute spend in its `LiteLLM_SpendLogs` table.
+LiteLLM's virtual key system (free tier) generates temporary API keys that the proxy validates on each request. Each key carries `team_id` and `user_id` metadata, which LiteLLM uses to attribute spend.
 - Key detail agents get wrong: we use virtual keys (free tier), NOT JWT auth (enterprise tier). The master key is only used for admin API calls, never passed to sandboxes.
 - Reference: [LiteLLM virtual keys docs](https://docs.litellm.ai/docs/proxy/virtual_keys)
 
@@ -75,9 +75,9 @@ The LiteLLM config (`apps/llm-proxy/litellm/config.yaml`) maps OpenCode model ID
 - Reference: `apps/llm-proxy/litellm/config.yaml`
 
 ### Spend Sync Architecture
-LiteLLM writes spend data to its own `LiteLLM_SpendLogs` table in a shared PostgreSQL database. Our billing worker reads from this table using cursor-based pagination and converts spend logs into billing events. The two systems share a database but use different schemas.
-- Key detail agents get wrong: we read from LiteLLM's schema (`litellm.LiteLLM_SpendLogs` by default) via raw SQL, not via Drizzle ORM. The schema name is configurable via `LITELLM_DB_SCHEMA`.
-- Reference: `packages/services/src/billing/db.ts:LITELLM_SPEND_LOGS_REF`
+Our billing worker reads spend data from LiteLLM's Admin REST API (`GET /spend/logs/v2`) per org and converts logs into billing events via bulk ledger deduction. Cursors are tracked per-org in the `llm_spend_cursors` table.
+- Key detail agents get wrong: we use the REST API, not cross-schema SQL. The old `LITELLM_DB_SCHEMA` env var is no longer used.
+- Reference: `packages/services/src/billing/litellm-api.ts:fetchSpendLogs`
 
 ---
 
@@ -97,7 +97,8 @@ packages/services/src/
 ├── sessions/
 │   └── sandbox-env.ts                  # Calls generateSessionAPIKey during session creation
 └── billing/
-    └── db.ts                           # LLM spend cursor CRUD, raw SQL reads from LiteLLM_SpendLogs
+    ├── db.ts                           # LLM spend cursor CRUD (per-org)
+    └── litellm-api.ts                  # LiteLLM Admin REST API client (GET /spend/logs/v2)
 
 packages/environment/src/
 └── schema.ts                           # LLM_PROXY_* env var definitions
@@ -120,9 +121,9 @@ packages/shared/src/providers/
 ### Database Tables
 
 ```sql
-llm_spend_cursors
-├── id              TEXT PRIMARY KEY DEFAULT 'global'  -- singleton row
-├── last_start_time TIMESTAMPTZ NOT NULL               -- cursor position in LiteLLM_SpendLogs
+llm_spend_cursors (per-org)
+├── organization_id TEXT PRIMARY KEY FK → organization.id (CASCADE)
+├── last_start_time TIMESTAMPTZ NOT NULL               -- cursor position for REST API pagination
 ├── last_request_id TEXT                               -- tie-breaker for deterministic ordering
 ├── records_processed INTEGER DEFAULT 0                -- total records synced (monotonic)
 └── synced_at       TIMESTAMPTZ DEFAULT NOW()          -- last sync timestamp
@@ -145,21 +146,23 @@ interface VirtualKeyResponse {
   user_id: string;         // sessionId
 }
 
-// packages/services/src/billing/db.ts
-interface LLMSpendLog {
+// packages/services/src/billing/litellm-api.ts
+interface LiteLLMSpendLog {
   request_id: string;
   team_id: string | null;  // our orgId
-  user: string | null;     // our sessionId
+  end_user: string | null; // our sessionId
   spend: number;           // cost in USD
   model: string;
   model_group: string | null;
   total_tokens: number;
   prompt_tokens: number;
   completion_tokens: number;
-  startTime?: Date | string;
+  startTime?: string;
 }
 
+// packages/services/src/billing/db.ts
 interface LLMSpendCursor {
+  organizationId: string;
   lastStartTime: Date;
   lastRequestId: string | null;
   recordsProcessed: number;
@@ -168,8 +171,8 @@ interface LLMSpendCursor {
 ```
 
 ### Key Indexes & Query Patterns
-- `llm_spend_cursors` has no additional indexes — single-row table queried by `WHERE id = 'global'`.
-- `LiteLLM_SpendLogs` (external, LiteLLM-managed) is queried with `ORDER BY "startTime" ASC, request_id ASC` for deterministic cursor pagination. Index coverage depends on LiteLLM's schema — not under our control.
+- `llm_spend_cursors` — primary key lookup by `organization_id`. One row per active org.
+- Spend logs are now fetched via LiteLLM's REST API (`GET /spend/logs/v2?team_id=...&start_date=...`), not raw SQL.
 
 ---
 
@@ -182,7 +185,7 @@ interface LLMSpendCursor {
 
 ### Don't
 - Don't pass `LLM_PROXY_MASTER_KEY` to sandboxes — only virtual keys go to sandboxes
-- Don't read `LiteLLM_SpendLogs` via Drizzle ORM — the table is managed by LiteLLM, use raw SQL via `packages/services/src/billing/db.ts`
+- Don't query LiteLLM's database directly — use the REST API client (`packages/services/src/billing/litellm-api.ts:fetchSpendLogs`)
 - Don't assume `LLM_PROXY_URL` is always set — graceful fallback to direct API key is required unless `LLM_PROXY_REQUIRED=true`
 
 ### Error Handling
@@ -207,8 +210,8 @@ _Source: `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`_
 
 ### Reliability
 - Team creation is idempotent — `ensureTeamExists` checks via `GET /team/info` first, handles "already exists" errors from `POST /team/new` (`packages/shared/src/llm-proxy.ts:ensureTeamExists`)
-- Spend sync uses cursor-based pagination with deterministic ordering (`startTime ASC, request_id ASC`) to avoid duplicates (`packages/services/src/billing/db.ts:getLLMSpendLogsByCursor`)
-- Lookback sweep catches late-arriving logs; idempotency keys prevent double-billing (`apps/worker/src/billing/worker.ts:syncLLMSpend`)
+- Spend sync uses per-org cursors with `start_date` filtering via the REST API to avoid reprocessing (`packages/services/src/billing/db.ts:getLLMSpendCursor`)
+- Idempotency keys (`llm:{request_id}`) on billing events prevent double-billing even if the same logs are fetched twice (`packages/services/src/billing/shadow-balance.ts:bulkDeductShadowBalance`)
 
 ### Testing Conventions
 - No dedicated tests exist for the LLM proxy integration. Key generation and spend sync are verified via manual testing and production observability.
@@ -261,23 +264,27 @@ _Source: `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`_
 
 ### 6.3 LLM Spend Sync
 
-**What it does:** Periodically reads LLM spend logs from LiteLLM's database and converts them into billing events for Proliferate's billing system.
+**What it does:** Periodically reads LLM spend logs from LiteLLM's REST API and converts them into billing events for Proliferate's billing system via bulk ledger deduction.
 
 **Happy path:**
-1. Billing worker calls `syncLLMSpend()` every 30 seconds, guarded by `NEXT_PUBLIC_BILLING_ENABLED` (`apps/worker/src/billing/worker.ts`)
-2. Reads current cursor from `llm_spend_cursors` table — `getLLMSpendCursor()` (`packages/services/src/billing/db.ts`)
-3. Queries `litellm.LiteLLM_SpendLogs` via raw SQL, ordered by `startTime ASC, request_id ASC`, batched at `llmSyncBatchSize` (`packages/services/src/billing/db.ts:getLLMSpendLogsByCursor`)
-4. For each log with a valid `team_id` and positive `spend`, calls `billing.deductShadowBalance()` with `eventType: "llm"` and `idempotencyKey: "llm:{request_id}"` — this atomically deducts credits and creates a billing event (see `billing-metering.md` for shadow balance details)
-5. Updates cursor position after each batch (`packages/services/src/billing/db.ts:updateLLMSpendCursor`)
-6. After cursor-based sweep, runs a lookback sweep for late-arriving logs (`getLLMSpendLogsLookback`)
+1. Billing worker calls `syncLLMSpend()` every 30 seconds, guarded by `NEXT_PUBLIC_BILLING_ENABLED` and `LLM_PROXY_ADMIN_URL` (`apps/worker/src/billing/worker.ts`)
+2. Lists all billable orgs (billing state in `active`, `trial`, or `grace`) via `billing.listBillableOrgIds()` (`packages/services/src/billing/db.ts`)
+3. For each org:
+   a. Reads per-org cursor — `billing.getLLMSpendCursor(orgId)` (`packages/services/src/billing/db.ts`)
+   b. Fetches spend logs via REST API — `billing.fetchSpendLogs(orgId, startDate)` (`packages/services/src/billing/litellm-api.ts`)
+   c. Filters logs with positive `spend`, converts to `BulkDeductEvent[]` using `calculateLLMCredits(spend)` with idempotency key `llm:{request_id}`
+   d. Calls `billing.bulkDeductShadowBalance(orgId, events)` — single transaction: locks org row, bulk inserts billing events, deducts total from shadow balance (`packages/services/src/billing/shadow-balance.ts`)
+   e. Updates cursor to latest log's `startTime` — `billing.updateLLMSpendCursor()` (`packages/services/src/billing/db.ts`)
+4. Handles state transitions: if `shouldTerminateSessions`, calls `billing.handleCreditsExhaustedV2(orgId, providers)`
 
 **Edge cases:**
-- First run (no cursor) with `LLM_SYNC_BOOTSTRAP_MODE=full` → seeds cursor from earliest log in `LiteLLM_SpendLogs`
-- First run with `LLM_SYNC_BOOTSTRAP_MODE=recent` (default) → starts from 5-minute lookback window
-- Duplicate logs → `deductShadowBalance` uses unique `idempotencyKey` (`llm:{request_id}`), duplicates are silently skipped
-- Max batches exceeded → logs warning but does not fail; remaining logs are picked up next cycle
+- First run for an org (no cursor) → starts from 5-minute lookback window (`now - 5min`)
+- No logs returned → cursor is not advanced (no-op for that org)
+- Duplicate logs → `bulkDeductShadowBalance` uses `ON CONFLICT (idempotency_key) DO NOTHING`, duplicates are silently skipped
+- REST API failure for one org → logged and skipped; other orgs continue; retried next cycle
+- `LLM_PROXY_ADMIN_URL` not set → entire sync is skipped (no proxy configured)
 
-**Files touched:** `apps/worker/src/billing/worker.ts:syncLLMSpend`, `packages/services/src/billing/db.ts`
+**Files touched:** `apps/worker/src/billing/worker.ts:syncLLMSpend`, `packages/services/src/billing/db.ts`, `packages/services/src/billing/litellm-api.ts`, `packages/services/src/billing/shadow-balance.ts`
 
 **Status:** Implemented
 
@@ -312,18 +319,15 @@ _Source: `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`_
 | Env Var | Required | Default | Purpose |
 |---------|----------|---------|---------|
 | `LLM_PROXY_URL` | No | — | Base URL of the LiteLLM proxy. When set, enables proxy mode. |
-| `LLM_PROXY_ADMIN_URL` | No | `LLM_PROXY_URL` | Separate admin URL for key/team management. Falls back to `LLM_PROXY_URL`. |
+| `LLM_PROXY_ADMIN_URL` | No | `LLM_PROXY_URL` | Separate admin URL for key/team management and REST API spend queries. Falls back to `LLM_PROXY_URL`. |
 | `LLM_PROXY_PUBLIC_URL` | No | `LLM_PROXY_URL` | Public-facing URL that sandboxes use. Falls back to `LLM_PROXY_URL`. |
-| `LLM_PROXY_MASTER_KEY` | When proxy is enabled | — | Master key for LiteLLM admin API (key generation, team management). |
+| `LLM_PROXY_MASTER_KEY` | When proxy is enabled | — | Master key for LiteLLM admin API (key generation, team management, spend queries). |
 | `LLM_PROXY_KEY_DURATION` | No | `"24h"` | Default virtual key validity duration. Supports LiteLLM duration strings. |
 | `LLM_PROXY_REQUIRED` | No | `false` | When `true`, session creation fails if proxy is not configured. |
 
-Additional env vars used by the spend sync (read via raw `process.env`, not in the typed schema):
-- `LITELLM_DB_SCHEMA` — PostgreSQL schema containing `LiteLLM_SpendLogs` (default: `"litellm"`) (`packages/services/src/billing/db.ts`)
-- `LLM_SYNC_BOOTSTRAP_MODE` — `"recent"` (default) or `"full"` for first-run backfill behavior (`apps/worker/src/billing/worker.ts`)
-- `LLM_SYNC_MAX_BATCHES` — max batches per sync cycle (default: 100, or 20 on bootstrap) (`apps/worker/src/billing/worker.ts`)
+The spend sync uses `LLM_PROXY_ADMIN_URL` and `LLM_PROXY_MASTER_KEY` (same vars as key generation) to call `GET /spend/logs/v2`. No additional env vars are required.
 
-**Files touched:** `packages/environment/src/schema.ts` (LLM_PROXY_* vars), `packages/shared/src/llm-proxy.ts`, `packages/services/src/billing/db.ts`, `apps/worker/src/billing/worker.ts`
+**Files touched:** `packages/environment/src/schema.ts` (LLM_PROXY_* vars), `packages/shared/src/llm-proxy.ts`, `packages/services/src/billing/litellm-api.ts`
 
 **Status:** Implemented
 
@@ -335,8 +339,8 @@ Additional env vars used by the spend sync (read via raw `process.env`, not in t
 |---|---|---|---|
 | Sandbox Providers | Providers → This | `getLLMProxyBaseURL()`, reads `envVars.LLM_PROXY_API_KEY` | Both Modal and E2B inject the virtual key and base URL at sandbox boot. See `sandbox-providers.md` §6. |
 | Sessions | Sessions → This | `buildSandboxEnvVars()` → `generateSessionAPIKey()` | Session creation triggers key generation. See `sessions-gateway.md` §6. |
-| Billing & Metering | Billing → This | `syncLLMSpend()` reads `LiteLLM_SpendLogs`, writes `billing_events` | Billing worker polls spend data. Charging policy owned by `billing-metering.md`. |
-| Environment | This → Environment | `env.LLM_PROXY_*` | Typed `LLM_PROXY_*` vars read from env schema (`packages/environment/src/schema.ts`). Sync tuning vars (`LITELLM_DB_SCHEMA`, `LLM_SYNC_*`) are raw `process.env` reads — see §6.4. |
+| Billing & Metering | Billing → This | `syncLLMSpend()` calls `fetchSpendLogs()` REST API, writes `billing_events` via `bulkDeductShadowBalance()` | Billing worker polls spend data per org. Charging policy owned by `billing-metering.md`. |
+| Environment | This → Environment | `env.LLM_PROXY_*` | Typed `LLM_PROXY_*` vars read from env schema (`packages/environment/src/schema.ts`). |
 
 ### Security & Auth
 - The master key (`LLM_PROXY_MASTER_KEY`) is never exposed to sandboxes — it stays server-side for admin API calls only.
@@ -364,6 +368,6 @@ Additional env vars used by the spend sync (read via raw `process.env`, not in t
 ## 9. Known Limitations & Tech Debt
 
 - [x] ~~**No key revocation on session end**~~ — Resolved. `revokeVirtualKey(sessionId)` is called fire-and-forget on session pause, exhaustion, and bulk termination.
-- [ ] **Shared database coupling** — the spend sync reads directly from LiteLLM's PostgreSQL schema, coupling our billing worker to LiteLLM's internal table format. Impact: LiteLLM schema changes could break the sync. Expected fix: use LiteLLM's HTTP spend API instead of raw SQL if one becomes available.
-- [ ] **Single global cursor** — the `llm_spend_cursors` table uses a singleton row (`id = 'global'`). This means only one billing worker instance can sync spend logs at a time. Impact: acceptable at current scale. Expected fix: per-org cursors or distributed lock if needed.
+- [x] ~~**Shared database coupling**~~ — resolved. Spend sync now uses LiteLLM's REST API (`GET /spend/logs/v2`) via `litellm-api.ts` instead of cross-schema SQL.
+- [x] ~~**Single global cursor**~~ — resolved. Cursors are now per-org (`llm_spend_cursors` table keyed by `organization_id`). The old global cursor table has been archived as `llm_spend_cursors_global`.
 - [x] ~~**No budget enforcement on virtual keys**~~ — Resolved. `buildSandboxEnvVars` fetches `shadow_balance` when billing is enabled and passes `maxBudget = Math.max(0, shadow_balance * 0.01)` to `generateVirtualKey`.

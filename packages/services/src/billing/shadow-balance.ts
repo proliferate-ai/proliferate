@@ -249,19 +249,21 @@ export async function bulkDeductShadowBalance(
 	organizationId: string,
 	events: BulkDeductEvent[],
 ): Promise<BulkDeductResult> {
+	const db = getDb();
+
 	if (events.length === 0) {
+		const balance = await getShadowBalance(organizationId);
+		const current = balance?.balance ?? 0;
 		return {
 			insertedCount: 0,
 			totalCreditsDeducted: 0,
-			previousBalance: 0,
-			newBalance: 0,
+			previousBalance: current,
+			newBalance: current,
 			stateChanged: false,
 			shouldTerminateSessions: false,
 			shouldBlockNewSessions: false,
 		};
 	}
-
-	const db = getDb();
 
 	return await db.transaction(async (tx) => {
 		// 1. Lock the org row

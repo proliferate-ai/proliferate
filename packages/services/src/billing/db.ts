@@ -5,8 +5,18 @@
  * LLM spend logs are now fetched via the LiteLLM REST API (see litellm-api.ts).
  */
 
-import { arrayContains } from "drizzle-orm";
-import { and, billingEvents, desc, eq, getDb, gte, llmSpendCursors, sql } from "../db/client";
+import { arrayContains, inArray } from "drizzle-orm";
+import {
+	and,
+	billingEvents,
+	desc,
+	eq,
+	getDb,
+	gte,
+	llmSpendCursors,
+	organization,
+	sql,
+} from "../db/client";
 
 // ============================================
 // Types
@@ -157,6 +167,23 @@ export async function listBillingEvents(options: ListBillingEventsOptions): Prom
 		events,
 		total: Number(countRow?.count ?? 0),
 	};
+}
+
+// ============================================
+// Billable Orgs
+// ============================================
+
+/**
+ * List org IDs with an active billing state (active, trial, or grace).
+ * These are the orgs that may accumulate LLM spend.
+ */
+export async function listBillableOrgIds(): Promise<string[]> {
+	const db = getDb();
+	const rows = await db
+		.select({ id: organization.id })
+		.from(organization)
+		.where(inArray(organization.billingState, ["active", "trial", "grace"]));
+	return rows.map((r) => r.id);
 }
 
 // ============================================
