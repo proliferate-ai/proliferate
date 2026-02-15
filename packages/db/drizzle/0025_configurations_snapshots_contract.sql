@@ -146,6 +146,10 @@ ALTER TABLE "configurations" DROP COLUMN IF EXISTS "service_commands_updated_by"
 ALTER TABLE "configurations" RENAME COLUMN "notes" TO "description";
 --> statement-breakpoint
 
+-- Add updated_at (never existed on prebuilds)
+ALTER TABLE "configurations" ADD COLUMN IF NOT EXISTS "updated_at" timestamp with time zone DEFAULT now();
+--> statement-breakpoint
+
 -- ============================================
 -- 9. Rename prebuild_repos → configuration_repos
 -- ============================================
