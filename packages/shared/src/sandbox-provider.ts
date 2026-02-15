@@ -123,6 +123,8 @@ export interface SandboxProvider {
 	readonly supportsPause?: boolean;
 	/** True if provider auto-pauses sandboxes on expiry (no explicit snapshot needed for idle sessions). */
 	readonly supportsAutoPause?: boolean;
+	/** True if provider supports in-memory snapshots (faster than filesystem snapshots). */
+	readonly supportsMemorySnapshot?: boolean;
 
 	/**
 	 * Ensure a sandbox exists for this session.
@@ -229,4 +231,30 @@ export interface SandboxProvider {
 			env?: Record<string, string>;
 		},
 	): Promise<{ stdout: string; stderr: string; exitCode: number }>;
+
+	/**
+	 * Take an in-memory snapshot of a running sandbox.
+	 * Memory snapshots capture the full process state (RAM + disk) and are
+	 * faster to restore than filesystem-only snapshots.
+	 * Only available if `supportsMemorySnapshot` is true.
+	 *
+	 * @param sessionId - Our internal session ID
+	 * @param sandboxId - The provider's sandbox ID
+	 */
+	memorySnapshot?(sessionId: string, sandboxId: string): Promise<SnapshotResult>;
+
+	/**
+	 * Restore a sandbox from an in-memory snapshot.
+	 * The returned sandbox resumes execution from the exact point the snapshot was taken.
+	 * Only available if `supportsMemorySnapshot` is true.
+	 *
+	 * @param sessionId - Our internal session ID
+	 * @param snapshotId - The snapshot ID from a previous memorySnapshot() call
+	 * @param opts - Creation options (env vars, etc.) to apply on restore
+	 */
+	restoreFromMemorySnapshot?(
+		sessionId: string,
+		snapshotId: string,
+		opts?: Pick<CreateSandboxOpts, "envVars">,
+	): Promise<CreateSandboxResult>;
 }

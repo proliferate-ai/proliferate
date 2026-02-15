@@ -203,6 +203,7 @@ export const organization = pgTable(
 		graceEnteredAt: timestamp("grace_entered_at", { withTimezone: true, mode: "date" }),
 		graceExpiresAt: timestamp("grace_expires_at", { withTimezone: true, mode: "date" }),
 		onboardingMeta: jsonb("onboarding_meta"),
+		actionModes: jsonb("action_modes"),
 	},
 	(table) => [
 		index("organization_allowed_domains_idx").using(
@@ -282,8 +283,8 @@ export const repos = pgTable(
 	],
 );
 
-export const prebuilds = pgTable(
-	"prebuilds",
+export const configurations = pgTable(
+	"configurations",
 	{
 		id: uuid().defaultRandom().primaryKey().notNull(),
 		snapshotId: text("snapshot_id"),
@@ -420,37 +421,6 @@ export const integrations = pgTable(
 	],
 );
 
-export const secretBundles = pgTable(
-	"secret_bundles",
-	{
-		id: uuid().defaultRandom().primaryKey().notNull(),
-		organizationId: text("organization_id").notNull(),
-		name: text().notNull(),
-		description: text(),
-		targetPath: text("target_path"),
-		createdBy: text("created_by"),
-		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
-		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
-	},
-	(table) => [
-		index("idx_secret_bundles_org").using(
-			"btree",
-			table.organizationId.asc().nullsLast().op("text_ops"),
-		),
-		foreignKey({
-			columns: [table.organizationId],
-			foreignColumns: [organization.id],
-			name: "secret_bundles_organization_id_fkey",
-		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.createdBy],
-			foreignColumns: [user.id],
-			name: "secret_bundles_created_by_fkey",
-		}),
-		unique("secret_bundles_org_name_unique").on(table.organizationId, table.name),
-	],
-);
-
 export const secrets = pgTable(
 	"secrets",
 	{
@@ -465,12 +435,10 @@ export const secrets = pgTable(
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		prebuildId: uuid("prebuild_id"),
-		bundleId: uuid("bundle_id"),
 	},
 	(table) => [
 		index("idx_secrets_org").using("btree", table.organizationId.asc().nullsLast().op("text_ops")),
 		index("idx_secrets_repo").using("btree", table.repoId.asc().nullsLast().op("uuid_ops")),
-		index("idx_secrets_bundle").using("btree", table.bundleId.asc().nullsLast().op("uuid_ops")),
 		foreignKey({
 			columns: [table.organizationId],
 			foreignColumns: [organization.id],
@@ -488,14 +456,9 @@ export const secrets = pgTable(
 		}),
 		foreignKey({
 			columns: [table.prebuildId],
-			foreignColumns: [prebuilds.id],
+			foreignColumns: [configurations.id],
 			name: "secrets_prebuild_id_fkey",
 		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.bundleId],
-			foreignColumns: [secretBundles.id],
-			name: "secrets_bundle_id_fkey",
-		}).onDelete("set null"),
 		unique("secrets_org_repo_prebuild_key_unique").on(
 			table.organizationId,
 			table.repoId,
@@ -604,6 +567,7 @@ export const automations = pgTable(
 		llmAnalysisPrompt: text("llm_analysis_prompt"),
 		notificationChannelId: text("notification_channel_id"),
 		notificationSlackInstallationId: uuid("notification_slack_installation_id"),
+		actionModes: jsonb("action_modes"),
 	},
 	(table) => [
 		index("idx_automations_enabled")
@@ -629,7 +593,7 @@ export const automations = pgTable(
 		}),
 		foreignKey({
 			columns: [table.defaultPrebuildId],
-			foreignColumns: [prebuilds.id],
+			foreignColumns: [configurations.id],
 			name: "automations_default_prebuild_id_fkey",
 		}).onDelete("set null"),
 		foreignKey({
@@ -1198,50 +1162,6 @@ export const actionInvocations = pgTable(
 	],
 );
 
-export const actionGrants = pgTable(
-	"action_grants",
-	{
-		id: uuid().defaultRandom().primaryKey().notNull(),
-		organizationId: text("organization_id").notNull(),
-		createdBy: text("created_by").notNull(),
-		sessionId: uuid("session_id"),
-		integration: text("integration").notNull(),
-		action: text("action").notNull(),
-		maxCalls: integer("max_calls"),
-		usedCalls: integer("used_calls").default(0).notNull(),
-		expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
-		revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
-		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
-	},
-	(table) => [
-		index("idx_action_grants_org").using(
-			"btree",
-			table.organizationId.asc().nullsLast().op("text_ops"),
-		),
-		index("idx_action_grants_lookup").using(
-			"btree",
-			table.organizationId.asc().nullsLast().op("text_ops"),
-			table.integration.asc().nullsLast().op("text_ops"),
-			table.action.asc().nullsLast().op("text_ops"),
-		),
-		foreignKey({
-			columns: [table.organizationId],
-			foreignColumns: [organization.id],
-			name: "action_grants_organization_id_fkey",
-		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.createdBy],
-			foreignColumns: [user.id],
-			name: "action_grants_created_by_fkey",
-		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.sessionId],
-			foreignColumns: [sessions.id],
-			name: "action_grants_session_id_fkey",
-		}).onDelete("cascade"),
-	],
-);
-
 export const userSshKeys = pgTable(
 	"user_ssh_keys",
 	{
@@ -1428,6 +1348,7 @@ export const sessions = pgTable(
 		clientType: text("client_type"),
 		clientMetadata: jsonb("client_metadata"),
 		prebuildId: uuid("prebuild_id"),
+		idempotencyKey: text("idempotency_key"),
 		sandboxExpiresAt: timestamp("sandbox_expires_at", { withTimezone: true, mode: "date" }),
 		meteredThroughAt: timestamp("metered_through_at", { withTimezone: true, mode: "date" }),
 		billingTokenVersion: integer("billing_token_version").default(1),
@@ -1508,7 +1429,7 @@ export const sessions = pgTable(
 		}).onDelete("set null"),
 		foreignKey({
 			columns: [table.prebuildId],
-			foreignColumns: [prebuilds.id],
+			foreignColumns: [configurations.id],
 			name: "sessions_prebuild_id_fkey",
 		}).onDelete("cascade"),
 		check(
@@ -1568,10 +1489,10 @@ export const billingEvents = pgTable(
 	],
 );
 
-export const prebuildRepos = pgTable(
-	"prebuild_repos",
+export const configurationRepos = pgTable(
+	"configuration_repos",
 	{
-		prebuildId: uuid("prebuild_id").notNull(),
+		configurationId: uuid("configuration_id").notNull(),
 		repoId: uuid("repo_id").notNull(),
 		workspacePath: text("workspace_path").notNull(),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
@@ -1579,12 +1500,12 @@ export const prebuildRepos = pgTable(
 	(table) => [
 		index("idx_prebuild_repos_prebuild").using(
 			"btree",
-			table.prebuildId.asc().nullsLast().op("uuid_ops"),
+			table.configurationId.asc().nullsLast().op("uuid_ops"),
 		),
 		index("idx_prebuild_repos_repo").using("btree", table.repoId.asc().nullsLast().op("uuid_ops")),
 		foreignKey({
-			columns: [table.prebuildId],
-			foreignColumns: [prebuilds.id],
+			columns: [table.configurationId],
+			foreignColumns: [configurations.id],
 			name: "prebuild_repos_prebuild_id_fkey",
 		}).onDelete("cascade"),
 		foreignKey({
@@ -1592,7 +1513,10 @@ export const prebuildRepos = pgTable(
 			foreignColumns: [repos.id],
 			name: "prebuild_repos_repo_id_fkey",
 		}).onDelete("cascade"),
-		primaryKey({ columns: [table.prebuildId, table.repoId], name: "prebuild_repos_pkey" }),
+		primaryKey({
+			columns: [table.configurationId, table.repoId],
+			name: "prebuild_repos_pkey",
+		}),
 	],
 );
 
@@ -1735,6 +1659,7 @@ export const orgConnectors = pgTable(
 		url: text().notNull(),
 		auth: jsonb().notNull(),
 		riskPolicy: jsonb("risk_policy"),
+		toolRiskOverrides: jsonb("tool_risk_overrides"),
 		enabled: boolean().notNull().default(true),
 		createdBy: text("created_by"),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
@@ -1751,6 +1676,261 @@ export const orgConnectors = pgTable(
 			columns: [table.createdBy],
 			foreignColumns: [user.id],
 			name: "org_connectors_created_by_fkey",
+		}),
+	],
+);
+
+// ============================================
+// vNext Tables
+// ============================================
+
+/**
+ * Webhook inbox — raw webhook events received before processing.
+ * Decouples ingestion from processing for reliability.
+ */
+export const webhookInbox = pgTable(
+	"webhook_inbox",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id"),
+		provider: text().notNull(),
+		externalId: text("external_id"),
+		headers: jsonb(),
+		payload: jsonb().notNull(),
+		signature: text(),
+		status: text().default("pending").notNull(),
+		error: text(),
+		processedAt: timestamp("processed_at", { withTimezone: true, mode: "date" }),
+		receivedAt: timestamp("received_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_webhook_inbox_status").using(
+			"btree",
+			table.status.asc().nullsLast().op("text_ops"),
+			table.receivedAt.asc().nullsLast().op("timestamptz_ops"),
+		),
+		index("idx_webhook_inbox_provider").using(
+			"btree",
+			table.provider.asc().nullsLast().op("text_ops"),
+		),
+		index("idx_webhook_inbox_org").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
+		),
+	],
+);
+
+/**
+ * Trigger poll groups — groups polling triggers by provider+connection for efficient batch polling.
+ */
+export const triggerPollGroups = pgTable(
+	"trigger_poll_groups",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id").notNull(),
+		provider: text().notNull(),
+		integrationId: uuid("integration_id"),
+		cronExpression: text("cron_expression").notNull(),
+		enabled: boolean().default(true),
+		lastPolledAt: timestamp("last_polled_at", { withTimezone: true, mode: "date" }),
+		cursor: jsonb(),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_trigger_poll_groups_org").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
+		),
+		index("idx_trigger_poll_groups_enabled").using(
+			"btree",
+			table.enabled.asc().nullsLast().op("bool_ops"),
+		),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "trigger_poll_groups_organization_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.integrationId],
+			foreignColumns: [integrations.id],
+			name: "trigger_poll_groups_integration_id_fkey",
+		}).onDelete("set null"),
+	],
+);
+
+/**
+ * Session tool invocations — records tool calls within sessions for audit and observability.
+ */
+export const sessionToolInvocations = pgTable(
+	"session_tool_invocations",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		sessionId: uuid("session_id").notNull(),
+		organizationId: text("organization_id").notNull(),
+		toolName: text("tool_name").notNull(),
+		toolSource: text("tool_source"),
+		status: text().default("pending"),
+		input: jsonb(),
+		output: jsonb(),
+		error: text(),
+		durationMs: integer("duration_ms"),
+		startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+		completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_session_tool_invocations_session").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_session_tool_invocations_org").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
+		),
+		index("idx_session_tool_invocations_status").using(
+			"btree",
+			table.status.asc().nullsLast().op("text_ops"),
+		),
+		foreignKey({
+			columns: [table.sessionId],
+			foreignColumns: [sessions.id],
+			name: "session_tool_invocations_session_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "session_tool_invocations_organization_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
+/**
+ * User connections — user-level integration connections (distinct from org-level integrations).
+ */
+export const userConnections = pgTable(
+	"user_connections",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		userId: text("user_id").notNull(),
+		organizationId: text("organization_id").notNull(),
+		provider: text().notNull(),
+		connectionId: text("connection_id").notNull(),
+		displayName: text("display_name"),
+		status: text().default("active"),
+		metadata: jsonb(),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_user_connections_user").using(
+			"btree",
+			table.userId.asc().nullsLast().op("text_ops"),
+		),
+		index("idx_user_connections_org").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
+		),
+		foreignKey({
+			columns: [table.userId],
+			foreignColumns: [user.id],
+			name: "user_connections_user_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "user_connections_organization_id_fkey",
+		}).onDelete("cascade"),
+		unique("user_connections_user_org_provider_connection_key").on(
+			table.userId,
+			table.organizationId,
+			table.provider,
+			table.connectionId,
+		),
+	],
+);
+
+/**
+ * Secret files — file-based secrets written to sandbox (replaces secret_bundles approach).
+ */
+export const secretFiles = pgTable(
+	"secret_files",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id").notNull(),
+		configurationId: uuid("configuration_id"),
+		filePath: text("file_path").notNull(),
+		encryptedContent: text("encrypted_content").notNull(),
+		description: text(),
+		createdBy: text("created_by"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_secret_files_org").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
+		),
+		index("idx_secret_files_configuration").using(
+			"btree",
+			table.configurationId.asc().nullsLast().op("uuid_ops"),
+		),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "secret_files_organization_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.configurationId],
+			foreignColumns: [configurations.id],
+			name: "secret_files_configuration_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [user.id],
+			name: "secret_files_created_by_fkey",
+		}),
+		unique("secret_files_org_config_path_unique").on(
+			table.organizationId,
+			table.configurationId,
+			table.filePath,
+		),
+	],
+);
+
+/**
+ * Configuration secrets — links configurations to secrets for scoped secret injection.
+ */
+export const configurationSecrets = pgTable(
+	"configuration_secrets",
+	{
+		configurationId: uuid("configuration_id").notNull(),
+		secretId: uuid("secret_id").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_configuration_secrets_configuration").using(
+			"btree",
+			table.configurationId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_configuration_secrets_secret").using(
+			"btree",
+			table.secretId.asc().nullsLast().op("uuid_ops"),
+		),
+		foreignKey({
+			columns: [table.configurationId],
+			foreignColumns: [configurations.id],
+			name: "configuration_secrets_configuration_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.secretId],
+			foreignColumns: [secrets.id],
+			name: "configuration_secrets_secret_id_fkey",
+		}).onDelete("cascade"),
+		primaryKey({
+			columns: [table.configurationId, table.secretId],
+			name: "configuration_secrets_pkey",
 		}),
 	],
 );

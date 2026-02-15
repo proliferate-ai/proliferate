@@ -9,6 +9,8 @@ import {
 	and,
 	cliDeviceCodes,
 	cliGithubSelections,
+	configurationRepos,
+	configurations,
 	desc,
 	eq,
 	getDb,
@@ -16,8 +18,6 @@ import {
 	integrations,
 	member,
 	organization,
-	prebuildRepos,
-	prebuilds,
 	repoConnections,
 	repos,
 	sessions,
@@ -470,8 +470,8 @@ export async function getCliPrebuild(
 	localPathHash: string,
 ): Promise<CliPrebuildRow | null> {
 	const db = getDb();
-	const row = await db.query.prebuilds.findFirst({
-		where: and(eq(prebuilds.userId, userId), eq(prebuilds.localPathHash, localPathHash)),
+	const row = await db.query.configurations.findFirst({
+		where: and(eq(configurations.userId, userId), eq(configurations.localPathHash, localPathHash)),
 		columns: {
 			id: true,
 			snapshotId: true,
@@ -504,7 +504,7 @@ export async function upsertCliPrebuild(input: {
 }): Promise<CliPrebuildRow> {
 	const db = getDb();
 	const [row] = await db
-		.insert(prebuilds)
+		.insert(configurations)
 		.values({
 			userId: input.userId,
 			localPathHash: input.localPathHash,
@@ -513,7 +513,7 @@ export async function upsertCliPrebuild(input: {
 			name: "CLI Prebuild",
 		})
 		.onConflictDoUpdate({
-			target: [prebuilds.userId, prebuilds.localPathHash],
+			target: [configurations.userId, configurations.localPathHash],
 			set: {
 				snapshotId: input.snapshotId,
 				status: "ready",
@@ -537,8 +537,8 @@ export async function upsertCliPrebuild(input: {
 export async function deleteCliPrebuild(userId: string, localPathHash: string): Promise<void> {
 	const db = getDb();
 	await db
-		.delete(prebuilds)
-		.where(and(eq(prebuilds.userId, userId), eq(prebuilds.localPathHash, localPathHash)));
+		.delete(configurations)
+		.where(and(eq(configurations.userId, userId), eq(configurations.localPathHash, localPathHash)));
 }
 
 /**
@@ -551,7 +551,7 @@ export async function createCliPrebuildPending(input: {
 }): Promise<{ id: string }> {
 	const db = getDb();
 	const [row] = await db
-		.insert(prebuilds)
+		.insert(configurations)
 		.values({
 			userId: input.userId,
 			localPathHash: input.localPathHash,
@@ -559,7 +559,7 @@ export async function createCliPrebuildPending(input: {
 			type: "cli",
 			name: "CLI Prebuild",
 		})
-		.returning({ id: prebuilds.id });
+		.returning({ id: configurations.id });
 
 	return row;
 }
@@ -574,14 +574,14 @@ export async function upsertPrebuildRepo(input: {
 }): Promise<void> {
 	const db = getDb();
 	await db
-		.insert(prebuildRepos)
+		.insert(configurationRepos)
 		.values({
-			prebuildId: input.prebuildId,
+			configurationId: input.prebuildId,
 			repoId: input.repoId,
 			workspacePath: input.workspacePath,
 		})
 		.onConflictDoUpdate({
-			target: [prebuildRepos.prebuildId, prebuildRepos.repoId],
+			target: [configurationRepos.configurationId, configurationRepos.repoId],
 			set: {
 				workspacePath: input.workspacePath,
 			},

@@ -590,6 +590,16 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  packages/providers:
+    dependencies:
+      zod:
+        specifier: ^3.22.3
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+
   packages/queue:
     dependencies:
       '@proliferate/environment':

@@ -250,12 +250,12 @@ export const reposRouter = {
 			const usablePrebuilds = prebuildRepos
 				.filter(
 					(pr) =>
-						pr.prebuild &&
-						typeof pr.prebuild === "object" &&
-						"snapshotId" in pr.prebuild &&
-						!!pr.prebuild.snapshotId,
+						pr.configuration &&
+						typeof pr.configuration === "object" &&
+						"snapshotId" in pr.configuration &&
+						!!pr.configuration.snapshotId,
 				)
-				.map((pr) => pr.prebuild);
+				.map((pr) => pr.configuration);
 
 			// Deduplicate by prebuild ID
 			const uniquePrebuilds = Array.from(

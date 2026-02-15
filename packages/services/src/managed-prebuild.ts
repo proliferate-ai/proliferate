@@ -76,7 +76,7 @@ async function findManagedPrebuild(
 
 	// Filter to prebuilds that have repos in this org
 	const orgPrebuilds = prebuilds.filter((p) =>
-		p.prebuildRepos?.some((pr) => pr.repo?.organizationId === organizationId),
+		p.configurationRepos?.some((pr) => pr.repo?.organizationId === organizationId),
 	);
 
 	if (orgPrebuilds.length === 0) {
@@ -86,7 +86,7 @@ async function findManagedPrebuild(
 	// Return the most recent one (prefer one with snapshot, but return any)
 	const best = orgPrebuilds.find((p) => p.snapshotId) || orgPrebuilds[0];
 	const repoIds =
-		best.prebuildRepos?.map((pr) => pr.repo?.id).filter((id): id is string => !!id) || [];
+		best.configurationRepos?.map((pr) => pr.repo?.id).filter((id): id is string => !!id) || [];
 
 	return {
 		id: best.id,

@@ -7,13 +7,13 @@
 import {
 	and,
 	automations,
+	configurations,
 	desc,
 	eq,
 	getDb,
 	gte,
 	inArray,
 	integrations,
-	prebuilds,
 	sql,
 	triggerEvents,
 	triggers,
@@ -508,11 +508,11 @@ export async function updateEvent(
  */
 export async function prebuildExists(id: string, orgId: string): Promise<boolean> {
 	const db = getDb();
-	const result = await db.query.prebuilds.findFirst({
-		where: eq(prebuilds.id, id),
+	const result = await db.query.configurations.findFirst({
+		where: eq(configurations.id, id),
 		columns: { id: true },
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
 					repo: {
 						columns: { organizationId: true },
@@ -523,7 +523,7 @@ export async function prebuildExists(id: string, orgId: string): Promise<boolean
 	});
 
 	if (!result) return false;
-	return result.prebuildRepos.some((pr) => pr.repo?.organizationId === orgId);
+	return result.configurationRepos.some((pr) => pr.repo?.organizationId === orgId);
 }
 
 /**
