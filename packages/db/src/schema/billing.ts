@@ -67,18 +67,6 @@ export const billingEventsRelations = relations(billingEvents, ({ one }) => ({
 }));
 
 // ============================================
-// LLM Spend Cursors — Global (archived, superseded by per-org)
-// ============================================
-
-export const llmSpendCursorsGlobal = pgTable("llm_spend_cursors_global", {
-	id: text("id").primaryKey().default("global"),
-	lastStartTime: timestamp("last_start_time", { withTimezone: true }).notNull(),
-	lastRequestId: text("last_request_id"),
-	recordsProcessed: integer("records_processed").default(0).notNull(),
-	syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ============================================
 // LLM Spend Cursors — Per-Org (Billing V2)
 // ============================================
 

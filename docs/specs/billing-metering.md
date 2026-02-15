@@ -95,7 +95,7 @@ packages/services/src/billing/
 └── snapshot-limits.ts          # Snapshot quota checking and cleanup
 
 packages/db/src/schema/
-└── billing.ts                  # billingEvents, llmSpendCursors (per-org), llmSpendCursorsGlobal (archived), billingReconciliations tables
+└── billing.ts                  # billingEvents, llmSpendCursors (per-org), billingReconciliations tables
 
 apps/web/src/server/routers/
 └── billing.ts                  # oRPC routes: getInfo, updateSettings, activatePlan, buyCredits
@@ -142,14 +142,6 @@ llm_spend_cursors (per-org, replaces global singleton)
 └── synced_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 ```
 
-```
-llm_spend_cursors_global (archived — retained for data migration)
-├── id                   TEXT PK DEFAULT 'global'
-├── last_start_time      TIMESTAMPTZ NOT NULL
-├── last_request_id      TEXT
-├── records_processed    INT DEFAULT 0
-└── synced_at            TIMESTAMPTZ NOT NULL DEFAULT now()
-```
 
 ```
 billing_reconciliations

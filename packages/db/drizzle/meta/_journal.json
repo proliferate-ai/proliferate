@@ -158,6 +158,13 @@
       "when": 1771286400000,
       "tag": "0023_llm_spend_cursors_partition",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1771372800000,
+      "tag": "0024_drop_llm_spend_cursors_global",
+      "breakpoints": true
     }
   ]
 }

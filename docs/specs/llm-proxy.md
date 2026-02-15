@@ -369,5 +369,5 @@ The spend sync uses `LLM_PROXY_ADMIN_URL` and `LLM_PROXY_MASTER_KEY` (same vars 
 
 - [x] ~~**No key revocation on session end**~~ — Resolved. `revokeVirtualKey(sessionId)` is called fire-and-forget on session pause, exhaustion, and bulk termination.
 - [x] ~~**Shared database coupling**~~ — resolved. Spend sync now uses LiteLLM's REST API (`GET /spend/logs/v2`) via `litellm-api.ts` instead of cross-schema SQL.
-- [x] ~~**Single global cursor**~~ — resolved. Cursors are now per-org (`llm_spend_cursors` table keyed by `organization_id`). The old global cursor table has been archived as `llm_spend_cursors_global`.
+- [x] ~~**Single global cursor**~~ — resolved. Cursors are now per-org (`llm_spend_cursors` table keyed by `organization_id`).
 - [x] ~~**No budget enforcement on virtual keys**~~ — Resolved. `buildSandboxEnvVars` fetches `shadow_balance` when billing is enabled and passes `maxBudget = Math.max(0, shadow_balance * 0.01)` to `generateVirtualKey`.

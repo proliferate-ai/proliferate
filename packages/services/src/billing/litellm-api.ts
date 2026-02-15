@@ -34,9 +34,9 @@ interface SpendLogsV2Response {
 // ============================================
 
 function getAdminUrl(): string {
-	const url = env.LLM_PROXY_ADMIN_URL;
+	const url = env.LLM_PROXY_ADMIN_URL || env.LLM_PROXY_URL;
 	if (!url) {
-		throw new Error("LLM_PROXY_ADMIN_URL is not configured");
+		throw new Error("LLM_PROXY_ADMIN_URL (or LLM_PROXY_URL) is not configured");
 	}
 	return url.replace(/\/+$/, "");
 }

@@ -88,8 +88,9 @@ async function syncLLMSpend(): Promise<void> {
 		return;
 	}
 
-	// Guard: REST API requires admin URL + master key
-	if (!env.LLM_PROXY_ADMIN_URL || !env.LLM_PROXY_MASTER_KEY) {
+	// Guard: REST API requires an admin-capable URL + master key
+	const proxyUrl = env.LLM_PROXY_ADMIN_URL || env.LLM_PROXY_URL;
+	if (!proxyUrl || !env.LLM_PROXY_MASTER_KEY) {
 		return;
 	}
 
@@ -143,15 +144,22 @@ async function syncOrgLLMSpend(orgId: string): Promise<number> {
 		return 0;
 	}
 
-	// 3. Filter and convert to BulkDeductEvent[]
-	const events: billing.BulkDeductEvent[] = [];
-	let latestStartTime = startDate;
-	let latestRequestId: string | null = cursor?.lastRequestId ?? null;
+	// 3. Sort logs by startTime ascending for deterministic cursor advancement.
+	// LiteLLM's REST API does not guarantee sort order, so we enforce it client-side.
+	logs.sort((a, b) => {
+		const ta = a.startTime ? new Date(a.startTime).getTime() : 0;
+		const tb = b.startTime ? new Date(b.startTime).getTime() : 0;
+		if (ta !== tb) return ta - tb;
+		return a.request_id.localeCompare(b.request_id);
+	});
 
+	// 4. Convert to BulkDeductEvent[]. We do NOT skip duplicates client-side —
+	// bulkDeductShadowBalance uses ON CONFLICT (idempotency_key) DO NOTHING,
+	// which is the authoritative dedup. This avoids the weak single-request_id
+	// check that can miss same-timestamp rows.
+	const events: billing.BulkDeductEvent[] = [];
 	for (const entry of logs) {
 		if (entry.spend <= 0) continue;
-		// Skip entries already processed (same request_id as cursor)
-		if (cursor?.lastRequestId && entry.request_id === cursor.lastRequestId) continue;
 
 		const credits = calculateLLMCredits(entry.spend);
 		events.push({
@@ -168,22 +176,13 @@ async function syncOrgLLMSpend(orgId: string): Promise<number> {
 				litellm_request_id: entry.request_id,
 			},
 		});
-
-		// Track latest log for cursor advancement
-		if (entry.startTime) {
-			const entryTime = new Date(entry.startTime);
-			if (entryTime >= latestStartTime) {
-				latestStartTime = entryTime;
-				latestRequestId = entry.request_id;
-			}
-		}
 	}
 
 	if (!events.length) {
 		return 0;
 	}
 
-	// 4. Bulk deduct
+	// 5. Bulk deduct
 	const result = await billing.bulkDeductShadowBalance(orgId, events);
 
 	log.info(
@@ -196,18 +195,32 @@ async function syncOrgLLMSpend(orgId: string): Promise<number> {
 		"Synced LLM spend",
 	);
 
-	// 5. Advance cursor
+	// 6. Advance cursor to the last sorted log's startTime.
+	// Use the last log in sorted order so we don't skip ahead past unprocessed rows.
+	const lastLog = logs[logs.length - 1];
+	const latestStartTime = lastLog.startTime ? new Date(lastLog.startTime) : startDate;
+
 	await billing.updateLLMSpendCursor({
 		organizationId: orgId,
 		lastStartTime: latestStartTime,
-		lastRequestId: latestRequestId,
+		lastRequestId: lastLog.request_id,
 		recordsProcessed: (cursor?.recordsProcessed ?? 0) + result.insertedCount,
 		syncedAt: new Date(),
 	});
 
-	// 6. Handle state transitions
+	// 7. Handle state transitions
 	if (result.shouldTerminateSessions) {
-		log.info({ enforcementReason: result.enforcementReason }, "Balance exhausted — terminating sessions");
+		// Check trial auto-activation before terminating (parity with compute metering)
+		const activation = await billing.tryActivatePlanAfterTrial(orgId);
+		if (activation.activated) {
+			log.info("Trial auto-activated via LLM spend; skipping termination");
+			return result.insertedCount;
+		}
+
+		log.info(
+			{ enforcementReason: result.enforcementReason },
+			"Balance exhausted — terminating sessions",
+		);
 		const providers = await getProvidersMap();
 		await billing.handleCreditsExhaustedV2(orgId, providers);
 	} else if (result.shouldBlockNewSessions) {
