@@ -10,7 +10,7 @@ import type { Repo } from "@proliferate/shared";
 // DB Row Types (re-exported from db.ts)
 // ============================================
 
-// RepoRow and RepoWithPrebuildsRow are now exported from repos/db.ts
+// RepoRow and RepoWithConfigurationsRow are now exported from repos/db.ts
 // using InferSelectModel<typeof repos> for type safety
 
 // ============================================
@@ -24,7 +24,6 @@ export interface DbCreateRepoInput {
 	githubRepoName: string;
 	githubUrl: string;
 	defaultBranch?: string;
-	addedBy: string;
 	isPrivate?: boolean;
 	source?: string;
 }

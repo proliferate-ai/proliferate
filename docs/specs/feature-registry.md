@@ -206,6 +206,28 @@
 
 ---
 
+## 9b. Configurations & Snapshots (`configurations-snapshots.md`)
+
+| Feature | Status | Evidence | Notes |
+|---------|--------|----------|-------|
+| First-class snapshots table | Implemented | `packages/db/src/schema/schema.ts:snapshots` | Lifecycle: building/ready/failed, `has_deps` property |
+| Snapshot repos (commit tracking) | Implemented | `packages/db/src/schema/schema.ts:snapshotRepos` | Per-repo commit SHA per snapshot (not populated in PR1) |
+| Active snapshot on prebuilds | Implemented | `packages/db/src/schema/schema.ts:prebuilds.activeSnapshotId` | FK → snapshots, set on markReady |
+| Organization ID on prebuilds | Implemented | `packages/db/src/schema/schema.ts:prebuilds.organizationId` | Backfilled from prebuild_repos → repos |
+| Secret files (config-scoped env) | Implemented | `packages/db/src/schema/schema.ts:secretFiles` | Replaces env_files JSONB (dual-write in PR1) |
+| Configuration secrets | Implemented | `packages/db/src/schema/schema.ts:configurationSecrets` | Per-key encrypted values for secret files |
+| Secret files CRUD API | Implemented | `apps/web/src/server/routers/secrets.ts:secretFilesRouter` | List/create/delete files, upsert/delete secrets |
+| Snapshots service | Implemented | `packages/services/src/snapshots/` | Create, markReady, markFailed, getActiveSnapshot |
+| Secret files service | Implemented | `packages/services/src/secret-files/` | CRUD, encryption, boot decryption, saveEnvFileSpec |
+| Snapshot dual-write (save_snapshot) | Implemented | `apps/gateway/src/hub/session-hub.ts` | Writes to old prebuilds + new snapshots table |
+| Snapshot dual-write (finalize) | Implemented | `apps/web/src/server/routers/repos-finalize.ts` | Writes to old prebuilds + new snapshots table |
+| Env files dual-write (save_env_files) | Implemented | `apps/gateway/src/hub/capabilities/tools/save-env-files.ts` | Writes to old JSONB + new secret_files |
+| Snapshot fallback reads | Implemented | `apps/gateway/src/lib/session-creator.ts` | active_snapshot → legacy snapshot → repo snapshot |
+| snapshotHasDeps fallback | Implemented | `apps/gateway/src/lib/session-creator.ts`, `session-store.ts` | Matches snapshot ID before using has_deps |
+| Migration (expand) | Implemented | `packages/db/drizzle/0024_configurations_snapshots_expand.sql` | Create tables, backfill, migrate data |
+
+---
+
 ## 10. Secrets & Environment (`secrets-environment.md`)
 
 | Feature | Status | Evidence | Notes |

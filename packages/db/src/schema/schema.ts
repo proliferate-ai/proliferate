@@ -232,131 +232,51 @@ export const repos = pgTable(
 		githubRepoId: text("github_repo_id").notNull(),
 		githubRepoName: text("github_repo_name").notNull(),
 		defaultBranch: text("default_branch").default("main"),
-		setupCommands: text("setup_commands").array(),
-		detectedStack: jsonb("detected_stack"),
-		isOrphaned: boolean("is_orphaned").default(false),
-		addedBy: text("added_by"),
+		isPrivate: boolean("is_private").default(false),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
-		source: text().default("github"),
-		isPrivate: boolean("is_private").default(false),
-		localPathHash: text("local_path_hash"),
-		repoSnapshotId: text("repo_snapshot_id"),
-		repoSnapshotStatus: text("repo_snapshot_status"),
-		repoSnapshotError: text("repo_snapshot_error"),
-		repoSnapshotCommitSha: text("repo_snapshot_commit_sha"),
-		repoSnapshotBuiltAt: timestamp("repo_snapshot_built_at", { withTimezone: true, mode: "date" }),
-		repoSnapshotProvider: text("repo_snapshot_provider"),
-		serviceCommands: jsonb("service_commands"),
-		serviceCommandsUpdatedAt: timestamp("service_commands_updated_at", {
-			withTimezone: true,
-			mode: "date",
-		}),
-		serviceCommandsUpdatedBy: text("service_commands_updated_by"),
 	},
 	(table) => [
-		index("idx_repos_local_path_hash")
-			.using("btree", table.localPathHash.asc().nullsLast().op("text_ops"))
-			.where(sql`(local_path_hash IS NOT NULL)`),
 		index("idx_repos_org").using("btree", table.organizationId.asc().nullsLast().op("text_ops")),
-		index("idx_repos_repo_snapshot_status").using(
-			"btree",
-			table.repoSnapshotStatus.asc().nullsLast().op("text_ops"),
-		),
 		foreignKey({
 			columns: [table.organizationId],
 			foreignColumns: [organization.id],
 			name: "repos_organization_id_fkey",
 		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.addedBy],
-			foreignColumns: [user.id],
-			name: "repos_added_by_fkey",
-		}),
 		unique("repos_organization_id_github_repo_id_key").on(table.organizationId, table.githubRepoId),
-		check(
-			"repos_source_check",
-			sql`((source = 'local'::text) AND (local_path_hash IS NOT NULL)) OR (source <> 'local'::text)`,
-		),
 	],
 );
 
-export const prebuilds = pgTable(
-	"prebuilds",
+export const configurations = pgTable(
+	"configurations",
 	{
 		id: uuid().defaultRandom().primaryKey().notNull(),
-		snapshotId: text("snapshot_id"),
-		status: text().default("building"),
-		error: text(),
-		createdBy: text("created_by"),
 		name: text().notNull(),
-		notes: text(),
-		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
-		sandboxProvider: text("sandbox_provider").default("modal").notNull(),
-		userId: text("user_id"),
-		localPathHash: text("local_path_hash"),
-		type: text().default("manual"),
-		serviceCommands: jsonb("service_commands"),
-		serviceCommandsUpdatedAt: timestamp("service_commands_updated_at", {
-			withTimezone: true,
-			mode: "date",
-		}),
-		serviceCommandsUpdatedBy: text("service_commands_updated_by"),
-		envFiles: jsonb("env_files"),
-		envFilesUpdatedAt: timestamp("env_files_updated_at", {
-			withTimezone: true,
-			mode: "date",
-		}),
-		envFilesUpdatedBy: text("env_files_updated_by"),
-		connectors: jsonb("connectors"),
-		connectorsUpdatedAt: timestamp("connectors_updated_at", {
-			withTimezone: true,
-			mode: "date",
-		}),
-		connectorsUpdatedBy: text("connectors_updated_by"),
-		// PR1 expand columns
+		description: text(),
 		organizationId: text("organization_id").notNull(),
+		sandboxProvider: text("sandbox_provider").default("modal").notNull(),
+		serviceCommands: jsonb("service_commands"),
 		activeSnapshotId: uuid("active_snapshot_id").references((): AnyPgColumn => snapshots.id, {
 			onDelete: "set null",
 		}),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
 	},
 	(table) => [
-		index("idx_prebuilds_sandbox_provider").using(
-			"btree",
-			table.sandboxProvider.asc().nullsLast().op("text_ops"),
-		),
-		index("idx_prebuilds_type_managed")
-			.using("btree", table.type.asc().nullsLast().op("text_ops"))
-			.where(sql`(type = 'managed'::text)`),
-		foreignKey({
-			columns: [table.createdBy],
-			foreignColumns: [user.id],
-			name: "prebuilds_created_by_fkey",
-		}),
-		foreignKey({
-			columns: [table.userId],
-			foreignColumns: [user.id],
-			name: "prebuilds_user_id_fkey",
-		}).onDelete("cascade"),
-		unique("prebuilds_user_path_unique").on(table.userId, table.localPathHash),
 		check(
-			"prebuilds_sandbox_provider_check",
+			"configurations_sandbox_provider_check",
 			sql`sandbox_provider = ANY (ARRAY['modal'::text, 'e2b'::text])`,
 		),
-		check(
-			"prebuilds_cli_requires_path",
-			sql`((user_id IS NOT NULL) AND (local_path_hash IS NOT NULL)) OR ((user_id IS NULL) AND (local_path_hash IS NULL))`,
-		),
-		// PR1 expand constraints
 		foreignKey({
 			columns: [table.organizationId],
 			foreignColumns: [organization.id],
-			name: "prebuilds_organization_id_fkey",
+			name: "configurations_organization_id_fkey",
 		}).onDelete("cascade"),
-		index("idx_prebuilds_org").using(
+		index("idx_configurations_org").using(
 			"btree",
 			table.organizationId.asc().nullsLast().op("text_ops"),
 		),
+		unique("configurations_org_name_unique").on(table.organizationId, table.name),
 	],
 );
 
@@ -434,37 +354,6 @@ export const integrations = pgTable(
 	],
 );
 
-export const secretBundles = pgTable(
-	"secret_bundles",
-	{
-		id: uuid().defaultRandom().primaryKey().notNull(),
-		organizationId: text("organization_id").notNull(),
-		name: text().notNull(),
-		description: text(),
-		targetPath: text("target_path"),
-		createdBy: text("created_by"),
-		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
-		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
-	},
-	(table) => [
-		index("idx_secret_bundles_org").using(
-			"btree",
-			table.organizationId.asc().nullsLast().op("text_ops"),
-		),
-		foreignKey({
-			columns: [table.organizationId],
-			foreignColumns: [organization.id],
-			name: "secret_bundles_organization_id_fkey",
-		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.createdBy],
-			foreignColumns: [user.id],
-			name: "secret_bundles_created_by_fkey",
-		}),
-		unique("secret_bundles_org_name_unique").on(table.organizationId, table.name),
-	],
-);
-
 export const secrets = pgTable(
 	"secrets",
 	{
@@ -478,13 +367,11 @@ export const secrets = pgTable(
 		createdBy: text("created_by"),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
-		prebuildId: uuid("prebuild_id"),
-		bundleId: uuid("bundle_id"),
+		configurationId: uuid("configuration_id"),
 	},
 	(table) => [
 		index("idx_secrets_org").using("btree", table.organizationId.asc().nullsLast().op("text_ops")),
 		index("idx_secrets_repo").using("btree", table.repoId.asc().nullsLast().op("uuid_ops")),
-		index("idx_secrets_bundle").using("btree", table.bundleId.asc().nullsLast().op("uuid_ops")),
 		foreignKey({
 			columns: [table.organizationId],
 			foreignColumns: [organization.id],
@@ -501,20 +388,15 @@ export const secrets = pgTable(
 			name: "secrets_created_by_fkey",
 		}),
 		foreignKey({
-			columns: [table.prebuildId],
-			foreignColumns: [prebuilds.id],
-			name: "secrets_prebuild_id_fkey",
+			columns: [table.configurationId],
+			foreignColumns: [configurations.id],
+			name: "secrets_configuration_id_fkey",
 		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.bundleId],
-			foreignColumns: [secretBundles.id],
-			name: "secrets_bundle_id_fkey",
-		}).onDelete("set null"),
-		unique("secrets_org_repo_prebuild_key_unique").on(
+		unique("secrets_org_repo_configuration_key_unique").on(
 			table.organizationId,
 			table.repoId,
 			table.key,
-			table.prebuildId,
+			table.configurationId,
 		),
 	],
 );
@@ -612,7 +494,7 @@ export const automations = pgTable(
 		createdBy: text("created_by"),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
-		defaultPrebuildId: uuid("default_prebuild_id"),
+		defaultConfigurationId: uuid("default_configuration_id"),
 		llmFilterPrompt: text("llm_filter_prompt"),
 		enabledTools: jsonb("enabled_tools").default({}),
 		llmAnalysisPrompt: text("llm_analysis_prompt"),
@@ -627,9 +509,9 @@ export const automations = pgTable(
 			"btree",
 			table.organizationId.asc().nullsLast().op("text_ops"),
 		),
-		index("idx_automations_prebuild").using(
+		index("idx_automations_configuration").using(
 			"btree",
-			table.defaultPrebuildId.asc().nullsLast().op("uuid_ops"),
+			table.defaultConfigurationId.asc().nullsLast().op("uuid_ops"),
 		),
 		foreignKey({
 			columns: [table.organizationId],
@@ -642,9 +524,9 @@ export const automations = pgTable(
 			name: "automations_created_by_fkey",
 		}),
 		foreignKey({
-			columns: [table.defaultPrebuildId],
-			foreignColumns: [prebuilds.id],
-			name: "automations_default_prebuild_id_fkey",
+			columns: [table.defaultConfigurationId],
+			foreignColumns: [configurations.id],
+			name: "automations_default_configuration_id_fkey",
 		}).onDelete("set null"),
 		foreignKey({
 			columns: [table.notificationSlackInstallationId],
@@ -1441,7 +1323,7 @@ export const sessions = pgTable(
 		systemPrompt: text("system_prompt"),
 		clientType: text("client_type"),
 		clientMetadata: jsonb("client_metadata"),
-		prebuildId: uuid("prebuild_id"),
+		configurationId: uuid("configuration_id"),
 		sandboxExpiresAt: timestamp("sandbox_expires_at", { withTimezone: true, mode: "date" }),
 		meteredThroughAt: timestamp("metered_through_at", { withTimezone: true, mode: "date" }),
 		billingTokenVersion: integer("billing_token_version").default(1),
@@ -1467,9 +1349,9 @@ export const sessions = pgTable(
 			"btree",
 			table.parentSessionId.asc().nullsLast().op("uuid_ops"),
 		),
-		index("idx_sessions_prebuild").using(
+		index("idx_sessions_configuration").using(
 			"btree",
-			table.prebuildId.asc().nullsLast().op("uuid_ops"),
+			table.configurationId.asc().nullsLast().op("uuid_ops"),
 		),
 		index("idx_sessions_repo").using("btree", table.repoId.asc().nullsLast().op("uuid_ops")),
 		index("idx_sessions_sandbox_expires_at")
@@ -1521,10 +1403,10 @@ export const sessions = pgTable(
 			name: "sessions_trigger_id_fkey",
 		}).onDelete("set null"),
 		foreignKey({
-			columns: [table.prebuildId],
-			foreignColumns: [prebuilds.id],
-			name: "sessions_prebuild_id_fkey",
-		}).onDelete("cascade"),
+			columns: [table.configurationId],
+			foreignColumns: [configurations.id],
+			name: "sessions_configuration_id_fkey",
+		}).onDelete("set null"),
 		check(
 			"sessions_sandbox_provider_check",
 			sql`sandbox_provider = ANY (ARRAY['modal'::text, 'e2b'::text])`,
@@ -1582,61 +1464,36 @@ export const billingEvents = pgTable(
 	],
 );
 
-export const prebuildRepos = pgTable(
-	"prebuild_repos",
+export const configurationRepos = pgTable(
+	"configuration_repos",
 	{
-		prebuildId: uuid("prebuild_id").notNull(),
+		configurationId: uuid("configuration_id").notNull(),
 		repoId: uuid("repo_id").notNull(),
 		workspacePath: text("workspace_path").notNull(),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 	},
 	(table) => [
-		index("idx_prebuild_repos_prebuild").using(
+		index("idx_configuration_repos_configuration").using(
 			"btree",
-			table.prebuildId.asc().nullsLast().op("uuid_ops"),
+			table.configurationId.asc().nullsLast().op("uuid_ops"),
 		),
-		index("idx_prebuild_repos_repo").using("btree", table.repoId.asc().nullsLast().op("uuid_ops")),
+		index("idx_configuration_repos_repo").using(
+			"btree",
+			table.repoId.asc().nullsLast().op("uuid_ops"),
+		),
 		foreignKey({
-			columns: [table.prebuildId],
-			foreignColumns: [prebuilds.id],
-			name: "prebuild_repos_prebuild_id_fkey",
+			columns: [table.configurationId],
+			foreignColumns: [configurations.id],
+			name: "configuration_repos_configuration_id_fkey",
 		}).onDelete("cascade"),
 		foreignKey({
 			columns: [table.repoId],
 			foreignColumns: [repos.id],
-			name: "prebuild_repos_repo_id_fkey",
-		}).onDelete("cascade"),
-		primaryKey({ columns: [table.prebuildId, table.repoId], name: "prebuild_repos_pkey" }),
-	],
-);
-
-export const cliGithubSelections = pgTable(
-	"cli_github_selections",
-	{
-		userId: text("user_id").notNull(),
-		organizationId: text("organization_id").notNull(),
-		connectionId: text("connection_id").notNull(),
-		expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
-		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
-	},
-	(table) => [
-		index("idx_cli_github_selections_expires_at").using(
-			"btree",
-			table.expiresAt.asc().nullsLast().op("timestamptz_ops"),
-		),
-		foreignKey({
-			columns: [table.userId],
-			foreignColumns: [user.id],
-			name: "cli_github_selections_user_id_fkey",
-		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.organizationId],
-			foreignColumns: [organization.id],
-			name: "cli_github_selections_organization_id_fkey",
+			name: "configuration_repos_repo_id_fkey",
 		}).onDelete("cascade"),
 		primaryKey({
-			columns: [table.userId, table.organizationId],
-			name: "cli_github_selections_pkey",
+			columns: [table.configurationId, table.repoId],
+			name: "configuration_repos_pkey",
 		}),
 	],
 );
@@ -1775,28 +1632,31 @@ export const snapshots = pgTable(
 	"snapshots",
 	{
 		id: uuid().defaultRandom().primaryKey().notNull(),
-		prebuildId: uuid("prebuild_id").notNull(),
+		configurationId: uuid("configuration_id").notNull(),
 		providerSnapshotId: text("provider_snapshot_id"),
 		sandboxProvider: text("sandbox_provider"),
 		status: text().default("building").notNull(),
-		hasDeps: boolean("has_deps").default(false).notNull(),
 		error: text(),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
 	},
 	(table) => [
-		index("idx_snapshots_prebuild").using(
+		index("idx_snapshots_configuration").using(
 			"btree",
-			table.prebuildId.asc().nullsLast().op("uuid_ops"),
+			table.configurationId.asc().nullsLast().op("uuid_ops"),
 		),
 		foreignKey({
-			columns: [table.prebuildId],
-			foreignColumns: [prebuilds.id],
-			name: "snapshots_prebuild_id_fkey",
+			columns: [table.configurationId],
+			foreignColumns: [configurations.id],
+			name: "snapshots_configuration_id_fkey",
 		}).onDelete("cascade"),
 		check(
 			"snapshots_status_check",
 			sql`status = ANY (ARRAY['building'::text, 'ready'::text, 'failed'::text])`,
+		),
+		check(
+			"snapshots_sandbox_provider_check",
+			sql`sandbox_provider = ANY (ARRAY['modal'::text, 'e2b'::text])`,
 		),
 	],
 );
@@ -1836,7 +1696,7 @@ export const secretFiles = pgTable(
 	"secret_files",
 	{
 		id: uuid().defaultRandom().primaryKey().notNull(),
-		prebuildId: uuid("prebuild_id").notNull(),
+		configurationId: uuid("configuration_id").notNull(),
 		workspacePath: text("workspace_path").default(".").notNull(),
 		filePath: text("file_path").notNull(),
 		mode: text().default("secret").notNull(),
@@ -1844,17 +1704,17 @@ export const secretFiles = pgTable(
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
 	},
 	(table) => [
-		index("idx_secret_files_prebuild").using(
+		index("idx_secret_files_configuration").using(
 			"btree",
-			table.prebuildId.asc().nullsLast().op("uuid_ops"),
+			table.configurationId.asc().nullsLast().op("uuid_ops"),
 		),
 		foreignKey({
-			columns: [table.prebuildId],
-			foreignColumns: [prebuilds.id],
-			name: "secret_files_prebuild_id_fkey",
+			columns: [table.configurationId],
+			foreignColumns: [configurations.id],
+			name: "secret_files_configuration_id_fkey",
 		}).onDelete("cascade"),
-		unique("secret_files_prebuild_workspace_file_unique").on(
-			table.prebuildId,
+		unique("secret_files_configuration_workspace_file_unique").on(
+			table.configurationId,
 			table.workspacePath,
 			table.filePath,
 		),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ConnectorsArraySchema, parsePrebuildConnectors } from "./connectors";
+import { ConnectorsArraySchema, parseConfigurationConnectors } from "./connectors";
 
-describe("parsePrebuildConnectors", () => {
+describe("parseConfigurationConnectors", () => {
 	const validConnector = {
 		id: "550e8400-e29b-41d4-a716-446655440000",
 		name: "Stripe",
@@ -12,28 +12,28 @@ describe("parsePrebuildConnectors", () => {
 	};
 
 	it("returns empty array for null", () => {
-		expect(parsePrebuildConnectors(null)).toEqual([]);
+		expect(parseConfigurationConnectors(null)).toEqual([]);
 	});
 
 	it("returns empty array for undefined", () => {
-		expect(parsePrebuildConnectors(undefined)).toEqual([]);
+		expect(parseConfigurationConnectors(undefined)).toEqual([]);
 	});
 
 	it("returns empty array for non-array", () => {
-		expect(parsePrebuildConnectors("not an array")).toEqual([]);
-		expect(parsePrebuildConnectors(123)).toEqual([]);
-		expect(parsePrebuildConnectors({})).toEqual([]);
+		expect(parseConfigurationConnectors("not an array")).toEqual([]);
+		expect(parseConfigurationConnectors(123)).toEqual([]);
+		expect(parseConfigurationConnectors({})).toEqual([]);
 	});
 
 	it("parses a valid connector array", () => {
-		const result = parsePrebuildConnectors([validConnector]);
+		const result = parseConfigurationConnectors([validConnector]);
 		expect(result).toHaveLength(1);
 		expect(result[0].name).toBe("Stripe");
 		expect(result[0].transport).toBe("remote_http");
 	});
 
 	it("returns empty array for invalid connector data", () => {
-		const result = parsePrebuildConnectors([{ name: "invalid" }]);
+		const result = parseConfigurationConnectors([{ name: "invalid" }]);
 		expect(result).toEqual([]);
 	});
 
@@ -45,7 +45,7 @@ describe("parsePrebuildConnectors", () => {
 				overrides: { dangerous_tool: "danger" as const },
 			},
 		};
-		const result = parsePrebuildConnectors([withPolicy]);
+		const result = parseConfigurationConnectors([withPolicy]);
 		expect(result).toHaveLength(1);
 		expect(result[0].riskPolicy?.defaultRisk).toBe("read");
 		expect(result[0].riskPolicy?.overrides?.dangerous_tool).toBe("danger");
@@ -62,7 +62,7 @@ describe("parsePrebuildConnectors", () => {
 				headerName: "CONTEXT7_API_KEY",
 			},
 		};
-		const result = parsePrebuildConnectors([customHeaderConnector]);
+		const result = parseConfigurationConnectors([customHeaderConnector]);
 		expect(result).toHaveLength(1);
 		expect(result[0].auth.type).toBe("custom_header");
 		if (result[0].auth.type === "custom_header") {
@@ -77,7 +77,7 @@ describe("parsePrebuildConnectors", () => {
 			name: "Notion",
 			url: "https://mcp.notion.so/v1",
 		};
-		const result = parsePrebuildConnectors([validConnector, second]);
+		const result = parseConfigurationConnectors([validConnector, second]);
 		expect(result).toHaveLength(2);
 	});
 
@@ -86,7 +86,7 @@ describe("parsePrebuildConnectors", () => {
 			...validConnector,
 			id: `550e8400-e29b-41d4-a716-44665544${String(i).padStart(4, "0")}`,
 		}));
-		const result = parsePrebuildConnectors(tooMany);
+		const result = parseConfigurationConnectors(tooMany);
 		expect(result).toEqual([]);
 	});
 });

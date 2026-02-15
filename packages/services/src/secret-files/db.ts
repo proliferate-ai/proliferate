@@ -47,12 +47,14 @@ export interface SecretForBootRow {
 // ============================================
 
 /**
- * List secret files for a prebuild with their keys (no encrypted values).
+ * List secret files for a configuration with their keys (no encrypted values).
  */
-export async function listByPrebuild(prebuildId: string): Promise<SecretFileWithKeysRow[]> {
+export async function listByConfiguration(
+	configurationId: string,
+): Promise<SecretFileWithKeysRow[]> {
 	const db = getDb();
 	const rows = await db.query.secretFiles.findMany({
-		where: eq(secretFiles.prebuildId, prebuildId),
+		where: eq(secretFiles.configurationId, configurationId),
 		orderBy: [desc(secretFiles.createdAt)],
 		with: {
 			configurationSecrets: {
@@ -80,7 +82,7 @@ export async function listByPrebuild(prebuildId: string): Promise<SecretFileWith
  * Create a new secret file definition.
  */
 export async function createSecretFile(input: {
-	prebuildId: string;
+	configurationId: string;
 	workspacePath?: string;
 	filePath: string;
 	mode?: string;
@@ -89,7 +91,7 @@ export async function createSecretFile(input: {
 	const [row] = await db
 		.insert(secretFiles)
 		.values({
-			prebuildId: input.prebuildId,
+			configurationId: input.configurationId,
 			workspacePath: input.workspacePath ?? ".",
 			filePath: input.filePath,
 			mode: input.mode ?? "secret",
@@ -99,17 +101,17 @@ export async function createSecretFile(input: {
 }
 
 /**
- * Find a secret file by prebuild + workspace + file path.
+ * Find a secret file by configuration + workspace + file path.
  */
 export async function findSecretFile(
-	prebuildId: string,
+	configurationId: string,
 	workspacePath: string,
 	filePath: string,
 ): Promise<SecretFileRow | null> {
 	const db = getDb();
 	const row = await db.query.secretFiles.findFirst({
 		where: and(
-			eq(secretFiles.prebuildId, prebuildId),
+			eq(secretFiles.configurationId, configurationId),
 			eq(secretFiles.workspacePath, workspacePath),
 			eq(secretFiles.filePath, filePath),
 		),
@@ -126,51 +128,54 @@ export async function deleteSecretFile(id: string): Promise<void> {
 }
 
 /**
- * Delete a secret file scoped to a prebuild (ownership check).
+ * Delete a secret file scoped to a configuration (ownership check).
  * Returns true if a row was deleted, false if not found.
  */
-export async function deleteSecretFileByPrebuild(id: string, prebuildId: string): Promise<boolean> {
+export async function deleteSecretFileByConfiguration(
+	id: string,
+	configurationId: string,
+): Promise<boolean> {
 	const db = getDb();
 	const rows = await db
 		.delete(secretFiles)
-		.where(and(eq(secretFiles.id, id), eq(secretFiles.prebuildId, prebuildId)))
+		.where(and(eq(secretFiles.id, id), eq(secretFiles.configurationId, configurationId)))
 		.returning({ id: secretFiles.id });
 	return rows.length > 0;
 }
 
 /**
- * Find a secret file by ID scoped to a prebuild (ownership check).
+ * Find a secret file by ID scoped to a configuration (ownership check).
  */
-export async function findSecretFileByPrebuild(
+export async function findSecretFileByConfiguration(
 	id: string,
-	prebuildId: string,
+	configurationId: string,
 ): Promise<SecretFileRow | null> {
 	const db = getDb();
 	const row = await db.query.secretFiles.findFirst({
-		where: and(eq(secretFiles.id, id), eq(secretFiles.prebuildId, prebuildId)),
+		where: and(eq(secretFiles.id, id), eq(secretFiles.configurationId, configurationId)),
 	});
 	return row ?? null;
 }
 
 /**
- * Delete a configuration secret scoped to a prebuild (ownership check via join).
+ * Delete a configuration secret scoped to a configuration (ownership check via join).
  * Returns true if a row was deleted, false if not found.
  */
-export async function deleteSecretByPrebuild(
+export async function deleteSecretByConfiguration(
 	secretId: string,
-	prebuildId: string,
+	configurationId: string,
 ): Promise<boolean> {
 	const db = getDb();
-	// Verify the secret belongs to a secret_file owned by this prebuild
+	// Verify the secret belongs to a secret_file owned by this configuration
 	const secret = await db.query.configurationSecrets.findFirst({
 		where: eq(configurationSecrets.id, secretId),
 		with: {
 			secretFile: {
-				columns: { prebuildId: true },
+				columns: { configurationId: true },
 			},
 		},
 	});
-	if (!secret || secret.secretFile?.prebuildId !== prebuildId) {
+	if (!secret || secret.secretFile?.configurationId !== configurationId) {
 		return false;
 	}
 	await db.delete(configurationSecrets).where(eq(configurationSecrets.id, secretId));
@@ -227,10 +232,10 @@ export async function deleteSecret(id: string): Promise<void> {
  * Get secrets for session boot (config-scoped only).
  * Returns secret files with their non-null encrypted values grouped by file.
  */
-export async function getSecretsForBoot(prebuildId: string): Promise<SecretForBootRow[]> {
+export async function getSecretsForBoot(configurationId: string): Promise<SecretForBootRow[]> {
 	const db = getDb();
 	const rows = await db.query.secretFiles.findMany({
-		where: eq(secretFiles.prebuildId, prebuildId),
+		where: eq(secretFiles.configurationId, configurationId),
 		with: {
 			configurationSecrets: {
 				columns: {
@@ -262,7 +267,7 @@ export async function getSecretsForBoot(prebuildId: string): Promise<SecretForBo
  * Used by the save_env_files agent tool.
  */
 export async function saveEnvFileSpec(
-	prebuildId: string,
+	configurationId: string,
 	files: Array<{
 		workspacePath: string;
 		path: string;
@@ -278,13 +283,13 @@ export async function saveEnvFileSpec(
 		const [sf] = await db
 			.insert(secretFiles)
 			.values({
-				prebuildId,
+				configurationId,
 				workspacePath: file.workspacePath,
 				filePath: file.path,
 				mode: file.mode,
 			})
 			.onConflictDoUpdate({
-				target: [secretFiles.prebuildId, secretFiles.workspacePath, secretFiles.filePath],
+				target: [secretFiles.configurationId, secretFiles.workspacePath, secretFiles.filePath],
 				set: {
 					mode: file.mode,
 					updatedAt: new Date(),

@@ -5,8 +5,8 @@
  * Sandbox provisioning is handled by the gateway when the client connects.
  *
  * Two paths:
- * - Prebuild-backed: existing flow with repo validation and snapshot resolution.
- * - Scratch: no prebuild, no repos. Only allowed for coding sessions.
+ * - Configuration-backed: existing flow with repo validation and snapshot resolution.
+ * - Scratch: no configuration, no repos. Only allowed for coding sessions.
  */
 
 import { randomUUID } from "crypto";
@@ -16,7 +16,7 @@ import { logger } from "@/lib/logger";
 const log = logger.child({ handler: "sessions-create" });
 import { getSessionGatewayUrl } from "@/lib/gateway";
 import { ORPCError } from "@orpc/server";
-import { prebuilds, sessions } from "@proliferate/services";
+import { configurations, sessions, snapshots } from "@proliferate/services";
 import {
 	type AgentConfig,
 	type SandboxProviderType,
@@ -27,7 +27,7 @@ import {
 import { getSandboxProvider } from "@proliferate/shared/providers";
 
 interface CreateSessionHandlerInput {
-	prebuildId?: string;
+	configurationId?: string;
 	sessionType?: "setup" | "coding";
 	modelId?: string;
 	orgId: string;
@@ -46,7 +46,13 @@ interface CreateSessionResult {
 export async function createSessionHandler(
 	input: CreateSessionHandlerInput,
 ): Promise<CreateSessionResult> {
-	const { prebuildId, sessionType = "coding", modelId: requestedModelId, orgId, userId } = input;
+	const {
+		configurationId,
+		sessionType = "coding",
+		modelId: requestedModelId,
+		orgId,
+		userId,
+	} = input;
 
 	// Check billing/credits before creating session
 	const billingCheck = await checkCanStartSession(orgId);
@@ -68,13 +74,13 @@ export async function createSessionHandler(
 					: getDefaultAgentConfig().modelId,
 	};
 
-	// Scratch path: no prebuild, just boot from base snapshot
-	if (!prebuildId) {
+	// Scratch path: no configuration, just boot from base snapshot
+	if (!configurationId) {
 		return createScratchSession({ sessionType, agentConfig, orgId, userId });
 	}
 
-	// Prebuild-backed path: existing flow
-	return createPrebuildSession({ prebuildId, sessionType, agentConfig, orgId, userId });
+	// Configuration-backed path: existing flow
+	return createConfigurationSession({ configurationId, sessionType, agentConfig, orgId, userId });
 }
 
 async function createScratchSession(input: {
@@ -102,7 +108,7 @@ async function createScratchSession(input: {
 
 		await sessions.createSessionRecord({
 			id: sessionId,
-			prebuildId: null,
+			configurationId: null,
 			organizationId: orgId,
 			createdBy: userId,
 			sessionType,
@@ -129,65 +135,56 @@ async function createScratchSession(input: {
 	};
 }
 
-async function createPrebuildSession(input: {
-	prebuildId: string;
+async function createConfigurationSession(input: {
+	configurationId: string;
 	sessionType: string;
 	agentConfig: AgentConfig;
 	orgId: string;
 	userId: string;
 }): Promise<CreateSessionResult> {
-	const { prebuildId, sessionType, agentConfig, orgId, userId } = input;
+	const { configurationId, sessionType, agentConfig, orgId, userId } = input;
 
-	// Get prebuild by ID
-	const prebuild = await prebuilds.findByIdForSession(prebuildId);
+	// Get configuration by ID
+	const configuration = await configurations.findByIdForSession(configurationId);
 
-	if (!prebuild) {
-		throw new ORPCError("BAD_REQUEST", { message: "Prebuild not found" });
+	if (!configuration) {
+		throw new ORPCError("BAD_REQUEST", { message: "Configuration not found" });
 	}
 
-	const prebuildProvider = prebuild.sandboxProvider;
+	const configurationProvider = configuration.sandboxProvider;
 
-	// Get repos from prebuild_repos junction table
-	let prebuildRepos: prebuilds.PrebuildRepoDetailRow[];
+	// Get repos from configuration_repos junction table
+	let configurationRepos: configurations.ConfigurationRepoDetailRow[];
 	try {
-		prebuildRepos = await prebuilds.getPrebuildReposWithDetails(prebuildId);
+		configurationRepos = await configurations.getConfigurationReposWithDetails(configurationId);
 	} catch (err) {
-		log.error({ err }, "Failed to fetch prebuild repos");
-		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to fetch prebuild repos" });
+		log.error({ err }, "Failed to fetch configuration repos");
+		throw new ORPCError("INTERNAL_SERVER_ERROR", {
+			message: "Failed to fetch configuration repos",
+		});
 	}
 
-	if (prebuildRepos.length === 0) {
-		throw new ORPCError("BAD_REQUEST", { message: "Prebuild has no repos" });
+	if (configurationRepos.length === 0) {
+		throw new ORPCError("BAD_REQUEST", { message: "Configuration has no repos" });
 	}
 
-	const verifiedPrebuildRepos = prebuildRepos.map((pr) => {
+	const verifiedConfigurationRepos = configurationRepos.map((pr) => {
 		if (!pr.repo) {
-			throw new ORPCError("BAD_REQUEST", { message: "Prebuild has missing repo data" });
+			throw new ORPCError("BAD_REQUEST", { message: "Configuration has missing repo data" });
 		}
 		if (pr.repo.organizationId !== orgId) {
-			throw new ORPCError("UNAUTHORIZED", { message: "Unauthorized access to prebuild repos" });
+			throw new ORPCError("UNAUTHORIZED", {
+				message: "Unauthorized access to configuration repos",
+			});
 		}
 		return { ...pr, repo: pr.repo };
 	});
 
-	// Resolve provider and snapshot layering
-	const providerType = prebuildProvider as SandboxProviderType | undefined;
+	// Resolve provider
+	const providerType = configurationProvider as SandboxProviderType | undefined;
 	const provider = getSandboxProvider(providerType);
 
-	const prebuildSnapshotId = prebuild.snapshotId;
-	const eligibleRepos = verifiedPrebuildRepos;
-	const repoSnapshotId =
-		!prebuildSnapshotId &&
-		provider.type === "modal" &&
-		eligibleRepos.length === 1 &&
-		eligibleRepos[0].workspacePath === "." &&
-		eligibleRepos[0].repo.repoSnapshotStatus === "ready" &&
-		eligibleRepos[0].repo.repoSnapshotId &&
-		(!eligibleRepos[0].repo.repoSnapshotProvider ||
-			eligibleRepos[0].repo.repoSnapshotProvider === "modal")
-			? eligibleRepos[0].repo.repoSnapshotId
-			: null;
-	const snapshotId = prebuildSnapshotId || repoSnapshotId;
+	// Snapshot resolution is handled by the gateway when the client connects.
 
 	// Generate IDs
 	const sessionId = randomUUID();
@@ -208,13 +205,13 @@ async function createPrebuildSession(input: {
 
 		await sessions.createSessionRecord({
 			id: sessionId,
-			prebuildId,
+			configurationId,
 			organizationId: orgId,
 			createdBy: userId,
 			sessionType,
 			status: "starting",
 			sandboxProvider: provider.type,
-			snapshotId,
+			snapshotId: null,
 			agentConfig: { modelId: agentConfig.modelId },
 		});
 	} catch (err) {

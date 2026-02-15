@@ -142,14 +142,11 @@ export function RepoSelector({
 		filteredAvailableRepos.length > 0 ||
 		filteredPublicRepos.length > 0;
 
-	const getRepoIcon = (repo: { is_private?: boolean; private?: boolean; source?: string }) => {
-		if (repo.is_private || repo.private) {
+	const getRepoIcon = (repo: { isPrivate?: boolean; private?: boolean }) => {
+		if (repo.isPrivate || repo.private) {
 			return <Lock className="h-4 w-4" />;
 		}
-		if (repo.source === "github" || !repo.source) {
-			return <GithubIcon className="h-4 w-4" />;
-		}
-		return <Globe className="h-4 w-4" />;
+		return <GithubIcon className="h-4 w-4" />;
 	};
 
 	return (

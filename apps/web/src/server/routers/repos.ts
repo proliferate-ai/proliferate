@@ -4,15 +4,13 @@
 
 import { type GitHubIntegration, listGitHubRepos } from "@/lib/github";
 import { ORPCError } from "@orpc/server";
-import { integrations, prebuilds, repos } from "@proliferate/services";
+import { integrations, repos } from "@proliferate/services";
 import {
 	CreateRepoInputSchema,
 	FinalizeSetupInputSchema,
 	FinalizeSetupResponseSchema,
 	GitHubRepoSchema,
-	RepoPrebuildSchema,
 	RepoSchema,
-	RepoSnapshotSchema,
 	SearchRepoSchema,
 } from "@proliferate/shared";
 import { z } from "zod";
@@ -216,155 +214,7 @@ export const reposRouter = {
 		}),
 
 	/**
-	 * List prebuilds for a repo.
-	 */
-	listPrebuilds: orgProcedure
-		.input(z.object({ id: z.string().uuid() }))
-		.output(z.object({ prebuilds: z.array(RepoPrebuildSchema) }))
-		.handler(async ({ input, context }) => {
-			// Verify repo belongs to org
-			const exists = await repos.repoExists(input.id, context.orgId);
-			if (!exists) {
-				throw new ORPCError("NOT_FOUND", { message: "Repo not found" });
-			}
-
-			const prebuildsList = await prebuilds.listByRepoId(input.id);
-			return {
-				prebuilds: prebuildsList.map((p) => ({
-					...p,
-					createdAt: p.createdAt?.toISOString() ?? null,
-				})),
-			};
-		}),
-
-	/**
-	 * List snapshots (usable prebuilds) for a repo.
-	 */
-	listSnapshots: orgProcedure
-		.input(z.object({ id: z.string().uuid() }))
-		.output(z.object({ prebuilds: z.array(RepoSnapshotSchema) }))
-		.handler(async ({ input }) => {
-			const prebuildRepos = await prebuilds.getPrebuildReposWithPrebuilds(input.id);
-
-			// Filter to only prebuilds with snapshots
-			const usablePrebuilds = prebuildRepos
-				.filter(
-					(pr) =>
-						pr.prebuild &&
-						typeof pr.prebuild === "object" &&
-						"snapshotId" in pr.prebuild &&
-						!!pr.prebuild.snapshotId,
-				)
-				.map((pr) => pr.prebuild);
-
-			// Deduplicate by prebuild ID
-			const uniquePrebuilds = Array.from(
-				new Map(usablePrebuilds.map((p) => [(p as { id: string }).id, p])).values(),
-			);
-
-			// Fetch repos for each prebuild
-			const prebuildsWithRepos = await Promise.all(
-				uniquePrebuilds.map(async (prebuild) => {
-					const pb = prebuild as {
-						id: string;
-						snapshotId: string | null;
-						status: string | null;
-						name: string | null;
-						notes: string | null;
-						createdAt: Date | null;
-						createdBy: string | null;
-						sessions?: Array<{ id: string; sessionType: string | null }>;
-					};
-
-					const reposList = await prebuilds.getReposForPrebuild(pb.id);
-
-					return {
-						id: pb.id,
-						snapshotId: pb.snapshotId,
-						status: pb.status,
-						name: pb.name,
-						notes: pb.notes,
-						createdAt: pb.createdAt?.toISOString() ?? "",
-						createdBy: pb.createdBy,
-						setupSessions: pb.sessions,
-						repos: reposList,
-						repoCount: reposList.length,
-					};
-				}),
-			);
-
-			// Sort by createdAt descending
-			prebuildsWithRepos.sort(
-				(a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-			);
-
-			return { prebuilds: prebuildsWithRepos };
-		}),
-
-	/**
-	 * Get service commands for a repo.
-	 */
-	getServiceCommands: orgProcedure
-		.input(z.object({ id: z.string().uuid() }))
-		.output(
-			z.object({
-				commands: z.array(
-					z.object({
-						name: z.string(),
-						command: z.string(),
-						cwd: z.string().optional(),
-					}),
-				),
-			}),
-		)
-		.handler(async ({ input, context }) => {
-			const exists = await repos.repoExists(input.id, context.orgId);
-			if (!exists) {
-				throw new ORPCError("NOT_FOUND", { message: "Repo not found" });
-			}
-
-			const row = await repos.getServiceCommands(input.id, context.orgId);
-			const { parseServiceCommands } = await import("@proliferate/shared/sandbox");
-			const commands = parseServiceCommands(row?.serviceCommands);
-			return { commands };
-		}),
-
-	/**
-	 * Update service commands for a repo.
-	 */
-	updateServiceCommands: orgProcedure
-		.input(
-			z.object({
-				id: z.string().uuid(),
-				commands: z
-					.array(
-						z.object({
-							name: z.string().min(1).max(100),
-							command: z.string().min(1).max(1000),
-							cwd: z.string().max(500).optional(),
-						}),
-					)
-					.max(10),
-			}),
-		)
-		.output(z.object({ success: z.boolean() }))
-		.handler(async ({ input, context }) => {
-			const exists = await repos.repoExists(input.id, context.orgId);
-			if (!exists) {
-				throw new ORPCError("NOT_FOUND", { message: "Repo not found" });
-			}
-
-			await repos.updateServiceCommands({
-				repoId: input.id,
-				orgId: context.orgId,
-				serviceCommands: input.commands,
-				updatedBy: context.user.id,
-			});
-			return { success: true };
-		}),
-
-	/**
-	 * Finalize setup session and create a prebuild snapshot.
+	 * Finalize setup session and create a configuration snapshot.
 	 * Note: This is a complex operation - keeping most logic here for now.
 	 * Could be moved to services later.
 	 */

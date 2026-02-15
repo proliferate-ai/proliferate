@@ -374,7 +374,7 @@ export interface SnapshotResultMessage {
 		success: boolean;
 		snapshotId?: string;
 		error?: string;
-		target: "prebuild" | "session";
+		target: "configuration" | "session";
 	};
 }
 
@@ -523,8 +523,8 @@ export interface SessionConfig {
 // Session status
 export type SessionStatus = "starting" | "running" | "paused" | "stopped" | "failed";
 
-// Prebuild status
-export type PrebuildStatus = "pending" | "building" | "ready" | "failed";
+// Configuration status
+export type ConfigurationStatus = "pending" | "building" | "ready" | "failed";
 
 // ============================================
 // Verification Types
@@ -907,12 +907,6 @@ export interface AutomationWithRelations extends Automation {
 export * from "./agents";
 
 // ============================================
-// Snapshot Resolution
-// ============================================
-
-export * from "./snapshot-resolution";
-
-// ============================================
 // Prompts
 // ============================================
 
@@ -923,6 +917,7 @@ export * from "./prompts";
 // ============================================
 
 export * from "./sandbox-provider";
+export type { PrebuildServiceCommand as ConfigurationServiceCommand } from "./sandbox-provider";
 // NOTE: Provider implementations are server-only due to Node.js dependencies.
 // Import from "@proliferate/shared/providers" in API routes.
 

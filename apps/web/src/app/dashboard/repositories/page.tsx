@@ -21,14 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import {
-	useAvailableRepos,
-	useCreateRepo,
-	useDeleteRepo,
-	useSearchRepos,
-	useServiceCommands,
-	useUpdateServiceCommands,
-} from "@/hooks/use-repos";
+import { useAvailableRepos, useCreateRepo, useDeleteRepo, useSearchRepos } from "@/hooks/use-repos";
 import { orpc } from "@/lib/orpc";
 import { cn, getSnapshotDisplayName } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
@@ -321,7 +314,7 @@ function RepoRow({
 							{repo.defaultBranch || "main"}
 						</span>
 						<span className="inline-flex items-center rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground flex-shrink-0">
-							{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
+							Repository
 						</span>
 					</button>
 
@@ -394,9 +387,13 @@ function RepoDetails({
 	onConfigure: (repoId: string) => void;
 }) {
 	const { data: snapshotsData, isLoading: snapshotsLoading } = useQuery({
-		...orpc.repos.listSnapshots.queryOptions({ input: { id: repo.id } }),
+		...orpc.configurations.list.queryOptions({ input: {} }),
 	});
-	const snapshots = snapshotsData?.prebuilds;
+	const allConfigurations = snapshotsData?.configurations;
+	// Filter configurations that contain this repo
+	const snapshots = allConfigurations?.filter((c) =>
+		c.configurationRepos?.some((cr) => cr.repo?.id === repo.id),
+	);
 
 	return (
 		<div className="px-4 pb-3 space-y-4">
@@ -433,7 +430,7 @@ function RepoDetails({
 													sessionId: setupSessionId,
 													snapshotId: snapshot.id,
 													snapshotName: getSnapshotDisplayName(snapshot),
-													prebuildId: snapshot.id,
+													configurationId: snapshot.id,
 												});
 											}}
 										>
@@ -457,162 +454,6 @@ function RepoDetails({
 					New configuration
 				</Button>
 			</div>
-
-			{/* Auto-start commands */}
-			<div className="pl-5.5">
-				<ServiceCommandsSection repoId={repo.id} />
-			</div>
-		</div>
-	);
-}
-
-interface CommandDraft {
-	name: string;
-	command: string;
-	cwd: string;
-}
-
-function ServiceCommandsSection({ repoId }: { repoId: string }) {
-	const { data: commands, isLoading } = useServiceCommands(repoId);
-	const updateCommands = useUpdateServiceCommands();
-	const [editing, setEditing] = useState(false);
-	const [drafts, setDrafts] = useState<CommandDraft[]>([]);
-
-	const startEditing = () => {
-		setDrafts(
-			commands?.length
-				? commands.map((c) => ({ name: c.name, command: c.command, cwd: c.cwd || "" }))
-				: [{ name: "", command: "", cwd: "" }],
-		);
-		setEditing(true);
-	};
-
-	const handleSave = async () => {
-		const valid = drafts.filter((d) => d.name.trim() && d.command.trim());
-		await updateCommands.mutateAsync({
-			id: repoId,
-			commands: valid.map((d) => ({
-				name: d.name.trim(),
-				command: d.command.trim(),
-				...(d.cwd.trim() ? { cwd: d.cwd.trim() } : {}),
-			})),
-		});
-		setEditing(false);
-	};
-
-	const addRow = () => {
-		if (drafts.length >= 10) return;
-		setDrafts([...drafts, { name: "", command: "", cwd: "" }]);
-	};
-
-	const removeRow = (index: number) => {
-		setDrafts(drafts.filter((_, i) => i !== index));
-	};
-
-	const updateDraft = (index: number, field: keyof CommandDraft, value: string) => {
-		setDrafts(drafts.map((d, i) => (i === index ? { ...d, [field]: value } : d)));
-	};
-
-	if (isLoading) {
-		return <LoadingDots size="sm" className="text-muted-foreground" />;
-	}
-
-	if (editing) {
-		return (
-			<div className="space-y-2">
-				<p className="text-xs text-muted-foreground">
-					Default auto-start commands. Run automatically when a session starts.
-				</p>
-				{drafts.map((draft, index) => (
-					<div key={index} className="flex items-start gap-2">
-						<div className="flex-1 space-y-1.5">
-							<Input
-								value={draft.name}
-								onChange={(e) => updateDraft(index, "name", e.target.value)}
-								placeholder="Name (e.g. dev-server)"
-								className="h-7 text-xs"
-							/>
-							<Input
-								value={draft.command}
-								onChange={(e) => updateDraft(index, "command", e.target.value)}
-								placeholder="Command (e.g. pnpm dev)"
-								className="h-7 text-xs font-mono"
-							/>
-							<Input
-								value={draft.cwd}
-								onChange={(e) => updateDraft(index, "cwd", e.target.value)}
-								placeholder="Working directory (optional)"
-								className="h-7 text-xs"
-							/>
-						</div>
-						<Button
-							variant="ghost"
-							size="sm"
-							className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-							onClick={() => removeRow(index)}
-						>
-							<Trash2 className="h-3.5 w-3.5" />
-						</Button>
-					</div>
-				))}
-				<div className="flex items-center gap-2">
-					<Button
-						variant="outline"
-						size="sm"
-						className="h-7 text-xs"
-						onClick={addRow}
-						disabled={drafts.length >= 10}
-					>
-						<Plus className="h-3 w-3 mr-1" />
-						Add command
-					</Button>
-					<div className="flex-1" />
-					<Button
-						variant="ghost"
-						size="sm"
-						className="h-7 text-xs"
-						onClick={() => setEditing(false)}
-					>
-						Cancel
-					</Button>
-					<Button
-						size="sm"
-						className="h-7 text-xs"
-						onClick={handleSave}
-						disabled={updateCommands.isPending}
-					>
-						{updateCommands.isPending ? "Saving..." : "Save"}
-					</Button>
-				</div>
-			</div>
-		);
-	}
-
-	return (
-		<div>
-			<p className="text-xs text-muted-foreground mb-2">Auto-start commands</p>
-			{commands && commands.length > 0 ? (
-				<div className="space-y-1">
-					{commands.map((cmd, index) => (
-						<div key={index} className="text-xs py-0.5">
-							<span className="font-medium">{cmd.name}</span>
-							<span className="text-muted-foreground ml-2 font-mono">{cmd.command}</span>
-							{cmd.cwd && <span className="text-muted-foreground ml-2">({cmd.cwd})</span>}
-						</div>
-					))}
-				</div>
-			) : (
-				<p className="text-xs text-muted-foreground">None</p>
-			)}
-			<Button
-				variant="ghost"
-				size="sm"
-				className="h-6 text-xs text-muted-foreground hover:text-foreground mt-1 -ml-2"
-				onClick={startEditing}
-			>
-				<Pencil className="h-3 w-3 mr-1" />
-				{commands && commands.length > 0 ? "Edit" : "Add commands"}
-			</Button>
 		</div>
 	);
 }

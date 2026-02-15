@@ -184,32 +184,10 @@ export async function deleteIntegration(
 		return { success: false, error: "Access denied" };
 	}
 
-	const isGitHubApp = integration.provider === "github-app";
-	const isGitHubRelated = isGitHubApp || integration.integrationId?.includes("github");
-
 	// Delete from database
 	await integrationsDb.deleteById(integrationId);
 
-	// Handle orphaned repos for GitHub connections
-	if (isGitHubRelated) {
-		await handleOrphanedRepos(orgId);
-	}
-
 	return { success: true };
-}
-
-/**
- * Mark repos as orphaned if they have no connections.
- */
-async function handleOrphanedRepos(orgId: string): Promise<void> {
-	const repos = await integrationsDb.getNonOrphanedRepos(orgId);
-
-	for (const repo of repos) {
-		const connectionCount = await integrationsDb.countRepoConnections(repo.id);
-		if (connectionCount === 0) {
-			await integrationsDb.markRepoOrphaned(repo.id);
-		}
-	}
 }
 
 // ============================================

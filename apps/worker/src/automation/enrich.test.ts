@@ -10,7 +10,7 @@ function makeContext(overrides: Record<string, unknown> = {}) {
 		automation: {
 			id: "auto-1",
 			name: "Bug Fixer",
-			defaultPrebuildId: "pb-1",
+			defaultConfigurationId: "pb-1",
 			agentInstructions: null,
 			modelId: null,
 			notificationChannelId: null,
@@ -218,7 +218,7 @@ describe("buildEnrichmentPayload", () => {
 			automation: {
 				id: "auto-1",
 				name: "Smart Fixer",
-				defaultPrebuildId: "pb-1",
+				defaultConfigurationId: "pb-1",
 				agentInstructions: null,
 				modelId: null,
 				notificationChannelId: null,

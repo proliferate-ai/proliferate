@@ -6,7 +6,7 @@
  *
  * Persistence semantics:
  * - Each secret can individually opt into org-level persistence via `persist`.
- * - If `persist` is absent, the global `saveToPrebuild` flag is used as fallback.
+ * - If `persist` is absent, the global `saveToConfiguration` flag is used as fallback.
  * - Regular env vars are always session-only (never persisted to DB).
  * - All values (persisted or not) are written to the sandbox for the current session.
  */
@@ -41,7 +41,7 @@ export interface SubmitEnvHandlerInput {
 	userId: string;
 	secrets: SecretInput[];
 	envVars: EnvVarInput[];
-	saveToPrebuild: boolean;
+	saveToConfiguration: boolean;
 }
 
 export interface SecretResult {
@@ -60,7 +60,7 @@ export interface SubmitEnvResult {
 // ============================================
 
 export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<SubmitEnvResult> {
-	const { sessionId, orgId, userId, secrets: secretsInput, envVars, saveToPrebuild } = input;
+	const { sessionId, orgId, userId, secrets: secretsInput, envVars, saveToConfiguration } = input;
 	const reqLog = log.child({ sessionId });
 	const startMs = Date.now();
 
@@ -68,8 +68,8 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 		{
 			envVarCount: envVars.length,
 			secretCount: secretsInput.length,
-			persistCount: secretsInput.filter((s) => s.persist ?? saveToPrebuild).length,
-			saveToPrebuild,
+			persistCount: secretsInput.filter((s) => s.persist ?? saveToConfiguration).length,
+			saveToConfiguration,
 		},
 		"submit_env.start",
 	);
@@ -99,7 +99,7 @@ export async function submitEnvHandler(input: SubmitEnvHandlerInput): Promise<Su
 	for (const secret of secretsInput) {
 		envVarsMap[secret.key] = secret.value;
 
-		const shouldPersist = secret.persist ?? saveToPrebuild;
+		const shouldPersist = secret.persist ?? saveToConfiguration;
 
 		if (shouldPersist) {
 			try {

@@ -9,13 +9,13 @@ import {
 	and,
 	automationConnections,
 	automations,
+	configurations,
 	desc,
 	eq,
 	getDb,
 	gte,
 	inArray,
 	integrations,
-	prebuilds,
 	triggerEvents,
 	triggers,
 } from "../db/client";
@@ -37,11 +37,11 @@ export type { Json };
 /** Automation row type from Drizzle schema */
 export type AutomationRow = InferSelectModel<typeof automations>;
 
-/** Prebuild summary for relations */
-export interface PrebuildSummary {
+/** Configuration summary for relations */
+export interface ConfigurationSummary {
 	id: string;
 	name: string | null;
-	snapshotId: string | null;
+	activeSnapshotId: string | null;
 }
 
 /** Creator summary for relations */
@@ -103,7 +103,7 @@ export interface TriggerWithIntegration {
 
 /** Automation with all relations for list view */
 export interface AutomationWithRelations extends AutomationRow {
-	defaultPrebuild: PrebuildSummary | null;
+	defaultConfiguration: ConfigurationSummary | null;
 	triggers: TriggerSummary[];
 	schedules: ScheduleSummary[];
 	createdByUser: CreatorSummary | null;
@@ -111,7 +111,7 @@ export interface AutomationWithRelations extends AutomationRow {
 
 /** Automation with triggers for detail view */
 export interface AutomationWithTriggers extends AutomationRow {
-	defaultPrebuild: PrebuildSummary | null;
+	defaultConfiguration: ConfigurationSummary | null;
 	triggers: TriggerWithIntegration[];
 }
 
@@ -184,7 +184,7 @@ export interface WebhookTriggerWithAutomation {
 		id: string;
 		name: string;
 		enabled: boolean | null;
-		defaultPrebuildId: string | null;
+		defaultConfigurationId: string | null;
 		agentInstructions: string | null;
 		modelId: string | null;
 	} | null;
@@ -228,11 +228,11 @@ export async function listByOrganization(orgId: string): Promise<AutomationWithR
 		where: eq(automations.organizationId, orgId),
 		orderBy: [desc(automations.updatedAt)],
 		with: {
-			prebuild: {
+			defaultConfiguration: {
 				columns: {
 					id: true,
 					name: true,
-					snapshotId: true,
+					activeSnapshotId: true,
 				},
 			},
 			triggers: {
@@ -259,10 +259,10 @@ export async function listByOrganization(orgId: string): Promise<AutomationWithR
 	});
 
 	return results.map((row) => {
-		const { prebuild, user, ...rest } = row;
+		const { defaultConfiguration, user, ...rest } = row;
 		return {
 			...rest,
-			defaultPrebuild: prebuild ?? null,
+			defaultConfiguration: defaultConfiguration ?? null,
 			createdByUser: user ?? null,
 		};
 	});
@@ -276,11 +276,11 @@ export async function findById(id: string, orgId: string): Promise<AutomationWit
 	const result = await db.query.automations.findFirst({
 		where: and(eq(automations.id, id), eq(automations.organizationId, orgId)),
 		with: {
-			prebuild: {
+			defaultConfiguration: {
 				columns: {
 					id: true,
 					name: true,
-					snapshotId: true,
+					activeSnapshotId: true,
 				},
 			},
 			triggers: {
@@ -309,10 +309,10 @@ export async function findById(id: string, orgId: string): Promise<AutomationWit
 	});
 
 	if (!result) return null;
-	const { prebuild, ...rest } = result;
+	const { defaultConfiguration, ...rest } = result;
 	return {
 		...rest,
-		defaultPrebuild: prebuild ?? null,
+		defaultConfiguration: defaultConfiguration ?? null,
 	};
 }
 
@@ -321,7 +321,7 @@ export async function findById(id: string, orgId: string): Promise<AutomationWit
  */
 export async function create(
 	input: CreateAutomationInput,
-): Promise<AutomationRow & { defaultPrebuild: PrebuildSummary | null }> {
+): Promise<AutomationRow & { defaultConfiguration: ConfigurationSummary | null }> {
 	const db = getDb();
 	const [result] = await db
 		.insert(automations)
@@ -330,32 +330,32 @@ export async function create(
 			name: input.name || "Untitled Automation",
 			description: input.description || null,
 			agentInstructions: input.agentInstructions || null,
-			defaultPrebuildId: input.defaultPrebuildId || null,
+			defaultConfigurationId: input.defaultConfigurationId || null,
 			allowAgenticRepoSelection: input.allowAgenticRepoSelection ?? false,
 			enabled: false,
 			createdBy: input.createdBy,
 		})
 		.returning();
 
-	// Fetch with prebuild relation
-	const withPrebuild = await db.query.automations.findFirst({
+	// Fetch with configuration relation
+	const withConfiguration = await db.query.automations.findFirst({
 		where: eq(automations.id, result.id),
 		with: {
-			prebuild: {
+			defaultConfiguration: {
 				columns: {
 					id: true,
 					name: true,
-					snapshotId: true,
+					activeSnapshotId: true,
 				},
 			},
 		},
 	});
 
-	if (!withPrebuild) {
-		return { ...result, defaultPrebuild: null };
+	if (!withConfiguration) {
+		return { ...result, defaultConfiguration: null };
 	}
-	const { prebuild, ...rest } = withPrebuild;
-	return { ...rest, defaultPrebuild: prebuild ?? null };
+	const { defaultConfiguration, ...rest } = withConfiguration;
+	return { ...rest, defaultConfiguration: defaultConfiguration ?? null };
 }
 
 /**
@@ -365,7 +365,7 @@ export async function update(
 	id: string,
 	orgId: string,
 	input: UpdateAutomationInput,
-): Promise<AutomationRow & { defaultPrebuild: PrebuildSummary | null }> {
+): Promise<AutomationRow & { defaultConfiguration: ConfigurationSummary | null }> {
 	const db = getDb();
 	const updates: Partial<typeof automations.$inferInsert> = {
 		updatedAt: new Date(),
@@ -375,7 +375,8 @@ export async function update(
 	if (input.description !== undefined) updates.description = input.description;
 	if (input.enabled !== undefined) updates.enabled = input.enabled;
 	if (input.agentInstructions !== undefined) updates.agentInstructions = input.agentInstructions;
-	if (input.defaultPrebuildId !== undefined) updates.defaultPrebuildId = input.defaultPrebuildId;
+	if (input.defaultConfigurationId !== undefined)
+		updates.defaultConfigurationId = input.defaultConfigurationId;
 	if (input.allowAgenticRepoSelection !== undefined)
 		updates.allowAgenticRepoSelection = input.allowAgenticRepoSelection;
 	if (input.agentType !== undefined) updates.agentType = input.agentType;
@@ -393,15 +394,15 @@ export async function update(
 		.set(updates)
 		.where(and(eq(automations.id, id), eq(automations.organizationId, orgId)));
 
-	// Fetch with prebuild relation
+	// Fetch with configuration relation
 	const result = await db.query.automations.findFirst({
 		where: and(eq(automations.id, id), eq(automations.organizationId, orgId)),
 		with: {
-			prebuild: {
+			defaultConfiguration: {
 				columns: {
 					id: true,
 					name: true,
-					snapshotId: true,
+					activeSnapshotId: true,
 				},
 			},
 		},
@@ -410,8 +411,8 @@ export async function update(
 	if (!result) {
 		throw new Error("Automation not found after update");
 	}
-	const { prebuild, ...rest } = result;
-	return { ...rest, defaultPrebuild: prebuild ?? null };
+	const { defaultConfiguration, ...rest } = result;
+	return { ...rest, defaultConfiguration: defaultConfiguration ?? null };
 }
 
 /**
@@ -454,18 +455,18 @@ export async function getAutomationName(
 }
 
 /**
- * Validate prebuild exists and belongs to org (via linked repos).
+ * Validate configuration exists and belongs to org (via linked repos).
  */
-export async function validatePrebuild(
-	prebuildId: string,
+export async function validateConfiguration(
+	configurationId: string,
 	orgId: string,
 ): Promise<{ id: string; snapshotId: string | null } | null> {
 	const db = getDb();
-	const result = await db.query.prebuilds.findFirst({
-		where: eq(prebuilds.id, prebuildId),
-		columns: { id: true, snapshotId: true },
+	const result = await db.query.configurations.findFirst({
+		where: eq(configurations.id, configurationId),
+		columns: { id: true, activeSnapshotId: true },
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
 					repo: {
 						columns: { organizationId: true },
@@ -478,10 +479,10 @@ export async function validatePrebuild(
 	if (!result) return null;
 
 	// Verify at least one linked repo belongs to the org
-	const belongsToOrg = result.prebuildRepos?.some((pr) => pr.repo?.organizationId === orgId);
+	const belongsToOrg = result.configurationRepos?.some((cr) => cr.repo?.organizationId === orgId);
 	if (!belongsToOrg) return null;
 
-	return { id: result.id, snapshotId: result.snapshotId };
+	return { id: result.id, snapshotId: result.activeSnapshotId };
 }
 
 // ============================================
@@ -859,7 +860,7 @@ export async function findWebhookTriggerForAutomation(
 					id: true,
 					name: true,
 					enabled: true,
-					defaultPrebuildId: true,
+					defaultConfigurationId: true,
 					agentInstructions: true,
 					modelId: true,
 				},
@@ -898,7 +899,7 @@ export async function findTriggerForAutomationByProvider(
 					id: true,
 					name: true,
 					enabled: true,
-					defaultPrebuildId: true,
+					defaultConfigurationId: true,
 					agentInstructions: true,
 					modelId: true,
 				},

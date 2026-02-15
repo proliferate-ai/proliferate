@@ -4,36 +4,21 @@
  * Raw Drizzle queries - no business logic.
  */
 
-import { and, desc, eq, getDb, isNull, ne, or, repoConnections, repos } from "../db/client";
+import { and, desc, eq, getDb, repoConnections, repos } from "../db/client";
 import type { InferSelectModel } from "../db/client";
 import type { DbCreateRepoInput } from "../types/repos";
 
 // Type alias for Drizzle model
 export type RepoRow = InferSelectModel<typeof repos>;
 
-// Type for repo with prebuilds (from relation query)
-export interface RepoWithPrebuildsRow extends RepoRow {
-	prebuildRepos?: Array<{
-		prebuild: {
+// Type for repo with configurations (from relation query)
+export interface RepoWithConfigurationsRow extends RepoRow {
+	configurationRepos?: Array<{
+		configuration: {
 			id: string;
-			status: string | null;
-			snapshotId: string | null;
+			activeSnapshotId: string | null;
 		} | null;
 	}>;
-}
-
-export interface RepoSnapshotBuildInfoRow {
-	id: string;
-	organizationId: string;
-	githubUrl: string;
-	defaultBranch: string | null;
-	source: string | null;
-	isPrivate: boolean | null;
-	repoSnapshotId: string | null;
-	repoSnapshotStatus: string | null;
-	repoSnapshotCommitSha: string | null;
-	repoSnapshotBuiltAt: Date | null;
-	repoSnapshotProvider: string | null;
 }
 
 // ============================================
@@ -41,21 +26,20 @@ export interface RepoSnapshotBuildInfoRow {
 // ============================================
 
 /**
- * List repos for an organization with prebuild status.
+ * List repos for an organization with configuration status.
  */
-export async function listByOrganization(orgId: string): Promise<RepoWithPrebuildsRow[]> {
+export async function listByOrganization(orgId: string): Promise<RepoWithConfigurationsRow[]> {
 	const db = getDb();
 	const results = await db.query.repos.findMany({
 		where: eq(repos.organizationId, orgId),
 		orderBy: [desc(repos.createdAt)],
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
-					prebuild: {
+					configuration: {
 						columns: {
 							id: true,
-							status: true,
-							snapshotId: true,
+							activeSnapshotId: true,
 						},
 					},
 				},
@@ -67,20 +51,22 @@ export async function listByOrganization(orgId: string): Promise<RepoWithPrebuil
 }
 
 /**
- * Get a single repo by ID with prebuild status.
+ * Get a single repo by ID with configuration status.
  */
-export async function findById(id: string, orgId: string): Promise<RepoWithPrebuildsRow | null> {
+export async function findById(
+	id: string,
+	orgId: string,
+): Promise<RepoWithConfigurationsRow | null> {
 	const db = getDb();
 	const result = await db.query.repos.findFirst({
 		where: and(eq(repos.id, id), eq(repos.organizationId, orgId)),
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
-					prebuild: {
+					configuration: {
 						columns: {
 							id: true,
-							status: true,
-							snapshotId: true,
+							activeSnapshotId: true,
 						},
 					},
 				},
@@ -120,8 +106,6 @@ export async function create(input: DbCreateRepoInput): Promise<RepoRow> {
 			githubRepoName: input.githubRepoName,
 			githubUrl: input.githubUrl,
 			defaultBranch: input.defaultBranch,
-			addedBy: input.addedBy,
-			source: input.source || "github",
 		})
 		.returning();
 
@@ -134,14 +118,6 @@ export async function create(input: DbCreateRepoInput): Promise<RepoRow> {
 export async function deleteById(id: string, orgId: string): Promise<void> {
 	const db = getDb();
 	await db.delete(repos).where(and(eq(repos.id, id), eq(repos.organizationId, orgId)));
-}
-
-/**
- * Update repo's orphaned status.
- */
-export async function updateOrphanedStatus(id: string, isOrphaned: boolean): Promise<void> {
-	const db = getDb();
-	await db.update(repos).set({ isOrphaned, updatedAt: new Date() }).where(eq(repos.id, id));
 }
 
 /**
@@ -189,131 +165,4 @@ export async function getGithubRepoName(repoId: string): Promise<string | null> 
 	});
 
 	return result?.githubRepoName || null;
-}
-
-/**
- * Fetch repo fields required for building a repo snapshot.
- */
-export async function getSnapshotBuildInfo(
-	repoId: string,
-): Promise<RepoSnapshotBuildInfoRow | null> {
-	const db = getDb();
-	const result = await db.query.repos.findFirst({
-		where: eq(repos.id, repoId),
-		columns: {
-			id: true,
-			organizationId: true,
-			githubUrl: true,
-			defaultBranch: true,
-			source: true,
-			isPrivate: true,
-			repoSnapshotId: true,
-			repoSnapshotStatus: true,
-			repoSnapshotCommitSha: true,
-			repoSnapshotBuiltAt: true,
-			repoSnapshotProvider: true,
-		},
-	});
-
-	return result ?? null;
-}
-
-/**
- * Mark a repo snapshot as building unless it is already ready.
- * Returns true if the row was updated.
- */
-export async function markRepoSnapshotBuilding(repoId: string, provider: string): Promise<boolean> {
-	const db = getDb();
-	const result = await db
-		.update(repos)
-		.set({
-			repoSnapshotStatus: "building",
-			repoSnapshotError: null,
-			repoSnapshotProvider: provider,
-			updatedAt: new Date(),
-		})
-		.where(
-			and(
-				eq(repos.id, repoId),
-				or(isNull(repos.repoSnapshotStatus), ne(repos.repoSnapshotStatus, "ready")),
-			),
-		)
-		.returning({ id: repos.id });
-
-	return result.length > 0;
-}
-
-export async function markRepoSnapshotReady(input: {
-	repoId: string;
-	snapshotId: string;
-	commitSha: string | null;
-	provider: string;
-}): Promise<void> {
-	const db = getDb();
-	await db
-		.update(repos)
-		.set({
-			repoSnapshotId: input.snapshotId,
-			repoSnapshotCommitSha: input.commitSha,
-			repoSnapshotBuiltAt: new Date(),
-			repoSnapshotStatus: "ready",
-			repoSnapshotError: null,
-			repoSnapshotProvider: input.provider,
-			updatedAt: new Date(),
-		})
-		.where(eq(repos.id, input.repoId));
-}
-
-export async function markRepoSnapshotFailed(input: {
-	repoId: string;
-	error: string;
-	provider: string;
-}): Promise<void> {
-	const db = getDb();
-	await db
-		.update(repos)
-		.set({
-			repoSnapshotStatus: "failed",
-			repoSnapshotError: input.error,
-			repoSnapshotProvider: input.provider,
-			updatedAt: new Date(),
-		})
-		.where(eq(repos.id, input.repoId));
-}
-
-/**
- * Get service commands for a repo.
- * Returns raw jsonb — caller must validate with parseServiceCommands().
- */
-export async function getServiceCommands(
-	repoId: string,
-	orgId: string,
-): Promise<{ serviceCommands: unknown } | null> {
-	const db = getDb();
-	const result = await db.query.repos.findFirst({
-		where: and(eq(repos.id, repoId), eq(repos.organizationId, orgId)),
-		columns: { serviceCommands: true },
-	});
-	return result ?? null;
-}
-
-/**
- * Update service commands for a repo.
- */
-export async function updateServiceCommands(input: {
-	repoId: string;
-	orgId: string;
-	serviceCommands: unknown;
-	updatedBy: string;
-}): Promise<void> {
-	const db = getDb();
-	await db
-		.update(repos)
-		.set({
-			serviceCommands: input.serviceCommands,
-			serviceCommandsUpdatedAt: new Date(),
-			serviceCommandsUpdatedBy: input.updatedBy,
-			updatedAt: new Date(),
-		})
-		.where(and(eq(repos.id, input.repoId), eq(repos.organizationId, input.orgId)));
 }

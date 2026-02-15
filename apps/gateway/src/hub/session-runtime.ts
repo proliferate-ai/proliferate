@@ -271,13 +271,13 @@ export class SessionRuntime {
 			this.context = await loadSessionContext(this.env, this.sessionId);
 			this.logLatency("runtime.ensure_ready.load_context", {
 				durationMs: Date.now() - contextStartMs,
-				prebuildId: this.context.session.prebuild_id,
+				configurationId: this.context.session.configuration_id,
 				repoCount: this.context.repos.length,
 				hasSandbox: Boolean(this.context.session.sandbox_id),
 				hasSnapshot: Boolean(this.context.session.snapshot_id),
 			});
 			this.log("Session context loaded", {
-				prebuildId: this.context.session.prebuild_id,
+				configurationId: this.context.session.configuration_id,
 				repoCount: this.context.repos.length,
 				primaryRepo: this.context.primaryRepo.github_repo_name,
 				hasSandbox: Boolean(this.context.session.sandbox_id),
@@ -346,7 +346,10 @@ export class SessionRuntime {
 			const ensureSandboxStartMs = Date.now();
 			const result = await provider.ensureSandbox({
 				sessionId: this.sessionId,
-				sessionType: this.context.session.session_type as "coding" | "setup" | "cli" | null,
+				sessionType: (this.context.session.session_type === "coding" ||
+				this.context.session.session_type === "setup"
+					? this.context.session.session_type
+					: null) as "coding" | "setup" | null,
 				userName,
 				userEmail,
 				repos: this.context.repos,
@@ -358,7 +361,7 @@ export class SessionRuntime {
 				agentConfig: this.context.agentConfig,
 				currentSandboxId: this.context.session.sandbox_id || undefined,
 				sshPublicKey: this.context.sshPublicKey,
-				snapshotHasDeps: this.context.snapshotHasDeps,
+				autoStartServices: this.context.autoStartServices,
 				serviceCommands: this.context.serviceCommands,
 			});
 			this.logLatency("runtime.ensure_ready.provider.ensure_sandbox", {

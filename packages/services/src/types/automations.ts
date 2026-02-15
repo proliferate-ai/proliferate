@@ -14,7 +14,7 @@ export type {
 	CreatorSummary,
 	IntegrationSummary,
 	ListEventsResult,
-	PrebuildSummary,
+	ConfigurationSummary,
 	ScheduleSummary,
 	TriggerEventDetailRow,
 	TriggerEventInsertRow,
@@ -38,7 +38,7 @@ export interface CreateAutomationInput {
 	name: string;
 	description?: string | null;
 	agentInstructions?: string | null;
-	defaultPrebuildId?: string | null;
+	defaultConfigurationId?: string | null;
 	allowAgenticRepoSelection?: boolean;
 	createdBy: string;
 }
@@ -48,7 +48,7 @@ export interface UpdateAutomationInput {
 	description?: string | null;
 	enabled?: boolean;
 	agentInstructions?: string | null;
-	defaultPrebuildId?: string | null;
+	defaultConfigurationId?: string | null;
 	allowAgenticRepoSelection?: boolean;
 	agentType?: string | null;
 	modelId?: string | null;

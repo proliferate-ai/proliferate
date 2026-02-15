@@ -12,14 +12,13 @@ import * as snapshotsDb from "./db";
 // ============================================
 
 export interface CreateSnapshotInput {
-	prebuildId: string;
+	configurationId: string;
 	sandboxProvider: string;
 }
 
 export interface MarkSnapshotReadyInput {
 	snapshotId: string;
 	providerSnapshotId: string;
-	hasDeps: boolean;
 	repoCommits?: Array<{ repoId: string; commitSha: string }>;
 }
 
@@ -34,14 +33,14 @@ export async function createSnapshot(input: CreateSnapshotInput) {
 	const id = randomUUID();
 	const row = await snapshotsDb.create({
 		id,
-		prebuildId: input.prebuildId,
+		configurationId: input.configurationId,
 		sandboxProvider: input.sandboxProvider,
 	});
 	return row;
 }
 
 /**
- * Mark a snapshot as ready, record repo commits, and set as active on the prebuild.
+ * Mark a snapshot as ready, record repo commits, and set as active on the configuration.
  */
 export async function markSnapshotReady(input: MarkSnapshotReadyInput): Promise<void> {
 	await snapshotsDb.markReady(input);
@@ -69,16 +68,16 @@ export async function getSnapshotWithRepos(id: string) {
 }
 
 /**
- * List all snapshots for a prebuild.
+ * List all snapshots for a configuration.
  */
-export async function listSnapshots(prebuildId: string) {
-	return snapshotsDb.listByPrebuild(prebuildId);
+export async function listSnapshots(configurationId: string) {
+	return snapshotsDb.listByConfiguration(configurationId);
 }
 
 /**
- * Get the active (ready) snapshot for a prebuild.
+ * Get the active (ready) snapshot for a configuration.
  * Returns null if no active snapshot is set.
  */
-export async function getActiveSnapshot(prebuildId: string) {
-	return snapshotsDb.getActiveSnapshot(prebuildId);
+export async function getActiveSnapshot(configurationId: string) {
+	return snapshotsDb.getActiveSnapshot(configurationId);
 }

@@ -12,9 +12,9 @@ import { createLogger } from "@proliferate/logger";
 import {
 	automations,
 	baseSnapshots,
+	configurations,
 	integrations,
-	prebuilds,
-	secrets,
+	secretFiles,
 	sessions,
 	snapshots,
 	users,
@@ -27,20 +27,18 @@ import {
 	getDefaultAgentConfig,
 	isValidModelId,
 	parseModelId,
-	resolveSnapshotId,
 } from "@proliferate/shared";
 import { getModalAppName } from "@proliferate/shared/providers";
 import {
 	computeBaseSnapshotVersionKey,
-	parseServiceCommands,
-	resolveServiceCommands,
+	parsePrebuildServiceCommands,
 } from "@proliferate/shared/sandbox";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "session-creator" });
 
-export type SessionType = "coding" | "setup" | "cli";
+export type SessionType = "coding" | "setup";
 export type ClientType = "web" | "slack" | "cli" | "automation";
 export type SandboxMode = "immediate" | "deferred";
 
@@ -50,7 +48,7 @@ export interface CreateSessionOptions {
 
 	// Required
 	organizationId: string;
-	prebuildId: string;
+	configurationId: string;
 	sessionType: SessionType;
 	clientType: ClientType;
 
@@ -91,10 +89,10 @@ export interface IntegrationWarning {
 
 export interface CreateSessionResult {
 	sessionId: string;
-	prebuildId: string;
+	configurationId: string;
 	status: "pending" | "starting" | "running";
 	hasSnapshot: boolean;
-	isNewPrebuild: boolean;
+	isNewConfiguration: boolean;
 	sandbox?: {
 		sandboxId: string;
 		previewUrl: string | null;
@@ -105,14 +103,13 @@ export interface CreateSessionResult {
 	integrationWarnings?: IntegrationWarning[];
 }
 
-interface PrebuildRepoRow {
+interface ConfigurationRepoRow {
 	workspacePath: string;
 	repo: {
 		id: string;
 		githubUrl: string;
 		githubRepoName: string;
 		defaultBranch: string | null;
-		serviceCommands?: unknown;
 	} | null;
 }
 
@@ -121,13 +118,13 @@ interface PrebuildRepoRow {
  */
 export async function createSession(
 	options: CreateSessionOptions,
-	isNewPrebuild = false,
+	isNewConfiguration = false,
 ): Promise<CreateSessionResult> {
 	const {
 		env,
 		provider,
 		organizationId,
-		prebuildId,
+		configurationId,
 		sessionType,
 		clientType,
 		userId,
@@ -161,7 +158,7 @@ export async function createSession(
 		"Creating session",
 	);
 	log.debug(
-		{ isNewPrebuild, hasSnapshotId: Boolean(inputSnapshotId) },
+		{ isNewConfiguration, hasSnapshotId: Boolean(inputSnapshotId) },
 		"session_creator.create_session.start",
 	);
 
@@ -194,42 +191,17 @@ export async function createSession(
 		}
 	}
 
-	// Resolve snapshotId: try active_snapshot_id (new) → old layered resolution (fallback).
+	// Resolve snapshotId: use active snapshot from configuration, or start from scratch.
 	let snapshotId = inputSnapshotId ?? null;
 	if (!snapshotId) {
-		// Try new active_snapshot_id on prebuild first
 		try {
-			const activeSnapshot = await snapshots.getActiveSnapshot(prebuildId);
+			const activeSnapshot = await snapshots.getActiveSnapshot(configurationId);
 			if (activeSnapshot?.providerSnapshotId) {
 				snapshotId = activeSnapshot.providerSnapshotId;
-				log.info({ snapshotId, snapshotTableId: activeSnapshot.id }, "Using active snapshot (new)");
+				log.info({ snapshotId, snapshotTableId: activeSnapshot.id }, "Using active snapshot");
 			}
 		} catch (err) {
-			log.warn({ err }, "Failed to read active snapshot (non-fatal, falling back)");
-		}
-
-		// Fallback: old layered resolution (prebuild snapshot → repo snapshot → null)
-		if (!snapshotId) {
-			try {
-				const prebuildRow = await prebuilds.findByIdForSession(prebuildId);
-				const prebuildSnapshotId = prebuildRow?.snapshotId ?? null;
-				if (prebuildSnapshotId) {
-					snapshotId = prebuildSnapshotId;
-					log.info({ snapshotId }, "Using prebuild snapshot (legacy fallback)");
-				} else if (provider.type === "modal" && sessionType !== "cli") {
-					const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
-					snapshotId = resolveSnapshotId({
-						prebuildSnapshotId: null,
-						sandboxProvider: provider.type,
-						prebuildRepos: prebuildRepoRows,
-					});
-					if (snapshotId) {
-						log.info({ snapshotId }, "Using repo snapshot (legacy fallback)");
-					}
-				}
-			} catch (err) {
-				log.warn({ err }, "Failed to resolve legacy snapshot (non-fatal)");
-			}
+			log.warn({ err }, "Failed to read active snapshot (non-fatal)");
 		}
 	}
 
@@ -238,7 +210,7 @@ export async function createSession(
 		const dbStartMs = Date.now();
 		await sessions.create({
 			id: sessionId,
-			prebuildId,
+			configurationId,
 			organizationId,
 			sessionType,
 			clientType,
@@ -292,10 +264,10 @@ export async function createSession(
 		);
 		return {
 			sessionId,
-			prebuildId,
+			configurationId,
 			status: "pending",
 			hasSnapshot: Boolean(snapshotId),
-			isNewPrebuild,
+			isNewConfiguration,
 		};
 	}
 
@@ -307,7 +279,7 @@ export async function createSession(
 			env,
 			provider,
 			sessionId,
-			prebuildId,
+			configurationId,
 			organizationId,
 			sessionType,
 			userId,
@@ -349,10 +321,10 @@ export async function createSession(
 		);
 		return {
 			sessionId,
-			prebuildId,
+			configurationId,
 			status: "running",
 			hasSnapshot: Boolean(snapshotId),
-			isNewPrebuild,
+			isNewConfiguration,
 			sandbox: {
 				sandboxId: result.sandboxId,
 				previewUrl: result.previewUrl,
@@ -379,7 +351,7 @@ interface CreateSandboxParams {
 	env: GatewayEnv;
 	provider: SandboxProvider;
 	sessionId: string;
-	prebuildId: string;
+	configurationId: string;
 	organizationId: string;
 	sessionType: SessionType;
 	userId?: string;
@@ -403,14 +375,14 @@ interface CreateSandboxResult {
 
 /**
  * Create a sandbox with all options unified.
- * Handles both coding sessions (with repo cloning) and CLI sessions (with SSH).
+ * Handles coding sessions with repo cloning and SSH sessions.
  */
 async function createSandbox(params: CreateSandboxParams): Promise<CreateSandboxResult> {
 	const {
 		env,
 		provider,
 		sessionId,
-		prebuildId,
+		configurationId,
 		organizationId,
 		sessionType,
 		userId,
@@ -491,7 +463,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		"session_creator.create_sandbox.integration_env_vars",
 	);
 
-	// For CLI/SSH sessions, we don't need to load repos (sync via rsync)
+	// For SSH sessions without clone instructions, we don't need to load repos (sync via rsync)
 	if (sshOptions && !sshOptions.cloneInstructions) {
 		const envStartMs = Date.now();
 		const baseEnvResult = await sessions.buildSandboxEnvVars({
@@ -554,46 +526,45 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		};
 	}
 
-	// Load prebuild repos for coding sessions
-	const prebuildStartMs = Date.now();
-	const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
+	// Load configuration repos for coding sessions
+	const configReposStartMs = Date.now();
+	const configurationRepoRows =
+		await configurations.getConfigurationReposWithDetails(configurationId);
 	log.info(
 		{
-			durationMs: Date.now() - prebuildStartMs,
-			count: prebuildRepoRows?.length ?? 0,
-			repos: prebuildRepoRows?.map((r) => r.repo?.githubRepoName).filter(Boolean),
+			durationMs: Date.now() - configReposStartMs,
+			count: configurationRepoRows?.length ?? 0,
+			repos: configurationRepoRows?.map((r) => r.repo?.githubRepoName).filter(Boolean),
 		},
-		"session_creator.create_sandbox.prebuild_repos",
+		"session_creator.create_sandbox.configuration_repos",
 	);
 
-	if (!prebuildRepoRows || prebuildRepoRows.length === 0) {
-		throw new Error("Prebuild has no associated repos");
+	if (!configurationRepoRows || configurationRepoRows.length === 0) {
+		throw new Error("Configuration has no associated repos");
 	}
 
 	// Filter out repos with null values and convert to expected shape
-	const typedPrebuildRepos: PrebuildRepoRow[] = prebuildRepoRows
-		.filter((pr) => pr.repo !== null)
-		.map((pr) => ({
-			workspacePath: pr.workspacePath,
-			repo: pr.repo,
+	const typedConfigurationRepos: ConfigurationRepoRow[] = configurationRepoRows
+		.filter((cr) => cr.repo !== null)
+		.map((cr) => ({
+			workspacePath: cr.workspacePath,
+			repo: cr.repo,
 		}));
 
-	if (typedPrebuildRepos.length === 0) {
-		throw new Error("Prebuild has no associated repos");
+	if (typedConfigurationRepos.length === 0) {
+		throw new Error("Configuration has no associated repos");
 	}
 
 	// Resolve GitHub tokens for each repo
 	const githubStartMs = Date.now();
 	const repoSpecs: RepoSpec[] = await Promise.all(
-		typedPrebuildRepos.map(async (pr) => {
-			const token = await resolveGitHubToken(env, organizationId, pr.repo!.id, userId);
-			const serviceCommands = parseServiceCommands(pr.repo!.serviceCommands);
+		typedConfigurationRepos.map(async (cr) => {
+			const token = await resolveGitHubToken(env, organizationId, cr.repo!.id, userId);
 			return {
-				repoUrl: pr.repo!.githubUrl,
+				repoUrl: cr.repo!.githubUrl,
 				token,
-				workspacePath: pr.workspacePath,
-				repoId: pr.repo!.id,
-				...(serviceCommands.length > 0 ? { serviceCommands } : {}),
+				workspacePath: cr.workspacePath,
+				repoId: cr.repo!.id,
 			};
 		}),
 	);
@@ -611,46 +582,26 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		"session_creator.create_sandbox.github_tokens",
 	);
 
-	// Derive snapshotHasDeps: use new snapshot.has_deps only when snapshotId matches active snapshot.
-	let snapshotHasDeps = false;
-	{
-		let matched = false;
-		try {
-			const activeSnapshot = await snapshots.getActiveSnapshot(prebuildId);
-			if (activeSnapshot && snapshotId === activeSnapshot.providerSnapshotId) {
-				snapshotHasDeps = activeSnapshot.hasDeps;
-				matched = true;
-			}
-		} catch {
-			// Fall through to legacy heuristic
+	// Determine autoStartServices: true if there is an active snapshot
+	const autoStartServices = Boolean(snapshotId);
+
+	// Read service commands directly from the configuration record
+	const configSvcRow = await configurations.getConfigurationServiceCommands(configurationId);
+	const configServiceCommands = parsePrebuildServiceCommands(configSvcRow?.serviceCommands);
+
+	// Load secret files for boot (config-scoped) and merge into env vars
+	const secretEnvVars: Record<string, string> = {};
+	try {
+		const bootSecrets = await secretFiles.getSecretsForBoot(configurationId);
+		for (const file of bootSecrets) {
+			Object.assign(secretEnvVars, file.vars);
 		}
-		if (!matched) {
-			const repoSnapshotFallback =
-				prebuildRepoRows.length === 1 &&
-				prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
-				prebuildRepoRows[0].repo?.repoSnapshotId
-					? prebuildRepoRows[0].repo.repoSnapshotId
-					: null;
-			snapshotHasDeps = Boolean(snapshotId) && snapshotId !== repoSnapshotFallback;
+		if (Object.keys(secretEnvVars).length > 0) {
+			log.info({ keyCount: Object.keys(secretEnvVars).length }, "Loaded config secret vars");
 		}
+	} catch (err) {
+		log.warn({ err }, "Failed to load secret files for boot (non-fatal)");
 	}
-
-	// Resolve service commands: prebuild-level first, then per-repo fallback
-	const prebuildSvcRow = await prebuilds.getPrebuildServiceCommands(prebuildId);
-	const resolvedServiceCommands = resolveServiceCommands(
-		prebuildSvcRow?.serviceCommands,
-		repoSpecs,
-	);
-
-	// Load env file generation spec (if configured)
-	// Note: PR1 keeps using old paths. PR2 switches to secret_files table.
-	const prebuildEnvFiles = await prebuilds.getPrebuildEnvFiles(prebuildId);
-	const bundleEnvFiles = await secrets.buildEnvFilesFromBundles(organizationId);
-	const prebuildList = Array.isArray(prebuildEnvFiles) ? prebuildEnvFiles : [];
-	const envFiles =
-		prebuildList.length > 0 || bundleEnvFiles.length > 0
-			? [...prebuildList, ...bundleEnvFiles]
-			: undefined;
 
 	// Build environment variables
 	const envStartMs = Date.now();
@@ -658,9 +609,9 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		env,
 		sessionId,
 		organizationId,
-		typedPrebuildRepos.map((pr) => pr.repo!.id),
+		typedConfigurationRepos.map((cr) => cr.repo!.id),
 		repoSpecs,
-		integrationEnvVars,
+		{ ...integrationEnvVars, ...secretEnvVars },
 	);
 	log.debug(
 		{
@@ -671,7 +622,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	);
 
 	// Build system prompt
-	const primaryRepo = typedPrebuildRepos[0].repo!;
+	const primaryRepo = typedConfigurationRepos[0].repo!;
 	const systemPrompt = `You are an AI coding assistant. Help the user with their coding tasks in the ${primaryRepo.githubRepoName} repository.`;
 
 	const defaultAgentConfig = getDefaultAgentConfig();
@@ -704,9 +655,8 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			: undefined,
 		sshPublicKey,
 		triggerContext,
-		snapshotHasDeps,
-		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
-		envFiles,
+		autoStartServices,
+		serviceCommands: configServiceCommands.length > 0 ? configServiceCommands : undefined,
 	});
 	log.debug(
 		{

@@ -23,9 +23,6 @@ export {
 // Automations types
 export * from "./automations";
 
-// CLI types
-export * from "./cli";
-
 // Integrations types (export with prefix to avoid conflicts)
 export {
 	IntegrationRow,
@@ -50,8 +47,8 @@ export {
 	DomainSuggestionRow,
 } from "./orgs";
 
-// Prebuilds types
-export * from "./prebuilds";
+// Configurations types
+export * from "./configurations";
 
 // Repos types
 export * from "./repos";

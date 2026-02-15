@@ -41,7 +41,7 @@ export function RepoList({ repos }: RepoListProps) {
 								<p className="text-sm text-muted-foreground">{repo.default_branch}</p>
 							</div>
 							<div>
-								{repo.prebuild_status === "ready" ? (
+								{repo.configuration_status === "ready" ? (
 									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
 										Ready
 									</span>

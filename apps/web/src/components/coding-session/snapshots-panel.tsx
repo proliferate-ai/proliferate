@@ -2,14 +2,14 @@
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useEffectiveServiceCommands, useServiceCommands } from "@/hooks/use-repos";
+import { useEffectiveServiceCommands } from "@/hooks/use-repos";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { Box, Camera, Loader2, Play, X } from "lucide-react";
 
 interface SnapshotsPanelProps {
 	snapshotId?: string | null;
 	repoId?: string | null;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	canSnapshot?: boolean;
 	isSnapshotting?: boolean;
 	onSnapshot?: () => void;
@@ -19,7 +19,7 @@ interface SnapshotsPanelProps {
 export interface SnapshotsContentProps {
 	snapshotId?: string | null;
 	repoId?: string | null;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	canSnapshot?: boolean;
 	isSnapshotting?: boolean;
 	onSnapshot?: () => void;
@@ -29,23 +29,19 @@ export interface SnapshotsContentProps {
 export function SnapshotsContent({
 	snapshotId,
 	repoId,
-	prebuildId,
+	configurationId,
 	canSnapshot,
 	isSnapshotting,
 	onSnapshot,
 	onNavigateAutoStart,
 }: SnapshotsContentProps) {
-	const hasPrebuild = !!prebuildId;
+	const hasConfiguration = !!configurationId;
 	const { data: effective, isLoading: effectiveLoading } = useEffectiveServiceCommands(
-		prebuildId || "",
-		hasPrebuild,
+		configurationId || "",
+		hasConfiguration,
 	);
-	const { data: repoCommands, isLoading: repoLoading } = useServiceCommands(
-		repoId || "",
-		!hasPrebuild && !!repoId,
-	);
-	const commands = hasPrebuild ? effective?.commands : repoCommands;
-	const commandsLoading = hasPrebuild ? effectiveLoading : repoLoading;
+	const commands = hasConfiguration ? effective?.commands : undefined;
+	const commandsLoading = hasConfiguration ? effectiveLoading : false;
 
 	return (
 		<div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -117,7 +113,7 @@ export function SnapshotsContent({
 export function SnapshotsPanel({
 	snapshotId,
 	repoId,
-	prebuildId,
+	configurationId,
 	canSnapshot,
 	isSnapshotting,
 	onSnapshot,
@@ -145,7 +141,7 @@ export function SnapshotsPanel({
 			<SnapshotsContent
 				snapshotId={snapshotId}
 				repoId={repoId}
-				prebuildId={prebuildId}
+				configurationId={configurationId}
 				canSnapshot={canSnapshot}
 				isSnapshotting={isSnapshotting}
 				onSnapshot={onSnapshot}

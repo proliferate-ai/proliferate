@@ -22,6 +22,7 @@
 | 11 | `integrations.md` | OAuth connection lifecycle for GitHub/Sentry/Linear/Slack via Nango. Connection binding to repos/automations/sessions. | 3 |
 | 12 | `auth-orgs.md` | better-auth, user/org/member model, invitations, onboarding/trial activation, API keys, admin/impersonation. | 3 |
 | 13 | `billing-metering.md` | Usage metering, credit gating, trial credits, reconciliation, org pause, Autumn integration. Owns charging/gating policy. | 3 |
+| 14 | `configurations-snapshots.md` | First-class snapshots, config-scoped secret files, dual-write expand/contract migration (PR1 expand state). Companion to `repos-prebuilds.md`. | 3 |
 
 ### Phase ordering
 
@@ -62,8 +63,8 @@ Use these terms consistently. Do not introduce synonyms.
 | **run** | A single execution of an automation. Has a lifecycle (queued → enriching → ready → running → succeeded/failed/needs_human/timed_out/canceled/skipped). | session (when automated), job |
 | **hub** | The gateway-side object managing a session's runtime state, WebSocket connections, and event processing. | session manager, controller |
 | **provider** | The sandbox compute backend (Modal or E2B). Implements the `SandboxProvider` interface. | runtime, backend, platform |
-| **prebuild** | A reusable configuration + snapshot combination for faster session starts. Previously called "configuration" in some code. | configuration (in specs — use "prebuild" consistently) |
-| **snapshot** | A saved filesystem state. Three layers: base snapshot, repo snapshot, prebuild snapshot. | image, checkpoint, save point |
+| **prebuild** | A reusable configuration + snapshot combination for faster session starts. Being refactored to "configuration" — see `configurations-snapshots.md`. | configuration |
+| **snapshot** | A saved filesystem state. Three layers: base snapshot, repo snapshot, prebuild snapshot. In the new model (`configurations-snapshots.md`), snapshots are first-class entities in the `snapshots` table. | image, checkpoint, save point |
 | **action** | A platform-mediated operation the agent performs on external services (e.g., create Linear issue, update Sentry). | tool (tools are the broader category; actions are the external-service subset) |
 | **integration** | An OAuth-backed external connection record (GitHub/Linear/Sentry/Slack) used to resolve tokens server-side. | adapter, connector, provider |
 | **connector** | A configuration entry (org-scoped) describing how to reach an MCP server and which secrets/auth mapping to use. | integration, adapter |

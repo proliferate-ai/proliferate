@@ -644,7 +644,7 @@ export class E2BProvider implements SandboxProvider {
 		];
 
 		if (isSetupSession) {
-			// Setup-only tools persist prebuild configuration.
+			// Setup-only tools persist configuration settings.
 			writePromises.push(
 				writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
 				writeFile(`${localToolDir}/save_service_commands.txt`, SAVE_SERVICE_COMMANDS_DESCRIPTION),
@@ -788,29 +788,8 @@ export class E2BProvider implements SandboxProvider {
 	): Promise<void> {
 		const workspaceDir = "/home/user/workspace";
 
-		// 1. Apply env files (blocking — services may depend on these)
-		if (opts.envFiles) {
-			try {
-				const specJson = JSON.stringify(opts.envFiles);
-				const result = await sandbox.commands.run(
-					`proliferate env apply --spec ${shellEscape(specJson)}`,
-					{ timeoutMs: 30000 },
-				);
-				if (result.exitCode !== 0) {
-					log.error(
-						{ exitCode: result.exitCode, stderr: result.stderr },
-						"proliferate env apply failed",
-					);
-				} else {
-					log.info("Env files applied");
-				}
-			} catch (err) {
-				log.error({ err }, "proliferate env apply failed");
-			}
-		}
-
-		// 2. Start services via tracked CLI (fire-and-forget per service)
-		if (!opts.snapshotHasDeps || !opts.serviceCommands?.length) return;
+		// Start services via tracked CLI (fire-and-forget per service)
+		if (!opts.autoStartServices || !opts.serviceCommands?.length) return;
 
 		for (const cmd of opts.serviceCommands) {
 			const baseDir =

@@ -20,9 +20,7 @@ export {
 	SANDBOX_TIMEOUT_SECONDS,
 	shellEscape,
 	capOutput,
-	parseServiceCommands,
 	parsePrebuildServiceCommands,
-	resolveServiceCommands,
 } from "./config";
 
 // OpenCode utilities

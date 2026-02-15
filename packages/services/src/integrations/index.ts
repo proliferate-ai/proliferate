@@ -42,7 +42,6 @@ export {
 	findActiveGitHubApp,
 	findActiveByIntegrationId,
 	findActiveNangoGitHub,
-	markRepoOrphaned,
 } from "./db";
 
 // DB functions needed by repos router (available handler)

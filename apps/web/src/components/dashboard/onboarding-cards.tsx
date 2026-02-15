@@ -4,6 +4,7 @@ import { OnboardingCard } from "@/components/dashboard/onboarding-card";
 import { RepoSelector } from "@/components/dashboard/repo-selector";
 import { BoltIcon, GithubIcon, SlackIcon } from "@/components/ui/icons";
 import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
+import { useConfigurations } from "@/hooks/use-configurations";
 import { useGitHubAppConnect } from "@/hooks/use-github-app-connect";
 import { useIntegrations } from "@/hooks/use-integrations";
 import {
@@ -51,6 +52,7 @@ export function OnboardingCards() {
 	const { data: integrationsData, isLoading: integrationsLoading } = useIntegrations();
 	const { data: automations, isLoading: automationsLoading } = useAutomations();
 	const { data: repos, isLoading: reposLoading } = useRepos();
+	const { data: configurations } = useConfigurations();
 
 	// Create automation mutation
 	const createAutomationMutation = useCreateAutomation();
@@ -71,8 +73,10 @@ export function OnboardingCards() {
 	// Build cards array based on what's needed
 	const cards: React.ReactNode[] = [];
 
-	// Repo setup cards
-	const hasReadyRepo = (repos ?? []).some((r) => r.prebuildStatus === "ready");
+	// A repo is "ready" if any configuration references it
+	const hasReadyRepo = (repos ?? []).some((r) =>
+		(configurations ?? []).some((c) => c.configurationRepos?.some((cr) => cr.repo?.id === r.id)),
+	);
 
 	if (!hasAnyRepo) {
 		// No repos at all — prompt to connect first repo

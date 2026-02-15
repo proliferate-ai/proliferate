@@ -2,10 +2,10 @@
  * Save Service Commands Tool Handler
  *
  * Intercepts save_service_commands tool calls from the agent and persists
- * the auto-start commands to the prebuild configuration.
+ * the auto-start commands to the configuration record.
  */
 
-import { prebuilds } from "@proliferate/services";
+import { configurations } from "@proliferate/services";
 import { z } from "zod";
 import type { SessionHub } from "../../session-hub";
 import type { InterceptedToolHandler, InterceptedToolResult } from "./index";
@@ -35,8 +35,7 @@ export const saveServiceCommandsHandler: InterceptedToolHandler = {
 
 		const context = hub.getContext();
 		const sessionType = context.session.session_type;
-		const prebuildId = context.session.prebuild_id;
-		const updatedBy = context.session.created_by || "agent";
+		const configurationId = context.session.configuration_id;
 
 		if (sessionType !== "setup") {
 			return {
@@ -45,25 +44,24 @@ export const saveServiceCommandsHandler: InterceptedToolHandler = {
 			};
 		}
 
-		if (!prebuildId) {
+		if (!configurationId) {
 			return {
 				success: false,
-				result: "Session has no prebuild — cannot save service commands.",
+				result: "Session has no configuration — cannot save service commands.",
 			};
 		}
 
 		try {
-			await prebuilds.updatePrebuildServiceCommands({
-				prebuildId,
+			await configurations.updateConfigurationServiceCommands({
+				configurationId,
 				serviceCommands: parsed.data.commands,
-				updatedBy,
 			});
 
 			const names = parsed.data.commands.map((c) => c.name).join(", ");
 			return {
 				success: true,
-				result: `Service commands saved for configuration: ${names}. These will auto-run in future sessions with this prebuild.`,
-				data: { prebuildId, commandCount: parsed.data.commands.length },
+				result: `Service commands saved for configuration: ${names}. These will auto-run in future sessions with this configuration.`,
+				data: { configurationId, commandCount: parsed.data.commands.length },
 			};
 		} catch (err) {
 			return {

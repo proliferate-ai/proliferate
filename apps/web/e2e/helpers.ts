@@ -43,21 +43,18 @@ INSERT INTO repo_connections (repo_id, integration_id)
 VALUES ('a0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001')
 ON CONFLICT DO NOTHING;
 
--- Prebuild (snapshot_id = NULL → fresh clone, no snapshot restore)
-INSERT INTO prebuilds (id, snapshot_id, sandbox_provider, status, type, created_by, name)
+-- Configuration (no snapshot → fresh clone, no snapshot restore)
+INSERT INTO configurations (id, organization_id, sandbox_provider, name)
 VALUES (
   'b0000000-0000-0000-0000-000000000001',
-  NULL,
+  'e2e-org-001',
   'modal',
-  'ready',
-  'manual',
-  'e2e-user-001',
   'E2E Hello World'
 )
 ON CONFLICT (id) DO NOTHING;
 
--- Prebuild ↔ Repo junction
-INSERT INTO prebuild_repos (prebuild_id, repo_id, workspace_path)
+-- Configuration ↔ Repo junction
+INSERT INTO configuration_repos (configuration_id, repo_id, workspace_path)
 VALUES (
   'b0000000-0000-0000-0000-000000000001',
   'a0000000-0000-0000-0000-000000000001',
@@ -70,8 +67,8 @@ COMMIT;
 
 const CLEANUP_SQL = `
 BEGIN;
-DELETE FROM prebuild_repos WHERE prebuild_id = 'b0000000-0000-0000-0000-000000000001';
-DELETE FROM prebuilds WHERE id = 'b0000000-0000-0000-0000-000000000001';
+DELETE FROM configuration_repos WHERE configuration_id = 'b0000000-0000-0000-0000-000000000001';
+DELETE FROM configurations WHERE id = 'b0000000-0000-0000-0000-000000000001';
 DELETE FROM repo_connections WHERE repo_id = 'a0000000-0000-0000-0000-000000000001';
 DELETE FROM repos WHERE id = 'a0000000-0000-0000-0000-000000000001';
 DELETE FROM integrations WHERE id = 'c0000000-0000-0000-0000-000000000001';

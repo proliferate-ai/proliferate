@@ -7,8 +7,8 @@ import { SidebarCollapseIcon, SidebarExpandIcon, SlackIcon } from "@/components/
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
+import { useConfigurations } from "@/hooks/use-configurations";
 import { useSlackStatus } from "@/hooks/use-integrations";
-import { usePrebuilds } from "@/hooks/use-prebuilds";
 import { useSessions } from "@/hooks/use-sessions";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useSession } from "@/lib/auth-client";
@@ -216,16 +216,16 @@ function SidebarContent({
 				.slice(0, 2)
 		: user?.email?.[0]?.toUpperCase() || "?";
 
-	// Fetch sessions and prebuilds
+	// Fetch sessions and configurations
 	const { data: sessions } = useSessions();
 
-	interface Prebuild {
+	interface Configuration {
 		id: string;
 		name: string | null;
 		snapshotId: string | null;
 		createdAt: string;
 		type?: "manual" | "managed";
-		prebuildRepos?: Array<{
+		configurationRepos?: Array<{
 			repo: { id: string; githubRepoName: string } | null;
 		}>;
 		setupSessions?: Array<{
@@ -233,10 +233,10 @@ function SidebarContent({
 			sessionType: string;
 		}>;
 	}
-	const { data: prebuildsData } = usePrebuilds();
-	const prebuilds = (prebuildsData as Prebuild[] | undefined) || [];
+	const { data: configurationsData } = useConfigurations();
+	const configurations = (configurationsData as Configuration[] | undefined) || [];
 
-	// Filter to coding sessions, apply status filter, group by prebuild
+	// Filter to coding sessions, apply status filter, group by configuration
 	const codingSessions = sessions?.filter((s) => {
 		if (s.sessionType === "setup" || s.origin === "cli") return false;
 		if (sidebarStatusFilter === "running") return s.status === "running";
@@ -244,15 +244,15 @@ function SidebarContent({
 		return true;
 	});
 
-	const sessionsByPrebuild = new Map<string, Session[]>();
+	const sessionsByConfiguration = new Map<string, Session[]>();
 	const orphanedSessions: Session[] = [];
 	for (const session of codingSessions ?? []) {
-		if (session.prebuildId) {
-			const existing = sessionsByPrebuild.get(session.prebuildId);
+		if (session.configurationId) {
+			const existing = sessionsByConfiguration.get(session.configurationId);
 			if (existing) {
 				existing.push(session);
 			} else {
-				sessionsByPrebuild.set(session.prebuildId, [session]);
+				sessionsByConfiguration.set(session.configurationId, [session]);
 			}
 		} else {
 			orphanedSessions.push(session);
@@ -393,11 +393,11 @@ function SidebarContent({
 				<div className="px-2">
 					{sidebarOrganize === "by-project" ? (
 						<>
-							{prebuilds.map((prebuild) => (
+							{configurations.map((configuration) => (
 								<ConfigurationGroup
-									key={prebuild.id}
-									prebuild={prebuild}
-									sessions={sessionsByPrebuild.get(prebuild.id) ?? []}
+									key={configuration.id}
+									configuration={configuration}
+									sessions={sessionsByConfiguration.get(configuration.id) ?? []}
 									activeSessionId={urlSessionId}
 									onNavigate={onNavigate}
 								/>

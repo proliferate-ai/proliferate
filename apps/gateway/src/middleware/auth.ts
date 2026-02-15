@@ -2,28 +2,15 @@
  * Auth Middleware
  *
  * Unified authentication for all gateway routes.
- * Supports both JWT tokens (web clients) and CLI API keys.
+ * Supports JWT tokens, service tokens, and sandbox HMAC tokens.
  */
 
-import { createLogger } from "@proliferate/logger";
 import { verifyToken as verifyJwt } from "@proliferate/shared";
 import type { Request, RequestHandler } from "express";
 import type { GatewayEnv } from "../lib/env";
 import { deriveSandboxMcpToken } from "../lib/sandbox-mcp-token";
 import type { AuthResult } from "../types";
 import { ApiError } from "./error-handler";
-
-const logger = createLogger({ service: "gateway" }).child({ module: "auth" });
-
-/**
- * CLI token verification result
- */
-export interface VerifyCliTokenResult {
-	valid: boolean;
-	userId?: string;
-	orgId?: string;
-	error?: string;
-}
 
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -45,33 +32,6 @@ function getSessionIdForSandboxAuth(req: Request): string | undefined {
 	}
 
 	return undefined;
-}
-
-/**
- * Verify a CLI API key via the web app's internal endpoint.
- * CLI tokens are better-auth API keys stored in the database.
- */
-export async function verifyCliToken(
-	token: string,
-	apiUrl: string,
-	serviceToken: string,
-): Promise<VerifyCliTokenResult> {
-	try {
-		const url = `${apiUrl}/api/internal/verify-cli-token`;
-		const response = await fetch(url, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"x-service-token": serviceToken,
-			},
-			body: JSON.stringify({ token }),
-		});
-
-		return (await response.json()) as VerifyCliTokenResult;
-	} catch (err) {
-		logger.error({ err }, "Failed to verify CLI token");
-		return { valid: false, error: "Token verification failed" };
-	}
 }
 
 /**
@@ -102,12 +62,6 @@ export async function verifyToken(
 		if (token === expected) {
 			return { source: "sandbox", sessionId };
 		}
-	}
-
-	// Try CLI API key (requires HTTP call to web app - keys stored in DB)
-	const cliResult = await verifyCliToken(token, env.apiUrl, env.serviceToken);
-	if (cliResult.valid && cliResult.userId) {
-		return { userId: cliResult.userId, orgId: cliResult.orgId, source: "cli" };
 	}
 
 	return null;

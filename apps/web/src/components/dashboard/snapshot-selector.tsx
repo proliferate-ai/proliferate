@@ -18,7 +18,7 @@ import { LoadingDots } from "@/components/ui/loading-dots";
 import { SelectableItem } from "@/components/ui/selectable-item";
 import { SelectorTrigger } from "@/components/ui/selector-trigger";
 import { Text } from "@/components/ui/text";
-import { useCreatePrebuild, usePrebuilds } from "@/hooks/use-prebuilds";
+import { useConfigurations, useCreateConfiguration } from "@/hooks/use-configurations";
 import { useAvailableRepos, useSearchRepos } from "@/hooks/use-repos";
 import { useCreateSession } from "@/hooks/use-sessions";
 import { orpc } from "@/lib/orpc";
@@ -33,12 +33,12 @@ import { useEffect, useRef, useState } from "react";
 interface SnapshotSelectorProps {
 	/** "select" for choosing existing snapshot, "create" for making new one */
 	mode?: "select" | "create";
-	/** Controlled value - prebuild ID */
+	/** Controlled value - configuration ID */
 	value?: string | null;
 	/** Callback when value changes (controlled mode) */
-	onValueChange?: (prebuildId: string) => void;
+	onValueChange?: (configurationId: string) => void;
 	/** Callback when snapshot is created */
-	onCreate?: (prebuildId: string, sessionId: string) => void;
+	onCreate?: (configurationId: string, sessionId: string) => void;
 	/** Optional class for the trigger button */
 	triggerClassName?: string;
 }
@@ -80,22 +80,20 @@ export function SnapshotSelector({
 		}
 	}, [open]);
 
-	// Fetch all ready prebuilds
-	const { data: allPrebuildsData } = usePrebuilds();
+	// Fetch all ready configurations
+	const { data: allConfigurationsData } = useConfigurations();
 
-	// Map prebuilds to snapshots
-	const allSnapshots: Snapshot[] = (allPrebuildsData || []).map((prebuild) => ({
-		id: prebuild.id,
-		snapshotId: prebuild.snapshotId,
-		name: prebuild.name || "Untitled snapshot",
-		notes: prebuild.notes,
-		createdAt: prebuild.createdAt || "",
-		status: prebuild.status || "pending",
-		setupSessions: prebuild.setupSessions?.map((s) => ({
+	// Map configurations to snapshots
+	const allSnapshots: Snapshot[] = (allConfigurationsData || []).map((configuration) => ({
+		id: configuration.id,
+		name: configuration.name || "Untitled snapshot",
+		description: configuration.description,
+		createdAt: configuration.createdAt || "",
+		setupSessions: configuration.setupSessions?.map((s) => ({
 			id: s.id,
 			sessionType: s.sessionType || "setup",
 		})),
-		repos: (prebuild.prebuildRepos || [])
+		repos: (configuration.configurationRepos || [])
 			.map((pr) => pr.repo)
 			.filter((r) => r !== null)
 			.map((r) => ({ id: r.id, githubRepoName: r.githubRepoName })),
@@ -121,9 +119,9 @@ export function SnapshotSelector({
 		setOpen(false);
 	};
 
-	const handleCreateSuccess = (prebuildId: string, sessionId: string) => {
+	const handleCreateSuccess = (configurationId: string, sessionId: string) => {
 		setCreateModalOpen(false);
-		onCreate?.(prebuildId, sessionId);
+		onCreate?.(configurationId, sessionId);
 	};
 
 	// Get trigger text
@@ -227,12 +225,12 @@ export function SnapshotSelector({
 												icon={<Pencil className="h-3 w-3" />}
 												onClick={(e) => {
 													e.stopPropagation();
-													if (setupSessionId && snapshot.snapshotId) {
+													if (setupSessionId) {
 														openEditSession({
 															sessionId: setupSessionId,
 															snapshotId: snapshot.id,
 															snapshotName: getSnapshotDisplayName(snapshot),
-															prebuildId: snapshot.id,
+															configurationId: snapshot.id,
 														});
 													} else {
 														openSetupSession(snapshot.id);
@@ -283,7 +281,7 @@ export function SnapshotSelector({
 // =============================================================================
 
 interface CreateSnapshotContentProps {
-	onCreate?: (prebuildId: string, sessionId: string) => void;
+	onCreate?: (configurationId: string, sessionId: string) => void;
 }
 
 export function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) {
@@ -337,26 +335,26 @@ export function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) 
 	});
 
 	// Create snapshot mutation (uses oRPC hooks)
-	const createPrebuild = useCreatePrebuild();
+	const createConfiguration = useCreateConfiguration();
 	const createSession = useCreateSession();
 
 	const handleCreate = async () => {
 		const repoIds = Array.from(selectedRepoIds);
-		const prebuildResult = await createPrebuild.mutateAsync({
+		const configurationResult = await createConfiguration.mutateAsync({
 			repoIds,
 			name: snapshotName || undefined,
 		});
 		const sessionResult = await createSession.mutateAsync({
-			prebuildId: prebuildResult.prebuildId,
+			configurationId: configurationResult.configurationId,
 			sessionType: "setup",
 			modelId: selectedModel,
 		});
-		onCreate?.(prebuildResult.prebuildId, sessionResult.sessionId);
+		onCreate?.(configurationResult.configurationId, sessionResult.sessionId);
 		setSelectedRepoIds(new Set());
 		setSnapshotName("");
 	};
 
-	const isCreating = createPrebuild.isPending || createSession.isPending;
+	const isCreating = createConfiguration.isPending || createSession.isPending;
 
 	// Derived data
 	const repos = Array.isArray(reposData) ? reposData : [];

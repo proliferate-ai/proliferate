@@ -11,7 +11,7 @@ const {
 	mockCreateSession,
 	mockPostMessage,
 	mockRepoExists,
-	mockFindManagedPrebuilds,
+	mockFindManagedConfigurations,
 } = vi.hoisted(() => ({
 	mockClaimRun: vi.fn(),
 	mockTransitionRunStatus: vi.fn(),
@@ -23,7 +23,7 @@ const {
 	mockCreateSession: vi.fn(),
 	mockPostMessage: vi.fn(),
 	mockRepoExists: vi.fn(),
-	mockFindManagedPrebuilds: vi.fn(),
+	mockFindManagedConfigurations: vi.fn(),
 }));
 
 vi.mock("@proliferate/environment/server", () => ({
@@ -77,8 +77,8 @@ vi.mock("@proliferate/services", () => ({
 	repos: {
 		repoExists: mockRepoExists,
 	},
-	prebuilds: {
-		findManagedPrebuilds: mockFindManagedPrebuilds,
+	configurations: {
+		findManagedConfigurations: mockFindManagedConfigurations,
 	},
 }));
 
@@ -113,7 +113,7 @@ function makeContext(overrides: Record<string, unknown> = {}) {
 		automation: {
 			id: "auto-1",
 			name: "Bug Fixer",
-			defaultPrebuildId: "pb-default",
+			defaultConfigurationId: "pb-default",
 			agentInstructions: "Fix the bug",
 			modelId: null,
 			notificationChannelId: null,
@@ -156,7 +156,7 @@ describe("handleExecute (target resolution integration)", () => {
 		mockCreateSession.mockResolvedValue({ sessionId: "sess-1" });
 		mockPostMessage.mockResolvedValue({});
 		mockRepoExists.mockResolvedValue(false);
-		mockFindManagedPrebuilds.mockResolvedValue([]);
+		mockFindManagedConfigurations.mockResolvedValue([]);
 
 		const { createSyncClient } = await import("@proliferate/gateway-clients");
 		syncClient = (createSyncClient as ReturnType<typeof vi.fn>)() as typeof syncClient;
@@ -188,14 +188,14 @@ describe("handleExecute (target resolution integration)", () => {
 		};
 	});
 
-	it("default path: uses prebuildId when selection disabled", async () => {
+	it("default path: uses configurationId when selection disabled", async () => {
 		mockClaimRun.mockResolvedValueOnce(makeRun());
 		mockFindRunWithRelations.mockResolvedValueOnce(
 			makeContext({
 				automation: {
 					id: "auto-1",
 					name: "Bug Fixer",
-					defaultPrebuildId: "pb-default",
+					defaultConfigurationId: "pb-default",
 					agentInstructions: "Fix the bug",
 					modelId: null,
 					notificationChannelId: null,
@@ -222,25 +222,25 @@ describe("handleExecute (target resolution integration)", () => {
 			}),
 		);
 
-		// Session created with prebuildId (not managedPrebuild)
+		// Session created with configurationId (not managedConfiguration)
 		expect(mockCreateSession).toHaveBeenCalledWith(
 			expect.objectContaining({
-				prebuildId: "pb-default",
+				configurationId: "pb-default",
 			}),
 			expect.any(Object),
 		);
 		expect(mockCreateSession).toHaveBeenCalledWith(
 			expect.not.objectContaining({
-				managedPrebuild: expect.anything(),
+				managedConfiguration: expect.anything(),
 			}),
 			expect.any(Object),
 		);
 	});
 
-	it("selected path (new): uses managedPrebuild when no existing prebuild covers repo", async () => {
+	it("selected path (new): uses managedConfiguration when no existing configuration covers repo", async () => {
 		mockClaimRun.mockResolvedValueOnce(makeRun());
 		mockRepoExists.mockResolvedValueOnce(true);
-		mockFindManagedPrebuilds.mockResolvedValueOnce([]);
+		mockFindManagedConfigurations.mockResolvedValueOnce([]);
 		mockFindRunWithRelations.mockResolvedValueOnce(
 			makeContext({
 				enrichmentJson: {
@@ -250,7 +250,7 @@ describe("handleExecute (target resolution integration)", () => {
 				automation: {
 					id: "auto-1",
 					name: "Bug Fixer",
-					defaultPrebuildId: "pb-default",
+					defaultConfigurationId: "pb-default",
 					agentInstructions: "Fix the bug",
 					modelId: null,
 					notificationChannelId: null,
@@ -278,23 +278,23 @@ describe("handleExecute (target resolution integration)", () => {
 			}),
 		);
 
-		// Session created with managedPrebuild (not prebuildId)
+		// Session created with managedConfiguration (not configurationId)
 		expect(mockCreateSession).toHaveBeenCalledWith(
 			expect.objectContaining({
-				managedPrebuild: { repoIds: ["repo-1"] },
+				managedConfiguration: { repoIds: ["repo-1"] },
 			}),
 			expect.any(Object),
 		);
 	});
 
-	it("selected path (reuse): uses prebuildId when existing managed prebuild covers repo", async () => {
+	it("selected path (reuse): uses configurationId when existing managed configuration covers repo", async () => {
 		mockClaimRun.mockResolvedValueOnce(makeRun());
 		mockRepoExists.mockResolvedValueOnce(true);
-		mockFindManagedPrebuilds.mockResolvedValueOnce([
+		mockFindManagedConfigurations.mockResolvedValueOnce([
 			{
 				id: "pb-managed-existing",
 				snapshotId: "snap-1",
-				prebuildRepos: [
+				configurationRepos: [
 					{ repo: { id: "repo-1", organizationId: "org-1", githubRepoName: "org/repo" } },
 				],
 			},
@@ -308,7 +308,7 @@ describe("handleExecute (target resolution integration)", () => {
 				automation: {
 					id: "auto-1",
 					name: "Bug Fixer",
-					defaultPrebuildId: "pb-default",
+					defaultConfigurationId: "pb-default",
 					agentInstructions: "Fix the bug",
 					modelId: null,
 					notificationChannelId: null,
@@ -335,22 +335,22 @@ describe("handleExecute (target resolution integration)", () => {
 			}),
 		);
 
-		// Session created with prebuildId (reusing existing, NOT managedPrebuild)
+		// Session created with configurationId (reusing existing, NOT managedConfiguration)
 		expect(mockCreateSession).toHaveBeenCalledWith(
 			expect.objectContaining({
-				prebuildId: "pb-managed-existing",
+				configurationId: "pb-managed-existing",
 			}),
 			expect.any(Object),
 		);
 		expect(mockCreateSession).toHaveBeenCalledWith(
 			expect.not.objectContaining({
-				managedPrebuild: expect.anything(),
+				managedConfiguration: expect.anything(),
 			}),
 			expect.any(Object),
 		);
 	});
 
-	it("fallback path: uses prebuildId when repo is invalid", async () => {
+	it("fallback path: uses configurationId when repo is invalid", async () => {
 		mockClaimRun.mockResolvedValueOnce(makeRun());
 		mockRepoExists.mockResolvedValueOnce(false);
 		mockFindRunWithRelations.mockResolvedValueOnce(
@@ -362,7 +362,7 @@ describe("handleExecute (target resolution integration)", () => {
 				automation: {
 					id: "auto-1",
 					name: "Bug Fixer",
-					defaultPrebuildId: "pb-default",
+					defaultConfigurationId: "pb-default",
 					agentInstructions: "Fix the bug",
 					modelId: null,
 					notificationChannelId: null,
@@ -390,23 +390,23 @@ describe("handleExecute (target resolution integration)", () => {
 			}),
 		);
 
-		// Session created with prebuildId fallback
+		// Session created with configurationId fallback
 		expect(mockCreateSession).toHaveBeenCalledWith(
 			expect.objectContaining({
-				prebuildId: "pb-default",
+				configurationId: "pb-default",
 			}),
 			expect.any(Object),
 		);
 	});
 
-	it("fails run when no default prebuild and selection disabled", async () => {
+	it("fails run when no default configuration and selection disabled", async () => {
 		mockClaimRun.mockResolvedValueOnce(makeRun());
 		mockFindRunWithRelations.mockResolvedValueOnce(
 			makeContext({
 				automation: {
 					id: "auto-1",
 					name: "Bug Fixer",
-					defaultPrebuildId: null,
+					defaultConfigurationId: null,
 					agentInstructions: "Fix the bug",
 					modelId: null,
 					notificationChannelId: null,
@@ -423,9 +423,9 @@ describe("handleExecute (target resolution integration)", () => {
 
 		expect(mockMarkRunFailed).toHaveBeenCalledWith({
 			runId: "run-1",
-			reason: "missing_prebuild",
+			reason: "missing_configuration",
 			stage: "execution",
-			errorMessage: "Automation missing default prebuild and no valid selection",
+			errorMessage: "Automation missing default configuration and no valid selection",
 		});
 
 		// Session should NOT be created

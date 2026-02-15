@@ -1,5 +1,5 @@
 import { createLogger } from "@proliferate/logger";
-import { cli, integrations, prebuilds, sessions, snapshots } from "@proliferate/services";
+import { configurations, integrations, sessions } from "@proliferate/services";
 import {
 	type AgentConfig,
 	type ModelId,
@@ -13,7 +13,7 @@ import {
 	parseModelId,
 } from "@proliferate/shared";
 import type { PrebuildServiceCommand } from "@proliferate/shared";
-import { parseServiceCommands, resolveServiceCommands } from "@proliferate/shared/sandbox";
+import { parsePrebuildServiceCommands } from "@proliferate/shared/sandbox";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
 
@@ -24,14 +24,13 @@ export interface RepoRecord {
 	github_url: string;
 	github_repo_name: string;
 	default_branch: string | null;
-	service_commands?: unknown;
 }
 
 export interface SessionRecord {
 	id: string;
 	organization_id: string;
 	created_by: string | null;
-	prebuild_id: string | null;
+	configuration_id: string | null;
 	session_type: string | null;
 	sandbox_id: string | null;
 	sandbox_provider: string | null;
@@ -59,12 +58,12 @@ export interface SessionContext {
 	/** SSH public key for CLI sessions (for rsync access) */
 	sshPublicKey?: string;
 	/** True if the snapshot includes installed dependencies. Gates service command auto-start. */
-	snapshotHasDeps: boolean;
-	/** Resolved service commands (prebuild-level or fallback from repos). */
+	autoStartServices: boolean;
+	/** Resolved service commands from the configuration record. */
 	serviceCommands?: PrebuildServiceCommand[];
 }
 
-interface PrebuildRepoRow {
+interface ConfigurationRepoRow {
 	workspace_path: string;
 	repo: RepoRecord;
 }
@@ -91,7 +90,7 @@ export async function loadSessionContext(
 	const log = logger.child({ sessionId });
 	log.debug("store.load_context.start");
 
-	// Load session without repo relationship (repos now come from prebuild_repos)
+	// Load session without repo relationship (repos now come from configuration_repos)
 	log.info("Loading session from database...");
 	const sessionRowStartMs = Date.now();
 	const sessionRow = await sessions.findByIdInternal(sessionId);
@@ -110,7 +109,7 @@ export async function loadSessionContext(
 		id: sessionRow.id,
 		organization_id: sessionRow.organizationId,
 		created_by: sessionRow.createdBy,
-		prebuild_id: sessionRow.prebuildId,
+		configuration_id: sessionRow.configurationId,
 		session_type: sessionRow.sessionType,
 		sandbox_id: sessionRow.sandboxId,
 		sandbox_provider: sessionRow.sandboxProvider,
@@ -130,7 +129,7 @@ export async function loadSessionContext(
 
 	log.info(
 		{
-			prebuildId: session.prebuild_id,
+			configurationId: session.configuration_id,
 			sandboxId: session.sandbox_id,
 			status: session.status,
 			sessionType: session.session_type,
@@ -138,9 +137,9 @@ export async function loadSessionContext(
 		"Session loaded",
 	);
 
-	// Scratch session: no prebuild, no repos — boot from base snapshot only
-	if (!session.prebuild_id) {
-		log.info("Scratch session (no prebuild)");
+	// Scratch session: no configuration, no repos — boot from base snapshot only
+	if (!session.configuration_id) {
+		log.info("Scratch session (no configuration)");
 
 		const scratchPrimaryRepo: RepoRecord = {
 			id: "scratch",
@@ -175,77 +174,79 @@ export async function loadSessionContext(
 			systemPrompt: session.system_prompt || getScratchSystemPrompt(),
 			agentConfig: { agentType: "opencode" as const, modelId, tools: session.agent_config?.tools },
 			envVars,
-			snapshotHasDeps: false,
+			autoStartServices: false,
 		};
 	}
 
-	// Prebuild-backed session: load repos, tokens, service commands
-	log.info({ prebuildId: session.prebuild_id }, "Loading repos from prebuild_repos...");
-	const prebuildReposStartMs = Date.now();
-	const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(session.prebuild_id);
+	// Configuration-backed session: load repos, tokens, service commands
+	log.info(
+		{ configurationId: session.configuration_id },
+		"Loading repos from configuration_repos...",
+	);
+	const configReposStartMs = Date.now();
+	const configurationRepoRows = await configurations.getConfigurationReposWithDetails(
+		session.configuration_id,
+	);
 	log.debug(
 		{
-			durationMs: Date.now() - prebuildReposStartMs,
-			count: prebuildRepoRows?.length ?? 0,
+			durationMs: Date.now() - configReposStartMs,
+			count: configurationRepoRows?.length ?? 0,
 		},
-		"store.load_context.prebuild_repos",
+		"store.load_context.configuration_repos",
 	);
 
-	if (!prebuildRepoRows || prebuildRepoRows.length === 0) {
-		log.warn("Prebuild has no repos");
-		throw new Error("Prebuild has no associated repos");
+	if (!configurationRepoRows || configurationRepoRows.length === 0) {
+		log.warn("Configuration has no repos");
+		throw new Error("Configuration has no associated repos");
 	}
 
 	// Convert to the expected shape
-	const typedPrebuildRepos: PrebuildRepoRow[] = prebuildRepoRows
-		.filter((pr) => pr.repo !== null)
-		.map((pr) => ({
-			workspace_path: pr.workspacePath,
+	const typedConfigurationRepos: ConfigurationRepoRow[] = configurationRepoRows
+		.filter((cr) => cr.repo !== null)
+		.map((cr) => ({
+			workspace_path: cr.workspacePath,
 			repo: {
-				id: pr.repo!.id,
-				github_url: pr.repo!.githubUrl,
-				github_repo_name: pr.repo!.githubRepoName,
-				default_branch: pr.repo!.defaultBranch,
-				service_commands: pr.repo!.serviceCommands,
+				id: cr.repo!.id,
+				github_url: cr.repo!.githubUrl,
+				github_repo_name: cr.repo!.githubRepoName,
+				default_branch: cr.repo!.defaultBranch,
 			},
 		}));
 
 	log.info(
 		{
-			count: typedPrebuildRepos.length,
-			repos: typedPrebuildRepos.map((pr) => ({
-				name: pr.repo.github_repo_name,
-				path: pr.workspace_path,
+			count: typedConfigurationRepos.length,
+			repos: typedConfigurationRepos.map((cr) => ({
+				name: cr.repo.github_repo_name,
+				path: cr.workspace_path,
 			})),
 		},
-		"Prebuild repos loaded",
+		"Configuration repos loaded",
 	);
 
 	// Primary repo (first one) for system prompt context
-	const primaryRepo = typedPrebuildRepos[0].repo;
+	const primaryRepo = typedConfigurationRepos[0].repo;
 
 	// Resolve GitHub token for each repo (may differ per installation)
 	log.info("Resolving GitHub tokens for repos...");
 	const tokenResolutionStartMs = Date.now();
 	const repoSpecs: RepoSpec[] = await Promise.all(
-		typedPrebuildRepos.map(async (pr) => {
+		typedConfigurationRepos.map(async (cr) => {
 			const token = await resolveGitHubToken(
 				env,
 				session.organization_id,
-				pr.repo.id,
+				cr.repo.id,
 				session.created_by,
 			);
 			log.info(
-				{ repo: pr.repo.github_repo_name, hasToken: Boolean(token) },
+				{ repo: cr.repo.github_repo_name, hasToken: Boolean(token) },
 				"Token resolved for repo",
 			);
-			const serviceCommands = parseServiceCommands(pr.repo.service_commands);
 			return {
-				repoUrl: pr.repo.github_url,
+				repoUrl: cr.repo.github_url,
 				token,
-				workspacePath: pr.workspace_path,
-				repoId: pr.repo.id,
-				...(serviceCommands.length > 0 ? { serviceCommands } : {}),
+				workspacePath: cr.workspace_path,
+				repoId: cr.repo.id,
 			};
 		}),
 	);
@@ -280,8 +281,8 @@ export async function loadSessionContext(
 		tools: session.agent_config?.tools,
 	};
 
-	// Load env vars for all repos in the prebuild
-	const repoIds = typedPrebuildRepos.map((pr) => pr.repo.id);
+	// Load env vars for all repos in the configuration
+	const repoIds = typedConfigurationRepos.map((cr) => cr.repo.id);
 	log.info({ repoIds }, "Loading environment variables...");
 	const envVarsStartMs = Date.now();
 	const envVars = await loadEnvironmentVariables(
@@ -306,61 +307,18 @@ export async function loadSessionContext(
 		"Environment variables loaded",
 	);
 
-	// Load SSH public key for CLI sessions
-	let sshPublicKey: string | undefined;
-	if (session.session_type === "cli" && session.created_by) {
-		log.info("Loading SSH public key for CLI session...");
-		const sshStartMs = Date.now();
-		const sshKeys = await cli.getSshPublicKeys(session.created_by);
-		log.debug(
-			{ durationMs: Date.now() - sshStartMs, count: sshKeys?.length ?? 0 },
-			"store.load_context.ssh_keys",
-		);
+	// Determine autoStartServices from active snapshot
+	const autoStartServices = Boolean(session.snapshot_id);
 
-		const publicKey = sshKeys?.[0];
-		if (publicKey) {
-			sshPublicKey = publicKey;
-			log.info({ fingerprint: `${publicKey.slice(0, 50)}...` }, "SSH public key loaded");
-		} else {
-			log.info("No SSH public key found for user");
-		}
-	}
-
-	// Derive snapshotHasDeps: use new snapshot.has_deps only when snapshotId matches active snapshot.
-	let snapshotHasDeps = false;
-	if (session.prebuild_id) {
-		let matched = false;
-		try {
-			const activeSnapshot = await snapshots.getActiveSnapshot(session.prebuild_id);
-			if (activeSnapshot && session.snapshot_id === activeSnapshot.providerSnapshotId) {
-				snapshotHasDeps = activeSnapshot.hasDeps;
-				matched = true;
-			}
-		} catch {
-			// Fall through to legacy heuristic
-		}
-		if (!matched) {
-			const repoSnapshotFallback =
-				prebuildRepoRows.length === 1 &&
-				prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
-				prebuildRepoRows[0].repo?.repoSnapshotId
-					? prebuildRepoRows[0].repo.repoSnapshotId
-					: null;
-			snapshotHasDeps =
-				Boolean(session.snapshot_id) && session.snapshot_id !== repoSnapshotFallback;
-		}
-	}
-
-	// Resolve service commands: prebuild-level first, then per-repo fallback
-	const prebuildSvcRow = await prebuilds.getPrebuildServiceCommands(session.prebuild_id);
-	const resolvedServiceCommands = resolveServiceCommands(
-		prebuildSvcRow?.serviceCommands,
-		repoSpecs,
+	// Read service commands directly from the configuration record
+	const configSvcRow = await configurations.getConfigurationServiceCommands(
+		session.configuration_id,
 	);
+	const configServiceCommands = parsePrebuildServiceCommands(configSvcRow?.serviceCommands);
 
 	log.info("Session context ready");
 	log.debug(
-		{ durationMs: Date.now() - startMs, repoCount: repoSpecs.length, snapshotHasDeps },
+		{ durationMs: Date.now() - startMs, repoCount: repoSpecs.length, autoStartServices },
 		"store.load_context.complete",
 	);
 	return {
@@ -370,9 +328,8 @@ export async function loadSessionContext(
 		systemPrompt,
 		agentConfig,
 		envVars,
-		sshPublicKey,
-		snapshotHasDeps,
-		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
+		autoStartServices,
+		serviceCommands: configServiceCommands.length > 0 ? configServiceCommands : undefined,
 	};
 }
 

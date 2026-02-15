@@ -7,7 +7,7 @@
 
 import { randomUUID } from "crypto";
 import { type Logger, createLogger } from "@proliferate/logger";
-import { prebuilds, sessions, snapshots } from "@proliferate/services";
+import { secretFiles, sessions, snapshots } from "@proliferate/services";
 import type {
 	ClientMessage,
 	ClientSource,
@@ -447,14 +447,14 @@ export class SessionHub {
 	 */
 	async saveSnapshot(
 		message?: string,
-	): Promise<{ snapshotId: string; target: "prebuild" | "session" }> {
+	): Promise<{ snapshotId: string; target: "configuration" | "session" }> {
 		const context = this.runtime.getContext();
 		if (!context.session.sandbox_id) {
 			throw new Error("No sandbox to snapshot");
 		}
 
 		const isSetupSession = context.session.session_type === "setup";
-		const target = isSetupSession ? "prebuild" : "session";
+		const target = isSetupSession ? "configuration" : "session";
 
 		const startTime = Date.now();
 		this.log("Saving snapshot", { target, message });
@@ -465,8 +465,8 @@ export class SessionHub {
 
 		// Load env files spec for scrub/apply around snapshot
 		let envFilesSpec: unknown = null;
-		if (context.session.prebuild_id) {
-			envFilesSpec = await prebuilds.getPrebuildEnvFiles(context.session.prebuild_id);
+		if (context.session.configuration_id) {
+			envFilesSpec = await secretFiles.listSecretFiles(context.session.configuration_id);
 		}
 
 		// Scrub secrets before snapshot (security-critical: abort if this fails)
@@ -511,28 +511,23 @@ export class SessionHub {
 		this.log(`[Timing] +${providerMs}ms provider.snapshot complete`);
 
 		if (isSetupSession) {
-			if (!context.session.prebuild_id) {
-				throw new Error("Setup session has no prebuild");
+			if (!context.session.configuration_id) {
+				throw new Error("Setup session has no configuration");
 			}
-			await prebuilds.update(context.session.prebuild_id, {
-				snapshotId: result.snapshotId,
-				status: "ready",
-			});
 
-			// Dual-write: also create snapshot in new snapshots table
+			// Create snapshot record in the snapshots table
 			try {
 				const snapshotRecord = await snapshots.createSnapshot({
-					prebuildId: context.session.prebuild_id,
+					configurationId: context.session.configuration_id,
 					sandboxProvider: providerType,
 				});
 				await snapshots.markSnapshotReady({
 					snapshotId: snapshotRecord.id,
 					providerSnapshotId: result.snapshotId,
-					hasDeps: true,
 					repoCommits: [],
 				});
 			} catch (err) {
-				this.logger.warn({ err }, "Failed to dual-write snapshot to new table (non-fatal)");
+				this.logger.error({ err }, "Failed to create snapshot record");
 			}
 		} else {
 			await sessions.update(this.sessionId, {

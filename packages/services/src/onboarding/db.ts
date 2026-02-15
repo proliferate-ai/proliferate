@@ -15,7 +15,7 @@ import {
 	repos,
 	slackInstallations,
 } from "../db/client";
-import type { IntegrationRow, RepoWithPrebuildRow } from "../types/onboarding";
+import type { IntegrationRow, RepoWithConfigurationRow } from "../types/onboarding";
 
 // ============================================
 // Queries
@@ -57,9 +57,11 @@ export async function hasGitHubConnection(
 }
 
 /**
- * Get repos with prebuild status for an organization.
+ * Get repos with configuration status for an organization.
  */
-export async function getReposWithPrebuildStatus(orgId: string): Promise<RepoWithPrebuildRow[]> {
+export async function getReposWithConfigurationStatus(
+	orgId: string,
+): Promise<RepoWithConfigurationRow[]> {
 	const db = getDb();
 	const results = await db.query.repos.findMany({
 		where: eq(repos.organizationId, orgId),
@@ -72,13 +74,12 @@ export async function getReposWithPrebuildStatus(orgId: string): Promise<RepoWit
 			createdAt: true,
 		},
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
-					prebuild: {
+					configuration: {
 						columns: {
 							id: true,
-							status: true,
-							snapshotId: true,
+							activeSnapshotId: true,
 						},
 					},
 				},
@@ -137,7 +138,6 @@ export async function createRepo(input: {
 	githubRepoName: string;
 	githubUrl: string;
 	defaultBranch: string;
-	addedBy: string;
 	isPrivate: boolean;
 }): Promise<void> {
 	const db = getDb();
@@ -148,8 +148,6 @@ export async function createRepo(input: {
 		githubRepoName: input.githubRepoName,
 		githubUrl: input.githubUrl,
 		defaultBranch: input.defaultBranch,
-		addedBy: input.addedBy,
-		source: "github",
 	});
 }
 

@@ -2,7 +2,7 @@
 
 import { SessionLoadingShell } from "@/components/coding-session/session-loading-shell";
 import { Button } from "@/components/ui/button";
-import { useCreatePrebuild } from "@/hooks/use-prebuilds";
+import { useCreateConfiguration } from "@/hooks/use-configurations";
 import { useRepo } from "@/hooks/use-repos";
 import { useCreateSession } from "@/hooks/use-sessions";
 import { useDashboardStore } from "@/stores/dashboard";
@@ -20,27 +20,27 @@ export default function NewSessionPage() {
 	const { data: repo } = useRepo(repoId || "");
 	const creationStartedRef = useRef(false);
 
-	const createPrebuild = useCreatePrebuild();
+	const createConfiguration = useCreateConfiguration();
 	const createSession = useCreateSession();
 
 	// Combined state for the two-step creation process
-	const isPending = createPrebuild.isPending || createSession.isPending;
+	const isPending = createConfiguration.isPending || createSession.isPending;
 	const isSuccess = createSession.isSuccess;
-	const isError = createPrebuild.isError || createSession.isError;
-	const error = createPrebuild.error || createSession.error;
+	const isError = createConfiguration.isError || createSession.isError;
+	const error = createConfiguration.error || createSession.error;
 
 	const createSessionFromRepo = useCallback(async () => {
-		// Step 1: Create prebuild with single repo
-		const prebuildResult = await createPrebuild.mutateAsync({ repoIds: [repoId!] });
+		// Step 1: Create configuration with single repo
+		const configurationResult = await createConfiguration.mutateAsync({ repoIds: [repoId!] });
 
-		// Step 2: Create session with the prebuild
+		// Step 2: Create session with the configuration
 		const sessionResult = await createSession.mutateAsync({
-			prebuildId: prebuildResult.prebuildId,
+			configurationId: configurationResult.configurationId,
 			sessionType,
 			modelId: selectedModel,
 		});
 		return sessionResult;
-	}, [repoId, sessionType, selectedModel, createPrebuild, createSession]);
+	}, [repoId, sessionType, selectedModel, createConfiguration, createSession]);
 
 	// Trigger creation once
 	useEffect(() => {
@@ -80,7 +80,7 @@ export default function NewSessionPage() {
 
 	const resetMutations = () => {
 		creationStartedRef.current = false;
-		createPrebuild.reset();
+		createConfiguration.reset();
 		createSession.reset();
 	};
 
