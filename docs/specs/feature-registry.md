@@ -189,20 +189,20 @@
 | Repo CRUD | Implemented | `apps/web/src/server/routers/repos.ts` | List/get/create/delete |
 | Repo search | Implemented | `apps/web/src/server/routers/repos.ts:search` | Search available repos |
 | Repo connections | Implemented | `packages/db/src/schema/repos.ts:repoConnections` | Integration bindings |
-| Configuration CRUD | Implemented | `apps/web/src/server/routers/prebuilds.ts` | List/create/update/delete |
-| Configuration-repo associations | Implemented | `packages/db/src/schema/prebuilds.ts:prebuildRepos` | Many-to-many (`configuration_repos` table) |
-| Effective service commands | Implemented | `apps/web/src/server/routers/prebuilds.ts:getEffectiveServiceCommands` | Resolved config |
+| Configuration CRUD | Implemented | `apps/web/src/server/routers/configurations.ts` | List/create/update/delete |
+| Configuration-repo associations | Implemented | `packages/db/src/schema/schema.ts:configurationRepos` | Many-to-many (`configuration_repos` table) |
+| Effective service commands | Removed | — | Read directly from configuration; dedicated resolver removed |
 | Base snapshot builds | Implemented | `apps/worker/src/base-snapshots/index.ts` | Worker queue, deduplication |
 | Repo snapshot builds | Implemented | `apps/worker/src/repo-snapshots/index.ts` | GitHub token hierarchy, commit tracking |
-| Configuration resolver | Implemented | `apps/gateway/src/lib/prebuild-resolver.ts` | Resolves configuration at session start |
-| Service commands persistence | Implemented | `packages/db/src/schema/prebuilds.ts:serviceCommands` | JSONB on configurations |
-| Env file persistence | Deprecated | `packages/db/src/schema/prebuilds.ts:envFiles` | Legacy JSONB; replaced by `secret_files` |
-| Configuration connector config (deprecated) | Deprecated | `packages/db/src/schema/prebuilds.ts:connectors` | Legacy JSONB on configurations table; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
+| Configuration resolver | Implemented | `apps/gateway/src/lib/configuration-resolver.ts` | Resolves configuration at session start |
+| Service commands persistence | Implemented | `packages/db/src/schema/schema.ts:configurations.serviceCommands` | JSONB on configurations |
+| Env file persistence | Removed | — | Deleted; replaced by `secret_files` table |
+| Configuration connector config | Removed | — | Deleted; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
 | Org-scoped connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | `org_connectors` table with full CRUD via Integrations routes |
 | Org connector management UI | Implemented | `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools page with presets, secret picker, validation |
 | Org connector validation endpoint | Implemented | `apps/web/src/server/routers/integrations.ts:validateConnector` | `tools/list` preflight with diagnostics |
-| Base snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:sandboxBaseSnapshots` | Building/ready/failed (legacy table) |
-| Repo snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:repoSnapshots` | Building/ready/failed + commit SHA (legacy table) |
+| Base snapshot status tracking | Implemented | `packages/db/src/schema/schema.ts:sandboxBaseSnapshots` | Building/ready/failed |
+| Repo snapshot status tracking | Removed | — | Repo snapshots removed; superseded by first-class snapshots table |
 
 ---
 
@@ -212,8 +212,8 @@
 |---------|--------|----------|-------|
 | First-class snapshots table | Implemented | `packages/db/src/schema/schema.ts:snapshots` | Lifecycle: building/ready/failed, `has_deps` property |
 | Snapshot repos (commit tracking) | Implemented | `packages/db/src/schema/schema.ts:snapshotRepos` | Per-repo commit SHA per snapshot (not populated in PR1) |
-| Active snapshot on configurations | Implemented | `packages/db/src/schema/schema.ts:prebuilds.activeSnapshotId` | FK → snapshots, set on markReady |
-| Organization ID on configurations | Implemented | `packages/db/src/schema/schema.ts:prebuilds.organizationId` | Backfilled from configuration_repos → repos |
+| Active snapshot on configurations | Implemented | `packages/db/src/schema/schema.ts:configurations.activeSnapshotId` | FK → snapshots, set on markReady |
+| Organization ID on configurations | Implemented | `packages/db/src/schema/schema.ts:configurations.organizationId` | Backfilled from configuration_repos → repos |
 | Secret files (config-scoped env) | Implemented | `packages/db/src/schema/schema.ts:secretFiles` | Replaces env_files JSONB and legacy secret_bundles |
 | Configuration secrets | Implemented | `packages/db/src/schema/schema.ts:configurationSecrets` | Per-key encrypted values for secret files |
 | Secret files CRUD API | Implemented | `apps/web/src/server/routers/secrets.ts:secretFilesRouter` | List/create/delete files, upsert/delete secrets |

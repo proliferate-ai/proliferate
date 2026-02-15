@@ -101,7 +101,7 @@
 ## 3. Contradictions
 
 ### 3.1 Snapshot resolution ownership
-- **Boundary-brief §2:** "repos-prebuilds.md owns repo records, prebuild configs, and snapshot *builds*. sessions-gateway.md owns snapshot *resolution* at session start (which snapshot to use)."
+- **Boundary-brief §2:** "repos-prebuilds.md owns repo records, configuration management, and snapshot *builds*. sessions-gateway.md owns snapshot *resolution* at session start (which snapshot to use)."
 - **repos-prebuilds.md §1:** "Out of Scope: Snapshot resolution logic — see `sandbox-providers.md` §6.5"
 - **sandbox-providers.md §6.5:** Documents `resolveSnapshotId()` — the function that picks which snapshot to use
 - **sessions-gateway.md:** Does NOT claim snapshot resolution
@@ -113,9 +113,9 @@
 - **Spec §4 note:** Acknowledges this discrepancy
 - **Fix:** Update boundary-brief glossary to match the actual DB values: "queued → enriching → ready → running → succeeded/failed/needs_human/timed_out"
 
-### 3.3 Prebuild resolver ownership ambiguity
-- **repos-prebuilds.md §6.7:** "Owned by the gateway; documented here because it creates prebuild and repo records via this spec's services."
-- **sessions-gateway.md §6.1:** References `resolvePrebuild()` as part of session creation
+### 3.3 Configuration resolver ownership ambiguity
+- **repos-prebuilds.md §6.7:** "Owned by the gateway; documented here because it creates configuration and repo records via this spec's services."
+- **sessions-gateway.md §6.1:** References `resolveConfiguration()` as part of session creation
 - **Fix:** The resolver file `apps/gateway/src/lib/prebuild-resolver.ts` should be assigned to one spec. Since it lives in the gateway and is part of session creation flow, assign to `sessions-gateway.md`. `repos-prebuilds.md` should reference it for context but not document its internals.
 
 ---
@@ -129,18 +129,14 @@
 
 ### 4.2 `feature-registry.md` — "Configurations" in title
 - **Section 9 header:** "Repos, Configurations & Prebuilds"
-- **Violation:** Glossary says use "prebuild" not "configuration (in specs)"
-- **Fix:** Change header to "Repos & Prebuilds"
+- **Status:** Resolved. Header updated to "Repos & Configurations" and glossary now uses "configuration" as the canonical term.
 
-### 4.3 `repos-prebuilds.md` — occasional "configuration" usage
-- **§1 Mental Model:** "Effective configuration unit" appears in `implementation-context.md` language
-- **§2 Core Concepts:** "Prebuild Types" is correct, but "configuration management" appears in boundary-brief scope description
-- **Fix:** Audit and replace "configuration" with "prebuild" throughout when referring to the entity
+### 4.3 `repos-prebuilds.md` — terminology alignment
+- **Status:** The canonical term is now "configuration" (not "prebuild"). Glossary updated in boundary-brief to reflect this rename.
 
-### 4.4 `boundary-brief.md` — "configuration" in scope description
-- **§1 Spec Registry, row 9:** "Repo CRUD, prebuild/configuration management"
-- **Violation:** Glossary says use "prebuild" not "configuration"
-- **Fix:** Change to "Repo CRUD, prebuild management"
+### 4.4 `boundary-brief.md` — scope description
+- **§1 Spec Registry, row 9:** Updated to "Repo CRUD, configuration management"
+- **Status:** Resolved.
 
 ### 4.5 `automations-runs.md` — "job" used for BullMQ
 - **§2 "Outbox Pattern":** "dispatches to BullMQ queues" — technically uses "queue" which the glossary reserves for outbox

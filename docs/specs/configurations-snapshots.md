@@ -5,7 +5,7 @@
 This spec documents the **Configurations & Snapshots** subsystem — the target-state architecture for org-scoped configuration records, first-class snapshot entities, config-scoped secret files, and simplified service commands.
 
 ### In Scope
-- `configurations` table (renamed from `prebuilds`), all FK columns use `configuration_id`
+- `configurations` table, all FK columns use `configuration_id`
 - First-class `snapshots` table (lifecycle: building → ready → failed)
 - `snapshot_repos` table (per-repo commit tracking per snapshot)
 - `secret_files` + `configuration_secrets` tables (config-scoped env files)
@@ -131,7 +131,7 @@ packages/db/drizzle/
 └── 0025_configurations_snapshots_contract.sql # Contract: rename tables, drop old columns/tables
 
 packages/services/src/
-├── configurations/                  # Renamed from prebuilds/
+├── configurations/                  # Configuration CRUD, service commands
 │   ├── db.ts                        # Configuration DB operations (CRUD, service commands)
 │   ├── mapper.ts                    # DB row → API type conversion
 │   └── service.ts                   # Configuration business logic
@@ -151,12 +151,12 @@ apps/gateway/src/
 │   └── capabilities/tools/
 │       └── save-service-commands.ts  # Agent tool: writes to configurations service
 └── lib/
-    ├── configuration-resolver.ts    # Renamed from prebuild-resolver.ts (no CLI path)
+    ├── configuration-resolver.ts    # Configuration resolver (no CLI path)
     ├── session-creator.ts           # Reads active_snapshot_id directly, no fallback chain
     └── session-store.ts             # Service auto-start gated by snapshot existence
 
 apps/web/src/server/routers/
-├── configurations.ts                # Renamed from prebuilds.ts
+├── configurations.ts                # Configuration oRPC routes
 ├── secrets.ts                       # secretFilesRouter: list, createFile, deleteFile, upsertSecret, deleteSecret
 ├── repos-finalize.ts                # Setup finalization → snapshot + configuration update
 └── index.ts                         # Registers routers

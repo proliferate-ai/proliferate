@@ -15,7 +15,7 @@
 ### Out of Scope
 - `request_env_variables` tool schema — see `agent-contract.md` §6
 - Sandbox env var injection mechanics (provider `createSandbox`, `writeEnvFile`) — see `sandbox-providers.md`
-- Configuration-level env file persistence — see `repos-prebuilds.md`
+- Configuration-level secret files — see `configurations-snapshots.md`
 - S3 for verification file storage (the gateway S3 module handles verification uploads, not secret storage) — see `sessions-gateway.md`
 
 ### Mental Model
@@ -63,7 +63,7 @@ A secret file has a `target_path` (e.g., `.env.local`, `apps/web/.env`). At sess
 packages/services/src/secrets/
 ├── index.ts                  # Module exports (re-exports service + DB functions)
 ├── service.ts                # Business logic (CRUD, encryption orchestration, bulk import)
-├── db.ts                     # Drizzle queries (secrets + bundles tables)
+├── db.ts                     # Drizzle queries (secrets + secret_files tables)
 ├── mapper.ts                 # DB row → API response type transforms
 └── service.test.ts           # Vitest unit tests (mocked DB + crypto)
 
@@ -88,7 +88,7 @@ packages/db/src/schema/
 └── secrets.ts                # Hand-written table defs (stale — not exported by index.ts)
 
 apps/web/src/server/routers/
-├── secrets.ts                # oRPC router (secret + bundle CRUD, bulk import)
+├── secrets.ts                # oRPC router (secret + secret file CRUD, bulk import)
 └── sessions-submit-env.ts    # Environment submission handler (persist toggle)
 
 apps/gateway/src/lib/

@@ -16,13 +16,13 @@
 | 5 | `triggers.md` | Trigger registry, webhook ingestion, polling, cron scheduling, trigger-service, provider adapters (GitHub/Linear/Sentry/PostHog). | 2 |
 | 6 | `actions.md` | Action invocations, approval flow, grants, risk classification, provider adapters (Linear/Sentry), sweeper. | 2 |
 | 7 | `llm-proxy.md` | LiteLLM proxy, virtual key generation, per-org/per-session spend tracking, model routing. | 2 |
-| 8 | `cli.md` | Device auth flow, local config, file sync, OpenCode launch, CLI-specific API routes. | 2 |
-| 9 | `repos-prebuilds.md` | Repo CRUD, configuration management, base + repo snapshot builds, service commands, env file generation. | 3 |
-| 10 | `secrets-environment.md` | Secret CRUD, bundles, bulk import, env file deployment to sandbox, encryption. | 3 |
+| 8 | ~~`cli.md`~~ | ~~Removed — CLI product deleted.~~ | — |
+| 9 | `repos-prebuilds.md` | Repo CRUD, base snapshot builds. | 3 |
+| 10 | `secrets-environment.md` | Secret CRUD, bulk import, encryption, connector credentials. | 3 |
 | 11 | `integrations.md` | OAuth connection lifecycle for GitHub/Sentry/Linear/Slack via Nango. Connection binding to repos/automations/sessions. | 3 |
 | 12 | `auth-orgs.md` | better-auth, user/org/member model, invitations, onboarding/trial activation, API keys, admin/impersonation. | 3 |
 | 13 | `billing-metering.md` | Usage metering, credit gating, trial credits, reconciliation, org pause, Autumn integration. Owns charging/gating policy. | 3 |
-| 14 | `configurations-snapshots.md` | First-class snapshots, config-scoped secret files, dual-write expand/contract migration (PR1 expand state). Companion to `repos-prebuilds.md`. | 3 |
+| 14 | `configurations-snapshots.md` | Configuration CRUD, first-class snapshots, config-scoped secret files, service/setup commands. | 3 |
 
 ### Phase ordering
 
@@ -45,10 +45,10 @@ These boundaries resolve the most likely overlaps. Follow them exactly.
 | **LLM Proxy vs Billing** | `llm-proxy.md` owns key generation, routing, and spend *events*. `billing-metering.md` owns charging policy, credit gating, and balance enforcement. |
 | **Triggers vs Automations** | `triggers.md` owns event ingestion, matching, and dispatch. Once a trigger fires, the resulting automation run belongs to `automations-runs.md`. The handoff point is the `AUTOMATION_ENRICH` queue enqueue. |
 | **Sessions vs Sandbox Providers** | `sessions-gateway.md` owns the session lifecycle and gateway runtime. `sandbox-providers.md` owns the provider interface and sandbox boot mechanics. Sessions *calls* the provider interface; the provider spec defines the contract. |
-| **Repos/Configurations vs Sessions** | `repos-prebuilds.md` owns repo records, configuration management, and snapshot *builds*. `sandbox-providers.md` owns snapshot *resolution* (`resolveSnapshotId()` in `packages/shared/src/snapshot-resolution.ts`). `sessions-gateway.md` owns the configuration *resolver* (`apps/gateway/src/lib/prebuild-resolver.ts`) which determines which configuration to use at session start. |
+| **Repos/Configurations vs Sessions** | `repos-prebuilds.md` owns repo records and base snapshot *builds*. `configurations-snapshots.md` owns configuration CRUD, snapshots, secret files, and service commands. `sessions-gateway.md` owns the configuration *resolver* (`apps/gateway/src/lib/configuration-resolver.ts`) which determines which configuration to use at session start. |
 | **Secrets vs Sandbox Providers** | `secrets-environment.md` owns secret CRUD and secret file management. How secrets get deployed into a running sandbox is `sandbox-providers.md` (env injection at boot). |
 | **Auth/Orgs vs Billing** | `auth-orgs.md` owns user/org model, membership, and onboarding flow. `billing-metering.md` owns trial credit provisioning, plan management, and checkout. Onboarding *triggers* trial activation but billing *owns* the credit grant. |
-| **CLI vs Sessions** | `cli.md` owns the CLI-specific entry point (device auth, local config, file sync). Session creation from CLI uses the same session lifecycle defined in `sessions-gateway.md`. |
+| ~~**CLI vs Sessions**~~ | ~~CLI product removed. No CLI-specific entry points.~~ |
 
 ---
 

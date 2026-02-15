@@ -128,7 +128,7 @@ The 7-day expiry aligns with `auto_delete_days` (default 7). The pre-beta limita
 
 **Fallback:** if memory snapshots fail at snapshot time, fall back to `snapshotFilesystem()` + `terminate()`. The resume path is the same (`ensureRuntimeReady()` from paused state), just slower (~10-20s) with service commands re-running on boot. OpenCode transcript is preserved on disk.
 
-If memory snapshot restore fails (e.g. expired after 7 days), the error is surfaced to the user and `snapshotId` is cleared in DB. The next reconnect creates a fresh sandbox from prebuild with empty history (restartable, not terminal).
+If memory snapshot restore fails (e.g. expired after 7 days), the error is surfaced to the user and `snapshotId` is cleared in DB. The next reconnect creates a fresh sandbox from configuration with empty history (restartable, not terminal).
 
 ### E2B — native pause
 
@@ -684,7 +684,7 @@ try {
 }
 ```
 
-**Restartable, not terminal.** Clearing `snapshotId` ensures the next reconnect attempt creates a fresh sandbox from prebuild instead of retrying the dead `mem:` ID. The user sees an error on the current attempt; reconnecting creates a fresh sandbox with empty OpenCode history.
+**Restartable, not terminal.** Clearing `snapshotId` ensures the next reconnect attempt creates a fresh sandbox from configuration instead of retrying the dead `mem:` ID. The user sees an error on the current attempt; reconnecting creates a fresh sandbox with empty OpenCode history.
 
 **UX note:** The existing `onStatus("error", message)` path sends the error to the client. The client should display something like "Session expired — your previous conversation has been reset" rather than a generic error. This is a UI-only change in the web app's error handling for the `"error"` status — defer to post-v1 if needed, but at minimum the error message from the `SandboxProviderError` will be visible.
 
@@ -877,7 +877,7 @@ Already renders yellow "Paused" badge.
 - **Preview URLs** — dead while sandbox is down. Resume restores them.
 - **Automation finalizer compatibility** — if the agent called `automation.complete`, the run is already in a terminal state before idle snapshot. Finalizer ignores it. If the agent didn't complete, finalizer eventually fails the run after 30 min — same existing behavior.
 - **Memory snapshot failure at snapshot time** — fall back to filesystem snapshot + terminate. Resume is slower but works. OpenCode transcript preserved on disk.
-- **Memory restore failure** — error surfaced to user, `snapshotId` cleared in DB. Next reconnect creates fresh sandbox from prebuild (empty history).
+- **Memory restore failure** — error surfaced to user, `snapshotId` cleared in DB. Next reconnect creates fresh sandbox from configuration (empty history).
 - **SSE reconnect for automation sessions** — `shouldReconnectWithoutClients()` returns true for automations, but reconnect timer is cancelled before snapshot. Generation counter prevents in-flight callbacks from restoring the sandbox.
 - **SSE drop + known idle** — if agent finishes → SSE drops (network) → user doesn't reconnect, snapshot still fires because `lastKnownAgentIdleAt` is set. Prevents burning compute for hours/24h.
 
@@ -892,7 +892,7 @@ Already renders yellow "Paused" badge.
 7. **HTTP activity aborts snapshot**: VS Code HTTP request arrives during lock acquisition wait → `touchActivity()` fires before `ensureRuntimeReady()` → re-check inside lock returns false → snapshot aborts
 8. **removeProxy idempotent**: Call cleanup function twice → `proxyConnections` doesn't go negative
 9. **Filesystem fallback (in runIdleSnapshot)**: Force memory snapshot failure → falls back to filesystem snapshot → resume works
-10. **Memory restore failure (in ensureSandbox)**: Use expired `mem:` ID → throws → DB `snapshotId` cleared → user sees error → subsequent reconnect creates fresh sandbox from prebuild (empty history)
+10. **Memory restore failure (in ensureSandbox)**: Use expired `mem:` ID → throws → DB `snapshotId` cleared → user sees error → subsequent reconnect creates fresh sandbox from configuration (empty history)
 11. **SSE drop + known idle**: Agent finishes → SSE drops (network) → user doesn't reconnect → after grace period, snapshot still fires (because `lastKnownAgentIdleAt` is set)
 12. **Expiry idle path**: Close tab → session has no clients → expiry fires at 55 min (if idle snapshot hasn't already fired) → DB shows `paused` (not `stopped`), no `endedAt`. Note: with clients connected, expiry takes `createNewSandbox: true` path (keeps running)
 13. **Prompt during snapshot**: Send prompt while idle snapshot in progress → blocks on migration lock, restores from snapshot
