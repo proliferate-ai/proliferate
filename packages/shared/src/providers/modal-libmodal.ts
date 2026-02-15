@@ -545,7 +545,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 					baseSnapshotId: baseSnapshotId || null,
 					isRestoreSnapshot,
 				},
-				"Snapshot resolution",
+				"Selecting sandbox image",
 			);
 
 			// Use restore snapshot if provided, otherwise use base snapshot (if configured), otherwise base image

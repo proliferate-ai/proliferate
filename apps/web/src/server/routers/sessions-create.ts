@@ -5,7 +5,7 @@
  * Sandbox provisioning is handled by the gateway when the client connects.
  *
  * Two paths:
- * - Configuration-backed: existing flow with repo validation and snapshot resolution.
+ * - Configuration-backed: existing flow with repo validation and snapshot selection.
  * - Scratch: no configuration, no repos. Only allowed for coding sessions.
  */
 
@@ -184,7 +184,7 @@ async function createConfigurationSession(input: {
 	const providerType = configurationProvider as SandboxProviderType | undefined;
 	const provider = getSandboxProvider(providerType);
 
-	// Snapshot resolution is handled by the gateway when the client connects.
+	// Snapshot selection is handled by the gateway when the client connects.
 
 	// Generate IDs
 	const sessionId = randomUUID();
