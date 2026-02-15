@@ -15,6 +15,7 @@ import {
 	repoConnections,
 	repos,
 	slackInstallations,
+	sql,
 } from "../db/client";
 import type { IntegrationRow, OnboardingMeta, RepoWithPrebuildRow } from "../types/onboarding";
 
@@ -191,7 +192,10 @@ export async function updateOnboardingMeta(
 	meta: Partial<OnboardingMeta>,
 ): Promise<void> {
 	const db = getDb();
-	const existing = await getOnboardingMeta(orgId);
-	const merged = { ...existing, ...meta };
-	await db.update(organization).set({ onboardingMeta: merged }).where(eq(organization.id, orgId));
+	await db
+		.update(organization)
+		.set({
+			onboardingMeta: sql`COALESCE("onboarding_meta", '{}'::jsonb) || ${JSON.stringify(meta)}::jsonb`,
+		})
+		.where(eq(organization.id, orgId));
 }

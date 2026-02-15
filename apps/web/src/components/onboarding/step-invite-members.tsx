@@ -139,7 +139,7 @@ export function StepInviteMembers({ onComplete }: StepInviteMembersProps) {
 
 			<div className="mt-8 flex gap-3">
 				<Button variant="outline" onClick={onComplete} className="h-11 flex-1 rounded-lg">
-					{sentCount > 0 ? "Continue" : "Skip for now"}
+					Skip for now
 				</Button>
 				{sentCount > 0 && (
 					<Button variant="dark" onClick={onComplete} className="h-11 flex-1 rounded-lg">
