@@ -52,15 +52,22 @@ export function shouldUseNangoForProvider(provider: Provider): boolean {
 	if (!env.NEXT_PUBLIC_INTEGRATIONS_ENABLED) {
 		return false;
 	}
-	// Standalone triggers don't use Nango
-	if (provider === "webhook" || provider === "scheduled") {
+	// Standalone triggers and non-Nango integrations do not use Nango.
+	if (
+		provider === "webhook" ||
+		provider === "scheduled" ||
+		provider === "posthog" ||
+		provider === "gmail" ||
+		provider === "slack"
+	) {
 		return false;
 	}
-	if (provider === "github") {
-		return USE_NANGO_GITHUB;
-	}
-	// All other providers always use Nango
-	return true;
+
+	// GitHub can use Nango optionally (feature-flagged); default is GitHub App flow.
+	if (provider === "github") return USE_NANGO_GITHUB;
+
+	// Linear/Sentry always use Nango when integrations are enabled.
+	return provider === "linear" || provider === "sentry";
 }
 
 export type NangoAuthFlow = "connectUI" | "auth";
