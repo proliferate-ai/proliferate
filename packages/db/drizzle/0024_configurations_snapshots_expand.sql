@@ -150,9 +150,9 @@ SELECT
 	COALESCE((k->>'required')::boolean, false),
 	now(),
 	now()
-FROM "prebuilds" p,
-	jsonb_array_elements(p."env_files") AS ef,
-	jsonb_array_elements(ef->'keys') AS k
+FROM "prebuilds" p
+CROSS JOIN LATERAL jsonb_array_elements(p."env_files") AS ef
+CROSS JOIN LATERAL jsonb_array_elements(ef->'keys') AS k
 JOIN "secret_files" sf
 	ON sf."prebuild_id" = p."id"
 	AND sf."workspace_path" = COALESCE(ef->>'workspacePath', '.')
