@@ -11,7 +11,7 @@
 
 export interface CreateSessionInput {
 	id: string;
-	prebuildId: string | null;
+	configurationId: string | null;
 	organizationId: string;
 	sessionType: string;
 	status: string;
@@ -66,10 +66,10 @@ export interface SessionStatus {
 	isComplete: boolean;
 }
 
-/** Input for creating a setup session (for managed prebuilds). */
+/** Input for creating a setup session (for managed configurations). */
 export interface CreateSetupSessionInput {
 	id: string;
-	prebuildId: string;
+	configurationId: string;
 	organizationId: string;
 	initialPrompt: string;
 }

@@ -13,14 +13,12 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
 	useEffectiveServiceCommands,
-	useServiceCommands,
-	useUpdatePrebuildServiceCommands,
-	useUpdateServiceCommands,
+	useUpdateConfigurationServiceCommands,
 } from "@/hooks/use-repos";
 import type {
 	AutoStartOutputEntry,
 	AutoStartOutputMessage,
-	PrebuildServiceCommand,
+	ServiceCommand,
 } from "@proliferate/shared";
 import {
 	CheckCircle2,
@@ -39,25 +37,17 @@ import { useCallback, useEffect, useState } from "react";
 
 interface AutoStartPanelProps {
 	repoId?: string | null;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	onClose: () => void;
 	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
-	sendRunAutoStart?: (
-		runId: string,
-		mode?: "test" | "start",
-		commands?: PrebuildServiceCommand[],
-	) => void;
+	sendRunAutoStart?: (runId: string, mode?: "test" | "start", commands?: ServiceCommand[]) => void;
 }
 
 export interface AutoStartContentProps {
 	repoId?: string | null;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
-	sendRunAutoStart?: (
-		runId: string,
-		mode?: "test" | "start",
-		commands?: PrebuildServiceCommand[],
-	) => void;
+	sendRunAutoStart?: (runId: string, mode?: "test" | "start", commands?: ServiceCommand[]) => void;
 }
 
 interface CommandDraft {
@@ -69,36 +59,25 @@ interface CommandDraft {
 
 export function AutoStartContent({
 	repoId,
-	prebuildId,
+	configurationId,
 	autoStartOutput,
 	sendRunAutoStart,
 }: AutoStartContentProps) {
-	const hasPrebuild = !!prebuildId;
+	const hasConfiguration = !!configurationId;
 
-	// Effective commands (server-side resolved) when prebuild exists
+	// Effective commands (server-side resolved) when configuration exists
 	const { data: effective, isLoading: effectiveLoading } = useEffectiveServiceCommands(
-		prebuildId || "",
-		hasPrebuild,
+		configurationId || "",
+		hasConfiguration,
 	);
 
-	// Fallback: repo-level commands when no prebuild
-	const { data: repoCommands, isLoading: repoLoading } = useServiceCommands(
-		repoId || "",
-		!hasPrebuild && !!repoId,
-	);
+	const updateConfigurationCommands = useUpdateConfigurationServiceCommands();
 
-	const updatePrebuildCommands = useUpdatePrebuildServiceCommands();
-	const updateRepoCommands = useUpdateServiceCommands();
-
-	const commands = hasPrebuild ? effective?.commands : repoCommands;
-	const source = hasPrebuild
-		? (effective?.source ?? "none")
-		: repoCommands?.length
-			? "repo"
-			: "none";
+	const commands = hasConfiguration ? effective?.commands : undefined;
+	const source = hasConfiguration ? (effective?.source ?? "none") : "none";
 	const workspaces = effective?.workspaces ?? [];
-	const isLoading = hasPrebuild ? effectiveLoading : repoLoading;
-	const canEdit = hasPrebuild ? !!prebuildId : !!repoId;
+	const isLoading = hasConfiguration ? effectiveLoading : false;
+	const canEdit = !!configurationId;
 
 	const [editing, setEditing] = useState(false);
 	const [drafts, setDrafts] = useState<CommandDraft[]>([]);
@@ -127,13 +106,8 @@ export function AutoStartContent({
 			...(d.workspacePath.trim() ? { workspacePath: d.workspacePath.trim() } : {}),
 		}));
 
-		if (hasPrebuild && prebuildId) {
-			// Promotion model: editing always writes to prebuild
-			await updatePrebuildCommands.mutateAsync({ prebuildId, commands: cmds });
-		} else if (repoId) {
-			// No prebuild — save to repo (commands without workspacePath)
-			const repoCmds = cmds.map(({ workspacePath: _, ...rest }) => rest);
-			await updateRepoCommands.mutateAsync({ id: repoId, commands: repoCmds });
+		if (configurationId) {
+			await updateConfigurationCommands.mutateAsync({ configurationId, commands: cmds });
 		}
 		setEditing(false);
 	};
@@ -160,7 +134,7 @@ export function AutoStartContent({
 		}
 	}, [isTesting, autoStartOutput]);
 
-	const isSaving = updatePrebuildCommands.isPending || updateRepoCommands.isPending;
+	const isSaving = updateConfigurationCommands.isPending;
 
 	const addRow = () => {
 		if (drafts.length >= 10) return;
@@ -192,7 +166,7 @@ export function AutoStartContent({
 
 			{source !== "none" && !editing && (
 				<p className="text-[10px] text-muted-foreground/70">
-					{source === "prebuild"
+					{source === "configuration"
 						? "Using configuration overrides"
 						: "Using repo defaults — saving will create configuration overrides"}
 				</p>
@@ -253,7 +227,7 @@ export function AutoStartContent({
 
 export function AutoStartPanel({
 	repoId,
-	prebuildId,
+	configurationId,
 	onClose,
 	autoStartOutput,
 	sendRunAutoStart,
@@ -277,7 +251,7 @@ export function AutoStartPanel({
 
 			<AutoStartContent
 				repoId={repoId}
-				prebuildId={prebuildId}
+				configurationId={configurationId}
 				autoStartOutput={autoStartOutput}
 				sendRunAutoStart={sendRunAutoStart}
 			/>

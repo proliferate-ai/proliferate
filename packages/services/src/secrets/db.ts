@@ -14,19 +14,13 @@ import {
 	inArray,
 	isNull,
 	or,
-	secretBundles,
 	secrets,
-	sql,
 } from "../db/client";
 import { getServicesLogger } from "../logger";
 import { toIsoString } from "../db/serialize";
 import type {
-	BundleWithKeys,
 	CheckSecretsFilter,
-	DbCreateBundleInput,
 	DbCreateSecretInput,
-	DbUpdateBundleInput,
-	SecretBundleListRow,
 	SecretForSessionRow,
 	SecretListRow,
 	UpsertSecretInput,
@@ -54,7 +48,7 @@ export async function listByOrganization(orgId: string): Promise<SecretListRow[]
 			description: secrets.description,
 			secretType: secrets.secretType,
 			repoId: secrets.repoId,
-			bundleId: secrets.bundleId,
+			configurationId: secrets.configurationId,
 			createdAt: secrets.createdAt,
 			updatedAt: secrets.updatedAt,
 		})
@@ -69,7 +63,7 @@ export async function listByOrganization(orgId: string): Promise<SecretListRow[]
 		description: row.description,
 		secret_type: row.secretType,
 		repo_id: row.repoId,
-		bundle_id: row.bundleId,
+		configuration_id: row.configurationId,
 		created_at: toIsoString(row.createdAt),
 		updated_at: toIsoString(row.updatedAt),
 	}));
@@ -89,7 +83,6 @@ export async function create(input: DbCreateSecretInput): Promise<SecretListRow>
 			description: input.description ?? null,
 			repoId: input.repoId ?? null,
 			secretType: input.secretType ?? "env",
-			bundleId: input.bundleId ?? null,
 			createdBy: input.createdBy,
 		})
 		.returning({
@@ -98,7 +91,7 @@ export async function create(input: DbCreateSecretInput): Promise<SecretListRow>
 			description: secrets.description,
 			secretType: secrets.secretType,
 			repoId: secrets.repoId,
-			bundleId: secrets.bundleId,
+			configurationId: secrets.configurationId,
 			createdAt: secrets.createdAt,
 			updatedAt: secrets.updatedAt,
 		});
@@ -110,7 +103,7 @@ export async function create(input: DbCreateSecretInput): Promise<SecretListRow>
 		description: row.description,
 		secret_type: row.secretType,
 		repo_id: row.repoId,
-		bundle_id: row.bundleId,
+		configuration_id: row.configurationId,
 		created_at: toIsoString(row.createdAt),
 		updated_at: toIsoString(row.updatedAt),
 	};
@@ -126,7 +119,7 @@ export async function deleteById(id: string, orgId: string): Promise<void> {
 
 /**
  * Check which secret keys exist for an organization.
- * Handles filtering by repo_id and prebuild_id.
+ * Handles filtering by repo_id.
  */
 export async function findExistingKeys(
 	orgId: string,
@@ -240,166 +233,6 @@ export async function upsertByRepoAndKey(input: UpsertSecretInput): Promise<bool
 }
 
 /**
- * Update a secret's bundle assignment.
- */
-export async function updateSecretBundle(
-	id: string,
-	orgId: string,
-	bundleId: string | null,
-): Promise<boolean> {
-	const db = getDb();
-	const rows = await db
-		.update(secrets)
-		.set({ bundleId, updatedAt: new Date() })
-		.where(and(eq(secrets.id, id), eq(secrets.organizationId, orgId)))
-		.returning({ id: secrets.id });
-	return rows.length > 0;
-}
-
-/**
- * Check if a bundle belongs to the given organization.
- */
-export async function bundleBelongsToOrg(bundleId: string, orgId: string): Promise<boolean> {
-	const db = getDb();
-	const row = await db.query.secretBundles.findFirst({
-		columns: { id: true },
-		where: and(eq(secretBundles.id, bundleId), eq(secretBundles.organizationId, orgId)),
-	});
-	return !!row;
-}
-
-// ============================================
-// Bundles Queries
-// ============================================
-
-/**
- * List all bundles for an organization with secret counts.
- */
-export async function listBundlesByOrganization(
-	orgId: string,
-): Promise<SecretBundleListRow[]> {
-	const db = getDb();
-	const rows = await db
-		.select({
-			id: secretBundles.id,
-			name: secretBundles.name,
-			description: secretBundles.description,
-			targetPath: secretBundles.targetPath,
-			secretCount: sql<number>`count(${secrets.id})::int`,
-			createdAt: secretBundles.createdAt,
-			updatedAt: secretBundles.updatedAt,
-		})
-		.from(secretBundles)
-		.leftJoin(secrets, eq(secrets.bundleId, secretBundles.id))
-		.where(eq(secretBundles.organizationId, orgId))
-		.groupBy(secretBundles.id)
-		.orderBy(desc(secretBundles.createdAt));
-
-	return rows.map((row) => ({
-		id: row.id,
-		name: row.name,
-		description: row.description,
-		target_path: row.targetPath,
-		secret_count: row.secretCount,
-		created_at: toIsoString(row.createdAt),
-		updated_at: toIsoString(row.updatedAt),
-	}));
-}
-
-/**
- * Create a new bundle.
- */
-export async function createBundle(
-	input: DbCreateBundleInput,
-): Promise<SecretBundleListRow> {
-	const db = getDb();
-	const [row] = await db
-		.insert(secretBundles)
-		.values({
-			organizationId: input.organizationId,
-			name: input.name,
-			description: input.description ?? null,
-			targetPath: input.targetPath ?? null,
-			createdBy: input.createdBy,
-		})
-		.returning({
-			id: secretBundles.id,
-			name: secretBundles.name,
-			description: secretBundles.description,
-			targetPath: secretBundles.targetPath,
-			createdAt: secretBundles.createdAt,
-			updatedAt: secretBundles.updatedAt,
-		});
-
-	return {
-		id: row.id,
-		name: row.name,
-		description: row.description,
-		target_path: row.targetPath,
-		secret_count: 0,
-		created_at: toIsoString(row.createdAt),
-		updated_at: toIsoString(row.updatedAt),
-	};
-}
-
-/**
- * Update a bundle's name and/or description.
- */
-export async function updateBundle(
-	id: string,
-	orgId: string,
-	input: DbUpdateBundleInput,
-): Promise<SecretBundleListRow | null> {
-	const db = getDb();
-	const set: Record<string, unknown> = { updatedAt: new Date() };
-	if (input.name !== undefined) set.name = input.name;
-	if (input.description !== undefined) set.description = input.description;
-	if (input.targetPath !== undefined) set.targetPath = input.targetPath;
-
-	const [row] = await db
-		.update(secretBundles)
-		.set(set)
-		.where(and(eq(secretBundles.id, id), eq(secretBundles.organizationId, orgId)))
-		.returning({
-			id: secretBundles.id,
-			name: secretBundles.name,
-			description: secretBundles.description,
-			targetPath: secretBundles.targetPath,
-			createdAt: secretBundles.createdAt,
-			updatedAt: secretBundles.updatedAt,
-		});
-
-	if (!row) return null;
-
-	// Fetch secret count separately
-	const [countRow] = await db
-		.select({ count: sql<number>`count(*)::int` })
-		.from(secrets)
-		.where(eq(secrets.bundleId, id));
-
-	return {
-		id: row.id,
-		name: row.name,
-		description: row.description,
-		target_path: row.targetPath,
-		secret_count: countRow?.count ?? 0,
-		created_at: toIsoString(row.createdAt),
-		updated_at: toIsoString(row.updatedAt),
-	};
-}
-
-/**
- * Delete a bundle by ID within an organization.
- * Secrets linked to this bundle will have bundle_id set to null (ON DELETE SET NULL).
- */
-export async function deleteBundle(id: string, orgId: string): Promise<void> {
-	const db = getDb();
-	await db
-		.delete(secretBundles)
-		.where(and(eq(secretBundles.id, id), eq(secretBundles.organizationId, orgId)));
-}
-
-/**
  * Bulk-create secrets, skipping keys that already exist (org + null repoId scope).
  * Returns the list of keys that were actually inserted.
  */
@@ -418,7 +251,6 @@ export async function bulkCreateSecrets(
 				description: e.description ?? null,
 				repoId: e.repoId ?? null,
 				secretType: e.secretType ?? "env",
-				bundleId: e.bundleId ?? null,
 				createdBy: e.createdBy,
 			})),
 		)
@@ -427,44 +259,4 @@ export async function bulkCreateSecrets(
 		})
 		.returning({ key: secrets.key });
 	return rows.map((r) => r.key);
-}
-
-/**
- * Get bundles that have a target_path set, with their associated secret keys.
- * Used at session creation time to build EnvFileSpec entries.
- */
-export async function getBundlesWithTargetPath(orgId: string): Promise<BundleWithKeys[]> {
-	const db = getDb();
-	const rows = await db
-		.select({
-			bundleId: secretBundles.id,
-			targetPath: secretBundles.targetPath,
-			secretKey: secrets.key,
-		})
-		.from(secretBundles)
-		.innerJoin(secrets, eq(secrets.bundleId, secretBundles.id))
-		.where(
-			and(
-				eq(secretBundles.organizationId, orgId),
-				sql`${secretBundles.targetPath} IS NOT NULL`,
-			),
-		);
-
-	// Group by bundle
-	const map = new Map<string, { targetPath: string; keys: string[] }>();
-	for (const row of rows) {
-		if (!row.targetPath) continue;
-		let entry = map.get(row.bundleId);
-		if (!entry) {
-			entry = { targetPath: row.targetPath, keys: [] };
-			map.set(row.bundleId, entry);
-		}
-		entry.keys.push(row.secretKey);
-	}
-
-	return Array.from(map.entries()).map(([id, data]) => ({
-		id,
-		targetPath: data.targetPath,
-		keys: data.keys,
-	}));
 }

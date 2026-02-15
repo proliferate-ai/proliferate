@@ -59,7 +59,7 @@ export const sessionsRouter = {
 		}),
 
 	/**
-	 * Create a new session from a prebuild.
+	 * Create a new session from a configuration.
 	 * Complex operation with sandbox provisioning.
 	 */
 	create: orgProcedure
@@ -67,7 +67,7 @@ export const sessionsRouter = {
 		.output(CreateSessionResponseSchema)
 		.handler(async ({ input, context }) => {
 			return createSessionHandler({
-				prebuildId: input.prebuildId,
+				configurationId: input.configurationId,
 				sessionType: input.sessionType,
 				modelId: input.modelId,
 				orgId: context.orgId,
@@ -176,7 +176,7 @@ export const sessionsRouter = {
 						value: z.string(),
 					}),
 				),
-				saveToPrebuild: z.boolean(),
+				saveToConfiguration: z.boolean(),
 			}),
 		)
 		.output(
@@ -200,7 +200,7 @@ export const sessionsRouter = {
 				userId: context.user.id,
 				secrets: input.secrets,
 				envVars: input.envVars,
-				saveToPrebuild: input.saveToPrebuild,
+				saveToConfiguration: input.saveToConfiguration,
 			});
 		}),
 };

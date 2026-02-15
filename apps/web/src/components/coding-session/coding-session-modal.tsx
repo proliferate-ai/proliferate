@@ -12,7 +12,7 @@ export function CodingSessionModal() {
 	const {
 		isOpen,
 		sessionId,
-		prebuildId,
+		configurationId,
 		sessionType,
 		title,
 		description,
@@ -25,22 +25,22 @@ export function CodingSessionModal() {
 	const createMutation = useCreateSession();
 	const creationStartedRef = useRef(false);
 
-	// Create session if we have prebuildId but no sessionId
+	// Create session if we have configurationId but no sessionId
 	useEffect(() => {
-		if (!isOpen || sessionId || !prebuildId) return;
+		if (!isOpen || sessionId || !configurationId) return;
 		if (creationStartedRef.current || createMutation.isPending || createMutation.isSuccess) return;
 
 		creationStartedRef.current = true;
 
 		createMutation
-			.mutateAsync({ prebuildId, sessionType: sessionType || "coding" })
+			.mutateAsync({ configurationId, sessionType: sessionType || "coding" })
 			.then((result) => {
 				setSessionId(result.sessionId);
 			})
 			.catch(() => {
 				creationStartedRef.current = false;
 			});
-	}, [isOpen, sessionId, prebuildId, sessionType, createMutation, setSessionId]);
+	}, [isOpen, sessionId, configurationId, sessionType, createMutation, setSessionId]);
 
 	// Reset creation state when modal closes
 	useEffect(() => {
@@ -53,7 +53,7 @@ export function CodingSessionModal() {
 	if (!isOpen) return null;
 
 	// Creating state - show loading shell in modal
-	if (!sessionId && prebuildId) {
+	if (!sessionId && configurationId) {
 		return (
 			<Dialog open={isOpen} onOpenChange={(open) => !open && closeSession()}>
 				<DialogContent className="max-w-4xl h-[85vh] p-0 gap-0 flex flex-col">
@@ -89,7 +89,7 @@ export function CodingSessionModal() {
 		);
 	}
 
-	// No sessionId and no prebuildId - shouldn't happen, close modal
+	// No sessionId and no configurationId - shouldn't happen, close modal
 	if (!sessionId) {
 		return null;
 	}

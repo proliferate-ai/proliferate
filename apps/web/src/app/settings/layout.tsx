@@ -149,16 +149,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
 				<header className="sticky top-0 z-10 flex items-center justify-between h-12 px-6 border-b border-border">
 					<span className="text-sm font-medium text-foreground">{title}</span>
 					<div className="flex items-center gap-3">
-						<Button
-							variant="outline"
-							size="sm"
-							className="h-auto px-2.5 py-1 text-xs text-muted-foreground"
-						>
-							<Search className="h-3.5 w-3.5 mr-2" />
-							<span>Search...</span>
-							<kbd className="ml-2 text-[10px] px-1 py-0.5 rounded border border-border">⌘K</kbd>
-						</Button>
-						<a
+						<Link
 							href="https://docs.proliferate.com"
 							target="_blank"
 							rel="noopener noreferrer"
@@ -166,7 +157,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
 						>
 							Docs
 							<ExternalLink className="h-3.5 w-3.5" />
-						</a>
+						</Link>
 					</div>
 				</header>
 

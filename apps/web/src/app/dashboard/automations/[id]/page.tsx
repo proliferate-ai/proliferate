@@ -95,7 +95,7 @@ function formatRelativeTime(dateString: string): string {
 function mapInputToOutput(data: UpdateAutomationInput): Record<string, unknown> {
 	const mapped: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(data)) {
-		if (key === "defaultPrebuildId") mapped.default_prebuild_id = value;
+		if (key === "defaultConfigurationId") mapped.default_configuration_id = value;
 		else if (key === "allowAgenticRepoSelection") mapped.allow_agentic_repo_selection = value;
 		else if (key === "agentInstructions") mapped.agent_instructions = value;
 		else if (key === "agentType") mapped.agent_type = value;

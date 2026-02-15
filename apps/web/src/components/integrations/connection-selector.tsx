@@ -39,11 +39,11 @@ export interface ConnectionSelectorProps {
 	onConnectSuccess?: () => void;
 	/** Auto-select when there's only one connection */
 	autoSelectSingle?: boolean;
-	/** Show "Use local git credentials" option (for CLI device-github flow) */
+	/** Show "Use local git credentials" option (for CLI flow) */
 	showLocalGitOption?: boolean;
 	/** Called when user selects local git credentials */
 	onSelectLocalGit?: () => void;
-	/** URL to redirect back to after OAuth (for device-github flow) */
+	/** URL to redirect back to after OAuth */
 	returnUrl?: string;
 	/** Optional label override */
 	label?: string;

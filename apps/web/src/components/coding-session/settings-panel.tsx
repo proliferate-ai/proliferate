@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { PreviewMode } from "@/stores/preview-panel";
-import type { AutoStartOutputMessage, PrebuildServiceCommand } from "@proliferate/shared";
+import type { AutoStartOutputMessage, ServiceCommand } from "@proliferate/shared";
 import { X } from "lucide-react";
 import { useState } from "react";
 import { AutoStartContent } from "./auto-start-panel";
@@ -30,13 +30,9 @@ export interface SettingsPanelProps {
 	onSnapshot?: () => void;
 	// Auto-start
 	repoId?: string | null;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
-	sendRunAutoStart?: (
-		runId: string,
-		mode?: "test" | "start",
-		commands?: PrebuildServiceCommand[],
-	) => void;
+	sendRunAutoStart?: (runId: string, mode?: "test" | "start", commands?: ServiceCommand[]) => void;
 }
 
 export function SettingsPanel({
@@ -55,7 +51,7 @@ export function SettingsPanel({
 	isSnapshotting,
 	onSnapshot,
 	repoId,
-	prebuildId,
+	configurationId,
 	autoStartOutput,
 	sendRunAutoStart,
 }: SettingsPanelProps) {
@@ -116,7 +112,7 @@ export function SettingsPanel({
 						<SnapshotsContent
 							snapshotId={snapshotId}
 							repoId={repoId}
-							prebuildId={prebuildId}
+							configurationId={configurationId}
 							canSnapshot={canSnapshot}
 							isSnapshotting={isSnapshotting}
 							onSnapshot={onSnapshot}
@@ -127,7 +123,7 @@ export function SettingsPanel({
 					<TabsContent value="auto-start" className="flex-1 min-h-0 overflow-y-auto mt-0">
 						<AutoStartContent
 							repoId={repoId}
-							prebuildId={prebuildId}
+							configurationId={configurationId}
 							autoStartOutput={autoStartOutput}
 							sendRunAutoStart={sendRunAutoStart}
 						/>

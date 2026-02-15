@@ -54,8 +54,8 @@ import type {
 	EnsureSandboxResult,
 	FileContent,
 	PauseResult,
-	PrebuildServiceCommand,
 	SandboxProvider,
+	ServiceCommand,
 	SnapshotResult,
 } from "../sandbox-provider";
 
@@ -545,7 +545,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 					baseSnapshotId: baseSnapshotId || null,
 					isRestoreSnapshot,
 				},
-				"Snapshot resolution",
+				"Selecting sandbox image",
 			);
 
 			// Use restore snapshot if provided, otherwise use base snapshot (if configured), otherwise base image
@@ -1056,7 +1056,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		];
 
 		if (isSetupSession) {
-			// Setup-only tools persist prebuild configuration.
+			// Setup-only tools persist configuration settings.
 			writePromises.push(
 				writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
 				writeFile(`${localToolDir}/save_service_commands.txt`, SAVE_SERVICE_COMMANDS_DESCRIPTION),
@@ -1327,30 +1327,8 @@ export class ModalLibmodalProvider implements SandboxProvider {
 	): Promise<void> {
 		const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
 
-		// 1. Apply env files (blocking — services may depend on these)
-		if (opts.envFiles) {
-			try {
-				const proc = await sandbox.exec([
-					"proliferate",
-					"env",
-					"apply",
-					"--spec",
-					JSON.stringify(opts.envFiles),
-				]);
-				const exitCode = await proc.wait();
-				if (exitCode !== 0) {
-					const stderr = await proc.stderr.readText();
-					log.error({ exitCode, stderr }, "proliferate env apply failed");
-				} else {
-					log.info("Env files applied");
-				}
-			} catch (err) {
-				log.error({ err }, "proliferate env apply failed");
-			}
-		}
-
-		// 2. Start services via tracked CLI (fire-and-forget per service)
-		if (!opts.snapshotHasDeps || !opts.serviceCommands?.length) return;
+		// Start services via tracked CLI (fire-and-forget per service)
+		if (!opts.autoStartServices || !opts.serviceCommands?.length) return;
 
 		for (const cmd of opts.serviceCommands) {
 			const baseDir =
@@ -1381,7 +1359,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 	async testServiceCommands(
 		sandboxId: string,
-		commands: PrebuildServiceCommand[],
+		commands: ServiceCommand[],
 		opts: { timeoutMs: number; runId: string },
 	): Promise<AutoStartOutputEntry[]> {
 		const log = providerLogger.child({ sandboxId: sandboxId.slice(0, 16), runId: opts.runId });

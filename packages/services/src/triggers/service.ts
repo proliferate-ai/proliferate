@@ -38,7 +38,7 @@ export interface CreateTriggerInput {
 	triggerType?: "webhook" | "polling";
 	provider: string;
 	executionMode?: "auto" | "queue";
-	defaultPrebuildId?: string;
+	defaultConfigurationId?: string;
 	allowAgenticRepoSelection?: boolean;
 	agentInstructions?: string;
 	pollingCron?: string;
@@ -134,11 +134,14 @@ export async function getTrigger(id: string, orgId: string): Promise<GetTriggerR
 export async function createTrigger(input: CreateTriggerInput): Promise<CreateTriggerResult> {
 	const triggerType = input.triggerType ?? "webhook";
 
-	// Validate prebuild if provided
-	if (input.defaultPrebuildId) {
-		const exists = await triggersDb.prebuildExists(input.defaultPrebuildId, input.organizationId);
+	// Validate configuration if provided
+	if (input.defaultConfigurationId) {
+		const exists = await triggersDb.configurationExists(
+			input.defaultConfigurationId,
+			input.organizationId,
+		);
 		if (!exists) {
-			throw new Error("Prebuild not found");
+			throw new Error("Configuration not found");
 		}
 	}
 
@@ -161,7 +164,7 @@ export async function createTrigger(input: CreateTriggerInput): Promise<CreateTr
 		name: input.name || "Untitled Automation",
 		description: input.description ?? null,
 		agentInstructions: input.agentInstructions ?? null,
-		defaultPrebuildId: input.defaultPrebuildId ?? null,
+		defaultConfigurationId: input.defaultConfigurationId ?? null,
 		allowAgenticRepoSelection: input.allowAgenticRepoSelection ?? false,
 		createdBy: input.userId,
 	});

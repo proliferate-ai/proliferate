@@ -20,20 +20,11 @@ export interface FileContent {
 }
 
 /**
- * A single service command to auto-run after sandbox init.
+ * A service command that supports multi-repo workspaces.
+ * Includes an optional workspacePath to target a specific repo directory
+ * in multi-repo configurations.
  */
 export interface ServiceCommand {
-	name: string;
-	command: string;
-	cwd?: string;
-}
-
-/**
- * A prebuild-level service command that supports multi-repo workspaces.
- * Unlike ServiceCommand (per-repo), this includes an optional workspacePath
- * to target a specific repo directory in multi-repo prebuilds.
- */
-export interface PrebuildServiceCommand {
 	name: string;
 	command: string;
 	workspacePath?: string;
@@ -60,13 +51,12 @@ export interface RepoSpec {
 	token?: string; // GitHub access token for this repo (may differ per installation)
 	workspacePath: string; // Directory name in /workspace/ (e.g., "api", "frontend")
 	repoId?: string; // Database repo ID for reference
-	serviceCommands?: ServiceCommand[];
 }
 
 export interface CreateSandboxOpts {
 	sessionId: string;
 	/** Session mode, used for mode-specific tool injection and behavior. */
-	sessionType?: "coding" | "setup" | "cli" | null;
+	sessionType?: "coding" | "setup" | null;
 	/** Git identity for commits made inside the sandbox. */
 	userName?: string;
 	userEmail?: string;
@@ -87,12 +77,10 @@ export interface CreateSandboxOpts {
 	sshPublicKey?: string;
 	/** Trigger context to write to .proliferate/trigger-context.json */
 	triggerContext?: Record<string, unknown>;
-	/** True if the snapshot includes installed dependencies (prebuild/session snapshots). Gates service command auto-start. */
-	snapshotHasDeps?: boolean;
-	/** Resolved service commands (prebuild-level or fallback from repos). Cross-repo aware. */
-	serviceCommands?: PrebuildServiceCommand[];
-	/** Env file generation spec from prebuild config. Applied on boot before service autostart. */
-	envFiles?: unknown;
+	/** Whether to auto-start service commands after sandbox init. */
+	autoStartServices?: boolean;
+	/** Resolved service commands (configuration-level or fallback from repos). Cross-repo aware. */
+	serviceCommands?: ServiceCommand[];
 }
 
 export interface CreateSandboxResult {
@@ -264,7 +252,7 @@ export interface SandboxProvider {
 	 */
 	testServiceCommands?(
 		sandboxId: string,
-		commands: PrebuildServiceCommand[],
+		commands: ServiceCommand[],
 		opts: { timeoutMs: number; runId: string },
 	): Promise<AutoStartOutputEntry[]>;
 

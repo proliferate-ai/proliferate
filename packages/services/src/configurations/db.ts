@@ -1,0 +1,626 @@
+/**
+ * Configurations DB operations.
+ *
+ * Raw Drizzle queries - no business logic.
+ */
+
+import {
+	type InferSelectModel,
+	and,
+	configurationRepos,
+	configurations,
+	desc,
+	eq,
+	getDb,
+	inArray,
+	repos,
+	type sessions,
+} from "../db/client";
+import { getServicesLogger } from "../logger";
+import type {
+	CreateConfigurationFullInput,
+	CreateConfigurationInput,
+	CreateConfigurationRepoInput,
+	CreateManagedConfigurationInput,
+	UpdateConfigurationInput,
+} from "../types/configurations";
+
+// ============================================
+// Types
+// ============================================
+
+/** Configuration row type from Drizzle schema */
+export type ConfigurationRow = InferSelectModel<typeof configurations>;
+
+/** Configuration repo row type from Drizzle schema */
+export type ConfigurationRepoRow = InferSelectModel<typeof configurationRepos>;
+
+/** Repo row type from Drizzle schema */
+export type RepoRow = InferSelectModel<typeof repos>;
+
+/** Session row type (for relations) */
+export type SessionRow = InferSelectModel<typeof sessions>;
+
+/** Configuration with repos and sessions relations */
+export interface ConfigurationWithRelationsRow extends ConfigurationRow {
+	configurationRepos: Array<{
+		workspacePath: string;
+		repo: {
+			id: string;
+			githubRepoName: string;
+			githubUrl: string;
+			organizationId: string;
+		} | null;
+	}>;
+	sessions: Array<{
+		id: string;
+		sessionType: string | null;
+		status: string | null;
+	}>;
+}
+
+/** Configuration with minimal repo data for auth check */
+export interface ConfigurationWithOrgRow {
+	id: string;
+	configurationRepos: Array<{
+		repo: {
+			organizationId: string;
+		} | null;
+	}>;
+}
+
+/** Repo basic info */
+export interface RepoBasicRow {
+	id: string;
+	organizationId: string;
+	githubRepoName: string;
+}
+
+/** Configuration data for session creation */
+export interface ConfigurationForSessionRow {
+	id: string;
+	sandboxProvider: string | null;
+}
+
+/** Configuration repo with full repo details for session creation */
+export interface ConfigurationRepoDetailRow {
+	workspacePath: string;
+	repo: {
+		id: string;
+		githubUrl: string;
+		githubRepoName: string;
+		defaultBranch: string | null;
+		organizationId: string;
+	} | null;
+}
+
+/** Configuration repos with nested configuration data for snapshots */
+export interface ConfigurationRepoWithConfigurationRow {
+	configurationId: string;
+	workspacePath: string;
+	configuration: {
+		id: string;
+		name: string;
+		description: string | null;
+		createdAt: Date | null;
+		sessions: Array<{ id: string; sessionType: string | null }>;
+	} | null;
+}
+
+/** Repo info for snapshots */
+export interface SnapshotRepoRow {
+	id: string;
+	githubRepoName: string;
+}
+
+/** Managed configuration with repos for lookup */
+export interface ManagedConfigurationRow {
+	id: string;
+	configurationRepos: Array<{
+		repo: {
+			id: string;
+			organizationId: string;
+			githubRepoName: string;
+		} | null;
+	}>;
+}
+
+/** Repo with github_repo_name for managed configuration creation */
+export interface RepoWithNameRow {
+	id: string;
+	githubRepoName: string;
+}
+
+/** Configuration row for repo listing (simpler than full ConfigurationRow) */
+export interface ConfigurationSummaryRow {
+	id: string;
+	name: string;
+	description: string | null;
+	createdAt: Date | null;
+}
+
+// ============================================
+// Queries
+// ============================================
+
+/**
+ * List configurations with repos and setup sessions.
+ */
+export async function listAll(): Promise<ConfigurationWithRelationsRow[]> {
+	const db = getDb();
+
+	const results = await db.query.configurations.findMany({
+		orderBy: [desc(configurations.createdAt)],
+		with: {
+			configurationRepos: {
+				with: {
+					repo: {
+						columns: {
+							id: true,
+							githubRepoName: true,
+							githubUrl: true,
+							organizationId: true,
+						},
+					},
+				},
+			},
+			sessions: {
+				columns: {
+					id: true,
+					sessionType: true,
+					status: true,
+				},
+			},
+		},
+	});
+
+	return results as ConfigurationWithRelationsRow[];
+}
+
+/**
+ * Get a configuration by ID with minimal repos (for auth check).
+ */
+export async function findById(id: string): Promise<ConfigurationWithOrgRow | null> {
+	const db = getDb();
+	const result = await db.query.configurations.findFirst({
+		where: eq(configurations.id, id),
+		columns: {
+			id: true,
+		},
+		with: {
+			configurationRepos: {
+				with: {
+					repo: {
+						columns: {
+							organizationId: true,
+						},
+					},
+				},
+			},
+		},
+	});
+
+	return result ?? null;
+}
+
+/**
+ * Get a configuration by ID with full relations.
+ */
+export async function findByIdFull(id: string): Promise<ConfigurationWithRelationsRow | null> {
+	const db = getDb();
+	const result = await db.query.configurations.findFirst({
+		where: eq(configurations.id, id),
+		with: {
+			configurationRepos: {
+				with: {
+					repo: {
+						columns: {
+							id: true,
+							githubRepoName: true,
+							githubUrl: true,
+							organizationId: true,
+						},
+					},
+				},
+			},
+			sessions: {
+				columns: {
+					id: true,
+					sessionType: true,
+					status: true,
+				},
+			},
+		},
+	});
+
+	return (result as ConfigurationWithRelationsRow) ?? null;
+}
+
+/**
+ * Get multiple repos by IDs.
+ */
+export async function getReposByIds(repoIds: string[]): Promise<RepoBasicRow[]> {
+	const db = getDb();
+	const results = await db.query.repos.findMany({
+		where: inArray(repos.id, repoIds),
+		columns: {
+			id: true,
+			organizationId: true,
+			githubRepoName: true,
+		},
+	});
+
+	return results;
+}
+
+/**
+ * Create a new configuration record.
+ */
+export async function create(input: CreateConfigurationInput): Promise<void> {
+	const db = getDb();
+	await db.insert(configurations).values({
+		id: input.id,
+		organizationId: input.organizationId,
+		name: input.name || "Untitled",
+		sandboxProvider: input.sandboxProvider,
+	});
+}
+
+/**
+ * Create configuration_repos junction entries.
+ */
+export async function createConfigurationRepos(
+	entries: CreateConfigurationRepoInput[],
+): Promise<void> {
+	const db = getDb();
+	const rows = entries.map((e) => ({
+		configurationId: e.configurationId,
+		repoId: e.repoId,
+		workspacePath: e.workspacePath,
+	}));
+
+	await db.insert(configurationRepos).values(rows);
+}
+
+/**
+ * Update a configuration.
+ */
+export async function update(
+	id: string,
+	input: UpdateConfigurationInput,
+): Promise<ConfigurationRow> {
+	const db = getDb();
+	const updates: Partial<typeof configurations.$inferInsert> = {};
+
+	if (input.name !== undefined) updates.name = input.name || "Untitled";
+	if (input.description !== undefined) updates.description = input.description;
+
+	const [result] = await db
+		.update(configurations)
+		.set(updates)
+		.where(eq(configurations.id, id))
+		.returning();
+
+	return result;
+}
+
+/**
+ * Delete a configuration by ID.
+ */
+export async function deleteById(id: string): Promise<void> {
+	const db = getDb();
+	await db.delete(configurations).where(eq(configurations.id, id));
+}
+
+/**
+ * Get configuration by ID for session creation.
+ */
+export async function findByIdForSession(id: string): Promise<ConfigurationForSessionRow | null> {
+	const db = getDb();
+	const result = await db.query.configurations.findFirst({
+		where: eq(configurations.id, id),
+		columns: {
+			id: true,
+			sandboxProvider: true,
+		},
+	});
+
+	return result ?? null;
+}
+
+/**
+ * Get configuration repos with full repo details for session creation.
+ */
+export async function getConfigurationReposWithDetails(
+	configurationId: string,
+): Promise<ConfigurationRepoDetailRow[]> {
+	const db = getDb();
+	const results = await db.query.configurationRepos.findMany({
+		where: eq(configurationRepos.configurationId, configurationId),
+		with: {
+			repo: {
+				columns: {
+					id: true,
+					githubUrl: true,
+					githubRepoName: true,
+					defaultBranch: true,
+					organizationId: true,
+				},
+			},
+		},
+	});
+
+	return results.map((r) => ({
+		workspacePath: r.workspacePath,
+		repo: r.repo,
+	}));
+}
+
+/**
+ * Get configuration-level service commands.
+ */
+export async function getConfigurationServiceCommands(
+	configurationId: string,
+): Promise<{ serviceCommands: unknown } | null> {
+	const db = getDb();
+	const result = await db.query.configurations.findFirst({
+		where: eq(configurations.id, configurationId),
+		columns: { serviceCommands: true },
+	});
+	return result ?? null;
+}
+
+/**
+ * Update configuration-level service commands.
+ */
+export async function updateConfigurationServiceCommands(input: {
+	configurationId: string;
+	serviceCommands: unknown;
+}): Promise<void> {
+	const db = getDb();
+	await db
+		.update(configurations)
+		.set({
+			serviceCommands: input.serviceCommands,
+			updatedAt: new Date(),
+		})
+		.where(eq(configurations.id, input.configurationId));
+}
+
+/**
+ * Create a new configuration with full details (for finalize).
+ */
+export async function createFull(input: CreateConfigurationFullInput): Promise<void> {
+	const db = getDb();
+	await db.insert(configurations).values({
+		id: input.id,
+		organizationId: input.organizationId,
+		name: input.name || "Untitled",
+		description: input.description || null,
+	});
+}
+
+/**
+ * Check if a configuration contains a specific repo.
+ */
+export async function configurationContainsRepo(
+	configurationId: string,
+	repoId: string,
+): Promise<boolean> {
+	const db = getDb();
+	const result = await db.query.configurationRepos.findFirst({
+		where: and(
+			eq(configurationRepos.configurationId, configurationId),
+			eq(configurationRepos.repoId, repoId),
+		),
+		columns: {
+			repoId: true,
+		},
+	});
+
+	return !!result;
+}
+
+/**
+ * Create a single configuration_repos junction entry.
+ */
+export async function createSingleConfigurationRepo(
+	configurationId: string,
+	repoId: string,
+	workspacePath: string,
+): Promise<void> {
+	const db = getDb();
+	try {
+		await db.insert(configurationRepos).values({
+			configurationId,
+			repoId,
+			workspacePath,
+		});
+	} catch (error) {
+		getServicesLogger()
+			.child({ module: "configurations-db" })
+			.error({ err: error, configurationId, repoId }, "Failed to create configuration_repos entry");
+	}
+}
+
+// ============================================
+// Repo-specific configuration queries
+// ============================================
+
+/**
+ * List configurations for a specific repo.
+ */
+export async function listByRepoId(repoId: string): Promise<ConfigurationSummaryRow[]> {
+	const db = getDb();
+
+	// Get configurations through the junction table
+	const results = await db.query.configurationRepos.findMany({
+		where: eq(configurationRepos.repoId, repoId),
+		with: {
+			configuration: {
+				columns: {
+					id: true,
+					name: true,
+					description: true,
+					createdAt: true,
+				},
+			},
+		},
+	});
+
+	return results
+		.map((r) => r.configuration)
+		.filter((p): p is NonNullable<typeof p> => p !== null)
+		.sort((a, b) => {
+			const aTime = a.createdAt?.getTime() ?? 0;
+			const bTime = b.createdAt?.getTime() ?? 0;
+			return bTime - aTime;
+		});
+}
+
+// ============================================
+// Snapshot queries (usable configurations with repos)
+// ============================================
+
+/**
+ * Get configuration_repos with configuration data for a specific repo.
+ */
+export async function getConfigurationReposWithConfigurations(
+	repoId: string,
+): Promise<ConfigurationRepoWithConfigurationRow[]> {
+	const db = getDb();
+	const results = await db.query.configurationRepos.findMany({
+		where: eq(configurationRepos.repoId, repoId),
+		with: {
+			configuration: {
+				columns: {
+					id: true,
+					name: true,
+					description: true,
+					createdAt: true,
+				},
+				with: {
+					sessions: {
+						columns: {
+							id: true,
+							sessionType: true,
+						},
+					},
+				},
+			},
+		},
+	});
+
+	return results.map((r) => ({
+		configurationId: r.configurationId,
+		workspacePath: r.workspacePath,
+		configuration: r.configuration
+			? {
+					...r.configuration,
+					sessions: r.configuration.sessions ?? [],
+				}
+			: null,
+	}));
+}
+
+/**
+ * Get repos linked to a configuration.
+ */
+export async function getReposForConfiguration(
+	configurationId: string,
+): Promise<SnapshotRepoRow[]> {
+	const db = getDb();
+	const results = await db.query.configurationRepos.findMany({
+		where: eq(configurationRepos.configurationId, configurationId),
+		with: {
+			repo: {
+				columns: {
+					id: true,
+					githubRepoName: true,
+				},
+			},
+		},
+	});
+
+	return results.map((r) => r.repo).filter((r): r is NonNullable<typeof r> => r !== null);
+}
+
+// ============================================
+// Managed Configuration queries
+// ============================================
+
+/**
+ * Find managed configurations with their repos.
+ */
+export async function findManagedConfigurations(): Promise<ManagedConfigurationRow[]> {
+	const db = getDb();
+	const results = await db.query.configurations.findMany({
+		where: eq(configurations.name, "Managed Configuration"),
+		orderBy: [desc(configurations.createdAt)],
+		columns: {
+			id: true,
+		},
+		with: {
+			configurationRepos: {
+				with: {
+					repo: {
+						columns: {
+							id: true,
+							organizationId: true,
+							githubRepoName: true,
+						},
+					},
+				},
+			},
+		},
+	});
+
+	return results;
+}
+
+/**
+ * Create a managed configuration record.
+ */
+export async function createManagedConfiguration(
+	input: CreateManagedConfigurationInput,
+): Promise<void> {
+	const db = getDb();
+	await db.insert(configurations).values({
+		id: input.id,
+		organizationId: input.organizationId,
+		name: "Managed Configuration",
+	});
+}
+
+/**
+ * Delete a configuration by ID (for cleanup on failure).
+ */
+export async function deleteConfiguration(id: string): Promise<void> {
+	const db = getDb();
+	await db.delete(configurations).where(eq(configurations.id, id));
+}
+
+/**
+ * Get repos for an organization by IDs (or all if no IDs provided).
+ */
+export async function getReposForManagedConfiguration(
+	orgId: string,
+	repoIds?: string[],
+): Promise<RepoWithNameRow[]> {
+	const db = getDb();
+
+	const conditions = [eq(repos.organizationId, orgId)];
+	if (repoIds && repoIds.length > 0) {
+		conditions.push(inArray(repos.id, repoIds));
+	}
+
+	const results = await db.query.repos.findMany({
+		where: and(...conditions),
+		columns: {
+			id: true,
+			githubRepoName: true,
+		},
+	});
+
+	return results;
+}

@@ -28,7 +28,7 @@ export const SessionSchema = z.object({
 	status: z.string().nullable(), // DB returns string, not enum
 	sandboxId: z.string().nullable(),
 	snapshotId: z.string().nullable(),
-	prebuildId: z.string().uuid().nullable(),
+	configurationId: z.string().uuid().nullable(),
 	branchName: z.string().nullable(),
 	parentSessionId: z.string().nullable(),
 	title: z.string().nullable(),
@@ -44,18 +44,18 @@ export type Session = z.infer<typeof SessionSchema>;
 
 export const CreateSessionInputSchema = z
 	.object({
-		prebuildId: z.string().uuid().optional(),
+		configurationId: z.string().uuid().optional(),
 		sessionType: z.enum(["setup", "coding"]).optional(),
 		modelId: z.string().optional(),
 		/** Integration IDs to associate with the session for OAuth token injection. */
 		integrationIds: z.array(z.string().uuid()).optional(),
 	})
 	.superRefine((data, ctx) => {
-		if (data.sessionType === "setup" && !data.prebuildId) {
+		if (data.sessionType === "setup" && !data.configurationId) {
 			ctx.addIssue({
 				code: z.ZodIssueCode.custom,
-				message: "Setup sessions require a prebuildId",
-				path: ["prebuildId"],
+				message: "Setup sessions require a configurationId",
+				path: ["configurationId"],
 			});
 		}
 	});
@@ -136,7 +136,7 @@ export const sessionsContract = c.router(
 				402: PaymentRequiredErrorSchema,
 				500: ErrorResponseSchema,
 			},
-			summary: "Create a new session from a prebuild",
+			summary: "Create a new session from a configuration",
 		},
 
 		delete: {

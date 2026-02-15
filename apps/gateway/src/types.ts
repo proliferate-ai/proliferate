@@ -27,7 +27,7 @@ export type SessionStatus = (typeof SessionStatus)[keyof typeof SessionStatus];
 export interface AuthResult {
 	userId?: string;
 	orgId?: string;
-	source: "jwt" | "cli" | "service" | "sandbox";
+	source: "jwt" | "service" | "sandbox";
 	/** Session ID derived from sandbox HMAC token verification. */
 	sessionId?: string;
 }

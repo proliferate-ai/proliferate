@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 
-const { mockRepoExists, mockFindManagedPrebuilds } = vi.hoisted(() => ({
+const { mockRepoExists, mockFindManagedConfigurations } = vi.hoisted(() => ({
 	mockRepoExists: vi.fn(),
-	mockFindManagedPrebuilds: vi.fn(),
+	mockFindManagedConfigurations: vi.fn(),
 }));
 
 vi.mock("@proliferate/services", () => ({
 	repos: {
 		repoExists: mockRepoExists,
 	},
-	prebuilds: {
-		findManagedPrebuilds: mockFindManagedPrebuilds,
+	configurations: {
+		findManagedConfigurations: mockFindManagedConfigurations,
 	},
 }));
 
@@ -19,14 +19,14 @@ import { resolveTarget } from "./resolve-target";
 
 beforeEach(() => {
 	vi.clearAllMocks();
-	mockFindManagedPrebuilds.mockResolvedValue([]);
+	mockFindManagedConfigurations.mockResolvedValue([]);
 });
 
 function makeAutomation(overrides: Record<string, unknown> = {}) {
 	return {
 		id: "auto-1",
 		name: "Bug Fixer",
-		defaultPrebuildId: "pb-default",
+		defaultConfigurationId: "cfg-default",
 		agentInstructions: null,
 		modelId: null,
 		notificationChannelId: null,
@@ -68,11 +68,11 @@ describe("resolveTarget", () => {
 
 		expect(result).toEqual({
 			type: "default",
-			prebuildId: "pb-default",
+			configurationId: "cfg-default",
 			reason: "selection_disabled",
 		});
 		expect(mockRepoExists).not.toHaveBeenCalled();
-		expect(mockFindManagedPrebuilds).not.toHaveBeenCalled();
+		expect(mockFindManagedConfigurations).not.toHaveBeenCalled();
 	});
 
 	it("returns default when allowAgenticRepoSelection is null", async () => {
@@ -84,7 +84,7 @@ describe("resolveTarget", () => {
 
 		expect(result).toEqual({
 			type: "default",
-			prebuildId: "pb-default",
+			configurationId: "cfg-default",
 			reason: "selection_disabled",
 		});
 	});
@@ -98,7 +98,7 @@ describe("resolveTarget", () => {
 
 		expect(result).toEqual({
 			type: "default",
-			prebuildId: "pb-default",
+			configurationId: "cfg-default",
 			reason: "no_suggestion",
 		});
 	});
@@ -112,18 +112,17 @@ describe("resolveTarget", () => {
 
 		expect(result).toEqual({
 			type: "default",
-			prebuildId: "pb-default",
+			configurationId: "cfg-default",
 			reason: "no_suggestion",
 		});
 	});
 
-	it("reuses existing managed prebuild when one covers the repo", async () => {
+	it("reuses existing managed configuration when one covers the repo", async () => {
 		mockRepoExists.mockResolvedValueOnce(true);
-		mockFindManagedPrebuilds.mockResolvedValueOnce([
+		mockFindManagedConfigurations.mockResolvedValueOnce([
 			{
-				id: "pb-managed-1",
-				snapshotId: "snap-1",
-				prebuildRepos: [
+				id: "cfg-managed-1",
+				configurationRepos: [
 					{ repo: { id: "repo-1", organizationId: "org-1", githubRepoName: "org/repo" } },
 				],
 			},
@@ -137,16 +136,16 @@ describe("resolveTarget", () => {
 
 		expect(result).toEqual({
 			type: "selected",
-			prebuildId: "pb-managed-1",
+			configurationId: "cfg-managed-1",
 			reason: "enrichment_suggestion_reused",
 			suggestedRepoId: "repo-1",
 		});
 		expect(mockRepoExists).toHaveBeenCalledWith("repo-1", "org-1");
 	});
 
-	it("creates new managed prebuild when no existing one covers the repo", async () => {
+	it("creates new managed configuration when no existing one covers the repo", async () => {
 		mockRepoExists.mockResolvedValueOnce(true);
-		mockFindManagedPrebuilds.mockResolvedValueOnce([]);
+		mockFindManagedConfigurations.mockResolvedValueOnce([]);
 
 		const result = await resolveTarget({
 			automation: makeAutomation({ allowAgenticRepoSelection: true }),
@@ -162,13 +161,12 @@ describe("resolveTarget", () => {
 		});
 	});
 
-	it("ignores managed prebuilds from a different org", async () => {
+	it("ignores managed configurations from a different org", async () => {
 		mockRepoExists.mockResolvedValueOnce(true);
-		mockFindManagedPrebuilds.mockResolvedValueOnce([
+		mockFindManagedConfigurations.mockResolvedValueOnce([
 			{
-				id: "pb-other-org",
-				snapshotId: "snap-1",
-				prebuildRepos: [
+				id: "cfg-other-org",
+				configurationRepos: [
 					{ repo: { id: "repo-1", organizationId: "org-other", githubRepoName: "org/repo" } },
 				],
 			},
@@ -199,11 +197,11 @@ describe("resolveTarget", () => {
 
 		expect(result).toEqual({
 			type: "fallback",
-			prebuildId: "pb-default",
+			configurationId: "cfg-default",
 			reason: "repo_not_found_or_wrong_org",
 			suggestedRepoId: "repo-bad",
 		});
-		expect(mockFindManagedPrebuilds).not.toHaveBeenCalled();
+		expect(mockFindManagedConfigurations).not.toHaveBeenCalled();
 	});
 
 	it("returns default when enrichment has wrong version", async () => {
@@ -215,12 +213,12 @@ describe("resolveTarget", () => {
 
 		expect(result).toEqual({
 			type: "default",
-			prebuildId: "pb-default",
+			configurationId: "cfg-default",
 			reason: "no_suggestion",
 		});
 	});
 
-	it("returns default with undefined prebuildId when automation is null", async () => {
+	it("returns default with undefined configurationId when automation is null", async () => {
 		const result = await resolveTarget({
 			automation: null,
 			enrichmentJson: makeEnrichment({ suggestedRepoId: "repo-1" }),
@@ -229,16 +227,16 @@ describe("resolveTarget", () => {
 
 		expect(result).toEqual({
 			type: "default",
-			prebuildId: undefined,
+			configurationId: undefined,
 			reason: "selection_disabled",
 		});
 	});
 
-	it("returns default with undefined prebuildId when defaultPrebuildId is null", async () => {
+	it("returns default with undefined configurationId when defaultConfigurationId is null", async () => {
 		const result = await resolveTarget({
 			automation: makeAutomation({
 				allowAgenticRepoSelection: false,
-				defaultPrebuildId: null,
+				defaultConfigurationId: null,
 			}),
 			enrichmentJson: null,
 			organizationId: "org-1",
@@ -246,7 +244,7 @@ describe("resolveTarget", () => {
 
 		expect(result).toEqual({
 			type: "default",
-			prebuildId: undefined,
+			configurationId: undefined,
 			reason: "selection_disabled",
 		});
 	});
@@ -260,7 +258,7 @@ describe("resolveTarget", () => {
 
 		expect(result).toEqual({
 			type: "default",
-			prebuildId: "pb-default",
+			configurationId: "cfg-default",
 			reason: "no_suggestion",
 		});
 	});

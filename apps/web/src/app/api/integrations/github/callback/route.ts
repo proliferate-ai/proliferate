@@ -28,7 +28,6 @@ function sanitizeReturnUrl(returnUrl: string | undefined): string {
 	const path = trimmed.split("?")[0] || "";
 	const allowedPrefixes = [
 		"/onboarding",
-		"/device-github",
 		"/dashboard",
 		"/settings",
 		"/preview",

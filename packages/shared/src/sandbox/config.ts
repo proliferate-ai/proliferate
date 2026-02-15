@@ -7,7 +7,7 @@
 
 import { env } from "@proliferate/environment/server";
 import { z } from "zod";
-import type { PrebuildServiceCommand, ServiceCommand } from "../sandbox-provider";
+import type { ServiceCommand } from "../sandbox-provider";
 
 /**
  * Proliferate plugin for OpenCode.
@@ -233,11 +233,12 @@ export function capOutput(output: string, maxBytes = MAX_OUTPUT_BYTES): string {
 	return `${output.slice(0, maxBytes)}\n...[truncated]`;
 }
 
-/** Zod schema for validating a single service command from untrusted jsonb. */
+/** Zod schema for service commands (includes optional workspacePath). */
 const ServiceCommandSchema = z.object({
 	name: z.string().min(1).max(100),
 	command: z.string().min(1).max(1000),
 	cwd: z.string().max(500).optional(),
+	workspacePath: z.string().max(500).optional(),
 });
 
 /**
@@ -248,52 +249,4 @@ export function parseServiceCommands(input: unknown): ServiceCommand[] {
 	if (!Array.isArray(input)) return [];
 	const result = z.array(ServiceCommandSchema).max(10).safeParse(input);
 	return result.success ? result.data : [];
-}
-
-/** Zod schema for prebuild-level service commands (includes optional workspacePath). */
-const PrebuildServiceCommandSchema = z.object({
-	name: z.string().min(1).max(100),
-	command: z.string().min(1).max(1000),
-	cwd: z.string().max(500).optional(),
-	workspacePath: z.string().max(500).optional(),
-});
-
-/**
- * Parse and validate prebuild-level service commands from untrusted jsonb.
- * Returns [] on invalid input — never throws.
- */
-export function parsePrebuildServiceCommands(input: unknown): PrebuildServiceCommand[] {
-	if (!Array.isArray(input)) return [];
-	const result = z.array(PrebuildServiceCommandSchema).max(10).safeParse(input);
-	return result.success ? result.data : [];
-}
-
-/**
- * Resolve service commands for a session.
- *
- * Resolution order:
- * 1. Prebuild-level commands (explicit per-configuration) — if non-empty, use those.
- * 2. Fallback: per-repo commands merged with workspace context.
- */
-export function resolveServiceCommands(
-	prebuildCommands: unknown,
-	repoSpecs: Array<{ workspacePath: string; serviceCommands?: ServiceCommand[] }>,
-): PrebuildServiceCommand[] {
-	const prebuildCmds = parsePrebuildServiceCommands(prebuildCommands);
-	if (prebuildCmds.length > 0) return prebuildCmds;
-
-	// Fallback: merge per-repo commands with workspace context
-	const merged: PrebuildServiceCommand[] = [];
-	for (const repo of repoSpecs) {
-		if (!repo.serviceCommands?.length) continue;
-		for (const cmd of repo.serviceCommands) {
-			merged.push({
-				name: cmd.name,
-				command: cmd.command,
-				cwd: cmd.cwd,
-				workspacePath: repo.workspacePath,
-			});
-		}
-	}
-	return merged;
 }

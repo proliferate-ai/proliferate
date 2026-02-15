@@ -1,0 +1,35 @@
+Sandbox Providers — ensureSandbox() Branching Logic
+
+- **If** existing sandbox found by sessionId → resolve tunnel URLs, **return** {recovered: true}. Done.
+- **Else** → call createSandbox(opts):
+  - Image resolution:
+    - **If** opts.snapshotId set → load that image (full restore — repos + deps inside)
+    - **Else if** MODAL_BASE_SNAPSHOT_ID set → load that image (tools pre-installed, no repos)
+    - **Else** → call get_image_id Python endpoint (bare base image, slowest)
+  - setupSandbox():
+    - **If** restoring from snapshot → read metadata.json for repoDir, no cloning
+    - **Else** (fresh) → write git credentials, clone each repo:
+      - **If** branch clone fails → retry with default branch
+      - **If** that fails too → throw
+      - Save metadata.json
+  - setupEssentialDependencies() — always runs:
+    - Write plugin, tools, config, instructions in parallel
+    - **If** sessionType === "setup" → also write setup-only tools
+    - **Else** → delete setup-only tools (in case snapshot had them)
+    - **If** sshPublicKey set → write SSH keys, start sshd
+    - **If** triggerContext set → write trigger context file
+    - Start OpenCode server
+  - setupAdditionalDependencies() — fire-and-forget:
+    - **If** userName/userEmail set → git config --global
+    - **If** shouldPullOnRestore() returns true → re-write fresh git credentials, git pull --ff-only each repo
+      - **If** all pulls succeed → update lastGitFetchAt
+      - **Else** → leave timer unchanged (retry next time)
+    - Start infrastructure services (Postgres, Redis, Mailcatcher)
+    - Write Caddyfile, start Caddy
+    - Start sandbox-mcp
+    - **If** opts.envFiles set → proliferate env apply
+    - **If** opts.serviceCommands set **and** snapshotHasDeps → proliferate services start
+  - waitForOpenCodeReady() — blocking:
+    - Poll /session endpoint, exponential backoff, 30s timeout
+    - **If** timeout → log warning, continue anyway (non-fatal)
+  - Return {sandboxId, tunnelUrl, previewUrl, recovered: false}

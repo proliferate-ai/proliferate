@@ -7,10 +7,10 @@
 import {
 	type InferSelectModel,
 	and,
+	configurations,
 	desc,
 	eq,
 	getDb,
-	prebuilds,
 	snapshotRepos,
 	snapshots,
 } from "../db/client";
@@ -38,7 +38,7 @@ export interface SnapshotWithReposRow extends SnapshotRow {
  */
 export async function create(input: {
 	id: string;
-	prebuildId: string;
+	configurationId: string;
 	sandboxProvider: string;
 }): Promise<SnapshotRow> {
 	const db = getDb();
@@ -46,10 +46,9 @@ export async function create(input: {
 		.insert(snapshots)
 		.values({
 			id: input.id,
-			prebuildId: input.prebuildId,
+			configurationId: input.configurationId,
 			sandboxProvider: input.sandboxProvider,
 			status: "building",
-			hasDeps: false,
 		})
 		.returning();
 	return row;
@@ -86,24 +85,23 @@ export async function findByIdWithRepos(id: string): Promise<SnapshotWithReposRo
 }
 
 /**
- * List snapshots for a prebuild, newest first.
+ * List snapshots for a configuration, newest first.
  */
-export async function listByPrebuild(prebuildId: string): Promise<SnapshotRow[]> {
+export async function listByConfiguration(configurationId: string): Promise<SnapshotRow[]> {
 	const db = getDb();
 	return db.query.snapshots.findMany({
-		where: eq(snapshots.prebuildId, prebuildId),
+		where: eq(snapshots.configurationId, configurationId),
 		orderBy: [desc(snapshots.createdAt)],
 	});
 }
 
 /**
- * Mark a snapshot as ready and set active_snapshot_id on the parent prebuild.
+ * Mark a snapshot as ready and set active_snapshot_id on the parent configuration.
  * Also inserts snapshot_repos entries for commit tracking.
  */
 export async function markReady(input: {
 	snapshotId: string;
 	providerSnapshotId: string;
-	hasDeps: boolean;
 	repoCommits?: Array<{ repoId: string; commitSha: string }>;
 }): Promise<void> {
 	const db = getDb();
@@ -114,11 +112,10 @@ export async function markReady(input: {
 		.set({
 			status: "ready",
 			providerSnapshotId: input.providerSnapshotId,
-			hasDeps: input.hasDeps,
 			updatedAt: new Date(),
 		})
 		.where(eq(snapshots.id, input.snapshotId))
-		.returning({ prebuildId: snapshots.prebuildId });
+		.returning({ configurationId: snapshots.configurationId });
 
 	if (!snapshot) return;
 
@@ -133,13 +130,13 @@ export async function markReady(input: {
 		);
 	}
 
-	// Set active_snapshot_id on prebuild
+	// Set active_snapshot_id on configuration
 	await db
-		.update(prebuilds)
+		.update(configurations)
 		.set({
 			activeSnapshotId: input.snapshotId,
 		})
-		.where(eq(prebuilds.id, snapshot.prebuildId));
+		.where(eq(configurations.id, snapshot.configurationId));
 }
 
 /**
@@ -158,20 +155,20 @@ export async function markFailed(snapshotId: string, error: string): Promise<voi
 }
 
 /**
- * Get the active snapshot for a prebuild (via active_snapshot_id).
+ * Get the active snapshot for a configuration (via active_snapshot_id).
  * Returns null if no active snapshot set.
  */
-export async function getActiveSnapshot(prebuildId: string): Promise<SnapshotRow | null> {
+export async function getActiveSnapshot(configurationId: string): Promise<SnapshotRow | null> {
 	const db = getDb();
-	const prebuild = await db.query.prebuilds.findFirst({
-		where: eq(prebuilds.id, prebuildId),
+	const configuration = await db.query.configurations.findFirst({
+		where: eq(configurations.id, configurationId),
 		columns: { activeSnapshotId: true },
 	});
 
-	if (!prebuild?.activeSnapshotId) return null;
+	if (!configuration?.activeSnapshotId) return null;
 
 	const row = await db.query.snapshots.findFirst({
-		where: and(eq(snapshots.id, prebuild.activeSnapshotId), eq(snapshots.status, "ready")),
+		where: and(eq(snapshots.id, configuration.activeSnapshotId), eq(snapshots.status, "ready")),
 	});
 
 	return row ?? null;

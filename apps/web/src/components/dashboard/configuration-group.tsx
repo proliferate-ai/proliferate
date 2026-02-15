@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
-import { useDeletePrebuild, useUpdatePrebuild } from "@/hooks/use-prebuilds";
+import { useDeleteConfiguration, useUpdateConfiguration } from "@/hooks/use-configurations";
 import { useCreateSession } from "@/hooks/use-sessions";
 import { cn, getRepoShortName } from "@/lib/utils";
 import { openEditSession, openSetupSession } from "@/stores/coding-session-store";
@@ -23,13 +23,13 @@ import { useRouter } from "next/navigation";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { SessionItem } from "./session-item";
 
-interface Prebuild {
+interface Configuration {
 	id: string;
 	name: string | null;
 	snapshotId: string | null;
 	createdAt: string;
 	type?: "manual" | "managed";
-	prebuildRepos?: Array<{
+	configurationRepos?: Array<{
 		repo: { id: string; githubRepoName: string } | null;
 	}>;
 	setupSessions?: Array<{
@@ -39,39 +39,39 @@ interface Prebuild {
 }
 
 interface ConfigurationGroupProps {
-	prebuild: Prebuild;
+	configuration: Configuration;
 	sessions: Session[];
 	activeSessionId: string | null | undefined;
 	onNavigate?: () => void;
 }
 
 export function ConfigurationGroup({
-	prebuild,
+	configuration,
 	sessions,
 	activeSessionId,
 	onNavigate,
 }: ConfigurationGroupProps) {
 	const [isOpen, setIsOpen] = useState(sessions.length > 0);
 	const [isEditing, setIsEditing] = useState(false);
-	const [editValue, setEditValue] = useState(prebuild.name || "");
+	const [editValue, setEditValue] = useState(configuration.name || "");
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const router = useRouter();
 
-	const isFinalized = prebuild.snapshotId !== null;
-	const isManaged = prebuild.type === "managed";
+	const isFinalized = configuration.snapshotId !== null;
+	const isManaged = configuration.type === "managed";
 
-	const firstRepo = prebuild.prebuildRepos?.[0]?.repo;
+	const firstRepo = configuration.configurationRepos?.[0]?.repo;
 	const repoShortName = firstRepo?.githubRepoName
 		? getRepoShortName(firstRepo.githubRepoName)
 		: "Untitled";
-	const displayName = prebuild.name || repoShortName;
+	const displayName = configuration.name || repoShortName;
 
-	const setupSessionId = prebuild.setupSessions?.find((s) => s.sessionType === "setup")?.id;
+	const setupSessionId = configuration.setupSessions?.find((s) => s.sessionType === "setup")?.id;
 
-	const updatePrebuild = useUpdatePrebuild();
-	const deletePrebuild = useDeletePrebuild();
+	const updateConfiguration = useUpdateConfiguration();
+	const deleteConfiguration = useDeleteConfiguration();
 	const createSession = useCreateSession();
 	const { selectedModel, setActiveSession, clearPendingPrompt } = useDashboardStore();
 
@@ -83,14 +83,14 @@ export function ConfigurationGroup({
 	}, [isEditing]);
 
 	const handleRename = () => {
-		setEditValue(prebuild.name || displayName);
+		setEditValue(configuration.name || displayName);
 		setIsEditing(true);
 	};
 
 	const handleSave = () => {
 		const trimmed = editValue.trim();
-		if (trimmed && trimmed !== prebuild.name) {
-			updatePrebuild.mutate(prebuild.id, { name: trimmed });
+		if (trimmed && trimmed !== configuration.name) {
+			updateConfiguration.mutate(configuration.id, { name: trimmed });
 		}
 		setIsEditing(false);
 	};
@@ -100,31 +100,31 @@ export function ConfigurationGroup({
 			handleSave();
 		} else if (e.key === "Escape") {
 			setIsEditing(false);
-			setEditValue(prebuild.name || "");
+			setEditValue(configuration.name || "");
 		}
 	};
 
 	const handleDelete = async () => {
-		await deletePrebuild.mutateAsync(prebuild.id);
+		await deleteConfiguration.mutateAsync(configuration.id);
 	};
 
 	const handleEditEnvironment = () => {
-		if (isFinalized && setupSessionId && prebuild.snapshotId) {
+		if (isFinalized && setupSessionId && configuration.snapshotId) {
 			openEditSession({
 				sessionId: setupSessionId,
-				snapshotId: prebuild.snapshotId,
+				snapshotId: configuration.snapshotId,
 				snapshotName: displayName,
-				prebuildId: prebuild.id,
+				configurationId: configuration.id,
 			});
 		} else {
-			openSetupSession(prebuild.id);
+			openSetupSession(configuration.id);
 		}
 	};
 
 	const handleCreateSession = async () => {
 		if (createSession.isPending) return;
 		const result = await createSession.mutateAsync({
-			prebuildId: prebuild.id,
+			configurationId: configuration.id,
 			sessionType: "coding",
 			modelId: selectedModel,
 		});

@@ -1,6 +1,6 @@
 /**
  * Dashboard-related types.
- * These are used across dashboard components for prebuilds, members, etc.
+ * These are used across dashboard components for configurations, members, etc.
  */
 
 /**
@@ -16,16 +16,13 @@ export interface Secret {
 }
 
 /**
- * Snapshot/Prebuild from our database.
- * Note: In the database this is the "prebuilds" table.
+ * Snapshot/Configuration from our database.
+ * Note: In the database this is the "configurations" table.
  */
 export interface Snapshot {
 	id: string;
-	repoId?: string;
-	snapshotId: string | null;
-	status: string;
 	name: string;
-	notes: string | null;
+	description: string | null;
 	createdAt: string;
 	setupSessions?: Array<{ id: string; sessionType: string }>;
 	repos?: Array<{ id: string; githubRepoName: string }>;

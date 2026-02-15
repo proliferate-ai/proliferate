@@ -21,8 +21,6 @@ export {
 	shellEscape,
 	capOutput,
 	parseServiceCommands,
-	parsePrebuildServiceCommands,
-	resolveServiceCommands,
 } from "./config";
 
 // OpenCode utilities

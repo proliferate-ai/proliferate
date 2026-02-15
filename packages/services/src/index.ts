@@ -11,12 +11,11 @@ export * as admin from "./admin";
 export * as baseSnapshots from "./base-snapshots";
 export * as automations from "./automations";
 export * as billing from "./billing";
-export * as cli from "./cli";
 export * as connectors from "./connectors";
 export * as integrations from "./integrations";
 export * as onboarding from "./onboarding";
 export * as orgs from "./orgs";
-export * as prebuilds from "./prebuilds";
+export * as configurations from "./configurations";
 export * as repos from "./repos";
 export * as runs from "./runs";
 export * as schedules from "./schedules";
@@ -32,10 +31,10 @@ export * as notifications from "./notifications";
 
 // Legacy exports (to be migrated)
 export {
-	getOrCreateManagedPrebuild,
-	type GetOrCreateManagedPrebuildOptions,
-	type ManagedPrebuild,
-} from "./managed-prebuild";
+	getOrCreateManagedConfiguration,
+	type GetOrCreateManagedConfigurationOptions,
+	type ManagedConfiguration,
+} from "./managed-configuration";
 
 // Logger
 export { setServicesLogger, getServicesLogger } from "./logger";

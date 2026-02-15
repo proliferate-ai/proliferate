@@ -166,13 +166,13 @@ export class SlackClient extends AsyncClient<
 			sessionId = existingSession.id;
 			this.logger.info({ sessionId }, "Found existing session");
 		} else {
-			// No session - create one via gateway SDK (handles managed prebuild automatically)
+			// No session - create one via gateway SDK (handles managed configuration automatically)
 			this.logger.info("No existing session, creating via gateway SDK");
 
 			try {
 				const result = await this.syncClient.createSession({
 					organizationId,
-					managedPrebuild: {}, // Auto-find/create managed prebuild
+					managedConfiguration: {}, // Auto-find/create managed configuration
 					sessionType: "coding",
 					clientType: "slack",
 					clientMetadata: {
@@ -185,7 +185,11 @@ export class SlackClient extends AsyncClient<
 
 				sessionId = result.sessionId;
 				this.logger.info(
-					{ sessionId, isNewPrebuild: result.isNewPrebuild, hasSnapshot: result.hasSnapshot },
+					{
+						sessionId,
+						isNewConfiguration: result.isNewConfiguration,
+						hasSnapshot: result.hasSnapshot,
+					},
 					"Created session",
 				);
 
@@ -200,8 +204,8 @@ export class SlackClient extends AsyncClient<
 					this.logger,
 				);
 
-				// Post status message if this is a new prebuild
-				if (result.isNewPrebuild) {
+				// Post status message if this is a new configuration
+				if (result.isNewConfiguration) {
 					await postToSlack(
 						encryptedBotToken,
 						channelId,

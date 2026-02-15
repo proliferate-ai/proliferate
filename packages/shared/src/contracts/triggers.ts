@@ -88,7 +88,7 @@ export const CreateTriggerInputSchema = z.object({
 	triggerType: TriggerTypeSchema.optional(),
 	provider: TriggerProviderSchema,
 	executionMode: ExecutionModeSchema.optional(),
-	defaultPrebuildId: z.string().uuid().optional(),
+	defaultConfigurationId: z.string().uuid().optional(),
 	allowAgenticRepoSelection: z.boolean().optional(),
 	agentInstructions: z.string().optional(),
 	pollingCron: z.string().optional(),

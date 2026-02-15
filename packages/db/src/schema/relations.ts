@@ -11,21 +11,19 @@ import {
 	automations,
 	billingEvents,
 	cliDeviceCodes,
-	cliGithubSelections,
+	configurationRepos,
 	configurationSecrets,
+	configurations,
 	integrations,
 	invitation,
 	member,
 	orgConnectors,
 	organization,
 	outbox,
-	prebuildRepos,
-	prebuilds,
 	repoConnections,
 	repos,
 	sandboxBaseSnapshots,
 	schedules,
-	secretBundles,
 	secretFiles,
 	secrets,
 	session,
@@ -53,13 +51,6 @@ export const userRelations = relations(user, ({ many }) => ({
 	accounts: many(account),
 	invitations: many(invitation),
 	members: many(member),
-	repos: many(repos),
-	prebuilds_createdBy: many(prebuilds, {
-		relationName: "prebuilds_createdBy_user_id",
-	}),
-	prebuilds_userId: many(prebuilds, {
-		relationName: "prebuilds_userId_user_id",
-	}),
 	integrations: many(integrations),
 	secrets: many(secrets),
 	triggers: many(triggers),
@@ -70,7 +61,6 @@ export const userRelations = relations(user, ({ many }) => ({
 	apikeys: many(apikey),
 	slackInstallations: many(slackInstallations),
 	sessions_createdBy: many(sessions),
-	cliGithubSelections: many(cliGithubSelections),
 }));
 
 export const accountRelations = relations(account, ({ one }) => ({
@@ -95,7 +85,7 @@ export const organizationRelations = relations(organization, ({ many }) => ({
 	invitations: many(invitation),
 	members: many(member),
 	repos: many(repos),
-	prebuilds: many(prebuilds),
+	configurations: many(configurations),
 	integrations: many(integrations),
 	secrets: many(secrets),
 	triggers: many(triggers),
@@ -108,7 +98,6 @@ export const organizationRelations = relations(organization, ({ many }) => ({
 	slackInstallations: many(slackInstallations),
 	sessions: many(sessions),
 	billingEvents: many(billingEvents),
-	cliGithubSelections: many(cliGithubSelections),
 	orgConnectors: many(orgConnectors),
 }));
 
@@ -139,44 +128,30 @@ export const reposRelations = relations(repos, ({ one, many }) => ({
 		fields: [repos.organizationId],
 		references: [organization.id],
 	}),
-	user: one(user, {
-		fields: [repos.addedBy],
-		references: [user.id],
-	}),
 	repoConnections: many(repoConnections),
 	secrets: many(secrets),
 	slackConversations: many(slackConversations),
 	sessions: many(sessions),
-	prebuildRepos: many(prebuildRepos),
+	configurationRepos: many(configurationRepos),
 	snapshotRepos: many(snapshotRepos),
 }));
 
-export const prebuildsRelations = relations(prebuilds, ({ one, many }) => ({
-	user_createdBy: one(user, {
-		fields: [prebuilds.createdBy],
-		references: [user.id],
-		relationName: "prebuilds_createdBy_user_id",
-	}),
-	user_userId: one(user, {
-		fields: [prebuilds.userId],
-		references: [user.id],
-		relationName: "prebuilds_userId_user_id",
-	}),
+export const configurationsRelations = relations(configurations, ({ one, many }) => ({
 	organization: one(organization, {
-		fields: [prebuilds.organizationId],
+		fields: [configurations.organizationId],
 		references: [organization.id],
 	}),
 	activeSnapshot: one(snapshots, {
-		fields: [prebuilds.activeSnapshotId],
+		fields: [configurations.activeSnapshotId],
 		references: [snapshots.id],
-		relationName: "prebuilds_activeSnapshotId_snapshots_id",
+		relationName: "configurations_activeSnapshotId_snapshots_id",
 	}),
 	secrets: many(secrets),
 	automations: many(automations),
 	sessions: many(sessions),
-	prebuildRepos: many(prebuildRepos),
+	configurationRepos: many(configurationRepos),
 	snapshots: many(snapshots, {
-		relationName: "snapshots_prebuildId_prebuilds_id",
+		relationName: "snapshots_configurationId_configurations_id",
 	}),
 	secretFiles: many(secretFiles),
 }));
@@ -229,18 +204,6 @@ export const integrationsRelations = relations(integrations, ({ one, many }) => 
 	triggers: many(triggers),
 }));
 
-export const secretBundlesRelations = relations(secretBundles, ({ one, many }) => ({
-	organization: one(organization, {
-		fields: [secretBundles.organizationId],
-		references: [organization.id],
-	}),
-	user: one(user, {
-		fields: [secretBundles.createdBy],
-		references: [user.id],
-	}),
-	secrets: many(secrets),
-}));
-
 export const secretsRelations = relations(secrets, ({ one }) => ({
 	organization: one(organization, {
 		fields: [secrets.organizationId],
@@ -254,13 +217,9 @@ export const secretsRelations = relations(secrets, ({ one }) => ({
 		fields: [secrets.createdBy],
 		references: [user.id],
 	}),
-	prebuild: one(prebuilds, {
-		fields: [secrets.prebuildId],
-		references: [prebuilds.id],
-	}),
-	bundle: one(secretBundles, {
-		fields: [secrets.bundleId],
-		references: [secretBundles.id],
+	configuration: one(configurations, {
+		fields: [secrets.configurationId],
+		references: [configurations.id],
 	}),
 }));
 
@@ -296,9 +255,9 @@ export const automationsRelations = relations(automations, ({ one, many }) => ({
 		fields: [automations.createdBy],
 		references: [user.id],
 	}),
-	prebuild: one(prebuilds, {
-		fields: [automations.defaultPrebuildId],
-		references: [prebuilds.id],
+	defaultConfiguration: one(configurations, {
+		fields: [automations.defaultConfigurationId],
+		references: [configurations.id],
 	}),
 	schedules: many(schedules),
 	sessions: many(sessions),
@@ -432,9 +391,9 @@ export const sessionsRelations = relations(sessions, ({ one, many }) => ({
 		references: [triggerEvents.id],
 		relationName: "sessions_triggerEventId_triggerEvents_id",
 	}),
-	prebuild: one(prebuilds, {
-		fields: [sessions.prebuildId],
-		references: [prebuilds.id],
+	configuration: one(configurations, {
+		fields: [sessions.configurationId],
+		references: [configurations.id],
 	}),
 }));
 
@@ -497,25 +456,14 @@ export const billingEventsRelations = relations(billingEvents, ({ one }) => ({
 	}),
 }));
 
-export const prebuildReposRelations = relations(prebuildRepos, ({ one }) => ({
-	prebuild: one(prebuilds, {
-		fields: [prebuildRepos.prebuildId],
-		references: [prebuilds.id],
+export const configurationReposRelations = relations(configurationRepos, ({ one }) => ({
+	configuration: one(configurations, {
+		fields: [configurationRepos.configurationId],
+		references: [configurations.id],
 	}),
 	repo: one(repos, {
-		fields: [prebuildRepos.repoId],
+		fields: [configurationRepos.repoId],
 		references: [repos.id],
-	}),
-}));
-
-export const cliGithubSelectionsRelations = relations(cliGithubSelections, ({ one }) => ({
-	user: one(user, {
-		fields: [cliGithubSelections.userId],
-		references: [user.id],
-	}),
-	organization: one(organization, {
-		fields: [cliGithubSelections.organizationId],
-		references: [organization.id],
 	}),
 }));
 
@@ -552,14 +500,14 @@ export const actionGrantsRelations = relations(actionGrants, ({ one }) => ({
 }));
 
 // ============================================
-// PR1 expand relations
+// Configurations expand relations
 // ============================================
 
 export const snapshotsRelations = relations(snapshots, ({ one, many }) => ({
-	prebuild: one(prebuilds, {
-		fields: [snapshots.prebuildId],
-		references: [prebuilds.id],
-		relationName: "snapshots_prebuildId_prebuilds_id",
+	configuration: one(configurations, {
+		fields: [snapshots.configurationId],
+		references: [configurations.id],
+		relationName: "snapshots_configurationId_configurations_id",
 	}),
 	snapshotRepos: many(snapshotRepos),
 }));
@@ -576,9 +524,9 @@ export const snapshotReposRelations = relations(snapshotRepos, ({ one }) => ({
 }));
 
 export const secretFilesRelations = relations(secretFiles, ({ one, many }) => ({
-	prebuild: one(prebuilds, {
-		fields: [secretFiles.prebuildId],
-		references: [prebuilds.id],
+	configuration: one(configurations, {
+		fields: [secretFiles.configurationId],
+		references: [configurations.id],
 	}),
 	configurationSecrets: many(configurationSecrets),
 }));

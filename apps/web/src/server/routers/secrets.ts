@@ -5,21 +5,24 @@
  */
 
 import { ORPCError } from "@orpc/server";
-import { prebuilds, secretFiles, secrets } from "@proliferate/services";
+import { configurations, secretFiles, secrets } from "@proliferate/services";
 import {
-	BulkImportInputSchema,
-	BulkImportResultSchema,
 	CheckSecretsInputSchema,
 	CheckSecretsResultSchema,
-	CreateBundleInputSchema,
 	CreateSecretInputSchema,
-	SecretBundleSchema,
 	SecretSchema,
-	UpdateBundleInputSchema,
-	UpdateSecretBundleInputSchema,
 } from "@proliferate/shared";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
+
+const BulkImportInputSchema = z.object({
+	envText: z.string().min(1),
+});
+
+const BulkImportResultSchema = z.object({
+	created: z.number(),
+	skipped: z.array(z.string()),
+});
 
 export const secretsRouter = {
 	/**
@@ -51,7 +54,6 @@ export const secretsRouter = {
 					description: input.description,
 					repoId: input.repoId,
 					secretType: input.secretType,
-					bundleId: input.bundleId,
 				});
 				return { secret };
 			} catch (err) {
@@ -60,9 +62,6 @@ export const secretsRouter = {
 				}
 				if (err instanceof secrets.EncryptionError) {
 					throw new ORPCError("INTERNAL_SERVER_ERROR", { message: err.message });
-				}
-				if (err instanceof secrets.BundleOrgMismatchError) {
-					throw new ORPCError("BAD_REQUEST", { message: err.message });
 				}
 				throw err;
 			}
@@ -90,108 +89,9 @@ export const secretsRouter = {
 				organizationId: context.orgId,
 				keys: input.keys,
 				repoId: input.repo_id,
-				prebuildId: input.prebuild_id,
+				configurationId: input.configuration_id,
 			});
 			return { keys: results };
-		}),
-
-	/**
-	 * Update a secret's bundle assignment.
-	 */
-	updateBundle: orgProcedure
-		.input(UpdateSecretBundleInputSchema)
-		.output(z.object({ updated: z.boolean() }))
-		.handler(async ({ input, context }) => {
-			try {
-				const updated = await secrets.updateSecretBundle(input.id, context.orgId, input.bundleId);
-				return { updated };
-			} catch (err) {
-				if (err instanceof secrets.BundleOrgMismatchError) {
-					throw new ORPCError("BAD_REQUEST", { message: err.message });
-				}
-				throw err;
-			}
-		}),
-
-	// ============================================
-	// Bundle operations
-	// ============================================
-
-	/**
-	 * List all secret bundles for the current organization.
-	 */
-	listBundles: orgProcedure
-		.input(z.object({}).optional())
-		.output(z.object({ bundles: z.array(SecretBundleSchema) }))
-		.handler(async ({ context }) => {
-			const bundles = await secrets.listBundles(context.orgId);
-			return { bundles };
-		}),
-
-	/**
-	 * Create a new secret bundle.
-	 */
-	createBundle: orgProcedure
-		.input(CreateBundleInputSchema)
-		.output(z.object({ bundle: SecretBundleSchema }))
-		.handler(async ({ input, context }) => {
-			try {
-				const bundle = await secrets.createBundle({
-					organizationId: context.orgId,
-					userId: context.user.id,
-					name: input.name,
-					description: input.description,
-					targetPath: input.targetPath,
-				});
-				return { bundle };
-			} catch (err) {
-				if (err instanceof secrets.DuplicateBundleError) {
-					throw new ORPCError("CONFLICT", { message: err.message });
-				}
-				if (err instanceof secrets.InvalidTargetPathError) {
-					throw new ORPCError("BAD_REQUEST", { message: err.message });
-				}
-				throw err;
-			}
-		}),
-
-	/**
-	 * Update a secret bundle.
-	 */
-	updateBundleMeta: orgProcedure
-		.input(z.object({ id: z.string().uuid() }).merge(UpdateBundleInputSchema))
-		.output(z.object({ bundle: SecretBundleSchema }))
-		.handler(async ({ input, context }) => {
-			try {
-				const bundle = await secrets.updateBundleMeta(input.id, context.orgId, {
-					name: input.name,
-					description: input.description,
-					targetPath: input.targetPath,
-				});
-				return { bundle };
-			} catch (err) {
-				if (err instanceof secrets.BundleNotFoundError) {
-					throw new ORPCError("NOT_FOUND", { message: err.message });
-				}
-				if (err instanceof secrets.DuplicateBundleError) {
-					throw new ORPCError("CONFLICT", { message: err.message });
-				}
-				if (err instanceof secrets.InvalidTargetPathError) {
-					throw new ORPCError("BAD_REQUEST", { message: err.message });
-				}
-				throw err;
-			}
-		}),
-
-	/**
-	 * Delete a secret bundle. Secrets become unbundled.
-	 */
-	deleteBundle: orgProcedure
-		.input(z.object({ id: z.string().uuid() }))
-		.output(z.object({ deleted: z.boolean() }))
-		.handler(async ({ input, context }) => {
-			await secrets.deleteBundle(input.id, context.orgId);
-			return { deleted: true };
 		}),
 
 	// ============================================
@@ -210,14 +110,10 @@ export const secretsRouter = {
 					organizationId: context.orgId,
 					userId: context.user.id,
 					envText: input.envText,
-					bundleId: input.bundleId,
 				});
 			} catch (err) {
 				if (err instanceof secrets.EncryptionError) {
 					throw new ORPCError("INTERNAL_SERVER_ERROR", { message: err.message });
-				}
-				if (err instanceof secrets.BundleOrgMismatchError) {
-					throw new ORPCError("BAD_REQUEST", { message: err.message });
 				}
 				throw err;
 			}
@@ -225,7 +121,7 @@ export const secretsRouter = {
 };
 
 // ============================================
-// Secret Files Router (PR1 expand — config-scoped env files)
+// Secret Files Router (configuration-scoped env files)
 // ============================================
 
 const SecretFileKeySchema = z.object({
@@ -237,38 +133,38 @@ const SecretFileKeySchema = z.object({
 
 const SecretFileSchema = z.object({
 	id: z.string().uuid(),
-	prebuildId: z.string().uuid(),
+	configurationId: z.string().uuid(),
 	workspacePath: z.string(),
 	filePath: z.string(),
 	mode: z.string(),
 	keys: z.array(SecretFileKeySchema),
 });
 
-/** Verify the prebuild belongs to the caller's org. */
-async function requirePrebuildAccess(prebuildId: string, orgId: string) {
-	const prebuild = await prebuilds.findById(prebuildId);
-	if (!prebuild) {
-		throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+/** Verify the configuration belongs to the caller's org. */
+async function requireConfigurationAccess(configurationId: string, orgId: string) {
+	const configuration = await configurations.findById(configurationId);
+	if (!configuration) {
+		throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 	}
-	const prebuildOrgId = prebuild.prebuildRepos?.[0]?.repo?.organizationId;
-	if (prebuildOrgId !== orgId) {
-		throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+	const configurationOrgId = configuration.configurationRepos?.[0]?.repo?.organizationId;
+	if (configurationOrgId !== orgId) {
+		throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 	}
 }
 
 export const secretFilesRouter = {
 	/**
-	 * List secret files for a prebuild with their keys.
+	 * List secret files for a configuration with their keys.
 	 */
 	list: orgProcedure
-		.input(z.object({ prebuildId: z.string().uuid() }))
+		.input(z.object({ configurationId: z.string().uuid() }))
 		.output(z.object({ files: z.array(SecretFileSchema) }))
 		.handler(async ({ input, context }) => {
-			await requirePrebuildAccess(input.prebuildId, context.orgId);
-			const rows = await secretFiles.listSecretFiles(input.prebuildId);
+			await requireConfigurationAccess(input.configurationId, context.orgId);
+			const rows = await secretFiles.listSecretFiles(input.configurationId);
 			const files = rows.map((r) => ({
 				id: r.id,
-				prebuildId: r.prebuildId,
+				configurationId: r.configurationId,
 				workspacePath: r.workspacePath,
 				filePath: r.filePath,
 				mode: r.mode,
@@ -291,7 +187,7 @@ export const secretFilesRouter = {
 	createFile: orgProcedure
 		.input(
 			z.object({
-				prebuildId: z.string().uuid(),
+				configurationId: z.string().uuid(),
 				filePath: z.string().min(1).max(500),
 				workspacePath: z.string().max(500).default("."),
 				mode: z.enum(["secret"]).default("secret"),
@@ -299,9 +195,9 @@ export const secretFilesRouter = {
 		)
 		.output(z.object({ id: z.string().uuid() }))
 		.handler(async ({ input, context }) => {
-			await requirePrebuildAccess(input.prebuildId, context.orgId);
+			await requireConfigurationAccess(input.configurationId, context.orgId);
 			const file = await secretFiles.createSecretFile({
-				prebuildId: input.prebuildId,
+				configurationId: input.configurationId,
 				filePath: input.filePath,
 				workspacePath: input.workspacePath,
 				mode: input.mode,
@@ -313,11 +209,14 @@ export const secretFilesRouter = {
 	 * Delete a secret file and all its secrets.
 	 */
 	deleteFile: orgProcedure
-		.input(z.object({ id: z.string().uuid(), prebuildId: z.string().uuid() }))
+		.input(z.object({ id: z.string().uuid(), configurationId: z.string().uuid() }))
 		.output(z.object({ deleted: z.boolean() }))
 		.handler(async ({ input, context }) => {
-			await requirePrebuildAccess(input.prebuildId, context.orgId);
-			const deleted = await secretFiles.deleteSecretFileByPrebuild(input.id, input.prebuildId);
+			await requireConfigurationAccess(input.configurationId, context.orgId);
+			const deleted = await secretFiles.deleteSecretFileByConfiguration(
+				input.id,
+				input.configurationId,
+			);
 			if (!deleted) {
 				throw new ORPCError("NOT_FOUND", { message: "Secret file not found" });
 			}
@@ -330,7 +229,7 @@ export const secretFilesRouter = {
 	upsertSecret: orgProcedure
 		.input(
 			z.object({
-				prebuildId: z.string().uuid(),
+				configurationId: z.string().uuid(),
 				secretFileId: z.string().uuid(),
 				key: z.string().min(1).max(200),
 				value: z.string(),
@@ -339,9 +238,12 @@ export const secretFilesRouter = {
 		)
 		.output(z.object({ id: z.string().uuid() }))
 		.handler(async ({ input, context }) => {
-			await requirePrebuildAccess(input.prebuildId, context.orgId);
-			// Verify secretFileId belongs to this prebuild
-			const file = await secretFiles.findSecretFileByPrebuild(input.secretFileId, input.prebuildId);
+			await requireConfigurationAccess(input.configurationId, context.orgId);
+			// Verify secretFileId belongs to this configuration
+			const file = await secretFiles.findSecretFileByConfiguration(
+				input.secretFileId,
+				input.configurationId,
+			);
 			if (!file) {
 				throw new ORPCError("NOT_FOUND", { message: "Secret file not found" });
 			}
@@ -358,11 +260,14 @@ export const secretFilesRouter = {
 	 * Delete a configuration secret.
 	 */
 	deleteSecret: orgProcedure
-		.input(z.object({ id: z.string().uuid(), prebuildId: z.string().uuid() }))
+		.input(z.object({ id: z.string().uuid(), configurationId: z.string().uuid() }))
 		.output(z.object({ deleted: z.boolean() }))
 		.handler(async ({ input, context }) => {
-			await requirePrebuildAccess(input.prebuildId, context.orgId);
-			const deleted = await secretFiles.deleteSecretByPrebuild(input.id, input.prebuildId);
+			await requireConfigurationAccess(input.configurationId, context.orgId);
+			const deleted = await secretFiles.deleteSecretByConfiguration(
+				input.id,
+				input.configurationId,
+			);
 			if (!deleted) {
 				throw new ORPCError("NOT_FOUND", { message: "Secret not found" });
 			}

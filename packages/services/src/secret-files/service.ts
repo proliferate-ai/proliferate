@@ -24,17 +24,17 @@ export interface DecryptedBootSecrets {
 // ============================================
 
 /**
- * List secret files for a prebuild (without encrypted values).
+ * List secret files for a configuration (without encrypted values).
  */
-export async function listSecretFiles(prebuildId: string) {
-	return secretFilesDb.listByPrebuild(prebuildId);
+export async function listSecretFiles(configurationId: string) {
+	return secretFilesDb.listByConfiguration(configurationId);
 }
 
 /**
  * Create a new secret file definition.
  */
 export async function createSecretFile(input: {
-	prebuildId: string;
+	configurationId: string;
 	workspacePath?: string;
 	filePath: string;
 	mode?: string;
@@ -50,27 +50,30 @@ export async function deleteSecretFile(id: string): Promise<void> {
 }
 
 /**
- * Delete a secret file scoped to a prebuild (ownership check).
+ * Delete a secret file scoped to a configuration (ownership check).
  */
-export async function deleteSecretFileByPrebuild(id: string, prebuildId: string): Promise<boolean> {
-	return secretFilesDb.deleteSecretFileByPrebuild(id, prebuildId);
-}
-
-/**
- * Find a secret file by ID scoped to a prebuild (ownership check).
- */
-export async function findSecretFileByPrebuild(id: string, prebuildId: string) {
-	return secretFilesDb.findSecretFileByPrebuild(id, prebuildId);
-}
-
-/**
- * Delete a configuration secret scoped to a prebuild (ownership check).
- */
-export async function deleteSecretByPrebuild(
-	secretId: string,
-	prebuildId: string,
+export async function deleteSecretFileByConfiguration(
+	id: string,
+	configurationId: string,
 ): Promise<boolean> {
-	return secretFilesDb.deleteSecretByPrebuild(secretId, prebuildId);
+	return secretFilesDb.deleteSecretFileByConfiguration(id, configurationId);
+}
+
+/**
+ * Find a secret file by ID scoped to a configuration (ownership check).
+ */
+export async function findSecretFileByConfiguration(id: string, configurationId: string) {
+	return secretFilesDb.findSecretFileByConfiguration(id, configurationId);
+}
+
+/**
+ * Delete a configuration secret scoped to a configuration (ownership check).
+ */
+export async function deleteSecretByConfiguration(
+	secretId: string,
+	configurationId: string,
+): Promise<boolean> {
+	return secretFilesDb.deleteSecretByConfiguration(secretId, configurationId);
 }
 
 /**
@@ -115,9 +118,9 @@ export async function deleteSecret(id: string): Promise<void> {
  * Get decrypted secrets for session boot (config-scoped only).
  * Returns files with decrypted key-value pairs ready for sandbox injection.
  */
-export async function getSecretsForBoot(prebuildId: string): Promise<DecryptedBootSecrets[]> {
+export async function getSecretsForBoot(configurationId: string): Promise<DecryptedBootSecrets[]> {
 	const log = getServicesLogger().child({ module: "secret-files" });
-	const bootRows = await secretFilesDb.getSecretsForBoot(prebuildId);
+	const bootRows = await secretFilesDb.getSecretsForBoot(configurationId);
 
 	if (bootRows.length === 0) return [];
 
@@ -145,21 +148,4 @@ export async function getSecretsForBoot(prebuildId: string): Promise<DecryptedBo
 			vars,
 		};
 	});
-}
-
-/**
- * Save env file spec from agent tool (creates secret_files + placeholder secrets).
- * Dual-write target for the save_env_files gateway tool.
- */
-export async function saveEnvFileSpec(
-	prebuildId: string,
-	files: Array<{
-		workspacePath: string;
-		path: string;
-		format: string;
-		mode: string;
-		keys: Array<{ key: string; required: boolean }>;
-	}>,
-): Promise<void> {
-	await secretFilesDb.saveEnvFileSpec(prebuildId, files);
 }

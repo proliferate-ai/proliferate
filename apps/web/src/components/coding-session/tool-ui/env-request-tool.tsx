@@ -153,7 +153,7 @@ export const EnvRequestToolUI = makeAssistantToolUI<EnvRequestArgs, string>({
 					sessionId: sessionCtx.sessionId,
 					secrets: secretsToSubmit,
 					envVars: envsToSubmit,
-					saveToPrebuild: true,
+					saveToConfiguration: true,
 				});
 
 				setSubmitResults(response.results ?? []);

@@ -113,7 +113,7 @@ export function CodingSession({
 				activityTick,
 				sessionStatus: sessionData.status ?? undefined,
 				repoId: sessionData.repoId,
-				prebuildId: sessionData.prebuildId,
+				configurationId: sessionData.configurationId,
 				repoName: repoData?.githubRepoName || sessionData.repo?.githubRepoName,
 				branchName: sessionData.branchName,
 				snapshotId: sessionData.sandboxId,

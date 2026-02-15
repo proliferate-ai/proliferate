@@ -9,17 +9,16 @@
 // DB Row Types
 // ============================================
 
-export interface RepoWithPrebuildRow {
+export interface RepoWithConfigurationRow {
 	id: string;
 	githubRepoName: string;
 	githubUrl: string;
 	defaultBranch: string | null;
 	createdAt: Date | null;
-	prebuildRepos: Array<{
-		prebuild: {
+	configurationRepos: Array<{
+		configuration: {
 			id: string;
-			status: string | null;
-			snapshotId: string | null;
+			activeSnapshotId: string | null;
 		} | null;
 	}>;
 }

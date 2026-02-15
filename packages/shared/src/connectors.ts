@@ -98,11 +98,11 @@ export const ConnectorsArraySchema = z.array(ConnectorConfigSchema).max(20);
 // ============================================
 
 /**
- * Legacy helper: parse and validate raw connector JSONB from prebuild storage.
+ * Legacy helper: parse and validate raw connector JSONB from configuration storage.
  * New connector source-of-truth is org-scoped catalog persistence.
  * Returns an empty array for null, undefined, or invalid input.
  */
-export function parsePrebuildConnectors(raw: unknown): ConnectorConfig[] {
+export function parseConfigurationConnectors(raw: unknown): ConnectorConfig[] {
 	if (!raw || !Array.isArray(raw)) return [];
 	const result = ConnectorsArraySchema.safeParse(raw);
 	return result.success ? result.data : [];

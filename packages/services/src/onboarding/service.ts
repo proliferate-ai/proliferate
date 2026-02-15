@@ -6,7 +6,6 @@
 
 import type { OnboardingRepo, OnboardingStatus } from "@proliferate/shared";
 import { toIsoString } from "../db/serialize";
-import { requestRepoSnapshotBuild } from "../repos";
 import * as onboardingDb from "./db";
 
 // ============================================
@@ -38,25 +37,25 @@ export async function getOnboardingStatus(
 	const [hasSlackConnection, hasGitHubConnection, reposWithStatus] = await Promise.all([
 		onboardingDb.hasSlackConnection(orgId),
 		onboardingDb.hasGitHubConnection(orgId, nangoGithubIntegrationId),
-		onboardingDb.getReposWithPrebuildStatus(orgId),
+		onboardingDb.getReposWithConfigurationStatus(orgId),
 	]);
 
-	// Helper to check if a prebuild_repo entry has a usable prebuild (has snapshot)
-	const hasUsablePrebuild = (pr: {
-		prebuild: { snapshotId: string | null } | null;
-	}): boolean => !!pr.prebuild?.snapshotId;
+	// Helper to check if a configuration_repo entry has a usable configuration (has snapshot)
+	const hasUsableConfiguration = (cr: {
+		configuration: { activeSnapshotId: string | null } | null;
+	}): boolean => !!cr.configuration?.activeSnapshotId;
 
-	// Transform to include prebuild status
+	// Transform to include configuration status
 	const repos: OnboardingRepo[] = reposWithStatus.map((repo) => {
-		const readyPrebuild = repo.prebuildRepos?.find(hasUsablePrebuild);
+		const readyConfiguration = repo.configurationRepos?.find(hasUsableConfiguration);
 		return {
 			id: repo.id,
 			github_repo_name: repo.githubRepoName,
 			github_url: repo.githubUrl,
 			default_branch: repo.defaultBranch,
 			created_at: toIsoString(repo.createdAt),
-			prebuild_id: readyPrebuild?.prebuild?.id || null,
-			prebuild_status: readyPrebuild ? ("ready" as const) : ("pending" as const),
+			configuration_id: readyConfiguration?.configuration?.id || null,
+			configuration_status: readyConfiguration ? ("ready" as const) : ("pending" as const),
 		};
 	});
 
@@ -98,7 +97,6 @@ export async function getIntegrationForFinalization(
  */
 export async function upsertRepoFromGitHub(
 	orgId: string,
-	userId: string,
 	githubRepo: {
 		id: number;
 		full_name: string;
@@ -114,14 +112,12 @@ export async function upsertRepoFromGitHub(
 	const existingRepo = await onboardingDb.findRepoByGitHubId(orgId, githubRepoIdStr);
 
 	let repoId: string;
-	let isNew = false;
 
 	if (existingRepo) {
 		repoId = existingRepo.id;
 	} else {
 		// Create new repo
 		repoId = crypto.randomUUID();
-		isNew = true;
 		await onboardingDb.createRepo({
 			id: repoId,
 			organizationId: orgId,
@@ -129,17 +125,12 @@ export async function upsertRepoFromGitHub(
 			githubRepoName: githubRepo.full_name,
 			githubUrl: githubRepo.html_url,
 			defaultBranch: githubRepo.default_branch,
-			addedBy: userId,
 			isPrivate: githubRepo.private,
 		});
 	}
 
 	// Create/update repo connection
 	await onboardingDb.upsertRepoConnection(repoId, integrationId);
-
-	if (isNew) {
-		void requestRepoSnapshotBuild(repoId);
-	}
 
 	return repoId;
 }

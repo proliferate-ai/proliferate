@@ -12,5 +12,5 @@ export type {
 	SecretForBootRow,
 } from "./db";
 
-// DB functions needed by gateway
-export { getSecretsForBoot, saveEnvFileSpec, listByPrebuild } from "./db";
+// DB functions needed by routers (getSecretsForBoot is exported from service.ts above)
+export { listByConfiguration } from "./db";

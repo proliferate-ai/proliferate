@@ -5,8 +5,9 @@ const GATEWAY_URL = process.env.E2E_GATEWAY_URL || "http://localhost:8787";
 const WEB_URL = process.env.E2E_WEB_URL || "http://localhost:3000";
 const E2E_ORG_ID = process.env.E2E_ORG_ID || "e2e-org-001";
 const E2E_AUTH_TOKEN = process.env.E2E_AUTH_TOKEN || "test-e2e-token";
-// Prebuild seeded with snapshot_id=NULL → gateway does a fresh repo clone (no snapshot restore)
-const E2E_PREBUILD_ID = process.env.E2E_PREBUILD_ID || "b0000000-0000-0000-0000-000000000001";
+// Configuration seeded without a snapshot → gateway does a fresh repo clone (no snapshot restore)
+const E2E_CONFIGURATION_ID =
+	process.env.E2E_CONFIGURATION_ID || "b0000000-0000-0000-0000-000000000001";
 const PROMPT = 'Say exactly: "Hello from Playwright!" and nothing else.';
 
 test.beforeAll(async () => {
@@ -52,7 +53,7 @@ test("create session and chat with agent", async ({ page }) => {
 			Authorization: `Bearer ${E2E_AUTH_TOKEN}`,
 		},
 		body: JSON.stringify({
-			prebuildId: E2E_PREBUILD_ID,
+			configurationId: E2E_CONFIGURATION_ID,
 			organizationId: E2E_ORG_ID,
 			sessionType: "coding",
 			clientType: "web",

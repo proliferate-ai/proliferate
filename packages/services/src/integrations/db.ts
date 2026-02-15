@@ -17,10 +17,8 @@ import {
 	isNull,
 	organization,
 	repoConnections,
-	repos,
 	type slackConversations,
 	slackInstallations,
-	sql,
 	user,
 } from "../db/client";
 import { getServicesLogger } from "../logger";
@@ -529,44 +527,6 @@ export async function getIntegrationWithStatus(
 	});
 
 	return result ?? null;
-}
-
-// ============================================
-// Repo connection queries (for orphan handling)
-// ============================================
-
-/**
- * Get non-orphaned repos for an organization.
- */
-export async function getNonOrphanedRepos(orgId: string): Promise<{ id: string }[]> {
-	const db = getDb();
-	const results = await db.query.repos.findMany({
-		where: and(eq(repos.organizationId, orgId), eq(repos.isOrphaned, false)),
-		columns: { id: true },
-	});
-
-	return results;
-}
-
-/**
- * Count repo connections.
- */
-export async function countRepoConnections(repoId: string): Promise<number> {
-	const db = getDb();
-	const result = await db
-		.select({ count: sql<number>`count(*)::int` })
-		.from(repoConnections)
-		.where(eq(repoConnections.repoId, repoId));
-
-	return result[0]?.count ?? 0;
-}
-
-/**
- * Mark repo as orphaned.
- */
-export async function markRepoOrphaned(repoId: string): Promise<void> {
-	const db = getDb();
-	await db.update(repos).set({ isOrphaned: true }).where(eq(repos.id, repoId));
 }
 
 // ============================================

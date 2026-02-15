@@ -13,7 +13,7 @@ import { NANGO_GITHUB_INTEGRATION_ID } from "@/lib/nango";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
 import { createSyncClient } from "@proliferate/gateway-clients";
-import { getOrCreateManagedPrebuild, onboarding, orgs } from "@proliferate/services";
+import { getOrCreateManagedConfiguration, onboarding, orgs } from "@proliferate/services";
 import {
 	FinalizeOnboardingInputSchema,
 	FinalizeOnboardingResponseSchema,
@@ -201,7 +201,7 @@ export const onboardingRouter = {
 	}),
 
 	/**
-	 * Finalize onboarding by selecting repos and creating a managed prebuild.
+	 * Finalize onboarding by selecting repos and creating a managed configuration.
 	 */
 	finalize: orgProcedure
 		.input(FinalizeOnboardingInputSchema)
@@ -273,7 +273,7 @@ export const onboardingRouter = {
 
 			for (const repo of selectedRepos) {
 				try {
-					const repoId = await onboarding.upsertRepoFromGitHub(orgId, userId, repo, integrationId);
+					const repoId = await onboarding.upsertRepoFromGitHub(orgId, repo, integrationId);
 					createdRepoIds.push(repoId);
 				} catch (err) {
 					log.error({ err }, "Failed to insert repo");
@@ -286,7 +286,7 @@ export const onboardingRouter = {
 				});
 			}
 
-			// Create managed prebuild with specific repo IDs
+			// Create managed configuration with specific repo IDs
 			try {
 				const gateway = createSyncClient({
 					baseUrl: GATEWAY_URL,
@@ -297,21 +297,21 @@ export const onboardingRouter = {
 					},
 				});
 
-				const prebuild = await getOrCreateManagedPrebuild({
+				const configuration = await getOrCreateManagedConfiguration({
 					organizationId: orgId,
 					gateway,
 					repoIds: createdRepoIds,
 				});
 
 				return {
-					prebuildId: prebuild.id,
+					configurationId: configuration.id,
 					repoIds: createdRepoIds,
-					isNew: prebuild.isNew,
+					isNew: configuration.isNew,
 				};
 			} catch (err) {
-				log.error({ err }, "Failed to create managed prebuild");
+				log.error({ err }, "Failed to create managed configuration");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: err instanceof Error ? err.message : "Failed to create managed prebuild",
+					message: err instanceof Error ? err.message : "Failed to create managed configuration",
 				});
 			}
 		}),

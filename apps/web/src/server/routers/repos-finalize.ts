@@ -9,7 +9,7 @@ import { randomUUID } from "crypto";
 import { encrypt, getEncryptionKey } from "@/lib/crypto";
 import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
-import { prebuilds, repos, secrets, sessions, snapshots } from "@proliferate/services";
+import { configurations, repos, secrets, sessions, snapshots } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 
@@ -27,7 +27,7 @@ export interface FinalizeSetupInput {
 }
 
 export interface FinalizeSetupResult {
-	prebuildId: string;
+	configurationId: string;
 	snapshotId: string;
 	success: boolean;
 }
@@ -50,22 +50,25 @@ export async function finalizeSetupHandler(
 		throw new ORPCError("BAD_REQUEST", { message: "sessionId is required" });
 	}
 
-	// 1. Get session and verify it belongs to this repo or prebuild
+	// 1. Get session and verify it belongs to this repo or configuration
 	const session = await sessions.findSessionByIdInternal(sessionId);
 
 	if (!session) {
 		throw new ORPCError("NOT_FOUND", { message: "Session not found" });
 	}
 
-	// Verify repoId matches or session's prebuild contains this repo
+	// Verify repoId matches or session's configuration contains this repo
 	const sessionBelongsToRepo = session.repoId === repoId;
-	let sessionBelongsToPrebuild = false;
+	let sessionBelongsToConfiguration = false;
 
-	if (session.prebuildId && !sessionBelongsToRepo) {
-		sessionBelongsToPrebuild = await prebuilds.prebuildContainsRepo(session.prebuildId, repoId);
+	if (session.configurationId && !sessionBelongsToRepo) {
+		sessionBelongsToConfiguration = await configurations.configurationContainsRepo(
+			session.configurationId,
+			repoId,
+		);
 	}
 
-	if (!sessionBelongsToRepo && !sessionBelongsToPrebuild) {
+	if (!sessionBelongsToRepo && !sessionBelongsToConfiguration) {
 		throw new ORPCError("NOT_FOUND", { message: "Session not found for this repo" });
 	}
 
@@ -122,63 +125,56 @@ export async function finalizeSetupHandler(
 		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create snapshot" });
 	}
 
-	let prebuildId: string;
+	let configurationId: string;
 
-	// Determine which prebuild to update
-	const existingPrebuildId = updateSnapshotId || session.prebuildId;
+	// Determine which configuration to update
+	const existingConfigurationId = updateSnapshotId || session.configurationId;
 
-	if (existingPrebuildId) {
-		// Update existing prebuild record
-		prebuildId = existingPrebuildId;
+	if (existingConfigurationId) {
+		// Update existing configuration record
+		configurationId = existingConfigurationId;
 		try {
-			await prebuilds.updatePrebuild(existingPrebuildId, {
-				snapshotId,
-				status: "ready",
+			await configurations.updateConfiguration(existingConfigurationId, {
 				name: name || null,
-				notes: notes || null,
+				description: notes || null,
 			});
 		} catch {
-			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to update prebuild" });
+			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to update configuration" });
 		}
 	} else {
-		// Create new prebuild record
-		prebuildId = randomUUID();
+		// Create new configuration record
+		configurationId = randomUUID();
 		try {
-			await prebuilds.createPrebuildFull({
-				id: prebuildId,
+			await configurations.createConfigurationFull({
+				id: configurationId,
 				organizationId,
-				snapshotId,
-				status: "ready",
 				name: name || null,
-				notes: notes || null,
-				createdBy: userId,
-				sandboxProvider: provider.type,
+				description: notes || null,
 			});
 		} catch {
-			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create prebuild" });
+			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create configuration" });
 		}
 
-		// Create prebuild_repos entry for this repo
+		// Create configuration_repos entry for this repo
 		const repoName = repoId.slice(0, 8);
 		const githubRepoName = await repos.getGithubRepoName(repoId);
 		const workspacePath = githubRepoName?.split("/")[1] || repoName;
 
-		await prebuilds.createSinglePrebuildRepo(prebuildId, repoId, workspacePath);
+		await configurations.createSingleConfigurationRepo(configurationId, repoId, workspacePath);
 
-		// Update session with the new prebuild_id
-		await sessions.updateSessionPrebuildId(sessionId, prebuildId);
+		// Update session with the new configuration_id
+		await sessions.updateSessionConfigurationId(sessionId, configurationId);
 	}
 
 	// Dual-write: create snapshot in new snapshots table
 	try {
 		const snapshotRecord = await snapshots.createSnapshot({
-			prebuildId,
+			configurationId,
 			sandboxProvider: provider.type,
 		});
 		await snapshots.markSnapshotReady({
 			snapshotId: snapshotRecord.id,
 			providerSnapshotId: snapshotId,
-			hasDeps: true,
 			repoCommits: [],
 		});
 	} catch (err) {
@@ -197,7 +193,7 @@ export async function finalizeSetupHandler(
 	}
 
 	return {
-		prebuildId,
+		configurationId,
 		snapshotId,
 		success: true,
 	};

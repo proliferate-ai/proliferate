@@ -16,11 +16,15 @@ export function formatDate(dateString: string): string {
 
 export function getSnapshotDisplayName(snapshot: {
 	name: string | null;
-	notes?: string | null;
-	createdAt: string;
+	description?: string | null;
+	createdAt: string | null;
 }): string {
 	// Name can be null for legacy data, so keep fallbacks
-	return snapshot.name || snapshot.notes || formatDate(snapshot.createdAt);
+	return (
+		snapshot.name ||
+		snapshot.description ||
+		(snapshot.createdAt ? formatDate(snapshot.createdAt) : "Untitled")
+	);
 }
 
 export function formatBytes(bytes: number, decimals = 1): string {

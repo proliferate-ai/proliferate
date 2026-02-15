@@ -119,7 +119,7 @@ export const triggersRouter = {
 					triggerType: input.triggerType,
 					provider: input.provider,
 					executionMode: input.executionMode,
-					defaultPrebuildId: input.defaultPrebuildId,
+					defaultConfigurationId: input.defaultConfigurationId,
 					allowAgenticRepoSelection: input.allowAgenticRepoSelection,
 					agentInstructions: input.agentInstructions,
 					pollingCron: input.pollingCron,
@@ -131,8 +131,8 @@ export const triggersRouter = {
 				return result;
 			} catch (error) {
 				if (error instanceof Error) {
-					if (error.message === "Prebuild not found") {
-						throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+					if (error.message === "Configuration not found") {
+						throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 					}
 					if (error.message === "Integration not found") {
 						throw new ORPCError("NOT_FOUND", { message: "Integration not found" });

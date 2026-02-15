@@ -2,8 +2,8 @@
 
 import { HelpLink } from "@/components/help/help-link";
 import { useAutomations } from "@/hooks/use-automations";
+import { useCreateConfiguration } from "@/hooks/use-configurations";
 import { useIntegrations } from "@/hooks/use-integrations";
-import { useCreatePrebuild } from "@/hooks/use-prebuilds";
 import { useRepos } from "@/hooks/use-repos";
 import { useCreateSession } from "@/hooks/use-sessions";
 import { useSession } from "@/lib/auth-client";
@@ -43,7 +43,7 @@ export function EmptyDashboard() {
 		setPendingPrompt,
 		dismissedOnboardingCards,
 	} = useDashboardStore();
-	const createPrebuild = useCreatePrebuild();
+	const createConfiguration = useCreateConfiguration();
 	const createSession = useCreateSession();
 
 	// Query data to determine if onboarding cards exist (TanStack Query deduplicates)
@@ -60,7 +60,7 @@ export function EmptyDashboard() {
 		const hasSlack = integrations.some((i) => i.provider === "slack" && i.status === "active");
 		const hasAutomation = (automations ?? []).length > 0;
 		const hasAnyRepo = (repos ?? []).length > 0;
-		const hasReadyRepo = (repos ?? []).some((r) => r.prebuildStatus === "ready");
+		const hasReadyRepo = false; // Configuration status is now tracked at configuration level, not repo level
 
 		let count = 0;
 		if (!hasAnyRepo) count++;
@@ -103,21 +103,21 @@ export function EmptyDashboard() {
 				return;
 			}
 
-			let prebuildId = selectedSnapshotId;
+			let configurationId = selectedSnapshotId;
 
-			// If no prebuild selected, create one on-the-fly for the selected repo
-			if (!prebuildId && selectedRepoId) {
-				const prebuildResult = await createPrebuild.mutateAsync({
+			// If no configuration selected, create one on-the-fly for the selected repo
+			if (!configurationId && selectedRepoId) {
+				const configurationResult = await createConfiguration.mutateAsync({
 					repoIds: [selectedRepoId],
 				});
-				prebuildId = prebuildResult.prebuildId;
+				configurationId = configurationResult.configurationId;
 			}
 
-			if (!prebuildId) return;
+			if (!configurationId) return;
 
-			// Create session with prebuild
+			// Create session with configuration
 			const result = await createSession.mutateAsync({
-				prebuildId,
+				configurationId,
 				modelId: selectedModel,
 			});
 
@@ -131,7 +131,7 @@ export function EmptyDashboard() {
 		}
 	};
 
-	const isSubmitting = createPrebuild.isPending || createSession.isPending;
+	const isSubmitting = createConfiguration.isPending || createSession.isPending;
 
 	// GitHub nudge: show when no GitHub is connected and not dismissed
 	const hasGitHub = useMemo(() => {
@@ -147,10 +147,7 @@ export function EmptyDashboard() {
 		return repos.find((r) => r.id === selectedRepoId) ?? null;
 	}, [selectedRepoId, repos]);
 	const showSetupHint =
-		!dataLoading &&
-		selectedRepo &&
-		selectedRepo.prebuildStatus !== "ready" &&
-		!dismissedOnboardingCards.includes("setup-hint");
+		!dataLoading && selectedRepo && !dismissedOnboardingCards.includes("setup-hint");
 
 	return (
 		<div className="h-full flex flex-col items-center justify-center p-8">

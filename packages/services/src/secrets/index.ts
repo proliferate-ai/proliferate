@@ -11,18 +11,10 @@ export type {
 	SecretForSessionRow,
 	UpsertSecretInput,
 	CheckSecretsFilter,
-	SecretBundleListRow,
-	DbCreateBundleInput,
-	DbUpdateBundleInput,
-	BundleWithKeys,
 } from "../types/secrets";
 export {
 	EncryptionError,
 	DuplicateSecretError,
-	DuplicateBundleError,
-	BundleNotFoundError,
-	BundleOrgMismatchError,
-	InvalidTargetPathError,
 } from "./service";
 
 // DB functions needed by sessions-create and repos-finalize
