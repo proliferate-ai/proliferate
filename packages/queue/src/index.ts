@@ -6,6 +6,9 @@ import IORedis from "ioredis";
 export const QUEUE_NAMES = {
 	TRIGGER_EVENTS: "trigger-events",
 	POLLING: "polling",
+	POLL_GROUPS: "poll-groups",
+	WEBHOOK_INBOX: "webhook-inbox",
+	INBOX_GC: "inbox-gc",
 	SCHEDULED: "scheduled",
 	AUTOMATION_ENRICH: "automation-enrich",
 	AUTOMATION_EXECUTE: "automation-execute",
@@ -79,6 +82,28 @@ export interface BaseSnapshotBuildJob {
 	versionKey: string;
 	provider: string;
 	modalAppName: string;
+}
+
+/**
+ * Job to poll a trigger poll group (vNext per-group fan-out).
+ * Worker fetches group config, polls once, then fans out to all triggers in-memory.
+ */
+export interface PollGroupJob {
+	groupId: string; // FK to trigger_poll_groups.id
+}
+
+/**
+ * Job to drain webhook inbox rows (vNext async processing).
+ */
+export interface WebhookInboxJob {
+	batchSize?: number;
+}
+
+/**
+ * Job to garbage-collect old webhook inbox rows.
+ */
+export interface InboxGcJob {
+	retentionDays?: number;
 }
 
 /**
@@ -162,6 +187,12 @@ export const REDIS_KEYS = {
 	 * TTL: 120 seconds
 	 */
 	pollLock: (triggerId: string) => `poll:lock:${triggerId}`,
+
+	/**
+	 * Lock during poll group execution: poll-group:lock:{groupId}
+	 * TTL: 120 seconds. Prevents concurrent polls for the same group.
+	 */
+	pollGroupLock: (groupId: string) => `poll-group:lock:${groupId}`,
 } as const;
 
 // ============================================
@@ -245,6 +276,50 @@ const baseSnapshotBuildJobOptions: JobsOptions = {
 	removeOnFail: {
 		age: 604800, // 7 days
 		count: 100,
+	},
+};
+
+const pollGroupJobOptions: JobsOptions = {
+	attempts: 2,
+	backoff: {
+		type: "fixed",
+		delay: 5000,
+	},
+	removeOnComplete: {
+		age: 3600, // 1 hour
+		count: 100,
+	},
+	removeOnFail: {
+		age: 86400, // 24 hours
+		count: 100,
+	},
+};
+
+const webhookInboxJobOptions: JobsOptions = {
+	attempts: 1, // Inbox rows handle their own retry via status
+	removeOnComplete: {
+		age: 3600, // 1 hour
+		count: 100,
+	},
+	removeOnFail: {
+		age: 86400, // 24 hours
+		count: 100,
+	},
+};
+
+const inboxGcJobOptions: JobsOptions = {
+	attempts: 2,
+	backoff: {
+		type: "fixed",
+		delay: 30000,
+	},
+	removeOnComplete: {
+		age: 86400, // 24 hours
+		count: 50,
+	},
+	removeOnFail: {
+		age: 86400,
+		count: 50,
 	},
 };
 
@@ -457,6 +532,105 @@ export function createRepoSnapshotBuildWorker(
 	return new Worker<RepoSnapshotBuildJob>(QUEUE_NAMES.REPO_SNAPSHOT_BUILDS, processor, {
 		connection: connection ?? getConnectionOptions(),
 		concurrency: 2,
+	});
+}
+
+/**
+ * Create the poll groups queue (vNext per-group fan-out)
+ */
+export function createPollGroupQueue(connection?: ConnectionOptions): Queue<PollGroupJob> {
+	return new Queue<PollGroupJob>(QUEUE_NAMES.POLL_GROUPS, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: pollGroupJobOptions,
+	});
+}
+
+/**
+ * Create a worker for processing poll group jobs
+ */
+export function createPollGroupWorker(
+	processor: (job: Job<PollGroupJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<PollGroupJob> {
+	return new Worker<PollGroupJob>(QUEUE_NAMES.POLL_GROUPS, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 3,
+	});
+}
+
+/**
+ * Create the webhook inbox queue
+ */
+export function createWebhookInboxQueue(connection?: ConnectionOptions): Queue<WebhookInboxJob> {
+	return new Queue<WebhookInboxJob>(QUEUE_NAMES.WEBHOOK_INBOX, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: webhookInboxJobOptions,
+	});
+}
+
+/**
+ * Create a worker for draining the webhook inbox
+ */
+export function createWebhookInboxWorker(
+	processor: (job: Job<WebhookInboxJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<WebhookInboxJob> {
+	return new Worker<WebhookInboxJob>(QUEUE_NAMES.WEBHOOK_INBOX, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 2,
+	});
+}
+
+/**
+ * Create the inbox garbage collection queue
+ */
+export function createInboxGcQueue(connection?: ConnectionOptions): Queue<InboxGcJob> {
+	return new Queue<InboxGcJob>(QUEUE_NAMES.INBOX_GC, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: inboxGcJobOptions,
+	});
+}
+
+/**
+ * Create a worker for inbox garbage collection
+ */
+export function createInboxGcWorker(
+	processor: (job: Job<InboxGcJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<InboxGcJob> {
+	return new Worker<InboxGcJob>(QUEUE_NAMES.INBOX_GC, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 1,
+	});
+}
+
+/**
+ * Schedule a poll group job with a cron pattern.
+ */
+export async function schedulePollGroupJob(
+	queue: Queue<PollGroupJob>,
+	groupId: string,
+	cronPattern: string,
+): Promise<void> {
+	await queue.add(
+		`poll-group:${groupId}`,
+		{ groupId },
+		{
+			repeat: { pattern: cronPattern },
+			jobId: `poll-group:${groupId}`,
+		},
+	);
+}
+
+/**
+ * Remove a scheduled poll group job.
+ */
+export async function removePollGroupJob(
+	queue: Queue<PollGroupJob>,
+	groupId: string,
+): Promise<void> {
+	await queue.removeRepeatable(`poll-group:${groupId}`, {
+		pattern: "",
 	});
 }
 

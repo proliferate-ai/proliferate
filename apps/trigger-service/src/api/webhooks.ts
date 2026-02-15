@@ -1,61 +1,89 @@
-import { integrations, triggers as triggerService } from "@proliferate/services";
+/**
+ * Webhook ingestion routes — Fast-Ack pattern.
+ *
+ * These routes do exactly three things:
+ * 1. Verify signatures (where applicable)
+ * 2. INSERT INTO webhook_inbox
+ * 3. Return 200 OK
+ *
+ * No parsing, no matching, no hydration, no run creation.
+ * All processing happens asynchronously in the webhook inbox worker.
+ */
+
+import { webhookInbox } from "@proliferate/services";
 import { type IRouter, Router } from "express";
 import { logger as rootLogger } from "../lib/logger.js";
-import { processTriggerEvents } from "../lib/trigger-processor.js";
 import { dispatchIntegrationWebhook } from "../lib/webhook-dispatcher.js";
 
 const logger = rootLogger.child({ module: "webhooks" });
 
 export const webhookRouter: IRouter = Router();
 
-// POST /webhooks/nango
+/**
+ * POST /webhooks/nango — Nango-forwarded webhooks.
+ *
+ * Nango forwards provider webhooks (Linear, Sentry, GitHub, etc.)
+ * through its own endpoint. We verify the Nango signature, extract
+ * routing info, and store the raw payload in the inbox.
+ */
 webhookRouter.post("/nango", async (req, res) => {
 	try {
+		// Use existing Nango dispatcher for signature verification and routing extraction
 		const dispatch = await dispatchIntegrationWebhook("nango", req);
-		if (!dispatch || dispatch.matches.length === 0) {
-			return res.json({ processed: 0, skipped: 0 });
+		if (!dispatch) {
+			return res.status(200).send("OK");
 		}
 
-		let processed = 0;
-		let skipped = 0;
+		// Store in inbox for async processing
+		await webhookInbox.insertInboxRow({
+			provider: dispatch.provider,
+			headers: req.headers as Record<string, unknown>,
+			payload: req.body,
+			// connectionId is stored in payload for the inbox worker to resolve
+		});
 
-		const integration = await integrations.findByConnectionIdAndProvider(
-			dispatch.connectionId,
-			"nango",
+		logger.debug(
+			{ provider: dispatch.provider, connectionId: dispatch.connectionId },
+			"Webhook received and queued",
 		);
 
-		if (!integration) {
-			logger.info({ connectionId: dispatch.connectionId }, "Integration not found for connection");
-			return res.json({ processed: 0, skipped: 0 });
-		}
-
-		const triggerRows = await triggerService.findActiveWebhookTriggers(integration.id);
-		if (triggerRows.length === 0) {
-			return res.json({ processed: 0, skipped: 0 });
-		}
-
-		for (const match of dispatch.matches) {
-			if (match.events.length === 0) continue;
-
-			for (const triggerRow of triggerRows) {
-				if (triggerRow.provider !== match.triggerDef.provider) continue;
-				const result = await processTriggerEvents(match.triggerDef, triggerRow, match.events);
-				processed += result.processed;
-				skipped += result.skipped;
-			}
-		}
-
-		res.json({ processed, skipped });
+		res.status(200).send("OK");
 	} catch (error) {
 		if (error instanceof Error && error.message === "Invalid signature") {
 			return res.status(401).json({ error: "Invalid signature" });
 		}
-		logger.error({ err: error }, "Webhook error");
-		res.status(500).json({ error: "Internal server error" });
+		logger.error({ err: error }, "Webhook ingestion error");
+		// Still return 200 to prevent upstream retries on transient failures
+		res.status(200).send("OK");
 	}
 });
 
-// POST /webhooks/:provider (reserved)
-webhookRouter.post("/:provider", (_req, res) => {
-	res.status(404).json({ error: "Unsupported webhook provider" });
+/**
+ * POST /webhooks/direct/:providerId — Direct provider webhooks (vNext).
+ *
+ * For providers that send webhooks directly (not through Nango).
+ * Uses the vNext ProviderTriggers.webhook.verify() interface.
+ *
+ * The provider's verify() method returns routing identity (org/integration/trigger)
+ * which the inbox worker uses to resolve the target organization.
+ */
+webhookRouter.post("/direct/:providerId", async (req, res) => {
+	try {
+		const { providerId } = req.params;
+
+		// TODO: Look up provider from vNext ProviderRegistry once implemented
+		// For now, store all direct webhooks in the inbox with provider ID
+		await webhookInbox.insertInboxRow({
+			provider: providerId,
+			headers: req.headers as Record<string, unknown>,
+			payload: req.body,
+		});
+
+		logger.debug({ provider: providerId }, "Direct webhook received and queued");
+
+		res.status(200).send("OK");
+	} catch (error) {
+		logger.error({ err: error }, "Direct webhook ingestion error");
+		res.status(200).send("OK");
+	}
 });

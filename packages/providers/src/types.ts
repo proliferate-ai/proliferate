@@ -100,20 +100,128 @@ export interface TriggerEventType {
 export interface NormalizedTriggerEvent {
 	/** Provider identifier (e.g., "github", "linear") */
 	provider: string;
-	/** Provider-specific event type (e.g., "issues:opened", "Issue:create") */
+	/** Internal normalized event type (e.g., "error_created", "issue_opened") */
 	eventType: string;
-	/** Deduplication key — unique per provider+event to prevent double-processing */
+	/** Native type from provider header/payload (e.g., "issue.created") */
+	providerEventType: string;
+	/** ISO 8601 timestamp of when the event occurred */
+	occurredAt: string;
+	/** Deduplication key — globally unique per provider+event */
 	dedupKey: string;
+	/** Short summary of the event for display */
+	title: string;
+	/** URL to the event source (e.g., issue URL, PR URL) */
+	url?: string;
 	/** External event identifier from the provider */
 	externalId?: string;
-	/** Parsed context for prompt enrichment */
-	context: TriggerEventContext;
+	/** Parsed, structured context for prompt enrichment */
+	context: Record<string, unknown>;
 	/** Raw provider payload (stored for audit, not used in processing) */
-	rawPayload: unknown;
+	raw?: unknown;
+}
+
+// ============================================
+// Webhook Ingestion
+// ============================================
+
+/**
+ * Normalized representation of an inbound HTTP webhook request.
+ * Passed to provider verify() and parse() methods.
+ */
+export interface WebhookRequest {
+	method: string;
+	path: string;
+	headers: Record<string, string | string[] | undefined>;
+	query: Record<string, string | undefined>;
+	params: Record<string, string | undefined>;
+	/** Raw body bytes — mandatory for accurate HMAC verification */
+	rawBody: Buffer;
+	body: unknown;
+}
+
+/**
+ * Input to the provider's webhook parse() method.
+ * Called by the async inbox worker after claiming a row.
+ */
+export interface WebhookParseInput {
+	json: unknown;
+	headers: Record<string, string | string[] | undefined>;
+	providerEventType?: string;
+	receivedAt: string;
+}
+
+/**
+ * Result of webhook signature verification.
+ */
+export interface WebhookVerificationResult {
+	ok: boolean;
+	/** Routing identity — tells the framework how to resolve the org/integration */
+	identity?: { kind: "org" | "integration" | "trigger"; id: string };
+	/** Immediate response for challenge/handshake protocols (e.g., Slack, Jira) */
+	immediateResponse?: { status: number; body?: unknown };
+}
+
+// ============================================
+// Trigger Types & Provider Triggers
+// ============================================
+
+/**
+ * A typed trigger definition within a provider.
+ * The matches() function MUST be pure — no DB calls, no network, no side effects.
+ */
+export interface TriggerType<TConfig = unknown> {
+	/** Trigger type identifier (e.g., "error_created", "issue_opened") */
+	id: string;
+	/** Human-readable description */
+	description: string;
+	/** Zod schema for trigger configuration validation */
+	configSchema: z.ZodType<TConfig>;
+	/** Pure matching function — determines if an event matches this trigger config */
+	matches(event: NormalizedTriggerEvent, config: TConfig): boolean;
+}
+
+/**
+ * The trigger contract that integration modules implement.
+ * Providers are stateless — they never read PostgreSQL, write Redis, or schedule jobs.
+ * The framework owns all persistence and deduplication.
+ */
+export interface ProviderTriggers {
+	/** Available trigger type definitions */
+	types: TriggerType[];
+
+	/** Webhook ingestion — verify signatures and parse payloads */
+	webhook?: {
+		verify(req: WebhookRequest, secret: string | null): Promise<WebhookVerificationResult>;
+		parse(input: WebhookParseInput): Promise<NormalizedTriggerEvent[]>;
+	};
+
+	/** Polling ingestion — fetch events from provider API */
+	polling?: {
+		defaultIntervalSeconds: number;
+		poll(ctx: {
+			cursor: unknown;
+			token?: string;
+			orgId: string;
+		}): Promise<{
+			events: NormalizedTriggerEvent[];
+			nextCursor: unknown;
+			backoffSeconds?: number;
+		}>;
+	};
+
+	/**
+	 * Optional hydration — called ONCE per event batch to fetch missing data
+	 * (e.g., fetching Jira issue fields via API). Rate-limit aware.
+	 */
+	hydrate?: (
+		event: NormalizedTriggerEvent,
+		ctx: { token: string },
+	) => Promise<NormalizedTriggerEvent>;
 }
 
 /**
  * Parsed context extracted from a trigger event, used for prompt enrichment.
+ * @deprecated Use Record<string, unknown> context on NormalizedTriggerEvent directly.
  */
 export interface TriggerEventContext {
 	/** Short summary of the event for display */

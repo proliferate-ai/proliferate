@@ -1,18 +1,17 @@
 /**
- * Nango Webhook Handler
+ * Nango Webhook Handler (Auth & Sync only)
  *
- * Receives webhooks from Nango (auth events, sync events, forwarded provider webhooks).
- * Uses shared trigger processor for event handling.
+ * Receives webhooks from Nango for auth lifecycle and sync events.
+ * Forward webhooks (provider trigger events) are now handled by the
+ * trigger service via apps/trigger-service/src/api/webhooks.ts.
  */
 
 import { logger } from "@/lib/logger";
-import { getProviderFromIntegrationId } from "@/lib/nango";
 import { env } from "@proliferate/environment/server";
+import { integrations } from "@proliferate/services";
+import { NextResponse } from "next/server";
 
 const log = logger.child({ handler: "nango-webhook" });
-import { integrations, triggers } from "@proliferate/services";
-import { getProviderByType } from "@proliferate/triggers";
-import { NextResponse } from "next/server";
 
 const NANGO_SECRET_KEY = env.NANGO_SECRET_KEY;
 
@@ -58,15 +57,7 @@ interface NangoSyncWebhook {
 	};
 }
 
-interface NangoForwardWebhook {
-	type: "forward";
-	from: string;
-	connectionId: string;
-	providerConfigKey: string;
-	payload: Record<string, unknown>;
-}
-
-type NangoWebhook = NangoAuthWebhook | NangoSyncWebhook | NangoForwardWebhook;
+type NangoWebhook = NangoAuthWebhook | NangoSyncWebhook | { type: string };
 
 // ============================================
 // Signature verification
@@ -143,57 +134,6 @@ async function handleAuthWebhook(webhook: NangoAuthWebhook): Promise<void> {
 }
 
 // ============================================
-// Forward webhook handler
-// ============================================
-
-async function handleForwardWebhook(
-	webhook: NangoForwardWebhook,
-): Promise<{ processed: number; skipped: number }> {
-	// Map Nango integration ID to our provider type
-	const providerType = getProviderFromIntegrationId(webhook.from);
-	if (!providerType) {
-		log.info({ from: webhook.from }, "Unsupported forward webhook provider");
-		return { processed: 0, skipped: 0 };
-	}
-
-	// Get the provider implementation
-	const provider = getProviderByType(providerType);
-	if (!provider) {
-		log.error({ providerType }, "Provider not found");
-		return { processed: 0, skipped: 0 };
-	}
-
-	// Find the integration by connection_id
-	const integration = await integrations.findByConnectionIdAndProvider(
-		webhook.connectionId,
-		"nango",
-	);
-
-	if (!integration) {
-		log.info({ connectionId: webhook.connectionId }, "Integration not found for connection");
-		return { processed: 0, skipped: 0 };
-	}
-
-	// Find active triggers for this integration
-	const triggerRows = await triggers.findActiveWebhookTriggers(integration.id);
-	if (triggerRows.length === 0) {
-		log.info({ integrationId: integration.id }, "No active webhook triggers for integration");
-		return { processed: 0, skipped: 0 };
-	}
-
-	// Parse the forwarded payload using the provider
-	const items = provider.parseWebhook(webhook.payload);
-	if (items.length === 0) {
-		log.info({ from: webhook.from }, "Event type not supported by provider");
-		return { processed: 0, skipped: 0 };
-	}
-
-	// Process events using shared processor
-	const processableItems = items.map((item) => ({ item, provider }));
-	return triggers.processTriggerEvents(triggerRows, processableItems);
-}
-
-// ============================================
 // Main handler
 // ============================================
 
@@ -220,25 +160,27 @@ export async function POST(request: Request) {
 	try {
 		switch (webhook.type) {
 			case "auth":
-				await handleAuthWebhook(webhook);
+				await handleAuthWebhook(webhook as NangoAuthWebhook);
 				return NextResponse.json({ success: true, type: "auth" });
 
 			case "sync":
-				log.info({ syncName: webhook.syncName, success: webhook.success }, "Sync completed");
+				log.info(
+					{
+						syncName: (webhook as NangoSyncWebhook).syncName,
+						success: (webhook as NangoSyncWebhook).success,
+					},
+					"Sync completed",
+				);
 				return NextResponse.json({ success: true, type: "sync" });
 
-			case "forward": {
-				const result = await handleForwardWebhook(webhook);
-				return NextResponse.json({
-					success: true,
-					type: "forward",
-					processed: result.processed,
-					skipped: result.skipped,
-				});
-			}
+			case "forward":
+				// Forward webhooks are now handled by the trigger service.
+				// Return 200 to prevent retries if Nango still sends here during migration.
+				log.info("Forward webhook received — should be routed to trigger service");
+				return NextResponse.json({ success: true, type: "forward", migrated: true });
 
 			default:
-				log.info({ type: (webhook as NangoWebhook).type }, "Unknown webhook type");
+				log.info({ type: webhook.type }, "Unknown webhook type");
 				return NextResponse.json({ success: true, type: "unknown" });
 		}
 	} catch (err) {

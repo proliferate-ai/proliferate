@@ -38,6 +38,7 @@ export type {
 // DB functions needed by sessions-create
 export {
 	getRepoConnectionsWithIntegrations,
+	findById,
 	findByIdAndOrg,
 	findActiveGitHubApp,
 	findActiveByIntegrationId,
