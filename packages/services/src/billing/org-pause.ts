@@ -189,15 +189,15 @@ export async function handleCreditsExhaustedV2(
 				);
 			}
 
-			// Best-effort key revocation (fire-and-forget)
-			revokeVirtualKey(session.id).catch((err) => {
-				logger.debug({ err, sessionId: session.id }, "Failed to revoke virtual key");
-			});
-
 			if (!providerTerminated) {
 				failed++;
 				continue;
 			}
+
+			// Best-effort key revocation (fire-and-forget)
+			revokeVirtualKey(session.id).catch((err) => {
+				logger.debug({ err, sessionId: session.id }, "Failed to revoke virtual key");
+			});
 
 			await db
 				.update(sessions)
@@ -268,15 +268,15 @@ export async function terminateAllOrgSessions(
 				);
 			}
 
-			// Best-effort key revocation (fire-and-forget)
-			revokeVirtualKey(session.id).catch((err) => {
-				logger.debug({ err, sessionId: session.id }, "Failed to revoke virtual key");
-			});
-
 			if (!providerTerminated) {
 				failed++;
 				continue;
 			}
+
+			// Best-effort key revocation (fire-and-forget)
+			revokeVirtualKey(session.id).catch((err) => {
+				logger.debug({ err, sessionId: session.id }, "Failed to revoke virtual key");
+			});
 
 			await db
 				.update(sessions)
