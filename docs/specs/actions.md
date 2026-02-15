@@ -23,7 +23,7 @@
 
 ### Mental Model
 
-Actions are platform-mediated operations that the agent performs on external services. Implemented action sources are (a) hand-written Linear/Sentry/Slack adapters and (b) connector-backed MCP `remote_http` sources discovered from prebuild connector config. Planned direction: connector discovery moves to an org-scoped catalog owned by `integrations.md`, so all sessions in an org see the same connector-backed sources by default. Unlike tools that run inside the sandbox, actions are executed server-side by the gateway using either OAuth tokens (`integrations.getToken`) or org-scoped secrets (`secrets.resolveSecretValue`) depending on source type. Every action goes through a risk-based approval pipeline before execution (`packages/services/src/actions/service.ts:invokeAction`).
+Actions are platform-mediated operations that the agent performs on external services. Implemented action sources are (a) hand-written Linear/Sentry/Slack adapters and (b) connector-backed MCP `remote_http` sources discovered from the org-scoped connector catalog (`org_connectors` table). Unlike tools that run inside the sandbox, actions are executed server-side by the gateway using either OAuth tokens (`integrations.getToken`) or org-scoped secrets (`secrets.resolveSecretValue`) depending on source type. Every action goes through a risk-based approval pipeline before execution (`packages/services/src/actions/service.ts:invokeAction`).
 
 The agent invokes actions via the `proliferate` CLI inside the sandbox. The CLI sends HTTP requests to the gateway (`apps/gateway/src/api/proliferate/http/actions.ts`), which evaluates risk, checks for matching grants, and either auto-executes or queues the invocation for human approval. Users approve or deny pending invocations through the web dashboard or WebSocket events.
 
@@ -62,7 +62,7 @@ Adapters are statically registered in a `Map`. Currently three adapters exist: `
 ### Action Source Boundary
 Two action source types coexist:
 1. **Static adapters** — hand-written Linear, Sentry, Slack adapters registered in `packages/services/src/actions/adapters/index.ts`. Require OAuth integration connections per session.
-2. **Connector-backed actions** — MCP `remote_http` connectors discovered at runtime. Current implementation resolves connector config from prebuilds. Planned direction resolves the same connector shape from an org-scoped catalog. Connector actions use the `connector:<uuid>` integration prefix to distinguish them from static adapters in the `integration` column.
+2. **Connector-backed actions** — MCP `remote_http` connectors discovered at runtime from the org-scoped connector catalog (`org_connectors` table). Connector actions use the `connector:<uuid>` integration prefix to distinguish them from static adapters in the `integration` column.
 
 Both source types share the same risk/approval/grant/audit lifecycle. The merge point is `GET /available` in `apps/gateway/src/api/proliferate/http/actions.ts`, which returns adapter-based and connector-based integrations in a single list.
 
@@ -419,31 +419,25 @@ Each adapter embeds its own guide as a static string (e.g., `linearAdapter.guide
 
 **Files touched:** `packages/services/src/actions/adapters/index.ts:getGuide`, adapter files
 
-### 6.11 MCP Connector System — `Implemented` (Prebuild-Scoped) / `Planned` (Org-Scoped Catalog)
+### 6.11 MCP Connector System — `Implemented` (Org-Scoped Catalog)
 
 **What it does:** Enables remote MCP servers to surface tools through the Actions pipeline, giving agents access to MCP-compatible services while preserving the existing risk/approval/grant/audit flow.
 
 **Architecture:**
 ```
-Current:
-Prebuild (connectors JSONB) → Gateway resolves at session runtime
+Org connector catalog (org_connectors table) → Gateway resolves by org/session runtime
   → MCP Client connects to remote server (StreamableHTTPClientTransport)
   → tools/list → ActionDefinition[] (cached 5 min per session)
   → Merged into GET /available alongside adapter actions
   → POST /invoke → risk/grant evaluation → tools/call on MCP server
-
-Planned:
-Org connector catalog (integrations-owned) → Gateway resolves by org/session runtime
-  → Same MCP client + risk/grant/audit path
-  → Same GET /available merge and invoke behavior
 ```
 
 **Key components:**
-- **Connector config** (`packages/shared/src/connectors.ts`): `ConnectorConfig` type + Zod schemas. Currently stored as JSONB on `prebuilds`. Planned migration is org-scoped connector catalog persistence in the Integrations domain.
+- **Connector config** (`packages/shared/src/connectors.ts`): `ConnectorConfig` type + Zod schemas. Stored in the org-scoped `org_connectors` table, managed via Integrations CRUD routes.
 - **MCP client** (`packages/services/src/actions/connectors/client.ts`): Stateless — creates a fresh `Client` per `listConnectorTools()` or `callConnectorTool()` call. Uses `@modelcontextprotocol/sdk` (MIT). 15s timeout for tool listing, 30s for calls.
 - **Risk derivation** (`packages/services/src/actions/connectors/risk.ts`): Priority: per-tool policy override → MCP annotations (`destructiveHint`→danger, `readOnlyHint`→read; destructive checked first for fail-safe) → connector default risk → "write" fallback.
 - **Secret resolution**: Connector `auth.secretKey` references an org-level secret by key name. Resolved at call time via `secrets.resolveSecretValue()`. Keys never enter the sandbox.
-- **Gateway integration** (`apps/gateway/src/api/proliferate/http/actions.ts`): In-memory tool cache (`Map<sessionId, CachedConnectorTools[]>`, 5-min TTL). Connector branches in `GET /available`, `GET /guide/:integration`, `POST /invoke`, `POST /approve`. Current connector loading path is session → prebuild. Planned path is session/org → org connector catalog.
+- **Gateway integration** (`apps/gateway/src/api/proliferate/http/actions.ts`): In-memory tool cache (`Map<sessionId, CachedConnectorTools[]>`, 5-min TTL). Connector branches in `GET /available`, `GET /guide/:integration`, `POST /invoke`, `POST /approve`. Connector loading path is session/org → org connector catalog.
 - **Integration prefix**: Connector actions use `connector:<uuid>` in the `integration` column. Grants match this as a string (wildcards work). `integrationId` is `null` for connector invocations.
 
 **Connector guide auto-generation:** `GET /guide/connector:<id>` generates a markdown guide from cached tool definitions (name, description, risk level, parameters) instead of using a static adapter guide string.

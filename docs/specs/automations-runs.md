@@ -3,7 +3,7 @@
 ## 1. Scope & Purpose
 
 ### In Scope
-- Automation CRUD and configuration (name, instructions, model, prebuild, notifications)
+- Automation CRUD and configuration (name, instructions, model, configuration, notifications)
 - Automation connections (integration bindings)
 - Run lifecycle state machine: queued → enriching → ready → running → succeeded/failed/needs_human/timed_out
 - Run pipeline: enrich → execute → finalize
@@ -14,7 +14,7 @@
 - Outbox dispatch (atomic claim, stuck-row recovery, exponential backoff)
 - Side effects tracking (`automation_side_effects`)
 - Artifact storage (S3 — completion + enrichment JSON)
-- Target resolution (which repo/prebuild to use)
+- Target resolution (which repo/configuration to use)
 - Notification dispatch (Slack channel messages on terminal run states)
 - Slack async client (bidirectional session via Slack threads)
 - Slack inbound handlers (text, todo, verify, default-tool)
@@ -33,12 +33,12 @@
 
 ### Mental Model
 
-An **automation** is a reusable configuration that describes *what* the agent should do when a trigger fires. A **run** is a single execution of that automation, moving through a pipeline: enrich the trigger context, resolve a target repo/prebuild, create a session, send the prompt, then finalize when the agent calls `automation.complete` or the session terminates.
+An **automation** is a reusable configuration that describes *what* the agent should do when a trigger fires. A **run** is a single execution of that automation, moving through a pipeline: enrich the trigger context, resolve a target repo/configuration, create a session, send the prompt, then finalize when the agent calls `automation.complete` or the session terminates.
 
 The pipeline is driven by an **outbox** pattern: stages enqueue the next stage's work via the `outbox` table, and a poller dispatches items to BullMQ queues. This decouples stages and provides at-least-once delivery with retry. Only `createRunFromTriggerEvent` and `completeRun` write outbox rows in the same transaction as status updates; the enrichment flow writes status, outbox, and artifact entries as separate sequential calls (`apps/worker/src/automation/index.ts:114-134`).
 
 **Core entities:**
-- **Automation** — org-scoped configuration with agent instructions, model, default prebuild, notification settings. Owns triggers and connections.
+- **Automation** — org-scoped configuration with agent instructions, model, default configuration, notification settings. Owns triggers and connections.
 - **Run** (`automation_runs`) — a single pipeline execution. Tracks status, timestamps, lease, session reference, completion, enrichment, and assignment.
 - **Outbox** (`outbox`) — transactional outbox table for reliable dispatch between pipeline stages.
 - **Run event** (`automation_run_events`) — append-only audit log of status transitions and milestones.
@@ -83,7 +83,7 @@ apps/worker/src/automation/
 ├── index.ts                          # Orchestrator: workers, outbox poller, finalizer loop
 ├── enrich.ts                         # buildEnrichmentPayload() — pure extraction
 ├── finalizer.ts                      # finalizeOneRun() — reconcile stale runs
-├── resolve-target.ts                 # resolveTarget() — pick repo/prebuild
+├── resolve-target.ts                 # resolveTarget() — pick repo/configuration
 ├── artifacts.ts                      # S3 artifact writer (completion + enrichment)
 ├── notifications.ts                  # Slack notification dispatch + channel resolution
 ├── *.test.ts                         # Tests for each module
@@ -138,7 +138,7 @@ automations
 ├── agent_instructions  TEXT
 ├── agent_type          TEXT DEFAULT 'opencode'
 ├── model_id            TEXT DEFAULT 'claude-sonnet-4-20250514'
-├── default_prebuild_id UUID FK(prebuilds) ON DELETE SET NULL
+├── default_configuration_id UUID FK(configurations) ON DELETE SET NULL
 ├── allow_agentic_repo_selection BOOLEAN DEFAULT false
 ├── llm_filter_prompt   TEXT
 ├── enabled_tools       JSONB DEFAULT {}
@@ -148,7 +148,7 @@ automations
 ├── created_by          TEXT FK(user)
 ├── created_at          TIMESTAMPTZ
 └── updated_at          TIMESTAMPTZ
-Indexes: idx_automations_org, idx_automations_enabled, idx_automations_prebuild
+Indexes: idx_automations_org, idx_automations_enabled, idx_automations_configuration
 
 automation_connections
 ├── id                  UUID PK
@@ -245,7 +245,7 @@ Terminal statuses: `succeeded`, `failed`, `needs_human`, `timed_out`. Any non-te
 ```typescript
 // packages/services/src/runs/db.ts
 interface AutomationRunWithRelations extends AutomationRunRow {
-  automation: { id; name; defaultPrebuildId; agentInstructions; modelId; ... } | null;
+  automation: { id; name; defaultConfigurationId; agentInstructions; modelId; ... } | null;
   triggerEvent: { id; parsedContext; rawPayload; providerEventType; ... } | null;
   trigger: { id; provider; name } | null;
 }
@@ -265,7 +265,7 @@ interface EnrichmentPayload {
 // apps/worker/src/automation/resolve-target.ts
 interface TargetResolution {
   type: "default" | "selected" | "fallback";
-  prebuildId?: string;
+  configurationId?: string;
   repoIds?: string[];
   reason: string;
   suggestedRepoId?: string;
@@ -372,14 +372,14 @@ try {
 
 ### 6.3 Target Resolution — `Implemented`
 
-**What it does:** Determines which repo/prebuild to use for session creation based on enrichment output and automation configuration.
+**What it does:** Determines which repo/configuration to use for session creation based on enrichment output and automation configuration.
 
 **Decision tree** (`apps/worker/src/automation/resolve-target.ts:resolveTarget`):
-1. If `allowAgenticRepoSelection` is false → use `defaultPrebuildId` ("selection_disabled")
-2. If no `suggestedRepoId` in enrichment → use `defaultPrebuildId` ("no_suggestion")
-3. If suggested repo doesn't exist in org → fallback to `defaultPrebuildId` ("repo_not_found_or_wrong_org")
-4. If existing managed prebuild contains the repo → reuse it ("enrichment_suggestion_reused")
-5. Otherwise → pass `repoIds: [suggestedRepoId]` for managed prebuild creation ("enrichment_suggestion_new")
+1. If `allowAgenticRepoSelection` is false → use `defaultConfigurationId` ("selection_disabled")
+2. If no `suggestedRepoId` in enrichment → use `defaultConfigurationId` ("no_suggestion")
+3. If suggested repo doesn't exist in org → fallback to `defaultConfigurationId` ("repo_not_found_or_wrong_org")
+4. If existing managed configuration contains the repo → reuse it ("enrichment_suggestion_reused")
+5. Otherwise → pass `repoIds: [suggestedRepoId]` for managed configuration creation ("enrichment_suggestion_new")
 
 **Files touched:** `apps/worker/src/automation/resolve-target.ts`
 
@@ -389,13 +389,13 @@ try {
 
 **Happy path:**
 1. Claim run in `ready` status (`apps/worker/src/automation/index.ts:handleExecute`)
-2. Call `resolveTarget()` to determine prebuild/repos
+2. Call `resolveTarget()` to determine configuration/repos
 3. Create session via `syncClient.createSession()` with `clientType: "automation"`, `sandboxMode: "immediate"`
 4. Build prompt: agent instructions + trigger context path + completion requirements with `run_id` and `completion_id`
 5. Post prompt via `syncClient.postMessage()` with idempotency key
 
 **Edge cases:**
-- No valid target → run marked failed with `missing_prebuild`
+- No valid target → run marked failed with `missing_configuration`
 - Session already exists (`run.sessionId` set) → skip creation, only send prompt if not already sent
 - Prompt already sent (`run.promptSentAt` set) → skip
 
@@ -515,9 +515,9 @@ try {
 | `triggers.md` | Triggers → This | `runs.createRunFromTriggerEvent()` | Trigger service inserts run + outbox row. Handoff point. |
 | `agent-contract.md` | This → Agent | `automation.complete` tool schema | Run injects `run_id` + `completion_id` in prompt. Agent calls tool to finalize. |
 | `sessions-gateway.md` | This → Gateway | `syncClient.createSession()`, `postMessage()`, `getSessionStatus()` | Worker creates sessions and sends prompts via gateway SDK. |
-| `sandbox-providers.md` | This → Provider (indirect) | Via gateway session creation | Target resolution determines prebuild; gateway handles sandbox boot. |
+| `sandbox-providers.md` | This → Provider (indirect) | Via gateway session creation | Target resolution determines configuration; gateway handles sandbox boot. |
 | `integrations.md` | This → Integrations | `automations.addAutomationConnection()` | Automation connections bind integrations. OAuth lifecycle owned by integrations spec. |
-| `repos-prebuilds.md` | This → Prebuilds | `prebuilds.findManagedPrebuilds()` | Target resolution looks up managed prebuilds for repo reuse. |
+| `repos-prebuilds.md` | This → Configurations | `configurations.findManagedConfigurations()` | Target resolution looks up managed configurations for repo reuse. |
 | `billing-metering.md` | This → Billing (indirect) | Via session creation | Session creation triggers billing; this spec does not gate on balance. |
 
 ### Security & Auth

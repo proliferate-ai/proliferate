@@ -225,10 +225,9 @@ System specs in `docs/specs/` are the **single source of truth** for how each su
 | Trigger service, webhooks, polling, cron, trigger providers (GitHub/Linear/Sentry/PostHog) | `triggers.md` |
 | Action invocations, approval flow, grants, risk classification, Linear/Sentry adapters | `actions.md` |
 | LiteLLM virtual keys, model routing, per-org spend tracking | `llm-proxy.md` |
-| CLI device auth, file sync, OpenCode launch, CLI API routes | `cli.md` |
-| Repo CRUD, prebuild configs, base/repo snapshot builds, service commands, env file persistence | `repos-prebuilds.md` |
-| First-class snapshots, config-scoped secret files, dual-write expand/contract migration | `configurations-snapshots.md` |
-| Secret CRUD, bundles, encryption, env file deployment | `secrets-environment.md` |
+| Repo CRUD, base snapshot builds | `repos-prebuilds.md` |
+| Configuration CRUD, snapshots, secret files, service commands, setup commands | `configurations-snapshots.md` |
+| Secret CRUD, encryption, connector credentials | `secrets-environment.md` |
 | OAuth connections (GitHub/Sentry/Linear/Slack), Nango, connection binding | `integrations.md` |
 | User auth, orgs, members, invitations, onboarding, admin, API keys | `auth-orgs.md` |
 | Billing, metering, credit gating, trial credits, org pause, Autumn | `billing-metering.md` |

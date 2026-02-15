@@ -23,7 +23,7 @@
 - Sandbox boot mechanics and provider interface — see `sandbox-providers.md`
 - Tool schemas and prompt modes — see `agent-contract.md`
 - Automation-initiated session orchestration (run lifecycle) — see `automations-runs.md`
-- Repo/prebuild config resolution — see `repos-prebuilds.md`
+- Repo/configuration config resolution — see `repos-prebuilds.md`
 - LLM key generation — see `llm-proxy.md`
 - Billing gating for session creation — see `billing-metering.md`
 
@@ -31,7 +31,7 @@
 
 The gateway is a stateful Express + WebSocket server that bridges web clients and sandbox agents. When a user opens a session, the gateway creates a **hub** — a per-session runtime that owns the sandbox connection (SSE to OpenCode), client connections (WebSocket), and event translation. The hub lazily provisions the sandbox on first client connect, then streams events bidirectionally until the session pauses, migrates, or stops.
 
-Sessions can be created via two different pipelines. The **oRPC path** (`apps/web/src/server/routers/sessions-create.ts`) is lightweight: billing check, agent config, prebuild lookup, snapshot resolution, and a `sessions.createSessionRecord()` call — no idempotency, no session connections, no sandbox provisioning. The **gateway HTTP path** (`POST /proliferate/sessions` via `apps/gateway/src/lib/session-creator.ts`) is the full pipeline: prebuild resolution, idempotency, integration token resolution, session connections, SSH options, and optionally immediate sandbox creation. Both pipelines converge at runtime: the first WebSocket connection triggers `ensureRuntimeReady()`.
+Sessions can be created via two different pipelines. The **oRPC path** (`apps/web/src/server/routers/sessions-create.ts`) is lightweight: billing check, agent config, configuration lookup, snapshot resolution, and a `sessions.createSessionRecord()` call — no idempotency, no session connections, no sandbox provisioning. The **gateway HTTP path** (`POST /proliferate/sessions` via `apps/gateway/src/lib/session-creator.ts`) is the full pipeline: configuration resolution, idempotency, integration token resolution, session connections, SSH options, and optionally immediate sandbox creation. Both pipelines converge at runtime: the first WebSocket connection triggers `ensureRuntimeReady()`.
 
 **Core entities:**
 - **Session** — a DB record tracking sandbox association, status, snapshot, and config. Statuses: `pending`, `starting`, `running`, `paused`, `stopped`, `failed`. Resume is implicit — connecting to a paused session's hub triggers `ensureRuntimeReady()`, which provisions a new sandbox from the stored snapshot.
@@ -88,7 +88,6 @@ apps/gateway/src/
 │   └── capabilities/tools/
 │       ├── index.ts                      # Intercepted tools registry (see agent-contract.md §6.5)
 │       ├── automation-complete.ts        # automation.complete handler
-│       ├── save-env-files.ts             # save_env_files handler
 │       ├── save-service-commands.ts      # save_service_commands handler
 │       ├── save-snapshot.ts              # save_snapshot handler
 │       └── verify.ts                     # verify handler
@@ -119,7 +118,7 @@ apps/gateway/src/
 │   ├── s3.ts                            # S3 verification file upload
 │   ├── lock.ts                          # Distributed migration lock
 │   ├── idempotency.ts                   # Redis-based idempotency keys
-│   ├── prebuild-resolver.ts             # Prebuild resolution (see repos-prebuilds.md)
+│   ├── configuration-resolver.ts        # Configuration resolution (see repos-prebuilds.md)
 │   ├── github-auth.ts                   # GitHub token resolution
 │   └── sandbox-mcp-token.ts             # HMAC-SHA256 token derivation
 ├── expiry/
@@ -174,7 +173,7 @@ sessions
 ├── id                    UUID PRIMARY KEY
 ├── organization_id       TEXT NOT NULL (FK → organization)
 ├── created_by            TEXT (FK → user)
-├── prebuild_id           UUID (FK → prebuilds, SET NULL on delete)
+├── configuration_id      UUID (FK → configurations, SET NULL on delete)
 ├── repo_id               UUID (FK → repos, CASCADE — legacy)
 ├── session_type           TEXT DEFAULT 'coding'   -- 'setup' | 'coding' | 'cli' | 'terminal' (see note)
 ├── status                TEXT DEFAULT 'starting'  -- 'pending' | 'starting' | 'running' | 'paused' | 'stopped' | 'failed'
@@ -232,7 +231,7 @@ Source: `packages/db/src/schema/sessions.ts`
 - `idx_sessions_parent` on `parent_session_id`
 - `idx_sessions_automation` on `automation_id`
 - `idx_sessions_trigger` on `trigger_id`
-- `idx_sessions_prebuild` on `prebuild_id`
+- `idx_sessions_configuration` on `configuration_id`
 - `idx_sessions_local_path_hash` on `local_path_hash`
 - `idx_sessions_client_type` on `client_type`
 - `idx_sessions_sandbox_expires_at` on `sandbox_expires_at`
@@ -249,7 +248,7 @@ interface SessionContext {
   agentConfig: AgentConfig & { tools?: string[] };
   envVars: Record<string, string>;
   sshPublicKey?: string;
-  snapshotHasDeps: boolean;
+  activeSnapshotId: string | null;
   serviceCommands?: PrebuildServiceCommand[];
 }
 
@@ -311,15 +310,15 @@ class ApiError extends Error {
 
 **Gateway HTTP path** (`POST /proliferate/sessions`):
 1. Auth middleware validates JWT/CLI token (`apps/gateway/src/middleware/auth.ts:createRequireAuth`).
-2. Route validates exactly one prebuild option (explicit ID, managed, or CLI) (`apps/gateway/src/api/proliferate/http/sessions.ts:123-134`).
-3. `resolvePrebuild()` resolves or creates a prebuild record (`apps/gateway/src/lib/prebuild-resolver.ts`).
+2. Route validates exactly one configuration option (explicit ID or managed) (`apps/gateway/src/api/proliferate/http/sessions.ts:123-134`).
+3. `resolveConfiguration()` resolves or creates a configuration record (`apps/gateway/src/lib/configuration-resolver.ts`).
 4. `createSession()` writes DB record, creates session connections, and optionally creates sandbox (`apps/gateway/src/lib/session-creator.ts:121`).
-5. For new managed prebuilds, fires a setup session with auto-generated prompt (`sessions.ts:startSetupSession`).
+5. For new managed configurations, fires a setup session with auto-generated prompt (`sessions.ts:startSetupSession`).
 
-**Scratch sessions** (no prebuild):
-- `prebuildId` is optional in `CreateSessionInputSchema`. When omitted, the oRPC path creates a **scratch session** with `prebuildId: null`, `snapshotId: null`.
-- `sessionType: "setup"` is rejected at schema level (via `superRefine`) when `prebuildId` is absent — setup sessions always require a prebuild.
-- Gateway `loadSessionContext()` handles `prebuild_id = null` with an early-return path: `repos: []`, synthetic scratch `primaryRepo`, `getScratchSystemPrompt()`, `snapshotHasDeps: false`.
+**Scratch sessions** (no configuration):
+- `configurationId` is optional in `CreateSessionInputSchema`. When omitted, the oRPC path creates a **scratch session** with `configurationId: null`, `snapshotId: null`.
+- `sessionType: "setup"` is rejected at schema level (via `superRefine`) when `configurationId` is absent — setup sessions always require a configuration.
+- Gateway `loadSessionContext()` handles `configuration_id = null` with an early-return path: `repos: []`, synthetic scratch `primaryRepo`, `getScratchSystemPrompt()`, `activeSnapshotId: null`.
 
 **oRPC path** (`apps/web/src/server/routers/sessions.ts`):
 - `create` → calls `createSessionHandler()` (`sessions-create.ts`) which writes a DB record only. This is a **separate, lighter pipeline** than the gateway HTTP route — no idempotency, no session connections, no sandbox provisioning.
@@ -489,7 +488,7 @@ Token verification chain: (1) User JWT (signed with `gatewayJwtSecret`), (2) Ser
 | `sandbox-providers.md` | This → Provider | `SandboxProvider.ensureSandbox()`, `.snapshot()`, `.pause()`, `.terminate()` | Runtime calls provider for sandbox lifecycle |
 | `agent-contract.md` | This → Tools | `getInterceptedToolHandler()` | Hub executes intercepted tools; schemas defined in agent-contract |
 | `automations-runs.md` | Runs → This | `createSyncClient().createSession()` + `.postMessage()` | Worker creates session and posts initial prompt |
-| `repos-prebuilds.md` | This → Prebuilds | `resolvePrebuild()`, `prebuilds.getPrebuildReposWithDetails()` | Session creator resolves prebuild at creation |
+| `repos-prebuilds.md` | This → Configurations | `resolveConfiguration()`, `configurations.getConfigurationReposWithDetails()` | Session creator resolves configuration at creation |
 | `llm-proxy.md` | Proxy → This | `sessions.buildSandboxEnvVars()` | Env vars include `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` |
 | `secrets-environment.md` | Secrets → This | `secrets.buildEnvFilesFromBundles()` | Env files passed to provider at sandbox creation |
 | `integrations.md` | This → Integrations | `integrations.getRepoConnectionsWithIntegrations()` | Token resolution for git clone |
@@ -526,4 +525,4 @@ Token verification chain: (1) User JWT (signed with `gatewayJwtSecret`), (2) Ser
 - [ ] **No WebSocket message persistence** — Messages live only in OpenCode's in-memory session. If OpenCode restarts, message history is lost. Impact: users see empty chat on sandbox recreation. Expected fix: message persistence layer (out of scope for current design).
 - [ ] **CORS allows all origins** — `Access-Control-Allow-Origin: *` is permissive. Impact: any domain can make requests if they have a valid token. Expected fix: restrict to known domains in production.
 - [ ] **Session status enum not enforced at DB level** — `status` is a `TEXT` column with no CHECK constraint. Impact: invalid states possible via direct DB writes. Expected fix: add DB-level enum or check constraint.
-- [ ] **Legacy `repo_id` FK on sessions** — Sessions table still has `repo_id` FK to repos (with CASCADE delete). Repos are now associated via `prebuild_repos` junction. Impact: schema inconsistency. Expected fix: drop `repo_id` column after confirming no reads.
+- [ ] **Legacy `repo_id` FK on sessions** — Sessions table still has `repo_id` FK to repos (with CASCADE delete). Repos are now associated via `configuration_repos` junction. Impact: schema inconsistency. Expected fix: drop `repo_id` column after confirming no reads.

@@ -17,7 +17,7 @@
 | `verify` tool | Implemented | `packages/shared/src/opencode-tools/index.ts:VERIFY_TOOL` | Uploads screenshots/evidence to S3 |
 | `save_snapshot` tool | Implemented | `packages/shared/src/opencode-tools/index.ts:SAVE_SNAPSHOT_TOOL` | Saves sandbox filesystem state |
 | `save_service_commands` tool | Implemented | `packages/shared/src/opencode-tools/index.ts:SAVE_SERVICE_COMMANDS_TOOL` | Persists auto-start commands for future sessions |
-| `save_env_files` tool | Implemented | `packages/shared/src/opencode-tools/index.ts:SAVE_ENV_FILES_TOOL` | Generates .env files from secrets |
+| `save_env_files` tool | Removed | `packages/shared/src/opencode-tools/index.ts` | Deleted; env files now managed via secret files |
 | `automation.complete` tool | Implemented | `packages/shared/src/opencode-tools/index.ts:AUTOMATION_COMPLETE_TOOL` | Marks automation run outcome with artifacts |
 | `request_env_variables` tool | Implemented | `packages/shared/src/opencode-tools/index.ts:REQUEST_ENV_VARIABLES_TOOL` | Requests secrets from user with suggestions |
 | Tool capability injection | Implemented | `packages/shared/src/sandbox/config.ts` | Plugin injection into sandbox OpenCode config |
@@ -92,7 +92,7 @@
 | Outbox atomic claim | Implemented | `packages/services/src/outbox/service.ts` | Claim + stuck-row recovery |
 | Side effects tracking | Implemented | `packages/db/src/schema/automations.ts` | `automation_side_effects` table |
 | Artifact storage (S3) | Implemented | `apps/worker/src/automation/artifacts.ts` | Completion + enrichment artifacts |
-| Target resolution | Implemented | `apps/worker/src/automation/resolve-target.ts` | Resolves which repo/prebuild to use |
+| Target resolution | Implemented | `apps/worker/src/automation/resolve-target.ts` | Resolves which repo/configuration to use |
 | Slack notifications | Implemented | `apps/worker/src/automation/notifications.ts` | Run status posted to Slack |
 | Notification dispatch | Implemented | `apps/worker/src/automation/notifications.ts:dispatchRunNotification` | Delivery orchestration |
 | Slack async client | Implemented | `apps/worker/src/slack/client.ts` | Full bidirectional session via Slack |
@@ -163,46 +163,46 @@
 
 ---
 
-## 8. CLI (`cli.md`)
+## 8. CLI (`cli.md`) — Removed
 
 | Feature | Status | Evidence | Notes |
 |---------|--------|----------|-------|
-| Device auth flow | Implemented | `packages/cli/src/state/auth.ts` | OAuth device code flow, token saved to `~/.proliferate/token` |
-| Local config management | Implemented | `packages/cli/src/state/config.ts` | Project-local `.proliferate/` config |
-| File sync (local → sandbox) | Implemented | `packages/cli/src/lib/sync.ts` | Unidirectional rsync-based push |
-| OpenCode launch | Implemented | `packages/cli/src/agents/opencode.ts` | Opens OpenCode UI |
-| CLI API routes (auth) | Implemented | `apps/web/src/server/routers/cli.ts:cliAuthRouter` | Device code create/authorize/poll |
-| CLI API routes (repos) | Implemented | `apps/web/src/server/routers/cli.ts:cliReposRouter` | Get/create repos from CLI |
-| CLI API routes (sessions) | Implemented | `apps/web/src/server/routers/cli.ts:cliSessionsRouter` | Session creation for CLI |
-| CLI API routes (SSH keys) | Implemented | `apps/web/src/server/routers/cli.ts:cliSshKeysRouter` | SSH key management |
-| CLI API routes (GitHub) | Implemented | `apps/web/src/server/routers/cli.ts:cliGitHubRouter` | GitHub connection for CLI |
-| CLI API routes (prebuilds) | Implemented | `apps/web/src/server/routers/cli.ts:cliPrebuildsRouter` | Prebuild listing for CLI |
-| GitHub repo selection | Implemented | `packages/db/src/schema/cli.ts:cliGithubSelections` | Selection history |
-| SSH key storage | Implemented | `packages/db/src/schema/cli.ts:userSshKeys` | Per-user SSH keys |
+| Device auth flow | Removed | `packages/cli/` | CLI package removed |
+| Local config management | Removed | `packages/cli/` | CLI package removed |
+| File sync (local → sandbox) | Removed | `packages/cli/` | CLI package removed |
+| OpenCode launch | Removed | `packages/cli/` | CLI package removed |
+| CLI API routes (auth) | Removed | `apps/web/src/server/routers/cli.ts` | CLI routes removed |
+| CLI API routes (repos) | Removed | `apps/web/src/server/routers/cli.ts` | CLI routes removed |
+| CLI API routes (sessions) | Removed | `apps/web/src/server/routers/cli.ts` | CLI routes removed |
+| CLI API routes (SSH keys) | Removed | `apps/web/src/server/routers/cli.ts` | CLI routes removed |
+| CLI API routes (GitHub) | Removed | `apps/web/src/server/routers/cli.ts` | CLI routes removed |
+| CLI API routes (configurations) | Removed | `apps/web/src/server/routers/cli.ts` | CLI routes removed |
+| GitHub repo selection | Removed | `packages/db/src/schema/cli.ts` | CLI schema removed |
+| SSH key storage | Removed | `packages/db/src/schema/cli.ts` | CLI schema removed |
 
 ---
 
-## 9. Repos, Configurations & Prebuilds (`repos-prebuilds.md`)
+## 9. Repos & Configurations (`repos-prebuilds.md`)
 
 | Feature | Status | Evidence | Notes |
 |---------|--------|----------|-------|
 | Repo CRUD | Implemented | `apps/web/src/server/routers/repos.ts` | List/get/create/delete |
 | Repo search | Implemented | `apps/web/src/server/routers/repos.ts:search` | Search available repos |
 | Repo connections | Implemented | `packages/db/src/schema/repos.ts:repoConnections` | Integration bindings |
-| Prebuild CRUD | Implemented | `apps/web/src/server/routers/prebuilds.ts` | List/create/update/delete |
-| Prebuild-repo associations | Implemented | `packages/db/src/schema/prebuilds.ts:prebuildRepos` | Many-to-many |
+| Configuration CRUD | Implemented | `apps/web/src/server/routers/prebuilds.ts` | List/create/update/delete |
+| Configuration-repo associations | Implemented | `packages/db/src/schema/prebuilds.ts:prebuildRepos` | Many-to-many (`configuration_repos` table) |
 | Effective service commands | Implemented | `apps/web/src/server/routers/prebuilds.ts:getEffectiveServiceCommands` | Resolved config |
 | Base snapshot builds | Implemented | `apps/worker/src/base-snapshots/index.ts` | Worker queue, deduplication |
 | Repo snapshot builds | Implemented | `apps/worker/src/repo-snapshots/index.ts` | GitHub token hierarchy, commit tracking |
-| Prebuild resolver | Implemented | `apps/gateway/src/lib/prebuild-resolver.ts` | Resolves config at session start |
-| Service commands persistence | Implemented | `packages/db/src/schema/prebuilds.ts:serviceCommands` | JSONB on prebuilds |
-| Env file persistence | Implemented | `packages/db/src/schema/prebuilds.ts:envFiles` | JSONB on prebuilds |
-| Prebuild connector configuration (deprecated) | Deprecated | `packages/db/src/schema/prebuilds.ts:connectors` | Legacy JSONB on prebuilds table; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
+| Configuration resolver | Implemented | `apps/gateway/src/lib/prebuild-resolver.ts` | Resolves configuration at session start |
+| Service commands persistence | Implemented | `packages/db/src/schema/prebuilds.ts:serviceCommands` | JSONB on configurations |
+| Env file persistence | Deprecated | `packages/db/src/schema/prebuilds.ts:envFiles` | Legacy JSONB; replaced by `secret_files` |
+| Configuration connector config (deprecated) | Deprecated | `packages/db/src/schema/prebuilds.ts:connectors` | Legacy JSONB on configurations table; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
 | Org-scoped connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | `org_connectors` table with full CRUD via Integrations routes |
 | Org connector management UI | Implemented | `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools page with presets, secret picker, validation |
 | Org connector validation endpoint | Implemented | `apps/web/src/server/routers/integrations.ts:validateConnector` | `tools/list` preflight with diagnostics |
-| Base snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:sandboxBaseSnapshots` | Building/ready/failed |
-| Repo snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:repoSnapshots` | Building/ready/failed + commit SHA |
+| Base snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:sandboxBaseSnapshots` | Building/ready/failed (legacy table) |
+| Repo snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:repoSnapshots` | Building/ready/failed + commit SHA (legacy table) |
 
 ---
 
@@ -212,16 +212,15 @@
 |---------|--------|----------|-------|
 | First-class snapshots table | Implemented | `packages/db/src/schema/schema.ts:snapshots` | Lifecycle: building/ready/failed, `has_deps` property |
 | Snapshot repos (commit tracking) | Implemented | `packages/db/src/schema/schema.ts:snapshotRepos` | Per-repo commit SHA per snapshot (not populated in PR1) |
-| Active snapshot on prebuilds | Implemented | `packages/db/src/schema/schema.ts:prebuilds.activeSnapshotId` | FK → snapshots, set on markReady |
-| Organization ID on prebuilds | Implemented | `packages/db/src/schema/schema.ts:prebuilds.organizationId` | Backfilled from prebuild_repos → repos |
-| Secret files (config-scoped env) | Implemented | `packages/db/src/schema/schema.ts:secretFiles` | Replaces env_files JSONB (dual-write in PR1) |
+| Active snapshot on configurations | Implemented | `packages/db/src/schema/schema.ts:prebuilds.activeSnapshotId` | FK → snapshots, set on markReady |
+| Organization ID on configurations | Implemented | `packages/db/src/schema/schema.ts:prebuilds.organizationId` | Backfilled from configuration_repos → repos |
+| Secret files (config-scoped env) | Implemented | `packages/db/src/schema/schema.ts:secretFiles` | Replaces env_files JSONB and legacy secret_bundles |
 | Configuration secrets | Implemented | `packages/db/src/schema/schema.ts:configurationSecrets` | Per-key encrypted values for secret files |
 | Secret files CRUD API | Implemented | `apps/web/src/server/routers/secrets.ts:secretFilesRouter` | List/create/delete files, upsert/delete secrets |
 | Snapshots service | Implemented | `packages/services/src/snapshots/` | Create, markReady, markFailed, getActiveSnapshot |
 | Secret files service | Implemented | `packages/services/src/secret-files/` | CRUD, encryption, boot decryption, saveEnvFileSpec |
-| Snapshot dual-write (save_snapshot) | Implemented | `apps/gateway/src/hub/session-hub.ts` | Writes to old prebuilds + new snapshots table |
-| Snapshot dual-write (finalize) | Implemented | `apps/web/src/server/routers/repos-finalize.ts` | Writes to old prebuilds + new snapshots table |
-| Env files dual-write (save_env_files) | Implemented | `apps/gateway/src/hub/capabilities/tools/save-env-files.ts` | Writes to old JSONB + new secret_files |
+| Snapshot dual-write (save_snapshot) | Implemented | `apps/gateway/src/hub/session-hub.ts` | Writes to old configurations + new snapshots table |
+| Snapshot dual-write (finalize) | Implemented | `apps/web/src/server/routers/repos-finalize.ts` | Writes to old configurations + new snapshots table |
 | Snapshot fallback reads | Implemented | `apps/gateway/src/lib/session-creator.ts` | active_snapshot → legacy snapshot → repo snapshot |
 | snapshotHasDeps fallback | Implemented | `apps/gateway/src/lib/session-creator.ts`, `session-store.ts` | Matches snapshot ID before using has_deps |
 | Migration (expand) | Implemented | `packages/db/drizzle/0024_configurations_snapshots_expand.sql` | Create tables, backfill, migrate data |
@@ -234,8 +233,8 @@
 |---------|--------|----------|-------|
 | Secret CRUD | Implemented | `apps/web/src/server/routers/secrets.ts` | Create/delete/list |
 | Secret check (exists?) | Implemented | `apps/web/src/server/routers/secrets.ts:check` | Check without revealing value |
-| Secret bundles CRUD | Implemented | `apps/web/src/server/routers/secrets.ts` | List/create/update/delete bundles |
-| Bundle metadata update | Implemented | `apps/web/src/server/routers/secrets.ts:updateBundleMeta` | Rename, change target path |
+| Secret bundles CRUD | Removed | `apps/web/src/server/routers/secrets.ts` | Replaced by secret files (`secret_files` table) |
+| Bundle metadata update | Removed | `apps/web/src/server/routers/secrets.ts` | Replaced by secret files |
 | Bulk import | Implemented | `apps/web/src/server/routers/secrets.ts:bulkImport` | `.env` paste flow |
 | Secret encryption | Implemented | `packages/services/src/secrets/` | Encrypted at rest |
 | Per-secret persistence toggle | Implemented | Recent PR `c4d0abb` | Toggle whether secret persists across sessions |

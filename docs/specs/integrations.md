@@ -122,7 +122,7 @@ apps/gateway/src/lib/
 └── github-auth.ts               # Gateway-side GitHub token resolution
 ```
 
-Connector catalog: `packages/services/src/connectors/` owns DB access and business logic. `org_connectors` table stores connector definitions with backfill migration from legacy `prebuilds.connectors` JSONB.
+Connector catalog: `packages/services/src/connectors/` owns DB access and business logic. `org_connectors` table stores connector definitions (migrated from legacy `configurations.connectors` JSONB).
 
 ---
 
@@ -506,7 +506,7 @@ function handleNangoError(err: unknown, operation: string): never {
 **Behavior:**
 1. Admin/owner configures connectors once per org via Settings → Tools.
 2. Config is stored in `org_connectors` table using the shared `ConnectorConfig` schema (`packages/shared/src/connectors.ts`).
-3. Gateway Actions loads enabled connectors by org/session context, not by prebuild.
+3. Gateway Actions loads enabled connectors by org/session context, not by configuration.
 4. Connector-backed actions continue using the same `connector:<uuid>` integration prefix and existing approval/audit pipeline in `actions.md`.
 5. Quick-setup flow: preset grid with inline API key entry, atomic secret + connector creation in a single transaction.
 6. Advanced flow: full form with secret picker, custom auth, risk policy, and connection validation.

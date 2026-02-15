@@ -4,7 +4,7 @@
 
 ### In Scope
 - System prompt modes: setup, coding, automation — what each injects and how they differ
-- OpenCode tool schemas: `verify`, `save_snapshot`, `save_service_commands`, `save_env_files`, `automation.complete`, `request_env_variables`
+- OpenCode tool schemas: `verify`, `save_snapshot`, `save_service_commands`, `automation.complete`, `request_env_variables`
 - Capability injection: how tools and instructions are registered in the sandbox OpenCode config
 - Tool input/output contracts and validation rules
 - Agent/model configuration and selection
@@ -33,8 +33,8 @@ The gateway selects a system prompt based on session type and client type, then 
 - **Agent config** — model ID and optional tools array stored per-session in the database.
 
 **Key invariants:**
-- All six tools are always injected regardless of session mode. The system prompt alone controls which tools the agent is encouraged to use.
-- Five of six tools are intercepted by the gateway (executed server-side). Only `request_env_variables` runs in the sandbox.
+- All five tools are always injected regardless of session mode. The system prompt alone controls which tools the agent is encouraged to use.
+- Four of five tools are intercepted by the gateway (executed server-side). Only `request_env_variables` runs in the sandbox.
 - Tool definitions are string templates exported from `packages/shared/src/opencode-tools/index.ts`. They are the single source of truth for tool schemas.
 - The system prompt can be overridden per-session via `session.system_prompt` in the database.
 
@@ -85,8 +85,7 @@ apps/gateway/src/
     ├── verify.ts                       # verify handler (S3 upload)
     ├── save-snapshot.ts                # save_snapshot handler (provider snapshot)
     ├── automation-complete.ts          # automation.complete handler (run finalization)
-    ├── save-service-commands.ts        # save_service_commands handler (prebuild update)
-    └── save-env-files.ts              # save_env_files handler (prebuild update)
+    └── save-service-commands.ts        # save_service_commands handler (configuration update)
 ```
 
 ---
@@ -147,7 +146,7 @@ Source: `apps/gateway/src/lib/session-store.ts:SessionRecord`
 ### Do
 - Define new tool schemas in `packages/shared/src/opencode-tools/index.ts` as string template exports — this keeps all tool definitions in one place.
 - Export both a `.ts` tool definition and a `.txt` description file for each tool — OpenCode uses both.
-- Use Zod validation in gateway handlers for tools with complex schemas (e.g., `save_service_commands`, `save_env_files`). Simpler tools (`verify`, `save_snapshot`) use inline type coercion.
+- Use Zod validation in gateway handlers for tools with complex schemas (e.g., `save_service_commands`). Simpler tools (`verify`, `save_snapshot`) use inline type coercion.
 - Return `InterceptedToolResult` from all handlers — the `success` field drives error reporting.
 
 ### Don't
@@ -160,7 +159,7 @@ Source: `apps/gateway/src/lib/session-store.ts:SessionRecord`
 
 ```typescript
 // Standard pattern for intercepted tool handlers
-// Source: apps/gateway/src/hub/capabilities/tools/save-env-files.ts
+// Source: apps/gateway/src/hub/capabilities/tools/save-service-commands.ts
 async execute(hub, args): Promise<InterceptedToolResult> {
   const parsed = ArgsSchema.safeParse(args);
   if (!parsed.success) {
@@ -189,7 +188,7 @@ async execute(hub, args): Promise<InterceptedToolResult> {
 ### Testing Conventions
 - Tool handler tests live alongside handlers in gateway tests.
 - Test intercepted tool handlers by mocking `SessionHub` methods (e.g., `hub.uploadVerificationFiles`, `hub.saveSnapshot`).
-- Verify Zod validation rejects malformed args for `save_service_commands` and `save_env_files`.
+- Verify Zod validation rejects malformed args for `save_service_commands`.
 - System prompt tests: assert each mode includes the expected tool references and omits out-of-scope ones.
 
 ---
@@ -219,7 +218,6 @@ async execute(hub, args): Promise<InterceptedToolResult> {
 | `save_snapshot` | Required at end | Available | Available |
 | `request_env_variables` | Emphasized | Available | Available |
 | `save_service_commands` | Emphasized | Not available | Not available |
-| `save_env_files` | Emphasized | Not available | Not available |
 | `automation.complete` | Not mentioned | Not mentioned | **Mandatory** |
 | Source code edits | Forbidden | Encouraged | Encouraged |
 | `proliferate` CLI | Documented | Documented | Documented |
@@ -257,7 +255,7 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 }
 ```
 
-**Behavior:** Gateway intercepts, triggers provider snapshot. For setup sessions: updates prebuild snapshot. For coding sessions: updates session snapshot. Returns `{ snapshotId, target }`.
+**Behavior:** Gateway intercepts, triggers provider snapshot. For setup sessions: updates configuration snapshot. For coding sessions: updates session snapshot. Returns `{ snapshotId, target }`.
 
 #### `save_service_commands` tool — `Implemented`
 
@@ -273,31 +271,9 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 }
 ```
 
-**Behavior:** Gateway intercepts, validates with Zod, persists to prebuild `service_commands` JSONB. Requires `session.prebuild_id`. Returns `{ prebuildId, commandCount }`.
+**Behavior:** Gateway intercepts, validates with Zod, persists to configuration `service_commands` JSONB. Requires `session.configuration_id`. Returns `{ configurationId, commandCount }`.
 
 **Scope:** Setup sessions only. The tool file is only injected into sandboxes when `sessionType === "setup"`. The gateway handler also rejects calls from non-setup sessions at runtime as a defense-in-depth measure.
-
-#### `save_env_files` tool — `Implemented`
-
-**Schema:**
-```typescript
-{
-  files: Array<{
-    path: string          // Relative, no leading /, no .., max 500 chars
-    workspacePath?: string // Default "."
-    format: "dotenv"      // Only supported format
-    mode: "secret"        // Only supported mode
-    keys: Array<{
-      key: string         // 1-200 chars
-      required: boolean
-    }>  // min 1, max 50 keys
-  }>  // min 1, max 10 files
-}
-```
-
-**Behavior:** Gateway intercepts, validates with Zod (including path traversal checks), persists to prebuild `env_files` JSONB. Returns `{ prebuildId, fileCount }`.
-
-**Scope:** Setup sessions only. Same injection/runtime scoping as `save_service_commands`.
 
 #### `automation.complete` tool — `Implemented`
 
@@ -347,7 +323,7 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 **Happy path:**
 1. Provider (Modal or E2B) calls `setupEssentialDependencies()` during sandbox boot (`packages/shared/src/providers/modal-libmodal.ts:988`, `packages/shared/src/providers/e2b.ts:568`)
 2. Plugin written to `/home/user/.config/opencode/plugin/proliferate.mjs` — minimal SSE-mode plugin (`PLUGIN_MJS` from `packages/shared/src/sandbox/config.ts:16-31`)
-3. Six tool `.ts` files + six `.txt` description files written to `{repoDir}/.opencode/tool/`
+3. Five tool `.ts` files + five `.txt` description files written to `{repoDir}/.opencode/tool/`
 4. Pre-installed `package.json` + `node_modules/` copied from `/home/user/.opencode-tools/` to `{repoDir}/.opencode/tool/`
 5. OpenCode config written to both `{repoDir}/opencode.json` and `/home/user/.config/opencode/opencode.json`
 6. Environment instructions appended to `{repoDir}/.opencode/instructions.md` (from `ENV_INSTRUCTIONS` in `config.ts:84-131`)
@@ -372,7 +348,6 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 │       ├── save_snapshot.ts / save_snapshot.txt
 │       ├── automation_complete.ts / automation_complete.txt
 │       ├── save_service_commands.ts / save_service_commands.txt
-│       ├── save_env_files.ts / save_env_files.txt
 │       ├── package.json                 # Pre-installed deps
 │       └── node_modules/                # Pre-installed deps
 └── .proliferate/
@@ -435,7 +410,6 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 | `save_snapshot` | Yes | Needs provider API access |
 | `automation.complete` | Yes | Needs database access |
 | `save_service_commands` | Yes | Needs database access |
-| `save_env_files` | Yes | Needs database access |
 | `request_env_variables` | No | Returns immediately; gateway detects via SSE |
 
 **Handler contract:** Every intercepted tool handler implements `InterceptedToolHandler` — a `name` string and an `execute(hub, args)` method returning `InterceptedToolResult { success, result, data? }`. Handlers are registered in `apps/gateway/src/hub/capabilities/tools/index.ts`.
@@ -455,7 +429,7 @@ For the full runtime execution flow (SSE detection, EventProcessor routing, Sess
 | `sessions-gateway.md` | This → Gateway | `InterceptedToolHandler.execute(hub)` | Gateway hub executes tool handlers; tool schemas defined here |
 | `sandbox-providers.md` | This → Providers | Tool file templates + `getOpencodeConfig()` | Providers consume definitions, write files into sandbox |
 | `automations-runs.md` | Runs → This | `automation.complete` tool schema | Automation runs inject `run_id`/`completion_id` via system prompt; agent calls tool to finalize |
-| `repos-prebuilds.md` | This → Prebuilds | `save_service_commands`, `save_env_files` | Tools persist config to prebuild records |
+| `repos-prebuilds.md` | This → Configurations | `save_service_commands` | Tool persists config to configuration records |
 | `secrets-environment.md` | Secrets → This | `request_env_variables` + `/tmp/.proliferate_env.json` | Secrets written to env file; tool requests new ones |
 | `llm-proxy.md` | Proxy → This | `anthropicBaseUrl` / `anthropicApiKey` in OpenCode config | LLM proxy URL embedded in agent config |
 | `actions.md` | This → Actions | `proliferate actions` CLI in system prompts | Prompts document CLI usage; actions spec owns the runtime |
@@ -463,7 +437,6 @@ For the full runtime execution flow (SSE detection, EventProcessor routing, Sess
 ### Security & Auth
 - Intercepted tools run on the gateway with full DB/S3/provider access — sandbox never has these credentials.
 - `request_env_variables` instructs agents to never `cat` or `echo` the env file directly — only extract specific keys with `jq`.
-- `save_env_files` validates paths cannot contain `..` (directory traversal prevention).
 - OpenCode permissions deny `question` tool to prevent native browser dialogs.
 - System prompts instruct agents never to ask for API keys for connected integrations (tokens resolved server-side).
 
@@ -486,7 +459,7 @@ For the full runtime execution flow (SSE detection, EventProcessor routing, Sess
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **Partial per-mode tool filtering** — Setup-only tools (`save_service_commands`, `save_env_files`) are now injected only for setup sessions, but `automation.complete` is still available in non-automation sessions. Impact: reduced mode mismatch, but some out-of-mode tool calls remain possible. Expected fix: conditional automation tool injection by client/session mode.
+- [ ] **Partial per-mode tool filtering** — The setup-only tool (`save_service_commands`) is now injected only for setup sessions, but `automation.complete` is still available in non-automation sessions. Impact: reduced mode mismatch, but some out-of-mode tool calls remain possible. Expected fix: conditional automation tool injection by client/session mode.
 - [ ] **Two tool definition styles** — `verify` uses raw `export default { name, description, parameters }` while other tools use the `tool()` plugin API from `@opencode-ai/plugin`. Impact: inconsistent authoring; no functional difference. Expected fix: migrate `verify` to `tool()` API.
 - [ ] **Dual registration for automation.complete** — Registered under both `automation.complete` and `automation_complete` to handle agent variation. Impact: minor registry bloat. Expected fix: standardize on one name once agent behavior is stable.
 - [ ] **No tool versioning** — Tool schemas are string templates with no version tracking. If a schema changes, running sessions continue with the old version until sandbox restart. Impact: potential schema mismatch during deploys. Expected fix: version stamp in tool file path or metadata.
