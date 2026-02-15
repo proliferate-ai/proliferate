@@ -3,6 +3,10 @@
  *
  * Core hub class that bridges clients and OpenCode sandboxes.
  * Manages client connections, sandbox lifecycle, and message routing.
+ *
+ * vNext: Tools are executed via HTTP callbacks (POST /tools/:toolName),
+ * not SSE interception. The hub tracks active HTTP tool calls to prevent
+ * idle snapshotting during tool execution (False Idle Blindspot).
  */
 
 import { randomUUID } from "crypto";
@@ -17,7 +21,6 @@ import type {
 	ServerMessage,
 	SessionEventMessage,
 	SnapshotResultMessage,
-	ToolEndMessage,
 } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import type { WebSocket } from "ws";
@@ -27,13 +30,19 @@ import {
 	fetchOpenCodeMessages,
 	mapOpenCodeMessages,
 	sendPromptAsync,
-	updateToolResult,
 } from "../lib/opencode";
 import { publishSessionEvent } from "../lib/redis";
 import { uploadVerificationFiles } from "../lib/s3";
+import {
+	OWNER_LEASE_TTL_MS,
+	acquireOwnerLease,
+	clearRuntimeLease,
+	releaseOwnerLease,
+	renewOwnerLease,
+	setRuntimeLease,
+} from "../lib/session-leases";
 import type { SessionContext } from "../lib/session-store";
 import type { ClientConnection, OpenCodeEvent, SandboxInfo } from "../types";
-import { getInterceptedToolHandler, getInterceptedToolNames } from "./capabilities/tools";
 import { EventProcessor } from "./event-processor";
 import { GitOperations } from "./git-operations";
 import { MigrationController } from "./migration-controller";
@@ -44,12 +53,20 @@ interface HubDependencies {
 	env: GatewayEnv;
 	sessionId: string;
 	context: SessionContext;
+	onEvict?: () => void;
 }
+
+/** Renewal interval: ~1/3 of owner lease TTL. */
+const LEASE_RENEW_INTERVAL_MS = Math.floor(OWNER_LEASE_TTL_MS / 3);
+
+/** Idle snapshot delay: 5 minutes of no SSE activity and no clients. */
+const IDLE_SNAPSHOT_DELAY_MS = 5 * 60 * 1000;
 
 export class SessionHub {
 	private readonly env: GatewayEnv;
 	private readonly sessionId: string;
 	private readonly logger: Logger;
+	private readonly instanceId: string;
 
 	// Client connections
 	private readonly clients = new Map<WebSocket, ClientConnection>();
@@ -66,9 +83,21 @@ export class SessionHub {
 	// Reconnection state
 	private reconnectAttempt = 0;
 
+	// Session leases
+	private leaseRenewTimer: ReturnType<typeof setInterval> | null = null;
+	private lastLeaseRenewAt = 0;
+
+	// Idle snapshot tracking
+	private activeHttpToolCalls = 0;
+	private idleSnapshotTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// Hub eviction callback (set by HubManager)
+	private readonly onEvict?: () => void;
+
 	constructor(deps: HubDependencies) {
 		this.env = deps.env;
 		this.sessionId = deps.sessionId;
+		this.instanceId = randomUUID();
 		this.logger = createLogger({ service: "gateway" }).child({
 			module: "hub",
 			sessionId: deps.sessionId,
@@ -77,11 +106,8 @@ export class SessionHub {
 		this.eventProcessor = new EventProcessor(
 			{
 				broadcast: (msg) => this.broadcast(msg),
-				onInterceptedTool: (toolName, args, partId, messageId, toolCallId) =>
-					this.handleInterceptedTool(toolName, args, partId, messageId, toolCallId),
 				getOpenCodeSessionId: () => this.runtime.getOpenCodeSessionId(),
 			},
-			getInterceptedToolNames(),
 			this.logger,
 		);
 
@@ -94,6 +120,8 @@ export class SessionHub {
 			onStatus: (status, message) => this.broadcastStatus(status, message),
 			onBroadcast: (message) => this.broadcast(message),
 		});
+
+		this.onEvict = deps.onEvict;
 
 		this.migrationController = new MigrationController({
 			sessionId: this.sessionId,
@@ -152,6 +180,10 @@ export class SessionHub {
 		const connectionId = randomUUID();
 		this.clients.set(ws, { connectionId, userId });
 		this.log("Client connected", { connectionId, userId, totalClients: this.clients.size });
+		this.touchActivity();
+
+		// Cancel idle snapshot timer when a client connects
+		this.cancelIdleSnapshotTimer();
 
 		ws.on("close", () => {
 			this.log("Client disconnected", {
@@ -176,6 +208,11 @@ export class SessionHub {
 		}
 		this.clients.delete(ws);
 		this.log("Client removed", { remainingClients: this.clients.size });
+
+		// Start idle timer if no clients remain
+		if (this.clients.size === 0 && !this.shouldReconnectWithoutClients()) {
+			this.scheduleIdleSnapshot();
+		}
 	}
 
 	private async initializeClient(ws: WebSocket, userId?: string): Promise<void> {
@@ -197,6 +234,8 @@ export class SessionHub {
 	}
 
 	handleClientMessage(ws: WebSocket, message: ClientMessage): void {
+		this.touchActivity();
+
 		switch (message.type) {
 			case "ping":
 				this.sendMessage(ws, { type: "pong" });
@@ -389,6 +428,44 @@ export class SessionHub {
 	}
 
 	// ============================================
+	// HTTP Tool Call Tracking (False Idle Blindspot)
+	// ============================================
+
+	/**
+	 * Increment active HTTP tool call counter.
+	 * Called by tool routes when a tool execution starts.
+	 */
+	trackToolCallStart(): void {
+		this.activeHttpToolCalls++;
+		this.touchActivity();
+	}
+
+	/**
+	 * Decrement active HTTP tool call counter.
+	 * Called by tool routes when a tool execution completes.
+	 */
+	trackToolCallEnd(): void {
+		this.activeHttpToolCalls = Math.max(0, this.activeHttpToolCalls - 1);
+		this.touchActivity();
+	}
+
+	/**
+	 * Check if idle snapshotting is safe (no in-flight tool calls).
+	 */
+	shouldIdleSnapshot(): boolean {
+		if (this.activeHttpToolCalls > 0) {
+			return false;
+		}
+		if (this.eventProcessor.hasRunningTools()) {
+			return false;
+		}
+		if (this.getEffectiveClientCount() > 0) {
+			return false;
+		}
+		return true;
+	}
+
+	// ============================================
 	// Core Operations
 	// ============================================
 
@@ -399,6 +476,8 @@ export class SessionHub {
 		this.lifecycleStartTime = Date.now();
 		await this.runtime.ensureRuntimeReady();
 		this.startMigrationMonitor();
+		this.startLeaseRenewal();
+		await setRuntimeLease(this.sessionId);
 	}
 
 	/**
@@ -580,10 +659,12 @@ export class SessionHub {
 	// ============================================
 
 	/**
-	 * Stop the migration monitor and clean up resources.
+	 * Stop the migration monitor, lease renewal, and clean up resources.
 	 */
 	stopMigrationMonitor(): void {
 		this.migrationController.stop();
+		this.stopLeaseRenewal();
+		this.cancelIdleSnapshotTimer();
 	}
 
 	/**
@@ -591,6 +672,177 @@ export class SessionHub {
 	 */
 	async runExpiryMigration(): Promise<void> {
 		await this.migrationController.runExpiryMigration();
+	}
+
+	// ============================================
+	// Private: Session Leases & Split-Brain Detection
+	// ============================================
+
+	private startLeaseRenewal(): void {
+		if (this.leaseRenewTimer) {
+			return;
+		}
+
+		// Acquire initial lease
+		acquireOwnerLease(this.sessionId, this.instanceId).catch((err) => {
+			this.logger.error({ err }, "Failed to acquire owner lease");
+		});
+
+		this.lastLeaseRenewAt = Date.now();
+
+		this.leaseRenewTimer = setInterval(() => {
+			const now = Date.now();
+
+			// Split-brain detection: if event loop lagged beyond the TTL,
+			// another instance may have taken over. Self-terminate.
+			if (now - this.lastLeaseRenewAt > OWNER_LEASE_TTL_MS) {
+				this.logger.error(
+					{
+						lastRenewAt: this.lastLeaseRenewAt,
+						lag: now - this.lastLeaseRenewAt,
+						ttl: OWNER_LEASE_TTL_MS,
+					},
+					"Split-brain detected: event loop lag exceeds lease TTL, self-terminating hub",
+				);
+				this.selfTerminate();
+				return;
+			}
+
+			this.lastLeaseRenewAt = now;
+
+			renewOwnerLease(this.sessionId, this.instanceId)
+				.then((renewed) => {
+					if (!renewed) {
+						this.logger.error("Owner lease lost during renewal, self-terminating");
+						this.selfTerminate();
+					}
+				})
+				.catch((err) => {
+					this.logger.error({ err }, "Failed to renew owner lease");
+				});
+
+			// Also renew runtime lease
+			setRuntimeLease(this.sessionId).catch((err) => {
+				this.logger.error({ err }, "Failed to renew runtime lease");
+			});
+		}, LEASE_RENEW_INTERVAL_MS);
+	}
+
+	private stopLeaseRenewal(): void {
+		if (this.leaseRenewTimer) {
+			clearInterval(this.leaseRenewTimer);
+			this.leaseRenewTimer = null;
+		}
+
+		// Release leases
+		releaseOwnerLease(this.sessionId, this.instanceId).catch((err) => {
+			this.logger.error({ err }, "Failed to release owner lease");
+		});
+		clearRuntimeLease(this.sessionId).catch((err) => {
+			this.logger.error({ err }, "Failed to clear runtime lease");
+		});
+	}
+
+	/**
+	 * Self-terminate on split-brain detection.
+	 * Aborts in-flight work, drops WS clients, disconnects SSE.
+	 */
+	private selfTerminate(): void {
+		this.stopLeaseRenewal();
+		this.migrationController.stop();
+		this.cancelIdleSnapshotTimer();
+
+		// Drop all WS clients
+		for (const [ws] of this.clients) {
+			try {
+				ws.close(1001, "Session ownership transferred");
+			} catch {
+				// ignore
+			}
+		}
+		this.clients.clear();
+
+		// Disconnect SSE
+		this.runtime.disconnectSse();
+	}
+
+	// ============================================
+	// Private: Idle Snapshot Timer
+	// ============================================
+
+	private touchActivity(): void {
+		// Hook point for activity tracking. Currently a no-op;
+		// idle snapshot scheduling is managed via timers.
+	}
+
+	private scheduleIdleSnapshot(): void {
+		this.cancelIdleSnapshotTimer();
+
+		this.idleSnapshotTimer = setTimeout(() => {
+			this.idleSnapshotTimer = null;
+
+			if (!this.shouldIdleSnapshot()) {
+				this.log("Idle snapshot skipped: active tool calls or clients");
+				return;
+			}
+
+			this.log("Idle snapshot timer fired, running idle snapshot");
+			this.migrationController
+				.runIdleSnapshot()
+				.then(() => {
+					this.log("Idle snapshot complete, evicting hub");
+					this.onEvict?.();
+				})
+				.catch((err) => {
+					this.logError("Idle snapshot failed", err);
+				});
+		}, IDLE_SNAPSHOT_DELAY_MS);
+	}
+
+	private cancelIdleSnapshotTimer(): void {
+		if (this.idleSnapshotTimer) {
+			clearTimeout(this.idleSnapshotTimer);
+			this.idleSnapshotTimer = null;
+		}
+	}
+
+	// ============================================
+	// Automation Fast-Path (terminal cleanup, no snapshot)
+	// ============================================
+
+	/**
+	 * Terminate the session immediately without snapshotting.
+	 * Used by automation.complete — automations are terminal.
+	 */
+	async terminateForAutomation(): Promise<void> {
+		this.log("Terminating session for automation fast-path");
+		const context = this.runtime.getContext();
+		const sandboxId = context.session.sandbox_id;
+
+		// Stop all monitoring
+		this.stopMigrationMonitor();
+
+		if (sandboxId) {
+			const providerType = context.session.sandbox_provider as SandboxProviderType;
+			const provider = getSandboxProvider(providerType);
+
+			try {
+				await provider.terminate(this.sessionId, sandboxId);
+				this.log("Sandbox terminated for automation");
+			} catch (err) {
+				this.logError("Failed to terminate sandbox for automation", err);
+			}
+		}
+
+		try {
+			await sessions.markSessionStopped(this.sessionId);
+		} catch (err) {
+			this.logError("Failed to mark session stopped for automation", err);
+		}
+
+		this.runtime.disconnectSse();
+		this.runtime.resetSandboxState();
+		this.onEvict?.();
 	}
 
 	// ============================================
@@ -824,6 +1076,7 @@ export class SessionHub {
 	// ============================================
 
 	private handleOpenCodeEvent(event: OpenCodeEvent): void {
+		this.touchActivity();
 		this.eventProcessor.process(event);
 	}
 
@@ -869,58 +1122,6 @@ export class SessionHub {
 					this.scheduleReconnect();
 				});
 		}, delay);
-	}
-
-	private async handleInterceptedTool(
-		toolName: string,
-		args: Record<string, unknown>,
-		partId: string,
-		messageId: string,
-		toolCallId: string,
-	): Promise<void> {
-		const handler = getInterceptedToolHandler(toolName);
-		if (!handler) {
-			return;
-		}
-
-		try {
-			const result = await handler.execute(this, args);
-
-			// Update OpenCode with the result
-			const openCodeUrl = this.runtime.getOpenCodeUrl();
-			const openCodeSessionId = this.runtime.getOpenCodeSessionId();
-			if (openCodeUrl && openCodeSessionId) {
-				await updateToolResult(openCodeUrl, openCodeSessionId, messageId, partId, result.result);
-			}
-
-			this.eventProcessor.markToolEventSent(partId, "end");
-			const endPayload: ToolEndMessage = {
-				type: "tool_end",
-				payload: {
-					partId,
-					toolCallId,
-					tool: toolName,
-					result: result.result,
-					durationMs: 0,
-				},
-			};
-			this.broadcast(endPayload);
-			this.eventProcessor.setToolStatus(toolCallId, result.success ? "completed" : "error");
-		} catch (err) {
-			this.eventProcessor.markToolEventSent(partId, "end");
-			const endPayload: ToolEndMessage = {
-				type: "tool_end",
-				payload: {
-					partId,
-					toolCallId,
-					tool: toolName,
-					result: `Tool failed: ${err instanceof Error ? err.message : "Unknown error"}`,
-					durationMs: 0,
-				},
-			};
-			this.broadcast(endPayload);
-			this.eventProcessor.setToolStatus(toolCallId, "error");
-		}
 	}
 
 	// ============================================

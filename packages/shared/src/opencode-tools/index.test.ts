@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	AUTOMATION_COMPLETE_TOOL,
 	REQUEST_ENV_VARIABLES_TOOL,
+	SAVE_ENV_FILES_TOOL,
 	SAVE_SERVICE_COMMANDS_TOOL,
 	SAVE_SNAPSHOT_TOOL,
 	VERIFY_TOOL,
@@ -37,6 +38,7 @@ describe("opencode tool templates", () => {
 		SAVE_SNAPSHOT_TOOL,
 		AUTOMATION_COMPLETE_TOOL,
 		SAVE_SERVICE_COMMANDS_TOOL,
+		SAVE_ENV_FILES_TOOL,
 	};
 
 	for (const [name, source] of Object.entries(tools)) {
