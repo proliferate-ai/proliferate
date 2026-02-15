@@ -374,6 +374,25 @@ export class SessionRuntime {
 				recovered: result.recovered,
 			});
 
+			// Git Freshness Post-Thaw: pull latest changes after restoring from snapshot.
+			// The repo may be stale if time has passed since the snapshot was taken.
+			if (this.context.session.snapshot_id && provider.execCommand) {
+				try {
+					const gitStartMs = Date.now();
+					const gitResult = await provider.execCommand(
+						result.sandboxId,
+						["bash", "-c", "cd /home/user/workspace && git pull --ff-only 2>&1 || true"],
+						{ timeoutMs: 30_000 },
+					);
+					this.logLatency("runtime.ensure_ready.git_freshness", {
+						durationMs: Date.now() - gitStartMs,
+						exitCode: gitResult.exitCode,
+					});
+				} catch (err) {
+					this.logger.warn({ err }, "Git freshness pull failed (non-fatal)");
+				}
+			}
+
 			// Update session with sandbox info
 			const updateStartMs = Date.now();
 			await sessions.update(this.sessionId, {

@@ -13,8 +13,8 @@ export type RepoRow = InferSelectModel<typeof repos>;
 
 // Type for repo with prebuilds (from relation query)
 export interface RepoWithPrebuildsRow extends RepoRow {
-	prebuildRepos?: Array<{
-		prebuild: {
+	configurationRepos?: Array<{
+		configuration: {
 			id: string;
 			status: string | null;
 			snapshotId: string | null;
@@ -49,9 +49,9 @@ export async function listByOrganization(orgId: string): Promise<RepoWithPrebuil
 		where: eq(repos.organizationId, orgId),
 		orderBy: [desc(repos.createdAt)],
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
-					prebuild: {
+					configuration: {
 						columns: {
 							id: true,
 							status: true,
@@ -74,9 +74,9 @@ export async function findById(id: string, orgId: string): Promise<RepoWithPrebu
 	const result = await db.query.repos.findFirst({
 		where: and(eq(repos.id, id), eq(repos.organizationId, orgId)),
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
-					prebuild: {
+					configuration: {
 						columns: {
 							id: true,
 							status: true,

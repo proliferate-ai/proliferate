@@ -56,6 +56,14 @@ export const automationCompleteHandler: InterceptedToolHandler = {
 			processedAt: new Date(),
 		});
 
+		// Automation Fast-Path: schedule terminal cleanup after response is sent.
+		// Automations are terminal — no snapshot needed. Fire-and-forget.
+		setTimeout(() => {
+			hub.terminateForAutomation().catch(() => {
+				// Best-effort — already logged inside terminateForAutomation
+			});
+		}, 0);
+
 		return { success: true, result: "Automation run completed" };
 	},
 };

@@ -18,7 +18,9 @@ export type SandboxOperation =
 	| "resolveTunnels"
 	| "readFiles"
 	| "testServiceCommands"
-	| "execCommand";
+	| "execCommand"
+	| "memorySnapshot"
+	| "restoreFromMemorySnapshot";
 
 /**
  * Patterns that should be redacted from error messages.

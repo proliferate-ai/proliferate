@@ -12,29 +12,35 @@ import {
 	billingEvents,
 	cliDeviceCodes,
 	cliGithubSelections,
+	configurationRepos,
+	configurationSecrets,
+	configurations,
 	integrations,
 	invitation,
 	member,
 	orgConnectors,
 	organization,
 	outbox,
-	prebuildRepos,
-	prebuilds,
 	repoConnections,
 	repos,
 	sandboxBaseSnapshots,
 	schedules,
 	secretBundles,
+	secretFiles,
 	secrets,
 	session,
 	sessionConnections,
+	sessionToolInvocations,
 	sessions,
 	slackConversations,
 	slackInstallations,
 	triggerEvents,
+	triggerPollGroups,
 	triggers,
 	user,
+	userConnections,
 	userSshKeys,
+	webhookInbox,
 } from "./schema";
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -50,11 +56,11 @@ export const userRelations = relations(user, ({ many }) => ({
 	invitations: many(invitation),
 	members: many(member),
 	repos: many(repos),
-	prebuilds_createdBy: many(prebuilds, {
-		relationName: "prebuilds_createdBy_user_id",
+	configurations_createdBy: many(configurations, {
+		relationName: "configurations_createdBy_user_id",
 	}),
-	prebuilds_userId: many(prebuilds, {
-		relationName: "prebuilds_userId_user_id",
+	configurations_userId: many(configurations, {
+		relationName: "configurations_userId_user_id",
 	}),
 	integrations: many(integrations),
 	secrets: many(secrets),
@@ -142,25 +148,30 @@ export const reposRelations = relations(repos, ({ one, many }) => ({
 	secrets: many(secrets),
 	slackConversations: many(slackConversations),
 	sessions: many(sessions),
-	prebuildRepos: many(prebuildRepos),
+	configurationRepos: many(configurationRepos),
 }));
 
-export const prebuildsRelations = relations(prebuilds, ({ one, many }) => ({
+export const configurationsRelations = relations(configurations, ({ one, many }) => ({
 	user_createdBy: one(user, {
-		fields: [prebuilds.createdBy],
+		fields: [configurations.createdBy],
 		references: [user.id],
-		relationName: "prebuilds_createdBy_user_id",
+		relationName: "configurations_createdBy_user_id",
 	}),
 	user_userId: one(user, {
-		fields: [prebuilds.userId],
+		fields: [configurations.userId],
 		references: [user.id],
-		relationName: "prebuilds_userId_user_id",
+		relationName: "configurations_userId_user_id",
 	}),
 	secrets: many(secrets),
 	automations: many(automations),
 	sessions: many(sessions),
-	prebuildRepos: many(prebuildRepos),
+	configurationRepos: many(configurationRepos),
+	configurationSecrets: many(configurationSecrets),
+	secretFiles: many(secretFiles),
 }));
+
+/** @deprecated Use configurationsRelations */
+export const prebuildsRelations = configurationsRelations;
 
 export const repoConnectionsRelations = relations(repoConnections, ({ one }) => ({
 	repo: one(repos, {
@@ -235,9 +246,9 @@ export const secretsRelations = relations(secrets, ({ one }) => ({
 		fields: [secrets.createdBy],
 		references: [user.id],
 	}),
-	prebuild: one(prebuilds, {
+	configuration: one(configurations, {
 		fields: [secrets.prebuildId],
-		references: [prebuilds.id],
+		references: [configurations.id],
 	}),
 	bundle: one(secretBundles, {
 		fields: [secrets.bundleId],
@@ -277,9 +288,9 @@ export const automationsRelations = relations(automations, ({ one, many }) => ({
 		fields: [automations.createdBy],
 		references: [user.id],
 	}),
-	prebuild: one(prebuilds, {
+	configuration: one(configurations, {
 		fields: [automations.defaultPrebuildId],
-		references: [prebuilds.id],
+		references: [configurations.id],
 	}),
 	schedules: many(schedules),
 	sessions: many(sessions),
@@ -413,10 +424,11 @@ export const sessionsRelations = relations(sessions, ({ one, many }) => ({
 		references: [triggerEvents.id],
 		relationName: "sessions_triggerEventId_triggerEvents_id",
 	}),
-	prebuild: one(prebuilds, {
+	configuration: one(configurations, {
 		fields: [sessions.prebuildId],
-		references: [prebuilds.id],
+		references: [configurations.id],
 	}),
+	toolInvocations: many(sessionToolInvocations),
 }));
 
 export const slackConversationsRelations = relations(slackConversations, ({ one }) => ({
@@ -478,16 +490,19 @@ export const billingEventsRelations = relations(billingEvents, ({ one }) => ({
 	}),
 }));
 
-export const prebuildReposRelations = relations(prebuildRepos, ({ one }) => ({
-	prebuild: one(prebuilds, {
-		fields: [prebuildRepos.prebuildId],
-		references: [prebuilds.id],
+export const configurationReposRelations = relations(configurationRepos, ({ one }) => ({
+	configuration: one(configurations, {
+		fields: [configurationRepos.configurationId],
+		references: [configurations.id],
 	}),
 	repo: one(repos, {
-		fields: [prebuildRepos.repoId],
+		fields: [configurationRepos.repoId],
 		references: [repos.id],
 	}),
 }));
+
+/** @deprecated Use configurationReposRelations */
+export const prebuildReposRelations = configurationReposRelations;
 
 export const cliGithubSelectionsRelations = relations(cliGithubSelections, ({ one }) => ({
 	user: one(user, {
@@ -517,6 +532,7 @@ export const actionInvocationsRelations = relations(actionInvocations, ({ one })
 	}),
 }));
 
+/** @deprecated To be dropped in vNext */
 export const actionGrantsRelations = relations(actionGrants, ({ one }) => ({
 	organization: one(organization, {
 		fields: [actionGrants.organizationId],
@@ -529,5 +545,75 @@ export const actionGrantsRelations = relations(actionGrants, ({ one }) => ({
 	session: one(sessions, {
 		fields: [actionGrants.sessionId],
 		references: [sessions.id],
+	}),
+}));
+
+// ============================================
+// vNext Table Relations
+// ============================================
+
+export const webhookInboxRelations = relations(webhookInbox, ({ one }) => ({
+	organization: one(organization, {
+		fields: [webhookInbox.organizationId],
+		references: [organization.id],
+	}),
+}));
+
+export const triggerPollGroupsRelations = relations(triggerPollGroups, ({ one }) => ({
+	organization: one(organization, {
+		fields: [triggerPollGroups.organizationId],
+		references: [organization.id],
+	}),
+	integration: one(integrations, {
+		fields: [triggerPollGroups.integrationId],
+		references: [integrations.id],
+	}),
+}));
+
+export const sessionToolInvocationsRelations = relations(sessionToolInvocations, ({ one }) => ({
+	session: one(sessions, {
+		fields: [sessionToolInvocations.sessionId],
+		references: [sessions.id],
+	}),
+	organization: one(organization, {
+		fields: [sessionToolInvocations.organizationId],
+		references: [organization.id],
+	}),
+}));
+
+export const userConnectionsRelations = relations(userConnections, ({ one }) => ({
+	user: one(user, {
+		fields: [userConnections.userId],
+		references: [user.id],
+	}),
+	organization: one(organization, {
+		fields: [userConnections.organizationId],
+		references: [organization.id],
+	}),
+}));
+
+export const secretFilesRelations = relations(secretFiles, ({ one }) => ({
+	organization: one(organization, {
+		fields: [secretFiles.organizationId],
+		references: [organization.id],
+	}),
+	configuration: one(configurations, {
+		fields: [secretFiles.configurationId],
+		references: [configurations.id],
+	}),
+	user: one(user, {
+		fields: [secretFiles.createdBy],
+		references: [user.id],
+	}),
+}));
+
+export const configurationSecretsRelations = relations(configurationSecrets, ({ one }) => ({
+	configuration: one(configurations, {
+		fields: [configurationSecrets.configurationId],
+		references: [configurations.id],
+	}),
+	secret: one(secrets, {
+		fields: [configurationSecrets.secretId],
+		references: [secrets.id],
 	}),
 }));

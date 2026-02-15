@@ -2,7 +2,8 @@
  * Event Processor
  *
  * Transforms OpenCode SSE events into ServerMessages for clients.
- * Handles tool interception and state tracking.
+ * All tool execution is handled via HTTP callbacks (POST /tools/:toolName),
+ * so the EventProcessor is a pure pass-through for SSE events.
  */
 
 import type { Logger } from "@proliferate/logger";
@@ -29,17 +30,6 @@ export interface EventProcessorCallbacks {
 	broadcast: (msg: ServerMessage) => void;
 
 	/**
-	 * Handle an intercepted tool call
-	 */
-	onInterceptedTool: (
-		toolName: string,
-		args: Record<string, unknown>,
-		partId: string,
-		messageId: string,
-		toolCallId: string,
-	) => void;
-
-	/**
 	 * Get the current OpenCode session ID
 	 */
 	getOpenCodeSessionId: () => string | null;
@@ -50,15 +40,12 @@ export class EventProcessor {
 	private currentOpenCodeUserMessageId: string | null = null;
 	private readonly toolStates = new Map<string, ToolState>();
 	private readonly sentToolEvents = new Set<string>();
-	private readonly interceptedTools: Set<string>;
 	private readonly logger: Logger;
 
 	constructor(
 		private readonly callbacks: EventProcessorCallbacks,
-		interceptedToolNames: string[],
 		logger: Logger,
 	) {
-		this.interceptedTools = new Set(interceptedToolNames);
 		this.logger = logger.child({ module: "event-processor" });
 	}
 
@@ -192,30 +179,6 @@ export class EventProcessor {
 		return Array.from(this.toolStates.values()).some((state) => state.status === "running");
 	}
 
-	/**
-	 * Mark a tool event as sent (used by intercepted tool handlers)
-	 */
-	markToolEventSent(partId: string, event: "start" | "args" | "end"): void {
-		this.sentToolEvents.add(`${partId}:${event}`);
-	}
-
-	/**
-	 * Update tool status (used by intercepted tool handlers)
-	 */
-	setToolStatus(toolCallId: string, status: "running" | "completed" | "error"): void {
-		const state = this.toolStates.get(toolCallId);
-		if (state) {
-			state.status = status;
-		} else {
-			this.toolStates.set(toolCallId, {
-				startEmitted: true,
-				argsEmitted: false,
-				endEmitted: status !== "running",
-				status,
-			});
-		}
-	}
-
 	private handlePartUpdate(props: PartUpdateProperties): void {
 		const { part, delta } = props;
 
@@ -320,37 +283,7 @@ export class EventProcessor {
 		const argsKey = `${part.id}:args`;
 		const endKey = `${part.id}:end`;
 
-		// Check if this tool should be intercepted
-		if (this.interceptedTools.has(toolName) && !this.sentToolEvents.has(endKey)) {
-			if (!this.sentToolEvents.has(startKey)) {
-				this.sentToolEvents.add(startKey);
-
-				// Send tool_start
-				const startPayload: ToolStartMessage = {
-					type: "tool_start",
-					payload: {
-						messageId: this.currentAssistantMessageId || undefined,
-						partId: part.id,
-						toolCallId,
-						tool: toolName,
-						args,
-					},
-				};
-				this.callbacks.broadcast(startPayload);
-				this.toolStates.set(toolCallId, {
-					startEmitted: true,
-					argsEmitted: hasArgs,
-					endEmitted: false,
-					status: "running",
-				});
-
-				// Delegate to intercepted tool handler
-				this.callbacks.onInterceptedTool(toolName, args, part.id, part.messageID, toolCallId);
-			}
-			return;
-		}
-
-		// Normal tool processing
+		// Emit tool_start on first sighting
 		if (!this.sentToolEvents.has(startKey)) {
 			this.sentToolEvents.add(startKey);
 			if (hasArgs) {

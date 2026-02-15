@@ -27,6 +27,8 @@ export * as triggers from "./triggers";
 export * as users from "./users";
 export * as outbox from "./outbox";
 export * as notifications from "./notifications";
+export * as webhookInbox from "./webhook-inbox";
+export * as pollGroups from "./poll-groups";
 
 // Legacy exports (to be migrated)
 export {

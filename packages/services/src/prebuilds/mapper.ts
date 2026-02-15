@@ -21,7 +21,7 @@ export function toPrebuild(row: PrebuildWithRelationsRow): Prebuild {
 		createdAt: toIsoString(row.createdAt),
 		createdBy: row.createdBy,
 		sandboxProvider: null, // Field removed from schema
-		prebuildRepos: row.prebuildRepos?.map((pr) => ({
+		prebuildRepos: row.configurationRepos?.map((pr) => ({
 			workspacePath: pr.workspacePath,
 			repo: pr.repo
 				? {

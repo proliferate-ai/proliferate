@@ -2,10 +2,9 @@
  * Actions HTTP route tests.
  *
  * Covers approve/deny endpoints:
- *   - approve once vs approve with grant modes
+ *   - approve once (only mode — grants removed in vNext)
  *   - role gating (admin/owner required)
- *   - status/error mapping (404/409/410/400)
- *   - grant.maxCalls validation (positive int or null)
+ *   - status/error mapping (404/409/410)
  */
 
 import { type Server, createServer } from "node:http";
@@ -17,7 +16,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // ============================================
 
 const mockApproveAction = vi.fn();
-const mockApproveActionWithGrant = vi.fn();
 const mockDenyAction = vi.fn();
 const mockMarkExecuting = vi.fn();
 const mockMarkCompleted = vi.fn();
@@ -48,7 +46,6 @@ class ActionConflictError extends Error {
 vi.mock("@proliferate/services", () => ({
 	actions: {
 		approveAction: (...args: unknown[]) => mockApproveAction(...args),
-		approveActionWithGrant: (...args: unknown[]) => mockApproveActionWithGrant(...args),
 		denyAction: (...args: unknown[]) => mockDenyAction(...args),
 		markExecuting: (...args: unknown[]) => mockMarkExecuting(...args),
 		markCompleted: (...args: unknown[]) => mockMarkCompleted(...args),
@@ -61,8 +58,6 @@ vi.mock("@proliferate/services", () => ({
 		ActionConflictError,
 		invokeAction: vi.fn(),
 		PendingLimitError: class extends Error {},
-		createGrant: vi.fn(),
-		listActiveGrants: vi.fn().mockResolvedValue([]),
 	},
 	sessions: {
 		findByIdInternal: vi.fn().mockResolvedValue({ organizationId: "org-1" }),
@@ -127,23 +122,6 @@ function makeInvocation(overrides: Record<string, unknown> = {}) {
 		error: null,
 		completedAt: null,
 		durationMs: null,
-		createdAt: new Date(),
-		...overrides,
-	};
-}
-
-function makeGrant(overrides: Record<string, unknown> = {}) {
-	return {
-		id: "grant-1",
-		organizationId: "org-1",
-		createdBy: "user-1",
-		sessionId: "session-1",
-		integration: "linear",
-		action: "create_issue",
-		maxCalls: null,
-		usedCalls: 0,
-		expiresAt: null,
-		revokedAt: null,
 		createdAt: new Date(),
 		...overrides,
 	};
@@ -225,10 +203,10 @@ describe("actions HTTP routes", () => {
 	});
 
 	// ------------------------------------------
-	// POST /invocations/:id/approve — approve once
+	// POST /invocations/:id/approve
 	// ------------------------------------------
 
-	describe("POST /invocations/:id/approve (once mode)", () => {
+	describe("POST /invocations/:id/approve", () => {
 		it("approves a pending invocation and executes it", async () => {
 			const invocation = makeInvocation();
 			mockApproveAction.mockResolvedValue(invocation);
@@ -238,186 +216,12 @@ describe("actions HTTP routes", () => {
 			});
 			mockMarkCompleted.mockResolvedValue({ ...invocation, status: "completed" });
 
-			const res = await jsonPost("/invocations/inv-1/approve", { mode: "once" });
+			const res = await jsonPost("/invocations/inv-1/approve", {});
 
 			expect(res.status).toBe(200);
 			const body = (await res.json()) as Record<string, unknown>;
 			expect(body.result).toEqual({ issueId: "LIN-123" });
 			expect(mockApproveAction).toHaveBeenCalledWith("inv-1", "org-1", "user-1");
-		});
-
-		it("defaults to once mode when mode is omitted", async () => {
-			const invocation = makeInvocation();
-			mockApproveAction.mockResolvedValue(invocation);
-			mockMarkExecuting.mockResolvedValue(invocation);
-			mockGetAdapter.mockReturnValue({
-				execute: vi.fn().mockResolvedValue({ ok: true }),
-			});
-			mockMarkCompleted.mockResolvedValue({ ...invocation, status: "completed" });
-
-			const res = await jsonPost("/invocations/inv-1/approve", {});
-
-			expect(res.status).toBe(200);
-			expect(mockApproveAction).toHaveBeenCalled();
-			expect(mockApproveActionWithGrant).not.toHaveBeenCalled();
-		});
-	});
-
-	// ------------------------------------------
-	// POST /invocations/:id/approve — grant mode
-	// ------------------------------------------
-
-	describe("POST /invocations/:id/approve (grant mode)", () => {
-		it("approves with grant and returns grant info", async () => {
-			const invocation = makeInvocation();
-			const grant = makeGrant();
-			mockApproveActionWithGrant.mockResolvedValue({ invocation, grant });
-			mockMarkExecuting.mockResolvedValue(invocation);
-			mockGetAdapter.mockReturnValue({
-				execute: vi.fn().mockResolvedValue({ ok: true }),
-			});
-			mockMarkCompleted.mockResolvedValue({ ...invocation, status: "completed" });
-
-			const res = await jsonPost("/invocations/inv-1/approve", {
-				mode: "grant",
-				grant: { scope: "session", maxCalls: 5 },
-			});
-
-			expect(res.status).toBe(200);
-			const body = (await res.json()) as Record<string, unknown>;
-			expect(body.grant).toEqual({
-				id: "grant-1",
-				integration: "linear",
-				action: "create_issue",
-				maxCalls: null,
-			});
-			expect(mockApproveActionWithGrant).toHaveBeenCalledWith("inv-1", "org-1", "user-1", {
-				scope: "session",
-				maxCalls: 5,
-			});
-		});
-
-		it("accepts org scope", async () => {
-			const invocation = makeInvocation();
-			const grant = makeGrant({ sessionId: null });
-			mockApproveActionWithGrant.mockResolvedValue({ invocation, grant });
-			mockMarkExecuting.mockResolvedValue(invocation);
-			mockGetAdapter.mockReturnValue({
-				execute: vi.fn().mockResolvedValue({ ok: true }),
-			});
-			mockMarkCompleted.mockResolvedValue({ ...invocation, status: "completed" });
-
-			const res = await jsonPost("/invocations/inv-1/approve", {
-				mode: "grant",
-				grant: { scope: "org", maxCalls: null },
-			});
-
-			expect(res.status).toBe(200);
-			expect(mockApproveActionWithGrant).toHaveBeenCalledWith("inv-1", "org-1", "user-1", {
-				scope: "org",
-				maxCalls: null,
-			});
-		});
-
-		it("defaults scope to session when not specified", async () => {
-			const invocation = makeInvocation();
-			const grant = makeGrant();
-			mockApproveActionWithGrant.mockResolvedValue({ invocation, grant });
-			mockMarkExecuting.mockResolvedValue(invocation);
-			mockGetAdapter.mockReturnValue({
-				execute: vi.fn().mockResolvedValue({ ok: true }),
-			});
-			mockMarkCompleted.mockResolvedValue({ ...invocation, status: "completed" });
-
-			const res = await jsonPost("/invocations/inv-1/approve", {
-				mode: "grant",
-				grant: {},
-			});
-
-			expect(res.status).toBe(200);
-			expect(mockApproveActionWithGrant).toHaveBeenCalledWith("inv-1", "org-1", "user-1", {
-				scope: "session",
-				maxCalls: null,
-			});
-		});
-	});
-
-	// ------------------------------------------
-	// grant.maxCalls validation
-	// ------------------------------------------
-
-	describe("grant.maxCalls validation", () => {
-		it("rejects maxCalls=0", async () => {
-			const res = await jsonPost("/invocations/inv-1/approve", {
-				mode: "grant",
-				grant: { maxCalls: 0 },
-			});
-			expect(res.status).toBe(400);
-			const body = (await res.json()) as { error: string };
-			expect(body.error).toMatch(/positive integer/i);
-		});
-
-		it("rejects negative maxCalls", async () => {
-			const res = await jsonPost("/invocations/inv-1/approve", {
-				mode: "grant",
-				grant: { maxCalls: -3 },
-			});
-			expect(res.status).toBe(400);
-		});
-
-		it("rejects non-integer maxCalls", async () => {
-			const res = await jsonPost("/invocations/inv-1/approve", {
-				mode: "grant",
-				grant: { maxCalls: 2.5 },
-			});
-			expect(res.status).toBe(400);
-		});
-
-		it("accepts null maxCalls (unlimited)", async () => {
-			const invocation = makeInvocation();
-			const grant = makeGrant({ maxCalls: null });
-			mockApproveActionWithGrant.mockResolvedValue({ invocation, grant });
-			mockMarkExecuting.mockResolvedValue(invocation);
-			mockGetAdapter.mockReturnValue({
-				execute: vi.fn().mockResolvedValue({ ok: true }),
-			});
-			mockMarkCompleted.mockResolvedValue(invocation);
-
-			const res = await jsonPost("/invocations/inv-1/approve", {
-				mode: "grant",
-				grant: { scope: "session", maxCalls: null },
-			});
-			expect(res.status).toBe(200);
-		});
-
-		it("accepts positive integer maxCalls", async () => {
-			const invocation = makeInvocation();
-			const grant = makeGrant({ maxCalls: 10 });
-			mockApproveActionWithGrant.mockResolvedValue({ invocation, grant });
-			mockMarkExecuting.mockResolvedValue(invocation);
-			mockGetAdapter.mockReturnValue({
-				execute: vi.fn().mockResolvedValue({ ok: true }),
-			});
-			mockMarkCompleted.mockResolvedValue(invocation);
-
-			const res = await jsonPost("/invocations/inv-1/approve", {
-				mode: "grant",
-				grant: { maxCalls: 10 },
-			});
-			expect(res.status).toBe(200);
-		});
-	});
-
-	// ------------------------------------------
-	// Invalid approval mode
-	// ------------------------------------------
-
-	describe("invalid approval mode", () => {
-		it("rejects unknown mode", async () => {
-			const res = await jsonPost("/invocations/inv-1/approve", { mode: "bulk" });
-			expect(res.status).toBe(400);
-			const body = (await res.json()) as { error: string };
-			expect(body.error).toMatch(/Invalid approval mode/);
 		});
 	});
 

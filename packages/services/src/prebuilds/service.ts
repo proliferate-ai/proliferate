@@ -55,7 +55,7 @@ export async function listPrebuilds(orgId: string, status?: string): Promise<Pre
 
 	// Filter to only prebuilds that have repos in this org
 	const filteredRows = rows.filter((p) =>
-		p.prebuildRepos?.some((pr) => pr.repo?.organizationId === orgId),
+		p.configurationRepos?.some((pr) => pr.repo?.organizationId === orgId),
 	);
 
 	return toPrebuilds(filteredRows);
@@ -168,7 +168,7 @@ export async function prebuildExists(id: string): Promise<boolean> {
 export async function prebuildBelongsToOrg(prebuildId: string, orgId: string): Promise<boolean> {
 	const prebuild = await prebuildsDb.findById(prebuildId);
 	if (!prebuild) return false;
-	return prebuild.prebuildRepos.some((pr) => pr.repo?.organizationId === orgId);
+	return prebuild.configurationRepos.some((pr) => pr.repo?.organizationId === orgId);
 }
 
 /**

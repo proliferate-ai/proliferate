@@ -2,13 +2,14 @@
  * Actions service.
  *
  * Business logic for agent-initiated external actions.
+ * vNext: uses Three-Mode Permissioning Cascade (replaces CAS grants).
  */
 
+import type { ActionModes } from "@proliferate/providers";
 import { getServicesLogger } from "../logger";
 import type { ActionInvocationRow, ActionInvocationWithSession } from "./db";
 import * as actionsDb from "./db";
-import * as grantsService from "./grants";
-import type { ActionGrantRow } from "./grants-db";
+import { evaluateActionApproval, resolveActionMode } from "./modes";
 
 // ============================================
 // Error Classes
@@ -58,7 +59,7 @@ const SENSITIVE_KEYS = new Set([
 // Redaction
 // ============================================
 
-/** Strip sensitive fields and truncate large values before storing in DB. */
+/** Strip sensitive fields before storing in DB. */
 function redactData(data: unknown): unknown {
 	if (data === null || data === undefined) return data;
 	if (typeof data !== "object") return data;
@@ -75,12 +76,109 @@ function redactData(data: unknown): unknown {
 	return result;
 }
 
-/** Truncate result if serialized form exceeds max size. */
+// ============================================
+// JSON-Aware Truncation
+// ============================================
+
+/**
+ * Truncate action result data while preserving valid JSON structure.
+ * Instead of blindly slicing a serialized string, prunes structurally:
+ *   - Arrays are truncated to fit within the budget
+ *   - Strings are sliced with an ellipsis marker
+ *   - Objects keep their keys but prune nested values
+ *   - Primitives pass through unchanged
+ *
+ * Returns the original data if it fits within MAX_RESULT_SIZE.
+ */
 function truncateResult(data: unknown): unknown {
 	if (data === null || data === undefined) return data;
 	const serialized = JSON.stringify(data);
 	if (serialized.length <= MAX_RESULT_SIZE) return data;
-	return { _truncated: true, _originalSize: serialized.length };
+
+	return pruneToFit(data, MAX_RESULT_SIZE);
+}
+
+/**
+ * Recursively prune a value to fit within a byte budget.
+ * Preserves structure so the output is always valid JSON.
+ */
+function pruneToFit(value: unknown, budget: number): unknown {
+	if (value === null || value === undefined) return value;
+
+	if (typeof value === "string") {
+		if (value.length + 2 <= budget) return value; // +2 for JSON quotes
+		const maxLen = Math.max(0, budget - 20); // room for quotes + ellipsis marker
+		return `${value.slice(0, maxLen)}… [truncated]`;
+	}
+
+	if (typeof value !== "object") return value;
+
+	if (Array.isArray(value)) {
+		return pruneArray(value, budget);
+	}
+
+	return pruneObject(value as Record<string, unknown>, budget);
+}
+
+function pruneArray(arr: unknown[], budget: number): unknown {
+	// Envelope: [ ... , {"_truncated": true, "_originalLength": N} ]
+	const truncMarker = { _truncated: true, _originalLength: arr.length };
+	const markerSize = JSON.stringify(truncMarker).length + 1; // +1 for comma
+
+	let used = 2; // opening [ and closing ]
+	const result: unknown[] = [];
+
+	for (const item of arr) {
+		const itemJson = JSON.stringify(item);
+		const itemCost = itemJson.length + (result.length > 0 ? 1 : 0); // comma
+
+		if (used + itemCost + markerSize > budget) {
+			// No more room — append truncation marker
+			result.push(truncMarker);
+			return result;
+		}
+
+		result.push(item);
+		used += itemCost;
+	}
+
+	return result; // Everything fit
+}
+
+function pruneObject(obj: Record<string, unknown>, budget: number): unknown {
+	let used = 2; // { }
+	const result: Record<string, unknown> = {};
+	const entries = Object.entries(obj);
+	let truncated = false;
+
+	for (const [key, value] of entries) {
+		const keySize = JSON.stringify(key).length + 1; // +1 for colon
+		const valueBudget = budget - used - keySize - 1; // -1 for comma
+
+		if (valueBudget <= 0) {
+			truncated = true;
+			break;
+		}
+
+		const valueJson = JSON.stringify(value);
+		if (valueJson.length <= valueBudget) {
+			result[key] = value;
+			used += keySize + valueJson.length + (Object.keys(result).length > 1 ? 1 : 0);
+		} else {
+			// Prune the value to fit
+			result[key] = pruneToFit(value, valueBudget);
+			used +=
+				keySize + JSON.stringify(result[key]).length + (Object.keys(result).length > 1 ? 1 : 0);
+			truncated = true;
+			break;
+		}
+	}
+
+	if (truncated) {
+		result._truncated = true;
+	}
+
+	return result;
 }
 
 // ============================================
@@ -104,6 +202,10 @@ export interface InvokeActionInput {
 	action: string;
 	riskLevel: "read" | "write" | "danger";
 	params: unknown;
+	/** vNext: action modes for mode-based resolution. */
+	modes?: ActionModes | null;
+	/** vNext: whether MCP tool schema drift was detected. */
+	driftDetected?: boolean;
 }
 
 export interface InvokeActionResult {
@@ -117,54 +219,48 @@ export interface InvokeActionResult {
 // ============================================
 
 /**
- * Create an action invocation. Reads are auto-approved; writes are pending.
+ * Create an action invocation using the Three-Mode Permissioning Cascade.
+ *
+ * Resolution order:
+ *   1. Per-action override (modes.actions["integration:action"])
+ *   2. Per-integration override (modes.integrations["integration"])
+ *   3. Org/automation default (modes.defaultMode)
+ *   4. Fallback: "auto" (risk-based)
+ *
+ * In "auto" mode: reads auto-approve, writes auto-approve, danger denied.
+ * Drift detection downgrades auto → pending (requires approval).
  */
 export async function invokeAction(input: InvokeActionInput): Promise<InvokeActionResult> {
 	const log = getServicesLogger().child({ module: "actions" });
 
-	if (input.riskLevel === "danger") {
+	const mode = resolveActionMode(input.modes, input.integration, input.action);
+	const disposition = evaluateActionApproval(mode, input.riskLevel, input.driftDetected);
+
+	if (disposition === "denied") {
 		const invocation = await actionsDb.createInvocation({
 			...input,
 			status: "denied",
 		});
-		log.info({ invocationId: invocation.id, action: input.action }, "Action denied (danger)");
+		log.info(
+			{ invocationId: invocation.id, action: input.action, mode, riskLevel: input.riskLevel },
+			"Action denied",
+		);
 		return { invocation, needsApproval: false };
 	}
 
-	if (input.riskLevel === "read") {
-		const invocation = await actionsDb.createInvocation({
-			...input,
-			status: "approved",
-		});
-		log.info({ invocationId: invocation.id, action: input.action }, "Action auto-approved (read)");
-		return { invocation, needsApproval: false };
-	}
-
-	// Write actions — check for a matching grant before requiring approval
-	const grantResult = await grantsService.evaluateGrant(
-		input.organizationId,
-		input.integration,
-		input.action,
-		input.sessionId,
-	);
-
-	if (grantResult.granted) {
+	if (disposition === "approved") {
 		const invocation = await actionsDb.createInvocation({
 			...input,
 			status: "approved",
 		});
 		log.info(
-			{
-				invocationId: invocation.id,
-				action: input.action,
-				grantId: grantResult.grantId,
-			},
-			"Action auto-approved via grant (write)",
+			{ invocationId: invocation.id, action: input.action, mode, riskLevel: input.riskLevel },
+			"Action auto-approved",
 		);
 		return { invocation, needsApproval: false };
 	}
 
-	// No matching grant — enforce pending cap before creating pending invocation
+	// disposition === "pending" — enforce pending cap
 	const pending = await actionsDb.listPendingBySession(input.sessionId);
 	if (pending.length >= MAX_PENDING_PER_SESSION) {
 		throw new PendingLimitError();
@@ -177,8 +273,13 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 		expiresAt,
 	});
 	log.info(
-		{ invocationId: invocation.id, action: input.action },
-		"Action pending approval (write)",
+		{
+			invocationId: invocation.id,
+			action: input.action,
+			mode,
+			driftDetected: input.driftDetected,
+		},
+		"Action pending approval",
 	);
 	return { invocation, needsApproval: true };
 }
@@ -252,69 +353,6 @@ export async function approveAction(
 		throw new ActionConflictError("Failed to update invocation");
 	}
 	return updated;
-}
-
-/**
- * Approve a pending invocation and create a scoped grant for future similar actions.
- */
-export interface ApproveWithGrantInput {
-	scope: "session" | "org";
-	maxCalls?: number | null;
-}
-
-export async function approveActionWithGrant(
-	invocationId: string,
-	orgId: string,
-	userId: string,
-	grantInput: ApproveWithGrantInput,
-): Promise<{ invocation: ActionInvocationRow; grant: ActionGrantRow }> {
-	const log = getServicesLogger().child({ module: "actions" });
-
-	// 1. Validate invocation (same checks as approveAction)
-	const invocation = await actionsDb.getInvocation(invocationId, orgId);
-	if (!invocation) {
-		throw new ActionNotFoundError();
-	}
-	if (invocation.status !== "pending") {
-		throw new ActionConflictError(`Cannot approve invocation in status: ${invocation.status}`);
-	}
-	if (invocation.expiresAt && invocation.expiresAt <= new Date()) {
-		await actionsDb.updateInvocationStatus(invocationId, "expired", {
-			completedAt: new Date(),
-		});
-		throw new ActionExpiredError();
-	}
-
-	// 2. Create the grant (derives integration+action from invocation)
-	const grant = await grantsService.createGrant({
-		organizationId: orgId,
-		createdBy: userId,
-		sessionId: grantInput.scope === "session" ? invocation.sessionId : undefined,
-		integration: invocation.integration,
-		action: invocation.action,
-		maxCalls: grantInput.maxCalls ?? null,
-	});
-
-	// 3. Approve the invocation — rollback grant on failure
-	try {
-		const updated = await actionsDb.updateInvocationStatus(invocationId, "approved", {
-			approvedBy: userId,
-			approvedAt: new Date(),
-		});
-		if (!updated) {
-			await grantsService.revokeGrant(grant.id, orgId);
-			throw new ActionConflictError("Failed to update invocation");
-		}
-		log.info(
-			{ invocationId, grantId: grant.id, scope: grantInput.scope },
-			"Invocation approved with grant",
-		);
-		return { invocation: updated, grant };
-	} catch (err) {
-		// Best-effort rollback — grant is useless without the approval
-		await grantsService.revokeGrant(grant.id, orgId).catch(() => undefined);
-		throw err;
-	}
 }
 
 /**

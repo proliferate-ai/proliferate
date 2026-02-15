@@ -13,6 +13,7 @@ import cancelRouter from "./cancel";
 import infoRouter from "./info";
 import messageRouter from "./message";
 import { createSessionsRouter } from "./sessions";
+import { createToolsRouter } from "./tools";
 import { createVerificationMediaRouter } from "./verification-media";
 
 export function createProliferateHttpRoutes(hubManager: HubManager, env: GatewayEnv): RouterType {
@@ -31,6 +32,9 @@ export function createProliferateHttpRoutes(hubManager: HubManager, env: Gateway
 
 	// Actions routes — don't require sandbox running (DB + external API only)
 	router.use("/:proliferateSessionId/actions", createActionsRouter(env, hubManager));
+
+	// Tool callback routes — sandbox calls these synchronously during tool execution
+	router.use("/:proliferateSessionId/tools", createToolsRouter(env, hubManager));
 
 	// Routes that need the sandbox running
 	// Mount ensureSessionReady on the param path so params are extracted first

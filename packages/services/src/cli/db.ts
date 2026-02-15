@@ -9,6 +9,7 @@ import {
 	and,
 	cliDeviceCodes,
 	cliGithubSelections,
+	configurationRepos,
 	desc,
 	eq,
 	getDb,
@@ -16,7 +17,6 @@ import {
 	integrations,
 	member,
 	organization,
-	prebuildRepos,
 	prebuilds,
 	repoConnections,
 	repos,
@@ -574,14 +574,14 @@ export async function upsertPrebuildRepo(input: {
 }): Promise<void> {
 	const db = getDb();
 	await db
-		.insert(prebuildRepos)
+		.insert(configurationRepos)
 		.values({
-			prebuildId: input.prebuildId,
+			configurationId: input.prebuildId,
 			repoId: input.repoId,
 			workspacePath: input.workspacePath,
 		})
 		.onConflictDoUpdate({
-			target: [prebuildRepos.prebuildId, prebuildRepos.repoId],
+			target: [configurationRepos.configurationId, configurationRepos.repoId],
 			set: {
 				workspacePath: input.workspacePath,
 			},

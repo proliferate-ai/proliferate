@@ -74,9 +74,9 @@ export async function getReposWithPrebuildStatus(orgId: string): Promise<RepoWit
 			createdAt: true,
 		},
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
-					prebuild: {
+					configuration: {
 						columns: {
 							id: true,
 							status: true,

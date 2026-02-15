@@ -5,6 +5,7 @@ import IORedis from "ioredis";
 // Queue names
 export const QUEUE_NAMES = {
 	TRIGGER_EVENTS: "trigger-events",
+	WEBHOOK_INBOX: "webhook-inbox",
 	POLLING: "polling",
 	SCHEDULED: "scheduled",
 	AUTOMATION_ENRICH: "automation-enrich",
@@ -24,6 +25,14 @@ export const QUEUE_NAMES = {
  */
 export interface TriggerEventJob {
 	eventId: string; // FK to trigger_events.id
+}
+
+/**
+ * Job to process a webhook inbox row asynchronously.
+ * Worker fetches full row from database and runs parse → hydrate → match → execute.
+ */
+export interface WebhookInboxJob {
+	inboxId: string; // FK to webhook_inbox.id
 }
 
 /**
@@ -168,6 +177,22 @@ export const REDIS_KEYS = {
 // Job Options
 // ============================================
 
+const webhookInboxJobOptions: JobsOptions = {
+	attempts: 3,
+	backoff: {
+		type: "exponential",
+		delay: 2000,
+	},
+	removeOnComplete: {
+		age: 86400, // 24 hours
+		count: 1000,
+	},
+	removeOnFail: {
+		age: 604800, // 7 days
+		count: 1000,
+	},
+};
+
 const triggerEventJobOptions: JobsOptions = {
 	attempts: 3,
 	backoff: {
@@ -279,6 +304,16 @@ export function createTriggerEventsQueue(connection?: ConnectionOptions): Queue<
 }
 
 /**
+ * Create the webhook inbox processing queue
+ */
+export function createWebhookInboxQueue(connection?: ConnectionOptions): Queue<WebhookInboxJob> {
+	return new Queue<WebhookInboxJob>(QUEUE_NAMES.WEBHOOK_INBOX, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: webhookInboxJobOptions,
+	});
+}
+
+/**
  * Create the polling jobs queue
  */
 export function createPollingQueue(connection?: ConnectionOptions): Queue<PollingJob> {
@@ -370,6 +405,19 @@ export function createTriggerEventWorker(
 	connection?: ConnectionOptions,
 ): Worker<TriggerEventJob> {
 	return new Worker<TriggerEventJob>(QUEUE_NAMES.TRIGGER_EVENTS, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 5,
+	});
+}
+
+/**
+ * Create a worker for processing webhook inbox rows
+ */
+export function createWebhookInboxWorker(
+	processor: (job: Job<WebhookInboxJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<WebhookInboxJob> {
+	return new Worker<WebhookInboxJob>(QUEUE_NAMES.WEBHOOK_INBOX, processor, {
 		connection: connection ?? getConnectionOptions(),
 		concurrency: 5,
 	});
@@ -476,6 +524,16 @@ export async function queueTriggerEvent(
 }
 
 /**
+ * Queue a webhook inbox row for async processing.
+ */
+export async function queueWebhookInbox(
+	queue: Queue<WebhookInboxJob>,
+	inboxId: string,
+): Promise<void> {
+	await queue.add(`inbox:${inboxId}`, { inboxId });
+}
+
+/**
  * Queue an automation run for enrichment.
  */
 export async function queueAutomationEnrich(
@@ -534,6 +592,40 @@ export async function triggerImmediatePoll(
 	triggerId: string,
 ): Promise<void> {
 	await queue.add(`poll_${triggerId}_manual`, { triggerId }, { jobId: `poll_${triggerId}_manual` });
+}
+
+/**
+ * Schedule a poll group job with a cron pattern.
+ * Uses BullMQ repeatable jobs — one per connection group instead of per trigger.
+ */
+export async function schedulePollGroupJob(
+	queue: Queue<PollingJob>,
+	pollGroupId: string,
+	cronPattern: string,
+): Promise<void> {
+	await queue.add(
+		`pollgroup_${pollGroupId}`,
+		{ triggerId: pollGroupId },
+		{
+			repeat: {
+				pattern: cronPattern,
+			},
+			jobId: `pollgroup_${pollGroupId}`,
+		},
+	);
+}
+
+/**
+ * Remove a scheduled poll group job.
+ * Call when the last trigger in a group is disabled or deleted.
+ */
+export async function removePollGroupJob(
+	queue: Queue<PollingJob>,
+	pollGroupId: string,
+): Promise<void> {
+	await queue.removeRepeatable(`pollgroup_${pollGroupId}`, {
+		pattern: "",
+	});
 }
 
 /**

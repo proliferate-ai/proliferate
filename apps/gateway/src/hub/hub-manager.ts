@@ -40,6 +40,7 @@ export class HubManager {
 				env: this.env,
 				sessionId,
 				context,
+				onEvict: () => this.remove(sessionId),
 			});
 
 			this.hubs.set(sessionId, hub);
