@@ -228,7 +228,7 @@ export async function listByOrganization(orgId: string): Promise<AutomationWithR
 		where: eq(automations.organizationId, orgId),
 		orderBy: [desc(automations.updatedAt)],
 		with: {
-			prebuild: {
+			configuration: {
 				columns: {
 					id: true,
 					name: true,
@@ -259,10 +259,10 @@ export async function listByOrganization(orgId: string): Promise<AutomationWithR
 	});
 
 	return results.map((row) => {
-		const { prebuild, user, ...rest } = row;
+		const { configuration, user, ...rest } = row;
 		return {
 			...rest,
-			defaultPrebuild: prebuild ?? null,
+			defaultPrebuild: configuration ?? null,
 			createdByUser: user ?? null,
 		};
 	});
@@ -276,7 +276,7 @@ export async function findById(id: string, orgId: string): Promise<AutomationWit
 	const result = await db.query.automations.findFirst({
 		where: and(eq(automations.id, id), eq(automations.organizationId, orgId)),
 		with: {
-			prebuild: {
+			configuration: {
 				columns: {
 					id: true,
 					name: true,
@@ -309,10 +309,10 @@ export async function findById(id: string, orgId: string): Promise<AutomationWit
 	});
 
 	if (!result) return null;
-	const { prebuild, ...rest } = result;
+	const { configuration, ...rest } = result;
 	return {
 		...rest,
-		defaultPrebuild: prebuild ?? null,
+		defaultPrebuild: configuration ?? null,
 	};
 }
 
@@ -337,11 +337,11 @@ export async function create(
 		})
 		.returning();
 
-	// Fetch with prebuild relation
-	const withPrebuild = await db.query.automations.findFirst({
+	// Fetch with configuration relation
+	const withConfiguration = await db.query.automations.findFirst({
 		where: eq(automations.id, result.id),
 		with: {
-			prebuild: {
+			configuration: {
 				columns: {
 					id: true,
 					name: true,
@@ -351,11 +351,11 @@ export async function create(
 		},
 	});
 
-	if (!withPrebuild) {
+	if (!withConfiguration) {
 		return { ...result, defaultPrebuild: null };
 	}
-	const { prebuild, ...rest } = withPrebuild;
-	return { ...rest, defaultPrebuild: prebuild ?? null };
+	const { configuration, ...rest } = withConfiguration;
+	return { ...rest, defaultPrebuild: configuration ?? null };
 }
 
 /**
@@ -393,11 +393,11 @@ export async function update(
 		.set(updates)
 		.where(and(eq(automations.id, id), eq(automations.organizationId, orgId)));
 
-	// Fetch with prebuild relation
+	// Fetch with configuration relation
 	const result = await db.query.automations.findFirst({
 		where: and(eq(automations.id, id), eq(automations.organizationId, orgId)),
 		with: {
-			prebuild: {
+			configuration: {
 				columns: {
 					id: true,
 					name: true,
@@ -410,8 +410,8 @@ export async function update(
 	if (!result) {
 		throw new Error("Automation not found after update");
 	}
-	const { prebuild, ...rest } = result;
-	return { ...rest, defaultPrebuild: prebuild ?? null };
+	const { configuration, ...rest } = result;
+	return { ...rest, defaultPrebuild: configuration ?? null };
 }
 
 /**
@@ -465,7 +465,7 @@ export async function validatePrebuild(
 		where: eq(prebuilds.id, prebuildId),
 		columns: { id: true, snapshotId: true },
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
 					repo: {
 						columns: { organizationId: true },
@@ -478,7 +478,7 @@ export async function validatePrebuild(
 	if (!result) return null;
 
 	// Verify at least one linked repo belongs to the org
-	const belongsToOrg = result.prebuildRepos?.some((pr) => pr.repo?.organizationId === orgId);
+	const belongsToOrg = result.configurationRepos?.some((pr) => pr.repo?.organizationId === orgId);
 	if (!belongsToOrg) return null;
 
 	return { id: result.id, snapshotId: result.snapshotId };

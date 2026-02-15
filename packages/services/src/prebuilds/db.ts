@@ -7,12 +7,12 @@
 import {
 	type InferSelectModel,
 	and,
+	configurationRepos,
 	desc,
 	eq,
 	getDb,
 	inArray,
 	isNull,
-	prebuildRepos,
 	prebuilds,
 	repos,
 	type sessions,
@@ -34,7 +34,7 @@ import type {
 export type PrebuildRow = InferSelectModel<typeof prebuilds>;
 
 /** Prebuild repo row type from Drizzle schema */
-export type PrebuildRepoRow = InferSelectModel<typeof prebuildRepos>;
+export type PrebuildRepoRow = InferSelectModel<typeof configurationRepos>;
 
 /** Repo row type from Drizzle schema */
 export type RepoRow = InferSelectModel<typeof repos>;
@@ -44,7 +44,7 @@ export type SessionRow = InferSelectModel<typeof sessions>;
 
 /** Prebuild with repos and sessions relations */
 export interface PrebuildWithRelationsRow extends PrebuildRow {
-	prebuildRepos: Array<{
+	configurationRepos: Array<{
 		workspacePath: string;
 		repo: {
 			id: string;
@@ -63,7 +63,7 @@ export interface PrebuildWithRelationsRow extends PrebuildRow {
 /** Prebuild with minimal repo data for auth check */
 export interface PrebuildWithOrgRow {
 	id: string;
-	prebuildRepos: Array<{
+	configurationRepos: Array<{
 		repo: {
 			organizationId: string;
 		} | null;
@@ -103,9 +103,9 @@ export interface PrebuildRepoDetailRow {
 
 /** Prebuild repos with nested prebuild data for snapshots */
 export interface PrebuildRepoWithPrebuildRow {
-	prebuildId: string;
+	configurationId: string;
 	workspacePath: string;
-	prebuild: {
+	configuration: {
 		id: string;
 		snapshotId: string | null;
 		status: string | null;
@@ -127,7 +127,7 @@ export interface SnapshotRepoRow {
 export interface ManagedPrebuildRow {
 	id: string;
 	snapshotId: string | null;
-	prebuildRepos: Array<{
+	configurationRepos: Array<{
 		repo: {
 			id: string;
 			organizationId: string;
@@ -172,7 +172,7 @@ export async function listAll(status?: string): Promise<PrebuildWithRelationsRow
 		where: conditions.length > 0 ? and(...conditions) : undefined,
 		orderBy: [desc(prebuilds.createdAt)],
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
 					repo: {
 						columns: {
@@ -208,7 +208,7 @@ export async function findById(id: string): Promise<PrebuildWithOrgRow | null> {
 			id: true,
 		},
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
 					repo: {
 						columns: {
@@ -231,7 +231,7 @@ export async function findByIdFull(id: string): Promise<PrebuildWithRelationsRow
 	const result = await db.query.prebuilds.findFirst({
 		where: eq(prebuilds.id, id),
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
 					repo: {
 						columns: {
@@ -294,12 +294,12 @@ export async function create(input: CreatePrebuildInput): Promise<void> {
 export async function createPrebuildRepos(entries: CreatePrebuildRepoInput[]): Promise<void> {
 	const db = getDb();
 	const rows = entries.map((e) => ({
-		prebuildId: e.prebuildId,
+		configurationId: e.prebuildId,
 		repoId: e.repoId,
 		workspacePath: e.workspacePath,
 	}));
 
-	await db.insert(prebuildRepos).values(rows);
+	await db.insert(configurationRepos).values(rows);
 }
 
 /**
@@ -352,8 +352,8 @@ export async function getPrebuildReposWithDetails(
 	prebuildId: string,
 ): Promise<PrebuildRepoDetailRow[]> {
 	const db = getDb();
-	const results = await db.query.prebuildRepos.findMany({
-		where: eq(prebuildRepos.prebuildId, prebuildId),
+	const results = await db.query.configurationRepos.findMany({
+		where: eq(configurationRepos.configurationId, prebuildId),
 		with: {
 			repo: {
 				columns: {
@@ -479,8 +479,11 @@ export async function createFull(input: CreatePrebuildFullInput): Promise<void> 
  */
 export async function prebuildContainsRepo(prebuildId: string, repoId: string): Promise<boolean> {
 	const db = getDb();
-	const result = await db.query.prebuildRepos.findFirst({
-		where: and(eq(prebuildRepos.prebuildId, prebuildId), eq(prebuildRepos.repoId, repoId)),
+	const result = await db.query.configurationRepos.findFirst({
+		where: and(
+			eq(configurationRepos.configurationId, prebuildId),
+			eq(configurationRepos.repoId, repoId),
+		),
 		columns: {
 			repoId: true,
 		},
@@ -499,8 +502,8 @@ export async function createSinglePrebuildRepo(
 ): Promise<void> {
 	const db = getDb();
 	try {
-		await db.insert(prebuildRepos).values({
-			prebuildId,
+		await db.insert(configurationRepos).values({
+			configurationId: prebuildId,
 			repoId,
 			workspacePath,
 		});
@@ -522,10 +525,10 @@ export async function listByRepoId(repoId: string): Promise<RepoPrebuildRow[]> {
 	const db = getDb();
 
 	// Get prebuilds through the junction table
-	const results = await db.query.prebuildRepos.findMany({
-		where: eq(prebuildRepos.repoId, repoId),
+	const results = await db.query.configurationRepos.findMany({
+		where: eq(configurationRepos.repoId, repoId),
 		with: {
-			prebuild: {
+			configuration: {
 				columns: {
 					id: true,
 					name: true,
@@ -539,7 +542,7 @@ export async function listByRepoId(repoId: string): Promise<RepoPrebuildRow[]> {
 	});
 
 	return results
-		.map((r) => r.prebuild)
+		.map((r) => r.configuration)
 		.filter((p): p is NonNullable<typeof p> => p !== null)
 		.sort((a, b) => {
 			const aTime = a.createdAt?.getTime() ?? 0;
@@ -559,10 +562,10 @@ export async function getPrebuildReposWithPrebuilds(
 	repoId: string,
 ): Promise<PrebuildRepoWithPrebuildRow[]> {
 	const db = getDb();
-	const results = await db.query.prebuildRepos.findMany({
-		where: eq(prebuildRepos.repoId, repoId),
+	const results = await db.query.configurationRepos.findMany({
+		where: eq(configurationRepos.repoId, repoId),
 		with: {
-			prebuild: {
+			configuration: {
 				columns: {
 					id: true,
 					snapshotId: true,
@@ -585,12 +588,12 @@ export async function getPrebuildReposWithPrebuilds(
 	});
 
 	return results.map((r) => ({
-		prebuildId: r.prebuildId,
+		configurationId: r.configurationId,
 		workspacePath: r.workspacePath,
-		prebuild: r.prebuild
+		configuration: r.configuration
 			? {
-					...r.prebuild,
-					sessions: r.prebuild.sessions ?? [],
+					...r.configuration,
+					sessions: r.configuration.sessions ?? [],
 				}
 			: null,
 	}));
@@ -601,8 +604,8 @@ export async function getPrebuildReposWithPrebuilds(
  */
 export async function getReposForPrebuild(prebuildId: string): Promise<SnapshotRepoRow[]> {
 	const db = getDb();
-	const results = await db.query.prebuildRepos.findMany({
-		where: eq(prebuildRepos.prebuildId, prebuildId),
+	const results = await db.query.configurationRepos.findMany({
+		where: eq(configurationRepos.configurationId, prebuildId),
 		with: {
 			repo: {
 				columns: {
@@ -633,7 +636,7 @@ export async function findManagedPrebuilds(): Promise<ManagedPrebuildRow[]> {
 			snapshotId: true,
 		},
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
 					repo: {
 						columns: {

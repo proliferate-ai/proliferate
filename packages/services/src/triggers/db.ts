@@ -512,7 +512,7 @@ export async function prebuildExists(id: string, orgId: string): Promise<boolean
 		where: eq(prebuilds.id, id),
 		columns: { id: true },
 		with: {
-			prebuildRepos: {
+			configurationRepos: {
 				with: {
 					repo: {
 						columns: { organizationId: true },
@@ -523,7 +523,7 @@ export async function prebuildExists(id: string, orgId: string): Promise<boolean
 	});
 
 	if (!result) return false;
-	return result.prebuildRepos.some((pr) => pr.repo?.organizationId === orgId);
+	return result.configurationRepos.some((pr) => pr.repo?.organizationId === orgId);
 }
 
 /**
