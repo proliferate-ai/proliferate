@@ -4,3 +4,8 @@
 
 export * from "./types";
 export * from "./action-source";
+
+// Provider implementations
+export { linearSource } from "./providers/linear";
+export { sentrySource } from "./providers/sentry";
+export { slackSource } from "./providers/slack";

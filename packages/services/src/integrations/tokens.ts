@@ -21,6 +21,8 @@ export interface IntegrationForToken {
 	integrationId: string; // 'linear' | 'sentry' | 'github' | 'slack'
 	connectionId: string;
 	githubInstallationId?: string | null;
+	/** Optional user-scoped connection ID (for per-user OAuth tokens). */
+	userConnectionId?: string | null;
 }
 
 /** Successful token resolution. */
@@ -73,12 +75,11 @@ export async function getToken(integration: IntegrationForToken): Promise<string
 	}
 
 	// Nango -> OAuth token from Nango API
-	if (integration.provider === "nango" && integration.connectionId) {
+	// Prefer user-scoped connection if available, fall back to org connection
+	const connectionId = integration.userConnectionId ?? integration.connectionId;
+	if (integration.provider === "nango" && connectionId) {
 		const nango = getNango();
-		const connection = await nango.getConnection(
-			integration.integrationId,
-			integration.connectionId,
-		);
+		const connection = await nango.getConnection(integration.integrationId, connectionId);
 
 		const credentials = connection.credentials as { access_token?: string };
 		if (!credentials.access_token) {
