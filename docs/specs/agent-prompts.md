@@ -20,7 +20,7 @@ YOUR ASSIGNMENT:
 - Spec file: docs/specs/agent-contract.md
 - In scope:
   - System prompt modes: setup, coding, automation (how they differ, what each injects)
-  - OpenCode tool schemas: verify, save_snapshot, save_service_commands, automation.complete, request_env_variables
+  - OpenCode tool schemas: verify, save_snapshot, save_service_commands, save_env_files, automation.complete, request_env_variables
   - Capability injection: how tools get registered in the sandbox OpenCode config
   - Tool input/output contracts and validation
   - Which tools are available in which session modes
@@ -73,7 +73,7 @@ YOUR ASSIGNMENT:
 - Out of scope:
   - Session lifecycle that calls the provider (sessions-gateway.md)
   - Tool schemas and prompt templates (agent-contract.md)
-  - Snapshot build jobs — base snapshot workers (`repos.md`)
+  - Snapshot build jobs — base and repo snapshot workers (repos-prebuilds.md)
   - Secret values and bundle management (secrets-environment.md)
   - LLM key generation (llm-proxy.md)
 
@@ -141,7 +141,7 @@ YOUR ASSIGNMENT:
   - Sandbox boot mechanics and provider interface (sandbox-providers.md)
   - Tool schemas and prompt modes (agent-contract.md)
   - Automation-initiated sessions (automations-runs.md owns the run lifecycle)
-  - Repo/configuration resolution (repos.md)
+  - Repo/prebuild config resolution (repos-prebuilds.md)
   - LLM key generation (llm-proxy.md)
   - Billing gating for session creation (billing-metering.md)
 
@@ -199,7 +199,7 @@ YOUR ASSIGNMENT:
   - Outbox dispatch (atomic claim, stuck-row recovery)
   - Side effects tracking
   - Artifact storage (S3 — completion + enrichment artifacts)
-  - Target resolution (which repo/configuration to use)
+  - Target resolution (which repo/prebuild to use)
   - Notification dispatch (Slack)
   - Slack async client (bidirectional session via Slack)
   - Slack inbound handlers (text, todo, verify, default-tool)
@@ -423,14 +423,14 @@ YOUR ASSIGNMENT:
   - Local config management (.proliferate/ directory)
   - File sync (unidirectional: local → sandbox via rsync)
   - OpenCode launch
-  - CLI-specific API routes (auth, repos, sessions, SSH keys, GitHub, configurations)
+  - CLI-specific API routes (auth, repos, sessions, SSH keys, GitHub, prebuilds)
   - GitHub repo selection history
   - SSH key storage and management
   - CLI package structure and build
 - Out of scope:
   - Session lifecycle after creation (sessions-gateway.md)
   - Sandbox boot (sandbox-providers.md)
-  - Repo/configuration management beyond CLI-specific routes (repos.md)
+  - Repo/prebuild management beyond CLI-specific routes (repos-prebuilds.md)
   - Auth system internals / better-auth (auth-orgs.md)
 
 KEY FILES TO READ:
@@ -456,7 +456,7 @@ RULES:
 
 ## Phase 3 (run after phase 2 specs exist)
 
-### 9. Repos & Configurations
+### 9. Repos, Configurations & Prebuilds
 
 ```
 You are writing a system spec for the Proliferate codebase.
@@ -464,39 +464,42 @@ You are writing a system spec for the Proliferate codebase.
 READ THESE FILES FIRST (in order):
 1. docs/specs/boundary-brief.md — boundary rules and glossary (MANDATORY)
 2. docs/specs/template.md — spec template (follow exactly)
-3. docs/specs/feature-registry.md — section 9 (Repos/Configurations features)
+3. docs/specs/feature-registry.md — section 9 (Repos/Prebuilds features)
 4. docs/specs/sandbox-providers.md — cross-reference for snapshot resolution
-5. docs/specs/sessions-gateway.md — cross-reference for configuration resolver
+5. docs/specs/sessions-gateway.md — cross-reference for prebuild resolver
 
 YOUR ASSIGNMENT:
-- Spec file: docs/specs/repos.md
+- Spec file: docs/specs/repos-prebuilds.md
 - In scope:
   - Repo CRUD and search
   - Repo connections (integration bindings)
-  - Configuration CRUD
-  - Configuration-repo associations (many-to-many)
+  - Prebuild CRUD and configuration
+  - Prebuild-repo associations (many-to-many)
   - Effective service commands resolution
   - Base snapshot build worker (queue, deduplication, status tracking)
-  - Configuration resolver (resolves config at session start)
+  - Repo snapshot build worker (GitHub token hierarchy, commit tracking)
+  - Prebuild resolver (resolves config at session start)
   - Service commands persistence (JSONB)
-  - Configuration secret files
+  - Env file persistence (JSONB)
   - Base snapshot status tracking (building/ready/failed)
+  - Repo snapshot status tracking (building/ready/failed + commit SHA)
 - Out of scope:
   - Snapshot resolution logic (sandbox-providers.md)
-  - Session creation that uses configurations (sessions-gateway.md)
+  - Session creation that uses prebuilds (sessions-gateway.md)
   - Secret values and bundles (secrets-environment.md)
   - Integration OAuth (integrations.md)
 
 KEY FILES TO READ:
 - apps/web/src/server/routers/repos.ts
-- apps/web/src/server/routers/configurations.ts
+- apps/web/src/server/routers/prebuilds.ts
 - apps/worker/src/base-snapshots/index.ts
-- apps/gateway/src/lib/configuration-resolver.ts
+- apps/worker/src/repo-snapshots/index.ts
+- apps/gateway/src/lib/prebuild-resolver.ts
 - packages/services/src/repos/
-- packages/services/src/configurations/
+- packages/services/src/prebuilds/
 - packages/services/src/base-snapshots/
 - packages/db/src/schema/repos.ts
-- packages/db/src/schema/schema.ts
+- packages/db/src/schema/prebuilds.ts
 
 RULES:
 - Document what is in main today, not aspirational design
@@ -529,10 +532,10 @@ YOUR ASSIGNMENT:
   - S3 integration for secret storage
   - How secrets flow from DB → gateway → sandbox (the data path, not the tool schema)
 - Out of scope:
-  - Secret file management (configurations-snapshots.md)
+  - The save_env_files tool schema (agent-contract.md)
   - The request_env_variables tool schema (agent-contract.md)
   - Sandbox env var injection mechanics (sandbox-providers.md)
-  - Configuration secret files (repos.md)
+  - Prebuild env file persistence (repos-prebuilds.md)
 
 KEY FILES TO READ:
 - apps/web/src/server/routers/secrets.ts

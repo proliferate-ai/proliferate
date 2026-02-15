@@ -148,7 +148,7 @@ Native MCP support. Users configure MCP servers in settings, agent discovers too
 - **Server-side token management**: OAuth tokens never leave the server
 - **Approval flow**: Risk-classified operations require human approval
 - **Audit trail**: Every action invocation is logged
-- **Team-wide configuration**: Platform provides centrally managed connector access (org-scoped via `org_connectors` table)
+- **Team-wide configuration**: Platform can provide centrally managed connector access (current implementation is prebuild-scoped; target is org-scoped)
 - **Automation integration**: Tools are available in triggered automation runs, not just interactive sessions
 
 ---
@@ -186,7 +186,7 @@ Any approach needs to address these questions:
 
 | Level | Scope | Persistence |
 |---|---|---|
-| **Per-configuration** (JSONB on configurations table) | Project-wide, all sessions | Survives sessions |
+| **Per-prebuild** (JSONB on prebuilds table) | Project-wide, all sessions | Survives sessions |
 | **Per-session** (session config) | One session | Ephemeral |
 | **Per-org** (org-level config) | All projects | Survives everything |
 | **Per-repo** (committed to repo, e.g. `.opencode/`) | Follows the code | Versioned with code |
@@ -197,13 +197,13 @@ Any approach needs to address these questions:
 
 ### Option 1: MCP Servers in the Sandbox (OpenCode-Native)
 
-Add MCP server configs to configurations. At sandbox boot, write them into `opencode.json`. OpenCode manages the MCP servers natively inside the sandbox. The agent discovers and calls tools through OpenCode's built-in MCP support.
+Add MCP server configs to prebuilds. At sandbox boot, write them into `opencode.json`. OpenCode manages the MCP servers natively inside the sandbox. The agent discovers and calls tools through OpenCode's built-in MCP support.
 
 **What changes:**
-- `mcp_servers` JSONB on configurations table
+- `mcp_servers` JSONB on prebuilds table
 - `getOpencodeConfig()` becomes composable (accepts dynamic MCP servers)
 - API key secrets injected as env vars into sandbox (existing secrets system)
-- UI for configuring MCP servers on configurations
+- UI for configuring MCP servers on prebuilds
 
 **What doesn't change:**
 - Gateway, CLI, Actions system — all untouched
@@ -350,19 +350,19 @@ Adopt **Option 2 with a strict V1 transport scope and org-wide config scope**:
 4. Use a single org-scoped connector catalog so all sessions in an org share the same connector set by default.
 5. Defer gateway `stdio` connectors and native sandbox MCP expansion to later phases.
 
-This path preserves approval, grants, and audit guarantees while removing configuration-level setup friction.
+This path preserves approval, grants, and audit guarantees while removing prebuild-level setup friction.
 
 ### Implementation Status (2026-02-13)
 
 **Current baseline (implemented): Option 2 transport path with org-scoped connector catalog.**
 - Connector types + Zod schemas: `packages/shared/src/connectors.ts`
-- DB: `org_connectors` table (`packages/db/drizzle/0022_org_connectors.sql`), legacy `configurations.connectors` JSONB retained but no longer read
+- DB: `org_connectors` table (`packages/db/drizzle/0022_org_connectors.sql`), legacy `prebuilds.connectors` JSONB retained but no longer read
 - MCP client module: `packages/services/src/actions/connectors/` (list tools, call tool, risk derivation)
 - Secret resolver: `packages/services/src/secrets/service.ts:resolveSecretValue`
 - Gateway wiring: `apps/gateway/src/api/proliferate/http/actions.ts` (available, guide, invoke, approve)
 - CRUD/UI: `apps/web/src/server/routers/integrations.ts` + `apps/web/src/app/settings/tools/page.tsx`
 
-**Approved next step (completed): migrated connector source-of-truth from configuration scope to org scope under Integrations ownership.**
+**Approved next step (planned): migrate connector source-of-truth from prebuild scope to org scope under Integrations ownership.**
 
 ### MCP Server Reality Check (2026-02-13)
 
@@ -387,12 +387,12 @@ Reference docs:
 
 ### Delivery Plan (2026-02-13) — Completed
 
-Migration from configuration-scoped to org-wide connector management is complete.
+Migration from prebuild-scoped to org-wide connector management is complete.
 
 #### Phase 1 — Org Connector Data Model + Service Layer (`Done`)
 
 1. Org-scoped `org_connectors` table + `packages/services/src/connectors/` service layer.
-2. Backfill migration `0022_org_connectors.sql` copied configuration connectors to org scope, deduplicating by `(organization_id, url, name)`.
+2. Backfill migration `0022_org_connectors.sql` copied prebuild connectors to org scope, deduplicating by `(organization_id, url, name)`.
 
 #### Phase 2 — Org-Level API + UI Surface (`Done`)
 
@@ -401,12 +401,12 @@ Migration from configuration-scoped to org-wide connector management is complete
 
 #### Phase 3 — Gateway Resolution Switch (`Done`)
 
-1. Gateway loads enabled connectors by org/session context, not by configuration.
+1. Gateway loads enabled connectors by org/session context, not by prebuild.
 2. Risk/grant/approval/audit behavior and `connector:<uuid>` integration prefix preserved.
 
 #### Phase 4 — Cleanup (`Partial`)
 
-1. Configuration connector CRUD routes removed. Legacy `configurations.connectors` JSONB column retained for data preservation but no longer read at runtime.
+1. Prebuild connector CRUD routes removed. Legacy `prebuilds.connectors` JSONB column retained for data preservation but no longer read at runtime.
 
 #### Non-goals (unchanged)
 
@@ -457,4 +457,4 @@ For self-hosted teams that want maximum flexibility, native sandbox MCP remains 
 | `packages/shared/src/sandbox/config.ts` | Plugin template, env instructions, constants |
 | `packages/shared/src/providers/modal-libmodal.ts` | Modal provider — sandbox boot, file injection |
 | `packages/shared/src/providers/e2b.ts` | E2B provider — same interface |
-| `packages/db/src/schema/schema.ts` | Configurations table (has `service_commands` JSONB) |
+| `packages/db/src/schema/prebuilds.ts` | Prebuilds table (has `service_commands`, `env_files` JSONB) |

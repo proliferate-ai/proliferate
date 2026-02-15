@@ -348,7 +348,7 @@ async function safeCreateSkippedEvent(input) {
 **What it does:** oRPC routes for managing triggers. **Status: Implemented.**
 
 **Happy path:**
-1. `create` validates configuration and integration existence, generates `webhookUrlPath` (UUID-based) and `webhookSecret` (32-byte hex) for webhook triggers, creates an automation parent record, then creates the trigger. For polling triggers, schedules a BullMQ repeatable job.
+1. `create` validates prebuild and integration existence, generates `webhookUrlPath` (UUID-based) and `webhookSecret` (32-byte hex) for webhook triggers, creates an automation parent record, then creates the trigger. For polling triggers, schedules a BullMQ repeatable job.
 2. `update` modifies trigger fields. For polling triggers, reschedules or removes the repeatable job based on `enabled` state and `pollingCron`.
 3. `delete` removes the trigger (cascades to events). For polling triggers, removes the repeatable job.
 4. `list` returns triggers with integration data and pending event counts.

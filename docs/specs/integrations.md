@@ -16,7 +16,7 @@
 - Org-scoped MCP connector catalog lifecycle (CRUD, validation, settings UI)
 
 ### Out of Scope
-- What repos/automations/sessions **do** with connections at runtime — see `repos.md`, `automations-runs.md`, `sessions-gateway.md`
+- What repos/automations/sessions **do** with connections at runtime — see `repos-prebuilds.md`, `automations-runs.md`, `sessions-gateway.md`
 - Slack async client and message handling — see `automations-runs.md`
 - Action adapters for Linear/Sentry — see `actions.md`
 - Connector execution lifecycle (risk/approval/grants/audit) — see `actions.md`
@@ -122,7 +122,7 @@ apps/gateway/src/lib/
 └── github-auth.ts               # Gateway-side GitHub token resolution
 ```
 
-Connector catalog: `packages/services/src/connectors/` owns DB access and business logic. `org_connectors` table stores connector definitions (migrated from legacy `configurations.connectors` JSONB).
+Connector catalog: `packages/services/src/connectors/` owns DB access and business logic. `org_connectors` table stores connector definitions with backfill migration from legacy `prebuilds.connectors` JSONB.
 
 ---
 
@@ -506,7 +506,7 @@ function handleNangoError(err: unknown, operation: string): never {
 **Behavior:**
 1. Admin/owner configures connectors once per org via Settings → Tools.
 2. Config is stored in `org_connectors` table using the shared `ConnectorConfig` schema (`packages/shared/src/connectors.ts`).
-3. Gateway Actions loads enabled connectors by org/session context, not by configuration.
+3. Gateway Actions loads enabled connectors by org/session context, not by prebuild.
 4. Connector-backed actions continue using the same `connector:<uuid>` integration prefix and existing approval/audit pipeline in `actions.md`.
 5. Quick-setup flow: preset grid with inline API key entry, atomic secret + connector creation in a single transaction.
 6. Advanced flow: full form with secret picker, custom auth, risk policy, and connection validation.
@@ -524,7 +524,7 @@ function handleNangoError(err: unknown, operation: string): never {
 
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
-| `repos.md` | Repos → This | `repo_connections` table, `getRepoConnectionsWithIntegrations()` | Repos bind to integrations for GitHub access |
+| `repos-prebuilds.md` | Repos → This | `repo_connections` table, `getRepoConnectionsWithIntegrations()` | Repos bind to integrations for GitHub access |
 | `automations-runs.md` | Automations → This | `automation_connections` table, `resolveTokens()` | Runs resolve tokens for enrichment context |
 | `sessions-gateway.md` | Sessions → This | `session_connections` table, `getGitHubTokenForIntegration()` | Sessions use tokens for git operations |
 | `triggers.md` | Triggers → This | `integrations.triggers` relation, `findActiveByGitHubInstallationId()` | Trigger-service resolves integration for webhook dispatch |

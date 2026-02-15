@@ -89,8 +89,8 @@
 - **Fix:** Assign to `billing-metering.md`. `llm-proxy.md` documents `syncLLMSpend()` which lives here — it should reference the function, not claim the file.
 
 ### 2.10 `repo_connections` table
-- **Claimed by:** `repos.md` (data models §4), `integrations.md` (data models §4)
-- **Fix:** Assign to `integrations.md` (owns connection binding tables per boundary-brief). `repos.md` references it for token resolution but should not list the full DDL.
+- **Claimed by:** `repos-prebuilds.md` (data models §4), `integrations.md` (data models §4)
+- **Fix:** Assign to `integrations.md` (owns connection binding tables per boundary-brief). `repos-prebuilds.md` references it for token resolution but should not list the full DDL.
 
 ### 2.11 `apps/gateway/src/lib/github-auth.ts`
 - **Claimed by:** `sessions-gateway.md` (file tree §3), `integrations.md` (file tree §3, §6.11 deep dive)
@@ -101,11 +101,11 @@
 ## 3. Contradictions
 
 ### 3.1 Snapshot resolution ownership
-- **Boundary-brief §2:** "repos.md owns repo records, configuration management, and snapshot *builds*. sessions-gateway.md owns snapshot *resolution* at session start (which snapshot to use)."
-- **repos.md §1:** "Out of Scope: Snapshot resolution logic — see `sandbox-providers.md` §6.5"
+- **Boundary-brief §2:** "repos-prebuilds.md owns repo records, prebuild configs, and snapshot *builds*. sessions-gateway.md owns snapshot *resolution* at session start (which snapshot to use)."
+- **repos-prebuilds.md §1:** "Out of Scope: Snapshot resolution logic — see `sandbox-providers.md` §6.5"
 - **sandbox-providers.md §6.5:** Documents `resolveSnapshotId()` — the function that picks which snapshot to use
 - **sessions-gateway.md:** Does NOT claim snapshot resolution
-- **Fix:** Update boundary-brief to say "sandbox-providers.md owns snapshot resolution" (since the function lives in `packages/shared/src/snapshot-resolution.ts` which is in the providers file tree). Or move it to repos since it's closely related to snapshot builds.
+- **Fix:** Update boundary-brief to say "sandbox-providers.md owns snapshot resolution" (since the function lives in `packages/shared/src/snapshot-resolution.ts` which is in the providers file tree). Or move it to repos-prebuilds since it's closely related to snapshot builds.
 
 ### 3.2 Run lifecycle state names
 - **Boundary-brief §3 glossary:** "pending → enriching → executing → completed/failed"
@@ -113,10 +113,10 @@
 - **Spec §4 note:** Acknowledges this discrepancy
 - **Fix:** Update boundary-brief glossary to match the actual DB values: "queued → enriching → ready → running → succeeded/failed/needs_human/timed_out"
 
-### 3.3 Configuration resolver ownership ambiguity
-- **repos.md §6.7:** "Owned by the gateway; documented here because it creates configuration and repo records via this spec's services."
-- **sessions-gateway.md §6.1:** References `resolveConfiguration()` as part of session creation
-- **Fix:** The resolver file `apps/gateway/src/lib/prebuild-resolver.ts` should be assigned to one spec. Since it lives in the gateway and is part of session creation flow, assign to `sessions-gateway.md`. `repos.md` should reference it for context but not document its internals.
+### 3.3 Prebuild resolver ownership ambiguity
+- **repos-prebuilds.md §6.7:** "Owned by the gateway; documented here because it creates prebuild and repo records via this spec's services."
+- **sessions-gateway.md §6.1:** References `resolvePrebuild()` as part of session creation
+- **Fix:** The resolver file `apps/gateway/src/lib/prebuild-resolver.ts` should be assigned to one spec. Since it lives in the gateway and is part of session creation flow, assign to `sessions-gateway.md`. `repos-prebuilds.md` should reference it for context but not document its internals.
 
 ---
 
@@ -129,14 +129,18 @@
 
 ### 4.2 `feature-registry.md` — "Configurations" in title
 - **Section 9 header:** "Repos, Configurations & Prebuilds"
-- **Status:** Resolved. Header updated to "Repos & Configurations" and glossary now uses "configuration" as the canonical term.
+- **Violation:** Glossary says use "prebuild" not "configuration (in specs)"
+- **Fix:** Change header to "Repos & Prebuilds"
 
-### 4.3 `repos.md` — terminology alignment
-- **Status:** The canonical term is now "configuration" (not "prebuild"). Glossary updated in boundary-brief to reflect this rename.
+### 4.3 `repos-prebuilds.md` — occasional "configuration" usage
+- **§1 Mental Model:** "Effective configuration unit" appears in `implementation-context.md` language
+- **§2 Core Concepts:** "Prebuild Types" is correct, but "configuration management" appears in boundary-brief scope description
+- **Fix:** Audit and replace "configuration" with "prebuild" throughout when referring to the entity
 
-### 4.4 `boundary-brief.md` — scope description
-- **§1 Spec Registry, row 9:** Updated to "Repo CRUD, configuration management"
-- **Status:** Resolved.
+### 4.4 `boundary-brief.md` — "configuration" in scope description
+- **§1 Spec Registry, row 9:** "Repo CRUD, prebuild/configuration management"
+- **Violation:** Glossary says use "prebuild" not "configuration"
+- **Fix:** Change to "Repo CRUD, prebuild management"
 
 ### 4.5 `automations-runs.md` — "job" used for BullMQ
 - **§2 "Outbox Pattern":** "dispatches to BullMQ queues" — technically uses "queue" which the glossary reserves for outbox
@@ -168,7 +172,7 @@
 - **Issue:** This file handles both GitHub lifecycle events (integrations.md §6.13) and trigger dispatch (triggers.md §6.8). Both specs document it without clearly delineating ownership.
 - **Fix:** Add explicit notes: integrations.md owns lifecycle handling (installation deleted/suspended/unsuspended), triggers.md owns event dispatch to triggers. The file should be listed in one spec's file tree with a cross-reference from the other.
 
-### 5.5 `repos.md` — setup finalization secret storage
+### 5.5 `repos-prebuilds.md` — setup finalization secret storage
 - **Issue:** §6.8 mentions `secrets.upsertSecretByRepoAndKey()` but the cross-cutting table row just says "Finalize → Secrets" without the specific function.
 - **Fix:** The cross-reference exists (§7 table has it), but the description could be more specific: "Setup finalization stores encrypted secrets via `secrets.upsertSecretByRepoAndKey()`"
 
@@ -221,7 +225,7 @@ All 13 specs fall within the 300-600 line target:
 - The `outbox` table is used by both automations-runs and triggers (triggers insert `enqueue_enrich` rows). The table definition lives only in automations-runs.md §4. This is acceptable since automations-runs owns the outbox dispatch, but triggers.md should have a cross-reference noting it inserts into a table documented in automations-runs.md.
 
 ### 8.2 `packages/queue/src/index.ts` claimed by multiple specs
-- triggers.md (polling/scheduling queues), repos.md (snapshot build queues), automations-runs.md (automation queues) all reference this file. As shared infrastructure, it's listed in the feature-registry cross-cutting section. No spec should exclusively claim it.
+- triggers.md (polling/scheduling queues), repos-prebuilds.md (snapshot build queues), automations-runs.md (automation queues) all reference this file. As shared infrastructure, it's listed in the feature-registry cross-cutting section. No spec should exclusively claim it.
 
 ### 8.3 `session_connections`, `automation_connections` tables
 - integrations.md lists these in its data models (connection binding tables)

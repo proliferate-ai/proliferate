@@ -177,7 +177,7 @@ System specs in `docs/specs/` are the **single source of truth** for how each su
 | Action invocations, approval flow, grants, risk classification, Linear/Sentry adapters | `actions.md` |
 | LiteLLM virtual keys, model routing, per-org spend tracking | `llm-proxy.md` |
 | CLI device auth, file sync, OpenCode launch, CLI API routes | `cli.md` |
-| Repo CRUD, prebuild configs, base/repo snapshot builds, service commands, env file persistence | `repos.md` |
+| Repo CRUD, prebuild configs, base/repo snapshot builds, service commands, env file persistence | `repos-prebuilds.md` |
 | Secret CRUD, bundles, encryption, env file deployment | `secrets-environment.md` |
 | OAuth connections (GitHub/Sentry/Linear/Slack), Nango, connection binding | `integrations.md` |
 | User auth, orgs, members, invitations, onboarding, admin, API keys | `auth-orgs.md` |

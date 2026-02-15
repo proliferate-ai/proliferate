@@ -15,13 +15,13 @@
 ### 2.1 Core entities and runtime model
 
 - **Repo**: Single repository record.
-- **Configuration**: Effective configuration unit that can include one or multiple repos (via `configuration_repos`).
-- **Session**: Running instance of a configuration.
+- **Prebuild/Configuration**: Effective configuration unit that can include one or multiple repos (via `prebuild_repos`).
+- **Session**: Running instance of a configuration/prebuild.
 - **Setup session**: Specialized session to prepare environment and produce reusable snapshot state.
 - **Snapshots**:
 	- Base snapshot layer
 	- Repo snapshot layer (where applicable)
-	- Configuration/user snapshot layer
+	- Prebuild/user snapshot layer
 
 ### 2.2 Runtime transport model
 

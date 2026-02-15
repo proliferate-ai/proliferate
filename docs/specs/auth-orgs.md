@@ -273,7 +273,7 @@ interface Invitation {
 // packages/shared/src/contracts/onboarding.ts
 interface OnboardingStatus {
   hasOrg: boolean; hasSlackConnection: boolean; hasGitHubConnection: boolean;
-  repos: Array<{ id: string; github_repo_name: string; configuration_status: "ready" | "pending" }>;
+  repos: Array<{ id: string; github_repo_name: string; prebuild_status: "ready" | "pending" }>;
 }
 
 // packages/shared/src/auth.ts
@@ -444,7 +444,7 @@ The service layer has parallel implementations (`updateMemberRole`, `removeMembe
 **Status check:**
 1. `onboardingRouter.getStatus` calls `onboarding.getOnboardingStatus(orgId, nangoGithubIntegrationId)` — `apps/web/src/server/routers/onboarding.ts`
 2. Checks: `hasOrg` (org exists), `hasSlackConnection` (active Slack installation), `hasGitHubConnection` (GitHub integration) — `packages/services/src/onboarding/service.ts`
-3. Returns repos with configuration status (`ready` if snapshotId exists, else `pending`).
+3. Returns repos with prebuild status (`ready` if snapshotId exists, else `pending`).
 
 **Dashboard gating:**
 - Dashboard layout redirects to `/onboarding` when billing is enabled and `billingState === "unconfigured"` — `apps/web/src/app/dashboard/layout.tsx`
@@ -467,8 +467,8 @@ The service layer has parallel implementations (`updateMemberRole`, `removeMembe
 1. `onboardingRouter.finalize({ selectedGithubRepoIds, integrationId })` — `apps/web/src/server/routers/onboarding.ts`
 2. Fetches GitHub repos via integration, filters to selected IDs
 3. Upserts each repo into DB, triggers repo snapshot build for new repos — `packages/services/src/onboarding/service.ts:upsertRepoFromGitHub`
-4. Creates or retrieves managed configuration via gateway service-to-service call
-5. Returns `{ configurationId, repoIds, isNew }`
+4. Creates or retrieves managed prebuild via gateway service-to-service call
+5. Returns `{ prebuildId, repoIds, isNew }`
 
 **Files touched:** `apps/web/src/server/routers/onboarding.ts`, `packages/services/src/onboarding/service.ts`, `packages/services/src/onboarding/db.ts`
 
@@ -539,9 +539,10 @@ The service layer has parallel implementations (`updateMemberRole`, `removeMembe
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
 | `billing-metering.md` | This → Billing | `autumnCreateCustomer()`, `autumnAttach()`, `TRIAL_CREDITS`, `initializeBillingState()` | Onboarding triggers trial; billing owns credit policy |
+| `cli.md` | CLI → This | `auth.api.createApiKey()`, `auth.api.verifyApiKey()` | CLI device auth creates API keys; auth-helpers verifies them |
 | `sessions-gateway.md` | Gateway → This | `verifyToken()`, `verifyInternalToken()` | Gateway auth middleware uses shared JWT/token helpers |
 | `integrations.md` | This → Integrations | `onboarding.getIntegrationForFinalization()` | Onboarding finalize fetches GitHub integration for repo listing |
-| `repos.md` | This → Repos | `getOrCreateManagedConfiguration()` | Onboarding finalize creates repos and managed configurations |
+| `repos-prebuilds.md` | This → Repos | `getOrCreateManagedPrebuild()`, `requestRepoSnapshotBuild()` | Onboarding finalize creates repos and triggers snapshot builds |
 
 ### Security & Auth
 - **AuthN:** better-auth manages session tokens (httpOnly cookies), password hashing, and OAuth flows
