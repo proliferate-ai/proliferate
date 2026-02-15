@@ -10,10 +10,7 @@ import type { BillingOutboxJob } from "@proliferate/queue";
 import { billing } from "@proliferate/services";
 import { getProvidersMap } from "./providers";
 
-export async function processOutboxJob(
-	_job: Job<BillingOutboxJob>,
-	logger: Logger,
-): Promise<void> {
+export async function processOutboxJob(_job: Job<BillingOutboxJob>, logger: Logger): Promise<void> {
 	try {
 		const providers = await getProvidersMap();
 		await billing.processOutbox(providers);

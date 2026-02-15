@@ -11,9 +11,7 @@ import { billing } from "@proliferate/services";
 import { AUTUMN_FEATURES, autumnGetBalance } from "@proliferate/shared/billing";
 
 // TODO: wire up from feat/billing-data-layer-rest-bulk after merge
-async function listOrgsForReconciliation(): Promise<
-	{ id: string; autumnCustomerId: string }[]
-> {
+async function listOrgsForReconciliation(): Promise<{ id: string; autumnCustomerId: string }[]> {
 	return [];
 }
 

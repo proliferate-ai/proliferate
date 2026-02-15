@@ -100,19 +100,19 @@ export interface AddScheduledJobResult {
 // ============================================
 
 /** Repeatable metering job — runs every 30s, no data needed. */
-export interface BillingMeteringJob {}
+export type BillingMeteringJob = Record<string, never>;
 
 /** Repeatable outbox job — runs every 60s, no data needed. */
-export interface BillingOutboxJob {}
+export type BillingOutboxJob = Record<string, never>;
 
 /** Repeatable grace expiration job — runs every 60s, no data needed. */
-export interface BillingGraceJob {}
+export type BillingGraceJob = Record<string, never>;
 
 /** Nightly reconciliation job — cron at 00:00 UTC, no data needed. */
-export interface BillingReconcileJob {}
+export type BillingReconcileJob = Record<string, never>;
 
 /** Repeatable LLM sync dispatcher — runs every 30s, fans out per-org jobs. */
-export interface BillingLLMSyncDispatchJob {}
+export type BillingLLMSyncDispatchJob = Record<string, never>;
 
 /** Per-org LLM spend sync job — dispatched by the dispatcher. */
 export interface BillingLLMSyncOrgJob {

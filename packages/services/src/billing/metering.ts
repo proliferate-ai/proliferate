@@ -43,9 +43,7 @@ interface SessionForMetering {
  *
  * @param providers - Map of provider type to provider instance
  */
-export async function runMeteringCycle(
-	providers: Map<string, SandboxProvider>,
-): Promise<void> {
+export async function runMeteringCycle(providers: Map<string, SandboxProvider>): Promise<void> {
 	const nowMs = Date.now();
 	const db = getDb();
 

@@ -72,25 +72,45 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 	const llmSyncOrgQueue = createBillingLLMSyncOrgQueue(connection);
 
 	// Add repeatable schedules (idempotent — BullMQ deduplicates by repeat key)
-	await meteringQueue.add("metering", {}, {
-		repeat: { every: 30_000 },
-	});
+	await meteringQueue.add(
+		"metering",
+		{},
+		{
+			repeat: { every: 30_000 },
+		},
+	);
 
-	await outboxQueue.add("outbox", {}, {
-		repeat: { every: 60_000 },
-	});
+	await outboxQueue.add(
+		"outbox",
+		{},
+		{
+			repeat: { every: 60_000 },
+		},
+	);
 
-	await graceQueue.add("grace", {}, {
-		repeat: { every: 60_000 },
-	});
+	await graceQueue.add(
+		"grace",
+		{},
+		{
+			repeat: { every: 60_000 },
+		},
+	);
 
-	await reconcileQueue.add("reconcile", {}, {
-		repeat: { pattern: "0 0 * * *", tz: "UTC" },
-	});
+	await reconcileQueue.add(
+		"reconcile",
+		{},
+		{
+			repeat: { pattern: "0 0 * * *", tz: "UTC" },
+		},
+	);
 
-	await llmSyncDispatchQueue.add("llm-sync-dispatch", {}, {
-		repeat: { every: 30_000 },
-	});
+	await llmSyncDispatchQueue.add(
+		"llm-sync-dispatch",
+		{},
+		{
+			repeat: { every: 30_000 },
+		},
+	);
 
 	// Create workers
 	const meteringWorker = createBillingMeteringWorker(
