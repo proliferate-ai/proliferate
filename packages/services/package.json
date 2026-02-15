@@ -23,6 +23,7 @@
 		"@proliferate/environment": "workspace:*",
 		"@proliferate/gateway-clients": "workspace:*",
 		"@proliferate/logger": "workspace:*",
+		"@proliferate/providers": "workspace:*",
 		"@proliferate/queue": "workspace:*",
 		"@proliferate/shared": "workspace:*",
 		"@proliferate/triggers": "workspace:*",
