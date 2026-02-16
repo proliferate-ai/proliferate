@@ -135,7 +135,7 @@ function ApprovalItem({ data }: { data: ApprovalWithSession }) {
 					</p>
 					{sessionTitle && (
 						<Link
-							href={`/dashboard/sessions/${sessionId}`}
+							href={`/workspace/${sessionId}`}
 							className="text-xs text-muted-foreground hover:text-foreground hover:underline mt-1 inline-block"
 						>
 							{sessionTitle}
@@ -143,7 +143,7 @@ function ApprovalItem({ data }: { data: ApprovalWithSession }) {
 					)}
 					{!sessionTitle && sessionId && (
 						<Link
-							href={`/dashboard/sessions/${sessionId}`}
+							href={`/workspace/${sessionId}`}
 							className="text-xs text-muted-foreground hover:text-foreground hover:underline mt-1 inline-block"
 						>
 							View session
@@ -227,16 +227,21 @@ function RunItem({ data }: { data: PendingRunSummary }) {
 				</div>
 			</div>
 
-			{data.session_id && (
-				<div className="mt-3 ml-8">
-					<Link href={`/dashboard/sessions/${data.session_id}`}>
+			<div className="mt-3 ml-8 flex items-center gap-2">
+				<Link href={`/dashboard/automations/runs/${data.id}`}>
+					<Button size="sm" variant="default" className="h-8">
+						<ExternalLink className="h-3.5 w-3.5" />
+						<span className="ml-1.5">Inspect Run</span>
+					</Button>
+				</Link>
+				{data.session_id && (
+					<Link href={`/workspace/${data.session_id}`}>
 						<Button size="sm" variant="outline" className="h-8">
-							<ExternalLink className="h-3.5 w-3.5" />
-							<span className="ml-1.5">View Session</span>
+							<span>Take Over in Studio</span>
 						</Button>
 					</Link>
-				</div>
-			)}
+				)}
+			</div>
 		</div>
 	);
 }
