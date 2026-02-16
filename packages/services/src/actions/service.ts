@@ -7,8 +7,6 @@
 import { getServicesLogger } from "../logger";
 import type { ActionInvocationRow, ActionInvocationWithSession } from "./db";
 import * as actionsDb from "./db";
-import * as grantsService from "./grants";
-import type { ActionGrantRow } from "./grants-db";
 
 // ============================================
 // Error Classes
@@ -140,31 +138,7 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 		return { invocation, needsApproval: false };
 	}
 
-	// Write actions — check for a matching grant before requiring approval
-	const grantResult = await grantsService.evaluateGrant(
-		input.organizationId,
-		input.integration,
-		input.action,
-		input.sessionId,
-	);
-
-	if (grantResult.granted) {
-		const invocation = await actionsDb.createInvocation({
-			...input,
-			status: "approved",
-		});
-		log.info(
-			{
-				invocationId: invocation.id,
-				action: input.action,
-				grantId: grantResult.grantId,
-			},
-			"Action auto-approved via grant (write)",
-		);
-		return { invocation, needsApproval: false };
-	}
-
-	// No matching grant — enforce pending cap before creating pending invocation
+	// Write actions — enforce pending cap before creating pending invocation
 	const pending = await actionsDb.listPendingBySession(input.sessionId);
 	if (pending.length >= MAX_PENDING_PER_SESSION) {
 		throw new PendingLimitError();
@@ -252,69 +226,6 @@ export async function approveAction(
 		throw new ActionConflictError("Failed to update invocation");
 	}
 	return updated;
-}
-
-/**
- * Approve a pending invocation and create a scoped grant for future similar actions.
- */
-export interface ApproveWithGrantInput {
-	scope: "session" | "org";
-	maxCalls?: number | null;
-}
-
-export async function approveActionWithGrant(
-	invocationId: string,
-	orgId: string,
-	userId: string,
-	grantInput: ApproveWithGrantInput,
-): Promise<{ invocation: ActionInvocationRow; grant: ActionGrantRow }> {
-	const log = getServicesLogger().child({ module: "actions" });
-
-	// 1. Validate invocation (same checks as approveAction)
-	const invocation = await actionsDb.getInvocation(invocationId, orgId);
-	if (!invocation) {
-		throw new ActionNotFoundError();
-	}
-	if (invocation.status !== "pending") {
-		throw new ActionConflictError(`Cannot approve invocation in status: ${invocation.status}`);
-	}
-	if (invocation.expiresAt && invocation.expiresAt <= new Date()) {
-		await actionsDb.updateInvocationStatus(invocationId, "expired", {
-			completedAt: new Date(),
-		});
-		throw new ActionExpiredError();
-	}
-
-	// 2. Create the grant (derives integration+action from invocation)
-	const grant = await grantsService.createGrant({
-		organizationId: orgId,
-		createdBy: userId,
-		sessionId: grantInput.scope === "session" ? invocation.sessionId : undefined,
-		integration: invocation.integration,
-		action: invocation.action,
-		maxCalls: grantInput.maxCalls ?? null,
-	});
-
-	// 3. Approve the invocation — rollback grant on failure
-	try {
-		const updated = await actionsDb.updateInvocationStatus(invocationId, "approved", {
-			approvedBy: userId,
-			approvedAt: new Date(),
-		});
-		if (!updated) {
-			await grantsService.revokeGrant(grant.id, orgId);
-			throw new ActionConflictError("Failed to update invocation");
-		}
-		log.info(
-			{ invocationId, grantId: grant.id, scope: grantInput.scope },
-			"Invocation approved with grant",
-		);
-		return { invocation: updated, grant };
-	} catch (err) {
-		// Best-effort rollback — grant is useless without the approval
-		await grantsService.revokeGrant(grant.id, orgId).catch(() => undefined);
-		throw err;
-	}
 }
 
 /**

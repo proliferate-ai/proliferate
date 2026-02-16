@@ -165,6 +165,13 @@
       "when": 1771372800000,
       "tag": "0024_drop_llm_spend_cursors_global",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1771194914156,
+      "tag": "0025_vnext_phase0",
+      "breakpoints": true
     }
   ]
 }

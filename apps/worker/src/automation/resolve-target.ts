@@ -88,7 +88,7 @@ async function findManagedPrebuildForRepo(
 ): Promise<string | null> {
 	const managed = await prebuilds.findManagedPrebuilds();
 	const match = managed.find((p) =>
-		p.prebuildRepos?.some(
+		p.configurationRepos?.some(
 			(pr) => pr.repo?.id === repoId && pr.repo?.organizationId === organizationId,
 		),
 	);
