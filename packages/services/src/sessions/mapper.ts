@@ -48,6 +48,7 @@ export function toSession(row: SessionWithRepoRow): Session {
 		startedAt: toIsoString(row.startedAt),
 		lastActivityAt: toIsoString(row.lastActivityAt),
 		pausedAt: toIsoString(row.pausedAt),
+		pauseReason: row.pauseReason ?? null,
 		origin: row.origin,
 		clientType: row.clientType,
 		repo: row.repo ? mapRepo(row.repo) : undefined,
@@ -81,6 +82,7 @@ export function toSessionPartial(row: SessionRow): Omit<Session, "repo"> {
 		startedAt: toIsoString(row.startedAt),
 		lastActivityAt: toIsoString(row.lastActivityAt),
 		pausedAt: toIsoString(row.pausedAt),
+		pauseReason: row.pauseReason ?? null,
 		origin: row.origin,
 		clientType: row.clientType,
 	};

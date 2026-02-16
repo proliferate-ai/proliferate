@@ -8,6 +8,8 @@ import type { Logger } from "@proliferate/logger";
 import { sessions } from "@proliferate/services";
 import type { SandboxProviderType, ServerMessage } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
+import { cancelSessionExpiry } from "../expiry/expiry-queue";
+import type { GatewayEnv } from "../lib/env";
 import { runWithMigrationLock } from "../lib/lock";
 import { abortOpenCodeSession } from "../lib/opencode";
 import type { EventProcessor } from "./event-processor";
@@ -25,6 +27,9 @@ export interface MigrationControllerOptions {
 	) => void;
 	logger: Logger;
 	getClientCount: () => number;
+	env: GatewayEnv;
+	shouldIdleSnapshot: () => boolean;
+	onIdleSnapshotComplete: () => void;
 }
 
 export class MigrationController {
@@ -72,8 +77,12 @@ export class MigrationController {
 	}
 
 	/**
-	 * Run idle snapshot: no clients, no active tool calls.
-	 * After pausing/snapshotting, evicts the hub from the HubManager.
+	 * Run idle snapshot with proper locking, re-validation, and CAS/fencing.
+	 *
+	 * Lock TTL is 300s (5 min) to cover worst-case snapshot (120s) + terminate + DB.
+	 * Inside the lock: re-reads sandbox_id, re-checks shouldIdleSnapshot(),
+	 * disconnects SSE before terminate, uses CAS update guarded by sandbox_id match,
+	 * and cancels the BullMQ expiry job.
 	 */
 	async runIdleSnapshot(): Promise<void> {
 		if (this.migrationState !== "normal") {
@@ -81,10 +90,98 @@ export class MigrationController {
 			return;
 		}
 
+		// Early exit if no sandbox
+		const sandboxId = this.options.runtime.getContext().session.sandbox_id;
+		if (!sandboxId) return;
+
 		const startMs = Date.now();
 		this.logger.info("idle_snapshot.start");
-		await this.migrateToNewSandbox({ createNewSandbox: false });
-		this.logger.info({ durationMs: Date.now() - startMs }, "idle_snapshot.complete");
+
+		const ran = await runWithMigrationLock(this.options.sessionId, 300_000, async () => {
+			// Re-read context after lock acquisition (may have changed while waiting)
+			const freshSandboxId = this.options.runtime.getContext().session.sandbox_id;
+			if (!freshSandboxId) {
+				this.logger.info("Idle snapshot aborted: sandbox already gone");
+				return;
+			}
+
+			// Re-check ALL idle conditions inside lock (including grace period)
+			if (!this.options.shouldIdleSnapshot()) {
+				this.logger.info("Idle snapshot aborted: conditions no longer met");
+				return;
+			}
+
+			const providerType = this.options.runtime.getContext().session
+				.sandbox_provider as SandboxProviderType;
+			const provider = getSandboxProvider(providerType);
+
+			// 1. Disconnect SSE BEFORE terminate (prevents reconnect cycle)
+			this.options.runtime.disconnectSse();
+
+			// 2. Snapshot
+			let snapshotId: string;
+			if (provider.supportsPause) {
+				this.logger.info("Pausing sandbox for idle snapshot");
+				const result = await provider.pause(this.options.sessionId, freshSandboxId);
+				snapshotId = result.snapshotId;
+			} else {
+				this.logger.info("Taking snapshot for idle snapshot");
+				const result = await provider.snapshot(this.options.sessionId, freshSandboxId);
+				snapshotId = result.snapshotId;
+			}
+
+			// 3. Terminate (non-pause providers only)
+			let terminated = provider.supportsPause;
+			if (!provider.supportsPause) {
+				try {
+					await provider.terminate(this.options.sessionId, freshSandboxId);
+					terminated = true;
+				} catch (err) {
+					this.logger.error({ err }, "Failed to terminate after idle snapshot");
+					terminated = false;
+				}
+			}
+
+			// 4. CAS/fencing DB update: only applies if sandbox_id still matches
+			const rowsAffected = await sessions.updateWhereSandboxIdMatches(
+				this.options.sessionId,
+				freshSandboxId,
+				{
+					snapshotId,
+					sandboxId: provider.supportsPause ? freshSandboxId : terminated ? null : freshSandboxId,
+					status: "paused",
+					pausedAt: new Date().toISOString(),
+					pauseReason: "inactivity",
+				},
+			);
+
+			if (rowsAffected === 0) {
+				this.logger.info("Idle snapshot aborted: CAS mismatch (another actor advanced state)");
+				return;
+			}
+
+			// 5. Cancel BullMQ expiry job
+			try {
+				await cancelSessionExpiry(this.options.env, this.options.sessionId);
+			} catch (err) {
+				this.logger.error({ err }, "Failed to cancel session expiry after idle snapshot");
+			}
+
+			// 6. Reset sandbox state
+			this.options.runtime.resetSandboxState();
+
+			// 7. Signal hub: stop idle timer and clear state
+			this.options.onIdleSnapshotComplete();
+
+			this.logger.info(
+				{ sandboxId: freshSandboxId, snapshotId, durationMs: Date.now() - startMs },
+				"idle_snapshot.complete",
+			);
+		});
+
+		if (ran === null) {
+			this.logger.info("Idle snapshot skipped: lock already held");
+		}
 	}
 
 	private async migrateToNewSandbox(options: { createNewSandbox: boolean }): Promise<void> {
@@ -156,7 +253,10 @@ export class MigrationController {
 						"Migration complete",
 					);
 				} else {
-					// Idle migration: pause (if supported) or snapshot, then stop the sandbox.
+					// Idle/expiry migration: pause (if supported) or snapshot, then pause the session.
+					// Disconnect SSE BEFORE terminate to prevent reconnect cycle.
+					this.options.runtime.disconnectSse();
+
 					let snapshotId: string;
 					if (provider.supportsPause) {
 						this.logger.info("Pausing sandbox before idle shutdown");
@@ -180,14 +280,8 @@ export class MigrationController {
 						this.logger.info({ snapshotId }, "Snapshot saved");
 					}
 
-					const dbStartMs = Date.now();
-					await sessions.update(this.options.sessionId, {
-						snapshotId,
-						status: provider.supportsPause ? "paused" : "stopped",
-						pausedAt: provider.supportsPause ? new Date().toISOString() : null,
-					});
-					this.logger.debug({ durationMs: Date.now() - dbStartMs }, "migration.db.update_snapshot");
-
+					// Terminate (non-pause providers only)
+					let terminated = provider.supportsPause;
 					if (!provider.supportsPause) {
 						try {
 							const terminateStartMs = Date.now();
@@ -199,25 +293,34 @@ export class MigrationController {
 								},
 								"migration.terminate",
 							);
+							terminated = true;
 							this.logger.info(
 								{ sandboxId: oldSandboxId },
 								"Sandbox terminated after idle snapshot",
 							);
 						} catch (err) {
 							this.logger.error({ err }, "Failed to terminate sandbox after idle snapshot");
-						}
-
-						// Mark session ended for consumers relying on endedAt (best-effort).
-						try {
-							await sessions.markSessionStopped(this.options.sessionId);
-						} catch (err) {
-							this.logger.error({ err }, "Failed to mark session stopped after idle snapshot");
+							terminated = false;
 						}
 					}
+
+					// Unified paused state — no markSessionStopped, no endedAt
+					const dbStartMs = Date.now();
+					await sessions.update(this.options.sessionId, {
+						snapshotId,
+						sandboxId: provider.supportsPause ? sandboxId : terminated ? null : sandboxId,
+						status: "paused",
+						pausedAt: new Date().toISOString(),
+						pauseReason: "inactivity",
+					});
+					this.logger.debug({ durationMs: Date.now() - dbStartMs }, "migration.db.update_snapshot");
+
 					this.options.runtime.resetSandboxState();
-					this.options.runtime.disconnectSse();
 					this.stop();
-					this.logger.info({ oldSandboxId, snapshotId }, "Idle snapshot complete, sandbox stopped");
+					this.logger.info(
+						{ oldSandboxId, snapshotId },
+						"Expiry idle path complete, session paused",
+					);
 				}
 
 				this.logger.info(

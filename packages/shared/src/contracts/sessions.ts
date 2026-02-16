@@ -35,6 +35,7 @@ export const SessionSchema = z.object({
 	startedAt: z.string().nullable(),
 	lastActivityAt: z.string().nullable(),
 	pausedAt: z.string().nullable(),
+	pauseReason: z.string().nullable().optional(),
 	origin: z.string().nullable(),
 	clientType: z.string().nullable(),
 	repo: RepoSchema.optional(),
