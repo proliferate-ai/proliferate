@@ -144,7 +144,10 @@ webhookRouter.post("/github-app", async (req, res) => {
 		}
 
 		const expected = `sha256=${crypto.createHmac("sha256", secret).update(rawBody).digest("hex")}`;
-		if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+		if (
+			signature.length !== expected.length ||
+			!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+		) {
 			logger.warn("Invalid GitHub App webhook signature");
 			return res.status(401).json({ error: "Invalid signature" });
 		}

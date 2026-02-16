@@ -55,18 +55,27 @@ export async function acquireOwnerLease(sessionId: string, instanceId: string): 
 
 /**
  * Renew the owner lease. Returns false if the lease was lost (split-brain signal).
+ * Uses a Lua script for atomic check-and-extend to prevent race conditions.
  */
 export async function renewOwnerLease(sessionId: string, instanceId: string): Promise<boolean> {
 	const client = await ensureRedisConnected();
 	const key = ownerKey(sessionId);
 
-	const current = await client.get(key);
-	if (current !== instanceId) {
+	// Atomic: only extend TTL if we still own the lease
+	const script = `
+		if redis.call("get", KEYS[1]) == ARGV[1] then
+			return redis.call("pexpire", KEYS[1], ARGV[2])
+		else
+			return 0
+		end
+	`;
+	const result = await client.eval(script, 1, key, instanceId, String(OWNER_TTL_MS));
+	if (result === 0) {
+		const current = await client.get(key);
 		logger.warn({ sessionId, instanceId, currentOwner: current }, "Owner lease lost");
 		return false;
 	}
 
-	await client.pexpire(key, OWNER_TTL_MS);
 	return true;
 }
 
