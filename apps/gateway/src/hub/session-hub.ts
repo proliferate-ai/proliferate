@@ -476,7 +476,7 @@ export class SessionHub {
 		this.lifecycleStartTime = Date.now();
 		await this.runtime.ensureRuntimeReady();
 		this.startMigrationMonitor();
-		this.startLeaseRenewal();
+		await this.startLeaseRenewal();
 		await setRuntimeLease(this.sessionId);
 	}
 
@@ -678,15 +678,18 @@ export class SessionHub {
 	// Private: Session Leases & Split-Brain Detection
 	// ============================================
 
-	private startLeaseRenewal(): void {
+	private async startLeaseRenewal(): Promise<void> {
 		if (this.leaseRenewTimer) {
 			return;
 		}
 
-		// Acquire initial lease
-		acquireOwnerLease(this.sessionId, this.instanceId).catch((err) => {
-			this.logger.error({ err }, "Failed to acquire owner lease");
-		});
+		// Acquire initial lease — fail fast if another instance owns this session
+		const acquired = await acquireOwnerLease(this.sessionId, this.instanceId);
+		if (!acquired) {
+			this.logger.error("Failed to acquire owner lease — another instance owns this session");
+			this.selfTerminate();
+			return;
+		}
 
 		this.lastLeaseRenewAt = Date.now();
 
