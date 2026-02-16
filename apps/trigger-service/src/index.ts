@@ -39,13 +39,16 @@ async function startAsyncWorkers() {
 	await scheduleEnabledPollGroups();
 }
 
-startAsyncWorkers().catch((err) => {
-	logger.error({ err }, "Failed to start async workers");
-});
-
-server.listen(PORT, () => {
-	logger.info({ port: PORT }, "Trigger service listening");
-});
+startAsyncWorkers()
+	.then(() => {
+		server.listen(PORT, () => {
+			logger.info({ port: PORT }, "Trigger service listening");
+		});
+	})
+	.catch((err) => {
+		logger.error({ err }, "Failed to start async workers — exiting");
+		process.exit(1);
+	});
 
 async function gracefulShutdown() {
 	await pollGroupWorker.close();

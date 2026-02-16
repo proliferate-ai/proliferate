@@ -1,0 +1,1 @@
+ALTER TABLE "trigger_poll_groups" ADD CONSTRAINT "uq_poll_groups_org_provider_integration" UNIQUE NULLS NOT DISTINCT("organization_id","provider","integration_id");

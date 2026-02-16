@@ -5,7 +5,7 @@
  */
 
 import { randomBytes, randomUUID } from "crypto";
-import { createPollGroupQueue, schedulePollGroupJob } from "@proliferate/queue";
+import { createPollGroupQueue, removePollGroupJob, schedulePollGroupJob } from "@proliferate/queue";
 import type { Trigger, TriggerEvent, TriggerWithIntegration } from "@proliferate/shared";
 import { getServicesLogger } from "../logger";
 import * as pollGroupsDb from "../poll-groups/db";
@@ -250,8 +250,12 @@ export async function updateTrigger(
 				);
 				await schedulePollGroupJob(getPollGroupQueue(), group.id, group.cronExpression);
 			}
-			// Clean up orphaned groups when triggers are disabled
-			await pollGroupsDb.deleteOrphanedGroups();
+			// Clean up orphaned groups and their BullMQ jobs
+			const orphaned = await pollGroupsDb.deleteOrphanedGroups();
+			const queue = getPollGroupQueue();
+			for (const group of orphaned) {
+				await removePollGroupJob(queue, group.id, group.cronExpression);
+			}
 		} catch (err) {
 			getServicesLogger()
 				.child({ module: "triggers" })
@@ -271,12 +275,16 @@ export async function deleteTrigger(id: string, orgId: string): Promise<boolean>
 
 	if (existing?.triggerType === "polling") {
 		try {
-			// vNext: Clean up orphaned poll groups after trigger deletion
+			// vNext: Clean up orphaned poll groups and their BullMQ jobs
 			const orphaned = await pollGroupsDb.deleteOrphanedGroups();
-			if (orphaned > 0) {
+			if (orphaned.length > 0) {
+				const queue = getPollGroupQueue();
+				for (const group of orphaned) {
+					await removePollGroupJob(queue, group.id, group.cronExpression);
+				}
 				getServicesLogger()
 					.child({ module: "triggers" })
-					.info({ orphanedGroups: orphaned }, "Cleaned up orphaned poll groups");
+					.info({ orphanedGroups: orphaned.length }, "Cleaned up orphaned poll groups");
 			}
 		} catch (err) {
 			getServicesLogger()
