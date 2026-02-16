@@ -674,6 +674,15 @@ export class SessionHub {
 		await this.migrationController.runExpiryMigration();
 	}
 
+	/**
+	 * Run idle snapshot and evict the hub.
+	 * Used by the orphan sweeper for sessions without runtime leases.
+	 */
+	async runIdleSnapshot(): Promise<void> {
+		await this.migrationController.runIdleSnapshot();
+		this.onEvict?.();
+	}
+
 	// ============================================
 	// Private: Session Leases & Split-Brain Detection
 	// ============================================
@@ -776,9 +785,15 @@ export class SessionHub {
 	// Private: Idle Snapshot Timer
 	// ============================================
 
-	private touchActivity(): void {
-		// Hook point for activity tracking. Currently a no-op;
-		// idle snapshot scheduling is managed via timers.
+	touchActivity(): void {
+		// Reset idle snapshot timer when activity occurs.
+		if (this.idleSnapshotTimer) {
+			this.cancelIdleSnapshotTimer();
+			// Reschedule if still idle (no clients, non-automation)
+			if (this.clients.size === 0 && !this.shouldReconnectWithoutClients()) {
+				this.scheduleIdleSnapshot();
+			}
+		}
 	}
 
 	private scheduleIdleSnapshot(): void {
