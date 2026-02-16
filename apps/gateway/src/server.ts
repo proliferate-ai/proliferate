@@ -58,7 +58,7 @@ export function createServer(deps: ServerDependencies): ServerResult {
 	startSessionExpiryWorker(env, hubManager);
 
 	// Start orphan sweeper (15-min interval, catches dead sandboxes)
-	startOrphanSweeper(hubManager, logger);
+	startOrphanSweeper(hubManager, env, logger);
 
 	return { app, server, hubManager };
 }

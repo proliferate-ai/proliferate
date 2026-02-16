@@ -140,10 +140,18 @@ export function createVscodeWsProxy(
 		try {
 			const hub = await hubManager.getOrCreate(sessionId);
 			hub.touchActivity();
-			await hub.ensureRuntimeReady();
 			const removeProxy = hub.addProxyConnection();
+
+			try {
+				await hub.ensureRuntimeReady();
+			} catch (err) {
+				removeProxy();
+				throw err;
+			}
+
 			const previewUrl = hub.getPreviewUrl();
 			if (!previewUrl) {
+				removeProxy();
 				socket.write("HTTP/1.1 503 Service Unavailable\r\n\r\n");
 				socket.destroy();
 				return true;
@@ -201,6 +209,7 @@ export function createVscodeWsProxy(
 
 			upstream.on("error", (err) => {
 				logger.error({ err, sessionId }, "VS Code upstream WS error");
+				removeProxy();
 				if (clientWs && clientWs.readyState === WebSocket.OPEN) {
 					clientWs.close(1011, "Upstream error");
 				} else if (!socket.destroyed) {

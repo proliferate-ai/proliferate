@@ -358,6 +358,19 @@ export async function countRunningByOrganization(orgId: string): Promise<number>
 }
 
 /**
+ * List all session IDs with status = 'running'.
+ * Used by the orphan sweeper to find sessions that may have lost their gateway.
+ */
+export async function listRunningSessionIds(): Promise<string[]> {
+	const db = getDb();
+	const rows = await db
+		.select({ id: sessions.id })
+		.from(sessions)
+		.where(eq(sessions.status, "running"));
+	return rows.map((r) => r.id);
+}
+
+/**
  * Get session counts by status for an organization.
  * Returns counts for running and paused sessions.
  */

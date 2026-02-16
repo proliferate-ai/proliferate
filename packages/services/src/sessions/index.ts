@@ -42,4 +42,5 @@ export {
 	findByIdInternal,
 	createSetupSession,
 	updateWhereSandboxIdMatches,
+	listRunningSessionIds,
 } from "./db";

@@ -88,7 +88,7 @@ export class SessionHub {
 
 	// Idle snapshot tracking
 	private activeHttpToolCalls = 0;
-	private idleSnapshotTimer: ReturnType<typeof setTimeout> | null = null;
+	private idleCheckTimer: ReturnType<typeof setInterval> | null = null;
 
 	// Activity & proxy tracking for idle snapshotting
 	private readonly proxyConnections = new Set<string>();
@@ -140,7 +140,7 @@ export class SessionHub {
 			env: this.env,
 			shouldIdleSnapshot: () => this.shouldIdleSnapshot(),
 			onIdleSnapshotComplete: () => {
-				this.cancelIdleSnapshotTimer();
+				this.stopIdleMonitor();
 			},
 			cancelReconnect: () => this.cancelReconnect(),
 		});
@@ -192,9 +192,6 @@ export class SessionHub {
 		this.log("Client connected", { connectionId, userId, totalClients: this.clients.size });
 		this.touchActivity();
 
-		// Cancel idle snapshot timer when a client connects
-		this.cancelIdleSnapshotTimer();
-
 		ws.on("close", () => {
 			this.log("Client disconnected", {
 				connectionId,
@@ -219,11 +216,6 @@ export class SessionHub {
 		this.clients.delete(ws);
 		this.touchActivity();
 		this.log("Client removed", { remainingClients: this.clients.size });
-
-		// Start idle timer if no clients remain
-		if (this.clients.size === 0 && !this.shouldReconnectWithoutClients()) {
-			this.scheduleIdleSnapshot();
-		}
 	}
 
 	private async initializeClient(ws: WebSocket, userId?: string): Promise<void> {
@@ -708,7 +700,7 @@ export class SessionHub {
 	stopMigrationMonitor(): void {
 		this.migrationController.stop();
 		this.stopLeaseRenewal();
-		this.cancelIdleSnapshotTimer();
+		this.stopIdleMonitor();
 		this.cancelReconnect();
 	}
 
@@ -807,7 +799,7 @@ export class SessionHub {
 	private selfTerminate(): void {
 		this.stopLeaseRenewal();
 		this.migrationController.stop();
-		this.cancelIdleSnapshotTimer();
+		this.stopIdleMonitor();
 		this.cancelReconnect();
 
 		// Drop all WS clients
@@ -828,43 +820,49 @@ export class SessionHub {
 	}
 
 	// ============================================
-	// Private: Idle Snapshot Timer
+	// Private: Idle Snapshot Monitor (30s interval)
 	// ============================================
 
 	touchActivity(): void {
 		this.lastActivityAt = Date.now();
 	}
 
-	private scheduleIdleSnapshot(): void {
-		this.cancelIdleSnapshotTimer();
+	/**
+	 * Start a 30s polling interval that checks idle snapshot conditions.
+	 * Called once when the runtime becomes ready. Safe to call multiple times.
+	 */
+	private startIdleMonitor(): void {
+		if (this.idleCheckTimer) {
+			return;
+		}
 
-		const graceMs = this.getIdleGraceMs();
-		this.idleSnapshotTimer = setTimeout(() => {
-			this.idleSnapshotTimer = null;
-
-			if (!this.shouldIdleSnapshot()) {
-				this.log("Idle snapshot skipped: conditions not met");
-				return;
-			}
-
-			this.log("Idle snapshot timer fired, running idle snapshot");
-			this.migrationController
-				.runIdleSnapshot()
-				.then(() => {
-					this.log("Idle snapshot complete");
-					this.lastKnownAgentIdleAt = null;
-				})
-				.catch((err) => {
-					this.logError("Idle snapshot failed", err);
-				});
-		}, graceMs);
+		this.idleCheckTimer = setInterval(() => {
+			this.checkIdleSnapshot();
+		}, 30_000);
 	}
 
-	private cancelIdleSnapshotTimer(): void {
-		if (this.idleSnapshotTimer) {
-			clearTimeout(this.idleSnapshotTimer);
-			this.idleSnapshotTimer = null;
+	private stopIdleMonitor(): void {
+		if (this.idleCheckTimer) {
+			clearInterval(this.idleCheckTimer);
+			this.idleCheckTimer = null;
 		}
+	}
+
+	private checkIdleSnapshot(): void {
+		if (!this.shouldIdleSnapshot()) {
+			return;
+		}
+
+		this.log("Idle snapshot conditions met, running idle snapshot");
+		this.migrationController
+			.runIdleSnapshot()
+			.then(() => {
+				this.log("Idle snapshot complete");
+				this.lastKnownAgentIdleAt = null;
+			})
+			.catch((err) => {
+				this.logError("Idle snapshot failed", err);
+			});
 	}
 
 	// ============================================
@@ -1225,6 +1223,7 @@ export class SessionHub {
 
 	private startMigrationMonitor(): void {
 		this.migrationController.start();
+		this.startIdleMonitor();
 	}
 
 	// ============================================
