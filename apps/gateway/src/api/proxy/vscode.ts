@@ -141,6 +141,8 @@ export function createVscodeWsProxy(
 			const hub = await hubManager.getOrCreate(sessionId);
 			hub.touchActivity();
 			const removeProxy = hub.addProxyConnection();
+			socket.once("close", removeProxy);
+			socket.once("error", removeProxy);
 
 			try {
 				await hub.ensureRuntimeReady();

@@ -108,9 +108,12 @@ async function cleanupOrphanedSession(
 		const providerType = session.sandboxProvider as SandboxProviderType;
 		const provider = getSandboxProvider(providerType);
 
-		// Snapshot (pause-capable providers stay alive, others get terminated)
+		// Snapshot: memory (preferred) → pause → filesystem
 		let snapshotId: string;
-		if (provider.supportsPause) {
+		if (provider.supportsMemorySnapshot && provider.memorySnapshot) {
+			const result = await provider.memorySnapshot(sessionId, sandboxId);
+			snapshotId = result.snapshotId;
+		} else if (provider.supportsPause) {
 			const result = await provider.pause(sessionId, sandboxId);
 			snapshotId = result.snapshotId;
 		} else {
@@ -124,10 +127,12 @@ async function cleanupOrphanedSession(
 			}
 		}
 
-		// CAS DB update
+		// CAS DB update (keep sandbox alive for memory snapshot / pause providers)
+		const isMemorySnapshot = snapshotId.startsWith("mem:");
+		const keepSandbox = isMemorySnapshot || provider.supportsPause;
 		const rowsAffected = await sessions.updateWhereSandboxIdMatches(sessionId, sandboxId, {
 			snapshotId,
-			sandboxId: provider.supportsPause ? sandboxId : null,
+			sandboxId: keepSandbox ? sandboxId : null,
 			status: "paused",
 			pausedAt: new Date().toISOString(),
 			pauseReason: "orphaned",
