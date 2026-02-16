@@ -204,6 +204,59 @@ export async function enforceCreditsExhausted(
 // ============================================
 
 /**
+ * Terminate all sessions for an org.
+ * Used when billing state transitions to exhausted or suspended.
+ *
+ * Uses lock-safe pause/snapshot transitions to preserve resumability.
+ */
+export async function terminateAllOrgSessions(
+	orgId: string,
+	reason: PauseReason,
+	_providers?: Map<string, unknown>,
+): Promise<{ terminated: number; failed: number }> {
+	const db = getDb();
+
+	const sessionRows = await db.query.sessions.findMany({
+		where: and(eq(sessions.organizationId, orgId), eq(sessions.status, "running")),
+		columns: {
+			id: true,
+			sandboxId: true,
+			sandboxProvider: true,
+		},
+	});
+
+	const logger = getServicesLogger().child({ module: "org-pause", orgId });
+
+	let terminated = 0;
+	let failed = 0;
+
+	for (const session of sessionRows) {
+		try {
+			await pauseSessionWithSnapshot(
+				session.id,
+				session.sandboxId,
+				session.sandboxProvider,
+				reason,
+			);
+			terminated++;
+		} catch (err) {
+			logger.error({ err, sessionId: session.id }, "Failed to pause session");
+			failed++;
+		}
+	}
+
+	if (failed > 0) {
+		logger.warn({ failed }, "Sessions left running due to pause failures");
+	}
+	logger.info({ terminated, failed, reason }, "Terminate all sessions complete");
+	return { terminated, failed };
+}
+
+// ============================================
+// Lock-Safe Pause with Snapshot
+// ============================================
+
+/**
  * Pause a single session with a lock-safe snapshot.
  *
  * Follows the exact pattern from the orphan sweeper:
