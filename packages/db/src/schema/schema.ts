@@ -1204,51 +1204,6 @@ export const actionInvocations = pgTable(
 	],
 );
 
-/** @deprecated To be dropped in vNext. Action modes replace per-invocation grants. */
-export const actionGrants = pgTable(
-	"action_grants",
-	{
-		id: uuid().defaultRandom().primaryKey().notNull(),
-		organizationId: text("organization_id").notNull(),
-		createdBy: text("created_by").notNull(),
-		sessionId: uuid("session_id"),
-		integration: text("integration").notNull(),
-		action: text("action").notNull(),
-		maxCalls: integer("max_calls"),
-		usedCalls: integer("used_calls").default(0).notNull(),
-		expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
-		revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
-		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
-	},
-	(table) => [
-		index("idx_action_grants_org").using(
-			"btree",
-			table.organizationId.asc().nullsLast().op("text_ops"),
-		),
-		index("idx_action_grants_lookup").using(
-			"btree",
-			table.organizationId.asc().nullsLast().op("text_ops"),
-			table.integration.asc().nullsLast().op("text_ops"),
-			table.action.asc().nullsLast().op("text_ops"),
-		),
-		foreignKey({
-			columns: [table.organizationId],
-			foreignColumns: [organization.id],
-			name: "action_grants_organization_id_fkey",
-		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.createdBy],
-			foreignColumns: [user.id],
-			name: "action_grants_created_by_fkey",
-		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.sessionId],
-			foreignColumns: [sessions.id],
-			name: "action_grants_session_id_fkey",
-		}).onDelete("cascade"),
-	],
-);
-
 export const userSshKeys = pgTable(
 	"user_ssh_keys",
 	{
