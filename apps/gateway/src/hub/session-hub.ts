@@ -764,6 +764,9 @@ export class SessionHub {
 
 		// Disconnect SSE
 		this.runtime.disconnectSse();
+
+		// Remove from HubManager to prevent zombie entry
+		this.onEvict?.();
 	}
 
 	// ============================================
