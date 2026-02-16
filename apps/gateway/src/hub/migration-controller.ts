@@ -30,6 +30,7 @@ export interface MigrationControllerOptions {
 	env: GatewayEnv;
 	shouldIdleSnapshot: () => boolean;
 	onIdleSnapshotComplete: () => void;
+	cancelReconnect: () => void;
 }
 
 export class MigrationController {
@@ -201,6 +202,11 @@ export class MigrationController {
 				const provider = getSandboxProvider(providerType);
 
 				this.logger.debug({ createNewSandbox, provider: provider.type }, "migration.lock_acquired");
+
+				// Cancel any pending reconnect timers to prevent races
+				if (!createNewSandbox) {
+					this.options.cancelReconnect();
+				}
 
 				if (createNewSandbox) {
 					this.migrationState = "migrating";
