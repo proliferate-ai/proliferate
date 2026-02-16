@@ -23,6 +23,7 @@ import type { IntegrationWithCreator } from "@proliferate/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Plus } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 const PROVIDERS: Provider[] = ["github", "sentry", "linear"];
 
@@ -54,19 +55,33 @@ export default function IntegrationsPage() {
 	});
 
 	const connect = async (provider: Provider) => {
-		if (shouldUseNangoForProvider(provider)) {
-			await nangoConnect(provider as NangoProvider);
-		} else {
+		if (provider === "github") {
+			// GitHub: default to GitHub App install; optionally use Nango GitHub when enabled.
+			if (shouldUseNangoForProvider("github")) {
+				await nangoConnect("github" as NangoProvider);
+				return;
+			}
 			await githubConnect();
+			return;
 		}
+
+		// Non-GitHub providers must never fall back to GitHub App flow.
+		if (!shouldUseNangoForProvider(provider)) {
+			toast.error("Integrations are disabled. Configure Nango to connect this provider.");
+			return;
+		}
+
+		await nangoConnect(provider as NangoProvider);
 	};
 
 	const disconnect = async (provider: Provider, integrationId: string) => {
-		if (shouldUseNangoForProvider(provider)) {
-			await nangoDisconnect(provider as NangoProvider, integrationId);
-		} else {
+		if (provider === "github") {
 			await githubDisconnect(integrationId);
+			return;
 		}
+
+		// Sentry/Linear are always Nango-backed integrations.
+		await nangoDisconnect(provider as NangoProvider, integrationId);
 	};
 
 	const loadingProvider: Provider | null = githubLoading ? "github" : nangoLoadingProvider;
