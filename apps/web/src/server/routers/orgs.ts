@@ -92,6 +92,43 @@ export const orgsRouter = {
 			return result;
 		}),
 
+	// ============================================
+	// Action Modes
+	// ============================================
+
+	/**
+	 * Get org-level action modes (3-mode permission cascade).
+	 */
+	getActionModes: orgProcedure
+		.output(z.object({ modes: z.record(z.enum(["allow", "require_approval", "deny"])) }))
+		.handler(async ({ context }) => {
+			const modes = await orgs.getActionModes(context.orgId);
+			return { modes };
+		}),
+
+	/**
+	 * Set a single org-level action mode entry.
+	 */
+	setActionMode: orgProcedure
+		.input(
+			z.object({
+				key: z.string(),
+				mode: z.enum(["allow", "require_approval", "deny"]),
+			}),
+		)
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			try {
+				await orgs.setActionMode(context.orgId, context.user.id, input.key, input.mode);
+				return { success: true };
+			} catch (err) {
+				if (err instanceof Error && err.message.includes("Only admins")) {
+					throw new ORPCError("FORBIDDEN", { message: err.message });
+				}
+				throw err;
+			}
+		}),
+
 	/**
 	 * Get organizations matching user's email domain for auto-join.
 	 */

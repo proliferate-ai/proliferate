@@ -155,6 +155,38 @@ export async function automationExists(id: string, orgId: string): Promise<boole
 	return automationsDb.exists(id, orgId);
 }
 
+// ============================================
+// Action Modes (per-automation overrides)
+// ============================================
+
+export type { ActionMode, ActionModesMap } from "./db";
+
+/**
+ * Get action_modes for an automation.
+ */
+export async function getAutomationActionModes(
+	id: string,
+	orgId: string,
+): Promise<automationsDb.ActionModesMap> {
+	const exists = await automationsDb.exists(id, orgId);
+	if (!exists) throw new Error("Automation not found");
+	return automationsDb.getActionModes(id, orgId);
+}
+
+/**
+ * Set a single action mode on an automation.
+ */
+export async function setAutomationActionMode(
+	id: string,
+	orgId: string,
+	key: string,
+	mode: automationsDb.ActionMode,
+): Promise<void> {
+	const exists = await automationsDb.exists(id, orgId);
+	if (!exists) throw new Error("Automation not found");
+	await automationsDb.setActionMode(id, orgId, key, mode);
+}
+
 /**
  * Get automation name for display.
  */

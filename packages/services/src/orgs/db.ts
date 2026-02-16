@@ -393,6 +393,42 @@ export async function markOnboardingComplete(
 }
 
 // ============================================
+// Action Modes
+// ============================================
+
+/** Action mode type for the 3-mode permission cascade. */
+export type ActionMode = "allow" | "require_approval" | "deny";
+
+/** Action modes map: key → mode. */
+export type ActionModesMap = Record<string, ActionMode>;
+
+/**
+ * Get action_modes JSONB for an organization.
+ */
+export async function getActionModes(orgId: string): Promise<ActionModesMap> {
+	const db = getDb();
+	const result = await db.query.organization.findFirst({
+		where: eq(organization.id, orgId),
+		columns: {
+			actionModes: true,
+		},
+	});
+
+	if (!result?.actionModes) return {};
+	return result.actionModes as ActionModesMap;
+}
+
+/**
+ * Set a single action mode entry (merge-patch into JSONB).
+ */
+export async function setActionMode(orgId: string, key: string, mode: ActionMode): Promise<void> {
+	const db = getDb();
+	const current = await getActionModes(orgId);
+	const updated = { ...current, [key]: mode };
+	await db.update(organization).set({ actionModes: updated }).where(eq(organization.id, orgId));
+}
+
+// ============================================
 // Billing V2 Helpers
 // ============================================
 

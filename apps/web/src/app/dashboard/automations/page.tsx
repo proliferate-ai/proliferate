@@ -1,6 +1,7 @@
 "use client";
 
 import { AutomationCard } from "@/components/automations/automation-card";
+import { type Recipe, RecipeCards } from "@/components/automations/recipe-cards";
 import { Button } from "@/components/ui/button";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
@@ -15,6 +16,18 @@ export default function AutomationsPage() {
 	const handleCreate = async () => {
 		try {
 			const automation = await createAutomation.mutateAsync({});
+			router.push(`/dashboard/automations/${automation.id}`);
+		} catch {
+			// mutation handles error state
+		}
+	};
+
+	const handleRecipeSelect = async (recipe: Recipe) => {
+		try {
+			const automation = await createAutomation.mutateAsync({
+				name: recipe.name,
+				agentInstructions: recipe.agentInstructions,
+			});
 			router.push(`/dashboard/automations/${automation.id}`);
 		} catch {
 			// mutation handles error state
@@ -41,12 +54,16 @@ export default function AutomationsPage() {
 				</div>
 
 				{automations.length === 0 ? (
-					<div className="flex flex-col items-center justify-center py-20 text-center">
-						<p className="text-muted-foreground mb-4">No automations yet</p>
-						<Button onClick={handleCreate} disabled={createAutomation.isPending} variant="outline">
-							<Plus className="h-4 w-4 mr-1.5" />
-							Create your first automation
-						</Button>
+					<div className="flex flex-col items-center py-12">
+						<h2 className="text-lg font-medium text-foreground mb-2">
+							Get started with a template
+						</h2>
+						<p className="text-sm text-muted-foreground mb-6">
+							Pick a recipe to create your first automation, or start from scratch.
+						</p>
+						<div className="w-full max-w-xl">
+							<RecipeCards onSelect={handleRecipeSelect} disabled={createAutomation.isPending} />
+						</div>
 					</div>
 				) : (
 					<div className="grid gap-3">

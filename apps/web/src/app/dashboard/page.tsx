@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { EmptyDashboard } from "@/components/dashboard/empty-state";
+import { useAttentionInbox } from "@/hooks/use-attention-inbox";
 import { useDashboardStore } from "@/stores/dashboard";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -10,6 +11,7 @@ import { useEffect } from "react";
 export default function DashboardPage() {
 	const router = useRouter();
 	const { activeSessionId, clearPendingPrompt } = useDashboardStore();
+	const inboxItems = useAttentionInbox({ wsApprovals: [] });
 
 	// If there's an active session, redirect to the session page
 	useEffect(() => {
@@ -17,6 +19,13 @@ export default function DashboardPage() {
 			router.push(`/dashboard/sessions/${activeSessionId}`);
 		}
 	}, [activeSessionId, router]);
+
+	// If inbox has items and no active session, redirect to inbox
+	useEffect(() => {
+		if (!activeSessionId && inboxItems.length > 0) {
+			router.push("/dashboard/inbox");
+		}
+	}, [activeSessionId, inboxItems.length, router]);
 
 	// Clear any pending prompt when landing on this page
 	useEffect(() => {
