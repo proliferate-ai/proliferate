@@ -7,7 +7,7 @@
 
 import { Nango } from "@nangohq/node";
 import { env } from "@proliferate/environment/server";
-import { getDb, inArray, integrations } from "../db/client";
+import { and, eq, getDb, inArray, integrations, userConnections } from "../db/client";
 import { getInstallationToken } from "./github-app";
 
 // ============================================
@@ -65,8 +65,21 @@ function getNango(): Nango {
 /**
  * Get OAuth token for any integration type.
  * Abstracts over Nango and GitHub App providers.
+ *
+ * If opts.userId is provided, checks user_connections first for
+ * user-attributed actions (e.g., Git commit authorship). Falls back
+ * to org-level connection if no user connection is found.
  */
-export async function getToken(integration: IntegrationForToken): Promise<string> {
+export async function getToken(
+	integration: IntegrationForToken,
+	opts?: { userId?: string },
+): Promise<string> {
+	// Optional user-scoped token resolution
+	if (opts?.userId) {
+		const userToken = await resolveUserToken(opts.userId, integration.integrationId);
+		if (userToken) return userToken;
+	}
+
 	// GitHub App -> installation token
 	if (integration.provider === "github-app" && integration.githubInstallationId) {
 		return getInstallationToken(integration.githubInstallationId);
@@ -91,6 +104,33 @@ export async function getToken(integration: IntegrationForToken): Promise<string
 	throw new Error(
 		`Cannot get token for integration ${integration.id}: unsupported provider ${integration.provider}`,
 	);
+}
+
+/**
+ * Attempt to resolve a user-scoped token from user_connections.
+ * Returns null if no active user connection exists for this provider.
+ */
+async function resolveUserToken(userId: string, provider: string): Promise<string | null> {
+	const db = getDb();
+	const [row] = await db
+		.select({ connectionId: userConnections.connectionId })
+		.from(userConnections)
+		.where(
+			and(
+				eq(userConnections.userId, userId),
+				eq(userConnections.provider, provider),
+				eq(userConnections.status, "active"),
+			),
+		)
+		.limit(1);
+
+	if (!row) return null;
+
+	// Resolve the token via Nango using the user's connection ID
+	const nango = getNango();
+	const connection = await nango.getConnection(provider, row.connectionId);
+	const credentials = connection.credentials as { access_token?: string };
+	return credentials?.access_token ?? null;
 }
 
 /**

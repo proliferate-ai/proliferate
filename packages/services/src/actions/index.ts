@@ -17,3 +17,7 @@ export type { ActionInvocationRow, ActionInvocationWithSession, CreateInvocation
 
 // MCP connector module
 export * as connectors from "./connectors";
+
+// Mode resolution
+export { resolveMode, setOrgActionMode, setAutomationActionMode } from "./modes";
+export type { ModeResolution, ModeSource, ResolveModeInput } from "./modes";

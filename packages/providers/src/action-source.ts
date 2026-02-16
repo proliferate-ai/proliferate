@@ -17,6 +17,7 @@
  *   execute() calls the MCP server over stdio/SSE. No provider-specific code.
  */
 
+import type { ProviderActionModule } from "./providers/registry";
 import type { ActionDefinition, ActionExecutionContext, ActionResult, RiskLevel } from "./types";
 
 // ============================================
@@ -92,4 +93,40 @@ export interface ResolvedActionSources {
 		source: ActionSource;
 		action: ActionDefinition;
 	}>;
+}
+
+// ============================================
+// Provider Action Source (Archetype A)
+// ============================================
+
+/**
+ * Wraps a code-defined provider action module into the ActionSource interface.
+ * Adapts static Linear/Sentry/Slack modules for use by the Gateway's
+ * unified action pipeline.
+ */
+export class ProviderActionSource implements ActionSource {
+	readonly id: string;
+	readonly displayName: string;
+	readonly guide?: string;
+
+	private module: ProviderActionModule;
+
+	constructor(providerId: string, displayName: string, module: ProviderActionModule) {
+		this.id = providerId;
+		this.displayName = displayName;
+		this.module = module;
+		this.guide = module.guide;
+	}
+
+	async listActions(_ctx: ActionExecutionContext): Promise<ActionDefinition[]> {
+		return this.module.actions;
+	}
+
+	async execute(
+		actionId: string,
+		params: Record<string, unknown>,
+		ctx: ActionExecutionContext,
+	): Promise<ActionResult> {
+		return this.module.execute(actionId, params, ctx);
+	}
 }

@@ -4,3 +4,4 @@
 
 export * from "./types";
 export * from "./action-source";
+export * from "./providers/registry";

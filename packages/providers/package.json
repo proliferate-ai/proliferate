@@ -6,7 +6,10 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./types": "./src/types.ts",
-		"./action-source": "./src/action-source.ts"
+		"./action-source": "./src/action-source.ts",
+		"./helpers/schema": "./src/helpers/schema.ts",
+		"./helpers/truncation": "./src/helpers/truncation.ts",
+		"./providers/registry": "./src/providers/registry.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit"
