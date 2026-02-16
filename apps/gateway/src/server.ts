@@ -12,6 +12,7 @@ import { startSessionExpiryWorker } from "./expiry/expiry-queue";
 import { HubManager } from "./hub";
 import type { GatewayEnv } from "./lib/env";
 import { cors, errorHandler } from "./middleware";
+import { startOrphanSweeper } from "./sweeper/orphan-sweeper";
 
 export interface ServerDependencies {
 	env: GatewayEnv;
@@ -55,6 +56,9 @@ export function createServer(deps: ServerDependencies): ServerResult {
 
 	// Start expiry worker (durable delayed jobs via BullMQ)
 	startSessionExpiryWorker(env, hubManager);
+
+	// Start orphan sweeper (15-min interval, catches dead sandboxes)
+	startOrphanSweeper(hubManager, env, logger);
 
 	return { app, server, hubManager };
 }

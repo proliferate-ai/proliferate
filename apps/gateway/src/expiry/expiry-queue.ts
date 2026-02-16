@@ -74,6 +74,16 @@ export async function scheduleSessionExpiry(
 	);
 }
 
+export async function cancelSessionExpiry(env: GatewayEnv, sessionId: string): Promise<void> {
+	const q = getQueue(env);
+	const jobId = `${JOB_PREFIX}${sessionId}`;
+	const existing = await q.getJob(jobId);
+	if (existing) {
+		await existing.remove();
+		logger.info({ sessionId, jobId }, "expiry.cancel");
+	}
+}
+
 export function startSessionExpiryWorker(env: GatewayEnv, hubManager: HubManager): void {
 	const connection = getConnection(env);
 

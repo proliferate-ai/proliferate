@@ -59,9 +59,6 @@ interface HubDependencies {
 /** Renewal interval: ~1/3 of owner lease TTL. */
 const LEASE_RENEW_INTERVAL_MS = Math.floor(OWNER_LEASE_TTL_MS / 3);
 
-/** Idle snapshot delay: 5 minutes of no SSE activity and no clients. */
-const IDLE_SNAPSHOT_DELAY_MS = 5 * 60 * 1000;
-
 export class SessionHub {
 	private readonly env: GatewayEnv;
 	private readonly sessionId: string;
@@ -82,6 +79,8 @@ export class SessionHub {
 
 	// Reconnection state
 	private reconnectAttempt = 0;
+	private reconnectTimerId: ReturnType<typeof setTimeout> | null = null;
+	private reconnectGeneration = 0;
 
 	// Session leases
 	private leaseRenewTimer: ReturnType<typeof setInterval> | null = null;
@@ -89,7 +88,12 @@ export class SessionHub {
 
 	// Idle snapshot tracking
 	private activeHttpToolCalls = 0;
-	private idleSnapshotTimer: ReturnType<typeof setTimeout> | null = null;
+	private idleCheckTimer: ReturnType<typeof setInterval> | null = null;
+
+	// Activity & proxy tracking for idle snapshotting
+	private readonly proxyConnections = new Set<string>();
+	private lastActivityAt = Date.now();
+	private lastKnownAgentIdleAt: number | null = null;
 
 	// Hub eviction callback (set by HubManager)
 	private readonly onEvict?: () => void;
@@ -133,6 +137,12 @@ export class SessionHub {
 			// Treat headless automation sessions as active for expiry migration decisions.
 			// These sessions usually have 0 WS clients, but must still migrate/reconnect reliably.
 			getClientCount: () => this.getEffectiveClientCount(),
+			env: this.env,
+			shouldIdleSnapshot: () => this.shouldIdleSnapshot(),
+			onIdleSnapshotComplete: () => {
+				this.stopIdleMonitor();
+			},
+			cancelReconnect: () => this.cancelReconnect(),
 		});
 	}
 
@@ -182,9 +192,6 @@ export class SessionHub {
 		this.log("Client connected", { connectionId, userId, totalClients: this.clients.size });
 		this.touchActivity();
 
-		// Cancel idle snapshot timer when a client connects
-		this.cancelIdleSnapshotTimer();
-
 		ws.on("close", () => {
 			this.log("Client disconnected", {
 				connectionId,
@@ -207,12 +214,8 @@ export class SessionHub {
 			return;
 		}
 		this.clients.delete(ws);
+		this.touchActivity();
 		this.log("Client removed", { remainingClients: this.clients.size });
-
-		// Start idle timer if no clients remain
-		if (this.clients.size === 0 && !this.shouldReconnectWithoutClients()) {
-			this.scheduleIdleSnapshot();
-		}
 	}
 
 	private async initializeClient(ws: WebSocket, userId?: string): Promise<void> {
@@ -450,19 +453,51 @@ export class SessionHub {
 	}
 
 	/**
-	 * Check if idle snapshotting is safe (no in-flight tool calls).
+	 * Register a proxy connection (terminal/VS Code WS).
+	 * Returns an idempotent cleanup function.
+	 */
+	addProxyConnection(): () => void {
+		const connectionId = randomUUID();
+		this.proxyConnections.add(connectionId);
+		this.touchActivity();
+		let removed = false;
+		return () => {
+			if (removed) return;
+			removed = true;
+			this.proxyConnections.delete(connectionId);
+			this.touchActivity();
+		};
+	}
+
+	/**
+	 * Full idle snapshot predicate: checks all conditions including
+	 * grace period, clients/proxies, agent idle, SSE state, and sandbox existence.
 	 */
 	shouldIdleSnapshot(): boolean {
-		if (this.activeHttpToolCalls > 0) {
-			return false;
-		}
-		if (this.eventProcessor.hasRunningTools()) {
-			return false;
-		}
-		if (this.getEffectiveClientCount() > 0) {
-			return false;
-		}
+		if (this.activeHttpToolCalls > 0) return false;
+		if (this.eventProcessor.hasRunningTools()) return false;
+		if (this.clients.size > 0) return false;
+		if (this.proxyConnections.size > 0) return false;
+		if (this.eventProcessor.getCurrentAssistantMessageId() !== null) return false;
+
+		const sseReady = this.runtime.isReady();
+		if (!sseReady && this.lastKnownAgentIdleAt === null) return false;
+
+		const hasSandbox = Boolean(this.runtime.getContext().session.sandbox_id);
+		if (!hasSandbox) return false;
+
+		const graceMs = this.getIdleGraceMs();
+		if (Date.now() - this.lastActivityAt < graceMs) return false;
+
 		return true;
+	}
+
+	private getIdleGraceMs(): number {
+		const sessionType = this.runtime.getContext().session.client_type;
+		if (sessionType === "automation" || sessionType === "slack") {
+			return 30_000;
+		}
+		return this.env.idleSnapshotGraceSeconds * 1000;
 	}
 
 	// ============================================
@@ -472,9 +507,10 @@ export class SessionHub {
 	/**
 	 * Ensure sandbox, OpenCode session, and SSE are ready.
 	 */
-	async ensureRuntimeReady(): Promise<void> {
+	async ensureRuntimeReady(options?: { reason?: "auto_reconnect" }): Promise<void> {
 		this.lifecycleStartTime = Date.now();
-		await this.runtime.ensureRuntimeReady();
+		await this.runtime.ensureRuntimeReady(options);
+		this.lastKnownAgentIdleAt = null; // fresh sandbox, agent state unknown
 		this.startMigrationMonitor();
 		await this.startLeaseRenewal();
 		await setRuntimeLease(this.sessionId);
@@ -664,7 +700,8 @@ export class SessionHub {
 	stopMigrationMonitor(): void {
 		this.migrationController.stop();
 		this.stopLeaseRenewal();
-		this.cancelIdleSnapshotTimer();
+		this.stopIdleMonitor();
+		this.cancelReconnect();
 	}
 
 	/**
@@ -672,6 +709,15 @@ export class SessionHub {
 	 */
 	async runExpiryMigration(): Promise<void> {
 		await this.migrationController.runExpiryMigration();
+	}
+
+	/**
+	 * Run idle snapshot and evict the hub.
+	 * Used by the orphan sweeper for sessions without runtime leases.
+	 */
+	async runIdleSnapshot(): Promise<void> {
+		await this.migrationController.runIdleSnapshot();
+		this.onEvict?.();
 	}
 
 	// ============================================
@@ -753,7 +799,8 @@ export class SessionHub {
 	private selfTerminate(): void {
 		this.stopLeaseRenewal();
 		this.migrationController.stop();
-		this.cancelIdleSnapshotTimer();
+		this.stopIdleMonitor();
+		this.cancelReconnect();
 
 		// Drop all WS clients
 		for (const [ws] of this.clients) {
@@ -773,43 +820,49 @@ export class SessionHub {
 	}
 
 	// ============================================
-	// Private: Idle Snapshot Timer
+	// Private: Idle Snapshot Monitor (30s interval)
 	// ============================================
 
-	private touchActivity(): void {
-		// Hook point for activity tracking. Currently a no-op;
-		// idle snapshot scheduling is managed via timers.
+	touchActivity(): void {
+		this.lastActivityAt = Date.now();
 	}
 
-	private scheduleIdleSnapshot(): void {
-		this.cancelIdleSnapshotTimer();
-
-		this.idleSnapshotTimer = setTimeout(() => {
-			this.idleSnapshotTimer = null;
-
-			if (!this.shouldIdleSnapshot()) {
-				this.log("Idle snapshot skipped: active tool calls or clients");
-				return;
-			}
-
-			this.log("Idle snapshot timer fired, running idle snapshot");
-			this.migrationController
-				.runIdleSnapshot()
-				.then(() => {
-					this.log("Idle snapshot complete, evicting hub");
-					this.onEvict?.();
-				})
-				.catch((err) => {
-					this.logError("Idle snapshot failed", err);
-				});
-		}, IDLE_SNAPSHOT_DELAY_MS);
-	}
-
-	private cancelIdleSnapshotTimer(): void {
-		if (this.idleSnapshotTimer) {
-			clearTimeout(this.idleSnapshotTimer);
-			this.idleSnapshotTimer = null;
+	/**
+	 * Start a 30s polling interval that checks idle snapshot conditions.
+	 * Called once when the runtime becomes ready. Safe to call multiple times.
+	 */
+	private startIdleMonitor(): void {
+		if (this.idleCheckTimer) {
+			return;
 		}
+
+		this.idleCheckTimer = setInterval(() => {
+			this.checkIdleSnapshot();
+		}, 30_000);
+	}
+
+	private stopIdleMonitor(): void {
+		if (this.idleCheckTimer) {
+			clearInterval(this.idleCheckTimer);
+			this.idleCheckTimer = null;
+		}
+	}
+
+	private checkIdleSnapshot(): void {
+		if (!this.shouldIdleSnapshot()) {
+			return;
+		}
+
+		this.log("Idle snapshot conditions met, running idle snapshot");
+		this.migrationController
+			.runIdleSnapshot()
+			.then(() => {
+				this.log("Idle snapshot complete");
+				this.lastKnownAgentIdleAt = null;
+			})
+			.catch((err) => {
+				this.logError("Idle snapshot failed", err);
+			});
 	}
 
 	// ============================================
@@ -866,6 +919,9 @@ export class SessionHub {
 			this.log("Dropping prompt during migration", { migrationState });
 			return;
 		}
+
+		this.touchActivity();
+		this.lastKnownAgentIdleAt = null; // new work starting, invalidates previous idle state
 
 		this.log("Handling prompt", {
 			userId,
@@ -1083,7 +1139,14 @@ export class SessionHub {
 
 	private handleOpenCodeEvent(event: OpenCodeEvent): void {
 		this.touchActivity();
+		const wasBusy = this.eventProcessor.getCurrentAssistantMessageId() !== null;
 		this.eventProcessor.process(event);
+		const nowIdle = this.eventProcessor.getCurrentAssistantMessageId() === null;
+
+		if (wasBusy && nowIdle) {
+			this.touchActivity(); // marks agent-done boundary, starts grace period
+			this.lastKnownAgentIdleAt = Date.now();
+		}
 	}
 
 	private handleSseDisconnect(reason: string): void {
@@ -1105,12 +1168,26 @@ export class SessionHub {
 		const delay = delays[delayIndex];
 		this.reconnectAttempt++;
 
+		const generation = this.reconnectGeneration;
+
 		this.log("Scheduling reconnection", {
 			attempt: this.reconnectAttempt,
 			delayMs: delay,
+			generation,
 		});
 
-		setTimeout(() => {
+		this.reconnectTimerId = setTimeout(() => {
+			this.reconnectTimerId = null;
+
+			// Bail if generation changed (cancelReconnect was called)
+			if (this.reconnectGeneration !== generation) {
+				this.log("Reconnection aborted: generation mismatch", {
+					expected: generation,
+					current: this.reconnectGeneration,
+				});
+				return;
+			}
+
 			// Check again - clients may have disconnected during delay
 			if (this.clients.size === 0 && !this.shouldReconnectWithoutClients()) {
 				this.log("No clients connected, aborting reconnection");
@@ -1118,7 +1195,7 @@ export class SessionHub {
 				return;
 			}
 
-			this.ensureRuntimeReady()
+			this.ensureRuntimeReady({ reason: "auto_reconnect" })
 				.then(() => {
 					this.log("Reconnection successful");
 					this.reconnectAttempt = 0;
@@ -1130,12 +1207,22 @@ export class SessionHub {
 		}, delay);
 	}
 
+	private cancelReconnect(): void {
+		this.reconnectGeneration++;
+		if (this.reconnectTimerId) {
+			clearTimeout(this.reconnectTimerId);
+			this.reconnectTimerId = null;
+		}
+		this.reconnectAttempt = 0;
+	}
+
 	// ============================================
 	// Private: Migration
 	// ============================================
 
 	private startMigrationMonitor(): void {
 		this.migrationController.start();
+		this.startIdleMonitor();
 	}
 
 	// ============================================

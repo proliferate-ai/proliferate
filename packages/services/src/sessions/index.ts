@@ -35,4 +35,12 @@ export {
 } from "./db";
 
 // Gateway-specific exports (unified names)
-export { create, update, deleteById, findByIdInternal, createSetupSession } from "./db";
+export {
+	create,
+	update,
+	deleteById,
+	findByIdInternal,
+	createSetupSession,
+	updateWhereSandboxIdMatches,
+	listRunningSessionIds,
+} from "./db";

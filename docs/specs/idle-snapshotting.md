@@ -254,7 +254,7 @@ private async restoreFromMemorySnapshot(
   const { sandboxId: newSandboxId } = await this.client.cpClient.sandboxRestore({
     snapshotId: memorySnapshotId,
     sandboxNameOverride: sessionId, // keeps sandbox discoverable via fromName()
-    sandboxNameOverrideType: 0, // verify enum value
+    sandboxNameOverrideType: 2, // STRING (Modal gRPC enum)
   });
   const sandbox = await this.client.sandboxes.fromId(newSandboxId);
   const tunnels = await sandbox.tunnels(30000);

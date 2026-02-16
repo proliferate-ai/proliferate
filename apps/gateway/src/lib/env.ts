@@ -26,6 +26,7 @@ export interface GatewayEnv {
 	s3AccessKey?: string;
 	s3SecretKey?: string;
 	redisUrl: string;
+	idleSnapshotGraceSeconds: number;
 }
 
 export function loadGatewayEnv(): GatewayEnv {
@@ -51,5 +52,6 @@ export function loadGatewayEnv(): GatewayEnv {
 		s3AccessKey: env.S3_ACCESS_KEY,
 		s3SecretKey: env.S3_SECRET_KEY,
 		redisUrl: env.REDIS_URL,
+		idleSnapshotGraceSeconds: env.IDLE_SNAPSHOT_DELAY_SECONDS,
 	};
 }

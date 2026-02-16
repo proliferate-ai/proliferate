@@ -10,6 +10,7 @@ import type { GatewayEnv } from "../../../lib/env";
 import { createEnsureSessionReady, createRequireAuth } from "../../../middleware";
 import { createActionsRouter } from "./actions";
 import cancelRouter from "./cancel";
+import { createHeartbeatRouter } from "./heartbeat";
 import infoRouter from "./info";
 import messageRouter from "./message";
 import { createSessionsRouter } from "./sessions";
@@ -29,6 +30,9 @@ export function createProliferateHttpRoutes(hubManager: HubManager, env: Gateway
 
 	// Verification media doesn't need session hub (reads from S3)
 	router.use(createVerificationMediaRouter(env));
+
+	// Heartbeat — doesn't require sandbox running (resets idle timers only)
+	router.use("/:proliferateSessionId", createHeartbeatRouter(hubManager));
 
 	// Actions routes — don't require sandbox running (DB + external API only)
 	router.use("/:proliferateSessionId/actions", createActionsRouter(env, hubManager));
