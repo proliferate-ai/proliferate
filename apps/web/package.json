@@ -55,7 +55,7 @@
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"cmdk": "^1.1.1",
-		"cronstrue": "^3.9.0",
+		"cronstrue": "^3.12.0",
 		"date-fns": "^4.1.0",
 		"jose": "^5.2.0",
 		"lucide-react": "^0.562.0",
