@@ -15,6 +15,8 @@
 import type { ActionMode, RiskLevel } from "@proliferate/providers";
 import * as modesDb from "./modes-db";
 
+const VALID_ACTION_MODES = new Set<string>(["allow", "deny", "require_approval"]);
+
 // ============================================
 // Types
 // ============================================
@@ -74,10 +76,10 @@ export async function resolveMode(input: ResolveModeInput): Promise<ModeResoluti
 	// 1. Automation override (highest priority)
 	if (input.automationId) {
 		const automationModes = await modesDb.getAutomationActionModes(input.automationId);
-		const automationMode = automationModes[modeKey] as ActionMode | undefined;
-		if (automationMode) {
+		const raw = automationModes[modeKey];
+		if (raw && VALID_ACTION_MODES.has(raw)) {
 			return applyDriftGuard(
-				{ mode: automationMode, source: "automation_override" },
+				{ mode: raw as ActionMode, source: "automation_override" },
 				input.isDrifted,
 			);
 		}
@@ -85,9 +87,9 @@ export async function resolveMode(input: ResolveModeInput): Promise<ModeResoluti
 
 	// 2. Org default
 	const orgModes = await modesDb.getOrgActionModes(input.orgId);
-	const orgMode = orgModes[modeKey] as ActionMode | undefined;
-	if (orgMode) {
-		return applyDriftGuard({ mode: orgMode, source: "org_default" }, input.isDrifted);
+	const orgRaw = orgModes[modeKey];
+	if (orgRaw && VALID_ACTION_MODES.has(orgRaw)) {
+		return applyDriftGuard({ mode: orgRaw as ActionMode, source: "org_default" }, input.isDrifted);
 	}
 
 	// 3. Inferred default from risk hint

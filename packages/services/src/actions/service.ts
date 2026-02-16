@@ -193,6 +193,20 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 			);
 			return { invocation, needsApproval: true };
 		}
+
+		default: {
+			// Unknown mode from JSONB — deny as a safe fallback
+			const invocation = await actionsDb.createInvocation({
+				...baseInput,
+				status: "denied",
+				deniedReason: `unknown_mode:${mode}`,
+			});
+			log.warn(
+				{ invocationId: invocation.id, action: input.action, mode },
+				"Action denied — unknown mode from JSONB",
+			);
+			return { invocation, needsApproval: false };
+		}
 	}
 }
 

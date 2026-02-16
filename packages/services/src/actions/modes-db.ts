@@ -5,9 +5,12 @@
  * organizations and automations tables.
  */
 
+import type { ActionMode } from "@proliferate/providers";
 import { automations, eq, getDb, organization } from "../db/client";
 
 type ActionModesMap = Record<string, string>;
+
+const VALID_ACTION_MODES = new Set<string>(["allow", "deny", "require_approval"]);
 
 /**
  * Read org-level action mode overrides.
@@ -40,7 +43,10 @@ export async function getAutomationActionModes(automationId: string): Promise<Ac
  * Set a single org-level action mode override.
  * Used by the "always approve" flow.
  */
-export async function setOrgActionMode(orgId: string, key: string, mode: string): Promise<void> {
+export async function setOrgActionMode(orgId: string, key: string, mode: ActionMode): Promise<void> {
+	if (!VALID_ACTION_MODES.has(mode)) {
+		throw new Error(`Invalid action mode: ${mode}`);
+	}
 	const db = getDb();
 	const existing = await getOrgActionModes(orgId);
 	existing[key] = mode;
@@ -53,8 +59,11 @@ export async function setOrgActionMode(orgId: string, key: string, mode: string)
 export async function setAutomationActionMode(
 	automationId: string,
 	key: string,
-	mode: string,
+	mode: ActionMode,
 ): Promise<void> {
+	if (!VALID_ACTION_MODES.has(mode)) {
+		throw new Error(`Invalid action mode: ${mode}`);
+	}
 	const db = getDb();
 	const existing = await getAutomationActionModes(automationId);
 	existing[key] = mode;
