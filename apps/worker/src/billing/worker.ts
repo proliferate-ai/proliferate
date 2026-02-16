@@ -25,6 +25,8 @@ import {
 	createBillingOutboxWorker,
 	createBillingReconcileQueue,
 	createBillingReconcileWorker,
+	createBillingSnapshotCleanupQueue,
+	createBillingSnapshotCleanupWorker,
 	getConnectionOptions,
 } from "@proliferate/queue";
 import { processGraceJob } from "../jobs/billing/grace.job";
@@ -33,6 +35,7 @@ import { processLLMSyncOrgJob } from "../jobs/billing/llm-sync-org.job";
 import { processMeteringJob } from "../jobs/billing/metering.job";
 import { processOutboxJob } from "../jobs/billing/outbox.job";
 import { processReconcileJob } from "../jobs/billing/reconcile.job";
+import { processSnapshotCleanupJob } from "../jobs/billing/snapshot-cleanup.job";
 
 // ============================================
 // Billing Worker State
@@ -70,6 +73,7 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 	const reconcileQueue = createBillingReconcileQueue(connection);
 	const llmSyncDispatchQueue = createBillingLLMSyncDispatchQueue(connection);
 	const llmSyncOrgQueue = createBillingLLMSyncOrgQueue(connection);
+	const snapshotCleanupQueue = createBillingSnapshotCleanupQueue(connection);
 
 	// Add repeatable schedules (idempotent — BullMQ deduplicates by repeat key)
 	await meteringQueue.add(
@@ -112,6 +116,14 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 		},
 	);
 
+	await snapshotCleanupQueue.add(
+		"snapshot-cleanup",
+		{},
+		{
+			repeat: { pattern: "0 1 * * *", tz: "UTC" }, // Daily at 01:00 UTC
+		},
+	);
+
 	// Create workers
 	const meteringWorker = createBillingMeteringWorker(
 		async (job) => processMeteringJob(job, logger),
@@ -143,6 +155,11 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 		connection,
 	);
 
+	const snapshotCleanupWorker = createBillingSnapshotCleanupWorker(
+		async (job) => processSnapshotCleanupJob(job, logger),
+		connection,
+	);
+
 	// Attach error handlers
 	const workers = [
 		meteringWorker,
@@ -151,6 +168,7 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 		reconcileWorker,
 		llmSyncDispatchWorker,
 		llmSyncOrgWorker,
+		snapshotCleanupWorker,
 	];
 	for (const worker of workers) {
 		worker.on("failed", (job, err) => {
@@ -167,6 +185,7 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 		reconcileQueue,
 		llmSyncDispatchQueue,
 		llmSyncOrgQueue,
+		snapshotCleanupQueue,
 	];
 
 	isRunning = true;
@@ -180,6 +199,7 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 				"billing-reconcile (daily 00:00 UTC)",
 				"billing-llm-sync-dispatch (30s)",
 				"billing-llm-sync-org (on-demand)",
+				"billing-snapshot-cleanup (daily 01:00 UTC)",
 			],
 		},
 		"Billing BullMQ workers started",

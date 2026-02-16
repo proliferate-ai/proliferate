@@ -82,10 +82,14 @@ export async function runWithMigrationLock<T>(
 	const redlock = getRedlock();
 	const lockKey = getMigrationLockKey(sessionId);
 	try {
-		return await redlock.using([lockKey], ttlMs, async () => fn(), {
-			retryCount: 0,
-		});
-	} catch {
+		return await redlock.using([lockKey], ttlMs, { retryCount: 0 }, async () => fn());
+	} catch (err) {
+		const isLockContention = err instanceof Error && err.message.includes("attempts");
+		if (!isLockContention) {
+			getServicesLogger()
+				.child({ module: "lock" })
+				.warn({ err, lockKey }, "Lock acquire failed (not contention)");
+		}
 		return null;
 	}
 }

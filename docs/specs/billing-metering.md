@@ -15,8 +15,8 @@
 - Overage policy (pause vs allow, per-org)
 - Checkout flow (plan activation, credit top-ups via Autumn)
 - Snapshot quota management (count and retention limits)
-- Distributed locks for concurrent billing operations
-- Billing worker (interval-based cycles)
+- Atomic concurrent admission (advisory lock at session insert)
+- Billing worker (BullMQ repeatable jobs)
 - Billing token system (JWT auth for sandbox billing requests)
 
 ### Out of Scope
@@ -84,14 +84,18 @@ packages/shared/src/billing/
 
 packages/services/src/billing/
 ├── index.ts                    # Re-exports all billing service modules
-├── db.ts                       # Billing event queries, per-org LLM cursor ops
+├── gate.ts                     # Iron Door: checkBillingGateForOrg, assertBillingGateForOrg, getOrgPlanLimits
+├── db.ts                       # Billing event queries, per-org LLM cursor ops, billable org enumeration
 ├── litellm-api.ts              # LiteLLM Admin REST API client (GET /spend/logs/v2)
 ├── shadow-balance.ts           # Atomic deduct/add/bulk-deduct/reconcile/initialize shadow balance
 ├── metering.ts                 # Compute metering cycle, sandbox liveness, finalization
 ├── outbox.ts                   # Outbox worker: retry failed Autumn posts
 ├── org-pause.ts                # Billing enforcement orchestration (pause/snapshot policy)
 ├── trial-activation.ts         # Auto-activate plan after trial exhaustion
-└── snapshot-limits.ts          # Snapshot quota checking and cleanup
+└── snapshot-limits.ts          # Snapshot quota checking, retention cleanup, provider-side deletion
+
+packages/services/src/sessions/
+└── db.ts                       # createWithAdmissionGuard, createSetupSessionWithAdmissionGuard (atomic concurrent admission)
 
 packages/db/src/schema/
 └── billing.ts                  # billingEvents, llmSpendCursors (per-org), billingReconciliations tables
@@ -107,13 +111,14 @@ apps/worker/src/billing/
 └── worker.ts                   # BullMQ-based billing worker lifecycle
 
 apps/worker/src/jobs/billing/
-├── providers.ts                # Shared sandbox provider utilities
+├── providers.ts                # Shared sandbox provider utilities (used by metering for liveness checks)
 ├── metering.job.ts             # BullMQ processor: compute metering (every 30s)
 ├── outbox.job.ts               # BullMQ processor: billing outbox (every 60s)
 ├── grace.job.ts                # BullMQ processor: grace expiration (every 60s)
 ├── reconcile.job.ts            # BullMQ processor: nightly reconciliation (00:00 UTC)
 ├── llm-sync-dispatcher.job.ts  # BullMQ processor: LLM sync fan-out (every 30s)
-└── llm-sync-org.job.ts         # BullMQ processor: per-org LLM spend sync
+├── llm-sync-org.job.ts         # BullMQ processor: per-org LLM spend sync
+└── snapshot-cleanup.job.ts     # BullMQ processor: daily snapshot retention cleanup (01:00 UTC)
 ```
 
 ---
@@ -191,7 +196,7 @@ Trial: 1,000 credits granted at signup. Top-up pack: 500 credits for $5.
 ## 5. Conventions & Patterns
 
 ### Do
-- Always deduct from shadow balance via `deductShadowBalance()` — it is the **only** path for credit deduction (`packages/services/src/billing/shadow-balance.ts:deductShadowBalance`).
+- Always deduct from shadow balance via `deductShadowBalance()` or `bulkDeductShadowBalance()` — these are the **only** paths for credit deduction (`packages/services/src/billing/shadow-balance.ts`).
 - Use deterministic idempotency keys: `compute:{sessionId}:{fromMs}:{toMs}` for regular intervals, `compute:{sessionId}:{fromMs}:final` for finalization, `llm:{requestId}` for LLM events.
 - Billing cycles run as BullMQ repeatable jobs with concurrency 1 — no manual locking needed.
 
@@ -227,7 +232,7 @@ Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or
 7. If billing enforcement is required, invokes org-level enforcement flow — unless transitioning from trial (tries `tryActivatePlanAfterTrial()` first).
 
 **Edge cases:**
-- Dead sandbox → `billFinalInterval()` bills through `last_seen_alive_at + pollInterval`, not detection time. Marks session `stopped`.
+- Dead sandbox → `billFinalInterval()` bills through `last_seen_alive_at + pollInterval`, not detection time. Marks session `paused` (preserves resumability).
 - BullMQ concurrency 1 ensures only one metering cycle runs at a time.
 
 **Files touched:** `packages/services/src/billing/metering.ts`, `shadow-balance.ts`, `org-pause.ts`, `trial-activation.ts`
@@ -253,7 +258,7 @@ Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or
 
 **Files touched:** `packages/services/src/billing/shadow-balance.ts`, `packages/db/src/schema/billing.ts`
 
-### 6.3 Credit Gating — `Partial`
+### 6.3 Credit Gating — `Implemented`
 
 **What it does:** Single entry point for session-lifecycle billing checks.
 
@@ -263,33 +268,57 @@ Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or
 3. Gate checks (in order): grace expiry → billing state → credit sufficiency (min 11 credits) → concurrent session limit.
 4. Returns `{ allowed: true }` or `{ allowed: false, errorCode, message, action }`.
 
-**Operations gated:** `session_start`, `session_resume`, `cli_connect`, `automation_trigger`. Resume and CLI connect skip the concurrent limit check.
+**Operations gated:** `session_start`, `session_resume`, `cli_connect`, `automation_trigger`. Resume and CLI connect skip the concurrent limit check **and** the credit minimum threshold (state-level checks still apply).
 
-**Gap:** Gating is only enforced in the oRPC `createSessionHandler` (`apps/web/src/server/routers/sessions-create.ts:48`). Automation runs create sessions via the gateway HTTP route (`apps/gateway/src/api/proliferate/http/sessions.ts`), which has no billing check. Automations can therefore create sessions even when the org is out of credits or over concurrent limits.
+**Enforcement points:**
+- oRPC `createSessionHandler` (`apps/web/src/server/routers/sessions-create.ts`) — `session_start` / `automation_trigger`
+- Gateway session creation (`apps/gateway/src/api/proliferate/http/sessions.ts`) — `session_start` / `automation_trigger`
+- Gateway setup session (`startSetupSession` in same file) — `session_start`
+- Managed prebuild setup session (`packages/services/src/managed-prebuild.ts`) — `session_start` (logs and skips on denial)
+- Runtime resume/cold-start (`apps/gateway/src/hub/session-runtime.ts:doEnsureRuntimeReady`) — `session_resume` (already-running sessions skip this check via `ensureRuntimeReady` early return)
+- Message path coverage: `postPrompt` → `handlePrompt` → `ensureRuntimeReady` → `doEnsureRuntimeReady`, so the runtime resume gate covers message-triggered cold-starts transitively.
 
-**Files touched:** `packages/shared/src/billing/gating.ts`, `apps/web/src/lib/billing.ts`
+**Atomic concurrent admission (TOCTOU-safe):**
+
+The billing gate's concurrent limit check (Step 4 in `checkBillingGate`) serves as a fast rejection. The authoritative enforcement is at session insert time via `createWithAdmissionGuard` / `createSetupSessionWithAdmissionGuard` (`packages/services/src/sessions/db.ts`).
+
+Approach: **transaction-scoped advisory lock** (`pg_advisory_xact_lock`).
+1. Open a Postgres transaction.
+2. Acquire `pg_advisory_xact_lock(hashtext(orgId || ':session_admit'))` — serializes per-org admission.
+3. Count sessions with `status IN ('starting', 'pending', 'running')` within the transaction.
+4. If count >= plan limit, return `{ created: false }` without inserting.
+5. Otherwise, insert the session row and commit.
+
+The lock is released automatically when the transaction commits/rolls back. It does not block other orgs, other session operations (update, delete), or non-admission queries.
+
+**Tradeoffs considered:**
+- **Advisory lock (chosen):** Minimal scope (per-org, transaction-lifetime), no schema changes, no deadlock risk with other billing operations. Serializes only concurrent creates for the same org.
+- **Org row `FOR UPDATE` lock:** Would conflict with shadow balance deductions (which also lock the org row), causing unnecessary contention between metering and session creation.
+- **Redis atomic counter:** Adds external dependency to the admission path and requires rollback semantics on insert failure. Not justified given Postgres already handles this well.
+
+**Files touched:** `packages/shared/src/billing/gating.ts`, `packages/services/src/billing/gate.ts`, `packages/services/src/sessions/db.ts`, `apps/web/src/lib/billing.ts`
 
 ### 6.4 LLM Spend Sync — `Implemented`
 
-**What it does:** Ingests LLM cost data into billing events via the LiteLLM Admin REST API and per-org cursors.
+**What it does:** Ingests LLM cost data into billing events via the LiteLLM Admin REST API and per-org cursors. Uses a BullMQ dispatcher → per-org fan-out pattern for parallelism.
 
 **Happy path:**
-1. Worker calls `syncLLMSpend()` every 30 seconds, guarded by `NEXT_PUBLIC_BILLING_ENABLED` + `LLM_PROXY_ADMIN_URL` (`apps/worker/src/billing/worker.ts`).
-2. Lists billable orgs (`billing.listBillableOrgIds()` — states `active`, `trial`, `grace`) (`packages/services/src/billing/db.ts`).
-3. For each org:
+1. Dispatcher job (`billing-llm-sync-dispatch`, every 30s) lists billable orgs via `billing.listBillableOrgIds()` — states `active`, `trial`, `grace` (`packages/services/src/billing/db.ts`).
+2. Enqueues one `billing-llm-sync-org` job per org (deduplicated by org ID).
+3. Per-org worker (concurrency 5):
    a. Reads per-org cursor (`billing.getLLMSpendCursor(orgId)`) or defaults to 5-min lookback.
    b. Fetches spend logs via `billing.fetchSpendLogs(orgId, startDate)` (`packages/services/src/billing/litellm-api.ts`).
    c. Converts logs with positive `spend` to `BulkDeductEvent[]` using `calculateLLMCredits()`.
    d. Calls `billing.bulkDeductShadowBalance(orgId, events)` — single transaction with idempotent insert (`packages/services/src/billing/shadow-balance.ts`).
    e. Advances per-org cursor to latest log's `startTime`.
-4. Handles state transitions: when enforcement is required, route to billing enforcement flow.
+4. Handles state transitions: when enforcement is required, calls `enforceCreditsExhausted(orgId)` to pause/snapshot running sessions.
 
 **Edge cases:**
 - First run for an org (no cursor) → starts from 5-min lookback.
 - REST API failure for one org → logged and skipped; other orgs continue.
 - Duplicate logs → idempotency key `llm:{request_id}` prevents double-billing.
 
-**Files touched:** `apps/worker/src/billing/worker.ts`, `packages/services/src/billing/litellm-api.ts`, `packages/services/src/billing/db.ts`, `packages/services/src/billing/shadow-balance.ts`
+**Files touched:** `apps/worker/src/jobs/billing/llm-sync-dispatcher.job.ts`, `apps/worker/src/jobs/billing/llm-sync-org.job.ts`, `packages/services/src/billing/litellm-api.ts`, `packages/services/src/billing/db.ts`, `packages/services/src/billing/shadow-balance.ts`
 
 ### 6.5 Outbox Processing — `Implemented`
 
@@ -299,8 +328,8 @@ Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or
 1. `processOutbox()` is invoked by the BullMQ `billing-outbox` repeatable job (`packages/services/src/billing/outbox.ts`).
 2. Queries billing events with `status IN ('pending', 'failed')`, `retry_count < 5`, `next_retry_at < now()`.
 3. For each event: calls `autumnDeductCredits()` to post to Autumn.
-4. On success: marks `status = 'posted'`. If Autumn denies, transitions org to `exhausted` and enforces pause/snapshot policy for running sessions.
-5. On failure: increments retry count, sets exponential backoff, marks `failed` after 5 retries.
+4. On success: marks `status = 'posted'`. If Autumn denies, transitions org to `exhausted` and calls `enforceCreditsExhausted(orgId)` to pause/snapshot running sessions.
+5. On failure: increments retry count, sets exponential backoff. After 5 retries, marks `failed` permanently and emits `alert: true` log with `orgId`, `eventId`, `credits`, and `retryCount` for monitoring.
 
 **Files touched:** `packages/services/src/billing/outbox.ts`, `packages/shared/src/billing/autumn-client.ts`
 
@@ -324,17 +353,29 @@ suspended    → active (manual_unsuspend)
 
 **Files touched:** `packages/shared/src/billing/state.ts`
 
-### 6.7 Org Billing Enforcement (Pause/Snapshot Policy) — `Partial`
+### 6.7 Org Billing Enforcement (Pause/Snapshot Policy) — `Implemented`
 
-**What it does (spec policy):** Applies org-level enforcement when credits are exhausted/suspended by pausing/snapshotting sessions (resumable), not hard-terminating user work by default.
+**What it does:** Applies org-level enforcement when credits are exhausted/suspended by pausing/snapshotting sessions (resumable), not hard-terminating user work.
 
-**V1 (`handleCreditsExhausted`):** Checks overage policy. If `pause` → pauses all sessions. If `allow` → attempts auto top-up via Autumn; on failure, pauses.
+**`enforceCreditsExhausted(orgId)`:** Iterates all running sessions for the org and calls `pauseSessionWithSnapshot()` for each. Returns `{ paused, failed }`.
 
-**Current implementation gap:** `handleCreditsExhaustedV2` still terminates sessions sequentially (`status: "stopped"` path). This diverges from policy.
+**`pauseSessionWithSnapshot()`:** Lock-safe per-session enforcement:
+1. Acquires migration lock (300s TTL) via `runWithMigrationLock`
+2. Re-verifies session is still running (may have been paused by gateway idle snapshot)
+3. Snapshots: memory (preferred) → pause → filesystem, depending on provider capabilities
+4. Terminates sandbox (non-pause/non-memory providers only)
+5. CAS DB update with `sandbox_id` fencing — `status: "paused"`, `pauseReason: "credit_limit"`
+6. Revokes LLM virtual key (best-effort)
 
-**Required integration:** Replace direct termination with the lock-guarded gateway pause/snapshot pipeline from `idle-snapshotting.md` (including race-safe locking/revalidation) so exhausted/suspended org enforcement yields resumable paused sessions.
+If the lock is already held (e.g., by an idle snapshot in progress), the session is skipped. Sessions that fail to pause are counted in `failed` and left running — the next enforcement cycle will retry.
 
-**`canOrgStartSession`:** Checks concurrent session count against plan limit.
+**`canOrgStartSession`:** Checks concurrent session count against plan limit (superseded by atomic admission guard in `sessions/db.ts`).
+
+**Callers:**
+- `metering.ts` → `billComputeInterval()` when `shouldTerminateSessions` (after trial auto-activation check)
+- `outbox.ts` → `processEvent()` when Autumn denies credits
+- `grace.job.ts` → on grace period expiration
+- `llm-sync-org.job.ts` → when LLM spend depletes balance
 
 **Files touched:** `packages/services/src/billing/org-pause.ts`
 
@@ -360,19 +401,21 @@ suspended    → active (manual_unsuspend)
 
 **Files touched:** `apps/web/src/server/routers/billing.ts`
 
-### 6.10 Snapshot Quota Management — `Partial`
+### 6.10 Snapshot Quota Management — `Implemented`
 
 **What it does:** Defines per-plan snapshot count and retention limits. Snapshots are free within quota (no credit charge).
 
-**`canCreateSnapshot`:** Checks count of sessions with `snapshot_id IS NOT NULL` against plan limit.
+**Quota enforcement (on snapshot creation):**
+- `sessions-pause.ts` and `sessions-snapshot.ts` call `ensureSnapshotCapacity(orgId, plan, deleteSnapshotFromProvider)` before creating snapshots.
+- If at limit, evicts oldest snapshot (expired first, then by `paused_at`). Eviction clears DB ref after best-effort provider cleanup via `deleteSnapshotFromProvider`.
 
-**`ensureSnapshotCapacity`:** If at limit, deletes oldest snapshot (by `paused_at`).
+**Retention cleanup (daily background):**
+- `billing-snapshot-cleanup` BullMQ job runs daily at 01:00 UTC.
+- Calls `cleanupAllExpiredSnapshots()` which sweeps all sessions with snapshots past the global `SNAPSHOT_RETENTION_DAYS` cap (default 14 days), bounded to 500 per cycle.
 
-**`cleanupExpiredSnapshots`:** Deletes snapshots older than retention period.
+**Provider-side deletion:** `deleteSnapshotFromProvider` is currently a no-op — providers (Modal, E2B) auto-expire snapshot resources. The function serves as the designated hook point for when providers add delete APIs.
 
-**Gap:** All three functions are exported but have **no callers** in the codebase. Neither session pause nor any worker invokes quota checks. Snapshot limits are currently unenforced.
-
-**Files touched:** `packages/services/src/billing/snapshot-limits.ts`
+**Files touched:** `packages/services/src/billing/snapshot-limits.ts`, `apps/worker/src/jobs/billing/snapshot-cleanup.job.ts`
 
 ### 6.11 Distributed Locks — `Removed`
 
@@ -387,9 +430,10 @@ Distributed locks (`packages/shared/src/billing/distributed-lock.ts`) were remov
 | `billing-metering` | Every 30s | `metering.job.ts` → `billing.runMeteringCycle()` |
 | `billing-outbox` | Every 60s | `outbox.job.ts` → `billing.processOutbox()` |
 | `billing-grace` | Every 60s | `grace.job.ts` → grace expiration checks |
-| `billing-reconcile` | Daily 00:00 UTC | `reconcile.job.ts` → `billing.reconcileShadowBalance()` |
+| `billing-reconcile` | Daily 00:00 UTC | `reconcile.job.ts` → enumerates orgs via `billing.listBillableOrgsWithCustomerId()`, fetches Autumn balance per org, calls `billing.reconcileShadowBalance()`, alerts on drift > threshold |
 | `billing-llm-sync-dispatch` | Every 30s | `llm-sync-dispatcher.job.ts` → fan-out per-org jobs |
 | `billing-llm-sync-org` | On-demand | `llm-sync-org.job.ts` → per-org LLM spend sync |
+| `billing-snapshot-cleanup` | Daily 01:00 UTC | `snapshot-cleanup.job.ts` → `billing.cleanupAllExpiredSnapshots()` |
 
 Guarded by `NEXT_PUBLIC_BILLING_ENABLED` env var.
 
@@ -416,8 +460,8 @@ Guarded by `NEXT_PUBLIC_BILLING_ENABLED` env var.
 | `llm-proxy.md` | LLM → Billing | `GET /spend/logs/v2` REST API | LLM spend sync via `litellm-api.ts` (replaces cross-schema SQL) |
 | `sessions-gateway.md` | Sessions → Billing | `checkCanStartSession()` | Session creation calls billing gate |
 | `sessions-gateway.md` | Billing → Sessions | `sessions.status`, `metered_through_at` | Metering reads/updates session rows |
-| `sandbox-providers.md` | Billing → Providers | `provider.checkSandboxes()` | Liveness checks for metering; pause/snapshot execution is delegated via gateway lifecycle pipeline |
-| `automations-runs.md` | Automations → Billing | (not yet wired) | `automation_trigger` gate type exists but automations bypass billing via gateway HTTP route |
+| `sandbox-providers.md` | Billing → Providers | `provider.checkSandboxes()`, `getSandboxProvider()` | Liveness checks for metering; `org-pause.ts` resolves providers directly via `getSandboxProvider()` for enforcement pause/snapshot |
+| `automations-runs.md` | Automations → Billing | `billing.assertBillingGateForOrg()` | `automation_trigger` gate enforced in gateway session creation route |
 
 ### Security & Auth
 - Billing routes use `orgProcedure` middleware (authenticated + org context). Settings and checkout require admin/owner role.
@@ -428,27 +472,40 @@ Guarded by `NEXT_PUBLIC_BILLING_ENABLED` env var.
 - Structured logging via `@proliferate/logger` with modules: `metering`, `org-pause`, `outbox`, `llm-sync`, `trial-activation`, `snapshot-limits`.
 - Key log fields: `sessionId`, `orgId`, `billableSeconds`, `credits`, `balance`, `enforcementReason`.
 - `getOutboxStats()` provides pending/failed/permanently-failed event counts for monitoring (`packages/services/src/billing/outbox.ts:getOutboxStats`).
+- **Alerting signals** (`alert: true` log field):
+  - Permanently failed outbox events — logged with `orgId`, `eventId`, `credits`, `retryCount`.
+  - Reconciliation drift exceeding `METERING_CONFIG.reconcileDriftAlertThreshold` — logged with `orgId`, `drift`, `previousBalance`, `newBalance`.
 
 ---
 
 ## 8. Acceptance Gates
 
-- [ ] Typecheck passes (`pnpm typecheck`)
+- [x] Typecheck passes (`pnpm typecheck`) — 22/22
 - [ ] Billing tests pass (Autumn client tests)
-- [ ] This spec is updated (file tree, data models, deep dives)
-- [ ] Idempotency keys follow the deterministic pattern
-- [ ] Shadow balance is only modified via `deductShadowBalance` or `addShadowBalance`
-- [ ] No Autumn API calls in session start/resume hot path
+- [x] This spec is updated (file tree, data models, deep dives)
+- [x] Idempotency keys follow the deterministic pattern
+- [x] Shadow balance is only modified via `deductShadowBalance`, `bulkDeductShadowBalance`, `addShadowBalance`, or `reconcileShadowBalance`
+- [x] No Autumn API calls in session start/resume hot path — gating uses local shadow balance; Autumn called only by outbox worker, reconciliation job, and billing API routes
+- [x] All billable admission paths go through `assertBillingGateForOrg` or `checkBillingGateForOrg`
+- [x] Concurrent session limits are atomically enforced via `pg_advisory_xact_lock` admission guard
+- [x] Exhausted/suspended enforcement uses pause/snapshot (resumable), not hard-terminate
 
 ---
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **Automation runs bypass billing gate** — the `automation_trigger` gate type exists in `checkBillingGate` but automations create sessions via the gateway HTTP route (`apps/gateway/src/api/proliferate/http/sessions.ts`), which has no billing check. Only the oRPC `createSessionHandler` enforces gating. — Expected fix: add billing gate to the gateway session creation path or have the worker call gating before dispatching.
-- [ ] **Snapshot quota functions have no callers** — `canCreateSnapshot`, `ensureSnapshotCapacity`, and `cleanupExpiredSnapshots` are exported but never invoked. Snapshot count and retention limits are unenforced. — Expected fix: wire into session pause/snapshot paths and add cleanup to billing worker.
+### Resolved in this PR
+
+- [x] **All billable admission paths are gated** — Gateway session creation, oRPC session creation, setup sessions (gateway + managed-prebuild), and runtime resume/cold-start all enforce the billing gate. Resume uses `session_resume` (state-only checks, no credit minimum).
+- [x] **Concurrent session limits are atomic** — `createWithAdmissionGuard` / `createSetupSessionWithAdmissionGuard` use `pg_advisory_xact_lock` to serialize per-org admission at insert time.
+- [x] **Enforcement is pause/snapshot-first (resumable)** — `enforceCreditsExhausted` calls `pauseSessionWithSnapshot()` per session: migration lock → snapshot → CAS update to `status: "paused"` with `pauseReason: "credit_limit"`. Provider instances are resolved internally via `getSandboxProvider()`.
+- [x] **Snapshot quota lifecycle is complete** — `ensureSnapshotCapacity` called with `deleteSnapshotFromProvider` in pause/snapshot handlers. `cleanupAllExpiredSnapshots` runs daily via `billing-snapshot-cleanup` BullMQ job at 01:00 UTC.
+- [x] **Nightly reconciliation is active** — `listBillableOrgsWithCustomerId()` enumerates orgs with `billingState IN ('active','trial','grace') AND autumnCustomerId IS NOT NULL`. Per-org errors are isolated. Drift exceeding `METERING_CONFIG.reconcileDriftAlertThreshold` (500 credits) emits `alert: true`.
+- [x] **Outbox permanent failures are alerted** — Permanently failed events log with `alert: true`, `orgId`, `eventId`, `credits`, and `retryCount`.
+
+### Open
+
 - [ ] **Billing token not wired into request authorization** — `validateBillingToken` has no callers. No gateway middleware or session creation path mints or validates billing tokens. — Expected fix: integrate into gateway or sandbox request auth.
-- [ ] **Billing enforcement policy/implementation mismatch** — spec policy is resumable pause/snapshot on `exhausted`/`suspended`, but `handleCreditsExhaustedV2` currently terminates sessions (`stopped`). — Expected fix: route enforcement through the lock-guarded pause/snapshot lifecycle path and retire termination-first behavior.
-- [x] **Nightly reconciliation with Autumn** — `reconcileShadowBalance()` is called nightly at 00:00 UTC via `billing-reconcile` BullMQ job. Org listing is stubbed pending merge with data-layer branch.
 - [ ] **Grace expiration check is polling-based** — `checkGraceExpirations()` runs every 60s, meaning grace can overrun by up to 60s. — Impact: minor, grace window is 5 minutes.
-- [ ] **Permanently failed outbox events have no alerting** — events that exhaust all 5 retries are marked `failed` but no alert is raised. — Expected fix: add monitoring/alerting on permanently failed events.
 - [ ] **LLM model allowlist is manually maintained** — `ALLOWED_LLM_MODELS` set in `types.ts` must be updated when adding models to the proxy. — Impact: new models will be rejected until added.
+- [ ] **`shouldTerminateSessions` field name is legacy** — `DeductResult` and `BulkDeductResult` in `shadow-balance.ts` still use `shouldTerminateSessions` as a field name. The actual enforcement behavior is pause/snapshot, not terminate. — Impact: naming-only; no behavioral issue.

@@ -186,6 +186,32 @@ export async function listBillableOrgIds(): Promise<string[]> {
 	return rows.map((r) => r.id);
 }
 
+/**
+ * List billable orgs that have an Autumn customer ID.
+ * Used by the nightly reconciliation job to sync shadow balances.
+ */
+export async function listBillableOrgsWithCustomerId(): Promise<
+	{ id: string; autumnCustomerId: string }[]
+> {
+	const db = getDb();
+	const rows = await db
+		.select({
+			id: organization.id,
+			autumnCustomerId: organization.autumnCustomerId,
+		})
+		.from(organization)
+		.where(
+			and(
+				inArray(organization.billingState, ["active", "trial", "grace"]),
+				sql`${organization.autumnCustomerId} IS NOT NULL`,
+			),
+		);
+	return rows.map((r) => ({
+		id: r.id,
+		autumnCustomerId: r.autumnCustomerId!,
+	}));
+}
+
 // ============================================
 // Per-Org LLM Spend Cursors
 // ============================================

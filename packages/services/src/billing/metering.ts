@@ -13,7 +13,7 @@ import {
 } from "@proliferate/shared/billing";
 import { eq, getDb, sessions } from "../db/client";
 import { getServicesLogger } from "../logger";
-import { handleCreditsExhaustedV2 } from "./org-pause";
+import { enforceCreditsExhausted } from "./org-pause";
 import { deductShadowBalance } from "./shadow-balance";
 import { tryActivatePlanAfterTrial } from "./trial-activation";
 
@@ -81,11 +81,11 @@ export async function runMeteringCycle(providers: Map<string, SandboxProvider>):
 			const isAlive = aliveStatus.get(session.sandboxId ?? "");
 
 			if (!isAlive && session.sandboxId) {
-				// Sandbox confirmed dead - bill final interval and mark stopped
-				await billFinalInterval(session, nowMs, providers);
+				// Sandbox confirmed dead - bill final interval and mark paused
+				await billFinalInterval(session, nowMs);
 			} else {
 				// Sandbox alive - bill regular interval
-				await billRegularInterval(session, nowMs, providers);
+				await billRegularInterval(session, nowMs);
 			}
 		} catch (err) {
 			logger.error({ err, sessionId: session.id }, "Error processing session");
@@ -188,11 +188,7 @@ async function checkSandboxesWithGrace(
 /**
  * Bill a regular interval for an active session.
  */
-async function billRegularInterval(
-	session: SessionForMetering,
-	nowMs: number,
-	providers: Map<string, SandboxProvider>,
-): Promise<void> {
+async function billRegularInterval(session: SessionForMetering, nowMs: number): Promise<void> {
 	const meteredThroughMs = session.meteredThroughAt
 		? session.meteredThroughAt.getTime()
 		: session.startedAt.getTime();
@@ -211,7 +207,7 @@ async function billRegularInterval(
 	// Deterministic idempotency key based on interval boundaries
 	const idempotencyKey = `compute:${session.id}:${meteredThroughMs}:${billedThroughMs}`;
 
-	await billComputeInterval(session, billableSeconds, billedThroughMs, idempotencyKey, providers);
+	await billComputeInterval(session, billableSeconds, billedThroughMs, idempotencyKey);
 }
 
 /**
@@ -220,11 +216,7 @@ async function billRegularInterval(
  * IMPORTANT: Bills through last_seen_alive_at, NOT now.
  * This prevents overbilling for time when sandbox was already dead.
  */
-async function billFinalInterval(
-	session: SessionForMetering,
-	_nowMs: number,
-	providers: Map<string, SandboxProvider>,
-): Promise<void> {
+async function billFinalInterval(session: SessionForMetering, _nowMs: number): Promise<void> {
 	const meteredThroughMs = session.meteredThroughAt
 		? session.meteredThroughAt.getTime()
 		: session.startedAt.getTime();
@@ -242,7 +234,7 @@ async function billFinalInterval(
 
 	if (remainingSeconds > 0) {
 		const idempotencyKey = `compute:${session.id}:${meteredThroughMs}:final`;
-		await billComputeInterval(session, remainingSeconds, billThroughMs, idempotencyKey, providers);
+		await billComputeInterval(session, remainingSeconds, billThroughMs, idempotencyKey);
 	}
 
 	// Mark session as paused (not stopped) — preserves resumability.
@@ -273,7 +265,6 @@ async function billComputeInterval(
 	billableSeconds: number,
 	billedThroughMs: number,
 	idempotencyKey: string,
-	providers: Map<string, SandboxProvider>,
 ): Promise<void> {
 	const db = getDb();
 	const credits = calculateComputeCredits(billableSeconds);
@@ -333,9 +324,9 @@ async function billComputeInterval(
 		}
 		log.info(
 			{ enforcementReason: result.enforcementReason },
-			"Balance exhausted - terminating sessions",
+			"Balance exhausted — pausing sessions",
 		);
-		await handleCreditsExhaustedV2(session.organizationId, providers);
+		await enforceCreditsExhausted(session.organizationId);
 	} else if (result.shouldBlockNewSessions) {
 		log.info({ enforcementReason: result.enforcementReason }, "Entering grace period");
 		// Grace period started - new sessions will be blocked but existing ones continue

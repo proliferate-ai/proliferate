@@ -12,6 +12,7 @@ import { createLogger } from "@proliferate/logger";
 import {
 	automations,
 	baseSnapshots,
+	billing,
 	integrations,
 	prebuilds,
 	sessions,
@@ -208,10 +209,10 @@ export async function createSession(
 		}
 	}
 
-	// Create session record via services
+	// Create session record via services (with atomic concurrent admission guard)
 	try {
 		const dbStartMs = Date.now();
-		await sessions.create({
+		const sessionInput = {
 			id: sessionId,
 			prebuildId,
 			organizationId,
@@ -230,7 +231,22 @@ export async function createSession(
 			automationId,
 			triggerId,
 			triggerEventId,
-		});
+		};
+
+		const planLimits = await billing.getOrgPlanLimits(organizationId);
+		if (planLimits) {
+			const { created } = await sessions.createWithAdmissionGuard(
+				sessionInput,
+				planLimits.maxConcurrentSessions,
+			);
+			if (!created) {
+				throw new Error(
+					`Concurrent session limit reached. Your plan allows ${planLimits.maxConcurrentSessions} concurrent session${planLimits.maxConcurrentSessions === 1 ? "" : "s"}.`,
+				);
+			}
+		} else {
+			await sessions.create(sessionInput);
+		}
 		log.debug({ durationMs: Date.now() - dbStartMs }, "session_creator.create_session.db.create");
 	} catch (err) {
 		log.error({ err, durationMs: Date.now() - startMs }, "Failed to create session");

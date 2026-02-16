@@ -378,6 +378,9 @@ export const METERING_CONFIG = {
 
 	/** LLM sync lookback window (ms) */
 	llmSyncLookbackMs: 5 * 60 * 1000,
+
+	/** Absolute drift threshold (credits) that triggers an alert during reconciliation */
+	reconcileDriftAlertThreshold: 500,
 } as const;
 
 // ============================================

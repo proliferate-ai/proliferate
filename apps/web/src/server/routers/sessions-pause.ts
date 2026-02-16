@@ -55,7 +55,11 @@ export async function pauseSessionHandler(
 	const plan: BillingPlan = org?.billingPlan === "pro" ? "pro" : "dev";
 	const provider = getSandboxProvider(session.sandboxProvider as SandboxProviderType);
 
-	const capacity = await billing.ensureSnapshotCapacity(orgId, plan);
+	const capacity = await billing.ensureSnapshotCapacity(
+		orgId,
+		plan,
+		billing.deleteSnapshotFromProvider,
+	);
 
 	let snapshotId: string | null = null;
 

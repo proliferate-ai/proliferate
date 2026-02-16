@@ -44,7 +44,11 @@ export async function snapshotSessionHandler(
 	const org = await orgs.getBillingInfoV2(orgId);
 	const plan: BillingPlan = org?.billingPlan === "pro" ? "pro" : "dev";
 
-	const capacity = await billing.ensureSnapshotCapacity(orgId, plan);
+	const capacity = await billing.ensureSnapshotCapacity(
+		orgId,
+		plan,
+		billing.deleteSnapshotFromProvider,
+	);
 	if (!capacity.allowed) {
 		throw new ORPCError("CONFLICT", {
 			message: "Snapshot quota exceeded. Delete an existing snapshot and try again.",

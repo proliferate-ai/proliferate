@@ -150,7 +150,12 @@ export function checkBillingGate(
 	}
 
 	// Step 3: Check shadow balance for active/trial states
-	if (billingState === "active" || billingState === "trial") {
+	// Resume/connect operations skip the credit minimum — the session already exists,
+	// so we only need state-level checks (Steps 1-2) to block truly denied orgs.
+	if (
+		(operation === "session_start" || operation === "automation_trigger") &&
+		(billingState === "active" || billingState === "trial")
+	) {
 		if (shadowBalance < minCreditsRequired) {
 			return {
 				allowed: false,

@@ -21,6 +21,7 @@ export const QUEUE_NAMES = {
 	BILLING_RECONCILE: "billing-reconcile",
 	BILLING_LLM_SYNC_DISPATCH: "billing-llm-sync-dispatch",
 	BILLING_LLM_SYNC_ORG: "billing-llm-sync-org",
+	BILLING_SNAPSHOT_CLEANUP: "billing-snapshot-cleanup",
 } as const;
 
 // ============================================
@@ -143,6 +144,9 @@ export type BillingLLMSyncDispatchJob = Record<string, never>;
 export interface BillingLLMSyncOrgJob {
 	orgId: string;
 }
+
+/** Daily snapshot retention cleanup job — cron at 01:00 UTC, no data needed. */
+export type BillingSnapshotCleanupJob = Record<string, never>;
 
 // ============================================
 // Connection Options
@@ -754,6 +758,15 @@ export function createBillingLLMSyncOrgQueue(
 	});
 }
 
+export function createBillingSnapshotCleanupQueue(
+	connection?: ConnectionOptions,
+): Queue<BillingSnapshotCleanupJob> {
+	return new Queue<BillingSnapshotCleanupJob>(QUEUE_NAMES.BILLING_SNAPSHOT_CLEANUP, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: billingRepeatableJobOptions,
+	});
+}
+
 // ============================================
 // Billing Worker Factories
 // ============================================
@@ -815,6 +828,16 @@ export function createBillingLLMSyncOrgWorker(
 	return new Worker<BillingLLMSyncOrgJob>(QUEUE_NAMES.BILLING_LLM_SYNC_ORG, processor, {
 		connection: connection ?? getConnectionOptions(),
 		concurrency: 5,
+	});
+}
+
+export function createBillingSnapshotCleanupWorker(
+	processor: (job: Job<BillingSnapshotCleanupJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<BillingSnapshotCleanupJob> {
+	return new Worker<BillingSnapshotCleanupJob>(QUEUE_NAMES.BILLING_SNAPSHOT_CLEANUP, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 1,
 	});
 }
 

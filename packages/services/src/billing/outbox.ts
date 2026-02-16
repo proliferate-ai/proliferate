@@ -5,7 +5,6 @@
  * This worker picks up events that failed to post to Autumn and retries them.
  */
 
-import type { SandboxProvider } from "@proliferate/shared";
 import {
 	AUTUMN_FEATURES,
 	type BillingEventType,
@@ -14,7 +13,7 @@ import {
 } from "@proliferate/shared/billing";
 import { and, asc, billingEvents, eq, getDb, inArray, lt, organization } from "../db/client";
 import { getServicesLogger } from "../logger";
-import { handleCreditsExhaustedV2 } from "./org-pause";
+import { enforceCreditsExhausted } from "./org-pause";
 
 // ============================================
 // Types
@@ -38,13 +37,9 @@ interface PendingBillingEvent {
  * Process pending billing events that failed to post to Autumn.
  * Should be called every 60 seconds by a worker.
  *
- * @param providers - Map of provider type to provider instance
  * @param batchSize - Max events to process per cycle (default: 100)
  */
-export async function processOutbox(
-	providers?: Map<string, SandboxProvider>,
-	batchSize = 100,
-): Promise<void> {
+export async function processOutbox(batchSize = 100): Promise<void> {
 	const logger = getServicesLogger().child({ module: "outbox" });
 	const db = getDb();
 
@@ -75,17 +70,14 @@ export async function processOutbox(
 	logger.info({ eventCount: events.length }, "Processing pending events");
 
 	for (const event of events) {
-		await processEvent(event, providers);
+		await processEvent(event);
 	}
 }
 
 /**
  * Process a single pending event.
  */
-async function processEvent(
-	event: PendingBillingEvent,
-	providers?: Map<string, SandboxProvider>,
-): Promise<void> {
+async function processEvent(event: PendingBillingEvent): Promise<void> {
 	const logger = getServicesLogger().child({
 		module: "outbox",
 		eventId: event.id,
@@ -124,7 +116,7 @@ async function processEvent(
 					graceExpiresAt: null,
 				})
 				.where(eq(organization.id, event.organizationId));
-			await handleCreditsExhaustedV2(event.organizationId, providers);
+			await enforceCreditsExhausted(event.organizationId);
 		}
 	} catch (err) {
 		// Calculate exponential backoff
@@ -147,7 +139,10 @@ async function processEvent(
 			.where(eq(billingEvents.id, event.id));
 
 		if (status === "failed") {
-			logger.error({ err, retryCount }, "Event permanently failed");
+			logger.error(
+				{ err, retryCount, credits: Number(event.credits), alert: true },
+				"Event permanently failed",
+			);
 		} else {
 			logger.warn({ err, retryCount }, "Event failed, will retry");
 		}

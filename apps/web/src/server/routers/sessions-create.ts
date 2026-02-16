@@ -84,11 +84,8 @@ async function createScratchSession(input: {
 	const doUrl = getSessionGatewayUrl(sessionId);
 	reqLog.info({ sessionType }, "Creating scratch session");
 
-	// Re-check billing right before insert (race protection)
-	await billing.assertBillingGateForOrg(orgId, "session_start");
-
 	try {
-		await sessions.createSessionRecord({
+		await createSessionWithAdmission(orgId, {
 			id: sessionId,
 			prebuildId: null,
 			organizationId: orgId,
@@ -183,13 +180,10 @@ async function createPrebuildSession(input: {
 	const doUrl = getSessionGatewayUrl(sessionId);
 	reqLog.info("Session creation started");
 
-	// Re-check billing right before insert (race protection)
-	await billing.assertBillingGateForOrg(orgId, "session_start");
-
 	// Create session record and return immediately.
 	// Sandbox provisioning is handled by the gateway when the client connects.
 	try {
-		await sessions.createSessionRecord({
+		await createSessionWithAdmission(orgId, {
 			id: sessionId,
 			prebuildId,
 			organizationId: orgId,
@@ -216,4 +210,28 @@ async function createPrebuildSession(input: {
 		sandboxId: null,
 		warning: null,
 	};
+}
+
+/**
+ * Create a session with atomic concurrent admission guard when billing is enabled.
+ * Falls back to plain insert when billing is disabled.
+ */
+async function createSessionWithAdmission(
+	orgId: string,
+	input: sessions.DbCreateSessionInput,
+): Promise<void> {
+	const planLimits = await billing.getOrgPlanLimits(orgId);
+	if (planLimits) {
+		const { created } = await sessions.createWithAdmissionGuard(
+			input,
+			planLimits.maxConcurrentSessions,
+		);
+		if (!created) {
+			throw new ORPCError("FORBIDDEN", {
+				message: `Concurrent session limit reached. Your plan allows ${planLimits.maxConcurrentSessions} concurrent session${planLimits.maxConcurrentSessions === 1 ? "" : "s"}.`,
+			});
+		}
+	} else {
+		await sessions.createSessionRecord(input);
+	}
 }

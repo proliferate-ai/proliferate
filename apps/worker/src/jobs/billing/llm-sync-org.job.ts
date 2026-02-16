@@ -13,7 +13,6 @@ import type { Logger } from "@proliferate/logger";
 import type { BillingLLMSyncOrgJob, Job } from "@proliferate/queue";
 import { billing } from "@proliferate/services";
 import { calculateLLMCredits } from "@proliferate/shared/billing";
-import { getProvidersMap } from "./providers";
 
 /** Default lookback window for first-run orgs with no cursor (5 minutes). */
 const LLM_SYNC_DEFAULT_LOOKBACK_MS = 5 * 60 * 1000;
@@ -111,10 +110,9 @@ export async function processLLMSyncOrgJob(
 
 		log.info(
 			{ enforcementReason: result.enforcementReason },
-			"Balance exhausted — terminating sessions",
+			"Balance exhausted — pausing sessions",
 		);
-		const providers = await getProvidersMap();
-		await billing.handleCreditsExhaustedV2(orgId, providers);
+		await billing.enforceCreditsExhausted(orgId);
 	} else if (result.shouldBlockNewSessions) {
 		log.info({ enforcementReason: result.enforcementReason }, "Entering grace period");
 	}

@@ -838,7 +838,7 @@ export class SessionHub {
 
 		this.idleCheckTimer = setInterval(() => {
 			this.checkIdleSnapshot();
-		}, 30_000);
+		}, 10_000);
 	}
 
 	private stopIdleMonitor(): void {
@@ -850,6 +850,18 @@ export class SessionHub {
 
 	private checkIdleSnapshot(): void {
 		if (!this.shouldIdleSnapshot()) {
+			const idleMs = Date.now() - this.lastActivityAt;
+			const graceMs = this.getIdleGraceMs();
+			this.logger.debug(
+				{
+					clients: this.clients.size,
+					proxies: this.proxyConnections.size,
+					idleMs,
+					graceMs,
+					remainingMs: Math.max(0, graceMs - idleMs),
+				},
+				"Idle check: not ready",
+			);
 			return;
 		}
 

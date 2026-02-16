@@ -79,4 +79,15 @@ export class HubManager {
 	getActiveSessionIds(): string[] {
 		return Array.from(this.hubs.keys());
 	}
+
+	/**
+	 * Release all owner/runtime leases. Called on graceful shutdown
+	 * so a restarted instance can immediately re-acquire sessions.
+	 */
+	releaseAllLeases(): void {
+		for (const [sessionId, hub] of this.hubs) {
+			hub.stopMigrationMonitor();
+			this.hubs.delete(sessionId);
+		}
+	}
 }

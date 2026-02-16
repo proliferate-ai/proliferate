@@ -137,6 +137,67 @@ export async function create(input: CreateSessionInput): Promise<SessionRow> {
 }
 
 /**
+ * Atomic concurrent admission guard for session creation.
+ *
+ * Uses pg_advisory_xact_lock to serialize admission per org so that
+ * parallel creates cannot exceed the concurrent session limit (TOCTOU-safe).
+ *
+ * Lock scope: transaction-scoped advisory lock keyed on org ID.
+ * Released automatically when the transaction commits or rolls back.
+ */
+export async function createWithAdmissionGuard(
+	input: CreateSessionInput,
+	maxConcurrent: number,
+): Promise<{ created: boolean }> {
+	const db = getDb();
+	return await db.transaction(async (tx) => {
+		// Serialize concurrent admission per org
+		await tx.execute(
+			sql`SELECT pg_advisory_xact_lock(hashtext(${input.organizationId} || ':session_admit'))`,
+		);
+
+		// Count active sessions under the lock
+		const [result] = await tx
+			.select({ count: sql<number>`count(*)` })
+			.from(sessions)
+			.where(
+				and(
+					eq(sessions.organizationId, input.organizationId),
+					sql`${sessions.status} IN ('starting', 'pending', 'running')`,
+				),
+			);
+
+		if (Number(result?.count ?? 0) >= maxConcurrent) {
+			return { created: false };
+		}
+
+		// Insert session within the same transaction
+		await tx.insert(sessions).values({
+			id: input.id,
+			prebuildId: input.prebuildId,
+			organizationId: input.organizationId,
+			sessionType: input.sessionType,
+			status: input.status,
+			sandboxProvider: input.sandboxProvider,
+			createdBy: input.createdBy ?? null,
+			snapshotId: input.snapshotId ?? null,
+			initialPrompt: input.initialPrompt,
+			title: input.title,
+			clientType: input.clientType,
+			clientMetadata: input.clientMetadata,
+			agentConfig: input.agentConfig,
+			localPathHash: input.localPathHash,
+			origin: input.origin,
+			automationId: input.automationId ?? null,
+			triggerId: input.triggerId ?? null,
+			triggerEventId: input.triggerEventId ?? null,
+		});
+
+		return { created: true };
+	});
+}
+
+/**
  * Update a session.
  */
 export async function update(id: string, input: UpdateSessionInput): Promise<void> {
@@ -287,6 +348,48 @@ export async function createSetupSession(input: CreateSetupSessionInput): Promis
 		status: "starting",
 		initialPrompt: input.initialPrompt,
 		source: "managed-prebuild",
+	});
+}
+
+/**
+ * Atomic concurrent admission guard for setup session creation.
+ * Same advisory lock pattern as createWithAdmissionGuard.
+ */
+export async function createSetupSessionWithAdmissionGuard(
+	input: CreateSetupSessionInput,
+	maxConcurrent: number,
+): Promise<{ created: boolean }> {
+	const db = getDb();
+	return await db.transaction(async (tx) => {
+		await tx.execute(
+			sql`SELECT pg_advisory_xact_lock(hashtext(${input.organizationId} || ':session_admit'))`,
+		);
+
+		const [result] = await tx
+			.select({ count: sql<number>`count(*)` })
+			.from(sessions)
+			.where(
+				and(
+					eq(sessions.organizationId, input.organizationId),
+					sql`${sessions.status} IN ('starting', 'pending', 'running')`,
+				),
+			);
+
+		if (Number(result?.count ?? 0) >= maxConcurrent) {
+			return { created: false };
+		}
+
+		await tx.insert(sessions).values({
+			id: input.id,
+			prebuildId: input.prebuildId,
+			organizationId: input.organizationId,
+			sessionType: "setup",
+			status: "starting",
+			initialPrompt: input.initialPrompt,
+			source: "managed-prebuild",
+		});
+
+		return { created: true };
 	});
 }
 

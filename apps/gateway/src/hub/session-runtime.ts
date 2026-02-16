@@ -6,7 +6,7 @@
  */
 
 import { type Logger, createLogger } from "@proliferate/logger";
-import { baseSnapshots, sessions } from "@proliferate/services";
+import { baseSnapshots, billing, sessions } from "@proliferate/services";
 import type {
 	AutoStartOutputEntry,
 	PrebuildServiceCommand,
@@ -290,6 +290,20 @@ export class SessionRuntime {
 			if (options?.reason === "auto_reconnect" && this.context.session.status === "paused") {
 				this.log("Auto-reconnect aborted: session is paused");
 				return;
+			}
+
+			// Billing gate: deny resume/cold-start when org is blocked or exhausted.
+			// Uses "session_resume" which skips credit minimum but enforces state-level checks.
+			// Already-running sessions skip this entirely (ensureRuntimeReady returns early).
+			const orgId = this.context.session.organization_id;
+			if (orgId) {
+				const gateResult = await billing.checkBillingGateForOrg(orgId, "session_resume");
+				if (!gateResult.allowed) {
+					const msg = gateResult.message ?? "Billing check failed";
+					this.log("Billing gate denied resume", { orgId, error: msg });
+					this.onStatus("error", msg);
+					throw new Error(`Billing gate denied: ${msg}`);
+				}
 			}
 
 			const hasSandbox = Boolean(this.context.session.sandbox_id);

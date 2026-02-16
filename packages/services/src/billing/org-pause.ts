@@ -141,11 +141,11 @@ export async function canOrgStartSession(
 }
 
 // ============================================
-// V2 Enforcement (Lock-Safe Pause/Snapshot)
+// Enforcement (Lock-Safe Pause/Snapshot)
 // ============================================
 
 /**
- * Handle credits exhausted for an organization (V2).
+ * Enforce credits-exhausted state for an organization.
  *
  * Uses lock-safe snapshot/pause transitions instead of hard termination.
  * Each session is individually locked, snapshot'd, and CAS-updated to
@@ -153,10 +153,9 @@ export async function canOrgStartSession(
  *
  * Sessions remain resumable when credits are replenished.
  */
-export async function handleCreditsExhaustedV2(
+export async function enforceCreditsExhausted(
 	orgId: string,
-	_providers?: Map<string, unknown>,
-): Promise<{ terminated: number; failed: number }> {
+): Promise<{ paused: number; failed: number }> {
 	const db = getDb();
 
 	// Get all running sessions
@@ -172,10 +171,10 @@ export async function handleCreditsExhaustedV2(
 	const logger = getServicesLogger().child({ module: "org-pause", orgId });
 
 	if (!sessionRows.length) {
-		return { terminated: 0, failed: 0 };
+		return { paused: 0, failed: 0 };
 	}
 
-	let terminated = 0;
+	let paused = 0;
 	let failed = 0;
 
 	for (const session of sessionRows) {
@@ -186,7 +185,7 @@ export async function handleCreditsExhaustedV2(
 				session.sandboxProvider,
 				"credit_limit",
 			);
-			terminated++;
+			paused++;
 		} catch (err) {
 			logger.error({ err, sessionId: session.id }, "Failed to pause session for enforcement");
 			failed++;
@@ -196,57 +195,8 @@ export async function handleCreditsExhaustedV2(
 	if (failed > 0) {
 		logger.warn({ failed }, "Sessions left running due to pause failures");
 	}
-	logger.info({ terminated, failed, reason: "credits_exhausted" }, "Enforcement complete");
-	return { terminated, failed };
-}
-
-/**
- * Terminate all sessions for an org.
- * Used when billing state transitions to exhausted or suspended.
- *
- * Uses lock-safe pause/snapshot transitions to preserve resumability.
- */
-export async function terminateAllOrgSessions(
-	orgId: string,
-	reason: "credit_limit" | "suspended",
-	_providers?: Map<string, unknown>,
-): Promise<{ terminated: number; failed: number }> {
-	const db = getDb();
-
-	const sessionRows = await db.query.sessions.findMany({
-		where: and(eq(sessions.organizationId, orgId), eq(sessions.status, "running")),
-		columns: {
-			id: true,
-			sandboxId: true,
-			sandboxProvider: true,
-		},
-	});
-
-	const logger = getServicesLogger().child({ module: "org-pause", orgId });
-
-	let terminated = 0;
-	let failed = 0;
-
-	for (const session of sessionRows) {
-		try {
-			await pauseSessionWithSnapshot(
-				session.id,
-				session.sandboxId,
-				session.sandboxProvider,
-				reason,
-			);
-			terminated++;
-		} catch (err) {
-			logger.error({ err, sessionId: session.id }, "Failed to pause session");
-			failed++;
-		}
-	}
-
-	if (failed > 0) {
-		logger.warn({ failed }, "Sessions left running due to pause failures");
-	}
-	logger.info({ terminated, failed, reason }, "Terminate all sessions complete");
-	return { terminated, failed };
+	logger.info({ paused, failed, reason: "credits_exhausted" }, "Enforcement complete");
+	return { paused, failed };
 }
 
 // ============================================

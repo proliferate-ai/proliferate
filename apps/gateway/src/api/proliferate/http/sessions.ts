@@ -399,6 +399,9 @@ async function startSetupSession(
 	organizationId: string,
 	hubManager: HubManager,
 ): Promise<void> {
+	// Billing gate — setup sessions are billable like regular sessions
+	await billing.assertBillingGateForOrg(organizationId, "session_start");
+
 	// Get repo names for prompt
 	const prebuildRepos = await prebuilds.getPrebuildReposWithDetails(prebuildId);
 
@@ -408,15 +411,31 @@ async function startSetupSession(
 	const repoNamesStr = repoNames.join(", ") || "workspace";
 	const prompt = `Set up ${repoNamesStr} for development. Get everything running and working.`;
 
-	// Create setup session
+	// Create setup session (with atomic concurrent admission guard)
 	const sessionId = crypto.randomUUID();
-
-	await sessions.createSetupSession({
+	const setupInput = {
 		id: sessionId,
 		prebuildId,
 		organizationId,
 		initialPrompt: prompt,
-	});
+	};
+
+	const planLimits = await billing.getOrgPlanLimits(organizationId);
+	if (planLimits) {
+		const { created } = await sessions.createSetupSessionWithAdmissionGuard(
+			setupInput,
+			planLimits.maxConcurrentSessions,
+		);
+		if (!created) {
+			logger.info(
+				{ organizationId, maxConcurrent: planLimits.maxConcurrentSessions },
+				"Setup session skipped: concurrent limit reached",
+			);
+			return;
+		}
+	} else {
+		await sessions.createSetupSession(setupInput);
+	}
 
 	// Use HubManager to get/create hub and post prompt directly (fire-and-forget)
 	hubManager

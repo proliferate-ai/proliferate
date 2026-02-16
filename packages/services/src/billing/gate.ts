@@ -152,3 +152,41 @@ export async function assertBillingGateForOrg(
 		);
 	}
 }
+
+/**
+ * Get the org's plan limits for concurrent session admission.
+ *
+ * Returns null when billing is disabled (no limit enforcement needed).
+ * Used by session creation flows to pass limits to the atomic admission guard.
+ */
+export async function getOrgPlanLimits(
+	orgId: string,
+): Promise<{ maxConcurrentSessions: number } | null> {
+	if (!env.NEXT_PUBLIC_BILLING_ENABLED) {
+		return null;
+	}
+
+	const log = getServicesLogger().child({ module: "billing-gate", orgId });
+
+	let org: NonNullable<Awaited<ReturnType<typeof getBillingInfoV2>>>;
+	try {
+		const result = await getBillingInfoV2(orgId);
+		if (!result) {
+			log.error("FAIL-CLOSED: org not found for plan limits");
+			// Fail-closed: enforce most restrictive default
+			return { maxConcurrentSessions: 1 };
+		}
+		org = result;
+	} catch (err) {
+		log.error({ err }, "FAIL-CLOSED: could not load org for plan limits");
+		return { maxConcurrentSessions: 1 };
+	}
+
+	const planId = resolvePlan(org.billingPlan);
+	if (planId && PLAN_CONFIGS[planId]) {
+		return { maxConcurrentSessions: PLAN_CONFIGS[planId].maxConcurrentSessions };
+	}
+
+	// No plan configured — use conservative default
+	return { maxConcurrentSessions: 1 };
+}

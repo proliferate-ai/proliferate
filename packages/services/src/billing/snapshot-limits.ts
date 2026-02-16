@@ -211,6 +211,76 @@ export async function cleanupExpiredSnapshots(
 	return { deletedCount };
 }
 
+/**
+ * Clean up ALL expired snapshots across all orgs.
+ *
+ * Uses the global SNAPSHOT_RETENTION_DAYS cap (the binding constraint in practice,
+ * since getRetentionDays returns min(planRetention, globalCap)).
+ *
+ * Designed for background worker use — bounded, idempotent, safe to run daily.
+ */
+export async function cleanupAllExpiredSnapshots(): Promise<{ deletedCount: number }> {
+	const globalCap = env.SNAPSHOT_RETENTION_DAYS;
+	const cutoffDate = new Date();
+	cutoffDate.setDate(cutoffDate.getDate() - globalCap);
+
+	const db = getDb();
+	const expired = (await db.query.sessions.findMany({
+		where: and(isNotNull(sessions.snapshotId), lt(sessions.pausedAt, cutoffDate)),
+		columns: {
+			id: true,
+			snapshotId: true,
+			sandboxProvider: true,
+			pausedAt: true,
+		},
+		orderBy: [asc(sessions.pausedAt)],
+		limit: 500, // Bound work per cycle
+	})) as SessionWithSnapshot[];
+
+	if (!expired.length) {
+		return { deletedCount: 0 };
+	}
+
+	const logger = getServicesLogger().child({ module: "snapshot-cleanup" });
+	let deletedCount = 0;
+
+	for (const session of expired) {
+		if (!session.snapshotId) continue;
+		const result = await evictSnapshot(session, deleteSnapshotFromProvider, logger);
+		if (result) deletedCount++;
+	}
+
+	if (deletedCount > 0) {
+		logger.info({ deletedCount, retentionDays: globalCap }, "Global snapshot cleanup complete");
+	}
+
+	return { deletedCount };
+}
+
+// ============================================
+// Provider-Side Cleanup
+// ============================================
+
+/**
+ * Best-effort provider-side snapshot deletion.
+ *
+ * Currently a no-op: sandbox providers (Modal, E2B) do not expose snapshot
+ * delete APIs. Provider-side resources auto-expire:
+ * - Modal memory snapshots: 7-day TTL
+ * - Modal filesystem snapshots: managed by Modal platform
+ * - E2B: managed by E2B platform
+ *
+ * Resolving successfully allows eviction to proceed and clear the DB ref.
+ * When providers add delete APIs, wire them here.
+ */
+export async function deleteSnapshotFromProvider(
+	_provider: string,
+	_snapshotId: string,
+): Promise<void> {
+	// No-op — provider-side resources auto-expire.
+	// DB ref will be cleared by the caller (evictSnapshot).
+}
+
 // ============================================
 // Internal Helpers
 // ============================================

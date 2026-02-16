@@ -32,11 +32,21 @@ async function start(): Promise<void> {
 	setLockRedisClient(redisClient);
 
 	// Create and start server
-	const { server } = createServer({ env, logger });
+	const { server, hubManager } = createServer({ env, logger });
 
 	server.listen(env.port, () => {
 		logger.info({ port: env.port }, "Gateway listening");
 	});
+
+	// Graceful shutdown: release all owner/runtime leases so a
+	// restarted instance can immediately re-acquire sessions.
+	const shutdown = () => {
+		logger.info("Shutting down — releasing leases");
+		hubManager.releaseAllLeases();
+		server.close();
+	};
+	process.once("SIGTERM", shutdown);
+	process.once("SIGINT", shutdown);
 }
 
 start().catch((err) => {

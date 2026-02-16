@@ -10,6 +10,8 @@
  */
 
 import type { SyncClient } from "@proliferate/gateway-clients";
+import { BillingGateError } from "@proliferate/shared/billing";
+import { assertBillingGateForOrg, getOrgPlanLimits } from "./billing/gate";
 import { getServicesLogger } from "./logger";
 import * as prebuildsDb from "./prebuilds/db";
 import * as sessionsDb from "./sessions/db";
@@ -148,16 +150,46 @@ async function createAndStartSetupSession(
 	repoNames: string[],
 	gateway: SyncClient,
 ): Promise<string> {
+	// Billing gate — setup sessions are billable; on denial, skip setup silently
+	// (the caller's main session was already created)
+	try {
+		await assertBillingGateForOrg(organizationId, "session_start");
+	} catch (err) {
+		if (err instanceof BillingGateError) {
+			getServicesLogger()
+				.child({ module: "managed-prebuild", prebuildId, organizationId })
+				.info({ code: err.code }, "Setup session skipped: billing gate denied");
+			return "";
+		}
+		throw err;
+	}
+
 	const sessionId = crypto.randomUUID();
 	const repoNamesStr = repoNames.join(", ") || "workspace";
 	const prompt = `Set up ${repoNamesStr} for development. Get everything running and working.`;
-
-	await sessionsDb.createSetupSession({
+	const setupInput = {
 		id: sessionId,
 		prebuildId,
 		organizationId,
 		initialPrompt: prompt,
-	});
+	};
+
+	// Atomic concurrent admission guard
+	const planLimits = await getOrgPlanLimits(organizationId);
+	if (planLimits) {
+		const { created } = await sessionsDb.createSetupSessionWithAdmissionGuard(
+			setupInput,
+			planLimits.maxConcurrentSessions,
+		);
+		if (!created) {
+			getServicesLogger()
+				.child({ module: "managed-prebuild", prebuildId, organizationId })
+				.info("Setup session skipped: concurrent limit reached");
+			return "";
+		}
+	} else {
+		await sessionsDb.createSetupSession(setupInput);
+	}
 
 	// Post initial prompt to gateway to kick off setup (fire-and-forget)
 	gateway

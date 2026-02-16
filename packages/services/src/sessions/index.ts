@@ -41,6 +41,8 @@ export {
 	deleteById,
 	findByIdInternal,
 	createSetupSession,
+	createSetupSessionWithAdmissionGuard,
+	createWithAdmissionGuard,
 	updateWhereSandboxIdMatches,
 	listRunningSessionIds,
 } from "./db";
