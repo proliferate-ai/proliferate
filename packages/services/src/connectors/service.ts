@@ -84,6 +84,18 @@ export async function getConnector(
 }
 
 /**
+ * Get stored tool_risk_overrides for a connector (used for drift detection).
+ * Returns null if the connector doesn't exist or has no overrides.
+ */
+export async function getToolRiskOverrides(
+	id: string,
+	organizationId: string,
+): Promise<Record<string, { mode?: string; hash?: string }> | null> {
+	const row = await db.findByIdAndOrg(id, organizationId);
+	return (row?.toolRiskOverrides as Record<string, { mode?: string; hash?: string }>) ?? null;
+}
+
+/**
  * Create a new org connector.
  */
 export async function createConnector(input: CreateConnectorInput): Promise<ConnectorConfig> {

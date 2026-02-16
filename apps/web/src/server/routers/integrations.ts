@@ -960,9 +960,41 @@ export const integrationsRouter = {
 					};
 				}
 
+				// Convert Zod-based ActionDefinitions to the oRPC response format
+				const { zodToJsonSchema } = await import("@proliferate/providers/helpers/schema");
+				const tools = result.actions.map((a) => {
+					const schema = zodToJsonSchema(a.params);
+					const properties = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
+					const requiredSet = new Set(
+						Array.isArray(schema.required) ? (schema.required as string[]) : [],
+					);
+					return {
+						name: a.id,
+						description: a.description,
+						riskLevel: a.riskLevel,
+						params: Object.entries(properties).map(([name, prop]) => {
+							const t = prop.type as string;
+							const type: "string" | "number" | "boolean" | "object" =
+								t === "string"
+									? "string"
+									: t === "number"
+										? "number"
+										: t === "boolean"
+											? "boolean"
+											: "object";
+							return {
+								name,
+								type,
+								required: requiredSet.has(name),
+								description: (prop.description as string) ?? "",
+							};
+						}),
+					};
+				});
+
 				return {
 					ok: true,
-					tools: result.actions,
+					tools,
 					error: null,
 					diagnostics: null,
 				};

@@ -16,10 +16,10 @@
 
 import { Client } from "@modelcontextprotocol/sdk/client";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { computeDefinitionHash } from "@proliferate/providers/helpers/schema";
+import type { ActionDefinition } from "@proliferate/providers";
+import { computeDefinitionHash, jsonSchemaToZod } from "@proliferate/providers/helpers/schema";
 import type { ConnectorConfig } from "@proliferate/shared";
 import { getServicesLogger } from "../../logger";
-import type { ActionDefinition, ActionParam } from "../adapters/types";
 import { deriveRiskLevel } from "./risk";
 import type { ConnectorCallResult, ConnectorToolList, ConnectorToolListWithDrift } from "./types";
 
@@ -37,34 +37,6 @@ interface McpContentBlock {
 interface McpCallToolResultShape {
 	content?: McpContentBlock[];
 	structuredContent?: Record<string, unknown>;
-}
-
-// ============================================
-// Schema conversion helpers
-// ============================================
-
-/** Map JSON Schema type to ActionParam type. */
-function mapJsonSchemaType(schema: Record<string, unknown>): ActionParam["type"] {
-	const t = schema.type;
-	if (t === "string") return "string";
-	if (t === "number" || t === "integer") return "number";
-	if (t === "boolean") return "boolean";
-	return "object";
-}
-
-/** Convert MCP tool inputSchema (JSON Schema) to ActionParam[]. */
-export function schemaToParams(
-	inputSchema: { properties?: Record<string, object>; required?: string[] } | undefined,
-): ActionParam[] {
-	if (!inputSchema?.properties) return [];
-	const required = new Set(inputSchema.required ?? []);
-
-	return Object.entries(inputSchema.properties).map(([name, prop]) => ({
-		name,
-		type: mapJsonSchemaType(prop as Record<string, unknown>),
-		required: required.has(name),
-		description: ((prop as Record<string, unknown>).description as string) ?? "",
-	}));
 }
 
 /**
@@ -135,9 +107,53 @@ function isSessionInvalidation(err: unknown): boolean {
 // Public API
 // ============================================
 
+/** Raw MCP tool as returned by the protocol (before conversion). */
+export interface McpRawTool {
+	name: string;
+	description?: string;
+	inputSchema?: Record<string, unknown>;
+	annotations?: Record<string, unknown>;
+}
+
+/**
+ * List raw MCP tools from a remote connector.
+ * Returns the protocol-level tool objects without converting to ActionDefinition.
+ * Used by McpConnectorActionSource to build Zod-based ActionDefinitions.
+ */
+export async function listConnectorToolsRaw(
+	config: ConnectorConfig,
+	resolvedSecret: string,
+): Promise<McpRawTool[]> {
+	const log = logger().child({ connectorId: config.id, connectorName: config.name });
+	const transport = createTransport(config, resolvedSecret);
+	const client = new Client({ name: "proliferate-gateway", version: "1.0.0" });
+
+	try {
+		await client.connect(transport);
+
+		const result = await Promise.race([
+			client.listTools(),
+			new Promise<never>((_, reject) =>
+				setTimeout(() => reject(new Error("tools/list timeout")), TOOL_LIST_TIMEOUT_MS),
+			),
+		]);
+
+		const tools = (result.tools ?? []) as McpRawTool[];
+		log.info({ toolCount: tools.length }, "Listed raw connector tools");
+		return tools;
+	} finally {
+		try {
+			await client.close();
+		} catch {
+			// best-effort close
+		}
+	}
+}
+
 /**
  * List tools from a remote MCP connector (throwing variant).
  * Connects, initializes, calls tools/list, then closes.
+ * Returns Zod-based ActionDefinitions.
  * Throws on error — caller decides how to handle failures.
  */
 export async function listConnectorToolsOrThrow(
@@ -159,10 +175,10 @@ export async function listConnectorToolsOrThrow(
 		]);
 
 		const toolActions: ActionDefinition[] = (result.tools ?? []).map((tool) => ({
-			name: tool.name,
+			id: tool.name,
 			description: tool.description ?? "",
 			riskLevel: deriveRiskLevel(tool.name, tool.annotations, config.riskPolicy),
-			params: schemaToParams(tool.inputSchema),
+			params: jsonSchemaToZod((tool.inputSchema as Record<string, unknown>) ?? { type: "object" }),
 		}));
 
 		log.info({ toolCount: toolActions.length }, "Listed connector tools");
@@ -260,7 +276,7 @@ export async function callConnectorTool(
  * Compute drift status for connector tools by comparing current definition
  * hashes against stored hashes in tool_risk_overrides.
  *
- * @param tools - Current tool list from the MCP server
+ * @param tools - Current tool list from the MCP server (Zod-based ActionDefinitions)
  * @param storedOverrides - Persisted tool_risk_overrides from org_connectors row
  * @returns Per-tool drift status map and updated hashes
  */
@@ -272,42 +288,21 @@ export function computeDriftStatus(
 	const overrides = storedOverrides ?? {};
 
 	for (const action of tools.actions) {
-		const stored = overrides[action.name];
+		const stored = overrides[action.id];
 		if (!stored?.hash) {
 			// No stored hash — tool is new, not drifted (needs initial review)
-			driftStatus[action.name] = false;
+			driftStatus[action.id] = false;
 			continue;
 		}
 
-		// Compute current hash using the params (ActionParam[] → fake Zod schema for hashing)
+		// Compute current hash — params is already a Zod schema, computeDefinitionHash handles both
 		const currentHash = computeDefinitionHash({
-			id: action.name,
-			params: actionParamsToJsonSchema(action.params),
+			id: action.id,
+			params: action.params,
 		});
 
-		driftStatus[action.name] = currentHash !== stored.hash;
+		driftStatus[action.id] = currentHash !== stored.hash;
 	}
 
 	return { ...tools, driftStatus };
-}
-
-/**
- * Convert ActionParam[] to a JSON Schema object for hashing.
- * This bridges the old ActionParam format with the hash function that expects
- * either a Zod type or a JSON Schema record.
- */
-function actionParamsToJsonSchema(params: ActionParam[]): Record<string, unknown> {
-	const properties: Record<string, unknown> = {};
-	const required: string[] = [];
-
-	for (const p of params) {
-		properties[p.name] = { type: p.type === "object" ? "object" : p.type };
-		if (p.required) required.push(p.name);
-	}
-
-	return {
-		type: "object",
-		properties,
-		...(required.length > 0 ? { required } : {}),
-	};
 }
