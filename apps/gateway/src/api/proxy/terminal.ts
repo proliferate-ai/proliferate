@@ -60,7 +60,9 @@ export function createTerminalWsProxy(
 		// Get hub and ensure runtime ready
 		try {
 			const hub = await hubManager.getOrCreate(sessionId);
+			hub.touchActivity();
 			await hub.ensureRuntimeReady();
+			const removeProxy = hub.addProxyConnection();
 			const previewUrl = hub.getPreviewUrl();
 			if (!previewUrl) {
 				socket.write("HTTP/1.1 503 Service Unavailable\r\n\r\n");
@@ -110,12 +112,14 @@ export function createTerminalWsProxy(
 
 					// Close propagation
 					ws.on("close", () => {
+						removeProxy();
 						if (upstream.readyState === WebSocket.OPEN) {
 							upstream.close();
 						}
 					});
 
 					upstream.on("close", () => {
+						removeProxy();
 						if (ws.readyState === WebSocket.OPEN) {
 							ws.close();
 						}

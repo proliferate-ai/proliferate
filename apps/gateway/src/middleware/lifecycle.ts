@@ -22,6 +22,7 @@ export function createEnsureSessionReady(hubManager: HubManager): RequestHandler
 
 		try {
 			const hub = await hubManager.getOrCreate(proliferateSessionId);
+			hub.touchActivity(); // Before ensureRuntimeReady — must not block on migration lock
 			await hub.ensureRuntimeReady();
 
 			req.hub = hub;

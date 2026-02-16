@@ -59,9 +59,6 @@ interface HubDependencies {
 /** Renewal interval: ~1/3 of owner lease TTL. */
 const LEASE_RENEW_INTERVAL_MS = Math.floor(OWNER_LEASE_TTL_MS / 3);
 
-/** Idle snapshot delay: 5 minutes of no SSE activity and no clients. */
-const IDLE_SNAPSHOT_DELAY_MS = 5 * 60 * 1000;
-
 export class SessionHub {
 	private readonly env: GatewayEnv;
 	private readonly sessionId: string;
@@ -90,6 +87,11 @@ export class SessionHub {
 	// Idle snapshot tracking
 	private activeHttpToolCalls = 0;
 	private idleSnapshotTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// Activity & proxy tracking for idle snapshotting
+	private readonly proxyConnections = new Set<string>();
+	private lastActivityAt = Date.now();
+	private lastKnownAgentIdleAt: number | null = null;
 
 	// Hub eviction callback (set by HubManager)
 	private readonly onEvict?: () => void;
@@ -207,6 +209,7 @@ export class SessionHub {
 			return;
 		}
 		this.clients.delete(ws);
+		this.touchActivity();
 		this.log("Client removed", { remainingClients: this.clients.size });
 
 		// Start idle timer if no clients remain
@@ -450,19 +453,51 @@ export class SessionHub {
 	}
 
 	/**
-	 * Check if idle snapshotting is safe (no in-flight tool calls).
+	 * Register a proxy connection (terminal/VS Code WS).
+	 * Returns an idempotent cleanup function.
+	 */
+	addProxyConnection(): () => void {
+		const connectionId = randomUUID();
+		this.proxyConnections.add(connectionId);
+		this.touchActivity();
+		let removed = false;
+		return () => {
+			if (removed) return;
+			removed = true;
+			this.proxyConnections.delete(connectionId);
+			this.touchActivity();
+		};
+	}
+
+	/**
+	 * Full idle snapshot predicate: checks all conditions including
+	 * grace period, clients/proxies, agent idle, SSE state, and sandbox existence.
 	 */
 	shouldIdleSnapshot(): boolean {
-		if (this.activeHttpToolCalls > 0) {
-			return false;
-		}
-		if (this.eventProcessor.hasRunningTools()) {
-			return false;
-		}
-		if (this.getEffectiveClientCount() > 0) {
-			return false;
-		}
+		if (this.activeHttpToolCalls > 0) return false;
+		if (this.eventProcessor.hasRunningTools()) return false;
+		if (this.clients.size > 0) return false;
+		if (this.proxyConnections.size > 0) return false;
+		if (this.eventProcessor.getCurrentAssistantMessageId() !== null) return false;
+
+		const sseReady = this.runtime.isReady();
+		if (!sseReady && this.lastKnownAgentIdleAt === null) return false;
+
+		const hasSandbox = Boolean(this.runtime.getContext().session.sandbox_id);
+		if (!hasSandbox) return false;
+
+		const graceMs = this.getIdleGraceMs();
+		if (Date.now() - this.lastActivityAt < graceMs) return false;
+
 		return true;
+	}
+
+	private getIdleGraceMs(): number {
+		const sessionType = this.runtime.getContext().session.client_type;
+		if (sessionType === "automation" || sessionType === "slack") {
+			return 30_000;
+		}
+		return this.env.idleSnapshotGraceSeconds * 1000;
 	}
 
 	// ============================================
@@ -475,6 +510,7 @@ export class SessionHub {
 	async ensureRuntimeReady(): Promise<void> {
 		this.lifecycleStartTime = Date.now();
 		await this.runtime.ensureRuntimeReady();
+		this.lastKnownAgentIdleAt = null; // fresh sandbox, agent state unknown
 		this.startMigrationMonitor();
 		await this.startLeaseRenewal();
 		await setRuntimeLease(this.sessionId);
@@ -776,19 +812,19 @@ export class SessionHub {
 	// Private: Idle Snapshot Timer
 	// ============================================
 
-	private touchActivity(): void {
-		// Hook point for activity tracking. Currently a no-op;
-		// idle snapshot scheduling is managed via timers.
+	touchActivity(): void {
+		this.lastActivityAt = Date.now();
 	}
 
 	private scheduleIdleSnapshot(): void {
 		this.cancelIdleSnapshotTimer();
 
+		const graceMs = this.getIdleGraceMs();
 		this.idleSnapshotTimer = setTimeout(() => {
 			this.idleSnapshotTimer = null;
 
 			if (!this.shouldIdleSnapshot()) {
-				this.log("Idle snapshot skipped: active tool calls or clients");
+				this.log("Idle snapshot skipped: conditions not met");
 				return;
 			}
 
@@ -796,13 +832,13 @@ export class SessionHub {
 			this.migrationController
 				.runIdleSnapshot()
 				.then(() => {
-					this.log("Idle snapshot complete, evicting hub");
-					this.onEvict?.();
+					this.log("Idle snapshot complete");
+					this.lastKnownAgentIdleAt = null;
 				})
 				.catch((err) => {
 					this.logError("Idle snapshot failed", err);
 				});
-		}, IDLE_SNAPSHOT_DELAY_MS);
+		}, graceMs);
 	}
 
 	private cancelIdleSnapshotTimer(): void {
@@ -866,6 +902,9 @@ export class SessionHub {
 			this.log("Dropping prompt during migration", { migrationState });
 			return;
 		}
+
+		this.touchActivity();
+		this.lastKnownAgentIdleAt = null; // new work starting, invalidates previous idle state
 
 		this.log("Handling prompt", {
 			userId,
@@ -1083,7 +1122,14 @@ export class SessionHub {
 
 	private handleOpenCodeEvent(event: OpenCodeEvent): void {
 		this.touchActivity();
+		const wasBusy = this.eventProcessor.getCurrentAssistantMessageId() !== null;
 		this.eventProcessor.process(event);
+		const nowIdle = this.eventProcessor.getCurrentAssistantMessageId() === null;
+
+		if (wasBusy && nowIdle) {
+			this.touchActivity(); // marks agent-done boundary, starts grace period
+			this.lastKnownAgentIdleAt = Date.now();
+		}
 	}
 
 	private handleSseDisconnect(reason: string): void {
