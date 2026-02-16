@@ -665,7 +665,6 @@ export async function removePollGroupJob(
 	});
 }
 
-<<<<<<< HEAD
 // ============================================
 // Billing Job Options
 // ============================================
