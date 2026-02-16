@@ -15,6 +15,7 @@ COPY packages/gateway-clients ./packages/gateway-clients
 COPY packages/db ./packages/db
 COPY packages/triggers ./packages/triggers
 COPY packages/services ./packages/services
+COPY packages/providers ./packages/providers
 COPY apps/web ./apps/web
 
 # Install all dependencies

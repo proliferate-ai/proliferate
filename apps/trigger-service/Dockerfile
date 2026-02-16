@@ -14,6 +14,7 @@ COPY packages/queue ./packages/queue
 COPY packages/gateway-clients ./packages/gateway-clients
 COPY packages/triggers ./packages/triggers
 COPY packages/services ./packages/services
+COPY packages/providers ./packages/providers
 COPY packages/db ./packages/db
 COPY packages/triggers ./packages/triggers
 COPY apps/trigger-service ./apps/trigger-service
