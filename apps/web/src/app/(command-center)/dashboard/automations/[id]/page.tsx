@@ -264,7 +264,9 @@ function StepLabel({ step, label }: { step: number; label: string }) {
 			<span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-muted text-[11px] font-semibold text-muted-foreground shrink-0">
 				{step}
 			</span>
-			<Label className="text-sm text-muted-foreground">{label}</Label>
+			<Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+				{label}
+			</Label>
 		</div>
 	);
 }
@@ -567,27 +569,30 @@ export default function AutomationDetailPage({
 					</div>
 				</div>
 
-				{/* Two Column Layout */}
-				<div className="w-full flex flex-col lg:flex-row grow gap-6 lg:gap-8 pb-8 min-h-min">
-					{/* Left Column - Main Content */}
-					<div className="relative flex-1 min-w-0">
-						<div className="flex flex-col min-h-0 gap-6 lg:gap-8">
-							{/* Instructions */}
-							<TextAreaWithFooter
-								label="Do this..."
-								description="Tell the agent what to do when this automation is triggered."
-								value={instructionsValue}
-								onChange={handleInstructionsChange}
-								placeholder="You are a helpful assistant that investigates and fixes issues..."
-								footerText={
-									hasPendingChanges || updateMutation.isPending
-										? "Saving..."
-										: "Auto-saves as you type"
-								}
-								minHeight="200px"
+				{/* Vertical Wizard Layout — WHEN / WHERE / WHAT / HOW */}
+				<div className="w-full max-w-2xl flex flex-col gap-8 pb-8">
+					{/* Step 1: WHEN — triggers + event filter */}
+					<div>
+						<StepLabel step={1} label="When" />
+						<div className="flex flex-col">
+							{triggers.map((trigger, index) => (
+								<TriggerChip
+									key={trigger.id}
+									trigger={trigger}
+									automationId={automation.id}
+									variant="stacked"
+									isFirst={index === 0}
+									isLast={false}
+								/>
+							))}
+							<AddTriggerButton
+								automationId={automation.id}
+								variant="stacked"
+								isFirst={triggers.length === 0}
+								isLast
 							/>
-
-							{/* LLM Filter */}
+						</div>
+						<div className="mt-4">
 							<TextAreaWithFooter
 								label="Event Filter"
 								description="Use AI to filter events before processing. Events that don't pass will be marked as filtered."
@@ -596,9 +601,53 @@ export default function AutomationDetailPage({
 								placeholder="Only process events where the user was on a checkout or payment page. Ignore events from internal/admin users."
 								minHeight="120px"
 							/>
+						</div>
+					</div>
 
-							{/* LLM Analysis (shown when tools are enabled) */}
-							{hasEnabledTools && (
+					{/* Step 2: WHERE — codebase selection */}
+					<div>
+						<StepLabel step={2} label="Where" />
+						<div className="flex flex-col">
+							<StackedListItem isFirst isLast>
+								<div className="flex items-center justify-between w-full">
+									<span className="text-sm">
+										{automation.default_prebuild_id ? "Configured codebase" : "Any codebase"}
+									</span>
+									<Switch
+										checked={automation.allow_agentic_repo_selection ?? true}
+										onCheckedChange={(checked) =>
+											handleUpdate({ allowAgenticRepoSelection: checked })
+										}
+									/>
+								</div>
+							</StackedListItem>
+						</div>
+						<p className="text-xs text-muted-foreground mt-2">
+							{(automation.allow_agentic_repo_selection ?? true)
+								? "Agent will choose the most relevant codebase for each event."
+								: "Agent will always use the configured codebase."}
+						</p>
+					</div>
+
+					{/* Step 3: WHAT — agent instructions */}
+					<div>
+						<StepLabel step={3} label="What" />
+						<TextAreaWithFooter
+							label="Agent Instructions"
+							description="Tell the agent what to do when this automation is triggered."
+							value={instructionsValue}
+							onChange={handleInstructionsChange}
+							placeholder="You are a helpful assistant that investigates and fixes issues..."
+							footerText={
+								hasPendingChanges || updateMutation.isPending
+									? "Saving..."
+									: "Auto-saves as you type"
+							}
+							minHeight="200px"
+						/>
+						{/* LLM Analysis (shown when tools are enabled) */}
+						{hasEnabledTools && (
+							<div className="mt-4">
 								<TextAreaWithFooter
 									label="Analysis Instructions"
 									description="Customize how AI analyzes events to determine which tools to execute."
@@ -607,38 +656,17 @@ export default function AutomationDetailPage({
 									placeholder="Focus on user-impacting issues. Create Linear issues for bugs that affect checkout. Send Slack notifications for high-severity errors."
 									minHeight="120px"
 								/>
-							)}
-						</div>
+							</div>
+						)}
 					</div>
 
-					{/* Right Column - Configuration */}
-					<div className="lg:w-80 min-w-0 flex flex-col gap-5 shrink-0">
-						{/* Triggers */}
-						<div>
-							<StepLabel step={1} label="When" />
-							<div className="flex flex-col">
-								{triggers.map((trigger, index) => (
-									<TriggerChip
-										key={trigger.id}
-										trigger={trigger}
-										automationId={automation.id}
-										variant="stacked"
-										isFirst={index === 0}
-										isLast={false}
-									/>
-								))}
-								<AddTriggerButton
-									automationId={automation.id}
-									variant="stacked"
-									isFirst={triggers.length === 0}
-									isLast
-								/>
-							</div>
-						</div>
+					{/* Step 4: HOW — model + actions/tools + permissions */}
+					<div>
+						<StepLabel step={4} label="How" />
 
-						{/* Agent */}
-						<div>
-							<StepLabel step={2} label="Model" />
+						{/* Model */}
+						<div className="mb-4">
+							<p className="text-xs text-muted-foreground mb-2">Model</p>
 							<div className="flex flex-col">
 								<StackedListItem isFirst isLast>
 									<ModelSelector
@@ -657,8 +685,8 @@ export default function AutomationDetailPage({
 						</div>
 
 						{/* Actions/Tools */}
-						<div>
-							<StepLabel step={3} label="Actions" />
+						<div className="mb-4">
+							<p className="text-xs text-muted-foreground mb-2">Actions</p>
 							<div className="flex flex-col">
 								<ToolListItem
 									icon={SlackIcon}
@@ -771,8 +799,6 @@ export default function AutomationDetailPage({
 				{/* Bottom spacer */}
 				<div className="h-12 shrink-0" />
 			</div>
-
-			{/* Delete Confirmation Dialog */}
 			<AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
@@ -814,7 +840,7 @@ function AutomationPermissions({ automationId }: { automationId: string }) {
 
 	return (
 		<div>
-			<StepLabel step={4} label="Permissions" />
+			<p className="text-xs text-muted-foreground mb-2">Permission Overrides</p>
 			{allActions.length === 0 ? (
 				<div className="rounded-lg border border-dashed border-border/80 py-6 text-center">
 					<Shield className="h-5 w-5 mx-auto mb-1.5 text-muted-foreground/40" />
