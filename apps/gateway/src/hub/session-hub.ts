@@ -719,6 +719,15 @@ export class SessionHub {
 		await this.migrationController.runExpiryMigration();
 	}
 
+	/**
+	 * Run idle snapshot and evict the hub.
+	 * Used by the orphan sweeper for sessions without runtime leases.
+	 */
+	async runIdleSnapshot(): Promise<void> {
+		await this.migrationController.runIdleSnapshot();
+		this.onEvict?.();
+	}
+
 	// ============================================
 	// Private: Session Leases & Split-Brain Detection
 	// ============================================
