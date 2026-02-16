@@ -135,6 +135,11 @@ export class SessionHub {
 			// Treat headless automation sessions as active for expiry migration decisions.
 			// These sessions usually have 0 WS clients, but must still migrate/reconnect reliably.
 			getClientCount: () => this.getEffectiveClientCount(),
+			env: this.env,
+			shouldIdleSnapshot: () => this.shouldIdleSnapshot(),
+			onIdleSnapshotComplete: () => {
+				this.cancelIdleSnapshotTimer();
+			},
 		});
 	}
 
