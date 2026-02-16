@@ -15,6 +15,7 @@ import type {
 	ServerMessage,
 } from "@proliferate/shared";
 import { getModalAppName, getSandboxProvider } from "@proliferate/shared/providers";
+import { SandboxProviderError } from "@proliferate/shared/sandbox";
 import { computeBaseSnapshotVersionKey } from "@proliferate/shared/sandbox";
 import { scheduleSessionExpiry } from "../expiry/expiry-queue";
 import type { GatewayEnv } from "../lib/env";
@@ -34,6 +35,7 @@ export class MigrationInProgressError extends Error {
 
 export interface EnsureRuntimeOptions {
 	skipMigrationLock?: boolean;
+	reason?: "auto_reconnect";
 }
 
 export interface SessionRuntimeOptions {
@@ -284,6 +286,12 @@ export class SessionRuntime {
 				hasSnapshot: Boolean(this.context.session.snapshot_id),
 			});
 
+			// Abort auto-reconnect if session was paused (idle snapshot completed while we waited)
+			if (options?.reason === "auto_reconnect" && this.context.session.status === "paused") {
+				this.log("Auto-reconnect aborted: session is paused");
+				return;
+			}
+
 			const hasSandbox = Boolean(this.context.session.sandbox_id);
 			this.onStatus(hasSandbox ? "resuming" : "creating");
 
@@ -330,21 +338,40 @@ export class SessionRuntime {
 			};
 
 			const ensureSandboxStartMs = Date.now();
-			const result = await provider.ensureSandbox({
-				sessionId: this.sessionId,
-				sessionType: this.context.session.session_type as "coding" | "setup" | "cli" | null,
-				repos: this.context.repos,
-				branch: this.context.primaryRepo.default_branch || "main",
-				envVars: envVarsWithToken,
-				systemPrompt: this.context.systemPrompt,
-				snapshotId: this.context.session.snapshot_id || undefined,
-				baseSnapshotId,
-				agentConfig: this.context.agentConfig,
-				currentSandboxId: this.context.session.sandbox_id || undefined,
-				sshPublicKey: this.context.sshPublicKey,
-				snapshotHasDeps: this.context.snapshotHasDeps,
-				serviceCommands: this.context.serviceCommands,
-			});
+			let result: Awaited<ReturnType<SandboxProvider["ensureSandbox"]>>;
+			try {
+				result = await provider.ensureSandbox({
+					sessionId: this.sessionId,
+					sessionType: this.context.session.session_type as "coding" | "setup" | "cli" | null,
+					repos: this.context.repos,
+					branch: this.context.primaryRepo.default_branch || "main",
+					envVars: envVarsWithToken,
+					systemPrompt: this.context.systemPrompt,
+					snapshotId: this.context.session.snapshot_id || undefined,
+					baseSnapshotId,
+					agentConfig: this.context.agentConfig,
+					currentSandboxId: this.context.session.sandbox_id || undefined,
+					sshPublicKey: this.context.sshPublicKey,
+					snapshotHasDeps: this.context.snapshotHasDeps,
+					serviceCommands: this.context.serviceCommands,
+				});
+			} catch (ensureErr) {
+				// On memory snapshot restore failure, clear snapshotId so next reconnect
+				// creates a fresh sandbox instead of looping on a dead snapshot.
+				if (
+					ensureErr instanceof SandboxProviderError &&
+					ensureErr.operation === "restoreFromMemorySnapshot"
+				) {
+					this.logger.error(
+						{ err: ensureErr },
+						"Memory snapshot restore failed, clearing snapshotId",
+					);
+					await sessions.update(this.sessionId, { snapshotId: null }).catch((dbErr) => {
+						this.logger.error({ err: dbErr }, "Failed to clear snapshotId after restore failure");
+					});
+				}
+				throw ensureErr;
+			}
 			this.logLatency("runtime.ensure_ready.provider.ensure_sandbox", {
 				provider: provider.type,
 				durationMs: Date.now() - ensureSandboxStartMs,

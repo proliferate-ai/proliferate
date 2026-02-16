@@ -41,6 +41,7 @@ export interface UpdateSessionInput {
 	previewTunnelUrl?: string | null;
 	codingAgentSessionId?: string | null;
 	pausedAt?: string | null;
+	pauseReason?: string | null;
 	sandboxExpiresAt?: number | null;
 	automationId?: string | null;
 	triggerId?: string | null;
