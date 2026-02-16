@@ -82,6 +82,8 @@ export class SessionHub {
 
 	// Reconnection state
 	private reconnectAttempt = 0;
+	private reconnectTimerId: ReturnType<typeof setTimeout> | null = null;
+	private reconnectGeneration = 0;
 
 	// Session leases
 	private leaseRenewTimer: ReturnType<typeof setInterval> | null = null;
@@ -133,6 +135,7 @@ export class SessionHub {
 			// Treat headless automation sessions as active for expiry migration decisions.
 			// These sessions usually have 0 WS clients, but must still migrate/reconnect reliably.
 			getClientCount: () => this.getEffectiveClientCount(),
+			cancelReconnect: () => this.cancelReconnect(),
 		});
 	}
 
@@ -665,6 +668,7 @@ export class SessionHub {
 		this.migrationController.stop();
 		this.stopLeaseRenewal();
 		this.cancelIdleSnapshotTimer();
+		this.cancelReconnect();
 	}
 
 	/**
@@ -754,6 +758,7 @@ export class SessionHub {
 		this.stopLeaseRenewal();
 		this.migrationController.stop();
 		this.cancelIdleSnapshotTimer();
+		this.cancelReconnect();
 
 		// Drop all WS clients
 		for (const [ws] of this.clients) {
@@ -1105,12 +1110,26 @@ export class SessionHub {
 		const delay = delays[delayIndex];
 		this.reconnectAttempt++;
 
+		const generation = this.reconnectGeneration;
+
 		this.log("Scheduling reconnection", {
 			attempt: this.reconnectAttempt,
 			delayMs: delay,
+			generation,
 		});
 
-		setTimeout(() => {
+		this.reconnectTimerId = setTimeout(() => {
+			this.reconnectTimerId = null;
+
+			// Bail if generation changed (cancelReconnect was called)
+			if (this.reconnectGeneration !== generation) {
+				this.log("Reconnection aborted: generation mismatch", {
+					expected: generation,
+					current: this.reconnectGeneration,
+				});
+				return;
+			}
+
 			// Check again - clients may have disconnected during delay
 			if (this.clients.size === 0 && !this.shouldReconnectWithoutClients()) {
 				this.log("No clients connected, aborting reconnection");
@@ -1118,7 +1137,8 @@ export class SessionHub {
 				return;
 			}
 
-			this.ensureRuntimeReady()
+			this.runtime
+				.ensureRuntimeReady({ reason: "auto_reconnect" })
 				.then(() => {
 					this.log("Reconnection successful");
 					this.reconnectAttempt = 0;
@@ -1128,6 +1148,15 @@ export class SessionHub {
 					this.scheduleReconnect();
 				});
 		}, delay);
+	}
+
+	private cancelReconnect(): void {
+		this.reconnectGeneration++;
+		if (this.reconnectTimerId) {
+			clearTimeout(this.reconnectTimerId);
+			this.reconnectTimerId = null;
+		}
+		this.reconnectAttempt = 0;
 	}
 
 	// ============================================
