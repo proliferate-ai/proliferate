@@ -6,7 +6,7 @@
 
 import { GATEWAY_URL } from "@/lib/gateway";
 import { ORPCError } from "@orpc/server";
-import { automations, runs, schedules } from "@proliferate/services";
+import { actions, automations, runs, schedules } from "@proliferate/services";
 import {
 	AutomationConnectionSchema,
 	AutomationEventDetailSchema,
@@ -551,6 +551,64 @@ export const automationsRouter = {
 			return {
 				runs: result.runs.map((run) => mapRunToSchema(run)),
 				total: result.total,
+			};
+		}),
+
+	/**
+	 * Get a single run by ID with its action invocation timeline.
+	 */
+	getRun: orgProcedure
+		.input(z.object({ runId: z.string().uuid() }))
+		.handler(async ({ input, context }) => {
+			const run = await runs.findRunWithRelations(input.runId);
+			if (!run || run.organizationId !== context.orgId) {
+				throw new ORPCError("NOT_FOUND", { message: "Run not found" });
+			}
+
+			const invocations = run.sessionId ? await actions.listSessionActions(run.sessionId) : [];
+
+			const parsedContext = run.triggerEvent?.parsedContext as Record<string, unknown> | null;
+
+			return {
+				run: {
+					id: run.id,
+					automation_id: run.automationId,
+					automation_name: run.automation?.name ?? null,
+					status: run.status as AutomationRunStatus,
+					status_reason: run.statusReason,
+					error_message: run.errorMessage,
+					queued_at: run.queuedAt.toISOString(),
+					completed_at: run.completedAt?.toISOString() ?? null,
+					session_id: run.sessionId,
+					trigger_event: run.triggerEvent
+						? {
+								id: run.triggerEvent.id,
+								parsed_context: parsedContext,
+								provider_event_type: run.triggerEvent.providerEventType,
+							}
+						: null,
+					trigger: run.trigger
+						? {
+								id: run.trigger.id,
+								name: run.trigger.name,
+								provider: run.trigger.provider,
+							}
+						: null,
+					enrichment_json: (run.enrichmentJson as Record<string, unknown>) ?? null,
+				},
+				invocations: invocations.map((inv) => ({
+					id: inv.id,
+					integration: inv.integration,
+					action: inv.action,
+					riskLevel: inv.riskLevel,
+					params: inv.params,
+					status: inv.status,
+					deniedReason: inv.deniedReason,
+					error: inv.error,
+					createdAt: inv.createdAt?.toISOString() ?? null,
+					completedAt: inv.completedAt?.toISOString() ?? null,
+					durationMs: inv.durationMs,
+				})),
 			};
 		}),
 

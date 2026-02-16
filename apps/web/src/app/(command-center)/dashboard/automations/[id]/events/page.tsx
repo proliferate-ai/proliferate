@@ -253,12 +253,19 @@ function RunDetailSection({ run }: { run: AutomationRun }) {
 					>
 						Agent Session
 					</Text>
-					<Link href={`/dashboard/sessions/${run.session_id}`}>
-						<Button variant="outline" size="sm" className="gap-1.5">
-							<Bot className="w-3.5 h-3.5" />
-							View agent session
-						</Button>
-					</Link>
+					<div className="flex items-center gap-2">
+						<Link href={`/dashboard/automations/runs/${run.id}`}>
+							<Button variant="default" size="sm" className="gap-1.5">
+								Inspect Run
+							</Button>
+						</Link>
+						<Link href={`/workspace/${run.session_id}`}>
+							<Button variant="outline" size="sm" className="gap-1.5">
+								<Bot className="w-3.5 h-3.5" />
+								Take Over in Studio
+							</Button>
+						</Link>
+					</div>
 				</div>
 			)}
 
