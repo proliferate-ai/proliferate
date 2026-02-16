@@ -673,6 +673,9 @@ importers:
       '@proliferate/logger':
         specifier: workspace:*
         version: link:../logger
+      '@proliferate/providers':
+        specifier: workspace:*
+        version: link:../providers
       '@proliferate/queue':
         specifier: workspace:*
         version: link:../queue

@@ -16,11 +16,12 @@
 
 import { Client } from "@modelcontextprotocol/sdk/client";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { computeDefinitionHash } from "@proliferate/providers/helpers/schema";
 import type { ConnectorConfig } from "@proliferate/shared";
 import { getServicesLogger } from "../../logger";
 import type { ActionDefinition, ActionParam } from "../adapters/types";
 import { deriveRiskLevel } from "./risk";
-import type { ConnectorCallResult, ConnectorToolList } from "./types";
+import type { ConnectorCallResult, ConnectorToolList, ConnectorToolListWithDrift } from "./types";
 
 const logger = () => getServicesLogger().child({ module: "mcp-connector" });
 
@@ -249,4 +250,64 @@ export async function callConnectorTool(
 		}
 		throw err;
 	}
+}
+
+// ============================================
+// Drift Detection
+// ============================================
+
+/**
+ * Compute drift status for connector tools by comparing current definition
+ * hashes against stored hashes in tool_risk_overrides.
+ *
+ * @param tools - Current tool list from the MCP server
+ * @param storedOverrides - Persisted tool_risk_overrides from org_connectors row
+ * @returns Per-tool drift status map and updated hashes
+ */
+export function computeDriftStatus(
+	tools: ConnectorToolList,
+	storedOverrides: Record<string, { mode?: string; hash?: string }> | null,
+): ConnectorToolListWithDrift {
+	const driftStatus: Record<string, boolean> = {};
+	const overrides = storedOverrides ?? {};
+
+	for (const action of tools.actions) {
+		const stored = overrides[action.name];
+		if (!stored?.hash) {
+			// No stored hash — tool is new, not drifted (needs initial review)
+			driftStatus[action.name] = false;
+			continue;
+		}
+
+		// Compute current hash using the params (ActionParam[] → fake Zod schema for hashing)
+		const currentHash = computeDefinitionHash({
+			id: action.name,
+			params: actionParamsToJsonSchema(action.params),
+		});
+
+		driftStatus[action.name] = currentHash !== stored.hash;
+	}
+
+	return { ...tools, driftStatus };
+}
+
+/**
+ * Convert ActionParam[] to a JSON Schema object for hashing.
+ * This bridges the old ActionParam format with the hash function that expects
+ * either a Zod type or a JSON Schema record.
+ */
+function actionParamsToJsonSchema(params: ActionParam[]): Record<string, unknown> {
+	const properties: Record<string, unknown> = {};
+	const required: string[] = [];
+
+	for (const p of params) {
+		properties[p.name] = { type: p.type === "object" ? "object" : p.type };
+		if (p.required) required.push(p.name);
+	}
+
+	return {
+		type: "object",
+		properties,
+		...(required.length > 0 ? { required } : {}),
+	};
 }

@@ -7,6 +7,7 @@ export {
 	listConnectorToolsOrThrow,
 	callConnectorTool,
 	schemaToParams,
+	computeDriftStatus,
 } from "./client";
 export { deriveRiskLevel, type McpToolAnnotations } from "./risk";
-export type { ConnectorToolList, ConnectorCallResult } from "./types";
+export type { ConnectorToolList, ConnectorToolListWithDrift, ConnectorCallResult } from "./types";

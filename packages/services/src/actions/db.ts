@@ -39,6 +39,9 @@ export interface CreateInvocationInput {
 	riskLevel: "read" | "write" | "danger";
 	params: unknown;
 	status: string;
+	mode?: string;
+	modeSource?: string;
+	deniedReason?: string;
 	expiresAt?: Date;
 }
 
@@ -53,8 +56,11 @@ export async function createInvocation(input: CreateInvocationInput): Promise<Ac
 			integration: input.integration,
 			action: input.action,
 			riskLevel: input.riskLevel,
+			mode: input.mode,
+			modeSource: input.modeSource,
 			params: input.params,
 			status: input.status,
+			deniedReason: input.deniedReason,
 			expiresAt: input.expiresAt,
 		})
 		.returning();

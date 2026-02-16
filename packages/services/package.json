@@ -19,6 +19,7 @@
 		"@modelcontextprotocol/sdk": "^1.26.0",
 		"@nangohq/node": "^0.69.22",
 		"@proliferate/db": "workspace:*",
+		"@proliferate/providers": "workspace:*",
 		"@proliferate/environment": "workspace:*",
 		"@proliferate/gateway-clients": "workspace:*",
 		"@proliferate/logger": "workspace:*",
