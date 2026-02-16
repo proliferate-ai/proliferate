@@ -27,11 +27,15 @@ export interface MigrationControllerOptions {
 	getClientCount: () => number;
 }
 
+/** Maximum consecutive idle snapshot failures before circuit-breaking. */
+const MAX_SNAPSHOT_FAILURES = 3;
+
 export class MigrationController {
 	private readonly options: MigrationControllerOptions;
 	private readonly logger: Logger;
 	private migrationState: MigrationState = "normal";
 	private started = false;
+	private snapshotFailures = 0;
 
 	constructor(options: MigrationControllerOptions) {
 		this.options = options;
@@ -78,6 +82,14 @@ export class MigrationController {
 	async runIdleSnapshot(): Promise<void> {
 		if (this.migrationState !== "normal") {
 			this.logger.info("Idle snapshot skipped: already migrating");
+			return;
+		}
+
+		if (this.snapshotFailures >= MAX_SNAPSHOT_FAILURES) {
+			this.logger.error(
+				{ failures: this.snapshotFailures },
+				"Idle snapshot circuit-breaker open: too many consecutive failures",
+			);
 			return;
 		}
 
@@ -156,9 +168,19 @@ export class MigrationController {
 						"Migration complete",
 					);
 				} else {
-					// Idle migration: pause (if supported) or snapshot, then stop the sandbox.
+					// Idle migration: memory snapshot (preferred) → pause → filesystem snapshot.
 					let snapshotId: string;
-					if (provider.supportsPause) {
+					if (provider.supportsMemorySnapshot && provider.memorySnapshot) {
+						this.logger.info("Taking memory snapshot before idle shutdown");
+						const memStartMs = Date.now();
+						const result = await provider.memorySnapshot(this.options.sessionId, sandboxId);
+						this.logger.debug(
+							{ provider: provider.type, durationMs: Date.now() - memStartMs },
+							"migration.memory_snapshot",
+						);
+						snapshotId = result.snapshotId;
+						this.logger.info({ snapshotId }, "Memory snapshot saved");
+					} else if (provider.supportsPause) {
 						this.logger.info("Pausing sandbox before idle shutdown");
 						const pauseStartMs = Date.now();
 						const result = await provider.pause(this.options.sessionId, sandboxId);
@@ -180,15 +202,16 @@ export class MigrationController {
 						this.logger.info({ snapshotId }, "Snapshot saved");
 					}
 
+					const isMemorySnapshot = snapshotId.startsWith("mem:");
 					const dbStartMs = Date.now();
 					await sessions.update(this.options.sessionId, {
 						snapshotId,
-						status: provider.supportsPause ? "paused" : "stopped",
-						pausedAt: provider.supportsPause ? new Date().toISOString() : null,
+						status: isMemorySnapshot || provider.supportsPause ? "paused" : "stopped",
+						pausedAt: isMemorySnapshot || provider.supportsPause ? new Date().toISOString() : null,
 					});
 					this.logger.debug({ durationMs: Date.now() - dbStartMs }, "migration.db.update_snapshot");
 
-					if (!provider.supportsPause) {
+					if (!isMemorySnapshot && !provider.supportsPause) {
 						try {
 							const terminateStartMs = Date.now();
 							await provider.terminate(this.options.sessionId, sandboxId);
@@ -217,6 +240,7 @@ export class MigrationController {
 					this.options.runtime.resetSandboxState();
 					this.options.runtime.disconnectSse();
 					this.stop();
+					this.snapshotFailures = 0;
 					this.logger.info({ oldSandboxId, snapshotId }, "Idle snapshot complete, sandbox stopped");
 				}
 
@@ -231,6 +255,13 @@ export class MigrationController {
 			} catch (err) {
 				this.logger.error({ err }, "Migration failed (best-effort)");
 				this.migrationState = "normal";
+				if (!createNewSandbox) {
+					this.snapshotFailures++;
+					this.logger.warn(
+						{ failures: this.snapshotFailures, max: MAX_SNAPSHOT_FAILURES },
+						"Idle snapshot failure recorded",
+					);
+				}
 			}
 		});
 
