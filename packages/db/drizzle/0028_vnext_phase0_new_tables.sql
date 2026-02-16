@@ -130,7 +130,7 @@ CREATE INDEX IF NOT EXISTS "idx_secret_files_configuration" ON "secret_files" US
 --> statement-breakpoint
 ALTER TABLE "secret_files" ADD CONSTRAINT "secret_files_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "secret_files" ADD CONSTRAINT "secret_files_configuration_id_fkey" FOREIGN KEY ("configuration_id") REFERENCES "public"."prebuilds"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "secret_files" ADD CONSTRAINT "secret_files_configuration_id_fkey" FOREIGN KEY ("configuration_id") REFERENCES "public"."configurations"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "secret_files" ADD CONSTRAINT "secret_files_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;
 --> statement-breakpoint
@@ -147,6 +147,6 @@ CREATE INDEX IF NOT EXISTS "idx_configuration_secrets_configuration" ON "configu
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_configuration_secrets_secret" ON "configuration_secrets" USING btree ("secret_id" uuid_ops);
 --> statement-breakpoint
-ALTER TABLE "configuration_secrets" ADD CONSTRAINT "configuration_secrets_configuration_id_fkey" FOREIGN KEY ("configuration_id") REFERENCES "public"."prebuilds"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "configuration_secrets" ADD CONSTRAINT "configuration_secrets_configuration_id_fkey" FOREIGN KEY ("configuration_id") REFERENCES "public"."configurations"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "configuration_secrets" ADD CONSTRAINT "configuration_secrets_secret_id_fkey" FOREIGN KEY ("secret_id") REFERENCES "public"."secrets"("id") ON DELETE cascade ON UPDATE no action;

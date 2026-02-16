@@ -284,7 +284,7 @@ export const repos = pgTable(
 );
 
 export const configurations = pgTable(
-	"prebuilds",
+	"configurations",
 	{
 		id: uuid().defaultRandom().primaryKey().notNull(),
 		snapshotId: text("snapshot_id"),

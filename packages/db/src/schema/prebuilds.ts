@@ -12,7 +12,7 @@ import { repos } from "./repos";
 // ============================================
 
 export const prebuilds = pgTable(
-	"prebuilds",
+	"configurations",
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
 
