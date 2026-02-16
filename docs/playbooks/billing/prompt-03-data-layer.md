@@ -23,4 +23,5 @@ You are implementing the data layer foundations for the horizontally scalable LL
    - Implementation: Open exactly ONE Postgres transaction -> lock the org row (`FOR UPDATE`) -> execute a bulk `INSERT INTO billing_events ON CONFLICT (idempotency_key) DO NOTHING` -> sum the credits *only for the successfully inserted rows* -> deduct that sum from the shadow balance.
 
 # Validation
+
 Run `pnpm typecheck`. Ensure zero raw SQL queries against `litellm.LiteLLM_SpendLogs` remain.

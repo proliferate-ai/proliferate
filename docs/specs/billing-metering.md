@@ -79,7 +79,6 @@ packages/shared/src/billing/
 ├── gating.ts                   # Unified billing gate (checkBillingGate)
 ├── autumn-client.ts            # Autumn HTTP client (attach, check, track, top-up)
 ├── autumn-types.ts             # Autumn API type definitions, feature/product IDs
-├── distributed-lock.ts         # Redis SET NX locking (acquire/renew/release)
 ├── billing-token.ts            # JWT tokens for sandbox billing auth
 └── autumn-client.test.ts       # Autumn client tests
 
@@ -105,7 +104,16 @@ apps/web/src/lib/
 
 apps/worker/src/billing/
 ├── index.ts                    # Worker exports (start/stop/health)
-└── worker.ts                   # Interval-based billing worker (metering, LLM sync, outbox, grace)
+└── worker.ts                   # BullMQ-based billing worker lifecycle
+
+apps/worker/src/jobs/billing/
+├── providers.ts                # Shared sandbox provider utilities
+├── metering.job.ts             # BullMQ processor: compute metering (every 30s)
+├── outbox.job.ts               # BullMQ processor: billing outbox (every 60s)
+├── grace.job.ts                # BullMQ processor: grace expiration (every 60s)
+├── reconcile.job.ts            # BullMQ processor: nightly reconciliation (00:00 UTC)
+├── llm-sync-dispatcher.job.ts  # BullMQ processor: LLM sync fan-out (every 30s)
+└── llm-sync-org.job.ts         # BullMQ processor: per-org LLM spend sync
 ```
 
 ---
@@ -185,8 +193,7 @@ Trial: 1,000 credits granted at signup. Top-up pack: 500 credits for $5.
 ### Do
 - Always deduct from shadow balance via `deductShadowBalance()` — it is the **only** path for credit deduction (`packages/services/src/billing/shadow-balance.ts:deductShadowBalance`).
 - Use deterministic idempotency keys: `compute:{sessionId}:{fromMs}:{toMs}` for regular intervals, `compute:{sessionId}:{fromMs}:final` for finalization, `llm:{requestId}` for LLM events.
-- Acquire a distributed lock before running metering or outbox cycles (`packages/shared/src/billing/distributed-lock.ts`).
-- Check lock validity between sessions during metering to fail fast if lock is lost.
+- Billing cycles run as BullMQ repeatable jobs with concurrency 1 — no manual locking needed.
 
 ### Don't
 - Do not call Autumn APIs in the session start/resume hot path — use `checkBillingGate()` with local shadow balance.
@@ -197,7 +204,7 @@ Trial: 1,000 credits granted at signup. Top-up pack: 500 credits for $5.
 Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or shadow balance can't be computed, the operation is denied. See `apps/web/src/lib/billing.ts:checkCanStartSession`.
 
 ### Reliability
-- **Metering lock**: 30s TTL, renewed every 10s. If renewal fails, the cycle aborts.
+- **Metering concurrency**: BullMQ repeatable job with concurrency 1 ensures single-execution.
 - **Outbox retries**: exponential backoff from 60s base, max 1h, up to 5 attempts. After 5 failures, event is permanently marked `failed`.
 - **Idempotency**: `billingEvents.idempotency_key` UNIQUE constraint with `onConflictDoNothing` — prevents double-billing without aborting the transaction.
 - **Sandbox liveness**: 3 consecutive alive-check failures before declaring dead (`METERING_CONFIG.graceFailures`).
@@ -211,7 +218,7 @@ Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or
 **What it does:** Bills running sessions for elapsed compute time every 30 seconds.
 
 **Happy path:**
-1. `runMeteringCycle()` acquires the `billing:metering:lock` via Redis (`packages/services/src/billing/metering.ts:runMeteringCycle`).
+1. `runMeteringCycle()` is invoked by the BullMQ `billing-metering` repeatable job (`packages/services/src/billing/metering.ts:runMeteringCycle`).
 2. Queries all sessions with `status = 'running'`.
 3. Checks sandbox liveness via provider `checkSandboxes()` with grace period (3 consecutive failures = dead).
 4. For alive sandboxes: computes `billableSeconds = floor((now - meteredThroughAt) / 1000)`, skips if < 10s.
@@ -221,7 +228,7 @@ Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or
 
 **Edge cases:**
 - Dead sandbox → `billFinalInterval()` bills through `last_seen_alive_at + pollInterval`, not detection time. Marks session `stopped`.
-- Lock renewal failure → cycle aborts immediately to prevent conflicting with another worker.
+- BullMQ concurrency 1 ensures only one metering cycle runs at a time.
 
 **Files touched:** `packages/services/src/billing/metering.ts`, `shadow-balance.ts`, `org-pause.ts`, `trial-activation.ts`
 
@@ -289,7 +296,7 @@ Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or
 **What it does:** Retries posting billing events to Autumn that failed or haven't been posted yet.
 
 **Happy path:**
-1. `processOutbox()` acquires `billing:outbox:lock` via Redis (`packages/services/src/billing/outbox.ts`).
+1. `processOutbox()` is invoked by the BullMQ `billing-outbox` repeatable job (`packages/services/src/billing/outbox.ts`).
 2. Queries billing events with `status IN ('pending', 'failed')`, `retry_count < 5`, `next_retry_at < now()`.
 3. For each event: calls `autumnDeductCredits()` to post to Autumn.
 4. On success: marks `status = 'posted'`. If Autumn denies, transitions org to `exhausted` and terminates sessions.
@@ -363,30 +370,26 @@ suspended    → active (manual_unsuspend)
 
 **Files touched:** `packages/services/src/billing/snapshot-limits.ts`
 
-### 6.11 Distributed Locks — `Implemented`
+### 6.11 Distributed Locks — `Removed`
 
-**What it does:** Ensures only one worker runs metering or outbox processing at a time.
+Distributed locks (`packages/shared/src/billing/distributed-lock.ts`) were removed. BullMQ repeatable jobs with concurrency 1 now ensure single-execution guarantees for metering, outbox, and other billing cycles.
 
-**Implementation:** Redis `SET NX` with token-based ownership. Lua scripts for atomic renew (`check-then-pexpire`) and release (`check-then-del`). `withLock()` helper handles acquisition, renewal interval, and release in a try/finally.
+### 6.12 Billing Worker — `Implemented` (BullMQ)
 
-**Lock keys:** `billing:metering:lock`, `billing:outbox:lock`. TTL: 30s. Renewal: every 10s.
+**What it does:** Runs billing tasks as BullMQ repeatable jobs with dedicated queues and workers.
 
-**Files touched:** `packages/shared/src/billing/distributed-lock.ts`
+| Queue | Schedule | Processor |
+|-------|----------|-----------|
+| `billing-metering` | Every 30s | `metering.job.ts` → `billing.runMeteringCycle()` |
+| `billing-outbox` | Every 60s | `outbox.job.ts` → `billing.processOutbox()` |
+| `billing-grace` | Every 60s | `grace.job.ts` → grace expiration checks |
+| `billing-reconcile` | Daily 00:00 UTC | `reconcile.job.ts` → `billing.reconcileShadowBalance()` |
+| `billing-llm-sync-dispatch` | Every 30s | `llm-sync-dispatcher.job.ts` → fan-out per-org jobs |
+| `billing-llm-sync-org` | On-demand | `llm-sync-org.job.ts` → per-org LLM spend sync |
 
-### 6.12 Billing Worker — `Implemented`
+Guarded by `NEXT_PUBLIC_BILLING_ENABLED` env var.
 
-**What it does:** Runs four periodic tasks as `setInterval` loops inside the worker process.
-
-| Task | Interval | Function |
-|------|----------|----------|
-| Compute metering | 30s | `billing.runMeteringCycle()` |
-| LLM spend sync | 30s | `syncLLMSpend()` (inline in worker) |
-| Outbox processing | 60s | `billing.processOutbox()` |
-| Grace expiration | 60s | `checkGraceExpirations()` |
-
-Initial runs: metering at +5s, LLM sync at +3s after start. Guarded by `NEXT_PUBLIC_BILLING_ENABLED` env var.
-
-**Files touched:** `apps/worker/src/billing/worker.ts`
+**Files touched:** `apps/worker/src/billing/worker.ts`, `apps/worker/src/jobs/billing/*.ts`, `packages/queue/src/index.ts`
 
 ### 6.13 Billing Token — `Partial`
 
@@ -441,7 +444,7 @@ Initial runs: metering at +5s, LLM sync at +3s after start. Guarded by `NEXT_PUB
 - [ ] **Snapshot quota functions have no callers** — `canCreateSnapshot`, `ensureSnapshotCapacity`, and `cleanupExpiredSnapshots` are exported but never invoked. Snapshot count and retention limits are unenforced. — Expected fix: wire into session pause/snapshot paths and add cleanup to billing worker.
 - [ ] **Billing token not wired into request authorization** — `validateBillingToken` has no callers. No gateway middleware or session creation path mints or validates billing tokens. — Expected fix: integrate into gateway or sandbox request auth.
 - [ ] **Overage auto-charge (V1) not integrated with V2 state machine** — `handleCreditsExhausted` (V1) uses `autumnAutoTopUp` and pause, while V2 uses `handleCreditsExhaustedV2` with termination. Both exist but V2 is the active path for shadow-balance enforcement. — Expected fix: remove V1 once V2 is fully validated.
-- [ ] **No automated reconciliation with Autumn** — `reconcileShadowBalance()` exists but is not called on a schedule. Shadow balance can drift from Autumn's actual balance indefinitely. — Expected fix: add periodic reconciliation in billing worker.
+- [x] **Nightly reconciliation with Autumn** — `reconcileShadowBalance()` is called nightly at 00:00 UTC via `billing-reconcile` BullMQ job. Org listing is stubbed pending merge with data-layer branch.
 - [ ] **Grace expiration check is polling-based** — `checkGraceExpirations()` runs every 60s, meaning grace can overrun by up to 60s. — Impact: minor, grace window is 5 minutes.
 - [ ] **Permanently failed outbox events have no alerting** — events that exhaust all 5 retries are marked `failed` but no alert is raised. — Expected fix: add monitoring/alerting on permanently failed events.
 - [ ] **LLM model allowlist is manually maintained** — `ALLOWED_LLM_MODELS` set in `types.ts` must be updated when adding models to the proxy. — Impact: new models will be rejected until added.

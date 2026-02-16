@@ -12,6 +12,12 @@ export const QUEUE_NAMES = {
 	AUTOMATION_FINALIZE: "automation-finalize",
 	REPO_SNAPSHOT_BUILDS: "repo-snapshot-builds",
 	BASE_SNAPSHOT_BUILDS: "base-snapshot-builds",
+	BILLING_METERING: "billing-metering",
+	BILLING_OUTBOX: "billing-outbox",
+	BILLING_GRACE: "billing-grace",
+	BILLING_RECONCILE: "billing-reconcile",
+	BILLING_LLM_SYNC_DISPATCH: "billing-llm-sync-dispatch",
+	BILLING_LLM_SYNC_ORG: "billing-llm-sync-org",
 } as const;
 
 // ============================================
@@ -87,6 +93,30 @@ export interface BaseSnapshotBuildJob {
  */
 export interface AddScheduledJobResult {
 	repeatJobKey: string;
+}
+
+// ============================================
+// Billing Job Types
+// ============================================
+
+/** Repeatable metering job — runs every 30s, no data needed. */
+export type BillingMeteringJob = Record<string, never>;
+
+/** Repeatable outbox job — runs every 60s, no data needed. */
+export type BillingOutboxJob = Record<string, never>;
+
+/** Repeatable grace expiration job — runs every 60s, no data needed. */
+export type BillingGraceJob = Record<string, never>;
+
+/** Nightly reconciliation job — cron at 00:00 UTC, no data needed. */
+export type BillingReconcileJob = Record<string, never>;
+
+/** Repeatable LLM sync dispatcher — runs every 30s, fans out per-org jobs. */
+export type BillingLLMSyncDispatchJob = Record<string, never>;
+
+/** Per-org LLM spend sync job — dispatched by the dispatcher. */
+export interface BillingLLMSyncOrgJob {
+	orgId: string;
 }
 
 // ============================================
@@ -457,6 +487,159 @@ export function createRepoSnapshotBuildWorker(
 	return new Worker<RepoSnapshotBuildJob>(QUEUE_NAMES.REPO_SNAPSHOT_BUILDS, processor, {
 		connection: connection ?? getConnectionOptions(),
 		concurrency: 2,
+	});
+}
+
+// ============================================
+// Billing Job Options
+// ============================================
+
+const billingRepeatableJobOptions: JobsOptions = {
+	attempts: 3,
+	backoff: {
+		type: "exponential",
+		delay: 5000,
+	},
+	removeOnComplete: {
+		age: 3600, // 1 hour
+		count: 100,
+	},
+	removeOnFail: {
+		age: 86400, // 24 hours
+		count: 100,
+	},
+};
+
+const billingLLMSyncOrgJobOptions: JobsOptions = {
+	attempts: 2,
+	backoff: {
+		type: "fixed",
+		delay: 5000,
+	},
+	removeOnComplete: {
+		count: 0, // Remove immediately so jobId can be reused across dispatch cycles
+	},
+	removeOnFail: {
+		age: 86400, // 24 hours
+		count: 100,
+	},
+};
+
+// ============================================
+// Billing Queue Factories
+// ============================================
+
+export function createBillingMeteringQueue(
+	connection?: ConnectionOptions,
+): Queue<BillingMeteringJob> {
+	return new Queue<BillingMeteringJob>(QUEUE_NAMES.BILLING_METERING, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: billingRepeatableJobOptions,
+	});
+}
+
+export function createBillingOutboxQueue(connection?: ConnectionOptions): Queue<BillingOutboxJob> {
+	return new Queue<BillingOutboxJob>(QUEUE_NAMES.BILLING_OUTBOX, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: billingRepeatableJobOptions,
+	});
+}
+
+export function createBillingGraceQueue(connection?: ConnectionOptions): Queue<BillingGraceJob> {
+	return new Queue<BillingGraceJob>(QUEUE_NAMES.BILLING_GRACE, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: billingRepeatableJobOptions,
+	});
+}
+
+export function createBillingReconcileQueue(
+	connection?: ConnectionOptions,
+): Queue<BillingReconcileJob> {
+	return new Queue<BillingReconcileJob>(QUEUE_NAMES.BILLING_RECONCILE, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: billingRepeatableJobOptions,
+	});
+}
+
+export function createBillingLLMSyncDispatchQueue(
+	connection?: ConnectionOptions,
+): Queue<BillingLLMSyncDispatchJob> {
+	return new Queue<BillingLLMSyncDispatchJob>(QUEUE_NAMES.BILLING_LLM_SYNC_DISPATCH, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: billingRepeatableJobOptions,
+	});
+}
+
+export function createBillingLLMSyncOrgQueue(
+	connection?: ConnectionOptions,
+): Queue<BillingLLMSyncOrgJob> {
+	return new Queue<BillingLLMSyncOrgJob>(QUEUE_NAMES.BILLING_LLM_SYNC_ORG, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: billingLLMSyncOrgJobOptions,
+	});
+}
+
+// ============================================
+// Billing Worker Factories
+// ============================================
+
+export function createBillingMeteringWorker(
+	processor: (job: Job<BillingMeteringJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<BillingMeteringJob> {
+	return new Worker<BillingMeteringJob>(QUEUE_NAMES.BILLING_METERING, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 1,
+	});
+}
+
+export function createBillingOutboxWorker(
+	processor: (job: Job<BillingOutboxJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<BillingOutboxJob> {
+	return new Worker<BillingOutboxJob>(QUEUE_NAMES.BILLING_OUTBOX, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 1,
+	});
+}
+
+export function createBillingGraceWorker(
+	processor: (job: Job<BillingGraceJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<BillingGraceJob> {
+	return new Worker<BillingGraceJob>(QUEUE_NAMES.BILLING_GRACE, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 1,
+	});
+}
+
+export function createBillingReconcileWorker(
+	processor: (job: Job<BillingReconcileJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<BillingReconcileJob> {
+	return new Worker<BillingReconcileJob>(QUEUE_NAMES.BILLING_RECONCILE, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 1,
+	});
+}
+
+export function createBillingLLMSyncDispatchWorker(
+	processor: (job: Job<BillingLLMSyncDispatchJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<BillingLLMSyncDispatchJob> {
+	return new Worker<BillingLLMSyncDispatchJob>(QUEUE_NAMES.BILLING_LLM_SYNC_DISPATCH, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 1,
+	});
+}
+
+export function createBillingLLMSyncOrgWorker(
+	processor: (job: Job<BillingLLMSyncOrgJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<BillingLLMSyncOrgJob> {
+	return new Worker<BillingLLMSyncOrgJob>(QUEUE_NAMES.BILLING_LLM_SYNC_ORG, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 5,
 	});
 }
 

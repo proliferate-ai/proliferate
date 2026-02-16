@@ -7,15 +7,10 @@
 
 import type { SandboxProvider } from "@proliferate/shared";
 import {
-	BILLING_REDIS_KEYS,
 	METERING_CONFIG,
 	type PauseReason,
-	acquireLock,
 	calculateComputeCredits,
-	releaseLock,
-	renewLock,
 } from "@proliferate/shared/billing";
-import type IORedis from "ioredis";
 import { eq, getDb, sessions } from "../db/client";
 import { getServicesLogger } from "../logger";
 import { handleCreditsExhaustedV2 } from "./org-pause";
@@ -46,104 +41,55 @@ interface SessionForMetering {
  * Run a single metering cycle.
  * Should be called every 30 seconds by a worker.
  *
- * @param redis - Redis client for distributed locking
  * @param providers - Map of provider type to provider instance
  */
-export async function runMeteringCycle(
-	redis: IORedis,
-	providers: Map<string, SandboxProvider>,
-): Promise<void> {
-	const lockToken = crypto.randomUUID();
+export async function runMeteringCycle(providers: Map<string, SandboxProvider>): Promise<void> {
+	const nowMs = Date.now();
+	const db = getDb();
 
-	// Acquire lock
-	const acquired = await acquireLock(
-		redis,
-		BILLING_REDIS_KEYS.meteringLock,
-		lockToken,
-		METERING_CONFIG.lockTtlMs,
-	);
+	// Get all running sessions
+	const sessionsToMeter = (await db.query.sessions.findMany({
+		where: eq(sessions.status, "running"),
+		columns: {
+			id: true,
+			organizationId: true,
+			sandboxId: true,
+			sandboxProvider: true,
+			meteredThroughAt: true,
+			startedAt: true,
+			status: true,
+			lastSeenAliveAt: true,
+			aliveCheckFailures: true,
+		},
+	})) as SessionForMetering[];
 
-	if (!acquired) {
-		getServicesLogger()
-			.child({ module: "metering" })
-			.debug("Another worker has the lock, skipping");
+	const logger = getServicesLogger().child({ module: "metering" });
+
+	if (!sessionsToMeter.length) {
+		logger.debug("No running sessions");
 		return;
 	}
 
-	// Set up renewal interval with error handling
-	let renewalFailed = false;
-	const renewInterval = setInterval(async () => {
+	logger.info({ sessionCount: sessionsToMeter.length }, "Processing running sessions");
+
+	// Check sandbox liveness
+	const aliveStatus = await checkSandboxesWithGrace(sessionsToMeter, providers);
+
+	// Process each session
+	for (const session of sessionsToMeter) {
 		try {
-			await renewLock(redis, BILLING_REDIS_KEYS.meteringLock, lockToken, METERING_CONFIG.lockTtlMs);
+			const isAlive = aliveStatus.get(session.sandboxId ?? "");
+
+			if (!isAlive && session.sandboxId) {
+				// Sandbox confirmed dead - bill final interval and mark stopped
+				await billFinalInterval(session, nowMs, providers);
+			} else {
+				// Sandbox alive - bill regular interval
+				await billRegularInterval(session, nowMs, providers);
+			}
 		} catch (err) {
-			getServicesLogger().child({ module: "metering" }).error({ err }, "Lock renewal failed");
-			renewalFailed = true;
+			logger.error({ err, sessionId: session.id }, "Error processing session");
 		}
-	}, METERING_CONFIG.lockRenewIntervalMs);
-
-	try {
-		// Helper to check if we should abort due to lock renewal failure
-		const checkLockValid = () => {
-			if (renewalFailed) {
-				throw new Error("Lock renewal failed - aborting metering cycle to prevent conflicts");
-			}
-		};
-		const nowMs = Date.now();
-		const db = getDb();
-
-		// Get all running sessions
-		const sessionsToMeter = (await db.query.sessions.findMany({
-			where: eq(sessions.status, "running"),
-			columns: {
-				id: true,
-				organizationId: true,
-				sandboxId: true,
-				sandboxProvider: true,
-				meteredThroughAt: true,
-				startedAt: true,
-				status: true,
-				lastSeenAliveAt: true,
-				aliveCheckFailures: true,
-			},
-		})) as SessionForMetering[];
-
-		const logger = getServicesLogger().child({ module: "metering" });
-
-		if (!sessionsToMeter.length) {
-			logger.debug("No running sessions");
-			return;
-		}
-
-		logger.info({ sessionCount: sessionsToMeter.length }, "Processing running sessions");
-
-		// Check sandbox liveness
-		const aliveStatus = await checkSandboxesWithGrace(sessionsToMeter, providers);
-
-		// Check lock validity before processing sessions
-		checkLockValid();
-
-		// Process each session
-		for (const session of sessionsToMeter) {
-			// Check lock validity before each session to fail fast if lock is lost
-			checkLockValid();
-
-			try {
-				const isAlive = aliveStatus.get(session.sandboxId ?? "");
-
-				if (!isAlive && session.sandboxId) {
-					// Sandbox confirmed dead - bill final interval and mark stopped
-					await billFinalInterval(session, nowMs, providers);
-				} else {
-					// Sandbox alive - bill regular interval
-					await billRegularInterval(session, nowMs, providers);
-				}
-			} catch (err) {
-				logger.error({ err, sessionId: session.id }, "Error processing session");
-			}
-		}
-	} finally {
-		clearInterval(renewInterval);
-		await releaseLock(redis, BILLING_REDIS_KEYS.meteringLock, lockToken);
 	}
 }
 
