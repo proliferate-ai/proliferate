@@ -11,7 +11,7 @@
 - Billing event outbox (retry failed Autumn posts)
 - Billing reconciliation and audit trail
 - Trial credit provisioning and auto-activation
-- Org pause / session termination on zero balance
+- Org pause / snapshot enforcement on zero balance (resumable)
 - Overage policy (pause vs allow, per-org)
 - Checkout flow (plan activation, credit top-ups via Autumn)
 - Snapshot quota management (count and retention limits)
@@ -89,7 +89,7 @@ packages/services/src/billing/
 ├── shadow-balance.ts           # Atomic deduct/add/bulk-deduct/reconcile/initialize shadow balance
 ├── metering.ts                 # Compute metering cycle, sandbox liveness, finalization
 ├── outbox.ts                   # Outbox worker: retry failed Autumn posts
-├── org-pause.ts                # Bulk pause/terminate sessions, overage handling
+├── org-pause.ts                # Billing enforcement orchestration (pause/snapshot policy)
 ├── trial-activation.ts         # Auto-activate plan after trial exhaustion
 └── snapshot-limits.ts          # Snapshot quota checking and cleanup
 
@@ -224,7 +224,7 @@ Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or
 4. For alive sandboxes: computes `billableSeconds = floor((now - meteredThroughAt) / 1000)`, skips if < 10s.
 5. Calls `deductShadowBalance()` with deterministic idempotency key.
 6. Advances `sessions.metered_through_at`.
-7. If `shouldTerminateSessions`, calls `handleCreditsExhaustedV2()` — unless transitioning from trial (tries `tryActivatePlanAfterTrial()` first).
+7. If billing enforcement is required, invokes org-level enforcement flow — unless transitioning from trial (tries `tryActivatePlanAfterTrial()` first).
 
 **Edge cases:**
 - Dead sandbox → `billFinalInterval()` bills through `last_seen_alive_at + pollInterval`, not detection time. Marks session `stopped`.
@@ -282,7 +282,7 @@ Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or
    c. Converts logs with positive `spend` to `BulkDeductEvent[]` using `calculateLLMCredits()`.
    d. Calls `billing.bulkDeductShadowBalance(orgId, events)` — single transaction with idempotent insert (`packages/services/src/billing/shadow-balance.ts`).
    e. Advances per-org cursor to latest log's `startTime`.
-4. Handles state transitions: `shouldTerminateSessions` → `handleCreditsExhaustedV2()`.
+4. Handles state transitions: when enforcement is required, route to billing enforcement flow.
 
 **Edge cases:**
 - First run for an org (no cursor) → starts from 5-min lookback.
@@ -299,7 +299,7 @@ Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or
 1. `processOutbox()` is invoked by the BullMQ `billing-outbox` repeatable job (`packages/services/src/billing/outbox.ts`).
 2. Queries billing events with `status IN ('pending', 'failed')`, `retry_count < 5`, `next_retry_at < now()`.
 3. For each event: calls `autumnDeductCredits()` to post to Autumn.
-4. On success: marks `status = 'posted'`. If Autumn denies, transitions org to `exhausted` and terminates sessions.
+4. On success: marks `status = 'posted'`. If Autumn denies, transitions org to `exhausted` and enforces pause/snapshot policy for running sessions.
 5. On failure: increments retry count, sets exponential backoff, marks `failed` after 5 retries.
 
 **Files touched:** `packages/services/src/billing/outbox.ts`, `packages/shared/src/billing/autumn-client.ts`
@@ -318,17 +318,21 @@ exhausted    → active (credits_added) | suspended (manual)
 suspended    → active (manual_unsuspend)
 ```
 
-**Enforcement actions:** `grace` → blocks new sessions. `exhausted`/`suspended` → terminates all running sessions.
+**Enforcement actions (spec policy):** `grace` → blocks new sessions. `exhausted`/`suspended` → pause/snapshot running sessions so they are resumable.
+
+**Cross-spec invariant:** billing must treat `status: "paused"` (for inactivity/credit enforcement) as meter-stopping, equivalent to legacy `stopped` semantics for metering closure.
 
 **Files touched:** `packages/shared/src/billing/state.ts`
 
-### 6.7 Org Pause & Session Termination — `Implemented`
+### 6.7 Org Billing Enforcement (Pause/Snapshot Policy) — `Partial`
 
-**What it does:** Bulk-pauses or terminates all running sessions for an org when credits are exhausted.
+**What it does (spec policy):** Applies org-level enforcement when credits are exhausted/suspended by pausing/snapshotting sessions (resumable), not hard-terminating user work by default.
 
 **V1 (`handleCreditsExhausted`):** Checks overage policy. If `pause` → pauses all sessions. If `allow` → attempts auto top-up via Autumn; on failure, pauses.
 
-**V2 (`handleCreditsExhaustedV2`):** Terminates sessions sequentially (stops sandbox via provider, marks session `stopped`). Used when grace period expires or overdraft cap is exceeded.
+**Current implementation gap:** `handleCreditsExhaustedV2` still terminates sessions sequentially (`status: "stopped"` path). This diverges from policy.
+
+**Required integration:** Replace direct termination with the lock-guarded gateway pause/snapshot pipeline from `idle-snapshotting.md` (including race-safe locking/revalidation) so exhausted/suspended org enforcement yields resumable paused sessions.
 
 **`canOrgStartSession`:** Checks concurrent session count against plan limit.
 
@@ -412,7 +416,7 @@ Guarded by `NEXT_PUBLIC_BILLING_ENABLED` env var.
 | `llm-proxy.md` | LLM → Billing | `GET /spend/logs/v2` REST API | LLM spend sync via `litellm-api.ts` (replaces cross-schema SQL) |
 | `sessions-gateway.md` | Sessions → Billing | `checkCanStartSession()` | Session creation calls billing gate |
 | `sessions-gateway.md` | Billing → Sessions | `sessions.status`, `metered_through_at` | Metering reads/updates session rows |
-| `sandbox-providers.md` | Billing → Providers | `provider.checkSandboxes()`, `provider.terminate()` | Liveness checks and session termination |
+| `sandbox-providers.md` | Billing → Providers | `provider.checkSandboxes()` | Liveness checks for metering; pause/snapshot execution is delegated via gateway lifecycle pipeline |
 | `automations-runs.md` | Automations → Billing | (not yet wired) | `automation_trigger` gate type exists but automations bypass billing via gateway HTTP route |
 
 ### Security & Auth
@@ -443,7 +447,7 @@ Guarded by `NEXT_PUBLIC_BILLING_ENABLED` env var.
 - [ ] **Automation runs bypass billing gate** — the `automation_trigger` gate type exists in `checkBillingGate` but automations create sessions via the gateway HTTP route (`apps/gateway/src/api/proliferate/http/sessions.ts`), which has no billing check. Only the oRPC `createSessionHandler` enforces gating. — Expected fix: add billing gate to the gateway session creation path or have the worker call gating before dispatching.
 - [ ] **Snapshot quota functions have no callers** — `canCreateSnapshot`, `ensureSnapshotCapacity`, and `cleanupExpiredSnapshots` are exported but never invoked. Snapshot count and retention limits are unenforced. — Expected fix: wire into session pause/snapshot paths and add cleanup to billing worker.
 - [ ] **Billing token not wired into request authorization** — `validateBillingToken` has no callers. No gateway middleware or session creation path mints or validates billing tokens. — Expected fix: integrate into gateway or sandbox request auth.
-- [ ] **Overage auto-charge (V1) not integrated with V2 state machine** — `handleCreditsExhausted` (V1) uses `autumnAutoTopUp` and pause, while V2 uses `handleCreditsExhaustedV2` with termination. Both exist but V2 is the active path for shadow-balance enforcement. — Expected fix: remove V1 once V2 is fully validated.
+- [ ] **Billing enforcement policy/implementation mismatch** — spec policy is resumable pause/snapshot on `exhausted`/`suspended`, but `handleCreditsExhaustedV2` currently terminates sessions (`stopped`). — Expected fix: route enforcement through the lock-guarded pause/snapshot lifecycle path and retire termination-first behavior.
 - [x] **Nightly reconciliation with Autumn** — `reconcileShadowBalance()` is called nightly at 00:00 UTC via `billing-reconcile` BullMQ job. Org listing is stubbed pending merge with data-layer branch.
 - [ ] **Grace expiration check is polling-based** — `checkGraceExpirations()` runs every 60s, meaning grace can overrun by up to 60s. — Impact: minor, grace window is 5 minutes.
 - [ ] **Permanently failed outbox events have no alerting** — events that exhaust all 5 retries are marked `failed` but no alert is raised. — Expected fix: add monitoring/alerting on permanently failed events.
