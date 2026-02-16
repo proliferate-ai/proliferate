@@ -94,7 +94,15 @@ export function startSessionExpiryWorker(env: GatewayEnv, hubManager: HubManager
 				const startMs = Date.now();
 				const sessionId = job.data.sessionId;
 				logger.debug({ sessionId, jobId: job.id }, "expiry.job.start");
-				const hub = await hubManager.getOrCreate(sessionId);
+
+				// If the hub was already evicted (e.g. idle snapshot completed),
+				// skip — don't create a new hub for a session that's already handled.
+				const hub = hubManager.get(sessionId);
+				if (!hub) {
+					logger.info({ sessionId, jobId: job.id }, "expiry.job.skip (hub already evicted)");
+					return;
+				}
+
 				await hub.runExpiryMigration();
 				logger.info(
 					{

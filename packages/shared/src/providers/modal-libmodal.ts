@@ -155,7 +155,28 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		const tokenSecret = normalizeModalEnvValue(env.MODAL_TOKEN_SECRET);
 		const endpoint = normalizeModalEnvValue(env.MODAL_ENDPOINT_URL);
 
-		this.client = new ModalClient({ tokenId, tokenSecret, endpoint });
+		this.client = new ModalClient({
+			tokenId,
+			tokenSecret,
+			endpoint,
+			// The Modal JS SDK doesn't expose `enableSnapshot` in SandboxCreateParams,
+			// but the protobuf field exists. This middleware intercepts SandboxCreate
+			// requests and moves `enable_snapshot` from experimentalOptions to the
+			// dedicated `enableSnapshot` proto field that enables memory snapshots.
+			grpcMiddleware: [
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				async function* enableSnapshotMiddleware(call: any, options: any) {
+					if (
+						!call.requestStream &&
+						call.request?.definition?.experimentalOptions?.enable_snapshot
+					) {
+						call.request.definition.enableSnapshot = true;
+						delete call.request.definition.experimentalOptions.enable_snapshot;
+					}
+					return yield* call.next(call.request, options);
+				},
+			],
+		});
 	}
 
 	private async ensureModalAuth(operation: SandboxOperation): Promise<void> {
@@ -1536,12 +1557,23 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			});
 
 			const waitStartMs = Date.now();
-			await this.client.cpClient.sandboxSnapshotWait({ snapshotId, timeout: 120 });
+			const waitResponse = await this.client.cpClient.sandboxSnapshotWait({
+				snapshotId,
+				timeout: 120,
+			});
 			logLatency("provider.memory_snapshot.wait_complete", {
 				provider: this.type,
 				sessionId,
 				durationMs: Date.now() - waitStartMs,
 			});
+
+			// GenericResult_GenericStatus: SUCCESS=1, FAILURE=2, TERMINATED=3
+			const result = waitResponse.result;
+			if (result && result.status !== 1) {
+				throw new Error(
+					`Memory snapshot failed (status=${result.status}): ${result.exception || "unknown"}`,
+				);
+			}
 
 			const memSnapshotId = `mem:${snapshotId}`;
 			providerLogger.info(

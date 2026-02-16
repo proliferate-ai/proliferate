@@ -138,17 +138,24 @@ export class MigrationController {
 				this.options.runtime.disconnectSse();
 
 				// 2. Snapshot: memory (preferred) → pause → filesystem
-				let snapshotId: string;
+				let snapshotId: string | undefined;
+
 				if (provider.supportsMemorySnapshot && provider.memorySnapshot) {
-					this.logger.info("Taking memory snapshot for idle shutdown");
-					const memStartMs = Date.now();
-					const result = await provider.memorySnapshot(this.options.sessionId, freshSandboxId);
-					this.logger.debug(
-						{ provider: provider.type, durationMs: Date.now() - memStartMs },
-						"migration.memory_snapshot",
-					);
-					snapshotId = result.snapshotId;
-				} else if (provider.supportsPause) {
+					try {
+						this.logger.info("Taking memory snapshot for idle shutdown");
+						const memStartMs = Date.now();
+						const result = await provider.memorySnapshot(this.options.sessionId, freshSandboxId);
+						this.logger.debug(
+							{ provider: provider.type, durationMs: Date.now() - memStartMs },
+							"migration.memory_snapshot",
+						);
+						snapshotId = result.snapshotId;
+					} catch (memErr) {
+						this.logger.warn({ err: memErr }, "Memory snapshot failed, falling back to filesystem");
+					}
+				}
+
+				if (!snapshotId && provider.supportsPause) {
 					this.logger.info("Pausing sandbox for idle shutdown");
 					const pauseStartMs = Date.now();
 					const result = await provider.pause(this.options.sessionId, freshSandboxId);
@@ -157,7 +164,9 @@ export class MigrationController {
 						"migration.pause",
 					);
 					snapshotId = result.snapshotId;
-				} else {
+				}
+
+				if (!snapshotId) {
 					this.logger.info("Taking filesystem snapshot for idle shutdown");
 					const snapStartMs = Date.now();
 					const result = await provider.snapshot(this.options.sessionId, freshSandboxId);
