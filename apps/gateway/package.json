@@ -18,6 +18,7 @@
 		"@proliferate/db": "workspace:*",
 		"@proliferate/environment": "workspace:*",
 		"@proliferate/logger": "workspace:*",
+		"@proliferate/providers": "workspace:*",
 		"@proliferate/services": "workspace:*",
 		"@proliferate/shared": "workspace:*",
 		"bullmq": "^5.30.1",

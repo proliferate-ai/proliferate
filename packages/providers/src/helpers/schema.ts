@@ -89,6 +89,60 @@ function convertZodType(schema: ZodType): Record<string, unknown> {
 }
 
 // ============================================
+// JSON Schema → Zod
+// ============================================
+
+/**
+ * Convert a JSON Schema object to a Zod schema.
+ * Used by McpConnectorActionSource to convert MCP tool inputSchema
+ * into Zod types for the unified ActionDefinition interface.
+ *
+ * Handles: string, number/integer, boolean, array, object, enum, nullable.
+ * Unknown types fall back to z.unknown().
+ */
+export function jsonSchemaToZod(schema: Record<string, unknown>): ZodType {
+	if (!schema || typeof schema !== "object") return z.unknown();
+
+	// Handle enum
+	if (Array.isArray(schema.enum) && schema.enum.length > 0) {
+		const values = schema.enum as [string, ...string[]];
+		return z.enum(values);
+	}
+
+	const type = schema.type as string | undefined;
+
+	switch (type) {
+		case "string":
+			return z.string();
+		case "number":
+		case "integer":
+			return z.number();
+		case "boolean":
+			return z.boolean();
+		case "array": {
+			const items = schema.items as Record<string, unknown> | undefined;
+			return z.array(items ? jsonSchemaToZod(items) : z.unknown());
+		}
+		case "object": {
+			const properties = schema.properties as Record<string, Record<string, unknown>> | undefined;
+			if (!properties) return z.record(z.unknown());
+
+			const required = new Set(Array.isArray(schema.required) ? (schema.required as string[]) : []);
+			const shape: Record<string, ZodType> = {};
+
+			for (const [key, propSchema] of Object.entries(properties)) {
+				const fieldSchema = jsonSchemaToZod(propSchema);
+				shape[key] = required.has(key) ? fieldSchema : fieldSchema.optional();
+			}
+
+			return z.object(shape);
+		}
+		default:
+			return z.unknown();
+	}
+}
+
+// ============================================
 // Normalization (for hashing)
 // ============================================
 
