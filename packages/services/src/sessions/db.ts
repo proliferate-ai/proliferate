@@ -153,6 +153,7 @@ export async function update(id: string, input: UpdateSessionInput): Promise<voi
 		updates.codingAgentSessionId = input.codingAgentSessionId;
 	if (input.pausedAt !== undefined)
 		updates.pausedAt = input.pausedAt ? new Date(input.pausedAt) : null;
+	if (input.pauseReason !== undefined) updates.pauseReason = input.pauseReason;
 	if (input.sandboxExpiresAt !== undefined)
 		updates.sandboxExpiresAt = input.sandboxExpiresAt ? new Date(input.sandboxExpiresAt) : null;
 	if (input.automationId !== undefined) updates.automationId = input.automationId;
@@ -183,11 +184,40 @@ export async function updateWithOrgCheck(
 		updates.codingAgentSessionId = input.codingAgentSessionId;
 	if (input.pausedAt !== undefined)
 		updates.pausedAt = input.pausedAt ? new Date(input.pausedAt) : null;
+	if (input.pauseReason !== undefined) updates.pauseReason = input.pauseReason;
 
 	await db
 		.update(sessions)
 		.set(updates)
 		.where(and(eq(sessions.id, id), eq(sessions.organizationId, orgId)));
+}
+
+/**
+ * CAS/fencing update: only applies if sandbox_id still matches expectedSandboxId.
+ * Returns the number of rows affected (0 = another actor already advanced state).
+ */
+export async function updateWhereSandboxIdMatches(
+	id: string,
+	expectedSandboxId: string,
+	input: UpdateSessionInput,
+): Promise<number> {
+	const db = getDb();
+	const updates: Partial<typeof sessions.$inferInsert> = {};
+
+	if (input.status !== undefined) updates.status = input.status;
+	if (input.sandboxId !== undefined) updates.sandboxId = input.sandboxId;
+	if (input.snapshotId !== undefined) updates.snapshotId = input.snapshotId;
+	if (input.pausedAt !== undefined)
+		updates.pausedAt = input.pausedAt ? new Date(input.pausedAt) : null;
+	if (input.pauseReason !== undefined) updates.pauseReason = input.pauseReason;
+
+	const rows = await db
+		.update(sessions)
+		.set(updates)
+		.where(and(eq(sessions.id, id), eq(sessions.sandboxId, expectedSandboxId)))
+		.returning({ id: sessions.id });
+
+	return rows.length;
 }
 
 /**
