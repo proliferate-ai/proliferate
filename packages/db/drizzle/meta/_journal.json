@@ -172,6 +172,13 @@
       "when": 1771194914156,
       "tag": "0025_vnext_phase0",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1771224032301,
+      "tag": "0026_friendly_mercury",
+      "breakpoints": true
     }
   ]
 }

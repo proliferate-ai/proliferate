@@ -1757,6 +1757,9 @@ export const triggerPollGroups = pgTable(
 			foreignColumns: [integrations.id],
 			name: "trigger_poll_groups_integration_id_fkey",
 		}).onDelete("set null"),
+		unique("uq_poll_groups_org_provider_integration")
+			.on(table.organizationId, table.provider, table.integrationId)
+			.nullsNotDistinct(),
 	],
 );
 

@@ -17,7 +17,7 @@ export type TriggerPollGroupRow = InferSelectModel<typeof triggerPollGroups>;
 
 /**
  * Find or create a poll group for the given org+provider+integration.
- * Uses INSERT ... ON CONFLICT for atomic upsert.
+ * Uses INSERT ... ON CONFLICT DO NOTHING for atomic upsert.
  */
 export async function findOrCreateGroup(
 	orgId: string,
@@ -27,7 +27,22 @@ export async function findOrCreateGroup(
 ): Promise<TriggerPollGroupRow> {
 	const db = getDb();
 
-	// Try to find existing group first
+	// Attempt INSERT; unique constraint prevents duplicates
+	const [inserted] = await db
+		.insert(triggerPollGroups)
+		.values({
+			organizationId: orgId,
+			provider,
+			integrationId: integrationId ?? undefined,
+			cronExpression,
+			enabled: true,
+		})
+		.onConflictDoNothing()
+		.returning();
+
+	if (inserted) return inserted;
+
+	// Conflict path — row already exists, fetch it
 	const conditions = [
 		eq(triggerPollGroups.organizationId, orgId),
 		eq(triggerPollGroups.provider, provider),
@@ -38,28 +53,13 @@ export async function findOrCreateGroup(
 		conditions.push(sql`${triggerPollGroups.integrationId} IS NULL`);
 	}
 
-	const existing = await db
+	const [existing] = await db
 		.select()
 		.from(triggerPollGroups)
 		.where(and(...conditions))
 		.limit(1);
 
-	if (existing.length > 0) {
-		return existing[0];
-	}
-
-	const [row] = await db
-		.insert(triggerPollGroups)
-		.values({
-			organizationId: orgId,
-			provider,
-			integrationId: integrationId ?? undefined,
-			cronExpression,
-			enabled: true,
-		})
-		.returning();
-
-	return row;
+	return existing;
 }
 
 /**
@@ -132,13 +132,18 @@ export async function updateGroupCursor(
 		.where(eq(triggerPollGroups.id, groupId));
 }
 
+export interface DeletedPollGroup {
+	id: string;
+	cronExpression: string;
+}
+
 /**
  * Delete orphaned poll groups — groups with no matching active triggers.
- * Called after trigger deletion to clean up empty groups.
+ * Returns deleted rows so callers can clean up associated BullMQ jobs.
  */
-export async function deleteOrphanedGroups(): Promise<number> {
+export async function deleteOrphanedGroups(): Promise<DeletedPollGroup[]> {
 	const db = getDb();
-	const result = await db.execute<{ id: string }>(sql`
+	const result = await db.execute<{ id: string; cron_expression: string }>(sql`
 		DELETE FROM trigger_poll_groups
 		WHERE id NOT IN (
 			SELECT DISTINCT tpg.id
@@ -154,7 +159,7 @@ export async function deleteOrphanedGroups(): Promise<number> {
 				AND t.enabled = true
 			)
 		)
-		RETURNING id
+		RETURNING id, cron_expression
 	`);
-	return [...result].length;
+	return [...result].map((r) => ({ id: r.id, cronExpression: r.cron_expression }));
 }
