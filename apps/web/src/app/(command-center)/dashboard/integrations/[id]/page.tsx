@@ -23,7 +23,8 @@ import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 import type { ConnectorConfig } from "@proliferate/shared";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Shield } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { AlertTriangle, ArrowLeft, Shield } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -126,7 +127,7 @@ export default function IntegrationDetailPage() {
 						)}
 					>
 						<Shield className="h-3.5 w-3.5 inline mr-1.5" />
-						Agent Permissions
+						Security Policies
 					</button>
 				</div>
 
@@ -299,8 +300,22 @@ function PermissionsTab({
 	const setActionMode = useSetActionMode();
 	const modes = modesData?.modes ?? {};
 
-	// Get the list of actions
-	let actions: { key: string; name: string; description: string; riskLevel: string }[] = [];
+	// For MCP connectors, fetch dynamic tools from listActions
+	const { data: connectorTools, isLoading: toolsLoading } = useQuery({
+		...orpc.integrations.listActions.queryOptions({
+			input: { connectorId: connectorId ?? "" },
+		}),
+		enabled: !!connectorId,
+	});
+
+	// Build action list — static for OAuth, dynamic for MCP connectors
+	let actions: {
+		key: string;
+		name: string;
+		description: string;
+		riskLevel: string;
+		drifted?: boolean;
+	}[] = [];
 
 	if (isOAuth && provider) {
 		const adapter = ACTION_ADAPTERS.find((a) => a.integration === provider);
@@ -312,26 +327,31 @@ function PermissionsTab({
 				riskLevel: action.riskLevel,
 			}));
 		}
+	} else if (connectorId && connectorTools?.tools) {
+		actions = connectorTools.tools.map((tool) => ({
+			key: `connector:${connectorId}:${tool.name}`,
+			name: tool.name,
+			description: tool.description,
+			riskLevel: tool.riskLevel,
+		}));
 	}
-	// For MCP connectors, we'd need dynamic tool list — show a placeholder for now
-	// (Critical Fix #5: Dynamic actions require a backend route not yet built)
 
-	if (actions.length === 0 && !connectorId) {
+	if (toolsLoading && connectorId) {
 		return (
-			<div className="rounded-lg border border-dashed border-border/80 py-8 text-center">
-				<Shield className="h-6 w-6 mx-auto mb-2 text-muted-foreground/40" />
-				<p className="text-sm text-muted-foreground">No actions available for this integration.</p>
+			<div className="flex items-center justify-center py-12">
+				<LoadingDots size="md" className="text-muted-foreground" />
 			</div>
 		);
 	}
 
-	if (actions.length === 0 && connectorId) {
+	if (actions.length === 0) {
 		return (
 			<div className="rounded-lg border border-dashed border-border/80 py-8 text-center">
 				<Shield className="h-6 w-6 mx-auto mb-2 text-muted-foreground/40" />
 				<p className="text-sm text-muted-foreground">
-					Tool permissions for custom connectors will be available when agents discover tools at
-					runtime.
+					{connectorId
+						? "No tools discovered. The connector may be unreachable or has no tools."
+						: "No actions available for this integration."}
 				</p>
 			</div>
 		);
@@ -342,33 +362,58 @@ function PermissionsTab({
 			<p className="text-sm text-muted-foreground">
 				Control what your agents can do with this integration. Changes apply to all sessions.
 			</p>
-			<div className="rounded-lg border border-border/80 bg-background divide-y divide-border/60">
-				{actions.map((action) => {
-					const currentMode = modes[action.key] ?? "require_approval";
-					return (
-						<div key={action.key} className="flex items-center justify-between px-4 py-3">
-							<div className="min-w-0 flex-1 mr-4">
-								<p className="text-sm font-medium">{action.name}</p>
-								<p className="text-xs text-muted-foreground">{action.description}</p>
-								<span
-									className={cn(
-										"inline-block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border",
-										action.riskLevel === "write"
-											? "border-amber-500/30 text-amber-600 bg-amber-50 dark:bg-amber-950/30"
-											: "border-border text-muted-foreground",
-									)}
-								>
-									{action.riskLevel}
-								</span>
+
+			{/* Table header */}
+			<div className="rounded-lg border border-border/80 bg-background">
+				<div className="grid grid-cols-[1fr_auto] items-center px-4 py-2 border-b border-border/60 text-xs text-muted-foreground font-medium">
+					<span>Action</span>
+					<span>Access Policy</span>
+				</div>
+				<div className="divide-y divide-border/60">
+					{actions.map((action) => {
+						const currentMode = modes[action.key] ?? "require_approval";
+						const isDrifted = action.drifted;
+						return (
+							<div
+								key={action.key}
+								className={cn(
+									"flex items-center justify-between px-4 py-3",
+									isDrifted && "bg-amber-50/50 dark:bg-amber-950/20",
+								)}
+							>
+								<div className="min-w-0 flex-1 mr-4">
+									<div className="flex items-center gap-2">
+										<p className="text-sm font-medium font-mono">{action.name}</p>
+										{isDrifted && (
+											<span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+												<AlertTriangle className="h-3 w-3" />
+												Schema changed
+											</span>
+										)}
+									</div>
+									<p className="text-xs text-muted-foreground">{action.description}</p>
+									<span
+										className={cn(
+											"inline-block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border",
+											action.riskLevel === "write"
+												? "border-amber-500/30 text-amber-600 bg-amber-50 dark:bg-amber-950/30"
+												: action.riskLevel === "danger"
+													? "border-red-500/30 text-red-600 bg-red-50 dark:bg-red-950/30"
+													: "border-border text-muted-foreground",
+										)}
+									>
+										{action.riskLevel}
+									</span>
+								</div>
+								<PermissionControl
+									value={currentMode}
+									onChange={(mode) => setActionMode.mutate({ key: action.key, mode })}
+									disabled={setActionMode.isPending}
+								/>
 							</div>
-							<PermissionControl
-								value={currentMode}
-								onChange={(mode) => setActionMode.mutate({ key: action.key, mode })}
-								disabled={setActionMode.isPending}
-							/>
-						</div>
-					);
-				})}
+						);
+					})}
+				</div>
 			</div>
 		</div>
 	);
