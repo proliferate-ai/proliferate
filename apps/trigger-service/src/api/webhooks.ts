@@ -53,8 +53,7 @@ webhookRouter.post("/nango", async (req, res) => {
 			return res.status(401).json({ error: "Invalid signature" });
 		}
 		logger.error({ err: error }, "Webhook ingestion error");
-		// Still return 200 to prevent upstream retries on transient failures
-		res.status(200).send("OK");
+		res.status(500).json({ error: "Internal error" });
 	}
 });
 
@@ -84,6 +83,6 @@ webhookRouter.post("/direct/:providerId", async (req, res) => {
 		res.status(200).send("OK");
 	} catch (error) {
 		logger.error({ err: error }, "Direct webhook ingestion error");
-		res.status(200).send("OK");
+		res.status(500).json({ error: "Internal error" });
 	}
 });
