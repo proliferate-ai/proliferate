@@ -697,6 +697,9 @@ importers:
       ioredis:
         specifier: ^5.5.0
         version: 5.9.1
+      redlock:
+        specifier: ^5.0.0-beta.2
+        version: 5.0.0-beta.2
     devDependencies:
       typescript:
         specifier: ^5.3.3

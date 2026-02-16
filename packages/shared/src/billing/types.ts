@@ -296,7 +296,8 @@ export type PauseReason =
 	| "credit_limit"
 	| "inactivity"
 	| "overage_cap"
-	| "payment_failed";
+	| "payment_failed"
+	| "suspended";
 
 export type StopReason = "manual" | "error" | "sandbox_terminated" | "auto_pause_failed";
 

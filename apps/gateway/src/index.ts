@@ -9,6 +9,7 @@ import { createLogger } from "@proliferate/logger";
 import { setServicesLogger } from "@proliferate/services/logger";
 import { setSharedLogger } from "@proliferate/shared/logger";
 import { loadGatewayEnv } from "./lib/env";
+import { setLockRedisClient } from "./lib/lock";
 import { ensureRedisConnected } from "./lib/redis";
 import { createServer } from "./server";
 
@@ -27,7 +28,8 @@ async function start(): Promise<void> {
 
 	// Load environment
 	const env = loadGatewayEnv();
-	await ensureRedisConnected();
+	const redisClient = await ensureRedisConnected();
+	setLockRedisClient(redisClient);
 
 	// Create and start server
 	const { server } = createServer({ env, logger });

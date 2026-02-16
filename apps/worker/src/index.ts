@@ -24,6 +24,7 @@ import {
 	getConnectionOptions,
 	getRedisClient,
 } from "@proliferate/queue";
+import { setLockRedisClient } from "@proliferate/services/lock";
 import { setServicesLogger } from "@proliferate/services/logger";
 import { setSharedLogger } from "@proliferate/shared/logger";
 import { startAutomationWorkers, stopAutomationWorkers } from "./automation";
@@ -40,6 +41,9 @@ const logger: Logger = createLogger({ service: "worker" });
 // Inject logger into shared packages
 setServicesLogger(logger.child({ module: "services" }));
 setSharedLogger(logger.child({ module: "shared" }));
+
+// Inject Redis into shared lock module (used by billing enforcement)
+setLockRedisClient(getRedisClient());
 
 // Environment variables
 const GATEWAY_URL = env.NEXT_PUBLIC_GATEWAY_URL;

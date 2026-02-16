@@ -245,20 +245,21 @@ async function billFinalInterval(
 		await billComputeInterval(session, remainingSeconds, billThroughMs, idempotencyKey, providers);
 	}
 
-	// Mark session as stopped
+	// Mark session as paused (not stopped) — preserves resumability.
+	// Use "inactivity" since the sandbox became unreachable.
 	const db = getDb();
 	await db
 		.update(sessions)
 		.set({
-			status: "stopped",
-			endedAt: new Date(),
-			stopReason: "sandbox_terminated",
+			status: "paused",
+			pauseReason: "inactivity",
+			pausedAt: new Date(),
 		})
 		.where(eq(sessions.id, session.id));
 
 	getServicesLogger()
 		.child({ module: "metering", sessionId: session.id })
-		.info("Session marked as stopped (sandbox dead)");
+		.info("Session marked as paused (sandbox dead)");
 }
 
 /**
