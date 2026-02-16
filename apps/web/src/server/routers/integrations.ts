@@ -1025,6 +1025,87 @@ export const integrationsRouter = {
 				};
 			}
 		}),
+
+	/**
+	 * List actions (tools) exposed by a saved connector.
+	 * Looks up the connector by ID, resolves its secret, connects to the MCP
+	 * server, and returns the discovered tools with risk levels.
+	 * Restricted to admin/owner role.
+	 */
+	listActions: orgProcedure
+		.input(z.object({ connectorId: z.string() }))
+		.output(
+			z.object({
+				tools: z.array(
+					z.object({
+						name: z.string(),
+						description: z.string(),
+						riskLevel: z.enum(["read", "write", "danger"]),
+						params: z.array(
+							z.object({
+								name: z.string(),
+								type: z.enum(["string", "number", "boolean", "object"]),
+								required: z.boolean(),
+								description: z.string(),
+							}),
+						),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			await requireConnectorAdmin(context.user.id, context.orgId);
+
+			const connector = await connectors.getConnector(input.connectorId, context.orgId);
+			if (!connector) {
+				throw new ORPCError("NOT_FOUND", { message: "Connector not found" });
+			}
+
+			const resolvedSecret = await secrets.resolveSecretValue(
+				context.orgId,
+				connector.auth.secretKey,
+			);
+			if (!resolvedSecret) {
+				throw new ORPCError("NOT_FOUND", {
+					message: `Secret "${connector.auth.secretKey}" not found or could not be decrypted`,
+				});
+			}
+
+			const result = await actions.connectors.listConnectorToolsOrThrow(connector, resolvedSecret);
+
+			const { zodToJsonSchema } = await import("@proliferate/providers/helpers/schema");
+			const tools = result.actions.map((a) => {
+				const schema = zodToJsonSchema(a.params);
+				const properties = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
+				const requiredSet = new Set(
+					Array.isArray(schema.required) ? (schema.required as string[]) : [],
+				);
+				return {
+					name: a.id,
+					description: a.description,
+					riskLevel: a.riskLevel,
+					params: Object.entries(properties).map(([name, prop]) => {
+						const t = prop.type as string;
+						const type: "string" | "number" | "boolean" | "object" =
+							t === "string"
+								? "string"
+								: t === "number"
+									? "number"
+									: t === "boolean"
+										? "boolean"
+										: "object";
+						return {
+							name,
+							type,
+							required: requiredSet.has(name),
+							description: (prop.description as string) ?? "",
+						};
+					}),
+				};
+			});
+
+			return { tools };
+		}),
 };
 
 // ============================================

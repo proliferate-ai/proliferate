@@ -1,16 +1,18 @@
 "use client";
 
-export const dynamic = "force-dynamic";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect } from "react";
 
-import { CodingSession } from "@/components/coding-session";
-import { useParams } from "next/navigation";
-
-export default function SessionPage() {
+/**
+ * Legacy redirect: /session/:id → /workspace/:id
+ */
+export default function LegacySessionRedirect() {
 	const { id } = useParams();
+	const router = useRouter();
 
-	return (
-		<div className="h-screen">
-			<CodingSession sessionId={id as string} />
-		</div>
-	);
+	useEffect(() => {
+		router.replace(`/workspace/${id}`);
+	}, [id, router]);
+
+	return null;
 }
