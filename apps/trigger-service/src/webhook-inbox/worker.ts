@@ -62,8 +62,7 @@ async function processInboxRow(row: webhookInbox.WebhookInboxRow): Promise<void>
 	// For Nango-forwarded webhooks, resolve via connectionId
 	const connectionId = extractConnectionId(payload);
 	if (!connectionId) {
-		logger.debug({ inboxId: row.id, provider: row.provider }, "No connectionId found, skipping");
-		return;
+		throw new Error("Direct webhook processing not yet implemented (no connectionId)");
 	}
 
 	const integration = await integrations.findByConnectionIdAndProvider(connectionId, "nango");

@@ -75,6 +75,9 @@ importers:
       '@proliferate/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@proliferate/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
       '@proliferate/services':
         specifier: workspace:*
         version: link:../../packages/services
@@ -224,6 +227,9 @@ importers:
       '@proliferate/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@proliferate/providers':
+        specifier: workspace:*
+        version: link:../../packages/providers
       '@proliferate/queue':
         specifier: workspace:^
         version: link:../../packages/queue
@@ -673,6 +679,9 @@ importers:
       '@proliferate/logger':
         specifier: workspace:*
         version: link:../logger
+      '@proliferate/providers':
+        specifier: workspace:*
+        version: link:../providers
       '@proliferate/queue':
         specifier: workspace:*
         version: link:../queue

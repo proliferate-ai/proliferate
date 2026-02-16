@@ -4,9 +4,11 @@
  * Business logic for agent-initiated external actions.
  */
 
+import { truncateJson } from "@proliferate/providers/helpers/truncation";
 import { getServicesLogger } from "../logger";
 import type { ActionInvocationRow, ActionInvocationWithSession } from "./db";
 import * as actionsDb from "./db";
+import { resolveMode } from "./modes";
 
 // ============================================
 // Error Classes
@@ -73,12 +75,9 @@ function redactData(data: unknown): unknown {
 	return result;
 }
 
-/** Truncate result if serialized form exceeds max size. */
+/** Truncate result using JSON-aware structural pruning. */
 function truncateResult(data: unknown): unknown {
-	if (data === null || data === undefined) return data;
-	const serialized = JSON.stringify(data);
-	if (serialized.length <= MAX_RESULT_SIZE) return data;
-	return { _truncated: true, _originalSize: serialized.length };
+	return truncateJson(data, MAX_RESULT_SIZE);
 }
 
 // ============================================
@@ -102,6 +101,10 @@ export interface InvokeActionInput {
 	action: string;
 	riskLevel: "read" | "write" | "danger";
 	params: unknown;
+	/** Automation ID for mode resolution (unattended runs) */
+	automationId?: string;
+	/** Whether this tool has drifted from last admin review (connector tools) */
+	isDrifted?: boolean;
 }
 
 export interface InvokeActionResult {
@@ -115,46 +118,96 @@ export interface InvokeActionResult {
 // ============================================
 
 /**
- * Create an action invocation. Reads are auto-approved; writes are pending.
+ * Create an action invocation using the Three-Mode Permissioning Cascade.
+ *
+ * Mode resolution: automation override → org default → inferred from risk hint.
+ * Drift guard: if a connector tool has drifted, `allow` downgrades to `require_approval`.
  */
 export async function invokeAction(input: InvokeActionInput): Promise<InvokeActionResult> {
 	const log = getServicesLogger().child({ module: "actions" });
 
-	if (input.riskLevel === "danger") {
-		const invocation = await actionsDb.createInvocation({
-			...input,
-			status: "denied",
-		});
-		log.info({ invocationId: invocation.id, action: input.action }, "Action denied (danger)");
-		return { invocation, needsApproval: false };
-	}
-
-	if (input.riskLevel === "read") {
-		const invocation = await actionsDb.createInvocation({
-			...input,
-			status: "approved",
-		});
-		log.info({ invocationId: invocation.id, action: input.action }, "Action auto-approved (read)");
-		return { invocation, needsApproval: false };
-	}
-
-	// Write actions — enforce pending cap before creating pending invocation
-	const pending = await actionsDb.listPendingBySession(input.sessionId);
-	if (pending.length >= MAX_PENDING_PER_SESSION) {
-		throw new PendingLimitError();
-	}
-
-	const expiresAt = new Date(Date.now() + PENDING_EXPIRY_MS);
-	const invocation = await actionsDb.createInvocation({
-		...input,
-		status: "pending",
-		expiresAt,
+	// Resolve mode via the three-tier cascade
+	const { mode, source: modeSource } = await resolveMode({
+		sourceId: input.integration,
+		actionId: input.action,
+		riskLevel: input.riskLevel,
+		orgId: input.organizationId,
+		automationId: input.automationId,
+		isDrifted: input.isDrifted,
 	});
-	log.info(
-		{ invocationId: invocation.id, action: input.action },
-		"Action pending approval (write)",
-	);
-	return { invocation, needsApproval: true };
+
+	const baseInput = {
+		sessionId: input.sessionId,
+		organizationId: input.organizationId,
+		integrationId: input.integrationId,
+		integration: input.integration,
+		action: input.action,
+		riskLevel: input.riskLevel,
+		params: input.params,
+		mode,
+		modeSource,
+	};
+
+	switch (mode) {
+		case "deny": {
+			const invocation = await actionsDb.createInvocation({
+				...baseInput,
+				status: "denied",
+				deniedReason: "policy",
+			});
+			log.info(
+				{ invocationId: invocation.id, action: input.action, modeSource },
+				"Action denied by policy",
+			);
+			return { invocation, needsApproval: false };
+		}
+
+		case "allow": {
+			const invocation = await actionsDb.createInvocation({
+				...baseInput,
+				status: "approved",
+			});
+			log.info(
+				{ invocationId: invocation.id, action: input.action, modeSource },
+				"Action auto-approved",
+			);
+			return { invocation, needsApproval: false };
+		}
+
+		case "require_approval": {
+			// Enforce pending cap before creating pending invocation
+			const pending = await actionsDb.listPendingBySession(input.sessionId);
+			if (pending.length >= MAX_PENDING_PER_SESSION) {
+				throw new PendingLimitError();
+			}
+
+			const expiresAt = new Date(Date.now() + PENDING_EXPIRY_MS);
+			const invocation = await actionsDb.createInvocation({
+				...baseInput,
+				status: "pending",
+				expiresAt,
+			});
+			log.info(
+				{ invocationId: invocation.id, action: input.action, modeSource },
+				"Action pending approval",
+			);
+			return { invocation, needsApproval: true };
+		}
+
+		default: {
+			// Unknown mode from JSONB — deny as a safe fallback
+			const invocation = await actionsDb.createInvocation({
+				...baseInput,
+				status: "denied",
+				deniedReason: `unknown_mode:${mode}`,
+			});
+			log.warn(
+				{ invocationId: invocation.id, action: input.action, mode },
+				"Action denied — unknown mode from JSONB",
+			);
+			return { invocation, needsApproval: false };
+		}
+	}
 }
 
 /**

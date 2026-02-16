@@ -6,6 +6,7 @@ export {
 	listConnectors,
 	listEnabledConnectors,
 	getConnector,
+	getToolRiskOverrides,
 	createConnector,
 	createConnectorWithSecret,
 	updateConnector,

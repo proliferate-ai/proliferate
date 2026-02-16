@@ -179,6 +179,13 @@
       "when": 1771224032301,
       "tag": "0026_friendly_mercury",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1771225562697,
+      "tag": "0027_cloudy_sunfire",
+      "breakpoints": true
     }
   ]
 }
