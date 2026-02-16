@@ -1575,11 +1575,12 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			await this.ensureModalAuth("restoreFromMemorySnapshot");
 
 			const restoreStartMs = Date.now();
-			// SandboxNameOverrideType: 2 = STRING (override with sessionId)
+			// Modal gRPC SandboxNameOverrideType enum: 2 = STRING
+			const SANDBOX_NAME_OVERRIDE_STRING = 2;
 			const { sandboxId: newSandboxId } = await this.client.cpClient.sandboxRestore({
 				snapshotId: memorySnapshotId,
 				sandboxNameOverride: sessionId,
-				sandboxNameOverrideType: 2,
+				sandboxNameOverrideType: SANDBOX_NAME_OVERRIDE_STRING,
 			});
 			logLatency("provider.memory_restore.restore_call", {
 				provider: this.type,
