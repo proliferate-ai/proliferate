@@ -4,6 +4,7 @@
 
 export * from "./types";
 export * from "./action-source";
+export { getAdapterSource, listAdapterSources } from "./source-registry";
 
 // Provider implementations
 export { linearSource } from "./providers/linear";

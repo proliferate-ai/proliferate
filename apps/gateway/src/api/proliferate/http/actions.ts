@@ -15,6 +15,11 @@
  */
 
 import { createLogger } from "@proliferate/logger";
+import {
+	type ActionSource,
+	type ConnectorActionSource,
+	getAdapterSource,
+} from "@proliferate/providers";
 import { actions, connectors, integrations, orgs, secrets, sessions } from "@proliferate/services";
 import type { ConnectorConfig } from "@proliferate/shared";
 import { Router, type Router as RouterType } from "express";
@@ -55,27 +60,22 @@ setInterval(() => {
 }, RATE_LIMIT_WINDOW_MS);
 
 // ============================================
-// Connector Tool Cache (per session, in-memory)
+// Connector Source Cache (per session, in-memory)
 // ============================================
 
-interface CachedConnectorTools {
-	connectorId: string;
-	connectorName: string;
-	actions: actions.ActionDefinition[];
-	expiresAt: number;
-}
+type CachedConnectorSource = ConnectorActionSource & { expiresAt: number };
 
 const CONNECTOR_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const connectorToolCache = new Map<string, CachedConnectorTools[]>();
-const connectorRefreshInFlight = new Map<string, Promise<CachedConnectorTools[]>>();
+const connectorSourceCache = new Map<string, CachedConnectorSource[]>();
+const connectorRefreshInFlight = new Map<string, Promise<CachedConnectorSource[]>>();
 
 // Periodic cleanup
 setInterval(() => {
 	const now = Date.now();
-	for (const [key, entries] of connectorToolCache) {
+	for (const [key, entries] of connectorSourceCache) {
 		const valid = entries.filter((e) => now < e.expiresAt);
-		if (valid.length === 0) connectorToolCache.delete(key);
-		else connectorToolCache.set(key, valid);
+		if (valid.length === 0) connectorSourceCache.delete(key);
+		else connectorSourceCache.set(key, valid);
 	}
 }, CONNECTOR_CACHE_TTL_MS);
 
@@ -103,11 +103,32 @@ async function resolveConnectorSecret(
 }
 
 /**
- * List tools for all enabled connectors for a session (with caching).
+ * Build a ConnectorActionSource from a connector config and its discovered tools.
  */
-async function listSessionConnectorTools(sessionId: string): Promise<CachedConnectorTools[]> {
+function buildConnectorSource(
+	connector: ConnectorConfig,
+	toolList: actions.connectors.ConnectorToolList,
+): CachedConnectorSource {
+	return {
+		type: "connector",
+		id: connector.id,
+		displayName: toolList.connectorName,
+		connectorId: connector.id,
+		url: connector.url,
+		transport: "remote_http",
+		defaultRisk: connector.riskPolicy?.defaultRisk ?? "write",
+		toolRiskOverrides: connector.riskPolicy?.overrides,
+		actions: toolList.actions,
+		expiresAt: Date.now() + CONNECTOR_CACHE_TTL_MS,
+	};
+}
+
+/**
+ * List connector sources for a session (with caching).
+ */
+async function listSessionConnectorSources(sessionId: string): Promise<CachedConnectorSource[]> {
 	// Check cache
-	const cached = connectorToolCache.get(sessionId);
+	const cached = connectorSourceCache.get(sessionId);
 	if (cached?.every((c) => Date.now() < c.expiresAt)) {
 		return cached;
 	}
@@ -128,25 +149,23 @@ async function listSessionConnectorTools(sessionId: string): Promise<CachedConne
 						{ connectorId: connector.id, secretKey: connector.auth.secretKey },
 						"Connector secret not found, skipping",
 					);
-					return {
+					return buildConnectorSource(connector, {
 						connectorId: connector.id,
 						connectorName: connector.name,
-						actions: [] as actions.ActionDefinition[],
-					};
+						actions: [],
+					});
 				}
-				return actions.connectors.listConnectorTools(connector, secret);
+				const toolList = await actions.connectors.listConnectorTools(connector, secret);
+				return buildConnectorSource(connector, toolList);
 			}),
 		);
 
-		const toolLists = results
-			.filter(
-				(r): r is PromiseFulfilledResult<actions.connectors.ConnectorToolList> =>
-					r.status === "fulfilled",
-			)
-			.map((r) => ({ ...r.value, expiresAt: Date.now() + CONNECTOR_CACHE_TTL_MS }));
+		const sources = results
+			.filter((r): r is PromiseFulfilledResult<CachedConnectorSource> => r.status === "fulfilled")
+			.map((r) => r.value);
 
-		connectorToolCache.set(sessionId, toolLists);
-		return toolLists;
+		connectorSourceCache.set(sessionId, sources);
+		return sources;
 	})();
 
 	connectorRefreshInFlight.set(sessionId, refreshPromise);
@@ -178,6 +197,28 @@ async function resolveConnector(
 	}
 
 	return { connector, orgId: session.organizationId, secret };
+}
+
+// ============================================
+// Action Source Serialization
+// ============================================
+
+/**
+ * Serialize an ActionSource for the API response.
+ * Strips functions (execute) and sensitive fields (url).
+ */
+function serializeSource(source: ActionSource) {
+	const base = {
+		type: source.type,
+		id: source.id,
+		displayName: source.displayName,
+		actions: source.actions,
+		guide: source.guide,
+	};
+	if (source.type === "adapter") {
+		return { ...base, integration: source.integration };
+	}
+	return { ...base, connectorId: source.connectorId };
 }
 
 // ============================================
@@ -238,7 +279,8 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 	}
 
 	/**
-	 * GET /available — list available integrations + actions for this session.
+	 * GET /available — list available action sources for this session.
+	 * Returns a unified ActionSource[] merging adapter-based and connector-backed sources.
 	 * Auth: sandbox token or user token (user must belong to session's org).
 	 */
 	router.get("/available", async (req, res, next) => {
@@ -250,45 +292,21 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				await requireSessionOrgAccess(sessionId, req.auth?.orgId);
 			}
 
+			// Adapter sources: resolve from session connections + provider registry
 			const connections = await sessions.listSessionConnections(sessionId);
-
-			// Filter to active integrations that have an adapter
-			const available = connections
+			const adapterSources: ActionSource[] = connections
 				.filter((c) => c.integration?.status === "active")
-				.map((c) => {
-					const adapter = actions.getAdapter(c.integration!.integrationId);
-					if (!adapter) return null;
-					return {
-						integrationId: c.integrationId,
-						integration: adapter.integration,
-						displayName: c.integration!.displayName,
-						actions: adapter.actions.map((a) => ({
-							name: a.name,
-							description: a.description,
-							riskLevel: a.riskLevel,
-							params: a.params,
-						})),
-					};
-				})
-				.filter(Boolean);
+				.map((c) => getAdapterSource(c.integration!.integrationId))
+				.filter((s): s is NonNullable<typeof s> => s != null);
 
-			// Merge connector-backed tools
-			const connectorTools = await listSessionConnectorTools(sessionId);
-			const connectorIntegrations = connectorTools
-				.filter((ct) => ct.actions.length > 0)
-				.map((ct) => ({
-					integrationId: null,
-					integration: `connector:${ct.connectorId}`,
-					displayName: ct.connectorName,
-					actions: ct.actions.map((a) => ({
-						name: a.name,
-						description: a.description,
-						riskLevel: a.riskLevel,
-						params: a.params,
-					})),
-				}));
+			// Connector sources: resolve from org connector catalog
+			const connectorSources = await listSessionConnectorSources(sessionId);
+			const activeConnectorSources: ActionSource[] = connectorSources.filter(
+				(s) => s.actions.length > 0,
+			);
 
-			res.json({ integrations: [...available, ...connectorIntegrations] });
+			const sources = [...adapterSources, ...activeConnectorSources];
+			res.json({ sources: sources.map(serializeSource) });
 		} catch (err) {
 			next(err);
 		}
@@ -311,14 +329,20 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			// Connector-backed guide (auto-generated from tool definitions)
 			if (integration.startsWith("connector:")) {
 				const connectorId = integration.slice("connector:".length);
-				const tools = await listSessionConnectorTools(sessionId);
-				const ct = tools.find((t) => t.connectorId === connectorId);
-				if (!ct || ct.actions.length === 0) {
+				const sources = await listSessionConnectorSources(sessionId);
+				const source = sources.find((s) => s.connectorId === connectorId);
+				if (!source || source.actions.length === 0) {
 					throw new ApiError(404, `No guide available for connector: ${connectorId}`);
 				}
 
-				const lines = [`# ${ct.connectorName} (MCP Connector)`, "", "## Available Actions", ""];
-				for (const a of ct.actions) {
+				// Use the source's guide if set, otherwise auto-generate
+				if (source.guide) {
+					res.json({ integration, guide: source.guide });
+					return;
+				}
+
+				const lines = [`# ${source.displayName} (MCP Connector)`, "", "## Available Actions", ""];
+				for (const a of source.actions) {
 					lines.push(`### ${a.name} (${a.riskLevel})`);
 					lines.push(a.description);
 					if (a.params.length > 0) {
@@ -337,12 +361,13 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				return;
 			}
 
-			const guide = actions.getGuide(integration);
-			if (!guide) {
+			// Adapter-backed guide from provider source
+			const source = getAdapterSource(integration);
+			if (!source?.guide) {
 				throw new ApiError(404, `No guide available for integration: ${integration}`);
 			}
 
-			res.json({ integration, guide });
+			res.json({ integration, guide: source.guide });
 		} catch (err) {
 			next(err);
 		}
@@ -379,10 +404,10 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				const connectorId = integration.slice("connector:".length);
 				const { connector, orgId, secret } = await resolveConnector(sessionId, connectorId);
 
-				// Look up action definition from cached tools
-				const tools = await listSessionConnectorTools(sessionId);
-				const ct = tools.find((t) => t.connectorId === connectorId);
-				const actionDef = ct?.actions.find((a) => a.name === action);
+				// Look up action definition from cached connector sources
+				const sources = await listSessionConnectorSources(sessionId);
+				const connectorSource = sources.find((s) => s.connectorId === connectorId);
+				const actionDef = connectorSource?.actions.find((a) => a.name === action);
 				if (!actionDef) {
 					throw new ApiError(400, `Unknown action: ${integration}/${action}`);
 				}
@@ -478,16 +503,16 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				return;
 			}
 
-			// ── Static adapter path (unchanged) ──
+			// ── Static adapter path ──
 
-			// Find adapter
-			const adapter = actions.getAdapter(integration);
-			if (!adapter) {
+			// Find adapter source from provider registry
+			const source = getAdapterSource(integration);
+			if (!source) {
 				throw new ApiError(400, `Unknown integration: ${integration}`);
 			}
 
 			// Validate action exists
-			const actionDef = adapter.actions.find((a) => a.name === action);
+			const actionDef = source.actions.find((a) => a.name === action);
 			if (!actionDef) {
 				throw new ApiError(400, `Unknown action: ${integration}/${action}`);
 			}
@@ -541,14 +566,17 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 						githubInstallationId: conn.integration.githubInstallationId,
 					});
 
-					const actionResult = await adapter.execute(action, params ?? {}, token);
+					const actionResult = await source.execute(action, params ?? {}, token);
 					const durationMs = Date.now() - startMs;
+					if (!actionResult.success) {
+						throw new Error(actionResult.error ?? "Action failed");
+					}
 					const invocation = await actions.markCompleted(
 						result.invocation.id,
-						actionResult,
+						actionResult.data,
 						durationMs,
 					);
-					res.json({ invocation, result: actionResult });
+					res.json({ invocation, result: actionResult.data });
 				} catch (err) {
 					const durationMs = Date.now() - startMs;
 					const errorMsg = err instanceof Error ? err.message : String(err);
@@ -688,8 +716,8 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 						throw new Error("Integration no longer available");
 					}
 
-					const adapter = actions.getAdapter(invocation.integration);
-					if (!adapter) {
+					const adapterSource = getAdapterSource(invocation.integration);
+					if (!adapterSource) {
 						throw new Error(`No adapter for ${invocation.integration}`);
 					}
 
@@ -701,11 +729,15 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 						githubInstallationId: conn.integration.githubInstallationId,
 					});
 
-					actionResult = await adapter.execute(
+					const adapterResult = await adapterSource.execute(
 						invocation.action,
 						(invocation.params as Record<string, unknown>) ?? {},
 						token,
 					);
+					if (!adapterResult.success) {
+						throw new Error(adapterResult.error ?? "Action failed");
+					}
+					actionResult = adapterResult.data;
 				}
 
 				const durationMs = Date.now() - startMs;
