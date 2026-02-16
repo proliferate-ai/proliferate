@@ -658,9 +658,10 @@ export async function schedulePollGroupJob(
 export async function removePollGroupJob(
 	queue: Queue<PollGroupJob>,
 	groupId: string,
+	cronPattern: string,
 ): Promise<void> {
 	await queue.removeRepeatable(`poll-group:${groupId}`, {
-		pattern: "",
+		pattern: cronPattern,
 	});
 }
 
