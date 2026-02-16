@@ -7,6 +7,7 @@ import { SidebarCollapseIcon, SidebarExpandIcon, SlackIcon } from "@/components/
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
+import { useAttentionInbox } from "@/hooks/use-attention-inbox";
 import { useSlackStatus } from "@/hooks/use-integrations";
 import { usePrebuilds } from "@/hooks/use-prebuilds";
 import { useSessions } from "@/hooks/use-sessions";
@@ -18,6 +19,7 @@ import type { Session } from "@proliferate/shared/contracts";
 import {
 	FileStackIcon,
 	FolderGit2,
+	Inbox,
 	LifeBuoy,
 	LogOut,
 	Menu,
@@ -78,9 +80,13 @@ export function Sidebar() {
 	const pathname = usePathname();
 	const router = useRouter();
 
+	const isInboxPage = pathname?.startsWith("/dashboard/inbox");
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
 	const isRepositoriesPage = pathname?.startsWith("/dashboard/repositories");
+
+	const inboxItems = useAttentionInbox({ wsApprovals: [] });
+	const inboxCount = inboxItems.length;
 
 	return (
 		<aside
@@ -126,17 +132,35 @@ export function Sidebar() {
 					<Plus className="h-4 w-4" />
 				</Button>
 				<Button
-					variant={isIntegrationsPage ? "secondary" : "ghost"}
+					variant={isInboxPage ? "secondary" : "ghost"}
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground relative"
+					onClick={(e) => {
+						e.stopPropagation();
+						router.push("/dashboard/inbox");
+					}}
+					title="Inbox"
+				>
+					<Inbox className="h-4 w-4" />
+					{inboxCount > 0 && (
+						<span className="absolute -top-0.5 -right-0.5 h-3.5 min-w-3.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-medium flex items-center justify-center px-1">
+							{inboxCount > 9 ? "9+" : inboxCount}
+						</span>
+					)}
+				</Button>
+				<Button
+					variant={isRepositoriesPage ? "secondary" : "ghost"}
 					size="icon"
 					className="h-8 w-8 text-muted-foreground hover:text-foreground"
 					onClick={(e) => {
 						e.stopPropagation();
-						router.push("/dashboard/integrations");
+						router.push("/dashboard/repositories");
 					}}
-					title="Integrations"
+					title="Repositories"
 				>
-					<Plug className="h-4 w-4" />
+					<FolderGit2 className="h-4 w-4" />
 				</Button>
+				<div className="my-1" />
 				<Button
 					variant={isAutomationsPage ? "secondary" : "ghost"}
 					size="icon"
@@ -150,16 +174,16 @@ export function Sidebar() {
 					<FileStackIcon className="h-4 w-4" />
 				</Button>
 				<Button
-					variant={isRepositoriesPage ? "secondary" : "ghost"}
+					variant={isIntegrationsPage ? "secondary" : "ghost"}
 					size="icon"
 					className="h-8 w-8 text-muted-foreground hover:text-foreground"
 					onClick={(e) => {
 						e.stopPropagation();
-						router.push("/dashboard/repositories");
+						router.push("/dashboard/integrations");
 					}}
-					title="Repositories"
+					title="Integrations"
 				>
-					<FolderGit2 className="h-4 w-4" />
+					<Plug className="h-4 w-4" />
 				</Button>
 			</div>
 
@@ -269,9 +293,14 @@ function SidebarContent({
 	});
 
 	// Detect active pages from URL
+	const isInboxPage = pathname?.startsWith("/dashboard/inbox");
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 	const isRepositoriesPage = pathname?.startsWith("/dashboard/repositories");
+
+	// Inbox count for badge
+	const inboxItems = useAttentionInbox({ wsApprovals: [] });
+	const inboxCount = inboxItems.length;
 
 	// Detect active session from URL
 	const isSessionDetailPage =
@@ -329,8 +358,8 @@ function SidebarContent({
 				</div>
 			</div>
 
-			{/* New Session + Search + Nav */}
-			<div className="px-2 mb-2 space-y-1">
+			{/* New Session + Search */}
+			<div className="px-2 mb-1 space-y-1">
 				<button
 					type="button"
 					onClick={handleNewSession}
@@ -340,19 +369,51 @@ function SidebarContent({
 					<span className="text-sm">New session</span>
 				</button>
 				<SearchTrigger onClick={() => setCommandSearchOpen(true)} />
+			</div>
+
+			{/* Workspace section */}
+			<div className="px-2 mb-1">
+				<div className="px-3 py-1 text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+					Workspace
+				</div>
 				<button
 					type="button"
-					onClick={() => handleNavigate("/dashboard/integrations")}
+					onClick={() => handleNavigate("/dashboard/inbox")}
 					className={cn(
 						"flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-sm transition-colors",
-						isIntegrationsPage
+						isInboxPage
 							? "bg-muted text-foreground"
 							: "text-muted-foreground hover:text-foreground hover:bg-accent",
 					)}
 				>
-					<Plug className="h-5 w-5" />
-					<span>Integrations</span>
+					<Inbox className="h-5 w-5" />
+					<span>Inbox</span>
+					{inboxCount > 0 && (
+						<span className="ml-auto h-5 min-w-5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-medium flex items-center justify-center px-1.5">
+							{inboxCount > 99 ? "99+" : inboxCount}
+						</span>
+					)}
 				</button>
+				<button
+					type="button"
+					onClick={() => handleNavigate("/dashboard/repositories")}
+					className={cn(
+						"flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-sm transition-colors",
+						isRepositoriesPage
+							? "bg-muted text-foreground"
+							: "text-muted-foreground hover:text-foreground hover:bg-accent",
+					)}
+				>
+					<FolderGit2 className="h-5 w-5" />
+					<span>Repositories</span>
+				</button>
+			</div>
+
+			{/* Agents section */}
+			<div className="px-2 mb-2">
+				<div className="px-3 py-1 text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+					Agents
+				</div>
 				<button
 					type="button"
 					onClick={() => handleNavigate("/dashboard/automations")}
@@ -368,16 +429,16 @@ function SidebarContent({
 				</button>
 				<button
 					type="button"
-					onClick={() => handleNavigate("/dashboard/repositories")}
+					onClick={() => handleNavigate("/dashboard/integrations")}
 					className={cn(
 						"flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-sm transition-colors",
-						isRepositoriesPage
+						isIntegrationsPage
 							? "bg-muted text-foreground"
 							: "text-muted-foreground hover:text-foreground hover:bg-accent",
 					)}
 				>
-					<FolderGit2 className="h-5 w-5" />
-					<span>Repositories</span>
+					<Plug className="h-5 w-5" />
+					<span>Integrations</span>
 				</button>
 			</div>
 

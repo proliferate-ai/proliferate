@@ -431,6 +431,52 @@ export const automationsRouter = {
 		}),
 
 	// ============================================
+	// Action Modes (per-automation overrides)
+	// ============================================
+
+	/**
+	 * Get action modes for a specific automation.
+	 */
+	getActionModes: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ modes: z.record(z.enum(["allow", "require_approval", "deny"])) }))
+		.handler(async ({ input, context }) => {
+			try {
+				const modes = await automations.getAutomationActionModes(input.id, context.orgId);
+				return { modes };
+			} catch (err) {
+				if (err instanceof Error && err.message === "Automation not found") {
+					throw new ORPCError("NOT_FOUND", { message: err.message });
+				}
+				throw err;
+			}
+		}),
+
+	/**
+	 * Set a single action mode entry on an automation.
+	 */
+	setActionMode: orgProcedure
+		.input(
+			z.object({
+				id: z.string().uuid(),
+				key: z.string(),
+				mode: z.enum(["allow", "require_approval", "deny"]),
+			}),
+		)
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			try {
+				await automations.setAutomationActionMode(input.id, context.orgId, input.key, input.mode);
+				return { success: true };
+			} catch (err) {
+				if (err instanceof Error && err.message === "Automation not found") {
+					throw new ORPCError("NOT_FOUND", { message: err.message });
+				}
+				throw err;
+			}
+		}),
+
+	// ============================================
 	// Org-level pending runs (attention tray)
 	// ============================================
 

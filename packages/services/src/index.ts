@@ -20,6 +20,7 @@ export * as prebuilds from "./prebuilds";
 export * as repos from "./repos";
 export * as runs from "./runs";
 export * as schedules from "./schedules";
+export * as secretFiles from "./secret-files";
 export * as secrets from "./secrets";
 export * as sessions from "./sessions";
 export * as sideEffects from "./side-effects";

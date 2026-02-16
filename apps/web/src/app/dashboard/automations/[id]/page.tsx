@@ -3,6 +3,7 @@
 import { AddTriggerButton } from "@/components/automations/add-trigger-button";
 import { ModelSelector } from "@/components/automations/model-selector";
 import { TriggerChip } from "@/components/automations/trigger-chip";
+import { PermissionControl } from "@/components/integrations/permission-control";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -34,8 +35,10 @@ import { Switch } from "@/components/ui/switch";
 import { Text } from "@/components/ui/text";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAutomationActionModes, useSetAutomationActionMode } from "@/hooks/use-action-modes";
 import { useAutomation, useUpdateAutomation } from "@/hooks/use-automations";
 import { useSlackInstallations } from "@/hooks/use-integrations";
+import { ACTION_ADAPTERS, type ActionMeta } from "@/lib/action-adapters";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 import {
@@ -47,7 +50,7 @@ import {
 	parseModelId,
 } from "@proliferate/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { HelpCircle, History, Mail, MoreVertical, Trash2 } from "lucide-react";
+import { HelpCircle, History, Mail, MoreVertical, Shield, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useRef, useState } from "react";
@@ -251,6 +254,17 @@ function TextAreaWithFooter({
 					</div>
 				)}
 			</div>
+		</div>
+	);
+}
+
+function StepLabel({ step, label }: { step: number; label: string }) {
+	return (
+		<div className="flex items-center gap-2 mb-2">
+			<span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-muted text-[11px] font-semibold text-muted-foreground shrink-0">
+				{step}
+			</span>
+			<Label className="text-sm text-muted-foreground">{label}</Label>
 		</div>
 	);
 }
@@ -560,7 +574,7 @@ export default function AutomationDetailPage({
 						<div className="flex flex-col min-h-0 gap-6 lg:gap-8">
 							{/* Instructions */}
 							<TextAreaWithFooter
-								label="Agent Instructions"
+								label="Do this..."
 								description="Tell the agent what to do when this automation is triggered."
 								value={instructionsValue}
 								onChange={handleInstructionsChange}
@@ -601,7 +615,7 @@ export default function AutomationDetailPage({
 					<div className="lg:w-80 min-w-0 flex flex-col gap-5 shrink-0">
 						{/* Triggers */}
 						<div>
-							<Label className="text-sm text-muted-foreground mb-2 block">Triggers</Label>
+							<StepLabel step={1} label="When" />
 							<div className="flex flex-col">
 								{triggers.map((trigger, index) => (
 									<TriggerChip
@@ -624,7 +638,7 @@ export default function AutomationDetailPage({
 
 						{/* Agent */}
 						<div>
-							<Label className="text-sm text-muted-foreground mb-2 block">Model</Label>
+							<StepLabel step={2} label="Model" />
 							<div className="flex flex-col">
 								<StackedListItem isFirst isLast>
 									<ModelSelector
@@ -644,7 +658,7 @@ export default function AutomationDetailPage({
 
 						{/* Actions/Tools */}
 						<div>
-							<Label className="text-sm text-muted-foreground mb-2 block">Actions</Label>
+							<StepLabel step={3} label="Actions" />
 							<div className="flex flex-col">
 								<ToolListItem
 									icon={SlackIcon}
@@ -748,6 +762,9 @@ export default function AutomationDetailPage({
 								/>
 							</div>
 						</div>
+
+						{/* Permissions */}
+						<AutomationPermissions automationId={id} />
 					</div>
 				</div>
 
@@ -776,6 +793,66 @@ export default function AutomationDetailPage({
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
+		</div>
+	);
+}
+
+function AutomationPermissions({ automationId }: { automationId: string }) {
+	const { data: modesData } = useAutomationActionModes(automationId);
+	const setActionMode = useSetAutomationActionMode(automationId);
+	const modes = modesData?.modes ?? {};
+
+	const allActions = ACTION_ADAPTERS.flatMap((adapter) =>
+		adapter.actions.map((action: ActionMeta) => ({
+			key: `${adapter.integration}:${action.name}`,
+			name: action.name,
+			integration: adapter.displayName,
+			description: action.description,
+			riskLevel: action.riskLevel,
+		})),
+	);
+
+	return (
+		<div>
+			<StepLabel step={4} label="Permissions" />
+			{allActions.length === 0 ? (
+				<div className="rounded-lg border border-dashed border-border/80 py-6 text-center">
+					<Shield className="h-5 w-5 mx-auto mb-1.5 text-muted-foreground/40" />
+					<p className="text-xs text-muted-foreground">No actions available</p>
+				</div>
+			) : (
+				<div className="rounded-lg border border-border/80 bg-background divide-y divide-border/60">
+					{allActions.map((action) => {
+						const currentMode = modes[action.key] ?? "require_approval";
+						return (
+							<div key={action.key} className="flex items-center justify-between px-3 py-2.5">
+								<div className="min-w-0 flex-1 mr-3">
+									<p className="text-xs font-medium">
+										{action.integration}: {action.name}
+									</p>
+									<span
+										className={cn(
+											"inline-block mt-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full border",
+											action.riskLevel === "write"
+												? "border-amber-500/30 text-amber-600 bg-amber-50 dark:bg-amber-950/30"
+												: "border-border text-muted-foreground",
+										)}
+									>
+										{action.riskLevel}
+									</span>
+								</div>
+								<PermissionControl
+									value={currentMode}
+									onChange={(mode) =>
+										setActionMode.mutate({ id: automationId, key: action.key, mode })
+									}
+									disabled={setActionMode.isPending}
+								/>
+							</div>
+						);
+					})}
+				</div>
+			)}
 		</div>
 	);
 }

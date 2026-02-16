@@ -360,6 +360,36 @@ export async function getDomainSuggestions(
 	};
 }
 
+// ============================================
+// Action Modes
+// ============================================
+
+export type { ActionMode, ActionModesMap } from "./db";
+
+/**
+ * Get action_modes for an organization.
+ */
+export async function getActionModes(orgId: string): Promise<orgsDb.ActionModesMap> {
+	return orgsDb.getActionModes(orgId);
+}
+
+/**
+ * Set a single action mode for an organization.
+ * Requires admin or owner role.
+ */
+export async function setActionMode(
+	orgId: string,
+	userId: string,
+	key: string,
+	mode: orgsDb.ActionMode,
+): Promise<void> {
+	const role = await orgsDb.getUserRole(userId, orgId);
+	if (role !== "owner" && role !== "admin") {
+		throw new Error("Only admins and owners can manage action modes");
+	}
+	await orgsDb.setActionMode(orgId, key, mode);
+}
+
 /**
  * Check if a user is a member of an organization.
  */

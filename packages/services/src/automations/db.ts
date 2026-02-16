@@ -437,6 +437,47 @@ export async function exists(id: string, orgId: string): Promise<boolean> {
 	return !!result;
 }
 
+// ============================================
+// Action Modes (per-automation overrides)
+// ============================================
+
+export type ActionMode = "allow" | "require_approval" | "deny";
+export type ActionModesMap = Record<string, ActionMode>;
+
+/**
+ * Get action_modes JSONB for an automation.
+ */
+export async function getActionModes(id: string, orgId: string): Promise<ActionModesMap> {
+	const db = getDb();
+	const result = await db.query.automations.findFirst({
+		where: and(eq(automations.id, id), eq(automations.organizationId, orgId)),
+		columns: {
+			actionModes: true,
+		},
+	});
+
+	if (!result?.actionModes) return {};
+	return result.actionModes as ActionModesMap;
+}
+
+/**
+ * Set a single action mode entry on an automation (merge-patch into JSONB).
+ */
+export async function setActionMode(
+	id: string,
+	orgId: string,
+	key: string,
+	mode: ActionMode,
+): Promise<void> {
+	const db = getDb();
+	const current = await getActionModes(id, orgId);
+	const updated = { ...current, [key]: mode };
+	await db
+		.update(automations)
+		.set({ actionModes: updated, updatedAt: new Date() })
+		.where(and(eq(automations.id, id), eq(automations.organizationId, orgId)));
+}
+
 /**
  * Get automation name for display.
  */
