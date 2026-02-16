@@ -34,6 +34,7 @@ export class MigrationInProgressError extends Error {
 
 export interface EnsureRuntimeOptions {
 	skipMigrationLock?: boolean;
+	reason?: "auto_reconnect";
 }
 
 export interface SessionRuntimeOptions {
@@ -283,6 +284,12 @@ export class SessionRuntime {
 				hasSandbox: Boolean(this.context.session.sandbox_id),
 				hasSnapshot: Boolean(this.context.session.snapshot_id),
 			});
+
+			// Abort auto-reconnect if session was paused (idle snapshot completed while we waited)
+			if (options?.reason === "auto_reconnect" && this.context.session.status === "paused") {
+				this.log("Auto-reconnect aborted: session is paused");
+				return;
+			}
 
 			const hasSandbox = Boolean(this.context.session.sandbox_id);
 			this.onStatus(hasSandbox ? "resuming" : "creating");
