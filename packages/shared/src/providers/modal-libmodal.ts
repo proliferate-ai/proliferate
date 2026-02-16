@@ -142,6 +142,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 	readonly type = "modal" as const;
 	readonly supportsPause = false;
 	readonly supportsAutoPause = false;
+	readonly supportsMemorySnapshot = true;
 	private client: ModalClient;
 	private app: App | null = null;
 	private baseImage: Image | null = null;
@@ -638,7 +639,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				name: opts.sessionId,
 				cpu: 2,
 				memoryMiB: 4096,
-				experimentalOptions: { enable_docker: true },
+				experimentalOptions: { enable_docker: true, enable_snapshot: true },
 			});
 			logLatency("provider.create_sandbox.sandbox_created", {
 				provider: this.type,
@@ -766,6 +767,22 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			sessionId: opts.sessionId,
 			hasSnapshotId: Boolean(opts.snapshotId),
 		});
+
+		// Route memory snapshot IDs through the restore path
+		if (opts.snapshotId?.startsWith("mem:")) {
+			log.info({ snapshotId: opts.snapshotId }, "Restoring from memory snapshot");
+			const result = await this.restoreFromMemorySnapshot(opts.sessionId, opts.snapshotId, {
+				envVars: opts.envVars,
+			});
+			logLatency("provider.ensure_sandbox.complete", {
+				provider: this.type,
+				sessionId: opts.sessionId,
+				recovered: false,
+				memoryRestore: true,
+				durationMs: Date.now() - startTime,
+			});
+			return { ...result, recovered: false };
+		}
 
 		// For Modal, sessionId IS the sandbox identifier (we use it as the unique name)
 		// This is equivalent to E2B using currentSandboxId - both are "find by ID"
@@ -1502,6 +1519,116 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			message: "pause is not supported for modal sandboxes",
 			isRetryable: false,
 		});
+	}
+
+	async memorySnapshot(sessionId: string, sandboxId: string): Promise<SnapshotResult> {
+		providerLogger.info({ sessionId, sandboxId: sandboxId.slice(0, 16) }, "Taking memory snapshot");
+		const startMs = Date.now();
+
+		try {
+			await this.ensureModalAuth("memorySnapshot");
+			const snapshotStartMs = Date.now();
+			const { snapshotId } = await this.client.cpClient.sandboxSnapshot({ sandboxId });
+			logLatency("provider.memory_snapshot.initiated", {
+				provider: this.type,
+				sessionId,
+				durationMs: Date.now() - snapshotStartMs,
+			});
+
+			const waitStartMs = Date.now();
+			await this.client.cpClient.sandboxSnapshotWait({ snapshotId, timeout: 120 });
+			logLatency("provider.memory_snapshot.wait_complete", {
+				provider: this.type,
+				sessionId,
+				durationMs: Date.now() - waitStartMs,
+			});
+
+			const memSnapshotId = `mem:${snapshotId}`;
+			providerLogger.info(
+				{ snapshotId: memSnapshotId, durationMs: Date.now() - startMs },
+				"Memory snapshot created",
+			);
+			return { snapshotId: memSnapshotId };
+		} catch (error) {
+			logLatency("provider.memory_snapshot.error", {
+				provider: this.type,
+				sessionId,
+				durationMs: Date.now() - startMs,
+				error: error instanceof Error ? error.message : String(error),
+			});
+			throw SandboxProviderError.fromError(error, "modal", "memorySnapshot");
+		}
+	}
+
+	async restoreFromMemorySnapshot(
+		sessionId: string,
+		snapshotId: string,
+		opts?: Pick<CreateSandboxOpts, "envVars">,
+	): Promise<CreateSandboxResult> {
+		// Strip the "mem:" prefix to get the raw Modal snapshot ID
+		const memorySnapshotId = snapshotId.replace(/^mem:/, "");
+		const log = providerLogger.child({ sessionId });
+		log.info({ memorySnapshotId }, "Restoring from memory snapshot");
+		const startMs = Date.now();
+
+		try {
+			await this.ensureModalAuth("restoreFromMemorySnapshot");
+
+			const restoreStartMs = Date.now();
+			// SandboxNameOverrideType: 2 = STRING (override with sessionId)
+			const { sandboxId: newSandboxId } = await this.client.cpClient.sandboxRestore({
+				snapshotId: memorySnapshotId,
+				sandboxNameOverride: sessionId,
+				sandboxNameOverrideType: 2,
+			});
+			logLatency("provider.memory_restore.restore_call", {
+				provider: this.type,
+				sessionId,
+				durationMs: Date.now() - restoreStartMs,
+				newSandboxId,
+			});
+
+			// Resolve tunnel URLs for the restored sandbox
+			const tunnelsStartMs = Date.now();
+			const sandbox = await this.client.sandboxes.fromId(newSandboxId);
+			const tunnels = await sandbox.tunnels(30000);
+			logLatency("provider.memory_restore.tunnels", {
+				provider: this.type,
+				sessionId,
+				durationMs: Date.now() - tunnelsStartMs,
+			});
+
+			const opencodeTunnel = tunnels[SANDBOX_PORTS.opencode];
+			const previewTunnel = tunnels[SANDBOX_PORTS.preview];
+			const sshTunnel = tunnels[SANDBOX_PORTS.ssh];
+
+			// Write updated env vars if provided (tokens may have rotated)
+			if (opts?.envVars && Object.keys(opts.envVars).length > 0) {
+				try {
+					await this.writeEnvFile(newSandboxId, opts.envVars);
+				} catch (err) {
+					log.warn({ err }, "Failed to write env vars after memory restore (non-fatal)");
+				}
+			}
+
+			log.info({ newSandboxId, durationMs: Date.now() - startMs }, "Memory snapshot restored");
+			return {
+				sandboxId: newSandboxId,
+				tunnelUrl: opencodeTunnel?.url || "",
+				previewUrl: previewTunnel?.url || "",
+				sshHost: sshTunnel?.unencryptedHost || undefined,
+				sshPort: sshTunnel?.unencryptedPort || undefined,
+				expiresAt: Date.now() + SANDBOX_TIMEOUT_MS,
+			};
+		} catch (error) {
+			logLatency("provider.memory_restore.error", {
+				provider: this.type,
+				sessionId,
+				durationMs: Date.now() - startMs,
+				error: error instanceof Error ? error.message : String(error),
+			});
+			throw SandboxProviderError.fromError(error, "modal", "restoreFromMemorySnapshot");
+		}
 	}
 
 	async terminate(sessionId: string, sandboxId?: string): Promise<void> {
