@@ -10,6 +10,7 @@ import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { PanelTabBar } from "./panel-tab-bar";
 import type { SessionPanelProps } from "./right-panel";
 import { RightPanel } from "./right-panel";
 import { SessionHeader } from "./session-header";
@@ -96,8 +97,15 @@ export function CodingSession({
 		}
 	};
 
-	const { mode, toggleUrlPreview, togglePanel, mobileView, toggleMobileView } =
-		usePreviewPanelStore();
+	const {
+		mode,
+		toggleUrlPreview,
+		togglePanel,
+		mobileView,
+		toggleMobileView,
+		close,
+		setMobileView,
+	} = usePreviewPanelStore();
 	const isPanelOpen = mode.type !== "none";
 	const [secretsModalOpen, setSecretsModalOpen] = useState(false);
 
@@ -192,26 +200,47 @@ export function CodingSession({
 					</SessionContext.Provider>
 				</div>
 
-				{/* Right panel — buttons above + rounded card */}
+				{/* Right panel — tab bar + content panel */}
 				{isPanelOpen && (
 					<div
-						className={`hidden md:flex md:flex-col md:w-1/2 p-2 gap-1 ${mobileView === "preview" ? "!flex w-full" : ""}`}
+						className={`hidden md:flex md:flex-col md:w-1/2 border-l border-border bg-muted/30 ${mobileView === "preview" ? "!flex w-full" : ""}`}
 					>
-						<div className="flex justify-start shrink-0 px-1">
-							<SessionHeader
-								error={error}
-								panelMode={mode}
-								onTogglePreview={() => toggleUrlPreview(previewUrl)}
-								onToggleSettings={() => togglePanel("settings")}
-								onToggleGit={() => togglePanel("git")}
-								onToggleTerminal={() => togglePanel("terminal")}
-								onToggleVscode={() => togglePanel("vscode")}
-								onToggleArtifacts={() => togglePanel("artifacts")}
-								mobileView={mobileView}
-								onToggleMobileView={toggleMobileView}
-							/>
-						</div>
-						<div className="flex-1 min-h-0 rounded-xl border bg-background overflow-hidden">
+						<PanelTabBar
+							tabs={[
+								{
+									id: "terminal",
+									label: "Terminal",
+									isActive: mode.type === "terminal",
+									onClick: () => togglePanel("terminal"),
+								},
+								{
+									id: "git",
+									label: "Changes",
+									isActive: mode.type === "git",
+									onClick: () => togglePanel("git"),
+								},
+								{
+									id: "preview",
+									label: "Preview",
+									isActive: mode.type === "url",
+									onClick: () => toggleUrlPreview(previewUrl),
+								},
+								{
+									id: "artifacts",
+									label: "Artifacts",
+									isActive:
+										mode.type === "artifacts" || mode.type === "file" || mode.type === "gallery",
+									onClick: () => togglePanel("artifacts"),
+								},
+							]}
+							onToggleSettings={() => togglePanel("settings")}
+							settingsActive={mode.type === "settings"}
+							onClose={() => {
+								close();
+								setMobileView("chat");
+							}}
+						/>
+						<div className="flex-1 min-h-0 overflow-hidden">
 							<RightPanel
 								isMobileFullScreen={mobileView === "preview"}
 								sessionProps={sessionPanelProps}

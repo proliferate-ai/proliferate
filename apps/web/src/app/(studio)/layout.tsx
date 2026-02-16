@@ -1,5 +1,6 @@
 "use client";
 
+import { StudioSidebar } from "@/components/studio/sidebar";
 import { Button } from "@/components/ui/button";
 import { useAttentionInbox } from "@/hooks/use-attention-inbox";
 import { useBilling } from "@/hooks/use-billing";
@@ -90,8 +91,11 @@ export default function StudioLayout({
 				</Link>
 			</header>
 
-			{/* Full-bleed studio content */}
-			<div className="flex-1 min-h-0">{children}</div>
+			{/* Main layout: Sidebar + Content */}
+			<div className="flex-1 flex min-h-0">
+				<StudioSidebar />
+				<main className="flex-1 min-h-0 min-w-0">{children}</main>
+			</div>
 		</div>
 	);
 }
