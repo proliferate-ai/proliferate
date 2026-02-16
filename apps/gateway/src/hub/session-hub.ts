@@ -507,9 +507,9 @@ export class SessionHub {
 	/**
 	 * Ensure sandbox, OpenCode session, and SSE are ready.
 	 */
-	async ensureRuntimeReady(): Promise<void> {
+	async ensureRuntimeReady(options?: { reason?: "auto_reconnect" }): Promise<void> {
 		this.lifecycleStartTime = Date.now();
-		await this.runtime.ensureRuntimeReady();
+		await this.runtime.ensureRuntimeReady(options);
 		this.lastKnownAgentIdleAt = null; // fresh sandbox, agent state unknown
 		this.startMigrationMonitor();
 		await this.startLeaseRenewal();
@@ -1195,8 +1195,7 @@ export class SessionHub {
 				return;
 			}
 
-			this.runtime
-				.ensureRuntimeReady({ reason: "auto_reconnect" })
+			this.ensureRuntimeReady({ reason: "auto_reconnect" })
 				.then(() => {
 					this.log("Reconnection successful");
 					this.reconnectAttempt = 0;

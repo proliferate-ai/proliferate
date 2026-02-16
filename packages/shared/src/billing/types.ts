@@ -297,7 +297,9 @@ export type PauseReason =
 	| "inactivity"
 	| "overage_cap"
 	| "payment_failed"
-	| "suspended";
+	| "suspended"
+	| "orphaned"
+	| "snapshot_failed";
 
 export type StopReason = "manual" | "error" | "sandbox_terminated" | "auto_pause_failed";
 
