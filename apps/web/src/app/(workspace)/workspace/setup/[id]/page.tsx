@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useCreateConfiguration } from "@/hooks/use-configurations";
 import { useCreateSession, useFinalizeSetup } from "@/hooks/use-sessions";
 import { useDashboardStore } from "@/stores/dashboard";
+import { useSetupProgressStore } from "@/stores/setup-progress";
 import { Check, Settings } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -26,6 +27,15 @@ export default function SetupPage() {
 	const createConfigurationMutation = useCreateConfiguration();
 	const createSessionMutation = useCreateSession();
 	const finalizeSetupMutation = useFinalizeSetup();
+
+	const { hasActivity, envRequested, verified, snapshotSaved } = useSetupProgressStore();
+	const resetProgress = useSetupProgressStore((s) => s.reset);
+
+	// Reset progress store on mount/unmount
+	useEffect(() => {
+		resetProgress();
+		return () => resetProgress();
+	}, [resetProgress]);
 
 	// Create configuration and session on mount
 	useEffect(() => {
@@ -116,7 +126,15 @@ export default function SetupPage() {
 						<HelpLink topic="setup-sessions" iconOnly />
 					</div>
 					<span className="text-xs text-muted-foreground block">
-						The agent is configuring this environment. Save the snapshot when it's verified.
+						{snapshotSaved
+							? "Setup complete \u2014 save the snapshot to finish"
+							: verified
+								? "Environment verified \u2014 ready to save"
+								: envRequested
+									? "Secrets requested \u2014 provide them in the chat below"
+									: hasActivity
+										? "Installing dependencies and configuring services\u2026"
+										: "The agent is starting setup\u2026"}
 					</span>
 				</div>
 				<TooltipProvider>
