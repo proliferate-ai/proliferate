@@ -7,7 +7,7 @@ CREATE TABLE "user_action_preferences" (
 	"enabled" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now(),
 	"updated_at" timestamp with time zone DEFAULT now(),
-	CONSTRAINT "user_action_prefs_user_org_source_action_key" UNIQUE NULLS NOT DISTINCT("user_id","organization_id","source_id","action_id")
+	CONSTRAINT "user_action_prefs_user_org_source_action_key" UNIQUE("user_id","organization_id","source_id","action_id")
 );
 --> statement-breakpoint
 ALTER TABLE "user_action_preferences" ADD CONSTRAINT "user_action_preferences_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
