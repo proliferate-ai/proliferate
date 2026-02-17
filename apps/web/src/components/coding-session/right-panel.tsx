@@ -110,7 +110,6 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 			return (
 				<SettingsPanel
 					panelMode={mode}
-					onClose={handleClose}
 					sessionStatus={sessionProps.sessionStatus}
 					repoName={sessionProps.repoName}
 					branchName={sessionProps.branchName}
@@ -137,7 +136,6 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 					sessionId={sessionProps.sessionId}
 					prebuildId={sessionProps.prebuildId}
 					repoId={sessionProps.repoId}
-					onClose={handleClose}
 				/>
 			);
 		}
@@ -146,7 +144,6 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 		if (mode.type === "git" && sessionProps) {
 			return (
 				<GitPanel
-					onClose={handleClose}
 					panelMode={mode}
 					sessionId={sessionProps.sessionId}
 					activityTick={sessionProps.activityTick}
@@ -186,7 +183,6 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 				<ArtifactsPanel
 					sessionId={sessionProps.sessionId}
 					activityTick={sessionProps.activityTick ?? 0}
-					onClose={handleClose}
 				/>
 			);
 		}

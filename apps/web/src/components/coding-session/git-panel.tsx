@@ -5,7 +5,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { PreviewMode } from "@/stores/preview-panel";
 import type { GitResultMessage, GitState } from "@proliferate/shared";
 import {
@@ -23,9 +22,9 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChangesContent } from "./changes-panel";
+import { PanelShell } from "./panel-shell";
 
 interface GitPanelProps {
-	onClose: () => void;
 	panelMode: PreviewMode;
 	sessionId?: string;
 	activityTick?: number;
@@ -48,7 +47,6 @@ interface GitPanelProps {
 }
 
 export function GitPanel({
-	onClose,
 	panelMode,
 	sessionId,
 	activityTick,
@@ -139,84 +137,67 @@ export function GitPanel({
 	const canMutate = !!gitState && !isBusy;
 
 	return (
-		<TooltipProvider delayDuration={150}>
-			<div className="flex flex-col h-full">
-				{/* Header */}
-				<div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 shrink-0">
-					<div className="flex items-center gap-2">
-						<GitBranch className="h-4 w-4 text-muted-foreground" />
-						<span className="text-sm font-medium">Git</span>
-					</div>
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
-								<X className="h-4 w-4" />
-							</Button>
-						</TooltipTrigger>
-						<TooltipContent>Close panel</TooltipContent>
-					</Tooltip>
+		<PanelShell
+			title="Git"
+			icon={<GitBranch className="h-4 w-4 text-muted-foreground" />}
+			noPadding
+		>
+			<Tabs defaultValue={defaultTab} className="h-full flex flex-col min-h-0">
+				<div className="px-3 pt-2">
+					<TabsList className="w-full">
+						<TabsTrigger value="git" className="flex-1 text-xs">
+							Git
+						</TabsTrigger>
+						<TabsTrigger value="changes" className="flex-1 text-xs">
+							Changes
+						</TabsTrigger>
+					</TabsList>
 				</div>
 
-				{/* Tabs */}
-				<Tabs defaultValue={defaultTab} className="flex-1 flex flex-col min-h-0">
-					<div className="px-3 pt-2">
-						<TabsList className="w-full">
-							<TabsTrigger value="git" className="flex-1 text-xs">
-								Git
-							</TabsTrigger>
-							<TabsTrigger value="changes" className="flex-1 text-xs">
-								Changes
-							</TabsTrigger>
-						</TabsList>
-					</div>
+				<TabsContent value="git" className="flex-1 min-h-0 overflow-y-auto mt-0">
+					{!gitState ? (
+						<div className="flex items-center justify-center h-full">
+							<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+						</div>
+					) : (
+						<div className="p-3 space-y-4">
+							<StatusIndicators gitState={gitState} />
+							{pollError && (
+								<div className="text-xs text-muted-foreground">Last update failed: {pollError}</div>
+							)}
+							<BranchSection
+								gitState={gitState}
+								canMutate={canMutate}
+								sendGitCreateBranch={sendGitCreateBranch}
+							/>
+							<ChangesSection gitState={gitState} />
+							<CommitSection
+								gitState={gitState}
+								canMutate={canMutate}
+								sendGitCommit={sendGitCommit}
+							/>
+							<PushSection gitState={gitState} canMutate={canMutate} sendGitPush={sendGitPush} />
+							<PrSection
+								gitState={gitState}
+								canMutate={canMutate}
+								sendGitCreatePr={sendGitCreatePr}
+							/>
+							<CommitsSection gitState={gitState} />
+						</div>
+					)}
+				</TabsContent>
 
-					<TabsContent value="git" className="flex-1 min-h-0 overflow-y-auto mt-0">
-						{!gitState ? (
-							<div className="flex items-center justify-center h-full">
-								<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-							</div>
-						) : (
-							<div className="p-3 space-y-4">
-								<StatusIndicators gitState={gitState} />
-								{pollError && (
-									<div className="text-xs text-muted-foreground">
-										Last update failed: {pollError}
-									</div>
-								)}
-								<BranchSection
-									gitState={gitState}
-									canMutate={canMutate}
-									sendGitCreateBranch={sendGitCreateBranch}
-								/>
-								<ChangesSection gitState={gitState} />
-								<CommitSection
-									gitState={gitState}
-									canMutate={canMutate}
-									sendGitCommit={sendGitCommit}
-								/>
-								<PushSection gitState={gitState} canMutate={canMutate} sendGitPush={sendGitPush} />
-								<PrSection
-									gitState={gitState}
-									canMutate={canMutate}
-									sendGitCreatePr={sendGitCreatePr}
-								/>
-								<CommitsSection gitState={gitState} />
-							</div>
-						)}
-					</TabsContent>
-
-					<TabsContent value="changes" className="flex-1 min-h-0 mt-0">
-						{sessionId ? (
-							<ChangesContent sessionId={sessionId} activityTick={activityTick ?? 0} />
-						) : (
-							<div className="px-3 py-8 text-center text-sm text-muted-foreground">
-								No session available
-							</div>
-						)}
-					</TabsContent>
-				</Tabs>
-			</div>
-		</TooltipProvider>
+				<TabsContent value="changes" className="flex-1 min-h-0 mt-0">
+					{sessionId ? (
+						<ChangesContent sessionId={sessionId} activityTick={activityTick ?? 0} />
+					) : (
+						<div className="px-3 py-8 text-center text-sm text-muted-foreground">
+							No session available
+						</div>
+					)}
+				</TabsContent>
+			</Tabs>
+		</PanelShell>
 	);
 }
 

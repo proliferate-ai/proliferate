@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusDot } from "@/components/ui/status-dot";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -18,6 +18,7 @@ import {
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { toast } from "sonner";
+import { PanelShell } from "./panel-shell";
 import type { ServiceInfo } from "./runtime/use-services";
 import {
 	useExposePort,
@@ -200,51 +201,49 @@ export function ServicesPanel({ sessionId, previewUrl }: ServicesPanelProps) {
 		});
 	};
 
-	return (
-		<TooltipProvider delayDuration={150}>
-			<div className="flex flex-col h-full">
-				{/* Header */}
-				<div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 shrink-0">
-					<div className="flex items-center gap-2 min-w-0">
-						{selectedService ? (
-							<>
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Button
-											variant="ghost"
-											size="icon"
-											className="h-7 w-7 shrink-0"
-											onClick={() => setSelectedService(null)}
-										>
-											<ChevronLeft className="h-4 w-4" />
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent>Back to services</TooltipContent>
-								</Tooltip>
-								<StatusDot
-									status={serviceStatusToDot(
-										services.find((s) => s.name === selectedService)?.status ?? "stopped",
-									)}
-									size="sm"
-								/>
-								<span className="text-sm font-medium truncate">{selectedService} logs</span>
-							</>
-						) : (
-							<span className="text-sm font-medium">Services</span>
-						)}
-					</div>
-					{!selectedService && (
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => refetch()}>
-									<RefreshCw className="h-3.5 w-3.5" />
-								</Button>
-							</TooltipTrigger>
-							<TooltipContent>Refresh</TooltipContent>
-						</Tooltip>
-					)}
-				</div>
+	const panelIcon = selectedService ? (
+		<>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7 shrink-0"
+						onClick={() => setSelectedService(null)}
+					>
+						<ChevronLeft className="h-4 w-4" />
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent>Back to services</TooltipContent>
+			</Tooltip>
+			<StatusDot
+				status={serviceStatusToDot(
+					services.find((s) => s.name === selectedService)?.status ?? "stopped",
+				)}
+				size="sm"
+			/>
+		</>
+	) : undefined;
 
+	const panelActions = !selectedService ? (
+		<Tooltip>
+			<TooltipTrigger asChild>
+				<Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => refetch()}>
+					<RefreshCw className="h-3.5 w-3.5" />
+				</Button>
+			</TooltipTrigger>
+			<TooltipContent>Refresh</TooltipContent>
+		</Tooltip>
+	) : undefined;
+
+	return (
+		<PanelShell
+			title={selectedService ? `${selectedService} logs` : "Services"}
+			icon={panelIcon}
+			actions={panelActions}
+			noPadding
+		>
+			<div className="flex flex-col h-full">
 				{/* Content */}
 				<div className="flex-1 min-h-0">
 					{selectedService ? (
@@ -310,6 +309,6 @@ export function ServicesPanel({ sessionId, previewUrl }: ServicesPanelProps) {
 					</div>
 				)}
 			</div>
-		</TooltipProvider>
+		</PanelShell>
 	);
 }
