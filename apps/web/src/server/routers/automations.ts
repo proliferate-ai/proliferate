@@ -110,7 +110,11 @@ export const automationsRouter = {
 					if (err.message.includes("not found")) {
 						throw new ORPCError("NOT_FOUND", { message: err.message });
 					}
-					if (err.message.includes("not active") || err.message.includes("Missing required")) {
+					if (
+						err.message.includes("not active") ||
+						err.message.includes("Missing required") ||
+						err.message.includes("is for")
+					) {
 						throw new ORPCError("BAD_REQUEST", { message: err.message });
 					}
 				}
