@@ -6,20 +6,19 @@ import { CommandSearch } from "@/components/dashboard/command-search";
 import { MobileSidebar, MobileSidebarTrigger, Sidebar } from "@/components/dashboard/sidebar";
 import { openIntercomMessenger } from "@/components/providers";
 import { Button } from "@/components/ui/button";
-import { useAttentionInbox } from "@/hooks/use-attention-inbox";
 import { useBilling } from "@/hooks/use-billing";
 import { useOnboarding } from "@/hooks/use-onboarding";
 import { useSession } from "@/lib/auth-client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { env } from "@proliferate/environment/public";
-import { Bell, BookOpen, MessageSquare, Search } from "lucide-react";
+import { BookOpen, MessageSquare, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 const PAGE_TITLES: Record<string, string> = {
 	"/dashboard": "Home",
-	"/dashboard/runs": "Runs",
+	"/dashboard/inbox": "Inbox",
 	"/dashboard/sessions": "Sessions",
 	"/dashboard/automations": "Automations",
 	"/dashboard/repos": "Repos",
@@ -59,8 +58,6 @@ export default function CommandCenterLayout({
 	const { data: onboardingStatus, isLoading: onboardingLoading } = useOnboarding();
 	const { commandSearchOpen, setCommandSearchOpen } = useDashboardStore();
 	const needsOnboarding = onboardingStatus ? !onboardingStatus.onboardingComplete : false;
-	const inboxItems = useAttentionInbox({ wsApprovals: [] });
-	const inboxCount = inboxItems.length;
 
 	// Cmd+K keyboard shortcut for search
 	useEffect(() => {
@@ -166,20 +163,6 @@ export default function CommandCenterLayout({
 							>
 								<MessageSquare className="h-3.5 w-3.5" />
 								<span className="text-xs">Feedback</span>
-							</Button>
-							<Button
-								variant="ghost"
-								size="icon"
-								className="h-8 w-8 relative text-muted-foreground"
-								onClick={() => router.push("/dashboard/actions")}
-							>
-								<Bell className="h-3.5 w-3.5" />
-								{inboxCount > 0 && (
-									<span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
-										{inboxCount > 9 ? "9+" : inboxCount}
-									</span>
-								)}
-								<span className="sr-only">Notifications</span>
 							</Button>
 						</div>
 					</div>

@@ -16,6 +16,7 @@ import {
 	Code,
 	GitBranch,
 	Globe,
+	Layers,
 	Loader2,
 	MoreHorizontal,
 	Pin,
@@ -39,6 +40,7 @@ const PANEL_TABS = [
 	{ type: "vscode" as const, label: "Code", icon: Code },
 	{ type: "terminal" as const, label: "Terminal", icon: SquareTerminal },
 	{ type: "git" as const, label: "Git", icon: GitBranch },
+	{ type: "services" as const, label: "Services", icon: Layers },
 	{ type: "artifacts" as const, label: "Artifacts", icon: Zap },
 	{ type: "settings" as const, label: "Settings", icon: Settings },
 ];

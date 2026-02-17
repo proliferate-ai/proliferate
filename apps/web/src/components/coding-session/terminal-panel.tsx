@@ -6,8 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { useWsToken } from "./runtime/use-ws-token";
-import { ServicesStrip } from "./services-panel";
-
 interface TerminalPanelProps {
 	sessionId: string;
 	onClose: () => void;
@@ -146,10 +144,5 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 		};
 	}, [sessionId, token]);
 
-	return (
-		<div className="flex flex-col h-full">
-			<ServicesStrip sessionId={sessionId} />
-			<div ref={containerRef} className="flex-1 min-h-0 bg-background" />
-		</div>
-	);
+	return <div ref={containerRef} className="h-full min-h-0 bg-background" />;
 }

@@ -10,7 +10,8 @@ export type PreviewMode =
 	| { type: "git"; tab?: "git" | "changes" }
 	| { type: "terminal" }
 	| { type: "vscode" }
-	| { type: "artifacts" };
+	| { type: "artifacts" }
+	| { type: "services" };
 
 // Mobile view state - on mobile we either show chat or preview (full screen)
 export type MobileView = "chat" | "preview";
@@ -28,7 +29,9 @@ interface PreviewPanelState {
 
 	// Toggle helpers (for header buttons — toggles open/close)
 	toggleUrlPreview: (url: string | null) => void;
-	togglePanel: (type: "settings" | "git" | "terminal" | "vscode" | "artifacts") => void;
+	togglePanel: (
+		type: "settings" | "git" | "terminal" | "vscode" | "artifacts" | "services",
+	) => void;
 
 	// Pin/unpin tabs in header
 	pinTab: (type: string) => void;
@@ -65,7 +68,7 @@ export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
 	},
 
 	// Switch panel view — always stays open, just switches type
-	togglePanel: (type: "settings" | "git" | "terminal" | "vscode" | "artifacts") => {
+	togglePanel: (type: "settings" | "git" | "terminal" | "vscode" | "artifacts" | "services") => {
 		const { mode } = get();
 		if (mode.type === type) {
 			set({ mode: DEFAULT_MODE });
