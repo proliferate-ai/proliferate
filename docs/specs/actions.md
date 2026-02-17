@@ -119,7 +119,11 @@ packages/db/src/schema/
 └── relations.ts                      # Drizzle relations for both tables
 
 apps/web/src/server/routers/
-└── actions.ts                        # oRPC router for org-level actions inbox
+├── actions.ts                        # oRPC router for org-level actions inbox
+└── automations.ts                    # Also hosts getIntegrationActions endpoint
+
+apps/web/src/components/automations/
+└── integration-permissions.tsx        # Unified integration cards + action permissions UI
 ```
 
 ---
@@ -403,6 +407,8 @@ try {
 
 **Frontend surface:** Pending approvals are surfaced via an inline **inbox tray** rendered inside the coding session thread (`apps/web/src/components/coding-session/inbox-tray.tsx`). The tray merges three data sources: current-session WebSocket approval requests, org-level polled pending approvals (via `useOrgActions`), and org-level pending automation runs (via `useOrgPendingRuns`). The merge logic deduplicates WebSocket vs polled approvals by `invocationId` and sorts all items newest-first. A standalone actions page (`apps/web/src/app/dashboard/actions/page.tsx`) also exists with full pagination, status filtering, and grant configuration — sidebar navigation to it was removed but the route remains accessible directly.
 
+**Automation-scoped permissions UI:** The automation detail page uses a dedicated `IntegrationPermissions` component (`apps/web/src/components/automations/integration-permissions.tsx`) that fetches action metadata dynamically via `useAutomationIntegrationActions(automationId)` → `automations.getIntegrationActions` oRPC endpoint. The backend resolver (`packages/services/src/automations/service.ts:getAutomationIntegrationActions`) checks the automation's `enabledTools` and trigger providers to determine which integrations are relevant, then returns their action definitions (name, description, risk level). The UI renders grouped integration cards with per-action `PermissionControl` selectors. Action permission modes (`allow`/`require_approval`/`deny`) are persisted as automation-level overrides via the `useSetAutomationActionMode` hook.
+
 **Files touched:** `apps/web/src/server/routers/actions.ts`, `packages/services/src/actions/db.ts:listByOrg`, `apps/web/src/components/coding-session/inbox-tray.tsx`, `apps/web/src/hooks/use-attention-inbox.ts`
 
 ### 6.10 Integration Guide Flow — `Implemented`
@@ -468,6 +474,7 @@ Org connector catalog (integrations-owned) → Gateway resolves by org/session r
 | `agent-contract.md` | Contract → Actions | `ACTIONS_BOOTSTRAP` in sandbox config | Bootstrap guide written to `.proliferate/actions-guide.md` |
 | `agent-contract.md` | Contract → Actions | `proliferate` CLI in system prompts | Prompts document CLI usage for actions |
 | `auth-orgs.md` | Actions → Auth | `orgs.getUserRole(userId, orgId)` | Admin/owner role check for approve/deny |
+| `automations-runs.md` | Actions ← Automations | `automations.getIntegrationActions` oRPC endpoint | Dynamic resolver returns relevant integration actions based on automation config (enabled tools + trigger providers) |
 
 ### Security & Auth
 - **Sandbox tokens** can invoke actions and create grants but cannot approve/deny.
