@@ -8,7 +8,7 @@ import type {
 	GitState,
 } from "@proliferate/shared";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, PanelRight } from "lucide-react";
+import { Loader2, MousePointerClick } from "lucide-react";
 import dynamic from "next/dynamic";
 import { ArtifactsPanel } from "./artifacts-panel";
 import { EnvironmentPanel } from "./environment-panel";
@@ -97,8 +97,8 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 	// Empty state when no panel is selected
 	if (mode.type === "none") {
 		return (
-			<div className="flex flex-col h-full items-center justify-center gap-3 text-muted-foreground">
-				<PanelRight className="h-8 w-8" />
+			<div className="flex flex-col h-full items-center justify-center text-muted-foreground">
+				<MousePointerClick className="h-8 w-8 mb-3 opacity-40" />
 				<p className="text-sm">Select a tool from the top bar</p>
 			</div>
 		);

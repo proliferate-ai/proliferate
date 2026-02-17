@@ -9,9 +9,9 @@ import { X } from "lucide-react";
 interface PanelShellProps {
 	title: string;
 	icon?: React.ReactNode;
-	/** Extra controls rendered before the close button */
+	/** Toolbar actions rendered before the close button */
 	actions?: React.ReactNode;
-	/** Disable default padding on the content area (for iframes, terminals) */
+	/** Disable default body padding (for edge-to-edge iframes, terminals) */
 	noPadding?: boolean;
 	children: React.ReactNode;
 }
@@ -22,10 +22,12 @@ export function PanelShell({ title, icon, actions, noPadding, children }: PanelS
 	return (
 		<TooltipProvider delayDuration={150}>
 			<div className="flex flex-col h-full w-full bg-background overflow-hidden">
-				{/* Header */}
-				<div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 shrink-0">
+				{/* Standardized header */}
+				<div className="h-10 px-3 border-b border-border bg-muted/30 flex items-center justify-between shrink-0">
 					<div className="flex items-center gap-2 min-w-0">
-						{icon}
+						{icon && (
+							<span className="shrink-0 text-muted-foreground [&>svg]:h-4 [&>svg]:w-4">{icon}</span>
+						)}
 						<span className="text-sm font-medium truncate">{title}</span>
 					</div>
 					<div className="flex items-center gap-1 shrink-0">

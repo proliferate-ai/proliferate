@@ -42,7 +42,7 @@ interface PreviewPanelState {
 	pinTab: (type: string) => void;
 	unpinTab: (type: string) => void;
 
-	// Panel layout sizes
+	// Panel sizes (persisted)
 	setPanelSizes: (sizes: number[]) => void;
 
 	// Missing env key count
@@ -53,7 +53,7 @@ interface PreviewPanelState {
 	toggleMobileView: () => void;
 }
 
-const DEFAULT_MODE: PreviewMode = { type: "vscode" };
+const DEFAULT_MODE: PreviewMode = { type: "none" };
 const NONE_MODE: PreviewMode = { type: "none" };
 
 export const usePreviewPanelStore = create<PreviewPanelState>()(
