@@ -9,8 +9,10 @@ import {
 	MonitorIcon,
 	RefreshCw,
 } from "@/components/ui/icons";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 interface PreviewPanelProps {
 	url: string | null;
@@ -52,7 +54,7 @@ export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
 
 		let cancelled = false;
 		let attempts = 0;
-		const maxAttempts = 5;
+		const maxAttempts = 8;
 		setStatus("checking");
 
 		const poll = async () => {
@@ -70,9 +72,11 @@ export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
 				return;
 			}
 
+			// Exponential backoff: 1s, 2s, 4s, 8s, 10s (capped)
+			const delay = Math.min(1000 * 2 ** (attempts - 1), 10000);
 			setTimeout(() => {
 				if (!cancelled) poll();
-			}, 3000);
+			}, delay);
 		};
 
 		poll();
@@ -81,9 +85,26 @@ export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
 		};
 	}, [url, checkUrl, refreshKey]);
 
+	// Esc key exits fullscreen
+	useEffect(() => {
+		if (!isFullscreen) return;
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setIsFullscreen(false);
+		};
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [isFullscreen]);
+
 	const handleRefresh = useCallback(() => {
 		setRefreshKey((k) => k + 1);
 	}, []);
+
+	const handleCopyUrl = useCallback(() => {
+		if (!url) return;
+		navigator.clipboard.writeText(url).then(() => {
+			toast.success("URL copied");
+		});
+	}, [url]);
 
 	if (!url) {
 		return (
@@ -136,8 +157,12 @@ export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
 					<RefreshCw className={cn("h-4 w-4", status === "checking" && "animate-spin")} />
 				</Button>
 
-				<div className="flex-1 min-w-0">
-					<span className="text-xs text-muted-foreground truncate block">{url}</span>
+				<div className="flex-1 min-w-0" onClick={handleCopyUrl} title="Click to copy URL">
+					<Input
+						readOnly
+						value={url}
+						className="h-7 text-xs text-muted-foreground bg-muted/50 border-none cursor-pointer select-all focus-visible:ring-0"
+					/>
 				</div>
 
 				<Button
