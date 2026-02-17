@@ -312,7 +312,17 @@ export default function AutomationDetailPage({
 		triggerManualRun.mutate(
 			{ id },
 			{
-				onSuccess: () => toast.success("Run started"),
+				onSuccess: (data) => {
+					const runId = data?.run?.id;
+					toast.success("Run started", {
+						action: runId
+							? {
+									label: "View",
+									onClick: () => router.push(`/dashboard/automations/${id}/events?runId=${runId}`),
+								}
+							: undefined,
+					});
+				},
 				onError: (err) => toast.error(err.message || "Failed to start run"),
 			},
 		);
@@ -448,23 +458,11 @@ export default function AutomationDetailPage({
 					<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
 						Triggers
 					</p>
-					<div className="rounded-xl border border-border overflow-hidden">
-						{triggers.map((trigger, index) => (
-							<TriggerChip
-								key={trigger.id}
-								trigger={trigger}
-								automationId={automation.id}
-								variant="stacked"
-								isFirst={index === 0}
-								isLast={false}
-							/>
+					<div className="flex flex-wrap items-center gap-2">
+						{triggers.map((trigger) => (
+							<TriggerChip key={trigger.id} trigger={trigger} automationId={automation.id} />
 						))}
-						<AddTriggerButton
-							automationId={automation.id}
-							variant="stacked"
-							isFirst={triggers.length === 0}
-							isLast
-						/>
+						<AddTriggerButton automationId={automation.id} />
 					</div>
 				</div>
 
@@ -473,22 +471,14 @@ export default function AutomationDetailPage({
 					<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
 						Schedules
 					</p>
-					<div className="rounded-xl border border-border overflow-hidden">
-						{schedules.map((schedule, index) => (
-							<TriggerChip
-								key={schedule.id}
-								trigger={schedule}
-								automationId={automation.id}
-								variant="stacked"
-								isFirst={index === 0}
-								isLast={false}
-							/>
+					<div className="flex flex-wrap items-center gap-2">
+						{schedules.map((schedule) => (
+							<TriggerChip key={schedule.id} trigger={schedule} automationId={automation.id} />
 						))}
 						<AddTriggerButton
 							automationId={automation.id}
-							variant="stacked"
-							isFirst={schedules.length === 0}
-							isLast
+							defaultProvider="scheduled"
+							label="Add schedule"
 						/>
 					</div>
 				</div>

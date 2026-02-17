@@ -110,7 +110,6 @@ export function IntegrationPermissions({
 			<IntegrationCard
 				icon={SlackIcon}
 				name="Slack"
-				description="Send notifications to a Slack channel"
 				enabled={enabledTools.slack_notify?.enabled || false}
 				onToggle={(enabled) => onToolToggle("slack_notify", enabled)}
 			>
@@ -155,7 +154,6 @@ export function IntegrationPermissions({
 			<IntegrationCard
 				icon={LinearIcon}
 				name="Linear"
-				description="Create and manage Linear issues"
 				enabled={enabledTools.create_linear_issue?.enabled || false}
 				onToggle={(enabled) => onToolToggle("create_linear_issue", enabled)}
 				footer={
@@ -185,7 +183,6 @@ export function IntegrationPermissions({
 			<IntegrationCard
 				icon={Mail}
 				name="Email"
-				description="Send email notifications"
 				enabled={enabledTools.email_user?.enabled || false}
 				onToggle={(enabled) => onToolToggle("email_user", enabled)}
 			>
@@ -260,7 +257,6 @@ export function IntegrationPermissions({
 function IntegrationCard({
 	icon: Icon,
 	name,
-	description,
 	enabled,
 	onToggle,
 	children,
@@ -268,7 +264,6 @@ function IntegrationCard({
 }: {
 	icon: React.ElementType;
 	name: string;
-	description: string;
 	enabled: boolean;
 	onToggle: (enabled: boolean) => void;
 	children?: React.ReactNode;
@@ -277,12 +272,9 @@ function IntegrationCard({
 }) {
 	return (
 		<div className="rounded-xl border border-border overflow-hidden">
-			<div className="flex items-center px-3 py-2.5 border-b border-border/50">
+			<div className="flex items-center px-3 py-2 border-b border-border/50">
 				<Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
-				<div className="flex flex-col min-w-0 px-2 grow">
-					<span className="text-sm font-medium">{name}</span>
-					<span className="text-xs text-muted-foreground">{description}</span>
-				</div>
+				<span className="text-sm font-medium min-w-0 px-2 grow">{name}</span>
 				<Switch checked={enabled} onCheckedChange={onToggle} />
 			</div>
 			{enabled && children && (

@@ -13,8 +13,8 @@ import {
 	automations,
 	baseSnapshots,
 	billing,
-	integrations,
 	configurations,
+	integrations,
 	sessions,
 } from "@proliferate/services";
 import {
@@ -195,7 +195,8 @@ export async function createSession(
 	let snapshotId = inputSnapshotId ?? null;
 	if (!snapshotId && provider.type === "modal" && sessionType !== "cli") {
 		try {
-			const configurationRepoRows = await configurations.getConfigurationReposWithDetails(configurationId);
+			const configurationRepoRows =
+				await configurations.getConfigurationReposWithDetails(configurationId);
 			snapshotId = resolveSnapshotId({
 				configurationSnapshotId: null,
 				sandboxProvider: provider.type,
@@ -531,7 +532,8 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 
 	// Load configuration repos for coding sessions
 	const configStartMs = Date.now();
-	const configurationRepoRows = await configurations.getConfigurationReposWithDetails(configurationId);
+	const configurationRepoRows =
+		await configurations.getConfigurationReposWithDetails(configurationId);
 	log.info(
 		{
 			durationMs: Date.now() - configStartMs,
@@ -598,10 +600,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 
 	// Resolve service commands: configuration-level first, then per-repo fallback
 	const configSvcRow = await configurations.getConfigurationServiceCommands(configurationId);
-	const resolvedServiceCommands = resolveServiceCommands(
-		configSvcRow?.serviceCommands,
-		repoSpecs,
-	);
+	const resolvedServiceCommands = resolveServiceCommands(configSvcRow?.serviceCommands, repoSpecs);
 
 	// Load env file generation spec (if configured)
 	const configEnvFiles = await configurations.getConfigurationEnvFiles(configurationId);

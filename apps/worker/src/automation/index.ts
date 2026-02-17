@@ -137,6 +137,7 @@ export async function handleEnrich(runId: string, logger?: Logger): Promise<void
 			"Enrichment completed (atomic)",
 		);
 	} catch (err) {
+		console.log("err", err);
 		if (err instanceof EnrichmentError) {
 			log?.warn(
 				{ errorClass: "enrichment_failed", errorMessage: err.message },

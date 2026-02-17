@@ -24,7 +24,9 @@ describe("resolveSnapshotId", () => {
 		const result = resolveSnapshotId({
 			configurationSnapshotId: "config-snap-1",
 			sandboxProvider: "modal",
-			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
+			configurationRepos: [
+				makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" }),
+			],
 		});
 		expect(result).toBe("config-snap-1");
 	});
@@ -33,7 +35,9 @@ describe("resolveSnapshotId", () => {
 		const result = resolveSnapshotId({
 			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
+			configurationRepos: [
+				makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" }),
+			],
 		});
 		expect(result).toBe("repo-snap-1");
 	});
@@ -42,7 +46,9 @@ describe("resolveSnapshotId", () => {
 		const result = resolveSnapshotId({
 			configurationSnapshotId: null,
 			sandboxProvider: null,
-			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
+			configurationRepos: [
+				makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" }),
+			],
 		});
 		expect(result).toBeNull();
 	});
@@ -51,7 +57,9 @@ describe("resolveSnapshotId", () => {
 		const result = resolveSnapshotId({
 			configurationSnapshotId: null,
 			sandboxProvider: "e2b",
-			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
+			configurationRepos: [
+				makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" }),
+			],
 		});
 		expect(result).toBeNull();
 	});
@@ -91,7 +99,9 @@ describe("resolveSnapshotId", () => {
 		const result = resolveSnapshotId({
 			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "building" })],
+			configurationRepos: [
+				makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "building" }),
+			],
 		});
 		expect(result).toBeNull();
 	});

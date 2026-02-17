@@ -376,7 +376,8 @@ export async function update(
 	if (input.description !== undefined) updates.description = input.description;
 	if (input.enabled !== undefined) updates.enabled = input.enabled;
 	if (input.agentInstructions !== undefined) updates.agentInstructions = input.agentInstructions;
-	if (input.defaultConfigurationId !== undefined) updates.defaultConfigurationId = input.defaultConfigurationId;
+	if (input.defaultConfigurationId !== undefined)
+		updates.defaultConfigurationId = input.defaultConfigurationId;
 	if (input.allowAgenticRepoSelection !== undefined)
 		updates.allowAgenticRepoSelection = input.allowAgenticRepoSelection;
 	if (input.agentType !== undefined) updates.agentType = input.agentType;

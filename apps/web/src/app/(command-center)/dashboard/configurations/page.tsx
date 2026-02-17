@@ -1,6 +1,7 @@
 "use client";
 
 import { PageShell } from "@/components/dashboard/page-shell";
+import { CreateSnapshotContent } from "@/components/dashboard/snapshot-selector";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -13,6 +14,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -21,11 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import {
-	useConfigurations,
-	useCreateConfiguration,
-	useDeleteConfiguration,
-} from "@/hooks/use-configurations";
+import { useConfigurations, useDeleteConfiguration } from "@/hooks/use-configurations";
 import { cn } from "@/lib/utils";
 import type { Configuration } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
@@ -41,8 +45,7 @@ import { useMemo, useState } from "react";
 export default function ConfigurationsPage() {
 	const { data: configurations, isLoading } = useConfigurations();
 	const [filterQuery, setFilterQuery] = useState("");
-	const createConfiguration = useCreateConfiguration();
-	const router = useRouter();
+	const [createOpen, setCreateOpen] = useState(false);
 
 	const configList = useMemo(() => {
 		const list = configurations ?? [];
@@ -50,13 +53,6 @@ export default function ConfigurationsPage() {
 		const q = filterQuery.toLowerCase();
 		return list.filter((c) => (c.name ?? "").toLowerCase().includes(q));
 	}, [configurations, filterQuery]);
-
-	const handleCreate = async () => {
-		const result = await createConfiguration.mutateAsync({});
-		if (result?.configurationId) {
-			router.push(`/dashboard/configurations/${result.configurationId}`);
-		}
-	};
 
 	if (isLoading) {
 		return (
@@ -87,14 +83,9 @@ export default function ConfigurationsPage() {
 							/>
 						</div>
 					)}
-					<Button
-						size="sm"
-						className="h-8"
-						onClick={handleCreate}
-						disabled={createConfiguration.isPending}
-					>
+					<Button size="sm" className="h-8" onClick={() => setCreateOpen(true)}>
 						<Plus className="h-3.5 w-3.5 mr-1.5" />
-						{createConfiguration.isPending ? "Creating..." : "New Configuration"}
+						New Configuration
 					</Button>
 				</div>
 			}
@@ -106,9 +97,9 @@ export default function ConfigurationsPage() {
 						Create a configuration to set up repos, service commands, and environment files
 					</p>
 					<div className="flex items-center justify-center gap-3 mt-4">
-						<Button size="sm" onClick={handleCreate} disabled={createConfiguration.isPending}>
+						<Button size="sm" onClick={() => setCreateOpen(true)}>
 							<Plus className="h-3.5 w-3.5 mr-1.5" />
-							{createConfiguration.isPending ? "Creating..." : "New Configuration"}
+							New Configuration
 						</Button>
 					</div>
 				</div>
@@ -131,6 +122,15 @@ export default function ConfigurationsPage() {
 					))}
 				</div>
 			)}
+			<Dialog open={createOpen} onOpenChange={setCreateOpen}>
+				<DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
+					<DialogHeader className="sr-only">
+						<DialogTitle>New configuration</DialogTitle>
+						<DialogDescription>Select repos and create a configuration</DialogDescription>
+					</DialogHeader>
+					<CreateSnapshotContent onCreate={() => setCreateOpen(false)} />
+				</DialogContent>
+			</Dialog>
 		</PageShell>
 	);
 }

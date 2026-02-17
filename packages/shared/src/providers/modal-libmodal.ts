@@ -49,12 +49,12 @@ import {
 } from "../sandbox";
 import type {
 	AutoStartOutputEntry,
+	ConfigurationServiceCommand,
 	CreateSandboxOpts,
 	CreateSandboxResult,
 	EnsureSandboxResult,
 	FileContent,
 	PauseResult,
-	ConfigurationServiceCommand,
 	SandboxProvider,
 	SnapshotResult,
 } from "../sandbox-provider";
@@ -171,7 +171,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 						call.request?.definition?.experimentalOptions?.enable_snapshot
 					) {
 						call.request.definition.enableSnapshot = true;
-						delete call.request.definition.experimentalOptions.enable_snapshot;
+						call.request.definition.experimentalOptions.enable_snapshot = undefined;
 					}
 					return yield* call.next(call.request, options);
 				},
@@ -392,7 +392,9 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				// Ensure we don't accidentally treat this snapshot as a repo snapshot.
 				sandbox
 					.exec(["rm", "-f", SANDBOX_PATHS.metadataFile])
-					.catch(() => {}),
+					.catch(() => {
+						// Best-effort — ignore errors
+					}),
 			]);
 
 			const snapshotStartMs = Date.now();
@@ -410,7 +412,9 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			return { snapshotId: snapshotImage.imageId };
 		} finally {
 			// Best-effort cleanup.
-			await sandbox.terminate().catch(() => {});
+			await sandbox.terminate().catch(() => {
+				// Best-effort — ignore errors
+			});
 		}
 	}
 
@@ -526,7 +530,9 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 			return { snapshotId: snapshotImage.imageId, commitSha };
 		} finally {
-			await sandbox.terminate().catch(() => {});
+			await sandbox.terminate().catch(() => {
+				// Best-effort — ignore errors
+			});
 		}
 	}
 

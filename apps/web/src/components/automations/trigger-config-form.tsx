@@ -73,6 +73,8 @@ interface TriggerConfigFormProps {
 	onCancel: () => void;
 	submitLabel?: string;
 	isSubmitting?: boolean;
+	/** When true, hides the provider selector (use with initialProvider to lock to a specific type) */
+	lockProvider?: boolean;
 }
 
 // --- Constants ---
@@ -624,6 +626,7 @@ export function TriggerConfigForm({
 	onCancel,
 	submitLabel = "Add Trigger",
 	isSubmitting = false,
+	lockProvider = false,
 }: TriggerConfigFormProps) {
 	// State
 	const [provider, setProvider] = useState<Provider | null>(initialProvider || null);
@@ -731,13 +734,15 @@ export function TriggerConfigForm({
 
 	return (
 		<div className="space-y-4 py-2 min-w-[280px]">
-			<ProviderSelector
-				provider={provider}
-				onSelect={handleProviderSelect}
-				integrationProviders={integrationProviders}
-				standaloneProviders={STANDALONE_PROVIDERS}
-				disabledProviders={disabledProviders}
-			/>
+			{!lockProvider && (
+				<ProviderSelector
+					provider={provider}
+					onSelect={handleProviderSelect}
+					integrationProviders={integrationProviders}
+					standaloneProviders={STANDALONE_PROVIDERS}
+					disabledProviders={disabledProviders}
+				/>
+			)}
 
 			{needsConnection && (
 				<div className="space-y-2">

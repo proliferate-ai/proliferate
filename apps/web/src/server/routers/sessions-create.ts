@@ -45,7 +45,13 @@ interface CreateSessionResult {
 export async function createSessionHandler(
 	input: CreateSessionHandlerInput,
 ): Promise<CreateSessionResult> {
-	const { configurationId, sessionType = "coding", modelId: requestedModelId, orgId, userId } = input;
+	const {
+		configurationId,
+		sessionType = "coding",
+		modelId: requestedModelId,
+		orgId,
+		userId,
+	} = input;
 
 	// Check billing/credits before creating session
 	await billing.assertBillingGateForOrg(orgId, "session_start");
@@ -138,7 +144,9 @@ async function createConfigurationSession(input: {
 		configurationRepos = await configurations.getConfigurationReposWithDetails(configurationId);
 	} catch (err) {
 		log.error({ err }, "Failed to fetch configuration repos");
-		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to fetch configuration repos" });
+		throw new ORPCError("INTERNAL_SERVER_ERROR", {
+			message: "Failed to fetch configuration repos",
+		});
 	}
 
 	if (configurationRepos.length === 0) {
@@ -150,7 +158,9 @@ async function createConfigurationSession(input: {
 			throw new ORPCError("BAD_REQUEST", { message: "Configuration has missing repo data" });
 		}
 		if (pr.repo.organizationId !== orgId) {
-			throw new ORPCError("UNAUTHORIZED", { message: "Unauthorized access to configuration repos" });
+			throw new ORPCError("UNAUTHORIZED", {
+				message: "Unauthorized access to configuration repos",
+			});
 		}
 		return { ...pr, repo: pr.repo };
 	});

@@ -329,7 +329,10 @@ export async function findByIdInternal(id: string): Promise<SessionRow | null> {
 /**
  * Update session configuration_id.
  */
-export async function updateConfigurationId(sessionId: string, configurationId: string): Promise<void> {
+export async function updateConfigurationId(
+	sessionId: string,
+	configurationId: string,
+): Promise<void> {
 	const db = getDb();
 	await db.update(sessions).set({ configurationId }).where(eq(sessions.id, sessionId));
 }

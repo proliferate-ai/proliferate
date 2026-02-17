@@ -588,7 +588,9 @@ export class SessionHub {
 		// Load env files spec for scrub/apply around snapshot
 		let envFilesSpec: unknown = null;
 		if (context.session.configuration_id) {
-			envFilesSpec = await configurations.getConfigurationEnvFiles(context.session.configuration_id);
+			envFilesSpec = await configurations.getConfigurationEnvFiles(
+				context.session.configuration_id,
+			);
 		}
 
 		// Scrub secrets before snapshot (security-critical: abort if this fails)

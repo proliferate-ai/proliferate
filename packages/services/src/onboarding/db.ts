@@ -61,7 +61,9 @@ export async function hasGitHubConnection(
 /**
  * Get repos with configuration status for an organization.
  */
-export async function getReposWithConfigurationStatus(orgId: string): Promise<RepoWithConfigurationRow[]> {
+export async function getReposWithConfigurationStatus(
+	orgId: string,
+): Promise<RepoWithConfigurationRow[]> {
 	const db = getDb();
 	const results = await db.query.repos.findMany({
 		where: eq(repos.organizationId, orgId),

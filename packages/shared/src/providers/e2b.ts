@@ -36,12 +36,12 @@ import {
 } from "../sandbox";
 import type {
 	AutoStartOutputEntry,
+	ConfigurationServiceCommand,
 	CreateSandboxOpts,
 	CreateSandboxResult,
 	EnsureSandboxResult,
 	FileContent,
 	PauseResult,
-	ConfigurationServiceCommand,
 	SandboxProvider,
 	SnapshotResult,
 } from "../sandbox-provider";

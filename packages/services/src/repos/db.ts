@@ -69,7 +69,10 @@ export async function listByOrganization(orgId: string): Promise<RepoWithConfigu
 /**
  * Get a single repo by ID with configuration status.
  */
-export async function findById(id: string, orgId: string): Promise<RepoWithConfigurationsRow | null> {
+export async function findById(
+	id: string,
+	orgId: string,
+): Promise<RepoWithConfigurationsRow | null> {
 	const db = getDb();
 	const result = await db.query.repos.findFirst({
 		where: and(eq(repos.id, id), eq(repos.organizationId, orgId)),

@@ -55,7 +55,10 @@ export async function resolveTarget(input: {
 
 	// Reuse an existing managed configuration that already contains this repo
 	// to avoid creating a new configuration + setup session on every run.
-	const existingConfigurationId = await findManagedConfigurationForRepo(suggestedRepoId, organizationId);
+	const existingConfigurationId = await findManagedConfigurationForRepo(
+		suggestedRepoId,
+		organizationId,
+	);
 	if (existingConfigurationId) {
 		return {
 			type: "selected",

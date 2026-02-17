@@ -1506,7 +1506,10 @@ export const configurationRepos = pgTable(
 			"btree",
 			table.configurationId.asc().nullsLast().op("uuid_ops"),
 		),
-		index("idx_configuration_repos_repo").using("btree", table.repoId.asc().nullsLast().op("uuid_ops")),
+		index("idx_configuration_repos_repo").using(
+			"btree",
+			table.repoId.asc().nullsLast().op("uuid_ops"),
+		),
 		foreignKey({
 			columns: [table.configurationId],
 			foreignColumns: [configurations.id],

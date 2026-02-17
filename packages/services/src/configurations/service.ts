@@ -97,11 +97,15 @@ export async function createConfiguration(
 		}
 	}
 
+	// Default name to repo name(s) if not provided
+	const defaultName =
+		name || repos.map((r) => r.githubRepoName?.split("/").pop() || r.id).join(", ");
+
 	// Create configuration record
 	const configurationId = randomUUID();
 	await configurationsDb.create({
 		id: configurationId,
-		name,
+		name: defaultName,
 		createdBy: userId,
 		sandboxProvider: env.DEFAULT_SANDBOX_PROVIDER,
 	});

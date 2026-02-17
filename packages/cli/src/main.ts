@@ -47,7 +47,7 @@ export async function main(): Promise<void> {
 
 		session = await client.createSession({
 			organizationId: auth.org.id,
-			cliPrebuild: {
+			cliConfiguration: {
 				localPathHash: hashPrebuildPath(cwd),
 				displayName: basename(cwd),
 			},

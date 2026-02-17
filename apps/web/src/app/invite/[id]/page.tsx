@@ -13,12 +13,12 @@ interface InvitationDetails {
 	role: string;
 	status: string;
 	expiresAt: string;
-	organization: {
+	organization?: {
 		id: string;
 		name: string;
 		logo?: string;
 	};
-	inviter: {
+	inviter?: {
 		name: string;
 		email: string;
 	};
@@ -138,10 +138,10 @@ export default function InviteAcceptPage() {
 		<div className="min-h-screen flex items-center justify-center bg-background">
 			<div className="max-w-md w-full p-8">
 				<div className="text-center mb-8">
-					{invitation.organization.logo ? (
+					{invitation.organization?.logo ? (
 						<img
 							src={invitation.organization.logo}
-							alt={invitation.organization.name}
+							alt={invitation.organization?.name ?? ""}
 							className="h-16 w-16 rounded-full mx-auto mb-4"
 						/>
 					) : (
@@ -150,10 +150,10 @@ export default function InviteAcceptPage() {
 						</div>
 					)}
 					<Text variant="h3" className="mb-2">
-						Join {invitation.organization.name}
+						Join {invitation.organization?.name ?? "Organization"}
 					</Text>
 					<Text variant="body" color="muted">
-						{invitation.inviter.name} has invited you to join as a{" "}
+						{invitation.inviter?.name ?? "Someone"} has invited you to join as a{" "}
 						<Text as="span" className="font-medium text-foreground">
 							{invitation.role}
 						</Text>
@@ -165,7 +165,7 @@ export default function InviteAcceptPage() {
 						<Text variant="small" color="muted">
 							Invited by
 						</Text>
-						<Text variant="small">{invitation.inviter.name}</Text>
+						<Text variant="small">{invitation.inviter?.name ?? "Unknown"}</Text>
 					</div>
 					<div className="flex items-center justify-between text-sm mt-2">
 						<Text variant="small" color="muted">

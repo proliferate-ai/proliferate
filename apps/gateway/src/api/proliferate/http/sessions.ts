@@ -14,13 +14,16 @@ import type { GatewayEnv } from "../../../lib/env";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "sessions-route" });
 import {
+	type ConfigurationResolutionOptions,
+	resolveConfiguration,
+} from "../../../lib/configuration-resolver";
+import {
 	IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS,
 	clearIdempotencyKey,
 	readIdempotencyResponse,
 	reserveIdempotencyKey,
 	storeIdempotencyResponse,
 } from "../../../lib/idempotency";
-import { type ConfigurationResolutionOptions, resolveConfiguration } from "../../../lib/configuration-resolver";
 import {
 	type ClientType,
 	type SandboxMode,
@@ -118,11 +121,16 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 			}
 
 			// Validate exactly one configuration option is provided
-			const configurationOptions = [body.configurationId, body.managedConfiguration, body.cliConfiguration].filter(
-				Boolean,
-			);
+			const configurationOptions = [
+				body.configurationId,
+				body.managedConfiguration,
+				body.cliConfiguration,
+			].filter(Boolean);
 			if (configurationOptions.length === 0) {
-				throw new ApiError(400, "One of configurationId, managedConfiguration, or cliConfiguration is required");
+				throw new ApiError(
+					400,
+					"One of configurationId, managedConfiguration, or cliConfiguration is required",
+				);
 			}
 			if (configurationOptions.length > 1) {
 				throw new ApiError(

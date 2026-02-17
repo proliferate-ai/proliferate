@@ -185,7 +185,11 @@ export class SlackClient extends AsyncClient<
 
 				sessionId = result.sessionId;
 				this.logger.info(
-					{ sessionId, isNewConfiguration: result.isNewConfiguration, hasSnapshot: result.hasSnapshot },
+					{
+						sessionId,
+						isNewConfiguration: result.isNewConfiguration,
+						hasSnapshot: result.hasSnapshot,
+					},
 					"Created session",
 				);
 

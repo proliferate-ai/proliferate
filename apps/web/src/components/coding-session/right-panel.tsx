@@ -166,7 +166,7 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 
 		// Services panel
 		if (mode.type === "services" && sessionProps?.sessionId) {
-			return <ServicesPanel sessionId={sessionProps.sessionId} onClose={handleClose} />;
+			return <ServicesPanel sessionId={sessionProps.sessionId} previewUrl={previewUrl} />;
 		}
 
 		// VS Code panel

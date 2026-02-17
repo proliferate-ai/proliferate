@@ -43,7 +43,7 @@ The gateway selects a system prompt based on session type and client type, then 
 ## 2. Core Concepts
 
 ### System Prompt Modes — `Implemented`
-Three prompt builders produce mode-specific system messages. The gateway selects one based on `session_type` and `client_type`.
+Three prompt builders produce mode-specific system messages. The gateway selects one based on `session_type` and `client_type`. All prompts identify the agent as running inside **Proliferate** and document the `proliferate` CLI capabilities (services, actions, local workflow via `npx @proliferate/cli`). The setup prompt additionally includes a UI handoff line telling the agent to direct users to the "Done — Save Snapshot" button when setup is complete.
 - Key detail agents get wrong: automation mode extends coding mode (it appends to it), not replaces it.
 - Reference: `packages/shared/src/prompts.ts`
 
@@ -214,7 +214,9 @@ async execute(hub, args): Promise<InterceptedToolResult> {
 | Aspect | Setup | Coding | Automation |
 |--------|-------|--------|------------|
 | Base prompt | Unique | Unique | Extends Coding |
+| Platform identity | "AI engineer running inside **Proliferate**" | "running inside **Proliferate**" | Inherits from Coding |
 | Goal | Get repo running, save snapshot | Implement changes, verify | Complete task, report outcome |
+| UI handoff | Tells user to click "Done — Save Snapshot" | None | None |
 | `verify` | Required before snapshot | Encouraged | Available |
 | `save_snapshot` | Required at end | Available | Available |
 | `request_env_variables` | Emphasized | Available | Available |
@@ -222,8 +224,9 @@ async execute(hub, args): Promise<InterceptedToolResult> {
 | `save_env_files` | Emphasized | Not available | Not available |
 | `automation.complete` | Not mentioned | Not mentioned | **Mandatory** |
 | Source code edits | Forbidden | Encouraged | Encouraged |
-| `proliferate` CLI | Documented | Documented | Documented |
-| Actions integration | Documented | Documented | Documented |
+| CLI: services | Full command listing | Compact reference | Inherits from Coding |
+| CLI: actions | Documented (incl. `actions guide`) | Documented (incl. `actions guide`) | Inherits from Coding |
+| CLI: local workflow | `npx @proliferate/cli` documented | `npx @proliferate/cli` documented | Inherits from Coding |
 
 **Files touched:** `packages/shared/src/prompts.ts`, `apps/gateway/src/lib/session-store.ts`
 
@@ -350,8 +353,8 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 3. Six tool `.ts` files + six `.txt` description files written to `{repoDir}/.opencode/tool/`
 4. Pre-installed `package.json` + `node_modules/` copied from `/home/user/.opencode-tools/` to `{repoDir}/.opencode/tool/`
 5. OpenCode config written to both `{repoDir}/opencode.json` and `/home/user/.config/opencode/opencode.json`
-6. Environment instructions appended to `{repoDir}/.opencode/instructions.md` (from `ENV_INSTRUCTIONS` in `config.ts:84-131`)
-7. Actions bootstrap guide written to `{repoDir}/.proliferate/actions-guide.md` (from `ACTIONS_BOOTSTRAP` in `config.ts:137-165`)
+6. Environment instructions appended to `{repoDir}/.opencode/instructions.md` (from `ENV_INSTRUCTIONS` in `config.ts:84-116`)
+7. Actions/platform guide written to `{repoDir}/.proliferate/actions-guide.md` (from `ACTIONS_BOOTSTRAP` in `config.ts:122-150`). This guide identifies the agent as running inside Proliferate, documents the `proliferate actions` CLI, and mentions the local CLI (`npx @proliferate/cli`).
 8. OpenCode server started: `cd {repoDir} && opencode serve --port 4096 --hostname 0.0.0.0`
 9. Gateway waits for readiness via `waitForOpenCodeReady()` with exponential backoff
 

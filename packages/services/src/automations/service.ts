@@ -87,7 +87,10 @@ export async function createAutomation(
 ): Promise<AutomationListItem> {
 	// Validate configuration if provided
 	if (input.defaultConfigurationId) {
-		const configuration = await automationsDb.validateConfiguration(input.defaultConfigurationId, orgId);
+		const configuration = await automationsDb.validateConfiguration(
+			input.defaultConfigurationId,
+			orgId,
+		);
 		if (!configuration) {
 			throw new Error("Configuration not found");
 		}
@@ -116,7 +119,10 @@ export async function updateAutomation(
 ): Promise<Automation> {
 	// Validate configuration if provided
 	if (input.defaultConfigurationId) {
-		const configuration = await automationsDb.validateConfiguration(input.defaultConfigurationId, orgId);
+		const configuration = await automationsDb.validateConfiguration(
+			input.defaultConfigurationId,
+			orgId,
+		);
 		if (!configuration) {
 			throw new Error("Configuration not found");
 		}
@@ -644,7 +650,10 @@ export async function triggerManualRun(
 		externalEventId: `manual-${Date.now()}`,
 		providerEventType: "manual_trigger",
 		rawPayload: { type: "manual_trigger", triggered_by: userId },
-		parsedContext: { message: "Manually triggered from UI" },
+		parsedContext: {
+			title: "Manual test run",
+			description: "Manually triggered from the UI",
+		},
 		dedupKey: null,
 	});
 

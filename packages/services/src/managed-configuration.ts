@@ -12,8 +12,8 @@
 import type { SyncClient } from "@proliferate/gateway-clients";
 import { BillingGateError } from "@proliferate/shared/billing";
 import { assertBillingGateForOrg, getOrgPlanLimits } from "./billing/gate";
-import { getServicesLogger } from "./logger";
 import * as configurationsDb from "./configurations/db";
+import { getServicesLogger } from "./logger";
 import * as sessionsDb from "./sessions/db";
 
 export interface ManagedConfiguration {
@@ -104,7 +104,10 @@ async function createManagedConfigurationRecord(
 	organizationId: string,
 	specificRepoIds?: string[],
 ): Promise<{ configurationId: string; repoIds: string[]; repoNames: string[] }> {
-	const repos = await configurationsDb.getReposForManagedConfiguration(organizationId, specificRepoIds);
+	const repos = await configurationsDb.getReposForManagedConfiguration(
+		organizationId,
+		specificRepoIds,
+	);
 
 	if (repos.length === 0) {
 		throw new Error("No repos found for organization");

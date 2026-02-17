@@ -26,8 +26,8 @@ import {
 } from "../db/client";
 import { toIsoString, toIsoStringRequired } from "../db/serialize";
 import type {
-	CliGitHubSelectionRow,
 	CliConfigurationRow,
+	CliGitHubSelectionRow,
 	CliRepoConnectionRow,
 	CliRepoRow,
 	CliSessionFullRow,

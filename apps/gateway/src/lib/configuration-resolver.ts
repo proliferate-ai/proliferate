@@ -53,12 +53,18 @@ export async function resolveConfiguration(
 	const { configurationId, managedConfiguration, cliConfiguration } = options;
 
 	// Validate exactly one option is provided
-	const optionCount = [configurationId, managedConfiguration, cliConfiguration].filter(Boolean).length;
+	const optionCount = [configurationId, managedConfiguration, cliConfiguration].filter(
+		Boolean,
+	).length;
 	if (optionCount === 0) {
-		throw new Error("One of configurationId, managedConfiguration, or cliConfiguration is required");
+		throw new Error(
+			"One of configurationId, managedConfiguration, or cliConfiguration is required",
+		);
 	}
 	if (optionCount > 1) {
-		throw new Error("Only one of configurationId, managedConfiguration, or cliConfiguration can be provided");
+		throw new Error(
+			"Only one of configurationId, managedConfiguration, or cliConfiguration can be provided",
+		);
 	}
 
 	if (configurationId) {
@@ -178,7 +184,10 @@ async function createManagedConfigurationRecord(
 	organizationId: string,
 	specificRepoIds?: string[],
 ): Promise<{ configurationId: string; repoIds: string[] }> {
-	const repoRows = await configurations.getReposForManagedConfiguration(organizationId, specificRepoIds);
+	const repoRows = await configurations.getReposForManagedConfiguration(
+		organizationId,
+		specificRepoIds,
+	);
 
 	if (!repoRows || repoRows.length === 0) {
 		throw new ApiError(422, "No repos found for organization");
@@ -227,7 +236,9 @@ async function resolveCli(
 
 	if (existingConfiguration) {
 		// Get linked repos via configuration_repos
-		const configurationRepos = await configurations.getConfigurationReposWithDetails(existingConfiguration.id);
+		const configurationRepos = await configurations.getConfigurationReposWithDetails(
+			existingConfiguration.id,
+		);
 		const repoIds =
 			configurationRepos?.map((pr) => pr.repo?.id).filter((id): id is string => Boolean(id)) || [];
 

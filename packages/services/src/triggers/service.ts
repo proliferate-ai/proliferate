@@ -137,7 +137,10 @@ export async function createTrigger(input: CreateTriggerInput): Promise<CreateTr
 
 	// Validate configuration if provided
 	if (input.defaultConfigurationId) {
-		const exists = await triggersDb.configurationExists(input.defaultConfigurationId, input.organizationId);
+		const exists = await triggersDb.configurationExists(
+			input.defaultConfigurationId,
+			input.organizationId,
+		);
 		if (!exists) {
 			throw new Error("Configuration not found");
 		}

@@ -119,34 +119,40 @@ docker compose up -d
  * Actions bootstrap hint written to .proliferate/actions-guide.md during sandbox setup.
  * Agents can read this file to discover the actions workflow.
  */
-export const ACTIONS_BOOTSTRAP = `# Proliferate Actions
+export const ACTIONS_BOOTSTRAP = `# Proliferate Platform Guide
 
-External integrations (Sentry, Linear, etc.) are available via the \`proliferate\` CLI.
+You are an AI agent running inside Proliferate, authorized to use external integrations on behalf of the user via the \`proliferate\` CLI.
 
 ## Quick Start
 
 \`\`\`bash
-# List connected integrations and their actions
+# Discover what the user has connected to this workspace
 proliferate actions list
 
-# Get a detailed usage guide for a specific integration
+# Get detailed usage guide for a specific integration
 proliferate actions guide --integration <name>
 
-# Run an action
+# Execute an action
 proliferate actions run --integration <name> --action <action> --params '<json>'
 \`\`\`
 
 ## How It Works
 
 - **Read** actions (e.g. list issues, get details) are auto-approved and return immediately.
-- **Write** actions (e.g. create issue, resolve issue) require user approval and block until approved or denied.
+- **Write** actions (e.g. create issue, resolve issue) require user approval — your terminal blocks until the user clicks Approve in their web UI.
 - **Danger** actions are denied by default.
-- Authentication tokens are resolved server-side — never ask for API keys.
+- Authentication tokens are resolved server-side — never ask for API keys for connected integrations.
 
-## Available Providers
+## Usage
 
-Run \`proliferate actions list\` to see which integrations are connected to this session.
+If the user asks you to check Linear issues, look at Sentry errors, or interact with any connected tool, use these commands proactively. You are acting as the user.
+
+Run \`proliferate actions list\` to see which integrations are connected.
 Run \`proliferate actions guide --integration <name>\` for provider-specific examples.
+
+## Local CLI
+
+The user can also run \`npx @proliferate/cli\` on their local machine to sync files with this sandbox and use their own IDE (VS Code, Cursor, etc.).
 `;
 
 /**

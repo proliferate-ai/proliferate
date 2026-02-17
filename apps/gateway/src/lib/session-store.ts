@@ -180,9 +180,14 @@ export async function loadSessionContext(
 	}
 
 	// Configuration-backed session: load repos, tokens, service commands
-	log.info({ configurationId: session.configuration_id }, "Loading repos from configuration_repos...");
+	log.info(
+		{ configurationId: session.configuration_id },
+		"Loading repos from configuration_repos...",
+	);
 	const configurationReposStartMs = Date.now();
-	const configurationRepoRows = await configurations.getConfigurationReposWithDetails(session.configuration_id);
+	const configurationRepoRows = await configurations.getConfigurationReposWithDetails(
+		session.configuration_id,
+	);
 	log.debug(
 		{
 			durationMs: Date.now() - configurationReposStartMs,
@@ -338,11 +343,10 @@ export async function loadSessionContext(
 		Boolean(session.snapshot_id) && session.snapshot_id !== repoSnapshotFallback;
 
 	// Resolve service commands: configuration-level first, then per-repo fallback
-	const configSvcRow = await configurations.getConfigurationServiceCommands(session.configuration_id);
-	const resolvedServiceCommands = resolveServiceCommands(
-		configSvcRow?.serviceCommands,
-		repoSpecs,
+	const configSvcRow = await configurations.getConfigurationServiceCommands(
+		session.configuration_id,
 	);
+	const resolvedServiceCommands = resolveServiceCommands(configSvcRow?.serviceCommands, repoSpecs);
 
 	log.info("Session context ready");
 	log.debug(

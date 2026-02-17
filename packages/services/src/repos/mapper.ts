@@ -12,6 +12,7 @@ import type { RepoRow, RepoWithConfigurationsRow } from "./db";
  * Map a DB row (with configurations) to API Repo type.
  */
 export function toRepo(row: RepoWithConfigurationsRow): Repo {
+	const primaryConfig = row.configurationRepos?.[0]?.configuration;
 	return {
 		id: row.id,
 		organizationId: row.organizationId,
@@ -22,6 +23,8 @@ export function toRepo(row: RepoWithConfigurationsRow): Repo {
 		createdAt: toIsoString(row.createdAt),
 		source: row.source || "github",
 		isPrivate: false, // Field not in Drizzle schema, default to false for API compatibility
+		configurationId: primaryConfig?.id ?? null,
+		configurationStatus: primaryConfig?.status ?? null,
 	};
 }
 

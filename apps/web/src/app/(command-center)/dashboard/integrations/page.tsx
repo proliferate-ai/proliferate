@@ -424,7 +424,7 @@ export default function IntegrationsPage() {
 					return false;
 			}
 		},
-		[integrationsByProvider, slackStatus, integrationsData],
+		[integrationsByProvider, slackStatus],
 	);
 
 	const getLoadingStatus = useCallback(
@@ -440,7 +440,7 @@ export default function IntegrationsPage() {
 					return false;
 			}
 		},
-		[loadingProvider, slackDisconnect.isPending, nangoLoadingProvider],
+		[loadingProvider, slackDisconnect.isPending],
 	);
 
 	const getConnectedMeta = useCallback(
@@ -475,7 +475,7 @@ export default function IntegrationsPage() {
 					break;
 			}
 		},
-		[connectOAuth, handleSlackConnect, nangoConnect],
+		[connectOAuth, handleSlackConnect],
 	);
 
 	// ---- Handle opening detail from picker ----

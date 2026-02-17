@@ -135,6 +135,7 @@ function ServiceCommandsSection({ repoId }: { repoId: string }) {
 						Default auto-start commands. Run automatically when a session starts.
 					</p>
 					{drafts.map((draft, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: draft list keyed by position
 						<div key={index} className="flex items-start gap-2">
 							<div className="flex-1 space-y-1.5">
 								<Input
@@ -200,6 +201,7 @@ function ServiceCommandsSection({ repoId }: { repoId: string }) {
 				<div className="rounded-lg border border-border/80 bg-background p-3">
 					<div className="space-y-1">
 						{commands.map((cmd, index) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: display-only list
 							<div key={index} className="text-xs py-0.5">
 								<span className="font-medium">{cmd.name}</span>
 								<span className="text-muted-foreground ml-2 font-mono">{cmd.command}</span>

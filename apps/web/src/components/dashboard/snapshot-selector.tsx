@@ -18,7 +18,7 @@ import { LoadingDots } from "@/components/ui/loading-dots";
 import { SelectableItem } from "@/components/ui/selectable-item";
 import { SelectorTrigger } from "@/components/ui/selector-trigger";
 import { Text } from "@/components/ui/text";
-import { useCreateConfiguration, useConfigurations } from "@/hooks/use-configurations";
+import { useConfigurations, useCreateConfiguration } from "@/hooks/use-configurations";
 import { useAvailableRepos, useSearchRepos } from "@/hooks/use-repos";
 import { useCreateSession } from "@/hooks/use-sessions";
 import { orpc } from "@/lib/orpc";
