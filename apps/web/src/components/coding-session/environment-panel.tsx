@@ -1,15 +1,14 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useCheckSecrets, useCreateSecret, usePrebuildEnvFiles } from "@/hooks/use-repos";
+import { useCheckSecrets, usePrebuildEnvFiles } from "@/hooks/use-repos";
+import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/use-secrets";
 import { orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle, FileText, Loader2, Plus, X } from "lucide-react";
+import { Loader2, Lock, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 // ============================================
@@ -32,173 +31,10 @@ interface EnvironmentPanelProps {
 }
 
 // ============================================
-// Per-key row component
+// Add Variable Form (always visible)
 // ============================================
 
-function SecretKeyRow({
-	keyName,
-	required,
-	exists,
-	sessionId,
-	prebuildId,
-	onSaved,
-}: {
-	keyName: string;
-	required: boolean;
-	exists: boolean;
-	sessionId: string;
-	prebuildId?: string | null;
-	onSaved: () => void;
-}) {
-	const [editing, setEditing] = useState(false);
-	const [value, setValue] = useState("");
-	const [persist, setPersist] = useState(true);
-	const [sessionOnly, setSessionOnly] = useState(false);
-	const [saving, setSaving] = useState(false);
-
-	const createSecret = useCreateSecret();
-	const submitEnv = useMutation(orpc.sessions.submitEnv.mutationOptions());
-
-	const handleSave = async () => {
-		if (!value.trim()) return;
-		setSaving(true);
-
-		try {
-			// Always inject into the live sandbox
-			await submitEnv.mutateAsync({
-				sessionId,
-				secrets: [{ key: keyName, value, persist: false }],
-				envVars: [],
-				saveToPrebuild: false,
-			});
-
-			if (persist && prebuildId) {
-				// Persist to DB with configuration linking
-				await createSecret.mutateAsync({
-					key: keyName,
-					value,
-					configurationId: prebuildId,
-					secretType: "secret",
-				});
-			} else {
-				setSessionOnly(true);
-			}
-
-			setValue("");
-			setEditing(false);
-			onSaved();
-		} catch {
-			// Error handling — the mutation hooks handle toast/logging
-		} finally {
-			setSaving(false);
-		}
-	};
-
-	// Key exists and not editing — show set badge
-	if (exists && !editing) {
-		return (
-			<div className="flex items-center justify-between py-1.5">
-				<div className="flex items-center gap-2 min-w-0">
-					<span className="text-xs font-medium truncate">{keyName}</span>
-					{required && <span className="text-destructive text-[10px]">*</span>}
-				</div>
-				<div className="flex items-center gap-1.5 shrink-0">
-					<span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-						<CheckCircle className="h-3 w-3" />
-						Set
-					</span>
-					<Button
-						variant="ghost"
-						size="sm"
-						className="h-6 px-1.5 text-[11px] text-muted-foreground"
-						onClick={() => setEditing(true)}
-					>
-						Edit
-					</Button>
-				</div>
-			</div>
-		);
-	}
-
-	// Session-only indicator (saved without persistence)
-	if (sessionOnly && !editing) {
-		return (
-			<div className="flex items-center justify-between py-1.5">
-				<div className="flex items-center gap-2 min-w-0">
-					<span className="text-xs font-medium truncate">{keyName}</span>
-					{required && <span className="text-destructive text-[10px]">*</span>}
-				</div>
-				<div className="flex items-center gap-1.5 shrink-0">
-					<span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-						<CheckCircle className="h-3 w-3" />
-						Session Only
-					</span>
-					<Button
-						variant="ghost"
-						size="sm"
-						className="h-6 px-1.5 text-[11px] text-muted-foreground"
-						onClick={() => {
-							setEditing(true);
-							setSessionOnly(false);
-						}}
-					>
-						Edit
-					</Button>
-				</div>
-			</div>
-		);
-	}
-
-	// Missing or editing — show input
-	return (
-		<div className="space-y-1.5 py-1.5">
-			<div className="flex items-center gap-2">
-				<span className="text-xs font-medium">{keyName}</span>
-				{required && <span className="text-destructive text-[10px]">*</span>}
-			</div>
-			<div className="flex items-center gap-1.5">
-				<Input
-					type="password"
-					value={value}
-					onChange={(e) => setValue(e.target.value)}
-					placeholder={`Enter ${keyName}`}
-					className="h-7 text-xs flex-1"
-					onKeyDown={(e) => {
-						if (e.key === "Enter") handleSave();
-					}}
-				/>
-				<Button
-					size="sm"
-					className="h-7 px-2.5 text-xs"
-					onClick={handleSave}
-					disabled={saving || !value.trim()}
-				>
-					{saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
-				</Button>
-			</div>
-			<div className="flex items-center gap-2">
-				<Checkbox
-					id={`persist-${keyName}`}
-					checked={persist}
-					onCheckedChange={(checked) => setPersist(checked === true)}
-					className="h-3.5 w-3.5"
-				/>
-				<label
-					htmlFor={`persist-${keyName}`}
-					className="text-[11px] text-muted-foreground cursor-pointer"
-				>
-					Save securely
-				</label>
-			</div>
-		</div>
-	);
-}
-
-// ============================================
-// Add secret form (for manual entry)
-// ============================================
-
-function AddSecretForm({
+function AddVariableForm({
 	sessionId,
 	prebuildId,
 	onSaved,
@@ -207,10 +43,8 @@ function AddSecretForm({
 	prebuildId?: string | null;
 	onSaved: () => void;
 }) {
-	const [expanded, setExpanded] = useState(false);
 	const [key, setKey] = useState("");
 	const [value, setValue] = useState("");
-	const [persist, setPersist] = useState(true);
 	const [saving, setSaving] = useState(false);
 
 	const createSecret = useCreateSecret();
@@ -222,6 +56,7 @@ function AddSecretForm({
 		setSaving(true);
 
 		try {
+			// Inject into live sandbox
 			await submitEnv.mutateAsync({
 				sessionId,
 				secrets: [{ key: trimmedKey, value, persist: false }],
@@ -229,93 +64,196 @@ function AddSecretForm({
 				saveToPrebuild: false,
 			});
 
-			if (persist && prebuildId) {
-				await createSecret.mutateAsync({
-					key: trimmedKey,
-					value,
-					configurationId: prebuildId,
-					secretType: "secret",
-				});
-			}
+			// Persist to DB (with configuration linking if available)
+			await createSecret.mutateAsync({
+				key: trimmedKey,
+				value,
+				secretType: "secret",
+				...(prebuildId ? { configurationId: prebuildId } : {}),
+			});
 
 			setKey("");
 			setValue("");
-			setExpanded(false);
 			onSaved();
 		} catch {
-			// Error handling — mutation hooks handle toast/logging
+			// mutation hooks handle errors
 		} finally {
 			setSaving(false);
 		}
 	};
 
-	if (!expanded) {
-		return (
-			<Button
-				variant="outline"
-				size="sm"
-				className="w-full justify-start gap-2 text-xs text-muted-foreground"
-				onClick={() => setExpanded(true)}
-			>
-				<Plus className="h-3.5 w-3.5" />
-				Add Secret
-			</Button>
-		);
-	}
-
 	return (
-		<div className="space-y-2 rounded-md border border-border p-2.5">
+		<div className="flex items-center gap-1.5">
 			<Input
-				type="text"
 				value={key}
 				onChange={(e) => setKey(e.target.value.toUpperCase())}
-				placeholder="KEY_NAME"
-				className="h-7 text-xs font-mono"
-				autoFocus
+				placeholder="KEY"
+				className="h-8 text-xs flex-[2]"
+				autoComplete="off"
 			/>
 			<Input
 				type="password"
 				value={value}
 				onChange={(e) => setValue(e.target.value)}
 				placeholder="Value"
-				className="h-7 text-xs"
+				className="h-8 text-xs flex-[3]"
 				onKeyDown={(e) => {
 					if (e.key === "Enter") handleSave();
 				}}
+				autoComplete="off"
 			/>
-			<div className="flex items-center gap-2">
-				<Checkbox
-					id="persist-new"
-					checked={persist}
-					onCheckedChange={(checked) => setPersist(checked === true)}
-					className="h-3.5 w-3.5"
-				/>
-				<label htmlFor="persist-new" className="text-[11px] text-muted-foreground cursor-pointer">
-					Save securely
-				</label>
+			<Button
+				size="sm"
+				className="h-8 px-3 text-xs shrink-0"
+				onClick={handleSave}
+				disabled={saving || !key.trim() || !value.trim()}
+			>
+				{saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Add"}
+			</Button>
+		</div>
+	);
+}
+
+// ============================================
+// Existing secret row
+// ============================================
+
+function SecretRow({
+	keyName,
+	isRequired,
+	onDelete,
+	isDeleting,
+}: {
+	keyName: string;
+	isRequired: boolean;
+	onDelete: () => void;
+	isDeleting: boolean;
+}) {
+	return (
+		<div className="flex items-center justify-between px-2 py-2 rounded-md hover:bg-muted/50 transition-colors group">
+			<div className="flex items-center gap-2 min-w-0">
+				<span className="text-xs font-medium truncate">{keyName}</span>
+				{isRequired && <span className="text-[10px] text-muted-foreground">required</span>}
 			</div>
-			<div className="flex items-center gap-1.5">
+			<div className="flex items-center gap-2 shrink-0">
+				<span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+					<Lock className="h-3 w-3" />
+					Encrypted
+				</span>
+				<Button
+					variant="ghost"
+					size="icon"
+					className="h-6 w-6 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+					onClick={onDelete}
+					disabled={isDeleting}
+				>
+					{isDeleting ? (
+						<Loader2 className="h-3 w-3 animate-spin" />
+					) : (
+						<Trash2 className="h-3 w-3" />
+					)}
+				</Button>
+			</div>
+		</div>
+	);
+}
+
+// ============================================
+// Missing required key row (from env spec)
+// ============================================
+
+function MissingKeyRow({
+	keyName,
+	sessionId,
+	prebuildId,
+	onSaved,
+}: {
+	keyName: string;
+	sessionId: string;
+	prebuildId?: string | null;
+	onSaved: () => void;
+}) {
+	const [editing, setEditing] = useState(false);
+	const [value, setValue] = useState("");
+	const [saving, setSaving] = useState(false);
+
+	const createSecret = useCreateSecret();
+	const submitEnv = useMutation(orpc.sessions.submitEnv.mutationOptions());
+
+	const handleSave = async () => {
+		if (!value.trim()) return;
+		setSaving(true);
+
+		try {
+			await submitEnv.mutateAsync({
+				sessionId,
+				secrets: [{ key: keyName, value, persist: false }],
+				envVars: [],
+				saveToPrebuild: false,
+			});
+
+			await createSecret.mutateAsync({
+				key: keyName,
+				value,
+				secretType: "secret",
+				...(prebuildId ? { configurationId: prebuildId } : {}),
+			});
+
+			setValue("");
+			setEditing(false);
+			onSaved();
+		} catch {
+			// mutation hooks handle errors
+		} finally {
+			setSaving(false);
+		}
+	};
+
+	if (editing) {
+		return (
+			<div className="flex items-center gap-1.5 px-2 py-1.5">
+				<span className="text-xs font-medium shrink-0">{keyName}</span>
+				<Input
+					type="password"
+					value={value}
+					onChange={(e) => setValue(e.target.value)}
+					placeholder="Value"
+					className="h-7 text-xs flex-1"
+					autoFocus
+					onKeyDown={(e) => {
+						if (e.key === "Enter") handleSave();
+						if (e.key === "Escape") {
+							setEditing(false);
+							setValue("");
+						}
+					}}
+				/>
 				<Button
 					size="sm"
-					className="h-7 px-2.5 text-xs flex-1"
+					className="h-7 px-2 text-xs"
 					onClick={handleSave}
-					disabled={saving || !key.trim() || !value.trim()}
+					disabled={saving || !value.trim()}
 				>
 					{saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
 				</Button>
-				<Button
-					variant="ghost"
-					size="sm"
-					className="h-7 px-2.5 text-xs"
-					onClick={() => {
-						setExpanded(false);
-						setKey("");
-						setValue("");
-					}}
-				>
-					Cancel
-				</Button>
 			</div>
+		);
+	}
+
+	return (
+		<div className="flex items-center justify-between px-2 py-2 rounded-md hover:bg-muted/50 transition-colors">
+			<div className="flex items-center gap-2 min-w-0">
+				<span className="text-xs font-medium truncate">{keyName}</span>
+				<span className="text-[10px] text-destructive">missing</span>
+			</div>
+			<Button
+				variant="outline"
+				size="sm"
+				className="h-6 px-2 text-[11px]"
+				onClick={() => setEditing(true)}
+			>
+				Set
+			</Button>
 		</div>
 	);
 }
@@ -332,71 +270,80 @@ export function EnvironmentPanel({
 }: EnvironmentPanelProps) {
 	const queryClient = useQueryClient();
 	const setMissingEnvKeyCount = usePreviewPanelStore((s) => s.setMissingEnvKeyCount);
+	const [deletingId, setDeletingId] = useState<string | null>(null);
 
-	// Fetch env file spec from the configuration
+	// All org secrets
+	const { data: secrets, isLoading: secretsLoading } = useSecrets();
+	const deleteSecret = useDeleteSecret();
+
+	// Env file spec from configuration
 	const { data: envFiles, isLoading: specLoading } = usePrebuildEnvFiles(
 		prebuildId ?? "",
 		!!prebuildId,
 	);
 
-	// Parse the spec into typed array
-	const parsedFiles = useMemo<EnvFileSpec[]>(() => {
+	// Parse spec keys
+	const specKeys = useMemo(() => {
 		if (!envFiles || !Array.isArray(envFiles)) return [];
-		return envFiles as EnvFileSpec[];
-	}, [envFiles]);
-
-	// Extract all keys from all files
-	const allKeys = useMemo(() => {
-		const keys: string[] = [];
-		for (const file of parsedFiles) {
+		const keys: Array<{ key: string; required: boolean }> = [];
+		for (const file of envFiles as EnvFileSpec[]) {
 			for (const k of file.keys) {
-				keys.push(k.key);
+				keys.push({ key: k.key, required: k.required !== false });
 			}
 		}
 		return keys;
-	}, [parsedFiles]);
+	}, [envFiles]);
 
-	// Check which keys are set (configuration-scoped)
+	const specKeyNames = useMemo(() => specKeys.map((k) => k.key), [specKeys]);
+
+	// Check which spec keys are set (configuration-scoped)
 	const {
 		data: checkResults,
 		isLoading: checkLoading,
 		refetch: refetchCheck,
-	} = useCheckSecrets(allKeys, undefined, prebuildId ?? undefined, allKeys.length > 0);
+	} = useCheckSecrets(specKeyNames, undefined, prebuildId ?? undefined, specKeyNames.length > 0);
 
-	// Build a set of existing keys
-	const existingKeySet = useMemo(() => {
+	const existingSpecKeys = useMemo(() => {
 		if (!checkResults) return new Set<string>();
 		return new Set(checkResults.filter((r) => r.exists).map((r) => r.key));
 	}, [checkResults]);
 
-	// Count missing required keys and update store
-	const missingCount = useMemo(() => {
-		let count = 0;
-		for (const file of parsedFiles) {
-			for (const k of file.keys) {
-				if (k.required !== false && !existingKeySet.has(k.key)) {
-					count++;
-				}
-			}
-		}
-		return count;
-	}, [parsedFiles, existingKeySet]);
+	// Set of spec key names (for annotating org secrets)
+	const specKeySet = useMemo(() => new Set(specKeys.map((k) => k.key)), [specKeys]);
+
+	// Missing required keys from spec
+	const missingRequired = useMemo(
+		() => specKeys.filter((k) => k.required && !existingSpecKeys.has(k.key)),
+		[specKeys, existingSpecKeys],
+	);
+
+	const missingCount = missingRequired.length;
 
 	useEffect(() => {
 		setMissingEnvKeyCount(missingCount);
 	}, [missingCount, setMissingEnvKeyCount]);
 
-	// Reset count on unmount
 	useEffect(() => {
 		return () => setMissingEnvKeyCount(0);
 	}, [setMissingEnvKeyCount]);
 
-	const handleSecretSaved = () => {
+	const handleRefresh = () => {
 		refetchCheck();
+		queryClient.invalidateQueries({ queryKey: orpc.secrets.list.key() });
 		queryClient.invalidateQueries({ queryKey: orpc.secrets.check.key() });
 	};
 
-	const isLoading = specLoading || checkLoading;
+	const handleDelete = async (id: string) => {
+		setDeletingId(id);
+		try {
+			await deleteSecret.mutateAsync(id);
+			handleRefresh();
+		} finally {
+			setDeletingId(null);
+		}
+	};
+
+	const isLoading = secretsLoading || specLoading;
 
 	return (
 		<TooltipProvider delayDuration={150}>
@@ -416,71 +363,76 @@ export function EnvironmentPanel({
 
 				{/* Content */}
 				<div className="flex-1 min-h-0 overflow-y-auto">
-					{isLoading && prebuildId ? (
+					{isLoading ? (
 						<div className="flex items-center justify-center p-8">
 							<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
 						</div>
 					) : (
-						<div className="p-3 space-y-4">
-							{parsedFiles.length === 0 ? (
-								<p className="text-xs text-muted-foreground">
-									{!prebuildId
-										? "No configuration detected yet. You can add secrets manually below."
-										: "No environment files configured for this snapshot."}
-								</p>
-							) : (
-								<>
-									<p className="text-xs text-muted-foreground">
-										{missingCount > 0
-											? `${missingCount} required ${missingCount === 1 ? "variable" : "variables"} missing.`
-											: "All required variables are set."}
-									</p>
-
-									{parsedFiles.map((file) => {
-										const filePath =
-											file.workspacePath && file.workspacePath !== "."
-												? `${file.workspacePath}/${file.path}`
-												: file.path;
-
-										return (
-											<div key={filePath}>
-												{/* File header */}
-												<div className="flex items-center gap-1.5 pb-1.5 mb-1.5 border-b border-border/50">
-													<FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-													<span className="text-xs font-medium text-muted-foreground">
-														{filePath}
-													</span>
-													<span className="text-[10px] text-muted-foreground">
-														({file.keys.filter((k) => existingKeySet.has(k.key)).length}/
-														{file.keys.length})
-													</span>
-												</div>
-
-												{/* Keys */}
-												<div className="space-y-0.5">
-													{file.keys.map((k) => (
-														<SecretKeyRow
-															key={k.key}
-															keyName={k.key}
-															required={k.required !== false}
-															exists={existingKeySet.has(k.key)}
-															sessionId={sessionId}
-															prebuildId={prebuildId}
-															onSaved={handleSecretSaved}
-														/>
-													))}
-												</div>
-											</div>
-										);
-									})}
-								</>
-							)}
-
-							<AddSecretForm
+						<div className="p-3 space-y-3">
+							{/* Always-visible add form */}
+							<AddVariableForm
 								sessionId={sessionId}
 								prebuildId={prebuildId}
-								onSaved={handleSecretSaved}
+								onSaved={handleRefresh}
 							/>
+
+							{/* Status summary for spec keys */}
+							{specKeys.length > 0 && (
+								<p className="text-xs text-muted-foreground">
+									{missingCount > 0
+										? `${missingCount} required ${missingCount === 1 ? "variable" : "variables"} missing`
+										: "All required variables are set"}
+								</p>
+							)}
+
+							{/* Missing required keys */}
+							{missingRequired.length > 0 && (
+								<div>
+									<p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pb-1.5">
+										Required
+									</p>
+									<div className="space-y-0.5">
+										{missingRequired.map((k) => (
+											<MissingKeyRow
+												key={k.key}
+												keyName={k.key}
+												sessionId={sessionId}
+												prebuildId={prebuildId}
+												onSaved={handleRefresh}
+											/>
+										))}
+									</div>
+								</div>
+							)}
+
+							{/* All stored variables */}
+							{secrets && secrets.length > 0 && (
+								<div>
+									{(specKeys.length > 0 || missingRequired.length > 0) && (
+										<p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pb-1.5">
+											Variables
+										</p>
+									)}
+									<div className="space-y-0.5">
+										{secrets.map((secret) => (
+											<SecretRow
+												key={secret.id}
+												keyName={secret.key}
+												isRequired={specKeySet.has(secret.key)}
+												onDelete={() => handleDelete(secret.id)}
+												isDeleting={deletingId === secret.id}
+											/>
+										))}
+									</div>
+								</div>
+							)}
+
+							{/* Empty state */}
+							{(!secrets || secrets.length === 0) && specKeys.length === 0 && (
+								<p className="text-xs text-muted-foreground py-4 text-center">
+									No variables yet. Add one above.
+								</p>
+							)}
 						</div>
 					)}
 				</div>

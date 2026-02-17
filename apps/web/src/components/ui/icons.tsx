@@ -88,6 +88,250 @@ interface IconProps {
 }
 
 /**
+ * Custom "Blocks" icon
+ */
+export function BlocksIcon({ className }: IconProps) {
+	return (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			viewBox="300 300 200 200"
+			className={className}
+			fill="none"
+		>
+			<rect x="375.00" y="375.00" width="50.00" height="50.00" fill="currentColor" />
+			<rect x="387.67" y="305.00" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="429.00" y="346.33" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="470.33" y="387.67" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="429.00" y="429.00" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="387.67" y="470.33" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="346.33" y="429.00" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="305.00" y="387.67" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="346.33" y="346.33" width="24.67" height="24.67" fill="currentColor" />
+		</svg>
+	);
+}
+
+/**
+ * Animated loading version of the "Blocks" icon
+ */
+export function BlocksLoadingIcon({ className }: IconProps) {
+	return (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			viewBox="300 300 200 200"
+			className={className}
+			fill="none"
+		>
+			<rect x="375.00" y="375.00" width="50.00" height="50.00" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="1;0.55;1"
+					dur="1.6s"
+					begin="-0.8s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="387.67" y="305.00" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="429.00" y="346.33" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0.16s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="470.33" y="387.67" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0.32s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="429.00" y="429.00" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0.48s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="387.67" y="470.33" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0.64s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="346.33" y="429.00" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0.8s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="305.00" y="387.67" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0.96s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="346.33" y="346.33" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="1.12s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+		</svg>
+	);
+}
+export function BlocksLoadingIcon2({ className }: IconProps) {
+	return (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			viewBox="300 300 200 200"
+			className={className}
+			fill="none"
+		>
+			{/* Embedded CSS for a self-contained component */}
+			<style>
+				{`
+                    @keyframes ai-pulse-wave {
+                        /* 0% to 60% covers the active pulse, 60% to 100% creates a natural resting pause between waves */
+                        0%, 60%, 100% {
+                            opacity: 0.2;
+                            transform: scale(0.6);
+                        }
+                        30% {
+                            opacity: 1;
+                            transform: scale(1);
+                        }
+                    }
+                    .ai-block {
+                        /* Ensures each block scales exactly from its own center */
+                        transform-origin: center;
+                        transform-box: fill-box;
+                        animation: ai-pulse-wave 1.5s infinite ease-in-out;
+                    }
+                `}
+			</style>
+
+			{/* Column 3: Center & Top/Bottom */}
+			<rect
+				x="375.00"
+				y="375.00"
+				width="50.00"
+				height="50.00"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.2s" }}
+			/>
+			<rect
+				x="387.67"
+				y="305.00"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.2s" }}
+			/>
+			<rect
+				x="387.67"
+				y="470.33"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.2s" }}
+			/>
+
+			{/* Column 4: Top-Right & Bottom-Right */}
+			<rect
+				x="429.00"
+				y="346.33"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.05s" }}
+			/>
+			<rect
+				x="429.00"
+				y="429.00"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.05s" }}
+			/>
+
+			{/* Column 5: Right Edge */}
+			<rect
+				x="470.33"
+				y="387.67"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-0.9s" }}
+			/>
+
+			{/* Column 2: Top-Left & Bottom-Left */}
+			<rect
+				x="346.33"
+				y="429.00"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.35s" }}
+			/>
+			<rect
+				x="346.33"
+				y="346.33"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.35s" }}
+			/>
+
+			{/* Column 1: Left Edge */}
+			<rect
+				x="305.00"
+				y="387.67"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.5s" }}
+			/>
+		</svg>
+	);
+}
+
+/**
  * Google brand icon for OAuth buttons
  */
 export function GoogleIcon({ className }: IconProps) {
