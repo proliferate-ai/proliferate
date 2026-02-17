@@ -43,7 +43,11 @@ export async function getAutomationActionModes(automationId: string): Promise<Ac
  * Set a single org-level action mode override.
  * Used by the "always approve" flow.
  */
-export async function setOrgActionMode(orgId: string, key: string, mode: ActionMode): Promise<void> {
+export async function setOrgActionMode(
+	orgId: string,
+	key: string,
+	mode: ActionMode,
+): Promise<void> {
 	if (!VALID_ACTION_MODES.has(mode)) {
 		throw new Error(`Invalid action mode: ${mode}`);
 	}

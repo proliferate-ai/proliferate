@@ -216,7 +216,6 @@ async function resolveActionSource(
 	sessionId: string,
 	integration: string,
 	action: string,
-	auth?: { userId?: string },
 ): Promise<ResolvedAction> {
 	if (integration.startsWith("connector:")) {
 		const connectorId = integration.slice("connector:".length);
@@ -273,16 +272,13 @@ async function resolveActionSource(
 	const session = await sessions.findByIdInternal(sessionId);
 	if (!session) throw new ApiError(404, "Session not found");
 
-	const token = await integrations.getToken(
-		{
-			id: conn.integration.id,
-			provider: conn.integration.provider,
-			integrationId: conn.integration.integrationId,
-			connectionId: conn.integration.connectionId,
-			githubInstallationId: conn.integration.githubInstallationId,
-		},
-		{ userId: auth?.userId },
-	);
+	const token = await integrations.getToken({
+		id: conn.integration.id,
+		provider: conn.integration.provider,
+		integrationId: conn.integration.integrationId,
+		connectionId: conn.integration.connectionId,
+		githubInstallationId: conn.integration.githubInstallationId,
+	});
 
 	return {
 		source,
@@ -698,7 +694,6 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 					invocation.sessionId,
 					invocation.integration,
 					invocation.action,
-					{ userId: auth.userId },
 				);
 
 				const actionResult = await resolved.source.execute(

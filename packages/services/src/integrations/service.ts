@@ -10,13 +10,7 @@ import { toIsoString } from "../db/serialize";
 import { getServicesLogger } from "../logger";
 import * as sessions from "../sessions";
 import * as integrationsDb from "./db";
-import {
-	attachCreators,
-	filterByVisibility,
-	groupByProvider,
-	toIntegration,
-	toIntegrationWithCreator,
-} from "./mapper";
+import { attachCreators, groupByProvider, toIntegration, toIntegrationWithCreator } from "./mapper";
 
 // ============================================
 // Types
@@ -78,8 +72,8 @@ export async function listIntegrations(
 	orgId: string,
 	userId: string,
 ): Promise<ListIntegrationsResult> {
-	// Fetch integrations
-	const integrations = await integrationsDb.listByOrganization(orgId);
+	// Fetch integrations (visibility filtered at DB level)
+	const integrations = await integrationsDb.listByOrganization(orgId, userId);
 
 	// Fetch creator info
 	const creatorIds = [
@@ -87,18 +81,15 @@ export async function listIntegrations(
 	];
 	const users = await integrationsDb.findUsersByIds(creatorIds);
 
-	// Attach creators and filter by visibility
+	// Attach creators and group by provider
 	const integrationsWithCreator = attachCreators(integrations, users);
-	const visibleIntegrations = filterByVisibility(integrationsWithCreator, userId);
-
-	// Group by provider
-	const byProvider = groupByProvider(visibleIntegrations);
+	const byProvider = groupByProvider(integrationsWithCreator);
 
 	return {
 		github: { connected: byProvider.github.length > 0 },
 		sentry: { connected: byProvider.sentry.length > 0 },
 		linear: { connected: byProvider.linear.length > 0 },
-		integrations: visibleIntegrations,
+		integrations: integrationsWithCreator,
 		byProvider,
 	};
 }

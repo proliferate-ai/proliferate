@@ -379,6 +379,7 @@ export const integrationsRouter = {
 		.input(z.object({ connectionId: z.string(), providerConfigKey: z.string() }))
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
+			await requireIntegrationAdmin(context.user.id, context.orgId);
 			const displayName = DISPLAY_NAMES[input.providerConfigKey] || input.providerConfigKey;
 
 			const result = await integrations.saveIntegrationFromCallback({
@@ -404,6 +405,15 @@ export const integrationsRouter = {
 
 			if (!integration) {
 				throw new ORPCError("NOT_FOUND", { message: "Connection not found" });
+			}
+
+			// Admin can disconnect anything; members can only disconnect their own
+			const role = await orgs.getUserRole(context.user.id, context.orgId);
+			const isAdmin = role === "owner" || role === "admin";
+			if (!isAdmin && integration.created_by !== context.user.id) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "Only admins or the creator can disconnect.",
+				});
 			}
 
 			const isGitHubApp = integration.provider === GITHUB_APP_PROVIDER;
@@ -451,6 +461,7 @@ export const integrationsRouter = {
 	githubSession: orgProcedure
 		.output(z.object({ sessionToken: z.string() }))
 		.handler(async ({ context }) => {
+			await requireIntegrationAdmin(context.user.id, context.orgId);
 			// Gate this endpoint behind the feature flag
 			if (!USE_NANGO_GITHUB) {
 				throw new ORPCError("BAD_REQUEST", {
@@ -507,6 +518,7 @@ export const integrationsRouter = {
 	sentrySession: orgProcedure
 		.output(z.object({ sessionToken: z.string() }))
 		.handler(async ({ context }) => {
+			await requireIntegrationAdmin(context.user.id, context.orgId);
 			const org = await integrations.getOrganizationForSession(context.orgId);
 
 			if (!org) {
@@ -603,6 +615,7 @@ export const integrationsRouter = {
 	linearSession: orgProcedure
 		.output(z.object({ sessionToken: z.string() }))
 		.handler(async ({ context }) => {
+			await requireIntegrationAdmin(context.user.id, context.orgId);
 			const org = await integrations.getOrganizationForSession(context.orgId);
 
 			if (!org) {
@@ -727,6 +740,7 @@ export const integrationsRouter = {
 			}),
 		)
 		.handler(async ({ input, context }) => {
+			await requireIntegrationAdmin(context.user.id, context.orgId);
 			const { channelName } = input;
 
 			// Get user email
@@ -768,6 +782,7 @@ export const integrationsRouter = {
 	slackDisconnect: orgProcedure
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ context }) => {
+			await requireIntegrationAdmin(context.user.id, context.orgId);
 			// Find active installation
 			const installation = await integrations.getSlackInstallationForDisconnect(context.orgId);
 
@@ -829,7 +844,7 @@ export const integrationsRouter = {
 			}),
 		)
 		.handler(async ({ input, context }) => {
-			await requireConnectorAdmin(context.user.id, context.orgId);
+			await requireIntegrationAdmin(context.user.id, context.orgId);
 			try {
 				return await connectors.createConnectorWithSecret({
 					organizationId: context.orgId,
@@ -869,7 +884,7 @@ export const integrationsRouter = {
 		)
 		.output(z.object({ connector: ConnectorConfigSchema }))
 		.handler(async ({ input, context }) => {
-			await requireConnectorAdmin(context.user.id, context.orgId);
+			await requireIntegrationAdmin(context.user.id, context.orgId);
 			const connector = await connectors.createConnector({
 				organizationId: context.orgId,
 				name: input.name,
@@ -900,7 +915,7 @@ export const integrationsRouter = {
 		)
 		.output(z.object({ connector: ConnectorConfigSchema.nullable() }))
 		.handler(async ({ input, context }) => {
-			await requireConnectorAdmin(context.user.id, context.orgId);
+			await requireIntegrationAdmin(context.user.id, context.orgId);
 			const connector = await connectors.updateConnector(input.id, context.orgId, {
 				name: input.name,
 				url: input.url,
@@ -922,7 +937,7 @@ export const integrationsRouter = {
 		.input(z.object({ id: z.string().uuid() }))
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
-			await requireConnectorAdmin(context.user.id, context.orgId);
+			await requireIntegrationAdmin(context.user.id, context.orgId);
 			const deleted = await connectors.deleteConnector(input.id, context.orgId);
 			if (!deleted) {
 				throw new ORPCError("NOT_FOUND", { message: "Connector not found" });
@@ -965,7 +980,7 @@ export const integrationsRouter = {
 			}),
 		)
 		.handler(async ({ input, context }) => {
-			await requireConnectorAdmin(context.user.id, context.orgId);
+			await requireIntegrationAdmin(context.user.id, context.orgId);
 
 			const connector: ConnectorConfig = input.connector;
 
@@ -1072,7 +1087,7 @@ export const integrationsRouter = {
 // Helpers
 // ============================================
 
-async function requireConnectorAdmin(userId: string, orgId: string): Promise<void> {
+async function requireIntegrationAdmin(userId: string, orgId: string): Promise<void> {
 	const role = await orgs.getUserRole(userId, orgId);
 	if (role !== "owner" && role !== "admin") {
 		throw new ORPCError("FORBIDDEN", { message: "Admin or owner role required" });

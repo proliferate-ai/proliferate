@@ -2,7 +2,7 @@
 
 import { ConnectorForm } from "@/components/integrations/connector-form";
 import { ConnectorIcon } from "@/components/integrations/connector-icon";
-import { ConnectorRow } from "@/components/integrations/connector-row";
+import { findPresetKey } from "@/components/integrations/connector-icon";
 import { IntegrationDetailDialog } from "@/components/integrations/integration-detail-dialog";
 import {
 	CATEGORY_LABELS,
@@ -66,9 +66,11 @@ import {
 	CheckCircle2,
 	ExternalLink,
 	MoreHorizontal,
+	Pencil,
 	Plus,
 	RefreshCw,
 	Search,
+	Trash2,
 	X,
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -142,6 +144,15 @@ const INTEGRATION_CATALOG: CatalogEntry[] = [
 			presetKey: p.key,
 		}),
 	),
+
+	// Custom MCP Server
+	{
+		key: "custom-mcp",
+		name: "Custom MCP Server",
+		description: "Connect any MCP-compatible tool server with your own URL and credentials",
+		category: "developer-tools",
+		type: "custom-mcp",
+	},
 ];
 
 // Suggestion cards for empty state
@@ -512,6 +523,25 @@ export default function IntegrationsPage() {
 		return entries;
 	}, [getConnectionStatus, searchQuery]);
 
+	const filteredConnectors = useMemo(() => {
+		let list = connectors ?? [];
+		if (searchQuery.trim()) {
+			const q = searchQuery.toLowerCase();
+			list = list.filter(
+				(c: ConnectorConfig) => c.name.toLowerCase().includes(q) || c.url.toLowerCase().includes(q),
+			);
+		}
+		return list;
+	}, [connectors, searchQuery]);
+
+	const [deleteConnectorTarget, setDeleteConnectorTarget] = useState<string | null>(null);
+
+	const handleConfirmDeleteConnector = async () => {
+		if (!deleteConnectorTarget) return;
+		await handleRemove(deleteConnectorTarget);
+		setDeleteConnectorTarget(null);
+	};
+
 	const pickerCatalog = INTEGRATION_CATALOG;
 
 	// ---- Loading state ----
@@ -541,8 +571,7 @@ export default function IntegrationsPage() {
 		);
 	}
 
-	const connectorList = connectors ?? [];
-	const hasConnectedIntegrations = connectedEntries.length > 0 || connectorList.length > 0;
+	const hasConnectedIntegrations = connectedEntries.length > 0 || (connectors ?? []).length > 0;
 
 	const getDisconnectDescription = (entry: CatalogEntry) => {
 		if (entry.provider === "github") {
@@ -587,7 +616,7 @@ export default function IntegrationsPage() {
 				)}
 
 				{/* Connected integrations table */}
-				{connectedEntries.length > 0 && (
+				{(connectedEntries.length > 0 || filteredConnectors.length > 0) && (
 					<div>
 						{/* Column headers */}
 						<div className="flex items-center gap-3 px-3 py-2 border-b border-border text-xs font-medium text-muted-foreground">
@@ -670,6 +699,71 @@ export default function IntegrationsPage() {
 									</div>
 								);
 							})}
+
+							{/* MCP connector rows */}
+							{filteredConnectors.map((c) => {
+								if (isAdmin && editingId === c.id) {
+									return (
+										<ConnectorForm
+											key={c.id}
+											initial={c}
+											isNew={false}
+											onSave={handleSave}
+											onCancel={() => setEditingId(null)}
+										/>
+									);
+								}
+
+								const presetKey = findPresetKey(c);
+
+								return (
+									<div
+										key={c.id}
+										className="flex items-center gap-3 px-3 py-3 hover:bg-muted/30 transition-colors rounded-lg"
+									>
+										{/* Icon */}
+										<div className="w-10 h-10 rounded-lg border border-border bg-background flex items-center justify-center p-2 shrink-0">
+											<ConnectorIcon presetKey={presetKey} size="md" />
+										</div>
+
+										{/* Name + URL */}
+										<div className="flex-1 min-w-0">
+											<p className="text-sm font-medium">{c.name}</p>
+											<p className="text-xs text-muted-foreground truncate">{c.url}</p>
+										</div>
+
+										{/* Admin: Connected by (empty for connectors) */}
+										{isAdmin && (
+											<div className="w-32 hidden sm:block shrink-0">
+												<p className="text-sm text-muted-foreground truncate">{"\u2014"}</p>
+											</div>
+										)}
+
+										{/* User: Enable/Disable toggle */}
+										{!isAdmin && (
+											<div className="w-16 flex justify-end shrink-0">
+												<Switch
+													checked={isConnectorEnabled(c.id)}
+													onCheckedChange={() => handleToggleConnectorSource(c.id)}
+													disabled={togglePreference.isPending}
+												/>
+											</div>
+										)}
+
+										{/* Admin: Actions menu */}
+										{isAdmin && (
+											<div className="shrink-0">
+												<ConnectorMenu
+													connector={c}
+													onEdit={() => setEditingId(c.id)}
+													onToggle={() => handleToggle(c)}
+													onDelete={() => setDeleteConnectorTarget(c.id)}
+												/>
+											</div>
+										)}
+									</div>
+								);
+							})}
 						</div>
 					</div>
 				)}
@@ -738,57 +832,6 @@ export default function IntegrationsPage() {
 							</button>
 						)}
 					</div>
-				)}
-
-				{/* Connected Tools (MCP connectors) */}
-				{connectorList.length > 0 && (
-					<section className="mt-6">
-						<h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
-							Connected Tools
-						</h2>
-						<div className="rounded-lg border border-border bg-card">
-							<div className="divide-y divide-border">
-								{connectorList.map((c) =>
-									isAdmin ? (
-										editingId === c.id ? (
-											<ConnectorForm
-												key={c.id}
-												initial={c}
-												isNew={false}
-												onSave={handleSave}
-												onCancel={() => setEditingId(null)}
-											/>
-										) : (
-											<ConnectorRow
-												key={c.id}
-												connector={c}
-												onEdit={() => setEditingId(c.id)}
-												onRemove={() => handleRemove(c.id)}
-												onToggle={() => handleToggle(c)}
-											/>
-										)
-									) : (
-										<div key={c.id} className="flex items-center gap-3 px-3 py-3">
-											<div className="w-10 h-10 rounded-lg border border-border bg-background flex items-center justify-center p-2 shrink-0">
-												<ConnectorIcon presetKey={c.name.toLowerCase()} size="md" />
-											</div>
-											<div className="flex-1 min-w-0">
-												<p className="text-sm font-medium">{c.name}</p>
-												<p className="text-xs text-muted-foreground truncate">
-													{CATEGORY_LABELS["developer-tools"]}
-												</p>
-											</div>
-											<Switch
-												checked={isConnectorEnabled(c.id)}
-												onCheckedChange={() => handleToggleConnectorSource(c.id)}
-												disabled={togglePreference.isPending}
-											/>
-										</div>
-									),
-								)}
-							</div>
-						</div>
-					</section>
 				)}
 
 				{/* Empty state */}
@@ -938,6 +981,31 @@ export default function IntegrationsPage() {
 					</AlertDialogContent>
 				</AlertDialog>
 
+				{/* Connector delete confirmation dialog */}
+				<AlertDialog
+					open={!!deleteConnectorTarget}
+					onOpenChange={(open) => !open && setDeleteConnectorTarget(null)}
+				>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>Delete connector?</AlertDialogTitle>
+							<AlertDialogDescription>
+								This connector will be removed and its tools will no longer be available in
+								sessions.
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>Cancel</AlertDialogCancel>
+							<AlertDialogAction
+								onClick={handleConfirmDeleteConnector}
+								className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+							>
+								Delete
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+
 				{/* Picker modal */}
 				<IntegrationPickerDialog
 					open={pickerOpen}
@@ -1036,6 +1104,49 @@ function CardMenu({
 				>
 					<X className="h-3.5 w-3.5" />
 					Disconnect
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
+// ====================================================================
+// Connector dropdown menu (admin: edit / toggle / delete)
+// ====================================================================
+
+function ConnectorMenu({
+	connector,
+	onEdit,
+	onToggle,
+	onDelete,
+}: {
+	connector: ConnectorConfig;
+	onEdit: () => void;
+	onToggle: () => void;
+	onDelete: () => void;
+}) {
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
+					<MoreHorizontal className="h-4 w-4" />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuItem onClick={onEdit} className="flex items-center gap-2">
+					<Pencil className="h-3.5 w-3.5" />
+					Edit
+				</DropdownMenuItem>
+				<DropdownMenuItem onClick={onToggle} className="flex items-center gap-2">
+					{connector.enabled ? "Disable" : "Enable"}
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem
+					onClick={onDelete}
+					className="flex items-center gap-2 text-destructive focus:text-destructive"
+				>
+					<Trash2 className="h-3.5 w-3.5" />
+					Delete
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>

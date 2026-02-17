@@ -103,6 +103,37 @@ export function useDeleteAutomation() {
 }
 
 // ============================================
+// Manual Run
+// ============================================
+
+export function useTriggerManualRun(automationId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		...orpc.automations.triggerManualRun.mutationOptions(),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: orpc.automations.listRuns.queryOptions({ input: { id: automationId } }).queryKey,
+			});
+		},
+	});
+}
+
+// ============================================
+// Integration Actions
+// ============================================
+
+export function useAutomationIntegrationActions(automationId: string) {
+	return useQuery({
+		...orpc.automations.getIntegrationActions.queryOptions({
+			input: { id: automationId },
+		}),
+		enabled: !!automationId,
+		select: (data) => data.integrations,
+	});
+}
+
+// ============================================
 // Event Hooks
 // ============================================
 

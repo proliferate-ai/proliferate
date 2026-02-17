@@ -26,7 +26,7 @@ export interface CatalogEntry {
 	name: string;
 	description: string;
 	category: IntegrationCategory;
-	type: "oauth" | "slack" | "mcp-preset";
+	type: "oauth" | "slack" | "mcp-preset" | "custom-mcp";
 	provider?: Provider;
 	presetKey?: string;
 }
@@ -172,7 +172,9 @@ export function IntegrationPickerDialog({
 															<ConnectorIcon presetKey={entry.presetKey} size="md" />
 														) : entry.provider ? (
 															<ProviderIcon provider={entry.provider} size="md" />
-														) : null}
+														) : (
+															<ConnectorIcon presetKey="custom" size="md" />
+														)}
 													</div>
 													{isConnected && (
 														<div className="absolute -right-1 -top-1 rounded-full bg-card">

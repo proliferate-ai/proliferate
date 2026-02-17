@@ -60,9 +60,9 @@ A generic layer that abstracts over GitHub App installation tokens and Nango OAu
 - Reference: `packages/services/src/integrations/tokens.ts`, `apps/gateway/src/lib/github-auth.ts`
 
 ### Visibility
-Integrations have a `visibility` field: `org` (visible to all org members) or `private` (visible only to the creator). The `filterByVisibility` mapper enforces this at the service layer.
-- Key detail agents get wrong: Visibility filtering is applied in `listIntegrations`, not at the DB query level.
-- Reference: `packages/services/src/integrations/mapper.ts:filterByVisibility`
+Integrations have a `visibility` field: `org` (visible to all org members), `private` (visible only to the creator), or `null` (legacy, treated as `org`). Visibility is enforced at the DB query level in `listByOrganization(orgId, userId)` using a SQL WHERE clause.
+- Key detail agents get wrong: Visibility is filtered in the Drizzle query, not in application code. The old `filterByVisibility` mapper function has been deleted.
+- Reference: `packages/services/src/integrations/db.ts:listByOrganization`
 
 ### Connector Catalog
 Org-scoped MCP connector definitions are stored in the `org_connectors` table and managed through Integrations CRUD routes. Each connector defines a remote MCP server endpoint, auth method (org secret reference or custom header), and optional risk policy. The gateway loads enabled connectors by org at session runtime and merges their tools into `/actions/available`.
@@ -104,8 +104,16 @@ packages/services/src/connectors/
 apps/web/src/server/routers/
 └── integrations.ts              # oRPC router (all integration + connector endpoints)
 
-apps/web/src/app/settings/
-└── tools/page.tsx               # Org-level connector management UI (route: /settings/tools)
+apps/web/src/app/(command-center)/dashboard/integrations/
+└── page.tsx                     # Unified integrations page (OAuth + MCP, admin + user views)
+
+apps/web/src/components/integrations/
+├── connector-icon.tsx           # Connector icon + findPresetKey utility
+├── connector-form.tsx           # Full connector config form (URL, transport, auth)
+├── integration-detail-dialog.tsx  # Detail dialog (connect tab + about tab)
+├── integration-picker-dialog.tsx  # Catalog picker with search + categories
+├── provider-icon.tsx            # OAuth provider icon + display name helpers
+└── quick-setup-form.tsx         # API-key-only setup form for MCP presets
 
 apps/web/src/hooks/
 └── use-org-connectors.ts        # React hooks for org-level connector CRUD
@@ -315,10 +323,9 @@ function handleNangoError(err: unknown, operation: string): never {
 
 **Happy path (list):**
 1. `integrationsRouter.list` calls `integrations.listIntegrations(orgId, userId)` (`apps/web/src/server/routers/integrations.ts`)
-2. Service fetches all integration rows for the org (`db.ts:listByOrganization`)
+2. Service fetches integration rows for the org, filtered by visibility at the SQL level — `org` and `null` are visible to all; `private` only to the creator (`db.ts:listByOrganization(orgId, userId)`)
 3. Creator info is batch-fetched and attached (`mapper.ts:attachCreators`)
-4. Results are filtered by visibility (`mapper.ts:filterByVisibility`)
-5. Grouped by provider (`mapper.ts:groupByProvider`) and returned with per-provider `connected` booleans
+4. Grouped by provider (`mapper.ts:groupByProvider`) and returned with per-provider `connected` booleans
 
 **Happy path (update):**
 1. `integrationsRouter.update` verifies the integration belongs to the org
@@ -394,11 +401,14 @@ function handleNangoError(err: unknown, operation: string): never {
 
 **What it does:** Removes an integration, cleans up Nango connection, and detects orphaned repos.
 
+**Permission model:** Admins and owners can disconnect any integration. Members can only disconnect integrations they created (`integration.created_by === userId`). Non-creator members receive a 403 FORBIDDEN.
+
 **Happy path:**
-1. `integrationsRouter.disconnect` fetches the integration, checks org ownership
-2. For Nango-managed connections (`provider !== 'github-app'`): calls `nango.deleteConnection()` to revoke upstream
-3. Calls `service.ts:deleteIntegration()` which deletes the row from `integrations`
-4. For GitHub-related integrations: runs `handleOrphanedRepos()` — iterates non-orphaned repos, checks if any have zero `repo_connections`, marks them as `isOrphaned=true`
+1. `integrationsRouter.disconnect` fetches the integration, checks org membership (via `orgProcedure`)
+2. Verifies the caller is admin/owner OR the integration creator
+3. For Nango-managed connections (`provider !== 'github-app'`): calls `nango.deleteConnection()` to revoke upstream
+4. Calls `service.ts:deleteIntegration()` which deletes the row from `integrations`
+5. For GitHub-related integrations: runs `handleOrphanedRepos()` — iterates non-orphaned repos, checks if any have zero `repo_connections`, marks them as `isOrphaned=true`
 
 **Files touched:** `apps/web/src/server/routers/integrations.ts:disconnect`, `packages/services/src/integrations/service.ts:deleteIntegration`
 
@@ -448,11 +458,11 @@ function handleNangoError(err: unknown, operation: string): never {
 
 ### 6.10 Token Resolution — `Implemented`
 
-**What it does:** Generic layer to get live OAuth tokens for any integration type.
+**What it does:** Generic layer to get live OAuth tokens for any integration type. Tokens are always org-scoped; there is no user-level token resolution (the legacy `user_connections` table and `resolveUserToken` function have been removed).
 
 **Happy path:**
 1. Caller provides an `IntegrationForToken` (from `db.ts:getIntegrationsForTokens` lookup)
-2. `tokens.ts:getToken()` checks provider type:
+2. `tokens.ts:getToken(integration)` checks provider type:
    - `github-app` + `githubInstallationId`: generates JWT, calls GitHub API for installation token (cached 50 min)
    - `nango` + `connectionId`: calls `nango.getConnection()` to get `access_token`
 3. `resolveTokens()` processes multiple integrations in parallel via `Promise.allSettled`, collecting successes and errors separately
@@ -504,18 +514,21 @@ function handleNangoError(err: unknown, operation: string): never {
 **What it does:** Defines a single org-level source of truth for MCP connector configuration used by Actions discovery/invocation.
 
 **Behavior:**
-1. Admin/owner configures connectors once per org via Settings → Tools.
+1. Admin/owner configures connectors via the unified Integrations page (`/dashboard/integrations`). Connectors appear in the same list as OAuth integrations.
 2. Config is stored in `org_connectors` table using the shared `ConnectorConfig` schema (`packages/shared/src/connectors.ts`).
 3. Gateway Actions loads enabled connectors by org/session context, not by prebuild.
 4. Connector-backed actions continue using the same `connector:<uuid>` integration prefix and existing approval/audit pipeline in `actions.md`.
-5. Quick-setup flow: preset grid with inline API key entry, atomic secret + connector creation in a single transaction.
-6. Advanced flow: full form with secret picker, custom auth, risk policy, and connection validation.
+5. MCP presets always use `QuickSetupForm` (API key only) — URL, transport, and auth are auto-filled from preset defaults.
+6. Custom MCP Server: a catalog entry (`type: "custom-mcp"`) opens the full `ConnectorForm` with URL, transport, auth, and risk policy. This is the only path to full connector configuration.
+7. Admin dropdown menu on connector rows: Edit (inline form), Toggle enabled/disabled, Delete (with confirmation dialog).
+8. Non-admin users see connectors in the same unified list with source-level enable/disable toggles.
 
 **Key files:**
 - DB: `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/db.ts`
 - Service: `packages/services/src/connectors/service.ts`
 - Router: `apps/web/src/server/routers/integrations.ts` (connectors section)
-- UI: `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts`
+- UI: `apps/web/src/app/(command-center)/dashboard/integrations/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts`
+- Components: `connector-icon.tsx` (icon + `findPresetKey`), `quick-setup-form.tsx`, `connector-form.tsx`, `integration-detail-dialog.tsx`
 - Presets: `packages/shared/src/connectors.ts:CONNECTOR_PRESETS`
 
 ---
@@ -536,6 +549,9 @@ function handleNangoError(err: unknown, operation: string): never {
 
 ### Security & Auth
 - All oRPC routes use `orgProcedure` (org membership required)
+- OAuth session creation (`callback`, `githubSession`, `sentrySession`, `linearSession`) and Slack endpoints (`slackConnect`, `slackDisconnect`) require `requireIntegrationAdmin` (admin/owner role)
+- Disconnect uses a creator-or-admin check: admins disconnect anything, members only their own integrations
+- Connector CRUD endpoints require `requireIntegrationAdmin`
 - Slack OAuth state includes nonce + 5-min timestamp for CSRF protection
 - GitHub App callback validates `installation_id` via GitHub API before saving
 - GitHub App webhook validates HMAC-SHA256 signature
@@ -564,5 +580,6 @@ function handleNangoError(err: unknown, operation: string): never {
 - [ ] **Duplicated GitHub App JWT logic** — `apps/web/src/lib/github-app.ts`, `apps/gateway/src/lib/github-auth.ts`, and `packages/services/src/integrations/github-app.ts` each contain independent JWT generation and PKCS key conversion. Should be consolidated into the services package. — Medium impact on maintenance.
 - [ ] **Slack schema drift** — The `support_*` columns (`support_channel_id`, `support_channel_name`, `support_invite_id`, `support_invite_url`) exist in the production DB (reflected in `packages/db/src/schema/schema.ts:1350-1353`) but are missing from the hand-written schema in `packages/db/src/schema/slack.ts`. The service code (`db.ts:updateSlackSupportChannel`) wraps access in try/catch commenting "columns may not exist yet". The hand-written schema should be updated to include these columns. — Low impact but creates confusion.
 - [ ] **No token refresh error handling** — If Nango returns an expired/invalid token, the error propagates directly to the caller. No automatic retry or re-auth flow exists. — Medium impact for long-running sessions.
-- [ ] **Visibility filtering in memory** — `filterByVisibility` loads all org integrations then filters in JS. Fine at current scale but won't scale if an org has hundreds of integrations. — Low impact.
+- [x] **Visibility filtering in memory** — Resolved. `listByOrganization` now filters by visibility at the SQL level. The old `filterByVisibility` mapper function has been deleted.
+- [x] **`user_connections` table dropped** — The legacy `user_connections` table has been removed (migration `0031_drop_user_connections.sql`). The `resolveUserToken` function in `tokens.ts` has been deleted. All token resolution is now org-scoped only.
 - [ ] **Orphaned repo detection is O(n)** — `handleOrphanedRepos` iterates all non-orphaned repos and runs a count query per repo. Should be a single query. — Low impact at current scale.

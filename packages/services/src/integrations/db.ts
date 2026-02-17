@@ -15,6 +15,7 @@ import {
 	integrations,
 	isNotNull,
 	isNull,
+	or,
 	organization,
 	repoConnections,
 	repos,
@@ -79,12 +80,20 @@ export interface GitHubAppIntegrationRow {
 // ============================================
 
 /**
- * List all integrations for an organization.
+ * List integrations for an organization, filtered by visibility.
+ * Returns org-visible integrations + private integrations owned by the given user.
  */
-export async function listByOrganization(orgId: string): Promise<IntegrationRow[]> {
+export async function listByOrganization(orgId: string, userId: string): Promise<IntegrationRow[]> {
 	const db = getDb();
 	const results = await db.query.integrations.findMany({
-		where: eq(integrations.organizationId, orgId),
+		where: and(
+			eq(integrations.organizationId, orgId),
+			or(
+				eq(integrations.visibility, "org"),
+				isNull(integrations.visibility),
+				and(eq(integrations.visibility, "private"), eq(integrations.createdBy, userId)),
+			),
+		),
 		orderBy: [desc(integrations.createdAt)],
 	});
 

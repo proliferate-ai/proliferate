@@ -1814,51 +1814,6 @@ export const sessionToolInvocations = pgTable(
 );
 
 /**
- * User connections — user-level integration connections (distinct from org-level integrations).
- */
-export const userConnections = pgTable(
-	"user_connections",
-	{
-		id: uuid().defaultRandom().primaryKey().notNull(),
-		userId: text("user_id").notNull(),
-		organizationId: text("organization_id").notNull(),
-		provider: text().notNull(),
-		connectionId: text("connection_id").notNull(),
-		displayName: text("display_name"),
-		status: text().default("active"),
-		metadata: jsonb(),
-		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
-		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
-	},
-	(table) => [
-		index("idx_user_connections_user").using(
-			"btree",
-			table.userId.asc().nullsLast().op("text_ops"),
-		),
-		index("idx_user_connections_org").using(
-			"btree",
-			table.organizationId.asc().nullsLast().op("text_ops"),
-		),
-		foreignKey({
-			columns: [table.userId],
-			foreignColumns: [user.id],
-			name: "user_connections_user_id_fkey",
-		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.organizationId],
-			foreignColumns: [organization.id],
-			name: "user_connections_organization_id_fkey",
-		}).onDelete("cascade"),
-		unique("user_connections_user_org_provider_connection_key").on(
-			table.userId,
-			table.organizationId,
-			table.provider,
-			table.connectionId,
-		),
-	],
-);
-
-/**
  * User action preferences — per-user, per-org toggles for action sources.
  * Absence of a row means "enabled" (default). Rows are stored for explicit opt-outs.
  * sourceId is the action source key (e.g. "linear", "connector:<uuid>").

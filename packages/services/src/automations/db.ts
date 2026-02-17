@@ -16,6 +16,7 @@ import {
 	gte,
 	inArray,
 	integrations,
+	sql,
 	triggerEvents,
 	triggers,
 } from "../db/client";
@@ -948,6 +949,24 @@ export async function findTriggerForAutomationByProvider(
 	});
 
 	return (result as WebhookTriggerWithAutomation) ?? null;
+}
+
+/**
+ * Find the dedicated manual trigger for an automation (any enabled state).
+ * Manual triggers use provider "webhook" with `config._manual = true` to stay
+ * within the valid TriggerProvider enum while being identifiable.
+ */
+export async function findManualTrigger(automationId: string): Promise<{ id: string } | null> {
+	const db = getDb();
+	const result = await db.query.triggers.findFirst({
+		where: and(
+			eq(triggers.automationId, automationId),
+			sql`${triggers.config}->>'_manual' = 'true'`,
+		),
+		columns: { id: true },
+	});
+
+	return result ?? null;
 }
 
 /**
