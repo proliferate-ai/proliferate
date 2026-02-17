@@ -13,6 +13,7 @@ import type {
 	AutomationTrigger,
 	AutomationWithTriggers,
 } from "@proliferate/shared/contracts";
+import { createRunFromTriggerEvent } from "../runs/service";
 import * as automationsDb from "./db";
 import {
 	toAutomation,
@@ -596,4 +597,55 @@ export async function createTriggerEvent(
 		triggerId: row.triggerId,
 		organizationId: row.organizationId,
 	};
+}
+
+// ============================================
+// Manual run trigger
+// ============================================
+
+/**
+ * Trigger a manual run for an automation.
+ *
+ * Creates a synthetic trigger event and kicks off the run pipeline
+ * (enrich → execute) so users can test automations from the UI.
+ */
+export async function triggerManualRun(
+	automationId: string,
+	orgId: string,
+	userId: string,
+): Promise<{ runId: string; status: string }> {
+	const exists = await automationsDb.exists(automationId, orgId);
+	if (!exists) throw new Error("Automation not found");
+
+	// Find any existing trigger to satisfy the FK, or create a hidden one.
+	let trigger = await automationsDb.findAnyTriggerForAutomation(automationId);
+	if (!trigger) {
+		trigger = await automationsDb.createTriggerForAutomation({
+			automationId,
+			organizationId: orgId,
+			name: "Manual trigger",
+			provider: "webhook",
+			triggerType: "webhook",
+			enabled: false,
+			config: {},
+			integrationId: null,
+			webhookUrlPath: `manual-${automationId}`,
+			webhookSecret: randomBytes(16).toString("hex"),
+			pollingCron: null,
+			createdBy: userId,
+		});
+	}
+
+	const { run } = await createRunFromTriggerEvent({
+		triggerId: trigger.id,
+		organizationId: orgId,
+		automationId,
+		externalEventId: `manual-${Date.now()}`,
+		providerEventType: "manual_trigger",
+		rawPayload: { type: "manual_trigger", triggered_by: userId },
+		parsedContext: { message: "Manually triggered from UI" },
+		dedupKey: null,
+	});
+
+	return { runId: run.id, status: run.status };
 }

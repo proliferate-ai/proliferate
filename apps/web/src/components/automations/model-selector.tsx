@@ -17,8 +17,8 @@ interface ModelSelectorProps {
 	modelId: ModelId;
 	onChange: (modelId: ModelId) => void;
 	disabled?: boolean;
-	/** Use "ghost" for borderless in toolbars, "outline" (default) for standalone */
-	variant?: "outline" | "ghost";
+	/** "outline" (default) for standalone, "ghost" for borderless, "chip" for inline property row */
+	variant?: "outline" | "ghost" | "chip";
 	/** Extra classes for the trigger button (e.g. borderless when embedded in a stacked list) */
 	triggerClassName?: string;
 }
@@ -34,16 +34,22 @@ export function ModelSelector({
 	const models = getModelsForAgent(DEFAULT_AGENT_TYPE);
 	const currentModel = getModel(DEFAULT_AGENT_TYPE, modelId);
 
+	const buttonVariant = variant === "chip" ? "ghost" : variant;
+
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
 				<Button
-					variant={variant}
+					variant={buttonVariant}
 					size="sm"
-					className={cn("h-8 gap-2 font-normal", triggerClassName)}
+					className={cn(
+						"gap-2 font-normal",
+						variant === "chip" ? "h-7 px-2 text-sm bg-muted/50 hover:bg-muted rounded-md" : "h-8",
+						triggerClassName,
+					)}
 					disabled={disabled}
 				>
-					<ClaudeIcon className="h-4 w-4" />
+					<ClaudeIcon className="h-3.5 w-3.5" />
 					<span>{currentModel?.name ?? modelId}</span>
 				</Button>
 			</PopoverTrigger>
