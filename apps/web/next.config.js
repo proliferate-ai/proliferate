@@ -45,8 +45,8 @@ const nextConfig = {
 				permanent: true,
 			},
 			{
-				source: "/dashboard/inbox",
-				destination: "/dashboard/runs",
+				source: "/dashboard/runs",
+				destination: "/dashboard/inbox",
 				permanent: true,
 			},
 			{
