@@ -362,6 +362,7 @@ class ApiError extends Error {
 
 **Edge cases:**
 - Concurrent `ensureRuntimeReady()` calls coalesce into a single promise (`ensureReadyPromise`).
+- OpenCode session creation uses bounded retry with exponential backoff for transient transport failures (fetch/socket and retryable 5xx/429), with per-attempt latency logs.
 - E2B auto-pause: if provider supports auto-pause, `sandboxId` is stored as `snapshotId` for implicit recovery.
 - Stored tunnel URLs are used as fallback if provider returns empty values on recovery.
 

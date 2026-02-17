@@ -74,9 +74,13 @@ export async function waitForOpenCodeReady(
 ): Promise<void> {
 	const startTime = Date.now();
 	let attempt = 0;
+	let lastStatus: number | null = null;
+	let lastError: string | null = null;
+	let lastErrorCode: string | null = null;
 
 	while (Date.now() - startTime < maxWaitMs) {
 		attempt++;
+		const elapsedMs = Date.now() - startTime;
 		try {
 			const response = await fetch(`${tunnelUrl}/session`, {
 				signal: AbortSignal.timeout(5000),
@@ -85,15 +89,34 @@ export async function waitForOpenCodeReady(
 				log(`[P-LATENCY] Agent ready after ${attempt} attempts (${Date.now() - startTime}ms)`);
 				return;
 			}
-		} catch {
-			// Not ready yet, retry
+			lastStatus = response.status;
+			log(
+				`[P-LATENCY] Agent readiness probe attempt=${attempt} status=${response.status} elapsedMs=${elapsedMs}`,
+			);
+		} catch (error) {
+			const err = error instanceof Error ? error : new Error(String(error));
+			const cause =
+				err.cause && typeof err.cause === "object"
+					? (err.cause as { code?: unknown; message?: unknown })
+					: undefined;
+			lastError = err.message;
+			lastErrorCode = typeof cause?.code === "string" ? cause.code : null;
+			const codeSuffix = lastErrorCode ? `/${lastErrorCode}` : "";
+			log(
+				`[P-LATENCY] Agent readiness probe attempt=${attempt} error=${err.name}${codeSuffix} elapsedMs=${elapsedMs} message=${err.message}`,
+			);
 		}
 		// Exponential backoff: 200ms, 300ms, 450ms, ... up to 2s max
 		const delay = Math.min(200 * 1.5 ** (attempt - 1), 2000);
 		await new Promise((r) => setTimeout(r, delay));
 	}
 
-	throw new Error(`[P-LATENCY] Agent not ready after ${maxWaitMs}ms (${attempt} attempts)`);
+	const statusSuffix = lastStatus !== null ? `, lastStatus=${lastStatus}` : "";
+	const errorSuffix = lastError ? `, lastError=${lastError}` : "";
+	const codeSuffix = lastErrorCode ? `, lastErrorCode=${lastErrorCode}` : "";
+	throw new Error(
+		`[P-LATENCY] Agent not ready after ${maxWaitMs}ms (${attempt} attempts${statusSuffix}${errorSuffix}${codeSuffix})`,
+	);
 }
 
 /**

@@ -3,6 +3,27 @@ import pinoHttp, { type Options as PinoHttpOptions } from "pino-http";
 
 export type { LevelWithSilent, Logger };
 
+const PRETTY_TRANSPORT_CONFIG = {
+	target: "pino-pretty",
+	options: {
+		colorize: true,
+		translateTime: "SYS:yyyy-mm-dd HH:MM:ss.l",
+		ignore: "pid,hostname",
+		messageFormat:
+			"{msg}{if err} — {err.message}{end}{if durationMs} ({durationMs}ms){end}{if count} (count: {count}){end}",
+		hideObject: true,
+	},
+} as const;
+
+let prettyTransport: ReturnType<typeof pino.transport> | null = null;
+
+function getPrettyTransport(): ReturnType<typeof pino.transport> {
+	if (!prettyTransport) {
+		prettyTransport = pino.transport(PRETTY_TRANSPORT_CONFIG);
+	}
+	return prettyTransport;
+}
+
 export interface CreateLoggerOptions {
 	service: string;
 	level?: LevelWithSilent;
@@ -36,17 +57,7 @@ export function createLogger(options: CreateLoggerOptions): Logger {
 	};
 
 	if (prettyEnabled) {
-		loggerOptions.transport = {
-			target: "pino-pretty",
-			options: {
-				colorize: true,
-				translateTime: "SYS:yyyy-mm-dd HH:MM:ss.l",
-				ignore: "pid,hostname",
-				messageFormat:
-					"{msg}{if err} — {err.message}{end}{if durationMs} ({durationMs}ms){end}{if count} (count: {count}){end}",
-				hideObject: true,
-			},
-		};
+		return pino(loggerOptions, getPrettyTransport());
 	}
 
 	return pino(loggerOptions);

@@ -20,7 +20,11 @@ import { computeBaseSnapshotVersionKey } from "@proliferate/shared/sandbox";
 import { scheduleSessionExpiry } from "../expiry/expiry-queue";
 import type { GatewayEnv } from "../lib/env";
 import { waitForMigrationLockRelease } from "../lib/lock";
-import { createOpenCodeSession, listOpenCodeSessions } from "../lib/opencode";
+import {
+	type OpenCodeSessionCreateError,
+	createOpenCodeSession,
+	listOpenCodeSessions,
+} from "../lib/opencode";
 import { deriveSandboxMcpToken } from "../lib/sandbox-mcp-token";
 import { type SessionContext, loadSessionContext } from "../lib/session-store";
 import type { OpenCodeEvent, SandboxInfo } from "../types";
@@ -52,6 +56,9 @@ export interface SessionRuntimeOptions {
 }
 
 export class SessionRuntime {
+	private static readonly OPEN_CODE_CREATE_BASE_DELAY_MS = 500;
+	private static readonly OPEN_CODE_CREATE_MAX_DELAY_MS = 5000;
+
 	private readonly env: GatewayEnv;
 	private readonly sessionId: string;
 	private context: SessionContext;
@@ -545,7 +552,7 @@ export class SessionRuntime {
 		// Create new OpenCode session
 		const createStartMs = Date.now();
 		this.log("Creating new OpenCode session...");
-		const sessionId = await createOpenCodeSession(this.openCodeUrl);
+		const sessionId = await this.createOpenCodeSessionWithRetry();
 		this.log("OpenCode session created", { sessionId });
 		this.logLatency("runtime.opencode_session.create", {
 			durationMs: Date.now() - createStartMs,
@@ -557,6 +564,87 @@ export class SessionRuntime {
 
 		// Store the new ID
 		await sessions.update(this.sessionId, { codingAgentSessionId: sessionId });
+	}
+
+	private async createOpenCodeSessionWithRetry(): Promise<string> {
+		if (!this.openCodeUrl) {
+			throw new Error("Agent URL missing");
+		}
+
+		// Restores from snapshot can take longer for OpenCode to accept session create calls.
+		const maxAttempts = this.context.session.snapshot_id ? 5 : 3;
+		let lastError: unknown;
+
+		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+			const attemptStartMs = Date.now();
+			try {
+				const sessionId = await createOpenCodeSession(this.openCodeUrl);
+				this.logLatency("runtime.opencode_session.create.attempt", {
+					attempt,
+					maxAttempts,
+					durationMs: Date.now() - attemptStartMs,
+					success: true,
+				});
+				return sessionId;
+			} catch (error) {
+				lastError = error;
+				const err = error as OpenCodeSessionCreateError;
+				const retryable = this.isRetryableOpenCodeCreateError(error);
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				this.logLatency("runtime.opencode_session.create.attempt", {
+					attempt,
+					maxAttempts,
+					durationMs: Date.now() - attemptStartMs,
+					success: false,
+					retryable,
+					error: errorMessage,
+					status: err.status,
+					code: err.code,
+					phase: err.phase,
+				});
+
+				if (!retryable || attempt >= maxAttempts) {
+					break;
+				}
+
+				const delayMs = Math.min(
+					SessionRuntime.OPEN_CODE_CREATE_BASE_DELAY_MS * 2 ** (attempt - 1),
+					SessionRuntime.OPEN_CODE_CREATE_MAX_DELAY_MS,
+				);
+				this.logger.warn(
+					{
+						attempt,
+						maxAttempts,
+						delayMs,
+						error: errorMessage,
+						status: err.status,
+						code: err.code,
+						phase: err.phase,
+					},
+					"OpenCode session create failed; retrying",
+				);
+				await new Promise((resolve) => setTimeout(resolve, delayMs));
+			}
+		}
+
+		throw lastError instanceof Error ? lastError : new Error(String(lastError));
+	}
+
+	private isRetryableOpenCodeCreateError(error: unknown): boolean {
+		const err = error as OpenCodeSessionCreateError;
+		if (typeof err.retryable === "boolean") {
+			return err.retryable;
+		}
+		const message =
+			error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+		return (
+			message.includes("fetch failed") ||
+			message.includes("other side closed") ||
+			message.includes("econnreset") ||
+			message.includes("econnrefused") ||
+			message.includes("etimedout") ||
+			message.includes("und_err")
+		);
 	}
 
 	// ============================================
