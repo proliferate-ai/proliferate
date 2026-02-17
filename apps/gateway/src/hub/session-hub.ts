@@ -85,6 +85,7 @@ export class SessionHub {
 	// Session leases
 	private leaseRenewTimer: ReturnType<typeof setInterval> | null = null;
 	private lastLeaseRenewAt = 0;
+	private ownsOwnerLease = false;
 
 	// Idle snapshot tracking
 	private activeHttpToolCalls = 0;
@@ -509,10 +510,16 @@ export class SessionHub {
 	 */
 	async ensureRuntimeReady(options?: { reason?: "auto_reconnect" }): Promise<void> {
 		this.lifecycleStartTime = Date.now();
-		await this.runtime.ensureRuntimeReady(options);
+		await this.startLeaseRenewal();
+		try {
+			await this.runtime.ensureRuntimeReady(options);
+		} catch (err) {
+			// Preserve prior behavior: failed runtime init should not keep ownership.
+			this.stopLeaseRenewal();
+			throw err;
+		}
 		this.lastKnownAgentIdleAt = null; // fresh sandbox, agent state unknown
 		this.startMigrationMonitor();
-		await this.startLeaseRenewal();
 		await setRuntimeLease(this.sessionId);
 	}
 
@@ -733,9 +740,9 @@ export class SessionHub {
 		const acquired = await acquireOwnerLease(this.sessionId, this.instanceId);
 		if (!acquired) {
 			this.logger.error("Failed to acquire owner lease — another instance owns this session");
-			this.selfTerminate();
-			return;
+			throw new Error("Session is owned by another instance");
 		}
+		this.ownsOwnerLease = true;
 
 		this.lastLeaseRenewAt = Date.now();
 
@@ -762,6 +769,7 @@ export class SessionHub {
 			renewOwnerLease(this.sessionId, this.instanceId)
 				.then((renewed) => {
 					if (!renewed) {
+						this.ownsOwnerLease = false;
 						this.logger.error("Owner lease lost during renewal, self-terminating");
 						this.selfTerminate();
 					}
@@ -782,6 +790,12 @@ export class SessionHub {
 			clearInterval(this.leaseRenewTimer);
 			this.leaseRenewTimer = null;
 		}
+
+		// Never clear shared runtime lease state unless this hub actually held ownership.
+		if (!this.ownsOwnerLease) {
+			return;
+		}
+		this.ownsOwnerLease = false;
 
 		// Release leases
 		releaseOwnerLease(this.sessionId, this.instanceId).catch((err) => {
