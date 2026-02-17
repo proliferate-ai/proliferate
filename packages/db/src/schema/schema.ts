@@ -1892,12 +1892,9 @@ export const userActionPreferences = pgTable(
 			foreignColumns: [organization.id],
 			name: "user_action_preferences_organization_id_fkey",
 		}).onDelete("cascade"),
-		unique("user_action_prefs_user_org_source_action_key").on(
-			table.userId,
-			table.organizationId,
-			table.sourceId,
-			table.actionId,
-		),
+		unique("user_action_prefs_user_org_source_action_key")
+			.on(table.userId, table.organizationId, table.sourceId, table.actionId)
+			.nullsNotDistinct(),
 	],
 );
 
