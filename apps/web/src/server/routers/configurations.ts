@@ -10,6 +10,8 @@ import { configurations } from "@proliferate/services";
 import {
 	ConfigurationSchema,
 	CreateConfigurationInputSchema,
+	FinalizeSetupInputSchema,
+	FinalizeSetupResponseSchema,
 	UpdateConfigurationInputSchema,
 } from "@proliferate/shared";
 import { parseConfigurationServiceCommands } from "@proliferate/shared/sandbox";
@@ -257,6 +259,31 @@ export const configurationsRouter = {
 				updatedBy: context.user.id,
 			});
 			return { success: true };
+		}),
+
+	/**
+	 * Finalize setup session and create a configuration snapshot.
+	 */
+	finalizeSetup: orgProcedure
+		.input(
+			z.object({
+				id: z.string().uuid(),
+				...FinalizeSetupInputSchema.shape,
+			}),
+		)
+		.output(FinalizeSetupResponseSchema)
+		.handler(async ({ input, context }) => {
+			const { finalizeSetupHandler } = await import("./configurations-finalize");
+			return finalizeSetupHandler({
+				repoId: input.id,
+				sessionId: input.sessionId,
+				secrets: input.secrets,
+				name: input.name,
+				notes: input.notes,
+				updateSnapshotId: input.updateSnapshotId,
+				keepRunning: input.keepRunning,
+				userId: context.user.id,
+			});
 		}),
 
 	/**

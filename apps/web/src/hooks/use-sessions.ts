@@ -201,7 +201,7 @@ export function useFinalizeSetup() {
 	const queryClient = useQueryClient();
 
 	const mutation = useMutation({
-		...orpc.repos.finalizeSetup.mutationOptions(),
+		...orpc.configurations.finalizeSetup.mutationOptions(),
 		onSuccess: () => {
 			// Invalidate all relevant queries
 			queryClient.invalidateQueries({ queryKey: orpc.sessions.list.key() });

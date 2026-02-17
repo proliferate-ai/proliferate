@@ -175,23 +175,6 @@ export const reposContract = c.router(
 			},
 			summary: "Search public GitHub repositories",
 		},
-
-		finalizeSetup: {
-			method: "POST",
-			path: "/repos/:id/finalize-setup",
-			pathParams: z.object({
-				id: z.string().uuid(),
-			}),
-			body: FinalizeSetupInputSchema,
-			responses: {
-				200: FinalizeSetupResponseSchema,
-				400: ErrorResponseSchema,
-				401: ErrorResponseSchema,
-				404: ErrorResponseSchema,
-				500: ErrorResponseSchema,
-			},
-			summary: "Finalize setup session and create a configuration snapshot",
-		},
 	},
 	{
 		pathPrefix: "/api",

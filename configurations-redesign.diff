@@ -909,112 +909,742 @@ index 4281d4c..c80b504 100644
  		else if (key === "agentInstructions") mapped.agent_instructions = value;
  		else if (key === "agentType") mapped.agent_type = value;
 diff --git a/apps/web/src/app/(command-center)/dashboard/repos/[id]/page.tsx b/apps/web/src/app/(command-center)/dashboard/repos/[id]/page.tsx
-index 0b9218b..1514140 100644
+index 0b9218b..7b89da8 100644
 --- a/apps/web/src/app/(command-center)/dashboard/repos/[id]/page.tsx
 +++ b/apps/web/src/app/(command-center)/dashboard/repos/[id]/page.tsx
-@@ -74,7 +74,7 @@ export default function RepoDetailPage() {
+@@ -1,17 +1,9 @@
+ "use client";
+ 
+-import { openEditSession, openHistoricalSession } from "@/components/coding-session";
+-import { SecretFilesEditor } from "@/components/repositories/secret-files-editor";
+ import { Button } from "@/components/ui/button";
+ import { Input } from "@/components/ui/input";
+ import { LoadingDots } from "@/components/ui/loading-dots";
+-import { useOrgMembers } from "@/hooks/use-orgs";
+ import { useRepo, useServiceCommands, useUpdateServiceCommands } from "@/hooks/use-repos";
+-import { useActiveOrganization, useSession } from "@/lib/auth-client";
+-import { orpc } from "@/lib/orpc";
+-import { type OrgRole, hasRoleOrHigher } from "@/lib/roles";
+-import { getSnapshotDisplayName } from "@/lib/utils";
+-import { useQuery } from "@tanstack/react-query";
+ import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
+ import { useParams, useRouter } from "next/navigation";
+ import { useState } from "react";
+@@ -23,15 +15,6 @@ export default function RepoDetailPage() {
+ 
+ 	const { data: repo, isLoading } = useRepo(repoId);
+ 
+-	// Role gating for secret files
+-	const { data: activeOrg } = useActiveOrganization();
+-	const { data: authSession } = useSession();
+-	const currentUserId = authSession?.user?.id;
+-	const { data: members } = useOrgMembers(activeOrg?.id ?? "");
+-	const currentUserRole = members?.find((m: { userId: string }) => m.userId === currentUserId)
+-		?.role as OrgRole | undefined;
+-	const isAdmin = currentUserRole ? hasRoleOrHigher(currentUserRole, "admin") : false;
+-
+ 	if (isLoading) {
+ 		return (
+ 			<div className="flex items-center justify-center h-full">
+@@ -73,15 +56,9 @@ export default function RepoDetailPage() {
+ 					<h1 className="text-lg font-semibold">{repo.githubRepoName}</h1>
  					<div className="flex items-center gap-2 mt-1">
  						<span className="text-xs text-muted-foreground">{repo.defaultBranch || "main"}</span>
- 						<span className="inline-flex items-center rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+-						<span className="inline-flex items-center rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
 -							{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
-+							{repo.configurationStatus === "ready" ? "Configured" : "Not configured"}
- 						</span>
+-						</span>
  					</div>
  				</div>
-@@ -94,7 +94,7 @@ function ConfigurationsSection({ repoId, isAdmin }: { repoId: string; isAdmin: b
- 	const { data: snapshotsData, isLoading } = useQuery({
- 		...orpc.repos.listSnapshots.queryOptions({ input: { id: repoId } }),
- 	});
+ 
+-				{/* Configurations */}
+-				<ConfigurationsSection repoId={repoId} isAdmin={isAdmin} />
+-
+ 				{/* Service Commands */}
+ 				<ServiceCommandsSection repoId={repoId} />
+ 			</div>
+@@ -89,107 +66,6 @@ export default function RepoDetailPage() {
+ 	);
+ }
+ 
+-function ConfigurationsSection({ repoId, isAdmin }: { repoId: string; isAdmin: boolean }) {
+-	const router = useRouter();
+-	const { data: snapshotsData, isLoading } = useQuery({
+-		...orpc.repos.listSnapshots.queryOptions({ input: { id: repoId } }),
+-	});
 -	const snapshots = snapshotsData?.prebuilds;
-+	const snapshots = snapshotsData?.configurations;
- 
- 	const [expandedId, setExpandedId] = useState<string | null>(null);
- 
-@@ -148,7 +148,7 @@ function ConfigurationsSection({ repoId, isAdmin }: { repoId: string; isAdmin: b
- 														sessionId: setupSessionId,
- 														snapshotId: snapshot.id,
- 														snapshotName: getSnapshotDisplayName(snapshot),
+-
+-	const [expandedId, setExpandedId] = useState<string | null>(null);
+-
+-	return (
+-		<section>
+-			<div className="flex items-center justify-between mb-3">
+-				<h2 className="text-sm font-medium">Configurations</h2>
+-				<Button
+-					variant="outline"
+-					size="sm"
+-					className="h-7 text-xs"
+-					onClick={() => router.push(`/workspace/new?repoId=${repoId}&type=setup`)}
+-				>
+-					<Plus className="h-3 w-3 mr-1" />
+-					New configuration
+-				</Button>
+-			</div>
+-
+-			{isLoading ? (
+-				<LoadingDots size="sm" className="text-muted-foreground" />
+-			) : snapshots && snapshots.length > 0 ? (
+-				<div className="rounded-lg border border-border/80 bg-background divide-y divide-border/60">
+-					{snapshots.map((snapshot) => {
+-						const setupSessionId = snapshot.setupSessions?.find(
+-							(s) => s.sessionType === "setup",
+-						)?.id;
+-						const isExpanded = expandedId === snapshot.id;
+-
+-						return (
+-							<div key={snapshot.id}>
+-								<div className="flex items-center justify-between px-4 py-2.5">
+-									<button
+-										type="button"
+-										className="text-sm truncate hover:underline text-left flex-1 min-w-0"
+-										onClick={() => {
+-											if (setupSessionId) {
+-												openHistoricalSession(setupSessionId, getSnapshotDisplayName(snapshot));
+-											}
+-										}}
+-									>
+-										{getSnapshotDisplayName(snapshot)}
+-									</button>
+-									<div className="flex items-center gap-1.5 flex-shrink-0 ml-3">
+-										{setupSessionId && (
+-											<Button
+-												variant="ghost"
+-												size="sm"
+-												className="h-7 text-xs"
+-												onClick={() =>
+-													openEditSession({
+-														sessionId: setupSessionId,
+-														snapshotId: snapshot.id,
+-														snapshotName: getSnapshotDisplayName(snapshot),
 -														prebuildId: snapshot.id,
-+														configurationId: snapshot.id,
- 													})
- 												}
- 											>
+-													})
+-												}
+-											>
+-												<Pencil className="h-3 w-3 mr-1" />
+-												Edit
+-											</Button>
+-										)}
+-										{isAdmin && (
+-											<Button
+-												variant="ghost"
+-												size="sm"
+-												className="h-7 text-xs"
+-												onClick={() => setExpandedId(isExpanded ? null : snapshot.id)}
+-											>
+-												{isExpanded ? "Hide Secrets" : "Secret Files"}
+-											</Button>
+-										)}
+-									</div>
+-								</div>
+-
+-								{isAdmin && isExpanded && (
+-									<div className="px-4 pb-3 border-t border-border/40 pt-3">
+-										<SecretFilesEditor configurationId={snapshot.id} />
+-									</div>
+-								)}
+-							</div>
+-						);
+-					})}
+-				</div>
+-			) : (
+-				<div className="rounded-lg border border-dashed border-border/80 py-8 text-center">
+-					<p className="text-sm text-muted-foreground">No configurations yet</p>
+-					<p className="text-xs text-muted-foreground mt-1">
+-						Create a configuration to get started
+-					</p>
+-				</div>
+-			)}
+-		</section>
+-	);
+-}
+-
+ interface CommandDraft {
+ 	name: string;
+ 	command: string;
 diff --git a/apps/web/src/app/(command-center)/dashboard/repos/page.tsx b/apps/web/src/app/(command-center)/dashboard/repos/page.tsx
-index 3b87e1d..eec4a4f 100644
+index 3b87e1d..82ffa3d 100644
 --- a/apps/web/src/app/(command-center)/dashboard/repos/page.tsx
 +++ b/apps/web/src/app/(command-center)/dashboard/repos/page.tsx
-@@ -25,10 +25,10 @@ import { Input } from "@/components/ui/input";
- import { LoadingDots } from "@/components/ui/loading-dots";
+@@ -1,6 +1,5 @@
+ "use client";
+ 
+-import { openEditSession, openHistoricalSession } from "@/components/coding-session";
+ import { PageShell } from "@/components/dashboard/page-shell";
  import {
- 	useCheckSecrets,
-+	useConfigurationEnvFiles,
- 	useCreateRepo,
- 	useCreateSecret,
- 	useDeleteRepo,
+ 	AlertDialog,
+@@ -23,36 +22,12 @@ import {
+ } from "@/components/ui/dropdown-menu";
+ import { Input } from "@/components/ui/input";
+ import { LoadingDots } from "@/components/ui/loading-dots";
+-import {
+-	useCheckSecrets,
+-	useCreateRepo,
+-	useCreateSecret,
+-	useDeleteRepo,
 -	usePrebuildEnvFiles,
- 	useRepoSnapshots,
- 	useRepos,
- 	useSearchRepos,
-@@ -230,12 +230,12 @@ function RepoRow({
- 							<span
- 								className={cn(
- 									"inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-medium",
--									repo.prebuildStatus === "ready"
-+									repo.configurationStatus === "ready"
- 										? "border-border/50 bg-muted/50 text-foreground"
- 										: "border-border/50 bg-muted/50 text-muted-foreground",
- 								)}
- 							>
--								{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
-+								{repo.configurationStatus === "ready" ? "Configured" : "Not configured"}
- 							</span>
- 						</span>
- 					</button>
-@@ -393,7 +393,7 @@ function ConfigurationRow({
- 										sessionId: setupSessionId,
- 										snapshotId: config.snapshotId || config.id,
- 										snapshotName: name,
--										prebuildId: config.id,
-+										configurationId: config.id,
- 									})
- 								}
- 							>
-@@ -403,7 +403,7 @@ function ConfigurationRow({
- 					)}
+-	useRepoSnapshots,
+-	useRepos,
+-	useSearchRepos,
+-} from "@/hooks/use-repos";
+-import { cn, getSnapshotDisplayName } from "@/lib/utils";
+-import { useDashboardStore } from "@/stores/dashboard";
++import { useCreateRepo, useDeleteRepo, useRepos, useSearchRepos } from "@/hooks/use-repos";
++import { cn } from "@/lib/utils";
+ import type { GitHubRepo, Repo } from "@/types";
+-import type { RepoSnapshot } from "@proliferate/shared/contracts";
+-import { formatDistanceToNow } from "date-fns";
+-import {
+-	AlertTriangle,
+-	Check,
+-	ChevronRight,
+-	ExternalLink,
+-	KeyRound,
+-	MoreVertical,
+-	Plus,
+-	Search,
+-	Star,
+-	Trash2,
+-} from "lucide-react";
++import { ExternalLink, MoreVertical, Plus, Search, Star, Trash2 } from "lucide-react";
+ import Link from "next/link";
+-import { useRouter } from "next/navigation";
+-import { useCallback, useEffect, useMemo, useState } from "react";
++import { useEffect, useMemo, useState } from "react";
+ 
+ // ============================================
+ // Main Page
+@@ -60,7 +35,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
+ 
+ export default function RepositoriesPage() {
+ 	const { data: repos, isLoading } = useRepos();
+-	const [expandedRepoId, setExpandedRepoId] = useState<string | null>(null);
+ 	const [filterQuery, setFilterQuery] = useState("");
+ 	const [addDialogOpen, setAddDialogOpen] = useState(false);
+ 
+@@ -71,10 +45,6 @@ export default function RepositoriesPage() {
+ 		return list.filter((r) => r.githubRepoName.toLowerCase().includes(q));
+ 	}, [repos, filterQuery]);
+ 
+-	const toggleExpand = useCallback((repoId: string) => {
+-		setExpandedRepoId((prev) => (prev === repoId ? null : repoId));
+-	}, []);
+-
+ 	if (isLoading) {
+ 		return (
+ 			<PageShell title="Repositories">
+@@ -135,20 +105,13 @@ export default function RepositoriesPage() {
+ 				<div className="rounded-xl border border-border overflow-hidden">
+ 					{/* Table header */}
+ 					<div className="flex items-center px-4 py-2 pr-12 text-xs text-muted-foreground border-b border-border/50">
+-						<span className="w-6" />
+ 						<span className="flex-1 min-w-0">Name</span>
+ 						<span className="w-24 text-center shrink-0">Branch</span>
+-						<span className="w-28 text-center shrink-0">Configurations</span>
+-						<span className="w-28 text-center shrink-0">Status</span>
++						<span className="w-20 text-center shrink-0">GitHub</span>
+ 					</div>
+ 
+ 					{reposList.map((repo) => (
+-						<RepoRow
+-							key={repo.id}
+-							repo={repo}
+-							expanded={expandedRepoId === repo.id}
+-							onToggle={() => toggleExpand(repo.id)}
+-						/>
++						<RepoRow key={repo.id} repo={repo} />
+ 					))}
  				</div>
+ 			)}
+@@ -166,26 +129,9 @@ export default function RepositoriesPage() {
+ // Repo Row
+ // ============================================
+ 
+-function RepoRow({
+-	repo,
+-	expanded,
+-	onToggle,
+-}: {
+-	repo: Repo;
+-	expanded: boolean;
+-	onToggle: () => void;
+-}) {
+-	const router = useRouter();
+-	const { setSelectedRepo } = useDashboardStore();
++function RepoRow({ repo }: { repo: Repo }) {
+ 	const deleteRepo = useDeleteRepo();
+ 	const [deleteOpen, setDeleteOpen] = useState(false);
+-	const { data: snapshots } = useRepoSnapshots(repo.id, expanded);
+-	const configCount = snapshots?.length ?? 0;
+-
+-	const handleConfigure = () => {
+-		setSelectedRepo(repo.id);
+-		router.push(`/workspace/new?repoId=${repo.id}&type=setup`);
+-	};
+ 
+ 	const handleDelete = async () => {
+ 		await deleteRepo.mutateAsync({ id: repo.id });
+@@ -194,53 +140,24 @@ function RepoRow({
+ 
+ 	return (
+ 		<>
+-			<div className={cn("border-b border-border/50 last:border-0", expanded && "bg-muted/30")}>
+-				{/* Collapsed row */}
+-				<div className="flex items-center hover:bg-muted/50 transition-colors">
+-					<button
+-						type="button"
+-						onClick={onToggle}
+-						className="flex-1 min-w-0 flex items-center px-4 py-2.5 text-sm text-left"
+-					>
+-						<ChevronRight
+-							className={cn(
+-								"h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0",
+-								expanded && "rotate-90",
+-							)}
+-						/>
+-						<span className="flex-1 min-w-0 flex items-center gap-1.5 ml-2">
+-							<span className="font-medium truncate">{repo.githubRepoName}</span>
+-							<a
+-								href={repo.githubUrl}
+-								target="_blank"
+-								rel="noopener noreferrer"
+-								onClick={(e) => e.stopPropagation()}
+-								className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+-							>
+-								<ExternalLink className="h-3 w-3" />
+-							</a>
+-						</span>
+-						<span className="w-24 text-center text-xs text-muted-foreground shrink-0">
+-							{repo.defaultBranch || "main"}
+-						</span>
+-						<span className="w-28 text-center text-xs text-muted-foreground shrink-0">
+-							{configCount > 0 ? `${configCount} config${configCount !== 1 ? "s" : ""}` : "\u2014"}
+-						</span>
+-						<span className="w-28 flex justify-center shrink-0">
+-							<span
+-								className={cn(
+-									"inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-medium",
+-									repo.prebuildStatus === "ready"
+-										? "border-border/50 bg-muted/50 text-foreground"
+-										: "border-border/50 bg-muted/50 text-muted-foreground",
+-								)}
+-							>
+-								{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
+-							</span>
+-						</span>
+-					</button>
++			<div className="border-b border-border/50 last:border-0">
++				<div className="flex items-center hover:bg-muted/50 transition-colors px-4 py-2.5 text-sm">
++					<span className="flex-1 min-w-0 font-medium truncate">{repo.githubRepoName}</span>
++					<span className="w-24 text-center text-xs text-muted-foreground shrink-0">
++						{repo.defaultBranch || "main"}
++					</span>
++					<span className="w-20 flex justify-center shrink-0">
++						<a
++							href={repo.githubUrl}
++							target="_blank"
++							rel="noopener noreferrer"
++							className="text-muted-foreground hover:text-foreground transition-colors"
++						>
++							<ExternalLink className="h-3.5 w-3.5" />
++						</a>
++					</span>
+ 
+-					<div className="pr-3 shrink-0">
++					<div className="shrink-0 ml-2">
+ 						<DropdownMenu>
+ 							<DropdownMenuTrigger asChild>
+ 								<Button variant="ghost" size="icon" className="h-7 w-7">
+@@ -248,10 +165,6 @@ function RepoRow({
+ 								</Button>
+ 							</DropdownMenuTrigger>
+ 							<DropdownMenuContent align="end">
+-								<DropdownMenuItem onClick={handleConfigure}>
+-									<Plus className="h-4 w-4 mr-2" />
+-									Configure
+-								</DropdownMenuItem>
+ 								<DropdownMenuItem asChild>
+ 									<a href={repo.githubUrl} target="_blank" rel="noopener noreferrer">
+ 										<ExternalLink className="h-4 w-4 mr-2" />
+@@ -267,9 +180,6 @@ function RepoRow({
+ 						</DropdownMenu>
+ 					</div>
+ 				</div>
+-
+-				{/* Expanded content */}
+-				{expanded && <RepoConfigurations repoId={repo.id} />}
  			</div>
+ 
+ 			<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+@@ -277,8 +187,8 @@ function RepoRow({
+ 					<AlertDialogHeader>
+ 						<AlertDialogTitle>Delete repository</AlertDialogTitle>
+ 						<AlertDialogDescription>
+-							Are you sure you want to remove {repo.githubRepoName}? This will delete all associated
+-							configurations and snapshots.
++							Are you sure you want to remove {repo.githubRepoName}? This will not affect
++							configurations that reference this repository.
+ 						</AlertDialogDescription>
+ 					</AlertDialogHeader>
+ 					<AlertDialogFooter>
+@@ -296,349 +206,6 @@ function RepoRow({
+ 	);
+ }
+ 
+-// ============================================
+-// Repo Configurations (expanded content)
+-// ============================================
+-
+-function RepoConfigurations({ repoId }: { repoId: string }) {
+-	const router = useRouter();
+-	const { setSelectedRepo } = useDashboardStore();
+-	const { data: snapshots, isLoading } = useRepoSnapshots(repoId);
+-
+-	const handleConfigure = () => {
+-		setSelectedRepo(repoId);
+-		router.push(`/workspace/new?repoId=${repoId}&type=setup`);
+-	};
+-
+-	if (isLoading) {
+-		return (
+-			<div className="px-4 pb-4 pl-10">
+-				<LoadingDots size="sm" className="text-muted-foreground" />
+-			</div>
+-		);
+-	}
+-
+-	if (!snapshots || snapshots.length === 0) {
+-		return (
+-			<div className="px-4 pb-4 pl-10">
+-				<p className="text-xs text-muted-foreground mb-2">No configurations yet</p>
+-				<Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleConfigure}>
+-					Configure
+-				</Button>
+-			</div>
+-		);
+-	}
+-
+-	return (
+-		<div className="px-4 pb-3 pl-10 space-y-1">
+-			{snapshots.map((config) => (
+-				<ConfigurationRow key={config.id} config={config} repoId={repoId} />
+-			))}
+-			<Button
+-				variant="ghost"
+-				size="sm"
+-				className="h-7 text-xs text-muted-foreground hover:text-foreground -ml-2"
+-				onClick={handleConfigure}
+-			>
+-				<Plus className="h-3 w-3 mr-1" />
+-				New configuration
+-			</Button>
+-		</div>
+-	);
+-}
+-
+-// ============================================
+-// Configuration Row
+-// ============================================
+-
+-function ConfigurationRow({
+-	config,
+-	repoId,
+-}: {
+-	config: RepoSnapshot;
+-	repoId: string;
+-}) {
+-	const name = getSnapshotDisplayName(config);
+-	const setupSessionId = config.setupSessions?.find((s) => s.sessionType === "setup")?.id;
+-	const timeAgo = formatDistanceToNow(new Date(config.createdAt), { addSuffix: true });
+-	const statusLabel = config.status || "pending";
+-
+-	return (
+-		<div className="py-2 border-b border-border/30 last:border-0">
+-			<div className="flex items-center justify-between gap-2">
+-				<div className="min-w-0">
+-					<span className="text-sm font-medium">{name}</span>
+-					<span className="text-xs text-muted-foreground ml-2">
+-						{statusLabel} · {timeAgo}
+-						{config.createdBy && ` by ${config.createdBy}`}
+-					</span>
+-				</div>
+-				<div className="flex items-center gap-1 shrink-0">
+-					{setupSessionId && (
+-						<>
+-							<Button
+-								variant="ghost"
+-								size="sm"
+-								className="h-7 text-xs"
+-								onClick={() => openHistoricalSession(setupSessionId, name)}
+-							>
+-								View
+-							</Button>
+-							<Button
+-								variant="ghost"
+-								size="sm"
+-								className="h-7 text-xs"
+-								onClick={() =>
+-									openEditSession({
+-										sessionId: setupSessionId,
+-										snapshotId: config.snapshotId || config.id,
+-										snapshotName: name,
+-										prebuildId: config.id,
+-									})
+-								}
+-							>
+-								Edit
+-							</Button>
+-						</>
+-					)}
+-				</div>
+-			</div>
 -			<EnvFileSummary prebuildId={config.id} repoId={repoId} />
-+			<EnvFileSummary configurationId={config.id} repoId={repoId} />
- 		</div>
- 	);
- }
-@@ -418,14 +418,14 @@ interface EnvFileSpec {
- }
- 
- function EnvFileSummary({
+-		</div>
+-	);
+-}
+-
+-// ============================================
+-// Env File Summary
+-// ============================================
+-
+-interface EnvFileSpec {
+-	path: string;
+-	keys: Array<{ key: string; required: boolean }>;
+-}
+-
+-function EnvFileSummary({
 -	prebuildId,
-+	configurationId,
- 	repoId,
- }: {
+-	repoId,
+-}: {
 -	prebuildId: string;
-+	configurationId: string;
- 	repoId: string;
- }) {
- 	const [secretsDialogOpen, setSecretsDialogOpen] = useState(false);
+-	repoId: string;
+-}) {
+-	const [secretsDialogOpen, setSecretsDialogOpen] = useState(false);
 -	const { data: envFilesRaw, isLoading: envLoading } = usePrebuildEnvFiles(prebuildId);
-+	const { data: envFilesRaw, isLoading: envLoading } = useConfigurationEnvFiles(configurationId);
- 
- 	const envFiles = useMemo(() => {
- 		if (!envFilesRaw || !Array.isArray(envFilesRaw)) return [];
-@@ -439,7 +439,7 @@ function EnvFileSummary({
- 	const { data: secretResults, isLoading: secretsLoading } = useCheckSecrets(
- 		allKeys,
- 		repoId,
+-
+-	const envFiles = useMemo(() => {
+-		if (!envFilesRaw || !Array.isArray(envFilesRaw)) return [];
+-		return envFilesRaw as EnvFileSpec[];
+-	}, [envFilesRaw]);
+-
+-	const allKeys = useMemo(() => {
+-		return envFiles.flatMap((f) => f.keys.map((k) => k.key));
+-	}, [envFiles]);
+-
+-	const { data: secretResults, isLoading: secretsLoading } = useCheckSecrets(
+-		allKeys,
+-		repoId,
 -		prebuildId,
-+		configurationId,
- 		allKeys.length > 0,
- 	);
- 
+-		allKeys.length > 0,
+-	);
+-
+-	if (envLoading || envFiles.length === 0) return null;
+-
+-	const existingKeys = new Set((secretResults ?? []).filter((r) => r.exists).map((r) => r.key));
+-	const isLoading = secretsLoading;
+-	let hasMissing = false;
+-
+-	return (
+-		<>
+-			<div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+-				{envFiles.map((file) => {
+-					const total = file.keys.length;
+-					const populated = file.keys.filter((k) => existingKeys.has(k.key)).length;
+-					const missing = total - populated;
+-					if (missing > 0) hasMissing = true;
+-
+-					return (
+-						<span
+-							key={file.path}
+-							className={cn(
+-								"text-xs",
+-								missing > 0 ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground",
+-							)}
+-						>
+-							{file.path}{" "}
+-							{isLoading ? (
+-								<span className="text-muted-foreground">(...)</span>
+-							) : (
+-								<>
+-									({populated}/{total} keys)
+-									{missing > 0 && <AlertTriangle className="inline h-3 w-3 ml-0.5 -mt-0.5" />}
+-								</>
+-							)}
+-						</span>
+-					);
+-				})}
+-				{!isLoading && (
+-					<button
+-						type="button"
+-						onClick={() => setSecretsDialogOpen(true)}
+-						className={cn(
+-							"text-xs hover:underline",
+-							hasMissing ? "text-primary" : "text-muted-foreground hover:text-foreground",
+-						)}
+-					>
+-						{hasMissing ? "Manage Secrets" : "View Secrets"}
+-					</button>
+-				)}
+-			</div>
+-
+-			<ManageSecretsDialog
+-				open={secretsDialogOpen}
+-				onOpenChange={setSecretsDialogOpen}
+-				envFiles={envFiles}
+-				existingKeys={existingKeys}
+-				repoId={repoId}
+-			/>
+-		</>
+-	);
+-}
+-
+-// ============================================
+-// Manage Secrets Dialog
+-// ============================================
+-
+-function ManageSecretsDialog({
+-	open,
+-	onOpenChange,
+-	envFiles,
+-	existingKeys,
+-	repoId,
+-}: {
+-	open: boolean;
+-	onOpenChange: (open: boolean) => void;
+-	envFiles: EnvFileSpec[];
+-	existingKeys: Set<string>;
+-	repoId: string;
+-}) {
+-	const createSecret = useCreateSecret();
+-	const [values, setValues] = useState<Record<string, string>>({});
+-	const [saving, setSaving] = useState(false);
+-	const [errors, setErrors] = useState<Record<string, string>>({});
+-	const [saved, setSaved] = useState<Set<string>>(new Set());
+-
+-	// Reset state when dialog opens
+-	useEffect(() => {
+-		if (open) {
+-			setValues({});
+-			setErrors({});
+-			setSaved(new Set());
+-		}
+-	}, [open]);
+-
+-	const missingKeys = useMemo(() => {
+-		return envFiles.flatMap((f) =>
+-			f.keys.filter((k) => !existingKeys.has(k.key)).map((k) => k.key),
+-		);
+-	}, [envFiles, existingKeys]);
+-
+-	const filledCount = missingKeys.filter((k) => values[k]?.trim()).length;
+-
+-	const handleSave = async () => {
+-		const toCreate = missingKeys.filter((k) => values[k]?.trim());
+-		if (toCreate.length === 0) return;
+-
+-		setSaving(true);
+-		setErrors({});
+-		const newSaved = new Set(saved);
+-
+-		for (const key of toCreate) {
+-			try {
+-				await createSecret.mutateAsync({
+-					key,
+-					value: values[key].trim(),
+-					repoId,
+-				});
+-				newSaved.add(key);
+-			} catch (err) {
+-				const message = err instanceof Error ? err.message : "Failed to save";
+-				setErrors((prev) => ({ ...prev, [key]: message }));
+-			}
+-		}
+-
+-		setSaved(newSaved);
+-		setSaving(false);
+-
+-		// Close if all missing keys are now saved
+-		const remainingMissing = missingKeys.filter((k) => !newSaved.has(k) && !existingKeys.has(k));
+-		if (remainingMissing.length === 0) {
+-			onOpenChange(false);
+-		}
+-	};
+-
+-	return (
+-		<Dialog open={open} onOpenChange={onOpenChange}>
+-			<DialogContent className="sm:max-w-md">
+-				<DialogHeader>
+-					<DialogTitle>Environment Secrets</DialogTitle>
+-				</DialogHeader>
+-
+-				<div className="space-y-4 max-h-96 overflow-y-auto">
+-					{envFiles.map((file) => (
+-						<div key={file.path}>
+-							<p className="text-xs font-medium text-muted-foreground mb-2">{file.path}</p>
+-							<div className="space-y-2">
+-								{file.keys.map((k) => {
+-									const exists = existingKeys.has(k.key) || saved.has(k.key);
+-									const error = errors[k.key];
+-
+-									return (
+-										<div key={k.key} className="space-y-1">
+-											<div className="flex items-center gap-2">
+-												{exists ? (
+-													<Check className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+-												) : (
+-													<KeyRound className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+-												)}
+-												<span className="text-sm flex-1 min-w-0 truncate">{k.key}</span>
+-												{exists && (
+-													<span className="text-xs text-muted-foreground shrink-0">Set</span>
+-												)}
+-											</div>
+-											{!exists && (
+-												<Input
+-													type="password"
+-													value={values[k.key] ?? ""}
+-													onChange={(e) =>
+-														setValues((prev) => ({ ...prev, [k.key]: e.target.value }))
+-													}
+-													placeholder="Enter value..."
+-													className="h-8 text-sm ml-5.5"
+-												/>
+-											)}
+-											{error && <p className="text-xs text-destructive ml-5.5">{error}</p>}
+-										</div>
+-									);
+-								})}
+-							</div>
+-						</div>
+-					))}
+-				</div>
+-
+-				{missingKeys.length > 0 && missingKeys.length !== saved.size && (
+-					<div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+-						<Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+-							Cancel
+-						</Button>
+-						<Button size="sm" onClick={handleSave} disabled={saving || filledCount === 0}>
+-							{saving ? "Saving..." : `Save ${filledCount > 0 ? `(${filledCount})` : ""}`}
+-						</Button>
+-					</div>
+-				)}
+-			</DialogContent>
+-		</Dialog>
+-	);
+-}
+-
+ // ============================================
+ // Add Repository Dialog
+ // ============================================
 diff --git a/apps/web/src/app/(workspace)/workspace/new/page.tsx b/apps/web/src/app/(workspace)/workspace/new/page.tsx
 index 9099cb4..8edb077 100644
 --- a/apps/web/src/app/(workspace)/workspace/new/page.tsx
@@ -1185,17 +1815,20 @@ index d26f43a..316d664 100644
  			hasSnapshot: result.hasSnapshot,
  		});
 diff --git a/apps/web/src/components/coding-session/auto-start-panel.tsx b/apps/web/src/components/coding-session/auto-start-panel.tsx
-index 16d2486..0b85c1f 100644
+index 16d2486..425c3b6 100644
 --- a/apps/web/src/components/coding-session/auto-start-panel.tsx
 +++ b/apps/web/src/components/coding-session/auto-start-panel.tsx
-@@ -14,13 +14,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
+@@ -13,14 +13,13 @@ import {
+ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
  import {
  	useEffectiveServiceCommands,
- 	useServiceCommands,
+-	useServiceCommands,
 -	useUpdatePrebuildServiceCommands,
+-	useUpdateServiceCommands,
+-} from "@/hooks/use-repos";
 +	useUpdateConfigurationServiceCommands,
- 	useUpdateServiceCommands,
- } from "@/hooks/use-repos";
++} from "@/hooks/use-configurations";
++import { useServiceCommands, useUpdateServiceCommands } from "@/hooks/use-repos";
  import type {
  	AutoStartOutputEntry,
  	AutoStartOutputMessage,
@@ -1204,7 +1837,7 @@ index 16d2486..0b85c1f 100644
  } from "@proliferate/shared";
  import {
  	CheckCircle2,
-@@ -39,24 +39,24 @@ import { useCallback, useEffect, useState } from "react";
+@@ -39,24 +38,24 @@ import { useCallback, useEffect, useState } from "react";
  
  interface AutoStartPanelProps {
  	repoId?: string | null;
@@ -1233,7 +1866,7 @@ index 16d2486..0b85c1f 100644
  	) => void;
  }
  
-@@ -69,36 +69,36 @@ interface CommandDraft {
+@@ -69,36 +68,36 @@ interface CommandDraft {
  
  export function AutoStartContent({
  	repoId,
@@ -1282,7 +1915,7 @@ index 16d2486..0b85c1f 100644
  
  	const [editing, setEditing] = useState(false);
  	const [drafts, setDrafts] = useState<CommandDraft[]>([]);
-@@ -127,11 +127,11 @@ export function AutoStartContent({
+@@ -127,11 +126,11 @@ export function AutoStartContent({
  			...(d.workspacePath.trim() ? { workspacePath: d.workspacePath.trim() } : {}),
  		}));
  
@@ -1298,7 +1931,7 @@ index 16d2486..0b85c1f 100644
  			const repoCmds = cmds.map(({ workspacePath: _, ...rest }) => rest);
  			await updateRepoCommands.mutateAsync({ id: repoId, commands: repoCmds });
  		}
-@@ -160,7 +160,7 @@ export function AutoStartContent({
+@@ -160,7 +159,7 @@ export function AutoStartContent({
  		}
  	}, [isTesting, autoStartOutput]);
  
@@ -1307,7 +1940,7 @@ index 16d2486..0b85c1f 100644
  
  	const addRow = () => {
  		if (drafts.length >= 10) return;
-@@ -192,7 +192,7 @@ export function AutoStartContent({
+@@ -192,7 +191,7 @@ export function AutoStartContent({
  
  			{source !== "none" && !editing && (
  				<p className="text-[10px] text-muted-foreground/70">
@@ -1316,7 +1949,7 @@ index 16d2486..0b85c1f 100644
  						? "Using configuration overrides"
  						: "Using repo defaults — saving will create configuration overrides"}
  				</p>
-@@ -253,7 +253,7 @@ export function AutoStartContent({
+@@ -253,7 +252,7 @@ export function AutoStartContent({
  
  export function AutoStartPanel({
  	repoId,
@@ -1325,7 +1958,7 @@ index 16d2486..0b85c1f 100644
  	onClose,
  	autoStartOutput,
  	sendRunAutoStart,
-@@ -277,7 +277,7 @@ export function AutoStartPanel({
+@@ -277,7 +276,7 @@ export function AutoStartPanel({
  
  			<AutoStartContent
  				repoId={repoId}
@@ -1406,19 +2039,20 @@ index 62b2187..a71a083 100644
  				branchName: sessionData.branchName,
  				snapshotId: sessionData.sandboxId,
 diff --git a/apps/web/src/components/coding-session/environment-panel.tsx b/apps/web/src/components/coding-session/environment-panel.tsx
-index a35f408..5b9a12b 100644
+index a35f408..4a9709a 100644
 --- a/apps/web/src/components/coding-session/environment-panel.tsx
 +++ b/apps/web/src/components/coding-session/environment-panel.tsx
-@@ -3,7 +3,7 @@
+@@ -3,7 +3,8 @@
  import { Button } from "@/components/ui/button";
  import { Input } from "@/components/ui/input";
  import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 -import { useCheckSecrets, usePrebuildEnvFiles } from "@/hooks/use-repos";
-+import { useCheckSecrets, useConfigurationEnvFiles } from "@/hooks/use-repos";
++import { useConfigurationEnvFiles } from "@/hooks/use-configurations";
++import { useCheckSecrets } from "@/hooks/use-repos";
  import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/use-secrets";
  import { orpc } from "@/lib/orpc";
  import { usePreviewPanelStore } from "@/stores/preview-panel";
-@@ -25,7 +25,7 @@ interface EnvFileSpec {
+@@ -25,7 +26,7 @@ interface EnvFileSpec {
  
  interface EnvironmentPanelProps {
  	sessionId: string;
@@ -1427,7 +2061,7 @@ index a35f408..5b9a12b 100644
  	repoId?: string | null;
  	onClose: () => void;
  }
-@@ -36,11 +36,11 @@ interface EnvironmentPanelProps {
+@@ -36,11 +37,11 @@ interface EnvironmentPanelProps {
  
  function AddVariableForm({
  	sessionId,
@@ -1441,7 +2075,7 @@ index a35f408..5b9a12b 100644
  	onSaved: () => void;
  }) {
  	const [key, setKey] = useState("");
-@@ -61,7 +61,7 @@ function AddVariableForm({
+@@ -61,7 +62,7 @@ function AddVariableForm({
  				sessionId,
  				secrets: [{ key: trimmedKey, value, persist: false }],
  				envVars: [],
@@ -1450,7 +2084,7 @@ index a35f408..5b9a12b 100644
  			});
  
  			// Persist to DB (with configuration linking if available)
-@@ -69,7 +69,7 @@ function AddVariableForm({
+@@ -69,7 +70,7 @@ function AddVariableForm({
  				key: trimmedKey,
  				value,
  				secretType: "secret",
@@ -1459,7 +2093,7 @@ index a35f408..5b9a12b 100644
  			});
  
  			setKey("");
-@@ -165,12 +165,12 @@ function SecretRow({
+@@ -165,12 +166,12 @@ function SecretRow({
  function MissingKeyRow({
  	keyName,
  	sessionId,
@@ -1474,7 +2108,7 @@ index a35f408..5b9a12b 100644
  	onSaved: () => void;
  }) {
  	const [editing, setEditing] = useState(false);
-@@ -189,14 +189,14 @@ function MissingKeyRow({
+@@ -189,14 +190,14 @@ function MissingKeyRow({
  				sessionId,
  				secrets: [{ key: keyName, value, persist: false }],
  				envVars: [],
@@ -1491,7 +2125,7 @@ index a35f408..5b9a12b 100644
  			});
  
  			setValue("");
-@@ -264,7 +264,7 @@ function MissingKeyRow({
+@@ -264,7 +265,7 @@ function MissingKeyRow({
  
  export function EnvironmentPanel({
  	sessionId,
@@ -1500,7 +2134,7 @@ index a35f408..5b9a12b 100644
  	repoId,
  	onClose,
  }: EnvironmentPanelProps) {
-@@ -277,9 +277,9 @@ export function EnvironmentPanel({
+@@ -277,9 +278,9 @@ export function EnvironmentPanel({
  	const deleteSecret = useDeleteSecret();
  
  	// Env file spec from configuration
@@ -1513,16 +2147,21 @@ index a35f408..5b9a12b 100644
  	);
  
  	// Parse spec keys
-@@ -301,7 +301,7 @@ export function EnvironmentPanel({
+@@ -301,7 +302,12 @@ export function EnvironmentPanel({
  		data: checkResults,
  		isLoading: checkLoading,
  		refetch: refetchCheck,
 -	} = useCheckSecrets(specKeyNames, undefined, prebuildId ?? undefined, specKeyNames.length > 0);
-+	} = useCheckSecrets(specKeyNames, undefined, configurationId ?? undefined, specKeyNames.length > 0);
++	} = useCheckSecrets(
++		specKeyNames,
++		undefined,
++		configurationId ?? undefined,
++		specKeyNames.length > 0,
++	);
  
  	const existingSpecKeys = useMemo(() => {
  		if (!checkResults) return new Set<string>();
-@@ -372,7 +372,7 @@ export function EnvironmentPanel({
+@@ -372,7 +378,7 @@ export function EnvironmentPanel({
  							{/* Always-visible add form */}
  							<AddVariableForm
  								sessionId={sessionId}
@@ -1531,7 +2170,7 @@ index a35f408..5b9a12b 100644
  								onSaved={handleRefresh}
  							/>
  
-@@ -397,7 +397,7 @@ export function EnvironmentPanel({
+@@ -397,7 +403,7 @@ export function EnvironmentPanel({
  												key={k.key}
  												keyName={k.key}
  												sessionId={sessionId}
@@ -1658,10 +2297,19 @@ index ff6c46e..7eaf78c 100644
  							sendRunAutoStart={sendRunAutoStart}
  						/>
 diff --git a/apps/web/src/components/coding-session/snapshots-panel.tsx b/apps/web/src/components/coding-session/snapshots-panel.tsx
-index c911053..a3d3cb2 100644
+index c911053..e75699b 100644
 --- a/apps/web/src/components/coding-session/snapshots-panel.tsx
 +++ b/apps/web/src/components/coding-session/snapshots-panel.tsx
-@@ -9,7 +9,7 @@ import { Box, Camera, Loader2, Play, X } from "lucide-react";
+@@ -2,14 +2,15 @@
+ 
+ import { Button } from "@/components/ui/button";
+ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+-import { useEffectiveServiceCommands, useServiceCommands } from "@/hooks/use-repos";
++import { useEffectiveServiceCommands } from "@/hooks/use-configurations";
++import { useServiceCommands } from "@/hooks/use-repos";
+ import { usePreviewPanelStore } from "@/stores/preview-panel";
+ import { Box, Camera, Loader2, Play, X } from "lucide-react";
+ 
  interface SnapshotsPanelProps {
  	snapshotId?: string | null;
  	repoId?: string | null;
@@ -1670,7 +2318,7 @@ index c911053..a3d3cb2 100644
  	canSnapshot?: boolean;
  	isSnapshotting?: boolean;
  	onSnapshot?: () => void;
-@@ -19,7 +19,7 @@ interface SnapshotsPanelProps {
+@@ -19,7 +20,7 @@ interface SnapshotsPanelProps {
  export interface SnapshotsContentProps {
  	snapshotId?: string | null;
  	repoId?: string | null;
@@ -1679,7 +2327,7 @@ index c911053..a3d3cb2 100644
  	canSnapshot?: boolean;
  	isSnapshotting?: boolean;
  	onSnapshot?: () => void;
-@@ -29,23 +29,23 @@ export interface SnapshotsContentProps {
+@@ -29,23 +30,23 @@ export interface SnapshotsContentProps {
  export function SnapshotsContent({
  	snapshotId,
  	repoId,
@@ -1710,7 +2358,7 @@ index c911053..a3d3cb2 100644
  
  	return (
  		<div className="flex-1 overflow-y-auto p-4 space-y-6">
-@@ -117,7 +117,7 @@ export function SnapshotsContent({
+@@ -117,7 +118,7 @@ export function SnapshotsContent({
  export function SnapshotsPanel({
  	snapshotId,
  	repoId,
@@ -1719,7 +2367,7 @@ index c911053..a3d3cb2 100644
  	canSnapshot,
  	isSnapshotting,
  	onSnapshot,
-@@ -145,7 +145,7 @@ export function SnapshotsPanel({
+@@ -145,7 +146,7 @@ export function SnapshotsPanel({
  			<SnapshotsContent
  				snapshotId={snapshotId}
  				repoId={repoId}
@@ -1887,28 +2535,32 @@ index 6eab9bc..a120805 100644
  			modelId: selectedModel,
  		});
 diff --git a/apps/web/src/components/dashboard/empty-state.tsx b/apps/web/src/components/dashboard/empty-state.tsx
-index 2694044..17d1893 100644
+index 2694044..bd211be 100644
 --- a/apps/web/src/components/dashboard/empty-state.tsx
 +++ b/apps/web/src/components/dashboard/empty-state.tsx
-@@ -4,7 +4,7 @@ import { SessionListRow } from "@/components/sessions/session-card";
+@@ -3,8 +3,8 @@
+ import { SessionListRow } from "@/components/sessions/session-card";
  import { useAutomations } from "@/hooks/use-automations";
  import { useOrgPendingRuns } from "@/hooks/use-automations";
++import { useCreateConfiguration } from "@/hooks/use-configurations";
  import { useIntegrations } from "@/hooks/use-integrations";
 -import { useCreatePrebuild } from "@/hooks/use-prebuilds";
-+import { useCreateConfiguration } from "@/hooks/use-configurations";
  import { useRepos } from "@/hooks/use-repos";
  import { useCreateSession, useSessions } from "@/hooks/use-sessions";
  import { useSession } from "@/lib/auth-client";
-@@ -103,7 +103,7 @@ function OnboardingSection() {
+@@ -103,11 +103,9 @@ function OnboardingSection() {
  		const hasSlack = integrations.some((i) => i.provider === "slack" && i.status === "active");
  		const hasAutomation = (automations ?? []).length > 0;
  		const hasAnyRepo = (repos ?? []).length > 0;
 -		const hasReadyRepo = (repos ?? []).some((r) => r.prebuildStatus === "ready");
-+		const hasReadyRepo = (repos ?? []).some((r) => r.configurationStatus === "ready");
  
  		let count = 0;
  		if (!hasAnyRepo) count++;
-@@ -309,7 +309,7 @@ export function EmptyDashboard() {
+-		else if (!hasReadyRepo) count++;
+ 		if (!hasGitHub && !dismissedOnboardingCards.includes("github")) count++;
+ 		if (!hasSlack && !dismissedOnboardingCards.includes("slack")) count++;
+ 		if (!hasAutomation && !dismissedOnboardingCards.includes("automation")) count++;
+@@ -309,7 +307,7 @@ export function EmptyDashboard() {
  	const { data: authSession } = useSession();
  	const { selectedRepoId, selectedSnapshotId, selectedModel, setPendingPrompt } =
  		useDashboardStore();
@@ -1917,7 +2569,7 @@ index 2694044..17d1893 100644
  	const createSession = useCreateSession();
  
  	const firstName = authSession?.user?.name?.split(" ")[0] ?? "";
-@@ -328,19 +328,19 @@ export function EmptyDashboard() {
+@@ -328,19 +326,19 @@ export function EmptyDashboard() {
  				return;
  			}
  
@@ -1943,7 +2595,7 @@ index 2694044..17d1893 100644
  				modelId: selectedModel,
  			});
  			// Session created — list auto-refreshes via query invalidation
-@@ -351,7 +351,7 @@ export function EmptyDashboard() {
+@@ -351,7 +349,7 @@ export function EmptyDashboard() {
  		}
  	};
  
@@ -1953,7 +2605,7 @@ index 2694044..17d1893 100644
  	return (
  		<div className="h-full flex flex-col overflow-y-auto">
 diff --git a/apps/web/src/components/dashboard/environment-picker.tsx b/apps/web/src/components/dashboard/environment-picker.tsx
-index 219a2eb..919e5f8 100644
+index 219a2eb..f65b99b 100644
 --- a/apps/web/src/components/dashboard/environment-picker.tsx
 +++ b/apps/web/src/components/dashboard/environment-picker.tsx
 @@ -10,7 +10,7 @@ import {
@@ -1965,7 +2617,7 @@ index 219a2eb..919e5f8 100644
  import { useRepos } from "@/hooks/use-repos";
  import { cn } from "@/lib/utils";
  import { useDashboardStore } from "@/stores/dashboard";
-@@ -26,14 +26,14 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
+@@ -26,14 +26,15 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
  	const [open, setOpen] = useState(false);
  	const [createOpen, setCreateOpen] = useState(false);
  	const { data: repos } = useRepos();
@@ -1976,14 +2628,15 @@ index 219a2eb..919e5f8 100644
  
  	const allRepos = repos ?? [];
 -	const multiRepoConfigs = prebuilds?.filter((p) => (p.prebuildRepos?.length ?? 0) >= 2) ?? [];
-+	const multiRepoConfigs = configurations?.filter((p) => (p.configurationRepos?.length ?? 0) >= 2) ?? [];
++	const multiRepoConfigs =
++		configurations?.filter((p) => (p.configurationRepos?.length ?? 0) >= 2) ?? [];
  
 -	// Clear stale persisted selections when data loads (e.g. repo/prebuild was deleted)
 +	// Clear stale persisted selections when data loads (e.g. repo/configuration was deleted)
  	useEffect(() => {
  		if (!repos) return;
  		if (selectedRepoId && !repos.some((r) => r.id === selectedRepoId)) {
-@@ -41,18 +41,18 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
+@@ -41,18 +42,25 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
  			setSelectedRepo(null);
  			setSelectedSnapshot(null);
  		} else if (selectedRepoId && selectedSnapshotId) {
@@ -2003,11 +2656,18 @@ index 219a2eb..919e5f8 100644
  			}
  		}
 -	}, [repos, prebuilds, selectedRepoId, selectedSnapshotId, setSelectedRepo, setSelectedSnapshot]);
-+	}, [repos, configurations, selectedRepoId, selectedSnapshotId, setSelectedRepo, setSelectedSnapshot]);
++	}, [
++		repos,
++		configurations,
++		selectedRepoId,
++		selectedSnapshotId,
++		setSelectedRepo,
++		setSelectedSnapshot,
++	]);
  
  	// Find display name for the trigger
  	const selectedRepo = allRepos.find((r) => r.id === selectedRepoId);
-@@ -66,15 +66,15 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
+@@ -66,15 +74,15 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
  
  	const selectRepo = (repo: (typeof allRepos)[0]) => {
  		setSelectedRepo(repo.id);
@@ -2027,16 +2687,16 @@ index 219a2eb..919e5f8 100644
  		setOpen(false);
  	};
  
-@@ -131,7 +131,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
+@@ -131,7 +139,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
  									)}
  									<span className="truncate">{repo.githubRepoName}</span>
  									<span className="text-muted-foreground text-xs ml-auto shrink-0">
 -										{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
-+										{repo.configurationStatus === "ready" ? "Configured" : "Not configured"}
++										{repo.defaultBranch || "main"}
  									</span>
  								</Button>
  							);
-@@ -160,7 +160,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
+@@ -160,7 +168,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
  									)}
  									<span className="truncate">{config.name ?? "Untitled"}</span>
  									<span className="text-muted-foreground text-xs ml-auto shrink-0">
@@ -2046,31 +2706,117 @@ index 219a2eb..919e5f8 100644
  								</Button>
  							);
 diff --git a/apps/web/src/components/dashboard/onboarding-cards.tsx b/apps/web/src/components/dashboard/onboarding-cards.tsx
-index f691185..30987f0 100644
+index f691185..5f79973 100644
 --- a/apps/web/src/components/dashboard/onboarding-cards.tsx
 +++ b/apps/web/src/components/dashboard/onboarding-cards.tsx
-@@ -95,7 +95,7 @@ export function OnboardingCards({ hideHeader }: { hideHeader?: boolean } = {}) {
+@@ -94,9 +94,6 @@ export function OnboardingCards({ hideHeader }: { hideHeader?: boolean } = {}) {
+ 	// Build cards array based on what's needed
  	const cards: React.ReactNode[] = [];
  
- 	// Repo setup cards
+-	// Repo setup cards
 -	const hasReadyRepo = (repos ?? []).some((r) => r.prebuildStatus === "ready");
-+	const hasReadyRepo = (repos ?? []).some((r) => r.configurationStatus === "ready");
- 
+-
  	if (!hasAnyRepo) {
  		// No repos at all — prompt to connect first repo
+ 		cards.push(
+@@ -133,22 +130,6 @@ export function OnboardingCards({ hideHeader }: { hideHeader?: boolean } = {}) {
+ 				</Popover.Portal>
+ 			</Popover.Root>,
+ 		);
+-	} else if (!hasReadyRepo) {
+-		// Has repos but none configured — prompt to set up first repo
+-		const firstRepo = (repos ?? [])[0];
+-		if (firstRepo) {
+-			cards.push(
+-				<OnboardingCard
+-					key="configure-repo"
+-					icon={<FolderGit className="h-6 w-6" />}
+-					title="Set up your first repo"
+-					description="Configure environment and dependencies so sessions boot instantly."
+-					ctaLabel="Configure"
+-					onCtaClick={() => router.push(`/workspace/new?repoId=${firstRepo.id}&type=setup`)}
+-					image="/onboarding/setup.png"
+-				/>,
+-			);
+-		}
+ 	}
+ 
+ 	// Link GitHub card (only if user selected this tool)
 diff --git a/apps/web/src/components/dashboard/repo-list.tsx b/apps/web/src/components/dashboard/repo-list.tsx
-index ea50de7..d07394d 100644
+index ea50de7..ada9176 100644
 --- a/apps/web/src/components/dashboard/repo-list.tsx
 +++ b/apps/web/src/components/dashboard/repo-list.tsx
-@@ -41,7 +41,7 @@ export function RepoList({ repos }: RepoListProps) {
+@@ -40,17 +40,6 @@ export function RepoList({ repos }: RepoListProps) {
+ 								</div>
  								<p className="text-sm text-muted-foreground">{repo.default_branch}</p>
  							</div>
- 							<div>
+-							<div>
 -								{repo.prebuild_status === "ready" ? (
-+								{repo.configuration_status === "ready" ? (
- 									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
- 										Ready
- 									</span>
+-									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+-										Ready
+-									</span>
+-								) : (
+-									<span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+-										Pending setup
+-									</span>
+-								)}
+-							</div>
+ 						</li>
+ 					))}
+ 				</ul>
+diff --git a/apps/web/src/components/dashboard/sidebar.tsx b/apps/web/src/components/dashboard/sidebar.tsx
+index c393efd..274a912 100644
+--- a/apps/web/src/components/dashboard/sidebar.tsx
++++ b/apps/web/src/components/dashboard/sidebar.tsx
+@@ -98,7 +98,7 @@ export function Sidebar() {
+ 	const isInboxPage = pathname?.startsWith("/dashboard/inbox");
+ 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
+ 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
+-	const isReposPage = pathname?.startsWith("/dashboard/repos");
++	const isConfigurationsPage = pathname?.startsWith("/dashboard/configurations");
+ 
+ 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
+ 	const inboxCount = inboxItems.length;
+@@ -192,14 +192,14 @@ export function Sidebar() {
+ 					<AutomationsIcon className="h-4 w-4" />
+ 				</Button>
+ 				<Button
+-					variant={isReposPage ? "secondary" : "ghost"}
++					variant={isConfigurationsPage ? "secondary" : "ghost"}
+ 					size="icon"
+ 					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+ 					onClick={(e) => {
+ 						e.stopPropagation();
+-						router.push("/dashboard/repos");
++						router.push("/dashboard/configurations");
+ 					}}
+-					title="Repos"
++					title="Configurations"
+ 				>
+ 					<FolderGit2 className="h-4 w-4" />
+ 				</Button>
+@@ -560,7 +560,7 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
+ 	const isInboxPage = pathname?.startsWith("/dashboard/inbox");
+ 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
+ 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
+-	const isReposPage = pathname?.startsWith("/dashboard/repos");
++	const isConfigurationsPage = pathname?.startsWith("/dashboard/configurations");
+ 	const isSettingsPage = pathname?.startsWith("/settings");
+ 
+ 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
+@@ -606,9 +606,9 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
+ 				/>
+ 				<NavItem
+ 					icon={FolderGit2}
+-					label="Repos"
+-					active={!!isReposPage}
+-					onClick={() => handleNavigate("/dashboard/repos")}
++					label="Configurations"
++					active={!!isConfigurationsPage}
++					onClick={() => handleNavigate("/dashboard/configurations")}
+ 				/>
+ 				<NavItem
+ 					icon={Plug}
 diff --git a/apps/web/src/components/dashboard/snapshot-selector.tsx b/apps/web/src/components/dashboard/snapshot-selector.tsx
 index 0274755..e8b6bb2 100644
 --- a/apps/web/src/components/dashboard/snapshot-selector.tsx
@@ -2212,23 +2958,197 @@ index 335ba0e..1a576f9 100644
  							setPendingPrompt(getSetupInitialPrompt());
  							router.push(`/workspace/${sessionId}`);
 diff --git a/apps/web/src/components/settings/tabs/repositories-tab.tsx b/apps/web/src/components/settings/tabs/repositories-tab.tsx
-index 21bef85..bfea168 100644
+index 21bef85..bce5b4d 100644
 --- a/apps/web/src/components/settings/tabs/repositories-tab.tsx
 +++ b/apps/web/src/components/settings/tabs/repositories-tab.tsx
-@@ -373,7 +373,7 @@ function RepoCard({
- 														sessionId: setupSessionId,
- 														snapshotId: snapshot.id,
- 														snapshotName: getSnapshotDisplayName(snapshot),
+@@ -1,34 +1,15 @@
+ "use client";
+ 
+-import { openEditSession, openHistoricalSession } from "@/components/coding-session";
+ import { Button } from "@/components/ui/button";
+ import { Input } from "@/components/ui/input";
+ import { LoadingDots } from "@/components/ui/loading-dots";
+ import { Text } from "@/components/ui/text";
+-import {
+-	useAvailableRepos,
+-	useCreateRepo,
+-	useRepoSnapshots,
+-	useSearchRepos,
+-} from "@/hooks/use-repos";
++import { useAvailableRepos, useCreateRepo, useSearchRepos } from "@/hooks/use-repos";
+ import { orpc } from "@/lib/orpc";
+-import { cn, getSnapshotDisplayName } from "@/lib/utils";
+-import { useDashboardStore } from "@/stores/dashboard";
++import { cn } from "@/lib/utils";
+ import type { GitHubRepo, Repo } from "@/types";
+ import { useQuery } from "@tanstack/react-query";
+-import {
+-	Camera,
+-	ChevronDown,
+-	FolderGit2,
+-	GitBranch,
+-	Globe,
+-	Lock,
+-	Pencil,
+-	Plus,
+-	Search,
+-	Star,
+-} from "lucide-react";
+-import { useRouter } from "next/navigation";
++import { ChevronDown, FolderGit2, GitBranch, Globe, Lock, Plus, Search, Star } from "lucide-react";
+ import { useEffect, useState } from "react";
+ 
+ interface RepositoriesTabProps {
+@@ -36,8 +17,6 @@ interface RepositoriesTabProps {
+ }
+ 
+ export function RepositoriesTab({ onClose }: RepositoriesTabProps) {
+-	const router = useRouter();
+-	const { setSelectedRepo } = useDashboardStore();
+ 	const [showAvailable, setShowAvailable] = useState(false);
+ 	const [showPublicSearch, setShowPublicSearch] = useState(false);
+ 	const [addingRepoId, setAddingRepoId] = useState<number | null>(null);
+@@ -113,16 +92,7 @@ export function RepositoriesTab({ onClose }: RepositoriesTabProps) {
+ 			{reposList.length > 0 ? (
+ 				<div className="space-y-3">
+ 					{reposList.map((repo) => (
+-						<RepoCard
+-							key={repo.id}
+-							repo={repo}
+-							onClose={onClose}
+-							onCreateSnapshot={(repoId) => {
+-								setSelectedRepo(repoId);
+-								onClose();
+-								router.push(`/workspace/new?repoId=${repoId}&type=setup`);
+-							}}
+-						/>
++						<RepoCard key={repo.id} repo={repo} />
+ 					))}
+ 				</div>
+ 			) : (
+@@ -299,26 +269,10 @@ export function RepositoriesTab({ onClose }: RepositoriesTabProps) {
+ 	);
+ }
+ 
+-function RepoCard({
+-	repo,
+-	onClose,
+-	onCreateSnapshot,
+-}: {
+-	repo: Repo;
+-	onClose: () => void;
+-	onCreateSnapshot: (repoId: string) => void;
+-}) {
+-	const [expanded, setExpanded] = useState(false);
+-
+-	const { data: snapshots, isLoading } = useRepoSnapshots(repo.id, expanded);
+-
++function RepoCard({ repo }: { repo: Repo }) {
+ 	return (
+ 		<div className="border border-border rounded-lg overflow-hidden">
+-			<Button
+-				variant="ghost"
+-				onClick={() => setExpanded(!expanded)}
+-				className="w-full h-auto justify-start gap-3 p-4 hover:bg-muted/50 rounded-none"
+-			>
++			<div className="flex items-center gap-3 p-4">
+ 				<div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+ 					<GitBranch className="h-5 w-5" />
+ 				</div>
+@@ -326,87 +280,7 @@ function RepoCard({
+ 					<p className="font-medium truncate">{repo.githubRepoName}</p>
+ 					<p className="text-sm text-muted-foreground">{repo.defaultBranch || "main"}</p>
+ 				</div>
+-				<span className="text-xs text-muted-foreground">
+-					{expanded ? "Hide" : "Show"} snapshots
+-				</span>
+-			</Button>
+-
+-			{expanded && (
+-				<div className="border-t border-border bg-muted/20 p-3">
+-					{isLoading ? (
+-						<div className="py-4 text-center">
+-							<LoadingDots size="sm" className="text-muted-foreground" />
+-						</div>
+-					) : snapshots && snapshots.length > 0 ? (
+-						<div className="space-y-2">
+-							{snapshots.map((snapshot) => {
+-								const setupSessionId = snapshot.setupSessions?.find(
+-									(s: { sessionType: string | null }) => s.sessionType === "setup",
+-								)?.id;
+-								return (
+-									<div
+-										key={snapshot.id}
+-										className="group flex items-center gap-1 rounded-md hover:bg-background transition-colors"
+-									>
+-										<Button
+-											variant="ghost"
+-											onClick={() => {
+-												if (setupSessionId) {
+-													openHistoricalSession(setupSessionId, getSnapshotDisplayName(snapshot));
+-												}
+-												onClose();
+-											}}
+-											className="flex-1 h-auto justify-start gap-3 p-2"
+-										>
+-											<Camera className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+-											<span className="text-sm truncate flex-1 text-left">
+-												{getSnapshotDisplayName(snapshot)}
+-											</span>
+-										</Button>
+-										{setupSessionId && (
+-											<Button
+-												variant="ghost"
+-												size="icon"
+-												onClick={(e) => {
+-													e.stopPropagation();
+-													openEditSession({
+-														sessionId: setupSessionId,
+-														snapshotId: snapshot.id,
+-														snapshotName: getSnapshotDisplayName(snapshot),
 -														prebuildId: snapshot.id,
-+														configurationId: snapshot.id,
- 													});
- 													onClose();
- 												}}
+-													});
+-													onClose();
+-												}}
+-												className="h-8 w-8 opacity-0 group-hover:opacity-100 mr-1"
+-												title="Edit environment"
+-											>
+-												<Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+-											</Button>
+-										)}
+-									</div>
+-								);
+-							})}
+-							<Button
+-								variant="outline"
+-								size="sm"
+-								className="w-full mt-2"
+-								onClick={() => onCreateSnapshot(repo.id)}
+-							>
+-								<Plus className="h-3.5 w-3.5 mr-2" />
+-								Create New Snapshot
+-							</Button>
+-						</div>
+-					) : (
+-						<div className="text-center py-4">
+-							<p className="text-sm text-muted-foreground mb-3">No snapshots yet</p>
+-							<Button variant="outline" size="sm" onClick={() => onCreateSnapshot(repo.id)}>
+-								<Plus className="h-3.5 w-3.5 mr-2" />
+-								Create Snapshot
+-							</Button>
+-						</div>
+-					)}
+-				</div>
+-			)}
++			</div>
+ 		</div>
+ 	);
+ }
 diff --git a/apps/web/src/hooks/index.ts b/apps/web/src/hooks/index.ts
-index cb4a4a8..95c36a8 100644
+index cb4a4a8..cce1591 100644
 --- a/apps/web/src/hooks/index.ts
 +++ b/apps/web/src/hooks/index.ts
-@@ -120,10 +120,10 @@ export {
+@@ -120,10 +120,16 @@ export {
  	useSlackDisconnect,
  } from "./use-integrations";
  
@@ -2244,77 +3164,76 @@ index cb4a4a8..95c36a8 100644
 +	useCreateConfiguration,
 +	useUpdateConfiguration,
 +	useDeleteConfiguration,
++	useConfigurationEnvFiles,
++	useConfigurationServiceCommands,
++	useEffectiveServiceCommands,
++	useUpdateConfigurationServiceCommands,
++	useAttachRepo,
++	useDetachRepo,
 +} from "./use-configurations";
 diff --git a/apps/web/src/hooks/use-onboarding.ts b/apps/web/src/hooks/use-onboarding.ts
-index 0c0cd35..8e097bf 100644
+index 0c0cd35..1f3b29a 100644
 --- a/apps/web/src/hooks/use-onboarding.ts
 +++ b/apps/web/src/hooks/use-onboarding.ts
-@@ -10,7 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+@@ -10,7 +10,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
  
  export interface OnboardingState extends OnboardingStatus {
  	hasRepos: boolean;
 -	hasReadyPrebuild: boolean;
-+	hasReadyConfiguration: boolean;
  }
  
  // Re-export the Repo type from the contract for backwards compatibility
-@@ -20,11 +20,11 @@ export function useOnboarding() {
+@@ -20,11 +19,9 @@ export function useOnboarding() {
  	return useQuery({
  		...orpc.onboarding.getStatus.queryOptions({ input: undefined }),
  		select: (data): OnboardingState => {
 -			const hasReadyPrebuild = data.repos.some((repo) => repo.prebuild_status === "ready");
-+			const hasReadyConfiguration = data.repos.some((repo) => repo.configuration_status === "ready");
  			return {
  				...data,
  				hasRepos: data.repos.length > 0,
 -				hasReadyPrebuild,
-+				hasReadyConfiguration,
  			};
  		},
  	});
 diff --git a/apps/web/src/hooks/use-repos.ts b/apps/web/src/hooks/use-repos.ts
-index abff671..a431408 100644
+index abff671..35df89d 100644
 --- a/apps/web/src/hooks/use-repos.ts
 +++ b/apps/web/src/hooks/use-repos.ts
-@@ -42,11 +42,11 @@ export function useDeleteRepo() {
+@@ -42,22 +42,6 @@ export function useDeleteRepo() {
  	);
  }
  
 -export function useRepoPrebuilds(repoId: string, enabled = true) {
-+export function useRepoConfigurations(repoId: string, enabled = true) {
- 	return useQuery({
+-	return useQuery({
 -		...orpc.repos.listPrebuilds.queryOptions({ input: { id: repoId } }),
-+		...orpc.repos.listConfigurations.queryOptions({ input: { id: repoId } }),
- 		enabled: enabled && !!repoId,
+-		enabled: enabled && !!repoId,
 -		select: (data) => data.prebuilds,
-+		select: (data) => data.configurations,
- 	});
- }
- 
-@@ -54,7 +54,7 @@ export function useRepoSnapshots(repoId: string, enabled = true) {
+-	});
+-}
+-
+-export function useRepoSnapshots(repoId: string, enabled = true) {
+-	return useQuery({
+-		...orpc.repos.listSnapshots.queryOptions({ input: { id: repoId } }),
+-		enabled: enabled && !!repoId,
+-		select: (data) => data.prebuilds,
+-	});
+-}
+-
+ export function useAvailableRepos(integrationId?: string) {
  	return useQuery({
- 		...orpc.repos.listSnapshots.queryOptions({ input: { id: repoId } }),
- 		enabled: enabled && !!repoId,
--		select: (data) => data.prebuilds,
-+		select: (data) => data.configurations,
- 	});
- }
- 
-@@ -96,10 +96,10 @@ export function useUpdateServiceCommands() {
+ 		...orpc.repos.available.queryOptions({ input: { integrationId } }),
+@@ -96,23 +80,15 @@ export function useUpdateServiceCommands() {
  	);
  }
  
 -export function usePrebuildEnvFiles(prebuildId: string, enabled = true) {
-+export function useConfigurationEnvFiles(configurationId: string, enabled = true) {
- 	return useQuery({
+-	return useQuery({
 -		...orpc.prebuilds.getEnvFiles.queryOptions({ input: { prebuildId } }),
 -		enabled: enabled && !!prebuildId,
-+		...orpc.configurations.getEnvFiles.queryOptions({ input: { configurationId } }),
-+		enabled: enabled && !!configurationId,
- 		select: (data) => data.envFiles,
- 	});
- }
-@@ -107,12 +107,12 @@ export function usePrebuildEnvFiles(prebuildId: string, enabled = true) {
+-		select: (data) => data.envFiles,
+-	});
+-}
+-
  export function useCheckSecrets(
  	keys: string[],
  	repoId?: string,
@@ -2329,56 +3248,48 @@ index abff671..a431408 100644
  		}),
  		enabled: enabled && keys.length > 0,
  		select: (data) => data.keys,
-@@ -131,35 +131,35 @@ export function useCreateSecret() {
+@@ -130,39 +106,3 @@ export function useCreateSecret() {
+ 		}),
  	);
  }
- 
+-
 -export function usePrebuildServiceCommands(prebuildId: string, enabled = true) {
-+export function useConfigurationServiceCommands(configurationId: string, enabled = true) {
- 	return useQuery({
+-	return useQuery({
 -		...orpc.prebuilds.getServiceCommands.queryOptions({ input: { prebuildId } }),
 -		enabled: enabled && !!prebuildId,
-+		...orpc.configurations.getServiceCommands.queryOptions({ input: { configurationId } }),
-+		enabled: enabled && !!configurationId,
- 		select: (data) => data.commands,
- 	});
- }
- 
+-		select: (data) => data.commands,
+-	});
+-}
+-
 -export function useEffectiveServiceCommands(prebuildId: string, enabled = true) {
-+export function useEffectiveServiceCommands(configurationId: string, enabled = true) {
- 	return useQuery({
+-	return useQuery({
 -		...orpc.prebuilds.getEffectiveServiceCommands.queryOptions({ input: { prebuildId } }),
 -		enabled: enabled && !!prebuildId,
-+		...orpc.configurations.getEffectiveServiceCommands.queryOptions({ input: { configurationId } }),
-+		enabled: enabled && !!configurationId,
- 	});
- }
- 
+-	});
+-}
+-
 -export function useUpdatePrebuildServiceCommands() {
-+export function useUpdateConfigurationServiceCommands() {
- 	const queryClient = useQueryClient();
- 
- 	return useMutation(
+-	const queryClient = useQueryClient();
+-
+-	return useMutation(
 -		orpc.prebuilds.updateServiceCommands.mutationOptions({
-+		orpc.configurations.updateServiceCommands.mutationOptions({
- 			onSuccess: (_data, input) => {
- 				queryClient.invalidateQueries({
+-			onSuccess: (_data, input) => {
+-				queryClient.invalidateQueries({
 -					queryKey: orpc.prebuilds.getServiceCommands.key({
 -						input: { prebuildId: input.prebuildId },
-+					queryKey: orpc.configurations.getServiceCommands.key({
-+						input: { configurationId: input.configurationId },
- 					}),
- 				});
- 				queryClient.invalidateQueries({
+-					}),
+-				});
+-				queryClient.invalidateQueries({
 -					queryKey: orpc.prebuilds.getEffectiveServiceCommands.key({
 -						input: { prebuildId: input.prebuildId },
-+					queryKey: orpc.configurations.getEffectiveServiceCommands.key({
-+						input: { configurationId: input.configurationId },
- 					}),
- 				});
- 			},
+-					}),
+-				});
+-			},
+-		}),
+-	);
+-}
 diff --git a/apps/web/src/hooks/use-sessions.ts b/apps/web/src/hooks/use-sessions.ts
-index 01fc982..68860a2 100644
+index 01fc982..8f12898 100644
 --- a/apps/web/src/hooks/use-sessions.ts
 +++ b/apps/web/src/hooks/use-sessions.ts
 @@ -61,7 +61,7 @@ export function useCreateSession() {
@@ -2390,15 +3301,16 @@ index 01fc982..68860a2 100644
  				branchName: null,
  				parentSessionId: null,
  				title: null,
-@@ -206,7 +206,7 @@ export function useFinalizeSetup() {
+@@ -206,8 +206,7 @@ export function useFinalizeSetup() {
  			// Invalidate all relevant queries
  			queryClient.invalidateQueries({ queryKey: orpc.sessions.list.key() });
  			queryClient.invalidateQueries({ queryKey: orpc.repos.list.key() });
 -			queryClient.invalidateQueries({ queryKey: orpc.repos.listPrebuilds.key() });
-+			queryClient.invalidateQueries({ queryKey: orpc.repos.listConfigurations.key() });
- 			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
+-			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
++			queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
  		},
  	});
+ 
 diff --git a/apps/web/src/server/routers/automations.ts b/apps/web/src/server/routers/automations.ts
 index 3048c0c..a261541 100644
 --- a/apps/web/src/server/routers/automations.ts
@@ -2743,105 +3655,94 @@ index 92b4f9c..655b9c6 100644
  		success: true,
  	};
 diff --git a/apps/web/src/server/routers/repos.ts b/apps/web/src/server/routers/repos.ts
-index 407cfe6..df0cf33 100644
+index 407cfe6..a4fecc4 100644
 --- a/apps/web/src/server/routers/repos.ts
 +++ b/apps/web/src/server/routers/repos.ts
-@@ -4,13 +4,13 @@
+@@ -4,15 +4,13 @@
  
  import { type GitHubIntegration, listGitHubRepos } from "@/lib/github";
  import { ORPCError } from "@orpc/server";
 -import { integrations, prebuilds, repos } from "@proliferate/services";
-+import { configurations, integrations, repos } from "@proliferate/services";
++import { integrations, repos } from "@proliferate/services";
  import {
  	CreateRepoInputSchema,
  	FinalizeSetupInputSchema,
  	FinalizeSetupResponseSchema,
  	GitHubRepoSchema,
 -	RepoPrebuildSchema,
-+	RepoConfigurationSchema,
  	RepoSchema,
- 	RepoSnapshotSchema,
+-	RepoSnapshotSchema,
  	SearchRepoSchema,
-@@ -216,11 +216,11 @@ export const reposRouter = {
+ } from "@proliferate/shared";
+ import { z } from "zod";
+@@ -215,92 +213,6 @@ export const reposRouter = {
+ 			return { repositories: publicRepos };
  		}),
  
- 	/**
+-	/**
 -	 * List prebuilds for a repo.
-+	 * List configurations for a repo.
- 	 */
+-	 */
 -	listPrebuilds: orgProcedure
-+	listConfigurations: orgProcedure
- 		.input(z.object({ id: z.string().uuid() }))
+-		.input(z.object({ id: z.string().uuid() }))
 -		.output(z.object({ prebuilds: z.array(RepoPrebuildSchema) }))
-+		.output(z.object({ configurations: z.array(RepoConfigurationSchema) }))
- 		.handler(async ({ input, context }) => {
- 			// Verify repo belongs to org
- 			const exists = await repos.repoExists(input.id, context.orgId);
-@@ -228,9 +228,9 @@ export const reposRouter = {
- 				throw new ORPCError("NOT_FOUND", { message: "Repo not found" });
- 			}
- 
+-		.handler(async ({ input, context }) => {
+-			// Verify repo belongs to org
+-			const exists = await repos.repoExists(input.id, context.orgId);
+-			if (!exists) {
+-				throw new ORPCError("NOT_FOUND", { message: "Repo not found" });
+-			}
+-
 -			const prebuildsList = await prebuilds.listByRepoId(input.id);
-+			const configurationsList = await configurations.listByRepoId(input.id);
- 			return {
+-			return {
 -				prebuilds: prebuildsList.map((p) => ({
-+				configurations: configurationsList.map((p) => ({
- 					...p,
- 					createdAt: p.createdAt?.toISOString() ?? null,
- 				})),
-@@ -238,16 +238,16 @@ export const reposRouter = {
- 		}),
- 
- 	/**
+-					...p,
+-					createdAt: p.createdAt?.toISOString() ?? null,
+-				})),
+-			};
+-		}),
+-
+-	/**
 -	 * List snapshots (usable prebuilds) for a repo.
-+	 * List snapshots (usable configurations) for a repo.
- 	 */
- 	listSnapshots: orgProcedure
- 		.input(z.object({ id: z.string().uuid() }))
+-	 */
+-	listSnapshots: orgProcedure
+-		.input(z.object({ id: z.string().uuid() }))
 -		.output(z.object({ prebuilds: z.array(RepoSnapshotSchema) }))
-+		.output(z.object({ configurations: z.array(RepoSnapshotSchema) }))
- 		.handler(async ({ input }) => {
+-		.handler(async ({ input }) => {
 -			const prebuildRepos = await prebuilds.getPrebuildReposWithPrebuilds(input.id);
-+			const configurationRepos = await configurations.getConfigurationReposWithConfigurations(input.id);
- 
+-
 -			// Filter to only prebuilds with snapshots
 -			const usablePrebuilds = prebuildRepos
-+			// Filter to only configurations with snapshots
-+			const usableConfigurations = configurationRepos
- 				.filter(
- 					(pr) =>
- 						pr.configuration &&
-@@ -257,15 +257,15 @@ export const reposRouter = {
- 				)
- 				.map((pr) => pr.configuration);
- 
+-				.filter(
+-					(pr) =>
+-						pr.configuration &&
+-						typeof pr.configuration === "object" &&
+-						"snapshotId" in pr.configuration &&
+-						!!pr.configuration.snapshotId,
+-				)
+-				.map((pr) => pr.configuration);
+-
 -			// Deduplicate by prebuild ID
 -			const uniquePrebuilds = Array.from(
 -				new Map(usablePrebuilds.map((p) => [(p as { id: string }).id, p])).values(),
-+			// Deduplicate by configuration ID
-+			const uniqueConfigurations = Array.from(
-+				new Map(usableConfigurations.map((p) => [(p as { id: string }).id, p])).values(),
- 			);
- 
+-			);
+-
 -			// Fetch repos for each prebuild
 -			const prebuildsWithRepos = await Promise.all(
 -				uniquePrebuilds.map(async (prebuild) => {
 -					const pb = prebuild as {
-+			// Fetch repos for each configuration
-+			const configurationsWithRepos = await Promise.all(
-+				uniqueConfigurations.map(async (configuration) => {
-+					const cfg = configuration as {
- 						id: string;
- 						snapshotId: string | null;
- 						status: string | null;
-@@ -276,17 +276,17 @@ export const reposRouter = {
- 						sessions?: Array<{ id: string; sessionType: string | null }>;
- 					};
- 
+-						id: string;
+-						snapshotId: string | null;
+-						status: string | null;
+-						name: string | null;
+-						notes: string | null;
+-						createdAt: Date | null;
+-						createdBy: string | null;
+-						sessions?: Array<{ id: string; sessionType: string | null }>;
+-					};
+-
 -					const reposList = await prebuilds.getReposForPrebuild(pb.id);
-+					const reposList = await configurations.getReposForConfiguration(cfg.id);
- 
- 					return {
+-
+-					return {
 -						id: pb.id,
 -						snapshotId: pb.snapshotId,
 -						status: pb.status,
@@ -2850,32 +3751,24 @@ index 407cfe6..df0cf33 100644
 -						createdAt: pb.createdAt?.toISOString() ?? "",
 -						createdBy: pb.createdBy,
 -						setupSessions: pb.sessions,
-+						id: cfg.id,
-+						snapshotId: cfg.snapshotId,
-+						status: cfg.status,
-+						name: cfg.name,
-+						notes: cfg.notes,
-+						createdAt: cfg.createdAt?.toISOString() ?? "",
-+						createdBy: cfg.createdBy,
-+						setupSessions: cfg.sessions,
- 						repos: reposList,
- 						repoCount: reposList.length,
- 					};
-@@ -294,11 +294,11 @@ export const reposRouter = {
- 			);
- 
- 			// Sort by createdAt descending
+-						repos: reposList,
+-						repoCount: reposList.length,
+-					};
+-				}),
+-			);
+-
+-			// Sort by createdAt descending
 -			prebuildsWithRepos.sort(
-+			configurationsWithRepos.sort(
- 				(a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
- 			);
- 
+-				(a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+-			);
+-
 -			return { prebuilds: prebuildsWithRepos };
-+			return { configurations: configurationsWithRepos };
- 		}),
- 
+-		}),
+-
  	/**
-@@ -364,7 +364,7 @@ export const reposRouter = {
+ 	 * Get service commands for a repo.
+ 	 */
+@@ -364,7 +276,7 @@ export const reposRouter = {
  		}),
  
  	/**
@@ -3327,7 +4220,7 @@ index 30ecd83..52ebeb3 100644
  		});
  
 diff --git a/apps/web/src/types/dashboard.ts b/apps/web/src/types/dashboard.ts
-index 5a52060..f574670 100644
+index 5a52060..76ce016 100644
 --- a/apps/web/src/types/dashboard.ts
 +++ b/apps/web/src/types/dashboard.ts
 @@ -1,6 +1,6 @@
@@ -3338,17 +4231,33 @@ index 5a52060..f574670 100644
   */
  
  /**
-@@ -16,8 +16,8 @@ export interface Secret {
+@@ -16,10 +16,9 @@ export interface Secret {
  }
  
  /**
 - * Snapshot/Prebuild from our database.
 - * Note: In the database this is the "prebuilds" table.
-+ * Snapshot/Configuration from our database.
-+ * Note: In the database this is the "configurations" table.
++ * Configuration from our database.
   */
- export interface Snapshot {
+-export interface Snapshot {
++export interface Configuration {
  	id: string;
+ 	repoId?: string;
+ 	snapshotId: string | null;
+diff --git a/apps/web/src/types/index.ts b/apps/web/src/types/index.ts
+index bb536b6..e71dc93 100644
+--- a/apps/web/src/types/index.ts
++++ b/apps/web/src/types/index.ts
+@@ -11,7 +11,8 @@ export type { GitHubRepo, AvailableReposResponse } from "./github";
+ // Dashboard/UI types
+ export type {
+ 	Secret,
+-	Snapshot,
++	Configuration,
++	Configuration as Snapshot,
+ 	Member,
+ 	Invitation,
+ 	Integration,
 diff --git a/apps/worker/src/automation/enrich-integration.test.ts b/apps/worker/src/automation/enrich-integration.test.ts
 index e096771..312a14f 100644
 --- a/apps/worker/src/automation/enrich-integration.test.ts
@@ -5129,10 +6038,10 @@ index 80166c2..68bd0cd 100644
  	SlackInstallationRow,
  } from "../types/onboarding";
 diff --git a/packages/services/src/onboarding/service.ts b/packages/services/src/onboarding/service.ts
-index e32ed02..ecd9cef 100644
+index e32ed02..697162b 100644
 --- a/packages/services/src/onboarding/service.ts
 +++ b/packages/services/src/onboarding/service.ts
-@@ -42,29 +42,29 @@ export async function getOnboardingStatus(
+@@ -42,31 +42,20 @@ export async function getOnboardingStatus(
  		await Promise.all([
  			onboardingDb.hasSlackConnection(orgId),
  			onboardingDb.hasGitHubConnection(orgId, nangoGithubIntegrationId),
@@ -5146,29 +6055,32 @@ index e32ed02..ecd9cef 100644
  
 -	// Helper to check if a prebuild_repo entry has a usable prebuild (has snapshot)
 -	const hasUsablePrebuild = (pr: {
-+	// Helper to check if a configuration_repos entry has a usable configuration (has snapshot)
-+	const hasUsableConfiguration = (pr: {
- 		configuration: { snapshotId: string | null } | null;
- 	}): boolean => !!pr.configuration?.snapshotId;
- 
+-		configuration: { snapshotId: string | null } | null;
+-	}): boolean => !!pr.configuration?.snapshotId;
+-
 -	// Transform to include prebuild status
-+	// Transform to include configuration status
- 	const repos: OnboardingRepo[] = reposWithStatus.map((repo) => {
+-	const repos: OnboardingRepo[] = reposWithStatus.map((repo) => {
 -		const readyPrebuild = repo.configurationRepos?.find(hasUsablePrebuild);
-+		const readyConfiguration = repo.configurationRepos?.find(hasUsableConfiguration);
- 		return {
- 			id: repo.id,
- 			github_repo_name: repo.githubRepoName,
- 			github_url: repo.githubUrl,
- 			default_branch: repo.defaultBranch,
- 			created_at: toIsoString(repo.createdAt),
+-		return {
+-			id: repo.id,
+-			github_repo_name: repo.githubRepoName,
+-			github_url: repo.githubUrl,
+-			default_branch: repo.defaultBranch,
+-			created_at: toIsoString(repo.createdAt),
 -			prebuild_id: readyPrebuild?.configuration?.id || null,
 -			prebuild_status: readyPrebuild ? ("ready" as const) : ("pending" as const),
-+			configuration_id: readyConfiguration?.configuration?.id || null,
-+			configuration_status: readyConfiguration ? ("ready" as const) : ("pending" as const),
- 		};
- 	});
+-		};
+-	});
++	const repos: OnboardingRepo[] = reposWithStatus.map((repo) => ({
++		id: repo.id,
++		github_repo_name: repo.githubRepoName,
++		github_url: repo.githubUrl,
++		default_branch: repo.defaultBranch,
++		created_at: toIsoString(repo.createdAt),
++	}));
  
+ 	return {
+ 		hasOrg: true,
 diff --git a/packages/services/src/repos/db.ts b/packages/services/src/repos/db.ts
 index 44a9c1a..2d1a093 100644
 --- a/packages/services/src/repos/db.ts
@@ -5222,10 +6134,10 @@ index 686dd17..d2d61be 100644
  // DB functions needed by repos-finalize
  export { getOrganizationId, getGithubRepoName } from "./db";
 diff --git a/packages/services/src/repos/mapper.ts b/packages/services/src/repos/mapper.ts
-index e387044..1e467ac 100644
+index e387044..b9fe299 100644
 --- a/packages/services/src/repos/mapper.ts
 +++ b/packages/services/src/repos/mapper.ts
-@@ -6,20 +6,20 @@
+@@ -6,22 +6,12 @@
  
  import type { Repo } from "@proliferate/shared";
  import { toIsoString } from "../db/serialize";
@@ -5234,34 +6146,30 @@ index e387044..1e467ac 100644
  
  /**
 - * Check if a prebuild_repos entry has a usable snapshot.
-+ * Check if a configuration_repos entry has a usable snapshot.
-  */
--function hasUsablePrebuild(pr: { configuration: { snapshotId: string | null } | null }): boolean {
-+function hasUsableConfiguration(pr: { configuration: { snapshotId: string | null } | null }): boolean {
- 	return !!pr.configuration?.snapshotId;
- }
- 
- /**
-- * Map a DB row (with prebuilds) to API Repo type.
 + * Map a DB row (with configurations) to API Repo type.
   */
+-function hasUsablePrebuild(pr: { configuration: { snapshotId: string | null } | null }): boolean {
+-	return !!pr.configuration?.snapshotId;
+-}
+-
+-/**
+- * Map a DB row (with prebuilds) to API Repo type.
+- */
 -export function toRepo(row: RepoWithPrebuildsRow): Repo {
 -	const readyPrebuild = row.configurationRepos?.find(hasUsablePrebuild);
+-	const hasServiceCommands = Array.isArray(row.serviceCommands) && row.serviceCommands.length > 0;
+-
 +export function toRepo(row: RepoWithConfigurationsRow): Repo {
-+	const readyConfiguration = row.configurationRepos?.find(hasUsableConfiguration);
- 	const hasServiceCommands = Array.isArray(row.serviceCommands) && row.serviceCommands.length > 0;
- 
  	return {
-@@ -32,21 +32,21 @@ export function toRepo(row: RepoWithPrebuildsRow): Repo {
+ 		id: row.id,
+ 		organizationId: row.organizationId,
+@@ -32,21 +22,18 @@ export function toRepo(row: RepoWithPrebuildsRow): Repo {
  		createdAt: toIsoString(row.createdAt),
  		source: row.source || "github",
  		isPrivate: false, // Field not in Drizzle schema, default to false for API compatibility
 -		prebuildStatus: readyPrebuild ? "ready" : "pending",
 -		prebuildId: readyPrebuild?.configuration?.id || null,
 -		isConfigured: hasServiceCommands && !!readyPrebuild,
-+		configurationStatus: readyConfiguration ? "ready" : "pending",
-+		configurationId: readyConfiguration?.configuration?.id || null,
-+		isConfigured: hasServiceCommands && !!readyConfiguration,
  	};
  }
  
@@ -5427,21 +6335,20 @@ index e15cb38..f3df6ae 100644
  	findBySlackThread as findSessionBySlackThread,
  	getSessionClientInfo,
 diff --git a/packages/services/src/sessions/mapper.ts b/packages/services/src/sessions/mapper.ts
-index bb56ffa..e58ac12 100644
+index bb56ffa..2af2efd 100644
 --- a/packages/services/src/sessions/mapper.ts
 +++ b/packages/services/src/sessions/mapper.ts
-@@ -22,8 +22,8 @@ function mapRepo(repo: RepoRow) {
+@@ -22,9 +22,6 @@ function mapRepo(repo: RepoRow) {
  		createdAt: toIsoString(repo.createdAt),
  		source: repo.source || "github",
  		isPrivate: false, // repos schema doesn't have isPrivate yet
 -		prebuildStatus: "pending" as const,
 -		prebuildId: null,
-+		configurationStatus: "pending" as const,
-+		configurationId: null,
- 		isConfigured: false,
+-		isConfigured: false,
  	};
  }
-@@ -41,7 +41,7 @@ export function toSession(row: SessionWithRepoRow): Session {
+ 
+@@ -41,7 +38,7 @@ export function toSession(row: SessionWithRepoRow): Session {
  		status: row.status,
  		sandboxId: row.sandboxId,
  		snapshotId: row.snapshotId,
@@ -5450,7 +6357,7 @@ index bb56ffa..e58ac12 100644
  		branchName: row.branchName,
  		parentSessionId: row.parentSessionId,
  		title: row.title,
-@@ -75,7 +75,7 @@ export function toSessionPartial(row: SessionRow): Omit<Session, "repo"> {
+@@ -75,7 +72,7 @@ export function toSessionPartial(row: SessionRow): Omit<Session, "repo"> {
  		status: row.status,
  		sandboxId: row.sandboxId,
  		snapshotId: row.snapshotId,
@@ -6018,21 +6925,19 @@ index 94d79ac..4109852 100644
  
  // Re-export integration types
 diff --git a/packages/shared/src/contracts/onboarding.ts b/packages/shared/src/contracts/onboarding.ts
-index 0605abb..0703250 100644
+index 0605abb..544e76a 100644
 --- a/packages/shared/src/contracts/onboarding.ts
 +++ b/packages/shared/src/contracts/onboarding.ts
-@@ -14,8 +14,8 @@ export const OnboardingRepoSchema = z.object({
+@@ -14,8 +14,6 @@ export const OnboardingRepoSchema = z.object({
  	github_url: z.string(),
  	default_branch: z.string().nullable(),
  	created_at: z.string().nullable(),
 -	prebuild_id: z.string().nullable(),
 -	prebuild_status: z.enum(["ready", "pending"]),
-+	configuration_id: z.string().nullable(),
-+	configuration_status: z.enum(["ready", "pending"]),
  });
  
  export type OnboardingRepo = z.infer<typeof OnboardingRepoSchema>;
-@@ -39,7 +39,7 @@ export const FinalizeOnboardingInputSchema = z.object({
+@@ -39,7 +37,7 @@ export const FinalizeOnboardingInputSchema = z.object({
  export type FinalizeOnboardingInput = z.infer<typeof FinalizeOnboardingInputSchema>;
  
  export const FinalizeOnboardingResponseSchema = z.object({
@@ -6041,7 +6946,7 @@ index 0605abb..0703250 100644
  	repoIds: z.array(z.string()),
  	isNew: z.boolean(),
  });
-@@ -87,7 +87,7 @@ export const onboardingContract = c.router(
+@@ -87,7 +85,7 @@ export const onboardingContract = c.router(
  				401: ErrorResponseSchema,
  				500: ErrorResponseSchema,
  			},
@@ -6051,7 +6956,7 @@ index 0605abb..0703250 100644
  	},
  	{
 diff --git a/packages/shared/src/contracts/repos.ts b/packages/shared/src/contracts/repos.ts
-index 15e8dd8..3968fce 100644
+index 15e8dd8..16e920e 100644
 --- a/packages/shared/src/contracts/repos.ts
 +++ b/packages/shared/src/contracts/repos.ts
 @@ -33,48 +33,6 @@ export const SearchRepoSchema = z.object({
@@ -6112,18 +7017,17 @@ index 15e8dd8..3968fce 100644
  	snapshotId: z.string(),
  	success: z.boolean(),
  });
-@@ -104,8 +62,8 @@ export const RepoSchema = z.object({
+@@ -104,9 +62,6 @@ export const RepoSchema = z.object({
  	createdAt: z.string().nullable(),
  	source: z.string(),
  	isPrivate: z.boolean(),
 -	prebuildStatus: z.enum(["ready", "pending"]),
 -	prebuildId: z.string().nullable(),
-+	configurationStatus: z.enum(["ready", "pending"]),
-+	configurationId: z.string().nullable(),
- 	isConfigured: z.boolean(),
+-	isConfigured: z.boolean(),
  });
  
-@@ -221,36 +179,6 @@ export const reposContract = c.router(
+ export type Repo = z.infer<typeof RepoSchema>;
+@@ -221,36 +176,6 @@ export const reposContract = c.router(
  			summary: "Search public GitHub repositories",
  		},
  
@@ -6160,7 +7064,7 @@ index 15e8dd8..3968fce 100644
  		finalizeSetup: {
  			method: "POST",
  			path: "/repos/:id/finalize-setup",
-@@ -265,7 +193,7 @@ export const reposContract = c.router(
+@@ -265,7 +190,7 @@ export const reposContract = c.router(
  				404: ErrorResponseSchema,
  				500: ErrorResponseSchema,
  			},

@@ -1,5 +1,5 @@
 /**
- * Finalize setup handler - extracted from repos router.
+ * Finalize setup handler - extracted from configurations router.
  *
  * This is a complex operation with many side effects.
  * Uses services layer for all database operations.
@@ -13,7 +13,7 @@ import { configurations, repos, secrets, sessions } from "@proliferate/services"
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 
-const log = logger.child({ handler: "repos-finalize" });
+const log = logger.child({ handler: "configurations-finalize" });
 
 export interface FinalizeSetupInput {
 	repoId: string;
@@ -62,7 +62,10 @@ export async function finalizeSetupHandler(
 	let sessionBelongsToConfiguration = false;
 
 	if (session.configurationId && !sessionBelongsToRepo) {
-		sessionBelongsToConfiguration = await configurations.configurationContainsRepo(session.configurationId, repoId);
+		sessionBelongsToConfiguration = await configurations.configurationContainsRepo(
+			session.configurationId,
+			repoId,
+		);
 	}
 
 	if (!sessionBelongsToRepo && !sessionBelongsToConfiguration) {
