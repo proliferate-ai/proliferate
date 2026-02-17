@@ -9,6 +9,12 @@ interface TerminalViewProps {
 	wsUrl: string | null;
 }
 
+/** Resolve a CSS custom property to its computed HSL value. */
+function getCssColor(property: string): string {
+	const value = getComputedStyle(document.documentElement).getPropertyValue(property).trim();
+	return value ? `hsl(${value})` : "";
+}
+
 export function TerminalView({ wsUrl }: TerminalViewProps) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const terminalRef = useRef<Terminal | null>(null);
@@ -22,15 +28,27 @@ export function TerminalView({ wsUrl }: TerminalViewProps) {
 
 		setStatus("connecting");
 
+		const bg = getCssColor("--background");
+		const fg = getCssColor("--foreground");
+
 		const term = new Terminal({
 			convertEol: true,
 			cursorBlink: true,
-			fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-			fontSize: 12,
-			theme: {
-				background: "#0b0d10",
-				foreground: "#e5e7eb",
-			},
+			cursorStyle: "bar",
+			fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+			fontSize: 13,
+			lineHeight: 1.4,
+			letterSpacing: 0,
+			scrollback: 5000,
+			theme:
+				bg && fg
+					? {
+							background: bg,
+							foreground: fg,
+							cursor: fg,
+							selectionBackground: `${fg}33`,
+						}
+					: undefined,
 		});
 		const fit = new FitAddon();
 		term.loadAddon(fit);
@@ -126,7 +144,9 @@ export function TerminalView({ wsUrl }: TerminalViewProps) {
 				<span>Terminal</span>
 				<span>{status}</span>
 			</div>
-			<div ref={containerRef} className="flex-1 bg-[#0b0d10]" />
+			<div className="relative flex-1 bg-background">
+				<div ref={containerRef} className="absolute inset-2" />
+			</div>
 		</div>
 	);
 }

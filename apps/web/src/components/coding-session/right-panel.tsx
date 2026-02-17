@@ -19,6 +19,10 @@ const TerminalPanel = dynamic(() => import("./terminal-panel").then((m) => m.Ter
 	ssr: false,
 });
 
+const ServicesPanel = dynamic(() => import("./services-panel").then((m) => m.ServicesPanel), {
+	ssr: false,
+});
+
 export interface SessionPanelProps {
 	sessionId?: string;
 	activityTick?: number;
@@ -139,6 +143,11 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 		// Terminal panel
 		if (mode.type === "terminal" && sessionProps?.sessionId) {
 			return <TerminalPanel sessionId={sessionProps.sessionId} onClose={handleClose} />;
+		}
+
+		// Services panel
+		if (mode.type === "services" && sessionProps?.sessionId) {
+			return <ServicesPanel sessionId={sessionProps.sessionId} onClose={handleClose} />;
 		}
 
 		// VS Code panel
