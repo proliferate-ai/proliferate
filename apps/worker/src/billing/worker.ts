@@ -137,12 +137,13 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 		},
 	);
 
+	const nextSnapshotCleanupRunAt = getNextDailyUtcRunAt(1, 0);
 	logger.info(
 		{
-			nextRunAt: getNextDailyUtcRunAt(1, 0),
+			nextRunAt: nextSnapshotCleanupRunAt,
 			retentionDays: env.SNAPSHOT_RETENTION_DAYS,
 		},
-		"Scheduled snapshot cleanup job",
+		`Scheduled snapshot cleanup job (nextRunAt=${nextSnapshotCleanupRunAt}, retentionDays=${env.SNAPSHOT_RETENTION_DAYS})`,
 	);
 
 	// Create workers

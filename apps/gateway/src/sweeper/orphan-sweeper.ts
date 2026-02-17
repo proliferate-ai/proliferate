@@ -31,7 +31,7 @@ let sweepTimer: ReturnType<typeof setInterval> | null = null;
 async function sweep(hubManager: HubManager, env: GatewayEnv, logger: Logger): Promise<void> {
 	const runningIds = await sessions.listRunningSessionIds();
 	if (runningIds.length === 0) {
-		logger.info({ scanned: 0, orphans: 0 }, "orphan_sweep.complete");
+		logger.info({ scanned: 0, orphans: 0 }, "orphan_sweep.complete scanned=0 orphans=0");
 		return;
 	}
 
@@ -70,7 +70,10 @@ async function sweep(hubManager: HubManager, env: GatewayEnv, logger: Logger): P
 		}
 	}
 
-	logger.info({ scanned: runningIds.length, orphans: orphanCount }, "orphan_sweep.complete");
+	logger.info(
+		{ scanned: runningIds.length, orphans: orphanCount },
+		`orphan_sweep.complete scanned=${runningIds.length} orphans=${orphanCount}`,
+	);
 }
 
 /**
@@ -169,12 +172,13 @@ export function startOrphanSweeper(hubManager: HubManager, env: GatewayEnv, logg
 	}
 
 	const log = logger.child({ module: "orphan-sweeper" });
+	const firstRunAt = new Date(Date.now() + SWEEP_INTERVAL_MS).toISOString();
 	log.info(
 		{
 			intervalMs: SWEEP_INTERVAL_MS,
-			firstRunAt: new Date(Date.now() + SWEEP_INTERVAL_MS).toISOString(),
+			firstRunAt,
 		},
-		"Orphan sweeper started",
+		`Orphan sweeper started (intervalMs=${SWEEP_INTERVAL_MS}, firstRunAt=${firstRunAt})`,
 	);
 
 	sweepTimer = setInterval(() => {

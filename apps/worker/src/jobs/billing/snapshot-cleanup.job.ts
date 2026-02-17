@@ -19,14 +19,14 @@ export async function processSnapshotCleanupJob(
 			jobId: _job.id,
 			retentionDays: env.SNAPSHOT_RETENTION_DAYS,
 		},
-		"Snapshot cleanup started",
+		`Snapshot cleanup started (jobId=${_job.id ?? "unknown"}, retentionDays=${env.SNAPSHOT_RETENTION_DAYS})`,
 	);
 
 	try {
 		const { deletedCount } = await billing.cleanupAllExpiredSnapshots();
 		logger.info(
 			{ deletedCount, retentionDays: env.SNAPSHOT_RETENTION_DAYS },
-			"Snapshot cleanup complete",
+			`Snapshot cleanup complete (deletedCount=${deletedCount}, retentionDays=${env.SNAPSHOT_RETENTION_DAYS})`,
 		);
 	} catch (err) {
 		logger.error({ err }, "Snapshot cleanup error");
