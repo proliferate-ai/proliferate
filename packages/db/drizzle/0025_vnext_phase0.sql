@@ -15,7 +15,7 @@
 --   trigger_poll_groups, user_connections, webhook_inbox
 --
 -- New columns:
---   automations.action_modes, organization.action_modes,
+--   automations.action_modes, organization.action_modes, organization.onboarding_meta,
 --   sessions.idempotency_key, org_connectors.tool_risk_overrides
 
 -- ========== RENAMES ==========
@@ -135,6 +135,8 @@ CREATE TABLE "webhook_inbox" (
 ALTER TABLE "automations" ADD COLUMN "action_modes" jsonb;
 --> statement-breakpoint
 ALTER TABLE "organization" ADD COLUMN "action_modes" jsonb;
+--> statement-breakpoint
+ALTER TABLE "organization" ADD COLUMN "onboarding_meta" jsonb;
 --> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "idempotency_key" text;
 --> statement-breakpoint

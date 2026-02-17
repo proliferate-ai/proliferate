@@ -367,7 +367,7 @@ export function EmptyDashboard() {
 			<div className="flex-1 border-l border-r border-border/50 mx-auto w-full max-w-3xl">
 				<div className="flex flex-col gap-10 px-4 pb-10">
 					{/* Get Started — horizontal onboarding cards */}
-					<OnboardingSection />
+					{/* <OnboardingSection /> */}
 
 					{/* Needs Attention — triage items from agent runs */}
 					<NeedsAttention />

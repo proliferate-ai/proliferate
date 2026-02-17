@@ -1,9 +1,7 @@
 "use client";
 
 import { GATEWAY_URL } from "@/lib/gateway";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type RefObject, useEffect } from "react";
-import type { Terminal } from "xterm";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useWsToken } from "./use-ws-token";
 
 export interface ServiceInfo {
@@ -16,137 +14,196 @@ export interface ServiceInfo {
 	logFile: string;
 }
 
-interface ServiceListData {
+export interface UseServicesResult {
 	services: ServiceInfo[];
 	exposedPort: number | null;
+	loading: boolean;
+	error: string | null;
+	actionLoading: string | null;
+	selectedService: string | null;
+	logContent: string;
+	logEndRef: React.RefObject<HTMLDivElement | null>;
+	portInput: string;
+	exposing: boolean;
+	setPortInput: (v: string) => void;
+	selectService: (name: string | null) => void;
+	refresh: () => Promise<void>;
+	handleStop: (name: string) => Promise<void>;
+	handleRestart: (service: ServiceInfo) => Promise<void>;
+	handleExpose: () => Promise<void>;
 }
 
 function devtoolsUrl(sessionId: string, token: string, path: string): string {
 	return `${GATEWAY_URL}/proxy/${sessionId}/${token}/devtools/mcp${path}`;
 }
 
-// ---------------------------------------------------------------------------
-// Queries
-// ---------------------------------------------------------------------------
-
-export function useServiceList(sessionId: string) {
+export function useServices(sessionId: string): UseServicesResult {
 	const { token } = useWsToken();
 
-	return useQuery({
-		queryKey: ["services", sessionId],
-		queryFn: async (): Promise<ServiceListData> => {
-			if (!GATEWAY_URL || !token) throw new Error("Not ready");
+	const [services, setServices] = useState<ServiceInfo[]>([]);
+	const [exposedPort, setExposedPort] = useState<number | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
+
+	const [selectedService, setSelectedService] = useState<string | null>(null);
+	const [logContent, setLogContent] = useState("");
+
+	const eventSourceRef = useRef<EventSource | null>(null);
+	const logEndRef = useRef<HTMLDivElement | null>(null);
+
+	const [portInput, setPortInput] = useState("");
+	const [exposing, setExposing] = useState(false);
+	const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+	const fetchServices = useCallback(async () => {
+		if (!token || !GATEWAY_URL) return;
+		try {
 			const res = await fetch(devtoolsUrl(sessionId, token, "/api/services"));
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const data = await res.json();
-			return { services: data.services, exposedPort: data.exposedPort };
-		},
-		enabled: !!token && !!GATEWAY_URL && !!sessionId,
-		refetchInterval: 5_000,
-		staleTime: 3_000,
-	});
-}
+			setServices(data.services);
+			setExposedPort(data.exposedPort);
+			setError(null);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Failed to load services");
+		} finally {
+			setLoading(false);
+		}
+	}, [sessionId, token]);
 
-// ---------------------------------------------------------------------------
-// Mutations
-// ---------------------------------------------------------------------------
-
-export function useStopService(sessionId: string) {
-	const { token } = useWsToken();
-	const queryClient = useQueryClient();
-
-	return useMutation({
-		mutationFn: async (serviceName: string) => {
-			if (!GATEWAY_URL || !token) throw new Error("Not ready");
-			const res = await fetch(
-				devtoolsUrl(sessionId, token, `/api/services/${encodeURIComponent(serviceName)}`),
-				{ method: "DELETE" },
-			);
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["services", sessionId] });
-		},
-	});
-}
-
-export function useRestartService(sessionId: string) {
-	const { token } = useWsToken();
-	const queryClient = useQueryClient();
-
-	return useMutation({
-		mutationFn: async (service: Pick<ServiceInfo, "name" | "command" | "cwd">) => {
-			if (!GATEWAY_URL || !token) throw new Error("Not ready");
-			const res = await fetch(devtoolsUrl(sessionId, token, "/api/services"), {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					name: service.name,
-					command: service.command,
-					cwd: service.cwd,
-				}),
-			});
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["services", sessionId] });
-		},
-	});
-}
-
-export function useExposePort(sessionId: string) {
-	const { token } = useWsToken();
-	const queryClient = useQueryClient();
-
-	return useMutation({
-		mutationFn: async (port: number) => {
-			if (!GATEWAY_URL || !token) throw new Error("Not ready");
-			const res = await fetch(devtoolsUrl(sessionId, token, "/api/expose"), {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ port }),
-			});
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["services", sessionId] });
-		},
-	});
-}
-
-// ---------------------------------------------------------------------------
-// SSE log streaming → xterm
-// ---------------------------------------------------------------------------
-
-export function useServiceLogs(
-	sessionId: string,
-	serviceName: string | null,
-	termRef: RefObject<Terminal | null>,
-) {
-	const { token } = useWsToken();
-
+	// Poll service list
 	useEffect(() => {
-		if (!serviceName || !token || !GATEWAY_URL) return;
+		fetchServices();
+		const interval = setInterval(fetchServices, 5000);
+		return () => clearInterval(interval);
+	}, [fetchServices]);
 
-		const url = devtoolsUrl(sessionId, token, `/api/logs/${encodeURIComponent(serviceName)}`);
+	// SSE log streaming
+	useEffect(() => {
+		if (eventSourceRef.current) {
+			eventSourceRef.current.close();
+			eventSourceRef.current = null;
+		}
+
+		if (!selectedService || !token || !GATEWAY_URL) {
+			setLogContent("");
+			return;
+		}
+
+		const url = devtoolsUrl(sessionId, token, `/api/logs/${encodeURIComponent(selectedService)}`);
 		const es = new EventSource(url);
+		eventSourceRef.current = es;
 
 		es.onmessage = (event) => {
 			try {
 				const data = JSON.parse(event.data);
 				if (data.type === "initial") {
-					termRef.current?.clear();
-					termRef.current?.write(data.content);
+					setLogContent(data.content);
 				} else if (data.type === "append") {
-					termRef.current?.write(data.content);
+					setLogContent((prev) => prev + data.content);
 				}
 			} catch {
 				// Ignore parse errors
 			}
 		};
 
+		es.onerror = () => {
+			// EventSource auto-reconnects; no action needed
+		};
+
 		return () => {
 			es.close();
+			eventSourceRef.current = null;
 		};
-	}, [sessionId, token, serviceName, termRef]);
+	}, [selectedService, sessionId, token]);
+
+	// Auto-scroll logs when new content arrives
+	// biome-ignore lint/correctness/useExhaustiveDependencies: logContent triggers scroll on change
+	useEffect(() => {
+		logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+	}, [logContent]);
+
+	const handleStop = useCallback(
+		async (name: string) => {
+			if (!token || !GATEWAY_URL) return;
+			setActionLoading(name);
+			try {
+				const res = await fetch(
+					devtoolsUrl(sessionId, token, `/api/services/${encodeURIComponent(name)}`),
+					{ method: "DELETE" },
+				);
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			} catch {
+				// Refresh to get actual state
+			} finally {
+				setActionLoading(null);
+				await fetchServices();
+			}
+		},
+		[sessionId, token, fetchServices],
+	);
+
+	const handleRestart = useCallback(
+		async (service: ServiceInfo) => {
+			if (!token || !GATEWAY_URL) return;
+			setActionLoading(service.name);
+			try {
+				const res = await fetch(devtoolsUrl(sessionId, token, "/api/services"), {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						name: service.name,
+						command: service.command,
+						cwd: service.cwd,
+					}),
+				});
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			} catch {
+				// Refresh to get actual state
+			} finally {
+				setActionLoading(null);
+				await fetchServices();
+			}
+		},
+		[sessionId, token, fetchServices],
+	);
+
+	const handleExpose = useCallback(async () => {
+		const port = Number.parseInt(portInput, 10);
+		if (!token || !GATEWAY_URL || Number.isNaN(port) || port < 1 || port > 65535) return;
+		setExposing(true);
+		try {
+			const res = await fetch(devtoolsUrl(sessionId, token, "/api/expose"), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ port }),
+			});
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			setExposedPort(port);
+			setPortInput("");
+		} catch {
+			// User can retry
+		} finally {
+			setExposing(false);
+		}
+	}, [sessionId, token, portInput]);
+
+	return {
+		services,
+		exposedPort,
+		loading,
+		error,
+		actionLoading,
+		selectedService,
+		logContent,
+		logEndRef,
+		portInput,
+		exposing,
+		setPortInput,
+		selectService: setSelectedService,
+		refresh: fetchServices,
+		handleStop,
+		handleRestart,
+		handleExpose,
+	};
 }

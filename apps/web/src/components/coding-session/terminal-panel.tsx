@@ -2,10 +2,12 @@
 
 import "xterm/css/xterm.css";
 import { GATEWAY_URL } from "@/lib/gateway";
+import { Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { useWsToken } from "./runtime/use-ws-token";
+
 interface TerminalPanelProps {
 	sessionId: string;
 	onClose: () => void;
@@ -43,14 +45,19 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 		const term = new Terminal({
 			convertEol: true,
 			cursorBlink: true,
-			fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-			fontSize: 12,
+			cursorStyle: "bar",
+			fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+			fontSize: 13,
+			lineHeight: 1.4,
+			letterSpacing: 0,
+			scrollback: 5000,
 			theme:
 				bg && fg
 					? {
 							background: bg,
 							foreground: fg,
 							cursor: fg,
+							selectionBackground: `${fg}33`,
 						}
 					: undefined,
 		});
@@ -144,5 +151,25 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 		};
 	}, [sessionId, token]);
 
-	return <div ref={containerRef} className="h-full min-h-0 bg-background" />;
+	return (
+		<div className="relative flex-1 min-h-0 h-full bg-background">
+			<div ref={containerRef} className="absolute inset-2" />
+			{status !== "connected" && (
+				<div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background">
+					{status === "connecting" && (
+						<>
+							<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+							<p className="text-xs text-muted-foreground">Connecting...</p>
+						</>
+					)}
+					{status === "error" && (
+						<p className="text-xs text-destructive">Terminal connection failed</p>
+					)}
+					{status === "closed" && (
+						<p className="text-xs text-muted-foreground">Connection closed</p>
+					)}
+				</div>
+			)}
+		</div>
+	);
 }

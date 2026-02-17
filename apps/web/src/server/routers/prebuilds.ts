@@ -204,6 +204,22 @@ export const prebuildsRouter = {
 		}),
 
 	/**
+	 * Get env file spec for a prebuild.
+	 */
+	getEnvFiles: orgProcedure
+		.input(z.object({ prebuildId: z.string().uuid() }))
+		.output(z.object({ envFiles: z.unknown().nullable() }))
+		.handler(async ({ input, context }) => {
+			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+			if (!belongsToOrg) {
+				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+			}
+
+			const envFiles = await prebuilds.getPrebuildEnvFiles(input.prebuildId);
+			return { envFiles: envFiles ?? null };
+		}),
+
+	/**
 	 * Update service commands for a prebuild.
 	 */
 	updateServiceCommands: orgProcedure
