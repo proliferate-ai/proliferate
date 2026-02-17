@@ -1,16 +1,16 @@
 "use client";
 
-import { StatusDot } from "@/components/ui/status-dot";
+import { SessionListRow } from "@/components/sessions/session-card";
 import { useAutomations } from "@/hooks/use-automations";
 import { useOrgPendingRuns } from "@/hooks/use-automations";
 import { useIntegrations } from "@/hooks/use-integrations";
 import { useCreatePrebuild } from "@/hooks/use-prebuilds";
 import { useRepos } from "@/hooks/use-repos";
-import { useCreateSession, usePrefetchSession, useSessions } from "@/hooks/use-sessions";
+import { useCreateSession, useSessions } from "@/hooks/use-sessions";
 import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
-import type { PendingRunSummary, Session } from "@proliferate/shared/contracts";
+import type { PendingRunSummary } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
 import { AlertCircle, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
@@ -27,24 +27,6 @@ function getGreeting(name: string): string {
 	if (hour < 12) return `Good morning, ${name}`;
 	if (hour < 18) return `Good afternoon, ${name}`;
 	return `Good evening, ${name}`;
-}
-
-function getStatusLabel(status: Session["status"]): string {
-	switch (status) {
-		case "running":
-			return "Running";
-		case "paused":
-			return "Paused";
-		case "starting":
-			return "Starting";
-		default:
-			return "";
-	}
-}
-
-function getRepoShortName(fullName: string): string {
-	const parts = fullName.split("/");
-	return parts[parts.length - 1];
 }
 
 function getRunStatusLabel(status: PendingRunSummary["status"]): string {
@@ -241,8 +223,8 @@ function NeedsAttention() {
 			<SectionHeader
 				title="Needs Attention"
 				subtitle="Agent runs requiring your input"
-				actionLabel="All Runs"
-				actionHref="/dashboard/runs"
+				actionLabel="Inbox"
+				actionHref="/dashboard/inbox"
 			/>
 			<div className="rounded-xl border border-border overflow-hidden">
 				{pendingRuns.map((run) => {
@@ -254,9 +236,7 @@ function NeedsAttention() {
 						<Link
 							key={run.id}
 							href={
-								run.session_id
-									? `/workspace/${run.session_id}`
-									: `/dashboard/automations/${run.automation_id}/events?runId=${run.id}`
+								run.session_id ? `/workspace/${run.session_id}` : `/dashboard/inbox?id=${run.id}`
 							}
 							className="group flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors text-sm border-b border-border/50 last:border-0"
 						>
@@ -292,124 +272,32 @@ function NeedsAttention() {
 }
 
 // ============================================
-// Active Sessions
+// Recent Activity (unified sessions list)
 // ============================================
 
-function ActiveSessions() {
-	const { data: sessions, isLoading } = useSessions();
-	const prefetchSession = usePrefetchSession();
+function RecentActivity() {
+	const { data: sessions, isLoading } = useSessions({
+		limit: 5,
+		excludeSetup: true,
+		excludeCli: true,
+	});
 
-	const activeSessions = useMemo(() => {
-		if (!sessions) return [];
-		return sessions.filter(
-			(s) =>
-				s.sessionType !== "setup" &&
-				s.origin !== "cli" &&
-				(s.status === "running" || s.status === "starting" || s.status === "paused"),
-		);
-	}, [sessions]);
-
-	if (isLoading || activeSessions.length === 0) return null;
+	if (isLoading || !sessions || sessions.length === 0) return null;
 
 	return (
 		<div className="w-full">
 			<SectionHeader
-				title="Active Sessions"
-				subtitle="Sessions currently in progress"
-				actionLabel="All Sessions"
-				actionHref="/dashboard/sessions"
-			/>
-			<div className="rounded-xl border border-border overflow-hidden">
-				{activeSessions.slice(0, 5).map((session) => (
-					<SessionRow key={session.id} session={session} onHover={prefetchSession} />
-				))}
-			</div>
-		</div>
-	);
-}
-
-// ============================================
-// Recent Sessions
-// ============================================
-
-function RecentSessions() {
-	const { data: sessions, isLoading } = useSessions();
-	const prefetchSession = usePrefetchSession();
-
-	const recentSessions = useMemo(() => {
-		if (!sessions) return [];
-		return sessions.filter((s) => s.sessionType !== "setup" && s.origin !== "cli").slice(0, 5);
-	}, [sessions]);
-
-	if (isLoading || recentSessions.length === 0) return null;
-
-	return (
-		<div className="w-full">
-			<SectionHeader
-				title="Recent Sessions"
+				title="Recent Activity"
 				subtitle="Pick up where you left off"
 				actionLabel="All Sessions"
 				actionHref="/dashboard/sessions"
 			/>
-			<div className="rounded-xl border border-border overflow-hidden">
-				{recentSessions.map((session) => (
-					<SessionRow key={session.id} session={session} onHover={prefetchSession} />
+			<div className="rounded-lg border border-border bg-card overflow-hidden">
+				{sessions.map((session) => (
+					<SessionListRow key={session.id} session={session} />
 				))}
 			</div>
 		</div>
-	);
-}
-
-// ============================================
-// Shared Session Row
-// ============================================
-
-function SessionRow({
-	session,
-	onHover,
-}: {
-	session: Session;
-	onHover: (id: string) => void;
-}) {
-	const activityDate = session.lastActivityAt || session.startedAt;
-	const timeAgo = activityDate
-		? formatDistanceToNow(new Date(activityDate), { addSuffix: true })
-		: "";
-	const repoName = session.repo?.githubRepoName
-		? getRepoShortName(session.repo.githubRepoName)
-		: null;
-	const title = session.title || repoName || "Untitled session";
-	const statusLabel = getStatusLabel(session.status);
-	const statusType =
-		session.status === "running"
-			? "active"
-			: session.status === "paused"
-				? "paused"
-				: session.status === "starting"
-					? "running"
-					: "stopped";
-
-	return (
-		<Link
-			href={`/workspace/${session.id}`}
-			className="group flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors text-sm border-b border-border/50 last:border-0"
-			onMouseEnter={() => onHover(session.id)}
-		>
-			<div className="flex items-center gap-3 min-w-0">
-				<StatusDot status={statusType} size="sm" />
-				<div className="min-w-0">
-					<span className="truncate font-medium text-foreground block group-hover:text-primary transition-colors">
-						{title}
-					</span>
-					<span className="text-xs text-muted-foreground">
-						{[repoName && session.title ? repoName : null, timeAgo].filter(Boolean).join(" · ")}
-					</span>
-				</div>
-			</div>
-			{statusLabel && (
-				<span className="text-xs text-muted-foreground shrink-0 ml-3">{statusLabel}</span>
-			)}
-		</Link>
 	);
 }
 
@@ -484,11 +372,8 @@ export function EmptyDashboard() {
 					{/* Needs Attention — triage items from agent runs */}
 					<NeedsAttention />
 
-					{/* Active Sessions */}
-					<ActiveSessions />
-
-					{/* Recent Sessions */}
-					<RecentSessions />
+					{/* Recent Activity — unified sessions list */}
+					<RecentActivity />
 				</div>
 			</div>
 		</div>

@@ -5,7 +5,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
 	AutomationsIcon,
-	ChatBubbleIcon,
 	RunsIcon,
 	SidebarCollapseIcon,
 	SidebarExpandIcon,
@@ -16,7 +15,6 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
 import { useAttentionInbox } from "@/hooks/use-attention-inbox";
 import { useSlackStatus } from "@/hooks/use-integrations";
-import { useSessions } from "@/hooks/use-sessions";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
@@ -44,7 +42,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { SearchTrigger } from "./command-search";
 
 // Mobile sidebar trigger button - shown in mobile header
@@ -96,7 +94,7 @@ export function Sidebar() {
 
 	const isSettingsPage = pathname?.startsWith("/settings");
 	const isHomePage = pathname === "/dashboard";
-	const isRunsPage = pathname?.startsWith("/dashboard/runs");
+	const isInboxPage = pathname?.startsWith("/dashboard/inbox");
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
 	const isReposPage = pathname?.startsWith("/dashboard/repos");
@@ -163,14 +161,14 @@ export function Sidebar() {
 					<Home className="h-4 w-4" />
 				</Button>
 				<Button
-					variant={isRunsPage ? "secondary" : "ghost"}
+					variant={isInboxPage ? "secondary" : "ghost"}
 					size="icon"
 					className="h-8 w-8 text-muted-foreground hover:text-foreground relative"
 					onClick={(e) => {
 						e.stopPropagation();
-						router.push("/dashboard/runs");
+						router.push("/dashboard/inbox");
 					}}
-					title="Runs"
+					title="Inbox"
 				>
 					<RunsIcon className="h-4 w-4" />
 					{inboxCount > 0 && (
@@ -550,19 +548,13 @@ export function SidebarShell({
 	);
 }
 
-// Helper to extract short repo name from "org/repo" format
-function getRepoShortName(fullName: string): string {
-	const parts = fullName.split("/");
-	return parts[parts.length - 1];
-}
-
 // Dashboard-specific nav items
 function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 	const pathname = usePathname();
 	const router = useRouter();
 
 	const isHomePage = pathname === "/dashboard";
-	const isRunsPage = pathname?.startsWith("/dashboard/runs");
+	const isInboxPage = pathname?.startsWith("/dashboard/inbox");
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 	const isReposPage = pathname?.startsWith("/dashboard/repos");
@@ -570,12 +562,6 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 
 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
 	const inboxCount = inboxItems.length;
-
-	const { data: sessions } = useSessions();
-	const recentSessions = useMemo(() => {
-		if (!sessions) return [];
-		return sessions.filter((s) => s.sessionType !== "setup" && s.origin !== "cli").slice(0, 5);
-	}, [sessions]);
 
 	const handleNavigate = (path: string) => {
 		router.push(path);
@@ -599,10 +585,10 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 				<SectionLabel>Monitor</SectionLabel>
 				<NavItem
 					icon={RunsIcon}
-					label="Runs"
-					active={!!isRunsPage}
+					label="Inbox"
+					active={!!isInboxPage}
 					badge={inboxCount}
-					onClick={() => handleNavigate("/dashboard/runs")}
+					onClick={() => handleNavigate("/dashboard/inbox")}
 				/>
 			</div>
 
@@ -628,38 +614,6 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 					onClick={() => handleNavigate("/dashboard/integrations")}
 				/>
 			</div>
-
-			{/* Recents */}
-			{recentSessions.length > 0 && (
-				<div className="flex flex-col gap-0.5">
-					<SectionLabel>Recents</SectionLabel>
-					{recentSessions.map((session) => {
-						const repoName = session.repo?.githubRepoName
-							? getRepoShortName(session.repo.githubRepoName)
-							: null;
-						const title = session.title || repoName || "Untitled session";
-
-						return (
-							<button
-								key={session.id}
-								type="button"
-								onClick={() => handleNavigate(`/workspace/${session.id}`)}
-								className="flex items-center gap-2 w-full px-2 h-8 rounded-xl text-sm font-medium transition-colors text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]"
-							>
-								<ChatBubbleIcon className="h-5 w-5 shrink-0" />
-								<span className="truncate">{title}</span>
-							</button>
-						);
-					})}
-					<button
-						type="button"
-						onClick={() => handleNavigate("/dashboard/sessions")}
-						className="flex items-center gap-2 w-full px-2 h-8 rounded-xl text-xs transition-colors text-muted-foreground/70 hover:text-muted-foreground"
-					>
-						<span className="ml-[1.625rem]">View all</span>
-					</button>
-				</div>
-			)}
 
 			{/* Settings */}
 			<div className="flex flex-col gap-1">
