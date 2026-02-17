@@ -132,7 +132,7 @@ function SignUpContent() {
 			<div className="w-full max-w-[380px]">
 				<div className="mb-8 text-center">
 					<h1 className="text-xl font-semibold tracking-tight text-neutral-50">
-						Create your account
+						Create Your Proliferate Account
 					</h1>
 					<p className="mt-1.5 text-sm text-neutral-500">Get started with Proliferate for free</p>
 				</div>

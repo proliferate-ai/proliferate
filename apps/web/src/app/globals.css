@@ -43,34 +43,34 @@
 
 	.dark {
 		/* ─── Core Backgrounds & Text (Dark) ─── */
-		--background: 0 0% 0%; /* Pure Black */
+		--background: 0 0% 11%; /* #1c1c1c ~ Lovable zinc-900 */
 		--foreground: 0 0% 98%; /* Near White */
 
 		/* ─── Surfaces ─── */
-		--card: 0 0% 6%; /* #0f0f0f - Slightly elevated */
+		--card: 0 0% 15%; /* #262626 ~ Lovable neutral-800 */
 		--card-foreground: 0 0% 98%;
-		--popover: 0 0% 6%;
+		--popover: 0 0% 15%; /* #262626 ~ Lovable neutral-800 */
 		--popover-foreground: 0 0% 98%;
 
 		/* ─── Structural Elements ─── */
-		--sidebar: 0 0% 4%; /* #0a0a0a */
+		--sidebar: 0 0% 4%; /* #0a0a0a ~ Lovable stone-950 (darker than content) */
 		--sidebar-foreground: 0 0% 98%;
-		--sidebar-border: 0 0% 12%; /* #1f1f1f */
+		--sidebar-border: 0 0% 15%; /* #262626 ~ Lovable neutral-800 */
 
 		/* ─── Semantic Actions ─── */
 		--primary: 0 0% 98%; /* White buttons in dark mode */
 		--primary-foreground: 0 0% 0%; /* Black text */
-		--secondary: 0 0% 12%;
+		--secondary: 0 0% 15%; /* #262626 ~ neutral-800 */
 		--secondary-foreground: 0 0% 98%;
-		--muted: 0 0% 12%;
+		--muted: 0 0% 15%; /* #262626 ~ neutral-800 */
 		--muted-foreground: 0 0% 65%; /* #a6a6a6 */
-		--accent: 0 0% 15%; /* #262626 */
+		--accent: 0 0% 18%; /* #2e2e2e ~ hover lift above neutral-800 */
 		--accent-foreground: 0 0% 98%;
 
 		/* ─── Borders & Inputs ─── */
-		--border: 0 0% 15%; /* #262626 */
-		--input: 0 0% 15%;
-		--ring: 0 0% 100%; /* White focus rings */
+		--border: 0 0% 15%; /* #262626 ~ Lovable neutral-800 */
+		--input: 0 0% 25%; /* #404040 ~ Lovable neutral-700 (interactive) */
+		--ring: 0 0% 25%; /* #404040 ~ Lovable neutral-700 (subtle focus) */
 
 		/* ─── Status Colors ─── */
 		--destructive: 0 63% 31%; /* Darker red for contrast */
@@ -151,12 +151,6 @@
 	body {
 		@apply bg-background text-foreground;
 	}
-}
-
-/* Allow Nango Connect UI iframe to receive pointer events when open */
-/* The hook adds this class to body when openConnectUI is active */
-body.nango-connect-open [data-radix-dialog-overlay] {
-	pointer-events: none;
 }
 
 /* Override browser autofill styling (Chrome adds ugly grey/blue backgrounds) */

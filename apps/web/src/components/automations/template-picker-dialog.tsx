@@ -4,15 +4,19 @@ import { ProviderIcon } from "@/components/integrations/provider-icon";
 import type { Provider } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+	TemplateIconCiFixer,
+	TemplateIconGithubSolver,
+	TemplateIconLinearPr,
+	TemplateIconSentryFixer,
+} from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
 	AlertTriangle,
 	Bug,
 	CheckCircle2,
-	CircleDot,
 	CircuitBoard,
-	GitPullRequest,
 	Loader2,
 	Plus,
 	Search,
@@ -74,10 +78,11 @@ const CATEGORY_LABELS: Record<TemplateCategory, string> = {
 };
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-	bug: Bug,
-	"git-pull-request": GitPullRequest,
-	"circle-dot": CircleDot,
-	"alert-triangle": AlertTriangle,
+	bug: TemplateIconSentryFixer,
+	"git-pull-request": TemplateIconLinearPr,
+	"circle-dot": TemplateIconGithubSolver,
+	"alert-triangle": TemplateIconCiFixer,
+	// Fallbacks for future templates
 	"circuit-board": CircuitBoard,
 	shield: Shield,
 };

@@ -47,6 +47,7 @@ export const secretsRouter = {
 					description: input.description,
 					repoId: input.repoId,
 					secretType: input.secretType,
+					configurationId: input.configurationId,
 				});
 				return { secret };
 			} catch (err) {

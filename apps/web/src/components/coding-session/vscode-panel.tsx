@@ -2,13 +2,13 @@
 
 import { Button } from "@/components/ui/button";
 import { GATEWAY_URL } from "@/lib/gateway";
-import { Loader2 } from "lucide-react";
+import { Code, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { PanelShell } from "./panel-shell";
 import { useWsToken } from "./runtime/use-ws-token";
 
 interface VscodePanelProps {
 	sessionId: string;
-	onClose: () => void;
 }
 
 function devtoolsUrl(sessionId: string, token: string, path: string): string {
@@ -24,6 +24,7 @@ type PanelStatus = "starting" | "ready" | "error";
 export function VscodePanel({ sessionId }: VscodePanelProps) {
 	const { token } = useWsToken();
 	const [status, setStatus] = useState<PanelStatus>("starting");
+	const [attemptCount, setAttemptCount] = useState(0);
 	const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	const startVscodeServer = useCallback(async () => {
@@ -35,6 +36,7 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 		}
 
 		setStatus("starting");
+		setAttemptCount(0);
 
 		try {
 			// Check if openvscode-server is already running
@@ -52,8 +54,6 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 			}
 
 			// Start openvscode-server via service manager
-			// --server-base-path tells VS Code to prefix asset URLs with the proxy path
-			// so they route through the gateway instead of hitting the root and 404ing
 			const basePath = `/proxy/${sessionId}/${token}/devtools/vscode`;
 			const startRes = await fetch(devtoolsUrl(sessionId, token, "/api/services"), {
 				method: "POST",
@@ -73,6 +73,7 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 			let attempts = 0;
 			pollingRef.current = setInterval(async () => {
 				attempts++;
+				setAttemptCount(attempts);
 				if (attempts > 30) {
 					if (pollingRef.current) {
 						clearInterval(pollingRef.current);
@@ -101,7 +102,7 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 					// Keep polling
 				}
 			}, 1000);
-		} catch (err) {
+		} catch {
 			setStatus("error");
 		}
 	}, [sessionId, token]);
@@ -124,12 +125,20 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 	const iframeSrc = token ? vscodeUrl(sessionId, token) : "";
 
 	return (
-		<div className="flex flex-col h-full">
-			<div className="flex-1 min-h-0">
+		<PanelShell title="Code" icon={<Code className="h-4 w-4 text-muted-foreground" />} noPadding>
+			<div className="h-full min-h-0">
 				{status === "starting" && (
 					<div className="flex flex-col items-center justify-center h-full gap-3">
 						<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
 						<p className="text-sm text-muted-foreground">Starting VS Code...</p>
+						{attemptCount > 0 && (
+							<div className="w-32 h-1 bg-muted rounded-full overflow-hidden">
+								<div
+									className="h-full bg-primary transition-all duration-500"
+									style={{ width: `${Math.min((attemptCount / 30) * 100, 100)}%` }}
+								/>
+							</div>
+						)}
 					</div>
 				)}
 				{status === "error" && (
@@ -149,6 +158,6 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 					/>
 				)}
 			</div>
-		</div>
+		</PanelShell>
 	);
 }

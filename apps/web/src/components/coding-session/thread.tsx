@@ -2,7 +2,7 @@
 
 import { ModelSelector } from "@/components/automations/model-selector";
 import { Button } from "@/components/ui/button";
-import { OpenCodeIcon } from "@/components/ui/icons";
+import { BlocksIcon, OpenCodeIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
@@ -237,8 +237,9 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 
 // Small avatar for assistant messages
 const AssistantAvatar: FC = () => (
-	<div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted">
-		<OpenCodeIcon className="h-3.5 w-3.5 text-foreground" />
+	<div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full ">
+		{/* <OpenCodeIcon className="h-3.5 w-3.5 text-foreground" /> */}
+		<BlocksIcon className="h-3.5 w-3.5 text-primary" />
 	</div>
 );
 

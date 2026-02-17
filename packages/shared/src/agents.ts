@@ -10,10 +10,20 @@
 // ============================================
 
 /**
+ * LLM provider identifiers.
+ */
+export type ModelProvider = "anthropic" | "openai" | "google";
+
+/**
  * Our canonical model IDs.
  * These are the IDs used throughout our codebase and stored in the database.
  */
-export type ModelId = "claude-opus-4.6" | "claude-opus-4.5" | "claude-sonnet-4";
+export type ModelId =
+	| "claude-opus-4.6"
+	| "claude-sonnet-4"
+	| "gpt-5.2"
+	| "gemini-3-pro"
+	| "gemini-3-flash";
 
 /**
  * Agent types we support.
@@ -36,6 +46,7 @@ export interface ModelInfo {
 	id: ModelId;
 	name: string;
 	description: string;
+	provider: ModelProvider;
 	default?: boolean;
 }
 
@@ -55,23 +66,39 @@ export const AGENTS: Record<AgentType, AgentInfo> = {
 		name: "OpenCode",
 		description: "Terminal-based coding agent",
 		models: [
+			// Anthropic
 			{
 				id: "claude-opus-4.6",
-				name: "Opus 4.6",
+				name: "Claude Opus 4.6",
 				description: "Most capable model for complex tasks",
+				provider: "anthropic",
 				default: true,
 			},
 			{
-				id: "claude-opus-4.5",
-				name: "Opus 4.5",
-				description: "Previous generation Opus model",
-				default: false,
+				id: "claude-sonnet-4",
+				name: "Claude Sonnet 4",
+				description: "Fast and efficient for most tasks",
+				provider: "anthropic",
+			},
+			// OpenAI
+			{
+				id: "gpt-5.2",
+				name: "GPT-5.2",
+				description: "OpenAI flagship thinking model",
+				provider: "openai",
+			},
+			// Google
+			{
+				id: "gemini-3-pro",
+				name: "Gemini 3 Pro",
+				description: "Google flagship with 1M context",
+				provider: "google",
 			},
 			{
-				id: "claude-sonnet-4",
-				name: "Sonnet 4",
-				description: "Fast and efficient for most tasks",
-				default: false,
+				id: "gemini-3-flash",
+				name: "Gemini 3 Flash",
+				description: "Fast Google model for quick tasks",
+				provider: "google",
 			},
 		],
 	},
@@ -138,30 +165,43 @@ export function getModelsForAgent(agentType: AgentType): ModelInfo[] {
 
 /**
  * Transform canonical model ID to OpenCode config format.
- * OpenCode uses "anthropic/claude-sonnet-4-5" style IDs (NO date suffix!).
- * OpenCode internally maps these to actual Anthropic API model IDs.
+ *
+ * Anthropic models use the native "anthropic/" prefix.
+ * Non-Anthropic models use "litellm/" prefix, routed through the LiteLLM
+ * proxy as an OpenAI-compatible custom provider.
  */
 export function toOpencodeModelId(modelId: ModelId): string {
 	const transforms: Record<ModelId, string> = {
 		"claude-opus-4.6": "anthropic/claude-opus-4-6",
-		"claude-opus-4.5": "anthropic/claude-opus-4-5",
 		"claude-sonnet-4": "anthropic/claude-sonnet-4-5",
+		"gpt-5.2": "litellm/gpt-5.2",
+		"gemini-3-pro": "litellm/gemini-3-pro-preview",
+		"gemini-3-flash": "litellm/gemini-3-flash-preview",
 	};
 	return transforms[modelId] || transforms[DEFAULT_MODEL_ID];
 }
 
 /**
- * Transform canonical model ID to Anthropic API format.
- * The API uses versioned model IDs like "claude-sonnet-4-20250514".
- * NOTE: claude-opus-4-5-20250514 does NOT exist - use sonnet-4 for now.
+ * Transform canonical model ID to the actual API model ID.
+ * Used for billing validation and spend tracking.
  */
-export function toAnthropicApiModelId(modelId: ModelId): string {
+export function toApiModelId(modelId: ModelId): string {
 	const transforms: Record<ModelId, string> = {
 		"claude-opus-4.6": "claude-opus-4-6",
-		"claude-opus-4.5": "claude-opus-4-5-20251101",
 		"claude-sonnet-4": "claude-sonnet-4-20250514",
+		"gpt-5.2": "gpt-5.2",
+		"gemini-3-pro": "gemini-3-pro-preview",
+		"gemini-3-flash": "gemini-3-flash-preview",
 	};
 	return transforms[modelId] || transforms[DEFAULT_MODEL_ID];
+}
+
+/**
+ * Get the provider for a canonical model ID.
+ */
+export function getModelProvider(modelId: ModelId): ModelProvider {
+	const model = getModel(DEFAULT_AGENT_TYPE, modelId);
+	return model?.provider ?? "anthropic";
 }
 
 /**
@@ -174,11 +214,21 @@ export function parseModelId(input: string): ModelId {
 	if (normalized.includes("opus") && normalized.includes("4.6")) {
 		return "claude-opus-4.6";
 	}
-	if (normalized.includes("opus")) {
-		return "claude-opus-4.5";
+	if (normalized.includes("opus") && normalized.includes("4.5")) {
+		// Legacy: fall back to Opus 4.6
+		return "claude-opus-4.6";
 	}
 	if (normalized.includes("sonnet")) {
 		return "claude-sonnet-4";
+	}
+	if (normalized.includes("gpt-5")) {
+		return "gpt-5.2";
+	}
+	if (normalized.includes("gemini") && normalized.includes("pro")) {
+		return "gemini-3-pro";
+	}
+	if (normalized.includes("gemini") && normalized.includes("flash")) {
+		return "gemini-3-flash";
 	}
 
 	return DEFAULT_MODEL_ID;
@@ -188,7 +238,13 @@ export function parseModelId(input: string): ModelId {
  * Validate if a string is a valid canonical model ID.
  */
 export function isValidModelId(id: string): id is ModelId {
-	return id === "claude-opus-4.6" || id === "claude-opus-4.5" || id === "claude-sonnet-4";
+	return (
+		id === "claude-opus-4.6" ||
+		id === "claude-sonnet-4" ||
+		id === "gpt-5.2" ||
+		id === "gemini-3-pro" ||
+		id === "gemini-3-flash"
+	);
 }
 
 /**
@@ -197,3 +253,12 @@ export function isValidModelId(id: string): id is ModelId {
 export function isValidAgentType(type: string): type is AgentType {
 	return type in AGENTS;
 }
+
+// ============================================
+// Backward Compatibility
+// ============================================
+
+/**
+ * @deprecated Use `toApiModelId()` instead.
+ */
+export const toAnthropicApiModelId = toApiModelId;

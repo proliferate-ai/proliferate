@@ -26,6 +26,7 @@ export const CreateSecretInputSchema = z.object({
 	description: z.string().optional(),
 	repoId: z.string().uuid().optional(),
 	secretType: z.string().optional(),
+	configurationId: z.string().uuid().optional(),
 });
 
 export type CreateSecretInput = z.infer<typeof CreateSecretInputSchema>;

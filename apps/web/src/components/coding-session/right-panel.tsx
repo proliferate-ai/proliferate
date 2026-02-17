@@ -7,9 +7,11 @@ import type {
 	GitResultMessage,
 	GitState,
 } from "@proliferate/shared";
-import { Loader2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Loader2, PanelRight } from "lucide-react";
 import dynamic from "next/dynamic";
 import { ArtifactsPanel } from "./artifacts-panel";
+import { EnvironmentPanel } from "./environment-panel";
 import { GitPanel } from "./git-panel";
 import { PreviewPanel } from "./preview-panel";
 import { SettingsPanel } from "./settings-panel";
@@ -35,7 +37,6 @@ export interface SessionPanelProps {
 	startedAt?: string | null;
 	concurrentUsers?: number;
 	isModal?: boolean;
-	onSecretsClick?: () => void;
 	isMigrating?: boolean;
 	canSnapshot?: boolean;
 	isSnapshotting?: boolean;
@@ -93,6 +94,16 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 		);
 	}
 
+	// Empty state when no panel is selected
+	if (mode.type === "none") {
+		return (
+			<div className="flex flex-col h-full items-center justify-center gap-3 text-muted-foreground">
+				<PanelRight className="h-8 w-8" />
+				<p className="text-sm">Select a tool from the top bar</p>
+			</div>
+		);
+	}
+
 	const panelContent = (() => {
 		// Settings panel
 		if (mode.type === "settings" && sessionProps) {
@@ -107,7 +118,6 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 					startedAt={sessionProps.startedAt}
 					concurrentUsers={sessionProps.concurrentUsers}
 					isModal={sessionProps.isModal}
-					onSecretsClick={sessionProps.onSecretsClick}
 					isMigrating={sessionProps.isMigrating}
 					canSnapshot={sessionProps.canSnapshot}
 					isSnapshotting={sessionProps.isSnapshotting}
@@ -116,6 +126,18 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 					prebuildId={sessionProps.prebuildId}
 					autoStartOutput={sessionProps.autoStartOutput}
 					sendRunAutoStart={sessionProps.sendRunAutoStart}
+				/>
+			);
+		}
+
+		// Environment panel
+		if (mode.type === "environment" && sessionProps?.sessionId) {
+			return (
+				<EnvironmentPanel
+					sessionId={sessionProps.sessionId}
+					prebuildId={sessionProps.prebuildId}
+					repoId={sessionProps.repoId}
+					onClose={handleClose}
 				/>
 			);
 		}
@@ -142,7 +164,7 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 
 		// Terminal panel
 		if (mode.type === "terminal" && sessionProps?.sessionId) {
-			return <TerminalPanel sessionId={sessionProps.sessionId} onClose={handleClose} />;
+			return <TerminalPanel sessionId={sessionProps.sessionId} />;
 		}
 
 		// Services panel
@@ -152,7 +174,7 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 
 		// VS Code panel
 		if (mode.type === "vscode" && sessionProps?.sessionId) {
-			return <VscodePanel sessionId={sessionProps.sessionId} onClose={handleClose} />;
+			return <VscodePanel sessionId={sessionProps.sessionId} />;
 		}
 
 		// Artifacts panel
@@ -184,8 +206,17 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 	})();
 
 	return (
-		<div className="flex flex-col h-full">
-			<div className="flex-1 min-h-0">{panelContent}</div>
-		</div>
+		<AnimatePresence mode="wait">
+			<motion.div
+				key={mode.type}
+				initial={{ opacity: 0, y: 4 }}
+				animate={{ opacity: 1, y: 0 }}
+				exit={{ opacity: 0, y: -4 }}
+				transition={{ duration: 0.15 }}
+				className="h-full w-full"
+			>
+				{panelContent}
+			</motion.div>
+		</AnimatePresence>
 	);
 }

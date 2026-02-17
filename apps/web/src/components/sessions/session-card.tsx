@@ -1,6 +1,6 @@
 "use client";
 
-import { StatusDot } from "@/components/ui/status-dot";
+import { BlocksIcon, BlocksLoadingIcon } from "@/components/ui/icons";
 import { usePrefetchSession } from "@/hooks/use-sessions";
 import type { Session } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
@@ -16,36 +16,37 @@ function getRepoShortName(fullName: string): string {
 	return parts[parts.length - 1];
 }
 
-function getStatusDotType(
-	status: Session["status"],
-): "running" | "active" | "paused" | "stopped" | "error" {
-	switch (status) {
-		case "running":
-			return "running";
-		case "starting":
-			return "active";
-		case "paused":
-			return "paused";
-		default:
-			return "stopped";
-	}
-}
+const STATUS_CONFIG: Record<string, { animated: boolean; label: string; colorClassName: string }> =
+	{
+		running: {
+			animated: true,
+			label: "Running",
+			colorClassName: "text-emerald-500",
+		},
+		starting: {
+			animated: true,
+			label: "Starting",
+			colorClassName: "text-muted-foreground",
+		},
+		paused: {
+			animated: false,
+			label: "Paused",
+			colorClassName: "text-amber-500",
+		},
+		suspended: {
+			animated: false,
+			label: "Suspended",
+			colorClassName: "text-orange-500",
+		},
+		stopped: {
+			animated: false,
+			label: "Stopped",
+			colorClassName: "text-muted-foreground/50",
+		},
+	};
 
-function getStatusLabel(status: Session["status"]): string {
-	switch (status) {
-		case "running":
-			return "Running";
-		case "paused":
-			return "Paused";
-		case "starting":
-			return "Starting";
-		case "suspended":
-			return "Suspended";
-		case "stopped":
-			return "Stopped";
-		default:
-			return status ?? "Unknown";
-	}
+function getStatusConfig(status: Session["status"]) {
+	return STATUS_CONFIG[status ?? "stopped"] ?? STATUS_CONFIG.stopped;
 }
 
 export function SessionListRow({ session }: SessionListRowProps) {
@@ -67,14 +68,15 @@ export function SessionListRow({ session }: SessionListRowProps) {
 	if (repoShortName) metaParts.push(repoShortName);
 	if (timeAgo) metaParts.push(timeAgo);
 
+	const config = getStatusConfig(session.status);
+	const Icon = config.animated ? BlocksLoadingIcon : BlocksIcon;
+
 	return (
 		<Link href={`/workspace/${session.id}`}>
 			<div
 				className="flex items-center px-4 py-2.5 border-b border-border/50 hover:bg-muted/50 transition-colors text-sm cursor-pointer last:border-0 gap-3"
 				onMouseEnter={() => prefetchSession(session.id)}
 			>
-				<StatusDot status={getStatusDotType(session.status)} size="sm" className="flex-shrink-0" />
-
 				<span className="font-medium text-foreground truncate min-w-0 flex-1">{displayTitle}</span>
 
 				{session.branchName && (
@@ -88,8 +90,9 @@ export function SessionListRow({ session }: SessionListRowProps) {
 					{metaParts.join(" · ")}
 				</span>
 
-				<span className="inline-flex items-center rounded-md border border-border/50 bg-muted/50 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground flex-shrink-0">
-					{getStatusLabel(session.status)}
+				<span className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground flex-shrink-0">
+					<Icon className={`h-3.5 w-3.5 ${config.colorClassName}`} />
+					{config.label}
 				</span>
 			</div>
 		</Link>

@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
 	AutomationsIcon,
+	BlocksIcon,
 	RunsIcon,
 	SidebarCollapseIcon,
 	SidebarExpandIcon,
@@ -360,12 +361,13 @@ export function SidebarShell({
 							type="button"
 							className="flex items-center gap-2 w-full bg-card rounded-xl px-2 h-9 ring-1 ring-inset ring-border shadow-subtle transition-colors hover:bg-accent"
 						>
-							<div className="w-5 h-5 flex items-center justify-center rounded-md bg-foreground/[0.04] border border-foreground/[0.1]">
-								<img
+							<div className="w-5 h-5 flex items-center justify-center ">
+								{/* <img
 									src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp"
 									alt="Proliferate"
 									className="w-3 h-3 rounded-full"
-								/>
+								/> */}
+								<BlocksIcon className="text-primary h-4 w-4 rounded-full" />
 							</div>
 							<p className="text-sm font-medium text-foreground truncate flex-1 text-left">
 								Workspace
@@ -389,11 +391,12 @@ export function SidebarShell({
 							}}
 						>
 							<div className="h-8 w-8 rounded-[10px] border border-border/60 bg-muted/50 flex items-center justify-center shrink-0">
-								<img
+								{/* <img
 									src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp"
 									alt="Proliferate"
 									className="h-4 w-4 rounded-full"
-								/>
+								/> */}
+								<BlocksIcon className="h-4 w-4 rounded-full" />
 							</div>
 							<div className="flex-1 min-w-0">
 								<div className="font-medium text-foreground">Open workspace</div>

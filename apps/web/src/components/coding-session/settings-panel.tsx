@@ -22,7 +22,6 @@ export interface SettingsPanelProps {
 	startedAt?: string | null;
 	concurrentUsers?: number;
 	isModal?: boolean;
-	onSecretsClick?: () => void;
 	isMigrating?: boolean;
 	// Snapshots
 	canSnapshot?: boolean;
@@ -49,7 +48,6 @@ export function SettingsPanel({
 	startedAt,
 	concurrentUsers,
 	isModal,
-	onSecretsClick,
 	isMigrating,
 	canSnapshot,
 	isSnapshotting,
@@ -107,7 +105,6 @@ export function SettingsPanel({
 							startedAt={startedAt}
 							concurrentUsers={concurrentUsers}
 							isModal={isModal}
-							onSecretsClick={onSecretsClick}
 							isMigrating={isMigrating}
 						/>
 					</TabsContent>
