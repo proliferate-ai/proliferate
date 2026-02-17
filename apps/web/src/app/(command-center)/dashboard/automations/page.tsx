@@ -11,7 +11,7 @@ import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
 import { useIntegrations, useSlackInstallations } from "@/hooks/use-integrations";
 import { useCreateFromTemplate, useTemplateCatalog } from "@/hooks/use-templates";
 import { cn } from "@/lib/utils";
-import { Plus, Search } from "lucide-react";
+import { BookTemplate, Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -124,12 +124,31 @@ export default function AutomationsPage() {
 	return (
 		<div className="flex-1 overflow-y-auto">
 			<div className="max-w-4xl mx-auto px-6 py-6">
-				<div className="flex items-center justify-end mb-4">
-					<Button onClick={() => setPickerOpen(true)} disabled={isPending} size="sm">
-						<Plus className="h-4 w-4 mr-1.5" />
-						New
-					</Button>
+				{/* Page header */}
+				<div className="flex items-center justify-between mb-6">
+					<div>
+						<h1 className="text-lg font-semibold tracking-tight text-foreground">Automations</h1>
+						<p className="text-[13px] text-muted-foreground mt-1">
+							Event-driven agents that respond to triggers across your stack.
+						</p>
+					</div>
+					<div className="flex items-center gap-2">
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => setPickerOpen(true)}
+							disabled={isPending}
+						>
+							<BookTemplate className="h-3.5 w-3.5 mr-1.5" />
+							Templates
+						</Button>
+						<Button size="sm" onClick={handleBlankCreate} disabled={isPending}>
+							<Plus className="h-4 w-4 mr-1.5" />
+							New
+						</Button>
+					</div>
 				</div>
+
 				{isLoading ? (
 					<div className="rounded-xl border border-border overflow-hidden">
 						{[1, 2, 3].map((i) => (
@@ -142,15 +161,26 @@ export default function AutomationsPage() {
 				) : automations.length === 0 ? (
 					<div className="flex flex-col items-center py-16">
 						<h2 className="text-base font-semibold text-foreground mb-1">
-							Get started with a template
+							Create your first automation
 						</h2>
-						<p className="text-sm text-muted-foreground mb-8">
-							Pick a template to create your first automation, or start from scratch.
+						<p className="text-sm text-muted-foreground mb-6">
+							Start from scratch or pick a template to get going fast.
 						</p>
-						<Button onClick={() => setPickerOpen(true)} disabled={isPending} size="sm">
-							<Plus className="h-4 w-4 mr-1.5" />
-							Browse templates
-						</Button>
+						<div className="flex items-center gap-2">
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => setPickerOpen(true)}
+								disabled={isPending}
+							>
+								<BookTemplate className="h-3.5 w-3.5 mr-1.5" />
+								Browse templates
+							</Button>
+							<Button size="sm" onClick={handleBlankCreate} disabled={isPending}>
+								<Plus className="h-4 w-4 mr-1.5" />
+								New
+							</Button>
+						</div>
 					</div>
 				) : (
 					<>

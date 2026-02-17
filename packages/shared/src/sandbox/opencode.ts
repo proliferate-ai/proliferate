@@ -11,40 +11,66 @@ import { SANDBOX_PATHS } from "./config";
 /**
  * Generate OpenCode configuration JSON.
  *
- * @param opencodeModelId - The OpenCode-formatted model ID (e.g., "claude-sonnet-4-20250514")
- * @param anthropicBaseUrl - Optional custom base URL for Anthropic API (e.g., LLM proxy)
- * @param anthropicApiKey - Optional API key to embed in config (avoid for sandboxed proxy keys; prefer env)
+ * Supports multiple providers:
+ * - Anthropic models use the native "anthropic" provider
+ * - Non-Anthropic models (OpenAI, Google) use a custom "litellm" provider
+ *   configured as OpenAI-compatible, routing through the same LiteLLM proxy
+ *
+ * @param opencodeModelId - The OpenCode-formatted model ID (e.g., "anthropic/claude-opus-4-6" or "litellm/gpt-5.2")
+ * @param proxyBaseUrl - Optional LLM proxy base URL (shared by all providers)
+ * @param proxyApiKey - Optional API key to embed in config (avoid for sandboxed proxy keys; prefer env)
  */
 export function getOpencodeConfig(
 	opencodeModelId: string,
-	anthropicBaseUrl?: string,
-	anthropicApiKey?: string,
+	proxyBaseUrl?: string,
+	proxyApiKey?: string,
 ): string {
-	// Build provider config - add baseURL and apiKey if using a proxy
-	let providerConfig: string;
-	const optionEntries: string[] = [];
-	if (anthropicBaseUrl) {
-		optionEntries.push(`"baseURL": "${anthropicBaseUrl}"`);
+	// Build Anthropic provider options
+	const anthropicOptions: string[] = [];
+	if (proxyBaseUrl) {
+		anthropicOptions.push(`"baseURL": "${proxyBaseUrl}"`);
 	}
-	if (anthropicApiKey) {
-		optionEntries.push(`"apiKey": "${anthropicApiKey}"`);
+	if (proxyApiKey) {
+		anthropicOptions.push(`"apiKey": "${proxyApiKey}"`);
 	}
 
-	if (optionEntries.length > 0) {
-		providerConfig = `"anthropic": {
+	const anthropicBlock =
+		anthropicOptions.length > 0
+			? `"anthropic": {
       "options": {
-        ${optionEntries.join(",\n        ")}
+        ${anthropicOptions.join(",\n        ")}
+      }
+    }`
+			: '"anthropic": {}';
+
+	// Build LiteLLM provider (OpenAI-compatible) for non-Anthropic models
+	const litellmOptions: string[] = [];
+	if (proxyBaseUrl) {
+		litellmOptions.push(`"baseURL": "${proxyBaseUrl}"`);
+	}
+	if (proxyApiKey) {
+		litellmOptions.push(`"apiKey": "${proxyApiKey}"`);
+	}
+
+	const litellmBlock = `"litellm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteLLM",
+      "options": {
+        ${litellmOptions.length > 0 ? litellmOptions.join(",\n        ") : ""}
+      },
+      "models": {
+        "gpt-5.2": { "name": "GPT-5.2" },
+        "gemini-3-pro-preview": { "name": "Gemini 3 Pro" },
+        "gemini-3-flash-preview": { "name": "Gemini 3 Flash" }
       }
     }`;
-	} else {
-		providerConfig = '"anthropic": {}';
-	}
 
 	return `{
   "$schema": "https://opencode.ai/config.json",
   "model": "${opencodeModelId}",
   "provider": {
-    ${providerConfig}
+    ${anthropicBlock},
+    ${litellmBlock}
   },
   "server": {
     "port": 4096,

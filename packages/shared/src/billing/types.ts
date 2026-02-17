@@ -200,10 +200,18 @@ export const ALLOWED_LLM_MODELS = new Set([
 	"o1-preview",
 	"o1-mini",
 	"o3-mini",
+	// OpenAI GPT-5
+	"gpt-5",
+	"gpt-5.1",
+	"gpt-5.1-codex",
+	"gpt-5.2",
+	"gpt-5.2-pro",
 	// Google Gemini
 	"gemini-1.5-pro",
 	"gemini-1.5-flash",
 	"gemini-2.0-flash-exp",
+	"gemini-3-pro-preview",
+	"gemini-3-flash-preview",
 	// DeepSeek
 	"deepseek-chat",
 	"deepseek-coder",

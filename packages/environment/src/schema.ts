@@ -155,7 +155,8 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 		MODAL_TOKEN_SECRET: requiredForProvider(env, "modal"),
 		NANGO_SECRET_KEY: requiredWhen(integrationsEnabled, "Required when integrations are enabled"),
 		NEXT_BUILD_STANDALONE: optionalBoolean,
-		OPENAI_API_KEY: optionalString, // Only needed for specific features
+		OPENAI_API_KEY: optionalString, // Used by LLM proxy for OpenAI model routing
+		GOOGLE_API_KEY: optionalString, // Used by LLM proxy for Gemini model routing
 		WEB_PORT: optionalPort(3000),
 		WORKER_PORT: optionalPort(3002),
 		PROLIFERATE_SLACK_BOT_TOKEN: optionalString, // Only needed if using Slack integration

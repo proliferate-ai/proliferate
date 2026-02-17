@@ -71,6 +71,9 @@ describe("E2B Provider - Helper Functions", () => {
 			const config = getOpencodeConfig("test-model");
 			const parsed = JSON.parse(config);
 			expect(parsed.provider.anthropic).toEqual({});
+			// Should also include the litellm provider for non-Anthropic models
+			expect(parsed.provider.litellm).toBeDefined();
+			expect(parsed.provider.litellm.npm).toBe("@ai-sdk/openai-compatible");
 		});
 
 		it("should embed baseURL and apiKey when proxy params provided", () => {

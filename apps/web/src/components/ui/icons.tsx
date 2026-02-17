@@ -578,6 +578,45 @@ export function ClaudeIcon({ className }: IconProps) {
 	);
 }
 
+/**
+ * OpenAI logo
+ */
+export function OpenAIIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={cn("h-4 w-4", className)}
+			viewBox="0 0 24 24"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" />
+		</svg>
+	);
+}
+
+/**
+ * Google Gemini logo
+ */
+export function GeminiIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={cn("h-4 w-4", className)}
+			viewBox="0 0 24 24"
+			fill="none"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path
+				d="M12 24C12 18.2 12 15.3 12 12C12 8.7 12 5.8 12 0C14.4 3.5 17 6.2 21 8.1C24 9.5 24 9.5 24 12C24 14.5 24 14.5 21 15.9C17 17.8 14.4 20.5 12 24Z"
+				fill="#4285F4"
+			/>
+			<path
+				d="M12 24C12 18.2 12 15.3 12 12C12 8.7 12 5.8 12 0C9.6 3.5 7 6.2 3 8.1C0 9.5 0 9.5 0 12C0 14.5 0 14.5 3 15.9C7 17.8 9.6 20.5 12 24Z"
+				fill="#4285F4"
+			/>
+		</svg>
+	);
+}
+
 // ============================================================================
 // Generic UI Icons
 // ============================================================================
@@ -754,6 +793,144 @@ export function RunsIcon({ className }: IconProps) {
 			/>
 			<path
 				d="M6.4585 10.625H9.79183"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	);
+}
+
+// ============================================================================
+// Automation Template Icons
+// ============================================================================
+
+/**
+ * Sentry Auto-Fixer: Bug with a wrench overlay
+ */
+export function TemplateIconSentryFixer({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+			{/* Bug body */}
+			<ellipse cx="14" cy="17" rx="6" ry="7" stroke="currentColor" strokeWidth="1.8" />
+			<line x1="14" y1="10" x2="14" y2="24" stroke="currentColor" strokeWidth="1.5" />
+			<line x1="8" y1="16" x2="20" y2="16" stroke="currentColor" strokeWidth="1.5" />
+			{/* Bug legs */}
+			<path d="M8.5 13.5L5.5 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M8 17.5L4.5 17.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M8.5 21L5.5 23" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M19.5 13.5L22.5 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			{/* Bug antennae */}
+			<path d="M11 11L9 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M17 11L19 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			{/* Wrench */}
+			<path d="M24 20L28 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+			<circle cx="23" cy="19" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+		</svg>
+	);
+}
+
+/**
+ * Linear PR Drafter: Ticket shape flowing into a git merge/branch
+ */
+export function TemplateIconLinearPr({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+			{/* Ticket / card */}
+			<rect x="3" y="7" width="13" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" />
+			<line
+				x1="6.5"
+				y1="11.5"
+				x2="12.5"
+				y2="11.5"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+			/>
+			<line
+				x1="6.5"
+				y1="14.5"
+				x2="10.5"
+				y2="14.5"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+			/>
+			<line
+				x1="6.5"
+				y1="17.5"
+				x2="11.5"
+				y2="17.5"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+			/>
+			{/* Arrow flowing right */}
+			<path d="M16 16H22" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+			<path
+				d="M20 13.5L22.5 16L20 18.5"
+				stroke="currentColor"
+				strokeWidth="1.8"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			{/* Git branch symbol */}
+			<circle cx="27" cy="11" r="2" stroke="currentColor" strokeWidth="1.5" />
+			<circle cx="27" cy="21" r="2" stroke="currentColor" strokeWidth="1.5" />
+			<path d="M27 13V19" stroke="currentColor" strokeWidth="1.5" />
+		</svg>
+	);
+}
+
+/**
+ * GitHub Issue Solver: Issue circle with an inner check
+ */
+export function TemplateIconGithubSolver({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+			{/* Outer issue circle */}
+			<circle cx="16" cy="16" r="11" stroke="currentColor" strokeWidth="1.8" />
+			{/* Inner dot (GitHub issue icon style) morphing into a check */}
+			<path
+				d="M11.5 16.5L14.5 19.5L21 13"
+				stroke="currentColor"
+				strokeWidth="2.2"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			{/* Small spark lines radiating — solution found */}
+			<path d="M16 2.5V4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M16 27.5V29.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M2.5 16H4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M27.5 16H29.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+		</svg>
+	);
+}
+
+/**
+ * CI Failure Fixer: Pipeline with a lightning bolt repair
+ */
+export function TemplateIconCiFixer({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+			{/* Pipeline stages */}
+			<rect x="2" y="11" width="7" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+			<rect x="23" y="11" width="7" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+			{/* Connecting lines */}
+			<path d="M9 16H12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+			<path d="M20 16H23" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+			{/* Lightning bolt in center — the fix */}
+			<path
+				d="M17.5 9L14 17H18L14.5 25"
+				stroke="currentColor"
+				strokeWidth="2"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			{/* Check in the last stage */}
+			<path
+				d="M25 15.5L26.5 17L28 14.5"
 				stroke="currentColor"
 				strokeWidth="1.5"
 				strokeLinecap="round"

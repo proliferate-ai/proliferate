@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRepo } from "@/hooks/use-repos";
 import { useSessionData, useSnapshotSession } from "@/hooks/use-sessions";
@@ -134,6 +135,8 @@ export function CodingSession({
 		pinTab,
 		unpinTab,
 		missingEnvKeyCount,
+		panelSizes,
+		setPanelSizes,
 	} = usePreviewPanelStore();
 	const [viewPickerOpen, setViewPickerOpen] = useState(false);
 	const activeType = mode.type === "file" || mode.type === "gallery" ? "artifacts" : mode.type;
@@ -222,7 +225,7 @@ export function CodingSession({
 	const isReady = !isLoading && !!authSession && !!sessionData && status !== "error";
 
 	const panelViewPicker = (
-		<div className="hidden md:flex items-center gap-0.5">
+		<div className="flex items-center gap-0.5">
 			{pinnedTabs.map((tabType) => {
 				const tab = PANEL_TABS.find((t) => t.type === tabType);
 				if (!tab) return null;
@@ -302,84 +305,127 @@ export function CodingSession({
 		</div>
 	);
 
-	const mainContent = (
-		<div className="flex h-full">
-			{/* Chat area */}
-			<div
-				className={cn(
-					"flex flex-col",
-					mobileView === "preview" ? "hidden md:flex" : "flex",
-					"md:flex-[35] md:min-w-0",
-				)}
-			>
-				{leftPaneContent}
-			</div>
-
-			{/* Right panel — always visible */}
-			<div
-				className={cn(
-					"hidden md:flex md:flex-col md:flex-[65] md:min-w-0 p-2 gap-1",
-					mobileView === "preview" && "!flex w-full",
-				)}
-			>
-				<div className="flex-1 min-h-0 rounded-xl border border-border bg-background overflow-hidden">
-					<RightPanel
-						isMobileFullScreen={mobileView === "preview"}
-						sessionProps={sessionPanelProps}
-						previewUrl={previewUrl}
-					/>
-				</div>
-			</div>
+	// Left pane header (logo, title, session controls)
+	const leftHeader = (
+		<div className="shrink-0 flex h-12 items-center gap-2 px-3 border-b border-border/50">
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Link href="/dashboard">
+						<Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+							<ArrowLeft className="h-4 w-4" />
+						</Button>
+					</Link>
+				</TooltipTrigger>
+				<TooltipContent side="bottom">Back to dashboard</TooltipContent>
+			</Tooltip>
+			<div className="h-5 w-px bg-border/60 shrink-0" />
+			<img
+				src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp"
+				alt="Proliferate"
+				className="h-5 w-5 rounded-full shrink-0"
+			/>
+			{displayTitle && (
+				<span className="text-sm font-medium text-foreground truncate">{displayTitle}</span>
+			)}
+			<SessionHeader
+				error={headerDisabled ? null : error}
+				disabled={headerDisabled}
+				mobileView={mobileView}
+				onToggleMobileView={toggleMobileView}
+				panelMode={mode}
+			/>
 		</div>
+	);
+
+	// Right pane header (panel tabs)
+	const rightHeader = (
+		<div className="shrink-0 flex h-12 items-center px-3 border-b border-border/50">
+			{panelViewPicker}
+		</div>
+	);
+
+	// Wrap left pane content with runtime provider when ready
+	const wrappedLeftContent = isReady ? (
+		<AssistantRuntimeProvider runtime={runtime}>{leftPaneContent}</AssistantRuntimeProvider>
+	) : (
+		leftPaneContent
+	);
+
+	// Mobile layout: full-screen toggle between chat and panel
+	const mobileLayout = (
+		<div className="flex flex-col h-full md:hidden">
+			{mobileView === "chat" ? (
+				<>
+					{leftHeader}
+					<div className="flex-1 min-h-0">{wrappedLeftContent}</div>
+				</>
+			) : (
+				<>
+					<div className="shrink-0 flex h-12 items-center px-3 border-b border-border/50">
+						{panelViewPicker}
+					</div>
+					<div className="flex-1 min-h-0 p-2">
+						<div className="h-full rounded-xl border border-border bg-background overflow-hidden">
+							<RightPanel
+								isMobileFullScreen
+								sessionProps={sessionPanelProps}
+								previewUrl={previewUrl}
+							/>
+						</div>
+					</div>
+				</>
+			)}
+		</div>
+	);
+
+	// Desktop layout: resizable two-pane
+	const desktopLayout = (
+		<TooltipProvider delayDuration={150}>
+			<ResizablePanelGroup
+				orientation="horizontal"
+				className="hidden md:flex h-full w-full"
+				onLayoutChanged={(layout) => {
+					setPanelSizes([layout.left ?? 35, layout.right ?? 65]);
+				}}
+			>
+				{/* Left pane: Chat */}
+				<ResizablePanel
+					id="left"
+					defaultSize={panelSizes[0] || 35}
+					minSize={25}
+					maxSize={65}
+					className="flex flex-col"
+				>
+					{leftHeader}
+					<div className="flex-1 min-h-0 flex flex-col">{wrappedLeftContent}</div>
+				</ResizablePanel>
+
+				{/* Drag handle */}
+				<ResizableHandle withHandle />
+
+				{/* Right pane: Tool panels */}
+				<ResizablePanel
+					id="right"
+					defaultSize={panelSizes[1] || 65}
+					minSize={35}
+					maxSize={75}
+					className="flex flex-col"
+				>
+					{rightHeader}
+					<div className="flex-1 min-h-0 p-2">
+						<div className="h-full rounded-xl border border-border bg-background overflow-hidden">
+							<RightPanel sessionProps={sessionPanelProps} previewUrl={previewUrl} />
+						</div>
+					</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
+		</TooltipProvider>
 	);
 
 	const content = (
 		<div className="flex h-full flex-col">
-			<TooltipProvider delayDuration={150}>
-				{/* Header — same 35/65 split so panel tabs align with right panel */}
-				<div className="shrink-0 flex h-12 border-b border-border/50">
-					{/* Left header (above chat) */}
-					<div className="flex items-center gap-2 min-w-0 px-3 md:flex-[35]">
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<Link href="/dashboard">
-									<Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-										<ArrowLeft className="h-4 w-4" />
-									</Button>
-								</Link>
-							</TooltipTrigger>
-							<TooltipContent side="bottom">Back to dashboard</TooltipContent>
-						</Tooltip>
-						<div className="h-5 w-px bg-border/60 shrink-0" />
-						<img
-							src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp"
-							alt="Proliferate"
-							className="h-5 w-5 rounded-full shrink-0"
-						/>
-						{displayTitle && (
-							<span className="text-sm font-medium text-foreground truncate">{displayTitle}</span>
-						)}
-						<SessionHeader
-							error={headerDisabled ? null : error}
-							disabled={headerDisabled}
-							mobileView={mobileView}
-							onToggleMobileView={toggleMobileView}
-							panelMode={mode}
-						/>
-					</div>
-					{/* Right header (above right panel) — panel tabs at left edge */}
-					<div className="hidden md:flex md:flex-[65] items-center px-3">{panelViewPicker}</div>
-				</div>
-			</TooltipProvider>
-
-			{/* Main content — two-pane layout always rendered */}
-			<div className="flex-1 min-h-0">
-				{isReady ? (
-					<AssistantRuntimeProvider runtime={runtime}>{mainContent}</AssistantRuntimeProvider>
-				) : (
-					mainContent
-				)}
-			</div>
+			{mobileLayout}
+			{desktopLayout}
 		</div>
 	);
 

@@ -1,5 +1,6 @@
 import type { VerificationFile } from "@proliferate/shared";
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 export type PreviewMode =
 	| { type: "none" }
@@ -21,6 +22,7 @@ interface PreviewPanelState {
 	mode: PreviewMode;
 	mobileView: MobileView;
 	pinnedTabs: string[];
+	panelSizes: number[];
 	missingEnvKeyCount: number;
 
 	// Actions
@@ -28,6 +30,7 @@ interface PreviewPanelState {
 	openFile: (file: VerificationFile) => void;
 	openGallery: (files: VerificationFile[]) => void;
 	close: () => void;
+	closePanel: () => void;
 
 	// Toggle helpers (for header buttons — toggles open/close)
 	toggleUrlPreview: (url: string | null) => void;
@@ -39,6 +42,9 @@ interface PreviewPanelState {
 	pinTab: (type: string) => void;
 	unpinTab: (type: string) => void;
 
+	// Panel layout sizes
+	setPanelSizes: (sizes: number[]) => void;
+
 	// Missing env key count
 	setMissingEnvKeyCount: (count: number) => void;
 
@@ -48,62 +54,82 @@ interface PreviewPanelState {
 }
 
 const DEFAULT_MODE: PreviewMode = { type: "vscode" };
+const NONE_MODE: PreviewMode = { type: "none" };
 
-export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
-	mode: DEFAULT_MODE,
-	mobileView: "chat",
-	pinnedTabs: ["url", "vscode"],
-	missingEnvKeyCount: 0,
+export const usePreviewPanelStore = create<PreviewPanelState>()(
+	persist(
+		(set, get) => ({
+			mode: DEFAULT_MODE,
+			mobileView: "chat",
+			pinnedTabs: ["url", "vscode"],
+			panelSizes: [35, 65],
+			missingEnvKeyCount: 0,
 
-	openUrl: (url: string) => set({ mode: { type: "url", url } }),
+			openUrl: (url: string) => set({ mode: { type: "url", url } }),
 
-	openFile: (file: VerificationFile) => set({ mode: { type: "file", file } }),
+			openFile: (file: VerificationFile) => set({ mode: { type: "file", file } }),
 
-	openGallery: (files: VerificationFile[]) => set({ mode: { type: "gallery", files } }),
+			openGallery: (files: VerificationFile[]) => set({ mode: { type: "gallery", files } }),
 
-	close: () => set({ mode: DEFAULT_MODE, mobileView: "chat" }),
+			close: () => set({ mode: DEFAULT_MODE, mobileView: "chat" }),
 
-	// Toggle URL preview — switches between url and default view
-	toggleUrlPreview: (url: string | null) => {
-		const { mode } = get();
-		if (mode.type === "url") {
-			set({ mode: DEFAULT_MODE });
-		} else {
-			set({ mode: { type: "url", url } });
-		}
-	},
+			// Close panel to empty state (used by PanelShell close button)
+			closePanel: () => set({ mode: NONE_MODE }),
 
-	// Switch panel view — always stays open, just switches type
-	togglePanel: (
-		type: "settings" | "git" | "terminal" | "vscode" | "artifacts" | "services" | "environment",
-	) => {
-		const { mode } = get();
-		if (mode.type === type) {
-			set({ mode: DEFAULT_MODE });
-		} else {
-			set({ mode: { type } });
-		}
-	},
+			// Toggle URL preview — switches between url and none
+			toggleUrlPreview: (url: string | null) => {
+				const { mode } = get();
+				if (mode.type === "url") {
+					set({ mode: NONE_MODE });
+				} else {
+					set({ mode: { type: "url", url } });
+				}
+			},
 
-	pinTab: (type) =>
-		set((state) => ({
-			pinnedTabs: state.pinnedTabs.includes(type) ? state.pinnedTabs : [...state.pinnedTabs, type],
-		})),
+			// Switch panel view — clicking active tab closes to none
+			togglePanel: (
+				type: "settings" | "git" | "terminal" | "vscode" | "artifacts" | "services" | "environment",
+			) => {
+				const { mode } = get();
+				if (mode.type === type) {
+					set({ mode: NONE_MODE });
+				} else {
+					set({ mode: { type } });
+				}
+			},
 
-	unpinTab: (type) =>
-		set((state) => ({
-			pinnedTabs: state.pinnedTabs.filter((t) => t !== type),
-		})),
+			pinTab: (type) =>
+				set((state) => ({
+					pinnedTabs: state.pinnedTabs.includes(type)
+						? state.pinnedTabs
+						: [...state.pinnedTabs, type],
+				})),
 
-	setMissingEnvKeyCount: (count: number) => set({ missingEnvKeyCount: count }),
+			unpinTab: (type) =>
+				set((state) => ({
+					pinnedTabs: state.pinnedTabs.filter((t) => t !== type),
+				})),
 
-	setMobileView: (view: MobileView) => set({ mobileView: view }),
+			setPanelSizes: (sizes: number[]) => set({ panelSizes: sizes }),
 
-	toggleMobileView: () => {
-		const { mobileView } = get();
-		set({ mobileView: mobileView === "chat" ? "preview" : "chat" });
-	},
-}));
+			setMissingEnvKeyCount: (count: number) => set({ missingEnvKeyCount: count }),
 
-// Helper to check if panel is open (always true now, but kept for mobile compat)
+			setMobileView: (view: MobileView) => set({ mobileView: view }),
+
+			toggleMobileView: () => {
+				const { mobileView } = get();
+				set({ mobileView: mobileView === "chat" ? "preview" : "chat" });
+			},
+		}),
+		{
+			name: "preview-panel-storage",
+			partialize: (state) => ({
+				pinnedTabs: state.pinnedTabs,
+				panelSizes: state.panelSizes,
+			}),
+		},
+	),
+);
+
+// Helper to check if panel is open
 export const isPanelOpen = (mode: PreviewMode) => mode.type !== "none";

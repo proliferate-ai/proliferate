@@ -8,7 +8,7 @@ import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/use-secret
 import { orpc } from "@/lib/orpc";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Lock, Trash2, X } from "lucide-react";
+import { FileUp, Loader2, Lock, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 // ============================================
@@ -28,6 +28,31 @@ interface EnvironmentPanelProps {
 	prebuildId?: string | null;
 	repoId?: string | null;
 	onClose: () => void;
+}
+
+// ============================================
+// Parse .env text into key-value pairs
+// ============================================
+
+function parseEnvText(text: string): Array<{ key: string; value: string }> {
+	const results: Array<{ key: string; value: string }> = [];
+	for (const line of text.split("\n")) {
+		const trimmed = line.trim();
+		if (!trimmed || trimmed.startsWith("#")) continue;
+		const eqIndex = trimmed.indexOf("=");
+		if (eqIndex === -1) continue;
+		const key = trimmed.slice(0, eqIndex).trim();
+		let value = trimmed.slice(eqIndex + 1).trim();
+		// Strip surrounding quotes
+		if (
+			(value.startsWith('"') && value.endsWith('"')) ||
+			(value.startsWith("'") && value.endsWith("'"))
+		) {
+			value = value.slice(1, -1);
+		}
+		if (key) results.push({ key, value });
+	}
+	return results;
 }
 
 // ============================================
@@ -110,6 +135,88 @@ function AddVariableForm({
 			>
 				{saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Add"}
 			</Button>
+		</div>
+	);
+}
+
+// ============================================
+// Paste .env Form
+// ============================================
+
+function PasteEnvForm({
+	sessionId,
+	prebuildId,
+	onSaved,
+	onClose,
+}: {
+	sessionId: string;
+	prebuildId?: string | null;
+	onSaved: () => void;
+	onClose: () => void;
+}) {
+	const [text, setText] = useState("");
+	const [saving, setSaving] = useState(false);
+
+	const bulkImport = useMutation(orpc.secrets.bulkImport.mutationOptions());
+	const submitEnv = useMutation(orpc.sessions.submitEnv.mutationOptions());
+
+	const parsed = useMemo(() => parseEnvText(text), [text]);
+
+	const handleImport = async () => {
+		if (parsed.length === 0) return;
+		setSaving(true);
+
+		try {
+			// Inject all into live sandbox
+			await submitEnv.mutateAsync({
+				sessionId,
+				secrets: parsed.map(({ key, value }) => ({ key, value, persist: false })),
+				envVars: [],
+				saveToPrebuild: false,
+			});
+
+			// Persist to DB
+			await bulkImport.mutateAsync({ envText: text });
+
+			setText("");
+			onSaved();
+			onClose();
+		} catch {
+			// mutation hooks handle errors
+		} finally {
+			setSaving(false);
+		}
+	};
+
+	return (
+		<div className="space-y-2">
+			<textarea
+				value={text}
+				onChange={(e) => setText(e.target.value)}
+				placeholder={"Paste .env file contents\n\nKEY=value\nDATABASE_URL=postgres://..."}
+				className="w-full h-32 rounded-md border border-input bg-background px-3 py-2 text-xs resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+				autoFocus
+			/>
+			<div className="flex items-center justify-between">
+				<span className="text-[11px] text-muted-foreground">
+					{parsed.length > 0
+						? `${parsed.length} ${parsed.length === 1 ? "variable" : "variables"} detected`
+						: "Paste KEY=value pairs"}
+				</span>
+				<div className="flex items-center gap-1.5">
+					<Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onClose}>
+						Cancel
+					</Button>
+					<Button
+						size="sm"
+						className="h-7 px-3 text-xs"
+						onClick={handleImport}
+						disabled={saving || parsed.length === 0}
+					>
+						{saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Import"}
+					</Button>
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -271,6 +378,7 @@ export function EnvironmentPanel({
 	const queryClient = useQueryClient();
 	const setMissingEnvKeyCount = usePreviewPanelStore((s) => s.setMissingEnvKeyCount);
 	const [deletingId, setDeletingId] = useState<string | null>(null);
+	const [pasteMode, setPasteMode] = useState(false);
 
 	// All org secrets
 	const { data: secrets, isLoading: secretsLoading } = useSecrets();
@@ -369,12 +477,31 @@ export function EnvironmentPanel({
 						</div>
 					) : (
 						<div className="p-3 space-y-3">
-							{/* Always-visible add form */}
-							<AddVariableForm
-								sessionId={sessionId}
-								prebuildId={prebuildId}
-								onSaved={handleRefresh}
-							/>
+							{/* Add variable / paste .env */}
+							{pasteMode ? (
+								<PasteEnvForm
+									sessionId={sessionId}
+									prebuildId={prebuildId}
+									onSaved={handleRefresh}
+									onClose={() => setPasteMode(false)}
+								/>
+							) : (
+								<div className="space-y-1.5">
+									<AddVariableForm
+										sessionId={sessionId}
+										prebuildId={prebuildId}
+										onSaved={handleRefresh}
+									/>
+									<button
+										type="button"
+										className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+										onClick={() => setPasteMode(true)}
+									>
+										<FileUp className="h-3 w-3" />
+										Paste .env
+									</button>
+								</div>
+							)}
 
 							{/* Status summary for spec keys */}
 							{specKeys.length > 0 && (

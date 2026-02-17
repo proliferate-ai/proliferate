@@ -2,13 +2,16 @@
 
 import "xterm/css/xterm.css";
 import { GATEWAY_URL } from "@/lib/gateway";
-import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
+import { SquareTerminal } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
+import { PanelShell } from "./panel-shell";
 import { useWsToken } from "./runtime/use-ws-token";
+
 interface TerminalPanelProps {
 	sessionId: string;
-	onClose: () => void;
 }
 
 function buildTerminalWsUrl(sessionId: string, token: string): string {
@@ -22,18 +25,34 @@ function getCssColor(property: string): string {
 	return value ? `hsl(${value})` : "";
 }
 
+type ConnectionStatus = "connecting" | "connected" | "error" | "closed";
+
+function StatusDot({ status }: { status: ConnectionStatus }) {
+	return (
+		<div
+			className={cn(
+				"h-2 w-2 rounded-full shrink-0",
+				status === "connected" && "bg-green-500",
+				status === "connecting" && "bg-yellow-500 animate-pulse",
+				(status === "error" || status === "closed") && "bg-red-500",
+			)}
+			title={status}
+		/>
+	);
+}
+
 export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
-	const [status, setStatus] = useState<"connecting" | "connected" | "error" | "closed">(
-		"connecting",
-	);
+	const [status, setStatus] = useState<ConnectionStatus>("connecting");
 	const { token } = useWsToken();
+	const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const isActiveRef = useRef(true);
 
-	useEffect(() => {
+	const initTerminal = useCallback(() => {
 		const container = containerRef.current;
 		if (!container || !token || !GATEWAY_URL) return;
 
-		let isActive = true;
+		isActiveRef.current = true;
 		setStatus("connecting");
 
 		// Resolve theme colors from CSS custom properties
@@ -70,7 +89,7 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 		const ws = new WebSocket(wsUrl);
 
 		ws.onopen = () => {
-			if (!isActive) return;
+			if (!isActiveRef.current) return;
 			setStatus("connected");
 			try {
 				const dims = fit.proposeDimensions();
@@ -83,12 +102,19 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 		};
 
 		ws.onclose = () => {
-			if (!isActive) return;
+			if (!isActiveRef.current) return;
 			setStatus("closed");
+			// Auto-reconnect after 3 seconds
+			reconnectTimeoutRef.current = setTimeout(() => {
+				if (isActiveRef.current) {
+					term.dispose();
+					initTerminal();
+				}
+			}, 3000);
 		};
 
 		ws.onerror = () => {
-			if (!isActive) return;
+			if (!isActiveRef.current) return;
 			setStatus("error");
 		};
 
@@ -133,7 +159,10 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 		observer.observe(container);
 
 		return () => {
-			isActive = false;
+			isActiveRef.current = false;
+			if (reconnectTimeoutRef.current) {
+				clearTimeout(reconnectTimeoutRef.current);
+			}
 			observer.disconnect();
 			try {
 				ws.close();
@@ -144,5 +173,23 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 		};
 	}, [sessionId, token]);
 
-	return <div ref={containerRef} className="h-full min-h-0 bg-background" />;
+	// biome-ignore lint/correctness/useExhaustiveDependencies: initTerminal is the setup function
+	useEffect(() => {
+		const cleanup = initTerminal();
+		return () => {
+			isActiveRef.current = false;
+			cleanup?.();
+		};
+	}, [initTerminal]);
+
+	return (
+		<PanelShell
+			title="Terminal"
+			icon={<SquareTerminal className="h-4 w-4 text-muted-foreground" />}
+			actions={<StatusDot status={status} />}
+			noPadding
+		>
+			<div ref={containerRef} className="h-full min-h-0 bg-background" />
+		</PanelShell>
+	);
 }
