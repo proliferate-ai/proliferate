@@ -405,14 +405,12 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			let allIntegrations = [...available, ...connectorIntegrations];
 
 			// Apply user action preference pre-filter
-			const userId =
-				req.auth?.source !== "sandbox"
-					? req.auth?.userId
-					: (await sessions.findByIdInternal(sessionId))?.createdBy;
+			const sessionRow =
+				req.auth?.source === "sandbox" ? await sessions.findByIdInternal(sessionId) : null;
+			const userId = req.auth?.source !== "sandbox" ? req.auth?.userId : sessionRow?.createdBy;
 
 			if (userId) {
-				const orgId =
-					req.auth?.orgId ?? (await sessions.findByIdInternal(sessionId))?.organizationId;
+				const orgId = req.auth?.orgId ?? sessionRow?.organizationId;
 				if (orgId) {
 					const disabled = await userActionPreferences.getDisabledSourceIds(userId, orgId);
 					if (disabled.size > 0) {
