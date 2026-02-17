@@ -91,9 +91,9 @@ export interface CreateCliSessionInput {
 	title: string;
 }
 
-export interface CreateCliSessionWithPrebuildInput {
+export interface CreateCliSessionWithConfigurationInput {
 	id: string;
-	prebuildId: string;
+	configurationId: string;
 	organizationId: string;
 	createdBy: string;
 	sessionType: string;
@@ -104,10 +104,10 @@ export interface CreateCliSessionWithPrebuildInput {
 }
 
 // ============================================
-// Prebuild Types
+// Configuration Types
 // ============================================
 
-export interface CliPrebuildRow {
+export interface CliConfigurationRow {
 	id: string;
 	snapshot_id: string | null;
 	user_id: string | null;

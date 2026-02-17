@@ -95,7 +95,7 @@ export function OnboardingCards({ hideHeader }: { hideHeader?: boolean } = {}) {
 	const cards: React.ReactNode[] = [];
 
 	// Repo setup cards
-	const hasReadyRepo = (repos ?? []).some((r) => r.prebuildStatus === "ready");
+	const hasReadyRepo = (repos ?? []).some((r) => r.configurationStatus === "ready");
 
 	if (!hasAnyRepo) {
 		// No repos at all — prompt to connect first repo

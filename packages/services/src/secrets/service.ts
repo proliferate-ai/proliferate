@@ -29,7 +29,7 @@ export interface CheckSecretsInput {
 	organizationId: string;
 	keys: string[];
 	repoId?: string;
-	prebuildId?: string;
+	configurationId?: string;
 }
 
 export interface CheckSecretsResult {
@@ -131,9 +131,9 @@ export async function deleteSecret(id: string, orgId: string): Promise<boolean> 
  */
 export async function checkSecrets(input: CheckSecretsInput): Promise<CheckSecretsResult[]> {
 	let existingKeys: string[];
-	if (input.prebuildId) {
+	if (input.configurationId) {
 		existingKeys = await secretsDb.findExistingKeysForConfiguration(
-			input.organizationId, input.prebuildId, input.keys,
+			input.organizationId, input.configurationId, input.keys,
 		);
 	} else {
 		existingKeys = await secretsDb.findExistingKeys(input.organizationId, {

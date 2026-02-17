@@ -4,13 +4,13 @@
 
 import { type GitHubIntegration, listGitHubRepos } from "@/lib/github";
 import { ORPCError } from "@orpc/server";
-import { integrations, prebuilds, repos } from "@proliferate/services";
+import { configurations, integrations, repos } from "@proliferate/services";
 import {
 	CreateRepoInputSchema,
 	FinalizeSetupInputSchema,
 	FinalizeSetupResponseSchema,
 	GitHubRepoSchema,
-	RepoPrebuildSchema,
+	RepoConfigurationSchema,
 	RepoSchema,
 	RepoSnapshotSchema,
 	SearchRepoSchema,
@@ -216,11 +216,11 @@ export const reposRouter = {
 		}),
 
 	/**
-	 * List prebuilds for a repo.
+	 * List configurations for a repo.
 	 */
-	listPrebuilds: orgProcedure
+	listConfigurations: orgProcedure
 		.input(z.object({ id: z.string().uuid() }))
-		.output(z.object({ prebuilds: z.array(RepoPrebuildSchema) }))
+		.output(z.object({ configurations: z.array(RepoConfigurationSchema) }))
 		.handler(async ({ input, context }) => {
 			// Verify repo belongs to org
 			const exists = await repos.repoExists(input.id, context.orgId);
@@ -228,9 +228,9 @@ export const reposRouter = {
 				throw new ORPCError("NOT_FOUND", { message: "Repo not found" });
 			}
 
-			const prebuildsList = await prebuilds.listByRepoId(input.id);
+			const configurationsList = await configurations.listByRepoId(input.id);
 			return {
-				prebuilds: prebuildsList.map((p) => ({
+				configurations: configurationsList.map((p) => ({
 					...p,
 					createdAt: p.createdAt?.toISOString() ?? null,
 				})),
@@ -238,16 +238,16 @@ export const reposRouter = {
 		}),
 
 	/**
-	 * List snapshots (usable prebuilds) for a repo.
+	 * List snapshots (usable configurations) for a repo.
 	 */
 	listSnapshots: orgProcedure
 		.input(z.object({ id: z.string().uuid() }))
-		.output(z.object({ prebuilds: z.array(RepoSnapshotSchema) }))
+		.output(z.object({ configurations: z.array(RepoSnapshotSchema) }))
 		.handler(async ({ input }) => {
-			const prebuildRepos = await prebuilds.getPrebuildReposWithPrebuilds(input.id);
+			const configurationRepos = await configurations.getConfigurationReposWithConfigurations(input.id);
 
-			// Filter to only prebuilds with snapshots
-			const usablePrebuilds = prebuildRepos
+			// Filter to only configurations with snapshots
+			const usableConfigurations = configurationRepos
 				.filter(
 					(pr) =>
 						pr.configuration &&
@@ -257,15 +257,15 @@ export const reposRouter = {
 				)
 				.map((pr) => pr.configuration);
 
-			// Deduplicate by prebuild ID
-			const uniquePrebuilds = Array.from(
-				new Map(usablePrebuilds.map((p) => [(p as { id: string }).id, p])).values(),
+			// Deduplicate by configuration ID
+			const uniqueConfigurations = Array.from(
+				new Map(usableConfigurations.map((p) => [(p as { id: string }).id, p])).values(),
 			);
 
-			// Fetch repos for each prebuild
-			const prebuildsWithRepos = await Promise.all(
-				uniquePrebuilds.map(async (prebuild) => {
-					const pb = prebuild as {
+			// Fetch repos for each configuration
+			const configurationsWithRepos = await Promise.all(
+				uniqueConfigurations.map(async (configuration) => {
+					const cfg = configuration as {
 						id: string;
 						snapshotId: string | null;
 						status: string | null;
@@ -276,17 +276,17 @@ export const reposRouter = {
 						sessions?: Array<{ id: string; sessionType: string | null }>;
 					};
 
-					const reposList = await prebuilds.getReposForPrebuild(pb.id);
+					const reposList = await configurations.getReposForConfiguration(cfg.id);
 
 					return {
-						id: pb.id,
-						snapshotId: pb.snapshotId,
-						status: pb.status,
-						name: pb.name,
-						notes: pb.notes,
-						createdAt: pb.createdAt?.toISOString() ?? "",
-						createdBy: pb.createdBy,
-						setupSessions: pb.sessions,
+						id: cfg.id,
+						snapshotId: cfg.snapshotId,
+						status: cfg.status,
+						name: cfg.name,
+						notes: cfg.notes,
+						createdAt: cfg.createdAt?.toISOString() ?? "",
+						createdBy: cfg.createdBy,
+						setupSessions: cfg.sessions,
 						repos: reposList,
 						repoCount: reposList.length,
 					};
@@ -294,11 +294,11 @@ export const reposRouter = {
 			);
 
 			// Sort by createdAt descending
-			prebuildsWithRepos.sort(
+			configurationsWithRepos.sort(
 				(a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
 			);
 
-			return { prebuilds: prebuildsWithRepos };
+			return { configurations: configurationsWithRepos };
 		}),
 
 	/**
@@ -364,7 +364,7 @@ export const reposRouter = {
 		}),
 
 	/**
-	 * Finalize setup session and create a prebuild snapshot.
+	 * Finalize setup session and create a configuration snapshot.
 	 * Note: This is a complex operation - keeping most logic here for now.
 	 * Could be moved to services later.
 	 */

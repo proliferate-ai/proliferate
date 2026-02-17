@@ -6,7 +6,7 @@ import { create } from "zustand";
 interface CodingSessionModalState {
 	isOpen: boolean;
 	sessionId?: string;
-	prebuildId?: string;
+	configurationId?: string;
 	sessionType?: "coding" | "setup";
 	title?: string;
 	description?: string;
@@ -28,7 +28,7 @@ interface CodingSessionStore extends CodingSessionModalState {
 export const useCodingSessionStore = create<CodingSessionStore>((set, get) => ({
 	isOpen: false,
 	sessionId: undefined,
-	prebuildId: undefined,
+	configurationId: undefined,
 	sessionType: undefined,
 	title: undefined,
 	description: undefined,
@@ -51,7 +51,7 @@ export const useCodingSessionStore = create<CodingSessionStore>((set, get) => ({
 		set({
 			isOpen: false,
 			sessionId: undefined,
-			prebuildId: undefined,
+			configurationId: undefined,
 			sessionType: undefined,
 			title: undefined,
 			description: undefined,
@@ -71,9 +71,9 @@ export const useCodingSessionStore = create<CodingSessionStore>((set, get) => ({
 }));
 
 // Convenience function for opening setup sessions
-export function openSetupSession(prebuildId: string, onComplete?: () => void) {
+export function openSetupSession(configurationId: string, onComplete?: () => void) {
 	useCodingSessionStore.getState().openSession({
-		prebuildId,
+		configurationId,
 		sessionType: "setup",
 		title: "Set up your Environment",
 		description:
@@ -86,7 +86,7 @@ export function openSetupSession(prebuildId: string, onComplete?: () => void) {
 // Convenience function for opening coding sessions
 export function openCodingSession(params: {
 	sessionId?: string;
-	prebuildId?: string;
+	configurationId?: string;
 	title?: string;
 	description?: string;
 	onClose?: () => void;
@@ -112,11 +112,11 @@ export function openEditSession(params: {
 	sessionId: string;
 	snapshotId: string;
 	snapshotName?: string;
-	prebuildId: string;
+	configurationId: string;
 }) {
 	useCodingSessionStore.getState().openSession({
 		sessionId: params.sessionId,
-		prebuildId: params.prebuildId,
+		configurationId: params.configurationId,
 		sessionType: "setup",
 		title: params.snapshotName ? `Edit: ${params.snapshotName}` : "Edit Snapshot",
 		description: "Continue editing this environment. Changes will update the existing snapshot.",

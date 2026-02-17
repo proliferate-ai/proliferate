@@ -14,8 +14,8 @@ export const OnboardingRepoSchema = z.object({
 	github_url: z.string(),
 	default_branch: z.string().nullable(),
 	created_at: z.string().nullable(),
-	prebuild_id: z.string().nullable(),
-	prebuild_status: z.enum(["ready", "pending"]),
+	configuration_id: z.string().nullable(),
+	configuration_status: z.enum(["ready", "pending"]),
 });
 
 export type OnboardingRepo = z.infer<typeof OnboardingRepoSchema>;
@@ -39,7 +39,7 @@ export const FinalizeOnboardingInputSchema = z.object({
 export type FinalizeOnboardingInput = z.infer<typeof FinalizeOnboardingInputSchema>;
 
 export const FinalizeOnboardingResponseSchema = z.object({
-	prebuildId: z.string(),
+	configurationId: z.string(),
 	repoIds: z.array(z.string()),
 	isNew: z.boolean(),
 });
@@ -87,7 +87,7 @@ export const onboardingContract = c.router(
 				401: ErrorResponseSchema,
 				500: ErrorResponseSchema,
 			},
-			summary: "Finalize onboarding by selecting repos and creating a managed prebuild",
+			summary: "Finalize onboarding by selecting repos and creating a managed configuration",
 		},
 	},
 	{

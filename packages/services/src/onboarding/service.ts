@@ -42,29 +42,29 @@ export async function getOnboardingStatus(
 		await Promise.all([
 			onboardingDb.hasSlackConnection(orgId),
 			onboardingDb.hasGitHubConnection(orgId, nangoGithubIntegrationId),
-			onboardingDb.getReposWithPrebuildStatus(orgId),
+			onboardingDb.getReposWithConfigurationStatus(orgId),
 			onboardingDb.getOnboardingMeta(orgId),
 			orgsDb.findBillingInfo(orgId),
 		]);
 
 	const onboardingComplete = billingInfo?.onboardingComplete ?? false;
 
-	// Helper to check if a prebuild_repo entry has a usable prebuild (has snapshot)
-	const hasUsablePrebuild = (pr: {
+	// Helper to check if a configuration_repos entry has a usable configuration (has snapshot)
+	const hasUsableConfiguration = (pr: {
 		configuration: { snapshotId: string | null } | null;
 	}): boolean => !!pr.configuration?.snapshotId;
 
-	// Transform to include prebuild status
+	// Transform to include configuration status
 	const repos: OnboardingRepo[] = reposWithStatus.map((repo) => {
-		const readyPrebuild = repo.configurationRepos?.find(hasUsablePrebuild);
+		const readyConfiguration = repo.configurationRepos?.find(hasUsableConfiguration);
 		return {
 			id: repo.id,
 			github_repo_name: repo.githubRepoName,
 			github_url: repo.githubUrl,
 			default_branch: repo.defaultBranch,
 			created_at: toIsoString(repo.createdAt),
-			prebuild_id: readyPrebuild?.configuration?.id || null,
-			prebuild_status: readyPrebuild ? ("ready" as const) : ("pending" as const),
+			configuration_id: readyConfiguration?.configuration?.id || null,
+			configuration_status: readyConfiguration ? ("ready" as const) : ("pending" as const),
 		};
 	});
 

@@ -7,7 +7,7 @@ import { Box, Camera, Loader2, Play } from "lucide-react";
 export interface SnapshotsContentProps {
 	snapshotId?: string | null;
 	repoId?: string | null;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	canSnapshot?: boolean;
 	isSnapshotting?: boolean;
 	onSnapshot?: () => void;
@@ -17,23 +17,23 @@ export interface SnapshotsContentProps {
 export function SnapshotsContent({
 	snapshotId,
 	repoId,
-	prebuildId,
+	configurationId,
 	canSnapshot,
 	isSnapshotting,
 	onSnapshot,
 	onNavigateAutoStart,
 }: SnapshotsContentProps) {
-	const hasPrebuild = !!prebuildId;
+	const hasConfiguration = !!configurationId;
 	const { data: effective, isLoading: effectiveLoading } = useEffectiveServiceCommands(
-		prebuildId || "",
-		hasPrebuild,
+		configurationId || "",
+		hasConfiguration,
 	);
 	const { data: repoCommands, isLoading: repoLoading } = useServiceCommands(
 		repoId || "",
-		!hasPrebuild && !!repoId,
+		!hasConfiguration && !!repoId,
 	);
-	const commands = hasPrebuild ? effective?.commands : repoCommands;
-	const commandsLoading = hasPrebuild ? effectiveLoading : repoLoading;
+	const commands = hasConfiguration ? effective?.commands : repoCommands;
+	const commandsLoading = hasConfiguration ? effectiveLoading : repoLoading;
 
 	return (
 		<div className="flex-1 overflow-y-auto p-4 space-y-6">

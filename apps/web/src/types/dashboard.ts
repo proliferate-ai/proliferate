@@ -1,6 +1,6 @@
 /**
  * Dashboard-related types.
- * These are used across dashboard components for prebuilds, members, etc.
+ * These are used across dashboard components for configurations, members, etc.
  */
 
 /**
@@ -16,8 +16,8 @@ export interface Secret {
 }
 
 /**
- * Snapshot/Prebuild from our database.
- * Note: In the database this is the "prebuilds" table.
+ * Snapshot/Configuration from our database.
+ * Note: In the database this is the "configurations" table.
  */
 export interface Snapshot {
 	id: string;

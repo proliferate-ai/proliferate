@@ -3,37 +3,37 @@
 import { orpc } from "@/lib/orpc";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-interface CreatePrebuildInput {
+interface CreateConfigurationInput {
 	repoIds?: string[];
 	repos?: Array<{ repoId: string; workspacePath?: string }>;
 	name?: string;
 }
 
-interface UpdatePrebuildInput {
+interface UpdateConfigurationInput {
 	name?: string;
 	notes?: string;
 }
 
-export function usePrebuilds(status?: string) {
+export function useConfigurations(status?: string) {
 	return useQuery({
-		...orpc.prebuilds.list.queryOptions({ input: status ? { status } : {} }),
-		select: (data) => data.prebuilds,
+		...orpc.configurations.list.queryOptions({ input: status ? { status } : {} }),
+		select: (data) => data.configurations,
 	});
 }
 
-export function useCreatePrebuild() {
+export function useCreateConfiguration() {
 	const queryClient = useQueryClient();
 
 	const mutation = useMutation({
-		...orpc.prebuilds.create.mutationOptions(),
+		...orpc.configurations.create.mutationOptions(),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: orpc.prebuilds.list.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listPrebuilds.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.repos.listConfigurations.key() });
 			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
 		},
 	});
 
-	const mutateAsync = async (data: CreatePrebuildInput) => {
+	const mutateAsync = async (data: CreateConfigurationInput) => {
 		const result = await mutation.mutateAsync(data);
 		return result;
 	};
@@ -41,46 +41,46 @@ export function useCreatePrebuild() {
 	return {
 		...mutation,
 		mutateAsync,
-		mutate: (data: CreatePrebuildInput) => {
+		mutate: (data: CreateConfigurationInput) => {
 			mutation.mutate(data);
 		},
 	};
 }
 
-export function useUpdatePrebuild() {
+export function useUpdateConfiguration() {
 	const queryClient = useQueryClient();
 
 	const mutation = useMutation({
-		...orpc.prebuilds.update.mutationOptions(),
+		...orpc.configurations.update.mutationOptions(),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: orpc.prebuilds.list.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listPrebuilds.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.repos.listConfigurations.key() });
 			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
 		},
 	});
 
-	const mutateAsync = async (id: string, data: UpdatePrebuildInput) => {
+	const mutateAsync = async (id: string, data: UpdateConfigurationInput) => {
 		const result = await mutation.mutateAsync({ id, ...data });
-		return result.prebuild;
+		return result.configuration;
 	};
 
 	return {
 		...mutation,
 		mutateAsync,
-		mutate: (id: string, data: UpdatePrebuildInput) => {
+		mutate: (id: string, data: UpdateConfigurationInput) => {
 			mutation.mutate({ id, ...data });
 		},
 	};
 }
 
-export function useDeletePrebuild() {
+export function useDeleteConfiguration() {
 	const queryClient = useQueryClient();
 
 	const mutation = useMutation({
-		...orpc.prebuilds.delete.mutationOptions(),
+		...orpc.configurations.delete.mutationOptions(),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: orpc.prebuilds.list.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listPrebuilds.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.repos.listConfigurations.key() });
 			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
 		},
 	});

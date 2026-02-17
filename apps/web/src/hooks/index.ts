@@ -120,10 +120,10 @@ export {
 	useSlackDisconnect,
 } from "./use-integrations";
 
-// Prebuild hooks
+// Configuration hooks
 export {
-	usePrebuilds,
-	useCreatePrebuild,
-	useUpdatePrebuild,
-	useDeletePrebuild,
-} from "./use-prebuilds";
+	useConfigurations,
+	useCreateConfiguration,
+	useUpdateConfiguration,
+	useDeleteConfiguration,
+} from "./use-configurations";

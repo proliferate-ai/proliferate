@@ -1,41 +1,41 @@
 /**
- * Prebuilds oRPC router.
+ * Configurations oRPC router.
  *
- * Handles prebuild CRUD operations.
+ * Handles configuration CRUD operations.
  */
 
 import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
-import { prebuilds } from "@proliferate/services";
+import { configurations } from "@proliferate/services";
 import {
-	CreatePrebuildInputSchema,
-	PrebuildSchema,
-	UpdatePrebuildInputSchema,
+	ConfigurationSchema,
+	CreateConfigurationInputSchema,
+	UpdateConfigurationInputSchema,
 } from "@proliferate/shared";
-import { parsePrebuildServiceCommands } from "@proliferate/shared/sandbox";
+import { parseConfigurationServiceCommands } from "@proliferate/shared/sandbox";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 
-const log = logger.child({ handler: "prebuilds" });
+const log = logger.child({ handler: "configurations" });
 
-export const prebuildsRouter = {
+export const configurationsRouter = {
 	/**
-	 * List prebuilds for the current organization.
+	 * List configurations for the current organization.
 	 */
 	list: orgProcedure
 		.input(z.object({ status: z.string().optional() }).optional())
-		.output(z.object({ prebuilds: z.array(PrebuildSchema) }))
+		.output(z.object({ configurations: z.array(ConfigurationSchema) }))
 		.handler(async ({ input, context }) => {
-			const prebuildsList = await prebuilds.listPrebuilds(context.orgId, input?.status);
-			return { prebuilds: prebuildsList };
+			const configurationsList = await configurations.listConfigurations(context.orgId, input?.status);
+			return { configurations: configurationsList };
 		}),
 
 	/**
-	 * Create a new prebuild.
+	 * Create a new configuration.
 	 */
 	create: orgProcedure
-		.input(CreatePrebuildInputSchema)
-		.output(z.object({ prebuildId: z.string().uuid(), repos: z.number() }))
+		.input(CreateConfigurationInputSchema)
+		.output(z.object({ configurationId: z.string().uuid(), repos: z.number() }))
 		.handler(async ({ input, context }) => {
 			// Support both new repoIds[] and legacy repos[] format
 			const repoIds = input.repoIds || input.repos?.map((r) => r.repoId);
@@ -47,7 +47,7 @@ export const prebuildsRouter = {
 			}
 
 			try {
-				const result = await prebuilds.createPrebuild({
+				const result = await configurations.createConfiguration({
 					organizationId: context.orgId,
 					userId: context.user.id,
 					repoIds,
@@ -55,11 +55,11 @@ export const prebuildsRouter = {
 				});
 
 				return {
-					prebuildId: result.prebuildId,
+					configurationId: result.configurationId,
 					repos: result.repoCount,
 				};
 			} catch (error) {
-				const message = error instanceof Error ? error.message : "Failed to create prebuild";
+				const message = error instanceof Error ? error.message : "Failed to create configuration";
 
 				if (message === "One or more repos not found") {
 					throw new ORPCError("NOT_FOUND", { message });
@@ -71,36 +71,36 @@ export const prebuildsRouter = {
 					throw new ORPCError("BAD_REQUEST", { message });
 				}
 
-				log.error({ err: error }, "Failed to create prebuild");
+				log.error({ err: error }, "Failed to create configuration");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", { message });
 			}
 		}),
 
 	/**
-	 * Update a prebuild.
+	 * Update a configuration.
 	 */
 	update: orgProcedure
 		.input(
 			z.object({
 				id: z.string().uuid(),
-				...UpdatePrebuildInputSchema.shape,
+				...UpdateConfigurationInputSchema.shape,
 			}),
 		)
-		.output(z.object({ prebuild: PrebuildSchema }))
+		.output(z.object({ configuration: ConfigurationSchema }))
 		.handler(async ({ input, context }) => {
 			const { id, name, notes } = input;
 
-			// Verify the prebuild exists and belongs to this org
-			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(id, context.orgId);
+			// Verify the configuration exists and belongs to this org
+			const belongsToOrg = await configurations.configurationBelongsToOrg(id, context.orgId);
 			if (!belongsToOrg) {
-				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 			}
 
 			try {
-				const updated = await prebuilds.updatePrebuild(id, { name, notes });
+				const updated = await configurations.updateConfiguration(id, { name, notes });
 
 				return {
-					prebuild: {
+					configuration: {
 						id: updated.id!,
 						snapshotId: updated.snapshotId ?? null,
 						status: updated.status ?? null,
@@ -112,46 +112,46 @@ export const prebuildsRouter = {
 					},
 				};
 			} catch (error) {
-				const message = error instanceof Error ? error.message : "Failed to update prebuild";
+				const message = error instanceof Error ? error.message : "Failed to update configuration";
 
 				if (message === "No fields to update") {
 					throw new ORPCError("BAD_REQUEST", { message });
 				}
 
-				log.error({ err: error }, "Failed to update prebuild");
+				log.error({ err: error }, "Failed to update configuration");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", { message });
 			}
 		}),
 
 	/**
-	 * Delete a prebuild.
+	 * Delete a configuration.
 	 */
 	delete: orgProcedure
 		.input(z.object({ id: z.string().uuid() }))
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
-			// Verify the prebuild belongs to this org
-			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.id, context.orgId);
+			// Verify the configuration belongs to this org
+			const belongsToOrg = await configurations.configurationBelongsToOrg(input.id, context.orgId);
 			if (!belongsToOrg) {
-				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 			}
 
 			try {
-				await prebuilds.deletePrebuild(input.id);
+				await configurations.deleteConfiguration(input.id);
 				return { success: true };
 			} catch (error) {
-				log.error({ err: error }, "Failed to delete prebuild");
+				log.error({ err: error }, "Failed to delete configuration");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: "Failed to delete prebuild",
+					message: "Failed to delete configuration",
 				});
 			}
 		}),
 
 	/**
-	 * Get service commands for a prebuild.
+	 * Get service commands for a configuration.
 	 */
 	getServiceCommands: orgProcedure
-		.input(z.object({ prebuildId: z.string().uuid() }))
+		.input(z.object({ configurationId: z.string().uuid() }))
 		.output(
 			z.object({
 				commands: z.array(
@@ -165,24 +165,24 @@ export const prebuildsRouter = {
 			}),
 		)
 		.handler(async ({ input, context }) => {
-			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+			const belongsToOrg = await configurations.configurationBelongsToOrg(input.configurationId, context.orgId);
 			if (!belongsToOrg) {
-				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 			}
 
-			const row = await prebuilds.getPrebuildServiceCommands(input.prebuildId);
-			const commands = parsePrebuildServiceCommands(row?.serviceCommands);
+			const row = await configurations.getConfigurationServiceCommands(input.configurationId);
+			const commands = parseConfigurationServiceCommands(row?.serviceCommands);
 			return { commands };
 		}),
 
 	/**
-	 * Get effective service commands for a prebuild (resolved: prebuild overrides > repo defaults).
+	 * Get effective service commands for a configuration (resolved: configuration overrides > repo defaults).
 	 */
 	getEffectiveServiceCommands: orgProcedure
-		.input(z.object({ prebuildId: z.string().uuid() }))
+		.input(z.object({ configurationId: z.string().uuid() }))
 		.output(
 			z.object({
-				source: z.enum(["prebuild", "repo", "none"]),
+				source: z.enum(["configuration", "repo", "none"]),
 				commands: z.array(
 					z.object({
 						name: z.string(),
@@ -195,37 +195,37 @@ export const prebuildsRouter = {
 			}),
 		)
 		.handler(async ({ input, context }) => {
-			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+			const belongsToOrg = await configurations.configurationBelongsToOrg(input.configurationId, context.orgId);
 			if (!belongsToOrg) {
-				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 			}
 
-			return prebuilds.getEffectiveServiceCommands(input.prebuildId);
+			return configurations.getEffectiveServiceCommands(input.configurationId);
 		}),
 
 	/**
-	 * Get env file spec for a prebuild.
+	 * Get env file spec for a configuration.
 	 */
 	getEnvFiles: orgProcedure
-		.input(z.object({ prebuildId: z.string().uuid() }))
+		.input(z.object({ configurationId: z.string().uuid() }))
 		.output(z.object({ envFiles: z.unknown().nullable() }))
 		.handler(async ({ input, context }) => {
-			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+			const belongsToOrg = await configurations.configurationBelongsToOrg(input.configurationId, context.orgId);
 			if (!belongsToOrg) {
-				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 			}
 
-			const envFiles = await prebuilds.getPrebuildEnvFiles(input.prebuildId);
+			const envFiles = await configurations.getConfigurationEnvFiles(input.configurationId);
 			return { envFiles: envFiles ?? null };
 		}),
 
 	/**
-	 * Update service commands for a prebuild.
+	 * Update service commands for a configuration.
 	 */
 	updateServiceCommands: orgProcedure
 		.input(
 			z.object({
-				prebuildId: z.string().uuid(),
+				configurationId: z.string().uuid(),
 				commands: z
 					.array(
 						z.object({
@@ -240,13 +240,13 @@ export const prebuildsRouter = {
 		)
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
-			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+			const belongsToOrg = await configurations.configurationBelongsToOrg(input.configurationId, context.orgId);
 			if (!belongsToOrg) {
-				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 			}
 
-			await prebuilds.updatePrebuildServiceCommands({
-				prebuildId: input.prebuildId,
+			await configurations.updateConfigurationServiceCommands({
+				configurationId: input.configurationId,
 				serviceCommands: input.commands,
 				updatedBy: context.user.id,
 			});

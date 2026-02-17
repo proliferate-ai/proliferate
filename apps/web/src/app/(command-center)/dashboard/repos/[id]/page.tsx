@@ -74,7 +74,7 @@ export default function RepoDetailPage() {
 					<div className="flex items-center gap-2 mt-1">
 						<span className="text-xs text-muted-foreground">{repo.defaultBranch || "main"}</span>
 						<span className="inline-flex items-center rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-							{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
+							{repo.configurationStatus === "ready" ? "Configured" : "Not configured"}
 						</span>
 					</div>
 				</div>
@@ -94,7 +94,7 @@ function ConfigurationsSection({ repoId, isAdmin }: { repoId: string; isAdmin: b
 	const { data: snapshotsData, isLoading } = useQuery({
 		...orpc.repos.listSnapshots.queryOptions({ input: { id: repoId } }),
 	});
-	const snapshots = snapshotsData?.prebuilds;
+	const snapshots = snapshotsData?.configurations;
 
 	const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -148,7 +148,7 @@ function ConfigurationsSection({ repoId, isAdmin }: { repoId: string; isAdmin: b
 														sessionId: setupSessionId,
 														snapshotId: snapshot.id,
 														snapshotName: getSnapshotDisplayName(snapshot),
-														prebuildId: snapshot.id,
+														configurationId: snapshot.id,
 													})
 												}
 											>

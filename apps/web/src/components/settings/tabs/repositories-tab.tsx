@@ -373,7 +373,7 @@ function RepoCard({
 														sessionId: setupSessionId,
 														snapshotId: snapshot.id,
 														snapshotName: getSnapshotDisplayName(snapshot),
-														prebuildId: snapshot.id,
+														configurationId: snapshot.id,
 													});
 													onClose();
 												}}

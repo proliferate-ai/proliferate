@@ -22,8 +22,8 @@ function mapRepo(repo: RepoRow) {
 		createdAt: toIsoString(repo.createdAt),
 		source: repo.source || "github",
 		isPrivate: false, // repos schema doesn't have isPrivate yet
-		prebuildStatus: "pending" as const,
-		prebuildId: null,
+		configurationStatus: "pending" as const,
+		configurationId: null,
 		isConfigured: false,
 	};
 }
@@ -41,7 +41,7 @@ export function toSession(row: SessionWithRepoRow): Session {
 		status: row.status,
 		sandboxId: row.sandboxId,
 		snapshotId: row.snapshotId,
-		prebuildId: row.prebuildId ?? null,
+		configurationId: row.configurationId ?? null,
 		branchName: row.branchName,
 		parentSessionId: row.parentSessionId,
 		title: row.title,
@@ -75,7 +75,7 @@ export function toSessionPartial(row: SessionRow): Omit<Session, "repo"> {
 		status: row.status,
 		sandboxId: row.sandboxId,
 		snapshotId: row.snapshotId,
-		prebuildId: row.prebuildId ?? null,
+		configurationId: row.configurationId ?? null,
 		branchName: row.branchName,
 		parentSessionId: row.parentSessionId,
 		title: row.title,

@@ -1,5 +1,5 @@
 /**
- * Prebuilds schema
+ * Configurations schema
  */
 
 import { relations } from "drizzle-orm";
@@ -8,16 +8,16 @@ import { user } from "./auth";
 import { repos } from "./repos";
 
 // ============================================
-// Prebuilds
+// Configurations
 // ============================================
 
-export const prebuilds = pgTable(
-	"prebuilds",
+export const configurations = pgTable(
+	"configurations",
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
 
 		// Sandbox
-		snapshotId: text("snapshot_id"), // NULL means prebuild is being set up
+		snapshotId: text("snapshot_id"), // NULL means configuration is being set up
 		sandboxProvider: text("sandbox_provider").default("modal"),
 
 		// Status
@@ -32,7 +32,7 @@ export const prebuilds = pgTable(
 		name: text("name").notNull(),
 		notes: text("notes"),
 
-		// CLI prebuilds
+		// CLI configurations
 		userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
 		localPathHash: text("local_path_hash"),
 
@@ -60,37 +60,37 @@ export const prebuilds = pgTable(
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 	},
 	(table) => [
-		index("idx_prebuilds_repo_created").on(table.createdAt),
-		index("idx_prebuilds_type_managed").on(table.type),
+		index("idx_configurations_repo_created").on(table.createdAt),
+		index("idx_configurations_type_managed").on(table.type),
 	],
 );
 
-export const prebuildsRelations = relations(prebuilds, ({ one, many }) => ({
+export const configurationsRelations = relations(configurations, ({ one, many }) => ({
 	createdByUser: one(user, {
-		fields: [prebuilds.createdBy],
+		fields: [configurations.createdBy],
 		references: [user.id],
-		relationName: "prebuildCreator",
+		relationName: "configurationCreator",
 	}),
 	user: one(user, {
-		fields: [prebuilds.userId],
+		fields: [configurations.userId],
 		references: [user.id],
-		relationName: "prebuildOwner",
+		relationName: "configurationOwner",
 	}),
-	prebuildRepos: many(prebuildRepos),
+	configurationRepos: many(configurationRepos),
 	sessions: many(sessions),
 	automations: many(automations),
 }));
 
 // ============================================
-// Prebuild Repos (junction table)
+// Configuration Repos (junction table)
 // ============================================
 
-export const prebuildRepos = pgTable(
-	"prebuild_repos",
+export const configurationRepos = pgTable(
+	"configuration_repos",
 	{
-		prebuildId: uuid("prebuild_id")
+		configurationId: uuid("configuration_id")
 			.notNull()
-			.references(() => prebuilds.id, { onDelete: "cascade" }),
+			.references(() => configurations.id, { onDelete: "cascade" }),
 		repoId: uuid("repo_id")
 			.notNull()
 			.references(() => repos.id, { onDelete: "cascade" }),
@@ -98,19 +98,19 @@ export const prebuildRepos = pgTable(
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 	},
 	(table) => [
-		primaryKey({ columns: [table.prebuildId, table.repoId] }),
-		index("idx_prebuild_repos_prebuild").on(table.prebuildId),
-		index("idx_prebuild_repos_repo").on(table.repoId),
+		primaryKey({ columns: [table.configurationId, table.repoId] }),
+		index("idx_configuration_repos_configuration").on(table.configurationId),
+		index("idx_configuration_repos_repo").on(table.repoId),
 	],
 );
 
-export const prebuildReposRelations = relations(prebuildRepos, ({ one }) => ({
-	prebuild: one(prebuilds, {
-		fields: [prebuildRepos.prebuildId],
-		references: [prebuilds.id],
+export const configurationReposRelations = relations(configurationRepos, ({ one }) => ({
+	configuration: one(configurations, {
+		fields: [configurationRepos.configurationId],
+		references: [configurations.id],
 	}),
 	repo: one(repos, {
-		fields: [prebuildRepos.repoId],
+		fields: [configurationRepos.repoId],
 		references: [repos.id],
 	}),
 }));

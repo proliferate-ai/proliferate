@@ -97,7 +97,7 @@ export interface CreateAutomationInput {
 	name: string;
 	description?: string | null;
 	agentInstructions?: string | null;
-	defaultPrebuildId?: string | null;
+	defaultConfigurationId?: string | null;
 	allowAgenticRepoSelection?: boolean;
 	createdBy: string;
 }
@@ -307,7 +307,7 @@ export async function createAutomation(input: CreateAutomationInput): Promise<{ 
 			name: input.name,
 			description: input.description ?? null,
 			agentInstructions: input.agentInstructions ?? null,
-			defaultPrebuildId: input.defaultPrebuildId ?? null,
+			defaultConfigurationId: input.defaultConfigurationId ?? null,
 			allowAgenticRepoSelection: input.allowAgenticRepoSelection ?? false,
 			createdBy: input.createdBy,
 		})
@@ -504,9 +504,9 @@ export async function updateEvent(
 }
 
 /**
- * Check if a prebuild exists in an organization (via linked repos).
+ * Check if a configuration exists in an organization (via linked repos).
  */
-export async function prebuildExists(id: string, orgId: string): Promise<boolean> {
+export async function configurationExists(id: string, orgId: string): Promise<boolean> {
 	const db = getDb();
 	const result = await db.query.configurations.findFirst({
 		where: eq(configurations.id, id),

@@ -16,7 +16,7 @@ export * as connectors from "./connectors";
 export * as integrations from "./integrations";
 export * as onboarding from "./onboarding";
 export * as orgs from "./orgs";
-export * as prebuilds from "./prebuilds";
+export * as configurations from "./configurations";
 export * as repos from "./repos";
 export * as runs from "./runs";
 export * as schedules from "./schedules";
@@ -35,10 +35,10 @@ export * as pollGroups from "./poll-groups";
 
 // Legacy exports (to be migrated)
 export {
-	getOrCreateManagedPrebuild,
-	type GetOrCreateManagedPrebuildOptions,
-	type ManagedPrebuild,
-} from "./managed-prebuild";
+	getOrCreateManagedConfiguration,
+	type GetOrCreateManagedConfigurationOptions,
+	type ManagedConfiguration,
+} from "./managed-configuration";
 
 // Logger
 export { setServicesLogger, getServicesLogger } from "./logger";

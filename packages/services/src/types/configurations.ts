@@ -1,35 +1,35 @@
 /**
- * Prebuilds module types.
+ * Configurations module types.
  *
- * Input types for prebuilds queries.
- * DB row types are exported from ../prebuilds/db.ts
+ * Input types for configurations queries.
+ * DB row types are exported from ../configurations/db.ts
  */
 
 // ============================================
 // Input Types
 // ============================================
 
-export interface CreatePrebuildInput {
+export interface CreateConfigurationInput {
 	id: string;
 	name?: string | null;
 	createdBy: string;
 	sandboxProvider?: string;
 }
 
-export interface CreatePrebuildRepoInput {
-	prebuildId: string;
+export interface CreateConfigurationRepoInput {
+	configurationId: string;
 	repoId: string;
 	workspacePath: string;
 }
 
-export interface UpdatePrebuildInput {
+export interface UpdateConfigurationInput {
 	name?: string | null;
 	notes?: string | null;
 	snapshotId?: string;
 	status?: string;
 }
 
-export interface CreatePrebuildFullInput {
+export interface CreateConfigurationFullInput {
 	id: string;
 	snapshotId: string;
 	status: string;
@@ -40,11 +40,11 @@ export interface CreatePrebuildFullInput {
 }
 
 // ============================================
-// Managed Prebuild Types
+// Managed Configuration Types
 // ============================================
 
-/** Input for creating a managed prebuild. */
-export interface CreateManagedPrebuildInput {
+/** Input for creating a managed configuration. */
+export interface CreateManagedConfigurationInput {
 	id: string;
 }
 

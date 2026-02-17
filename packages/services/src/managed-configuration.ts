@@ -1,67 +1,67 @@
 /**
- * Managed Prebuild Utility
+ * Managed Configuration Utility
  *
- * Managed prebuilds are auto-created/maintained by universal clients (Slack, CLI, etc.)
- * They contain all repos for an organization in a single prebuild.
+ * Managed configurations are auto-created/maintained by universal clients (Slack, CLI, etc.)
+ * They contain all repos for an organization in a single configuration.
  *
  * Usage:
  *   const syncClient = createSyncClient({ baseUrl, auth: { type: "service", name: "my-service", secret } });
- *   const prebuild = await getOrCreateManagedPrebuild({ organizationId, gateway: syncClient });
+ *   const configuration = await getOrCreateManagedConfiguration({ organizationId, gateway: syncClient });
  */
 
 import type { SyncClient } from "@proliferate/gateway-clients";
 import { BillingGateError } from "@proliferate/shared/billing";
 import { assertBillingGateForOrg, getOrgPlanLimits } from "./billing/gate";
 import { getServicesLogger } from "./logger";
-import * as prebuildsDb from "./prebuilds/db";
+import * as configurationsDb from "./configurations/db";
 import * as sessionsDb from "./sessions/db";
 
-export interface ManagedPrebuild {
+export interface ManagedConfiguration {
 	id: string;
 	snapshotId: string | null; // null if still initializing (first use)
 	repoIds: string[];
 	isNew: boolean; // true if just created
 }
 
-export interface GetOrCreateManagedPrebuildOptions {
+export interface GetOrCreateManagedConfigurationOptions {
 	organizationId: string;
 	gateway: SyncClient;
 	repoIds?: string[]; // Optional: specific repo IDs to include. If not provided, uses all org repos.
 }
 
 /**
- * Get or create a managed prebuild for an organization.
+ * Get or create a managed configuration for an organization.
  *
  * - If one exists, returns it (even if still building - caller can use immediately)
  * - If none exists, creates one and kicks off setup automatically
  *
- * The caller can always use the returned prebuild immediately. The gateway
+ * The caller can always use the returned configuration immediately. The gateway
  * will create the sandbox and take an early snapshot automatically.
  */
-export async function getOrCreateManagedPrebuild(
-	options: GetOrCreateManagedPrebuildOptions,
-): Promise<ManagedPrebuild> {
+export async function getOrCreateManagedConfiguration(
+	options: GetOrCreateManagedConfigurationOptions,
+): Promise<ManagedConfiguration> {
 	const { organizationId, gateway, repoIds: specificRepoIds } = options;
 
-	// 1. Check for existing managed prebuild (only if not creating with specific repos)
+	// 1. Check for existing managed configuration (only if not creating with specific repos)
 	if (!specificRepoIds) {
-		const existing = await findManagedPrebuild(organizationId);
+		const existing = await findManagedConfiguration(organizationId);
 		if (existing) {
 			return { ...existing, isNew: false };
 		}
 	}
 
-	// 2. No managed prebuild - create one
-	const { prebuildId, repoIds, repoNames } = await createManagedPrebuildRecord(
+	// 2. No managed configuration - create one
+	const { configurationId, repoIds, repoNames } = await createManagedConfigurationRecord(
 		organizationId,
 		specificRepoIds,
 	);
 
 	// 3. Create setup session and kick it off
-	await createAndStartSetupSession(prebuildId, organizationId, repoNames, gateway);
+	await createAndStartSetupSession(configurationId, organizationId, repoNames, gateway);
 
 	return {
-		id: prebuildId,
+		id: configurationId,
 		snapshotId: null, // Will be set by early snapshot
 		repoIds,
 		isNew: true,
@@ -69,24 +69,24 @@ export async function getOrCreateManagedPrebuild(
 }
 
 /**
- * Find existing managed prebuild for an org
+ * Find existing managed configuration for an org
  */
-async function findManagedPrebuild(
+async function findManagedConfiguration(
 	organizationId: string,
-): Promise<Omit<ManagedPrebuild, "isNew"> | null> {
-	const prebuilds = await prebuildsDb.findManagedPrebuilds();
+): Promise<Omit<ManagedConfiguration, "isNew"> | null> {
+	const configurations = await configurationsDb.findManagedConfigurations();
 
-	// Filter to prebuilds that have repos in this org
-	const orgPrebuilds = prebuilds.filter((p) =>
+	// Filter to configurations that have repos in this org
+	const orgConfigurations = configurations.filter((p) =>
 		p.configurationRepos?.some((pr) => pr.repo?.organizationId === organizationId),
 	);
 
-	if (orgPrebuilds.length === 0) {
+	if (orgConfigurations.length === 0) {
 		return null;
 	}
 
 	// Return the most recent one (prefer one with snapshot, but return any)
-	const best = orgPrebuilds.find((p) => p.snapshotId) || orgPrebuilds[0];
+	const best = orgConfigurations.find((p) => p.snapshotId) || orgConfigurations[0];
 	const repoIds =
 		best.configurationRepos?.map((pr) => pr.repo?.id).filter((id): id is string => !!id) || [];
 
@@ -98,44 +98,44 @@ async function findManagedPrebuild(
 }
 
 /**
- * Create the managed prebuild record in the database
+ * Create the managed configuration record in the database
  */
-async function createManagedPrebuildRecord(
+async function createManagedConfigurationRecord(
 	organizationId: string,
 	specificRepoIds?: string[],
-): Promise<{ prebuildId: string; repoIds: string[]; repoNames: string[] }> {
-	const repos = await prebuildsDb.getReposForManagedPrebuild(organizationId, specificRepoIds);
+): Promise<{ configurationId: string; repoIds: string[]; repoNames: string[] }> {
+	const repos = await configurationsDb.getReposForManagedConfiguration(organizationId, specificRepoIds);
 
 	if (repos.length === 0) {
 		throw new Error("No repos found for organization");
 	}
 
-	// Create prebuild record
-	const prebuildId = crypto.randomUUID();
-	await prebuildsDb.createManagedPrebuild({ id: prebuildId });
+	// Create configuration record
+	const configurationId = crypto.randomUUID();
+	await configurationsDb.createManagedConfiguration({ id: configurationId });
 
-	// Create prebuild_repos entries
-	const prebuildRepos = repos.map((repo) => {
+	// Create configuration_repos entries
+	const configurationRepos = repos.map((repo) => {
 		const repoName = repo.githubRepoName?.split("/").pop() || repo.id;
 		return {
-			prebuildId,
+			configurationId,
 			repoId: repo.id,
 			workspacePath: repos.length === 1 ? "." : repoName,
 		};
 	});
 
 	try {
-		await prebuildsDb.createPrebuildRepos(prebuildRepos);
+		await configurationsDb.createConfigurationRepos(configurationRepos);
 	} catch (error) {
 		// Clean up on failure
-		await prebuildsDb.deletePrebuild(prebuildId);
+		await configurationsDb.deleteConfiguration(configurationId);
 		throw new Error(
 			`Failed to link repos: ${error instanceof Error ? error.message : "Unknown error"}`,
 		);
 	}
 
 	return {
-		prebuildId,
+		configurationId,
 		repoIds: repos.map((r) => r.id),
 		repoNames: repos.map((r) => r.githubRepoName),
 	};
@@ -145,7 +145,7 @@ async function createManagedPrebuildRecord(
  * Create a setup session and post initial prompt to gateway to start it
  */
 async function createAndStartSetupSession(
-	prebuildId: string,
+	configurationId: string,
 	organizationId: string,
 	repoNames: string[],
 	gateway: SyncClient,
@@ -157,7 +157,7 @@ async function createAndStartSetupSession(
 	} catch (err) {
 		if (err instanceof BillingGateError) {
 			getServicesLogger()
-				.child({ module: "managed-prebuild", prebuildId, organizationId })
+				.child({ module: "managed-configuration", configurationId, organizationId })
 				.info({ code: err.code }, "Setup session skipped: billing gate denied");
 			return "";
 		}
@@ -169,7 +169,7 @@ async function createAndStartSetupSession(
 	const prompt = `Set up ${repoNamesStr} for development. Get everything running and working.`;
 	const setupInput = {
 		id: sessionId,
-		prebuildId,
+		configurationId,
 		organizationId,
 		initialPrompt: prompt,
 	};
@@ -183,7 +183,7 @@ async function createAndStartSetupSession(
 		);
 		if (!created) {
 			getServicesLogger()
-				.child({ module: "managed-prebuild", prebuildId, organizationId })
+				.child({ module: "managed-configuration", configurationId, organizationId })
 				.info("Setup session skipped: concurrent limit reached");
 			return "";
 		}
@@ -195,11 +195,11 @@ async function createAndStartSetupSession(
 	gateway
 		.postMessage(sessionId, {
 			content: prompt,
-			userId: "managed-prebuild-setup",
+			userId: "managed-configuration-setup",
 		})
 		.catch((err: Error) => {
 			getServicesLogger()
-				.child({ module: "managed-prebuild", prebuildId, sessionId })
+				.child({ module: "managed-configuration", configurationId, sessionId })
 				.error({ err }, "Failed to start setup session");
 		});
 

@@ -83,7 +83,7 @@ export const secretsRouter = {
 				organizationId: context.orgId,
 				keys: input.keys,
 				repoId: input.repo_id,
-				prebuildId: input.prebuild_id,
+				configurationId: input.configuration_id,
 			});
 			return { keys: results };
 		}),

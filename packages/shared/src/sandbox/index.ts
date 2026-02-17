@@ -21,7 +21,7 @@ export {
 	shellEscape,
 	capOutput,
 	parseServiceCommands,
-	parsePrebuildServiceCommands,
+	parseConfigurationServiceCommands,
 	resolveServiceCommands,
 } from "./config";
 

@@ -25,10 +25,10 @@ import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import {
 	useCheckSecrets,
+	useConfigurationEnvFiles,
 	useCreateRepo,
 	useCreateSecret,
 	useDeleteRepo,
-	usePrebuildEnvFiles,
 	useRepoSnapshots,
 	useRepos,
 	useSearchRepos,
@@ -230,12 +230,12 @@ function RepoRow({
 							<span
 								className={cn(
 									"inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-medium",
-									repo.prebuildStatus === "ready"
+									repo.configurationStatus === "ready"
 										? "border-border/50 bg-muted/50 text-foreground"
 										: "border-border/50 bg-muted/50 text-muted-foreground",
 								)}
 							>
-								{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
+								{repo.configurationStatus === "ready" ? "Configured" : "Not configured"}
 							</span>
 						</span>
 					</button>
@@ -393,7 +393,7 @@ function ConfigurationRow({
 										sessionId: setupSessionId,
 										snapshotId: config.snapshotId || config.id,
 										snapshotName: name,
-										prebuildId: config.id,
+										configurationId: config.id,
 									})
 								}
 							>
@@ -403,7 +403,7 @@ function ConfigurationRow({
 					)}
 				</div>
 			</div>
-			<EnvFileSummary prebuildId={config.id} repoId={repoId} />
+			<EnvFileSummary configurationId={config.id} repoId={repoId} />
 		</div>
 	);
 }
@@ -418,14 +418,14 @@ interface EnvFileSpec {
 }
 
 function EnvFileSummary({
-	prebuildId,
+	configurationId,
 	repoId,
 }: {
-	prebuildId: string;
+	configurationId: string;
 	repoId: string;
 }) {
 	const [secretsDialogOpen, setSecretsDialogOpen] = useState(false);
-	const { data: envFilesRaw, isLoading: envLoading } = usePrebuildEnvFiles(prebuildId);
+	const { data: envFilesRaw, isLoading: envLoading } = useConfigurationEnvFiles(configurationId);
 
 	const envFiles = useMemo(() => {
 		if (!envFilesRaw || !Array.isArray(envFilesRaw)) return [];
@@ -439,7 +439,7 @@ function EnvFileSummary({
 	const { data: secretResults, isLoading: secretsLoading } = useCheckSecrets(
 		allKeys,
 		repoId,
-		prebuildId,
+		configurationId,
 		allKeys.length > 0,
 	);
 

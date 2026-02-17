@@ -194,24 +194,24 @@ async function handleExecute(
 		type: target.type,
 		reason: target.reason,
 		suggestedRepoId: target.suggestedRepoId ?? null,
-		prebuildId: target.prebuildId ?? null,
+		configurationId: target.configurationId ?? null,
 		repoIds: target.repoIds ?? null,
 	});
 
 	const hasTarget =
-		(target.type === "selected" && (target.repoIds?.length || target.prebuildId)) ||
-		(target.type !== "selected" && target.prebuildId);
+		(target.type === "selected" && (target.repoIds?.length || target.configurationId)) ||
+		(target.type !== "selected" && target.configurationId);
 
 	if (!hasTarget) {
 		log?.warn(
-			{ errorClass: "missing_prebuild", targetType: target.type },
+			{ errorClass: "missing_configuration", targetType: target.type },
 			"Execute aborted: no valid target",
 		);
 		await runs.markRunFailed({
 			runId,
-			reason: "missing_prebuild",
+			reason: "missing_configuration",
 			stage: "execution",
-			errorMessage: "Automation missing default prebuild and no valid selection",
+			errorMessage: "Automation missing default configuration and no valid selection",
 		});
 		return;
 	}
@@ -260,9 +260,9 @@ async function handleExecute(
 		};
 
 		if (target.type === "selected" && target.repoIds) {
-			sessionRequest.managedPrebuild = { repoIds: target.repoIds };
+			sessionRequest.managedConfiguration = { repoIds: target.repoIds };
 		} else {
-			sessionRequest.prebuildId = target.prebuildId;
+			sessionRequest.configurationId = target.configurationId;
 		}
 
 		const session = await syncClient.createSession(sessionRequest, {

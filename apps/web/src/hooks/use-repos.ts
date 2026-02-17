@@ -42,11 +42,11 @@ export function useDeleteRepo() {
 	);
 }
 
-export function useRepoPrebuilds(repoId: string, enabled = true) {
+export function useRepoConfigurations(repoId: string, enabled = true) {
 	return useQuery({
-		...orpc.repos.listPrebuilds.queryOptions({ input: { id: repoId } }),
+		...orpc.repos.listConfigurations.queryOptions({ input: { id: repoId } }),
 		enabled: enabled && !!repoId,
-		select: (data) => data.prebuilds,
+		select: (data) => data.configurations,
 	});
 }
 
@@ -54,7 +54,7 @@ export function useRepoSnapshots(repoId: string, enabled = true) {
 	return useQuery({
 		...orpc.repos.listSnapshots.queryOptions({ input: { id: repoId } }),
 		enabled: enabled && !!repoId,
-		select: (data) => data.prebuilds,
+		select: (data) => data.configurations,
 	});
 }
 
@@ -96,10 +96,10 @@ export function useUpdateServiceCommands() {
 	);
 }
 
-export function usePrebuildEnvFiles(prebuildId: string, enabled = true) {
+export function useConfigurationEnvFiles(configurationId: string, enabled = true) {
 	return useQuery({
-		...orpc.prebuilds.getEnvFiles.queryOptions({ input: { prebuildId } }),
-		enabled: enabled && !!prebuildId,
+		...orpc.configurations.getEnvFiles.queryOptions({ input: { configurationId } }),
+		enabled: enabled && !!configurationId,
 		select: (data) => data.envFiles,
 	});
 }
@@ -107,12 +107,12 @@ export function usePrebuildEnvFiles(prebuildId: string, enabled = true) {
 export function useCheckSecrets(
 	keys: string[],
 	repoId?: string,
-	prebuildId?: string,
+	configurationId?: string,
 	enabled = true,
 ) {
 	return useQuery({
 		...orpc.secrets.check.queryOptions({
-			input: { keys, repo_id: repoId, prebuild_id: prebuildId },
+			input: { keys, repo_id: repoId, configuration_id: configurationId },
 		}),
 		enabled: enabled && keys.length > 0,
 		select: (data) => data.keys,
@@ -131,35 +131,35 @@ export function useCreateSecret() {
 	);
 }
 
-export function usePrebuildServiceCommands(prebuildId: string, enabled = true) {
+export function useConfigurationServiceCommands(configurationId: string, enabled = true) {
 	return useQuery({
-		...orpc.prebuilds.getServiceCommands.queryOptions({ input: { prebuildId } }),
-		enabled: enabled && !!prebuildId,
+		...orpc.configurations.getServiceCommands.queryOptions({ input: { configurationId } }),
+		enabled: enabled && !!configurationId,
 		select: (data) => data.commands,
 	});
 }
 
-export function useEffectiveServiceCommands(prebuildId: string, enabled = true) {
+export function useEffectiveServiceCommands(configurationId: string, enabled = true) {
 	return useQuery({
-		...orpc.prebuilds.getEffectiveServiceCommands.queryOptions({ input: { prebuildId } }),
-		enabled: enabled && !!prebuildId,
+		...orpc.configurations.getEffectiveServiceCommands.queryOptions({ input: { configurationId } }),
+		enabled: enabled && !!configurationId,
 	});
 }
 
-export function useUpdatePrebuildServiceCommands() {
+export function useUpdateConfigurationServiceCommands() {
 	const queryClient = useQueryClient();
 
 	return useMutation(
-		orpc.prebuilds.updateServiceCommands.mutationOptions({
+		orpc.configurations.updateServiceCommands.mutationOptions({
 			onSuccess: (_data, input) => {
 				queryClient.invalidateQueries({
-					queryKey: orpc.prebuilds.getServiceCommands.key({
-						input: { prebuildId: input.prebuildId },
+					queryKey: orpc.configurations.getServiceCommands.key({
+						input: { configurationId: input.configurationId },
 					}),
 				});
 				queryClient.invalidateQueries({
-					queryKey: orpc.prebuilds.getEffectiveServiceCommands.key({
-						input: { prebuildId: input.prebuildId },
+					queryKey: orpc.configurations.getEffectiveServiceCommands.key({
+						input: { configurationId: input.configurationId },
 					}),
 				});
 			},

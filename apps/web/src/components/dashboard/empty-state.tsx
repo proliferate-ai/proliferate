@@ -4,7 +4,7 @@ import { SessionListRow } from "@/components/sessions/session-card";
 import { useAutomations } from "@/hooks/use-automations";
 import { useOrgPendingRuns } from "@/hooks/use-automations";
 import { useIntegrations } from "@/hooks/use-integrations";
-import { useCreatePrebuild } from "@/hooks/use-prebuilds";
+import { useCreateConfiguration } from "@/hooks/use-configurations";
 import { useRepos } from "@/hooks/use-repos";
 import { useCreateSession, useSessions } from "@/hooks/use-sessions";
 import { useSession } from "@/lib/auth-client";
@@ -103,7 +103,7 @@ function OnboardingSection() {
 		const hasSlack = integrations.some((i) => i.provider === "slack" && i.status === "active");
 		const hasAutomation = (automations ?? []).length > 0;
 		const hasAnyRepo = (repos ?? []).length > 0;
-		const hasReadyRepo = (repos ?? []).some((r) => r.prebuildStatus === "ready");
+		const hasReadyRepo = (repos ?? []).some((r) => r.configurationStatus === "ready");
 
 		let count = 0;
 		if (!hasAnyRepo) count++;
@@ -309,7 +309,7 @@ export function EmptyDashboard() {
 	const { data: authSession } = useSession();
 	const { selectedRepoId, selectedSnapshotId, selectedModel, setPendingPrompt } =
 		useDashboardStore();
-	const createPrebuild = useCreatePrebuild();
+	const createConfiguration = useCreateConfiguration();
 	const createSession = useCreateSession();
 
 	const firstName = authSession?.user?.name?.split(" ")[0] ?? "";
@@ -328,19 +328,19 @@ export function EmptyDashboard() {
 				return;
 			}
 
-			let prebuildId = selectedSnapshotId;
+			let configurationId = selectedSnapshotId;
 
-			if (!prebuildId && selectedRepoId) {
-				const prebuildResult = await createPrebuild.mutateAsync({
+			if (!configurationId && selectedRepoId) {
+				const configurationResult = await createConfiguration.mutateAsync({
 					repoIds: [selectedRepoId],
 				});
-				prebuildId = prebuildResult.prebuildId;
+				configurationId = configurationResult.configurationId;
 			}
 
-			if (!prebuildId) return;
+			if (!configurationId) return;
 
 			await createSession.mutateAsync({
-				prebuildId,
+				configurationId,
 				modelId: selectedModel,
 			});
 			// Session created — list auto-refreshes via query invalidation
@@ -351,7 +351,7 @@ export function EmptyDashboard() {
 		}
 	};
 
-	const isSubmitting = createPrebuild.isPending || createSession.isPending;
+	const isSubmitting = createConfiguration.isPending || createSession.isPending;
 
 	return (
 		<div className="h-full flex flex-col overflow-y-auto">

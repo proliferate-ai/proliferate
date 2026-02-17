@@ -118,10 +118,10 @@ const GitHubConnectStatusResponseSchema = z.object({
 });
 
 // ============================================
-// CLI Prebuilds Schemas
+// CLI Configurations Schemas
 // ============================================
 
-const CliPrebuildSchema = z.object({
+const CliConfigurationSchema = z.object({
 	id: z.string().uuid(),
 	snapshot_id: z.string().nullable(),
 	user_id: z.string().nullable(),
@@ -130,7 +130,7 @@ const CliPrebuildSchema = z.object({
 	sandbox_provider: z.string().nullable(),
 });
 
-const CreateCliPrebuildInputSchema = z.object({
+const CreateCliConfigurationInputSchema = z.object({
 	localPathHash: z.string(),
 	sessionId: z.string(),
 	sandboxId: z.string(),
@@ -454,43 +454,43 @@ export const cliContract = c.router(
 		},
 
 		// ====================================
-		// CLI Prebuilds
+		// CLI Configurations
 		// ====================================
-		prebuilds: {
+		configurations: {
 			get: {
 				method: "GET",
-				path: "/cli/prebuilds",
+				path: "/cli/configurations",
 				query: z.object({
 					localPathHash: z.string(),
 				}),
 				responses: {
-					200: z.object({ prebuild: CliPrebuildSchema.nullable() }),
+					200: z.object({ configuration: CliConfigurationSchema.nullable() }),
 					400: ErrorResponseSchema,
 					401: ErrorResponseSchema,
 					500: ErrorResponseSchema,
 				},
-				summary: "Look up prebuild by local path hash",
+				summary: "Look up configuration by local path hash",
 			},
 
 			create: {
 				method: "POST",
-				path: "/cli/prebuilds",
-				body: CreateCliPrebuildInputSchema,
+				path: "/cli/configurations",
+				body: CreateCliConfigurationInputSchema,
 				responses: {
 					200: z.object({
-						prebuild: CliPrebuildSchema,
+						configuration: CliConfigurationSchema,
 						snapshotId: z.string(),
 					}),
 					400: ErrorResponseSchema,
 					401: ErrorResponseSchema,
 					500: ErrorResponseSchema,
 				},
-				summary: "Create or update a prebuild (snapshot cache)",
+				summary: "Create or update a configuration (snapshot cache)",
 			},
 
 			delete: {
 				method: "DELETE",
-				path: "/cli/prebuilds",
+				path: "/cli/configurations",
 				query: z.object({
 					localPathHash: z.string(),
 				}),
@@ -501,7 +501,7 @@ export const cliContract = c.router(
 					401: ErrorResponseSchema,
 					500: ErrorResponseSchema,
 				},
-				summary: "Delete a prebuild by local path hash",
+				summary: "Delete a configuration by local path hash",
 			},
 		},
 	},
@@ -518,5 +518,5 @@ export {
 	DevicePollResponseSchema,
 	SshKeySchema,
 	CliSessionSchema,
-	CliPrebuildSchema,
+	CliConfigurationSchema,
 };

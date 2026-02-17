@@ -15,9 +15,9 @@ const SERVICE_TOKEN = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
  *
  * Creates a CLI session via the gateway SDK.
  * The gateway handles:
- * - Finding or creating device-scoped prebuild
+ * - Finding or creating device-scoped configuration
  * - Finding or creating local repo record
- * - Linking repo to prebuild
+ * - Linking repo to configuration
  * - Creating session with type "cli"
  *
  * Body:
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
 		// Create session via gateway SDK
 		const result = await gateway.createSession({
 			organizationId: orgId,
-			cliPrebuild: { localPathHash, displayName },
+			cliConfiguration: { localPathHash, displayName },
 			sessionType: "cli",
 			clientType: "cli",
 			sandboxMode: "deferred", // Gateway will start sandbox on first connect
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
 
 		return NextResponse.json({
 			sessionId: result.sessionId,
-			prebuildId: result.prebuildId,
+			configurationId: result.configurationId,
 			gatewayUrl: result.gatewayUrl,
 			hasSnapshot: result.hasSnapshot,
 		});

@@ -7,7 +7,7 @@
 
 import { env } from "@proliferate/environment/server";
 import { z } from "zod";
-import type { PrebuildServiceCommand, ServiceCommand } from "../sandbox-provider";
+import type { ConfigurationServiceCommand, ServiceCommand } from "../sandbox-provider";
 
 /**
  * Proliferate plugin for OpenCode.
@@ -235,8 +235,8 @@ export function parseServiceCommands(input: unknown): ServiceCommand[] {
 	return result.success ? result.data : [];
 }
 
-/** Zod schema for prebuild-level service commands (includes optional workspacePath). */
-const PrebuildServiceCommandSchema = z.object({
+/** Zod schema for configuration-level service commands (includes optional workspacePath). */
+const ConfigurationServiceCommandSchema = z.object({
 	name: z.string().min(1).max(100),
 	command: z.string().min(1).max(1000),
 	cwd: z.string().max(500).optional(),
@@ -244,12 +244,12 @@ const PrebuildServiceCommandSchema = z.object({
 });
 
 /**
- * Parse and validate prebuild-level service commands from untrusted jsonb.
+ * Parse and validate configuration-level service commands from untrusted jsonb.
  * Returns [] on invalid input — never throws.
  */
-export function parsePrebuildServiceCommands(input: unknown): PrebuildServiceCommand[] {
+export function parseConfigurationServiceCommands(input: unknown): ConfigurationServiceCommand[] {
 	if (!Array.isArray(input)) return [];
-	const result = z.array(PrebuildServiceCommandSchema).max(10).safeParse(input);
+	const result = z.array(ConfigurationServiceCommandSchema).max(10).safeParse(input);
 	return result.success ? result.data : [];
 }
 
@@ -257,18 +257,18 @@ export function parsePrebuildServiceCommands(input: unknown): PrebuildServiceCom
  * Resolve service commands for a session.
  *
  * Resolution order:
- * 1. Prebuild-level commands (explicit per-configuration) — if non-empty, use those.
+ * 1. Configuration-level commands (explicit per-configuration) — if non-empty, use those.
  * 2. Fallback: per-repo commands merged with workspace context.
  */
 export function resolveServiceCommands(
-	prebuildCommands: unknown,
+	configurationCommands: unknown,
 	repoSpecs: Array<{ workspacePath: string; serviceCommands?: ServiceCommand[] }>,
-): PrebuildServiceCommand[] {
-	const prebuildCmds = parsePrebuildServiceCommands(prebuildCommands);
-	if (prebuildCmds.length > 0) return prebuildCmds;
+): ConfigurationServiceCommand[] {
+	const configCmds = parseConfigurationServiceCommands(configurationCommands);
+	if (configCmds.length > 0) return configCmds;
 
 	// Fallback: merge per-repo commands with workspace context
-	const merged: PrebuildServiceCommand[] = [];
+	const merged: ConfigurationServiceCommand[] = [];
 	for (const repo of repoSpecs) {
 		if (!repo.serviceCommands?.length) continue;
 		for (const cmd of repo.serviceCommands) {

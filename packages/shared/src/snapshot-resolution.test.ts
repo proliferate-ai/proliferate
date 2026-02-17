@@ -8,7 +8,7 @@ function makeRepo(
 		repoSnapshotStatus?: string | null;
 		repoSnapshotProvider?: string | null;
 	} = {},
-): ResolveSnapshotInput["prebuildRepos"][number] {
+): ResolveSnapshotInput["configurationRepos"][number] {
 	return {
 		workspacePath: overrides.workspacePath ?? ".",
 		repo: {
@@ -22,45 +22,45 @@ function makeRepo(
 describe("resolveSnapshotId", () => {
 	it("returns restore snapshot when present", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: "prebuild-snap-1",
+			configurationSnapshotId: "config-snap-1",
 			sandboxProvider: "modal",
-			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
+			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
 		});
-		expect(result).toBe("prebuild-snap-1");
+		expect(result).toBe("config-snap-1");
 	});
 
 	it("returns repo snapshot for Modal single-repo with workspacePath '.'", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
+			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
 		});
 		expect(result).toBe("repo-snap-1");
 	});
 
 	it("returns null when sandboxProvider is null (unknown provider = no repo snapshot)", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: null,
-			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
+			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
 		});
 		expect(result).toBeNull();
 	});
 
 	it("returns null for E2B provider even with ready repo snapshot", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "e2b",
-			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
+			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "ready" })],
 		});
 		expect(result).toBeNull();
 	});
 
-	it("returns null for multi-repo prebuilds", () => {
+	it("returns null for multi-repo configurations", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [
+			configurationRepos: [
 				makeRepo({ repoSnapshotId: "snap-a", repoSnapshotStatus: "ready" }),
 				makeRepo({
 					workspacePath: "backend",
@@ -74,9 +74,9 @@ describe("resolveSnapshotId", () => {
 
 	it("returns null when workspacePath is not '.'", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [
+			configurationRepos: [
 				makeRepo({
 					workspacePath: "frontend",
 					repoSnapshotId: "repo-snap-1",
@@ -89,36 +89,36 @@ describe("resolveSnapshotId", () => {
 
 	it("returns null when repo snapshot status is not 'ready'", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "building" })],
+			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: "building" })],
 		});
 		expect(result).toBeNull();
 	});
 
 	it("returns null when repo snapshot status is null", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: null })],
+			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap-1", repoSnapshotStatus: null })],
 		});
 		expect(result).toBeNull();
 	});
 
 	it("returns null when repo has no repoSnapshotId", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [makeRepo({ repoSnapshotId: null, repoSnapshotStatus: "ready" })],
+			configurationRepos: [makeRepo({ repoSnapshotId: null, repoSnapshotStatus: "ready" })],
 		});
 		expect(result).toBeNull();
 	});
 
 	it("returns null when repo snapshot provider is non-Modal", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [
+			configurationRepos: [
 				makeRepo({
 					repoSnapshotId: "repo-snap-1",
 					repoSnapshotStatus: "ready",
@@ -131,9 +131,9 @@ describe("resolveSnapshotId", () => {
 
 	it("accepts repo snapshot when repoSnapshotProvider is 'modal'", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [
+			configurationRepos: [
 				makeRepo({
 					repoSnapshotId: "repo-snap-1",
 					repoSnapshotStatus: "ready",
@@ -146,9 +146,9 @@ describe("resolveSnapshotId", () => {
 
 	it("accepts repo snapshot when repoSnapshotProvider is null", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [
+			configurationRepos: [
 				makeRepo({
 					repoSnapshotId: "repo-snap-1",
 					repoSnapshotStatus: "ready",
@@ -161,35 +161,35 @@ describe("resolveSnapshotId", () => {
 
 	it("returns null when repo is null", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [{ workspacePath: ".", repo: null }],
+			configurationRepos: [{ workspacePath: ".", repo: null }],
 		});
 		expect(result).toBeNull();
 	});
 
-	it("returns null when prebuildRepos is empty", () => {
+	it("returns null when configurationRepos is empty", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [],
+			configurationRepos: [],
 		});
 		expect(result).toBeNull();
 	});
 
-	it("prebuild snapshot takes priority over repo snapshot", () => {
+	it("configuration snapshot takes priority over repo snapshot", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: "prebuild-snap",
+			configurationSnapshotId: "config-snap",
 			sandboxProvider: "e2b",
-			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap", repoSnapshotStatus: "ready" })],
+			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap", repoSnapshotStatus: "ready" })],
 		});
-		expect(result).toBe("prebuild-snap");
+		expect(result).toBe("config-snap");
 	});
 });
 
 describe("full layering precedence", () => {
 	// The complete 4-layer resolution chain:
-	// 1. Prebuild snapshot (resolveSnapshotId returns prebuildSnapshotId)
+	// 1. Configuration snapshot (resolveSnapshotId returns configurationSnapshotId)
 	// 2. Repo snapshot (resolveSnapshotId returns repoSnapshotId for Modal)
 	// 3. Base snapshot (gateway resolves from DB → opts.baseSnapshotId → env var)
 	// 4. Base image (provider fallback via ensureBaseImageInitialized)
@@ -197,42 +197,42 @@ describe("full layering precedence", () => {
 	// This function handles layers 1-2. Layers 3-4 are resolved by
 	// session-creator.ts (DB lookup) and modal-libmodal.ts (provider fallback).
 
-	it("prebuild snapshot wins over all other layers", () => {
+	it("configuration snapshot wins over all other layers", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: "prebuild-snap",
+			configurationSnapshotId: "config-snap",
 			sandboxProvider: "modal",
-			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap", repoSnapshotStatus: "ready" })],
+			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap", repoSnapshotStatus: "ready" })],
 		});
-		expect(result).toBe("prebuild-snap");
+		expect(result).toBe("config-snap");
 	});
 
-	it("repo snapshot wins when no prebuild snapshot exists", () => {
+	it("repo snapshot wins when no configuration snapshot exists", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap", repoSnapshotStatus: "ready" })],
+			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap", repoSnapshotStatus: "ready" })],
 		});
 		expect(result).toBe("repo-snap");
 	});
 
-	it("returns null when no prebuild or repo snapshot — base snapshot/image handled by gateway and provider", () => {
+	it("returns null when no configuration or repo snapshot — base snapshot/image handled by gateway and provider", () => {
 		// When resolveSnapshotId returns null, the gateway checks the DB for
 		// a ready base snapshot (baseSnapshots.getReadySnapshotId) and passes
 		// it as baseSnapshotId. The Modal provider then falls through:
 		//   opts.baseSnapshotId → MODAL_BASE_SNAPSHOT_ID env → base image
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "modal",
-			prebuildRepos: [makeRepo({ repoSnapshotId: null })],
+			configurationRepos: [makeRepo({ repoSnapshotId: null })],
 		});
 		expect(result).toBeNull();
 	});
 
-	it("returns null for non-Modal providers — only prebuild snapshots apply", () => {
+	it("returns null for non-Modal providers — only configuration snapshots apply", () => {
 		const result = resolveSnapshotId({
-			prebuildSnapshotId: null,
+			configurationSnapshotId: null,
 			sandboxProvider: "e2b",
-			prebuildRepos: [makeRepo({ repoSnapshotId: "repo-snap", repoSnapshotStatus: "ready" })],
+			configurationRepos: [makeRepo({ repoSnapshotId: "repo-snap", repoSnapshotStatus: "ready" })],
 		});
 		expect(result).toBeNull();
 	});
