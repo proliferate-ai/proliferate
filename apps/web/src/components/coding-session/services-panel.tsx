@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
@@ -18,7 +19,12 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { ServiceInfo } from "./runtime/use-services";
-import { useRestartService, useServiceList, useStopService } from "./runtime/use-services";
+import {
+	useExposePort,
+	useRestartService,
+	useServiceList,
+	useStopService,
+} from "./runtime/use-services";
 
 const ServiceLogViewer = dynamic(
 	() => import("./service-log-viewer").then((m) => m.ServiceLogViewer),
@@ -157,8 +163,10 @@ export function ServicesPanel({ sessionId, previewUrl }: ServicesPanelProps) {
 	const { data, isLoading, error, refetch } = useServiceList(sessionId);
 	const stopService = useStopService(sessionId);
 	const restartService = useRestartService(sessionId);
+	const exposePort = useExposePort(sessionId);
 
 	const [selectedService, setSelectedService] = useState<string | null>(null);
+	const [portInput, setPortInput] = useState("");
 
 	const services = data?.services ?? [];
 	const exposedPort = data?.exposedPort ?? null;
@@ -180,6 +188,15 @@ export function ServicesPanel({ sessionId, previewUrl }: ServicesPanelProps) {
 		restartService.mutate(service, {
 			onError: (err) =>
 				toast.error(err instanceof Error ? err.message : "Failed to restart service"),
+		});
+	};
+
+	const handleExpose = () => {
+		const port = Number.parseInt(portInput, 10);
+		if (Number.isNaN(port) || port < 1 || port > 65535) return;
+		exposePort.mutate(port, {
+			onSuccess: () => setPortInput(""),
+			onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to expose port"),
 		});
 	};
 
@@ -264,9 +281,32 @@ export function ServicesPanel({ sessionId, previewUrl }: ServicesPanelProps) {
 
 				{/* Footer */}
 				{!selectedService && services.length > 0 && (
-					<div className="px-3 py-1.5 border-t text-xs text-muted-foreground shrink-0">
-						{services.length} service{services.length !== 1 ? "s" : ""}
-						{exposedPort !== null && ` \u00B7 port ${exposedPort}`}
+					<div className="border-t shrink-0">
+						{/* Expose port */}
+						<div className="flex items-center gap-2 px-3 py-2">
+							<Input
+								type="number"
+								value={portInput}
+								onChange={(e) => setPortInput(e.target.value)}
+								placeholder={exposedPort ? `port ${exposedPort}` : "Port (e.g. 3000)"}
+								className="h-7 text-xs flex-1"
+								min={1}
+								max={65535}
+								onKeyDown={(e) => e.key === "Enter" && handleExpose()}
+							/>
+							<Button
+								size="sm"
+								className="h-7 text-xs"
+								onClick={handleExpose}
+								disabled={exposePort.isPending || !portInput}
+							>
+								{exposePort.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Expose"}
+							</Button>
+						</div>
+						<div className="px-3 py-1 text-xs text-muted-foreground">
+							{services.length} service{services.length !== 1 ? "s" : ""}
+							{exposedPort !== null && ` \u00B7 port ${exposedPort}`}
+						</div>
 					</div>
 				)}
 			</div>
