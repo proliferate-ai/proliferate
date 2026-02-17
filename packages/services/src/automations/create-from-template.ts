@@ -60,11 +60,7 @@ export async function createFromTemplate(
 	}
 
 	// S3: Validate all integration bindings before starting transaction
-	const validatedIntegrations = await validateIntegrationBindings(
-		orgId,
-		template,
-		input.integrationBindings,
-	);
+	const validatedIntegrations = await validateIntegrationBindings(orgId, input.integrationBindings);
 
 	const db = getDb();
 
@@ -159,21 +155,14 @@ export async function createFromTemplate(
  */
 async function validateIntegrationBindings(
 	orgId: string,
-	template: AutomationTemplate,
 	bindings: Record<string, string>,
 ): Promise<Map<string, ValidatedIntegration>> {
 	const db = getDb();
 	const validated = new Map<string, ValidatedIntegration>();
 
-	// Check each required integration is present in bindings
-	for (const req of template.requiredIntegrations) {
-		if (!req.required) continue;
-
-		const integrationId = bindings[req.provider];
-		if (!integrationId) {
-			throw new Error(`Missing required integration for ${req.provider}: ${req.reason}`);
-		}
-	}
+	// Don't enforce required integrations here — templates create paused drafts
+	// (enabled: false). Users connect missing integrations before enabling.
+	// We only validate bindings that are actually provided.
 
 	// Validate each binding
 	for (const [bindingKey, integrationId] of Object.entries(bindings)) {
