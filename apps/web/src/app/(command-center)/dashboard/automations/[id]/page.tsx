@@ -282,6 +282,10 @@ export default function AutomationDetailPage({
 		handleUpdate({ enabledTools: newTools });
 	};
 
+	const debouncedSaveTools = useDebouncedCallback((tools: EnabledTools) => {
+		handleUpdate({ enabledTools: tools as Record<string, unknown> });
+	}, 500);
+
 	const handleToolConfigChange = (
 		toolName: keyof EnabledTools,
 		configKey: string,
@@ -292,7 +296,7 @@ export default function AutomationDetailPage({
 			[toolName]: { ...enabledTools[toolName], [configKey]: value || undefined },
 		};
 		setEnabledTools(newTools);
-		handleUpdate({ enabledTools: newTools });
+		debouncedSaveTools(newTools);
 	};
 
 	const handleSlackInstallationChange = (installationId: string | null) => {
@@ -338,7 +342,11 @@ export default function AutomationDetailPage({
 		);
 	}
 
-	const triggers = automation.triggers ?? [];
+	const allTriggers = automation.triggers ?? [];
+	const triggers = allTriggers.filter(
+		(t) => (t.provider as string) !== "manual" && t.provider !== "scheduled",
+	);
+	const schedules = allTriggers.filter((t) => t.provider === "scheduled");
 
 	return (
 		<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
@@ -456,6 +464,27 @@ export default function AutomationDetailPage({
 					</div>
 				</div>
 
+				{/* Schedules */}
+				{schedules.length > 0 && (
+					<div className="mb-6">
+						<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+							Schedules
+						</p>
+						<div className="rounded-xl border border-border overflow-hidden">
+							{schedules.map((schedule, index) => (
+								<TriggerChip
+									key={schedule.id}
+									trigger={schedule}
+									automationId={automation.id}
+									variant="stacked"
+									isFirst={index === 0}
+									isLast={index === schedules.length - 1}
+								/>
+							))}
+						</div>
+					</div>
+				)}
+
 				{/* Integrations & Permissions */}
 				<div className="mb-6">
 					<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
@@ -464,7 +493,7 @@ export default function AutomationDetailPage({
 					<IntegrationPermissions
 						automationId={id}
 						enabledTools={enabledTools}
-						triggers={triggers.map((t) => ({ provider: t.provider }))}
+						triggers={allTriggers.map((t) => ({ provider: t.provider }))}
 						actionModes={actionModes}
 						slackInstallations={slackInstallations}
 						notificationSlackInstallationId={notificationSlackInstallationId}

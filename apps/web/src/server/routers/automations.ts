@@ -732,6 +732,41 @@ export const automationsRouter = {
 				throw err;
 			}
 		}),
+
+	// ============================================
+	// Integration action resolver
+	// ============================================
+
+	/**
+	 * Returns available integration actions for an automation.
+	 * Based on enabled tools, triggers, and connections.
+	 */
+	getIntegrationActions: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(
+			z.object({
+				integrations: z.array(
+					z.object({
+						sourceId: z.string(),
+						displayName: z.string(),
+						actions: z.array(
+							z.object({
+								name: z.string(),
+								description: z.string(),
+								riskLevel: z.enum(["read", "write"]),
+							}),
+						),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const integrationActions = await automations.getAutomationIntegrationActions(
+				input.id,
+				context.orgId,
+			);
+			return { integrations: integrationActions };
+		}),
 };
 
 function mapRunToSchema(run: runs.RunListItem) {

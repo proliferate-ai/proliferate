@@ -617,15 +617,15 @@ export async function triggerManualRun(
 	const exists = await automationsDb.exists(automationId, orgId);
 	if (!exists) throw new Error("Automation not found");
 
-	// Find any existing trigger to satisfy the FK, or create a hidden one.
-	let trigger = await automationsDb.findAnyTriggerForAutomation(automationId);
+	// Find or create a dedicated manual trigger (isolated from real triggers).
+	let trigger = await automationsDb.findManualTrigger(automationId);
 	if (!trigger) {
 		trigger = await automationsDb.createTriggerForAutomation({
 			automationId,
 			organizationId: orgId,
 			name: "Manual trigger",
-			provider: "webhook",
-			triggerType: "webhook",
+			provider: "manual",
+			triggerType: "manual",
 			enabled: false,
 			config: {},
 			integrationId: null,
@@ -648,4 +648,78 @@ export async function triggerManualRun(
 	});
 
 	return { runId: run.id, status: run.status };
+}
+
+// ============================================
+// Integration action resolver
+// ============================================
+
+interface ActionMeta {
+	name: string;
+	description: string;
+	riskLevel: "read" | "write";
+}
+
+export interface IntegrationActions {
+	sourceId: string;
+	displayName: string;
+	actions: ActionMeta[];
+}
+
+const LINEAR_ACTIONS: ActionMeta[] = [
+	{ name: "list_issues", description: "List issues", riskLevel: "read" },
+	{ name: "get_issue", description: "Get a specific issue", riskLevel: "read" },
+	{ name: "create_issue", description: "Create a new issue", riskLevel: "write" },
+	{ name: "update_issue", description: "Update an existing issue", riskLevel: "write" },
+	{ name: "add_comment", description: "Add a comment to an issue", riskLevel: "write" },
+];
+
+const SENTRY_ACTIONS: ActionMeta[] = [
+	{ name: "list_issues", description: "List issues", riskLevel: "read" },
+	{ name: "get_issue", description: "Get details of a specific issue", riskLevel: "read" },
+	{
+		name: "list_issue_events",
+		description: "List events for a specific issue",
+		riskLevel: "read",
+	},
+	{ name: "get_event", description: "Get details of a specific event", riskLevel: "read" },
+	{ name: "update_issue", description: "Update an issue", riskLevel: "write" },
+];
+
+/**
+ * Returns the integration actions available for an automation based on its
+ * enabled tools, triggers, and connections.
+ *
+ * Native adapters (Linear, Sentry) return stable action lists.
+ * MCP connector support is planned via automation_connections.
+ */
+export async function getAutomationIntegrationActions(
+	automationId: string,
+	orgId: string,
+): Promise<IntegrationActions[]> {
+	const automation = await automationsDb.findById(automationId, orgId);
+	if (!automation) throw new Error("Automation not found");
+
+	const enabledTools = (automation.enabledTools ?? {}) as Record<
+		string,
+		{ enabled?: boolean } | undefined
+	>;
+	const triggerProviders = automation.triggers.map((t) => t.provider);
+
+	const result: IntegrationActions[] = [];
+
+	// Linear: show if tool enabled or trigger exists
+	if (enabledTools.create_linear_issue?.enabled || triggerProviders.includes("linear")) {
+		result.push({ sourceId: "linear", displayName: "Linear", actions: LINEAR_ACTIONS });
+	}
+
+	// Sentry: show if trigger exists
+	if (triggerProviders.includes("sentry")) {
+		result.push({ sourceId: "sentry", displayName: "Sentry", actions: SENTRY_ACTIONS });
+	}
+
+	// TODO: MCP connectors — query automation_connections → org_connectors,
+	// call listConnectorTools for each, and include their actions here.
+
+	return result;
 }

@@ -951,15 +951,13 @@ export async function findTriggerForAutomationByProvider(
 }
 
 /**
- * Find any trigger for an automation (regardless of provider or enabled state).
- * Used by manual run to find a trigger to satisfy the FK.
+ * Find the dedicated manual trigger for an automation (any enabled state).
+ * Used by manual run to avoid polluting real trigger history.
  */
-export async function findAnyTriggerForAutomation(
-	automationId: string,
-): Promise<{ id: string } | null> {
+export async function findManualTrigger(automationId: string): Promise<{ id: string } | null> {
 	const db = getDb();
 	const result = await db.query.triggers.findFirst({
-		where: eq(triggers.automationId, automationId),
+		where: and(eq(triggers.automationId, automationId), eq(triggers.provider, "manual")),
 		columns: { id: true },
 	});
 

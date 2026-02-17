@@ -4,9 +4,17 @@ import { PermissionControl } from "@/components/integrations/permission-control"
 import { LinearIcon, SentryIcon, SlackIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useAutomationIntegrationActions } from "@/hooks/use-automations";
 import { cn } from "@/lib/utils";
-import { Mail, Shield } from "lucide-react";
+import { Mail, Plug, Shield } from "lucide-react";
 
 // ============================================
 // Types
@@ -34,33 +42,18 @@ interface EnabledTools {
 	create_session?: ToolConfig;
 }
 
-interface TriggerInfo {
-	provider: string;
+// ============================================
+// Icon resolver (maps sourceId to icon component)
+// ============================================
+
+const INTEGRATION_ICONS: Record<string, React.ElementType> = {
+	linear: LinearIcon,
+	sentry: SentryIcon,
+};
+
+function getIntegrationIcon(sourceId: string): React.ElementType {
+	return INTEGRATION_ICONS[sourceId] ?? Plug;
 }
-
-// ============================================
-// Adapter action metadata (stable, only 2 adapters)
-// ============================================
-
-const LINEAR_ACTIONS: ActionMeta[] = [
-	{ name: "list_issues", description: "List issues", riskLevel: "read" },
-	{ name: "get_issue", description: "Get a specific issue", riskLevel: "read" },
-	{ name: "create_issue", description: "Create a new issue", riskLevel: "write" },
-	{ name: "update_issue", description: "Update an existing issue", riskLevel: "write" },
-	{ name: "add_comment", description: "Add a comment to an issue", riskLevel: "write" },
-];
-
-const SENTRY_ACTIONS: ActionMeta[] = [
-	{ name: "list_issues", description: "List issues", riskLevel: "read" },
-	{ name: "get_issue", description: "Get details of a specific issue", riskLevel: "read" },
-	{
-		name: "list_issue_events",
-		description: "List events for a specific issue",
-		riskLevel: "read",
-	},
-	{ name: "get_event", description: "Get details of a specific event", riskLevel: "read" },
-	{ name: "update_issue", description: "Update an issue", riskLevel: "write" },
-];
 
 // ============================================
 // Props
@@ -69,7 +62,7 @@ const SENTRY_ACTIONS: ActionMeta[] = [
 interface IntegrationPermissionsProps {
 	automationId: string;
 	enabledTools: EnabledTools;
-	triggers: TriggerInfo[];
+	triggers: Array<{ provider: string }>;
 	actionModes: Record<string, ActionMode>;
 	slackInstallations?: Array<{ id: string; team_name: string | null; team_id: string }>;
 	notificationSlackInstallationId: string | null;
@@ -85,6 +78,7 @@ interface IntegrationPermissionsProps {
 // ============================================
 
 export function IntegrationPermissions({
+	automationId,
 	enabledTools,
 	triggers,
 	actionModes,
@@ -96,11 +90,19 @@ export function IntegrationPermissions({
 	onPermissionChange,
 	permissionsPending,
 }: IntegrationPermissionsProps) {
-	const hasLinearTool = enabledTools.create_linear_issue?.enabled;
-	const hasLinearTrigger = triggers.some((t) => t.provider === "linear");
-	const showLinear = hasLinearTool || hasLinearTrigger;
+	// Fetch dynamic integration actions from backend
+	const { data: integrationActions } = useAutomationIntegrationActions(automationId);
 
+	const hasLinearTrigger = triggers.some((t) => t.provider === "linear");
 	const hasSentryTrigger = triggers.some((t) => t.provider === "sentry");
+
+	// Build permissions lookup from dynamic data
+	const linearActions = integrationActions?.find((i) => i.sourceId === "linear");
+	const sentryActions = integrationActions?.find((i) => i.sourceId === "sentry");
+
+	// Additional connector integrations (MCP, future)
+	const connectorIntegrations =
+		integrationActions?.filter((i) => i.sourceId !== "linear" && i.sourceId !== "sentry") ?? [];
 
 	return (
 		<div className="flex flex-col gap-3">
@@ -117,20 +119,24 @@ export function IntegrationPermissions({
 						(slackInstallations.length > 1 || notificationSlackInstallationId) && (
 							<div className="flex flex-col gap-1.5">
 								<Label className="text-xs text-muted-foreground">Workspace</Label>
-								<select
+								<Select
 									value={notificationSlackInstallationId ?? "auto"}
-									onChange={(e) =>
-										onSlackInstallationChange(e.target.value === "auto" ? null : e.target.value)
+									onValueChange={(value) =>
+										onSlackInstallationChange(value === "auto" ? null : value)
 									}
-									className="h-8 rounded-md border border-border bg-background px-2 text-sm"
 								>
-									<option value="auto">Auto-detect</option>
-									{slackInstallations.map((inst) => (
-										<option key={inst.id} value={inst.id}>
-											{inst.team_name ?? inst.team_id}
-										</option>
-									))}
-								</select>
+									<SelectTrigger className="h-8">
+										<SelectValue placeholder="Auto-detect" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="auto">Auto-detect</SelectItem>
+										{slackInstallations.map((inst) => (
+											<SelectItem key={inst.id} value={inst.id}>
+												{inst.team_name ?? inst.team_id}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
 						)}
 					<div className="flex flex-col gap-1.5">
@@ -152,26 +158,26 @@ export function IntegrationPermissions({
 				description="Create and manage Linear issues"
 				enabled={enabledTools.create_linear_issue?.enabled || false}
 				onToggle={(enabled) => onToolToggle("create_linear_issue", enabled)}
-			>
-				<div className="flex flex-col gap-4">
-					<div className="flex flex-col gap-1.5">
-						<Label className="text-xs text-muted-foreground">Team ID</Label>
-						<Input
-							value={enabledTools.create_linear_issue?.teamId || ""}
-							onChange={(e) => onToolConfigChange("create_linear_issue", "teamId", e.target.value)}
-							placeholder="abc123"
-							className="h-8"
-						/>
-					</div>
-					{showLinear && (
+				footer={
+					linearActions ? (
 						<ActionPermissionsList
 							integration="linear"
-							actions={LINEAR_ACTIONS}
+							actions={linearActions.actions}
 							actionModes={actionModes}
 							onPermissionChange={onPermissionChange}
 							disabled={permissionsPending}
 						/>
-					)}
+					) : undefined
+				}
+			>
+				<div className="flex flex-col gap-1.5">
+					<Label className="text-xs text-muted-foreground">Team ID</Label>
+					<Input
+						value={enabledTools.create_linear_issue?.teamId || ""}
+						onChange={(e) => onToolConfigChange("create_linear_issue", "teamId", e.target.value)}
+						placeholder="abc123"
+						className="h-8"
+					/>
 				</div>
 			</IntegrationCard>
 
@@ -195,7 +201,7 @@ export function IntegrationPermissions({
 			</IntegrationCard>
 
 			{/* Sentry (trigger-based, no tool toggle) */}
-			{hasSentryTrigger && (
+			{hasSentryTrigger && sentryActions && (
 				<div className="rounded-xl border border-border overflow-hidden">
 					<div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-border/50 bg-muted/30">
 						<SentryIcon className="w-4 h-4 shrink-0 text-muted-foreground" />
@@ -207,7 +213,7 @@ export function IntegrationPermissions({
 					<div className="p-3">
 						<ActionPermissionsList
 							integration="sentry"
-							actions={SENTRY_ACTIONS}
+							actions={sentryActions.actions}
 							actionModes={actionModes}
 							onPermissionChange={onPermissionChange}
 							disabled={permissionsPending}
@@ -215,6 +221,34 @@ export function IntegrationPermissions({
 					</div>
 				</div>
 			)}
+
+			{/* Dynamic connector integrations (MCP, future) */}
+			{connectorIntegrations.map((integration) => {
+				const Icon = getIntegrationIcon(integration.sourceId);
+				return (
+					<div
+						key={integration.sourceId}
+						className="rounded-xl border border-border overflow-hidden"
+					>
+						<div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-border/50 bg-muted/30">
+							<Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
+							<div className="flex flex-col min-w-0">
+								<span className="text-sm font-medium">{integration.displayName}</span>
+								<span className="text-xs text-muted-foreground">Connected via MCP</span>
+							</div>
+						</div>
+						<div className="p-3">
+							<ActionPermissionsList
+								integration={integration.sourceId}
+								actions={integration.actions}
+								actionModes={actionModes}
+								onPermissionChange={onPermissionChange}
+								disabled={permissionsPending}
+							/>
+						</div>
+					</div>
+				);
+			})}
 		</div>
 	);
 }
@@ -230,13 +264,16 @@ function IntegrationCard({
 	enabled,
 	onToggle,
 	children,
+	footer,
 }: {
 	icon: React.ElementType;
 	name: string;
 	description: string;
 	enabled: boolean;
 	onToggle: (enabled: boolean) => void;
-	children: React.ReactNode;
+	children?: React.ReactNode;
+	/** Rendered independently of the enabled toggle (e.g. permissions from triggers) */
+	footer?: React.ReactNode;
 }) {
 	return (
 		<div className="rounded-xl border border-border overflow-hidden">
@@ -248,7 +285,10 @@ function IntegrationCard({
 				</div>
 				<Switch checked={enabled} onCheckedChange={onToggle} />
 			</div>
-			{enabled && <div className="p-3 border-t border-border/50 bg-muted/20">{children}</div>}
+			{enabled && children && (
+				<div className="p-3 border-t border-border/50 bg-muted/20">{children}</div>
+			)}
+			{footer && <div className="p-3 border-t border-border/50">{footer}</div>}
 		</div>
 	);
 }
