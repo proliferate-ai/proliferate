@@ -5,6 +5,7 @@
  * using the global SNAPSHOT_RETENTION_DAYS cap.
  */
 
+import { env } from "@proliferate/environment/server";
 import type { Logger } from "@proliferate/logger";
 import type { BillingSnapshotCleanupJob, Job } from "@proliferate/queue";
 import { billing } from "@proliferate/services";
@@ -13,11 +14,20 @@ export async function processSnapshotCleanupJob(
 	_job: Job<BillingSnapshotCleanupJob>,
 	logger: Logger,
 ): Promise<void> {
+	logger.info(
+		{
+			jobId: _job.id,
+			retentionDays: env.SNAPSHOT_RETENTION_DAYS,
+		},
+		"Snapshot cleanup started",
+	);
+
 	try {
 		const { deletedCount } = await billing.cleanupAllExpiredSnapshots();
-		if (deletedCount > 0) {
-			logger.info({ deletedCount }, "Snapshot cleanup complete");
-		}
+		logger.info(
+			{ deletedCount, retentionDays: env.SNAPSHOT_RETENTION_DAYS },
+			"Snapshot cleanup complete",
+		);
 	} catch (err) {
 		logger.error({ err }, "Snapshot cleanup error");
 		throw err;
