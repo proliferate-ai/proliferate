@@ -79,6 +79,9 @@ export default function SetupPage() {
 			router.push("/dashboard");
 		} catch (error) {
 			console.error("Failed to finalize setup:", error);
+			toast.error("Failed to save snapshot", {
+				description: error instanceof Error ? error.message : "Please try again.",
+			});
 		}
 	};
 

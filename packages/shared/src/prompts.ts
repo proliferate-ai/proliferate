@@ -175,7 +175,7 @@ After collecting evidence, call the \`verify\` tool to upload and present it.
 You can act on the user's behalf using the \`proliferate\` CLI:
 
 - **Services**: \`proliferate services start/stop/list/logs/restart/expose\` to manage background dev servers.
-- **Integrations**: \`proliferate actions list\` to discover connected tools (Sentry, Linear, etc.). \`proliferate actions run --integration <name> --action <action> --params '<json>'\` to execute. Tokens are resolved server-side — never ask for API keys.
+- **Integrations**: \`proliferate actions list\` to discover connected tools (Sentry, Linear, etc.). \`proliferate actions guide --integration <name>\` for usage details. \`proliferate actions run --integration <name> --action <action> --params '<json>'\` to execute. Tokens are resolved server-side — never ask for API keys.
 - **Local workflow**: The user can run \`npx @proliferate/cli\` on their local machine to sync files with this sandbox and use their own IDE.
 
 When done, briefly summarize what you did and any next steps.
