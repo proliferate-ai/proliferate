@@ -1,8 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { GATEWAY_URL } from "@/lib/gateway";
-import { Code, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PanelShell } from "./panel-shell";
 import { useWsToken } from "./runtime/use-ws-token";
@@ -21,10 +21,12 @@ function vscodeUrl(sessionId: string, token: string): string {
 
 type PanelStatus = "starting" | "ready" | "error";
 
+const MAX_POLL_ATTEMPTS = 30;
+
 export function VscodePanel({ sessionId }: VscodePanelProps) {
 	const { token } = useWsToken();
 	const [status, setStatus] = useState<PanelStatus>("starting");
-	const [attemptCount, setAttemptCount] = useState(0);
+	const [pollProgress, setPollProgress] = useState(0);
 	const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	const startVscodeServer = useCallback(async () => {
@@ -36,7 +38,7 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 		}
 
 		setStatus("starting");
-		setAttemptCount(0);
+		setPollProgress(0);
 
 		try {
 			// Check if openvscode-server is already running
@@ -69,12 +71,13 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 				throw new Error(err.error || `HTTP ${startRes.status}`);
 			}
 
-			// Poll until ready
+			// Poll until ready with progress tracking
 			let attempts = 0;
 			pollingRef.current = setInterval(async () => {
 				attempts++;
-				setAttemptCount(attempts);
-				if (attempts > 30) {
+				setPollProgress(Math.min((attempts / MAX_POLL_ATTEMPTS) * 100, 100));
+
+				if (attempts > MAX_POLL_ATTEMPTS) {
 					if (pollingRef.current) {
 						clearInterval(pollingRef.current);
 						pollingRef.current = null;
@@ -118,33 +121,28 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 		};
 	}, [startVscodeServer]);
 
-	const handleRetry = () => {
-		startVscodeServer();
-	};
-
 	const iframeSrc = token ? vscodeUrl(sessionId, token) : "";
 
 	return (
-		<PanelShell title="Code" icon={<Code className="h-4 w-4 text-muted-foreground" />} noPadding>
-			<div className="h-full min-h-0">
+		<PanelShell title="Code Editor" noPadding>
+			<div className="flex-1 min-h-0 h-full">
 				{status === "starting" && (
-					<div className="flex flex-col items-center justify-center h-full gap-3">
-						<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+					<div className="flex flex-col items-center justify-center h-full gap-4 px-8">
 						<p className="text-sm text-muted-foreground">Starting VS Code...</p>
-						{attemptCount > 0 && (
-							<div className="w-32 h-1 bg-muted rounded-full overflow-hidden">
-								<div
-									className="h-full bg-primary transition-all duration-500"
-									style={{ width: `${Math.min((attemptCount / 30) * 100, 100)}%` }}
-								/>
-							</div>
-						)}
+						<Progress value={pollProgress} className="w-full max-w-xs" />
+						<p className="text-[11px] text-muted-foreground/60">
+							{pollProgress < 30
+								? "Launching server"
+								: pollProgress < 70
+									? "Waiting for response"
+									: "Almost ready"}
+						</p>
 					</div>
 				)}
 				{status === "error" && (
 					<div className="flex flex-col items-center justify-center h-full gap-3">
 						<p className="text-sm text-destructive">Failed to start VS Code server</p>
-						<Button variant="outline" size="sm" onClick={handleRetry}>
+						<Button variant="outline" size="sm" onClick={startVscodeServer}>
 							Retry
 						</Button>
 					</div>

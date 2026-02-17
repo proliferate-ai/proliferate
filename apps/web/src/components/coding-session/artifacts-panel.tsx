@@ -31,7 +31,7 @@ export function ArtifactsPanel({ sessionId, activityTick }: ArtifactsPanelProps)
 	const isGalleryView = mode.type === "gallery";
 
 	// Determine header title
-	const title = isFileView ? mode.file.name : isGalleryView ? "Verification Evidence" : "Artifacts";
+	const title = isFileView ? mode.file.name : isGalleryView ? "Verification Evidence" : "Workspace";
 
 	const panelIcon =
 		isFileView && galleryContext ? (

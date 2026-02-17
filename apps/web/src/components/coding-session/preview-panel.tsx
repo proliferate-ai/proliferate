@@ -1,24 +1,19 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import {
-	ArrowLeft,
-	ExternalLink,
-	Maximize2,
-	Minimize2,
-	MonitorIcon,
-	RefreshCw,
-} from "@/components/ui/icons";
+import { ExternalLink, Maximize2, Minimize2, MonitorIcon, RefreshCw } from "@/components/ui/icons";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { PanelShell } from "./panel-shell";
 
 interface PreviewPanelProps {
 	url: string | null;
 	className?: string;
-	onClose?: () => void;
 }
 
-export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
+export function PreviewPanel({ url, className }: PreviewPanelProps) {
 	const iframeRef = useRef<HTMLIFrameElement>(null);
 	const [isFullscreen, setIsFullscreen] = useState(false);
 	// "checking" = polling the URL, "ready" = server is up, "unavailable" = not serving
@@ -52,7 +47,7 @@ export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
 
 		let cancelled = false;
 		let attempts = 0;
-		const maxAttempts = 5;
+		const maxAttempts = 8;
 		setStatus("checking");
 
 		const poll = async () => {
@@ -70,9 +65,11 @@ export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
 				return;
 			}
 
+			// Exponential backoff: 1s, 2s, 4s, 8s, 10s (capped)
+			const delay = Math.min(1000 * 2 ** (attempts - 1), 10000);
 			setTimeout(() => {
 				if (!cancelled) poll();
-			}, 3000);
+			}, delay);
 		};
 
 		poll();
@@ -81,14 +78,31 @@ export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
 		};
 	}, [url, checkUrl, refreshKey]);
 
+	// Esc key exits fullscreen
+	useEffect(() => {
+		if (!isFullscreen) return;
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === "Escape") setIsFullscreen(false);
+		};
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [isFullscreen]);
+
 	const handleRefresh = useCallback(() => {
 		setRefreshKey((k) => k + 1);
 	}, []);
 
+	const handleCopyUrl = useCallback(() => {
+		if (!url) return;
+		navigator.clipboard.writeText(url).then(() => {
+			toast.success("URL copied");
+		});
+	}, [url]);
+
 	if (!url) {
 		return (
-			<div className={cn("flex flex-col h-full", className)}>
-				<div className="flex items-center justify-center h-full">
+			<PanelShell title="Preview" noPadding>
+				<div className={cn("flex items-center justify-center h-full", className)}>
 					<div className="text-center space-y-3 px-4">
 						<div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center">
 							<MonitorIcon className="h-6 w-6 text-muted-foreground" />
@@ -101,9 +115,37 @@ export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
 						</div>
 					</div>
 				</div>
-			</div>
+			</PanelShell>
 		);
 	}
+
+	const toolbar = (
+		<>
+			<Button
+				variant="ghost"
+				size="icon"
+				className="h-7 w-7"
+				onClick={handleRefresh}
+				title="Refresh"
+			>
+				<RefreshCw className={cn("h-4 w-4", status === "checking" && "animate-spin")} />
+			</Button>
+			<Button
+				variant="ghost"
+				size="icon"
+				className="h-7 w-7"
+				onClick={() => setIsFullscreen(!isFullscreen)}
+				title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+			>
+				{isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+			</Button>
+			<Button variant="ghost" size="icon" className="h-7 w-7" asChild title="Open in new tab">
+				<a href={url} target="_blank" rel="noopener noreferrer">
+					<ExternalLink className="h-4 w-4" />
+				</a>
+			</Button>
+		</>
+	);
 
 	return (
 		<div
@@ -113,89 +155,58 @@ export function PreviewPanel({ url, className, onClose }: PreviewPanelProps) {
 				isFullscreen && "fixed inset-0 z-50 bg-background",
 			)}
 		>
-			{/* Toolbar */}
-			<div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 shrink-0">
-				{onClose && (
-					<Button
-						variant="ghost"
-						size="icon"
-						className="h-7 w-7 md:hidden"
-						onClick={onClose}
-						title="Back to chat"
-					>
-						<ArrowLeft className="h-4 w-4" />
-					</Button>
-				)}
-				<Button
-					variant="ghost"
-					size="icon"
-					className="h-7 w-7"
-					onClick={handleRefresh}
-					title="Refresh"
-				>
-					<RefreshCw className={cn("h-4 w-4", status === "checking" && "animate-spin")} />
-				</Button>
-
-				<div className="flex-1 min-w-0">
-					<span className="text-xs text-muted-foreground truncate block">{url}</span>
+			<PanelShell title="Preview" noPadding actions={toolbar}>
+				{/* URL bar */}
+				<div className="flex items-center px-3 py-1.5 border-b bg-muted/20 shrink-0">
+					<div className="flex-1 min-w-0" onClick={handleCopyUrl} title="Click to copy URL">
+						<Input
+							readOnly
+							value={url}
+							className="h-7 text-xs text-muted-foreground bg-muted/50 border-none cursor-pointer select-all focus-visible:ring-0"
+						/>
+					</div>
 				</div>
 
-				<Button
-					variant="ghost"
-					size="icon"
-					className="h-7 w-7"
-					onClick={() => setIsFullscreen(!isFullscreen)}
-					title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-				>
-					{isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-				</Button>
-
-				<Button variant="ghost" size="icon" className="h-7 w-7" asChild title="Open in new tab">
-					<a href={url} target="_blank" rel="noopener noreferrer">
-						<ExternalLink className="h-4 w-4" />
-					</a>
-				</Button>
-			</div>
-
-			{/* Content */}
-			<div className="flex-1 relative min-h-0">
-				{status === "checking" && (
-					<div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background">
-						<RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-						<p className="text-xs text-muted-foreground">Connecting to preview...</p>
-					</div>
-				)}
-
-				{status === "unavailable" && (
-					<div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background">
-						<div className="text-center space-y-3 px-4">
-							<div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-								<MonitorIcon className="h-6 w-6 text-muted-foreground" />
-							</div>
-							<div>
-								<p className="text-sm font-medium">Preview Not Ready</p>
-								<p className="text-xs text-muted-foreground mt-1">
-									No server is running on this port yet
-								</p>
-							</div>
-							<Button variant="outline" size="sm" onClick={handleRefresh} className="mt-2 gap-2">
-								<RefreshCw className="h-3.5 w-3.5" />
-								Retry
-							</Button>
+				{/* Content */}
+				<div className="flex-1 relative min-h-0">
+					{status === "checking" && (
+						<div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background">
+							<RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+							<p className="text-xs text-muted-foreground">Connecting to preview...</p>
 						</div>
-					</div>
-				)}
+					)}
 
-				{status === "ready" && (
-					<iframe
-						ref={iframeRef}
-						src={url}
-						className="w-full h-full border-0"
-						sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-						title="Preview"
-					/>
-				)}
-			</div>
+					{status === "unavailable" && (
+						<div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background">
+							<div className="text-center space-y-3 px-4">
+								<div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+									<MonitorIcon className="h-6 w-6 text-muted-foreground" />
+								</div>
+								<div>
+									<p className="text-sm font-medium">Preview Not Ready</p>
+									<p className="text-xs text-muted-foreground mt-1">
+										No server is running on this port yet
+									</p>
+								</div>
+								<Button variant="outline" size="sm" onClick={handleRefresh} className="mt-2 gap-2">
+									<RefreshCw className="h-3.5 w-3.5" />
+									Retry
+								</Button>
+							</div>
+						</div>
+					)}
+
+					{status === "ready" && (
+						<iframe
+							ref={iframeRef}
+							src={url}
+							className="w-full h-full border-0"
+							sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+							title="Preview"
+						/>
+					)}
+				</div>
+			</PanelShell>
 		</div>
 	);
 }

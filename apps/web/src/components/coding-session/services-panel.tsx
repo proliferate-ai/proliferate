@@ -236,6 +236,31 @@ export function ServicesPanel({ sessionId, previewUrl }: ServicesPanelProps) {
 		</Tooltip>
 	) : undefined;
 
+	const exposePortBar = !selectedService && (
+		<div className="border-b shrink-0">
+			<div className="flex items-center gap-2 px-3 py-2">
+				<Input
+					type="number"
+					value={portInput}
+					onChange={(e) => setPortInput(e.target.value)}
+					placeholder={exposedPort ? `port ${exposedPort}` : "Port (e.g. 3000)"}
+					className="h-7 text-xs flex-1"
+					min={1}
+					max={65535}
+					onKeyDown={(e) => e.key === "Enter" && handleExpose()}
+				/>
+				<Button
+					size="sm"
+					className="h-7 text-xs"
+					onClick={handleExpose}
+					disabled={exposePort.isPending || !portInput}
+				>
+					{exposePort.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Expose"}
+				</Button>
+			</div>
+		</div>
+	);
+
 	return (
 		<PanelShell
 			title={selectedService ? `${selectedService} logs` : "Services"}
@@ -244,6 +269,9 @@ export function ServicesPanel({ sessionId, previewUrl }: ServicesPanelProps) {
 			noPadding
 		>
 			<div className="flex flex-col h-full">
+				{/* Expose port bar — always visible at top when on list view */}
+				{exposePortBar}
+
 				{/* Content */}
 				<div className="flex-1 min-h-0">
 					{selectedService ? (
@@ -278,34 +306,11 @@ export function ServicesPanel({ sessionId, previewUrl }: ServicesPanelProps) {
 					)}
 				</div>
 
-				{/* Footer */}
+				{/* Footer — service count + exposed port info */}
 				{!selectedService && services.length > 0 && (
-					<div className="border-t shrink-0">
-						{/* Expose port */}
-						<div className="flex items-center gap-2 px-3 py-2">
-							<Input
-								type="number"
-								value={portInput}
-								onChange={(e) => setPortInput(e.target.value)}
-								placeholder={exposedPort ? `port ${exposedPort}` : "Port (e.g. 3000)"}
-								className="h-7 text-xs flex-1"
-								min={1}
-								max={65535}
-								onKeyDown={(e) => e.key === "Enter" && handleExpose()}
-							/>
-							<Button
-								size="sm"
-								className="h-7 text-xs"
-								onClick={handleExpose}
-								disabled={exposePort.isPending || !portInput}
-							>
-								{exposePort.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Expose"}
-							</Button>
-						</div>
-						<div className="px-3 py-1 text-xs text-muted-foreground">
-							{services.length} service{services.length !== 1 ? "s" : ""}
-							{exposedPort !== null && ` \u00B7 port ${exposedPort}`}
-						</div>
+					<div className="border-t shrink-0 px-3 py-1 text-xs text-muted-foreground">
+						{services.length} service{services.length !== 1 ? "s" : ""}
+						{exposedPort !== null && ` \u00B7 port ${exposedPort}`}
 					</div>
 				)}
 			</div>

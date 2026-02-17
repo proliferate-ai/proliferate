@@ -2,13 +2,15 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useConfigurationEnvFiles } from "@/hooks/use-configurations";
 import { useCheckSecrets } from "@/hooks/use-repos";
 import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/use-secrets";
 import { orpc } from "@/lib/orpc";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileUp, Loader2, Lock, Trash2 } from "lucide-react";
+import { FileUp, Loader2, Lock, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PanelShell } from "./panel-shell";
 
@@ -70,6 +72,7 @@ function AddVariableForm({
 }) {
 	const [key, setKey] = useState("");
 	const [value, setValue] = useState("");
+	const [persist, setPersist] = useState(true);
 	const [saving, setSaving] = useState(false);
 
 	const createSecret = useCreateSecret();
@@ -89,13 +92,15 @@ function AddVariableForm({
 				saveToConfiguration: false,
 			});
 
-			// Persist to DB (with configuration linking if available)
-			await createSecret.mutateAsync({
-				key: trimmedKey,
-				value,
-				secretType: "secret",
-				...(configurationId ? { configurationId: configurationId } : {}),
-			});
+			// Persist to DB only if the toggle is on
+			if (persist) {
+				await createSecret.mutateAsync({
+					key: trimmedKey,
+					value,
+					secretType: "secret",
+					...(configurationId ? { configurationId: configurationId } : {}),
+				});
+			}
 
 			setKey("");
 			setValue("");
@@ -108,33 +113,46 @@ function AddVariableForm({
 	};
 
 	return (
-		<div className="flex items-center gap-1.5">
-			<Input
-				value={key}
-				onChange={(e) => setKey(e.target.value.toUpperCase())}
-				placeholder="KEY"
-				className="h-8 text-xs flex-[2]"
-				autoComplete="off"
-			/>
-			<Input
-				type="password"
-				value={value}
-				onChange={(e) => setValue(e.target.value)}
-				placeholder="Value"
-				className="h-8 text-xs flex-[3]"
-				onKeyDown={(e) => {
-					if (e.key === "Enter") handleSave();
-				}}
-				autoComplete="off"
-			/>
-			<Button
-				size="sm"
-				className="h-8 px-3 text-xs shrink-0"
-				onClick={handleSave}
-				disabled={saving || !key.trim() || !value.trim()}
-			>
-				{saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Add"}
-			</Button>
+		<div className="space-y-2">
+			<div className="flex items-center gap-1.5">
+				<Input
+					value={key}
+					onChange={(e) => setKey(e.target.value.toUpperCase())}
+					placeholder="KEY"
+					className="h-8 text-xs flex-[2]"
+					autoComplete="off"
+				/>
+				<Input
+					type="password"
+					value={value}
+					onChange={(e) => setValue(e.target.value)}
+					placeholder="Value"
+					className="h-8 text-xs flex-[3]"
+					onKeyDown={(e) => {
+						if (e.key === "Enter") handleSave();
+					}}
+					autoComplete="off"
+				/>
+				<Button
+					size="sm"
+					className="h-8 px-3 text-xs shrink-0"
+					onClick={handleSave}
+					disabled={saving || !key.trim() || !value.trim()}
+				>
+					{saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Add"}
+				</Button>
+			</div>
+			<div className="flex items-center gap-2">
+				<Switch
+					id="persist"
+					checked={persist}
+					onCheckedChange={setPersist}
+					className="h-4 w-7 [&>span]:h-3 [&>span]:w-3"
+				/>
+				<Label htmlFor="persist" className="text-[11px] text-muted-foreground cursor-pointer">
+					{persist ? "Save to vault" : "Session only (ephemeral)"}
+				</Label>
+			</div>
 		</div>
 	);
 }
@@ -374,6 +392,7 @@ export function EnvironmentPanel({ sessionId, configurationId, repoId }: Environ
 	const setMissingEnvKeyCount = usePreviewPanelStore((s) => s.setMissingEnvKeyCount);
 	const [deletingId, setDeletingId] = useState<string | null>(null);
 	const [pasteMode, setPasteMode] = useState(false);
+	const [filter, setFilter] = useState("");
 
 	// All org secrets
 	const { data: secrets, isLoading: secretsLoading } = useSecrets();
@@ -453,6 +472,26 @@ export function EnvironmentPanel({ sessionId, configurationId, repoId }: Environ
 
 	const isLoading = secretsLoading || specLoading;
 
+	// Filter secrets and missing keys by search
+	const filterLower = filter.toLowerCase();
+	const filteredSecrets = useMemo(
+		() =>
+			filter
+				? (secrets ?? []).filter((s) => s.key.toLowerCase().includes(filterLower))
+				: (secrets ?? []),
+		[secrets, filterLower, filter],
+	);
+	const filteredMissing = useMemo(
+		() =>
+			filter
+				? missingRequired.filter((k) => k.key.toLowerCase().includes(filterLower))
+				: missingRequired,
+		[missingRequired, filterLower, filter],
+	);
+
+	const totalItems = (secrets?.length ?? 0) + missingRequired.length;
+	const showSearch = totalItems >= 6;
+
 	return (
 		<PanelShell title="Environment" noPadding>
 			<div className="h-full min-h-0 overflow-y-auto">
@@ -488,8 +527,21 @@ export function EnvironmentPanel({ sessionId, configurationId, repoId }: Environ
 							</div>
 						)}
 
+						{/* Search filter */}
+						{showSearch && (
+							<div className="relative">
+								<Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+								<Input
+									value={filter}
+									onChange={(e) => setFilter(e.target.value)}
+									placeholder="Filter variables..."
+									className="h-8 text-xs pl-7"
+								/>
+							</div>
+						)}
+
 						{/* Status summary for spec keys */}
-						{specKeys.length > 0 && (
+						{specKeys.length > 0 && !filter && (
 							<p className="text-xs text-muted-foreground">
 								{missingCount > 0
 									? `${missingCount} required ${missingCount === 1 ? "variable" : "variables"} missing`
@@ -498,13 +550,13 @@ export function EnvironmentPanel({ sessionId, configurationId, repoId }: Environ
 						)}
 
 						{/* Missing required keys */}
-						{missingRequired.length > 0 && (
+						{filteredMissing.length > 0 && (
 							<div>
 								<p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pb-1.5">
 									Required
 								</p>
 								<div className="space-y-0.5">
-									{missingRequired.map((k) => (
+									{filteredMissing.map((k) => (
 										<MissingKeyRow
 											key={k.key}
 											keyName={k.key}
@@ -518,15 +570,15 @@ export function EnvironmentPanel({ sessionId, configurationId, repoId }: Environ
 						)}
 
 						{/* All stored variables */}
-						{secrets && secrets.length > 0 && (
+						{filteredSecrets.length > 0 && (
 							<div>
-								{(specKeys.length > 0 || missingRequired.length > 0) && (
+								{(specKeys.length > 0 || missingRequired.length > 0) && !filter && (
 									<p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pb-1.5">
 										Variables
 									</p>
 								)}
 								<div className="space-y-0.5">
-									{secrets.map((secret) => (
+									{filteredSecrets.map((secret) => (
 										<SecretRow
 											key={secret.id}
 											keyName={secret.key}

@@ -42,7 +42,7 @@ const PANEL_TABS = [
 	{ type: "terminal" as const, label: "Terminal", icon: SquareTerminal },
 	{ type: "git" as const, label: "Git", icon: GitBranch },
 	{ type: "services" as const, label: "Services", icon: Layers },
-	{ type: "artifacts" as const, label: "Artifacts", icon: Zap },
+	{ type: "artifacts" as const, label: "Workspace", icon: Zap },
 	{ type: "environment" as const, label: "Env", icon: KeyRound },
 	{ type: "settings" as const, label: "Settings", icon: Settings },
 ];
@@ -134,9 +134,9 @@ export function CodingSession({
 		pinnedTabs,
 		pinTab,
 		unpinTab,
-		missingEnvKeyCount,
 		panelSizes,
 		setPanelSizes,
+		missingEnvKeyCount,
 	} = usePreviewPanelStore();
 	const [viewPickerOpen, setViewPickerOpen] = useState(false);
 	const activeType = mode.type === "file" || mode.type === "gallery" ? "artifacts" : mode.type;
@@ -305,9 +305,9 @@ export function CodingSession({
 		</div>
 	);
 
-	// Left pane header (logo, title, session controls)
-	const leftHeader = (
-		<div className="shrink-0 flex h-12 items-center gap-2 px-3 border-b border-border/50">
+	// Chat header (embedded in left pane)
+	const chatHeader = (
+		<div className="shrink-0 flex items-center gap-2 h-12 px-3 border-b border-border/50">
 			<Tooltip>
 				<TooltipTrigger asChild>
 					<Link href="/dashboard">
@@ -337,96 +337,90 @@ export function CodingSession({
 		</div>
 	);
 
-	// Right pane header (panel tabs)
-	const rightHeader = (
-		<div className="shrink-0 flex h-12 items-center px-3 border-b border-border/50">
+	// Panel tabs header (embedded in right pane)
+	const panelTabsHeader = (
+		<div className="shrink-0 flex items-center h-12 px-3 border-b border-border/50">
 			{panelViewPicker}
 		</div>
 	);
 
-	// Wrap left pane content with runtime provider when ready
-	const wrappedLeftContent = isReady ? (
-		<AssistantRuntimeProvider runtime={runtime}>{leftPaneContent}</AssistantRuntimeProvider>
-	) : (
-		leftPaneContent
+	// Desktop layout with resizable panels
+	const desktopContent = (
+		<ResizablePanelGroup
+			orientation="horizontal"
+			className="h-full w-full"
+			onLayoutChanged={(layout) => setPanelSizes(Object.values(layout))}
+		>
+			{/* Left pane: Chat */}
+			<ResizablePanel
+				defaultSize={panelSizes[0] || 35}
+				minSize={25}
+				maxSize={65}
+				className="flex flex-col"
+			>
+				{chatHeader}
+				<div className="flex-1 min-h-0 flex flex-col">{leftPaneContent}</div>
+			</ResizablePanel>
+
+			{/* Drag handle */}
+			<ResizableHandle withHandle />
+
+			{/* Right pane: Tool panels */}
+			<ResizablePanel
+				defaultSize={panelSizes[1] || 65}
+				minSize={35}
+				maxSize={75}
+				className="flex flex-col"
+			>
+				{panelTabsHeader}
+				<div className="flex-1 min-h-0 p-2">
+					<div className="h-full rounded-xl border border-border bg-background overflow-hidden">
+						<RightPanel
+							isMobileFullScreen={false}
+							sessionProps={sessionPanelProps}
+							previewUrl={previewUrl}
+						/>
+					</div>
+				</div>
+			</ResizablePanel>
+		</ResizablePanelGroup>
 	);
 
-	// Mobile layout: full-screen toggle between chat and panel
-	const mobileLayout = (
+	// Mobile layout (full-screen toggle between chat and panel)
+	const mobileContent = (
 		<div className="flex flex-col h-full md:hidden">
-			{mobileView === "chat" ? (
-				<>
-					{leftHeader}
-					<div className="flex-1 min-h-0">{wrappedLeftContent}</div>
-				</>
-			) : (
-				<>
-					<div className="shrink-0 flex h-12 items-center px-3 border-b border-border/50">
-						{panelViewPicker}
-					</div>
-					<div className="flex-1 min-h-0 p-2">
-						<div className="h-full rounded-xl border border-border bg-background overflow-hidden">
-							<RightPanel
-								isMobileFullScreen
-								sessionProps={sessionPanelProps}
-								previewUrl={previewUrl}
-							/>
-						</div>
-					</div>
-				</>
-			)}
+			{chatHeader}
+			<div className="flex-1 min-h-0">
+				{mobileView === "preview" ? (
+					<RightPanel isMobileFullScreen sessionProps={sessionPanelProps} previewUrl={previewUrl} />
+				) : (
+					leftPaneContent
+				)}
+			</div>
 		</div>
 	);
 
-	// Desktop layout: resizable two-pane
-	const desktopLayout = (
-		<TooltipProvider delayDuration={150}>
-			<ResizablePanelGroup
-				orientation="horizontal"
-				className="hidden md:flex h-full w-full"
-				onLayoutChanged={(layout) => {
-					setPanelSizes([layout.left ?? 35, layout.right ?? 65]);
-				}}
-			>
-				{/* Left pane: Chat */}
-				<ResizablePanel
-					id="left"
-					defaultSize={panelSizes[0] || 35}
-					minSize={25}
-					maxSize={65}
-					className="flex flex-col"
-				>
-					{leftHeader}
-					<div className="flex-1 min-h-0 flex flex-col">{wrappedLeftContent}</div>
-				</ResizablePanel>
-
-				{/* Drag handle */}
-				<ResizableHandle withHandle />
-
-				{/* Right pane: Tool panels */}
-				<ResizablePanel
-					id="right"
-					defaultSize={panelSizes[1] || 65}
-					minSize={35}
-					maxSize={75}
-					className="flex flex-col"
-				>
-					{rightHeader}
-					<div className="flex-1 min-h-0 p-2">
-						<div className="h-full rounded-xl border border-border bg-background overflow-hidden">
-							<RightPanel sessionProps={sessionPanelProps} previewUrl={previewUrl} />
-						</div>
-					</div>
-				</ResizablePanel>
-			</ResizablePanelGroup>
-		</TooltipProvider>
+	const mainContent = (
+		<>
+			{/* Desktop: resizable two-pane */}
+			<div className="hidden md:flex h-full">{desktopContent}</div>
+			{/* Mobile: full-screen toggle */}
+			{mobileContent}
+		</>
 	);
 
 	const content = (
-		<div className="flex h-full flex-col">
-			{mobileLayout}
-			{desktopLayout}
-		</div>
+		<TooltipProvider delayDuration={150}>
+			<div className="flex h-full flex-col">
+				<div className="flex-1 min-h-0">
+					{isReady ? (
+						<AssistantRuntimeProvider runtime={runtime}>{mainContent}</AssistantRuntimeProvider>
+					) : (
+						mainContent
+					)}
+				</div>
+			</div>
+		</TooltipProvider>
 	);
 
 	if (asModal) {
