@@ -1858,6 +1858,49 @@ export const userConnections = pgTable(
 );
 
 /**
+ * User action preferences — per-user, per-org toggles for action sources.
+ * Absence of a row means "enabled" (default). Rows are stored for explicit opt-outs.
+ * sourceId is the action source key (e.g. "linear", "connector:<uuid>").
+ * actionId is null for source-level toggles, or a specific action ID for per-action granularity.
+ */
+export const userActionPreferences = pgTable(
+	"user_action_preferences",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		userId: text("user_id").notNull(),
+		organizationId: text("organization_id").notNull(),
+		sourceId: text("source_id").notNull(),
+		actionId: text("action_id"),
+		enabled: boolean().notNull().default(true),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_user_action_prefs_user_org").using(
+			"btree",
+			table.userId.asc().nullsLast().op("text_ops"),
+			table.organizationId.asc().nullsLast().op("text_ops"),
+		),
+		foreignKey({
+			columns: [table.userId],
+			foreignColumns: [user.id],
+			name: "user_action_preferences_user_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "user_action_preferences_organization_id_fkey",
+		}).onDelete("cascade"),
+		unique("user_action_prefs_user_org_source_action_key").on(
+			table.userId,
+			table.organizationId,
+			table.sourceId,
+			table.actionId,
+		),
+	],
+);
+
+/**
  * Secret files — file-based secrets written to sandbox (replaces secret_bundles approach).
  */
 export const secretFiles = pgTable(

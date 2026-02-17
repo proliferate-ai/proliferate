@@ -21,6 +21,7 @@ import { secretFilesRouter } from "./secret-files";
 import { secretsRouter } from "./secrets";
 import { sessionsRouter } from "./sessions";
 import { triggersRouter } from "./triggers";
+import { userActionPreferencesRouter } from "./user-action-preferences";
 
 export const appRouter = {
 	actions: actionsRouter,
@@ -40,6 +41,7 @@ export const appRouter = {
 	secrets: secretsRouter,
 	sessions: sessionsRouter,
 	triggers: triggersRouter,
+	userActionPreferences: userActionPreferencesRouter,
 };
 
 export type AppRouter = typeof appRouter;

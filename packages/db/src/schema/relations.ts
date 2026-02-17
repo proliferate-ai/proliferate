@@ -36,6 +36,7 @@ import {
 	triggerPollGroups,
 	triggers,
 	user,
+	userActionPreferences,
 	userConnections,
 	userSshKeys,
 	webhookInbox,
@@ -548,6 +549,17 @@ export const userConnectionsRelations = relations(userConnections, ({ one }) => 
 	}),
 	organization: one(organization, {
 		fields: [userConnections.organizationId],
+		references: [organization.id],
+	}),
+}));
+
+export const userActionPreferencesRelations = relations(userActionPreferences, ({ one }) => ({
+	user: one(user, {
+		fields: [userActionPreferences.userId],
+		references: [user.id],
+	}),
+	organization: one(organization, {
+		fields: [userActionPreferences.organizationId],
 		references: [organization.id],
 	}),
 }));

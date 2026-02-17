@@ -24,7 +24,15 @@ import { ProviderActionSource } from "@proliferate/providers/action-source";
 import { computeDefinitionHash, zodToJsonSchema } from "@proliferate/providers/helpers/schema";
 import { truncateJson } from "@proliferate/providers/helpers/truncation";
 import { getProviderActions } from "@proliferate/providers/providers/registry";
-import { actions, connectors, integrations, orgs, secrets, sessions } from "@proliferate/services";
+import {
+	actions,
+	connectors,
+	integrations,
+	orgs,
+	secrets,
+	sessions,
+	userActionPreferences,
+} from "@proliferate/services";
 import type { ConnectorConfig } from "@proliferate/shared";
 import { Router, type Router as RouterType } from "express";
 import type { HubManager } from "../../../hub";
@@ -394,7 +402,26 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 					actions: ct.actions.map(actionToResponse),
 				}));
 
-			res.json({ integrations: [...available, ...connectorIntegrations] });
+			let allIntegrations = [...available, ...connectorIntegrations];
+
+			// Apply user action preference pre-filter
+			const userId =
+				req.auth?.source !== "sandbox"
+					? req.auth?.userId
+					: (await sessions.findByIdInternal(sessionId))?.createdBy;
+
+			if (userId) {
+				const orgId =
+					req.auth?.orgId ?? (await sessions.findByIdInternal(sessionId))?.organizationId;
+				if (orgId) {
+					const disabled = await userActionPreferences.getDisabledSourceIds(userId, orgId);
+					if (disabled.size > 0) {
+						allIntegrations = allIntegrations.filter((i) => i && !disabled.has(i.integration));
+					}
+				}
+			}
+
+			res.json({ integrations: allIntegrations });
 		} catch (err) {
 			next(err);
 		}
@@ -490,6 +517,21 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(400, "Missing integration or action");
 			}
 
+			// Resolve session (used for preference check + invocation context)
+			const session = await sessions.findByIdInternal(sessionId);
+			if (!session) throw new ApiError(404, "Session not found");
+
+			// Enforce user action preferences (belt-and-suspenders with GET /available filter)
+			if (session.createdBy) {
+				const disabled = await userActionPreferences.getDisabledSourceIds(
+					session.createdBy,
+					session.organizationId,
+				);
+				if (disabled.has(integration)) {
+					throw new ApiError(403, "This integration is disabled by user preferences");
+				}
+			}
+
 			// Resolve ActionSource, definition, context, and drift
 			const resolved = await resolveActionSource(sessionId, integration, action);
 
@@ -499,10 +541,6 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(400, `Invalid params: ${parseResult.error.message}`);
 			}
 			const validatedParams = parseResult.data as Record<string, unknown>;
-
-			// Resolve org from session
-			const session = await sessions.findByIdInternal(sessionId);
-			if (!session) throw new ApiError(404, "Session not found");
 
 			// Create invocation via standard risk pipeline
 			let result: Awaited<ReturnType<typeof actions.invokeAction>>;
