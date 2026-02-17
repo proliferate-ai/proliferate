@@ -11,7 +11,8 @@ export type PreviewMode =
 	| { type: "terminal" }
 	| { type: "vscode" }
 	| { type: "artifacts" }
-	| { type: "services" };
+	| { type: "services" }
+	| { type: "environment" };
 
 // Mobile view state - on mobile we either show chat or preview (full screen)
 export type MobileView = "chat" | "preview";
@@ -20,6 +21,7 @@ interface PreviewPanelState {
 	mode: PreviewMode;
 	mobileView: MobileView;
 	pinnedTabs: string[];
+	missingEnvKeyCount: number;
 
 	// Actions
 	openUrl: (url: string) => void;
@@ -30,12 +32,15 @@ interface PreviewPanelState {
 	// Toggle helpers (for header buttons — toggles open/close)
 	toggleUrlPreview: (url: string | null) => void;
 	togglePanel: (
-		type: "settings" | "git" | "terminal" | "vscode" | "artifacts" | "services",
+		type: "settings" | "git" | "terminal" | "vscode" | "artifacts" | "services" | "environment",
 	) => void;
 
 	// Pin/unpin tabs in header
 	pinTab: (type: string) => void;
 	unpinTab: (type: string) => void;
+
+	// Missing env key count
+	setMissingEnvKeyCount: (count: number) => void;
 
 	// Mobile view toggle
 	setMobileView: (view: MobileView) => void;
@@ -48,6 +53,7 @@ export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
 	mode: DEFAULT_MODE,
 	mobileView: "chat",
 	pinnedTabs: ["url", "vscode"],
+	missingEnvKeyCount: 0,
 
 	openUrl: (url: string) => set({ mode: { type: "url", url } }),
 
@@ -68,7 +74,9 @@ export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
 	},
 
 	// Switch panel view — always stays open, just switches type
-	togglePanel: (type: "settings" | "git" | "terminal" | "vscode" | "artifacts" | "services") => {
+	togglePanel: (
+		type: "settings" | "git" | "terminal" | "vscode" | "artifacts" | "services" | "environment",
+	) => {
 		const { mode } = get();
 		if (mode.type === type) {
 			set({ mode: DEFAULT_MODE });
@@ -86,6 +94,8 @@ export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
 		set((state) => ({
 			pinnedTabs: state.pinnedTabs.filter((t) => t !== type),
 		})),
+
+	setMissingEnvKeyCount: (count: number) => set({ missingEnvKeyCount: count }),
 
 	setMobileView: (view: MobileView) => set({ mobileView: view }),
 

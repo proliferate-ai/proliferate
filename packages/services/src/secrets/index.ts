@@ -15,7 +15,7 @@ export type {
 export { EncryptionError, DuplicateSecretError } from "./service";
 
 // DB functions needed by sessions-create and repos-finalize
-export { getSecretsForSession, upsertByRepoAndKey as upsertSecretByRepoAndKey } from "./db";
+export { getSecretsForSession, getSecretsForConfiguration, upsertByRepoAndKey as upsertSecretByRepoAndKey } from "./db";
 
 // Connector secret resolution (used by gateway actions routes)
 export { resolveSecretValue } from "./service";

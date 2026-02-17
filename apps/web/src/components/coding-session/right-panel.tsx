@@ -10,6 +10,7 @@ import type {
 import { Loader2 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { ArtifactsPanel } from "./artifacts-panel";
+import { EnvironmentPanel } from "./environment-panel";
 import { GitPanel } from "./git-panel";
 import { PreviewPanel } from "./preview-panel";
 import { SettingsPanel } from "./settings-panel";
@@ -35,7 +36,6 @@ export interface SessionPanelProps {
 	startedAt?: string | null;
 	concurrentUsers?: number;
 	isModal?: boolean;
-	onSecretsClick?: () => void;
 	isMigrating?: boolean;
 	canSnapshot?: boolean;
 	isSnapshotting?: boolean;
@@ -107,7 +107,6 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 					startedAt={sessionProps.startedAt}
 					concurrentUsers={sessionProps.concurrentUsers}
 					isModal={sessionProps.isModal}
-					onSecretsClick={sessionProps.onSecretsClick}
 					isMigrating={sessionProps.isMigrating}
 					canSnapshot={sessionProps.canSnapshot}
 					isSnapshotting={sessionProps.isSnapshotting}
@@ -116,6 +115,18 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 					prebuildId={sessionProps.prebuildId}
 					autoStartOutput={sessionProps.autoStartOutput}
 					sendRunAutoStart={sessionProps.sendRunAutoStart}
+				/>
+			);
+		}
+
+		// Environment panel
+		if (mode.type === "environment" && sessionProps?.sessionId) {
+			return (
+				<EnvironmentPanel
+					sessionId={sessionProps.sessionId}
+					prebuildId={sessionProps.prebuildId}
+					repoId={sessionProps.repoId}
+					onClose={handleClose}
 				/>
 			);
 		}

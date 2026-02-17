@@ -22,6 +22,7 @@ export interface CreateSecretInput {
 	description?: string;
 	repoId?: string;
 	secretType?: string;
+	configurationId?: string;
 }
 
 export interface CheckSecretsInput {
@@ -103,6 +104,10 @@ export async function createSecret(input: CreateSecretInput): Promise<Secret> {
 			createdBy: input.userId,
 		});
 
+		if (input.configurationId && row.id) {
+			await secretsDb.linkSecretToConfiguration(input.configurationId, row.id);
+		}
+
 		return toSecret(row);
 	} catch (err: unknown) {
 		// Check for unique constraint violation
@@ -125,11 +130,16 @@ export async function deleteSecret(id: string, orgId: string): Promise<boolean> 
  * Check which secrets exist for given keys.
  */
 export async function checkSecrets(input: CheckSecretsInput): Promise<CheckSecretsResult[]> {
-	const existingKeys = await secretsDb.findExistingKeys(input.organizationId, {
-		keys: input.keys,
-		repoId: input.repoId,
-		prebuildId: input.prebuildId,
-	});
+	let existingKeys: string[];
+	if (input.prebuildId) {
+		existingKeys = await secretsDb.findExistingKeysForConfiguration(
+			input.organizationId, input.prebuildId, input.keys,
+		);
+	} else {
+		existingKeys = await secretsDb.findExistingKeys(input.organizationId, {
+			keys: input.keys, repoId: input.repoId,
+		});
+	}
 
 	const existingSet = new Set(existingKeys);
 

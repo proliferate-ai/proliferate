@@ -1,6 +1,5 @@
 "use client";
 
-import { SettingsModal } from "@/components/dashboard/settings-modal";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -16,6 +15,7 @@ import {
 	Code,
 	GitBranch,
 	Globe,
+	KeyRound,
 	Layers,
 	Loader2,
 	MoreHorizontal,
@@ -42,6 +42,7 @@ const PANEL_TABS = [
 	{ type: "git" as const, label: "Git", icon: GitBranch },
 	{ type: "services" as const, label: "Services", icon: Layers },
 	{ type: "artifacts" as const, label: "Artifacts", icon: Zap },
+	{ type: "environment" as const, label: "Env", icon: KeyRound },
 	{ type: "settings" as const, label: "Settings", icon: Settings },
 ];
 
@@ -132,8 +133,8 @@ export function CodingSession({
 		pinnedTabs,
 		pinTab,
 		unpinTab,
+		missingEnvKeyCount,
 	} = usePreviewPanelStore();
-	const [secretsModalOpen, setSecretsModalOpen] = useState(false);
 	const [viewPickerOpen, setViewPickerOpen] = useState(false);
 	const activeType = mode.type === "file" || mode.type === "gallery" ? "artifacts" : mode.type;
 
@@ -156,7 +157,6 @@ export function CodingSession({
 				startedAt: sessionData.startedAt,
 				concurrentUsers: 1,
 				isModal: asModal,
-				onSecretsClick: () => setSecretsModalOpen(true),
 				isMigrating,
 				canSnapshot,
 				isSnapshotting: snapshotSession.isPending,
@@ -243,6 +243,11 @@ export function CodingSession({
 					>
 						<tab.icon className="h-3.5 w-3.5" />
 						<span className="hidden lg:inline">{tab.label}</span>
+						{tab.type === "environment" && missingEnvKeyCount > 0 && (
+							<span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-medium text-destructive-foreground">
+								{missingEnvKeyCount}
+							</span>
+						)}
 					</Button>
 				);
 			})}
@@ -370,14 +375,7 @@ export function CodingSession({
 			{/* Main content — two-pane layout always rendered */}
 			<div className="flex-1 min-h-0">
 				{isReady ? (
-					<AssistantRuntimeProvider runtime={runtime}>
-						{mainContent}
-						<SettingsModal
-							open={secretsModalOpen}
-							onOpenChange={setSecretsModalOpen}
-							defaultTab="secrets"
-						/>
-					</AssistantRuntimeProvider>
+					<AssistantRuntimeProvider runtime={runtime}>{mainContent}</AssistantRuntimeProvider>
 				) : (
 					mainContent
 				)}
