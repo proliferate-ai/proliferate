@@ -1,0 +1,437 @@
+diff --git a/apps/web/src/app/(workspace)/workspace/setup/[id]/page.tsx b/apps/web/src/app/(workspace)/workspace/setup/[id]/page.tsx
+index dad5770..88056aa 100644
+--- a/apps/web/src/app/(workspace)/workspace/setup/[id]/page.tsx
++++ b/apps/web/src/app/(workspace)/workspace/setup/[id]/page.tsx
+@@ -2,13 +2,17 @@
+ 
+ import { CodingSession } from "@/components/coding-session";
+ import { SessionLoadingShell } from "@/components/coding-session/session-loading-shell";
++import { HelpLink } from "@/components/help/help-link";
++import { SetupIntroModal } from "@/components/sessions/setup-intro-modal";
+ import { Button } from "@/components/ui/button";
++import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+ import { useCreatePrebuild } from "@/hooks/use-prebuilds";
+ import { useCreateSession, useFinalizeSetup } from "@/hooks/use-sessions";
+ import { useDashboardStore } from "@/stores/dashboard";
+ import { Check, Settings } from "lucide-react";
+ import { useParams, useRouter } from "next/navigation";
+ import { useEffect, useRef, useState } from "react";
++import { toast } from "sonner";
+ 
+ export default function SetupPage() {
+ 	const params = useParams();
+@@ -59,6 +63,9 @@ export default function SetupPage() {
+ 				repoId,
+ 				sessionId,
+ 			});
++			toast.success("Snapshot saved!", {
++				description: "Your environment is ready. Start a coding session to begin building.",
++			});
+ 			router.push("/dashboard");
+ 		} catch (error) {
+ 			console.error("Failed to finalize setup:", error);
+@@ -98,24 +105,39 @@ export default function SetupPage() {
+ 
+ 	return (
+ 		<div className="flex h-full flex-col">
++			<SetupIntroModal />
++
+ 			{/* Setup context banner */}
+-			<div className="flex items-center gap-3 border-b border-border bg-muted/30 px-4 py-2 shrink-0">
++			<div className="flex items-center gap-3 border-b border-border bg-muted/50 px-5 py-2.5 shrink-0">
+ 				<Settings className="h-4 w-4 text-muted-foreground shrink-0" />
+ 				<div className="flex-1 min-w-0">
+-					<span className="text-sm font-medium">Setting up your environment</span>
+-					<span className="text-xs text-muted-foreground ml-2">
+-						Install dependencies, configure services, and save when ready
++					<div className="flex items-center gap-1.5">
++						<span className="text-sm font-medium">Setup Session</span>
++						<HelpLink topic="setup-sessions" iconOnly />
++					</div>
++					<span className="text-xs text-muted-foreground block">
++						The agent is configuring this environment. Save the snapshot when it's verified.
+ 					</span>
+ 				</div>
+-				<Button
+-					onClick={handleFinalize}
+-					disabled={!sessionId || finalizeSetupMutation.isPending}
+-					size="sm"
+-					className="gap-1.5 shrink-0"
+-				>
+-					<Check className="h-3.5 w-3.5" />
+-					{finalizeSetupMutation.isPending ? "Saving..." : "Done — Save Snapshot"}
+-				</Button>
++				<TooltipProvider>
++					<Tooltip>
++						<TooltipTrigger asChild>
++							<Button
++								onClick={handleFinalize}
++								disabled={!sessionId || finalizeSetupMutation.isPending}
++								size="sm"
++								className="gap-1.5 shrink-0"
++							>
++								<Check className="h-3.5 w-3.5" />
++								{finalizeSetupMutation.isPending ? "Saving..." : "Done — Save Snapshot"}
++							</Button>
++						</TooltipTrigger>
++						<TooltipContent side="bottom" align="end" className="max-w-[240px]">
++							Saves this environment as a reusable snapshot. Future coding sessions will boot from
++							this state.
++						</TooltipContent>
++					</Tooltip>
++				</TooltipProvider>
+ 			</div>
+ 
+ 			{/* Session */}
+diff --git a/apps/web/src/components/sessions/setup-intro-modal.tsx b/apps/web/src/components/sessions/setup-intro-modal.tsx
+new file mode 100644
+index 0000000..8dc016f
+--- /dev/null
++++ b/apps/web/src/components/sessions/setup-intro-modal.tsx
+@@ -0,0 +1,95 @@
++"use client";
++
++import { Button } from "@/components/ui/button";
++import {
++	Dialog,
++	DialogContent,
++	DialogDescription,
++	DialogFooter,
++	DialogHeader,
++	DialogTitle,
++} from "@/components/ui/dialog";
++import { KeyRound, Save, Terminal } from "lucide-react";
++import { useEffect, useState } from "react";
++
++const STORAGE_KEY = "proliferate_setup_intro_seen";
++
++export function SetupIntroModal() {
++	const [isOpen, setIsOpen] = useState(false);
++
++	useEffect(() => {
++		const hasSeen = localStorage.getItem(STORAGE_KEY);
++		if (!hasSeen) {
++			setIsOpen(true);
++		}
++	}, []);
++
++	const handleClose = () => {
++		localStorage.setItem(STORAGE_KEY, "true");
++		setIsOpen(false);
++	};
++
++	return (
++		<Dialog
++			open={isOpen}
++			onOpenChange={(open) => {
++				if (!open) handleClose();
++			}}
++		>
++			<DialogContent className="sm:max-w-[480px]">
++				<DialogHeader>
++					<DialogTitle className="text-lg">Welcome to Setup Mode</DialogTitle>
++					<DialogDescription className="text-sm text-muted-foreground">
++						This is a one-time initialization session. The AI agent will configure this repository
++						so future coding sessions start instantly.
++					</DialogDescription>
++				</DialogHeader>
++
++				<div className="flex flex-col gap-4 py-3">
++					<div className="flex gap-3 items-start">
++						<div className="flex items-center justify-center w-8 h-8 rounded-md bg-muted shrink-0">
++							<Terminal className="w-4 h-4 text-muted-foreground" />
++						</div>
++						<div>
++							<p className="text-sm font-medium">1. The agent builds the foundation</p>
++							<p className="text-xs text-muted-foreground mt-0.5">
++								It installs dependencies, configures databases, and starts local services
++								autonomously.
++							</p>
++						</div>
++					</div>
++					<div className="flex gap-3 items-start">
++						<div className="flex items-center justify-center w-8 h-8 rounded-md bg-muted shrink-0">
++							<KeyRound className="w-4 h-4 text-muted-foreground" />
++						</div>
++						<div>
++							<p className="text-sm font-medium">2. Provide missing secrets</p>
++							<p className="text-xs text-muted-foreground mt-0.5">
++								If the project requires third-party API keys, the agent will prompt you with a
++								secure form in the chat.
++							</p>
++						</div>
++					</div>
++					<div className="flex gap-3 items-start">
++						<div className="flex items-center justify-center w-8 h-8 rounded-md bg-muted shrink-0">
++							<Save className="w-4 h-4 text-muted-foreground" />
++						</div>
++						<div>
++							<p className="text-sm font-medium">3. Save the snapshot when ready</p>
++							<p className="text-xs text-muted-foreground mt-0.5">
++								Once verified, click "Done — Save Snapshot" at the top. All future coding sessions
++								will boot from this saved state.
++							</p>
++						</div>
++					</div>
++				</div>
++
++				<DialogFooter>
++					<Button onClick={handleClose} className="w-full">
++						Got it, let's start
++					</Button>
++				</DialogFooter>
++			</DialogContent>
++		</Dialog>
++	);
++}
+diff --git a/apps/web/src/content/help/index.ts b/apps/web/src/content/help/index.ts
+index 8c09233..c2c06a6 100644
+--- a/apps/web/src/content/help/index.ts
++++ b/apps/web/src/content/help/index.ts
+@@ -108,45 +108,40 @@ Yes! If you prefer, you can start coding sessions without a snapshot. Your envir
+ 
+ 	"setup-sessions": `# Setup Sessions
+ 
+-Setup sessions configure your cloud environment so coding sessions start instantly.
++A setup session is a one-time initialization phase where an AI agent configures your cloud environment. Once saved as a snapshot, every future coding session boots instantly from that exact state.
+ 
+-## Configured vs. not configured
+-
+-- **Configured** — a setup session has run, dependencies are installed, and a snapshot is saved. New coding sessions boot in seconds.
+-- **Not configured** — no setup has run yet. You can still start a coding session, but it'll begin from a blank slate and the agent will need to install everything first.
+-
+-You can always start a coding session without any repo at all ("General assistant" mode) — useful for quick questions or scratch work.
++## What is happening?
+ 
+-## What happens in a setup session?
++You're watching the agent work in real-time. It autonomously:
+ 
+-An AI agent helps you:
++1. **Installs dependencies** — npm, pip, cargo, whatever your project needs
++2. **Configures services** — databases, caches, queues, all running locally
++3. **Verifies everything works** — hits endpoints, runs tests, takes screenshots
+ 
+-1. **Install dependencies** — npm, pip, cargo, whatever your project needs
+-2. **Configure services** — databases, caches, queues
+-3. **Set up tools** — linters, formatters, test runners
+-4. **Verify everything works** — run your tests, start your dev server
++## Your role
+ 
+-## How it works
++- **Watch the agent work** — it handles most setup autonomously
++- **Provide secrets when prompted** — if the project needs third-party API keys (Stripe, etc.), the agent will show a secure form in the chat
++- **Click "Done — Save Snapshot"** when the agent confirms everything is working
+ 
+-Tell the agent what you need in plain English:
++## What does "Done — Save Snapshot" do?
+ 
+-> "Install all dependencies and make sure the tests pass"
++It freezes the entire environment — code, dependencies, databases, running services — into a reusable image. All future coding sessions for this repo will boot from this saved state in seconds, skipping the entire setup process.
+ 
+-> "Set up PostgreSQL and run the database migrations"
+-
+-> "Configure the project for local development"
++## Configured vs. not configured
+ 
+-The agent reads your project files, figures out what to do, and sets everything up. You can watch it work and ask questions along the way.
++- **Configured** — a setup session has run, a snapshot is saved. Coding sessions boot instantly.
++- **Not configured** — no setup yet. You can still start a coding session, but the agent will need to install everything from scratch.
+ 
+-## Saving your work
++## Local CLI
+ 
+-When your environment is ready, save a snapshot. This captures everything so you don't have to repeat the setup next time.
++You can also connect your local IDE to this cloud environment. Run \`npx @proliferate/cli\` in your terminal to sync files and use VS Code, Cursor, or any editor you prefer.
+ 
+ ## Tips
+ 
+ - **Be specific** — "Install Node 20" is better than "install node"
+ - **Check the logs** — if something fails, the error messages help the agent fix it
+-- **Iterate** — you can always adjust and save a new snapshot`,
++- **Iterate** — you can always re-run setup and save a new snapshot`,
+ 
+ 	"coding-sessions": `# Coding Sessions
+ 
+diff --git a/packages/shared/src/prompts.ts b/packages/shared/src/prompts.ts
+index 91d7b75..6ab6ea5 100644
+--- a/packages/shared/src/prompts.ts
++++ b/packages/shared/src/prompts.ts
+@@ -3,8 +3,7 @@
+  */
+ 
+ export function getSetupSystemPrompt(repoName: string): string {
+-	return `
+-You're setting up a development environment for ${repoName}. Your goal is to get everything running and working — not just installed, but actually functional and verified. When you're confident it all works, save a snapshot so the user can spin up this environment again later.
++	return `You are an AI engineer running inside **Proliferate**, a cloud development platform. You're setting up a development environment for ${repoName}. Your goal is to get everything running and working — not just installed, but actually functional and verified. When you're confident it all works, save a snapshot so the user can spin up this environment again later.
+ 
+ Work autonomously. Push through problems instead of stopping at the first error. When something fails, read the error, try a different approach, check logs, search the codebase for hints. You have internet access — use it. Only ask the user for help as a last resort. Most setup problems are solvable if you're persistent.
+ 
+@@ -16,7 +15,11 @@ You have tools to request environment variables from the user (\`request_env_var
+ 
+ Don't edit source code. Developers set up local environments without modifying the codebase, and you should too. Config files and .env files are fine.
+ 
+-Use the \`proliferate\` CLI to manage background services:
++## Proliferate CLI
++
++You have native access to the \`proliferate\` CLI in this sandbox. You are acting on behalf of the user — use it proactively.
++
++### Service Management
+ - \`proliferate services start --name <name> --command "<cmd>"\` — start a background service
+ - \`proliferate services list\` — list all services and their status
+ - \`proliferate services logs --name <name>\` — view recent logs
+@@ -27,15 +30,22 @@ Use the \`proliferate\` CLI to manage background services:
+ 
+ All commands output JSON.
+ 
+-## External Integrations
+-
++### External Integrations
+ Use \`proliferate actions list\` to discover available integrations (Sentry, Linear, etc.).
++Use \`proliferate actions guide --integration <name>\` for detailed usage of a specific integration.
+ Use \`proliferate actions run --integration <name> --action <action> --params '<json>'\` to interact with external services.
+ Tokens are resolved server-side — never ask the user for API keys for connected integrations.
+-Write actions may require user approval and will block until approved.
++Write actions require user approval and will block until approved in the UI.
++
++### Local Workflow
++The user can also install the Proliferate CLI on their local machine (\`npx @proliferate/cli\`) to sync files with this sandbox and use their own IDE. If they ask about local development, VS Code, Cursor, or file syncing, let them know.
++
++## Environment Files & Secrets
+ 
+ After identifying which env files the project needs (e.g. \`.env.local\`, \`.env\`), call \`save_env_files()\` to record the spec. Future sessions will automatically generate these files from stored secrets on boot. Secret env files are automatically scrubbed before snapshots and restored after, so \`save_snapshot()\` is always safe to call.
+ 
++## Operational Rules
++
+ Background any long-running processes. Don't block on dev servers or watchers.
+ 
+ "Services start" is not the same as "services work." Actually test that things function — hit endpoints, check health, verify the app loads. Use the \`verify\` tool to upload evidence.
+@@ -64,7 +74,7 @@ export function getSetupInitialPrompt(): string {
+ }
+ 
+ export function getCodingSystemPrompt(repoName: string): string {
+-	return `You are a software engineer working on ${repoName}.
++	return `You are a software engineer working on ${repoName}, running inside **Proliferate**, a cloud development platform.
+ 
+ ## User Interaction
+ 
+@@ -76,12 +86,11 @@ Full access to codebase, terminal, and git. The dev environment is already confi
+ - Read/edit files, run shell commands, start/stop services
+ - Commit and push changes
+ - Browser automation via Playwright MCP
+-- \`proliferate\` CLI for managing services (\`proliferate services start/stop/list/logs/expose\`)
+ 
+ ## Verification Evidence
+ 
+ Since you're working in a cloud sandbox, the main goal is to produce *verifiably correct* work. This means that you should aim to collect a corpus
+-of evidence that proves the changes you've made work correctly for the user, and verify when needed. 
++of evidence that proves the changes you've made work correctly for the user, and verify when needed.
+ 
+ When verifying your work, collect evidence in the \`.proliferate/.verification/\` folder:
+ - Screenshots: Save browser screenshots showing UI changes work correctly
+@@ -108,12 +117,13 @@ Then call: \`verify()\` (uses default folder) or \`verify({ folder: ".proliferat
+ 3. **Test your work** - Run tests, use browser for UI verification
+ 4. **Commit logically** - Clear, focused commits with good messages
+ 
+-## External Integrations
++## Proliferate Platform & Capabilities
+ 
+-Use \`proliferate actions list\` to discover available integrations (Sentry, Linear, etc.).
+-Use \`proliferate actions run --integration <name> --action <action> --params '<json>'\` to interact with external services.
+-Tokens are resolved server-side — never ask the user for API keys for connected integrations.
+-Write actions may require user approval and will block until approved.
++You can act on the user's behalf using the \`proliferate\` CLI:
++
++- **Services**: \`proliferate services start/stop/list/logs/restart/expose\` to manage background dev servers.
++- **Integrations**: \`proliferate actions list\` to discover connected tools (Sentry, Linear, etc.). \`proliferate actions guide --integration <name>\` for usage details. \`proliferate actions run --integration <name> --action <action> --params '<json>'\` to execute. Tokens are resolved server-side — never ask for API keys for connected integrations. Write actions require user approval and will block until approved in the UI.
++- **Local workflow**: The user can run \`npx @proliferate/cli\` on their local machine to sync files with this sandbox and use their own IDE. Mention this if they ask about local development, VS Code, or file syncing.
+ 
+ ## Secrets
+ 
+@@ -124,7 +134,7 @@ When done, briefly summarize what you changed and any next steps.
+ }
+ 
+ export function getScratchSystemPrompt(): string {
+-	return `You are a software engineer working in a cloud sandbox with full terminal access, internet, and development tools. No repository is loaded.
++	return `You are a software engineer working in a cloud sandbox on **Proliferate**, a cloud development platform. Full terminal access, internet, and development tools are available. No repository is loaded.
+ 
+ ## User Interaction
+ 
+@@ -137,7 +147,6 @@ Full access to terminal, filesystem, and internet. You can:
+ - Install packages and run any development tools
+ - Start and manage background services
+ - Browse the web via Playwright MCP
+-- \`proliferate\` CLI for managing services (\`proliferate services start/stop/list/logs/expose\`)
+ 
+ ## Working Directory
+ 
+@@ -159,10 +168,13 @@ When verifying your work, collect evidence in \`.proliferate/.verification/\`:
+ 
+ After collecting evidence, call the \`verify\` tool to upload and present it.
+ 
+-## External Integrations
++## Proliferate Platform & Capabilities
+ 
+-Use \`proliferate actions list\` to discover available integrations (Sentry, Linear, etc.).
+-Use \`proliferate actions run --integration <name> --action <action> --params '<json>'\` to interact with external services.
++You can act on the user's behalf using the \`proliferate\` CLI:
++
++- **Services**: \`proliferate services start/stop/list/logs/restart/expose\` to manage background dev servers.
++- **Integrations**: \`proliferate actions list\` to discover connected tools (Sentry, Linear, etc.). \`proliferate actions run --integration <name> --action <action> --params '<json>'\` to execute. Tokens are resolved server-side — never ask for API keys.
++- **Local workflow**: The user can run \`npx @proliferate/cli\` on their local machine to sync files with this sandbox and use their own IDE.
+ 
+ When done, briefly summarize what you did and any next steps.
+ `;
+diff --git a/packages/shared/src/sandbox/config.ts b/packages/shared/src/sandbox/config.ts
+index 804a11f..2e163db 100644
+--- a/packages/shared/src/sandbox/config.ts
++++ b/packages/shared/src/sandbox/config.ts
+@@ -119,34 +119,40 @@ docker compose up -d
+  * Actions bootstrap hint written to .proliferate/actions-guide.md during sandbox setup.
+  * Agents can read this file to discover the actions workflow.
+  */
+-export const ACTIONS_BOOTSTRAP = `# Proliferate Actions
++export const ACTIONS_BOOTSTRAP = `# Proliferate Platform Guide
+ 
+-External integrations (Sentry, Linear, etc.) are available via the \`proliferate\` CLI.
++You are an AI agent running inside Proliferate, authorized to use external integrations on behalf of the user via the \`proliferate\` CLI.
+ 
+ ## Quick Start
+ 
+ \`\`\`bash
+-# List connected integrations and their actions
++# Discover what the user has connected to this workspace
+ proliferate actions list
+ 
+-# Get a detailed usage guide for a specific integration
++# Get detailed usage guide for a specific integration
+ proliferate actions guide --integration <name>
+ 
+-# Run an action
++# Execute an action
+ proliferate actions run --integration <name> --action <action> --params '<json>'
+ \`\`\`
+ 
+ ## How It Works
+ 
+ - **Read** actions (e.g. list issues, get details) are auto-approved and return immediately.
+-- **Write** actions (e.g. create issue, resolve issue) require user approval and block until approved or denied.
++- **Write** actions (e.g. create issue, resolve issue) require user approval — your terminal blocks until the user clicks Approve in their web UI.
+ - **Danger** actions are denied by default.
+-- Authentication tokens are resolved server-side — never ask for API keys.
++- Authentication tokens are resolved server-side — never ask for API keys for connected integrations.
+ 
+-## Available Providers
++## Usage
+ 
+-Run \`proliferate actions list\` to see which integrations are connected to this session.
++If the user asks you to check Linear issues, look at Sentry errors, or interact with any connected tool, use these commands proactively. You are acting as the user.
++
++Run \`proliferate actions list\` to see which integrations are connected.
+ Run \`proliferate actions guide --integration <name>\` for provider-specific examples.
++
++## Local CLI
++
++The user can also run \`npx @proliferate/cli\` on their local machine to sync files with this sandbox and use their own IDE (VS Code, Cursor, etc.).
+ `;
+ 
+ /**
