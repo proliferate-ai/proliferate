@@ -26,7 +26,7 @@ export interface CatalogEntry {
 	name: string;
 	description: string;
 	category: IntegrationCategory;
-	type: "oauth" | "slack" | "mcp-preset";
+	type: "oauth" | "slack" | "mcp-preset" | "custom-mcp";
 	provider?: Provider;
 	presetKey?: string;
 }

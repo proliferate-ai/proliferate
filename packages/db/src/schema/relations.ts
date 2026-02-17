@@ -37,7 +37,6 @@ import {
 	triggers,
 	user,
 	userActionPreferences,
-	userConnections,
 	userSshKeys,
 	webhookInbox,
 } from "./schema";
@@ -538,17 +537,6 @@ export const sessionToolInvocationsRelations = relations(sessionToolInvocations,
 	}),
 	organization: one(organization, {
 		fields: [sessionToolInvocations.organizationId],
-		references: [organization.id],
-	}),
-}));
-
-export const userConnectionsRelations = relations(userConnections, ({ one }) => ({
-	user: one(user, {
-		fields: [userConnections.userId],
-		references: [user.id],
-	}),
-	organization: one(organization, {
-		fields: [userConnections.organizationId],
 		references: [organization.id],
 	}),
 }));

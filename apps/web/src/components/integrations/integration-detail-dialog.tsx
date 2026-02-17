@@ -191,12 +191,14 @@ function ConnectTabContent({
 	onSaveConnector: (connector: ConnectorConfig, isNew: boolean) => void;
 	onClose: () => void;
 }) {
-	// MCP preset — render setup form
+	// Custom MCP — full connector form with URL, transport, auth
+	if (entry.type === "custom-mcp") {
+		return <ConnectorForm isNew onSave={onSaveConnector} onCancel={onClose} />;
+	}
+
+	// MCP preset — always use quick setup (API key only)
 	if (entry.type === "mcp-preset" && preset) {
-		if (preset.quickSetup) {
-			return <QuickSetupForm preset={preset} onClose={onClose} />;
-		}
-		return <ConnectorForm isNew preset={preset} onSave={onSaveConnector} onCancel={onClose} />;
+		return <QuickSetupForm preset={preset} onClose={onClose} />;
 	}
 
 	// OAuth / Slack
