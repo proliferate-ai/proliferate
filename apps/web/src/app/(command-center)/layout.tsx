@@ -1,9 +1,13 @@
 "use client";
 
 import { ImpersonationBanner } from "@/components/admin/impersonation-banner";
+import {
+	CCMobileSidebar,
+	CCMobileSidebarTrigger,
+	CCSidebar,
+} from "@/components/command-center/sidebar";
 import { BillingBanner } from "@/components/dashboard/billing-banner";
 import { CommandSearch } from "@/components/dashboard/command-search";
-import { MobileSidebar, MobileSidebarTrigger, Sidebar } from "@/components/dashboard/sidebar";
 import { Button } from "@/components/ui/button";
 import { useBilling } from "@/hooks/use-billing";
 import { useSession } from "@/lib/auth-client";
@@ -85,7 +89,7 @@ export default function DashboardLayout({
 
 			{/* Mobile header - only visible on mobile */}
 			<div className="flex md:hidden items-center justify-between h-14 px-4 border-b border-border shrink-0">
-				<MobileSidebarTrigger />
+				<CCMobileSidebarTrigger />
 				<Button
 					variant="ghost"
 					size="icon"
@@ -100,14 +104,14 @@ export default function DashboardLayout({
 			{/* Main layout: Sidebar + Content */}
 			<div className="flex-1 flex overflow-hidden">
 				{/* Sidebar - desktop only, full height */}
-				<Sidebar />
+				<CCSidebar />
 
 				{/* Main content */}
 				<main className="flex-1 overflow-y-auto animate-in fade-in duration-200">{children}</main>
 			</div>
 
 			{/* Mobile Sidebar Drawer */}
-			<MobileSidebar />
+			<CCMobileSidebar />
 
 			{/* Command Search */}
 			<CommandSearch open={commandSearchOpen} onOpenChange={setCommandSearchOpen} />

@@ -6,17 +6,7 @@ import { useActiveOrganization, useListOrganizations } from "@/lib/auth-client";
 import { organization } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { env } from "@proliferate/environment/public";
-import {
-	ArrowLeft,
-	Building2,
-	CreditCard,
-	ExternalLink,
-	Key,
-	Plug,
-	Search,
-	User,
-	Users,
-} from "lucide-react";
+import { ArrowLeft, Building2, CreditCard, ExternalLink, Search, User, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -35,8 +25,6 @@ const NAV_ITEMS = [
 				? [{ id: "billing", label: "Billing", icon: CreditCard, href: "/settings/billing" }]
 				: []),
 			{ id: "members", label: "Members", icon: Users, href: "/settings/members" },
-			{ id: "secrets", label: "Secrets", icon: Key, href: "/settings/secrets" },
-			{ id: "tools", label: "Tools", icon: Plug, href: "/settings/tools" },
 		],
 	},
 ];
@@ -45,9 +33,7 @@ const PAGE_TITLES: Record<string, string> = {
 	profile: "Profile",
 	general: "General",
 	members: "Members",
-	secrets: "Secrets",
 	...(BILLING_ENABLED ? { billing: "Billing" } : {}),
-	tools: "Tools",
 };
 
 function getPageTitle(pathname: string) {
