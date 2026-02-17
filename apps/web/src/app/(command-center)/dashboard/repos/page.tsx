@@ -26,6 +26,7 @@ import { LoadingDots } from "@/components/ui/loading-dots";
 import {
 	useCheckSecrets,
 	useCreateRepo,
+	useCreateSecret,
 	useDeleteRepo,
 	usePrebuildEnvFiles,
 	useRepoSnapshots,
@@ -39,8 +40,10 @@ import type { RepoSnapshot } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
 import {
 	AlertTriangle,
+	Check,
 	ChevronRight,
 	ExternalLink,
+	KeyRound,
 	MoreVertical,
 	Plus,
 	Search,
@@ -421,6 +424,7 @@ function EnvFileSummary({
 	prebuildId: string;
 	repoId: string;
 }) {
+	const [secretsDialogOpen, setSecretsDialogOpen] = useState(false);
 	const { data: envFilesRaw, isLoading: envLoading } = usePrebuildEnvFiles(prebuildId);
 
 	const envFiles = useMemo(() => {
@@ -446,39 +450,192 @@ function EnvFileSummary({
 	let hasMissing = false;
 
 	return (
-		<div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-			{envFiles.map((file) => {
-				const total = file.keys.length;
-				const populated = file.keys.filter((k) => existingKeys.has(k.key)).length;
-				const missing = total - populated;
-				if (missing > 0) hasMissing = true;
+		<>
+			<div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+				{envFiles.map((file) => {
+					const total = file.keys.length;
+					const populated = file.keys.filter((k) => existingKeys.has(k.key)).length;
+					const missing = total - populated;
+					if (missing > 0) hasMissing = true;
 
-				return (
-					<span
-						key={file.path}
+					return (
+						<span
+							key={file.path}
+							className={cn(
+								"text-xs",
+								missing > 0 ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground",
+							)}
+						>
+							{file.path}{" "}
+							{isLoading ? (
+								<span className="text-muted-foreground">(...)</span>
+							) : (
+								<>
+									({populated}/{total} keys)
+									{missing > 0 && <AlertTriangle className="inline h-3 w-3 ml-0.5 -mt-0.5" />}
+								</>
+							)}
+						</span>
+					);
+				})}
+				{!isLoading && (
+					<button
+						type="button"
+						onClick={() => setSecretsDialogOpen(true)}
 						className={cn(
-							"text-xs",
-							missing > 0 ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground",
+							"text-xs hover:underline",
+							hasMissing ? "text-primary" : "text-muted-foreground hover:text-foreground",
 						)}
 					>
-						{file.path}{" "}
-						{isLoading ? (
-							<span className="text-muted-foreground">(...)</span>
-						) : (
-							<>
-								({populated}/{total} keys)
-								{missing > 0 && <AlertTriangle className="inline h-3 w-3 ml-0.5 -mt-0.5" />}
-							</>
-						)}
-					</span>
-				);
-			})}
-			{hasMissing && !isLoading && (
-				<Link href="/settings/secrets" className="text-xs text-primary hover:underline">
-					Manage Secrets
-				</Link>
-			)}
-		</div>
+						{hasMissing ? "Manage Secrets" : "View Secrets"}
+					</button>
+				)}
+			</div>
+
+			<ManageSecretsDialog
+				open={secretsDialogOpen}
+				onOpenChange={setSecretsDialogOpen}
+				envFiles={envFiles}
+				existingKeys={existingKeys}
+				repoId={repoId}
+			/>
+		</>
+	);
+}
+
+// ============================================
+// Manage Secrets Dialog
+// ============================================
+
+function ManageSecretsDialog({
+	open,
+	onOpenChange,
+	envFiles,
+	existingKeys,
+	repoId,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	envFiles: EnvFileSpec[];
+	existingKeys: Set<string>;
+	repoId: string;
+}) {
+	const createSecret = useCreateSecret();
+	const [values, setValues] = useState<Record<string, string>>({});
+	const [saving, setSaving] = useState(false);
+	const [errors, setErrors] = useState<Record<string, string>>({});
+	const [saved, setSaved] = useState<Set<string>>(new Set());
+
+	// Reset state when dialog opens
+	useEffect(() => {
+		if (open) {
+			setValues({});
+			setErrors({});
+			setSaved(new Set());
+		}
+	}, [open]);
+
+	const missingKeys = useMemo(() => {
+		return envFiles.flatMap((f) =>
+			f.keys.filter((k) => !existingKeys.has(k.key)).map((k) => k.key),
+		);
+	}, [envFiles, existingKeys]);
+
+	const filledCount = missingKeys.filter((k) => values[k]?.trim()).length;
+
+	const handleSave = async () => {
+		const toCreate = missingKeys.filter((k) => values[k]?.trim());
+		if (toCreate.length === 0) return;
+
+		setSaving(true);
+		setErrors({});
+		const newSaved = new Set(saved);
+
+		for (const key of toCreate) {
+			try {
+				await createSecret.mutateAsync({
+					key,
+					value: values[key].trim(),
+					repoId,
+				});
+				newSaved.add(key);
+			} catch (err) {
+				const message = err instanceof Error ? err.message : "Failed to save";
+				setErrors((prev) => ({ ...prev, [key]: message }));
+			}
+		}
+
+		setSaved(newSaved);
+		setSaving(false);
+
+		// Close if all missing keys are now saved
+		const remainingMissing = missingKeys.filter((k) => !newSaved.has(k) && !existingKeys.has(k));
+		if (remainingMissing.length === 0) {
+			onOpenChange(false);
+		}
+	};
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="sm:max-w-md">
+				<DialogHeader>
+					<DialogTitle>Environment Secrets</DialogTitle>
+				</DialogHeader>
+
+				<div className="space-y-4 max-h-96 overflow-y-auto">
+					{envFiles.map((file) => (
+						<div key={file.path}>
+							<p className="text-xs font-medium text-muted-foreground mb-2">{file.path}</p>
+							<div className="space-y-2">
+								{file.keys.map((k) => {
+									const exists = existingKeys.has(k.key) || saved.has(k.key);
+									const error = errors[k.key];
+
+									return (
+										<div key={k.key} className="space-y-1">
+											<div className="flex items-center gap-2">
+												{exists ? (
+													<Check className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+												) : (
+													<KeyRound className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+												)}
+												<span className="text-sm flex-1 min-w-0 truncate">{k.key}</span>
+												{exists && (
+													<span className="text-xs text-muted-foreground shrink-0">Set</span>
+												)}
+											</div>
+											{!exists && (
+												<Input
+													type="password"
+													value={values[k.key] ?? ""}
+													onChange={(e) =>
+														setValues((prev) => ({ ...prev, [k.key]: e.target.value }))
+													}
+													placeholder="Enter value..."
+													className="h-8 text-sm ml-5.5"
+												/>
+											)}
+											{error && <p className="text-xs text-destructive ml-5.5">{error}</p>}
+										</div>
+									);
+								})}
+							</div>
+						</div>
+					))}
+				</div>
+
+				{missingKeys.length > 0 && missingKeys.length !== saved.size && (
+					<div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+						<Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+							Cancel
+						</Button>
+						<Button size="sm" onClick={handleSave} disabled={saving || filledCount === 0}>
+							{saving ? "Saving..." : `Save ${filledCount > 0 ? `(${filledCount})` : ""}`}
+						</Button>
+					</div>
+				)}
+			</DialogContent>
+		</Dialog>
 	);
 }
 

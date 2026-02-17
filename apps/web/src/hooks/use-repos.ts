@@ -119,6 +119,18 @@ export function useCheckSecrets(
 	});
 }
 
+export function useCreateSecret() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.secrets.create.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: orpc.secrets.check.key() });
+			},
+		}),
+	);
+}
+
 export function usePrebuildServiceCommands(prebuildId: string, enabled = true) {
 	return useQuery({
 		...orpc.prebuilds.getServiceCommands.queryOptions({ input: { prebuildId } }),

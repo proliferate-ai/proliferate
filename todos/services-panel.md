@@ -187,34 +187,99 @@ The Services panel's biggest gap vs the other panels is in the data layer. Termi
 
 ---
 
-## 8. Recommendations
+## 8. Architectural Directives
 
-### Quick wins (hours, not days)
+The goal is to transform this panel from a "dumb task manager" into a **first-class IDE debugging interface**. A developer cannot efficiently debug a modern web framework if the logs strip ANSI colors, the UI crashes from unbounded string concatenation, and port exposure is entirely disconnected from the Preview pane.
 
-1. **Replace `Circle` with `StatusDot`** — visual consistency with the rest of the app.
-2. **Show `startedAt` as relative time** — "Running for 12 min" gives useful context.
-3. **Add a toast on action failure** — stop swallowing errors silently.
-4. **Cap log content** — keep last N lines (e.g., 5000) and drop old ones.
-5. **Remove the close button from the header** — panel switching is handled by the parent tab bar.
+### Directive 1: Kill the `<pre>` tag — mandate `xterm.js` for logs
 
-### Medium effort (days)
+Debugging a Webpack/Vite/Next.js stack trace in monochrome plain text is physically painful. Modern dev servers rely entirely on red/green/cyan ANSI terminal colors to highlight errors and file paths. Stripping those colors defeats the core purpose of looking at the logs.
 
-6. **Migrate to TanStack Query** — replace the raw `fetch`/`useState` with `useQuery` for the service list and `useMutation` for actions. Gets you caching, background refresh, stale-while-revalidate, and proper abort handling for free.
-7. **Add abort controllers** to the current implementation if not migrating to TanStack Query immediately.
-8. **Surface the exposed port URL** — make it clickable, copyable, and link it to the Preview tab.
-9. **Pause polling when the panel isn't active** — only fetch when `mode.type === "services"`.
+**The fix:** We already pay the bundle-size tax for `xterm.js` in the Terminal panel. Reuse it here. When a user clicks a service to view logs, spawn a *read-only* `xterm.js` instance. Feed the SSE log chunks directly into `term.write()`. This instantly gives perfect ANSI color support, native scrolling, and a premium IDE feel.
 
-### Larger redesign
+### Directive 2: Fix the unbounded memory leak (P0)
 
-10. **Rethink the port exposure UX.** It's a sandbox-level capability, not a per-service action. Consider moving it to Settings or making it a first-class feature in the Preview tab (where the URL is actually shown).
-11. **Consider whether this panel should exist at all in its current form.** If services are mostly "fire and forget" (agent starts them, user doesn't manage them), maybe this should be a small status indicator rather than a full panel. If services are important for the user to manage, the UI needs to be much richer (resource usage, port bindings, dependency graph, etc.).
-12. **Log viewer upgrade.** If keeping the log viewer, consider using xterm.js (already in the project for the Terminal panel) to render ANSI colors properly. Or at minimum add line numbers, search, and a copy button.
+Do not wait for a redesign. An IDE tab that crashes the browser is a P0 bug. Infinite string concatenation inside a React `useState` for a verbose background process guarantees an OOM crash.
+
+**The fix:** Routing logs through `xterm.js` (Directive 1) solves this automatically — configure `scrollback: 5000`. Xterm natively handles ring-buffer memory management, dropping old lines so the DOM never crashes.
+
+### Directive 3: Burn the hand-rolled data fetching — enforce the platform standard
+
+Hand-rolling a polling mechanism without `AbortControllers` or visibility checks in a complex SPA is a massive liability. It burns gateway resources and leaves developers chasing ghosts when silent errors occur.
+
+**The fix:**
+1. Rip out the custom polling logic. Wrap `/api/services` in a standard TanStack Query `useQuery` with `refetchInterval: 5000`.
+2. TanStack Query automatically pauses polling when the window/tab loses focus, instantly solving the background CPU-burn issue.
+3. Wrap Stop/Restart actions in `useMutation` and fire standard red Toast notifications on `onError`. No more swallowed errors.
+
+### Directive 4: Bridge the "Expose Port" gap — port exposure is a Preview capability
+
+When a developer exposes port 3000, their next immediate thought is "I want to see the web app." Typing "3000" into a random box at the bottom of a list breaks the debugging loop.
+
+**The fix:** Move port exposure directly onto the Service Row. If a service is running and exposes a port, the row must render an explicit, highly visible **`[ Open in Preview ]`** button. Clicking it should:
+1. Handle the exposure logic under the hood
+2. Instantly switch the right panel tab to "Preview"
+3. Load the URL
+
+Tightly couple the process to the visual output. If manual port exposure is still needed for untracked processes, move that generic input box into the header of the Preview panel, not here.
+
+### Directive 5: Conform to the "Engine Room" spec — strip redundant chrome
+
+- **Kill the internal close button.** The parent tab bar controls panel visibility. Nested close buttons confuse the spatial layout.
+- **Enforce design tokens.** Swap manual SVG circles for `<StatusDot />`.
+- **Add debug context.** Show `startedAt` as relative timestamp: `Uptime: 14m` or `Crashed 2m ago` so the developer instantly knows if their dev server just crash-looped.
 
 ---
 
-## 9. Questions
+## 9. Target Layout
 
-1. **How often do users actually interact with the Services panel?** If it's rarely used, the investment should be minimal (just fix the bugs). If it's core to the workflow, it needs a full redesign.
-2. **Should port exposure be tied to Services or be its own concept?** Currently it's awkwardly bundled in.
-3. **Should the log viewer support ANSI escape codes?** Many dev servers output colored text. Right now it's stripped to plain text.
-4. **Is there a plan to show resource usage (CPU/memory)?** The sandbox MCP service manager would need to expose this data.
+The engineer should target this exact visual hierarchy.
+
+**List view:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Services                                          [↻]  │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  [●] dev-server                      Uptime: 14m        │
+│      npm run dev                                        │
+│      Port 3000          [ Open in Preview ] [■] [↻]     │
+│  ───────────────────────────────────────────────────    │
+│  [○] postgres                        Stopped            │
+│      pg_ctl start                                       │
+│                                            [▶] [↻]      │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Log view (xterm.js):**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  [← Services]   ● dev-server logs                       │
+├─────────────────────────────────────────────────────────┤
+│  [xterm.js canvas with ANSI colors]                     │
+│  \x1b[32m ✓ Ready in 125ms \x1b[0m                      │
+│  \x1b[36m ℹ GET /api/health 200 \x1b[0m                 │
+│                                                         │
+│  ⨯ Error: Cannot read properties of undefined           │
+│     at handleCallback (src/auth.ts:14:22)               │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 10. Implementation Order
+
+| Step | What | Priority | Deps |
+|------|------|----------|------|
+| 1 | Fix unbounded log memory leak (P0 bug) | Immediate | None |
+| 2 | Replace `<pre>` log viewer with read-only `xterm.js` instance | High | Solves step 1 permanently |
+| 3 | Migrate `useServices` to TanStack Query (`useQuery` + `useMutation`) | High | None |
+| 4 | Add toast notifications on action failure (stop/restart/expose) | High | Step 3 |
+| 5 | Replace `Circle` icons with `<StatusDot />`, add `startedAt` relative time | Medium | None |
+| 6 | Remove internal close button from header | Medium | None |
+| 7 | Move port exposure onto Service Row as "Open in Preview" button | Medium | Needs preview-panel store wiring |
+| 8 | Remove standalone "Expose port" form from bottom of panel | Medium | Step 7 |
+| 9 | Move generic manual port input to Preview panel header (fallback) | Low | Step 7 |
