@@ -709,6 +709,29 @@ export const automationsRouter = {
 				throw err;
 			}
 		}),
+
+	// ============================================
+	// Manual run trigger
+	// ============================================
+
+	/**
+	 * Trigger a manual run for an automation.
+	 * Creates a synthetic trigger event and kicks off the run pipeline.
+	 */
+	triggerManualRun: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ run: z.object({ id: z.string(), status: z.string() }) }))
+		.handler(async ({ input, context }) => {
+			try {
+				const result = await automations.triggerManualRun(input.id, context.orgId, context.user.id);
+				return { run: { id: result.runId, status: result.status } };
+			} catch (err) {
+				if (err instanceof Error && err.message === "Automation not found") {
+					throw new ORPCError("NOT_FOUND", { message: err.message });
+				}
+				throw err;
+			}
+		}),
 };
 
 function mapRunToSchema(run: runs.RunListItem) {

@@ -103,6 +103,23 @@ export function useDeleteAutomation() {
 }
 
 // ============================================
+// Manual Run
+// ============================================
+
+export function useTriggerManualRun(automationId: string) {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		...orpc.automations.triggerManualRun.mutationOptions(),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: orpc.automations.listRuns.queryOptions({ input: { id: automationId } }).queryKey,
+			});
+		},
+	});
+}
+
+// ============================================
 // Event Hooks
 // ============================================
 

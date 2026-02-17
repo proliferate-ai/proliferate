@@ -1,9 +1,9 @@
 "use client";
 
 import { AddTriggerButton } from "@/components/automations/add-trigger-button";
+import { IntegrationPermissions } from "@/components/automations/integration-permissions";
 import { ModelSelector } from "@/components/automations/model-selector";
 import { TriggerChip } from "@/components/automations/trigger-chip";
-import { PermissionControl } from "@/components/integrations/permission-control";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -15,32 +15,21 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LinearIcon, OpenCodeIcon, SlackIcon } from "@/components/ui/icons";
 import { InlineEdit } from "@/components/ui/inline-edit";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Switch } from "@/components/ui/switch";
 import { Text } from "@/components/ui/text";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAutomationActionModes, useSetAutomationActionMode } from "@/hooks/use-action-modes";
-import { useAutomation, useUpdateAutomation } from "@/hooks/use-automations";
+import { useAutomation, useTriggerManualRun, useUpdateAutomation } from "@/hooks/use-automations";
 import { useSlackInstallations } from "@/hooks/use-integrations";
-import { ACTION_ADAPTERS, type ActionMeta } from "@/lib/action-adapters";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 import {
@@ -52,10 +41,11 @@ import {
 	parseModelId,
 } from "@proliferate/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { HelpCircle, History, Mail, MoreVertical, Shield, Trash2 } from "lucide-react";
+import { History, Loader2, MoreVertical, Play, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useDebouncedCallback } from "use-debounce";
 
 // ============================================
@@ -116,109 +106,6 @@ function mapInputToOutput(data: UpdateAutomationInput): Record<string, unknown> 
 }
 
 // ============================================
-// Local Components
-// ============================================
-
-function SectionLabel({ label }: { label: string }) {
-	return (
-		<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-			{label}
-		</p>
-	);
-}
-
-function ToolListItem({
-	icon: Icon,
-	label,
-	tooltip,
-	enabled,
-	onToggle,
-	badge,
-	children,
-}: {
-	icon: React.ElementType;
-	label: string;
-	tooltip?: string;
-	enabled: boolean;
-	onToggle: (enabled: boolean) => void;
-	badge?: string;
-	children?: React.ReactNode;
-}) {
-	return (
-		<div className="border-b border-border/50 last:border-0">
-			<div className="flex items-center px-3 py-2.5">
-				<Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
-				<div className="flex min-w-0 items-center grow gap-2 px-2">
-					<span className="text-sm font-medium">{label}</span>
-					{tooltip && (
-						<TooltipProvider>
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<span className="inline-flex cursor-help">
-										<HelpCircle className="w-3.5 h-3.5 text-muted-foreground/60" />
-									</span>
-								</TooltipTrigger>
-								<TooltipContent side="top" className="max-w-[200px]">
-									<p className="text-xs">{tooltip}</p>
-								</TooltipContent>
-							</Tooltip>
-						</TooltipProvider>
-					)}
-					{badge && (
-						<span className="inline-flex items-center text-[11px] rounded-full font-medium bg-muted/80 text-muted-foreground h-5 px-1.5">
-							{badge}
-						</span>
-					)}
-				</div>
-				<Switch checked={enabled} onCheckedChange={onToggle} />
-			</div>
-			{enabled && children && (
-				<div className="px-3 pb-3 pt-1 border-t border-border/50 bg-muted/30">{children}</div>
-			)}
-		</div>
-	);
-}
-
-function TextAreaWithFooter({
-	label,
-	value,
-	onChange,
-	placeholder,
-	footerText,
-	minHeight = "150px",
-}: {
-	label: string;
-	value: string;
-	onChange: (value: string) => void;
-	placeholder?: string;
-	footerText?: string;
-	minHeight?: string;
-}) {
-	return (
-		<div className="space-y-2">
-			<SectionLabel label={label} />
-			<div className="relative rounded-xl border border-border overflow-hidden focus-within:border-foreground focus-within:ring-[0.5px] focus-within:ring-foreground transition-all">
-				<Textarea
-					value={value}
-					onChange={(e) => onChange(e.target.value)}
-					placeholder={placeholder}
-					className={cn(
-						"w-full text-sm focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 border-none resize-none px-4 py-3.5 bg-transparent rounded-none min-h-0",
-						"placeholder:text-muted-foreground/60",
-					)}
-					style={{ minHeight }}
-				/>
-				{footerText && (
-					<div className="flex items-center bg-muted/50 border-t border-border/50 px-4 py-2">
-						<p className="text-xs text-muted-foreground">{footerText}</p>
-					</div>
-				)}
-			</div>
-		</div>
-	);
-}
-
-// ============================================
 // Page Component
 // ============================================
 
@@ -243,14 +130,16 @@ export default function AutomationDetailPage({
 	>(null);
 	const hydratedRef = useRef(false);
 
-	// Fetch automation using oRPC
+	// Data
 	const { data: automation, isLoading, error } = useAutomation(id);
-
-	// Fetch Slack installations for workspace selector
 	const { data: slackInstallations } = useSlackInstallations();
+	const { data: modesData } = useAutomationActionModes(id);
+	const setActionMode = useSetAutomationActionMode(id);
+	const actionModes = modesData?.modes ?? {};
 
-	// Update mutation using oRPC
+	// Mutations
 	const updateMutation = useUpdateAutomation(id);
+	const triggerManualRun = useTriggerManualRun(id);
 
 	// Initialize local state from automation data (only on first load)
 	useEffect(() => {
@@ -269,7 +158,6 @@ export default function AutomationDetailPage({
 		(data: UpdateAutomationInput) => {
 			const mappedData = mapInputToOutput(data);
 
-			// Optimistic update on list
 			queryClient.setQueryData(
 				orpc.automations.list.key(),
 				(old: { automations: Array<{ id: string; [key: string]: unknown }> } | undefined) => {
@@ -283,7 +171,6 @@ export default function AutomationDetailPage({
 				},
 			);
 
-			// Optimistic update on detail
 			queryClient.setQueryData(
 				orpc.automations.get.key({ input: { id } }),
 				(old: { automation: AutomationWithTriggers } | undefined) => {
@@ -304,7 +191,7 @@ export default function AutomationDetailPage({
 		[id, queryClient, updateMutation],
 	);
 
-	// Delete mutation using oRPC
+	// Delete mutation
 	const deleteMutation = useMutation({
 		...orpc.automations.delete.mutationOptions(),
 		onMutate: async () => {
@@ -408,27 +295,31 @@ export default function AutomationDetailPage({
 		handleUpdate({ enabledTools: newTools });
 	};
 
-	const hasEnabledTools =
-		enabledTools.slack_notify?.enabled ||
-		enabledTools.create_linear_issue?.enabled ||
-		enabledTools.email_user?.enabled;
+	const handleSlackInstallationChange = (installationId: string | null) => {
+		setNotificationSlackInstallationId(installationId);
+		handleUpdate({ notificationSlackInstallationId: installationId });
+	};
 
+	const handleRunNow = () => {
+		triggerManualRun.mutate(
+			{ id },
+			{
+				onSuccess: () => toast.success("Run started"),
+				onError: (err) => toast.error(err.message || "Failed to start run"),
+			},
+		);
+	};
+
+	// Loading state
 	if (isLoading) {
 		return (
 			<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto">
-				<div className="flex flex-col grow w-full max-w-screen-xl mx-auto px-4 lg:px-8 lg:pt-8 min-h-0">
-					<div className="animate-pulse space-y-6 py-8">
+				<div className="w-full max-w-3xl mx-auto px-4 lg:px-8 py-8">
+					<div className="animate-pulse space-y-6">
 						<div className="h-8 w-48 bg-muted rounded" />
-						<div className="flex gap-8">
-							<div className="flex-1 space-y-4">
-								<div className="h-48 bg-muted rounded-xl" />
-								<div className="h-32 bg-muted rounded-xl" />
-							</div>
-							<div className="w-80 space-y-4">
-								<div className="h-24 bg-muted rounded-xl" />
-								<div className="h-48 bg-muted rounded-xl" />
-							</div>
-						</div>
+						<div className="h-12 bg-muted rounded-xl" />
+						<div className="h-48 bg-muted rounded-xl" />
+						<div className="h-32 bg-muted rounded-xl" />
 					</div>
 				</div>
 			</div>
@@ -438,7 +329,7 @@ export default function AutomationDetailPage({
 	if (error || !automation) {
 		return (
 			<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto">
-				<div className="flex flex-col grow w-full max-w-screen-xl mx-auto px-4 lg:px-8 py-8">
+				<div className="w-full max-w-3xl mx-auto px-4 lg:px-8 py-8">
 					<Text variant="body" color="destructive">
 						Failed to load automation
 					</Text>
@@ -451,10 +342,9 @@ export default function AutomationDetailPage({
 
 	return (
 		<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
-			<div className="flex flex-col grow w-full max-w-screen-xl mx-auto px-4 lg:px-8 lg:pt-8 min-h-0">
+			<div className="w-full max-w-3xl mx-auto px-4 lg:px-8 py-6">
 				{/* Header */}
-				<div className="flex items-center gap-3 py-4 border-b border-border/50 mb-6">
-					<StatusDot status={automation.enabled ? "active" : "paused"} />
+				<div className="flex items-center gap-3 mb-6">
 					<InlineEdit
 						value={automation.name}
 						onSave={handleNameSave}
@@ -462,242 +352,196 @@ export default function AutomationDetailPage({
 						displayClassName="text-lg font-semibold tracking-tight text-foreground hover:bg-muted/50 rounded px-1 -mx-1 transition-colors"
 						inputClassName="text-lg font-semibold tracking-tight h-auto py-0.5 px-1 -mx-1 max-w-md"
 					/>
-					<span className="text-xs text-muted-foreground whitespace-nowrap">
+					<span className="text-xs text-muted-foreground whitespace-nowrap ml-auto">
 						Edited {formatRelativeTime(automation.updated_at)}
 					</span>
 
-					<div className="flex items-center gap-2 ml-auto">
-						<Link href={`/dashboard/automations/${id}/events`}>
-							<Button variant="outline" size="sm">
-								<History className="h-3.5 w-3.5 mr-1.5" />
-								Events
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={handleRunNow}
+						disabled={triggerManualRun.isPending}
+					>
+						{triggerManualRun.isPending ? (
+							<Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+						) : (
+							<Play className="h-3.5 w-3.5 mr-1.5" />
+						)}
+						Run Now
+					</Button>
+
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button variant="ghost" size="icon" className="h-8 w-8">
+								<MoreVertical className="h-4 w-4" />
 							</Button>
-						</Link>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							<DropdownMenuItem
+								onClick={() => setDeleteDialogOpen(true)}
+								className="text-destructive"
+							>
+								<Trash2 className="h-4 w-4 mr-2" />
+								Delete
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				</div>
 
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button variant="ghost" size="icon" className="h-8 w-8">
-									<MoreVertical className="h-4 w-4" />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end">
-								<DropdownMenuItem
-									onClick={() => setDeleteDialogOpen(true)}
-									className="text-destructive"
-								>
-									<Trash2 className="h-4 w-4 mr-2" />
-									Delete
-								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
-
-						<div className="flex items-center gap-2 pl-2 border-l border-border/50">
+				{/* Property Rows */}
+				<div className="rounded-xl border border-border divide-y divide-border/50 mb-6">
+					{/* Status */}
+					<div className="flex items-center justify-between px-4 py-3">
+						<span className="text-sm text-muted-foreground">Status</span>
+						<div className="flex items-center gap-2">
+							<StatusDot status={automation.enabled ? "active" : "paused"} />
 							<Switch
 								checked={automation.enabled}
 								onCheckedChange={(checked) => handleUpdate({ enabled: checked })}
 							/>
-							<span className="text-xs text-muted-foreground">
-								{automation.enabled ? "Active" : "Paused"}
-							</span>
+							<span className="text-sm">{automation.enabled ? "Active" : "Paused"}</span>
 						</div>
+					</div>
+
+					{/* Model */}
+					<div className="flex items-center justify-between px-4 py-3">
+						<span className="text-sm text-muted-foreground">Model</span>
+						<ModelSelector
+							modelId={
+								automation.model_id && isValidModelId(automation.model_id)
+									? automation.model_id
+									: automation.model_id
+										? parseModelId(automation.model_id)
+										: getDefaultAgentConfig().modelId
+							}
+							onChange={handleModelChange}
+							variant="chip"
+						/>
+					</div>
+
+					{/* History */}
+					<div className="flex items-center justify-between px-4 py-3">
+						<span className="text-sm text-muted-foreground">History</span>
+						<Link href={`/dashboard/automations/${id}/events`}>
+							<Button variant="ghost" size="sm" className="h-7 gap-1.5 text-sm">
+								<History className="h-3.5 w-3.5" />
+								View Events
+							</Button>
+						</Link>
 					</div>
 				</div>
 
-				{/* Two Column Layout */}
-				<div className="w-full flex flex-col lg:flex-row grow gap-6 lg:gap-8 pb-8 min-h-min">
-					{/* Left Column - Main Content */}
-					<div className="relative flex-1 min-w-0">
-						<div className="flex flex-col min-h-0 gap-6">
-							<TextAreaWithFooter
-								label="Instructions"
-								value={instructionsValue}
-								onChange={handleInstructionsChange}
-								placeholder="Tell the agent what to do when this automation is triggered..."
-								footerText={
-									hasPendingChanges || updateMutation.isPending
-										? "Saving..."
-										: "Auto-saves as you type"
-								}
-								minHeight="200px"
+				{/* Triggers */}
+				<div className="mb-6">
+					<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+						Triggers
+					</p>
+					<div className="rounded-xl border border-border overflow-hidden">
+						{triggers.map((trigger, index) => (
+							<TriggerChip
+								key={trigger.id}
+								trigger={trigger}
+								automationId={automation.id}
+								variant="stacked"
+								isFirst={index === 0}
+								isLast={false}
 							/>
+						))}
+						<AddTriggerButton
+							automationId={automation.id}
+							variant="stacked"
+							isFirst={triggers.length === 0}
+							isLast
+						/>
+					</div>
+				</div>
 
-							<TextAreaWithFooter
-								label="Event Filter"
-								value={llmFilterPrompt}
-								onChange={handleLlmFilterPromptChange}
-								placeholder="Only process events where the user was on a checkout or payment page. Ignore events from internal/admin users."
-								minHeight="120px"
-							/>
+				{/* Integrations & Permissions */}
+				<div className="mb-6">
+					<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+						Integrations & Permissions
+					</p>
+					<IntegrationPermissions
+						automationId={id}
+						enabledTools={enabledTools}
+						triggers={triggers.map((t) => ({ provider: t.provider }))}
+						actionModes={actionModes}
+						slackInstallations={slackInstallations}
+						notificationSlackInstallationId={notificationSlackInstallationId}
+						onToolToggle={handleToolToggle}
+						onToolConfigChange={handleToolConfigChange}
+						onSlackInstallationChange={handleSlackInstallationChange}
+						onPermissionChange={(key, mode) => setActionMode.mutate({ id, key, mode })}
+						permissionsPending={setActionMode.isPending}
+					/>
+				</div>
 
-							{hasEnabledTools && (
-								<TextAreaWithFooter
-									label="Analysis Instructions"
-									value={llmAnalysisPrompt}
-									onChange={handleLlmAnalysisPromptChange}
-									placeholder="Focus on user-impacting issues. Create Linear issues for bugs that affect checkout. Send Slack notifications for high-severity errors."
-									minHeight="120px"
-								/>
+				{/* Instructions */}
+				<div className="mb-6">
+					<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+						Instructions
+					</p>
+					<div className="relative rounded-xl border border-border overflow-hidden focus-within:border-foreground focus-within:ring-[0.5px] focus-within:ring-foreground transition-all">
+						<Textarea
+							value={instructionsValue}
+							onChange={(e) => handleInstructionsChange(e.target.value)}
+							placeholder="Tell the agent what to do when this automation is triggered..."
+							className={cn(
+								"w-full text-sm focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 border-none resize-none px-4 py-3.5 bg-transparent rounded-none min-h-0",
+								"placeholder:text-muted-foreground/60",
 							)}
+							style={{ minHeight: "200px" }}
+						/>
+						<div className="flex items-center bg-muted/50 border-t border-border/50 px-4 py-2">
+							<p className="text-xs text-muted-foreground">
+								{hasPendingChanges || updateMutation.isPending
+									? "Saving..."
+									: "Auto-saves as you type"}
+							</p>
 						</div>
-					</div>
-
-					{/* Right Column - Configuration */}
-					<div className="lg:w-80 min-w-0 flex flex-col gap-5 shrink-0">
-						{/* Triggers */}
-						<div>
-							<SectionLabel label="Triggers" />
-							<div className="rounded-xl border border-border overflow-hidden">
-								{triggers.map((trigger, index) => (
-									<TriggerChip
-										key={trigger.id}
-										trigger={trigger}
-										automationId={automation.id}
-										variant="stacked"
-										isFirst={index === 0}
-										isLast={false}
-									/>
-								))}
-								<AddTriggerButton
-									automationId={automation.id}
-									variant="stacked"
-									isFirst={triggers.length === 0}
-									isLast
-								/>
-							</div>
-						</div>
-
-						{/* Model */}
-						<div>
-							<SectionLabel label="Model" />
-							<div className="rounded-xl border border-border overflow-hidden">
-								<div className="flex items-center px-3 min-h-[2.75rem]">
-									<ModelSelector
-										modelId={
-											automation.model_id && isValidModelId(automation.model_id)
-												? automation.model_id
-												: automation.model_id
-													? parseModelId(automation.model_id)
-													: getDefaultAgentConfig().modelId
-										}
-										onChange={handleModelChange}
-										triggerClassName="w-full h-full border-0 shadow-none bg-transparent hover:bg-transparent px-0"
-									/>
-								</div>
-							</div>
-						</div>
-
-						{/* Actions */}
-						<div>
-							<SectionLabel label="Actions" />
-							<div className="rounded-xl border border-border overflow-hidden">
-								<ToolListItem
-									icon={SlackIcon}
-									label="Slack"
-									tooltip="Send a notification to a Slack channel when events are triggered"
-									enabled={enabledTools.slack_notify?.enabled || false}
-									onToggle={(checked) => handleToolToggle("slack_notify", checked)}
-								>
-									<div className="space-y-3">
-										{slackInstallations &&
-											(slackInstallations.length > 1 || notificationSlackInstallationId) && (
-												<div className="space-y-1.5">
-													<Label className="text-xs text-muted-foreground">Workspace</Label>
-													<Select
-														value={notificationSlackInstallationId ?? "auto"}
-														onValueChange={(value) => {
-															const installationId = value === "auto" ? null : value;
-															setNotificationSlackInstallationId(installationId);
-															handleUpdate({
-																notificationSlackInstallationId: installationId,
-															});
-														}}
-													>
-														<SelectTrigger className="h-8">
-															<SelectValue placeholder="Auto-detect" />
-														</SelectTrigger>
-														<SelectContent>
-															<SelectItem value="auto">Auto-detect</SelectItem>
-															{slackInstallations.map((inst) => (
-																<SelectItem key={inst.id} value={inst.id}>
-																	{inst.team_name ?? inst.team_id}
-																</SelectItem>
-															))}
-														</SelectContent>
-													</Select>
-												</div>
-											)}
-										<div className="space-y-1.5">
-											<Label className="text-xs text-muted-foreground">Channel ID</Label>
-											<Input
-												value={enabledTools.slack_notify?.channelId || ""}
-												onChange={(e) =>
-													handleToolConfigChange("slack_notify", "channelId", e.target.value)
-												}
-												placeholder="C01234567890"
-												className="h-8"
-											/>
-										</div>
-									</div>
-								</ToolListItem>
-
-								<ToolListItem
-									icon={LinearIcon}
-									label="Linear"
-									tooltip="Create a Linear issue to track and manage the triggered event"
-									enabled={enabledTools.create_linear_issue?.enabled || false}
-									onToggle={(checked) => handleToolToggle("create_linear_issue", checked)}
-								>
-									<div className="space-y-1.5">
-										<Label className="text-xs text-muted-foreground">Team ID</Label>
-										<Input
-											value={enabledTools.create_linear_issue?.teamId || ""}
-											onChange={(e) =>
-												handleToolConfigChange("create_linear_issue", "teamId", e.target.value)
-											}
-											placeholder="abc123"
-											className="h-8"
-										/>
-									</div>
-								</ToolListItem>
-
-								<ToolListItem
-									icon={Mail}
-									label="Email"
-									tooltip="Send an email notification about the triggered event"
-									enabled={enabledTools.email_user?.enabled || false}
-									onToggle={(checked) => handleToolToggle("email_user", checked)}
-								>
-									<div className="space-y-1.5">
-										<Label className="text-xs text-muted-foreground">Recipient</Label>
-										<Input
-											value={enabledTools.email_user?.defaultTo || ""}
-											onChange={(e) =>
-												handleToolConfigChange("email_user", "defaultTo", e.target.value)
-											}
-											placeholder="team@example.com"
-											className="h-8"
-										/>
-									</div>
-								</ToolListItem>
-
-								<ToolListItem
-									icon={OpenCodeIcon}
-									label="Agent Session"
-									tooltip="Spin up an AI coding agent to investigate and fix the issue"
-									enabled={enabledTools.create_session?.enabled ?? true}
-									onToggle={(checked) => handleToolToggle("create_session", checked)}
-									badge="Default"
-								/>
-							</div>
-						</div>
-
-						{/* Permissions */}
-						<AutomationPermissions automationId={id} />
 					</div>
 				</div>
+
+				{/* Advanced Prompts */}
+				<CollapsibleSection title="Advanced Prompts" defaultOpen={false}>
+					<div className="flex flex-col gap-4 px-4 pb-4">
+						<div>
+							<p className="text-xs font-medium text-muted-foreground mb-1.5">Event Filter</p>
+							<div className="relative rounded-xl border border-border overflow-hidden focus-within:border-foreground focus-within:ring-[0.5px] focus-within:ring-foreground transition-all">
+								<Textarea
+									value={llmFilterPrompt}
+									onChange={(e) => handleLlmFilterPromptChange(e.target.value)}
+									placeholder="Only process events where the user was on a checkout or payment page. Ignore events from internal/admin users."
+									className={cn(
+										"w-full text-sm focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 border-none resize-none px-4 py-3.5 bg-transparent rounded-none min-h-0",
+										"placeholder:text-muted-foreground/60",
+									)}
+									style={{ minHeight: "100px" }}
+								/>
+							</div>
+						</div>
+						<div>
+							<p className="text-xs font-medium text-muted-foreground mb-1.5">
+								Analysis Instructions
+							</p>
+							<div className="relative rounded-xl border border-border overflow-hidden focus-within:border-foreground focus-within:ring-[0.5px] focus-within:ring-foreground transition-all">
+								<Textarea
+									value={llmAnalysisPrompt}
+									onChange={(e) => handleLlmAnalysisPromptChange(e.target.value)}
+									placeholder="Focus on user-impacting issues. Create Linear issues for bugs that affect checkout. Send Slack notifications for high-severity errors."
+									className={cn(
+										"w-full text-sm focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 border-none resize-none px-4 py-3.5 bg-transparent rounded-none min-h-0",
+										"placeholder:text-muted-foreground/60",
+									)}
+									style={{ minHeight: "100px" }}
+								/>
+							</div>
+						</div>
+					</div>
+				</CollapsibleSection>
 
 				{/* Bottom spacer */}
-				<div className="h-12 shrink-0" />
+				<div className="h-12" />
 			</div>
 
 			{/* Delete Confirmation Dialog */}
@@ -721,66 +565,6 @@ export default function AutomationDetailPage({
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
-		</div>
-	);
-}
-
-function AutomationPermissions({ automationId }: { automationId: string }) {
-	const { data: modesData } = useAutomationActionModes(automationId);
-	const setActionMode = useSetAutomationActionMode(automationId);
-	const modes = modesData?.modes ?? {};
-
-	const allActions = ACTION_ADAPTERS.flatMap((adapter) =>
-		adapter.actions.map((action: ActionMeta) => ({
-			key: `${adapter.integration}:${action.name}`,
-			name: action.name,
-			integration: adapter.displayName,
-			description: action.description,
-			riskLevel: action.riskLevel,
-		})),
-	);
-
-	return (
-		<div>
-			<SectionLabel label="Permissions" />
-			{allActions.length === 0 ? (
-				<div className="rounded-xl border border-dashed border-border/80 py-6 text-center">
-					<Shield className="h-5 w-5 mx-auto mb-1.5 text-muted-foreground/40" />
-					<p className="text-xs text-muted-foreground">No actions available</p>
-				</div>
-			) : (
-				<div className="rounded-xl border border-border overflow-hidden divide-y divide-border/50">
-					{allActions.map((action) => {
-						const currentMode = modes[action.key] ?? "require_approval";
-						return (
-							<div key={action.key} className="flex items-center justify-between px-3 py-2.5">
-								<div className="min-w-0 flex-1 mr-3">
-									<p className="text-xs font-medium">
-										{action.integration}: {action.name}
-									</p>
-									<span
-										className={cn(
-											"inline-block mt-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full border",
-											action.riskLevel === "write"
-												? "border-amber-500/30 text-amber-600 bg-amber-50 dark:bg-amber-950/30"
-												: "border-border text-muted-foreground",
-										)}
-									>
-										{action.riskLevel}
-									</span>
-								</div>
-								<PermissionControl
-									value={currentMode}
-									onChange={(mode) =>
-										setActionMode.mutate({ id: automationId, key: action.key, mode })
-									}
-									disabled={setActionMode.isPending}
-								/>
-							</div>
-						);
-					})}
-				</div>
-			)}
 		</div>
 	);
 }

@@ -951,6 +951,22 @@ export async function findTriggerForAutomationByProvider(
 }
 
 /**
+ * Find any trigger for an automation (regardless of provider or enabled state).
+ * Used by manual run to find a trigger to satisfy the FK.
+ */
+export async function findAnyTriggerForAutomation(
+	automationId: string,
+): Promise<{ id: string } | null> {
+	const db = getDb();
+	const result = await db.query.triggers.findFirst({
+		where: eq(triggers.automationId, automationId),
+		columns: { id: true },
+	});
+
+	return result ?? null;
+}
+
+/**
  * Find webhook trigger info for the GET handler.
  */
 export async function findWebhookTriggerInfo(
