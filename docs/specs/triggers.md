@@ -155,7 +155,7 @@ triggers
 ├── name                  TEXT (deprecated — use automation.name)
 ├── description           TEXT (deprecated)
 ├── trigger_type          TEXT NOT NULL DEFAULT 'webhook'  -- 'webhook' | 'polling'
-├── provider              TEXT NOT NULL                    -- 'sentry' | 'linear' | 'github' | 'posthog' | 'custom'
+├── provider              TEXT NOT NULL                    -- 'sentry' | 'linear' | 'github' | 'custom' | 'webhook' | 'posthog' | 'gmail' | 'scheduled'
 ├── enabled               BOOLEAN DEFAULT true
 ├── execution_mode        TEXT DEFAULT 'auto' (deprecated)
 ├── allow_agentic_repo_selection  BOOLEAN DEFAULT false (deprecated)
@@ -166,7 +166,7 @@ triggers
 ├── polling_endpoint      TEXT
 ├── polling_state         JSONB DEFAULT {}                 -- cursor backup
 ├── last_polled_at        TIMESTAMPTZ
-├── config                JSONB DEFAULT {}                 -- provider-specific filters
+├── config                JSONB DEFAULT {}                 -- provider-specific filters; { _manual: true } marks manual-run triggers
 ├── integration_id        UUID → integrations.id (SET NULL)
 ├── created_by            TEXT → user.id
 ├── created_at            TIMESTAMPTZ
@@ -400,6 +400,14 @@ async function safeCreateSkippedEvent(input) {
 - Token refresh: retries once on 401.
 - Files: `packages/triggers/src/service/adapters/gmail.ts`
 
+#### Manual Run Trigger (Implemented — via automation service)
+- Not a traditional provider — created on-demand by `triggerManualRun()` when users click "Run Now" in the automation detail page.
+- Uses `provider: "webhook"`, `triggerType: "webhook"`, `enabled: false` with `config: { _manual: true }` flag to distinguish from real webhook triggers.
+- The trigger is disabled (`enabled: false`) so it never participates in webhook ingestion or matching.
+- `findManualTrigger()` queries by JSONB `config->>'_manual' = 'true'` rather than by provider value.
+- The UI filters manual triggers from display using the `config._manual` flag.
+- Files: `packages/services/src/automations/service.ts:triggerManualRun`, `packages/services/src/automations/db.ts:findManualTrigger`
+
 ### 6.5 Schedule CRUD
 
 **What it does:** Manages cron schedules attached to automations. **Status: Implemented.**
@@ -527,3 +535,4 @@ These routes exist alongside the trigger-service webhook handler. They handle pr
 - [ ] **removePollingJob passes empty pattern** — `removePollingJob` calls `queue.removeRepeatable` with an empty `pattern` string, relying on BullMQ behavior that may change. — Low risk but fragile.
 - [ ] **No retry logic for failed trigger event processing** — If `createRunFromTriggerEvent` fails, the event is marked as skipped with reason `run_create_failed`. There is no automatic retry mechanism. — Events can be manually retried via re-processing.
 - [ ] **HMAC helper duplication** — The `hmacSha256` function is duplicated across `github.ts`, `linear.ts`, `sentry.ts`, `posthog.ts`, and multiple web app webhook routes. Should be extracted to a shared utility. — Low impact.
+- [ ] **Manual triggers use webhook provider** — Manual run triggers are stored with `provider: "webhook"` and a `config._manual` JSONB flag rather than a dedicated provider value. This avoids enum violations but means manual triggers are distinguished only by their config, not by a first-class provider type. Impact: low — `findManualTrigger` queries by config flag reliably. Expected fix: add "manual" to the `TriggerProviderSchema` enum when a migration is appropriate.

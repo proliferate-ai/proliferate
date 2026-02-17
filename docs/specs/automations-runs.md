@@ -21,6 +21,7 @@
 - Slack receiver worker (BullMQ-based message processing)
 - Run claiming / manual assignment
 - Schedule binding on automations
+- Manual run triggering (Run Now from UI)
 
 ### Out of Scope
 - Trigger ingestion and matching — see `triggers.md`. Handoff point is the `enqueue_enrich` outbox row.
@@ -33,7 +34,7 @@
 
 ### Mental Model
 
-An **automation** is a reusable configuration that describes *what* the agent should do when a trigger fires. A **run** is a single execution of that automation, moving through a pipeline: enrich the trigger context, resolve a target repo/prebuild, create a session, send the prompt, then finalize when the agent calls `automation.complete` or the session terminates.
+An **automation** is a reusable configuration that describes *what* the agent should do when a trigger fires. A **run** is a single execution of that automation, moving through a pipeline: enrich the trigger context, resolve a target repo/prebuild, create a session, send the prompt, then finalize when the agent calls `automation.complete` or the session terminates. Runs can be created by trigger events or manually via the 'Run Now' UI action.
 
 The pipeline is driven by an **outbox** pattern: stages enqueue the next stage's work via the `outbox` table, and a poller dispatches items to BullMQ queues. This decouples stages and provides at-least-once delivery with retry. Only `createRunFromTriggerEvent` and `completeRun` write outbox rows in the same transaction as status updates; the enrichment flow writes status, outbox, and artifact entries as separate sequential calls (`apps/worker/src/automation/index.ts:114-134`).
 
@@ -101,7 +102,7 @@ apps/worker/src/slack/
     └── default-tool.ts               # defaultToolHandler — fallback code block
 
 apps/web/src/server/routers/
-└── automations.ts                    # oRPC routes: automation CRUD, runs, triggers, schedules
+└── automations.ts                    # oRPC routes: automation CRUD, runs, triggers, schedules, manual runs, integration actions
 
 packages/services/src/
 ├── automations/
@@ -505,6 +506,27 @@ try {
 - `resolveRun` — manually transition a `needs_human`, `failed`, or `timed_out` run to `succeeded` or `failed` with an optional resolution note.
 
 **Scoping note:** The route validates that the automation exists in the org (`automationExists(id, orgId)`), but the actual DB update in `assignRunToUser` (`packages/services/src/runs/db.ts:278`) is scoped by `run_id + organization_id` only — it does not re-check the automation ID. This means the automation ID in the route acts as a parent-resource guard but is not enforced at the DB level.
+
+### 6.12 Manual Run (Run Now) — `Implemented`
+
+**What it does:** Allows users to manually trigger an automation run from the UI without waiting for a trigger event.
+
+**Happy path:**
+1. User clicks "Run Now" on the automation detail page.
+2. Frontend calls `useTriggerManualRun(automationId)` hook which hits `automations.triggerManualRun` oRPC endpoint.
+3. `triggerManualRun(automationId, orgId, userId)` verifies automation exists in the org.
+4. Finds or creates a dedicated manual trigger: `provider: "webhook"`, `triggerType: "webhook"`, `enabled: false`, `config: { _manual: true }`. The trigger is disabled so it never receives real webhooks. Uses `config._manual` flag (not a separate provider value) to stay within the valid `TriggerProvider` enum.
+5. Calls `createRunFromTriggerEvent()` with `providerEventType: "manual_trigger"` and a synthetic payload containing the triggering user ID.
+6. Returns `{ runId, status }`. Frontend invalidates the runs list query and shows a success toast.
+
+**Edge cases:**
+- Automation not found → throws Error ("Automation not found")
+- Manual trigger already exists → reuses it (no duplicate creation)
+- The manual trigger has `enabled: false` — it will never match real webhook ingestion
+
+**Frontend:** `useTriggerManualRun` hook (`apps/web/src/hooks/use-automations.ts`) wraps the mutation. The "Run Now" button is in the automation detail page header.
+
+**Files touched:** `packages/services/src/automations/service.ts:triggerManualRun`, `packages/services/src/automations/db.ts:findManualTrigger`, `apps/web/src/server/routers/automations.ts:triggerManualRun`, `apps/web/src/hooks/use-automations.ts:useTriggerManualRun`
 
 ---
 
