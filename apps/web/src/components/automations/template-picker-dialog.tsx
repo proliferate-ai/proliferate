@@ -91,6 +91,7 @@ interface TemplatePickerDialogProps {
 	onSelectTemplate: (template: TemplateEntry) => void;
 	onSelectBlank: () => void;
 	isPending?: boolean;
+	error?: string | null;
 }
 
 export function TemplatePickerDialog({
@@ -101,6 +102,7 @@ export function TemplatePickerDialog({
 	onSelectTemplate,
 	onSelectBlank,
 	isPending,
+	error,
 }: TemplatePickerDialogProps) {
 	const [selectedCategory, setSelectedCategory] = useState<TemplateCategory | "all">("all");
 	const [searchQuery, setSearchQuery] = useState("");
@@ -141,6 +143,7 @@ export function TemplatePickerDialog({
 				{/* Header */}
 				<div className="px-6 py-4 border-b border-border shrink-0">
 					<h2 className="text-base font-semibold">New automation</h2>
+					{error && <p className="text-xs text-destructive mt-1">{error}</p>}
 				</div>
 
 				{/* Body */}

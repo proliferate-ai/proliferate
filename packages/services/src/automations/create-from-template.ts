@@ -4,7 +4,7 @@
  * Security invariants:
  *   S1 — All write-action modes are forced to "require_approval"
  *   S2 — Automation is created in paused state (enabled: false)
- *   S3 — All integration bindings are validated (org ownership + active status)
+ *   S3 — All integration bindings are validated (org ownership + active status + provider match)
  */
 
 import { randomBytes, randomUUID } from "crypto";
@@ -34,7 +34,10 @@ export interface CreateFromTemplateInput {
 
 interface ValidatedIntegration {
 	id: string;
+	/** The DB provider column (e.g., "nango", "github-app") */
 	provider: string;
+	/** The DB integration_id column — the actual service (e.g., "github", "linear") */
+	integrationId: string;
 	status: string | null;
 }
 
@@ -84,9 +87,11 @@ export async function createFromTemplate(
 
 		const automationId = automationRow.id;
 
-		// 2. Insert triggers with integration bindings
+		// 2. Insert triggers with validated integration bindings
 		for (const triggerDef of template.triggers) {
-			const integrationId = input.integrationBindings[triggerDef.provider] ?? null;
+			// Use validated integration ID (not raw input) to prevent mismatched bindings
+			const validated = validatedIntegrations.get(triggerDef.provider);
+			const integrationId = validated?.id ?? null;
 
 			const webhookUrlPath = `/webhooks/t_${randomUUID().slice(0, 12)}`;
 			const webhookSecret = randomBytes(32).toString("hex");
@@ -107,14 +112,14 @@ export async function createFromTemplate(
 			});
 		}
 
-		// 3. Insert automation_connections for each bound integration
+		// 3. Insert automation_connections for each validated integration
 		const seenIntegrationIds = new Set<string>();
-		for (const integrationId of Object.values(input.integrationBindings)) {
-			if (integrationId && !seenIntegrationIds.has(integrationId)) {
-				seenIntegrationIds.add(integrationId);
+		for (const validated of validatedIntegrations.values()) {
+			if (!seenIntegrationIds.has(validated.id)) {
+				seenIntegrationIds.add(validated.id);
 				await tx.insert(automationConnections).values({
 					automationId,
-					integrationId,
+					integrationId: validated.id,
 				});
 			}
 		}
@@ -143,7 +148,14 @@ export async function createFromTemplate(
 // ============================================
 
 /**
- * S3: Validate that all required integration bindings exist, belong to the org, and are active.
+ * S3: Validate that all required integration bindings exist, belong to the org,
+ * are active, and match the expected provider.
+ *
+ * Integration rows store:
+ *   provider     = auth mechanism ("nango", "github-app")
+ *   integrationId = actual service ("github", "linear", "sentry")
+ *
+ * We match binding keys (e.g., "github") against integrationId, not provider.
  */
 async function validateIntegrationBindings(
 	orgId: string,
@@ -157,7 +169,6 @@ async function validateIntegrationBindings(
 	for (const req of template.requiredIntegrations) {
 		if (!req.required) continue;
 
-		// Required integrations that serve as trigger sources must be bound
 		const integrationId = bindings[req.provider];
 		if (!integrationId) {
 			throw new Error(`Missing required integration for ${req.provider}: ${req.reason}`);
@@ -165,12 +176,12 @@ async function validateIntegrationBindings(
 	}
 
 	// Validate each binding
-	for (const [provider, integrationId] of Object.entries(bindings)) {
+	for (const [bindingKey, integrationId] of Object.entries(bindings)) {
 		if (!integrationId) continue;
 
 		const integration = await db.query.integrations.findFirst({
 			where: and(eq(integrations.id, integrationId), eq(integrations.organizationId, orgId)),
-			columns: { id: true, provider: true, status: true },
+			columns: { id: true, provider: true, integrationId: true, status: true },
 		});
 
 		if (!integration) {
@@ -181,9 +192,18 @@ async function validateIntegrationBindings(
 			throw new Error(`Integration ${integrationId} is not active (status: ${integration.status})`);
 		}
 
-		validated.set(provider, {
+		// Verify the integration's service type matches the binding key.
+		// integrationId column holds the actual service (e.g., "github", "linear").
+		if (integration.integrationId && !integration.integrationId.includes(bindingKey)) {
+			throw new Error(
+				`Integration ${integrationId} is for "${integration.integrationId}", not "${bindingKey}"`,
+			);
+		}
+
+		validated.set(bindingKey, {
 			id: integration.id,
-			provider: integration.provider ?? provider,
+			provider: integration.provider ?? bindingKey,
+			integrationId: integration.integrationId ?? bindingKey,
 			status: integration.status,
 		});
 	}
