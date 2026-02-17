@@ -189,13 +189,7 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 
 		// URL preview
 		if (mode.type === "url") {
-			return (
-				<PreviewPanel
-					url={mode.url || previewUrl || null}
-					className="h-full"
-					onClose={isMobileFullScreen ? handleClose : undefined}
-				/>
-			);
+			return <PreviewPanel url={mode.url || previewUrl || null} className="h-full" />;
 		}
 
 		return null;

@@ -2,6 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useConfigurationEnvFiles } from "@/hooks/use-configurations";
 import { useCheckSecrets } from "@/hooks/use-repos";
 import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/use-secrets";
@@ -70,6 +72,7 @@ function AddVariableForm({
 }) {
 	const [key, setKey] = useState("");
 	const [value, setValue] = useState("");
+	const [persist, setPersist] = useState(true);
 	const [saving, setSaving] = useState(false);
 
 	const createSecret = useCreateSecret();
@@ -89,13 +92,15 @@ function AddVariableForm({
 				saveToConfiguration: false,
 			});
 
-			// Persist to DB (with configuration linking if available)
-			await createSecret.mutateAsync({
-				key: trimmedKey,
-				value,
-				secretType: "secret",
-				...(configurationId ? { configurationId: configurationId } : {}),
-			});
+			// Persist to DB only if the toggle is on
+			if (persist) {
+				await createSecret.mutateAsync({
+					key: trimmedKey,
+					value,
+					secretType: "secret",
+					...(configurationId ? { configurationId: configurationId } : {}),
+				});
+			}
 
 			setKey("");
 			setValue("");
@@ -108,33 +113,46 @@ function AddVariableForm({
 	};
 
 	return (
-		<div className="flex items-center gap-1.5">
-			<Input
-				value={key}
-				onChange={(e) => setKey(e.target.value.toUpperCase())}
-				placeholder="KEY"
-				className="h-8 text-xs flex-[2]"
-				autoComplete="off"
-			/>
-			<Input
-				type="password"
-				value={value}
-				onChange={(e) => setValue(e.target.value)}
-				placeholder="Value"
-				className="h-8 text-xs flex-[3]"
-				onKeyDown={(e) => {
-					if (e.key === "Enter") handleSave();
-				}}
-				autoComplete="off"
-			/>
-			<Button
-				size="sm"
-				className="h-8 px-3 text-xs shrink-0"
-				onClick={handleSave}
-				disabled={saving || !key.trim() || !value.trim()}
-			>
-				{saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Add"}
-			</Button>
+		<div className="space-y-2">
+			<div className="flex items-center gap-1.5">
+				<Input
+					value={key}
+					onChange={(e) => setKey(e.target.value.toUpperCase())}
+					placeholder="KEY"
+					className="h-8 text-xs flex-[2]"
+					autoComplete="off"
+				/>
+				<Input
+					type="password"
+					value={value}
+					onChange={(e) => setValue(e.target.value)}
+					placeholder="Value"
+					className="h-8 text-xs flex-[3]"
+					onKeyDown={(e) => {
+						if (e.key === "Enter") handleSave();
+					}}
+					autoComplete="off"
+				/>
+				<Button
+					size="sm"
+					className="h-8 px-3 text-xs shrink-0"
+					onClick={handleSave}
+					disabled={saving || !key.trim() || !value.trim()}
+				>
+					{saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Add"}
+				</Button>
+			</div>
+			<div className="flex items-center gap-2">
+				<Switch
+					id="persist"
+					checked={persist}
+					onCheckedChange={setPersist}
+					className="h-4 w-7 [&>span]:h-3 [&>span]:w-3"
+				/>
+				<Label htmlFor="persist" className="text-[11px] text-muted-foreground cursor-pointer">
+					{persist ? "Save to vault" : "Session only (ephemeral)"}
+				</Label>
+			</div>
 		</div>
 	);
 }

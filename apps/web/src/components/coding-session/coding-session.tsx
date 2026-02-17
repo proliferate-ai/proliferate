@@ -42,7 +42,7 @@ const PANEL_TABS = [
 	{ type: "terminal" as const, label: "Terminal", icon: SquareTerminal },
 	{ type: "git" as const, label: "Git", icon: GitBranch },
 	{ type: "services" as const, label: "Services", icon: Layers },
-	{ type: "artifacts" as const, label: "Artifacts", icon: Zap },
+	{ type: "artifacts" as const, label: "Workspace", icon: Zap },
 	{ type: "environment" as const, label: "Env", icon: KeyRound },
 	{ type: "settings" as const, label: "Settings", icon: Settings },
 ];
