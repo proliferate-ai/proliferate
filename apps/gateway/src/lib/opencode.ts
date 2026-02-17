@@ -54,35 +54,99 @@ export interface OpenCodeMessage {
 	parts: OpenCodeMessagePart[];
 }
 
+export interface OpenCodeSessionCreateError extends Error {
+	retryable?: boolean;
+	status?: number;
+	code?: string;
+	phase?: "fetch" | "http";
+}
+
+function buildOpenCodeSessionCreateError(
+	message: string,
+	details: Partial<OpenCodeSessionCreateError>,
+): OpenCodeSessionCreateError {
+	const error = new Error(message) as OpenCodeSessionCreateError;
+	error.retryable = details.retryable;
+	error.status = details.status;
+	error.code = details.code;
+	error.phase = details.phase;
+	return error;
+}
+
 export async function createOpenCodeSession(baseUrl: string, title?: string): Promise<string> {
 	const startMs = Date.now();
-	logger.debug(
-		{ host: getBaseUrlHost(baseUrl), hasTitle: Boolean(title) },
-		"opencode.session.create.start",
-	);
-	const response = await fetch(`${baseUrl}/session`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify(title ? { title } : {}),
-	});
+	const host = getBaseUrlHost(baseUrl);
+	logger.debug({ host, hasTitle: Boolean(title) }, "opencode.session.create.start");
+	let response: Response;
+	try {
+		response = await fetch(`${baseUrl}/session`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(title ? { title } : {}),
+		});
+	} catch (error) {
+		const err = error instanceof Error ? error : new Error(String(error));
+		const cause =
+			err.cause && typeof err.cause === "object"
+				? (err.cause as { code?: unknown; message?: unknown })
+				: undefined;
+		const causeCode = typeof cause?.code === "string" ? cause.code : undefined;
+		const causeMessage = typeof cause?.message === "string" ? cause.message : undefined;
+		logger.debug(
+			{
+				host,
+				durationMs: Date.now() - startMs,
+				errorName: err.name,
+				errorMessage: err.message,
+				causeCode,
+				causeMessage,
+			},
+			"opencode.session.create.fetch_error",
+		);
+		throw buildOpenCodeSessionCreateError(
+			`OpenCode session create fetch failed: ${err.message}${causeCode ? ` (${causeCode})` : ""}`,
+			{
+				retryable: true,
+				code: causeCode,
+				phase: "fetch",
+			},
+		);
+	}
 
 	if (!response.ok) {
 		const errorText = await response.text();
+		const maxErrorPreviewLength = 300;
+		const errorPreview =
+			errorText.length > maxErrorPreviewLength
+				? `${errorText.slice(0, maxErrorPreviewLength)}...`
+				: errorText;
 		logger.debug(
 			{
-				host: getBaseUrlHost(baseUrl),
+				host,
 				status: response.status,
 				durationMs: Date.now() - startMs,
+				errorLength: errorText.length,
 			},
 			"opencode.session.create.error",
 		);
-		throw new Error(`OpenCode session create failed: ${errorText}`);
+		const status = response.status;
+		const retryable = status >= 500 || status === 408 || status === 429;
+		throw buildOpenCodeSessionCreateError(
+			`OpenCode session create failed: ${errorPreview}${
+				errorText.length > maxErrorPreviewLength ? ` (truncated; length=${errorText.length})` : ""
+			}`,
+			{
+				retryable,
+				status,
+				phase: "http",
+			},
+		);
 	}
 
 	const data = (await response.json()) as { id: string };
 	logger.debug(
 		{
-			host: getBaseUrlHost(baseUrl),
+			host,
 			status: response.status,
 			durationMs: Date.now() - startMs,
 		},

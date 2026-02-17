@@ -317,6 +317,7 @@ throw SandboxProviderError.fromError(error, "modal", "createSandbox");
 
 **Edge cases:**
 - Branch clone fails → falls back to default branch (`modal-libmodal.ts:909-919`).
+- Memory snapshot restore now blocks on OpenCode readiness (`waitForOpenCodeReady`) before returning tunnel URLs, preventing post-restore `/session` races.
 - Modal does not support `pause()` — throws `SandboxProviderError` (`modal-libmodal.ts:1496`).
 - `findSandbox()` uses `sessionId` as Modal sandbox name for 1:1 lookup (`modal-libmodal.ts:810`).
 

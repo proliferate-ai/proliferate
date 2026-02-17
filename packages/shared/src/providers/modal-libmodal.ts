@@ -1634,6 +1634,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			const opencodeTunnel = tunnels[SANDBOX_PORTS.opencode];
 			const previewTunnel = tunnels[SANDBOX_PORTS.preview];
 			const sshTunnel = tunnels[SANDBOX_PORTS.ssh];
+			const openCodeUrl = opencodeTunnel?.url || "";
 
 			// Write updated env vars if provided (tokens may have rotated)
 			if (opts?.envVars && Object.keys(opts.envVars).length > 0) {
@@ -1644,10 +1645,44 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				}
 			}
 
+			// Ensure the restored OpenCode server is accepting requests before returning.
+			// Without this gate, runtime startup can race and fail with "other side closed"
+			// when creating the OpenCode session immediately after restore.
+			if (openCodeUrl) {
+				const timeoutMs = 30000;
+				logLatency("provider.memory_restore.opencode_ready.start", {
+					provider: this.type,
+					sessionId,
+					timeoutMs,
+					openCodeUrl,
+					previewUrl: previewTunnel?.url || "",
+				});
+				const readyStartMs = Date.now();
+				try {
+					await waitForOpenCodeReady(openCodeUrl, timeoutMs, (msg) => log.debug(msg));
+					logLatency("provider.memory_restore.opencode_ready", {
+						provider: this.type,
+						sessionId,
+						durationMs: Date.now() - readyStartMs,
+						timeoutMs,
+					});
+				} catch (readyErr) {
+					logLatency("provider.memory_restore.opencode_ready.error", {
+						provider: this.type,
+						sessionId,
+						durationMs: Date.now() - readyStartMs,
+						timeoutMs,
+						error: readyErr instanceof Error ? readyErr.message : String(readyErr),
+						openCodeUrl,
+					});
+					throw readyErr;
+				}
+			}
+
 			log.info({ newSandboxId, durationMs: Date.now() - startMs }, "Memory snapshot restored");
 			return {
 				sandboxId: newSandboxId,
-				tunnelUrl: opencodeTunnel?.url || "",
+				tunnelUrl: openCodeUrl,
 				previewUrl: previewTunnel?.url || "",
 				sshHost: sshTunnel?.unencryptedHost || undefined,
 				sshPort: sshTunnel?.unencryptedPort || undefined,
