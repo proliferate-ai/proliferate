@@ -43,7 +43,13 @@ export const configurationsRouter = {
 		.output(z.object({ configurationId: z.string().uuid(), repos: z.number() }))
 		.handler(async ({ input, context }) => {
 			// Support both new repoIds[] and legacy repos[] format
-			const repoIds = input.repoIds || input.repos?.map((r) => r.repoId) || [];
+			const repoIds = input.repoIds || input.repos?.map((r) => r.repoId);
+
+			if (!repoIds || repoIds.length === 0) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "At least one repo is required",
+				});
+			}
 
 			try {
 				const result = await configurations.createConfiguration({

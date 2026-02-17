@@ -445,6 +445,584 @@ index 9d612c1..f87d1a5 100644
  				repoCount: this.context.repos.length,
  				primaryRepo: this.context.primaryRepo.github_repo_name,
  				hasSandbox: Boolean(this.context.session.sandbox_id),
+diff --git a/apps/gateway/src/lib/configuration-resolver.ts b/apps/gateway/src/lib/configuration-resolver.ts
+new file mode 100644
+index 0000000..be0118d
+--- /dev/null
++++ b/apps/gateway/src/lib/configuration-resolver.ts
+@@ -0,0 +1,283 @@
++/**
++ * Configuration Resolver
++ *
++ * Handles configuration resolution for session creation:
++ * - Direct configurationId lookup
++ * - Managed configuration find/create (for Slack and similar universal clients)
++ * - CLI device-scoped configuration find/create
++ */
++
++import { createLogger } from "@proliferate/logger";
++import { cli, configurations } from "@proliferate/services";
++import type { SandboxProvider } from "@proliferate/shared";
++import { ApiError } from "../middleware";
++
++const logger = createLogger({ service: "gateway" }).child({ module: "configuration-resolver" });
++
++export interface ResolvedConfiguration {
++	id: string;
++	snapshotId: string | null;
++	repoIds: string[];
++	isNew: boolean;
++}
++
++export interface ConfigurationResolutionOptions {
++	organizationId: string;
++	provider: SandboxProvider;
++
++	/** Explicit configuration ID - just look it up */
++	configurationId?: string;
++
++	/** Managed configuration - find existing or create new with all org repos */
++	managedConfiguration?: {
++		repoIds?: string[]; // Optional: specific repo IDs, otherwise uses all org repos
++	};
++
++	/** CLI device-scoped configuration - find/create for this device */
++	cliConfiguration?: {
++		localPathHash: string;
++		displayName?: string;
++	};
++
++	/** User ID for device-scoped configurations */
++	userId?: string;
++}
++
++/**
++ * Resolve a configuration based on the provided options.
++ * Exactly one of configurationId, managedConfiguration, or cliConfiguration must be provided.
++ */
++export async function resolveConfiguration(
++	options: ConfigurationResolutionOptions,
++): Promise<ResolvedConfiguration> {
++	const { configurationId, managedConfiguration, cliConfiguration } = options;
++
++	// Validate exactly one option is provided
++	const optionCount = [configurationId, managedConfiguration, cliConfiguration].filter(Boolean).length;
++	if (optionCount === 0) {
++		throw new Error("One of configurationId, managedConfiguration, or cliConfiguration is required");
++	}
++	if (optionCount > 1) {
++		throw new Error("Only one of configurationId, managedConfiguration, or cliConfiguration can be provided");
++	}
++
++	if (configurationId) {
++		return resolveDirect(configurationId);
++	}
++
++	if (managedConfiguration) {
++		return resolveManaged(options.organizationId, managedConfiguration.repoIds);
++	}
++
++	if (cliConfiguration) {
++		if (!options.userId) {
++			throw new Error("userId is required for CLI configurations");
++		}
++		return resolveCli(
++			options.organizationId,
++			options.userId,
++			cliConfiguration.localPathHash,
++			cliConfiguration.displayName,
++			options.provider,
++		);
++	}
++
++	// Should never reach here due to validation above
++	throw new Error("Invalid configuration resolution options");
++}
++
++/**
++ * Direct configuration lookup by ID
++ */
++async function resolveDirect(configurationId: string): Promise<ResolvedConfiguration> {
++	const configuration = await configurations.findById(configurationId);
++
++	if (!configuration) {
++		throw new Error(`Configuration not found: ${configurationId}`);
++	}
++
++	// Get full configuration with repos
++	const configurationRepos = await configurations.getConfigurationReposWithDetails(configurationId);
++	const repoIds =
++		configurationRepos?.map((pr) => pr.repo?.id).filter((id): id is string => Boolean(id)) || [];
++
++	// Get snapshot ID from full configuration
++	const fullConfiguration = await configurations.findByIdFull(configurationId);
++
++	return {
++		id: configuration.id,
++		snapshotId: fullConfiguration?.snapshotId ?? null,
++		repoIds,
++		isNew: false,
++	};
++}
++
++/**
++ * Find or create managed configuration for an organization
++ */
++async function resolveManaged(
++	organizationId: string,
++	specificRepoIds?: string[],
++): Promise<ResolvedConfiguration> {
++	// Check for existing managed configuration (only if not creating with specific repos)
++	if (!specificRepoIds) {
++		const existing = await findManagedConfiguration(organizationId);
++		if (existing) {
++			return { ...existing, isNew: false };
++		}
++	}
++
++	// Create new managed configuration
++	const { configurationId, repoIds } = await createManagedConfigurationRecord(
++		organizationId,
++		specificRepoIds,
++	);
++
++	return {
++		id: configurationId,
++		snapshotId: null,
++		repoIds,
++		isNew: true,
++	};
++}
++
++/**
++ * Find existing managed configuration for an org
++ */
++async function findManagedConfiguration(
++	organizationId: string,
++): Promise<Omit<ResolvedConfiguration, "isNew"> | null> {
++	const managedConfigurations = await configurations.findManagedConfigurations();
++
++	// Filter to configurations that have repos in this org
++	const orgConfigurations = managedConfigurations.filter((p) =>
++		p.configurationRepos?.some((pr) => pr.repo?.organizationId === organizationId),
++	);
++
++	if (orgConfigurations.length === 0) {
++		return null;
++	}
++
++	// Return the most recent one (prefer one with snapshot, but return any)
++	const best = orgConfigurations.find((p) => p.snapshotId) || orgConfigurations[0];
++	const repoIds =
++		best.configurationRepos?.map((pr) => pr.repo?.id).filter((id): id is string => Boolean(id)) ||
++		[];
++
++	return {
++		id: best.id,
++		snapshotId: best.snapshotId,
++		repoIds,
++	};
++}
++
++/**
++ * Create the managed configuration record in the database
++ */
++async function createManagedConfigurationRecord(
++	organizationId: string,
++	specificRepoIds?: string[],
++): Promise<{ configurationId: string; repoIds: string[] }> {
++	const repoRows = await configurations.getReposForManagedConfiguration(organizationId, specificRepoIds);
++
++	if (!repoRows || repoRows.length === 0) {
++		throw new ApiError(422, "No repos found for organization");
++	}
++
++	// Create configuration record
++	const configurationId = crypto.randomUUID();
++	await configurations.createManagedConfiguration({ id: configurationId });
++
++	// Create configuration_repos entries
++	const configurationReposEntries = repoRows.map((repo) => {
++		const repoName = repo.githubRepoName?.split("/").pop() || repo.id;
++		return {
++			configurationId: configurationId,
++			repoId: repo.id,
++			workspacePath: repoRows.length === 1 ? "." : repoName,
++		};
++	});
++
++	try {
++		await configurations.createConfigurationRepos(configurationReposEntries);
++	} catch (err) {
++		// Clean up on failure
++		await configurations.deleteConfiguration(configurationId);
++		throw new Error(`Failed to link repos: ${err instanceof Error ? err.message : String(err)}`);
++	}
++
++	return {
++		configurationId,
++		repoIds: repoRows.map((r) => r.id),
++	};
++}
++
++/**
++ * Find or create CLI device-scoped configuration
++ */
++async function resolveCli(
++	organizationId: string,
++	userId: string,
++	localPathHash: string,
++	displayName: string | undefined,
++	provider: SandboxProvider,
++): Promise<ResolvedConfiguration> {
++	// Check for existing configuration
++	const existingConfiguration = await cli.getCliConfiguration(userId, localPathHash);
++
++	if (existingConfiguration) {
++		// Get linked repos via configuration_repos
++		const configurationRepos = await configurations.getConfigurationReposWithDetails(existingConfiguration.id);
++		const repoIds =
++			configurationRepos?.map((pr) => pr.repo?.id).filter((id): id is string => Boolean(id)) || [];
++
++		return {
++			id: existingConfiguration.id,
++			snapshotId: existingConfiguration.snapshot_id,
++			repoIds,
++			isNew: false,
++		};
++	}
++
++	// Create new configuration using CLI service
++	const { id: configurationId } = await cli.createCliConfigurationPending({
++		userId,
++		localPathHash,
++		sandboxProvider: provider.type,
++	});
++
++	// Find or create local repo
++	let repoId: string;
++	const existingRepo = await cli.findLocalRepo(organizationId, localPathHash);
++
++	if (existingRepo) {
++		repoId = existingRepo.id;
++	} else {
++		const newRepo = await cli.createLocalRepo({
++			organizationId,
++			addedBy: userId,
++			localPathHash,
++			displayName: displayName || "Local Directory",
++		});
++		repoId = newRepo.id;
++	}
++
++	// Link repo to configuration
++	try {
++		await cli.upsertConfigurationRepo({
++			configurationId,
++			repoId,
++			workspacePath: ".",
++		});
++	} catch (err) {
++		logger.error({ err }, "Failed to link repo to configuration");
++		// Non-fatal
++	}
++
++	return {
++		id: configurationId,
++		snapshotId: null,
++		repoIds: [repoId],
++		isNew: true,
++	};
++}
+diff --git a/apps/gateway/src/lib/prebuild-resolver.ts b/apps/gateway/src/lib/prebuild-resolver.ts
+deleted file mode 100644
+index 8c6f4ee..0000000
+--- a/apps/gateway/src/lib/prebuild-resolver.ts
++++ /dev/null
+@@ -1,283 +0,0 @@
+-/**
+- * Prebuild Resolver
+- *
+- * Handles prebuild resolution for session creation:
+- * - Direct prebuildId lookup
+- * - Managed prebuild find/create (for Slack and similar universal clients)
+- * - CLI device-scoped prebuild find/create
+- */
+-
+-import { createLogger } from "@proliferate/logger";
+-import { cli, prebuilds } from "@proliferate/services";
+-import type { SandboxProvider } from "@proliferate/shared";
+-import { ApiError } from "../middleware";
+-
+-const logger = createLogger({ service: "gateway" }).child({ module: "prebuild-resolver" });
+-
+-export interface ResolvedPrebuild {
+-	id: string;
+-	snapshotId: string | null;
+-	repoIds: string[];
+-	isNew: boolean;
+-}
+-
+-export interface PrebuildResolutionOptions {
+-	organizationId: string;
+-	provider: SandboxProvider;
+-
+-	/** Explicit prebuild ID - just look it up */
+-	prebuildId?: string;
+-
+-	/** Managed prebuild - find existing or create new with all org repos */
+-	managedPrebuild?: {
+-		repoIds?: string[]; // Optional: specific repo IDs, otherwise uses all org repos
+-	};
+-
+-	/** CLI device-scoped prebuild - find/create for this device */
+-	cliPrebuild?: {
+-		localPathHash: string;
+-		displayName?: string;
+-	};
+-
+-	/** User ID for device-scoped prebuilds */
+-	userId?: string;
+-}
+-
+-/**
+- * Resolve a prebuild based on the provided options.
+- * Exactly one of prebuildId, managedPrebuild, or cliPrebuild must be provided.
+- */
+-export async function resolvePrebuild(
+-	options: PrebuildResolutionOptions,
+-): Promise<ResolvedPrebuild> {
+-	const { prebuildId, managedPrebuild, cliPrebuild } = options;
+-
+-	// Validate exactly one option is provided
+-	const optionCount = [prebuildId, managedPrebuild, cliPrebuild].filter(Boolean).length;
+-	if (optionCount === 0) {
+-		throw new Error("One of prebuildId, managedPrebuild, or cliPrebuild is required");
+-	}
+-	if (optionCount > 1) {
+-		throw new Error("Only one of prebuildId, managedPrebuild, or cliPrebuild can be provided");
+-	}
+-
+-	if (prebuildId) {
+-		return resolveDirect(prebuildId);
+-	}
+-
+-	if (managedPrebuild) {
+-		return resolveManaged(options.organizationId, managedPrebuild.repoIds);
+-	}
+-
+-	if (cliPrebuild) {
+-		if (!options.userId) {
+-			throw new Error("userId is required for CLI prebuilds");
+-		}
+-		return resolveCli(
+-			options.organizationId,
+-			options.userId,
+-			cliPrebuild.localPathHash,
+-			cliPrebuild.displayName,
+-			options.provider,
+-		);
+-	}
+-
+-	// Should never reach here due to validation above
+-	throw new Error("Invalid prebuild resolution options");
+-}
+-
+-/**
+- * Direct prebuild lookup by ID
+- */
+-async function resolveDirect(prebuildId: string): Promise<ResolvedPrebuild> {
+-	const prebuild = await prebuilds.findById(prebuildId);
+-
+-	if (!prebuild) {
+-		throw new Error(`Prebuild not found: ${prebuildId}`);
+-	}
+-
+-	// Get full prebuild with repos
+-	const prebuildRepos = await prebuilds.getPrebuildReposWithDetails(prebuildId);
+-	const repoIds =
+-		prebuildRepos?.map((pr) => pr.repo?.id).filter((id): id is string => Boolean(id)) || [];
+-
+-	// Get snapshot ID from full prebuild
+-	const fullPrebuild = await prebuilds.findByIdFull(prebuildId);
+-
+-	return {
+-		id: prebuild.id,
+-		snapshotId: fullPrebuild?.snapshotId ?? null,
+-		repoIds,
+-		isNew: false,
+-	};
+-}
+-
+-/**
+- * Find or create managed prebuild for an organization
+- */
+-async function resolveManaged(
+-	organizationId: string,
+-	specificRepoIds?: string[],
+-): Promise<ResolvedPrebuild> {
+-	// Check for existing managed prebuild (only if not creating with specific repos)
+-	if (!specificRepoIds) {
+-		const existing = await findManagedPrebuild(organizationId);
+-		if (existing) {
+-			return { ...existing, isNew: false };
+-		}
+-	}
+-
+-	// Create new managed prebuild
+-	const { prebuildId, repoIds } = await createManagedPrebuildRecord(
+-		organizationId,
+-		specificRepoIds,
+-	);
+-
+-	return {
+-		id: prebuildId,
+-		snapshotId: null,
+-		repoIds,
+-		isNew: true,
+-	};
+-}
+-
+-/**
+- * Find existing managed prebuild for an org
+- */
+-async function findManagedPrebuild(
+-	organizationId: string,
+-): Promise<Omit<ResolvedPrebuild, "isNew"> | null> {
+-	const managedPrebuilds = await prebuilds.findManagedPrebuilds();
+-
+-	// Filter to prebuilds that have repos in this org
+-	const orgPrebuilds = managedPrebuilds.filter((p) =>
+-		p.configurationRepos?.some((pr) => pr.repo?.organizationId === organizationId),
+-	);
+-
+-	if (orgPrebuilds.length === 0) {
+-		return null;
+-	}
+-
+-	// Return the most recent one (prefer one with snapshot, but return any)
+-	const best = orgPrebuilds.find((p) => p.snapshotId) || orgPrebuilds[0];
+-	const repoIds =
+-		best.configurationRepos?.map((pr) => pr.repo?.id).filter((id): id is string => Boolean(id)) ||
+-		[];
+-
+-	return {
+-		id: best.id,
+-		snapshotId: best.snapshotId,
+-		repoIds,
+-	};
+-}
+-
+-/**
+- * Create the managed prebuild record in the database
+- */
+-async function createManagedPrebuildRecord(
+-	organizationId: string,
+-	specificRepoIds?: string[],
+-): Promise<{ prebuildId: string; repoIds: string[] }> {
+-	const repoRows = await prebuilds.getReposForManagedPrebuild(organizationId, specificRepoIds);
+-
+-	if (!repoRows || repoRows.length === 0) {
+-		throw new ApiError(422, "No repos found for organization");
+-	}
+-
+-	// Create prebuild record
+-	const prebuildId = crypto.randomUUID();
+-	await prebuilds.createManagedPrebuild({ id: prebuildId });
+-
+-	// Create prebuild_repos entries
+-	const prebuildReposEntries = repoRows.map((repo) => {
+-		const repoName = repo.githubRepoName?.split("/").pop() || repo.id;
+-		return {
+-			prebuildId: prebuildId,
+-			repoId: repo.id,
+-			workspacePath: repoRows.length === 1 ? "." : repoName,
+-		};
+-	});
+-
+-	try {
+-		await prebuilds.createPrebuildRepos(prebuildReposEntries);
+-	} catch (err) {
+-		// Clean up on failure
+-		await prebuilds.deletePrebuild(prebuildId);
+-		throw new Error(`Failed to link repos: ${err instanceof Error ? err.message : String(err)}`);
+-	}
+-
+-	return {
+-		prebuildId,
+-		repoIds: repoRows.map((r) => r.id),
+-	};
+-}
+-
+-/**
+- * Find or create CLI device-scoped prebuild
+- */
+-async function resolveCli(
+-	organizationId: string,
+-	userId: string,
+-	localPathHash: string,
+-	displayName: string | undefined,
+-	provider: SandboxProvider,
+-): Promise<ResolvedPrebuild> {
+-	// Check for existing prebuild
+-	const existingPrebuild = await cli.getCliPrebuild(userId, localPathHash);
+-
+-	if (existingPrebuild) {
+-		// Get linked repos via prebuild_repos
+-		const prebuildRepos = await prebuilds.getPrebuildReposWithDetails(existingPrebuild.id);
+-		const repoIds =
+-			prebuildRepos?.map((pr) => pr.repo?.id).filter((id): id is string => Boolean(id)) || [];
+-
+-		return {
+-			id: existingPrebuild.id,
+-			snapshotId: existingPrebuild.snapshot_id,
+-			repoIds,
+-			isNew: false,
+-		};
+-	}
+-
+-	// Create new prebuild using CLI service
+-	const { id: prebuildId } = await cli.createCliPrebuildPending({
+-		userId,
+-		localPathHash,
+-		sandboxProvider: provider.type,
+-	});
+-
+-	// Find or create local repo
+-	let repoId: string;
+-	const existingRepo = await cli.findLocalRepo(organizationId, localPathHash);
+-
+-	if (existingRepo) {
+-		repoId = existingRepo.id;
+-	} else {
+-		const newRepo = await cli.createLocalRepo({
+-			organizationId,
+-			addedBy: userId,
+-			localPathHash,
+-			displayName: displayName || "Local Directory",
+-		});
+-		repoId = newRepo.id;
+-	}
+-
+-	// Link repo to prebuild
+-	try {
+-		await cli.upsertPrebuildRepo({
+-			prebuildId,
+-			repoId,
+-			workspacePath: ".",
+-		});
+-	} catch (err) {
+-		logger.error({ err }, "Failed to link repo to prebuild");
+-		// Non-fatal
+-	}
+-
+-	return {
+-		id: prebuildId,
+-		snapshotId: null,
+-		repoIds: [repoId],
+-		isNew: true,
+-	};
+-}
 diff --git a/apps/gateway/src/lib/session-creator.ts b/apps/gateway/src/lib/session-creator.ts
 index 06c6cd3..ed9b168 100644
 --- a/apps/gateway/src/lib/session-creator.ts
@@ -908,6 +1486,609 @@ index 4281d4c..c80b504 100644
  		else if (key === "allowAgenticRepoSelection") mapped.allow_agentic_repo_selection = value;
  		else if (key === "agentInstructions") mapped.agent_instructions = value;
  		else if (key === "agentType") mapped.agent_type = value;
+diff --git a/apps/web/src/app/(command-center)/dashboard/configurations/[id]/page.tsx b/apps/web/src/app/(command-center)/dashboard/configurations/[id]/page.tsx
+new file mode 100644
+index 0000000..03a87b9
+--- /dev/null
++++ b/apps/web/src/app/(command-center)/dashboard/configurations/[id]/page.tsx
+@@ -0,0 +1,319 @@
++"use client";
++
++import { Button } from "@/components/ui/button";
++import { Input } from "@/components/ui/input";
++import { LoadingDots } from "@/components/ui/loading-dots";
++import {
++	useConfigurationServiceCommands,
++	useConfigurations,
++	useDetachRepo,
++	useUpdateConfigurationServiceCommands,
++} from "@/hooks/use-configurations";
++import { cn } from "@/lib/utils";
++import { ArrowLeft, FolderGit2, Pencil, Plus, Trash2, X } from "lucide-react";
++import { useParams, useRouter } from "next/navigation";
++import { useMemo, useState } from "react";
++
++export default function ConfigurationDetailPage() {
++	const params = useParams<{ id: string }>();
++	const router = useRouter();
++	const configurationId = params.id;
++
++	const { data: configurations, isLoading } = useConfigurations();
++
++	const config = useMemo(() => {
++		return configurations?.find((c) => c.id === configurationId);
++	}, [configurations, configurationId]);
++
++	if (isLoading) {
++		return (
++			<div className="flex items-center justify-center h-full">
++				<LoadingDots size="md" className="text-muted-foreground" />
++			</div>
++		);
++	}
++
++	if (!config) {
++		return (
++			<div className="mx-auto max-w-3xl px-6 py-8">
++				<p className="text-sm text-muted-foreground">Configuration not found.</p>
++				<Button
++					variant="ghost"
++					size="sm"
++					className="mt-2"
++					onClick={() => router.push("/dashboard/configurations")}
++				>
++					<ArrowLeft className="h-4 w-4 mr-1" />
++					Back to configurations
++				</Button>
++			</div>
++		);
++	}
++
++	const displayName = config.name || "Untitled configuration";
++	const repos = (config.configurationRepos ?? []).filter((cr) => cr.repo !== null);
++
++	return (
++		<div className="h-full overflow-y-auto">
++			<div className="mx-auto max-w-3xl px-6 py-8 space-y-8">
++				{/* Header */}
++				<div>
++					<button
++						type="button"
++						onClick={() => router.push("/dashboard/configurations")}
++						className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mb-3"
++					>
++						<ArrowLeft className="h-3 w-3" />
++						Configurations
++					</button>
++					<h1 className="text-lg font-semibold">{displayName}</h1>
++					<div className="flex items-center gap-2 mt-1">
++						<span
++							className={cn(
++								"inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-medium",
++								config.status === "ready"
++									? "border-border/50 bg-muted/50 text-foreground"
++									: "border-border/50 bg-muted/50 text-muted-foreground",
++							)}
++						>
++							{config.status === "ready"
++								? "Ready"
++								: config.status === "building"
++									? "Building"
++									: "Pending"}
++						</span>
++					</div>
++				</div>
++
++				{/* Attached repos */}
++				<AttachedReposSection configurationId={configurationId} repos={repos} />
++
++				{/* Service Commands */}
++				<ServiceCommandsSection configurationId={configurationId} />
++			</div>
++		</div>
++	);
++}
++
++// ============================================
++// Attached Repos Section
++// ============================================
++
++interface ConfigurationRepo {
++	workspacePath: string;
++	repo: {
++		id: string;
++		githubRepoName: string;
++		githubUrl: string;
++	} | null;
++}
++
++function AttachedReposSection({
++	configurationId,
++	repos,
++}: {
++	configurationId: string;
++	repos: ConfigurationRepo[];
++}) {
++	const detachRepo = useDetachRepo();
++
++	const handleDetach = async (repoId: string) => {
++		await detachRepo.mutateAsync({ configurationId, repoId });
++	};
++
++	return (
++		<section>
++			<div className="flex items-center justify-between mb-3">
++				<h2 className="text-sm font-medium">Attached Repositories</h2>
++			</div>
++
++			{repos.length > 0 ? (
++				<div className="rounded-lg border border-border/80 bg-background divide-y divide-border/60">
++					{repos.map((cr) => (
++						<div key={cr.repo!.id} className="flex items-center justify-between px-4 py-2.5">
++							<div className="flex items-center gap-2 min-w-0">
++								<FolderGit2 className="h-4 w-4 text-muted-foreground shrink-0" />
++								<span className="text-sm truncate">{cr.repo!.githubRepoName}</span>
++								{cr.workspacePath && (
++									<span className="text-xs text-muted-foreground">{cr.workspacePath}</span>
++								)}
++							</div>
++							<Button
++								variant="ghost"
++								size="sm"
++								className="h-7 text-xs text-muted-foreground hover:text-destructive shrink-0"
++								onClick={() => handleDetach(cr.repo!.id)}
++								disabled={detachRepo.isPending}
++							>
++								<X className="h-3 w-3 mr-1" />
++								Detach
++							</Button>
++						</div>
++					))}
++				</div>
++			) : (
++				<div className="rounded-lg border border-dashed border-border/80 py-8 text-center">
++					<p className="text-sm text-muted-foreground">No repositories attached</p>
++					<p className="text-xs text-muted-foreground mt-1">
++						Attach repositories from the repos page or via the API
++					</p>
++				</div>
++			)}
++		</section>
++	);
++}
++
++// ============================================
++// Service Commands Section
++// ============================================
++
++interface CommandDraft {
++	name: string;
++	command: string;
++	cwd: string;
++}
++
++function ServiceCommandsSection({ configurationId }: { configurationId: string }) {
++	const { data: commands, isLoading } = useConfigurationServiceCommands(configurationId);
++	const updateCommands = useUpdateConfigurationServiceCommands();
++	const [editing, setEditing] = useState(false);
++	const [drafts, setDrafts] = useState<CommandDraft[]>([]);
++
++	const startEditing = () => {
++		setDrafts(
++			commands?.length
++				? commands.map((c) => ({ name: c.name, command: c.command, cwd: c.cwd || "" }))
++				: [{ name: "", command: "", cwd: "" }],
++		);
++		setEditing(true);
++	};
++
++	const handleSave = async () => {
++		const valid = drafts.filter((d) => d.name.trim() && d.command.trim());
++		await updateCommands.mutateAsync({
++			configurationId,
++			commands: valid.map((d) => ({
++				name: d.name.trim(),
++				command: d.command.trim(),
++				...(d.cwd.trim() ? { cwd: d.cwd.trim() } : {}),
++			})),
++		});
++		setEditing(false);
++	};
++
++	const addRow = () => {
++		if (drafts.length >= 10) return;
++		setDrafts([...drafts, { name: "", command: "", cwd: "" }]);
++	};
++
++	const removeRow = (index: number) => {
++		setDrafts(drafts.filter((_, i) => i !== index));
++	};
++
++	const updateDraft = (index: number, field: keyof CommandDraft, value: string) => {
++		setDrafts(drafts.map((d, i) => (i === index ? { ...d, [field]: value } : d)));
++	};
++
++	if (isLoading) {
++		return <LoadingDots size="sm" className="text-muted-foreground" />;
++	}
++
++	return (
++		<section>
++			<div className="flex items-center justify-between mb-3">
++				<h2 className="text-sm font-medium">Service Commands</h2>
++				{!editing && (
++					<Button variant="ghost" size="sm" className="h-7 text-xs" onClick={startEditing}>
++						<Pencil className="h-3 w-3 mr-1" />
++						{commands && commands.length > 0 ? "Edit" : "Add commands"}
++					</Button>
++				)}
++			</div>
++
++			{editing ? (
++				<div className="space-y-2">
++					<p className="text-xs text-muted-foreground">
++						Service commands run automatically when a session starts with this configuration.
++					</p>
++					{drafts.map((draft, index) => (
++						<div key={index} className="flex items-start gap-2">
++							<div className="flex-1 space-y-1.5">
++								<Input
++									value={draft.name}
++									onChange={(e) => updateDraft(index, "name", e.target.value)}
++									placeholder="Name (e.g. dev-server)"
++									className="h-7 text-xs"
++								/>
++								<Input
++									value={draft.command}
++									onChange={(e) => updateDraft(index, "command", e.target.value)}
++									placeholder="Command (e.g. pnpm dev)"
++									className="h-7 text-xs font-mono"
++								/>
++								<Input
++									value={draft.cwd}
++									onChange={(e) => updateDraft(index, "cwd", e.target.value)}
++									placeholder="Working directory (optional)"
++									className="h-7 text-xs"
++								/>
++							</div>
++							<Button
++								variant="ghost"
++								size="sm"
++								className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
++								onClick={() => removeRow(index)}
++							>
++								<Trash2 className="h-3.5 w-3.5" />
++							</Button>
++						</div>
++					))}
++					<div className="flex items-center gap-2">
++						<Button
++							variant="outline"
++							size="sm"
++							className="h-7 text-xs"
++							onClick={addRow}
++							disabled={drafts.length >= 10}
++						>
++							<Plus className="h-3 w-3 mr-1" />
++							Add command
++						</Button>
++						<div className="flex-1" />
++						<Button
++							variant="ghost"
++							size="sm"
++							className="h-7 text-xs"
++							onClick={() => setEditing(false)}
++						>
++							Cancel
++						</Button>
++						<Button
++							size="sm"
++							className="h-7 text-xs"
++							onClick={handleSave}
++							disabled={updateCommands.isPending}
++						>
++							{updateCommands.isPending ? "Saving..." : "Save"}
++						</Button>
++					</div>
++				</div>
++			) : commands && commands.length > 0 ? (
++				<div className="rounded-lg border border-border/80 bg-background p-3">
++					<div className="space-y-1">
++						{commands.map((cmd, index) => (
++							<div key={index} className="text-xs py-0.5">
++								<span className="font-medium">{cmd.name}</span>
++								<span className="text-muted-foreground ml-2 font-mono">{cmd.command}</span>
++								{cmd.cwd && <span className="text-muted-foreground ml-2">({cmd.cwd})</span>}
++							</div>
++						))}
++					</div>
++				</div>
++			) : (
++				<div className="rounded-lg border border-dashed border-border/80 py-6 text-center">
++					<p className="text-sm text-muted-foreground">No service commands configured</p>
++				</div>
++			)}
++		</section>
++	);
++}
+diff --git a/apps/web/src/app/(command-center)/dashboard/configurations/page.tsx b/apps/web/src/app/(command-center)/dashboard/configurations/page.tsx
+new file mode 100644
+index 0000000..c3f6771
+--- /dev/null
++++ b/apps/web/src/app/(command-center)/dashboard/configurations/page.tsx
+@@ -0,0 +1,272 @@
++"use client";
++
++import { PageShell } from "@/components/dashboard/page-shell";
++import {
++	AlertDialog,
++	AlertDialogAction,
++	AlertDialogCancel,
++	AlertDialogContent,
++	AlertDialogDescription,
++	AlertDialogFooter,
++	AlertDialogHeader,
++	AlertDialogTitle,
++} from "@/components/ui/alert-dialog";
++import { Button } from "@/components/ui/button";
++import {
++	DropdownMenu,
++	DropdownMenuContent,
++	DropdownMenuItem,
++	DropdownMenuSeparator,
++	DropdownMenuTrigger,
++} from "@/components/ui/dropdown-menu";
++import { Input } from "@/components/ui/input";
++import { LoadingDots } from "@/components/ui/loading-dots";
++import {
++	useConfigurations,
++	useCreateConfiguration,
++	useDeleteConfiguration,
++} from "@/hooks/use-configurations";
++import { cn } from "@/lib/utils";
++import type { Configuration } from "@proliferate/shared/contracts";
++import { formatDistanceToNow } from "date-fns";
++import { ChevronRight, FolderGit2, MoreVertical, Plus, Search, Trash2 } from "lucide-react";
++import Link from "next/link";
++import { useRouter } from "next/navigation";
++import { useMemo, useState } from "react";
++
++// ============================================
++// Main Page
++// ============================================
++
++export default function ConfigurationsPage() {
++	const { data: configurations, isLoading } = useConfigurations();
++	const [filterQuery, setFilterQuery] = useState("");
++	const createConfiguration = useCreateConfiguration();
++	const router = useRouter();
++
++	const configList = useMemo(() => {
++		const list = configurations ?? [];
++		if (!filterQuery) return list;
++		const q = filterQuery.toLowerCase();
++		return list.filter((c) => (c.name ?? "").toLowerCase().includes(q));
++	}, [configurations, filterQuery]);
++
++	const handleCreate = async () => {
++		const result = await createConfiguration.mutateAsync({});
++		if (result?.configurationId) {
++			router.push(`/dashboard/configurations/${result.configurationId}`);
++		}
++	};
++
++	if (isLoading) {
++		return (
++			<PageShell title="Configurations">
++				<div className="py-12 flex justify-center">
++					<LoadingDots size="md" className="text-muted-foreground" />
++				</div>
++			</PageShell>
++		);
++	}
++
++	const hasConfigs = (configurations ?? []).length > 0;
++	const hasResults = configList.length > 0;
++
++	return (
++		<PageShell
++			title="Configurations"
++			actions={
++				<div className="flex items-center gap-2">
++					{hasConfigs && (
++						<div className="relative">
++							<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
++							<Input
++								value={filterQuery}
++								onChange={(e) => setFilterQuery(e.target.value)}
++								placeholder="Search configurations..."
++								className="pl-8 h-8 w-56 text-sm"
++							/>
++						</div>
++					)}
++					<Button
++						size="sm"
++						className="h-8"
++						onClick={handleCreate}
++						disabled={createConfiguration.isPending}
++					>
++						<Plus className="h-3.5 w-3.5 mr-1.5" />
++						{createConfiguration.isPending ? "Creating..." : "New Configuration"}
++					</Button>
++				</div>
++			}
++		>
++			{!hasConfigs ? (
++				<div className="rounded-xl border border-dashed border-border py-16 text-center">
++					<p className="text-sm text-muted-foreground">No configurations yet</p>
++					<p className="text-xs text-muted-foreground mt-1">
++						Create a configuration to set up repos, service commands, and environment files
++					</p>
++					<div className="flex items-center justify-center gap-3 mt-4">
++						<Button size="sm" onClick={handleCreate} disabled={createConfiguration.isPending}>
++							<Plus className="h-3.5 w-3.5 mr-1.5" />
++							{createConfiguration.isPending ? "Creating..." : "New Configuration"}
++						</Button>
++					</div>
++				</div>
++			) : !hasResults ? (
++				<p className="text-sm text-muted-foreground text-center py-12">
++					No configurations matching &ldquo;{filterQuery}&rdquo;
++				</p>
++			) : (
++				<div className="rounded-xl border border-border overflow-hidden">
++					{/* Table header */}
++					<div className="flex items-center px-4 py-2 pr-12 text-xs text-muted-foreground border-b border-border/50">
++						<span className="flex-1 min-w-0">Name</span>
++						<span className="w-28 text-center shrink-0">Status</span>
++						<span className="w-32 text-center shrink-0">Repos</span>
++						<span className="w-28 text-center shrink-0">Created</span>
++					</div>
++
++					{configList.map((config) => (
++						<ConfigurationRow key={config.id} config={config} />
++					))}
++				</div>
++			)}
++		</PageShell>
++	);
++}
++
++// ============================================
++// Configuration Row
++// ============================================
++
++function ConfigurationRow({ config }: { config: Configuration }) {
++	const router = useRouter();
++	const deleteConfiguration = useDeleteConfiguration();
++	const [deleteOpen, setDeleteOpen] = useState(false);
++	const [expanded, setExpanded] = useState(false);
++
++	const displayName = config.name || "Untitled configuration";
++	const repos = (config.configurationRepos ?? []).filter((cr) => cr.repo !== null);
++	const repoCount = repos.length;
++	const timeAgo = config.createdAt
++		? formatDistanceToNow(new Date(config.createdAt), { addSuffix: true })
++		: "\u2014";
++
++	const handleDelete = async () => {
++		await deleteConfiguration.mutateAsync(config.id);
++		setDeleteOpen(false);
++	};
++
++	return (
++		<>
++			<div className={cn("border-b border-border/50 last:border-0", expanded && "bg-muted/30")}>
++				<div className="flex items-center hover:bg-muted/50 transition-colors">
++					<button
++						type="button"
++						onClick={() => repoCount > 0 && setExpanded(!expanded)}
++						className="flex-1 min-w-0 flex items-center px-4 py-2.5 text-sm text-left"
++					>
++						<span className="flex-1 min-w-0 flex items-center gap-1.5">
++							{repoCount > 0 ? (
++								<ChevronRight
++									className={cn(
++										"h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0",
++										expanded && "rotate-90",
++									)}
++								/>
++							) : (
++								<span className="w-3.5 shrink-0" />
++							)}
++							<Link
++								href={`/dashboard/configurations/${config.id}`}
++								onClick={(e) => e.stopPropagation()}
++								className="font-medium truncate hover:underline"
++							>
++								{displayName}
++							</Link>
++						</span>
++						<span className="w-28 flex justify-center shrink-0">
++							<span
++								className={cn(
++									"inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-medium",
++									config.status === "ready"
++										? "border-border/50 bg-muted/50 text-foreground"
++										: "border-border/50 bg-muted/50 text-muted-foreground",
++								)}
++							>
++								{config.status === "ready"
++									? "Ready"
++									: config.status === "building"
++										? "Building"
++										: "Pending"}
++							</span>
++						</span>
++						<span className="w-32 text-center text-xs text-muted-foreground shrink-0">
++							{repoCount > 0 ? `${repoCount} repo${repoCount !== 1 ? "s" : ""}` : "\u2014"}
++						</span>
++						<span className="w-28 text-center text-xs text-muted-foreground shrink-0">
++							{timeAgo}
++						</span>
++					</button>
++
++					<div className="pr-3 shrink-0">
++						<DropdownMenu>
++							<DropdownMenuTrigger asChild>
++								<Button variant="ghost" size="icon" className="h-7 w-7">
++									<MoreVertical className="h-3.5 w-3.5" />
++								</Button>
++							</DropdownMenuTrigger>
++							<DropdownMenuContent align="end">
++								<DropdownMenuItem
++									onClick={() => router.push(`/dashboard/configurations/${config.id}`)}
++								>
++									Edit
++								</DropdownMenuItem>
++								<DropdownMenuSeparator />
++								<DropdownMenuItem onClick={() => setDeleteOpen(true)} className="text-destructive">
++									<Trash2 className="h-4 w-4 mr-2" />
++									Delete
++								</DropdownMenuItem>
++							</DropdownMenuContent>
++						</DropdownMenu>
++					</div>
++				</div>
++
++				{/* Expanded repos list */}
++				{expanded && repos.length > 0 && (
++					<div className="px-4 pb-3 pl-10 space-y-1">
++						{repos.map((cr) => (
++							<div key={cr.repo!.id} className="flex items-center gap-2 py-1">
++								<FolderGit2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
++								<span className="text-xs text-muted-foreground truncate">
++									{cr.repo!.githubRepoName}
++								</span>
++							</div>
++						))}
++					</div>
++				)}
++			</div>
++
++			<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
++				<AlertDialogContent>
++					<AlertDialogHeader>
++						<AlertDialogTitle>Delete configuration</AlertDialogTitle>
++						<AlertDialogDescription>
++							Are you sure you want to delete &ldquo;{displayName}&rdquo;? This will remove all
++							associated snapshots and service commands.
++						</AlertDialogDescription>
++					</AlertDialogHeader>
++					<AlertDialogFooter>
++						<AlertDialogCancel>Cancel</AlertDialogCancel>
++						<AlertDialogAction
++							onClick={handleDelete}
++							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
++						>
++							{deleteConfiguration.isPending ? "Deleting..." : "Delete"}
++						</AlertDialogAction>
++					</AlertDialogFooter>
++				</AlertDialogContent>
++			</AlertDialog>
++		</>
++	);
++}
 diff --git a/apps/web/src/app/(command-center)/dashboard/repos/[id]/page.tsx b/apps/web/src/app/(command-center)/dashboard/repos/[id]/page.tsx
 index 0b9218b..7b89da8 100644
 --- a/apps/web/src/app/(command-center)/dashboard/repos/[id]/page.tsx
@@ -3171,6 +4352,172 @@ index cb4a4a8..cce1591 100644
 +	useAttachRepo,
 +	useDetachRepo,
 +} from "./use-configurations";
+diff --git a/apps/web/src/hooks/use-configurations.ts b/apps/web/src/hooks/use-configurations.ts
+new file mode 100644
+index 0000000..bff4436
+--- /dev/null
++++ b/apps/web/src/hooks/use-configurations.ts
+@@ -0,0 +1,160 @@
++"use client";
++
++import { orpc } from "@/lib/orpc";
++import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
++
++interface CreateConfigurationInput {
++	repoIds?: string[];
++	repos?: Array<{ repoId: string; workspacePath?: string }>;
++	name?: string;
++}
++
++interface UpdateConfigurationInput {
++	name?: string;
++	notes?: string;
++}
++
++export function useConfigurations(status?: string) {
++	return useQuery({
++		...orpc.configurations.list.queryOptions({ input: status ? { status } : {} }),
++		select: (data) => data.configurations,
++	});
++}
++
++export function useCreateConfiguration() {
++	const queryClient = useQueryClient();
++
++	const mutation = useMutation({
++		...orpc.configurations.create.mutationOptions(),
++		onSuccess: () => {
++			queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
++		},
++	});
++
++	const mutateAsync = async (data: CreateConfigurationInput) => {
++		const result = await mutation.mutateAsync(data);
++		return result;
++	};
++
++	return {
++		...mutation,
++		mutateAsync,
++		mutate: (data: CreateConfigurationInput) => {
++			mutation.mutate(data);
++		},
++	};
++}
++
++export function useUpdateConfiguration() {
++	const queryClient = useQueryClient();
++
++	const mutation = useMutation({
++		...orpc.configurations.update.mutationOptions(),
++		onSuccess: () => {
++			queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
++		},
++	});
++
++	const mutateAsync = async (id: string, data: UpdateConfigurationInput) => {
++		const result = await mutation.mutateAsync({ id, ...data });
++		return result.configuration;
++	};
++
++	return {
++		...mutation,
++		mutateAsync,
++		mutate: (id: string, data: UpdateConfigurationInput) => {
++			mutation.mutate({ id, ...data });
++		},
++	};
++}
++
++export function useDeleteConfiguration() {
++	const queryClient = useQueryClient();
++
++	const mutation = useMutation({
++		...orpc.configurations.delete.mutationOptions(),
++		onSuccess: () => {
++			queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
++		},
++	});
++
++	const mutateAsync = async (id: string) => {
++		const result = await mutation.mutateAsync({ id });
++		return result;
++	};
++
++	return {
++		...mutation,
++		mutateAsync,
++		mutate: (id: string) => {
++			mutation.mutate({ id });
++		},
++	};
++}
++
++export function useConfigurationEnvFiles(configurationId: string, enabled = true) {
++	return useQuery({
++		...orpc.configurations.getEnvFiles.queryOptions({ input: { configurationId } }),
++		enabled: enabled && !!configurationId,
++		select: (data) => data.envFiles,
++	});
++}
++
++export function useConfigurationServiceCommands(configurationId: string, enabled = true) {
++	return useQuery({
++		...orpc.configurations.getServiceCommands.queryOptions({ input: { configurationId } }),
++		enabled: enabled && !!configurationId,
++		select: (data) => data.commands,
++	});
++}
++
++export function useEffectiveServiceCommands(configurationId: string, enabled = true) {
++	return useQuery({
++		...orpc.configurations.getEffectiveServiceCommands.queryOptions({ input: { configurationId } }),
++		enabled: enabled && !!configurationId,
++	});
++}
++
++export function useUpdateConfigurationServiceCommands() {
++	const queryClient = useQueryClient();
++
++	return useMutation(
++		orpc.configurations.updateServiceCommands.mutationOptions({
++			onSuccess: (_data, input) => {
++				queryClient.invalidateQueries({
++					queryKey: orpc.configurations.getServiceCommands.key({
++						input: { configurationId: input.configurationId },
++					}),
++				});
++				queryClient.invalidateQueries({
++					queryKey: orpc.configurations.getEffectiveServiceCommands.key({
++						input: { configurationId: input.configurationId },
++					}),
++				});
++			},
++		}),
++	);
++}
++
++export function useAttachRepo() {
++	const queryClient = useQueryClient();
++	return useMutation(
++		orpc.configurations.attachRepo.mutationOptions({
++			onSuccess: () => {
++				queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
++			},
++		}),
++	);
++}
++
++export function useDetachRepo() {
++	const queryClient = useQueryClient();
++	return useMutation(
++		orpc.configurations.detachRepo.mutationOptions({
++			onSuccess: () => {
++				queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
++			},
++		}),
++	);
++}
 diff --git a/apps/web/src/hooks/use-onboarding.ts b/apps/web/src/hooks/use-onboarding.ts
 index 0c0cd35..1f3b29a 100644
 --- a/apps/web/src/hooks/use-onboarding.ts
@@ -3195,6 +4542,112 @@ index 0c0cd35..1f3b29a 100644
  			};
  		},
  	});
+diff --git a/apps/web/src/hooks/use-prebuilds.ts b/apps/web/src/hooks/use-prebuilds.ts
+deleted file mode 100644
+index 6b051db..0000000
+--- a/apps/web/src/hooks/use-prebuilds.ts
++++ /dev/null
+@@ -1,100 +0,0 @@
+-"use client";
+-
+-import { orpc } from "@/lib/orpc";
+-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+-
+-interface CreatePrebuildInput {
+-	repoIds?: string[];
+-	repos?: Array<{ repoId: string; workspacePath?: string }>;
+-	name?: string;
+-}
+-
+-interface UpdatePrebuildInput {
+-	name?: string;
+-	notes?: string;
+-}
+-
+-export function usePrebuilds(status?: string) {
+-	return useQuery({
+-		...orpc.prebuilds.list.queryOptions({ input: status ? { status } : {} }),
+-		select: (data) => data.prebuilds,
+-	});
+-}
+-
+-export function useCreatePrebuild() {
+-	const queryClient = useQueryClient();
+-
+-	const mutation = useMutation({
+-		...orpc.prebuilds.create.mutationOptions(),
+-		onSuccess: () => {
+-			queryClient.invalidateQueries({ queryKey: orpc.prebuilds.list.key() });
+-			queryClient.invalidateQueries({ queryKey: orpc.repos.listPrebuilds.key() });
+-			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
+-		},
+-	});
+-
+-	const mutateAsync = async (data: CreatePrebuildInput) => {
+-		const result = await mutation.mutateAsync(data);
+-		return result;
+-	};
+-
+-	return {
+-		...mutation,
+-		mutateAsync,
+-		mutate: (data: CreatePrebuildInput) => {
+-			mutation.mutate(data);
+-		},
+-	};
+-}
+-
+-export function useUpdatePrebuild() {
+-	const queryClient = useQueryClient();
+-
+-	const mutation = useMutation({
+-		...orpc.prebuilds.update.mutationOptions(),
+-		onSuccess: () => {
+-			queryClient.invalidateQueries({ queryKey: orpc.prebuilds.list.key() });
+-			queryClient.invalidateQueries({ queryKey: orpc.repos.listPrebuilds.key() });
+-			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
+-		},
+-	});
+-
+-	const mutateAsync = async (id: string, data: UpdatePrebuildInput) => {
+-		const result = await mutation.mutateAsync({ id, ...data });
+-		return result.prebuild;
+-	};
+-
+-	return {
+-		...mutation,
+-		mutateAsync,
+-		mutate: (id: string, data: UpdatePrebuildInput) => {
+-			mutation.mutate({ id, ...data });
+-		},
+-	};
+-}
+-
+-export function useDeletePrebuild() {
+-	const queryClient = useQueryClient();
+-
+-	const mutation = useMutation({
+-		...orpc.prebuilds.delete.mutationOptions(),
+-		onSuccess: () => {
+-			queryClient.invalidateQueries({ queryKey: orpc.prebuilds.list.key() });
+-			queryClient.invalidateQueries({ queryKey: orpc.repos.listPrebuilds.key() });
+-			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
+-		},
+-	});
+-
+-	const mutateAsync = async (id: string) => {
+-		const result = await mutation.mutateAsync({ id });
+-		return result;
+-	};
+-
+-	return {
+-		...mutation,
+-		mutateAsync,
+-		mutate: (id: string) => {
+-			mutation.mutate({ id });
+-		},
+-	};
+-}
 diff --git a/apps/web/src/hooks/use-repos.ts b/apps/web/src/hooks/use-repos.ts
 index abff671..35df89d 100644
 --- a/apps/web/src/hooks/use-repos.ts
@@ -3289,7 +4742,7 @@ index abff671..35df89d 100644
 -	);
 -}
 diff --git a/apps/web/src/hooks/use-sessions.ts b/apps/web/src/hooks/use-sessions.ts
-index 01fc982..8f12898 100644
+index 01fc982..4c02710 100644
 --- a/apps/web/src/hooks/use-sessions.ts
 +++ b/apps/web/src/hooks/use-sessions.ts
 @@ -61,7 +61,7 @@ export function useCreateSession() {
@@ -3301,7 +4754,13 @@ index 01fc982..8f12898 100644
  				branchName: null,
  				parentSessionId: null,
  				title: null,
-@@ -206,8 +206,7 @@ export function useFinalizeSetup() {
+@@ -201,13 +201,12 @@ export function useFinalizeSetup() {
+ 	const queryClient = useQueryClient();
+ 
+ 	const mutation = useMutation({
+-		...orpc.repos.finalizeSetup.mutationOptions(),
++		...orpc.configurations.finalizeSetup.mutationOptions(),
+ 		onSuccess: () => {
  			// Invalidate all relevant queries
  			queryClient.invalidateQueries({ queryKey: orpc.sessions.list.key() });
  			queryClient.invalidateQueries({ queryKey: orpc.repos.list.key() });
@@ -3447,6 +4906,498 @@ index a4c9e54..8fffee8 100644
 -	prebuilds: cliPrebuildsRouter,
 +	configurations: cliConfigurationsRouter,
  };
+diff --git a/apps/web/src/server/routers/repos-finalize.ts b/apps/web/src/server/routers/configurations-finalize.ts
+similarity index 71%
+rename from apps/web/src/server/routers/repos-finalize.ts
+rename to apps/web/src/server/routers/configurations-finalize.ts
+index 92b4f9c..f57ebd9 100644
+--- a/apps/web/src/server/routers/repos-finalize.ts
++++ b/apps/web/src/server/routers/configurations-finalize.ts
+@@ -1,5 +1,5 @@
+ /**
+- * Finalize setup handler - extracted from repos router.
++ * Finalize setup handler - extracted from configurations router.
+  *
+  * This is a complex operation with many side effects.
+  * Uses services layer for all database operations.
+@@ -9,11 +9,11 @@ import { randomUUID } from "crypto";
+ import { encrypt, getEncryptionKey } from "@/lib/crypto";
+ import { logger } from "@/lib/logger";
+ import { ORPCError } from "@orpc/server";
+-import { prebuilds, repos, secrets, sessions } from "@proliferate/services";
++import { configurations, repos, secrets, sessions } from "@proliferate/services";
+ import type { SandboxProviderType } from "@proliferate/shared";
+ import { getSandboxProvider } from "@proliferate/shared/providers";
+ 
+-const log = logger.child({ handler: "repos-finalize" });
++const log = logger.child({ handler: "configurations-finalize" });
+ 
+ export interface FinalizeSetupInput {
+ 	repoId: string;
+@@ -27,7 +27,7 @@ export interface FinalizeSetupInput {
+ }
+ 
+ export interface FinalizeSetupResult {
+-	prebuildId: string;
++	configurationId: string;
+ 	snapshotId: string;
+ 	success: boolean;
+ }
+@@ -50,22 +50,25 @@ export async function finalizeSetupHandler(
+ 		throw new ORPCError("BAD_REQUEST", { message: "sessionId is required" });
+ 	}
+ 
+-	// 1. Get session and verify it belongs to this repo or prebuild
++	// 1. Get session and verify it belongs to this repo or configuration
+ 	const session = await sessions.findSessionByIdInternal(sessionId);
+ 
+ 	if (!session) {
+ 		throw new ORPCError("NOT_FOUND", { message: "Session not found" });
+ 	}
+ 
+-	// Verify repoId matches or session's prebuild contains this repo
++	// Verify repoId matches or session's configuration contains this repo
+ 	const sessionBelongsToRepo = session.repoId === repoId;
+-	let sessionBelongsToPrebuild = false;
++	let sessionBelongsToConfiguration = false;
+ 
+-	if (session.prebuildId && !sessionBelongsToRepo) {
+-		sessionBelongsToPrebuild = await prebuilds.prebuildContainsRepo(session.prebuildId, repoId);
++	if (session.configurationId && !sessionBelongsToRepo) {
++		sessionBelongsToConfiguration = await configurations.configurationContainsRepo(
++			session.configurationId,
++			repoId,
++		);
+ 	}
+ 
+-	if (!sessionBelongsToRepo && !sessionBelongsToPrebuild) {
++	if (!sessionBelongsToRepo && !sessionBelongsToConfiguration) {
+ 		throw new ORPCError("NOT_FOUND", { message: "Session not found for this repo" });
+ 	}
+ 
+@@ -122,30 +125,30 @@ export async function finalizeSetupHandler(
+ 		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create snapshot" });
+ 	}
+ 
+-	let prebuildId: string;
++	let configurationId: string;
+ 
+-	// Determine which prebuild to update
+-	const existingPrebuildId = updateSnapshotId || session.prebuildId;
++	// Determine which configuration to update
++	const existingConfigurationId = updateSnapshotId || session.configurationId;
+ 
+-	if (existingPrebuildId) {
+-		// Update existing prebuild record
+-		prebuildId = existingPrebuildId;
++	if (existingConfigurationId) {
++		// Update existing configuration record
++		configurationId = existingConfigurationId;
+ 		try {
+-			await prebuilds.updatePrebuild(existingPrebuildId, {
++			await configurations.updateConfiguration(existingConfigurationId, {
+ 				snapshotId,
+ 				status: "ready",
+ 				name: name || null,
+ 				notes: notes || null,
+ 			});
+ 		} catch {
+-			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to update prebuild" });
++			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to update configuration" });
+ 		}
+ 	} else {
+-		// Create new prebuild record
+-		prebuildId = randomUUID();
++		// Create new configuration record
++		configurationId = randomUUID();
+ 		try {
+-			await prebuilds.createPrebuildFull({
+-				id: prebuildId,
++			await configurations.createConfigurationFull({
++				id: configurationId,
+ 				snapshotId,
+ 				status: "ready",
+ 				name: name || null,
+@@ -154,18 +157,18 @@ export async function finalizeSetupHandler(
+ 				sandboxProvider: provider.type,
+ 			});
+ 		} catch {
+-			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create prebuild" });
++			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create configuration" });
+ 		}
+ 
+-		// Create prebuild_repos entry for this repo
++		// Create configuration_repos entry for this repo
+ 		const repoName = repoId.slice(0, 8);
+ 		const githubRepoName = await repos.getGithubRepoName(repoId);
+ 		const workspacePath = githubRepoName?.split("/")[1] || repoName;
+ 
+-		await prebuilds.createSinglePrebuildRepo(prebuildId, repoId, workspacePath);
++		await configurations.createSingleConfigurationRepo(configurationId, repoId, workspacePath);
+ 
+-		// Update session with the new prebuild_id
+-		await sessions.updateSessionPrebuildId(sessionId, prebuildId);
++		// Update session with the new configuration_id
++		await sessions.updateSessionConfigurationId(sessionId, configurationId);
+ 	}
+ 
+ 	// 7. Terminate sandbox and end session (unless keepRunning)
+@@ -180,7 +183,7 @@ export async function finalizeSetupHandler(
+ 	}
+ 
+ 	return {
+-		prebuildId,
++		configurationId,
+ 		snapshotId,
+ 		success: true,
+ 	};
+diff --git a/apps/web/src/server/routers/configurations.ts b/apps/web/src/server/routers/configurations.ts
+new file mode 100644
+index 0000000..f402ff1
+--- /dev/null
++++ b/apps/web/src/server/routers/configurations.ts
+@@ -0,0 +1,341 @@
++/**
++ * Configurations oRPC router.
++ *
++ * Handles configuration CRUD operations.
++ */
++
++import { logger } from "@/lib/logger";
++import { ORPCError } from "@orpc/server";
++import { configurations } from "@proliferate/services";
++import {
++	ConfigurationSchema,
++	CreateConfigurationInputSchema,
++	FinalizeSetupInputSchema,
++	FinalizeSetupResponseSchema,
++	UpdateConfigurationInputSchema,
++} from "@proliferate/shared";
++import { parseConfigurationServiceCommands } from "@proliferate/shared/sandbox";
++import { z } from "zod";
++import { orgProcedure } from "./middleware";
++
++const log = logger.child({ handler: "configurations" });
++
++export const configurationsRouter = {
++	/**
++	 * List configurations for the current organization.
++	 */
++	list: orgProcedure
++		.input(z.object({ status: z.string().optional() }).optional())
++		.output(z.object({ configurations: z.array(ConfigurationSchema) }))
++		.handler(async ({ input, context }) => {
++			const configurationsList = await configurations.listConfigurations(
++				context.orgId,
++				input?.status,
++			);
++			return { configurations: configurationsList };
++		}),
++
++	/**
++	 * Create a new configuration.
++	 */
++	create: orgProcedure
++		.input(CreateConfigurationInputSchema)
++		.output(z.object({ configurationId: z.string().uuid(), repos: z.number() }))
++		.handler(async ({ input, context }) => {
++			// Support both new repoIds[] and legacy repos[] format
++			const repoIds = input.repoIds || input.repos?.map((r) => r.repoId) || [];
++
++			try {
++				const result = await configurations.createConfiguration({
++					organizationId: context.orgId,
++					userId: context.user.id,
++					repoIds,
++					name: input.name,
++				});
++
++				return {
++					configurationId: result.configurationId,
++					repos: result.repoCount,
++				};
++			} catch (error) {
++				const message = error instanceof Error ? error.message : "Failed to create configuration";
++
++				if (message === "One or more repos not found") {
++					throw new ORPCError("NOT_FOUND", { message });
++				}
++				if (message === "Unauthorized access to repo") {
++					throw new ORPCError("FORBIDDEN", { message });
++				}
++
++				log.error({ err: error }, "Failed to create configuration");
++				throw new ORPCError("INTERNAL_SERVER_ERROR", { message });
++			}
++		}),
++
++	/**
++	 * Update a configuration.
++	 */
++	update: orgProcedure
++		.input(
++			z.object({
++				id: z.string().uuid(),
++				...UpdateConfigurationInputSchema.shape,
++			}),
++		)
++		.output(z.object({ configuration: ConfigurationSchema }))
++		.handler(async ({ input, context }) => {
++			const { id, name, notes } = input;
++
++			// Verify the configuration exists and belongs to this org
++			const belongsToOrg = await configurations.configurationBelongsToOrg(id, context.orgId);
++			if (!belongsToOrg) {
++				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
++			}
++
++			try {
++				const updated = await configurations.updateConfiguration(id, { name, notes });
++
++				return {
++					configuration: {
++						id: updated.id!,
++						snapshotId: updated.snapshotId ?? null,
++						status: updated.status ?? null,
++						name: updated.name ?? null,
++						notes: updated.notes ?? null,
++						createdAt: updated.createdAt?.toISOString() ?? null,
++						createdBy: updated.createdBy ?? null,
++						sandboxProvider: updated.sandboxProvider ?? null,
++					},
++				};
++			} catch (error) {
++				const message = error instanceof Error ? error.message : "Failed to update configuration";
++
++				if (message === "No fields to update") {
++					throw new ORPCError("BAD_REQUEST", { message });
++				}
++
++				log.error({ err: error }, "Failed to update configuration");
++				throw new ORPCError("INTERNAL_SERVER_ERROR", { message });
++			}
++		}),
++
++	/**
++	 * Delete a configuration.
++	 */
++	delete: orgProcedure
++		.input(z.object({ id: z.string().uuid() }))
++		.output(z.object({ success: z.boolean() }))
++		.handler(async ({ input, context }) => {
++			// Verify the configuration belongs to this org
++			const belongsToOrg = await configurations.configurationBelongsToOrg(input.id, context.orgId);
++			if (!belongsToOrg) {
++				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
++			}
++
++			try {
++				await configurations.deleteConfiguration(input.id);
++				return { success: true };
++			} catch (error) {
++				log.error({ err: error }, "Failed to delete configuration");
++				throw new ORPCError("INTERNAL_SERVER_ERROR", {
++					message: "Failed to delete configuration",
++				});
++			}
++		}),
++
++	/**
++	 * Get service commands for a configuration.
++	 */
++	getServiceCommands: orgProcedure
++		.input(z.object({ configurationId: z.string().uuid() }))
++		.output(
++			z.object({
++				commands: z.array(
++					z.object({
++						name: z.string(),
++						command: z.string(),
++						cwd: z.string().optional(),
++						workspacePath: z.string().optional(),
++					}),
++				),
++			}),
++		)
++		.handler(async ({ input, context }) => {
++			const belongsToOrg = await configurations.configurationBelongsToOrg(
++				input.configurationId,
++				context.orgId,
++			);
++			if (!belongsToOrg) {
++				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
++			}
++
++			const row = await configurations.getConfigurationServiceCommands(input.configurationId);
++			const commands = parseConfigurationServiceCommands(row?.serviceCommands);
++			return { commands };
++		}),
++
++	/**
++	 * Get effective service commands for a configuration (resolved: configuration overrides > repo defaults).
++	 */
++	getEffectiveServiceCommands: orgProcedure
++		.input(z.object({ configurationId: z.string().uuid() }))
++		.output(
++			z.object({
++				source: z.enum(["configuration", "repo", "none"]),
++				commands: z.array(
++					z.object({
++						name: z.string(),
++						command: z.string(),
++						cwd: z.string().optional(),
++						workspacePath: z.string().optional(),
++					}),
++				),
++				workspaces: z.array(z.string()),
++			}),
++		)
++		.handler(async ({ input, context }) => {
++			const belongsToOrg = await configurations.configurationBelongsToOrg(
++				input.configurationId,
++				context.orgId,
++			);
++			if (!belongsToOrg) {
++				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
++			}
++
++			return configurations.getEffectiveServiceCommands(input.configurationId);
++		}),
++
++	/**
++	 * Get env file spec for a configuration.
++	 */
++	getEnvFiles: orgProcedure
++		.input(z.object({ configurationId: z.string().uuid() }))
++		.output(z.object({ envFiles: z.unknown().nullable() }))
++		.handler(async ({ input, context }) => {
++			const belongsToOrg = await configurations.configurationBelongsToOrg(
++				input.configurationId,
++				context.orgId,
++			);
++			if (!belongsToOrg) {
++				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
++			}
++
++			const envFiles = await configurations.getConfigurationEnvFiles(input.configurationId);
++			return { envFiles: envFiles ?? null };
++		}),
++
++	/**
++	 * Update service commands for a configuration.
++	 */
++	updateServiceCommands: orgProcedure
++		.input(
++			z.object({
++				configurationId: z.string().uuid(),
++				commands: z
++					.array(
++						z.object({
++							name: z.string().min(1).max(100),
++							command: z.string().min(1).max(1000),
++							cwd: z.string().max(500).optional(),
++							workspacePath: z.string().max(500).optional(),
++						}),
++					)
++					.max(10),
++			}),
++		)
++		.output(z.object({ success: z.boolean() }))
++		.handler(async ({ input, context }) => {
++			const belongsToOrg = await configurations.configurationBelongsToOrg(
++				input.configurationId,
++				context.orgId,
++			);
++			if (!belongsToOrg) {
++				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
++			}
++
++			await configurations.updateConfigurationServiceCommands({
++				configurationId: input.configurationId,
++				serviceCommands: input.commands,
++				updatedBy: context.user.id,
++			});
++			return { success: true };
++		}),
++
++	/**
++	 * Finalize setup session and create a configuration snapshot.
++	 */
++	finalizeSetup: orgProcedure
++		.input(
++			z.object({
++				id: z.string().uuid(),
++				...FinalizeSetupInputSchema.shape,
++			}),
++		)
++		.output(FinalizeSetupResponseSchema)
++		.handler(async ({ input, context }) => {
++			const { finalizeSetupHandler } = await import("./configurations-finalize");
++			return finalizeSetupHandler({
++				repoId: input.id,
++				sessionId: input.sessionId,
++				secrets: input.secrets,
++				name: input.name,
++				notes: input.notes,
++				updateSnapshotId: input.updateSnapshotId,
++				keepRunning: input.keepRunning,
++				userId: context.user.id,
++			});
++		}),
++
++	/**
++	 * Attach a repo to a configuration.
++	 */
++	attachRepo: orgProcedure
++		.input(
++			z.object({
++				configurationId: z.string().uuid(),
++				repoId: z.string().uuid(),
++			}),
++		)
++		.output(z.object({ success: z.boolean() }))
++		.handler(async ({ input, context }) => {
++			try {
++				await configurations.attachRepo(input.configurationId, input.repoId, context.orgId);
++				return { success: true };
++			} catch (error) {
++				const message = error instanceof Error ? error.message : "Failed to attach repo";
++				if (message === "Configuration not found" || message === "Repo not found") {
++					throw new ORPCError("NOT_FOUND", { message });
++				}
++				if (message === "Unauthorized access to repo") {
++					throw new ORPCError("FORBIDDEN", { message });
++				}
++				log.error({ err: error }, "Failed to attach repo");
++				throw new ORPCError("INTERNAL_SERVER_ERROR", { message });
++			}
++		}),
++
++	/**
++	 * Detach a repo from a configuration.
++	 */
++	detachRepo: orgProcedure
++		.input(
++			z.object({
++				configurationId: z.string().uuid(),
++				repoId: z.string().uuid(),
++			}),
++		)
++		.output(z.object({ success: z.boolean() }))
++		.handler(async ({ input, context }) => {
++			try {
++				await configurations.detachRepo(input.configurationId, input.repoId, context.orgId);
++				return { success: true };
++			} catch (error) {
++				const message = error instanceof Error ? error.message : "Failed to detach repo";
++				if (message === "Configuration not found") {
++					throw new ORPCError("NOT_FOUND", { message });
++				}
++				log.error({ err: error }, "Failed to detach repo");
++				throw new ORPCError("INTERNAL_SERVER_ERROR", { message });
++			}
++		}),
++};
 diff --git a/apps/web/src/server/routers/index.ts b/apps/web/src/server/routers/index.ts
 index f700414..14d7cde 100644
 --- a/apps/web/src/server/routers/index.ts
@@ -3527,138 +5478,272 @@ index 30d0ee5..e3aa5c5 100644
  				});
  			}
  		}),
-diff --git a/apps/web/src/server/routers/repos-finalize.ts b/apps/web/src/server/routers/repos-finalize.ts
-index 92b4f9c..655b9c6 100644
---- a/apps/web/src/server/routers/repos-finalize.ts
-+++ b/apps/web/src/server/routers/repos-finalize.ts
-@@ -9,7 +9,7 @@ import { randomUUID } from "crypto";
- import { encrypt, getEncryptionKey } from "@/lib/crypto";
- import { logger } from "@/lib/logger";
- import { ORPCError } from "@orpc/server";
--import { prebuilds, repos, secrets, sessions } from "@proliferate/services";
-+import { configurations, repos, secrets, sessions } from "@proliferate/services";
- import type { SandboxProviderType } from "@proliferate/shared";
- import { getSandboxProvider } from "@proliferate/shared/providers";
- 
-@@ -27,7 +27,7 @@ export interface FinalizeSetupInput {
- }
- 
- export interface FinalizeSetupResult {
--	prebuildId: string;
-+	configurationId: string;
- 	snapshotId: string;
- 	success: boolean;
- }
-@@ -50,22 +50,22 @@ export async function finalizeSetupHandler(
- 		throw new ORPCError("BAD_REQUEST", { message: "sessionId is required" });
- 	}
- 
--	// 1. Get session and verify it belongs to this repo or prebuild
-+	// 1. Get session and verify it belongs to this repo or configuration
- 	const session = await sessions.findSessionByIdInternal(sessionId);
- 
- 	if (!session) {
- 		throw new ORPCError("NOT_FOUND", { message: "Session not found" });
- 	}
- 
--	// Verify repoId matches or session's prebuild contains this repo
-+	// Verify repoId matches or session's configuration contains this repo
- 	const sessionBelongsToRepo = session.repoId === repoId;
--	let sessionBelongsToPrebuild = false;
-+	let sessionBelongsToConfiguration = false;
- 
--	if (session.prebuildId && !sessionBelongsToRepo) {
--		sessionBelongsToPrebuild = await prebuilds.prebuildContainsRepo(session.prebuildId, repoId);
-+	if (session.configurationId && !sessionBelongsToRepo) {
-+		sessionBelongsToConfiguration = await configurations.configurationContainsRepo(session.configurationId, repoId);
- 	}
- 
--	if (!sessionBelongsToRepo && !sessionBelongsToPrebuild) {
-+	if (!sessionBelongsToRepo && !sessionBelongsToConfiguration) {
- 		throw new ORPCError("NOT_FOUND", { message: "Session not found for this repo" });
- 	}
- 
-@@ -122,30 +122,30 @@ export async function finalizeSetupHandler(
- 		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create snapshot" });
- 	}
- 
--	let prebuildId: string;
-+	let configurationId: string;
- 
--	// Determine which prebuild to update
--	const existingPrebuildId = updateSnapshotId || session.prebuildId;
-+	// Determine which configuration to update
-+	const existingConfigurationId = updateSnapshotId || session.configurationId;
- 
--	if (existingPrebuildId) {
--		// Update existing prebuild record
--		prebuildId = existingPrebuildId;
-+	if (existingConfigurationId) {
-+		// Update existing configuration record
-+		configurationId = existingConfigurationId;
- 		try {
--			await prebuilds.updatePrebuild(existingPrebuildId, {
-+			await configurations.updateConfiguration(existingConfigurationId, {
- 				snapshotId,
- 				status: "ready",
- 				name: name || null,
- 				notes: notes || null,
- 			});
- 		} catch {
--			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to update prebuild" });
-+			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to update configuration" });
- 		}
- 	} else {
--		// Create new prebuild record
--		prebuildId = randomUUID();
-+		// Create new configuration record
-+		configurationId = randomUUID();
- 		try {
--			await prebuilds.createPrebuildFull({
--				id: prebuildId,
-+			await configurations.createConfigurationFull({
-+				id: configurationId,
- 				snapshotId,
- 				status: "ready",
- 				name: name || null,
-@@ -154,18 +154,18 @@ export async function finalizeSetupHandler(
- 				sandboxProvider: provider.type,
- 			});
- 		} catch {
--			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create prebuild" });
-+			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to create configuration" });
- 		}
- 
--		// Create prebuild_repos entry for this repo
-+		// Create configuration_repos entry for this repo
- 		const repoName = repoId.slice(0, 8);
- 		const githubRepoName = await repos.getGithubRepoName(repoId);
- 		const workspacePath = githubRepoName?.split("/")[1] || repoName;
- 
--		await prebuilds.createSinglePrebuildRepo(prebuildId, repoId, workspacePath);
-+		await configurations.createSingleConfigurationRepo(configurationId, repoId, workspacePath);
- 
--		// Update session with the new prebuild_id
--		await sessions.updateSessionPrebuildId(sessionId, prebuildId);
-+		// Update session with the new configuration_id
-+		await sessions.updateSessionConfigurationId(sessionId, configurationId);
- 	}
- 
- 	// 7. Terminate sandbox and end session (unless keepRunning)
-@@ -180,7 +180,7 @@ export async function finalizeSetupHandler(
- 	}
- 
- 	return {
--		prebuildId,
-+		configurationId,
- 		snapshotId,
- 		success: true,
- 	};
+diff --git a/apps/web/src/server/routers/prebuilds.ts b/apps/web/src/server/routers/prebuilds.ts
+deleted file mode 100644
+index 9538108..0000000
+--- a/apps/web/src/server/routers/prebuilds.ts
++++ /dev/null
+@@ -1,255 +0,0 @@
+-/**
+- * Prebuilds oRPC router.
+- *
+- * Handles prebuild CRUD operations.
+- */
+-
+-import { logger } from "@/lib/logger";
+-import { ORPCError } from "@orpc/server";
+-import { prebuilds } from "@proliferate/services";
+-import {
+-	CreatePrebuildInputSchema,
+-	PrebuildSchema,
+-	UpdatePrebuildInputSchema,
+-} from "@proliferate/shared";
+-import { parsePrebuildServiceCommands } from "@proliferate/shared/sandbox";
+-import { z } from "zod";
+-import { orgProcedure } from "./middleware";
+-
+-const log = logger.child({ handler: "prebuilds" });
+-
+-export const prebuildsRouter = {
+-	/**
+-	 * List prebuilds for the current organization.
+-	 */
+-	list: orgProcedure
+-		.input(z.object({ status: z.string().optional() }).optional())
+-		.output(z.object({ prebuilds: z.array(PrebuildSchema) }))
+-		.handler(async ({ input, context }) => {
+-			const prebuildsList = await prebuilds.listPrebuilds(context.orgId, input?.status);
+-			return { prebuilds: prebuildsList };
+-		}),
+-
+-	/**
+-	 * Create a new prebuild.
+-	 */
+-	create: orgProcedure
+-		.input(CreatePrebuildInputSchema)
+-		.output(z.object({ prebuildId: z.string().uuid(), repos: z.number() }))
+-		.handler(async ({ input, context }) => {
+-			// Support both new repoIds[] and legacy repos[] format
+-			const repoIds = input.repoIds || input.repos?.map((r) => r.repoId);
+-
+-			if (!repoIds || repoIds.length === 0) {
+-				throw new ORPCError("BAD_REQUEST", {
+-					message: "repoIds[] is required",
+-				});
+-			}
+-
+-			try {
+-				const result = await prebuilds.createPrebuild({
+-					organizationId: context.orgId,
+-					userId: context.user.id,
+-					repoIds,
+-					name: input.name,
+-				});
+-
+-				return {
+-					prebuildId: result.prebuildId,
+-					repos: result.repoCount,
+-				};
+-			} catch (error) {
+-				const message = error instanceof Error ? error.message : "Failed to create prebuild";
+-
+-				if (message === "One or more repos not found") {
+-					throw new ORPCError("NOT_FOUND", { message });
+-				}
+-				if (message === "Unauthorized access to repo") {
+-					throw new ORPCError("FORBIDDEN", { message });
+-				}
+-				if (message === "repoIds[] is required") {
+-					throw new ORPCError("BAD_REQUEST", { message });
+-				}
+-
+-				log.error({ err: error }, "Failed to create prebuild");
+-				throw new ORPCError("INTERNAL_SERVER_ERROR", { message });
+-			}
+-		}),
+-
+-	/**
+-	 * Update a prebuild.
+-	 */
+-	update: orgProcedure
+-		.input(
+-			z.object({
+-				id: z.string().uuid(),
+-				...UpdatePrebuildInputSchema.shape,
+-			}),
+-		)
+-		.output(z.object({ prebuild: PrebuildSchema }))
+-		.handler(async ({ input, context }) => {
+-			const { id, name, notes } = input;
+-
+-			// Verify the prebuild exists and belongs to this org
+-			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(id, context.orgId);
+-			if (!belongsToOrg) {
+-				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+-			}
+-
+-			try {
+-				const updated = await prebuilds.updatePrebuild(id, { name, notes });
+-
+-				return {
+-					prebuild: {
+-						id: updated.id!,
+-						snapshotId: updated.snapshotId ?? null,
+-						status: updated.status ?? null,
+-						name: updated.name ?? null,
+-						notes: updated.notes ?? null,
+-						createdAt: updated.createdAt?.toISOString() ?? null,
+-						createdBy: updated.createdBy ?? null,
+-						sandboxProvider: updated.sandboxProvider ?? null,
+-					},
+-				};
+-			} catch (error) {
+-				const message = error instanceof Error ? error.message : "Failed to update prebuild";
+-
+-				if (message === "No fields to update") {
+-					throw new ORPCError("BAD_REQUEST", { message });
+-				}
+-
+-				log.error({ err: error }, "Failed to update prebuild");
+-				throw new ORPCError("INTERNAL_SERVER_ERROR", { message });
+-			}
+-		}),
+-
+-	/**
+-	 * Delete a prebuild.
+-	 */
+-	delete: orgProcedure
+-		.input(z.object({ id: z.string().uuid() }))
+-		.output(z.object({ success: z.boolean() }))
+-		.handler(async ({ input, context }) => {
+-			// Verify the prebuild belongs to this org
+-			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.id, context.orgId);
+-			if (!belongsToOrg) {
+-				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+-			}
+-
+-			try {
+-				await prebuilds.deletePrebuild(input.id);
+-				return { success: true };
+-			} catch (error) {
+-				log.error({ err: error }, "Failed to delete prebuild");
+-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+-					message: "Failed to delete prebuild",
+-				});
+-			}
+-		}),
+-
+-	/**
+-	 * Get service commands for a prebuild.
+-	 */
+-	getServiceCommands: orgProcedure
+-		.input(z.object({ prebuildId: z.string().uuid() }))
+-		.output(
+-			z.object({
+-				commands: z.array(
+-					z.object({
+-						name: z.string(),
+-						command: z.string(),
+-						cwd: z.string().optional(),
+-						workspacePath: z.string().optional(),
+-					}),
+-				),
+-			}),
+-		)
+-		.handler(async ({ input, context }) => {
+-			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+-			if (!belongsToOrg) {
+-				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+-			}
+-
+-			const row = await prebuilds.getPrebuildServiceCommands(input.prebuildId);
+-			const commands = parsePrebuildServiceCommands(row?.serviceCommands);
+-			return { commands };
+-		}),
+-
+-	/**
+-	 * Get effective service commands for a prebuild (resolved: prebuild overrides > repo defaults).
+-	 */
+-	getEffectiveServiceCommands: orgProcedure
+-		.input(z.object({ prebuildId: z.string().uuid() }))
+-		.output(
+-			z.object({
+-				source: z.enum(["prebuild", "repo", "none"]),
+-				commands: z.array(
+-					z.object({
+-						name: z.string(),
+-						command: z.string(),
+-						cwd: z.string().optional(),
+-						workspacePath: z.string().optional(),
+-					}),
+-				),
+-				workspaces: z.array(z.string()),
+-			}),
+-		)
+-		.handler(async ({ input, context }) => {
+-			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+-			if (!belongsToOrg) {
+-				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+-			}
+-
+-			return prebuilds.getEffectiveServiceCommands(input.prebuildId);
+-		}),
+-
+-	/**
+-	 * Get env file spec for a prebuild.
+-	 */
+-	getEnvFiles: orgProcedure
+-		.input(z.object({ prebuildId: z.string().uuid() }))
+-		.output(z.object({ envFiles: z.unknown().nullable() }))
+-		.handler(async ({ input, context }) => {
+-			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+-			if (!belongsToOrg) {
+-				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+-			}
+-
+-			const envFiles = await prebuilds.getPrebuildEnvFiles(input.prebuildId);
+-			return { envFiles: envFiles ?? null };
+-		}),
+-
+-	/**
+-	 * Update service commands for a prebuild.
+-	 */
+-	updateServiceCommands: orgProcedure
+-		.input(
+-			z.object({
+-				prebuildId: z.string().uuid(),
+-				commands: z
+-					.array(
+-						z.object({
+-							name: z.string().min(1).max(100),
+-							command: z.string().min(1).max(1000),
+-							cwd: z.string().max(500).optional(),
+-							workspacePath: z.string().max(500).optional(),
+-						}),
+-					)
+-					.max(10),
+-			}),
+-		)
+-		.output(z.object({ success: z.boolean() }))
+-		.handler(async ({ input, context }) => {
+-			const belongsToOrg = await prebuilds.prebuildBelongsToOrg(input.prebuildId, context.orgId);
+-			if (!belongsToOrg) {
+-				throw new ORPCError("NOT_FOUND", { message: "Prebuild not found" });
+-			}
+-
+-			await prebuilds.updatePrebuildServiceCommands({
+-				prebuildId: input.prebuildId,
+-				serviceCommands: input.commands,
+-				updatedBy: context.user.id,
+-			});
+-			return { success: true };
+-		}),
+-};
 diff --git a/apps/web/src/server/routers/repos.ts b/apps/web/src/server/routers/repos.ts
-index 407cfe6..a4fecc4 100644
+index 407cfe6..90aab00 100644
 --- a/apps/web/src/server/routers/repos.ts
 +++ b/apps/web/src/server/routers/repos.ts
-@@ -4,15 +4,13 @@
+@@ -4,15 +4,11 @@
  
  import { type GitHubIntegration, listGitHubRepos } from "@/lib/github";
  import { ORPCError } from "@orpc/server";
@@ -3666,8 +5751,8 @@ index 407cfe6..a4fecc4 100644
 +import { integrations, repos } from "@proliferate/services";
  import {
  	CreateRepoInputSchema,
- 	FinalizeSetupInputSchema,
- 	FinalizeSetupResponseSchema,
+-	FinalizeSetupInputSchema,
+-	FinalizeSetupResponseSchema,
  	GitHubRepoSchema,
 -	RepoPrebuildSchema,
  	RepoSchema,
@@ -3675,7 +5760,7 @@ index 407cfe6..a4fecc4 100644
  	SearchRepoSchema,
  } from "@proliferate/shared";
  import { z } from "zod";
-@@ -215,92 +213,6 @@ export const reposRouter = {
+@@ -215,92 +211,6 @@ export const reposRouter = {
  			return { repositories: publicRepos };
  		}),
  
@@ -3768,15 +5853,42 @@ index 407cfe6..a4fecc4 100644
  	/**
  	 * Get service commands for a repo.
  	 */
-@@ -364,7 +276,7 @@ export const reposRouter = {
+@@ -362,35 +272,4 @@ export const reposRouter = {
+ 			});
+ 			return { success: true };
  		}),
- 
- 	/**
+-
+-	/**
 -	 * Finalize setup session and create a prebuild snapshot.
-+	 * Finalize setup session and create a configuration snapshot.
- 	 * Note: This is a complex operation - keeping most logic here for now.
- 	 * Could be moved to services later.
- 	 */
+-	 * Note: This is a complex operation - keeping most logic here for now.
+-	 * Could be moved to services later.
+-	 */
+-	finalizeSetup: orgProcedure
+-		.input(
+-			z.object({
+-				id: z.string().uuid(),
+-				...FinalizeSetupInputSchema.shape,
+-			}),
+-		)
+-		.output(FinalizeSetupResponseSchema)
+-		.handler(async ({ input, context }) => {
+-			// This is a complex operation with many side effects.
+-			// For now, we'll import and call the existing implementation.
+-			// TODO: Refactor this into services layer.
+-
+-			const { finalizeSetupHandler } = await import("./repos-finalize");
+-			return finalizeSetupHandler({
+-				repoId: input.id,
+-				sessionId: input.sessionId,
+-				secrets: input.secrets,
+-				name: input.name,
+-				notes: input.notes,
+-				updateSnapshotId: input.updateSnapshotId,
+-				keepRunning: input.keepRunning,
+-				userId: context.user.id,
+-			});
+-		}),
+ };
 diff --git a/apps/web/src/server/routers/secrets.ts b/apps/web/src/server/routers/secrets.ts
 index 569d376..42c2388 100644
 --- a/apps/web/src/server/routers/secrets.ts
@@ -4914,6 +7026,144 @@ index 7c10019..8d02794 100644
  					await postToSlack(
  						encryptedBotToken,
  						channelId,
+diff --git a/docs/specs/boundary-brief.md b/docs/specs/boundary-brief.md
+index 02904af..1040106 100644
+--- a/docs/specs/boundary-brief.md
++++ b/docs/specs/boundary-brief.md
+@@ -17,7 +17,7 @@
+ | 6 | `actions.md` | Action invocations, approval flow, grants, risk classification, provider adapters (Linear/Sentry), sweeper. | 2 |
+ | 7 | `llm-proxy.md` | LiteLLM proxy, virtual key generation, per-org/per-session spend tracking, model routing. | 2 |
+ | 8 | `cli.md` | Device auth flow, local config, file sync, OpenCode launch, CLI-specific API routes. | 2 |
+-| 9 | `repos-prebuilds.md` | Repo CRUD, prebuild/configuration management, base + repo snapshot builds, service commands, env file generation. | 3 |
++| 9 | `repos-configurations.md` | Repo CRUD, configuration management, base + repo snapshot builds, service commands, env file generation. | 3 |
+ | 10 | `secrets-environment.md` | Secret CRUD, bundles, bulk import, env file deployment to sandbox, encryption. | 3 |
+ | 11 | `integrations.md` | OAuth connection lifecycle for GitHub/Sentry/Linear/Slack via Nango. Connection binding to repos/automations/sessions. | 3 |
+ | 12 | `auth-orgs.md` | better-auth, user/org/member model, invitations, onboarding/trial activation, API keys, admin/impersonation. | 3 |
+@@ -38,13 +38,13 @@ These boundaries resolve the most likely overlaps. Follow them exactly.
+ | Boundary | Rule |
+ |----------|------|
+ | **Integrations vs Actions/Automations/Sessions** | `integrations.md` owns external credential/connectivity lifecycle (OAuth integrations + MCP connector catalog). Runtime behavior that *uses* those records belongs to the consuming spec (Actions, Automations, Sessions). |
+-| **Actions vs Integrations (connectors)** | `actions.md` owns action execution, risk, approval, grants, and audit behavior. `integrations.md` owns persistence and scope of org-level connector configuration (target ownership). Current implementation still stores connectors on prebuilds as a legacy transitional path documented in `repos-prebuilds.md`. |
++| **Actions vs Integrations (connectors)** | `actions.md` owns action execution, risk, approval, grants, and audit behavior. `integrations.md` owns persistence and scope of org-level connector configuration (target ownership). Current implementation still stores connectors on configurations as a legacy transitional path documented in `repos-configurations.md`. |
+ | **Agent Contract vs Sessions/Automations** | `agent-contract.md` owns prompt templates, tool schemas, and capability injection. Runtime behavior that *executes* tools belongs to `sessions-gateway.md` (interactive) or `automations-runs.md` (automated). |
+ | **Agent Contract vs Sandbox Providers** | `agent-contract.md` owns what tools exist and their schemas. `sandbox-providers.md` owns how tools are injected into the sandbox environment (plugin config, MCP server). |
+ | **LLM Proxy vs Billing** | `llm-proxy.md` owns key generation, routing, and spend *events*. `billing-metering.md` owns charging policy, credit gating, and balance enforcement. |
+ | **Triggers vs Automations** | `triggers.md` owns event ingestion, matching, and dispatch. Once a trigger fires, the resulting automation run belongs to `automations-runs.md`. The handoff point is the `AUTOMATION_ENRICH` queue enqueue. |
+ | **Sessions vs Sandbox Providers** | `sessions-gateway.md` owns the session lifecycle and gateway runtime. `sandbox-providers.md` owns the provider interface and sandbox boot mechanics. Sessions *calls* the provider interface; the provider spec defines the contract. |
+-| **Repos/Prebuilds vs Sessions** | `repos-prebuilds.md` owns repo records, prebuild configs, and snapshot *builds*. `sandbox-providers.md` owns snapshot *resolution* (`resolveSnapshotId()` in `packages/shared/src/snapshot-resolution.ts`). `sessions-gateway.md` owns the prebuild *resolver* (`apps/gateway/src/lib/prebuild-resolver.ts`) which determines which prebuild to use at session start. |
++| **Repos/Configurations vs Sessions** | `repos-configurations.md` owns repo records, configuration configs, and snapshot *builds*. `sandbox-providers.md` owns snapshot *resolution* (`resolveSnapshotId()` in `packages/shared/src/snapshot-resolution.ts`). `sessions-gateway.md` owns the configuration *resolver* (`apps/gateway/src/lib/configuration-resolver.ts`) which determines which configuration to use at session start. |
+ | **Secrets vs Sandbox Providers** | `secrets-environment.md` owns secret CRUD and bundle management. How secrets get deployed into a running sandbox is `sandbox-providers.md` (env injection at boot) + `agent-contract.md` (the `save_env_files` tool). |
+ | **Auth/Orgs vs Billing** | `auth-orgs.md` owns user/org model, membership, and onboarding flow. `billing-metering.md` owns trial credit provisioning, plan management, and checkout. Onboarding *triggers* trial activation but billing *owns* the credit grant. |
+ | **CLI vs Sessions** | `cli.md` owns the CLI-specific entry point (device auth, local config, file sync). Session creation from CLI uses the same session lifecycle defined in `sessions-gateway.md`. |
+@@ -62,8 +62,8 @@ Use these terms consistently. Do not introduce synonyms.
+ | **run** | A single execution of an automation. Has a lifecycle (queued → enriching → ready → running → succeeded/failed/needs_human/timed_out/canceled/skipped). | session (when automated), job |
+ | **hub** | The gateway-side object managing a session's runtime state, WebSocket connections, and event processing. | session manager, controller |
+ | **provider** | The sandbox compute backend (Modal or E2B). Implements the `SandboxProvider` interface. | runtime, backend, platform |
+-| **prebuild** | A reusable configuration + snapshot combination for faster session starts. Previously called "configuration" in some code. | configuration (in specs — use "prebuild" consistently) |
+-| **snapshot** | A saved filesystem state. Three layers: base snapshot, repo snapshot, prebuild snapshot. | image, checkpoint, save point |
++| **configuration** | A reusable configuration + snapshot combination for faster session starts. Previously called "prebuild" in some code. | prebuild (in specs — use "configuration" consistently) |
++| **snapshot** | A saved filesystem state. Three layers: base snapshot, repo snapshot, configuration snapshot. | image, checkpoint, save point |
+ | **action** | A platform-mediated operation the agent performs on external services (e.g., create Linear issue, update Sentry). | tool (tools are the broader category; actions are the external-service subset) |
+ | **integration** | An OAuth-backed external connection record (GitHub/Linear/Sentry/Slack) used to resolve tokens server-side. | adapter, connector, provider |
+ | **connector** | A configuration entry (org-scoped) describing how to reach an MCP server and which secrets/auth mapping to use. | integration, adapter |
+diff --git a/docs/specs/feature-registry.md b/docs/specs/feature-registry.md
+index f7ef580..86964e9 100644
+--- a/docs/specs/feature-registry.md
++++ b/docs/specs/feature-registry.md
+@@ -92,7 +92,7 @@
+ | Outbox atomic claim | Implemented | `packages/services/src/outbox/service.ts` | Claim + stuck-row recovery |
+ | Side effects tracking | Implemented | `packages/db/src/schema/automations.ts` | `automation_side_effects` table |
+ | Artifact storage (S3) | Implemented | `apps/worker/src/automation/artifacts.ts` | Completion + enrichment artifacts |
+-| Target resolution | Implemented | `apps/worker/src/automation/resolve-target.ts` | Resolves which repo/prebuild to use |
++| Target resolution | Implemented | `apps/worker/src/automation/resolve-target.ts` | Resolves which repo/configuration to use |
+ | Slack notifications | Implemented | `apps/worker/src/automation/notifications.ts` | Run status posted to Slack |
+ | Notification dispatch | Implemented | `apps/worker/src/automation/notifications.ts:dispatchRunNotification` | Delivery orchestration |
+ | Slack async client | Implemented | `apps/worker/src/slack/client.ts` | Full bidirectional session via Slack |
+@@ -176,33 +176,33 @@
+ | CLI API routes (sessions) | Implemented | `apps/web/src/server/routers/cli.ts:cliSessionsRouter` | Session creation for CLI |
+ | CLI API routes (SSH keys) | Implemented | `apps/web/src/server/routers/cli.ts:cliSshKeysRouter` | SSH key management |
+ | CLI API routes (GitHub) | Implemented | `apps/web/src/server/routers/cli.ts:cliGitHubRouter` | GitHub connection for CLI |
+-| CLI API routes (prebuilds) | Implemented | `apps/web/src/server/routers/cli.ts:cliPrebuildsRouter` | Prebuild listing for CLI |
++| CLI API routes (configurations) | Implemented | `apps/web/src/server/routers/cli.ts:cliConfigurationsRouter` | Configuration listing for CLI |
+ | GitHub repo selection | Implemented | `packages/db/src/schema/cli.ts:cliGithubSelections` | Selection history |
+ | SSH key storage | Implemented | `packages/db/src/schema/cli.ts:userSshKeys` | Per-user SSH keys |
+ 
+ ---
+ 
+-## 9. Repos, Configurations & Prebuilds (`repos-prebuilds.md`)
++## 9. Repos & Configurations (`repos-configurations.md`)
+ 
+ | Feature | Status | Evidence | Notes |
+ |---------|--------|----------|-------|
+ | Repo CRUD | Implemented | `apps/web/src/server/routers/repos.ts` | List/get/create/delete |
+ | Repo search | Implemented | `apps/web/src/server/routers/repos.ts:search` | Search available repos |
+ | Repo connections | Implemented | `packages/db/src/schema/repos.ts:repoConnections` | Integration bindings |
+-| Prebuild CRUD | Implemented | `apps/web/src/server/routers/prebuilds.ts` | List/create/update/delete |
+-| Prebuild-repo associations | Implemented | `packages/db/src/schema/prebuilds.ts:prebuildRepos` | Many-to-many |
+-| Effective service commands | Implemented | `apps/web/src/server/routers/prebuilds.ts:getEffectiveServiceCommands` | Resolved config |
++| Configuration CRUD | Implemented | `apps/web/src/server/routers/configurations.ts` | List/create/update/delete |
++| Configuration-repo associations | Implemented | `packages/db/src/schema/configurations.ts:configurationRepos` | Many-to-many |
++| Effective service commands | Implemented | `apps/web/src/server/routers/configurations.ts:getEffectiveServiceCommands` | Resolved config |
+ | Base snapshot builds | Implemented | `apps/worker/src/base-snapshots/index.ts` | Worker queue, deduplication |
+ | Repo snapshot builds | Implemented | `apps/worker/src/repo-snapshots/index.ts` | GitHub token hierarchy, commit tracking |
+-| Prebuild resolver | Implemented | `apps/gateway/src/lib/prebuild-resolver.ts` | Resolves config at session start |
+-| Service commands persistence | Implemented | `packages/db/src/schema/prebuilds.ts:serviceCommands` | JSONB on prebuilds |
+-| Env file persistence | Implemented | `packages/db/src/schema/prebuilds.ts:envFiles` | JSONB on prebuilds |
+-| Prebuild connector configuration (deprecated) | Deprecated | `packages/db/src/schema/prebuilds.ts:connectors` | Legacy JSONB on prebuilds table; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
++| Configuration resolver | Implemented | `apps/gateway/src/lib/configuration-resolver.ts` | Resolves config at session start |
++| Service commands persistence | Implemented | `packages/db/src/schema/configurations.ts:serviceCommands` | JSONB on configurations |
++| Env file persistence | Implemented | `packages/db/src/schema/configurations.ts:envFiles` | JSONB on configurations |
++| Configuration connector configuration (deprecated) | Deprecated | `packages/db/src/schema/configurations.ts:connectors` | Legacy JSONB on configurations table; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
+ | Org-scoped connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | `org_connectors` table with full CRUD via Integrations routes |
+ | Org connector management UI | Implemented | `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools page with presets, secret picker, validation |
+ | Org connector validation endpoint | Implemented | `apps/web/src/server/routers/integrations.ts:validateConnector` | `tools/list` preflight with diagnostics |
+-| Base snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:sandboxBaseSnapshots` | Building/ready/failed |
+-| Repo snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:repoSnapshots` | Building/ready/failed + commit SHA |
++| Base snapshot status tracking | Implemented | `packages/db/src/schema/configurations.ts:sandboxBaseSnapshots` | Building/ready/failed |
++| Repo snapshot status tracking | Implemented | `packages/db/src/schema/configurations.ts:repoSnapshots` | Building/ready/failed + commit SHA |
+ 
+ ---
+ 
+diff --git a/packages/db/drizzle/0031_rename_prebuild_to_configuration.sql b/packages/db/drizzle/0031_rename_prebuild_to_configuration.sql
+new file mode 100644
+index 0000000..276df15
+--- /dev/null
++++ b/packages/db/drizzle/0031_rename_prebuild_to_configuration.sql
+@@ -0,0 +1,34 @@
++-- Rename remaining prebuild_id columns to configuration_id
++ALTER TABLE "sessions" RENAME COLUMN "prebuild_id" TO "configuration_id";
++ALTER TABLE "automations" RENAME COLUMN "default_prebuild_id" TO "default_configuration_id";
++ALTER TABLE "secrets" RENAME COLUMN "prebuild_id" TO "configuration_id";
++
++-- Rename indexes on sessions
++ALTER INDEX "idx_sessions_prebuild" RENAME TO "idx_sessions_configuration";
++
++-- Rename indexes on automations
++ALTER INDEX "idx_automations_prebuild" RENAME TO "idx_automations_configuration";
++
++-- Rename foreign key constraints
++ALTER TABLE "sessions" RENAME CONSTRAINT "sessions_prebuild_id_fkey" TO "sessions_configuration_id_fkey";
++ALTER TABLE "automations" RENAME CONSTRAINT "automations_default_prebuild_id_fkey" TO "automations_default_configuration_id_fkey";
++ALTER TABLE "secrets" RENAME CONSTRAINT "secrets_prebuild_id_fkey" TO "secrets_configuration_id_fkey";
++
++-- Rename legacy constraint names on configurations table (from prebuild era)
++ALTER INDEX "idx_prebuilds_sandbox_provider" RENAME TO "idx_configurations_sandbox_provider";
++ALTER INDEX "idx_prebuilds_type_managed" RENAME TO "idx_configurations_type_managed";
++ALTER TABLE "configurations" RENAME CONSTRAINT "prebuilds_created_by_fkey" TO "configurations_created_by_fkey";
++ALTER TABLE "configurations" RENAME CONSTRAINT "prebuilds_user_id_fkey" TO "configurations_user_id_fkey";
++ALTER TABLE "configurations" RENAME CONSTRAINT "prebuilds_user_path_unique" TO "configurations_user_path_unique";
++ALTER TABLE "configurations" RENAME CONSTRAINT "prebuilds_sandbox_provider_check" TO "configurations_sandbox_provider_check";
++ALTER TABLE "configurations" RENAME CONSTRAINT "prebuilds_cli_requires_path" TO "configurations_cli_requires_path";
++
++-- Rename legacy constraint names on configuration_repos table
++ALTER INDEX "idx_prebuild_repos_prebuild" RENAME TO "idx_configuration_repos_configuration";
++ALTER INDEX "idx_prebuild_repos_repo" RENAME TO "idx_configuration_repos_repo";
++ALTER TABLE "configuration_repos" RENAME CONSTRAINT "prebuild_repos_prebuild_id_fkey" TO "configuration_repos_configuration_id_fkey";
++ALTER TABLE "configuration_repos" RENAME CONSTRAINT "prebuild_repos_repo_id_fkey" TO "configuration_repos_repo_id_fkey";
++ALTER TABLE "configuration_repos" RENAME CONSTRAINT "prebuild_repos_pkey" TO "configuration_repos_pkey";
++
++-- Rename secrets unique constraint
++ALTER TABLE "secrets" RENAME CONSTRAINT "secrets_org_repo_prebuild_key_unique" TO "secrets_org_repo_configuration_key_unique";
 diff --git a/packages/db/src/schema/automations.ts b/packages/db/src/schema/automations.ts
 index a5343fb..51931ed 100644
 --- a/packages/db/src/schema/automations.ts
@@ -4960,6 +7210,129 @@ index a5343fb..51931ed 100644
  	}),
  	triggers: many(triggers),
  	schedules: many(schedules),
+diff --git a/packages/db/src/schema/prebuilds.ts b/packages/db/src/schema/configurations.ts
+similarity index 64%
+rename from packages/db/src/schema/prebuilds.ts
+rename to packages/db/src/schema/configurations.ts
+index 4f9d372..48cf77d 100644
+--- a/packages/db/src/schema/prebuilds.ts
++++ b/packages/db/src/schema/configurations.ts
+@@ -1,5 +1,5 @@
+ /**
+- * Prebuilds schema
++ * Configurations schema
+  */
+ 
+ import { relations } from "drizzle-orm";
+@@ -8,16 +8,16 @@ import { user } from "./auth";
+ import { repos } from "./repos";
+ 
+ // ============================================
+-// Prebuilds
++// Configurations
+ // ============================================
+ 
+-export const prebuilds = pgTable(
+-	"prebuilds",
++export const configurations = pgTable(
++	"configurations",
+ 	{
+ 		id: uuid("id").primaryKey().defaultRandom(),
+ 
+ 		// Sandbox
+-		snapshotId: text("snapshot_id"), // NULL means prebuild is being set up
++		snapshotId: text("snapshot_id"), // NULL means configuration is being set up
+ 		sandboxProvider: text("sandbox_provider").default("modal"),
+ 
+ 		// Status
+@@ -32,7 +32,7 @@ export const prebuilds = pgTable(
+ 		name: text("name").notNull(),
+ 		notes: text("notes"),
+ 
+-		// CLI prebuilds
++		// CLI configurations
+ 		userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+ 		localPathHash: text("local_path_hash"),
+ 
+@@ -60,37 +60,37 @@ export const prebuilds = pgTable(
+ 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+ 	},
+ 	(table) => [
+-		index("idx_prebuilds_repo_created").on(table.createdAt),
+-		index("idx_prebuilds_type_managed").on(table.type),
++		index("idx_configurations_repo_created").on(table.createdAt),
++		index("idx_configurations_type_managed").on(table.type),
+ 	],
+ );
+ 
+-export const prebuildsRelations = relations(prebuilds, ({ one, many }) => ({
++export const configurationsRelations = relations(configurations, ({ one, many }) => ({
+ 	createdByUser: one(user, {
+-		fields: [prebuilds.createdBy],
++		fields: [configurations.createdBy],
+ 		references: [user.id],
+-		relationName: "prebuildCreator",
++		relationName: "configurationCreator",
+ 	}),
+ 	user: one(user, {
+-		fields: [prebuilds.userId],
++		fields: [configurations.userId],
+ 		references: [user.id],
+-		relationName: "prebuildOwner",
++		relationName: "configurationOwner",
+ 	}),
+-	prebuildRepos: many(prebuildRepos),
++	configurationRepos: many(configurationRepos),
+ 	sessions: many(sessions),
+ 	automations: many(automations),
+ }));
+ 
+ // ============================================
+-// Prebuild Repos (junction table)
++// Configuration Repos (junction table)
+ // ============================================
+ 
+-export const prebuildRepos = pgTable(
+-	"prebuild_repos",
++export const configurationRepos = pgTable(
++	"configuration_repos",
+ 	{
+-		prebuildId: uuid("prebuild_id")
++		configurationId: uuid("configuration_id")
+ 			.notNull()
+-			.references(() => prebuilds.id, { onDelete: "cascade" }),
++			.references(() => configurations.id, { onDelete: "cascade" }),
+ 		repoId: uuid("repo_id")
+ 			.notNull()
+ 			.references(() => repos.id, { onDelete: "cascade" }),
+@@ -98,19 +98,19 @@ export const prebuildRepos = pgTable(
+ 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+ 	},
+ 	(table) => [
+-		primaryKey({ columns: [table.prebuildId, table.repoId] }),
+-		index("idx_prebuild_repos_prebuild").on(table.prebuildId),
+-		index("idx_prebuild_repos_repo").on(table.repoId),
++		primaryKey({ columns: [table.configurationId, table.repoId] }),
++		index("idx_configuration_repos_configuration").on(table.configurationId),
++		index("idx_configuration_repos_repo").on(table.repoId),
+ 	],
+ );
+ 
+-export const prebuildReposRelations = relations(prebuildRepos, ({ one }) => ({
+-	prebuild: one(prebuilds, {
+-		fields: [prebuildRepos.prebuildId],
+-		references: [prebuilds.id],
++export const configurationReposRelations = relations(configurationRepos, ({ one }) => ({
++	configuration: one(configurations, {
++		fields: [configurationRepos.configurationId],
++		references: [configurations.id],
+ 	}),
+ 	repo: one(repos, {
+-		fields: [prebuildRepos.repoId],
++		fields: [configurationRepos.repoId],
+ 		references: [repos.id],
+ 	}),
+ }));
 diff --git a/packages/db/src/schema/relations.ts b/packages/db/src/schema/relations.ts
 index 1f95209..150fe19 100644
 --- a/packages/db/src/schema/relations.ts
@@ -5972,6 +8345,942 @@ index 1133e3b..09cdb84 100644
  		hasSnapshot: Boolean(snapshotId),
  	};
  }
+diff --git a/packages/services/src/prebuilds/db.ts b/packages/services/src/configurations/db.ts
+similarity index 66%
+rename from packages/services/src/prebuilds/db.ts
+rename to packages/services/src/configurations/db.ts
+index 429b715..e81e8c6 100644
+--- a/packages/services/src/prebuilds/db.ts
++++ b/packages/services/src/configurations/db.ts
+@@ -1,5 +1,5 @@
+ /**
+- * Prebuilds DB operations.
++ * Configurations DB operations.
+  *
+  * Raw Drizzle queries - no business logic.
+  */
+@@ -19,22 +19,22 @@ import {
+ } from "../db/client";
+ import { getServicesLogger } from "../logger";
+ import type {
+-	CreateManagedPrebuildInput,
+-	CreatePrebuildFullInput,
+-	CreatePrebuildInput,
+-	CreatePrebuildRepoInput,
+-	UpdatePrebuildInput,
+-} from "../types/prebuilds";
++	CreateConfigurationFullInput,
++	CreateConfigurationInput,
++	CreateConfigurationRepoInput,
++	CreateManagedConfigurationInput,
++	UpdateConfigurationInput,
++} from "../types/configurations";
+ 
+ // ============================================
+ // Types
+ // ============================================
+ 
+-/** Prebuild row type from Drizzle schema */
+-export type PrebuildRow = InferSelectModel<typeof configurations>;
++/** Configuration row type from Drizzle schema */
++export type ConfigurationRow = InferSelectModel<typeof configurations>;
+ 
+-/** Prebuild repo row type from Drizzle schema */
+-export type PrebuildRepoRow = InferSelectModel<typeof configurationRepos>;
++/** Configuration repo row type from Drizzle schema */
++export type ConfigurationRepoRow = InferSelectModel<typeof configurationRepos>;
+ 
+ /** Repo row type from Drizzle schema */
+ export type RepoRow = InferSelectModel<typeof repos>;
+@@ -42,8 +42,8 @@ export type RepoRow = InferSelectModel<typeof repos>;
+ /** Session row type (for relations) */
+ export type SessionRow = InferSelectModel<typeof sessions>;
+ 
+-/** Prebuild with repos and sessions relations */
+-export interface PrebuildWithRelationsRow extends PrebuildRow {
++/** Configuration with repos and sessions relations */
++export interface ConfigurationWithRelationsRow extends ConfigurationRow {
+ 	configurationRepos: Array<{
+ 		workspacePath: string;
+ 		repo: {
+@@ -60,8 +60,8 @@ export interface PrebuildWithRelationsRow extends PrebuildRow {
+ 	}>;
+ }
+ 
+-/** Prebuild with minimal repo data for auth check */
+-export interface PrebuildWithOrgRow {
++/** Configuration with minimal repo data for auth check */
++export interface ConfigurationWithOrgRow {
+ 	id: string;
+ 	configurationRepos: Array<{
+ 		repo: {
+@@ -77,16 +77,16 @@ export interface RepoBasicRow {
+ 	githubRepoName: string;
+ }
+ 
+-/** Prebuild data for session creation */
+-export interface PrebuildForSessionRow {
++/** Configuration data for session creation */
++export interface ConfigurationForSessionRow {
+ 	id: string;
+ 	snapshotId: string | null;
+ 	sandboxProvider: string | null;
+ 	status: string | null;
+ }
+ 
+-/** Prebuild repo with full repo details for session creation */
+-export interface PrebuildRepoDetailRow {
++/** Configuration repo with full repo details for session creation */
++export interface ConfigurationRepoDetailRow {
+ 	workspacePath: string;
+ 	repo: {
+ 		id: string;
+@@ -101,8 +101,8 @@ export interface PrebuildRepoDetailRow {
+ 	} | null;
+ }
+ 
+-/** Prebuild repos with nested prebuild data for snapshots */
+-export interface PrebuildRepoWithPrebuildRow {
++/** Configuration repos with nested configuration data for snapshots */
++export interface ConfigurationRepoWithConfigurationRow {
+ 	configurationId: string;
+ 	workspacePath: string;
+ 	configuration: {
+@@ -123,8 +123,8 @@ export interface SnapshotRepoRow {
+ 	githubRepoName: string;
+ }
+ 
+-/** Managed prebuild with repos for lookup */
+-export interface ManagedPrebuildRow {
++/** Managed configuration with repos for lookup */
++export interface ManagedConfigurationRow {
+ 	id: string;
+ 	snapshotId: string | null;
+ 	configurationRepos: Array<{
+@@ -136,14 +136,14 @@ export interface ManagedPrebuildRow {
+ 	}>;
+ }
+ 
+-/** Repo with github_repo_name for managed prebuild creation */
++/** Repo with github_repo_name for managed configuration creation */
+ export interface RepoWithNameRow {
+ 	id: string;
+ 	githubRepoName: string;
+ }
+ 
+-/** Prebuild row for repo listing (simpler than full PrebuildRow) */
+-export interface RepoPrebuildRow {
++/** Configuration row for repo listing (simpler than full ConfigurationRow) */
++export interface RepoConfigurationRow {
+ 	id: string;
+ 	name: string;
+ 	notes: string | null;
+@@ -160,7 +160,7 @@ export interface RepoPrebuildRow {
+  * List configurations with repos and setup sessions.
+  * Optionally filter by status.
+  */
+-export async function listAll(status?: string): Promise<PrebuildWithRelationsRow[]> {
++export async function listAll(status?: string): Promise<ConfigurationWithRelationsRow[]> {
+ 	const db = getDb();
+ 
+ 	const conditions = [];
+@@ -194,13 +194,13 @@ export async function listAll(status?: string): Promise<PrebuildWithRelationsRow
+ 		},
+ 	});
+ 
+-	return results as PrebuildWithRelationsRow[];
++	return results as ConfigurationWithRelationsRow[];
+ }
+ 
+ /**
+- * Get a prebuild by ID with minimal repos (for auth check).
++ * Get a configuration by ID with minimal repos (for auth check).
+  */
+-export async function findById(id: string): Promise<PrebuildWithOrgRow | null> {
++export async function findById(id: string): Promise<ConfigurationWithOrgRow | null> {
+ 	const db = getDb();
+ 	const result = await db.query.configurations.findFirst({
+ 		where: eq(configurations.id, id),
+@@ -224,9 +224,9 @@ export async function findById(id: string): Promise<PrebuildWithOrgRow | null> {
+ }
+ 
+ /**
+- * Get a prebuild by ID with full relations.
++ * Get a configuration by ID with full relations.
+  */
+-export async function findByIdFull(id: string): Promise<PrebuildWithRelationsRow | null> {
++export async function findByIdFull(id: string): Promise<ConfigurationWithRelationsRow | null> {
+ 	const db = getDb();
+ 	const result = await db.query.configurations.findFirst({
+ 		where: eq(configurations.id, id),
+@@ -253,7 +253,7 @@ export async function findByIdFull(id: string): Promise<PrebuildWithRelationsRow
+ 		},
+ 	});
+ 
+-	return (result as PrebuildWithRelationsRow) ?? null;
++	return (result as ConfigurationWithRelationsRow) ?? null;
+ }
+ 
+ /**
+@@ -274,9 +274,9 @@ export async function getReposByIds(repoIds: string[]): Promise<RepoBasicRow[]>
+ }
+ 
+ /**
+- * Create a new prebuild record.
++ * Create a new configuration record.
+  */
+-export async function create(input: CreatePrebuildInput): Promise<void> {
++export async function create(input: CreateConfigurationInput): Promise<void> {
+ 	const db = getDb();
+ 	await db.insert(configurations).values({
+ 		id: input.id,
+@@ -289,12 +289,14 @@ export async function create(input: CreatePrebuildInput): Promise<void> {
+ }
+ 
+ /**
+- * Create prebuild_repos junction entries.
++ * Create configuration_repos junction entries.
+  */
+-export async function createPrebuildRepos(entries: CreatePrebuildRepoInput[]): Promise<void> {
++export async function createConfigurationRepos(
++	entries: CreateConfigurationRepoInput[],
++): Promise<void> {
+ 	const db = getDb();
+ 	const rows = entries.map((e) => ({
+-		configurationId: e.prebuildId,
++		configurationId: e.configurationId,
+ 		repoId: e.repoId,
+ 		workspacePath: e.workspacePath,
+ 	}));
+@@ -303,9 +305,12 @@ export async function createPrebuildRepos(entries: CreatePrebuildRepoInput[]): P
+ }
+ 
+ /**
+- * Update a prebuild.
++ * Update a configuration.
+  */
+-export async function update(id: string, input: UpdatePrebuildInput): Promise<PrebuildRow> {
++export async function update(
++	id: string,
++	input: UpdateConfigurationInput,
++): Promise<ConfigurationRow> {
+ 	const db = getDb();
+ 	const updates: Partial<typeof configurations.$inferInsert> = {};
+ 
+@@ -324,7 +329,7 @@ export async function update(id: string, input: UpdatePrebuildInput): Promise<Pr
+ }
+ 
+ /**
+- * Delete a prebuild by ID.
++ * Delete a configuration by ID.
+  */
+ export async function deleteById(id: string): Promise<void> {
+ 	const db = getDb();
+@@ -332,9 +337,9 @@ export async function deleteById(id: string): Promise<void> {
+ }
+ 
+ /**
+- * Get prebuild by ID for session creation.
++ * Get configuration by ID for session creation.
+  */
+-export async function findByIdForSession(id: string): Promise<PrebuildForSessionRow | null> {
++export async function findByIdForSession(id: string): Promise<ConfigurationForSessionRow | null> {
+ 	const db = getDb();
+ 	const result = await db.query.configurations.findFirst({
+ 		where: eq(configurations.id, id),
+@@ -350,14 +355,14 @@ export async function findByIdForSession(id: string): Promise<PrebuildForSession
+ }
+ 
+ /**
+- * Get prebuild repos with full repo details for session creation.
++ * Get configuration repos with full repo details for session creation.
+  */
+-export async function getPrebuildReposWithDetails(
+-	prebuildId: string,
+-): Promise<PrebuildRepoDetailRow[]> {
++export async function getConfigurationReposWithDetails(
++	configurationId: string,
++): Promise<ConfigurationRepoDetailRow[]> {
+ 	const db = getDb();
+ 	const results = await db.query.configurationRepos.findMany({
+-		where: eq(configurationRepos.configurationId, prebuildId),
++		where: eq(configurationRepos.configurationId, configurationId),
+ 		with: {
+ 			repo: {
+ 				columns: {
+@@ -382,24 +387,24 @@ export async function getPrebuildReposWithDetails(
+ }
+ 
+ /**
+- * Get prebuild-level service commands.
++ * Get configuration-level service commands.
+  */
+-export async function getPrebuildServiceCommands(
+-	prebuildId: string,
++export async function getConfigurationServiceCommands(
++	configurationId: string,
+ ): Promise<{ serviceCommands: unknown } | null> {
+ 	const db = getDb();
+ 	const result = await db.query.configurations.findFirst({
+-		where: eq(configurations.id, prebuildId),
++		where: eq(configurations.id, configurationId),
+ 		columns: { serviceCommands: true },
+ 	});
+ 	return result ?? null;
+ }
+ 
+ /**
+- * Update prebuild-level service commands.
++ * Update configuration-level service commands.
+  */
+-export async function updatePrebuildServiceCommands(input: {
+-	prebuildId: string;
++export async function updateConfigurationServiceCommands(input: {
++	configurationId: string;
+ 	serviceCommands: unknown;
+ 	updatedBy: string;
+ }): Promise<void> {
+@@ -411,14 +416,14 @@ export async function updatePrebuildServiceCommands(input: {
+ 			serviceCommandsUpdatedAt: new Date(),
+ 			serviceCommandsUpdatedBy: input.updatedBy,
+ 		})
+-		.where(eq(configurations.id, input.prebuildId));
++		.where(eq(configurations.id, input.configurationId));
+ }
+ 
+ /**
+- * Update prebuild-level env file spec.
++ * Update configuration-level env file spec.
+  */
+-export async function updatePrebuildEnvFiles(input: {
+-	prebuildId: string;
++export async function updateConfigurationEnvFiles(input: {
++	configurationId: string;
+ 	envFiles: unknown;
+ 	updatedBy: string;
+ }): Promise<void> {
+@@ -430,43 +435,43 @@ export async function updatePrebuildEnvFiles(input: {
+ 			envFilesUpdatedAt: new Date(),
+ 			envFilesUpdatedBy: input.updatedBy,
+ 		})
+-		.where(eq(configurations.id, input.prebuildId));
++		.where(eq(configurations.id, input.configurationId));
+ }
+ 
+ /**
+- * Get prebuild env file spec.
++ * Get configuration env file spec.
+  */
+-export async function getPrebuildEnvFiles(prebuildId: string): Promise<unknown | null> {
++export async function getConfigurationEnvFiles(configurationId: string): Promise<unknown | null> {
+ 	const db = getDb();
+ 	const result = await db.query.configurations.findFirst({
+-		where: eq(configurations.id, prebuildId),
++		where: eq(configurations.id, configurationId),
+ 		columns: { envFiles: true },
+ 	});
+ 	return result?.envFiles ?? null;
+ }
+ 
+ /**
+- * Update prebuild snapshot_id only if currently null.
++ * Update configuration snapshot_id only if currently null.
+  * Returns true if updated, false if already had a snapshot.
+  */
+ export async function updateSnapshotIdIfNull(
+-	prebuildId: string,
++	configurationId: string,
+ 	snapshotId: string,
+ ): Promise<boolean> {
+ 	const db = getDb();
+ 	const result = await db
+ 		.update(configurations)
+ 		.set({ snapshotId })
+-		.where(and(eq(configurations.id, prebuildId), isNull(configurations.snapshotId)))
++		.where(and(eq(configurations.id, configurationId), isNull(configurations.snapshotId)))
+ 		.returning({ id: configurations.id });
+ 
+ 	return result.length > 0;
+ }
+ 
+ /**
+- * Create a new prebuild with full details (for finalize).
++ * Create a new configuration with full details (for finalize).
+  */
+-export async function createFull(input: CreatePrebuildFullInput): Promise<void> {
++export async function createFull(input: CreateConfigurationFullInput): Promise<void> {
+ 	const db = getDb();
+ 	await db.insert(configurations).values({
+ 		id: input.id,
+@@ -479,13 +484,16 @@ export async function createFull(input: CreatePrebuildFullInput): Promise<void>
+ }
+ 
+ /**
+- * Check if a prebuild contains a specific repo.
++ * Check if a configuration contains a specific repo.
+  */
+-export async function prebuildContainsRepo(prebuildId: string, repoId: string): Promise<boolean> {
++export async function configurationContainsRepo(
++	configurationId: string,
++	repoId: string,
++): Promise<boolean> {
+ 	const db = getDb();
+ 	const result = await db.query.configurationRepos.findFirst({
+ 		where: and(
+-			eq(configurationRepos.configurationId, prebuildId),
++			eq(configurationRepos.configurationId, configurationId),
+ 			eq(configurationRepos.repoId, repoId),
+ 		),
+ 		columns: {
+@@ -497,35 +505,53 @@ export async function prebuildContainsRepo(prebuildId: string, repoId: string):
+ }
+ 
+ /**
+- * Create a single prebuild_repo junction entry.
++ * Create a single configuration_repo junction entry.
+  */
+-export async function createSinglePrebuildRepo(
+-	prebuildId: string,
++export async function createSingleConfigurationRepo(
++	configurationId: string,
+ 	repoId: string,
+ 	workspacePath: string,
+ ): Promise<void> {
+ 	const db = getDb();
+ 	try {
+ 		await db.insert(configurationRepos).values({
+-			configurationId: prebuildId,
++			configurationId,
+ 			repoId,
+ 			workspacePath,
+ 		});
+ 	} catch (error) {
+ 		getServicesLogger()
+ 			.child({ module: "configurations-db" })
+-			.error({ err: error, prebuildId, repoId }, "Failed to create prebuild_repos entry");
++			.error({ err: error, configurationId, repoId }, "Failed to create configuration_repos entry");
+ 	}
+ }
+ 
++/**
++ * Delete a configuration_repo junction entry.
++ */
++export async function deleteConfigurationRepo(
++	configurationId: string,
++	repoId: string,
++): Promise<void> {
++	const db = getDb();
++	await db
++		.delete(configurationRepos)
++		.where(
++			and(
++				eq(configurationRepos.configurationId, configurationId),
++				eq(configurationRepos.repoId, repoId),
++			),
++		);
++}
++
+ // ============================================
+-// Repo-specific prebuild queries
++// Repo-specific configuration queries
+ // ============================================
+ 
+ /**
+  * List configurations for a specific repo.
+  */
+-export async function listByRepoId(repoId: string): Promise<RepoPrebuildRow[]> {
++export async function listByRepoId(repoId: string): Promise<RepoConfigurationRow[]> {
+ 	const db = getDb();
+ 
+ 	// Get configurations through the junction table
+@@ -560,11 +586,11 @@ export async function listByRepoId(repoId: string): Promise<RepoPrebuildRow[]> {
+ // ============================================
+ 
+ /**
+- * Get prebuild_repos with prebuild data for a specific repo.
++ * Get configuration_repos with configuration data for a specific repo.
+  */
+-export async function getPrebuildReposWithPrebuilds(
++export async function getConfigurationReposWithConfigurations(
+ 	repoId: string,
+-): Promise<PrebuildRepoWithPrebuildRow[]> {
++): Promise<ConfigurationRepoWithConfigurationRow[]> {
+ 	const db = getDb();
+ 	const results = await db.query.configurationRepos.findMany({
+ 		where: eq(configurationRepos.repoId, repoId),
+@@ -604,12 +630,14 @@ export async function getPrebuildReposWithPrebuilds(
+ }
+ 
+ /**
+- * Get repos linked to a prebuild.
++ * Get repos linked to a configuration.
+  */
+-export async function getReposForPrebuild(prebuildId: string): Promise<SnapshotRepoRow[]> {
++export async function getReposForConfiguration(
++	configurationId: string,
++): Promise<SnapshotRepoRow[]> {
+ 	const db = getDb();
+ 	const results = await db.query.configurationRepos.findMany({
+-		where: eq(configurationRepos.configurationId, prebuildId),
++		where: eq(configurationRepos.configurationId, configurationId),
+ 		with: {
+ 			repo: {
+ 				columns: {
+@@ -624,13 +652,13 @@ export async function getReposForPrebuild(prebuildId: string): Promise<SnapshotR
+ }
+ 
+ // ============================================
+-// Managed Prebuild queries
++// Managed Configuration queries
+ // ============================================
+ 
+ /**
+  * Find managed configurations with their repos.
+  */
+-export async function findManagedPrebuilds(): Promise<ManagedPrebuildRow[]> {
++export async function findManagedConfigurations(): Promise<ManagedConfigurationRow[]> {
+ 	const db = getDb();
+ 	const results = await db.query.configurations.findMany({
+ 		where: eq(configurations.type, "managed"),
+@@ -658,23 +686,25 @@ export async function findManagedPrebuilds(): Promise<ManagedPrebuildRow[]> {
+ }
+ 
+ /**
+- * Create a managed prebuild record.
++ * Create a managed configuration record.
+  */
+-export async function createManagedPrebuild(input: CreateManagedPrebuildInput): Promise<void> {
++export async function createManagedConfiguration(
++	input: CreateManagedConfigurationInput,
++): Promise<void> {
+ 	const db = getDb();
+ 	await db.insert(configurations).values({
+ 		id: input.id,
+ 		type: "managed",
+ 		status: "building",
+ 		snapshotId: null,
+-		name: "Managed Prebuild",
++		name: "Managed Configuration",
+ 	});
+ }
+ 
+ /**
+- * Delete a prebuild by ID (for cleanup on failure).
++ * Delete a configuration by ID (for cleanup on failure).
+  */
+-export async function deletePrebuild(id: string): Promise<void> {
++export async function deleteConfiguration(id: string): Promise<void> {
+ 	const db = getDb();
+ 	await db.delete(configurations).where(eq(configurations.id, id));
+ }
+@@ -682,7 +712,7 @@ export async function deletePrebuild(id: string): Promise<void> {
+ /**
+  * Get repos for an organization by IDs (or all if no IDs provided).
+  */
+-export async function getReposForManagedPrebuild(
++export async function getReposForManagedConfiguration(
+ 	orgId: string,
+ 	repoIds?: string[],
+ ): Promise<RepoWithNameRow[]> {
+diff --git a/packages/services/src/configurations/index.ts b/packages/services/src/configurations/index.ts
+new file mode 100644
+index 0000000..a39848a
+--- /dev/null
++++ b/packages/services/src/configurations/index.ts
+@@ -0,0 +1,65 @@
++/**
++ * Configurations module exports.
++ */
++
++export * from "./service";
++export * from "./mapper";
++
++// Re-export types from db.ts (Drizzle types)
++export type {
++	ConfigurationRow,
++	ConfigurationRepoRow,
++	RepoBasicRow,
++	ConfigurationForSessionRow,
++	ConfigurationRepoDetailRow,
++	RepoConfigurationRow,
++	ConfigurationRepoWithConfigurationRow,
++	SnapshotRepoRow,
++	ConfigurationWithRelationsRow,
++	ConfigurationWithOrgRow,
++	ManagedConfigurationRow,
++	RepoWithNameRow,
++} from "./db";
++
++// Re-export input types from types file
++export type {
++	CreateConfigurationInput as DbCreateConfigurationInput,
++	CreateConfigurationRepoInput,
++	UpdateConfigurationInput as DbUpdateConfigurationInput,
++	CreateConfigurationFullInput,
++	SnapshotRow,
++} from "../types/configurations";
++
++// DB functions needed by sessions-create and repos-finalize
++export {
++	findByIdForSession,
++	getConfigurationReposWithDetails,
++	getConfigurationEnvFiles,
++	getConfigurationServiceCommands,
++	updateConfigurationEnvFiles,
++	updateConfigurationServiceCommands,
++	updateSnapshotIdIfNull,
++	update as updateConfiguration,
++	createFull as createConfigurationFull,
++	configurationContainsRepo,
++	createSingleConfigurationRepo,
++	deleteConfigurationRepo,
++} from "./db";
++
++// DB functions needed by repos router (listConfigurations, listSnapshots)
++export {
++	listByRepoId,
++	getConfigurationReposWithConfigurations,
++	getReposForConfiguration,
++} from "./db";
++
++// Gateway-specific exports
++export {
++	findById,
++	findByIdFull,
++	findManagedConfigurations,
++	getReposForManagedConfiguration,
++	createManagedConfiguration,
++	createConfigurationRepos,
++	update,
++} from "./db";
+diff --git a/packages/services/src/prebuilds/mapper.ts b/packages/services/src/configurations/mapper.ts
+similarity index 57%
+rename from packages/services/src/prebuilds/mapper.ts
+rename to packages/services/src/configurations/mapper.ts
+index d683c98..661ba98 100644
+--- a/packages/services/src/prebuilds/mapper.ts
++++ b/packages/services/src/configurations/mapper.ts
+@@ -1,17 +1,17 @@
+ /**
+- * Prebuilds mapper.
++ * Configurations mapper.
+  *
+  * Transforms DB rows (camelCase) to API response types (camelCase).
+  */
+ 
+-import type { Prebuild } from "@proliferate/shared";
++import type { Configuration } from "@proliferate/shared";
+ import { toIsoString } from "../db/serialize";
+-import type { PrebuildRow, PrebuildWithRelationsRow } from "./db";
++import type { ConfigurationRow, ConfigurationWithRelationsRow } from "./db";
+ 
+ /**
+- * Map a DB row to API Prebuild type.
++ * Map a DB row to API Configuration type.
+  */
+-export function toPrebuild(row: PrebuildWithRelationsRow): Prebuild {
++export function toConfiguration(row: ConfigurationWithRelationsRow): Configuration {
+ 	return {
+ 		id: row.id,
+ 		snapshotId: row.snapshotId,
+@@ -21,7 +21,7 @@ export function toPrebuild(row: PrebuildWithRelationsRow): Prebuild {
+ 		createdAt: toIsoString(row.createdAt),
+ 		createdBy: row.createdBy,
+ 		sandboxProvider: null, // Field removed from schema
+-		prebuildRepos: row.configurationRepos?.map((pr) => ({
++		configurationRepos: row.configurationRepos?.map((pr) => ({
+ 			workspacePath: pr.workspacePath,
+ 			repo: pr.repo
+ 				? {
+@@ -40,16 +40,16 @@ export function toPrebuild(row: PrebuildWithRelationsRow): Prebuild {
+ }
+ 
+ /**
+- * Map multiple DB rows to API Prebuild types.
++ * Map multiple DB rows to API Configuration types.
+  */
+-export function toPrebuilds(rows: PrebuildWithRelationsRow[]): Prebuild[] {
+-	return rows.map(toPrebuild);
++export function toConfigurations(rows: ConfigurationWithRelationsRow[]): Configuration[] {
++	return rows.map(toConfiguration);
+ }
+ 
+ /**
+- * Map a simple prebuild row (no relations) to partial Prebuild type.
++ * Map a simple configuration row (no relations) to partial Configuration type.
+  */
+-export function toPrebuildPartial(row: PrebuildRow): Partial<Prebuild> {
++export function toConfigurationPartial(row: ConfigurationRow): Partial<Configuration> {
+ 	return {
+ 		id: row.id,
+ 		snapshotId: row.snapshotId,
+diff --git a/packages/services/src/configurations/service.ts b/packages/services/src/configurations/service.ts
+new file mode 100644
+index 0000000..f10328f
+--- /dev/null
++++ b/packages/services/src/configurations/service.ts
+@@ -0,0 +1,261 @@
++/**
++ * Configurations service.
++ *
++ * Business logic that orchestrates DB operations.
++ */
++
++import { randomUUID } from "crypto";
++import { env } from "@proliferate/environment/server";
++import type { Configuration, ConfigurationServiceCommand } from "@proliferate/shared";
++import {
++	parseConfigurationServiceCommands,
++	parseServiceCommands,
++	resolveServiceCommands,
++} from "@proliferate/shared/sandbox";
++import * as configurationsDb from "./db";
++import { toConfiguration, toConfigurationPartial, toConfigurations } from "./mapper";
++
++// ============================================
++// Types
++// ============================================
++
++export interface CreateConfigurationInput {
++	organizationId: string;
++	userId: string;
++	repoIds?: string[];
++	name?: string;
++}
++
++export interface CreateConfigurationResult {
++	configurationId: string;
++	repoCount: number;
++}
++
++export interface UpdateConfigurationInput {
++	name?: string;
++	notes?: string;
++}
++
++export interface EffectiveServiceCommandsResult {
++	source: "configuration" | "repo" | "none";
++	commands: ConfigurationServiceCommand[];
++	workspaces: string[];
++}
++
++// ============================================
++// Service functions
++// ============================================
++
++/**
++ * List configurations for an organization.
++ * Filters to only include configurations with repos in the given org.
++ */
++export async function listConfigurations(orgId: string, status?: string): Promise<Configuration[]> {
++	const rows = await configurationsDb.listAll(status);
++
++	// Filter to only configurations that have repos in this org
++	const filteredRows = rows.filter((p) =>
++		p.configurationRepos?.some((pr) => pr.repo?.organizationId === orgId),
++	);
++
++	return toConfigurations(filteredRows);
++}
++
++/**
++ * Get a single configuration by ID.
++ */
++export async function getConfiguration(id: string): Promise<Configuration | null> {
++	const row = await configurationsDb.findByIdFull(id);
++	if (!row) return null;
++	return toConfiguration(row);
++}
++
++/**
++ * Create a new configuration with repos.
++ *
++ * @throws Error if repos not found or unauthorized
++ */
++export async function createConfiguration(
++	input: CreateConfigurationInput,
++): Promise<CreateConfigurationResult> {
++	const { organizationId, userId, name } = input;
++	const repoIds = input.repoIds ?? [];
++
++	// Create configuration record
++	const configurationId = randomUUID();
++	await configurationsDb.create({
++		id: configurationId,
++		name,
++		createdBy: userId,
++		sandboxProvider: env.DEFAULT_SANDBOX_PROVIDER,
++	});
++
++	if (repoIds.length > 0) {
++		// Verify repos exist and belong to organization
++		const repos = await configurationsDb.getReposByIds(repoIds);
++
++		if (!repos || repos.length !== repoIds.length) {
++			await configurationsDb.deleteById(configurationId);
++			throw new Error("One or more repos not found");
++		}
++
++		for (const repo of repos) {
++			if (repo.organizationId !== organizationId) {
++				await configurationsDb.deleteById(configurationId);
++				throw new Error("Unauthorized access to repo");
++			}
++		}
++
++		// Create configuration_repos entries with derived workspace paths
++		const configurationRepos = repoIds.map((repoId) => {
++			const repo = repos.find((r) => r.id === repoId);
++			const repoName = repo?.githubRepoName?.split("/").pop() || repoId;
++			return {
++				configurationId,
++				repoId,
++				workspacePath: repoIds.length === 1 ? "." : repoName,
++			};
++		});
++
++		try {
++			await configurationsDb.createConfigurationRepos(configurationRepos);
++		} catch (error) {
++			// Rollback: delete the configuration if junction creation fails
++			await configurationsDb.deleteById(configurationId);
++			throw new Error("Failed to link repos to configuration");
++		}
++	}
++
++	return {
++		configurationId,
++		repoCount: repoIds.length,
++	};
++}
++
++/**
++ * Attach a repo to a configuration.
++ *
++ * @throws Error if configuration or repo not found, or unauthorized
++ */
++export async function attachRepo(
++	configurationId: string,
++	repoId: string,
++	orgId: string,
++): Promise<void> {
++	// Verify configuration belongs to org
++	const belongs = await configurationBelongsToOrg(configurationId, orgId);
++	if (!belongs) {
++		// For new configurations with no repos yet, verify the configuration exists
++		const config = await configurationsDb.findByIdForSession(configurationId);
++		if (!config) throw new Error("Configuration not found");
++	}
++
++	// Verify repo exists
++	const repos = await configurationsDb.getReposByIds([repoId]);
++	if (!repos.length) throw new Error("Repo not found");
++	if (repos[0].organizationId !== orgId) throw new Error("Unauthorized access to repo");
++
++	// Check if already attached
++	const alreadyAttached = await configurationsDb.configurationContainsRepo(configurationId, repoId);
++	if (alreadyAttached) return;
++
++	// Derive workspace path
++	const repoName = repos[0].githubRepoName?.split("/").pop() || repoId;
++
++	// Check if this is the only repo (use "." for workspace path) or not
++	const existingRepos = await configurationsDb.getConfigurationReposWithDetails(configurationId);
++	const workspacePath = existingRepos.length === 0 ? "." : repoName;
++
++	await configurationsDb.createSingleConfigurationRepo(configurationId, repoId, workspacePath);
++}
++
++/**
++ * Detach a repo from a configuration.
++ *
++ * @throws Error if configuration not found
++ */
++export async function detachRepo(
++	configurationId: string,
++	repoId: string,
++	orgId: string,
++): Promise<void> {
++	const belongs = await configurationBelongsToOrg(configurationId, orgId);
++	if (!belongs) throw new Error("Configuration not found");
++
++	await configurationsDb.deleteConfigurationRepo(configurationId, repoId);
++}
++
++/**
++ * Update a configuration.
++ *
++ * @throws Error if nothing to update
++ */
++export async function updateConfiguration(
++	id: string,
++	input: UpdateConfigurationInput,
++): Promise<Partial<Configuration>> {
++	if (input.name === undefined && input.notes === undefined) {
++		throw new Error("No fields to update");
++	}
++
++	const updated = await configurationsDb.update(id, input);
++	return toConfigurationPartial(updated);
++}
++
++/**
++ * Delete a configuration.
++ */
++export async function deleteConfiguration(id: string): Promise<boolean> {
++	await configurationsDb.deleteById(id);
++	return true;
++}
++
++/**
++ * Check if a configuration exists.
++ */
++export async function configurationExists(id: string): Promise<boolean> {
++	const configuration = await configurationsDb.findById(id);
++	return !!configuration;
++}
++
++/**
++ * Check if a configuration belongs to an organization (via its linked repos).
++ */
++export async function configurationBelongsToOrg(
++	configurationId: string,
++	orgId: string,
++): Promise<boolean> {
++	const configuration = await configurationsDb.findById(configurationId);
++	if (!configuration) return false;
++	return configuration.configurationRepos.some((pr) => pr.repo?.organizationId === orgId);
++}
++
++/**
++ * Get the effective service commands for a configuration, using the same
++ * resolution logic as the gateway runtime: configuration overrides win if
++ * non-empty, otherwise per-repo defaults are merged with workspace context.
++ */
++export async function getEffectiveServiceCommands(
++	configurationId: string,
++): Promise<EffectiveServiceCommandsResult> {
++	const [configurationRow, repoRows] = await Promise.all([
++		configurationsDb.getConfigurationServiceCommands(configurationId),
++		configurationsDb.getConfigurationReposWithDetails(configurationId),
++	]);
++
++	const repoSpecs = repoRows.map((r) => ({
++		workspacePath: r.workspacePath,
++		serviceCommands: parseServiceCommands(r.repo?.serviceCommands),
++	}));
++
++	const commands = resolveServiceCommands(configurationRow?.serviceCommands, repoSpecs);
++
++	const configCmds = parseConfigurationServiceCommands(configurationRow?.serviceCommands);
++	const hasRepoDefaults = repoSpecs.some((r) => r.serviceCommands.length > 0);
++	const source: EffectiveServiceCommandsResult["source"] =
++		configCmds.length > 0 ? "configuration" : hasRepoDefaults ? "repo" : "none";
++
++	const workspaces = [...new Set(repoRows.map((r) => r.workspacePath))];
++
++	return { source, commands, workspaces };
++}
 diff --git a/packages/services/src/index.ts b/packages/services/src/index.ts
 index 0f69dc4..c4a2373 100644
 --- a/packages/services/src/index.ts
@@ -6000,6 +9309,240 @@ index 0f69dc4..c4a2373 100644
  
  // Logger
  export { setServicesLogger, getServicesLogger } from "./logger";
+diff --git a/packages/services/src/managed-prebuild.ts b/packages/services/src/managed-configuration.ts
+similarity index 59%
+rename from packages/services/src/managed-prebuild.ts
+rename to packages/services/src/managed-configuration.ts
+index 95d7d1d..9346e80 100644
+--- a/packages/services/src/managed-prebuild.ts
++++ b/packages/services/src/managed-configuration.ts
+@@ -1,67 +1,67 @@
+ /**
+- * Managed Prebuild Utility
++ * Managed Configuration Utility
+  *
+- * Managed prebuilds are auto-created/maintained by universal clients (Slack, CLI, etc.)
+- * They contain all repos for an organization in a single prebuild.
++ * Managed configurations are auto-created/maintained by universal clients (Slack, CLI, etc.)
++ * They contain all repos for an organization in a single configuration.
+  *
+  * Usage:
+  *   const syncClient = createSyncClient({ baseUrl, auth: { type: "service", name: "my-service", secret } });
+- *   const prebuild = await getOrCreateManagedPrebuild({ organizationId, gateway: syncClient });
++ *   const configuration = await getOrCreateManagedConfiguration({ organizationId, gateway: syncClient });
+  */
+ 
+ import type { SyncClient } from "@proliferate/gateway-clients";
+ import { BillingGateError } from "@proliferate/shared/billing";
+ import { assertBillingGateForOrg, getOrgPlanLimits } from "./billing/gate";
+ import { getServicesLogger } from "./logger";
+-import * as prebuildsDb from "./prebuilds/db";
++import * as configurationsDb from "./configurations/db";
+ import * as sessionsDb from "./sessions/db";
+ 
+-export interface ManagedPrebuild {
++export interface ManagedConfiguration {
+ 	id: string;
+ 	snapshotId: string | null; // null if still initializing (first use)
+ 	repoIds: string[];
+ 	isNew: boolean; // true if just created
+ }
+ 
+-export interface GetOrCreateManagedPrebuildOptions {
++export interface GetOrCreateManagedConfigurationOptions {
+ 	organizationId: string;
+ 	gateway: SyncClient;
+ 	repoIds?: string[]; // Optional: specific repo IDs to include. If not provided, uses all org repos.
+ }
+ 
+ /**
+- * Get or create a managed prebuild for an organization.
++ * Get or create a managed configuration for an organization.
+  *
+  * - If one exists, returns it (even if still building - caller can use immediately)
+  * - If none exists, creates one and kicks off setup automatically
+  *
+- * The caller can always use the returned prebuild immediately. The gateway
++ * The caller can always use the returned configuration immediately. The gateway
+  * will create the sandbox and take an early snapshot automatically.
+  */
+-export async function getOrCreateManagedPrebuild(
+-	options: GetOrCreateManagedPrebuildOptions,
+-): Promise<ManagedPrebuild> {
++export async function getOrCreateManagedConfiguration(
++	options: GetOrCreateManagedConfigurationOptions,
++): Promise<ManagedConfiguration> {
+ 	const { organizationId, gateway, repoIds: specificRepoIds } = options;
+ 
+-	// 1. Check for existing managed prebuild (only if not creating with specific repos)
++	// 1. Check for existing managed configuration (only if not creating with specific repos)
+ 	if (!specificRepoIds) {
+-		const existing = await findManagedPrebuild(organizationId);
++		const existing = await findManagedConfiguration(organizationId);
+ 		if (existing) {
+ 			return { ...existing, isNew: false };
+ 		}
+ 	}
+ 
+-	// 2. No managed prebuild - create one
+-	const { prebuildId, repoIds, repoNames } = await createManagedPrebuildRecord(
++	// 2. No managed configuration - create one
++	const { configurationId, repoIds, repoNames } = await createManagedConfigurationRecord(
+ 		organizationId,
+ 		specificRepoIds,
+ 	);
+ 
+ 	// 3. Create setup session and kick it off
+-	await createAndStartSetupSession(prebuildId, organizationId, repoNames, gateway);
++	await createAndStartSetupSession(configurationId, organizationId, repoNames, gateway);
+ 
+ 	return {
+-		id: prebuildId,
++		id: configurationId,
+ 		snapshotId: null, // Will be set by early snapshot
+ 		repoIds,
+ 		isNew: true,
+@@ -69,24 +69,24 @@ export async function getOrCreateManagedPrebuild(
+ }
+ 
+ /**
+- * Find existing managed prebuild for an org
++ * Find existing managed configuration for an org
+  */
+-async function findManagedPrebuild(
++async function findManagedConfiguration(
+ 	organizationId: string,
+-): Promise<Omit<ManagedPrebuild, "isNew"> | null> {
+-	const prebuilds = await prebuildsDb.findManagedPrebuilds();
++): Promise<Omit<ManagedConfiguration, "isNew"> | null> {
++	const configurations = await configurationsDb.findManagedConfigurations();
+ 
+-	// Filter to prebuilds that have repos in this org
+-	const orgPrebuilds = prebuilds.filter((p) =>
++	// Filter to configurations that have repos in this org
++	const orgConfigurations = configurations.filter((p) =>
+ 		p.configurationRepos?.some((pr) => pr.repo?.organizationId === organizationId),
+ 	);
+ 
+-	if (orgPrebuilds.length === 0) {
++	if (orgConfigurations.length === 0) {
+ 		return null;
+ 	}
+ 
+ 	// Return the most recent one (prefer one with snapshot, but return any)
+-	const best = orgPrebuilds.find((p) => p.snapshotId) || orgPrebuilds[0];
++	const best = orgConfigurations.find((p) => p.snapshotId) || orgConfigurations[0];
+ 	const repoIds =
+ 		best.configurationRepos?.map((pr) => pr.repo?.id).filter((id): id is string => !!id) || [];
+ 
+@@ -98,44 +98,44 @@ async function findManagedPrebuild(
+ }
+ 
+ /**
+- * Create the managed prebuild record in the database
++ * Create the managed configuration record in the database
+  */
+-async function createManagedPrebuildRecord(
++async function createManagedConfigurationRecord(
+ 	organizationId: string,
+ 	specificRepoIds?: string[],
+-): Promise<{ prebuildId: string; repoIds: string[]; repoNames: string[] }> {
+-	const repos = await prebuildsDb.getReposForManagedPrebuild(organizationId, specificRepoIds);
++): Promise<{ configurationId: string; repoIds: string[]; repoNames: string[] }> {
++	const repos = await configurationsDb.getReposForManagedConfiguration(organizationId, specificRepoIds);
+ 
+ 	if (repos.length === 0) {
+ 		throw new Error("No repos found for organization");
+ 	}
+ 
+-	// Create prebuild record
+-	const prebuildId = crypto.randomUUID();
+-	await prebuildsDb.createManagedPrebuild({ id: prebuildId });
++	// Create configuration record
++	const configurationId = crypto.randomUUID();
++	await configurationsDb.createManagedConfiguration({ id: configurationId });
+ 
+-	// Create prebuild_repos entries
+-	const prebuildRepos = repos.map((repo) => {
++	// Create configuration_repos entries
++	const configurationRepos = repos.map((repo) => {
+ 		const repoName = repo.githubRepoName?.split("/").pop() || repo.id;
+ 		return {
+-			prebuildId,
++			configurationId,
+ 			repoId: repo.id,
+ 			workspacePath: repos.length === 1 ? "." : repoName,
+ 		};
+ 	});
+ 
+ 	try {
+-		await prebuildsDb.createPrebuildRepos(prebuildRepos);
++		await configurationsDb.createConfigurationRepos(configurationRepos);
+ 	} catch (error) {
+ 		// Clean up on failure
+-		await prebuildsDb.deletePrebuild(prebuildId);
++		await configurationsDb.deleteConfiguration(configurationId);
+ 		throw new Error(
+ 			`Failed to link repos: ${error instanceof Error ? error.message : "Unknown error"}`,
+ 		);
+ 	}
+ 
+ 	return {
+-		prebuildId,
++		configurationId,
+ 		repoIds: repos.map((r) => r.id),
+ 		repoNames: repos.map((r) => r.githubRepoName),
+ 	};
+@@ -145,7 +145,7 @@ async function createManagedPrebuildRecord(
+  * Create a setup session and post initial prompt to gateway to start it
+  */
+ async function createAndStartSetupSession(
+-	prebuildId: string,
++	configurationId: string,
+ 	organizationId: string,
+ 	repoNames: string[],
+ 	gateway: SyncClient,
+@@ -157,7 +157,7 @@ async function createAndStartSetupSession(
+ 	} catch (err) {
+ 		if (err instanceof BillingGateError) {
+ 			getServicesLogger()
+-				.child({ module: "managed-prebuild", prebuildId, organizationId })
++				.child({ module: "managed-configuration", configurationId, organizationId })
+ 				.info({ code: err.code }, "Setup session skipped: billing gate denied");
+ 			return "";
+ 		}
+@@ -169,7 +169,7 @@ async function createAndStartSetupSession(
+ 	const prompt = `Set up ${repoNamesStr} for development. Get everything running and working.`;
+ 	const setupInput = {
+ 		id: sessionId,
+-		prebuildId,
++		configurationId,
+ 		organizationId,
+ 		initialPrompt: prompt,
+ 	};
+@@ -183,7 +183,7 @@ async function createAndStartSetupSession(
+ 		);
+ 		if (!created) {
+ 			getServicesLogger()
+-				.child({ module: "managed-prebuild", prebuildId, organizationId })
++				.child({ module: "managed-configuration", configurationId, organizationId })
+ 				.info("Setup session skipped: concurrent limit reached");
+ 			return "";
+ 		}
+@@ -195,11 +195,11 @@ async function createAndStartSetupSession(
+ 	gateway
+ 		.postMessage(sessionId, {
+ 			content: prompt,
+-			userId: "managed-prebuild-setup",
++			userId: "managed-configuration-setup",
+ 		})
+ 		.catch((err: Error) => {
+ 			getServicesLogger()
+-				.child({ module: "managed-prebuild", prebuildId, sessionId })
++				.child({ module: "managed-configuration", configurationId, sessionId })
+ 				.error({ err }, "Failed to start setup session");
+ 		});
+ 
 diff --git a/packages/services/src/onboarding/db.ts b/packages/services/src/onboarding/db.ts
 index f914498..4cf436e 100644
 --- a/packages/services/src/onboarding/db.ts
@@ -6081,6 +9624,280 @@ index e32ed02..697162b 100644
  
  	return {
  		hasOrg: true,
+diff --git a/packages/services/src/prebuilds/index.ts b/packages/services/src/prebuilds/index.ts
+deleted file mode 100644
+index 2ddd072..0000000
+--- a/packages/services/src/prebuilds/index.ts
++++ /dev/null
+@@ -1,60 +0,0 @@
+-/**
+- * Prebuilds module exports.
+- */
+-
+-export * from "./service";
+-export * from "./mapper";
+-
+-// Re-export types from db.ts (Drizzle types)
+-export type {
+-	PrebuildRow,
+-	PrebuildRepoRow,
+-	RepoBasicRow,
+-	PrebuildForSessionRow,
+-	PrebuildRepoDetailRow,
+-	RepoPrebuildRow,
+-	PrebuildRepoWithPrebuildRow,
+-	SnapshotRepoRow,
+-	PrebuildWithRelationsRow,
+-	PrebuildWithOrgRow,
+-	ManagedPrebuildRow,
+-	RepoWithNameRow,
+-} from "./db";
+-
+-// Re-export input types from types file
+-export type {
+-	CreatePrebuildInput as DbCreatePrebuildInput,
+-	CreatePrebuildRepoInput,
+-	UpdatePrebuildInput as DbUpdatePrebuildInput,
+-	CreatePrebuildFullInput,
+-	SnapshotRow,
+-} from "../types/prebuilds";
+-
+-// DB functions needed by sessions-create and repos-finalize
+-export {
+-	findByIdForSession,
+-	getPrebuildReposWithDetails,
+-	getPrebuildEnvFiles,
+-	getPrebuildServiceCommands,
+-	updatePrebuildEnvFiles,
+-	updatePrebuildServiceCommands,
+-	updateSnapshotIdIfNull,
+-	update as updatePrebuild,
+-	createFull as createPrebuildFull,
+-	prebuildContainsRepo,
+-	createSinglePrebuildRepo,
+-} from "./db";
+-
+-// DB functions needed by repos router (listPrebuilds, listSnapshots)
+-export { listByRepoId, getPrebuildReposWithPrebuilds, getReposForPrebuild } from "./db";
+-
+-// Gateway-specific exports
+-export {
+-	findById,
+-	findByIdFull,
+-	findManagedPrebuilds,
+-	getReposForManagedPrebuild,
+-	createManagedPrebuild,
+-	createPrebuildRepos,
+-	update,
+-} from "./db";
+diff --git a/packages/services/src/prebuilds/service.ts b/packages/services/src/prebuilds/service.ts
+deleted file mode 100644
+index a33af86..0000000
+--- a/packages/services/src/prebuilds/service.ts
++++ /dev/null
+@@ -1,202 +0,0 @@
+-/**
+- * Prebuilds service.
+- *
+- * Business logic that orchestrates DB operations.
+- */
+-
+-import { randomUUID } from "crypto";
+-import { env } from "@proliferate/environment/server";
+-import type { Prebuild, PrebuildServiceCommand } from "@proliferate/shared";
+-import {
+-	parsePrebuildServiceCommands,
+-	parseServiceCommands,
+-	resolveServiceCommands,
+-} from "@proliferate/shared/sandbox";
+-import * as prebuildsDb from "./db";
+-import { toPrebuild, toPrebuildPartial, toPrebuilds } from "./mapper";
+-
+-// ============================================
+-// Types
+-// ============================================
+-
+-export interface CreatePrebuildInput {
+-	organizationId: string;
+-	userId: string;
+-	repoIds: string[];
+-	name?: string;
+-}
+-
+-export interface CreatePrebuildResult {
+-	prebuildId: string;
+-	repoCount: number;
+-}
+-
+-export interface UpdatePrebuildInput {
+-	name?: string;
+-	notes?: string;
+-}
+-
+-export interface EffectiveServiceCommandsResult {
+-	source: "prebuild" | "repo" | "none";
+-	commands: PrebuildServiceCommand[];
+-	workspaces: string[];
+-}
+-
+-// ============================================
+-// Service functions
+-// ============================================
+-
+-/**
+- * List prebuilds for an organization.
+- * Filters to only include prebuilds with repos in the given org.
+- */
+-export async function listPrebuilds(orgId: string, status?: string): Promise<Prebuild[]> {
+-	const rows = await prebuildsDb.listAll(status);
+-
+-	// Filter to only prebuilds that have repos in this org
+-	const filteredRows = rows.filter((p) =>
+-		p.configurationRepos?.some((pr) => pr.repo?.organizationId === orgId),
+-	);
+-
+-	return toPrebuilds(filteredRows);
+-}
+-
+-/**
+- * Get a single prebuild by ID.
+- */
+-export async function getPrebuild(id: string): Promise<Prebuild | null> {
+-	const row = await prebuildsDb.findByIdFull(id);
+-	if (!row) return null;
+-	return toPrebuild(row);
+-}
+-
+-/**
+- * Create a new prebuild with repos.
+- *
+- * @throws Error if repos not found or unauthorized
+- */
+-export async function createPrebuild(input: CreatePrebuildInput): Promise<CreatePrebuildResult> {
+-	const { organizationId, userId, repoIds, name } = input;
+-
+-	if (!repoIds || repoIds.length === 0) {
+-		throw new Error("repoIds[] is required");
+-	}
+-
+-	// Verify repos exist and belong to organization
+-	const repos = await prebuildsDb.getReposByIds(repoIds);
+-
+-	if (!repos || repos.length !== repoIds.length) {
+-		throw new Error("One or more repos not found");
+-	}
+-
+-	for (const repo of repos) {
+-		if (repo.organizationId !== organizationId) {
+-			throw new Error("Unauthorized access to repo");
+-		}
+-	}
+-
+-	// Create prebuild record
+-	const prebuildId = randomUUID();
+-	await prebuildsDb.create({
+-		id: prebuildId,
+-		name,
+-		createdBy: userId,
+-		sandboxProvider: env.DEFAULT_SANDBOX_PROVIDER,
+-	});
+-
+-	// Create prebuild_repos entries with derived workspace paths
+-	const prebuildRepos = repoIds.map((repoId) => {
+-		const repo = repos.find((r) => r.id === repoId);
+-		const repoName = repo?.githubRepoName?.split("/").pop() || repoId;
+-		return {
+-			prebuildId,
+-			repoId,
+-			workspacePath: repoIds.length === 1 ? "." : repoName,
+-		};
+-	});
+-
+-	try {
+-		await prebuildsDb.createPrebuildRepos(prebuildRepos);
+-	} catch (error) {
+-		// Rollback: delete the prebuild if junction creation fails
+-		await prebuildsDb.deleteById(prebuildId);
+-		throw new Error("Failed to link repos to prebuild");
+-	}
+-
+-	return {
+-		prebuildId,
+-		repoCount: repoIds.length,
+-	};
+-}
+-
+-/**
+- * Update a prebuild.
+- *
+- * @throws Error if nothing to update
+- */
+-export async function updatePrebuild(
+-	id: string,
+-	input: UpdatePrebuildInput,
+-): Promise<Partial<Prebuild>> {
+-	if (input.name === undefined && input.notes === undefined) {
+-		throw new Error("No fields to update");
+-	}
+-
+-	const updated = await prebuildsDb.update(id, input);
+-	return toPrebuildPartial(updated);
+-}
+-
+-/**
+- * Delete a prebuild.
+- */
+-export async function deletePrebuild(id: string): Promise<boolean> {
+-	await prebuildsDb.deleteById(id);
+-	return true;
+-}
+-
+-/**
+- * Check if a prebuild exists.
+- */
+-export async function prebuildExists(id: string): Promise<boolean> {
+-	const prebuild = await prebuildsDb.findById(id);
+-	return !!prebuild;
+-}
+-
+-/**
+- * Check if a prebuild belongs to an organization (via its linked repos).
+- */
+-export async function prebuildBelongsToOrg(prebuildId: string, orgId: string): Promise<boolean> {
+-	const prebuild = await prebuildsDb.findById(prebuildId);
+-	if (!prebuild) return false;
+-	return prebuild.configurationRepos.some((pr) => pr.repo?.organizationId === orgId);
+-}
+-
+-/**
+- * Get the effective service commands for a prebuild, using the same
+- * resolution logic as the gateway runtime: prebuild overrides win if
+- * non-empty, otherwise per-repo defaults are merged with workspace context.
+- */
+-export async function getEffectiveServiceCommands(
+-	prebuildId: string,
+-): Promise<EffectiveServiceCommandsResult> {
+-	const [prebuildRow, repoRows] = await Promise.all([
+-		prebuildsDb.getPrebuildServiceCommands(prebuildId),
+-		prebuildsDb.getPrebuildReposWithDetails(prebuildId),
+-	]);
+-
+-	const repoSpecs = repoRows.map((r) => ({
+-		workspacePath: r.workspacePath,
+-		serviceCommands: parseServiceCommands(r.repo?.serviceCommands),
+-	}));
+-
+-	const commands = resolveServiceCommands(prebuildRow?.serviceCommands, repoSpecs);
+-
+-	const prebuildCmds = parsePrebuildServiceCommands(prebuildRow?.serviceCommands);
+-	const hasRepoDefaults = repoSpecs.some((r) => r.serviceCommands.length > 0);
+-	const source: EffectiveServiceCommandsResult["source"] =
+-		prebuildCmds.length > 0 ? "prebuild" : hasRepoDefaults ? "repo" : "none";
+-
+-	const workspaces = [...new Set(repoRows.map((r) => r.workspacePath))];
+-
+-	return { source, commands, workspaces };
+-}
 diff --git a/packages/services/src/repos/db.ts b/packages/services/src/repos/db.ts
 index 44a9c1a..2d1a093 100644
 --- a/packages/services/src/repos/db.ts
@@ -6498,6 +10315,72 @@ index ac1776c..7db1d26 100644
  	id: string;
  	snapshot_id: string | null;
  	user_id: string | null;
+diff --git a/packages/services/src/types/prebuilds.ts b/packages/services/src/types/configurations.ts
+similarity index 70%
+rename from packages/services/src/types/prebuilds.ts
+rename to packages/services/src/types/configurations.ts
+index cd57e92..a3949f1 100644
+--- a/packages/services/src/types/prebuilds.ts
++++ b/packages/services/src/types/configurations.ts
+@@ -1,35 +1,35 @@
+ /**
+- * Prebuilds module types.
++ * Configurations module types.
+  *
+- * Input types for prebuilds queries.
+- * DB row types are exported from ../prebuilds/db.ts
++ * Input types for configurations queries.
++ * DB row types are exported from ../configurations/db.ts
+  */
+ 
+ // ============================================
+ // Input Types
+ // ============================================
+ 
+-export interface CreatePrebuildInput {
++export interface CreateConfigurationInput {
+ 	id: string;
+ 	name?: string | null;
+ 	createdBy: string;
+ 	sandboxProvider?: string;
+ }
+ 
+-export interface CreatePrebuildRepoInput {
+-	prebuildId: string;
++export interface CreateConfigurationRepoInput {
++	configurationId: string;
+ 	repoId: string;
+ 	workspacePath: string;
+ }
+ 
+-export interface UpdatePrebuildInput {
++export interface UpdateConfigurationInput {
+ 	name?: string | null;
+ 	notes?: string | null;
+ 	snapshotId?: string;
+ 	status?: string;
+ }
+ 
+-export interface CreatePrebuildFullInput {
++export interface CreateConfigurationFullInput {
+ 	id: string;
+ 	snapshotId: string;
+ 	status: string;
+@@ -40,11 +40,11 @@ export interface CreatePrebuildFullInput {
+ }
+ 
+ // ============================================
+-// Managed Prebuild Types
++// Managed Configuration Types
+ // ============================================
+ 
+-/** Input for creating a managed prebuild. */
+-export interface CreateManagedPrebuildInput {
++/** Input for creating a managed configuration. */
++export interface CreateManagedConfigurationInput {
+ 	id: string;
+ }
+ 
 diff --git a/packages/services/src/types/index.ts b/packages/services/src/types/index.ts
 index e03f672..a14edca 100644
 --- a/packages/services/src/types/index.ts
@@ -6837,6 +10720,139 @@ index d2e23d3..03183e0 100644
 -	CliPrebuildSchema,
 +	CliConfigurationSchema,
  };
+diff --git a/packages/shared/src/contracts/prebuilds.ts b/packages/shared/src/contracts/configurations.ts
+similarity index 69%
+rename from packages/shared/src/contracts/prebuilds.ts
+rename to packages/shared/src/contracts/configurations.ts
+index ceefe3e..2b08d36 100644
+--- a/packages/shared/src/contracts/prebuilds.ts
++++ b/packages/shared/src/contracts/configurations.ts
+@@ -8,7 +8,7 @@ const c = initContract();
+ // Schemas
+ // ============================================
+ 
+-export const PrebuildRepoSchema = z.object({
++export const ConfigurationRepoSchema = z.object({
+ 	workspacePath: z.string(),
+ 	repo: z
+ 		.object({
+@@ -25,7 +25,7 @@ export const SetupSessionSchema = z.object({
+ 	status: z.string().nullable(),
+ });
+ 
+-export const PrebuildSchema = z.object({
++export const ConfigurationSchema = z.object({
+ 	id: z.string().uuid(),
+ 	snapshotId: z.string().nullable(),
+ 	status: z.string().nullable(),
+@@ -34,13 +34,13 @@ export const PrebuildSchema = z.object({
+ 	createdAt: z.string().nullable(),
+ 	createdBy: z.string().nullable(),
+ 	sandboxProvider: z.string().nullable(),
+-	prebuildRepos: z.array(PrebuildRepoSchema).optional(),
++	configurationRepos: z.array(ConfigurationRepoSchema).optional(),
+ 	setupSessions: z.array(SetupSessionSchema).optional(),
+ });
+ 
+-export type Prebuild = z.infer<typeof PrebuildSchema>;
++export type Configuration = z.infer<typeof ConfigurationSchema>;
+ 
+-export const CreatePrebuildInputSchema = z.object({
++export const CreateConfigurationInputSchema = z.object({
+ 	repoIds: z.array(z.string().uuid()).optional(),
+ 	// Legacy format support
+ 	repos: z
+@@ -54,7 +54,7 @@ export const CreatePrebuildInputSchema = z.object({
+ 	name: z.string().optional(),
+ });
+ 
+-export const UpdatePrebuildInputSchema = z.object({
++export const UpdateConfigurationInputSchema = z.object({
+ 	name: z.string().optional(),
+ 	notes: z.string().optional(),
+ });
+@@ -63,29 +63,29 @@ export const UpdatePrebuildInputSchema = z.object({
+ // Contract
+ // ============================================
+ 
+-export const prebuildsContract = c.router(
++export const configurationsContract = c.router(
+ 	{
+ 		list: {
+ 			method: "GET",
+-			path: "/prebuilds",
++			path: "/configurations",
+ 			query: z.object({
+ 				status: z.string().optional(),
+ 			}),
+ 			responses: {
+-				200: z.object({ prebuilds: z.array(PrebuildSchema) }),
++				200: z.object({ configurations: z.array(ConfigurationSchema) }),
+ 				401: ErrorResponseSchema,
+ 				500: ErrorResponseSchema,
+ 			},
+-			summary: "List prebuilds for the current organization",
++			summary: "List configurations for the current organization",
+ 		},
+ 
+ 		create: {
+ 			method: "POST",
+-			path: "/prebuilds",
+-			body: CreatePrebuildInputSchema,
++			path: "/configurations",
++			body: CreateConfigurationInputSchema,
+ 			responses: {
+ 				200: z.object({
+-					prebuildId: z.string().uuid(),
++					configurationId: z.string().uuid(),
+ 					repos: z.number(),
+ 				}),
+ 				400: ErrorResponseSchema,
+@@ -94,29 +94,29 @@ export const prebuildsContract = c.router(
+ 				404: ErrorResponseSchema,
+ 				500: ErrorResponseSchema,
+ 			},
+-			summary: "Create a new prebuild with multiple repos",
++			summary: "Create a new configuration with multiple repos",
+ 		},
+ 
+ 		update: {
+ 			method: "PATCH",
+-			path: "/prebuilds/:id",
++			path: "/configurations/:id",
+ 			pathParams: z.object({
+ 				id: z.string().uuid(),
+ 			}),
+-			body: UpdatePrebuildInputSchema,
++			body: UpdateConfigurationInputSchema,
+ 			responses: {
+-				200: z.object({ prebuild: PrebuildSchema }),
++				200: z.object({ configuration: ConfigurationSchema }),
+ 				400: ErrorResponseSchema,
+ 				401: ErrorResponseSchema,
+ 				404: ErrorResponseSchema,
+ 				500: ErrorResponseSchema,
+ 			},
+-			summary: "Update a prebuild (name, notes)",
++			summary: "Update a configuration (name, notes)",
+ 		},
+ 
+ 		delete: {
+ 			method: "DELETE",
+-			path: "/prebuilds/:id",
++			path: "/configurations/:id",
+ 			pathParams: z.object({
+ 				id: z.string().uuid(),
+ 			}),
+@@ -126,7 +126,7 @@ export const prebuildsContract = c.router(
+ 				401: ErrorResponseSchema,
+ 				500: ErrorResponseSchema,
+ 			},
+-			summary: "Delete a prebuild",
++			summary: "Delete a configuration",
+ 		},
+ 	},
+ 	{
 diff --git a/packages/shared/src/contracts/index.ts b/packages/shared/src/contracts/index.ts
 index 94d79ac..4109852 100644
 --- a/packages/shared/src/contracts/index.ts
@@ -6956,7 +10972,7 @@ index 0605abb..544e76a 100644
  	},
  	{
 diff --git a/packages/shared/src/contracts/repos.ts b/packages/shared/src/contracts/repos.ts
-index 15e8dd8..16e920e 100644
+index 15e8dd8..e2b02fb 100644
 --- a/packages/shared/src/contracts/repos.ts
 +++ b/packages/shared/src/contracts/repos.ts
 @@ -33,48 +33,6 @@ export const SearchRepoSchema = z.object({
@@ -7027,10 +11043,11 @@ index 15e8dd8..16e920e 100644
  });
  
  export type Repo = z.infer<typeof RepoSchema>;
-@@ -221,36 +176,6 @@ export const reposContract = c.router(
+@@ -220,53 +175,6 @@ export const reposContract = c.router(
+ 			},
  			summary: "Search public GitHub repositories",
  		},
- 
+-
 -		listPrebuilds: {
 -			method: "GET",
 -			path: "/repos/:id/prebuilds",
@@ -7061,18 +11078,25 @@ index 15e8dd8..16e920e 100644
 -			summary: "List snapshots (usable prebuilds) for a repo",
 -		},
 -
- 		finalizeSetup: {
- 			method: "POST",
- 			path: "/repos/:id/finalize-setup",
-@@ -265,7 +190,7 @@ export const reposContract = c.router(
- 				404: ErrorResponseSchema,
- 				500: ErrorResponseSchema,
- 			},
+-		finalizeSetup: {
+-			method: "POST",
+-			path: "/repos/:id/finalize-setup",
+-			pathParams: z.object({
+-				id: z.string().uuid(),
+-			}),
+-			body: FinalizeSetupInputSchema,
+-			responses: {
+-				200: FinalizeSetupResponseSchema,
+-				400: ErrorResponseSchema,
+-				401: ErrorResponseSchema,
+-				404: ErrorResponseSchema,
+-				500: ErrorResponseSchema,
+-			},
 -			summary: "Finalize setup session and create a prebuild snapshot",
-+			summary: "Finalize setup session and create a configuration snapshot",
- 		},
+-		},
  	},
  	{
+ 		pathPrefix: "/api",
 diff --git a/packages/shared/src/contracts/secrets.ts b/packages/shared/src/contracts/secrets.ts
 index 423e5a4..dfdf56a 100644
 --- a/packages/shared/src/contracts/secrets.ts
