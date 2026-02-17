@@ -31,8 +31,8 @@ export function useAttentionInbox(options: {
 }) {
 	const { wsApprovals, sessionId } = options;
 
-	const { data: orgActions } = useOrgActions({ status: "pending", limit: 10 });
-	const { data: pendingRuns } = useOrgPendingRuns({ limit: 10 });
+	const { data: orgActions } = useOrgActions({ status: "pending", limit: 50 });
+	const { data: pendingRuns } = useOrgPendingRuns({ limit: 50 });
 
 	const items = useMemo(() => {
 		const result: AttentionItem[] = [];
