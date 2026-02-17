@@ -47,7 +47,9 @@ export const env = new Proxy(rawEnv as typeof rawEnv, {
 		if (prop === "GATEWAY_PORT") return normalizeInt(value, 8787);
 		if (prop === "WEB_PORT") return normalizeInt(value, 3000);
 		if (prop === "WORKER_PORT") return normalizeInt(value, 3002);
+		if (prop === "IDLE_SNAPSHOT_DELAY_SECONDS") return normalizeInt(value, 300);
 		if (prop === "SANDBOX_TIMEOUT_SECONDS") return normalizeInt(value, 3600);
+		if (prop === "SNAPSHOT_RETENTION_DAYS") return normalizeInt(value, 14);
 
 		if (prop === "CI") return normalizeBoolean(value);
 		if (prop === "EMAIL_ENABLED") return normalizeBoolean(value);
