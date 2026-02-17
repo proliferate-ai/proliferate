@@ -48,6 +48,19 @@ interface Closeable {
 let closeables: Closeable[] = [];
 let isRunning = false;
 
+function getNextDailyUtcRunAt(hourUtc: number, minuteUtc: number): string {
+	const now = new Date();
+	const next = new Date(
+		Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hourUtc, minuteUtc, 0, 0),
+	);
+
+	if (next.getTime() <= now.getTime()) {
+		next.setUTCDate(next.getUTCDate() + 1);
+	}
+
+	return next.toISOString();
+}
+
 // ============================================
 // Worker Lifecycle
 // ============================================
@@ -122,6 +135,14 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 		{
 			repeat: { pattern: "0 1 * * *", tz: "UTC" }, // Daily at 01:00 UTC
 		},
+	);
+
+	logger.info(
+		{
+			nextRunAt: getNextDailyUtcRunAt(1, 0),
+			retentionDays: env.SNAPSHOT_RETENTION_DAYS,
+		},
+		"Scheduled snapshot cleanup job",
 	);
 
 	// Create workers
