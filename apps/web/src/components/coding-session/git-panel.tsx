@@ -137,11 +137,7 @@ export function GitPanel({
 	const canMutate = !!gitState && !isBusy;
 
 	return (
-		<PanelShell
-			title="Git"
-			icon={<GitBranch className="h-4 w-4 text-muted-foreground" />}
-			noPadding
-		>
+		<PanelShell title="Git" icon={<GitBranch className="h-4 w-4" />} noPadding>
 			<Tabs defaultValue={defaultTab} className="h-full flex flex-col min-h-0">
 				<div className="px-3 pt-2">
 					<TabsList className="w-full">

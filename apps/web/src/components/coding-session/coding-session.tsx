@@ -347,9 +347,9 @@ export function CodingSession({
 	// Desktop layout with resizable panels
 	const desktopContent = (
 		<ResizablePanelGroup
-			direction="horizontal"
+			orientation="horizontal"
 			className="h-full w-full"
-			onLayout={(sizes: number[]) => setPanelSizes(sizes)}
+			onLayoutChanged={(layout) => setPanelSizes(Object.values(layout))}
 		>
 			{/* Left pane: Chat */}
 			<ResizablePanel
