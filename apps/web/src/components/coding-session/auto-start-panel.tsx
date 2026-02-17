@@ -10,7 +10,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
 	useEffectiveServiceCommands,
 	useServiceCommands,
@@ -32,22 +31,9 @@ import {
 	Plus,
 	Settings,
 	Trash2,
-	X,
 	XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-
-interface AutoStartPanelProps {
-	repoId?: string | null;
-	prebuildId?: string | null;
-	onClose: () => void;
-	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
-	sendRunAutoStart?: (
-		runId: string,
-		mode?: "test" | "start",
-		commands?: PrebuildServiceCommand[],
-	) => void;
-}
 
 export interface AutoStartContentProps {
 	repoId?: string | null;
@@ -247,40 +233,6 @@ export function AutoStartContent({
 			) : (
 				<EmptyState onAdd={startEditing} />
 			)}
-		</div>
-	);
-}
-
-export function AutoStartPanel({
-	repoId,
-	prebuildId,
-	onClose,
-	autoStartOutput,
-	sendRunAutoStart,
-}: AutoStartPanelProps) {
-	return (
-		<div className="flex flex-col h-full">
-			{/* Header */}
-			<TooltipProvider delayDuration={150}>
-				<div className="flex items-center justify-between px-4 py-2.5 border-b shrink-0">
-					<span className="text-sm font-medium">Auto-start</span>
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
-								<X className="h-4 w-4" />
-							</Button>
-						</TooltipTrigger>
-						<TooltipContent>Close panel</TooltipContent>
-					</Tooltip>
-				</div>
-			</TooltipProvider>
-
-			<AutoStartContent
-				repoId={repoId}
-				prebuildId={prebuildId}
-				autoStartOutput={autoStartOutput}
-				sendRunAutoStart={sendRunAutoStart}
-			/>
 		</div>
 	);
 }

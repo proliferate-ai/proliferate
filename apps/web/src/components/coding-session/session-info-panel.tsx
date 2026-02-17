@@ -2,23 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { GithubIcon } from "@/components/ui/icons";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
-import { Box, Circle, Clock, GitBranch, KeyRound, Moon, Sun, Users, X } from "lucide-react";
+import { Box, Circle, Clock, GitBranch, KeyRound, Moon, Sun, Users } from "lucide-react";
 import { useTheme } from "next-themes";
-
-interface SessionInfoPanelProps {
-	sessionStatus?: string;
-	repoName?: string | null;
-	branchName?: string | null;
-	snapshotId?: string | null;
-	startedAt?: string | null;
-	concurrentUsers?: number;
-	isModal?: boolean;
-	onClose: () => void;
-	isMigrating?: boolean;
-}
 
 export interface SessionInfoContentProps {
 	sessionStatus?: string;
@@ -164,48 +151,6 @@ export function SessionInfoContent({
 					)}
 				</div>
 			</div>
-		</div>
-	);
-}
-
-export function SessionInfoPanel({
-	sessionStatus,
-	repoName,
-	branchName,
-	snapshotId,
-	startedAt,
-	concurrentUsers,
-	isModal,
-	onClose,
-	isMigrating,
-}: SessionInfoPanelProps) {
-	return (
-		<div className="flex flex-col h-full">
-			{/* Header */}
-			<TooltipProvider delayDuration={150}>
-				<div className="flex items-center justify-between px-4 py-2.5 border-b shrink-0">
-					<span className="text-sm font-medium">Session Info</span>
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
-								<X className="h-4 w-4" />
-							</Button>
-						</TooltipTrigger>
-						<TooltipContent>Close panel</TooltipContent>
-					</Tooltip>
-				</div>
-			</TooltipProvider>
-
-			<SessionInfoContent
-				sessionStatus={sessionStatus}
-				repoName={repoName}
-				branchName={branchName}
-				snapshotId={snapshotId}
-				startedAt={startedAt}
-				concurrentUsers={concurrentUsers}
-				isModal={isModal}
-				isMigrating={isMigrating}
-			/>
 		</div>
 	);
 }

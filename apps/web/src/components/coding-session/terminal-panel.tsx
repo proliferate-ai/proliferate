@@ -173,7 +173,6 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 		};
 	}, [sessionId, token]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: initTerminal is the setup function
 	useEffect(() => {
 		const cleanup = initTerminal();
 		return () => {
