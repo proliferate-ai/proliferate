@@ -120,6 +120,20 @@ export function useTriggerManualRun(automationId: string) {
 }
 
 // ============================================
+// Integration Actions
+// ============================================
+
+export function useAutomationIntegrationActions(automationId: string) {
+	return useQuery({
+		...orpc.automations.getIntegrationActions.queryOptions({
+			input: { id: automationId },
+		}),
+		enabled: !!automationId,
+		select: (data) => data.integrations,
+	});
+}
+
+// ============================================
 // Event Hooks
 // ============================================
 
