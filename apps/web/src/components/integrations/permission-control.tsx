@@ -11,23 +11,25 @@ interface PermissionControlProps {
 	disabled?: boolean;
 }
 
-const MODES: { value: ActionMode; label: string; dotColor: string; tooltip: string }[] = [
+// Dot colors: --destructive exists as a semantic token; no --success/--warning tokens exist
+// in the design system, so allow/approval use Tailwind palette values as a pragmatic fallback.
+const MODES: { value: ActionMode; label: string; dotClass: string; tooltip: string }[] = [
 	{
 		value: "allow",
 		label: "Allow",
-		dotColor: "#22c55e",
+		dotClass: "bg-emerald-500",
 		tooltip: "Executes automatically without human review",
 	},
 	{
 		value: "require_approval",
 		label: "Approval",
-		dotColor: "#f59e0b",
+		dotClass: "bg-amber-500",
 		tooltip: "Pauses for human approval (5 min timeout)",
 	},
 	{
 		value: "deny",
 		label: "Deny",
-		dotColor: "#ef4444",
+		dotClass: "bg-destructive",
 		tooltip: "Agent is blocked from using this action",
 	},
 ];
@@ -52,10 +54,10 @@ export function PermissionControl({ value, onChange, disabled }: PermissionContr
 								)}
 							>
 								<span
-									className="w-1.5 h-1.5 rounded-full shrink-0"
-									style={{
-										backgroundColor: value === mode.value ? mode.dotColor : "transparent",
-									}}
+									className={cn(
+										"w-1.5 h-1.5 rounded-full shrink-0",
+										value === mode.value ? mode.dotClass : "bg-transparent",
+									)}
 								/>
 								{mode.label}
 							</button>
