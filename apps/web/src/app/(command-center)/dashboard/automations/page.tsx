@@ -8,10 +8,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
+import { useIntegrations, useSlackInstallations } from "@/hooks/use-integrations";
 import { useCreateFromTemplate, useTemplateCatalog } from "@/hooks/use-templates";
-import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
 import { Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -32,27 +31,25 @@ export default function AutomationsPage() {
 	const { data: templateCatalog = [] } = useTemplateCatalog();
 
 	// Fetch org integrations for connection status badges
-	const { data: integrationsData } = useQuery({
-		...orpc.integrations.list.queryOptions({ input: undefined }),
-	});
+	const { data: integrationsData } = useIntegrations();
+	const { data: slackInstallations } = useSlackInstallations();
 
 	const connectedProviders = useMemo(() => {
 		const providers = new Set<string>();
 		if (!integrationsData) return providers;
+		// github/sentry/linear flags use integration_id matching (correct for Nango)
 		if (integrationsData.github.connected) providers.add("github");
 		if (integrationsData.sentry.connected) providers.add("sentry");
 		if (integrationsData.linear.connected) providers.add("linear");
-		// Check for active Slack installations via the integrations list
-		const hasSlack = integrationsData.integrations.some(
-			(i) => i.provider === "slack" && i.status === "active",
-		);
-		if (hasSlack) providers.add("slack");
+		// Slack uses a separate installations table
+		if (slackInstallations && slackInstallations.length > 0) providers.add("slack");
 		return providers;
-	}, [integrationsData]);
+	}, [integrationsData, slackInstallations]);
 
 	const [activeTab, setActiveTab] = useState<Tab>("all");
 	const [searchQuery, setSearchQuery] = useState("");
 	const [pickerOpen, setPickerOpen] = useState(false);
+	const [createError, setCreateError] = useState<string | null>(null);
 
 	const counts = useMemo(
 		() => ({
@@ -81,23 +78,26 @@ export default function AutomationsPage() {
 	}, [automations, activeTab, searchQuery]);
 
 	const handleBlankCreate = async () => {
+		setCreateError(null);
 		try {
 			const automation = await createAutomation.mutateAsync({});
 			setPickerOpen(false);
 			router.push(`/dashboard/automations/${automation.id}`);
-		} catch {
-			// mutation handles error state
+		} catch (err) {
+			setCreateError(err instanceof Error ? err.message : "Failed to create automation");
 		}
 	};
 
 	const handleTemplateSelect = async (template: TemplateEntry) => {
-		// Build integration bindings from connected providers
+		setCreateError(null);
+		// Build integration bindings from connected providers.
+		// Integration rows store provider as "nango" (auth mechanism) and
+		// integration_id as the actual service ("github", "sentry", "linear").
 		const integrationBindings: Record<string, string> = {};
 		if (integrationsData) {
 			for (const req of template.requiredIntegrations) {
-				// Find the first active integration for this provider
 				const integration = integrationsData.integrations.find(
-					(i) => i.provider === req.provider && i.status === "active",
+					(i) => i.integration_id?.includes(req.provider) && i.status === "active",
 				);
 				if (integration) {
 					integrationBindings[req.provider] = integration.id;
@@ -112,8 +112,10 @@ export default function AutomationsPage() {
 			});
 			setPickerOpen(false);
 			router.push(`/dashboard/automations/${automation.id}`);
-		} catch {
-			// mutation handles error state
+		} catch (err) {
+			setCreateError(
+				err instanceof Error ? err.message : "Failed to create automation from template",
+			);
 		}
 	};
 
@@ -241,6 +243,7 @@ export default function AutomationsPage() {
 				onSelectTemplate={handleTemplateSelect}
 				onSelectBlank={handleBlankCreate}
 				isPending={isPending}
+				error={createError}
 			/>
 		</div>
 	);
