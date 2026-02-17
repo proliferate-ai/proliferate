@@ -34,6 +34,8 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { useActionPreferences, useToggleActionPreference } from "@/hooks/use-action-preferences";
 import { useGitHubAppConnect } from "@/hooks/use-github-app-connect";
 import {
 	useIntegrations,
@@ -53,7 +55,10 @@ import {
 	useOrgConnectors,
 	useUpdateOrgConnector,
 } from "@/hooks/use-org-connectors";
+import { useOrgMembers } from "@/hooks/use-orgs";
+import { useActiveOrganization, useSession } from "@/lib/auth-client";
 import { orpc } from "@/lib/orpc";
+import { type OrgRole, hasRoleOrHigher } from "@/lib/roles";
 import { CONNECTOR_PRESETS, type ConnectorConfig } from "@proliferate/shared";
 import type { IntegrationWithCreator } from "@proliferate/shared";
 import { useQueryClient } from "@tanstack/react-query";
@@ -150,6 +155,30 @@ const SUGGESTION_ENTRIES = INTEGRATION_CATALOG.filter((e) =>
 
 export default function IntegrationsPage() {
 	const queryClient = useQueryClient();
+
+	// ---- Role detection ----
+	const { data: activeOrg } = useActiveOrganization();
+	const { data: authSession } = useSession();
+	const currentUserId = authSession?.user?.id;
+	const { data: members } = useOrgMembers(activeOrg?.id ?? "");
+	const currentUserRole = members?.find((m: { userId: string }) => m.userId === currentUserId)
+		?.role as OrgRole | undefined;
+	const isAdmin = currentUserRole ? hasRoleOrHigher(currentUserRole, "admin") : false;
+
+	// ---- User action preferences ----
+	const { data: preferences } = useActionPreferences();
+	const togglePreference = useToggleActionPreference();
+
+	const disabledSourceIds = useMemo(() => {
+		const set = new Set<string>();
+		if (!preferences) return set;
+		for (const pref of preferences) {
+			if (!pref.actionId && !pref.enabled) {
+				set.add(pref.sourceId);
+			}
+		}
+		return set;
+	}, [preferences]);
 
 	// ---- Modal state ----
 	const [pickerOpen, setPickerOpen] = useState(false);
@@ -257,6 +286,57 @@ export default function IntegrationsPage() {
 	const createMutation = useCreateOrgConnector();
 	const updateMutation = useUpdateOrgConnector();
 	const deleteMutation = useDeleteOrgConnector();
+
+	// ---- Source preference helpers (needs connectors) ----
+	const getSourceId = useCallback(
+		(entry: CatalogEntry): string | null => {
+			if (entry.type === "oauth" && entry.provider) return entry.provider;
+			if (entry.type === "slack") return "slack";
+			if (entry.type === "mcp-preset" && entry.presetKey) {
+				const connector = (connectors ?? []).find(
+					(c: ConnectorConfig) => c.name.toLowerCase() === entry.name.toLowerCase(),
+				);
+				return connector ? `connector:${connector.id}` : null;
+			}
+			return null;
+		},
+		[connectors],
+	);
+
+	const isSourceEnabled = useCallback(
+		(entry: CatalogEntry): boolean => {
+			const sourceId = getSourceId(entry);
+			if (!sourceId) return true;
+			return !disabledSourceIds.has(sourceId);
+		},
+		[getSourceId, disabledSourceIds],
+	);
+
+	const handleToggleSource = useCallback(
+		(entry: CatalogEntry) => {
+			const sourceId = getSourceId(entry);
+			if (!sourceId) return;
+			const currentlyEnabled = !disabledSourceIds.has(sourceId);
+			togglePreference.mutate({ sourceId, enabled: !currentlyEnabled });
+		},
+		[getSourceId, disabledSourceIds, togglePreference],
+	);
+
+	const handleToggleConnectorSource = useCallback(
+		(connectorId: string) => {
+			const sourceId = `connector:${connectorId}`;
+			const currentlyEnabled = !disabledSourceIds.has(sourceId);
+			togglePreference.mutate({ sourceId, enabled: !currentlyEnabled });
+		},
+		[disabledSourceIds, togglePreference],
+	);
+
+	const isConnectorEnabled = useCallback(
+		(connectorId: string): boolean => {
+			return !disabledSourceIds.has(`connector:${connectorId}`);
+		},
+		[disabledSourceIds],
+	);
 
 	const handleRemove = useCallback(
 		async (id: string) => {
@@ -477,11 +557,20 @@ export default function IntegrationsPage() {
 			<div className="mx-auto px-6 py-6 max-w-5xl">
 				{/* Header */}
 				<div className="flex items-center justify-between mb-6">
-					<h1 className="text-xl font-semibold tracking-tight text-foreground">Integrations</h1>
-					<Button size="sm" className="rounded-xl" onClick={() => setPickerOpen(true)}>
-						<Plus className="h-4 w-4 mr-1.5" />
-						Add integration
-					</Button>
+					<div>
+						<h1 className="text-xl font-semibold tracking-tight text-foreground">Integrations</h1>
+						{!isAdmin && (
+							<p className="text-sm text-muted-foreground mt-0.5">
+								Toggle which tools are available in your sessions
+							</p>
+						)}
+					</div>
+					{isAdmin && (
+						<Button size="sm" className="rounded-xl" onClick={() => setPickerOpen(true)}>
+							<Plus className="h-4 w-4 mr-1.5" />
+							Add integration
+						</Button>
+					)}
 				</div>
 
 				{/* Search (only when there are connected integrations) */}
@@ -503,7 +592,8 @@ export default function IntegrationsPage() {
 						{/* Column headers */}
 						<div className="flex items-center gap-3 px-3 py-2 border-b border-border text-xs font-medium text-muted-foreground">
 							<div className="flex-1">Name</div>
-							<div className="w-32 hidden sm:block">Connected by</div>
+							{isAdmin && <div className="w-32 hidden sm:block">Connected by</div>}
+							{!isAdmin && <div className="w-16 text-right">Enabled</div>}
 							<div className="w-8" />
 						</div>
 
@@ -512,12 +602,13 @@ export default function IntegrationsPage() {
 							{connectedEntries.map((entry) => {
 								const connectedMeta = getConnectedMeta(entry);
 								const isLoading = getLoadingStatus(entry);
+								const enabled = isSourceEnabled(entry);
 
 								return (
 									<div
 										key={entry.key}
 										className="flex items-center gap-3 px-3 py-3 hover:bg-muted/30 transition-colors cursor-pointer rounded-lg"
-										onClick={() => handleSelectFromRow(entry)}
+										onClick={() => isAdmin && handleSelectFromRow(entry)}
 									>
 										{/* Icon */}
 										<div className="w-10 h-10 rounded-lg border border-border bg-background flex items-center justify-center p-2 shrink-0">
@@ -534,30 +625,48 @@ export default function IntegrationsPage() {
 											<p className="text-xs text-muted-foreground truncate">{entry.description}</p>
 										</div>
 
-										{/* Connected by */}
-										<div className="w-32 hidden sm:block shrink-0">
-											<p className="text-sm text-muted-foreground truncate">
-												{connectedMeta || "\u2014"}
-											</p>
-										</div>
+										{/* Admin: Connected by */}
+										{isAdmin && (
+											<div className="w-32 hidden sm:block shrink-0">
+												<p className="text-sm text-muted-foreground truncate">
+													{connectedMeta || "\u2014"}
+												</p>
+											</div>
+										)}
 
-										{/* Actions */}
-										<div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-											<CardMenu
-												entry={entry}
-												isLoading={isLoading}
-												onReconnect={() => handleConnect(entry)}
-												onDisconnect={() =>
-													setDisconnectTarget({
-														entry,
-														integrationId:
-															entry.type === "oauth" && entry.provider
-																? integrationsByProvider[entry.provider]?.[0]?.id
-																: undefined,
-													})
-												}
-											/>
-										</div>
+										{/* User: Enable/Disable toggle */}
+										{!isAdmin && (
+											<div
+												className="w-16 flex justify-end shrink-0"
+												onClick={(e) => e.stopPropagation()}
+											>
+												<Switch
+													checked={enabled}
+													onCheckedChange={() => handleToggleSource(entry)}
+													disabled={togglePreference.isPending}
+												/>
+											</div>
+										)}
+
+										{/* Admin: Actions menu */}
+										{isAdmin && (
+											<div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+												<CardMenu
+													entry={entry}
+													isLoading={isLoading}
+													onReconnect={() => handleConnect(entry)}
+													onDisconnect={() =>
+														setDisconnectTarget({
+															entry,
+															integrationId:
+																entry.type === "oauth" && entry.provider
+																	? integrationsByProvider[entry.provider]?.[0]?.id
+																	: undefined,
+														})
+													}
+												/>
+											</div>
+										)}
 									</div>
 								);
 							})}
@@ -565,8 +674,8 @@ export default function IntegrationsPage() {
 					</div>
 				)}
 
-				{/* Slack support channel section */}
-				{slackStatus?.connected && (
+				{/* Slack support channel section (admin only) */}
+				{isAdmin && slackStatus?.connected && (
 					<div className="mt-3 ml-1">
 						{slackStatus.supportChannel ? (
 							<div className="flex items-center gap-2 p-3 rounded-lg bg-muted/30">
@@ -640,22 +749,41 @@ export default function IntegrationsPage() {
 						<div className="rounded-lg border border-border bg-card">
 							<div className="divide-y divide-border">
 								{connectorList.map((c) =>
-									editingId === c.id ? (
-										<ConnectorForm
-											key={c.id}
-											initial={c}
-											isNew={false}
-											onSave={handleSave}
-											onCancel={() => setEditingId(null)}
-										/>
+									isAdmin ? (
+										editingId === c.id ? (
+											<ConnectorForm
+												key={c.id}
+												initial={c}
+												isNew={false}
+												onSave={handleSave}
+												onCancel={() => setEditingId(null)}
+											/>
+										) : (
+											<ConnectorRow
+												key={c.id}
+												connector={c}
+												onEdit={() => setEditingId(c.id)}
+												onRemove={() => handleRemove(c.id)}
+												onToggle={() => handleToggle(c)}
+											/>
+										)
 									) : (
-										<ConnectorRow
-											key={c.id}
-											connector={c}
-											onEdit={() => setEditingId(c.id)}
-											onRemove={() => handleRemove(c.id)}
-											onToggle={() => handleToggle(c)}
-										/>
+										<div key={c.id} className="flex items-center gap-3 px-3 py-3">
+											<div className="w-10 h-10 rounded-lg border border-border bg-background flex items-center justify-center p-2 shrink-0">
+												<ConnectorIcon presetKey={c.name.toLowerCase()} size="md" />
+											</div>
+											<div className="flex-1 min-w-0">
+												<p className="text-sm font-medium">{c.name}</p>
+												<p className="text-xs text-muted-foreground truncate">
+													{CATEGORY_LABELS["developer-tools"]}
+												</p>
+											</div>
+											<Switch
+												checked={isConnectorEnabled(c.id)}
+												onCheckedChange={() => handleToggleConnectorSource(c.id)}
+												disabled={togglePreference.isPending}
+											/>
+										</div>
 									),
 								)}
 							</div>
@@ -747,36 +875,42 @@ export default function IntegrationsPage() {
 									/>
 								</svg>
 							</div>
-							<h2 className="text-lg font-semibold text-foreground">No integrations configured</h2>
+							<h2 className="text-lg font-semibold text-foreground">
+								{isAdmin ? "No integrations configured" : "No integrations available"}
+							</h2>
 							<p className="text-sm text-muted-foreground">
-								Browse our library of integrations to extend your agents' capabilities.
+								{isAdmin
+									? "Browse our library of integrations to extend your agents' capabilities."
+									: "Ask your admin to connect integrations for your organization."}
 							</p>
 						</div>
 
-						{/* Suggestion cards */}
-						<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-3xl">
-							{SUGGESTION_ENTRIES.map((entry) => (
-								<button
-									key={entry.key}
-									type="button"
-									className="flex flex-col items-start p-4 pb-3 rounded-2xl border border-border bg-card hover:border-foreground/20 transition-colors text-left"
-									onClick={() => {
-										setSelectedEntry(entry);
-										setOpenedFromPicker(false);
-									}}
-								>
-									<div className="w-7 h-7 rounded-lg border border-border bg-background flex items-center justify-center p-1 shrink-0">
-										{entry.provider ? <ProviderIcon provider={entry.provider} size="md" /> : null}
-									</div>
-									<div className="flex flex-col mt-2 w-full">
-										<p className="text-sm font-semibold text-foreground">{entry.name}</p>
-										<p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-											{entry.description}
-										</p>
-									</div>
-								</button>
-							))}
-						</div>
+						{/* Suggestion cards (admin only) */}
+						{isAdmin && (
+							<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-3xl">
+								{SUGGESTION_ENTRIES.map((entry) => (
+									<button
+										key={entry.key}
+										type="button"
+										className="flex flex-col items-start p-4 pb-3 rounded-2xl border border-border bg-card hover:border-foreground/20 transition-colors text-left"
+										onClick={() => {
+											setSelectedEntry(entry);
+											setOpenedFromPicker(false);
+										}}
+									>
+										<div className="w-7 h-7 rounded-lg border border-border bg-background flex items-center justify-center p-1 shrink-0">
+											{entry.provider ? <ProviderIcon provider={entry.provider} size="md" /> : null}
+										</div>
+										<div className="flex flex-col mt-2 w-full">
+											<p className="text-sm font-semibold text-foreground">{entry.name}</p>
+											<p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+												{entry.description}
+											</p>
+										</div>
+									</button>
+								))}
+							</div>
+						)}
 					</div>
 				)}
 
