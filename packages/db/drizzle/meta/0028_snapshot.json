@@ -6987,7 +6987,7 @@
       "uniqueConstraints": {
         "user_action_prefs_user_org_source_action_key": {
           "name": "user_action_prefs_user_org_source_action_key",
-          "nullsNotDistinct": false,
+          "nullsNotDistinct": true,
           "columns": [
             "user_id",
             "organization_id",
