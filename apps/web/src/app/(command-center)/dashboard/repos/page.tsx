@@ -13,6 +13,7 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -23,281 +24,168 @@ import {
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import {
-	useAvailableRepos,
+	useCheckSecrets,
 	useCreateRepo,
+	useCreateSecret,
 	useDeleteRepo,
+	usePrebuildEnvFiles,
+	useRepoSnapshots,
+	useRepos,
 	useSearchRepos,
-	useServiceCommands,
-	useUpdateServiceCommands,
 } from "@/hooks/use-repos";
-import { orpc } from "@/lib/orpc";
 import { cn, getSnapshotDisplayName } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { GitHubRepo, Repo } from "@/types";
-import { useQuery } from "@tanstack/react-query";
+import type { RepoSnapshot } from "@proliferate/shared/contracts";
+import { formatDistanceToNow } from "date-fns";
 import {
-	ChevronDown,
+	AlertTriangle,
+	Check,
 	ChevronRight,
-	Globe,
-	Lock,
+	ExternalLink,
+	KeyRound,
 	MoreVertical,
-	Pencil,
 	Plus,
 	Search,
 	Star,
 	Trash2,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+// ============================================
+// Main Page
+// ============================================
 
 export default function RepositoriesPage() {
-	const router = useRouter();
-	const { setSelectedRepo } = useDashboardStore();
-	const [showAvailable, setShowAvailable] = useState(false);
-	const [showPublicSearch, setShowPublicSearch] = useState(false);
-	const [addingRepoId, setAddingRepoId] = useState<number | null>(null);
-	const [publicSearchQuery, setPublicSearchQuery] = useState("");
-	const [debouncedQuery, setDebouncedQuery] = useState("");
+	const { data: repos, isLoading } = useRepos();
+	const [expandedRepoId, setExpandedRepoId] = useState<string | null>(null);
+	const [filterQuery, setFilterQuery] = useState("");
+	const [addDialogOpen, setAddDialogOpen] = useState(false);
 
-	useEffect(() => {
-		const timer = setTimeout(() => {
-			setDebouncedQuery(publicSearchQuery);
-		}, 300);
-		return () => clearTimeout(timer);
-	}, [publicSearchQuery]);
+	const reposList = useMemo(() => {
+		const list = repos ?? [];
+		if (!filterQuery) return list;
+		const q = filterQuery.toLowerCase();
+		return list.filter((r) => r.githubRepoName.toLowerCase().includes(q));
+	}, [repos, filterQuery]);
 
-	const { data: reposData, isLoading } = useQuery({
-		...orpc.repos.list.queryOptions({ input: {} }),
-	});
-	const repos = reposData?.repos;
-
-	const { data: availableData, isLoading: availableLoading } = useAvailableRepos();
-	const availableRepos = showAvailable ? availableData?.repositories : undefined;
-
-	const { data: searchResults, isLoading: searchLoading } = useSearchRepos(
-		debouncedQuery,
-		debouncedQuery.length >= 2,
-	);
-
-	const createRepo = useCreateRepo();
-
-	const handleAddRepo = async (repo: GitHubRepo, isPublic = false) => {
-		setAddingRepoId(repo.id);
-		try {
-			await createRepo.mutateAsync({
-				githubRepoId: String(repo.id),
-				githubRepoName: repo.full_name,
-				githubUrl: repo.html_url,
-				defaultBranch: repo.default_branch,
-			});
-			if (isPublic) {
-				setPublicSearchQuery("");
-				setShowPublicSearch(false);
-			}
-		} catch {
-			// Error is surfaced by TanStack Query's mutation state
-		} finally {
-			setAddingRepoId(null);
-		}
-	};
-
-	const handleConfigure = (repoId: string) => {
-		setSelectedRepo(repoId);
-		router.push(`/workspace/new?repoId=${repoId}&type=setup`);
-	};
-
-	const reposList = Array.isArray(repos) ? repos : [];
-	const existingRepoIds = new Set(reposList.map((r) => r.githubRepoId));
+	const toggleExpand = useCallback((repoId: string) => {
+		setExpandedRepoId((prev) => (prev === repoId ? null : repoId));
+	}, []);
 
 	if (isLoading) {
 		return (
 			<PageShell title="Repositories">
-				<div className="py-8 text-center">
+				<div className="py-12 flex justify-center">
 					<LoadingDots size="md" className="text-muted-foreground" />
 				</div>
 			</PageShell>
 		);
 	}
 
+	const hasRepos = (repos ?? []).length > 0;
+	const hasResults = reposList.length > 0;
+
 	return (
-		<PageShell title="Repositories">
-			<div className="space-y-8">
-				{reposList.length > 0 ? (
-					<div className="rounded-lg border border-border/80 bg-background divide-y divide-border/60">
-						{reposList.map((repo) => (
-							<RepoRow key={repo.id} repo={repo} onConfigure={handleConfigure} />
-						))}
-					</div>
-				) : (
-					<div className="rounded-lg border border-dashed border-border/80 py-12 text-center">
-						<p className="text-sm text-muted-foreground">No repositories added yet</p>
-						<p className="text-xs text-muted-foreground mt-1">
-							Add a repository from GitHub to get started
-						</p>
-					</div>
-				)}
-
-				{/* Add Repository */}
-				<div className="space-y-2">
-					<h2 className="text-sm font-medium">Add Repository</h2>
-					<div className="rounded-lg border border-border/80 bg-background overflow-hidden">
-						<Button
-							variant="ghost"
-							onClick={() => setShowAvailable(!showAvailable)}
-							className="w-full h-auto flex items-center justify-between px-4 py-3 rounded-none hover:bg-muted/50 transition-colors"
-						>
-							<span className="text-sm font-medium">From Connected Repos</span>
-							<ChevronDown
-								className={cn(
-									"h-4 w-4 text-muted-foreground transition-transform",
-									showAvailable && "rotate-180",
-								)}
+		<PageShell
+			title="Repositories"
+			actions={
+				<div className="flex items-center gap-2">
+					{hasRepos && (
+						<div className="relative">
+							<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+							<Input
+								value={filterQuery}
+								onChange={(e) => setFilterQuery(e.target.value)}
+								placeholder="Search repositories..."
+								className="pl-8 h-8 w-56 text-sm"
 							/>
+						</div>
+					)}
+					<Button size="sm" className="h-8" onClick={() => setAddDialogOpen(true)}>
+						<Plus className="h-3.5 w-3.5 mr-1.5" />
+						Add Repository
+					</Button>
+				</div>
+			}
+		>
+			{!hasRepos ? (
+				<div className="rounded-xl border border-dashed border-border py-16 text-center">
+					<p className="text-sm text-muted-foreground">No repositories yet</p>
+					<p className="text-xs text-muted-foreground mt-1">
+						Add a public repository or connect GitHub from Integrations
+					</p>
+					<div className="flex items-center justify-center gap-3 mt-4">
+						<Button size="sm" onClick={() => setAddDialogOpen(true)}>
+							<Plus className="h-3.5 w-3.5 mr-1.5" />
+							Add Repository
 						</Button>
-
-						{showAvailable && (
-							<div className="border-t border-border/60 p-4">
-								{availableLoading ? (
-									<div className="py-4 text-center">
-										<LoadingDots size="sm" className="text-muted-foreground" />
-									</div>
-								) : availableRepos && availableRepos.length > 0 ? (
-									<div className="space-y-1 max-h-64 overflow-y-auto">
-										{availableRepos.map((repo) => (
-											<div
-												key={repo.id}
-												className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors"
-											>
-												<div className="min-w-0 flex-1">
-													<p className="text-sm truncate">
-														{repo.full_name}
-														{repo.private && (
-															<Lock className="inline h-3 w-3 text-muted-foreground ml-1.5" />
-														)}
-													</p>
-													<p className="text-xs text-muted-foreground">{repo.default_branch}</p>
-												</div>
-												<Button
-													variant="outline"
-													size="sm"
-													className="ml-3 flex-shrink-0 h-7 text-xs"
-													onClick={() => handleAddRepo(repo)}
-													disabled={addingRepoId === repo.id}
-												>
-													{addingRepoId === repo.id ? "..." : "Add"}
-												</Button>
-											</div>
-										))}
-									</div>
-								) : (
-									<p className="text-sm text-muted-foreground text-center py-4">
-										No additional repositories available
-									</p>
-								)}
-							</div>
-						)}
-					</div>
-
-					<div className="rounded-lg border border-border/80 bg-background overflow-hidden">
-						<Button
-							variant="ghost"
-							onClick={() => setShowPublicSearch(!showPublicSearch)}
-							className="w-full h-auto flex items-center justify-between px-4 py-3 rounded-none hover:bg-muted/50 transition-colors"
-						>
-							<span className="text-sm font-medium">Public Repository</span>
-							<ChevronDown
-								className={cn(
-									"h-4 w-4 text-muted-foreground transition-transform",
-									showPublicSearch && "rotate-180",
-								)}
-							/>
+						<Button variant="outline" size="sm" asChild>
+							<Link href="/dashboard/integrations">Go to Integrations</Link>
 						</Button>
-
-						{showPublicSearch && (
-							<div className="border-t border-border/60 p-4 space-y-4">
-								<div className="relative">
-									<Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-									<Input
-										value={publicSearchQuery}
-										onChange={(e) => setPublicSearchQuery(e.target.value)}
-										placeholder="Search repos (e.g., vercel/next.js)"
-										className="pl-9 h-8 text-sm"
-										autoFocus
-									/>
-								</div>
-
-								{searchLoading ? (
-									<div className="py-4 text-center">
-										<LoadingDots size="sm" className="text-muted-foreground" />
-									</div>
-								) : searchResults && searchResults.length > 0 ? (
-									<div className="space-y-1 max-h-64 overflow-y-auto">
-										{searchResults
-											.filter((repo) => !existingRepoIds.has(String(repo.id)))
-											.map((repo) => (
-												<div
-													key={repo.id}
-													className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors"
-												>
-													<div className="min-w-0 flex-1">
-														<p className="text-sm truncate">{repo.full_name}</p>
-														<div className="flex items-center gap-2 text-xs text-muted-foreground">
-															{repo.stargazers_count !== undefined && (
-																<span className="flex items-center gap-0.5">
-																	<Star className="h-3 w-3" />
-																	{repo.stargazers_count.toLocaleString()}
-																</span>
-															)}
-															{repo.language && <span>{repo.language}</span>}
-															<span>{repo.default_branch}</span>
-														</div>
-													</div>
-													<Button
-														variant="outline"
-														size="sm"
-														className="ml-3 flex-shrink-0 h-7 text-xs"
-														onClick={() => handleAddRepo(repo, true)}
-														disabled={addingRepoId === repo.id}
-													>
-														{addingRepoId === repo.id ? "..." : "Add"}
-													</Button>
-												</div>
-											))}
-										{searchResults.filter((repo) => !existingRepoIds.has(String(repo.id)))
-											.length === 0 && (
-											<p className="text-sm text-muted-foreground text-center py-2">
-												All matching repos already added
-											</p>
-										)}
-									</div>
-								) : debouncedQuery.length >= 2 ? (
-									<p className="text-sm text-muted-foreground text-center py-4">
-										No public repositories found
-									</p>
-								) : (
-									<p className="text-sm text-muted-foreground text-center py-4">
-										Enter at least 2 characters to search
-									</p>
-								)}
-							</div>
-						)}
 					</div>
 				</div>
-			</div>
+			) : !hasResults ? (
+				<p className="text-sm text-muted-foreground text-center py-12">
+					No repositories matching &ldquo;{filterQuery}&rdquo;
+				</p>
+			) : (
+				<div className="rounded-xl border border-border overflow-hidden">
+					{/* Table header */}
+					<div className="flex items-center px-4 py-2 pr-12 text-xs text-muted-foreground border-b border-border/50">
+						<span className="w-6" />
+						<span className="flex-1 min-w-0">Name</span>
+						<span className="w-24 text-center shrink-0">Branch</span>
+						<span className="w-28 text-center shrink-0">Configurations</span>
+						<span className="w-28 text-center shrink-0">Status</span>
+					</div>
+
+					{reposList.map((repo) => (
+						<RepoRow
+							key={repo.id}
+							repo={repo}
+							expanded={expandedRepoId === repo.id}
+							onToggle={() => toggleExpand(repo.id)}
+						/>
+					))}
+				</div>
+			)}
+
+			<AddRepoDialog
+				open={addDialogOpen}
+				onOpenChange={setAddDialogOpen}
+				existingRepoIds={new Set((repos ?? []).map((r) => r.githubRepoId))}
+			/>
 		</PageShell>
 	);
 }
 
+// ============================================
+// Repo Row
+// ============================================
+
 function RepoRow({
 	repo,
-	onConfigure,
+	expanded,
+	onToggle,
 }: {
 	repo: Repo;
-	onConfigure: (repoId: string) => void;
+	expanded: boolean;
+	onToggle: () => void;
 }) {
-	const [expanded, setExpanded] = useState(false);
-	const [deleteOpen, setDeleteOpen] = useState(false);
+	const router = useRouter();
+	const { setSelectedRepo } = useDashboardStore();
 	const deleteRepo = useDeleteRepo();
+	const [deleteOpen, setDeleteOpen] = useState(false);
+	const { data: snapshots } = useRepoSnapshots(repo.id, expanded);
+	const configCount = snapshots?.length ?? 0;
+
+	const handleConfigure = () => {
+		setSelectedRepo(repo.id);
+		router.push(`/workspace/new?repoId=${repo.id}&type=setup`);
+	};
 
 	const handleDelete = async () => {
 		await deleteRepo.mutateAsync({ id: repo.id });
@@ -306,37 +194,53 @@ function RepoRow({
 
 	return (
 		<>
-			<div>
-				<div className="flex items-center gap-3 px-4 py-2.5">
+			<div className={cn("border-b border-border/50 last:border-0", expanded && "bg-muted/30")}>
+				{/* Collapsed row */}
+				<div className="flex items-center hover:bg-muted/50 transition-colors">
 					<button
 						type="button"
-						onClick={() => setExpanded(!expanded)}
-						className="flex items-center gap-2 flex-1 min-w-0 text-left group"
+						onClick={onToggle}
+						className="flex-1 min-w-0 flex items-center px-4 py-2.5 text-sm text-left"
 					>
 						<ChevronRight
 							className={cn(
-								"h-3.5 w-3.5 text-muted-foreground transition-transform flex-shrink-0",
+								"h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0",
 								expanded && "rotate-90",
 							)}
 						/>
-						<span className="text-sm font-medium truncate">{repo.githubRepoName}</span>
-						<span className="text-xs text-muted-foreground flex-shrink-0">
+						<span className="flex-1 min-w-0 flex items-center gap-1.5 ml-2">
+							<span className="font-medium truncate">{repo.githubRepoName}</span>
+							<a
+								href={repo.githubUrl}
+								target="_blank"
+								rel="noopener noreferrer"
+								onClick={(e) => e.stopPropagation()}
+								className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+							>
+								<ExternalLink className="h-3 w-3" />
+							</a>
+						</span>
+						<span className="w-24 text-center text-xs text-muted-foreground shrink-0">
 							{repo.defaultBranch || "main"}
 						</span>
-						<span className="inline-flex items-center rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground flex-shrink-0">
-							{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
+						<span className="w-28 text-center text-xs text-muted-foreground shrink-0">
+							{configCount > 0 ? `${configCount} config${configCount !== 1 ? "s" : ""}` : "\u2014"}
+						</span>
+						<span className="w-28 flex justify-center shrink-0">
+							<span
+								className={cn(
+									"inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-medium",
+									repo.prebuildStatus === "ready"
+										? "border-border/50 bg-muted/50 text-foreground"
+										: "border-border/50 bg-muted/50 text-muted-foreground",
+								)}
+							>
+								{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
+							</span>
 						</span>
 					</button>
 
-					<div className="flex items-center gap-1.5 flex-shrink-0">
-						<Button
-							variant="outline"
-							size="sm"
-							className="h-7 text-xs"
-							onClick={() => onConfigure(repo.id)}
-						>
-							Configure
-						</Button>
+					<div className="pr-3 shrink-0">
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
 								<Button variant="ghost" size="icon" className="h-7 w-7">
@@ -344,13 +248,15 @@ function RepoRow({
 								</Button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end">
-								<DropdownMenuItem
-									onClick={() => {
-										setExpanded(true);
-									}}
-								>
-									<Pencil className="h-4 w-4 mr-2" />
-									Edit defaults
+								<DropdownMenuItem onClick={handleConfigure}>
+									<Plus className="h-4 w-4 mr-2" />
+									Configure
+								</DropdownMenuItem>
+								<DropdownMenuItem asChild>
+									<a href={repo.githubUrl} target="_blank" rel="noopener noreferrer">
+										<ExternalLink className="h-4 w-4 mr-2" />
+										Open on GitHub
+									</a>
 								</DropdownMenuItem>
 								<DropdownMenuSeparator />
 								<DropdownMenuItem onClick={() => setDeleteOpen(true)} className="text-destructive">
@@ -362,7 +268,8 @@ function RepoRow({
 					</div>
 				</div>
 
-				{expanded && <RepoDetails repo={repo} onConfigure={onConfigure} />}
+				{/* Expanded content */}
+				{expanded && <RepoConfigurations repoId={repo.id} />}
 			</div>
 
 			<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
@@ -389,233 +296,483 @@ function RepoRow({
 	);
 }
 
-function RepoDetails({
-	repo,
-	onConfigure,
-}: {
-	repo: Repo;
-	onConfigure: (repoId: string) => void;
-}) {
-	const { data: snapshotsData, isLoading: snapshotsLoading } = useQuery({
-		...orpc.repos.listSnapshots.queryOptions({ input: { id: repo.id } }),
-	});
-	const snapshots = snapshotsData?.prebuilds;
+// ============================================
+// Repo Configurations (expanded content)
+// ============================================
 
-	return (
-		<div className="px-4 pb-3 space-y-4">
-			{/* Snapshots */}
-			<div className="pl-5.5">
-				<p className="text-xs text-muted-foreground mb-2">Configurations</p>
-				{snapshotsLoading ? (
-					<LoadingDots size="sm" className="text-muted-foreground" />
-				) : snapshots && snapshots.length > 0 ? (
-					<div className="space-y-0.5">
-						{snapshots.map((snapshot) => {
-							const setupSessionId = snapshot.setupSessions?.find(
-								(s) => s.sessionType === "setup",
-							)?.id;
-							return (
-								<div key={snapshot.id} className="group flex items-center gap-2 py-0.5">
-									<button
-										type="button"
-										className="text-xs truncate hover:underline text-left"
-										onClick={() => {
-											if (setupSessionId) {
-												openHistoricalSession(setupSessionId, getSnapshotDisplayName(snapshot));
-											}
-										}}
-									>
-										{getSnapshotDisplayName(snapshot)}
-									</button>
-									{setupSessionId && (
-										<button
-											type="button"
-											className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
-											onClick={() => {
-												openEditSession({
-													sessionId: setupSessionId,
-													snapshotId: snapshot.id,
-													snapshotName: getSnapshotDisplayName(snapshot),
-													prebuildId: snapshot.id,
-												});
-											}}
-										>
-											<Pencil className="h-3 w-3" />
-										</button>
-									)}
-								</div>
-							);
-						})}
-					</div>
-				) : (
-					<p className="text-xs text-muted-foreground">None</p>
-				)}
-				<Button
-					variant="ghost"
-					size="sm"
-					className="h-6 text-xs text-muted-foreground hover:text-foreground mt-1 -ml-2"
-					onClick={() => onConfigure(repo.id)}
-				>
-					<Plus className="h-3 w-3 mr-1" />
-					New configuration
+function RepoConfigurations({ repoId }: { repoId: string }) {
+	const router = useRouter();
+	const { setSelectedRepo } = useDashboardStore();
+	const { data: snapshots, isLoading } = useRepoSnapshots(repoId);
+
+	const handleConfigure = () => {
+		setSelectedRepo(repoId);
+		router.push(`/workspace/new?repoId=${repoId}&type=setup`);
+	};
+
+	if (isLoading) {
+		return (
+			<div className="px-4 pb-4 pl-10">
+				<LoadingDots size="sm" className="text-muted-foreground" />
+			</div>
+		);
+	}
+
+	if (!snapshots || snapshots.length === 0) {
+		return (
+			<div className="px-4 pb-4 pl-10">
+				<p className="text-xs text-muted-foreground mb-2">No configurations yet</p>
+				<Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleConfigure}>
+					Configure
 				</Button>
 			</div>
+		);
+	}
 
-			{/* Auto-start commands */}
-			<div className="pl-5.5">
-				<ServiceCommandsSection repoId={repo.id} />
-			</div>
+	return (
+		<div className="px-4 pb-3 pl-10 space-y-1">
+			{snapshots.map((config) => (
+				<ConfigurationRow key={config.id} config={config} repoId={repoId} />
+			))}
+			<Button
+				variant="ghost"
+				size="sm"
+				className="h-7 text-xs text-muted-foreground hover:text-foreground -ml-2"
+				onClick={handleConfigure}
+			>
+				<Plus className="h-3 w-3 mr-1" />
+				New configuration
+			</Button>
 		</div>
 	);
 }
 
-interface CommandDraft {
-	name: string;
-	command: string;
-	cwd: string;
-}
+// ============================================
+// Configuration Row
+// ============================================
 
-function ServiceCommandsSection({ repoId }: { repoId: string }) {
-	const { data: commands, isLoading } = useServiceCommands(repoId);
-	const updateCommands = useUpdateServiceCommands();
-	const [editing, setEditing] = useState(false);
-	const [drafts, setDrafts] = useState<CommandDraft[]>([]);
-
-	const startEditing = () => {
-		setDrafts(
-			commands?.length
-				? commands.map((c) => ({ name: c.name, command: c.command, cwd: c.cwd || "" }))
-				: [{ name: "", command: "", cwd: "" }],
-		);
-		setEditing(true);
-	};
-
-	const handleSave = async () => {
-		const valid = drafts.filter((d) => d.name.trim() && d.command.trim());
-		await updateCommands.mutateAsync({
-			id: repoId,
-			commands: valid.map((d) => ({
-				name: d.name.trim(),
-				command: d.command.trim(),
-				...(d.cwd.trim() ? { cwd: d.cwd.trim() } : {}),
-			})),
-		});
-		setEditing(false);
-	};
-
-	const addRow = () => {
-		if (drafts.length >= 10) return;
-		setDrafts([...drafts, { name: "", command: "", cwd: "" }]);
-	};
-
-	const removeRow = (index: number) => {
-		setDrafts(drafts.filter((_, i) => i !== index));
-	};
-
-	const updateDraft = (index: number, field: keyof CommandDraft, value: string) => {
-		setDrafts(drafts.map((d, i) => (i === index ? { ...d, [field]: value } : d)));
-	};
-
-	if (isLoading) {
-		return <LoadingDots size="sm" className="text-muted-foreground" />;
-	}
-
-	if (editing) {
-		return (
-			<div className="space-y-2">
-				<p className="text-xs text-muted-foreground">
-					Default auto-start commands. Run automatically when a session starts.
-				</p>
-				{drafts.map((draft, index) => (
-					<div key={`draft-${draft.name}-${draft.command}`} className="flex items-start gap-2">
-						<div className="flex-1 space-y-1.5">
-							<Input
-								value={draft.name}
-								onChange={(e) => updateDraft(index, "name", e.target.value)}
-								placeholder="Name (e.g. dev-server)"
-								className="h-7 text-xs"
-							/>
-							<Input
-								value={draft.command}
-								onChange={(e) => updateDraft(index, "command", e.target.value)}
-								placeholder="Command (e.g. pnpm dev)"
-								className="h-7 text-xs font-mono"
-							/>
-							<Input
-								value={draft.cwd}
-								onChange={(e) => updateDraft(index, "cwd", e.target.value)}
-								placeholder="Working directory (optional)"
-								className="h-7 text-xs"
-							/>
-						</div>
-						<Button
-							variant="ghost"
-							size="sm"
-							className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-							onClick={() => removeRow(index)}
-						>
-							<Trash2 className="h-3.5 w-3.5" />
-						</Button>
-					</div>
-				))}
-				<div className="flex items-center gap-2">
-					<Button
-						variant="outline"
-						size="sm"
-						className="h-7 text-xs"
-						onClick={addRow}
-						disabled={drafts.length >= 10}
-					>
-						<Plus className="h-3 w-3 mr-1" />
-						Add command
-					</Button>
-					<div className="flex-1" />
-					<Button
-						variant="ghost"
-						size="sm"
-						className="h-7 text-xs"
-						onClick={() => setEditing(false)}
-					>
-						Cancel
-					</Button>
-					<Button
-						size="sm"
-						className="h-7 text-xs"
-						onClick={handleSave}
-						disabled={updateCommands.isPending}
-					>
-						{updateCommands.isPending ? "Saving..." : "Save"}
-					</Button>
-				</div>
-			</div>
-		);
-	}
+function ConfigurationRow({
+	config,
+	repoId,
+}: {
+	config: RepoSnapshot;
+	repoId: string;
+}) {
+	const name = getSnapshotDisplayName(config);
+	const setupSessionId = config.setupSessions?.find((s) => s.sessionType === "setup")?.id;
+	const timeAgo = formatDistanceToNow(new Date(config.createdAt), { addSuffix: true });
+	const statusLabel = config.status || "pending";
 
 	return (
-		<div>
-			<p className="text-xs text-muted-foreground mb-2">Auto-start commands</p>
-			{commands && commands.length > 0 ? (
-				<div className="space-y-1">
-					{commands.map((cmd) => (
-						<div key={`${cmd.name}-${cmd.command}`} className="text-xs py-0.5">
-							<span className="font-medium">{cmd.name}</span>
-							<span className="text-muted-foreground ml-2 font-mono">{cmd.command}</span>
-							{cmd.cwd && <span className="text-muted-foreground ml-2">({cmd.cwd})</span>}
+		<div className="py-2 border-b border-border/30 last:border-0">
+			<div className="flex items-center justify-between gap-2">
+				<div className="min-w-0">
+					<span className="text-sm font-medium">{name}</span>
+					<span className="text-xs text-muted-foreground ml-2">
+						{statusLabel} · {timeAgo}
+						{config.createdBy && ` by ${config.createdBy}`}
+					</span>
+				</div>
+				<div className="flex items-center gap-1 shrink-0">
+					{setupSessionId && (
+						<>
+							<Button
+								variant="ghost"
+								size="sm"
+								className="h-7 text-xs"
+								onClick={() => openHistoricalSession(setupSessionId, name)}
+							>
+								View
+							</Button>
+							<Button
+								variant="ghost"
+								size="sm"
+								className="h-7 text-xs"
+								onClick={() =>
+									openEditSession({
+										sessionId: setupSessionId,
+										snapshotId: config.snapshotId || config.id,
+										snapshotName: name,
+										prebuildId: config.id,
+									})
+								}
+							>
+								Edit
+							</Button>
+						</>
+					)}
+				</div>
+			</div>
+			<EnvFileSummary prebuildId={config.id} repoId={repoId} />
+		</div>
+	);
+}
+
+// ============================================
+// Env File Summary
+// ============================================
+
+interface EnvFileSpec {
+	path: string;
+	keys: Array<{ key: string; required: boolean }>;
+}
+
+function EnvFileSummary({
+	prebuildId,
+	repoId,
+}: {
+	prebuildId: string;
+	repoId: string;
+}) {
+	const [secretsDialogOpen, setSecretsDialogOpen] = useState(false);
+	const { data: envFilesRaw, isLoading: envLoading } = usePrebuildEnvFiles(prebuildId);
+
+	const envFiles = useMemo(() => {
+		if (!envFilesRaw || !Array.isArray(envFilesRaw)) return [];
+		return envFilesRaw as EnvFileSpec[];
+	}, [envFilesRaw]);
+
+	const allKeys = useMemo(() => {
+		return envFiles.flatMap((f) => f.keys.map((k) => k.key));
+	}, [envFiles]);
+
+	const { data: secretResults, isLoading: secretsLoading } = useCheckSecrets(
+		allKeys,
+		repoId,
+		prebuildId,
+		allKeys.length > 0,
+	);
+
+	if (envLoading || envFiles.length === 0) return null;
+
+	const existingKeys = new Set((secretResults ?? []).filter((r) => r.exists).map((r) => r.key));
+	const isLoading = secretsLoading;
+	let hasMissing = false;
+
+	return (
+		<>
+			<div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+				{envFiles.map((file) => {
+					const total = file.keys.length;
+					const populated = file.keys.filter((k) => existingKeys.has(k.key)).length;
+					const missing = total - populated;
+					if (missing > 0) hasMissing = true;
+
+					return (
+						<span
+							key={file.path}
+							className={cn(
+								"text-xs",
+								missing > 0 ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground",
+							)}
+						>
+							{file.path}{" "}
+							{isLoading ? (
+								<span className="text-muted-foreground">(...)</span>
+							) : (
+								<>
+									({populated}/{total} keys)
+									{missing > 0 && <AlertTriangle className="inline h-3 w-3 ml-0.5 -mt-0.5" />}
+								</>
+							)}
+						</span>
+					);
+				})}
+				{!isLoading && (
+					<button
+						type="button"
+						onClick={() => setSecretsDialogOpen(true)}
+						className={cn(
+							"text-xs hover:underline",
+							hasMissing ? "text-primary" : "text-muted-foreground hover:text-foreground",
+						)}
+					>
+						{hasMissing ? "Manage Secrets" : "View Secrets"}
+					</button>
+				)}
+			</div>
+
+			<ManageSecretsDialog
+				open={secretsDialogOpen}
+				onOpenChange={setSecretsDialogOpen}
+				envFiles={envFiles}
+				existingKeys={existingKeys}
+				repoId={repoId}
+			/>
+		</>
+	);
+}
+
+// ============================================
+// Manage Secrets Dialog
+// ============================================
+
+function ManageSecretsDialog({
+	open,
+	onOpenChange,
+	envFiles,
+	existingKeys,
+	repoId,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	envFiles: EnvFileSpec[];
+	existingKeys: Set<string>;
+	repoId: string;
+}) {
+	const createSecret = useCreateSecret();
+	const [values, setValues] = useState<Record<string, string>>({});
+	const [saving, setSaving] = useState(false);
+	const [errors, setErrors] = useState<Record<string, string>>({});
+	const [saved, setSaved] = useState<Set<string>>(new Set());
+
+	// Reset state when dialog opens
+	useEffect(() => {
+		if (open) {
+			setValues({});
+			setErrors({});
+			setSaved(new Set());
+		}
+	}, [open]);
+
+	const missingKeys = useMemo(() => {
+		return envFiles.flatMap((f) =>
+			f.keys.filter((k) => !existingKeys.has(k.key)).map((k) => k.key),
+		);
+	}, [envFiles, existingKeys]);
+
+	const filledCount = missingKeys.filter((k) => values[k]?.trim()).length;
+
+	const handleSave = async () => {
+		const toCreate = missingKeys.filter((k) => values[k]?.trim());
+		if (toCreate.length === 0) return;
+
+		setSaving(true);
+		setErrors({});
+		const newSaved = new Set(saved);
+
+		for (const key of toCreate) {
+			try {
+				await createSecret.mutateAsync({
+					key,
+					value: values[key].trim(),
+					repoId,
+				});
+				newSaved.add(key);
+			} catch (err) {
+				const message = err instanceof Error ? err.message : "Failed to save";
+				setErrors((prev) => ({ ...prev, [key]: message }));
+			}
+		}
+
+		setSaved(newSaved);
+		setSaving(false);
+
+		// Close if all missing keys are now saved
+		const remainingMissing = missingKeys.filter((k) => !newSaved.has(k) && !existingKeys.has(k));
+		if (remainingMissing.length === 0) {
+			onOpenChange(false);
+		}
+	};
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="sm:max-w-md">
+				<DialogHeader>
+					<DialogTitle>Environment Secrets</DialogTitle>
+				</DialogHeader>
+
+				<div className="space-y-4 max-h-96 overflow-y-auto">
+					{envFiles.map((file) => (
+						<div key={file.path}>
+							<p className="text-xs font-medium text-muted-foreground mb-2">{file.path}</p>
+							<div className="space-y-2">
+								{file.keys.map((k) => {
+									const exists = existingKeys.has(k.key) || saved.has(k.key);
+									const error = errors[k.key];
+
+									return (
+										<div key={k.key} className="space-y-1">
+											<div className="flex items-center gap-2">
+												{exists ? (
+													<Check className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+												) : (
+													<KeyRound className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+												)}
+												<span className="text-sm flex-1 min-w-0 truncate">{k.key}</span>
+												{exists && (
+													<span className="text-xs text-muted-foreground shrink-0">Set</span>
+												)}
+											</div>
+											{!exists && (
+												<Input
+													type="password"
+													value={values[k.key] ?? ""}
+													onChange={(e) =>
+														setValues((prev) => ({ ...prev, [k.key]: e.target.value }))
+													}
+													placeholder="Enter value..."
+													className="h-8 text-sm ml-5.5"
+												/>
+											)}
+											{error && <p className="text-xs text-destructive ml-5.5">{error}</p>}
+										</div>
+									);
+								})}
+							</div>
 						</div>
 					))}
 				</div>
-			) : (
-				<p className="text-xs text-muted-foreground">None</p>
-			)}
-			<Button
-				variant="ghost"
-				size="sm"
-				className="h-6 text-xs text-muted-foreground hover:text-foreground mt-1 -ml-2"
-				onClick={startEditing}
-			>
-				<Pencil className="h-3 w-3 mr-1" />
-				{commands && commands.length > 0 ? "Edit" : "Add commands"}
-			</Button>
-		</div>
+
+				{missingKeys.length > 0 && missingKeys.length !== saved.size && (
+					<div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+						<Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+							Cancel
+						</Button>
+						<Button size="sm" onClick={handleSave} disabled={saving || filledCount === 0}>
+							{saving ? "Saving..." : `Save ${filledCount > 0 ? `(${filledCount})` : ""}`}
+						</Button>
+					</div>
+				)}
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+// ============================================
+// Add Repository Dialog
+// ============================================
+
+function AddRepoDialog({
+	open,
+	onOpenChange,
+	existingRepoIds,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	existingRepoIds: Set<string>;
+}) {
+	const [searchQuery, setSearchQuery] = useState("");
+	const [debouncedQuery, setDebouncedQuery] = useState("");
+	const [addingRepoId, setAddingRepoId] = useState<number | null>(null);
+	const createRepo = useCreateRepo();
+
+	useEffect(() => {
+		const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+		return () => clearTimeout(timer);
+	}, [searchQuery]);
+
+	// Reset search when dialog closes
+	useEffect(() => {
+		if (!open) {
+			setSearchQuery("");
+			setDebouncedQuery("");
+		}
+	}, [open]);
+
+	const { data: searchResults, isLoading: searchLoading } = useSearchRepos(
+		debouncedQuery,
+		debouncedQuery.length >= 2,
+	);
+
+	const handleAddRepo = async (repo: GitHubRepo) => {
+		setAddingRepoId(repo.id);
+		try {
+			await createRepo.mutateAsync({
+				githubRepoId: String(repo.id),
+				githubRepoName: repo.full_name,
+				githubUrl: repo.html_url,
+				defaultBranch: repo.default_branch,
+			});
+			onOpenChange(false);
+		} catch {
+			// Error is surfaced by TanStack Query's mutation state
+		} finally {
+			setAddingRepoId(null);
+		}
+	};
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="sm:max-w-lg">
+				<DialogHeader>
+					<DialogTitle>Add Repository</DialogTitle>
+				</DialogHeader>
+
+				<div className="space-y-4">
+					<div className="relative">
+						<Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+						<Input
+							value={searchQuery}
+							onChange={(e) => setSearchQuery(e.target.value)}
+							placeholder="Search public repos (e.g., vercel/next.js)"
+							className="pl-9 h-9 text-sm"
+							autoFocus
+						/>
+					</div>
+
+					<div className="max-h-72 overflow-y-auto">
+						{searchLoading ? (
+							<div className="py-8 flex justify-center">
+								<LoadingDots size="sm" className="text-muted-foreground" />
+							</div>
+						) : searchResults && searchResults.length > 0 ? (
+							<div className="space-y-0.5">
+								{searchResults.map((repo) => {
+									const isConnected = existingRepoIds.has(String(repo.id));
+
+									return (
+										<div
+											key={repo.id}
+											className={cn(
+												"flex items-center justify-between py-2 px-2 rounded-md transition-colors",
+												isConnected ? "opacity-50" : "hover:bg-muted/50",
+											)}
+										>
+											<div className="min-w-0 flex-1">
+												<p className="text-sm font-medium truncate">{repo.full_name}</p>
+												<div className="flex items-center gap-2 text-xs text-muted-foreground">
+													{repo.stargazers_count !== undefined && (
+														<span className="flex items-center gap-0.5">
+															<Star className="h-3 w-3" />
+															{repo.stargazers_count.toLocaleString()}
+														</span>
+													)}
+													{repo.language && <span>{repo.language}</span>}
+													<span>{repo.default_branch}</span>
+												</div>
+											</div>
+											{isConnected ? (
+												<span className="text-xs text-muted-foreground shrink-0 ml-3">
+													Connected
+												</span>
+											) : (
+												<Button
+													variant="outline"
+													size="sm"
+													className="h-7 text-xs shrink-0 ml-3"
+													onClick={() => handleAddRepo(repo)}
+													disabled={addingRepoId === repo.id}
+												>
+													{addingRepoId === repo.id ? "..." : "Add"}
+												</Button>
+											)}
+										</div>
+									);
+								})}
+							</div>
+						) : debouncedQuery.length >= 2 ? (
+							<p className="text-sm text-muted-foreground text-center py-8">
+								No public repositories found
+							</p>
+						) : (
+							<p className="text-sm text-muted-foreground text-center py-8">
+								Enter at least 2 characters to search
+							</p>
+						)}
+					</div>
+				</div>
+			</DialogContent>
+		</Dialog>
 	);
 }

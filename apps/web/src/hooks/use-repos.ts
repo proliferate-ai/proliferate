@@ -96,6 +96,41 @@ export function useUpdateServiceCommands() {
 	);
 }
 
+export function usePrebuildEnvFiles(prebuildId: string, enabled = true) {
+	return useQuery({
+		...orpc.prebuilds.getEnvFiles.queryOptions({ input: { prebuildId } }),
+		enabled: enabled && !!prebuildId,
+		select: (data) => data.envFiles,
+	});
+}
+
+export function useCheckSecrets(
+	keys: string[],
+	repoId?: string,
+	prebuildId?: string,
+	enabled = true,
+) {
+	return useQuery({
+		...orpc.secrets.check.queryOptions({
+			input: { keys, repo_id: repoId, prebuild_id: prebuildId },
+		}),
+		enabled: enabled && keys.length > 0,
+		select: (data) => data.keys,
+	});
+}
+
+export function useCreateSecret() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.secrets.create.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: orpc.secrets.check.key() });
+			},
+		}),
+	);
+}
+
 export function usePrebuildServiceCommands(prebuildId: string, enabled = true) {
 	return useQuery({
 		...orpc.prebuilds.getServiceCommands.queryOptions({ input: { prebuildId } }),

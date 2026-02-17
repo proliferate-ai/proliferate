@@ -25,6 +25,7 @@ export * as secrets from "./secrets";
 export * as sessions from "./sessions";
 export * as sideEffects from "./side-effects";
 export * as triggers from "./triggers";
+export * as userActionPreferences from "./user-action-preferences";
 export * as users from "./users";
 export * as outbox from "./outbox";
 export * as notifications from "./notifications";
