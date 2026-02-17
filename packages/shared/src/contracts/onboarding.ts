@@ -14,8 +14,6 @@ export const OnboardingRepoSchema = z.object({
 	github_url: z.string(),
 	default_branch: z.string().nullable(),
 	created_at: z.string().nullable(),
-	configuration_id: z.string().nullable(),
-	configuration_status: z.enum(["ready", "pending"]),
 });
 
 export type OnboardingRepo = z.infer<typeof OnboardingRepoSchema>;

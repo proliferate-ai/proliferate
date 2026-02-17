@@ -1,8 +1,21 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useEffectiveServiceCommands, useServiceCommands } from "@/hooks/use-repos";
-import { Box, Camera, Loader2, Play } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useEffectiveServiceCommands } from "@/hooks/use-configurations";
+import { useServiceCommands } from "@/hooks/use-repos";
+import { usePreviewPanelStore } from "@/stores/preview-panel";
+import { Box, Camera, Loader2, Play, X } from "lucide-react";
+
+interface SnapshotsPanelProps {
+	snapshotId?: string | null;
+	repoId?: string | null;
+	configurationId?: string | null;
+	canSnapshot?: boolean;
+	isSnapshotting?: boolean;
+	onSnapshot?: () => void;
+	onClose: () => void;
+}
 
 export interface SnapshotsContentProps {
 	snapshotId?: string | null;

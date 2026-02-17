@@ -22,7 +22,7 @@ import { toConfiguration, toConfigurationPartial, toConfigurations } from "./map
 export interface CreateConfigurationInput {
 	organizationId: string;
 	userId: string;
-	repoIds: string[];
+	repoIds?: string[];
 	name?: string;
 }
 
@@ -75,25 +75,11 @@ export async function getConfiguration(id: string): Promise<Configuration | null
  *
  * @throws Error if repos not found or unauthorized
  */
-export async function createConfiguration(input: CreateConfigurationInput): Promise<CreateConfigurationResult> {
-	const { organizationId, userId, repoIds, name } = input;
-
-	if (!repoIds || repoIds.length === 0) {
-		throw new Error("repoIds[] is required");
-	}
-
-	// Verify repos exist and belong to organization
-	const repos = await configurationsDb.getReposByIds(repoIds);
-
-	if (!repos || repos.length !== repoIds.length) {
-		throw new Error("One or more repos not found");
-	}
-
-	for (const repo of repos) {
-		if (repo.organizationId !== organizationId) {
-			throw new Error("Unauthorized access to repo");
-		}
-	}
+export async function createConfiguration(
+	input: CreateConfigurationInput,
+): Promise<CreateConfigurationResult> {
+	const { organizationId, userId, name } = input;
+	const repoIds = input.repoIds ?? [];
 
 	// Create configuration record
 	const configurationId = randomUUID();
@@ -104,29 +90,99 @@ export async function createConfiguration(input: CreateConfigurationInput): Prom
 		sandboxProvider: env.DEFAULT_SANDBOX_PROVIDER,
 	});
 
-	// Create configuration_repos entries with derived workspace paths
-	const configurationRepos = repoIds.map((repoId) => {
-		const repo = repos.find((r) => r.id === repoId);
-		const repoName = repo?.githubRepoName?.split("/").pop() || repoId;
-		return {
-			configurationId,
-			repoId,
-			workspacePath: repoIds.length === 1 ? "." : repoName,
-		};
-	});
+	if (repoIds.length > 0) {
+		// Verify repos exist and belong to organization
+		const repos = await configurationsDb.getReposByIds(repoIds);
 
-	try {
-		await configurationsDb.createConfigurationRepos(configurationRepos);
-	} catch (error) {
-		// Rollback: delete the configuration if junction creation fails
-		await configurationsDb.deleteById(configurationId);
-		throw new Error("Failed to link repos to configuration");
+		if (!repos || repos.length !== repoIds.length) {
+			await configurationsDb.deleteById(configurationId);
+			throw new Error("One or more repos not found");
+		}
+
+		for (const repo of repos) {
+			if (repo.organizationId !== organizationId) {
+				await configurationsDb.deleteById(configurationId);
+				throw new Error("Unauthorized access to repo");
+			}
+		}
+
+		// Create configuration_repos entries with derived workspace paths
+		const configurationRepos = repoIds.map((repoId) => {
+			const repo = repos.find((r) => r.id === repoId);
+			const repoName = repo?.githubRepoName?.split("/").pop() || repoId;
+			return {
+				configurationId,
+				repoId,
+				workspacePath: repoIds.length === 1 ? "." : repoName,
+			};
+		});
+
+		try {
+			await configurationsDb.createConfigurationRepos(configurationRepos);
+		} catch (error) {
+			// Rollback: delete the configuration if junction creation fails
+			await configurationsDb.deleteById(configurationId);
+			throw new Error("Failed to link repos to configuration");
+		}
 	}
 
 	return {
 		configurationId,
 		repoCount: repoIds.length,
 	};
+}
+
+/**
+ * Attach a repo to a configuration.
+ *
+ * @throws Error if configuration or repo not found, or unauthorized
+ */
+export async function attachRepo(
+	configurationId: string,
+	repoId: string,
+	orgId: string,
+): Promise<void> {
+	// Verify configuration belongs to org
+	const belongs = await configurationBelongsToOrg(configurationId, orgId);
+	if (!belongs) {
+		// For new configurations with no repos yet, verify the configuration exists
+		const config = await configurationsDb.findByIdForSession(configurationId);
+		if (!config) throw new Error("Configuration not found");
+	}
+
+	// Verify repo exists
+	const repos = await configurationsDb.getReposByIds([repoId]);
+	if (!repos.length) throw new Error("Repo not found");
+	if (repos[0].organizationId !== orgId) throw new Error("Unauthorized access to repo");
+
+	// Check if already attached
+	const alreadyAttached = await configurationsDb.configurationContainsRepo(configurationId, repoId);
+	if (alreadyAttached) return;
+
+	// Derive workspace path
+	const repoName = repos[0].githubRepoName?.split("/").pop() || repoId;
+
+	// Check if this is the only repo (use "." for workspace path) or not
+	const existingRepos = await configurationsDb.getConfigurationReposWithDetails(configurationId);
+	const workspacePath = existingRepos.length === 0 ? "." : repoName;
+
+	await configurationsDb.createSingleConfigurationRepo(configurationId, repoId, workspacePath);
+}
+
+/**
+ * Detach a repo from a configuration.
+ *
+ * @throws Error if configuration not found
+ */
+export async function detachRepo(
+	configurationId: string,
+	repoId: string,
+	orgId: string,
+): Promise<void> {
+	const belongs = await configurationBelongsToOrg(configurationId, orgId);
+	if (!belongs) throw new Error("Configuration not found");
+
+	await configurationsDb.deleteConfigurationRepo(configurationId, repoId);
 }
 
 /**
@@ -165,7 +221,10 @@ export async function configurationExists(id: string): Promise<boolean> {
 /**
  * Check if a configuration belongs to an organization (via its linked repos).
  */
-export async function configurationBelongsToOrg(configurationId: string, orgId: string): Promise<boolean> {
+export async function configurationBelongsToOrg(
+	configurationId: string,
+	orgId: string,
+): Promise<boolean> {
 	const configuration = await configurationsDb.findById(configurationId);
 	if (!configuration) return false;
 	return configuration.configurationRepos.some((pr) => pr.repo?.organizationId === orgId);

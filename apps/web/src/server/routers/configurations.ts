@@ -26,7 +26,10 @@ export const configurationsRouter = {
 		.input(z.object({ status: z.string().optional() }).optional())
 		.output(z.object({ configurations: z.array(ConfigurationSchema) }))
 		.handler(async ({ input, context }) => {
-			const configurationsList = await configurations.listConfigurations(context.orgId, input?.status);
+			const configurationsList = await configurations.listConfigurations(
+				context.orgId,
+				input?.status,
+			);
 			return { configurations: configurationsList };
 		}),
 
@@ -38,13 +41,7 @@ export const configurationsRouter = {
 		.output(z.object({ configurationId: z.string().uuid(), repos: z.number() }))
 		.handler(async ({ input, context }) => {
 			// Support both new repoIds[] and legacy repos[] format
-			const repoIds = input.repoIds || input.repos?.map((r) => r.repoId);
-
-			if (!repoIds || repoIds.length === 0) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: "repoIds[] is required",
-				});
-			}
+			const repoIds = input.repoIds || input.repos?.map((r) => r.repoId) || [];
 
 			try {
 				const result = await configurations.createConfiguration({
@@ -66,9 +63,6 @@ export const configurationsRouter = {
 				}
 				if (message === "Unauthorized access to repo") {
 					throw new ORPCError("FORBIDDEN", { message });
-				}
-				if (message === "repoIds[] is required") {
-					throw new ORPCError("BAD_REQUEST", { message });
 				}
 
 				log.error({ err: error }, "Failed to create configuration");
@@ -165,7 +159,10 @@ export const configurationsRouter = {
 			}),
 		)
 		.handler(async ({ input, context }) => {
-			const belongsToOrg = await configurations.configurationBelongsToOrg(input.configurationId, context.orgId);
+			const belongsToOrg = await configurations.configurationBelongsToOrg(
+				input.configurationId,
+				context.orgId,
+			);
 			if (!belongsToOrg) {
 				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 			}
@@ -195,7 +192,10 @@ export const configurationsRouter = {
 			}),
 		)
 		.handler(async ({ input, context }) => {
-			const belongsToOrg = await configurations.configurationBelongsToOrg(input.configurationId, context.orgId);
+			const belongsToOrg = await configurations.configurationBelongsToOrg(
+				input.configurationId,
+				context.orgId,
+			);
 			if (!belongsToOrg) {
 				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 			}
@@ -210,7 +210,10 @@ export const configurationsRouter = {
 		.input(z.object({ configurationId: z.string().uuid() }))
 		.output(z.object({ envFiles: z.unknown().nullable() }))
 		.handler(async ({ input, context }) => {
-			const belongsToOrg = await configurations.configurationBelongsToOrg(input.configurationId, context.orgId);
+			const belongsToOrg = await configurations.configurationBelongsToOrg(
+				input.configurationId,
+				context.orgId,
+			);
 			if (!belongsToOrg) {
 				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 			}
@@ -240,7 +243,10 @@ export const configurationsRouter = {
 		)
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
-			const belongsToOrg = await configurations.configurationBelongsToOrg(input.configurationId, context.orgId);
+			const belongsToOrg = await configurations.configurationBelongsToOrg(
+				input.configurationId,
+				context.orgId,
+			);
 			if (!belongsToOrg) {
 				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 			}
@@ -251,5 +257,58 @@ export const configurationsRouter = {
 				updatedBy: context.user.id,
 			});
 			return { success: true };
+		}),
+
+	/**
+	 * Attach a repo to a configuration.
+	 */
+	attachRepo: orgProcedure
+		.input(
+			z.object({
+				configurationId: z.string().uuid(),
+				repoId: z.string().uuid(),
+			}),
+		)
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			try {
+				await configurations.attachRepo(input.configurationId, input.repoId, context.orgId);
+				return { success: true };
+			} catch (error) {
+				const message = error instanceof Error ? error.message : "Failed to attach repo";
+				if (message === "Configuration not found" || message === "Repo not found") {
+					throw new ORPCError("NOT_FOUND", { message });
+				}
+				if (message === "Unauthorized access to repo") {
+					throw new ORPCError("FORBIDDEN", { message });
+				}
+				log.error({ err: error }, "Failed to attach repo");
+				throw new ORPCError("INTERNAL_SERVER_ERROR", { message });
+			}
+		}),
+
+	/**
+	 * Detach a repo from a configuration.
+	 */
+	detachRepo: orgProcedure
+		.input(
+			z.object({
+				configurationId: z.string().uuid(),
+				repoId: z.string().uuid(),
+			}),
+		)
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			try {
+				await configurations.detachRepo(input.configurationId, input.repoId, context.orgId);
+				return { success: true };
+			} catch (error) {
+				const message = error instanceof Error ? error.message : "Failed to detach repo";
+				if (message === "Configuration not found") {
+					throw new ORPCError("NOT_FOUND", { message });
+				}
+				log.error({ err: error }, "Failed to detach repo");
+				throw new ORPCError("INTERNAL_SERVER_ERROR", { message });
+			}
 		}),
 };

@@ -16,10 +16,9 @@ export interface Secret {
 }
 
 /**
- * Snapshot/Configuration from our database.
- * Note: In the database this is the "configurations" table.
+ * Configuration from our database.
  */
-export interface Snapshot {
+export interface Configuration {
 	id: string;
 	repoId?: string;
 	snapshotId: string | null;

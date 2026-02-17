@@ -58,7 +58,8 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 		useDashboardStore();
 
 	const allRepos = repos ?? [];
-	const multiRepoConfigs = configurations?.filter((p) => (p.configurationRepos?.length ?? 0) >= 2) ?? [];
+	const multiRepoConfigs =
+		configurations?.filter((p) => (p.configurationRepos?.length ?? 0) >= 2) ?? [];
 
 	// Clear stale persisted selections when data loads (e.g. repo/configuration was deleted)
 	useEffect(() => {
@@ -76,7 +77,14 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 				setSelectedSnapshot(null);
 			}
 		}
-	}, [repos, configurations, selectedRepoId, selectedSnapshotId, setSelectedRepo, setSelectedSnapshot]);
+	}, [
+		repos,
+		configurations,
+		selectedRepoId,
+		selectedSnapshotId,
+		setSelectedRepo,
+		setSelectedSnapshot,
+	]);
 
 	// Find display name for the trigger
 	const selectedRepo = allRepos.find((r) => r.id === selectedRepoId);

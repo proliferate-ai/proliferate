@@ -22,9 +22,6 @@ function mapRepo(repo: RepoRow) {
 		createdAt: toIsoString(repo.createdAt),
 		source: repo.source || "github",
 		isPrivate: false, // repos schema doesn't have isPrivate yet
-		configurationStatus: "pending" as const,
-		configurationId: null,
-		isConfigured: false,
 	};
 }
 

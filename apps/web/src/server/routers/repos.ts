@@ -4,15 +4,13 @@
 
 import { type GitHubIntegration, listGitHubRepos } from "@/lib/github";
 import { ORPCError } from "@orpc/server";
-import { configurations, integrations, repos } from "@proliferate/services";
+import { integrations, repos } from "@proliferate/services";
 import {
 	CreateRepoInputSchema,
 	FinalizeSetupInputSchema,
 	FinalizeSetupResponseSchema,
 	GitHubRepoSchema,
-	RepoConfigurationSchema,
 	RepoSchema,
-	RepoSnapshotSchema,
 	SearchRepoSchema,
 } from "@proliferate/shared";
 import { z } from "zod";
@@ -213,92 +211,6 @@ export const reposRouter = {
 				);
 
 			return { repositories: publicRepos };
-		}),
-
-	/**
-	 * List configurations for a repo.
-	 */
-	listConfigurations: orgProcedure
-		.input(z.object({ id: z.string().uuid() }))
-		.output(z.object({ configurations: z.array(RepoConfigurationSchema) }))
-		.handler(async ({ input, context }) => {
-			// Verify repo belongs to org
-			const exists = await repos.repoExists(input.id, context.orgId);
-			if (!exists) {
-				throw new ORPCError("NOT_FOUND", { message: "Repo not found" });
-			}
-
-			const configurationsList = await configurations.listByRepoId(input.id);
-			return {
-				configurations: configurationsList.map((p) => ({
-					...p,
-					createdAt: p.createdAt?.toISOString() ?? null,
-				})),
-			};
-		}),
-
-	/**
-	 * List snapshots (usable configurations) for a repo.
-	 */
-	listSnapshots: orgProcedure
-		.input(z.object({ id: z.string().uuid() }))
-		.output(z.object({ configurations: z.array(RepoSnapshotSchema) }))
-		.handler(async ({ input }) => {
-			const configurationRepos = await configurations.getConfigurationReposWithConfigurations(input.id);
-
-			// Filter to only configurations with snapshots
-			const usableConfigurations = configurationRepos
-				.filter(
-					(pr) =>
-						pr.configuration &&
-						typeof pr.configuration === "object" &&
-						"snapshotId" in pr.configuration &&
-						!!pr.configuration.snapshotId,
-				)
-				.map((pr) => pr.configuration);
-
-			// Deduplicate by configuration ID
-			const uniqueConfigurations = Array.from(
-				new Map(usableConfigurations.map((p) => [(p as { id: string }).id, p])).values(),
-			);
-
-			// Fetch repos for each configuration
-			const configurationsWithRepos = await Promise.all(
-				uniqueConfigurations.map(async (configuration) => {
-					const cfg = configuration as {
-						id: string;
-						snapshotId: string | null;
-						status: string | null;
-						name: string | null;
-						notes: string | null;
-						createdAt: Date | null;
-						createdBy: string | null;
-						sessions?: Array<{ id: string; sessionType: string | null }>;
-					};
-
-					const reposList = await configurations.getReposForConfiguration(cfg.id);
-
-					return {
-						id: cfg.id,
-						snapshotId: cfg.snapshotId,
-						status: cfg.status,
-						name: cfg.name,
-						notes: cfg.notes,
-						createdAt: cfg.createdAt?.toISOString() ?? "",
-						createdBy: cfg.createdBy,
-						setupSessions: cfg.sessions,
-						repos: reposList,
-						repoCount: reposList.length,
-					};
-				}),
-			);
-
-			// Sort by createdAt descending
-			configurationsWithRepos.sort(
-				(a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-			);
-
-			return { configurations: configurationsWithRepos };
 		}),
 
 	/**

@@ -206,8 +206,7 @@ export function useFinalizeSetup() {
 			// Invalidate all relevant queries
 			queryClient.invalidateQueries({ queryKey: orpc.sessions.list.key() });
 			queryClient.invalidateQueries({ queryKey: orpc.repos.list.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listConfigurations.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
 		},
 	});
 

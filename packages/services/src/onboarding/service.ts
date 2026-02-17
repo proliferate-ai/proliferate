@@ -49,24 +49,13 @@ export async function getOnboardingStatus(
 
 	const onboardingComplete = billingInfo?.onboardingComplete ?? false;
 
-	// Helper to check if a configuration_repos entry has a usable configuration (has snapshot)
-	const hasUsableConfiguration = (pr: {
-		configuration: { snapshotId: string | null } | null;
-	}): boolean => !!pr.configuration?.snapshotId;
-
-	// Transform to include configuration status
-	const repos: OnboardingRepo[] = reposWithStatus.map((repo) => {
-		const readyConfiguration = repo.configurationRepos?.find(hasUsableConfiguration);
-		return {
-			id: repo.id,
-			github_repo_name: repo.githubRepoName,
-			github_url: repo.githubUrl,
-			default_branch: repo.defaultBranch,
-			created_at: toIsoString(repo.createdAt),
-			configuration_id: readyConfiguration?.configuration?.id || null,
-			configuration_status: readyConfiguration ? ("ready" as const) : ("pending" as const),
-		};
-	});
+	const repos: OnboardingRepo[] = reposWithStatus.map((repo) => ({
+		id: repo.id,
+		github_repo_name: repo.githubRepoName,
+		github_url: repo.githubUrl,
+		default_branch: repo.defaultBranch,
+		created_at: toIsoString(repo.createdAt),
+	}));
 
 	return {
 		hasOrg: true,

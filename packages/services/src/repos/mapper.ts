@@ -9,19 +9,9 @@ import { toIsoString } from "../db/serialize";
 import type { RepoRow, RepoWithConfigurationsRow } from "./db";
 
 /**
- * Check if a configuration_repos entry has a usable snapshot.
- */
-function hasUsableConfiguration(pr: { configuration: { snapshotId: string | null } | null }): boolean {
-	return !!pr.configuration?.snapshotId;
-}
-
-/**
  * Map a DB row (with configurations) to API Repo type.
  */
 export function toRepo(row: RepoWithConfigurationsRow): Repo {
-	const readyConfiguration = row.configurationRepos?.find(hasUsableConfiguration);
-	const hasServiceCommands = Array.isArray(row.serviceCommands) && row.serviceCommands.length > 0;
-
 	return {
 		id: row.id,
 		organizationId: row.organizationId,
@@ -32,9 +22,6 @@ export function toRepo(row: RepoWithConfigurationsRow): Repo {
 		createdAt: toIsoString(row.createdAt),
 		source: row.source || "github",
 		isPrivate: false, // Field not in Drizzle schema, default to false for API compatibility
-		configurationStatus: readyConfiguration ? "ready" : "pending",
-		configurationId: readyConfiguration?.configuration?.id || null,
-		isConfigured: hasServiceCommands && !!readyConfiguration,
 	};
 }
 

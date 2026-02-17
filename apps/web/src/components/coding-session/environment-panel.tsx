@@ -2,7 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useCheckSecrets, useConfigurationEnvFiles } from "@/hooks/use-repos";
+import { useConfigurationEnvFiles } from "@/hooks/use-configurations";
+import { useCheckSecrets } from "@/hooks/use-repos";
 import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/use-secrets";
 import { orpc } from "@/lib/orpc";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
@@ -403,7 +404,12 @@ export function EnvironmentPanel({ sessionId, configurationId, repoId }: Environ
 		data: checkResults,
 		isLoading: checkLoading,
 		refetch: refetchCheck,
-	} = useCheckSecrets(specKeyNames, undefined, configurationId ?? undefined, specKeyNames.length > 0);
+	} = useCheckSecrets(
+		specKeyNames,
+		undefined,
+		configurationId ?? undefined,
+		specKeyNames.length > 0,
+	);
 
 	const existingSpecKeys = useMemo(() => {
 		if (!checkResults) return new Set<string>();

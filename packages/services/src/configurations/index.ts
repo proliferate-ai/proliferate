@@ -43,10 +43,15 @@ export {
 	createFull as createConfigurationFull,
 	configurationContainsRepo,
 	createSingleConfigurationRepo,
+	deleteConfigurationRepo,
 } from "./db";
 
 // DB functions needed by repos router (listConfigurations, listSnapshots)
-export { listByRepoId, getConfigurationReposWithConfigurations, getReposForConfiguration } from "./db";
+export {
+	listByRepoId,
+	getConfigurationReposWithConfigurations,
+	getReposForConfiguration,
+} from "./db";
 
 // Gateway-specific exports
 export {

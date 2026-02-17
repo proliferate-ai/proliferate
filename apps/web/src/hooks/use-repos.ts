@@ -42,22 +42,6 @@ export function useDeleteRepo() {
 	);
 }
 
-export function useRepoConfigurations(repoId: string, enabled = true) {
-	return useQuery({
-		...orpc.repos.listConfigurations.queryOptions({ input: { id: repoId } }),
-		enabled: enabled && !!repoId,
-		select: (data) => data.configurations,
-	});
-}
-
-export function useRepoSnapshots(repoId: string, enabled = true) {
-	return useQuery({
-		...orpc.repos.listSnapshots.queryOptions({ input: { id: repoId } }),
-		enabled: enabled && !!repoId,
-		select: (data) => data.configurations,
-	});
-}
-
 export function useAvailableRepos(integrationId?: string) {
 	return useQuery({
 		...orpc.repos.available.queryOptions({ input: { integrationId } }),
@@ -96,14 +80,6 @@ export function useUpdateServiceCommands() {
 	);
 }
 
-export function useConfigurationEnvFiles(configurationId: string, enabled = true) {
-	return useQuery({
-		...orpc.configurations.getEnvFiles.queryOptions({ input: { configurationId } }),
-		enabled: enabled && !!configurationId,
-		select: (data) => data.envFiles,
-	});
-}
-
 export function useCheckSecrets(
 	keys: string[],
 	repoId?: string,
@@ -126,42 +102,6 @@ export function useCreateSecret() {
 		orpc.secrets.create.mutationOptions({
 			onSuccess: () => {
 				queryClient.invalidateQueries({ queryKey: orpc.secrets.check.key() });
-			},
-		}),
-	);
-}
-
-export function useConfigurationServiceCommands(configurationId: string, enabled = true) {
-	return useQuery({
-		...orpc.configurations.getServiceCommands.queryOptions({ input: { configurationId } }),
-		enabled: enabled && !!configurationId,
-		select: (data) => data.commands,
-	});
-}
-
-export function useEffectiveServiceCommands(configurationId: string, enabled = true) {
-	return useQuery({
-		...orpc.configurations.getEffectiveServiceCommands.queryOptions({ input: { configurationId } }),
-		enabled: enabled && !!configurationId,
-	});
-}
-
-export function useUpdateConfigurationServiceCommands() {
-	const queryClient = useQueryClient();
-
-	return useMutation(
-		orpc.configurations.updateServiceCommands.mutationOptions({
-			onSuccess: (_data, input) => {
-				queryClient.invalidateQueries({
-					queryKey: orpc.configurations.getServiceCommands.key({
-						input: { configurationId: input.configurationId },
-					}),
-				});
-				queryClient.invalidateQueries({
-					queryKey: orpc.configurations.getEffectiveServiceCommands.key({
-						input: { configurationId: input.configurationId },
-					}),
-				});
 			},
 		}),
 	);

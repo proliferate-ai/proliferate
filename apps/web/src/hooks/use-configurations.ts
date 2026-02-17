@@ -28,8 +28,6 @@ export function useCreateConfiguration() {
 		...orpc.configurations.create.mutationOptions(),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listConfigurations.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
 		},
 	});
 
@@ -54,8 +52,6 @@ export function useUpdateConfiguration() {
 		...orpc.configurations.update.mutationOptions(),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listConfigurations.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
 		},
 	});
 
@@ -80,8 +76,6 @@ export function useDeleteConfiguration() {
 		...orpc.configurations.delete.mutationOptions(),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listConfigurations.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
 		},
 	});
 
@@ -97,4 +91,70 @@ export function useDeleteConfiguration() {
 			mutation.mutate({ id });
 		},
 	};
+}
+
+export function useConfigurationEnvFiles(configurationId: string, enabled = true) {
+	return useQuery({
+		...orpc.configurations.getEnvFiles.queryOptions({ input: { configurationId } }),
+		enabled: enabled && !!configurationId,
+		select: (data) => data.envFiles,
+	});
+}
+
+export function useConfigurationServiceCommands(configurationId: string, enabled = true) {
+	return useQuery({
+		...orpc.configurations.getServiceCommands.queryOptions({ input: { configurationId } }),
+		enabled: enabled && !!configurationId,
+		select: (data) => data.commands,
+	});
+}
+
+export function useEffectiveServiceCommands(configurationId: string, enabled = true) {
+	return useQuery({
+		...orpc.configurations.getEffectiveServiceCommands.queryOptions({ input: { configurationId } }),
+		enabled: enabled && !!configurationId,
+	});
+}
+
+export function useUpdateConfigurationServiceCommands() {
+	const queryClient = useQueryClient();
+
+	return useMutation(
+		orpc.configurations.updateServiceCommands.mutationOptions({
+			onSuccess: (_data, input) => {
+				queryClient.invalidateQueries({
+					queryKey: orpc.configurations.getServiceCommands.key({
+						input: { configurationId: input.configurationId },
+					}),
+				});
+				queryClient.invalidateQueries({
+					queryKey: orpc.configurations.getEffectiveServiceCommands.key({
+						input: { configurationId: input.configurationId },
+					}),
+				});
+			},
+		}),
+	);
+}
+
+export function useAttachRepo() {
+	const queryClient = useQueryClient();
+	return useMutation(
+		orpc.configurations.attachRepo.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
+			},
+		}),
+	);
+}
+
+export function useDetachRepo() {
+	const queryClient = useQueryClient();
+	return useMutation(
+		orpc.configurations.detachRepo.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
+			},
+		}),
+	);
 }

@@ -10,7 +10,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export interface OnboardingState extends OnboardingStatus {
 	hasRepos: boolean;
-	hasReadyConfiguration: boolean;
 }
 
 // Re-export the Repo type from the contract for backwards compatibility
@@ -20,11 +19,9 @@ export function useOnboarding() {
 	return useQuery({
 		...orpc.onboarding.getStatus.queryOptions({ input: undefined }),
 		select: (data): OnboardingState => {
-			const hasReadyConfiguration = data.repos.some((repo) => repo.configuration_status === "ready");
 			return {
 				...data,
 				hasRepos: data.repos.length > 0,
-				hasReadyConfiguration,
 			};
 		},
 	});

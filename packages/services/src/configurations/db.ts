@@ -19,10 +19,10 @@ import {
 } from "../db/client";
 import { getServicesLogger } from "../logger";
 import type {
-	CreateManagedConfigurationInput,
 	CreateConfigurationFullInput,
 	CreateConfigurationInput,
 	CreateConfigurationRepoInput,
+	CreateManagedConfigurationInput,
 	UpdateConfigurationInput,
 } from "../types/configurations";
 
@@ -291,7 +291,9 @@ export async function create(input: CreateConfigurationInput): Promise<void> {
 /**
  * Create configuration_repos junction entries.
  */
-export async function createConfigurationRepos(entries: CreateConfigurationRepoInput[]): Promise<void> {
+export async function createConfigurationRepos(
+	entries: CreateConfigurationRepoInput[],
+): Promise<void> {
 	const db = getDb();
 	const rows = entries.map((e) => ({
 		configurationId: e.configurationId,
@@ -305,7 +307,10 @@ export async function createConfigurationRepos(entries: CreateConfigurationRepoI
 /**
  * Update a configuration.
  */
-export async function update(id: string, input: UpdateConfigurationInput): Promise<ConfigurationRow> {
+export async function update(
+	id: string,
+	input: UpdateConfigurationInput,
+): Promise<ConfigurationRow> {
 	const db = getDb();
 	const updates: Partial<typeof configurations.$inferInsert> = {};
 
@@ -481,7 +486,10 @@ export async function createFull(input: CreateConfigurationFullInput): Promise<v
 /**
  * Check if a configuration contains a specific repo.
  */
-export async function configurationContainsRepo(configurationId: string, repoId: string): Promise<boolean> {
+export async function configurationContainsRepo(
+	configurationId: string,
+	repoId: string,
+): Promise<boolean> {
 	const db = getDb();
 	const result = await db.query.configurationRepos.findFirst({
 		where: and(
@@ -516,6 +524,24 @@ export async function createSingleConfigurationRepo(
 			.child({ module: "configurations-db" })
 			.error({ err: error, configurationId, repoId }, "Failed to create configuration_repos entry");
 	}
+}
+
+/**
+ * Delete a configuration_repo junction entry.
+ */
+export async function deleteConfigurationRepo(
+	configurationId: string,
+	repoId: string,
+): Promise<void> {
+	const db = getDb();
+	await db
+		.delete(configurationRepos)
+		.where(
+			and(
+				eq(configurationRepos.configurationId, configurationId),
+				eq(configurationRepos.repoId, repoId),
+			),
+		);
 }
 
 // ============================================
@@ -606,7 +632,9 @@ export async function getConfigurationReposWithConfigurations(
 /**
  * Get repos linked to a configuration.
  */
-export async function getReposForConfiguration(configurationId: string): Promise<SnapshotRepoRow[]> {
+export async function getReposForConfiguration(
+	configurationId: string,
+): Promise<SnapshotRepoRow[]> {
 	const db = getDb();
 	const results = await db.query.configurationRepos.findMany({
 		where: eq(configurationRepos.configurationId, configurationId),
@@ -660,7 +688,9 @@ export async function findManagedConfigurations(): Promise<ManagedConfigurationR
 /**
  * Create a managed configuration record.
  */
-export async function createManagedConfiguration(input: CreateManagedConfigurationInput): Promise<void> {
+export async function createManagedConfiguration(
+	input: CreateManagedConfigurationInput,
+): Promise<void> {
 	const db = getDb();
 	await db.insert(configurations).values({
 		id: input.id,

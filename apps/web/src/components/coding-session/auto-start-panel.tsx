@@ -12,10 +12,9 @@ import {
 } from "@/components/ui/select";
 import {
 	useEffectiveServiceCommands,
-	useServiceCommands,
 	useUpdateConfigurationServiceCommands,
-	useUpdateServiceCommands,
-} from "@/hooks/use-repos";
+} from "@/hooks/use-configurations";
+import { useServiceCommands, useUpdateServiceCommands } from "@/hooks/use-repos";
 import type {
 	AutoStartOutputEntry,
 	AutoStartOutputMessage,

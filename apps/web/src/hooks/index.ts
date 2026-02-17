@@ -126,4 +126,10 @@ export {
 	useCreateConfiguration,
 	useUpdateConfiguration,
 	useDeleteConfiguration,
+	useConfigurationEnvFiles,
+	useConfigurationServiceCommands,
+	useEffectiveServiceCommands,
+	useUpdateConfigurationServiceCommands,
+	useAttachRepo,
+	useDetachRepo,
 } from "./use-configurations";

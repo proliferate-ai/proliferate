@@ -3,8 +3,8 @@
 import { SessionListRow } from "@/components/sessions/session-card";
 import { useAutomations } from "@/hooks/use-automations";
 import { useOrgPendingRuns } from "@/hooks/use-automations";
-import { useIntegrations } from "@/hooks/use-integrations";
 import { useCreateConfiguration } from "@/hooks/use-configurations";
+import { useIntegrations } from "@/hooks/use-integrations";
 import { useRepos } from "@/hooks/use-repos";
 import { useCreateSession, useSessions } from "@/hooks/use-sessions";
 import { useSession } from "@/lib/auth-client";
@@ -103,11 +103,9 @@ function OnboardingSection() {
 		const hasSlack = integrations.some((i) => i.provider === "slack" && i.status === "active");
 		const hasAutomation = (automations ?? []).length > 0;
 		const hasAnyRepo = (repos ?? []).length > 0;
-		const hasReadyRepo = (repos ?? []).some((r) => r.configurationStatus === "ready");
 
 		let count = 0;
 		if (!hasAnyRepo) count++;
-		else if (!hasReadyRepo) count++;
 		if (!hasGitHub && !dismissedOnboardingCards.includes("github")) count++;
 		if (!hasSlack && !dismissedOnboardingCards.includes("slack")) count++;
 		if (!hasAutomation && !dismissedOnboardingCards.includes("automation")) count++;

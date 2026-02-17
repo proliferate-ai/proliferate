@@ -98,7 +98,7 @@ export function Sidebar() {
 	const isInboxPage = pathname?.startsWith("/dashboard/inbox");
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
-	const isReposPage = pathname?.startsWith("/dashboard/repos");
+	const isConfigurationsPage = pathname?.startsWith("/dashboard/configurations");
 
 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
 	const inboxCount = inboxItems.length;
@@ -192,14 +192,14 @@ export function Sidebar() {
 					<AutomationsIcon className="h-4 w-4" />
 				</Button>
 				<Button
-					variant={isReposPage ? "secondary" : "ghost"}
+					variant={isConfigurationsPage ? "secondary" : "ghost"}
 					size="icon"
 					className="h-8 w-8 text-muted-foreground hover:text-foreground"
 					onClick={(e) => {
 						e.stopPropagation();
-						router.push("/dashboard/repos");
+						router.push("/dashboard/configurations");
 					}}
-					title="Repos"
+					title="Configurations"
 				>
 					<FolderGit2 className="h-4 w-4" />
 				</Button>
@@ -560,7 +560,7 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 	const isInboxPage = pathname?.startsWith("/dashboard/inbox");
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
-	const isReposPage = pathname?.startsWith("/dashboard/repos");
+	const isConfigurationsPage = pathname?.startsWith("/dashboard/configurations");
 	const isSettingsPage = pathname?.startsWith("/settings");
 
 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
@@ -606,9 +606,9 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 				/>
 				<NavItem
 					icon={FolderGit2}
-					label="Repos"
-					active={!!isReposPage}
-					onClick={() => handleNavigate("/dashboard/repos")}
+					label="Configurations"
+					active={!!isConfigurationsPage}
+					onClick={() => handleNavigate("/dashboard/configurations")}
 				/>
 				<NavItem
 					icon={Plug}
