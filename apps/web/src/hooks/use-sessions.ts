@@ -6,7 +6,13 @@ import type { Session } from "@proliferate/shared/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
-export function useSessions(params?: { status?: string; repoId?: string }) {
+export function useSessions(params?: {
+	status?: string;
+	repoId?: string;
+	limit?: number;
+	excludeSetup?: boolean;
+	excludeCli?: boolean;
+}) {
 	return useQuery({
 		...orpc.sessions.list.queryOptions({
 			input: params ?? {},

@@ -32,6 +32,9 @@ export const sessionsRouter = {
 				.object({
 					repoId: z.string().uuid().optional(),
 					status: z.string().optional(),
+					limit: z.number().int().min(1).max(50).optional(),
+					excludeSetup: z.boolean().optional(),
+					excludeCli: z.boolean().optional(),
 				})
 				.optional(),
 		)
@@ -40,6 +43,9 @@ export const sessionsRouter = {
 			const sessionsList = await sessions.listSessions(context.orgId, {
 				repoId: input?.repoId,
 				status: input?.status,
+				limit: input?.limit,
+				excludeSetup: input?.excludeSetup,
+				excludeCli: input?.excludeCli,
 			});
 			return { sessions: sessionsList };
 		}),

@@ -11,6 +11,7 @@ import {
 	desc,
 	eq,
 	getDb,
+	ne,
 	type repos,
 	sessionConnections,
 	sessions,
@@ -62,12 +63,24 @@ export async function listByOrganization(
 		conditions.push(eq(sessions.status, filters.status));
 	}
 
+	if (filters?.excludeSetup) {
+		conditions.push(ne(sessions.sessionType, "setup"));
+	}
+
+	if (filters?.excludeCli) {
+		conditions.push(ne(sessions.origin, "cli"));
+	}
+
 	const results = await db.query.sessions.findMany({
 		where: and(...conditions),
 		with: {
 			repo: true,
 		},
-		orderBy: [desc(sessions.startedAt)],
+		orderBy: [
+			sql`CASE WHEN ${sessions.status} IN ('starting', 'running', 'paused') THEN 0 ELSE 1 END`,
+			desc(sessions.lastActivityAt),
+		],
+		...(filters?.limit ? { limit: filters.limit } : {}),
 	});
 
 	return results;
