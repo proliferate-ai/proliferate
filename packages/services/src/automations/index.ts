@@ -23,7 +23,7 @@ export type {
 	CreateTriggerEventInput as CreateTriggerEventDbInput,
 	TriggerEventInsertRow,
 	Json,
-	PrebuildSummary,
+	ConfigurationSummary,
 	CreatorSummary,
 	TriggerSummary,
 	ScheduleSummary,

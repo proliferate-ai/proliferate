@@ -50,8 +50,8 @@ export {
 	DomainSuggestionRow,
 } from "./orgs";
 
-// Prebuilds types
-export * from "./prebuilds";
+// Configurations types
+export * from "./configurations";
 
 // Repos types
 export * from "./repos";

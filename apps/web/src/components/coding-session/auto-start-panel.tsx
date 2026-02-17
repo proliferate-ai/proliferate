@@ -12,14 +12,13 @@ import {
 } from "@/components/ui/select";
 import {
 	useEffectiveServiceCommands,
-	useServiceCommands,
-	useUpdatePrebuildServiceCommands,
-	useUpdateServiceCommands,
-} from "@/hooks/use-repos";
+	useUpdateConfigurationServiceCommands,
+} from "@/hooks/use-configurations";
+import { useServiceCommands, useUpdateServiceCommands } from "@/hooks/use-repos";
 import type {
 	AutoStartOutputEntry,
 	AutoStartOutputMessage,
-	PrebuildServiceCommand,
+	ConfigurationServiceCommand,
 } from "@proliferate/shared";
 import {
 	CheckCircle2,
@@ -37,12 +36,12 @@ import { useCallback, useEffect, useState } from "react";
 
 export interface AutoStartContentProps {
 	repoId?: string | null;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
 	sendRunAutoStart?: (
 		runId: string,
 		mode?: "test" | "start",
-		commands?: PrebuildServiceCommand[],
+		commands?: ConfigurationServiceCommand[],
 	) => void;
 }
 
@@ -55,36 +54,36 @@ interface CommandDraft {
 
 export function AutoStartContent({
 	repoId,
-	prebuildId,
+	configurationId,
 	autoStartOutput,
 	sendRunAutoStart,
 }: AutoStartContentProps) {
-	const hasPrebuild = !!prebuildId;
+	const hasConfiguration = !!configurationId;
 
-	// Effective commands (server-side resolved) when prebuild exists
+	// Effective commands (server-side resolved) when configuration exists
 	const { data: effective, isLoading: effectiveLoading } = useEffectiveServiceCommands(
-		prebuildId || "",
-		hasPrebuild,
+		configurationId || "",
+		hasConfiguration,
 	);
 
-	// Fallback: repo-level commands when no prebuild
+	// Fallback: repo-level commands when no configuration
 	const { data: repoCommands, isLoading: repoLoading } = useServiceCommands(
 		repoId || "",
-		!hasPrebuild && !!repoId,
+		!hasConfiguration && !!repoId,
 	);
 
-	const updatePrebuildCommands = useUpdatePrebuildServiceCommands();
+	const updateConfigurationCommands = useUpdateConfigurationServiceCommands();
 	const updateRepoCommands = useUpdateServiceCommands();
 
-	const commands = hasPrebuild ? effective?.commands : repoCommands;
-	const source = hasPrebuild
+	const commands = hasConfiguration ? effective?.commands : repoCommands;
+	const source = hasConfiguration
 		? (effective?.source ?? "none")
 		: repoCommands?.length
 			? "repo"
 			: "none";
 	const workspaces = effective?.workspaces ?? [];
-	const isLoading = hasPrebuild ? effectiveLoading : repoLoading;
-	const canEdit = hasPrebuild ? !!prebuildId : !!repoId;
+	const isLoading = hasConfiguration ? effectiveLoading : repoLoading;
+	const canEdit = hasConfiguration ? !!configurationId : !!repoId;
 
 	const [editing, setEditing] = useState(false);
 	const [drafts, setDrafts] = useState<CommandDraft[]>([]);
@@ -113,11 +112,11 @@ export function AutoStartContent({
 			...(d.workspacePath.trim() ? { workspacePath: d.workspacePath.trim() } : {}),
 		}));
 
-		if (hasPrebuild && prebuildId) {
-			// Promotion model: editing always writes to prebuild
-			await updatePrebuildCommands.mutateAsync({ prebuildId, commands: cmds });
+		if (hasConfiguration && configurationId) {
+			// Promotion model: editing always writes to configuration
+			await updateConfigurationCommands.mutateAsync({ configurationId, commands: cmds });
 		} else if (repoId) {
-			// No prebuild — save to repo (commands without workspacePath)
+			// No configuration — save to repo (commands without workspacePath)
 			const repoCmds = cmds.map(({ workspacePath: _, ...rest }) => rest);
 			await updateRepoCommands.mutateAsync({ id: repoId, commands: repoCmds });
 		}
@@ -146,7 +145,7 @@ export function AutoStartContent({
 		}
 	}, [isTesting, autoStartOutput]);
 
-	const isSaving = updatePrebuildCommands.isPending || updateRepoCommands.isPending;
+	const isSaving = updateConfigurationCommands.isPending || updateRepoCommands.isPending;
 
 	const addRow = () => {
 		if (drafts.length >= 10) return;
@@ -178,7 +177,7 @@ export function AutoStartContent({
 
 			{source !== "none" && !editing && (
 				<p className="text-[10px] text-muted-foreground/70">
-					{source === "prebuild"
+					{source === "configuration"
 						? "Using configuration overrides"
 						: "Using repo defaults — saving will create configuration overrides"}
 				</p>

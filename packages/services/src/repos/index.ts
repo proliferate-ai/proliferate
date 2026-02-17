@@ -5,7 +5,7 @@
 export * from "./service";
 export * from "./mapper";
 export type { CreateRepoInput, CreateRepoResult, DbCreateRepoInput } from "../types/repos";
-export type { RepoRow, RepoWithPrebuildsRow } from "./db";
+export type { RepoRow, RepoWithConfigurationsRow } from "./db";
 
 // DB functions needed by repos-finalize
 export { getOrganizationId, getGithubRepoName } from "./db";

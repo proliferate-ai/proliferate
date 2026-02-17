@@ -2,7 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useCheckSecrets, usePrebuildEnvFiles } from "@/hooks/use-repos";
+import { useConfigurationEnvFiles } from "@/hooks/use-configurations";
+import { useCheckSecrets } from "@/hooks/use-repos";
 import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/use-secrets";
 import { orpc } from "@/lib/orpc";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
@@ -25,7 +26,7 @@ interface EnvFileSpec {
 
 interface EnvironmentPanelProps {
 	sessionId: string;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	repoId?: string | null;
 }
 
@@ -60,11 +61,11 @@ function parseEnvText(text: string): Array<{ key: string; value: string }> {
 
 function AddVariableForm({
 	sessionId,
-	prebuildId,
+	configurationId,
 	onSaved,
 }: {
 	sessionId: string;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	onSaved: () => void;
 }) {
 	const [key, setKey] = useState("");
@@ -85,7 +86,7 @@ function AddVariableForm({
 				sessionId,
 				secrets: [{ key: trimmedKey, value, persist: false }],
 				envVars: [],
-				saveToPrebuild: false,
+				saveToConfiguration: false,
 			});
 
 			// Persist to DB (with configuration linking if available)
@@ -93,7 +94,7 @@ function AddVariableForm({
 				key: trimmedKey,
 				value,
 				secretType: "secret",
-				...(prebuildId ? { configurationId: prebuildId } : {}),
+				...(configurationId ? { configurationId: configurationId } : {}),
 			});
 
 			setKey("");
@@ -144,12 +145,12 @@ function AddVariableForm({
 
 function PasteEnvForm({
 	sessionId,
-	prebuildId,
+	configurationId,
 	onSaved,
 	onClose,
 }: {
 	sessionId: string;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	onSaved: () => void;
 	onClose: () => void;
 }) {
@@ -171,7 +172,7 @@ function PasteEnvForm({
 				sessionId,
 				secrets: parsed.map(({ key, value }) => ({ key, value, persist: false })),
 				envVars: [],
-				saveToPrebuild: false,
+				saveToConfiguration: false,
 			});
 
 			// Persist to DB
@@ -271,12 +272,12 @@ function SecretRow({
 function MissingKeyRow({
 	keyName,
 	sessionId,
-	prebuildId,
+	configurationId,
 	onSaved,
 }: {
 	keyName: string;
 	sessionId: string;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	onSaved: () => void;
 }) {
 	const [editing, setEditing] = useState(false);
@@ -295,14 +296,14 @@ function MissingKeyRow({
 				sessionId,
 				secrets: [{ key: keyName, value, persist: false }],
 				envVars: [],
-				saveToPrebuild: false,
+				saveToConfiguration: false,
 			});
 
 			await createSecret.mutateAsync({
 				key: keyName,
 				value,
 				secretType: "secret",
-				...(prebuildId ? { configurationId: prebuildId } : {}),
+				...(configurationId ? { configurationId: configurationId } : {}),
 			});
 
 			setValue("");
@@ -368,7 +369,7 @@ function MissingKeyRow({
 // Main component
 // ============================================
 
-export function EnvironmentPanel({ sessionId, prebuildId, repoId }: EnvironmentPanelProps) {
+export function EnvironmentPanel({ sessionId, configurationId, repoId }: EnvironmentPanelProps) {
 	const queryClient = useQueryClient();
 	const setMissingEnvKeyCount = usePreviewPanelStore((s) => s.setMissingEnvKeyCount);
 	const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -379,9 +380,9 @@ export function EnvironmentPanel({ sessionId, prebuildId, repoId }: EnvironmentP
 	const deleteSecret = useDeleteSecret();
 
 	// Env file spec from configuration
-	const { data: envFiles, isLoading: specLoading } = usePrebuildEnvFiles(
-		prebuildId ?? "",
-		!!prebuildId,
+	const { data: envFiles, isLoading: specLoading } = useConfigurationEnvFiles(
+		configurationId ?? "",
+		!!configurationId,
 	);
 
 	// Parse spec keys
@@ -403,7 +404,12 @@ export function EnvironmentPanel({ sessionId, prebuildId, repoId }: EnvironmentP
 		data: checkResults,
 		isLoading: checkLoading,
 		refetch: refetchCheck,
-	} = useCheckSecrets(specKeyNames, undefined, prebuildId ?? undefined, specKeyNames.length > 0);
+	} = useCheckSecrets(
+		specKeyNames,
+		undefined,
+		configurationId ?? undefined,
+		specKeyNames.length > 0,
+	);
 
 	const existingSpecKeys = useMemo(() => {
 		if (!checkResults) return new Set<string>();
@@ -460,7 +466,7 @@ export function EnvironmentPanel({ sessionId, prebuildId, repoId }: EnvironmentP
 						{pasteMode ? (
 							<PasteEnvForm
 								sessionId={sessionId}
-								prebuildId={prebuildId}
+								configurationId={configurationId}
 								onSaved={handleRefresh}
 								onClose={() => setPasteMode(false)}
 							/>
@@ -468,7 +474,7 @@ export function EnvironmentPanel({ sessionId, prebuildId, repoId }: EnvironmentP
 							<div className="space-y-1.5">
 								<AddVariableForm
 									sessionId={sessionId}
-									prebuildId={prebuildId}
+									configurationId={configurationId}
 									onSaved={handleRefresh}
 								/>
 								<button
@@ -503,7 +509,7 @@ export function EnvironmentPanel({ sessionId, prebuildId, repoId }: EnvironmentP
 											key={k.key}
 											keyName={k.key}
 											sessionId={sessionId}
-											prebuildId={prebuildId}
+											configurationId={configurationId}
 											onSaved={handleRefresh}
 										/>
 									))}

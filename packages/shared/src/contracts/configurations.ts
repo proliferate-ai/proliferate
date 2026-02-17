@@ -8,7 +8,7 @@ const c = initContract();
 // Schemas
 // ============================================
 
-export const PrebuildRepoSchema = z.object({
+export const ConfigurationRepoSchema = z.object({
 	workspacePath: z.string(),
 	repo: z
 		.object({
@@ -25,7 +25,7 @@ export const SetupSessionSchema = z.object({
 	status: z.string().nullable(),
 });
 
-export const PrebuildSchema = z.object({
+export const ConfigurationSchema = z.object({
 	id: z.string().uuid(),
 	snapshotId: z.string().nullable(),
 	status: z.string().nullable(),
@@ -34,13 +34,13 @@ export const PrebuildSchema = z.object({
 	createdAt: z.string().nullable(),
 	createdBy: z.string().nullable(),
 	sandboxProvider: z.string().nullable(),
-	prebuildRepos: z.array(PrebuildRepoSchema).optional(),
+	configurationRepos: z.array(ConfigurationRepoSchema).optional(),
 	setupSessions: z.array(SetupSessionSchema).optional(),
 });
 
-export type Prebuild = z.infer<typeof PrebuildSchema>;
+export type Configuration = z.infer<typeof ConfigurationSchema>;
 
-export const CreatePrebuildInputSchema = z.object({
+export const CreateConfigurationInputSchema = z.object({
 	repoIds: z.array(z.string().uuid()).optional(),
 	// Legacy format support
 	repos: z
@@ -54,7 +54,7 @@ export const CreatePrebuildInputSchema = z.object({
 	name: z.string().optional(),
 });
 
-export const UpdatePrebuildInputSchema = z.object({
+export const UpdateConfigurationInputSchema = z.object({
 	name: z.string().optional(),
 	notes: z.string().optional(),
 });
@@ -63,29 +63,29 @@ export const UpdatePrebuildInputSchema = z.object({
 // Contract
 // ============================================
 
-export const prebuildsContract = c.router(
+export const configurationsContract = c.router(
 	{
 		list: {
 			method: "GET",
-			path: "/prebuilds",
+			path: "/configurations",
 			query: z.object({
 				status: z.string().optional(),
 			}),
 			responses: {
-				200: z.object({ prebuilds: z.array(PrebuildSchema) }),
+				200: z.object({ configurations: z.array(ConfigurationSchema) }),
 				401: ErrorResponseSchema,
 				500: ErrorResponseSchema,
 			},
-			summary: "List prebuilds for the current organization",
+			summary: "List configurations for the current organization",
 		},
 
 		create: {
 			method: "POST",
-			path: "/prebuilds",
-			body: CreatePrebuildInputSchema,
+			path: "/configurations",
+			body: CreateConfigurationInputSchema,
 			responses: {
 				200: z.object({
-					prebuildId: z.string().uuid(),
+					configurationId: z.string().uuid(),
 					repos: z.number(),
 				}),
 				400: ErrorResponseSchema,
@@ -94,29 +94,29 @@ export const prebuildsContract = c.router(
 				404: ErrorResponseSchema,
 				500: ErrorResponseSchema,
 			},
-			summary: "Create a new prebuild with multiple repos",
+			summary: "Create a new configuration with multiple repos",
 		},
 
 		update: {
 			method: "PATCH",
-			path: "/prebuilds/:id",
+			path: "/configurations/:id",
 			pathParams: z.object({
 				id: z.string().uuid(),
 			}),
-			body: UpdatePrebuildInputSchema,
+			body: UpdateConfigurationInputSchema,
 			responses: {
-				200: z.object({ prebuild: PrebuildSchema }),
+				200: z.object({ configuration: ConfigurationSchema }),
 				400: ErrorResponseSchema,
 				401: ErrorResponseSchema,
 				404: ErrorResponseSchema,
 				500: ErrorResponseSchema,
 			},
-			summary: "Update a prebuild (name, notes)",
+			summary: "Update a configuration (name, notes)",
 		},
 
 		delete: {
 			method: "DELETE",
-			path: "/prebuilds/:id",
+			path: "/configurations/:id",
 			pathParams: z.object({
 				id: z.string().uuid(),
 			}),
@@ -126,7 +126,7 @@ export const prebuildsContract = c.router(
 				401: ErrorResponseSchema,
 				500: ErrorResponseSchema,
 			},
-			summary: "Delete a prebuild",
+			summary: "Delete a configuration",
 		},
 	},
 	{

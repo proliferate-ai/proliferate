@@ -29,11 +29,11 @@ export interface ServiceCommand {
 }
 
 /**
- * A prebuild-level service command that supports multi-repo workspaces.
+ * A configuration-level service command that supports multi-repo workspaces.
  * Unlike ServiceCommand (per-repo), this includes an optional workspacePath
- * to target a specific repo directory in multi-repo prebuilds.
+ * to target a specific repo directory in multi-repo configurations.
  */
-export interface PrebuildServiceCommand {
+export interface ConfigurationServiceCommand {
 	name: string;
 	command: string;
 	workspacePath?: string;
@@ -84,11 +84,11 @@ export interface CreateSandboxOpts {
 	sshPublicKey?: string;
 	/** Trigger context to write to .proliferate/trigger-context.json */
 	triggerContext?: Record<string, unknown>;
-	/** True if the snapshot includes installed dependencies (prebuild/session snapshots). Gates service command auto-start. */
+	/** True if the snapshot includes installed dependencies (configuration/session snapshots). Gates service command auto-start. */
 	snapshotHasDeps?: boolean;
-	/** Resolved service commands (prebuild-level or fallback from repos). Cross-repo aware. */
-	serviceCommands?: PrebuildServiceCommand[];
-	/** Env file generation spec from prebuild config. Applied on boot before service autostart. */
+	/** Resolved service commands (configuration-level or fallback from repos). Cross-repo aware. */
+	serviceCommands?: ConfigurationServiceCommand[];
+	/** Env file generation spec from configuration config. Applied on boot before service autostart. */
 	envFiles?: unknown;
 }
 
@@ -208,7 +208,7 @@ export interface SandboxProvider {
 	 */
 	testServiceCommands?(
 		sandboxId: string,
-		commands: PrebuildServiceCommand[],
+		commands: ConfigurationServiceCommand[],
 		opts: { timeoutMs: number; runId: string },
 	): Promise<AutoStartOutputEntry[]>;
 

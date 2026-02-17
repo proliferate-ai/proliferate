@@ -322,7 +322,7 @@ export default tool({
 Call this tool after setup is complete and verified.
 The snapshot is saved automatically - no user confirmation required.
 
-For setup sessions: Updates the prebuild (future sessions start from this state)
+For setup sessions: Updates the configuration (future sessions start from this state)
 For coding sessions: Updates the session snapshot
 
 Call this ONLY after:
@@ -372,7 +372,7 @@ Only call this AFTER you have:
 
 1. You call \`save_snapshot({ message: "Setup complete!" })\`
 2. Gateway takes a filesystem snapshot
-3. For setup sessions: prebuild is updated (future sessions start here)
+3. For setup sessions: configuration is updated (future sessions start here)
 4. For coding sessions: session snapshot is updated
 
 ## Example
@@ -478,7 +478,7 @@ Include summary_markdown and citations when possible.
  */
 export const SAVE_SERVICE_COMMANDS_TOOL = `
 // Save Service Commands Tool for OpenCode
-// Calls Gateway HTTP callback to save commands to the prebuild configuration
+// Calls Gateway HTTP callback to save commands to the configuration
 
 import { tool } from "@opencode-ai/plugin"
 import { randomUUID } from "crypto"
@@ -488,7 +488,7 @@ ${TOOL_CALLBACK_HELPER}
 export default tool({
   description: \`Save auto-start service commands for this configuration.
 
-These commands will run automatically when future sessions start with this prebuild snapshot.
+These commands will run automatically when future sessions start with this configuration snapshot.
 Use this to configure dev servers, watchers, or background services that should always be running.
 
 Call this AFTER you have verified the commands work correctly in the current session.
@@ -533,7 +533,7 @@ Use the save_service_commands tool to configure auto-start commands for this con
 ## When to Use
 
 Call this tool when the user asks you to save startup commands for their project.
-These commands will auto-run in future sessions that use this prebuild snapshot.
+These commands will auto-run in future sessions that use this configuration snapshot.
 
 ## How to Use
 
@@ -568,12 +568,12 @@ save_service_commands({
 /**
  * Save Env Files Tool
  *
- * Saves env file generation spec for the current prebuild.
+ * Saves env file generation spec for the current configuration.
  * The gateway intercepts this tool and persists the spec to the database.
  */
 export const SAVE_ENV_FILES_TOOL = `
 // Save Env Files Tool for OpenCode
-// Calls Gateway HTTP callback to save env file spec to the prebuild configuration
+// Calls Gateway HTTP callback to save env file spec to the configuration
 
 import { tool } from "@opencode-ai/plugin"
 import { randomUUID } from "crypto"
@@ -639,7 +639,7 @@ Use the save_env_files tool to record which env files this project needs.
 ## When to Use
 
 Call this tool when you identify that the project needs env files (e.g. .env.local, .env) containing secrets or credentials.
-This saves the spec to the prebuild configuration for use during session boot.
+This saves the spec to the configuration for use during session boot.
 
 ## How to Use
 

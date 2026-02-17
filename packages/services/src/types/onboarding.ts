@@ -9,7 +9,7 @@
 // DB Row Types
 // ============================================
 
-export interface RepoWithPrebuildRow {
+export interface RepoWithConfigurationRow {
 	id: string;
 	githubRepoName: string;
 	githubUrl: string;

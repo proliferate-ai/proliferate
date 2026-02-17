@@ -1,6 +1,6 @@
 // Message types for Client <-> Durable Object WebSocket communication
 
-import type { AutoStartOutputEntry, PrebuildServiceCommand } from "./sandbox-provider";
+import type { AutoStartOutputEntry, ConfigurationServiceCommand } from "./sandbox-provider";
 
 // Client source - where the message originated from
 export type ClientSource = "slack" | "web" | "api" | "cli" | "automation";
@@ -93,7 +93,7 @@ export interface RunAutoStartMessage {
 	type: "run_auto_start";
 	runId: string;
 	mode?: "test" | "start";
-	commands?: PrebuildServiceCommand[];
+	commands?: ConfigurationServiceCommand[];
 }
 
 // ============================================
@@ -374,7 +374,7 @@ export interface SnapshotResultMessage {
 		success: boolean;
 		snapshotId?: string;
 		error?: string;
-		target: "prebuild" | "session";
+		target: "configuration" | "session";
 	};
 }
 
@@ -523,8 +523,8 @@ export interface SessionConfig {
 // Session status
 export type SessionStatus = "starting" | "running" | "paused" | "stopped" | "failed";
 
-// Prebuild status
-export type PrebuildStatus = "pending" | "building" | "ready" | "failed";
+// Configuration status
+export type ConfigurationStatus = "pending" | "building" | "ready" | "failed";
 
 // ============================================
 // Verification Types

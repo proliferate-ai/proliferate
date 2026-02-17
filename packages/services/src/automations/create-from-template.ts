@@ -134,7 +134,7 @@ export async function createFromTemplate(
 		// to the detail page immediately and will refetch full data.
 		return toNewAutomationListItem({
 			...automationRow,
-			defaultPrebuild: null,
+			defaultConfiguration: null,
 		});
 	});
 }

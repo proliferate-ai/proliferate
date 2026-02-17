@@ -57,7 +57,7 @@ interface UseSessionWebSocketReturn {
 	sendRunAutoStart: (
 		runId: string,
 		mode?: "test" | "start",
-		commands?: import("@proliferate/shared").PrebuildServiceCommand[],
+		commands?: import("@proliferate/shared").ConfigurationServiceCommand[],
 	) => void;
 	sendGetGitStatus: (workspacePath?: string) => void;
 	sendGitCreateBranch: (branchName: string, workspacePath?: string) => void;
@@ -189,7 +189,7 @@ export function useSessionWebSocket({
 		(
 			runId: string,
 			mode?: "test" | "start",
-			commands?: import("@proliferate/shared").PrebuildServiceCommand[],
+			commands?: import("@proliferate/shared").ConfigurationServiceCommand[],
 		) => {
 			setAutoStartOutput(null);
 			wsRef.current?.sendRunAutoStart(runId, mode, commands);

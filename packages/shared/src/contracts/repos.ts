@@ -33,48 +33,6 @@ export const SearchRepoSchema = z.object({
 
 export type SearchRepo = z.infer<typeof SearchRepoSchema>;
 
-// Prebuild schema for repo-specific prebuilds list
-export const RepoPrebuildSchema = z.object({
-	id: z.string(),
-	name: z.string().nullable(),
-	notes: z.string().nullable(),
-	status: z.string().nullable(),
-	createdAt: z.string().nullable(),
-	snapshotId: z.string().nullable(),
-});
-
-export type RepoPrebuild = z.infer<typeof RepoPrebuildSchema>;
-
-// Snapshot schema for repo-specific snapshots list (prebuilds with snapshots)
-export const RepoSnapshotSchema = z.object({
-	id: z.string(),
-	snapshotId: z.string().nullable(),
-	status: z.string().nullable(),
-	name: z.string().nullable(),
-	notes: z.string().nullable(),
-	createdAt: z.string(),
-	createdBy: z.string().nullable(),
-	setupSessions: z
-		.array(
-			z.object({
-				id: z.string(),
-				sessionType: z.string().nullable(),
-			}),
-		)
-		.optional(),
-	repos: z
-		.array(
-			z.object({
-				id: z.string(),
-				githubRepoName: z.string(),
-			}),
-		)
-		.optional(),
-	repoCount: z.number().optional(),
-});
-
-export type RepoSnapshot = z.infer<typeof RepoSnapshotSchema>;
-
 // Finalize setup input schema
 export const FinalizeSetupInputSchema = z.object({
 	sessionId: z.string(),
@@ -89,7 +47,7 @@ export type FinalizeSetupInput = z.infer<typeof FinalizeSetupInputSchema>;
 
 // Finalize setup response schema
 export const FinalizeSetupResponseSchema = z.object({
-	prebuildId: z.string(),
+	configurationId: z.string(),
 	snapshotId: z.string(),
 	success: z.boolean(),
 });
@@ -104,9 +62,6 @@ export const RepoSchema = z.object({
 	createdAt: z.string().nullable(),
 	source: z.string(),
 	isPrivate: z.boolean(),
-	prebuildStatus: z.enum(["ready", "pending"]),
-	prebuildId: z.string().nullable(),
-	isConfigured: z.boolean(),
 });
 
 export type Repo = z.infer<typeof RepoSchema>;
@@ -219,53 +174,6 @@ export const reposContract = c.router(
 				500: ErrorResponseSchema,
 			},
 			summary: "Search public GitHub repositories",
-		},
-
-		listPrebuilds: {
-			method: "GET",
-			path: "/repos/:id/prebuilds",
-			pathParams: z.object({
-				id: z.string().uuid(),
-			}),
-			responses: {
-				200: z.object({ prebuilds: z.array(RepoPrebuildSchema) }),
-				400: ErrorResponseSchema,
-				401: ErrorResponseSchema,
-				404: ErrorResponseSchema,
-				500: ErrorResponseSchema,
-			},
-			summary: "List prebuilds for a repo",
-		},
-
-		listSnapshots: {
-			method: "GET",
-			path: "/repos/:id/snapshots",
-			pathParams: z.object({
-				id: z.string().uuid(),
-			}),
-			responses: {
-				200: z.object({ prebuilds: z.array(RepoSnapshotSchema) }),
-				401: ErrorResponseSchema,
-				500: ErrorResponseSchema,
-			},
-			summary: "List snapshots (usable prebuilds) for a repo",
-		},
-
-		finalizeSetup: {
-			method: "POST",
-			path: "/repos/:id/finalize-setup",
-			pathParams: z.object({
-				id: z.string().uuid(),
-			}),
-			body: FinalizeSetupInputSchema,
-			responses: {
-				200: FinalizeSetupResponseSchema,
-				400: ErrorResponseSchema,
-				401: ErrorResponseSchema,
-				404: ErrorResponseSchema,
-				500: ErrorResponseSchema,
-			},
-			summary: "Finalize setup session and create a prebuild snapshot",
 		},
 	},
 	{

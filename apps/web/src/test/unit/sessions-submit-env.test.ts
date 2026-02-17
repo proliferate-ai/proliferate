@@ -52,7 +52,7 @@ const baseSession = {
 	id: "session-1",
 	sandboxId: "sandbox-1",
 	sandboxProvider: "modal",
-	prebuildId: "prebuild-1",
+	configurationId: "configuration-1",
 };
 
 const baseInput = {
@@ -61,7 +61,7 @@ const baseInput = {
 	userId: "user-1",
 	secrets: [] as Array<{ key: string; value: string; persist?: boolean; description?: string }>,
 	envVars: [] as Array<{ key: string; value: string }>,
-	saveToPrebuild: true,
+	saveToConfiguration: true,
 };
 
 describe("submitEnvHandler", () => {
@@ -76,10 +76,10 @@ describe("submitEnvHandler", () => {
 	// Backward compatibility
 	// ============================================
 
-	it("persists all secrets when saveToPrebuild is true (no per-secret flags)", async () => {
+	it("persists all secrets when saveToConfiguration is true (no per-secret flags)", async () => {
 		const result = await submitEnvHandler({
 			...baseInput,
-			saveToPrebuild: true,
+			saveToConfiguration: true,
 			secrets: [
 				{ key: "API_KEY", value: "abc" },
 				{ key: "DB_URL", value: "pg://localhost" },
@@ -93,10 +93,10 @@ describe("submitEnvHandler", () => {
 		]);
 	});
 
-	it("skips persistence when saveToPrebuild is false (no per-secret flags)", async () => {
+	it("skips persistence when saveToConfiguration is false (no per-secret flags)", async () => {
 		const result = await submitEnvHandler({
 			...baseInput,
-			saveToPrebuild: false,
+			saveToConfiguration: false,
 			secrets: [{ key: "API_KEY", value: "abc" }],
 		});
 
@@ -111,7 +111,7 @@ describe("submitEnvHandler", () => {
 	it("honors mixed per-secret persist flags", async () => {
 		const result = await submitEnvHandler({
 			...baseInput,
-			saveToPrebuild: false,
+			saveToConfiguration: false,
 			secrets: [
 				{ key: "PERSIST_ME", value: "val1", persist: true },
 				{ key: "SESSION_ONLY", value: "val2", persist: false },
@@ -126,10 +126,10 @@ describe("submitEnvHandler", () => {
 		]);
 	});
 
-	it("per-secret persist:false overrides global saveToPrebuild:true", async () => {
+	it("per-secret persist:false overrides global saveToConfiguration:true", async () => {
 		const result = await submitEnvHandler({
 			...baseInput,
-			saveToPrebuild: true,
+			saveToConfiguration: true,
 			secrets: [{ key: "TEMP_KEY", value: "val", persist: false }],
 		});
 
@@ -165,10 +165,10 @@ describe("submitEnvHandler", () => {
 	// Env vars are always session-only
 	// ============================================
 
-	it("never persists regular env vars regardless of saveToPrebuild", async () => {
+	it("never persists regular env vars regardless of saveToConfiguration", async () => {
 		const result = await submitEnvHandler({
 			...baseInput,
-			saveToPrebuild: true,
+			saveToConfiguration: true,
 			envVars: [{ key: "PORT", value: "3000" }],
 		});
 

@@ -1,7 +1,7 @@
 /**
  * CLI oRPC router.
  *
- * Handles CLI authentication, SSH keys, repos, sessions, GitHub, and prebuilds.
+ * Handles CLI authentication, SSH keys, repos, sessions, GitHub, and configurations.
  */
 
 import { auth } from "@/lib/auth";
@@ -14,7 +14,7 @@ import { env } from "@proliferate/environment/server";
 import { cli } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import {
-	CliPrebuildSchema,
+	CliConfigurationSchema,
 	CliRepoConnectionSchema,
 	CliRepoSchema,
 	CliSessionSchema,
@@ -571,27 +571,27 @@ export const cliGitHubRouter = {
 };
 
 // ============================================
-// Prebuilds Router
+// Configurations Router
 // ============================================
 
-export const cliPrebuildsRouter = {
+export const cliConfigurationsRouter = {
 	/**
-	 * Look up prebuild by local path hash.
+	 * Look up configuration by local path hash.
 	 */
 	get: protectedProcedure
 		.input(z.object({ localPathHash: z.string() }))
-		.output(z.object({ prebuild: CliPrebuildSchema.nullable() }))
+		.output(z.object({ configuration: CliConfigurationSchema.nullable() }))
 		.handler(async ({ input, context }) => {
-			const prebuild = await cli.getCliPrebuild(context.user.id, input.localPathHash);
-			return { prebuild };
+			const configuration = await cli.getCliConfiguration(context.user.id, input.localPathHash);
+			return { configuration };
 		}),
 
 	/**
-	 * Create or update a prebuild (snapshot cache).
+	 * Create or update a configuration (snapshot cache).
 	 */
 	create: protectedProcedure
 		.input(z.object({ localPathHash: z.string(), sessionId: z.string(), sandboxId: z.string() }))
-		.output(z.object({ prebuild: CliPrebuildSchema, snapshotId: z.string() }))
+		.output(z.object({ configuration: CliConfigurationSchema, snapshotId: z.string() }))
 		.handler(async ({ input, context }) => {
 			const { localPathHash, sessionId, sandboxId } = input;
 			const provider = getSandboxProvider();
@@ -601,7 +601,7 @@ export const cliPrebuildsRouter = {
 				const snapshotResult = await provider.snapshot(sessionId, sandboxId);
 				log.info({ snapshotId: snapshotResult.snapshotId }, "Snapshot created");
 
-				const prebuild = await cli.upsertCliPrebuild(
+				const configuration = await cli.upsertCliConfiguration(
 					context.user.id,
 					localPathHash,
 					snapshotResult.snapshotId,
@@ -609,7 +609,7 @@ export const cliPrebuildsRouter = {
 				);
 
 				return {
-					prebuild,
+					configuration,
 					snapshotId: snapshotResult.snapshotId,
 				};
 			} catch (err) {
@@ -621,13 +621,13 @@ export const cliPrebuildsRouter = {
 		}),
 
 	/**
-	 * Delete a prebuild by local path hash.
+	 * Delete a configuration by local path hash.
 	 */
 	delete: protectedProcedure
 		.input(z.object({ localPathHash: z.string() }))
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
-			await cli.deleteCliPrebuild(context.user.id, input.localPathHash);
+			await cli.deleteCliConfiguration(context.user.id, input.localPathHash);
 			return { success: true };
 		}),
 };
@@ -642,5 +642,5 @@ export const cliRouter = {
 	sshKeys: cliSshKeysRouter,
 	sessions: cliSessionsRouter,
 	github: cliGitHubRouter,
-	prebuilds: cliPrebuildsRouter,
+	configurations: cliConfigurationsRouter,
 };

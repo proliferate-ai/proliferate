@@ -33,7 +33,7 @@ export interface CreateAutomationInput {
 	name?: string;
 	description?: string;
 	agentInstructions?: string;
-	defaultPrebuildId?: string;
+	defaultConfigurationId?: string;
 	allowAgenticRepoSelection?: boolean;
 }
 
@@ -42,7 +42,7 @@ export interface UpdateAutomationInput {
 	description?: string | null;
 	enabled?: boolean;
 	agentInstructions?: string | null;
-	defaultPrebuildId?: string | null;
+	defaultConfigurationId?: string | null;
 	allowAgenticRepoSelection?: boolean;
 	agentType?: string;
 	modelId?: string;
@@ -85,11 +85,11 @@ export async function createAutomation(
 	userId: string,
 	input: CreateAutomationInput,
 ): Promise<AutomationListItem> {
-	// Validate prebuild if provided
-	if (input.defaultPrebuildId) {
-		const prebuild = await automationsDb.validatePrebuild(input.defaultPrebuildId, orgId);
-		if (!prebuild) {
-			throw new Error("Prebuild not found");
+	// Validate configuration if provided
+	if (input.defaultConfigurationId) {
+		const configuration = await automationsDb.validateConfiguration(input.defaultConfigurationId, orgId);
+		if (!configuration) {
+			throw new Error("Configuration not found");
 		}
 	}
 
@@ -98,7 +98,7 @@ export async function createAutomation(
 		name: input.name || "Untitled Automation",
 		description: input.description,
 		agentInstructions: input.agentInstructions,
-		defaultPrebuildId: input.defaultPrebuildId,
+		defaultConfigurationId: input.defaultConfigurationId,
 		allowAgenticRepoSelection: input.allowAgenticRepoSelection,
 		createdBy: userId,
 	});
@@ -114,11 +114,11 @@ export async function updateAutomation(
 	orgId: string,
 	input: UpdateAutomationInput,
 ): Promise<Automation> {
-	// Validate prebuild if provided
-	if (input.defaultPrebuildId) {
-		const prebuild = await automationsDb.validatePrebuild(input.defaultPrebuildId, orgId);
-		if (!prebuild) {
-			throw new Error("Prebuild not found");
+	// Validate configuration if provided
+	if (input.defaultConfigurationId) {
+		const configuration = await automationsDb.validateConfiguration(input.defaultConfigurationId, orgId);
+		if (!configuration) {
+			throw new Error("Configuration not found");
 		}
 	}
 
@@ -127,7 +127,7 @@ export async function updateAutomation(
 		description: input.description,
 		enabled: input.enabled,
 		agentInstructions: input.agentInstructions,
-		defaultPrebuildId: input.defaultPrebuildId,
+		defaultConfigurationId: input.defaultConfigurationId,
 		allowAgenticRepoSelection: input.allowAgenticRepoSelection,
 		agentType: input.agentType,
 		modelId: input.modelId,
@@ -389,7 +389,7 @@ export interface WebhookTriggerResult {
 		id: string;
 		name: string;
 		enabled: boolean;
-		defaultPrebuildId: string | null;
+		defaultConfigurationId: string | null;
 		agentInstructions: string | null;
 		modelId: string | null;
 	} | null;
@@ -501,7 +501,7 @@ export async function findWebhookTrigger(
 					id: row.automation.id,
 					name: row.automation.name,
 					enabled: row.automation.enabled ?? false,
-					defaultPrebuildId: row.automation.defaultPrebuildId,
+					defaultConfigurationId: row.automation.defaultConfigurationId,
 					agentInstructions: row.automation.agentInstructions,
 					modelId: row.automation.modelId,
 				}
@@ -531,7 +531,7 @@ export async function findTriggerForAutomationByProvider(
 					id: row.automation.id,
 					name: row.automation.name,
 					enabled: row.automation.enabled ?? false,
-					defaultPrebuildId: row.automation.defaultPrebuildId,
+					defaultConfigurationId: row.automation.defaultConfigurationId,
 					agentInstructions: row.automation.agentInstructions,
 					modelId: row.automation.modelId,
 				}

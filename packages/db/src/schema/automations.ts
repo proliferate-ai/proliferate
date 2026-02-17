@@ -5,7 +5,7 @@
 import { relations } from "drizzle-orm";
 import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organization, user } from "./auth";
-import { prebuilds } from "./prebuilds";
+import { configurations } from "./configurations";
 import { slackInstallations } from "./slack";
 
 // ============================================
@@ -32,8 +32,8 @@ export const automations = pgTable(
 		agentType: text("agent_type").default("opencode"),
 		modelId: text("model_id").default("claude-sonnet-4-20250514"),
 
-		// Repository targeting (via prebuild)
-		defaultPrebuildId: uuid("default_prebuild_id").references(() => prebuilds.id, {
+		// Repository targeting (via configuration)
+		defaultConfigurationId: uuid("default_configuration_id").references(() => configurations.id, {
 			onDelete: "set null",
 		}),
 		allowAgenticRepoSelection: boolean("allow_agentic_repo_selection").default(false),
@@ -61,7 +61,7 @@ export const automations = pgTable(
 	(table) => [
 		index("idx_automations_org").on(table.organizationId),
 		index("idx_automations_enabled").on(table.enabled),
-		index("idx_automations_prebuild").on(table.defaultPrebuildId),
+		index("idx_automations_configuration").on(table.defaultConfigurationId),
 	],
 );
 
@@ -74,9 +74,9 @@ export const automationsRelations = relations(automations, ({ one, many }) => ({
 		fields: [automations.createdBy],
 		references: [user.id],
 	}),
-	defaultPrebuild: one(prebuilds, {
-		fields: [automations.defaultPrebuildId],
-		references: [prebuilds.id],
+	defaultConfiguration: one(configurations, {
+		fields: [automations.defaultConfigurationId],
+		references: [configurations.id],
 	}),
 	triggers: many(triggers),
 	schedules: many(schedules),

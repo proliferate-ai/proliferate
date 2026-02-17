@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { GithubIcon } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { usePrebuilds } from "@/hooks/use-prebuilds";
+import { useConfigurations } from "@/hooks/use-configurations";
 import { useRepos } from "@/hooks/use-repos";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
@@ -53,14 +53,15 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 	const [open, setOpen] = useState(false);
 	const [createOpen, setCreateOpen] = useState(false);
 	const { data: repos } = useRepos();
-	const { data: prebuilds } = usePrebuilds("ready");
+	const { data: configurations } = useConfigurations("ready");
 	const { selectedRepoId, selectedSnapshotId, setSelectedRepo, setSelectedSnapshot } =
 		useDashboardStore();
 
 	const allRepos = repos ?? [];
-	const multiRepoConfigs = prebuilds?.filter((p) => (p.prebuildRepos?.length ?? 0) >= 2) ?? [];
+	const multiRepoConfigs =
+		configurations?.filter((p) => (p.configurationRepos?.length ?? 0) >= 2) ?? [];
 
-	// Clear stale persisted selections when data loads (e.g. repo/prebuild was deleted)
+	// Clear stale persisted selections when data loads (e.g. repo/configuration was deleted)
 	useEffect(() => {
 		if (!repos) return;
 		if (selectedRepoId && !repos.some((r) => r.id === selectedRepoId)) {
@@ -68,15 +69,22 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 			setSelectedSnapshot(null);
 		} else if (selectedRepoId && selectedSnapshotId) {
 			const repo = repos.find((r) => r.id === selectedRepoId);
-			if (repo && selectedSnapshotId !== repo.prebuildId) {
-				setSelectedSnapshot(repo.prebuildId ?? null);
+			if (repo && selectedSnapshotId !== repo.configurationId) {
+				setSelectedSnapshot(repo.configurationId ?? null);
 			}
 		} else if (selectedSnapshotId && !selectedRepoId) {
-			if (prebuilds && !prebuilds.some((c) => c.id === selectedSnapshotId)) {
+			if (configurations && !configurations.some((c) => c.id === selectedSnapshotId)) {
 				setSelectedSnapshot(null);
 			}
 		}
-	}, [repos, prebuilds, selectedRepoId, selectedSnapshotId, setSelectedRepo, setSelectedSnapshot]);
+	}, [
+		repos,
+		configurations,
+		selectedRepoId,
+		selectedSnapshotId,
+		setSelectedRepo,
+		setSelectedSnapshot,
+	]);
 
 	// Find display name for the trigger
 	const selectedRepo = allRepos.find((r) => r.id === selectedRepoId);
@@ -90,15 +98,15 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 
 	const selectRepo = (repo: (typeof allRepos)[0]) => {
 		setSelectedRepo(repo.id);
-		if (repo.prebuildId) {
-			setSelectedSnapshot(repo.prebuildId);
+		if (repo.configurationId) {
+			setSelectedSnapshot(repo.configurationId);
 		}
 		setOpen(false);
 	};
 
-	const selectConfig = (prebuild: (typeof multiRepoConfigs)[0]) => {
+	const selectConfig = (config: (typeof multiRepoConfigs)[0]) => {
 		setSelectedRepo(null);
-		setSelectedSnapshot(prebuild.id);
+		setSelectedSnapshot(config.id);
 		setOpen(false);
 	};
 
@@ -161,7 +169,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 													)}
 													<RepoName name={repo.githubRepoName} />
 													<span className="text-muted-foreground text-xs ml-auto shrink-0">
-														{repo.prebuildStatus === "ready" ? "Configured" : ""}
+														{repo.configurationStatus === "ready" ? "Configured" : ""}
 													</span>
 												</CommandItem>
 											);
@@ -178,7 +186,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 										{multiRepoConfigs.map((config) => {
 											const isSelected = config.id === selectedSnapshotId;
 											const repoNames =
-												config.prebuildRepos
+												config.configurationRepos
 													?.map((r) => r.repo?.githubRepoName)
 													.filter(Boolean)
 													.join(", ") ?? "";
@@ -196,7 +204,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 													)}
 													<span className="truncate">{config.name ?? "Untitled"}</span>
 													<span className="text-muted-foreground text-xs ml-auto shrink-0">
-														{config.prebuildRepos?.length} repos
+														{config.configurationRepos?.length} repos
 													</span>
 												</CommandItem>
 											);

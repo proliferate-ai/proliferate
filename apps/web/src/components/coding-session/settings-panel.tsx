@@ -2,7 +2,7 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { PreviewMode } from "@/stores/preview-panel";
-import type { AutoStartOutputMessage, PrebuildServiceCommand } from "@proliferate/shared";
+import type { AutoStartOutputMessage, ConfigurationServiceCommand } from "@proliferate/shared";
 import { useState } from "react";
 import { AutoStartContent } from "./auto-start-panel";
 import { PanelShell } from "./panel-shell";
@@ -26,12 +26,12 @@ export interface SettingsPanelProps {
 	onSnapshot?: () => void;
 	// Auto-start
 	repoId?: string | null;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	autoStartOutput?: AutoStartOutputMessage["payload"] | null;
 	sendRunAutoStart?: (
 		runId: string,
 		mode?: "test" | "start",
-		commands?: PrebuildServiceCommand[],
+		commands?: ConfigurationServiceCommand[],
 	) => void;
 }
 
@@ -49,7 +49,7 @@ export function SettingsPanel({
 	isSnapshotting,
 	onSnapshot,
 	repoId,
-	prebuildId,
+	configurationId,
 	autoStartOutput,
 	sendRunAutoStart,
 }: SettingsPanelProps) {
@@ -90,7 +90,7 @@ export function SettingsPanel({
 					<SnapshotsContent
 						snapshotId={snapshotId}
 						repoId={repoId}
-						prebuildId={prebuildId}
+						configurationId={configurationId}
 						canSnapshot={canSnapshot}
 						isSnapshotting={isSnapshotting}
 						onSnapshot={onSnapshot}
@@ -101,7 +101,7 @@ export function SettingsPanel({
 				<TabsContent value="auto-start" className="flex-1 min-h-0 overflow-y-auto mt-0">
 					<AutoStartContent
 						repoId={repoId}
-						prebuildId={prebuildId}
+						configurationId={configurationId}
 						autoStartOutput={autoStartOutput}
 						sendRunAutoStart={sendRunAutoStart}
 					/>

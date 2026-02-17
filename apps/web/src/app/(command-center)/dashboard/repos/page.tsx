@@ -1,6 +1,5 @@
 "use client";
 
-import { openEditSession, openHistoricalSession } from "@/components/coding-session";
 import { PageShell } from "@/components/dashboard/page-shell";
 import {
 	AlertDialog,
@@ -23,36 +22,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import {
-	useCheckSecrets,
-	useCreateRepo,
-	useCreateSecret,
-	useDeleteRepo,
-	usePrebuildEnvFiles,
-	useRepoSnapshots,
-	useRepos,
-	useSearchRepos,
-} from "@/hooks/use-repos";
-import { cn, getSnapshotDisplayName } from "@/lib/utils";
-import { useDashboardStore } from "@/stores/dashboard";
+import { useCreateRepo, useDeleteRepo, useRepos, useSearchRepos } from "@/hooks/use-repos";
+import { cn } from "@/lib/utils";
 import type { GitHubRepo, Repo } from "@/types";
-import type { RepoSnapshot } from "@proliferate/shared/contracts";
-import { formatDistanceToNow } from "date-fns";
-import {
-	AlertTriangle,
-	Check,
-	ChevronRight,
-	ExternalLink,
-	KeyRound,
-	MoreVertical,
-	Plus,
-	Search,
-	Star,
-	Trash2,
-} from "lucide-react";
+import { ExternalLink, MoreVertical, Plus, Search, Star, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 // ============================================
 // Main Page
@@ -60,7 +35,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 export default function RepositoriesPage() {
 	const { data: repos, isLoading } = useRepos();
-	const [expandedRepoId, setExpandedRepoId] = useState<string | null>(null);
 	const [filterQuery, setFilterQuery] = useState("");
 	const [addDialogOpen, setAddDialogOpen] = useState(false);
 
@@ -70,10 +44,6 @@ export default function RepositoriesPage() {
 		const q = filterQuery.toLowerCase();
 		return list.filter((r) => r.githubRepoName.toLowerCase().includes(q));
 	}, [repos, filterQuery]);
-
-	const toggleExpand = useCallback((repoId: string) => {
-		setExpandedRepoId((prev) => (prev === repoId ? null : repoId));
-	}, []);
 
 	if (isLoading) {
 		return (
@@ -135,20 +105,13 @@ export default function RepositoriesPage() {
 				<div className="rounded-xl border border-border overflow-hidden">
 					{/* Table header */}
 					<div className="flex items-center px-4 py-2 pr-12 text-xs text-muted-foreground border-b border-border/50">
-						<span className="w-6" />
 						<span className="flex-1 min-w-0">Name</span>
 						<span className="w-24 text-center shrink-0">Branch</span>
-						<span className="w-28 text-center shrink-0">Configurations</span>
-						<span className="w-28 text-center shrink-0">Status</span>
+						<span className="w-20 text-center shrink-0">GitHub</span>
 					</div>
 
 					{reposList.map((repo) => (
-						<RepoRow
-							key={repo.id}
-							repo={repo}
-							expanded={expandedRepoId === repo.id}
-							onToggle={() => toggleExpand(repo.id)}
-						/>
+						<RepoRow key={repo.id} repo={repo} />
 					))}
 				</div>
 			)}
@@ -166,26 +129,9 @@ export default function RepositoriesPage() {
 // Repo Row
 // ============================================
 
-function RepoRow({
-	repo,
-	expanded,
-	onToggle,
-}: {
-	repo: Repo;
-	expanded: boolean;
-	onToggle: () => void;
-}) {
-	const router = useRouter();
-	const { setSelectedRepo } = useDashboardStore();
+function RepoRow({ repo }: { repo: Repo }) {
 	const deleteRepo = useDeleteRepo();
 	const [deleteOpen, setDeleteOpen] = useState(false);
-	const { data: snapshots } = useRepoSnapshots(repo.id, expanded);
-	const configCount = snapshots?.length ?? 0;
-
-	const handleConfigure = () => {
-		setSelectedRepo(repo.id);
-		router.push(`/workspace/new?repoId=${repo.id}&type=setup`);
-	};
 
 	const handleDelete = async () => {
 		await deleteRepo.mutateAsync({ id: repo.id });
@@ -194,53 +140,24 @@ function RepoRow({
 
 	return (
 		<>
-			<div className={cn("border-b border-border/50 last:border-0", expanded && "bg-muted/30")}>
-				{/* Collapsed row */}
-				<div className="flex items-center hover:bg-muted/50 transition-colors">
-					<button
-						type="button"
-						onClick={onToggle}
-						className="flex-1 min-w-0 flex items-center px-4 py-2.5 text-sm text-left"
-					>
-						<ChevronRight
-							className={cn(
-								"h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0",
-								expanded && "rotate-90",
-							)}
-						/>
-						<span className="flex-1 min-w-0 flex items-center gap-1.5 ml-2">
-							<span className="font-medium truncate">{repo.githubRepoName}</span>
-							<a
-								href={repo.githubUrl}
-								target="_blank"
-								rel="noopener noreferrer"
-								onClick={(e) => e.stopPropagation()}
-								className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
-							>
-								<ExternalLink className="h-3 w-3" />
-							</a>
-						</span>
-						<span className="w-24 text-center text-xs text-muted-foreground shrink-0">
-							{repo.defaultBranch || "main"}
-						</span>
-						<span className="w-28 text-center text-xs text-muted-foreground shrink-0">
-							{configCount > 0 ? `${configCount} config${configCount !== 1 ? "s" : ""}` : "\u2014"}
-						</span>
-						<span className="w-28 flex justify-center shrink-0">
-							<span
-								className={cn(
-									"inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-medium",
-									repo.prebuildStatus === "ready"
-										? "border-border/50 bg-muted/50 text-foreground"
-										: "border-border/50 bg-muted/50 text-muted-foreground",
-								)}
-							>
-								{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
-							</span>
-						</span>
-					</button>
+			<div className="border-b border-border/50 last:border-0">
+				<div className="flex items-center hover:bg-muted/50 transition-colors px-4 py-2.5 text-sm">
+					<span className="flex-1 min-w-0 font-medium truncate">{repo.githubRepoName}</span>
+					<span className="w-24 text-center text-xs text-muted-foreground shrink-0">
+						{repo.defaultBranch || "main"}
+					</span>
+					<span className="w-20 flex justify-center shrink-0">
+						<a
+							href={repo.githubUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-muted-foreground hover:text-foreground transition-colors"
+						>
+							<ExternalLink className="h-3.5 w-3.5" />
+						</a>
+					</span>
 
-					<div className="pr-3 shrink-0">
+					<div className="shrink-0 ml-2">
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
 								<Button variant="ghost" size="icon" className="h-7 w-7">
@@ -248,10 +165,6 @@ function RepoRow({
 								</Button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end">
-								<DropdownMenuItem onClick={handleConfigure}>
-									<Plus className="h-4 w-4 mr-2" />
-									Configure
-								</DropdownMenuItem>
 								<DropdownMenuItem asChild>
 									<a href={repo.githubUrl} target="_blank" rel="noopener noreferrer">
 										<ExternalLink className="h-4 w-4 mr-2" />
@@ -267,9 +180,6 @@ function RepoRow({
 						</DropdownMenu>
 					</div>
 				</div>
-
-				{/* Expanded content */}
-				{expanded && <RepoConfigurations repoId={repo.id} />}
 			</div>
 
 			<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
@@ -277,8 +187,8 @@ function RepoRow({
 					<AlertDialogHeader>
 						<AlertDialogTitle>Delete repository</AlertDialogTitle>
 						<AlertDialogDescription>
-							Are you sure you want to remove {repo.githubRepoName}? This will delete all associated
-							configurations and snapshots.
+							Are you sure you want to remove {repo.githubRepoName}? This will not affect
+							configurations that reference this repository.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -293,349 +203,6 @@ function RepoRow({
 				</AlertDialogContent>
 			</AlertDialog>
 		</>
-	);
-}
-
-// ============================================
-// Repo Configurations (expanded content)
-// ============================================
-
-function RepoConfigurations({ repoId }: { repoId: string }) {
-	const router = useRouter();
-	const { setSelectedRepo } = useDashboardStore();
-	const { data: snapshots, isLoading } = useRepoSnapshots(repoId);
-
-	const handleConfigure = () => {
-		setSelectedRepo(repoId);
-		router.push(`/workspace/new?repoId=${repoId}&type=setup`);
-	};
-
-	if (isLoading) {
-		return (
-			<div className="px-4 pb-4 pl-10">
-				<LoadingDots size="sm" className="text-muted-foreground" />
-			</div>
-		);
-	}
-
-	if (!snapshots || snapshots.length === 0) {
-		return (
-			<div className="px-4 pb-4 pl-10">
-				<p className="text-xs text-muted-foreground mb-2">No configurations yet</p>
-				<Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleConfigure}>
-					Configure
-				</Button>
-			</div>
-		);
-	}
-
-	return (
-		<div className="px-4 pb-3 pl-10 space-y-1">
-			{snapshots.map((config) => (
-				<ConfigurationRow key={config.id} config={config} repoId={repoId} />
-			))}
-			<Button
-				variant="ghost"
-				size="sm"
-				className="h-7 text-xs text-muted-foreground hover:text-foreground -ml-2"
-				onClick={handleConfigure}
-			>
-				<Plus className="h-3 w-3 mr-1" />
-				New configuration
-			</Button>
-		</div>
-	);
-}
-
-// ============================================
-// Configuration Row
-// ============================================
-
-function ConfigurationRow({
-	config,
-	repoId,
-}: {
-	config: RepoSnapshot;
-	repoId: string;
-}) {
-	const name = getSnapshotDisplayName(config);
-	const setupSessionId = config.setupSessions?.find((s) => s.sessionType === "setup")?.id;
-	const timeAgo = formatDistanceToNow(new Date(config.createdAt), { addSuffix: true });
-	const statusLabel = config.status || "pending";
-
-	return (
-		<div className="py-2 border-b border-border/30 last:border-0">
-			<div className="flex items-center justify-between gap-2">
-				<div className="min-w-0">
-					<span className="text-sm font-medium">{name}</span>
-					<span className="text-xs text-muted-foreground ml-2">
-						{statusLabel} · {timeAgo}
-						{config.createdBy && ` by ${config.createdBy}`}
-					</span>
-				</div>
-				<div className="flex items-center gap-1 shrink-0">
-					{setupSessionId && (
-						<>
-							<Button
-								variant="ghost"
-								size="sm"
-								className="h-7 text-xs"
-								onClick={() => openHistoricalSession(setupSessionId, name)}
-							>
-								View
-							</Button>
-							<Button
-								variant="ghost"
-								size="sm"
-								className="h-7 text-xs"
-								onClick={() =>
-									openEditSession({
-										sessionId: setupSessionId,
-										snapshotId: config.snapshotId || config.id,
-										snapshotName: name,
-										prebuildId: config.id,
-									})
-								}
-							>
-								Edit
-							</Button>
-						</>
-					)}
-				</div>
-			</div>
-			<EnvFileSummary prebuildId={config.id} repoId={repoId} />
-		</div>
-	);
-}
-
-// ============================================
-// Env File Summary
-// ============================================
-
-interface EnvFileSpec {
-	path: string;
-	keys: Array<{ key: string; required: boolean }>;
-}
-
-function EnvFileSummary({
-	prebuildId,
-	repoId,
-}: {
-	prebuildId: string;
-	repoId: string;
-}) {
-	const [secretsDialogOpen, setSecretsDialogOpen] = useState(false);
-	const { data: envFilesRaw, isLoading: envLoading } = usePrebuildEnvFiles(prebuildId);
-
-	const envFiles = useMemo(() => {
-		if (!envFilesRaw || !Array.isArray(envFilesRaw)) return [];
-		return envFilesRaw as EnvFileSpec[];
-	}, [envFilesRaw]);
-
-	const allKeys = useMemo(() => {
-		return envFiles.flatMap((f) => f.keys.map((k) => k.key));
-	}, [envFiles]);
-
-	const { data: secretResults, isLoading: secretsLoading } = useCheckSecrets(
-		allKeys,
-		repoId,
-		prebuildId,
-		allKeys.length > 0,
-	);
-
-	if (envLoading || envFiles.length === 0) return null;
-
-	const existingKeys = new Set((secretResults ?? []).filter((r) => r.exists).map((r) => r.key));
-	const isLoading = secretsLoading;
-	let hasMissing = false;
-
-	return (
-		<>
-			<div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-				{envFiles.map((file) => {
-					const total = file.keys.length;
-					const populated = file.keys.filter((k) => existingKeys.has(k.key)).length;
-					const missing = total - populated;
-					if (missing > 0) hasMissing = true;
-
-					return (
-						<span
-							key={file.path}
-							className={cn(
-								"text-xs",
-								missing > 0 ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground",
-							)}
-						>
-							{file.path}{" "}
-							{isLoading ? (
-								<span className="text-muted-foreground">(...)</span>
-							) : (
-								<>
-									({populated}/{total} keys)
-									{missing > 0 && <AlertTriangle className="inline h-3 w-3 ml-0.5 -mt-0.5" />}
-								</>
-							)}
-						</span>
-					);
-				})}
-				{!isLoading && (
-					<button
-						type="button"
-						onClick={() => setSecretsDialogOpen(true)}
-						className={cn(
-							"text-xs hover:underline",
-							hasMissing ? "text-primary" : "text-muted-foreground hover:text-foreground",
-						)}
-					>
-						{hasMissing ? "Manage Secrets" : "View Secrets"}
-					</button>
-				)}
-			</div>
-
-			<ManageSecretsDialog
-				open={secretsDialogOpen}
-				onOpenChange={setSecretsDialogOpen}
-				envFiles={envFiles}
-				existingKeys={existingKeys}
-				repoId={repoId}
-			/>
-		</>
-	);
-}
-
-// ============================================
-// Manage Secrets Dialog
-// ============================================
-
-function ManageSecretsDialog({
-	open,
-	onOpenChange,
-	envFiles,
-	existingKeys,
-	repoId,
-}: {
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	envFiles: EnvFileSpec[];
-	existingKeys: Set<string>;
-	repoId: string;
-}) {
-	const createSecret = useCreateSecret();
-	const [values, setValues] = useState<Record<string, string>>({});
-	const [saving, setSaving] = useState(false);
-	const [errors, setErrors] = useState<Record<string, string>>({});
-	const [saved, setSaved] = useState<Set<string>>(new Set());
-
-	// Reset state when dialog opens
-	useEffect(() => {
-		if (open) {
-			setValues({});
-			setErrors({});
-			setSaved(new Set());
-		}
-	}, [open]);
-
-	const missingKeys = useMemo(() => {
-		return envFiles.flatMap((f) =>
-			f.keys.filter((k) => !existingKeys.has(k.key)).map((k) => k.key),
-		);
-	}, [envFiles, existingKeys]);
-
-	const filledCount = missingKeys.filter((k) => values[k]?.trim()).length;
-
-	const handleSave = async () => {
-		const toCreate = missingKeys.filter((k) => values[k]?.trim());
-		if (toCreate.length === 0) return;
-
-		setSaving(true);
-		setErrors({});
-		const newSaved = new Set(saved);
-
-		for (const key of toCreate) {
-			try {
-				await createSecret.mutateAsync({
-					key,
-					value: values[key].trim(),
-					repoId,
-				});
-				newSaved.add(key);
-			} catch (err) {
-				const message = err instanceof Error ? err.message : "Failed to save";
-				setErrors((prev) => ({ ...prev, [key]: message }));
-			}
-		}
-
-		setSaved(newSaved);
-		setSaving(false);
-
-		// Close if all missing keys are now saved
-		const remainingMissing = missingKeys.filter((k) => !newSaved.has(k) && !existingKeys.has(k));
-		if (remainingMissing.length === 0) {
-			onOpenChange(false);
-		}
-	};
-
-	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-md">
-				<DialogHeader>
-					<DialogTitle>Environment Secrets</DialogTitle>
-				</DialogHeader>
-
-				<div className="space-y-4 max-h-96 overflow-y-auto">
-					{envFiles.map((file) => (
-						<div key={file.path}>
-							<p className="text-xs font-medium text-muted-foreground mb-2">{file.path}</p>
-							<div className="space-y-2">
-								{file.keys.map((k) => {
-									const exists = existingKeys.has(k.key) || saved.has(k.key);
-									const error = errors[k.key];
-
-									return (
-										<div key={k.key} className="space-y-1">
-											<div className="flex items-center gap-2">
-												{exists ? (
-													<Check className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-												) : (
-													<KeyRound className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-												)}
-												<span className="text-sm flex-1 min-w-0 truncate">{k.key}</span>
-												{exists && (
-													<span className="text-xs text-muted-foreground shrink-0">Set</span>
-												)}
-											</div>
-											{!exists && (
-												<Input
-													type="password"
-													value={values[k.key] ?? ""}
-													onChange={(e) =>
-														setValues((prev) => ({ ...prev, [k.key]: e.target.value }))
-													}
-													placeholder="Enter value..."
-													className="h-8 text-sm ml-5.5"
-												/>
-											)}
-											{error && <p className="text-xs text-destructive ml-5.5">{error}</p>}
-										</div>
-									);
-								})}
-							</div>
-						</div>
-					))}
-				</div>
-
-				{missingKeys.length > 0 && missingKeys.length !== saved.size && (
-					<div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
-						<Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-							Cancel
-						</Button>
-						<Button size="sm" onClick={handleSave} disabled={saving || filledCount === 0}>
-							{saving ? "Saving..." : `Save ${filledCount > 0 ? `(${filledCount})` : ""}`}
-						</Button>
-					</div>
-				)}
-			</DialogContent>
-		</Dialog>
 	);
 }
 

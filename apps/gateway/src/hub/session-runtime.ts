@@ -9,7 +9,7 @@ import { type Logger, createLogger } from "@proliferate/logger";
 import { baseSnapshots, billing, sessions } from "@proliferate/services";
 import type {
 	AutoStartOutputEntry,
-	PrebuildServiceCommand,
+	ConfigurationServiceCommand,
 	SandboxProvider,
 	SandboxProviderType,
 	ServerMessage,
@@ -180,7 +180,7 @@ export class SessionRuntime {
 	 */
 	async testAutoStartCommands(
 		runId: string,
-		overrideCommands?: PrebuildServiceCommand[],
+		overrideCommands?: ConfigurationServiceCommand[],
 	): Promise<AutoStartOutputEntry[]> {
 		const sandboxId = this.context.session.sandbox_id;
 		const commands = overrideCommands?.length ? overrideCommands : this.context.serviceCommands;
@@ -280,13 +280,13 @@ export class SessionRuntime {
 			this.context = await loadSessionContext(this.env, this.sessionId);
 			this.logLatency("runtime.ensure_ready.load_context", {
 				durationMs: Date.now() - contextStartMs,
-				prebuildId: this.context.session.prebuild_id,
+				configurationId: this.context.session.configuration_id,
 				repoCount: this.context.repos.length,
 				hasSandbox: Boolean(this.context.session.sandbox_id),
 				hasSnapshot: Boolean(this.context.session.snapshot_id),
 			});
 			this.log("Session context loaded", {
-				prebuildId: this.context.session.prebuild_id,
+				configurationId: this.context.session.configuration_id,
 				repoCount: this.context.repos.length,
 				primaryRepo: this.context.primaryRepo.github_repo_name,
 				hasSandbox: Boolean(this.context.session.sandbox_id),

@@ -21,7 +21,7 @@ export function AddSnapshotButton() {
 	const [open, setOpen] = useState(false);
 	const { setMobileSidebarOpen, setPendingPrompt } = useDashboardStore();
 
-	const handleCreate = (_prebuildId: string, sessionId: string) => {
+	const handleCreate = (_configurationId: string, sessionId: string) => {
 		setOpen(false);
 		setMobileSidebarOpen(false);
 		setPendingPrompt(getSetupInitialPrompt());
@@ -61,7 +61,7 @@ export function AddSnapshotRow() {
 	const [open, setOpen] = useState(false);
 	const { setMobileSidebarOpen, setPendingPrompt } = useDashboardStore();
 
-	const handleCreate = (_prebuildId: string, sessionId: string) => {
+	const handleCreate = (_configurationId: string, sessionId: string) => {
 		setOpen(false);
 		setMobileSidebarOpen(false);
 		setPendingPrompt(getSetupInitialPrompt());

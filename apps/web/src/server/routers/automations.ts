@@ -67,12 +67,12 @@ export const automationsRouter = {
 					name: input.name,
 					description: input.description,
 					agentInstructions: input.agentInstructions,
-					defaultPrebuildId: input.defaultPrebuildId,
+					defaultConfigurationId: input.defaultConfigurationId,
 					allowAgenticRepoSelection: input.allowAgenticRepoSelection,
 				});
 				return { automation };
 			} catch (err) {
-				if (err instanceof Error && err.message === "Prebuild not found") {
+				if (err instanceof Error && err.message === "Configuration not found") {
 					throw new ORPCError("NOT_FOUND", { message: err.message });
 				}
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
@@ -144,7 +144,7 @@ export const automationsRouter = {
 					description: updateData.description,
 					enabled: updateData.enabled,
 					agentInstructions: updateData.agentInstructions,
-					defaultPrebuildId: updateData.defaultPrebuildId,
+					defaultConfigurationId: updateData.defaultConfigurationId,
 					allowAgenticRepoSelection: updateData.allowAgenticRepoSelection,
 					agentType: updateData.agentType,
 					modelId: updateData.modelId,
@@ -157,7 +157,7 @@ export const automationsRouter = {
 				return { automation };
 			} catch (err) {
 				if (err instanceof Error) {
-					if (err.message === "Prebuild not found") {
+					if (err.message === "Configuration not found") {
 						throw new ORPCError("NOT_FOUND", { message: err.message });
 					}
 					if (err.message.includes("no snapshot")) {

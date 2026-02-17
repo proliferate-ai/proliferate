@@ -61,7 +61,7 @@ export function useCreateSession() {
 				status: "starting",
 				sandboxId: result.sandboxId ?? null,
 				snapshotId: null,
-				prebuildId: variables.prebuildId ?? null,
+				configurationId: variables.configurationId ?? null,
 				branchName: null,
 				parentSessionId: null,
 				title: null,
@@ -201,13 +201,12 @@ export function useFinalizeSetup() {
 	const queryClient = useQueryClient();
 
 	const mutation = useMutation({
-		...orpc.repos.finalizeSetup.mutationOptions(),
+		...orpc.configurations.finalizeSetup.mutationOptions(),
 		onSuccess: () => {
 			// Invalidate all relevant queries
 			queryClient.invalidateQueries({ queryKey: orpc.sessions.list.key() });
 			queryClient.invalidateQueries({ queryKey: orpc.repos.list.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listPrebuilds.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
 		},
 	});
 

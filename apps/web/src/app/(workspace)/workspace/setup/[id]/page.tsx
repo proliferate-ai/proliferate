@@ -3,7 +3,7 @@
 import { CodingSession } from "@/components/coding-session";
 import { SessionLoadingShell } from "@/components/coding-session/session-loading-shell";
 import { Button } from "@/components/ui/button";
-import { useCreatePrebuild } from "@/hooks/use-prebuilds";
+import { useCreateConfiguration } from "@/hooks/use-configurations";
 import { useCreateSession, useFinalizeSetup } from "@/hooks/use-sessions";
 import { useDashboardStore } from "@/stores/dashboard";
 import { Check, Settings } from "lucide-react";
@@ -19,25 +19,25 @@ export default function SetupPage() {
 	const creationStartedRef = useRef(false);
 	const { selectedModel } = useDashboardStore();
 
-	const createPrebuildMutation = useCreatePrebuild();
+	const createConfigurationMutation = useCreateConfiguration();
 	const createSessionMutation = useCreateSession();
 	const finalizeSetupMutation = useFinalizeSetup();
 
-	// Create prebuild and session on mount
+	// Create configuration and session on mount
 	useEffect(() => {
 		if (!repoId || sessionId) return;
 		if (creationStartedRef.current) return;
 
 		creationStartedRef.current = true;
 
-		const createPrebuildAndSession = async () => {
+		const createConfigurationAndSession = async () => {
 			try {
-				const prebuildResult = await createPrebuildMutation.mutateAsync({
+				const configurationResult = await createConfigurationMutation.mutateAsync({
 					repoIds: [repoId],
 				});
 
 				const sessionResult = await createSessionMutation.mutateAsync({
-					prebuildId: prebuildResult.prebuildId,
+					configurationId: configurationResult.configurationId,
 					sessionType: "setup",
 					modelId: selectedModel,
 				});
@@ -48,8 +48,8 @@ export default function SetupPage() {
 			}
 		};
 
-		createPrebuildAndSession();
-	}, [repoId, sessionId, selectedModel, createPrebuildMutation, createSessionMutation]);
+		createConfigurationAndSession();
+	}, [repoId, sessionId, selectedModel, createConfigurationMutation, createSessionMutation]);
 
 	const handleFinalize = async () => {
 		if (!sessionId) return;
@@ -65,9 +65,9 @@ export default function SetupPage() {
 		}
 	};
 
-	const hasError = createPrebuildMutation.isError || createSessionMutation.isError;
+	const hasError = createConfigurationMutation.isError || createSessionMutation.isError;
 	const errorMessage =
-		createPrebuildMutation.error?.message ||
+		createConfigurationMutation.error?.message ||
 		createSessionMutation.error?.message ||
 		"Failed to create session";
 
@@ -82,7 +82,7 @@ export default function SetupPage() {
 							className="h-auto p-0 text-sm text-primary underline"
 							onClick={() => {
 								creationStartedRef.current = false;
-								createPrebuildMutation.reset();
+								createConfigurationMutation.reset();
 								createSessionMutation.reset();
 							}}
 						>

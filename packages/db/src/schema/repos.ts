@@ -55,12 +55,12 @@ export const reposRelations = relations(repos, ({ one, many }) => ({
 		fields: [repos.addedBy],
 		references: [user.id],
 	}),
-	prebuildRepos: many(prebuildRepos),
+	configurationRepos: many(configurationRepos),
 	repoConnections: many(repoConnections),
 	secrets: many(secrets),
 }));
 
+import { configurationRepos } from "./configurations";
 import { repoConnections } from "./integrations";
 // Forward declarations for circular references
-import { prebuildRepos } from "./prebuilds";
 import { secrets } from "./secrets";

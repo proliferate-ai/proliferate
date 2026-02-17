@@ -101,7 +101,7 @@ export function WelcomeDialog() {
 					</DialogHeader>
 					<SnapshotSelector
 						mode="create"
-						onCreate={(_prebuildId, sessionId) => {
+						onCreate={(_configurationId, sessionId) => {
 							setShowCreate(false);
 							setPendingPrompt(getSetupInitialPrompt());
 							router.push(`/workspace/${sessionId}`);

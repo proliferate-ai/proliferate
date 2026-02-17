@@ -2,11 +2,11 @@ import { initContract } from "@ts-rest/core";
 import { adminContract } from "./admin";
 import { automationsContract } from "./automations";
 import { cliContract } from "./cli";
+import { configurationsContract } from "./configurations";
 import { integrationsContract } from "./integrations";
 import { miscContract } from "./misc";
 import { onboardingContract } from "./onboarding";
 import { orgsContract } from "./orgs";
-import { prebuildsContract } from "./prebuilds";
 import { reposContract } from "./repos";
 import { schedulesContract } from "./schedules";
 import { secretsContract } from "./secrets";
@@ -24,11 +24,11 @@ export const contract = c.router({
 	admin: adminContract,
 	automations: automationsContract,
 	cli: cliContract,
+	configurations: configurationsContract,
 	integrations: integrationsContract,
 	misc: miscContract,
 	onboarding: onboardingContract,
 	orgs: orgsContract,
-	prebuilds: prebuildsContract,
 	repos: reposContract,
 	schedules: schedulesContract,
 	secrets: secretsContract,
@@ -41,11 +41,11 @@ export const contract = c.router({
 export { adminContract } from "./admin";
 export { automationsContract } from "./automations";
 export { cliContract } from "./cli";
+export { configurationsContract } from "./configurations";
 export { integrationsContract } from "./integrations";
 export { miscContract } from "./misc";
 export { onboardingContract } from "./onboarding";
 export { orgsContract } from "./orgs";
-export { prebuildsContract } from "./prebuilds";
 export { reposContract } from "./repos";
 export { schedulesContract } from "./schedules";
 export { secretsContract } from "./secrets";
@@ -74,8 +74,6 @@ export type {
 	CreateRepoInput,
 	GitHubRepo,
 	SearchRepo,
-	RepoPrebuild,
-	RepoSnapshot,
 	FinalizeSetupInput,
 } from "./repos";
 export {
@@ -83,8 +81,6 @@ export {
 	CreateRepoInputSchema,
 	GitHubRepoSchema,
 	SearchRepoSchema,
-	RepoPrebuildSchema,
-	RepoSnapshotSchema,
 	FinalizeSetupInputSchema,
 	FinalizeSetupResponseSchema,
 } from "./repos";
@@ -109,9 +105,13 @@ export {
 	DomainSuggestionSchema,
 } from "./orgs";
 
-// Re-export prebuild types
-export type { Prebuild } from "./prebuilds";
-export { PrebuildSchema, CreatePrebuildInputSchema, UpdatePrebuildInputSchema } from "./prebuilds";
+// Re-export configuration types
+export type { Configuration } from "./configurations";
+export {
+	ConfigurationSchema,
+	CreateConfigurationInputSchema,
+	UpdateConfigurationInputSchema,
+} from "./configurations";
 
 // Re-export onboarding types
 export type {
@@ -139,7 +139,7 @@ export {
 	DevicePollResponseSchema,
 	SshKeySchema,
 	CliSessionSchema,
-	CliPrebuildSchema,
+	CliConfigurationSchema,
 } from "./cli";
 
 // Re-export integration types

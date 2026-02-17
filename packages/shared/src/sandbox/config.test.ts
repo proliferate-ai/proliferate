@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	capOutput,
-	parsePrebuildServiceCommands,
+	parseConfigurationServiceCommands,
 	parseServiceCommands,
 	resolveServiceCommands,
 	shellEscape,
@@ -97,16 +97,16 @@ describe("parseServiceCommands", () => {
 	});
 });
 
-describe("parsePrebuildServiceCommands", () => {
+describe("parseConfigurationServiceCommands", () => {
 	it("returns empty array for non-array input", () => {
-		expect(parsePrebuildServiceCommands(null)).toEqual([]);
-		expect(parsePrebuildServiceCommands(undefined)).toEqual([]);
-		expect(parsePrebuildServiceCommands("string")).toEqual([]);
-		expect(parsePrebuildServiceCommands({})).toEqual([]);
+		expect(parseConfigurationServiceCommands(null)).toEqual([]);
+		expect(parseConfigurationServiceCommands(undefined)).toEqual([]);
+		expect(parseConfigurationServiceCommands("string")).toEqual([]);
+		expect(parseConfigurationServiceCommands({})).toEqual([]);
 	});
 
 	it("returns empty array for empty array", () => {
-		expect(parsePrebuildServiceCommands([])).toEqual([]);
+		expect(parseConfigurationServiceCommands([])).toEqual([]);
 	});
 
 	it("parses valid commands with workspacePath", () => {
@@ -114,12 +114,12 @@ describe("parsePrebuildServiceCommands", () => {
 			{ name: "dev", command: "pnpm dev", workspacePath: "frontend" },
 			{ name: "api", command: "pnpm start", workspacePath: "backend", cwd: "src" },
 		];
-		expect(parsePrebuildServiceCommands(input)).toEqual(input);
+		expect(parseConfigurationServiceCommands(input)).toEqual(input);
 	});
 
 	it("parses commands without workspacePath", () => {
 		const input = [{ name: "dev", command: "pnpm dev" }];
-		expect(parsePrebuildServiceCommands(input)).toEqual(input);
+		expect(parseConfigurationServiceCommands(input)).toEqual(input);
 	});
 
 	it("rejects more than 10 commands", () => {
@@ -127,23 +127,23 @@ describe("parsePrebuildServiceCommands", () => {
 			name: `cmd-${i}`,
 			command: `echo ${i}`,
 		}));
-		expect(parsePrebuildServiceCommands(input)).toEqual([]);
+		expect(parseConfigurationServiceCommands(input)).toEqual([]);
 	});
 });
 
 describe("resolveServiceCommands", () => {
-	it("uses prebuild commands when present", () => {
-		const prebuildCmds = [{ name: "dev", command: "pnpm dev", workspacePath: "frontend" }];
+	it("uses configuration commands when present", () => {
+		const configCmds = [{ name: "dev", command: "pnpm dev", workspacePath: "frontend" }];
 		const repoSpecs = [
 			{
 				workspacePath: "frontend",
 				serviceCommands: [{ name: "old", command: "npm start" }],
 			},
 		];
-		expect(resolveServiceCommands(prebuildCmds, repoSpecs)).toEqual(prebuildCmds);
+		expect(resolveServiceCommands(configCmds, repoSpecs)).toEqual(configCmds);
 	});
 
-	it("falls back to repo commands when prebuild has none", () => {
+	it("falls back to repo commands when configuration has none", () => {
 		const repoSpecs = [
 			{
 				workspacePath: "frontend",
@@ -159,7 +159,7 @@ describe("resolveServiceCommands", () => {
 		]);
 	});
 
-	it("falls back to repo commands when prebuild is empty array", () => {
+	it("falls back to repo commands when configuration is empty array", () => {
 		const repoSpecs = [
 			{
 				workspacePath: ".",
@@ -193,14 +193,14 @@ describe("resolveServiceCommands", () => {
 		expect(resolveServiceCommands(null, [{ workspacePath: "." }])).toEqual([]);
 	});
 
-	it("returns empty array when prebuild commands are invalid", () => {
+	it("returns empty array when configuration commands are invalid", () => {
 		const repoSpecs = [
 			{
 				workspacePath: ".",
 				serviceCommands: [{ name: "dev", command: "pnpm dev" }],
 			},
 		];
-		// Invalid prebuild commands fall through to repo fallback
+		// Invalid configuration commands fall through to repo fallback
 		expect(resolveServiceCommands("not-an-array", repoSpecs)).toEqual([
 			{ name: "dev", command: "pnpm dev", cwd: undefined, workspacePath: "." },
 		]);

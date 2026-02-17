@@ -10,8 +10,8 @@ const c = initContract();
 // Schemas
 // ============================================
 
-// Prebuild summary for automation responses
-const PrebuildSummarySchema = z
+// Configuration summary for automation responses
+const ConfigurationSummarySchema = z
 	.object({
 		id: z.string().uuid(),
 		name: z.string().nullable(),
@@ -62,14 +62,14 @@ export const AutomationSchema = z.object({
 	description: z.string().nullable(),
 	enabled: z.boolean(),
 	agent_instructions: z.string().nullable(),
-	default_prebuild_id: z.string().uuid().nullable(),
+	default_configuration_id: z.string().uuid().nullable(),
 	allow_agentic_repo_selection: z.boolean(),
 	agent_type: z.string().nullable().optional(),
 	model_id: z.string().nullable().optional(),
 	created_by: z.string().nullable(),
 	created_at: z.string(),
 	updated_at: z.string(),
-	default_prebuild: PrebuildSummarySchema.optional(),
+	default_configuration: ConfigurationSummarySchema.optional(),
 	creator: CreatorSchema.optional(),
 	llm_filter_prompt: z.string().nullable().optional(),
 	enabled_tools: z.record(z.unknown()).nullable().optional(),
@@ -104,7 +104,7 @@ export const CreateAutomationInputSchema = z.object({
 	name: z.string().optional(),
 	description: z.string().optional(),
 	agentInstructions: z.string().optional(),
-	defaultPrebuildId: z.string().uuid().optional(),
+	defaultConfigurationId: z.string().uuid().optional(),
 	allowAgenticRepoSelection: z.boolean().optional(),
 });
 
@@ -116,7 +116,7 @@ export const UpdateAutomationInputSchema = z.object({
 	description: z.string().optional(),
 	enabled: z.boolean().optional(),
 	agentInstructions: z.string().optional(),
-	defaultPrebuildId: z.string().uuid().nullable().optional(),
+	defaultConfigurationId: z.string().uuid().nullable().optional(),
 	allowAgenticRepoSelection: z.boolean().optional(),
 	agentType: z.string().optional(),
 	modelId: z.string().optional(),

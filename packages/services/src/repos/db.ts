@@ -11,8 +11,8 @@ import type { DbCreateRepoInput } from "../types/repos";
 // Type alias for Drizzle model
 export type RepoRow = InferSelectModel<typeof repos>;
 
-// Type for repo with prebuilds (from relation query)
-export interface RepoWithPrebuildsRow extends RepoRow {
+// Type for repo with configurations (from relation query)
+export interface RepoWithConfigurationsRow extends RepoRow {
 	configurationRepos?: Array<{
 		configuration: {
 			id: string;
@@ -41,9 +41,9 @@ export interface RepoSnapshotBuildInfoRow {
 // ============================================
 
 /**
- * List repos for an organization with prebuild status.
+ * List repos for an organization with configuration status.
  */
-export async function listByOrganization(orgId: string): Promise<RepoWithPrebuildsRow[]> {
+export async function listByOrganization(orgId: string): Promise<RepoWithConfigurationsRow[]> {
 	const db = getDb();
 	const results = await db.query.repos.findMany({
 		where: eq(repos.organizationId, orgId),
@@ -67,9 +67,9 @@ export async function listByOrganization(orgId: string): Promise<RepoWithPrebuil
 }
 
 /**
- * Get a single repo by ID with prebuild status.
+ * Get a single repo by ID with configuration status.
  */
-export async function findById(id: string, orgId: string): Promise<RepoWithPrebuildsRow | null> {
+export async function findById(id: string, orgId: string): Promise<RepoWithConfigurationsRow | null> {
 	const db = getDb();
 	const result = await db.query.repos.findFirst({
 		where: and(eq(repos.id, id), eq(repos.organizationId, orgId)),

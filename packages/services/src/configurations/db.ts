@@ -1,5 +1,5 @@
 /**
- * Prebuilds DB operations.
+ * Configurations DB operations.
  *
  * Raw Drizzle queries - no business logic.
  */
@@ -19,22 +19,22 @@ import {
 } from "../db/client";
 import { getServicesLogger } from "../logger";
 import type {
-	CreateManagedPrebuildInput,
-	CreatePrebuildFullInput,
-	CreatePrebuildInput,
-	CreatePrebuildRepoInput,
-	UpdatePrebuildInput,
-} from "../types/prebuilds";
+	CreateConfigurationFullInput,
+	CreateConfigurationInput,
+	CreateConfigurationRepoInput,
+	CreateManagedConfigurationInput,
+	UpdateConfigurationInput,
+} from "../types/configurations";
 
 // ============================================
 // Types
 // ============================================
 
-/** Prebuild row type from Drizzle schema */
-export type PrebuildRow = InferSelectModel<typeof configurations>;
+/** Configuration row type from Drizzle schema */
+export type ConfigurationRow = InferSelectModel<typeof configurations>;
 
-/** Prebuild repo row type from Drizzle schema */
-export type PrebuildRepoRow = InferSelectModel<typeof configurationRepos>;
+/** Configuration repo row type from Drizzle schema */
+export type ConfigurationRepoRow = InferSelectModel<typeof configurationRepos>;
 
 /** Repo row type from Drizzle schema */
 export type RepoRow = InferSelectModel<typeof repos>;
@@ -42,8 +42,8 @@ export type RepoRow = InferSelectModel<typeof repos>;
 /** Session row type (for relations) */
 export type SessionRow = InferSelectModel<typeof sessions>;
 
-/** Prebuild with repos and sessions relations */
-export interface PrebuildWithRelationsRow extends PrebuildRow {
+/** Configuration with repos and sessions relations */
+export interface ConfigurationWithRelationsRow extends ConfigurationRow {
 	configurationRepos: Array<{
 		workspacePath: string;
 		repo: {
@@ -60,8 +60,8 @@ export interface PrebuildWithRelationsRow extends PrebuildRow {
 	}>;
 }
 
-/** Prebuild with minimal repo data for auth check */
-export interface PrebuildWithOrgRow {
+/** Configuration with minimal repo data for auth check */
+export interface ConfigurationWithOrgRow {
 	id: string;
 	configurationRepos: Array<{
 		repo: {
@@ -77,16 +77,16 @@ export interface RepoBasicRow {
 	githubRepoName: string;
 }
 
-/** Prebuild data for session creation */
-export interface PrebuildForSessionRow {
+/** Configuration data for session creation */
+export interface ConfigurationForSessionRow {
 	id: string;
 	snapshotId: string | null;
 	sandboxProvider: string | null;
 	status: string | null;
 }
 
-/** Prebuild repo with full repo details for session creation */
-export interface PrebuildRepoDetailRow {
+/** Configuration repo with full repo details for session creation */
+export interface ConfigurationRepoDetailRow {
 	workspacePath: string;
 	repo: {
 		id: string;
@@ -101,8 +101,8 @@ export interface PrebuildRepoDetailRow {
 	} | null;
 }
 
-/** Prebuild repos with nested prebuild data for snapshots */
-export interface PrebuildRepoWithPrebuildRow {
+/** Configuration repos with nested configuration data for snapshots */
+export interface ConfigurationRepoWithConfigurationRow {
 	configurationId: string;
 	workspacePath: string;
 	configuration: {
@@ -123,8 +123,8 @@ export interface SnapshotRepoRow {
 	githubRepoName: string;
 }
 
-/** Managed prebuild with repos for lookup */
-export interface ManagedPrebuildRow {
+/** Managed configuration with repos for lookup */
+export interface ManagedConfigurationRow {
 	id: string;
 	snapshotId: string | null;
 	configurationRepos: Array<{
@@ -136,14 +136,14 @@ export interface ManagedPrebuildRow {
 	}>;
 }
 
-/** Repo with github_repo_name for managed prebuild creation */
+/** Repo with github_repo_name for managed configuration creation */
 export interface RepoWithNameRow {
 	id: string;
 	githubRepoName: string;
 }
 
-/** Prebuild row for repo listing (simpler than full PrebuildRow) */
-export interface RepoPrebuildRow {
+/** Configuration row for repo listing (simpler than full ConfigurationRow) */
+export interface RepoConfigurationRow {
 	id: string;
 	name: string;
 	notes: string | null;
@@ -160,7 +160,7 @@ export interface RepoPrebuildRow {
  * List configurations with repos and setup sessions.
  * Optionally filter by status.
  */
-export async function listAll(status?: string): Promise<PrebuildWithRelationsRow[]> {
+export async function listAll(status?: string): Promise<ConfigurationWithRelationsRow[]> {
 	const db = getDb();
 
 	const conditions = [];
@@ -194,13 +194,13 @@ export async function listAll(status?: string): Promise<PrebuildWithRelationsRow
 		},
 	});
 
-	return results as PrebuildWithRelationsRow[];
+	return results as ConfigurationWithRelationsRow[];
 }
 
 /**
- * Get a prebuild by ID with minimal repos (for auth check).
+ * Get a configuration by ID with minimal repos (for auth check).
  */
-export async function findById(id: string): Promise<PrebuildWithOrgRow | null> {
+export async function findById(id: string): Promise<ConfigurationWithOrgRow | null> {
 	const db = getDb();
 	const result = await db.query.configurations.findFirst({
 		where: eq(configurations.id, id),
@@ -224,9 +224,9 @@ export async function findById(id: string): Promise<PrebuildWithOrgRow | null> {
 }
 
 /**
- * Get a prebuild by ID with full relations.
+ * Get a configuration by ID with full relations.
  */
-export async function findByIdFull(id: string): Promise<PrebuildWithRelationsRow | null> {
+export async function findByIdFull(id: string): Promise<ConfigurationWithRelationsRow | null> {
 	const db = getDb();
 	const result = await db.query.configurations.findFirst({
 		where: eq(configurations.id, id),
@@ -253,7 +253,7 @@ export async function findByIdFull(id: string): Promise<PrebuildWithRelationsRow
 		},
 	});
 
-	return (result as PrebuildWithRelationsRow) ?? null;
+	return (result as ConfigurationWithRelationsRow) ?? null;
 }
 
 /**
@@ -274,9 +274,9 @@ export async function getReposByIds(repoIds: string[]): Promise<RepoBasicRow[]> 
 }
 
 /**
- * Create a new prebuild record.
+ * Create a new configuration record.
  */
-export async function create(input: CreatePrebuildInput): Promise<void> {
+export async function create(input: CreateConfigurationInput): Promise<void> {
 	const db = getDb();
 	await db.insert(configurations).values({
 		id: input.id,
@@ -289,12 +289,14 @@ export async function create(input: CreatePrebuildInput): Promise<void> {
 }
 
 /**
- * Create prebuild_repos junction entries.
+ * Create configuration_repos junction entries.
  */
-export async function createPrebuildRepos(entries: CreatePrebuildRepoInput[]): Promise<void> {
+export async function createConfigurationRepos(
+	entries: CreateConfigurationRepoInput[],
+): Promise<void> {
 	const db = getDb();
 	const rows = entries.map((e) => ({
-		configurationId: e.prebuildId,
+		configurationId: e.configurationId,
 		repoId: e.repoId,
 		workspacePath: e.workspacePath,
 	}));
@@ -303,9 +305,12 @@ export async function createPrebuildRepos(entries: CreatePrebuildRepoInput[]): P
 }
 
 /**
- * Update a prebuild.
+ * Update a configuration.
  */
-export async function update(id: string, input: UpdatePrebuildInput): Promise<PrebuildRow> {
+export async function update(
+	id: string,
+	input: UpdateConfigurationInput,
+): Promise<ConfigurationRow> {
 	const db = getDb();
 	const updates: Partial<typeof configurations.$inferInsert> = {};
 
@@ -324,7 +329,7 @@ export async function update(id: string, input: UpdatePrebuildInput): Promise<Pr
 }
 
 /**
- * Delete a prebuild by ID.
+ * Delete a configuration by ID.
  */
 export async function deleteById(id: string): Promise<void> {
 	const db = getDb();
@@ -332,9 +337,9 @@ export async function deleteById(id: string): Promise<void> {
 }
 
 /**
- * Get prebuild by ID for session creation.
+ * Get configuration by ID for session creation.
  */
-export async function findByIdForSession(id: string): Promise<PrebuildForSessionRow | null> {
+export async function findByIdForSession(id: string): Promise<ConfigurationForSessionRow | null> {
 	const db = getDb();
 	const result = await db.query.configurations.findFirst({
 		where: eq(configurations.id, id),
@@ -350,14 +355,14 @@ export async function findByIdForSession(id: string): Promise<PrebuildForSession
 }
 
 /**
- * Get prebuild repos with full repo details for session creation.
+ * Get configuration repos with full repo details for session creation.
  */
-export async function getPrebuildReposWithDetails(
-	prebuildId: string,
-): Promise<PrebuildRepoDetailRow[]> {
+export async function getConfigurationReposWithDetails(
+	configurationId: string,
+): Promise<ConfigurationRepoDetailRow[]> {
 	const db = getDb();
 	const results = await db.query.configurationRepos.findMany({
-		where: eq(configurationRepos.configurationId, prebuildId),
+		where: eq(configurationRepos.configurationId, configurationId),
 		with: {
 			repo: {
 				columns: {
@@ -382,24 +387,24 @@ export async function getPrebuildReposWithDetails(
 }
 
 /**
- * Get prebuild-level service commands.
+ * Get configuration-level service commands.
  */
-export async function getPrebuildServiceCommands(
-	prebuildId: string,
+export async function getConfigurationServiceCommands(
+	configurationId: string,
 ): Promise<{ serviceCommands: unknown } | null> {
 	const db = getDb();
 	const result = await db.query.configurations.findFirst({
-		where: eq(configurations.id, prebuildId),
+		where: eq(configurations.id, configurationId),
 		columns: { serviceCommands: true },
 	});
 	return result ?? null;
 }
 
 /**
- * Update prebuild-level service commands.
+ * Update configuration-level service commands.
  */
-export async function updatePrebuildServiceCommands(input: {
-	prebuildId: string;
+export async function updateConfigurationServiceCommands(input: {
+	configurationId: string;
 	serviceCommands: unknown;
 	updatedBy: string;
 }): Promise<void> {
@@ -411,14 +416,14 @@ export async function updatePrebuildServiceCommands(input: {
 			serviceCommandsUpdatedAt: new Date(),
 			serviceCommandsUpdatedBy: input.updatedBy,
 		})
-		.where(eq(configurations.id, input.prebuildId));
+		.where(eq(configurations.id, input.configurationId));
 }
 
 /**
- * Update prebuild-level env file spec.
+ * Update configuration-level env file spec.
  */
-export async function updatePrebuildEnvFiles(input: {
-	prebuildId: string;
+export async function updateConfigurationEnvFiles(input: {
+	configurationId: string;
 	envFiles: unknown;
 	updatedBy: string;
 }): Promise<void> {
@@ -430,43 +435,43 @@ export async function updatePrebuildEnvFiles(input: {
 			envFilesUpdatedAt: new Date(),
 			envFilesUpdatedBy: input.updatedBy,
 		})
-		.where(eq(configurations.id, input.prebuildId));
+		.where(eq(configurations.id, input.configurationId));
 }
 
 /**
- * Get prebuild env file spec.
+ * Get configuration env file spec.
  */
-export async function getPrebuildEnvFiles(prebuildId: string): Promise<unknown | null> {
+export async function getConfigurationEnvFiles(configurationId: string): Promise<unknown | null> {
 	const db = getDb();
 	const result = await db.query.configurations.findFirst({
-		where: eq(configurations.id, prebuildId),
+		where: eq(configurations.id, configurationId),
 		columns: { envFiles: true },
 	});
 	return result?.envFiles ?? null;
 }
 
 /**
- * Update prebuild snapshot_id only if currently null.
+ * Update configuration snapshot_id only if currently null.
  * Returns true if updated, false if already had a snapshot.
  */
 export async function updateSnapshotIdIfNull(
-	prebuildId: string,
+	configurationId: string,
 	snapshotId: string,
 ): Promise<boolean> {
 	const db = getDb();
 	const result = await db
 		.update(configurations)
 		.set({ snapshotId })
-		.where(and(eq(configurations.id, prebuildId), isNull(configurations.snapshotId)))
+		.where(and(eq(configurations.id, configurationId), isNull(configurations.snapshotId)))
 		.returning({ id: configurations.id });
 
 	return result.length > 0;
 }
 
 /**
- * Create a new prebuild with full details (for finalize).
+ * Create a new configuration with full details (for finalize).
  */
-export async function createFull(input: CreatePrebuildFullInput): Promise<void> {
+export async function createFull(input: CreateConfigurationFullInput): Promise<void> {
 	const db = getDb();
 	await db.insert(configurations).values({
 		id: input.id,
@@ -479,13 +484,16 @@ export async function createFull(input: CreatePrebuildFullInput): Promise<void> 
 }
 
 /**
- * Check if a prebuild contains a specific repo.
+ * Check if a configuration contains a specific repo.
  */
-export async function prebuildContainsRepo(prebuildId: string, repoId: string): Promise<boolean> {
+export async function configurationContainsRepo(
+	configurationId: string,
+	repoId: string,
+): Promise<boolean> {
 	const db = getDb();
 	const result = await db.query.configurationRepos.findFirst({
 		where: and(
-			eq(configurationRepos.configurationId, prebuildId),
+			eq(configurationRepos.configurationId, configurationId),
 			eq(configurationRepos.repoId, repoId),
 		),
 		columns: {
@@ -497,35 +505,53 @@ export async function prebuildContainsRepo(prebuildId: string, repoId: string): 
 }
 
 /**
- * Create a single prebuild_repo junction entry.
+ * Create a single configuration_repo junction entry.
  */
-export async function createSinglePrebuildRepo(
-	prebuildId: string,
+export async function createSingleConfigurationRepo(
+	configurationId: string,
 	repoId: string,
 	workspacePath: string,
 ): Promise<void> {
 	const db = getDb();
 	try {
 		await db.insert(configurationRepos).values({
-			configurationId: prebuildId,
+			configurationId,
 			repoId,
 			workspacePath,
 		});
 	} catch (error) {
 		getServicesLogger()
 			.child({ module: "configurations-db" })
-			.error({ err: error, prebuildId, repoId }, "Failed to create prebuild_repos entry");
+			.error({ err: error, configurationId, repoId }, "Failed to create configuration_repos entry");
 	}
 }
 
+/**
+ * Delete a configuration_repo junction entry.
+ */
+export async function deleteConfigurationRepo(
+	configurationId: string,
+	repoId: string,
+): Promise<void> {
+	const db = getDb();
+	await db
+		.delete(configurationRepos)
+		.where(
+			and(
+				eq(configurationRepos.configurationId, configurationId),
+				eq(configurationRepos.repoId, repoId),
+			),
+		);
+}
+
 // ============================================
-// Repo-specific prebuild queries
+// Repo-specific configuration queries
 // ============================================
 
 /**
  * List configurations for a specific repo.
  */
-export async function listByRepoId(repoId: string): Promise<RepoPrebuildRow[]> {
+export async function listByRepoId(repoId: string): Promise<RepoConfigurationRow[]> {
 	const db = getDb();
 
 	// Get configurations through the junction table
@@ -560,11 +586,11 @@ export async function listByRepoId(repoId: string): Promise<RepoPrebuildRow[]> {
 // ============================================
 
 /**
- * Get prebuild_repos with prebuild data for a specific repo.
+ * Get configuration_repos with configuration data for a specific repo.
  */
-export async function getPrebuildReposWithPrebuilds(
+export async function getConfigurationReposWithConfigurations(
 	repoId: string,
-): Promise<PrebuildRepoWithPrebuildRow[]> {
+): Promise<ConfigurationRepoWithConfigurationRow[]> {
 	const db = getDb();
 	const results = await db.query.configurationRepos.findMany({
 		where: eq(configurationRepos.repoId, repoId),
@@ -604,12 +630,14 @@ export async function getPrebuildReposWithPrebuilds(
 }
 
 /**
- * Get repos linked to a prebuild.
+ * Get repos linked to a configuration.
  */
-export async function getReposForPrebuild(prebuildId: string): Promise<SnapshotRepoRow[]> {
+export async function getReposForConfiguration(
+	configurationId: string,
+): Promise<SnapshotRepoRow[]> {
 	const db = getDb();
 	const results = await db.query.configurationRepos.findMany({
-		where: eq(configurationRepos.configurationId, prebuildId),
+		where: eq(configurationRepos.configurationId, configurationId),
 		with: {
 			repo: {
 				columns: {
@@ -624,13 +652,13 @@ export async function getReposForPrebuild(prebuildId: string): Promise<SnapshotR
 }
 
 // ============================================
-// Managed Prebuild queries
+// Managed Configuration queries
 // ============================================
 
 /**
  * Find managed configurations with their repos.
  */
-export async function findManagedPrebuilds(): Promise<ManagedPrebuildRow[]> {
+export async function findManagedConfigurations(): Promise<ManagedConfigurationRow[]> {
 	const db = getDb();
 	const results = await db.query.configurations.findMany({
 		where: eq(configurations.type, "managed"),
@@ -658,23 +686,25 @@ export async function findManagedPrebuilds(): Promise<ManagedPrebuildRow[]> {
 }
 
 /**
- * Create a managed prebuild record.
+ * Create a managed configuration record.
  */
-export async function createManagedPrebuild(input: CreateManagedPrebuildInput): Promise<void> {
+export async function createManagedConfiguration(
+	input: CreateManagedConfigurationInput,
+): Promise<void> {
 	const db = getDb();
 	await db.insert(configurations).values({
 		id: input.id,
 		type: "managed",
 		status: "building",
 		snapshotId: null,
-		name: "Managed Prebuild",
+		name: "Managed Configuration",
 	});
 }
 
 /**
- * Delete a prebuild by ID (for cleanup on failure).
+ * Delete a configuration by ID (for cleanup on failure).
  */
-export async function deletePrebuild(id: string): Promise<void> {
+export async function deleteConfiguration(id: string): Promise<void> {
 	const db = getDb();
 	await db.delete(configurations).where(eq(configurations.id, id));
 }
@@ -682,7 +712,7 @@ export async function deletePrebuild(id: string): Promise<void> {
 /**
  * Get repos for an organization by IDs (or all if no IDs provided).
  */
-export async function getReposForManagedPrebuild(
+export async function getReposForManagedConfiguration(
 	orgId: string,
 	repoIds?: string[],
 ): Promise<RepoWithNameRow[]> {

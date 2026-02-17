@@ -1,17 +1,17 @@
 /**
- * Prebuilds mapper.
+ * Configurations mapper.
  *
  * Transforms DB rows (camelCase) to API response types (camelCase).
  */
 
-import type { Prebuild } from "@proliferate/shared";
+import type { Configuration } from "@proliferate/shared";
 import { toIsoString } from "../db/serialize";
-import type { PrebuildRow, PrebuildWithRelationsRow } from "./db";
+import type { ConfigurationRow, ConfigurationWithRelationsRow } from "./db";
 
 /**
- * Map a DB row to API Prebuild type.
+ * Map a DB row to API Configuration type.
  */
-export function toPrebuild(row: PrebuildWithRelationsRow): Prebuild {
+export function toConfiguration(row: ConfigurationWithRelationsRow): Configuration {
 	return {
 		id: row.id,
 		snapshotId: row.snapshotId,
@@ -21,7 +21,7 @@ export function toPrebuild(row: PrebuildWithRelationsRow): Prebuild {
 		createdAt: toIsoString(row.createdAt),
 		createdBy: row.createdBy,
 		sandboxProvider: null, // Field removed from schema
-		prebuildRepos: row.configurationRepos?.map((pr) => ({
+		configurationRepos: row.configurationRepos?.map((pr) => ({
 			workspacePath: pr.workspacePath,
 			repo: pr.repo
 				? {
@@ -40,16 +40,16 @@ export function toPrebuild(row: PrebuildWithRelationsRow): Prebuild {
 }
 
 /**
- * Map multiple DB rows to API Prebuild types.
+ * Map multiple DB rows to API Configuration types.
  */
-export function toPrebuilds(rows: PrebuildWithRelationsRow[]): Prebuild[] {
-	return rows.map(toPrebuild);
+export function toConfigurations(rows: ConfigurationWithRelationsRow[]): Configuration[] {
+	return rows.map(toConfiguration);
 }
 
 /**
- * Map a simple prebuild row (no relations) to partial Prebuild type.
+ * Map a simple configuration row (no relations) to partial Configuration type.
  */
-export function toPrebuildPartial(row: PrebuildRow): Partial<Prebuild> {
+export function toConfigurationPartial(row: ConfigurationRow): Partial<Configuration> {
 	return {
 		id: row.id,
 		snapshotId: row.snapshotId,

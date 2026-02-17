@@ -23,7 +23,7 @@ export {
 	create as createSessionRecord,
 	update as updateSessionRecord,
 	findByIdInternal as findSessionByIdInternal,
-	updatePrebuildId as updateSessionPrebuildId,
+	updateConfigurationId as updateSessionConfigurationId,
 	markStopped as markSessionStopped,
 	findBySlackThread as findSessionBySlackThread,
 	getSessionClientInfo,

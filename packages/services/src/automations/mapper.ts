@@ -18,7 +18,7 @@ import type {
 	AutomationRow,
 	AutomationWithRelations,
 	AutomationWithTriggers as AutomationWithTriggersRow,
-	PrebuildSummary,
+	ConfigurationSummary,
 	TriggerEventDetailRow,
 	TriggerEventRow,
 	TriggerForAutomationRow,
@@ -42,7 +42,7 @@ const GATEWAY_URL = env.NEXT_PUBLIC_GATEWAY_URL;
  * Transform a DB row (camelCase) to base Automation type (snake_case).
  */
 export function toAutomation(
-	row: AutomationRow & { defaultPrebuild?: PrebuildSummary | null },
+	row: AutomationRow & { defaultConfiguration?: ConfigurationSummary | null },
 ): Automation {
 	return {
 		id: row.id,
@@ -51,18 +51,18 @@ export function toAutomation(
 		description: row.description,
 		enabled: row.enabled ?? false,
 		agent_instructions: row.agentInstructions,
-		default_prebuild_id: row.defaultPrebuildId,
+		default_configuration_id: row.defaultConfigurationId,
 		allow_agentic_repo_selection: row.allowAgenticRepoSelection ?? false,
 		agent_type: row.agentType,
 		model_id: row.modelId,
 		created_by: row.createdBy,
 		created_at: toIsoString(row.createdAt) ?? new Date().toISOString(),
 		updated_at: toIsoString(row.updatedAt) ?? new Date().toISOString(),
-		default_prebuild: row.defaultPrebuild
+		default_configuration: row.defaultConfiguration
 			? {
-					id: row.defaultPrebuild.id,
-					name: row.defaultPrebuild.name,
-					snapshot_id: row.defaultPrebuild.snapshotId,
+					id: row.defaultConfiguration.id,
+					name: row.defaultConfiguration.name,
+					snapshot_id: row.defaultConfiguration.snapshotId,
 				}
 			: null,
 		llm_filter_prompt: row.llmFilterPrompt ?? null,
@@ -94,18 +94,18 @@ export function toAutomationListItem(row: AutomationWithRelations): AutomationLi
 		description: row.description,
 		enabled: row.enabled ?? false,
 		agent_instructions: row.agentInstructions,
-		default_prebuild_id: row.defaultPrebuildId,
+		default_configuration_id: row.defaultConfigurationId,
 		allow_agentic_repo_selection: row.allowAgenticRepoSelection ?? false,
 		agent_type: row.agentType,
 		model_id: row.modelId,
 		created_by: row.createdBy,
 		created_at: toIsoString(row.createdAt) ?? new Date().toISOString(),
 		updated_at: toIsoString(row.updatedAt) ?? new Date().toISOString(),
-		default_prebuild: row.defaultPrebuild
+		default_configuration: row.defaultConfiguration
 			? {
-					id: row.defaultPrebuild.id,
-					name: row.defaultPrebuild.name,
-					snapshot_id: row.defaultPrebuild.snapshotId,
+					id: row.defaultConfiguration.id,
+					name: row.defaultConfiguration.name,
+					snapshot_id: row.defaultConfiguration.snapshotId,
 				}
 			: null,
 		creator: row.createdByUser
@@ -166,18 +166,18 @@ export function toAutomationWithTriggers(row: AutomationWithTriggersRow): Automa
 		description: row.description,
 		enabled: row.enabled ?? false,
 		agent_instructions: row.agentInstructions,
-		default_prebuild_id: row.defaultPrebuildId,
+		default_configuration_id: row.defaultConfigurationId,
 		allow_agentic_repo_selection: row.allowAgenticRepoSelection ?? false,
 		agent_type: row.agentType,
 		model_id: row.modelId,
 		created_by: row.createdBy,
 		created_at: toIsoString(row.createdAt) ?? new Date().toISOString(),
 		updated_at: toIsoString(row.updatedAt) ?? new Date().toISOString(),
-		default_prebuild: row.defaultPrebuild
+		default_configuration: row.defaultConfiguration
 			? {
-					id: row.defaultPrebuild.id,
-					name: row.defaultPrebuild.name,
-					snapshot_id: row.defaultPrebuild.snapshotId,
+					id: row.defaultConfiguration.id,
+					name: row.defaultConfiguration.name,
+					snapshot_id: row.defaultConfiguration.snapshotId,
 				}
 			: null,
 		llm_filter_prompt: row.llmFilterPrompt ?? null,
@@ -201,7 +201,7 @@ export function toAutomationListItems(rows: AutomationWithRelations[]): Automati
  * Create a new automation list item with empty counts.
  */
 export function toNewAutomationListItem(
-	row: AutomationRow & { defaultPrebuild?: PrebuildSummary | null },
+	row: AutomationRow & { defaultConfiguration?: ConfigurationSummary | null },
 ): AutomationListItem {
 	return {
 		id: row.id,
@@ -210,18 +210,18 @@ export function toNewAutomationListItem(
 		description: row.description,
 		enabled: row.enabled ?? false,
 		agent_instructions: row.agentInstructions,
-		default_prebuild_id: row.defaultPrebuildId,
+		default_configuration_id: row.defaultConfigurationId,
 		allow_agentic_repo_selection: row.allowAgenticRepoSelection ?? false,
 		agent_type: row.agentType,
 		model_id: row.modelId,
 		created_by: row.createdBy,
 		created_at: toIsoString(row.createdAt) ?? new Date().toISOString(),
 		updated_at: toIsoString(row.updatedAt) ?? new Date().toISOString(),
-		default_prebuild: row.defaultPrebuild
+		default_configuration: row.defaultConfiguration
 			? {
-					id: row.defaultPrebuild.id,
-					name: row.defaultPrebuild.name,
-					snapshot_id: row.defaultPrebuild.snapshotId,
+					id: row.defaultConfiguration.id,
+					name: row.defaultConfiguration.name,
+					snapshot_id: row.defaultConfiguration.snapshotId,
 				}
 			: null,
 		llm_filter_prompt: row.llmFilterPrompt ?? null,

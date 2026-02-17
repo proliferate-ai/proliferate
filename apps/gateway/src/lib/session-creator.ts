@@ -14,7 +14,7 @@ import {
 	baseSnapshots,
 	billing,
 	integrations,
-	prebuilds,
+	configurations,
 	sessions,
 } from "@proliferate/services";
 import {
@@ -47,7 +47,7 @@ export interface CreateSessionOptions {
 
 	// Required
 	organizationId: string;
-	prebuildId: string;
+	configurationId: string;
 	sessionType: SessionType;
 	clientType: ClientType;
 
@@ -87,10 +87,10 @@ export interface IntegrationWarning {
 
 export interface CreateSessionResult {
 	sessionId: string;
-	prebuildId: string;
+	configurationId: string;
 	status: "pending" | "starting" | "running";
 	hasSnapshot: boolean;
-	isNewPrebuild: boolean;
+	isNewConfiguration: boolean;
 	sandbox?: {
 		sandboxId: string;
 		previewUrl: string | null;
@@ -101,7 +101,7 @@ export interface CreateSessionResult {
 	integrationWarnings?: IntegrationWarning[];
 }
 
-interface PrebuildRepoRow {
+interface ConfigurationRepoRow {
 	workspacePath: string;
 	repo: {
 		id: string;
@@ -117,13 +117,13 @@ interface PrebuildRepoRow {
  */
 export async function createSession(
 	options: CreateSessionOptions,
-	isNewPrebuild = false,
+	isNewConfiguration = false,
 ): Promise<CreateSessionResult> {
 	const {
 		env,
 		provider,
 		organizationId,
-		prebuildId,
+		configurationId,
 		sessionType,
 		clientType,
 		userId,
@@ -157,7 +157,7 @@ export async function createSession(
 		"Creating session",
 	);
 	log.debug(
-		{ isNewPrebuild, hasSnapshotId: Boolean(inputSnapshotId) },
+		{ isNewConfiguration, hasSnapshotId: Boolean(inputSnapshotId) },
 		"session_creator.create_session.start",
 	);
 
@@ -190,16 +190,16 @@ export async function createSession(
 		}
 	}
 
-	// Resolve snapshotId via layering (prebuild snapshot → repo snapshot → null).
+	// Resolve snapshotId via layering (configuration snapshot → repo snapshot → null).
 	// Repo snapshots are only eligible for Modal provider, non-CLI sessions.
 	let snapshotId = inputSnapshotId ?? null;
 	if (!snapshotId && provider.type === "modal" && sessionType !== "cli") {
 		try {
-			const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
+			const configurationRepoRows = await configurations.getConfigurationReposWithDetails(configurationId);
 			snapshotId = resolveSnapshotId({
-				prebuildSnapshotId: null,
+				configurationSnapshotId: null,
 				sandboxProvider: provider.type,
-				prebuildRepos: prebuildRepoRows,
+				configurationRepos: configurationRepoRows,
 			});
 			if (snapshotId) {
 				log.info({ snapshotId }, "Using repo snapshot");
@@ -214,7 +214,7 @@ export async function createSession(
 		const dbStartMs = Date.now();
 		const sessionInput = {
 			id: sessionId,
-			prebuildId,
+			configurationId,
 			organizationId,
 			sessionType,
 			clientType,
@@ -283,10 +283,10 @@ export async function createSession(
 		);
 		return {
 			sessionId,
-			prebuildId,
+			configurationId,
 			status: "pending",
 			hasSnapshot: Boolean(snapshotId),
-			isNewPrebuild,
+			isNewConfiguration,
 		};
 	}
 
@@ -298,7 +298,7 @@ export async function createSession(
 			env,
 			provider,
 			sessionId,
-			prebuildId,
+			configurationId,
 			organizationId,
 			sessionType,
 			userId,
@@ -340,10 +340,10 @@ export async function createSession(
 		);
 		return {
 			sessionId,
-			prebuildId,
+			configurationId,
 			status: "running",
 			hasSnapshot: Boolean(snapshotId),
-			isNewPrebuild,
+			isNewConfiguration,
 			sandbox: {
 				sandboxId: result.sandboxId,
 				previewUrl: result.previewUrl,
@@ -370,7 +370,7 @@ interface CreateSandboxParams {
 	env: GatewayEnv;
 	provider: SandboxProvider;
 	sessionId: string;
-	prebuildId: string;
+	configurationId: string;
 	organizationId: string;
 	sessionType: SessionType;
 	userId?: string;
@@ -401,7 +401,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		env,
 		provider,
 		sessionId,
-		prebuildId,
+		configurationId,
 		organizationId,
 		sessionType,
 		userId,
@@ -529,38 +529,38 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		};
 	}
 
-	// Load prebuild repos for coding sessions
-	const prebuildStartMs = Date.now();
-	const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(prebuildId);
+	// Load configuration repos for coding sessions
+	const configStartMs = Date.now();
+	const configurationRepoRows = await configurations.getConfigurationReposWithDetails(configurationId);
 	log.info(
 		{
-			durationMs: Date.now() - prebuildStartMs,
-			count: prebuildRepoRows?.length ?? 0,
-			repos: prebuildRepoRows?.map((r) => r.repo?.githubRepoName).filter(Boolean),
+			durationMs: Date.now() - configStartMs,
+			count: configurationRepoRows?.length ?? 0,
+			repos: configurationRepoRows?.map((r) => r.repo?.githubRepoName).filter(Boolean),
 		},
-		"session_creator.create_sandbox.prebuild_repos",
+		"session_creator.create_sandbox.configuration_repos",
 	);
 
-	if (!prebuildRepoRows || prebuildRepoRows.length === 0) {
-		throw new Error("Prebuild has no associated repos");
+	if (!configurationRepoRows || configurationRepoRows.length === 0) {
+		throw new Error("Configuration has no associated repos");
 	}
 
 	// Filter out repos with null values and convert to expected shape
-	const typedPrebuildRepos: PrebuildRepoRow[] = prebuildRepoRows
+	const typedConfigurationRepos: ConfigurationRepoRow[] = configurationRepoRows
 		.filter((pr) => pr.repo !== null)
 		.map((pr) => ({
 			workspacePath: pr.workspacePath,
 			repo: pr.repo,
 		}));
 
-	if (typedPrebuildRepos.length === 0) {
-		throw new Error("Prebuild has no associated repos");
+	if (typedConfigurationRepos.length === 0) {
+		throw new Error("Configuration has no associated repos");
 	}
 
 	// Resolve GitHub tokens for each repo
 	const githubStartMs = Date.now();
 	const repoSpecs: RepoSpec[] = await Promise.all(
-		typedPrebuildRepos.map(async (pr) => {
+		typedConfigurationRepos.map(async (pr) => {
 			const token = await resolveGitHubToken(env, organizationId, pr.repo!.id, userId);
 			const serviceCommands = parseServiceCommands(pr.repo!.serviceCommands);
 			return {
@@ -587,26 +587,26 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	);
 
 	// Derive snapshotHasDeps: true when snapshot includes installed deps.
-	// Repo snapshots (clone-only) don't have deps; prebuild/session/pause snapshots do.
+	// Repo snapshots (clone-only) don't have deps; configuration/session/pause snapshots do.
 	const repoSnapshotFallback =
-		prebuildRepoRows.length === 1 &&
-		prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
-		prebuildRepoRows[0].repo?.repoSnapshotId
-			? prebuildRepoRows[0].repo.repoSnapshotId
+		configurationRepoRows.length === 1 &&
+		configurationRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
+		configurationRepoRows[0].repo?.repoSnapshotId
+			? configurationRepoRows[0].repo.repoSnapshotId
 			: null;
 	const snapshotHasDeps = Boolean(snapshotId) && snapshotId !== repoSnapshotFallback;
 
-	// Resolve service commands: prebuild-level first, then per-repo fallback
-	const prebuildSvcRow = await prebuilds.getPrebuildServiceCommands(prebuildId);
+	// Resolve service commands: configuration-level first, then per-repo fallback
+	const configSvcRow = await configurations.getConfigurationServiceCommands(configurationId);
 	const resolvedServiceCommands = resolveServiceCommands(
-		prebuildSvcRow?.serviceCommands,
+		configSvcRow?.serviceCommands,
 		repoSpecs,
 	);
 
 	// Load env file generation spec (if configured)
-	const prebuildEnvFiles = await prebuilds.getPrebuildEnvFiles(prebuildId);
-	const prebuildList = Array.isArray(prebuildEnvFiles) ? prebuildEnvFiles : [];
-	const envFiles = prebuildList.length > 0 ? prebuildList : undefined;
+	const configEnvFiles = await configurations.getConfigurationEnvFiles(configurationId);
+	const configList = Array.isArray(configEnvFiles) ? configEnvFiles : [];
+	const envFiles = configList.length > 0 ? configList : undefined;
 
 	// Build environment variables
 	const envStartMs = Date.now();
@@ -614,7 +614,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		env,
 		sessionId,
 		organizationId,
-		typedPrebuildRepos.map((pr) => pr.repo!.id),
+		typedConfigurationRepos.map((pr) => pr.repo!.id),
 		repoSpecs,
 		integrationEnvVars,
 	);
@@ -627,7 +627,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	);
 
 	// Build system prompt
-	const primaryRepo = typedPrebuildRepos[0].repo!;
+	const primaryRepo = typedConfigurationRepos[0].repo!;
 	const systemPrompt = `You are an AI coding assistant. Help the user with their coding tasks in the ${primaryRepo.githubRepoName} repository.`;
 
 	const defaultAgentConfig = getDefaultAgentConfig();

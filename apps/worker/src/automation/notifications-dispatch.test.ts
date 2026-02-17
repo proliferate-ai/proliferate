@@ -48,7 +48,7 @@ function makeRun(overrides: Record<string, unknown> = {}) {
 		automation: {
 			id: "auto-1",
 			name: "Test Automation",
-			defaultPrebuildId: null,
+			defaultConfigurationId: null,
 			agentInstructions: null,
 			modelId: null,
 			notificationChannelId: "C_CHANNEL",

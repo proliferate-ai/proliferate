@@ -1,17 +1,9 @@
 "use client";
 
-import { openEditSession, openHistoricalSession } from "@/components/coding-session";
-import { SecretFilesEditor } from "@/components/repositories/secret-files-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import { useOrgMembers } from "@/hooks/use-orgs";
 import { useRepo, useServiceCommands, useUpdateServiceCommands } from "@/hooks/use-repos";
-import { useActiveOrganization, useSession } from "@/lib/auth-client";
-import { orpc } from "@/lib/orpc";
-import { type OrgRole, hasRoleOrHigher } from "@/lib/roles";
-import { getSnapshotDisplayName } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -22,15 +14,6 @@ export default function RepoDetailPage() {
 	const repoId = params.id;
 
 	const { data: repo, isLoading } = useRepo(repoId);
-
-	// Role gating for secret files
-	const { data: activeOrg } = useActiveOrganization();
-	const { data: authSession } = useSession();
-	const currentUserId = authSession?.user?.id;
-	const { data: members } = useOrgMembers(activeOrg?.id ?? "");
-	const currentUserRole = members?.find((m: { userId: string }) => m.userId === currentUserId)
-		?.role as OrgRole | undefined;
-	const isAdmin = currentUserRole ? hasRoleOrHigher(currentUserRole, "admin") : false;
 
 	if (isLoading) {
 		return (
@@ -73,120 +56,13 @@ export default function RepoDetailPage() {
 					<h1 className="text-lg font-semibold">{repo.githubRepoName}</h1>
 					<div className="flex items-center gap-2 mt-1">
 						<span className="text-xs text-muted-foreground">{repo.defaultBranch || "main"}</span>
-						<span className="inline-flex items-center rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-							{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
-						</span>
 					</div>
 				</div>
-
-				{/* Configurations */}
-				<ConfigurationsSection repoId={repoId} isAdmin={isAdmin} />
 
 				{/* Service Commands */}
 				<ServiceCommandsSection repoId={repoId} />
 			</div>
 		</div>
-	);
-}
-
-function ConfigurationsSection({ repoId, isAdmin }: { repoId: string; isAdmin: boolean }) {
-	const router = useRouter();
-	const { data: snapshotsData, isLoading } = useQuery({
-		...orpc.repos.listSnapshots.queryOptions({ input: { id: repoId } }),
-	});
-	const snapshots = snapshotsData?.prebuilds;
-
-	const [expandedId, setExpandedId] = useState<string | null>(null);
-
-	return (
-		<section>
-			<div className="flex items-center justify-between mb-3">
-				<h2 className="text-sm font-medium">Configurations</h2>
-				<Button
-					variant="outline"
-					size="sm"
-					className="h-7 text-xs"
-					onClick={() => router.push(`/workspace/new?repoId=${repoId}&type=setup`)}
-				>
-					<Plus className="h-3 w-3 mr-1" />
-					New configuration
-				</Button>
-			</div>
-
-			{isLoading ? (
-				<LoadingDots size="sm" className="text-muted-foreground" />
-			) : snapshots && snapshots.length > 0 ? (
-				<div className="rounded-lg border border-border/80 bg-background divide-y divide-border/60">
-					{snapshots.map((snapshot) => {
-						const setupSessionId = snapshot.setupSessions?.find(
-							(s) => s.sessionType === "setup",
-						)?.id;
-						const isExpanded = expandedId === snapshot.id;
-
-						return (
-							<div key={snapshot.id}>
-								<div className="flex items-center justify-between px-4 py-2.5">
-									<button
-										type="button"
-										className="text-sm truncate hover:underline text-left flex-1 min-w-0"
-										onClick={() => {
-											if (setupSessionId) {
-												openHistoricalSession(setupSessionId, getSnapshotDisplayName(snapshot));
-											}
-										}}
-									>
-										{getSnapshotDisplayName(snapshot)}
-									</button>
-									<div className="flex items-center gap-1.5 flex-shrink-0 ml-3">
-										{setupSessionId && (
-											<Button
-												variant="ghost"
-												size="sm"
-												className="h-7 text-xs"
-												onClick={() =>
-													openEditSession({
-														sessionId: setupSessionId,
-														snapshotId: snapshot.id,
-														snapshotName: getSnapshotDisplayName(snapshot),
-														prebuildId: snapshot.id,
-													})
-												}
-											>
-												<Pencil className="h-3 w-3 mr-1" />
-												Edit
-											</Button>
-										)}
-										{isAdmin && (
-											<Button
-												variant="ghost"
-												size="sm"
-												className="h-7 text-xs"
-												onClick={() => setExpandedId(isExpanded ? null : snapshot.id)}
-											>
-												{isExpanded ? "Hide Secrets" : "Secret Files"}
-											</Button>
-										)}
-									</div>
-								</div>
-
-								{isAdmin && isExpanded && (
-									<div className="px-4 pb-3 border-t border-border/40 pt-3">
-										<SecretFilesEditor configurationId={snapshot.id} />
-									</div>
-								)}
-							</div>
-						);
-					})}
-				</div>
-			) : (
-				<div className="rounded-lg border border-dashed border-border/80 py-8 text-center">
-					<p className="text-sm text-muted-foreground">No configurations yet</p>
-					<p className="text-xs text-muted-foreground mt-1">
-						Create a configuration to get started
-					</p>
-				</div>
-			)}
-		</section>
 	);
 }
 

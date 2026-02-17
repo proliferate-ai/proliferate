@@ -116,7 +116,7 @@ export async function deleteById(id: string, orgId: string): Promise<void> {
 
 /**
  * Check which secret keys exist for an organization.
- * Handles filtering by repo_id and prebuild_id.
+ * Handles filtering by repo_id and configuration_id.
  */
 export async function findExistingKeys(
 	orgId: string,

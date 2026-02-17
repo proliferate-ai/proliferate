@@ -5,13 +5,13 @@
 export * from "./service";
 export type {
 	CliGitHubSelectionRow,
-	CliPrebuildRow,
+	CliConfigurationRow,
 	CliRepoConnectionRow,
 	CliRepoRow,
 	CliSessionFullRow,
 	CliSessionRow,
 	CreateCliSessionInput,
-	CreateCliSessionWithPrebuildInput,
+	CreateCliSessionWithConfigurationInput,
 	DeviceCodeRow,
 	GitHubIntegrationForTokenRow,
 	GitHubIntegrationStatusRow,
@@ -21,9 +21,9 @@ export type {
 
 // Gateway-specific exports (DB functions not in service.ts)
 export {
-	getCliPrebuild,
-	createCliPrebuildPending,
+	getCliConfiguration,
+	createCliConfigurationPending,
 	findLocalRepo,
 	createLocalRepo,
-	upsertPrebuildRepo,
+	upsertConfigurationRepo,
 } from "./db";

@@ -26,7 +26,7 @@ export interface AutomationRunWithRelations extends AutomationRunRow {
 	automation: {
 		id: string;
 		name: string;
-		defaultPrebuildId: string | null;
+		defaultConfigurationId: string | null;
 		agentInstructions: string | null;
 		modelId: string | null;
 		notificationChannelId: string | null;
@@ -70,7 +70,7 @@ export async function findByIdWithRelations(
 				columns: {
 					id: true,
 					name: true,
-					defaultPrebuildId: true,
+					defaultConfigurationId: true,
 					agentInstructions: true,
 					modelId: true,
 					notificationChannelId: true,

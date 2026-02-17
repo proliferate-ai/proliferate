@@ -5,7 +5,7 @@
  */
 
 import { createLogger } from "@proliferate/logger";
-import { billing, prebuilds, sessions } from "@proliferate/services";
+import { billing, configurations, sessions } from "@proliferate/services";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import type { Router as RouterType } from "express";
 import { Router } from "express";
@@ -20,7 +20,7 @@ import {
 	reserveIdempotencyKey,
 	storeIdempotencyResponse,
 } from "../../../lib/idempotency";
-import { type PrebuildResolutionOptions, resolvePrebuild } from "../../../lib/prebuild-resolver";
+import { type ConfigurationResolutionOptions, resolveConfiguration } from "../../../lib/configuration-resolver";
 import {
 	type ClientType,
 	type SandboxMode,
@@ -35,10 +35,10 @@ import { ApiError } from "../../../middleware";
 interface CreateSessionRequest {
 	organizationId: string;
 
-	// Prebuild resolution (exactly one required)
-	prebuildId?: string;
-	managedPrebuild?: { repoIds?: string[] };
-	cliPrebuild?: { localPathHash: string; displayName?: string };
+	// Configuration resolution (exactly one required)
+	configurationId?: string;
+	managedConfiguration?: { repoIds?: string[] };
+	cliConfiguration?: { localPathHash: string; displayName?: string };
 
 	// Session config
 	sessionType: SessionType;
@@ -71,11 +71,11 @@ interface CreateSessionRequest {
  */
 interface CreateSessionResponse {
 	sessionId: string;
-	prebuildId: string;
+	configurationId: string;
 	status: "pending" | "starting" | "running";
 	gatewayUrl: string;
 	hasSnapshot: boolean;
-	isNewPrebuild: boolean;
+	isNewConfiguration: boolean;
 	sandbox?: {
 		sandboxId: string;
 		previewUrl: string | null;
@@ -117,17 +117,17 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(400, "clientType is required");
 			}
 
-			// Validate exactly one prebuild option is provided
-			const prebuildOptions = [body.prebuildId, body.managedPrebuild, body.cliPrebuild].filter(
+			// Validate exactly one configuration option is provided
+			const configurationOptions = [body.configurationId, body.managedConfiguration, body.cliConfiguration].filter(
 				Boolean,
 			);
-			if (prebuildOptions.length === 0) {
-				throw new ApiError(400, "One of prebuildId, managedPrebuild, or cliPrebuild is required");
+			if (configurationOptions.length === 0) {
+				throw new ApiError(400, "One of configurationId, managedConfiguration, or cliConfiguration is required");
 			}
-			if (prebuildOptions.length > 1) {
+			if (configurationOptions.length > 1) {
 				throw new ApiError(
 					400,
-					"Only one of prebuildId, managedPrebuild, or cliPrebuild can be provided",
+					"Only one of configurationId, managedConfiguration, or cliConfiguration can be provided",
 				);
 			}
 
@@ -199,38 +199,38 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 			const operation = body.automationId ? "automation_trigger" : "session_start";
 			await billing.assertBillingGateForOrg(organizationId, operation);
 
-			// Resolve prebuild
-			const prebuildResolutionOptions: PrebuildResolutionOptions = {
+			// Resolve configuration
+			const configurationResolutionOptions: ConfigurationResolutionOptions = {
 				organizationId,
 				provider,
 				userId: auth.userId,
-				prebuildId: body.prebuildId,
-				managedPrebuild: body.managedPrebuild,
-				cliPrebuild: body.cliPrebuild,
+				configurationId: body.configurationId,
+				managedConfiguration: body.managedConfiguration,
+				cliConfiguration: body.cliConfiguration,
 			};
 
-			logger.info({ orgId: organizationId.slice(0, 8) }, "Resolving prebuild");
+			logger.info({ orgId: organizationId.slice(0, 8) }, "Resolving configuration");
 
-			const prebuildStartMs = Date.now();
-			const prebuild = await resolvePrebuild(prebuildResolutionOptions);
+			const configurationStartMs = Date.now();
+			const configuration = await resolveConfiguration(configurationResolutionOptions);
 			logger.debug(
 				{
 					orgId: organizationId.slice(0, 8),
-					durationMs: Date.now() - prebuildStartMs,
-					isNew: prebuild.isNew,
-					hasSnapshot: Boolean(prebuild.snapshotId),
-					repoCount: prebuild.repoIds.length,
+					durationMs: Date.now() - configurationStartMs,
+					isNew: configuration.isNew,
+					hasSnapshot: Boolean(configuration.snapshotId),
+					repoCount: configuration.repoIds.length,
 				},
-				"sessions.create.prebuild.resolved",
+				"sessions.create.configuration.resolved",
 			);
 
 			logger.info(
 				{
-					prebuildId: prebuild.id.slice(0, 8),
-					isNew: prebuild.isNew,
-					hasSnapshot: Boolean(prebuild.snapshotId),
+					configurationId: configuration.id.slice(0, 8),
+					isNew: configuration.isNew,
+					hasSnapshot: Boolean(configuration.snapshotId),
 				},
-				"Prebuild resolved",
+				"Configuration resolved",
 			);
 
 			// Create session
@@ -240,11 +240,11 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 					env,
 					provider,
 					organizationId,
-					prebuildId: prebuild.id,
+					configurationId: configuration.id,
 					sessionType: body.sessionType,
 					clientType: body.clientType,
 					userId: auth.userId,
-					snapshotId: body.snapshotId || prebuild.snapshotId,
+					snapshotId: body.snapshotId || configuration.snapshotId,
 					initialPrompt: body.initialPrompt,
 					title: body.title,
 					clientMetadata: body.clientMetadata,
@@ -257,11 +257,11 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 					sshOptions: body.sshOptions
 						? {
 								...body.sshOptions,
-								localPathHash: body.cliPrebuild?.localPathHash,
+								localPathHash: body.cliConfiguration?.localPathHash,
 							}
 						: undefined,
 				},
-				prebuild.isNew,
+				configuration.isNew,
 			);
 			const createSessionDurationMs = Date.now() - createSessionStartMs;
 			logger.debug(
@@ -296,18 +296,18 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 				"Session created",
 			);
 
-			// For new managed prebuilds, kick off setup session
-			if (prebuild.isNew && body.managedPrebuild) {
-				await startSetupSession(prebuild.id, organizationId, hubManager);
+			// For new managed configurations, kick off setup session
+			if (configuration.isNew && body.managedConfiguration) {
+				await startSetupSession(configuration.id, organizationId, hubManager);
 			}
 
 			const response: CreateSessionResponse = {
 				sessionId: result.sessionId,
-				prebuildId: result.prebuildId,
+				configurationId: result.configurationId,
 				status: result.status,
 				gatewayUrl,
 				hasSnapshot: result.hasSnapshot,
-				isNewPrebuild: result.isNewPrebuild,
+				isNewConfiguration: result.isNewConfiguration,
 				sandbox: result.sandbox,
 			};
 
@@ -392,10 +392,10 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 }
 
 /**
- * Start a setup session for a new managed prebuild
+ * Start a setup session for a new managed configuration
  */
 async function startSetupSession(
-	prebuildId: string,
+	configurationId: string,
 	organizationId: string,
 	hubManager: HubManager,
 ): Promise<void> {
@@ -403,10 +403,10 @@ async function startSetupSession(
 	await billing.assertBillingGateForOrg(organizationId, "session_start");
 
 	// Get repo names for prompt
-	const prebuildRepos = await prebuilds.getPrebuildReposWithDetails(prebuildId);
+	const configurationRepos = await configurations.getConfigurationReposWithDetails(configurationId);
 
 	const repoNames =
-		prebuildRepos?.filter((pr) => pr.repo !== null).map((pr) => pr.repo!.githubRepoName) || [];
+		configurationRepos?.filter((pr) => pr.repo !== null).map((pr) => pr.repo!.githubRepoName) || [];
 
 	const repoNamesStr = repoNames.join(", ") || "workspace";
 	const prompt = `Set up ${repoNamesStr} for development. Get everything running and working.`;
@@ -415,7 +415,7 @@ async function startSetupSession(
 	const sessionId = crypto.randomUUID();
 	const setupInput = {
 		id: sessionId,
-		prebuildId,
+		configurationId,
 		organizationId,
 		initialPrompt: prompt,
 	};
@@ -441,7 +441,7 @@ async function startSetupSession(
 	hubManager
 		.getOrCreate(sessionId)
 		.then((hub) => {
-			hub.postPrompt(prompt, "managed-prebuild-setup");
+			hub.postPrompt(prompt, "managed-configuration-setup");
 		})
 		.catch((err) => {
 			logger.error({ err }, "Failed to start setup session");

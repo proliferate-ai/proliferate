@@ -16,7 +16,7 @@ export interface SecretRow {
 	description: string | null;
 	secret_type: string | null;
 	repo_id: string | null;
-	prebuild_id: string | null;
+	configuration_id: string | null;
 	created_by: string;
 	created_at: string | null;
 	updated_at: string | null;
@@ -56,7 +56,7 @@ export interface DbCreateSecretInput {
 export interface CheckSecretsFilter {
 	keys: string[];
 	repoId?: string;
-	prebuildId?: string;
+	configurationId?: string;
 }
 
 export interface UpsertSecretInput {

@@ -30,7 +30,7 @@ export interface SessionPanelProps {
 	activityTick?: number;
 	sessionStatus?: string;
 	repoId?: string | null;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	repoName?: string | null;
 	branchName?: string | null;
 	snapshotId?: string | null;
@@ -45,7 +45,7 @@ export interface SessionPanelProps {
 	sendRunAutoStart?: (
 		runId: string,
 		mode?: "test" | "start",
-		commands?: import("@proliferate/shared").PrebuildServiceCommand[],
+		commands?: import("@proliferate/shared").ConfigurationServiceCommand[],
 	) => void;
 	gitState?: GitState | null;
 	gitResult?: GitResultMessage["payload"] | null;
@@ -122,7 +122,7 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 					isSnapshotting={sessionProps.isSnapshotting}
 					onSnapshot={sessionProps.onSnapshot}
 					repoId={sessionProps.repoId}
-					prebuildId={sessionProps.prebuildId}
+					configurationId={sessionProps.configurationId}
 					autoStartOutput={sessionProps.autoStartOutput}
 					sendRunAutoStart={sessionProps.sendRunAutoStart}
 				/>
@@ -134,7 +134,7 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 			return (
 				<EnvironmentPanel
 					sessionId={sessionProps.sessionId}
-					prebuildId={sessionProps.prebuildId}
+					configurationId={sessionProps.configurationId}
 					repoId={sessionProps.repoId}
 				/>
 			);
