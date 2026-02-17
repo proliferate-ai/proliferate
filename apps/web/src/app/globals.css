@@ -153,12 +153,6 @@
 	}
 }
 
-/* Allow Nango Connect UI iframe to receive pointer events when open */
-/* The hook adds this class to body when openConnectUI is active */
-body.nango-connect-open [data-radix-dialog-overlay] {
-	pointer-events: none;
-}
-
 /* Override browser autofill styling (Chrome adds ugly grey/blue backgrounds) */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,

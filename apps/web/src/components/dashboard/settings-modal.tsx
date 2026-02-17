@@ -56,9 +56,8 @@ export function SettingsModal({
 		connect: nangoConnect,
 		disconnect: nangoDisconnect,
 		loadingProvider: nangoLoadingProvider,
-		isConnectUIOpen,
 	} = useNangoConnect({
-		flow: "connectUI",
+		flow: "auth",
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["integrations"] });
 		},
@@ -115,11 +114,8 @@ export function SettingsModal({
 	];
 
 	return (
-		<ResponsiveDialog open={open} onOpenChange={handleOpenChange} modal={!isConnectUIOpen}>
-			<ResponsiveDialogContent
-				className="max-w-3xl max-h-[90vh] md:max-h-[80vh] p-0 gap-0"
-				disableOverlayPointerEvents={isConnectUIOpen}
-			>
+		<ResponsiveDialog open={open} onOpenChange={handleOpenChange}>
+			<ResponsiveDialogContent className="max-w-3xl max-h-[90vh] md:max-h-[80vh] p-0 gap-0">
 				<div className="flex flex-col md:flex-row h-[85vh] md:h-[70vh]">
 					{/* Tabs - Compact icons on mobile, Vertical with labels on desktop */}
 					<div className="md:w-48 border-b md:border-b-0 md:border-r border-border bg-muted/30 p-2 flex flex-col shrink-0">

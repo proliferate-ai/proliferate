@@ -4,7 +4,7 @@ import type { Provider } from "@/components/integrations/provider-icon";
 import { orpc } from "@/lib/orpc";
 import Nango from "@nangohq/frontend";
 import { env } from "@proliferate/environment/public";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 // Feature flag for using Nango for GitHub OAuth (vs GitHub App)
 export const USE_NANGO_GITHUB = env.NEXT_PUBLIC_USE_NANGO_GITHUB;
@@ -65,15 +65,11 @@ export function shouldUseNangoForProvider(provider: Provider): boolean {
 
 export type NangoAuthFlow = "connectUI" | "auth";
 
-// CSS class added to body when Nango Connect UI is open
-// This allows us to disable pointer-events on overlays that might block the iframe
-const NANGO_OPEN_CLASS = "nango-connect-open";
-
 interface UseNangoConnectOptions {
 	/**
 	 * Which auth flow to use:
-	 * - "connectUI" (default): Opens Nango's managed Connect UI modal (recommended)
-	 * - "auth": Opens a headless popup directly to the provider
+	 * - "connectUI": Opens Nango's managed Connect UI modal
+	 * - "auth" (default): Opens a headless popup directly to the provider
 	 */
 	flow?: NangoAuthFlow;
 	onSuccess?: (provider: NangoProvider) => void;
@@ -90,23 +86,11 @@ interface UseNangoConnectReturn {
 }
 
 export function useNangoConnect(options: UseNangoConnectOptions = {}): UseNangoConnectReturn {
-	const { flow = "connectUI", onSuccess, onError } = options;
+	const { flow = "auth", onSuccess, onError } = options;
 	const [loadingProvider, setLoadingProvider] = useState<NangoProvider | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [isConnectUIOpen, setIsConnectUIOpen] = useState(false);
 	const connectUIRef = useRef<ReturnType<Nango["openConnectUI"]> | null>(null);
-
-	// Add/remove body class when Connect UI is open to allow CSS to disable overlay pointer-events
-	useEffect(() => {
-		if (isConnectUIOpen) {
-			document.body.classList.add(NANGO_OPEN_CLASS);
-		} else {
-			document.body.classList.remove(NANGO_OPEN_CLASS);
-		}
-		return () => {
-			document.body.classList.remove(NANGO_OPEN_CLASS);
-		};
-	}, [isConnectUIOpen]);
 
 	const connect = useCallback(
 		async (provider: NangoProvider) => {

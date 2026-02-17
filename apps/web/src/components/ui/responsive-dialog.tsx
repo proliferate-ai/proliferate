@@ -32,7 +32,6 @@ interface ResponsiveDialogProps {
 interface ResponsiveDialogContentProps {
 	className?: string;
 	children: React.ReactNode;
-	disableOverlayPointerEvents?: boolean;
 }
 
 interface ResponsiveDialogHeaderProps {
@@ -81,11 +80,7 @@ function ResponsiveDialog({ open, onOpenChange, children, modal }: ResponsiveDia
 	);
 }
 
-function ResponsiveDialogContent({
-	className,
-	children,
-	disableOverlayPointerEvents,
-}: ResponsiveDialogContentProps) {
+function ResponsiveDialogContent({ className, children }: ResponsiveDialogContentProps) {
 	const { isMobile } = React.useContext(ResponsiveDialogContext);
 
 	if (isMobile) {
@@ -96,11 +91,7 @@ function ResponsiveDialogContent({
 		);
 	}
 
-	return (
-		<DialogContent className={className} disableOverlayPointerEvents={disableOverlayPointerEvents}>
-			{children}
-		</DialogContent>
-	);
+	return <DialogContent className={className}>{children}</DialogContent>;
 }
 
 function ResponsiveDialogHeader({ className, children }: ResponsiveDialogHeaderProps) {
