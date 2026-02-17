@@ -2,7 +2,7 @@
 
 import { ConnectorForm } from "@/components/integrations/connector-form";
 import { ConnectorIcon } from "@/components/integrations/connector-icon";
-import { findPresetKey } from "@/components/integrations/connector-row";
+import { findPresetKey } from "@/components/integrations/connector-icon";
 import { IntegrationDetailDialog } from "@/components/integrations/integration-detail-dialog";
 import {
 	CATEGORY_LABELS,

@@ -400,12 +400,20 @@ export const integrationsRouter = {
 		.input(z.object({ integrationId: z.string().uuid() }))
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
-			await requireIntegrationAdmin(context.user.id, context.orgId);
 			// Get the integration details first
 			const integration = await integrations.getIntegration(input.integrationId, context.orgId);
 
 			if (!integration) {
 				throw new ORPCError("NOT_FOUND", { message: "Connection not found" });
+			}
+
+			// Admin can disconnect anything; members can only disconnect their own
+			const role = await orgs.getUserRole(context.user.id, context.orgId);
+			const isAdmin = role === "owner" || role === "admin";
+			if (!isAdmin && integration.created_by !== context.user.id) {
+				throw new ORPCError("FORBIDDEN", {
+					message: "Only admins or the creator can disconnect.",
+				});
 			}
 
 			const isGitHubApp = integration.provider === GITHUB_APP_PROVIDER;
