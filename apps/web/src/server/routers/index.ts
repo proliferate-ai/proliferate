@@ -20,6 +20,7 @@ import { schedulesRouter } from "./schedules";
 import { secretFilesRouter } from "./secret-files";
 import { secretsRouter } from "./secrets";
 import { sessionsRouter } from "./sessions";
+import { templatesRouter } from "./templates";
 import { triggersRouter } from "./triggers";
 import { userActionPreferencesRouter } from "./user-action-preferences";
 
@@ -40,6 +41,7 @@ export const appRouter = {
 	secretFiles: secretFilesRouter,
 	secrets: secretsRouter,
 	sessions: sessionsRouter,
+	templates: templatesRouter,
 	triggers: triggersRouter,
 	userActionPreferences: userActionPreferencesRouter,
 };

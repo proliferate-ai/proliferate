@@ -50,6 +50,9 @@ export const automations = pgTable(
 			{ onDelete: "set null" },
 		),
 
+		// Telemetry
+		sourceTemplateId: text("source_template_id"),
+
 		// Metadata
 		createdBy: text("created_by").references(() => user.id),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),

@@ -1,6 +1,6 @@
 {
-  "id": "4c76ac9e-1285-42ff-90ec-bf8479faac04",
-  "prevId": "b52deab4-997b-4434-a134-773e2d423271",
+  "id": "3288673b-1cb4-41f1-b524-ee2309da2a78",
+  "prevId": "7bc2b96e-a25b-4caa-ba09-467003f943a1",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1405,6 +1405,12 @@
         "action_modes": {
           "name": "action_modes",
           "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_template_id": {
+          "name": "source_template_id",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         }
@@ -6987,7 +6993,7 @@
       "uniqueConstraints": {
         "user_action_prefs_user_org_source_action_key": {
           "name": "user_action_prefs_user_org_source_action_key",
-          "nullsNotDistinct": false,
+          "nullsNotDistinct": true,
           "columns": [
             "user_id",
             "organization_id",

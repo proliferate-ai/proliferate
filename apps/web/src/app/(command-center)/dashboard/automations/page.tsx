@@ -1,10 +1,15 @@
 "use client";
 
 import { AutomationListRow } from "@/components/automations/automation-list-row";
-import { type Recipe, RecipeCards } from "@/components/automations/recipe-cards";
+import {
+	type TemplateEntry,
+	TemplatePickerDialog,
+} from "@/components/automations/template-picker-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
+import { useIntegrations, useSlackInstallations } from "@/hooks/use-integrations";
+import { useCreateFromTemplate, useTemplateCatalog } from "@/hooks/use-templates";
 import { cn } from "@/lib/utils";
 import { Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -22,9 +27,29 @@ export default function AutomationsPage() {
 	const router = useRouter();
 	const { data: automations = [], isLoading } = useAutomations();
 	const createAutomation = useCreateAutomation();
+	const createFromTemplate = useCreateFromTemplate();
+	const { data: templateCatalog = [] } = useTemplateCatalog();
+
+	// Fetch org integrations for connection status badges
+	const { data: integrationsData } = useIntegrations();
+	const { data: slackInstallations } = useSlackInstallations();
+
+	const connectedProviders = useMemo(() => {
+		const providers = new Set<string>();
+		if (!integrationsData) return providers;
+		// github/sentry/linear flags use integration_id matching (correct for Nango)
+		if (integrationsData.github.connected) providers.add("github");
+		if (integrationsData.sentry.connected) providers.add("sentry");
+		if (integrationsData.linear.connected) providers.add("linear");
+		// Slack uses a separate installations table
+		if (slackInstallations && slackInstallations.length > 0) providers.add("slack");
+		return providers;
+	}, [integrationsData, slackInstallations]);
 
 	const [activeTab, setActiveTab] = useState<Tab>("all");
 	const [searchQuery, setSearchQuery] = useState("");
+	const [pickerOpen, setPickerOpen] = useState(false);
+	const [createError, setCreateError] = useState<string | null>(null);
 
 	const counts = useMemo(
 		() => ({
@@ -52,32 +77,55 @@ export default function AutomationsPage() {
 		return result;
 	}, [automations, activeTab, searchQuery]);
 
-	const handleCreate = async () => {
+	const handleBlankCreate = async () => {
+		setCreateError(null);
 		try {
 			const automation = await createAutomation.mutateAsync({});
+			setPickerOpen(false);
 			router.push(`/dashboard/automations/${automation.id}`);
-		} catch {
-			// mutation handles error state
+		} catch (err) {
+			setCreateError(err instanceof Error ? err.message : "Failed to create automation");
 		}
 	};
 
-	const handleRecipeSelect = async (recipe: Recipe) => {
+	const handleTemplateSelect = async (template: TemplateEntry) => {
+		setCreateError(null);
+		// Build integration bindings from connected providers.
+		// Integration rows store provider as "nango" (auth mechanism) and
+		// integration_id as the actual service ("github", "sentry", "linear").
+		const integrationBindings: Record<string, string> = {};
+		if (integrationsData) {
+			for (const req of template.requiredIntegrations) {
+				const integration = integrationsData.integrations.find(
+					(i) => i.integration_id === req.provider && i.status === "active",
+				);
+				if (integration) {
+					integrationBindings[req.provider] = integration.id;
+				}
+			}
+		}
+
 		try {
-			const automation = await createAutomation.mutateAsync({
-				name: recipe.name,
-				agentInstructions: recipe.agentInstructions,
+			const automation = await createFromTemplate.mutateAsync({
+				templateId: template.id,
+				integrationBindings,
 			});
+			setPickerOpen(false);
 			router.push(`/dashboard/automations/${automation.id}`);
-		} catch {
-			// mutation handles error state
+		} catch (err) {
+			setCreateError(
+				err instanceof Error ? err.message : "Failed to create automation from template",
+			);
 		}
 	};
+
+	const isPending = createAutomation.isPending || createFromTemplate.isPending;
 
 	return (
 		<div className="flex-1 overflow-y-auto">
 			<div className="max-w-4xl mx-auto px-6 py-6">
 				<div className="flex items-center justify-end mb-4">
-					<Button onClick={handleCreate} disabled={createAutomation.isPending} size="sm">
+					<Button onClick={() => setPickerOpen(true)} disabled={isPending} size="sm">
 						<Plus className="h-4 w-4 mr-1.5" />
 						New
 					</Button>
@@ -97,11 +145,12 @@ export default function AutomationsPage() {
 							Get started with a template
 						</h2>
 						<p className="text-sm text-muted-foreground mb-8">
-							Pick a recipe to create your first automation, or start from scratch.
+							Pick a template to create your first automation, or start from scratch.
 						</p>
-						<div className="w-full max-w-xl">
-							<RecipeCards onSelect={handleRecipeSelect} disabled={createAutomation.isPending} />
-						</div>
+						<Button onClick={() => setPickerOpen(true)} disabled={isPending} size="sm">
+							<Plus className="h-4 w-4 mr-1.5" />
+							Browse templates
+						</Button>
 					</div>
 				) : (
 					<>
@@ -184,6 +233,18 @@ export default function AutomationsPage() {
 					</>
 				)}
 			</div>
+
+			{/* Template picker modal */}
+			<TemplatePickerDialog
+				open={pickerOpen}
+				onOpenChange={setPickerOpen}
+				templates={templateCatalog}
+				connectedProviders={connectedProviders}
+				onSelectTemplate={handleTemplateSelect}
+				onSelectBlank={handleBlankCreate}
+				isPending={isPending}
+				error={createError}
+			/>
 		</div>
 	);
 }
