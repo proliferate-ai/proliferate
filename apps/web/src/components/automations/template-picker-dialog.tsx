@@ -10,6 +10,7 @@ import {
 	AlertTriangle,
 	Bug,
 	CheckCircle2,
+	CircleDot,
 	CircuitBoard,
 	GitPullRequest,
 	Loader2,
@@ -75,6 +76,8 @@ const CATEGORY_LABELS: Record<TemplateCategory, string> = {
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
 	bug: Bug,
 	"git-pull-request": GitPullRequest,
+	"circle-dot": CircleDot,
+	"alert-triangle": AlertTriangle,
 	"circuit-board": CircuitBoard,
 	shield: Shield,
 };

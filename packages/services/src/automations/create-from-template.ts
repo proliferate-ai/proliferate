@@ -194,7 +194,7 @@ async function validateIntegrationBindings(
 
 		// Verify the integration's service type matches the binding key.
 		// integrationId column holds the actual service (e.g., "github", "linear").
-		if (integration.integrationId && !integration.integrationId.includes(bindingKey)) {
+		if (integration.integrationId && integration.integrationId !== bindingKey) {
 			throw new Error(
 				`Integration ${integrationId} is for "${integration.integrationId}", not "${bindingKey}"`,
 			);

@@ -97,7 +97,7 @@ export default function AutomationsPage() {
 		if (integrationsData) {
 			for (const req of template.requiredIntegrations) {
 				const integration = integrationsData.integrations.find(
-					(i) => i.integration_id?.includes(req.provider) && i.status === "active",
+					(i) => i.integration_id === req.provider && i.status === "active",
 				);
 				if (integration) {
 					integrationBindings[req.provider] = integration.id;
