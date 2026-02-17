@@ -280,6 +280,10 @@ export default function AutomationDetailPage({
 		};
 		setEnabledTools(newTools);
 		handleUpdate({ enabledTools: newTools });
+		// Invalidate dynamic permissions so they refresh when tools change
+		queryClient.invalidateQueries({
+			queryKey: orpc.automations.getIntegrationActions.key({ input: { id } }),
+		});
 	};
 
 	const debouncedSaveTools = useDebouncedCallback((tools: EnabledTools) => {
@@ -343,9 +347,9 @@ export default function AutomationDetailPage({
 	}
 
 	const allTriggers = automation.triggers ?? [];
-	const triggers = allTriggers.filter(
-		(t) => (t.provider as string) !== "manual" && t.provider !== "scheduled",
-	);
+	const isManualTrigger = (t: { config?: Record<string, unknown> | null }) =>
+		(t.config as Record<string, unknown> | null)?._manual === true;
+	const triggers = allTriggers.filter((t) => !isManualTrigger(t) && t.provider !== "scheduled");
 	const schedules = allTriggers.filter((t) => t.provider === "scheduled");
 
 	return (
@@ -465,25 +469,29 @@ export default function AutomationDetailPage({
 				</div>
 
 				{/* Schedules */}
-				{schedules.length > 0 && (
-					<div className="mb-6">
-						<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-							Schedules
-						</p>
-						<div className="rounded-xl border border-border overflow-hidden">
-							{schedules.map((schedule, index) => (
-								<TriggerChip
-									key={schedule.id}
-									trigger={schedule}
-									automationId={automation.id}
-									variant="stacked"
-									isFirst={index === 0}
-									isLast={index === schedules.length - 1}
-								/>
-							))}
-						</div>
+				<div className="mb-6">
+					<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+						Schedules
+					</p>
+					<div className="rounded-xl border border-border overflow-hidden">
+						{schedules.map((schedule, index) => (
+							<TriggerChip
+								key={schedule.id}
+								trigger={schedule}
+								automationId={automation.id}
+								variant="stacked"
+								isFirst={index === 0}
+								isLast={false}
+							/>
+						))}
+						<AddTriggerButton
+							automationId={automation.id}
+							variant="stacked"
+							isFirst={schedules.length === 0}
+							isLast
+						/>
 					</div>
-				)}
+				</div>
 
 				{/* Integrations & Permissions */}
 				<div className="mb-6">

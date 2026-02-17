@@ -618,16 +618,17 @@ export async function triggerManualRun(
 	if (!exists) throw new Error("Automation not found");
 
 	// Find or create a dedicated manual trigger (isolated from real triggers).
+	// Uses provider "webhook" with a config flag to stay within the valid TriggerProvider enum.
 	let trigger = await automationsDb.findManualTrigger(automationId);
 	if (!trigger) {
 		trigger = await automationsDb.createTriggerForAutomation({
 			automationId,
 			organizationId: orgId,
 			name: "Manual trigger",
-			provider: "manual",
-			triggerType: "manual",
+			provider: "webhook",
+			triggerType: "webhook",
 			enabled: false,
-			config: {},
+			config: { _manual: true },
 			integrationId: null,
 			webhookUrlPath: `manual-${automationId}`,
 			webhookSecret: randomBytes(16).toString("hex"),
