@@ -7,11 +7,29 @@
 ## Core Philosophy
 
 - **Spec-first**: Read the relevant system spec before changing any subsystem. Update the spec in the same PR if behavior changes. See **Specs** section below.
+- **Design-system-first for UI work**: Before writing any UI/UX code (React, Tailwind, CSS, pages, components), read `docs/design-system.md` and follow it strictly.
 - **Minimal and elegant**: Less code is better. Every line should earn its place.
 - **Reads like English**: Code should be self-explanatory through explicit naming.
 - **Follow existing patterns**: Never duplicate functionality. Find and extend what exists.
 - **No surprises**: Ask before making architecture decisions.
 - **Open source first**: Only use MIT/Apache-2.0/BSD-compatible dependencies. No GPL, AGPL, SSPL, or BSL.
+
+## UI Work Gate (Mandatory)
+
+If the task includes any UI/design work, perform this gate **before writing code**:
+
+1. Read `docs/design-system.md` from top to bottom.
+2. Apply its anti-pattern rules and density rules to every new or edited UI block.
+3. Use only semantic tokens and approved component patterns from the design system.
+
+Hard rule: **Do not generate UI code until this gate is completed.**
+
+Reject these outputs during implementation and review:
+- Placeholder/filler stat cards with no product function
+- Repetitive decorative icons or arbitrary colored dots
+- `font-mono` used for metadata (paths, timestamps, counts)
+- Raw Tailwind color utilities for product surfaces/text (e.g. `bg-blue-500`, `text-gray-400`)
+- Tinted success/warning/info callout boxes, nested card borders, or pill-style step indicators
 
 ## Stack & Architecture
 
@@ -74,6 +92,7 @@ CLAUDE.md             # this file (Claude Code)
 
 ## Frontend Rules
 
+- **Design system is mandatory and blocking**: For any UI/design task, do not write code until `docs/design-system.md` has been read and its rules are actively enforced in the implementation.
 - **Data fetching**: TanStack Query + oRPC. No raw `fetch("/api/..." )` in components.
 - **WebSocket streaming**: use `@proliferate/gateway-clients`.
 

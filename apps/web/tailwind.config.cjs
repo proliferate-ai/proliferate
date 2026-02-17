@@ -8,6 +8,17 @@ module.exports = {
 	],
 	theme: {
 		extend: {
+			fontFamily: {
+				sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
+				mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
+			},
+			fontSize: {
+				xs: ["12px", "16px"],
+				sm: ["13px", "20px"],
+				base: ["14px", "24px"],
+				lg: ["16px", "24px"],
+				xl: ["18px", "28px"],
+			},
 			colors: {
 				border: "hsl(var(--border))",
 				input: "hsl(var(--input))",
@@ -49,7 +60,17 @@ module.exports = {
 				},
 				"chat-input": "hsl(var(--chat-input))",
 			},
+			boxShadow: {
+				subtle: "rgba(0, 0, 0, 0.04) 0px 1px 2px",
+				keystone:
+					"rgba(0, 0, 0, 0.04) 0px 3px 3px, rgba(0, 0, 0, 0.05) 0px 1px 2px",
+				floating:
+					"0 0 0 1px rgba(0,0,0,0.05), 0 8px 24px -4px rgba(0,0,0,0.1)",
+				"floating-dark":
+					"0 0 0 1px rgba(255,255,255,0.1), 0 8px 24px -4px rgba(0,0,0,0.5)",
+			},
 			borderRadius: {
+				xl: "calc(var(--radius) + 4px)",
 				lg: "var(--radius)",
 				md: "calc(var(--radius) - 2px)",
 				sm: "calc(var(--radius) - 4px)",

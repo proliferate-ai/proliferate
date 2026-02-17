@@ -1,81 +1,146 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@layer base {
+	:root {
+		/* ─── Core Backgrounds & Text (Light) ─── */
+		--background: 0 0% 100%; /* Pure White */
+		--foreground: 0 0% 10%; /* #1a1a1a - Near Black */
+
+		/* ─── Surfaces ─── */
+		--card: 0 0% 100%;
+		--card-foreground: 0 0% 10%;
+		--popover: 0 0% 100%;
+		--popover-foreground: 0 0% 10%;
+
+		/* ─── Structural Elements ─── */
+		--sidebar: 0 0% 98%; /* #fafafa - Subtle off-white */
+		--sidebar-foreground: 0 0% 10%;
+		--sidebar-border: 0 0% 90%; /* #e5e5e5 */
+
+		/* ─── Semantic Actions ─── */
+		--primary: 0 0% 10%; /* Near Black */
+		--primary-foreground: 0 0% 98%; /* Off-white */
+		--secondary: 0 0% 96%; /* #f5f5f5 */
+		--secondary-foreground: 0 0% 10%;
+		--muted: 0 0% 96%; /* Inactive/Soft backgrounds */
+		--muted-foreground: 0 0% 45%; /* #737373 - Accessible secondary text */
+		--accent: 0 0% 94%; /* #f0f0f0 - Hover states */
+		--accent-foreground: 0 0% 10%;
+
+		/* ─── Borders & Inputs ─── */
+		--border: 0 0% 90%; /* 1px structural lines */
+		--input: 0 0% 90%;
+		--ring: 0 0% 10%; /* Focus rings */
+
+		/* ─── Status Colors (Use sparingly, NO tinted backgrounds) ─── */
+		--destructive: 0 84% 60%; /* Crisp Red */
+		--destructive-foreground: 0 0% 98%;
+
+		/* ─── Geometry ─── */
+		--radius: 0.5rem; /* 8px base for product */
+	}
+
+	.dark {
+		/* ─── Core Backgrounds & Text (Dark) ─── */
+		--background: 0 0% 0%; /* Pure Black */
+		--foreground: 0 0% 98%; /* Near White */
+
+		/* ─── Surfaces ─── */
+		--card: 0 0% 6%; /* #0f0f0f - Slightly elevated */
+		--card-foreground: 0 0% 98%;
+		--popover: 0 0% 6%;
+		--popover-foreground: 0 0% 98%;
+
+		/* ─── Structural Elements ─── */
+		--sidebar: 0 0% 4%; /* #0a0a0a */
+		--sidebar-foreground: 0 0% 98%;
+		--sidebar-border: 0 0% 12%; /* #1f1f1f */
+
+		/* ─── Semantic Actions ─── */
+		--primary: 0 0% 98%; /* White buttons in dark mode */
+		--primary-foreground: 0 0% 0%; /* Black text */
+		--secondary: 0 0% 12%;
+		--secondary-foreground: 0 0% 98%;
+		--muted: 0 0% 12%;
+		--muted-foreground: 0 0% 65%; /* #a6a6a6 */
+		--accent: 0 0% 15%; /* #262626 */
+		--accent-foreground: 0 0% 98%;
+
+		/* ─── Borders & Inputs ─── */
+		--border: 0 0% 15%; /* #262626 */
+		--input: 0 0% 15%;
+		--ring: 0 0% 100%; /* White focus rings */
+
+		/* ─── Status Colors ─── */
+		--destructive: 0 63% 31%; /* Darker red for contrast */
+		--destructive-foreground: 0 0% 98%;
+	}
+}
 
 @layer base {
 	:root {
-		--background: 60 9% 98%;
-		--foreground: 24 10% 4%;
-
+		/* --background: 60 9% 98%; */
+		/* --foreground: 24 10% 4%; */
 		/* Sidebar */
-		--sidebar: 60 5% 96%;
-		--sidebar-foreground: 24 10% 4%;
-		--sidebar-border: 24 6% 90%;
-
-		--card: 60 9% 98%;
-		--card-foreground: 24 10% 4%;
-		--popover: 0 0% 100%;
-		--popover-foreground: 0 0% 3.9%;
-		--primary: 0 0% 9%;
-		--primary-foreground: 0 0% 98%;
-		--secondary: 0 0% 96.1%;
-		--secondary-foreground: 0 0% 9%;
-		--muted: 0 0% 96.1%;
-		--muted-foreground: 48 9% 30%; /* a more neutral, warmer dark (soft taupe) */
-		--accent: 0 0% 92%;
-		--accent-foreground: 0 0% 9%;
-		--destructive: 0 84.2% 60.2%;
-		--destructive-foreground: 0 0% 98%;
-		--border: 24 6% 85%;
-		--input: 20 6% 89%;
-		--ring: 24 10% 4%;
-		--radius: 0.5rem;
-
+		/* --sidebar: 60 5% 96%; */
+		/* --sidebar-foreground: 24 10% 4%; */
+		/* --sidebar-border: 24 6% 90%; */
+		/* --card: 60 9% 98%; */
+		/* --card-foreground: 24 10% 4%; */
+		/* --popover: 0 0% 100%; */
+		/* --popover-foreground: 0 0% 3.9%; */
+		/* --primary: 0 0% 9%; */
+		/* --primary-foreground: 0 0% 98%; */
+		/* --secondary: 0 0% 96.1%; */
+		/* --secondary-foreground: 0 0% 9%; */
+		/* --muted: 0 0% 96.1%; */
+		/* --muted-foreground: 48 9% 30%; */
+		/* --accent: 0 0% 92%; */
+		/* --accent-foreground: 0 0% 9%; */
+		/* --destructive: 0 84.2% 60.2%; */
+		/* --destructive-foreground: 0 0% 98%; */
+		/* --border: 24 6% 85%; */
+		/* --input: 20 6% 89%; */
+		/* --ring: 24 10% 4%; */
+		/* --radius: 0.5rem; */
 		/* Chat input background - uses card in light mode */
-		--chat-input: 60 9% 98%;
+		/* --chat-input: 60 9% 98%; */
 	}
 
 	.dark {
 		/* Main content background - lighter than sidebar */
-		--background: 20 5% 12%;
-		--foreground: 60 5% 98%;
-
+		/* --background: 20 5% 12%; */
+		/* --foreground: 60 5% 98%; */
 		/* Sidebar */
-		--sidebar: 24 6% 10%;
-		--sidebar-foreground: 60 5% 98%;
-		--sidebar-border: 20 5% 16%;
-
+		/* --sidebar: 24 6% 10%; */
+		/* --sidebar-foreground: 60 5% 98%; */
+		/* --sidebar-border: 20 5% 16%; */
 		/* Cards and popovers - slightly elevated from background */
-		--card: 20 5% 11%;
-		--card-foreground: 60 5% 98%;
-		--popover: 20 5% 11%;
-		--popover-foreground: 60 5% 98%;
-
+		/* --card: 20 5% 11%; */
+		/* --card-foreground: 60 5% 98%; */
+		/* --popover: 20 5% 11%; */
+		/* --popover-foreground: 60 5% 98%; */
 		/* Primary action color - white in dark mode */
-		--primary: 0 0% 98%;
-		--primary-foreground: 0 0% 9%;
-
+		/* --primary: 0 0% 98%; */
+		/* --primary-foreground: 0 0% 9%; */
 		/* Secondary/muted surfaces */
-		--secondary: 0 0% 16%;
-		--secondary-foreground: 0 0% 98%;
-		--muted: 0 0% 16%;
-		--muted-foreground: 0 0% 83%;
-
+		/* --secondary: 0 0% 16%; */
+		/* --secondary-foreground: 0 0% 98%; */
+		/* --muted: 0 0% 16%; */
+		/* --muted-foreground: 0 0% 83%; */
 		/* Accent (hover states, highlights) */
-		--accent: 20 4% 16%;
-		--accent-foreground: 60 5% 98%;
-
+		/* --accent: 20 4% 16%; */
+		/* --accent-foreground: 60 5% 98%; */
 		/* Destructive */
-		--destructive: 0 62.8% 30.6%;
-		--destructive-foreground: 0 0% 98%;
-
+		/* --destructive: 0 62.8% 30.6%; */
+		/* --destructive-foreground: 0 0% 98%; */
 		/* Borders and inputs */
-		--border: 20 4% 20%;
-		--input: 20 4% 20%;
-		--ring: 60 5% 98%;
-
+		/* --border: 20 4% 20%; */
+		/* --input: 20 4% 20%; */
+		/* --ring: 60 5% 98%; */
 		/* Chat input background */
-		--chat-input: 20 4% 19%;
+		/* --chat-input: 20 4% 19%; */
 	}
 }
 
