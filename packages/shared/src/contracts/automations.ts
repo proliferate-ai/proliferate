@@ -76,6 +76,7 @@ export const AutomationSchema = z.object({
 	llm_analysis_prompt: z.string().nullable().optional(),
 	notification_channel_id: z.string().nullable().optional(),
 	notification_slack_installation_id: z.string().uuid().nullable().optional(),
+	source_template_id: z.string().nullable().optional(),
 });
 
 export type Automation = z.infer<typeof AutomationSchema>;
