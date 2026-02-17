@@ -115,21 +115,32 @@ export async function createOpenCodeSession(baseUrl: string, title?: string): Pr
 
 	if (!response.ok) {
 		const errorText = await response.text();
+		const maxErrorPreviewLength = 300;
+		const errorPreview =
+			errorText.length > maxErrorPreviewLength
+				? `${errorText.slice(0, maxErrorPreviewLength)}...`
+				: errorText;
 		logger.debug(
 			{
 				host,
 				status: response.status,
 				durationMs: Date.now() - startMs,
+				errorLength: errorText.length,
 			},
 			"opencode.session.create.error",
 		);
 		const status = response.status;
 		const retryable = status >= 500 || status === 408 || status === 429;
-		throw buildOpenCodeSessionCreateError(`OpenCode session create failed: ${errorText}`, {
-			retryable,
-			status,
-			phase: "http",
-		});
+		throw buildOpenCodeSessionCreateError(
+			`OpenCode session create failed: ${errorPreview}${
+				errorText.length > maxErrorPreviewLength ? ` (truncated; length=${errorText.length})` : ""
+			}`,
+			{
+				retryable,
+				status,
+				phase: "http",
+			},
+		);
 	}
 
 	const data = (await response.json()) as { id: string };

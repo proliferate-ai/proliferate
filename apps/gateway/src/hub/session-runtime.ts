@@ -56,8 +56,8 @@ export interface SessionRuntimeOptions {
 }
 
 export class SessionRuntime {
-	private static readonly OPEN_CODE_CREATE_BASE_DELAY_MS = 500;
-	private static readonly OPEN_CODE_CREATE_MAX_DELAY_MS = 5000;
+	private static readonly openCodeCreateBaseDelayMs = 500;
+	private static readonly openCodeCreateMaxDelayMs = 5000;
 
 	private readonly env: GatewayEnv;
 	private readonly sessionId: string;
@@ -608,8 +608,8 @@ export class SessionRuntime {
 				}
 
 				const delayMs = Math.min(
-					SessionRuntime.OPEN_CODE_CREATE_BASE_DELAY_MS * 2 ** (attempt - 1),
-					SessionRuntime.OPEN_CODE_CREATE_MAX_DELAY_MS,
+					SessionRuntime.openCodeCreateBaseDelayMs * 2 ** (attempt - 1),
+					SessionRuntime.openCodeCreateMaxDelayMs,
 				);
 				this.logger.warn(
 					{

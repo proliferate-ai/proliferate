@@ -3,7 +3,7 @@ import pinoHttp, { type Options as PinoHttpOptions } from "pino-http";
 
 export type { LevelWithSilent, Logger };
 
-const PRETTY_TRANSPORT_CONFIG = {
+const prettyTransportConfig = {
 	target: "pino-pretty",
 	options: {
 		colorize: true,
@@ -19,7 +19,7 @@ let prettyTransport: ReturnType<typeof pino.transport> | null = null;
 
 function getPrettyTransport(): ReturnType<typeof pino.transport> {
 	if (!prettyTransport) {
-		prettyTransport = pino.transport(PRETTY_TRANSPORT_CONFIG);
+		prettyTransport = pino.transport(prettyTransportConfig);
 	}
 	return prettyTransport;
 }
