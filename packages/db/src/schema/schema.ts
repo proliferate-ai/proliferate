@@ -568,6 +568,7 @@ export const automations = pgTable(
 		notificationChannelId: text("notification_channel_id"),
 		notificationSlackInstallationId: uuid("notification_slack_installation_id"),
 		actionModes: jsonb("action_modes"),
+		sourceTemplateId: text("source_template_id"),
 	},
 	(table) => [
 		index("idx_automations_enabled")

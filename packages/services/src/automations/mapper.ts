@@ -70,6 +70,7 @@ export function toAutomation(
 		llm_analysis_prompt: row.llmAnalysisPrompt ?? null,
 		notification_channel_id: row.notificationChannelId ?? null,
 		notification_slack_installation_id: row.notificationSlackInstallationId ?? null,
+		source_template_id: row.sourceTemplateId ?? null,
 	};
 }
 
@@ -119,6 +120,7 @@ export function toAutomationListItem(row: AutomationWithRelations): AutomationLi
 		llm_analysis_prompt: row.llmAnalysisPrompt ?? null,
 		notification_channel_id: row.notificationChannelId ?? null,
 		notification_slack_installation_id: row.notificationSlackInstallationId ?? null,
+		source_template_id: row.sourceTemplateId ?? null,
 		_count: {
 			triggers: triggers.length,
 			schedules: schedules.length,
@@ -183,6 +185,7 @@ export function toAutomationWithTriggers(row: AutomationWithTriggersRow): Automa
 		llm_analysis_prompt: row.llmAnalysisPrompt ?? null,
 		notification_channel_id: row.notificationChannelId ?? null,
 		notification_slack_installation_id: row.notificationSlackInstallationId ?? null,
+		source_template_id: row.sourceTemplateId ?? null,
 		triggers: (row.triggers || []).map(toAutomationTrigger),
 	};
 }
@@ -226,6 +229,7 @@ export function toNewAutomationListItem(
 		llm_analysis_prompt: row.llmAnalysisPrompt ?? null,
 		notification_channel_id: row.notificationChannelId ?? null,
 		notification_slack_installation_id: row.notificationSlackInstallationId ?? null,
+		source_template_id: row.sourceTemplateId ?? null,
 		_count: { triggers: 0, schedules: 0 },
 		activeProviders: [],
 	};
