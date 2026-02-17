@@ -99,7 +99,7 @@ export function EmptyDashboard() {
 					modelId: selectedModel,
 				});
 				setActiveSession(result.sessionId);
-				router.push(`/dashboard/sessions/${result.sessionId}`);
+				router.push(`/workspace/${result.sessionId}`);
 				return;
 			}
 
@@ -123,7 +123,7 @@ export function EmptyDashboard() {
 
 			// Set active session and navigate to session page
 			setActiveSession(result.sessionId);
-			router.push(`/dashboard/sessions/${result.sessionId}`);
+			router.push(`/workspace/${result.sessionId}`);
 		} catch (error) {
 			console.error("Failed to create session:", error);
 			// Clear pending prompt on error
@@ -171,7 +171,7 @@ export function EmptyDashboard() {
 						<span>
 							<strong>{selectedRepo.githubRepoName}</strong> isn&apos;t configured yet &mdash;{" "}
 							<Link
-								href={`/dashboard/sessions/new?repoId=${selectedRepoId}&type=setup`}
+								href={`/workspace/new?repoId=${selectedRepoId}&type=setup`}
 								className="underline hover:text-foreground"
 							>
 								set it up

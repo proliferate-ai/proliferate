@@ -130,7 +130,7 @@ export function ConfigurationGroup({
 		});
 		clearPendingPrompt();
 		setActiveSession(result.sessionId);
-		router.push(`/dashboard/sessions/${result.sessionId}`);
+		router.push(`/workspace/${result.sessionId}`);
 		onNavigate?.();
 	};
 

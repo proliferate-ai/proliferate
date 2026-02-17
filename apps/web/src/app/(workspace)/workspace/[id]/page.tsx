@@ -34,7 +34,7 @@ export default function SessionDetailPage({
 		organization
 			.setActive({ organizationId: targetOrgId })
 			.then(() => {
-				window.location.replace(`/dashboard/sessions/${id}?orgId=${targetOrgId}`);
+				window.location.replace(`/workspace/${id}?orgId=${targetOrgId}`);
 			})
 			.catch((err) => {
 				console.error("Failed to switch organization:", err);

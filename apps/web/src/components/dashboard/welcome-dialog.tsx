@@ -104,7 +104,7 @@ export function WelcomeDialog() {
 						onCreate={(_prebuildId, sessionId) => {
 							setShowCreate(false);
 							setPendingPrompt(getSetupInitialPrompt());
-							router.push(`/dashboard/sessions/${sessionId}`);
+							router.push(`/workspace/${sessionId}`);
 						}}
 					/>
 				</DialogContent>

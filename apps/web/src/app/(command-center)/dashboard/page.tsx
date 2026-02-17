@@ -16,14 +16,14 @@ export default function DashboardPage() {
 	// If there's an active session, redirect to the session page
 	useEffect(() => {
 		if (activeSessionId) {
-			router.push(`/dashboard/sessions/${activeSessionId}`);
+			router.push(`/workspace/${activeSessionId}`);
 		}
 	}, [activeSessionId, router]);
 
-	// If inbox has items and no active session, redirect to inbox
+	// If inbox has items and no active session, redirect to runs
 	useEffect(() => {
 		if (!activeSessionId && inboxItems.length > 0) {
-			router.push("/dashboard/inbox");
+			router.push("/dashboard/runs");
 		}
 	}, [activeSessionId, inboxItems.length, router]);
 

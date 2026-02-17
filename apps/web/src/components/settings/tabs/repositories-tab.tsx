@@ -120,7 +120,7 @@ export function RepositoriesTab({ onClose }: RepositoriesTabProps) {
 							onCreateSnapshot={(repoId) => {
 								setSelectedRepo(repoId);
 								onClose();
-								router.push(`/dashboard/sessions/new?repoId=${repoId}&type=setup`);
+								router.push(`/workspace/new?repoId=${repoId}&type=setup`);
 							}}
 						/>
 					))}

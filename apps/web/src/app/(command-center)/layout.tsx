@@ -10,20 +10,23 @@ import { useSession } from "@/lib/auth-client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { env } from "@proliferate/environment/public";
 import { Search } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-export default function DashboardLayout({
+export default function CommandCenterLayout({
 	children,
 }: {
 	children: React.ReactNode;
 }) {
 	const router = useRouter();
+	const pathname = usePathname();
 	const { data: session, isPending: authPending } = useSession();
 	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
 	const { data: billingInfo, isLoading: billingLoading, isError: billingError } = useBilling();
 	const { commandSearchOpen, setCommandSearchOpen } = useDashboardStore();
 	const needsOnboarding = billingEnabled && billingInfo?.state.billingState === "unconfigured";
+
+	const isSettingsPage = pathname?.startsWith("/settings");
 
 	// Cmd+K keyboard shortcut for search
 	useEffect(() => {
@@ -73,6 +76,11 @@ export default function DashboardLayout({
 	// Redirect in effect above; keep shell hidden while routing.
 	if (needsOnboarding) {
 		return null;
+	}
+
+	// Settings pages provide their own layout chrome — skip dashboard sidebar/banners
+	if (isSettingsPage) {
+		return <>{children}</>;
 	}
 
 	return (

@@ -253,7 +253,7 @@ function RunDetailSection({ run }: { run: AutomationRun }) {
 					>
 						Agent Session
 					</Text>
-					<Link href={`/dashboard/sessions/${run.session_id}`}>
+					<Link href={`/workspace/${run.session_id}`}>
 						<Button variant="outline" size="sm" className="gap-1.5">
 							<Bot className="w-3.5 h-3.5" />
 							View agent session

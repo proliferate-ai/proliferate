@@ -38,6 +38,42 @@ const nextConfig = {
 				destination: "/settings/tools",
 				permanent: true,
 			},
+			// Route restructuring redirects (old paths → new paths)
+			{
+				source: "/session/:id",
+				destination: "/workspace/:id",
+				permanent: true,
+			},
+			{
+				source: "/dashboard/inbox",
+				destination: "/dashboard/runs",
+				permanent: true,
+			},
+			{
+				source: "/dashboard/repositories",
+				destination: "/dashboard/repos",
+				permanent: true,
+			},
+			{
+				source: "/dashboard/repositories/:id",
+				destination: "/dashboard/repos/:id",
+				permanent: true,
+			},
+			{
+				source: "/dashboard/sessions/new",
+				destination: "/workspace/new",
+				permanent: true,
+			},
+			{
+				source: "/dashboard/sessions/:id",
+				destination: "/workspace/:id",
+				permanent: true,
+			},
+			{
+				source: "/dashboard/setup/:id",
+				destination: "/workspace/setup/:id",
+				permanent: true,
+			},
 		];
 	},
 };

@@ -60,7 +60,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 		(sessionId: string) => {
 			clearPendingPrompt();
 			setActiveSession(sessionId);
-			router.push(`/dashboard/sessions/${sessionId}`);
+			router.push(`/workspace/${sessionId}`);
 			onOpenChange(false);
 		},
 		[clearPendingPrompt, setActiveSession, router, onOpenChange],

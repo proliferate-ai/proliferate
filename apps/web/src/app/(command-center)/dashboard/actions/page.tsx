@@ -153,7 +153,7 @@ export default function ActionsPage() {
 									handleApproveWithGrant(inv.sessionId, inv.id, config)
 								}
 								onDeny={() => handleDeny(inv.sessionId, inv.id)}
-								onSessionClick={() => router.push(`/dashboard/sessions/${inv.sessionId}`)}
+								onSessionClick={() => router.push(`/workspace/${inv.sessionId}`)}
 							/>
 						))}
 					</div>

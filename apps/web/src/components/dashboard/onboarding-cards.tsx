@@ -124,7 +124,7 @@ export function OnboardingCards() {
 							value={null}
 							onValueChange={(repoId) => {
 								setRepoSelectorOpen(false);
-								router.push(`/dashboard/sessions/new?repoId=${repoId}&type=setup`);
+								router.push(`/workspace/new?repoId=${repoId}&type=setup`);
 							}}
 							triggerClassName="w-56"
 							placeholder="Choose repo..."
@@ -144,9 +144,7 @@ export function OnboardingCards() {
 					title="Set up your first repo"
 					description="Configure environment and dependencies so sessions boot instantly."
 					ctaLabel="Configure"
-					onCtaClick={() =>
-						router.push(`/dashboard/sessions/new?repoId=${firstRepo.id}&type=setup`)
-					}
+					onCtaClick={() => router.push(`/workspace/new?repoId=${firstRepo.id}&type=setup`)}
 					image="/onboarding/setup.png"
 				/>,
 			);

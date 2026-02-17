@@ -12,7 +12,6 @@ import {
 	CreditCard,
 	ExternalLink,
 	Key,
-	Plug,
 	Search,
 	User,
 	Users,
@@ -31,12 +30,11 @@ const NAV_ITEMS = [
 		section: "Workspace",
 		items: [
 			{ id: "general", label: "General", icon: Building2, href: "/settings/general" },
+			{ id: "members", label: "Members", icon: Users, href: "/settings/members" },
+			{ id: "secrets", label: "Secrets", icon: Key, href: "/settings/secrets" },
 			...(BILLING_ENABLED
 				? [{ id: "billing", label: "Billing", icon: CreditCard, href: "/settings/billing" }]
 				: []),
-			{ id: "members", label: "Members", icon: Users, href: "/settings/members" },
-			{ id: "secrets", label: "Secrets", icon: Key, href: "/settings/secrets" },
-			{ id: "tools", label: "Tools", icon: Plug, href: "/settings/tools" },
 		],
 	},
 ];
@@ -47,7 +45,6 @@ const PAGE_TITLES: Record<string, string> = {
 	members: "Members",
 	secrets: "Secrets",
 	...(BILLING_ENABLED ? { billing: "Billing" } : {}),
-	tools: "Tools",
 };
 
 function getPageTitle(pathname: string) {

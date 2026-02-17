@@ -9,36 +9,31 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
 import { useAttentionInbox } from "@/hooks/use-attention-inbox";
 import { useSlackStatus } from "@/hooks/use-integrations";
-import { usePrebuilds } from "@/hooks/use-prebuilds";
-import { useSessions } from "@/hooks/use-sessions";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
-import type { Session } from "@proliferate/shared/contracts";
 import {
 	FileStackIcon,
 	FolderGit2,
+	Home,
 	Inbox,
 	LifeBuoy,
 	LogOut,
 	Menu,
 	MessageCircle,
+	MessageSquare,
 	Moon,
 	Plug,
-	Plus,
 	Settings,
 	Sun,
+	Terminal,
 	X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { AddSnapshotButton } from "./add-snapshot-button";
+import { useState } from "react";
 import { SearchTrigger } from "./command-search";
-import { ConfigurationGroup } from "./configuration-group";
-import { SessionItem } from "./session-item";
-import { SidebarOrganizeMenu } from "./sidebar-organize-menu";
 
 // Mobile sidebar trigger button - shown in mobile header
 export function MobileSidebarTrigger() {
@@ -75,15 +70,16 @@ export function MobileSidebar() {
 
 // Desktop sidebar - hidden on mobile
 export function Sidebar() {
-	const { sidebarCollapsed, toggleSidebar, clearPendingPrompt, setActiveSession } =
-		useDashboardStore();
+	const { sidebarCollapsed, toggleSidebar } = useDashboardStore();
 	const pathname = usePathname();
 	const router = useRouter();
 
-	const isInboxPage = pathname?.startsWith("/dashboard/inbox");
+	const isHomePage = pathname === "/dashboard";
+	const isRunsPage = pathname?.startsWith("/dashboard/runs");
+	const isSessionsPage = pathname?.startsWith("/dashboard/sessions");
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
-	const isRepositoriesPage = pathname?.startsWith("/dashboard/repositories");
+	const isReposPage = pathname?.startsWith("/dashboard/repos");
 
 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
 	const inboxCount = inboxItems.length;
@@ -123,23 +119,33 @@ export function Sidebar() {
 					className="h-8 w-8 text-muted-foreground hover:text-foreground"
 					onClick={(e) => {
 						e.stopPropagation();
-						clearPendingPrompt();
-						setActiveSession(null);
-						router.push("/dashboard");
+						router.push("/workspace");
 					}}
-					title="New session"
+					title="Open workspace"
 				>
-					<Plus className="h-4 w-4" />
+					<Terminal className="h-4 w-4" />
 				</Button>
 				<Button
-					variant={isInboxPage ? "secondary" : "ghost"}
+					variant={isHomePage ? "secondary" : "ghost"}
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.stopPropagation();
+						router.push("/dashboard");
+					}}
+					title="Home"
+				>
+					<Home className="h-4 w-4" />
+				</Button>
+				<Button
+					variant={isRunsPage ? "secondary" : "ghost"}
 					size="icon"
 					className="h-8 w-8 text-muted-foreground hover:text-foreground relative"
 					onClick={(e) => {
 						e.stopPropagation();
-						router.push("/dashboard/inbox");
+						router.push("/dashboard/runs");
 					}}
-					title="Inbox"
+					title="Runs"
 				>
 					<Inbox className="h-4 w-4" />
 					{inboxCount > 0 && (
@@ -149,16 +155,16 @@ export function Sidebar() {
 					)}
 				</Button>
 				<Button
-					variant={isRepositoriesPage ? "secondary" : "ghost"}
+					variant={isSessionsPage ? "secondary" : "ghost"}
 					size="icon"
 					className="h-8 w-8 text-muted-foreground hover:text-foreground"
 					onClick={(e) => {
 						e.stopPropagation();
-						router.push("/dashboard/repositories");
+						router.push("/dashboard/sessions");
 					}}
-					title="Repositories"
+					title="Sessions"
 				>
-					<FolderGit2 className="h-4 w-4" />
+					<MessageSquare className="h-4 w-4" />
 				</Button>
 				<div className="my-1" />
 				<Button
@@ -172,6 +178,18 @@ export function Sidebar() {
 					title="Automations"
 				>
 					<FileStackIcon className="h-4 w-4" />
+				</Button>
+				<Button
+					variant={isReposPage ? "secondary" : "ghost"}
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.stopPropagation();
+						router.push("/dashboard/repos");
+					}}
+					title="Repos"
+				>
+					<FolderGit2 className="h-4 w-4" />
 				</Button>
 				<Button
 					variant={isIntegrationsPage ? "secondary" : "ghost"}
@@ -220,15 +238,7 @@ function SidebarContent({
 
 	// Fetch Slack status for support popup
 	const { data: slackStatus } = useSlackStatus();
-	const {
-		toggleSidebar,
-		setActiveSession,
-		clearPendingPrompt,
-		setCommandSearchOpen,
-		sidebarOrganize,
-		sidebarSort,
-		sidebarStatusFilter,
-	} = useDashboardStore();
+	const { toggleSidebar, setCommandSearchOpen } = useDashboardStore();
 
 	const user = authSession?.user;
 	const userInitials = user?.name
@@ -240,79 +250,17 @@ function SidebarContent({
 				.slice(0, 2)
 		: user?.email?.[0]?.toUpperCase() || "?";
 
-	// Fetch sessions and prebuilds
-	const { data: sessions } = useSessions();
-
-	interface Prebuild {
-		id: string;
-		name: string | null;
-		snapshotId: string | null;
-		createdAt: string;
-		type?: "manual" | "managed";
-		prebuildRepos?: Array<{
-			repo: { id: string; githubRepoName: string } | null;
-		}>;
-		setupSessions?: Array<{
-			id: string;
-			sessionType: string;
-		}>;
-	}
-	const { data: prebuildsData } = usePrebuilds();
-	const prebuilds = (prebuildsData as Prebuild[] | undefined) || [];
-
-	// Filter to coding sessions, apply status filter, group by prebuild
-	const codingSessions = sessions?.filter((s) => {
-		if (s.sessionType === "setup" || s.origin === "cli") return false;
-		if (sidebarStatusFilter === "running") return s.status === "running";
-		if (sidebarStatusFilter === "paused") return s.status === "paused";
-		return true;
-	});
-
-	const sessionsByPrebuild = new Map<string, Session[]>();
-	const orphanedSessions: Session[] = [];
-	for (const session of codingSessions ?? []) {
-		if (session.prebuildId) {
-			const existing = sessionsByPrebuild.get(session.prebuildId);
-			if (existing) {
-				existing.push(session);
-			} else {
-				sessionsByPrebuild.set(session.prebuildId, [session]);
-			}
-		} else {
-			orphanedSessions.push(session);
-		}
-	}
-
-	// Flat sorted list for chronological mode
-	const sortedSessions = [...(codingSessions ?? [])].sort((a, b) => {
-		const dateA =
-			sidebarSort === "updated" ? a.lastActivityAt || a.startedAt || "" : a.startedAt || "";
-		const dateB =
-			sidebarSort === "updated" ? b.lastActivityAt || b.startedAt || "" : b.startedAt || "";
-		return new Date(dateB).getTime() - new Date(dateA).getTime();
-	});
-
 	// Detect active pages from URL
-	const isInboxPage = pathname?.startsWith("/dashboard/inbox");
+	const isHomePage = pathname === "/dashboard";
+	const isRunsPage = pathname?.startsWith("/dashboard/runs");
+	const isSessionsPage = pathname?.startsWith("/dashboard/sessions");
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
-	const isRepositoriesPage = pathname?.startsWith("/dashboard/repositories");
+	const isReposPage = pathname?.startsWith("/dashboard/repos");
 
 	// Inbox count for badge
 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
 	const inboxCount = inboxItems.length;
-
-	// Detect active session from URL
-	const isSessionDetailPage =
-		pathname?.startsWith("/dashboard/sessions/") && pathname !== "/dashboard/sessions";
-	const urlSessionId = isSessionDetailPage ? pathname?.split("/").pop() : null;
-
-	const handleNewSession = () => {
-		clearPendingPrompt();
-		setActiveSession(null);
-		router.push("/dashboard");
-		onNavigate?.();
-	};
 
 	const handleNavigate = (path: string) => {
 		router.push(path);
@@ -321,17 +269,28 @@ function SidebarContent({
 
 	return (
 		<>
-			{/* Top section: Logo + Collapse/Close */}
+			{/* Top section: Logo + Terminal + Collapse/Close */}
 			<div className="p-3 flex items-center justify-between gap-2">
-				<img
-					src={
-						resolvedTheme === "dark"
-							? "https://d1uh4o7rpdqkkl.cloudfront.net/logotype-inverted.webp"
-							: "https://d1uh4o7rpdqkkl.cloudfront.net/logotype.webp"
-					}
-					alt="Proliferate"
-					className="h-5"
-				/>
+				<div className="flex items-center gap-2">
+					<img
+						src={
+							resolvedTheme === "dark"
+								? "https://d1uh4o7rpdqkkl.cloudfront.net/logotype-inverted.webp"
+								: "https://d1uh4o7rpdqkkl.cloudfront.net/logotype.webp"
+						}
+						alt="Proliferate"
+						className="h-5"
+					/>
+					<Button
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7 text-muted-foreground hover:text-foreground"
+						onClick={() => handleNavigate("/workspace")}
+						title="Open workspace"
+					>
+						<Terminal className="h-4 w-4" />
+					</Button>
+				</div>
 				<div className="flex items-center gap-1">
 					{showCollapseButton && (
 						<Button
@@ -358,36 +317,38 @@ function SidebarContent({
 				</div>
 			</div>
 
-			{/* New Session + Search */}
-			<div className="px-2 mb-1 space-y-1">
-				<button
-					type="button"
-					onClick={handleNewSession}
-					className="flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-				>
-					<Plus className="h-5 w-5" />
-					<span className="text-sm">New session</span>
-				</button>
+			{/* Search */}
+			<div className="px-2 mb-1">
 				<SearchTrigger onClick={() => setCommandSearchOpen(true)} />
 			</div>
 
-			{/* Workspace section */}
+			{/* Main nav */}
 			<div className="px-2 mb-1">
-				<div className="px-3 py-1 text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
-					Workspace
-				</div>
 				<button
 					type="button"
-					onClick={() => handleNavigate("/dashboard/inbox")}
+					onClick={() => handleNavigate("/dashboard")}
 					className={cn(
 						"flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-sm transition-colors",
-						isInboxPage
+						isHomePage
+							? "bg-muted text-foreground"
+							: "text-muted-foreground hover:text-foreground hover:bg-accent",
+					)}
+				>
+					<Home className="h-5 w-5" />
+					<span>Home</span>
+				</button>
+				<button
+					type="button"
+					onClick={() => handleNavigate("/dashboard/runs")}
+					className={cn(
+						"flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-sm transition-colors",
+						isRunsPage
 							? "bg-muted text-foreground"
 							: "text-muted-foreground hover:text-foreground hover:bg-accent",
 					)}
 				>
 					<Inbox className="h-5 w-5" />
-					<span>Inbox</span>
+					<span>Runs</span>
 					{inboxCount > 0 && (
 						<span className="ml-auto h-5 min-w-5 rounded-full bg-destructive text-destructive-foreground text-[11px] font-medium flex items-center justify-center px-1.5">
 							{inboxCount > 99 ? "99+" : inboxCount}
@@ -396,16 +357,16 @@ function SidebarContent({
 				</button>
 				<button
 					type="button"
-					onClick={() => handleNavigate("/dashboard/repositories")}
+					onClick={() => handleNavigate("/dashboard/sessions")}
 					className={cn(
 						"flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-sm transition-colors",
-						isRepositoriesPage
+						isSessionsPage
 							? "bg-muted text-foreground"
 							: "text-muted-foreground hover:text-foreground hover:bg-accent",
 					)}
 				>
-					<FolderGit2 className="h-5 w-5" />
-					<span>Repositories</span>
+					<MessageSquare className="h-5 w-5" />
+					<span>Sessions</span>
 				</button>
 			</div>
 
@@ -429,6 +390,19 @@ function SidebarContent({
 				</button>
 				<button
 					type="button"
+					onClick={() => handleNavigate("/dashboard/repos")}
+					className={cn(
+						"flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-sm transition-colors",
+						isReposPage
+							? "bg-muted text-foreground"
+							: "text-muted-foreground hover:text-foreground hover:bg-accent",
+					)}
+				>
+					<FolderGit2 className="h-5 w-5" />
+					<span>Repos</span>
+				</button>
+				<button
+					type="button"
 					onClick={() => handleNavigate("/dashboard/integrations")}
 					className={cn(
 						"flex items-center gap-[0.38rem] w-full px-3 py-1.5 rounded-lg text-sm transition-colors",
@@ -442,70 +416,8 @@ function SidebarContent({
 				</button>
 			</div>
 
-			{/* Scrollable content */}
-			<div className="flex-1 overflow-y-auto text-sm">
-				<div className="flex items-center w-full px-4 py-1.5 text-xs text-muted-foreground">
-					<span>Threads</span>
-					<div className="ml-auto flex items-center gap-0.5">
-						<SidebarOrganizeMenu />
-						<AddSnapshotButton />
-					</div>
-				</div>
-				<div className="px-2">
-					{sidebarOrganize === "by-project" ? (
-						<>
-							{prebuilds.map((prebuild) => (
-								<ConfigurationGroup
-									key={prebuild.id}
-									prebuild={prebuild}
-									sessions={sessionsByPrebuild.get(prebuild.id) ?? []}
-									activeSessionId={urlSessionId}
-									onNavigate={onNavigate}
-								/>
-							))}
-							{orphanedSessions.length > 0 && (
-								<>
-									<div className="px-3 py-1 text-xs text-muted-foreground/60">Other</div>
-									{orphanedSessions.slice(0, 10).map((session) => (
-										<SessionItem
-											key={session.id}
-											session={session}
-											isActive={urlSessionId === session.id}
-											onNavigate={onNavigate}
-										/>
-									))}
-									{orphanedSessions.length > 10 && (
-										<button
-											type="button"
-											onClick={() => handleNavigate("/dashboard/sessions")}
-											className="w-full px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-										>
-											Show more
-										</button>
-									)}
-								</>
-							)}
-						</>
-					) : (
-						<>
-							{sortedSessions.length > 0 ? (
-								sortedSessions.map((session) => (
-									<SessionItem
-										key={session.id}
-										session={session}
-										isActive={urlSessionId === session.id}
-										onNavigate={onNavigate}
-									/>
-								))
-							) : (
-								<div className="px-3 py-4 text-center text-sm text-muted-foreground/60">
-									No sessions
-								</div>
-							)}
-						</>
-					)}
-				</div>
-			</div>
+			{/* Spacer to push footer down */}
+			<div className="flex-1" />
 
 			{/* Footer with Support button and user card */}
 			<div className="border-t border-sidebar-border">

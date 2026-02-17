@@ -25,7 +25,7 @@ export function AddSnapshotButton() {
 		setOpen(false);
 		setMobileSidebarOpen(false);
 		setPendingPrompt(getSetupInitialPrompt());
-		router.push(`/dashboard/sessions/${sessionId}`);
+		router.push(`/workspace/${sessionId}`);
 	};
 
 	return (
@@ -65,7 +65,7 @@ export function AddSnapshotRow() {
 		setOpen(false);
 		setMobileSidebarOpen(false);
 		setPendingPrompt(getSetupInitialPrompt());
-		router.push(`/dashboard/sessions/${sessionId}`);
+		router.push(`/workspace/${sessionId}`);
 	};
 
 	return (

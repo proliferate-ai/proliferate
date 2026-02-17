@@ -65,7 +65,7 @@ export function SessionCard({ session }: SessionCardProps) {
 		session.title || `${repoShortName}${session.branchName ? ` (${session.branchName})` : ""}`;
 
 	return (
-		<Link href={`/dashboard/sessions/${session.id}`}>
+		<Link href={`/workspace/${session.id}`}>
 			<div
 				className={cn(
 					"group p-4 rounded-lg border border-border bg-card",

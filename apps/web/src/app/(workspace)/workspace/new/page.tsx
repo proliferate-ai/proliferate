@@ -51,7 +51,7 @@ export default function NewSessionPage() {
 
 		// Setup sessions have a dedicated page with title, description, and "Done" button
 		if (sessionType === "setup") {
-			router.replace(`/dashboard/setup/${repoId}`);
+			router.replace(`/workspace/setup/${repoId}`);
 			return;
 		}
 
@@ -64,7 +64,7 @@ export default function NewSessionPage() {
 		void (async () => {
 			try {
 				const data = await createSessionFromRepo();
-				router.replace(`/dashboard/sessions/${data.sessionId}`);
+				router.replace(`/workspace/${data.sessionId}`);
 			} catch {
 				creationStartedRef.current = false;
 			}

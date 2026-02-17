@@ -94,7 +94,7 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 	const handleClick = () => {
 		clearPendingPrompt();
 		setActiveSession(session.id);
-		router.push(`/dashboard/sessions/${session.id}`);
+		router.push(`/workspace/${session.id}`);
 		onNavigate?.();
 	};
 

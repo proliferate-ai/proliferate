@@ -102,7 +102,7 @@ export default function RepositoriesPage() {
 
 	const handleConfigure = (repoId: string) => {
 		setSelectedRepo(repoId);
-		router.push(`/dashboard/sessions/new?repoId=${repoId}&type=setup`);
+		router.push(`/workspace/new?repoId=${repoId}&type=setup`);
 	};
 
 	const reposList = Array.isArray(repos) ? repos : [];

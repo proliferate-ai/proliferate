@@ -32,7 +32,7 @@ function sanitizeReturnUrl(returnUrl: string | undefined): string {
 		"/dashboard",
 		"/settings",
 		"/preview",
-		"/session",
+		"/workspace",
 		"/repos",
 		"/invite",
 	];

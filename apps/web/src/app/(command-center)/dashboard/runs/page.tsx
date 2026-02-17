@@ -12,7 +12,7 @@ export default function InboxPage() {
 		<div className="h-full overflow-y-auto">
 			<div className="max-w-3xl mx-auto px-6 py-8">
 				<div className="flex items-center gap-3 mb-6">
-					<h1 className="text-xl font-semibold">Inbox</h1>
+					<h1 className="text-xl font-semibold">Runs</h1>
 					{items.length > 0 && <Badge variant="secondary">{items.length}</Badge>}
 				</div>
 
