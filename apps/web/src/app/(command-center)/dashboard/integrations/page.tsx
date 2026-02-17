@@ -53,9 +53,7 @@ import {
 	useOrgConnectors,
 	useUpdateOrgConnector,
 } from "@/hooks/use-org-connectors";
-import { ACTION_ADAPTERS } from "@/lib/action-adapters";
 import { orpc } from "@/lib/orpc";
-import { env } from "@proliferate/environment/public";
 import { CONNECTOR_PRESETS, type ConnectorConfig } from "@proliferate/shared";
 import type { IntegrationWithCreator } from "@proliferate/shared";
 import { useQueryClient } from "@tanstack/react-query";
@@ -97,15 +95,6 @@ const INTEGRATION_CATALOG: CatalogEntry[] = [
 		type: "oauth",
 		provider: "sentry",
 	},
-	{
-		key: "sentry-actions",
-		name: "Sentry Actions",
-		description: "Query and manage Sentry issues directly from agent sessions",
-		category: "monitoring",
-		type: "adapter",
-		provider: "sentry",
-		adapterKey: "sentry",
-	},
 
 	// Project Management
 	{
@@ -115,15 +104,6 @@ const INTEGRATION_CATALOG: CatalogEntry[] = [
 		category: "project-management",
 		type: "oauth",
 		provider: "linear",
-	},
-	{
-		key: "linear-actions",
-		name: "Linear Actions",
-		description: "Create, update, and manage Linear issues from agent sessions",
-		category: "project-management",
-		type: "adapter",
-		provider: "linear",
-		adapterKey: "linear",
 	},
 
 	// Communication
@@ -278,8 +258,6 @@ export default function IntegrationsPage() {
 	const updateMutation = useUpdateOrgConnector();
 	const deleteMutation = useDeleteOrgConnector();
 
-	const integrationsEnabled = env.NEXT_PUBLIC_INTEGRATIONS_ENABLED;
-
 	const handleRemove = useCallback(
 		async (id: string) => {
 			await deleteMutation.mutateAsync({ id });
@@ -337,12 +315,6 @@ export default function IntegrationsPage() {
 			await disconnectOAuth(entry.provider, integrationId);
 		} else if (entry.type === "slack") {
 			await handleSlackDisconnect();
-		} else if (entry.type === "adapter" && entry.adapterKey) {
-			const providerIntegrations = integrationsData?.byProvider[entry.adapterKey] ?? [];
-			const active = providerIntegrations.find((i) => i.status === "active");
-			if (active) {
-				await nangoDisconnect(entry.adapterKey, active.id);
-			}
 		}
 		setDisconnectTarget(null);
 	};
@@ -355,11 +327,6 @@ export default function IntegrationsPage() {
 					return entry.provider ? (integrationsByProvider[entry.provider]?.length ?? 0) > 0 : false;
 				case "slack":
 					return slackStatus?.connected ?? false;
-				case "adapter": {
-					if (!entry.adapterKey) return false;
-					const providerIntegrations = integrationsData?.byProvider[entry.adapterKey] ?? [];
-					return providerIntegrations.some((i) => i.status === "active");
-				}
 				case "mcp-preset":
 					return false;
 				default:
@@ -376,8 +343,6 @@ export default function IntegrationsPage() {
 					return loadingProvider === entry.provider;
 				case "slack":
 					return slackDisconnect.isPending;
-				case "adapter":
-					return nangoLoadingProvider === entry.adapterKey;
 				case "mcp-preset":
 					return false;
 				default:
@@ -413,9 +378,6 @@ export default function IntegrationsPage() {
 					break;
 				case "slack":
 					handleSlackConnect();
-					break;
-				case "adapter":
-					if (entry.adapterKey) nangoConnect(entry.adapterKey);
 					break;
 				case "mcp-preset":
 					// MCP presets connect through the detail modal form
@@ -458,10 +420,7 @@ export default function IntegrationsPage() {
 
 	// ---- Connected integrations list ----
 	const connectedEntries = useMemo(() => {
-		let entries = INTEGRATION_CATALOG.filter((entry) => {
-			if (entry.type === "adapter" && !integrationsEnabled) return false;
-			return getConnectionStatus(entry);
-		});
+		let entries = INTEGRATION_CATALOG.filter((entry) => getConnectionStatus(entry));
 
 		if (searchQuery.trim()) {
 			const q = searchQuery.toLowerCase();
@@ -471,15 +430,9 @@ export default function IntegrationsPage() {
 		}
 
 		return entries;
-	}, [getConnectionStatus, integrationsEnabled, searchQuery]);
+	}, [getConnectionStatus, searchQuery]);
 
-	// Catalog for the picker (filter adapters if disabled)
-	const pickerCatalog = useMemo(() => {
-		if (!integrationsEnabled) {
-			return INTEGRATION_CATALOG.filter((e) => e.type !== "adapter");
-		}
-		return INTEGRATION_CATALOG;
-	}, [integrationsEnabled]);
+	const pickerCatalog = INTEGRATION_CATALOG;
 
 	// ---- Loading state ----
 	if (integrationsLoading && connectorsLoading) {

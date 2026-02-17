@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
 	AutomationsIcon,
+	ChatBubbleIcon,
 	RunsIcon,
 	SidebarCollapseIcon,
 	SidebarExpandIcon,
@@ -33,7 +34,6 @@ import {
 	LogOut,
 	Menu,
 	MessageCircle,
-	MessageSquare,
 	Moon,
 	Plug,
 	Settings,
@@ -644,9 +644,9 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 								key={session.id}
 								type="button"
 								onClick={() => handleNavigate(`/workspace/${session.id}`)}
-								className="flex items-center gap-2 w-full px-2 h-7 rounded-lg text-sm transition-colors text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]"
+								className="flex items-center gap-2 w-full px-2 h-8 rounded-xl text-sm font-medium transition-colors text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]"
 							>
-								<MessageSquare className="h-3.5 w-3.5 shrink-0" />
+								<ChatBubbleIcon className="h-5 w-5 shrink-0" />
 								<span className="truncate">{title}</span>
 							</button>
 						);
@@ -654,9 +654,9 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 					<button
 						type="button"
 						onClick={() => handleNavigate("/dashboard/sessions")}
-						className="flex items-center gap-2 w-full px-2 h-7 rounded-lg text-xs transition-colors text-muted-foreground/70 hover:text-muted-foreground"
+						className="flex items-center gap-2 w-full px-2 h-8 rounded-xl text-xs transition-colors text-muted-foreground/70 hover:text-muted-foreground"
 					>
-						<span className="ml-5.5">View all</span>
+						<span className="ml-[1.625rem]">View all</span>
 					</button>
 				</div>
 			)}

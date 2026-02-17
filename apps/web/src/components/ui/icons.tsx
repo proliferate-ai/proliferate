@@ -529,6 +529,9 @@ export function ChatBubbleIcon({ className }: IconProps) {
 				strokeLinecap="square"
 				strokeLinejoin="round"
 			/>
+			<path d="M10.0331 8V12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M7 9V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M13.0331 9V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 		</svg>
 	);
 }

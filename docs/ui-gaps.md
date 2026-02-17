@@ -1,109 +1,93 @@
 # UI Gaps — What's Missing
 
-Tracking file for bringing the product UI up to the spec in `docs/updated-flows.md` and the visual quality of the `/inspiration` reference apps (Tembo, Lovable, Gumloop, ElevenLabs).
+Tracking file for bringing the product UI up to the spec in `docs/updated-flows.md` and the visual quality of the `/inspiration` reference apps.
 
 Last updated: February 2026
 
 ---
 
-## Agent Runs / Triage (`/dashboard/runs`) — ~40% of spec
+## Agent Runs / Triage (`/dashboard/runs`)
 
-The runs page has basic triage list + filter tabs + search, but the core interaction model from the spec is missing.
+The runs page has basic triage list with status grouping, filter tabs, and search. The core detail interaction model from the spec is the main gap — plus backend endpoints needed to support it.
 
-- [ ] **Org-wide all-runs API endpoint** — current `listOrgPendingRuns` only returns failed/needs_human/timed_out. Need an endpoint that returns runs across all statuses so we can show "Running" and "Done" groups.
-- [ ] **Running group** — show currently executing runs (status = `running`, `enriching`, `ready`, `queued`). Requires the new endpoint above.
-- [ ] **Done group** — show recently completed runs (status = `succeeded`). Requires the new endpoint.
+### Frontend
+
 - [ ] **Detail panel slide-out** — spec says "click row → detail panel slides out with Triage Card". Currently items are flat inline cards with no expandable detail.
 - [ ] **Triage Card (4 sections)** — TL;DR summary, Payload preview (code diff / Slack message / terminal error), Execution Trail (CI/CD-style collapsed timeline), Action Bar (approve/deny/quick-reply + claim & open).
-- [ ] **Bulk operations** — "Approve All (N)" button for batching pending approvals.
+- [ ] **Running group** — show currently executing runs (status = `running`, `enriching`, `ready`, `queued`). Requires the org-wide all-runs endpoint below.
+- [ ] **Done group** — show recently completed runs (status = `succeeded`). Requires the endpoint below.
+- [ ] **Bulk approve button** — "Approve All (N)" for batching pending approvals.
 - [ ] **Advanced filters** — automation name dropdown, repo filter, "Mine" vs "Org" toggle, time range. Currently only free-text search.
-- [ ] **Claim & Open in Workspace** — button that navigates to `/workspace/:id` with pre-warmed state + persistent "Resumed from Automation" banner.
+- [ ] **Claim & Open in Workspace** — button on triage card that navigates to `/workspace/:id` with pre-warmed state.
+
+### Backend
+
+- [ ] **Org-wide all-runs endpoint** — current `listOrgPendingRuns` only returns `failed`/`needs_human`/`timed_out`. Need a new endpoint (or expand it) to return runs across all statuses with optional grouping, so the frontend can show Running and Done groups.
+- [ ] **Run detail endpoint** — single endpoint returning fully-resolved triage card data: run summary, enrichment payload, execution event trail, assignee info, trigger event context. The data exists in DB (`automationRunEvents` table, enrichment_json on run) but isn't exposed as a cohesive endpoint.
+- [ ] **Run event trail endpoint** — list all `automationRunEvents` for a given run (status transitions, enrichment saves, manual resolutions). Needed for the Execution Trail section in the Triage Card.
+- [ ] **Bulk resolve endpoint** — batch version of `resolveRun()`. Currently single-run only; frontend would need to loop N times.
+- [ ] **Triage filter params** — add `automation_id`, `repo_id`, `assigned_to` (me/org), `since` query params to the runs listing endpoint.
 
 ---
 
-## Workspace / Session (`/workspace/:id`) — ~50% of spec
+## Workspace Header (`/workspace/:id`)
 
-Core routing works but the header bar and Engine Room details need verification / buildout.
+The workspace has a full two-pane layout (chat + Engine Room with Preview/Code/Terminal/Git/Artifacts/Settings tabs), model selector, file attach, speech input, approval tray — all working. The main gap is the **session header bar** described in the spec.
 
-- [ ] **Session header bar (38px)** — escape hatch (logo → `/dashboard` with attention badge), separator, branch + repo name, origin badge (e.g. "From: Sentry Auto-Fixer"), agent live status (e.g. "Running tests..."), tools pill ("Sentry, GitHub, Linear" linking to integrations). Take heavy inspiration from Lovable's chat header (`/inspiration/lovable/chat_header.html`).
-- [ ] **Engine Room right pane** — tabbed: Preview, Code, Terminal. Agent-controlled (opens files, runs commands, updates preview). Refer to Lovable's chat page for the two-pane IDE feel.
-- [ ] **Dynamic Engine Room** — hidden when no repo attached (chat fills viewport); slides in when repo attached or agent executes code.
-- [ ] **"Return to Agent Runs" button** — shown on claimed/automation-originated sessions.
-
----
-
-## Dashboard Home (`/dashboard`) — ~70% of spec
-
-Greeting, prompt input, recent sessions, onboarding cards all exist. Missing prompt input features.
-
-- [ ] **Model selector** in prompt input — let users pick which model to use for the session.
-- [ ] **File attach** — ability to attach files to the initial prompt.
-- [ ] **Speech input** — microphone button for voice prompts.
+- [ ] **Session header bar** — the current header has a back button, logo, session title, and panel tab picker. The spec calls for a richer bar: escape hatch (logo → `/dashboard` with attention badge), separator, branch + repo name, **origin badge** (e.g. "From: Sentry Auto-Fixer"), **agent live status** (e.g. "Running tests..."), **tools pill** ("Sentry, GitHub, Linear" linking to integrations config). Take inspiration from Lovable's chat header (`/inspiration/lovable/chat_header.html`).
+- [ ] **Origin badge** — sessions don't currently track which automation spawned them. The session object has `origin: "web" | "cli"` but no `automationId`/`automationName` field. Backend needs to store this when a run creates a session.
+- [ ] **"Return to Agent Runs" button** — persistent banner on automation-originated sessions linking back to the triage page. Currently the automation banner exists (`?from=automation`) but just shows "Resumed from Automation" with a close button — no link back.
 
 ---
 
-## Session History (`/dashboard/sessions`) — ~60% of spec
+## Session History (`/dashboard/sessions`)
 
-List works but is sparse.
+Has filter tabs (All/Active/Stopped), search, status dots, click-to-open. One data gap.
 
-- [ ] **Origin column** — show whether session was manual or from an automation (with automation name).
-- [ ] **Active status indicator** — more prominent display of running vs paused vs completed.
-- [ ] **Search/filter** — text search + status filter for session list.
-
----
-
-## Automations (`/dashboard/automations`) — ~70% of spec
-
-List and creation work. Missing richer detail in list rows.
-
-- [ ] **Richer list columns** — trigger type, action type, total run count, last run time alongside current name/status/updated_at.
-- [ ] **Automation builder** — structured builder UI (deferred to post-V1 per spec, but tracking here).
-
----
-
-## Integrations (`/dashboard/integrations`) — ~80% of spec
-
-Catalog and connections work well.
-
-- [ ] **Per-action toggles** — `Allow | Require Approval` toggle per action for each integration adapter. Show exact agent actions (e.g. `update_issue`, `read_logs`).
+- [ ] **Origin column** — spec says each row should show "origin (manual vs. automation name)". Not currently displayed. Requires backend to expose automation source on session objects (same as the origin badge above).
 
 ---
 
 ## Sign-In / Sign-Up — visual polish
 
-Functional but missing brand presence. Take inspiration from Tembo login (`/inspiration/tembo/login.html`).
+Functionally complete (OAuth + email, verification, redirect preservation). Visual treatment is basic.
 
-- [ ] **Split layout with brand hero** — left side: dark panel with logo, tagline, integration/action logos (connectors we support). Right side: auth form. Similar to Tembo's bright/dark split.
-- [ ] **"Last used" indicator** — highlight the most recently used auth method.
-- [ ] **Tighter form density** — reduce spacing between form elements per design system product density rules.
+- [ ] **Split layout with brand hero** — left side: dark panel with logo, tagline, integration/action logos (connectors we support). Right side: auth form. Inspired by Tembo login (`/inspiration/tembo/login.html`).
 
 ---
 
-## Sidebar — polish
+## Chat UI — visual polish
 
-Functional and organized. Minor refinements.
+The chat has user/assistant message bubbles with markdown, tool call displays, streaming, approval cards, model selector, attachments, and speech. The gap is visual refinement vs. the inspiration.
 
-- [ ] **Section header visual weight** — make section labels ("Monitor", "Configure") slightly more distinct with spacing or subtle background.
-- [ ] **Experimental feature badges** — add "Beta"/"Alpha" labels to experimental features (like ElevenLabs does).
-
----
-
-## Chat UI — major
-
-The actual chat bubbles and message rendering inside the workspace. Spec says to strongly lean on Lovable's chat UI.
-
-- [ ] **Chat bubble styling** — reference `/inspiration/lovable/chat_page.jsx` for message bubble layout, streaming state, tool output displays, code diff rendering.
-- [ ] **Chat input area** — reference Gumloop's chat input with app indicator, attachment button, recommended actions.
-- [ ] **Agent status indicators** — streaming state, "Analyzing...", tool call displays.
+- [ ] **Chat bubble styling pass** — reference `/inspiration/lovable/chat_page.jsx` for message bubble layout, spacing, streaming state rendering, tool output displays. Current bubbles are functional but could be more polished.
+- [ ] **Chat input area refinement** — reference Gumloop's chat input for visual treatment (glassmorphism, app indicator pill, recommended actions dropdown).
 
 ---
 
 ## Global Polish
 
-Small refinements that add up to a premium feel across all pages.
-
-- [ ] **Spacing audit** — standardize `gap-` and `p-` usage. Cards: `p-3`. Pages: `p-6`. Tight items: `gap-1`. Sections: `gap-4`.
-- [ ] **Border consistency** — all borders use `border-border` token, never hardcoded. Verify across all components.
+- [ ] **Spacing audit** — standardize `gap-` and `p-` usage across all pages per design system density rules.
+- [ ] **Border consistency** — verify all borders use `border-border` token, never hardcoded.
 - [ ] **Shadow consistency** — cards use `shadow-keystone`, floating/popovers use `shadow-floating`.
 - [ ] **Focus states** — audit all interactive elements have visible focus indicators using `ring` token.
-- [ ] **Hover state consistency** — all interactive elements use either `hover:bg-muted/50` or `hover:bg-accent`, not mixed.
+- [ ] **Hover state consistency** — all interactive elements use consistent hover treatment.
+
+---
+
+## Already Complete (removed from tracking)
+
+These were previously listed as gaps but are actually implemented:
+
+- ~~Dashboard home model selector~~ — exists in PromptInput component
+- ~~File attach~~ — exists in PromptInput (image support with thumbnails)
+- ~~Speech input~~ — exists in PromptInput (browser SpeechRecognition API)
+- ~~Engine Room right pane~~ — fully built: Preview (iframe), Code (OpenVSCode Server), Terminal (xterm.js over WS), Git (status/branch/commit/push/PR), Artifacts (file viewer gallery), Settings (info/snapshots/auto-start)
+- ~~Dynamic Engine Room~~ — 35/65 split layout with mobile responsive toggle
+- ~~Automations richer list columns~~ — has Name, Scope, Triggers, Actions, Created, Updated columns
+- ~~Integrations per-action toggles~~ — exist in MCP connector detail modal (Allow/Require Approval/Disabled per action)
+- ~~Sessions search/filter~~ — has filter tabs (All/Active/Stopped) + search input
+- ~~Repos page~~ — feature-complete
+- ~~Onboarding flow~~ — feature-complete (developer/org paths, tools, billing, questionnaire, invite)
+- ~~Settings pages~~ — feature-complete (profile, general, members, secrets, billing)
+- ~~Sidebar organization~~ — has Monitor/Configure sections with proper grouping

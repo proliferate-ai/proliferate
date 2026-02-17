@@ -14,7 +14,6 @@ import { QuickSetupForm } from "@/components/integrations/quick-setup-form";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ACTION_ADAPTERS } from "@/lib/action-adapters";
 import type { ConnectorConfig, ConnectorPreset } from "@proliferate/shared";
 import { CONNECTOR_PRESETS } from "@proliferate/shared";
 import { CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
@@ -58,10 +57,6 @@ export function IntegrationDetailDialog({
 	const preset: ConnectorPreset | undefined = entry.presetKey
 		? CONNECTOR_PRESETS.find((p) => p.key === entry.presetKey)
 		: undefined;
-
-	const adapterMeta = entry.adapterKey
-		? (ACTION_ADAPTERS.find((a) => a.integration === entry.adapterKey) ?? null)
-		: null;
 
 	const manageUrl = entry.provider ? getProviderManageUrl(entry.provider) : null;
 
@@ -111,7 +106,6 @@ export function IntegrationDetailDialog({
 								isLoading={isLoading}
 								connectedMeta={connectedMeta}
 								manageUrl={manageUrl}
-								adapterMeta={adapterMeta}
 								onConnect={onConnect}
 								onDisconnect={onDisconnect}
 								onSaveConnector={onSaveConnector}
@@ -130,16 +124,6 @@ export function IntegrationDetailDialog({
 									<h3 className="text-sm font-medium mb-1">Category</h3>
 									<p className="text-sm text-muted-foreground">{CATEGORY_LABELS[entry.category]}</p>
 								</div>
-								{entry.type === "adapter" && adapterMeta && (
-									<div>
-										<h3 className="text-sm font-medium mb-1">Actions</h3>
-										<p className="text-sm text-muted-foreground">
-											{adapterMeta.actions.length} actions (
-											{adapterMeta.actions.filter((a) => a.riskLevel === "read").length} read,{" "}
-											{adapterMeta.actions.filter((a) => a.riskLevel === "write").length} write)
-										</p>
-									</div>
-								)}
 								{manageUrl && (
 									<a
 										href={manageUrl}
@@ -191,7 +175,6 @@ function ConnectTabContent({
 	isLoading,
 	connectedMeta,
 	manageUrl,
-	adapterMeta,
 	onConnect,
 	onDisconnect,
 	onSaveConnector,
@@ -203,7 +186,6 @@ function ConnectTabContent({
 	isLoading: boolean;
 	connectedMeta: string | null;
 	manageUrl: string | null;
-	adapterMeta: (typeof ACTION_ADAPTERS)[number] | null;
 	onConnect: () => void;
 	onDisconnect: () => void;
 	onSaveConnector: (connector: ConnectorConfig, isNew: boolean) => void;
@@ -217,7 +199,7 @@ function ConnectTabContent({
 		return <ConnectorForm isNew preset={preset} onSave={onSaveConnector} onCancel={onClose} />;
 	}
 
-	// OAuth / Slack / Adapter
+	// OAuth / Slack
 	if (isConnected) {
 		return (
 			<div className="space-y-4">
@@ -229,14 +211,6 @@ function ConnectTabContent({
 						Connected{connectedMeta ? ` \u00b7 ${connectedMeta}` : ""}
 					</span>
 				</div>
-
-				{adapterMeta && (
-					<p className="text-xs text-muted-foreground">
-						{adapterMeta.actions.length} actions available (
-						{adapterMeta.actions.filter((a) => a.riskLevel === "read").length} read,{" "}
-						{adapterMeta.actions.filter((a) => a.riskLevel === "write").length} write)
-					</p>
-				)}
 
 				<div className="flex items-center gap-2 pt-2">
 					<Button variant="outline" size="sm" onClick={onConnect}>

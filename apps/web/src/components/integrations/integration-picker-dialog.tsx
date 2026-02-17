@@ -26,10 +26,9 @@ export interface CatalogEntry {
 	name: string;
 	description: string;
 	category: IntegrationCategory;
-	type: "oauth" | "slack" | "adapter" | "mcp-preset";
+	type: "oauth" | "slack" | "mcp-preset";
 	provider?: Provider;
 	presetKey?: string;
-	adapterKey?: "linear" | "sentry";
 }
 
 export const CATEGORY_ORDER: IntegrationCategory[] = [
