@@ -6,7 +6,7 @@
 
 import { GATEWAY_URL } from "@/lib/gateway";
 import { ORPCError } from "@orpc/server";
-import { automations, runs, schedules } from "@proliferate/services";
+import { automations, runs, schedules, templates } from "@proliferate/services";
 import {
 	AutomationConnectionSchema,
 	AutomationEventDetailSchema,
@@ -77,6 +77,45 @@ export const automationsRouter = {
 				}
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
 					message: "Failed to create automation",
+				});
+			}
+		}),
+
+	/**
+	 * Create an automation from a template (single transaction).
+	 */
+	createFromTemplate: orgProcedure
+		.input(
+			z.object({
+				templateId: z.string(),
+				integrationBindings: z.record(z.string()),
+			}),
+		)
+		.output(z.object({ automation: AutomationListItemSchema }))
+		.handler(async ({ input, context }) => {
+			// Validate template exists before hitting the service
+			const template = templates.getTemplateById(input.templateId);
+			if (!template) {
+				throw new ORPCError("NOT_FOUND", { message: "Template not found" });
+			}
+
+			try {
+				const automation = await automations.createFromTemplate(context.orgId, context.user.id, {
+					templateId: input.templateId,
+					integrationBindings: input.integrationBindings,
+				});
+				return { automation };
+			} catch (err) {
+				if (err instanceof Error) {
+					if (err.message.includes("not found")) {
+						throw new ORPCError("NOT_FOUND", { message: err.message });
+					}
+					if (err.message.includes("not active") || err.message.includes("Missing required")) {
+						throw new ORPCError("BAD_REQUEST", { message: err.message });
+					}
+				}
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "Failed to create automation from template",
 				});
 			}
 		}),

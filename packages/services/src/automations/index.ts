@@ -3,6 +3,7 @@
  */
 
 export * from "./service";
+export { createFromTemplate, type CreateFromTemplateInput } from "./create-from-template";
 export type {
 	AutomationRow,
 	AutomationWithRelations,
