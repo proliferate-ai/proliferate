@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { authClient } from "@/lib/auth-client";
 import { Mail, X } from "lucide-react";
+import Image from "next/image";
 import { useState } from "react";
 
 interface StepInviteMembersProps {
@@ -61,91 +62,108 @@ export function StepInviteMembers({ onComplete }: StepInviteMembersProps) {
 	const sentCount = invites.filter((i) => i.status === "sent").length;
 
 	return (
-		<div className="w-full max-w-md">
-			<div className="text-center mb-8">
-				<h1 className="text-2xl sm:text-3xl font-bold text-foreground">Invite your team</h1>
-				<p className="mt-3 text-muted-foreground text-sm sm:text-base">
-					Add team members to collaborate on projects.
-				</p>
-			</div>
-
-			<div className="rounded-xl border border-border bg-card p-5 space-y-4">
-				<div className="flex items-center gap-2">
-					<Input
-						type="email"
-						placeholder="email@example.com"
-						value={email}
-						onChange={(e) => {
-							setEmail(e.target.value);
-							setError(null);
-						}}
-						onKeyDown={(e) => {
-							if (e.key === "Enter") handleInvite();
-						}}
-						className="flex-1 h-9 text-sm"
-					/>
-					<Select value={role} onValueChange={(v) => setRole(v as "admin" | "member")}>
-						<SelectTrigger className="w-24 h-9 text-xs">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="member">Member</SelectItem>
-							<SelectItem value="admin">Admin</SelectItem>
-						</SelectContent>
-					</Select>
-					<Button
-						size="sm"
-						className="h-9"
-						onClick={handleInvite}
-						disabled={isInviting || !email.trim()}
-					>
-						{isInviting ? "..." : "Invite"}
-					</Button>
+		<div className="w-[480px]">
+			<div className="rounded-2xl overflow-hidden border border-border">
+				{/* Image Area */}
+				<div className="relative bg-black" style={{ aspectRatio: "1360 / 880" }}>
+					<Image src="/single.png" alt="Invite your team" fill className="object-cover" />
+					<div className="absolute top-3 left-0 right-0 flex justify-center pointer-events-none">
+						<span className="px-4 py-1.5 font-bold text-xs tracking-[0.25em] uppercase text-white/80">
+							Team
+						</span>
+					</div>
 				</div>
 
-				{error && <p className="text-sm text-destructive">{error}</p>}
-
-				{invites.length > 0 && (
-					<div className="space-y-2 pt-2 border-t border-border">
-						{invites.map((invite, i) => (
-							<div
-								key={`${invite.email}-${i}`}
-								className="flex items-center justify-between text-sm"
-							>
-								<div className="flex items-center gap-2 min-w-0">
-									<Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-									<span className="truncate">{invite.email}</span>
-									<span className="text-xs text-muted-foreground">({invite.role})</span>
-								</div>
-								<div className="flex items-center gap-2 shrink-0">
-									{invite.status === "sent" ? (
-										<span className="text-xs text-green-600 dark:text-green-400">Sent</span>
-									) : (
-										<span className="text-xs text-destructive">Failed</span>
-									)}
-									<button
-										type="button"
-										onClick={() => removeInvite(i)}
-										className="text-muted-foreground hover:text-foreground"
-									>
-										<X className="h-3.5 w-3.5" />
-									</button>
-								</div>
-							</div>
-						))}
+				{/* Content */}
+				<div className="p-6 bg-card">
+					<div className="mb-5 text-center">
+						<h1 className="text-xl font-semibold text-foreground">Invite your team</h1>
+						<p className="mt-2 text-sm text-muted-foreground">
+							Add team members to collaborate on projects.
+						</p>
 					</div>
-				)}
-			</div>
 
-			<div className="mt-8 flex gap-3">
-				<Button variant="outline" onClick={onComplete} className="h-11 flex-1 rounded-lg">
-					Skip for now
-				</Button>
-				{sentCount > 0 && (
-					<Button variant="dark" onClick={onComplete} className="h-11 flex-1 rounded-lg">
-						Continue
-					</Button>
-				)}
+					<div className="space-y-4">
+						<div className="flex items-center gap-2">
+							<Input
+								type="email"
+								placeholder="email@example.com"
+								value={email}
+								onChange={(e) => {
+									setEmail(e.target.value);
+									setError(null);
+								}}
+								onKeyDown={(e) => {
+									if (e.key === "Enter") handleInvite();
+								}}
+								className="flex-1 h-9 text-sm"
+							/>
+							<Select value={role} onValueChange={(v) => setRole(v as "admin" | "member")}>
+								<SelectTrigger className="w-24 h-9 text-xs">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="member">Member</SelectItem>
+									<SelectItem value="admin">Admin</SelectItem>
+								</SelectContent>
+							</Select>
+							<Button
+								size="sm"
+								className="h-9"
+								onClick={handleInvite}
+								disabled={isInviting || !email.trim()}
+							>
+								{isInviting ? "..." : "Invite"}
+							</Button>
+						</div>
+
+						{error && <p className="text-sm text-destructive">{error}</p>}
+
+						{invites.length > 0 && (
+							<div className="space-y-2 pt-3 border-t border-border">
+								{invites.map((invite, i) => (
+									<div
+										key={`${invite.email}-${i}`}
+										className="flex items-center justify-between text-sm"
+									>
+										<div className="flex items-center gap-2 min-w-0">
+											<Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+											<span className="truncate">{invite.email}</span>
+											<span className="text-xs text-muted-foreground">({invite.role})</span>
+										</div>
+										<div className="flex items-center gap-2 shrink-0">
+											{invite.status === "sent" ? (
+												<span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+													Sent
+												</span>
+											) : (
+												<span className="text-xs text-destructive">Failed</span>
+											)}
+											<button
+												type="button"
+												onClick={() => removeInvite(i)}
+												className="text-muted-foreground hover:text-foreground"
+											>
+												<X className="h-3.5 w-3.5" />
+											</button>
+										</div>
+									</div>
+								))}
+							</div>
+						)}
+					</div>
+
+					<div className="mt-5 flex gap-3">
+						<Button variant="outline" onClick={onComplete} className="h-11 flex-1 rounded-lg">
+							Skip for now
+						</Button>
+						{sentCount > 0 && (
+							<Button variant="dark" onClick={onComplete} className="h-11 flex-1 rounded-lg">
+								Continue
+							</Button>
+						)}
+					</div>
+				</div>
 			</div>
 		</div>
 	);

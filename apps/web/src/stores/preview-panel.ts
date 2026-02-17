@@ -18,6 +18,7 @@ export type MobileView = "chat" | "preview";
 interface PreviewPanelState {
 	mode: PreviewMode;
 	mobileView: MobileView;
+	pinnedTabs: string[];
 
 	// Actions
 	openUrl: (url: string) => void;
@@ -29,14 +30,21 @@ interface PreviewPanelState {
 	toggleUrlPreview: (url: string | null) => void;
 	togglePanel: (type: "settings" | "git" | "terminal" | "vscode" | "artifacts") => void;
 
+	// Pin/unpin tabs in header
+	pinTab: (type: string) => void;
+	unpinTab: (type: string) => void;
+
 	// Mobile view toggle
 	setMobileView: (view: MobileView) => void;
 	toggleMobileView: () => void;
 }
 
+const DEFAULT_MODE: PreviewMode = { type: "vscode" };
+
 export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
-	mode: { type: "none" },
+	mode: DEFAULT_MODE,
 	mobileView: "chat",
+	pinnedTabs: ["url", "vscode"],
 
 	openUrl: (url: string) => set({ mode: { type: "url", url } }),
 
@@ -44,38 +52,45 @@ export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
 
 	openGallery: (files: VerificationFile[]) => set({ mode: { type: "gallery", files } }),
 
-	close: () => set({ mode: { type: "none" }, mobileView: "chat" }),
+	close: () => set({ mode: DEFAULT_MODE, mobileView: "chat" }),
 
-	// Toggle URL preview specifically - used by the preview button
+	// Toggle URL preview — switches between url and default view
 	toggleUrlPreview: (url: string | null) => {
 		const { mode } = get();
 		if (mode.type === "url") {
-			set({ mode: { type: "none" }, mobileView: "chat" });
+			set({ mode: DEFAULT_MODE });
 		} else {
 			set({ mode: { type: "url", url } });
 		}
 	},
 
-	// Generic toggle for composite panels
+	// Switch panel view — always stays open, just switches type
 	togglePanel: (type: "settings" | "git" | "terminal" | "vscode" | "artifacts") => {
 		const { mode } = get();
 		if (mode.type === type) {
-			set({ mode: { type: "none" }, mobileView: "chat" });
+			set({ mode: DEFAULT_MODE });
 		} else {
 			set({ mode: { type } });
 		}
 	},
 
+	pinTab: (type) =>
+		set((state) => ({
+			pinnedTabs: state.pinnedTabs.includes(type) ? state.pinnedTabs : [...state.pinnedTabs, type],
+		})),
+
+	unpinTab: (type) =>
+		set((state) => ({
+			pinnedTabs: state.pinnedTabs.filter((t) => t !== type),
+		})),
+
 	setMobileView: (view: MobileView) => set({ mobileView: view }),
 
 	toggleMobileView: () => {
-		const { mobileView, mode } = get();
-		// Only toggle if there's something to show in preview
-		if (mode.type !== "none") {
-			set({ mobileView: mobileView === "chat" ? "preview" : "chat" });
-		}
+		const { mobileView } = get();
+		set({ mobileView: mobileView === "chat" ? "preview" : "chat" });
 	},
 }));
 
-// Helper to check if panel is open
+// Helper to check if panel is open (always true now, but kept for mobile compat)
 export const isPanelOpen = (mode: PreviewMode) => mode.type !== "none";

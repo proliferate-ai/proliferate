@@ -1,14 +1,13 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
+import { StatusDot } from "@/components/ui/status-dot";
 import { usePrefetchSession } from "@/hooks/use-sessions";
-import { cn } from "@/lib/utils";
 import type { Session } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
-import { GitBranch, MessageSquare } from "lucide-react";
+import { GitBranch } from "lucide-react";
 import Link from "next/link";
 
-interface SessionCardProps {
+interface SessionListRowProps {
 	session: Session;
 }
 
@@ -17,19 +16,18 @@ function getRepoShortName(fullName: string): string {
 	return parts[parts.length - 1];
 }
 
-function getStatusColor(status: Session["status"]): string {
+function getStatusDotType(
+	status: Session["status"],
+): "running" | "active" | "paused" | "stopped" | "error" {
 	switch (status) {
 		case "running":
-			return "bg-green-500/10 text-green-600 border-green-500/20";
-		case "paused":
-			return "bg-yellow-500/10 text-yellow-600 border-yellow-500/20";
+			return "running";
 		case "starting":
-			return "bg-blue-500/10 text-blue-600 border-blue-500/20";
-		case "suspended":
-		case "stopped":
-			return "bg-muted text-muted-foreground";
+			return "active";
+		case "paused":
+			return "paused";
 		default:
-			return "bg-muted text-muted-foreground";
+			return "stopped";
 	}
 }
 
@@ -50,67 +48,49 @@ function getStatusLabel(status: Session["status"]): string {
 	}
 }
 
-export function SessionCard({ session }: SessionCardProps) {
+export function SessionListRow({ session }: SessionListRowProps) {
 	const prefetchSession = usePrefetchSession();
 	const activityDate = session.lastActivityAt || session.startedAt;
 	const timeAgo = activityDate
 		? formatDistanceToNow(new Date(activityDate), { addSuffix: true })
-		: "unknown";
+		: null;
 
 	const repoShortName = session.repo?.githubRepoName
 		? getRepoShortName(session.repo.githubRepoName)
-		: "unknown";
+		: null;
 
 	const displayTitle =
-		session.title || `${repoShortName}${session.branchName ? ` (${session.branchName})` : ""}`;
+		session.title ||
+		`${repoShortName ?? "Untitled"}${session.branchName ? ` (${session.branchName})` : ""}`;
+
+	const metaParts: string[] = [];
+	if (repoShortName) metaParts.push(repoShortName);
+	if (timeAgo) metaParts.push(timeAgo);
 
 	return (
 		<Link href={`/workspace/${session.id}`}>
 			<div
-				className={cn(
-					"group p-4 rounded-lg border border-border bg-card",
-					"hover:border-primary/50 hover:bg-muted/30 transition-colors cursor-pointer",
-				)}
+				className="flex items-center px-4 py-2.5 border-b border-border/50 hover:bg-muted/50 transition-colors text-sm cursor-pointer last:border-0 gap-3"
 				onMouseEnter={() => prefetchSession(session.id)}
 			>
-				{/* Header: Title + Timestamp */}
-				<div className="flex items-start justify-between gap-4 mb-3">
-					<div className="flex items-center gap-2 min-w-0">
-						<MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-						<h3
-							className={cn(
-								"font-medium text-foreground group-hover:text-primary transition-colors truncate",
-								!session.title && "italic",
-							)}
-						>
-							{displayTitle}
-						</h3>
+				<StatusDot status={getStatusDotType(session.status)} size="sm" className="flex-shrink-0" />
+
+				<span className="font-medium text-foreground truncate min-w-0 flex-1">{displayTitle}</span>
+
+				{session.branchName && (
+					<div className="flex items-center gap-1 text-muted-foreground flex-shrink-0">
+						<GitBranch className="h-3 w-3" />
+						<span className="text-xs truncate max-w-[120px]">{session.branchName}</span>
 					</div>
-					<span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
-						{timeAgo}
-					</span>
-				</div>
+				)}
 
-				{/* Footer: Repo + Branch + Status */}
-				<div className="flex items-center justify-between">
-					<div className="flex items-center gap-3 text-sm text-muted-foreground">
-						{/* Repo name */}
-						<span className="truncate">{repoShortName}</span>
+				<span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+					{metaParts.join(" · ")}
+				</span>
 
-						{/* Branch */}
-						{session.branchName && (
-							<div className="flex items-center gap-1">
-								<GitBranch className="h-3.5 w-3.5" />
-								<span className="truncate max-w-[150px]">{session.branchName}</span>
-							</div>
-						)}
-					</div>
-
-					{/* Status badge */}
-					<Badge variant="secondary" className={cn("text-xs", getStatusColor(session.status))}>
-						{getStatusLabel(session.status)}
-					</Badge>
-				</div>
+				<span className="inline-flex items-center rounded-md border border-border/50 bg-muted/50 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground flex-shrink-0">
+					{getStatusLabel(session.status)}
+				</span>
 			</div>
 		</Link>
 	);

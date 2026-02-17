@@ -2,11 +2,11 @@
 
 export const dynamic = "force-dynamic";
 
+import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff, GithubIcon, GoogleIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Text } from "@/components/ui/text";
 import { useAuthProviders } from "@/hooks/use-auth-providers";
 import { signIn, signUp, useSession } from "@/lib/auth-client";
 import { env } from "@proliferate/environment/public";
@@ -111,9 +111,9 @@ function SignUpContent() {
 
 	if (isPending) {
 		return (
-			<div className="flex min-h-screen items-center justify-center bg-background dark:bg-neutral-950">
-				<div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
-			</div>
+			<AuthLayout>
+				<div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-700 border-t-neutral-300" />
+			</AuthLayout>
 		);
 	}
 
@@ -128,51 +128,55 @@ function SignUpContent() {
 			: "/sign-in";
 
 	return (
-		<div className="flex min-h-screen items-center justify-center bg-background dark:bg-neutral-950 p-6">
-			<div className="w-full max-w-[360px]">
-				<div className="mb-7 text-center">
-					<Text variant="h3">Create your account</Text>
+		<AuthLayout>
+			<div className="w-full max-w-[380px]">
+				<div className="mb-8 text-center">
+					<h1 className="text-xl font-semibold tracking-tight text-neutral-50">
+						Create your account
+					</h1>
+					<p className="mt-1.5 text-sm text-neutral-500">Get started with Proliferate for free</p>
 				</div>
 
 				{hasAnySocialOAuth && (
 					<>
-						<div className="space-y-2">
+						<div className="flex items-center gap-3">
 							{hasGoogleOAuth && (
 								<Button
 									variant="outline"
-									className="relative h-11 w-full justify-center gap-2.5 rounded-lg text-sm font-medium"
+									className="h-10 flex-1 gap-2.5 rounded-lg border-neutral-800 bg-neutral-900/50 text-sm font-medium text-neutral-300 hover:bg-neutral-800/80 hover:text-neutral-100"
 									onClick={handleGoogleSignIn}
 									disabled={googleLoading || githubLoading || formLoading}
 									type="button"
 								>
-									<GoogleIcon className="absolute left-4 h-5 w-5" />
-									{googleLoading ? "Signing up..." : "Sign up with Google"}
+									<GoogleIcon className="h-4 w-4" />
+									{googleLoading ? "..." : "Google"}
 								</Button>
 							)}
 							{hasGitHubOAuth && (
 								<Button
 									variant="outline"
-									className="relative h-11 w-full justify-center gap-2.5 rounded-lg text-sm font-medium"
+									className="h-10 flex-1 gap-2.5 rounded-lg border-neutral-800 bg-neutral-900/50 text-sm font-medium text-neutral-300 hover:bg-neutral-800/80 hover:text-neutral-100"
 									onClick={handleGitHubSignIn}
 									disabled={githubLoading || googleLoading || formLoading}
 									type="button"
 								>
-									<GithubIcon className="absolute left-4 h-5 w-5" />
-									{githubLoading ? "Signing up..." : "Sign up with GitHub"}
+									<GithubIcon className="h-4 w-4" />
+									{githubLoading ? "..." : "GitHub"}
 								</Button>
 							)}
 						</div>
 
-						<div className="my-6 flex items-center">
-							<div className="h-px flex-1 bg-border" />
-							<div className="h-px flex-1 bg-border" />
+						<div className="my-6 flex items-center gap-3">
+							<div className="h-px flex-1 bg-neutral-800" />
+							<span className="text-xs text-neutral-600">or</span>
+							<div className="h-px flex-1 bg-neutral-800" />
 						</div>
 					</>
 				)}
 
-				<form onSubmit={handleEmailSignUp} className="space-y-0">
-					<div className="space-y-1">
-						<Label htmlFor="name" className="text-sm font-medium">
+				<form onSubmit={handleEmailSignUp} className="space-y-4">
+					<div className="space-y-1.5">
+						<Label htmlFor="name" className="text-sm font-medium text-neutral-400">
 							Name
 						</Label>
 						<Input
@@ -180,15 +184,15 @@ function SignUpContent() {
 							type="text"
 							value={name}
 							onChange={(e) => setName(e.target.value)}
-							placeholder=""
+							placeholder="Your name"
 							required
 							disabled={formLoading || googleLoading || githubLoading}
-							className="h-11 rounded-lg px-4 text-sm"
+							className="h-10 rounded-lg border-neutral-800 bg-neutral-900/50 px-3 text-sm text-neutral-100 placeholder:text-neutral-600 focus-visible:border-neutral-600 focus-visible:ring-0"
 						/>
 					</div>
 
-					<div className="space-y-1 pt-2.5">
-						<Label htmlFor="email" className="text-sm font-medium">
+					<div className="space-y-1.5">
+						<Label htmlFor="email" className="text-sm font-medium text-neutral-400">
 							Email
 						</Label>
 						<Input
@@ -196,15 +200,15 @@ function SignUpContent() {
 							type="email"
 							value={email}
 							onChange={(e) => setEmail(e.target.value)}
-							placeholder=""
+							placeholder="you@company.com"
 							required
 							disabled={formLoading || googleLoading || githubLoading}
-							className="h-11 rounded-lg px-4 text-sm"
+							className="h-10 rounded-lg border-neutral-800 bg-neutral-900/50 px-3 text-sm text-neutral-100 placeholder:text-neutral-600 focus-visible:border-neutral-600 focus-visible:ring-0"
 						/>
 					</div>
 
-					<div className="space-y-1 pt-2.5">
-						<Label htmlFor="password" className="text-sm font-medium">
+					<div className="space-y-1.5">
+						<Label htmlFor="password" className="text-sm font-medium text-neutral-400">
 							Password
 						</Label>
 						<div className="relative">
@@ -213,53 +217,40 @@ function SignUpContent() {
 								type={showPassword ? "text" : "password"}
 								value={password}
 								onChange={(e) => setPassword(e.target.value)}
-								placeholder=""
+								placeholder="At least 8 characters"
 								required
 								disabled={formLoading || googleLoading || githubLoading}
-								className="h-11 rounded-lg px-4 pr-10 text-sm"
+								className="h-10 rounded-lg border-neutral-800 bg-neutral-900/50 px-3 pr-10 text-sm text-neutral-100 placeholder:text-neutral-600 focus-visible:border-neutral-600 focus-visible:ring-0"
 							/>
 							<Button
 								type="button"
 								variant="ghost"
 								size="icon"
 								onClick={() => setShowPassword(!showPassword)}
-								className="absolute inset-y-0 right-0 h-full px-4 text-muted-foreground hover:text-foreground"
+								className="absolute inset-y-0 right-0 h-full px-3 text-neutral-500 hover:bg-transparent hover:text-neutral-300"
 							>
-								{showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+								{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
 							</Button>
 						</div>
-						<Text variant="small" color="muted" className="text-xs">
-							At least 8 characters
-						</Text>
 					</div>
 
-					<div className="pt-4">
-						<Button
-							type="submit"
-							variant="dark"
-							className="h-11 w-full rounded-lg"
-							disabled={formLoading || googleLoading || githubLoading}
-						>
-							{formLoading ? "Creating account..." : "Create account"}
-						</Button>
-					</div>
+					<Button
+						type="submit"
+						className="h-10 w-full rounded-lg bg-neutral-100 text-sm font-medium text-neutral-950 hover:bg-white"
+						disabled={formLoading || googleLoading || githubLoading}
+					>
+						{formLoading ? "Creating account..." : "Create account"}
+					</Button>
 				</form>
 
-				<Text
-					variant="small"
-					color="muted"
-					className="mt-4 flex items-center justify-center gap-1 text-sm"
-				>
-					Already have an account?
-					<Link
-						href={signInHref}
-						className="font-medium text-foreground underline hover:no-underline"
-					>
+				<p className="mt-6 text-center text-sm text-neutral-500">
+					Already have an account?{" "}
+					<Link href={signInHref} className="text-neutral-300 transition-colors hover:text-white">
 						Sign in
 					</Link>
-				</Text>
+				</p>
 			</div>
-		</div>
+		</AuthLayout>
 	);
 }
 
@@ -267,9 +258,9 @@ export default function SignUpPage() {
 	return (
 		<Suspense
 			fallback={
-				<div className="flex min-h-screen items-center justify-center bg-background dark:bg-neutral-950">
-					<div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
-				</div>
+				<AuthLayout>
+					<div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-700 border-t-neutral-300" />
+				</AuthLayout>
 			}
 		>
 			<SignUpContent />

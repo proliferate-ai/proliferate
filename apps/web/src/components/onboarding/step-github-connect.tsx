@@ -23,8 +23,8 @@ export function StepGitHubConnect({
 	// Already connected
 	if (hasGitHubConnection) {
 		return (
-			<div className="w-full max-w-[420px]">
-				<div className="rounded-2xl overflow-hidden border border-border mb-8">
+			<div className="w-[480px]">
+				<div className="rounded-2xl overflow-hidden border border-border">
 					{/* GitHub Icon Area */}
 					<div className="relative bg-gradient-to-br from-[#24292e] to-[#1a1e22] h-48 flex items-center justify-center">
 						<div className="w-20 h-20 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center">
@@ -67,8 +67,8 @@ export function StepGitHubConnect({
 
 	// Not connected yet
 	return (
-		<div className="w-full max-w-[420px]">
-			<div className="rounded-2xl overflow-hidden border border-border mb-8">
+		<div className="w-[480px]">
+			<div className="rounded-2xl overflow-hidden border border-border">
 				{/* GitHub Icon Area */}
 				<div className="relative bg-gradient-to-br from-[#24292e] to-[#1a1e22] h-48 flex items-center justify-center">
 					<div className="w-20 h-20 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center">

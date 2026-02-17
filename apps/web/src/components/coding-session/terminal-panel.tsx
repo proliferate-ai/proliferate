@@ -1,10 +1,7 @@
 "use client";
 
 import "xterm/css/xterm.css";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { GATEWAY_URL } from "@/lib/gateway";
-import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
@@ -27,7 +24,7 @@ function getCssColor(property: string): string {
 	return value ? `hsl(${value})` : "";
 }
 
-export function TerminalPanel({ sessionId, onClose }: TerminalPanelProps) {
+export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const [status, setStatus] = useState<"connecting" | "connected" | "error" | "closed">(
 		"connecting",
@@ -150,25 +147,9 @@ export function TerminalPanel({ sessionId, onClose }: TerminalPanelProps) {
 	}, [sessionId, token]);
 
 	return (
-		<TooltipProvider delayDuration={150}>
-			<div className="flex flex-col h-full">
-				<div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 shrink-0">
-					<span className="text-sm font-medium">Terminal</span>
-					<div className="flex items-center gap-1">
-						<span className="text-xs text-muted-foreground">{status}</span>
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
-									<X className="h-4 w-4" />
-								</Button>
-							</TooltipTrigger>
-							<TooltipContent>Close panel</TooltipContent>
-						</Tooltip>
-					</div>
-				</div>
-				<ServicesStrip sessionId={sessionId} />
-				<div ref={containerRef} className="flex-1 min-h-0 bg-background" />
-			</div>
-		</TooltipProvider>
+		<div className="flex flex-col h-full">
+			<ServicesStrip sessionId={sessionId} />
+			<div ref={containerRef} className="flex-1 min-h-0 bg-background" />
+		</div>
 	);
 }

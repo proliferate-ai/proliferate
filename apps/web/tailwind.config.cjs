@@ -9,8 +9,8 @@ module.exports = {
 	theme: {
 		extend: {
 			fontFamily: {
-				sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
-				mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
+				sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+				mono: ["ui-monospace", "monospace"],
 			},
 			fontSize: {
 				xs: ["12px", "16px"],

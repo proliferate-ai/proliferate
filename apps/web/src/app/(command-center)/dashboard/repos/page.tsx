@@ -1,6 +1,7 @@
 "use client";
 
 import { openEditSession, openHistoricalSession } from "@/components/coding-session";
+import { PageShell } from "@/components/dashboard/page-shell";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -110,178 +111,180 @@ export default function RepositoriesPage() {
 
 	if (isLoading) {
 		return (
-			<div className="py-8 text-center">
-				<LoadingDots size="md" className="text-muted-foreground" />
-			</div>
+			<PageShell title="Repositories">
+				<div className="py-8 text-center">
+					<LoadingDots size="md" className="text-muted-foreground" />
+				</div>
+			</PageShell>
 		);
 	}
 
 	return (
-		<div className="mx-auto max-w-3xl px-6 py-6 space-y-8">
-			<h1 className="text-lg font-semibold">Repositories</h1>
+		<PageShell title="Repositories">
+			<div className="space-y-8">
+				{reposList.length > 0 ? (
+					<div className="rounded-lg border border-border/80 bg-background divide-y divide-border/60">
+						{reposList.map((repo) => (
+							<RepoRow key={repo.id} repo={repo} onConfigure={handleConfigure} />
+						))}
+					</div>
+				) : (
+					<div className="rounded-lg border border-dashed border-border/80 py-12 text-center">
+						<p className="text-sm text-muted-foreground">No repositories added yet</p>
+						<p className="text-xs text-muted-foreground mt-1">
+							Add a repository from GitHub to get started
+						</p>
+					</div>
+				)}
 
-			{reposList.length > 0 ? (
-				<div className="rounded-lg border border-border/80 bg-background divide-y divide-border/60">
-					{reposList.map((repo) => (
-						<RepoRow key={repo.id} repo={repo} onConfigure={handleConfigure} />
-					))}
-				</div>
-			) : (
-				<div className="rounded-lg border border-dashed border-border/80 py-12 text-center">
-					<p className="text-sm text-muted-foreground">No repositories added yet</p>
-					<p className="text-xs text-muted-foreground mt-1">
-						Add a repository from GitHub to get started
-					</p>
-				</div>
-			)}
+				{/* Add Repository */}
+				<div className="space-y-2">
+					<h2 className="text-sm font-medium">Add Repository</h2>
+					<div className="rounded-lg border border-border/80 bg-background overflow-hidden">
+						<Button
+							variant="ghost"
+							onClick={() => setShowAvailable(!showAvailable)}
+							className="w-full h-auto flex items-center justify-between px-4 py-3 rounded-none hover:bg-muted/50 transition-colors"
+						>
+							<span className="text-sm font-medium">From Connected Repos</span>
+							<ChevronDown
+								className={cn(
+									"h-4 w-4 text-muted-foreground transition-transform",
+									showAvailable && "rotate-180",
+								)}
+							/>
+						</Button>
 
-			{/* Add Repository */}
-			<div className="space-y-2">
-				<h2 className="text-sm font-medium">Add Repository</h2>
-				<div className="rounded-lg border border-border/80 bg-background overflow-hidden">
-					<Button
-						variant="ghost"
-						onClick={() => setShowAvailable(!showAvailable)}
-						className="w-full h-auto flex items-center justify-between px-4 py-3 rounded-none hover:bg-muted/50 transition-colors"
-					>
-						<span className="text-sm font-medium">From Connected Repos</span>
-						<ChevronDown
-							className={cn(
-								"h-4 w-4 text-muted-foreground transition-transform",
-								showAvailable && "rotate-180",
-							)}
-						/>
-					</Button>
-
-					{showAvailable && (
-						<div className="border-t border-border/60 p-4">
-							{availableLoading ? (
-								<div className="py-4 text-center">
-									<LoadingDots size="sm" className="text-muted-foreground" />
-								</div>
-							) : availableRepos && availableRepos.length > 0 ? (
-								<div className="space-y-1 max-h-64 overflow-y-auto">
-									{availableRepos.map((repo) => (
-										<div
-											key={repo.id}
-											className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors"
-										>
-											<div className="min-w-0 flex-1">
-												<p className="text-sm truncate">
-													{repo.full_name}
-													{repo.private && (
-														<Lock className="inline h-3 w-3 text-muted-foreground ml-1.5" />
-													)}
-												</p>
-												<p className="text-xs text-muted-foreground">{repo.default_branch}</p>
-											</div>
-											<Button
-												variant="outline"
-												size="sm"
-												className="ml-3 flex-shrink-0 h-7 text-xs"
-												onClick={() => handleAddRepo(repo)}
-												disabled={addingRepoId === repo.id}
-											>
-												{addingRepoId === repo.id ? "..." : "Add"}
-											</Button>
-										</div>
-									))}
-								</div>
-							) : (
-								<p className="text-sm text-muted-foreground text-center py-4">
-									No additional repositories available
-								</p>
-							)}
-						</div>
-					)}
-				</div>
-
-				<div className="rounded-lg border border-border/80 bg-background overflow-hidden">
-					<Button
-						variant="ghost"
-						onClick={() => setShowPublicSearch(!showPublicSearch)}
-						className="w-full h-auto flex items-center justify-between px-4 py-3 rounded-none hover:bg-muted/50 transition-colors"
-					>
-						<span className="text-sm font-medium">Public Repository</span>
-						<ChevronDown
-							className={cn(
-								"h-4 w-4 text-muted-foreground transition-transform",
-								showPublicSearch && "rotate-180",
-							)}
-						/>
-					</Button>
-
-					{showPublicSearch && (
-						<div className="border-t border-border/60 p-4 space-y-4">
-							<div className="relative">
-								<Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-								<Input
-									value={publicSearchQuery}
-									onChange={(e) => setPublicSearchQuery(e.target.value)}
-									placeholder="Search repos (e.g., vercel/next.js)"
-									className="pl-9 h-8 text-sm"
-									autoFocus
-								/>
-							</div>
-
-							{searchLoading ? (
-								<div className="py-4 text-center">
-									<LoadingDots size="sm" className="text-muted-foreground" />
-								</div>
-							) : searchResults && searchResults.length > 0 ? (
-								<div className="space-y-1 max-h-64 overflow-y-auto">
-									{searchResults
-										.filter((repo) => !existingRepoIds.has(String(repo.id)))
-										.map((repo) => (
+						{showAvailable && (
+							<div className="border-t border-border/60 p-4">
+								{availableLoading ? (
+									<div className="py-4 text-center">
+										<LoadingDots size="sm" className="text-muted-foreground" />
+									</div>
+								) : availableRepos && availableRepos.length > 0 ? (
+									<div className="space-y-1 max-h-64 overflow-y-auto">
+										{availableRepos.map((repo) => (
 											<div
 												key={repo.id}
 												className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors"
 											>
 												<div className="min-w-0 flex-1">
-													<p className="text-sm truncate">{repo.full_name}</p>
-													<div className="flex items-center gap-2 text-xs text-muted-foreground">
-														{repo.stargazers_count !== undefined && (
-															<span className="flex items-center gap-0.5">
-																<Star className="h-3 w-3" />
-																{repo.stargazers_count.toLocaleString()}
-															</span>
+													<p className="text-sm truncate">
+														{repo.full_name}
+														{repo.private && (
+															<Lock className="inline h-3 w-3 text-muted-foreground ml-1.5" />
 														)}
-														{repo.language && <span>{repo.language}</span>}
-														<span>{repo.default_branch}</span>
-													</div>
+													</p>
+													<p className="text-xs text-muted-foreground">{repo.default_branch}</p>
 												</div>
 												<Button
 													variant="outline"
 													size="sm"
 													className="ml-3 flex-shrink-0 h-7 text-xs"
-													onClick={() => handleAddRepo(repo, true)}
+													onClick={() => handleAddRepo(repo)}
 													disabled={addingRepoId === repo.id}
 												>
 													{addingRepoId === repo.id ? "..." : "Add"}
 												</Button>
 											</div>
 										))}
-									{searchResults.filter((repo) => !existingRepoIds.has(String(repo.id))).length ===
-										0 && (
-										<p className="text-sm text-muted-foreground text-center py-2">
-											All matching repos already added
-										</p>
-									)}
+									</div>
+								) : (
+									<p className="text-sm text-muted-foreground text-center py-4">
+										No additional repositories available
+									</p>
+								)}
+							</div>
+						)}
+					</div>
+
+					<div className="rounded-lg border border-border/80 bg-background overflow-hidden">
+						<Button
+							variant="ghost"
+							onClick={() => setShowPublicSearch(!showPublicSearch)}
+							className="w-full h-auto flex items-center justify-between px-4 py-3 rounded-none hover:bg-muted/50 transition-colors"
+						>
+							<span className="text-sm font-medium">Public Repository</span>
+							<ChevronDown
+								className={cn(
+									"h-4 w-4 text-muted-foreground transition-transform",
+									showPublicSearch && "rotate-180",
+								)}
+							/>
+						</Button>
+
+						{showPublicSearch && (
+							<div className="border-t border-border/60 p-4 space-y-4">
+								<div className="relative">
+									<Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+									<Input
+										value={publicSearchQuery}
+										onChange={(e) => setPublicSearchQuery(e.target.value)}
+										placeholder="Search repos (e.g., vercel/next.js)"
+										className="pl-9 h-8 text-sm"
+										autoFocus
+									/>
 								</div>
-							) : debouncedQuery.length >= 2 ? (
-								<p className="text-sm text-muted-foreground text-center py-4">
-									No public repositories found
-								</p>
-							) : (
-								<p className="text-sm text-muted-foreground text-center py-4">
-									Enter at least 2 characters to search
-								</p>
-							)}
-						</div>
-					)}
+
+								{searchLoading ? (
+									<div className="py-4 text-center">
+										<LoadingDots size="sm" className="text-muted-foreground" />
+									</div>
+								) : searchResults && searchResults.length > 0 ? (
+									<div className="space-y-1 max-h-64 overflow-y-auto">
+										{searchResults
+											.filter((repo) => !existingRepoIds.has(String(repo.id)))
+											.map((repo) => (
+												<div
+													key={repo.id}
+													className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors"
+												>
+													<div className="min-w-0 flex-1">
+														<p className="text-sm truncate">{repo.full_name}</p>
+														<div className="flex items-center gap-2 text-xs text-muted-foreground">
+															{repo.stargazers_count !== undefined && (
+																<span className="flex items-center gap-0.5">
+																	<Star className="h-3 w-3" />
+																	{repo.stargazers_count.toLocaleString()}
+																</span>
+															)}
+															{repo.language && <span>{repo.language}</span>}
+															<span>{repo.default_branch}</span>
+														</div>
+													</div>
+													<Button
+														variant="outline"
+														size="sm"
+														className="ml-3 flex-shrink-0 h-7 text-xs"
+														onClick={() => handleAddRepo(repo, true)}
+														disabled={addingRepoId === repo.id}
+													>
+														{addingRepoId === repo.id ? "..." : "Add"}
+													</Button>
+												</div>
+											))}
+										{searchResults.filter((repo) => !existingRepoIds.has(String(repo.id)))
+											.length === 0 && (
+											<p className="text-sm text-muted-foreground text-center py-2">
+												All matching repos already added
+											</p>
+										)}
+									</div>
+								) : debouncedQuery.length >= 2 ? (
+									<p className="text-sm text-muted-foreground text-center py-4">
+										No public repositories found
+									</p>
+								) : (
+									<p className="text-sm text-muted-foreground text-center py-4">
+										Enter at least 2 characters to search
+									</p>
+								)}
+							</div>
+						)}
+					</div>
 				</div>
 			</div>
-		</div>
+		</PageShell>
 	);
 }
 
@@ -524,7 +527,7 @@ function ServiceCommandsSection({ repoId }: { repoId: string }) {
 					Default auto-start commands. Run automatically when a session starts.
 				</p>
 				{drafts.map((draft, index) => (
-					<div key={index} className="flex items-start gap-2">
+					<div key={`draft-${draft.name}-${draft.command}`} className="flex items-start gap-2">
 						<div className="flex-1 space-y-1.5">
 							<Input
 								value={draft.name}
@@ -593,8 +596,8 @@ function ServiceCommandsSection({ repoId }: { repoId: string }) {
 			<p className="text-xs text-muted-foreground mb-2">Auto-start commands</p>
 			{commands && commands.length > 0 ? (
 				<div className="space-y-1">
-					{commands.map((cmd, index) => (
-						<div key={index} className="text-xs py-0.5">
+					{commands.map((cmd) => (
+						<div key={`${cmd.name}-${cmd.command}`} className="text-xs py-0.5">
 							<span className="font-medium">{cmd.name}</span>
 							<span className="text-muted-foreground ml-2 font-mono">{cmd.command}</span>
 							{cmd.cwd && <span className="text-muted-foreground ml-2">({cmd.cwd})</span>}

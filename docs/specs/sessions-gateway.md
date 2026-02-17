@@ -43,6 +43,7 @@ Sessions can be created via two different pipelines. The **oRPC path** (`apps/we
 - Messages never flow through API routes. All real-time streaming is Client ↔ Gateway ↔ Sandbox.
 - `HubManager` deduplicates concurrent `getOrCreate` calls for the same session ID via a pending-promise map.
 - `ensureRuntimeReady()` is idempotent — coalesces concurrent callers into a single promise.
+- `SessionHub.ensureRuntimeReady()` acquires the cross-pod owner lease before runtime lifecycle work. Non-owner hubs must abort before provisioning.
 - Sandbox creation is always delegated to the `SandboxProvider` interface (see `sandbox-providers.md`).
 
 ---
@@ -68,6 +69,13 @@ The gateway maintains a persistent SSE connection to OpenCode (`GET /event` on t
 Handles sandbox expiry by either migrating to a new sandbox (if clients are connected) or snapshotting and stopping (if idle). Uses a distributed lock to prevent concurrent migrations.
 - Key detail agents get wrong: Migration does NOT use a timer in the controller itself — expiry is scheduled via a BullMQ job in `expiry-queue.ts`. The controller only runs when triggered.
 - Reference: `apps/gateway/src/hub/migration-controller.ts`, `apps/gateway/src/expiry/expiry-queue.ts`
+
+### Session Ownership Leases
+Each active hub uses Redis leases to prevent split-brain across gateway pods:
+- **Owner lease** (`session:owner:{sessionId}`) — only the owner may run runtime lifecycle work.
+- **Runtime lease** (`session:runtime:{sessionId}`) — indicates a live runtime for orphan detection.
+- Key detail agents get wrong: owner lease acquisition happens before `runtime.ensureRuntimeReady()`. A hub that cannot acquire ownership must fail fast and avoid sandbox/OpenCode provisioning.
+- Reference: `apps/gateway/src/hub/session-hub.ts`, `apps/gateway/src/lib/session-leases.ts`
 
 ---
 
@@ -335,6 +343,11 @@ class ApiError extends Error {
 ### 6.2 Session Runtime Lifecycle — `Implemented`
 
 **What it does:** Lazily provisions sandbox, OpenCode session, and SSE bridge on first client connect.
+
+**SessionHub pre-step** (`apps/gateway/src/hub/session-hub.ts:ensureRuntimeReady`):
+1. Acquire/renew owner lease (cross-pod ownership gate).
+2. Abort if ownership is unavailable.
+3. Then call `runtime.ensureRuntimeReady()`.
 
 **Happy path** (`apps/gateway/src/hub/session-runtime.ts:doEnsureRuntimeReady`):
 1. Wait for migration lock release (`lib/lock.ts:waitForMigrationLockRelease`).

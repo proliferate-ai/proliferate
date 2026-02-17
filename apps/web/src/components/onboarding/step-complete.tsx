@@ -1,16 +1,18 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Sparkles } from "lucide-react";
+import { Loader2 } from "@/components/ui/icons";
 import Image from "next/image";
 
 interface StepCompleteProps {
 	onComplete: () => void;
+	isSubmitting?: boolean;
+	error?: string;
 }
 
-export function StepComplete({ onComplete }: StepCompleteProps) {
+export function StepComplete({ onComplete, isSubmitting, error }: StepCompleteProps) {
 	return (
-		<div className="w-full max-w-[560px]">
+		<div className="w-[480px]">
 			<div className="rounded-2xl overflow-hidden border border-border">
 				{/* Image Area - wider aspect ratio */}
 				<div className="relative bg-black" style={{ aspectRatio: "1360 / 880" }}>
@@ -39,8 +41,26 @@ export function StepComplete({ onComplete }: StepCompleteProps) {
 						</p>
 					</div>
 
-					<Button variant="dark" onClick={onComplete} className="h-11 w-full rounded-lg">
-						Go to Dashboard
+					{error && (
+						<p className="mb-3 text-sm text-destructive text-center">
+							Failed to complete onboarding. Please try again.
+						</p>
+					)}
+
+					<Button
+						variant="dark"
+						onClick={onComplete}
+						disabled={isSubmitting}
+						className="h-11 w-full rounded-lg"
+					>
+						{isSubmitting ? (
+							<>
+								<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+								Finishing...
+							</>
+						) : (
+							"Go to Dashboard"
+						)}
 					</Button>
 				</div>
 			</div>

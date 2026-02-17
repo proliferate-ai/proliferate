@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const geist = Geist({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
 	title: "Keystone | The Autonomous Engineering Organization",
@@ -90,7 +90,7 @@ export default function RootLayout({
 					content="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp"
 				/>
 			</head>
-			<body className={geist.className}>
+			<body className={`${inter.variable} ${inter.className}`}>
 				<Providers>{children}</Providers>
 				<Toaster
 					position="top-center"

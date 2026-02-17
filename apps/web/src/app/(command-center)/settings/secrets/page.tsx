@@ -1,6 +1,7 @@
 "use client";
 
-import { SettingsCard, SettingsRow, SettingsSection } from "@/components/settings/settings-row";
+import { PageShell } from "@/components/dashboard/page-shell";
+import { SettingsCard, SettingsRow } from "@/components/settings/settings-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,16 +66,19 @@ export default function SecretsPage() {
 
 	if (isLoading) {
 		return (
-			<div className="py-8 text-center">
-				<LoadingDots size="md" className="text-muted-foreground" />
-			</div>
+			<PageShell title="Secrets" subtitle="Encrypted environment variables" maxWidth="2xl">
+				<div className="space-y-4">
+					{[1, 2].map((i) => (
+						<div key={i} className="h-16 rounded-lg bg-muted/30 animate-pulse" />
+					))}
+				</div>
+			</PageShell>
 		);
 	}
 
 	return (
-		<div className="space-y-10">
-			<SettingsSection title="Environment Variables">
-				{isAdding ? (
+		<PageShell title="Secrets" subtitle="Encrypted environment variables" maxWidth="2xl">
+			{isAdding ? (
 					<div className="rounded-lg border border-border/80 bg-background p-4 space-y-4">
 						<div className="space-y-2">
 							<Label htmlFor="key">Key</Label>
@@ -175,7 +179,6 @@ export default function SecretsPage() {
 						</Button>
 					</div>
 				)}
-			</SettingsSection>
-		</div>
+		</PageShell>
 	);
 }

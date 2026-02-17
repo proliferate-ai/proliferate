@@ -291,6 +291,47 @@ async function fetchLinearMetadata(authToken: string, teamId?: string): Promise<
 
 export const integrationsRouter = {
 	/**
+	 * Request a new integration (sends email via Resend).
+	 */
+	requestIntegration: orgProcedure
+		.input(z.object({ integrationName: z.string().min(1).max(200) }))
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			const { Resend } = await import("resend");
+			const { env } = await import("@proliferate/environment/server");
+
+			const apiKey = env.RESEND_API_KEY;
+			const emailFrom = env.EMAIL_FROM;
+
+			if (!apiKey || !emailFrom) {
+				log.warn("RESEND_API_KEY or EMAIL_FROM not configured, skipping integration request email");
+				return { success: true };
+			}
+
+			const resend = new Resend(apiKey);
+			const org = await integrations.getOrganizationForSession(context.orgId);
+			const orgName = org?.name;
+
+			await resend.emails.send({
+				from: emailFrom,
+				to: emailFrom,
+				subject: `Integration request: ${input.integrationName}`,
+				html: `
+					<p><strong>${context.user.name || context.user.email}</strong> from <strong>${orgName || context.orgId}</strong> requested:</p>
+					<p style="font-size: 18px; padding: 12px 0;">${input.integrationName}</p>
+					<p style="color: #666;">User email: ${context.user.email}</p>
+				`,
+			});
+
+			log.info(
+				{ orgId: context.orgId, userId: context.user.id, integration: input.integrationName },
+				"Integration request email sent",
+			);
+
+			return { success: true };
+		}),
+
+	/**
 	 * List all integrations for the organization.
 	 */
 	list: orgProcedure

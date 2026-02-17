@@ -1,9 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { GATEWAY_URL } from "@/lib/gateway";
-import { ExternalLink, Loader2, RefreshCw, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWsToken } from "./runtime/use-ws-token";
 
@@ -22,10 +21,9 @@ function vscodeUrl(sessionId: string, token: string): string {
 
 type PanelStatus = "starting" | "ready" | "error";
 
-export function VscodePanel({ sessionId, onClose }: VscodePanelProps) {
+export function VscodePanel({ sessionId }: VscodePanelProps) {
 	const { token } = useWsToken();
 	const [status, setStatus] = useState<PanelStatus>("starting");
-	const [iframeKey, setIframeKey] = useState(0);
 	const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	const startVscodeServer = useCallback(async () => {
@@ -119,10 +117,6 @@ export function VscodePanel({ sessionId, onClose }: VscodePanelProps) {
 		};
 	}, [startVscodeServer]);
 
-	const handleRefresh = () => {
-		setIframeKey((k) => k + 1);
-	};
-
 	const handleRetry = () => {
 		startVscodeServer();
 	};
@@ -130,72 +124,31 @@ export function VscodePanel({ sessionId, onClose }: VscodePanelProps) {
 	const iframeSrc = token ? vscodeUrl(sessionId, token) : "";
 
 	return (
-		<TooltipProvider delayDuration={150}>
-			<div className="flex flex-col h-full">
-				<div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 shrink-0">
-					<span className="text-sm font-medium">VS Code</span>
-					<div className="flex items-center gap-1">
-						{status === "ready" && (
-							<>
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRefresh}>
-											<RefreshCw className="h-3.5 w-3.5" />
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent>Refresh</TooltipContent>
-								</Tooltip>
-								{iframeSrc && (
-									<Tooltip>
-										<TooltipTrigger asChild>
-											<a href={iframeSrc} target="_blank" rel="noopener noreferrer">
-												<Button variant="ghost" size="icon" className="h-7 w-7">
-													<ExternalLink className="h-3.5 w-3.5" />
-												</Button>
-											</a>
-										</TooltipTrigger>
-										<TooltipContent>Open in new tab</TooltipContent>
-									</Tooltip>
-								)}
-							</>
-						)}
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
-									<X className="h-4 w-4" />
-								</Button>
-							</TooltipTrigger>
-							<TooltipContent>Close panel</TooltipContent>
-						</Tooltip>
+		<div className="flex flex-col h-full">
+			<div className="flex-1 min-h-0">
+				{status === "starting" && (
+					<div className="flex flex-col items-center justify-center h-full gap-3">
+						<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+						<p className="text-sm text-muted-foreground">Starting VS Code...</p>
 					</div>
-				</div>
-
-				<div className="flex-1 min-h-0">
-					{status === "starting" && (
-						<div className="flex flex-col items-center justify-center h-full gap-3">
-							<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-							<p className="text-sm text-muted-foreground">Starting VS Code...</p>
-						</div>
-					)}
-					{status === "error" && (
-						<div className="flex flex-col items-center justify-center h-full gap-3">
-							<p className="text-sm text-destructive">Failed to start VS Code server</p>
-							<Button variant="outline" size="sm" onClick={handleRetry}>
-								Retry
-							</Button>
-						</div>
-					)}
-					{status === "ready" && iframeSrc && (
-						<iframe
-							key={iframeKey}
-							src={iframeSrc}
-							title="VS Code"
-							className="w-full h-full border-0"
-							sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
-						/>
-					)}
-				</div>
+				)}
+				{status === "error" && (
+					<div className="flex flex-col items-center justify-center h-full gap-3">
+						<p className="text-sm text-destructive">Failed to start VS Code server</p>
+						<Button variant="outline" size="sm" onClick={handleRetry}>
+							Retry
+						</Button>
+					</div>
+				)}
+				{status === "ready" && iframeSrc && (
+					<iframe
+						src={iframeSrc}
+						title="VS Code"
+						className="w-full h-full border-0"
+						sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
+					/>
+				)}
 			</div>
-		</TooltipProvider>
+		</div>
 	);
 }

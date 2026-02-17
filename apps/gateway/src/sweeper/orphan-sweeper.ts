@@ -31,6 +31,7 @@ let sweepTimer: ReturnType<typeof setInterval> | null = null;
 async function sweep(hubManager: HubManager, env: GatewayEnv, logger: Logger): Promise<void> {
 	const runningIds = await sessions.listRunningSessionIds();
 	if (runningIds.length === 0) {
+		logger.info({ scanned: 0, orphans: 0 }, "orphan_sweep.complete");
 		return;
 	}
 
@@ -168,7 +169,13 @@ export function startOrphanSweeper(hubManager: HubManager, env: GatewayEnv, logg
 	}
 
 	const log = logger.child({ module: "orphan-sweeper" });
-	log.info({ intervalMs: SWEEP_INTERVAL_MS }, "Orphan sweeper started");
+	log.info(
+		{
+			intervalMs: SWEEP_INTERVAL_MS,
+			firstRunAt: new Date(Date.now() + SWEEP_INTERVAL_MS).toISOString(),
+		},
+		"Orphan sweeper started",
+	);
 
 	sweepTimer = setInterval(() => {
 		sweep(hubManager, env, log).catch((err) => {
