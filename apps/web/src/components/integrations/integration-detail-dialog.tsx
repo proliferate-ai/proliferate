@@ -74,7 +74,9 @@ export function IntegrationDetailDialog({
 							<ConnectorIcon presetKey={entry.presetKey} size="md" />
 						) : entry.provider ? (
 							<ProviderIcon provider={entry.provider} size="md" />
-						) : null}
+						) : (
+							<ConnectorIcon presetKey="custom" size="md" />
+						)}
 					</div>
 					<h2 className="text-lg font-medium tracking-tight">{entry.name}</h2>
 				</div>
