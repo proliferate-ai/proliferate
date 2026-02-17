@@ -1,5 +1,6 @@
 "use client";
 
+import { useBilling } from "@/hooks/use-billing";
 import { useSession } from "@/lib/auth-client";
 import { env } from "@proliferate/environment/public";
 import { useRouter } from "next/navigation";
@@ -12,6 +13,9 @@ export default function WorkspaceLayout({
 }) {
 	const router = useRouter();
 	const { data: session, isPending: authPending } = useSession();
+	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
+	const { data: billingInfo, isLoading: billingLoading, isError: billingError } = useBilling();
+	const needsOnboarding = billingEnabled && billingInfo?.state.billingState === "unconfigured";
 
 	const requireEmailVerification = env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION;
 
@@ -29,11 +33,21 @@ export default function WorkspaceLayout({
 		}
 	}, [session, authPending, router, requireEmailVerification]);
 
-	if (authPending) {
+	useEffect(() => {
+		if (!authPending && session && !billingLoading && needsOnboarding) {
+			router.push("/onboarding");
+		}
+	}, [authPending, session, billingLoading, needsOnboarding, router]);
+
+	if (authPending || (billingEnabled && (billingLoading || billingError))) {
 		return <div className="min-h-screen bg-background" />;
 	}
 
 	if (!session) {
+		return null;
+	}
+
+	if (needsOnboarding) {
 		return null;
 	}
 

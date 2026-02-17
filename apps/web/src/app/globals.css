@@ -31,6 +31,7 @@
 		/* ─── Borders & Inputs ─── */
 		--border: 0 0% 90%; /* 1px structural lines */
 		--input: 0 0% 90%;
+		--chat-input: 0 0% 100%;
 		--ring: 0 0% 10%; /* Focus rings */
 
 		/* ─── Status Colors (Use sparingly, NO tinted backgrounds) ─── */
@@ -70,77 +71,12 @@
 		/* ─── Borders & Inputs ─── */
 		--border: 0 0% 15%; /* #262626 */
 		--input: 0 0% 15%;
+		--chat-input: 0 0% 12%;
 		--ring: 0 0% 100%; /* White focus rings */
 
 		/* ─── Status Colors ─── */
 		--destructive: 0 63% 31%; /* Darker red for contrast */
 		--destructive-foreground: 0 0% 98%;
-	}
-}
-
-@layer base {
-	:root {
-		/* --background: 60 9% 98%; */
-		/* --foreground: 24 10% 4%; */
-		/* Sidebar */
-		/* --sidebar: 60 5% 96%; */
-		/* --sidebar-foreground: 24 10% 4%; */
-		/* --sidebar-border: 24 6% 90%; */
-		/* --card: 60 9% 98%; */
-		/* --card-foreground: 24 10% 4%; */
-		/* --popover: 0 0% 100%; */
-		/* --popover-foreground: 0 0% 3.9%; */
-		/* --primary: 0 0% 9%; */
-		/* --primary-foreground: 0 0% 98%; */
-		/* --secondary: 0 0% 96.1%; */
-		/* --secondary-foreground: 0 0% 9%; */
-		/* --muted: 0 0% 96.1%; */
-		/* --muted-foreground: 48 9% 30%; */
-		/* --accent: 0 0% 92%; */
-		/* --accent-foreground: 0 0% 9%; */
-		/* --destructive: 0 84.2% 60.2%; */
-		/* --destructive-foreground: 0 0% 98%; */
-		/* --border: 24 6% 85%; */
-		/* --input: 20 6% 89%; */
-		/* --ring: 24 10% 4%; */
-		/* --radius: 0.5rem; */
-		/* Chat input background - uses card in light mode */
-		/* --chat-input: 60 9% 98%; */
-	}
-
-	.dark {
-		/* Main content background - lighter than sidebar */
-		/* --background: 20 5% 12%; */
-		/* --foreground: 60 5% 98%; */
-		/* Sidebar */
-		/* --sidebar: 24 6% 10%; */
-		/* --sidebar-foreground: 60 5% 98%; */
-		/* --sidebar-border: 20 5% 16%; */
-		/* Cards and popovers - slightly elevated from background */
-		/* --card: 20 5% 11%; */
-		/* --card-foreground: 60 5% 98%; */
-		/* --popover: 20 5% 11%; */
-		/* --popover-foreground: 60 5% 98%; */
-		/* Primary action color - white in dark mode */
-		/* --primary: 0 0% 98%; */
-		/* --primary-foreground: 0 0% 9%; */
-		/* Secondary/muted surfaces */
-		/* --secondary: 0 0% 16%; */
-		/* --secondary-foreground: 0 0% 98%; */
-		/* --muted: 0 0% 16%; */
-		/* --muted-foreground: 0 0% 83%; */
-		/* Accent (hover states, highlights) */
-		/* --accent: 20 4% 16%; */
-		/* --accent-foreground: 60 5% 98%; */
-		/* Destructive */
-		/* --destructive: 0 62.8% 30.6%; */
-		/* --destructive-foreground: 0 0% 98%; */
-		/* Borders and inputs */
-		/* --border: 20 4% 20%; */
-		/* --input: 20 4% 20%; */
-		/* --ring: 60 5% 98%; */
-		/* Chat input background */
-		/* --chat-input: 20 4% 19%; */
 	}
 }
 
