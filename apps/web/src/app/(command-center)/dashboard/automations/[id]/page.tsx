@@ -22,6 +22,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LinearIcon, OpenCodeIcon, SlackIcon } from "@/components/ui/icons";
+import { InlineEdit } from "@/components/ui/inline-edit";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -31,6 +32,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { StatusDot } from "@/components/ui/status-dot";
 import { Switch } from "@/components/ui/switch";
 import { Text } from "@/components/ui/text";
 import { Textarea } from "@/components/ui/textarea";
@@ -117,30 +119,11 @@ function mapInputToOutput(data: UpdateAutomationInput): Record<string, unknown> 
 // Local Components
 // ============================================
 
-function StackedListItem({
-	children,
-	className,
-	isFirst,
-	isLast,
-}: {
-	children: React.ReactNode;
-	className?: string;
-	isFirst?: boolean;
-	isLast?: boolean;
-}) {
+function SectionLabel({ label }: { label: string }) {
 	return (
-		<div
-			className={cn(
-				"min-h-[2.75rem] text-left text-sm font-medium flex items-center px-3 relative transition-colors duration-75",
-				"border border-border -mb-px last:mb-0",
-				"text-muted-foreground",
-				isFirst && "rounded-t-xl",
-				isLast && "rounded-b-xl",
-				className,
-			)}
-		>
-			{children}
-		</div>
+		<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+			{label}
+		</p>
 	);
 }
 
@@ -151,8 +134,6 @@ function ToolListItem({
 	enabled,
 	onToggle,
 	badge,
-	isFirst,
-	isLast,
 	children,
 }: {
 	icon: React.ElementType;
@@ -161,20 +142,11 @@ function ToolListItem({
 	enabled: boolean;
 	onToggle: (enabled: boolean) => void;
 	badge?: string;
-	isFirst?: boolean;
-	isLast?: boolean;
 	children?: React.ReactNode;
 }) {
 	return (
-		<div
-			className={cn(
-				"border border-border -mb-px last:mb-0 transition-colors",
-				isFirst && "rounded-t-xl",
-				isLast && !children && "rounded-b-xl",
-				enabled && children && "rounded-b-none",
-			)}
-		>
-			<div className="min-h-[2.75rem] flex items-center px-3 py-2">
+		<div className="border-b border-border/50 last:border-0">
+			<div className="flex items-center px-3 py-2.5">
 				<Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
 				<div className="flex min-w-0 items-center grow gap-2 px-2">
 					<span className="text-sm font-medium">{label}</span>
@@ -201,14 +173,7 @@ function ToolListItem({
 				<Switch checked={enabled} onCheckedChange={onToggle} />
 			</div>
 			{enabled && children && (
-				<div
-					className={cn(
-						"px-3 pb-3 pt-1 border-t border-border bg-muted/30",
-						isLast && "rounded-b-xl",
-					)}
-				>
-					{children}
-				</div>
+				<div className="px-3 pb-3 pt-1 border-t border-border/50 bg-muted/30">{children}</div>
 			)}
 		</div>
 	);
@@ -216,7 +181,6 @@ function ToolListItem({
 
 function TextAreaWithFooter({
 	label,
-	description,
 	value,
 	onChange,
 	placeholder,
@@ -224,7 +188,6 @@ function TextAreaWithFooter({
 	minHeight = "150px",
 }: {
 	label: string;
-	description?: string;
 	value: string;
 	onChange: (value: string) => void;
 	placeholder?: string;
@@ -233,38 +196,24 @@ function TextAreaWithFooter({
 }) {
 	return (
 		<div className="space-y-2">
-			<div className="space-y-0.5">
-				<Label className="text-sm text-foreground">{label}</Label>
-				{description && <p className="text-sm text-muted-foreground">{description}</p>}
-			</div>
-			<div className="relative border rounded-2xl overflow-hidden focus-within:border-foreground focus-within:ring-[0.5px] focus-within:ring-foreground transition-all">
+			<SectionLabel label={label} />
+			<div className="relative rounded-xl border border-border overflow-hidden focus-within:border-foreground focus-within:ring-[0.5px] focus-within:ring-foreground transition-all">
 				<Textarea
 					value={value}
 					onChange={(e) => onChange(e.target.value)}
 					placeholder={placeholder}
 					className={cn(
-						"w-full text-sm focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 border-none resize-none px-5 py-4 bg-transparent rounded-none min-h-0",
+						"w-full text-sm focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 border-none resize-none px-4 py-3.5 bg-transparent rounded-none min-h-0",
 						"placeholder:text-muted-foreground/60",
 					)}
 					style={{ minHeight }}
 				/>
 				{footerText && (
-					<div className="flex items-center justify-end bg-muted/50 border-t border-border gap-2 rounded-b-2xl px-4 py-2.5">
-						<p className="text-sm text-muted-foreground mr-auto">{footerText}</p>
+					<div className="flex items-center bg-muted/50 border-t border-border/50 px-4 py-2">
+						<p className="text-xs text-muted-foreground">{footerText}</p>
 					</div>
 				)}
 			</div>
-		</div>
-	);
-}
-
-function StepLabel({ step, label }: { step: number; label: string }) {
-	return (
-		<div className="flex items-center gap-2 mb-2">
-			<span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-muted text-[11px] font-semibold text-muted-foreground shrink-0">
-				{step}
-			</span>
-			<Label className="text-sm text-muted-foreground">{label}</Label>
 		</div>
 	);
 }
@@ -283,8 +232,6 @@ export default function AutomationDetailPage({
 	const queryClient = useQueryClient();
 
 	// Local state
-	const [editingName, setEditingName] = useState(false);
-	const [nameValue, setNameValue] = useState("");
 	const [instructionsValue, setInstructionsValue] = useState("");
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [llmFilterPrompt, setLlmFilterPrompt] = useState("");
@@ -309,7 +256,6 @@ export default function AutomationDetailPage({
 	useEffect(() => {
 		if (automation && !hydratedRef.current) {
 			hydratedRef.current = true;
-			setNameValue(automation.name);
 			setInstructionsValue(automation.agent_instructions || "");
 			setLlmFilterPrompt(automation.llm_filter_prompt || "");
 			setLlmAnalysisPrompt(automation.llm_analysis_prompt || "");
@@ -408,12 +354,12 @@ export default function AutomationDetailPage({
 	}, 1000);
 
 	// Handlers
-	const handleNameBlur = useCallback(() => {
-		setEditingName(false);
-		if (nameValue !== automation?.name && nameValue.trim()) {
-			handleUpdate({ name: nameValue.trim() });
-		}
-	}, [nameValue, automation?.name, handleUpdate]);
+	const handleNameSave = useCallback(
+		(name: string) => {
+			handleUpdate({ name });
+		},
+		[handleUpdate],
+	);
 
 	const handleModelChange = useCallback(
 		(modelId: ModelId) => {
@@ -475,8 +421,8 @@ export default function AutomationDetailPage({
 						<div className="h-8 w-48 bg-muted rounded" />
 						<div className="flex gap-8">
 							<div className="flex-1 space-y-4">
-								<div className="h-48 bg-muted rounded-2xl" />
-								<div className="h-32 bg-muted rounded-2xl" />
+								<div className="h-48 bg-muted rounded-xl" />
+								<div className="h-32 bg-muted rounded-xl" />
 							</div>
 							<div className="w-80 space-y-4">
 								<div className="h-24 bg-muted rounded-xl" />
@@ -507,40 +453,30 @@ export default function AutomationDetailPage({
 		<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
 			<div className="flex flex-col grow w-full max-w-screen-xl mx-auto px-4 lg:px-8 lg:pt-8 min-h-0">
 				{/* Header */}
-				<div className="flex items-center h-10 mt-6 mb-6">
-					{editingName ? (
-						<Input
-							value={nameValue}
-							onChange={(e) => setNameValue(e.target.value)}
-							onBlur={handleNameBlur}
-							onKeyDown={(e) => e.key === "Enter" && handleNameBlur()}
-							className="text-2xl font-bold h-auto py-1 px-2 -ml-2 max-w-md"
-							autoFocus
-						/>
-					) : (
-						<h1
-							onClick={() => setEditingName(true)}
-							className="text-2xl text-foreground font-bold cursor-text hover:bg-muted/50 rounded px-2 py-1 -ml-2 transition-colors"
-						>
-							{automation.name}
-						</h1>
-					)}
+				<div className="flex items-center gap-3 py-4 border-b border-border/50 mb-6">
+					<StatusDot status={automation.enabled ? "active" : "paused"} />
+					<InlineEdit
+						value={automation.name}
+						onSave={handleNameSave}
+						className="min-w-0"
+						displayClassName="text-lg font-semibold tracking-tight text-foreground hover:bg-muted/50 rounded px-1 -mx-1 transition-colors"
+						inputClassName="text-lg font-semibold tracking-tight h-auto py-0.5 px-1 -mx-1 max-w-md"
+					/>
+					<span className="text-xs text-muted-foreground whitespace-nowrap">
+						Edited {formatRelativeTime(automation.updated_at)}
+					</span>
 
-					<div className="flex items-center gap-3 ml-auto">
-						<Text variant="small" color="muted">
-							Edited {formatRelativeTime(automation.updated_at)}
-						</Text>
-
+					<div className="flex items-center gap-2 ml-auto">
 						<Link href={`/dashboard/automations/${id}/events`}>
 							<Button variant="outline" size="sm">
-								<History className="h-4 w-4 mr-2" />
+								<History className="h-3.5 w-3.5 mr-1.5" />
 								Events
 							</Button>
 						</Link>
 
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
-								<Button variant="ghost" size="icon">
+								<Button variant="ghost" size="icon" className="h-8 w-8">
 									<MoreVertical className="h-4 w-4" />
 								</Button>
 							</DropdownMenuTrigger>
@@ -555,14 +491,14 @@ export default function AutomationDetailPage({
 							</DropdownMenuContent>
 						</DropdownMenu>
 
-						<div className="flex items-center gap-2">
+						<div className="flex items-center gap-2 pl-2 border-l border-border/50">
 							<Switch
 								checked={automation.enabled}
 								onCheckedChange={(checked) => handleUpdate({ enabled: checked })}
 							/>
-							<Label className="text-sm text-muted-foreground">
+							<span className="text-xs text-muted-foreground">
 								{automation.enabled ? "Active" : "Paused"}
-							</Label>
+							</span>
 						</div>
 					</div>
 				</div>
@@ -571,14 +507,12 @@ export default function AutomationDetailPage({
 				<div className="w-full flex flex-col lg:flex-row grow gap-6 lg:gap-8 pb-8 min-h-min">
 					{/* Left Column - Main Content */}
 					<div className="relative flex-1 min-w-0">
-						<div className="flex flex-col min-h-0 gap-6 lg:gap-8">
-							{/* Instructions */}
+						<div className="flex flex-col min-h-0 gap-6">
 							<TextAreaWithFooter
-								label="Do this..."
-								description="Tell the agent what to do when this automation is triggered."
+								label="Instructions"
 								value={instructionsValue}
 								onChange={handleInstructionsChange}
-								placeholder="You are a helpful assistant that investigates and fixes issues..."
+								placeholder="Tell the agent what to do when this automation is triggered..."
 								footerText={
 									hasPendingChanges || updateMutation.isPending
 										? "Saving..."
@@ -587,21 +521,17 @@ export default function AutomationDetailPage({
 								minHeight="200px"
 							/>
 
-							{/* LLM Filter */}
 							<TextAreaWithFooter
 								label="Event Filter"
-								description="Use AI to filter events before processing. Events that don't pass will be marked as filtered."
 								value={llmFilterPrompt}
 								onChange={handleLlmFilterPromptChange}
 								placeholder="Only process events where the user was on a checkout or payment page. Ignore events from internal/admin users."
 								minHeight="120px"
 							/>
 
-							{/* LLM Analysis (shown when tools are enabled) */}
 							{hasEnabledTools && (
 								<TextAreaWithFooter
 									label="Analysis Instructions"
-									description="Customize how AI analyzes events to determine which tools to execute."
 									value={llmAnalysisPrompt}
 									onChange={handleLlmAnalysisPromptChange}
 									placeholder="Focus on user-impacting issues. Create Linear issues for bugs that affect checkout. Send Slack notifications for high-severity errors."
@@ -615,8 +545,8 @@ export default function AutomationDetailPage({
 					<div className="lg:w-80 min-w-0 flex flex-col gap-5 shrink-0">
 						{/* Triggers */}
 						<div>
-							<StepLabel step={1} label="When" />
-							<div className="flex flex-col">
+							<SectionLabel label="Triggers" />
+							<div className="rounded-xl border border-border overflow-hidden">
 								{triggers.map((trigger, index) => (
 									<TriggerChip
 										key={trigger.id}
@@ -636,11 +566,11 @@ export default function AutomationDetailPage({
 							</div>
 						</div>
 
-						{/* Agent */}
+						{/* Model */}
 						<div>
-							<StepLabel step={2} label="Model" />
-							<div className="flex flex-col">
-								<StackedListItem isFirst isLast>
+							<SectionLabel label="Model" />
+							<div className="rounded-xl border border-border overflow-hidden">
+								<div className="flex items-center px-3 min-h-[2.75rem]">
 									<ModelSelector
 										modelId={
 											automation.model_id && isValidModelId(automation.model_id)
@@ -652,21 +582,20 @@ export default function AutomationDetailPage({
 										onChange={handleModelChange}
 										triggerClassName="w-full h-full border-0 shadow-none bg-transparent hover:bg-transparent px-0"
 									/>
-								</StackedListItem>
+								</div>
 							</div>
 						</div>
 
-						{/* Actions/Tools */}
+						{/* Actions */}
 						<div>
-							<StepLabel step={3} label="Actions" />
-							<div className="flex flex-col">
+							<SectionLabel label="Actions" />
+							<div className="rounded-xl border border-border overflow-hidden">
 								<ToolListItem
 									icon={SlackIcon}
 									label="Slack"
 									tooltip="Send a notification to a Slack channel when events are triggered"
 									enabled={enabledTools.slack_notify?.enabled || false}
 									onToggle={(checked) => handleToolToggle("slack_notify", checked)}
-									isFirst
 								>
 									<div className="space-y-3">
 										{slackInstallations &&
@@ -758,7 +687,6 @@ export default function AutomationDetailPage({
 									enabled={enabledTools.create_session?.enabled ?? true}
 									onToggle={(checked) => handleToolToggle("create_session", checked)}
 									badge="Default"
-									isLast
 								/>
 							</div>
 						</div>
@@ -814,14 +742,14 @@ function AutomationPermissions({ automationId }: { automationId: string }) {
 
 	return (
 		<div>
-			<StepLabel step={4} label="Permissions" />
+			<SectionLabel label="Permissions" />
 			{allActions.length === 0 ? (
-				<div className="rounded-lg border border-dashed border-border/80 py-6 text-center">
+				<div className="rounded-xl border border-dashed border-border/80 py-6 text-center">
 					<Shield className="h-5 w-5 mx-auto mb-1.5 text-muted-foreground/40" />
 					<p className="text-xs text-muted-foreground">No actions available</p>
 				</div>
 			) : (
-				<div className="rounded-lg border border-border/80 bg-background divide-y divide-border/60">
+				<div className="rounded-xl border border-border overflow-hidden divide-y divide-border/50">
 					{allActions.map((action) => {
 						const currentMode = modes[action.key] ?? "require_approval";
 						return (

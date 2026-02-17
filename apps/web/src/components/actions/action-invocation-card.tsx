@@ -133,171 +133,185 @@ export function ActionInvocationCard({
 	}, [onApproveWithGrant, grantScope, grantMaxCalls]);
 
 	return (
-		<div className="flex items-start gap-3 px-3 py-2.5 text-sm">
-			<StatusIcon
-				className={cn(
-					"h-4 w-4 shrink-0 mt-0.5",
-					invocation.status === "executing" && "animate-spin",
-					invocation.status === "completed" && "text-green-600 dark:text-green-400",
-					invocation.status === "failed" && "text-destructive",
-					invocation.status === "denied" && "text-destructive",
-					invocation.status === "pending" && "text-yellow-600 dark:text-yellow-400",
-					invocation.status === "expired" && "text-muted-foreground",
-					(invocation.status === "approved" || invocation.status === "executing") &&
-						"text-blue-600 dark:text-blue-400",
-				)}
-			/>
-
-			<div className="flex-1 min-w-0">
-				<div className="flex items-center gap-2 flex-wrap">
-					<span className="font-medium">
+		<div className="text-sm">
+			<div className="flex items-center gap-4 px-4 py-2.5">
+				{/* Action name + risk */}
+				<div className="flex items-center gap-2 min-w-0 flex-1">
+					<StatusIcon
+						className={cn(
+							"h-3.5 w-3.5 shrink-0",
+							invocation.status === "executing" && "animate-spin",
+							invocation.status === "completed" && "text-green-600 dark:text-green-400",
+							invocation.status === "failed" && "text-destructive",
+							invocation.status === "denied" && "text-destructive",
+							invocation.status === "pending" && "text-yellow-600 dark:text-yellow-400",
+							invocation.status === "expired" && "text-muted-foreground",
+							(invocation.status === "approved" || invocation.status === "executing") &&
+								"text-blue-600 dark:text-blue-400",
+						)}
+					/>
+					<span className="font-medium truncate">
 						{invocation.integration}/{invocation.action}
 					</span>
-					<Badge variant="outline" className={cn("text-xs h-5", riskColors[invocation.riskLevel])}>
+					<Badge
+						variant="outline"
+						className={cn("text-xs h-5 shrink-0", riskColors[invocation.riskLevel])}
+					>
 						{invocation.riskLevel}
 					</Badge>
+				</div>
+
+				{/* Status */}
+				<div className="hidden sm:block w-24 shrink-0">
 					<Badge variant={config.variant} className="text-xs h-5">
 						{config.label}
 					</Badge>
 				</div>
 
+				{/* Session */}
 				{showSession && (
-					<button
-						type="button"
-						className="text-xs text-muted-foreground hover:text-foreground transition-colors truncate block mt-0.5"
-						onClick={onSessionClick}
-					>
-						{invocation.sessionTitle || `Session ${invocation.sessionId.slice(0, 8)}...`}
-					</button>
+					<div className="hidden md:block w-40 shrink-0">
+						<button
+							type="button"
+							className="text-xs text-muted-foreground hover:text-foreground transition-colors truncate block"
+							onClick={onSessionClick}
+						>
+							{invocation.sessionTitle || `Session ${invocation.sessionId.slice(0, 8)}...`}
+						</button>
+					</div>
 				)}
 
-				{formatParams(invocation.params) && (
-					<p className="text-xs text-muted-foreground truncate mt-0.5">
-						{formatParams(invocation.params)}
-					</p>
-				)}
-
-				{invocation.error && (
-					<p className="text-xs text-destructive truncate mt-0.5">{invocation.error}</p>
-				)}
-
-				{error && <p className="text-xs text-destructive mt-0.5">{error}</p>}
-
-				<div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+				{/* Time */}
+				<div className="hidden sm:block w-16 shrink-0 text-right">
 					{invocation.createdAt && (
 						<Tooltip>
 							<TooltipTrigger asChild>
-								<span>{relativeTime(invocation.createdAt)}</span>
+								<span className="text-xs text-muted-foreground">
+									{relativeTime(invocation.createdAt)}
+								</span>
 							</TooltipTrigger>
 							<TooltipContent>{new Date(invocation.createdAt).toLocaleString()}</TooltipContent>
 						</Tooltip>
 					)}
-					{invocation.durationMs != null && <span>{invocation.durationMs}ms</span>}
-					{isPending && invocation.expiresAt && <CountdownTimer expiresAt={invocation.expiresAt} />}
 				</div>
 
-				{/* Inline grant config form */}
-				{showGrantConfig && (
-					<div className="mt-2 p-2 border rounded-md bg-muted/30 space-y-2">
-						<div className="flex items-center gap-2">
-							<Label className="text-xs w-14 shrink-0">Scope</Label>
-							<Select
-								value={grantScope}
-								onValueChange={(v) => setGrantScope(v as "session" | "org")}
-							>
-								<SelectTrigger className="h-7 text-xs">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="session">This session</SelectItem>
-									<SelectItem value="org">All sessions</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-						<div className="flex items-center gap-2">
-							<Label className="text-xs w-14 shrink-0">Uses</Label>
-							<Input
-								type="number"
-								className="h-7 text-xs w-20"
-								value={grantMaxCalls}
-								onChange={(e) => setGrantMaxCalls(e.target.value)}
-								min={1}
-							/>
-							<span className="text-xs text-muted-foreground">blank = unlimited</span>
-						</div>
-						<div className="flex items-center gap-1.5 justify-end">
+				{/* Approve / Deny */}
+				{isPending && canApprove ? (
+					<div className="flex items-center gap-1.5 shrink-0 w-36 justify-end">
+						<Button
+							size="sm"
+							variant="outline"
+							className="h-7 px-2"
+							disabled={loading !== null}
+							onClick={() => handleAction("deny")}
+						>
+							{loading === "deny" ? (
+								<Loader2 className="h-3 w-3 animate-spin" />
+							) : (
+								<X className="h-3 w-3" />
+							)}
+							<span className="ml-1">Deny</span>
+						</Button>
+						<div className="flex items-center">
 							<Button
 								size="sm"
-								variant="outline"
-								className="h-6 text-xs"
-								onClick={() => setShowGrantConfig(false)}
-							>
-								Cancel
-							</Button>
-							<Button
-								size="sm"
-								className="h-6 text-xs"
-								onClick={handleApproveWithGrant}
+								className="h-7 px-2 rounded-r-none"
 								disabled={loading !== null}
+								onClick={() => handleAction("approve")}
 							>
-								{loading === "approve" && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
-								Grant & Approve
+								{loading === "approve" ? (
+									<Loader2 className="h-3 w-3 animate-spin" />
+								) : (
+									<Check className="h-3 w-3" />
+								)}
+								<span className="ml-1">Approve</span>
 							</Button>
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<Button
+										size="sm"
+										className="h-7 px-1 rounded-l-none border-l border-primary-foreground/20"
+										disabled={loading !== null}
+									>
+										<ChevronDown className="h-3 w-3" />
+									</Button>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="end">
+									<DropdownMenuItem onClick={() => handleAction("approve")}>
+										Approve once
+									</DropdownMenuItem>
+									<DropdownMenuItem onClick={() => setShowGrantConfig(true)}>
+										Approve with grant...
+									</DropdownMenuItem>
+								</DropdownMenuContent>
+							</DropdownMenu>
 						</div>
 					</div>
+				) : (
+					<div className="w-36 shrink-0" />
 				)}
 			</div>
 
-			{isPending && canApprove && (
-				<div className="flex items-center gap-1.5 shrink-0">
-					<Button
-						size="sm"
-						variant="outline"
-						className="h-7 px-2"
-						disabled={loading !== null}
-						onClick={() => handleAction("deny")}
-					>
-						{loading === "deny" ? (
-							<Loader2 className="h-3 w-3 animate-spin" />
-						) : (
-							<X className="h-3 w-3" />
-						)}
-						<span className="ml-1">Deny</span>
-					</Button>
-					<div className="flex items-center">
-						<Button
-							size="sm"
-							className="h-7 px-2 rounded-r-none"
-							disabled={loading !== null}
-							onClick={() => handleAction("approve")}
-						>
-							{loading === "approve" ? (
-								<Loader2 className="h-3 w-3 animate-spin" />
-							) : (
-								<Check className="h-3 w-3" />
-							)}
-							<span className="ml-1">Approve</span>
-						</Button>
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
+			{/* Expandable details row */}
+			{(error || (isPending && invocation.expiresAt) || showGrantConfig) && (
+				<div className="px-4 pb-2.5 pl-10">
+					{error && <p className="text-xs text-destructive">{error}</p>}
+
+					{isPending && invocation.expiresAt && (
+						<span className="text-xs text-muted-foreground">
+							Expires in <CountdownTimer expiresAt={invocation.expiresAt} />
+						</span>
+					)}
+
+					{showGrantConfig && (
+						<div className="mt-1 p-2 border rounded-md bg-muted/30 space-y-2 max-w-sm">
+							<div className="flex items-center gap-2">
+								<Label className="text-xs w-14 shrink-0">Scope</Label>
+								<Select
+									value={grantScope}
+									onValueChange={(v) => setGrantScope(v as "session" | "org")}
+								>
+									<SelectTrigger className="h-7 text-xs">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="session">This session</SelectItem>
+										<SelectItem value="org">All sessions</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+							<div className="flex items-center gap-2">
+								<Label className="text-xs w-14 shrink-0">Uses</Label>
+								<Input
+									type="number"
+									className="h-7 text-xs w-20"
+									value={grantMaxCalls}
+									onChange={(e) => setGrantMaxCalls(e.target.value)}
+									min={1}
+								/>
+								<span className="text-xs text-muted-foreground">blank = unlimited</span>
+							</div>
+							<div className="flex items-center gap-1.5 justify-end">
 								<Button
 									size="sm"
-									className="h-7 px-1 rounded-l-none border-l border-primary-foreground/20"
+									variant="outline"
+									className="h-6 text-xs"
+									onClick={() => setShowGrantConfig(false)}
+								>
+									Cancel
+								</Button>
+								<Button
+									size="sm"
+									className="h-6 text-xs"
+									onClick={handleApproveWithGrant}
 									disabled={loading !== null}
 								>
-									<ChevronDown className="h-3 w-3" />
+									{loading === "approve" && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+									Grant & Approve
 								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end">
-								<DropdownMenuItem onClick={() => handleAction("approve")}>
-									Approve once
-								</DropdownMenuItem>
-								<DropdownMenuItem onClick={() => setShowGrantConfig(true)}>
-									Approve with grant...
-								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
-					</div>
+							</div>
+						</div>
+					)}
 				</div>
 			)}
 		</div>

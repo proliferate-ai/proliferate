@@ -6,6 +6,7 @@
 
 import type { OnboardingRepo, OnboardingStatus } from "@proliferate/shared";
 import { toIsoString } from "../db/serialize";
+import * as orgsDb from "../orgs/db";
 import { requestRepoSnapshotBuild } from "../repos";
 import type { OnboardingMeta } from "../types/onboarding";
 import * as onboardingDb from "./db";
@@ -30,18 +31,23 @@ export async function getOnboardingStatus(
 	if (!orgId) {
 		return {
 			hasOrg: false,
+			onboardingComplete: false,
 			hasSlackConnection: false,
 			hasGitHubConnection: false,
 			repos: [],
 		};
 	}
 
-	const [hasSlackConnection, hasGitHubConnection, reposWithStatus, meta] = await Promise.all([
-		onboardingDb.hasSlackConnection(orgId),
-		onboardingDb.hasGitHubConnection(orgId, nangoGithubIntegrationId),
-		onboardingDb.getReposWithPrebuildStatus(orgId),
-		onboardingDb.getOnboardingMeta(orgId),
-	]);
+	const [hasSlackConnection, hasGitHubConnection, reposWithStatus, meta, billingInfo] =
+		await Promise.all([
+			onboardingDb.hasSlackConnection(orgId),
+			onboardingDb.hasGitHubConnection(orgId, nangoGithubIntegrationId),
+			onboardingDb.getReposWithPrebuildStatus(orgId),
+			onboardingDb.getOnboardingMeta(orgId),
+			orgsDb.findBillingInfo(orgId),
+		]);
+
+	const onboardingComplete = billingInfo?.onboardingComplete ?? false;
 
 	// Helper to check if a prebuild_repo entry has a usable prebuild (has snapshot)
 	const hasUsablePrebuild = (pr: {
@@ -64,6 +70,7 @@ export async function getOnboardingStatus(
 
 	return {
 		hasOrg: true,
+		onboardingComplete,
 		hasSlackConnection,
 		hasGitHubConnection,
 		repos,

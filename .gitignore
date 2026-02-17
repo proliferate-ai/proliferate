@@ -7,6 +7,9 @@
 node_modules/
 .pnpm-store/
 
+# Inspiration
+inspiration/
+
 # Build outputs
 dist/
 build/
@@ -70,6 +73,7 @@ Notes.md
 # External repos
 open-source-examples/
 engineering-blog-examples/
+.emdash-analysis/
 
 # Private planning documents
 private-planning/

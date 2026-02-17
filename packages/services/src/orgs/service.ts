@@ -190,6 +190,22 @@ export async function markOnboardingComplete(
 }
 
 /**
+ * Mark onboarding complete for ALL organizations a user belongs to.
+ * Prevents users from getting stuck in onboarding when their session
+ * switches to a different org (e.g. personal workspace).
+ */
+export async function markAllUserOrgsOnboardingComplete(userId: string): Promise<void> {
+	await orgsDb.markAllUserOrgsOnboardingComplete(userId);
+}
+
+/**
+ * Check if a user has ANY org with onboarding complete.
+ */
+export async function hasAnyOrgCompletedOnboarding(userId: string): Promise<boolean> {
+	return orgsDb.hasAnyOrgCompletedOnboarding(userId);
+}
+
+/**
  * List all members of an organization.
  * Returns null if user is not a member.
  */

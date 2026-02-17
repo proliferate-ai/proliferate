@@ -1,13 +1,29 @@
 "use client";
 
 import { SettingsModal } from "@/components/dashboard/settings-modal";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRepo } from "@/hooks/use-repos";
 import { useSessionData, useSnapshotSession } from "@/hooks/use-sessions";
 import { useSession as useBetterAuthSession } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { Loader2 } from "lucide-react";
+import {
+	ArrowLeft,
+	Code,
+	GitBranch,
+	Globe,
+	Loader2,
+	MoreHorizontal,
+	Pin,
+	Settings,
+	SquareTerminal,
+	Zap,
+} from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { SessionPanelProps } from "./right-panel";
@@ -17,6 +33,15 @@ import { SessionLoadingShell } from "./session-loading-shell";
 import { Thread } from "./thread";
 import { SessionContext } from "./tool-ui";
 import { useCodingSessionRuntime } from "./use-coding-session-runtime";
+
+const PANEL_TABS = [
+	{ type: "url" as const, label: "Preview", icon: Globe },
+	{ type: "vscode" as const, label: "Code", icon: Code },
+	{ type: "terminal" as const, label: "Terminal", icon: SquareTerminal },
+	{ type: "git" as const, label: "Git", icon: GitBranch },
+	{ type: "artifacts" as const, label: "Artifacts", icon: Zap },
+	{ type: "settings" as const, label: "Settings", icon: Settings },
+];
 
 interface CodingSessionProps {
 	sessionId: string;
@@ -96,17 +121,26 @@ export function CodingSession({
 		}
 	};
 
-	const { mode, toggleUrlPreview, togglePanel, mobileView, toggleMobileView } =
-		usePreviewPanelStore();
-	const isPanelOpen = mode.type !== "none";
+	const {
+		mode,
+		mobileView,
+		toggleMobileView,
+		togglePanel,
+		toggleUrlPreview,
+		pinnedTabs,
+		pinTab,
+		unpinTab,
+	} = usePreviewPanelStore();
 	const [secretsModalOpen, setSecretsModalOpen] = useState(false);
+	const [viewPickerOpen, setViewPickerOpen] = useState(false);
+	const activeType = mode.type === "file" || mode.type === "gallery" ? "artifacts" : mode.type;
 
 	// Combine all loading states
 	const isLoading =
 		authLoading || sessionLoading || status === "loading" || status === "connecting";
 	const isSessionCreating = sessionData?.status === "starting" && !sessionData?.sandboxId;
 
-	// Session props for the right panel (session-info & snapshots modes)
+	// Session props for the right panel
 	const sessionPanelProps: SessionPanelProps | undefined = sessionData
 		? {
 				sessionId,
@@ -142,7 +176,8 @@ export function CodingSession({
 	const displayTitle = sessionTitle || sessionData?.title || title;
 	const headerDisabled = isLoading || !authSession || !sessionData || status === "error";
 
-	const innerContent = isLoading ? (
+	// Left pane content (chat or loading/error states)
+	const leftPaneContent = isLoading ? (
 		sessionData ? (
 			<SessionLoadingShell
 				mode={isSessionCreating ? "creating" : "resuming"}
@@ -171,96 +206,180 @@ export function CodingSession({
 			<p className="text-sm text-destructive">{error || "Connection error"}</p>
 		</div>
 	) : (
-		<AssistantRuntimeProvider runtime={runtime}>
-			<div className="relative flex h-full">
-				{/* Chat area */}
-				<div
-					className={
-						isPanelOpen
-							? `relative hidden md:block md:w-1/2 ${mobileView === "chat" ? "!block w-full" : ""}`
-							: "relative w-full"
-					}
-				>
-					<SessionContext.Provider value={{ sessionId, repoId: sessionData.repoId ?? undefined }}>
-						<Thread
-							title={title}
-							description={description}
-							sessionId={sessionId}
-							token={wsToken}
-							pendingApprovals={pendingApprovals}
-						/>
-					</SessionContext.Provider>
-				</div>
+		<SessionContext.Provider value={{ sessionId, repoId: sessionData.repoId ?? undefined }}>
+			<Thread
+				title={title}
+				description={description}
+				sessionId={sessionId}
+				token={wsToken}
+				pendingApprovals={pendingApprovals}
+			/>
+		</SessionContext.Provider>
+	);
 
-				{/* Right panel — buttons above + rounded card */}
-				{isPanelOpen && (
-					<div
-						className={`hidden md:flex md:flex-col md:w-1/2 p-2 gap-1 ${mobileView === "preview" ? "!flex w-full" : ""}`}
+	const isReady = !isLoading && !!authSession && !!sessionData && status !== "error";
+
+	const panelViewPicker = (
+		<div className="hidden md:flex items-center gap-0.5">
+			{pinnedTabs.map((tabType) => {
+				const tab = PANEL_TABS.find((t) => t.type === tabType);
+				if (!tab) return null;
+				const isActive = activeType === tabType;
+				return (
+					<Button
+						key={tabType}
+						variant={isActive ? "secondary" : "ghost"}
+						size="sm"
+						className={cn(
+							"h-7 gap-1.5 text-xs font-medium px-2.5",
+							!isActive && "text-muted-foreground hover:text-foreground",
+						)}
+						onClick={() => {
+							if (tab.type === "url") toggleUrlPreview(previewUrl || null);
+							else togglePanel(tab.type);
+						}}
 					>
-						<div className="flex justify-start shrink-0 px-1">
-							<SessionHeader
-								error={error}
-								panelMode={mode}
-								onTogglePreview={() => toggleUrlPreview(previewUrl)}
-								onToggleSettings={() => togglePanel("settings")}
-								onToggleGit={() => togglePanel("git")}
-								onToggleTerminal={() => togglePanel("terminal")}
-								onToggleVscode={() => togglePanel("vscode")}
-								onToggleArtifacts={() => togglePanel("artifacts")}
-								mobileView={mobileView}
-								onToggleMobileView={toggleMobileView}
-							/>
-						</div>
-						<div className="flex-1 min-h-0 rounded-xl border bg-background overflow-hidden">
-							<RightPanel
-								isMobileFullScreen={mobileView === "preview"}
-								sessionProps={sessionPanelProps}
-							/>
-						</div>
-					</div>
+						<tab.icon className="h-3.5 w-3.5" />
+						<span className="hidden lg:inline">{tab.label}</span>
+					</Button>
+				);
+			})}
+			<Popover open={viewPickerOpen} onOpenChange={setViewPickerOpen}>
+				<PopoverTrigger asChild>
+					<Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
+						<MoreHorizontal className="h-3.5 w-3.5" />
+					</Button>
+				</PopoverTrigger>
+				<PopoverContent align="start" sideOffset={8} className="w-48 p-1">
+					{PANEL_TABS.map(({ type, label, icon: Icon }) => {
+						const isActive = activeType === type;
+						const isPinned = pinnedTabs.includes(type);
+						return (
+							<div key={type} className="flex items-center gap-0.5">
+								<Button
+									variant="ghost"
+									size="sm"
+									className={cn(
+										"flex-1 justify-start gap-2 h-8 text-sm font-normal px-2.5",
+										isActive && "bg-secondary text-secondary-foreground",
+									)}
+									onClick={() => {
+										if (type === "url") toggleUrlPreview(previewUrl || null);
+										else togglePanel(type);
+										setViewPickerOpen(false);
+									}}
+								>
+									<Icon className="h-4 w-4 shrink-0" />
+									{label}
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon"
+									className={cn(
+										"h-7 w-7 shrink-0",
+										isPinned ? "text-foreground" : "text-muted-foreground/50 hover:text-foreground",
+									)}
+									onClick={(e) => {
+										e.stopPropagation();
+										if (isPinned) unpinTab(type);
+										else pinTab(type);
+									}}
+								>
+									<Pin className={cn("h-3 w-3", isPinned && "fill-current")} />
+								</Button>
+							</div>
+						);
+					})}
+				</PopoverContent>
+			</Popover>
+		</div>
+	);
+
+	const mainContent = (
+		<div className="flex h-full">
+			{/* Chat area */}
+			<div
+				className={cn(
+					"flex flex-col",
+					mobileView === "preview" ? "hidden md:flex" : "flex",
+					"md:flex-[35] md:min-w-0",
 				)}
+			>
+				{leftPaneContent}
 			</div>
 
-			<SettingsModal
-				open={secretsModalOpen}
-				onOpenChange={setSecretsModalOpen}
-				defaultTab="secrets"
-			/>
-		</AssistantRuntimeProvider>
+			{/* Right panel — always visible */}
+			<div
+				className={cn(
+					"hidden md:flex md:flex-col md:flex-[65] md:min-w-0 p-2 gap-1",
+					mobileView === "preview" && "!flex w-full",
+				)}
+			>
+				<div className="flex-1 min-h-0 rounded-xl border border-border bg-background overflow-hidden">
+					<RightPanel
+						isMobileFullScreen={mobileView === "preview"}
+						sessionProps={sessionPanelProps}
+						previewUrl={previewUrl}
+					/>
+				</div>
+			</div>
+		</div>
 	);
 
 	const content = (
-		<div className="relative flex h-full flex-col">
-			{/* Always-visible floating title — top left */}
-			{displayTitle && (
-				<div className="absolute top-2 left-3 z-10">
-					<span className="text-sm font-medium text-foreground truncate max-w-[200px] block">
-						{displayTitle}
-					</span>
+		<div className="flex h-full flex-col">
+			<TooltipProvider delayDuration={150}>
+				{/* Header — same 35/65 split so panel tabs align with right panel */}
+				<div className="shrink-0 flex h-12 border-b border-border/50">
+					{/* Left header (above chat) */}
+					<div className="flex items-center gap-2 min-w-0 px-3 md:flex-[35]">
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<Link href="/dashboard">
+									<Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+										<ArrowLeft className="h-4 w-4" />
+									</Button>
+								</Link>
+							</TooltipTrigger>
+							<TooltipContent side="bottom">Back to dashboard</TooltipContent>
+						</Tooltip>
+						<div className="h-5 w-px bg-border/60 shrink-0" />
+						<img
+							src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp"
+							alt="Proliferate"
+							className="h-5 w-5 rounded-full shrink-0"
+						/>
+						{displayTitle && (
+							<span className="text-sm font-medium text-foreground truncate">{displayTitle}</span>
+						)}
+						<SessionHeader
+							error={headerDisabled ? null : error}
+							disabled={headerDisabled}
+							mobileView={mobileView}
+							onToggleMobileView={toggleMobileView}
+							panelMode={mode}
+						/>
+					</div>
+					{/* Right header (above right panel) — panel tabs at left edge */}
+					<div className="hidden md:flex md:flex-[65] items-center px-3">{panelViewPicker}</div>
 				</div>
-			)}
+			</TooltipProvider>
 
-			{/* Always-visible floating buttons — top right (only when panel is closed) */}
-			{!isPanelOpen && (
-				<div className="absolute top-2 right-3 z-10">
-					<SessionHeader
-						error={headerDisabled ? null : error}
-						disabled={headerDisabled}
-						panelMode={mode}
-						onTogglePreview={() => toggleUrlPreview(previewUrl)}
-						onToggleSettings={() => togglePanel("settings")}
-						onToggleGit={() => togglePanel("git")}
-						onToggleTerminal={() => togglePanel("terminal")}
-						onToggleVscode={() => togglePanel("vscode")}
-						onToggleArtifacts={() => togglePanel("artifacts")}
-						mobileView={mobileView}
-						onToggleMobileView={toggleMobileView}
-					/>
-				</div>
-			)}
-
-			{/* Main content (loading shell or runtime) */}
-			<div className="flex-1 min-h-0">{innerContent}</div>
+			{/* Main content — two-pane layout always rendered */}
+			<div className="flex-1 min-h-0">
+				{isReady ? (
+					<AssistantRuntimeProvider runtime={runtime}>
+						{mainContent}
+						<SettingsModal
+							open={secretsModalOpen}
+							onOpenChange={setSecretsModalOpen}
+							defaultTab="secrets"
+						/>
+					</AssistantRuntimeProvider>
+				) : (
+					mainContent
+				)}
+			</div>
 		</div>
 	);
 

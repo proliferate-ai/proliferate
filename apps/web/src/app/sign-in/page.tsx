@@ -2,11 +2,11 @@
 
 export const dynamic = "force-dynamic";
 
+import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff, GithubIcon, GoogleIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Text } from "@/components/ui/text";
 import { useAuthProviders } from "@/hooks/use-auth-providers";
 import { signIn, useSession } from "@/lib/auth-client";
 import Link from "next/link";
@@ -86,9 +86,9 @@ function SignInContent() {
 
 	if (isPending) {
 		return (
-			<div className="flex min-h-screen items-center justify-center bg-background dark:bg-neutral-950">
-				<div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
-			</div>
+			<AuthLayout>
+				<div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-700 border-t-neutral-300" />
+			</AuthLayout>
 		);
 	}
 
@@ -97,51 +97,53 @@ function SignInContent() {
 	}
 
 	return (
-		<div className="flex min-h-screen items-center justify-center bg-background dark:bg-neutral-950 p-6">
-			<div className="w-full max-w-[360px]">
-				<div className="mb-7 text-center">
-					<Text variant="h3">Welcome back</Text>
+		<AuthLayout>
+			<div className="w-full max-w-[380px]">
+				<div className="mb-8 text-center">
+					<h1 className="text-xl font-semibold tracking-tight text-neutral-50">Welcome back</h1>
+					<p className="mt-1.5 text-sm text-neutral-500">Sign in to your account to continue</p>
 				</div>
 
 				{hasAnySocialOAuth && (
 					<>
-						<div className="space-y-2">
+						<div className="flex items-center gap-3">
 							{hasGoogleOAuth && (
 								<Button
 									variant="outline"
-									className="relative h-11 w-full justify-center gap-2.5 rounded-lg text-sm font-medium"
+									className="h-10 flex-1 gap-2.5 rounded-lg border-neutral-800 bg-neutral-900/50 text-sm font-medium text-neutral-300 hover:bg-neutral-800/80 hover:text-neutral-100"
 									onClick={handleGoogleSignIn}
 									disabled={googleLoading || githubLoading || formLoading}
 									type="button"
 								>
-									<GoogleIcon className="absolute left-4 h-5 w-5" />
-									{googleLoading ? "Signing in..." : "Sign in with Google"}
+									<GoogleIcon className="h-4 w-4" />
+									{googleLoading ? "..." : "Google"}
 								</Button>
 							)}
 							{hasGitHubOAuth && (
 								<Button
 									variant="outline"
-									className="relative h-11 w-full justify-center gap-2.5 rounded-lg text-sm font-medium"
+									className="h-10 flex-1 gap-2.5 rounded-lg border-neutral-800 bg-neutral-900/50 text-sm font-medium text-neutral-300 hover:bg-neutral-800/80 hover:text-neutral-100"
 									onClick={handleGitHubSignIn}
 									disabled={githubLoading || googleLoading || formLoading}
 									type="button"
 								>
-									<GithubIcon className="absolute left-4 h-5 w-5" />
-									{githubLoading ? "Signing in..." : "Sign in with GitHub"}
+									<GithubIcon className="h-4 w-4" />
+									{githubLoading ? "..." : "GitHub"}
 								</Button>
 							)}
 						</div>
 
-						<div className="my-6 flex items-center">
-							<div className="h-px flex-1 bg-border" />
-							<div className="h-px flex-1 bg-border" />
+						<div className="my-6 flex items-center gap-3">
+							<div className="h-px flex-1 bg-neutral-800" />
+							<span className="text-xs text-neutral-600">or</span>
+							<div className="h-px flex-1 bg-neutral-800" />
 						</div>
 					</>
 				)}
 
-				<form onSubmit={handleEmailSignIn} className="space-y-0">
-					<div className="space-y-1">
-						<Label htmlFor="email" className="text-sm font-medium">
+				<form onSubmit={handleEmailSignIn} className="space-y-4">
+					<div className="space-y-1.5">
+						<Label htmlFor="email" className="text-sm font-medium text-neutral-400">
 							Email
 						</Label>
 						<Input
@@ -149,23 +151,23 @@ function SignInContent() {
 							type="email"
 							value={email}
 							onChange={(e) => setEmail(e.target.value)}
-							placeholder=""
+							placeholder="you@company.com"
 							required
 							disabled={formLoading || googleLoading || githubLoading}
-							className="h-11 rounded-lg px-4 text-sm"
+							className="h-10 rounded-lg border-neutral-800 bg-neutral-900/50 px-3 text-sm text-neutral-100 placeholder:text-neutral-600 focus-visible:border-neutral-600 focus-visible:ring-0"
 						/>
 					</div>
 
-					<div className="relative space-y-1 pt-2.5">
+					<div className="space-y-1.5">
 						<div className="flex items-center justify-between">
-							<Label htmlFor="password" className="text-sm font-medium">
+							<Label htmlFor="password" className="text-sm font-medium text-neutral-400">
 								Password
 							</Label>
 							<Link
 								href="/auth/forgot-password"
-								className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+								className="text-xs text-neutral-500 transition-colors hover:text-neutral-300"
 							>
-								Forgot your password?
+								Forgot password?
 							</Link>
 						</div>
 						<div className="relative">
@@ -174,54 +176,46 @@ function SignInContent() {
 								type={showPassword ? "text" : "password"}
 								value={password}
 								onChange={(e) => setPassword(e.target.value)}
-								placeholder=""
 								required
 								disabled={formLoading || googleLoading || githubLoading}
-								className="h-11 rounded-lg px-4 pr-10 text-sm"
+								className="h-10 rounded-lg border-neutral-800 bg-neutral-900/50 px-3 pr-10 text-sm text-neutral-100 placeholder:text-neutral-600 focus-visible:border-neutral-600 focus-visible:ring-0"
 							/>
 							<Button
 								type="button"
 								variant="ghost"
 								size="icon"
 								onClick={() => setShowPassword(!showPassword)}
-								className="absolute inset-y-0 right-0 h-full px-4 text-muted-foreground hover:text-foreground"
+								className="absolute inset-y-0 right-0 h-full px-3 text-neutral-500 hover:bg-transparent hover:text-neutral-300"
 							>
-								{showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+								{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
 							</Button>
 						</div>
 					</div>
 
-					<div className="pt-4">
-						<Button
-							type="submit"
-							variant="dark"
-							className="h-11 w-full rounded-lg"
-							disabled={formLoading || googleLoading || githubLoading}
-						>
-							{formLoading ? "Signing in..." : "Sign in"}
-						</Button>
-					</div>
+					<Button
+						type="submit"
+						className="h-10 w-full rounded-lg bg-neutral-100 text-sm font-medium text-neutral-950 hover:bg-white"
+						disabled={formLoading || googleLoading || githubLoading}
+					>
+						{formLoading ? "Signing in..." : "Sign in"}
+					</Button>
 				</form>
 
-				<Text
-					variant="small"
-					color="muted"
-					className="mt-4 flex items-center justify-center gap-1 text-sm"
-				>
-					Don&apos;t have an account?
+				<p className="mt-6 text-center text-sm text-neutral-500">
+					Don&apos;t have an account?{" "}
 					<Link
 						href={
 							redirectUrl !== "/dashboard"
 								? `/sign-up?redirect=${encodeURIComponent(redirectUrl)}`
 								: "/sign-up"
 						}
-						className="font-medium text-foreground underline hover:no-underline"
+						className="text-neutral-300 transition-colors hover:text-white"
 					>
 						Sign up
 					</Link>
-				</Text>
+				</p>
 			</div>
-		</div>
+		</AuthLayout>
 	);
 }
 
@@ -229,9 +223,9 @@ export default function SignInPage() {
 	return (
 		<Suspense
 			fallback={
-				<div className="flex min-h-screen items-center justify-center bg-background dark:bg-neutral-950">
-					<div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
-				</div>
+				<AuthLayout>
+					<div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-700 border-t-neutral-300" />
+				</AuthLayout>
 			}
 		>
 			<SignInContent />

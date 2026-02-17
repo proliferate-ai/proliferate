@@ -76,7 +76,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 
 	return (
 		<CommandDialog open={open} onOpenChange={onOpenChange}>
-			<CommandInput placeholder="Search sessions and automations..." />
+			<CommandInput autoFocus placeholder="Search sessions and automations..." />
 			<CommandList>
 				<CommandEmpty>No results found.</CommandEmpty>
 

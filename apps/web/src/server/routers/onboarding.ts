@@ -171,7 +171,9 @@ export const onboardingRouter = {
 
 	/**
 	 * Mark onboarding as complete for the organization.
-	 * Called after Stripe checkout completes.
+	 * Called when the user finishes the onboarding flow.
+	 * Also marks all other orgs the user belongs to (e.g. personal workspace)
+	 * so they don't get stuck in onboarding if the active org changes.
 	 */
 	markComplete: orgProcedure
 		.output(z.object({ success: z.boolean() }))
@@ -184,10 +186,20 @@ export const onboardingRouter = {
 					await orgs.initializeBillingState(context.orgId, "trial", TRIAL_CREDITS);
 				}
 			} catch (err) {
-				log.error({ err }, "Failed to mark complete");
+				log.error({ err, orgId: context.orgId }, "Failed to mark complete");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
 					message: "Failed to complete onboarding",
 				});
+			}
+
+			// Also mark all other orgs the user belongs to as onboarding-complete.
+			// This prevents the user from getting stuck in onboarding if their
+			// session switches back to a personal workspace or another org.
+			try {
+				await orgs.markAllUserOrgsOnboardingComplete(context.user.id);
+			} catch (err) {
+				// Non-critical — log and continue
+				log.warn({ err, userId: context.user.id }, "Failed to mark other orgs complete");
 			}
 
 			return { success: true };
@@ -198,7 +210,32 @@ export const onboardingRouter = {
 	 */
 	getStatus: protectedProcedure.output(OnboardingStatusSchema).handler(async ({ context }) => {
 		const orgId = context.session.activeOrganizationId;
+
+		if (!orgId) {
+			log.warn({ userId: context.user.id }, "No active organization for onboarding status check");
+		}
+
 		const status = await onboarding.getOnboardingStatus(orgId, NANGO_GITHUB_INTEGRATION_ID);
+
+		// If the active org hasn't completed onboarding, check if the user has
+		// ANY org that has completed. If so, mark the current org complete too
+		// to prevent onboarding loops when switching orgs.
+		if (orgId && !status.onboardingComplete) {
+			const hasCompleted = await orgs.hasAnyOrgCompletedOnboarding(context.user.id);
+			if (hasCompleted) {
+				log.info(
+					{ orgId, userId: context.user.id },
+					"Active org not onboarded but user has another completed org — auto-completing",
+				);
+				try {
+					await orgs.markOnboardingComplete(orgId, true);
+					status.onboardingComplete = true;
+				} catch (err) {
+					log.warn({ err, orgId }, "Failed to auto-complete onboarding for org");
+				}
+			}
+		}
+
 		return status;
 	}),
 

@@ -28,7 +28,7 @@ import { FolderGit } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function OnboardingCards() {
+export function OnboardingCards({ hideHeader }: { hideHeader?: boolean } = {}) {
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	const [repoSelectorOpen, setRepoSelectorOpen] = useState(false);
@@ -252,6 +252,11 @@ export function OnboardingCards() {
 
 	// Don't render if no cards to show
 	if (cards.length === 0) return null;
+
+	// When hideHeader is true, render bare cards (parent manages scrolling/layout)
+	if (hideHeader) {
+		return <>{cards}</>;
+	}
 
 	return (
 		<div className="mb-6" data-onboarding-cards>

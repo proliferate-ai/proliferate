@@ -22,6 +22,7 @@ export type OnboardingRepo = z.infer<typeof OnboardingRepoSchema>;
 
 export const OnboardingStatusSchema = z.object({
 	hasOrg: z.boolean(),
+	onboardingComplete: z.boolean(),
 	hasSlackConnection: z.boolean(),
 	hasGitHubConnection: z.boolean(),
 	repos: z.array(OnboardingRepoSchema),

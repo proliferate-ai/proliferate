@@ -9,8 +9,8 @@ module.exports = {
 	theme: {
 		extend: {
 			fontFamily: {
-				sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
-				mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
+				sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+				mono: ["ui-monospace", "monospace"],
 			},
 			fontSize: {
 				xs: ["12px", "16px"],
@@ -62,9 +62,12 @@ module.exports = {
 			},
 			boxShadow: {
 				subtle: "rgba(0, 0, 0, 0.04) 0px 1px 2px",
-				keystone: "rgba(0, 0, 0, 0.04) 0px 3px 3px, rgba(0, 0, 0, 0.05) 0px 1px 2px",
-				floating: "0 0 0 1px rgba(0,0,0,0.05), 0 8px 24px -4px rgba(0,0,0,0.1)",
-				"floating-dark": "0 0 0 1px rgba(255,255,255,0.1), 0 8px 24px -4px rgba(0,0,0,0.5)",
+				keystone:
+					"rgba(0, 0, 0, 0.04) 0px 3px 3px, rgba(0, 0, 0, 0.05) 0px 1px 2px",
+				floating:
+					"0 0 0 1px rgba(0,0,0,0.05), 0 8px 24px -4px rgba(0,0,0,0.1)",
+				"floating-dark":
+					"0 0 0 1px rgba(255,255,255,0.1), 0 8px 24px -4px rgba(0,0,0,0.5)",
 			},
 			borderRadius: {
 				xl: "calc(var(--radius) + 4px)",

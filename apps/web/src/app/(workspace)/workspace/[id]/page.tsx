@@ -65,7 +65,7 @@ export default function SessionDetailPage({
 	}
 
 	return (
-		<div className="h-full flex flex-col">
+		<div className="flex-1 min-h-0 flex flex-col">
 			{showAutomationBanner && (
 				<div className="flex items-center gap-2 px-4 py-2 bg-muted/60 border-b border-border text-sm text-muted-foreground shrink-0">
 					<Zap className="h-3.5 w-3.5" />
@@ -79,7 +79,7 @@ export default function SessionDetailPage({
 					</button>
 				</div>
 			)}
-			<div className="flex-1 min-h-0">
+			<div className="flex-1 min-h-0 flex flex-col">
 				<CodingSession
 					sessionId={id}
 					initialPrompt={pendingPrompt || undefined}
