@@ -125,7 +125,7 @@ export default function CommandCenterLayout({
 				<Button
 					variant="ghost"
 					size="icon"
-					className="h-9 w-9"
+					className="h-9 w-9 rounded-lg"
 					onClick={() => setCommandSearchOpen(true)}
 				>
 					<Search className="h-5 w-5" />
@@ -147,7 +147,7 @@ export default function CommandCenterLayout({
 							<Button
 								variant="ghost"
 								size="sm"
-								className="h-8 gap-1.5 text-muted-foreground"
+								className="h-8 gap-1.5 rounded-lg text-muted-foreground"
 								asChild
 							>
 								<Link href="https://docs.proliferate.com" target="_blank" rel="noopener noreferrer">
@@ -158,11 +158,11 @@ export default function CommandCenterLayout({
 							<Button
 								variant="ghost"
 								size="sm"
-								className="h-8 gap-1.5 text-muted-foreground"
+								className="h-8 gap-1.5 rounded-lg text-muted-foreground"
 								onClick={openIntercomMessenger}
 							>
 								<MessageSquare className="h-3.5 w-3.5" />
-								<span className="text-xs">Feedback</span>
+								<span className="text-xs">Help</span>
 							</Button>
 						</div>
 					</div>
