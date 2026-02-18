@@ -6,13 +6,14 @@
 - Trigger CRUD (create, update, delete, list, get)
 - Trigger events log and trigger event actions (audit trail)
 - Trigger service (`apps/trigger-service/` — dedicated Express app)
-- Webhook ingestion via Nango forwarding (trigger-service + web app API routes)
-- Direct webhook routes: GitHub App, custom, PostHog, automation-scoped (`apps/web/src/app/api/webhooks/`)
+- Async webhook inbox pattern (fast-ack + BullMQ worker for reliable ingestion)
+- Direct webhook routes: GitHub App installation lifecycle, Nango auth/sync (`apps/web/src/app/api/webhooks/`)
 - Webhook dispatch and matching (event → trigger → automation run)
-- Polling scheduler (cursor-based, Redis state, BullMQ repeatable jobs)
+- Integration-scoped polling via poll groups (`trigger_poll_groups` table — one job per group, not per trigger)
 - Cron scheduling via SCHEDULED queue (Partial — queue defined, worker not running)
 - Provider registry (`packages/triggers/src/service/registry.ts`)
 - Provider adapters: GitHub (webhook), Linear (webhook + polling), Sentry (webhook), PostHog (webhook, HMAC), Gmail (polling via Composio)
+- `NormalizedTriggerEvent` interface and `ProviderTriggers` contract (`packages/providers/src/types.ts`)
 - Schedule CRUD (get, update, delete)
 - PubSub session events subscriber
 - Handoff to automations (enqueue via outbox `enqueue_enrich`)
@@ -25,7 +26,11 @@
 
 ### Mental Model
 
-Triggers are the inbound event layer of Proliferate. External services (GitHub, Linear, Sentry, PostHog, Gmail) emit events that Proliferate ingests, filters, deduplicates, and converts into automation runs. There are three ingestion mechanisms: **webhooks** (provider pushes events — via Nango forwarding to trigger-service, or via direct Next.js API routes), **polling** (Proliferate pulls from provider APIs on a cron schedule), and **scheduled** (pure cron triggers with no external event source — queue defined but worker not yet running).
+Triggers are the inbound event layer of Proliferate. External services (GitHub, Linear, Sentry, PostHog, Gmail) emit events that Proliferate ingests, normalizes, filters, deduplicates, and converts into automation runs. There are three ingestion mechanisms: **webhooks** (provider pushes events — via Nango forwarding to trigger-service, or via direct Next.js API routes for installation lifecycle), **polling** (Proliferate pulls from provider APIs on a schedule), and **scheduled** (pure cron triggers with no external event source — queue defined but worker not yet running).
+
+Webhook ingestion uses the **async webhook inbox** pattern: Express routes do exactly three things — verify signatures, insert into `webhook_inbox`, and return `200 OK`. A BullMQ worker asynchronously drains the inbox, parsing payloads, matching triggers, and creating runs. This decoupling prevents upstream providers from timing out during bulk event storms.
+
+Polling uses **integration-scoped poll groups**: one BullMQ repeatable job per `(organization_id, provider, integration_id)` group, not per trigger. The worker calls the provider API once, then fans out events in-memory to all active triggers in the group. This turns an O(N) network fan-out into a single API call + O(N) in-memory matching.
 
 Every trigger belongs to exactly one automation. When an event passes filtering and deduplication, the trigger processor creates a `trigger_event` record and an `automation_run` record inside a single transaction, using the transactional outbox pattern to guarantee the run will be picked up by the worker.
 
@@ -33,34 +38,55 @@ Every trigger belongs to exactly one automation. When an event passes filtering 
 - **Trigger** — a configured event source bound to an automation and an integration. Types: `webhook` or `polling`.
 - **Trigger event** — an individual event occurrence, with lifecycle: `queued` → `processing` → `completed`/`failed`/`skipped`.
 - **Trigger event action** — audit log of tool executions within a trigger event.
+- **Webhook inbox** — raw webhook payloads stored for async processing. Lifecycle: `pending` → `processing` → `completed`/`failed`.
+- **Trigger poll group** — groups polling triggers by `(org, provider, integration)` for efficient batch polling.
 - **Schedule** — a cron expression attached to an automation for time-based runs.
-- **Provider adapter** — a `WebhookTrigger` or `PollingTrigger` subclass that knows how to parse, filter, and contextualize events from a specific external service.
+- **Provider adapter** — a `WebhookTrigger` or `PollingTrigger` subclass that knows how to parse, filter, and contextualize events from a specific external service. Being consolidated into the `ProviderTriggers` contract.
+- **NormalizedTriggerEvent** — provider-agnostic representation of an inbound event, defined in `packages/providers/src/types.ts`.
 
-**Key invariants:**
-- Each trigger belongs to exactly one automation (FK `automation_id`).
-- Deduplication is enforced via a unique index on `(trigger_id, dedup_key)` in `trigger_events`.
-- Polling state is stored in Redis (hot path) and backed up to PostgreSQL (`polling_state` column).
-- Webhook signature verification happens at the Nango adapter level for trigger-service, and at the route level for direct webhook routes.
-- Webhook ingestion exists in two places: trigger-service (`POST /webhooks/nango`) and web app API routes (`apps/web/src/app/api/webhooks/`). Both use the same `createRunFromTriggerEvent` handoff.
+**Core invariants:**
+1. **Async Webhook Inbox:** Express webhook routes must do exactly three things: verify signatures, extract routing identity, and `INSERT INTO webhook_inbox`. They must return `200 OK` instantly to prevent upstream rate-limit timeouts.
+2. **Integration-Scoped Polling:** Polling is scheduled per poll group (org + provider + integration), NOT per trigger. The worker fetches events once from the provider, then fans out in-memory to evaluate filters across all active triggers.
+3. **Pure Matching:** The `matches()` / `filter()` function declared by providers must be strictly pure (no DB calls, no network calls, no side effects).
+4. **Stateless Providers:** Providers never read PostgreSQL, write Redis, or schedule jobs. The framework owns all persistence and deduplication.
+5. Each trigger belongs to exactly one automation (FK `automation_id`).
+6. Deduplication is enforced via a unique index on `(trigger_id, dedup_key)` in `trigger_events`.
+7. Polling cursors are stored in `trigger_poll_groups.cursor` (PostgreSQL). Legacy per-trigger Redis cursor storage is being phased out.
+8. Webhook signature verification happens at the ingestion layer (Nango HMAC in the fast-ack route, provider-specific signatures in provider adapters).
 
 ---
 
 ## 2. Core Concepts
 
+### Async Webhook Inbox
+External webhooks are received by Express routes in the trigger service. Instead of processing synchronously (which risks timeouts during bulk event storms), the routes verify the signature, store the raw payload in the `webhook_inbox` table, and return `200 OK` immediately. A BullMQ worker (`apps/trigger-service/src/webhook-inbox/worker.ts`) drains the inbox every 5 seconds, parsing payloads, resolving integrations, running trigger matching, and creating automation runs.
+- Key detail agents get wrong: the webhook route does NOT parse events, run matching, or create runs. All of that happens asynchronously in the inbox worker.
+- Reference: `apps/trigger-service/src/api/webhooks.ts`, `apps/trigger-service/src/webhook-inbox/worker.ts`
+
 ### Nango Forwarding
-External webhooks from GitHub, Linear, and Sentry are received by Nango, which forwards them to the trigger service as a unified envelope with type `"forward"`. The envelope includes `connectionId`, `providerConfigKey`, and `payload`.
+External webhooks from GitHub, Linear, and Sentry are received by Nango, which forwards them to the trigger service as a unified envelope with type `"forward"`. The envelope includes `connectionId`, `providerConfigKey`, and `payload`. The fast-ack route verifies the Nango HMAC signature, extracts the provider and connectionId, and stores the raw payload in the webhook inbox.
 - Key detail agents get wrong: the trigger service receives Nango's envelope, not raw provider payloads. The `parseNangoForwardWebhook` function extracts the inner payload.
-- Reference: `packages/triggers/src/service/adapters/nango.ts`
+- Reference: `packages/triggers/src/service/adapters/nango.ts`, `apps/trigger-service/src/lib/webhook-dispatcher.ts`
 
 ### Provider Registry (Service Layer)
-The trigger service uses a class-based registry (`TriggerRegistry`) with separate maps for webhook and polling triggers. Providers register via `registerDefaultTriggers()` at startup. This is distinct from the older functional `TriggerProvider` interface in `packages/triggers/src/types.ts` (which is still used for context parsing and filtering).
-- Key detail agents get wrong: there are two abstraction layers — the service-layer `WebhookTrigger`/`PollingTrigger` classes (used by trigger-service) and the `TriggerProvider` interface (used for parsing/filtering logic). The Nango adapter classes delegate to the `TriggerProvider` implementations.
-- Reference: `packages/triggers/src/service/registry.ts`, `packages/triggers/src/service/base.ts`
+The trigger service uses a class-based registry (`TriggerRegistry`) with separate maps for webhook and polling triggers. Providers register via `registerDefaultTriggers()` at startup. This registry is used by the webhook inbox worker and polling worker to resolve trigger definitions. The `ProviderTriggers` contract in `packages/providers/src/types.ts` defines the target interface that all integration modules will implement.
+- Key detail agents get wrong: two abstraction layers currently coexist — the service-layer `WebhookTrigger`/`PollingTrigger` classes (used by trigger-service) and the `ProviderTriggers` interface (target architecture). Migration to the consolidated `ProviderTriggers` interface is in progress.
+- Reference: `packages/triggers/src/service/registry.ts`, `packages/providers/src/types.ts`
 
-### Cursor-Based Polling
-Polling triggers store a cursor in Redis (`poll:{triggerId}`) and persist it to PostgreSQL. Each poll cycle reads the cursor, calls the provider's `poll()` method, stores the new cursor, and processes any returned events through the standard trigger processor pipeline.
-- Key detail agents get wrong: the cursor is a provider-specific opaque string (e.g., Linear GraphQL pagination cursor, Gmail history ID). It is NOT a timestamp.
-- Reference: `apps/trigger-service/src/polling/worker.ts`
+### The `ProviderTriggers` Contract
+The `ProviderTriggers` interface in `packages/providers/src/types.ts` defines the target trigger contract for integration modules. Key types:
+- **`NormalizedTriggerEvent`** — provider-agnostic event representation with `provider`, `eventType`, `providerEventType`, `occurredAt`, `dedupKey`, `title`, `context`, and optional `url`, `externalId`, `raw`.
+- **`WebhookRequest`** — normalized HTTP request with mandatory `rawBody: Buffer` for HMAC verification.
+- **`WebhookParseInput`** — input to the provider's `parse()` method (json, headers, providerEventType, receivedAt).
+- **`WebhookVerificationResult`** — verification result with routing `identity` (org/integration/trigger) and optional `immediateResponse` for challenge protocols.
+- **`TriggerType<TConfig>`** — typed trigger definition with pure `matches()` function and Zod `configSchema`.
+- Key detail agents get wrong: `matches()` must be pure — no DB calls, no network, no side effects. The framework owns all persistence.
+- Reference: `packages/providers/src/types.ts`
+
+### Integration-Scoped Polling (Poll Groups)
+Instead of scheduling one BullMQ job per polling trigger (which causes N API calls for N triggers against the same provider), polling is grouped by `(organization_id, provider, integration_id)` in the `trigger_poll_groups` table. One repeatable BullMQ job runs per group. The worker acquires a Redis lock, calls the provider's `poll()` method once, then fans out events in-memory to all active triggers in the group.
+- Key detail agents get wrong: the cursor lives on the poll group row, not on individual triggers. All triggers in a group share a single cursor and a single API call.
+- Reference: `apps/trigger-service/src/polling/worker.ts`, `packages/services/src/poll-groups/db.ts`
 
 ### Transactional Outbox Handoff
 When a trigger event passes all checks, `createRunFromTriggerEvent` inserts both the `trigger_event` and `automation_run` rows in a single transaction, plus an outbox entry with kind `enqueue_enrich`. The outbox dispatcher (owned by `automations-runs.md`) picks this up.
@@ -73,17 +99,37 @@ When a trigger event passes all checks, `createRunFromTriggerEvent` inserts both
 
 ```
 apps/trigger-service/src/
-├── index.ts                          # Entry point: registers triggers, starts server + polling worker
+├── index.ts                          # Entry point: registers triggers, starts server + workers
 ├── server.ts                         # Express app setup (health, providers, webhooks routes)
 ├── api/
-│   ├── webhooks.ts                   # POST /webhooks/nango — webhook ingestion route
+│   ├── webhooks.ts                   # Fast-Ack ingestion (POST /webhooks/nango, /webhooks/direct/:providerId)
 │   └── providers.ts                  # GET /providers — provider metadata for UI
 ├── lib/
 │   ├── logger.ts                     # Service logger
-│   ├── webhook-dispatcher.ts         # Dispatches Nango webhooks to matching triggers
+│   ├── webhook-dispatcher.ts         # Dispatches Nango webhooks, extracts routing info
 │   └── trigger-processor.ts          # Processes events: filter, dedup, create run
+├── webhook-inbox/
+│   └── worker.ts                     # BullMQ worker: drains webhook_inbox rows (parse, match, handoff)
+├── gc/
+│   └── inbox-gc.ts                   # BullMQ worker: garbage collects old inbox rows (hourly, 7-day retention)
 └── polling/
-    └── worker.ts                     # BullMQ polling worker (cursor-based)
+    └── worker.ts                     # BullMQ worker: poll per group, fan-out in memory
+
+packages/providers/src/
+├── index.ts                          # Package exports
+├── types.ts                          # IntegrationProvider, NormalizedTriggerEvent, ProviderTriggers, WebhookRequest, etc.
+├── action-source.ts                  # Action source types
+├── helpers/
+│   ├── schema.ts                     # Schema helpers
+│   └── truncation.ts                 # Truncation helpers
+└── providers/
+    ├── registry.ts                   # ProviderActionRegistry (action modules — Linear, Sentry, Slack)
+    ├── linear/
+    │   └── actions.ts                # Linear action implementations
+    ├── sentry/
+    │   └── actions.ts                # Sentry action implementations
+    └── slack/
+        └── actions.ts                # Slack action implementations
 
 packages/triggers/src/
 ├── index.ts                          # Package exports + provider map
@@ -106,10 +152,18 @@ packages/triggers/src/
 
 packages/services/src/triggers/
 ├── index.ts                          # Module exports
-├── service.ts                        # Business logic (CRUD, event management, polling jobs)
+├── service.ts                        # Business logic (CRUD, event management, poll group scheduling)
 ├── db.ts                             # Drizzle queries
 ├── mapper.ts                         # DB row → API type mapping
 └── processor.ts                      # Shared trigger event processor (filter/dedup/handoff)
+
+packages/services/src/webhook-inbox/
+├── index.ts                          # Module exports
+└── db.ts                             # Webhook inbox Drizzle queries (insert, claim, mark, gc)
+
+packages/services/src/poll-groups/
+├── index.ts                          # Module exports
+└── db.ts                             # Poll groups Drizzle queries (find/create, list, cursor, orphan cleanup)
 
 packages/services/src/schedules/
 ├── index.ts                          # Module exports
@@ -118,8 +172,8 @@ packages/services/src/schedules/
 └── mapper.ts                         # DB row → API type mapping
 
 packages/db/src/schema/
-├── triggers.ts                       # triggers, trigger_events, trigger_event_actions tables
-└── schedules.ts                      # schedules table
+├── schema.ts                         # triggers, trigger_events, trigger_event_actions, webhook_inbox, trigger_poll_groups tables
+└── (schedules defined in schema.ts)  # schedules table
 
 packages/services/src/types/
 ├── triggers.ts                       # Re-exported trigger DB types
@@ -130,11 +184,8 @@ apps/web/src/server/routers/
 └── schedules.ts                      # Schedule CRUD oRPC routes
 
 apps/web/src/app/api/webhooks/
-├── nango/route.ts                    # Nango webhook handler (auth, sync, forward)
-├── github-app/route.ts               # GitHub App direct webhooks (installation lifecycle + events)
-├── custom/[triggerId]/route.ts       # Custom webhook by trigger ID (any payload, optional HMAC)
-├── posthog/[automationId]/route.ts   # PostHog webhook by automation ID
-└── automation/[automationId]/route.ts # Generic automation webhook by automation ID
+├── nango/route.ts                    # Nango webhook handler (auth + sync lifecycle only; forwards return 200 stub)
+└── github-app/route.ts              # GitHub App installation lifecycle only (deleted, suspend, unsuspend)
 
 apps/worker/src/pubsub/
 ├── index.ts                          # Exports SessionSubscriber
@@ -148,6 +199,35 @@ apps/worker/src/pubsub/
 ### Database Tables
 
 ```sql
+webhook_inbox
+├── id                    UUID PRIMARY KEY
+├── organization_id       TEXT                             -- nullable, resolved from routing identity
+├── provider              TEXT NOT NULL                    -- e.g. 'github', 'linear', 'sentry'
+├── external_id           TEXT                             -- optional provider-specific ID
+├── headers               JSONB                            -- raw HTTP headers for deferred parsing
+├── payload               JSONB NOT NULL                   -- raw webhook body
+├── signature             TEXT                             -- raw signature header for deferred verification
+├── status                TEXT NOT NULL DEFAULT 'pending'   -- pending | processing | completed | failed
+├── error                 TEXT                             -- error message on failure
+├── processed_at          TIMESTAMPTZ                      -- when the inbox worker processed this row
+├── received_at           TIMESTAMPTZ DEFAULT now()        -- when the webhook was received
+└── created_at            TIMESTAMPTZ DEFAULT now()
+    INDEXES: (status, received_at), provider, organization_id
+
+trigger_poll_groups
+├── id                    UUID PRIMARY KEY
+├── organization_id       TEXT NOT NULL → organization.id (CASCADE)
+├── provider              TEXT NOT NULL
+├── integration_id        UUID → integrations.id (SET NULL)
+├── cron_expression       TEXT NOT NULL
+├── enabled               BOOLEAN DEFAULT true
+├── last_polled_at        TIMESTAMPTZ
+├── cursor                JSONB                            -- opaque cursor for provider pagination
+├── created_at            TIMESTAMPTZ DEFAULT now()
+└── updated_at            TIMESTAMPTZ DEFAULT now()
+    INDEXES: organization_id, enabled
+    UNIQUE(organization_id, provider, integration_id) NULLS NOT DISTINCT
+
 triggers
 ├── id                    UUID PRIMARY KEY
 ├── organization_id       TEXT NOT NULL → organization.id (CASCADE)
@@ -164,7 +244,7 @@ triggers
 ├── webhook_url_path      TEXT UNIQUE                      -- /webhooks/t_{uuid12}
 ├── polling_cron          TEXT                             -- cron expression
 ├── polling_endpoint      TEXT
-├── polling_state         JSONB DEFAULT {}                 -- cursor backup
+├── polling_state         JSONB DEFAULT {}                 -- legacy cursor backup (being replaced by poll groups)
 ├── last_polled_at        TIMESTAMPTZ
 ├── config                JSONB DEFAULT {}                 -- provider-specific filters; { _manual: true } marks manual-run triggers
 ├── integration_id        UUID → integrations.id (SET NULL)
@@ -226,7 +306,74 @@ schedules
 ### Core TypeScript Types
 
 ```typescript
-// packages/triggers/src/service/base.ts — trigger definition base classes
+// packages/providers/src/types.ts — vNext provider trigger contract
+
+interface NormalizedTriggerEvent {
+  provider: string;          // e.g. "sentry"
+  eventType: string;         // Internal normalized type (e.g. "error_created")
+  providerEventType: string; // Native type from header (e.g. "issue.created")
+  occurredAt: string;        // ISO 8601 timestamp
+  dedupKey: string;          // Globally unique key for deduplication
+  title: string;
+  url?: string;
+  externalId?: string;       // External event identifier from the provider
+  context: Record<string, unknown>; // Parsed, structured data
+  raw?: unknown;             // Optional: original payload
+}
+
+interface WebhookRequest {
+  method: string;
+  path: string;
+  headers: Record<string, string | string[] | undefined>;
+  query: Record<string, string | undefined>;
+  params: Record<string, string | undefined>;
+  rawBody: Buffer; // Mandatory for accurate HMAC verification
+  body: unknown;
+}
+
+interface WebhookParseInput {
+  json: unknown;
+  headers: Record<string, string | string[] | undefined>;
+  providerEventType?: string;
+  receivedAt: string;
+}
+
+interface WebhookVerificationResult {
+  ok: boolean;
+  identity?: { kind: "org" | "integration" | "trigger"; id: string };
+  immediateResponse?: { status: number; body?: unknown }; // For Slack/Jira challenges
+}
+
+interface TriggerType<TConfig = unknown> {
+  id: string;
+  description: string;
+  configSchema: z.ZodType<TConfig>;
+  // Pure, synchronous, no side effects
+  matches(event: NormalizedTriggerEvent, config: TConfig): boolean;
+}
+
+interface ProviderTriggers {
+  types: TriggerType[];
+
+  webhook?: {
+    verify(req: WebhookRequest, secret: string | null): Promise<WebhookVerificationResult>;
+    parse(input: WebhookParseInput): Promise<NormalizedTriggerEvent[]>;
+  };
+
+  polling?: {
+    defaultIntervalSeconds: number;
+    poll(ctx: {
+      cursor: unknown;
+      token?: string;
+      orgId: string;
+    }): Promise<{ events: NormalizedTriggerEvent[]; nextCursor: unknown; backoffSeconds?: number }>;
+  };
+
+  // Called ONCE per event batch to fetch missing data (e.g. fetching Jira issue fields via API)
+  hydrate?: (event: NormalizedTriggerEvent, ctx: { token: string }) => Promise<NormalizedTriggerEvent>;
+}
+
+// packages/triggers/src/service/base.ts — current service-layer base classes (being consolidated)
 abstract class WebhookTrigger<T extends TriggerId, TConfig> {
   abstract webhook(req: Request): Promise<TriggerEvent[]>;
   abstract filter(event: TriggerEvent, config: TConfig): boolean;
@@ -240,24 +387,14 @@ abstract class PollingTrigger<T extends TriggerId, TConfig> {
   abstract idempotencyKey(event: TriggerEvent): string;
   abstract context(event: TriggerEvent): Record<string, unknown>;
 }
-
-// packages/triggers/src/types.ts — provider interface (used for parsing/filtering)
-interface TriggerProvider<TConfig, TState, TItem> {
-  poll(connection, config, lastState): Promise<PollResult<TItem, TState>>;
-  findNewItems(items, lastState): TItem[];
-  filter(item, config): boolean;
-  parseContext(item): ParsedEventContext;
-  verifyWebhook(request, secret, body): Promise<boolean>;
-  parseWebhook(payload): TItem[];
-  computeDedupKey(item): string | null;
-  extractExternalId(item): string;
-  getEventType(item): string;
-}
 ```
 
 ### Key Indexes & Query Patterns
+- Webhook inbox drain: `claimBatch()` uses `SELECT FOR UPDATE SKIP LOCKED` on `(status, received_at)` for concurrent worker safety.
 - Webhook lookup: `findActiveWebhookTriggers(integrationId)` uses `(integration_id, enabled, trigger_type)`.
 - Dedup check: `eventExistsByDedupKey(triggerId, dedupKey)` uses unique index `(trigger_id, dedup_key)`.
+- Poll group lookup: `findTriggersForGroup(orgId, provider, integrationId)` matches triggers by org + provider + integration.
+- Orphan cleanup: `deleteOrphanedGroups()` removes poll groups with no matching active triggers.
 - Event listing: `listEvents(orgId, options)` uses `(organization_id, status)` with pagination.
 
 ---
@@ -267,14 +404,18 @@ interface TriggerProvider<TConfig, TState, TItem> {
 ### Do
 - Use the transactional outbox (`createRunFromTriggerEvent`) for all trigger-to-run handoffs — guarantees atomicity.
 - Register new providers in `registerDefaultTriggers()` (`packages/triggers/src/service/register.ts`).
-- Implement both `WebhookTrigger` (service layer) AND `TriggerProvider` (parsing layer) when adding a provider.
-- Store polling cursors in Redis for hot-path access, persist to PostgreSQL as backup.
+- Store webhook payloads in the inbox for async processing — never process webhooks synchronously in the Express handler.
+- Use poll groups for polling triggers — never schedule per-trigger polling jobs.
+- Keep `matches()` / `filter()` functions pure — no DB calls, no network, no side effects.
+- When adding a new provider, implement `ProviderTriggers` in `packages/providers/src/types.ts` (target contract) and optionally bridge via `WebhookTrigger`/`PollingTrigger` classes during migration.
 
 ### Don't
 - Skip deduplication — always implement `computeDedupKey` / `idempotencyKey`.
 - Directly enqueue BullMQ jobs from trigger processing — use the outbox.
-- Add raw SQL to `packages/services/src/triggers/db.ts` — use Drizzle query builder.
+- Add raw SQL to `packages/services/src/triggers/db.ts` — use Drizzle query builder (exception: `claimBatch` in webhook-inbox uses raw SQL for `FOR UPDATE SKIP LOCKED`).
 - Log raw webhook payloads (may contain sensitive data). Log trigger IDs, event counts, and provider names instead.
+- Process webhooks synchronously in Express routes — always use the inbox pattern.
+- Schedule per-trigger polling jobs — use poll groups.
 
 ### Error Handling
 ```typescript
@@ -289,68 +430,97 @@ async function safeCreateSkippedEvent(input) {
 ```
 
 ### Reliability
+- **Webhook inbox concurrency**: `claimBatch()` uses `SELECT FOR UPDATE SKIP LOCKED` for safe concurrent processing. Worker drains every 5 seconds with configurable batch size (default 10).
 - **Webhook signature verification**: Nango HMAC-SHA256 via `verifyNangoSignature()` using `timingSafeEqual`. Provider-specific signatures (Linear-Signature, X-Hub-Signature-256, Sentry-Hook-Signature, X-PostHog-Signature) verified by provider adapters.
-- **Polling concurrency**: BullMQ worker with `concurrency: 3` (`packages/queue/src/index.ts`).
-- **Polling job options**: 2 attempts, fixed 5s backoff, 1 hour age limit, 24 hour retention on fail.
-- **Idempotency**: Unique index `(trigger_id, dedup_key)` prevents duplicate event processing. Custom webhook routes also use SHA-256 payload hashing with a 5-minute dedup window.
+- **Inbox garbage collection**: BullMQ worker runs hourly, deleting completed/failed rows older than 7 days to prevent PostgreSQL bloat.
+- **Polling concurrency**: Redis lock per poll group (`poll:<groupId>`) with 120-second TTL prevents concurrent polls for the same group.
+- **Polling job options**: Repeatable BullMQ jobs per poll group, scheduled at startup via `scheduleEnabledPollGroups()`.
+- **Idempotency**: Unique index `(trigger_id, dedup_key)` prevents duplicate event processing.
 
 ---
 
 ## 6. Subsystem Deep Dives
 
-### 6.1 Webhook Ingestion (Nango)
+### 6.1 Async Webhook Ingestion
 
-**What it does:** Receives forwarded webhooks from Nango, matches them to triggers, and creates automation runs. **Status: Implemented.**
+**What it does:** Receives webhooks via fast-ack Express routes, stores in `webhook_inbox`, and processes asynchronously via BullMQ worker. **Status: Implemented.**
 
-**Happy path:**
-1. Nango sends `POST /webhooks/nango` to trigger service (`apps/trigger-service/src/api/webhooks.ts`).
-2. `dispatchIntegrationWebhook("nango", req)` extracts the Nango forward envelope (`webhook-dispatcher.ts`).
-3. Dispatcher calls `registry.webhooksByProvider(providerKey)` to find matching `WebhookTrigger` definitions.
-4. Each trigger definition's `webhook(req)` method verifies the Nango HMAC signature, parses the inner payload via the provider's `parseWebhook()`, and returns `TriggerEvent[]`.
-5. The webhook route looks up the integration by `connectionId` via `integrations.findByConnectionIdAndProvider()`.
-6. Active webhook triggers for that integration are fetched via `triggerService.findActiveWebhookTriggers()`.
-7. `processTriggerEvents()` (`trigger-processor.ts`) iterates events × triggers: checks automation enabled, applies provider filter, checks dedup key, then calls `runs.createRunFromTriggerEvent()`.
-8. The run creation inserts `trigger_event` (status `queued`), `automation_run` (status `queued`), and an outbox entry (`enqueue_enrich`) in a single transaction.
+**Phase 1 — Fast-Ack Express Route (`apps/trigger-service/src/api/webhooks.ts`):**
+1. `POST /webhooks/nango` receives a Nango-forwarded webhook.
+2. `dispatchIntegrationWebhook("nango", req)` verifies the Nango HMAC signature and extracts provider + connectionId from the forward envelope.
+3. The route calls `webhookInbox.insertInboxRow()` to store the raw payload with provider and headers.
+4. Returns `200 OK` immediately. No parsing, no matching, no run creation.
 
-**Edge cases:**
-- Integration not found for `connectionId` → returns `{ processed: 0, skipped: 0 }`.
-- Automation disabled → event recorded as skipped with reason `automation_disabled`.
-- Filter mismatch → event recorded as skipped with reason `filter_mismatch`.
-- Duplicate dedup key → silently skipped (no event record).
-- Invalid Nango signature → `401` response.
+**Phase 1b — Direct Provider Route:**
+1. `POST /webhooks/direct/:providerId` receives webhooks from providers that bypass Nango.
+2. Stores the raw payload in the inbox with the provider ID.
+3. Returns `200 OK` immediately.
 
-**Files touched:** `apps/trigger-service/src/api/webhooks.ts`, `apps/trigger-service/src/lib/webhook-dispatcher.ts`, `apps/trigger-service/src/lib/trigger-processor.ts`, `packages/triggers/src/service/adapters/nango.ts`, `packages/services/src/runs/service.ts`
-
-### 6.2 Polling Worker
-
-**What it does:** Periodically polls external APIs for new events using BullMQ repeatable jobs. **Status: Implemented.**
-
-**Happy path:**
-1. When a polling trigger is created/updated with a `pollingCron`, `schedulePollingJob()` adds a BullMQ repeatable job to the POLLING queue.
-2. The polling worker (`apps/trigger-service/src/polling/worker.ts`) processes each job:
-   - Loads trigger row with integration data.
-   - Skips if disabled or not a polling trigger.
-   - Reads cursor from Redis (`poll:{triggerId}`).
-   - Calls the polling trigger's `poll(connection, config, cursor)`.
-   - Stores new cursor in Redis and PostgreSQL.
-   - Passes events to `processTriggerEvents()`.
-3. On trigger disable/delete, `removePollingJob()` removes the repeatable job.
+**Phase 2 — BullMQ Inbox Worker (`apps/trigger-service/src/webhook-inbox/worker.ts`):**
+1. A repeatable BullMQ job fires every 5 seconds.
+2. `claimBatch()` uses `SELECT FOR UPDATE SKIP LOCKED` to safely claim pending rows.
+3. For each row, the worker:
+   - Extracts `connectionId` from the Nango payload.
+   - Resolves the integration via `integrations.findByConnectionIdAndProvider()`.
+   - Finds active webhook triggers for that integration.
+   - Resolves trigger definitions from the registry via `registry.webhooksByProvider()`.
+   - Parses events using the trigger definition's `webhook()` method.
+   - Calls `processTriggerEvents()` to filter, dedup, and create runs.
+4. On success, marks the row `completed`. On failure, marks it `failed` with error message.
 
 **Edge cases:**
-- Missing integration `connectionId` → logs warning, returns.
-- Redis cursor missing → first poll (cursor = null).
-- Cursor parse failure → falls back to raw string.
+- No connectionId in payload (direct webhook) → throws error (direct processing not yet fully implemented).
+- Integration not found for connectionId → row marked completed, no events processed.
+- No active triggers for integration → row marked completed.
+- Invalid Nango signature → `401` response (rejected at fast-ack layer, never reaches inbox).
+- Inbox worker failure → row stays in `processing` state until manually resolved or re-claimed.
 
-**Files touched:** `apps/trigger-service/src/polling/worker.ts`, `packages/services/src/triggers/service.ts`, `packages/queue/src/index.ts`
+**Files touched:** `apps/trigger-service/src/api/webhooks.ts`, `apps/trigger-service/src/webhook-inbox/worker.ts`, `apps/trigger-service/src/lib/webhook-dispatcher.ts`, `apps/trigger-service/src/lib/trigger-processor.ts`, `packages/services/src/webhook-inbox/db.ts`
 
-### 6.3 Trigger CRUD
+### 6.2 Inbox Garbage Collection
+
+**What it does:** Periodically deletes old completed/failed webhook inbox rows to prevent PostgreSQL table bloat. **Status: Implemented.**
+
+**Happy path:**
+1. A repeatable BullMQ job fires every hour.
+2. `webhookInbox.gcOldRows(retentionDays)` deletes rows where `status IN ('completed', 'failed') AND processed_at < NOW() - INTERVAL '7 days'`.
+3. Logs the number of deleted rows.
+
+**Files touched:** `apps/trigger-service/src/gc/inbox-gc.ts`, `packages/services/src/webhook-inbox/db.ts`
+
+### 6.3 Integration-Scoped Polling (Poll Groups)
+
+**What it does:** Polls external APIs efficiently using one job per integration group, then fans out events in-memory. **Status: Implemented.**
+
+**Happy path:**
+1. When a polling trigger is created/updated, the service calls `pollGroups.findOrCreateGroup()` to ensure a poll group exists for `(org, provider, integration)`, then schedules a BullMQ repeatable job for the group.
+2. At startup, `scheduleEnabledPollGroups()` schedules jobs for all enabled groups.
+3. The poll group worker (`apps/trigger-service/src/polling/worker.ts`) processes each job:
+   - Loads the poll group row.
+   - Acquires a Redis lock (`poll:<groupId>`) with 120-second TTL to prevent concurrent polls.
+   - Finds all active polling triggers in the group via `pollGroups.findTriggersForGroup()`.
+   - Resolves the integration's connectionId.
+   - Calls the polling trigger's `poll(connection, config, cursor)` once for the group.
+   - Updates the group cursor via `pollGroups.updateGroupCursor()`.
+   - **In-memory fan-out:** iterates events across all triggers in the group, calling `processTriggerEvents()` for each.
+4. On trigger disable/delete, orphaned poll groups (with no matching active triggers) are cleaned up via `pollGroups.deleteOrphanedGroups()`.
+
+**Edge cases:**
+- Redis lock already held → skips this poll cycle (prevents concurrent polls).
+- No active triggers in group → skips (group may be orphaned).
+- Missing connectionId → logs warning, returns.
+- Cursor missing → first poll (cursor = null).
+
+**Files touched:** `apps/trigger-service/src/polling/worker.ts`, `packages/services/src/poll-groups/db.ts`, `packages/services/src/triggers/service.ts`
+
+### 6.4 Trigger CRUD
 
 **What it does:** oRPC routes for managing triggers. **Status: Implemented.**
 
 **Happy path:**
-1. `create` validates prebuild and integration existence, generates `webhookUrlPath` (UUID-based) and `webhookSecret` (32-byte hex) for webhook triggers, creates an automation parent record, then creates the trigger. For polling triggers, schedules a BullMQ repeatable job.
+1. `create` validates prebuild and integration existence, generates `webhookUrlPath` (UUID-based) and `webhookSecret` (32-byte hex) for webhook triggers, creates an automation parent record, then creates the trigger. For polling triggers, finds or creates a poll group and schedules a BullMQ repeatable job.
 2. `update` modifies trigger fields. For polling triggers, reschedules or removes the repeatable job based on `enabled` state and `pollingCron`.
-3. `delete` removes the trigger (cascades to events). For polling triggers, removes the repeatable job.
+3. `delete` removes the trigger (cascades to events). For polling triggers, cleans up orphaned poll groups.
 4. `list` returns triggers with integration data and pending event counts.
 5. `get` returns a single trigger with recent events and event status counts.
 6. `listEvents` returns paginated events with trigger and session relations.
@@ -358,7 +528,7 @@ async function safeCreateSkippedEvent(input) {
 
 **Files touched:** `apps/web/src/server/routers/triggers.ts`, `packages/services/src/triggers/service.ts`, `packages/services/src/triggers/db.ts`
 
-### 6.4 Provider Adapters
+### 6.5 Provider Adapters
 
 **What it does:** Provider-specific parsing, filtering, and context extraction. **Status: varies by provider.**
 
@@ -408,7 +578,7 @@ async function safeCreateSkippedEvent(input) {
 - The UI filters manual triggers from display using the `config._manual` flag.
 - Files: `packages/services/src/automations/service.ts:triggerManualRun`, `packages/services/src/automations/db.ts:findManualTrigger`
 
-### 6.5 Schedule CRUD
+### 6.6 Schedule CRUD
 
 **What it does:** Manages cron schedules attached to automations. **Status: Implemented.**
 
@@ -420,7 +590,7 @@ async function safeCreateSkippedEvent(input) {
 
 **Files touched:** `apps/web/src/server/routers/schedules.ts`, `packages/services/src/schedules/service.ts`, `packages/services/src/schedules/db.ts`
 
-### 6.6 PubSub Session Events Subscriber
+### 6.7 PubSub Session Events Subscriber
 
 **What it does:** Listens on Redis PubSub for session events and wakes async clients (e.g., Slack). **Status: Implemented.**
 
@@ -435,7 +605,7 @@ async function safeCreateSkippedEvent(input) {
 
 **Files touched:** `apps/worker/src/pubsub/session-events.ts`
 
-### 6.7 Provider Registry & Metadata API
+### 6.8 Provider Registry & Metadata API
 
 **What it does:** Exposes registered trigger providers and their config schemas. **Status: Implemented.**
 
@@ -445,43 +615,23 @@ async function safeCreateSkippedEvent(input) {
 
 **Files touched:** `apps/trigger-service/src/api/providers.ts`, `packages/triggers/src/service/registry.ts`
 
-### 6.8 Direct Webhook Routes (Web App)
+### 6.9 Web App Webhook Routes (Lifecycle Only)
 
-**What it does:** Next.js API routes that handle webhook ingestion directly, bypassing the trigger service. **Status: Implemented.**
-
-These routes exist alongside the trigger-service webhook handler. They handle providers/scenarios where Nango forwarding is not used.
+**What it does:** Next.js API routes that handle non-trigger webhook events (auth lifecycle, installation management). Trigger event processing has been moved to the trigger service. **Status: Implemented.**
 
 #### Nango route (`/api/webhooks/nango`)
 - Verifies `X-Nango-Hmac-Sha256` signature.
-- Handles three webhook types: `auth` (updates integration status), `sync` (logged only), `forward` (parses payload via `TriggerProvider`, calls `triggers.processTriggerEvents()`).
+- Handles `auth` webhooks (updates integration status on creation, override, refresh failure).
+- Handles `sync` webhooks (logged only).
+- `forward` webhooks return `200` with a migration stub — actual processing happens in the trigger service.
 - File: `apps/web/src/app/api/webhooks/nango/route.ts`
 
 #### GitHub App route (`/api/webhooks/github-app`)
 - Receives webhooks directly from GitHub App installations (not via Nango).
 - Verifies `X-Hub-Signature-256` using `GITHUB_APP_WEBHOOK_SECRET`.
-- Handles installation lifecycle events (deleted, suspend, unsuspend) by updating integration status.
-- For other events: maps `installation.id` → integration → active triggers, then filters/dedupes/creates runs.
+- Handles installation lifecycle events only (deleted, suspend, unsuspend) by updating integration status.
+- All other GitHub events return `200` with a migration message — processing happens in the trigger service via Nango forwarding.
 - File: `apps/web/src/app/api/webhooks/github-app/route.ts`
-
-#### Custom webhook route (`/api/webhooks/custom/[triggerId]`)
-- Accepts any POST payload to a trigger-specific URL.
-- Optional HMAC-SHA256 verification (checks `X-Webhook-Signature`, `X-Signature`, `X-Hub-Signature-256`, `X-Signature-256` headers).
-- Dedup key: SHA-256 hash of raw body, checked within 5-minute window via `findDuplicateEventByDedupKey()`.
-- Also supports GET for health checks.
-- File: `apps/web/src/app/api/webhooks/custom/[triggerId]/route.ts`
-
-#### PostHog route (`/api/webhooks/posthog/[automationId]`)
-- Uses automation ID in URL (known before trigger creation).
-- Finds PostHog trigger by automation via `automations.findTriggerForAutomationByProvider()`.
-- Optional `PostHogProvider.verifyWebhook()` (controlled by `config.requireSignatureVerification`).
-- Full filter/dedup/run-creation pipeline using `PostHogProvider` methods.
-- File: `apps/web/src/app/api/webhooks/posthog/[automationId]/route.ts`
-
-#### Automation webhook route (`/api/webhooks/automation/[automationId]`)
-- Generic automation-scoped webhook (similar to custom, but keyed by automation ID).
-- Finds webhook trigger via `automations.findWebhookTrigger()`.
-- Dedup key: SHA-256 hash of raw body, checked via `automations.isDuplicateTriggerEvent()`.
-- File: `apps/web/src/app/api/webhooks/automation/[automationId]/route.ts`
 
 ---
 
@@ -490,28 +640,32 @@ These routes exist alongside the trigger-service webhook handler. They handle pr
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
 | Automations | Triggers → Automations | `runs.createRunFromTriggerEvent()` | Handoff point. Creates trigger event + automation run + outbox entry in one transaction. |
-| Automations | Triggers → Automations | `automations.findWebhookTrigger()`, `automations.findTriggerForAutomationByProvider()` | Used by automation-scoped and PostHog webhook routes. |
+| Providers package | Trigger service → Providers | `ProviderTriggers` contract, `ProviderRegistry` | Target interface for integration modules. Defines `NormalizedTriggerEvent`, `verify()`, `parse()`, `matches()`, `poll()`. |
 | Integrations | Triggers → Integrations | `integrations.findByConnectionIdAndProvider()`, `integrations.findActiveByGitHubInstallationId()` | Resolves Nango connectionId or GitHub installation ID to integration record. |
 | Integrations | Triggers ← Integrations | `trigger.integrationId` FK | Trigger references its OAuth connection. |
-| Queue (BullMQ) | Triggers → Queue | `schedulePollingJob()`, `removePollingJob()`, `createPollingWorker()` | POLLING queue for repeatable poll jobs. |
-| Redis | Triggers → Redis | `REDIS_KEYS.pollState(triggerId)` | Cursor storage for polling. |
+| Queue (BullMQ) | Triggers → Queue | `createWebhookInboxQueue()`, `createPollGroupQueue()`, `schedulePollGroupJob()` | Inbox drain (every 5s), inbox GC (hourly), poll group repeatable jobs. |
+| Redis | Triggers → Redis | `REDIS_KEYS.pollGroupLock(groupId)` | Lock for poll group concurrency control. |
 | Outbox | Triggers → Outbox | `outbox.insert({ kind: "enqueue_enrich" })` | Reliable handoff to automation run pipeline. See `automations-runs.md`. |
 | Sessions | Events → Sessions | `trigger_events.session_id` FK | Links event to resulting session (set after run execution). |
+| Secrets | Triggers → Secrets | webhook secrets | Webhook verification secrets stored on trigger rows or resolved from provider config. |
 
 ### Security & Auth
 - **Trigger CRUD**: Protected by `orgProcedure` middleware (requires authenticated user + org membership).
-- **Trigger-service webhooks**: Public endpoint (`POST /webhooks/nango`). Signature verified via Nango HMAC-SHA256 (`verifyNangoSignature` using `timingSafeEqual`).
-- **Web app webhook routes**: All public endpoints. Each route verifies signatures independently:
+- **Trigger-service webhooks**: Public endpoints. Signature verified at ingestion layer:
+  - Nango route: `verifyNangoSignature()` using Nango HMAC-SHA256 (`timingSafeEqual`).
+  - Direct route: deferred to inbox worker via `ProviderTriggers.webhook.verify()` (when fully implemented).
+- **Web app webhook routes**: Public endpoints for lifecycle events only. Signature verification:
   - Nango route: `X-Nango-Hmac-Sha256` header.
   - GitHub App route: `X-Hub-Signature-256` header against `GITHUB_APP_WEBHOOK_SECRET` env var.
-  - Custom/automation routes: optional HMAC verification using stored `webhookSecret` (checks `X-Webhook-Signature`, `X-Signature`, `X-Hub-Signature-256`, `X-Signature-256` headers).
-  - PostHog route: optional `PostHogProvider.verifyWebhook()` (controlled by `config.requireSignatureVerification`).
 - **Webhook secrets**: 32-byte random hex stored in DB. Generated on trigger creation.
+- Provider verification must not leak secrets in error messages or logs.
 
 ### Observability
 - Trigger service logger: `@proliferate/logger` with `{ service: "trigger-service" }`.
-- Child loggers per module: `{ module: "webhooks" }`, `{ module: "polling" }`, `{ module: "trigger-processor" }`.
-- Structured fields: `triggerId`, `connectionId`, `sessionId`.
+- Child loggers per module: `{ module: "webhooks" }`, `{ module: "webhook-inbox-worker" }`, `{ module: "poll-groups" }`, `{ module: "inbox-gc" }`, `{ module: "trigger-processor" }`.
+- Structured fields: `triggerId`, `connectionId`, `sessionId`, `groupId`, `inboxId`, `provider`.
+- Metrics to track: webhook request counts by provider, inbox queue depth, inbox drain latency, parse failures, dedup hits, poll duration, poll backoffs, run creation failures.
+- **Inbox garbage collection**: Hourly cron deletes `completed`/`failed` rows older than 7 days to prevent PostgreSQL bloat.
 
 ---
 
@@ -519,6 +673,9 @@ These routes exist alongside the trigger-service webhook handler. They handle pr
 
 - [ ] Typecheck passes (`pnpm typecheck`)
 - [ ] Relevant tests pass (`pnpm test`)
+- [ ] All webhook ingestion routes through trigger-service fast-ack pattern
+- [ ] `NormalizedTriggerEvent` types compile with no strict errors
+- [ ] Orphaned poll groups are correctly removed (when the last trigger in a group is deleted, the BullMQ job is unscheduled)
 - [ ] This spec is updated (file tree, data models, deep dives)
 
 ---
@@ -526,13 +683,14 @@ These routes exist alongside the trigger-service webhook handler. They handle pr
 ## 9. Known Limitations & Tech Debt
 
 - [ ] **SCHEDULED queue worker not instantiated** — `createScheduledWorker()` exists in `packages/queue/src/index.ts` and jobs can be enqueued, but no worker is started in any running service. The scheduled trigger worker was archived (`apps/worker/src/_archived/`). Cron-based triggers that rely on this queue do not execute. — High impact.
-- [ ] **Dual webhook ingestion paths** — Webhook ingestion exists in both trigger-service (`POST /webhooks/nango`) and web app API routes (`apps/web/src/app/api/webhooks/`). The Nango route is duplicated across both. GitHub App webhooks go only through the web app, not trigger-service. PostHog webhooks go only through the web app. Should consolidate to a single ingestion layer. — Medium complexity.
-- [ ] **Dual abstraction layers** — Both `TriggerProvider` interface (`types.ts`) and `WebhookTrigger`/`PollingTrigger` classes (`service/base.ts`) exist. Nango adapter classes bridge between them by delegating to `TriggerProvider` methods. Should consolidate. — Medium complexity.
+- [ ] **Dual abstraction layers** — Both `TriggerProvider` interface (`packages/triggers/src/types.ts`) and `WebhookTrigger`/`PollingTrigger` classes (`packages/triggers/src/service/base.ts`) coexist alongside the target `ProviderTriggers` contract (`packages/providers/src/types.ts`). The inbox worker still uses the class-based registry. Should consolidate all providers to the `ProviderTriggers` interface. — Medium complexity.
+- [ ] **Direct webhook processing not yet implemented** — The `POST /webhooks/direct/:providerId` route stores payloads in the inbox, but the inbox worker only handles Nango-forwarded webhooks (requires `connectionId`). Direct provider webhooks need identity resolution via `ProviderTriggers.webhook.verify()`. — Medium impact.
 - [ ] **Deprecated trigger fields** — `name`, `description`, `executionMode`, `allowAgenticRepoSelection`, `agentInstructions` on the triggers table are deprecated in favor of the parent automation's fields, but still populated on create. — Low impact, remove when safe.
 - [ ] **Gmail provider requires Composio** — Gmail polling uses Composio as an OAuth token broker, adding an external dependency. Only registered when `COMPOSIO_API_KEY` is set. Full implementation exists but external dependency makes it Partial.
-- [ ] **PostHog not registered in trigger service** — The `PostHogProvider` exists in `packages/triggers/src/posthog.ts` and registers in the functional provider registry, but there is no `PostHogNangoTrigger` adapter in `service/adapters/`. PostHog webhooks are handled via a separate web app API route (`apps/web/src/app/api/webhooks/posthog/`), not through the trigger service. — Should be unified.
-- [ ] **pollLock defined but unused** — `REDIS_KEYS.pollLock` is defined in `packages/queue/src/index.ts` but only used in archived code (`apps/worker/src/_archived/redis.ts`). The active polling worker does not acquire locks. — Concurrent polls for the same trigger are possible.
-- [ ] **removePollingJob passes empty pattern** — `removePollingJob` calls `queue.removeRepeatable` with an empty `pattern` string, relying on BullMQ behavior that may change. — Low risk but fragile.
+- [ ] **PostHog not registered in trigger service** — The `PostHogProvider` exists in `packages/triggers/src/posthog.ts` and registers in the functional provider registry, but there is no `PostHogNangoTrigger` adapter in `service/adapters/`. PostHog webhooks were previously handled via a separate web app API route (now removed). Needs a trigger-service adapter or migration to `ProviderTriggers`. — Medium impact.
 - [ ] **No retry logic for failed trigger event processing** — If `createRunFromTriggerEvent` fails, the event is marked as skipped with reason `run_create_failed`. There is no automatic retry mechanism. — Events can be manually retried via re-processing.
-- [ ] **HMAC helper duplication** — The `hmacSha256` function is duplicated across `github.ts`, `linear.ts`, `sentry.ts`, `posthog.ts`, and multiple web app webhook routes. Should be extracted to a shared utility. — Low impact.
+- [ ] **HMAC helper duplication** — The `hmacSha256` function is duplicated across `github.ts`, `linear.ts`, `sentry.ts`, `posthog.ts`, and the web app Nango route. Should be extracted to a shared utility (the `ProviderTriggers` architecture uses `packages/providers/src/helpers/` for this). — Low impact.
 - [ ] **Manual triggers use webhook provider** — Manual run triggers are stored with `provider: "webhook"` and a `config._manual` JSONB flag rather than a dedicated provider value. This avoids enum violations but means manual triggers are distinguished only by their config, not by a first-class provider type. Impact: low — `findManualTrigger` queries by config flag reliably. Expected fix: add "manual" to the `TriggerProviderSchema` enum when a migration is appropriate.
+- [ ] **Providers with expiring webhook registrations** — Providers like Jira that require webhook registration refresh need a refresh job and `external_webhook_id` persistence (deferred to Jira implementation).
+- [ ] **Secret resolution chicken-and-egg** — For per-integration secrets (e.g., PostHog), the framework must extract a "candidate identity" from URL params or headers, look up the secret from the DB, and *then* call `verify()`. Not yet implemented for the direct webhook path.
+- [ ] **Legacy per-trigger polling state** — The `polling_state` JSONB column on the `triggers` table and Redis `poll:{triggerId}` keys are legacy from per-trigger polling. Poll groups now own cursor state. Legacy columns should be removed once all polling triggers are migrated to groups.
