@@ -2,16 +2,33 @@
 
 export const GearIllustration = () => (
 	<svg xmlns="http://www.w3.org/2000/svg" width="66" height="66" viewBox="0 0 66 66" fill="none">
-		<circle cx="33" cy="33" r="28" className="fill-muted/30 stroke-border" strokeWidth="1.5" />
-		<circle cx="33" cy="33" r="10" className="stroke-border" strokeWidth="1.5" />
-		<circle cx="33" cy="33" r="4" className="fill-border" />
+		<circle
+			cx="33"
+			cy="33"
+			r="28"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.5"
+		/>
+		<circle
+			cx="33"
+			cy="33"
+			r="10"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1.5"
+		/>
+		<circle
+			cx="33"
+			cy="33"
+			r="4"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
 		<rect
 			x="30"
 			y="3"
 			width="6"
 			height="10"
 			rx="2"
-			className="fill-muted/30 stroke-border"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.2"
 		/>
 		<rect
@@ -20,7 +37,7 @@ export const GearIllustration = () => (
 			width="6"
 			height="10"
 			rx="2"
-			className="fill-muted/30 stroke-border"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.2"
 		/>
 		<rect
@@ -29,7 +46,7 @@ export const GearIllustration = () => (
 			width="10"
 			height="6"
 			rx="2"
-			className="fill-muted/30 stroke-border"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.2"
 		/>
 		<rect
@@ -38,7 +55,7 @@ export const GearIllustration = () => (
 			width="10"
 			height="6"
 			rx="2"
-			className="fill-muted/30 stroke-border"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.2"
 		/>
 		<rect
@@ -47,7 +64,7 @@ export const GearIllustration = () => (
 			width="6"
 			height="10"
 			rx="2"
-			className="fill-muted/30 stroke-border"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.2"
 			transform="rotate(-45 13.8 13.8)"
 		/>
@@ -57,7 +74,7 @@ export const GearIllustration = () => (
 			width="6"
 			height="10"
 			rx="2"
-			className="fill-muted/30 stroke-border"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.2"
 			transform="rotate(-45 48.2 48.2)"
 		/>
@@ -67,7 +84,7 @@ export const GearIllustration = () => (
 			width="6"
 			height="10"
 			rx="2"
-			className="fill-muted/30 stroke-border"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.2"
 			transform="rotate(45 48.2 13.8)"
 		/>
@@ -77,20 +94,20 @@ export const GearIllustration = () => (
 			width="6"
 			height="10"
 			rx="2"
-			className="fill-muted/30 stroke-border"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.2"
 			transform="rotate(45 13.8 48.2)"
 		/>
 		<path
 			d="M33 23V20"
-			className="stroke-border"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
 			strokeWidth="1"
 			strokeLinecap="round"
 			strokeDasharray="2 2"
 		/>
 		<path
 			d="M33 46V43"
-			className="stroke-border"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
 			strokeWidth="1"
 			strokeLinecap="round"
 			strokeDasharray="2 2"
@@ -106,46 +123,72 @@ export const AutomationIllustration = () => (
 			width="58"
 			height="50"
 			rx="6"
-			className="fill-muted/30 stroke-border"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.5"
 		/>
-		<circle cx="18" cy="24" r="6" className="fill-muted/30 stroke-border" strokeWidth="1.5" />
-		<circle cx="18" cy="24" r="2.5" className="fill-border" />
+		<circle
+			cx="18"
+			cy="24"
+			r="6"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.5"
+		/>
+		<circle
+			cx="18"
+			cy="24"
+			r="2.5"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
 		<rect
 			x="32"
 			y="18"
 			width="12"
 			height="12"
 			rx="3"
-			className="fill-muted/30 stroke-border"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.5"
 		/>
-		<path d="M36 24H40" className="stroke-border" strokeWidth="1.5" strokeLinecap="round" />
-		<path d="M38 22V26" className="stroke-border" strokeWidth="1.5" strokeLinecap="round" />
+		<path
+			d="M36 24H40"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1.5"
+			strokeLinecap="round"
+		/>
+		<path
+			d="M38 22V26"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1.5"
+			strokeLinecap="round"
+		/>
 		<path
 			d="M48 40L54 46L48 52L42 46Z"
-			className="fill-muted/30 stroke-border"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.5"
 			strokeLinejoin="round"
 		/>
-		<path d="M24 24H32" className="stroke-border" strokeWidth="1.5" strokeLinecap="round" />
+		<path
+			d="M24 24H32"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1.5"
+			strokeLinecap="round"
+		/>
 		<path
 			d="M44 24H52C54 24 56 26 56 28V38"
-			className="stroke-border"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
 			strokeWidth="1"
 			strokeLinecap="round"
 			strokeDasharray="3 3"
 		/>
 		<path
 			d="M18 30V42C18 44 20 46 22 46H42"
-			className="stroke-border"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
 			strokeWidth="1"
 			strokeLinecap="round"
 			strokeDasharray="3 3"
 		/>
 		<path
 			d="M16.5 22L18 24.5H17L18.5 26"
-			className="stroke-border"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
 			strokeWidth="0.8"
 			strokeLinecap="round"
 			strokeLinejoin="round"
@@ -157,63 +200,106 @@ export const InboxIllustration = () => (
 	<svg xmlns="http://www.w3.org/2000/svg" width="66" height="66" viewBox="0 0 66 66" fill="none">
 		<path
 			d="M8 30L16 10H50L58 30V52C58 54.209 56.209 56 54 56H12C9.791 56 8 54.209 8 52V30Z"
-			className="fill-muted/30 stroke-border"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
 			strokeWidth="1.5"
 			strokeLinejoin="round"
 		/>
 		<path
 			d="M8 30H22C22 30 24 38 33 38C42 38 44 30 44 30H58"
-			className="stroke-border"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
 			strokeWidth="1.5"
 			strokeLinecap="round"
 		/>
 		<path
 			d="M20 44H46"
-			className="stroke-border"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
 			strokeWidth="1"
 			strokeLinecap="round"
 			strokeDasharray="3 3"
 		/>
 		<path
 			d="M24 48H42"
-			className="stroke-border"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
 			strokeWidth="1"
 			strokeLinecap="round"
 			strokeDasharray="3 3"
 		/>
-		<path d="M22 18H44" className="stroke-border" strokeWidth="0.8" strokeLinecap="round" />
-		<path d="M20 22H46" className="stroke-border" strokeWidth="0.8" strokeLinecap="round" />
+		<path
+			d="M22 18H44"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="0.8"
+			strokeLinecap="round"
+		/>
+		<path
+			d="M20 22H46"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="0.8"
+			strokeLinecap="round"
+		/>
 	</svg>
 );
 
 export const MembersIllustration = () => (
 	<svg xmlns="http://www.w3.org/2000/svg" width="66" height="66" viewBox="0 0 66 66" fill="none">
-		<circle cx="33" cy="20" r="9" className="fill-muted/30 stroke-border" strokeWidth="1.5" />
+		<circle
+			cx="33"
+			cy="20"
+			r="9"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.5"
+		/>
 		<path
 			d="M16 54C16 43.507 23.611 35 33 35C42.389 35 50 43.507 50 54"
-			className="stroke-border"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
 			strokeWidth="1.5"
 			strokeLinecap="round"
 		/>
-		<circle cx="16" cy="24" r="6" className="fill-muted/30 stroke-border" strokeWidth="1.2" />
+		<circle
+			cx="16"
+			cy="24"
+			r="6"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
 		<path
 			d="M4 50C4 42.268 9.373 36 16 36"
-			className="stroke-border"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
 			strokeWidth="1.2"
 			strokeLinecap="round"
 			strokeDasharray="3 3"
 		/>
-		<circle cx="50" cy="24" r="6" className="fill-muted/30 stroke-border" strokeWidth="1.2" />
+		<circle
+			cx="50"
+			cy="24"
+			r="6"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
 		<path
 			d="M62 50C62 42.268 56.627 36 50 36"
-			className="stroke-border"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
 			strokeWidth="1.2"
 			strokeLinecap="round"
 			strokeDasharray="3 3"
 		/>
-		<circle cx="33" cy="20" r="2.5" className="fill-border" />
-		<circle cx="16" cy="24" r="2" className="fill-border" />
-		<circle cx="50" cy="24" r="2" className="fill-border" />
+		<circle
+			cx="33"
+			cy="20"
+			r="2.5"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+		<circle
+			cx="16"
+			cy="24"
+			r="2"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+		<circle
+			cx="50"
+			cy="24"
+			r="2"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
 	</svg>
 );
 
@@ -266,7 +352,7 @@ export function PageEmptyState({
 			<div className="relative flex flex-col items-center">
 				{illustration}
 				{/* Shadow ellipse */}
-				<div className="mt-1 w-8 h-2 rounded-full bg-border scale-x-[2] scale-y-50" />
+				<div className="mt-1 w-8 h-2 rounded-full bg-muted-foreground/20 dark:bg-muted-foreground/30 scale-x-[2] scale-y-50" />
 				{/* Badge */}
 				<div className="absolute -top-1 -right-1 bg-background rounded-full w-6 h-6 flex items-center justify-center text-muted-foreground">
 					{badge}
