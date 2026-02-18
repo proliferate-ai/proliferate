@@ -85,5 +85,6 @@ export function toSessionPartial(row: SessionRow): Omit<Session, "repo"> {
 		origin: row.origin,
 		clientType: row.clientType,
 		automationId: row.automationId ?? null,
+		automation: null,
 	};
 }
