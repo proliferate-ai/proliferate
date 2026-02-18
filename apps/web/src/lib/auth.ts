@@ -43,7 +43,7 @@ const pool =
 		max: isDev ? 5 : 1, // More connections for local dev; limit in serverless
 		idleTimeoutMillis: 10000, // Close idle connections after 10s
 		connectionTimeoutMillis: isDev ? 30000 : 5000, // Survive Next.js cold compiles locally
-		keepAlive: true,
+		keepAlive: isDev,
 		// Explicit ssl avoids the pg v8 deprecation warning about sslmode aliases.
 		// RDS certs aren't in the default trust store, so rejectUnauthorized: false.
 		ssl: isLocalDb ? false : { rejectUnauthorized: false },
