@@ -68,7 +68,7 @@ export function useCodingSessionRuntime({
 	});
 
 	// Title management - single instance with actual messages
-	const { sessionTitle } = useAutoTitle({
+	const { sessionTitle, updateTitle } = useAutoTitle({
 		sessionId,
 		messages,
 		initialPrompt,
@@ -155,6 +155,7 @@ export function useCodingSessionRuntime({
 		messages,
 		previewUrl,
 		sessionTitle,
+		updateTitle,
 		envRequest,
 		clearEnvRequest,
 		activityTick,

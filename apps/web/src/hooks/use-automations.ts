@@ -197,12 +197,21 @@ export function useAssignRun(automationId: string) {
 
 	return useMutation({
 		...orpc.automations.assignRun.mutationOptions(),
-		onSuccess: () => {
+		onSuccess: (_data, variables) => {
+			queryClient.invalidateQueries({
+				queryKey: orpc.automations.getRun.key({ input: { runId: variables.runId } }),
+			});
+			queryClient.invalidateQueries({
+				queryKey: orpc.automations.listOrgPendingRuns.key(),
+			});
+			queryClient.invalidateQueries({
+				queryKey: orpc.automations.myClaimedRuns.key(),
+			});
 			queryClient.invalidateQueries({
 				queryKey: orpc.automations.listRuns.key({ input: { id: automationId } }),
 			});
 			queryClient.invalidateQueries({
-				queryKey: orpc.automations.myClaimedRuns.key(),
+				queryKey: orpc.automations.listOrgRuns.key(),
 			});
 		},
 	});

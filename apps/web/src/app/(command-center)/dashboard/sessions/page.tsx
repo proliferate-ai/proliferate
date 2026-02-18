@@ -74,13 +74,18 @@ export default function SessionsPage() {
 		[sessions],
 	);
 
+	const originFiltered = useMemo(() => {
+		if (originFilter === "all") return baseSessions;
+		return baseSessions.filter((s) => getSessionOrigin(s) === originFilter);
+	}, [baseSessions, originFilter]);
+
 	const counts = useMemo(
 		() => ({
-			all: baseSessions.length,
-			active: baseSessions.filter((s) => isActiveStatus(s.status)).length,
-			stopped: baseSessions.filter((s) => !isActiveStatus(s.status)).length,
+			all: originFiltered.length,
+			active: originFiltered.filter((s) => isActiveStatus(s.status)).length,
+			stopped: originFiltered.filter((s) => !isActiveStatus(s.status)).length,
 		}),
-		[baseSessions],
+		[originFiltered],
 	);
 
 	const filtered = useMemo(() => {

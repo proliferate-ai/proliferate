@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "@/lib/auth-client";
+import { useMemo } from "react";
 import { useOrgActions } from "./use-actions";
 import { useMyClaimedRuns } from "./use-automations";
 import { useSessions } from "./use-sessions";
@@ -30,8 +31,12 @@ export function useMyWork() {
 		limit: 50,
 	});
 
-	const activeSessions = allSessions?.filter(
-		(s) => s.status === "running" || s.status === "starting" || s.status === "paused",
+	const activeSessions = useMemo(
+		() =>
+			allSessions?.filter(
+				(s) => s.status === "running" || s.status === "starting" || s.status === "paused",
+			),
+		[allSessions],
 	);
 
 	const pendingApprovals = approvals?.invocations ?? [];
