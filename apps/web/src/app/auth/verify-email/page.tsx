@@ -160,7 +160,7 @@ function VerifyEmailContent() {
 				</div>
 
 				{/* Card */}
-				<div className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-5">
+				<div className="rounded-lg border border-border bg-card/50 p-5">
 					<p className="mb-4 text-center text-xs text-neutral-500">
 						Click the link in the email to verify your account. Check spam if you don&apos;t see it.
 					</p>

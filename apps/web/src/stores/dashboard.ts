@@ -1,4 +1,5 @@
 import type { ModelId, ReasoningEffort } from "@proliferate/shared";
+import { modelSupportsReasoning } from "@proliferate/shared/agents";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -83,7 +84,14 @@ export const useDashboardStore = create<DashboardState>()(
 
 			setPendingPrompt: (prompt) => set({ pendingPrompt: prompt }),
 
-			setSelectedModel: (model) => set({ selectedModel: model }),
+			setSelectedModel: (model) =>
+				set({
+					selectedModel: model,
+					// Reset reasoning effort when switching to a model that doesn't support it
+					...(!modelSupportsReasoning(model)
+						? { reasoningEffort: "normal" as ReasoningEffort }
+						: {}),
+				}),
 
 			setReasoningEffort: (effort) => set({ reasoningEffort: effort }),
 

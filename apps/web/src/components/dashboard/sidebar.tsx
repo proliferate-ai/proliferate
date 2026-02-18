@@ -5,7 +5,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
 	AutomationsIcon,
-	BlocksIcon,
 	RunsIcon,
 	SidebarCollapseIcon,
 	SidebarExpandIcon,
@@ -24,7 +23,6 @@ import { env } from "@proliferate/environment/public";
 import {
 	ArrowLeft,
 	Building2,
-	ChevronsUpDown,
 	CreditCard,
 	FolderGit2,
 	Home,
@@ -45,6 +43,7 @@ import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { SearchTrigger } from "./command-search";
+import { OrgSwitcher } from "./org-switcher";
 
 // Mobile sidebar trigger button - shown in mobile header
 export function MobileSidebarTrigger() {
@@ -291,11 +290,10 @@ export function SidebarShell({
 	const { theme, resolvedTheme, setTheme } = useTheme();
 	const [userMenuOpen, setUserMenuOpen] = useState(false);
 	const [supportMenuOpen, setSupportMenuOpen] = useState(false);
-	const [launcherOpen, setLauncherOpen] = useState(false);
 
 	// Fetch Slack status for support popup
 	const { data: slackStatus } = useSlackStatus();
-	const { toggleSidebar, setCommandSearchOpen, setActiveSession } = useDashboardStore();
+	const { toggleSidebar, setCommandSearchOpen } = useDashboardStore();
 
 	const user = authSession?.user;
 	const userInitials = user?.name
@@ -353,58 +351,9 @@ export function SidebarShell({
 				</div>
 			</div>
 
-			{/* New chat launcher */}
+			{/* Organization switcher */}
 			<div className="px-3 mb-2">
-				<Popover open={launcherOpen} onOpenChange={setLauncherOpen}>
-					<PopoverTrigger asChild>
-						<button
-							type="button"
-							className="flex items-center gap-2 w-full bg-card rounded-xl px-2 h-9 ring-1 ring-inset ring-border shadow-subtle transition-colors hover:bg-accent"
-						>
-							<div className="w-5 h-5 flex items-center justify-center ">
-								{/* <img
-									src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp"
-									alt="Proliferate"
-									className="w-3 h-3 rounded-full"
-								/> */}
-								<BlocksIcon className="text-primary h-4 w-4 rounded-full" />
-							</div>
-							<p className="text-sm font-medium text-foreground truncate flex-1 text-left">
-								Workspace
-							</p>
-							<ChevronsUpDown className="h-4 w-4 text-muted-foreground mr-0.5 shrink-0" />
-						</button>
-					</PopoverTrigger>
-					<PopoverContent
-						side="bottom"
-						align="start"
-						className="w-[min(16rem,calc(100vw-2rem))] p-1.5 bg-popover/90 backdrop-blur rounded-[10px] z-[60]"
-						sideOffset={6}
-					>
-						<button
-							type="button"
-							className="flex items-center gap-3 w-full px-3 py-2.5 text-sm rounded-lg hover:bg-muted transition-colors text-left"
-							onClick={() => {
-								setLauncherOpen(false);
-								setActiveSession(null);
-								handleNavigate("/dashboard");
-							}}
-						>
-							<div className="h-8 w-8 rounded-[10px] border border-border/60 bg-muted/50 flex items-center justify-center shrink-0">
-								{/* <img
-									src="https://d1uh4o7rpdqkkl.cloudfront.net/logo.webp"
-									alt="Proliferate"
-									className="h-4 w-4 rounded-full"
-								/> */}
-								<BlocksIcon className="h-4 w-4 rounded-full" />
-							</div>
-							<div className="flex-1 min-w-0">
-								<div className="font-medium text-foreground">Open workspace</div>
-								<div className="text-xs text-muted-foreground">Start a new chat session</div>
-							</div>
-						</button>
-					</PopoverContent>
-				</Popover>
+				<OrgSwitcher />
 			</div>
 
 			{/* Search */}

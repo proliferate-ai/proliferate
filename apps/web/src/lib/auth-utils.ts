@@ -11,7 +11,7 @@ export function buildAuthLink(base: string, redirect: string, email: string): st
 export function sanitizeRedirect(raw: string | null): string {
 	const fallback = "/dashboard";
 	if (!raw) return fallback;
-	// Only allow relative paths (no protocol-relative or absolute URLs)
-	if (!raw.startsWith("/") || raw.startsWith("//")) return fallback;
+	// Only allow relative paths (no protocol-relative, absolute URLs, or backslash tricks)
+	if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return fallback;
 	return raw;
 }
