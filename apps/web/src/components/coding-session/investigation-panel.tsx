@@ -171,9 +171,6 @@ function ResolutionSection({
 	return (
 		<div className="space-y-2">
 			<p className="text-xs font-medium text-muted-foreground">Resolve</p>
-			{resolveRun.isError && (
-				<p className="text-xs text-destructive">Failed to resolve run. Please try again.</p>
-			)}
 			<div className="flex items-center gap-1.5">
 				<Button
 					size="sm"

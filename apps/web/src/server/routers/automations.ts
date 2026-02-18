@@ -795,8 +795,10 @@ export const automationsRouter = {
 		.input(z.object({ runId: z.string().uuid() }))
 		.output(z.object({ events: z.array(AutomationRunEventSchema) }))
 		.handler(async ({ input, context }) => {
-			// listRunEvents verifies org ownership internally
 			const events = await runs.listRunEvents(input.runId, context.orgId);
+			if (!events) {
+				throw new ORPCError("NOT_FOUND", { message: "Run not found" });
+			}
 			return {
 				events: events.map((e) => ({
 					id: e.id,
@@ -804,7 +806,7 @@ export const automationsRouter = {
 					from_status: e.fromStatus ?? null,
 					to_status: e.toStatus ?? null,
 					data: (e.data as Record<string, unknown>) ?? null,
-					created_at: (e.createdAt ?? new Date()).toISOString(),
+					created_at: e.createdAt!.toISOString(),
 				})),
 			};
 		}),

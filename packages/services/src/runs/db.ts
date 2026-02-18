@@ -485,13 +485,13 @@ export async function findRunForDisplay(runId: string, orgId: string): Promise<R
 export async function listRunEvents(
 	runId: string,
 	orgId: string,
-): Promise<AutomationRunEventRow[]> {
+): Promise<AutomationRunEventRow[] | null> {
 	const db = getDb();
 	const run = await db.query.automationRuns.findFirst({
 		where: and(eq(automationRuns.id, runId), eq(automationRuns.organizationId, orgId)),
 		columns: { id: true },
 	});
-	if (!run) return [];
+	if (!run) return null;
 	return db.query.automationRunEvents.findMany({
 		where: eq(automationRunEvents.runId, runId),
 		orderBy: [automationRunEvents.createdAt],

@@ -357,7 +357,7 @@ export async function findRunForDisplay(
 export async function listRunEvents(
 	runId: string,
 	orgId: string,
-): Promise<runsDb.AutomationRunEventRow[]> {
+): Promise<runsDb.AutomationRunEventRow[] | null> {
 	return runsDb.listRunEvents(runId, orgId);
 }
 
