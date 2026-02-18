@@ -13,7 +13,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
-import { useAttentionInbox } from "@/hooks/use-attention-inbox";
+import { countUnassignedItems, useAttentionInbox } from "@/hooks/use-attention-inbox";
 import { useSlackStatus } from "@/hooks/use-integrations";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useSession } from "@/lib/auth-client";
@@ -105,10 +105,7 @@ export function Sidebar() {
 	const isSessionsPage = pathname?.startsWith("/dashboard/sessions");
 
 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
-	const inboxCount = inboxItems.filter((item) => {
-		if (item.type === "run") return !item.data.assigned_to;
-		return true;
-	}).length;
+	const inboxCount = countUnassignedItems(inboxItems);
 
 	return (
 		<aside
@@ -562,10 +559,7 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 
 	// Inbox badge: count only unassigned items
 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
-	const inboxCount = inboxItems.filter((item) => {
-		if (item.type === "run") return !item.data.assigned_to;
-		return true;
-	}).length;
+	const inboxCount = countUnassignedItems(inboxItems);
 
 	const handleNavigate = (path: string) => {
 		router.push(path);

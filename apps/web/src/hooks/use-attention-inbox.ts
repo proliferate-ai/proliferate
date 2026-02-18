@@ -19,6 +19,19 @@ export type AttentionItem =
 	| { type: "approval"; data: ApprovalWithSession; timestamp: number }
 	| { type: "run"; data: PendingRunSummary; timestamp: number };
 
+/** Filter attention items to only those with no owner (unassigned runs + all approvals). */
+export function filterUnassignedItems(items: AttentionItem[]): AttentionItem[] {
+	return items.filter((item) => {
+		if (item.type === "run") return !item.data.assigned_to;
+		return true;
+	});
+}
+
+/** Count attention items that have no owner yet. */
+export function countUnassignedItems(items: AttentionItem[]): number {
+	return filterUnassignedItems(items).length;
+}
+
 /**
  * Merges current-session WebSocket approvals with org-level polled approvals
  * and org pending runs into a single sorted attention list.

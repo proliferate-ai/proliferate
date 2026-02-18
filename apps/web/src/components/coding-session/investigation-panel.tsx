@@ -164,13 +164,16 @@ function ResolutionSection({
 			setActiveOutcome(null);
 			setComment("");
 		} catch {
-			// Error state surfaced via resolveRun.isError
+			// Error rendered below via resolveRun.isError
 		}
 	};
 
 	return (
 		<div className="space-y-2">
 			<p className="text-xs font-medium text-muted-foreground">Resolve</p>
+			{resolveRun.isError && (
+				<p className="text-xs text-destructive">Failed to resolve run. Please try again.</p>
+			)}
 			<div className="flex items-center gap-1.5">
 				<Button
 					size="sm"
@@ -201,6 +204,9 @@ function ResolutionSection({
 						placeholder="Optional comment..."
 						className="text-sm min-h-[60px] resize-none"
 					/>
+					{resolveRun.isError && (
+						<p className="text-xs text-destructive">Failed to resolve — please try again.</p>
+					)}
 					<div className="flex items-center gap-1.5">
 						<Button
 							size="sm"
