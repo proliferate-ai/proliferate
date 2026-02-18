@@ -29,18 +29,29 @@ if (emailEnabled && !emailFrom) {
 	throw new Error("EMAIL_FROM is required when email is enabled.");
 }
 
+const isDev = process.env.NODE_ENV === "development";
 const isLocalDb =
 	env.DATABASE_URL?.includes("localhost") || env.DATABASE_URL?.includes("127.0.0.1");
 
-const pool = new Pool({
-	connectionString: env.DATABASE_URL,
-	max: 1, // Limit connections in serverless environment
-	idleTimeoutMillis: 10000, // Close idle connections after 10s
-	connectionTimeoutMillis: 5000, // Fail fast if can't connect
-	// Explicit ssl avoids the pg v8 deprecation warning about sslmode aliases.
-	// RDS certs aren't in the default trust store, so rejectUnauthorized: false.
-	ssl: isLocalDb ? false : { rejectUnauthorized: false },
-});
+// Prevent Next.js HMR from creating orphaned pools on every file save
+const globalForAuthDb = globalThis as unknown as { authPool: Pool | undefined };
+
+const pool =
+	globalForAuthDb.authPool ??
+	new Pool({
+		connectionString: env.DATABASE_URL,
+		max: isDev ? 5 : 1, // More connections for local dev; limit in serverless
+		idleTimeoutMillis: 10000, // Close idle connections after 10s
+		connectionTimeoutMillis: isDev ? 30000 : 5000, // Survive Next.js cold compiles locally
+		keepAlive: isDev,
+		// Explicit ssl avoids the pg v8 deprecation warning about sslmode aliases.
+		// RDS certs aren't in the default trust store, so rejectUnauthorized: false.
+		ssl: isLocalDb ? false : { rejectUnauthorized: false },
+	});
+
+if (isDev) {
+	globalForAuthDb.authPool = pool;
+}
 
 // When true, blocks login until email is verified and sends verification emails.
 // Coerce because SKIP_ENV_VALIDATION returns raw env strings.
