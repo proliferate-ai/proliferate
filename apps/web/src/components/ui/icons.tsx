@@ -759,23 +759,7 @@ export function OpenAIIcon({ className }: IconProps) {
  * Google Gemini logo
  */
 export function GeminiIcon({ className }: IconProps) {
-	return (
-		<svg
-			className={cn("h-4 w-4", className)}
-			viewBox="0 0 24 24"
-			fill="none"
-			xmlns="http://www.w3.org/2000/svg"
-		>
-			<path
-				d="M12 24C12 18.2 12 15.3 12 12C12 8.7 12 5.8 12 0C14.4 3.5 17 6.2 21 8.1C24 9.5 24 9.5 24 12C24 14.5 24 14.5 21 15.9C17 17.8 14.4 20.5 12 24Z"
-				fill="#4285F4"
-			/>
-			<path
-				d="M12 24C12 18.2 12 15.3 12 12C12 8.7 12 5.8 12 0C9.6 3.5 7 6.2 3 8.1C0 9.5 0 9.5 0 12C0 14.5 0 14.5 3 15.9C7 17.8 9.6 20.5 12 24Z"
-				fill="#4285F4"
-			/>
-		</svg>
-	);
+	return <img src="/logos/gemini.png" alt="" className={cn("h-4 w-4 object-contain", className)} />;
 }
 
 /**
@@ -783,14 +767,7 @@ export function GeminiIcon({ className }: IconProps) {
  */
 export function DeepSeekIcon({ className }: IconProps) {
 	return (
-		<svg
-			className={cn("h-4 w-4", className)}
-			viewBox="0 0 24 24"
-			fill="currentColor"
-			xmlns="http://www.w3.org/2000/svg"
-		>
-			<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1.5 14.5c-2.49 0-4.5-2.01-4.5-4.5s2.01-4.5 4.5-4.5c1.23 0 2.34.5 3.15 1.3l-1.27 1.27A2.976 2.976 0 0010.5 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c1.3 0 2.4-.83 2.82-2h-2.82v-1.75h4.74c.06.3.09.62.09.95 0 2.79-2.01 4.8-4.83 4.8v-.5zm7.5-4.25h-1.75V10.5H18v1.75zm0 3.5h-1.75V14H18v1.75z" />
-		</svg>
+		<img src="/logos/deespeek.png" alt="" className={cn("h-4 w-4 object-contain", className)} />
 	);
 }
 
@@ -799,19 +776,16 @@ export function DeepSeekIcon({ className }: IconProps) {
  */
 export function XAIIcon({ className }: IconProps) {
 	return (
-		<svg
-			className={cn("h-4 w-4", className)}
-			viewBox="0 0 24 24"
-			fill="currentColor"
-			xmlns="http://www.w3.org/2000/svg"
-		>
-			<path d="M2 4l8.5 8L2 20h2.5l7-6.5L18.5 20H21l-8.5-8L21 4h-2.5l-7 6.5L4.5 4H2z" />
-		</svg>
+		<img
+			src="/logos/xai.png"
+			alt=""
+			className={cn("h-4 w-4 object-contain dark:invert", className)}
+		/>
 	);
 }
 
 /**
- * Mistral brand icon
+ * Mistral brand icon — no logo file provided, keep as SVG placeholder
  */
 export function MistralIcon({ className }: IconProps) {
 	return (
@@ -831,6 +805,113 @@ export function MistralIcon({ className }: IconProps) {
 			<rect x="19" y="17" width="4" height="4" />
 			<rect x="7" y="3" width="10" height="4" fill="currentColor" opacity="0.5" />
 			<rect x="7" y="17" width="10" height="4" fill="currentColor" opacity="0.5" />
+		</svg>
+	);
+}
+
+/**
+ * Animated thinking icon with speed-differentiated animation.
+ * Uses the same blocks pattern as BlocksLoadingIcon but with parameterized duration.
+ */
+export function ThinkingIcon({
+	className,
+	speed = "normal",
+}: IconProps & { speed?: "quick" | "normal" | "deep" }) {
+	const dur = speed === "quick" ? "0.8s" : speed === "deep" ? "2.4s" : "1.4s";
+	const offsets = ["-0.8s", "0s", "0.16s", "0.32s", "0.48s", "0.64s", "0.8s", "0.96s", "1.12s"];
+	// Scale begin offsets proportionally to duration
+	const durNum = Number.parseFloat(dur);
+	const scale = durNum / 1.6;
+	const beginValues = offsets.map((o) => `${Number.parseFloat(o) * scale}s`);
+
+	return (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			viewBox="300 300 200 200"
+			className={className}
+			fill="none"
+		>
+			<rect x="375.00" y="375.00" width="50.00" height="50.00" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="1;0.55;1"
+					dur={dur}
+					begin={beginValues[0]}
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="387.67" y="305.00" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur={dur}
+					begin={beginValues[1]}
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="429.00" y="346.33" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur={dur}
+					begin={beginValues[2]}
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="470.33" y="387.67" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur={dur}
+					begin={beginValues[3]}
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="429.00" y="429.00" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur={dur}
+					begin={beginValues[4]}
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="387.67" y="470.33" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur={dur}
+					begin={beginValues[5]}
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="346.33" y="429.00" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur={dur}
+					begin={beginValues[6]}
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="305.00" y="387.67" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur={dur}
+					begin={beginValues[7]}
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="346.33" y="346.33" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur={dur}
+					begin={beginValues[8]}
+					repeatCount="indefinite"
+				/>
+			</rect>
 		</svg>
 	);
 }
@@ -1168,9 +1249,6 @@ export function ChatBubbleIcon({ className }: IconProps) {
 				strokeLinecap="square"
 				strokeLinejoin="round"
 			/>
-			<path d="M10.0331 8V12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-			<path d="M7 9V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-			<path d="M13.0331 9V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 		</svg>
 	);
 }
