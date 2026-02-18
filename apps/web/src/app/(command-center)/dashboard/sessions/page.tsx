@@ -61,7 +61,7 @@ export default function SessionsPage() {
 		const map = new Map<string, NonNullable<typeof pendingRuns>[number]>();
 		if (!pendingRuns) return map;
 		for (const run of pendingRuns) {
-			if (run.session_id) {
+			if (run.session_id && !map.has(run.session_id)) {
 				map.set(run.session_id, run);
 			}
 		}

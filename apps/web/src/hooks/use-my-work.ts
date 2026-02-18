@@ -22,6 +22,7 @@ export function useMyWork() {
 		excludeCli: true,
 		excludeAutomation: true,
 		createdBy: userId,
+		enabled: !!userId,
 	});
 
 	const { data: approvals, isLoading: approvalsLoading } = useOrgActions({

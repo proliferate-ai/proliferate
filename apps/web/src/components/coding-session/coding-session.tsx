@@ -2,11 +2,12 @@
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRepo } from "@/hooks/use-repos";
-import { useSessionData, useSnapshotSession } from "@/hooks/use-sessions";
+import { useRenameSession, useSessionData, useSnapshotSession } from "@/hooks/use-sessions";
 import { useSession as useBetterAuthSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
@@ -82,6 +83,7 @@ export function CodingSession({
 		error,
 		previewUrl,
 		sessionTitle,
+		updateTitle,
 		isMigrating,
 		activityTick,
 		autoStartOutput,
@@ -144,11 +146,11 @@ export function CodingSession({
 	const [viewPickerOpen, setViewPickerOpen] = useState(false);
 	const activeType = mode.type === "file" || mode.type === "gallery" ? "artifacts" : mode.type;
 
-	// Auto-open investigation panel when runId is present
-	const investigationOpened = useRef(false);
+	// Auto-open investigation panel when runId is present (fires once per runId)
+	const lastOpenedRunId = useRef<string | null>(null);
 	useEffect(() => {
-		if (runId && !investigationOpened.current) {
-			investigationOpened.current = true;
+		if (runId && lastOpenedRunId.current !== runId) {
+			lastOpenedRunId.current = runId;
 			if (mode.type !== "investigation") {
 				togglePanel("investigation");
 			}
@@ -199,6 +201,42 @@ export function CodingSession({
 
 	const displayTitle = sessionTitle || sessionData?.title || title;
 	const headerDisabled = isLoading || !authSession || !sessionData || status === "error";
+
+	// Inline rename state
+	const renameSession = useRenameSession();
+	const [isEditingTitle, setIsEditingTitle] = useState(false);
+	const [editTitleValue, setEditTitleValue] = useState("");
+	const titleInputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		if (isEditingTitle && titleInputRef.current) {
+			titleInputRef.current.focus();
+			titleInputRef.current.select();
+		}
+	}, [isEditingTitle]);
+
+	const handleStartRename = () => {
+		setEditTitleValue(displayTitle || "");
+		setIsEditingTitle(true);
+	};
+
+	const handleSaveRename = () => {
+		const trimmed = editTitleValue.trim();
+		if (trimmed && trimmed !== displayTitle) {
+			renameSession.mutate(sessionId, trimmed);
+			updateTitle(trimmed);
+		}
+		setIsEditingTitle(false);
+	};
+
+	const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+		if (e.key === "Enter") {
+			handleSaveRename();
+		} else if (e.key === "Escape") {
+			setIsEditingTitle(false);
+			setEditTitleValue("");
+		}
+	};
 
 	// Left pane content (chat or loading/error states)
 	const leftPaneContent = isLoading ? (
@@ -343,9 +381,29 @@ export function CodingSession({
 				alt="Proliferate"
 				className="h-5 w-5 rounded-full shrink-0"
 			/>
-			{displayTitle && (
-				<span className="text-sm font-medium text-foreground truncate">{displayTitle}</span>
-			)}
+			<div className="min-w-0 flex-1">
+				{isEditingTitle ? (
+					<Input
+						ref={titleInputRef}
+						type="text"
+						variant="inline"
+						size="auto"
+						value={editTitleValue}
+						onChange={(e) => setEditTitleValue(e.target.value)}
+						onBlur={handleSaveRename}
+						onKeyDown={handleRenameKeyDown}
+						className="text-sm font-medium"
+					/>
+				) : (
+					<span
+						className="text-sm font-medium text-foreground truncate block cursor-pointer hover:text-foreground/80 transition-colors"
+						onClick={handleStartRename}
+						title="Click to rename"
+					>
+						{displayTitle || "Untitled"}
+					</span>
+				)}
+			</div>
 			<SessionHeader
 				error={headerDisabled ? null : error}
 				disabled={headerDisabled}
