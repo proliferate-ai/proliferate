@@ -7,6 +7,7 @@ import type { Session } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
 import { AlertTriangle, GitBranch, Terminal } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface SessionListRowProps {
 	session: Session;
@@ -52,16 +53,22 @@ function getStatusConfig(status: Session["status"]) {
 }
 
 function OriginBadge({ session }: { session: Session }) {
+	const router = useRouter();
+
 	if (session.automationId && session.automation) {
 		return (
-			<Link
-				href={`/dashboard/automations/${session.automation.id}/events`}
+			<button
+				type="button"
 				className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
-				onClick={(e) => e.stopPropagation()}
+				onClick={(e) => {
+					e.preventDefault();
+					e.stopPropagation();
+					router.push(`/dashboard/automations/${session.automation!.id}/events`);
+				}}
 			>
 				<AutomationsIcon className="h-3 w-3" />
 				<span className="truncate max-w-[100px]">{session.automation.name}</span>
-			</Link>
+			</button>
 		);
 	}
 
