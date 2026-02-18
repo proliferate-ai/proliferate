@@ -1,11 +1,22 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { GithubIcon, LinearIcon, PostHogIcon, SentryIcon, SlackIcon } from "@/components/ui/icons";
+import {
+	Context7Icon,
+	FirecrawlIcon,
+	GithubIcon,
+	LinearIcon,
+	NeonIcon,
+	PlaywrightIcon,
+	PostHogIcon,
+	SentryIcon,
+	SlackIcon,
+	StripeIcon,
+} from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 import { useOnboardingStore } from "@/stores/onboarding";
 import { Check } from "lucide-react";
-import Image from "next/image";
+import { OnboardingCardImage } from "./onboarding-card-image";
 
 interface StepToolSelectionProps {
 	onComplete: (selectedTools: string[]) => void;
@@ -43,6 +54,36 @@ const TOOLS = [
 		description: "Product analytics and insights",
 		icon: PostHogIcon,
 	},
+	{
+		id: "context7",
+		name: "Context7",
+		description: "Up-to-date docs and code examples",
+		icon: Context7Icon,
+	},
+	{
+		id: "stripe",
+		name: "Stripe",
+		description: "Payment processing and billing",
+		icon: StripeIcon,
+	},
+	{
+		id: "firecrawl",
+		name: "Firecrawl",
+		description: "Web scraping and crawling",
+		icon: FirecrawlIcon,
+	},
+	{
+		id: "neon",
+		name: "Neon",
+		description: "Serverless Postgres databases",
+		icon: NeonIcon,
+	},
+	{
+		id: "playwright",
+		name: "Playwright",
+		description: "Browser testing and automation",
+		icon: PlaywrightIcon,
+	},
 ] as const;
 
 export function StepToolSelection({ onComplete, isSubmitting }: StepToolSelectionProps) {
@@ -62,17 +103,10 @@ export function StepToolSelection({ onComplete, isSubmitting }: StepToolSelectio
 	};
 
 	return (
-		<div className="w-[480px]">
+		<div className="w-[520px]">
 			<div className="rounded-2xl overflow-hidden border border-border">
 				{/* Image Area */}
-				<div className="relative bg-black" style={{ aspectRatio: "1360 / 880" }}>
-					<Image src="/jam.png" alt="Select your tools" fill className="object-cover" />
-					<div className="absolute top-3 left-0 right-0 flex justify-center pointer-events-none">
-						<span className="px-4 py-1.5 font-bold text-xs tracking-[0.25em] uppercase text-white/80">
-							Integrations
-						</span>
-					</div>
-				</div>
+				<OnboardingCardImage src="/tool2.png" alt="Select your tools" label="Integrations" />
 
 				{/* Content */}
 				<div className="p-6 bg-card">
@@ -83,7 +117,7 @@ export function StepToolSelection({ onComplete, isSubmitting }: StepToolSelectio
 						</p>
 					</div>
 
-					<div className="space-y-1.5">
+					<div className="grid grid-cols-2 gap-1.5">
 						{TOOLS.map((tool) => {
 							const Icon = tool.icon;
 							const isSelected = selected.has(tool.id);
@@ -93,18 +127,17 @@ export function StepToolSelection({ onComplete, isSubmitting }: StepToolSelectio
 									type="button"
 									onClick={() => toggle(tool.id)}
 									className={cn(
-										"flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg border transition-all text-left",
+										"flex items-center gap-2 w-full px-2.5 py-2 rounded-lg border transition-all text-left",
 										isSelected
 											? "border-primary bg-primary/5 ring-1 ring-primary/20"
 											: "border-border hover:border-foreground/20 bg-card",
 									)}
 								>
-									<div className="flex h-8 w-8 items-center justify-center rounded-md bg-muted shrink-0">
-										<Icon className="h-4 w-4" />
+									<div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted shrink-0">
+										<Icon className="h-3.5 w-3.5" />
 									</div>
 									<div className="flex-1 min-w-0">
 										<p className="text-sm font-medium text-foreground leading-tight">{tool.name}</p>
-										<p className="text-[11px] text-muted-foreground">{tool.description}</p>
 									</div>
 									<div
 										className={cn(

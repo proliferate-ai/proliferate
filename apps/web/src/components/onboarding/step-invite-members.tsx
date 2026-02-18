@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/select";
 import { authClient } from "@/lib/auth-client";
 import { Mail, X } from "lucide-react";
-import Image from "next/image";
 import { useState } from "react";
+import { OnboardingCardImage } from "./onboarding-card-image";
 
 interface StepInviteMembersProps {
 	onComplete: () => void;
@@ -65,14 +65,7 @@ export function StepInviteMembers({ onComplete }: StepInviteMembersProps) {
 		<div className="w-[480px]">
 			<div className="rounded-2xl overflow-hidden border border-border">
 				{/* Image Area */}
-				<div className="relative bg-black" style={{ aspectRatio: "1360 / 880" }}>
-					<Image src="/single.png" alt="Invite your team" fill className="object-cover" />
-					<div className="absolute top-3 left-0 right-0 flex justify-center pointer-events-none">
-						<span className="px-4 py-1.5 font-bold text-xs tracking-[0.25em] uppercase text-white/80">
-							Team
-						</span>
-					</div>
-				</div>
+				<OnboardingCardImage src="/team.png" alt="Invite your team" label="Team" />
 
 				{/* Content */}
 				<div className="p-6 bg-card">

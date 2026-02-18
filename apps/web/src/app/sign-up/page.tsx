@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, GithubIcon, GoogleIcon } from "@/components/ui/icons";
+import { Eye, EyeOff, GoogleIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthProviders } from "@/hooks/use-auth-providers";
@@ -23,7 +23,6 @@ function SignUpContent() {
 	const { data: session, isPending } = useSession();
 	const { data: authProviders } = useAuthProviders();
 	const [googleLoading, setGoogleLoading] = useState(false);
-	const [githubLoading, setGithubLoading] = useState(false);
 	const [formLoading, setFormLoading] = useState(false);
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("");
@@ -34,8 +33,6 @@ function SignUpContent() {
 	const redirectUrl = searchParams.get("redirect") || "/dashboard";
 
 	const hasGoogleOAuth = authProviders?.providers.google ?? false;
-	const hasGitHubOAuth = authProviders?.providers.github ?? false;
-	const hasAnySocialOAuth = hasGoogleOAuth || hasGitHubOAuth;
 
 	useEffect(() => {
 		if (session && !isPending) {
@@ -47,8 +44,18 @@ function SignUpContent() {
 		}
 	}, [session, isPending, router, redirectUrl]);
 
+	// Track which auth method was last used
+	const setLastAuthMethod = (method: "google" | "email") => {
+		try {
+			localStorage.setItem("proliferate:last-auth-method", method);
+		} catch {
+			// localStorage may be unavailable in private browsing
+		}
+	};
+
 	const handleGoogleSignIn = async () => {
 		setGoogleLoading(true);
+		setLastAuthMethod("google");
 		try {
 			await signIn.social({
 				provider: "google",
@@ -61,23 +68,10 @@ function SignUpContent() {
 		}
 	};
 
-	const handleGitHubSignIn = async () => {
-		setGithubLoading(true);
-		try {
-			await signIn.social({
-				provider: "github",
-				callbackURL: redirectUrl,
-			});
-		} catch (err) {
-			console.error("GitHub sign up failed:", err);
-			toast.error("GitHub sign up failed. Please try again.");
-			setGithubLoading(false);
-		}
-	};
-
 	const handleEmailSignUp = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setFormLoading(true);
+		setLastAuthMethod("email");
 
 		if (password.length < 8) {
 			toast.error("Password must be at least 8 characters");
@@ -137,34 +131,18 @@ function SignUpContent() {
 					<p className="mt-1.5 text-sm text-neutral-500">Get started with Proliferate for free</p>
 				</div>
 
-				{hasAnySocialOAuth && (
+				{hasGoogleOAuth && (
 					<>
-						<div className="flex items-center gap-3">
-							{hasGoogleOAuth && (
-								<Button
-									variant="outline"
-									className="h-10 flex-1 gap-2.5 rounded-lg border-neutral-800 bg-neutral-900/50 text-sm font-medium text-neutral-300 hover:bg-neutral-800/80 hover:text-neutral-100"
-									onClick={handleGoogleSignIn}
-									disabled={googleLoading || githubLoading || formLoading}
-									type="button"
-								>
-									<GoogleIcon className="h-4 w-4" />
-									{googleLoading ? "..." : "Google"}
-								</Button>
-							)}
-							{hasGitHubOAuth && (
-								<Button
-									variant="outline"
-									className="h-10 flex-1 gap-2.5 rounded-lg border-neutral-800 bg-neutral-900/50 text-sm font-medium text-neutral-300 hover:bg-neutral-800/80 hover:text-neutral-100"
-									onClick={handleGitHubSignIn}
-									disabled={githubLoading || googleLoading || formLoading}
-									type="button"
-								>
-									<GithubIcon className="h-4 w-4" />
-									{githubLoading ? "..." : "GitHub"}
-								</Button>
-							)}
-						</div>
+						<Button
+							variant="outline"
+							className="h-10 w-full gap-2.5 rounded-lg border-neutral-800 bg-neutral-900/50 text-sm font-medium text-neutral-300 hover:bg-neutral-800/80 hover:text-neutral-100"
+							onClick={handleGoogleSignIn}
+							disabled={googleLoading || formLoading}
+							type="button"
+						>
+							<GoogleIcon className="h-4 w-4" />
+							{googleLoading ? "..." : "Google"}
+						</Button>
 
 						<div className="my-6 flex items-center gap-3">
 							<div className="h-px flex-1 bg-neutral-800" />
@@ -186,7 +164,7 @@ function SignUpContent() {
 							onChange={(e) => setName(e.target.value)}
 							placeholder="Your name"
 							required
-							disabled={formLoading || googleLoading || githubLoading}
+							disabled={formLoading || googleLoading}
 							className="h-10 rounded-lg border-neutral-800 bg-neutral-900/50 px-3 text-sm text-neutral-100 placeholder:text-neutral-600 focus-visible:border-neutral-600 focus-visible:ring-0"
 						/>
 					</div>
@@ -202,7 +180,7 @@ function SignUpContent() {
 							onChange={(e) => setEmail(e.target.value)}
 							placeholder="you@company.com"
 							required
-							disabled={formLoading || googleLoading || githubLoading}
+							disabled={formLoading || googleLoading}
 							className="h-10 rounded-lg border-neutral-800 bg-neutral-900/50 px-3 text-sm text-neutral-100 placeholder:text-neutral-600 focus-visible:border-neutral-600 focus-visible:ring-0"
 						/>
 					</div>
@@ -219,7 +197,7 @@ function SignUpContent() {
 								onChange={(e) => setPassword(e.target.value)}
 								placeholder="At least 8 characters"
 								required
-								disabled={formLoading || googleLoading || githubLoading}
+								disabled={formLoading || googleLoading}
 								className="h-10 rounded-lg border-neutral-800 bg-neutral-900/50 px-3 pr-10 text-sm text-neutral-100 placeholder:text-neutral-600 focus-visible:border-neutral-600 focus-visible:ring-0"
 							/>
 							<Button
@@ -237,7 +215,7 @@ function SignUpContent() {
 					<Button
 						type="submit"
 						className="h-10 w-full rounded-lg bg-neutral-100 text-sm font-medium text-neutral-950 hover:bg-white"
-						disabled={formLoading || googleLoading || githubLoading}
+						disabled={formLoading || googleLoading}
 					>
 						{formLoading ? "Creating account..." : "Create account"}
 					</Button>

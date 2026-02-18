@@ -51,11 +51,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
 				<div className="flex w-full max-w-[380px] flex-col items-center">
 					{/* Logo */}
 					{/* eslint-disable-next-line @next/next/no-img-element */}
-					{/* <img
-						src="https://d1uh4o7rpdqkkl.cloudfront.net/logotype-inverted.webp"
-						alt="Proliferate"
-						className="mb-10 h-5 w-auto"
-					/> */}
+					<img src="/proliferate-logo-inverted.svg" alt="Proliferate" className="mb-8 h-8 w-8" />
 
 					{/* Auth form */}
 					{children}

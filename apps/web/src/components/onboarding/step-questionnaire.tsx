@@ -11,7 +11,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { useOnboardingStore } from "@/stores/onboarding";
-import Image from "next/image";
+import { OnboardingCardImage } from "./onboarding-card-image";
 
 interface QuestionnaireData {
 	referralSource?: string;
@@ -54,14 +54,7 @@ export function StepQuestionnaire({ onComplete, isSubmitting }: StepQuestionnair
 		<div className="w-[480px]">
 			<div className="rounded-2xl overflow-hidden border border-border">
 				{/* Image Area */}
-				<div className="relative bg-black" style={{ aspectRatio: "1360 / 880" }}>
-					<Image src="/asdf.png" alt="Tell us about your team" fill className="object-cover" />
-					<div className="absolute top-3 left-0 right-0 flex justify-center pointer-events-none">
-						<span className="px-4 py-1.5 font-bold text-xs tracking-[0.25em] uppercase text-white/80">
-							About You
-						</span>
-					</div>
-				</div>
+				<OnboardingCardImage src="/about2.png" alt="Tell us about your team" label="About You" />
 
 				{/* Form Content */}
 				<div className="p-6 bg-card">

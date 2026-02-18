@@ -119,15 +119,21 @@ export default function OnboardingPage() {
 	const handleFinish = () => {
 		markCompleteMutation.mutate(undefined, {
 			onSuccess: async () => {
-				reset();
 				await refetch();
+				// Navigate first, then reset the store to avoid flashing the path choice step
 				router.push("/dashboard");
+				reset();
 			},
 			onError: (err) => {
 				console.error("Failed to complete onboarding:", err);
 			},
 		});
 	};
+
+	// While finishing, keep showing the complete step (don't flash path choice)
+	if (markCompleteMutation.isSuccess) {
+		return null;
+	}
 
 	return (
 		<div key={step} className="animate-in fade-in duration-300">

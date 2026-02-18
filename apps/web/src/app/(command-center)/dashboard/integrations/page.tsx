@@ -80,7 +80,7 @@ import { useCallback, useMemo, useState } from "react";
 // ====================================================================
 
 const quickPresets = CONNECTOR_PRESETS.filter((p) => p.quickSetup);
-const advancedPresets = CONNECTOR_PRESETS.filter((p) => !p.quickSetup);
+const advancedPresets = CONNECTOR_PRESETS.filter((p) => !p.quickSetup && p.key !== "custom");
 
 const INTEGRATION_CATALOG: CatalogEntry[] = [
 	// Source Control
