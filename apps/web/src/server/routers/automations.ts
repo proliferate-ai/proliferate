@@ -795,8 +795,10 @@ export const automationsRouter = {
 		.input(z.object({ runId: z.string().uuid() }))
 		.output(z.object({ events: z.array(AutomationRunEventSchema) }))
 		.handler(async ({ input, context }) => {
-			// listRunEvents verifies org ownership; returns [] if run not found
 			const events = await runs.listRunEvents(input.runId, context.orgId);
+			if (!events) {
+				throw new ORPCError("NOT_FOUND", { message: "Run not found" });
+			}
 			return {
 				events: events.map((e) => ({
 					id: e.id,
