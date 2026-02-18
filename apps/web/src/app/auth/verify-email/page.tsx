@@ -2,8 +2,8 @@
 
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
-import { sendVerificationEmail, useSession } from "@/lib/auth-client";
-import Link from "next/link";
+import { sendVerificationEmail, signOut, useSession } from "@/lib/auth-client";
+import { sanitizeRedirect } from "@/lib/auth-utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
@@ -72,7 +72,7 @@ function VerifyEmailContent() {
 	const { data: session, isPending } = useSession();
 
 	const emailFromQuery = searchParams.get("email");
-	const redirectUrl = searchParams.get("redirect") || "/dashboard";
+	const redirectUrl = sanitizeRedirect(searchParams.get("redirect"));
 	const email = session?.user?.email || emailFromQuery;
 
 	const [isResending, setIsResending] = useState(false);
@@ -171,12 +171,16 @@ function VerifyEmailContent() {
 								{isResending ? "Sending..." : resent ? "Email sent" : "Resend verification email"}
 							</Button>
 						)}
-						<Link
-							href="/sign-in"
+						<button
+							type="button"
 							className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md text-sm text-neutral-500 transition-colors hover:text-neutral-300"
+							onClick={async () => {
+								await signOut();
+								router.push("/sign-in");
+							}}
 						>
 							Back to sign in
-						</Link>
+						</button>
 					</div>
 				</div>
 			</div>

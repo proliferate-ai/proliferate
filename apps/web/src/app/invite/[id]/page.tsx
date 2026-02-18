@@ -45,8 +45,10 @@ export default function InviteAcceptPage() {
 
 	// Step 1: Fetch basic invite info (no auth needed)
 	useEffect(() => {
+		let aborted = false;
 		getBasicInviteInfo(invitationId)
 			.then((info) => {
+				if (aborted) return;
 				if (info) {
 					setInvitedEmail(info.email);
 					setOrganizationName(info.organizationName);
@@ -55,11 +57,15 @@ export default function InviteAcceptPage() {
 				}
 			})
 			.catch(() => {
+				if (aborted) return;
 				setError("Failed to load invitation");
 			})
 			.finally(() => {
-				setBasicInfoLoaded(true);
+				if (!aborted) setBasicInfoLoaded(true);
 			});
+		return () => {
+			aborted = true;
+		};
 	}, [invitationId]);
 
 	// Step 2: Route based on session + email match
@@ -80,9 +86,11 @@ export default function InviteAcceptPage() {
 		}
 
 		// Logged in + correct email — fetch full invitation from better-auth
+		let aborted = false;
 		organization
 			.getInvitation({ query: { id: invitationId } })
 			.then((result) => {
+				if (aborted) return;
 				if (result.data) {
 					setInvitation(result.data as unknown as InvitationDetails);
 				} else {
@@ -90,8 +98,12 @@ export default function InviteAcceptPage() {
 				}
 			})
 			.catch(() => {
+				if (aborted) return;
 				setError("Failed to load invitation details");
 			});
+		return () => {
+			aborted = true;
+		};
 	}, [session, sessionPending, invitedEmail, basicInfoLoaded, invitationId, router]);
 
 	const handleAccept = async () => {

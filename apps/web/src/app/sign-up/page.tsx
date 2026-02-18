@@ -9,20 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthProviders } from "@/hooks/use-auth-providers";
 import { signIn, signUp, useSession } from "@/lib/auth-client";
+import { buildAuthLink, sanitizeRedirect } from "@/lib/auth-utils";
 import { env } from "@proliferate/environment/public";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
-
-/** Build an auth page link preserving redirect + email params. */
-function buildAuthLink(base: string, redirect: string, email: string): string {
-	const params = new URLSearchParams();
-	if (redirect && redirect !== "/dashboard") params.set("redirect", redirect);
-	if (email) params.set("email", email);
-	const qs = params.toString();
-	return qs ? `${base}?${qs}` : base;
-}
 
 const REQUIRE_EMAIL_VERIFICATION = env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION;
 
@@ -38,7 +30,7 @@ function SignUpContent() {
 	const [showPassword, setShowPassword] = useState(false);
 
 	// Get redirect URL and optional pre-filled email from query params
-	const redirectUrl = searchParams.get("redirect") || "/dashboard";
+	const redirectUrl = sanitizeRedirect(searchParams.get("redirect"));
 	const prefilledEmail = searchParams.get("email") || "";
 
 	const [email, setEmail] = useState(prefilledEmail);
