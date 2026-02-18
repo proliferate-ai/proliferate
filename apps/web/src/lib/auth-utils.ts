@@ -3,8 +3,8 @@ export function buildAuthLink(base: string, redirect: string, email: string): st
 	const params = new URLSearchParams();
 	if (redirect && redirect !== "/dashboard") params.set("redirect", redirect);
 	if (email) params.set("email", email);
-	const qs = params.toString();
-	return qs ? `${base}?${qs}` : base;
+	const queryString = params.toString();
+	return queryString ? `${base}?${queryString}` : base;
 }
 
 /** Sanitize a redirect URL from query params to prevent open redirects. */

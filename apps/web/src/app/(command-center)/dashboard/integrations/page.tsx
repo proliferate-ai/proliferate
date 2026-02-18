@@ -125,23 +125,23 @@ const INTEGRATION_CATALOG: CatalogEntry[] = [
 
 	// MCP presets (categorized by preset.category, defaults to "developer-tools")
 	...quickPresets.map(
-		(p): CatalogEntry => ({
-			key: `mcp-${p.key}`,
-			name: p.name,
-			description: p.description,
-			category: p.category ?? "developer-tools",
+		(preset): CatalogEntry => ({
+			key: `mcp-${preset.key}`,
+			name: preset.name,
+			description: preset.description,
+			category: preset.category ?? "developer-tools",
 			type: "mcp-preset",
-			presetKey: p.key,
+			presetKey: preset.key,
 		}),
 	),
 	...advancedPresets.map(
-		(p): CatalogEntry => ({
-			key: `mcp-${p.key}`,
-			name: p.name,
-			description: p.description,
-			category: p.category ?? "developer-tools",
+		(preset): CatalogEntry => ({
+			key: `mcp-${preset.key}`,
+			name: preset.name,
+			description: preset.description,
+			category: preset.category ?? "developer-tools",
 			type: "mcp-preset",
-			presetKey: p.key,
+			presetKey: preset.key,
 		}),
 	),
 

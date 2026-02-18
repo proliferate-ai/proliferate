@@ -320,13 +320,13 @@ export function EmptyDashboard() {
 		setPendingPrompt(prompt);
 
 		try {
-			const sessionOpts = {
+			const sessionOptions = {
 				modelId: selectedModel,
 				reasoningEffort: reasoningEffort !== "normal" ? reasoningEffort : undefined,
 			};
 
 			if (!selectedSnapshotId && !selectedRepoId) {
-				await createSession.mutateAsync(sessionOpts);
+				await createSession.mutateAsync(sessionOptions);
 				// Session created — list auto-refreshes via query invalidation
 				setPendingPrompt(null);
 				return;
@@ -344,7 +344,7 @@ export function EmptyDashboard() {
 			if (!configurationId) return;
 
 			await createSession.mutateAsync({
-				...sessionOpts,
+				...sessionOptions,
 				configurationId,
 			});
 			// Session created — list auto-refreshes via query invalidation

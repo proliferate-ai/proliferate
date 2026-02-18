@@ -246,7 +246,7 @@ export default function InviteAcceptPage() {
 					{invitation.organization?.logo ? (
 						<img
 							src={invitation.organization.logo}
-							alt={invitation.organization?.name ?? ""}
+							alt={invitation.organization?.name ?? "Organization logo"}
 							className="mx-auto mb-4 h-16 w-16 rounded-full"
 						/>
 					) : (

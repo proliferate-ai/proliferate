@@ -18,32 +18,44 @@ const MailIllustration = () => (
 			width="54"
 			height="38"
 			rx="5"
-			fill="#1a1a1a"
-			stroke="#333"
+			className="fill-muted/30 stroke-border"
 			strokeWidth="1.5"
 		/>
 		{/* Flap */}
-		<path d="M6 21L33 40L60 21" stroke="#333" strokeWidth="1.5" strokeLinejoin="round" />
+		<path
+			d="M6 21L33 40L60 21"
+			className="stroke-border"
+			strokeWidth="1.5"
+			strokeLinejoin="round"
+		/>
 		{/* Bottom fold lines */}
 		<path
 			d="M6 54L24 38"
-			stroke="#333"
+			className="stroke-border"
 			strokeWidth="1"
 			strokeLinecap="round"
 			strokeDasharray="3 3"
 		/>
 		<path
 			d="M60 54L42 38"
-			stroke="#333"
+			className="stroke-border"
 			strokeWidth="1"
 			strokeLinecap="round"
 			strokeDasharray="3 3"
 		/>
 		{/* Letter peeking out */}
-		<rect x="16" y="8" width="34" height="28" rx="3" fill="#111" stroke="#333" strokeWidth="1.2" />
-		<path d="M24 16H42" stroke="#333" strokeWidth="1.5" strokeLinecap="round" />
-		<path d="M24 22H38" stroke="#333" strokeWidth="1.5" strokeLinecap="round" />
-		<path d="M24 28H34" stroke="#333" strokeWidth="1.5" strokeLinecap="round" />
+		<rect
+			x="16"
+			y="8"
+			width="34"
+			height="28"
+			rx="3"
+			className="fill-background stroke-border"
+			strokeWidth="1.2"
+		/>
+		<path d="M24 16H42" className="stroke-border" strokeWidth="1.5" strokeLinecap="round" />
+		<path d="M24 22H38" className="stroke-border" strokeWidth="1.5" strokeLinecap="round" />
+		<path d="M24 28H34" className="stroke-border" strokeWidth="1.5" strokeLinecap="round" />
 	</svg>
 );
 
@@ -171,16 +183,17 @@ function VerifyEmailContent() {
 								{isResending ? "Sending..." : resent ? "Email sent" : "Resend verification email"}
 							</Button>
 						)}
-						<button
+						<Button
 							type="button"
-							className="flex h-10 w-full items-center justify-center gap-1.5 rounded-md text-sm text-neutral-500 transition-colors hover:text-neutral-300"
+							variant="ghost"
+							className="h-10 w-full text-sm text-neutral-500 hover:text-neutral-300 hover:bg-transparent"
 							onClick={async () => {
 								await signOut();
 								router.push("/sign-in");
 							}}
 						>
 							Back to sign in
-						</button>
+						</Button>
 					</div>
 				</div>
 			</div>
