@@ -3,7 +3,7 @@
 import { InboxEmpty } from "@/components/inbox/inbox-empty";
 import { InboxItem } from "@/components/inbox/inbox-item";
 import type { AttentionItem } from "@/hooks/use-attention-inbox";
-import { filterUnassignedItems, useAttentionInbox } from "@/hooks/use-attention-inbox";
+import { useAttentionInbox } from "@/hooks/use-attention-inbox";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/utils";
 import type { PendingRunSummary } from "@proliferate/shared";
@@ -243,8 +243,8 @@ function InboxContent() {
 
 	// Apply all filters
 	const filtered = useMemo(() => {
-		// Start by filtering runs to only show unassigned items
-		let result = filterUnassignedItems(items);
+		// Runs are already filtered to unassigned at the DB level
+		let result = [...items];
 
 		// Type filter
 		if (typeFilter === "runs") {

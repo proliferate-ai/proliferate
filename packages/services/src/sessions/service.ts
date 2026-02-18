@@ -30,6 +30,7 @@ export async function listSessions(
 		excludeSetup: options?.excludeSetup,
 		excludeCli: options?.excludeCli,
 		excludeAutomation: options?.excludeAutomation,
+		createdBy: options?.createdBy,
 	});
 	return toSessions(rows);
 }

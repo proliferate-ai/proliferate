@@ -57,9 +57,9 @@ The investigation panel is a `PreviewMode` variant (`{ type: "investigation" }`)
 - Reference: `apps/web/src/components/coding-session/coding-session.tsx`, `apps/web/src/stores/preview-panel.ts`
 
 ### Unassigned Item Filtering
-The inbox filters attention items to show only those without an owner. For runs, this means `assigned_to` is null. Approvals are always shown (they do not have a per-user assignment yet). The same `countUnassignedItems()` function is used for the sidebar badge count.
-- Key detail agents get wrong: the filtering happens at the presentation layer in the inbox page and sidebar, not at the API level. The `useAttentionInbox` hook returns all items; consumers apply `filterUnassignedItems()`.
-- Reference: `apps/web/src/hooks/use-attention-inbox.ts:filterUnassignedItems`
+The inbox filters attention items to show only those without an owner. For runs, this means `assigned_to` is null. Approvals are always shown (they do not have a per-user assignment yet). The sidebar badge count is the length of the filtered items.
+- Key detail agents get wrong: the filtering is **server-side** via the `unassignedOnly` parameter on `listOrgPendingRuns`, not client-side. The `useAttentionInbox` hook passes `unassignedOnly: true` to the DB query, which adds `WHERE assigned_to IS NULL`. Legacy helpers `filterUnassignedItems()` and `countUnassignedItems()` still exist but are no longer the primary filter path.
+- Reference: `packages/services/src/runs/db.ts:listOrgPendingRuns`, `apps/web/src/hooks/use-attention-inbox.ts`
 
 ---
 
@@ -158,14 +158,15 @@ workspace/[id]/page.tsx
     │  extracts: runId = searchParams.get("runId")
     ▼
 CodingSession({ sessionId, runId })
-    │  useEffect: auto-open investigation panel (once via ref guard)
+    │  useEffect: auto-open investigation panel (once via ref guard + mode check)
     │  prepends "Investigate" tab to panel tabs when runId is present
     ▼
 RightPanel({ runId }) → mode.type === "investigation"
     ▼
 InvestigationPanel({ runId })
     ├── useRun(runId)         → run status, error, assignee, trigger context
-    ├── useRunEvents(runId)   → timeline of status transitions
+    ├── useRunEvents(runId)   → timeline of status transitions (30s poll)
+    ├── useAssignRun()        → "Claim" button (shown when unassigned + attention status)
     └── useResolveRun()       → mutation to mark run as succeeded/failed
 ```
 
@@ -174,8 +175,9 @@ InvestigationPanel({ runId })
 ```
 useMyWork()
     ├── useMyClaimedRuns()    → automations.myClaimedRuns (runs assigned to current user)
-    ├── useSessions({ excludeSetup, excludeCli, excludeAutomation })
-    │   → filter: createdBy === userId && status in (running, starting, paused)
+    ├── useSessions({ excludeSetup, excludeCli, excludeAutomation, createdBy: userId })
+    │   → server-side: WHERE created_by = userId
+    │   → client-side: status in (running, starting, paused)
     └── useOrgActions({ status: "pending" })
         → pendingApprovals
     ▼
@@ -201,13 +203,12 @@ ActivityPage: status filter pills, paginated run list
 
 ```
 useAttentionInbox({ wsApprovals })
-    │  returns: all AttentionItem[] (runs + approvals, sorted by timestamp)
+    │  calls: useOrgPendingRuns({ limit: 50, unassignedOnly: true })
+    │  DB query: WHERE assigned_to IS NULL (server-side)
+    │  returns: AttentionItem[] (unassigned runs + approvals, sorted by timestamp)
     ▼
-filterUnassignedItems(items)
-    │  keeps: runs where assigned_to is null + all approvals
-    ▼
-InboxContent: filtered items displayed
-Sidebar: countUnassignedItems(items) → badge count
+InboxContent: items displayed directly (no client-side filter needed)
+Sidebar: items.length → badge count
 ```
 
 ---
@@ -229,10 +230,13 @@ Sidebar: countUnassignedItems(items) → badge count
 
 ### Client-Side Filtering vs Server-Side
 - **Server-side**: `excludeAutomation` filter on `sessions.listByOrganization` adds `WHERE automation_id IS NULL`. Source: `packages/services/src/sessions/db.ts`
+- **Server-side**: `createdBy` filter on `sessions.listByOrganization` adds `WHERE created_by = ?`. Used by My Work to scope sessions to the current user. Source: `packages/services/src/sessions/db.ts`
+- **Server-side**: `unassignedOnly` filter on `listOrgPendingRuns` adds `WHERE assigned_to IS NULL`. Used by inbox and sidebar badge. Source: `packages/services/src/runs/db.ts`
 - **Client-side**: Origin filter dropdown (manual/automation/slack/cli) and urgency indicator cross-referencing are computed in the browser. Source: `apps/web/src/app/(command-center)/dashboard/sessions/page.tsx`
 
 ### Polling Intervals
 - `useRun(runId)`: 30s refetch interval. Source: `apps/web/src/hooks/use-automations.ts:useRun`
+- `useRunEvents(runId)`: 30s refetch interval. Source: `apps/web/src/hooks/use-automations.ts:useRunEvents`
 - `useOrgRuns()`: 30s refetch interval. Source: `apps/web/src/hooks/use-automations.ts:useOrgRuns`
 - `useOrgPendingRuns()`: 30s refetch interval (inherited from existing hook).
 
@@ -250,3 +254,4 @@ Sidebar: countUnassignedItems(items) → badge count
 - [ ] **Activity page has no date range picker** — The 90-day time bound is hardcoded in the DB query. Users cannot adjust the time window.
 - [ ] **Sessions removed from sidebar** — The Sessions page is still accessible via direct URL (`/dashboard/sessions`) but is no longer in the sidebar navigation. It is accessible via command search.
 - [ ] **My Work shows all org approvals** — Pending approvals in My Work are org-wide, not filtered to the current user, because per-user approval assignment does not exist yet. Source: `apps/web/src/hooks/use-my-work.ts`
+- [ ] **Investigation panel claim does not optimistically update** — The "Claim" button in the investigation panel calls `assignRun` and waits for the mutation to complete. There is no optimistic update, so the button stays visible until the refetch completes.

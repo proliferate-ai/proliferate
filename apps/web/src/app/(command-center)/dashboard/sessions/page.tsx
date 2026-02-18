@@ -53,7 +53,7 @@ export default function SessionsPage() {
 
 	const [activeTab, setActiveTab] = useState<FilterTab>("all");
 	const [searchQuery, setSearchQuery] = useState("");
-	const [originFilter, setOriginFilter] = useState<OriginFilter>("manual");
+	const [originFilter, setOriginFilter] = useState<OriginFilter>("all");
 
 	// Build a map of sessionId → most recent pendingRun for urgency indicators.
 	// A session typically has at most one active run; if multiple exist, the last one wins.

@@ -13,6 +13,7 @@ export function useSessions(params?: {
 	excludeSetup?: boolean;
 	excludeCli?: boolean;
 	excludeAutomation?: boolean;
+	createdBy?: string;
 }) {
 	return useQuery({
 		...orpc.sessions.list.queryOptions({

@@ -13,7 +13,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
-import { countUnassignedItems, useAttentionInbox } from "@/hooks/use-attention-inbox";
+import { useAttentionInbox } from "@/hooks/use-attention-inbox";
 import { useSlackStatus } from "@/hooks/use-integrations";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useSession } from "@/lib/auth-client";
@@ -103,7 +103,7 @@ export function Sidebar() {
 	const isConfigurationsPage = pathname?.startsWith("/dashboard/configurations");
 
 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
-	const inboxCount = countUnassignedItems(inboxItems);
+	const inboxCount = inboxItems.length;
 
 	return (
 		<aside
@@ -541,9 +541,9 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 	const isConfigurationsPage = pathname?.startsWith("/dashboard/configurations");
 	const isSettingsPage = pathname?.startsWith("/settings");
 
-	// Inbox badge: count only unassigned items
+	// Inbox badge: runs are already filtered to unassigned at the DB level
 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
-	const inboxCount = countUnassignedItems(inboxItems);
+	const inboxCount = inboxItems.length;
 
 	const handleNavigate = (path: string) => {
 		router.push(path);

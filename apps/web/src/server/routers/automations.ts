@@ -534,6 +534,7 @@ export const automationsRouter = {
 				.object({
 					limit: z.number().int().positive().max(50).optional(),
 					maxAgeDays: z.number().int().positive().max(30).optional(),
+					unassignedOnly: z.boolean().optional(),
 				})
 				.optional(),
 		)
@@ -542,6 +543,7 @@ export const automationsRouter = {
 			const pendingRuns = await runs.listOrgPendingRuns(context.orgId, {
 				limit: input?.limit,
 				maxAgeDays: input?.maxAgeDays,
+				unassignedOnly: input?.unassignedOnly,
 			});
 			return {
 				runs: pendingRuns.map((r) => ({

@@ -382,12 +382,22 @@ export interface PendingRunSummary {
 
 export async function listOrgPendingRuns(
 	orgId: string,
-	options: { limit?: number; maxAgeDays?: number } = {},
+	options: { limit?: number; maxAgeDays?: number; unassignedOnly?: boolean } = {},
 ): Promise<PendingRunSummary[]> {
 	const db = getDb();
 	const limit = Math.min(options.limit ?? 20, 50);
 	const maxAgeDays = options.maxAgeDays ?? 7;
 	const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000);
+
+	const conditions = [
+		eq(automationRuns.organizationId, orgId),
+		inArray(automationRuns.status, ATTENTION_STATUSES),
+		gte(automationRuns.createdAt, cutoff),
+	];
+
+	if (options.unassignedOnly) {
+		conditions.push(isNull(automationRuns.assignedTo));
+	}
 
 	const rows = await db
 		.select({
@@ -404,13 +414,7 @@ export async function listOrgPendingRuns(
 		})
 		.from(automationRuns)
 		.innerJoin(automations, eq(automationRuns.automationId, automations.id))
-		.where(
-			and(
-				eq(automationRuns.organizationId, orgId),
-				inArray(automationRuns.status, ATTENTION_STATUSES),
-				gte(automationRuns.createdAt, cutoff),
-			),
-		)
+		.where(and(...conditions))
 		.orderBy(desc(automationRuns.completedAt))
 		.limit(limit);
 

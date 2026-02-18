@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { AutomationsIcon } from "@/components/ui/icons";
 import { Textarea } from "@/components/ui/textarea";
-import { useResolveRun, useRun, useRunEvents } from "@/hooks/use-automations";
+import { useAssignRun, useResolveRun, useRun, useRunEvents } from "@/hooks/use-automations";
+import { useSession } from "@/lib/auth-client";
 import { getRunStatusDisplay } from "@/lib/run-status";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -18,6 +19,8 @@ interface InvestigationPanelProps {
 export function InvestigationPanel({ runId }: InvestigationPanelProps) {
 	const { data: run, isLoading: runLoading } = useRun(runId);
 	const { data: events, isLoading: eventsLoading } = useRunEvents(runId);
+	const { data: authSession } = useSession();
+	const assignRun = useAssignRun(run?.automation_id ?? "");
 
 	if (runLoading) {
 		return (
@@ -95,12 +98,34 @@ export function InvestigationPanel({ runId }: InvestigationPanelProps) {
 				)}
 
 				{/* Assignee */}
-				{run.assignee && (
+				{run.assignee ? (
 					<div className="space-y-1">
 						<p className="text-xs font-medium text-muted-foreground">Assigned to</p>
 						<p className="text-sm">{run.assignee.name}</p>
 					</div>
-				)}
+				) : isResolvable && authSession?.user?.id ? (
+					<div className="space-y-1">
+						<p className="text-xs font-medium text-muted-foreground">Assigned to</p>
+						<div className="flex items-center gap-2">
+							<p className="text-sm text-muted-foreground">Unassigned</p>
+							<Button
+								size="sm"
+								variant="outline"
+								className="h-7 text-xs"
+								disabled={assignRun.isPending}
+								onClick={() =>
+									assignRun.mutate({
+										id: run.automation_id,
+										runId,
+									})
+								}
+							>
+								{assignRun.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+								Claim
+							</Button>
+						</div>
+					</div>
+				) : null}
 
 				{/* Timeline */}
 				<div className="space-y-1">

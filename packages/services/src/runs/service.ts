@@ -342,7 +342,7 @@ export type { PendingRunSummary } from "./db";
 
 export async function listOrgPendingRuns(
 	orgId: string,
-	options?: { limit?: number; maxAgeDays?: number },
+	options?: { limit?: number; maxAgeDays?: number; unassignedOnly?: boolean },
 ): Promise<runsDb.PendingRunSummary[]> {
 	return runsDb.listOrgPendingRuns(orgId, options);
 }

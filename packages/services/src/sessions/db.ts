@@ -80,6 +80,10 @@ export async function listByOrganization(
 		conditions.push(isNull(sessions.automationId));
 	}
 
+	if (filters?.createdBy) {
+		conditions.push(eq(sessions.createdBy, filters.createdBy));
+	}
+
 	const results = await db.query.sessions.findMany({
 		where: and(...conditions),
 		with: {

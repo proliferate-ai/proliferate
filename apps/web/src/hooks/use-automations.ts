@@ -231,7 +231,11 @@ export function useMyClaimedRuns() {
 	});
 }
 
-export function useOrgPendingRuns(options?: { limit?: number; maxAgeDays?: number }) {
+export function useOrgPendingRuns(options?: {
+	limit?: number;
+	maxAgeDays?: number;
+	unassignedOnly?: boolean;
+}) {
 	return useQuery({
 		...orpc.automations.listOrgPendingRuns.queryOptions({
 			input: options ?? {},
@@ -258,6 +262,7 @@ export function useRunEvents(runId: string | undefined) {
 			input: { runId: runId! },
 		}),
 		enabled: !!runId,
+		refetchInterval: 30_000,
 		select: (data) => data.events,
 	});
 }

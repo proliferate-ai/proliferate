@@ -21,6 +21,7 @@ export function useMyWork() {
 		excludeSetup: true,
 		excludeCli: true,
 		excludeAutomation: true,
+		createdBy: userId,
 	});
 
 	const { data: approvals, isLoading: approvalsLoading } = useOrgActions({
@@ -29,9 +30,7 @@ export function useMyWork() {
 	});
 
 	const activeSessions = allSessions?.filter(
-		(s) =>
-			s.createdBy === userId &&
-			(s.status === "running" || s.status === "starting" || s.status === "paused"),
+		(s) => s.status === "running" || s.status === "starting" || s.status === "paused",
 	);
 
 	const pendingApprovals = approvals?.invocations ?? [];

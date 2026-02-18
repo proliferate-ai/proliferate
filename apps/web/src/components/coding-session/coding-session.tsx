@@ -149,9 +149,11 @@ export function CodingSession({
 	useEffect(() => {
 		if (runId && !investigationOpened.current) {
 			investigationOpened.current = true;
-			togglePanel("investigation");
+			if (mode.type !== "investigation") {
+				togglePanel("investigation");
+			}
 		}
-	}, [runId, togglePanel]);
+	}, [runId, togglePanel, mode.type]);
 
 	// Build panel tabs — prepend investigation tab when runId is present
 	const effectivePanelTabs = runId
