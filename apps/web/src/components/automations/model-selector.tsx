@@ -1,7 +1,23 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ClaudeIcon, GeminiIcon, OpenAIIcon } from "@/components/ui/icons";
+import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+	CommandSeparator,
+} from "@/components/ui/command";
+import {
+	ClaudeIcon,
+	DeepSeekIcon,
+	GeminiIcon,
+	MistralIcon,
+	OpenAIIcon,
+	XAIIcon,
+} from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import {
@@ -25,6 +41,15 @@ interface ModelSelectorProps {
 	triggerClassName?: string;
 }
 
+const PROVIDER_LABELS: Record<ModelProvider, string> = {
+	anthropic: "Anthropic",
+	openai: "OpenAI",
+	google: "Google",
+	deepseek: "DeepSeek",
+	xai: "xAI",
+	mistral: "Mistral",
+};
+
 const ProviderIcon: FC<{ provider: ModelProvider; className?: string }> = ({
 	provider,
 	className,
@@ -36,6 +61,12 @@ const ProviderIcon: FC<{ provider: ModelProvider; className?: string }> = ({
 			return <OpenAIIcon className={className} />;
 		case "google":
 			return <GeminiIcon className={className} />;
+		case "deepseek":
+			return <DeepSeekIcon className={className} />;
+		case "xai":
+			return <XAIIcon className={className} />;
+		case "mistral":
+			return <MistralIcon className={className} />;
 	}
 };
 
@@ -51,7 +82,14 @@ export function ModelSelector({
 	const currentModel = getModel(DEFAULT_AGENT_TYPE, modelId);
 
 	// Group models by provider for the dropdown
-	const providers: ModelProvider[] = ["anthropic", "openai", "google"];
+	const providers: ModelProvider[] = [
+		"anthropic",
+		"openai",
+		"google",
+		"deepseek",
+		"xai",
+		"mistral",
+	];
 	const grouped = providers
 		.map((p) => ({
 			provider: p,
@@ -82,42 +120,48 @@ export function ModelSelector({
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent className="w-72 p-0" align="start">
-				<div className="py-1">
-					{grouped.map((group, groupIndex) => (
-						<div key={group.provider}>
-							{groupIndex > 0 && <div className="h-px bg-border mx-3 my-1" />}
-							{group.models.map((model) => {
-								const isSelected = model.id === modelId;
-								return (
-									<Button
-										key={model.id}
-										variant="ghost"
-										className={cn(
-											"w-full h-auto flex items-start justify-start gap-2 px-3 py-2 text-sm font-normal rounded-none",
-											isSelected && "bg-primary/10",
-										)}
-										onClick={() => {
-											onChange(model.id);
-											setOpen(false);
-										}}
-									>
-										{isSelected ? (
-											<Check className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-										) : (
-											<ProviderIcon provider={model.provider} className="h-4 w-4 mt-0.5 shrink-0" />
-										)}
-										<div className="flex flex-col items-start min-w-0">
-											<span className="leading-none">{model.name}</span>
-											<span className="text-xs text-muted-foreground mt-1">
-												{model.description}
-											</span>
-										</div>
-									</Button>
-								);
-							})}
-						</div>
-					))}
-				</div>
+				<Command>
+					<CommandInput placeholder="Search models..." />
+					<CommandList>
+						<CommandEmpty>No models found.</CommandEmpty>
+						{grouped.map((group, groupIndex) => (
+							<div key={group.provider}>
+								{groupIndex > 0 && <CommandSeparator />}
+								<CommandGroup heading={PROVIDER_LABELS[group.provider]}>
+									{group.models.map((model) => {
+										const isSelected = model.id === modelId;
+										return (
+											<CommandItem
+												key={model.id}
+												value={`${model.name} ${model.description} ${PROVIDER_LABELS[model.provider]}`}
+												onSelect={() => {
+													onChange(model.id);
+													setOpen(false);
+												}}
+												className="flex items-start gap-2"
+											>
+												{isSelected ? (
+													<Check className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+												) : (
+													<ProviderIcon
+														provider={model.provider}
+														className="h-4 w-4 mt-0.5 shrink-0"
+													/>
+												)}
+												<div className="flex flex-col items-start min-w-0">
+													<span className="leading-none">{model.name}</span>
+													<span className="text-xs text-muted-foreground mt-1">
+														{model.description}
+													</span>
+												</div>
+											</CommandItem>
+										);
+									})}
+								</CommandGroup>
+							</div>
+						))}
+					</CommandList>
+				</Command>
 			</PopoverContent>
 		</Popover>
 	);

@@ -530,6 +530,140 @@ export function PlaywrightIcon({ className }: IconProps) {
 }
 
 /**
+ * Zapier brand icon (Z lightning bolt)
+ */
+export function ZapierIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path d="M15.535 8.465h3.293l-7.39 7.39v-3.683l-.001-.003a4.413 4.413 0 0 1-.508.03c-.174 0-.345-.011-.514-.03v3.686l-7.39-7.39h3.683c-.019-.169-.03-.34-.03-.514 0-.175.011-.346.03-.515H2.925l7.39-7.39v3.683c.169-.019.34-.03.514-.03.175 0 .346.011.515.03V.465l7.39 7.39h-3.683c.019.169.03.34.03.515 0 .174-.011.345-.03.514l-.516-.419zm-1.47 0a4.413 4.413 0 0 1-.858 1.742l2.469 2.469h-2.469l-.858-1.742a4.425 4.425 0 0 1-1.742.858l-2.469-2.469v2.469l1.742.858a4.425 4.425 0 0 1-.858 1.742H6.07l2.469-2.469-1.742-.858a4.413 4.413 0 0 1 .858-1.742l-2.469-2.469h2.469l.858 1.742a4.425 4.425 0 0 1 1.742-.858l2.469 2.469v-2.469l-1.742-.858a4.425 4.425 0 0 1 .858-1.742H14.065z" />
+		</svg>
+	);
+}
+
+/**
+ * Supabase brand icon
+ */
+export function SupabaseIcon({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 109 113" fill="none" xmlns="http://www.w3.org/2000/svg">
+			<path
+				d="M63.708 110.284c-2.86 3.601-8.658 1.628-8.727-2.97l-1.007-67.251h45.22c8.19 0 12.758 9.46 7.665 15.874L63.708 110.284z"
+				fill="currentColor"
+				opacity="0.5"
+			/>
+			<path
+				d="M45.317 2.071c2.86-3.601 8.657-1.628 8.726 2.97l.442 67.251H9.83c-8.19 0-12.759-9.46-7.665-15.875L45.317 2.072z"
+				fill="currentColor"
+			/>
+		</svg>
+	);
+}
+
+/**
+ * Asana brand icon (three dots)
+ */
+export function AsanaIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<circle cx="12" cy="5.5" r="4.5" />
+			<circle cx="4.5" cy="16.5" r="4.5" />
+			<circle cx="19.5" cy="16.5" r="4.5" />
+		</svg>
+	);
+}
+
+/**
+ * Semgrep brand icon (shield with code brackets)
+ */
+export function SemgrepIcon({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+			<path
+				d="M12 2L3 7v6c0 5.25 3.83 10.16 9 11.34C17.17 23.16 21 18.25 21 13V7l-9-5z"
+				stroke="currentColor"
+				strokeWidth="2"
+				strokeLinejoin="round"
+			/>
+			<path
+				d="M9 10L6.5 12.5 9 15"
+				stroke="currentColor"
+				strokeWidth="2"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<path
+				d="M15 10l2.5 2.5L15 15"
+				stroke="currentColor"
+				strokeWidth="2"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	);
+}
+
+/**
+ * DeepWiki brand icon (book with magnifying glass)
+ */
+export function DeepWikiIcon({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+			<path
+				d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"
+				stroke="currentColor"
+				strokeWidth="2"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<path
+				d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+				stroke="currentColor"
+				strokeWidth="2"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="1.5" />
+			<path
+				d="M14.2 12.2L16.5 14.5"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+			/>
+		</svg>
+	);
+}
+
+/**
+ * Apify brand icon (hexagon with A)
+ */
+export function ApifyIcon({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+			<path
+				d="M12 2l8.66 5v10L12 22l-8.66-5V7L12 2z"
+				stroke="currentColor"
+				strokeWidth="2"
+				strokeLinejoin="round"
+			/>
+			<path
+				d="M12 7l-3.5 10h2l.8-2.5h3.4l.8 2.5h2L12 7zm0 3.5l1.2 3h-2.4l1.2-3z"
+				fill="currentColor"
+			/>
+		</svg>
+	);
+}
+
+/**
  * Linear brand icon
  */
 export function LinearIcon({ className }: IconProps) {
@@ -640,6 +774,63 @@ export function GeminiIcon({ className }: IconProps) {
 				d="M12 24C12 18.2 12 15.3 12 12C12 8.7 12 5.8 12 0C9.6 3.5 7 6.2 3 8.1C0 9.5 0 9.5 0 12C0 14.5 0 14.5 3 15.9C7 17.8 9.6 20.5 12 24Z"
 				fill="#4285F4"
 			/>
+		</svg>
+	);
+}
+
+/**
+ * DeepSeek brand icon
+ */
+export function DeepSeekIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={cn("h-4 w-4", className)}
+			viewBox="0 0 24 24"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1.5 14.5c-2.49 0-4.5-2.01-4.5-4.5s2.01-4.5 4.5-4.5c1.23 0 2.34.5 3.15 1.3l-1.27 1.27A2.976 2.976 0 0010.5 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c1.3 0 2.4-.83 2.82-2h-2.82v-1.75h4.74c.06.3.09.62.09.95 0 2.79-2.01 4.8-4.83 4.8v-.5zm7.5-4.25h-1.75V10.5H18v1.75zm0 3.5h-1.75V14H18v1.75z" />
+		</svg>
+	);
+}
+
+/**
+ * xAI brand icon
+ */
+export function XAIIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={cn("h-4 w-4", className)}
+			viewBox="0 0 24 24"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path d="M2 4l8.5 8L2 20h2.5l7-6.5L18.5 20H21l-8.5-8L21 4h-2.5l-7 6.5L4.5 4H2z" />
+		</svg>
+	);
+}
+
+/**
+ * Mistral brand icon
+ */
+export function MistralIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={cn("h-4 w-4", className)}
+			viewBox="0 0 24 24"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<rect x="1" y="3" width="4" height="4" />
+			<rect x="19" y="3" width="4" height="4" />
+			<rect x="1" y="10" width="4" height="4" />
+			<rect x="7" y="10" width="4" height="4" />
+			<rect x="13" y="10" width="4" height="4" />
+			<rect x="19" y="10" width="4" height="4" />
+			<rect x="1" y="17" width="4" height="4" />
+			<rect x="19" y="17" width="4" height="4" />
+			<rect x="7" y="3" width="10" height="4" fill="currentColor" opacity="0.5" />
+			<rect x="7" y="17" width="10" height="4" fill="currentColor" opacity="0.5" />
 		</svg>
 	);
 }

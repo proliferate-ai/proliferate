@@ -15,6 +15,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+/** Build an auth page link preserving redirect + email params. */
+function buildAuthLink(base: string, redirect: string, email: string): string {
+	const params = new URLSearchParams();
+	if (redirect && redirect !== "/dashboard") params.set("redirect", redirect);
+	if (email) params.set("email", email);
+	const qs = params.toString();
+	return qs ? `${base}?${qs}` : base;
+}
+
 const REQUIRE_EMAIL_VERIFICATION = env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION;
 
 function SignUpContent() {
@@ -25,19 +34,23 @@ function SignUpContent() {
 	const [googleLoading, setGoogleLoading] = useState(false);
 	const [formLoading, setFormLoading] = useState(false);
 	const [name, setName] = useState("");
-	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
 
-	// Get redirect URL from query params, default to dashboard
+	// Get redirect URL and optional pre-filled email from query params
 	const redirectUrl = searchParams.get("redirect") || "/dashboard";
+	const prefilledEmail = searchParams.get("email") || "";
+
+	const [email, setEmail] = useState(prefilledEmail);
 
 	const hasGoogleOAuth = authProviders?.providers.google ?? false;
 
 	useEffect(() => {
 		if (session && !isPending) {
 			if (!session.user?.emailVerified && REQUIRE_EMAIL_VERIFICATION) {
-				router.push(`/auth/verify-email?email=${encodeURIComponent(session.user.email)}`);
+				router.push(
+					`/auth/verify-email?email=${encodeURIComponent(session.user.email)}&redirect=${encodeURIComponent(redirectUrl)}`,
+				);
 				return;
 			}
 			router.push(redirectUrl);
@@ -115,11 +128,8 @@ function SignUpContent() {
 		return null;
 	}
 
-	// Build sign-in link with redirect param preserved
-	const signInHref =
-		redirectUrl !== "/dashboard"
-			? `/sign-in?redirect=${encodeURIComponent(redirectUrl)}`
-			: "/sign-in";
+	// Build sign-in link preserving redirect + email params
+	const signInHref = buildAuthLink("/sign-in", redirectUrl, prefilledEmail);
 
 	return (
 		<AuthLayout>

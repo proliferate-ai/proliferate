@@ -256,6 +256,37 @@ export async function getUserOrgIds(userId: string): Promise<string[]> {
 }
 
 // ============================================
+// Public Invitation Lookup
+// ============================================
+
+/**
+ * Fetch minimal invitation info by ID (no auth required).
+ * Used to resolve the invited email before the user logs in.
+ */
+export async function findBasicInvitationInfo(invitationId: string): Promise<{
+	email: string;
+	status: string;
+	expiresAt: Date;
+	organizationName: string;
+} | null> {
+	const db = getDb();
+	const result = await db.query.invitation.findFirst({
+		where: eq(invitation.id, invitationId),
+		columns: { email: true, status: true, expiresAt: true },
+		with: {
+			organization: { columns: { name: true } },
+		},
+	});
+	if (!result) return null;
+	return {
+		email: result.email,
+		status: result.status,
+		expiresAt: result.expiresAt,
+		organizationName: result.organization.name,
+	};
+}
+
+// ============================================
 // Billing / Onboarding Helpers
 // ============================================
 

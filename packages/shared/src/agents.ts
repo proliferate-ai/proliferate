@@ -12,7 +12,7 @@
 /**
  * LLM provider identifiers.
  */
-export type ModelProvider = "anthropic" | "openai" | "google";
+export type ModelProvider = "anthropic" | "openai" | "google" | "deepseek" | "xai" | "mistral";
 
 /**
  * Our canonical model IDs.
@@ -23,7 +23,12 @@ export type ModelId =
 	| "claude-sonnet-4"
 	| "gpt-5.2"
 	| "gemini-3-pro"
-	| "gemini-3-flash";
+	| "gemini-3-flash"
+	| "deepseek-v3"
+	| "deepseek-r1"
+	| "grok-4.1"
+	| "grok-4.1-fast"
+	| "codestral";
 
 /**
  * Agent types we support.
@@ -31,11 +36,22 @@ export type ModelId =
 export type AgentType = "opencode";
 
 /**
+ * Reasoning effort levels — a 3-tier abstraction over provider-specific params.
+ * - "quick": Minimal reasoning, fastest responses
+ * - "normal": Default balanced reasoning
+ * - "deep": Maximum reasoning depth
+ */
+export type ReasoningEffort = "quick" | "normal" | "deep";
+
+export const DEFAULT_REASONING_EFFORT: ReasoningEffort = "normal";
+
+/**
  * Configuration passed through the stack for agent/model selection.
  */
 export interface AgentConfig {
 	agentType: AgentType;
 	modelId: ModelId;
+	reasoningEffort?: ReasoningEffort;
 }
 
 // ============================================
@@ -48,6 +64,8 @@ export interface ModelInfo {
 	description: string;
 	provider: ModelProvider;
 	default?: boolean;
+	/** Whether this model supports configurable reasoning effort. */
+	supportsReasoning?: boolean;
 }
 
 export interface AgentInfo {
@@ -73,12 +91,14 @@ export const AGENTS: Record<AgentType, AgentInfo> = {
 				description: "Most capable model for complex tasks",
 				provider: "anthropic",
 				default: true,
+				supportsReasoning: true,
 			},
 			{
 				id: "claude-sonnet-4",
 				name: "Claude Sonnet 4",
 				description: "Fast and efficient for most tasks",
 				provider: "anthropic",
+				supportsReasoning: true,
 			},
 			// OpenAI
 			{
@@ -86,6 +106,7 @@ export const AGENTS: Record<AgentType, AgentInfo> = {
 				name: "GPT-5.2",
 				description: "OpenAI flagship thinking model",
 				provider: "openai",
+				supportsReasoning: true,
 			},
 			// Google
 			{
@@ -99,6 +120,41 @@ export const AGENTS: Record<AgentType, AgentInfo> = {
 				name: "Gemini 3 Flash",
 				description: "Fast Google model for quick tasks",
 				provider: "google",
+			},
+			// DeepSeek
+			{
+				id: "deepseek-v3",
+				name: "DeepSeek V3",
+				description: "Strong open-weight coding model",
+				provider: "deepseek",
+			},
+			{
+				id: "deepseek-r1",
+				name: "DeepSeek R1",
+				description: "Reasoning model with chain-of-thought",
+				provider: "deepseek",
+				supportsReasoning: true,
+			},
+			// xAI
+			{
+				id: "grok-4.1",
+				name: "Grok 4.1",
+				description: "xAI flagship model",
+				provider: "xai",
+				supportsReasoning: true,
+			},
+			{
+				id: "grok-4.1-fast",
+				name: "Grok 4.1 Fast",
+				description: "Fast xAI model for quick tasks",
+				provider: "xai",
+			},
+			// Mistral
+			{
+				id: "codestral",
+				name: "Codestral",
+				description: "Mistral code-specialized model",
+				provider: "mistral",
 			},
 		],
 	},
@@ -177,6 +233,11 @@ export function toOpencodeModelId(modelId: ModelId): string {
 		"gpt-5.2": "litellm/gpt-5.2",
 		"gemini-3-pro": "litellm/gemini-3-pro-preview",
 		"gemini-3-flash": "litellm/gemini-3-flash-preview",
+		"deepseek-v3": "litellm/deepseek-v3",
+		"deepseek-r1": "litellm/deepseek-r1",
+		"grok-4.1": "litellm/grok-4.1",
+		"grok-4.1-fast": "litellm/grok-4.1-fast",
+		codestral: "litellm/codestral",
 	};
 	return transforms[modelId] || transforms[DEFAULT_MODEL_ID];
 }
@@ -192,6 +253,11 @@ export function toApiModelId(modelId: ModelId): string {
 		"gpt-5.2": "gpt-5.2",
 		"gemini-3-pro": "gemini-3-pro-preview",
 		"gemini-3-flash": "gemini-3-flash-preview",
+		"deepseek-v3": "deepseek-chat",
+		"deepseek-r1": "deepseek-reasoner",
+		"grok-4.1": "grok-4.1",
+		"grok-4.1-fast": "grok-4.1-fast",
+		codestral: "codestral-latest",
 	};
 	return transforms[modelId] || transforms[DEFAULT_MODEL_ID];
 }
@@ -230,6 +296,24 @@ export function parseModelId(input: string): ModelId {
 	if (normalized.includes("gemini") && normalized.includes("flash")) {
 		return "gemini-3-flash";
 	}
+	if (normalized.includes("deepseek") && normalized.includes("r1")) {
+		return "deepseek-r1";
+	}
+	if (normalized.includes("deepseek")) {
+		return "deepseek-v3";
+	}
+	if (normalized.includes("grok") && normalized.includes("fast")) {
+		return "grok-4.1-fast";
+	}
+	if (normalized.includes("grok")) {
+		return "grok-4.1";
+	}
+	if (
+		normalized.includes("codestral") ||
+		(normalized.includes("mistral") && normalized.includes("code"))
+	) {
+		return "codestral";
+	}
 
 	return DEFAULT_MODEL_ID;
 }
@@ -243,7 +327,12 @@ export function isValidModelId(id: string): id is ModelId {
 		id === "claude-sonnet-4" ||
 		id === "gpt-5.2" ||
 		id === "gemini-3-pro" ||
-		id === "gemini-3-flash"
+		id === "gemini-3-flash" ||
+		id === "deepseek-v3" ||
+		id === "deepseek-r1" ||
+		id === "grok-4.1" ||
+		id === "grok-4.1-fast" ||
+		id === "codestral"
 	);
 }
 
@@ -252,6 +341,18 @@ export function isValidModelId(id: string): id is ModelId {
  */
 export function isValidAgentType(type: string): type is AgentType {
 	return type in AGENTS;
+}
+
+// ============================================
+// Reasoning Effort
+// ============================================
+
+/**
+ * Check if a model supports configurable reasoning effort.
+ */
+export function modelSupportsReasoning(modelId: ModelId): boolean {
+	const model = getModel(DEFAULT_AGENT_TYPE, modelId);
+	return model?.supportsReasoning ?? false;
 }
 
 // ============================================

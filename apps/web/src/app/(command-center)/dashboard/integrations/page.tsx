@@ -123,13 +123,13 @@ const INTEGRATION_CATALOG: CatalogEntry[] = [
 		provider: "slack",
 	},
 
-	// Developer Tools (MCP presets)
+	// MCP presets (categorized by preset.category, defaults to "developer-tools")
 	...quickPresets.map(
 		(p): CatalogEntry => ({
 			key: `mcp-${p.key}`,
 			name: p.name,
 			description: p.description,
-			category: "developer-tools",
+			category: p.category ?? "developer-tools",
 			type: "mcp-preset",
 			presetKey: p.key,
 		}),
@@ -139,7 +139,7 @@ const INTEGRATION_CATALOG: CatalogEntry[] = [
 			key: `mcp-${p.key}`,
 			name: p.name,
 			description: p.description,
-			category: "developer-tools",
+			category: p.category ?? "developer-tools",
 			type: "mcp-preset",
 			presetKey: p.key,
 		}),

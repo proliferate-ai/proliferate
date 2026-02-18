@@ -42,7 +42,7 @@ export interface SessionRecord {
 	coding_agent_session_id?: string | null;
 	open_code_tunnel_url?: string | null;
 	preview_tunnel_url?: string | null;
-	agent_config?: { modelId?: string; tools?: string[] } | null;
+	agent_config?: { modelId?: string; tools?: string[]; reasoningEffort?: string } | null;
 	system_prompt?: string | null;
 	status?: string | null;
 	client_type?: string | null;
@@ -173,7 +173,14 @@ export async function loadSessionContext(
 			repos: [],
 			primaryRepo: scratchPrimaryRepo,
 			systemPrompt: session.system_prompt || getScratchSystemPrompt(),
-			agentConfig: { agentType: "opencode" as const, modelId, tools: session.agent_config?.tools },
+			agentConfig: {
+				agentType: "opencode" as const,
+				modelId,
+				tools: session.agent_config?.tools,
+				...(session.agent_config?.reasoningEffort && {
+					reasoningEffort: session.agent_config.reasoningEffort as AgentConfig["reasoningEffort"],
+				}),
+			},
 			envVars,
 			snapshotHasDeps: false,
 		};
@@ -283,6 +290,9 @@ export async function loadSessionContext(
 		agentType: "opencode" as const,
 		modelId,
 		tools: session.agent_config?.tools,
+		...(session.agent_config?.reasoningEffort && {
+			reasoningEffort: session.agent_config.reasoningEffort as AgentConfig["reasoningEffort"],
+		}),
 	};
 
 	// Load env vars for all repos in the configuration

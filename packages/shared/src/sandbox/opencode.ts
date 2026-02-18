@@ -61,7 +61,12 @@ export function getOpencodeConfig(
       "models": {
         "gpt-5.2": { "name": "GPT-5.2" },
         "gemini-3-pro-preview": { "name": "Gemini 3 Pro" },
-        "gemini-3-flash-preview": { "name": "Gemini 3 Flash" }
+        "gemini-3-flash-preview": { "name": "Gemini 3 Flash" },
+        "deepseek-v3": { "name": "DeepSeek V3" },
+        "deepseek-r1": { "name": "DeepSeek R1" },
+        "grok-4.1": { "name": "Grok 4.1" },
+        "grok-4.1-fast": { "name": "Grok 4.1 Fast" },
+        "codestral": { "name": "Codestral" }
       }
     }`;
 

@@ -7,6 +7,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
+import type { IntegrationCategory } from "@proliferate/shared";
 import { CheckCircle2, Loader2, Search, Send } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -14,12 +15,7 @@ import { useMemo, useState } from "react";
 // Shared types & constants (used by page + detail dialog)
 // ====================================================================
 
-export type IntegrationCategory =
-	| "source-control"
-	| "monitoring"
-	| "project-management"
-	| "communication"
-	| "developer-tools";
+export type { IntegrationCategory } from "@proliferate/shared";
 
 export interface CatalogEntry {
 	key: string;
@@ -36,6 +32,10 @@ export const CATEGORY_ORDER: IntegrationCategory[] = [
 	"monitoring",
 	"project-management",
 	"communication",
+	"data",
+	"commerce",
+	"security",
+	"automation",
 	"developer-tools",
 ];
 
@@ -44,6 +44,10 @@ export const CATEGORY_LABELS: Record<IntegrationCategory, string> = {
 	monitoring: "Monitoring",
 	"project-management": "Project Management",
 	communication: "Communication",
+	data: "Data & Analytics",
+	commerce: "Commerce",
+	security: "Security",
+	automation: "Automation",
 	"developer-tools": "Developer Tools",
 };
 

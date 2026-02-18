@@ -110,6 +110,40 @@ model_list:
       api_key: os.environ/GOOGLE_API_KEY
 
   # ============================================
+  # DeepSeek models (via LiteLLM)
+  # ============================================
+  - model_name: litellm/deepseek-v3
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+  - model_name: litellm/deepseek-r1
+    litellm_params:
+      model: deepseek/deepseek-reasoner
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+  # ============================================
+  # xAI Grok models (via LiteLLM)
+  # ============================================
+  - model_name: litellm/grok-4.1
+    litellm_params:
+      model: xai/grok-4.1
+      api_key: os.environ/XAI_API_KEY
+
+  - model_name: litellm/grok-4.1-fast
+    litellm_params:
+      model: xai/grok-4.1-fast
+      api_key: os.environ/XAI_API_KEY
+
+  # ============================================
+  # Mistral models (via LiteLLM)
+  # ============================================
+  - model_name: litellm/codestral
+    litellm_params:
+      model: mistral/codestral-latest
+      api_key: os.environ/MISTRAL_API_KEY
+
+  # ============================================
   # Convenience aliases (short names)
   # ============================================
   - model_name: claude-sonnet-4-5

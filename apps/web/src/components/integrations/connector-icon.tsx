@@ -1,10 +1,16 @@
 import {
+	ApifyIcon,
+	AsanaIcon,
 	Context7Icon,
+	DeepWikiIcon,
 	FirecrawlIcon,
 	NeonIcon,
 	PlaywrightIcon,
 	PostHogIcon,
+	SemgrepIcon,
 	StripeIcon,
+	SupabaseIcon,
+	ZapierIcon,
 } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 import type { ConnectorConfig } from "@proliferate/shared";
@@ -45,6 +51,18 @@ export function ConnectorIcon({ presetKey, className, size = "md" }: ConnectorIc
 			return <StripeIcon className={iconClass} />;
 		case "playwright":
 			return <PlaywrightIcon className={iconClass} />;
+		case "zapier":
+			return <ZapierIcon className={iconClass} />;
+		case "supabase":
+			return <SupabaseIcon className={iconClass} />;
+		case "asana":
+			return <AsanaIcon className={iconClass} />;
+		case "semgrep":
+			return <SemgrepIcon className={iconClass} />;
+		case "deepwiki":
+			return <DeepWikiIcon className={iconClass} />;
+		case "apify":
+			return <ApifyIcon className={iconClass} />;
 		default:
 			return <Plug className={iconClass} />;
 	}

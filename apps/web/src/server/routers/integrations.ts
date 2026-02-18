@@ -312,21 +312,37 @@ export const integrationsRouter = {
 			const org = await integrations.getOrganizationForSession(context.orgId);
 			const orgName = org?.name;
 
-			await resend.emails.send({
-				from: emailFrom,
-				to: emailFrom,
-				subject: `Integration request: ${input.integrationName}`,
-				html: `
-					<p><strong>${context.user.name || context.user.email}</strong> from <strong>${orgName || context.orgId}</strong> requested:</p>
-					<p style="font-size: 18px; padding: 12px 0;">${input.integrationName}</p>
-					<p style="color: #666;">User email: ${context.user.email}</p>
-				`,
-			});
+			const userName = escapeHtml(context.user.name || context.user.email);
+			const displayOrg = escapeHtml(orgName || context.orgId);
+			const integrationName = escapeHtml(input.integrationName);
+			const userEmail = escapeHtml(context.user.email);
 
-			log.info(
-				{ orgId: context.orgId, userId: context.user.id, integration: input.integrationName },
-				"Integration request email sent",
-			);
+			try {
+				await resend.emails.send({
+					from: emailFrom,
+					to: emailFrom,
+					subject: `Integration request: ${input.integrationName}`,
+					html: `
+						<p><strong>${userName}</strong> from <strong>${displayOrg}</strong> requested:</p>
+						<p style="font-size: 18px; padding: 12px 0;">${integrationName}</p>
+						<p style="color: #666;">User email: ${userEmail}</p>
+					`,
+				});
+				log.info(
+					{ orgId: context.orgId, userId: context.user.id, integration: input.integrationName },
+					"Integration request email sent",
+				);
+			} catch (err) {
+				log.error(
+					{
+						err,
+						orgId: context.orgId,
+						userId: context.user.id,
+						integration: input.integrationName,
+					},
+					"Failed to send integration request email",
+				);
+			}
 
 			return { success: true };
 		}),
@@ -1092,4 +1108,14 @@ async function requireIntegrationAdmin(userId: string, orgId: string): Promise<v
 	if (role !== "owner" && role !== "admin") {
 		throw new ORPCError("FORBIDDEN", { message: "Admin or owner role required" });
 	}
+}
+
+/** Escape user-provided strings before embedding in HTML email templates. */
+function escapeHtml(str: string): string {
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
 }

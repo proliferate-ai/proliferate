@@ -7,6 +7,9 @@
 node_modules/
 .pnpm-store/
 
+temp/
+temp_hero/
+
 # Inspiration
 inspiration/
 

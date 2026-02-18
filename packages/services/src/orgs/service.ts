@@ -206,6 +206,22 @@ export async function hasAnyOrgCompletedOnboarding(userId: string): Promise<bool
 }
 
 /**
+ * Get basic invitation info by ID (no auth required).
+ * Returns the invited email and org name for pending, non-expired invitations.
+ * Used to resolve invitation context before the user logs in.
+ */
+export async function getBasicInvitationInfo(invitationId: string): Promise<{
+	email: string;
+	organizationName: string;
+} | null> {
+	const info = await orgsDb.findBasicInvitationInfo(invitationId);
+	if (!info) return null;
+	if (info.status !== "pending") return null;
+	if (new Date(info.expiresAt) < new Date()) return null;
+	return { email: info.email, organizationName: info.organizationName };
+}
+
+/**
  * List all members of an organization.
  * Returns null if user is not a member.
  */

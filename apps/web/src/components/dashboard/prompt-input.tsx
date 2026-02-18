@@ -2,6 +2,7 @@
 
 import { ModelSelector } from "@/components/automations/model-selector";
 import { EnvironmentPicker } from "@/components/dashboard/environment-picker";
+import { ReasoningSelector } from "@/components/dashboard/reasoning-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,7 +26,8 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 	const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } =
 		useSpeechRecognition();
 
-	const { selectedModel, setSelectedModel } = useDashboardStore();
+	const { selectedModel, setSelectedModel, reasoningEffort, setReasoningEffort } =
+		useDashboardStore();
 
 	// Append transcript to prompt when speech recognition completes
 	useEffect(() => {
@@ -131,14 +133,20 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 				/>
 
 				{/* Bottom toolbar */}
-				<div className="flex items-center justify-between px-3 py-2">
+				<div className="flex items-center justify-between px-3 py-2 overflow-hidden">
 					{/* Left side - Context selectors */}
-					<div className="flex items-center gap-1">
+					<div className="flex items-center gap-1 min-w-0 overflow-hidden">
 						<ModelSelector
 							modelId={selectedModel}
 							onChange={setSelectedModel}
 							disabled={isLoading}
 							variant="ghost"
+						/>
+						<ReasoningSelector
+							modelId={selectedModel}
+							effort={reasoningEffort}
+							onChange={setReasoningEffort}
+							disabled={isLoading}
 						/>
 						<EnvironmentPicker disabled={isLoading} />
 					</div>

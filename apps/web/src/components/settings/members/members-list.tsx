@@ -1,5 +1,10 @@
 "use client";
 
+import {
+	MembersIllustration,
+	PageEmptyState,
+	PlusBadge,
+} from "@/components/dashboard/page-empty-state";
 import { Button } from "@/components/ui/button";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import {
@@ -136,7 +141,12 @@ export function MembersList({
 					})}
 				</div>
 			) : (
-				<p className="text-sm text-muted-foreground text-center py-4">No members found.</p>
+				<PageEmptyState
+					illustration={<MembersIllustration />}
+					badge={<PlusBadge />}
+					title="No members added"
+					description="Invite teammates to collaborate on debugging, assign issues, and share context."
+				/>
 			)}
 		</SettingsSection>
 	);

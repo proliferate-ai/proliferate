@@ -20,9 +20,18 @@ import {
 import { GithubIcon } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useConfigurations } from "@/hooks/use-configurations";
+import { useGitHubAppConnect } from "@/hooks/use-github-app-connect";
+import { useIntegrations } from "@/hooks/use-integrations";
+import {
+	type NangoProvider,
+	shouldUseNangoForProvider,
+	useNangoConnect,
+} from "@/hooks/use-nango-connect";
 import { useRepos } from "@/hooks/use-repos";
+import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
+import { useQueryClient } from "@tanstack/react-query";
 import { Check, Layers, Plus, Terminal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CreateSnapshotContent } from "./snapshot-selector";
@@ -52,10 +61,37 @@ function RepoName({ name }: { name: string }) {
 export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 	const [open, setOpen] = useState(false);
 	const [createOpen, setCreateOpen] = useState(false);
+	const queryClient = useQueryClient();
 	const { data: repos } = useRepos();
 	const { data: configurations } = useConfigurations("ready");
+	const { data: integrationsData } = useIntegrations();
 	const { selectedRepoId, selectedSnapshotId, setSelectedRepo, setSelectedSnapshot } =
 		useDashboardStore();
+
+	// GitHub connection state
+	const hasGitHub =
+		integrationsData?.integrations?.some(
+			(i) => (i.provider === "github" || i.provider === "github-app") && i.status === "active",
+		) ?? false;
+
+	const invalidateIntegrations = () => {
+		queryClient.invalidateQueries({ queryKey: orpc.integrations.list.key() });
+	};
+	const { connect: nangoConnect, loadingProvider: nangoLoadingProvider } = useNangoConnect({
+		flow: "auth",
+		onSuccess: invalidateIntegrations,
+	});
+	const { connect: githubAppConnect, isLoading: githubAppLoading } = useGitHubAppConnect({
+		onSuccess: invalidateIntegrations,
+	});
+	const connectGitHub = () => {
+		if (shouldUseNangoForProvider("github")) {
+			nangoConnect("github" as NangoProvider);
+		} else {
+			githubAppConnect();
+		}
+	};
+	const githubConnecting = githubAppLoading || (nangoLoadingProvider as string) === "github";
 
 	const allRepos = repos ?? [];
 	const multiRepoConfigs =
@@ -94,7 +130,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 		? selectedRepo.githubRepoName
 		: selectedConfig
 			? (selectedConfig.name ?? "Untitled")
-			: "General assistant";
+			: "Scratch session";
 
 	const selectRepo = (repo: (typeof allRepos)[0]) => {
 		setSelectedRepo(repo.id);
@@ -127,12 +163,32 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 					<Command>
 						<CommandInput placeholder="Search repos and configurations..." />
 						<CommandList>
-							<CommandEmpty>No results found.</CommandEmpty>
+							<CommandEmpty>
+								{!hasGitHub && allRepos.length === 0 ? (
+									<div className="flex flex-col items-center gap-2 py-2">
+										<p className="text-sm text-muted-foreground">
+											Connect GitHub to import your repositories
+										</p>
+										<Button
+											size="sm"
+											variant="outline"
+											className="gap-2"
+											onClick={connectGitHub}
+											disabled={githubConnecting}
+										>
+											<GithubIcon className="h-4 w-4" />
+											{githubConnecting ? "Connecting..." : "Connect GitHub"}
+										</Button>
+									</div>
+								) : (
+									"No results found."
+								)}
+							</CommandEmpty>
 
-							{/* General assistant */}
+							{/* Scratch session */}
 							<CommandGroup>
 								<CommandItem
-									value="general-assistant"
+									value="scratch-session"
 									onSelect={() => {
 										setSelectedRepo(null);
 										setSelectedSnapshot(null);
@@ -144,7 +200,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 									) : (
 										<Terminal className="h-4 w-4 shrink-0" />
 									)}
-									<span>General assistant</span>
+									<span>Scratch session</span>
 								</CommandItem>
 							</CommandGroup>
 
@@ -209,6 +265,26 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 												</CommandItem>
 											);
 										})}
+									</CommandGroup>
+								</>
+							)}
+
+							{/* Connect GitHub prompt */}
+							{!hasGitHub && allRepos.length === 0 && (
+								<>
+									<CommandSeparator />
+									<CommandGroup heading="Get started">
+										<CommandItem
+											value="connect-github"
+											onSelect={connectGitHub}
+											className="flex items-center gap-2"
+										>
+											<GithubIcon className="h-4 w-4 shrink-0" />
+											<span>Connect GitHub</span>
+											<span className="text-muted-foreground text-xs ml-auto shrink-0">
+												Import repos
+											</span>
+										</CommandItem>
 									</CommandGroup>
 								</>
 							)}

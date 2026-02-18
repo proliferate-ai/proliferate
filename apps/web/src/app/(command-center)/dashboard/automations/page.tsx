@@ -5,6 +5,11 @@ import {
 	type TemplateEntry,
 	TemplatePickerDialog,
 } from "@/components/automations/template-picker-dialog";
+import {
+	AutomationIllustration,
+	PageEmptyState,
+	PlusBadge,
+} from "@/components/dashboard/page-empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
@@ -159,29 +164,26 @@ export default function AutomationsPage() {
 						))}
 					</div>
 				) : automations.length === 0 ? (
-					<div className="flex flex-col items-center py-16">
-						<h2 className="text-base font-semibold text-foreground mb-1">
-							Create your first automation
-						</h2>
-						<p className="text-sm text-muted-foreground mb-6">
-							Start from scratch or pick a template to get going fast.
-						</p>
-						<div className="flex items-center gap-2">
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => setPickerOpen(true)}
-								disabled={isPending}
-							>
-								<BookTemplate className="h-3.5 w-3.5 mr-1.5" />
-								Browse templates
-							</Button>
-							<Button size="sm" onClick={handleBlankCreate} disabled={isPending}>
-								<Plus className="h-4 w-4 mr-1.5" />
-								New
-							</Button>
-						</div>
-					</div>
+					<PageEmptyState
+						illustration={<AutomationIllustration />}
+						badge={<PlusBadge />}
+						title="No automations set up"
+						description="Create workflows that automatically triage, assign, and resolve issues as they come in."
+					>
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => setPickerOpen(true)}
+							disabled={isPending}
+						>
+							<BookTemplate className="h-3.5 w-3.5 mr-1.5" />
+							Browse templates
+						</Button>
+						<Button size="sm" onClick={handleBlankCreate} disabled={isPending}>
+							<Plus className="h-4 w-4 mr-1.5" />
+							New
+						</Button>
+					</PageEmptyState>
 				) : (
 					<>
 						{/* Tabs + Search */}

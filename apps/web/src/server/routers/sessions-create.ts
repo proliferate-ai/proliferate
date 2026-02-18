@@ -29,6 +29,7 @@ interface CreateSessionHandlerInput {
 	configurationId?: string;
 	sessionType?: "setup" | "coding";
 	modelId?: string;
+	reasoningEffort?: "quick" | "normal" | "deep";
 	orgId: string;
 	userId: string;
 }
@@ -49,6 +50,7 @@ export async function createSessionHandler(
 		configurationId,
 		sessionType = "coding",
 		modelId: requestedModelId,
+		reasoningEffort,
 		orgId,
 		userId,
 	} = input;
@@ -65,6 +67,7 @@ export async function createSessionHandler(
 				: requestedModelId
 					? parseModelId(requestedModelId)
 					: getDefaultAgentConfig().modelId,
+		reasoningEffort: reasoningEffort && reasoningEffort !== "normal" ? reasoningEffort : undefined,
 	};
 
 	// Scratch path: no configuration, just boot from base snapshot
@@ -100,7 +103,10 @@ async function createScratchSession(input: {
 			status: "starting",
 			sandboxProvider: provider.type,
 			snapshotId: null,
-			agentConfig: { modelId: agentConfig.modelId },
+			agentConfig: {
+				modelId: agentConfig.modelId,
+				...(agentConfig.reasoningEffort && { reasoningEffort: agentConfig.reasoningEffort }),
+			},
 		});
 	} catch (err) {
 		if (err instanceof ORPCError) throw err;
@@ -202,7 +208,10 @@ async function createConfigurationSession(input: {
 			status: "starting",
 			sandboxProvider: provider.type,
 			snapshotId,
-			agentConfig: { modelId: agentConfig.modelId },
+			agentConfig: {
+				modelId: agentConfig.modelId,
+				...(agentConfig.reasoningEffort && { reasoningEffort: agentConfig.reasoningEffort }),
+			},
 		});
 	} catch (err) {
 		if (err instanceof ORPCError) throw err;

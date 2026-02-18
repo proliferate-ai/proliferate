@@ -112,6 +112,17 @@ export function parseConfigurationConnectors(raw: unknown): ConnectorConfig[] {
 // Connector Presets
 // ============================================
 
+export type IntegrationCategory =
+	| "source-control"
+	| "monitoring"
+	| "project-management"
+	| "communication"
+	| "developer-tools"
+	| "data"
+	| "security"
+	| "commerce"
+	| "automation";
+
 export interface ConnectorPreset {
 	/** Preset identifier. */
 	key: string;
@@ -121,6 +132,8 @@ export interface ConnectorPreset {
 	description: string;
 	/** Pre-filled connector config (id is omitted — generated on add). */
 	defaults: Omit<ConnectorConfig, "id">;
+	/** Category for the integration picker. Defaults to "developer-tools". */
+	category?: IntegrationCategory;
 	/** Guidance text shown in the UI when this preset is selected. */
 	guidance?: string;
 	/** When true, preset supports the quick "API key + save" flow. */
@@ -162,6 +175,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		key: "posthog",
 		name: "PostHog",
 		description: "Query PostHog analytics, feature flags, and experiments",
+		category: "monitoring",
 		defaults: {
 			name: "PostHog",
 			transport: "remote_http",
@@ -196,6 +210,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		key: "neon",
 		name: "Neon",
 		description: "Manage Neon Postgres databases, branches, and queries",
+		category: "data",
 		defaults: {
 			name: "Neon",
 			transport: "remote_http",
@@ -213,6 +228,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		key: "stripe",
 		name: "Stripe",
 		description: "Manage Stripe payments, customers, and subscriptions",
+		category: "commerce",
 		defaults: {
 			name: "Stripe",
 			transport: "remote_http",
@@ -225,6 +241,113 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		secretLabel: "Stripe secret key",
 		recommendedSecretKey: "STRIPE_SECRET_KEY",
 		docsUrl: "https://docs.stripe.com/keys",
+	},
+	{
+		key: "zapier",
+		name: "Zapier",
+		description: "Automate workflows across 7,000+ apps with Zapier actions",
+		category: "automation",
+		defaults: {
+			name: "Zapier",
+			transport: "remote_http",
+			url: "https://actions.zapier.com/mcp/",
+			auth: { type: "bearer", secretKey: "" },
+			riskPolicy: { defaultRisk: "write" },
+			enabled: true,
+		},
+		quickSetup: true,
+		secretLabel: "Zapier API key",
+		recommendedSecretKey: "ZAPIER_API_KEY",
+		docsUrl: "https://actions.zapier.com/docs/platform/mcp",
+	},
+	{
+		key: "supabase",
+		name: "Supabase",
+		description: "Manage Supabase databases, auth, storage, and edge functions",
+		category: "data",
+		defaults: {
+			name: "Supabase",
+			transport: "remote_http",
+			url: "https://mcp.supabase.com",
+			auth: { type: "bearer", secretKey: "" },
+			riskPolicy: { defaultRisk: "write" },
+			enabled: true,
+		},
+		quickSetup: true,
+		secretLabel: "Supabase personal access token",
+		recommendedSecretKey: "SUPABASE_ACCESS_TOKEN",
+		docsUrl: "https://supabase.com/docs/guides/getting-started/mcp",
+	},
+	{
+		key: "asana",
+		name: "Asana",
+		description: "Manage Asana tasks, projects, and workflows",
+		category: "project-management",
+		defaults: {
+			name: "Asana",
+			transport: "remote_http",
+			url: "https://mcp.asana.com/sse",
+			auth: { type: "bearer", secretKey: "" },
+			riskPolicy: { defaultRisk: "write" },
+			enabled: true,
+		},
+		quickSetup: true,
+		secretLabel: "Asana personal access token",
+		recommendedSecretKey: "ASANA_ACCESS_TOKEN",
+		docsUrl: "https://developers.asana.com/docs/personal-access-token",
+	},
+	{
+		key: "semgrep",
+		name: "Semgrep",
+		description: "Run static analysis and find security vulnerabilities in code",
+		category: "security",
+		defaults: {
+			name: "Semgrep",
+			transport: "remote_http",
+			url: "https://mcp.semgrep.ai/mcp",
+			auth: { type: "bearer", secretKey: "" },
+			riskPolicy: { defaultRisk: "read" },
+			enabled: true,
+		},
+		quickSetup: true,
+		secretLabel: "Semgrep API token",
+		recommendedSecretKey: "SEMGREP_API_TOKEN",
+		docsUrl: "https://semgrep.dev/docs/semgrep-cloud-platform/tokens",
+	},
+	{
+		key: "deepwiki",
+		name: "DeepWiki",
+		description: "Search and query documentation for open-source repositories",
+		defaults: {
+			name: "DeepWiki",
+			transport: "remote_http",
+			url: "https://mcp.deepwiki.com/mcp",
+			auth: { type: "bearer", secretKey: "" },
+			riskPolicy: { defaultRisk: "read" },
+			enabled: true,
+		},
+		quickSetup: true,
+		secretLabel: "DeepWiki API key",
+		recommendedSecretKey: "DEEPWIKI_API_KEY",
+		docsUrl: "https://deepwiki.com",
+	},
+	{
+		key: "apify",
+		name: "Apify",
+		description: "Web scraping, data extraction, and browser automation at scale",
+		category: "automation",
+		defaults: {
+			name: "Apify",
+			transport: "remote_http",
+			url: "https://actors-mcp-server.apify.actor/mcp",
+			auth: { type: "bearer", secretKey: "" },
+			riskPolicy: { defaultRisk: "write" },
+			enabled: true,
+		},
+		quickSetup: true,
+		secretLabel: "Apify API token",
+		recommendedSecretKey: "APIFY_API_TOKEN",
+		docsUrl: "https://docs.apify.com/platform/integrations/api#api-token",
 	},
 	{
 		key: "custom",

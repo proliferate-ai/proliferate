@@ -157,6 +157,9 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 		NEXT_BUILD_STANDALONE: optionalBoolean,
 		OPENAI_API_KEY: optionalString, // Used by LLM proxy for OpenAI model routing
 		GOOGLE_API_KEY: optionalString, // Used by LLM proxy for Gemini model routing
+		DEEPSEEK_API_KEY: optionalString, // Used by LLM proxy for DeepSeek model routing
+		XAI_API_KEY: optionalString, // Used by LLM proxy for xAI Grok model routing
+		MISTRAL_API_KEY: optionalString, // Used by LLM proxy for Mistral model routing
 		WEB_PORT: optionalPort(3000),
 		WORKER_PORT: optionalPort(3002),
 		PROLIFERATE_SLACK_BOT_TOKEN: optionalString, // Only needed if using Slack integration

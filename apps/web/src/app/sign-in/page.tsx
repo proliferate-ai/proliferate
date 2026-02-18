@@ -14,6 +14,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+/** Build an auth page link preserving redirect + email params. */
+function buildAuthLink(base: string, redirect: string, email: string): string {
+	const params = new URLSearchParams();
+	if (redirect && redirect !== "/dashboard") params.set("redirect", redirect);
+	if (email) params.set("email", email);
+	const qs = params.toString();
+	return qs ? `${base}?${qs}` : base;
+}
+
 function SignInContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
@@ -21,12 +30,14 @@ function SignInContent() {
 	const { data: authProviders } = useAuthProviders();
 	const [googleLoading, setGoogleLoading] = useState(false);
 	const [formLoading, setFormLoading] = useState(false);
-	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
 
-	// Get redirect URL from query params, default to dashboard
+	// Get redirect URL and optional pre-filled email from query params
 	const redirectUrl = searchParams.get("redirect") || "/dashboard";
+	const prefilledEmail = searchParams.get("email") || "";
+
+	const [email, setEmail] = useState(prefilledEmail);
 
 	const hasGoogleOAuth = authProviders?.providers.google ?? false;
 
@@ -184,11 +195,7 @@ function SignInContent() {
 				<p className="mt-6 text-center text-sm text-neutral-500">
 					Don&apos;t have an account?{" "}
 					<Link
-						href={
-							redirectUrl !== "/dashboard"
-								? `/sign-up?redirect=${encodeURIComponent(redirectUrl)}`
-								: "/sign-up"
-						}
+						href={buildAuthLink("/sign-up", redirectUrl, prefilledEmail)}
 						className="text-neutral-300 transition-colors hover:text-white"
 					>
 						Sign up

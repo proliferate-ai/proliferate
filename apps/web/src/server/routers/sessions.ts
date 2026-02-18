@@ -76,6 +76,7 @@ export const sessionsRouter = {
 				configurationId: input.configurationId,
 				sessionType: input.sessionType,
 				modelId: input.modelId,
+				reasoningEffort: input.reasoningEffort,
 				orgId: context.orgId,
 				userId: context.user.id,
 			});

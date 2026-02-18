@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { OnboardingCards } from "./onboarding-cards";
 import { PromptInput } from "./prompt-input";
+import { ActivitySummary } from "./session-stats";
 
 // ============================================
 // Helpers
@@ -305,10 +306,12 @@ function RecentActivity() {
 
 export function EmptyDashboard() {
 	const { data: authSession } = useSession();
-	const { selectedRepoId, selectedSnapshotId, selectedModel, setPendingPrompt } =
+	const { selectedRepoId, selectedSnapshotId, selectedModel, reasoningEffort, setPendingPrompt } =
 		useDashboardStore();
 	const createConfiguration = useCreateConfiguration();
 	const createSession = useCreateSession();
+	const { data: recentSessions } = useSessions({ limit: 1, excludeSetup: true, excludeCli: true });
+	const hasSessions = (recentSessions ?? []).length > 0;
 
 	const firstName = authSession?.user?.name?.split(" ")[0] ?? "";
 	const greeting = firstName ? getGreeting(firstName) : "How can I help you today?";
@@ -317,10 +320,13 @@ export function EmptyDashboard() {
 		setPendingPrompt(prompt);
 
 		try {
+			const sessionOpts = {
+				modelId: selectedModel,
+				reasoningEffort: reasoningEffort !== "normal" ? reasoningEffort : undefined,
+			};
+
 			if (!selectedSnapshotId && !selectedRepoId) {
-				await createSession.mutateAsync({
-					modelId: selectedModel,
-				});
+				await createSession.mutateAsync(sessionOpts);
 				// Session created — list auto-refreshes via query invalidation
 				setPendingPrompt(null);
 				return;
@@ -338,8 +344,8 @@ export function EmptyDashboard() {
 			if (!configurationId) return;
 
 			await createSession.mutateAsync({
+				...sessionOpts,
 				configurationId,
-				modelId: selectedModel,
 			});
 			// Session created — list auto-refreshes via query invalidation
 			setPendingPrompt(null);
@@ -353,8 +359,13 @@ export function EmptyDashboard() {
 
 	return (
 		<div className="h-full flex flex-col overflow-y-auto">
-			{/* Prompt input area — full width, pinned at top */}
-			<div className="flex flex-col items-center px-4 pt-8 md:pt-16 pb-6">
+			{/* Prompt input area — centered when empty, pinned at top when sessions exist */}
+			<div
+				className={cn(
+					"flex flex-col items-center px-4 pb-6",
+					hasSessions ? "pt-8 md:pt-16" : "flex-1 justify-center",
+				)}
+			>
 				<h2 className="text-3xl font-semibold mb-6">{greeting}</h2>
 				<div className="w-full max-w-2xl">
 					<PromptInput onSubmit={handleSubmit} isLoading={isSubmitting} />
@@ -364,8 +375,11 @@ export function EmptyDashboard() {
 			{/* Content sections — bordered column like Tembo */}
 			<div className="flex-1 border-l border-r border-border/50 mx-auto w-full max-w-3xl">
 				<div className="flex flex-col gap-10 px-4 pb-10">
+					{/* Activity summary for returning users */}
+					{hasSessions && <ActivitySummary />}
+
 					{/* Get Started — horizontal onboarding cards */}
-					{/* <OnboardingSection /> */}
+					<OnboardingSection />
 
 					{/* Needs Attention — triage items from agent runs */}
 					<NeedsAttention />

@@ -48,6 +48,8 @@ export const CreateSessionInputSchema = z
 		configurationId: z.string().uuid().optional(),
 		sessionType: z.enum(["setup", "coding"]).optional(),
 		modelId: z.string().optional(),
+		/** Reasoning effort level for models that support it. */
+		reasoningEffort: z.enum(["quick", "normal", "deep"]).optional(),
 		/** Integration IDs to associate with the session for OAuth token injection. */
 		integrationIds: z.array(z.string().uuid()).optional(),
 	})

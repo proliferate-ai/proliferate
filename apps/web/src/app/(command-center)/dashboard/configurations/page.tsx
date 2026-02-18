@@ -1,5 +1,10 @@
 "use client";
 
+import {
+	GearIllustration,
+	PageEmptyState,
+	PlusBadge,
+} from "@/components/dashboard/page-empty-state";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { CreateSnapshotContent } from "@/components/dashboard/snapshot-selector";
 import {
@@ -56,7 +61,10 @@ export default function ConfigurationsPage() {
 
 	if (isLoading) {
 		return (
-			<PageShell title="Configurations">
+			<PageShell
+				title="Configurations"
+				subtitle="Pre-built environments with repos, services, and dependencies."
+			>
 				<div className="py-12 flex justify-center">
 					<LoadingDots size="md" className="text-muted-foreground" />
 				</div>
@@ -91,18 +99,17 @@ export default function ConfigurationsPage() {
 			}
 		>
 			{!hasConfigs ? (
-				<div className="rounded-xl border border-dashed border-border py-16 text-center">
-					<p className="text-sm text-muted-foreground">No configurations yet</p>
-					<p className="text-xs text-muted-foreground mt-1">
-						Create a configuration to set up repos, service commands, and environment files
-					</p>
-					<div className="flex items-center justify-center gap-3 mt-4">
-						<Button size="sm" onClick={() => setCreateOpen(true)}>
-							<Plus className="h-3.5 w-3.5 mr-1.5" />
-							New Configuration
-						</Button>
-					</div>
-				</div>
+				<PageEmptyState
+					illustration={<GearIllustration />}
+					badge={<PlusBadge />}
+					title="No configurations yet"
+					description="Define repos, service commands, and environment files to customize your sandbox."
+				>
+					<Button size="sm" onClick={() => setCreateOpen(true)}>
+						<Plus className="h-3.5 w-3.5 mr-1.5" />
+						New Configuration
+					</Button>
+				</PageEmptyState>
 			) : !hasResults ? (
 				<p className="text-sm text-muted-foreground text-center py-12">
 					No configurations matching &ldquo;{filterQuery}&rdquo;
