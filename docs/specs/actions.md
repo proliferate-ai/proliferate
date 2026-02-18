@@ -3,16 +3,17 @@
 ## 1. Scope & Purpose
 
 ### In Scope
-- Action invocation lifecycle: pending → approved/denied → expired
-- Risk classification: read / write / danger
-- Grant system: create, evaluate, revoke, call budgets
-- Gateway action routes (invoke, approve, deny, list, grants, guide)
+- Action listing and invocation lifecycle: pending → approved/denied → expired
+- Source-agnostic permissioning via a three-mode system: `allow` / `deny` / `require_approval`
+- Mode resolution cascade (automation override → org default → inferred default)
+- Provider-backed actions surfaced via code-defined integration modules (Linear, Sentry, Slack)
+- Connector-backed MCP actions surfaced via `ActionSource` wrappers (dynamic, runtime-discovered tools)
+- Database connector actions as `ActionSource` (planned)
+- Action definition schemas via Zod, with JSON Schema export for UI and agent guides
+- Connector tool drift detection via action definition hashing (admin re-review required when a tool changes)
+- Gateway action routes (invoke, approve, deny, list, guide)
 - Integration guide/bootstrap flow
-- Linear adapter
-- Sentry adapter
-- Slack adapter
 - Invocation sweeper (expiry job)
-- Sandbox-MCP grants handler
 - Actions list (org-level inbox)
 
 ### Out of Scope
@@ -20,22 +21,30 @@
 - Session runtime (hub, WebSocket streaming, event processing) — see `sessions-gateway.md` §6
 - Integration OAuth flows for Linear/Sentry (connection lifecycle) — see `integrations.md`
 - Automation runs that invoke actions — see `automations-runs.md` §6
+- Trigger ingestion and polling — see `triggers.md`
 
 ### Mental Model
 
-Actions are platform-mediated operations that the agent performs on external services. Implemented action sources are (a) hand-written Linear/Sentry/Slack adapters and (b) connector-backed MCP `remote_http` sources discovered from prebuild connector config. Planned direction: connector discovery moves to an org-scoped catalog owned by `integrations.md`, so all sessions in an org see the same connector-backed sources by default. Unlike tools that run inside the sandbox, actions are executed server-side by the gateway using either OAuth tokens (`integrations.getToken`) or org-scoped secrets (`secrets.resolveSecretValue`) depending on source type. Every action goes through a risk-based approval pipeline before execution (`packages/services/src/actions/service.ts:invokeAction`).
+Actions are platform-mediated operations the agent asks the gateway to perform on external services. The agent sees one flat action catalog for a session (`GET /:sessionId/actions/available`) that merges code-defined integration actions (e.g., Sentry), org-scoped MCP connector tools (e.g., Context7), and database connectors (planned) into a single polymorphic interface: `ActionSource`.
 
-The agent invokes actions via the `proliferate` CLI inside the sandbox. The CLI sends HTTP requests to the gateway (`apps/gateway/src/api/proliferate/http/actions.ts`), which evaluates risk, checks for matching grants, and either auto-executes or queues the invocation for human approval. Users approve or deny pending invocations through the web dashboard or WebSocket events.
+Every action invocation resolves to exactly one **mode**:
+- `allow`: execute synchronously.
+- `deny`: reject synchronously.
+- `require_approval`: create a pending invocation and block until a human approves/denies (interactive sessions) or the automation is paused for human approval (unattended runs).
+
+The agent invokes actions via the `proliferate` CLI inside the sandbox. The CLI sends HTTP requests to the gateway (`apps/gateway/src/api/proliferate/http/actions.ts`), which resolves the action source, validates parameters, resolves the mode via the three-tier cascade, and either auto-executes, denies, or queues the invocation for human approval. Users approve or deny pending invocations through the web dashboard or WebSocket events.
 
 **Core entities:**
-- **Invocation** — a single request to execute an action, with its approval state. Lifecycle: pending → approved → executing → completed (or denied/expired/failed).
-- **Grant** — a reusable permission allowing the agent to perform a specific action without per-invocation approval. Scoped to session or org, with optional call budgets.
-- **Adapter** — an integration-specific module that declares available actions and implements execution against the external API.
-- **Action source** — the origin of an action definition. Implemented sources are static adapters and connector-backed MCP sources (both execute through the same lifecycle).
+- **Action source** — a polymorphic origin that can list and execute actions (`ActionSource`), e.g. a provider-backed source (`linear`) or a connector-backed source (`connector:<uuid>`). All source types share the same invocation lifecycle.
+- **Action definition** — schema + description + risk hint for a single action, produced by an action source. Uses Zod for parameter validation.
+- **Invocation** — a persisted record of a single action request and its eventual outcome, including the resolved mode and mode source.
+- **Mode override** — a persisted policy value (`allow|deny|require_approval`) keyed by `(sourceId, actionId)` at org or automation scope.
 
 **Key invariants:**
-- Read actions are always auto-approved. Danger actions are always denied. Only write actions enter the approval pipeline. Source: `packages/services/src/actions/service.ts:125-141`
-- Grants are evaluated atomically via CAS (compare-and-swap) to prevent concurrent overuse of call budgets. Source: `packages/services/src/actions/grants-db.ts:consumeGrantCall`
+- **Source-Agnostic Permissioning:** Mode resolution is deterministic (automation override → org default → inferred default) and blind to the underlying execution protocol.
+- **Stateless Providers:** Action sources never read PostgreSQL or Redis. Tokens and configuration are dynamically injected via `ActionExecutionContext`.
+- **JSON-Aware Truncation:** Results stored in the DB are redacted and structurally JSON-truncated (max 10KB) without producing invalid JSON.
+- **Fail-Safe Drift Detection:** MCP tools that change since the last admin review are flagged as drifted. `allow` downgrades to `require_approval`; `deny` stays `deny`.
 - A session can have at most 10 pending invocations simultaneously (`MAX_PENDING_PER_SESSION`). Source: `packages/services/src/actions/service.ts:46`
 - Pending invocations expire after 5 minutes if not approved or denied (`PENDING_EXPIRY_MS`). Source: `packages/services/src/actions/service.ts:45`
 - Results stored in the DB are redacted (sensitive keys removed) and truncated (max 10KB). Source: `packages/services/src/actions/service.ts:62-84`
@@ -44,33 +53,87 @@ The agent invokes actions via the `proliferate` CLI inside the sandbox. The CLI 
 
 ## 2. Core Concepts
 
-### Risk Classification
-Every action definition declares a `riskLevel`: `read`, `write`, or `danger`. This controls the approval flow — reads auto-execute, writes require approval (or a matching grant), and danger actions are unconditionally denied.
-- Key detail agents get wrong: there is no "danger" action currently defined in any adapter. The level exists in the type system and service logic but has no adapter-level use yet.
-- Reference: `packages/services/src/actions/service.ts:invokeAction`
+### 2.1 Three-Mode Permissioning
 
-### Grant Evaluation (CAS Pattern)
-When a write action is invoked, the service checks for a matching grant before requiring approval. Matching uses exact integration/action or wildcard (`*`). The `consumeGrantCall` function uses a CAS-style SQL UPDATE with WHERE conditions to atomically decrement the budget, preventing concurrent requests from double-spending.
-- Key detail agents get wrong: grants can use wildcards for both `integration` and `action` fields. A grant with `integration="*"` and `action="*"` auto-approves any write action.
-- Reference: `packages/services/src/actions/grants-db.ts:consumeGrantCall`
+Every invocation resolves to one mode via a simple cascade:
 
-### Adapter Registry
-Adapters are statically registered in a `Map`. Currently three adapters exist: `linear`, `sentry`, and `slack`. Each adapter declares its actions, their risk levels, parameter schemas, an `execute()` function, and an optional markdown `guide`.
-- Key detail agents get wrong: adapters are not dynamically discovered. Adding a new OAuth-style adapter requires code changes to the registry, but adding a connector-backed source does not.
-- Reference: `packages/services/src/actions/adapters/index.ts`
+1. **Automation override** (`automations.action_modes["<sourceId>:<actionId>"]`) — highest priority
+2. **Org default** (`organizations.action_modes["<sourceId>:<actionId>"]`)
+3. **Inferred default** (from action definition `riskLevel` hints: `read` → `allow`, `write` → `require_approval`, `danger` → `deny`)
 
-### Action Source Boundary
-Two action source types coexist:
-1. **Static adapters** — hand-written Linear, Sentry, Slack adapters registered in `packages/services/src/actions/adapters/index.ts`. Require OAuth integration connections per session.
-2. **Connector-backed actions** — MCP `remote_http` connectors discovered at runtime. Current implementation resolves connector config from prebuilds. Planned direction resolves the same connector shape from an org-scoped catalog. Connector actions use the `connector:<uuid>` integration prefix to distinguish them from static adapters in the `integration` column.
+Providers annotate actions with static `riskLevel: "read" | "write" | "danger"` hints. These hints are only used for inferred defaults when no explicit override exists. Enforcement is entirely via modes.
 
-Both source types share the same risk/approval/grant/audit lifecycle. The merge point is `GET /available` in `apps/gateway/src/api/proliferate/http/actions.ts`, which returns adapter-based and connector-based integrations in a single list.
+- Key detail agents get wrong: `riskLevel` is a hint for defaults only. Enforcement is entirely via mode overrides and the resolved mode recorded on each invocation.
+- Reference: `packages/services/src/actions/modes.ts`
 
-- Key detail agents get wrong: connector actions pass `integrationId: null` in invocations since they don't use OAuth connections. The `integration` field contains `connector:<uuid>` which uniquely identifies the connector.
-- Key detail agents get wrong: MCP tool annotations (`readOnlyHint`, `destructiveHint`) are mapped to risk levels with a safe "write" fallback. Per-tool and per-connector policy overrides take precedence. See `packages/services/src/actions/connectors/risk.ts`.
-- Reference: `packages/services/src/actions/connectors/`, `apps/gateway/src/api/proliferate/http/actions.ts`
+### 2.2 The `ActionSource` Interface
 
-### Actions Bootstrap
+All action catalogs and execution paths flow through a single polymorphic interface. The gateway calls `source.listActions()` and `source.execute()` without knowing if the underlying system is REST, MCP, or any other protocol.
+
+```typescript
+// packages/providers/src/action-source.ts
+interface ActionSource {
+  id: string;           // e.g., "sentry", "connector:<uuid>"
+  displayName: string;
+  guide?: string;
+
+  listActions(ctx: ActionExecutionContext): Promise<ActionDefinition[]>;
+  execute(actionId: string, params: Record<string, unknown>, ctx: ActionExecutionContext): Promise<ActionResult>;
+}
+
+// packages/providers/src/types.ts
+interface ActionDefinition {
+  id: string;
+  description: string;
+  riskLevel: RiskLevel;     // Static hint ONLY. Enforcement via Mode Cascade.
+  params: z.ZodType;        // Zod for enums, deep schemas, JSON Schema export
+}
+
+interface ActionExecutionContext {
+  token: string;            // Live token resolved & injected by the platform
+  orgId: string;
+  sessionId: string;
+}
+
+type ActionMode = "allow" | "require_approval" | "deny";
+
+interface ModeResolution {
+  mode: ActionMode;
+  source: "automation_override" | "org_default" | "inferred_default";
+}
+```
+
+Two `ActionSource` archetypes are implemented:
+
+1. **`ProviderActionSource`** (Archetype A) — wraps code-defined provider action modules (Linear, Sentry, Slack). `listActions()` returns a static list of Zod-validated definitions. `execute()` calls the provider's REST/GraphQL API with an injected OAuth token. Source: `packages/providers/src/action-source.ts:ProviderActionSource`
+2. **`McpConnectorActionSource`** (Archetype B) — wraps an `org_connectors` DB row. `listActions()` dynamically discovers tools via MCP protocol (`tools/list`). `execute()` calls the MCP server's `tools/call` endpoint statelessly. Source: `packages/services/src/actions/connectors/action-source.ts`
+
+- Key detail agents get wrong: the `ActionSource` interface is async for `listActions()` because MCP connectors discover tools over the network. Adapter implementations return a static list but the interface must accommodate dynamic discovery.
+- Reference: `packages/providers/src/action-source.ts`, `packages/services/src/actions/connectors/action-source.ts`
+
+### 2.3 Zod Schemas (Params and Results)
+
+Action definitions use Zod for parameter validation and JSON Schema export (for UI rendering and agent guide generation). The `@proliferate/providers/helpers/schema` module provides `zodToJsonSchema()`, `jsonSchemaToZod()` (for MCP tools), and `computeDefinitionHash()`.
+
+- Key detail agents get wrong: schema conversion must be stable for hashing; use the shared `zodToJsonSchema()` implementation. Flat `ActionParam[]` schemas are deprecated.
+- Reference: `packages/providers/src/helpers/schema.ts`
+
+### 2.4 Connector Tool Drift Detection (Hashing)
+
+Dynamic MCP tools can change at runtime. The system stores a stable hash for each tool definition alongside its configured mode. On listing, the gateway compares the stored hash with the current hash.
+
+Hashing rules (to avoid false-positive drift):
+- Use a deterministic JSON stringifier (stable key ordering). Source: `packages/providers/src/helpers/schema.ts:stableStringify`
+- Hash a normalized JSON Schema that strips `description`, `default`, and `enum` fields (these commonly contain dynamic data). Source: `packages/providers/src/helpers/schema.ts:normalizeSchemaForHash`
+
+Drift handling rules:
+- Previous `allow` → set effective mode to `require_approval` until re-confirmed.
+- Previous `require_approval` → keep `require_approval`.
+- Previous `deny` → keep `deny` (still drifted; must be explicitly re-enabled by an admin).
+- Key detail agents get wrong: drift detection must never "upgrade" a denied tool into an approvable tool.
+- Reference: `packages/services/src/actions/modes.ts:applyDriftGuard`
+
+### 2.5 Actions Bootstrap
 During sandbox setup, a markdown file (`actions-guide.md`) is written to `.proliferate/` inside the sandbox. This file documents the `proliferate actions` CLI commands (list, guide, run). The agent reads this file to discover available integrations.
 - Key detail agents get wrong: the bootstrap guide is static — it does not list which integrations are connected. The agent must run `proliferate actions list` at runtime to discover connected integrations.
 - Reference: `packages/shared/src/sandbox/config.ts:ACTIONS_BOOTSTRAP`
@@ -80,26 +143,34 @@ During sandbox setup, a markdown file (`actions-guide.md`) is written to `.proli
 ## 3. File Tree
 
 ```
+packages/providers/src/
+├── index.ts                          # Exports registry, types, ActionSource adapters
+├── types.ts                          # ActionDefinition, ActionExecutionContext, ActionMode, RiskLevel
+├── action-source.ts                  # ActionSource interface + ProviderActionSource adapter
+├── helpers/
+│   ├── schema.ts                     # zodToJsonSchema(), jsonSchemaToZod(), computeDefinitionHash()
+│   └── truncation.ts                 # JSON-aware structural truncation (truncateJson)
+└── providers/
+    ├── registry.ts                   # ProviderActionModule registry (static Map)
+    ├── linear/
+    │   └── actions.ts                # Linear GraphQL adapter (5 actions)
+    ├── sentry/
+    │   └── actions.ts                # Sentry REST adapter (5 actions)
+    └── slack/
+        └── actions.ts                # Slack REST adapter (1 action)
+
 packages/services/src/actions/
 ├── index.ts                          # Module exports
-├── service.ts                        # Business logic (invoke, approve, deny, expire)
+├── service.ts                        # Business logic (invoke, approve, deny, expire, mode resolution)
 ├── service.test.ts                   # Service unit tests
 ├── db.ts                             # Drizzle queries for action_invocations
-├── grants.ts                         # Grant service (create, evaluate, revoke)
-├── grants.test.ts                    # Grant service unit tests
-├── grants-db.ts                      # Drizzle queries for action_grants
-├── grants-db.test.ts                 # Grant DB unit tests
-├── guide.test.ts                     # Guide retrieval tests
-├── adapters/
-│   ├── index.ts                      # Adapter registry (Map-based)
-│   ├── types.ts                      # ActionAdapter / ActionDefinition interfaces
-│   ├── linear.ts                     # Linear GraphQL adapter (5 actions)
-│   ├── sentry.ts                     # Sentry REST adapter (5 actions)
-│   └── slack.ts                      # Slack REST adapter (1 action)
+├── modes.ts                          # Three-mode resolution cascade + drift guard
+├── modes-db.ts                       # DB helpers for org/automation action_modes JSONB
 └── connectors/
     ├── index.ts                      # Re-exports (listConnectorTools, callConnectorTool, etc.)
-    ├── client.ts                     # MCP client (list tools, call tool, schema conversion)
-    ├── client.test.ts                # schemaToParams unit tests
+    ├── action-source.ts              # McpConnectorActionSource (Archetype B)
+    ├── client.ts                     # MCP client (list tools, call tool)
+    ├── client.test.ts                # MCP client unit tests
     ├── risk.ts                       # MCP annotations → risk level mapping
     ├── risk.test.ts                  # deriveRiskLevel unit tests
     └── types.ts                      # ConnectorToolList, ConnectorCallResult
@@ -112,11 +183,11 @@ apps/worker/src/sweepers/
 └── index.ts                          # Action expiry sweeper (setInterval)
 
 packages/sandbox-mcp/src/
-└── actions-grants.ts                 # CLI grant command handlers (sandbox-side)
+└── actions-grants.ts                 # CLI grant command handlers (legacy, sandbox-side)
 
 packages/db/src/schema/
-├── schema.ts                         # actionInvocations + actionGrants table definitions
-└── relations.ts                      # Drizzle relations for both tables
+├── schema.ts                         # actionInvocations + organizations.actionModes + automations.actionModes
+└── relations.ts                      # Drizzle relations
 
 apps/web/src/server/routers/
 ├── actions.ts                        # oRPC router for org-level actions inbox
@@ -138,57 +209,88 @@ action_invocations
 ├── session_id        UUID NOT NULL FK → sessions(id) ON DELETE CASCADE
 ├── organization_id   TEXT NOT NULL FK → organization(id) ON DELETE CASCADE
 ├── integration_id    UUID FK → integrations(id) ON DELETE SET NULL
-├── integration       TEXT NOT NULL                     -- adapter name ("linear", "sentry", "slack")
-├── action            TEXT NOT NULL                     -- action name ("create_issue", etc.)
-├── risk_level        TEXT NOT NULL                     -- "read" | "write" | "danger"
-├── params            JSONB                             -- action parameters (redacted before store)
-├── status            TEXT NOT NULL DEFAULT 'pending'   -- lifecycle state
-├── result            JSONB                             -- execution result (redacted, truncated)
-├── error             TEXT                              -- error message on failure
-├── duration_ms       INTEGER                           -- execution time
-├── approved_by       TEXT                              -- user ID who approved/denied
+├── integration       TEXT NOT NULL                 -- sourceId (e.g. "linear", "connector:<uuid>")
+├── action            TEXT NOT NULL                 -- actionId (e.g. "create_issue", "search_docs")
+├── risk_level        TEXT NOT NULL                 -- "read" | "write" | "danger" (hint copied at invocation time)
+├── mode              TEXT                          -- "allow" | "deny" | "require_approval" (resolved)
+├── mode_source       TEXT                          -- "automation_override" | "org_default" | "inferred_default"
+├── params            JSONB                         -- action parameters (redacted before store)
+├── status            TEXT NOT NULL DEFAULT 'pending' -- pending | approved | executing | completed | denied | failed | expired
+├── result            JSONB                         -- execution result (redacted, structurally truncated)
+├── error             TEXT                          -- error message on failure
+├── denied_reason     TEXT                          -- policy | human | expired | unknown_mode:<value>
+├── duration_ms       INTEGER                       -- execution time
+├── approved_by       TEXT                          -- user ID who approved/denied
 ├── approved_at       TIMESTAMPTZ
 ├── completed_at      TIMESTAMPTZ
-├── expires_at        TIMESTAMPTZ                       -- 5min TTL for pending invocations
+├── expires_at        TIMESTAMPTZ                   -- 5min TTL for pending invocations
 └── created_at        TIMESTAMPTZ DEFAULT now()
 
-action_grants
-├── id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
-├── organization_id   TEXT NOT NULL FK → organization(id) ON DELETE CASCADE
-├── created_by        TEXT NOT NULL FK → user(id) ON DELETE CASCADE  -- see §9 caveat
-├── session_id        UUID FK → sessions(id) ON DELETE CASCADE  -- NULL = org-wide
-├── integration       TEXT NOT NULL                     -- adapter name or "*" wildcard
-├── action            TEXT NOT NULL                     -- action name or "*" wildcard
-├── max_calls         INTEGER                           -- NULL = unlimited
-├── used_calls        INTEGER NOT NULL DEFAULT 0
-├── expires_at        TIMESTAMPTZ                       -- NULL = no expiry
-├── revoked_at        TIMESTAMPTZ                       -- set on revocation
-└── created_at        TIMESTAMPTZ DEFAULT now()
+-- Mode overrides (JSONB columns on existing tables)
+organizations
+├── id                TEXT PRIMARY KEY
+└── action_modes      JSONB                         -- { "<sourceId>:<actionId>": "allow|deny|require_approval", ... }
+
+automations
+├── id                UUID PRIMARY KEY
+└── action_modes      JSONB                         -- same shape; highest priority in cascade
+
+-- Connector tool config (persistence owned by Integrations)
+org_connectors
+├── id                UUID PRIMARY KEY
+├── organization_id   TEXT NOT NULL
+├── name              TEXT NOT NULL
+├── transport         TEXT NOT NULL DEFAULT 'remote_http'
+├── url               TEXT NOT NULL
+├── auth              JSONB NOT NULL
+├── risk_policy       JSONB                         -- default risk + per-tool overrides
+├── tool_risk_overrides JSONB                       -- { "<toolName>": { mode, hash }, ... }
+├── enabled           BOOLEAN NOT NULL DEFAULT true
+├── created_by        TEXT
+├── created_at        TIMESTAMPTZ DEFAULT now()
+└── updated_at        TIMESTAMPTZ DEFAULT now()
 ```
 
 ### Core TypeScript Types
 
 ```typescript
-// packages/services/src/actions/adapters/types.ts
-interface ActionParam {
-  name: string;
-  type: "string" | "number" | "boolean" | "object";
-  required: boolean;
-  description: string;
-}
+// packages/providers/src/types.ts
+type RiskLevel = "read" | "write" | "danger";
+type ActionMode = "allow" | "require_approval" | "deny";
 
 interface ActionDefinition {
-  name: string;
+  id: string;
   description: string;
-  riskLevel: "read" | "write" | "danger";
-  params: ActionParam[];
+  riskLevel: RiskLevel;
+  params: z.ZodType;              // Zod schema — supports enums, nested objects, JSON Schema export
 }
 
-interface ActionAdapter {
-  integration: string;
-  actions: ActionDefinition[];
+interface ActionExecutionContext {
+  token: string;
+  orgId: string;
+  sessionId: string;
+}
+
+interface ActionResult {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+  durationMs?: number;
+}
+
+// packages/providers/src/action-source.ts
+interface ActionSource {
+  id: string;
+  displayName: string;
   guide?: string;
-  execute(action: string, params: Record<string, unknown>, token: string): Promise<unknown>;
+  listActions(ctx: ActionExecutionContext): Promise<ActionDefinition[]>;
+  execute(actionId: string, params: Record<string, unknown>, ctx: ActionExecutionContext): Promise<ActionResult>;
+}
+
+// packages/services/src/actions/modes.ts
+interface ModeResolution {
+  mode: ActionMode;
+  source: "automation_override" | "org_default" | "inferred_default";
 }
 
 // packages/services/src/actions/service.ts
@@ -200,23 +302,30 @@ type ActionStatus = "pending" | "approved" | "executing" | "completed"
 - `idx_action_invocations_session` (session_id) — `listBySession`, `listPendingBySession`
 - `idx_action_invocations_org_created` (organization_id, created_at) — `listByOrg`, `countByOrg`
 - `idx_action_invocations_status_expires` (status, expires_at) — `expirePendingInvocations` sweeper
-- `idx_action_grants_org` (organization_id) — `listActiveGrants`, `listGrantsByOrg`
-- `idx_action_grants_lookup` (organization_id, integration, action) — `findMatchingGrants`
+- Org policy lookup is a point read on `organizations.action_modes` (JSONB), keyed by `"<sourceId>:<actionId>"`.
 
 ---
 
 ## 5. Conventions & Patterns
 
 ### Do
-- Add new adapters in `packages/services/src/actions/adapters/` and register them in `adapters/index.ts` — one adapter per integration.
-- Use the `ActionAdapter` interface for all adapters — ensures consistent action definition and execution contracts.
-- Set `AbortSignal.timeout(30_000)` on all external API calls — both adapters enforce a 30s timeout.
+- Keep mode resolution centralized and deterministic (`modes.ts`), and record `mode` + `mode_source` on every invocation.
+- Validate params against Zod schema before mode resolution and execution.
+- Add new provider adapters in `packages/providers/src/providers/` and register them in `providers/registry.ts`.
+- Use the `ActionSource` interface for all action execution — ensures consistent listing and execution contracts.
+- Set `AbortSignal.timeout(30_000)` on all external API calls — adapters enforce a 30s timeout.
 - Redact results via `redactData()` before storing — sensitive keys (token, secret, password, authorization, api_key, apikey) are stripped.
+- **JSON-truncate results before storing (10KB max)**. Truncation structurally prunes arrays/objects via `truncateJson()` to preserve valid JSON and includes a `_truncated: true` marker when applied. Never string-slice.
+- Cache connector `tools/list` results (5 minutes) and include tool hash comparisons during listing.
+- Fail safe on drift: if a tool hash changes, downgrade `allow` to `require_approval` but never relax `deny`.
 
 ### Don't
+- Don't implement per-source permissioning branches in the invocation pipeline (mode resolution is uniform).
+- Don't rely on provider `riskLevel` as enforcement (it is only an inferred default hint).
 - Return `{ ok: false }` error objects from service functions — throw typed errors (`ActionNotFoundError`, `ActionExpiredError`, `ActionConflictError`, `PendingLimitError`).
-- Store raw external API responses — always pass through `redactData()` and `truncateResult()` (10KB max).
+- Store raw external API responses — always pass through `redactData()` and `truncateResult()`.
 - Approve/deny from sandbox tokens — only user tokens with admin/owner role can approve or deny invocations.
+- Don't store or return raw tokens from action routes.
 
 ### Error Handling
 
@@ -234,84 +343,92 @@ try {
 ```
 
 ### Reliability
+- **External API timeout**: 30s on all adapters and connector calls.
 - **Invocation expiry**: 5-minute TTL on pending invocations (`PENDING_EXPIRY_MS`). Source: `packages/services/src/actions/service.ts:PENDING_EXPIRY_MS`
 - **Pending cap**: Max 10 pending invocations per session (`MAX_PENDING_PER_SESSION`). Source: `packages/services/src/actions/service.ts:MAX_PENDING_PER_SESSION`
 - **Rate limiting**: 60 invocations per minute per session (in-memory counter in gateway). Source: `apps/gateway/src/api/proliferate/http/actions.ts:checkInvokeRateLimit`
-- **Grant CAS**: Atomic `UPDATE ... WHERE usedCalls < maxCalls` prevents budget overuse. Source: `packages/services/src/actions/grants-db.ts:consumeGrantCall`
-- **Grant rollback**: If invocation approval fails after grant creation, the grant is revoked (best-effort). Source: `packages/services/src/actions/service.ts:approveActionWithGrant`
-- **External API timeout**: 30s on Linear, Sentry, and Slack adapters.
+- **Result truncation**: never string-slice JSON. Prune structurally via `truncateJson()` until under the limit and return/store a valid JSON value. Source: `packages/providers/src/helpers/truncation.ts`
 
 ### Testing Conventions
-- Mock `./db` and `./grants` modules for service tests — never hit the database.
+- Mock `./db` and `./modes` modules for service tests — never hit the database.
 - Mock `../logger` to suppress log output.
-- Use `makeInvocationRow()` / `makeGrant()` helpers for test data.
-- Grant concurrency tests verify CAS semantics using sequential `mockResolvedValueOnce` chains.
+- Use test helper factories for invocation row data.
 
 ---
 
 ## 6. Subsystem Deep Dives
 
-### 6.1 Action Invocation Lifecycle — `Implemented`
+### 6.1 List Available Actions — `Implemented`
 
-**What it does:** Routes an action through risk classification, grant evaluation, approval, execution, and result storage.
+**What it does:** Returns a merged catalog of actions available to a session, across all action source types.
+
+**Happy path:**
+1. Load session context: `session_connections` (provider-backed sources) and `org_connectors` (connector sources).
+2. Build `ActionSource[]` for provider-backed sources (`ProviderActionSource` wrapping registry modules) and connector-backed sources (`McpConnectorActionSource`, tools cached 5 min per session).
+3. For each source, call `listActions(ctx)`. For connector tools, compute drift status using normalized schema hashing.
+4. Return one flat list. The list is also used to generate the sandbox guide (`.proliferate/actions-guide.md`).
+
+**Edge cases:**
+- Connector is unreachable at list-time → its tools simply do not appear in the available list. Other connectors and static adapters continue working.
+- Tool hash changed since last review → mark drifted; `allow` becomes `require_approval`, `deny` stays `deny`, and the admin UI surfaces "needs re-review".
+
+**Files touched:** `apps/gateway/src/api/proliferate/http/actions.ts`, `packages/providers/src/action-source.ts`, `packages/services/src/actions/connectors/action-source.ts`
+
+### 6.2 Action Invocation Lifecycle — `Implemented`
+
+**What it does:** Routes an action through mode resolution, execution or approval, and result storage.
 
 **Invoke response contracts:**
 
 | Outcome | HTTP | Response shape |
 |---------|------|----------------|
-| Auto-approved (read or grant-matched write) | 200 | `{ invocation, result }` |
-| Pending approval (write, no grant) | 202 | `{ invocation, message: "Action requires approval" }` |
-| Denied (danger) | 403 | `{ invocation, error }` |
+| Auto-approved (`allow` mode) | 200 | `{ invocation, result }` |
+| Pending approval (`require_approval` mode) | 202 | `{ invocation, message: "Action requires approval" }` |
+| Denied (`deny` mode) | 403 | `{ invocation, error }` |
 | Pending cap exceeded | 429 | `{ error }` |
 
-**Happy path (write action, no grant):**
+**Pipeline (`POST /invoke`):**
 1. Agent calls `proliferate actions run --integration linear --action create_issue --params '{...}'`
-2. Sandbox-MCP CLI sends `POST /:sessionId/actions/invoke` to gateway (`actions.ts` invoke handler)
-3. Gateway validates adapter via `getAdapter(integration)` (`adapters/index.ts:getAdapter`), finds session connections via `sessions.listSessionConnections(sessionId)`, resolves org via `sessions.findByIdInternal(sessionId)`
-4. Calls `invokeAction()` (`service.ts:invokeAction`) — risk = write, no matching grant → creates pending invocation with 5-min expiry
-5. Gateway broadcasts `action_approval_request` to WebSocket clients via `hub.broadcastMessage()`
-6. Returns HTTP 202 `{ invocation, message: "Action requires approval" }` — sandbox CLI blocks polling `GET /:sessionId/actions/invocations/:id`
-7. User approves via `POST /:sessionId/actions/invocations/:id/approve` — admin/owner role required (`actions.ts:requireAdminRole`)
-8. Gateway calls `approveAction()` (`service.ts:approveAction`), then `markExecuting()` (`service.ts:markExecuting`), resolves integration token via `integrations.getToken()`, calls `adapter.execute()`
-9. On success: `markCompleted()` (`service.ts:markCompleted`) with redacted/truncated result, broadcasts `action_completed` via `hub.broadcastMessage()`. Returns HTTP 200 `{ invocation, result, grant? }`
-10. On failure: `markFailed()` (`service.ts:markFailed`) with error message, broadcasts failure, returns HTTP 502
+2. Sandbox-MCP CLI sends `POST /:sessionId/actions/invoke` to gateway
+3. Gateway resolves the `ActionSource` by `sourceId` and locates the `ActionDefinition` by `actionId`
+4. Validates params via Zod (`safeParse`) and rejects invalid payloads early
+5. If source is a connector tool, computes drift status via normalized schema hashing
+6. Resolves mode via three-tier cascade (`resolveMode()` in `modes.ts`): automation override → org default → inferred default
+7. Applies drift guardrail (connector tools only): drifted `allow` downgrades to `require_approval`; drifted `deny` stays `deny`
+8. Calls `invokeAction()` (`service.ts`) which branches on mode:
+   - `deny` → persists invocation as denied with `deniedReason: "policy"`, returns HTTP 403
+   - `allow` → persists invocation as approved, gateway executes `source.execute()` immediately, returns HTTP 200
+   - `require_approval` → enforces pending cap, persists invocation as pending with 5-min expiry, broadcasts `action_approval_request` via WebSocket, returns HTTP 202
+9. For executed responses, redacts and structurally JSON-truncates results to <=10KB, persists via `markCompleted()`, broadcasts `action_completed`
+10. On execution failure: `markFailed()` with error message, broadcasts failure, returns HTTP 502
 
 **Edge cases:**
-- **Read action** → auto-approved by `invokeAction()` (`service.ts:invokeAction`), executed immediately, returns HTTP 200 `{ invocation, result }`
-- **Danger action** → denied by `invokeAction()` (`service.ts:invokeAction`), returns HTTP 403 `{ invocation, error }`
-- **Grant match** → auto-approved after CAS consumption via `evaluateGrant()` (`grants.ts:evaluateGrant`), executed immediately
 - **Pending cap exceeded** → throws `PendingLimitError`, gateway returns HTTP 429
 - **Expired before approval** → `approveAction()` marks expired via `db.ts:updateInvocationStatus`, throws `ActionExpiredError` (410)
 - **Already approved/denied** → throws `ActionConflictError` (409)
+- **Unknown mode from JSONB** → denied as safe fallback with `deniedReason: "unknown_mode:<value>"`
 
-**Files touched:** `packages/services/src/actions/service.ts`, `apps/gateway/src/api/proliferate/http/actions.ts`
+**Files touched:** `packages/services/src/actions/service.ts`, `packages/services/src/actions/modes.ts`, `apps/gateway/src/api/proliferate/http/actions.ts`
 
-### 6.2 Grant System — `Implemented`
+### 6.3 Approve/Deny Pending Invocations — `Implemented`
 
-**What it does:** Provides reusable permissions that auto-approve write actions without per-invocation human approval.
+**What it does:** Resolves a pending invocation into an executed or denied state.
 
-**Grant creation paths:**
-1. **Via approval**: User approves an invocation with `mode: "grant"` — creates a grant with `createdBy` = the approving user's ID. Source: `service.ts:approveActionWithGrant`
-2. **Via sandbox CLI**: Agent calls `POST /:sessionId/actions/grants` — gateway resolves the session and uses `session.createdBy` (user ID) as `createdBy`. If `session.createdBy` is missing, request is rejected with HTTP 400.
+**Routes:**
+- `POST /invocations/:invocationId/approve` — admin/owner role required
+- `POST /invocations/:invocationId/deny` — admin/owner role required
 
-**Grant evaluation flow:**
-1. `invokeAction()` (`service.ts:invokeAction`) calls `evaluateGrant()` (`grants.ts:evaluateGrant`) for write actions
-2. `evaluateGrant()` calls `findMatchingGrants()` (`grants-db.ts:findMatchingGrants`) — DB query matching exact or wildcard (`*`) on integration and action, filtered by org, non-revoked, non-expired, non-exhausted, scoped to session or org-wide
-3. For each candidate: `consumeGrantCall()` (`grants-db.ts:consumeGrantCall`) atomically increments `usedCalls` via CAS
-4. First successful CAS returns `{ granted: true, grantId }` — invocation auto-approved
-5. All CAS failures → `{ granted: false }` — falls through to pending approval
+**Approve modes:**
+- `mode: "once"` (default) — approves this invocation only.
+- `mode: "always"` — approves this invocation AND updates `organizations.action_modes` (or `automations.action_modes`) to `allow` for this `sourceId:actionId` pair, so future invocations are auto-approved.
 
-**Grant scoping:**
-- `sessionId = NULL` → org-wide grant (matches any session)
-- `sessionId = <uuid>` → session-scoped (matches only that session + org-wide grants)
-- `maxCalls = NULL` → unlimited uses
-- `maxCalls = N` → exactly N uses before exhaustion
+Interactive sessions use WebSocket-connected human clients to approve/deny via the Org Inbox UI. Unattended automation runs pause, notify a Slack channel, and wait for human resumption (owned by `automations-runs.md`).
 
-**Files touched:** `packages/services/src/actions/grants.ts`, `packages/services/src/actions/grants-db.ts`
+**Files touched:** `packages/services/src/actions/service.ts`, `packages/services/src/actions/modes-db.ts`, `apps/gateway/src/api/proliferate/http/actions.ts`
 
-### 6.3 Gateway Action Routes — `Implemented`
+### 6.4 Gateway Action Routes — `Implemented`
 
-**What it does:** HTTP API for action invocation, approval, denial, listing, and grants.
+**What it does:** HTTP API for action invocation, approval, denial, listing, and guides.
 
 **Routes** (all prefixed with `/:proliferateSessionId/actions/`):
 
@@ -324,18 +441,12 @@ try {
 | GET | `/invocations/:invocationId` | Sandbox or User | Poll invocation status |
 | POST | `/invocations/:invocationId/approve` | User (admin/owner) | Approve pending invocation |
 | POST | `/invocations/:invocationId/deny` | User (admin/owner) | Deny pending invocation |
-| POST | `/grants` | Sandbox only | Create a grant |
-| GET | `/grants` | Sandbox or User | List active grants |
-
-**Approve modes:**
-- `mode: "once"` (default) — approves this invocation only
-- `mode: "grant"` — approves this invocation and creates a grant for future similar actions. Accepts `grant: { scope: "session"|"org", maxCalls: number|null }`.
 
 **Files touched:** `apps/gateway/src/api/proliferate/http/actions.ts`
 
-### 6.4 Linear Adapter — `Implemented`
+### 6.5 Linear Adapter — `Implemented`
 
-**What it does:** Provides 5 actions against the Linear GraphQL API.
+**What it does:** Provides 5 actions against the Linear GraphQL API via the `ProviderActionSource` wrapper.
 
 | Action | Risk | Required Params |
 |--------|------|-----------------|
@@ -347,11 +458,11 @@ try {
 
 **Implementation:** GraphQL queries/mutations via `fetch` to `https://api.linear.app/graphql`. Token passed as `Authorization` header. 30s timeout. Pagination via cursor (`first`/`after`), capped at 50 results.
 
-**Files touched:** `packages/services/src/actions/adapters/linear.ts`
+**Files touched:** `packages/providers/src/providers/linear/actions.ts`
 
-### 6.5 Sentry Adapter — `Implemented`
+### 6.6 Sentry Adapter — `Implemented`
 
-**What it does:** Provides 5 actions against the Sentry REST API.
+**What it does:** Provides 5 actions against the Sentry REST API via the `ProviderActionSource` wrapper.
 
 | Action | Risk | Required Params |
 |--------|------|-----------------|
@@ -363,11 +474,11 @@ try {
 
 **Implementation:** REST via `fetch` to `https://sentry.io/api/0`. Token as `Bearer` in `Authorization` header. 30s timeout. URL segments properly encoded via `encodeURIComponent`.
 
-**Files touched:** `packages/services/src/actions/adapters/sentry.ts`
+**Files touched:** `packages/providers/src/providers/sentry/actions.ts`
 
-### 6.6 Slack Adapter — `Implemented`
+### 6.7 Slack Adapter — `Implemented`
 
-**What it does:** Provides a basic Slack write action (`send_message`) against the Slack Web API.
+**What it does:** Provides a basic Slack write action (`send_message`) against the Slack Web API via the `ProviderActionSource` wrapper.
 
 | Action | Risk | Required Params |
 |--------|------|-----------------|
@@ -375,9 +486,9 @@ try {
 
 **Implementation:** REST via `fetch` to `https://slack.com/api/chat.postMessage`. Token as `Bearer` in `Authorization` header. 30s timeout. Returns Slack API response JSON when `ok=true`, throws on Slack API errors.
 
-**Files touched:** `packages/services/src/actions/adapters/slack.ts`
+**Files touched:** `packages/providers/src/providers/slack/actions.ts`
 
-### 6.7 Invocation Sweeper — `Implemented`
+### 6.8 Invocation Sweeper — `Implemented`
 
 **What it does:** Periodically marks stale pending invocations as expired.
 
@@ -387,25 +498,13 @@ try {
 
 **Files touched:** `apps/worker/src/sweepers/index.ts`, `packages/services/src/actions/db.ts:expirePendingInvocations`
 
-### 6.8 Sandbox-MCP Grants Handler — `Implemented`
-
-**What it does:** Provides CLI command handlers for grant management inside the sandbox.
-
-**Commands:**
-- `actions grant request` — creates a grant via `POST /grants`. Flags: `--integration` (required), `--action` (required), `--scope` (session|org, default session), `--max-calls` (optional positive integer).
-- `actions grants list` — lists active grants via `GET /grants`.
-
-**Design:** Uses injectable `GatewayRequestFn` for testability — the CLI's `fatal()` calls `process.exit`, so command logic is extracted into pure async functions.
-
-**Files touched:** `packages/sandbox-mcp/src/actions-grants.ts`
-
 ### 6.9 Actions List (Org Inbox) — `Implemented`
 
 **What it does:** oRPC route for querying action invocations at the org level, consumed by the inline attention inbox tray.
 
 **Route:** `actions.list` — org-scoped procedure accepting optional `status` filter and `limit`/`offset` pagination (default 50/0, max 100). Returns invocations with session title joined, plus total count for pagination. Dates serialized to ISO strings.
 
-**Frontend surface:** Pending approvals are surfaced via an inline **inbox tray** rendered inside the coding session thread (`apps/web/src/components/coding-session/inbox-tray.tsx`). The tray merges three data sources: current-session WebSocket approval requests, org-level polled pending approvals (via `useOrgActions`), and org-level pending automation runs (via `useOrgPendingRuns`). The merge logic deduplicates WebSocket vs polled approvals by `invocationId` and sorts all items newest-first. A standalone actions page (`apps/web/src/app/dashboard/actions/page.tsx`) also exists with full pagination, status filtering, and grant configuration — sidebar navigation to it was removed but the route remains accessible directly.
+**Frontend surface:** Pending approvals are surfaced via an inline **inbox tray** rendered inside the coding session thread (`apps/web/src/components/coding-session/inbox-tray.tsx`). The tray merges three data sources: current-session WebSocket approval requests, org-level polled pending approvals (via `useOrgActions`), and org-level pending automation runs (via `useOrgPendingRuns`). The merge logic deduplicates WebSocket vs polled approvals by `invocationId` and sorts all items newest-first. The UI allows administrators to quickly review the LLM's requested parameters and click `[ Approve Once ]`, `[ Deny ]`, or `[ Approve & Always Allow ]`. A standalone actions page (`apps/web/src/app/dashboard/actions/page.tsx`) also exists with full pagination, status filtering, and grant configuration — sidebar navigation to it was removed but the route remains accessible directly.
 
 **Automation-scoped permissions UI:** The automation detail page uses a dedicated `IntegrationPermissions` component (`apps/web/src/components/automations/integration-permissions.tsx`) that fetches action metadata dynamically via `useAutomationIntegrationActions(automationId)` → `automations.getIntegrationActions` oRPC endpoint. The backend resolver (`packages/services/src/automations/service.ts:getAutomationIntegrationActions`) checks the automation's `enabledTools` and trigger providers to determine which integrations are relevant, then returns their action definitions (name, description, risk level). The UI renders grouped integration cards with per-action `PermissionControl` selectors. Action permission modes (`allow`/`require_approval`/`deny`) are persisted as automation-level overrides via the `useSetAutomationActionMode` hook.
 
@@ -418,43 +517,34 @@ try {
 **Flow:**
 1. Agent calls `proliferate actions guide --integration linear`
 2. CLI sends `GET /:sessionId/actions/guide/linear` to gateway (`actions.ts` guide handler)
-3. Gateway calls `getGuide("linear")` (`adapters/index.ts:getGuide`) — looks up adapter in registry, returns `adapter.guide`
-4. Returns markdown guide with CLI examples for each action
+3. Gateway resolves the `ActionSource` and returns `source.guide`
+4. For provider-backed sources, returns the static guide string embedded in the action module
+5. For connector-backed sources (`connector:<id>`), auto-generates a markdown guide from cached tool definitions (name, description, risk level, parameters)
 
-Each adapter embeds its own guide as a static string (e.g., `linearAdapter.guide`, `sentryAdapter.guide`, `slackAdapter.guide`).
+**Files touched:** `packages/providers/src/providers/registry.ts:getProviderActions`, `apps/gateway/src/api/proliferate/http/actions.ts`
 
-**Files touched:** `packages/services/src/actions/adapters/index.ts:getGuide`, adapter files
+### 6.11 MCP Connector System — `Implemented`
 
-### 6.11 MCP Connector System — `Implemented` (Prebuild-Scoped) / `Planned` (Org-Scoped Catalog)
-
-**What it does:** Enables remote MCP servers to surface tools through the Actions pipeline, giving agents access to MCP-compatible services while preserving the existing risk/approval/grant/audit flow.
+**What it does:** Enables remote MCP servers to surface tools through the Actions pipeline, giving agents access to MCP-compatible services while preserving the existing mode/approval/audit flow.
 
 **Architecture:**
 ```
-Current:
-Prebuild (connectors JSONB) → Gateway resolves at session runtime
+Org connector catalog (integrations-owned) → Gateway resolves by org at session runtime
+  → McpConnectorActionSource wraps connector row
   → MCP Client connects to remote server (StreamableHTTPClientTransport)
   → tools/list → ActionDefinition[] (cached 5 min per session)
-  → Merged into GET /available alongside adapter actions
-  → POST /invoke → risk/grant evaluation → tools/call on MCP server
-
-Planned:
-Org connector catalog (integrations-owned) → Gateway resolves by org/session runtime
-  → Same MCP client + risk/grant/audit path
-  → Same GET /available merge and invoke behavior
+  → Merged into GET /available alongside provider-backed actions
+  → POST /invoke → mode resolution (three-tier cascade) → tools/call on MCP server
 ```
 
 **Key components:**
-- **Connector config** (`packages/shared/src/connectors.ts`): `ConnectorConfig` type + Zod schemas. Currently stored as JSONB on `prebuilds`. Planned migration is org-scoped connector catalog persistence in the Integrations domain.
-- **MCP client** (`packages/services/src/actions/connectors/client.ts`): Stateless — creates a fresh `Client` per `listConnectorTools()` or `callConnectorTool()` call. Uses `@modelcontextprotocol/sdk` (MIT). 15s timeout for tool listing, 30s for calls.
+- **Connector config** (`packages/shared/src/connectors.ts`): `ConnectorConfig` type + Zod schemas. Stored as rows in `org_connectors` table, managed via Integrations CRUD routes.
+- **McpConnectorActionSource** (`packages/services/src/actions/connectors/action-source.ts`): Implements `ActionSource`. Constructed with a connector config and resolved secret. `listActions()` calls MCP `tools/list`, converts JSON Schema → Zod via `jsonSchemaToZod()`, and derives risk levels. `execute()` calls MCP `tools/call` statelessly.
+- **MCP client** (`packages/services/src/actions/connectors/client.ts`): Stateless — creates a fresh `Client` per `listConnectorToolsRaw()` or `callConnectorTool()` call. Uses `@modelcontextprotocol/sdk` (MIT). 15s timeout for tool listing, 30s for calls. Retries once on 404 session invalidation.
 - **Risk derivation** (`packages/services/src/actions/connectors/risk.ts`): Priority: per-tool policy override → MCP annotations (`destructiveHint`→danger, `readOnlyHint`→read; destructive checked first for fail-safe) → connector default risk → "write" fallback.
 - **Secret resolution**: Connector `auth.secretKey` references an org-level secret by key name. Resolved at call time via `secrets.resolveSecretValue()`. Keys never enter the sandbox.
-- **Gateway integration** (`apps/gateway/src/api/proliferate/http/actions.ts`): In-memory tool cache (`Map<sessionId, CachedConnectorTools[]>`, 5-min TTL). Connector branches in `GET /available`, `GET /guide/:integration`, `POST /invoke`, `POST /approve`. Current connector loading path is session → prebuild. Planned path is session/org → org connector catalog.
-- **Integration prefix**: Connector actions use `connector:<uuid>` in the `integration` column. Grants match this as a string (wildcards work). `integrationId` is `null` for connector invocations.
-
-**Connector guide auto-generation:** `GET /guide/connector:<id>` generates a markdown guide from cached tool definitions (name, description, risk level, parameters) instead of using a static adapter guide string.
-
-**Graceful degradation:** If an MCP server is unreachable during `tools/list`, its tools simply don't appear in the available list. Other connectors and static adapters continue working.
+- **Gateway integration** (`apps/gateway/src/api/proliferate/http/actions.ts`): In-memory tool cache (`Map<sessionId, CachedConnectorTools[]>`, 5-min TTL). Connector branches in `GET /available`, `GET /guide/:integration`, `POST /invoke`, `POST /approve`.
+- **Integration prefix**: Connector actions use `connector:<uuid>` in the `integration` column. Mode overrides match this string. `integrationId` is `null` for connector invocations.
 
 **CRUD surface:** Org-level connector CRUD lives in `apps/web/src/server/routers/integrations.ts` (`listConnectors`, `createConnector`, `updateConnector`, `deleteConnector`, `validateConnector`). Management UI is at Settings → Tools (`apps/web/src/app/settings/tools/page.tsx`).
 
@@ -466,27 +556,30 @@ Org connector catalog (integrations-owned) → Gateway resolves by org/session r
 
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
-| `integrations.md` | Actions → Integrations | `integrations.getToken()` (`packages/services/src/integrations/tokens.ts:getToken`) | Token resolution for adapter execution |
+| `integrations.md` | Actions → Integrations | `integrations.getToken()` (`packages/services/src/integrations/tokens.ts:getToken`) | Token resolution for provider-backed action execution |
 | `integrations.md` | Actions → Integrations | `sessions.listSessionConnections()` (`packages/services/src/sessions/db.ts`) | Discovers which integrations are available for a session |
-| `integrations.md` | Actions ← Integrations | `connectors.listEnabledConnectors(orgId)`, `connectors.getConnector(id, orgId)` | Org-scoped connector catalog; gateway loads enabled connectors by org at session runtime via `loadSessionConnectors()` |
+| `integrations.md` | Actions ← Integrations | `connectors.listEnabledConnectors(orgId)`, `connectors.getConnector(id, orgId)` | Org-scoped connector catalog; gateway loads enabled connectors by org at session runtime |
 | `secrets-environment.md` | Actions → Secrets | `secrets.resolveSecretValue(orgId, key)` | Resolves + decrypts org secrets for connector auth at call time |
 | `sessions-gateway.md` | Actions → Gateway | WebSocket broadcast events | `action_approval_request` (pending write), `action_completed` (execution success/failure, includes `status` field), `action_approval_result` (denial only) |
 | `agent-contract.md` | Contract → Actions | `ACTIONS_BOOTSTRAP` in sandbox config | Bootstrap guide written to `.proliferate/actions-guide.md` |
 | `agent-contract.md` | Contract → Actions | `proliferate` CLI in system prompts | Prompts document CLI usage for actions |
 | `auth-orgs.md` | Actions → Auth | `orgs.getUserRole(userId, orgId)` | Admin/owner role check for approve/deny |
-| `automations-runs.md` | Actions ← Automations | `automations.getIntegrationActions` oRPC endpoint | Dynamic resolver returns relevant integration actions based on automation config (enabled tools + trigger providers) |
+| `automations-runs.md` | Actions ← Automations | `automations.getIntegrationActions` oRPC endpoint | Dynamic resolver returns relevant integration actions based on automation config |
+| `automations-runs.md` | Actions → Automations | "needs_human" pause/resume | Unattended approvals are run-owned |
+| Providers package | Actions → Providers | `ProviderActionSource`, `ActionSource`, `ActionDefinition` | Listing + execution via the polymorphic ActionSource interface |
 
 ### Security & Auth
-- **Sandbox tokens** can invoke actions and create grants but cannot approve/deny.
+- **Sandbox tokens** can invoke actions but cannot approve/deny.
 - **User tokens** with admin/owner role can approve/deny invocations.
 - **Member role** users cannot approve/deny (403).
 - **Token resolution** happens server-side via the integrations token resolver (`integrations.getToken`) — the sandbox never sees integration OAuth tokens.
 - **Result redaction**: sensitive keys (`token`, `secret`, `password`, `authorization`, `api_key`, `apikey`) are stripped before DB storage. Source: `packages/services/src/actions/service.ts:redactData`
-- **Result truncation**: results exceeding 10KB are replaced with `{ _truncated: true, _originalSize }`. Source: `packages/services/src/actions/service.ts:truncateResult`
+- **Result truncation**: results exceeding 10KB are structurally pruned via `truncateJson()` to preserve valid JSON. Source: `packages/providers/src/helpers/truncation.ts`
 
 ### Observability
-- Service functions log via `getServicesLogger().child({ module: "actions" })` or `{ module: "actions.grants" }`.
-- Key log events: invocation created (with risk level), grant created/consumed/revoked, expiry sweep counts.
+- Service functions log via `getServicesLogger().child({ module: "actions" })`.
+- Key log fields: `sessionId`, `organizationId`, `sourceId`, `actionId`, `mode`, `modeSource`, `status`, `durationMs`.
+- Key log events: invocation created (with mode + mode source), action denied by policy, action auto-approved, action pending approval, expiry sweep counts.
 - Gateway rate limit counter cleanup runs every 60s (in-memory, not persisted).
 
 ---
@@ -496,19 +589,23 @@ Org connector catalog (integrations-owned) → Gateway resolves by org/session r
 - [ ] Typecheck passes (`pnpm typecheck`)
 - [ ] `packages/services/src/actions/*.test.ts` pass
 - [ ] `apps/gateway/src/api/proliferate/http/actions.test.ts` passes
-- [ ] New adapters implement the `ActionAdapter` interface and are registered in `adapters/index.ts`
+- [ ] New provider adapters implement stateless action modules and are registered in `providers/registry.ts`
+- [ ] Mode resolution is recorded on every invocation (`mode` + `mode_source` columns)
+- [ ] Drift hashing uses a deterministic stringifier and strips `enum`, `default`, and `description`
+- [ ] JSON-aware truncation correctly prunes large payloads structurally without returning malformed JSON
 - [ ] This spec is updated (file tree, data models, adapter tables)
 
 ---
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **No "danger" actions defined** — the risk level exists in types and service logic but no adapter declares any danger-level action. Impact: the deny-by-default path is untested in production. Expected fix: define danger actions when destructive operations are added (e.g., delete resources).
-- [ ] **In-memory rate limiting** — the per-session invocation rate limit (60/min) uses an in-memory Map in the gateway. Multiple gateway instances do not share counters. Impact: effective limit is multiplied by instance count. Expected fix: move to Redis-based rate limiting.
-- [ ] **No grant expiry sweeper** — grants with `expiresAt` are filtered out at query time but never cleaned up. Expired grant rows accumulate. Impact: minor DB bloat. Expected fix: add periodic cleanup job similar to invocation sweeper.
-- [x] **Static adapter registry** — addressed by MCP connector system (§6.11). Remote MCP connectors are configured without adapter code changes. Scope is org-wide catalog (`org_connectors` table).
-- [ ] **Grant rollback is best-effort** — if invocation approval fails after grant creation, the grant revocation is attempted but failures are silently caught. Impact: orphaned grants may exist in rare edge cases. Expected fix: wrap in a transaction or add cleanup sweep.
-- [ ] **No pagination on grants list** — `listActiveGrants` and `listGrantsByOrg` return all matching rows with no limit/offset. Impact: could return large result sets for orgs with many grants. Expected fix: add pagination parameters.
-- [x] **Connector 404 session recovery** — addressed. `callConnectorTool` retries once on 404 session invalidation by re-initializing a fresh connection. The SDK handles `Mcp-Session-Id` internally within each connection lifecycle. Source: `packages/services/src/actions/connectors/client.ts`.
-- [x] **Dedicated connector management UI** — addressed at org scope. Settings → Tools page provides add/edit/remove/validate flow with presets, org secret picker, and inline validation diagnostics. Source: `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts`.
-- [x] **Connector scope is org-scoped** — addressed. Connectors are stored in the `org_connectors` table, managed via Integrations CRUD routes, and loaded by org in the gateway. Backfill migration (`0022_org_connectors.sql`) copied legacy prebuild-scoped connectors to org scope.
+- [ ] **In-memory rate limiting** — the per-session invocation rate limit (60/min) uses an in-memory Map in the gateway. Multiple gateway instances do not share counters. Impact: effective limit is multiplied by instance count. Expected fix: move to Redis-based rate limiting (`ratelimit:actions:<sessionId>` via `INCR` + `EXPIRE`).
+- [ ] **Database connectors planned** — initial architecture unifies provider-backed + MCP connector-backed actions. Database connectors (e.g. Postgres read-only queries) are planned as a third `ActionSource` archetype but not yet implemented.
+- [ ] **Unattended approval pause/resume** — cross-cutting and requires coordinated changes in `automations-runs.md` and `sessions-gateway.md`. The mode resolution cascade supports automation-scoped overrides, but the full pause/resume flow for unattended runs is not yet wired end-to-end.
+- [ ] **Drift hashing stability** — relies on stable JSON Schema conversion; changes to `zodToJsonSchema()` can cause false-positive drift and should be treated as a breaking change. Source: `packages/providers/src/helpers/schema.ts`.
+- [ ] **Legacy grant CLI handlers** — `packages/sandbox-mcp/src/actions-grants.ts` still contains grant request/list command handlers from the old CAS grant system. These are no longer functional (the `action_grants` table and gateway grant routes have been removed) and should be cleaned up.
+- [x] **Grant system removed** — the old CAS (compare-and-swap) grant system (`action_grants` table, `grants.ts`, `grants-db.ts`) has been completely replaced by the three-mode permissioning cascade. Mode overrides stored as JSONB on `organizations.action_modes` and `automations.action_modes` provide equivalent functionality without per-invocation budget tracking.
+- [x] **Static adapter registry unified** — addressed by the `ActionSource` polymorphic interface and `packages/providers/` package. All action sources (provider-backed and connector-backed) implement the same `ActionSource` interface and flow through the same mode resolution pipeline.
+- [x] **Connector scope is org-scoped** — addressed. Connectors are stored in the `org_connectors` table, managed via Integrations CRUD routes, and loaded by org in the gateway. Source: `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts`.
+- [x] **Connector 404 session recovery** — addressed. `callConnectorTool` retries once on 404 session invalidation by re-initializing a fresh connection. Source: `packages/services/src/actions/connectors/client.ts`.
+- [x] **Dedicated connector management UI** — addressed at org scope. Settings → Tools page provides add/edit/remove/validate flow with presets, org secret picker, and inline validation diagnostics. Source: `apps/web/src/app/settings/tools/page.tsx`.
