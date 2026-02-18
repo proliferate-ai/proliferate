@@ -12,7 +12,7 @@ import {
 import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
 import { useSessions } from "@/hooks/use-sessions";
 import { useDashboardStore } from "@/stores/dashboard";
-import { Plus, Search } from "lucide-react";
+import { Activity, Plus, Search, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { AutomationRow } from "./automation-row";
@@ -89,6 +89,30 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 					<CommandItem onSelect={handleNewAutomation}>
 						<Plus className="mr-2 h-4 w-4" />
 						<span>New Automation</span>
+					</CommandItem>
+				</CommandGroup>
+
+				<CommandSeparator />
+
+				{/* Navigation */}
+				<CommandGroup heading="Navigate">
+					<CommandItem
+						onSelect={() => {
+							router.push("/dashboard/my-work");
+							onOpenChange(false);
+						}}
+					>
+						<User className="mr-2 h-4 w-4" />
+						<span>My Work</span>
+					</CommandItem>
+					<CommandItem
+						onSelect={() => {
+							router.push("/dashboard/activity");
+							onOpenChange(false);
+						}}
+					>
+						<Activity className="mr-2 h-4 w-4" />
+						<span>Activity</span>
 					</CommandItem>
 				</CommandGroup>
 

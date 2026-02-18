@@ -229,7 +229,7 @@ function RunItem({ data }: { data: PendingRunSummary }) {
 					</p>
 				</div>
 				{data.session_id && (
-					<Link href={`/workspace/${data.session_id}`} className="shrink-0 mt-0.5">
+					<Link href={`/workspace/${data.session_id}?runId=${data.id}`} className="shrink-0 mt-0.5">
 						<Button size="sm" variant="outline" className="h-7 text-xs px-2.5">
 							<ExternalLink className="h-3 w-3" />
 							<span className="ml-1">View Session</span>

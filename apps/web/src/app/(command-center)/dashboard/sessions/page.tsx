@@ -4,6 +4,14 @@ import { PageShell } from "@/components/dashboard/page-shell";
 import { SessionListRow } from "@/components/sessions/session-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { useOrgPendingRuns } from "@/hooks/use-automations";
 import { useSessions } from "@/hooks/use-sessions";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
@@ -12,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 type FilterTab = "all" | "active" | "stopped";
+type OriginFilter = "all" | "manual" | "automation" | "slack" | "cli";
 
 const TABS: { value: FilterTab; label: string }[] = [
 	{ value: "all", label: "All" },
@@ -23,19 +32,45 @@ function isActiveStatus(status: string | null): boolean {
 	return status === "running" || status === "starting" || status === "paused";
 }
 
+function getSessionOrigin(session: {
+	automationId?: string | null;
+	origin?: string | null;
+	clientType?: string | null;
+}): OriginFilter {
+	if (session.automationId) return "automation";
+	if (session.origin === "slack" || session.clientType === "slack") return "slack";
+	if (session.origin === "cli" || session.clientType === "cli") return "cli";
+	return "manual";
+}
+
 export default function SessionsPage() {
 	const router = useRouter();
 	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
-	const { data: sessions, isLoading } = useSessions();
+	const { data: sessions, isLoading } = useSessions({
+		excludeSetup: true,
+		excludeCli: true,
+	});
+	const { data: pendingRuns } = useOrgPendingRuns();
 
 	const [activeTab, setActiveTab] = useState<FilterTab>("all");
 	const [searchQuery, setSearchQuery] = useState("");
+	const [originFilter, setOriginFilter] = useState<OriginFilter>("manual");
 
-	// Filter out setup sessions and CLI sessions
+	// Build a map of sessionId → pendingRun for urgency indicators
+	const pendingRunsBySession = useMemo(() => {
+		const map = new Map<string, NonNullable<typeof pendingRuns>[number]>();
+		if (!pendingRuns) return map;
+		for (const run of pendingRuns) {
+			if (run.session_id) {
+				map.set(run.session_id, run);
+			}
+		}
+		return map;
+	}, [pendingRuns]);
+
+	// Filter out setup sessions
 	const baseSessions = useMemo(
-		() =>
-			sessions?.filter((session) => session.sessionType !== "setup" && session.origin !== "cli") ??
-			[],
+		() => sessions?.filter((session) => session.sessionType !== "setup") ?? [],
 		[sessions],
 	);
 
@@ -57,18 +92,25 @@ export default function SessionsPage() {
 			result = result.filter((s) => !isActiveStatus(s.status));
 		}
 
+		if (originFilter !== "all") {
+			result = result.filter((s) => getSessionOrigin(s) === originFilter);
+		}
+
 		if (searchQuery.trim()) {
 			const q = searchQuery.toLowerCase().trim();
 			result = result.filter((s) => {
 				const title = s.title?.toLowerCase() ?? "";
 				const repo = s.repo?.githubRepoName?.toLowerCase() ?? "";
 				const branch = s.branchName?.toLowerCase() ?? "";
-				return title.includes(q) || repo.includes(q) || branch.includes(q);
+				const automationName = s.automation?.name?.toLowerCase() ?? "";
+				return (
+					title.includes(q) || repo.includes(q) || branch.includes(q) || automationName.includes(q)
+				);
 			});
 		}
 
 		return result;
-	}, [baseSessions, activeTab, searchQuery]);
+	}, [baseSessions, activeTab, searchQuery, originFilter]);
 
 	const handleNewSession = () => {
 		clearPendingPrompt();
@@ -86,7 +128,7 @@ export default function SessionsPage() {
 				</Button>
 			}
 		>
-			{/* Filter tabs + search */}
+			{/* Filter tabs + search + origin filter */}
 			<div className="flex items-center justify-between gap-4 mb-4">
 				<div className="flex items-center gap-1">
 					{TABS.map((tab) => (
@@ -106,14 +148,28 @@ export default function SessionsPage() {
 						</button>
 					))}
 				</div>
-				<div className="relative">
-					<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-					<Input
-						value={searchQuery}
-						onChange={(e) => setSearchQuery(e.target.value)}
-						placeholder="Search sessions..."
-						className="h-8 w-48 pl-8 text-sm"
-					/>
+				<div className="flex items-center gap-2">
+					<Select value={originFilter} onValueChange={(v) => setOriginFilter(v as OriginFilter)}>
+						<SelectTrigger className="h-8 w-[130px] text-sm">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">All Origins</SelectItem>
+							<SelectItem value="manual">Manual</SelectItem>
+							<SelectItem value="automation">Automation</SelectItem>
+							<SelectItem value="slack">Slack</SelectItem>
+							<SelectItem value="cli">CLI</SelectItem>
+						</SelectContent>
+					</Select>
+					<div className="relative">
+						<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+						<Input
+							value={searchQuery}
+							onChange={(e) => setSearchQuery(e.target.value)}
+							placeholder="Search sessions..."
+							className="h-8 w-48 pl-8 text-sm"
+						/>
+					</div>
 				</div>
 			</div>
 
@@ -154,7 +210,11 @@ export default function SessionsPage() {
 			) : (
 				<div className="rounded-lg border border-border bg-card overflow-hidden">
 					{filtered.map((session) => (
-						<SessionListRow key={session.id} session={session} />
+						<SessionListRow
+							key={session.id}
+							session={session}
+							pendingRun={pendingRunsBySession.get(session.id)}
+						/>
 					))}
 				</div>
 			)}

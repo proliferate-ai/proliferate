@@ -29,6 +29,7 @@ export async function listSessions(
 		limit: options?.limit,
 		excludeSetup: options?.excludeSetup,
 		excludeCli: options?.excludeCli,
+		excludeAutomation: options?.excludeAutomation,
 	});
 	return toSessions(rows);
 }

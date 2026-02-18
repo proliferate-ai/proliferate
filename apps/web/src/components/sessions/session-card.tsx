@@ -1,14 +1,17 @@
 "use client";
 
 import { BlocksIcon, BlocksLoadingIcon } from "@/components/ui/icons";
+import { AutomationsIcon, SlackIcon } from "@/components/ui/icons";
 import { usePrefetchSession } from "@/hooks/use-sessions";
+import type { PendingRunSummary } from "@proliferate/shared";
 import type { Session } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
-import { GitBranch } from "lucide-react";
+import { AlertTriangle, GitBranch, Terminal } from "lucide-react";
 import Link from "next/link";
 
 interface SessionListRowProps {
 	session: Session;
+	pendingRun?: PendingRunSummary;
 }
 
 function getRepoShortName(fullName: string): string {
@@ -49,7 +52,42 @@ function getStatusConfig(status: Session["status"]) {
 	return STATUS_CONFIG[status ?? "stopped"] ?? STATUS_CONFIG.stopped;
 }
 
-export function SessionListRow({ session }: SessionListRowProps) {
+function OriginBadge({ session }: { session: Session }) {
+	if (session.automationId && session.automation) {
+		return (
+			<Link
+				href={`/dashboard/automations/${session.automation.id}/events`}
+				className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
+				onClick={(e) => e.stopPropagation()}
+			>
+				<AutomationsIcon className="h-3 w-3" />
+				<span className="truncate max-w-[100px]">{session.automation.name}</span>
+			</Link>
+		);
+	}
+
+	if (session.origin === "slack" || session.clientType === "slack") {
+		return (
+			<span className="inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+				<SlackIcon className="h-3 w-3" />
+				<span>Slack</span>
+			</span>
+		);
+	}
+
+	if (session.origin === "cli" || session.clientType === "cli") {
+		return (
+			<span className="inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+				<Terminal className="h-3 w-3" />
+				<span>CLI</span>
+			</span>
+		);
+	}
+
+	return null;
+}
+
+export function SessionListRow({ session, pendingRun }: SessionListRowProps) {
 	const prefetchSession = usePrefetchSession();
 	const activityDate = session.lastActivityAt || session.startedAt;
 	const timeAgo = activityDate
@@ -71,12 +109,18 @@ export function SessionListRow({ session }: SessionListRowProps) {
 	const config = getStatusConfig(session.status);
 	const Icon = config.animated ? BlocksLoadingIcon : BlocksIcon;
 
+	const href = pendingRun
+		? `/workspace/${session.id}?runId=${pendingRun.id}`
+		: `/workspace/${session.id}`;
+
 	return (
-		<Link href={`/workspace/${session.id}`}>
+		<Link href={href}>
 			<div
 				className="flex items-center px-4 py-2.5 border-b border-border/50 hover:bg-muted/50 transition-colors text-sm cursor-pointer last:border-0 gap-3"
 				onMouseEnter={() => prefetchSession(session.id)}
 			>
+				{pendingRun && <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />}
+
 				<span className="font-medium text-foreground truncate min-w-0 flex-1">{displayTitle}</span>
 
 				{session.branchName && (
@@ -85,6 +129,8 @@ export function SessionListRow({ session }: SessionListRowProps) {
 						<span className="text-xs truncate max-w-[120px]">{session.branchName}</span>
 					</div>
 				)}
+
+				<OriginBadge session={session} />
 
 				<span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
 					{metaParts.join(" · ")}

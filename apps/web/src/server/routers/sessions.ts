@@ -35,6 +35,7 @@ export const sessionsRouter = {
 					limit: z.number().int().min(1).max(50).optional(),
 					excludeSetup: z.boolean().optional(),
 					excludeCli: z.boolean().optional(),
+					excludeAutomation: z.boolean().optional(),
 				})
 				.optional(),
 		)
@@ -46,6 +47,7 @@ export const sessionsRouter = {
 				limit: input?.limit,
 				excludeSetup: input?.excludeSetup,
 				excludeCli: input?.excludeCli,
+				excludeAutomation: input?.excludeAutomation,
 			});
 			return { sessions: sessionsList };
 		}),

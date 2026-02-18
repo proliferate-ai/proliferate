@@ -12,6 +12,7 @@ export function useSessions(params?: {
 	limit?: number;
 	excludeSetup?: boolean;
 	excludeCli?: boolean;
+	excludeAutomation?: boolean;
 }) {
 	return useQuery({
 		...orpc.sessions.list.queryOptions({

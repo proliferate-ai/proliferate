@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import {
+	AlertTriangle,
 	ArrowLeft,
 	Code,
 	GitBranch,
@@ -26,7 +27,7 @@ import {
 	Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { SessionPanelProps } from "./right-panel";
 import { RightPanel } from "./right-panel";
@@ -49,6 +50,7 @@ const PANEL_TABS = [
 
 interface CodingSessionProps {
 	sessionId: string;
+	runId?: string;
 	title?: string;
 	description?: string;
 	initialPrompt?: string;
@@ -61,6 +63,7 @@ interface CodingSessionProps {
 
 export function CodingSession({
 	sessionId,
+	runId,
 	title,
 	description,
 	initialPrompt,
@@ -140,6 +143,20 @@ export function CodingSession({
 	} = usePreviewPanelStore();
 	const [viewPickerOpen, setViewPickerOpen] = useState(false);
 	const activeType = mode.type === "file" || mode.type === "gallery" ? "artifacts" : mode.type;
+
+	// Auto-open investigation panel when runId is present
+	const investigationOpened = useRef(false);
+	useEffect(() => {
+		if (runId && !investigationOpened.current) {
+			investigationOpened.current = true;
+			togglePanel("investigation");
+		}
+	}, [runId, togglePanel]);
+
+	// Build panel tabs — prepend investigation tab when runId is present
+	const effectivePanelTabs = runId
+		? [{ type: "investigation" as const, label: "Investigate", icon: AlertTriangle }, ...PANEL_TABS]
+		: PANEL_TABS;
 
 	// Combine all loading states
 	const isLoading =
@@ -261,7 +278,7 @@ export function CodingSession({
 					</Button>
 				</PopoverTrigger>
 				<PopoverContent align="start" sideOffset={8} className="w-48 p-1">
-					{PANEL_TABS.map(({ type, label, icon: Icon }) => {
+					{effectivePanelTabs.map(({ type, label, icon: Icon }) => {
 						const isActive = activeType === type;
 						const isPinned = pinnedTabs.includes(type);
 						return (
@@ -379,6 +396,7 @@ export function CodingSession({
 							isMobileFullScreen={false}
 							sessionProps={sessionPanelProps}
 							previewUrl={previewUrl}
+							runId={runId}
 						/>
 					</div>
 				</div>
@@ -392,7 +410,12 @@ export function CodingSession({
 			{chatHeader}
 			<div className="flex-1 min-h-0">
 				{mobileView === "preview" ? (
-					<RightPanel isMobileFullScreen sessionProps={sessionPanelProps} previewUrl={previewUrl} />
+					<RightPanel
+						isMobileFullScreen
+						sessionProps={sessionPanelProps}
+						previewUrl={previewUrl}
+						runId={runId}
+					/>
 				) : (
 					leftPaneContent
 				)}

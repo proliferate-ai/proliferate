@@ -274,11 +274,24 @@ export const PendingRunSummarySchema = z.object({
 	status_reason: z.string().nullable(),
 	error_message: z.string().nullable(),
 	session_id: z.string().uuid().nullable(),
+	assigned_to: z.string().nullable(),
 	queued_at: z.string(),
 	completed_at: z.string().nullable(),
 });
 
 export type PendingRunSummary = z.infer<typeof PendingRunSummarySchema>;
+
+// Run event schema (status transitions and milestones)
+export const AutomationRunEventSchema = z.object({
+	id: z.string().uuid(),
+	type: z.string(),
+	from_status: z.string().nullable(),
+	to_status: z.string().nullable(),
+	data: z.record(z.unknown()).nullable(),
+	created_at: z.string(),
+});
+
+export type AutomationRunEvent = z.infer<typeof AutomationRunEventSchema>;
 
 // Trigger event action schema (tool execution audit log)
 export const AutomationEventActionSchema = z.object({

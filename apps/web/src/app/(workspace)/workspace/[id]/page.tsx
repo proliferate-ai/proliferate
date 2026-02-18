@@ -21,8 +21,9 @@ export default function SessionDetailPage({
 	const { data: activeOrg, isPending: isOrgPending } = useActiveOrganization();
 	const [switchError, setSwitchError] = useState<string | null>(null);
 	const [isSwitching, setIsSwitching] = useState(false);
+	const runId = searchParams.get("runId");
 	const fromAutomation = searchParams.get("from") === "automation";
-	const [showAutomationBanner, setShowAutomationBanner] = useState(fromAutomation);
+	const [showAutomationBanner, setShowAutomationBanner] = useState(fromAutomation && !runId);
 	const shouldSwitchOrg = useMemo(
 		() => Boolean(targetOrgId && activeOrg?.id && activeOrg.id !== targetOrgId),
 		[targetOrgId, activeOrg?.id],
@@ -82,6 +83,7 @@ export default function SessionDetailPage({
 			<div className="flex-1 min-h-0 flex flex-col">
 				<CodingSession
 					sessionId={id}
+					runId={runId ?? undefined}
 					initialPrompt={pendingPrompt || undefined}
 					onError={(error) => {
 						console.error("Session error:", error);

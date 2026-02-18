@@ -241,6 +241,62 @@ export function useOrgPendingRuns(options?: { limit?: number; maxAgeDays?: numbe
 	});
 }
 
+export function useRun(runId: string | undefined) {
+	return useQuery({
+		...orpc.automations.getRun.queryOptions({
+			input: { runId: runId! },
+		}),
+		enabled: !!runId,
+		refetchInterval: 30_000,
+		select: (data) => data.run,
+	});
+}
+
+export function useRunEvents(runId: string | undefined) {
+	return useQuery({
+		...orpc.automations.listRunEvents.queryOptions({
+			input: { runId: runId! },
+		}),
+		enabled: !!runId,
+		select: (data) => data.events,
+	});
+}
+
+export function useResolveRun() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		...orpc.automations.resolveRun.mutationOptions(),
+		onSuccess: (_data, variables) => {
+			queryClient.invalidateQueries({
+				queryKey: orpc.automations.getRun.key({ input: { runId: variables.runId } }),
+			});
+			queryClient.invalidateQueries({
+				queryKey: orpc.automations.listOrgPendingRuns.key(),
+			});
+			queryClient.invalidateQueries({
+				queryKey: orpc.automations.myClaimedRuns.key(),
+			});
+			queryClient.invalidateQueries({
+				queryKey: orpc.automations.listRuns.key({ input: { id: variables.id } }),
+			});
+		},
+	});
+}
+
+export function useOrgRuns(options?: {
+	status?: AutomationRunStatus;
+	limit?: number;
+	offset?: number;
+}) {
+	return useQuery({
+		...orpc.automations.listOrgRuns.queryOptions({
+			input: options ?? {},
+		}),
+		refetchInterval: 30_000,
+	});
+}
+
 // ============================================
 // Trigger Hooks
 // ============================================

@@ -54,6 +54,7 @@ export interface ListSessionsFilters {
 	limit?: number;
 	excludeSetup?: boolean;
 	excludeCli?: boolean;
+	excludeAutomation?: boolean;
 }
 
 // ============================================
@@ -66,6 +67,7 @@ export interface ListSessionsOptions {
 	limit?: number;
 	excludeSetup?: boolean;
 	excludeCli?: boolean;
+	excludeAutomation?: boolean;
 }
 
 export interface SessionStatus {

@@ -243,7 +243,13 @@ function InboxContent() {
 
 	// Apply all filters
 	const filtered = useMemo(() => {
-		let result = items;
+		// Start by filtering runs to only show unassigned items
+		let result = items.filter((i) => {
+			if (i.type === "run") {
+				return !i.data.assigned_to;
+			}
+			return true; // all approvals pass through
+		});
 
 		// Type filter
 		if (typeFilter === "runs") {

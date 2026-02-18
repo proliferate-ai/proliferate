@@ -347,6 +347,26 @@ export async function listOrgPendingRuns(
 	return runsDb.listOrgPendingRuns(orgId, options);
 }
 
+export async function findRunForDisplay(
+	runId: string,
+	orgId: string,
+): Promise<runsDb.RunListItem | null> {
+	return runsDb.findRunForDisplay(runId, orgId);
+}
+
+export async function listRunEvents(runId: string): Promise<runsDb.AutomationRunEventRow[]> {
+	return runsDb.listRunEvents(runId);
+}
+
+export type { AutomationRunEventRow } from "./db";
+
+export async function listOrgRuns(
+	orgId: string,
+	options?: { status?: string; limit?: number; offset?: number },
+): Promise<{ runs: runsDb.RunListItem[]; total: number }> {
+	return runsDb.listOrgRuns(orgId, options);
+}
+
 // ============================================
 // Manual run resolution
 // ============================================

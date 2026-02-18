@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { env } from "@proliferate/environment/public";
 import {
+	Activity,
 	ArrowLeft,
 	Building2,
 	CreditCard,
@@ -35,6 +36,7 @@ import {
 	Plug,
 	Settings,
 	Sun,
+	Terminal,
 	User,
 	Users,
 	X,
@@ -94,13 +96,19 @@ export function Sidebar() {
 
 	const isSettingsPage = pathname?.startsWith("/settings");
 	const isHomePage = pathname === "/dashboard";
+	const isMyWorkPage = pathname?.startsWith("/dashboard/my-work");
 	const isInboxPage = pathname?.startsWith("/dashboard/inbox");
+	const isActivityPage = pathname?.startsWith("/dashboard/activity");
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
 	const isConfigurationsPage = pathname?.startsWith("/dashboard/configurations");
+	const isSessionsPage = pathname?.startsWith("/dashboard/sessions");
 
 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
-	const inboxCount = inboxItems.length;
+	const inboxCount = inboxItems.filter((item) => {
+		if (item.type === "run") return !item.data.assigned_to;
+		return true;
+	}).length;
 
 	return (
 		<aside
@@ -161,6 +169,18 @@ export function Sidebar() {
 					<Home className="h-4 w-4" />
 				</Button>
 				<Button
+					variant={isMyWorkPage ? "secondary" : "ghost"}
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.stopPropagation();
+						router.push("/dashboard/my-work");
+					}}
+					title="My Work"
+				>
+					<User className="h-4 w-4" />
+				</Button>
+				<Button
 					variant={isInboxPage ? "secondary" : "ghost"}
 					size="icon"
 					className="h-8 w-8 text-muted-foreground hover:text-foreground relative"
@@ -176,6 +196,18 @@ export function Sidebar() {
 							{inboxCount > 9 ? "9+" : inboxCount}
 						</span>
 					)}
+				</Button>
+				<Button
+					variant={isActivityPage ? "secondary" : "ghost"}
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.stopPropagation();
+						router.push("/dashboard/activity");
+					}}
+					title="Activity"
+				>
+					<Activity className="h-4 w-4" />
 				</Button>
 				<div className="my-1" />
 				<Button
@@ -213,6 +245,19 @@ export function Sidebar() {
 					title="Integrations"
 				>
 					<Plug className="h-4 w-4" />
+				</Button>
+				<div className="my-1" />
+				<Button
+					variant={isSessionsPage ? "secondary" : "ghost"}
+					size="icon"
+					className="h-8 w-8 text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.stopPropagation();
+						router.push("/dashboard/sessions");
+					}}
+					title="Sessions"
+				>
+					<Terminal className="h-4 w-4" />
 				</Button>
 			</div>
 
@@ -506,14 +551,21 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 	const router = useRouter();
 
 	const isHomePage = pathname === "/dashboard";
+	const isMyWorkPage = pathname?.startsWith("/dashboard/my-work");
 	const isInboxPage = pathname?.startsWith("/dashboard/inbox");
+	const isActivityPage = pathname?.startsWith("/dashboard/activity");
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 	const isConfigurationsPage = pathname?.startsWith("/dashboard/configurations");
+	const isSessionsPage = pathname?.startsWith("/dashboard/sessions");
 	const isSettingsPage = pathname?.startsWith("/settings");
 
+	// Inbox badge: count only unassigned items
 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
-	const inboxCount = inboxItems.length;
+	const inboxCount = inboxItems.filter((item) => {
+		if (item.type === "run") return !item.data.assigned_to;
+		return true;
+	}).length;
 
 	const handleNavigate = (path: string) => {
 		router.push(path);
@@ -532,15 +584,27 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 				/>
 			</div>
 
-			{/* Monitor */}
+			{/* Work */}
 			<div className="flex flex-col gap-1">
-				<SectionLabel>Monitor</SectionLabel>
+				<SectionLabel>Work</SectionLabel>
+				<NavItem
+					icon={User}
+					label="My Work"
+					active={!!isMyWorkPage}
+					onClick={() => handleNavigate("/dashboard/my-work")}
+				/>
 				<NavItem
 					icon={RunsIcon}
 					label="Inbox"
 					active={!!isInboxPage}
 					badge={inboxCount}
 					onClick={() => handleNavigate("/dashboard/inbox")}
+				/>
+				<NavItem
+					icon={Activity}
+					label="Activity"
+					active={!!isActivityPage}
+					onClick={() => handleNavigate("/dashboard/activity")}
 				/>
 			</div>
 
@@ -567,8 +631,14 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 				/>
 			</div>
 
-			{/* Settings */}
+			{/* Sessions + Settings */}
 			<div className="flex flex-col gap-1">
+				<NavItem
+					icon={Terminal}
+					label="Sessions"
+					active={!!isSessionsPage}
+					onClick={() => handleNavigate("/dashboard/sessions")}
+				/>
 				<NavItem
 					icon={Settings}
 					label="Settings"

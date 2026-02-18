@@ -38,6 +38,14 @@ export const SessionSchema = z.object({
 	pauseReason: z.string().nullable().optional(),
 	origin: z.string().nullable(),
 	clientType: z.string().nullable(),
+	automationId: z.string().uuid().nullable().optional(),
+	automation: z
+		.object({
+			id: z.string().uuid(),
+			name: z.string(),
+		})
+		.nullable()
+		.optional(),
 	repo: RepoSchema.optional(),
 });
 
