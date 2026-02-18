@@ -11,6 +11,7 @@ import {
 	desc,
 	eq,
 	getDb,
+	isNull,
 	ne,
 	type repos,
 	sessionConnections,
@@ -34,9 +35,13 @@ export type SessionRow = InferSelectModel<typeof sessions>;
 /** Repo row type from Drizzle schema (for relations) */
 export type RepoRow = InferSelectModel<typeof repos>;
 
+/** Automation summary for session list responses */
+export type AutomationSummary = { id: string; name: string };
+
 /** Session with repo relation */
 export type SessionWithRepoRow = SessionRow & {
 	repo: RepoRow | null;
+	automation?: AutomationSummary | null;
 };
 
 // ============================================
@@ -71,10 +76,21 @@ export async function listByOrganization(
 		conditions.push(ne(sessions.origin, "cli"));
 	}
 
+	if (filters?.excludeAutomation) {
+		conditions.push(isNull(sessions.automationId));
+	}
+
+	if (filters?.createdBy) {
+		conditions.push(eq(sessions.createdBy, filters.createdBy));
+	}
+
 	const results = await db.query.sessions.findMany({
 		where: and(...conditions),
 		with: {
 			repo: true,
+			automation: {
+				columns: { id: true, name: true },
+			},
 		},
 		orderBy: [
 			sql`CASE WHEN ${sessions.status} IN ('starting', 'running', 'paused') THEN 0 ELSE 1 END`,
@@ -95,6 +111,9 @@ export async function findById(id: string, orgId: string): Promise<SessionWithRe
 		where: and(eq(sessions.id, id), eq(sessions.organizationId, orgId)),
 		with: {
 			repo: true,
+			automation: {
+				columns: { id: true, name: true },
+			},
 		},
 	});
 

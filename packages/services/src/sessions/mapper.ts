@@ -48,6 +48,8 @@ export function toSession(row: SessionWithRepoRow): Session {
 		pauseReason: row.pauseReason ?? null,
 		origin: row.origin,
 		clientType: row.clientType,
+		automationId: row.automationId ?? null,
+		automation: row.automation ? { id: row.automation.id, name: row.automation.name } : null,
 		repo: row.repo ? mapRepo(row.repo) : undefined,
 	};
 }
@@ -82,5 +84,7 @@ export function toSessionPartial(row: SessionRow): Omit<Session, "repo"> {
 		pauseReason: row.pauseReason ?? null,
 		origin: row.origin,
 		clientType: row.clientType,
+		automationId: row.automationId ?? null,
+		automation: null,
 	};
 }

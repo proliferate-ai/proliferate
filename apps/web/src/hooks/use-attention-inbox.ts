@@ -32,7 +32,7 @@ export function useAttentionInbox(options: {
 	const { wsApprovals, sessionId } = options;
 
 	const { data: orgActions } = useOrgActions({ status: "pending", limit: 50 });
-	const { data: pendingRuns } = useOrgPendingRuns({ limit: 50 });
+	const { data: pendingRuns } = useOrgPendingRuns({ limit: 50, unassignedOnly: true });
 
 	const items = useMemo(() => {
 		const result: AttentionItem[] = [];

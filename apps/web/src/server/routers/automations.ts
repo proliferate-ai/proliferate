@@ -13,6 +13,7 @@ import {
 	AutomationEventSchema,
 	AutomationEventStatusSchema,
 	AutomationListItemSchema,
+	AutomationRunEventSchema,
 	AutomationRunSchema,
 	type AutomationRunStatus,
 	AutomationRunStatusSchema,
@@ -533,6 +534,7 @@ export const automationsRouter = {
 				.object({
 					limit: z.number().int().positive().max(50).optional(),
 					maxAgeDays: z.number().int().positive().max(30).optional(),
+					unassignedOnly: z.boolean().optional(),
 				})
 				.optional(),
 		)
@@ -541,6 +543,7 @@ export const automationsRouter = {
 			const pendingRuns = await runs.listOrgPendingRuns(context.orgId, {
 				limit: input?.limit,
 				maxAgeDays: input?.maxAgeDays,
+				unassignedOnly: input?.unassignedOnly,
 			});
 			return {
 				runs: pendingRuns.map((r) => ({
@@ -551,6 +554,7 @@ export const automationsRouter = {
 					status_reason: r.statusReason,
 					error_message: r.errorMessage,
 					session_id: r.sessionId,
+					assigned_to: r.assignedTo,
 					queued_at: r.queuedAt.toISOString(),
 					completed_at: r.completedAt?.toISOString() ?? null,
 				})),
@@ -766,6 +770,77 @@ export const automationsRouter = {
 				context.orgId,
 			);
 			return { integrations: integrationActions };
+		}),
+
+	// ============================================
+	// Single run + events (investigation panel)
+	// ============================================
+
+	/**
+	 * Get a single run by ID (org-scoped, no automationId required).
+	 */
+	getRun: orgProcedure
+		.input(z.object({ runId: z.string().uuid() }))
+		.output(z.object({ run: AutomationRunSchema }))
+		.handler(async ({ input, context }) => {
+			const run = await runs.findRunForDisplay(input.runId, context.orgId);
+			if (!run) {
+				throw new ORPCError("NOT_FOUND", { message: "Run not found" });
+			}
+			return { run: mapRunToSchema(run) };
+		}),
+
+	/**
+	 * List timeline events for a run (status transitions, milestones).
+	 */
+	listRunEvents: orgProcedure
+		.input(z.object({ runId: z.string().uuid() }))
+		.output(z.object({ events: z.array(AutomationRunEventSchema) }))
+		.handler(async ({ input, context }) => {
+			const events = await runs.listRunEvents(input.runId, context.orgId);
+			if (!events) {
+				throw new ORPCError("NOT_FOUND", { message: "Run not found" });
+			}
+			return {
+				events: events.map((e) => ({
+					id: e.id,
+					type: e.type,
+					from_status: e.fromStatus ?? null,
+					to_status: e.toStatus ?? null,
+					data: (e.data as Record<string, unknown>) ?? null,
+					created_at: (e.createdAt ?? new Date()).toISOString(),
+				})),
+			};
+		}),
+
+	// ============================================
+	// Org-wide activity feed
+	// ============================================
+
+	/**
+	 * List all runs across all automations in the org, paginated.
+	 */
+	listOrgRuns: orgProcedure
+		.input(
+			z
+				.object({
+					status: AutomationRunStatusSchema.optional(),
+					limit: z.number().int().positive().max(100).optional(),
+					offset: z.number().int().nonnegative().optional(),
+				})
+				.optional(),
+		)
+		.output(z.object({ runs: z.array(AutomationRunSchema), total: z.number() }))
+		.handler(async ({ input, context }) => {
+			const result = await runs.listOrgRuns(context.orgId, {
+				status: input?.status,
+				limit: input?.limit,
+				offset: input?.offset,
+			});
+			return {
+				runs: result.runs.map((run) => mapRunToSchema(run)),
+				total: result.total,
+			};
 		}),
 };
 

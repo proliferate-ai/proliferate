@@ -303,6 +303,270 @@ export const MembersIllustration = () => (
 	</svg>
 );
 
+export const EmptyChatsIllustration = () => (
+	<svg xmlns="http://www.w3.org/2000/svg" width="66" height="66" viewBox="0 0 66 66" fill="none">
+		<rect
+			x="6"
+			y="8"
+			width="54"
+			height="40"
+			rx="8"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.5"
+		/>
+		<path
+			d="M21 48L21 56L30 48"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.5"
+			strokeLinejoin="round"
+		/>
+		<rect
+			x="18"
+			y="18"
+			width="30"
+			height="22"
+			rx="6"
+			className="fill-background stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
+		<path
+			d="M30 40L30 47L36 40"
+			className="fill-background stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+			strokeLinejoin="round"
+		/>
+		<path
+			d="M24 27H42"
+			className="stroke-muted-foreground/45 dark:stroke-muted-foreground/55"
+			strokeWidth="1.2"
+			strokeLinecap="round"
+		/>
+		<path
+			d="M24 31H38"
+			className="stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+			strokeLinecap="round"
+			strokeDasharray="2.5 2.5"
+		/>
+		<circle
+			cx="49"
+			cy="18"
+			r="4"
+			className="fill-muted/50 dark:fill-muted/55 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
+		<path
+			d="M47.5 18H50.5"
+			className="stroke-muted-foreground/50 dark:stroke-muted-foreground/60"
+			strokeWidth="1.1"
+			strokeLinecap="round"
+		/>
+		<path
+			d="M49 16.5V19.5"
+			className="stroke-muted-foreground/50 dark:stroke-muted-foreground/60"
+			strokeWidth="1.1"
+			strokeLinecap="round"
+		/>
+	</svg>
+);
+
+export const ActivityIllustration = () => (
+	<svg xmlns="http://www.w3.org/2000/svg" width="66" height="66" viewBox="0 0 66 66" fill="none">
+		{/* Vertical timeline line */}
+		<path
+			d="M20 10V56"
+			className="stroke-muted-foreground/30 dark:stroke-muted-foreground/40"
+			strokeWidth="1.5"
+			strokeLinecap="round"
+			strokeDasharray="3 3"
+		/>
+		{/* Top dot */}
+		<circle
+			cx="20"
+			cy="16"
+			r="4"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.5"
+		/>
+		<circle
+			cx="20"
+			cy="16"
+			r="1.5"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+		{/* Top row */}
+		<rect
+			x="28"
+			y="12"
+			width="28"
+			height="8"
+			rx="3"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
+		<path
+			d="M32 16H48"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1.2"
+			strokeLinecap="round"
+		/>
+		{/* Middle dot */}
+		<circle
+			cx="20"
+			cy="33"
+			r="4"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.5"
+		/>
+		<circle
+			cx="20"
+			cy="33"
+			r="1.5"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+		{/* Middle row */}
+		<rect
+			x="28"
+			y="29"
+			width="22"
+			height="8"
+			rx="3"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
+		<path
+			d="M32 33H44"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1.2"
+			strokeLinecap="round"
+		/>
+		{/* Bottom dot */}
+		<circle
+			cx="20"
+			cy="50"
+			r="4"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.5"
+		/>
+		<circle
+			cx="20"
+			cy="50"
+			r="1.5"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+		{/* Bottom row */}
+		<rect
+			x="28"
+			y="46"
+			width="25"
+			height="8"
+			rx="3"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
+		<path
+			d="M32 50H46"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1.2"
+			strokeLinecap="round"
+		/>
+	</svg>
+);
+
+export const MyWorkIllustration = () => (
+	<svg xmlns="http://www.w3.org/2000/svg" width="66" height="66" viewBox="0 0 66 66" fill="none">
+		{/* Clipboard body */}
+		<rect
+			x="12"
+			y="10"
+			width="42"
+			height="48"
+			rx="5"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.5"
+		/>
+		{/* Clipboard clip */}
+		<rect
+			x="24"
+			y="6"
+			width="18"
+			height="8"
+			rx="3"
+			className="fill-background stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.5"
+		/>
+		<circle
+			cx="33"
+			cy="10"
+			r="2"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+		{/* Row 1 — checked */}
+		<rect
+			x="19"
+			y="22"
+			width="8"
+			height="8"
+			rx="2"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
+		<path
+			d="M21 26.5L23 28.5L26 24"
+			className="stroke-muted-foreground/55 dark:stroke-muted-foreground/65"
+			strokeWidth="1.3"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		/>
+		<path
+			d="M31 26H46"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1.2"
+			strokeLinecap="round"
+		/>
+		{/* Row 2 — checked */}
+		<rect
+			x="19"
+			y="34"
+			width="8"
+			height="8"
+			rx="2"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
+		<path
+			d="M21 38.5L23 40.5L26 36"
+			className="stroke-muted-foreground/55 dark:stroke-muted-foreground/65"
+			strokeWidth="1.3"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		/>
+		<path
+			d="M31 38H42"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1.2"
+			strokeLinecap="round"
+		/>
+		{/* Row 3 — empty */}
+		<rect
+			x="19"
+			y="46"
+			width="8"
+			height="8"
+			rx="2"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
+		<path
+			d="M31 50H44"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1.2"
+			strokeLinecap="round"
+			strokeDasharray="3 3"
+		/>
+	</svg>
+);
+
 // ─── Badge Icons ─────────────────────────────────────────────────────────────
 
 export const PlusBadge = () => (

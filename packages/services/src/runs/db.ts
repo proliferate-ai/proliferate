@@ -375,18 +375,29 @@ export interface PendingRunSummary {
 	statusReason: string | null;
 	errorMessage: string | null;
 	sessionId: string | null;
+	assignedTo: string | null;
 	queuedAt: Date;
 	completedAt: Date | null;
 }
 
 export async function listOrgPendingRuns(
 	orgId: string,
-	options: { limit?: number; maxAgeDays?: number } = {},
+	options: { limit?: number; maxAgeDays?: number; unassignedOnly?: boolean } = {},
 ): Promise<PendingRunSummary[]> {
 	const db = getDb();
 	const limit = Math.min(options.limit ?? 20, 50);
 	const maxAgeDays = options.maxAgeDays ?? 7;
 	const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000);
+
+	const conditions = [
+		eq(automationRuns.organizationId, orgId),
+		inArray(automationRuns.status, ATTENTION_STATUSES),
+		gte(automationRuns.createdAt, cutoff),
+	];
+
+	if (options.unassignedOnly) {
+		conditions.push(isNull(automationRuns.assignedTo));
+	}
 
 	const rows = await db
 		.select({
@@ -397,18 +408,13 @@ export async function listOrgPendingRuns(
 			statusReason: automationRuns.statusReason,
 			errorMessage: automationRuns.errorMessage,
 			sessionId: automationRuns.sessionId,
+			assignedTo: automationRuns.assignedTo,
 			queuedAt: automationRuns.queuedAt,
 			completedAt: automationRuns.completedAt,
 		})
 		.from(automationRuns)
 		.innerJoin(automations, eq(automationRuns.automationId, automations.id))
-		.where(
-			and(
-				eq(automationRuns.organizationId, orgId),
-				inArray(automationRuns.status, ATTENTION_STATUSES),
-				gte(automationRuns.createdAt, cutoff),
-			),
-		)
+		.where(and(...conditions))
 		.orderBy(desc(automationRuns.completedAt))
 		.limit(limit);
 
@@ -420,7 +426,152 @@ export async function listOrgPendingRuns(
 		statusReason: r.statusReason,
 		errorMessage: r.errorMessage,
 		sessionId: r.sessionId,
+		assignedTo: r.assignedTo,
 		queuedAt: r.queuedAt,
 		completedAt: r.completedAt,
 	}));
+}
+
+// ============================================
+// Single run display (for investigation panel)
+// ============================================
+
+/**
+ * Fetch a single run with relations for display, scoped to org.
+ */
+export async function findRunForDisplay(runId: string, orgId: string): Promise<RunListItem | null> {
+	const db = getDb();
+	const result = await db.query.automationRuns.findFirst({
+		where: and(eq(automationRuns.id, runId), eq(automationRuns.organizationId, orgId)),
+		with: {
+			triggerEvent: {
+				columns: {
+					id: true,
+					parsedContext: true,
+					providerEventType: true,
+				},
+			},
+			trigger: {
+				columns: {
+					id: true,
+					provider: true,
+					name: true,
+				},
+			},
+			session: {
+				columns: {
+					id: true,
+					title: true,
+					status: true,
+				},
+			},
+			assignee: {
+				columns: {
+					id: true,
+					name: true,
+					email: true,
+					image: true,
+				},
+			},
+		},
+	});
+	return (result as RunListItem | null) ?? null;
+}
+
+// ============================================
+// Run events timeline
+// ============================================
+
+/**
+ * List status transition events for a run, chronologically.
+ * Verifies the run belongs to the given org for defense-in-depth.
+ */
+export async function listRunEvents(
+	runId: string,
+	orgId: string,
+): Promise<AutomationRunEventRow[] | null> {
+	const db = getDb();
+	const run = await db.query.automationRuns.findFirst({
+		where: and(eq(automationRuns.id, runId), eq(automationRuns.organizationId, orgId)),
+		columns: { id: true },
+	});
+	if (!run) return null;
+	return db.query.automationRunEvents.findMany({
+		where: eq(automationRunEvents.runId, runId),
+		orderBy: [automationRunEvents.createdAt],
+	});
+}
+
+// ============================================
+// Org-wide runs (activity feed)
+// ============================================
+
+/**
+ * List all runs across all automations in an org, paginated.
+ */
+export async function listOrgRuns(
+	orgId: string,
+	options: { status?: string; limit?: number; offset?: number } = {},
+): Promise<{ runs: RunListItem[]; total: number }> {
+	const db = getDb();
+	const limit = Math.min(options.limit ?? 50, 100);
+	const offset = options.offset ?? 0;
+
+	// Time-bound queries to last 90 days for performance
+	const cutoff = new Date();
+	cutoff.setDate(cutoff.getDate() - 90);
+	const baseConditions = [
+		eq(automationRuns.organizationId, orgId),
+		gte(automationRuns.createdAt, cutoff),
+	];
+	if (options.status) {
+		baseConditions.push(eq(automationRuns.status, options.status));
+	}
+	const where = and(...baseConditions);
+
+	const [runs, countResult] = await Promise.all([
+		db.query.automationRuns.findMany({
+			where,
+			with: {
+				triggerEvent: {
+					columns: {
+						id: true,
+						parsedContext: true,
+						providerEventType: true,
+					},
+				},
+				trigger: {
+					columns: {
+						id: true,
+						provider: true,
+						name: true,
+					},
+				},
+				session: {
+					columns: {
+						id: true,
+						title: true,
+						status: true,
+					},
+				},
+				assignee: {
+					columns: {
+						id: true,
+						name: true,
+						email: true,
+						image: true,
+					},
+				},
+			},
+			orderBy: [desc(automationRuns.createdAt)],
+			limit,
+			offset,
+		}),
+		db.select({ count: sql<number>`count(*)::int` }).from(automationRuns).where(where),
+	]);
+
+	return {
+		runs: runs as RunListItem[],
+		total: countResult[0]?.count ?? 0,
+	};
 }

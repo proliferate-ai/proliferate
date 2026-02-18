@@ -54,6 +54,8 @@ export interface ListSessionsFilters {
 	limit?: number;
 	excludeSetup?: boolean;
 	excludeCli?: boolean;
+	excludeAutomation?: boolean;
+	createdBy?: string;
 }
 
 // ============================================
@@ -66,6 +68,8 @@ export interface ListSessionsOptions {
 	limit?: number;
 	excludeSetup?: boolean;
 	excludeCli?: boolean;
+	excludeAutomation?: boolean;
+	createdBy?: string;
 }
 
 export interface SessionStatus {

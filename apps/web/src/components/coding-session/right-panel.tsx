@@ -13,6 +13,7 @@ import dynamic from "next/dynamic";
 import { ArtifactsPanel } from "./artifacts-panel";
 import { EnvironmentPanel } from "./environment-panel";
 import { GitPanel } from "./git-panel";
+import { InvestigationPanel } from "./investigation-panel";
 import { PreviewPanel } from "./preview-panel";
 import { SettingsPanel } from "./settings-panel";
 import { VscodePanel } from "./vscode-panel";
@@ -70,9 +71,15 @@ interface RightPanelProps {
 	isMobileFullScreen?: boolean;
 	sessionProps?: SessionPanelProps;
 	previewUrl?: string | null;
+	runId?: string;
 }
 
-export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: RightPanelProps) {
+export function RightPanel({
+	isMobileFullScreen,
+	sessionProps,
+	previewUrl,
+	runId,
+}: RightPanelProps) {
 	const { mode, close, setMobileView } = usePreviewPanelStore();
 
 	const handleClose = () => {
@@ -94,8 +101,8 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 		);
 	}
 
-	// Empty state when no panel is selected
-	if (mode.type === "none") {
+	// Empty state when no panel is selected, or investigation mode without a runId
+	if (mode.type === "none" || (mode.type === "investigation" && !runId)) {
 		return (
 			<div className="flex flex-col h-full items-center justify-center text-muted-foreground">
 				<MousePointerClick className="h-8 w-8 mb-3 opacity-40" />
@@ -185,6 +192,11 @@ export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: Rig
 					activityTick={sessionProps.activityTick ?? 0}
 				/>
 			);
+		}
+
+		// Investigation panel
+		if (mode.type === "investigation" && runId) {
+			return <InvestigationPanel runId={runId} />;
 		}
 
 		// URL preview

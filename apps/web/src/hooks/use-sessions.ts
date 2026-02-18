@@ -12,11 +12,16 @@ export function useSessions(params?: {
 	limit?: number;
 	excludeSetup?: boolean;
 	excludeCli?: boolean;
+	excludeAutomation?: boolean;
+	createdBy?: string;
+	enabled?: boolean;
 }) {
+	const { enabled = true, ...queryParams } = params ?? {};
 	return useQuery({
 		...orpc.sessions.list.queryOptions({
-			input: params ?? {},
+			input: queryParams,
 		}),
+		enabled,
 		select: (data) => data.sessions,
 	});
 }

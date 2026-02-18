@@ -243,7 +243,8 @@ function InboxContent() {
 
 	// Apply all filters
 	const filtered = useMemo(() => {
-		let result = items;
+		// Runs are already filtered to unassigned at the DB level
+		let result = [...items];
 
 		// Type filter
 		if (typeFilter === "runs") {

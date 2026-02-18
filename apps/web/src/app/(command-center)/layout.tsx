@@ -6,12 +6,13 @@ import { CommandSearch } from "@/components/dashboard/command-search";
 import { MobileSidebar, MobileSidebarTrigger, Sidebar } from "@/components/dashboard/sidebar";
 import { openIntercomMessenger } from "@/components/providers";
 import { Button } from "@/components/ui/button";
+import { ChatBubbleIcon } from "@/components/ui/icons";
 import { useBilling } from "@/hooks/use-billing";
 import { useOnboarding } from "@/hooks/use-onboarding";
 import { useSession } from "@/lib/auth-client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { env } from "@proliferate/environment/public";
-import { BookOpen, MessageSquare, Search } from "lucide-react";
+import { BookOpen, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -161,7 +162,7 @@ export default function CommandCenterLayout({
 								className="h-8 gap-1.5 rounded-lg text-muted-foreground"
 								onClick={openIntercomMessenger}
 							>
-								<MessageSquare className="h-3.5 w-3.5" />
+								<ChatBubbleIcon className="h-3.5 w-3.5" />
 								<span className="text-xs">Help</span>
 							</Button>
 						</div>

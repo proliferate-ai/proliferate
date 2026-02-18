@@ -2,16 +2,18 @@
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRepo } from "@/hooks/use-repos";
-import { useSessionData, useSnapshotSession } from "@/hooks/use-sessions";
+import { useRenameSession, useSessionData, useSnapshotSession } from "@/hooks/use-sessions";
 import { useSession as useBetterAuthSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import {
+	AlertTriangle,
 	ArrowLeft,
 	Code,
 	GitBranch,
@@ -26,7 +28,7 @@ import {
 	Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { SessionPanelProps } from "./right-panel";
 import { RightPanel } from "./right-panel";
@@ -49,6 +51,7 @@ const PANEL_TABS = [
 
 interface CodingSessionProps {
 	sessionId: string;
+	runId?: string;
 	title?: string;
 	description?: string;
 	initialPrompt?: string;
@@ -61,6 +64,7 @@ interface CodingSessionProps {
 
 export function CodingSession({
 	sessionId,
+	runId,
 	title,
 	description,
 	initialPrompt,
@@ -79,6 +83,7 @@ export function CodingSession({
 		error,
 		previewUrl,
 		sessionTitle,
+		updateTitle,
 		isMigrating,
 		activityTick,
 		autoStartOutput,
@@ -141,6 +146,22 @@ export function CodingSession({
 	const [viewPickerOpen, setViewPickerOpen] = useState(false);
 	const activeType = mode.type === "file" || mode.type === "gallery" ? "artifacts" : mode.type;
 
+	// Auto-open investigation panel when runId is present (fires once per runId)
+	const lastOpenedRunId = useRef<string | null>(null);
+	useEffect(() => {
+		if (runId && lastOpenedRunId.current !== runId) {
+			lastOpenedRunId.current = runId;
+			if (mode.type !== "investigation") {
+				togglePanel("investigation");
+			}
+		}
+	}, [runId, togglePanel, mode.type]);
+
+	// Build panel tabs — prepend investigation tab when runId is present
+	const effectivePanelTabs = runId
+		? [{ type: "investigation" as const, label: "Investigate", icon: AlertTriangle }, ...PANEL_TABS]
+		: PANEL_TABS;
+
 	// Combine all loading states
 	const isLoading =
 		authLoading || sessionLoading || status === "loading" || status === "connecting";
@@ -180,6 +201,42 @@ export function CodingSession({
 
 	const displayTitle = sessionTitle || sessionData?.title || title;
 	const headerDisabled = isLoading || !authSession || !sessionData || status === "error";
+
+	// Inline rename state
+	const renameSession = useRenameSession();
+	const [isEditingTitle, setIsEditingTitle] = useState(false);
+	const [editTitleValue, setEditTitleValue] = useState("");
+	const titleInputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		if (isEditingTitle && titleInputRef.current) {
+			titleInputRef.current.focus();
+			titleInputRef.current.select();
+		}
+	}, [isEditingTitle]);
+
+	const handleStartRename = () => {
+		setEditTitleValue(displayTitle || "");
+		setIsEditingTitle(true);
+	};
+
+	const handleSaveRename = () => {
+		const trimmed = editTitleValue.trim();
+		if (trimmed && trimmed !== displayTitle) {
+			renameSession.mutate(sessionId, trimmed);
+			updateTitle(trimmed);
+		}
+		setIsEditingTitle(false);
+	};
+
+	const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+		if (e.key === "Enter") {
+			handleSaveRename();
+		} else if (e.key === "Escape") {
+			setIsEditingTitle(false);
+			setEditTitleValue("");
+		}
+	};
 
 	// Left pane content (chat or loading/error states)
 	const leftPaneContent = isLoading ? (
@@ -261,7 +318,7 @@ export function CodingSession({
 					</Button>
 				</PopoverTrigger>
 				<PopoverContent align="start" sideOffset={8} className="w-48 p-1">
-					{PANEL_TABS.map(({ type, label, icon: Icon }) => {
+					{effectivePanelTabs.map(({ type, label, icon: Icon }) => {
 						const isActive = activeType === type;
 						const isPinned = pinnedTabs.includes(type);
 						return (
@@ -324,9 +381,29 @@ export function CodingSession({
 				alt="Proliferate"
 				className="h-5 w-5 rounded-full shrink-0"
 			/>
-			{displayTitle && (
-				<span className="text-sm font-medium text-foreground truncate">{displayTitle}</span>
-			)}
+			<div className="min-w-0 flex-1">
+				{isEditingTitle ? (
+					<Input
+						ref={titleInputRef}
+						type="text"
+						variant="inline"
+						size="auto"
+						value={editTitleValue}
+						onChange={(e) => setEditTitleValue(e.target.value)}
+						onBlur={handleSaveRename}
+						onKeyDown={handleRenameKeyDown}
+						className="text-sm font-medium"
+					/>
+				) : (
+					<span
+						className="text-sm font-medium text-foreground truncate block cursor-pointer hover:text-foreground/80 transition-colors"
+						onClick={handleStartRename}
+						title="Click to rename"
+					>
+						{displayTitle || "Untitled"}
+					</span>
+				)}
+			</div>
 			<SessionHeader
 				error={headerDisabled ? null : error}
 				disabled={headerDisabled}
@@ -379,6 +456,7 @@ export function CodingSession({
 							isMobileFullScreen={false}
 							sessionProps={sessionPanelProps}
 							previewUrl={previewUrl}
+							runId={runId}
 						/>
 					</div>
 				</div>
@@ -392,7 +470,12 @@ export function CodingSession({
 			{chatHeader}
 			<div className="flex-1 min-h-0">
 				{mobileView === "preview" ? (
-					<RightPanel isMobileFullScreen sessionProps={sessionPanelProps} previewUrl={previewUrl} />
+					<RightPanel
+						isMobileFullScreen
+						sessionProps={sessionPanelProps}
+						previewUrl={previewUrl}
+						runId={runId}
+					/>
 				) : (
 					leftPaneContent
 				)}

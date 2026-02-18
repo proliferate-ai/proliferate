@@ -342,9 +342,32 @@ export type { PendingRunSummary } from "./db";
 
 export async function listOrgPendingRuns(
 	orgId: string,
-	options?: { limit?: number; maxAgeDays?: number },
+	options?: { limit?: number; maxAgeDays?: number; unassignedOnly?: boolean },
 ): Promise<runsDb.PendingRunSummary[]> {
 	return runsDb.listOrgPendingRuns(orgId, options);
+}
+
+export async function findRunForDisplay(
+	runId: string,
+	orgId: string,
+): Promise<runsDb.RunListItem | null> {
+	return runsDb.findRunForDisplay(runId, orgId);
+}
+
+export async function listRunEvents(
+	runId: string,
+	orgId: string,
+): Promise<runsDb.AutomationRunEventRow[] | null> {
+	return runsDb.listRunEvents(runId, orgId);
+}
+
+export type { AutomationRunEventRow } from "./db";
+
+export async function listOrgRuns(
+	orgId: string,
+	options?: { status?: string; limit?: number; offset?: number },
+): Promise<{ runs: runsDb.RunListItem[]; total: number }> {
+	return runsDb.listOrgRuns(orgId, options);
 }
 
 // ============================================
