@@ -187,7 +187,7 @@ function SignInContent() {
 				<p className="mt-6 text-center text-sm text-neutral-500">
 					Don&apos;t have an account?{" "}
 					<Link
-						href={buildAuthLink("/sign-up", redirectUrl, prefilledEmail)}
+						href={buildAuthLink("/sign-up", redirectUrl, email)}
 						className="text-neutral-300 transition-colors hover:text-white"
 					>
 						Sign up

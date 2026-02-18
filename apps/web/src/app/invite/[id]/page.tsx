@@ -141,6 +141,8 @@ export default function InviteAcceptPage() {
 			const email = encodeURIComponent(invitedEmail);
 			router.push(`/sign-in?redirect=${redirect}&email=${email}`);
 		} catch {
+			setError("Failed to sign out. Please try again.");
+		} finally {
 			setSigningOut(false);
 		}
 	};

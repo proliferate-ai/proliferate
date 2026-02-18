@@ -121,7 +121,7 @@ function SignUpContent() {
 	}
 
 	// Build sign-in link preserving redirect + email params
-	const signInHref = buildAuthLink("/sign-in", redirectUrl, prefilledEmail);
+	const signInHref = buildAuthLink("/sign-in", redirectUrl, email);
 
 	return (
 		<AuthLayout>
