@@ -110,7 +110,8 @@ function VerifyEmailContent() {
 			} else {
 				setResent(true);
 			}
-		} catch {
+		} catch (err) {
+			console.error("Failed to send verification email:", err);
 			setError("Failed to send verification email");
 		} finally {
 			setIsResending(false);
@@ -120,7 +121,7 @@ function VerifyEmailContent() {
 	if (isPending) {
 		return (
 			<AuthLayout>
-				<div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-700 border-t-neutral-300" />
+				<div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-foreground" />
 			</AuthLayout>
 		);
 	}
@@ -137,9 +138,9 @@ function VerifyEmailContent() {
 					<div className="relative flex flex-col items-center">
 						<MailIllustration />
 						{/* Shadow */}
-						<div className="mt-1 h-1.5 w-6 rounded-full bg-neutral-800 scale-x-[2]" />
+						<div className="mt-1 h-1.5 w-6 rounded-full bg-muted scale-x-[2]" />
 						{/* Badge */}
-						<div className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-950 text-neutral-500">
+						<div className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-background text-muted-foreground">
 							<CheckBadge />
 						</div>
 					</div>
@@ -147,11 +148,11 @@ function VerifyEmailContent() {
 
 				{/* Header */}
 				<div className="mb-6 text-center">
-					<h1 className="text-xl font-semibold tracking-tight text-neutral-50">Check your email</h1>
-					<p className="mt-1.5 text-sm text-neutral-500">
+					<h1 className="text-xl font-semibold tracking-tight text-foreground">Check your email</h1>
+					<p className="mt-1.5 text-sm text-muted-foreground">
 						{email ? (
 							<>
-								We sent a verification link to <span className="text-neutral-300">{email}</span>
+								We sent a verification link to <span className="text-foreground">{email}</span>
 							</>
 						) : (
 							"We sent a verification link to your email"
@@ -161,7 +162,7 @@ function VerifyEmailContent() {
 
 				{/* Card */}
 				<div className="rounded-lg border border-border bg-card/50 p-5">
-					<p className="mb-4 text-center text-xs text-neutral-500">
+					<p className="mb-4 text-center text-xs text-muted-foreground">
 						Click the link in the email to verify your account. Check spam if you don&apos;t see it.
 					</p>
 
@@ -186,7 +187,7 @@ function VerifyEmailContent() {
 						<Button
 							type="button"
 							variant="ghost"
-							className="h-10 w-full text-sm text-neutral-500 hover:text-neutral-300 hover:bg-transparent"
+							className="h-10 w-full text-sm text-muted-foreground hover:text-foreground hover:bg-transparent"
 							onClick={async () => {
 								await signOut();
 								router.push("/sign-in");
@@ -206,7 +207,7 @@ export default function VerifyEmailPage() {
 		<Suspense
 			fallback={
 				<AuthLayout>
-					<div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-700 border-t-neutral-300" />
+					<div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-foreground" />
 				</AuthLayout>
 			}
 		>
