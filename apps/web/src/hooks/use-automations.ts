@@ -280,6 +280,9 @@ export function useResolveRun() {
 			queryClient.invalidateQueries({
 				queryKey: orpc.automations.listRuns.key({ input: { id: variables.id } }),
 			});
+			queryClient.invalidateQueries({
+				queryKey: orpc.automations.listOrgRuns.key(),
+			});
 		},
 	});
 }

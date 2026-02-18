@@ -513,9 +513,17 @@ export async function listOrgRuns(
 	const limit = Math.min(options.limit ?? 50, 100);
 	const offset = options.offset ?? 0;
 
-	const where = options.status
-		? and(eq(automationRuns.organizationId, orgId), eq(automationRuns.status, options.status))
-		: eq(automationRuns.organizationId, orgId);
+	// Time-bound queries to last 90 days for performance
+	const cutoff = new Date();
+	cutoff.setDate(cutoff.getDate() - 90);
+	const baseConditions = [
+		eq(automationRuns.organizationId, orgId),
+		gte(automationRuns.createdAt, cutoff),
+	];
+	if (options.status) {
+		baseConditions.push(eq(automationRuns.status, options.status));
+	}
+	const where = and(...baseConditions);
 
 	const [runs, countResult] = await Promise.all([
 		db.query.automationRuns.findMany({

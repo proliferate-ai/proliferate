@@ -806,7 +806,7 @@ export const automationsRouter = {
 					from_status: e.fromStatus ?? null,
 					to_status: e.toStatus ?? null,
 					data: (e.data as Record<string, unknown>) ?? null,
-					created_at: e.createdAt!.toISOString(),
+					created_at: (e.createdAt ?? new Date()).toISOString(),
 				})),
 			};
 		}),
