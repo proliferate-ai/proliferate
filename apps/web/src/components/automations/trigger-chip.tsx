@@ -27,6 +27,12 @@ type Trigger = AutomationTrigger & {
 	polling_cron?: string | null;
 };
 
+interface Integration {
+	id: string;
+	integration_id: string | null;
+	status: string | null;
+}
+
 interface TriggerChipProps {
 	trigger: Trigger;
 	automationId: string;
@@ -34,6 +40,10 @@ interface TriggerChipProps {
 	variant?: "chip" | "stacked";
 	isFirst?: boolean;
 	isLast?: boolean;
+	/** Which integrations are connected for this org */
+	connectedProviders?: Set<string>;
+	/** All active integrations for auto-selection */
+	integrations?: Integration[];
 }
 
 function getTriggerSummary(trigger: Trigger): string {
@@ -133,6 +143,8 @@ export function TriggerChip({
 	variant = "chip",
 	isFirst,
 	isLast,
+	connectedProviders,
+	integrations,
 }: TriggerChipProps) {
 	const [open, setOpen] = useState(false);
 	const queryClient = useQueryClient();
@@ -184,6 +196,8 @@ export function TriggerChip({
 				initialConfig={trigger.config}
 				initialCronExpression={trigger.polling_cron}
 				webhookSecret={trigger.webhook_secret}
+				connectedProviders={connectedProviders}
+				integrations={integrations}
 				onSubmit={handleUpdate}
 				onCancel={() => setOpen(false)}
 				submitLabel="Update"

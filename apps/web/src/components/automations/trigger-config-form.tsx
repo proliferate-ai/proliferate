@@ -7,13 +7,6 @@ import {
 	getProviderDisplayName,
 } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { FilterButtonGroup } from "@/components/ui/filter-button-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,8 +29,8 @@ import type {
 	TriggerConfig,
 } from "@proliferate/shared";
 import cronstrue from "cronstrue";
-import { Check, ChevronDown, Copy } from "lucide-react";
-import { useState } from "react";
+import { Check, Copy } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Cron } from "react-js-cron";
 import "react-js-cron/dist/styles.css";
 
@@ -62,6 +55,12 @@ export interface TriggerFormData {
 	cronExpression?: string;
 }
 
+interface Integration {
+	id: string;
+	integration_id: string | null;
+	status: string | null;
+}
+
 interface TriggerConfigFormProps {
 	automationId?: string;
 	initialProvider?: Provider | null;
@@ -75,6 +74,10 @@ interface TriggerConfigFormProps {
 	isSubmitting?: boolean;
 	/** When true, hides the provider selector (use with initialProvider to lock to a specific type) */
 	lockProvider?: boolean;
+	/** Which integrations are connected for this org */
+	connectedProviders?: Set<string>;
+	/** All active integrations for auto-selection */
+	integrations?: Integration[];
 }
 
 // --- Constants ---
@@ -116,80 +119,58 @@ const GITHUB_CONCLUSIONS = [
 	{ value: "timed_out" as const, label: "Timed Out" },
 ];
 
-const INTEGRATION_PROVIDERS: Provider[] = ["linear", "github", "sentry"];
-const SUPPORTED_INTEGRATION_PROVIDERS: Provider[] = ["linear", "github", "sentry"];
-const STANDALONE_PROVIDERS: Provider[] = ["webhook", "scheduled", "posthog"];
+const INTEGRATION_PROVIDERS: Provider[] = ["github", "linear", "sentry"];
+const STANDALONE_PROVIDERS: Provider[] = ["posthog", "webhook", "scheduled"];
+const ALL_PROVIDERS: Provider[] = [...INTEGRATION_PROVIDERS, ...STANDALONE_PROVIDERS];
 
 // --- Sub-components ---
 
 interface ProviderSelectorProps {
 	provider: Provider | null;
 	onSelect: (provider: Provider) => void;
-	integrationProviders: Provider[];
-	standaloneProviders: Provider[];
-	disabledProviders?: Provider[];
+	allProviders: Provider[];
+	connectedProviders: Set<string>;
 }
 
 function ProviderSelector({
 	provider,
 	onSelect,
-	integrationProviders,
-	standaloneProviders,
-	disabledProviders = [],
+	allProviders,
+	connectedProviders,
 }: ProviderSelectorProps) {
 	return (
-		<div className="space-y-2">
-			<Label className="text-xs text-muted-foreground">Integration</Label>
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button variant="outline" className="w-full h-9 justify-between font-normal">
-						{provider ? (
-							<div className="flex items-center gap-2">
-								<ProviderIcon provider={provider} className="h-4 w-4" />
-								<span className="capitalize">{provider}</span>
-							</div>
-						) : (
-							<span className="text-muted-foreground">Select integration</span>
-						)}
-						<ChevronDown className="h-4 w-4 opacity-50" />
-					</Button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]" align="start">
-					{integrationProviders.map((p) => (
-						<DropdownMenuItem
+		<div className="space-y-1.5">
+			<Label className="text-xs text-muted-foreground">Trigger type</Label>
+			<div className="flex flex-col rounded-lg border border-border/60 overflow-hidden divide-y divide-border/40">
+				{allProviders.map((p) => {
+					const needsConnection = INTEGRATION_PROVIDERS.includes(p);
+					const isDisabled = needsConnection && !connectedProviders.has(p);
+					const isSelected = provider === p;
+					return (
+						<button
 							key={p}
-							disabled={disabledProviders.includes(p)}
+							type="button"
+							disabled={isDisabled}
 							onClick={() => onSelect(p)}
-							className="flex items-center gap-2"
+							className={`flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${
+								isSelected
+									? "bg-muted/50 font-medium"
+									: isDisabled
+										? "opacity-40 cursor-not-allowed"
+										: "hover:bg-muted/30"
+							}`}
 						>
-							{provider === p ? (
-								<Check className="h-4 w-4 text-primary" />
+							{isSelected ? (
+								<Check className="h-3.5 w-3.5 text-foreground shrink-0" />
 							) : (
-								<ProviderIcon provider={p} className="h-4 w-4" />
+								<ProviderIcon provider={p} className="h-3.5 w-3.5 shrink-0" />
 							)}
-							<span>
-								{getProviderDisplayName(p)}
-								{disabledProviders.includes(p) ? " (coming soon)" : ""}
-							</span>
-						</DropdownMenuItem>
-					))}
-					<DropdownMenuSeparator />
-					{standaloneProviders.map((p) => (
-						<DropdownMenuItem
-							key={p}
-							onClick={() => onSelect(p)}
-							className="flex items-center gap-2"
-						>
-							{provider === p ? (
-								<Check className="h-4 w-4 text-primary" />
-							) : (
-								<ProviderIcon provider={p} className="h-4 w-4" />
-							)}
-							<span>{getProviderDisplayName(p)}</span>
-						</DropdownMenuItem>
-					))}
-				</DropdownMenuContent>
-			</DropdownMenu>
+							<span className="flex-1">{getProviderDisplayName(p)}</span>
+							{isDisabled && <span className="text-xs text-muted-foreground">Not connected</span>}
+						</button>
+					);
+				})}
+			</div>
 		</div>
 	);
 }
@@ -627,6 +608,8 @@ export function TriggerConfigForm({
 	submitLabel = "Add Trigger",
 	isSubmitting = false,
 	lockProvider = false,
+	connectedProviders = new Set<string>(),
+	integrations = [],
 }: TriggerConfigFormProps) {
 	// State
 	const [provider, setProvider] = useState<Provider | null>(initialProvider || null);
@@ -667,27 +650,45 @@ export function TriggerConfigForm({
 		sentryConfig.projectSlug,
 	);
 
+	// Determine available providers from trigger service
 	const { data: triggerProvidersData } = useTriggerProviders();
-	const integrationProviders = (() => {
-		if (!triggerProvidersData?.providers) return INTEGRATION_PROVIDERS;
+	const allProviders = (() => {
+		if (!triggerProvidersData?.providers) return ALL_PROVIDERS;
 		const available = new Set<Provider>();
 		for (const entry of Object.values(triggerProvidersData.providers)) {
-			const providerId = entry.provider as Provider;
-			if (providerId === "webhook" || providerId === "scheduled" || providerId === "posthog")
-				continue;
-			available.add(providerId);
+			available.add(entry.provider as Provider);
 		}
-		return available.size > 0 ? Array.from(available) : INTEGRATION_PROVIDERS;
+		// Always include standalone providers
+		for (const p of STANDALONE_PROVIDERS) available.add(p);
+		return ALL_PROVIDERS.filter((p) => available.has(p));
 	})();
 
-	const disabledProviders: Provider[] = integrationProviders.filter(
-		(providerId) => !SUPPORTED_INTEGRATION_PROVIDERS.includes(providerId),
-	);
-
+	// Auto-select integration when provider changes and org has exactly one
 	const handleProviderSelect = (p: Provider) => {
 		setProvider(p);
-		setSelectedIntegrationId(null);
+		// Auto-select if there's exactly one active integration for this provider
+		const matching = integrations.filter((i) => i.integration_id === p && i.status === "active");
+		setSelectedIntegrationId(matching.length === 1 ? matching[0].id : null);
 	};
+
+	// For integration providers, check if we need to show the connection selector
+	const matchingIntegrations = provider
+		? integrations.filter((i) => i.integration_id === provider && i.status === "active")
+		: [];
+	const showConnectionSelector =
+		provider && INTEGRATION_PROVIDERS.includes(provider) && matchingIntegrations.length > 1;
+
+	// Auto-select on mount if editing an existing trigger with a known integration
+	useEffect(() => {
+		if (initialProvider && !initialIntegrationId && !selectedIntegrationId) {
+			const matching = integrations.filter(
+				(i) => i.integration_id === initialProvider && i.status === "active",
+			);
+			if (matching.length === 1) {
+				setSelectedIntegrationId(matching[0].id);
+			}
+		}
+	}, [initialProvider, initialIntegrationId, selectedIntegrationId, integrations]);
 
 	const handleSubmit = () => {
 		if (!provider) return;
@@ -725,12 +726,6 @@ export function TriggerConfigForm({
 			provider === "scheduled" ||
 			provider === "posthog" ||
 			selectedIntegrationId);
-	const needsConnection =
-		provider &&
-		provider !== "webhook" &&
-		provider !== "scheduled" &&
-		provider !== "posthog" &&
-		provider !== "slack";
 
 	return (
 		<div className="space-y-4 py-2 min-w-[280px]">
@@ -738,17 +733,16 @@ export function TriggerConfigForm({
 				<ProviderSelector
 					provider={provider}
 					onSelect={handleProviderSelect}
-					integrationProviders={integrationProviders}
-					standaloneProviders={STANDALONE_PROVIDERS}
-					disabledProviders={disabledProviders}
+					allProviders={allProviders}
+					connectedProviders={connectedProviders}
 				/>
 			)}
 
-			{needsConnection && (
+			{showConnectionSelector && provider && (
 				<div className="space-y-2">
 					<Label className="text-xs text-muted-foreground">Connection</Label>
 					<ConnectionSelector
-						provider={provider}
+						provider={provider as "github" | "linear" | "sentry"}
 						selectedId={selectedIntegrationId}
 						onSelect={setSelectedIntegrationId}
 					/>

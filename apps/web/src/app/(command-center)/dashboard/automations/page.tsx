@@ -18,7 +18,7 @@ import { useCreateFromTemplate, useTemplateCatalog } from "@/hooks/use-templates
 import { cn } from "@/lib/utils";
 import { BookTemplate, Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { startTransition, useMemo, useState } from "react";
 
 type Tab = "all" | "active" | "paused";
 
@@ -87,7 +87,9 @@ export default function AutomationsPage() {
 		try {
 			const automation = await createAutomation.mutateAsync({});
 			setPickerOpen(false);
-			router.push(`/dashboard/automations/${automation.id}`);
+			startTransition(() => {
+				router.push(`/dashboard/automations/${automation.id}`);
+			});
 		} catch (err) {
 			setCreateError(err instanceof Error ? err.message : "Failed to create automation");
 		}
@@ -116,7 +118,9 @@ export default function AutomationsPage() {
 				integrationBindings,
 			});
 			setPickerOpen(false);
-			router.push(`/dashboard/automations/${automation.id}`);
+			startTransition(() => {
+				router.push(`/dashboard/automations/${automation.id}`);
+			});
 		} catch (err) {
 			setCreateError(
 				err instanceof Error ? err.message : "Failed to create automation from template",

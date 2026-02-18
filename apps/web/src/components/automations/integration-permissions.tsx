@@ -64,6 +64,7 @@ interface IntegrationPermissionsProps {
 	enabledTools: EnabledTools;
 	triggers: Array<{ provider: string }>;
 	actionModes: Record<string, ActionMode>;
+	connectedProviders: Set<string>;
 	slackInstallations?: Array<{ id: string; team_name: string | null; team_id: string }>;
 	notificationSlackInstallationId: string | null;
 	onToolToggle: (toolName: keyof EnabledTools, enabled: boolean) => void;
@@ -82,6 +83,7 @@ export function IntegrationPermissions({
 	enabledTools,
 	triggers,
 	actionModes,
+	connectedProviders,
 	slackInstallations,
 	notificationSlackInstallationId,
 	onToolToggle,
@@ -104,6 +106,9 @@ export function IntegrationPermissions({
 	const connectorIntegrations =
 		integrationActions?.filter((i) => i.sourceId !== "linear" && i.sourceId !== "sentry") ?? [];
 
+	const slackConnected = connectedProviders.has("slack");
+	const linearConnected = connectedProviders.has("linear");
+
 	return (
 		<div className="flex flex-col gap-3">
 			{/* Slack */}
@@ -112,6 +117,8 @@ export function IntegrationPermissions({
 				name="Slack"
 				enabled={enabledTools.slack_notify?.enabled || false}
 				onToggle={(enabled) => onToolToggle("slack_notify", enabled)}
+				disabled={!slackConnected}
+				disabledMessage="Connect Slack in Settings to use this tool"
 			>
 				<div className="flex flex-col gap-3">
 					{slackInstallations &&
@@ -156,6 +163,8 @@ export function IntegrationPermissions({
 				name="Linear"
 				enabled={enabledTools.create_linear_issue?.enabled || false}
 				onToggle={(enabled) => onToolToggle("create_linear_issue", enabled)}
+				disabled={!linearConnected}
+				disabledMessage="Connect Linear in Settings to use this tool"
 				footer={
 					linearActions ? (
 						<ActionPermissionsList
@@ -179,7 +188,7 @@ export function IntegrationPermissions({
 				</div>
 			</IntegrationCard>
 
-			{/* Email */}
+			{/* Email — always available (internal service) */}
 			<IntegrationCard
 				icon={Mail}
 				name="Email"
@@ -261,6 +270,8 @@ function IntegrationCard({
 	onToggle,
 	children,
 	footer,
+	disabled,
+	disabledMessage,
 }: {
 	icon: React.ElementType;
 	name: string;
@@ -269,15 +280,24 @@ function IntegrationCard({
 	children?: React.ReactNode;
 	/** Rendered independently of the enabled toggle (e.g. permissions from triggers) */
 	footer?: React.ReactNode;
+	/** When true, the toggle is disabled and the card shows a connection prompt */
+	disabled?: boolean;
+	/** Message shown when the integration is not connected */
+	disabledMessage?: string;
 }) {
 	return (
-		<div className="rounded-xl border border-border overflow-hidden">
+		<div
+			className={cn("rounded-xl border border-border overflow-hidden", disabled && "opacity-60")}
+		>
 			<div className="flex items-center px-3 py-2 border-b border-border/50">
 				<Icon className="w-4 h-4 shrink-0 text-muted-foreground" />
 				<span className="text-sm font-medium min-w-0 px-2 grow">{name}</span>
-				<Switch checked={enabled} onCheckedChange={onToggle} />
+				<Switch checked={enabled} onCheckedChange={onToggle} disabled={disabled} />
 			</div>
-			{enabled && children && (
+			{disabled && disabledMessage && (
+				<div className="px-3 py-2 text-xs text-muted-foreground">{disabledMessage}</div>
+			)}
+			{!disabled && enabled && children && (
 				<div className="p-3 border-t border-border/50 bg-muted/20">{children}</div>
 			)}
 			{footer && <div className="p-3 border-t border-border/50">{footer}</div>}

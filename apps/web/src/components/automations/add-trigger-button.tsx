@@ -11,6 +11,12 @@ import { CirclePlus, Plus } from "lucide-react";
 import { useState } from "react";
 import { TriggerConfigForm, type TriggerFormData } from "./trigger-config-form";
 
+interface Integration {
+	id: string;
+	integration_id: string | null;
+	status: string | null;
+}
+
 interface AddTriggerButtonProps {
 	automationId: string;
 	onAdded?: () => void;
@@ -21,6 +27,10 @@ interface AddTriggerButtonProps {
 	defaultProvider?: Provider;
 	/** Button label (defaults to "Add trigger") */
 	label?: string;
+	/** Which integrations are connected for this org */
+	connectedProviders?: Set<string>;
+	/** All active integrations for auto-selection */
+	integrations?: Integration[];
 }
 
 export function AddTriggerButton({
@@ -31,6 +41,8 @@ export function AddTriggerButton({
 	isLast,
 	defaultProvider,
 	label = "Add trigger",
+	connectedProviders,
+	integrations,
 }: AddTriggerButtonProps) {
 	const [open, setOpen] = useState(false);
 	const queryClient = useQueryClient();
@@ -46,12 +58,25 @@ export function AddTriggerButton({
 		},
 	});
 
+	const handleOpenChange = (isOpen: boolean) => {
+		setOpen(isOpen);
+		if (isOpen) {
+			// Prefetch integrations so the form has reasonably fresh connection data
+			queryClient.prefetchQuery({
+				...orpc.integrations.list.queryOptions({ input: undefined }),
+				staleTime: 30_000, // Only refetch if older than 30s
+			});
+		}
+	};
+
 	const popoverContent = (
 		<PopoverContent className="w-auto p-3" align="start">
 			<TriggerConfigForm
 				automationId={automationId}
 				initialProvider={defaultProvider}
 				lockProvider={!!defaultProvider}
+				connectedProviders={connectedProviders}
+				integrations={integrations}
 				onSubmit={(data) =>
 					createMutation.mutate({
 						id: automationId,
@@ -70,7 +95,7 @@ export function AddTriggerButton({
 
 	if (variant === "stacked") {
 		return (
-			<Popover open={open} onOpenChange={setOpen}>
+			<Popover open={open} onOpenChange={handleOpenChange}>
 				<PopoverTrigger asChild>
 					<button
 						type="button"
@@ -94,7 +119,7 @@ export function AddTriggerButton({
 	}
 
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
+		<Popover open={open} onOpenChange={handleOpenChange}>
 			<PopoverTrigger asChild>
 				<Button
 					variant="ghost"

@@ -29,7 +29,8 @@ import { Text } from "@/components/ui/text";
 import { Textarea } from "@/components/ui/textarea";
 import { useAutomationActionModes, useSetAutomationActionMode } from "@/hooks/use-action-modes";
 import { useAutomation, useTriggerManualRun, useUpdateAutomation } from "@/hooks/use-automations";
-import { useSlackInstallations } from "@/hooks/use-integrations";
+import { useIntegrations, useSlackInstallations } from "@/hooks/use-integrations";
+import { computeReadiness } from "@/lib/automation-readiness";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 import {
@@ -44,7 +45,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { History, Loader2, MoreVertical, Play, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useDebouncedCallback } from "use-debounce";
 
@@ -132,10 +133,21 @@ export default function AutomationDetailPage({
 
 	// Data
 	const { data: automation, isLoading, error } = useAutomation(id);
+	const { data: integrationsData } = useIntegrations();
 	const { data: slackInstallations } = useSlackInstallations();
 	const { data: modesData } = useAutomationActionModes(id);
 	const setActionMode = useSetAutomationActionMode(id);
 	const actionModes = modesData?.modes ?? {};
+
+	const connectedProviders = useMemo(() => {
+		const providers = new Set<string>();
+		if (!integrationsData) return providers;
+		if (integrationsData.github.connected) providers.add("github");
+		if (integrationsData.sentry.connected) providers.add("sentry");
+		if (integrationsData.linear.connected) providers.add("linear");
+		if (slackInstallations && slackInstallations.length > 0) providers.add("slack");
+		return providers;
+	}, [integrationsData, slackInstallations]);
 
 	// Mutations
 	const updateMutation = useUpdateAutomation(id);
@@ -309,6 +321,10 @@ export default function AutomationDetailPage({
 	};
 
 	const handleRunNow = () => {
+		if (!readiness.ready) {
+			toast.warning(`Cannot run: ${readiness.issues.join(", ")}`);
+			return;
+		}
 		triggerManualRun.mutate(
 			{ id },
 			{
@@ -332,7 +348,7 @@ export default function AutomationDetailPage({
 	if (isLoading) {
 		return (
 			<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto">
-				<div className="w-full max-w-3xl mx-auto px-4 lg:px-8 py-8">
+				<div className="w-full max-w-4xl mx-auto px-6 py-8">
 					<div className="animate-pulse space-y-6">
 						<div className="h-8 w-48 bg-muted rounded" />
 						<div className="h-12 bg-muted rounded-xl" />
@@ -347,7 +363,7 @@ export default function AutomationDetailPage({
 	if (error || !automation) {
 		return (
 			<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto">
-				<div className="w-full max-w-3xl mx-auto px-4 lg:px-8 py-8">
+				<div className="w-full max-w-4xl mx-auto px-6 py-8">
 					<Text variant="body" color="destructive">
 						Failed to load automation
 					</Text>
@@ -362,9 +378,15 @@ export default function AutomationDetailPage({
 	const triggers = allTriggers.filter((t) => !isManualTrigger(t) && t.provider !== "scheduled");
 	const schedules = allTriggers.filter((t) => t.provider === "scheduled");
 
+	const readiness = computeReadiness({
+		enabledTools,
+		connectedProviders,
+		agentInstructions: instructionsValue,
+	});
+
 	return (
 		<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
-			<div className="w-full max-w-3xl mx-auto px-4 lg:px-8 py-6">
+			<div className="w-full max-w-4xl mx-auto px-6 py-6">
 				{/* Header */}
 				<div className="flex items-center gap-3 mb-6">
 					<InlineEdit
@@ -374,23 +396,42 @@ export default function AutomationDetailPage({
 						displayClassName="text-lg font-semibold tracking-tight text-foreground hover:bg-muted/50 rounded px-1 -mx-1 transition-colors"
 						inputClassName="text-lg font-semibold tracking-tight h-auto py-0.5 px-1 -mx-1 max-w-md"
 					/>
-					<span className="text-xs text-muted-foreground whitespace-nowrap ml-auto">
-						Edited {formatRelativeTime(automation.updated_at)}
-					</span>
+
+					<div className="flex items-center gap-2 ml-2">
+						<StatusDot status={automation.enabled ? "active" : "paused"} />
+						<Switch
+							checked={automation.enabled}
+							onCheckedChange={(checked) => handleUpdate({ enabled: checked })}
+							disabled={!readiness.ready && !automation.enabled}
+						/>
+						<span className="text-sm">{automation.enabled ? "Active" : "Paused"}</span>
+					</div>
+
+					<Link href={`/dashboard/automations/${id}/events`} className="ml-1">
+						<Button variant="ghost" size="sm" className="h-7 gap-1.5 text-sm">
+							<History className="h-3.5 w-3.5" />
+							Events
+						</Button>
+					</Link>
 
 					<Button
 						variant="outline"
 						size="sm"
+						className="h-7 gap-1.5 text-sm ml-1"
 						onClick={handleRunNow}
 						disabled={triggerManualRun.isPending}
 					>
 						{triggerManualRun.isPending ? (
-							<Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+							<Loader2 className="h-3.5 w-3.5 animate-spin" />
 						) : (
-							<Play className="h-3.5 w-3.5 mr-1.5" />
+							<Play className="h-3.5 w-3.5" />
 						)}
 						Run Now
 					</Button>
+
+					<span className="text-xs text-muted-foreground whitespace-nowrap ml-auto">
+						Edited {formatRelativeTime(automation.updated_at)}
+					</span>
 
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
@@ -410,22 +451,22 @@ export default function AutomationDetailPage({
 					</DropdownMenu>
 				</div>
 
-				{/* Property Rows */}
-				<div className="rounded-xl border border-border divide-y divide-border/50 mb-6">
-					{/* Status */}
-					<div className="flex items-center justify-between px-4 py-3">
-						<span className="text-sm text-muted-foreground">Status</span>
-						<div className="flex items-center gap-2">
-							<StatusDot status={automation.enabled ? "active" : "paused"} />
-							<Switch
-								checked={automation.enabled}
-								onCheckedChange={(checked) => handleUpdate({ enabled: checked })}
-							/>
-							<span className="text-sm">{automation.enabled ? "Active" : "Paused"}</span>
-						</div>
+				{/* Readiness warning */}
+				{!readiness.ready && (
+					<div className="rounded-xl border border-border bg-muted/30 px-4 py-3 mb-6">
+						<p className="text-sm font-medium text-foreground mb-1">
+							Cannot enable this automation
+						</p>
+						<ul className="text-xs text-muted-foreground space-y-0.5">
+							{readiness.issues.map((issue) => (
+								<li key={issue}>&middot; {issue}</li>
+							))}
+						</ul>
 					</div>
+				)}
 
-					{/* Model */}
+				{/* Model */}
+				<div className="rounded-xl border border-border mb-6">
 					<div className="flex items-center justify-between px-4 py-3">
 						<span className="text-sm text-muted-foreground">Model</span>
 						<ModelSelector
@@ -440,17 +481,6 @@ export default function AutomationDetailPage({
 							variant="chip"
 						/>
 					</div>
-
-					{/* History */}
-					<div className="flex items-center justify-between px-4 py-3">
-						<span className="text-sm text-muted-foreground">History</span>
-						<Link href={`/dashboard/automations/${id}/events`}>
-							<Button variant="ghost" size="sm" className="h-7 gap-1.5 text-sm">
-								<History className="h-3.5 w-3.5" />
-								View Events
-							</Button>
-						</Link>
-					</div>
 				</div>
 
 				{/* Triggers */}
@@ -460,9 +490,19 @@ export default function AutomationDetailPage({
 					</p>
 					<div className="flex flex-wrap items-center gap-2">
 						{triggers.map((trigger) => (
-							<TriggerChip key={trigger.id} trigger={trigger} automationId={automation.id} />
+							<TriggerChip
+								key={trigger.id}
+								trigger={trigger}
+								automationId={automation.id}
+								connectedProviders={connectedProviders}
+								integrations={integrationsData?.integrations}
+							/>
 						))}
-						<AddTriggerButton automationId={automation.id} />
+						<AddTriggerButton
+							automationId={automation.id}
+							connectedProviders={connectedProviders}
+							integrations={integrationsData?.integrations}
+						/>
 					</div>
 				</div>
 
@@ -473,12 +513,20 @@ export default function AutomationDetailPage({
 					</p>
 					<div className="flex flex-wrap items-center gap-2">
 						{schedules.map((schedule) => (
-							<TriggerChip key={schedule.id} trigger={schedule} automationId={automation.id} />
+							<TriggerChip
+								key={schedule.id}
+								trigger={schedule}
+								automationId={automation.id}
+								connectedProviders={connectedProviders}
+								integrations={integrationsData?.integrations}
+							/>
 						))}
 						<AddTriggerButton
 							automationId={automation.id}
 							defaultProvider="scheduled"
 							label="Add schedule"
+							connectedProviders={connectedProviders}
+							integrations={integrationsData?.integrations}
 						/>
 					</div>
 				</div>
@@ -493,6 +541,7 @@ export default function AutomationDetailPage({
 						enabledTools={enabledTools}
 						triggers={allTriggers.map((t) => ({ provider: t.provider }))}
 						actionModes={actionModes}
+						connectedProviders={connectedProviders}
 						slackInstallations={slackInstallations}
 						notificationSlackInstallationId={notificationSlackInstallationId}
 						onToolToggle={handleToolToggle}
