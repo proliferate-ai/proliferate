@@ -207,6 +207,13 @@
       "when": 1771393783395,
       "tag": "0030_nulls_not_distinct_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1771804800000,
+      "tag": "0031_rename_prebuild_to_configuration",
+      "breakpoints": true
     }
   ]
 }
