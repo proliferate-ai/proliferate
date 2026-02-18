@@ -1,5 +1,10 @@
 "use client";
 
+import {
+	ActivityIllustration,
+	InfoBadge,
+	PageEmptyState,
+} from "@/components/dashboard/page-empty-state";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { AutomationsIcon } from "@/components/ui/icons";
 import { useOrgActivity } from "@/hooks/use-org-activity";
@@ -61,9 +66,12 @@ export default function ActivityPage() {
 					<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
 				</div>
 			) : runs.length === 0 ? (
-				<div className="flex flex-col items-center justify-center py-16 text-center">
-					<p className="text-sm text-muted-foreground">No activity yet</p>
-				</div>
+				<PageEmptyState
+					illustration={<ActivityIllustration />}
+					badge={<InfoBadge />}
+					title="No activity yet"
+					description="Automation runs across your organization will appear here as they complete."
+				/>
 			) : (
 				<>
 					<div className="rounded-lg border border-border bg-card overflow-hidden">

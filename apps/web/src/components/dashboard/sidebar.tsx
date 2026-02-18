@@ -36,7 +36,6 @@ import {
 	Plug,
 	Settings,
 	Sun,
-	Terminal,
 	User,
 	Users,
 	X,
@@ -102,7 +101,6 @@ export function Sidebar() {
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
 	const isConfigurationsPage = pathname?.startsWith("/dashboard/configurations");
-	const isSessionsPage = pathname?.startsWith("/dashboard/sessions");
 
 	const inboxItems = useAttentionInbox({ wsApprovals: [] });
 	const inboxCount = countUnassignedItems(inboxItems);
@@ -242,19 +240,6 @@ export function Sidebar() {
 					title="Integrations"
 				>
 					<Plug className="h-4 w-4" />
-				</Button>
-				<div className="my-1" />
-				<Button
-					variant={isSessionsPage ? "secondary" : "ghost"}
-					size="icon"
-					className="h-8 w-8 text-muted-foreground hover:text-foreground"
-					onClick={(e) => {
-						e.stopPropagation();
-						router.push("/dashboard/sessions");
-					}}
-					title="Sessions"
-				>
-					<Terminal className="h-4 w-4" />
 				</Button>
 			</div>
 
@@ -554,7 +539,6 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 	const isAutomationsPage = pathname?.startsWith("/dashboard/automations");
 	const isIntegrationsPage = pathname?.startsWith("/dashboard/integrations");
 	const isConfigurationsPage = pathname?.startsWith("/dashboard/configurations");
-	const isSessionsPage = pathname?.startsWith("/dashboard/sessions");
 	const isSettingsPage = pathname?.startsWith("/settings");
 
 	// Inbox badge: count only unassigned items
@@ -625,14 +609,8 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 				/>
 			</div>
 
-			{/* Sessions + Settings */}
+			{/* Settings */}
 			<div className="flex flex-col gap-1">
-				<NavItem
-					icon={Terminal}
-					label="Sessions"
-					active={!!isSessionsPage}
-					onClick={() => handleNavigate("/dashboard/sessions")}
-				/>
 				<NavItem
 					icon={Settings}
 					label="Settings"

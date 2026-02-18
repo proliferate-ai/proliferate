@@ -1,5 +1,10 @@
 "use client";
 
+import {
+	InfoBadge,
+	MyWorkIllustration,
+	PageEmptyState,
+} from "@/components/dashboard/page-empty-state";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { SessionListRow } from "@/components/sessions/session-card";
 import { Button } from "@/components/ui/button";
@@ -29,9 +34,12 @@ export default function MyWorkPage() {
 	return (
 		<PageShell title="My Work">
 			{isEmpty ? (
-				<div className="flex flex-col items-center justify-center py-16 text-center">
-					<p className="text-sm text-muted-foreground">Nothing needs your attention right now.</p>
-				</div>
+				<PageEmptyState
+					illustration={<MyWorkIllustration />}
+					badge={<InfoBadge />}
+					title="All clear"
+					description="Claimed runs, active sessions, and pending approvals will appear here."
+				/>
 			) : (
 				<div className="space-y-6">
 					{/* Claimed Runs */}
