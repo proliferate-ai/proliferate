@@ -10,36 +10,35 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-// Singleton instances
-let sql: ReturnType<typeof postgres> | null = null;
-let db: ReturnType<typeof drizzle<typeof schema>> | null = null;
+// Prevent Next.js HMR from creating orphaned connection pools on every file save.
+// Module-level `let` variables are reset when HMR re-evaluates the module,
+// leaking the old postgres.js pool. globalThis survives HMR.
+const globalForDb = globalThis as unknown as {
+	pgSql: ReturnType<typeof postgres> | undefined;
+	drizzleDb: ReturnType<typeof drizzle<typeof schema>> | undefined;
+};
 
-/**
- * Get the database connection string from environment.
- * Requires DATABASE_URL to be set.
- */
-function getConnectionString(): string {
-	return env.DATABASE_URL;
-}
+const isDev = process.env.NODE_ENV === "development";
 
 /**
  * Get the Drizzle database instance.
  * Creates connection on first call, reuses on subsequent calls.
  */
 export function getDb() {
-	if (db) return db;
-
-	const connectionString = getConnectionString();
+	if (globalForDb.drizzleDb) return globalForDb.drizzleDb;
 
 	// Create postgres.js connection
-	sql = postgres(connectionString, {
-		max: 10, // Connection pool size
-		idle_timeout: 20, // Close idle connections after 20 seconds
-		connect_timeout: 10, // Connection timeout
+	const sql = postgres(env.DATABASE_URL, {
+		max: 10,
+		idle_timeout: 20,
+		connect_timeout: isDev ? 30 : 10, // Survive Next.js cold compiles locally
 	});
 
 	// Create Drizzle instance with full schema for relations
-	db = drizzle(sql, { schema });
+	const db = drizzle(sql, { schema });
+
+	globalForDb.pgSql = sql;
+	globalForDb.drizzleDb = db;
 
 	return db;
 }
@@ -48,11 +47,11 @@ export function getDb() {
  * Reset the database connection (for testing).
  */
 export async function resetDb(): Promise<void> {
-	if (sql) {
-		await sql.end();
-		sql = null;
+	if (globalForDb.pgSql) {
+		await globalForDb.pgSql.end();
+		globalForDb.pgSql = undefined;
 	}
-	db = null;
+	globalForDb.drizzleDb = undefined;
 }
 
 /**
