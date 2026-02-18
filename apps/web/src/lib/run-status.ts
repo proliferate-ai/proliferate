@@ -1,4 +1,14 @@
-import { AlertCircle, CheckCircle2, Clock, Hand, Loader2, Timer, XCircle } from "lucide-react";
+import {
+	AlertCircle,
+	Ban,
+	CheckCircle2,
+	Clock,
+	Hand,
+	Loader2,
+	SkipForward,
+	Timer,
+	XCircle,
+} from "lucide-react";
 
 export function getRunStatusDisplay(status: string) {
 	switch (status) {
@@ -10,6 +20,10 @@ export function getRunStatusDisplay(status: string) {
 			return { icon: Hand, label: "Needs attention", className: "text-amber-500" };
 		case "timed_out":
 			return { icon: Timer, label: "Timed out", className: "text-orange-500" };
+		case "canceled":
+			return { icon: Ban, label: "Canceled", className: "text-muted-foreground" };
+		case "skipped":
+			return { icon: SkipForward, label: "Skipped", className: "text-muted-foreground" };
 		case "running":
 			return { icon: Loader2, label: "Running", className: "text-emerald-500" };
 		case "queued":

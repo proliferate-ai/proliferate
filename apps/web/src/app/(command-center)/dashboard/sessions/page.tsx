@@ -55,7 +55,8 @@ export default function SessionsPage() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [originFilter, setOriginFilter] = useState<OriginFilter>("manual");
 
-	// Build a map of sessionId → pendingRun for urgency indicators
+	// Build a map of sessionId → most recent pendingRun for urgency indicators.
+	// A session typically has at most one active run; if multiple exist, the last one wins.
 	const pendingRunsBySession = useMemo(() => {
 		const map = new Map<string, NonNullable<typeof pendingRuns>[number]>();
 		if (!pendingRuns) return map;
