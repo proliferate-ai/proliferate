@@ -3,18 +3,10 @@
 import { PageShell } from "@/components/dashboard/page-shell";
 import { AutomationsIcon } from "@/components/ui/icons";
 import { useOrgActivity } from "@/hooks/use-org-activity";
+import { getRunStatusDisplay } from "@/lib/run-status";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { AutomationRunStatus } from "@proliferate/shared";
-import {
-	AlertCircle,
-	CheckCircle2,
-	Clock,
-	ExternalLink,
-	Hand,
-	Loader2,
-	Timer,
-	XCircle,
-} from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -25,31 +17,6 @@ const STATUS_FILTERS: { value: AutomationRunStatus | "all"; label: string }[] = 
 	{ value: "failed", label: "Failed" },
 	{ value: "needs_human", label: "Needs Attention" },
 ];
-
-function getRunStatusDisplay(status: string) {
-	switch (status) {
-		case "succeeded":
-			return { icon: CheckCircle2, label: "Succeeded", className: "text-emerald-500" };
-		case "failed":
-			return { icon: XCircle, label: "Failed", className: "text-destructive" };
-		case "needs_human":
-			return { icon: Hand, label: "Needs attention", className: "text-amber-500" };
-		case "timed_out":
-			return { icon: Timer, label: "Timed out", className: "text-orange-500" };
-		case "running":
-			return { icon: Loader2, label: "Running", className: "text-emerald-500" };
-		case "queued":
-		case "enriching":
-		case "ready":
-			return {
-				icon: Clock,
-				label: status.charAt(0).toUpperCase() + status.slice(1),
-				className: "text-muted-foreground",
-			};
-		default:
-			return { icon: AlertCircle, label: status, className: "text-muted-foreground" };
-	}
-}
 
 export default function ActivityPage() {
 	const [statusFilter, setStatusFilter] = useState<AutomationRunStatus | "all">("all");

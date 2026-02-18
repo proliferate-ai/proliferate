@@ -480,9 +480,18 @@ export async function findRunForDisplay(runId: string, orgId: string): Promise<R
 
 /**
  * List status transition events for a run, chronologically.
+ * Verifies the run belongs to the given org for defense-in-depth.
  */
-export async function listRunEvents(runId: string): Promise<AutomationRunEventRow[]> {
+export async function listRunEvents(
+	runId: string,
+	orgId: string,
+): Promise<AutomationRunEventRow[]> {
 	const db = getDb();
+	const run = await db.query.automationRuns.findFirst({
+		where: and(eq(automationRuns.id, runId), eq(automationRuns.organizationId, orgId)),
+		columns: { id: true },
+	});
+	if (!run) return [];
 	return db.query.automationRunEvents.findMany({
 		where: eq(automationRunEvents.runId, runId),
 		orderBy: [automationRunEvents.createdAt],

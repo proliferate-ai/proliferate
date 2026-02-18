@@ -799,7 +799,7 @@ export const automationsRouter = {
 			if (!run) {
 				throw new ORPCError("NOT_FOUND", { message: "Run not found" });
 			}
-			const events = await runs.listRunEvents(input.runId);
+			const events = await runs.listRunEvents(input.runId, context.orgId);
 			return {
 				events: events.map((e) => ({
 					id: e.id,

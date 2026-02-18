@@ -1,7 +1,6 @@
 "use client";
 
-import { BlocksIcon, BlocksLoadingIcon } from "@/components/ui/icons";
-import { AutomationsIcon, SlackIcon } from "@/components/ui/icons";
+import { AutomationsIcon, BlocksIcon, BlocksLoadingIcon, SlackIcon } from "@/components/ui/icons";
 import { usePrefetchSession } from "@/hooks/use-sessions";
 import type { PendingRunSummary } from "@proliferate/shared";
 import type { Session } from "@proliferate/shared/contracts";

@@ -48,7 +48,6 @@ export default function SessionsPage() {
 	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
 	const { data: sessions, isLoading } = useSessions({
 		excludeSetup: true,
-		excludeCli: true,
 	});
 	const { data: pendingRuns } = useOrgPendingRuns();
 

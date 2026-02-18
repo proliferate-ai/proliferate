@@ -5,22 +5,10 @@ import { SessionListRow } from "@/components/sessions/session-card";
 import { Button } from "@/components/ui/button";
 import { AutomationsIcon } from "@/components/ui/icons";
 import { useMyWork } from "@/hooks/use-my-work";
+import { getRunStatusDisplay } from "@/lib/run-status";
 import { formatRelativeTime } from "@/lib/utils";
-import { AlertCircle, ExternalLink, Hand, Loader2, Shield, Timer, XCircle } from "lucide-react";
+import { ExternalLink, Loader2, Shield } from "lucide-react";
 import Link from "next/link";
-
-function getRunStatusInfo(status: string) {
-	switch (status) {
-		case "failed":
-			return { icon: XCircle, label: "Failed", className: "text-red-500" };
-		case "needs_human":
-			return { icon: Hand, label: "Needs attention", className: "text-amber-500" };
-		case "timed_out":
-			return { icon: Timer, label: "Timed out", className: "text-orange-500" };
-		default:
-			return { icon: AlertCircle, label: status, className: "text-muted-foreground" };
-	}
-}
 
 export default function MyWorkPage() {
 	const { claimedRuns, activeSessions, pendingApprovals, isLoading } = useMyWork();
@@ -54,7 +42,7 @@ export default function MyWorkPage() {
 							</h2>
 							<div className="rounded-lg border border-border bg-card overflow-hidden">
 								{claimedRuns.map((run) => {
-									const statusInfo = getRunStatusInfo(run.status);
+									const statusInfo = getRunStatusDisplay(run.status);
 									const StatusIcon = statusInfo.icon;
 									const timeAgo = run.completed_at
 										? formatRelativeTime(run.completed_at)

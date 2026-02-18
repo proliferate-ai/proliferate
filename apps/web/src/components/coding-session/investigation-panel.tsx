@@ -4,49 +4,15 @@ import { Button } from "@/components/ui/button";
 import { AutomationsIcon } from "@/components/ui/icons";
 import { Textarea } from "@/components/ui/textarea";
 import { useResolveRun, useRun, useRunEvents } from "@/hooks/use-automations";
+import { getRunStatusDisplay } from "@/lib/run-status";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
-import {
-	AlertCircle,
-	Check,
-	CheckCircle2,
-	Clock,
-	ExternalLink,
-	Hand,
-	Loader2,
-	Timer,
-	XCircle,
-} from "lucide-react";
+import { Check, CheckCircle2, ExternalLink, Loader2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 interface InvestigationPanelProps {
 	runId: string;
-}
-
-function getRunStatusDisplay(status: string) {
-	switch (status) {
-		case "succeeded":
-			return { icon: CheckCircle2, label: "Succeeded", className: "text-emerald-500" };
-		case "failed":
-			return { icon: XCircle, label: "Failed", className: "text-destructive" };
-		case "needs_human":
-			return { icon: Hand, label: "Needs attention", className: "text-amber-500" };
-		case "timed_out":
-			return { icon: Timer, label: "Timed out", className: "text-orange-500" };
-		case "running":
-			return { icon: Loader2, label: "Running", className: "text-emerald-500" };
-		case "queued":
-		case "enriching":
-		case "ready":
-			return {
-				icon: Clock,
-				label: status.charAt(0).toUpperCase() + status.slice(1),
-				className: "text-muted-foreground",
-			};
-		default:
-			return { icon: AlertCircle, label: status, className: "text-muted-foreground" };
-	}
 }
 
 export function InvestigationPanel({ runId }: InvestigationPanelProps) {
@@ -188,14 +154,18 @@ function ResolutionSection({
 
 	const handleResolve = async () => {
 		if (!activeOutcome) return;
-		await resolveRun.mutateAsync({
-			id: automationId,
-			runId,
-			outcome: activeOutcome,
-			comment: comment || undefined,
-		});
-		setActiveOutcome(null);
-		setComment("");
+		try {
+			await resolveRun.mutateAsync({
+				id: automationId,
+				runId,
+				outcome: activeOutcome,
+				comment: comment || undefined,
+			});
+			setActiveOutcome(null);
+			setComment("");
+		} catch {
+			// Error state surfaced via resolveRun.isError
+		}
 	};
 
 	return (
