@@ -92,7 +92,7 @@
 | Outbox atomic claim | Implemented | `packages/services/src/outbox/service.ts` | Claim + stuck-row recovery |
 | Side effects tracking | Implemented | `packages/db/src/schema/automations.ts` | `automation_side_effects` table |
 | Artifact storage (S3) | Implemented | `apps/worker/src/automation/artifacts.ts` | Completion + enrichment artifacts |
-| Target resolution | Implemented | `apps/worker/src/automation/resolve-target.ts` | Resolves which repo/prebuild to use |
+| Target resolution | Implemented | `apps/worker/src/automation/resolve-target.ts` | Resolves which repo/configuration to use |
 | Slack notifications | Implemented | `apps/worker/src/automation/notifications.ts` | Run status posted to Slack |
 | Notification dispatch | Implemented | `apps/worker/src/automation/notifications.ts:dispatchRunNotification` | Delivery orchestration |
 | Slack async client | Implemented | `apps/worker/src/slack/client.ts` | Full bidirectional session via Slack |
@@ -176,33 +176,33 @@
 | CLI API routes (sessions) | Implemented | `apps/web/src/server/routers/cli.ts:cliSessionsRouter` | Session creation for CLI |
 | CLI API routes (SSH keys) | Implemented | `apps/web/src/server/routers/cli.ts:cliSshKeysRouter` | SSH key management |
 | CLI API routes (GitHub) | Implemented | `apps/web/src/server/routers/cli.ts:cliGitHubRouter` | GitHub connection for CLI |
-| CLI API routes (prebuilds) | Implemented | `apps/web/src/server/routers/cli.ts:cliPrebuildsRouter` | Prebuild listing for CLI |
+| CLI API routes (configurations) | Implemented | `apps/web/src/server/routers/cli.ts:cliConfigurationsRouter` | Configuration listing for CLI |
 | GitHub repo selection | Implemented | `packages/db/src/schema/cli.ts:cliGithubSelections` | Selection history |
 | SSH key storage | Implemented | `packages/db/src/schema/cli.ts:userSshKeys` | Per-user SSH keys |
 
 ---
 
-## 9. Repos, Configurations & Prebuilds (`repos-prebuilds.md`)
+## 9. Repos & Configurations (`repos-configurations.md`)
 
 | Feature | Status | Evidence | Notes |
 |---------|--------|----------|-------|
 | Repo CRUD | Implemented | `apps/web/src/server/routers/repos.ts` | List/get/create/delete |
 | Repo search | Implemented | `apps/web/src/server/routers/repos.ts:search` | Search available repos |
 | Repo connections | Implemented | `packages/db/src/schema/repos.ts:repoConnections` | Integration bindings |
-| Prebuild CRUD | Implemented | `apps/web/src/server/routers/prebuilds.ts` | List/create/update/delete |
-| Prebuild-repo associations | Implemented | `packages/db/src/schema/prebuilds.ts:prebuildRepos` | Many-to-many |
-| Effective service commands | Implemented | `apps/web/src/server/routers/prebuilds.ts:getEffectiveServiceCommands` | Resolved config |
+| Configuration CRUD | Implemented | `apps/web/src/server/routers/configurations.ts` | List/create/update/delete |
+| Configuration-repo associations | Implemented | `packages/db/src/schema/configurations.ts:configurationRepos` | Many-to-many |
+| Effective service commands | Implemented | `apps/web/src/server/routers/configurations.ts:getEffectiveServiceCommands` | Resolved config |
 | Base snapshot builds | Implemented | `apps/worker/src/base-snapshots/index.ts` | Worker queue, deduplication |
 | Repo snapshot builds | Implemented | `apps/worker/src/repo-snapshots/index.ts` | GitHub token hierarchy, commit tracking |
-| Prebuild resolver | Implemented | `apps/gateway/src/lib/prebuild-resolver.ts` | Resolves config at session start |
-| Service commands persistence | Implemented | `packages/db/src/schema/prebuilds.ts:serviceCommands` | JSONB on prebuilds |
-| Env file persistence | Implemented | `packages/db/src/schema/prebuilds.ts:envFiles` | JSONB on prebuilds |
-| Prebuild connector configuration (deprecated) | Deprecated | `packages/db/src/schema/prebuilds.ts:connectors` | Legacy JSONB on prebuilds table; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
+| Configuration resolver | Implemented | `apps/gateway/src/lib/configuration-resolver.ts` | Resolves config at session start |
+| Service commands persistence | Implemented | `packages/db/src/schema/configurations.ts:serviceCommands` | JSONB on configurations |
+| Env file persistence | Implemented | `packages/db/src/schema/configurations.ts:envFiles` | JSONB on configurations |
+| Configuration connector configuration (deprecated) | Deprecated | `packages/db/src/schema/configurations.ts:connectors` | Legacy JSONB on configurations table; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
 | Org-scoped connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | `org_connectors` table with full CRUD via Integrations routes |
 | Org connector management UI | Implemented | `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools page with presets, secret picker, validation |
 | Org connector validation endpoint | Implemented | `apps/web/src/server/routers/integrations.ts:validateConnector` | `tools/list` preflight with diagnostics |
-| Base snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:sandboxBaseSnapshots` | Building/ready/failed |
-| Repo snapshot status tracking | Implemented | `packages/db/src/schema/prebuilds.ts:repoSnapshots` | Building/ready/failed + commit SHA |
+| Base snapshot status tracking | Implemented | `packages/db/src/schema/configurations.ts:sandboxBaseSnapshots` | Building/ready/failed |
+| Repo snapshot status tracking | Implemented | `packages/db/src/schema/configurations.ts:repoSnapshots` | Building/ready/failed + commit SHA |
 
 ---
 

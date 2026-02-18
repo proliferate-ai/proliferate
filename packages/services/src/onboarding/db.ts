@@ -17,7 +17,7 @@ import {
 	slackInstallations,
 	sql,
 } from "../db/client";
-import type { IntegrationRow, OnboardingMeta, RepoWithPrebuildRow } from "../types/onboarding";
+import type { IntegrationRow, OnboardingMeta, RepoWithConfigurationRow } from "../types/onboarding";
 
 // ============================================
 // Queries
@@ -59,9 +59,11 @@ export async function hasGitHubConnection(
 }
 
 /**
- * Get repos with prebuild status for an organization.
+ * Get repos with configuration status for an organization.
  */
-export async function getReposWithPrebuildStatus(orgId: string): Promise<RepoWithPrebuildRow[]> {
+export async function getReposWithConfigurationStatus(
+	orgId: string,
+): Promise<RepoWithConfigurationRow[]> {
 	const db = getDb();
 	const results = await db.query.repos.findMany({
 		where: eq(repos.organizationId, orgId),

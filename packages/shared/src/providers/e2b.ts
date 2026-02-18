@@ -36,12 +36,12 @@ import {
 } from "../sandbox";
 import type {
 	AutoStartOutputEntry,
+	ConfigurationServiceCommand,
 	CreateSandboxOpts,
 	CreateSandboxResult,
 	EnsureSandboxResult,
 	FileContent,
 	PauseResult,
-	PrebuildServiceCommand,
 	SandboxProvider,
 	SnapshotResult,
 } from "../sandbox-provider";
@@ -644,7 +644,7 @@ export class E2BProvider implements SandboxProvider {
 		];
 
 		if (isSetupSession) {
-			// Setup-only tools persist prebuild configuration.
+			// Setup-only tools persist configuration.
 			writePromises.push(
 				writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
 				writeFile(`${localToolDir}/save_service_commands.txt`, SAVE_SERVICE_COMMANDS_DESCRIPTION),
@@ -901,7 +901,7 @@ export class E2BProvider implements SandboxProvider {
 
 	async testServiceCommands(
 		sandboxId: string,
-		commands: PrebuildServiceCommand[],
+		commands: ConfigurationServiceCommand[],
 		opts: { timeoutMs: number; runId: string },
 	): Promise<AutoStartOutputEntry[]> {
 		const log = providerLogger.child({ sandboxId: sandboxId.slice(0, 16), runId: opts.runId });

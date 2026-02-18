@@ -108,45 +108,40 @@ Yes! If you prefer, you can start coding sessions without a snapshot. Your envir
 
 	"setup-sessions": `# Setup Sessions
 
-Setup sessions configure your cloud environment so coding sessions start instantly.
+A setup session is a one-time initialization phase where an AI agent configures your cloud environment. Once saved as a snapshot, every future coding session boots instantly from that exact state.
+
+## What is happening?
+
+You're watching the agent work in real-time. It autonomously:
+
+1. **Installs dependencies** — npm, pip, cargo, whatever your project needs
+2. **Configures services** — databases, caches, queues, all running locally
+3. **Verifies everything works** — hits endpoints, runs tests, takes screenshots
+
+## Your role
+
+- **Watch the agent work** — it handles most setup autonomously
+- **Provide secrets when prompted** — if the project needs third-party API keys (Stripe, etc.), the agent will show a secure form in the chat
+- **Click "Done — Save Snapshot"** when the agent confirms everything is working
+
+## What does "Done — Save Snapshot" do?
+
+It freezes the entire environment — code, dependencies, databases, running services — into a reusable image. All future coding sessions for this repo will boot from this saved state in seconds, skipping the entire setup process.
 
 ## Configured vs. not configured
 
-- **Configured** — a setup session has run, dependencies are installed, and a snapshot is saved. New coding sessions boot in seconds.
-- **Not configured** — no setup has run yet. You can still start a coding session, but it'll begin from a blank slate and the agent will need to install everything first.
+- **Configured** — a setup session has run, a snapshot is saved. Coding sessions boot instantly.
+- **Not configured** — no setup yet. You can still start a coding session, but the agent will need to install everything from scratch.
 
-You can always start a coding session without any repo at all ("General assistant" mode) — useful for quick questions or scratch work.
+## Local CLI
 
-## What happens in a setup session?
-
-An AI agent helps you:
-
-1. **Install dependencies** — npm, pip, cargo, whatever your project needs
-2. **Configure services** — databases, caches, queues
-3. **Set up tools** — linters, formatters, test runners
-4. **Verify everything works** — run your tests, start your dev server
-
-## How it works
-
-Tell the agent what you need in plain English:
-
-> "Install all dependencies and make sure the tests pass"
-
-> "Set up PostgreSQL and run the database migrations"
-
-> "Configure the project for local development"
-
-The agent reads your project files, figures out what to do, and sets everything up. You can watch it work and ask questions along the way.
-
-## Saving your work
-
-When your environment is ready, save a snapshot. This captures everything so you don't have to repeat the setup next time.
+You can also connect your local IDE to this cloud environment. Run \`npx @proliferate/cli\` in your terminal to sync files and use VS Code, Cursor, or any editor you prefer.
 
 ## Tips
 
 - **Be specific** — "Install Node 20" is better than "install node"
 - **Check the logs** — if something fails, the error messages help the agent fix it
-- **Iterate** — you can always adjust and save a new snapshot`,
+- **Iterate** — you can always re-run setup and save a new snapshot`,
 
 	"coding-sessions": `# Coding Sessions
 

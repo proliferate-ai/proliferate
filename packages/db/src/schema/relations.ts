@@ -36,7 +36,7 @@ import {
 	triggerPollGroups,
 	triggers,
 	user,
-	userConnections,
+	userActionPreferences,
 	userSshKeys,
 	webhookInbox,
 } from "./schema";
@@ -230,7 +230,7 @@ export const secretsRelations = relations(secrets, ({ one }) => ({
 		references: [user.id],
 	}),
 	configuration: one(configurations, {
-		fields: [secrets.prebuildId],
+		fields: [secrets.configurationId],
 		references: [configurations.id],
 	}),
 }));
@@ -268,7 +268,7 @@ export const automationsRelations = relations(automations, ({ one, many }) => ({
 		references: [user.id],
 	}),
 	configuration: one(configurations, {
-		fields: [automations.defaultPrebuildId],
+		fields: [automations.defaultConfigurationId],
 		references: [configurations.id],
 	}),
 	schedules: many(schedules),
@@ -404,7 +404,7 @@ export const sessionsRelations = relations(sessions, ({ one, many }) => ({
 		relationName: "sessions_triggerEventId_triggerEvents_id",
 	}),
 	configuration: one(configurations, {
-		fields: [sessions.prebuildId],
+		fields: [sessions.configurationId],
 		references: [configurations.id],
 	}),
 	toolInvocations: many(sessionToolInvocations),
@@ -541,13 +541,13 @@ export const sessionToolInvocationsRelations = relations(sessionToolInvocations,
 	}),
 }));
 
-export const userConnectionsRelations = relations(userConnections, ({ one }) => ({
+export const userActionPreferencesRelations = relations(userActionPreferences, ({ one }) => ({
 	user: one(user, {
-		fields: [userConnections.userId],
+		fields: [userActionPreferences.userId],
 		references: [user.id],
 	}),
 	organization: one(organization, {
-		fields: [userConnections.organizationId],
+		fields: [userActionPreferences.organizationId],
 		references: [organization.id],
 	}),
 }));

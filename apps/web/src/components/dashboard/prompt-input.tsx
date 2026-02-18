@@ -134,13 +134,13 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 				<div className="flex items-center justify-between px-3 py-2">
 					{/* Left side - Context selectors */}
 					<div className="flex items-center gap-1">
-						<EnvironmentPicker disabled={isLoading} />
 						<ModelSelector
 							modelId={selectedModel}
 							onChange={setSelectedModel}
 							disabled={isLoading}
 							variant="ghost"
 						/>
+						<EnvironmentPicker disabled={isLoading} />
 					</div>
 
 					{/* Right side - Actions & Submit */}

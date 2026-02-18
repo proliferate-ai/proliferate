@@ -11,7 +11,7 @@
 
 export interface CreateSessionInput {
 	id: string;
-	prebuildId: string | null;
+	configurationId: string | null;
 	organizationId: string;
 	sessionType: string;
 	status: string;
@@ -51,6 +51,9 @@ export interface UpdateSessionInput {
 export interface ListSessionsFilters {
 	repoId?: string;
 	status?: string;
+	limit?: number;
+	excludeSetup?: boolean;
+	excludeCli?: boolean;
 }
 
 // ============================================
@@ -60,6 +63,9 @@ export interface ListSessionsFilters {
 export interface ListSessionsOptions {
 	repoId?: string;
 	status?: string;
+	limit?: number;
+	excludeSetup?: boolean;
+	excludeCli?: boolean;
 }
 
 export interface SessionStatus {
@@ -67,10 +73,10 @@ export interface SessionStatus {
 	isComplete: boolean;
 }
 
-/** Input for creating a setup session (for managed prebuilds). */
+/** Input for creating a setup session (for managed configurations). */
 export interface CreateSetupSessionInput {
 	id: string;
-	prebuildId: string;
+	configurationId: string;
 	organizationId: string;
 	initialPrompt: string;
 }

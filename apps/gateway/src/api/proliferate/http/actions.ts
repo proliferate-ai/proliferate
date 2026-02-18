@@ -24,7 +24,15 @@ import { ProviderActionSource } from "@proliferate/providers/action-source";
 import { computeDefinitionHash, zodToJsonSchema } from "@proliferate/providers/helpers/schema";
 import { truncateJson } from "@proliferate/providers/helpers/truncation";
 import { getProviderActions } from "@proliferate/providers/providers/registry";
-import { actions, connectors, integrations, orgs, secrets, sessions } from "@proliferate/services";
+import {
+	actions,
+	connectors,
+	integrations,
+	orgs,
+	secrets,
+	sessions,
+	userActionPreferences,
+} from "@proliferate/services";
 import type { ConnectorConfig } from "@proliferate/shared";
 import { Router, type Router as RouterType } from "express";
 import type { HubManager } from "../../../hub";
@@ -208,7 +216,6 @@ async function resolveActionSource(
 	sessionId: string,
 	integration: string,
 	action: string,
-	auth?: { userId?: string },
 ): Promise<ResolvedAction> {
 	if (integration.startsWith("connector:")) {
 		const connectorId = integration.slice("connector:".length);
@@ -265,16 +272,13 @@ async function resolveActionSource(
 	const session = await sessions.findByIdInternal(sessionId);
 	if (!session) throw new ApiError(404, "Session not found");
 
-	const token = await integrations.getToken(
-		{
-			id: conn.integration.id,
-			provider: conn.integration.provider,
-			integrationId: conn.integration.integrationId,
-			connectionId: conn.integration.connectionId,
-			githubInstallationId: conn.integration.githubInstallationId,
-		},
-		{ userId: auth?.userId },
-	);
+	const token = await integrations.getToken({
+		id: conn.integration.id,
+		provider: conn.integration.provider,
+		integrationId: conn.integration.integrationId,
+		connectionId: conn.integration.connectionId,
+		githubInstallationId: conn.integration.githubInstallationId,
+	});
 
 	return {
 		source,
@@ -394,7 +398,24 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 					actions: ct.actions.map(actionToResponse),
 				}));
 
-			res.json({ integrations: [...available, ...connectorIntegrations] });
+			let allIntegrations = [...available, ...connectorIntegrations];
+
+			// Apply user action preference pre-filter
+			const sessionRow =
+				req.auth?.source === "sandbox" ? await sessions.findByIdInternal(sessionId) : null;
+			const userId = req.auth?.source !== "sandbox" ? req.auth?.userId : sessionRow?.createdBy;
+
+			if (userId) {
+				const orgId = req.auth?.orgId ?? sessionRow?.organizationId;
+				if (orgId) {
+					const disabled = await userActionPreferences.getDisabledSourceIds(userId, orgId);
+					if (disabled.size > 0) {
+						allIntegrations = allIntegrations.filter((i) => i && !disabled.has(i.integration));
+					}
+				}
+			}
+
+			res.json({ integrations: allIntegrations });
 		} catch (err) {
 			next(err);
 		}
@@ -490,6 +511,21 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(400, "Missing integration or action");
 			}
 
+			// Resolve session (used for preference check + invocation context)
+			const session = await sessions.findByIdInternal(sessionId);
+			if (!session) throw new ApiError(404, "Session not found");
+
+			// Enforce user action preferences (belt-and-suspenders with GET /available filter)
+			if (session.createdBy) {
+				const disabled = await userActionPreferences.getDisabledSourceIds(
+					session.createdBy,
+					session.organizationId,
+				);
+				if (disabled.has(integration)) {
+					throw new ApiError(403, "This integration is disabled by user preferences");
+				}
+			}
+
 			// Resolve ActionSource, definition, context, and drift
 			const resolved = await resolveActionSource(sessionId, integration, action);
 
@@ -499,10 +535,6 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(400, `Invalid params: ${parseResult.error.message}`);
 			}
 			const validatedParams = parseResult.data as Record<string, unknown>;
-
-			// Resolve org from session
-			const session = await sessions.findByIdInternal(sessionId);
-			if (!session) throw new ApiError(404, "Session not found");
 
 			// Create invocation via standard risk pipeline
 			let result: Awaited<ReturnType<typeof actions.invokeAction>>;
@@ -662,7 +694,6 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 					invocation.sessionId,
 					invocation.integration,
 					invocation.action,
-					{ userId: auth.userId },
 				);
 
 				const actionResult = await resolved.source.execute(

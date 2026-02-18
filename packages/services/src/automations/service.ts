@@ -13,6 +13,7 @@ import type {
 	AutomationTrigger,
 	AutomationWithTriggers,
 } from "@proliferate/shared/contracts";
+import { createRunFromTriggerEvent } from "../runs/service";
 import * as automationsDb from "./db";
 import {
 	toAutomation,
@@ -32,7 +33,7 @@ export interface CreateAutomationInput {
 	name?: string;
 	description?: string;
 	agentInstructions?: string;
-	defaultPrebuildId?: string;
+	defaultConfigurationId?: string;
 	allowAgenticRepoSelection?: boolean;
 }
 
@@ -41,7 +42,7 @@ export interface UpdateAutomationInput {
 	description?: string | null;
 	enabled?: boolean;
 	agentInstructions?: string | null;
-	defaultPrebuildId?: string | null;
+	defaultConfigurationId?: string | null;
 	allowAgenticRepoSelection?: boolean;
 	agentType?: string;
 	modelId?: string;
@@ -84,11 +85,14 @@ export async function createAutomation(
 	userId: string,
 	input: CreateAutomationInput,
 ): Promise<AutomationListItem> {
-	// Validate prebuild if provided
-	if (input.defaultPrebuildId) {
-		const prebuild = await automationsDb.validatePrebuild(input.defaultPrebuildId, orgId);
-		if (!prebuild) {
-			throw new Error("Prebuild not found");
+	// Validate configuration if provided
+	if (input.defaultConfigurationId) {
+		const configuration = await automationsDb.validateConfiguration(
+			input.defaultConfigurationId,
+			orgId,
+		);
+		if (!configuration) {
+			throw new Error("Configuration not found");
 		}
 	}
 
@@ -97,7 +101,7 @@ export async function createAutomation(
 		name: input.name || "Untitled Automation",
 		description: input.description,
 		agentInstructions: input.agentInstructions,
-		defaultPrebuildId: input.defaultPrebuildId,
+		defaultConfigurationId: input.defaultConfigurationId,
 		allowAgenticRepoSelection: input.allowAgenticRepoSelection,
 		createdBy: userId,
 	});
@@ -113,11 +117,14 @@ export async function updateAutomation(
 	orgId: string,
 	input: UpdateAutomationInput,
 ): Promise<Automation> {
-	// Validate prebuild if provided
-	if (input.defaultPrebuildId) {
-		const prebuild = await automationsDb.validatePrebuild(input.defaultPrebuildId, orgId);
-		if (!prebuild) {
-			throw new Error("Prebuild not found");
+	// Validate configuration if provided
+	if (input.defaultConfigurationId) {
+		const configuration = await automationsDb.validateConfiguration(
+			input.defaultConfigurationId,
+			orgId,
+		);
+		if (!configuration) {
+			throw new Error("Configuration not found");
 		}
 	}
 
@@ -126,7 +133,7 @@ export async function updateAutomation(
 		description: input.description,
 		enabled: input.enabled,
 		agentInstructions: input.agentInstructions,
-		defaultPrebuildId: input.defaultPrebuildId,
+		defaultConfigurationId: input.defaultConfigurationId,
 		allowAgenticRepoSelection: input.allowAgenticRepoSelection,
 		agentType: input.agentType,
 		modelId: input.modelId,
@@ -388,7 +395,7 @@ export interface WebhookTriggerResult {
 		id: string;
 		name: string;
 		enabled: boolean;
-		defaultPrebuildId: string | null;
+		defaultConfigurationId: string | null;
 		agentInstructions: string | null;
 		modelId: string | null;
 	} | null;
@@ -500,7 +507,7 @@ export async function findWebhookTrigger(
 					id: row.automation.id,
 					name: row.automation.name,
 					enabled: row.automation.enabled ?? false,
-					defaultPrebuildId: row.automation.defaultPrebuildId,
+					defaultConfigurationId: row.automation.defaultConfigurationId,
 					agentInstructions: row.automation.agentInstructions,
 					modelId: row.automation.modelId,
 				}
@@ -530,7 +537,7 @@ export async function findTriggerForAutomationByProvider(
 					id: row.automation.id,
 					name: row.automation.name,
 					enabled: row.automation.enabled ?? false,
-					defaultPrebuildId: row.automation.defaultPrebuildId,
+					defaultConfigurationId: row.automation.defaultConfigurationId,
 					agentInstructions: row.automation.agentInstructions,
 					modelId: row.automation.modelId,
 				}
@@ -596,4 +603,133 @@ export async function createTriggerEvent(
 		triggerId: row.triggerId,
 		organizationId: row.organizationId,
 	};
+}
+
+// ============================================
+// Manual run trigger
+// ============================================
+
+/**
+ * Trigger a manual run for an automation.
+ *
+ * Creates a synthetic trigger event and kicks off the run pipeline
+ * (enrich → execute) so users can test automations from the UI.
+ */
+export async function triggerManualRun(
+	automationId: string,
+	orgId: string,
+	userId: string,
+): Promise<{ runId: string; status: string }> {
+	const exists = await automationsDb.exists(automationId, orgId);
+	if (!exists) throw new Error("Automation not found");
+
+	// Find or create a dedicated manual trigger (isolated from real triggers).
+	// Uses provider "webhook" with a config flag to stay within the valid TriggerProvider enum.
+	let trigger = await automationsDb.findManualTrigger(automationId);
+	if (!trigger) {
+		trigger = await automationsDb.createTriggerForAutomation({
+			automationId,
+			organizationId: orgId,
+			name: "Manual trigger",
+			provider: "webhook",
+			triggerType: "webhook",
+			enabled: false,
+			config: { _manual: true },
+			integrationId: null,
+			webhookUrlPath: `manual-${automationId}`,
+			webhookSecret: randomBytes(16).toString("hex"),
+			pollingCron: null,
+			createdBy: userId,
+		});
+	}
+
+	const { run } = await createRunFromTriggerEvent({
+		triggerId: trigger.id,
+		organizationId: orgId,
+		automationId,
+		externalEventId: `manual-${Date.now()}`,
+		providerEventType: "manual_trigger",
+		rawPayload: { type: "manual_trigger", triggered_by: userId },
+		parsedContext: {
+			title: "Manual test run",
+			description: "Manually triggered from the UI",
+		},
+		dedupKey: null,
+	});
+
+	return { runId: run.id, status: run.status };
+}
+
+// ============================================
+// Integration action resolver
+// ============================================
+
+interface ActionMeta {
+	name: string;
+	description: string;
+	riskLevel: "read" | "write";
+}
+
+export interface IntegrationActions {
+	sourceId: string;
+	displayName: string;
+	actions: ActionMeta[];
+}
+
+const LINEAR_ACTIONS: ActionMeta[] = [
+	{ name: "list_issues", description: "List issues", riskLevel: "read" },
+	{ name: "get_issue", description: "Get a specific issue", riskLevel: "read" },
+	{ name: "create_issue", description: "Create a new issue", riskLevel: "write" },
+	{ name: "update_issue", description: "Update an existing issue", riskLevel: "write" },
+	{ name: "add_comment", description: "Add a comment to an issue", riskLevel: "write" },
+];
+
+const SENTRY_ACTIONS: ActionMeta[] = [
+	{ name: "list_issues", description: "List issues", riskLevel: "read" },
+	{ name: "get_issue", description: "Get details of a specific issue", riskLevel: "read" },
+	{
+		name: "list_issue_events",
+		description: "List events for a specific issue",
+		riskLevel: "read",
+	},
+	{ name: "get_event", description: "Get details of a specific event", riskLevel: "read" },
+	{ name: "update_issue", description: "Update an issue", riskLevel: "write" },
+];
+
+/**
+ * Returns the integration actions available for an automation based on its
+ * enabled tools, triggers, and connections.
+ *
+ * Native adapters (Linear, Sentry) return stable action lists.
+ * MCP connector support is planned via automation_connections.
+ */
+export async function getAutomationIntegrationActions(
+	automationId: string,
+	orgId: string,
+): Promise<IntegrationActions[]> {
+	const automation = await automationsDb.findById(automationId, orgId);
+	if (!automation) throw new Error("Automation not found");
+
+	const enabledTools = (automation.enabledTools ?? {}) as Record<
+		string,
+		{ enabled?: boolean } | undefined
+	>;
+	const triggerProviders = automation.triggers.map((t) => t.provider);
+
+	const result: IntegrationActions[] = [];
+
+	// Linear: show if tool enabled or trigger exists
+	if (enabledTools.create_linear_issue?.enabled || triggerProviders.includes("linear")) {
+		result.push({ sourceId: "linear", displayName: "Linear", actions: LINEAR_ACTIONS });
+	}
+
+	// Sentry: show if trigger exists
+	if (triggerProviders.includes("sentry")) {
+		result.push({ sourceId: "sentry", displayName: "Sentry", actions: SENTRY_ACTIONS });
+	}
+
+	// TODO: MCP connectors — query automation_connections → org_connectors,
+	// call listConnectorTools for each, and include their actions here.
+
+	return result;
 }

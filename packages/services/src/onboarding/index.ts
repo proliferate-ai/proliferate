@@ -5,6 +5,6 @@
 export * from "./service";
 export type {
 	IntegrationRow,
-	RepoWithPrebuildRow,
+	RepoWithConfigurationRow,
 	SlackInstallationRow,
 } from "../types/onboarding";

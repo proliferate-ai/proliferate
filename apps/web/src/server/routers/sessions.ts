@@ -32,6 +32,9 @@ export const sessionsRouter = {
 				.object({
 					repoId: z.string().uuid().optional(),
 					status: z.string().optional(),
+					limit: z.number().int().min(1).max(50).optional(),
+					excludeSetup: z.boolean().optional(),
+					excludeCli: z.boolean().optional(),
 				})
 				.optional(),
 		)
@@ -40,6 +43,9 @@ export const sessionsRouter = {
 			const sessionsList = await sessions.listSessions(context.orgId, {
 				repoId: input?.repoId,
 				status: input?.status,
+				limit: input?.limit,
+				excludeSetup: input?.excludeSetup,
+				excludeCli: input?.excludeCli,
 			});
 			return { sessions: sessionsList };
 		}),
@@ -59,7 +65,7 @@ export const sessionsRouter = {
 		}),
 
 	/**
-	 * Create a new session from a prebuild.
+	 * Create a new session from a configuration.
 	 * Complex operation with sandbox provisioning.
 	 */
 	create: billingGatedProcedure
@@ -67,7 +73,7 @@ export const sessionsRouter = {
 		.output(CreateSessionResponseSchema)
 		.handler(async ({ input, context }) => {
 			return createSessionHandler({
-				prebuildId: input.prebuildId,
+				configurationId: input.configurationId,
 				sessionType: input.sessionType,
 				modelId: input.modelId,
 				orgId: context.orgId,
@@ -176,7 +182,7 @@ export const sessionsRouter = {
 						value: z.string(),
 					}),
 				),
-				saveToPrebuild: z.boolean(),
+				saveToConfiguration: z.boolean(),
 			}),
 		)
 		.output(
@@ -200,7 +206,7 @@ export const sessionsRouter = {
 				userId: context.user.id,
 				secrets: input.secrets,
 				envVars: input.envVars,
-				saveToPrebuild: input.saveToPrebuild,
+				saveToConfiguration: input.saveToConfiguration,
 			});
 		}),
 };

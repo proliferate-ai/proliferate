@@ -11,6 +11,7 @@ import {
 	eq,
 	getDb,
 	gt,
+	inArray,
 	invitation,
 	isNull,
 	lt,
@@ -390,6 +391,36 @@ export async function markOnboardingComplete(
 ): Promise<void> {
 	const db = getDb();
 	await db.update(organization).set({ onboardingComplete }).where(eq(organization.id, orgId));
+}
+
+/**
+ * Mark onboarding complete for ALL organizations a user belongs to.
+ * Prevents onboarding loops when the active org changes (e.g. back to personal workspace).
+ */
+export async function markAllUserOrgsOnboardingComplete(userId: string): Promise<void> {
+	const db = getDb();
+	const orgIds = await getUserOrgIds(userId);
+	if (orgIds.length === 0) return;
+
+	await db
+		.update(organization)
+		.set({ onboardingComplete: true })
+		.where(and(inArray(organization.id, orgIds), eq(organization.onboardingComplete, false)));
+}
+
+/**
+ * Check if a user has ANY org with onboarding complete.
+ */
+export async function hasAnyOrgCompletedOnboarding(userId: string): Promise<boolean> {
+	const db = getDb();
+	const result = await db
+		.select({ id: organization.id })
+		.from(member)
+		.innerJoin(organization, eq(member.organizationId, organization.id))
+		.where(and(eq(member.userId, userId), eq(organization.onboardingComplete, true)))
+		.limit(1);
+
+	return result.length > 0;
 }
 
 // ============================================

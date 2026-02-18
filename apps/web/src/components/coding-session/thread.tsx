@@ -2,8 +2,8 @@
 
 import { ModelSelector } from "@/components/automations/model-selector";
 import { Button } from "@/components/ui/button";
+import { BlocksIcon, OpenCodeIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
-import { Text } from "@/components/ui/text";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import {
@@ -23,6 +23,7 @@ import {
 	Loader2,
 	Mic,
 	Paperclip,
+	Plus,
 	Square,
 	X,
 } from "lucide-react";
@@ -46,7 +47,7 @@ const MarkdownContent: FC<MarkdownContentProps> = ({ text, variant = "assistant"
 		<Markdown
 			components={{
 				p: ({ children }) => (
-					<p className={cn("leading-relaxed", isUser ? "mb-2 last:mb-0" : "mb-3 last:mb-0")}>
+					<p className={cn("leading-relaxed", isUser ? "mb-1.5 last:mb-0" : "mb-3 last:mb-0")}>
 						{children}
 					</p>
 				),
@@ -85,12 +86,12 @@ const MarkdownContent: FC<MarkdownContentProps> = ({ text, variant = "assistant"
 				li: ({ children }) => <li className="leading-relaxed">{children}</li>,
 				code: ({ className, children }) => {
 					const isBlock = className?.includes("language-");
-					const bgClass = isUser ? "bg-background/50" : "bg-muted/50";
+					const bgClass = isUser ? "bg-background/50" : "bg-muted";
 					return isBlock ? (
 						<pre
 							className={cn(
 								bgClass,
-								"rounded-md overflow-x-auto",
+								"rounded-lg overflow-x-auto",
 								isUser ? "p-2 my-2" : "p-3 my-3",
 							)}
 						>
@@ -100,7 +101,7 @@ const MarkdownContent: FC<MarkdownContentProps> = ({ text, variant = "assistant"
 						<code
 							className={cn(
 								bgClass,
-								"rounded text-xs font-mono",
+								"rounded-md text-xs font-mono",
 								isUser ? "px-1 py-0.5" : "px-1.5 py-0.5",
 							)}
 						>
@@ -134,7 +135,7 @@ const AttachmentPreview: FC<AttachmentPreviewProps> = ({ preview, index, onRemov
 		<img
 			src={preview}
 			alt={`Attachment ${index + 1}`}
-			className="h-16 w-16 object-cover rounded-lg border border-border"
+			className="h-16 w-16 object-cover rounded-xl border border-border"
 		/>
 		<Button
 			type="button"
@@ -180,11 +181,11 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 	listening,
 	browserSupportsSpeechRecognition,
 }) => (
-	<div className="flex items-center gap-1">
+	<div className="flex items-center gap-0.5">
 		<Button
 			variant="ghost"
 			size="icon"
-			className="h-8 w-8 text-muted-foreground hover:text-foreground"
+			className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-full"
 			onClick={onAttachClick}
 		>
 			<Paperclip className="h-4 w-4" />
@@ -193,7 +194,7 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 			variant="ghost"
 			size="icon"
 			className={cn(
-				"h-8 w-8",
+				"h-7 w-7 rounded-full",
 				listening
 					? "text-red-500 hover:text-red-600"
 					: "text-muted-foreground hover:text-foreground",
@@ -207,7 +208,7 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 			{hasAttachments ? (
 				<Button
 					size="icon"
-					className="h-8 w-8 rounded-full"
+					className="h-7 w-7 rounded-full bg-primary text-primary-foreground"
 					onClick={onSendWithAttachments}
 					disabled={!hasContent}
 				>
@@ -215,7 +216,7 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 				</Button>
 			) : (
 				<ComposerPrimitive.Send asChild>
-					<Button size="icon" className="h-8 w-8 rounded-full">
+					<Button size="icon" className="h-7 w-7 rounded-full bg-primary text-primary-foreground">
 						<ArrowUp className="h-4 w-4" />
 					</Button>
 				</ComposerPrimitive.Send>
@@ -225,12 +226,20 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 			<ComposerPrimitive.Cancel asChild>
 				<Button
 					size="icon"
-					className="h-8 w-8 rounded-full bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+					className="h-7 w-7 rounded-full bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
 				>
 					<Square className="h-3 w-3 fill-current" />
 				</Button>
 			</ComposerPrimitive.Cancel>
 		</ThreadPrimitive.If>
+	</div>
+);
+
+// Small avatar for assistant messages
+const AssistantAvatar: FC = () => (
+	<div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full ">
+		{/* <OpenCodeIcon className="h-3.5 w-3.5 text-foreground" /> */}
+		<BlocksIcon className="h-3.5 w-3.5 text-primary" />
 	</div>
 );
 
@@ -261,12 +270,11 @@ export const Thread: FC<ThreadProps> = ({
 			<ThreadPrimitive.Viewport className="flex-1 overflow-y-auto">
 				<ThreadPrimitive.Empty>
 					<div className="flex h-full flex-col items-center justify-center p-8 text-center">
-						<Text variant="h4" className="text-lg tracking-tight">
-							{title}
-						</Text>
-						<Text variant="body" color="muted" className="mt-2 text-sm max-w-md">
-							{description}
-						</Text>
+						<div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted mb-4">
+							<OpenCodeIcon className="h-5 w-5 text-foreground" />
+						</div>
+						<p className="text-lg font-semibold tracking-tight text-foreground">{title}</p>
+						<p className="mt-1.5 text-sm text-muted-foreground max-w-sm">{description}</p>
 					</div>
 				</ThreadPrimitive.Empty>
 
@@ -279,9 +287,12 @@ export const Thread: FC<ThreadProps> = ({
 
 				{/* Blinking cursor while waiting for response */}
 				<ThreadPrimitive.If running>
-					<div className="py-3 px-3">
-						<div className="max-w-2xl mx-auto">
-							<BlinkingCursor />
+					<div className="py-4 px-4">
+						<div className="max-w-2xl mx-auto flex items-start gap-3">
+							<AssistantAvatar />
+							<div className="pt-1">
+								<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+							</div>
 						</div>
 					</div>
 				</ThreadPrimitive.If>
@@ -395,9 +406,9 @@ const Composer: FC = () => {
 				className="hidden"
 			/>
 
-			<div className="flex flex-col rounded-2xl border bg-muted/40 dark:bg-chat-input">
+			<div className="flex flex-col rounded-3xl border border-border bg-muted/40 dark:bg-card">
 				{attachments.length > 0 && (
-					<div className="flex gap-2 p-3 pb-0 flex-wrap">
+					<div className="flex gap-2 px-4 pt-3 pb-0 flex-wrap">
 						{attachments.map((attachment, index) => (
 							<AttachmentPreview
 								key={attachment.preview}
@@ -410,8 +421,8 @@ const Composer: FC = () => {
 				)}
 
 				<ComposerPrimitive.Input
-					placeholder="Message..."
-					className="flex-1 resize-none bg-transparent px-4 py-3 text-sm outline-none placeholder:text-muted-foreground"
+					placeholder="Ask anything..."
+					className="flex-1 resize-none bg-transparent px-5 py-3.5 text-sm outline-none placeholder:text-muted-foreground"
 					rows={1}
 					autoFocus
 					onKeyDown={(e) => {
@@ -422,8 +433,18 @@ const Composer: FC = () => {
 					}}
 				/>
 
-				<div className="flex items-center justify-between px-2 py-1.5">
-					<ComposerActionsLeft selectedModel={selectedModel} onModelChange={setSelectedModel} />
+				<div className="flex items-center justify-between px-3 pb-2">
+					<div className="flex items-center gap-0.5">
+						<Button
+							variant="ghost"
+							size="icon"
+							className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-full"
+							onClick={handleAttachClick}
+						>
+							<Plus className="h-4 w-4" />
+						</Button>
+						<ComposerActionsLeft selectedModel={selectedModel} onModelChange={setSelectedModel} />
+					</div>
 					<ComposerActionsRight
 						hasAttachments={attachments.length > 0}
 						hasContent={!!hasContent}
@@ -440,12 +461,12 @@ const Composer: FC = () => {
 };
 
 const UserMessage: FC = () => (
-	<MessagePrimitive.Root className="mt-6 mb-2 px-3">
+	<MessagePrimitive.Root className="py-4 px-4">
 		<div className="max-w-2xl mx-auto flex flex-col items-end gap-2">
 			<MessagePrimitive.Content
 				components={{
 					Text: ({ text }) => (
-						<div className="bg-muted inline-flex rounded-xl py-1.5 pl-3 pr-3.5 text-sm max-w-[85%]">
+						<div className="bg-muted rounded-2xl rounded-tr-md py-2.5 px-4 text-sm max-w-[85%]">
 							<MarkdownContent text={text} variant="user" />
 						</div>
 					),
@@ -453,7 +474,7 @@ const UserMessage: FC = () => (
 						<img
 							src={image}
 							alt="Attached image"
-							className="max-w-[80%] max-h-64 object-contain rounded-lg border border-border"
+							className="max-w-[80%] max-h-64 object-contain rounded-xl border border-border"
 						/>
 					),
 				}}
@@ -462,12 +483,11 @@ const UserMessage: FC = () => (
 	</MessagePrimitive.Root>
 );
 
-const BlinkingCursor = () => <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
-
 const AssistantMessage: FC = () => (
-	<MessagePrimitive.Root className="pb-4 px-3">
-		<div className="max-w-2xl mx-auto">
-			<div className="text-sm">
+	<MessagePrimitive.Root className="py-4 px-4">
+		<div className="max-w-2xl mx-auto flex items-start gap-3">
+			<AssistantAvatar />
+			<div className="min-w-0 flex-1 text-sm pt-0.5">
 				<MessagePrimitive.Content
 					components={{
 						Text: ({ text }) => <MarkdownContent text={text} variant="assistant" />,
@@ -492,11 +512,11 @@ const ToolFallback: FC<{ toolName: string; args: unknown; result?: unknown }> = 
 		: null;
 
 	return (
-		<div className="my-0.5 ml-4">
+		<div className="my-0.5">
 			<button
 				type="button"
 				onClick={() => hasResult && setExpanded(!expanded)}
-				className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+				className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
 				disabled={!hasResult}
 			>
 				{hasResult ? (
@@ -508,10 +528,10 @@ const ToolFallback: FC<{ toolName: string; args: unknown; result?: unknown }> = 
 				) : (
 					<Loader2 className="h-3 w-3 animate-spin" />
 				)}
-				<code className="text-xs">{toolName}</code>
+				<span>{toolName}</span>
 			</button>
 			{expanded && resultString && (
-				<pre className="ml-4 mt-1 max-h-40 overflow-auto rounded border border-border/40 bg-muted/30 p-2 font-mono text-xs text-muted-foreground">
+				<pre className="mt-1 max-h-40 overflow-auto rounded-lg border border-border/40 bg-muted/30 p-2 font-mono text-xs text-muted-foreground">
 					{resultString.slice(0, 3000)}
 				</pre>
 			)}

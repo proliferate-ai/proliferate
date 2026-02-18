@@ -2,6 +2,15 @@
 
 import { Button } from "@/components/ui/button";
 import {
+	Command,
+	CommandEmpty,
+	CommandGroup,
+	CommandInput,
+	CommandItem,
+	CommandList,
+	CommandSeparator,
+} from "@/components/ui/command";
+import {
 	Dialog,
 	DialogContent,
 	DialogDescription,
@@ -10,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { GithubIcon } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { usePrebuilds } from "@/hooks/use-prebuilds";
+import { useConfigurations } from "@/hooks/use-configurations";
 import { useRepos } from "@/hooks/use-repos";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
@@ -22,37 +31,60 @@ interface EnvironmentPickerProps {
 	disabled?: boolean;
 }
 
+/**
+ * Split a GitHub repo name (owner/repo) into parts for display.
+ */
+function RepoName({ name }: { name: string }) {
+	const slashIndex = name.indexOf("/");
+	if (slashIndex === -1) return <span className="truncate">{name}</span>;
+
+	const owner = name.slice(0, slashIndex);
+	const repo = name.slice(slashIndex + 1);
+
+	return (
+		<span className="truncate">
+			<span className="text-muted-foreground">{owner}/</span>
+			<span className="font-medium">{repo}</span>
+		</span>
+	);
+}
+
 export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 	const [open, setOpen] = useState(false);
 	const [createOpen, setCreateOpen] = useState(false);
 	const { data: repos } = useRepos();
-	const { data: prebuilds } = usePrebuilds("ready");
+	const { data: configurations } = useConfigurations("ready");
 	const { selectedRepoId, selectedSnapshotId, setSelectedRepo, setSelectedSnapshot } =
 		useDashboardStore();
 
 	const allRepos = repos ?? [];
-	const multiRepoConfigs = prebuilds?.filter((p) => (p.prebuildRepos?.length ?? 0) >= 2) ?? [];
+	const multiRepoConfigs =
+		configurations?.filter((p) => (p.configurationRepos?.length ?? 0) >= 2) ?? [];
 
-	// Clear stale persisted selections when data loads (e.g. repo/prebuild was deleted)
+	// Clear stale persisted selections when data loads (e.g. repo/configuration was deleted)
 	useEffect(() => {
 		if (!repos) return;
 		if (selectedRepoId && !repos.some((r) => r.id === selectedRepoId)) {
-			// Repo no longer exists — clear both
 			setSelectedRepo(null);
 			setSelectedSnapshot(null);
 		} else if (selectedRepoId && selectedSnapshotId) {
-			// Repo exists — sync snapshot to repo's current prebuild
 			const repo = repos.find((r) => r.id === selectedRepoId);
-			if (repo && selectedSnapshotId !== repo.prebuildId) {
-				setSelectedSnapshot(repo.prebuildId ?? null);
+			if (repo && selectedSnapshotId !== repo.configurationId) {
+				setSelectedSnapshot(repo.configurationId ?? null);
 			}
 		} else if (selectedSnapshotId && !selectedRepoId) {
-			// Multi-repo config — check if it still exists
-			if (prebuilds && !prebuilds.some((c) => c.id === selectedSnapshotId)) {
+			if (configurations && !configurations.some((c) => c.id === selectedSnapshotId)) {
 				setSelectedSnapshot(null);
 			}
 		}
-	}, [repos, prebuilds, selectedRepoId, selectedSnapshotId, setSelectedRepo, setSelectedSnapshot]);
+	}, [
+		repos,
+		configurations,
+		selectedRepoId,
+		selectedSnapshotId,
+		setSelectedRepo,
+		setSelectedSnapshot,
+	]);
 
 	// Find display name for the trigger
 	const selectedRepo = allRepos.find((r) => r.id === selectedRepoId);
@@ -66,15 +98,15 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 
 	const selectRepo = (repo: (typeof allRepos)[0]) => {
 		setSelectedRepo(repo.id);
-		if (repo.prebuildId) {
-			setSelectedSnapshot(repo.prebuildId);
+		if (repo.configurationId) {
+			setSelectedSnapshot(repo.configurationId);
 		}
 		setOpen(false);
 	};
 
-	const selectConfig = (prebuild: (typeof multiRepoConfigs)[0]) => {
+	const selectConfig = (config: (typeof multiRepoConfigs)[0]) => {
 		setSelectedRepo(null);
-		setSelectedSnapshot(prebuild.id);
+		setSelectedSnapshot(config.id);
 		setOpen(false);
 	};
 
@@ -83,103 +115,121 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 			<Popover open={open} onOpenChange={setOpen}>
 				<PopoverTrigger asChild>
 					<Button variant="ghost" size="sm" className="h-8 gap-2 font-normal" disabled={disabled}>
-						{hasSelection ? <GithubIcon className="h-4 w-4" /> : <Terminal className="h-4 w-4" />}
+						{hasSelection ? (
+							<GithubIcon className="h-4 w-4 shrink-0" />
+						) : (
+							<Terminal className="h-4 w-4 shrink-0" />
+						)}
 						<span className="truncate max-w-[200px]">{triggerLabel}</span>
 					</Button>
 				</PopoverTrigger>
-				<PopoverContent className="w-56 p-0" align="start">
-					<div className="py-1">
-						{/* Scratch / General assistant option */}
-						<Button
-							variant="ghost"
-							className={cn(
-								"w-full h-auto flex items-center justify-start gap-2 px-3 py-2 text-sm font-normal rounded-none",
-								!hasSelection && "bg-primary/10",
-							)}
-							onClick={() => {
-								setSelectedRepo(null);
-								setSelectedSnapshot(null);
-								setOpen(false);
-							}}
-						>
-							{!hasSelection ? (
-								<Check className="h-4 w-4 text-primary shrink-0" />
-							) : (
-								<Terminal className="h-4 w-4 shrink-0" />
-							)}
-							<span>General assistant</span>
-						</Button>
+				<PopoverContent className="w-80 p-0" align="start">
+					<Command>
+						<CommandInput placeholder="Search repos and configurations..." />
+						<CommandList>
+							<CommandEmpty>No results found.</CommandEmpty>
 
-						{allRepos.length > 0 && <div className="h-px bg-border mx-3 my-1" />}
-
-						{allRepos.map((repo) => {
-							const isSelected = repo.id === selectedRepoId;
-							return (
-								<Button
-									key={repo.id}
-									variant="ghost"
-									className={cn(
-										"w-full h-auto flex items-center justify-start gap-2 px-3 py-2 text-sm font-normal rounded-none",
-										isSelected && "bg-primary/10",
-									)}
-									onClick={() => selectRepo(repo)}
+							{/* General assistant */}
+							<CommandGroup>
+								<CommandItem
+									value="general-assistant"
+									onSelect={() => {
+										setSelectedRepo(null);
+										setSelectedSnapshot(null);
+										setOpen(false);
+									}}
 								>
-									{isSelected ? (
+									{!hasSelection ? (
 										<Check className="h-4 w-4 text-primary shrink-0" />
 									) : (
-										<GithubIcon className="h-4 w-4 shrink-0" />
+										<Terminal className="h-4 w-4 shrink-0" />
 									)}
-									<span className="truncate">{repo.githubRepoName}</span>
-									<span className="text-muted-foreground text-xs ml-auto shrink-0">
-										{repo.prebuildStatus === "ready" ? "Configured" : "Not configured"}
-									</span>
-								</Button>
-							);
-						})}
+									<span>General assistant</span>
+								</CommandItem>
+							</CommandGroup>
 
-						{multiRepoConfigs.length > 0 && allRepos.length > 0 && (
-							<div className="h-px bg-border mx-3 my-1" />
-						)}
+							{/* Repos */}
+							{allRepos.length > 0 && (
+								<>
+									<CommandSeparator />
+									<CommandGroup heading="Repositories">
+										{allRepos.map((repo) => {
+											const isSelected = repo.id === selectedRepoId;
+											return (
+												<CommandItem
+													key={repo.id}
+													value={repo.githubRepoName}
+													onSelect={() => selectRepo(repo)}
+													className="flex items-center gap-2"
+												>
+													{isSelected ? (
+														<Check className="h-4 w-4 text-primary shrink-0" />
+													) : (
+														<GithubIcon className="h-4 w-4 shrink-0" />
+													)}
+													<RepoName name={repo.githubRepoName} />
+													<span className="text-muted-foreground text-xs ml-auto shrink-0">
+														{repo.configurationStatus === "ready" ? "Configured" : ""}
+													</span>
+												</CommandItem>
+											);
+										})}
+									</CommandGroup>
+								</>
+							)}
 
-						{multiRepoConfigs.map((config) => {
-							const isSelected = config.id === selectedSnapshotId;
-							return (
-								<Button
-									key={config.id}
-									variant="ghost"
-									className={cn(
-										"w-full h-auto flex items-center justify-start gap-2 px-3 py-2 text-sm font-normal rounded-none",
-										isSelected && "bg-primary/10",
-									)}
-									onClick={() => selectConfig(config)}
+							{/* Multi-repo configurations */}
+							{multiRepoConfigs.length > 0 && (
+								<>
+									<CommandSeparator />
+									<CommandGroup heading="Configurations">
+										{multiRepoConfigs.map((config) => {
+											const isSelected = config.id === selectedSnapshotId;
+											const repoNames =
+												config.configurationRepos
+													?.map((r) => r.repo?.githubRepoName)
+													.filter(Boolean)
+													.join(", ") ?? "";
+											return (
+												<CommandItem
+													key={config.id}
+													value={`${config.name ?? "Untitled"} ${repoNames}`}
+													onSelect={() => selectConfig(config)}
+													className="flex items-center gap-2"
+												>
+													{isSelected ? (
+														<Check className="h-4 w-4 text-primary shrink-0" />
+													) : (
+														<Layers className="h-4 w-4 shrink-0" />
+													)}
+													<span className="truncate">{config.name ?? "Untitled"}</span>
+													<span className="text-muted-foreground text-xs ml-auto shrink-0">
+														{config.configurationRepos?.length} repos
+													</span>
+												</CommandItem>
+											);
+										})}
+									</CommandGroup>
+								</>
+							)}
+
+							{/* New configuration */}
+							<CommandSeparator />
+							<CommandGroup>
+								<CommandItem
+									value="new-configuration"
+									onSelect={() => {
+										setOpen(false);
+										setCreateOpen(true);
+									}}
+									className="text-muted-foreground"
 								>
-									{isSelected ? (
-										<Check className="h-4 w-4 text-primary shrink-0" />
-									) : (
-										<Layers className="h-4 w-4 shrink-0" />
-									)}
-									<span className="truncate">{config.name ?? "Untitled"}</span>
-									<span className="text-muted-foreground text-xs ml-auto shrink-0">
-										{config.prebuildRepos?.length} repos
-									</span>
-								</Button>
-							);
-						})}
-
-						<div className="h-px bg-border mx-3 my-1" />
-
-						<Button
-							variant="ghost"
-							className="w-full h-auto flex items-center justify-start gap-2 px-3 py-2 text-sm font-normal rounded-none text-muted-foreground"
-							onClick={() => {
-								setOpen(false);
-								setCreateOpen(true);
-							}}
-						>
-							<Plus className="h-4 w-4 shrink-0" />
-							<span>New configuration</span>
-						</Button>
-					</div>
+									<Plus className="h-4 w-4 shrink-0" />
+									<span>New configuration</span>
+								</CommandItem>
+							</CommandGroup>
+						</CommandList>
+					</Command>
 				</PopoverContent>
 			</Popover>
 

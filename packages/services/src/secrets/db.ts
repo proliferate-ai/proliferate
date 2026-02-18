@@ -8,6 +8,7 @@ import {
 	type InferSelectModel,
 	type SQL,
 	and,
+	configurationSecrets,
 	desc,
 	eq,
 	getDb,
@@ -115,7 +116,7 @@ export async function deleteById(id: string, orgId: string): Promise<void> {
 
 /**
  * Check which secret keys exist for an organization.
- * Handles filtering by repo_id and prebuild_id.
+ * Handles filtering by repo_id and configuration_id.
  */
 export async function findExistingKeys(
 	orgId: string,
@@ -255,4 +256,65 @@ export async function bulkCreateSecrets(
 		})
 		.returning({ key: secrets.key });
 	return rows.map((r) => r.key);
+}
+
+export async function linkSecretToConfiguration(
+	configurationId: string,
+	secretId: string,
+): Promise<void> {
+	const db = getDb();
+	await db
+		.insert(configurationSecrets)
+		.values({ configurationId, secretId })
+		.onConflictDoNothing();
+}
+
+export async function findExistingKeysForConfiguration(
+	orgId: string,
+	configurationId: string,
+	keys: string[],
+): Promise<string[]> {
+	if (keys.length === 0) return [];
+	const db = getDb();
+	const configRows = await db
+		.select({ key: secrets.key })
+		.from(configurationSecrets)
+		.innerJoin(secrets, eq(configurationSecrets.secretId, secrets.id))
+		.where(
+			and(
+				eq(configurationSecrets.configurationId, configurationId),
+				eq(secrets.organizationId, orgId),
+				inArray(secrets.key, keys),
+			),
+		);
+	const orgRows = await db
+		.select({ key: secrets.key })
+		.from(secrets)
+		.where(
+			and(
+				eq(secrets.organizationId, orgId),
+				isNull(secrets.repoId),
+				inArray(secrets.key, keys),
+			),
+		);
+	const allKeys = new Set([...configRows.map((r) => r.key), ...orgRows.map((r) => r.key)]);
+	return [...allKeys];
+}
+
+export async function getSecretsForConfiguration(
+	orgId: string,
+	configurationId: string,
+): Promise<SecretForSessionRow[]> {
+	const db = getDb();
+	const rows = await db
+		.select({ key: secrets.key, encryptedValue: secrets.encryptedValue })
+		.from(configurationSecrets)
+		.innerJoin(secrets, eq(configurationSecrets.secretId, secrets.id))
+		.where(
+			and(
+				eq(configurationSecrets.configurationId, configurationId),
+				eq(secrets.organizationId, orgId),
+			),
+		);
+	return rows;
 }

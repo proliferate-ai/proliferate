@@ -6,6 +6,7 @@
 
 import type { OnboardingRepo, OnboardingStatus } from "@proliferate/shared";
 import { toIsoString } from "../db/serialize";
+import * as orgsDb from "../orgs/db";
 import { requestRepoSnapshotBuild } from "../repos";
 import type { OnboardingMeta } from "../types/onboarding";
 import * as onboardingDb from "./db";
@@ -30,40 +31,35 @@ export async function getOnboardingStatus(
 	if (!orgId) {
 		return {
 			hasOrg: false,
+			onboardingComplete: false,
 			hasSlackConnection: false,
 			hasGitHubConnection: false,
 			repos: [],
 		};
 	}
 
-	const [hasSlackConnection, hasGitHubConnection, reposWithStatus, meta] = await Promise.all([
-		onboardingDb.hasSlackConnection(orgId),
-		onboardingDb.hasGitHubConnection(orgId, nangoGithubIntegrationId),
-		onboardingDb.getReposWithPrebuildStatus(orgId),
-		onboardingDb.getOnboardingMeta(orgId),
-	]);
+	const [hasSlackConnection, hasGitHubConnection, reposWithStatus, meta, billingInfo] =
+		await Promise.all([
+			onboardingDb.hasSlackConnection(orgId),
+			onboardingDb.hasGitHubConnection(orgId, nangoGithubIntegrationId),
+			onboardingDb.getReposWithConfigurationStatus(orgId),
+			onboardingDb.getOnboardingMeta(orgId),
+			orgsDb.findBillingInfo(orgId),
+		]);
 
-	// Helper to check if a prebuild_repo entry has a usable prebuild (has snapshot)
-	const hasUsablePrebuild = (pr: {
-		configuration: { snapshotId: string | null } | null;
-	}): boolean => !!pr.configuration?.snapshotId;
+	const onboardingComplete = billingInfo?.onboardingComplete ?? false;
 
-	// Transform to include prebuild status
-	const repos: OnboardingRepo[] = reposWithStatus.map((repo) => {
-		const readyPrebuild = repo.configurationRepos?.find(hasUsablePrebuild);
-		return {
-			id: repo.id,
-			github_repo_name: repo.githubRepoName,
-			github_url: repo.githubUrl,
-			default_branch: repo.defaultBranch,
-			created_at: toIsoString(repo.createdAt),
-			prebuild_id: readyPrebuild?.configuration?.id || null,
-			prebuild_status: readyPrebuild ? ("ready" as const) : ("pending" as const),
-		};
-	});
+	const repos: OnboardingRepo[] = reposWithStatus.map((repo) => ({
+		id: repo.id,
+		github_repo_name: repo.githubRepoName,
+		github_url: repo.githubUrl,
+		default_branch: repo.defaultBranch,
+		created_at: toIsoString(repo.createdAt),
+	}));
 
 	return {
 		hasOrg: true,
+		onboardingComplete,
 		hasSlackConnection,
 		hasGitHubConnection,
 		repos,

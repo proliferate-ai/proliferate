@@ -28,7 +28,7 @@ import { FolderGit } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function OnboardingCards() {
+export function OnboardingCards({ hideHeader }: { hideHeader?: boolean } = {}) {
 	const router = useRouter();
 	const queryClient = useQueryClient();
 	const [repoSelectorOpen, setRepoSelectorOpen] = useState(false);
@@ -94,9 +94,6 @@ export function OnboardingCards() {
 	// Build cards array based on what's needed
 	const cards: React.ReactNode[] = [];
 
-	// Repo setup cards
-	const hasReadyRepo = (repos ?? []).some((r) => r.prebuildStatus === "ready");
-
 	if (!hasAnyRepo) {
 		// No repos at all — prompt to connect first repo
 		cards.push(
@@ -133,22 +130,6 @@ export function OnboardingCards() {
 				</Popover.Portal>
 			</Popover.Root>,
 		);
-	} else if (!hasReadyRepo) {
-		// Has repos but none configured — prompt to set up first repo
-		const firstRepo = (repos ?? [])[0];
-		if (firstRepo) {
-			cards.push(
-				<OnboardingCard
-					key="configure-repo"
-					icon={<FolderGit className="h-6 w-6" />}
-					title="Set up your first repo"
-					description="Configure environment and dependencies so sessions boot instantly."
-					ctaLabel="Configure"
-					onCtaClick={() => router.push(`/workspace/new?repoId=${firstRepo.id}&type=setup`)}
-					image="/onboarding/setup.png"
-				/>,
-			);
-		}
 	}
 
 	// Link GitHub card (only if user selected this tool)
@@ -252,6 +233,11 @@ export function OnboardingCards() {
 
 	// Don't render if no cards to show
 	if (cards.length === 0) return null;
+
+	// When hideHeader is true, render bare cards (parent manages scrolling/layout)
+	if (hideHeader) {
+		return <>{cards}</>;
+	}
 
 	return (
 		<div className="mb-6" data-onboarding-cards>

@@ -3,6 +3,7 @@
  */
 
 export * from "./service";
+export { createFromTemplate, type CreateFromTemplateInput } from "./create-from-template";
 export type {
 	AutomationRow,
 	AutomationWithRelations,
@@ -22,7 +23,7 @@ export type {
 	CreateTriggerEventInput as CreateTriggerEventDbInput,
 	TriggerEventInsertRow,
 	Json,
-	PrebuildSummary,
+	ConfigurationSummary,
 	CreatorSummary,
 	TriggerSummary,
 	ScheduleSummary,

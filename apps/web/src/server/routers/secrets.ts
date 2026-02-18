@@ -47,6 +47,7 @@ export const secretsRouter = {
 					description: input.description,
 					repoId: input.repoId,
 					secretType: input.secretType,
+					configurationId: input.configurationId,
 				});
 				return { secret };
 			} catch (err) {
@@ -82,7 +83,7 @@ export const secretsRouter = {
 				organizationId: context.orgId,
 				keys: input.keys,
 				repoId: input.repo_id,
-				prebuildId: input.prebuild_id,
+				configurationId: input.configuration_id,
 			});
 			return { keys: results };
 		}),

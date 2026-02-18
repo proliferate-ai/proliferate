@@ -88,23 +88,6 @@ export function attachCreators(
 }
 
 /**
- * Filter integrations by visibility and user.
- */
-export function filterByVisibility(
-	integrations: IntegrationWithCreator[],
-	userId: string,
-): IntegrationWithCreator[] {
-	return integrations.filter((integration) => {
-		// Org-visible or unset visibility is visible to all
-		if (integration.visibility === "org" || !integration.visibility) {
-			return true;
-		}
-		// Personal visibility - only visible to creator
-		return integration.created_by === userId;
-	});
-}
-
-/**
  * Group integrations by provider type.
  */
 export function groupByProvider(integrations: IntegrationWithCreator[]): {

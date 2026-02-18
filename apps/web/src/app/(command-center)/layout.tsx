@@ -4,14 +4,46 @@ import { ImpersonationBanner } from "@/components/admin/impersonation-banner";
 import { BillingBanner } from "@/components/dashboard/billing-banner";
 import { CommandSearch } from "@/components/dashboard/command-search";
 import { MobileSidebar, MobileSidebarTrigger, Sidebar } from "@/components/dashboard/sidebar";
+import { openIntercomMessenger } from "@/components/providers";
 import { Button } from "@/components/ui/button";
 import { useBilling } from "@/hooks/use-billing";
+import { useOnboarding } from "@/hooks/use-onboarding";
 import { useSession } from "@/lib/auth-client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { env } from "@proliferate/environment/public";
-import { Search } from "lucide-react";
+import { BookOpen, MessageSquare, Search } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
+
+const PAGE_TITLES: Record<string, string> = {
+	"/dashboard": "Home",
+	"/dashboard/inbox": "Inbox",
+	"/dashboard/sessions": "Sessions",
+	"/dashboard/automations": "Automations",
+	"/dashboard/repos": "Repos",
+	"/dashboard/integrations": "Integrations",
+	"/dashboard/actions": "Actions",
+	"/dashboard/triggers": "Triggers",
+	"/settings": "Settings",
+	"/settings/profile": "Profile",
+	"/settings/general": "General",
+	"/settings/members": "Members",
+	"/settings/secrets": "Secrets",
+	"/settings/billing": "Billing",
+	"/settings/connections": "Connections",
+	"/settings/repositories": "Repositories",
+	"/settings/tools": "Tools",
+};
+
+function getPageTitle(pathname: string): string {
+	if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+	// For detail pages like /dashboard/automations/[id], use the parent title
+	for (const [path, title] of Object.entries(PAGE_TITLES)) {
+		if (pathname.startsWith(`${path}/`)) return title;
+	}
+	return "";
+}
 
 export default function CommandCenterLayout({
 	children,
@@ -23,10 +55,9 @@ export default function CommandCenterLayout({
 	const { data: session, isPending: authPending } = useSession();
 	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
 	const { data: billingInfo, isLoading: billingLoading, isError: billingError } = useBilling();
+	const { data: onboardingStatus, isLoading: onboardingLoading } = useOnboarding();
 	const { commandSearchOpen, setCommandSearchOpen } = useDashboardStore();
-	const needsOnboarding = billingEnabled && billingInfo?.state.billingState === "unconfigured";
-
-	const isSettingsPage = pathname?.startsWith("/settings");
+	const needsOnboarding = onboardingStatus ? !onboardingStatus.onboardingComplete : false;
 
 	// Cmd+K keyboard shortcut for search
 	useEffect(() => {
@@ -55,17 +86,17 @@ export default function CommandCenterLayout({
 		}
 	}, [session, authPending, router, requireEmailVerification]);
 
-	// Keep onboarding/billing progression required, while allowing GitHub to be optional.
+	// Keep onboarding progression required, while allowing GitHub to be optional.
 	useEffect(() => {
-		if (!authPending && session && !billingLoading && needsOnboarding) {
+		if (!authPending && session && !onboardingLoading && needsOnboarding) {
 			router.push("/onboarding");
 		}
-	}, [authPending, session, billingLoading, needsOnboarding, router]);
+	}, [authPending, session, onboardingLoading, needsOnboarding, router]);
 
 	// Wait for required gate checks before rendering anything.
 	// Billing error is treated as "still loading" (fail-closed) — TanStack Query
 	// retries automatically, so the gate stays shut until we get a definitive answer.
-	if (authPending || (billingEnabled && (billingLoading || billingError))) {
+	if (authPending || onboardingLoading || (billingEnabled && (billingLoading || billingError))) {
 		return <div className="min-h-screen bg-background" />;
 	}
 
@@ -78,10 +109,7 @@ export default function CommandCenterLayout({
 		return null;
 	}
 
-	// Settings pages provide their own layout chrome — skip dashboard sidebar/banners
-	if (isSettingsPage) {
-		return <>{children}</>;
-	}
+	const pageTitle = getPageTitle(pathname);
 
 	return (
 		<div className="h-screen flex flex-col bg-background">
@@ -111,7 +139,38 @@ export default function CommandCenterLayout({
 				<Sidebar />
 
 				{/* Main content */}
-				<main className="flex-1 overflow-y-auto animate-in fade-in duration-200">{children}</main>
+				<div className="flex-1 flex flex-col overflow-hidden">
+					{/* Desktop header bar */}
+					<div className="hidden md:flex shrink-0 items-center justify-between h-12 px-4 border-b border-border/50">
+						<h1 className="text-sm font-medium text-foreground truncate">{pageTitle}</h1>
+						<div className="flex items-center gap-1">
+							<Button
+								variant="ghost"
+								size="sm"
+								className="h-8 gap-1.5 text-muted-foreground"
+								asChild
+							>
+								<Link href="https://docs.proliferate.com" target="_blank" rel="noopener noreferrer">
+									<BookOpen className="h-3.5 w-3.5" />
+									<span className="text-xs">Docs</span>
+								</Link>
+							</Button>
+							<Button
+								variant="ghost"
+								size="sm"
+								className="h-8 gap-1.5 text-muted-foreground"
+								onClick={openIntercomMessenger}
+							>
+								<MessageSquare className="h-3.5 w-3.5" />
+								<span className="text-xs">Feedback</span>
+							</Button>
+						</div>
+					</div>
+
+					<main className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-200">
+						{children}
+					</main>
+				</div>
 			</div>
 
 			{/* Mobile Sidebar Drawer */}

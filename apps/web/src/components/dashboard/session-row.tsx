@@ -1,8 +1,16 @@
 "use client";
 
-import { StatusDot } from "@/components/ui/status-dot";
+import { BlocksIcon, BlocksLoadingIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime, getRepoShortName } from "@/lib/utils";
+
+const STATUS_COLORS: Record<string, string> = {
+	running: "text-emerald-500",
+	starting: "text-muted-foreground",
+	paused: "text-amber-500",
+	suspended: "text-orange-500",
+	stopped: "text-muted-foreground/50",
+};
 
 interface SessionRowProps {
 	title: string | null;
@@ -43,7 +51,13 @@ export function SessionRow({
 					{branchName && ` · ${branchName}`}
 				</p>
 			</div>
-			{status === "running" && <StatusDot status="running" className="mt-1 ml-2 flex-shrink-0" />}
+			{status &&
+				(() => {
+					const isAnimated = status === "running" || status === "starting";
+					const Icon = isAnimated ? BlocksLoadingIcon : BlocksIcon;
+					const color = STATUS_COLORS[status] ?? STATUS_COLORS.stopped;
+					return <Icon className={`h-3.5 w-3.5 mt-0.5 ml-2 flex-shrink-0 ${color}`} />;
+				})()}
 		</div>
 	);
 }

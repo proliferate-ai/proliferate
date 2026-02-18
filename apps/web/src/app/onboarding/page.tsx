@@ -54,6 +54,10 @@ export default function OnboardingPage() {
 		...orpc.onboarding.saveQuestionnaire.mutationOptions(),
 	});
 
+	const markCompleteMutation = useMutation({
+		...orpc.onboarding.markComplete.mutationOptions(),
+	});
+
 	const handlePathSelect = (type: FlowType) => {
 		setFlowType(type);
 
@@ -113,9 +117,16 @@ export default function OnboardingPage() {
 	};
 
 	const handleFinish = () => {
-		reset();
-		refetch();
-		router.push("/dashboard");
+		markCompleteMutation.mutate(undefined, {
+			onSuccess: async () => {
+				reset();
+				await refetch();
+				router.push("/dashboard");
+			},
+			onError: (err) => {
+				console.error("Failed to complete onboarding:", err);
+			},
+		});
 	};
 
 	return (
@@ -136,7 +147,13 @@ export default function OnboardingPage() {
 			)}
 			{step === "invite" && <StepInviteMembers onComplete={handleInviteComplete} />}
 			{step === "billing" && billingEnabled && <StepBilling onComplete={handleBillingComplete} />}
-			{step === "complete" && <StepComplete onComplete={handleFinish} />}
+			{step === "complete" && (
+				<StepComplete
+					onComplete={handleFinish}
+					isSubmitting={markCompleteMutation.isPending}
+					error={markCompleteMutation.error?.message}
+				/>
+			)}
 		</div>
 	);
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { PageShell } from "@/components/dashboard/page-shell";
 import {
 	ActionError,
 	CancelInvitationDialog,
@@ -9,7 +10,6 @@ import {
 	RemoveMemberDialog,
 	useMembersPage,
 } from "@/components/settings/members";
-import { LoadingDots } from "@/components/ui/loading-dots";
 
 export default function MembersPage() {
 	const {
@@ -42,57 +42,63 @@ export default function MembersPage() {
 
 	if (isActiveOrgPending) {
 		return (
-			<div className="py-8 text-center">
-				<LoadingDots size="md" className="text-muted-foreground" />
-			</div>
+			<PageShell title="Members" subtitle="Manage your team" maxWidth="2xl">
+				<div className="space-y-4">
+					{[1, 2, 3].map((i) => (
+						<div key={i} className="h-16 rounded-lg bg-muted/30 animate-pulse" />
+					))}
+				</div>
+			</PageShell>
 		);
 	}
 
 	return (
-		<div className="space-y-10">
-			<MembersList
-				members={members}
-				isLoading={isLoading}
-				currentUserId={currentUserId}
-				isOwner={isOwner}
-				onUpdateRole={handleUpdateRole}
-				onRemoveMember={setConfirmRemoveMember}
-			/>
-
-			<PendingInvitations
-				invitations={invitations}
-				isLoading={isLoading}
-				canInvite={canInvite}
-				onCancelInvitation={setConfirmCancelInvitation}
-			/>
-
-			{canInvite && (
-				<InviteForm
-					inviteEmail={inviteEmail}
-					inviteRole={inviteRole}
-					isInviting={isInviting}
-					inviteError={inviteError}
-					isEmailVerified={isEmailVerified}
-					requireVerificationForInvites={requireVerificationForInvites}
-					onEmailChange={setInviteEmail}
-					onRoleChange={setInviteRole}
-					onInvite={handleInvite}
+		<PageShell title="Members" subtitle="Manage your team" maxWidth="2xl">
+			<div className="space-y-10">
+				<MembersList
+					members={members}
+					isLoading={isLoading}
+					currentUserId={currentUserId}
+					isOwner={isOwner}
+					onUpdateRole={handleUpdateRole}
+					onRemoveMember={setConfirmRemoveMember}
 				/>
-			)}
 
-			<ActionError error={actionError} onDismiss={() => setActionError(null)} />
+				<PendingInvitations
+					invitations={invitations}
+					isLoading={isLoading}
+					canInvite={canInvite}
+					onCancelInvitation={setConfirmCancelInvitation}
+				/>
 
-			<RemoveMemberDialog
-				member={confirmRemoveMember}
-				onClose={() => setConfirmRemoveMember(null)}
-				onConfirm={handleRemoveMember}
-			/>
+				{canInvite && (
+					<InviteForm
+						inviteEmail={inviteEmail}
+						inviteRole={inviteRole}
+						isInviting={isInviting}
+						inviteError={inviteError}
+						isEmailVerified={isEmailVerified}
+						requireVerificationForInvites={requireVerificationForInvites}
+						onEmailChange={setInviteEmail}
+						onRoleChange={setInviteRole}
+						onInvite={handleInvite}
+					/>
+				)}
 
-			<CancelInvitationDialog
-				invitationId={confirmCancelInvitation}
-				onClose={() => setConfirmCancelInvitation(null)}
-				onConfirm={handleCancelInvitation}
-			/>
-		</div>
+				<ActionError error={actionError} onDismiss={() => setActionError(null)} />
+
+				<RemoveMemberDialog
+					member={confirmRemoveMember}
+					onClose={() => setConfirmRemoveMember(null)}
+					onConfirm={handleRemoveMember}
+				/>
+
+				<CancelInvitationDialog
+					invitationId={confirmCancelInvitation}
+					onClose={() => setConfirmCancelInvitation(null)}
+					onConfirm={handleCancelInvitation}
+				/>
+			</div>
+		</PageShell>
 	);
 }

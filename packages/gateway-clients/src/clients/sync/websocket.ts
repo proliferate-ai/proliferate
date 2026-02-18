@@ -28,7 +28,7 @@ export interface SyncWebSocket {
 	sendRunAutoStart(
 		runId: string,
 		mode?: "test" | "start",
-		commands?: import("@proliferate/shared").PrebuildServiceCommand[],
+		commands?: import("@proliferate/shared").ConfigurationServiceCommand[],
 	): void;
 	/** Request current git status */
 	sendGetGitStatus(workspacePath?: string): void;
@@ -132,7 +132,7 @@ export class SyncWebSocketImpl implements SyncWebSocket {
 	sendRunAutoStart(
 		runId: string,
 		mode?: "test" | "start",
-		commands?: import("@proliferate/shared").PrebuildServiceCommand[],
+		commands?: import("@proliferate/shared").ConfigurationServiceCommand[],
 	): void {
 		this.send({ type: "run_auto_start", runId, mode, commands });
 	}

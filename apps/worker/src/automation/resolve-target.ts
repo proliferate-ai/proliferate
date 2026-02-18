@@ -1,17 +1,17 @@
 /**
  * Target resolution for automation runs.
  *
- * Determines which prebuild/repo to use for session creation
+ * Determines which configuration/repo to use for session creation
  * based on enrichment output and automation configuration.
  */
 
-import { prebuilds, repos } from "@proliferate/services";
+import { configurations, repos } from "@proliferate/services";
 import type { runs } from "@proliferate/services";
 import type { EnrichmentPayload } from "./enrich";
 
 export interface TargetResolution {
 	type: "default" | "selected" | "fallback";
-	prebuildId?: string;
+	configurationId?: string;
 	repoIds?: string[];
 	reason: string;
 	suggestedRepoId?: string;
@@ -24,12 +24,12 @@ export async function resolveTarget(input: {
 }): Promise<TargetResolution> {
 	const { automation, enrichmentJson, organizationId } = input;
 
-	const defaultPrebuildId = automation?.defaultPrebuildId ?? undefined;
+	const defaultConfigurationId = automation?.defaultConfigurationId ?? undefined;
 
 	if (!automation?.allowAgenticRepoSelection) {
 		return {
 			type: "default",
-			prebuildId: defaultPrebuildId,
+			configurationId: defaultConfigurationId,
 			reason: "selection_disabled",
 		};
 	}
@@ -38,7 +38,7 @@ export async function resolveTarget(input: {
 	if (!suggestedRepoId) {
 		return {
 			type: "default",
-			prebuildId: defaultPrebuildId,
+			configurationId: defaultConfigurationId,
 			reason: "no_suggestion",
 		};
 	}
@@ -47,19 +47,22 @@ export async function resolveTarget(input: {
 	if (!repoValid) {
 		return {
 			type: "fallback",
-			prebuildId: defaultPrebuildId,
+			configurationId: defaultConfigurationId,
 			reason: "repo_not_found_or_wrong_org",
 			suggestedRepoId,
 		};
 	}
 
-	// Reuse an existing managed prebuild that already contains this repo
-	// to avoid creating a new prebuild + setup session on every run.
-	const existingPrebuildId = await findManagedPrebuildForRepo(suggestedRepoId, organizationId);
-	if (existingPrebuildId) {
+	// Reuse an existing managed configuration that already contains this repo
+	// to avoid creating a new configuration + setup session on every run.
+	const existingConfigurationId = await findManagedConfigurationForRepo(
+		suggestedRepoId,
+		organizationId,
+	);
+	if (existingConfigurationId) {
 		return {
 			type: "selected",
-			prebuildId: existingPrebuildId,
+			configurationId: existingConfigurationId,
 			reason: "enrichment_suggestion_reused",
 			suggestedRepoId,
 		};
@@ -82,14 +85,14 @@ function extractSuggestedRepoId(enrichmentJson: unknown): string | null {
 	return payload.suggestedRepoId;
 }
 
-async function findManagedPrebuildForRepo(
+async function findManagedConfigurationForRepo(
 	repoId: string,
 	organizationId: string,
 ): Promise<string | null> {
-	const managed = await prebuilds.findManagedPrebuilds();
-	const match = managed.find((p) =>
-		p.configurationRepos?.some(
-			(pr) => pr.repo?.id === repoId && pr.repo?.organizationId === organizationId,
+	const managed = await configurations.findManagedConfigurations();
+	const match = managed.find((c) =>
+		c.configurationRepos?.some(
+			(cr) => cr.repo?.id === repoId && cr.repo?.organizationId === organizationId,
 		),
 	);
 	return match?.id ?? null;

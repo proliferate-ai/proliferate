@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { organization } from "@/lib/auth-client";
+import { useOnboardingStore } from "@/stores/onboarding";
 import Image from "next/image";
 import { useState } from "react";
 
@@ -12,7 +13,8 @@ interface StepCreateOrgProps {
 }
 
 export function StepCreateOrg({ onComplete }: StepCreateOrgProps) {
-	const [orgName, setOrgName] = useState("");
+	const orgName = useOnboardingStore((s) => s.orgName);
+	const setOrgName = useOnboardingStore((s) => s.setOrgName);
 	const [isCreating, setIsCreating] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -58,11 +60,11 @@ export function StepCreateOrg({ onComplete }: StepCreateOrgProps) {
 	};
 
 	return (
-		<div className="w-full max-w-[420px]">
+		<div className="w-[480px]">
 			{/* Card with image */}
-			<div className="rounded-2xl overflow-hidden border border-border mb-8">
+			<div className="rounded-2xl overflow-hidden border border-border">
 				{/* Image Area */}
-				<div className="relative bg-black" style={{ aspectRatio: "1 / 1" }}>
+				<div className="relative bg-black" style={{ aspectRatio: "1360 / 880" }}>
 					<Image src="/colloseum.png" alt="Create organization" fill className="object-cover" />
 					<div className="absolute top-3 left-0 right-0 flex justify-center pointer-events-none">
 						<span className="px-4 py-1.5 font-bold text-xs tracking-[0.25em] uppercase text-white/80">
@@ -87,7 +89,7 @@ export function StepCreateOrg({ onComplete }: StepCreateOrgProps) {
 								value={orgName}
 								onChange={(e) => {
 									setOrgName(e.target.value);
-									setError(null);
+									if (error) setError(null);
 								}}
 								disabled={isCreating}
 								autoFocus

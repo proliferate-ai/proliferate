@@ -10,17 +10,19 @@ import { authRouter } from "./auth";
 import { automationsRouter } from "./automations";
 import { billingRouter } from "./billing";
 import { cliRouter } from "./cli";
+import { configurationsRouter } from "./configurations";
 import { integrationsRouter } from "./integrations";
 import { intercomRouter } from "./intercom";
 import { onboardingRouter } from "./onboarding";
 import { orgsRouter } from "./orgs";
-import { prebuildsRouter } from "./prebuilds";
 import { reposRouter } from "./repos";
 import { schedulesRouter } from "./schedules";
 import { secretFilesRouter } from "./secret-files";
 import { secretsRouter } from "./secrets";
 import { sessionsRouter } from "./sessions";
+import { templatesRouter } from "./templates";
 import { triggersRouter } from "./triggers";
+import { userActionPreferencesRouter } from "./user-action-preferences";
 
 export const appRouter = {
 	actions: actionsRouter,
@@ -33,13 +35,15 @@ export const appRouter = {
 	intercom: intercomRouter,
 	onboarding: onboardingRouter,
 	orgs: orgsRouter,
-	prebuilds: prebuildsRouter,
+	configurations: configurationsRouter,
 	repos: reposRouter,
 	schedules: schedulesRouter,
 	secretFiles: secretFilesRouter,
 	secrets: secretsRouter,
 	sessions: sessionsRouter,
+	templates: templatesRouter,
 	triggers: triggersRouter,
+	userActionPreferences: userActionPreferencesRouter,
 };
 
 export type AppRouter = typeof appRouter;

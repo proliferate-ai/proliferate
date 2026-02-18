@@ -49,12 +49,12 @@ import {
 } from "../sandbox";
 import type {
 	AutoStartOutputEntry,
+	ConfigurationServiceCommand,
 	CreateSandboxOpts,
 	CreateSandboxResult,
 	EnsureSandboxResult,
 	FileContent,
 	PauseResult,
-	PrebuildServiceCommand,
 	SandboxProvider,
 	SnapshotResult,
 } from "../sandbox-provider";
@@ -171,7 +171,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 						call.request?.definition?.experimentalOptions?.enable_snapshot
 					) {
 						call.request.definition.enableSnapshot = true;
-						delete call.request.definition.experimentalOptions.enable_snapshot;
+						call.request.definition.experimentalOptions.enable_snapshot = undefined;
 					}
 					return yield* call.next(call.request, options);
 				},
@@ -392,7 +392,9 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				// Ensure we don't accidentally treat this snapshot as a repo snapshot.
 				sandbox
 					.exec(["rm", "-f", SANDBOX_PATHS.metadataFile])
-					.catch(() => {}),
+					.catch(() => {
+						// Best-effort — ignore errors
+					}),
 			]);
 
 			const snapshotStartMs = Date.now();
@@ -410,7 +412,9 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			return { snapshotId: snapshotImage.imageId };
 		} finally {
 			// Best-effort cleanup.
-			await sandbox.terminate().catch(() => {});
+			await sandbox.terminate().catch(() => {
+				// Best-effort — ignore errors
+			});
 		}
 	}
 
@@ -526,7 +530,9 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 			return { snapshotId: snapshotImage.imageId, commitSha };
 		} finally {
-			await sandbox.terminate().catch(() => {});
+			await sandbox.terminate().catch(() => {
+				// Best-effort — ignore errors
+			});
 		}
 	}
 
@@ -1094,7 +1100,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		];
 
 		if (isSetupSession) {
-			// Setup-only tools persist prebuild configuration.
+			// Setup-only tools persist configuration.
 			writePromises.push(
 				writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
 				writeFile(`${localToolDir}/save_service_commands.txt`, SAVE_SERVICE_COMMANDS_DESCRIPTION),
@@ -1403,7 +1409,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 	async testServiceCommands(
 		sandboxId: string,
-		commands: PrebuildServiceCommand[],
+		commands: ConfigurationServiceCommand[],
 		opts: { timeoutMs: number; runId: string },
 	): Promise<AutoStartOutputEntry[]> {
 		const log = providerLogger.child({ sandboxId: sandboxId.slice(0, 16), runId: opts.runId });

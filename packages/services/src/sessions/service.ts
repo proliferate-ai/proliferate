@@ -26,6 +26,9 @@ export async function listSessions(
 	const rows = await sessionsDb.listByOrganization(orgId, {
 		repoId: options?.repoId,
 		status: options?.status,
+		limit: options?.limit,
+		excludeSetup: options?.excludeSetup,
+		excludeCli: options?.excludeCli,
 	});
 	return toSessions(rows);
 }

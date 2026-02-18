@@ -88,6 +88,250 @@ interface IconProps {
 }
 
 /**
+ * Custom "Blocks" icon
+ */
+export function BlocksIcon({ className }: IconProps) {
+	return (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			viewBox="300 300 200 200"
+			className={className}
+			fill="none"
+		>
+			<rect x="375.00" y="375.00" width="50.00" height="50.00" fill="currentColor" />
+			<rect x="387.67" y="305.00" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="429.00" y="346.33" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="470.33" y="387.67" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="429.00" y="429.00" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="387.67" y="470.33" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="346.33" y="429.00" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="305.00" y="387.67" width="24.67" height="24.67" fill="currentColor" />
+			<rect x="346.33" y="346.33" width="24.67" height="24.67" fill="currentColor" />
+		</svg>
+	);
+}
+
+/**
+ * Animated loading version of the "Blocks" icon
+ */
+export function BlocksLoadingIcon({ className }: IconProps) {
+	return (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			viewBox="300 300 200 200"
+			className={className}
+			fill="none"
+		>
+			<rect x="375.00" y="375.00" width="50.00" height="50.00" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="1;0.55;1"
+					dur="1.6s"
+					begin="-0.8s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="387.67" y="305.00" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="429.00" y="346.33" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0.16s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="470.33" y="387.67" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0.32s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="429.00" y="429.00" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0.48s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="387.67" y="470.33" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0.64s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="346.33" y="429.00" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0.8s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="305.00" y="387.67" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="0.96s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+			<rect x="346.33" y="346.33" width="24.67" height="24.67" fill="currentColor">
+				<animate
+					attributeName="opacity"
+					values="0.35;1;0.35"
+					dur="1.6s"
+					begin="1.12s"
+					repeatCount="indefinite"
+				/>
+			</rect>
+		</svg>
+	);
+}
+export function BlocksLoadingIcon2({ className }: IconProps) {
+	return (
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			viewBox="300 300 200 200"
+			className={className}
+			fill="none"
+		>
+			{/* Embedded CSS for a self-contained component */}
+			<style>
+				{`
+                    @keyframes ai-pulse-wave {
+                        /* 0% to 60% covers the active pulse, 60% to 100% creates a natural resting pause between waves */
+                        0%, 60%, 100% {
+                            opacity: 0.2;
+                            transform: scale(0.6);
+                        }
+                        30% {
+                            opacity: 1;
+                            transform: scale(1);
+                        }
+                    }
+                    .ai-block {
+                        /* Ensures each block scales exactly from its own center */
+                        transform-origin: center;
+                        transform-box: fill-box;
+                        animation: ai-pulse-wave 1.5s infinite ease-in-out;
+                    }
+                `}
+			</style>
+
+			{/* Column 3: Center & Top/Bottom */}
+			<rect
+				x="375.00"
+				y="375.00"
+				width="50.00"
+				height="50.00"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.2s" }}
+			/>
+			<rect
+				x="387.67"
+				y="305.00"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.2s" }}
+			/>
+			<rect
+				x="387.67"
+				y="470.33"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.2s" }}
+			/>
+
+			{/* Column 4: Top-Right & Bottom-Right */}
+			<rect
+				x="429.00"
+				y="346.33"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.05s" }}
+			/>
+			<rect
+				x="429.00"
+				y="429.00"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.05s" }}
+			/>
+
+			{/* Column 5: Right Edge */}
+			<rect
+				x="470.33"
+				y="387.67"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-0.9s" }}
+			/>
+
+			{/* Column 2: Top-Left & Bottom-Left */}
+			<rect
+				x="346.33"
+				y="429.00"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.35s" }}
+			/>
+			<rect
+				x="346.33"
+				y="346.33"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.35s" }}
+			/>
+
+			{/* Column 1: Left Edge */}
+			<rect
+				x="305.00"
+				y="387.67"
+				width="24.67"
+				height="24.67"
+				fill="#000"
+				className="ai-block"
+				style={{ animationDelay: "-1.5s" }}
+			/>
+		</svg>
+	);
+}
+
+/**
  * Google brand icon for OAuth buttons
  */
 export function GoogleIcon({ className }: IconProps) {
@@ -334,6 +578,45 @@ export function ClaudeIcon({ className }: IconProps) {
 	);
 }
 
+/**
+ * OpenAI logo
+ */
+export function OpenAIIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={cn("h-4 w-4", className)}
+			viewBox="0 0 24 24"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" />
+		</svg>
+	);
+}
+
+/**
+ * Google Gemini logo
+ */
+export function GeminiIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={cn("h-4 w-4", className)}
+			viewBox="0 0 24 24"
+			fill="none"
+			xmlns="http://www.w3.org/2000/svg"
+		>
+			<path
+				d="M12 24C12 18.2 12 15.3 12 12C12 8.7 12 5.8 12 0C14.4 3.5 17 6.2 21 8.1C24 9.5 24 9.5 24 12C24 14.5 24 14.5 21 15.9C17 17.8 14.4 20.5 12 24Z"
+				fill="#4285F4"
+			/>
+			<path
+				d="M12 24C12 18.2 12 15.3 12 12C12 8.7 12 5.8 12 0C9.6 3.5 7 6.2 3 8.1C0 9.5 0 9.5 0 12C0 14.5 0 14.5 3 15.9C7 17.8 9.6 20.5 12 24Z"
+				fill="#4285F4"
+			/>
+		</svg>
+	);
+}
+
 // ============================================================================
 // Generic UI Icons
 // ============================================================================
@@ -462,6 +745,214 @@ export function SidebarCollapseIcon({ className }: IconProps) {
 	return (
 		<svg className={className} viewBox="0 0 16 16" fill="currentColor">
 			<path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3zm5-1v12h9a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H5zM4 2H2a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h2V2z" />
+		</svg>
+	);
+}
+
+export function AutomationsIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			xmlns="http://www.w3.org/2000/svg"
+			viewBox="0 0 20 20"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.5"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		>
+			<path d="M7.29183 5.625V9.16667C6.3118 10.3917 4.74726 11.7612 4.1643 13.3928M7.29183 5.625H12.7085M7.29183 5.625H6.4585M4.1643 13.3928C4.03384 13.758 3.9585 14.1318 3.9585 14.5135C3.9585 16.278 5.38885 17.7083 7.1533 17.7083H12.847C14.6115 17.7083 16.0418 16.278 16.0418 14.5135C16.0418 14.1318 15.9665 13.758 15.836 13.3928M4.1643 13.3928C4.1643 13.3928 6.39669 12.9228 7.84242 12.9613C9.5605 13.0072 10.4398 13.7786 12.1579 13.8244C13.6037 13.863 15.836 13.3928 15.836 13.3928M12.7085 5.625V9.16667C13.6885 10.3917 15.2531 11.7612 15.836 13.3928M12.7085 5.625H13.5418" />
+			<path d="M8.54167 3.33334C8.54167 3.44839 8.44842 3.54167 8.33334 3.54167M8.54167 3.33334C8.54167 3.21828 8.44842 3.125 8.33334 3.125M8.54167 3.33334H8.33334M8.33334 3.54167C8.21828 3.54167 8.125 3.44839 8.125 3.33334M8.33334 3.54167V3.33334M8.33334 3.125C8.21828 3.125 8.125 3.21828 8.125 3.33334M8.33334 3.125V3.33334M8.33334 3.33334H8.125M8.33334 3.33334L8.18602 3.48065M8.33334 3.33334L8.48067 3.18602M8.33334 3.33334L8.18602 3.18602M8.33334 3.33334L8.48067 3.48065M8.18602 3.48065C8.26738 3.56201 8.39925 3.56201 8.48067 3.48065M8.18602 3.48065C8.10466 3.39929 8.10466 3.26738 8.18602 3.18602M8.48067 3.18602C8.562 3.26738 8.562 3.39929 8.48067 3.48065M8.48067 3.18602C8.39925 3.10466 8.26738 3.10466 8.18602 3.18602" />
+			<path d="M11.875 2.08334C11.875 2.42852 11.5952 2.70834 11.25 2.70834C10.9048 2.70834 10.625 2.42852 10.625 2.08334C10.625 1.73817 10.9048 1.45834 11.25 1.45834C11.5952 1.45834 11.875 1.73817 11.875 2.08334Z" />
+		</svg>
+	);
+}
+
+export function RunsIcon({ className }: IconProps) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 20 20"
+			fill="none"
+			xmlns="http://www.w3.org/2000/svg"
+			color="currentColor"
+		>
+			<path
+				d="M16.8792 14.2083V8.625C16.8792 8.15829 16.8792 7.92493 16.7883 7.74667C16.7084 7.58987 16.581 7.46239 16.4242 7.38249C16.2459 7.29167 16.0126 7.29167 15.5458 7.29167H4.45833C3.99162 7.29167 3.75827 7.29167 3.58001 7.38249C3.42321 7.46239 3.29572 7.58987 3.21582 7.74667C3.125 7.92493 3.125 8.15829 3.125 8.625V14.2083C3.125 15.1417 3.125 15.6085 3.30666 15.965C3.46644 16.2786 3.72141 16.5336 4.03502 16.6933C4.39153 16.875 4.85824 16.875 5.79167 16.875H14.2125C15.1459 16.875 15.6127 16.875 15.9692 16.6933C16.2827 16.5336 16.5378 16.2786 16.6975 15.965C16.8792 15.6085 16.8792 15.1417 16.8792 14.2083Z"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<path
+				d="M4.7915 6.66667V3.125C4.7915 2.66477 5.1646 2.29167 5.62484 2.29167H8.05948C8.5015 2.29167 8.92542 2.46726 9.238 2.77983L10.1724 3.71426C10.3287 3.87053 10.5407 3.95833 10.7617 3.95833H14.3748C14.8351 3.95833 15.2082 4.33143 15.2082 4.79167V6.66667"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<path
+				d="M6.4585 10.625H9.79183"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	);
+}
+
+// ============================================================================
+// Automation Template Icons
+// ============================================================================
+
+/**
+ * Sentry Auto-Fixer: Bug with a wrench overlay
+ */
+export function TemplateIconSentryFixer({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+			{/* Bug body */}
+			<ellipse cx="14" cy="17" rx="6" ry="7" stroke="currentColor" strokeWidth="1.8" />
+			<line x1="14" y1="10" x2="14" y2="24" stroke="currentColor" strokeWidth="1.5" />
+			<line x1="8" y1="16" x2="20" y2="16" stroke="currentColor" strokeWidth="1.5" />
+			{/* Bug legs */}
+			<path d="M8.5 13.5L5.5 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M8 17.5L4.5 17.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M8.5 21L5.5 23" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M19.5 13.5L22.5 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			{/* Bug antennae */}
+			<path d="M11 11L9 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M17 11L19 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			{/* Wrench */}
+			<path d="M24 20L28 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+			<circle cx="23" cy="19" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+		</svg>
+	);
+}
+
+/**
+ * Linear PR Drafter: Ticket shape flowing into a git merge/branch
+ */
+export function TemplateIconLinearPr({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+			{/* Ticket / card */}
+			<rect x="3" y="7" width="13" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" />
+			<line
+				x1="6.5"
+				y1="11.5"
+				x2="12.5"
+				y2="11.5"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+			/>
+			<line
+				x1="6.5"
+				y1="14.5"
+				x2="10.5"
+				y2="14.5"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+			/>
+			<line
+				x1="6.5"
+				y1="17.5"
+				x2="11.5"
+				y2="17.5"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+			/>
+			{/* Arrow flowing right */}
+			<path d="M16 16H22" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+			<path
+				d="M20 13.5L22.5 16L20 18.5"
+				stroke="currentColor"
+				strokeWidth="1.8"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			{/* Git branch symbol */}
+			<circle cx="27" cy="11" r="2" stroke="currentColor" strokeWidth="1.5" />
+			<circle cx="27" cy="21" r="2" stroke="currentColor" strokeWidth="1.5" />
+			<path d="M27 13V19" stroke="currentColor" strokeWidth="1.5" />
+		</svg>
+	);
+}
+
+/**
+ * GitHub Issue Solver: Issue circle with an inner check
+ */
+export function TemplateIconGithubSolver({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+			{/* Outer issue circle */}
+			<circle cx="16" cy="16" r="11" stroke="currentColor" strokeWidth="1.8" />
+			{/* Inner dot (GitHub issue icon style) morphing into a check */}
+			<path
+				d="M11.5 16.5L14.5 19.5L21 13"
+				stroke="currentColor"
+				strokeWidth="2.2"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			{/* Small spark lines radiating — solution found */}
+			<path d="M16 2.5V4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M16 27.5V29.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M2.5 16H4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M27.5 16H29.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+		</svg>
+	);
+}
+
+/**
+ * CI Failure Fixer: Pipeline with a lightning bolt repair
+ */
+export function TemplateIconCiFixer({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+			{/* Pipeline stages */}
+			<rect x="2" y="11" width="7" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+			<rect x="23" y="11" width="7" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+			{/* Connecting lines */}
+			<path d="M9 16H12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+			<path d="M20 16H23" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+			{/* Lightning bolt in center — the fix */}
+			<path
+				d="M17.5 9L14 17H18L14.5 25"
+				stroke="currentColor"
+				strokeWidth="2"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			{/* Check in the last stage */}
+			<path
+				d="M25 15.5L26.5 17L28 14.5"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	);
+}
+
+export function ChatBubbleIcon({ className }: IconProps) {
+	return (
+		<svg className={className} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+			<path
+				d="M17.9167 10C17.9167 5.83334 14.838 3.33334 10 3.33334C5.16208 3.33334 2.08337 5.83334 2.08337 10C2.08337 11.0786 2.82855 12.908 2.94717 13.1924C2.95802 13.2184 2.96875 13.2421 2.97845 13.2685C3.05967 13.49 3.38597 14.6519 2.08337 16.3699C3.84263 17.2033 5.71096 15.8333 5.71096 15.8333C7.00358 16.5129 8.54162 16.6667 10 16.6667C14.838 16.6667 17.9167 14.1667 17.9167 10Z"
+				stroke="currentColor"
+				strokeWidth="1.5"
+				strokeLinecap="square"
+				strokeLinejoin="round"
+			/>
+			<path d="M10.0331 8V12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M7 9V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M13.0331 9V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 		</svg>
 	);
 }

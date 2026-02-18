@@ -16,15 +16,12 @@ const DialogClose = DialogPrimitive.Close;
 
 const DialogOverlay = React.forwardRef<
 	React.ElementRef<typeof DialogPrimitive.Overlay>,
-	React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> & {
-		disablePointerEvents?: boolean;
-	}
->(({ className, disablePointerEvents, ...props }, ref) => (
+	React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
+>(({ className, ...props }, ref) => (
 	<DialogPrimitive.Overlay
 		ref={ref}
 		className={cn(
 			"fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-			disablePointerEvents && "pointer-events-none",
 			className,
 		)}
 		{...props}
@@ -36,11 +33,10 @@ const DialogContent = React.forwardRef<
 	React.ElementRef<typeof DialogPrimitive.Content>,
 	React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
 		hideCloseButton?: boolean;
-		disableOverlayPointerEvents?: boolean;
 	}
->(({ className, children, hideCloseButton, disableOverlayPointerEvents, ...props }, ref) => (
+>(({ className, children, hideCloseButton, ...props }, ref) => (
 	<DialogPortal>
-		<DialogOverlay disablePointerEvents={disableOverlayPointerEvents} />
+		<DialogOverlay />
 		<DialogPrimitive.Content
 			ref={ref}
 			className={cn(

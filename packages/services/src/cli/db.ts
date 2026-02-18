@@ -26,14 +26,14 @@ import {
 } from "../db/client";
 import { toIsoString, toIsoStringRequired } from "../db/serialize";
 import type {
+	CliConfigurationRow,
 	CliGitHubSelectionRow,
-	CliPrebuildRow,
 	CliRepoConnectionRow,
 	CliRepoRow,
 	CliSessionFullRow,
 	CliSessionRow,
 	CreateCliSessionInput,
-	CreateCliSessionWithPrebuildInput,
+	CreateCliSessionWithConfigurationInput,
 	DeviceCodeRow,
 	GitHubIntegrationForTokenRow,
 	GitHubIntegrationStatusRow,
@@ -459,16 +459,16 @@ export async function findResumableSession(
 }
 
 // ============================================
-// Prebuild Queries
+// Configuration Queries
 // ============================================
 
 /**
- * Get CLI prebuild by local path hash.
+ * Get CLI configuration by local path hash.
  */
-export async function getCliPrebuild(
+export async function getCliConfiguration(
 	userId: string,
 	localPathHash: string,
-): Promise<CliPrebuildRow | null> {
+): Promise<CliConfigurationRow | null> {
 	const db = getDb();
 	const row = await db.query.configurations.findFirst({
 		where: and(eq(configurations.userId, userId), eq(configurations.localPathHash, localPathHash)),
@@ -494,14 +494,14 @@ export async function getCliPrebuild(
 }
 
 /**
- * Upsert CLI prebuild.
+ * Upsert CLI configuration.
  */
-export async function upsertCliPrebuild(input: {
+export async function upsertCliConfiguration(input: {
 	userId: string;
 	localPathHash: string;
 	snapshotId: string;
 	sandboxProvider: string;
-}): Promise<CliPrebuildRow> {
+}): Promise<CliConfigurationRow> {
 	const db = getDb();
 	const [row] = await db
 		.insert(configurations)
@@ -510,7 +510,7 @@ export async function upsertCliPrebuild(input: {
 			localPathHash: input.localPathHash,
 			snapshotId: input.snapshotId,
 			status: "ready",
-			name: "CLI Prebuild",
+			name: "CLI Configuration",
 		})
 		.onConflictDoUpdate({
 			target: [configurations.userId, configurations.localPathHash],
@@ -532,9 +532,9 @@ export async function upsertCliPrebuild(input: {
 }
 
 /**
- * Delete CLI prebuild.
+ * Delete CLI configuration.
  */
-export async function deleteCliPrebuild(userId: string, localPathHash: string): Promise<void> {
+export async function deleteCliConfiguration(userId: string, localPathHash: string): Promise<void> {
 	const db = getDb();
 	await db
 		.delete(configurations)
@@ -542,9 +542,9 @@ export async function deleteCliPrebuild(userId: string, localPathHash: string): 
 }
 
 /**
- * Create a new CLI prebuild with pending status.
+ * Create a new CLI configuration with pending status.
  */
-export async function createCliPrebuildPending(input: {
+export async function createCliConfigurationPending(input: {
 	userId: string;
 	localPathHash: string;
 	sandboxProvider: string;
@@ -557,7 +557,7 @@ export async function createCliPrebuildPending(input: {
 			localPathHash: input.localPathHash,
 			status: "pending",
 			type: "cli",
-			name: "CLI Prebuild",
+			name: "CLI Configuration",
 		})
 		.returning({ id: configurations.id });
 
@@ -565,10 +565,10 @@ export async function createCliPrebuildPending(input: {
 }
 
 /**
- * Upsert prebuild_repos junction entry.
+ * Upsert configuration_repos junction entry.
  */
-export async function upsertPrebuildRepo(input: {
-	prebuildId: string;
+export async function upsertConfigurationRepo(input: {
+	configurationId: string;
 	repoId: string;
 	workspacePath: string;
 }): Promise<void> {
@@ -576,7 +576,7 @@ export async function upsertPrebuildRepo(input: {
 	await db
 		.insert(configurationRepos)
 		.values({
-			configurationId: input.prebuildId,
+			configurationId: input.configurationId,
 			repoId: input.repoId,
 			workspacePath: input.workspacePath,
 		})
@@ -589,15 +589,15 @@ export async function upsertPrebuildRepo(input: {
 }
 
 /**
- * Create a CLI session with prebuild.
+ * Create a CLI session with configuration.
  */
-export async function createCliSessionWithPrebuild(
-	input: CreateCliSessionWithPrebuildInput,
+export async function createCliSessionWithConfiguration(
+	input: CreateCliSessionWithConfigurationInput,
 ): Promise<void> {
 	const db = getDb();
 	await db.insert(sessions).values({
 		id: input.id,
-		prebuildId: input.prebuildId,
+		configurationId: input.configurationId,
 		organizationId: input.organizationId,
 		createdBy: input.createdBy,
 		sessionType: input.sessionType,
@@ -728,7 +728,7 @@ export async function getSessionByIdAndOrg(
 		status: row.status,
 		sandbox_id: row.sandboxId,
 		snapshot_id: row.snapshotId,
-		prebuild_id: row.prebuildId,
+		configuration_id: row.configurationId,
 		branch_name: row.branchName,
 		base_commit_sha: row.baseCommitSha,
 		parent_session_id: row.parentSessionId,

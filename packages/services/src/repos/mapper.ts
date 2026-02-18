@@ -6,22 +6,13 @@
 
 import type { Repo } from "@proliferate/shared";
 import { toIsoString } from "../db/serialize";
-import type { RepoRow, RepoWithPrebuildsRow } from "./db";
+import type { RepoRow, RepoWithConfigurationsRow } from "./db";
 
 /**
- * Check if a prebuild_repos entry has a usable snapshot.
+ * Map a DB row (with configurations) to API Repo type.
  */
-function hasUsablePrebuild(pr: { configuration: { snapshotId: string | null } | null }): boolean {
-	return !!pr.configuration?.snapshotId;
-}
-
-/**
- * Map a DB row (with prebuilds) to API Repo type.
- */
-export function toRepo(row: RepoWithPrebuildsRow): Repo {
-	const readyPrebuild = row.configurationRepos?.find(hasUsablePrebuild);
-	const hasServiceCommands = Array.isArray(row.serviceCommands) && row.serviceCommands.length > 0;
-
+export function toRepo(row: RepoWithConfigurationsRow): Repo {
+	const primaryConfig = row.configurationRepos?.[0]?.configuration;
 	return {
 		id: row.id,
 		organizationId: row.organizationId,
@@ -32,21 +23,20 @@ export function toRepo(row: RepoWithPrebuildsRow): Repo {
 		createdAt: toIsoString(row.createdAt),
 		source: row.source || "github",
 		isPrivate: false, // Field not in Drizzle schema, default to false for API compatibility
-		prebuildStatus: readyPrebuild ? "ready" : "pending",
-		prebuildId: readyPrebuild?.configuration?.id || null,
-		isConfigured: hasServiceCommands && !!readyPrebuild,
+		configurationId: primaryConfig?.id ?? null,
+		configurationStatus: primaryConfig?.status ?? null,
 	};
 }
 
 /**
  * Map multiple DB rows to API Repo types.
  */
-export function toRepos(rows: RepoWithPrebuildsRow[]): Repo[] {
+export function toRepos(rows: RepoWithConfigurationsRow[]): Repo[] {
 	return rows.map(toRepo);
 }
 
 /**
- * Map a simple repo row (no prebuilds) to partial Repo type.
+ * Map a simple repo row (no configurations) to partial Repo type.
  */
 export function toRepoPartial(row: RepoRow): Partial<Repo> {
 	return {

@@ -60,8 +60,8 @@ export function StepSlackConnect({
 	// Just completed OAuth - show Slack Connect setup
 	if (justConnected) {
 		return (
-			<div className="w-full max-w-[420px]">
-				<div className="rounded-2xl overflow-hidden border border-border mb-8">
+			<div className="w-[480px]">
+				<div className="rounded-2xl overflow-hidden border border-border">
 					{/* Slack Icon Area */}
 					<div className="relative bg-gradient-to-br from-[#4A154B] to-[#611f69] h-48 flex items-center justify-center">
 						<div className="w-20 h-20 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center">
@@ -136,8 +136,8 @@ export function StepSlackConnect({
 	// Already connected (from previous session)
 	if (hasSlackConnection) {
 		return (
-			<div className="w-full max-w-[420px]">
-				<div className="rounded-2xl overflow-hidden border border-border mb-8">
+			<div className="w-[480px]">
+				<div className="rounded-2xl overflow-hidden border border-border">
 					{/* Slack Icon Area */}
 					<div className="relative bg-gradient-to-br from-[#4A154B] to-[#611f69] h-48 flex items-center justify-center">
 						<div className="w-20 h-20 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center">
@@ -185,8 +185,8 @@ export function StepSlackConnect({
 
 	// Not connected yet
 	return (
-		<div className="w-full max-w-[420px]">
-			<div className="rounded-2xl overflow-hidden border border-border mb-8">
+		<div className="w-[480px]">
+			<div className="rounded-2xl overflow-hidden border border-border">
 				{/* Slack Icon Area */}
 				<div className="relative bg-gradient-to-br from-[#4A154B] to-[#611f69] h-48 flex items-center justify-center">
 					<div className="w-20 h-20 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center">

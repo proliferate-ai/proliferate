@@ -73,6 +73,7 @@ export const auth = betterAuth({
 						if (!resend) {
 							throw new Error("Email is disabled but verification is required.");
 						}
+
 						await resend.emails.send({
 							from: emailFrom,
 							to: user.email,

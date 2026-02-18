@@ -5,7 +5,7 @@
 import { relations } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organization, user } from "./auth";
-import { prebuilds } from "./prebuilds";
+import { configurations } from "./configurations";
 import { repos } from "./repos";
 
 // ============================================
@@ -33,8 +33,8 @@ export const sessions = pgTable(
 		sandboxProvider: text("sandbox_provider").default("modal"),
 		snapshotId: text("snapshot_id"),
 
-		// Prebuild reference
-		prebuildId: uuid("prebuild_id").references(() => prebuilds.id, {
+		// Configuration reference
+		configurationId: uuid("configuration_id").references(() => configurations.id, {
 			onDelete: "set null",
 		}),
 
@@ -100,7 +100,7 @@ export const sessions = pgTable(
 		index("idx_sessions_parent").on(table.parentSessionId),
 		index("idx_sessions_automation").on(table.automationId),
 		index("idx_sessions_trigger").on(table.triggerId),
-		index("idx_sessions_prebuild").on(table.prebuildId),
+		index("idx_sessions_configuration").on(table.configurationId),
 		index("idx_sessions_local_path_hash").on(table.localPathHash),
 		index("idx_sessions_client_type").on(table.clientType),
 		index("idx_sessions_sandbox_expires_at").on(table.sandboxExpiresAt),
@@ -120,9 +120,9 @@ export const sessionsRelations = relations(sessions, ({ one, many }) => ({
 		fields: [sessions.createdBy],
 		references: [user.id],
 	}),
-	prebuild: one(prebuilds, {
-		fields: [sessions.prebuildId],
-		references: [prebuilds.id],
+	configuration: one(configurations, {
+		fields: [sessions.configurationId],
+		references: [configurations.id],
 	}),
 	parentSession: one(sessions, {
 		fields: [sessions.parentSessionId],

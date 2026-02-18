@@ -1,12 +1,12 @@
 "use client";
 
+import { PageShell } from "@/components/dashboard/page-shell";
 import {
 	BuyCreditsSection,
 	CreditUsageSection,
 	OverageSection,
 	PlanSection,
 } from "@/components/settings/billing";
-import { LoadingDots } from "@/components/ui/loading-dots";
 import { useBilling, useOrgMembers, useUpdateBillingSettings } from "@/hooks";
 import { useActiveOrganization, useSession } from "@/lib/auth-client";
 import type { BillingInfo } from "@/types/billing";
@@ -46,17 +46,23 @@ export default function BillingPage() {
 
 	if (isOrgPending || isBillingPending) {
 		return (
-			<div className="py-8 text-center">
-				<LoadingDots size="md" className="text-muted-foreground" />
-			</div>
+			<PageShell title="Billing" subtitle="Credits, plans, and usage" maxWidth="2xl">
+				<div className="space-y-4">
+					{[1, 2, 3].map((i) => (
+						<div key={i} className="h-24 rounded-lg bg-muted/30 animate-pulse" />
+					))}
+				</div>
+			</PageShell>
 		);
 	}
 
 	if (error) {
 		return (
-			<div className="py-8 text-center">
-				<p className="text-sm text-muted-foreground">Failed to load billing information</p>
-			</div>
+			<PageShell title="Billing" subtitle="Credits, plans, and usage" maxWidth="2xl">
+				<p className="text-sm text-muted-foreground text-center py-8">
+					Failed to load billing information
+				</p>
+			</PageShell>
 		);
 	}
 
@@ -65,23 +71,25 @@ export default function BillingPage() {
 	}
 
 	return (
-		<div className="space-y-10">
-			<CreditUsageSection credits={billing.credits} />
-			{isAdmin && <BuyCreditsSection />}
-			<PlanSection
-				plan={billing.plan}
-				limits={billing.limits}
-				hasActiveSubscription={billing.hasActiveSubscription}
-				selectedPlan={billing.selectedPlan}
-				billingState={billing.state.billingState}
-				isAdmin={isAdmin}
-			/>
-			{isAdmin && (
-				<OverageSection
-					billingSettings={billing.billingSettings}
-					onUpdate={handleUpdateBillingSettings}
+		<PageShell title="Billing" subtitle="Credits, plans, and usage" maxWidth="2xl">
+			<div className="space-y-10">
+				<CreditUsageSection credits={billing.credits} />
+				{isAdmin && <BuyCreditsSection />}
+				<PlanSection
+					plan={billing.plan}
+					limits={billing.limits}
+					hasActiveSubscription={billing.hasActiveSubscription}
+					selectedPlan={billing.selectedPlan}
+					billingState={billing.state.billingState}
+					isAdmin={isAdmin}
 				/>
-			)}
-		</div>
+				{isAdmin && (
+					<OverageSection
+						billingSettings={billing.billingSettings}
+						onUpdate={handleUpdateBillingSettings}
+					/>
+				)}
+			</div>
+		</PageShell>
 	);
 }

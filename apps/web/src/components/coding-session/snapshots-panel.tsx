@@ -1,25 +1,14 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useEffectiveServiceCommands, useServiceCommands } from "@/hooks/use-repos";
-import { usePreviewPanelStore } from "@/stores/preview-panel";
-import { Box, Camera, Loader2, Play, X } from "lucide-react";
-
-interface SnapshotsPanelProps {
-	snapshotId?: string | null;
-	repoId?: string | null;
-	prebuildId?: string | null;
-	canSnapshot?: boolean;
-	isSnapshotting?: boolean;
-	onSnapshot?: () => void;
-	onClose: () => void;
-}
+import { useEffectiveServiceCommands } from "@/hooks/use-configurations";
+import { useServiceCommands } from "@/hooks/use-repos";
+import { Box, Camera, Loader2, Play } from "lucide-react";
 
 export interface SnapshotsContentProps {
 	snapshotId?: string | null;
 	repoId?: string | null;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	canSnapshot?: boolean;
 	isSnapshotting?: boolean;
 	onSnapshot?: () => void;
@@ -29,23 +18,23 @@ export interface SnapshotsContentProps {
 export function SnapshotsContent({
 	snapshotId,
 	repoId,
-	prebuildId,
+	configurationId,
 	canSnapshot,
 	isSnapshotting,
 	onSnapshot,
 	onNavigateAutoStart,
 }: SnapshotsContentProps) {
-	const hasPrebuild = !!prebuildId;
+	const hasConfiguration = !!configurationId;
 	const { data: effective, isLoading: effectiveLoading } = useEffectiveServiceCommands(
-		prebuildId || "",
-		hasPrebuild,
+		configurationId || "",
+		hasConfiguration,
 	);
 	const { data: repoCommands, isLoading: repoLoading } = useServiceCommands(
 		repoId || "",
-		!hasPrebuild && !!repoId,
+		!hasConfiguration && !!repoId,
 	);
-	const commands = hasPrebuild ? effective?.commands : repoCommands;
-	const commandsLoading = hasPrebuild ? effectiveLoading : repoLoading;
+	const commands = hasConfiguration ? effective?.commands : repoCommands;
+	const commandsLoading = hasConfiguration ? effectiveLoading : repoLoading;
 
 	return (
 		<div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -110,47 +99,6 @@ export function SnapshotsContent({
 					</button>
 				</div>
 			)}
-		</div>
-	);
-}
-
-export function SnapshotsPanel({
-	snapshotId,
-	repoId,
-	prebuildId,
-	canSnapshot,
-	isSnapshotting,
-	onSnapshot,
-	onClose,
-}: SnapshotsPanelProps) {
-	const { togglePanel } = usePreviewPanelStore();
-
-	return (
-		<div className="flex flex-col h-full">
-			{/* Header */}
-			<TooltipProvider delayDuration={150}>
-				<div className="flex items-center justify-between px-4 py-2.5 border-b shrink-0">
-					<span className="text-sm font-medium">Snapshots</span>
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
-								<X className="h-4 w-4" />
-							</Button>
-						</TooltipTrigger>
-						<TooltipContent>Close panel</TooltipContent>
-					</Tooltip>
-				</div>
-			</TooltipProvider>
-
-			<SnapshotsContent
-				snapshotId={snapshotId}
-				repoId={repoId}
-				prebuildId={prebuildId}
-				canSnapshot={canSnapshot}
-				isSnapshotting={isSnapshotting}
-				onSnapshot={onSnapshot}
-				onNavigateAutoStart={() => togglePanel("settings")}
-			/>
 		</div>
 	);
 }

@@ -1,15 +1,10 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
-import { makeAssistantToolUI, useThreadRuntime } from "@assistant-ui/react";
-import { useMutation } from "@tanstack/react-query";
-import { CheckCircle, Key, Loader2, Settings } from "lucide-react";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { usePreviewPanelStore } from "@/stores/preview-panel";
+import { makeAssistantToolUI } from "@assistant-ui/react";
+import { CheckCircle, KeyRound, Loader2 } from "lucide-react";
+import { createContext, useContext, useMemo } from "react";
 
 // Context for session info needed by the tool UI
 interface SessionContextValue {
@@ -27,18 +22,11 @@ export function useSessionContext() {
 	return ctx;
 }
 
-interface Suggestion {
-	label: string;
-	value?: string;
-	instructions?: string;
-}
-
 interface EnvVariable {
 	key: string;
 	description?: string;
 	type?: "env" | "secret";
 	required?: boolean;
-	suggestions?: Suggestion[];
 }
 
 interface EnvRequestArgs {
@@ -47,193 +35,25 @@ interface EnvRequestArgs {
 
 export const EnvRequestToolUI = makeAssistantToolUI<EnvRequestArgs, string>({
 	toolName: "request_env_variables",
-	render: function EnvRequestUI({ args, status }) {
-		const [values, setValues] = useState<Record<string, string>>({});
-		const [existingKeys, setExistingKeys] = useState<Set<string>>(new Set());
-		const [overrides, setOverrides] = useState<Set<string>>(new Set());
-		const [skipped, setSkipped] = useState<Set<string>>(new Set());
-		const [persistMap, setPersistMap] = useState<Record<string, boolean>>({});
-		const [submitting, setSubmitting] = useState(false);
-		const [submitResults, setSubmitResults] = useState<Array<{
-			key: string;
-			persisted: boolean;
-			alreadyExisted: boolean;
-		}> | null>(null);
-		const [loading, setLoading] = useState(true);
-
-		// Get session context - may be null if not provided
-		const sessionCtx = useContext(SessionContext);
-		const threadRuntime = useThreadRuntime();
-
+	render: function EnvRequestUI({ args, result, status }) {
+		const togglePanel = usePreviewPanelStore((s) => s.togglePanel);
 		const isRunning = status.type === "running";
-
-		// Memoize variables to ensure stable reference
 		const variables = useMemo(() => args?.keys || [], [args?.keys]);
+		const requiredCount = variables.filter((v) => v.required !== false).length;
 
-		// Memoize secret keys to prevent infinite API calls on re-renders
-		const secretKeys = useMemo(
-			() => variables.filter((v) => v.type === "secret").map((v) => v.key),
-			[variables],
-		);
-		const repoId = sessionCtx?.repoId;
-
-		// Initialize persist defaults for secrets (default: true)
-		useEffect(() => {
-			const defaults: Record<string, boolean> = {};
-			for (const v of variables) {
-				if (v.type === "secret") defaults[v.key] = true;
-			}
-			setPersistMap(defaults);
-		}, [variables]);
-
-		const checkSecretsMutation = useMutation(orpc.secrets.check.mutationOptions());
-		const submitEnvMutation = useMutation(orpc.sessions.submitEnv.mutationOptions());
-		const checkSecrets = checkSecretsMutation.mutateAsync;
-
-		useEffect(() => {
-			if (!repoId) {
-				setLoading(false);
-				return;
-			}
-
-			async function checkExistingSecrets() {
-				if (secretKeys.length === 0) {
-					setLoading(false);
-					return;
-				}
-
-				try {
-					const response = await checkSecrets({
-						keys: secretKeys,
-						repo_id: repoId,
-					});
-					const existing = new Set(response.keys.filter((k) => k.exists).map((k) => k.key));
-					setExistingKeys(existing);
-				} catch (err) {
-					console.error("Failed to check existing secrets:", err);
-				} finally {
-					setLoading(false);
-				}
-			}
-			checkExistingSecrets();
-		}, [secretKeys, repoId, checkSecrets]);
-
-		const handleSuggestionClick = (key: string, suggestion: Suggestion) => {
-			const valueToUse = suggestion.value || suggestion.instructions || "";
-			// Toggle: if already selected, clear it
-			setValues((prev) => ({
-				...prev,
-				[key]: prev[key] === valueToUse ? "" : valueToUse,
-			}));
-		};
-
-		const handleSubmit = async () => {
-			if (!sessionCtx) return;
-
-			setSubmitting(true);
-
-			try {
-				const secretsToSubmit = variables
-					.filter((v) => v.type === "secret" && values[v.key])
-					.map((v) => ({
-						key: v.key,
-						value: values[v.key],
-						description: v.description,
-						persist: persistMap[v.key] ?? true,
-					}));
-
-				const envsToSubmit = variables
-					.filter((v) => v.type !== "secret" && values[v.key])
-					.map((v) => ({
-						key: v.key,
-						value: values[v.key],
-					}));
-
-				const response = await submitEnvMutation.mutateAsync({
-					sessionId: sessionCtx.sessionId,
-					secrets: secretsToSubmit,
-					envVars: envsToSubmit,
-					saveToPrebuild: true,
-				});
-
-				setSubmitResults(response.results ?? []);
-
-				// Send a user message to signal the agent to continue
-				threadRuntime.append({
-					role: "user",
-					content: [{ type: "text", text: "Configuration submitted." }],
-				});
-			} catch (err) {
-				console.error("Failed to submit environment variables:", err);
-			} finally {
-				setSubmitting(false);
-			}
-		};
-
-		// Check if all variables are satisfied (required ones must have value, optional ones can be skipped)
-		const allRequiredSatisfied = variables.every((v) => {
-			// Optional variables are satisfied if skipped or have a value
-			if (v.required === false) {
-				return (
-					skipped.has(v.key) || values[v.key] || (v.type === "secret" && existingKeys.has(v.key))
-				);
-			}
-			// Required variables must have a value or already exist
-			if (v.type === "secret") {
-				return existingKeys.has(v.key) || values[v.key];
-			}
-			return values[v.key];
-		});
-
-		const handleSkip = (key: string) => {
-			setSkipped((prev) => new Set([...prev, key]));
-			// Clear any value if skipping
-			setValues((prev) => {
-				const { [key]: _, ...rest } = prev;
-				return rest;
-			});
-		};
-
-		const handleUnskip = (key: string) => {
-			setSkipped((prev) => {
-				const next = new Set(prev);
-				next.delete(key);
-				return next;
-			});
-		};
-
-		const hasSecrets = variables.some((v) => v.type === "secret");
-
-		// If submitted, show per-secret results
-		if (submitResults) {
+		// Submitted state
+		if (result) {
 			return (
-				<div className="my-2 py-3 space-y-2">
-					<div className="flex items-center gap-2 text-green-600">
-						<CheckCircle className="h-4 w-4" />
-						<span className="text-sm font-medium">Configuration submitted</span>
+				<div className="my-2 py-3">
+					<div className="flex items-center gap-2">
+						<CheckCircle className="h-4 w-4 text-muted-foreground" />
+						<span className="text-sm text-muted-foreground">Configuration submitted</span>
 					</div>
-					{submitResults.length > 0 && (
-						<ul className="space-y-1 pl-6">
-							{submitResults.map((r) => (
-								<li key={r.key} className="text-xs text-muted-foreground">
-									<span className="font-medium text-foreground">{r.key}</span>
-									{" — "}
-									{r.alreadyExisted ? (
-										<span>Already saved</span>
-									) : r.persisted ? (
-										<span className="text-green-600">Saved for future sessions</span>
-									) : (
-										<span>This session only</span>
-									)}
-								</li>
-							))}
-						</ul>
-					)}
 				</div>
 			);
 		}
 
-		// If still running or no args yet, show minimal state
+		// Loading state
 		if (isRunning || !args?.keys) {
 			return (
 				<div className="my-2 py-3">
@@ -245,186 +65,28 @@ export const EnvRequestToolUI = makeAssistantToolUI<EnvRequestArgs, string>({
 			);
 		}
 
-		// If no session context, show error
-		if (!sessionCtx) {
-			return (
-				<div className="my-2 py-3">
-					<div className="flex items-center gap-2 text-destructive">
-						<Settings className="h-4 w-4" />
-						<span className="text-sm">Configuration form unavailable</span>
-					</div>
-				</div>
-			);
-		}
-
+		// Redirect card — directs user to the Environment sidebar tab
 		return (
-			<div className="my-2 py-4 space-y-4">
-				<div className="flex items-center gap-2 text-muted-foreground">
-					{hasSecrets ? <Key className="h-4 w-4" /> : <Settings className="h-4 w-4" />}
-					<h3 className="font-medium text-sm">
-						{hasSecrets ? "Configuration Required" : "Environment Variables"}
-					</h3>
+			<div className="my-2 py-3 space-y-3">
+				<div className="flex items-center gap-2">
+					<KeyRound className="h-4 w-4 text-muted-foreground" />
+					<span className="text-sm font-medium">
+						{requiredCount} environment {requiredCount === 1 ? "variable" : "variables"} needed
+					</span>
 				</div>
-
 				<p className="text-xs text-muted-foreground">
-					The agent needs the following to continue setup.
+					The agent needs environment variables to continue. Open the Environment panel to configure
+					them.
 				</p>
-
-				{loading ? (
-					<div className="flex items-center gap-2 text-muted-foreground">
-						<Loader2 className="h-3 w-3 animate-spin" />
-						<span className="text-xs">Checking existing configuration...</span>
-					</div>
-				) : (
-					<div className="space-y-3">
-						{variables.map((variable) => {
-							const isOptional = variable.required === false;
-							const isSkipped = skipped.has(variable.key);
-
-							return (
-								<div key={variable.key} className="space-y-1.5">
-									<div className="flex items-center gap-2">
-										<Label htmlFor={`env-${variable.key}`} className="text-xs font-medium">
-											{variable.key} {!isOptional && <span className="text-destructive">*</span>}
-										</Label>
-										{variable.type === "secret" && (
-											<span className="text-[10px] bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 px-1 py-0.5 rounded">
-												secret
-											</span>
-										)}
-										{isOptional && !isSkipped && (
-											<span className="text-[10px] text-muted-foreground">(optional)</span>
-										)}
-									</div>
-									{variable.description && (
-										<p className="text-[10px] text-muted-foreground">{variable.description}</p>
-									)}
-
-									{/* Skipped state for optional variables */}
-									{isSkipped ? (
-										<div className="flex items-center gap-2 text-xs text-muted-foreground">
-											<span>Skipped</span>
-											<Button
-												variant="link"
-												size="sm"
-												className="p-0 h-auto text-xs"
-												onClick={() => handleUnskip(variable.key)}
-											>
-												Undo
-											</Button>
-										</div>
-									) : (
-										<>
-											{/* Suggestions */}
-											{variable.suggestions && variable.suggestions.length > 0 && (
-												<div className="flex flex-wrap gap-1.5">
-													{variable.suggestions.map((suggestion) => (
-														<Button
-															key={suggestion.label}
-															variant="outline"
-															onClick={() => handleSuggestionClick(variable.key, suggestion)}
-															className={cn(
-																"text-[10px] h-auto px-2 py-0.5 rounded-full",
-																values[variable.key] ===
-																	(suggestion.value || suggestion.instructions)
-																	? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
-																	: "bg-background hover:bg-muted",
-															)}
-														>
-															{suggestion.label}
-														</Button>
-													))}
-												</div>
-											)}
-
-											{/* Existing secret indicator */}
-											{variable.type === "secret" &&
-											existingKeys.has(variable.key) &&
-											!overrides.has(variable.key) ? (
-												<div className="flex items-center gap-2 text-xs text-green-600">
-													<CheckCircle className="h-3 w-3" />
-													<span>Value already set</span>
-													<Button
-														variant="link"
-														size="sm"
-														className="p-0 h-auto text-xs"
-														onClick={() => setOverrides((prev) => new Set([...prev, variable.key]))}
-													>
-														Override
-													</Button>
-												</div>
-											) : (
-												<div className="flex items-center gap-2">
-													<Input
-														id={`env-${variable.key}`}
-														type={variable.type === "secret" ? "password" : "text"}
-														value={values[variable.key] || ""}
-														onChange={(e) =>
-															setValues((prev) => ({
-																...prev,
-																[variable.key]: e.target.value,
-															}))
-														}
-														placeholder={`Enter ${variable.key}`}
-														className="h-8 text-xs flex-1"
-													/>
-													{isOptional && (
-														<Button
-															variant="ghost"
-															size="sm"
-															className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-															onClick={() => handleSkip(variable.key)}
-														>
-															Skip
-														</Button>
-													)}
-												</div>
-											)}
-
-											{/* Per-secret persistence toggle */}
-											{variable.type === "secret" && (
-												<div className="flex items-center gap-2">
-													<Switch
-														id={`persist-${variable.key}`}
-														checked={persistMap[variable.key] ?? true}
-														onCheckedChange={(checked) =>
-															setPersistMap((prev) => ({
-																...prev,
-																[variable.key]: checked,
-															}))
-														}
-														className="h-4 w-7 [&>span]:h-3 [&>span]:w-3"
-													/>
-													<Label
-														htmlFor={`persist-${variable.key}`}
-														className="text-[10px] font-normal text-muted-foreground"
-													>
-														{(persistMap[variable.key] ?? true)
-															? "Save for future sessions"
-															: "This session only"}
-													</Label>
-												</div>
-											)}
-										</>
-									)}
-								</div>
-							);
-						})}
-					</div>
-				)}
-
-				{!loading && (
-					<div className="flex justify-end">
-						<Button
-							size="sm"
-							onClick={handleSubmit}
-							disabled={submitting || !allRequiredSatisfied}
-							className="h-7 text-xs"
-						>
-							{submitting ? "Submitting..." : "Submit"}
-						</Button>
-					</div>
-				)}
+				<Button
+					size="sm"
+					variant="outline"
+					className="gap-2 text-xs"
+					onClick={() => togglePanel("environment")}
+				>
+					<KeyRound className="h-3.5 w-3.5" />
+					Open Environment Panel
+				</Button>
 			</div>
 		);
 	},

@@ -11,6 +11,7 @@ import {
 	desc,
 	eq,
 	getDb,
+	ne,
 	type repos,
 	sessionConnections,
 	sessions,
@@ -62,12 +63,24 @@ export async function listByOrganization(
 		conditions.push(eq(sessions.status, filters.status));
 	}
 
+	if (filters?.excludeSetup) {
+		conditions.push(ne(sessions.sessionType, "setup"));
+	}
+
+	if (filters?.excludeCli) {
+		conditions.push(ne(sessions.origin, "cli"));
+	}
+
 	const results = await db.query.sessions.findMany({
 		where: and(...conditions),
 		with: {
 			repo: true,
 		},
-		orderBy: [desc(sessions.startedAt)],
+		orderBy: [
+			sql`CASE WHEN ${sessions.status} IN ('starting', 'running', 'paused') THEN 0 ELSE 1 END`,
+			desc(sessions.lastActivityAt),
+		],
+		...(filters?.limit ? { limit: filters.limit } : {}),
 	});
 
 	return results;
@@ -113,7 +126,7 @@ export async function create(input: CreateSessionInput): Promise<SessionRow> {
 		.insert(sessions)
 		.values({
 			id: input.id,
-			prebuildId: input.prebuildId,
+			configurationId: input.configurationId,
 			organizationId: input.organizationId,
 			sessionType: input.sessionType,
 			status: input.status,
@@ -174,7 +187,7 @@ export async function createWithAdmissionGuard(
 		// Insert session within the same transaction
 		await tx.insert(sessions).values({
 			id: input.id,
-			prebuildId: input.prebuildId,
+			configurationId: input.configurationId,
 			organizationId: input.organizationId,
 			sessionType: input.sessionType,
 			status: input.status,
@@ -314,11 +327,14 @@ export async function findByIdInternal(id: string): Promise<SessionRow | null> {
 }
 
 /**
- * Update session prebuild_id.
+ * Update session configuration_id.
  */
-export async function updatePrebuildId(sessionId: string, prebuildId: string): Promise<void> {
+export async function updateConfigurationId(
+	sessionId: string,
+	configurationId: string,
+): Promise<void> {
 	const db = getDb();
-	await db.update(sessions).set({ prebuildId }).where(eq(sessions.id, sessionId));
+	await db.update(sessions).set({ configurationId }).where(eq(sessions.id, sessionId));
 }
 
 /**
@@ -336,18 +352,18 @@ export async function markStopped(sessionId: string): Promise<void> {
 }
 
 /**
- * Create a setup session for a managed prebuild.
+ * Create a setup session for a managed configuration.
  */
 export async function createSetupSession(input: CreateSetupSessionInput): Promise<void> {
 	const db = getDb();
 	await db.insert(sessions).values({
 		id: input.id,
-		prebuildId: input.prebuildId,
+		configurationId: input.configurationId,
 		organizationId: input.organizationId,
 		sessionType: "setup",
 		status: "starting",
 		initialPrompt: input.initialPrompt,
-		source: "managed-prebuild",
+		source: "managed-configuration",
 	});
 }
 
@@ -381,12 +397,12 @@ export async function createSetupSessionWithAdmissionGuard(
 
 		await tx.insert(sessions).values({
 			id: input.id,
-			prebuildId: input.prebuildId,
+			configurationId: input.configurationId,
 			organizationId: input.organizationId,
 			sessionType: "setup",
 			status: "starting",
 			initialPrompt: input.initialPrompt,
-			source: "managed-prebuild",
+			source: "managed-configuration",
 		});
 
 		return { created: true };

@@ -11,7 +11,8 @@ export type { GitHubRepo, AvailableReposResponse } from "./github";
 // Dashboard/UI types
 export type {
 	Secret,
-	Snapshot,
+	Configuration,
+	Configuration as Snapshot,
 	Member,
 	Invitation,
 	Integration,

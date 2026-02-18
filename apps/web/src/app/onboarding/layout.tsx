@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useOnboardingStore } from "@/stores/onboarding";
+import { env } from "@proliferate/environment/public";
 import { useRouter } from "next/navigation";
 import { Suspense, useEffect } from "react";
 
@@ -53,6 +54,7 @@ function OnboardingLayoutInner({ children }: OnboardingLayoutProps) {
 	const step = useOnboardingStore((state) => state.step);
 	const flowType = useOnboardingStore((state) => state.flowType);
 	const setStep = useOnboardingStore((state) => state.setStep);
+	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
 
 	// Redirect to sign-in if not authenticated
 	useEffect(() => {
@@ -70,41 +72,31 @@ function OnboardingLayoutInner({ children }: OnboardingLayoutProps) {
 		return null;
 	}
 
-	// Calculate step progress
-	const getStepInfo = () => {
+	// Build step sequence based on flow type and billing
+	const getStepSequence = (): string[] => {
 		if (flowType === "developer") {
-			// Developer: path(1) → tools(2) → billing(3) → complete(4)
-			const steps = { path: 1, tools: 2, billing: 3, complete: 4 };
-			return { current: steps[step as keyof typeof steps] || 1, total: 4 };
+			const steps = ["path", "tools"];
+			if (billingEnabled) steps.push("billing");
+			steps.push("complete");
+			return steps;
 		}
-		// Organization: path(1) → create-org(2) → questionnaire(3) → tools(4) → invite(5) → billing(6) → complete(7)
-		const steps = {
-			path: 1,
-			"create-org": 2,
-			questionnaire: 3,
-			tools: 4,
-			invite: 5,
-			billing: 6,
-			complete: 7,
-		};
-		return { current: steps[step as keyof typeof steps] || 1, total: 7 };
+		const steps = ["path", "create-org", "questionnaire", "tools", "invite"];
+		if (billingEnabled) steps.push("billing");
+		steps.push("complete");
+		return steps;
+	};
+
+	const stepSequence = getStepSequence();
+
+	const getStepInfo = () => {
+		const index = stepSequence.indexOf(step);
+		return { current: (index >= 0 ? index : 0) + 1, total: stepSequence.length };
 	};
 
 	const handleStepClick = (stepNum: number) => {
-		if (flowType === "developer") {
-			const stepMap = ["path", "tools", "billing", "complete"] as const;
-			setStep(stepMap[stepNum - 1]);
-		} else {
-			const stepMap = [
-				"path",
-				"create-org",
-				"questionnaire",
-				"tools",
-				"invite",
-				"billing",
-				"complete",
-			] as const;
-			setStep(stepMap[stepNum - 1]);
+		const target = stepSequence[stepNum - 1];
+		if (target) {
+			setStep(target as typeof step);
 		}
 	};
 

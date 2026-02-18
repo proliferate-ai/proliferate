@@ -26,6 +26,7 @@ export const CreateSecretInputSchema = z.object({
 	description: z.string().optional(),
 	repoId: z.string().uuid().optional(),
 	secretType: z.string().optional(),
+	configurationId: z.string().uuid().optional(),
 });
 
 export type CreateSecretInput = z.infer<typeof CreateSecretInputSchema>;
@@ -33,7 +34,7 @@ export type CreateSecretInput = z.infer<typeof CreateSecretInputSchema>;
 export const CheckSecretsInputSchema = z.object({
 	keys: z.array(z.string()),
 	repo_id: z.string().uuid().optional(),
-	prebuild_id: z.string().uuid().optional(),
+	configuration_id: z.string().uuid().optional(),
 });
 
 export type CheckSecretsInput = z.infer<typeof CheckSecretsInputSchema>;

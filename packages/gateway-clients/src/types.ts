@@ -112,10 +112,10 @@ export type SandboxMode = "immediate" | "deferred";
 export interface CreateSessionRequest {
 	organizationId: string;
 
-	// Prebuild resolution (exactly one required)
-	prebuildId?: string;
-	managedPrebuild?: { repoIds?: string[] };
-	cliPrebuild?: { localPathHash: string; displayName?: string };
+	// Configuration resolution (exactly one required)
+	configurationId?: string;
+	managedConfiguration?: { repoIds?: string[] };
+	cliConfiguration?: { localPathHash: string; displayName?: string };
 
 	// Session config
 	sessionType: SessionType;
@@ -148,11 +148,11 @@ export interface CreateSessionRequest {
  */
 export interface CreateSessionResponse {
 	sessionId: string;
-	prebuildId: string;
+	configurationId: string;
 	status: "pending" | "starting" | "running";
 	gatewayUrl: string;
 	hasSnapshot: boolean;
-	isNewPrebuild: boolean;
+	isNewConfiguration: boolean;
 	sandbox?: {
 		sandboxId: string;
 		previewUrl: string | null;

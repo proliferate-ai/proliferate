@@ -42,22 +42,6 @@ export function useDeleteRepo() {
 	);
 }
 
-export function useRepoPrebuilds(repoId: string, enabled = true) {
-	return useQuery({
-		...orpc.repos.listPrebuilds.queryOptions({ input: { id: repoId } }),
-		enabled: enabled && !!repoId,
-		select: (data) => data.prebuilds,
-	});
-}
-
-export function useRepoSnapshots(repoId: string, enabled = true) {
-	return useQuery({
-		...orpc.repos.listSnapshots.queryOptions({ input: { id: repoId } }),
-		enabled: enabled && !!repoId,
-		select: (data) => data.prebuilds,
-	});
-}
-
 export function useAvailableRepos(integrationId?: string) {
 	return useQuery({
 		...orpc.repos.available.queryOptions({ input: { integrationId } }),
@@ -96,37 +80,28 @@ export function useUpdateServiceCommands() {
 	);
 }
 
-export function usePrebuildServiceCommands(prebuildId: string, enabled = true) {
+export function useCheckSecrets(
+	keys: string[],
+	repoId?: string,
+	configurationId?: string,
+	enabled = true,
+) {
 	return useQuery({
-		...orpc.prebuilds.getServiceCommands.queryOptions({ input: { prebuildId } }),
-		enabled: enabled && !!prebuildId,
-		select: (data) => data.commands,
+		...orpc.secrets.check.queryOptions({
+			input: { keys, repo_id: repoId, configuration_id: configurationId },
+		}),
+		enabled: enabled && keys.length > 0,
+		select: (data) => data.keys,
 	});
 }
 
-export function useEffectiveServiceCommands(prebuildId: string, enabled = true) {
-	return useQuery({
-		...orpc.prebuilds.getEffectiveServiceCommands.queryOptions({ input: { prebuildId } }),
-		enabled: enabled && !!prebuildId,
-	});
-}
-
-export function useUpdatePrebuildServiceCommands() {
+export function useCreateSecret() {
 	const queryClient = useQueryClient();
 
 	return useMutation(
-		orpc.prebuilds.updateServiceCommands.mutationOptions({
-			onSuccess: (_data, input) => {
-				queryClient.invalidateQueries({
-					queryKey: orpc.prebuilds.getServiceCommands.key({
-						input: { prebuildId: input.prebuildId },
-					}),
-				});
-				queryClient.invalidateQueries({
-					queryKey: orpc.prebuilds.getEffectiveServiceCommands.key({
-						input: { prebuildId: input.prebuildId },
-					}),
-				});
+		orpc.secrets.create.mutationOptions({
+			onSuccess: () => {
+				queryClient.invalidateQueries({ queryKey: orpc.secrets.check.key() });
 			},
 		}),
 	);

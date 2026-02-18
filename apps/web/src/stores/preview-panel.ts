@@ -1,5 +1,6 @@
 import type { VerificationFile } from "@proliferate/shared";
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 export type PreviewMode =
 	| { type: "none" }
@@ -10,7 +11,9 @@ export type PreviewMode =
 	| { type: "git"; tab?: "git" | "changes" }
 	| { type: "terminal" }
 	| { type: "vscode" }
-	| { type: "artifacts" };
+	| { type: "artifacts" }
+	| { type: "services" }
+	| { type: "environment" };
 
 // Mobile view state - on mobile we either show chat or preview (full screen)
 export type MobileView = "chat" | "preview";
@@ -18,64 +21,115 @@ export type MobileView = "chat" | "preview";
 interface PreviewPanelState {
 	mode: PreviewMode;
 	mobileView: MobileView;
+	pinnedTabs: string[];
+	panelSizes: number[];
+	missingEnvKeyCount: number;
 
 	// Actions
 	openUrl: (url: string) => void;
 	openFile: (file: VerificationFile) => void;
 	openGallery: (files: VerificationFile[]) => void;
 	close: () => void;
+	closePanel: () => void;
 
 	// Toggle helpers (for header buttons — toggles open/close)
 	toggleUrlPreview: (url: string | null) => void;
-	togglePanel: (type: "settings" | "git" | "terminal" | "vscode" | "artifacts") => void;
+	togglePanel: (
+		type: "settings" | "git" | "terminal" | "vscode" | "artifacts" | "services" | "environment",
+	) => void;
+
+	// Pin/unpin tabs in header
+	pinTab: (type: string) => void;
+	unpinTab: (type: string) => void;
+
+	// Panel sizes (persisted)
+	setPanelSizes: (sizes: number[]) => void;
+
+	// Missing env key count
+	setMissingEnvKeyCount: (count: number) => void;
 
 	// Mobile view toggle
 	setMobileView: (view: MobileView) => void;
 	toggleMobileView: () => void;
 }
 
-export const usePreviewPanelStore = create<PreviewPanelState>((set, get) => ({
-	mode: { type: "none" },
-	mobileView: "chat",
+const DEFAULT_MODE: PreviewMode = { type: "none" };
+const NONE_MODE: PreviewMode = { type: "none" };
 
-	openUrl: (url: string) => set({ mode: { type: "url", url } }),
+export const usePreviewPanelStore = create<PreviewPanelState>()(
+	persist(
+		(set, get) => ({
+			mode: DEFAULT_MODE,
+			mobileView: "chat",
+			pinnedTabs: ["url", "vscode"],
+			panelSizes: [35, 65],
+			missingEnvKeyCount: 0,
 
-	openFile: (file: VerificationFile) => set({ mode: { type: "file", file } }),
+			openUrl: (url: string) => set({ mode: { type: "url", url } }),
 
-	openGallery: (files: VerificationFile[]) => set({ mode: { type: "gallery", files } }),
+			openFile: (file: VerificationFile) => set({ mode: { type: "file", file } }),
 
-	close: () => set({ mode: { type: "none" }, mobileView: "chat" }),
+			openGallery: (files: VerificationFile[]) => set({ mode: { type: "gallery", files } }),
 
-	// Toggle URL preview specifically - used by the preview button
-	toggleUrlPreview: (url: string | null) => {
-		const { mode } = get();
-		if (mode.type === "url") {
-			set({ mode: { type: "none" }, mobileView: "chat" });
-		} else {
-			set({ mode: { type: "url", url } });
-		}
-	},
+			close: () => set({ mode: DEFAULT_MODE, mobileView: "chat" }),
 
-	// Generic toggle for composite panels
-	togglePanel: (type: "settings" | "git" | "terminal" | "vscode" | "artifacts") => {
-		const { mode } = get();
-		if (mode.type === type) {
-			set({ mode: { type: "none" }, mobileView: "chat" });
-		} else {
-			set({ mode: { type } });
-		}
-	},
+			// Close panel to empty state (used by PanelShell close button)
+			closePanel: () => set({ mode: NONE_MODE }),
 
-	setMobileView: (view: MobileView) => set({ mobileView: view }),
+			// Toggle URL preview — switches between url and none
+			toggleUrlPreview: (url: string | null) => {
+				const { mode } = get();
+				if (mode.type === "url") {
+					set({ mode: NONE_MODE });
+				} else {
+					set({ mode: { type: "url", url } });
+				}
+			},
 
-	toggleMobileView: () => {
-		const { mobileView, mode } = get();
-		// Only toggle if there's something to show in preview
-		if (mode.type !== "none") {
-			set({ mobileView: mobileView === "chat" ? "preview" : "chat" });
-		}
-	},
-}));
+			// Switch panel view — clicking active tab closes to none
+			togglePanel: (
+				type: "settings" | "git" | "terminal" | "vscode" | "artifacts" | "services" | "environment",
+			) => {
+				const { mode } = get();
+				if (mode.type === type) {
+					set({ mode: NONE_MODE });
+				} else {
+					set({ mode: { type } });
+				}
+			},
+
+			pinTab: (type) =>
+				set((state) => ({
+					pinnedTabs: state.pinnedTabs.includes(type)
+						? state.pinnedTabs
+						: [...state.pinnedTabs, type],
+				})),
+
+			unpinTab: (type) =>
+				set((state) => ({
+					pinnedTabs: state.pinnedTabs.filter((t) => t !== type),
+				})),
+
+			setPanelSizes: (sizes: number[]) => set({ panelSizes: sizes }),
+
+			setMissingEnvKeyCount: (count: number) => set({ missingEnvKeyCount: count }),
+
+			setMobileView: (view: MobileView) => set({ mobileView: view }),
+
+			toggleMobileView: () => {
+				const { mobileView } = get();
+				set({ mobileView: mobileView === "chat" ? "preview" : "chat" });
+			},
+		}),
+		{
+			name: "preview-panel-storage",
+			partialize: (state) => ({
+				pinnedTabs: state.pinnedTabs,
+				panelSizes: state.panelSizes,
+			}),
+		},
+	),
+);
 
 // Helper to check if panel is open
 export const isPanelOpen = (mode: PreviewMode) => mode.type !== "none";

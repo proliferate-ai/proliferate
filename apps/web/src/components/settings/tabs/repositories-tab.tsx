@@ -1,34 +1,15 @@
 "use client";
 
-import { openEditSession, openHistoricalSession } from "@/components/coding-session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { Text } from "@/components/ui/text";
-import {
-	useAvailableRepos,
-	useCreateRepo,
-	useRepoSnapshots,
-	useSearchRepos,
-} from "@/hooks/use-repos";
+import { useAvailableRepos, useCreateRepo, useSearchRepos } from "@/hooks/use-repos";
 import { orpc } from "@/lib/orpc";
-import { cn, getSnapshotDisplayName } from "@/lib/utils";
-import { useDashboardStore } from "@/stores/dashboard";
+import { cn } from "@/lib/utils";
 import type { GitHubRepo, Repo } from "@/types";
 import { useQuery } from "@tanstack/react-query";
-import {
-	Camera,
-	ChevronDown,
-	FolderGit2,
-	GitBranch,
-	Globe,
-	Lock,
-	Pencil,
-	Plus,
-	Search,
-	Star,
-} from "lucide-react";
-import { useRouter } from "next/navigation";
+import { ChevronDown, FolderGit2, GitBranch, Globe, Lock, Plus, Search, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface RepositoriesTabProps {
@@ -36,8 +17,6 @@ interface RepositoriesTabProps {
 }
 
 export function RepositoriesTab({ onClose }: RepositoriesTabProps) {
-	const router = useRouter();
-	const { setSelectedRepo } = useDashboardStore();
 	const [showAvailable, setShowAvailable] = useState(false);
 	const [showPublicSearch, setShowPublicSearch] = useState(false);
 	const [addingRepoId, setAddingRepoId] = useState<number | null>(null);
@@ -113,16 +92,7 @@ export function RepositoriesTab({ onClose }: RepositoriesTabProps) {
 			{reposList.length > 0 ? (
 				<div className="space-y-3">
 					{reposList.map((repo) => (
-						<RepoCard
-							key={repo.id}
-							repo={repo}
-							onClose={onClose}
-							onCreateSnapshot={(repoId) => {
-								setSelectedRepo(repoId);
-								onClose();
-								router.push(`/workspace/new?repoId=${repoId}&type=setup`);
-							}}
-						/>
+						<RepoCard key={repo.id} repo={repo} />
 					))}
 				</div>
 			) : (
@@ -299,26 +269,10 @@ export function RepositoriesTab({ onClose }: RepositoriesTabProps) {
 	);
 }
 
-function RepoCard({
-	repo,
-	onClose,
-	onCreateSnapshot,
-}: {
-	repo: Repo;
-	onClose: () => void;
-	onCreateSnapshot: (repoId: string) => void;
-}) {
-	const [expanded, setExpanded] = useState(false);
-
-	const { data: snapshots, isLoading } = useRepoSnapshots(repo.id, expanded);
-
+function RepoCard({ repo }: { repo: Repo }) {
 	return (
 		<div className="border border-border rounded-lg overflow-hidden">
-			<Button
-				variant="ghost"
-				onClick={() => setExpanded(!expanded)}
-				className="w-full h-auto justify-start gap-3 p-4 hover:bg-muted/50 rounded-none"
-			>
+			<div className="flex items-center gap-3 p-4">
 				<div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
 					<GitBranch className="h-5 w-5" />
 				</div>
@@ -326,87 +280,7 @@ function RepoCard({
 					<p className="font-medium truncate">{repo.githubRepoName}</p>
 					<p className="text-sm text-muted-foreground">{repo.defaultBranch || "main"}</p>
 				</div>
-				<span className="text-xs text-muted-foreground">
-					{expanded ? "Hide" : "Show"} snapshots
-				</span>
-			</Button>
-
-			{expanded && (
-				<div className="border-t border-border bg-muted/20 p-3">
-					{isLoading ? (
-						<div className="py-4 text-center">
-							<LoadingDots size="sm" className="text-muted-foreground" />
-						</div>
-					) : snapshots && snapshots.length > 0 ? (
-						<div className="space-y-2">
-							{snapshots.map((snapshot) => {
-								const setupSessionId = snapshot.setupSessions?.find(
-									(s: { sessionType: string | null }) => s.sessionType === "setup",
-								)?.id;
-								return (
-									<div
-										key={snapshot.id}
-										className="group flex items-center gap-1 rounded-md hover:bg-background transition-colors"
-									>
-										<Button
-											variant="ghost"
-											onClick={() => {
-												if (setupSessionId) {
-													openHistoricalSession(setupSessionId, getSnapshotDisplayName(snapshot));
-												}
-												onClose();
-											}}
-											className="flex-1 h-auto justify-start gap-3 p-2"
-										>
-											<Camera className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-											<span className="text-sm truncate flex-1 text-left">
-												{getSnapshotDisplayName(snapshot)}
-											</span>
-										</Button>
-										{setupSessionId && (
-											<Button
-												variant="ghost"
-												size="icon"
-												onClick={(e) => {
-													e.stopPropagation();
-													openEditSession({
-														sessionId: setupSessionId,
-														snapshotId: snapshot.id,
-														snapshotName: getSnapshotDisplayName(snapshot),
-														prebuildId: snapshot.id,
-													});
-													onClose();
-												}}
-												className="h-8 w-8 opacity-0 group-hover:opacity-100 mr-1"
-												title="Edit environment"
-											>
-												<Pencil className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-											</Button>
-										)}
-									</div>
-								);
-							})}
-							<Button
-								variant="outline"
-								size="sm"
-								className="w-full mt-2"
-								onClick={() => onCreateSnapshot(repo.id)}
-							>
-								<Plus className="h-3.5 w-3.5 mr-2" />
-								Create New Snapshot
-							</Button>
-						</div>
-					) : (
-						<div className="text-center py-4">
-							<p className="text-sm text-muted-foreground mb-3">No snapshots yet</p>
-							<Button variant="outline" size="sm" onClick={() => onCreateSnapshot(repo.id)}>
-								<Plus className="h-3.5 w-3.5 mr-2" />
-								Create Snapshot
-							</Button>
-						</div>
-					)}
-				</div>
-			)}
+			</div>
 		</div>
 	);
 }

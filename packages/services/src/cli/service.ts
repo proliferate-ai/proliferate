@@ -8,7 +8,7 @@ import crypto from "node:crypto";
 import { randomBytes } from "node:crypto";
 import { getServicesLogger } from "../logger";
 import type {
-	CliPrebuildRow,
+	CliConfigurationRow,
 	CliSessionFullRow,
 	CliSessionRow,
 	CreateCliSessionInput,
@@ -440,36 +440,36 @@ export async function stopSession(sessionId: string): Promise<void> {
 }
 
 // ============================================
-// Prebuild functions
+// Configuration functions
 // ============================================
 
 /**
- * Get CLI prebuild.
+ * Get CLI configuration.
  */
-export async function getCliPrebuild(
+export async function getCliConfiguration(
 	userId: string,
 	localPathHash: string,
-): Promise<CliPrebuildRow | null> {
-	return cliDb.getCliPrebuild(userId, localPathHash);
+): Promise<CliConfigurationRow | null> {
+	return cliDb.getCliConfiguration(userId, localPathHash);
 }
 
 /**
- * Delete CLI prebuild.
+ * Delete CLI configuration.
  */
-export async function deleteCliPrebuild(userId: string, localPathHash: string): Promise<void> {
-	return cliDb.deleteCliPrebuild(userId, localPathHash);
+export async function deleteCliConfiguration(userId: string, localPathHash: string): Promise<void> {
+	return cliDb.deleteCliConfiguration(userId, localPathHash);
 }
 
 /**
- * Upsert CLI prebuild (create snapshot cache).
+ * Upsert CLI configuration (create snapshot cache).
  */
-export async function upsertCliPrebuild(
+export async function upsertCliConfiguration(
 	userId: string,
 	localPathHash: string,
 	snapshotId: string,
 	sandboxProvider: string,
-): Promise<CliPrebuildRow> {
-	return cliDb.upsertCliPrebuild({
+): Promise<CliConfigurationRow> {
+	return cliDb.upsertCliConfiguration({
 		userId,
 		localPathHash,
 		snapshotId,
@@ -599,16 +599,16 @@ export interface CreateCliSessionFullInput {
 
 export interface CreateCliSessionFullResult {
 	sessionId: string;
-	prebuildId: string;
+	configurationId: string;
 	hasSnapshot: boolean;
 }
 
 /**
  * Create a CLI session with all required records.
  *
- * 1. Find or create device-scoped prebuild
+ * 1. Find or create device-scoped configuration
  * 2. Find or create local repo record
- * 3. Link repo to prebuild
+ * 3. Link repo to configuration
  * 4. Create session with type "cli"
  */
 export async function createCliSessionFull(
@@ -616,22 +616,22 @@ export async function createCliSessionFull(
 ): Promise<CreateCliSessionFullResult> {
 	const { sessionId, userId, orgId, localPathHash, displayName, sandboxProvider } = input;
 
-	// 1. Find or create prebuild (device-scoped)
-	let prebuildId: string;
+	// 1. Find or create configuration (device-scoped)
+	let configurationId: string;
 	let snapshotId: string | null = null;
 
-	const existingPrebuild = await cliDb.getCliPrebuild(userId, localPathHash);
+	const existingConfiguration = await cliDb.getCliConfiguration(userId, localPathHash);
 
-	if (existingPrebuild) {
-		prebuildId = existingPrebuild.id;
-		snapshotId = existingPrebuild.snapshot_id;
+	if (existingConfiguration) {
+		configurationId = existingConfiguration.id;
+		snapshotId = existingConfiguration.snapshot_id;
 	} else {
-		const newPrebuild = await cliDb.createCliPrebuildPending({
+		const newConfiguration = await cliDb.createCliConfigurationPending({
 			userId,
 			localPathHash,
 			sandboxProvider,
 		});
-		prebuildId = newPrebuild.id;
+		configurationId = newConfiguration.id;
 	}
 
 	// 2. Find or create local repo
@@ -651,10 +651,10 @@ export async function createCliSessionFull(
 		repoId = newRepo.id;
 	}
 
-	// 3. Link repo to prebuild (upsert to avoid race conditions)
+	// 3. Link repo to configuration (upsert to avoid race conditions)
 	try {
-		await cliDb.upsertPrebuildRepo({
-			prebuildId,
+		await cliDb.upsertConfigurationRepo({
+			configurationId,
 			repoId,
 			workspacePath: ".",
 		});
@@ -662,13 +662,13 @@ export async function createCliSessionFull(
 		// Non-fatal - log and continue
 		getServicesLogger()
 			.child({ module: "cli" })
-			.error({ err: error, prebuildId, repoId }, "Failed to link repo to prebuild");
+			.error({ err: error, configurationId, repoId }, "Failed to link repo to configuration");
 	}
 
 	// 4. Create session with type "cli"
-	await cliDb.createCliSessionWithPrebuild({
+	await cliDb.createCliSessionWithConfiguration({
 		id: sessionId,
-		prebuildId,
+		configurationId,
 		organizationId: orgId,
 		createdBy: userId,
 		sessionType: "cli",
@@ -680,7 +680,7 @@ export async function createCliSessionFull(
 
 	return {
 		sessionId,
-		prebuildId,
+		configurationId,
 		hasSnapshot: Boolean(snapshotId),
 	};
 }

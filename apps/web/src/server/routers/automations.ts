@@ -6,7 +6,7 @@
 
 import { GATEWAY_URL } from "@/lib/gateway";
 import { ORPCError } from "@orpc/server";
-import { automations, runs, schedules } from "@proliferate/services";
+import { automations, runs, schedules, templates } from "@proliferate/services";
 import {
 	AutomationConnectionSchema,
 	AutomationEventDetailSchema,
@@ -67,16 +67,59 @@ export const automationsRouter = {
 					name: input.name,
 					description: input.description,
 					agentInstructions: input.agentInstructions,
-					defaultPrebuildId: input.defaultPrebuildId,
+					defaultConfigurationId: input.defaultConfigurationId,
 					allowAgenticRepoSelection: input.allowAgenticRepoSelection,
 				});
 				return { automation };
 			} catch (err) {
-				if (err instanceof Error && err.message === "Prebuild not found") {
+				if (err instanceof Error && err.message === "Configuration not found") {
 					throw new ORPCError("NOT_FOUND", { message: err.message });
 				}
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
 					message: "Failed to create automation",
+				});
+			}
+		}),
+
+	/**
+	 * Create an automation from a template (single transaction).
+	 */
+	createFromTemplate: orgProcedure
+		.input(
+			z.object({
+				templateId: z.string(),
+				integrationBindings: z.record(z.string()),
+			}),
+		)
+		.output(z.object({ automation: AutomationListItemSchema }))
+		.handler(async ({ input, context }) => {
+			// Validate template exists before hitting the service
+			const template = templates.getTemplateById(input.templateId);
+			if (!template) {
+				throw new ORPCError("NOT_FOUND", { message: "Template not found" });
+			}
+
+			try {
+				const automation = await automations.createFromTemplate(context.orgId, context.user.id, {
+					templateId: input.templateId,
+					integrationBindings: input.integrationBindings,
+				});
+				return { automation };
+			} catch (err) {
+				if (err instanceof Error) {
+					if (err.message.includes("not found")) {
+						throw new ORPCError("NOT_FOUND", { message: err.message });
+					}
+					if (
+						err.message.includes("not active") ||
+						err.message.includes("Missing required") ||
+						err.message.includes("is for")
+					) {
+						throw new ORPCError("BAD_REQUEST", { message: err.message });
+					}
+				}
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "Failed to create automation from template",
 				});
 			}
 		}),
@@ -101,7 +144,7 @@ export const automationsRouter = {
 					description: updateData.description,
 					enabled: updateData.enabled,
 					agentInstructions: updateData.agentInstructions,
-					defaultPrebuildId: updateData.defaultPrebuildId,
+					defaultConfigurationId: updateData.defaultConfigurationId,
 					allowAgenticRepoSelection: updateData.allowAgenticRepoSelection,
 					agentType: updateData.agentType,
 					modelId: updateData.modelId,
@@ -114,7 +157,7 @@ export const automationsRouter = {
 				return { automation };
 			} catch (err) {
 				if (err instanceof Error) {
-					if (err.message === "Prebuild not found") {
+					if (err.message === "Configuration not found") {
 						throw new ORPCError("NOT_FOUND", { message: err.message });
 					}
 					if (err.message.includes("no snapshot")) {
@@ -665,6 +708,64 @@ export const automationsRouter = {
 				}
 				throw err;
 			}
+		}),
+
+	// ============================================
+	// Manual run trigger
+	// ============================================
+
+	/**
+	 * Trigger a manual run for an automation.
+	 * Creates a synthetic trigger event and kicks off the run pipeline.
+	 */
+	triggerManualRun: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ run: z.object({ id: z.string(), status: z.string() }) }))
+		.handler(async ({ input, context }) => {
+			try {
+				const result = await automations.triggerManualRun(input.id, context.orgId, context.user.id);
+				return { run: { id: result.runId, status: result.status } };
+			} catch (err) {
+				if (err instanceof Error && err.message === "Automation not found") {
+					throw new ORPCError("NOT_FOUND", { message: err.message });
+				}
+				throw err;
+			}
+		}),
+
+	// ============================================
+	// Integration action resolver
+	// ============================================
+
+	/**
+	 * Returns available integration actions for an automation.
+	 * Based on enabled tools, triggers, and connections.
+	 */
+	getIntegrationActions: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(
+			z.object({
+				integrations: z.array(
+					z.object({
+						sourceId: z.string(),
+						displayName: z.string(),
+						actions: z.array(
+							z.object({
+								name: z.string(),
+								description: z.string(),
+								riskLevel: z.enum(["read", "write"]),
+							}),
+						),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const integrationActions = await automations.getAutomationIntegrationActions(
+				input.id,
+				context.orgId,
+			);
+			return { integrations: integrationActions };
 		}),
 };
 

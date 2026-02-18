@@ -2,10 +2,10 @@
  * Save Env Files Tool Handler
  *
  * Intercepts save_env_files tool calls from the agent and persists
- * the env file generation spec to the prebuild configuration.
+ * the env file generation spec to the configuration.
  */
 
-import { prebuilds } from "@proliferate/services";
+import { configurations } from "@proliferate/services";
 import { z } from "zod";
 import type { SessionHub } from "../../session-hub";
 import type { InterceptedToolHandler, InterceptedToolResult } from "./index";
@@ -47,7 +47,7 @@ export const saveEnvFilesHandler: InterceptedToolHandler = {
 
 		const context = hub.getContext();
 		const sessionType = context.session.session_type;
-		const prebuildId = context.session.prebuild_id;
+		const configurationId = context.session.configuration_id;
 		const updatedBy = context.session.created_by || "agent";
 
 		if (sessionType !== "setup") {
@@ -57,16 +57,16 @@ export const saveEnvFilesHandler: InterceptedToolHandler = {
 			};
 		}
 
-		if (!prebuildId) {
+		if (!configurationId) {
 			return {
 				success: false,
-				result: "Session has no prebuild — cannot save env file spec.",
+				result: "Session has no configuration — cannot save env file spec.",
 			};
 		}
 
 		try {
-			await prebuilds.updatePrebuildEnvFiles({
-				prebuildId,
+			await configurations.updateConfigurationEnvFiles({
+				configurationId,
 				envFiles: parsed.data.files,
 				updatedBy,
 			});
@@ -74,8 +74,8 @@ export const saveEnvFilesHandler: InterceptedToolHandler = {
 			const paths = parsed.data.files.map((f) => f.path).join(", ");
 			return {
 				success: true,
-				result: `Env file spec saved: ${paths}. Recorded ${parsed.data.files.length} file(s) in prebuild configuration.`,
-				data: { prebuildId, fileCount: parsed.data.files.length },
+				result: `Env file spec saved: ${paths}. Recorded ${parsed.data.files.length} file(s) in configuration.`,
+				data: { configurationId, fileCount: parsed.data.files.length },
 			};
 		} catch (err) {
 			return {

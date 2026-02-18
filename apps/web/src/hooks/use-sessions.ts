@@ -6,7 +6,13 @@ import type { Session } from "@proliferate/shared/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
-export function useSessions(params?: { status?: string; repoId?: string }) {
+export function useSessions(params?: {
+	status?: string;
+	repoId?: string;
+	limit?: number;
+	excludeSetup?: boolean;
+	excludeCli?: boolean;
+}) {
 	return useQuery({
 		...orpc.sessions.list.queryOptions({
 			input: params ?? {},
@@ -55,7 +61,7 @@ export function useCreateSession() {
 				status: "starting",
 				sandboxId: result.sandboxId ?? null,
 				snapshotId: null,
-				prebuildId: variables.prebuildId ?? null,
+				configurationId: variables.configurationId ?? null,
 				branchName: null,
 				parentSessionId: null,
 				title: null,
@@ -195,13 +201,12 @@ export function useFinalizeSetup() {
 	const queryClient = useQueryClient();
 
 	const mutation = useMutation({
-		...orpc.repos.finalizeSetup.mutationOptions(),
+		...orpc.configurations.finalizeSetup.mutationOptions(),
 		onSuccess: () => {
 			// Invalidate all relevant queries
 			queryClient.invalidateQueries({ queryKey: orpc.sessions.list.key() });
 			queryClient.invalidateQueries({ queryKey: orpc.repos.list.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listPrebuilds.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.repos.listSnapshots.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.configurations.list.key() });
 		},
 	});
 

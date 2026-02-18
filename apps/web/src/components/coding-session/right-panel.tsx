@@ -7,8 +7,11 @@ import type {
 	GitResultMessage,
 	GitState,
 } from "@proliferate/shared";
+import { AnimatePresence, motion } from "framer-motion";
+import { Loader2, MousePointerClick } from "lucide-react";
 import dynamic from "next/dynamic";
 import { ArtifactsPanel } from "./artifacts-panel";
+import { EnvironmentPanel } from "./environment-panel";
 import { GitPanel } from "./git-panel";
 import { PreviewPanel } from "./preview-panel";
 import { SettingsPanel } from "./settings-panel";
@@ -18,19 +21,22 @@ const TerminalPanel = dynamic(() => import("./terminal-panel").then((m) => m.Ter
 	ssr: false,
 });
 
+const ServicesPanel = dynamic(() => import("./services-panel").then((m) => m.ServicesPanel), {
+	ssr: false,
+});
+
 export interface SessionPanelProps {
 	sessionId?: string;
 	activityTick?: number;
 	sessionStatus?: string;
 	repoId?: string | null;
-	prebuildId?: string | null;
+	configurationId?: string | null;
 	repoName?: string | null;
 	branchName?: string | null;
 	snapshotId?: string | null;
 	startedAt?: string | null;
 	concurrentUsers?: number;
 	isModal?: boolean;
-	onSecretsClick?: () => void;
 	isMigrating?: boolean;
 	canSnapshot?: boolean;
 	isSnapshotting?: boolean;
@@ -39,7 +45,7 @@ export interface SessionPanelProps {
 	sendRunAutoStart?: (
 		runId: string,
 		mode?: "test" | "start",
-		commands?: import("@proliferate/shared").PrebuildServiceCommand[],
+		commands?: import("@proliferate/shared").ConfigurationServiceCommand[],
 	) => void;
 	gitState?: GitState | null;
 	gitResult?: GitResultMessage["payload"] | null;
@@ -63,9 +69,10 @@ export interface SessionPanelProps {
 interface RightPanelProps {
 	isMobileFullScreen?: boolean;
 	sessionProps?: SessionPanelProps;
+	previewUrl?: string | null;
 }
 
-export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps) {
+export function RightPanel({ isMobileFullScreen, sessionProps, previewUrl }: RightPanelProps) {
 	const { mode, close, setMobileView } = usePreviewPanelStore();
 
 	const handleClose = () => {
@@ -73,89 +80,133 @@ export function RightPanel({ isMobileFullScreen, sessionProps }: RightPanelProps
 		setMobileView("chat");
 	};
 
-	// Settings panel (Session Info + Snapshots + Auto-start)
-	if (mode.type === "settings" && sessionProps) {
-		return (
-			<SettingsPanel
-				panelMode={mode}
-				onClose={handleClose}
-				sessionStatus={sessionProps.sessionStatus}
-				repoName={sessionProps.repoName}
-				branchName={sessionProps.branchName}
-				snapshotId={sessionProps.snapshotId}
-				startedAt={sessionProps.startedAt}
-				concurrentUsers={sessionProps.concurrentUsers}
-				isModal={sessionProps.isModal}
-				onSecretsClick={sessionProps.onSecretsClick}
-				isMigrating={sessionProps.isMigrating}
-				canSnapshot={sessionProps.canSnapshot}
-				isSnapshotting={sessionProps.isSnapshotting}
-				onSnapshot={sessionProps.onSnapshot}
-				repoId={sessionProps.repoId}
-				prebuildId={sessionProps.prebuildId}
-				autoStartOutput={sessionProps.autoStartOutput}
-				sendRunAutoStart={sessionProps.sendRunAutoStart}
-			/>
-		);
-	}
-
-	// Git panel (Git operations + Changes)
-	if (mode.type === "git" && sessionProps) {
-		return (
-			<GitPanel
-				onClose={handleClose}
-				panelMode={mode}
-				sessionId={sessionProps.sessionId}
-				activityTick={sessionProps.activityTick}
-				gitState={sessionProps.gitState ?? null}
-				gitResult={sessionProps.gitResult ?? null}
-				sendGetGitStatus={sessionProps.sendGetGitStatus}
-				sendGitCreateBranch={sessionProps.sendGitCreateBranch}
-				sendGitCommit={sessionProps.sendGitCommit}
-				sendGitPush={sessionProps.sendGitPush}
-				sendGitCreatePr={sessionProps.sendGitCreatePr}
-				clearGitResult={sessionProps.clearGitResult}
-			/>
-		);
-	}
-
-	// Terminal panel (with services strip)
-	if (mode.type === "terminal" && sessionProps?.sessionId) {
-		return <TerminalPanel sessionId={sessionProps.sessionId} onClose={handleClose} />;
-	}
-
-	// VS Code panel
-	if (mode.type === "vscode" && sessionProps?.sessionId) {
-		return <VscodePanel sessionId={sessionProps.sessionId} onClose={handleClose} />;
-	}
-
-	// Artifacts panel (Actions + File Viewer + Gallery)
-	if (
-		(mode.type === "artifacts" || mode.type === "file" || mode.type === "gallery") &&
-		sessionProps?.sessionId
-	) {
-		return (
-			<ArtifactsPanel
-				sessionId={sessionProps.sessionId}
-				activityTick={sessionProps.activityTick ?? 0}
-				onClose={handleClose}
-			/>
-		);
-	}
-
-	// URL preview
-	if (mode.type === "url") {
+	// If session isn't ready, show loading placeholder
+	if (!sessionProps?.sessionId && mode.type !== "url") {
 		return (
 			<div className="flex flex-col h-full">
-				<PreviewPanel
-					url={mode.url}
-					className="h-full"
-					onClose={isMobileFullScreen ? handleClose : undefined}
-				/>
+				<div className="flex-1 flex items-center justify-center">
+					<div className="flex flex-col items-center gap-3">
+						<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+						<p className="text-sm text-muted-foreground">Waiting for session...</p>
+					</div>
+				</div>
 			</div>
 		);
 	}
 
-	// Should not reach here if panel is open
-	return null;
+	// Empty state when no panel is selected
+	if (mode.type === "none") {
+		return (
+			<div className="flex flex-col h-full items-center justify-center text-muted-foreground">
+				<MousePointerClick className="h-8 w-8 mb-3 opacity-40" />
+				<p className="text-sm">Select a tool from the top bar</p>
+			</div>
+		);
+	}
+
+	const panelContent = (() => {
+		// Settings panel
+		if (mode.type === "settings" && sessionProps) {
+			return (
+				<SettingsPanel
+					panelMode={mode}
+					sessionStatus={sessionProps.sessionStatus}
+					repoName={sessionProps.repoName}
+					branchName={sessionProps.branchName}
+					snapshotId={sessionProps.snapshotId}
+					startedAt={sessionProps.startedAt}
+					concurrentUsers={sessionProps.concurrentUsers}
+					isModal={sessionProps.isModal}
+					isMigrating={sessionProps.isMigrating}
+					canSnapshot={sessionProps.canSnapshot}
+					isSnapshotting={sessionProps.isSnapshotting}
+					onSnapshot={sessionProps.onSnapshot}
+					repoId={sessionProps.repoId}
+					configurationId={sessionProps.configurationId}
+					autoStartOutput={sessionProps.autoStartOutput}
+					sendRunAutoStart={sessionProps.sendRunAutoStart}
+				/>
+			);
+		}
+
+		// Environment panel
+		if (mode.type === "environment" && sessionProps?.sessionId) {
+			return (
+				<EnvironmentPanel
+					sessionId={sessionProps.sessionId}
+					configurationId={sessionProps.configurationId}
+					repoId={sessionProps.repoId}
+				/>
+			);
+		}
+
+		// Git panel
+		if (mode.type === "git" && sessionProps) {
+			return (
+				<GitPanel
+					panelMode={mode}
+					sessionId={sessionProps.sessionId}
+					activityTick={sessionProps.activityTick}
+					gitState={sessionProps.gitState ?? null}
+					gitResult={sessionProps.gitResult ?? null}
+					sendGetGitStatus={sessionProps.sendGetGitStatus}
+					sendGitCreateBranch={sessionProps.sendGitCreateBranch}
+					sendGitCommit={sessionProps.sendGitCommit}
+					sendGitPush={sessionProps.sendGitPush}
+					sendGitCreatePr={sessionProps.sendGitCreatePr}
+					clearGitResult={sessionProps.clearGitResult}
+				/>
+			);
+		}
+
+		// Terminal panel
+		if (mode.type === "terminal" && sessionProps?.sessionId) {
+			return <TerminalPanel sessionId={sessionProps.sessionId} />;
+		}
+
+		// Services panel
+		if (mode.type === "services" && sessionProps?.sessionId) {
+			return <ServicesPanel sessionId={sessionProps.sessionId} previewUrl={previewUrl} />;
+		}
+
+		// VS Code panel
+		if (mode.type === "vscode" && sessionProps?.sessionId) {
+			return <VscodePanel sessionId={sessionProps.sessionId} />;
+		}
+
+		// Artifacts panel
+		if (
+			(mode.type === "artifacts" || mode.type === "file" || mode.type === "gallery") &&
+			sessionProps?.sessionId
+		) {
+			return (
+				<ArtifactsPanel
+					sessionId={sessionProps.sessionId}
+					activityTick={sessionProps.activityTick ?? 0}
+				/>
+			);
+		}
+
+		// URL preview
+		if (mode.type === "url") {
+			return <PreviewPanel url={mode.url || previewUrl || null} className="h-full" />;
+		}
+
+		return null;
+	})();
+
+	return (
+		<AnimatePresence mode="wait">
+			<motion.div
+				key={mode.type}
+				initial={{ opacity: 0, y: 4 }}
+				animate={{ opacity: 1, y: 0 }}
+				exit={{ opacity: 0, y: -4 }}
+				transition={{ duration: 0.15 }}
+				className="h-full w-full"
+			>
+				{panelContent}
+			</motion.div>
+		</AnimatePresence>
+	);
 }

@@ -318,30 +318,30 @@ export const configurations = pgTable(
 		connectorsUpdatedBy: text("connectors_updated_by"),
 	},
 	(table) => [
-		index("idx_prebuilds_sandbox_provider").using(
+		index("idx_configurations_sandbox_provider").using(
 			"btree",
 			table.sandboxProvider.asc().nullsLast().op("text_ops"),
 		),
-		index("idx_prebuilds_type_managed")
+		index("idx_configurations_type_managed")
 			.using("btree", table.type.asc().nullsLast().op("text_ops"))
 			.where(sql`(type = 'managed'::text)`),
 		foreignKey({
 			columns: [table.createdBy],
 			foreignColumns: [user.id],
-			name: "prebuilds_created_by_fkey",
+			name: "configurations_created_by_fkey",
 		}),
 		foreignKey({
 			columns: [table.userId],
 			foreignColumns: [user.id],
-			name: "prebuilds_user_id_fkey",
+			name: "configurations_user_id_fkey",
 		}).onDelete("cascade"),
-		unique("prebuilds_user_path_unique").on(table.userId, table.localPathHash),
+		unique("configurations_user_path_unique").on(table.userId, table.localPathHash),
 		check(
-			"prebuilds_sandbox_provider_check",
+			"configurations_sandbox_provider_check",
 			sql`sandbox_provider = ANY (ARRAY['modal'::text, 'e2b'::text])`,
 		),
 		check(
-			"prebuilds_cli_requires_path",
+			"configurations_cli_requires_path",
 			sql`((user_id IS NOT NULL) AND (local_path_hash IS NOT NULL)) OR ((user_id IS NULL) AND (local_path_hash IS NULL))`,
 		),
 	],
@@ -434,7 +434,7 @@ export const secrets = pgTable(
 		createdBy: text("created_by"),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
-		prebuildId: uuid("prebuild_id"),
+		configurationId: uuid("configuration_id"),
 	},
 	(table) => [
 		index("idx_secrets_org").using("btree", table.organizationId.asc().nullsLast().op("text_ops")),
@@ -455,15 +455,15 @@ export const secrets = pgTable(
 			name: "secrets_created_by_fkey",
 		}),
 		foreignKey({
-			columns: [table.prebuildId],
+			columns: [table.configurationId],
 			foreignColumns: [configurations.id],
-			name: "secrets_prebuild_id_fkey",
+			name: "secrets_configuration_id_fkey",
 		}).onDelete("cascade"),
-		unique("secrets_org_repo_prebuild_key_unique").on(
+		unique("secrets_org_repo_configuration_key_unique").on(
 			table.organizationId,
 			table.repoId,
 			table.key,
-			table.prebuildId,
+			table.configurationId,
 		),
 	],
 );
@@ -561,13 +561,14 @@ export const automations = pgTable(
 		createdBy: text("created_by"),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
-		defaultPrebuildId: uuid("default_prebuild_id"),
+		defaultConfigurationId: uuid("default_configuration_id"),
 		llmFilterPrompt: text("llm_filter_prompt"),
 		enabledTools: jsonb("enabled_tools").default({}),
 		llmAnalysisPrompt: text("llm_analysis_prompt"),
 		notificationChannelId: text("notification_channel_id"),
 		notificationSlackInstallationId: uuid("notification_slack_installation_id"),
 		actionModes: jsonb("action_modes"),
+		sourceTemplateId: text("source_template_id"),
 	},
 	(table) => [
 		index("idx_automations_enabled")
@@ -577,9 +578,9 @@ export const automations = pgTable(
 			"btree",
 			table.organizationId.asc().nullsLast().op("text_ops"),
 		),
-		index("idx_automations_prebuild").using(
+		index("idx_automations_configuration").using(
 			"btree",
-			table.defaultPrebuildId.asc().nullsLast().op("uuid_ops"),
+			table.defaultConfigurationId.asc().nullsLast().op("uuid_ops"),
 		),
 		foreignKey({
 			columns: [table.organizationId],
@@ -592,9 +593,9 @@ export const automations = pgTable(
 			name: "automations_created_by_fkey",
 		}),
 		foreignKey({
-			columns: [table.defaultPrebuildId],
+			columns: [table.defaultConfigurationId],
 			foreignColumns: [configurations.id],
-			name: "automations_default_prebuild_id_fkey",
+			name: "automations_default_configuration_id_fkey",
 		}).onDelete("set null"),
 		foreignKey({
 			columns: [table.notificationSlackInstallationId],
@@ -1350,7 +1351,7 @@ export const sessions = pgTable(
 		systemPrompt: text("system_prompt"),
 		clientType: text("client_type"),
 		clientMetadata: jsonb("client_metadata"),
-		prebuildId: uuid("prebuild_id"),
+		configurationId: uuid("configuration_id"),
 		idempotencyKey: text("idempotency_key"),
 		sandboxExpiresAt: timestamp("sandbox_expires_at", { withTimezone: true, mode: "date" }),
 		meteredThroughAt: timestamp("metered_through_at", { withTimezone: true, mode: "date" }),
@@ -1377,9 +1378,9 @@ export const sessions = pgTable(
 			"btree",
 			table.parentSessionId.asc().nullsLast().op("uuid_ops"),
 		),
-		index("idx_sessions_prebuild").using(
+		index("idx_sessions_configuration").using(
 			"btree",
-			table.prebuildId.asc().nullsLast().op("uuid_ops"),
+			table.configurationId.asc().nullsLast().op("uuid_ops"),
 		),
 		index("idx_sessions_repo").using("btree", table.repoId.asc().nullsLast().op("uuid_ops")),
 		index("idx_sessions_sandbox_expires_at")
@@ -1431,9 +1432,9 @@ export const sessions = pgTable(
 			name: "sessions_trigger_id_fkey",
 		}).onDelete("set null"),
 		foreignKey({
-			columns: [table.prebuildId],
+			columns: [table.configurationId],
 			foreignColumns: [configurations.id],
-			name: "sessions_prebuild_id_fkey",
+			name: "sessions_configuration_id_fkey",
 		}).onDelete("cascade"),
 		check(
 			"sessions_sandbox_provider_check",
@@ -1501,24 +1502,27 @@ export const configurationRepos = pgTable(
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 	},
 	(table) => [
-		index("idx_prebuild_repos_prebuild").using(
+		index("idx_configuration_repos_configuration").using(
 			"btree",
 			table.configurationId.asc().nullsLast().op("uuid_ops"),
 		),
-		index("idx_prebuild_repos_repo").using("btree", table.repoId.asc().nullsLast().op("uuid_ops")),
+		index("idx_configuration_repos_repo").using(
+			"btree",
+			table.repoId.asc().nullsLast().op("uuid_ops"),
+		),
 		foreignKey({
 			columns: [table.configurationId],
 			foreignColumns: [configurations.id],
-			name: "prebuild_repos_prebuild_id_fkey",
+			name: "configuration_repos_configuration_id_fkey",
 		}).onDelete("cascade"),
 		foreignKey({
 			columns: [table.repoId],
 			foreignColumns: [repos.id],
-			name: "prebuild_repos_repo_id_fkey",
+			name: "configuration_repos_repo_id_fkey",
 		}).onDelete("cascade"),
 		primaryKey({
 			columns: [table.configurationId, table.repoId],
-			name: "prebuild_repos_pkey",
+			name: "configuration_repos_pkey",
 		}),
 	],
 );
@@ -1813,47 +1817,42 @@ export const sessionToolInvocations = pgTable(
 );
 
 /**
- * User connections — user-level integration connections (distinct from org-level integrations).
+ * User action preferences — per-user, per-org toggles for action sources.
+ * Absence of a row means "enabled" (default). Rows are stored for explicit opt-outs.
+ * sourceId is the action source key (e.g. "linear", "connector:<uuid>").
+ * actionId is null for source-level toggles, or a specific action ID for per-action granularity.
  */
-export const userConnections = pgTable(
-	"user_connections",
+export const userActionPreferences = pgTable(
+	"user_action_preferences",
 	{
 		id: uuid().defaultRandom().primaryKey().notNull(),
 		userId: text("user_id").notNull(),
 		organizationId: text("organization_id").notNull(),
-		provider: text().notNull(),
-		connectionId: text("connection_id").notNull(),
-		displayName: text("display_name"),
-		status: text().default("active"),
-		metadata: jsonb(),
+		sourceId: text("source_id").notNull(),
+		actionId: text("action_id"),
+		enabled: boolean().notNull().default(true),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
 	},
 	(table) => [
-		index("idx_user_connections_user").using(
+		index("idx_user_action_prefs_user_org").using(
 			"btree",
 			table.userId.asc().nullsLast().op("text_ops"),
-		),
-		index("idx_user_connections_org").using(
-			"btree",
 			table.organizationId.asc().nullsLast().op("text_ops"),
 		),
 		foreignKey({
 			columns: [table.userId],
 			foreignColumns: [user.id],
-			name: "user_connections_user_id_fkey",
+			name: "user_action_preferences_user_id_fkey",
 		}).onDelete("cascade"),
 		foreignKey({
 			columns: [table.organizationId],
 			foreignColumns: [organization.id],
-			name: "user_connections_organization_id_fkey",
+			name: "user_action_preferences_organization_id_fkey",
 		}).onDelete("cascade"),
-		unique("user_connections_user_org_provider_connection_key").on(
-			table.userId,
-			table.organizationId,
-			table.provider,
-			table.connectionId,
-		),
+		unique("user_action_prefs_user_org_source_action_key")
+			.on(table.userId, table.organizationId, table.sourceId, table.actionId)
+			.nullsNotDistinct(),
 	],
 );
 

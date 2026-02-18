@@ -7,7 +7,15 @@ import {
 	StripeIcon,
 } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
+import type { ConnectorConfig } from "@proliferate/shared";
+import { CONNECTOR_PRESETS } from "@proliferate/shared";
 import { Plug } from "lucide-react";
+
+/** Best-effort preset key lookup for a connected tool (matches by URL). */
+export function findPresetKey(connector: ConnectorConfig): string {
+	const match = CONNECTOR_PRESETS.find((p) => p.defaults.url && connector.url === p.defaults.url);
+	return match?.key ?? "custom";
+}
 
 interface ConnectorIconProps {
 	presetKey: string;

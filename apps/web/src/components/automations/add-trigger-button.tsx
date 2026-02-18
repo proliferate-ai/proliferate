@@ -1,5 +1,6 @@
 "use client";
 
+import type { Provider } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { orpc } from "@/lib/orpc";
@@ -16,6 +17,10 @@ interface AddTriggerButtonProps {
 	variant?: "chip" | "stacked";
 	isFirst?: boolean;
 	isLast?: boolean;
+	/** Pre-select and lock to a specific provider (e.g. "scheduled") */
+	defaultProvider?: Provider;
+	/** Button label (defaults to "Add trigger") */
+	label?: string;
 }
 
 export function AddTriggerButton({
@@ -24,6 +29,8 @@ export function AddTriggerButton({
 	variant = "chip",
 	isFirst,
 	isLast,
+	defaultProvider,
+	label = "Add trigger",
 }: AddTriggerButtonProps) {
 	const [open, setOpen] = useState(false);
 	const queryClient = useQueryClient();
@@ -43,6 +50,8 @@ export function AddTriggerButton({
 		<PopoverContent className="w-auto p-3" align="start">
 			<TriggerConfigForm
 				automationId={automationId}
+				initialProvider={defaultProvider}
+				lockProvider={!!defaultProvider}
 				onSubmit={(data) =>
 					createMutation.mutate({
 						id: automationId,
@@ -53,7 +62,7 @@ export function AddTriggerButton({
 					})
 				}
 				onCancel={() => setOpen(false)}
-				submitLabel="Add Trigger"
+				submitLabel={defaultProvider ? "Add Schedule" : "Add Trigger"}
 				isSubmitting={createMutation.isPending}
 			/>
 		</PopoverContent>
@@ -76,7 +85,7 @@ export function AddTriggerButton({
 						)}
 					>
 						<CirclePlus className="w-[18px] h-[18px] shrink-0" />
-						<div className="flex min-w-0 items-center grow gap-1.5 px-2 py-2">Add trigger</div>
+						<div className="flex min-w-0 items-center grow gap-1.5 px-2 py-2">{label}</div>
 					</button>
 				</PopoverTrigger>
 				{popoverContent}

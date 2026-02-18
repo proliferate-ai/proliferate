@@ -11,7 +11,7 @@
 
 import { randomUUID } from "crypto";
 import { type Logger, createLogger } from "@proliferate/logger";
-import { prebuilds, sessions } from "@proliferate/services";
+import { configurations, sessions } from "@proliferate/services";
 import type {
 	ClientMessage,
 	ClientSource,
@@ -569,14 +569,14 @@ export class SessionHub {
 	 */
 	async saveSnapshot(
 		message?: string,
-	): Promise<{ snapshotId: string; target: "prebuild" | "session" }> {
+	): Promise<{ snapshotId: string; target: "configuration" | "session" }> {
 		const context = this.runtime.getContext();
 		if (!context.session.sandbox_id) {
 			throw new Error("No sandbox to snapshot");
 		}
 
 		const isSetupSession = context.session.session_type === "setup";
-		const target = isSetupSession ? "prebuild" : "session";
+		const target = isSetupSession ? "configuration" : "session";
 
 		const startTime = Date.now();
 		this.log("Saving snapshot", { target, message });
@@ -587,8 +587,10 @@ export class SessionHub {
 
 		// Load env files spec for scrub/apply around snapshot
 		let envFilesSpec: unknown = null;
-		if (context.session.prebuild_id) {
-			envFilesSpec = await prebuilds.getPrebuildEnvFiles(context.session.prebuild_id);
+		if (context.session.configuration_id) {
+			envFilesSpec = await configurations.getConfigurationEnvFiles(
+				context.session.configuration_id,
+			);
 		}
 
 		// Scrub secrets before snapshot (security-critical: abort if this fails)
@@ -633,10 +635,10 @@ export class SessionHub {
 		this.log(`[Timing] +${providerMs}ms provider.snapshot complete`);
 
 		if (isSetupSession) {
-			if (!context.session.prebuild_id) {
-				throw new Error("Setup session has no prebuild");
+			if (!context.session.configuration_id) {
+				throw new Error("Setup session has no configuration");
 			}
-			await prebuilds.update(context.session.prebuild_id, {
+			await configurations.update(context.session.configuration_id, {
 				snapshotId: result.snapshotId,
 				status: "ready",
 			});
@@ -1012,8 +1014,8 @@ export class SessionHub {
 
 	private async handleRunAutoStart(runId: string, inlineCommands?: unknown): Promise<void> {
 		await this.ensureRuntimeReady();
-		const { parsePrebuildServiceCommands } = await import("@proliferate/shared/sandbox");
-		const parsed = inlineCommands ? parsePrebuildServiceCommands(inlineCommands) : undefined;
+		const { parseConfigurationServiceCommands } = await import("@proliferate/shared/sandbox");
+		const parsed = inlineCommands ? parseConfigurationServiceCommands(inlineCommands) : undefined;
 		const entries = await this.runtime.testAutoStartCommands(
 			runId,
 			parsed?.length ? parsed : undefined,

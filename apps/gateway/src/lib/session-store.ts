@@ -1,5 +1,5 @@
 import { createLogger } from "@proliferate/logger";
-import { cli, integrations, prebuilds, sessions } from "@proliferate/services";
+import { cli, configurations, integrations, sessions } from "@proliferate/services";
 import {
 	type AgentConfig,
 	type ModelId,
@@ -12,7 +12,7 @@ import {
 	isValidModelId,
 	parseModelId,
 } from "@proliferate/shared";
-import type { PrebuildServiceCommand } from "@proliferate/shared";
+import type { ConfigurationServiceCommand } from "@proliferate/shared";
 import { parseServiceCommands, resolveServiceCommands } from "@proliferate/shared/sandbox";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
@@ -31,7 +31,7 @@ export interface SessionRecord {
 	id: string;
 	organization_id: string;
 	created_by: string | null;
-	prebuild_id: string | null;
+	configuration_id: string | null;
 	session_type: string | null;
 	sandbox_id: string | null;
 	sandbox_provider: string | null;
@@ -60,11 +60,11 @@ export interface SessionContext {
 	sshPublicKey?: string;
 	/** True if the snapshot includes installed dependencies. Gates service command auto-start. */
 	snapshotHasDeps: boolean;
-	/** Resolved service commands (prebuild-level or fallback from repos). */
-	serviceCommands?: PrebuildServiceCommand[];
+	/** Resolved service commands (configuration-level or fallback from repos). */
+	serviceCommands?: ConfigurationServiceCommand[];
 }
 
-interface PrebuildRepoRow {
+interface ConfigurationRepoRow {
 	workspace_path: string;
 	repo: RepoRecord;
 }
@@ -91,7 +91,7 @@ export async function loadSessionContext(
 	const log = logger.child({ sessionId });
 	log.debug("store.load_context.start");
 
-	// Load session without repo relationship (repos now come from prebuild_repos)
+	// Load session without repo relationship (repos now come from configuration_repos)
 	log.info("Loading session from database...");
 	const sessionRowStartMs = Date.now();
 	const sessionRow = await sessions.findByIdInternal(sessionId);
@@ -110,7 +110,7 @@ export async function loadSessionContext(
 		id: sessionRow.id,
 		organization_id: sessionRow.organizationId,
 		created_by: sessionRow.createdBy,
-		prebuild_id: sessionRow.prebuildId,
+		configuration_id: sessionRow.configurationId,
 		session_type: sessionRow.sessionType,
 		sandbox_id: sessionRow.sandboxId,
 		sandbox_provider: sessionRow.sandboxProvider,
@@ -130,7 +130,7 @@ export async function loadSessionContext(
 
 	log.info(
 		{
-			prebuildId: session.prebuild_id,
+			configurationId: session.configuration_id,
 			sandboxId: session.sandbox_id,
 			status: session.status,
 			sessionType: session.session_type,
@@ -138,9 +138,9 @@ export async function loadSessionContext(
 		"Session loaded",
 	);
 
-	// Scratch session: no prebuild, no repos — boot from base snapshot only
-	if (!session.prebuild_id) {
-		log.info("Scratch session (no prebuild)");
+	// Scratch session: no configuration, no repos — boot from base snapshot only
+	if (!session.configuration_id) {
+		log.info("Scratch session (no configuration)");
 
 		const scratchPrimaryRepo: RepoRecord = {
 			id: "scratch",
@@ -179,25 +179,30 @@ export async function loadSessionContext(
 		};
 	}
 
-	// Prebuild-backed session: load repos, tokens, service commands
-	log.info({ prebuildId: session.prebuild_id }, "Loading repos from prebuild_repos...");
-	const prebuildReposStartMs = Date.now();
-	const prebuildRepoRows = await prebuilds.getPrebuildReposWithDetails(session.prebuild_id);
+	// Configuration-backed session: load repos, tokens, service commands
+	log.info(
+		{ configurationId: session.configuration_id },
+		"Loading repos from configuration_repos...",
+	);
+	const configurationReposStartMs = Date.now();
+	const configurationRepoRows = await configurations.getConfigurationReposWithDetails(
+		session.configuration_id,
+	);
 	log.debug(
 		{
-			durationMs: Date.now() - prebuildReposStartMs,
-			count: prebuildRepoRows?.length ?? 0,
+			durationMs: Date.now() - configurationReposStartMs,
+			count: configurationRepoRows?.length ?? 0,
 		},
-		"store.load_context.prebuild_repos",
+		"store.load_context.configuration_repos",
 	);
 
-	if (!prebuildRepoRows || prebuildRepoRows.length === 0) {
-		log.warn("Prebuild has no repos");
-		throw new Error("Prebuild has no associated repos");
+	if (!configurationRepoRows || configurationRepoRows.length === 0) {
+		log.warn("Configuration has no repos");
+		throw new Error("Configuration has no associated repos");
 	}
 
 	// Convert to the expected shape
-	const typedPrebuildRepos: PrebuildRepoRow[] = prebuildRepoRows
+	const typedConfigurationRepos: ConfigurationRepoRow[] = configurationRepoRows
 		.filter((pr) => pr.repo !== null)
 		.map((pr) => ({
 			workspace_path: pr.workspacePath,
@@ -212,23 +217,23 @@ export async function loadSessionContext(
 
 	log.info(
 		{
-			count: typedPrebuildRepos.length,
-			repos: typedPrebuildRepos.map((pr) => ({
+			count: typedConfigurationRepos.length,
+			repos: typedConfigurationRepos.map((pr) => ({
 				name: pr.repo.github_repo_name,
 				path: pr.workspace_path,
 			})),
 		},
-		"Prebuild repos loaded",
+		"Configuration repos loaded",
 	);
 
 	// Primary repo (first one) for system prompt context
-	const primaryRepo = typedPrebuildRepos[0].repo;
+	const primaryRepo = typedConfigurationRepos[0].repo;
 
 	// Resolve GitHub token for each repo (may differ per installation)
 	log.info("Resolving GitHub tokens for repos...");
 	const tokenResolutionStartMs = Date.now();
 	const repoSpecs: RepoSpec[] = await Promise.all(
-		typedPrebuildRepos.map(async (pr) => {
+		typedConfigurationRepos.map(async (pr) => {
 			const token = await resolveGitHubToken(
 				env,
 				session.organization_id,
@@ -280,8 +285,8 @@ export async function loadSessionContext(
 		tools: session.agent_config?.tools,
 	};
 
-	// Load env vars for all repos in the prebuild
-	const repoIds = typedPrebuildRepos.map((pr) => pr.repo.id);
+	// Load env vars for all repos in the configuration
+	const repoIds = typedConfigurationRepos.map((pr) => pr.repo.id);
 	log.info({ repoIds }, "Loading environment variables...");
 	const envVarsStartMs = Date.now();
 	const envVars = await loadEnvironmentVariables(
@@ -327,22 +332,21 @@ export async function loadSessionContext(
 	}
 
 	// Derive snapshotHasDeps: true when snapshot includes installed deps.
-	// Repo snapshots (clone-only) don't have deps; prebuild/session/pause snapshots do.
+	// Repo snapshots (clone-only) don't have deps; configuration/session/pause snapshots do.
 	const repoSnapshotFallback =
-		prebuildRepoRows.length === 1 &&
-		prebuildRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
-		prebuildRepoRows[0].repo?.repoSnapshotId
-			? prebuildRepoRows[0].repo.repoSnapshotId
+		configurationRepoRows.length === 1 &&
+		configurationRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
+		configurationRepoRows[0].repo?.repoSnapshotId
+			? configurationRepoRows[0].repo.repoSnapshotId
 			: null;
 	const snapshotHasDeps =
 		Boolean(session.snapshot_id) && session.snapshot_id !== repoSnapshotFallback;
 
-	// Resolve service commands: prebuild-level first, then per-repo fallback
-	const prebuildSvcRow = await prebuilds.getPrebuildServiceCommands(session.prebuild_id);
-	const resolvedServiceCommands = resolveServiceCommands(
-		prebuildSvcRow?.serviceCommands,
-		repoSpecs,
+	// Resolve service commands: configuration-level first, then per-repo fallback
+	const configSvcRow = await configurations.getConfigurationServiceCommands(
+		session.configuration_id,
 	);
+	const resolvedServiceCommands = resolveServiceCommands(configSvcRow?.serviceCommands, repoSpecs);
 
 	log.info("Session context ready");
 	log.debug(
