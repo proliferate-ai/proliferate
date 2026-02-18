@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { ThinkingIcon } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import {
@@ -9,7 +10,7 @@ import {
 	type ReasoningEffort,
 	getModel,
 } from "@proliferate/shared/agents";
-import { Check, Gauge } from "lucide-react";
+import { Check } from "lucide-react";
 import { useState } from "react";
 
 interface ReasoningSelectorProps {
@@ -19,10 +20,30 @@ interface ReasoningSelectorProps {
 	disabled?: boolean;
 }
 
-const EFFORT_OPTIONS: { id: ReasoningEffort; label: string; description: string }[] = [
-	{ id: "quick", label: "Quick", description: "Minimal reasoning, fastest responses" },
-	{ id: "normal", label: "Normal", description: "Balanced reasoning (default)" },
-	{ id: "deep", label: "Deep", description: "Maximum reasoning depth" },
+const EFFORT_OPTIONS: {
+	id: ReasoningEffort;
+	label: string;
+	description: string;
+	speed: "quick" | "normal" | "deep";
+}[] = [
+	{
+		id: "quick",
+		label: "Quick",
+		description: "Minimal reasoning, fastest responses",
+		speed: "quick",
+	},
+	{
+		id: "normal",
+		label: "Normal",
+		description: "Balanced reasoning (default)",
+		speed: "normal",
+	},
+	{
+		id: "deep",
+		label: "Deep",
+		description: "Maximum reasoning depth",
+		speed: "deep",
+	},
 ];
 
 export function ReasoningSelector({ modelId, effort, onChange, disabled }: ReasoningSelectorProps) {
@@ -37,11 +58,11 @@ export function ReasoningSelector({ modelId, effort, onChange, disabled }: Reaso
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
 				<Button variant="ghost" size="sm" className="h-8 gap-1.5 font-normal" disabled={disabled}>
-					<Gauge className="h-3.5 w-3.5 shrink-0" />
+					<ThinkingIcon className="h-3.5 w-3.5 shrink-0" speed={currentOption.speed} />
 					<span className="text-sm">{currentOption.label}</span>
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent className="w-56 p-0" align="start">
+			<PopoverContent className="w-64 p-0" align="start">
 				<div className="py-1">
 					{EFFORT_OPTIONS.map((option) => {
 						const isSelected = option.id === effort;
@@ -61,7 +82,10 @@ export function ReasoningSelector({ modelId, effort, onChange, disabled }: Reaso
 								{isSelected ? (
 									<Check className="h-4 w-4 text-primary mt-0.5 shrink-0" />
 								) : (
-									<Gauge className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+									<ThinkingIcon
+										className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground"
+										speed={option.speed}
+									/>
 								)}
 								<div className="flex flex-col items-start min-w-0">
 									<span className="leading-none">{option.label}</span>

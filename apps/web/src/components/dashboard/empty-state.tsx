@@ -12,6 +12,7 @@ import type { PendingRunSummary } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
 import { AlertCircle, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { PromptInput } from "./prompt-input";
 import { ActivitySummary } from "./session-stats";
 
@@ -177,6 +178,7 @@ export function EmptyDashboard() {
 	const createSession = useCreateSession();
 	const { data: recentSessions } = useSessions({ limit: 1, excludeSetup: true, excludeCli: true });
 	const hasSessions = (recentSessions ?? []).length > 0;
+	const router = useRouter();
 
 	const firstName = authSession?.user?.name?.split(" ")[0] ?? "";
 	const greeting = firstName ? getGreeting(firstName) : "How can I help you today?";
@@ -193,30 +195,32 @@ export function EmptyDashboard() {
 						: undefined,
 			};
 
+			let result: Awaited<ReturnType<typeof createSession.mutateAsync>> | undefined;
+
 			if (!selectedSnapshotId && !selectedRepoId) {
-				await createSession.mutateAsync(sessionOptions);
-				// Session created — list auto-refreshes via query invalidation
-				setPendingPrompt(null);
-				return;
-			}
+				result = await createSession.mutateAsync(sessionOptions);
+			} else {
+				let configurationId = selectedSnapshotId;
 
-			let configurationId = selectedSnapshotId;
+				if (!configurationId && selectedRepoId) {
+					const configurationResult = await createConfiguration.mutateAsync({
+						repoIds: [selectedRepoId],
+					});
+					configurationId = configurationResult.configurationId;
+				}
 
-			if (!configurationId && selectedRepoId) {
-				const configurationResult = await createConfiguration.mutateAsync({
-					repoIds: [selectedRepoId],
+				if (!configurationId) return;
+
+				result = await createSession.mutateAsync({
+					...sessionOptions,
+					configurationId,
 				});
-				configurationId = configurationResult.configurationId;
 			}
 
-			if (!configurationId) return;
-
-			await createSession.mutateAsync({
-				...sessionOptions,
-				configurationId,
-			});
-			// Session created — list auto-refreshes via query invalidation
 			setPendingPrompt(null);
+			if (result?.sessionId) {
+				router.push(`/workspace/${result.sessionId}`);
+			}
 		} catch (error) {
 			console.error("Failed to create session:", error);
 			setPendingPrompt(null);

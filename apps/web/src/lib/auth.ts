@@ -34,9 +34,9 @@ const isLocalDb =
 
 const pool = new Pool({
 	connectionString: env.DATABASE_URL,
-	max: 1, // Limit connections in serverless environment
+	max: isLocalDb ? 5 : 1, // More connections for local dev; limit in serverless
 	idleTimeoutMillis: 10000, // Close idle connections after 10s
-	connectionTimeoutMillis: 5000, // Fail fast if can't connect
+	connectionTimeoutMillis: isLocalDb ? 30000 : 5000, // More patience for local dev cold compiles
 	// Explicit ssl avoids the pg v8 deprecation warning about sslmode aliases.
 	// RDS certs aren't in the default trust store, so rejectUnauthorized: false.
 	ssl: isLocalDb ? false : { rejectUnauthorized: false },

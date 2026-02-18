@@ -217,6 +217,7 @@ Run `make` or `make help` for the full list. Common targets:
 ## Git Workflow
 
 - **Do not create branches** unless explicitly asked.
+- **Never discard uncommitted changes** (`git checkout --`, `git restore`, `git clean`) without asking the user first. Uncommitted changes may be in-progress work from another branch or task. If you see unexpected modified files, list them and ask before discarding.
 - Use conventional commits (`feat:`, `fix:`, `chore:`) for commits and PR titles.
 - When opening a PR: use the PR template (`.github/PULL_REQUEST_TEMPLATE.md`) and fill every section.
 - On merge conflicts: summarize each conflict before choosing a resolution.

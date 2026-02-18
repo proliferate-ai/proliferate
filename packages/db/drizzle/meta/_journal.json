@@ -204,12 +204,19 @@
     {
       "idx": 30,
       "version": "7",
+      "when": 1771350000000,
+      "tag": "0028_faithful_shatterstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
       "when": 1771393783395,
       "tag": "0030_nulls_not_distinct_prefs",
       "breakpoints": true
     },
     {
-      "idx": 31,
+      "idx": 32,
       "version": "7",
       "when": 1771804800000,
       "tag": "0031_rename_prebuild_to_configuration",
