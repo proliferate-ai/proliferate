@@ -101,8 +101,8 @@ export function RightPanel({
 		);
 	}
 
-	// Empty state when no panel is selected
-	if (mode.type === "none") {
+	// Empty state when no panel is selected, or investigation mode without a runId
+	if (mode.type === "none" || (mode.type === "investigation" && !runId)) {
 		return (
 			<div className="flex flex-col h-full items-center justify-center text-muted-foreground">
 				<MousePointerClick className="h-8 w-8 mb-3 opacity-40" />

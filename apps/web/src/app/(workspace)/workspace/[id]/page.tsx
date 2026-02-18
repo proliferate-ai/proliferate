@@ -35,14 +35,16 @@ export default function SessionDetailPage({
 		organization
 			.setActive({ organizationId: targetOrgId })
 			.then(() => {
-				window.location.replace(`/workspace/${id}?orgId=${targetOrgId}`);
+				const params = new URLSearchParams({ orgId: targetOrgId });
+				if (runId) params.set("runId", runId);
+				window.location.replace(`/workspace/${id}?${params.toString()}`);
 			})
 			.catch((err) => {
 				console.error("Failed to switch organization:", err);
 				setSwitchError("Unable to switch organization for this session.");
 				setIsSwitching(false);
 			});
-	}, [targetOrgId, isOrgPending, isSwitching, shouldSwitchOrg, id]);
+	}, [targetOrgId, isOrgPending, isSwitching, shouldSwitchOrg, id, runId]);
 
 	// Sync active session ID with URL
 	useEffect(() => {
