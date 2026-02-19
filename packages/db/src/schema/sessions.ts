@@ -92,6 +92,13 @@ export const sessions = pgTable(
 
 		// Source (for session tracking)
 		source: text("source"),
+
+		// Phase 2: Session telemetry
+		outcome: text("outcome"),
+		summary: text("summary"),
+		prUrls: jsonb("pr_urls"),
+		metrics: jsonb("metrics"),
+		latestTask: text("latest_task"),
 	},
 	(table) => [
 		index("idx_sessions_org").on(table.organizationId),

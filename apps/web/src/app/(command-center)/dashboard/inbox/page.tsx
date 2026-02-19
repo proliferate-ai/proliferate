@@ -4,10 +4,11 @@ import { InboxEmpty } from "@/components/inbox/inbox-empty";
 import { InboxItem } from "@/components/inbox/inbox-item";
 import type { AttentionItem, BlockedGroup } from "@/hooks/use-attention-inbox";
 import { useAttentionInbox } from "@/hooks/use-attention-inbox";
+import { getRunStatusDisplay } from "@/lib/run-status";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/utils";
 import type { PendingRunSummary } from "@proliferate/shared";
-import { AlertCircle, AlertOctagon, Hand, Search, Shield, Timer, XCircle } from "lucide-react";
+import { AlertOctagon, Search, Shield } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
@@ -36,19 +37,6 @@ function getSearchableText(item: AttentionItem): string {
 	}
 	const { automation_name, error_message, status } = item.data;
 	return [automation_name, error_message, status].filter(Boolean).join(" ").toLowerCase();
-}
-
-function getRunStatusInfo(status: string) {
-	switch (status) {
-		case "failed":
-			return { icon: XCircle, label: "Failed", className: "text-red-500" };
-		case "needs_human":
-			return { icon: Hand, label: "Needs attention", className: "text-amber-500" };
-		case "timed_out":
-			return { icon: Timer, label: "Timed out", className: "text-orange-500" };
-		default:
-			return { icon: AlertCircle, label: status, className: "text-muted-foreground" };
-	}
 }
 
 /** Group items by status type for the queue list. */
@@ -182,7 +170,7 @@ function QueueRow({
 	}
 
 	const run = item.data as PendingRunSummary;
-	const statusInfo = getRunStatusInfo(run.status);
+	const statusInfo = getRunStatusDisplay(run.status);
 	const StatusIcon = statusInfo.icon;
 	const timeAgo = run.completed_at
 		? formatRelativeTime(run.completed_at)

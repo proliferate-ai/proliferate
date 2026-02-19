@@ -694,7 +694,7 @@ export async function stopAllCliSessions(orgId: string): Promise<void> {
 	const db = getDb();
 	await db
 		.update(sessions)
-		.set({ status: "stopped", endedAt: new Date() })
+		.set({ status: "stopped", endedAt: new Date(), latestTask: null, outcome: "completed" })
 		.where(
 			and(
 				eq(sessions.organizationId, orgId),
@@ -799,7 +799,7 @@ export async function stopSession(sessionId: string): Promise<void> {
 	const db = getDb();
 	await db
 		.update(sessions)
-		.set({ status: "stopped", endedAt: new Date() })
+		.set({ status: "stopped", endedAt: new Date(), latestTask: null, outcome: "completed" })
 		.where(eq(sessions.id, sessionId));
 }
 

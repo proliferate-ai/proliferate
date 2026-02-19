@@ -105,6 +105,7 @@ export async function pauseSessionHandler(
 			previewTunnelUrl: null,
 			codingAgentSessionId: null,
 			pausedAt: new Date().toISOString(),
+			latestTask: null,
 		});
 	} catch (updateError) {
 		reqLog.error({ err: updateError }, "Failed to update session");

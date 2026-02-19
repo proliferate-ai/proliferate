@@ -1360,6 +1360,12 @@ export const sessions = pgTable(
 		aliveCheckFailures: integer("alive_check_failures").default(0),
 		pauseReason: text("pause_reason"),
 		stopReason: text("stop_reason"),
+		// Phase 2: Session telemetry
+		outcome: text("outcome"),
+		summary: text("summary"),
+		prUrls: jsonb("pr_urls"),
+		metrics: jsonb("metrics"),
+		latestTask: text("latest_task"),
 	},
 	(table) => [
 		index("idx_sessions_automation").using(

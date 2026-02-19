@@ -2,7 +2,7 @@
  * automation.complete intercepted tool handler.
  */
 
-import { runs, triggers } from "@proliferate/services";
+import { runs, sessions, triggers } from "@proliferate/services";
 import type { InterceptedToolHandler, InterceptedToolResult } from "./index";
 
 interface AutomationCompleteArgs {
@@ -54,6 +54,12 @@ export const automationCompleteHandler: InterceptedToolHandler = {
 			status: eventStatus,
 			errorMessage: outcome === "failed" ? "Run failed" : null,
 			processedAt: new Date(),
+		});
+
+		// Persist outcome + summary to session before terminal cleanup
+		await sessions.updateSession(hub.getSessionId(), {
+			outcome,
+			summary: payload.summary_markdown ?? null,
 		});
 
 		// Automation Fast-Path: schedule terminal cleanup after response is sent.

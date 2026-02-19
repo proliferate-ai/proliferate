@@ -252,6 +252,11 @@ export async function update(id: string, input: UpdateSessionInput): Promise<voi
 	if (input.automationId !== undefined) updates.automationId = input.automationId;
 	if (input.triggerId !== undefined) updates.triggerId = input.triggerId;
 	if (input.triggerEventId !== undefined) updates.triggerEventId = input.triggerEventId;
+	if (input.latestTask !== undefined) updates.latestTask = input.latestTask;
+	if (input.outcome !== undefined) updates.outcome = input.outcome;
+	if (input.summary !== undefined) updates.summary = input.summary;
+	if (input.prUrls !== undefined) updates.prUrls = input.prUrls;
+	if (input.metrics !== undefined) updates.metrics = input.metrics;
 
 	await db.update(sessions).set(updates).where(eq(sessions.id, id));
 }
@@ -278,6 +283,11 @@ export async function updateWithOrgCheck(
 	if (input.pausedAt !== undefined)
 		updates.pausedAt = input.pausedAt ? new Date(input.pausedAt) : null;
 	if (input.pauseReason !== undefined) updates.pauseReason = input.pauseReason;
+	if (input.latestTask !== undefined) updates.latestTask = input.latestTask;
+	if (input.outcome !== undefined) updates.outcome = input.outcome;
+	if (input.summary !== undefined) updates.summary = input.summary;
+	if (input.prUrls !== undefined) updates.prUrls = input.prUrls;
+	if (input.metrics !== undefined) updates.metrics = input.metrics;
 
 	await db
 		.update(sessions)
@@ -303,6 +313,7 @@ export async function updateWhereSandboxIdMatches(
 	if (input.pausedAt !== undefined)
 		updates.pausedAt = input.pausedAt ? new Date(input.pausedAt) : null;
 	if (input.pauseReason !== undefined) updates.pauseReason = input.pauseReason;
+	if (input.latestTask !== undefined) updates.latestTask = input.latestTask;
 
 	const rows = await db
 		.update(sessions)
@@ -366,8 +377,62 @@ export async function markStopped(sessionId: string): Promise<void> {
 		.set({
 			status: "stopped",
 			endedAt: new Date(),
+			latestTask: null,
 		})
 		.where(eq(sessions.id, sessionId));
+}
+
+/**
+ * Flush telemetry counters to DB using SQL-level increments.
+ * Builds dynamic SET clauses to avoid MVCC churn on unchanged columns.
+ */
+export async function flushTelemetry(
+	sessionId: string,
+	delta: { toolCalls: number; messagesExchanged: number; activeSeconds: number },
+	newPrUrls: string[],
+	latestTask: string | null,
+): Promise<void> {
+	const db = getDb();
+
+	const hasDelta = delta.toolCalls > 0 || delta.messagesExchanged > 0 || delta.activeSeconds > 0;
+	const hasPrUrls = newPrUrls.length > 0;
+
+	// Build dynamic SET clauses
+	const setClauses: ReturnType<typeof sql>[] = [];
+
+	if (hasDelta) {
+		setClauses.push(
+			sql`metrics = jsonb_build_object(
+				'toolCalls', COALESCE((${sessions.metrics}->>'toolCalls')::int, 0) + ${delta.toolCalls},
+				'messagesExchanged', COALESCE((${sessions.metrics}->>'messagesExchanged')::int, 0) + ${delta.messagesExchanged},
+				'activeSeconds', COALESCE((${sessions.metrics}->>'activeSeconds')::int, 0) + ${delta.activeSeconds}
+			)`,
+		);
+	}
+
+	if (hasPrUrls) {
+		const urlsJson = JSON.stringify(newPrUrls);
+		setClauses.push(
+			sql`pr_urls = (
+				SELECT COALESCE(jsonb_agg(DISTINCT val), '[]'::jsonb)
+				FROM jsonb_array_elements(COALESCE(${sessions.prUrls}, '[]'::jsonb) || ${urlsJson}::jsonb) AS val
+			)`,
+		);
+	}
+
+	// Always set latest_task with dirty check
+	setClauses.push(
+		sql`latest_task = CASE
+			WHEN ${sessions.latestTask} IS DISTINCT FROM ${latestTask}
+			THEN ${latestTask}
+			ELSE ${sessions.latestTask}
+		END`,
+	);
+
+	if (setClauses.length === 0) return;
+
+	const setClause = sql.join(setClauses, sql.raw(", "));
+	await db.execute(sql`UPDATE sessions SET ${setClause} WHERE id = ${sessionId}`);
 }
 
 /**

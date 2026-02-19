@@ -101,7 +101,11 @@ async function cleanupOrphanedSession(
 		const sandboxId = session.sandboxId;
 		if (!sandboxId) {
 			// No sandbox — just mark as paused
-			await sessions.update(sessionId, { status: "paused", pauseReason: "orphaned" });
+			await sessions.update(sessionId, {
+				status: "paused",
+				pauseReason: "orphaned",
+				latestTask: null,
+			});
 			logger.info({ sessionId }, "orphan_sweep.paused_no_sandbox");
 			return;
 		}
@@ -137,6 +141,7 @@ async function cleanupOrphanedSession(
 			status: "paused",
 			pausedAt: new Date().toISOString(),
 			pauseReason: "orphaned",
+			latestTask: null,
 		});
 
 		if (rowsAffected === 0) {

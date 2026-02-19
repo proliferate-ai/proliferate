@@ -47,6 +47,7 @@ import { EventProcessor } from "./event-processor";
 import { GitOperations } from "./git-operations";
 import { MigrationController } from "./migration-controller";
 import { MigrationInProgressError, SessionRuntime } from "./session-runtime";
+import { SessionTelemetry, extractPrUrls } from "./session-telemetry";
 import type { PromptOptions } from "./types";
 
 interface HubDependencies {
@@ -99,6 +100,10 @@ export class SessionHub {
 	// Hub eviction callback (set by HubManager)
 	private readonly onEvict?: () => void;
 
+	// Phase 2a: telemetry
+	private readonly telemetry: SessionTelemetry;
+	private telemetryFlushTimer: ReturnType<typeof setInterval> | null = null;
+
 	constructor(deps: HubDependencies) {
 		this.env = deps.env;
 		this.sessionId = deps.sessionId;
@@ -108,13 +113,32 @@ export class SessionHub {
 			sessionId: deps.sessionId,
 		});
 
+		this.telemetry = new SessionTelemetry(deps.sessionId);
+
 		this.eventProcessor = new EventProcessor(
 			{
 				broadcast: (msg) => this.broadcast(msg),
 				getOpenCodeSessionId: () => this.runtime.getOpenCodeSessionId(),
+				onToolStart: (toolCallId) => this.telemetry.recordToolCall(toolCallId),
+				onMessageComplete: () => this.telemetry.recordMessageComplete(),
+				onTextPartComplete: (text) => {
+					for (const url of extractPrUrls(text)) {
+						this.telemetry.recordPrUrl(url);
+					}
+				},
+				onToolMetadata: (title) => {
+					if (title) this.telemetry.updateLatestTask(title);
+				},
 			},
 			this.logger,
 		);
+
+		// Debounced telemetry flush (every 30s)
+		this.telemetryFlushTimer = setInterval(() => {
+			this.flushTelemetry().catch((err) => {
+				this.logError("Debounced telemetry flush failed", err);
+			});
+		}, 30_000);
 
 		this.runtime = new SessionRuntime({
 			env: this.env,
@@ -144,6 +168,7 @@ export class SessionHub {
 				this.stopIdleMonitor();
 			},
 			cancelReconnect: () => this.cancelReconnect(),
+			flushTelemetry: () => this.flushTelemetry(),
 		});
 	}
 
@@ -519,6 +544,7 @@ export class SessionHub {
 			throw err;
 		}
 		this.lastKnownAgentIdleAt = null; // fresh sandbox, agent state unknown
+		this.telemetry.startRunning(); // idempotent: only sets if not already running
 		this.startMigrationMonitor();
 		await setRuntimeLease(this.sessionId);
 	}
@@ -711,6 +737,10 @@ export class SessionHub {
 		this.stopLeaseRenewal();
 		this.stopIdleMonitor();
 		this.cancelReconnect();
+		if (this.telemetryFlushTimer) {
+			clearInterval(this.telemetryFlushTimer);
+			this.telemetryFlushTimer = null;
+		}
 	}
 
 	/**
@@ -897,6 +927,14 @@ export class SessionHub {
 		// Stop all monitoring
 		this.stopMigrationMonitor();
 
+		// Flush telemetry before stopping (best-effort)
+		try {
+			this.telemetry.stopRunning();
+			await this.flushTelemetry();
+		} catch (err) {
+			this.logError("Telemetry flush failed before automation terminate", err);
+		}
+
 		if (sandboxId) {
 			const providerType = context.session.sandbox_provider as SandboxProviderType;
 			const provider = getSandboxProvider(providerType);
@@ -918,6 +956,14 @@ export class SessionHub {
 		this.runtime.disconnectSse();
 		this.runtime.resetSandboxState();
 		this.onEvict?.();
+	}
+
+	/**
+	 * Flush accumulated telemetry to DB (best-effort).
+	 * Delegates to SessionTelemetry's single-flight mutex.
+	 */
+	async flushTelemetry(): Promise<void> {
+		await this.telemetry.flush(sessions.flushTelemetry);
 	}
 
 	// ============================================
@@ -977,6 +1023,7 @@ export class SessionHub {
 			parts,
 		};
 		this.broadcast({ type: "message", payload: userMessage });
+		this.telemetry.recordUserPrompt();
 		this.log("User message broadcast", { messageId: userMessage.id });
 
 		// Publish to Redis for async clients
@@ -1130,6 +1177,9 @@ export class SessionHub {
 		await this.ensureRuntimeReady();
 		try {
 			const result = await fn();
+			if (result.prUrl) {
+				this.telemetry.recordPrUrl(result.prUrl);
+			}
 			this.sendMessage(ws, { type: "git_result", payload: { action, ...result } });
 			// Auto-refresh status on success (preserve workspacePath)
 			if (result.success) {

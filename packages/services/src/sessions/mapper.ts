@@ -60,6 +60,17 @@ export function toSession(row: SessionWithRepoRow, options?: ToSessionOptions): 
 		automationId: row.automationId ?? null,
 		automation: row.automation ? { id: row.automation.id, name: row.automation.name } : null,
 		repo: row.repo ? mapRepo(row.repo) : undefined,
+		// Phase 2a: session telemetry
+		outcome: (row.outcome as Session["outcome"]) ?? null,
+		summary: row.summary ?? null,
+		prUrls: (row.prUrls as string[] | null) ?? null,
+		metrics:
+			(row.metrics as {
+				toolCalls: number;
+				messagesExchanged: number;
+				activeSeconds: number;
+			} | null) ?? null,
+		latestTask: row.latestTask ?? null,
 	};
 }
 
@@ -97,5 +108,16 @@ export function toSessionPartial(row: SessionRow): Omit<Session, "repo"> {
 		clientType: row.clientType,
 		automationId: row.automationId ?? null,
 		automation: null,
+		// Phase 2a: session telemetry
+		outcome: (row.outcome as Session["outcome"]) ?? null,
+		summary: row.summary ?? null,
+		prUrls: (row.prUrls as string[] | null) ?? null,
+		metrics:
+			(row.metrics as {
+				toolCalls: number;
+				messagesExchanged: number;
+				activeSeconds: number;
+			} | null) ?? null,
+		latestTask: row.latestTask ?? null,
 	};
 }
