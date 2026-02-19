@@ -172,6 +172,7 @@ apps/gateway/src/
 │   ├── sse-client.ts                     # SseClient — transport-only SSE reader
 │   ├── migration-controller.ts           # MigrationController — expiry/idle migration
 │   ├── git-operations.ts                 # GitOperations — stateless git/gh via sandbox exec
+│   ├── session-telemetry.ts             # SessionTelemetry — in-memory counter + periodic DB flush
 │   ├── types.ts                          # PromptOptions, MigrationState, MigrationConfig
 │   └── capabilities/tools/
 │       ├── index.ts                      # Tool handler registry (invoked via tool callbacks; see agent-contract.md)
@@ -225,6 +226,17 @@ apps/gateway/src/
 
 apps/web/src/server/routers/
 └── sessions.ts                          # oRPC session routes (list, get, create, delete, rename, pause, snapshot, status, submitEnv)
+
+apps/web/src/
+├── components/sessions/
+│   ├── session-card.tsx                 # SessionListRow — session list rows with telemetry enrichment
+│   └── session-peek-drawer.tsx          # SessionPeekDrawer — URL-routable right-side sheet
+├── components/ui/
+│   └── sanitized-markdown.tsx           # SanitizedMarkdown — AST-sanitized markdown renderer
+├── lib/
+│   └── session-display.ts              # Session display helpers (formatActiveTime, getOutcomeDisplay, parsePrUrl)
+└── app/(command-center)/dashboard/sessions/
+    └── page.tsx                          # Sessions page — peek drawer wiring + URL param sync
 
 packages/gateway-clients/src/
 ├── index.ts                             # Barrel exports
@@ -311,7 +323,12 @@ sessions
 ├── last_seen_alive_at    TIMESTAMPTZ
 ├── alive_check_failures  INT DEFAULT 0
 ├── pause_reason          TEXT
-└── stop_reason           TEXT
+├── stop_reason           TEXT
+├── outcome               TEXT                     -- 'completed' | 'failed' | 'succeeded' | 'needs_human'
+├── summary               TEXT                     -- LLM-generated markdown (automation sessions)
+├── pr_urls               JSONB                    -- string[] of GitHub PR URLs
+├── metrics               JSONB                    -- { toolCalls, messagesExchanged, activeSeconds }
+└── latest_task           TEXT                     -- last known agent activity from tool_metadata
 
 session_connections
 ├── id                    UUID PRIMARY KEY
@@ -516,6 +533,70 @@ class ApiError extends Error {
 
 **Files touched:** `apps/gateway/src/hub/event-processor.ts`, `apps/gateway/src/hub/session-hub.ts`
 
+### 6.3a Session Telemetry — `Implemented`
+
+**What it does:** Passively captures session metrics (tool calls, messages, active time), PR URLs, and latest agent task during gateway event processing, then periodically flushes to the DB.
+
+**Architecture:**
+
+Each `SessionHub` owns a `SessionTelemetry` instance (pure in-memory counter class). The EventProcessor fires optional callbacks on key events; the hub wires these to telemetry recording methods.
+
+| Event | Callback | Telemetry method |
+|-------|----------|-----------------|
+| First tool event per `toolCallId` | `onToolStart` | `recordToolCall(id)` — deduplicates via `Set` |
+| Assistant message idle | `onMessageComplete` | `recordMessageComplete()` — increments delta counter |
+| User prompt sent | (direct call in `handlePrompt`) | `recordUserPrompt()` — increments delta counter |
+| Text part complete | `onTextPartComplete` | `extractPrUrls(text)` → `recordPrUrl(url)` for each |
+| Tool metadata with title | `onToolMetadata` | `updateLatestTask(title)` — dirty-tracked |
+| Git PR creation | (direct call in `handleGitAction`) | `recordPrUrl(result.prUrl)` |
+
+**Active time tracking:** `startRunning()` records a timestamp; `stopRunning()` accumulates elapsed seconds into a delta counter. Both are idempotent — repeated `startRunning()` calls don't reset the timer.
+
+**Flush lifecycle (single-flight mutex):**
+
+1. `getFlushPayload()` snapshots current deltas (tool call IDs, message count, active seconds including in-flight time, new PR URLs, dirty latestTask). Returns `null` if nothing is dirty.
+2. `flushFn()` calls `sessions.flushTelemetry()` — SQL-level atomic increment for metrics, JSONB append with dedup for PR URLs.
+3. `markFlushed(payload)` subtracts only the captured snapshot from deltas (differential approach), preserving any data added during the async flush.
+
+If a second `flush()` is called while one is in progress, it queues exactly one rerun — no data loss, no double-counting.
+
+**Flush points** (all wrapped in `try/catch`, best-effort):
+
+| Trigger | Location | Notes |
+|---------|----------|-------|
+| Idle snapshot | `migration-controller.ts` before CAS write | `stopRunning()` + flush |
+| Expiry migration | `migration-controller.ts` before CAS write | `stopRunning()` + flush |
+| Automation terminate | `session-hub.ts:terminateForAutomation()` | `stopRunning()` + flush |
+| Force terminate | `migration-controller.ts:forceTerminate()` | Best-effort flush |
+| Graceful shutdown | `hub-manager.ts:releaseAllLeases()` | Parallel flush per hub, bounded by 5s shutdown timeout |
+
+**DB method:** `sessions.flushTelemetry(sessionId, delta, newPrUrls, latestTask)` uses SQL-level `COALESCE + increment` to avoid read-modify-write races:
+
+```sql
+UPDATE sessions SET
+  metrics = jsonb_build_object(
+    'toolCalls', COALESCE((metrics->>'toolCalls')::int, 0) + $delta,
+    'messagesExchanged', COALESCE((metrics->>'messagesExchanged')::int, 0) + $delta,
+    'activeSeconds', COALESCE((metrics->>'activeSeconds')::int, 0) + $delta
+  ),
+  pr_urls = (SELECT COALESCE(jsonb_agg(DISTINCT val), '[]'::jsonb)
+             FROM jsonb_array_elements(COALESCE(pr_urls, '[]'::jsonb) || $new) AS val),
+  latest_task = $latest_task
+WHERE id = $session_id
+```
+
+**Outcome derivation:** Set at explicit terminal call sites, not in generic `markStopped()`:
+
+| Path | Outcome | Location |
+|------|---------|----------|
+| `automation.complete` tool | From completion payload | `automation-complete.ts` — persists before terminate |
+| CLI stop | `"completed"` | `cli/db.ts:stopSession`, `stopAllCliSessions` |
+| Force terminate (circuit breaker) | `"failed"` | `migration-controller.ts:forceTerminate` |
+
+**latestTask clearing:** All 12 non-hub write paths that transition sessions away from active states set `latestTask: null` to prevent zombie text (billing pause, manual pause, CLI stop, orphan sweeper, migration CAS).
+
+**Files touched:** `apps/gateway/src/hub/session-telemetry.ts`, `apps/gateway/src/hub/session-hub.ts`, `apps/gateway/src/hub/event-processor.ts`, `apps/gateway/src/hub/migration-controller.ts`, `apps/gateway/src/hub/hub-manager.ts`, `packages/services/src/sessions/db.ts`
+
 ### 6.4 WebSocket Protocol — `Implemented`
 
 **What it does:** Bidirectional real-time communication between browser clients and the gateway.
@@ -629,6 +710,20 @@ Token verification chain: (1) User JWT (signed with `gatewayJwtSecret`), (2) Ser
 **CORS** (`apps/gateway/src/middleware/cors.ts`): Allows all origins (`*`), methods `GET/POST/PATCH/DELETE/OPTIONS`, headers `Content-Type/Authorization/Accept`, max-age 86400s.
 
 **Error handler** (`apps/gateway/src/middleware/error-handler.ts`): Catches `ApiError` for structured JSON responses. Unhandled errors logged via `@proliferate/logger` and returned as 500.
+
+### 6.10 Session UI Surfaces — `Implemented`
+
+**Session list rows** (`apps/web/src/components/sessions/session-card.tsx`): Enriched with Phase 2a telemetry. Active rows show `latestTask` as subtitle; idle rows show `latestTask` → `promptSnippet` fallback; completed/failed rows show outcome label + compact metrics + PR count. An outcome badge appears for non-"completed" outcomes. A `GitPullRequest` icon + count shows when `prUrls` is populated. The row accepts an optional `onClick` prop — when provided, it fires the callback instead of navigating directly. The sessions page uses this to open the peek drawer; other pages (my-work) omit it and navigate to `/workspace/:id`.
+
+**Session display helpers** (`apps/web/src/lib/session-display.ts`): Pure formatting functions: `formatActiveTime(seconds)`, `formatCompactMetrics({toolCalls, activeSeconds})`, `getOutcomeDisplay(outcome)`, `parsePrUrl(url)`. Used across session list rows, peek drawer, and my-work pages.
+
+**Session peek drawer** (`apps/web/src/components/sessions/session-peek-drawer.tsx`): URL-routable right-side sheet. Opened via `?peek=<sessionId>` query param on the sessions page (`apps/web/src/app/(command-center)/dashboard/sessions/page.tsx`). Content sections: header (title + status + outcome), initial prompt, sanitized summary markdown, PR links, metrics grid, timeline, and context (repo/branch/automation). Footer has "Enter Workspace" or "Resume Session" CTA. Uses `useSessionData(id)` for detail data (includes `initialPrompt`). The sessions page wraps its content in `<Suspense>` for `useSearchParams()`.
+
+**Sanitized markdown** (`apps/web/src/components/ui/sanitized-markdown.tsx`): Reusable markdown renderer using `react-markdown` + `rehype-sanitize` with a restrictive schema: allowed tags limited to structural/inline elements (no `img`, `iframe`, `script`, `style`), `href` restricted to `http`/`https` protocols (blocking `javascript:` URLs). Optional `maxLength` prop for truncation. Used to render LLM-generated `session.summary` safely.
+
+**Inbox run triage enrichment** (`apps/web/src/components/inbox/inbox-item.tsx`): Run triage cards show session telemetry context — `latestTask`/`promptSnippet` fallback, sanitized summary (via `SanitizedMarkdown`), compact metrics, and PR count. The shared `getRunStatusDisplay` from `apps/web/src/lib/run-status.ts` is used consistently across inbox, activity, and my-work pages (replacing duplicated local helpers). Approval cards show `latestTask` context from the associated session.
+
+**Activity + My-Work consistency**: Activity page (`apps/web/src/app/(command-center)/dashboard/activity/page.tsx`) shows session title or trigger name for each run instead of a generic "Automation run" label. My-work claimed runs show session title or status label. Both use the shared `getRunStatusDisplay` mapping.
 
 ---
 

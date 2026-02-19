@@ -246,6 +246,7 @@ async function billFinalInterval(session: SessionForMetering, _nowMs: number): P
 			status: "paused",
 			pauseReason: "inactivity",
 			pausedAt: new Date(),
+			latestTask: null,
 		})
 		.where(eq(sessions.id, session.id));
 
@@ -440,6 +441,7 @@ export async function autoPauseSession(
 			status: "paused",
 			pauseReason: reason,
 			pausedAt: new Date(),
+			latestTask: null,
 		})
 		.where(eq(sessions.id, session.id));
 

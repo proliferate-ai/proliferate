@@ -2,6 +2,7 @@
 
 import { useWsToken } from "@/components/coding-session/runtime/use-ws-token";
 import { Button } from "@/components/ui/button";
+import { SanitizedMarkdown } from "@/components/ui/sanitized-markdown";
 import { useSetActionMode } from "@/hooks/use-action-modes";
 import { useApproveAction, useDenyAction } from "@/hooks/use-actions";
 import type { ApprovalWithSession, AttentionItem, BlockedGroup } from "@/hooks/use-attention-inbox";
@@ -9,20 +10,19 @@ import { useOrgMembersAndInvitations } from "@/hooks/use-orgs";
 import { useSessionData } from "@/hooks/use-sessions";
 import { useSession } from "@/lib/auth-client";
 import { type OrgRole, hasRoleOrHigher } from "@/lib/roles";
+import { getRunStatusDisplay } from "@/lib/run-status";
+import { formatCompactMetrics } from "@/lib/session-display";
 import { formatRelativeTime } from "@/lib/utils";
 import type { PendingRunSummary } from "@proliferate/shared";
 import {
-	AlertCircle,
 	AlertOctagon,
 	Check,
 	ExternalLink,
-	Hand,
+	GitPullRequest,
 	Loader2,
 	Shield,
 	ShieldCheck,
-	Timer,
 	X,
-	XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -146,9 +146,9 @@ function ApprovalItem({ data }: { data: ApprovalWithSession }) {
 						{sessionTitle || "View session"}
 						{timeAgo && ` · ${timeAgo}`}
 					</p>
-					{session?.promptSnippet && (
+					{(session?.latestTask || session?.promptSnippet) && (
 						<p className="text-xs text-muted-foreground mt-1 truncate">
-							The agent was working on: {session.promptSnippet}
+							{session?.latestTask ?? session?.promptSnippet}
 						</p>
 					)}
 				</div>
@@ -203,21 +203,8 @@ function ApprovalItem({ data }: { data: ApprovalWithSession }) {
 // Run Item
 // ============================================
 
-function getRunStatusInfo(status: string) {
-	switch (status) {
-		case "failed":
-			return { icon: XCircle, label: "Failed", className: "text-red-500" };
-		case "needs_human":
-			return { icon: Hand, label: "Needs attention", className: "text-amber-500" };
-		case "timed_out":
-			return { icon: Timer, label: "Timed out", className: "text-orange-500" };
-		default:
-			return { icon: AlertCircle, label: status, className: "text-muted-foreground" };
-	}
-}
-
 function RunItem({ data }: { data: PendingRunSummary }) {
-	const statusInfo = getRunStatusInfo(data.status);
+	const statusInfo = getRunStatusDisplay(data.status);
 	const StatusIcon = statusInfo.icon;
 	const { data: session } = useSessionData(data.session_id ?? "");
 
@@ -232,19 +219,42 @@ function RunItem({ data }: { data: PendingRunSummary }) {
 		? formatRelativeTime(data.completed_at)
 		: formatRelativeTime(data.queued_at);
 
+	const contextLine = session?.latestTask ?? session?.promptSnippet;
+	const metricsStr = session?.metrics ? formatCompactMetrics(session.metrics) : null;
+	const prCount = session?.prUrls?.length ?? 0;
+
 	return (
 		<div className="rounded-xl border border-border bg-card p-3 hover:bg-muted/30 transition-colors">
 			<div className="flex items-start gap-3">
-				<StatusIcon className={`h-4 w-4 shrink-0 mt-0.5 ${statusInfo.className}`} />
+				<StatusIcon
+					className={`h-4 w-4 shrink-0 mt-0.5 ${statusInfo.className}`}
+					aria-hidden="true"
+				/>
 				<div className="flex-1 min-w-0">
 					<p className="text-sm font-medium text-foreground">{title}</p>
 					<p className="text-xs text-muted-foreground mt-0.5 truncate">
 						{data.error_message ? `${data.error_message} · ` : ""}
 						{timeAgo}
 					</p>
-					{session?.promptSnippet && (
-						<p className="text-xs text-muted-foreground mt-1 truncate">
-							The agent was working on: {session.promptSnippet}
+					{contextLine && (
+						<p className="text-xs text-muted-foreground mt-1 truncate">{contextLine}</p>
+					)}
+					{session?.summary && (
+						<SanitizedMarkdown
+							content={session.summary}
+							maxLength={2000}
+							className="mt-2 text-xs text-muted-foreground"
+						/>
+					)}
+					{(metricsStr || prCount > 0) && (
+						<p className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+							{metricsStr && <span>{metricsStr}</span>}
+							{prCount > 0 && (
+								<span className="inline-flex items-center gap-1">
+									<GitPullRequest className="h-3 w-3" aria-hidden="true" />
+									{prCount} PR{prCount > 1 ? "s" : ""}
+								</span>
+							)}
 						</p>
 					)}
 				</div>

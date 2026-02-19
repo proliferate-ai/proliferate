@@ -46,6 +46,16 @@ export interface UpdateSessionInput {
 	automationId?: string | null;
 	triggerId?: string | null;
 	triggerEventId?: string | null;
+	// Phase 2a: telemetry
+	latestTask?: string | null;
+	outcome?: "completed" | "succeeded" | "failed" | "needs_human" | null;
+	summary?: string | null;
+	prUrls?: string[] | null;
+	metrics?: {
+		toolCalls: number;
+		messagesExchanged: number;
+		activeSeconds: number;
+	} | null;
 }
 
 export interface ListSessionsFilters {

@@ -2,6 +2,7 @@
 
 import { PageShell } from "@/components/dashboard/page-shell";
 import { SessionListRow } from "@/components/sessions/session-card";
+import { SessionPeekDrawer } from "@/components/sessions/session-peek-drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,8 +18,8 @@ import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { type DisplayStatus, deriveDisplayStatus } from "@proliferate/shared/sessions";
 import { Plus, Search } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 type FilterTab = "in_progress" | "needs_attention" | "paused" | "completed";
 type OriginFilter = "all" | "manual" | "automation" | "slack" | "cli";
@@ -45,12 +46,28 @@ function getSessionOrigin(session: {
 	return "manual";
 }
 
-export default function SessionsPage() {
+function SessionsContent() {
 	const router = useRouter();
+	const searchParams = useSearchParams();
 	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
 	const [activeTab, setActiveTab] = useState<FilterTab>("in_progress");
 	const [searchQuery, setSearchQuery] = useState("");
 	const [originFilter, setOriginFilter] = useState<OriginFilter>("all");
+
+	// Peek drawer via URL param
+	const peekSessionId = searchParams.get("peek");
+
+	const handleRowClick = (sessionId: string) => {
+		const params = new URLSearchParams(searchParams.toString());
+		params.set("peek", sessionId);
+		router.replace(`?${params.toString()}`, { scroll: false });
+	};
+
+	const handlePeekClose = () => {
+		const params = new URLSearchParams(searchParams.toString());
+		params.delete("peek");
+		router.replace(`?${params.toString()}`, { scroll: false });
+	};
 
 	// Track whether visible sessions include live ones (for polling).
 	const [hasLiveSessions, setHasLiveSessions] = useState(false);
@@ -268,10 +285,25 @@ export default function SessionsPage() {
 							key={session.id}
 							session={session}
 							pendingRun={pendingRunsBySession.get(session.id)}
+							onClick={handleRowClick}
 						/>
 					))}
 				</div>
 			)}
+
+			<SessionPeekDrawer
+				sessionId={peekSessionId}
+				pendingRunId={peekSessionId ? pendingRunsBySession.get(peekSessionId)?.id : undefined}
+				onClose={handlePeekClose}
+			/>
 		</PageShell>
+	);
+}
+
+export default function SessionsPage() {
+	return (
+		<Suspense>
+			<SessionsContent />
+		</Suspense>
 	);
 }

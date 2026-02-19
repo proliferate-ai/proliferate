@@ -98,16 +98,21 @@ export default function ActivityPage() {
 												statusDisplay.className,
 												run.status === "running" && "animate-spin",
 											)}
+											aria-hidden="true"
 										/>
-										<div className="flex items-center gap-1.5 min-w-0 flex-1">
-											<AutomationsIcon className="h-3 w-3 text-muted-foreground shrink-0" />
-											<span className="font-medium text-foreground truncate">Automation run</span>
+										<div className="min-w-0 flex-1">
+											<div className="flex items-center gap-1.5">
+												<AutomationsIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+												<span className="font-medium text-foreground truncate">
+													{run.session?.title || run.trigger?.name || "Automation run"}
+												</span>
+											</div>
+											{(run.error_message || run.trigger?.provider) && (
+												<span className="text-xs text-muted-foreground truncate block mt-0.5">
+													{run.error_message || run.trigger?.provider}
+												</span>
+											)}
 										</div>
-										{run.trigger?.provider && (
-											<span className="text-xs text-muted-foreground shrink-0">
-												{run.trigger.provider}
-											</span>
-										)}
 										<span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
 											{timeAgo}
 										</span>

@@ -51,6 +51,19 @@ export const SessionSchema = z.object({
 	endedAt: z.string().nullable().optional(),
 	promptSnippet: z.string().nullable().optional(),
 	initialPrompt: z.string().nullable().optional(),
+	// Phase 2a: session telemetry
+	outcome: z.enum(["completed", "succeeded", "failed", "needs_human"]).nullable().optional(),
+	summary: z.string().nullable().optional(),
+	prUrls: z.array(z.string()).nullable().optional(),
+	metrics: z
+		.object({
+			toolCalls: z.number(),
+			messagesExchanged: z.number(),
+			activeSeconds: z.number(),
+		})
+		.nullable()
+		.optional(),
+	latestTask: z.string().nullable().optional(),
 });
 
 export type Session = z.infer<typeof SessionSchema>;

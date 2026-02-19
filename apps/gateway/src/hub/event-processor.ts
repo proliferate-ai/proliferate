@@ -33,6 +33,12 @@ export interface EventProcessorCallbacks {
 	 * Get the current OpenCode session ID
 	 */
 	getOpenCodeSessionId: () => string | null;
+
+	// Phase 2a: telemetry hooks (optional for backwards compatibility)
+	onToolStart?: (toolCallId: string) => void;
+	onMessageComplete?: () => void;
+	onTextPartComplete?: (text: string) => void;
+	onToolMetadata?: (title: string | undefined) => void;
 }
 
 export class EventProcessor {
@@ -254,6 +260,7 @@ export class EventProcessor {
 					text: part.text,
 				},
 			});
+			this.callbacks.onTextPartComplete?.(part.text);
 		}
 	}
 
@@ -300,6 +307,7 @@ export class EventProcessor {
 				},
 			};
 			this.callbacks.broadcast(payload);
+			this.callbacks.onToolStart?.(toolCallId);
 			this.toolStates.set(toolCallId, {
 				startEmitted: true,
 				argsEmitted: hasArgs,
@@ -337,6 +345,7 @@ export class EventProcessor {
 					},
 				};
 				this.callbacks.broadcast(payload);
+				this.callbacks.onToolMetadata?.(part.state?.title);
 			}
 		}
 
@@ -387,6 +396,7 @@ export class EventProcessor {
 			return;
 		}
 
+		this.callbacks.onMessageComplete?.();
 		this.callbacks.broadcast({
 			type: "message_complete",
 			payload: { messageId: this.currentAssistantMessageId },

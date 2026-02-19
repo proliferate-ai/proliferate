@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
-> **Updated:** 2026-02-13 from `main` branch. UI renamed connectors to tools; code model remains `connector`.
+> **Updated:** 2026-02-19 from `feat/session-display-redesign-1a` branch. Phase 3a+3b session UI overhaul.
 > **Evidence convention:** `Planned` entries may cite RFC/spec files until code exists; once implemented, update evidence to concrete code paths.
 
 ---
@@ -69,10 +69,22 @@
 | Git operations | Implemented | `apps/gateway/src/hub/git-operations.ts` | Stateless git/gh via gateway |
 | Session store | Implemented | `apps/gateway/src/lib/session-store.ts` | In-memory session state |
 | Session connections (DB) | Implemented | `packages/db/src/schema/sessions.ts` | `session_connections` table |
+| Session telemetry capture | Implemented | `apps/gateway/src/hub/session-telemetry.ts` | Passive metrics, PR URLs, latest task |
+| Session telemetry DB flush | Implemented | `packages/services/src/sessions/db.ts:flushTelemetry` | SQL-level atomic increment |
+| Session outcome derivation | Implemented | `apps/gateway/src/hub/capabilities/tools/automation-complete.ts` | Set at explicit terminal call sites |
+| Async graceful shutdown (telemetry) | Implemented | `apps/gateway/src/index.ts`, `apps/gateway/src/hub/hub-manager.ts` | Bounded 5s flush on SIGTERM/SIGINT |
 | Gateway auth middleware | Implemented | `apps/gateway/src/middleware/auth.ts` | Token verification |
 | Gateway CORS | Implemented | `apps/gateway/src/middleware/cors.ts` | CORS policy |
 | Gateway error handler | Implemented | `apps/gateway/src/middleware/error-handler.ts` | Centralized error handling |
 | Gateway request logging | Implemented | `apps/gateway/src/` | pino-http via `@proliferate/logger` |
+| Session telemetry in list rows | Implemented | `apps/web/src/components/sessions/session-card.tsx` | latestTask subtitle, outcome badge, PR indicator, compact metrics |
+| Session peek drawer (URL-routable) | Implemented | `apps/web/src/components/sessions/session-peek-drawer.tsx` | `?peek=sessionId` URL param on sessions page |
+| Summary markdown sanitization | Implemented | `apps/web/src/components/ui/sanitized-markdown.tsx` | AST-based via rehype-sanitize |
+| Session display helpers | Implemented | `apps/web/src/lib/session-display.ts` | formatActiveTime, formatCompactMetrics, getOutcomeDisplay, parsePrUrl |
+| Inbox run triage telemetry | Implemented | `apps/web/src/components/inbox/inbox-item.tsx` | Summary, metrics, PR count on run triage cards |
+| Shared run status display | Implemented | `apps/web/src/lib/run-status.ts` | Consolidated getRunStatusDisplay used by inbox, activity, my-work |
+| Activity run titles | Implemented | `apps/web/src/app/(command-center)/dashboard/activity/page.tsx` | Shows session title or trigger name instead of generic label |
+| My-work run enrichment | Implemented | `apps/web/src/app/(command-center)/dashboard/my-work/page.tsx` | Claimed runs show session title, consistent status display |
 
 ---
 

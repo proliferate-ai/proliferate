@@ -10,15 +10,15 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-	AutomationsIcon,
-	BlocksIcon,
-	BlocksLoadingIcon,
-	SlackIcon,
-} from "@/components/ui/icons";
+import { AutomationsIcon, BlocksIcon, BlocksLoadingIcon, SlackIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
 import { useDeleteSession, usePrefetchSession, useRenameSession } from "@/hooks/use-sessions";
+import {
+	DISPLAY_STATUS_CONFIG,
+	formatCompactMetrics,
+	getOutcomeDisplay,
+} from "@/lib/session-display";
 import { cn } from "@/lib/utils";
 import type { PendingRunSummary } from "@proliferate/shared";
 import type { Session } from "@proliferate/shared/contracts";
@@ -28,7 +28,7 @@ import {
 	getBlockedReasonText,
 } from "@proliferate/shared/sessions";
 import { formatDistanceToNow } from "date-fns";
-import { AlertTriangle, GitBranch, RotateCcw, Terminal } from "lucide-react";
+import { AlertTriangle, GitBranch, GitPullRequest, RotateCcw, Terminal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -36,6 +36,7 @@ interface SessionListRowProps {
 	session: Session;
 	pendingRun?: PendingRunSummary;
 	isNew?: boolean;
+	onClick?: (sessionId: string) => void;
 }
 
 function getRepoShortName(fullName: string): string {
@@ -43,63 +44,38 @@ function getRepoShortName(fullName: string): string {
 	return parts[parts.length - 1];
 }
 
-const DISPLAY_STATUS_CONFIG: Record<
-	DisplayStatus,
-	{ animated: boolean; label: string; colorClassName: string }
-> = {
-	active: {
-		animated: true,
-		label: "Running",
-		colorClassName: "text-foreground",
-	},
-	idle: {
-		animated: false,
-		label: "Idle",
-		colorClassName: "text-muted-foreground",
-	},
-	paused: {
-		animated: false,
-		label: "Paused",
-		colorClassName: "text-muted-foreground",
-	},
-	blocked: {
-		animated: false,
-		label: "Blocked",
-		colorClassName: "text-destructive",
-	},
-	recovering: {
-		animated: true,
-		label: "Reconnecting",
-		colorClassName: "text-muted-foreground",
-	},
-	completed: {
-		animated: false,
-		label: "Completed",
-		colorClassName: "text-muted-foreground/50",
-	},
-	failed: {
-		animated: false,
-		label: "Failed",
-		colorClassName: "text-destructive",
-	},
-};
+// DISPLAY_STATUS_CONFIG imported from @/lib/session-display
 
 /**
  * Build context subtitle based on display status.
  */
 function getContextSubtitle(session: Session, displayStatus: DisplayStatus): string | null {
 	switch (displayStatus) {
+		case "active":
+			return session.latestTask ?? null;
 		case "idle":
-			return session.promptSnippet ?? null;
+			return session.latestTask ?? session.promptSnippet ?? null;
 		case "blocked":
 			return getBlockedReasonText(session.pauseReason, session.status);
 		case "recovering":
 			return "Reconnecting...";
 		case "completed":
 		case "failed": {
+			const parts: string[] = [];
+			if (session.outcome && session.outcome !== "completed") {
+				parts.push(getOutcomeDisplay(session.outcome).label);
+			}
+			if (session.metrics) {
+				const metricsStr = formatCompactMetrics(session.metrics);
+				if (metricsStr) parts.push(metricsStr);
+			}
+			if (session.prUrls && session.prUrls.length > 0) {
+				parts.push(`${session.prUrls.length} PR${session.prUrls.length > 1 ? "s" : ""}`);
+			}
+			if (parts.length > 0) return parts.join(" · ");
 			const endDate = session.endedAt ?? session.lastActivityAt;
-			if (!endDate) return null;
-			return formatDistanceToNow(new Date(endDate), { addSuffix: true });
+			if (endDate) return formatDistanceToNow(new Date(endDate), { addSuffix: true });
+			return null;
 		}
 		default:
 			return null;
@@ -147,7 +123,7 @@ function OriginBadge({ session }: { session: Session }) {
 	return null;
 }
 
-export function SessionListRow({ session, pendingRun, isNew }: SessionListRowProps) {
+export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionListRowProps) {
 	const prefetchSession = usePrefetchSession();
 	const renameSession = useRenameSession();
 	const deleteSession = useDeleteSession();
@@ -223,7 +199,11 @@ export function SessionListRow({ session, pendingRun, isNew }: SessionListRowPro
 
 	const handleRowClick = () => {
 		if (isEditing) return;
-		router.push(href);
+		if (onClick) {
+			onClick(session.id);
+		} else {
+			router.push(href);
+		}
 	};
 
 	return (
@@ -300,9 +280,29 @@ export function SessionListRow({ session, pendingRun, isNew }: SessionListRowPro
 					</div>
 				</div>
 
+				{session.prUrls && session.prUrls.length > 0 && (
+					<span className="inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+						<GitPullRequest className="h-3 w-3" />
+						{session.prUrls.length}
+					</span>
+				)}
+
 				{isResumable && (
 					<RotateCcw className="h-3 w-3 text-muted-foreground/50 shrink-0" aria-label="Resumable" />
 				)}
+
+				{(displayStatus === "completed" || displayStatus === "failed") &&
+					session.outcome &&
+					session.outcome !== "completed" && (
+						<span
+							className={cn(
+								"text-[11px] font-medium shrink-0",
+								getOutcomeDisplay(session.outcome).className,
+							)}
+						>
+							{getOutcomeDisplay(session.outcome).label}
+						</span>
+					)}
 
 				<span
 					className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground flex-shrink-0"

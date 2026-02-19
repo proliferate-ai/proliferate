@@ -83,8 +83,15 @@ export class HubManager {
 	/**
 	 * Release all owner/runtime leases. Called on graceful shutdown
 	 * so a restarted instance can immediately re-acquire sessions.
+	 * Flushes telemetry for all hubs (best-effort) before cleanup.
 	 */
-	releaseAllLeases(): void {
+	async releaseAllLeases(): Promise<void> {
+		const flushPromises = Array.from(this.hubs.values()).map((hub) =>
+			hub.flushTelemetry().catch(() => {
+				// best-effort — individual hub flush failures are non-fatal
+			}),
+		);
+		await Promise.allSettled(flushPromises);
 		for (const [sessionId, hub] of this.hubs) {
 			hub.stopMigrationMonitor();
 			this.hubs.delete(sessionId);

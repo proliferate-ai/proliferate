@@ -46,4 +46,5 @@ export {
 	createWithAdmissionGuard,
 	updateWhereSandboxIdMatches,
 	listRunningSessionIds,
+	flushTelemetry,
 } from "./db";

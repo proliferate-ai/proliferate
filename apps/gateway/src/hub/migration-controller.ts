@@ -31,6 +31,8 @@ export interface MigrationControllerOptions {
 	shouldIdleSnapshot: () => boolean;
 	onIdleSnapshotComplete: () => void;
 	cancelReconnect: () => void;
+	/** Best-effort telemetry flush before CAS writes. */
+	flushTelemetry: () => Promise<void>;
 }
 
 /** Maximum consecutive idle snapshot failures before circuit-breaking. */
@@ -188,7 +190,14 @@ export class MigrationController {
 					}
 				}
 
-				// 4. CAS/fencing DB update: only applies if sandbox_id still matches
+				// 4. Flush telemetry before CAS write (best-effort)
+				try {
+					await this.options.flushTelemetry();
+				} catch (err) {
+					this.logger.error({ err }, "Telemetry flush failed before idle snapshot CAS");
+				}
+
+				// 5. CAS/fencing DB update: only applies if sandbox_id still matches
 				const rowsAffected = await sessions.updateWhereSandboxIdMatches(
 					this.options.sessionId,
 					freshSandboxId,
@@ -198,6 +207,7 @@ export class MigrationController {
 						status: "paused",
 						pausedAt: new Date().toISOString(),
 						pauseReason: "inactivity",
+						latestTask: null,
 					},
 				);
 
@@ -209,14 +219,14 @@ export class MigrationController {
 					return;
 				}
 
-				// 5. Cancel BullMQ expiry job
+				// 6. Cancel BullMQ expiry job
 				try {
 					await cancelSessionExpiry(this.options.env, this.options.sessionId);
 				} catch (err) {
 					this.logger.error({ err }, "Failed to cancel session expiry after idle snapshot");
 				}
 
-				// 6. Reset sandbox state and signal hub
+				// 7. Reset sandbox state and signal hub
 				this.options.runtime.resetSandboxState();
 				this.options.onIdleSnapshotComplete();
 				this.snapshotFailures = 0;
@@ -261,10 +271,19 @@ export class MigrationController {
 			this.logger.error({ err, sandboxId }, "Circuit breaker: terminate failed");
 		}
 
+		// Best-effort telemetry flush
+		try {
+			await this.options.flushTelemetry();
+		} catch (err) {
+			this.logger.error({ err }, "Telemetry flush failed before force-terminate");
+		}
+
 		try {
 			await sessions.update(this.options.sessionId, {
 				status: "stopped",
 				pauseReason: "snapshot_failed",
+				latestTask: null,
+				outcome: "failed",
 			});
 			await sessions.markSessionStopped(this.options.sessionId);
 		} catch (err) {
@@ -379,6 +398,13 @@ export class MigrationController {
 						}
 					}
 
+					// Flush telemetry before CAS write (best-effort)
+					try {
+						await this.options.flushTelemetry();
+					} catch (err) {
+						this.logger.error({ err }, "Telemetry flush failed before expiry CAS");
+					}
+
 					// CAS DB update for expiry path too
 					const rowsAffected = await sessions.updateWhereSandboxIdMatches(
 						this.options.sessionId,
@@ -389,6 +415,7 @@ export class MigrationController {
 							status: "paused",
 							pausedAt: new Date().toISOString(),
 							pauseReason: "inactivity",
+							latestTask: null,
 						},
 					);
 

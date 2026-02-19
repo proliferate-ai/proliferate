@@ -99,6 +99,7 @@ async function pauseSingleSession(sessionId: string, reason: PauseReason): Promi
 			status: "paused",
 			pauseReason: reason,
 			pausedAt: new Date(),
+			latestTask: null,
 		})
 		.where(and(eq(sessions.id, sessionId), eq(sessions.status, "running")));
 }
@@ -284,6 +285,7 @@ async function pauseSessionWithSnapshot(
 				status: "paused",
 				pauseReason: reason,
 				pausedAt: new Date(),
+				latestTask: null,
 			})
 			.where(and(eq(sessions.id, sessionId), eq(sessions.status, "running")));
 
@@ -340,6 +342,7 @@ async function pauseSessionWithSnapshot(
 			status: "paused",
 			pausedAt: new Date().toISOString(),
 			pauseReason: reason,
+			latestTask: null,
 		});
 
 		if (rowsAffected === 0) {

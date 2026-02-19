@@ -38,15 +38,35 @@ async function start(): Promise<void> {
 		logger.info({ port: env.port }, "Gateway listening");
 	});
 
-	// Graceful shutdown: release all owner/runtime leases so a
-	// restarted instance can immediately re-acquire sessions.
-	const shutdown = () => {
-		logger.info("Shutting down — releasing leases");
-		hubManager.releaseAllLeases();
-		server.close();
+	// Graceful shutdown: flush telemetry, release leases, close server.
+	let shutdownPromise: Promise<void> | null = null;
+	const shutdown = async () => {
+		if (shutdownPromise) return shutdownPromise;
+		shutdownPromise = (async () => {
+			logger.info("Shutting down — flushing telemetry and releasing leases");
+			const forceExit = setTimeout(() => {
+				logger.warn("Shutdown timeout — forcing exit");
+				process.exit(0);
+			}, 5000);
+			forceExit.unref();
+
+			await hubManager.releaseAllLeases();
+			await new Promise<void>((resolve) => server.close(() => resolve()));
+
+			clearTimeout(forceExit);
+		})();
+		return shutdownPromise;
 	};
-	process.once("SIGTERM", shutdown);
-	process.once("SIGINT", shutdown);
+	process.once("SIGTERM", () => {
+		shutdown().catch(() => {
+			// Force exit timer handles this
+		});
+	});
+	process.once("SIGINT", () => {
+		shutdown().catch(() => {
+			// Force exit timer handles this
+		});
+	});
 }
 
 start().catch((err) => {
