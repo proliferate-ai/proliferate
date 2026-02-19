@@ -20,7 +20,7 @@ const DEFAULT_BILLING_SETTINGS = {
 	overage_cap_cents: null as number | null,
 };
 
-const DEPRECATION_HEADERS = {
+const deprecationHeaders = {
 	Deprecation: "true",
 	Link: '</api/rpc/billing.updateSettings>; rel="successor-version"',
 } as const;
@@ -39,7 +39,7 @@ export async function GET() {
 	if (!isBillingEnabled()) {
 		return NextResponse.json(
 			{ enabled: false, settings: DEFAULT_BILLING_SETTINGS },
-			{ headers: DEPRECATION_HEADERS },
+			{ headers: deprecationHeaders },
 		);
 	}
 
@@ -55,7 +55,7 @@ export async function GET() {
 			configured: !!org.autumnCustomerId,
 			settings: org.billingSettings ?? DEFAULT_BILLING_SETTINGS,
 		},
-		{ headers: DEPRECATION_HEADERS },
+		{ headers: deprecationHeaders },
 	);
 }
 
@@ -119,7 +119,7 @@ export async function PUT(request: Request) {
 
 	return NextResponse.json(
 		{ success: true, settings: newSettings },
-		{ headers: DEPRECATION_HEADERS },
+		{ headers: deprecationHeaders },
 	);
 }
 

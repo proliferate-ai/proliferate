@@ -22,7 +22,7 @@ import { NextResponse } from "next/server";
 
 const log = logger.child({ route: "billing" });
 
-const DEPRECATION_HEADERS = {
+const deprecationHeaders = {
 	Deprecation: "true",
 	Link: '</api/rpc/billing.getInfo>; rel="successor-version"',
 } as const;
@@ -127,6 +127,6 @@ export async function GET() {
 				stateMessage,
 			},
 		},
-		{ headers: DEPRECATION_HEADERS },
+		{ headers: deprecationHeaders },
 	);
 }

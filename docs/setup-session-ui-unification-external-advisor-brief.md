@@ -143,7 +143,7 @@ The current hook shape is `repoId + sessionId`, and dedicated page supplies repo
 | Entry point | Code path | Destination UI | Setup chrome visible? | Manual finalize visible? |
 |---|---|---|---|---|
 | New session with `type=setup` | `apps/web/src/app/(workspace)/workspace/new/page.tsx:54` redirect | `/workspace/setup/[repoId]` | Yes | Yes |
-| Dedicated setup page flow | `apps/web/src/app/(workspace)/workspace/setup/[id]/page.tsx` | Full page setup | Yes | Yes |
+| Dedicated setup page flow | `apps/web/src/app/(workspace)/workspace/setup/[id]/page.tsx` | Full-page setup | Yes | Yes |
 | Edit environment from configuration group | `apps/web/src/components/dashboard/configuration-group.tsx:120` -> `openSetupSession` | `CodingSessionModal` | No | No |
 | Pencil from snapshot selector | `apps/web/src/components/dashboard/snapshot-selector.tsx:238` -> `openSetupSession` | `CodingSessionModal` | No | No |
 | Edit existing setup snapshot | `apps/web/src/stores/coding-session-store.ts:110` (`openEditSession`) | `CodingSessionModal` | No | No |

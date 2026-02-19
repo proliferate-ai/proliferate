@@ -654,8 +654,7 @@ export async function findOverageState(orgId: string): Promise<
 }
 
 /**
- * Atomically update overage state columns.
- * Uses optimistic concurrency on cycle month when provided.
+ * Update overage state columns for an organization.
  */
 export async function updateOverageState(
 	orgId: string,

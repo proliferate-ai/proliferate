@@ -304,6 +304,14 @@ export async function ensureBillingPartition(
 	rangeStart: string,
 	rangeEnd: string,
 ): Promise<boolean> {
+	// Validate inputs to prevent SQL injection (inputs are system-generated, but defense-in-depth)
+	if (!/^billing_events_\d{6}$/.test(partitionName)) {
+		throw new Error(`Invalid partition name: ${partitionName}`);
+	}
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(rangeStart) || !/^\d{4}-\d{2}-\d{2}$/.test(rangeEnd)) {
+		throw new Error(`Invalid date range: ${rangeStart} to ${rangeEnd}`);
+	}
+
 	const db = getDb();
 	try {
 		await db.execute(

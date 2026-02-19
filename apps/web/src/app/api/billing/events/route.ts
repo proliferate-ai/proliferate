@@ -13,7 +13,7 @@ import { NextResponse } from "next/server";
 
 const log = logger.child({ route: "billing/events" });
 
-const DEPRECATION_HEADERS = {
+const deprecationHeaders = {
 	Deprecation: "true",
 } as const;
 
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 	}
 
 	if (!isBillingEnabled()) {
-		return NextResponse.json({ enabled: false, events: [] }, { headers: DEPRECATION_HEADERS });
+		return NextResponse.json({ enabled: false, events: [] }, { headers: deprecationHeaders });
 	}
 
 	const { searchParams } = new URL(request.url);
@@ -70,6 +70,6 @@ export async function GET(request: Request) {
 			limit,
 			offset,
 		},
-		{ headers: DEPRECATION_HEADERS },
+		{ headers: deprecationHeaders },
 	);
 }

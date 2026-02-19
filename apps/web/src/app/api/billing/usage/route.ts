@@ -13,7 +13,7 @@ import { NextResponse } from "next/server";
 
 const log = logger.child({ route: "billing/usage" });
 
-const DEPRECATION_HEADERS = {
+const deprecationHeaders = {
 	Deprecation: "true",
 } as const;
 
@@ -31,7 +31,7 @@ export async function GET() {
 	if (!isBillingEnabled()) {
 		return NextResponse.json(
 			{ enabled: false, message: "Billing is not configured" },
-			{ headers: DEPRECATION_HEADERS },
+			{ headers: deprecationHeaders },
 		);
 	}
 
@@ -44,7 +44,7 @@ export async function GET() {
 				configured: false,
 				message: "Billing not set up for this organization",
 			},
-			{ headers: DEPRECATION_HEADERS },
+			{ headers: deprecationHeaders },
 		);
 	}
 
@@ -81,6 +81,6 @@ export async function GET() {
 			},
 			periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
 		},
-		{ headers: DEPRECATION_HEADERS },
+		{ headers: deprecationHeaders },
 	);
 }

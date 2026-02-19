@@ -17,7 +17,7 @@ import { NextResponse } from "next/server";
 
 const log = logger.child({ route: "billing/buy-credits" });
 
-const DEPRECATION_HEADERS = {
+const deprecationHeaders = {
 	Deprecation: "true",
 	Link: '</api/rpc/billing.buyCredits>; rel="successor-version"',
 } as const;
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
 			if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 1 || raw > 10) {
 				return NextResponse.json(
 					{ error: "quantity must be an integer between 1 and 10" },
-					{ status: 400, headers: DEPRECATION_HEADERS },
+					{ status: 400, headers: deprecationHeaders },
 				);
 			}
 			quantity = raw;
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
 					credits: TOP_UP_PRODUCT.credits,
 					priceCents: TOP_UP_PRODUCT.priceCents,
 				},
-				{ headers: DEPRECATION_HEADERS },
+				{ headers: deprecationHeaders },
 			);
 		}
 
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
 				message: `${totalCredits} credits added to your account`,
 				credits: totalCredits,
 			},
-			{ headers: DEPRECATION_HEADERS },
+			{ headers: deprecationHeaders },
 		);
 	} catch (err) {
 		log.error({ err }, "Failed to process purchase");
