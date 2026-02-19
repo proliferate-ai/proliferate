@@ -28,6 +28,7 @@ export {
 	findBySlackThread as findSessionBySlackThread,
 	getSessionClientInfo,
 	countRunningByOrganization,
+	countNullPauseReasonSessions,
 	getSessionCountsByOrganization,
 	createSessionConnections,
 	listSessionConnections,

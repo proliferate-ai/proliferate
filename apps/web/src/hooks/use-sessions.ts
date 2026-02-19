@@ -15,13 +15,16 @@ export function useSessions(params?: {
 	excludeAutomation?: boolean;
 	createdBy?: string;
 	enabled?: boolean;
+	refetchInterval?: number | false;
 }) {
-	const { enabled = true, ...queryParams } = params ?? {};
+	const { enabled = true, refetchInterval, ...queryParams } = params ?? {};
 	return useQuery({
 		...orpc.sessions.list.queryOptions({
 			input: queryParams,
 		}),
 		enabled,
+		refetchInterval: refetchInterval ?? false,
+		refetchIntervalInBackground: false,
 		select: (data) => data.sessions,
 	});
 }

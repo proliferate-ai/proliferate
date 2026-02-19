@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "@/lib/auth-client";
+import { deriveDisplayStatus } from "@proliferate/shared/sessions";
 import { useMemo } from "react";
 import { useOrgActions } from "./use-actions";
 import { useMyClaimedRuns } from "./use-automations";
@@ -33,9 +34,10 @@ export function useMyWork() {
 
 	const activeSessions = useMemo(
 		() =>
-			allSessions?.filter(
-				(s) => s.status === "running" || s.status === "starting" || s.status === "paused",
-			),
+			allSessions?.filter((s) => {
+				const ds = deriveDisplayStatus(s.status, s.pauseReason);
+				return ds === "active" || ds === "idle";
+			}),
 		[allSessions],
 	);
 

@@ -15,22 +15,24 @@ import { useOrgPendingRuns } from "@/hooks/use-automations";
 import { useSessions } from "@/hooks/use-sessions";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
+import { type DisplayStatus, deriveDisplayStatus } from "@proliferate/shared/sessions";
 import { Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
-type FilterTab = "all" | "active" | "stopped";
+type FilterTab = "in_progress" | "needs_attention" | "paused" | "completed";
 type OriginFilter = "all" | "manual" | "automation" | "slack" | "cli";
 
 const TABS: { value: FilterTab; label: string }[] = [
-	{ value: "all", label: "All" },
-	{ value: "active", label: "Active" },
-	{ value: "stopped", label: "Stopped" },
+	{ value: "in_progress", label: "In Progress" },
+	{ value: "needs_attention", label: "Needs Attention" },
+	{ value: "paused", label: "Paused" },
+	{ value: "completed", label: "Completed" },
 ];
 
-function isActiveStatus(status: string | null): boolean {
-	return status === "running" || status === "starting" || status === "paused";
-}
+const IN_PROGRESS_STATUSES: Set<DisplayStatus> = new Set(["active", "idle"]);
+const NEEDS_ATTENTION_STATUSES: Set<DisplayStatus> = new Set(["blocked", "failed", "recovering"]);
+const LIVE_STATUSES: Set<DisplayStatus> = new Set(["active", "idle", "recovering"]);
 
 function getSessionOrigin(session: {
 	automationId?: string | null;
@@ -46,17 +48,22 @@ function getSessionOrigin(session: {
 export default function SessionsPage() {
 	const router = useRouter();
 	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
-	const { data: sessions, isLoading } = useSessions({
-		excludeSetup: true,
-	});
-	const { data: pendingRuns } = useOrgPendingRuns();
-
-	const [activeTab, setActiveTab] = useState<FilterTab>("all");
+	const [activeTab, setActiveTab] = useState<FilterTab>("in_progress");
 	const [searchQuery, setSearchQuery] = useState("");
 	const [originFilter, setOriginFilter] = useState<OriginFilter>("all");
 
-	// Build a map of sessionId → most recent pendingRun for urgency indicators.
-	// A session typically has at most one active run; if multiple exist, the last one wins.
+	// Track whether visible sessions include live ones (for polling).
+	// Uses a ref so the value from the previous render drives the next query cycle.
+	const hasLiveRef = useRef(false);
+
+	const { data: sessions, isLoading } = useSessions({
+		excludeSetup: true,
+		refetchInterval: hasLiveRef.current ? 5000 : false,
+	});
+
+	const { data: pendingRuns } = useOrgPendingRuns();
+
+	// Build a map of sessionId -> most recent pendingRun for urgency indicators.
 	const pendingRunsBySession = useMemo(() => {
 		const map = new Map<string, NonNullable<typeof pendingRuns>[number]>();
 		if (!pendingRuns) return map;
@@ -68,54 +75,93 @@ export default function SessionsPage() {
 		return map;
 	}, [pendingRuns]);
 
-	// Filter out setup sessions
-	const baseSessions = useMemo(
-		() => sessions?.filter((session) => session.sessionType !== "setup") ?? [],
-		[sessions],
-	);
+	const result = useMemo(() => {
+		const baseSessions = sessions?.filter((s) => s.sessionType !== "setup") ?? [];
 
-	const originFiltered = useMemo(() => {
-		if (originFilter === "all") return baseSessions;
-		return baseSessions.filter((s) => getSessionOrigin(s) === originFilter);
-	}, [baseSessions, originFilter]);
+		// Derive display status for all sessions once
+		const withStatus = baseSessions.map((s) => ({
+			session: s,
+			displayStatus: deriveDisplayStatus(s.status, s.pauseReason),
+			origin: getSessionOrigin(s),
+		}));
 
-	const counts = useMemo(
-		() => ({
-			all: originFiltered.length,
-			active: originFiltered.filter((s) => isActiveStatus(s.status)).length,
-			stopped: originFiltered.filter((s) => !isActiveStatus(s.status)).length,
-		}),
-		[originFiltered],
-	);
+		// Apply origin filter for counting
+		const originFiltered =
+			originFilter === "all" ? withStatus : withStatus.filter((s) => s.origin === originFilter);
 
-	const filtered = useMemo(() => {
-		let result = baseSessions;
+		// Count per tab
+		const tabCounts = {
+			in_progress: 0,
+			needs_attention: 0,
+			paused: 0,
+			completed: 0,
+		};
 
-		if (activeTab === "active") {
-			result = result.filter((s) => isActiveStatus(s.status));
-		} else if (activeTab === "stopped") {
-			result = result.filter((s) => !isActiveStatus(s.status));
+		for (const { session, displayStatus } of originFiltered) {
+			if (IN_PROGRESS_STATUSES.has(displayStatus)) {
+				tabCounts.in_progress++;
+			} else if (
+				NEEDS_ATTENTION_STATUSES.has(displayStatus) ||
+				pendingRunsBySession.has(session.id)
+			) {
+				tabCounts.needs_attention++;
+			} else if (displayStatus === "paused") {
+				tabCounts.paused++;
+			} else {
+				tabCounts.completed++;
+			}
 		}
 
-		if (originFilter !== "all") {
-			result = result.filter((s) => getSessionOrigin(s) === originFilter);
+		// Filter by tab
+		let tabFiltered = originFiltered;
+		switch (activeTab) {
+			case "in_progress":
+				tabFiltered = originFiltered.filter((s) => IN_PROGRESS_STATUSES.has(s.displayStatus));
+				break;
+			case "needs_attention":
+				tabFiltered = originFiltered.filter(
+					(s) =>
+						NEEDS_ATTENTION_STATUSES.has(s.displayStatus) || pendingRunsBySession.has(s.session.id),
+				);
+				break;
+			case "paused":
+				tabFiltered = originFiltered.filter((s) => s.displayStatus === "paused");
+				break;
+			case "completed":
+				tabFiltered = originFiltered.filter((s) => s.displayStatus === "completed");
+				break;
 		}
 
+		// Apply search filter
+		let finalFiltered = tabFiltered;
 		if (searchQuery.trim()) {
 			const q = searchQuery.toLowerCase().trim();
-			result = result.filter((s) => {
+			finalFiltered = tabFiltered.filter(({ session: s }) => {
 				const title = s.title?.toLowerCase() ?? "";
 				const repo = s.repo?.githubRepoName?.toLowerCase() ?? "";
 				const branch = s.branchName?.toLowerCase() ?? "";
 				const automationName = s.automation?.name?.toLowerCase() ?? "";
+				const snippet = s.promptSnippet?.toLowerCase() ?? "";
 				return (
-					title.includes(q) || repo.includes(q) || branch.includes(q) || automationName.includes(q)
+					title.includes(q) ||
+					repo.includes(q) ||
+					branch.includes(q) ||
+					automationName.includes(q) ||
+					snippet.includes(q)
 				);
 			});
 		}
 
-		return result;
-	}, [baseSessions, activeTab, searchQuery, originFilter]);
+		// Update polling ref based on visible sessions
+		const visibleHasLive = finalFiltered.some((s) => LIVE_STATUSES.has(s.displayStatus));
+		hasLiveRef.current = visibleHasLive;
+
+		return {
+			filtered: finalFiltered.map((s) => s.session),
+			counts: tabCounts,
+			totalCount: baseSessions.length,
+		};
+	}, [sessions, activeTab, searchQuery, originFilter, pendingRunsBySession]);
 
 	const handleNewSession = () => {
 		clearPendingPrompt();
@@ -149,7 +195,9 @@ export default function SessionsPage() {
 							)}
 						>
 							{tab.label}
-							<span className="ml-1.5 text-xs text-muted-foreground">{counts[tab.value]}</span>
+							<span className="ml-1.5 text-xs text-muted-foreground">
+								{result.counts[tab.value]}
+							</span>
 						</button>
 					))}
 				</div>
@@ -197,7 +245,7 @@ export default function SessionsPage() {
 						</div>
 					))}
 				</div>
-			) : baseSessions.length === 0 ? (
+			) : result.totalCount === 0 ? (
 				<div className="flex flex-col items-center justify-center py-16 text-center">
 					<h2 className="text-sm font-medium text-foreground mb-1">No sessions yet</h2>
 					<p className="text-sm text-muted-foreground mb-4">
@@ -208,13 +256,13 @@ export default function SessionsPage() {
 						New Session
 					</Button>
 				</div>
-			) : filtered.length === 0 ? (
+			) : result.filtered.length === 0 ? (
 				<div className="flex flex-col items-center justify-center py-16 text-center">
 					<p className="text-sm text-muted-foreground">No matching sessions</p>
 				</div>
 			) : (
 				<div className="rounded-lg border border-border bg-card overflow-hidden">
-					{filtered.map((session) => (
+					{result.filtered.map((session) => (
 						<SessionListRow
 							key={session.id}
 							session={session}

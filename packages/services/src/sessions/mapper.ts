@@ -5,6 +5,7 @@
  */
 
 import type { Session } from "@proliferate/shared";
+import { sanitizePromptSnippet } from "@proliferate/shared/sessions";
 import { toIsoString } from "../db/serialize";
 import type { RepoRow, SessionRow, SessionWithRepoRow } from "./db";
 
@@ -25,10 +26,15 @@ function mapRepo(repo: RepoRow) {
 	};
 }
 
+interface ToSessionOptions {
+	/** Include the full initialPrompt field (detail path only). */
+	includeInitialPrompt?: boolean;
+}
+
 /**
  * Map a DB row (camelCase with repo) to API Session type (camelCase).
  */
-export function toSession(row: SessionWithRepoRow): Session {
+export function toSession(row: SessionWithRepoRow, options?: ToSessionOptions): Session {
 	return {
 		id: row.id,
 		repoId: row.repoId,
@@ -44,8 +50,11 @@ export function toSession(row: SessionWithRepoRow): Session {
 		title: row.title,
 		startedAt: toIsoString(row.startedAt),
 		lastActivityAt: toIsoString(row.lastActivityAt),
+		endedAt: toIsoString(row.endedAt),
 		pausedAt: toIsoString(row.pausedAt),
 		pauseReason: row.pauseReason ?? null,
+		promptSnippet: sanitizePromptSnippet(row.initialPrompt),
+		...(options?.includeInitialPrompt ? { initialPrompt: row.initialPrompt ?? null } : {}),
 		origin: row.origin,
 		clientType: row.clientType,
 		automationId: row.automationId ?? null,
@@ -58,7 +67,7 @@ export function toSession(row: SessionWithRepoRow): Session {
  * Map multiple DB rows to API Session types.
  */
 export function toSessions(rows: SessionWithRepoRow[]): Session[] {
-	return rows.map(toSession);
+	return rows.map((row) => toSession(row));
 }
 
 /**
@@ -80,8 +89,10 @@ export function toSessionPartial(row: SessionRow): Omit<Session, "repo"> {
 		title: row.title,
 		startedAt: toIsoString(row.startedAt),
 		lastActivityAt: toIsoString(row.lastActivityAt),
+		endedAt: toIsoString(row.endedAt),
 		pausedAt: toIsoString(row.pausedAt),
 		pauseReason: row.pauseReason ?? null,
+		promptSnippet: sanitizePromptSnippet(row.initialPrompt),
 		origin: row.origin,
 		clientType: row.clientType,
 		automationId: row.automationId ?? null,

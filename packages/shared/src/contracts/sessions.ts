@@ -10,6 +10,7 @@ const c = initContract();
 // ============================================
 
 export const SessionStatusSchema = z.enum([
+	"pending",
 	"starting",
 	"running",
 	"paused",
@@ -47,6 +48,9 @@ export const SessionSchema = z.object({
 		.nullable()
 		.optional(),
 	repo: RepoSchema.optional(),
+	endedAt: z.string().nullable().optional(),
+	promptSnippet: z.string().nullable().optional(),
+	initialPrompt: z.string().nullable().optional(),
 });
 
 export type Session = z.infer<typeof SessionSchema>;
@@ -60,6 +64,8 @@ export const CreateSessionInputSchema = z
 		reasoningEffort: z.enum(["quick", "normal", "deep"]).optional(),
 		/** Integration IDs to associate with the session for OAuth token injection. */
 		integrationIds: z.array(z.string().uuid()).optional(),
+		/** Initial prompt text to persist for display and first-send fallback. */
+		initialPrompt: z.string().optional(),
 	})
 	.superRefine((data, ctx) => {
 		if (data.sessionType === "setup" && !data.configurationId) {

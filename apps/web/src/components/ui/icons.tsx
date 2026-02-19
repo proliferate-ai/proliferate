@@ -90,7 +90,7 @@ interface IconProps {
 /**
  * Proliferate brand icon (blocks pattern)
  */
-export function ProliferateIcon({ className }: IconProps) {
+export function BlocksIcon({ className }: IconProps) {
 	return (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
@@ -114,7 +114,7 @@ export function ProliferateIcon({ className }: IconProps) {
 /**
  * Animated loading version of the Proliferate icon
  */
-export function ProliferateLoadingIcon({ className }: IconProps) {
+export function BlocksLoadingIcon({ className }: IconProps) {
 	return (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"

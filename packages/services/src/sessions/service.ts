@@ -41,7 +41,7 @@ export async function listSessions(
 export async function getSession(id: string, orgId: string): Promise<Session | null> {
 	const row = await sessionsDb.findById(id, orgId);
 	if (!row) return null;
-	return toSession(row);
+	return toSession(row, { includeInitialPrompt: true });
 }
 
 /**

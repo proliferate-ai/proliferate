@@ -192,6 +192,7 @@ export function EmptyDashboard() {
 					reasoningEffort !== "normal" && modelSupportsReasoning(selectedModel)
 						? reasoningEffort
 						: undefined,
+				initialPrompt: prompt,
 			};
 
 			if (!selectedSnapshotId && !selectedRepoId) {

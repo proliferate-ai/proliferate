@@ -539,6 +539,19 @@ export async function getSessionCountsByOrganization(
 	return { running, paused };
 }
 
+/**
+ * Count paused sessions with null pause_reason (should be zero after backfill).
+ */
+export async function countNullPauseReasonSessions(): Promise<number> {
+	const db = getDb();
+	const [result] = await db
+		.select({ count: sql<number>`count(*)` })
+		.from(sessions)
+		.where(and(eq(sessions.status, "paused"), isNull(sessions.pauseReason)));
+
+	return Number(result?.count ?? 0);
+}
+
 // ============================================
 // Session Connections (Integration Tokens)
 // ============================================

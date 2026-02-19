@@ -2,7 +2,7 @@
 
 import { ModelSelector } from "@/components/automations/model-selector";
 import { Button } from "@/components/ui/button";
-import { ProliferateIcon } from "@/components/ui/icons";
+import { BlocksIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
@@ -238,7 +238,7 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 // Small avatar for assistant messages
 const AssistantAvatar: FC = () => (
 	<div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full ">
-		<ProliferateIcon className="h-3.5 w-3.5 text-primary" />
+		<BlocksIcon className="h-3.5 w-3.5 text-primary" />
 	</div>
 );
 
@@ -270,7 +270,7 @@ export const Thread: FC<ThreadProps> = ({
 				<ThreadPrimitive.Empty>
 					<div className="flex h-full flex-col items-center justify-center p-8 text-center">
 						<div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted mb-4">
-							<ProliferateIcon className="h-5 w-5 text-foreground" />
+							<BlocksIcon className="h-5 w-5 text-foreground" />
 						</div>
 						<p className="text-lg font-semibold tracking-tight text-foreground">{title}</p>
 						<p className="mt-1.5 text-sm text-muted-foreground max-w-sm">{description}</p>

@@ -81,6 +81,7 @@ export const sessionsRouter = {
 				sessionType: input.sessionType,
 				modelId: input.modelId,
 				reasoningEffort: input.reasoningEffort,
+				initialPrompt: input.initialPrompt,
 				orgId: context.orgId,
 				userId: context.user.id,
 			});

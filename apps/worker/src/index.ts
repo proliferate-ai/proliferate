@@ -24,6 +24,7 @@ import {
 	getConnectionOptions,
 	getRedisClient,
 } from "@proliferate/queue";
+import { sessions } from "@proliferate/services";
 import { setLockRedisClient } from "@proliferate/services/lock";
 import { setServicesLogger } from "@proliferate/services/logger";
 import { setSharedLogger } from "@proliferate/shared/logger";
@@ -129,6 +130,21 @@ logger.info(
 	},
 	"Workers started",
 );
+
+// One-time check: warn if backfill left orphaned null-pauseReason sessions
+sessions
+	.countNullPauseReasonSessions()
+	.then((count) => {
+		if (count > 0) {
+			logger.warn(
+				{ count },
+				"Found paused sessions with null pauseReason after backfill — investigate",
+			);
+		}
+	})
+	.catch((err) => {
+		logger.debug({ err }, "Failed to check null pauseReason sessions");
+	});
 
 // Start the subscriber
 sessionSubscriber.start().catch((err) => {

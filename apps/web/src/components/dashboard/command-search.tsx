@@ -125,9 +125,11 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 							<CommandItem key={session.id} onSelect={() => handleSelectSession(session.id)}>
 								<SessionRow
 									title={session.title}
+									promptSnippet={session.promptSnippet}
 									repoName={session.repo?.githubRepoName || null}
 									branchName={session.branchName}
 									status={session.status}
+									pauseReason={session.pauseReason}
 									lastActivityAt={session.lastActivityAt}
 									startedAt={session.startedAt}
 								/>

@@ -1,7 +1,7 @@
 "use client";
 
 import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
-import { LinearIcon, ProliferateIcon, SlackIcon } from "@/components/ui/icons";
+import { BlocksIcon, LinearIcon, SlackIcon } from "@/components/ui/icons";
 import { StatusDot } from "@/components/ui/status-dot";
 import { formatRelativeTime } from "@/lib/utils";
 import { Building2 } from "lucide-react";
@@ -19,7 +19,7 @@ interface EnabledTools {
 }
 
 const ACTION_TOOLS = [
-	{ key: "create_session" as const, label: "Agent", Icon: ProliferateIcon, defaultOn: true },
+	{ key: "create_session" as const, label: "Agent", Icon: BlocksIcon, defaultOn: true },
 	{ key: "slack_notify" as const, label: "Slack", Icon: SlackIcon },
 	{ key: "create_linear_issue" as const, label: "Linear", Icon: LinearIcon },
 ];

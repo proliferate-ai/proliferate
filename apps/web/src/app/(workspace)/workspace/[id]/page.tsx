@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { CodingSession } from "@/components/coding-session/coding-session";
+import { useSessionData } from "@/hooks/use-sessions";
 import { organization, useActiveOrganization } from "@/lib/auth-client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { X, Zap } from "lucide-react";
@@ -16,6 +17,7 @@ export default function SessionDetailPage({
 }) {
 	const { id } = use(params);
 	const { setActiveSession, pendingPrompt, clearPendingPrompt } = useDashboardStore();
+	const { data: sessionData } = useSessionData(id);
 	const searchParams = useSearchParams();
 	const targetOrgId = searchParams.get("orgId");
 	const { data: activeOrg, isPending: isOrgPending } = useActiveOrganization();
@@ -86,7 +88,7 @@ export default function SessionDetailPage({
 				<CodingSession
 					sessionId={id}
 					runId={runId ?? undefined}
-					initialPrompt={pendingPrompt || undefined}
+					initialPrompt={pendingPrompt || sessionData?.initialPrompt || undefined}
 					onError={(error) => {
 						console.error("Session error:", error);
 						clearPendingPrompt();
