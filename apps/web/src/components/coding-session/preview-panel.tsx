@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ExternalLink, Maximize2, Minimize2, MonitorIcon, RefreshCw } from "@/components/ui/icons";
+import { ExternalLink, Maximize2, Minimize2, RefreshCw } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -11,6 +11,83 @@ import { PanelShell } from "./panel-shell";
 interface PreviewPanelProps {
 	url: string | null;
 	className?: string;
+}
+
+function PreviewOfflineIllustration() {
+	return (
+		<div className="relative mx-auto h-[66px] w-[66px]">
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				viewBox="0 0 66 66"
+				fill="none"
+				className="h-[66px] w-[66px]"
+			>
+				<rect
+					x="8"
+					y="10"
+					width="50"
+					height="36"
+					rx="6"
+					className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+					strokeWidth="1.5"
+				/>
+				<rect
+					x="14"
+					y="16"
+					width="38"
+					height="24"
+					rx="3"
+					className="fill-background/70 dark:fill-background/55 stroke-muted-foreground/25 dark:stroke-muted-foreground/35"
+					strokeWidth="1.2"
+				/>
+				<circle
+					cx="33"
+					cy="28"
+					r="6"
+					className="fill-muted/45 dark:fill-muted/55 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+					strokeWidth="1.2"
+				/>
+				<path
+					d="M33 25V28.5L36 30.5"
+					className="stroke-muted-foreground/50 dark:stroke-muted-foreground/60"
+					strokeWidth="1.3"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				/>
+				<path
+					d="M26 53H40"
+					className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+					strokeWidth="1.5"
+					strokeLinecap="round"
+				/>
+				<path
+					d="M33 46V53"
+					className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+					strokeWidth="1.5"
+					strokeLinecap="round"
+				/>
+			</svg>
+
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				viewBox="0 0 66 66"
+				fill="none"
+				className="absolute inset-0 h-[66px] w-[66px] animate-spin text-muted-foreground/35 dark:text-muted-foreground/45"
+				style={{ animationDuration: "6s" }}
+			>
+				<circle
+					cx="33"
+					cy="33"
+					r="30"
+					stroke="currentColor"
+					strokeWidth="1.4"
+					strokeDasharray="4 5"
+				/>
+			</svg>
+
+			<span className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted-foreground/60 dark:bg-muted-foreground/70 animate-pulse" />
+		</div>
+	);
 }
 
 export function PreviewPanel({ url, className }: PreviewPanelProps) {
@@ -104,9 +181,7 @@ export function PreviewPanel({ url, className }: PreviewPanelProps) {
 			<PanelShell title="Preview" noPadding>
 				<div className={cn("flex items-center justify-center h-full", className)}>
 					<div className="text-center space-y-3 px-4">
-						<div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-							<MonitorIcon className="h-6 w-6 text-muted-foreground" />
-						</div>
+						<PreviewOfflineIllustration />
 						<div>
 							<p className="text-sm font-medium">No Preview Available</p>
 							<p className="text-xs text-muted-foreground mt-1">
@@ -179,9 +254,7 @@ export function PreviewPanel({ url, className }: PreviewPanelProps) {
 					{status === "unavailable" && (
 						<div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background">
 							<div className="text-center space-y-3 px-4">
-								<div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-									<MonitorIcon className="h-6 w-6 text-muted-foreground" />
-								</div>
+								<PreviewOfflineIllustration />
 								<div>
 									<p className="text-sm font-medium">Preview Not Ready</p>
 									<p className="text-xs text-muted-foreground mt-1">
