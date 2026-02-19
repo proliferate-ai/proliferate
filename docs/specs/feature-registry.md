@@ -77,7 +77,7 @@
 | Gateway CORS | Implemented | `apps/gateway/src/middleware/cors.ts` | CORS policy |
 | Gateway error handler | Implemented | `apps/gateway/src/middleware/error-handler.ts` | Centralized error handling |
 | Gateway request logging | Implemented | `apps/gateway/src/` | pino-http via `@proliferate/logger` |
-| Session telemetry in list rows | Implemented | `apps/web/src/components/sessions/session-card.tsx` | latestTask subtitle, outcome badge, PR indicator, compact metrics |
+| Session telemetry in list rows | Implemented | `apps/web/src/components/sessions/session-card.tsx` | latestTask subtitle, outcome badge, PR indicator, compact metrics, dedicated configuration column |
 | Session peek drawer (URL-routable) | Implemented | `apps/web/src/components/sessions/session-peek-drawer.tsx` | `?peek=sessionId` URL param on sessions page |
 | Summary markdown sanitization | Implemented | `apps/web/src/components/ui/sanitized-markdown.tsx` | AST-based via rehype-sanitize |
 | Session display helpers | Implemented | `apps/web/src/lib/session-display.ts` | formatActiveTime, formatCompactMetrics, getOutcomeDisplay, parsePrUrl |

@@ -17,6 +17,7 @@ import { useDeleteSession, usePrefetchSession, useRenameSession } from "@/hooks/
 import {
 	DISPLAY_STATUS_CONFIG,
 	formatCompactMetrics,
+	formatConfigurationLabel,
 	getOutcomeDisplay,
 } from "@/lib/session-display";
 import { cn } from "@/lib/utils";
@@ -143,8 +144,11 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 	const repoShortName = session.repo?.githubRepoName
 		? getRepoShortName(session.repo.githubRepoName)
 		: null;
+	const configurationLabel = formatConfigurationLabel(session.configurationId);
+	const repoAndBranch = repoShortName
+		? `${repoShortName}${session.branchName ? ` (${session.branchName})` : ""}`
+		: "Untitled";
 
-	const repoAndBranch = `${repoShortName ?? "Untitled"}${session.branchName ? ` (${session.branchName})` : ""}`;
 	const displayTitle = session.title || session.promptSnippet || repoAndBranch;
 
 	const contextSubtitle = getContextSubtitle(session, displayStatus);
@@ -255,6 +259,17 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 						<span className="text-xs truncate max-w-[120px]">{session.branchName}</span>
 					</div>
 				)}
+
+				<div className="w-28 shrink-0 hidden md:block">
+					<span
+						className={cn(
+							"text-xs truncate block",
+							configurationLabel ? "text-muted-foreground" : "text-muted-foreground/60",
+						)}
+					>
+						{configurationLabel ?? "No config"}
+					</span>
+				</div>
 
 				<OriginBadge session={session} />
 

@@ -5,6 +5,8 @@
  * used by session list rows, peek drawer, and my-work pages.
  */
 
+import type { DisplayStatus } from "@proliferate/shared/sessions";
+
 /** Format activeSeconds → "12 min" or "1h 23m" or "< 1 min" */
 export function formatActiveTime(seconds: number): string {
 	if (seconds < 60) return "< 1 min";
@@ -46,9 +48,6 @@ export function getOutcomeDisplay(outcome: string): { label: string; className: 
 	}
 }
 
-/** Shared display status config used by session rows and peek drawer. */
-import type { DisplayStatus } from "@proliferate/shared/sessions";
-
 export const DISPLAY_STATUS_CONFIG: Record<
 	DisplayStatus,
 	{ animated: boolean; label: string; colorClassName: string }
@@ -79,4 +78,12 @@ export function parsePrUrl(url: string): { repo: string; number: number } | null
 	const match = url.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
 	if (!match) return null;
 	return { repo: match[1], number: Number.parseInt(match[2], 10) };
+}
+
+/** Render a short configuration identifier label. */
+export function formatConfigurationLabel(
+	configurationId: string | null | undefined,
+): string | null {
+	if (!configurationId) return null;
+	return `Config ${configurationId.slice(0, 8)}`;
 }
