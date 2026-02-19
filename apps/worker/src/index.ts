@@ -131,20 +131,23 @@ logger.info(
 	"Workers started",
 );
 
-// One-time check: warn if backfill left orphaned null-pauseReason sessions
-sessions
-	.countNullPauseReasonSessions()
-	.then((count) => {
-		if (count > 0) {
-			logger.warn(
-				{ count },
-				"Found paused sessions with null pauseReason after backfill — investigate",
-			);
-		}
-	})
-	.catch((err) => {
-		logger.debug({ err }, "Failed to check null pauseReason sessions");
-	});
+// Periodic check: warn if any paused sessions have null pauseReason (regression detector).
+// Runs on startup and then every hour.
+const NULL_PAUSE_CHECK_INTERVAL = 60 * 60 * 1000; // 1 hour
+function checkNullPauseReasonSessions() {
+	sessions
+		.countNullPauseReasonSessions()
+		.then((count) => {
+			if (count > 0) {
+				logger.warn({ count }, "Found paused sessions with null pauseReason — investigate");
+			}
+		})
+		.catch((err) => {
+			logger.debug({ err }, "Failed to check null pauseReason sessions");
+		});
+}
+checkNullPauseReasonSessions();
+const nullPauseCheckTimer = setInterval(checkNullPauseReasonSessions, NULL_PAUSE_CHECK_INTERVAL);
 
 // Start the subscriber
 sessionSubscriber.start().catch((err) => {
@@ -179,6 +182,9 @@ healthServer.listen(PORT, () => logger.info({ port: PORT }, "Health check server
 // Graceful shutdown
 async function shutdown(): Promise<void> {
 	logger.info("Shutting down");
+
+	// Stop periodic checks
+	clearInterval(nullPauseCheckTimer);
 
 	// Close health check server
 	await new Promise<void>((resolve) => healthServer.close(() => resolve()));

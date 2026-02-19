@@ -28,7 +28,7 @@ import {
 	getBlockedReasonText,
 } from "@proliferate/shared/sessions";
 import { formatDistanceToNow } from "date-fns";
-import { AlertTriangle, GitBranch, Terminal } from "lucide-react";
+import { AlertTriangle, GitBranch, RotateCcw, Terminal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -161,6 +161,8 @@ export function SessionListRow({ session, pendingRun, isNew }: SessionListRowPro
 	const displayStatus = deriveDisplayStatus(session.status, session.pauseReason);
 	const config = DISPLAY_STATUS_CONFIG[displayStatus];
 	const Icon = config.animated ? BlocksLoadingIcon : BlocksIcon;
+	const isResumable =
+		session.snapshotId != null && (displayStatus === "idle" || displayStatus === "paused");
 
 	const repoShortName = session.repo?.githubRepoName
 		? getRepoShortName(session.repo.githubRepoName)
@@ -297,6 +299,10 @@ export function SessionListRow({ session, pendingRun, isNew }: SessionListRowPro
 						/>
 					</div>
 				</div>
+
+				{isResumable && (
+					<RotateCcw className="h-3 w-3 text-muted-foreground/50 shrink-0" aria-label="Resumable" />
+				)}
 
 				<span
 					className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground flex-shrink-0"

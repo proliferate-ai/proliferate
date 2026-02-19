@@ -18,7 +18,7 @@ import { useDashboardStore } from "@/stores/dashboard";
 import { type DisplayStatus, deriveDisplayStatus } from "@proliferate/shared/sessions";
 import { Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type FilterTab = "in_progress" | "needs_attention" | "paused" | "completed";
 type OriginFilter = "all" | "manual" | "automation" | "slack" | "cli";
@@ -32,7 +32,7 @@ const TABS: { value: FilterTab; label: string }[] = [
 
 const IN_PROGRESS_STATUSES: Set<DisplayStatus> = new Set(["active", "idle"]);
 const NEEDS_ATTENTION_STATUSES: Set<DisplayStatus> = new Set(["blocked", "failed", "recovering"]);
-const LIVE_STATUSES: Set<DisplayStatus> = new Set(["active", "idle", "recovering"]);
+const LIVE_STATUSES: Set<DisplayStatus> = new Set(["active", "idle", "recovering", "blocked"]);
 
 function getSessionOrigin(session: {
 	automationId?: string | null;
@@ -53,12 +53,11 @@ export default function SessionsPage() {
 	const [originFilter, setOriginFilter] = useState<OriginFilter>("all");
 
 	// Track whether visible sessions include live ones (for polling).
-	// Uses a ref so the value from the previous render drives the next query cycle.
-	const hasLiveRef = useRef(false);
+	const [hasLiveSessions, setHasLiveSessions] = useState(false);
 
 	const { data: sessions, isLoading } = useSessions({
 		excludeSetup: true,
-		refetchInterval: hasLiveRef.current ? 5000 : false,
+		refetchInterval: hasLiveSessions ? 5000 : false,
 	});
 
 	const { data: pendingRuns } = useOrgPendingRuns();
@@ -152,16 +151,18 @@ export default function SessionsPage() {
 			});
 		}
 
-		// Update polling ref based on visible sessions
-		const visibleHasLive = finalFiltered.some((s) => LIVE_STATUSES.has(s.displayStatus));
-		hasLiveRef.current = visibleHasLive;
-
 		return {
 			filtered: finalFiltered.map((s) => s.session),
 			counts: tabCounts,
 			totalCount: baseSessions.length,
+			visibleHasLive: finalFiltered.some((s) => LIVE_STATUSES.has(s.displayStatus)),
 		};
 	}, [sessions, activeTab, searchQuery, originFilter, pendingRunsBySession]);
+
+	// Sync polling state outside of useMemo to avoid side-effects during render
+	useEffect(() => {
+		setHasLiveSessions(result.visibleHasLive);
+	}, [result.visibleHasLive]);
 
 	const handleNewSession = () => {
 		clearPendingPrompt();
