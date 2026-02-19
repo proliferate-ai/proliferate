@@ -228,6 +228,13 @@
       "when": 1771891200000,
       "tag": "0032_backfill_manual_pause_reason",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1771977600000,
+      "tag": "0033_session_telemetry",
+      "breakpoints": true
     }
   ]
 }
