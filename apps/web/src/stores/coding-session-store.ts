@@ -1,6 +1,5 @@
 "use client";
 
-import { getSetupInitialPrompt } from "@/lib/prompts";
 import { create } from "zustand";
 
 interface CodingSessionModalState {
@@ -70,19 +69,6 @@ export const useCodingSessionStore = create<CodingSessionStore>((set, get) => ({
 	},
 }));
 
-// Convenience function for opening setup sessions
-export function openSetupSession(configurationId: string, onComplete?: () => void) {
-	useCodingSessionStore.getState().openSession({
-		configurationId,
-		sessionType: "setup",
-		title: "Set up your Environment",
-		description:
-			"We're setting up a cloud environment with your project's dependencies, just like you'd have locally.",
-		initialPrompt: getSetupInitialPrompt(),
-		onClose: onComplete,
-	});
-}
-
 // Convenience function for opening coding sessions
 export function openCodingSession(params: {
 	sessionId?: string;
@@ -104,23 +90,5 @@ export function openHistoricalSession(sessionId: string, snapshotName?: string) 
 		sessionType: "setup",
 		title: snapshotName ? `Setup: ${snapshotName}` : "Setup History",
 		description: "View the conversation that created this snapshot.",
-	});
-}
-
-// Convenience function for editing an existing snapshot
-export function openEditSession(params: {
-	sessionId: string;
-	snapshotId: string;
-	snapshotName?: string;
-	configurationId: string;
-}) {
-	useCodingSessionStore.getState().openSession({
-		sessionId: params.sessionId,
-		configurationId: params.configurationId,
-		sessionType: "setup",
-		title: params.snapshotName ? `Edit: ${params.snapshotName}` : "Edit Snapshot",
-		description: "Continue editing this environment. Changes will update the existing snapshot.",
-		editingSnapshotId: params.snapshotId,
-		// No initialPrompt - don't auto-send anything
 	});
 }

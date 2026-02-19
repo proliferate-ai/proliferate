@@ -14,8 +14,8 @@ import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
 import { useDeleteConfiguration, useUpdateConfiguration } from "@/hooks/use-configurations";
 import { useCreateSession } from "@/hooks/use-sessions";
+import { getSetupInitialPrompt } from "@/lib/prompts";
 import { cn, getRepoShortName } from "@/lib/utils";
-import { openEditSession, openSetupSession } from "@/stores/coding-session-store";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Session } from "@proliferate/shared/contracts";
 import { ChevronRight, Pencil, Plus, Zap } from "lucide-react";
@@ -59,7 +59,6 @@ export function ConfigurationGroup({
 	const inputRef = useRef<HTMLInputElement>(null);
 	const router = useRouter();
 
-	const isFinalized = configuration.snapshotId !== null;
 	const isManaged = configuration.type === "managed";
 
 	const firstRepo = configuration.configurationRepos?.[0]?.repo;
@@ -73,7 +72,8 @@ export function ConfigurationGroup({
 	const updateConfiguration = useUpdateConfiguration();
 	const deleteConfiguration = useDeleteConfiguration();
 	const createSession = useCreateSession();
-	const { selectedModel, setActiveSession, clearPendingPrompt } = useDashboardStore();
+	const { selectedModel, setActiveSession, clearPendingPrompt, setPendingPrompt } =
+		useDashboardStore();
 
 	useEffect(() => {
 		if (isEditing && inputRef.current) {
@@ -108,16 +108,19 @@ export function ConfigurationGroup({
 		await deleteConfiguration.mutateAsync(configuration.id);
 	};
 
-	const handleEditEnvironment = () => {
-		if (isFinalized && setupSessionId && configuration.snapshotId) {
-			openEditSession({
-				sessionId: setupSessionId,
-				snapshotId: configuration.snapshotId,
-				snapshotName: displayName,
-				configurationId: configuration.id,
-			});
+	const handleEditEnvironment = async () => {
+		if (setupSessionId) {
+			router.push(`/workspace/${setupSessionId}`);
+			onNavigate?.();
 		} else {
-			openSetupSession(configuration.id);
+			if (createSession.isPending) return;
+			const result = await createSession.mutateAsync({
+				configurationId: configuration.id,
+				sessionType: "setup",
+			});
+			setPendingPrompt(getSetupInitialPrompt());
+			router.push(`/workspace/${result.sessionId}`);
+			onNavigate?.();
 		}
 	};
 

@@ -4,8 +4,6 @@ export { useCodingSessionRuntime } from "./use-coding-session-runtime";
 export type { ExtendedMessage, MessagePart } from "./message-converter";
 export {
 	useCodingSessionStore,
-	openSetupSession,
 	openCodingSession,
 	openHistoricalSession,
-	openEditSession,
 } from "@/stores/coding-session-store";

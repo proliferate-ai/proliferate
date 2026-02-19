@@ -215,12 +215,12 @@ export function useFinalizeSetup() {
 		},
 	});
 
-	// Wrap mutateAsync to accept the old API format
+	// Wrap mutateAsync to accept repoId (optional) + session fields
 	const mutateAsync = async ({
 		repoId,
 		...body
 	}: {
-		repoId: string;
+		repoId?: string;
 	} & FinalizeSetupInput) => {
 		const result = await mutation.mutateAsync({
 			id: repoId,

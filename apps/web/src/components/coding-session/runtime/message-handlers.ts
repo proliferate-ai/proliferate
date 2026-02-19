@@ -20,6 +20,7 @@ type SetMessages = React.Dispatch<React.SetStateAction<ExtendedMessage[]>>;
 type SetStreamingText = React.Dispatch<React.SetStateAction<Record<string, string>>>;
 
 export interface MessageHandlerContext {
+	sessionId: string;
 	setMessages: SetMessages;
 	setStreamingText: SetStreamingText;
 	setIsRunning: (running: boolean) => void;
@@ -73,7 +74,7 @@ export function handleInit(payload: any, ctx: MessageHandlerContext) {
 		}),
 	);
 
-	useSetupProgressStore.getState().hydrateFromHistory(payload.messages);
+	useSetupProgressStore.getState().hydrateFromHistory(ctx.sessionId, payload.messages);
 
 	if (payload.config?.previewTunnelUrl) {
 		ctx.setPreviewUrl(payload.config.previewTunnelUrl);
@@ -123,7 +124,7 @@ export function handleToken(
 /** Handle tool start - add tool part to message */
 export function handleToolStart(data: ToolStartMessage, ctx: MessageHandlerContext) {
 	const payload = data.payload;
-	useSetupProgressStore.getState().onToolStart(payload.tool);
+	useSetupProgressStore.getState().onToolStart(ctx.sessionId, payload.tool);
 	const messageId = payload.messageId || ctx.getLastAssistantMessageId();
 
 	// Detect env request tool
@@ -167,7 +168,7 @@ export function handleToolStart(data: ToolStartMessage, ctx: MessageHandlerConte
 /** Handle tool end - mark tool as complete with result */
 export function handleToolEnd(data: ToolEndMessage, ctx: MessageHandlerContext) {
 	const payload = data.payload;
-	useSetupProgressStore.getState().onToolEnd();
+	useSetupProgressStore.getState().onToolEnd(ctx.sessionId);
 	// Ensure result is truthy (empty string causes issues)
 	const result = payload.result || " ";
 

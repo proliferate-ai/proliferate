@@ -127,6 +127,7 @@ export function useSessionWebSocket({
 		}
 
 		const ctx: MessageHandlerContext = {
+			sessionId,
 			setMessages,
 			setStreamingText,
 			setIsRunning,

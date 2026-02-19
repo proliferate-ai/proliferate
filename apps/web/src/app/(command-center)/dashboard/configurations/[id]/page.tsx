@@ -14,6 +14,8 @@ import {
 	useUpdateConfigurationServiceCommands,
 } from "@/hooks/use-configurations";
 import { useCreateSession } from "@/hooks/use-sessions";
+import { getSetupInitialPrompt } from "@/lib/prompts";
+import { useDashboardStore } from "@/stores/dashboard";
 import { ArrowLeft, FolderGit2, Pencil, Play, Plus, Trash2, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -23,6 +25,7 @@ export default function ConfigurationDetailPage() {
 	const configurationId = params.id;
 	const { data: configurations, isLoading } = useConfigurations();
 	const createSession = useCreateSession();
+	const { setPendingPrompt } = useDashboardStore();
 
 	const config = useMemo(() => {
 		return configurations?.find((c) => c.id === configurationId);
@@ -74,6 +77,7 @@ export default function ConfigurationDetailPage() {
 									configurationId,
 									sessionType: "setup",
 								});
+								setPendingPrompt(getSetupInitialPrompt());
 								router.push(`/workspace/${result.sessionId}`);
 							}}
 						>

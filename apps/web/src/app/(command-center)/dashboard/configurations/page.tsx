@@ -43,7 +43,9 @@ import { LoadingDots } from "@/components/ui/loading-dots";
 import { useConfigurations, useDeleteConfiguration } from "@/hooks/use-configurations";
 import { useIntegrations } from "@/hooks/use-integrations";
 import { useCreateSession } from "@/hooks/use-sessions";
+import { getSetupInitialPrompt } from "@/lib/prompts";
 import { cn } from "@/lib/utils";
+import { useDashboardStore } from "@/stores/dashboard";
 import type { Configuration } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
 import { ChevronRight, FolderGit2, MoreVertical, Play, Plus, Search, Trash2 } from "lucide-react";
@@ -58,8 +60,10 @@ import { useMemo, useState } from "react";
 const STATUS_ORDER: Record<string, number> = { ready: 0, default: 1, building: 2, failed: 3 };
 
 export default function ConfigurationsPage() {
+	const router = useRouter();
 	const { data: configurations, isLoading } = useConfigurations();
 	const { data: integrationsData } = useIntegrations();
+	const { setPendingPrompt } = useDashboardStore();
 	const [filterQuery, setFilterQuery] = useState("");
 	const [createOpen, setCreateOpen] = useState(false);
 
@@ -174,7 +178,13 @@ export default function ConfigurationsPage() {
 						<DialogTitle>New configuration</DialogTitle>
 						<DialogDescription>Select repos and create a configuration</DialogDescription>
 					</DialogHeader>
-					<CreateSnapshotContent onCreate={() => setCreateOpen(false)} />
+					<CreateSnapshotContent
+						onCreate={(_configurationId, sessionId) => {
+							setCreateOpen(false);
+							setPendingPrompt(getSetupInitialPrompt());
+							router.push(`/workspace/${sessionId}`);
+						}}
+					/>
 				</DialogContent>
 			</Dialog>
 		</PageShell>
@@ -189,6 +199,7 @@ function ConfigurationRow({ config }: { config: Configuration }) {
 	const router = useRouter();
 	const deleteConfiguration = useDeleteConfiguration();
 	const createSession = useCreateSession();
+	const { setPendingPrompt } = useDashboardStore();
 	const [deleteOpen, setDeleteOpen] = useState(false);
 	const [expanded, setExpanded] = useState(false);
 
@@ -259,6 +270,7 @@ function ConfigurationRow({ config }: { config: Configuration }) {
 												configurationId: config.id,
 												sessionType: "setup",
 											});
+											setPendingPrompt(getSetupInitialPrompt());
 											router.push(`/workspace/${result.sessionId}`);
 										}}
 									>

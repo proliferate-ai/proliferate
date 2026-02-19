@@ -273,7 +273,7 @@ export const configurationsRouter = {
 	finalizeSetup: orgProcedure
 		.input(
 			z.object({
-				id: z.string().uuid(),
+				id: z.string().uuid().optional(),
 				...FinalizeSetupInputSchema.shape,
 			}),
 		)
@@ -289,6 +289,7 @@ export const configurationsRouter = {
 				updateSnapshotId: input.updateSnapshotId,
 				keepRunning: input.keepRunning,
 				userId: context.user.id,
+				orgId: context.orgId,
 			});
 		}),
 

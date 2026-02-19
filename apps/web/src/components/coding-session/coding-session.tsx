@@ -34,6 +34,7 @@ import type { SessionPanelProps } from "./right-panel";
 import { RightPanel } from "./right-panel";
 import { SessionHeader } from "./session-header";
 import { SessionLoadingShell } from "./session-loading-shell";
+import { SetupSessionChrome } from "./setup-session-chrome";
 import { Thread } from "./thread";
 import { SessionContext } from "./tool-ui";
 import { useCodingSessionRuntime } from "./use-coding-session-runtime";
@@ -280,6 +281,7 @@ export function CodingSession({
 	);
 
 	const isReady = !isLoading && !!authSession && !!sessionData && status !== "error";
+	const isSetupSession = sessionData?.sessionType === "setup";
 
 	const panelViewPicker = (
 		<div className="flex items-center gap-0.5">
@@ -495,6 +497,14 @@ export function CodingSession({
 	const content = (
 		<TooltipProvider delayDuration={150}>
 			<div className="flex h-full flex-col">
+				{isSetupSession && sessionData && (
+					<SetupSessionChrome
+						sessionId={sessionId}
+						repoId={sessionData.repoId ?? undefined}
+						canFinalize={canSnapshot}
+						showIntro
+					/>
+				)}
 				<div className="flex-1 min-h-0">
 					{isReady ? (
 						<AssistantRuntimeProvider runtime={runtime}>{mainContent}</AssistantRuntimeProvider>

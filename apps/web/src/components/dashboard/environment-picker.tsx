@@ -29,10 +29,12 @@ import {
 } from "@/hooks/use-nango-connect";
 import { useRepos } from "@/hooks/use-repos";
 import { orpc } from "@/lib/orpc";
+import { getSetupInitialPrompt } from "@/lib/prompts";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Layers, Pencil, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CreateSnapshotContent } from "./snapshot-selector";
 
@@ -61,12 +63,18 @@ function RepoName({ name }: { name: string }) {
 export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 	const [open, setOpen] = useState(false);
 	const [createOpen, setCreateOpen] = useState(false);
+	const router = useRouter();
 	const queryClient = useQueryClient();
 	const { data: repos } = useRepos();
 	const { data: configurations } = useConfigurations("ready");
 	const { data: integrationsData } = useIntegrations();
-	const { selectedRepoId, selectedSnapshotId, setSelectedRepo, setSelectedSnapshot } =
-		useDashboardStore();
+	const {
+		selectedRepoId,
+		selectedSnapshotId,
+		setSelectedRepo,
+		setSelectedSnapshot,
+		setPendingPrompt,
+	} = useDashboardStore();
 
 	// GitHub connection state
 	const hasGitHub =
@@ -315,7 +323,13 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 						<DialogTitle>New configuration</DialogTitle>
 						<DialogDescription>Group the repositories that make up your project</DialogDescription>
 					</DialogHeader>
-					<CreateSnapshotContent onCreate={() => setCreateOpen(false)} />
+					<CreateSnapshotContent
+						onCreate={(_configurationId, sessionId) => {
+							setCreateOpen(false);
+							setPendingPrompt(getSetupInitialPrompt());
+							router.push(`/workspace/${sessionId}`);
+						}}
+					/>
 				</DialogContent>
 			</Dialog>
 		</>

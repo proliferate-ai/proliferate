@@ -16,7 +16,7 @@ import { getSandboxProvider } from "@proliferate/shared/providers";
 const log = logger.child({ handler: "configurations-finalize" });
 
 export interface FinalizeSetupInput {
-	repoId: string;
+	repoId?: string;
 	sessionId: string;
 	secrets?: Record<string, string>;
 	name?: string;
@@ -24,6 +24,7 @@ export interface FinalizeSetupInput {
 	updateSnapshotId?: string;
 	keepRunning?: boolean;
 	userId: string;
+	orgId: string;
 }
 
 export interface FinalizeSetupResult {
@@ -32,11 +33,56 @@ export interface FinalizeSetupResult {
 	success: boolean;
 }
 
+/**
+ * Resolve the target repoId for finalization.
+ *
+ * Decision tree (per advisor brief §9 Phase 4):
+ * 1. If caller supplied repoId: use it.
+ * 2. Else if session.repoId is non-null: use it.
+ * 3. Else if session.configurationId is null: reject.
+ * 4. Else load configurationRepos:
+ *    - Exactly one repo: use that repo.
+ *    - Multiple repos + secrets payload non-empty: reject (ambiguous).
+ *    - Multiple repos + no secrets: return the first repo (secrets skipped by caller).
+ *    - Zero repos: reject.
+ */
+async function resolveRepoId(
+	explicitRepoId: string | undefined,
+	session: { repoId: string | null; configurationId: string | null },
+	hasSecrets: boolean,
+): Promise<string> {
+	if (explicitRepoId) return explicitRepoId;
+	if (session.repoId) return session.repoId;
+	if (!session.configurationId) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "repoId is required when session has no configuration",
+		});
+	}
+
+	const configRepos = await configurations.getConfigurationReposWithDetails(
+		session.configurationId,
+	);
+	const repoIds = configRepos.map((cr) => cr.repo?.id).filter(Boolean) as string[];
+	if (repoIds.length === 0) {
+		throw new ORPCError("BAD_REQUEST", { message: "Configuration has no repos" });
+	}
+	if (repoIds.length === 1) {
+		return repoIds[0];
+	}
+	// Multiple repos
+	if (hasSecrets) {
+		throw new ORPCError("BAD_REQUEST", {
+			message: "repoId required for multi-repo secret persistence",
+		});
+	}
+	return repoIds[0];
+}
+
 export async function finalizeSetupHandler(
 	input: FinalizeSetupInput,
 ): Promise<FinalizeSetupResult> {
 	const {
-		repoId,
+		repoId: explicitRepoId,
 		sessionId,
 		secrets: inputSecrets = {},
 		name,
@@ -44,20 +90,41 @@ export async function finalizeSetupHandler(
 		updateSnapshotId,
 		keepRunning = true,
 		userId,
+		orgId,
 	} = input;
 
 	if (!sessionId) {
 		throw new ORPCError("BAD_REQUEST", { message: "sessionId is required" });
 	}
 
-	// 1. Get session and verify it belongs to this repo or configuration
+	// 1. Get session
 	const session = await sessions.findSessionByIdInternal(sessionId);
 
 	if (!session) {
 		throw new ORPCError("NOT_FOUND", { message: "Session not found" });
 	}
 
-	// Verify repoId matches or session's configuration contains this repo
+	if (session.organizationId !== orgId) {
+		throw new ORPCError("NOT_FOUND", { message: "Session not found" });
+	}
+
+	if (session.sessionType !== "setup") {
+		throw new ORPCError("BAD_REQUEST", { message: "Only setup sessions can be finalized" });
+	}
+
+	const sandboxId = session.sandboxId;
+	if (!sandboxId) {
+		throw new ORPCError("BAD_REQUEST", { message: "No sandbox associated with session" });
+	}
+
+	// 2. Resolve repoId (may be derived from session/configuration)
+	const repoId = await resolveRepoId(
+		explicitRepoId,
+		{ repoId: session.repoId, configurationId: session.configurationId },
+		Object.keys(inputSecrets).length > 0,
+	);
+
+	// Verify repoId matches session or session's configuration contains this repo
 	const sessionBelongsToRepo = session.repoId === repoId;
 	let sessionBelongsToConfiguration = false;
 
@@ -72,16 +139,7 @@ export async function finalizeSetupHandler(
 		throw new ORPCError("NOT_FOUND", { message: "Session not found for this repo" });
 	}
 
-	if (session.sessionType !== "setup") {
-		throw new ORPCError("BAD_REQUEST", { message: "Only setup sessions can be finalized" });
-	}
-
-	const sandboxId = session.sandboxId;
-	if (!sandboxId) {
-		throw new ORPCError("BAD_REQUEST", { message: "No sandbox associated with session" });
-	}
-
-	// 2. Take filesystem snapshot via provider
+	// 3. Take filesystem snapshot via provider
 	const provider = getSandboxProvider(session.sandboxProvider as SandboxProviderType);
 	let snapshotId: string | null = null;
 

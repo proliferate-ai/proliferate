@@ -1,6 +1,5 @@
 "use client";
 
-import { openEditSession, openSetupSession } from "@/components/coding-session";
 import { HelpLink } from "@/components/help";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -22,12 +21,14 @@ import { useConfigurations, useCreateConfiguration } from "@/hooks/use-configura
 import { useAvailableRepos, useSearchRepos } from "@/hooks/use-repos";
 import { useCreateSession } from "@/hooks/use-sessions";
 import { orpc } from "@/lib/orpc";
+import { getSetupInitialPrompt } from "@/lib/prompts";
 import { cn, getSnapshotDisplayName } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { GitHubRepo, Snapshot } from "@/types";
 import * as Popover from "@radix-ui/react-popover";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Globe, Lock, Pencil, Plus, Search, Star } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 interface SnapshotSelectorProps {
@@ -51,6 +52,8 @@ export function SnapshotSelector({
 	triggerClassName,
 }: SnapshotSelectorProps) {
 	const isControlled = value !== undefined;
+	const router = useRouter();
+	const createSession = useCreateSession();
 
 	// State
 	const [open, setOpen] = useState(false);
@@ -225,17 +228,19 @@ export function SnapshotSelector({
 											</SelectableItem>
 											<IconAction
 												icon={<Pencil className="h-3 w-3" />}
-												onClick={(e) => {
+												onClick={async (e) => {
 													e.stopPropagation();
-													if (setupSessionId && snapshot.snapshotId) {
-														openEditSession({
-															sessionId: setupSessionId,
-															snapshotId: snapshot.id,
-															snapshotName: getSnapshotDisplayName(snapshot),
-															configurationId: snapshot.id,
-														});
+													if (createSession.isPending) return;
+													setOpen(false);
+													if (setupSessionId) {
+														router.push(`/workspace/${setupSessionId}`);
 													} else {
-														openSetupSession(snapshot.id);
+														const result = await createSession.mutateAsync({
+															configurationId: snapshot.id,
+															sessionType: "setup",
+														});
+														dashboardStore.setPendingPrompt(getSetupInitialPrompt());
+														router.push(`/workspace/${result.sessionId}`);
 													}
 												}}
 												size="xs"
