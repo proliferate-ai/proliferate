@@ -8,21 +8,22 @@ import { Check, Clock, LogOut, Users, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+/**
+ * Matches the actual better-auth `getInvitation` response shape.
+ * The response is flat — org/inviter info are top-level fields,
+ * not nested objects.
+ */
 interface InvitationDetails {
 	id: string;
 	email: string;
 	role: string;
 	status: string;
 	expiresAt: string;
-	organization?: {
-		id: string;
-		name: string;
-		logo?: string;
-	};
-	inviter?: {
-		name: string;
-		email: string;
-	};
+	organizationId: string;
+	organizationName: string;
+	organizationSlug: string;
+	inviterId: string;
+	inviterEmail: string;
 }
 
 export default function InviteAcceptPage() {
@@ -107,16 +108,17 @@ export default function InviteAcceptPage() {
 	}, [session, sessionPending, invitedEmail, basicInfoLoaded, invitationId, router]);
 
 	const handleAccept = async () => {
-		if (!invitation?.organization) return;
+		if (!invitation) return;
 		setAccepting(true);
 		try {
 			// Accept the invitation
 			await organization.acceptInvitation({ invitationId });
 
 			// Switch active org to the invited org
-			await organization.setActive({ organizationId: invitation.organization.id });
+			await organization.setActive({ organizationId: invitation.organizationId });
 
-			// Delete the auto-created personal org (best-effort)
+			// Delete the auto-created personal org (best-effort, only for fresh signups).
+			// The server action checks that the org has no sessions before deleting.
 			try {
 				await deletePersonalOrg();
 			} catch {
@@ -124,7 +126,7 @@ export default function InviteAcceptPage() {
 			}
 
 			// Redirect to dashboard with welcome flag
-			const orgName = encodeURIComponent(invitation.organization.name);
+			const orgName = encodeURIComponent(invitation.organizationName);
 			router.push(`/dashboard?joined=${orgName}`);
 		} catch {
 			setError("Failed to accept invitation. You may need to verify your email first.");
@@ -260,22 +262,14 @@ export default function InviteAcceptPage() {
 		<div className="flex min-h-screen items-center justify-center bg-background">
 			<div className="w-full max-w-md p-8">
 				<div className="mb-8 text-center">
-					{invitation.organization?.logo ? (
-						<img
-							src={invitation.organization.logo}
-							alt={invitation.organization?.name ?? "Organization logo"}
-							className="mx-auto mb-4 h-16 w-16 rounded-full"
-						/>
-					) : (
-						<div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-							<Users className="h-8 w-8 text-muted-foreground" />
-						</div>
-					)}
+					<div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+						<Users className="h-8 w-8 text-muted-foreground" />
+					</div>
 					<Text variant="h3" className="mb-2">
-						Join {invitation.organization?.name ?? "Organization"}
+						Join {invitation.organizationName}
 					</Text>
 					<Text variant="body" color="muted">
-						{invitation.inviter?.name ?? "Someone"} has invited you to join as a{" "}
+						{invitation.inviterEmail} has invited you to join as a{" "}
 						<Text as="span" className="font-medium text-foreground">
 							{invitation.role}
 						</Text>
@@ -287,7 +281,7 @@ export default function InviteAcceptPage() {
 						<Text variant="small" color="muted">
 							Invited by
 						</Text>
-						<Text variant="small">{invitation.inviter?.name ?? "Unknown"}</Text>
+						<Text variant="small">{invitation.inviterEmail}</Text>
 					</div>
 					<div className="mt-2 flex items-center justify-between text-sm">
 						<Text variant="small" color="muted">
