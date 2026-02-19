@@ -432,8 +432,8 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			token?: string;
 			workspacePath: string;
 			repoId: string;
+			branch: string;
 		}>;
-		branch: string;
 	}): Promise<{ snapshotId: string }> {
 		const startMs = Date.now();
 		const log = providerLogger.child({ configurationId: input.configurationId });
@@ -491,7 +491,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				{
 					sessionId: sandboxName,
 					repos: input.repos,
-					branch: input.branch,
+					branch: "main", // fallback; each repo carries its own branch
 					envVars: {},
 					systemPrompt: "Configuration snapshot build",
 				},
@@ -951,13 +951,14 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				},
 				"Cloning repo",
 			);
+			const repoBranch = repo.branch ?? opts.branch;
 			const cloneProc = await sandbox.exec([
 				"git",
 				"clone",
 				"--depth",
 				"1",
 				"--branch",
-				opts.branch,
+				repoBranch,
 				cloneUrl,
 				targetDir,
 			]);

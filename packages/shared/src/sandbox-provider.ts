@@ -60,6 +60,7 @@ export interface RepoSpec {
 	token?: string; // GitHub access token for this repo (may differ per installation)
 	workspacePath: string; // Directory name in /workspace/ (e.g., "api", "frontend")
 	repoId?: string; // Database repo ID for reference
+	branch?: string; // Per-repo branch override (falls back to CreateSandboxOpts.branch)
 	serviceCommands?: ServiceCommand[];
 }
 

@@ -24,7 +24,6 @@ import {
 	getDefaultAgentConfig,
 	isValidModelId,
 	parseModelId,
-	resolveSnapshotId,
 } from "@proliferate/shared";
 import { getModalAppName } from "@proliferate/shared/providers";
 import {
@@ -190,25 +189,8 @@ export async function createSession(
 		}
 	}
 
-	// Resolve snapshotId via layering (configuration snapshot → repo snapshot → null).
-	// Repo snapshots are only eligible for Modal provider, non-CLI sessions.
-	let snapshotId = inputSnapshotId ?? null;
-	if (!snapshotId && provider.type === "modal" && sessionType !== "cli") {
-		try {
-			const configurationRepoRows =
-				await configurations.getConfigurationReposWithDetails(configurationId);
-			snapshotId = resolveSnapshotId({
-				configurationSnapshotId: null,
-				sandboxProvider: provider.type,
-				configurationRepos: configurationRepoRows,
-			});
-			if (snapshotId) {
-				log.info({ snapshotId }, "Using repo snapshot");
-			}
-		} catch (err) {
-			log.warn({ err }, "Failed to resolve repo snapshot (non-fatal)");
-		}
-	}
+	// Snapshot ID comes from the caller (configuration's snapshotId)
+	const snapshotId = inputSnapshotId ?? null;
 
 	// Create session record via services (with atomic concurrent admission guard)
 	try {

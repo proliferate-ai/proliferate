@@ -520,8 +520,9 @@ export class E2BProvider implements SandboxProvider {
 				},
 				"Cloning repo",
 			);
+			const repoBranch = repo.branch ?? opts.branch;
 			const cloneResult = await sandbox.commands.run(
-				`git clone --depth 1 --branch ${opts.branch} '${cloneUrl}' ${targetDir}`,
+				`git clone --depth 1 --branch ${repoBranch} '${cloneUrl}' ${targetDir}`,
 				{ timeoutMs: 120000 },
 			);
 			if (cloneResult.exitCode !== 0) {

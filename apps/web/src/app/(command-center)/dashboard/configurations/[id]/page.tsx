@@ -71,12 +71,12 @@ export default function ConfigurationDetailPage() {
 						<span
 							className={cn(
 								"inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-medium",
-								config.status === "ready"
+								config.status === "ready" || config.status === "default"
 									? "border-border/50 bg-muted/50 text-foreground"
 									: "border-border/50 bg-muted/50 text-muted-foreground",
 							)}
 						>
-							{config.status === "ready"
+							{config.status === "ready" || config.status === "default"
 								? "Ready"
 								: config.status === "building"
 									? "Building"

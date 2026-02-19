@@ -56,6 +56,15 @@ async function handleConfigurationSnapshotBuild(
 
 	const repos = config.configurationRepos.filter((cr) => cr.repo !== null).map((cr) => cr.repo!);
 
+	// Only Modal configurations support snapshot builds
+	if (config.sandboxProvider !== "modal") {
+		log.info(
+			{ sandboxProvider: config.sandboxProvider },
+			"Skipping snapshot build for non-Modal configuration",
+		);
+		return;
+	}
+
 	if (repos.length === 0) {
 		const message = "Configuration has no repos";
 		await configurations.markConfigurationSnapshotFailed(configurationId, message);
@@ -71,6 +80,7 @@ async function handleConfigurationSnapshotBuild(
 		token?: string;
 		workspacePath: string;
 		repoId: string;
+		branch: string;
 	}> = [];
 
 	for (const cr of config.configurationRepos) {
@@ -91,24 +101,21 @@ async function handleConfigurationSnapshotBuild(
 			token: token || undefined,
 			workspacePath: cr.workspacePath,
 			repoId: repo.id,
+			branch: repo.defaultBranch || "main",
 		});
 	}
-
-	// Use first repo's default branch (multi-repo configs use individual repo branches via setupSandbox)
-	const branch = repos[0].defaultBranch || "main";
 
 	const provider = new ModalLibmodalProvider();
 	try {
 		const result = await provider.createConfigurationSnapshot({
 			configurationId,
 			repos: repoInputs,
-			branch,
 		});
 
 		await configurations.markConfigurationSnapshotDefault(configurationId, result.snapshotId);
 
 		log.info(
-			{ snapshotId: result.snapshotId, repoCount: repoInputs.length, branch },
+			{ snapshotId: result.snapshotId, repoCount: repoInputs.length },
 			"Configuration snapshot built",
 		);
 	} catch (error) {
