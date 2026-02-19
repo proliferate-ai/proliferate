@@ -12,10 +12,23 @@ import { logger } from "@/lib/logger";
 import { getUserOrgRole } from "@/lib/permissions";
 import { env } from "@proliferate/environment/server";
 import { billing, orgs } from "@proliferate/services";
+import { createBillingFastReconcileQueue } from "@proliferate/queue";
 import { TOP_UP_PRODUCT, autumnAttach } from "@proliferate/shared/billing";
 import { NextResponse } from "next/server";
 
 const log = logger.child({ route: "billing/buy-credits" });
+
+/** Fire-and-forget fast reconcile. Non-fatal on failure. */
+function enqueueFastReconcile(orgId: string) {
+	const queue = createBillingFastReconcileQueue();
+	queue
+		.add("fast-reconcile", { orgId, trigger: "payment_webhook" as const }, { jobId: orgId })
+		.then(() => queue.close())
+		.catch((err) => {
+			log.warn({ err, orgId }, "Failed to enqueue fast reconcile");
+			queue.close().catch(() => {});
+		});
+}
 
 const deprecationHeaders = {
 	Deprecation: "true",
@@ -120,7 +133,8 @@ export async function POST(request: Request) {
 				userId,
 			);
 		} catch (err) {
-			log.error({ err }, "Failed to update shadow balance");
+			log.error({ err }, "Failed to update shadow balance — enqueueing reconcile");
+			enqueueFastReconcile(orgId);
 		}
 
 		return NextResponse.json(

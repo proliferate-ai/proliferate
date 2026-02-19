@@ -96,6 +96,6 @@ export async function processPartitionMaintenanceJob(
 			}
 		}
 	} catch (err) {
-		log.debug({ err }, "Could not check partitions");
+		log.warn({ err }, "Could not check partitions");
 	}
 }

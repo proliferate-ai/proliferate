@@ -5,7 +5,7 @@
  * LLM spend logs are now fetched via the LiteLLM REST API (see litellm-api.ts).
  */
 
-import { arrayContains, inArray, isNull, lt, or } from "drizzle-orm";
+import { arrayContains, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import {
 	and,
 	billingEvents,
@@ -203,7 +203,7 @@ export async function listBillableOrgsWithCustomerId(): Promise<
 		.where(
 			and(
 				inArray(organization.billingState, ["active", "trial", "grace"]),
-				sql`${organization.autumnCustomerId} IS NOT NULL`,
+				isNotNull(organization.autumnCustomerId),
 			),
 		);
 	return rows.map((r) => ({
@@ -228,7 +228,7 @@ export async function listStaleReconcileOrgs(
 		.from(organization)
 		.where(
 			and(
-				sql`${organization.autumnCustomerId} IS NOT NULL`,
+				isNotNull(organization.autumnCustomerId),
 				inArray(organization.billingState, ["active", "trial", "grace"]),
 				or(isNull(organization.lastReconciledAt), lt(organization.lastReconciledAt, threshold)),
 			),

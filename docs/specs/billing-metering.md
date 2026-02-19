@@ -219,8 +219,8 @@ Trial: 1,000 credits granted at signup. Top-up pack: 500 credits for $5.
 
 ### Don't
 - Do not call Autumn APIs in the session start/resume hot path — use `checkBillingGate()` with local shadow balance.
-- Do not insert billing events outside a `deductShadowBalance` transaction — this breaks the atomicity invariant.
-- Do not skip billing event insertion for trial/unconfigured orgs — these events use `status: "skipped"` so the outbox ignores them, but the insert is required for idempotency (prevents double-deduction on crash/retry).
+- Never insert billing events outside a `deductShadowBalance` transaction — this breaks the atomicity invariant.
+- Avoid skipping billing event insertion for trial/unconfigured orgs — these events use `status: "skipped"` so the outbox ignores them, but the insert is required for idempotency (prevents double-deduction on crash/retry).
 
 ### Error Handling
 Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or shadow balance can't be computed, the operation is denied. See `apps/web/src/lib/billing.ts:checkCanStartSession`.

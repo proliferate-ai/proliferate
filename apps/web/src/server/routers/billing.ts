@@ -30,12 +30,13 @@ const log = logger.child({ handler: "billing" });
 
 /** Fire-and-forget fast reconcile enqueue. Failures are non-fatal. */
 async function enqueueFastReconcile(orgId: string, trigger: "payment_webhook" | "manual") {
+	const queue = createBillingFastReconcileQueue();
 	try {
-		const queue = createBillingFastReconcileQueue();
 		await queue.add("fast-reconcile", { orgId, trigger }, { jobId: orgId });
-		await queue.close();
 	} catch (err) {
 		log.warn({ err, orgId }, "Failed to enqueue fast reconcile");
+	} finally {
+		await queue.close();
 	}
 }
 

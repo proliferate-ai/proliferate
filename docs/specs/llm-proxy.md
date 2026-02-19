@@ -305,7 +305,7 @@ _Source: `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`_
 
 **Call sites:**
 - `apps/web/src/server/routers/sessions-pause.ts:pauseSessionHandler` — after snapshot + terminate
-- `packages/services/src/billing/org-pause.ts:handleCreditsExhaustedV2` — per-session during exhaustion enforcement
+- `packages/services/src/billing/org-pause.ts:enforceCreditsExhausted` — per-session during exhaustion enforcement
 - `packages/services/src/billing/org-pause.ts:terminateAllOrgSessions` — per-session during bulk termination
 
 **Files touched:** `packages/shared/src/llm-proxy.ts:revokeVirtualKey`, `apps/web/src/server/routers/sessions-pause.ts`, `packages/services/src/billing/org-pause.ts`
