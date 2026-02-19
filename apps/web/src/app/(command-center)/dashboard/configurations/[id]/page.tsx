@@ -1,8 +1,8 @@
 "use client";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
+import { PageBackLink } from "@/components/ui/page-back-link";
 import {
 	useConfigurationServiceCommands,
 	useConfigurations,
@@ -14,19 +14,16 @@ import { cn } from "@/lib/utils";
 import { ArrowLeft, FolderGit2, Pencil, Play, Plus, Trash2, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-
 export default function ConfigurationDetailPage() {
 	const params = useParams<{ id: string }>();
 	const router = useRouter();
 	const configurationId = params.id;
-
 	const { data: configurations, isLoading } = useConfigurations();
 	const createSession = useCreateSession();
 
 	const config = useMemo(() => {
 		return configurations?.find((c) => c.id === configurationId);
 	}, [configurations, configurationId]);
-
 	if (isLoading) {
 		return (
 			<div className="flex items-center justify-center h-full">
@@ -34,7 +31,6 @@ export default function ConfigurationDetailPage() {
 			</div>
 		);
 	}
-
 	if (!config) {
 		return (
 			<div className="mx-auto max-w-3xl px-6 py-8">
@@ -51,23 +47,14 @@ export default function ConfigurationDetailPage() {
 			</div>
 		);
 	}
-
 	const displayName = config.name || "Untitled configuration";
 	const repos = (config.configurationRepos ?? []).filter((cr) => cr.repo !== null);
-
 	return (
 		<div className="h-full overflow-y-auto">
 			<div className="mx-auto max-w-3xl px-6 py-8 space-y-8">
 				{/* Header */}
 				<div>
-					<button
-						type="button"
-						onClick={() => router.push("/dashboard/configurations")}
-						className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mb-3"
-					>
-						<ArrowLeft className="h-3 w-3" />
-						Configurations
-					</button>
+					<PageBackLink href="/dashboard/configurations" label="Configurations" className="mb-3" />
 					<h1 className="text-lg font-semibold">{displayName}</h1>
 					<div className="flex items-center gap-2 mt-1">
 						<span
@@ -107,21 +94,17 @@ export default function ConfigurationDetailPage() {
 						</Button>
 					)}
 				</div>
-
 				{/* Attached repos */}
 				<AttachedReposSection configurationId={configurationId} repos={repos} />
-
 				{/* Service Commands */}
 				<ServiceCommandsSection configurationId={configurationId} />
 			</div>
 		</div>
 	);
 }
-
 // ============================================
 // Attached Repos Section
 // ============================================
-
 interface ConfigurationRepo {
 	workspacePath: string;
 	repo: {
@@ -130,7 +113,6 @@ interface ConfigurationRepo {
 		githubUrl: string;
 	} | null;
 }
-
 function AttachedReposSection({
 	configurationId,
 	repos,
@@ -139,17 +121,14 @@ function AttachedReposSection({
 	repos: ConfigurationRepo[];
 }) {
 	const detachRepo = useDetachRepo();
-
 	const handleDetach = async (repoId: string) => {
 		await detachRepo.mutateAsync({ configurationId, repoId });
 	};
-
 	return (
 		<section>
 			<div className="flex items-center justify-between mb-3">
 				<h2 className="text-sm font-medium">Attached Repositories</h2>
 			</div>
-
 			{repos.length > 0 ? (
 				<div className="rounded-lg border border-border/80 bg-background divide-y divide-border/60">
 					{repos.map((cr) => (
@@ -185,23 +164,19 @@ function AttachedReposSection({
 		</section>
 	);
 }
-
 // ============================================
 // Service Commands Section
 // ============================================
-
 interface CommandDraft {
 	name: string;
 	command: string;
 	cwd: string;
 }
-
 function ServiceCommandsSection({ configurationId }: { configurationId: string }) {
 	const { data: commands, isLoading } = useConfigurationServiceCommands(configurationId);
 	const updateCommands = useUpdateConfigurationServiceCommands();
 	const [editing, setEditing] = useState(false);
 	const [drafts, setDrafts] = useState<CommandDraft[]>([]);
-
 	const startEditing = () => {
 		setDrafts(
 			commands?.length
@@ -210,7 +185,6 @@ function ServiceCommandsSection({ configurationId }: { configurationId: string }
 		);
 		setEditing(true);
 	};
-
 	const handleSave = async () => {
 		const valid = drafts.filter((d) => d.name.trim() && d.command.trim());
 		await updateCommands.mutateAsync({
@@ -223,24 +197,19 @@ function ServiceCommandsSection({ configurationId }: { configurationId: string }
 		});
 		setEditing(false);
 	};
-
 	const addRow = () => {
 		if (drafts.length >= 10) return;
 		setDrafts([...drafts, { name: "", command: "", cwd: "" }]);
 	};
-
 	const removeRow = (index: number) => {
 		setDrafts(drafts.filter((_, i) => i !== index));
 	};
-
 	const updateDraft = (index: number, field: keyof CommandDraft, value: string) => {
 		setDrafts(drafts.map((d, i) => (i === index ? { ...d, [field]: value } : d)));
 	};
-
 	if (isLoading) {
 		return <LoadingDots size="sm" className="text-muted-foreground" />;
 	}
-
 	return (
 		<section>
 			<div className="flex items-center justify-between mb-3">
@@ -252,7 +221,6 @@ function ServiceCommandsSection({ configurationId }: { configurationId: string }
 					</Button>
 				)}
 			</div>
-
 			{editing ? (
 				<div className="space-y-2">
 					<p className="text-xs text-muted-foreground">

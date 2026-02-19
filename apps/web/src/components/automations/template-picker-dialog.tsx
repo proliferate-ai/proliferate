@@ -1,7 +1,10 @@
 "use client";
 
-import { ProviderIcon } from "@/components/integrations/provider-icon";
-import type { Provider } from "@/components/integrations/provider-icon";
+import {
+	type Provider,
+	ProviderIcon,
+	getProviderDisplayName,
+} from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
@@ -12,16 +15,8 @@ import {
 } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import {
-	AlertTriangle,
-	Bug,
-	CheckCircle2,
-	CircuitBoard,
-	Loader2,
-	Plus,
-	Search,
-	Shield,
-} from "lucide-react";
+import { Bug, CircuitBoard, Loader2, Plus, Search, Shield } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 // ====================================================================
@@ -112,6 +107,7 @@ export function TemplatePickerDialog({
 	isPending,
 	error,
 }: TemplatePickerDialogProps) {
+	const router = useRouter();
 	const [selectedCategory, setSelectedCategory] = useState<TemplateCategory | "all">("all");
 	const [searchQuery, setSearchQuery] = useState("");
 
@@ -230,7 +226,6 @@ export function TemplatePickerDialog({
 								{/* Template cards */}
 								{filteredTemplates.map((template) => {
 									const missing = getMissingIntegrations(template);
-									const hasAllRequired = missing.length === 0;
 									const Icon = ICON_MAP[template.icon] ?? Bug;
 
 									return (
@@ -241,15 +236,8 @@ export function TemplatePickerDialog({
 											className="flex flex-col items-start p-4 pb-3 rounded-xl border border-border bg-card hover:border-foreground/20 transition-colors text-left disabled:opacity-50"
 											onClick={() => onSelectTemplate(template)}
 										>
-											<div className="relative">
-												<div className="w-8 h-8 rounded-lg border border-border bg-background flex items-center justify-center p-1 shrink-0">
-													<Icon className="h-5 w-5 text-muted-foreground" />
-												</div>
-												{hasAllRequired && (
-													<div className="absolute -right-1 -top-1 rounded-full bg-card">
-														<CheckCircle2 className="h-4 w-4 text-foreground" />
-													</div>
-												)}
+											<div className="w-8 h-8 rounded-lg border border-border bg-background flex items-center justify-center p-1 shrink-0">
+												<Icon className="h-5 w-5 text-muted-foreground" />
 											</div>
 											<div className="flex flex-col gap-1 mt-2 w-full">
 												<p className="text-sm font-semibold text-foreground">{template.name}</p>
@@ -259,28 +247,60 @@ export function TemplatePickerDialog({
 											</div>
 
 											{/* Provider badges */}
-											<div className="flex items-center gap-1.5 mt-2">
-												{template.requiredIntegrations.map((req) => {
-													const isConnected = connectedProviders.has(req.provider);
-													return (
-														<div
-															key={req.provider}
-															className={cn(
-																"flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px]",
-																isConnected
-																	? "bg-muted/50 text-muted-foreground"
-																	: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-															)}
+											<div className="flex flex-col gap-1.5 mt-2 w-full">
+												<div className="flex items-center gap-1.5">
+													{template.requiredIntegrations.map((req) => {
+														const isConnected = connectedProviders.has(req.provider);
+														return (
+															<div
+																key={req.provider}
+																className={cn(
+																	"flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px]",
+																	isConnected
+																		? "bg-muted/50 text-muted-foreground"
+																		: "border border-dashed border-border text-muted-foreground/50",
+																)}
+															>
+																<ProviderIcon
+																	provider={req.provider as Provider}
+																	size="sm"
+																	className={cn("h-3 w-3", !isConnected && "opacity-50")}
+																/>
+																{!isConnected && (
+																	<span className="text-[10px]">
+																		{getProviderDisplayName(req.provider as Provider)}
+																	</span>
+																)}
+															</div>
+														);
+													})}
+												</div>
+												{missing.length > 0 && (
+													<p className="text-[11px] text-muted-foreground/70">
+														Requires{" "}
+														{missing
+															.map((m) => getProviderDisplayName(m.provider as Provider))
+															.join(", ")}
+														{" \u00b7 "}
+														<span
+															role="link"
+															tabIndex={0}
+															className="underline hover:text-foreground transition-colors cursor-pointer"
+															onClick={(e) => {
+																e.stopPropagation();
+																router.push("/dashboard/integrations");
+															}}
+															onKeyDown={(e) => {
+																if (e.key === "Enter") {
+																	e.stopPropagation();
+																	router.push("/dashboard/integrations");
+																}
+															}}
 														>
-															<ProviderIcon
-																provider={req.provider as Provider}
-																size="sm"
-																className="h-3 w-3"
-															/>
-															{!isConnected && <AlertTriangle className="h-2.5 w-2.5" />}
-														</div>
-													);
-												})}
+															Connect
+														</span>
+													</p>
+												)}
 											</div>
 										</button>
 									);

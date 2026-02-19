@@ -20,15 +20,26 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InlineEdit } from "@/components/ui/inline-edit";
+import { PageBackLink } from "@/components/ui/page-back-link";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Switch } from "@/components/ui/switch";
 import { Text } from "@/components/ui/text";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAutomationActionModes, useSetAutomationActionMode } from "@/hooks/use-action-modes";
 import { useAutomation, useTriggerManualRun, useUpdateAutomation } from "@/hooks/use-automations";
+import { useConfigurations } from "@/hooks/use-configurations";
 import { useIntegrations, useSlackInstallations } from "@/hooks/use-integrations";
 import { computeReadiness } from "@/lib/automation-readiness";
 import { orpc } from "@/lib/orpc";
@@ -42,7 +53,7 @@ import {
 	parseModelId,
 } from "@proliferate/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { History, Loader2, MoreVertical, Play, Trash2 } from "lucide-react";
+import { Building2, History, Loader2, MoreVertical, Play, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -138,6 +149,7 @@ export default function AutomationDetailPage({
 	const { data: modesData } = useAutomationActionModes(id);
 	const setActionMode = useSetAutomationActionMode(id);
 	const actionModes = modesData?.modes ?? {};
+	const { data: configurations } = useConfigurations();
 
 	const connectedProviders = useMemo(() => {
 		const providers = new Set<string>();
@@ -148,6 +160,11 @@ export default function AutomationDetailPage({
 		if (slackInstallations && slackInstallations.length > 0) providers.add("slack");
 		return providers;
 	}, [integrationsData, slackInstallations]);
+
+	// Filter to only ready configurations
+	const readyConfigurations = useMemo(() => {
+		return (configurations ?? []).filter((c) => c.status === "ready" || c.status === "default");
+	}, [configurations]);
 
 	// Mutations
 	const updateMutation = useUpdateAutomation(id);
@@ -263,6 +280,15 @@ export default function AutomationDetailPage({
 	const handleModelChange = useCallback(
 		(modelId: ModelId) => {
 			handleUpdate({ modelId });
+		},
+		[handleUpdate],
+	);
+
+	const handleConfigurationChange = useCallback(
+		(configurationId: string) => {
+			handleUpdate({
+				defaultConfigurationId: configurationId === "none" ? null : configurationId,
+			});
 		},
 		[handleUpdate],
 	);
@@ -384,9 +410,19 @@ export default function AutomationDetailPage({
 		agentInstructions: instructionsValue,
 	});
 
+	const resolvedModelId =
+		automation.model_id && isValidModelId(automation.model_id)
+			? automation.model_id
+			: automation.model_id
+				? parseModelId(automation.model_id)
+				: getDefaultAgentConfig().modelId;
+
 	return (
 		<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
 			<div className="w-full max-w-4xl mx-auto px-6 py-6">
+				{/* Back navigation */}
+				<PageBackLink href="/dashboard/automations" label="Automations" className="mb-3" />
+
 				{/* Header */}
 				<div className="flex items-center gap-3 mb-6">
 					<InlineEdit
@@ -407,48 +443,58 @@ export default function AutomationDetailPage({
 						<span className="text-sm">{automation.enabled ? "Active" : "Paused"}</span>
 					</div>
 
-					<Link href={`/dashboard/automations/${id}/events`} className="ml-1">
-						<Button variant="ghost" size="sm" className="h-7 gap-1.5 text-sm">
-							<History className="h-3.5 w-3.5" />
-							Events
-						</Button>
-					</Link>
+					<TooltipProvider delayDuration={300}>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<Link href={`/dashboard/automations/${id}/events`} className="ml-1">
+									<Button variant="ghost" size="sm" className="h-7 gap-1.5 text-sm">
+										<History className="h-3.5 w-3.5" />
+										Events
+									</Button>
+								</Link>
+							</TooltipTrigger>
+							<TooltipContent side="bottom" className="max-w-[260px]">
+								<p className="text-xs">
+									You can view all runs for all automations at the Events page
+								</p>
+							</TooltipContent>
+						</Tooltip>
+					</TooltipProvider>
 
-					<Button
-						variant="outline"
-						size="sm"
-						className="h-7 gap-1.5 text-sm ml-1"
-						onClick={handleRunNow}
-						disabled={triggerManualRun.isPending}
-					>
-						{triggerManualRun.isPending ? (
-							<Loader2 className="h-3.5 w-3.5 animate-spin" />
-						) : (
-							<Play className="h-3.5 w-3.5" />
-						)}
-						Run Now
-					</Button>
+					<div className="flex items-center gap-1.5 ml-auto">
+						<span className="text-xs text-muted-foreground whitespace-nowrap">
+							Edited {formatRelativeTime(automation.updated_at)}
+						</span>
 
-					<span className="text-xs text-muted-foreground whitespace-nowrap ml-auto">
-						Edited {formatRelativeTime(automation.updated_at)}
-					</span>
-
-					<DropdownMenu>
-						<DropdownMenuTrigger asChild>
-							<Button variant="ghost" size="icon" className="h-8 w-8">
-								<MoreVertical className="h-4 w-4" />
-							</Button>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end">
-							<DropdownMenuItem
-								onClick={() => setDeleteDialogOpen(true)}
-								className="text-destructive"
-							>
-								<Trash2 className="h-4 w-4 mr-2" />
-								Delete
-							</DropdownMenuItem>
-						</DropdownMenuContent>
-					</DropdownMenu>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button variant="ghost" size="icon" className="h-8 w-8">
+									<MoreVertical className="h-4 w-4" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								<DropdownMenuItem
+									onClick={handleRunNow}
+									disabled={triggerManualRun.isPending || !readiness.ready}
+								>
+									{triggerManualRun.isPending ? (
+										<Loader2 className="h-4 w-4 mr-2 animate-spin" />
+									) : (
+										<Play className="h-4 w-4 mr-2" />
+									)}
+									Run Now
+								</DropdownMenuItem>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem
+									onClick={() => setDeleteDialogOpen(true)}
+									className="text-destructive"
+								>
+									<Trash2 className="h-4 w-4 mr-2" />
+									Delete
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					</div>
 				</div>
 
 				{/* Readiness warning */}
@@ -465,21 +511,35 @@ export default function AutomationDetailPage({
 					</div>
 				)}
 
-				{/* Model */}
+				{/* Model & Configuration */}
 				<div className="rounded-xl border border-border mb-6">
-					<div className="flex items-center justify-between px-4 py-3">
+					<div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
 						<span className="text-sm text-muted-foreground">Model</span>
 						<ModelSelector
-							modelId={
-								automation.model_id && isValidModelId(automation.model_id)
-									? automation.model_id
-									: automation.model_id
-										? parseModelId(automation.model_id)
-										: getDefaultAgentConfig().modelId
-							}
+							modelId={resolvedModelId}
 							onChange={handleModelChange}
-							variant="chip"
+							variant="outline"
+							triggerClassName="h-8 border-0 bg-muted/30 hover:bg-muted"
 						/>
+					</div>
+					<div className="flex items-center justify-between px-4 py-2.5">
+						<span className="text-sm text-muted-foreground">Configuration</span>
+						<Select
+							value={automation.default_configuration_id ?? "none"}
+							onValueChange={handleConfigurationChange}
+						>
+							<SelectTrigger className="h-8 w-auto min-w-[180px] border-0 bg-muted/30 hover:bg-muted text-sm">
+								<SelectValue placeholder="Select configuration..." />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="none">No configuration</SelectItem>
+								{readyConfigurations.map((config) => (
+									<SelectItem key={config.id} value={config.id}>
+										{config.name || "Untitled configuration"}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
 					</div>
 				</div>
 
@@ -531,15 +591,20 @@ export default function AutomationDetailPage({
 					</div>
 				</div>
 
-				{/* Integrations & Permissions */}
+				{/* Actions */}
 				<div className="mb-6">
-					<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-						Integrations & Permissions
-					</p>
+					<div className="flex items-center gap-2 mb-2">
+						<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+							Actions
+						</p>
+						<span className="flex items-center gap-1 text-[11px] text-muted-foreground/60">
+							<Building2 className="h-3 w-3" />
+							Org-scoped
+						</span>
+					</div>
 					<IntegrationPermissions
 						automationId={id}
 						enabledTools={enabledTools}
-						triggers={allTriggers.map((t) => ({ provider: t.provider }))}
 						actionModes={actionModes}
 						connectedProviders={connectedProviders}
 						slackInstallations={slackInstallations}

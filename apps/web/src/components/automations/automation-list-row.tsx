@@ -4,7 +4,7 @@ import { type Provider, ProviderIcon } from "@/components/integrations/provider-
 import { LinearIcon, OpenCodeIcon, SlackIcon } from "@/components/ui/icons";
 import { StatusDot } from "@/components/ui/status-dot";
 import { formatRelativeTime } from "@/lib/utils";
-import { Building2, Mail } from "lucide-react";
+import { Building2 } from "lucide-react";
 import Link from "next/link";
 
 interface ToolConfig {
@@ -15,7 +15,6 @@ interface ToolConfig {
 interface EnabledTools {
 	slack_notify?: ToolConfig;
 	create_linear_issue?: ToolConfig;
-	email_user?: ToolConfig;
 	create_session?: ToolConfig;
 }
 
@@ -23,7 +22,6 @@ const ACTION_TOOLS = [
 	{ key: "create_session" as const, label: "Agent", Icon: OpenCodeIcon, defaultOn: true },
 	{ key: "slack_notify" as const, label: "Slack", Icon: SlackIcon },
 	{ key: "create_linear_issue" as const, label: "Linear", Icon: LinearIcon },
-	{ key: "email_user" as const, label: "Email", Icon: Mail },
 ];
 
 interface AutomationListRowProps {

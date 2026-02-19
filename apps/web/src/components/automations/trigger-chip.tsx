@@ -242,15 +242,16 @@ export function TriggerChip({
 				<Button
 					variant="ghost"
 					className={cn(
-						"h-auto flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-full border",
+						"h-auto flex items-center gap-1.5 pl-2 pr-1 py-1.5 rounded-xl border",
 						"bg-card hover:bg-muted border-border",
 						!trigger.enabled && "opacity-50",
 					)}
 				>
-					<ProviderIcon provider={trigger.provider as Provider} className="h-4 w-4" />
-					<span className="text-sm">
-						{providerLabel}: <span className="text-muted-foreground">{summary}</span>
-					</span>
+					<ProviderIcon provider={trigger.provider as Provider} className="h-4 w-4 shrink-0" />
+					<div className="flex flex-col items-start leading-tight">
+						<span className="text-sm font-medium">{providerLabel}</span>
+						<span className="text-xs text-muted-foreground">{summary}</span>
+					</div>
 					<span
 						role="button"
 						tabIndex={0}
