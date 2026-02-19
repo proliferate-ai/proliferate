@@ -9,8 +9,9 @@ import {
 	useDetachRepo,
 	useUpdateConfigurationServiceCommands,
 } from "@/hooks/use-configurations";
+import { useCreateSession } from "@/hooks/use-sessions";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, FolderGit2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, FolderGit2, Pencil, Play, Plus, Trash2, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -20,6 +21,7 @@ export default function ConfigurationDetailPage() {
 	const configurationId = params.id;
 
 	const { data: configurations, isLoading } = useConfigurations();
+	const createSession = useCreateSession();
 
 	const config = useMemo(() => {
 		return configurations?.find((c) => c.id === configurationId);
@@ -83,6 +85,27 @@ export default function ConfigurationDetailPage() {
 									: "Pending"}
 						</span>
 					</div>
+					{(config.status === "default" || config.status === "ready") && (
+						<Button
+							size="sm"
+							className="mt-3"
+							disabled={createSession.isPending}
+							onClick={async () => {
+								const result = await createSession.mutateAsync({
+									configurationId,
+									sessionType: "setup",
+								});
+								router.push(`/workspace/${result.sessionId}`);
+							}}
+						>
+							<Play className="h-3.5 w-3.5 mr-1.5" />
+							{createSession.isPending
+								? "Starting..."
+								: config.status === "ready"
+									? "Update Environment"
+									: "Set Up Environment"}
+						</Button>
+					)}
 				</div>
 
 				{/* Attached repos */}
