@@ -567,6 +567,140 @@ export const MyWorkIllustration = () => (
 	</svg>
 );
 
+export const IntegrationsIllustration = () => (
+	<svg xmlns="http://www.w3.org/2000/svg" width="66" height="66" viewBox="0 0 66 66" fill="none">
+		{/* Dashed connection lines (hub → satellites) */}
+		<path
+			d="M33 22V14"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1"
+			strokeLinecap="round"
+			strokeDasharray="3 3"
+		/>
+		<path
+			d="M44 33H52"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1"
+			strokeLinecap="round"
+			strokeDasharray="3 3"
+		/>
+		<path
+			d="M33 44V52"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1"
+			strokeLinecap="round"
+			strokeDasharray="3 3"
+		/>
+		<path
+			d="M22 33H14"
+			className="stroke-muted-foreground/40 dark:stroke-muted-foreground/50"
+			strokeWidth="1"
+			strokeLinecap="round"
+			strokeDasharray="3 3"
+		/>
+		{/* Central hub */}
+		<circle
+			cx="33"
+			cy="33"
+			r="11"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.5"
+		/>
+		{/* Hub inner link symbol */}
+		<circle
+			cx="29.5"
+			cy="33"
+			r="2"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+		<circle
+			cx="36.5"
+			cy="33"
+			r="2"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+		<path
+			d="M31.5 33H34.5"
+			className="stroke-muted-foreground/55 dark:stroke-muted-foreground/65"
+			strokeWidth="1.2"
+			strokeLinecap="round"
+		/>
+		{/* Top satellite */}
+		<circle
+			cx="33"
+			cy="8"
+			r="6"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
+		<circle
+			cx="33"
+			cy="8"
+			r="2"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+		{/* Right satellite */}
+		<circle
+			cx="58"
+			cy="33"
+			r="6"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
+		<circle
+			cx="58"
+			cy="33"
+			r="2"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+		{/* Bottom satellite */}
+		<circle
+			cx="33"
+			cy="58"
+			r="6"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
+		<circle
+			cx="33"
+			cy="58"
+			r="2"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+		{/* Left satellite */}
+		<circle
+			cx="8"
+			cy="33"
+			r="6"
+			className="fill-muted/40 dark:fill-muted/50 stroke-muted-foreground/35 dark:stroke-muted-foreground/45"
+			strokeWidth="1.2"
+		/>
+		<circle
+			cx="8"
+			cy="33"
+			r="2"
+			className="fill-muted-foreground/55 dark:fill-muted-foreground/65"
+		/>
+	</svg>
+);
+
+export const QuestionBadge = () => (
+	<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+		<path
+			d="M10 18.333C14.602 18.333 18.333 14.602 18.333 10C18.333 5.398 14.602 1.667 10 1.667C5.398 1.667 1.667 5.398 1.667 10C1.667 14.602 5.398 18.333 10 18.333Z"
+			stroke="currentColor"
+			strokeWidth="1.5"
+		/>
+		<path
+			d="M7.575 7.5C7.771 6.943 8.158 6.473 8.667 6.174C9.176 5.875 9.774 5.766 10.356 5.866C10.938 5.965 11.466 6.268 11.846 6.72C12.226 7.171 12.434 7.743 12.434 8.333C12.434 10 9.934 10.833 9.934 10.833"
+			stroke="currentColor"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		/>
+		<path d="M10 14.167H10.008" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+	</svg>
+);
+
 // ─── Badge Icons ─────────────────────────────────────────────────────────────
 
 export const PlusBadge = () => (

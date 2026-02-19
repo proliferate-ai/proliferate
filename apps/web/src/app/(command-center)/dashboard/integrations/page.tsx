@@ -1,5 +1,10 @@
 "use client";
 
+import {
+	IntegrationsIllustration,
+	PageEmptyState,
+	QuestionBadge,
+} from "@/components/dashboard/page-empty-state";
 import { ConnectorForm } from "@/components/integrations/connector-form";
 import { ConnectorIcon } from "@/components/integrations/connector-icon";
 import { findPresetKey } from "@/components/integrations/connector-icon";
@@ -894,13 +899,16 @@ export default function IntegrationsPage() {
 
 				{/* Empty state (no connected integrations or connectors yet) */}
 				{!hasConnectedIntegrations && (
-					<div className="flex flex-col items-center justify-center py-12">
-						<p className="text-sm text-muted-foreground">
-							{isAdmin
-								? "No integrations connected yet. Use the cards above or browse the full catalog."
-								: "No integrations available. Ask your admin to connect integrations for your organization."}
-						</p>
-					</div>
+					<PageEmptyState
+						illustration={<IntegrationsIllustration />}
+						badge={<QuestionBadge />}
+						title={isAdmin ? "No integrations configured" : "No integrations available"}
+						description={
+							isAdmin
+								? "Get started by connecting an integration above or browsing the full catalog."
+								: "Ask your admin to connect integrations for your organization."
+						}
+					/>
 				)}
 
 				{/* Disconnect confirmation dialog */}
