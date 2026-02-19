@@ -429,7 +429,11 @@ function UnifiedActionRow({
 					</Popover>
 				)}
 
-				<Switch checked={isEnabled} onCheckedChange={handleToggle} />
+				<Switch
+					checked={isEnabled}
+					onCheckedChange={handleToggle}
+					aria-label={`Toggle ${row.name}`}
+				/>
 			</div>
 
 			{/* Inline expanded permissions (action-only rows, no config) */}
