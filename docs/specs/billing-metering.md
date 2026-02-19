@@ -17,7 +17,7 @@
 - Snapshot quota management (count and retention limits)
 - Atomic concurrent admission (advisory lock at session insert)
 - Billing worker (BullMQ repeatable jobs)
-- Billing token system (JWT auth for sandbox billing requests)
+- Runtime auth interaction with billing enforcement paths
 
 ### Out of Scope
 - LLM virtual key generation and model routing — see `llm-proxy.md`
@@ -79,7 +79,6 @@ packages/shared/src/billing/
 ├── gating.ts                   # Unified billing gate (checkBillingGate)
 ├── autumn-client.ts            # Autumn HTTP client (attach, check, track, top-up)
 ├── autumn-types.ts             # Autumn API type definitions, feature/product IDs
-├── billing-token.ts            # JWT tokens for sandbox billing auth
 └── autumn-client.test.ts       # Autumn client tests
 
 packages/services/src/billing/
@@ -102,6 +101,13 @@ packages/db/src/schema/
 
 apps/web/src/server/routers/
 └── billing.ts                  # oRPC routes: getInfo, updateSettings, activatePlan, buyCredits
+
+apps/web/src/app/api/billing/   # LEGACY — duplicates oRPC; slated for removal (§10.3 Workstream A)
+├── route.ts                    # GET /api/billing (unused by frontend)
+├── usage/route.ts              # GET /api/billing/usage (unused by frontend)
+├── settings/route.ts           # GET/PUT /api/billing/settings (unused by frontend)
+├── buy-credits/route.ts        # POST /api/billing/buy-credits (unused by frontend; stale $20/2000cr comment)
+└── events/route.ts             # GET /api/billing/events (unused by frontend)
 
 apps/web/src/lib/
 └── billing.ts                  # Session gating helpers (checkCanStartSession, isBillingEnabled)
@@ -439,15 +445,9 @@ Guarded by `NEXT_PUBLIC_BILLING_ENABLED` env var.
 
 **Files touched:** `apps/worker/src/billing/worker.ts`, `apps/worker/src/jobs/billing/*.ts`, `packages/queue/src/index.ts`
 
-### 6.13 Billing Token — `Partial`
+### 6.13 Billing Token — `Removed`
 
-**What it does:** Short-lived JWTs (1h) for sandbox-to-platform billing authentication.
-
-**Claims:** `org_id`, `session_id`, `token_version`. Token version on the session record enables instant revocation. Full validation checks: signature → session existence → running status → org match → version match.
-
-**Gap:** `mintBillingToken` and `verifyBillingToken` are only used in the token refresh endpoint (`apps/web/src/app/api/sessions/[id]/refresh-token/route.ts`). `validateBillingToken` (full DB validation) has **no callers**. No gateway middleware or session creation path mints or validates billing tokens. The token infrastructure exists but is not wired into request authorization.
-
-**Files touched:** `packages/shared/src/billing/billing-token.ts`
+The billing token subsystem (`billing-token.ts`, `mintBillingToken`, `verifyBillingToken`, `validateBillingToken`) and its refresh endpoint have been removed. The only remnant is a dead `billing_token_version` column on the `sessions` table (`packages/db/src/schema/sessions.ts`) which defaults to `1` and is never read or written by billing code — should be dropped in a future migration. Runtime/sandbox auth is handled by existing gateway/session token flows.
 
 ---
 
@@ -465,7 +465,7 @@ Guarded by `NEXT_PUBLIC_BILLING_ENABLED` env var.
 
 ### Security & Auth
 - Billing routes use `orgProcedure` middleware (authenticated + org context). Settings and checkout require admin/owner role.
-- Billing tokens use HS256 JWT with `BILLING_JWT_SECRET`. Token version enables instant revocation.
+- Runtime/sandbox auth uses existing gateway/session token flows; there is no dedicated billing-token module in the current billing subsystem.
 - No sensitive data in billing events (no prompt content, no tokens). LLM metadata includes model name and token counts only.
 
 ### Observability
@@ -505,7 +505,174 @@ Guarded by `NEXT_PUBLIC_BILLING_ENABLED` env var.
 
 ### Open
 
-- [ ] **Billing token not wired into request authorization** — `validateBillingToken` has no callers. No gateway middleware or session creation path mints or validates billing tokens. — Expected fix: integrate into gateway or sandbox request auth.
-- [ ] **Grace expiration check is polling-based** — `checkGraceExpirations()` runs every 60s, meaning grace can overrun by up to 60s. — Impact: minor, grace window is 5 minutes.
-- [ ] **LLM model allowlist is manually maintained** — `ALLOWED_LLM_MODELS` set in `types.ts` must be updated when adding models to the proxy. — Impact: new models will be rejected until added.
-- [ ] **`shouldTerminateSessions` field name is legacy** — `DeductResult` and `BulkDeductResult` in `shadow-balance.ts` still use `shouldTerminateSessions` as a field name. The actual enforcement behavior is pause/snapshot, not terminate. — Impact: naming-only; no behavioral issue.
+#### Behavioral / Financial Risk
+
+- [ ] **Enforcement retry gap (P0)** — `enforceCreditsExhausted()` in `org-pause.ts` iterates sessions and calls `pauseSessionWithSnapshot()` per session. If pause fails (provider timeout, network error), the session is logged but **not retried** — it stays `running` and continues consuming unbilled resources. Next enforcement cycle (metering or outbox) may retry, but a persistent provider failure can leave sessions running indefinitely. — Expected fix: dedicated retry queue for failed enforcement pauses, or a sweeper job that re-checks `running` sessions against org billing state.
+- [ ] **Overage policy is incomplete (P0)** — `overage_used_this_month_cents` in `billing_settings` is defined but **never incremented or reset**. No BullMQ job or Autumn webhook resets it monthly. The `overage_policy: "allow"` path with a cap has no operational enforcement. — Expected fix: see §10.3 Workstream B (overage end-to-end).
+- [ ] **LLM cursor not atomic with bulk deduct (P1)** — In `llm-sync-org.job.ts`, the per-org cursor is advanced **after** `bulkDeductShadowBalance()` returns, outside the deduction transaction. If the worker crashes between deduct and cursor update, the same spend logs are re-fetched and re-processed on the next cycle. Idempotency keys (`llm:{requestId}`) prevent double-billing, but the wasted work and log noise scale with LLM volume. — Expected fix: advance cursor inside the bulk deduct transaction.
+- [ ] **Metering crash window (P2)** — `meteredThroughAt` is advanced in a separate DB update after `deductShadowBalance()`. If the worker crashes between the two, the next cycle re-bills the same interval — caught by idempotency key (no double charge), but the session appears "stuck" with stale `meteredThroughAt` until the next successful cycle. — Impact: no financial risk due to idempotency; operational noise only.
+
+#### Dead Code / Drift
+
+- [ ] **Dead `billing_token_version` column (P1)** — `sessions.billing_token_version` (integer, default `1`) is never read or written by billing code. The billing token subsystem it was designed for has been removed. — Expected fix: drop column in a migration.
+- [ ] **Legacy `/api/billing/*` routes are dead code (P1)** — Five raw Next.js API routes (`/api/billing`, `/api/billing/usage`, `/api/billing/settings`, `/api/billing/buy-credits`, `/api/billing/events`) duplicate oRPC procedures. Frontend hooks use oRPC exclusively; no external callers found (CLI, gateway, worker all verified). The `/api/billing/buy-credits` route has a stale comment documenting `$20/2000 credits` pricing (actual: `$5/500`). — Expected fix: see §10.3 Workstream A (consolidate API surface).
+- [ ] **LLM model allowlist is dead code (P2)** — `ALLOWED_LLM_MODELS` and `isModelAllowedForBilling()` in `types.ts` have **zero callers** anywhere in the codebase. Code comment claims models are "REJECTED (fail closed)" but no enforcement exists. All models with LiteLLM spend data are billed. — Expected fix: see §10.3 Workstream F (remove dead constants, add anomaly monitoring).
+- [ ] **`shouldTerminateSessions` field name is legacy (P2)** — `DeductResult` and `BulkDeductResult` in `shadow-balance.ts` use `shouldTerminateSessions` as a field name. Actual enforcement is pause/snapshot, not terminate. — Impact: naming-only; no behavioral issue.
+- [ ] **`BillingEventStatus` type omits `skipped` (P2)** — Shared types define billing event statuses but omit `skipped`, which billing code writes for trial/unconfigured events. — Impact: type safety gap only.
+
+#### Architectural / Scalability
+
+- [ ] **Shadow balance drift persists up to 24h (P1)** — No Autumn webhooks or callbacks update the shadow balance. Top-ups via `buyCredits` add to shadow balance locally, and the outbox posts to Autumn, but Autumn-side changes (subscription renewals, manual adjustments) only reach the shadow balance during the nightly reconcile at 00:00 UTC. — Expected fix: see §10.3 Workstream D (fast reconciliation).
+- [ ] **Billing events have no retention/archival (P1)** — `billing_events` grows unbounded. No TTL, partitioning, or archival job exists. At scale this will impact query performance on the outbox and org-scoped queries. — Expected fix: see §10.3 Workstream E (monthly partitioning, 90-day hot window).
+- [ ] **Grace expiration is polling-based (P2)** — `billing-grace` job runs every 60s, meaning grace can overrun by up to ~60s. — Impact: minor, grace window is 5 minutes.
+- [ ] **Grace query includes NULL `graceExpiresAt` (P2)** — `listGraceExpiredOrgs()` matches `graceExpiresAt IS NULL OR graceExpiresAt < now()`. An org in `grace` state with a NULL expiry timestamp is immediately expired. This is likely intentional (defensive fail-closed), but not documented. — Expected fix: add inline comment or assert `graceExpiresAt IS NOT NULL` on grace entry.
+- [ ] **Single-region billing worker (P2)** — All BullMQ billing jobs run through a single Redis instance. No multi-region failover for the billing worker. — Impact: acceptable for current scale; revisit if going multi-region.
+
+---
+
+## 10. Billing Alignment Audit & Remediation Plan (2026-02-19)
+
+This section verifies the external billing sweep against current code and defines the implementation plan to align billing behavior, interfaces, and documentation.
+
+Companion long-form advisor brief (no-codebase-access context): `docs/billing-alignment-advisor-spec.md`.
+
+### 10.1 Verification Matrix
+
+| Claim | Verdict | Evidence | Notes |
+|---|---|---|---|
+| Dual billing API surface (oRPC + `/api/billing/*`) | Confirmed | `apps/web/src/server/routers/billing.ts`, `apps/web/src/app/api/billing/*` | Hooks use oRPC, but legacy API routes still exist and can drift. |
+| Grace expiry can overrun by ~60s | Confirmed | `apps/worker/src/jobs/billing/grace.job.ts` | Poll interval is 60s. |
+| `shouldTerminateSessions` is misnamed | Confirmed | `packages/services/src/billing/shadow-balance.ts` | Behavior is pause/snapshot enforcement, not destructive terminate. |
+| Snapshot provider delete is no-op | Confirmed | `packages/services/src/billing/snapshot-limits.ts:deleteSnapshotFromProvider` | DB refs are cleared while provider cleanup is best-effort no-op. |
+| Billing events have no retention/archival policy | Confirmed | `packages/db/src/schema/billing.ts`, no archival job | Table growth is unbounded. |
+| Overages settings exist but enforcement/reset not visible | Confirmed | `packages/shared/src/billing/types.ts`, org settings routes only | `overage_used_this_month_cents` is read/written in settings payloads but not operationally advanced/reset. |
+| Shadow balance drift can persist until nightly reconcile | Partially confirmed | `apps/worker/src/jobs/billing/reconcile.job.ts` | Nightly reconcile is active; same-day drift still possible when non-shadow mutations occur. |
+| Billing token exists but is unwired | Stale / incorrect | No `billing-token.ts`; no refresh endpoint path in current tree | Module removed; dead `billing_token_version` column remains on `sessions` table. |
+| LLM allowlist blocks new models until updated | Stale / incorrect | `ALLOWED_LLM_MODELS` exists but no callers | Current risk is policy ambiguity, not active model rejection. |
+| Enforcement pause failure leaves sessions running | Confirmed | `packages/services/src/billing/org-pause.ts:enforceCreditsExhausted` | Failed `pauseSessionWithSnapshot()` calls are logged but not retried within the same cycle. |
+| LLM cursor advanced outside deduct transaction | Confirmed | `apps/worker/src/jobs/billing/llm-sync-org.job.ts` | Crash between bulk deduct and cursor update causes re-processing (mitigated by idempotency keys). |
+| Grace query matches NULL `graceExpiresAt` | Confirmed | `packages/services/src/orgs/db.ts:listGraceExpiredOrgs` | `IS NULL OR < now()` — likely intentional fail-closed but undocumented. |
+| `NEXT_PUBLIC_BILLING_ENABLED` bypass | Not a risk | `packages/services/src/billing/gate.ts`, worker guard | Proper feature flag — disabled = all operations allowed, no enforcement. Consistent across gate and worker. |
+
+Additional drift observed during verification:
+- `BillingEventStatus` in shared types omits `skipped`, but billing code writes `status: "skipped"` for trial/unconfigured events.
+- Legacy `/api/billing/buy-credits` route comments still describe `$20 / 2000 credits` while shared config is `$5 / 500` (`TOP_UP_PRODUCT`).
+- `meteredThroughAt` advance is not atomic with `deductShadowBalance()` — crash between them causes idempotent re-billing on next cycle (no financial risk, operational noise).
+
+### 10.2 Remediation Goals
+
+1. Single authoritative billing API surface and contract.
+2. Explicit, enforced overage policy semantics.
+3. Lower drift window between shadow balance and Autumn.
+4. Durable ledger lifecycle (retention + archival).
+5. Remove stale billing-token assumptions and dead code/doc references.
+6. Consistent naming/types that match pause-first enforcement behavior.
+
+### 10.3 Revised Workstreams (Advisor-Incorporated)
+
+#### Workstream A — Consolidate Billing API Surface (P0, Phase 1.1)
+
+Scope:
+- Make oRPC the single authoritative product API for billing.
+- Convert `/api/billing/*` to thin adapters during deprecation, then remove them.
+- Eliminate duplicated logic/constants across route surfaces.
+
+Acceptance:
+- No duplicated billing business logic in route handlers.
+- Frontend uses oRPC-only billing paths.
+- Adapter behavior remains contract-equivalent during deprecation.
+
+#### Workstream C — Contract and Type Cleanup (P0, Phase 1.1)
+
+Scope:
+- Rename pause-enforcement fields to match actual behavior (pause/snapshot, not terminate).
+- Remove stale billing-token references and deprecate dead token-version schema usage.
+- Resolve `skipped` status drift by removing skipped/no-op ledger writes (short-circuit trial/unconfigured paths).
+- Fix stale pricing/comment/documentation mismatches.
+
+Acceptance:
+- Runtime and shared types/contracts are aligned.
+- No billing specs reference non-existent token modules.
+- `billing_events` rows are financially meaningful (no no-op skipped spam).
+
+#### Workstream B — Overage Policy End-to-End (P0, Phase 1.2)
+
+Scope:
+- Adopt auto-top-up overage model (`allow`) with prepaid continuity.
+- Move overage counters from JSON settings into first-class columns.
+- Implement lazy monthly rollover (`overage_cycle_month`) instead of global reset cron.
+- Enforce cap and state transitions deterministically.
+
+Mandatory guardrails:
+- Card-decline circuit breaker (no infinite retry loop).
+- Velocity limits (daily/cycle top-up caps).
+- Deficit-aware top-up sizing after burst underflow.
+
+Acceptance:
+- Overage behavior is deterministic under success/failure modes.
+- UI reflects operational overage counters.
+- Cap and decline paths fail closed.
+
+#### Workstream D — Fast Reconciliation and Unblock Path (P0/P1, Phase 1.2+)
+
+Scope:
+- Keep nightly full reconcile.
+- Add event-driven fast-reconcile triggers for top-up/attach/denial/backlog signals.
+- Track reconcile staleness explicitly and alert on stale drift.
+
+Acceptance:
+- Payment-to-usable-balance path reconciles within minutes.
+- Drift alerts include magnitude and stale-age context.
+
+#### Workstream E — Ledger Retention and Archival (P1, Phase 2)
+
+Scope:
+- Partition `billing_events` monthly in Postgres.
+- Keep 90-day hot window.
+- Archive by detaching old partitions (not app-level ETL workers).
+
+Acceptance:
+- Hot data growth is bounded.
+- Historical usage remains recoverable for audit/support.
+
+#### Workstream F — LLM Billing Policy Clarification (P1, Phase 2)
+
+Scope:
+- Remove unused billing-layer model allowlist/cost-floor checks from deduction path.
+- Bill all authoritative spend logs from LiteLLM.
+- Add anomaly monitoring (`$0 spend with >0 tokens`, unknown-model spikes).
+
+Acceptance:
+- No dead billing safety constants remain.
+- Model-cost anomalies are observable and alertable.
+
+### 10.4 Revised Execution Order
+
+1. Phase 1.1: Workstreams A + C (stabilize and remove drift).
+2. Phase 1.2: Workstreams B + D (new financial logic with fast reconcile).
+3. Phase 2: Workstreams E + F (+ remaining D hardening).
+
+### 10.5 Critical Failure Scenarios to Cover
+
+1. Card decline retry loop: terminal decline must flip to fail-closed path immediately.
+2. Runaway auto-top-up velocity: enforce hard caps to prevent fraud/charge storms.
+3. LLM burst underflow: top-up logic must clear full deficit, not single-block blindly.
+4. Snapshot quota contradiction: if snapshot fails in enforcement flow, define explicit fail-closed fallback.
+5. Resume gate window: atomic resume checks must use balance-derived conditions, not state label only.
+
+### 10.6 Advisor Rulings Adopted (D1-D7)
+
+1. D1: Overage model = auto-top-up increments.
+2. D2: Overage accounting = first-class columns, not JSON counter mutations.
+3. D3: Legacy REST billing routes = thin adapters, then removal.
+4. D4: Billing-token-version legacy concept = remove/deprecate.
+5. D5: LLM allowlist in billing path = remove; monitor anomalies instead.
+6. D6: Ledger hot retention target = 90 days.
+7. D7: Reconcile SLO = <5 minutes for payment events, 24 hours for minor drift.
+
+### 10.7 Required Spec Follow-ups During Implementation
+
+When implementing any workstream above, update in the same PR:
+- `docs/specs/billing-metering.md` (§3 file tree, §4 models, §6 deep dives, §7 cross-cutting, §9 limitations).
+- `docs/specs/feature-registry.md` statuses/evidence for billing rows.
+- Any touched cross-spec references (`sessions-gateway.md`, `llm-proxy.md`, `auth-orgs.md`).
