@@ -136,7 +136,7 @@ function getTriggerSummary(trigger: Trigger): string {
 	return "Configured";
 }
 
-const INTEGRATION_PROVIDERS = new Set(["github", "linear", "sentry"]);
+const integrationProviders = new Set(["github", "linear", "sentry"]);
 
 export function TriggerChip({
 	trigger,
@@ -153,7 +153,7 @@ export function TriggerChip({
 
 	// Check if this trigger's provider requires an integration that isn't connected
 	const needsConnection =
-		INTEGRATION_PROVIDERS.has(trigger.provider) &&
+		integrationProviders.has(trigger.provider) &&
 		connectedProviders &&
 		!connectedProviders.has(trigger.provider);
 	const isDisabled = !!needsConnection;

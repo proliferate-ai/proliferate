@@ -243,7 +243,7 @@ export function ProliferateLoadingIcon2({ className }: IconProps) {
 				y="375.00"
 				width="50.00"
 				height="50.00"
-				fill="#000"
+				fill="currentColor"
 				className="ai-block"
 				style={{ animationDelay: "-1.2s" }}
 			/>
@@ -252,7 +252,7 @@ export function ProliferateLoadingIcon2({ className }: IconProps) {
 				y="305.00"
 				width="24.67"
 				height="24.67"
-				fill="#000"
+				fill="currentColor"
 				className="ai-block"
 				style={{ animationDelay: "-1.2s" }}
 			/>
@@ -261,7 +261,7 @@ export function ProliferateLoadingIcon2({ className }: IconProps) {
 				y="470.33"
 				width="24.67"
 				height="24.67"
-				fill="#000"
+				fill="currentColor"
 				className="ai-block"
 				style={{ animationDelay: "-1.2s" }}
 			/>
@@ -272,7 +272,7 @@ export function ProliferateLoadingIcon2({ className }: IconProps) {
 				y="346.33"
 				width="24.67"
 				height="24.67"
-				fill="#000"
+				fill="currentColor"
 				className="ai-block"
 				style={{ animationDelay: "-1.05s" }}
 			/>
@@ -281,7 +281,7 @@ export function ProliferateLoadingIcon2({ className }: IconProps) {
 				y="429.00"
 				width="24.67"
 				height="24.67"
-				fill="#000"
+				fill="currentColor"
 				className="ai-block"
 				style={{ animationDelay: "-1.05s" }}
 			/>
@@ -292,7 +292,7 @@ export function ProliferateLoadingIcon2({ className }: IconProps) {
 				y="387.67"
 				width="24.67"
 				height="24.67"
-				fill="#000"
+				fill="currentColor"
 				className="ai-block"
 				style={{ animationDelay: "-0.9s" }}
 			/>
@@ -303,7 +303,7 @@ export function ProliferateLoadingIcon2({ className }: IconProps) {
 				y="429.00"
 				width="24.67"
 				height="24.67"
-				fill="#000"
+				fill="currentColor"
 				className="ai-block"
 				style={{ animationDelay: "-1.35s" }}
 			/>
@@ -312,7 +312,7 @@ export function ProliferateLoadingIcon2({ className }: IconProps) {
 				y="346.33"
 				width="24.67"
 				height="24.67"
-				fill="#000"
+				fill="currentColor"
 				className="ai-block"
 				style={{ animationDelay: "-1.35s" }}
 			/>
@@ -323,7 +323,7 @@ export function ProliferateLoadingIcon2({ className }: IconProps) {
 				y="387.67"
 				width="24.67"
 				height="24.67"
-				fill="#000"
+				fill="currentColor"
 				className="ai-block"
 				style={{ animationDelay: "-1.5s" }}
 			/>
@@ -415,7 +415,7 @@ export function PostHogIcon({ className }: IconProps) {
 			/>
 			<path
 				d="M42.5248 23.5308l-9.4127-9.4127c-.63-.63-1.7071-.1838-1.7071.7071v13.1664c0 .5523.4477 1 1 1h14.5806c.5523 0 1-.4477 1-1v-1.199c0-.5523-.4496-.9934-.9973-1.0647-1.6807-.2188-3.2528-.9864-4.4635-2.1971zm-6.3213 2.2618c-.8829 0-1.5995-.7166-1.5995-1.5996 0-.8829.7166-1.5995 1.5995-1.5995.883 0 1.5996.7166 1.5996 1.5995 0 .883-.7166 1.5996-1.5996 1.5996z"
-				fill="#000"
+				fill="currentColor"
 			/>
 			<path
 				d="M0 27.9916c0 .5523.447715 1 1 1h4.58339c.8909 0 1.33707-1.0771.70711-1.7071l-4.58339-4.5834C1.07714 22.0711 0 22.5173 0 23.4082v4.5834zM9.997 10.997L1.70711 2.70711C1.07714 2.07714 0 2.52331 0 3.41421v5.16918c0 .26521.105357.51957.292893.7071L9.997 18.9946V10.997zM1.70711 12.7041C1.07714 12.0741 0 12.5203 0 13.4112v5.1692c0 .2652.105357.5196.292893.7071L9.997 28.9916V20.994l-8.28989-8.2899z"

@@ -74,7 +74,8 @@ export function ConfigurationSelector({
 							return (
 								<CommandItem
 									key={config.id}
-									value={config.name || "Untitled configuration"}
+									value={config.id}
+									keywords={[config.name || "Untitled configuration"]}
 									onSelect={() => {
 										onChange(config.id);
 										setOpen(false);

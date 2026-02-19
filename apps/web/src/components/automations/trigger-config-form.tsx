@@ -119,9 +119,9 @@ const GITHUB_CONCLUSIONS = [
 	{ value: "timed_out" as const, label: "Timed Out" },
 ];
 
-const INTEGRATION_PROVIDERS: Provider[] = ["github", "linear", "sentry"];
-const STANDALONE_PROVIDERS: Provider[] = ["posthog", "webhook", "scheduled"];
-const ALL_PROVIDERS: Provider[] = [...INTEGRATION_PROVIDERS, ...STANDALONE_PROVIDERS];
+const integrationProviders: Provider[] = ["github", "linear", "sentry"];
+const standaloneProviders: Provider[] = ["posthog", "webhook", "scheduled"];
+const allProvidersList: Provider[] = [...integrationProviders, ...standaloneProviders];
 
 // --- Sub-components ---
 
@@ -143,7 +143,7 @@ function ProviderSelector({
 			<Label className="text-xs text-muted-foreground">Trigger type</Label>
 			<div className="flex flex-col rounded-lg border border-border/60 overflow-hidden divide-y divide-border/40">
 				{allProviders.map((p) => {
-					const needsConnection = INTEGRATION_PROVIDERS.includes(p);
+					const needsConnection = integrationProviders.includes(p);
 					const isDisabled = needsConnection && !connectedProviders.has(p);
 					const isSelected = provider === p;
 					return (
@@ -653,14 +653,14 @@ export function TriggerConfigForm({
 	// Determine available providers from trigger service
 	const { data: triggerProvidersData } = useTriggerProviders();
 	const allProviders = (() => {
-		if (!triggerProvidersData?.providers) return ALL_PROVIDERS;
+		if (!triggerProvidersData?.providers) return allProvidersList;
 		const available = new Set<Provider>();
 		for (const entry of Object.values(triggerProvidersData.providers)) {
 			available.add(entry.provider as Provider);
 		}
 		// Always include standalone providers
-		for (const p of STANDALONE_PROVIDERS) available.add(p);
-		return ALL_PROVIDERS.filter((p) => available.has(p));
+		for (const p of standaloneProviders) available.add(p);
+		return allProvidersList.filter((p) => available.has(p));
 	})();
 
 	// Auto-select integration when provider changes and org has exactly one
@@ -676,7 +676,7 @@ export function TriggerConfigForm({
 		? integrations.filter((i) => i.integration_id === provider && i.status === "active")
 		: [];
 	const showConnectionSelector =
-		provider && INTEGRATION_PROVIDERS.includes(provider) && matchingIntegrations.length > 1;
+		provider && integrationProviders.includes(provider) && matchingIntegrations.length > 1;
 
 	// Auto-select on mount if editing an existing trigger with a known integration
 	useEffect(() => {
