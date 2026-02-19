@@ -22,6 +22,8 @@ export const QUEUE_NAMES = {
 	BILLING_LLM_SYNC_DISPATCH: "billing-llm-sync-dispatch",
 	BILLING_LLM_SYNC_ORG: "billing-llm-sync-org",
 	BILLING_SNAPSHOT_CLEANUP: "billing-snapshot-cleanup",
+	BILLING_FAST_RECONCILE: "billing-fast-reconcile",
+	BILLING_PARTITION_MAINTENANCE: "billing-partition-maintenance",
 } as const;
 
 // ============================================
@@ -148,6 +150,15 @@ export interface BillingLLMSyncOrgJob {
 
 /** Daily snapshot retention cleanup job — cron at 01:00 UTC, no data needed. */
 export type BillingSnapshotCleanupJob = Record<string, never>;
+
+/** On-demand fast reconciliation job — triggered by top-ups, denials, etc. */
+export interface BillingFastReconcileJob {
+	orgId: string;
+	trigger: "auto_topup" | "payment_webhook" | "outbox_denial" | "manual";
+}
+
+/** Daily partition maintenance job — creates future partitions, cleans old keys. */
+export type BillingPartitionMaintenanceJob = Record<string, never>;
 
 // ============================================
 // Connection Options
@@ -772,6 +783,38 @@ export function createBillingSnapshotCleanupQueue(
 	});
 }
 
+const billingFastReconcileJobOptions: JobsOptions = {
+	attempts: 3,
+	backoff: {
+		type: "exponential",
+		delay: 5000,
+	},
+	removeOnComplete: {
+		count: 0, // Remove immediately so jobId (orgId) can be reused
+	},
+	removeOnFail: {
+		age: 86400,
+		count: 100,
+	},
+};
+
+export function createBillingFastReconcileQueue(
+	connection?: ConnectionOptions,
+): Queue<BillingFastReconcileJob> {
+	return new Queue<BillingFastReconcileJob>(QUEUE_NAMES.BILLING_FAST_RECONCILE, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: billingFastReconcileJobOptions,
+	});
+}
+
+export function createBillingPartitionMaintenanceQueue(
+	connection?: ConnectionOptions,
+): Queue<BillingPartitionMaintenanceJob> {
+	return new Queue<BillingPartitionMaintenanceJob>(QUEUE_NAMES.BILLING_PARTITION_MAINTENANCE, {
+		connection: connection ?? getConnectionOptions(),
+	});
+}
+
 // ============================================
 // Billing Worker Factories
 // ============================================
@@ -844,6 +887,30 @@ export function createBillingSnapshotCleanupWorker(
 		connection: connection ?? getConnectionOptions(),
 		concurrency: 1,
 	});
+}
+
+export function createBillingFastReconcileWorker(
+	processor: (job: Job<BillingFastReconcileJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<BillingFastReconcileJob> {
+	return new Worker<BillingFastReconcileJob>(QUEUE_NAMES.BILLING_FAST_RECONCILE, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 3,
+	});
+}
+
+export function createBillingPartitionMaintenanceWorker(
+	processor: (job: Job<BillingPartitionMaintenanceJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<BillingPartitionMaintenanceJob> {
+	return new Worker<BillingPartitionMaintenanceJob>(
+		QUEUE_NAMES.BILLING_PARTITION_MAINTENANCE,
+		processor,
+		{
+			connection: connection ?? getConnectionOptions(),
+			concurrency: 1,
+		},
+	);
 }
 
 // ============================================

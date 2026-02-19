@@ -13,6 +13,7 @@ import {
 } from "@proliferate/shared/billing";
 import { and, asc, billingEvents, eq, getDb, inArray, lt, organization } from "../db/client";
 import { getServicesLogger } from "../logger";
+import { attemptAutoTopUp } from "./auto-topup";
 import { enforceCreditsExhausted } from "./org-pause";
 
 // ============================================
@@ -105,8 +106,17 @@ async function processEvent(event: PendingBillingEvent): Promise<void> {
 
 		logger.debug("Posted event");
 
-		// If Autumn denies, enforce exhausted state
+		// If Autumn denies, try auto-top-up before enforcing exhausted state
 		if (!result.allowed) {
+			const topup = await attemptAutoTopUp(event.organizationId, Number(event.credits));
+			if (topup.success) {
+				logger.info(
+					{ creditsAdded: topup.creditsAdded },
+					"Auto-top-up succeeded after Autumn denial",
+				);
+				return;
+			}
+
 			logger.warn("Autumn denied credits; enforcing exhausted state");
 			await db
 				.update(organization)

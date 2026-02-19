@@ -86,6 +86,7 @@ export default function BillingPage() {
 				{isAdmin && (
 					<OverageSection
 						billingSettings={billing.billingSettings}
+						overage={billing.overage}
 						onUpdate={handleUpdateBillingSettings}
 					/>
 				)}

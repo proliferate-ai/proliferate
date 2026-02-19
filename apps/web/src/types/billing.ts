@@ -25,7 +25,13 @@ export interface BillingInfo {
 	billingSettings: {
 		overage_policy: "pause" | "allow";
 		overage_cap_cents: number | null;
-		overage_used_this_month_cents: number;
+	};
+	overage: {
+		usedCents: number;
+		capCents: number | null;
+		cycleMonth: string | null;
+		topupCount: number;
+		circuitBreakerActive: boolean;
 	};
 	state: {
 		billingState: "unconfigured" | "trial" | "active" | "grace" | "exhausted" | "suspended";

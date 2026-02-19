@@ -4,7 +4,7 @@
  * Raw Drizzle queries - no business logic.
  */
 
-import type { OrgBillingSettings } from "@proliferate/shared/billing";
+import type { OrgBillingSettings, OrgOverageState } from "@proliferate/shared/billing";
 import {
 	type InferSelectModel,
 	and,
@@ -549,6 +549,13 @@ export async function findBillingInfoV2(orgId: string): Promise<{
 	shadowBalanceUpdatedAt: Date | null;
 	graceEnteredAt: Date | null;
 	graceExpiresAt: Date | null;
+	// Overage fields
+	overageUsedCents: number;
+	overageCycleMonth: string | null;
+	overageTopupCount: number;
+	overageLastTopupAt: Date | null;
+	overageDeclineAt: Date | null;
+	lastReconciledAt: Date | null;
 } | null> {
 	const db = getDb();
 	const result = await db.query.organization.findFirst({
@@ -565,6 +572,12 @@ export async function findBillingInfoV2(orgId: string): Promise<{
 			shadowBalanceUpdatedAt: true,
 			graceEnteredAt: true,
 			graceExpiresAt: true,
+			overageUsedCents: true,
+			overageCycleMonth: true,
+			overageTopupCount: true,
+			overageLastTopupAt: true,
+			overageDeclineAt: true,
+			lastReconciledAt: true,
 		},
 	});
 
@@ -583,5 +596,88 @@ export async function findBillingInfoV2(orgId: string): Promise<{
 		shadowBalanceUpdatedAt: result.shadowBalanceUpdatedAt ?? null,
 		graceEnteredAt: result.graceEnteredAt ?? null,
 		graceExpiresAt: result.graceExpiresAt ?? null,
+		// Overage fields
+		overageUsedCents: result.overageUsedCents,
+		overageCycleMonth: result.overageCycleMonth ?? null,
+		overageTopupCount: result.overageTopupCount,
+		overageLastTopupAt: result.overageLastTopupAt ?? null,
+		overageDeclineAt: result.overageDeclineAt ?? null,
+		lastReconciledAt: result.lastReconciledAt ?? null,
 	};
+}
+
+// ============================================
+// Overage State Queries
+// ============================================
+
+/**
+ * Get overage state for an organization (first-class columns).
+ */
+export async function findOverageState(orgId: string): Promise<
+	| (OrgOverageState & {
+			billingSettings: OrgBillingSettings | null;
+			autumnCustomerId: string | null;
+			billingState: string;
+			shadowBalance: string | null;
+	  })
+	| null
+> {
+	const db = getDb();
+	const result = await db.query.organization.findFirst({
+		where: eq(organization.id, orgId),
+		columns: {
+			billingSettings: true,
+			autumnCustomerId: true,
+			billingState: true,
+			shadowBalance: true,
+			overageUsedCents: true,
+			overageCycleMonth: true,
+			overageTopupCount: true,
+			overageLastTopupAt: true,
+			overageDeclineAt: true,
+		},
+	});
+
+	if (!result) return null;
+
+	return {
+		billingSettings: parseBillingSettings(result.billingSettings),
+		autumnCustomerId: result.autumnCustomerId ?? null,
+		billingState: result.billingState,
+		shadowBalance: result.shadowBalance ?? null,
+		overageUsedCents: result.overageUsedCents,
+		overageCycleMonth: result.overageCycleMonth ?? null,
+		overageTopupCount: result.overageTopupCount,
+		overageLastTopupAt: result.overageLastTopupAt ?? null,
+		overageDeclineAt: result.overageDeclineAt ?? null,
+	};
+}
+
+/**
+ * Atomically update overage state columns.
+ * Uses optimistic concurrency on cycle month when provided.
+ */
+export async function updateOverageState(
+	orgId: string,
+	updates: Partial<{
+		overageUsedCents: number;
+		overageCycleMonth: string | null;
+		overageTopupCount: number;
+		overageLastTopupAt: Date | null;
+		overageDeclineAt: Date | null;
+	}>,
+): Promise<void> {
+	const db = getDb();
+	await db.update(organization).set(updates).where(eq(organization.id, orgId));
+}
+
+/**
+ * Update last_reconciled_at timestamp for an organization.
+ */
+export async function updateLastReconciledAt(orgId: string): Promise<void> {
+	const db = getDb();
+	await db
+		.update(organization)
+		.set({ lastReconciledAt: new Date() })
+		.where(eq(organization.id, orgId));
 }

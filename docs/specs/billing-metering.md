@@ -40,7 +40,7 @@ The system is designed around three principles: (1) **no external API calls in t
 **Key invariants:**
 - Shadow balance **deduction** is atomic with billing event insertion (single Postgres transaction with `FOR UPDATE` row lock). Initialization (`initializeShadowBalance`) writes without `FOR UPDATE`.
 - A `[from, to)` compute interval is billed exactly once; idempotency key = `compute:{sessionId}:{fromMs}:{toMs}`.
-- Billing events in `trial` or `unconfigured` state are inserted with `status = 'skipped'` (no Autumn post).
+- Billing events for `trial` or `unconfigured` orgs are inserted with `status: "skipped"` so the outbox ignores them. The insert is still required for idempotency: a crash between deduction and checkpoint advancement must not cause a double-deduct on retry.
 - Grace period defaults to 5 minutes (max configurable: 1 hour); maximum overdraft is 500 credits.
 
 ---
@@ -84,10 +84,11 @@ packages/shared/src/billing/
 packages/services/src/billing/
 ├── index.ts                    # Re-exports all billing service modules
 ├── gate.ts                     # Iron Door: checkBillingGateForOrg, assertBillingGateForOrg, getOrgPlanLimits
-├── db.ts                       # Billing event queries, per-org LLM cursor ops, billable org enumeration
+├── db.ts                       # Billing event queries, per-org LLM cursor ops, billable org enumeration, partition maintenance
 ├── litellm-api.ts              # LiteLLM Admin REST API client (GET /spend/logs/v2)
 ├── shadow-balance.ts           # Atomic deduct/add/bulk-deduct/reconcile/initialize shadow balance
 ├── metering.ts                 # Compute metering cycle, sandbox liveness, finalization
+├── auto-topup.ts               # Overage auto-top-up: buy packs when balance goes negative (policy=allow)
 ├── outbox.ts                   # Outbox worker: retry failed Autumn posts
 ├── org-pause.ts                # Billing enforcement orchestration (pause/snapshot policy)
 ├── trial-activation.ts         # Auto-activate plan after trial exhaustion
@@ -97,17 +98,12 @@ packages/services/src/sessions/
 └── db.ts                       # createWithAdmissionGuard, createSetupSessionWithAdmissionGuard (atomic concurrent admission)
 
 packages/db/src/schema/
-└── billing.ts                  # billingEvents, llmSpendCursors (per-org), billingReconciliations tables
+└── billing.ts                  # billingEventKeys, billingEvents, llmSpendCursors (per-org), billingReconciliations tables
 
 apps/web/src/server/routers/
 └── billing.ts                  # oRPC routes: getInfo, updateSettings, activatePlan, buyCredits
 
-apps/web/src/app/api/billing/   # LEGACY — duplicates oRPC; slated for removal (§10.3 Workstream A)
-├── route.ts                    # GET /api/billing (unused by frontend)
-├── usage/route.ts              # GET /api/billing/usage (unused by frontend)
-├── settings/route.ts           # GET/PUT /api/billing/settings (unused by frontend)
-├── buy-credits/route.ts        # POST /api/billing/buy-credits (unused by frontend; stale $20/2000cr comment)
-└── events/route.ts             # GET /api/billing/events (unused by frontend)
+apps/web/src/app/api/billing/   # DEPRECATED — thin adapters forwarding to oRPC (§10.3 Workstream A, Phase 1.1)
 
 apps/web/src/lib/
 └── billing.ts                  # Session gating helpers (checkCanStartSession, isBillingEnabled)
@@ -124,6 +120,8 @@ apps/worker/src/jobs/billing/
 ├── reconcile.job.ts            # BullMQ processor: nightly reconciliation (00:00 UTC)
 ├── llm-sync-dispatcher.job.ts  # BullMQ processor: LLM sync fan-out (every 30s)
 ├── llm-sync-org.job.ts         # BullMQ processor: per-org LLM spend sync
+├── fast-reconcile.job.ts       # BullMQ processor: on-demand fast shadow balance reconciliation
+├── partition-maintenance.job.ts # BullMQ processor: billing events partition maintenance (02:00 UTC)
 └── snapshot-cleanup.job.ts     # BullMQ processor: daily snapshot retention cleanup (01:00 UTC)
 ```
 
@@ -132,6 +130,13 @@ apps/worker/src/jobs/billing/
 ## 4. Data Models & Schemas
 
 ### Database Tables
+
+```
+billing_event_keys
+├── idempotency_key   TEXT PK
+└── created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+Indexes: (created_at) — for retention cleanup
+```
 
 ```
 billing_events
@@ -185,8 +190,14 @@ The following columns live on the `organization` table (owned by `auth-orgs.md`)
 - `shadow_balance_updated_at` — last update timestamp
 - `grace_entered_at`, `grace_expires_at` — grace window timestamps
 - `billing_plan` — selected plan (`dev` | `pro`)
-- `billing_settings` — JSONB (overage policy, cap, monthly usage)
+- `billing_settings` — JSONB (overage policy, cap — user-facing settings only)
 - `autumn_customer_id` — external Autumn customer reference
+- `overage_used_cents` — INT, first-class counter for overage charges this cycle (replaces JSONB field)
+- `overage_cycle_month` — TEXT `"YYYY-MM"`, lazy monthly reset key
+- `overage_topup_count` — INT, top-ups this cycle (velocity limit)
+- `overage_last_topup_at` — TIMESTAMPTZ, rate limiting
+- `overage_decline_at` — TIMESTAMPTZ, circuit breaker (non-null = tripped)
+- `last_reconciled_at` — TIMESTAMPTZ, staleness tracking for reconciliation
 
 ### Plan Configuration
 
@@ -209,7 +220,7 @@ Trial: 1,000 credits granted at signup. Top-up pack: 500 credits for $5.
 ### Don't
 - Do not call Autumn APIs in the session start/resume hot path — use `checkBillingGate()` with local shadow balance.
 - Do not insert billing events outside a `deductShadowBalance` transaction — this breaks the atomicity invariant.
-- Do not skip billing events for trial orgs — insert them with `status = 'skipped'` so the ledger is complete.
+- Do not skip billing event insertion for trial/unconfigured orgs — these events use `status: "skipped"` so the outbox ignores them, but the insert is required for idempotency (prevents double-deduction on crash/retry).
 
 ### Error Handling
 Billing is **fail-closed**: if org lookup fails, billing state is unreadable, or shadow balance can't be computed, the operation is denied. See `apps/web/src/lib/billing.ts:checkCanStartSession`.
@@ -378,7 +389,7 @@ If the lock is already held (e.g., by an idle snapshot in progress), the session
 **`canOrgStartSession`:** Checks concurrent session count against plan limit (superseded by atomic admission guard in `sessions/db.ts`).
 
 **Callers:**
-- `metering.ts` → `billComputeInterval()` when `shouldTerminateSessions` (after trial auto-activation check)
+- `metering.ts` → `billComputeInterval()` when `shouldPauseSessions` (after trial auto-activation check)
 - `outbox.ts` → `processEvent()` when Autumn denies credits
 - `grace.job.ts` → on grace period expiration
 - `llm-sync-org.job.ts` → when LLM spend depletes balance
@@ -439,15 +450,46 @@ Distributed locks (`packages/shared/src/billing/distributed-lock.ts`) were remov
 | `billing-reconcile` | Daily 00:00 UTC | `reconcile.job.ts` → enumerates orgs via `billing.listBillableOrgsWithCustomerId()`, fetches Autumn balance per org, calls `billing.reconcileShadowBalance()`, alerts on drift > threshold |
 | `billing-llm-sync-dispatch` | Every 30s | `llm-sync-dispatcher.job.ts` → fan-out per-org jobs |
 | `billing-llm-sync-org` | On-demand | `llm-sync-org.job.ts` → per-org LLM spend sync |
+| `billing-fast-reconcile` | On-demand (concurrency 3) | `fast-reconcile.job.ts` → single-org shadow balance reconciliation with Autumn, triggered by auto-top-up/payment/denial |
 | `billing-snapshot-cleanup` | Daily 01:00 UTC | `snapshot-cleanup.job.ts` → `billing.cleanupAllExpiredSnapshots()` |
+| `billing-partition-maintenance` | Daily 02:00 UTC | `partition-maintenance.job.ts` → create future partitions, clean old keys, log detachment candidates |
 
 Guarded by `NEXT_PUBLIC_BILLING_ENABLED` env var.
 
 **Files touched:** `apps/worker/src/billing/worker.ts`, `apps/worker/src/jobs/billing/*.ts`, `packages/queue/src/index.ts`
 
-### 6.13 Billing Token — `Removed`
+### 6.13 Overage Auto-Top-Up — `Implemented`
 
-The billing token subsystem (`billing-token.ts`, `mintBillingToken`, `verifyBillingToken`, `validateBillingToken`) and its refresh endpoint have been removed. The only remnant is a dead `billing_token_version` column on the `sessions` table (`packages/db/src/schema/sessions.ts`) which defaults to `1` and is never read or written by billing code — should be dropped in a future migration. Runtime/sandbox auth is handled by existing gateway/session token flows.
+**What it does:** When an org has `overage_policy = "allow"` and its shadow balance goes negative, `attemptAutoTopUp()` purchases credit packs via `autumnAutoTopUp()` to keep sessions running. Called from all 4 enforcement paths: compute metering, LLM sync, grace expiration, and outbox denial.
+
+**Key design decisions:**
+- Runs **outside** the `deductShadowBalance` FOR UPDATE transaction (Autumn HTTP call can't be inside a DB lock)
+- Uses `pg_advisory_xact_lock(hashtext(orgId || ':auto_topup'))` to prevent concurrent top-ups per org, distinct from shadow balance lock
+- Uses existing `TOP_UP_PRODUCT` (500 credits/$5) with multiple packs for larger amounts
+- Lazy monthly reset: `overage_cycle_month` stores `"YYYY-MM"`, counters reset on first access in a new month
+- Circuit breaker: card decline sets `overage_decline_at`, forces immediate transition to exhausted state
+- Velocity limit: max 20 top-ups per cycle (`OVERAGE_MAX_TOPUPS_PER_CYCLE`), min 60s between (`OVERAGE_MIN_TOPUP_INTERVAL_MS`)
+- Cap enforcement: if `overage_cap_cents` is set, packs are clamped to remaining budget
+
+**Files touched:** `packages/services/src/billing/auto-topup.ts`, integration points in `metering.ts`, `outbox.ts`, `llm-sync-org.job.ts`, `grace.job.ts`
+
+### 6.14 Fast Reconciliation — `Implemented`
+
+**What it does:** On-demand shadow balance reconciliation triggered by payment events (auto-top-up, credit purchases, plan activations, outbox denials). Targets < 5 min SLO for reflecting payment events in shadow balance, vs nightly-only before.
+
+**Flow:** Enqueue `billing-fast-reconcile` job with `{ orgId, trigger }` → fetch Autumn balance → reconcile shadow balance → update `last_reconciled_at`. Uses BullMQ `jobId: orgId` for deduplication (at most one queued job per org).
+
+**Trigger points:**
+- After successful auto-top-up (from metering/LLM sync callers)
+- After `buyCredits` oRPC procedure
+- After `activatePlan` oRPC procedure
+- After outbox denial
+
+**Files touched:** `apps/worker/src/jobs/billing/fast-reconcile.job.ts`, `apps/worker/src/billing/worker.ts`, `apps/web/src/server/routers/billing.ts`
+
+### 6.15 Billing Token — `Removed`
+
+The billing token subsystem (`billing-token.ts`, `mintBillingToken`, `verifyBillingToken`, `validateBillingToken`) and its refresh endpoint have been removed. The `billing_token_version` column has been dropped from the `sessions` table (migration `0032_drop_billing_token_version.sql`). Runtime/sandbox auth is handled by existing gateway/session token flows.
 
 ---
 
@@ -508,21 +550,21 @@ The billing token subsystem (`billing-token.ts`, `mintBillingToken`, `verifyBill
 #### Behavioral / Financial Risk
 
 - [ ] **Enforcement retry gap (P0)** — `enforceCreditsExhausted()` in `org-pause.ts` iterates sessions and calls `pauseSessionWithSnapshot()` per session. If pause fails (provider timeout, network error), the session is logged but **not retried** — it stays `running` and continues consuming unbilled resources. Next enforcement cycle (metering or outbox) may retry, but a persistent provider failure can leave sessions running indefinitely. — Expected fix: dedicated retry queue for failed enforcement pauses, or a sweeper job that re-checks `running` sessions against org billing state.
-- [ ] **Overage policy is incomplete (P0)** — `overage_used_this_month_cents` in `billing_settings` is defined but **never incremented or reset**. No BullMQ job or Autumn webhook resets it monthly. The `overage_policy: "allow"` path with a cap has no operational enforcement. — Expected fix: see §10.3 Workstream B (overage end-to-end).
+- [x] **Overage policy is incomplete (P0)** — **Resolved.** Mutable counters moved to first-class columns (`overage_used_cents`, `overage_cycle_month`, `overage_topup_count`, `overage_last_topup_at`, `overage_decline_at`). `attemptAutoTopUp()` implements full overage execution: deficit-aware pack sizing, lazy monthly reset, velocity/rate limits, cap enforcement, circuit breaker on card decline. Wired into all 4 enforcement paths. See §6.13.
 - [ ] **LLM cursor not atomic with bulk deduct (P1)** — In `llm-sync-org.job.ts`, the per-org cursor is advanced **after** `bulkDeductShadowBalance()` returns, outside the deduction transaction. If the worker crashes between deduct and cursor update, the same spend logs are re-fetched and re-processed on the next cycle. Idempotency keys (`llm:{requestId}`) prevent double-billing, but the wasted work and log noise scale with LLM volume. — Expected fix: advance cursor inside the bulk deduct transaction.
 - [ ] **Metering crash window (P2)** — `meteredThroughAt` is advanced in a separate DB update after `deductShadowBalance()`. If the worker crashes between the two, the next cycle re-bills the same interval — caught by idempotency key (no double charge), but the session appears "stuck" with stale `meteredThroughAt` until the next successful cycle. — Impact: no financial risk due to idempotency; operational noise only.
 
 #### Dead Code / Drift
 
-- [ ] **Dead `billing_token_version` column (P1)** — `sessions.billing_token_version` (integer, default `1`) is never read or written by billing code. The billing token subsystem it was designed for has been removed. — Expected fix: drop column in a migration.
-- [ ] **Legacy `/api/billing/*` routes are dead code (P1)** — Five raw Next.js API routes (`/api/billing`, `/api/billing/usage`, `/api/billing/settings`, `/api/billing/buy-credits`, `/api/billing/events`) duplicate oRPC procedures. Frontend hooks use oRPC exclusively; no external callers found (CLI, gateway, worker all verified). The `/api/billing/buy-credits` route has a stale comment documenting `$20/2000 credits` pricing (actual: `$5/500`). — Expected fix: see §10.3 Workstream A (consolidate API surface).
+- [x] **Dead `billing_token_version` column (P1)** — Dropped in migration `0032_drop_billing_token_version.sql`. Column removed from schema and all code references.
+- [x] **Legacy `/api/billing/*` routes are dead code (P1)** — Converted to thin adapters with `Deprecation` headers. oRPC is the authoritative billing API surface; adapters will be removed after deprecation window.
 - [ ] **LLM model allowlist is dead code (P2)** — `ALLOWED_LLM_MODELS` and `isModelAllowedForBilling()` in `types.ts` have **zero callers** anywhere in the codebase. Code comment claims models are "REJECTED (fail closed)" but no enforcement exists. All models with LiteLLM spend data are billed. — Expected fix: see §10.3 Workstream F (remove dead constants, add anomaly monitoring).
-- [ ] **`shouldTerminateSessions` field name is legacy (P2)** — `DeductResult` and `BulkDeductResult` in `shadow-balance.ts` use `shouldTerminateSessions` as a field name. Actual enforcement is pause/snapshot, not terminate. — Impact: naming-only; no behavioral issue.
-- [ ] **`BillingEventStatus` type omits `skipped` (P2)** — Shared types define billing event statuses but omit `skipped`, which billing code writes for trial/unconfigured events. — Impact: type safety gap only.
+- [x] **`shouldTerminateSessions` field name is legacy (P2)** — Renamed to `shouldPauseSessions` across `DeductResult`, `BulkDeductResult`, and all callers. `EnforcementAction.terminate_sessions` renamed to `pause_sessions`. `shouldTerminateSessionsInState()` renamed to `shouldPauseSessionsInState()`.
+- [x] **`BillingEventStatus` type omits `skipped` (P2)** — Resolved by adding `"skipped"` to the `BillingEventStatus` union type. Trial/unconfigured orgs insert billing events with `status: "skipped"` for idempotency; the outbox ignores them.
 
 #### Architectural / Scalability
 
-- [ ] **Shadow balance drift persists up to 24h (P1)** — No Autumn webhooks or callbacks update the shadow balance. Top-ups via `buyCredits` add to shadow balance locally, and the outbox posts to Autumn, but Autumn-side changes (subscription renewals, manual adjustments) only reach the shadow balance during the nightly reconcile at 00:00 UTC. — Expected fix: see §10.3 Workstream D (fast reconciliation).
+- [x] **Shadow balance drift persists up to 24h (P1)** — **Resolved.** Event-driven fast reconciliation queue (`billing-fast-reconcile`) triggers on auto-top-up, credit purchases, plan activations, and outbox denials. Per-org `last_reconciled_at` tracks staleness. Nightly reconcile remains as backstop. See §6.14.
 - [ ] **Billing events have no retention/archival (P1)** — `billing_events` grows unbounded. No TTL, partitioning, or archival job exists. At scale this will impact query performance on the outbox and org-scoped queries. — Expected fix: see §10.3 Workstream E (monthly partitioning, 90-day hot window).
 - [ ] **Grace expiration is polling-based (P2)** — `billing-grace` job runs every 60s, meaning grace can overrun by up to ~60s. — Impact: minor, grace window is 5 minutes.
 - [ ] **Grace query includes NULL `graceExpiresAt` (P2)** — `listGraceExpiredOrgs()` matches `graceExpiresAt IS NULL OR graceExpiresAt < now()`. An org in `grace` state with a NULL expiry timestamp is immediately expired. This is likely intentional (defensive fail-closed), but not documented. — Expected fix: add inline comment or assert `graceExpiresAt IS NOT NULL` on grace entry.
@@ -540,14 +582,14 @@ Companion long-form advisor brief (no-codebase-access context): `docs/billing-al
 
 | Claim | Verdict | Evidence | Notes |
 |---|---|---|---|
-| Dual billing API surface (oRPC + `/api/billing/*`) | Confirmed | `apps/web/src/server/routers/billing.ts`, `apps/web/src/app/api/billing/*` | Hooks use oRPC, but legacy API routes still exist and can drift. |
+| Dual billing API surface (oRPC + `/api/billing/*`) | **Resolved** | Legacy routes converted to thin adapters with deprecation headers; oRPC is authoritative | Phase 1.1 Workstream A |
 | Grace expiry can overrun by ~60s | Confirmed | `apps/worker/src/jobs/billing/grace.job.ts` | Poll interval is 60s. |
-| `shouldTerminateSessions` is misnamed | Confirmed | `packages/services/src/billing/shadow-balance.ts` | Behavior is pause/snapshot enforcement, not destructive terminate. |
+| `shouldTerminateSessions` is misnamed | **Resolved** | Renamed to `shouldPauseSessions` | Phase 1.1 Workstream C |
 | Snapshot provider delete is no-op | Confirmed | `packages/services/src/billing/snapshot-limits.ts:deleteSnapshotFromProvider` | DB refs are cleared while provider cleanup is best-effort no-op. |
 | Billing events have no retention/archival policy | Confirmed | `packages/db/src/schema/billing.ts`, no archival job | Table growth is unbounded. |
-| Overages settings exist but enforcement/reset not visible | Confirmed | `packages/shared/src/billing/types.ts`, org settings routes only | `overage_used_this_month_cents` is read/written in settings payloads but not operationally advanced/reset. |
-| Shadow balance drift can persist until nightly reconcile | Partially confirmed | `apps/worker/src/jobs/billing/reconcile.job.ts` | Nightly reconcile is active; same-day drift still possible when non-shadow mutations occur. |
-| Billing token exists but is unwired | Stale / incorrect | No `billing-token.ts`; no refresh endpoint path in current tree | Module removed; dead `billing_token_version` column remains on `sessions` table. |
+| Overages settings exist but enforcement/reset not visible | **Resolved** | `packages/services/src/billing/auto-topup.ts`, org overage columns | Overage counters moved to first-class columns; `attemptAutoTopUp()` implements full execution with lazy monthly reset, circuit breaker, velocity limits. Phase 1.2 Workstream B. |
+| Shadow balance drift can persist until nightly reconcile | **Resolved** | `apps/worker/src/jobs/billing/fast-reconcile.job.ts`, `apps/worker/src/billing/worker.ts` | Event-driven fast reconciliation queue triggers on payment events; nightly reconcile remains as backstop. Phase 1.2 Workstream D. |
+| Billing token exists but is unwired | **Resolved** | Module removed; `billing_token_version` column dropped | Phase 1.1 Workstream C |
 | LLM allowlist blocks new models until updated | Stale / incorrect | `ALLOWED_LLM_MODELS` exists but no callers | Current risk is policy ambiguity, not active model rejection. |
 | Enforcement pause failure leaves sessions running | Confirmed | `packages/services/src/billing/org-pause.ts:enforceCreditsExhausted` | Failed `pauseSessionWithSnapshot()` calls are logged but not retried within the same cycle. |
 | LLM cursor advanced outside deduct transaction | Confirmed | `apps/worker/src/jobs/billing/llm-sync-org.job.ts` | Crash between bulk deduct and cursor update causes re-processing (mitigated by idempotency keys). |
@@ -555,8 +597,8 @@ Companion long-form advisor brief (no-codebase-access context): `docs/billing-al
 | `NEXT_PUBLIC_BILLING_ENABLED` bypass | Not a risk | `packages/services/src/billing/gate.ts`, worker guard | Proper feature flag — disabled = all operations allowed, no enforcement. Consistent across gate and worker. |
 
 Additional drift observed during verification:
-- `BillingEventStatus` in shared types omits `skipped`, but billing code writes `status: "skipped"` for trial/unconfigured events.
-- Legacy `/api/billing/buy-credits` route comments still describe `$20 / 2000 credits` while shared config is `$5 / 500` (`TOP_UP_PRODUCT`).
+- ~~`BillingEventStatus` in shared types omits `skipped`~~ — **Resolved**: `"skipped"` added to `BillingEventStatus` type. Trial/unconfigured events are inserted with `status: "skipped"` for idempotency.
+- ~~Legacy `/api/billing/buy-credits` route comments still describe `$20 / 2000 credits`~~ — **Resolved**: legacy routes converted to thin adapters mirroring canonical oRPC logic with deprecation headers.
 - `meteredThroughAt` advance is not atomic with `deductShadowBalance()` — crash between them causes idempotent re-billing on next cycle (no financial risk, operational noise).
 
 ### 10.2 Remediation Goals
@@ -587,13 +629,13 @@ Acceptance:
 Scope:
 - Rename pause-enforcement fields to match actual behavior (pause/snapshot, not terminate).
 - Remove stale billing-token references and deprecate dead token-version schema usage.
-- Resolve `skipped` status drift by removing skipped/no-op ledger writes (short-circuit trial/unconfigured paths).
+- Resolve `skipped` status drift by adding `"skipped"` to the `BillingEventStatus` type (aligns type with runtime behavior).
 - Fix stale pricing/comment/documentation mismatches.
 
 Acceptance:
 - Runtime and shared types/contracts are aligned.
 - No billing specs reference non-existent token modules.
-- `billing_events` rows are financially meaningful (no no-op skipped spam).
+- `BillingEventStatus` type includes `"skipped"`, matching runtime behavior for trial/unconfigured orgs.
 
 #### Workstream B — Overage Policy End-to-End (P0, Phase 1.2)
 

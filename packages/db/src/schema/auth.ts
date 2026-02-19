@@ -140,6 +140,13 @@ export const organization = pgTable(
 		shadowBalanceUpdatedAt: timestamp("shadow_balance_updated_at", { withTimezone: true }),
 		graceEnteredAt: timestamp("grace_entered_at", { withTimezone: true }),
 		graceExpiresAt: timestamp("grace_expires_at", { withTimezone: true }),
+		// Overage + reconciliation fields (Phase 1.2)
+		overageUsedCents: integer("overage_used_cents").default(0).notNull(),
+		overageCycleMonth: text("overage_cycle_month"),
+		overageTopupCount: integer("overage_topup_count").default(0).notNull(),
+		overageLastTopupAt: timestamp("overage_last_topup_at", { withTimezone: true }),
+		overageDeclineAt: timestamp("overage_decline_at", { withTimezone: true }),
+		lastReconciledAt: timestamp("last_reconciled_at", { withTimezone: true }),
 	},
 	(table) => [uniqueIndex("organization_slug_uidx").on(table.slug)],
 );

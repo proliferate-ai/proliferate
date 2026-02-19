@@ -235,6 +235,27 @@
       "when": 1771945800000,
       "tag": "0033_session_telemetry",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1771945800001,
+      "tag": "0032_drop_billing_token_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1771977600000,
+      "tag": "0033_add_overage_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1772064000000,
+      "tag": "0034_add_billing_event_keys",
+      "breakpoints": true
     }
   ]
 }

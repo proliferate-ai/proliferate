@@ -9,6 +9,7 @@ import { logger } from "@/lib/logger";
 import { getUserOrgRole } from "@/lib/permissions";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
+import { createBillingFastReconcileQueue } from "@proliferate/queue";
 import { billing, orgs } from "@proliferate/services";
 import {
 	AUTUMN_FEATURES,
@@ -27,6 +28,17 @@ import { orgProcedure } from "./middleware";
 
 const log = logger.child({ handler: "billing" });
 
+/** Fire-and-forget fast reconcile enqueue. Failures are non-fatal. */
+async function enqueueFastReconcile(orgId: string, trigger: "payment_webhook" | "manual") {
+	try {
+		const queue = createBillingFastReconcileQueue();
+		await queue.add("fast-reconcile", { orgId, trigger }, { jobId: orgId });
+		await queue.close();
+	} catch (err) {
+		log.warn({ err, orgId }, "Failed to enqueue fast reconcile");
+	}
+}
+
 // ============================================
 // Response Schemas
 // ============================================
@@ -34,7 +46,14 @@ const log = logger.child({ handler: "billing" });
 const BillingSettingsSchema = z.object({
 	overage_policy: z.enum(["pause", "allow"]),
 	overage_cap_cents: z.number().nullable(),
-	overage_used_this_month_cents: z.number(),
+});
+
+const OverageStateSchema = z.object({
+	usedCents: z.number(),
+	capCents: z.number().nullable(),
+	cycleMonth: z.string().nullable(),
+	topupCount: z.number(),
+	circuitBreakerActive: z.boolean(),
 });
 
 const BillingInfoSchema = z.object({
@@ -58,6 +77,7 @@ const BillingInfoSchema = z.object({
 		snapshotRetentionDays: z.number(),
 	}),
 	billingSettings: BillingSettingsSchema,
+	overage: OverageStateSchema,
 	// V2 state fields
 	state: z.object({
 		billingState: z.enum(["unconfigured", "trial", "active", "grace", "exhausted", "suspended"]),
@@ -90,7 +110,6 @@ const UpdateSettingsResponseSchema = z.object({
 const DEFAULT_BILLING_SETTINGS = {
 	overage_policy: "pause" as const,
 	overage_cap_cents: null as number | null,
-	overage_used_this_month_cents: 0,
 };
 
 // ============================================
@@ -187,6 +206,13 @@ export const billingRouter = {
 					snapshotRetentionDays: planConfig.snapshotRetentionDays,
 				},
 				billingSettings: org.billingSettings || DEFAULT_BILLING_SETTINGS,
+				overage: {
+					usedCents: org.overageUsedCents,
+					capCents: org.billingSettings?.overage_cap_cents ?? null,
+					cycleMonth: org.overageCycleMonth,
+					topupCount: org.overageTopupCount,
+					circuitBreakerActive: !!org.overageDeclineAt,
+				},
 				// V2 state
 				state: {
 					billingState,
@@ -315,6 +341,9 @@ export const billingRouter = {
 
 			await orgs.initializeBillingState(context.orgId, "active", includedCredits);
 
+			// Trigger fast reconcile to sync shadow balance with Autumn
+			await enqueueFastReconcile(context.orgId, "payment_webhook");
+
 			return {
 				success: true,
 				message: "Plan activated",
@@ -406,6 +435,9 @@ export const billingRouter = {
 				} catch (err) {
 					log.error({ err }, "Failed to update shadow balance");
 				}
+
+				// Trigger fast reconcile to sync shadow balance with Autumn
+				await enqueueFastReconcile(context.orgId, "payment_webhook");
 
 				return {
 					success: true,

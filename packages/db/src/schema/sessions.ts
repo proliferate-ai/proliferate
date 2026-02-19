@@ -81,7 +81,6 @@ export const sessions = pgTable(
 
 		// Billing fields
 		meteredThroughAt: timestamp("metered_through_at", { withTimezone: true }),
-		billingTokenVersion: integer("billing_token_version").default(1),
 		lastSeenAliveAt: timestamp("last_seen_alive_at", { withTimezone: true }),
 		aliveCheckFailures: integer("alive_check_failures").default(0),
 		pauseReason: text("pause_reason"),

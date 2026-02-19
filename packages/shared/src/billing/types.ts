@@ -95,13 +95,11 @@ export type OveragePolicy = "pause" | "allow";
 export interface OrgBillingSettings {
 	overage_policy: OveragePolicy;
 	overage_cap_cents: number | null; // null = unlimited (if policy is 'allow')
-	overage_used_this_month_cents: number;
 }
 
 export const DEFAULT_BILLING_SETTINGS: OrgBillingSettings = {
 	overage_policy: "pause",
 	overage_cap_cents: null,
-	overage_used_this_month_cents: 0,
 };
 
 export function parseBillingSettings(raw: unknown): OrgBillingSettings {
@@ -124,19 +122,51 @@ export function parseBillingSettings(raw: unknown): OrgBillingSettings {
 			typeof candidate.overage_cap_cents === "number" || candidate.overage_cap_cents === null
 				? candidate.overage_cap_cents
 				: DEFAULT_BILLING_SETTINGS.overage_cap_cents;
-		const overageUsed =
-			typeof candidate.overage_used_this_month_cents === "number"
-				? candidate.overage_used_this_month_cents
-				: DEFAULT_BILLING_SETTINGS.overage_used_this_month_cents;
 
 		return {
 			overage_policy: overagePolicy,
 			overage_cap_cents: overageCap,
-			overage_used_this_month_cents: overageUsed,
 		};
 	} catch {
 		return DEFAULT_BILLING_SETTINGS;
 	}
+}
+
+/**
+ * Overage state from first-class DB columns (not JSONB).
+ */
+export interface OrgOverageState {
+	overageUsedCents: number;
+	overageCycleMonth: string | null;
+	overageTopupCount: number;
+	overageLastTopupAt: Date | null;
+	overageDeclineAt: Date | null;
+}
+
+/**
+ * Result of an overage auto-top-up attempt (service-level).
+ * Distinct from the Autumn API-level AutoTopUpResult in autumn-client.ts.
+ */
+export interface OverageTopUpResult {
+	success: boolean;
+	packsCharged: number;
+	creditsAdded: number;
+	chargedCents: number;
+	circuitBreakerTripped?: boolean;
+	capExhausted?: boolean;
+	velocityLimited?: boolean;
+}
+
+/** Maximum auto-top-ups per billing cycle (velocity limit). */
+export const OVERAGE_MAX_TOPUPS_PER_CYCLE = 20;
+
+/** Minimum interval between auto-top-ups for same org (rate limit, ms). */
+export const OVERAGE_MIN_TOPUP_INTERVAL_MS = 60_000;
+
+/** Get the current billing cycle month key (YYYY-MM in UTC). */
+export function getCurrentCycleMonth(): string {
+	const now = new Date();
+	return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 export function serializeBillingSettings(settings: OrgBillingSettings): string {
@@ -164,76 +194,6 @@ export const COMPUTE_CREDITS_PER_SECOND = COMPUTE_CREDITS_PER_MINUTE / 60;
  * We use LiteLLM's actual cost calculation, then apply 3x markup.
  */
 export const LLM_MARKUP_MULTIPLIER = 3;
-
-/**
- * Whitelist of models allowed for LLM billing.
- * Models not in this list will be REJECTED (fail closed).
- * This prevents "free" usage if LiteLLM returns 0 cost for unknown models.
- *
- * Update this list when adding new models to the proxy.
- */
-export const ALLOWED_LLM_MODELS = new Set([
-	// Anthropic Claude
-	"claude-3-5-sonnet-20241022",
-	"claude-3-5-haiku-20241022",
-	"claude-3-7-sonnet-20250219",
-	"claude-3-opus-20240229",
-	"claude-3-sonnet-20240229",
-	"claude-3-haiku-20240307",
-	"claude-sonnet-4-20250514",
-	"claude-sonnet-4-5-20250929",
-	"claude-opus-4-20250514",
-	"claude-opus-4-5-20251101",
-	"claude-opus-4-6",
-	"claude-sonnet-4-6",
-	// OpenAI GPT-4
-	"gpt-4-turbo",
-	"gpt-4-turbo-preview",
-	"gpt-4-0125-preview",
-	"gpt-4-1106-preview",
-	"gpt-4o",
-	"gpt-4o-mini",
-	"gpt-4o-2024-08-06",
-	// OpenAI GPT-3.5
-	"gpt-3.5-turbo",
-	"gpt-3.5-turbo-0125",
-	// OpenAI o1/o3
-	"o1-preview",
-	"o1-mini",
-	"o3-mini",
-	// OpenAI GPT-5
-	"gpt-5",
-	"gpt-5.1",
-	"gpt-5.1-codex",
-	"gpt-5.2",
-	"gpt-5.2-pro",
-	// Google Gemini
-	"gemini-1.5-pro",
-	"gemini-1.5-flash",
-	"gemini-2.0-flash-exp",
-	"gemini-3-pro-preview",
-	"gemini-3-flash-preview",
-	// DeepSeek
-	"deepseek-chat",
-	"deepseek-coder",
-]);
-
-/**
- * Check if a model is allowed for billing.
- * Models not in the whitelist are rejected to prevent free usage.
- */
-export function isModelAllowedForBilling(model: string): boolean {
-	// Normalize model name (remove provider prefixes like "anthropic/")
-	const normalizedModel = model.includes("/") ? model.split("/").pop()! : model;
-	return ALLOWED_LLM_MODELS.has(normalizedModel);
-}
-
-/**
- * Minimum cost threshold for LLM billing.
- * If response_cost is below this, we reject the request (fail closed).
- * This prevents exploitation via cached responses or cost calculation bugs.
- */
-export const MIN_LLM_COST_USD = 0.000001; // $0.000001 minimum
 
 /**
  * Credit value in USD.
@@ -265,7 +225,7 @@ export function calculateComputeCredits(seconds: number): number {
 
 export type BillingEventType = "compute" | "llm";
 
-export type BillingEventStatus = "pending" | "posted" | "failed";
+export type BillingEventStatus = "pending" | "posted" | "failed" | "skipped";
 
 export interface BillingEvent {
 	id: string;
@@ -314,7 +274,6 @@ export type StopReason = "manual" | "error" | "sandbox_terminated" | "auto_pause
 
 export interface SessionBillingFields {
 	metered_through_at: string | null;
-	billing_token_version: number;
 	last_seen_alive_at: string | null;
 	alive_check_failures: number;
 	pause_reason: PauseReason | null;
@@ -337,7 +296,7 @@ export interface BillingGateResult {
 	error?: string;
 	code?: BillingErrorCode;
 	message?: string;
-	action?: "block" | "terminate_sessions";
+	action?: "block" | "pause_sessions";
 }
 
 export class BillingGateError extends Error {
@@ -388,8 +347,20 @@ export const METERING_CONFIG = {
 	/** LLM sync lookback window (ms) */
 	llmSyncLookbackMs: 5 * 60 * 1000,
 
-	/** Absolute drift threshold (credits) that triggers an alert during reconciliation */
+	/** Drift threshold (credits) that triggers a warning log during reconciliation */
+	reconcileDriftWarnThreshold: 100,
+
+	/** Drift threshold (credits) that triggers an error alert during reconciliation */
 	reconcileDriftAlertThreshold: 500,
+
+	/** Drift threshold (credits) that triggers a critical/paging alert */
+	reconcileDriftCriticalThreshold: 1000,
+
+	/** Maximum staleness for reconciliation before alerting (ms) — 25 hours */
+	reconcileMaxStalenessMs: 25 * 60 * 60 * 1000,
+
+	/** Hot retention period for billing events (days) */
+	billingEventsHotRetentionDays: 90,
 } as const;
 
 // ============================================
@@ -436,7 +407,9 @@ export type ReconciliationType =
 	| "shadow_sync" // Regular shadow balance sync with Autumn
 	| "manual_adjustment" // Manual credit adjustment
 	| "refund" // Credit refund
-	| "correction"; // Error correction
+	| "correction" // Error correction
+	| "auto_topup" // Auto-top-up credit addition
+	| "fast_reconcile"; // Event-driven fast reconcile
 
 /**
  * Reconciliation record for audit trail.
@@ -467,7 +440,7 @@ export interface GatingResult {
 	shadowBalance: number;
 	message?: string;
 	/** Action to take if not allowed */
-	action?: "block" | "terminate_sessions";
+	action?: "block" | "pause_sessions";
 }
 
 /**

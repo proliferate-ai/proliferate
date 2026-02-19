@@ -275,7 +275,7 @@ _Source: `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`_
    c. Filters logs with positive `spend`, converts to `BulkDeductEvent[]` using `calculateLLMCredits(spend)` with idempotency key `llm:{request_id}`
    d. Calls `billing.bulkDeductShadowBalance(orgId, events)` — single transaction: locks org row, bulk inserts billing events, deducts total from shadow balance (`packages/services/src/billing/shadow-balance.ts`)
    e. Updates cursor to latest log's `startTime` — `billing.updateLLMSpendCursor()` (`packages/services/src/billing/db.ts`)
-4. Handles state transitions: if `shouldTerminateSessions`, calls `billing.handleCreditsExhaustedV2(orgId, providers)`
+4. Handles state transitions: if `shouldPauseSessions`, calls `billing.enforceCreditsExhausted(orgId)`
 
 **Edge cases:**
 - First run for an org (no cursor) → starts from 5-minute lookback window (`now - 5min`)

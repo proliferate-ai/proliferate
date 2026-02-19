@@ -6,7 +6,7 @@
  * 2. Fetch spend logs from LiteLLM REST API
  * 3. Convert to BulkDeductEvent[] and bulk-deduct from shadow balance
  * 4. Advance cursor
- * 5. Handle state transitions (terminate sessions if exhausted)
+ * 5. Handle state transitions (pause sessions if exhausted)
  */
 
 import type { Logger } from "@proliferate/logger";
@@ -45,14 +45,21 @@ export async function processLLMSyncOrgJob(
 		return a.request_id.localeCompare(b.request_id);
 	});
 
-	// 4. Convert to BulkDeductEvent[]. We do NOT skip duplicates client-side —
+	// 4. Convert to BulkDeductEvent[] with anomaly detection.
 	// bulkDeductShadowBalance uses ON CONFLICT (idempotency_key) DO NOTHING,
 	// which is the authoritative dedup.
 	const events: billing.BulkDeductEvent[] = [];
+	let anomalyZeroSpend = 0;
+
 	for (const entry of logs) {
+		// Anomaly: tokens consumed but zero/negative spend — potential misconfigured model pricing
+		if (entry.spend <= 0 && (entry.total_tokens ?? 0) > 0) {
+			anomalyZeroSpend++;
+			continue;
+		}
+
 		if (entry.spend <= 0) continue;
 
-		// TODO: calculateLLMCredits applies a 3× markup — verify this is the desired conversion
 		const credits = calculateLLMCredits(entry.spend);
 		events.push({
 			credits,
@@ -68,6 +75,14 @@ export async function processLLMSyncOrgJob(
 				litellm_request_id: entry.request_id,
 			},
 		});
+	}
+
+	// Emit anomaly alerts
+	if (anomalyZeroSpend > 0) {
+		log.error(
+			{ anomalyZeroSpend, orgId, alert: true },
+			"LLM spend anomaly: entries with tokens > 0 but spend <= 0",
+		);
 	}
 
 	if (!events.length) {
@@ -100,11 +115,18 @@ export async function processLLMSyncOrgJob(
 	});
 
 	// 7. Handle state transitions
-	if (result.shouldTerminateSessions) {
-		// Check trial auto-activation before terminating (parity with compute metering)
+	if (result.shouldPauseSessions) {
+		// Check trial auto-activation before pausing (parity with compute metering)
 		const activation = await billing.tryActivatePlanAfterTrial(orgId);
 		if (activation.activated) {
-			log.info("Trial auto-activated via LLM spend; skipping termination");
+			log.info("Trial auto-activated via LLM spend; skipping enforcement");
+			return;
+		}
+
+		// Overage auto-top-up: buy more credits if policy allows
+		const topup = await billing.attemptAutoTopUp(orgId, Math.abs(result.newBalance));
+		if (topup.success) {
+			log.info({ creditsAdded: topup.creditsAdded }, "Auto-top-up succeeded; skipping enforcement");
 			return;
 		}
 

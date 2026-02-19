@@ -189,7 +189,6 @@ export const organization = pgTable(
 		billingSettings: jsonb("billing_settings").default({
 			overage_policy: "pause",
 			overage_cap_cents: null,
-			overage_used_this_month_cents: 0,
 		}),
 		onboardingComplete: boolean("onboarding_complete").default(false),
 		// Billing V2 fields
@@ -204,6 +203,22 @@ export const organization = pgTable(
 		graceExpiresAt: timestamp("grace_expires_at", { withTimezone: true, mode: "date" }),
 		onboardingMeta: jsonb("onboarding_meta"),
 		actionModes: jsonb("action_modes"),
+		// Overage + reconciliation fields (Phase 1.2)
+		overageUsedCents: integer("overage_used_cents").default(0).notNull(),
+		overageCycleMonth: text("overage_cycle_month"),
+		overageTopupCount: integer("overage_topup_count").default(0).notNull(),
+		overageLastTopupAt: timestamp("overage_last_topup_at", {
+			withTimezone: true,
+			mode: "date",
+		}),
+		overageDeclineAt: timestamp("overage_decline_at", {
+			withTimezone: true,
+			mode: "date",
+		}),
+		lastReconciledAt: timestamp("last_reconciled_at", {
+			withTimezone: true,
+			mode: "date",
+		}),
 	},
 	(table) => [
 		index("organization_allowed_domains_idx").using(
@@ -1355,7 +1370,6 @@ export const sessions = pgTable(
 		idempotencyKey: text("idempotency_key"),
 		sandboxExpiresAt: timestamp("sandbox_expires_at", { withTimezone: true, mode: "date" }),
 		meteredThroughAt: timestamp("metered_through_at", { withTimezone: true, mode: "date" }),
-		billingTokenVersion: integer("billing_token_version").default(1),
 		lastSeenAliveAt: timestamp("last_seen_alive_at", { withTimezone: true, mode: "date" }),
 		aliveCheckFailures: integer("alive_check_failures").default(0),
 		pauseReason: text("pause_reason"),
@@ -1448,6 +1462,16 @@ export const sessions = pgTable(
 		),
 	],
 );
+
+/**
+ * Global idempotency lookup table for billing events.
+ * Maintains global uniqueness of idempotency keys across partitions.
+ * Must be inserted into atomically with billing_events within the same transaction.
+ */
+export const billingEventKeys = pgTable("billing_event_keys", {
+	idempotencyKey: text("idempotency_key").primaryKey().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+});
 
 export const billingEvents = pgTable(
 	"billing_events",

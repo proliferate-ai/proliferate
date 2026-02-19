@@ -17,7 +17,7 @@ import {
 	canStartSessionsInState,
 	getStateMessage,
 	isGraceExpired,
-	shouldTerminateSessionsInState,
+	shouldPauseSessionsInState,
 } from "./state";
 import {
 	type BillingPlan,
@@ -130,7 +130,7 @@ export function checkBillingGate(
 			billingState: "exhausted", // Effective state
 			shadowBalance,
 			message: "Grace period expired. Add credits to continue.",
-			action: "terminate_sessions",
+			action: "pause_sessions",
 			errorCode: "GRACE_EXPIRED",
 			terminal: false, // Can be fixed by adding credits
 		};
@@ -143,7 +143,7 @@ export function checkBillingGate(
 			billingState,
 			shadowBalance,
 			message: getStateMessage(billingState, { graceExpiresAt, shadowBalance }),
-			action: shouldTerminateSessionsInState(billingState) ? "terminate_sessions" : "block",
+			action: shouldPauseSessionsInState(billingState) ? "pause_sessions" : "block",
 			errorCode: "STATE_BLOCKED",
 			terminal: billingState === "suspended", // Suspended requires manual intervention
 		};

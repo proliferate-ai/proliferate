@@ -1,8 +1,9 @@
 /**
- * GET/PUT /api/billing/settings
+ * GET/PUT/PATCH /api/billing/settings
  *
- * Get or update billing settings for the active organization.
- * Settings include overage policy and overage cap.
+ * DEPRECATED — thin adapter forwarding to the same service-layer methods as oRPC.
+ * Use the oRPC `billing.updateSettings` procedure instead.
+ * Will be removed after deprecation window (see billing-metering.md §10.6 D3).
  */
 
 import { requireAuth } from "@/lib/auth-helpers";
@@ -17,8 +18,12 @@ const log = logger.child({ route: "billing/settings" });
 const DEFAULT_BILLING_SETTINGS = {
 	overage_policy: "pause" as const,
 	overage_cap_cents: null as number | null,
-	overage_used_this_month_cents: 0,
 };
+
+const DEPRECATION_HEADERS = {
+	Deprecation: "true",
+	Link: '</api/rpc/billing.updateSettings>; rel="successor-version"',
+} as const;
 
 export async function GET() {
 	const authResult = await requireAuth();
@@ -32,22 +37,26 @@ export async function GET() {
 	}
 
 	if (!isBillingEnabled()) {
-		return NextResponse.json({
-			enabled: false,
-			settings: DEFAULT_BILLING_SETTINGS,
-		});
+		return NextResponse.json(
+			{ enabled: false, settings: DEFAULT_BILLING_SETTINGS },
+			{ headers: DEPRECATION_HEADERS },
+		);
 	}
+
 	const org = await orgs.getBillingInfo(orgId);
 	if (!org) {
 		log.error("Failed to fetch org");
 		return NextResponse.json({ error: "Failed to fetch billing settings" }, { status: 500 });
 	}
 
-	return NextResponse.json({
-		enabled: true,
-		configured: !!org.autumnCustomerId,
-		settings: org.billingSettings ?? DEFAULT_BILLING_SETTINGS,
-	});
+	return NextResponse.json(
+		{
+			enabled: true,
+			configured: !!org.autumnCustomerId,
+			settings: org.billingSettings ?? DEFAULT_BILLING_SETTINGS,
+		},
+		{ headers: DEPRECATION_HEADERS },
+	);
 }
 
 export async function PUT(request: Request) {
@@ -63,9 +72,7 @@ export async function PUT(request: Request) {
 		return NextResponse.json({ error: "No active organization" }, { status: 400 });
 	}
 
-	// Only admins/owners can update billing settings
 	const role = await getUserOrgRole(userId, orgId);
-
 	if (!role || role === "member") {
 		return NextResponse.json({ error: "Only admins can update billing settings" }, { status: 403 });
 	}
@@ -73,7 +80,6 @@ export async function PUT(request: Request) {
 	const body = await request.json();
 	const { overage_policy, overage_cap_cents } = body;
 
-	// Validate overage_policy
 	if (overage_policy && !["pause", "allow"].includes(overage_policy)) {
 		return NextResponse.json(
 			{ error: "Invalid overage_policy. Must be 'pause' or 'allow'" },
@@ -81,7 +87,6 @@ export async function PUT(request: Request) {
 		);
 	}
 
-	// Validate overage_cap_cents
 	if (
 		overage_cap_cents !== undefined &&
 		overage_cap_cents !== null &&
@@ -93,22 +98,18 @@ export async function PUT(request: Request) {
 		);
 	}
 
-	// Get current settings (cast to handle new columns)
 	const org = await orgs.getBillingInfo(orgId);
 	if (!org) {
 		return NextResponse.json({ error: "Failed to fetch current settings" }, { status: 500 });
 	}
 
 	const currentSettings = org.billingSettings ?? DEFAULT_BILLING_SETTINGS;
-
-	// Merge updates
 	const newSettings = {
 		...currentSettings,
 		...(overage_policy !== undefined && { overage_policy }),
 		...(overage_cap_cents !== undefined && { overage_cap_cents }),
 	};
 
-	// Update (cast to any to handle new column)
 	try {
 		await orgs.updateBillingSettings(orgId, newSettings);
 	} catch (error) {
@@ -116,10 +117,12 @@ export async function PUT(request: Request) {
 		return NextResponse.json({ error: "Failed to update billing settings" }, { status: 500 });
 	}
 
-	return NextResponse.json({ success: true, settings: newSettings });
+	return NextResponse.json(
+		{ success: true, settings: newSettings },
+		{ headers: DEPRECATION_HEADERS },
+	);
 }
 
-// PATCH is an alias for PUT
 export async function PATCH(request: Request) {
 	return PUT(request);
 }

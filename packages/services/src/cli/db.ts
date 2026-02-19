@@ -753,7 +753,6 @@ export async function getSessionByIdAndOrg(
 		agent_config: row.agentConfig,
 		system_prompt: row.systemPrompt,
 		metered_through_at: toIsoString(row.meteredThroughAt) ?? null,
-		billing_token_version: row.billingTokenVersion,
 		last_seen_alive_at: toIsoString(row.lastSeenAliveAt) ?? null,
 		alive_check_failures: row.aliveCheckFailures,
 		pause_reason: row.pauseReason,
