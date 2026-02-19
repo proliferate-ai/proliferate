@@ -10,12 +10,12 @@
 - Effective service commands resolution (prebuild overrides > repo defaults)
 - Legacy prebuild-level connector persistence for gateway-mediated MCP action sources (transitional; migrating to org scope)
 - Base snapshot build worker (queue, deduplication, status tracking)
-- Repo snapshot build worker (GitHub token hierarchy, commit tracking)
+- Configuration snapshot build worker (GitHub token hierarchy, multi-repo cloning)
 - Prebuild resolver (resolves prebuild at session start)
 - Service commands persistence (JSONB on both repos and prebuilds)
 - Env file persistence (JSONB on prebuilds)
 - Base snapshot status tracking (building/ready/failed)
-- Repo snapshot status tracking (building/ready/failed + commit SHA, inline on repos table)
+- Configuration snapshot status tracking (building/default/ready/failed on configurations table)
 - Setup session finalization (snapshot capture + prebuild creation/update)
 
 ### Out of Scope
@@ -34,18 +34,19 @@
 
 Connector configuration currently exists on prebuilds as a legacy transitional model, consumed by the gateway Actions path (not direct sandbox-native invocation). Planned direction is org-scoped connector catalog ownership in `integrations.md`.
 
-**Snapshots** are pre-built filesystem states at three layers: base (OpenCode + services, no repo), repo (base + cloned repo), and prebuild/session (full working state). This spec owns the *build* side — the workers that create base and repo snapshots. The *resolution* side (picking which layer to use) belongs to `sandbox-providers.md`.
+**Snapshots** are pre-built filesystem states at three layers: base (OpenCode + services, no repo), configuration (base + all configuration repos cloned), and finalized (full working state after user setup). This spec owns the *build* side — the workers that create base and configuration snapshots. The *resolution* side (picking which layer to use) belongs to `sandbox-providers.md`.
 
 **Core entities:**
-- **Repo** — an org-scoped GitHub repository reference. Lifecycle: create → configure → delete.
-- **Prebuild** — a reusable snapshot + metadata record linking one or more repos. Lifecycle: building → ready/failed.
+- **Repo** — an org-scoped GitHub repository reference. Lifecycle: create → configure → delete. Every new repo gets an auto-created single-repo configuration via `createRepoWithConfiguration()`.
+- **Prebuild** — a reusable snapshot + metadata record linking one or more repos. Lifecycle: building → default → ready/failed.
 - **Base snapshot** — a pre-baked sandbox state with OpenCode + services installed, no repo (Layer 1). Built by the base snapshot worker, tracked in `sandbox_base_snapshots`.
-- **Repo snapshot** — a base snapshot + cloned repo (Layer 2). Built by the repo snapshot worker, tracked inline on the `repos` table.
+- **Configuration snapshot** — a base snapshot + all configuration repos cloned (Layer 2). Built by the configuration snapshot worker, tracked on the `configurations` table (`snapshot_id`, `status`, `error`). Status lifecycle: `"building"` → `"default"` (auto-built) or `"failed"`. User finalization: `"default"` → `"ready"`.
 
 **Key invariants:**
 - On the happy path, a prebuild has at least one repo via `prebuild_repos`. Exceptions: CLI prebuild creation treats the repo link as non-fatal (`prebuild-resolver.ts:272`) — a prebuild can briefly exist without `prebuild_repos` if the upsert fails. Setup finalization derives `workspacePath` from `githubRepoName` (e.g., `"org/app"` → `"app"`), not `"."` (`repos-finalize.ts:163`). The standard service path (`createPrebuild`) uses `"."` for single-repo and repo name for multi-repo.
 - Base snapshot deduplication is keyed on `(versionKey, provider, modalAppName)`. Only one build runs per combination.
-- Repo snapshot builds are Modal-only. E2B sessions skip this layer (see `sandbox-providers.md` §6.5).
+- Configuration snapshot builds are Modal-only. E2B sessions skip this layer.
+- Configuration creation is tightly coupled to snapshot building — `createConfiguration()` always enqueues a snapshot build job via `requestConfigurationSnapshotBuild()`. Any future code creating a configuration with `status: "building"` must also trigger snapshot building.
 - Service commands resolution follows a clear precedence: prebuild-level overrides win; if empty, per-repo defaults are merged with workspace context.
 
 ---
@@ -74,9 +75,9 @@ Connector-backed tool access has been migrated from prebuild-scoped JSONB (`preb
 - Reference: `docs/specs/integrations.md`, `packages/services/src/connectors/`
 
 ### GitHub Token Hierarchy
-Repo snapshot builds resolve GitHub tokens with a two-level hierarchy: (1) repo-linked integration connections (prefer GitHub App installation, fall back to Nango OAuth), (2) org-wide GitHub integration. Private repos without a token skip the build.
-- Key detail agents get wrong: The token resolution in the repo snapshot worker is independent from the session-time token resolution in the gateway. They follow the same hierarchy but are separate code paths.
-- Reference: `apps/worker/src/repo-snapshots/index.ts:resolveGitHubToken`
+Configuration snapshot builds resolve GitHub tokens per-repo with a two-level hierarchy: (1) repo-linked integration connections (prefer GitHub App installation, fall back to Nango OAuth), (2) org-wide GitHub integration. Private repos without a token cause the build to fail.
+- Key detail agents get wrong: The token resolution in the snapshot worker is independent from the session-time token resolution in the gateway. They follow the same hierarchy but are separate code paths.
+- Reference: `apps/worker/src/github-token.ts:resolveGitHubToken`
 
 ---
 
@@ -94,8 +95,9 @@ apps/web/src/components/coding-session/
 apps/worker/src/
 ├── base-snapshots/
 │   └── index.ts                     # Base snapshot build worker + startup enqueue
-└── repo-snapshots/
-    └── index.ts                     # Repo snapshot build worker + GitHub token resolution
+├── configuration-snapshots/
+│   └── index.ts                     # Configuration snapshot build worker (multi-repo)
+└── github-token.ts                  # Shared GitHub token resolution utility
 
 apps/gateway/src/lib/
 └── prebuild-resolver.ts             # Prebuild resolution for session creation (direct/managed/CLI)
@@ -104,7 +106,7 @@ packages/services/src/
 ├── repos/
 │   ├── db.ts                        # Repo DB operations (CRUD, snapshot status, service commands)
 │   ├── mapper.ts                    # DB row → API type conversion
-│   └── service.ts                   # Repo business logic (create with snapshot build, service commands)
+│   └── service.ts                   # Repo business logic (create with auto-configuration, service commands)
 ├── prebuilds/
 │   ├── db.ts                        # Prebuild DB operations (CRUD, junction, managed, service commands)
 │   ├── mapper.ts                    # DB row → API type conversion
@@ -119,7 +121,7 @@ packages/db/src/schema/
 └── schema.ts                        # Full schema definitions (repos, prebuilds, sandbox_base_snapshots)
 
 packages/queue/src/
-└── index.ts                         # BullMQ queue/worker factories for base + repo snapshot builds
+└── index.ts                         # BullMQ queue/worker factories for base + configuration snapshot builds
 ```
 
 ---
@@ -252,8 +254,8 @@ interface BaseSnapshotBuildJob {
   modalAppName: string;
 }
 
-interface RepoSnapshotBuildJob {
-  repoId: string;
+interface ConfigurationSnapshotBuildJob {
+  configurationId: string;
   force?: boolean;
 }
 ```
@@ -293,8 +295,8 @@ if (message === "One or more repos not found") {
 
 ### Reliability
 - **Base snapshot builds**: 3 attempts, exponential backoff (10s initial). Concurrency: 1. `insertBuilding()` uses `ON CONFLICT DO NOTHING` for concurrent workers.
-- **Repo snapshot builds**: 3 attempts, exponential backoff (5s initial). Concurrency: 2. Timestamp-based job IDs prevent failed jobs from blocking future rebuilds.
-- **Idempotency**: `markRepoSnapshotBuilding()` won't overwrite a `"ready"` status. `updateSnapshotIdIfNull()` only sets snapshot ID if currently null.
+- **Configuration snapshot builds**: 3 attempts, exponential backoff (5s initial). Concurrency: 2. Timestamp-based job IDs prevent failed jobs from blocking future rebuilds. Skips if configuration already has status `"default"` or `"ready"` with a `snapshotId` (unless `force`).
+- **Idempotency**: `updateSnapshotIdIfNull()` only sets snapshot ID if currently null.
 
 ### Testing Conventions
 - No dedicated tests exist for repos, prebuilds, or snapshot build services/workers today. Coverage comes indirectly from route-level and integration tests.
@@ -309,10 +311,11 @@ if (message === "One or more repos not found") {
 
 **What it does:** Manages org-scoped GitHub repository references.
 
-**Happy path (create)** (`packages/services/src/repos/service.ts:createRepo`):
-1. Check if repo exists by `(organizationId, githubRepoId)`.
+**Happy path (create)** (`packages/services/src/repos/service.ts:createRepoWithConfiguration`):
+1. Call `createRepo()`: check if repo exists by `(organizationId, githubRepoId)`.
 2. If exists: link integration (if provided), un-orphan if needed, return existing.
-3. If new: generate UUID, insert record, fire-and-forget `requestRepoSnapshotBuild()`, link integration.
+3. If new: generate UUID, insert record, link integration.
+4. Auto-create a single-repo configuration via `configurations.createConfiguration()`, which is tightly coupled to snapshot building — it always enqueues a `CONFIGURATION_SNAPSHOT_BUILDS` job.
 
 **Other operations:**
 - `listRepos(orgId)` returns repos with prebuild status computed by `mapper.ts:toRepo` (joins prebuild data).
@@ -382,24 +385,24 @@ if (message === "One or more repos not found") {
 
 **Files touched:** `apps/worker/src/base-snapshots/index.ts`, `packages/services/src/base-snapshots/service.ts`
 
-### 6.6 Repo Snapshot Build Worker — `Implemented`
+### 6.6 Configuration Snapshot Build Worker — `Implemented`
 
-**What it does:** Builds repo snapshots (Layer 2) — base snapshot + cloned repo — for near-zero latency session starts.
+**What it does:** Builds configuration snapshots (Layer 2) — base snapshot + all configuration repos cloned — for near-zero latency session starts.
 
-**Happy path** (`apps/worker/src/repo-snapshots/index.ts`):
-1. Load repo info via `repos.getRepoSnapshotBuildInfo(repoId)`.
-2. Skip if: not GitHub source, no URL, or already ready (unless `force`).
-3. Mark `"building"` via `repos.markRepoSnapshotBuilding(repoId)`.
-4. Resolve GitHub token (see §2: GitHub Token Hierarchy).
-5. Call `ModalLibmodalProvider.createRepoSnapshot({ repoId, repoUrl, token, branch })`.
-6. On success: `repos.markRepoSnapshotReady({ repoId, snapshotId, commitSha })`.
-7. On failure: `repos.markRepoSnapshotFailed({ repoId, error })` + rethrow for retry.
+**Happy path** (`apps/worker/src/configuration-snapshots/index.ts`):
+1. Load configuration info via `configurations.getConfigurationSnapshotBuildInfo(configurationId)`.
+2. Skip if already `"default"` or `"ready"` with `snapshotId` (unless `force`).
+3. Mark `"building"` via `configurations.markConfigurationSnapshotBuilding(configurationId)`.
+4. For each repo in the configuration: resolve GitHub token (see §2: GitHub Token Hierarchy). Fail if private repo lacks token.
+5. Call `ModalLibmodalProvider.createConfigurationSnapshot({ configurationId, repos, branch })`.
+6. On success: `configurations.markConfigurationSnapshotDefault(configurationId, snapshotId)`.
+7. On failure: `configurations.markConfigurationSnapshotFailed(configurationId, error)` + rethrow for retry.
 
-**Trigger:** Automatically enqueued on repo creation via `requestRepoSnapshotBuild()` (fire-and-forget). Uses timestamp-based job IDs to avoid stale deduplication.
+**Trigger:** Automatically enqueued when a configuration is created via `requestConfigurationSnapshotBuild()` (fire-and-forget, tightly coupled to `createConfiguration()`). Also triggered by managed configuration creation. Uses timestamp-based job IDs to avoid stale deduplication.
 
-**Modal-only:** Checks `env.MODAL_APP_NAME` — returns early if not configured.
+**Modal-only:** `requestConfigurationSnapshotBuild()` checks `env.MODAL_APP_NAME` — returns early if not configured.
 
-**Files touched:** `apps/worker/src/repo-snapshots/index.ts`, `packages/services/src/repos/service.ts:requestRepoSnapshotBuild`
+**Files touched:** `apps/worker/src/configuration-snapshots/index.ts`, `apps/worker/src/github-token.ts`, `packages/services/src/configurations/service.ts:requestConfigurationSnapshotBuild`
 
 ### 6.7 Prebuild Resolver — `Implemented`
 
@@ -453,8 +456,8 @@ The resolver supports three modes (direct ID, managed, CLI) and returns a `Resol
 | `sessions-gateway.md` | Gateway → This | `resolvePrebuild()` → `prebuilds.*`, `cli.*` | Session creation calls resolver which creates/queries prebuild records via this spec's services. Resolver logic owned by `sessions-gateway.md` §6.1. |
 | `sessions-gateway.md` | Gateway → This | `prebuilds.getPrebuildReposWithDetails()` | Session store loads repo details for sandbox provisioning |
 | `actions.md` | Actions ↔ Integrations | `org_connectors` table via `connectors.listEnabledConnectors()` | Connector-backed action sources migrated to org-scoped catalog in `integrations.md`. Legacy `prebuilds.connectors` JSONB retained for data preservation only. |
-| `sandbox-providers.md` | Worker → Provider | `ModalLibmodalProvider.createBaseSnapshot()`, `.createRepoSnapshot()` | Snapshot workers call Modal provider directly |
-| `sandbox-providers.md` | Provider ← This | `resolveSnapshotId()` consumes repo snapshot status | Snapshot resolution reads `repoSnapshotId` from repo record |
+| `sandbox-providers.md` | Worker → Provider | `ModalLibmodalProvider.createBaseSnapshot()`, `.createConfigurationSnapshot()` | Snapshot workers call Modal provider directly |
+| `sandbox-providers.md` | Provider ← This | `resolveSnapshotId()` consumes configuration snapshot | Snapshot resolution reads `configurationSnapshotId` from configuration record |
 | `integrations.md` | This → Integrations | `integrations.getRepoConnectionsWithIntegrations()` | Token resolution for repo snapshot builds |
 | `secrets-environment.md` | Finalize → Secrets | `secrets.upsertSecretByRepoAndKey()` | Setup finalization stores encrypted secrets |
 | `agent-contract.md` | Agent → This | `save_service_commands` tool | Agent persists service commands via gateway → services |
@@ -466,7 +469,7 @@ The resolver supports three modes (direct ID, managed, CLI) and returns a `Resol
 - Setup finalization delegates secret storage to `secrets-environment.md` (encryption handled there).
 
 ### Observability
-- Structured logging via `@proliferate/logger` in workers (`module: "base-snapshots"`, `module: "repo-snapshots"`).
+- Structured logging via `@proliferate/logger` in workers (`module: "base-snapshots"`, `module: "configuration-snapshots"`).
 - Prebuilds router uses `logger.child({ handler: "prebuilds" })`.
 - Key log events: build start, build complete (with `snapshotId`), build failure (with error), deduplication skips.
 
@@ -482,10 +485,10 @@ The resolver supports three modes (direct ID, managed, CLI) and returns a `Resol
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **Repo snapshots are Modal-only** — E2B sessions cannot use Layer 2 snapshots. `requestRepoSnapshotBuild()` returns early if `MODAL_APP_NAME` is unset. Impact: E2B sessions always do a live clone. Expected fix: implement E2B template-based repo snapshots.
-- [ ] **Repo snapshot status is inline on repos table** — Unlike base snapshots (separate table), repo snapshot tracking lives as columns on the `repos` table (`repo_snapshot_id`, `repo_snapshot_status`, etc.). Impact: only one snapshot per repo per provider. Expected fix: separate `repo_snapshots` table if multi-provider or multi-branch snapshots are needed.
+- [ ] **Configuration snapshots are Modal-only** — E2B sessions cannot use Layer 2 snapshots. `requestConfigurationSnapshotBuild()` returns early if `MODAL_APP_NAME` is unset. Impact: E2B sessions always do a live clone. Expected fix: implement E2B template-based configuration snapshots.
+- [ ] **Legacy repo snapshot columns remain on repos table** — `repo_snapshot_id`, `repo_snapshot_status`, `repo_snapshot_commit_sha`, `repo_snapshot_built_at`, `repo_snapshot_provider`, `repo_snapshot_error` columns exist on the `repos` table but are no longer written to. Impact: dead columns consuming space. Expected fix: schema migration to drop these columns.
 - [ ] **Managed prebuild lookup scans all managed prebuilds** — `findManagedPrebuilds()` loads all `type = "managed"` prebuilds, then filters by org in-memory. Impact: grows linearly with managed prebuild count. Expected fix: add org-scoped query with DB-level filter.
 - [ ] **Setup finalization lives in the router** — `repos-finalize.ts` contains complex orchestration (snapshot + secrets + prebuild creation) that should be in the services layer. Impact: harder to reuse from non-web contexts. Marked with a TODO in code.
 - [ ] **GitHub search uses unauthenticated API** — `repos.search` calls GitHub API without auth, subject to lower rate limits (60 req/hour per IP). Impact: may fail under heavy usage. Expected fix: use org's GitHub integration token for authenticated search.
-- [ ] **No webhook-driven repo snapshot rebuilds** — Repo snapshots are only built on repo creation. Subsequent pushes to `defaultBranch` don't trigger rebuilds. Impact: repo snapshots become stale over time; git freshness pull compensates at session start. Expected fix: trigger rebuilds from GitHub push webhooks.
+- [ ] **No webhook-driven configuration snapshot rebuilds** — Configuration snapshots are only built on configuration creation. Subsequent pushes to `defaultBranch` don't trigger rebuilds. Impact: configuration snapshots become stale over time; git freshness pull compensates at session start. Expected fix: trigger rebuilds from GitHub push webhooks.
 - [x] **Connector scope is prebuild-scoped (legacy path)** — resolved. Connectors migrated to org-scoped `org_connectors` table. UI moved to Settings → Tools. See `integrations.md` §6.14.

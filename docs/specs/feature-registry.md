@@ -193,7 +193,7 @@
 | Configuration-repo associations | Implemented | `packages/db/src/schema/configurations.ts:configurationRepos` | Many-to-many |
 | Effective service commands | Implemented | `apps/web/src/server/routers/configurations.ts:getEffectiveServiceCommands` | Resolved config |
 | Base snapshot builds | Implemented | `apps/worker/src/base-snapshots/index.ts` | Worker queue, deduplication |
-| Repo snapshot builds | Implemented | `apps/worker/src/repo-snapshots/index.ts` | GitHub token hierarchy, commit tracking |
+| Configuration snapshot builds | Implemented | `apps/worker/src/configuration-snapshots/index.ts` | Multi-repo, tightly coupled to configuration creation |
 | Configuration resolver | Implemented | `apps/gateway/src/lib/configuration-resolver.ts` | Resolves config at session start |
 | Service commands persistence | Implemented | `packages/db/src/schema/configurations.ts:serviceCommands` | JSONB on configurations |
 | Env file persistence | Implemented | `packages/db/src/schema/configurations.ts:envFiles` | JSONB on configurations |
@@ -202,7 +202,7 @@
 | Org connector management UI | Implemented | `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools page with presets, secret picker, validation |
 | Org connector validation endpoint | Implemented | `apps/web/src/server/routers/integrations.ts:validateConnector` | `tools/list` preflight with diagnostics |
 | Base snapshot status tracking | Implemented | `packages/db/src/schema/configurations.ts:sandboxBaseSnapshots` | Building/ready/failed |
-| Repo snapshot status tracking | Implemented | `packages/db/src/schema/configurations.ts:repoSnapshots` | Building/ready/failed + commit SHA |
+| Configuration snapshot status tracking | Implemented | `packages/services/src/configurations/db.ts` | Building/default/ready/failed on configurations table |
 
 ---
 

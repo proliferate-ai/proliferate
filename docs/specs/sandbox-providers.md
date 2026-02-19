@@ -47,7 +47,7 @@ Inside every sandbox, **sandbox-mcp** runs as a sidecar providing an HTTP API (p
 
 ### Provider Factory
 Callers obtain a provider via `getSandboxProvider(type?)` (`packages/shared/src/providers/index.ts`). If no `type` is passed, it reads `DEFAULT_SANDBOX_PROVIDER` from the environment schema (`packages/environment/src/schema.ts`). The provider type is persisted in the session DB record (`sessions.sandbox_provider`) so that resume always uses the same provider that created the sandbox. A thin alias `getSandboxProviderForSnapshot()` exists but is currently unused — gateway code calls `getSandboxProvider(providerType)` directly.
-- Key detail agents get wrong: Session-facing code (gateway, API routes) should go through the factory — not instantiate providers directly. However, snapshot build workers (`apps/worker/src/base-snapshots/`) and the CLI snapshot script (`apps/gateway/src/bin/create-modal-base-snapshot.ts`) instantiate `ModalLibmodalProvider` directly because they need provider-specific methods like `createBaseSnapshot()` / `createRepoSnapshot()` that aren't on the `SandboxProvider` interface.
+- Key detail agents get wrong: Session-facing code (gateway, API routes) should go through the factory — not instantiate providers directly. However, snapshot build workers (`apps/worker/src/base-snapshots/`, `apps/worker/src/configuration-snapshots/`) and the CLI snapshot script (`apps/gateway/src/bin/create-modal-base-snapshot.ts`) instantiate `ModalLibmodalProvider` directly because they need provider-specific methods like `createBaseSnapshot()` / `createConfigurationSnapshot()` that aren't on the `SandboxProvider` interface.
 - Reference: `packages/shared/src/providers/index.ts`
 
 ### SandboxProvider Interface
@@ -541,7 +541,7 @@ Both providers re-write git credentials before pulling (snapshot tokens may be s
 |---|---|---|---|
 | Sessions/Gateway | Gateway -> Provider | `SandboxProvider.ensureSandbox()` | Gateway calls provider to create/recover sandboxes. See `sessions-gateway.md`. |
 | Agent Contract | Provider -> Sandbox | Tool files written to `.opencode/tool/` | Provider injects tool implementations at boot. Tool schemas defined in `agent-contract.md`. |
-| Repos/Configurations | Provider <- Worker | `createBaseSnapshot()`, `createRepoSnapshot()` | Snapshot workers call Modal provider directly. See `repos-prebuilds.md`. |
+| Repos/Configurations | Provider <- Worker | `createBaseSnapshot()`, `createConfigurationSnapshot()` | Snapshot workers call Modal provider directly. See `repos-prebuilds.md`. |
 | Secrets/Environment | Provider <- Gateway | `CreateSandboxOpts.envVars` | Gateway assembles env vars from secrets. See `secrets-environment.md`. |
 | LLM Proxy | Provider -> Sandbox | `ANTHROPIC_BASE_URL`/`ANTHROPIC_API_KEY` env vars | Virtual key injected as env var. See `llm-proxy.md`. |
 | Actions | CLI -> Gateway | `proliferate actions run` | CLI calls gateway action endpoints. See `actions.md`. |
