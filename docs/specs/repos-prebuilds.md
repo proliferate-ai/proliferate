@@ -43,7 +43,7 @@ Connector configuration currently exists on prebuilds as a legacy transitional m
 - **Configuration snapshot** — a base snapshot + all configuration repos cloned (Layer 2). Built by the configuration snapshot worker, tracked on the `configurations` table (`snapshot_id`, `status`, `error`). Status lifecycle: `"building"` → `"default"` (auto-built) or `"failed"`. User finalization: `"default"` → `"ready"`.
 
 **Key invariants:**
-- On the happy path, a prebuild has at least one repo via `prebuild_repos`. Exceptions: CLI prebuild creation treats the repo link as non-fatal (`prebuild-resolver.ts:272`) — a prebuild can briefly exist without `prebuild_repos` if the upsert fails. Setup finalization derives `workspacePath` from `githubRepoName` (e.g., `"org/app"` → `"app"`), not `"."` (`repos-finalize.ts:163`). The standard service path (`createPrebuild`) uses `"."` for single-repo and repo name for multi-repo.
+- On the happy path, a prebuild has at least one repo via `prebuild_repos`. Exceptions: CLI prebuild creation treats the repo link as non-fatal (`prebuild-resolver.ts:272`) — a prebuild can briefly exist without `prebuild_repos` if the upsert fails. Setup finalization derives `workspacePath` from `githubRepoName` (e.g., `"org/app"` → `"app"`), not `"."` (`configurations-finalize.ts:166`). The standard service path (`createPrebuild`) uses `"."` for single-repo and repo name for multi-repo.
 - Base snapshot deduplication is keyed on `(versionKey, provider, modalAppName)`. Only one build runs per combination.
 - Configuration snapshot builds are Modal-only. E2B sessions skip this layer.
 - Configuration creation is tightly coupled to snapshot building — `createConfiguration()` always enqueues a snapshot build job via `requestConfigurationSnapshotBuild()`. Any future code creating a configuration with `status: "building"` must also trigger snapshot building.
@@ -86,7 +86,7 @@ Configuration snapshot builds resolve GitHub tokens per-repo with a two-level hi
 ```
 apps/web/src/server/routers/
 ├── repos.ts                         # Repo oRPC routes (list/get/create/delete/search/available/finalize)
-├── repos-finalize.ts                # Setup session finalization (snapshot + prebuild create/update)
+├── configurations-finalize.ts       # Setup session finalization (snapshot + configuration update/create)
 └── prebuilds.ts                     # Prebuild oRPC routes (list/create/update/delete/service-commands)
 
 apps/web/src/components/coding-session/
@@ -416,18 +416,18 @@ The resolver supports three modes (direct ID, managed, CLI) and returns a `Resol
 
 ### 6.8 Setup Session Finalization — `Implemented`
 
-**What it does:** Captures a sandbox snapshot from a setup session and creates/updates a prebuild record.
+**What it does:** Captures a sandbox snapshot from a setup session and updates/creates a configuration snapshot record.
 
-**Happy path** (`apps/web/src/server/routers/repos-finalize.ts:finalizeSetupHandler`):
-1. Verify session exists and belongs to the repo (via `repoId` or `prebuild_repos`).
+**Happy path** (`apps/web/src/server/routers/configurations-finalize.ts:finalizeSetupHandler`):
+1. Verify session exists and belongs to the repo (via `session.repoId` or `configuration_repos`).
 2. Verify session type is `"setup"` and has a sandbox.
 3. Take filesystem snapshot via provider (`provider.snapshot(sessionId, sandboxId)`).
 4. Store any provided secrets (encryption details — see `secrets-environment.md`).
-5. If existing prebuild: update with new `snapshotId` + `status: "ready"`.
-6. If no prebuild: create new prebuild record, link repo via `prebuild_repos` (workspace path derived from `githubRepoName`), update session's `prebuildId`.
+5. If existing configuration (`updateSnapshotId` or `session.configurationId`): update with new `snapshotId` + `status: "ready"`.
+6. If no existing configuration: create a new configuration, create `configuration_repos` link for the repo, and update session `configurationId`.
 7. Optionally terminate sandbox and stop session (lifecycle details — see `sessions-gateway.md`).
 
-**Files touched:** `apps/web/src/server/routers/repos-finalize.ts`
+**Files touched:** `apps/web/src/server/routers/configurations-finalize.ts`
 
 ### 6.9 Env File Persistence — `Implemented`
 
@@ -488,7 +488,7 @@ The resolver supports three modes (direct ID, managed, CLI) and returns a `Resol
 - [ ] **Configuration snapshots are Modal-only** — E2B sessions cannot use Layer 2 snapshots. `requestConfigurationSnapshotBuild()` returns early if `MODAL_APP_NAME` is unset. Impact: E2B sessions always do a live clone. Expected fix: implement E2B template-based configuration snapshots.
 - [ ] **Legacy repo snapshot columns remain on repos table** — `repo_snapshot_id`, `repo_snapshot_status`, `repo_snapshot_commit_sha`, `repo_snapshot_built_at`, `repo_snapshot_provider`, `repo_snapshot_error` columns exist on the `repos` table but are no longer written to. Impact: dead columns consuming space. Expected fix: schema migration to drop these columns.
 - [ ] **Managed prebuild lookup scans all managed prebuilds** — `findManagedPrebuilds()` loads all `type = "managed"` prebuilds, then filters by org in-memory. Impact: grows linearly with managed prebuild count. Expected fix: add org-scoped query with DB-level filter.
-- [ ] **Setup finalization lives in the router** — `repos-finalize.ts` contains complex orchestration (snapshot + secrets + prebuild creation) that should be in the services layer. Impact: harder to reuse from non-web contexts. Marked with a TODO in code.
+- [ ] **Setup finalization lives in the router** — `configurations-finalize.ts` contains complex orchestration (snapshot + secrets + configuration mutation) that should be in the services layer. Impact: harder to reuse from non-web contexts.
 - [ ] **GitHub search uses unauthenticated API** — `repos.search` calls GitHub API without auth, subject to lower rate limits (60 req/hour per IP). Impact: may fail under heavy usage. Expected fix: use org's GitHub integration token for authenticated search.
 - [ ] **No webhook-driven configuration snapshot rebuilds** — Configuration snapshots are only built on configuration creation. Subsequent pushes to `defaultBranch` don't trigger rebuilds. Impact: configuration snapshots become stale over time; git freshness pull compensates at session start. Expected fix: trigger rebuilds from GitHub push webhooks.
 - [x] **Connector scope is prebuild-scoped (legacy path)** — resolved. Connectors migrated to org-scoped `org_connectors` table. UI moved to Settings → Tools. See `integrations.md` §6.14.
