@@ -613,7 +613,25 @@ export async function getBlockedSummary(orgId: string): Promise<BlockedGroupRow[
 		ORDER BY c.count DESC, b.rn ASC
 	`);
 
-	// Group flat result set by block_reason
+	return groupBlockedRows(rows);
+}
+
+/** Flat row shape returned by the blocked-summary SQL query. */
+export interface BlockedFlatRow {
+	block_reason: string;
+	count: number;
+	id: string | null;
+	title: string | null;
+	initial_prompt: string | null;
+	started_at: string | null;
+	paused_at: string | null;
+}
+
+/**
+ * Group flat SQL rows by block_reason into BlockedGroupRow[].
+ * Extracted for testability — pure function, no DB dependency.
+ */
+export function groupBlockedRows(rows: BlockedFlatRow[]): BlockedGroupRow[] {
 	const groupMap = new Map<string, BlockedGroupRow>();
 	for (const row of rows) {
 		let group = groupMap.get(row.block_reason);
@@ -631,7 +649,6 @@ export async function getBlockedSummary(orgId: string): Promise<BlockedGroupRow[
 			});
 		}
 	}
-
 	return [...groupMap.values()];
 }
 
