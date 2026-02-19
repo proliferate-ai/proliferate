@@ -24,7 +24,12 @@ model_list:
       model: anthropic/claude-opus-4-5-20251101
       api_key: os.environ/ANTHROPIC_API_KEY
 
-  # Claude Opus 4.6
+  # Claude 4.6 models
+  - model_name: anthropic/claude-sonnet-4-6
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
   - model_name: anthropic/claude-opus-4-6
     litellm_params:
       model: anthropic/claude-opus-4-6
@@ -156,7 +161,12 @@ model_list:
       model: anthropic/claude-opus-4-5-20251101
       api_key: os.environ/ANTHROPIC_API_KEY
 
-  # Claude Opus 4.6 (short alias)
+  # Claude 4.6 (short aliases)
+  - model_name: claude-sonnet-4-6
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
   - model_name: claude-opus-4-6
     litellm_params:
       model: anthropic/claude-opus-4-6
