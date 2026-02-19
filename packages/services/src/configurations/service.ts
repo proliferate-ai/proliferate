@@ -6,14 +6,27 @@
 
 import { randomUUID } from "crypto";
 import { env } from "@proliferate/environment/server";
+import { createConfigurationSnapshotBuildQueue } from "@proliferate/queue";
 import type { Configuration, ConfigurationServiceCommand } from "@proliferate/shared";
 import {
 	parseConfigurationServiceCommands,
 	parseServiceCommands,
 	resolveServiceCommands,
 } from "@proliferate/shared/sandbox";
+import { getServicesLogger } from "../logger";
 import * as configurationsDb from "./db";
 import { toConfiguration, toConfigurationPartial, toConfigurations } from "./mapper";
+
+// Lazy-initialized queue for configuration snapshot builds
+let configSnapshotBuildQueue: ReturnType<typeof createConfigurationSnapshotBuildQueue> | null =
+	null;
+
+function getConfigSnapshotBuildQueue() {
+	if (!configSnapshotBuildQueue) {
+		configSnapshotBuildQueue = createConfigurationSnapshotBuildQueue();
+	}
+	return configSnapshotBuildQueue;
+}
 
 // ============================================
 // Types
@@ -128,6 +141,9 @@ export async function createConfiguration(
 		await configurationsDb.deleteById(configurationId);
 		throw new Error("Failed to link repos to configuration");
 	}
+
+	// Tightly coupled: configuration creation always triggers snapshot build
+	void requestConfigurationSnapshotBuild(configurationId);
 
 	return {
 		configurationId,
@@ -261,4 +277,32 @@ export async function getEffectiveServiceCommands(
 	const workspaces = [...new Set(repoRows.map((r) => r.workspacePath))];
 
 	return { source, commands, workspaces };
+}
+
+/**
+ * Request a configuration snapshot build (fire-and-forget).
+ *
+ * Enqueues a background job that boots a sandbox from the base snapshot,
+ * clones all configuration repos, and captures a filesystem snapshot.
+ * Only works when Modal is configured (MODAL_APP_NAME is set).
+ */
+export async function requestConfigurationSnapshotBuild(
+	configurationId: string,
+	options?: { force?: boolean },
+): Promise<void> {
+	if (!env.MODAL_APP_NAME) return;
+
+	try {
+		const queue = getConfigSnapshotBuildQueue();
+		const jobId = `config:${configurationId}:${Date.now()}`;
+		await queue.add(
+			`config:${configurationId}`,
+			{ configurationId, force: options?.force ?? false },
+			{ jobId },
+		);
+	} catch (error) {
+		getServicesLogger()
+			.child({ module: "configurations" })
+			.warn({ err: error, configurationId }, "Failed to enqueue configuration snapshot build");
+	}
 }

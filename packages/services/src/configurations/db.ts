@@ -152,6 +152,26 @@ export interface RepoConfigurationRow {
 	snapshotId: string | null;
 }
 
+/** Configuration snapshot build info (for worker) */
+export interface ConfigurationSnapshotBuildInfoRow {
+	id: string;
+	snapshotId: string | null;
+	status: string | null;
+	sandboxProvider: string | null;
+	error: string | null;
+	configurationRepos: Array<{
+		workspacePath: string;
+		repo: {
+			id: string;
+			githubUrl: string;
+			githubRepoName: string;
+			defaultBranch: string | null;
+			organizationId: string;
+			isPrivate: boolean | null;
+		} | null;
+	}>;
+}
+
 // ============================================
 // Queries
 // ============================================
@@ -732,4 +752,84 @@ export async function getReposForManagedConfiguration(
 	});
 
 	return results;
+}
+
+// ============================================
+// Configuration Snapshot Build Operations
+// ============================================
+
+/**
+ * Get configuration info needed to build a snapshot.
+ * Includes linked repos with details needed for cloning.
+ */
+export async function getConfigurationSnapshotBuildInfo(
+	configurationId: string,
+): Promise<ConfigurationSnapshotBuildInfoRow | null> {
+	const db = getDb();
+	const result = await db.query.configurations.findFirst({
+		where: eq(configurations.id, configurationId),
+		columns: {
+			id: true,
+			snapshotId: true,
+			status: true,
+			sandboxProvider: true,
+			error: true,
+		},
+		with: {
+			configurationRepos: {
+				with: {
+					repo: {
+						columns: {
+							id: true,
+							githubUrl: true,
+							githubRepoName: true,
+							defaultBranch: true,
+							organizationId: true,
+							isPrivate: true,
+						},
+					},
+				},
+			},
+		},
+	});
+	return (result as ConfigurationSnapshotBuildInfoRow | undefined) ?? null;
+}
+
+/**
+ * Mark a configuration as building (snapshot build in progress).
+ */
+export async function markConfigurationSnapshotBuilding(configurationId: string): Promise<void> {
+	const db = getDb();
+	await db
+		.update(configurations)
+		.set({ status: "building", error: null })
+		.where(eq(configurations.id, configurationId));
+}
+
+/**
+ * Mark a configuration snapshot as default (auto-built with repos cloned).
+ */
+export async function markConfigurationSnapshotDefault(
+	configurationId: string,
+	snapshotId: string,
+): Promise<void> {
+	const db = getDb();
+	await db
+		.update(configurations)
+		.set({ snapshotId, status: "default", error: null })
+		.where(eq(configurations.id, configurationId));
+}
+
+/**
+ * Mark a configuration snapshot build as failed.
+ */
+export async function markConfigurationSnapshotFailed(
+	configurationId: string,
+	error: string,
+): Promise<void> {
+	const db = getDb();
+	await db
+		.update(configurations)
+		.set({ status: "failed", error })
+		.where(eq(configurations.id, configurationId));
 }

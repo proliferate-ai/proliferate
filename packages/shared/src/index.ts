@@ -524,7 +524,7 @@ export interface SessionConfig {
 export type SessionStatus = "starting" | "running" | "paused" | "stopped" | "failed";
 
 // Configuration status
-export type ConfigurationStatus = "pending" | "building" | "ready" | "failed";
+export type ConfigurationStatus = "pending" | "building" | "default" | "ready" | "failed";
 
 // ============================================
 // Verification Types

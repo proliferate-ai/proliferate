@@ -5,9 +5,9 @@
  */
 
 import type { OnboardingRepo, OnboardingStatus } from "@proliferate/shared";
+import * as configurationsService from "../configurations/service";
 import { toIsoString } from "../db/serialize";
 import * as orgsDb from "../orgs/db";
-import { requestRepoSnapshotBuild } from "../repos";
 import type { OnboardingMeta } from "../types/onboarding";
 import * as onboardingDb from "./db";
 
@@ -154,7 +154,12 @@ export async function upsertRepoFromGitHub(
 	await onboardingDb.upsertRepoConnection(repoId, integrationId);
 
 	if (isNew) {
-		void requestRepoSnapshotBuild(repoId);
+		// Auto-create a single-repo configuration (which triggers snapshot build)
+		void configurationsService.createConfiguration({
+			organizationId: orgId,
+			userId,
+			repoIds: [repoId],
+		});
 	}
 
 	return repoId;

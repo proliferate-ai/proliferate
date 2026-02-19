@@ -419,18 +419,24 @@ export class ModalLibmodalProvider implements SandboxProvider {
 	}
 
 	/**
-	 * Create a deterministic repo snapshot (Layer 2) from the base snapshot/image.
+	 * Create a configuration snapshot from the base snapshot/image.
 	 *
-	 * This is intended for background jobs. It only clones the repo and snapshots the filesystem.
+	 * Boots an ephemeral sandbox, clones all configuration repos with correct
+	 * workspace paths, snapshots the filesystem, and terminates.
+	 * Intended for background jobs triggered on configuration creation.
 	 */
-	async createRepoSnapshot(input: {
-		repoId: string;
-		repoUrl: string;
-		token?: string;
+	async createConfigurationSnapshot(input: {
+		configurationId: string;
+		repos: Array<{
+			repoUrl: string;
+			token?: string;
+			workspacePath: string;
+			repoId: string;
+		}>;
 		branch: string;
-	}): Promise<{ snapshotId: string; commitSha: string | null }> {
+	}): Promise<{ snapshotId: string }> {
 		const startMs = Date.now();
-		const log = providerLogger.child({ repoId: input.repoId });
+		const log = providerLogger.child({ configurationId: input.configurationId });
 
 		await this.ensureModalAuth("createSandbox");
 		const app = await this.ensureAppInitialized();
@@ -441,14 +447,14 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		const sandboxImage = baseSnapshotId
 			? await this.client.images.fromId(baseSnapshotId)
 			: await this.ensureBaseImageInitialized();
-		logLatency("provider.repo_snapshot.image_loaded", {
+		logLatency("provider.config_snapshot.image_loaded", {
 			provider: this.type,
-			repoId: input.repoId,
+			configurationId: input.configurationId,
 			hasBaseSnapshotId: Boolean(baseSnapshotId),
 			durationMs: Date.now() - imageStartMs,
 		});
 
-		const sandboxName = `repo-snapshot-${input.repoId}-${Date.now()}`;
+		const sandboxName = `config-snapshot-${input.configurationId}-${Date.now()}`;
 		const createStartMs = Date.now();
 		const sandbox = await this.client.sandboxes.create(app, sandboxImage, {
 			command: ["sh", "-c", "rm -f /var/run/docker.pid && exec /usr/local/bin/start-dockerd.sh"],
@@ -464,9 +470,9 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			memoryMiB: 4096,
 			experimentalOptions: { enable_docker: true },
 		});
-		logLatency("provider.repo_snapshot.sandbox_created", {
+		logLatency("provider.config_snapshot.sandbox_created", {
 			provider: this.type,
-			repoId: input.repoId,
+			configurationId: input.configurationId,
 			durationMs: Date.now() - createStartMs,
 		});
 
@@ -480,55 +486,40 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			await cleanProc.wait();
 
 			const setupStartMs = Date.now();
-			const repoDir = await this.setupSandbox(
+			await this.setupSandbox(
 				sandbox,
 				{
 					sessionId: sandboxName,
-					repos: [
-						{
-							repoUrl: input.repoUrl,
-							token: input.token,
-							workspacePath: ".",
-							repoId: input.repoId,
-						},
-					],
+					repos: input.repos,
 					branch: input.branch,
 					envVars: {},
-					systemPrompt: "Repo snapshot build",
+					systemPrompt: "Configuration snapshot build",
 				},
 				false,
 				log,
 			);
-			logLatency("provider.repo_snapshot.clone_complete", {
+			logLatency("provider.config_snapshot.clone_complete", {
 				provider: this.type,
-				repoId: input.repoId,
+				configurationId: input.configurationId,
+				repoCount: input.repos.length,
 				durationMs: Date.now() - setupStartMs,
 			});
 
-			let commitSha: string | null = null;
-			try {
-				const proc = await sandbox.exec(["sh", "-c", `cd '${repoDir}' && git rev-parse HEAD`]);
-				const stdout = await proc.stdout.readText();
-				commitSha = stdout.trim() || null;
-			} catch {
-				// Non-fatal - snapshot is still usable as a baseline.
-			}
-
 			const snapshotStartMs = Date.now();
 			const snapshotImage = await sandbox.snapshotFilesystem();
-			logLatency("provider.repo_snapshot.filesystem", {
+			logLatency("provider.config_snapshot.filesystem", {
 				provider: this.type,
-				repoId: input.repoId,
+				configurationId: input.configurationId,
 				durationMs: Date.now() - snapshotStartMs,
 			});
 
-			logLatency("provider.repo_snapshot.complete", {
+			logLatency("provider.config_snapshot.complete", {
 				provider: this.type,
-				repoId: input.repoId,
+				configurationId: input.configurationId,
 				durationMs: Date.now() - startMs,
 			});
 
-			return { snapshotId: snapshotImage.imageId, commitSha };
+			return { snapshotId: snapshotImage.imageId };
 		} finally {
 			await sandbox.terminate().catch(() => {
 				// Best-effort — ignore errors

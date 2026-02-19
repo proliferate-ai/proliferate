@@ -5,22 +5,12 @@
  */
 
 import { randomUUID } from "crypto";
-import { env } from "@proliferate/environment/server";
-import { createRepoSnapshotBuildQueue } from "@proliferate/queue";
 import type { Repo } from "@proliferate/shared";
+import * as configurationsService from "../configurations/service";
 import { getServicesLogger } from "../logger";
 import type { CreateRepoInput, CreateRepoResult } from "../types/repos";
 import * as reposDb from "./db";
 import { toRepo, toRepoPartial, toRepos } from "./mapper";
-
-let repoSnapshotBuildQueue: ReturnType<typeof createRepoSnapshotBuildQueue> | null = null;
-
-function getRepoSnapshotBuildQueue() {
-	if (!repoSnapshotBuildQueue) {
-		repoSnapshotBuildQueue = createRepoSnapshotBuildQueue();
-	}
-	return repoSnapshotBuildQueue;
-}
 
 // ============================================
 // Service functions
@@ -41,51 +31,6 @@ export async function getRepo(id: string, orgId: string): Promise<Repo | null> {
 	const row = await reposDb.findById(id, orgId);
 	if (!row) return null;
 	return toRepo(row);
-}
-
-export async function getRepoSnapshotBuildInfo(
-	repoId: string,
-): Promise<reposDb.RepoSnapshotBuildInfoRow | null> {
-	return reposDb.getSnapshotBuildInfo(repoId);
-}
-
-export async function markRepoSnapshotBuilding(repoId: string): Promise<boolean> {
-	return reposDb.markRepoSnapshotBuilding(repoId, "modal");
-}
-
-export async function markRepoSnapshotReady(input: {
-	repoId: string;
-	snapshotId: string;
-	commitSha: string | null;
-}): Promise<void> {
-	await reposDb.markRepoSnapshotReady({ ...input, provider: "modal" });
-}
-
-export async function markRepoSnapshotFailed(input: {
-	repoId: string;
-	error: string;
-}): Promise<void> {
-	await reposDb.markRepoSnapshotFailed({ ...input, provider: "modal" });
-}
-
-export async function requestRepoSnapshotBuild(
-	repoId: string,
-	options?: { force?: boolean },
-): Promise<void> {
-	// Repo snapshot builds only work with Modal provider.
-	if (!env.MODAL_APP_NAME) return;
-
-	try {
-		const queue = getRepoSnapshotBuildQueue();
-		// Use timestamp-based jobId so failed jobs don't block future rebuilds.
-		const jobId = `repo:${repoId}:${Date.now()}`;
-		await queue.add(`repo:${repoId}`, { repoId, force: options?.force ?? false }, { jobId });
-		await reposDb.markRepoSnapshotBuilding(repoId, "modal");
-	} catch (error) {
-		getServicesLogger()
-			.child({ module: "repos" })
-			.warn({ err: error, repoId }, "Failed to enqueue repo snapshot build");
-	}
 }
 
 /**
@@ -127,8 +72,6 @@ export async function createRepo(input: CreateRepoInput): Promise<CreateRepoResu
 		isPrivate: input.isPrivate,
 		source: input.source,
 	});
-
-	void requestRepoSnapshotBuild(newRepo.id);
 
 	// Link integration if provided
 	if (input.integrationId) {
@@ -184,4 +127,33 @@ export async function updateServiceCommands(input: {
 	updatedBy: string;
 }): Promise<void> {
 	await reposDb.updateServiceCommands(input);
+}
+
+/**
+ * Create a repo and auto-create an associated single-repo configuration.
+ *
+ * The configuration creation is tightly coupled to snapshot building —
+ * createConfiguration() always enqueues a snapshot build job.
+ */
+export async function createRepoWithConfiguration(
+	input: CreateRepoInput,
+): Promise<CreateRepoResult> {
+	const result = await createRepo(input);
+
+	if (!result.existing) {
+		try {
+			await configurationsService.createConfiguration({
+				organizationId: input.organizationId,
+				userId: input.userId,
+				repoIds: [result.id],
+			});
+		} catch (error) {
+			getServicesLogger()
+				.child({ module: "repos" })
+				.warn({ err: error, repoId: result.id }, "Failed to auto-create configuration for repo");
+			// Don't fail — the repo was created successfully
+		}
+	}
+
+	return result;
 }

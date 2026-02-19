@@ -30,8 +30,11 @@ import { setSharedLogger } from "@proliferate/shared/logger";
 import { startAutomationWorkers, stopAutomationWorkers } from "./automation";
 import { startBaseSnapshotWorkers, stopBaseSnapshotWorkers } from "./base-snapshots";
 import { isBillingWorkerHealthy, startBillingWorker, stopBillingWorker } from "./billing";
+import {
+	startConfigurationSnapshotWorkers,
+	stopConfigurationSnapshotWorkers,
+} from "./configuration-snapshots";
 import { SessionSubscriber } from "./pubsub";
-import { startRepoSnapshotWorkers, stopRepoSnapshotWorkers } from "./repo-snapshots";
 import { SlackClient } from "./slack";
 import { startActionExpirySweeper, stopActionExpirySweeper } from "./sweepers";
 
@@ -100,10 +103,10 @@ if (billingEnabled) {
 
 const automationWorkers = startAutomationWorkers(logger.child({ module: "automation" }));
 
-// Modal-only workers: repo snapshots + base snapshots require Modal provider
+// Modal-only workers: configuration snapshots + base snapshots require Modal provider
 const isModalConfigured = Boolean(env.MODAL_APP_NAME);
-const repoSnapshotWorkers = isModalConfigured
-	? startRepoSnapshotWorkers(logger.child({ module: "repo-snapshots" }))
+const configurationSnapshotWorkers = isModalConfigured
+	? startConfigurationSnapshotWorkers(logger.child({ module: "configuration-snapshots" }))
 	: null;
 const baseSnapshotWorkers = isModalConfigured
 	? startBaseSnapshotWorkers(logger.child({ module: "base-snapshots" }))
@@ -121,7 +124,7 @@ logger.info(
 		slackReceiver: 10,
 		billingEnabled,
 		automationWorkers: ["enrich", "execute", "outbox", "finalizer"],
-		repoSnapshotWorkers: isModalConfigured ? ["build"] : [],
+		configurationSnapshotWorkers: isModalConfigured ? ["build"] : [],
 		baseSnapshotWorkers: isModalConfigured ? ["build"] : [],
 	},
 	"Workers started",
@@ -177,8 +180,8 @@ async function shutdown(): Promise<void> {
 	// Close async clients (closes their queues and workers)
 	await slackClient.close();
 	await stopAutomationWorkers(automationWorkers);
-	if (repoSnapshotWorkers) {
-		await stopRepoSnapshotWorkers(repoSnapshotWorkers);
+	if (configurationSnapshotWorkers) {
+		await stopConfigurationSnapshotWorkers(configurationSnapshotWorkers);
 	}
 	if (baseSnapshotWorkers) {
 		await stopBaseSnapshotWorkers(baseSnapshotWorkers);

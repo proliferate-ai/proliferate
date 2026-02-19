@@ -56,7 +56,7 @@ export const reposRouter = {
 			}),
 		)
 		.handler(async ({ input, context }) => {
-			const result = await repos.createRepo({
+			const result = await repos.createRepoWithConfiguration({
 				organizationId: context.orgId,
 				userId: context.user.id,
 				githubRepoId: input.githubRepoId,

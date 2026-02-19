@@ -13,7 +13,7 @@ export const QUEUE_NAMES = {
 	AUTOMATION_ENRICH: "automation-enrich",
 	AUTOMATION_EXECUTE: "automation-execute",
 	AUTOMATION_FINALIZE: "automation-finalize",
-	REPO_SNAPSHOT_BUILDS: "repo-snapshot-builds",
+	CONFIGURATION_SNAPSHOT_BUILDS: "configuration-snapshot-builds",
 	BASE_SNAPSHOT_BUILDS: "base-snapshot-builds",
 	BILLING_METERING: "billing-metering",
 	BILLING_OUTBOX: "billing-outbox",
@@ -74,10 +74,11 @@ export interface AutomationFinalizeJob {
 }
 
 /**
- * Job to build a deterministic repo snapshot (clone-only baseline).
+ * Job to build a configuration snapshot (base + repos cloned).
+ * Triggered automatically when a configuration is created.
  */
-export interface RepoSnapshotBuildJob {
-	repoId: string;
+export interface ConfigurationSnapshotBuildJob {
+	configurationId: string;
 	force?: boolean;
 }
 
@@ -357,7 +358,7 @@ const inboxGcJobOptions: JobsOptions = {
 	},
 };
 
-const repoSnapshotBuildJobOptions: JobsOptions = {
+const configurationSnapshotBuildJobOptions: JobsOptions = {
 	attempts: 3,
 	backoff: {
 		type: "exponential",
@@ -456,14 +457,14 @@ export function createBaseSnapshotBuildQueue(
 }
 
 /**
- * Create the repo snapshot build queue
+ * Create the configuration snapshot build queue
  */
-export function createRepoSnapshotBuildQueue(
+export function createConfigurationSnapshotBuildQueue(
 	connection?: ConnectionOptions,
-): Queue<RepoSnapshotBuildJob> {
-	return new Queue<RepoSnapshotBuildJob>(QUEUE_NAMES.REPO_SNAPSHOT_BUILDS, {
+): Queue<ConfigurationSnapshotBuildJob> {
+	return new Queue<ConfigurationSnapshotBuildJob>(QUEUE_NAMES.CONFIGURATION_SNAPSHOT_BUILDS, {
 		connection: connection ?? getConnectionOptions(),
-		defaultJobOptions: repoSnapshotBuildJobOptions,
+		defaultJobOptions: configurationSnapshotBuildJobOptions,
 	});
 }
 
@@ -559,14 +560,18 @@ export function createBaseSnapshotBuildWorker(
 	});
 }
 
-export function createRepoSnapshotBuildWorker(
-	processor: (job: Job<RepoSnapshotBuildJob>) => Promise<void>,
+export function createConfigurationSnapshotBuildWorker(
+	processor: (job: Job<ConfigurationSnapshotBuildJob>) => Promise<void>,
 	connection?: ConnectionOptions,
-): Worker<RepoSnapshotBuildJob> {
-	return new Worker<RepoSnapshotBuildJob>(QUEUE_NAMES.REPO_SNAPSHOT_BUILDS, processor, {
-		connection: connection ?? getConnectionOptions(),
-		concurrency: 2,
-	});
+): Worker<ConfigurationSnapshotBuildJob> {
+	return new Worker<ConfigurationSnapshotBuildJob>(
+		QUEUE_NAMES.CONFIGURATION_SNAPSHOT_BUILDS,
+		processor,
+		{
+			connection: connection ?? getConnectionOptions(),
+			concurrency: 2,
+		},
+	);
 }
 
 /**

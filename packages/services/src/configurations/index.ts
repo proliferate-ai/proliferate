@@ -19,6 +19,7 @@ export type {
 	ConfigurationWithOrgRow,
 	ManagedConfigurationRow,
 	RepoWithNameRow,
+	ConfigurationSnapshotBuildInfoRow,
 } from "./db";
 
 // Re-export input types from types file
@@ -62,4 +63,12 @@ export {
 	createManagedConfiguration,
 	createConfigurationRepos,
 	update,
+} from "./db";
+
+// Configuration snapshot build operations (used by worker)
+export {
+	getConfigurationSnapshotBuildInfo,
+	markConfigurationSnapshotBuilding,
+	markConfigurationSnapshotDefault,
+	markConfigurationSnapshotFailed,
 } from "./db";

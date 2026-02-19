@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
 				await Promise.all(
 					repositories.map((repo) =>
 						repos
-							.createRepo({
+							.createRepoWithConfiguration({
 								organizationId: orgId,
 								userId: authResult.session.user.id,
 								githubRepoId: String(repo.id),

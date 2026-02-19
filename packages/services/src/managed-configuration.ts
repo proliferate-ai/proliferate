@@ -13,6 +13,7 @@ import type { SyncClient } from "@proliferate/gateway-clients";
 import { BillingGateError } from "@proliferate/shared/billing";
 import { assertBillingGateForOrg, getOrgPlanLimits } from "./billing/gate";
 import * as configurationsDb from "./configurations/db";
+import { requestConfigurationSnapshotBuild } from "./configurations/service";
 import { getServicesLogger } from "./logger";
 import * as sessionsDb from "./sessions/db";
 
@@ -136,6 +137,9 @@ async function createManagedConfigurationRecord(
 			`Failed to link repos: ${error instanceof Error ? error.message : "Unknown error"}`,
 		);
 	}
+
+	// Tightly coupled: managed configuration creation triggers snapshot build
+	void requestConfigurationSnapshotBuild(configurationId);
 
 	return {
 		configurationId,
