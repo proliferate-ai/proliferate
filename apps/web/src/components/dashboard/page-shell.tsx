@@ -10,7 +10,7 @@ const MAX_WIDTH_MAP = {
 
 interface PageShellProps {
 	title: string;
-	subtitle?: string;
+	subtitle?: React.ReactNode;
 	actions?: React.ReactNode;
 	maxWidth?: keyof typeof MAX_WIDTH_MAP;
 	children: React.ReactNode;

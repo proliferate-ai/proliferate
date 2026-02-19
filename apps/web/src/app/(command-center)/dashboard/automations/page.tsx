@@ -10,6 +10,7 @@ import {
 	PageEmptyState,
 	PlusBadge,
 } from "@/components/dashboard/page-empty-state";
+import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
@@ -131,144 +132,137 @@ export default function AutomationsPage() {
 	const isPending = createAutomation.isPending || createFromTemplate.isPending;
 
 	return (
-		<div className="flex-1 overflow-y-auto">
-			<div className="max-w-4xl mx-auto px-6 py-6">
-				{/* Page header */}
-				<div className="flex items-center justify-between mb-6">
-					<div>
-						<h1 className="text-lg font-semibold tracking-tight text-foreground">Automations</h1>
-						<p className="text-[13px] text-muted-foreground mt-1">
-							Event-driven agents that respond to triggers across your stack.
-						</p>
-					</div>
-					<div className="flex items-center gap-2">
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => setPickerOpen(true)}
-							disabled={isPending}
-						>
-							<BookTemplate className="h-3.5 w-3.5 mr-1.5" />
-							Templates
-						</Button>
-						<Button size="sm" onClick={handleBlankCreate} disabled={isPending}>
-							<Plus className="h-4 w-4 mr-1.5" />
-							New
-						</Button>
-					</div>
-				</div>
-
-				{isLoading ? (
-					<div className="rounded-xl border border-border overflow-hidden">
-						{[1, 2, 3].map((i) => (
-							<div
-								key={i}
-								className="h-12 border-b border-border/50 last:border-0 animate-pulse bg-muted/30"
-							/>
-						))}
-					</div>
-				) : automations.length === 0 ? (
-					<PageEmptyState
-						illustration={<AutomationIllustration />}
-						badge={<PlusBadge />}
-						title="No automations set up"
-						description="Create workflows that automatically triage, assign, and resolve issues as they come in."
+		<PageShell
+			title="Automations"
+			subtitle="Event-driven agents that respond to triggers across your stack."
+			actions={
+				<>
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => setPickerOpen(true)}
+						disabled={isPending}
 					>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => setPickerOpen(true)}
-							disabled={isPending}
-						>
-							<BookTemplate className="h-3.5 w-3.5 mr-1.5" />
-							Browse templates
-						</Button>
-						<Button size="sm" onClick={handleBlankCreate} disabled={isPending}>
-							<Plus className="h-4 w-4 mr-1.5" />
-							New
-						</Button>
-					</PageEmptyState>
-				) : (
-					<>
-						{/* Tabs + Search */}
-						<div className="flex items-center justify-between gap-4 mb-4">
-							<div className="flex items-center gap-1">
-								{TABS.map((tab) => (
-									<button
-										key={tab.value}
-										type="button"
-										onClick={() => setActiveTab(tab.value)}
+						<BookTemplate className="h-3.5 w-3.5 mr-1.5" />
+						Templates
+					</Button>
+					<Button size="sm" onClick={handleBlankCreate} disabled={isPending}>
+						<Plus className="h-4 w-4 mr-1.5" />
+						New
+					</Button>
+				</>
+			}
+		>
+			{isLoading ? (
+				<div className="rounded-xl border border-border overflow-hidden">
+					{[1, 2, 3].map((i) => (
+						<div
+							key={i}
+							className="h-12 border-b border-border/50 last:border-0 animate-pulse bg-muted/30"
+						/>
+					))}
+				</div>
+			) : automations.length === 0 ? (
+				<PageEmptyState
+					illustration={<AutomationIllustration />}
+					badge={<PlusBadge />}
+					title="No automations set up"
+					description="Create workflows that automatically triage, assign, and resolve issues as they come in."
+				>
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => setPickerOpen(true)}
+						disabled={isPending}
+					>
+						<BookTemplate className="h-3.5 w-3.5 mr-1.5" />
+						Browse templates
+					</Button>
+					<Button size="sm" onClick={handleBlankCreate} disabled={isPending}>
+						<Plus className="h-4 w-4 mr-1.5" />
+						New
+					</Button>
+				</PageEmptyState>
+			) : (
+				<>
+					{/* Tabs + Search */}
+					<div className="flex items-center justify-between gap-4 mb-4">
+						<div className="flex items-center gap-1">
+							{TABS.map((tab) => (
+								<button
+									key={tab.value}
+									type="button"
+									onClick={() => setActiveTab(tab.value)}
+									className={cn(
+										"flex items-center gap-1.5 px-3 h-7 text-sm rounded-lg transition-colors",
+										activeTab === tab.value
+											? "bg-card text-foreground font-medium shadow-subtle border border-border/50"
+											: "text-muted-foreground hover:text-foreground",
+									)}
+								>
+									{tab.label}
+									<span
 										className={cn(
-											"flex items-center gap-1.5 px-3 h-7 text-sm rounded-lg transition-colors",
+											"text-xs tabular-nums px-1.5 rounded-full",
 											activeTab === tab.value
-												? "bg-card text-foreground font-medium shadow-subtle border border-border/50"
-												: "text-muted-foreground hover:text-foreground",
+												? "bg-muted text-muted-foreground"
+												: "bg-muted/50 text-muted-foreground/70",
 										)}
 									>
-										{tab.label}
-										<span
-											className={cn(
-												"text-xs tabular-nums px-1.5 rounded-full",
-												activeTab === tab.value
-													? "bg-muted text-muted-foreground"
-													: "bg-muted/50 text-muted-foreground/70",
-											)}
-										>
-											{counts[tab.value]}
-										</span>
-									</button>
-								))}
-							</div>
-							<div className="relative">
-								<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-								<Input
-									value={searchQuery}
-									onChange={(e) => setSearchQuery(e.target.value)}
-									placeholder="Search"
-									className="h-8 w-48 pl-8 text-sm bg-muted/50 border-0"
-								/>
-							</div>
+										{counts[tab.value]}
+									</span>
+								</button>
+							))}
 						</div>
+						<div className="relative">
+							<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+							<Input
+								value={searchQuery}
+								onChange={(e) => setSearchQuery(e.target.value)}
+								placeholder="Search"
+								className="h-8 w-48 pl-8 text-sm bg-muted/50 border-0"
+							/>
+						</div>
+					</div>
 
-						{/* List */}
-						{filteredAutomations.length === 0 ? (
-							<div className="text-center py-12">
-								<p className="text-sm text-muted-foreground">
-									{searchQuery.trim()
-										? "No automations match your search."
-										: `No ${activeTab} automations.`}
-								</p>
+					{/* List */}
+					{filteredAutomations.length === 0 ? (
+						<div className="text-center py-12">
+							<p className="text-sm text-muted-foreground">
+								{searchQuery.trim()
+									? "No automations match your search."
+									: `No ${activeTab} automations.`}
+							</p>
+						</div>
+					) : (
+						<div className="rounded-xl border border-border overflow-hidden">
+							{/* Column headers */}
+							<div className="flex items-center gap-4 px-4 py-2 border-b border-border bg-muted/30 text-xs text-muted-foreground">
+								<div className="flex-1 min-w-0">Name</div>
+								<div className="hidden sm:block w-16 shrink-0">Scope</div>
+								<div className="hidden md:block w-28 shrink-0">Triggers</div>
+								<div className="hidden md:block w-24 shrink-0">Actions</div>
+								<div className="hidden lg:block w-16 shrink-0 text-right">Created</div>
+								<div className="w-16 shrink-0 text-right">Updated</div>
 							</div>
-						) : (
-							<div className="rounded-xl border border-border overflow-hidden">
-								{/* Column headers */}
-								<div className="flex items-center gap-4 px-4 py-2 border-b border-border bg-muted/30 text-xs text-muted-foreground">
-									<div className="flex-1 min-w-0">Name</div>
-									<div className="hidden sm:block w-16 shrink-0">Scope</div>
-									<div className="hidden md:block w-28 shrink-0">Triggers</div>
-									<div className="hidden md:block w-24 shrink-0">Actions</div>
-									<div className="hidden lg:block w-16 shrink-0 text-right">Created</div>
-									<div className="w-16 shrink-0 text-right">Updated</div>
-								</div>
-								{filteredAutomations.map((automation) => (
-									<AutomationListRow
-										key={automation.id}
-										id={automation.id}
-										name={automation.name}
-										enabled={automation.enabled}
-										createdAt={automation.created_at}
-										updatedAt={automation.updated_at}
-										triggerCount={automation._count.triggers}
-										scheduleCount={automation._count.schedules}
-										activeProviders={automation.activeProviders}
-										enabledTools={automation.enabled_tools}
-									/>
-								))}
-							</div>
-						)}
-					</>
-				)}
-			</div>
+							{filteredAutomations.map((automation) => (
+								<AutomationListRow
+									key={automation.id}
+									id={automation.id}
+									name={automation.name}
+									enabled={automation.enabled}
+									createdAt={automation.created_at}
+									updatedAt={automation.updated_at}
+									triggerCount={automation._count.triggers}
+									scheduleCount={automation._count.schedules}
+									activeProviders={automation.activeProviders}
+									enabledTools={automation.enabled_tools}
+								/>
+							))}
+						</div>
+					)}
+				</>
+			)}
 
 			{/* Template picker modal */}
 			<TemplatePickerDialog
@@ -281,6 +275,6 @@ export default function AutomationsPage() {
 				isPending={isPending}
 				error={createError}
 			/>
-		</div>
+		</PageShell>
 	);
 }
