@@ -98,6 +98,7 @@ export async function pauseSessionHandler(
 	try {
 		await sessions.updateSession(sessionId, {
 			status: "paused",
+			pauseReason: "manual",
 			snapshotId,
 			sandboxId: null,
 			openCodeTunnelUrl: null,

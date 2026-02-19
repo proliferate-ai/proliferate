@@ -46,10 +46,13 @@ export function InboxTray({ sessionId, token, pendingApprovals }: InboxTrayProps
 	const canApprove =
 		!!orgData?.currentUserRole && hasRoleOrHigher(orgData.currentUserRole, "admin");
 
-	if (items.length === 0) return null;
+	// Blocked groups are org-level concerns — only shown on /dashboard/inbox
+	const trayItems = items.filter((i) => i.type !== "blocked");
 
-	const visible = items.slice(0, MAX_VISIBLE_CARDS);
-	const overflow = items.length - MAX_VISIBLE_CARDS;
+	if (trayItems.length === 0) return null;
+
+	const visible = trayItems.slice(0, MAX_VISIBLE_CARDS);
+	const overflow = trayItems.length - MAX_VISIBLE_CARDS;
 
 	return (
 		<div className="shrink-0 px-3 pb-2">
@@ -62,9 +65,9 @@ export function InboxTray({ sessionId, token, pendingApprovals }: InboxTrayProps
 							token={token}
 							canApprove={canApprove}
 						/>
-					) : (
+					) : item.type === "run" ? (
 						<RunCard key={item.data.id} run={item.data} />
-					),
+					) : null,
 				)}
 				{overflow > 0 && (
 					<p className="text-xs text-muted-foreground text-center py-0.5">

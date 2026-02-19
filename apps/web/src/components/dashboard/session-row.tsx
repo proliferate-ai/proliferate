@@ -1,22 +1,17 @@
 "use client";
 
-import { ProliferateIcon, ProliferateLoadingIcon } from "@/components/ui/icons";
+import { BlocksIcon, BlocksLoadingIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime, getRepoShortName } from "@/lib/utils";
-
-const STATUS_COLORS: Record<string, string> = {
-	running: "text-emerald-500",
-	starting: "text-muted-foreground",
-	paused: "text-amber-500",
-	suspended: "text-orange-500",
-	stopped: "text-muted-foreground/50",
-};
+import { deriveDisplayStatus } from "@proliferate/shared/sessions";
 
 interface SessionRowProps {
 	title: string | null;
+	promptSnippet?: string | null;
 	repoName: string | null;
 	branchName: string | null;
 	status: string | null;
+	pauseReason?: string | null;
 	lastActivityAt: string | null;
 	startedAt: string | null;
 	className?: string;
@@ -28,9 +23,11 @@ interface SessionRowProps {
  */
 export function SessionRow({
 	title,
+	promptSnippet,
 	repoName,
 	branchName,
 	status,
+	pauseReason,
 	lastActivityAt,
 	startedAt,
 	className,
@@ -38,7 +35,18 @@ export function SessionRow({
 	const repoShortName = repoName ? getRepoShortName(repoName) : "unknown";
 	const activityDate = lastActivityAt || startedAt;
 	const relativeTime = activityDate ? formatRelativeTime(activityDate) : "unknown";
-	const displayTitle = title || `${repoShortName}${branchName ? ` (${branchName})` : ""}`;
+	const repoAndBranch = `${repoShortName}${branchName ? ` (${branchName})` : ""}`;
+	const displayTitle = title || promptSnippet || repoAndBranch;
+
+	const displayStatus = deriveDisplayStatus(status, pauseReason);
+	const isAnimated = displayStatus === "active" || displayStatus === "recovering";
+	const Icon = isAnimated ? BlocksLoadingIcon : BlocksIcon;
+	const color =
+		displayStatus === "blocked" || displayStatus === "failed"
+			? "text-destructive"
+			: displayStatus === "active"
+				? "text-foreground"
+				: "text-muted-foreground/50";
 
 	return (
 		<div className={cn("flex items-start min-w-0", className)}>
@@ -51,13 +59,7 @@ export function SessionRow({
 					{branchName && ` · ${branchName}`}
 				</p>
 			</div>
-			{status &&
-				(() => {
-					const isAnimated = status === "running" || status === "starting";
-					const Icon = isAnimated ? ProliferateLoadingIcon : ProliferateIcon;
-					const color = STATUS_COLORS[status] ?? STATUS_COLORS.stopped;
-					return <Icon className={`h-3.5 w-3.5 mt-0.5 ml-2 flex-shrink-0 ${color}`} />;
-				})()}
+			{status && <Icon className={`h-3.5 w-3.5 mt-0.5 ml-2 flex-shrink-0 ${color}`} />}
 		</div>
 	);
 }

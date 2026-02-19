@@ -4,11 +4,16 @@ import { useWsToken } from "@/components/coding-session/runtime/use-ws-token";
 import { Button } from "@/components/ui/button";
 import { useSetActionMode } from "@/hooks/use-action-modes";
 import { useApproveAction, useDenyAction } from "@/hooks/use-actions";
-import type { ApprovalWithSession, AttentionItem } from "@/hooks/use-attention-inbox";
+import type { ApprovalWithSession, AttentionItem, BlockedGroup } from "@/hooks/use-attention-inbox";
+import { useOrgMembersAndInvitations } from "@/hooks/use-orgs";
+import { useSessionData } from "@/hooks/use-sessions";
+import { useSession } from "@/lib/auth-client";
+import { type OrgRole, hasRoleOrHigher } from "@/lib/roles";
 import { formatRelativeTime } from "@/lib/utils";
 import type { PendingRunSummary } from "@proliferate/shared";
 import {
 	AlertCircle,
+	AlertOctagon,
 	Check,
 	ExternalLink,
 	Hand,
@@ -63,6 +68,9 @@ export function InboxItem({ item }: { item: AttentionItem }) {
 	if (item.type === "approval") {
 		return <ApprovalItem data={item.data} />;
 	}
+	if (item.type === "blocked") {
+		return <BlockedGroupItem data={item.data} />;
+	}
 	return <RunItem data={item.data} />;
 }
 
@@ -73,6 +81,7 @@ export function InboxItem({ item }: { item: AttentionItem }) {
 function ApprovalItem({ data }: { data: ApprovalWithSession }) {
 	const { approval, sessionId, sessionTitle } = data;
 	const { token } = useWsToken();
+	const { data: session } = useSessionData(sessionId);
 
 	const approveAction = useApproveAction();
 	const denyAction = useDenyAction();
@@ -137,6 +146,11 @@ function ApprovalItem({ data }: { data: ApprovalWithSession }) {
 						{sessionTitle || "View session"}
 						{timeAgo && ` · ${timeAgo}`}
 					</p>
+					{session?.promptSnippet && (
+						<p className="text-xs text-muted-foreground mt-1 truncate">
+							The agent was working on: {session.promptSnippet}
+						</p>
+					)}
 				</div>
 				{sessionId && (
 					<Link
@@ -205,6 +219,7 @@ function getRunStatusInfo(status: string) {
 function RunItem({ data }: { data: PendingRunSummary }) {
 	const statusInfo = getRunStatusInfo(data.status);
 	const StatusIcon = statusInfo.icon;
+	const { data: session } = useSessionData(data.session_id ?? "");
 
 	const title =
 		data.status === "failed"
@@ -227,6 +242,11 @@ function RunItem({ data }: { data: PendingRunSummary }) {
 						{data.error_message ? `${data.error_message} · ` : ""}
 						{timeAgo}
 					</p>
+					{session?.promptSnippet && (
+						<p className="text-xs text-muted-foreground mt-1 truncate">
+							The agent was working on: {session.promptSnippet}
+						</p>
+					)}
 				</div>
 				{data.session_id && (
 					<Link href={`/workspace/${data.session_id}?runId=${data.id}`} className="shrink-0 mt-0.5">
@@ -235,6 +255,63 @@ function RunItem({ data }: { data: PendingRunSummary }) {
 							<span className="ml-1">View Session</span>
 						</Button>
 					</Link>
+				)}
+			</div>
+		</div>
+	);
+}
+
+// ============================================
+// Blocked Group Item
+// ============================================
+
+function BlockedGroupItem({ data }: { data: BlockedGroup }) {
+	const { data: authSession } = useSession();
+	const { data: orgData } = useOrgMembersAndInvitations(
+		authSession?.session?.activeOrganizationId ?? "",
+	);
+	const currentUserRole = orgData?.currentUserRole as OrgRole | undefined;
+	const isAdmin = !!currentUserRole && hasRoleOrHigher(currentUserRole, "admin");
+
+	return (
+		<div className="rounded-xl border border-border bg-card p-3">
+			<div className="flex items-start gap-3">
+				<AlertOctagon className="h-4 w-4 shrink-0 text-destructive mt-0.5" />
+				<div className="flex-1 min-w-0">
+					<p className="text-sm font-medium text-foreground">
+						{data.count} session{data.count !== 1 ? "s" : ""} blocked
+					</p>
+					<p className="text-xs text-muted-foreground mt-0.5">{data.reason}</p>
+				</div>
+			</div>
+
+			{data.previewSessions.length > 0 && (
+				<div className="mt-3 ml-7 space-y-2">
+					{data.previewSessions.map((session) => (
+						<div key={session.id} className="flex items-center justify-between text-xs gap-2">
+							<span className="text-foreground truncate">
+								{session.title || session.promptSnippet || "Untitled session"}
+							</span>
+							<Link
+								href={`/workspace/${session.id}`}
+								className="text-muted-foreground hover:text-foreground shrink-0"
+							>
+								<ExternalLink className="h-3 w-3" />
+							</Link>
+						</div>
+					))}
+				</div>
+			)}
+
+			<div className="mt-3 ml-7">
+				{isAdmin ? (
+					<Button size="sm" variant="default" className="h-7 text-xs px-2.5" asChild>
+						<Link href="/settings/billing">Update Billing</Link>
+					</Button>
+				) : (
+					<p className="text-xs text-muted-foreground">
+						Contact your organization administrator to resolve this billing issue.
+					</p>
 				)}
 			</div>
 		</div>

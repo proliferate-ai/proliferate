@@ -81,6 +81,7 @@ export const sessionsRouter = {
 				sessionType: input.sessionType,
 				modelId: input.modelId,
 				reasoningEffort: input.reasoningEffort,
+				initialPrompt: input.initialPrompt,
 				orgId: context.orgId,
 				userId: context.user.id,
 			});
@@ -164,6 +165,33 @@ export const sessionsRouter = {
 				throw new ORPCError("NOT_FOUND", { message: "Session not found" });
 			}
 			return status;
+		}),
+
+	/**
+	 * Get billing-blocked sessions grouped by reason for inbox display.
+	 */
+	blockedSummary: orgProcedure
+		.output(
+			z.object({
+				groups: z.array(
+					z.object({
+						reason: z.string(),
+						count: z.number(),
+						previewSessions: z.array(
+							z.object({
+								id: z.string(),
+								title: z.string().nullable(),
+								promptSnippet: z.string().nullable(),
+								startedAt: z.string().nullable(),
+								pausedAt: z.string().nullable(),
+							}),
+						),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ context }) => {
+			return sessions.getBlockedSummary(context.orgId);
 		}),
 
 	/**

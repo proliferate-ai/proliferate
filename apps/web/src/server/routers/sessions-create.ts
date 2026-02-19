@@ -30,6 +30,7 @@ interface CreateSessionHandlerInput {
 	sessionType?: "setup" | "coding";
 	modelId?: string;
 	reasoningEffort?: "quick" | "normal" | "deep";
+	initialPrompt?: string;
 	orgId: string;
 	userId: string;
 }
@@ -51,6 +52,7 @@ export async function createSessionHandler(
 		sessionType = "coding",
 		modelId: requestedModelId,
 		reasoningEffort,
+		initialPrompt,
 		orgId,
 		userId,
 	} = input;
@@ -72,20 +74,28 @@ export async function createSessionHandler(
 
 	// Scratch path: no configuration, just boot from base snapshot
 	if (!configurationId) {
-		return createScratchSession({ sessionType, agentConfig, orgId, userId });
+		return createScratchSession({ sessionType, agentConfig, initialPrompt, orgId, userId });
 	}
 
 	// Configuration-backed path: existing flow
-	return createConfigurationSession({ configurationId, sessionType, agentConfig, orgId, userId });
+	return createConfigurationSession({
+		configurationId,
+		sessionType,
+		agentConfig,
+		initialPrompt,
+		orgId,
+		userId,
+	});
 }
 
 async function createScratchSession(input: {
 	sessionType: string;
 	agentConfig: AgentConfig;
+	initialPrompt?: string;
 	orgId: string;
 	userId: string;
 }): Promise<CreateSessionResult> {
-	const { sessionType, agentConfig, orgId, userId } = input;
+	const { sessionType, agentConfig, initialPrompt, orgId, userId } = input;
 
 	const provider = getSandboxProvider();
 	const sessionId = randomUUID();
@@ -103,6 +113,7 @@ async function createScratchSession(input: {
 			status: "starting",
 			sandboxProvider: provider.type,
 			snapshotId: null,
+			initialPrompt,
 			agentConfig: {
 				modelId: agentConfig.modelId,
 				...(agentConfig.reasoningEffort && { reasoningEffort: agentConfig.reasoningEffort }),
@@ -130,10 +141,11 @@ async function createConfigurationSession(input: {
 	configurationId: string;
 	sessionType: string;
 	agentConfig: AgentConfig;
+	initialPrompt?: string;
 	orgId: string;
 	userId: string;
 }): Promise<CreateSessionResult> {
-	const { configurationId, sessionType, agentConfig, orgId, userId } = input;
+	const { configurationId, sessionType, agentConfig, initialPrompt, orgId, userId } = input;
 
 	// Get configuration by ID
 	const configuration = await configurations.findByIdForSession(configurationId);
@@ -195,6 +207,7 @@ async function createConfigurationSession(input: {
 			status: "starting",
 			sandboxProvider: provider.type,
 			snapshotId,
+			initialPrompt,
 			agentConfig: {
 				modelId: agentConfig.modelId,
 				...(agentConfig.reasoningEffort && { reasoningEffort: agentConfig.reasoningEffort }),

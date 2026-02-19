@@ -7,6 +7,8 @@
  */
 
 import type { Session } from "@proliferate/shared";
+import { getBlockedReasonText, sanitizePromptSnippet } from "@proliferate/shared/sessions";
+import { toIsoString } from "../db/serialize";
 import type { ListSessionsOptions, SessionStatus, UpdateSessionInput } from "../types/sessions";
 import type { SessionRow } from "./db";
 import * as sessionsDb from "./db";
@@ -41,7 +43,7 @@ export async function listSessions(
 export async function getSession(id: string, orgId: string): Promise<Session | null> {
 	const row = await sessionsDb.findById(id, orgId);
 	if (!row) return null;
-	return toSession(row);
+	return toSession(row, { includeInitialPrompt: true });
 }
 
 /**
@@ -133,4 +135,48 @@ export async function getSessionCountsByOrganization(
 	orgId: string,
 ): Promise<{ running: number; paused: number }> {
 	return sessionsDb.getSessionCountsByOrganization(orgId);
+}
+
+// ============================================
+// Blocked Summary (Inbox)
+// ============================================
+
+export interface BlockedSummaryPreviewSession {
+	id: string;
+	title: string | null;
+	promptSnippet: string | null;
+	startedAt: string | null;
+	pausedAt: string | null;
+}
+
+export interface BlockedSummaryGroup {
+	reason: string;
+	count: number;
+	previewSessions: BlockedSummaryPreviewSession[];
+}
+
+export interface BlockedSummary {
+	groups: BlockedSummaryGroup[];
+}
+
+/**
+ * Get billing-blocked sessions grouped by reason for inbox display.
+ */
+export async function getBlockedSummary(orgId: string): Promise<BlockedSummary> {
+	const rows = await sessionsDb.getBlockedSummary(orgId);
+	return {
+		groups: rows.map((row) => ({
+			reason:
+				getBlockedReasonText(row.reason, row.reason === "suspended" ? "suspended" : "paused") ??
+				row.reason,
+			count: row.count,
+			previewSessions: row.previewSessions.map((s) => ({
+				id: s.id,
+				title: s.title,
+				promptSnippet: sanitizePromptSnippet(s.initialPrompt),
+				startedAt: toIsoString(s.startedAt),
+				pausedAt: toIsoString(s.pausedAt),
+			})),
+		})),
+	};
 }

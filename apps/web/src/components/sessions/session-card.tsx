@@ -12,8 +12,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
 	AutomationsIcon,
-	ProliferateIcon,
-	ProliferateLoadingIcon,
+	BlocksIcon,
+	BlocksLoadingIcon,
 	SlackIcon,
 } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
@@ -22,8 +22,13 @@ import { useDeleteSession, usePrefetchSession, useRenameSession } from "@/hooks/
 import { cn } from "@/lib/utils";
 import type { PendingRunSummary } from "@proliferate/shared";
 import type { Session } from "@proliferate/shared/contracts";
+import {
+	type DisplayStatus,
+	deriveDisplayStatus,
+	getBlockedReasonText,
+} from "@proliferate/shared/sessions";
 import { formatDistanceToNow } from "date-fns";
-import { AlertTriangle, GitBranch, Terminal } from "lucide-react";
+import { AlertTriangle, GitBranch, RotateCcw, Terminal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -38,37 +43,67 @@ function getRepoShortName(fullName: string): string {
 	return parts[parts.length - 1];
 }
 
-const STATUS_CONFIG: Record<string, { animated: boolean; label: string; colorClassName: string }> =
-	{
-		running: {
-			animated: true,
-			label: "Running",
-			colorClassName: "text-emerald-500",
-		},
-		starting: {
-			animated: true,
-			label: "Starting",
-			colorClassName: "text-muted-foreground",
-		},
-		paused: {
-			animated: false,
-			label: "Paused",
-			colorClassName: "text-amber-500",
-		},
-		suspended: {
-			animated: false,
-			label: "Suspended",
-			colorClassName: "text-orange-500",
-		},
-		stopped: {
-			animated: false,
-			label: "Stopped",
-			colorClassName: "text-muted-foreground/50",
-		},
-	};
+const DISPLAY_STATUS_CONFIG: Record<
+	DisplayStatus,
+	{ animated: boolean; label: string; colorClassName: string }
+> = {
+	active: {
+		animated: true,
+		label: "Running",
+		colorClassName: "text-foreground",
+	},
+	idle: {
+		animated: false,
+		label: "Idle",
+		colorClassName: "text-muted-foreground",
+	},
+	paused: {
+		animated: false,
+		label: "Paused",
+		colorClassName: "text-muted-foreground",
+	},
+	blocked: {
+		animated: false,
+		label: "Blocked",
+		colorClassName: "text-destructive",
+	},
+	recovering: {
+		animated: true,
+		label: "Reconnecting",
+		colorClassName: "text-muted-foreground",
+	},
+	completed: {
+		animated: false,
+		label: "Completed",
+		colorClassName: "text-muted-foreground/50",
+	},
+	failed: {
+		animated: false,
+		label: "Failed",
+		colorClassName: "text-destructive",
+	},
+};
 
-function getStatusConfig(status: Session["status"]) {
-	return STATUS_CONFIG[status ?? "stopped"] ?? STATUS_CONFIG.stopped;
+/**
+ * Build context subtitle based on display status.
+ */
+function getContextSubtitle(session: Session, displayStatus: DisplayStatus): string | null {
+	switch (displayStatus) {
+		case "idle":
+			return session.promptSnippet ?? null;
+		case "blocked":
+			return getBlockedReasonText(session.pauseReason, session.status);
+		case "recovering":
+			return "Reconnecting...";
+		case "completed":
+		case "failed": {
+			const endDate = session.endedAt ?? session.lastActivityAt;
+			if (!endDate) return null;
+			return formatDistanceToNow(new Date(endDate), { addSuffix: true });
+		}
+		default:
+			return null;
+	}
 }
 
 function OriginBadge({ session }: { session: Session }) {
@@ -123,25 +158,29 @@ export function SessionListRow({ session, pendingRun, isNew }: SessionListRowPro
 	const [menuOpen, setMenuOpen] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 
-	const activityDate = session.lastActivityAt || session.startedAt;
-	const timeAgo = activityDate
-		? formatDistanceToNow(new Date(activityDate), { addSuffix: true })
-		: null;
+	const displayStatus = deriveDisplayStatus(session.status, session.pauseReason);
+	const config = DISPLAY_STATUS_CONFIG[displayStatus];
+	const Icon = config.animated ? BlocksLoadingIcon : BlocksIcon;
+	const isResumable =
+		session.snapshotId != null && (displayStatus === "idle" || displayStatus === "paused");
 
 	const repoShortName = session.repo?.githubRepoName
 		? getRepoShortName(session.repo.githubRepoName)
 		: null;
 
-	const displayTitle =
-		session.title ||
-		`${repoShortName ?? "Untitled"}${session.branchName ? ` (${session.branchName})` : ""}`;
+	const repoAndBranch = `${repoShortName ?? "Untitled"}${session.branchName ? ` (${session.branchName})` : ""}`;
+	const displayTitle = session.title || session.promptSnippet || repoAndBranch;
+
+	const contextSubtitle = getContextSubtitle(session, displayStatus);
+
+	const activityDate = session.lastActivityAt || session.startedAt;
+	const timeAgo = activityDate
+		? formatDistanceToNow(new Date(activityDate), { addSuffix: true })
+		: null;
 
 	const metaParts: string[] = [];
 	if (repoShortName) metaParts.push(repoShortName);
-	if (timeAgo) metaParts.push(timeAgo);
-
-	const config = getStatusConfig(session.status);
-	const Icon = config.animated ? ProliferateLoadingIcon : ProliferateIcon;
+	if (!contextSubtitle && timeAgo) metaParts.push(timeAgo);
 
 	const href = pendingRun
 		? `/workspace/${session.id}?runId=${pendingRun.id}`
@@ -204,22 +243,29 @@ export function SessionListRow({ session, pendingRun, isNew }: SessionListRowPro
 			>
 				{pendingRun && <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />}
 
-				<div className="font-medium text-foreground truncate min-w-0 flex-1">
-					{isEditing ? (
-						<Input
-							ref={inputRef}
-							type="text"
-							variant="inline"
-							size="auto"
-							value={editValue}
-							onChange={(e) => setEditValue(e.target.value)}
-							onBlur={handleSave}
-							onKeyDown={handleKeyDown}
-							onClick={(e) => e.stopPropagation()}
-							className="text-sm font-medium"
-						/>
-					) : (
-						<span className="truncate block">{displayTitle}</span>
+				<div className="min-w-0 flex-1">
+					<div className="font-medium text-foreground truncate">
+						{isEditing ? (
+							<Input
+								ref={inputRef}
+								type="text"
+								variant="inline"
+								size="auto"
+								value={editValue}
+								onChange={(e) => setEditValue(e.target.value)}
+								onBlur={handleSave}
+								onKeyDown={handleKeyDown}
+								onClick={(e) => e.stopPropagation()}
+								className="text-sm font-medium"
+							/>
+						) : (
+							<span className="truncate block">{displayTitle}</span>
+						)}
+					</div>
+					{contextSubtitle && (
+						<span className="text-xs text-muted-foreground truncate block mt-0.5">
+							{contextSubtitle}
+						</span>
 					)}
 				</div>
 
@@ -254,7 +300,14 @@ export function SessionListRow({ session, pendingRun, isNew }: SessionListRowPro
 					</div>
 				</div>
 
-				<span className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground flex-shrink-0">
+				{isResumable && (
+					<RotateCcw className="h-3 w-3 text-muted-foreground/50 shrink-0" aria-label="Resumable" />
+				)}
+
+				<span
+					className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground flex-shrink-0"
+					aria-label={`Status: ${config.label}`}
+				>
 					<Icon className={`h-3.5 w-3.5 ${config.colorClassName}`} />
 					{config.label}
 				</span>
