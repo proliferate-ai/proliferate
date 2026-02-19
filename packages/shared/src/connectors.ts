@@ -169,7 +169,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		quickSetup: true,
 		secretLabel: "Context7 API key",
 		recommendedSecretKey: "CONTEXT7_API_KEY",
-		docsUrl: "https://context7.com/docs",
+		docsUrl: "https://docs.proliferate.com/integrations/context7",
 	},
 	{
 		key: "posthog",
@@ -187,7 +187,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		quickSetup: true,
 		secretLabel: "PostHog personal API key",
 		recommendedSecretKey: "POSTHOG_API_KEY",
-		docsUrl: "https://posthog.com/docs/api",
+		docsUrl: "https://docs.proliferate.com/integrations/posthog-mcp",
 	},
 	{
 		key: "firecrawl",
@@ -204,7 +204,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		quickSetup: true,
 		secretLabel: "Firecrawl API key",
 		recommendedSecretKey: "FIRECRAWL_API_KEY",
-		docsUrl: "https://docs.firecrawl.dev",
+		docsUrl: "https://docs.proliferate.com/integrations/firecrawl",
 	},
 	{
 		key: "neon",
@@ -222,7 +222,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		quickSetup: true,
 		secretLabel: "Neon API key",
 		recommendedSecretKey: "NEON_API_KEY",
-		docsUrl: "https://neon.tech/docs/manage/api-keys",
+		docsUrl: "https://docs.proliferate.com/integrations/neon",
 	},
 	{
 		key: "stripe",
@@ -240,7 +240,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		quickSetup: true,
 		secretLabel: "Stripe secret key",
 		recommendedSecretKey: "STRIPE_SECRET_KEY",
-		docsUrl: "https://docs.stripe.com/keys",
+		docsUrl: "https://docs.proliferate.com/integrations/stripe",
 	},
 	{
 		key: "zapier",
@@ -258,7 +258,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		quickSetup: true,
 		secretLabel: "Zapier API key",
 		recommendedSecretKey: "ZAPIER_API_KEY",
-		docsUrl: "https://actions.zapier.com/docs/platform/mcp",
+		docsUrl: "https://docs.proliferate.com/integrations/zapier",
 	},
 	{
 		key: "supabase",
@@ -276,7 +276,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		quickSetup: true,
 		secretLabel: "Supabase personal access token",
 		recommendedSecretKey: "SUPABASE_ACCESS_TOKEN",
-		docsUrl: "https://supabase.com/docs/guides/getting-started/mcp",
+		docsUrl: "https://docs.proliferate.com/integrations/supabase",
 	},
 	{
 		key: "asana",
@@ -294,7 +294,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		quickSetup: true,
 		secretLabel: "Asana personal access token",
 		recommendedSecretKey: "ASANA_ACCESS_TOKEN",
-		docsUrl: "https://developers.asana.com/docs/personal-access-token",
+		docsUrl: "https://docs.proliferate.com/integrations/asana",
 	},
 	{
 		key: "semgrep",
@@ -312,7 +312,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		quickSetup: true,
 		secretLabel: "Semgrep API token",
 		recommendedSecretKey: "SEMGREP_API_TOKEN",
-		docsUrl: "https://semgrep.dev/docs/semgrep-cloud-platform/tokens",
+		docsUrl: "https://docs.proliferate.com/integrations/semgrep",
 	},
 	{
 		key: "deepwiki",
@@ -329,7 +329,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		quickSetup: true,
 		secretLabel: "DeepWiki API key",
 		recommendedSecretKey: "DEEPWIKI_API_KEY",
-		docsUrl: "https://deepwiki.com",
+		docsUrl: "https://docs.proliferate.com/integrations/deepwiki",
 	},
 	{
 		key: "apify",
@@ -347,7 +347,7 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		quickSetup: true,
 		secretLabel: "Apify API token",
 		recommendedSecretKey: "APIFY_API_TOKEN",
-		docsUrl: "https://docs.apify.com/platform/integrations/api#api-token",
+		docsUrl: "https://docs.proliferate.com/integrations/apify",
 	},
 	{
 		key: "custom",

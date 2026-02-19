@@ -8,12 +8,9 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { getSetupInitialPrompt } from "@/lib/prompts";
 import { useDashboardStore } from "@/stores/dashboard";
 import { Box, Code, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { SnapshotSelector } from "./snapshot-selector";
 
 interface WelcomeDialogProps {
 	/** Organization name — shown when a user just accepted an invitation */
@@ -23,8 +20,7 @@ interface WelcomeDialogProps {
 }
 
 export function WelcomeDialog({ joinedOrgName, onJoinedDismiss }: WelcomeDialogProps) {
-	const { hasSeenWelcome, markWelcomeSeen, setPendingPrompt } = useDashboardStore();
-	const [showCreate, setShowCreate] = useState(false);
+	const { hasSeenWelcome, markWelcomeSeen } = useDashboardStore();
 	const router = useRouter();
 
 	// Invitation welcome — shown when a user just joined via invite
@@ -101,7 +97,7 @@ export function WelcomeDialog({ joinedOrgName, onJoinedDismiss }: WelcomeDialogP
 	}
 
 	// Standard welcome — shown for new users who signed up directly
-	if (hasSeenWelcome && !showCreate) return null;
+	if (hasSeenWelcome) return null;
 
 	return (
 		<>
@@ -163,31 +159,12 @@ export function WelcomeDialog({ joinedOrgName, onJoinedDismiss }: WelcomeDialogP
 							className="flex-1"
 							onClick={() => {
 								markWelcomeSeen();
-								setShowCreate(true);
+								router.push("/dashboard/integrations");
 							}}
 						>
-							Create your first snapshot
+							Connect your repositories
 						</Button>
 					</div>
-				</DialogContent>
-			</Dialog>
-
-			<Dialog open={showCreate} onOpenChange={setShowCreate}>
-				<DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
-					<DialogHeader className="sr-only">
-						<DialogTitle>Create your first snapshot</DialogTitle>
-						<DialogDescription>
-							Select repositories to include in your configuration
-						</DialogDescription>
-					</DialogHeader>
-					<SnapshotSelector
-						mode="create"
-						onCreate={(_configurationId, sessionId) => {
-							setShowCreate(false);
-							setPendingPrompt(getSetupInitialPrompt());
-							router.push(`/workspace/${sessionId}`);
-						}}
-					/>
 				</DialogContent>
 			</Dialog>
 		</>

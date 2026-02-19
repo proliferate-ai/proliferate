@@ -32,7 +32,7 @@ import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Layers, Plus, Terminal } from "lucide-react";
+import { Check, Layers, Pencil, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CreateSnapshotContent } from "./snapshot-selector";
 
@@ -154,7 +154,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 						{hasSelection ? (
 							<GithubIcon className="h-4 w-4 shrink-0" />
 						) : (
-							<Terminal className="h-4 w-4 shrink-0" />
+							<Pencil className="h-3.5 w-3.5 shrink-0" />
 						)}
 						<span className="truncate max-w-[200px]">{triggerLabel}</span>
 					</Button>
@@ -198,7 +198,7 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 									{!hasSelection ? (
 										<Check className="h-4 w-4 text-primary shrink-0" />
 									) : (
-										<Terminal className="h-4 w-4 shrink-0" />
+										<Pencil className="h-3.5 w-3.5 shrink-0" />
 									)}
 									<span>Scratch session</span>
 								</CommandItem>

@@ -1,6 +1,6 @@
 "use client";
 
-import { BlocksIcon, BlocksLoadingIcon } from "@/components/ui/icons";
+import { ProliferateIcon, ProliferateLoadingIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime, getRepoShortName } from "@/lib/utils";
 
@@ -54,7 +54,7 @@ export function SessionRow({
 			{status &&
 				(() => {
 					const isAnimated = status === "running" || status === "starting";
-					const Icon = isAnimated ? BlocksLoadingIcon : BlocksIcon;
+					const Icon = isAnimated ? ProliferateLoadingIcon : ProliferateIcon;
 					const color = STATUS_COLORS[status] ?? STATUS_COLORS.stopped;
 					return <Icon className={`h-3.5 w-3.5 mt-0.5 ml-2 flex-shrink-0 ${color}`} />;
 				})()}

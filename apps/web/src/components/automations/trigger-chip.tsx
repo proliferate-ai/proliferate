@@ -136,6 +136,8 @@ function getTriggerSummary(trigger: Trigger): string {
 	return "Configured";
 }
 
+const INTEGRATION_PROVIDERS = new Set(["github", "linear", "sentry"]);
+
 export function TriggerChip({
 	trigger,
 	automationId,
@@ -148,6 +150,13 @@ export function TriggerChip({
 }: TriggerChipProps) {
 	const [open, setOpen] = useState(false);
 	const queryClient = useQueryClient();
+
+	// Check if this trigger's provider requires an integration that isn't connected
+	const needsConnection =
+		INTEGRATION_PROVIDERS.has(trigger.provider) &&
+		connectedProviders &&
+		!connectedProviders.has(trigger.provider);
+	const isDisabled = !!needsConnection;
 
 	const updateMutation = useMutation({
 		...orpc.triggers.update.mutationOptions(),
@@ -192,6 +201,7 @@ export function TriggerChip({
 			<TriggerConfigForm
 				automationId={automationId}
 				initialProvider={trigger.provider as Provider}
+				lockProvider
 				initialIntegrationId={trigger.integration_id}
 				initialConfig={trigger.config}
 				initialCronExpression={trigger.polling_cron}
@@ -206,29 +216,38 @@ export function TriggerChip({
 		</PopoverContent>
 	);
 
+	const handleOpenChange = (isOpen: boolean) => {
+		if (isDisabled) return;
+		setOpen(isOpen);
+	};
+
 	if (variant === "stacked") {
 		return (
-			<Popover open={open} onOpenChange={setOpen}>
+			<Popover open={open} onOpenChange={handleOpenChange}>
 				<PopoverTrigger asChild>
 					<button
 						type="button"
+						disabled={isDisabled}
 						className={cn(
 							"min-h-[2.75rem] text-left text-sm font-medium flex items-center px-3 relative transition-colors duration-75",
 							"border border-border -mb-px last:mb-0",
 							"text-muted-foreground",
-							"hover:z-10 active:z-10 focus-visible:z-20",
-							"hover:bg-muted/50 active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+							isDisabled
+								? "opacity-50 cursor-not-allowed"
+								: "hover:z-10 active:z-10 focus-visible:z-20 hover:bg-muted/50 active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 							isFirst && "rounded-t-xl",
 							isLast && "rounded-b-xl",
-							!trigger.enabled && "opacity-50",
+							!trigger.enabled && !isDisabled && "opacity-50",
 						)}
 					>
 						<ProviderIcon provider={trigger.provider as Provider} className="h-4 w-4 shrink-0" />
 						<div className="flex min-w-0 flex-col grow gap-0.5 px-2 py-2">
 							<span className="text-foreground">{providerLabel}</span>
-							<span className="text-xs text-muted-foreground truncate">{summary}</span>
+							<span className="text-xs text-muted-foreground truncate">
+								{isDisabled ? "Not connected" : summary}
+							</span>
 						</div>
-						<ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+						{!isDisabled && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />}
 					</button>
 				</PopoverTrigger>
 				{popoverContent}
@@ -237,20 +256,24 @@ export function TriggerChip({
 	}
 
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
+		<Popover open={open} onOpenChange={handleOpenChange}>
 			<PopoverTrigger asChild>
 				<Button
 					variant="ghost"
+					disabled={isDisabled}
 					className={cn(
 						"h-auto flex items-center gap-1.5 pl-2 pr-1 py-1.5 rounded-xl border",
-						"bg-card hover:bg-muted border-border",
-						!trigger.enabled && "opacity-50",
+						"bg-card border-border",
+						isDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-muted",
+						!trigger.enabled && !isDisabled && "opacity-50",
 					)}
 				>
 					<ProviderIcon provider={trigger.provider as Provider} className="h-4 w-4 shrink-0" />
 					<div className="flex flex-col items-start leading-tight">
 						<span className="text-sm font-medium">{providerLabel}</span>
-						<span className="text-xs text-muted-foreground">{summary}</span>
+						<span className="text-xs text-muted-foreground">
+							{isDisabled ? "Not connected" : summary}
+						</span>
 					</div>
 					<span
 						role="button"

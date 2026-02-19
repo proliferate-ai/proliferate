@@ -12,6 +12,7 @@ import type { PendingRunSummary } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
 import { AlertCircle, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { EmptyChatsIllustration, PageEmptyState, PlusBadge } from "./page-empty-state";
 import { PromptInput } from "./prompt-input";
 import { ActivitySummary } from "./session-stats";
 
@@ -243,6 +244,16 @@ export function EmptyDashboard() {
 			{/* Content sections — bordered column like Tembo */}
 			<div className="flex-1 border-l border-r border-border/50 mx-auto w-full max-w-3xl">
 				<div className="flex flex-col gap-10 px-4 pb-10">
+					{/* Empty state illustration when no sessions */}
+					{!hasSessions && (
+						<PageEmptyState
+							illustration={<EmptyChatsIllustration />}
+							badge={<PlusBadge />}
+							title="Start your first session"
+							description="Type a prompt above to spin up a coding agent in a cloud environment."
+						/>
+					)}
+
 					{/* Activity summary for returning users */}
 					{hasSessions && <ActivitySummary />}
 

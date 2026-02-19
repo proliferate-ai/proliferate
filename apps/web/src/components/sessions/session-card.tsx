@@ -10,7 +10,12 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { AutomationsIcon, BlocksIcon, BlocksLoadingIcon, SlackIcon } from "@/components/ui/icons";
+import {
+	AutomationsIcon,
+	ProliferateIcon,
+	ProliferateLoadingIcon,
+	SlackIcon,
+} from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
 import { useDeleteSession, usePrefetchSession, useRenameSession } from "@/hooks/use-sessions";
@@ -136,7 +141,7 @@ export function SessionListRow({ session, pendingRun, isNew }: SessionListRowPro
 	if (timeAgo) metaParts.push(timeAgo);
 
 	const config = getStatusConfig(session.status);
-	const Icon = config.animated ? BlocksLoadingIcon : BlocksIcon;
+	const Icon = config.animated ? ProliferateLoadingIcon : ProliferateIcon;
 
 	const href = pendingRun
 		? `/workspace/${session.id}?runId=${pendingRun.id}`

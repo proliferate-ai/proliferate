@@ -418,8 +418,8 @@ export function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) 
 			<div className="px-4 pt-4 pb-3 border-b border-border">
 				<Text className="font-semibold">New configuration</Text>
 				<Text variant="small" color="muted" className="mt-1">
-					Group the repositories that make up your project. Each session launches with all of them
-					ready to go.
+					Group the repositories for this project. Build starts automatically, then setup finishes
+					configuration.
 				</Text>
 			</div>
 
@@ -562,15 +562,18 @@ export function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) 
 						disabled={selectedRepoIds.size === 0 || !snapshotName.trim() || isCreating}
 					>
 						{isCreating
-							? "Creating..."
+							? "Creating and starting setup..."
 							: selectedRepoIds.size === 0
 								? "Select repositories"
 								: !snapshotName.trim()
 									? "Enter a name"
-									: `Create with ${selectedRepoIds.size} ${selectedRepoIds.size === 1 ? "repo" : "repos"}`}
+									: `Create and start setup (${selectedRepoIds.size} ${selectedRepoIds.size === 1 ? "repo" : "repos"})`}
 					</Button>
+					<Text variant="small" color="muted" className="text-center block">
+						Build runs in the background. Save your setup session to mark this configuration ready.
+					</Text>
 					<HelpLink topic="snapshots" className="justify-center">
-						What are configurations?
+						How build and configure work
 					</HelpLink>
 				</div>
 			</div>

@@ -185,6 +185,7 @@ export const ALLOWED_LLM_MODELS = new Set([
 	"claude-opus-4-20250514",
 	"claude-opus-4-5-20251101",
 	"claude-opus-4-6",
+	"claude-sonnet-4-6",
 	// OpenAI GPT-4
 	"gpt-4-turbo",
 	"gpt-4-turbo-preview",

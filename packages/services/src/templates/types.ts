@@ -46,7 +46,7 @@ export interface AutomationTemplate {
 
 	/** Pre-written system prompt. May contain {{PLACEHOLDERS}} for user customization. */
 	agentInstructions: string;
-	/** LLM model ID. Defaults to "claude-sonnet-4-20250514". */
+	/** LLM model ID. Defaults to "claude-sonnet-4-6". */
 	modelId?: string;
 
 	/** Trigger definitions to create atomically */

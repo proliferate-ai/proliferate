@@ -1,6 +1,7 @@
 "use client";
 
 import { AddTriggerButton } from "@/components/automations/add-trigger-button";
+import { ConfigurationSelector } from "@/components/automations/configuration-selector";
 import { IntegrationPermissions } from "@/components/automations/integration-permissions";
 import { ModelSelector } from "@/components/automations/model-selector";
 import { TriggerChip } from "@/components/automations/trigger-chip";
@@ -25,13 +26,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { InlineEdit } from "@/components/ui/inline-edit";
 import { PageBackLink } from "@/components/ui/page-back-link";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Switch } from "@/components/ui/switch";
 import { Text } from "@/components/ui/text";
@@ -348,7 +342,7 @@ export default function AutomationDetailPage({
 
 	const handleRunNow = () => {
 		if (!readiness.ready) {
-			toast.warning(`Cannot run: ${readiness.issues.join(", ")}`);
+			toast.warning(`Cannot run: ${readiness.issues.map((i) => i.message).join(", ")}`);
 			return;
 		}
 		triggerManualRun.mutate(
@@ -408,6 +402,7 @@ export default function AutomationDetailPage({
 		enabledTools,
 		connectedProviders,
 		agentInstructions: instructionsValue,
+		triggerProviders: allTriggers.filter((t) => !isManualTrigger(t)).map((t) => t.provider),
 	});
 
 	const resolvedModelId =
@@ -505,7 +500,19 @@ export default function AutomationDetailPage({
 						</p>
 						<ul className="text-xs text-muted-foreground space-y-0.5">
 							{readiness.issues.map((issue) => (
-								<li key={issue}>&middot; {issue}</li>
+								<li key={issue.message}>
+									&middot;{" "}
+									{issue.href ? (
+										<Link
+											href={issue.href}
+											className="underline hover:text-foreground transition-colors"
+										>
+											{issue.message}
+										</Link>
+									) : (
+										issue.message
+									)}
+								</li>
 							))}
 						</ul>
 					</div>
@@ -524,22 +531,12 @@ export default function AutomationDetailPage({
 					</div>
 					<div className="flex items-center justify-between px-4 py-2.5">
 						<span className="text-sm text-muted-foreground">Configuration</span>
-						<Select
-							value={automation.default_configuration_id ?? "none"}
-							onValueChange={handleConfigurationChange}
-						>
-							<SelectTrigger className="h-8 w-auto min-w-[180px] border-0 bg-muted/30 hover:bg-muted text-sm">
-								<SelectValue placeholder="Select configuration..." />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="none">No configuration</SelectItem>
-								{readyConfigurations.map((config) => (
-									<SelectItem key={config.id} value={config.id}>
-										{config.name || "Untitled configuration"}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+						<ConfigurationSelector
+							configurations={readyConfigurations}
+							selectedId={automation.default_configuration_id}
+							onChange={handleConfigurationChange}
+							triggerClassName="border-0 bg-muted/30 hover:bg-muted"
+						/>
 					</div>
 				</div>
 

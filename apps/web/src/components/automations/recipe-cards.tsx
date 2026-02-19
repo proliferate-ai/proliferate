@@ -1,8 +1,7 @@
 "use client";
 
-import { TemplateIconLinearPr, TemplateIconSentryFixer } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
-import { Clock, Plus } from "lucide-react";
+import { Bug, Clock, GitPullRequest, Plus } from "lucide-react";
 import type { ComponentType } from "react";
 
 export interface Recipe {
@@ -19,7 +18,7 @@ const RECIPES: (Recipe & { Icon: ComponentType<{ className?: string }> })[] = [
 		icon: "bug",
 		agentInstructions:
 			"When a Sentry issue is received, analyze the error stacktrace and source code to identify the root cause. Then create a pull request with a fix and link it to the Sentry issue.",
-		Icon: TemplateIconSentryFixer,
+		Icon: Bug,
 	},
 	{
 		name: "Linear PR Drafter",
@@ -27,7 +26,7 @@ const RECIPES: (Recipe & { Icon: ComponentType<{ className?: string }> })[] = [
 		icon: "git-pull-request",
 		agentInstructions:
 			"When a Linear issue moves to In Progress, read the issue description and acceptance criteria. Then draft a pull request with an implementation plan and initial code changes.",
-		Icon: TemplateIconLinearPr,
+		Icon: GitPullRequest,
 	},
 	{
 		name: "Scheduled Code Review",

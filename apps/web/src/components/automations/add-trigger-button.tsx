@@ -1,15 +1,33 @@
 "use client";
 
-import type { Provider } from "@/components/integrations/provider-icon";
+import {
+	type Provider,
+	ProviderIcon,
+	getProviderDisplayName,
+} from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useTriggerProviders } from "@/hooks/use-trigger-providers";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 import type { TriggerProvider } from "@proliferate/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CirclePlus, Plus } from "lucide-react";
+import { Check, CirclePlus, Loader2, Plus } from "lucide-react";
 import { useState } from "react";
 import { TriggerConfigForm, type TriggerFormData } from "./trigger-config-form";
+
+const INTEGRATION_PROVIDERS: Provider[] = ["github", "linear", "sentry"];
+const STANDALONE_PROVIDERS: Provider[] = ["posthog", "webhook", "scheduled"];
+const ALL_PROVIDERS: Provider[] = [...INTEGRATION_PROVIDERS, ...STANDALONE_PROVIDERS];
+
+/** Default configs per provider for immediate trigger creation */
+const DEFAULT_CONFIGS: Record<string, Record<string, unknown>> = {
+	linear: { actionFilters: ["create"] },
+	sentry: {},
+	github: { eventTypes: ["issues"], actionFilters: ["opened"] },
+	posthog: {},
+	webhook: {},
+};
 
 interface Integration {
 	id: string;
@@ -41,8 +59,8 @@ export function AddTriggerButton({
 	isLast,
 	defaultProvider,
 	label = "Add trigger",
-	connectedProviders,
-	integrations,
+	connectedProviders = new Set(),
+	integrations = [],
 }: AddTriggerButtonProps) {
 	const [open, setOpen] = useState(false);
 	const queryClient = useQueryClient();
@@ -61,20 +79,59 @@ export function AddTriggerButton({
 	const handleOpenChange = (isOpen: boolean) => {
 		setOpen(isOpen);
 		if (isOpen) {
-			// Prefetch integrations so the form has reasonably fresh connection data
 			queryClient.prefetchQuery({
 				...orpc.integrations.list.queryOptions({ input: undefined }),
-				staleTime: 30_000, // Only refetch if older than 30s
+				staleTime: 30_000,
 			});
 		}
 	};
 
-	const popoverContent = (
+	/** For non-locked providers: select provider → create trigger immediately */
+	const handleProviderSelect = (provider: Provider) => {
+		// Find the integration ID if this provider needs one
+		let integrationId: string | undefined;
+		if (INTEGRATION_PROVIDERS.includes(provider)) {
+			const matching = integrations.filter(
+				(i) => i.integration_id === provider && i.status === "active",
+			);
+			if (matching.length === 1) {
+				integrationId = matching[0].id;
+			}
+			// If multiple connections, we still create with the first one — user can change in config
+			if (matching.length > 1) {
+				integrationId = matching[0].id;
+			}
+		}
+
+		createMutation.mutate({
+			id: automationId,
+			provider: provider as TriggerProvider,
+			integrationId,
+			config: DEFAULT_CONFIGS[provider] ?? {},
+		});
+	};
+
+	// Determine available providers
+	const { data: triggerProvidersData } = useTriggerProviders();
+	const allProviders = (() => {
+		if (!triggerProvidersData?.providers) return ALL_PROVIDERS;
+		const available = new Set<Provider>();
+		for (const entry of Object.values(triggerProvidersData.providers)) {
+			available.add(entry.provider as Provider);
+		}
+		for (const p of STANDALONE_PROVIDERS) available.add(p);
+		return ALL_PROVIDERS.filter((p) => available.has(p));
+	})();
+
+	// For locked providers (scheduled), keep the full form
+	const isLocked = !!defaultProvider;
+
+	const popoverContent = isLocked ? (
 		<PopoverContent className="w-auto p-3" align="start">
 			<TriggerConfigForm
 				automationId={automationId}
 				initialProvider={defaultProvider}
-				lockProvider={!!defaultProvider}
+				lockProvider
 				connectedProviders={connectedProviders}
 				integrations={integrations}
 				onSubmit={(data) =>
@@ -87,8 +144,17 @@ export function AddTriggerButton({
 					})
 				}
 				onCancel={() => setOpen(false)}
-				submitLabel={defaultProvider ? "Add Schedule" : "Add Trigger"}
+				submitLabel="Add Schedule"
 				isSubmitting={createMutation.isPending}
+			/>
+		</PopoverContent>
+	) : (
+		<PopoverContent className="w-auto p-0" align="start">
+			<ProviderPickerList
+				providers={allProviders.filter((p) => p !== "scheduled")}
+				connectedProviders={connectedProviders}
+				onSelect={handleProviderSelect}
+				isPending={createMutation.isPending}
 			/>
 		</PopoverContent>
 	);
@@ -131,5 +197,52 @@ export function AddTriggerButton({
 			</PopoverTrigger>
 			{popoverContent}
 		</Popover>
+	);
+}
+
+// ============================================
+// Provider Picker List (type selection only)
+// ============================================
+
+function ProviderPickerList({
+	providers,
+	connectedProviders,
+	onSelect,
+	isPending,
+}: {
+	providers: Provider[];
+	connectedProviders: Set<string>;
+	onSelect: (provider: Provider) => void;
+	isPending: boolean;
+}) {
+	return (
+		<div className="flex flex-col py-1 min-w-[200px]">
+			{providers.map((p) => {
+				const needsConnection = INTEGRATION_PROVIDERS.includes(p);
+				const isDisabled = (needsConnection && !connectedProviders.has(p)) || isPending;
+				return (
+					<button
+						key={p}
+						type="button"
+						disabled={isDisabled}
+						onClick={() => onSelect(p)}
+						className={cn(
+							"flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors",
+							isDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-muted/50",
+						)}
+					>
+						{isPending ? (
+							<Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+						) : (
+							<ProviderIcon provider={p} className="h-3.5 w-3.5 shrink-0" />
+						)}
+						<span className="flex-1">{getProviderDisplayName(p)}</span>
+						{needsConnection && !connectedProviders.has(p) && (
+							<span className="text-xs text-muted-foreground">Not connected</span>
+						)}
+					</button>
+				);
+			})}
+		</div>
 	);
 }

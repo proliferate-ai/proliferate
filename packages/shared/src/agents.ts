@@ -19,8 +19,8 @@ export type ModelProvider = "anthropic" | "openai" | "google" | "deepseek" | "xa
  * These are the IDs used throughout our codebase and stored in the database.
  */
 export type ModelId =
+	| "claude-sonnet-4.6"
 	| "claude-opus-4.6"
-	| "claude-sonnet-4"
 	| "gpt-5.2"
 	| "gemini-3-pro"
 	| "gemini-3-flash"
@@ -86,17 +86,17 @@ export const AGENTS: Record<AgentType, AgentInfo> = {
 		models: [
 			// Anthropic
 			{
-				id: "claude-opus-4.6",
-				name: "Claude Opus 4.6",
-				description: "Most capable model for complex tasks",
+				id: "claude-sonnet-4.6",
+				name: "Claude Sonnet 4.6",
+				description: "Best model for agents and coding",
 				provider: "anthropic",
 				default: true,
 				supportsReasoning: true,
 			},
 			{
-				id: "claude-sonnet-4",
-				name: "Claude Sonnet 4",
-				description: "Fast and efficient for most tasks",
+				id: "claude-opus-4.6",
+				name: "Claude Opus 4.6",
+				description: "Most capable model for complex tasks",
 				provider: "anthropic",
 				supportsReasoning: true,
 			},
@@ -165,7 +165,7 @@ export const AGENTS: Record<AgentType, AgentInfo> = {
 // ============================================
 
 export const DEFAULT_AGENT_TYPE: AgentType = "opencode";
-export const DEFAULT_MODEL_ID: ModelId = "claude-opus-4.6";
+export const DEFAULT_MODEL_ID: ModelId = "claude-sonnet-4.6";
 
 export function getDefaultAgentConfig(): AgentConfig {
 	return {
@@ -228,8 +228,8 @@ export function getModelsForAgent(agentType: AgentType): ModelInfo[] {
  */
 export function toOpencodeModelId(modelId: ModelId): string {
 	const transforms: Record<ModelId, string> = {
+		"claude-sonnet-4.6": "anthropic/claude-sonnet-4-6",
 		"claude-opus-4.6": "anthropic/claude-opus-4-6",
-		"claude-sonnet-4": "anthropic/claude-sonnet-4-5",
 		"gpt-5.2": "litellm/gpt-5.2",
 		"gemini-3-pro": "litellm/gemini-3-pro-preview",
 		"gemini-3-flash": "litellm/gemini-3-flash-preview",
@@ -248,8 +248,8 @@ export function toOpencodeModelId(modelId: ModelId): string {
  */
 export function toApiModelId(modelId: ModelId): string {
 	const transforms: Record<ModelId, string> = {
+		"claude-sonnet-4.6": "claude-sonnet-4-6",
 		"claude-opus-4.6": "claude-opus-4-6",
-		"claude-sonnet-4": "claude-sonnet-4-20250514",
 		"gpt-5.2": "gpt-5.2",
 		"gemini-3-pro": "gemini-3-pro-preview",
 		"gemini-3-flash": "gemini-3-flash-preview",
@@ -277,6 +277,9 @@ export function getModelProvider(modelId: ModelId): ModelProvider {
 export function parseModelId(input: string): ModelId {
 	const normalized = input.toLowerCase();
 
+	if (normalized.includes("sonnet") && normalized.includes("4.6")) {
+		return "claude-sonnet-4.6";
+	}
 	if (normalized.includes("opus") && normalized.includes("4.6")) {
 		return "claude-opus-4.6";
 	}
@@ -285,7 +288,7 @@ export function parseModelId(input: string): ModelId {
 		return "claude-opus-4.6";
 	}
 	if (normalized.includes("sonnet")) {
-		return "claude-sonnet-4";
+		return "claude-sonnet-4.6";
 	}
 	if (normalized.includes("gpt-5")) {
 		return "gpt-5.2";
@@ -323,8 +326,8 @@ export function parseModelId(input: string): ModelId {
  */
 export function isValidModelId(id: string): id is ModelId {
 	return (
+		id === "claude-sonnet-4.6" ||
 		id === "claude-opus-4.6" ||
-		id === "claude-sonnet-4" ||
 		id === "gpt-5.2" ||
 		id === "gemini-3-pro" ||
 		id === "gemini-3-flash" ||

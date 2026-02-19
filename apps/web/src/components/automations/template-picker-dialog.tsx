@@ -7,15 +7,19 @@ import {
 } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import {
-	TemplateIconCiFixer,
-	TemplateIconGithubSolver,
-	TemplateIconLinearPr,
-	TemplateIconSentryFixer,
-} from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Bug, CircuitBoard, Loader2, Plus, Search, Shield } from "lucide-react";
+import {
+	Bug,
+	CircleDot,
+	CircuitBoard,
+	GitPullRequest,
+	Loader2,
+	Plus,
+	Search,
+	Shield,
+	Zap,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -73,10 +77,10 @@ const CATEGORY_LABELS: Record<TemplateCategory, string> = {
 };
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-	bug: TemplateIconSentryFixer,
-	"git-pull-request": TemplateIconLinearPr,
-	"circle-dot": TemplateIconGithubSolver,
-	"alert-triangle": TemplateIconCiFixer,
+	bug: Bug,
+	"git-pull-request": GitPullRequest,
+	"circle-dot": CircleDot,
+	"alert-triangle": Zap,
 	// Fallbacks for future templates
 	"circuit-board": CircuitBoard,
 	shield: Shield,

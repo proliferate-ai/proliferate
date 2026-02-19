@@ -1,4 +1,8 @@
 "use client";
+import {
+	ConfigurationStatusBadges,
+	getConfigurationLifecycleState,
+} from "@/components/dashboard/configuration-lifecycle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
@@ -10,7 +14,6 @@ import {
 	useUpdateConfigurationServiceCommands,
 } from "@/hooks/use-configurations";
 import { useCreateSession } from "@/hooks/use-sessions";
-import { cn } from "@/lib/utils";
 import { ArrowLeft, FolderGit2, Pencil, Play, Plus, Trash2, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -49,6 +52,7 @@ export default function ConfigurationDetailPage() {
 	}
 	const displayName = config.name || "Untitled configuration";
 	const repos = (config.configurationRepos ?? []).filter((cr) => cr.repo !== null);
+	const lifecycle = getConfigurationLifecycleState(config.status);
 	return (
 		<div className="h-full overflow-y-auto">
 			<div className="mx-auto max-w-3xl px-6 py-8 space-y-8">
@@ -57,21 +61,9 @@ export default function ConfigurationDetailPage() {
 					<PageBackLink href="/dashboard/configurations" label="Configurations" className="mb-3" />
 					<h1 className="text-lg font-semibold">{displayName}</h1>
 					<div className="flex items-center gap-2 mt-1">
-						<span
-							className={cn(
-								"inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-medium",
-								config.status === "ready" || config.status === "default"
-									? "border-border/50 bg-muted/50 text-foreground"
-									: "border-border/50 bg-muted/50 text-muted-foreground",
-							)}
-						>
-							{config.status === "ready" || config.status === "default"
-								? "Ready"
-								: config.status === "building"
-									? "Building"
-									: "Pending"}
-						</span>
+						<ConfigurationStatusBadges status={config.status} align="start" />
 					</div>
+					<p className="mt-2 text-xs text-muted-foreground">{lifecycle.nextStep}</p>
 					{(config.status === "default" || config.status === "ready") && (
 						<Button
 							size="sm"

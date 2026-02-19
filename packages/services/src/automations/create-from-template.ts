@@ -73,7 +73,7 @@ export async function createFromTemplate(
 				name: template.name,
 				description: template.description,
 				agentInstructions: template.agentInstructions,
-				modelId: template.modelId ?? "claude-sonnet-4-20250514",
+				modelId: template.modelId ?? "claude-sonnet-4-6",
 				enabledTools: sanitizeEnabledTools(template.enabledTools),
 				enabled: false, // S2: Default to paused
 				sourceTemplateId: template.id,

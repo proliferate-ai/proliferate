@@ -1,6 +1,10 @@
 "use client";
 
 import {
+	ConfigurationLifecycleExplainer,
+	ConfigurationStatusBadges,
+} from "@/components/dashboard/configuration-lifecycle";
+import {
 	GearIllustration,
 	InfoBadge,
 	PageEmptyState,
@@ -51,7 +55,7 @@ import { useMemo, useState } from "react";
 // Main Page
 // ============================================
 
-const STATUS_ORDER: Record<string, number> = { ready: 0, default: 0, building: 1 };
+const STATUS_ORDER: Record<string, number> = { ready: 0, default: 1, building: 2, failed: 3 };
 
 export default function ConfigurationsPage() {
 	const { data: configurations, isLoading } = useConfigurations();
@@ -76,7 +80,7 @@ export default function ConfigurationsPage() {
 		return (
 			<PageShell
 				title="Configurations"
-				subtitle="Pre-built environments with repos, services, and dependencies."
+				subtitle="Build snapshots automatically, then configure once in a setup session."
 			>
 				<div className="py-12 flex justify-center">
 					<LoadingDots size="md" className="text-muted-foreground" />
@@ -91,6 +95,7 @@ export default function ConfigurationsPage() {
 	return (
 		<PageShell
 			title="Configurations"
+			subtitle="Build snapshots automatically, then configure once in a setup session."
 			actions={
 				<div className="flex items-center gap-2">
 					{hasConfigs && (
@@ -116,13 +121,16 @@ export default function ConfigurationsPage() {
 				</div>
 			}
 		>
+			<div className="mb-4">
+				<ConfigurationLifecycleExplainer />
+			</div>
 			{!hasConfigs ? (
 				hasGitHub ? (
 					<PageEmptyState
 						illustration={<GearIllustration />}
 						badge={<PlusBadge />}
 						title="No configurations yet"
-						description="Define repos, service commands, and environment files to customize your sandbox."
+						description="Choose repos to create a configuration. Build runs automatically; setup finishes configuration."
 					>
 						<Button size="sm" onClick={() => setCreateOpen(true)}>
 							<Plus className="h-3.5 w-3.5 mr-1.5" />
@@ -150,7 +158,7 @@ export default function ConfigurationsPage() {
 					{/* Table header */}
 					<div className="flex items-center px-4 py-2 pr-12 text-xs text-muted-foreground border-b border-border/50">
 						<span className="flex-1 min-w-0">Name</span>
-						<span className="w-28 text-center shrink-0">Status</span>
+						<span className="w-52 text-center shrink-0">Build / Configure</span>
 						<span className="w-32 text-center shrink-0">Repos</span>
 						<span className="w-28 text-center shrink-0">Created</span>
 					</div>
@@ -224,21 +232,8 @@ function ConfigurationRow({ config }: { config: Configuration }) {
 								{displayName}
 							</Link>
 						</span>
-						<span className="w-28 flex justify-center shrink-0">
-							<span
-								className={cn(
-									"inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-medium",
-									config.status === "ready" || config.status === "default"
-										? "border-border/50 bg-muted/50 text-foreground"
-										: "border-border/50 bg-muted/50 text-muted-foreground",
-								)}
-							>
-								{config.status === "ready" || config.status === "default"
-									? "Ready"
-									: config.status === "building"
-										? "Building"
-										: "Pending"}
-							</span>
+						<span className="w-52 flex justify-center shrink-0">
+							<ConfigurationStatusBadges status={config.status} />
 						</span>
 						<span className="w-32 text-center text-xs text-muted-foreground shrink-0">
 							{repoCount > 0 ? `${repoCount} repo${repoCount !== 1 ? "s" : ""}` : "\u2014"}

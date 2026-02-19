@@ -8,13 +8,11 @@ import {
 	RunsIcon,
 	SidebarCollapseIcon,
 	SidebarExpandIcon,
-	SlackIcon,
 } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
 import { useAttentionInbox } from "@/hooks/use-attention-inbox";
-import { useSlackStatus } from "@/hooks/use-integrations";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
@@ -31,7 +29,6 @@ import {
 	LifeBuoy,
 	LogOut,
 	Menu,
-	MessageCircle,
 	Moon,
 	Plug,
 	Settings,
@@ -316,10 +313,8 @@ export function SidebarShell({
 	const { data: authSession } = useSession();
 	const { theme, resolvedTheme, setTheme } = useTheme();
 	const [userMenuOpen, setUserMenuOpen] = useState(false);
-	const [supportMenuOpen, setSupportMenuOpen] = useState(false);
 
 	// Fetch Slack status for support popup
-	const { data: slackStatus } = useSlackStatus();
 	const { toggleSidebar, setCommandSearchOpen } = useDashboardStore();
 
 	const user = authSession?.user;
@@ -395,81 +390,19 @@ export function SidebarShell({
 
 			{/* Footer */}
 			<div className="border-t border-sidebar-border px-3 py-3 flex flex-col gap-2">
-				{/* Support */}
-				<Popover open={supportMenuOpen} onOpenChange={setSupportMenuOpen}>
-					<PopoverTrigger asChild>
-						<button
-							type="button"
-							className="flex items-center justify-center gap-2 w-full h-8 rounded-lg text-sm font-medium border border-border/60 bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border transition-colors"
-						>
-							<LifeBuoy className="h-4 w-4" />
-							<span>Support</span>
-						</button>
-					</PopoverTrigger>
-					<PopoverContent
-						side="top"
-						align="start"
-						className="w-[min(16rem,calc(100vw-2rem))] p-1 z-[60]"
-						sideOffset={8}
-					>
-						<div className="flex flex-col">
-							{/* Chat with us - Intercom */}
-							<button
-								type="button"
-								className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg hover:bg-muted transition-colors text-left"
-								onClick={() => {
-									setSupportMenuOpen(false);
-									openIntercomMessenger();
-								}}
-							>
-								<MessageCircle className="h-4 w-4 text-muted-foreground" />
-								<div className="flex-1">
-									<div className="font-medium">Chat with us</div>
-									<div className="text-xs text-muted-foreground">Get help instantly</div>
-								</div>
-							</button>
-
-							{/* Slack Connect - only show when fully set up */}
-							{slackStatus?.connected && slackStatus?.supportChannel && (
-								<>
-									<div className="my-1 h-px bg-border" />
-
-									<button
-										type="button"
-										className="flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg hover:bg-muted transition-colors text-left"
-										onClick={() => {
-											setSupportMenuOpen(false);
-											const slackUrl =
-												slackStatus.supportChannel?.inviteUrl ||
-												(slackStatus.teamId && slackStatus.supportChannel?.channelId
-													? `https://app.slack.com/client/${slackStatus.teamId}/${slackStatus.supportChannel.channelId}`
-													: null);
-											if (slackUrl) {
-												window.open(slackUrl, "_blank");
-											} else {
-												onNavigate?.();
-												router.push("/dashboard/integrations");
-											}
-										}}
-									>
-										<SlackIcon className="h-4 w-4" />
-										<div className="flex-1">
-											<div className="font-medium flex items-center gap-2">
-												Slack Connect
-												<span className="text-xs bg-green-500/10 text-green-600 dark:text-green-400 px-1.5 py-0.5 rounded">
-													Active
-												</span>
-											</div>
-											<div className="text-xs text-muted-foreground">
-												#{slackStatus.supportChannel.channelName}
-											</div>
-										</div>
-									</button>
-								</>
-							)}
-						</div>
-					</PopoverContent>
-				</Popover>
+				{/* Support - Intercom if available, docs fallback */}
+				<button
+					type="button"
+					className="flex items-center justify-center gap-2 w-full h-8 rounded-lg text-sm font-medium border border-border/60 bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border transition-colors"
+					onClick={() => {
+						if (!openIntercomMessenger()) {
+							window.open("https://docs.proliferate.com", "_blank", "noopener,noreferrer");
+						}
+					}}
+				>
+					<LifeBuoy className="h-4 w-4" />
+					<span>Support</span>
+				</button>
 
 				{/* User card */}
 				<Popover open={userMenuOpen} onOpenChange={setUserMenuOpen}>

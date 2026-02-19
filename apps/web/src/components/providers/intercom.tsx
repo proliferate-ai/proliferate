@@ -17,14 +17,14 @@ declare global {
 }
 
 /**
- * Opens the Intercom messenger with a new message compose view.
+ * Opens the Intercom messenger. Returns true if Intercom is available, false otherwise.
  */
-export function openIntercomMessenger() {
+export function openIntercomMessenger(): boolean {
 	if (typeof window !== "undefined" && window.Intercom) {
-		window.Intercom("show");
-	} else {
-		console.warn("Intercom not available");
+		window.Intercom("showNewMessage", "");
+		return true;
 	}
+	return false;
 }
 
 export function IntercomProvider() {

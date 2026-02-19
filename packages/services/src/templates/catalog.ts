@@ -33,7 +33,7 @@ export const TEMPLATE_CATALOG: AutomationTemplate[] = [
 			"- If the fix requires changes across multiple files, explain why in the PR.",
 			"- If you cannot determine a fix with confidence, describe the issue and your analysis instead.",
 		].join("\n"),
-		modelId: "claude-sonnet-4-20250514",
+		modelId: "claude-sonnet-4-6",
 		triggers: [
 			{
 				provider: "sentry",
@@ -80,7 +80,7 @@ export const TEMPLATE_CATALOG: AutomationTemplate[] = [
 			"- The PR description should explain the approach and any decisions made.",
 			"- If the issue is too large or ambiguous, draft the PR with a plan and partial implementation.",
 		].join("\n"),
-		modelId: "claude-sonnet-4-20250514",
+		modelId: "claude-sonnet-4-6",
 		triggers: [
 			{
 				provider: "linear",
@@ -128,7 +128,7 @@ export const TEMPLATE_CATALOG: AutomationTemplate[] = [
 			"- If the issue is unclear, add a comment explaining what you found and your approach.",
 			"- Follow existing code patterns and conventions.",
 		].join("\n"),
-		modelId: "claude-sonnet-4-20250514",
+		modelId: "claude-sonnet-4-6",
 		triggers: [
 			{
 				provider: "github",
@@ -176,7 +176,7 @@ export const TEMPLATE_CATALOG: AutomationTemplate[] = [
 			"- For build errors, fix type errors or missing imports.",
 			"- Include the original error output in the PR description for context.",
 		].join("\n"),
-		modelId: "claude-sonnet-4-20250514",
+		modelId: "claude-sonnet-4-6",
 		triggers: [
 			{
 				provider: "github",
