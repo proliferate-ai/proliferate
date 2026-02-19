@@ -221,6 +221,13 @@
       "when": 1771804800000,
       "tag": "0031_rename_prebuild_to_configuration",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1771891200000,
+      "tag": "0032_backfill_manual_pause_reason",
+      "breakpoints": true
     }
   ]
 }
