@@ -60,6 +60,27 @@ export function IntegrationDetailDialog({
 
 	const manageUrl = entry.provider ? getProviderManageUrl(entry.provider) : null;
 
+	const PROLIFERATE_DOCS: Record<string, string> = {
+		github: "https://docs.proliferate.com/integrations/github",
+		slack: "https://docs.proliferate.com/integrations/slack",
+		linear: "https://docs.proliferate.com/integrations/linear",
+		sentry: "https://docs.proliferate.com/integrations/sentry",
+	};
+	const proliferateDocsUrl =
+		PROLIFERATE_DOCS[entry.key] ??
+		(entry.type === "mcp-preset" || entry.type === "custom-mcp"
+			? "https://docs.proliferate.com/integrations/mcp-connectors"
+			: null);
+
+	// Platform feature notes for product integrations
+	const PLATFORM_NOTES: Record<string, string> = {
+		github: "Also powers repo management, code access, and pull requests.",
+		slack: "Also powers notifications and agent interaction from Slack.",
+		linear: "Also powers issue tracking triggers and automations.",
+		sentry: "Also powers error monitoring triggers and automations.",
+	};
+	const platformNote = PLATFORM_NOTES[entry.key];
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
@@ -121,33 +142,49 @@ export function IntegrationDetailDialog({
 								<div>
 									<h3 className="text-sm font-medium mb-1">Description</h3>
 									<p className="text-sm text-muted-foreground">{entry.description}</p>
+									{platformNote && (
+										<p className="text-xs text-muted-foreground mt-1.5">{platformNote}</p>
+									)}
 								</div>
 								<div>
 									<h3 className="text-sm font-medium mb-1">Category</h3>
 									<p className="text-sm text-muted-foreground">{CATEGORY_LABELS[entry.category]}</p>
 								</div>
-								{manageUrl && (
-									<a
-										href={manageUrl}
-										target="_blank"
-										rel="noopener noreferrer"
-										className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-									>
-										Manage on {getProviderDisplayName(entry.provider!)}
-										<ExternalLink className="h-3.5 w-3.5" />
-									</a>
-								)}
-								{preset?.docsUrl && (
-									<a
-										href={preset.docsUrl}
-										target="_blank"
-										rel="noopener noreferrer"
-										className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-									>
-										Documentation
-										<ExternalLink className="h-3.5 w-3.5" />
-									</a>
-								)}
+								<div className="flex flex-col gap-2">
+									{proliferateDocsUrl && (
+										<a
+											href={proliferateDocsUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+										>
+											Proliferate docs
+											<ExternalLink className="h-3.5 w-3.5" />
+										</a>
+									)}
+									{manageUrl && (
+										<a
+											href={manageUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+										>
+											Manage on {getProviderDisplayName(entry.provider!)}
+											<ExternalLink className="h-3.5 w-3.5" />
+										</a>
+									)}
+									{preset?.docsUrl && (
+										<a
+											href={preset.docsUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+										>
+											{entry.name} documentation
+											<ExternalLink className="h-3.5 w-3.5" />
+										</a>
+									)}
+								</div>
 							</div>
 						</TabsContent>
 					</Tabs>

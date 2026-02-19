@@ -152,6 +152,7 @@ export function IntegrationPickerDialog({
 									value={searchQuery}
 									onChange={(e) => setSearchQuery(e.target.value)}
 									className="h-9 pl-9 text-sm rounded-xl"
+									autoFocus
 								/>
 							</div>
 						</div>
