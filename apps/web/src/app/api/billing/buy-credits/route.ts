@@ -11,8 +11,8 @@ import { isBillingEnabled } from "@/lib/billing";
 import { logger } from "@/lib/logger";
 import { getUserOrgRole } from "@/lib/permissions";
 import { env } from "@proliferate/environment/server";
-import { billing, orgs } from "@proliferate/services";
 import { createBillingFastReconcileQueue } from "@proliferate/queue";
+import { billing, orgs } from "@proliferate/services";
 import { TOP_UP_PRODUCT, autumnAttach } from "@proliferate/shared/billing";
 import { NextResponse } from "next/server";
 
@@ -26,7 +26,9 @@ function enqueueFastReconcile(orgId: string) {
 		.then(() => queue.close())
 		.catch((err) => {
 			log.warn({ err, orgId }, "Failed to enqueue fast reconcile");
-			queue.close().catch(() => {});
+			queue.close().catch(() => {
+				/* intentional: fire-and-forget cleanup */
+			});
 		});
 }
 
