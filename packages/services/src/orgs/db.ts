@@ -18,6 +18,7 @@ import {
 	member,
 	or,
 	organization,
+	sessions,
 	sql,
 	type user,
 } from "../db/client";
@@ -284,6 +285,44 @@ export async function findBasicInvitationInfo(invitationId: string): Promise<{
 		expiresAt: result.expiresAt,
 		organizationName: result.organization.name,
 	};
+}
+
+/**
+ * Delete a user's auto-created personal organization and its membership.
+ * Only deletes orgs where is_personal = true and id matches the org_{userId} pattern.
+ * Skips deletion if the org has any sessions (sessions FK lacks ON DELETE CASCADE).
+ * The member + org deletion is wrapped in a transaction to prevent orphaned state.
+ * Returns true if a personal org was found and deleted.
+ */
+export async function deletePersonalOrg(userId: string): Promise<boolean> {
+	const db = getDb();
+	const personalOrgId = `org_${userId}`;
+
+	// Verify it exists and is actually a personal org
+	const org = await db.query.organization.findFirst({
+		where: and(eq(organization.id, personalOrgId), eq(organization.isPersonal, true)),
+		columns: { id: true },
+	});
+
+	if (!org) return false;
+
+	// Check for sessions — sessions FK has no cascade, so we can't delete if any exist
+	const hasSession = await db.query.sessions.findFirst({
+		where: eq(sessions.organizationId, personalOrgId),
+		columns: { id: true },
+	});
+
+	if (hasSession) return false;
+
+	// Delete member + org atomically to prevent orphaned state
+	await db.transaction(async (tx) => {
+		await tx
+			.delete(member)
+			.where(and(eq(member.organizationId, personalOrgId), eq(member.userId, userId)));
+		await tx.delete(organization).where(eq(organization.id, personalOrgId));
+	});
+
+	return true;
 }
 
 // ============================================

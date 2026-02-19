@@ -423,6 +423,14 @@ export async function setActionMode(
 }
 
 /**
+ * Delete a user's auto-created personal organization.
+ * Used after accepting an invitation so the user only belongs to the invited org.
+ */
+export async function deletePersonalOrg(userId: string): Promise<boolean> {
+	return orgsDb.deletePersonalOrg(userId);
+}
+
+/**
  * Check if a user is a member of an organization.
  */
 export async function isMember(userId: string, orgId: string): Promise<boolean> {
