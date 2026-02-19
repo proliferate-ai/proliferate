@@ -57,14 +57,15 @@ export async function GET(request: Request) {
 	return NextResponse.json(
 		{
 			enabled: true,
-			events: events.map((e) => ({
-				id: e.id,
-				type: e.eventType,
-				credits: Number(e.credits),
-				quantity: Number(e.quantity),
-				sessionIds: e.sessionIds ?? [],
-				metadata: e.metadata,
-				createdAt: e.createdAt instanceof Date ? e.createdAt.toISOString() : e.createdAt,
+			events: events.map((event) => ({
+				id: event.id,
+				type: event.eventType,
+				credits: Number(event.credits),
+				quantity: Number(event.quantity),
+				sessionIds: event.sessionIds ?? [],
+				metadata: event.metadata,
+				createdAt:
+					event.createdAt instanceof Date ? event.createdAt.toISOString() : event.createdAt,
 			})),
 			total,
 			limit,

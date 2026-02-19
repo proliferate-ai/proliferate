@@ -8,6 +8,7 @@
 import { arrayContains, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import {
 	and,
+	billingEventKeys,
 	billingEvents,
 	desc,
 	eq,
@@ -297,7 +298,7 @@ export async function updateLLMSpendCursor(cursor: LLMSpendCursor): Promise<void
 /**
  * Try to create a billing_events partition for the given month.
  * No-op if billing_events is not partitioned or partition already exists.
- * Returns true if partition was created, false otherwise.
+ * Returns true if the partition exists or was created; false if billing_events is not partitioned.
  */
 export async function ensureBillingPartition(
 	partitionName: string,
@@ -335,8 +336,11 @@ export async function ensureBillingPartition(
  */
 export async function cleanOldBillingEventKeys(cutoff: Date): Promise<number> {
 	const db = getDb();
-	const result = await db.execute(sql`DELETE FROM billing_event_keys WHERE created_at < ${cutoff}`);
-	return (result as { rowCount?: number }).rowCount ?? 0;
+	const result = await db
+		.delete(billingEventKeys)
+		.where(lt(billingEventKeys.createdAt, cutoff))
+		.returning({ key: billingEventKeys.idempotencyKey });
+	return result.length;
 }
 
 /**

@@ -67,15 +67,15 @@ export async function POST(request: Request) {
 
 	try {
 		// Parse quantity from body (must match oRPC: int, min 1, max 10)
-		let body: Record<string, unknown> | undefined;
+		let body: unknown;
 		try {
 			body = await request.json();
 		} catch {
 			// No body or invalid JSON — will use default
 		}
 		let quantity = 1;
-		if (body && "quantity" in body) {
-			const raw = body.quantity;
+		if (body && typeof body === "object" && "quantity" in body) {
+			const raw = (body as Record<string, unknown>).quantity;
 			if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 1 || raw > 10) {
 				return NextResponse.json(
 					{ error: "quantity must be an integer between 1 and 10" },

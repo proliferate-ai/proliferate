@@ -26,7 +26,7 @@ import { getServicesLogger } from "../logger";
 import { enforceCreditsExhausted } from "./org-pause";
 import { addShadowBalance } from "./shadow-balance";
 
-const EMPTY_RESULT: OverageTopUpResult = {
+const emptyResult: OverageTopUpResult = {
 	success: false,
 	packsCharged: 0,
 	creditsAdded: 0,
@@ -62,25 +62,25 @@ export async function attemptAutoTopUp(
 
 	if (!org) {
 		log.error("Org not found");
-		return EMPTY_RESULT;
+		return emptyResult;
 	}
 
 	const settings = parseBillingSettings(org.billingSettings);
 
 	// 2. Policy check
 	if (settings.overage_policy !== "allow") {
-		return EMPTY_RESULT;
+		return emptyResult;
 	}
 
 	if (!org.autumnCustomerId) {
 		log.warn("No Autumn customer ID — cannot auto-top-up");
-		return EMPTY_RESULT;
+		return emptyResult;
 	}
 
 	// 3. Circuit breaker check
 	if (org.overageDeclineAt) {
 		log.info("Circuit breaker active — skipping auto-top-up");
-		return { ...EMPTY_RESULT, circuitBreakerTripped: true };
+		return { ...emptyResult, circuitBreakerTripped: true };
 	}
 
 	// Use advisory lock transaction to prevent concurrent top-ups.
@@ -103,17 +103,17 @@ export async function attemptAutoTopUp(
 			.from(organization)
 			.where(eq(organization.id, orgId));
 
-		if (!fresh) return EMPTY_RESULT;
+		if (!fresh) return emptyResult;
 
 		// If balance is now positive (another caller topped up), skip
 		if (Number(fresh.shadowBalance ?? 0) > 0) {
 			log.debug("Balance already positive after lock — skipping");
-			return EMPTY_RESULT;
+			return emptyResult;
 		}
 
 		// Circuit breaker may have been set by another caller
 		if (fresh.overageDeclineAt) {
-			return { ...EMPTY_RESULT, circuitBreakerTripped: true };
+			return { ...emptyResult, circuitBreakerTripped: true };
 		}
 
 		let overageUsedCents = fresh.overageUsedCents;
@@ -144,7 +144,7 @@ export async function attemptAutoTopUp(
 				{ count: overageTopupCount, max: OVERAGE_MAX_TOPUPS_PER_CYCLE, alert: true },
 				"Velocity limit reached",
 			);
-			return { ...EMPTY_RESULT, velocityLimited: true };
+			return { ...emptyResult, velocityLimited: true };
 		}
 
 		// 8. Rate limit check
@@ -152,7 +152,7 @@ export async function attemptAutoTopUp(
 			const msSinceLast = Date.now() - fresh.overageLastTopupAt.getTime();
 			if (msSinceLast < OVERAGE_MIN_TOPUP_INTERVAL_MS) {
 				log.debug({ msSinceLast }, "Rate limited");
-				return { ...EMPTY_RESULT, velocityLimited: true };
+				return { ...emptyResult, velocityLimited: true };
 			}
 		}
 
@@ -166,12 +166,12 @@ export async function attemptAutoTopUp(
 			const remainingCapCents = capCents - overageUsedCents;
 			if (remainingCapCents <= 0) {
 				log.info({ used: overageUsedCents, cap: capCents }, "Cap exhausted");
-				return { ...EMPTY_RESULT, capExhausted: true };
+				return { ...emptyResult, capExhausted: true };
 			}
 			const maxPacksByBudget = Math.floor(remainingCapCents / TOP_UP_PRODUCT.priceCents);
 			if (maxPacksByBudget <= 0) {
 				log.info({ remaining: remainingCapCents }, "Cap too low for even one pack");
-				return { ...EMPTY_RESULT, capExhausted: true };
+				return { ...emptyResult, capExhausted: true };
 			}
 			if (packsNeeded > maxPacksByBudget) {
 				packsNeeded = maxPacksByBudget;
@@ -197,7 +197,7 @@ export async function attemptAutoTopUp(
 						.update(organization)
 						.set({ overageDeclineAt: new Date() })
 						.where(eq(organization.id, orgId));
-					return { ...EMPTY_RESULT, circuitBreakerTripped: true };
+					return { ...emptyResult, circuitBreakerTripped: true };
 				}
 			}
 		} catch (err) {
@@ -213,7 +213,7 @@ export async function attemptAutoTopUp(
 				})
 				.where(eq(organization.id, orgId));
 			shouldEnforce = true;
-			return { ...EMPTY_RESULT, circuitBreakerTripped: true };
+			return { ...emptyResult, circuitBreakerTripped: true };
 		}
 
 		// 11. Success — update overage accounting
