@@ -43,23 +43,34 @@ async function handleConfigurationSnapshotBuild(
 ): Promise<void> {
 	const log = logger.child({ configurationId, module: "configuration-snapshots" });
 
-	const config = await configurations.getConfigurationSnapshotBuildInfo(configurationId);
-	if (!config) {
+	const configuration = await configurations.getConfigurationSnapshotBuildInfo(configurationId);
+	if (!configuration) {
 		log.warn("Configuration not found");
 		return;
 	}
 
-	if (!force && (config.status === "default" || config.status === "ready") && config.snapshotId) {
-		log.info({ snapshotId: config.snapshotId }, "Configuration snapshot already built");
+	if (!force && configuration.status === "building") {
+		log.info("Configuration snapshot build already in progress");
 		return;
 	}
 
-	const repos = config.configurationRepos.filter((cr) => cr.repo !== null).map((cr) => cr.repo!);
+	if (
+		!force &&
+		(configuration.status === "default" || configuration.status === "ready") &&
+		configuration.snapshotId
+	) {
+		log.info({ snapshotId: configuration.snapshotId }, "Configuration snapshot already built");
+		return;
+	}
+
+	const repos = configuration.configurationRepos
+		.filter((configurationRepo) => configurationRepo.repo !== null)
+		.map((configurationRepo) => configurationRepo.repo!);
 
 	// Only Modal configurations support snapshot builds
-	if (config.sandboxProvider !== "modal") {
+	if (configuration.sandboxProvider !== "modal") {
 		log.info(
-			{ sandboxProvider: config.sandboxProvider },
+			{ sandboxProvider: configuration.sandboxProvider },
 			"Skipping snapshot build for non-Modal configuration",
 		);
 		return;
@@ -83,9 +94,9 @@ async function handleConfigurationSnapshotBuild(
 		branch: string;
 	}> = [];
 
-	for (const cr of config.configurationRepos) {
-		if (!cr.repo) continue;
-		const repo = cr.repo;
+	for (const configurationRepo of configuration.configurationRepos) {
+		if (!configurationRepo.repo) continue;
+		const repo = configurationRepo.repo;
 
 		const token = await resolveGitHubToken(repo.organizationId, repo.id);
 
@@ -99,7 +110,7 @@ async function handleConfigurationSnapshotBuild(
 		repoInputs.push({
 			repoUrl: repo.githubUrl,
 			token: token || undefined,
-			workspacePath: cr.workspacePath,
+			workspacePath: configurationRepo.workspacePath,
 			repoId: repo.id,
 			branch: repo.defaultBranch || "main",
 		});

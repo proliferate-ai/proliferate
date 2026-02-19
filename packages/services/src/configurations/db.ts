@@ -817,7 +817,13 @@ export async function markConfigurationSnapshotDefault(
 	await db
 		.update(configurations)
 		.set({ snapshotId, status: "default", error: null })
-		.where(eq(configurations.id, configurationId));
+		.where(
+			and(
+				eq(configurations.id, configurationId),
+				eq(configurations.status, "building"),
+				isNull(configurations.snapshotId),
+			),
+		);
 }
 
 /**

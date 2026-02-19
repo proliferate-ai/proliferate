@@ -522,7 +522,7 @@ export class E2BProvider implements SandboxProvider {
 			);
 			const repoBranch = repo.branch ?? opts.branch;
 			const cloneResult = await sandbox.commands.run(
-				`git clone --depth 1 --branch ${repoBranch} '${cloneUrl}' ${targetDir}`,
+				`git clone --depth 1 --branch ${shellEscape(repoBranch)} '${cloneUrl}' ${shellEscape(targetDir)}`,
 				{ timeoutMs: 120000 },
 			);
 			if (cloneResult.exitCode !== 0) {
@@ -531,7 +531,7 @@ export class E2BProvider implements SandboxProvider {
 					"Branch clone failed, trying default",
 				);
 				const fallbackResult = await sandbox.commands.run(
-					`git clone --depth 1 '${cloneUrl}' ${targetDir}`,
+					`git clone --depth 1 '${cloneUrl}' ${shellEscape(targetDir)}`,
 					{
 						timeoutMs: 120000,
 					},
