@@ -62,11 +62,12 @@ async function handleConfigurationSnapshotBuild(
 		.filter((configurationRepo) => configurationRepo.repo !== null)
 		.map((configurationRepo) => configurationRepo.repo!);
 
-	// Only Modal configurations support snapshot builds
+	// Only Modal configurations support snapshot builds — mark non-Modal as default
 	if (configuration.sandboxProvider !== "modal") {
+		await configurations.markConfigurationDefaultNoSnapshot(configurationId);
 		log.info(
 			{ sandboxProvider: configuration.sandboxProvider },
-			"Skipping snapshot build for non-Modal configuration",
+			"Non-Modal configuration — marked default without snapshot",
 		);
 		return;
 	}

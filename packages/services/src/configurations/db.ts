@@ -829,6 +829,18 @@ export async function markConfigurationSnapshotDefault(
 }
 
 /**
+ * Mark a configuration as default without a snapshot (e.g. non-Modal providers).
+ * Transitions from "building" to "default" with no snapshotId.
+ */
+export async function markConfigurationDefaultNoSnapshot(configurationId: string): Promise<void> {
+	const db = getDb();
+	await db
+		.update(configurations)
+		.set({ status: "default", error: null })
+		.where(and(eq(configurations.id, configurationId), eq(configurations.status, "building")));
+}
+
+/**
  * Mark a configuration snapshot build as failed.
  */
 export async function markConfigurationSnapshotFailed(

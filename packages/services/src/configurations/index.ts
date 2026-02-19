@@ -70,5 +70,6 @@ export {
 	getConfigurationSnapshotBuildInfo,
 	markConfigurationSnapshotBuilding,
 	markConfigurationSnapshotDefault,
+	markConfigurationDefaultNoSnapshot,
 	markConfigurationSnapshotFailed,
 } from "./db";

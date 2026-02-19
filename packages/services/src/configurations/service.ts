@@ -290,7 +290,11 @@ export async function requestConfigurationSnapshotBuild(
 	configurationId: string,
 	options?: { force?: boolean },
 ): Promise<void> {
-	if (!env.MODAL_APP_NAME) return;
+	if (!env.MODAL_APP_NAME) {
+		// Modal not configured — mark as default without snapshot so config isn't stuck in "building"
+		await configurationsDb.markConfigurationDefaultNoSnapshot(configurationId);
+		return;
+	}
 
 	try {
 		const queue = getConfigSnapshotBuildQueue();
