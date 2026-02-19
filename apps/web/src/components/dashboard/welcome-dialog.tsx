@@ -15,17 +15,98 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SnapshotSelector } from "./snapshot-selector";
 
-export function WelcomeDialog() {
+interface WelcomeDialogProps {
+	/** Organization name — shown when a user just accepted an invitation */
+	joinedOrgName?: string;
+	/** Called after the joined-org welcome is dismissed */
+	onJoinedDismiss?: () => void;
+}
+
+export function WelcomeDialog({ joinedOrgName, onJoinedDismiss }: WelcomeDialogProps) {
 	const { hasSeenWelcome, markWelcomeSeen, setPendingPrompt } = useDashboardStore();
 	const [showCreate, setShowCreate] = useState(false);
 	const router = useRouter();
 
+	// Invitation welcome — shown when a user just joined via invite
+	if (joinedOrgName) {
+		return (
+			<Dialog
+				open
+				onOpenChange={(open) => {
+					if (!open) onJoinedDismiss?.();
+				}}
+			>
+				<DialogContent className="max-w-lg border-border bg-card">
+					<DialogHeader>
+						<DialogTitle className="text-2xl">Welcome to {joinedOrgName}</DialogTitle>
+						<DialogDescription>
+							You&apos;ve joined the team. Here&apos;s what you can do.
+						</DialogDescription>
+					</DialogHeader>
+
+					<div className="space-y-4 py-2">
+						<div className="flex gap-3">
+							<div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+								<Box className="h-4 w-4 text-foreground" />
+							</div>
+							<div>
+								<p className="text-sm font-medium">Snapshots</p>
+								<p className="text-sm text-muted-foreground">
+									Pre-configured cloud environments with your team&apos;s repos, dependencies, and
+									services.
+								</p>
+							</div>
+						</div>
+
+						<div className="flex gap-3">
+							<div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+								<Code className="h-4 w-4 text-foreground" />
+							</div>
+							<div>
+								<p className="text-sm font-medium">Sessions</p>
+								<p className="text-sm text-muted-foreground">
+									Start coding sessions from a snapshot. Your agent gets a fully configured
+									environment in seconds.
+								</p>
+							</div>
+						</div>
+
+						<div className="flex gap-3">
+							<div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+								<Zap className="h-4 w-4 text-foreground" />
+							</div>
+							<div>
+								<p className="text-sm font-medium">Automations</p>
+								<p className="text-sm text-muted-foreground">
+									Trigger sessions automatically from GitHub issues, Slack messages, or webhooks.
+								</p>
+							</div>
+						</div>
+					</div>
+
+					<div className="pt-2">
+						<Button
+							className="w-full"
+							onClick={() => {
+								markWelcomeSeen();
+								onJoinedDismiss?.();
+							}}
+						>
+							Get started
+						</Button>
+					</div>
+				</DialogContent>
+			</Dialog>
+		);
+	}
+
+	// Standard welcome — shown for new users who signed up directly
 	if (hasSeenWelcome && !showCreate) return null;
 
 	return (
 		<>
 			<Dialog open={!hasSeenWelcome} onOpenChange={(open) => !open && markWelcomeSeen()}>
-				<DialogContent className="max-w-lg">
+				<DialogContent className="max-w-lg border-border bg-card">
 					<DialogHeader>
 						<DialogTitle className="text-2xl">Welcome to Proliferate</DialogTitle>
 						<DialogDescription>
@@ -35,8 +116,8 @@ export function WelcomeDialog() {
 
 					<div className="space-y-4 py-2">
 						<div className="flex gap-3">
-							<div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-								<Box className="h-4 w-4 text-primary" />
+							<div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+								<Box className="h-4 w-4 text-foreground" />
 							</div>
 							<div>
 								<p className="text-sm font-medium">Snapshots</p>
@@ -48,8 +129,8 @@ export function WelcomeDialog() {
 						</div>
 
 						<div className="flex gap-3">
-							<div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-								<Code className="h-4 w-4 text-primary" />
+							<div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+								<Code className="h-4 w-4 text-foreground" />
 							</div>
 							<div>
 								<p className="text-sm font-medium">Sessions</p>
@@ -61,8 +142,8 @@ export function WelcomeDialog() {
 						</div>
 
 						<div className="flex gap-3">
-							<div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-								<Zap className="h-4 w-4 text-primary" />
+							<div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+								<Zap className="h-4 w-4 text-foreground" />
 							</div>
 							<div>
 								<p className="text-sm font-medium">Automations</p>

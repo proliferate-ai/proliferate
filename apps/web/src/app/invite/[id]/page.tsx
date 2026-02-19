@@ -1,6 +1,6 @@
 "use client";
 
-import { getBasicInviteInfo } from "@/app/invite/actions";
+import { deletePersonalOrg, getBasicInviteInfo } from "@/app/invite/actions";
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
 import { organization, signOut, useSession } from "@/lib/auth-client";
@@ -107,11 +107,25 @@ export default function InviteAcceptPage() {
 	}, [session, sessionPending, invitedEmail, basicInfoLoaded, invitationId, router]);
 
 	const handleAccept = async () => {
-		if (!invitation) return;
+		if (!invitation?.organization) return;
 		setAccepting(true);
 		try {
+			// Accept the invitation
 			await organization.acceptInvitation({ invitationId });
-			router.push("/dashboard");
+
+			// Switch active org to the invited org
+			await organization.setActive({ organizationId: invitation.organization.id });
+
+			// Delete the auto-created personal org (best-effort)
+			try {
+				await deletePersonalOrg();
+			} catch {
+				// Non-critical — personal org stays if deletion fails
+			}
+
+			// Redirect to dashboard with welcome flag
+			const orgName = encodeURIComponent(invitation.organization.name);
+			router.push(`/dashboard?joined=${orgName}`);
 		} catch {
 			setError("Failed to accept invitation. You may need to verify your email first.");
 		} finally {
@@ -124,7 +138,8 @@ export default function InviteAcceptPage() {
 		setRejecting(true);
 		try {
 			await organization.rejectInvitation({ invitationId });
-			router.push("/");
+			// Send rejected users to onboarding so they can create their own org
+			router.push("/onboarding");
 		} catch {
 			setError("Failed to reject invitation");
 		} finally {
@@ -194,15 +209,15 @@ export default function InviteAcceptPage() {
 							Account Mismatch
 						</Text>
 						<Text variant="body" color="muted">
-							This invitation to join{" "}
+							You were taken here through an invitation to join{" "}
 							<Text as="span" className="font-medium text-foreground">
 								{organizationName}
-							</Text>{" "}
-							was sent to{" "}
+							</Text>
+							, but it was sent to{" "}
 							<Text as="span" className="font-medium text-foreground">
 								{invitedEmail}
 							</Text>
-							, but you&apos;re signed in as{" "}
+							, not{" "}
 							<Text as="span" className="font-medium text-foreground">
 								{session.user.email}
 							</Text>
@@ -215,8 +230,8 @@ export default function InviteAcceptPage() {
 							<LogOut className="mr-2 h-4 w-4" />
 							{signingOut ? "Signing out..." : `Sign in as ${invitedEmail}`}
 						</Button>
-						<Button variant="outline" onClick={() => router.push("/dashboard")} className="w-full">
-							Continue to Dashboard
+						<Button variant="outline" onClick={() => router.push("/onboarding")} className="w-full">
+							Continue with my account
 						</Button>
 					</div>
 				</div>
@@ -314,7 +329,7 @@ export default function InviteAcceptPage() {
 						</Button>
 						<Button className="flex-1" onClick={handleAccept} disabled={accepting || rejecting}>
 							{accepting ? (
-								"Accepting..."
+								"Joining..."
 							) : (
 								<>
 									<Check className="mr-2 h-4 w-4" />

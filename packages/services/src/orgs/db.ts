@@ -286,6 +286,32 @@ export async function findBasicInvitationInfo(invitationId: string): Promise<{
 	};
 }
 
+/**
+ * Delete a user's auto-created personal organization and its membership.
+ * Only deletes orgs where is_personal = true and id matches the org_{userId} pattern.
+ * Returns true if a personal org was found and deleted.
+ */
+export async function deletePersonalOrg(userId: string): Promise<boolean> {
+	const db = getDb();
+	const personalOrgId = `org_${userId}`;
+
+	// Verify it exists and is actually a personal org
+	const org = await db.query.organization.findFirst({
+		where: and(eq(organization.id, personalOrgId), eq(organization.isPersonal, true)),
+		columns: { id: true },
+	});
+
+	if (!org) return false;
+
+	// Delete member first (FK constraint), then org
+	await db
+		.delete(member)
+		.where(and(eq(member.organizationId, personalOrgId), eq(member.userId, userId)));
+	await db.delete(organization).where(eq(organization.id, personalOrgId));
+
+	return true;
+}
+
 // ============================================
 // Billing / Onboarding Helpers
 // ============================================
