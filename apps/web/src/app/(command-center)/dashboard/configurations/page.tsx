@@ -2,11 +2,13 @@
 
 import {
 	GearIllustration,
+	InfoBadge,
 	PageEmptyState,
 	PlusBadge,
 } from "@/components/dashboard/page-empty-state";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { CreateSnapshotContent } from "@/components/dashboard/snapshot-selector";
+import { GitHubConnectButton } from "@/components/integrations/github-connect-button";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -35,6 +37,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useConfigurations, useDeleteConfiguration } from "@/hooks/use-configurations";
+import { useIntegrations } from "@/hooks/use-integrations";
 import { cn } from "@/lib/utils";
 import type { Configuration } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
@@ -47,16 +50,25 @@ import { useMemo, useState } from "react";
 // Main Page
 // ============================================
 
+const STATUS_ORDER: Record<string, number> = { ready: 0, default: 0, building: 1 };
+
 export default function ConfigurationsPage() {
 	const { data: configurations, isLoading } = useConfigurations();
+	const { data: integrationsData } = useIntegrations();
 	const [filterQuery, setFilterQuery] = useState("");
 	const [createOpen, setCreateOpen] = useState(false);
 
+	const hasGitHub = integrationsData?.github?.connected ?? false;
+
 	const configList = useMemo(() => {
-		const list = configurations ?? [];
-		if (!filterQuery) return list;
-		const q = filterQuery.toLowerCase();
-		return list.filter((c) => (c.name ?? "").toLowerCase().includes(q));
+		let list = configurations ?? [];
+		if (filterQuery) {
+			const q = filterQuery.toLowerCase();
+			list = list.filter((c) => (c.name ?? "").toLowerCase().includes(q));
+		}
+		return [...list].sort(
+			(a, b) => (STATUS_ORDER[a.status ?? ""] ?? 2) - (STATUS_ORDER[b.status ?? ""] ?? 2),
+		);
 	}, [configurations, filterQuery]);
 
 	if (isLoading) {
@@ -91,7 +103,12 @@ export default function ConfigurationsPage() {
 							/>
 						</div>
 					)}
-					<Button size="sm" className="h-8" onClick={() => setCreateOpen(true)}>
+					<Button
+						size="sm"
+						className="h-8"
+						onClick={() => setCreateOpen(true)}
+						disabled={!hasGitHub}
+					>
 						<Plus className="h-3.5 w-3.5 mr-1.5" />
 						New Configuration
 					</Button>
@@ -99,17 +116,30 @@ export default function ConfigurationsPage() {
 			}
 		>
 			{!hasConfigs ? (
-				<PageEmptyState
-					illustration={<GearIllustration />}
-					badge={<PlusBadge />}
-					title="No configurations yet"
-					description="Define repos, service commands, and environment files to customize your sandbox."
-				>
-					<Button size="sm" onClick={() => setCreateOpen(true)}>
-						<Plus className="h-3.5 w-3.5 mr-1.5" />
-						New Configuration
-					</Button>
-				</PageEmptyState>
+				hasGitHub ? (
+					<PageEmptyState
+						illustration={<GearIllustration />}
+						badge={<PlusBadge />}
+						title="No configurations yet"
+						description="Define repos, service commands, and environment files to customize your sandbox."
+					>
+						<Button size="sm" onClick={() => setCreateOpen(true)}>
+							<Plus className="h-3.5 w-3.5 mr-1.5" />
+							New Configuration
+						</Button>
+					</PageEmptyState>
+				) : (
+					<PageEmptyState
+						illustration={<GearIllustration />}
+						badge={<InfoBadge />}
+						title="Connect GitHub first"
+						description="Configurations need access to your repos. Connect GitHub to get started."
+					>
+						<div className="w-56">
+							<GitHubConnectButton />
+						</div>
+					</PageEmptyState>
+				)
 			) : !hasResults ? (
 				<p className="text-sm text-muted-foreground text-center py-12">
 					No configurations matching &ldquo;{filterQuery}&rdquo;

@@ -454,7 +454,8 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			durationMs: Date.now() - imageStartMs,
 		});
 
-		const sandboxName = `config-snapshot-${input.configurationId}-${Date.now()}`;
+		const shortId = input.configurationId.replace(/-/g, "").slice(0, 12);
+		const sandboxName = `cfgsnapshot-${shortId}-${Date.now()}`;
 		const createStartMs = Date.now();
 		const sandbox = await this.client.sandboxes.create(app, sandboxImage, {
 			command: ["sh", "-c", "rm -f /var/run/docker.pid && exec /usr/local/bin/start-dockerd.sh"],
