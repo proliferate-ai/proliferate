@@ -86,6 +86,16 @@ export async function processLLMSyncOrgJob(
 	}
 
 	if (!events.length) {
+		// Still advance cursor so we don't re-fetch the same skipped entries forever
+		const lastLog = logs[logs.length - 1];
+		const latestStartTime = lastLog.startTime ? new Date(lastLog.startTime) : startDate;
+		await billing.updateLLMSpendCursor({
+			organizationId: orgId,
+			lastStartTime: latestStartTime,
+			lastRequestId: lastLog.request_id,
+			recordsProcessed: cursor?.recordsProcessed ?? 0,
+			syncedAt: new Date(),
+		});
 		return;
 	}
 
