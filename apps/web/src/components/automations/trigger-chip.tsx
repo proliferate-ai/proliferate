@@ -225,16 +225,11 @@ export function TriggerChip({
 		return (
 			<Popover open={open} onOpenChange={handleOpenChange}>
 				<PopoverTrigger asChild>
-					<button
-						type="button"
+					<Button
+						variant="stacked"
+						size="stacked"
 						disabled={isDisabled}
 						className={cn(
-							"min-h-[2.75rem] text-left text-sm font-medium flex items-center px-3 relative transition-colors duration-75",
-							"border border-border -mb-px last:mb-0",
-							"text-muted-foreground",
-							isDisabled
-								? "opacity-50 cursor-not-allowed"
-								: "hover:z-10 active:z-10 focus-visible:z-20 hover:bg-muted/50 active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 							isFirst && "rounded-t-xl",
 							isLast && "rounded-b-xl",
 							!trigger.enabled && !isDisabled && "opacity-50",
@@ -248,7 +243,7 @@ export function TriggerChip({
 							</span>
 						</div>
 						{!isDisabled && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />}
-					</button>
+					</Button>
 				</PopoverTrigger>
 				{popoverContent}
 			</Popover>
@@ -266,11 +261,12 @@ export function TriggerChip({
 				)}
 			>
 				<PopoverTrigger asChild>
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="sm"
 						disabled={isDisabled}
 						className={cn(
-							"inline-flex items-center gap-1.5 bg-transparent",
+							"h-auto p-0 gap-1.5 bg-transparent hover:bg-transparent",
 							isDisabled ? "cursor-not-allowed" : "hover:opacity-80 cursor-pointer",
 						)}
 					>
@@ -281,7 +277,7 @@ export function TriggerChip({
 								{isDisabled ? "Not connected" : summary}
 							</span>
 						</div>
-					</button>
+					</Button>
 				</PopoverTrigger>
 				<span
 					role="button"

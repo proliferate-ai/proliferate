@@ -163,21 +163,14 @@ export function AddTriggerButton({
 		return (
 			<Popover open={open} onOpenChange={handleOpenChange}>
 				<PopoverTrigger asChild>
-					<button
-						type="button"
-						className={cn(
-							"min-h-[2.75rem] text-left text-sm flex items-center px-3 relative transition-colors duration-75",
-							"border border-border -mb-px last:mb-0",
-							"text-muted-foreground font-medium",
-							"hover:z-10 active:z-10 focus-visible:z-20",
-							"hover:bg-muted/50 active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-							isFirst && "rounded-t-xl",
-							isLast && "rounded-b-xl",
-						)}
+					<Button
+						variant="stacked"
+						size="stacked"
+						className={cn(isFirst && "rounded-t-xl", isLast && "rounded-b-xl")}
 					>
 						<CirclePlus className="w-[18px] h-[18px] shrink-0" />
 						<div className="flex min-w-0 items-center grow gap-1.5 px-2 py-2">{label}</div>
-					</button>
+					</Button>
 				</PopoverTrigger>
 				{popoverContent}
 			</Popover>

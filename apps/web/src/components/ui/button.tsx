@@ -18,12 +18,15 @@ const buttonVariants = cva(
 				ghost: "hover:bg-accent hover:text-accent-foreground",
 				link: "text-primary underline-offset-4 hover:underline",
 				light: "bg-neutral-200 text-neutral-900 hover:bg-neutral-300",
+				stacked:
+					"flex justify-start text-left rounded-none border border-border text-muted-foreground -mb-px last:mb-0 hover:z-10 active:z-10 hover:bg-muted/50 active:bg-muted transition-colors duration-75",
 			},
 			size: {
 				default: "h-9 px-4 py-2",
 				sm: "h-8 rounded-md px-3 text-xs",
 				lg: "h-10 rounded-md px-8",
 				icon: "h-9 w-9",
+				stacked: "min-h-[2.75rem] px-3 py-0",
 			},
 		},
 		defaultVariants: {
