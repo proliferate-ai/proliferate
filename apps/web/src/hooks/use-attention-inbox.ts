@@ -2,8 +2,10 @@
 
 import { useOrgActions } from "@/hooks/use-actions";
 import { useOrgPendingRuns } from "@/hooks/use-automations";
+import { orpc } from "@/lib/orpc";
 import type { PendingRunSummary } from "@proliferate/shared";
 import type { ActionApprovalRequestMessage } from "@proliferate/shared";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 type ActionApproval = ActionApprovalRequestMessage["payload"];
@@ -15,13 +17,39 @@ export interface ApprovalWithSession {
 	sessionTitle?: string | null;
 }
 
+/** Blocked sessions grouped by billing reason for inbox rollup. */
+export interface BlockedGroup {
+	reason: string;
+	count: number;
+	previewSessions: Array<{
+		id: string;
+		title: string | null;
+		promptSnippet: string | null;
+		startedAt: string | null;
+		pausedAt: string | null;
+	}>;
+}
+
 export type AttentionItem =
 	| { type: "approval"; data: ApprovalWithSession; timestamp: number }
-	| { type: "run"; data: PendingRunSummary; timestamp: number };
+	| { type: "run"; data: PendingRunSummary; timestamp: number }
+	| { type: "blocked"; data: BlockedGroup; timestamp: number };
 
 /**
- * Merges current-session WebSocket approvals with org-level polled approvals
- * and org pending runs into a single sorted attention list.
+ * Fetch billing-blocked session summary for inbox rollup.
+ * Failure-isolated: if this query fails, approvals + runs still render.
+ */
+function useBlockedSummary() {
+	return useQuery({
+		...orpc.sessions.blockedSummary.queryOptions({ input: undefined }),
+		refetchInterval: 30_000,
+		select: (data) => data.groups,
+	});
+}
+
+/**
+ * Merges current-session WebSocket approvals with org-level polled approvals,
+ * org pending runs, and blocked session groups into a single sorted attention list.
  */
 export function useAttentionInbox(options: {
 	/** Current session's WS-delivered approvals. */
@@ -33,6 +61,7 @@ export function useAttentionInbox(options: {
 
 	const { data: orgActions } = useOrgActions({ status: "pending", limit: 50 });
 	const { data: pendingRuns } = useOrgPendingRuns({ limit: 50, unassignedOnly: true });
+	const { data: blockedGroups } = useBlockedSummary();
 
 	const items = useMemo(() => {
 		const result: AttentionItem[] = [];
@@ -84,11 +113,22 @@ export function useAttentionInbox(options: {
 			}
 		}
 
+		// 4. Blocked groups (rolled up by billing reason)
+		if (blockedGroups) {
+			for (const group of blockedGroups) {
+				result.push({
+					type: "blocked",
+					data: group,
+					timestamp: Date.now(),
+				});
+			}
+		}
+
 		// Sort newest first
 		result.sort((a, b) => b.timestamp - a.timestamp);
 
 		return result;
-	}, [wsApprovals, orgActions, pendingRuns, sessionId]);
+	}, [wsApprovals, orgActions, pendingRuns, blockedGroups, sessionId]);
 
 	return items;
 }

@@ -2,12 +2,12 @@
 
 import { InboxEmpty } from "@/components/inbox/inbox-empty";
 import { InboxItem } from "@/components/inbox/inbox-item";
-import type { AttentionItem } from "@/hooks/use-attention-inbox";
+import type { AttentionItem, BlockedGroup } from "@/hooks/use-attention-inbox";
 import { useAttentionInbox } from "@/hooks/use-attention-inbox";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/utils";
 import type { PendingRunSummary } from "@proliferate/shared";
-import { AlertCircle, Hand, Search, Shield, Timer, XCircle } from "lucide-react";
+import { AlertCircle, AlertOctagon, Hand, Search, Shield, Timer, XCircle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
@@ -15,10 +15,11 @@ import { Suspense, useMemo, useState } from "react";
 // Types & Helpers
 // ============================================
 
-type TypeFilter = "all" | "runs" | "approvals";
+type TypeFilter = "all" | "runs" | "approvals" | "blocked";
 
 function getItemId(item: AttentionItem): string {
 	if (item.type === "approval") return item.data.approval.invocationId;
+	if (item.type === "blocked") return `blocked-${item.data.reason}`;
 	return item.data.id;
 }
 
@@ -29,6 +30,9 @@ function getSearchableText(item: AttentionItem): string {
 			.filter(Boolean)
 			.join(" ")
 			.toLowerCase();
+	}
+	if (item.type === "blocked") {
+		return [item.data.reason, "blocked", "sessions"].join(" ").toLowerCase();
 	}
 	const { automation_name, error_message, status } = item.data;
 	return [automation_name, error_message, status].filter(Boolean).join(" ").toLowerCase();
@@ -56,6 +60,12 @@ interface StatusGroup {
 
 function groupByStatus(items: AttentionItem[]): StatusGroup[] {
 	const groups: StatusGroup[] = [];
+
+	// Blocked sessions first (org-level urgency)
+	const blocked = items.filter((i) => i.type === "blocked");
+	if (blocked.length > 0) {
+		groups.push({ key: "blocked", label: "Blocked Sessions", items: blocked });
+	}
 
 	const needsHelp = items.filter(
 		(i) =>
@@ -144,6 +154,28 @@ function QueueRow({
 					<span className="text-xs text-muted-foreground truncate block">
 						{[approval.integration, sessionTitle, timeAgo].filter(Boolean).join(" · ")}
 					</span>
+				</div>
+			</button>
+		);
+	}
+
+	if (item.type === "blocked") {
+		const group = item.data as BlockedGroup;
+		return (
+			<button
+				type="button"
+				onClick={onClick}
+				className={cn(
+					"flex items-center gap-2.5 w-full px-4 py-2.5 border-b border-border/50 hover:bg-muted/50 transition-colors text-sm text-left last:border-0",
+					selected && "bg-muted/50",
+				)}
+			>
+				<AlertOctagon className="h-4 w-4 shrink-0 text-destructive" />
+				<div className="min-w-0 flex-1">
+					<span className="text-sm font-medium text-foreground truncate block">
+						{group.count} session{group.count !== 1 ? "s" : ""} blocked
+					</span>
+					<span className="text-xs text-muted-foreground truncate block">{group.reason}</span>
 				</div>
 			</button>
 		);
@@ -251,6 +283,8 @@ function InboxContent() {
 			result = result.filter((i) => i.type === "run");
 		} else if (typeFilter === "approvals") {
 			result = result.filter((i) => i.type === "approval");
+		} else if (typeFilter === "blocked") {
+			result = result.filter((i) => i.type === "blocked");
 		}
 
 		// Integration filter
@@ -349,6 +383,16 @@ function InboxContent() {
 								setTypeFilter("runs");
 								setIntegrationFilter(null);
 								setRiskFilter(null);
+							}}
+						/>
+						<FilterPill
+							label="Blocked"
+							active={typeFilter === "blocked"}
+							onClick={() => {
+								setTypeFilter("blocked");
+								setIntegrationFilter(null);
+								setRiskFilter(null);
+								setAutomationFilter(null);
 							}}
 						/>
 					</div>

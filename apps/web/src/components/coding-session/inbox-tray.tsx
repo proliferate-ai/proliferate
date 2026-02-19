@@ -62,9 +62,9 @@ export function InboxTray({ sessionId, token, pendingApprovals }: InboxTrayProps
 							token={token}
 							canApprove={canApprove}
 						/>
-					) : (
+					) : item.type === "run" ? (
 						<RunCard key={item.data.id} run={item.data} />
-					),
+					) : null,
 				)}
 				{overflow > 0 && (
 					<p className="text-xs text-muted-foreground text-center py-0.5">

@@ -553,6 +553,89 @@ export async function countNullPauseReasonSessions(): Promise<number> {
 }
 
 // ============================================
+// Blocked Summary (Inbox)
+// ============================================
+
+/** Preview session for blocked summary groups. */
+export interface BlockedPreviewSessionRow {
+	id: string;
+	title: string | null;
+	initialPrompt: string | null;
+	startedAt: Date | null;
+	pausedAt: Date | null;
+}
+
+/** Blocked sessions grouped by reason. */
+export interface BlockedGroupRow {
+	reason: string;
+	count: number;
+	previewSessions: BlockedPreviewSessionRow[];
+}
+
+/**
+ * Get billing-blocked sessions grouped by reason with top-3 preview sessions.
+ */
+export async function getBlockedSummary(orgId: string): Promise<BlockedGroupRow[]> {
+	const db = getDb();
+
+	const rows = await db.execute<{
+		block_reason: string;
+		count: number;
+		id: string | null;
+		title: string | null;
+		initial_prompt: string | null;
+		started_at: string | null;
+		paused_at: string | null;
+	}>(sql`
+		WITH blocked AS (
+			SELECT
+				id, title, initial_prompt, started_at, paused_at,
+				COALESCE(pause_reason, status) AS block_reason,
+				ROW_NUMBER() OVER (
+					PARTITION BY COALESCE(pause_reason, status)
+					ORDER BY COALESCE(paused_at, started_at) DESC
+				) AS rn
+			FROM sessions
+			WHERE organization_id = ${orgId}
+				AND (
+					(status = 'paused' AND pause_reason IN ('credit_limit', 'payment_failed', 'overage_cap', 'suspended'))
+					OR status = 'suspended'
+				)
+		),
+		counts AS (
+			SELECT block_reason, COUNT(*)::int AS count
+			FROM blocked
+			GROUP BY block_reason
+		)
+		SELECT c.block_reason, c.count, b.id, b.title, b.initial_prompt, b.started_at, b.paused_at
+		FROM counts c
+		LEFT JOIN blocked b ON b.block_reason = c.block_reason AND b.rn <= 3
+		ORDER BY c.count DESC, b.rn ASC
+	`);
+
+	// Group flat result set by block_reason
+	const groupMap = new Map<string, BlockedGroupRow>();
+	for (const row of rows) {
+		let group = groupMap.get(row.block_reason);
+		if (!group) {
+			group = { reason: row.block_reason, count: row.count, previewSessions: [] };
+			groupMap.set(row.block_reason, group);
+		}
+		if (row.id) {
+			group.previewSessions.push({
+				id: row.id,
+				title: row.title,
+				initialPrompt: row.initial_prompt,
+				startedAt: row.started_at ? new Date(row.started_at) : null,
+				pausedAt: row.paused_at ? new Date(row.paused_at) : null,
+			});
+		}
+	}
+
+	return [...groupMap.values()];
+}
+
+// ============================================
 // Session Connections (Integration Tokens)
 // ============================================
 
