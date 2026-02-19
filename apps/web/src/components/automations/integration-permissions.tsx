@@ -362,6 +362,13 @@ function UnifiedActionRow({
 	const handleToggle = (enabled: boolean) => {
 		if (row.toolName) {
 			onToolToggle(row.toolName, enabled);
+			// Also sync dynamic action permissions when toggling off a tool with actions
+			if (!enabled && hasActions && row.integration) {
+				for (const action of row.actions!) {
+					const key = `${row.integration}:${action.name}`;
+					onPermissionChange(key, "deny");
+				}
+			}
 		} else if (hasActions && row.integration) {
 			const mode: ActionMode = enabled ? "require_approval" : "deny";
 			for (const action of row.actions!) {

@@ -257,38 +257,45 @@ export function TriggerChip({
 
 	return (
 		<Popover open={open} onOpenChange={handleOpenChange}>
-			<PopoverTrigger asChild>
-				<Button
-					variant="ghost"
-					disabled={isDisabled}
-					className={cn(
-						"h-auto flex items-center gap-1.5 pl-2 pr-1 py-1.5 rounded-xl border",
-						"bg-card border-border",
-						isDisabled ? "opacity-50 cursor-not-allowed" : "hover:bg-muted",
-						!trigger.enabled && !isDisabled && "opacity-50",
-					)}
-				>
-					<ProviderIcon provider={trigger.provider as Provider} className="h-4 w-4 shrink-0" />
-					<div className="flex flex-col items-start leading-tight">
-						<span className="text-sm font-medium">{providerLabel}</span>
-						<span className="text-xs text-muted-foreground">
-							{isDisabled ? "Not connected" : summary}
-						</span>
-					</div>
-					<span
-						role="button"
-						tabIndex={0}
-						onClick={handleDelete}
-						onKeyDown={(e) => e.key === "Enter" && handleDelete(e as unknown as React.MouseEvent)}
+			<div
+				className={cn(
+					"inline-flex items-center gap-1.5 pl-2 pr-1 py-1.5 rounded-xl border",
+					"bg-card border-border",
+					isDisabled ? "opacity-50" : "",
+					!trigger.enabled && !isDisabled && "opacity-50",
+				)}
+			>
+				<PopoverTrigger asChild>
+					<button
+						type="button"
+						disabled={isDisabled}
 						className={cn(
-							"ml-0.5 p-0.5 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors",
-							deleteMutation.isPending && "pointer-events-none opacity-50",
+							"inline-flex items-center gap-1.5 bg-transparent",
+							isDisabled ? "cursor-not-allowed" : "hover:opacity-80 cursor-pointer",
 						)}
 					>
-						<X className="h-3.5 w-3.5" />
-					</span>
-				</Button>
-			</PopoverTrigger>
+						<ProviderIcon provider={trigger.provider as Provider} className="h-4 w-4 shrink-0" />
+						<div className="flex flex-col items-start leading-tight">
+							<span className="text-sm font-medium">{providerLabel}</span>
+							<span className="text-xs text-muted-foreground">
+								{isDisabled ? "Not connected" : summary}
+							</span>
+						</div>
+					</button>
+				</PopoverTrigger>
+				<span
+					role="button"
+					tabIndex={0}
+					onClick={handleDelete}
+					onKeyDown={(e) => e.key === "Enter" && handleDelete(e as unknown as React.MouseEvent)}
+					className={cn(
+						"ml-0.5 p-0.5 rounded-full hover:bg-destructive/10 hover:text-destructive transition-colors",
+						deleteMutation.isPending && "pointer-events-none opacity-50",
+					)}
+				>
+					<X className="h-3.5 w-3.5" />
+				</span>
+			</div>
 			{popoverContent}
 		</Popover>
 	);
