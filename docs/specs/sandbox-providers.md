@@ -269,6 +269,7 @@ interface ServiceInfo {
 | `SANDBOX_TIMEOUT_SECONDS` | int | `3600` | No | Max sandbox lifetime |
 | `SANDBOX_GIT_PULL_ON_RESTORE` | boolean | `false` | No | Enable git pull on snapshot restore |
 | `SANDBOX_GIT_PULL_CADENCE_SECONDS` | int (>=0) | `0` | No | Min seconds between pulls; 0 = always |
+| `SANDBOX_IMAGE_VERSION` | string | — | No | Optional base snapshot cache-buster input for version-key |
 | `MODAL_APP_NAME` | string | — | If modal | Modal app name |
 | `MODAL_APP_SUFFIX` | string | — | No | Per-developer suffix (e.g., `"pablo"`) |
 | `MODAL_BASE_SNAPSHOT_ID` | string | — | No | Pre-baked base snapshot image ID |
@@ -443,7 +444,7 @@ throw SandboxProviderError.fromError(error, "modal", "createSandbox");
 
 **What it does:** Computes a SHA-256 hash of everything baked into a base snapshot (`packages/shared/src/sandbox/version-key.ts:computeBaseSnapshotVersionKey`).
 
-**Inputs hashed:** `PLUGIN_MJS` + `DEFAULT_CADDYFILE` + `getOpencodeConfig(defaultModelId)`.
+**Inputs hashed:** `PLUGIN_MJS` + `DEFAULT_CADDYFILE` + `getOpencodeConfig(defaultModelId)` + `SANDBOX_IMAGE_VERSION` (fallback `"v1.0.0"` when unset).
 
 When this key changes, the base snapshot is stale and must be rebuilt. Used by base snapshot build workers (see `repos-prebuilds.md`).
 

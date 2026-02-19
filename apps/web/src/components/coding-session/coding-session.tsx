@@ -15,6 +15,7 @@ import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import {
 	AlertTriangle,
 	ArrowLeft,
+	ArrowRightLeft,
 	Code,
 	GitBranch,
 	Globe,
@@ -142,6 +143,8 @@ export function CodingSession({
 		unpinTab,
 		panelSizes,
 		setPanelSizes,
+		panelSide,
+		setPanelSide,
 		missingEnvKeyCount,
 	} = usePreviewPanelStore();
 	const [viewPickerOpen, setViewPickerOpen] = useState(false);
@@ -418,9 +421,67 @@ export function CodingSession({
 
 	// Panel tabs header (embedded in right pane)
 	const panelTabsHeader = (
-		<div className="shrink-0 flex items-center h-12 px-3 border-b border-border/50">
+		<div className="shrink-0 flex items-center justify-between h-12 px-3 border-b border-border/50">
 			{panelViewPicker}
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7 text-muted-foreground"
+						onClick={() => setPanelSide(panelSide === "right" ? "left" : "right")}
+					>
+						<ArrowRightLeft className="h-3.5 w-3.5" />
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent side="bottom">
+					Move panel to {panelSide === "right" ? "left" : "right"}
+				</TooltipContent>
+			</Tooltip>
 		</div>
+	);
+
+	const handleDesktopLayoutChanged = (layout: unknown) => {
+		const sizes = Array.isArray(layout) ? layout : Object.values(layout as Record<string, number>);
+		if (sizes.length < 2) return;
+		if (panelSide === "left") {
+			setPanelSizes([sizes[1], sizes[0]]);
+		} else {
+			setPanelSizes([sizes[0], sizes[1]]);
+		}
+	};
+
+	const chatPane = (
+		<ResizablePanel
+			defaultSize={panelSizes[0] || 35}
+			minSize={25}
+			maxSize={65}
+			className="flex flex-col"
+		>
+			{chatHeader}
+			<div className="flex-1 min-h-0 flex flex-col">{leftPaneContent}</div>
+		</ResizablePanel>
+	);
+
+	const toolPane = (
+		<ResizablePanel
+			defaultSize={panelSizes[1] || 65}
+			minSize={35}
+			maxSize={75}
+			className="flex flex-col"
+		>
+			{panelTabsHeader}
+			<div className="flex-1 min-h-0 p-2">
+				<div className="h-full rounded-xl border border-border bg-background overflow-hidden">
+					<RightPanel
+						isMobileFullScreen={false}
+						sessionProps={sessionPanelProps}
+						previewUrl={previewUrl}
+						runId={runId}
+					/>
+				</div>
+			</div>
+		</ResizablePanel>
 	);
 
 	// Desktop layout with resizable panels
@@ -428,41 +489,21 @@ export function CodingSession({
 		<ResizablePanelGroup
 			orientation="horizontal"
 			className="h-full w-full"
-			onLayoutChanged={(layout) => setPanelSizes(Object.values(layout))}
+			onLayoutChanged={handleDesktopLayoutChanged}
 		>
-			{/* Left pane: Chat */}
-			<ResizablePanel
-				defaultSize={panelSizes[0] || 35}
-				minSize={25}
-				maxSize={65}
-				className="flex flex-col"
-			>
-				{chatHeader}
-				<div className="flex-1 min-h-0 flex flex-col">{leftPaneContent}</div>
-			</ResizablePanel>
-
-			{/* Drag handle */}
-			<ResizableHandle withHandle />
-
-			{/* Right pane: Tool panels */}
-			<ResizablePanel
-				defaultSize={panelSizes[1] || 65}
-				minSize={35}
-				maxSize={75}
-				className="flex flex-col"
-			>
-				{panelTabsHeader}
-				<div className="flex-1 min-h-0 p-2">
-					<div className="h-full rounded-xl border border-border bg-background overflow-hidden">
-						<RightPanel
-							isMobileFullScreen={false}
-							sessionProps={sessionPanelProps}
-							previewUrl={previewUrl}
-							runId={runId}
-						/>
-					</div>
-				</div>
-			</ResizablePanel>
+			{panelSide === "left" ? (
+				<>
+					{toolPane}
+					<ResizableHandle withHandle />
+					{chatPane}
+				</>
+			) : (
+				<>
+					{chatPane}
+					<ResizableHandle withHandle />
+					{toolPane}
+				</>
+			)}
 		</ResizablePanelGroup>
 	);
 

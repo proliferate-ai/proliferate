@@ -191,6 +191,7 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 			.describe(
 				"Minimum seconds between git pulls on snapshot restore. 0 = always pull when enabled.",
 			),
+		SANDBOX_IMAGE_VERSION: optionalString, // Optional cache-buster input for base snapshot version-key
 		IDLE_SNAPSHOT_DELAY_SECONDS: optionalSeconds(300),
 		SANDBOX_TIMEOUT_SECONDS: optionalSeconds(3600),
 		SNAPSHOT_RETENTION_DAYS: z.coerce

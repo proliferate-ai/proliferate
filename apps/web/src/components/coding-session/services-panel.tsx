@@ -61,39 +61,48 @@ function formatUptime(service: ServiceInfo): string {
 function ServiceRow({
 	service,
 	isActionLoading,
-	exposedPort,
-	previewUrl,
 	onViewLogs,
 	onStop,
 	onRestart,
 }: {
 	service: ServiceInfo;
 	isActionLoading: boolean;
-	exposedPort: number | null;
-	previewUrl?: string | null;
 	onViewLogs: () => void;
 	onStop: () => void;
 	onRestart: () => void;
 }) {
-	const openUrl = usePreviewPanelStore((s) => s.openUrl);
-
 	return (
-		<div className="px-3 py-2.5 hover:bg-muted/50 transition-colors">
-			{/* Row 1: status dot + name + uptime + actions */}
-			<div className="flex items-center gap-2">
-				<StatusDot status={serviceStatusToDot(service.status)} size="sm" />
-				<Button
-					variant="ghost"
-					size="sm"
-					className="h-auto p-0 text-sm font-medium justify-start min-w-0 truncate hover:underline hover:bg-transparent"
-					onClick={onViewLogs}
-				>
-					{service.name}
-				</Button>
-				<span className="text-xs text-muted-foreground ml-auto shrink-0">
-					{formatUptime(service)}
-				</span>
-				<div className="flex items-center gap-0.5 shrink-0">
+		<div className="px-3 py-3 hover:bg-muted/30 transition-colors border-b border-border/40 last:border-0">
+			<div className="flex items-start justify-between gap-3">
+				<div className="flex flex-col min-w-0 flex-1">
+					<div className="flex items-center gap-2">
+						<StatusDot status={serviceStatusToDot(service.status)} size="sm" />
+						<button
+							type="button"
+							onClick={onViewLogs}
+							className="text-sm font-medium truncate hover:underline text-left"
+						>
+							{service.name}
+						</button>
+						<span className="text-[10px] text-muted-foreground ml-1">{formatUptime(service)}</span>
+					</div>
+					<div className="mt-1 flex flex-col items-start gap-1.5">
+						<span className="text-[10.5px] font-mono text-muted-foreground/80 truncate bg-muted/40 px-1.5 py-0.5 rounded-sm max-w-full">
+							$ {service.command}
+						</span>
+						{service.status === "error" && (
+							<button
+								type="button"
+								onClick={onViewLogs}
+								className="inline-flex items-center gap-1.5 rounded-sm bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/20 transition-colors mt-0.5"
+							>
+								<span className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
+								Process crashed - view logs
+							</button>
+						)}
+					</div>
+				</div>
+				<div className="flex items-center gap-0.5 shrink-0 bg-background rounded-md border shadow-sm p-0.5 mt-0.5">
 					{isActionLoading ? (
 						<Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 					) : (
@@ -129,24 +138,6 @@ function ServiceRow({
 					)}
 				</div>
 			</div>
-			{/* Row 2: command + port / preview link */}
-			<div className="flex items-center gap-2 mt-0.5 pl-4">
-				<span className="text-xs text-muted-foreground truncate">{service.command}</span>
-				{exposedPort && previewUrl && service.status === "running" && (
-					<>
-						<span className="text-xs text-muted-foreground shrink-0">port {exposedPort}</span>
-						<Button
-							variant="ghost"
-							size="sm"
-							className="h-5 text-[11px] gap-1 px-1.5 text-muted-foreground hover:text-foreground shrink-0"
-							onClick={() => openUrl(previewUrl)}
-						>
-							<ExternalLink className="h-3 w-3" />
-							Preview
-						</Button>
-					</>
-				)}
-			</div>
 		</div>
 	);
 }
@@ -161,6 +152,7 @@ interface ServicesPanelProps {
 }
 
 export function ServicesPanel({ sessionId, previewUrl }: ServicesPanelProps) {
+	const openUrl = usePreviewPanelStore((s) => s.openUrl);
 	const { data, isLoading, error, refetch } = useServiceList(sessionId);
 	const stopService = useStopService(sessionId);
 	const restartService = useRestartService(sessionId);
@@ -237,26 +229,51 @@ export function ServicesPanel({ sessionId, previewUrl }: ServicesPanelProps) {
 	) : undefined;
 
 	const exposePortBar = !selectedService && (
-		<div className="border-b shrink-0">
-			<div className="flex items-center gap-2 px-3 py-2">
-				<Input
-					type="number"
-					value={portInput}
-					onChange={(e) => setPortInput(e.target.value)}
-					placeholder={exposedPort ? `port ${exposedPort}` : "Port (e.g. 3000)"}
-					className="h-7 text-xs flex-1"
-					min={1}
-					max={65535}
-					onKeyDown={(e) => e.key === "Enter" && handleExpose()}
-				/>
-				<Button
-					size="sm"
-					className="h-7 text-xs"
-					onClick={handleExpose}
-					disabled={exposePort.isPending || !portInput}
-				>
-					{exposePort.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Expose"}
-				</Button>
+		<div className="border-b shrink-0 bg-muted/10">
+			<div className="px-4 py-3 flex flex-col gap-2.5">
+				<div className="flex items-center justify-between gap-3">
+					<div className="min-w-0">
+						<h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+							Global Port Routing
+						</h4>
+						<p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+							Set which internal port is exposed in Preview.
+						</p>
+					</div>
+					{exposedPort && previewUrl && (
+						<Button
+							variant="secondary"
+							size="sm"
+							className="h-7 text-xs gap-1.5 shrink-0"
+							onClick={() => openUrl(previewUrl)}
+						>
+							Preview
+							<ExternalLink className="h-3 w-3" />
+						</Button>
+					)}
+				</div>
+				<div className="flex items-center gap-2 mt-1">
+					<Input
+						type="number"
+						value={portInput}
+						onChange={(e) => setPortInput(e.target.value)}
+						placeholder={
+							exposedPort ? `Currently exposing port ${exposedPort}` : "Target port (e.g. 3000)"
+						}
+						className="h-8 text-xs flex-1 max-w-[220px] bg-background"
+						min={1}
+						max={65535}
+						onKeyDown={(e) => e.key === "Enter" && handleExpose()}
+					/>
+					<Button
+						size="sm"
+						className="h-8 text-xs"
+						onClick={handleExpose}
+						disabled={exposePort.isPending || !portInput}
+					>
+						{exposePort.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Set Route"}
+					</Button>
+				</div>
 			</div>
 		</div>
 	);
@@ -289,14 +306,12 @@ export function ServicesPanel({ sessionId, previewUrl }: ServicesPanelProps) {
 							No services running
 						</div>
 					) : (
-						<div className="overflow-y-auto h-full divide-y divide-border/50">
+						<div className="overflow-y-auto h-full">
 							{services.map((svc) => (
 								<ServiceRow
 									key={svc.name}
 									service={svc}
 									isActionLoading={actionLoadingName === svc.name}
-									exposedPort={exposedPort}
-									previewUrl={previewUrl}
 									onViewLogs={() => setSelectedService(svc.name)}
 									onStop={() => handleStop(svc.name)}
 									onRestart={() => handleRestart(svc)}

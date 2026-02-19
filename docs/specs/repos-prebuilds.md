@@ -64,8 +64,8 @@ Determines where each repo is cloned inside the sandbox. Single-repo prebuilds a
 - Reference: `packages/services/src/prebuilds/service.ts:createPrebuild`
 
 ### Snapshot Version Key
-A SHA-256 hash of `PLUGIN_MJS` + `DEFAULT_CADDYFILE` + `getOpencodeConfig(defaultModelId)`. When this changes, the base snapshot is stale and must be rebuilt. Computed by `computeBaseSnapshotVersionKey()`.
-- Key detail agents get wrong: The version key is computed from source code constants, not runtime config. Changing `PLUGIN_MJS` or the Caddyfile template triggers a rebuild.
+A SHA-256 hash of `PLUGIN_MJS` + `DEFAULT_CADDYFILE` + `getOpencodeConfig(defaultModelId)` + `SANDBOX_IMAGE_VERSION` (fallback `"v1.0.0"`). When this changes, the base snapshot is stale and must be rebuilt. Computed by `computeBaseSnapshotVersionKey()`.
+- Key detail agents get wrong: The version key includes both source constants and an explicit runtime cache-buster. Changing `PLUGIN_MJS`, the Caddyfile template, OpenCode config, or `SANDBOX_IMAGE_VERSION` triggers a rebuild.
 - Reference: `packages/shared/src/sandbox/version-key.ts`
 
 ### Prebuild Connector Config (Deprecated — Migrated to Org Scope)

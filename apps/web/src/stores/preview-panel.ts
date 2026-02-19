@@ -24,6 +24,7 @@ interface PreviewPanelState {
 	mobileView: MobileView;
 	pinnedTabs: string[];
 	panelSizes: number[];
+	panelSide: "left" | "right";
 	missingEnvKeyCount: number;
 
 	// Actions
@@ -53,6 +54,7 @@ interface PreviewPanelState {
 
 	// Panel sizes (persisted)
 	setPanelSizes: (sizes: number[]) => void;
+	setPanelSide: (side: "left" | "right") => void;
 
 	// Missing env key count
 	setMissingEnvKeyCount: (count: number) => void;
@@ -72,6 +74,7 @@ export const usePreviewPanelStore = create<PreviewPanelState>()(
 			mobileView: "chat",
 			pinnedTabs: ["url", "vscode"],
 			panelSizes: [35, 65],
+			panelSide: "right",
 			missingEnvKeyCount: 0,
 
 			openUrl: (url: string) => set({ mode: { type: "url", url } }),
@@ -128,6 +131,7 @@ export const usePreviewPanelStore = create<PreviewPanelState>()(
 				})),
 
 			setPanelSizes: (sizes: number[]) => set({ panelSizes: sizes }),
+			setPanelSide: (side) => set({ panelSide: side }),
 
 			setMissingEnvKeyCount: (count: number) => set({ missingEnvKeyCount: count }),
 
@@ -143,6 +147,7 @@ export const usePreviewPanelStore = create<PreviewPanelState>()(
 			partialize: (state) => ({
 				pinnedTabs: state.pinnedTabs,
 				panelSizes: state.panelSizes,
+				panelSide: state.panelSide,
 			}),
 		},
 	),
