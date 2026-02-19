@@ -49,11 +49,6 @@ async function handleConfigurationSnapshotBuild(
 		return;
 	}
 
-	if (!force && configuration.status === "building") {
-		log.info("Configuration snapshot build already in progress");
-		return;
-	}
-
 	if (
 		!force &&
 		(configuration.status === "default" || configuration.status === "ready") &&

@@ -17,6 +17,7 @@ const logger = createLogger({ service: "gateway" }).child({ module: "configurati
 export interface ResolvedConfiguration {
 	id: string;
 	snapshotId: string | null;
+	status: string | null;
 	repoIds: string[];
 	isNew: boolean;
 }
@@ -96,23 +97,20 @@ export async function resolveConfiguration(
  * Direct configuration lookup by ID
  */
 async function resolveDirect(configurationId: string): Promise<ResolvedConfiguration> {
-	const configuration = await configurations.findById(configurationId);
+	const configuration = await configurations.findByIdForSession(configurationId);
 
 	if (!configuration) {
 		throw new Error(`Configuration not found: ${configurationId}`);
 	}
 
-	// Get full configuration with repos
 	const configurationRepos = await configurations.getConfigurationReposWithDetails(configurationId);
 	const repoIds =
 		configurationRepos?.map((pr) => pr.repo?.id).filter((id): id is string => Boolean(id)) || [];
 
-	// Get snapshot ID from full configuration
-	const fullConfiguration = await configurations.findByIdFull(configurationId);
-
 	return {
 		id: configuration.id,
-		snapshotId: fullConfiguration?.snapshotId ?? null,
+		snapshotId: configuration.snapshotId ?? null,
+		status: configuration.status ?? null,
 		repoIds,
 		isNew: false,
 	};
@@ -142,6 +140,7 @@ async function resolveManaged(
 	return {
 		id: configurationId,
 		snapshotId: null,
+		status: "building",
 		repoIds,
 		isNew: true,
 	};
@@ -173,6 +172,7 @@ async function findManagedConfiguration(
 	return {
 		id: best.id,
 		snapshotId: best.snapshotId,
+		status: best.status,
 		repoIds,
 	};
 }
@@ -215,6 +215,9 @@ async function createManagedConfigurationRecord(
 		throw new Error(`Failed to link repos: ${err instanceof Error ? err.message : String(err)}`);
 	}
 
+	// Tightly coupled: managed configuration creation triggers snapshot build
+	void configurations.requestConfigurationSnapshotBuild(configurationId);
+
 	return {
 		configurationId,
 		repoIds: repoRows.map((r) => r.id),
@@ -245,6 +248,7 @@ async function resolveCli(
 		return {
 			id: existingConfiguration.id,
 			snapshotId: existingConfiguration.snapshot_id,
+			status: null, // CLI configs go pending → ready (no "default" state)
 			repoIds,
 			isNew: false,
 		};
@@ -288,6 +292,7 @@ async function resolveCli(
 	return {
 		id: configurationId,
 		snapshotId: null,
+		status: "pending",
 		repoIds: [repoId],
 		isNew: true,
 	};

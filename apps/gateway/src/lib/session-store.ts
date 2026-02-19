@@ -341,16 +341,23 @@ export async function loadSessionContext(
 		}
 	}
 
-	// Derive snapshotHasDeps: true when snapshot includes installed deps.
-	// Repo snapshots (clone-only) don't have deps; configuration/session/pause snapshots do.
+	// Derive snapshotHasDeps: true only when snapshot includes installed deps.
+	// "default" configuration snapshots are clone-only (no deps); only "ready" has deps.
+	// Legacy repo snapshots also don't have deps.
+	// Pause/session snapshots always have deps (they capture full state).
 	const repoSnapshotFallback =
 		configurationRepoRows.length === 1 &&
 		configurationRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
 		configurationRepoRows[0].repo?.repoSnapshotId
 			? configurationRepoRows[0].repo.repoSnapshotId
 			: null;
+	const configInfo = await configurations.findByIdForSession(session.configuration_id);
+	const isDefaultConfigSnapshot =
+		configInfo?.status === "default" && session.snapshot_id === configInfo.snapshotId;
 	const snapshotHasDeps =
-		Boolean(session.snapshot_id) && session.snapshot_id !== repoSnapshotFallback;
+		Boolean(session.snapshot_id) &&
+		session.snapshot_id !== repoSnapshotFallback &&
+		!isDefaultConfigSnapshot;
 
 	// Resolve service commands: configuration-level first, then per-repo fallback
 	const configSvcRow = await configurations.getConfigurationServiceCommands(

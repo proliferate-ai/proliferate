@@ -175,20 +175,7 @@ async function createConfigurationSession(input: {
 	const providerType = configurationProvider as SandboxProviderType | undefined;
 	const provider = getSandboxProvider(providerType);
 
-	const configurationSnapshotId = configuration.snapshotId;
-	const eligibleRepos = verifiedConfigurationRepos;
-	const repoSnapshotId =
-		!configurationSnapshotId &&
-		provider.type === "modal" &&
-		eligibleRepos.length === 1 &&
-		eligibleRepos[0].workspacePath === "." &&
-		eligibleRepos[0].repo.repoSnapshotStatus === "ready" &&
-		eligibleRepos[0].repo.repoSnapshotId &&
-		(!eligibleRepos[0].repo.repoSnapshotProvider ||
-			eligibleRepos[0].repo.repoSnapshotProvider === "modal")
-			? eligibleRepos[0].repo.repoSnapshotId
-			: null;
-	const snapshotId = configurationSnapshotId || repoSnapshotId;
+	const snapshotId = configuration.snapshotId ?? null;
 
 	// Generate IDs
 	const sessionId = randomUUID();

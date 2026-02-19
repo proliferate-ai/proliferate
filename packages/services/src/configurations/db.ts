@@ -127,6 +127,7 @@ export interface SnapshotRepoRow {
 export interface ManagedConfigurationRow {
 	id: string;
 	snapshotId: string | null;
+	status: string | null;
 	configurationRepos: Array<{
 		repo: {
 			id: string;
@@ -686,6 +687,7 @@ export async function findManagedConfigurations(): Promise<ManagedConfigurationR
 		columns: {
 			id: true,
 			snapshotId: true,
+			status: true,
 		},
 		with: {
 			configurationRepos: {

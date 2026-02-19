@@ -38,10 +38,11 @@ import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useConfigurations, useDeleteConfiguration } from "@/hooks/use-configurations";
 import { useIntegrations } from "@/hooks/use-integrations";
+import { useCreateSession } from "@/hooks/use-sessions";
 import { cn } from "@/lib/utils";
 import type { Configuration } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
-import { ChevronRight, FolderGit2, MoreVertical, Plus, Search, Trash2 } from "lucide-react";
+import { ChevronRight, FolderGit2, MoreVertical, Play, Plus, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -179,6 +180,7 @@ export default function ConfigurationsPage() {
 function ConfigurationRow({ config }: { config: Configuration }) {
 	const router = useRouter();
 	const deleteConfiguration = useDeleteConfiguration();
+	const createSession = useCreateSession();
 	const [deleteOpen, setDeleteOpen] = useState(false);
 	const [expanded, setExpanded] = useState(false);
 
@@ -254,6 +256,21 @@ function ConfigurationRow({ config }: { config: Configuration }) {
 								</Button>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end">
+								{(config.status === "default" || config.status === "ready") && (
+									<DropdownMenuItem
+										disabled={createSession.isPending}
+										onClick={async () => {
+											const result = await createSession.mutateAsync({
+												configurationId: config.id,
+												sessionType: "setup",
+											});
+											router.push(`/workspace/${result.sessionId}`);
+										}}
+									>
+										<Play className="h-4 w-4 mr-2" />
+										{config.status === "ready" ? "Update Environment" : "Set Up Environment"}
+									</DropdownMenuItem>
+								)}
 								<DropdownMenuItem
 									onClick={() => router.push(`/dashboard/configurations/${config.id}`)}
 								>

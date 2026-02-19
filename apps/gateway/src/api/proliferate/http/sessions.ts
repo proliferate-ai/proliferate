@@ -253,6 +253,7 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 					clientType: body.clientType,
 					userId: auth.userId,
 					snapshotId: body.snapshotId || configuration.snapshotId,
+					configurationStatus: configuration.status,
 					initialPrompt: body.initialPrompt,
 					title: body.title,
 					clientMetadata: body.clientMetadata,
