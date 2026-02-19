@@ -155,10 +155,18 @@ const INTEGRATION_CATALOG: CatalogEntry[] = [
 	},
 ];
 
-// Suggestion cards for empty state
-const SUGGESTION_ENTRIES = INTEGRATION_CATALOG.filter((e) =>
+// Core product integrations — always shown as cards at the top of the page
+const CORE_ENTRIES = INTEGRATION_CATALOG.filter((e) =>
 	["github", "slack", "linear", "sentry"].includes(e.key),
 );
+
+// Short descriptions of platform features each core integration powers (beyond tools)
+const CORE_PLATFORM_NOTES: Record<string, string> = {
+	github: "Repos, pull requests, triggers, and agent tools",
+	slack: "Notifications, agent interaction, and agent tools",
+	linear: "Issue tracking, triggers, automations, and agent tools",
+	sentry: "Error monitoring, triggers, automations, and agent tools",
+};
 
 // ====================================================================
 // Page component
@@ -587,12 +595,18 @@ export default function IntegrationsPage() {
 				{/* Header */}
 				<div className="flex items-center justify-between mb-6">
 					<div>
-						<h1 className="text-xl font-semibold tracking-tight text-foreground">Integrations</h1>
-						{!isAdmin && (
-							<p className="text-sm text-muted-foreground mt-0.5">
-								Toggle which tools are available in your sessions
-							</p>
-						)}
+						<h1 className="text-lg font-semibold tracking-tight text-foreground">Integrations</h1>
+						<p className="text-[13px] text-muted-foreground mt-1">
+							Connect services and tools to extend your agents&apos; capabilities.{" "}
+							<a
+								href="https://docs.proliferate.com/integrations"
+								target="_blank"
+								rel="noopener noreferrer"
+								className="underline hover:text-foreground transition-colors"
+							>
+								Learn more
+							</a>
+						</p>
 					</div>
 					{isAdmin && (
 						<Button size="sm" className="rounded-xl" onClick={() => setPickerOpen(true)}>
@@ -601,6 +615,33 @@ export default function IntegrationsPage() {
 						</Button>
 					)}
 				</div>
+
+				{/* Core integration cards — show unconnected ones only */}
+				{isAdmin && CORE_ENTRIES.filter((e) => !getConnectionStatus(e)).length > 0 && (
+					<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+						{CORE_ENTRIES.filter((e) => !getConnectionStatus(e)).map((entry) => (
+							<button
+								key={entry.key}
+								type="button"
+								className="flex flex-col items-start p-4 pb-3 rounded-2xl border border-border bg-card hover:border-foreground/20 transition-colors text-left"
+								onClick={() => {
+									setSelectedEntry(entry);
+									setOpenedFromPicker(false);
+								}}
+							>
+								<div className="w-7 h-7 rounded-lg border border-border bg-background flex items-center justify-center p-1 shrink-0">
+									{entry.provider ? <ProviderIcon provider={entry.provider} size="md" /> : null}
+								</div>
+								<div className="flex flex-col mt-2 w-full">
+									<p className="text-sm font-semibold text-foreground">{entry.name}</p>
+									<p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+										{CORE_PLATFORM_NOTES[entry.key] ?? entry.description}
+									</p>
+								</div>
+							</button>
+						))}
+					</div>
+				)}
 
 				{/* Search (only when there are connected integrations) */}
 				{hasConnectedIntegrations && (
@@ -621,8 +662,15 @@ export default function IntegrationsPage() {
 						{/* Column headers */}
 						<div className="flex items-center gap-3 px-3 py-2 border-b border-border text-xs font-medium text-muted-foreground">
 							<div className="flex-1">Name</div>
-							{isAdmin && <div className="w-32 hidden sm:block">Connected by</div>}
-							{!isAdmin && <div className="w-16 text-right">Enabled</div>}
+							{isAdmin && <div className="w-32 hidden sm:block">Status</div>}
+							{!isAdmin && (
+								<div
+									className="w-16 text-right"
+									title="Controls which tools appear in your sessions"
+								>
+									My tools
+								</div>
+							)}
 							<div className="w-8" />
 						</div>
 
@@ -654,16 +702,16 @@ export default function IntegrationsPage() {
 											<p className="text-xs text-muted-foreground truncate">{entry.description}</p>
 										</div>
 
-										{/* Admin: Connected by */}
+										{/* Admin: Status */}
 										{isAdmin && (
 											<div className="w-32 hidden sm:block shrink-0">
-												<p className="text-sm text-muted-foreground truncate">
-													{connectedMeta || "\u2014"}
+												<p className="text-xs text-muted-foreground truncate">
+													Connected{connectedMeta ? ` \u00b7 ${connectedMeta}` : ""}
 												</p>
 											</div>
 										)}
 
-										{/* User: Enable/Disable toggle */}
+										{/* User: My tools toggle */}
 										{!isAdmin && (
 											<div
 												className="w-16 flex justify-end shrink-0"
@@ -719,7 +767,7 @@ export default function IntegrationsPage() {
 								return (
 									<div
 										key={c.id}
-										className="flex items-center gap-3 px-3 py-3 hover:bg-muted/30 transition-colors rounded-lg"
+										className={`flex items-center gap-3 px-3 py-3 hover:bg-muted/30 transition-colors rounded-lg ${!c.enabled && isAdmin ? "opacity-60" : ""}`}
 									>
 										{/* Icon */}
 										<div className="w-10 h-10 rounded-lg border border-border bg-background flex items-center justify-center p-2 shrink-0">
@@ -728,24 +776,34 @@ export default function IntegrationsPage() {
 
 										{/* Name + URL */}
 										<div className="flex-1 min-w-0">
-											<p className="text-sm font-medium">{c.name}</p>
+											<div className="flex items-center gap-2">
+												<p className="text-sm font-medium">{c.name}</p>
+												{!c.enabled && isAdmin && (
+													<span className="text-[11px] text-muted-foreground">Paused</span>
+												)}
+											</div>
 											<p className="text-xs text-muted-foreground truncate">{c.url}</p>
 										</div>
 
-										{/* Admin: Connected by (empty for connectors) */}
+										{/* Admin: Status — inline toggle */}
 										{isAdmin && (
-											<div className="w-32 hidden sm:block shrink-0">
-												<p className="text-sm text-muted-foreground truncate">{"\u2014"}</p>
+											<div className="w-32 hidden sm:flex items-center shrink-0">
+												<Switch
+													checked={c.enabled}
+													onCheckedChange={() => handleToggle(c)}
+													disabled={updateMutation.isPending}
+												/>
 											</div>
 										)}
 
-										{/* User: Enable/Disable toggle */}
+										{/* User: My tools toggle */}
 										{!isAdmin && (
 											<div className="w-16 flex justify-end shrink-0">
 												<Switch
 													checked={isConnectorEnabled(c.id)}
 													onCheckedChange={() => handleToggleConnectorSource(c.id)}
-													disabled={togglePreference.isPending}
+													disabled={togglePreference.isPending || !c.enabled}
+													title={!c.enabled ? "Disabled by admin" : undefined}
 												/>
 											</div>
 										)}
@@ -834,10 +892,9 @@ export default function IntegrationsPage() {
 					</div>
 				)}
 
-				{/* Empty state */}
+				{/* Empty state (no connected integrations or connectors yet) */}
 				{!hasConnectedIntegrations && (
-					<div className="flex flex-col items-center justify-center py-12 gap-12">
-						{/* Illustration + heading */}
+					<div className="flex flex-col items-center justify-center py-12">
 						<div className="flex flex-col items-center justify-center gap-2">
 							<div className="relative flex flex-col items-center">
 								{/* Globe illustration */}
@@ -923,37 +980,10 @@ export default function IntegrationsPage() {
 							</h2>
 							<p className="text-sm text-muted-foreground">
 								{isAdmin
-									? "Browse our library of integrations to extend your agents' capabilities."
+									? "Get started by connecting an integration above or browsing the full catalog."
 									: "Ask your admin to connect integrations for your organization."}
 							</p>
 						</div>
-
-						{/* Suggestion cards (admin only) */}
-						{isAdmin && (
-							<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-3xl">
-								{SUGGESTION_ENTRIES.map((entry) => (
-									<button
-										key={entry.key}
-										type="button"
-										className="flex flex-col items-start p-4 pb-3 rounded-2xl border border-border bg-card hover:border-foreground/20 transition-colors text-left"
-										onClick={() => {
-											setSelectedEntry(entry);
-											setOpenedFromPicker(false);
-										}}
-									>
-										<div className="w-7 h-7 rounded-lg border border-border bg-background flex items-center justify-center p-1 shrink-0">
-											{entry.provider ? <ProviderIcon provider={entry.provider} size="md" /> : null}
-										</div>
-										<div className="flex flex-col mt-2 w-full">
-											<p className="text-sm font-semibold text-foreground">{entry.name}</p>
-											<p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-												{entry.description}
-											</p>
-										</div>
-									</button>
-								))}
-							</div>
-						)}
 					</div>
 				)}
 

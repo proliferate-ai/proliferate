@@ -107,6 +107,7 @@ export function ConnectorForm({ initial, isNew, preset, onSave, onCancel }: Conn
 						onChange={(e) => setName(e.target.value)}
 						placeholder="e.g. Notion"
 						className="h-8 text-sm mt-1"
+						autoFocus
 					/>
 				</div>
 				<div>
