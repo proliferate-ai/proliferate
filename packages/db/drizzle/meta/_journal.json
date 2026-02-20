@@ -270,6 +270,13 @@
       "when": 1772118600000,
       "tag": "0034_slack_notifications_config",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1772118600000,
+      "tag": "0035_configuration_routing_description",
+      "breakpoints": true
     }
   ]
 }

@@ -13,6 +13,7 @@ import type {
 	AutomationTrigger,
 	AutomationWithTriggers,
 } from "@proliferate/shared/contracts";
+import * as configurationsDb from "../configurations/db";
 import { createRunFromTriggerEvent } from "../runs/service";
 import * as automationsDb from "./db";
 import {
@@ -130,6 +131,26 @@ export async function updateAutomation(
 		);
 		if (!configuration) {
 			throw new Error("Configuration not found");
+		}
+	}
+
+	// Validate agent_decide constraints
+	if (input.configSelectionStrategy === "agent_decide") {
+		const allowedIds = input.allowedConfigurationIds;
+		if (!allowedIds || allowedIds.length === 0) {
+			throw new Error("agent_decide strategy requires at least one allowlisted configuration");
+		}
+
+		// Verify all allowlisted configs have routing descriptions
+		const candidates = await configurationsDb.getConfigurationCandidates(allowedIds);
+		const missingDescription = candidates.filter(
+			(c) => !c.routingDescription || c.routingDescription.trim().length === 0,
+		);
+		if (missingDescription.length > 0) {
+			const names = missingDescription.map((c) => c.name).join(", ");
+			throw new Error(
+				`All allowlisted configurations must have routing descriptions. Missing: ${names}`,
+			);
 		}
 	}
 

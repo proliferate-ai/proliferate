@@ -216,6 +216,48 @@ export function useSessionStatus(id: string, enabled = true) {
 	});
 }
 
+export function useSessionNotificationSubscription(sessionId: string, enabled = true) {
+	return useQuery({
+		...orpc.sessions.getNotificationSubscription.queryOptions({
+			input: { sessionId },
+		}),
+		enabled: enabled && !!sessionId,
+		select: (data) => data.subscribed,
+	});
+}
+
+export function useSubscribeNotifications() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		...orpc.sessions.subscribeNotifications.mutationOptions(),
+		onSuccess: (_data, input) => {
+			queryClient.setQueryData(
+				orpc.sessions.getNotificationSubscription.queryOptions({
+					input: { sessionId: input.sessionId },
+				}).queryKey,
+				{ subscribed: true },
+			);
+		},
+	});
+}
+
+export function useUnsubscribeNotifications() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		...orpc.sessions.unsubscribeNotifications.mutationOptions(),
+		onSuccess: (_data, input) => {
+			queryClient.setQueryData(
+				orpc.sessions.getNotificationSubscription.queryOptions({
+					input: { sessionId: input.sessionId },
+				}).queryKey,
+				{ subscribed: false },
+			);
+		},
+	});
+}
+
 export function useFinalizeSetup() {
 	const queryClient = useQueryClient();
 

@@ -461,6 +461,36 @@ export async function getSlackInstallationConfigStrategy(installationId: string)
 }
 
 /**
+ * Get full selection config for a Slack installation.
+ * Includes strategy, default, fallback, and allowed configuration IDs.
+ * Used by the Slack client for agent_decide configuration selection.
+ */
+export async function getSlackInstallationSelectionConfig(installationId: string): Promise<{
+	defaultConfigSelectionStrategy: string | null;
+	defaultConfigurationId: string | null;
+	fallbackConfigurationId: string | null;
+	allowedConfigurationIds: string[] | null;
+} | null> {
+	const db = getDb();
+	const result = await db.query.slackInstallations.findFirst({
+		where: eq(slackInstallations.id, installationId),
+		columns: {
+			defaultConfigSelectionStrategy: true,
+			defaultConfigurationId: true,
+			fallbackConfigurationId: true,
+			allowedConfigurationIds: true,
+		},
+	});
+	if (!result) return null;
+	return {
+		defaultConfigSelectionStrategy: result.defaultConfigSelectionStrategy,
+		defaultConfigurationId: result.defaultConfigurationId,
+		fallbackConfigurationId: result.fallbackConfigurationId,
+		allowedConfigurationIds: result.allowedConfigurationIds as string[] | null,
+	};
+}
+
+/**
  * List all active Slack installations for an organization.
  * Used for the notification workspace selector UI.
  */

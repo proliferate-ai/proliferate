@@ -308,6 +308,7 @@ export const configurations = pgTable(
 		createdBy: text("created_by"),
 		name: text().notNull(),
 		notes: text(),
+		routingDescription: text("routing_description"),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		sandboxProvider: text("sandbox_provider").default("modal").notNull(),
 		userId: text("user_id"),

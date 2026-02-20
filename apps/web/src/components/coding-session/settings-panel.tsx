@@ -29,6 +29,8 @@ export interface SettingsPanelProps {
 		mode?: "test" | "start",
 		commands?: ConfigurationServiceCommand[],
 	) => void;
+	// Slack
+	slackThreadUrl?: string | null;
 }
 
 export function SettingsPanel({
@@ -47,6 +49,7 @@ export function SettingsPanel({
 	configurationId,
 	autoStartOutput,
 	sendRunAutoStart,
+	slackThreadUrl,
 }: SettingsPanelProps) {
 	return (
 		<PanelShell title="Settings" noPadding>
@@ -61,6 +64,7 @@ export function SettingsPanel({
 					concurrentUsers={concurrentUsers}
 					isModal={isModal}
 					isMigrating={isMigrating}
+					slackThreadUrl={slackThreadUrl}
 				/>
 
 				<div className="border-b border-border/50 mx-4" />

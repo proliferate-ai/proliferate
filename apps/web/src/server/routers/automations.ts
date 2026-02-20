@@ -166,7 +166,11 @@ export const automationsRouter = {
 					if (err.message === "Configuration not found") {
 						throw new ORPCError("NOT_FOUND", { message: err.message });
 					}
-					if (err.message.includes("no snapshot")) {
+					if (
+						err.message.includes("no snapshot") ||
+						err.message.includes("agent_decide") ||
+						err.message.includes("routing descriptions")
+					) {
 						throw new ORPCError("BAD_REQUEST", { message: err.message });
 					}
 				}

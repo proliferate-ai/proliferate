@@ -185,25 +185,36 @@ async function handleExecute(
 
 	const automation = context.automation;
 
-	const target = await resolveTarget({
-		automation: context.automation,
-		enrichmentJson: context.enrichmentJson,
-		organizationId: run.organizationId,
-	});
+	const target = await resolveTarget(
+		{
+			automation: context.automation,
+			enrichmentJson: context.enrichmentJson,
+			organizationId: run.organizationId,
+		},
+		log ?? logger!,
+	);
 
 	await runs.insertRunEvent(runId, "target_resolved", run.status, run.status, {
 		type: target.type,
 		reason: target.reason,
-		suggestedRepoId: target.suggestedRepoId ?? null,
 		configurationId: target.configurationId ?? null,
-		repoIds: target.repoIds ?? null,
 	});
 
-	const hasTarget =
-		(target.type === "selected" && (target.repoIds?.length || target.configurationId)) ||
-		(target.type !== "selected" && target.configurationId);
+	if (target.type === "failed") {
+		log?.warn(
+			{ errorClass: "configuration_selection_failed", targetType: target.type },
+			"Execute aborted: configuration selection failed",
+		);
+		await runs.markRunFailed({
+			runId,
+			reason: "configuration_selection_failed",
+			stage: "execution",
+			errorMessage: "Configuration selection failed",
+		});
+		return;
+	}
 
-	if (!hasTarget) {
+	if (!target.configurationId) {
 		log?.warn(
 			{ errorClass: "missing_configuration", targetType: target.type },
 			"Execute aborted: no valid target",
@@ -255,20 +266,11 @@ async function handleExecute(
 				targetResolution: {
 					type: target.type,
 					reason: target.reason,
-					suggestedRepoId: target.suggestedRepoId,
 				},
 			},
 		};
 
-		// agent_decide mode never creates managed configurations; it only
-		// selects from existing ones. The repoIds path is kept only for
-		// legacy non-agent_decide selection where strategy is "fixed".
-		const strategy = automation.configSelectionStrategy ?? "fixed";
-		if (target.type === "selected" && target.repoIds && strategy !== "agent_decide") {
-			sessionRequest.managedConfiguration = { repoIds: target.repoIds };
-		} else {
-			sessionRequest.configurationId = target.configurationId;
-		}
+		sessionRequest.configurationId = target.configurationId;
 
 		const session = await syncClient.createSession(sessionRequest, {
 			idempotencyKey: `run:${runId}:session`,

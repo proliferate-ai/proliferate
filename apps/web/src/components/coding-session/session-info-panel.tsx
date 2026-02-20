@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { GithubIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
-import { Box, Circle, Clock, GitBranch, Moon, Sun, Users } from "lucide-react";
+import { Box, Circle, Clock, ExternalLink, GitBranch, Moon, Sun, Users } from "lucide-react";
 import { useTheme } from "next-themes";
 
 export interface SessionInfoContentProps {
@@ -15,6 +15,7 @@ export interface SessionInfoContentProps {
 	concurrentUsers?: number;
 	isModal?: boolean;
 	isMigrating?: boolean;
+	slackThreadUrl?: string | null;
 }
 
 function formatAge(dateString: string | null | undefined): string {
@@ -41,6 +42,7 @@ export function SessionInfoContent({
 	concurrentUsers = 1,
 	isModal,
 	isMigrating,
+	slackThreadUrl,
 }: SessionInfoContentProps) {
 	const isRunning = sessionStatus === "running" || sessionStatus === "starting";
 	const { theme, setTheme } = useTheme();
@@ -81,6 +83,17 @@ export function SessionInfoContent({
 								{concurrentUsers} {concurrentUsers === 1 ? "user" : "users"}
 							</span>
 						</div>
+					)}
+					{slackThreadUrl && (
+						<a
+							href={slackThreadUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+						>
+							<ExternalLink className="h-3.5 w-3.5 shrink-0" />
+							<span>Slack thread</span>
+						</a>
 					)}
 				</div>
 			</div>

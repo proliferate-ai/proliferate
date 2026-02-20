@@ -217,6 +217,7 @@ export function CodingSession({
 				sendGitCreatePr,
 				clearGitResult,
 				pendingApprovals,
+				slackThreadUrl: sessionData.slackThreadUrl,
 			}
 		: undefined;
 

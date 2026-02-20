@@ -18,6 +18,7 @@ export function toConfiguration(row: ConfigurationWithRelationsRow): Configurati
 		status: row.status,
 		name: row.name,
 		notes: row.notes,
+		routingDescription: row.routingDescription ?? null,
 		createdAt: toIsoString(row.createdAt),
 		createdBy: row.createdBy,
 		sandboxProvider: null, // Field removed from schema
@@ -56,6 +57,7 @@ export function toConfigurationPartial(row: ConfigurationRow): Partial<Configura
 		status: row.status,
 		name: row.name,
 		notes: row.notes,
+		routingDescription: row.routingDescription ?? null,
 		createdAt: toIsoString(row.createdAt),
 		createdBy: row.createdBy,
 		sandboxProvider: null, // Field removed from schema

@@ -60,7 +60,11 @@ export { findActiveByGitHubInstallationId, updateStatusByGitHubInstallationId } 
 export { findByConnectionIdAndProvider, updateStatus } from "./db";
 
 // DB functions needed by SlackClient
-export { getSlackInstallationBotToken, getSlackInstallationConfigStrategy } from "./db";
+export {
+	getSlackInstallationBotToken,
+	getSlackInstallationConfigStrategy,
+	getSlackInstallationSelectionConfig,
+} from "./db";
 
 // DB functions needed by notification dispatch
 export { getSlackInstallationForNotifications } from "./db";

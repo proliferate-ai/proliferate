@@ -16,6 +16,7 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import {
 	DropdownMenu,
@@ -25,6 +26,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InlineEdit } from "@/components/ui/inline-edit";
+import { Label } from "@/components/ui/label";
 import { PageBackLink } from "@/components/ui/page-back-link";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Switch } from "@/components/ui/switch";
@@ -109,6 +111,9 @@ function mapInputToOutput(data: UpdateAutomationInput): Record<string, unknown> 
 		else if (key === "notificationDestinationType") mapped.notification_destination_type = value;
 		else if (key === "notificationSlackUserId") mapped.notification_slack_user_id = value;
 		else if (key === "notificationChannelId") mapped.notification_channel_id = value;
+		else if (key === "configSelectionStrategy") mapped.config_selection_strategy = value;
+		else if (key === "fallbackConfigurationId") mapped.fallback_configuration_id = value;
+		else if (key === "allowedConfigurationIds") mapped.allowed_configuration_ids = value;
 		else mapped[key] = value;
 	}
 	return mapped;
@@ -142,6 +147,11 @@ export default function AutomationDetailPage({
 	>("none");
 	const [notificationSlackUserId, setNotificationSlackUserId] = useState<string | null>(null);
 	const [notificationChannelId, setNotificationChannelId] = useState<string | null>(null);
+	const [configSelectionStrategy, setConfigSelectionStrategy] = useState<"fixed" | "agent_decide">(
+		"fixed",
+	);
+	const [allowedConfigurationIds, setAllowedConfigurationIds] = useState<string[]>([]);
+	const [fallbackConfigurationId, setFallbackConfigurationId] = useState<string | null>(null);
 	const hydratedRef = useRef(false);
 
 	// Data
@@ -187,6 +197,11 @@ export default function AutomationDetailPage({
 			);
 			setNotificationSlackUserId(automation.notification_slack_user_id ?? null);
 			setNotificationChannelId(automation.notification_channel_id ?? null);
+			setConfigSelectionStrategy(
+				(automation.config_selection_strategy as "fixed" | "agent_decide") ?? "fixed",
+			);
+			setAllowedConfigurationIds((automation.allowed_configuration_ids as string[]) ?? []);
+			setFallbackConfigurationId((automation.fallback_configuration_id as string) ?? null);
 		}
 	}, [automation]);
 
@@ -549,9 +564,9 @@ export default function AutomationDetailPage({
 					</div>
 				)}
 
-				{/* Model & Configuration */}
+				{/* Model */}
 				<div className="rounded-xl border border-border mb-6">
-					<div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
+					<div className="flex items-center justify-between px-4 py-2.5">
 						<span className="text-sm text-muted-foreground">Model</span>
 						<ModelSelector
 							modelId={resolvedModelId}
@@ -560,14 +575,106 @@ export default function AutomationDetailPage({
 							triggerClassName="h-8 border-0 bg-muted/30 hover:bg-muted"
 						/>
 					</div>
-					<div className="flex items-center justify-between px-4 py-2.5">
-						<span className="text-sm text-muted-foreground">Configuration</span>
-						<ConfigurationSelector
-							configurations={readyConfigurations}
-							selectedId={automation.default_configuration_id}
-							onChange={handleConfigurationChange}
-							triggerClassName="border-0 bg-muted/30 hover:bg-muted"
-						/>
+				</div>
+
+				{/* Configuration Selection */}
+				<div className="mb-6">
+					<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+						Configuration Selection
+					</p>
+					<div className="rounded-xl border border-border">
+						{/* Strategy toggle */}
+						<div className="flex items-center gap-1 px-4 py-2.5 border-b border-border/50">
+							<Button
+								variant={configSelectionStrategy === "fixed" ? "secondary" : "ghost"}
+								size="sm"
+								className="h-7 text-xs"
+								onClick={() => {
+									setConfigSelectionStrategy("fixed");
+									handleUpdate({ configSelectionStrategy: "fixed" });
+								}}
+							>
+								Fixed
+							</Button>
+							<Button
+								variant={configSelectionStrategy === "agent_decide" ? "secondary" : "ghost"}
+								size="sm"
+								className="h-7 text-xs"
+								onClick={() => {
+									setConfigSelectionStrategy("agent_decide");
+									handleUpdate({ configSelectionStrategy: "agent_decide" });
+								}}
+							>
+								Let agent decide
+							</Button>
+						</div>
+
+						{configSelectionStrategy === "fixed" ? (
+							<div className="flex items-center justify-between px-4 py-2.5">
+								<span className="text-sm text-muted-foreground">Configuration</span>
+								<ConfigurationSelector
+									configurations={readyConfigurations}
+									selectedId={automation.default_configuration_id}
+									onChange={handleConfigurationChange}
+									triggerClassName="border-0 bg-muted/30 hover:bg-muted"
+								/>
+							</div>
+						) : (
+							<div className="px-4 py-3 space-y-3">
+								<div>
+									<Label className="text-xs text-muted-foreground mb-2 block">
+										Allowed configurations
+									</Label>
+									<div className="space-y-1.5">
+										{readyConfigurations.map((config) => {
+											const isChecked = allowedConfigurationIds.includes(config.id);
+											return (
+												<label
+													key={config.id}
+													className="flex items-center gap-2 text-sm cursor-pointer"
+												>
+													<Checkbox
+														checked={isChecked}
+														onCheckedChange={(checked) => {
+															const next = checked
+																? [...allowedConfigurationIds, config.id]
+																: allowedConfigurationIds.filter((id) => id !== config.id);
+															setAllowedConfigurationIds(next);
+															handleUpdate({ allowedConfigurationIds: next });
+														}}
+													/>
+													<span className="truncate">
+														{config.name || "Untitled configuration"}
+													</span>
+												</label>
+											);
+										})}
+										{readyConfigurations.length === 0 && (
+											<p className="text-xs text-muted-foreground">
+												No ready configurations available
+											</p>
+										)}
+									</div>
+									<p className="text-xs text-muted-foreground mt-2">
+										Agent will only auto-select from allowlisted configurations that have routing
+										descriptions.
+									</p>
+								</div>
+								<div className="flex items-center justify-between pt-1 border-t border-border/50">
+									<span className="text-sm text-muted-foreground">Fallback</span>
+									<ConfigurationSelector
+										configurations={readyConfigurations}
+										selectedId={fallbackConfigurationId}
+										onChange={(id) => {
+											const value = id === "none" ? null : id;
+											setFallbackConfigurationId(value);
+											handleUpdate({ fallbackConfigurationId: value });
+										}}
+										triggerClassName="border-0 bg-muted/30 hover:bg-muted"
+									/>
+								</div>
+							</div>
+						)}
 					</div>
 				</div>
 

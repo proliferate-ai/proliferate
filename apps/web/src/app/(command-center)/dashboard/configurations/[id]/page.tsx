@@ -5,12 +5,15 @@ import {
 } from "@/components/dashboard/configuration-lifecycle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { PageBackLink } from "@/components/ui/page-back-link";
+import { Textarea } from "@/components/ui/textarea";
 import {
 	useConfigurationServiceCommands,
 	useConfigurations,
 	useDetachRepo,
+	useUpdateConfiguration,
 	useUpdateConfigurationServiceCommands,
 } from "@/hooks/use-configurations";
 import { useCreateSession } from "@/hooks/use-sessions";
@@ -18,7 +21,8 @@ import { getSetupInitialPrompt } from "@/lib/prompts";
 import { useDashboardStore } from "@/stores/dashboard";
 import { ArrowLeft, FolderGit2, Pencil, Play, Plus, Trash2, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useDebouncedCallback } from "use-debounce";
 export default function ConfigurationDetailPage() {
 	const params = useParams<{ id: string }>();
 	const router = useRouter();
@@ -27,9 +31,28 @@ export default function ConfigurationDetailPage() {
 	const createSession = useCreateSession();
 	const { setPendingPrompt } = useDashboardStore();
 
+	const updateConfiguration = useUpdateConfiguration();
+
 	const config = useMemo(() => {
 		return configurations?.find((c) => c.id === configurationId);
 	}, [configurations, configurationId]);
+
+	// Routing description local state + debounced save
+	const [routingDescription, setRoutingDescription] = useState("");
+	const hydratedRef = useRef(false);
+
+	useEffect(() => {
+		if (config && !hydratedRef.current) {
+			hydratedRef.current = true;
+			setRoutingDescription(config.routingDescription || "");
+		}
+	}, [config]);
+
+	const debouncedSaveRoutingDescription = useDebouncedCallback((value: string) => {
+		updateConfiguration.mutate(configurationId, {
+			routingDescription: value || null,
+		});
+	}, 1000);
 	if (isLoading) {
 		return (
 			<div className="flex items-center justify-center h-full">
@@ -90,6 +113,27 @@ export default function ConfigurationDetailPage() {
 						</Button>
 					)}
 				</div>
+				{/* Routing description */}
+				<section>
+					<Label htmlFor="routing-description" className="text-sm font-medium mb-1.5 block">
+						Routing description
+					</Label>
+					<Textarea
+						id="routing-description"
+						value={routingDescription}
+						onChange={(e) => {
+							setRoutingDescription(e.target.value);
+							debouncedSaveRoutingDescription(e.target.value);
+						}}
+						placeholder="Describes what this configuration is for..."
+						className="min-h-[80px] text-sm resize-none"
+					/>
+					<p className="text-xs text-muted-foreground mt-1.5">
+						Describes what this configuration is for. Used by auto-selection to match tasks to the
+						right configuration.
+					</p>
+				</section>
+
 				{/* Attached repos */}
 				<AttachedReposSection configurationId={configurationId} repos={repos} />
 				{/* Service Commands */}

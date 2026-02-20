@@ -66,6 +66,7 @@ export interface SessionPanelProps {
 	) => void;
 	clearGitResult?: () => void;
 	pendingApprovals?: ActionApprovalRequestMessage["payload"][];
+	slackThreadUrl?: string | null;
 }
 
 interface RightPanelProps {
@@ -132,6 +133,7 @@ export function RightPanel({
 					configurationId={sessionProps.configurationId}
 					autoStartOutput={sessionProps.autoStartOutput}
 					sendRunAutoStart={sessionProps.sendRunAutoStart}
+					slackThreadUrl={sessionProps.slackThreadUrl}
 				/>
 			);
 		}
