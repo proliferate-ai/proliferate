@@ -36,6 +36,26 @@ export const configurationsRouter = {
 		}),
 
 	/**
+	 * Get a single configuration by ID.
+	 */
+	get: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ configuration: ConfigurationSchema }))
+		.handler(async ({ input, context }) => {
+			const belongsToOrg = await configurations.configurationBelongsToOrg(input.id, context.orgId);
+			if (!belongsToOrg) {
+				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
+			}
+
+			const configuration = await configurations.getConfiguration(input.id);
+			if (!configuration) {
+				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
+			}
+
+			return { configuration };
+		}),
+
+	/**
 	 * Create a new configuration.
 	 */
 	create: orgProcedure

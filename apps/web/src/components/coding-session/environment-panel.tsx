@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useConfigurationEnvFiles } from "@/hooks/use-configurations";
+import { useConfiguration, useConfigurationEnvFiles } from "@/hooks/use-configurations";
 import { useCheckSecrets } from "@/hooks/use-repos";
 import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/use-secrets";
 import { orpc } from "@/lib/orpc";
@@ -33,6 +33,7 @@ interface EnvironmentPanelProps {
 	configurationId?: string | null;
 	repoId?: string | null;
 	isSetupSession?: boolean;
+	workspaceOptions?: Array<{ workspacePath: string; label: string }>;
 }
 
 // ============================================
@@ -430,6 +431,7 @@ export function EnvironmentPanel({
 	configurationId,
 	repoId: _repoId,
 	isSetupSession = false,
+	workspaceOptions: workspaceOptionsProp,
 }: EnvironmentPanelProps) {
 	const queryClient = useQueryClient();
 	const setMissingEnvKeyCount = usePreviewPanelStore((s) => s.setMissingEnvKeyCount);
@@ -447,6 +449,37 @@ export function EnvironmentPanel({
 		configurationId ?? "",
 		!!configurationId,
 	);
+	const shouldLoadConfiguration =
+		!!configurationId && !(workspaceOptionsProp && workspaceOptionsProp.length > 0);
+	const { data: configuration } = useConfiguration(configurationId ?? "", shouldLoadConfiguration);
+
+	const configurationWorkspaceOptions = useMemo(() => {
+		const repos = configuration?.configurationRepos ?? [];
+		if (repos.length === 0) return [];
+
+		const options: Array<{ workspacePath: string; label: string }> = [];
+		const seen = new Set<string>();
+
+		for (const repoLink of repos) {
+			if (!repoLink.repo || seen.has(repoLink.workspacePath)) continue;
+			seen.add(repoLink.workspacePath);
+
+			const repoName = repoLink.repo.githubRepoName.split("/").pop() || repoLink.workspacePath;
+			options.push({
+				workspacePath: repoLink.workspacePath,
+				label:
+					repoLink.workspacePath === "."
+						? `${repoName} (workspace root)`
+						: `${repoName} (${repoLink.workspacePath})`,
+			});
+		}
+
+		return options;
+	}, [configuration]);
+	const workspaceOptions =
+		workspaceOptionsProp && workspaceOptionsProp.length > 0
+			? workspaceOptionsProp
+			: configurationWorkspaceOptions;
 
 	// Parse spec keys
 	const specKeys = useMemo(() => {
@@ -560,6 +593,7 @@ export function EnvironmentPanel({
 											configurationId={configurationId}
 											initialCreateOpen
 											callToActionLabel="Create Secret File"
+											workspaceOptions={workspaceOptions}
 										/>
 									) : (
 										<p className="text-[11px] text-muted-foreground">
@@ -606,6 +640,7 @@ export function EnvironmentPanel({
 											<SecretFilesEditor
 												configurationId={configurationId}
 												callToActionLabel="Create Secret File"
+												workspaceOptions={workspaceOptions}
 											/>
 										</div>
 

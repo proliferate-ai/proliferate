@@ -22,6 +22,14 @@ export function useConfigurations(status?: string) {
 	});
 }
 
+export function useConfiguration(id: string, enabled = true) {
+	return useQuery({
+		...orpc.configurations.get.queryOptions({ input: { id } }),
+		enabled: enabled && !!id,
+		select: (data) => data.configuration,
+	});
+}
+
 export function useCreateConfiguration() {
 	const queryClient = useQueryClient();
 

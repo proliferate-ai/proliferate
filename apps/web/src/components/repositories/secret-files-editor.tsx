@@ -3,16 +3,29 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useDeleteSecretFile, useSecretFiles, useUpsertSecretFile } from "@/hooks/use-secret-files";
 import { formatDistanceToNow } from "date-fns";
 import { FileLock2, Plus, Trash2, Upload } from "lucide-react";
-import { type ChangeEvent, type ClipboardEvent, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 interface SecretFilesEditorProps {
 	configurationId: string;
 	initialCreateOpen?: boolean;
 	callToActionLabel?: string;
+	workspaceOptions?: WorkspaceOption[];
+}
+
+interface WorkspaceOption {
+	workspacePath: string;
+	label: string;
 }
 
 interface EnvRow {
@@ -73,17 +86,100 @@ function serializeEnvRows(rows: EnvRow[]): string {
 		.join("\n");
 }
 
+function normalizeRelativePath(path: string): string {
+	return path
+		.trim()
+		.replace(/^\.\/+/, "")
+		.replace(/^\/+/, "");
+}
+
+function joinWorkspaceAndPath(workspacePath: string, path: string): string {
+	const normalizedPath = normalizeRelativePath(path);
+	if (!normalizedPath) return "";
+
+	if (!workspacePath || workspacePath === ".") {
+		return normalizedPath;
+	}
+
+	return normalizedPath.startsWith(`${workspacePath}/`)
+		? normalizedPath
+		: `${workspacePath}/${normalizedPath}`;
+}
+
+function splitStoredPath(
+	storedPath: string,
+	workspacePaths: string[],
+): { workspacePath: string; relativePath: string } {
+	const nonRootWorkspaces = workspacePaths
+		.filter((workspacePath) => workspacePath !== ".")
+		.sort((a, b) => b.length - a.length);
+
+	for (const workspacePath of nonRootWorkspaces) {
+		if (storedPath === workspacePath) {
+			return { workspacePath, relativePath: "" };
+		}
+		if (storedPath.startsWith(`${workspacePath}/`)) {
+			return {
+				workspacePath,
+				relativePath: storedPath.slice(workspacePath.length + 1),
+			};
+		}
+	}
+
+	return { workspacePath: ".", relativePath: storedPath };
+}
+
+function buildDestinationTree(workspacePath: string, relativePath: string): string {
+	const normalizedPath = normalizeRelativePath(relativePath);
+	if (!normalizedPath) return "";
+
+	const pathSegments = normalizedPath.split("/").filter(Boolean);
+	const nodes =
+		workspacePath && workspacePath !== "." ? [workspacePath, ...pathSegments] : pathSegments;
+	const lines = ["workspace/"];
+
+	for (const [index, node] of nodes.entries()) {
+		const isLast = index === nodes.length - 1;
+		lines.push(`${"  ".repeat(index + 1)}${node}${isLast ? "" : "/"}`);
+	}
+
+	return lines.join("\n");
+}
+
 export function SecretFilesEditor({
 	configurationId,
 	initialCreateOpen = false,
 	callToActionLabel = "Add File",
+	workspaceOptions,
 }: SecretFilesEditorProps) {
 	const { data: filesData, isLoading } = useSecretFiles(configurationId);
 	const files = filesData?.files ?? [];
 	const upsertFile = useUpsertSecretFile(configurationId);
 	const deleteFile = useDeleteSecretFile(configurationId);
 
+	const resolvedWorkspaces = useMemo(() => {
+		if (workspaceOptions && workspaceOptions.length > 0) {
+			return workspaceOptions;
+		}
+		return [{ workspacePath: ".", label: "Workspace root" }];
+	}, [workspaceOptions]);
+	const workspacePaths = useMemo(
+		() => resolvedWorkspaces.map((workspace) => workspace.workspacePath),
+		[resolvedWorkspaces],
+	);
+	const workspaceLabelByPath = useMemo(
+		() =>
+			new Map(
+				resolvedWorkspaces.map((workspace) => [workspace.workspacePath, workspace.label] as const),
+			),
+		[resolvedWorkspaces],
+	);
+	const showWorkspaceSelector = resolvedWorkspaces.length > 1;
+
 	const [adding, setAdding] = useState(initialCreateOpen);
+	const [newWorkspacePath, setNewWorkspacePath] = useState(
+		resolvedWorkspaces[0]?.workspacePath ?? ".",
+	);
 	const [newPath, setNewPath] = useState("");
 	const [rows, setRows] = useState<EnvRow[]>([createRow()]);
 	const [showPasteImport, setShowPasteImport] = useState(false);
@@ -94,7 +190,22 @@ export function SecretFilesEditor({
 
 	const activeRows = useMemo(() => rows.filter((row) => row.key.trim().length > 0), [rows]);
 	const serializedContent = useMemo(() => serializeEnvRows(rows), [rows]);
-	const canSave = newPath.trim().length > 0 && activeRows.length > 0;
+	const resolvedPathPreview = useMemo(
+		() => joinWorkspaceAndPath(newWorkspacePath, newPath),
+		[newWorkspacePath, newPath],
+	);
+	const destinationTreePreview = useMemo(
+		() => buildDestinationTree(newWorkspacePath, newPath),
+		[newWorkspacePath, newPath],
+	);
+	const canSave = resolvedPathPreview.length > 0 && activeRows.length > 0;
+
+	useEffect(() => {
+		if (resolvedWorkspaces.some((workspace) => workspace.workspacePath === newWorkspacePath)) {
+			return;
+		}
+		setNewWorkspacePath(resolvedWorkspaces[0]?.workspacePath ?? ".");
+	}, [resolvedWorkspaces, newWorkspacePath]);
 
 	const clearComposer = () => {
 		setNewPath("");
@@ -116,10 +227,12 @@ export function SecretFilesEditor({
 
 	const handleAdd = async () => {
 		if (!canSave) return;
+		const resolvedFilePath = joinWorkspaceAndPath(newWorkspacePath, newPath);
+		if (!resolvedFilePath) return;
 
 		await upsertFile.mutateAsync({
 			configurationId,
-			filePath: newPath.trim(),
+			filePath: resolvedFilePath,
 			content: serializedContent,
 		});
 
@@ -255,14 +368,51 @@ export function SecretFilesEditor({
 						</p>
 					</div>
 					<div className="p-3 space-y-2">
+						{showWorkspaceSelector && (
+							<div className="space-y-1">
+								<Label className="text-[11px] text-muted-foreground">Repository / workspace</Label>
+								<Select value={newWorkspacePath} onValueChange={setNewWorkspacePath}>
+									<SelectTrigger className="h-8 text-xs">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{resolvedWorkspaces.map((workspace) => (
+											<SelectItem
+												key={workspace.workspacePath}
+												value={workspace.workspacePath}
+												className="text-xs"
+											>
+												{workspace.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+						)}
+
 						<div className="space-y-1">
 							<Label className="text-[11px] text-muted-foreground">File path in project</Label>
 							<Input
 								value={newPath}
 								onChange={(e) => setNewPath(e.target.value)}
-								placeholder="Path in repo (e.g. .env.local, apps/api/.env)"
+								placeholder="Path in selected workspace (e.g. .env.local, apps/api/.env)"
 								className="h-8 text-xs font-mono"
 							/>
+							{resolvedPathPreview && (
+								<div className="space-y-1 rounded-md border border-border/60 bg-muted/20 px-2.5 py-2">
+									<p className="text-[11px] text-muted-foreground">
+										Saves to <code>{resolvedPathPreview}</code>
+									</p>
+									{destinationTreePreview && (
+										<>
+											<p className="text-[11px] text-muted-foreground">Destination preview</p>
+											<pre className="text-[11px] font-mono leading-5 text-foreground/90 whitespace-pre-wrap">
+												{destinationTreePreview}
+											</pre>
+										</>
+									)}
+								</div>
+							)}
 						</div>
 
 						<div className="rounded-md border border-border/60 overflow-hidden">
@@ -366,83 +516,116 @@ export function SecretFilesEditor({
 			{files.length > 0 ? (
 				<div className="rounded-md border border-border/70 overflow-hidden">
 					<div className="flex items-center gap-3 border-b border-border bg-muted/30 px-3 py-2 text-[11px] font-medium text-muted-foreground">
-						<span className="min-w-0 flex-1">File path</span>
+						{showWorkspaceSelector ? (
+							<>
+								<span className="w-40 shrink-0">Workspace</span>
+								<span className="min-w-0 flex-1">Path</span>
+							</>
+						) : (
+							<span className="min-w-0 flex-1">File path</span>
+						)}
 						<span className="w-24 text-right">Value</span>
 						<span className="w-28 text-right">Updated</span>
 						<span className="w-28 text-right">Actions</span>
 					</div>
-					{files.map((file) => (
-						<div key={file.id} className="border-b border-border/60 last:border-b-0">
-							<div className="flex items-center gap-3 px-3 py-2.5">
-								<div className="min-w-0 flex-1">
-									<code className="text-xs font-mono">{file.filePath}</code>
-								</div>
-								<span className="w-24 text-right text-xs text-muted-foreground">••••••••••••</span>
-								<span className="w-28 text-right text-[11px] text-muted-foreground">
-									{formatRelativeTime(file.updatedAt, file.createdAt)}
-								</span>
-								<div className="w-28 flex justify-end gap-1">
-									<Button
-										variant="ghost"
-										size="sm"
-										className="h-6 text-[11px]"
-										onClick={() => {
-											if (editingId === file.id) {
-												setEditingId(null);
-												setEditContent("");
-												return;
-											}
-											setEditingId(file.id);
-											setEditContent("");
-										}}
-									>
-										{editingId === file.id ? "Close" : "Replace"}
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-										onClick={() => handleDelete(file.id)}
-										disabled={deleteFile.isPending}
-									>
-										<Trash2 className="h-3 w-3" />
-									</Button>
-								</div>
-							</div>
-							{editingId === file.id && (
-								<div className="border-t border-border/60 bg-muted/20 p-3 space-y-2">
-									<Label className="text-[11px] text-muted-foreground">Replace file contents</Label>
-									<Textarea
-										value={editContent}
-										onChange={(e) => setEditContent(e.target.value)}
-										placeholder="Paste new file contents"
-										className="text-xs font-mono min-h-[100px]"
-									/>
-									<div className="flex justify-end gap-2">
+					{files.map((file) => {
+						const splitPath = splitStoredPath(file.filePath, workspacePaths);
+						const workspaceLabel =
+							workspaceLabelByPath.get(splitPath.workspacePath) ??
+							(splitPath.workspacePath === "."
+								? "Workspace root"
+								: `${splitPath.workspacePath} (legacy)`);
+
+						return (
+							<div key={file.id} className="border-b border-border/60 last:border-b-0">
+								<div className="flex items-center gap-3 px-3 py-2.5">
+									{showWorkspaceSelector ? (
+										<>
+											<div className="w-40 shrink-0">
+												<span className="text-xs text-muted-foreground">{workspaceLabel}</span>
+											</div>
+											<div className="min-w-0 flex-1">
+												<code className="text-xs font-mono">
+													{splitPath.relativePath || file.filePath}
+												</code>
+											</div>
+										</>
+									) : (
+										<div className="min-w-0 flex-1">
+											<code className="text-xs font-mono">{file.filePath}</code>
+										</div>
+									)}
+									<span className="w-24 text-right text-xs text-muted-foreground">
+										••••••••••••
+									</span>
+									<span className="w-28 text-right text-[11px] text-muted-foreground">
+										{formatRelativeTime(file.updatedAt, file.createdAt)}
+									</span>
+									<div className="w-28 flex justify-end gap-1">
 										<Button
 											variant="ghost"
 											size="sm"
-											className="h-7 text-xs"
+											className="h-6 text-[11px]"
 											onClick={() => {
-												setEditingId(null);
+												if (editingId === file.id) {
+													setEditingId(null);
+													setEditContent("");
+													return;
+												}
+												setEditingId(file.id);
 												setEditContent("");
 											}}
 										>
-											Cancel
+											{editingId === file.id ? "Close" : "Replace"}
 										</Button>
 										<Button
+											variant="ghost"
 											size="sm"
-											className="h-7 text-xs"
-											onClick={() => handleUpdate(file.filePath)}
-											disabled={upsertFile.isPending || !editContent.trim()}
+											className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+											onClick={() => handleDelete(file.id)}
+											disabled={deleteFile.isPending}
 										>
-											{upsertFile.isPending ? "Saving..." : "Save Replacement"}
+											<Trash2 className="h-3 w-3" />
 										</Button>
 									</div>
 								</div>
-							)}
-						</div>
-					))}
+								{editingId === file.id && (
+									<div className="border-t border-border/60 bg-muted/20 p-3 space-y-2">
+										<Label className="text-[11px] text-muted-foreground">
+											Replace file contents
+										</Label>
+										<Textarea
+											value={editContent}
+											onChange={(e) => setEditContent(e.target.value)}
+											placeholder="Paste new file contents"
+											className="text-xs font-mono min-h-[100px]"
+										/>
+										<div className="flex justify-end gap-2">
+											<Button
+												variant="ghost"
+												size="sm"
+												className="h-7 text-xs"
+												onClick={() => {
+													setEditingId(null);
+													setEditContent("");
+												}}
+											>
+												Cancel
+											</Button>
+											<Button
+												size="sm"
+												className="h-7 text-xs"
+												onClick={() => handleUpdate(file.filePath)}
+												disabled={upsertFile.isPending || !editContent.trim()}
+											>
+												{upsertFile.isPending ? "Saving..." : "Save Replacement"}
+											</Button>
+										</div>
+									</div>
+								)}
+							</div>
+						);
+					})}
 				</div>
 			) : (
 				<p className="text-xs text-muted-foreground">No secret files yet. Create one above.</p>

@@ -68,6 +68,7 @@ export interface SessionPanelProps {
 	clearGitResult?: () => void;
 	pendingApprovals?: ActionApprovalRequestMessage["payload"][];
 	slackThreadUrl?: string | null;
+	workspaceOptions?: Array<{ workspacePath: string; label: string }>;
 }
 
 interface RightPanelProps {
@@ -180,6 +181,7 @@ export function RightPanel({
 					configurationId={sessionProps.configurationId}
 					repoId={sessionProps.repoId}
 					isSetupSession={isSetupSession}
+					workspaceOptions={sessionProps.workspaceOptions}
 				/>
 			);
 		}
@@ -190,6 +192,7 @@ export function RightPanel({
 				<GitPanel
 					gitState={sessionProps.gitState ?? null}
 					gitResult={sessionProps.gitResult ?? null}
+					workspaceOptions={sessionProps.workspaceOptions}
 					sendGetGitStatus={sessionProps.sendGetGitStatus}
 					sendGitCreateBranch={sessionProps.sendGitCreateBranch}
 					sendGitCommit={sessionProps.sendGitCommit}
