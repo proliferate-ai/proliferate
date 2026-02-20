@@ -16,7 +16,6 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import {
 	DropdownMenu,
@@ -198,6 +197,13 @@ export default function AutomationDetailPage({
 	const readyConfigurations = useMemo(() => {
 		return (configurations ?? []).filter((c) => c.status === "ready" || c.status === "default");
 	}, [configurations]);
+
+	// Configurations with routing descriptions (eligible for agent_decide)
+	const routableConfigurations = useMemo(() => {
+		return readyConfigurations.filter(
+			(c) => c.routingDescription && c.routingDescription.trim().length > 0,
+		);
+	}, [readyConfigurations]);
 
 	// Mutations
 	const updateMutation = useUpdateAutomation(id);
@@ -600,37 +606,75 @@ export default function AutomationDetailPage({
 				{/* Configuration Selection */}
 				<div className="mb-6">
 					<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-						Configuration Selection
+						Configuration
 					</p>
 					<div className="rounded-xl border border-border">
 						{/* Strategy toggle */}
-						<div className="flex items-center gap-1 px-4 py-2.5 border-b border-border/50">
-							<Button
-								variant={configSelectionStrategy === "fixed" ? "secondary" : "ghost"}
-								size="sm"
-								className="h-7 text-xs"
-								onClick={() => {
-									setConfigSelectionStrategy("fixed");
-									handleUpdate({ configSelectionStrategy: "fixed" });
-								}}
-							>
-								Fixed
-							</Button>
-							<Button
-								variant={configSelectionStrategy === "agent_decide" ? "secondary" : "ghost"}
-								size="sm"
-								className="h-7 text-xs"
-								onClick={() => {
-									setConfigSelectionStrategy("agent_decide");
-								}}
-							>
-								Let agent decide
-							</Button>
+						<div className="space-y-1.5 px-4 py-2.5 border-b border-border/50">
+							<div className="flex items-center justify-between">
+								<span className="text-sm text-muted-foreground">
+									{configSelectionStrategy === "agent_decide"
+										? "Agent selects from allowed configurations"
+										: "Use a fixed default configuration"}
+								</span>
+								<div className="flex items-center gap-2">
+									<span className="text-xs text-muted-foreground">Fixed</span>
+									<Switch
+										checked={configSelectionStrategy === "agent_decide"}
+										disabled={
+											configSelectionStrategy !== "agent_decide" &&
+											routableConfigurations.length === 0
+										}
+										onCheckedChange={(checked) => {
+											if (checked) {
+												setConfigSelectionStrategy("agent_decide");
+												const routableIds = routableConfigurations.map((c) => c.id);
+												setAllowedConfigurationIds(routableIds);
+												handleUpdate({
+													configSelectionStrategy: "agent_decide",
+													allowedConfigurationIds: routableIds,
+												});
+											} else {
+												setConfigSelectionStrategy("fixed");
+												handleUpdate({ configSelectionStrategy: "fixed" });
+											}
+										}}
+									/>
+									<span className="text-xs text-muted-foreground">Agent decides</span>
+								</div>
+							</div>
+							{configSelectionStrategy !== "agent_decide" &&
+								routableConfigurations.length === 0 && (
+									<p className="text-xs text-muted-foreground">
+										{readyConfigurations.length === 0 ? (
+											<>
+												<a
+													href="/dashboard/configurations"
+													className="underline hover:text-foreground transition-colors"
+												>
+													Create a configuration
+												</a>{" "}
+												with a routing description to enable agent-decide mode.
+											</>
+										) : (
+											<>
+												No configurations have routing descriptions.{" "}
+												<a
+													href="/dashboard/configurations"
+													className="underline hover:text-foreground transition-colors"
+												>
+													Add routing descriptions
+												</a>{" "}
+												to enable agent-decide mode.
+											</>
+										)}
+									</p>
+								)}
 						</div>
 
 						{configSelectionStrategy === "fixed" ? (
 							<div className="flex items-center justify-between px-4 py-2.5">
-								<span className="text-sm text-muted-foreground">Configuration</span>
+								<span className="text-sm text-muted-foreground">Default</span>
 								<ConfigurationSelector
 									configurations={readyConfigurations}
 									selectedId={automation.default_configuration_id}
@@ -639,25 +683,40 @@ export default function AutomationDetailPage({
 								/>
 							</div>
 						) : (
-							<div className="px-4 py-3 space-y-3">
-								<div>
-									<Label className="text-xs text-muted-foreground mb-2 block">
-										Allowed configurations
-									</Label>
-									<div className="space-y-1.5">
-										{readyConfigurations.map((config) => {
-											const isChecked = allowedConfigurationIds.includes(config.id);
-											return (
-												<Label
-													key={config.id}
-													className="flex items-center gap-2 text-sm cursor-pointer font-normal"
-												>
-													<Checkbox
-														checked={isChecked}
-														onCheckedChange={(checked) => {
-															const next = checked
-																? [...allowedConfigurationIds, config.id]
-																: allowedConfigurationIds.filter((id) => id !== config.id);
+							<CollapsibleSection
+								title="Allowed configurations"
+								defaultOpen
+								actions={
+									readyConfigurations.length > 0 ? (
+										<span className="text-[11px] text-muted-foreground tabular-nums">
+											{
+												allowedConfigurationIds.filter((id) =>
+													routableConfigurations.some((c) => c.id === id),
+												).length
+											}{" "}
+											of {routableConfigurations.length}
+										</span>
+									) : undefined
+								}
+							>
+								<div className="px-4 pb-2">
+									{routableConfigurations.length > 0 ? (
+										<div className="flex flex-wrap gap-1.5">
+											{routableConfigurations.map((config) => {
+												const isAllowed = allowedConfigurationIds.includes(config.id);
+												return (
+													<button
+														key={config.id}
+														type="button"
+														className={`px-2.5 py-1 rounded-md border text-xs transition-colors ${
+															isAllowed
+																? "border-foreground/20 bg-foreground/5 text-foreground"
+																: "border-border text-muted-foreground hover:border-foreground/20"
+														}`}
+														onClick={() => {
+															const next = isAllowed
+																? allowedConfigurationIds.filter((id) => id !== config.id)
+																: [...allowedConfigurationIds, config.id];
 															setAllowedConfigurationIds(next);
 															if (next.length > 0) {
 																handleUpdate({
@@ -666,25 +725,26 @@ export default function AutomationDetailPage({
 																});
 															}
 														}}
-													/>
-													<span className="truncate">
-														{config.name || "Untitled configuration"}
-													</span>
-												</Label>
-											);
-										})}
-										{readyConfigurations.length === 0 && (
-											<p className="text-xs text-muted-foreground">
-												No ready configurations available
-											</p>
-										)}
-									</div>
-									<p className="text-xs text-muted-foreground mt-2">
-										Agent will only auto-select from allowlisted configurations that have routing
-										descriptions.
-									</p>
+													>
+														{config.name || "Untitled"}
+													</button>
+												);
+											})}
+										</div>
+									) : (
+										<p className="text-xs text-muted-foreground">
+											No configurations with routing descriptions.{" "}
+											<a
+												href="/dashboard/configurations"
+												className="underline hover:text-foreground transition-colors"
+											>
+												Add routing descriptions
+											</a>{" "}
+											to your configurations.
+										</p>
+									)}
 								</div>
-							</div>
+							</CollapsibleSection>
 						)}
 					</div>
 				</div>
