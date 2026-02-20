@@ -442,6 +442,25 @@ export async function getSlackInstallationForNotifications(
 }
 
 /**
+ * Get the configuration strategy fields for a Slack installation.
+ * Used by the Slack client to determine how to resolve configurations for new sessions.
+ */
+export async function getSlackInstallationConfigStrategy(installationId: string): Promise<{
+	defaultConfigurationId: string | null;
+	defaultConfigSelectionStrategy: string | null;
+} | null> {
+	const db = getDb();
+	const result = await db.query.slackInstallations.findFirst({
+		where: eq(slackInstallations.id, installationId),
+		columns: {
+			defaultConfigurationId: true,
+			defaultConfigSelectionStrategy: true,
+		},
+	});
+	return result ?? null;
+}
+
+/**
  * List all active Slack installations for an organization.
  * Used for the notification workspace selector UI.
  */
@@ -872,10 +891,11 @@ export async function findSlackInstallationByTeamId(
 	if (results.length === 0) return null;
 
 	if (results.length > 1) {
-		logger.warn(
+		logger.error(
 			{ teamId, installationCount: results.length, orgIds: results.map((r) => r.organizationId) },
-			"Ambiguous Slack installation: multiple orgs share the same team ID",
+			"Refusing ambiguous Slack installation: multiple orgs share the same team ID. Events will not be routed.",
 		);
+		return null;
 	}
 
 	return results[0];

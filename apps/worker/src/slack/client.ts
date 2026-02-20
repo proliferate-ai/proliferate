@@ -166,13 +166,19 @@ export class SlackClient extends AsyncClient<
 			sessionId = existingSession.id;
 			this.logger.info({ sessionId }, "Found existing session");
 		} else {
-			// No session - create one via gateway SDK (handles managed configuration automatically)
+			// No session - create one via gateway SDK
 			this.logger.info("No existing session, creating via gateway SDK");
+
+			// Resolve configuration strategy from installation settings
+			const configStrategy = await integrations.getSlackInstallationConfigStrategy(installationId);
+			const configOption = configStrategy?.defaultConfigurationId
+				? { configurationId: configStrategy.defaultConfigurationId }
+				: { managedConfiguration: {} as { repoIds?: string[] } };
 
 			try {
 				const result = await this.syncClient.createSession({
 					organizationId,
-					managedConfiguration: {}, // Auto-find/create managed configuration
+					...configOption,
 					sessionType: "coding",
 					clientType: "slack",
 					clientMetadata: {
