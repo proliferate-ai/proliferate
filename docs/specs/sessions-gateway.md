@@ -469,7 +469,7 @@ class ApiError extends Error {
 - `create` → calls `createSessionHandler()` (`sessions-create.ts`) which writes a DB record only. This is a **separate, lighter pipeline** than the gateway HTTP route — no session connections, no sandbox provisioning.
 - Setup-session entry points in web (`dashboard/configurations`, `snapshot-selector`, `configuration-group`) pass `initialPrompt: getSetupInitialPrompt()`. `createSessionHandler()` persists this and calls gateway `eagerStart()` so setup work begins automatically before the user types.
 - Setup-session UI is explicit and persistent: `SetupSessionChrome` renders a checklist describing the two required user actions (iterate with the agent until verification, and configure secrets in Environment), and setup right-panel empty state reinforces the same flow.
-- When the agent calls `request_env_variables`, the web runtime auto-opens the Environment panel. In setup sessions, Environment prioritizes **secret file creation by path + pasted content** (with key-by-key entry as advanced fallback).
+- When the agent calls `request_env_variables`, the web runtime auto-opens the Environment panel. In setup sessions, Environment is **file-based only**: users create secret files by path + pasted content; key-by-key env entry is hidden in setup mode.
 - `pause` → loads session, calls `provider.snapshot()` + `provider.terminate()`, finalizes billing, updates DB status to `"paused"` (`sessions-pause.ts`).
 - `resume` → no dedicated handler. Resume is implicit: connecting a WebSocket client to a paused session triggers `ensureRuntimeReady()`, which creates a new sandbox from the stored snapshot.
 - `delete` → calls `sessions.deleteSession()`.
