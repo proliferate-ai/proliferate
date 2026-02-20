@@ -304,14 +304,30 @@ export class SessionHub {
 
 		this.initialPromptSending = true;
 		this.log("Auto-sending initial prompt");
+		const sentAt = new Date().toISOString();
 
-		// Mark as sent immediately to prevent duplicate sends on concurrent connections
-		await sessions.update(this.sessionId, {
-			initialPromptSentAt: new Date().toISOString(),
-		});
+		try {
+			// Mark as sent immediately to prevent duplicate sends on concurrent connections.
+			await sessions.update(this.sessionId, { initialPromptSentAt: sentAt });
+			session.initial_prompt_sent_at = sentAt;
 
-		// Use handlePrompt to broadcast to clients + send to OpenCode
-		await this.handlePrompt(context.initialPrompt, senderId, { source: "web" });
+			// Use handlePrompt to broadcast to clients + send to OpenCode.
+			await this.handlePrompt(context.initialPrompt, senderId, { source: "web" });
+		} catch (err) {
+			this.logError("Failed to auto-send initial prompt", err);
+
+			// Roll back sent marker so the next runtime init can retry.
+			try {
+				await sessions.update(this.sessionId, { initialPromptSentAt: null });
+				session.initial_prompt_sent_at = null;
+			} catch (clearErr) {
+				this.logError("Failed to clear initial_prompt_sent_at after send failure", clearErr);
+			}
+
+			throw err;
+		} finally {
+			this.initialPromptSending = false;
+		}
 	}
 
 	handleClientMessage(ws: WebSocket, message: ClientMessage): void {

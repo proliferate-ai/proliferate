@@ -72,7 +72,14 @@ If either is missing, do it now. Text cannot substitute for tool calls.
 }
 
 export function getSetupInitialPrompt(): string {
-	return "Set up this repository for development. Get everything running and working.";
+	return `Set up this repository for development autonomously.
+Start now without waiting for more instructions:
+1. Identify required dependencies, services, and env files.
+2. Install dependencies and start required local services.
+3. Verify key flows actually work (tests, health checks, and app startup).
+4. Call verify() with evidence of what works.
+5. Call save_snapshot() when setup is complete.
+If credentials are truly required, use request_env_variables with clear descriptions.`;
 }
 
 export function getCodingSystemPrompt(repoName: string): string {

@@ -1,3 +1,4 @@
+import { sessions } from "@proliferate/services";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as leases from "../lib/session-leases";
 import { SessionHub } from "./session-hub";
@@ -7,6 +8,7 @@ type HubStub = {
 	lifecycleStartTime: number;
 	lastKnownAgentIdleAt: number | null;
 	runtime: { ensureRuntimeReady: ReturnType<typeof vi.fn> };
+	telemetry: { startRunning: ReturnType<typeof vi.fn> };
 	startLeaseRenewal: ReturnType<typeof vi.fn>;
 	stopLeaseRenewal: ReturnType<typeof vi.fn>;
 	startMigrationMonitor: ReturnType<typeof vi.fn>;
@@ -24,6 +26,23 @@ type StopLeaseRenewalMethod = (this: {
 	logger: { error: ReturnType<typeof vi.fn> };
 }) => void;
 
+type MaybeSendInitialPromptMethod = (this: {
+	initialPromptSending: boolean;
+	sessionId: string;
+	runtime: {
+		getContext: () => {
+			initialPrompt?: string | null;
+			session: {
+				created_by?: string | null;
+				initial_prompt_sent_at?: string | null;
+			};
+		};
+	};
+	log: ReturnType<typeof vi.fn>;
+	logError: ReturnType<typeof vi.fn>;
+	handlePrompt: ReturnType<typeof vi.fn>;
+}) => Promise<void>;
+
 function createHubStub(): HubStub {
 	return {
 		sessionId: "session-1",
@@ -31,6 +50,9 @@ function createHubStub(): HubStub {
 		lastKnownAgentIdleAt: Date.now(),
 		runtime: {
 			ensureRuntimeReady: vi.fn(async () => undefined),
+		},
+		telemetry: {
+			startRunning: vi.fn(() => undefined),
 		},
 		startLeaseRenewal: vi.fn(async () => undefined),
 		stopLeaseRenewal: vi.fn(() => undefined),
@@ -134,5 +156,88 @@ describe("SessionHub lease cleanup", () => {
 		expect(releaseSpy).toHaveBeenCalledWith("session-1", "instance-1");
 		expect(clearSpy).toHaveBeenCalledWith("session-1");
 		expect((hub as { ownsOwnerLease: boolean }).ownsOwnerLease).toBe(false);
+	});
+});
+
+describe("SessionHub initial prompt auto-send", () => {
+	it("marks initial prompt as sent and dispatches once", async () => {
+		const updateSpy = vi.spyOn(sessions, "update").mockResolvedValue(undefined);
+		const hub = {
+			initialPromptSending: false,
+			sessionId: "session-1",
+			runtime: {
+				getContext: () => ({
+					initialPrompt: "Set up this repo",
+					session: {
+						created_by: "user-1",
+						initial_prompt_sent_at: null,
+					},
+				}),
+			},
+			log: vi.fn(),
+			logError: vi.fn(),
+			handlePrompt: vi.fn(async () => undefined),
+		};
+		const maybeSendInitialPrompt = (
+			SessionHub.prototype as unknown as { maybeSendInitialPrompt: MaybeSendInitialPromptMethod }
+		).maybeSendInitialPrompt;
+
+		await maybeSendInitialPrompt.call(hub);
+
+		expect(updateSpy).toHaveBeenCalledTimes(1);
+		expect(updateSpy).toHaveBeenCalledWith(
+			"session-1",
+			expect.objectContaining({
+				initialPromptSentAt: expect.any(String),
+			}),
+		);
+		expect(hub.handlePrompt).toHaveBeenCalledWith("Set up this repo", "user-1", { source: "web" });
+		expect(hub.initialPromptSending).toBe(false);
+	});
+
+	it("clears sent marker when auto-send fails so next init can retry", async () => {
+		const updateSpy = vi.spyOn(sessions, "update").mockResolvedValue(undefined);
+		const context = {
+			initialPrompt: "Set up this repo",
+			session: {
+				created_by: "user-1",
+				initial_prompt_sent_at: null as string | null,
+			},
+		};
+		const hub = {
+			initialPromptSending: false,
+			sessionId: "session-1",
+			runtime: {
+				getContext: () => context,
+			},
+			log: vi.fn(),
+			logError: vi.fn(),
+			handlePrompt: vi
+				.fn()
+				.mockRejectedValueOnce(new Error("send failed"))
+				.mockResolvedValueOnce(undefined),
+		};
+		const maybeSendInitialPrompt = (
+			SessionHub.prototype as unknown as { maybeSendInitialPrompt: MaybeSendInitialPromptMethod }
+		).maybeSendInitialPrompt;
+
+		await expect(maybeSendInitialPrompt.call(hub)).rejects.toThrow("send failed");
+
+		expect(updateSpy).toHaveBeenCalledTimes(2);
+		expect(updateSpy).toHaveBeenNthCalledWith(
+			1,
+			"session-1",
+			expect.objectContaining({
+				initialPromptSentAt: expect.any(String),
+			}),
+		);
+		expect(updateSpy).toHaveBeenNthCalledWith(2, "session-1", { initialPromptSentAt: null });
+		expect(context.session.initial_prompt_sent_at).toBeNull();
+		expect(hub.initialPromptSending).toBe(false);
+
+		await maybeSendInitialPrompt.call(hub);
+
+		expect(updateSpy).toHaveBeenCalledTimes(3);
+		expect(hub.handlePrompt).toHaveBeenCalledTimes(2);
 	});
 });

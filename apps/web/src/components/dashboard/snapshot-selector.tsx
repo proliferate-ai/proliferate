@@ -238,6 +238,7 @@ export function SnapshotSelector({
 														const result = await createSession.mutateAsync({
 															configurationId: snapshot.id,
 															sessionType: "setup",
+															initialPrompt: getSetupInitialPrompt(),
 														});
 														dashboardStore.setPendingPrompt(getSetupInitialPrompt());
 														router.push(`/workspace/${result.sessionId}`);
@@ -355,6 +356,7 @@ export function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) 
 			configurationId: configurationResult.configurationId,
 			sessionType: "setup",
 			modelId: selectedModel,
+			initialPrompt: getSetupInitialPrompt(),
 		});
 		onCreate?.(configurationResult.configurationId, sessionResult.sessionId);
 		setSelectedRepoIds(new Set());
