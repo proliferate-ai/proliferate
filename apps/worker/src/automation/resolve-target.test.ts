@@ -212,7 +212,7 @@ describe("resolveTarget", () => {
 		});
 	});
 
-	it("fails when LLM selector returns failure", async () => {
+	it("falls back to fallbackConfigurationId when LLM selector fails", async () => {
 		mockSelectConfiguration.mockResolvedValueOnce({
 			status: "failed",
 			reason: "no_eligible_candidates",
@@ -224,6 +224,7 @@ describe("resolveTarget", () => {
 					configSelectionStrategy: "agent_decide",
 					allowAgenticRepoSelection: true,
 					allowedConfigurationIds: ["cfg-1"],
+					fallbackConfigurationId: "cfg-fallback",
 				}),
 				enrichmentJson: makeEnrichment(),
 				organizationId: "org-1",
@@ -232,12 +233,13 @@ describe("resolveTarget", () => {
 		);
 
 		expect(result).toEqual({
-			type: "failed",
-			reason: "configuration_selection_failed",
+			type: "fallback",
+			configurationId: "cfg-fallback",
+			reason: "configuration_selection_failed_using_fallback",
 		});
 	});
 
-	it("fails when LLM selector returns invalid response", async () => {
+	it("falls back to defaultConfigurationId when no fallback is set", async () => {
 		mockSelectConfiguration.mockResolvedValueOnce({
 			status: "failed",
 			reason: "invalid_llm_response",
@@ -257,12 +259,13 @@ describe("resolveTarget", () => {
 		);
 
 		expect(result).toEqual({
-			type: "failed",
-			reason: "configuration_selection_failed",
+			type: "fallback",
+			configurationId: "cfg-default",
+			reason: "configuration_selection_failed_using_fallback",
 		});
 	});
 
-	it("fails when LLM selector selects out-of-allowlist ID", async () => {
+	it("fails when LLM selector fails and no fallback is available", async () => {
 		mockSelectConfiguration.mockResolvedValueOnce({
 			status: "failed",
 			reason: "selected_id_not_in_eligible_set",
@@ -274,6 +277,8 @@ describe("resolveTarget", () => {
 					configSelectionStrategy: "agent_decide",
 					allowAgenticRepoSelection: true,
 					allowedConfigurationIds: ["cfg-1"],
+					defaultConfigurationId: null,
+					fallbackConfigurationId: null,
 				}),
 				enrichmentJson: makeEnrichment(),
 				organizationId: "org-1",

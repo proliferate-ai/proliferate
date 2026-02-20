@@ -646,6 +646,10 @@ export const automations = pgTable(
 			for: "select",
 			to: ["public"],
 		}),
+		check(
+			"chk_automations_dm_user_slack_id",
+			sql`(notification_destination_type != 'slack_dm_user') OR (notification_slack_user_id IS NOT NULL)`,
+		),
 	],
 );
 
@@ -1169,6 +1173,10 @@ export const sessionNotificationSubscriptions = pgTable(
 			name: "session_notification_subscriptions_slack_installation_id_fkey",
 		}).onDelete("cascade"),
 		unique("session_notification_subscriptions_session_user_key").on(table.sessionId, table.userId),
+		check(
+			"chk_session_notif_sub_dm_user_slack_id",
+			sql`(destination_type != 'dm_user') OR (slack_user_id IS NOT NULL)`,
+		),
 	],
 );
 
@@ -1369,6 +1377,16 @@ export const slackInstallations = pgTable(
 			foreignColumns: [user.id],
 			name: "slack_installations_installed_by_fkey",
 		}),
+		foreignKey({
+			columns: [table.defaultConfigurationId],
+			foreignColumns: [configurations.id],
+			name: "slack_installations_default_configuration_id_fkey",
+		}).onDelete("set null"),
+		foreignKey({
+			columns: [table.fallbackConfigurationId],
+			foreignColumns: [configurations.id],
+			name: "slack_installations_fallback_configuration_id_fkey",
+		}).onDelete("set null"),
 		unique("slack_installations_organization_id_team_id_key").on(
 			table.organizationId,
 			table.teamId,

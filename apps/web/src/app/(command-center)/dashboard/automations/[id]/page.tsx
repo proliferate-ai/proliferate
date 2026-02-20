@@ -622,7 +622,6 @@ export default function AutomationDetailPage({
 								className="h-7 text-xs"
 								onClick={() => {
 									setConfigSelectionStrategy("agent_decide");
-									handleUpdate({ configSelectionStrategy: "agent_decide" });
 								}}
 							>
 								Let agent decide
@@ -649,9 +648,9 @@ export default function AutomationDetailPage({
 										{readyConfigurations.map((config) => {
 											const isChecked = allowedConfigurationIds.includes(config.id);
 											return (
-												<label
+												<Label
 													key={config.id}
-													className="flex items-center gap-2 text-sm cursor-pointer"
+													className="flex items-center gap-2 text-sm cursor-pointer font-normal"
 												>
 													<Checkbox
 														checked={isChecked}
@@ -660,13 +659,18 @@ export default function AutomationDetailPage({
 																? [...allowedConfigurationIds, config.id]
 																: allowedConfigurationIds.filter((id) => id !== config.id);
 															setAllowedConfigurationIds(next);
-															handleUpdate({ allowedConfigurationIds: next });
+															if (next.length > 0) {
+																handleUpdate({
+																	allowedConfigurationIds: next,
+																	configSelectionStrategy: "agent_decide",
+																});
+															}
 														}}
 													/>
 													<span className="truncate">
 														{config.name || "Untitled configuration"}
 													</span>
-												</label>
+												</Label>
 											);
 										})}
 										{readyConfigurations.length === 0 && (

@@ -2,17 +2,16 @@
 
 You are working in this exact repository worktree and branch:
 
-- Worktree: `/Users/pablo/proliferate/.worktrees/codex-slack-config-ux-north-star`
 - Branch: `codex/slack-config-ux-north-star`
 
 Do not create a new branch or worktree. Implement all requested changes in this single branch for one PR.
 
 ## Read first
 
-1. `/Users/pablo/proliferate/.worktrees/codex-slack-config-ux-north-star/docs/slack-notifications-ux-north-star.md`
-2. `/Users/pablo/proliferate/.worktrees/codex-slack-config-ux-north-star/docs/slack-configuration-flows-advisor-brief.md`
-3. `/Users/pablo/proliferate/.worktrees/codex-slack-config-ux-north-star/docs/slack-configuration-implementation-plan.md`
-4. Relevant subsystem specs in `/Users/pablo/proliferate/.worktrees/codex-slack-config-ux-north-star/docs/specs/` before coding.
+1. `docs/slack-notifications-ux-north-star.md`
+2. `docs/slack-configuration-flows-advisor-brief.md`
+3. `docs/slack-configuration-implementation-plan.md`
+4. Relevant subsystem specs in `docs/specs/` before coding.
 
 ## Hard requirements
 

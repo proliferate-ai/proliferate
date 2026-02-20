@@ -210,10 +210,7 @@ export class SlackClient extends AsyncClient<
 
 				if (selectionResult.status === "selected") {
 					this.logger.info(
-						{
-							configurationId: selectionResult.configurationId,
-							rationale: selectionResult.rationale,
-						},
+						{ configurationId: selectionResult.configurationId },
 						"Configuration auto-selected",
 					);
 					configOption = { configurationId: selectionResult.configurationId };

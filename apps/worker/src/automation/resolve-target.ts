@@ -72,6 +72,20 @@ export async function resolveTarget(
 		};
 	}
 
+	// LLM selection failed — fall back to fallback configuration if available
+	const fallbackId = automation.fallbackConfigurationId ?? defaultConfigurationId;
+	if (fallbackId) {
+		logger.warn(
+			{ fallbackConfigurationId: fallbackId, selectionReason: result.reason },
+			"Configuration selection failed, using fallback",
+		);
+		return {
+			type: "fallback",
+			configurationId: fallbackId,
+			reason: "configuration_selection_failed_using_fallback",
+		};
+	}
+
 	return {
 		type: "failed",
 		reason: "configuration_selection_failed",

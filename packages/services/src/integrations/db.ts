@@ -958,8 +958,8 @@ export async function updateStatusByGitHubInstallationId(
  * Used by the Slack events handler to look up installation for incoming events.
  *
  * WARNING: If multiple orgs share the same Slack workspace (same teamId),
- * this returns the first match. Callers should use the org-scoped
- * `getSlackInstallationForNotifications` when org context is available.
+ * this refuses the ambiguous match and returns null. Callers should use the
+ * org-scoped `getSlackInstallationForNotifications` when org context is available.
  */
 export async function findSlackInstallationByTeamId(
 	teamId: string,
