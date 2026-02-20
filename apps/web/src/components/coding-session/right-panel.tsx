@@ -182,10 +182,7 @@ export function RightPanel({
 		}
 
 		// Artifacts panel
-		if (
-			(mode.type === "artifacts" || mode.type === "file" || mode.type === "gallery") &&
-			sessionProps?.sessionId
-		) {
+		if (mode.type === "artifacts" && sessionProps?.sessionId) {
 			return (
 				<ArtifactsPanel
 					sessionId={sessionProps.sessionId}

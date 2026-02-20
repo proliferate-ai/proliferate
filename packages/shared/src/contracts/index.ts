@@ -12,7 +12,6 @@ import { schedulesContract } from "./schedules";
 import { secretsContract } from "./secrets";
 import { sessionsContract } from "./sessions";
 import { triggersContract } from "./triggers";
-import { verificationContract } from "./verification";
 
 const c = initContract();
 
@@ -34,7 +33,6 @@ export const contract = c.router({
 	secrets: secretsContract,
 	sessions: sessionsContract,
 	triggers: triggersContract,
-	verification: verificationContract,
 });
 
 // Re-export individual contracts for direct access
@@ -51,7 +49,6 @@ export { schedulesContract } from "./schedules";
 export { secretsContract } from "./secrets";
 export { sessionsContract } from "./sessions";
 export { triggersContract } from "./triggers";
-export { verificationContract } from "./verification";
 
 // Re-export common types
 export type { ErrorResponse, Pagination } from "./common";
@@ -158,16 +155,6 @@ export {
 	SentryMetadataSchema,
 	LinearMetadataSchema,
 } from "./integrations";
-
-// Re-export verification types
-export type { VerificationFile } from "./verification";
-export {
-	VerificationFileSchema,
-	VerificationMediaQuerySchema,
-	PresignedUrlResponseSchema,
-	TextContentResponseSchema,
-	FileListResponseSchema,
-} from "./verification";
 
 // Re-export schedule types
 export type { Schedule, UpdateScheduleInput } from "./schedules";

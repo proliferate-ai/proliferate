@@ -98,7 +98,6 @@ apps/worker/src/slack/
     ├── index.ts                      # Handler interfaces (ToolHandler, EventHandler)
     ├── text.ts                       # textPartCompleteHandler — posts text to thread
     ├── todo.ts                       # todoWriteToolHandler — formats task lists
-    ├── verify.ts                     # verifyToolHandler — uploads media to Slack
     └── default-tool.ts               # defaultToolHandler — fallback code block
 
 apps/web/src/server/routers/
@@ -508,7 +507,6 @@ try {
 
 **Slack handlers:**
 - `textPartCompleteHandler` — converts markdown → mrkdwn, posts to thread (`handlers/text.ts`)
-- `verifyToolHandler` — uploads verification media to Slack, posts summary with dashboard link (`handlers/verify.ts`)
 - `todoWriteToolHandler` — formats task list with checkboxes (`handlers/todo.ts`)
 - `defaultToolHandler` — posts tool result in code block, max 2000 chars (`handlers/default-tool.ts`)
 

@@ -43,6 +43,5 @@ export interface EventHandler<T extends ServerMessage = ServerMessage> {
 
 // Export handlers
 export { textPartCompleteHandler } from "./text";
-export { verifyToolHandler } from "./verify";
 export { defaultToolHandler } from "./default-tool";
 export { todoWriteToolHandler } from "./todo";

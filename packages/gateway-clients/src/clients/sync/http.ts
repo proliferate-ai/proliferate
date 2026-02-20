@@ -48,7 +48,7 @@ export function createHttpClient(baseUrl: string, getToken: TokenGetter): HttpCl
 			throw new Error(`Gateway error: ${response.status} - ${errorText}`);
 		}
 
-		// Handle stream responses (for verification file downloads)
+		// Handle stream responses (binary downloads)
 		if (options?.isStream || path.includes("stream=true")) {
 			const contentType = response.headers.get("content-type") || "application/octet-stream";
 			const data = await response.arrayBuffer();

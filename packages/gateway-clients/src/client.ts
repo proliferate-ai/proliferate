@@ -5,37 +5,13 @@
  * for shared capabilities and type discrimination.
  */
 
-import type { HealthCheckResult, VerificationFile } from "./types";
-
-/**
- * Verification tools - available on all client types
- */
-export interface VerificationTools {
-	/**
-	 * List verification files under a prefix
-	 */
-	list(proliferateSessionId: string, options?: { prefix?: string }): Promise<VerificationFile[]>;
-
-	/**
-	 * Get a presigned URL for a verification file
-	 */
-	getUrl(proliferateSessionId: string, key: string): Promise<string>;
-
-	/**
-	 * Get a verification file as an ArrayBuffer
-	 */
-	getStream(
-		proliferateSessionId: string,
-		key: string,
-	): Promise<{ data: ArrayBuffer; contentType: string }>;
-}
+import type { HealthCheckResult } from "./types";
 
 /**
  * Client capabilities - tools available on all client types
  */
-export interface ClientTools {
-	verification: VerificationTools;
-}
+// biome-ignore lint/suspicious/noEmptyInterface: will be extended when new capabilities are added
+export interface ClientTools {}
 
 /**
  * Base client interface implemented by all client types

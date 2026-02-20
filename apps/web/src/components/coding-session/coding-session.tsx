@@ -165,7 +165,7 @@ export function CodingSession({
 			window.removeEventListener("mouseup", onMouseUp);
 		};
 	}, [isPanelDragging]);
-	const activeType = mode.type === "file" || mode.type === "gallery" ? "artifacts" : mode.type;
+	const activeType = mode.type;
 
 	// Auto-open investigation panel when runId is present (fires once per runId)
 	const lastOpenedRunId = useRef<string | null>(null);

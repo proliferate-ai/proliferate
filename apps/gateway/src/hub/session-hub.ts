@@ -32,7 +32,6 @@ import {
 	sendPromptAsync,
 } from "../lib/opencode";
 import { publishSessionEvent } from "../lib/redis";
-import { uploadVerificationFiles } from "../lib/s3";
 import {
 	OWNER_LEASE_TTL_MS,
 	acquireOwnerLease,
@@ -737,44 +736,6 @@ export class SessionHub {
 		this.broadcast(resultMessage);
 
 		return { snapshotId: result.snapshotId, target };
-	}
-
-	/**
-	 * Upload verification files from sandbox to S3.
-	 */
-	async uploadVerificationFiles(
-		folder: string,
-	): Promise<{ uploadedCount: number; prefix: string }> {
-		const context = this.runtime.getContext();
-		if (!context.session.sandbox_id) {
-			throw new Error("No sandbox available");
-		}
-
-		const folderPath = folder.startsWith("/") ? folder : `/home/user/workspace/${folder}`;
-		this.log("Reading verification files", { folder, folderPath });
-
-		const providerType = context.session.sandbox_provider as SandboxProviderType;
-		const provider = getSandboxProvider(providerType);
-
-		if (!provider.readFiles) {
-			throw new Error("Provider does not support reading files");
-		}
-
-		const files = await provider.readFiles(context.session.sandbox_id, folderPath);
-
-		if (!files || files.length === 0) {
-			this.log("No files found in verification folder");
-			return { uploadedCount: 0, prefix: "" };
-		}
-
-		this.log("Uploading verification files", { fileCount: files.length });
-		const result = await uploadVerificationFiles(this.sessionId, files, this.env);
-		this.log("Verification files uploaded", {
-			uploadedCount: result.uploadedCount,
-			prefix: result.prefix,
-		});
-
-		return result;
 	}
 
 	// ============================================

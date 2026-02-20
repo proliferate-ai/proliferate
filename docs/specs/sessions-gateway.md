@@ -191,8 +191,7 @@ apps/gateway/src/
 │   │   │   ├── info.ts                 # GET /:sessionId (sandbox info)
 │   │   │   ├── heartbeat.ts            # POST /:sessionId/heartbeat (idle timer reset)
 │   │   │   ├── tools.ts               # POST /:sessionId/tools/:toolName (sandbox callbacks)
-│   │   │   ├── actions.ts              # Action routes (see actions.md)
-│   │   │   └── verification-media.ts   # GET /:sessionId/verification-media
+│   │   │   └── actions.ts              # Action routes (see actions.md)
 │   │   └── ws/
 │   │       └── index.ts                 # WS /proliferate/:sessionId
 │   ├── ws-multiplexer.ts                    # WS upgrade routing — first-match handler dispatch

@@ -7,7 +7,6 @@ export { GrepToolUI } from "./grep-tool";
 export { TodoWriteToolUI } from "./todo-write-tool";
 export { TaskToolUI } from "./task-tool";
 export { WebFetchToolUI } from "./web-fetch-tool";
-export { VerificationToolUI } from "./verification-tool";
 export { EnvRequestToolUI, SessionContext } from "./env-request-tool";
 export { SaveSnapshotToolUI } from "./save-snapshot-tool";
 
@@ -20,7 +19,6 @@ import { SaveSnapshotToolUI } from "./save-snapshot-tool";
 import { ShellToolUI } from "./shell-tool";
 import { TaskToolUI } from "./task-tool";
 import { TodoWriteToolUI } from "./todo-write-tool";
-import { VerificationToolUI } from "./verification-tool";
 import { WebFetchToolUI } from "./web-fetch-tool";
 import { WriteFileToolUI } from "./write-file-tool";
 
@@ -34,7 +32,6 @@ export const allToolUIs = [
 	{ id: "todowrite", Component: TodoWriteToolUI },
 	{ id: "task", Component: TaskToolUI },
 	{ id: "webfetch", Component: WebFetchToolUI },
-	{ id: "verify", Component: VerificationToolUI },
 	{ id: "request_env_variables", Component: EnvRequestToolUI },
 	{ id: "save_snapshot", Component: SaveSnapshotToolUI },
 ];

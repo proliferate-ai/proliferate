@@ -14,7 +14,6 @@
 | Setup system prompt | Implemented | `packages/shared/src/prompts.ts:getSetupSystemPrompt` | Configures agent for repo setup sessions |
 | Coding system prompt | Implemented | `packages/shared/src/prompts.ts:getCodingSystemPrompt` | Configures agent for interactive coding |
 | Automation system prompt | Implemented | `packages/shared/src/prompts.ts:getAutomationSystemPrompt` | Configures agent for automation runs |
-| `verify` tool | Implemented | `packages/shared/src/opencode-tools/index.ts:VERIFY_TOOL` | Uploads screenshots/evidence to S3 |
 | `save_snapshot` tool | Implemented | `packages/shared/src/opencode-tools/index.ts:SAVE_SNAPSHOT_TOOL` | Saves sandbox filesystem state |
 | `save_service_commands` tool | Implemented | `packages/shared/src/opencode-tools/index.ts:SAVE_SERVICE_COMMANDS_TOOL` | Persists auto-start commands for future sessions |
 | `save_env_files` tool | Implemented | `packages/shared/src/opencode-tools/index.ts:SAVE_ENV_FILES_TOOL` | Generates .env files from secrets |
@@ -113,7 +112,7 @@
 | Session notification subscriptions | Implemented | `packages/services/src/notifications/service.ts` | Upsert/delete/list subscriptions per session |
 | Configuration selection strategy | Implemented | `apps/worker/src/automation/resolve-target.ts` | `fixed` (default) or `agent_decide` with allowlist + fallback |
 | Slack async client | Implemented | `apps/worker/src/slack/client.ts` | Full bidirectional session via Slack |
-| Slack inbound handlers | Implemented | `apps/worker/src/slack/handlers/` | Text, todo, verify, default-tool |
+| Slack inbound handlers | Implemented | `apps/worker/src/slack/handlers/` | Text, todo, default-tool |
 | Slack receiver worker | Implemented | `apps/worker/src/slack/` | BullMQ-based message processing |
 | Run claiming / manual update | Implemented | `apps/web/src/server/routers/automations.ts` | Claim, unclaim, resolve runs via `assignRun`/`unassignRun`/`resolveRun` routes |
 | Org pending runs query | Implemented | `packages/services/src/runs/db.ts:listOrgPendingRuns`, `apps/web/src/server/routers/automations.ts` | Failed/needs_human/timed_out runs for attention inbox |
@@ -234,7 +233,7 @@
 | Bulk import | Implemented | `apps/web/src/server/routers/secrets.ts:bulkImport` | `.env` paste flow |
 | Secret encryption | Implemented | `packages/services/src/secrets/` | Encrypted at rest |
 | Per-secret persistence toggle | Implemented | Recent PR `c4d0abb` | Toggle whether secret persists across sessions |
-| Secret encryption (DB) | Implemented | `packages/services/src/secrets/service.ts` | AES-256 encrypted in PostgreSQL; S3 is NOT used for secrets (only verification uploads) |
+| Secret encryption (DB) | Implemented | `packages/services/src/secrets/service.ts` | AES-256 encrypted in PostgreSQL |
 
 ---
 
@@ -270,7 +269,7 @@
 | Feature | Status | Evidence | Notes |
 |---------|--------|----------|-------|
 | User auth (better-auth) | Implemented | `packages/shared/src/auth.ts` | Email/password + OAuth |
-| Email verification | Implemented | `packages/shared/src/verification.ts` | Verify email flow |
+| Email verification | Implemented | `packages/shared/src/auth.ts` | Verify email flow |
 | Org CRUD | Implemented | `apps/web/src/server/routers/orgs.ts` | List/get orgs |
 | Member management | Implemented | `apps/web/src/server/routers/orgs.ts:listMembers` | List org members |
 | Invitations | Implemented | `apps/web/src/server/routers/orgs.ts:listInvitations` | Invite/accept flow |

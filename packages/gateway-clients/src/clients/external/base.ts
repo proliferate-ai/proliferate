@@ -6,7 +6,6 @@
 
 import type { GatewayAuth, TokenGetter } from "../../auth";
 import { createTokenGetter } from "../../auth";
-import { createVerificationTools } from "../../capabilities/tools";
 import type { Client, ClientTools } from "../../client";
 import type { HealthCheckResult, HttpClient } from "../../types";
 import { checkHealth, createHttpClient } from "../sync/http";
@@ -52,9 +51,7 @@ export abstract class ExternalClientBase implements ExternalClient {
 		this.http = createHttpClient(this.baseUrl, this.getToken);
 
 		// Attach capabilities
-		this.tools = {
-			verification: createVerificationTools(this.http),
-		};
+		this.tools = {};
 	}
 
 	async checkHealth(): Promise<HealthCheckResult> {
