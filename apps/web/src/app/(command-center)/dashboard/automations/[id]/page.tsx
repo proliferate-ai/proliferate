@@ -112,7 +112,6 @@ function mapInputToOutput(data: UpdateAutomationInput): Record<string, unknown> 
 		else if (key === "notificationSlackUserId") mapped.notification_slack_user_id = value;
 		else if (key === "notificationChannelId") mapped.notification_channel_id = value;
 		else if (key === "configSelectionStrategy") mapped.config_selection_strategy = value;
-		else if (key === "fallbackConfigurationId") mapped.fallback_configuration_id = value;
 		else if (key === "allowedConfigurationIds") mapped.allowed_configuration_ids = value;
 		else mapped[key] = value;
 	}
@@ -151,7 +150,6 @@ export default function AutomationDetailPage({
 		"fixed",
 	);
 	const [allowedConfigurationIds, setAllowedConfigurationIds] = useState<string[]>([]);
-	const [fallbackConfigurationId, setFallbackConfigurationId] = useState<string | null>(null);
 	const hydratedRef = useRef(false);
 
 	// Data
@@ -201,7 +199,6 @@ export default function AutomationDetailPage({
 				(automation.config_selection_strategy as "fixed" | "agent_decide") ?? "fixed",
 			);
 			setAllowedConfigurationIds((automation.allowed_configuration_ids as string[]) ?? []);
-			setFallbackConfigurationId((automation.fallback_configuration_id as string) ?? null);
 		}
 	}, [automation]);
 
@@ -659,19 +656,6 @@ export default function AutomationDetailPage({
 										Agent will only auto-select from allowlisted configurations that have routing
 										descriptions.
 									</p>
-								</div>
-								<div className="flex items-center justify-between pt-1 border-t border-border/50">
-									<span className="text-sm text-muted-foreground">Fallback</span>
-									<ConfigurationSelector
-										configurations={readyConfigurations}
-										selectedId={fallbackConfigurationId}
-										onChange={(id) => {
-											const value = id === "none" ? null : id;
-											setFallbackConfigurationId(value);
-											handleUpdate({ fallbackConfigurationId: value });
-										}}
-										triggerClassName="border-0 bg-muted/30 hover:bg-muted"
-									/>
 								</div>
 							</div>
 						)}

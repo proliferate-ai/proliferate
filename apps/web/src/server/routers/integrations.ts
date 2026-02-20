@@ -16,7 +16,14 @@ import getNango, {
 } from "@/lib/nango";
 import { revokeToken, sendSlackConnectInvite } from "@/lib/slack";
 import { ORPCError } from "@orpc/server";
-import { actions, connectors, integrations, orgs, secrets } from "@proliferate/services";
+import {
+	actions,
+	configurations,
+	connectors,
+	integrations,
+	orgs,
+	secrets,
+} from "@proliferate/services";
 import {
 	ConnectorAuthSchema,
 	ConnectorConfigSchema,
@@ -866,6 +873,41 @@ export const integrationsRouter = {
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
 			await requireIntegrationAdmin(context.user.id, context.orgId);
+
+			// Validate defaultConfigurationId belongs to org
+			if (input.defaultConfigurationId) {
+				const belongs = await configurations.configurationBelongsToOrg(
+					input.defaultConfigurationId,
+					context.orgId,
+				);
+				if (!belongs) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "Default configuration not found in this org",
+					});
+				}
+			}
+
+			// Validate allowedConfigurationIds belong to org and have routing descriptions
+			if (input.strategy === "agent_decide" && input.allowedConfigurationIds?.length) {
+				const candidates = await configurations.getConfigurationCandidates(
+					input.allowedConfigurationIds,
+					context.orgId,
+				);
+				if (candidates.length !== input.allowedConfigurationIds.length) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "Some allowed configuration IDs are not found in this org",
+					});
+				}
+				const missingDescription = candidates.filter(
+					(c) => !c.routingDescription || c.routingDescription.trim().length === 0,
+				);
+				if (missingDescription.length > 0) {
+					const names = missingDescription.map((c) => c.name).join(", ");
+					throw new ORPCError("BAD_REQUEST", {
+						message: `All allowed configurations must have routing descriptions. Missing: ${names}`,
+					});
+				}
+			}
 
 			const updated = await integrations.updateSlackInstallationConfig(
 				input.installationId,
