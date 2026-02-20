@@ -71,8 +71,6 @@ export function useCodingSessionRuntime({
 	// Title management - single instance with actual messages
 	const { sessionTitle, updateTitle } = useAutoTitle({
 		sessionId,
-		messages,
-		initialPrompt,
 		initialTitle: wsTitle || initialTitle,
 	});
 

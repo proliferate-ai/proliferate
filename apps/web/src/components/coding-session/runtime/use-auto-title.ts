@@ -2,14 +2,10 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import type { ExtendedMessage } from "../message-converter";
 
 interface UseAutoTitleOptions {
 	sessionId: string;
-	messages: ExtendedMessage[];
-	initialPrompt?: string;
 	initialTitle?: string | null;
-	onTitleUpdate?: (title: string) => void;
 }
 
 /**

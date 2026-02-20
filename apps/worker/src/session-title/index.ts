@@ -22,8 +22,12 @@ export function startSessionTitleWorkers(logger: Logger): SessionTitleWorkers {
 	});
 
 	worker.on("failed", (job, err) => {
+		if (!job) {
+			logger.error({ err }, "Session title generation job failed (no job context)");
+			return;
+		}
 		logger.error(
-			{ err, jobId: job?.id, sessionId: job?.data?.sessionId },
+			{ err, jobId: job.id, sessionId: job.data.sessionId },
 			"Session title generation job failed",
 		);
 	});
