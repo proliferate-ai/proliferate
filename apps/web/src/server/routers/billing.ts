@@ -36,7 +36,9 @@ async function enqueueFastReconcile(orgId: string, trigger: "payment_webhook" | 
 	} catch (err) {
 		log.warn({ err, orgId }, "Failed to enqueue fast reconcile");
 	} finally {
-		await queue.close();
+		await queue.close().catch((err) => {
+			log.debug({ err, orgId }, "Failed to close fast reconcile queue");
+		});
 	}
 }
 
