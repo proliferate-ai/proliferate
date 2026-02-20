@@ -474,21 +474,10 @@ export function NeonIcon({ className }: IconProps) {
 }
 
 /**
- * Context7 brand icon (document with 7)
+ * Context7 brand icon
  */
 export function Context7Icon({ className }: IconProps) {
-	return (
-		<svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-			<rect x="3" y="1" width="18" height="22" rx="3" stroke="currentColor" strokeWidth="2" />
-			<path
-				d="M9 8h6.5L11 17"
-				stroke="currentColor"
-				strokeWidth="2.5"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-			/>
-		</svg>
-	);
+	return <img src="/logos/context7.png" alt="" className={cn("object-contain", className)} />;
 }
 
 /**
@@ -530,137 +519,52 @@ export function PlaywrightIcon({ className }: IconProps) {
 }
 
 /**
- * Zapier brand icon (Z lightning bolt)
+ * Zapier brand icon
  */
 export function ZapierIcon({ className }: IconProps) {
-	return (
-		<svg
-			className={className}
-			viewBox="0 0 24 24"
-			fill="currentColor"
-			xmlns="http://www.w3.org/2000/svg"
-		>
-			<path d="M15.535 8.465h3.293l-7.39 7.39v-3.683l-.001-.003a4.413 4.413 0 0 1-.508.03c-.174 0-.345-.011-.514-.03v3.686l-7.39-7.39h3.683c-.019-.169-.03-.34-.03-.514 0-.175.011-.346.03-.515H2.925l7.39-7.39v3.683c.169-.019.34-.03.514-.03.175 0 .346.011.515.03V.465l7.39 7.39h-3.683c.019.169.03.34.03.515 0 .174-.011.345-.03.514l-.516-.419zm-1.47 0a4.413 4.413 0 0 1-.858 1.742l2.469 2.469h-2.469l-.858-1.742a4.425 4.425 0 0 1-1.742.858l-2.469-2.469v2.469l1.742.858a4.425 4.425 0 0 1-.858 1.742H6.07l2.469-2.469-1.742-.858a4.413 4.413 0 0 1 .858-1.742l-2.469-2.469h2.469l.858 1.742a4.425 4.425 0 0 1 1.742-.858l2.469 2.469v-2.469l-1.742-.858a4.425 4.425 0 0 1 .858-1.742H14.065z" />
-		</svg>
-	);
+	return <img src="/logos/zapier.svg" alt="" className={cn("object-contain", className)} />;
 }
 
 /**
  * Supabase brand icon
  */
 export function SupabaseIcon({ className }: IconProps) {
-	return (
-		<svg className={className} viewBox="0 0 109 113" fill="none" xmlns="http://www.w3.org/2000/svg">
-			<path
-				d="M63.708 110.284c-2.86 3.601-8.658 1.628-8.727-2.97l-1.007-67.251h45.22c8.19 0 12.758 9.46 7.665 15.874L63.708 110.284z"
-				fill="currentColor"
-				opacity="0.5"
-			/>
-			<path
-				d="M45.317 2.071c2.86-3.601 8.657-1.628 8.726 2.97l.442 67.251H9.83c-8.19 0-12.759-9.46-7.665-15.875L45.317 2.072z"
-				fill="currentColor"
-			/>
-		</svg>
-	);
+	return <img src="/logos/supabase.webp" alt="" className={cn("object-contain", className)} />;
 }
 
 /**
- * Asana brand icon (three dots)
+ * Asana brand icon
  */
 export function AsanaIcon({ className }: IconProps) {
-	return (
-		<svg
-			className={className}
-			viewBox="0 0 24 24"
-			fill="currentColor"
-			xmlns="http://www.w3.org/2000/svg"
-		>
-			<circle cx="12" cy="5.5" r="4.5" />
-			<circle cx="4.5" cy="16.5" r="4.5" />
-			<circle cx="19.5" cy="16.5" r="4.5" />
-		</svg>
-	);
+	return <img src="/logos/asana.svg" alt="" className={cn("object-contain", className)} />;
 }
 
 /**
- * Semgrep brand icon (shield with code brackets)
+ * Semgrep brand icon
  */
 export function SemgrepIcon({ className }: IconProps) {
-	return (
-		<svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-			<path
-				d="M12 2L3 7v6c0 5.25 3.83 10.16 9 11.34C17.17 23.16 21 18.25 21 13V7l-9-5z"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinejoin="round"
-			/>
-			<path
-				d="M9 10L6.5 12.5 9 15"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-			/>
-			<path
-				d="M15 10l2.5 2.5L15 15"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-			/>
-		</svg>
-	);
+	return <img src="/logos/semgrep.png" alt="" className={cn("object-contain", className)} />;
 }
 
 /**
- * DeepWiki brand icon (book with magnifying glass)
+ * DeepWiki brand icon
  */
 export function DeepWikiIcon({ className }: IconProps) {
-	return (
-		<svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-			<path
-				d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-			/>
-			<path
-				d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="round"
-				strokeLinejoin="round"
-			/>
-			<circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="1.5" />
-			<path
-				d="M14.2 12.2L16.5 14.5"
-				stroke="currentColor"
-				strokeWidth="1.5"
-				strokeLinecap="round"
-			/>
-		</svg>
-	);
+	return <img src="/logos/deepwiki.png" alt="" className={cn("object-contain", className)} />;
 }
 
 /**
- * Apify brand icon (hexagon with A)
+ * MCP (Model Context Protocol) generic icon for custom connectors
+ */
+export function McpIcon({ className }: IconProps) {
+	return <img src="/logos/mcp.svg" alt="" className={cn("object-contain", className)} />;
+}
+
+/**
+ * Apify brand icon
  */
 export function ApifyIcon({ className }: IconProps) {
-	return (
-		<svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-			<path
-				d="M12 2l8.66 5v10L12 22l-8.66-5V7L12 2z"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinejoin="round"
-			/>
-			<path
-				d="M12 7l-3.5 10h2l.8-2.5h3.4l.8 2.5h2L12 7zm0 3.5l1.2 3h-2.4l1.2-3z"
-				fill="currentColor"
-			/>
-		</svg>
-	);
+	return <img src="/logos/apify.png" alt="" className={cn("object-contain", className)} />;
 }
 
 /**
