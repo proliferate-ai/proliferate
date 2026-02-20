@@ -11,7 +11,7 @@ import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/use-secret
 import { orpc } from "@/lib/orpc";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileLock2, FileUp, Loader2, Search, Trash2 } from "lucide-react";
+import { ChevronDown, FileLock2, FileUp, Loader2, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PanelShell } from "./panel-shell";
@@ -436,6 +436,7 @@ export function EnvironmentPanel({
 	const [deletingId, setDeletingId] = useState<string | null>(null);
 	const [pasteMode, setPasteMode] = useState(false);
 	const [filter, setFilter] = useState("");
+	const [showLegacyEntry, setShowLegacyEntry] = useState(false);
 
 	// All org secrets
 	const { data: secrets, isLoading: secretsLoading } = useSecrets();
@@ -589,100 +590,140 @@ export function EnvironmentPanel({
 							</>
 						) : (
 							<>
-								{pasteMode ? (
-									<PasteEnvForm
-										sessionId={sessionId}
-										configurationId={configurationId}
-										onSaved={handleRefresh}
-										onClose={() => setPasteMode(false)}
-									/>
-								) : (
-									<div className="space-y-1.5">
-										<AddVariableForm
-											sessionId={sessionId}
+								{configurationId && (
+									<div className="rounded-md border border-border/70 bg-muted/20 p-3 space-y-2">
+										<div className="flex items-start gap-2">
+											<FileLock2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+											<div className="space-y-1">
+												<p className="text-xs font-medium">Preferred: manage secret files</p>
+												<p className="text-[11px] text-muted-foreground leading-relaxed">
+													Create a secret file, set its path in the repo, and paste contents. This
+													matches the Vercel-style env workflow.
+												</p>
+											</div>
+										</div>
+										<SecretFilesEditor
 											configurationId={configurationId}
-											onSaved={handleRefresh}
+											callToActionLabel="Create Secret File"
 										/>
+									</div>
+								)}
+
+								{configurationId && (
+									<div className="rounded-md border border-border/60 p-2.5">
 										<button
 											type="button"
-											className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-											onClick={() => setPasteMode(true)}
+											className="w-full inline-flex items-center justify-between text-xs font-medium"
+											onClick={() => setShowLegacyEntry((prev) => !prev)}
 										>
-											<FileUp className="h-3 w-3" />
-											Paste .env
+											<span>Legacy: single env vars</span>
+											<ChevronDown
+												className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${
+													showLegacyEntry ? "rotate-180" : ""
+												}`}
+											/>
 										</button>
 									</div>
 								)}
 
-								{/* Search filter */}
-								{showSearch && (
-									<div className="relative">
-										<Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-										<Input
-											value={filter}
-											onChange={(e) => setFilter(e.target.value)}
-											placeholder="Filter variables..."
-											className="h-8 text-xs pl-7"
-										/>
-									</div>
-								)}
-
-								{/* Status summary for spec keys */}
-								{specKeys.length > 0 && !filter && (
-									<p className="text-xs text-muted-foreground">
-										{missingCount > 0
-											? `${missingCount} required ${missingCount === 1 ? "variable" : "variables"} missing`
-											: "All required variables are set"}
-									</p>
-								)}
-
-								{/* Missing required keys */}
-								{filteredMissing.length > 0 && (
-									<div>
-										<p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pb-1.5 px-4">
-											Required
-										</p>
-										<div>
-											{filteredMissing.map((k) => (
-												<MissingKeyRow
-													key={k.key}
-													keyName={k.key}
+								{(!configurationId || showLegacyEntry) && (
+									<>
+										{pasteMode ? (
+											<PasteEnvForm
+												sessionId={sessionId}
+												configurationId={configurationId}
+												onSaved={handleRefresh}
+												onClose={() => setPasteMode(false)}
+											/>
+										) : (
+											<div className="space-y-1.5">
+												<AddVariableForm
 													sessionId={sessionId}
 													configurationId={configurationId}
 													onSaved={handleRefresh}
 												/>
-											))}
-										</div>
-									</div>
-								)}
+												<button
+													type="button"
+													className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+													onClick={() => setPasteMode(true)}
+												>
+													<FileUp className="h-3 w-3" />
+													Paste .env
+												</button>
+											</div>
+										)}
 
-								{/* All stored variables */}
-								{filteredSecrets.length > 0 && (
-									<div>
-										{(specKeys.length > 0 || missingRequired.length > 0) && !filter && (
-											<p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pb-1.5 px-4">
-												Variables
+										{/* Search filter */}
+										{showSearch && (
+											<div className="relative">
+												<Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+												<Input
+													value={filter}
+													onChange={(e) => setFilter(e.target.value)}
+													placeholder="Filter variables..."
+													className="h-8 text-xs pl-7"
+												/>
+											</div>
+										)}
+
+										{/* Status summary for spec keys */}
+										{specKeys.length > 0 && !filter && (
+											<p className="text-xs text-muted-foreground">
+												{missingCount > 0
+													? `${missingCount} required ${missingCount === 1 ? "variable" : "variables"} missing`
+													: "All required variables are set"}
 											</p>
 										)}
-										<div>
-											{filteredSecrets.map((secret) => (
-												<SecretRow
-													key={secret.id}
-													keyName={secret.key}
-													isRequired={specKeySet.has(secret.key)}
-													onDelete={() => handleDelete(secret.id)}
-													isDeleting={deletingId === secret.id}
-												/>
-											))}
-										</div>
-									</div>
-								)}
 
-								{/* Empty state */}
-								{(!secrets || secrets.length === 0) && specKeys.length === 0 && (
-									<p className="text-xs text-muted-foreground py-4 text-center">
-										No variables yet. Add one above.
-									</p>
+										{/* Missing required keys */}
+										{filteredMissing.length > 0 && (
+											<div>
+												<p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pb-1.5 px-4">
+													Required
+												</p>
+												<div>
+													{filteredMissing.map((k) => (
+														<MissingKeyRow
+															key={k.key}
+															keyName={k.key}
+															sessionId={sessionId}
+															configurationId={configurationId}
+															onSaved={handleRefresh}
+														/>
+													))}
+												</div>
+											</div>
+										)}
+
+										{/* All stored variables */}
+										{filteredSecrets.length > 0 && (
+											<div>
+												{(specKeys.length > 0 || missingRequired.length > 0) && !filter && (
+													<p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pb-1.5 px-4">
+														Variables
+													</p>
+												)}
+												<div>
+													{filteredSecrets.map((secret) => (
+														<SecretRow
+															key={secret.id}
+															keyName={secret.key}
+															isRequired={specKeySet.has(secret.key)}
+															onDelete={() => handleDelete(secret.id)}
+															isDeleting={deletingId === secret.id}
+														/>
+													))}
+												</div>
+											</div>
+										)}
+
+										{/* Empty state */}
+										{(!secrets || secrets.length === 0) && specKeys.length === 0 && (
+											<p className="text-xs text-muted-foreground py-4 text-center">
+												No variables yet. Add one above.
+											</p>
+										)}
+									</>
 								)}
 							</>
 						)}
