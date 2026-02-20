@@ -75,8 +75,8 @@ export const EnvRequestToolUI = makeAssistantToolUI<EnvRequestArgs, string>({
 					</span>
 				</div>
 				<p className="text-xs text-muted-foreground">
-					The agent needs environment variables to continue. Open the Environment panel to configure
-					them.
+					The agent needs credentials to continue. Open Environment and create or update secret
+					files (path + contents), then resume setup.
 				</p>
 				<Button
 					size="sm"

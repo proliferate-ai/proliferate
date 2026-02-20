@@ -1,3 +1,4 @@
+import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useSetupProgressStore } from "@/stores/setup-progress";
 import type {
 	ToolEndMessage,
@@ -134,6 +135,11 @@ export function handleToolStart(data: ToolStartMessage, ctx: MessageHandlerConte
 			toolCallId: payload.toolCallId,
 			keys: toolArgs.keys as EnvRequest["keys"],
 		});
+
+		const panelStore = usePreviewPanelStore.getState();
+		if (panelStore.mode.type !== "environment") {
+			panelStore.togglePanel("environment");
+		}
 	}
 
 	if (!messageId) return;

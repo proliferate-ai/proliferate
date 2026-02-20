@@ -99,6 +99,7 @@ export default function ConfigurationDetailPage() {
 								const result = await createSession.mutateAsync({
 									configurationId,
 									sessionType: "setup",
+									initialPrompt: getSetupInitialPrompt(),
 								});
 								setPendingPrompt(getSetupInitialPrompt());
 								router.push(`/workspace/${result.sessionId}`);

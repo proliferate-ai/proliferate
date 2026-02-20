@@ -51,10 +51,12 @@ export function SetupIntroModal() {
 							<Terminal className="w-4 h-4 text-muted-foreground" />
 						</div>
 						<div>
-							<p className="text-sm font-medium">1. The agent builds the foundation</p>
+							<p className="text-sm font-medium">
+								1. Iterate with the agent until setup is verified
+							</p>
 							<p className="text-xs text-muted-foreground mt-0.5">
-								It installs dependencies, configures databases, and starts local services
-								autonomously.
+								The agent should install dependencies, configure services, and run verification
+								autonomously. Keep it going until setup is complete.
 							</p>
 						</div>
 					</div>
@@ -63,10 +65,10 @@ export function SetupIntroModal() {
 							<KeyRound className="w-4 h-4 text-muted-foreground" />
 						</div>
 						<div>
-							<p className="text-sm font-medium">2. Provide missing secrets</p>
+							<p className="text-sm font-medium">2. You configure credentials and secrets</p>
 							<p className="text-xs text-muted-foreground mt-0.5">
-								If the project requires third-party API keys, the agent will prompt you with a
-								secure form in the chat.
+								When credentials are needed, open Environment and create a secret file by choosing
+								the file path in your project and pasting its contents.
 							</p>
 						</div>
 					</div>
@@ -77,7 +79,7 @@ export function SetupIntroModal() {
 						<div>
 							<p className="text-sm font-medium">3. Save the snapshot when ready</p>
 							<p className="text-xs text-muted-foreground mt-0.5">
-								Once verified, click "Done — Save Snapshot" at the top. All future coding sessions
+								After verification, click "Done — Save Snapshot" at the top. Future coding sessions
 								will boot from this saved state.
 							</p>
 						</div>

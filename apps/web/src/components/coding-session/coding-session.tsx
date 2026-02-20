@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useBackgroundVscodeStart } from "@/hooks/use-background-vscode";
+import { useConfiguration } from "@/hooks/use-configurations";
 import { useRepo } from "@/hooks/use-repos";
 import { useRenameSession, useSessionData, useSnapshotSession } from "@/hooks/use-sessions";
 import { useSession as useBetterAuthSession } from "@/lib/auth-client";
@@ -30,7 +31,7 @@ import {
 	Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { SessionPanelProps } from "./right-panel";
 import { RightPanel } from "./right-panel";
@@ -79,6 +80,10 @@ export function CodingSession({
 	const { data: authSession, isPending: authLoading } = useBetterAuthSession();
 	const { data: sessionData, isLoading: sessionLoading } = useSessionData(sessionId);
 	const { data: repoData } = useRepo(sessionData?.repoId || "");
+	const { data: configurationData } = useConfiguration(
+		sessionData?.configurationId || "",
+		!!sessionData?.configurationId,
+	);
 
 	const {
 		status,
@@ -188,6 +193,29 @@ export function CodingSession({
 		authLoading || sessionLoading || status === "loading" || status === "connecting";
 	const isSessionCreating = sessionData?.status === "starting" && !sessionData?.sandboxId;
 
+	const workspaceOptions = useMemo(() => {
+		const repoLinks = configurationData?.configurationRepos ?? [];
+		if (repoLinks.length === 0) return [];
+
+		const options: Array<{ workspacePath: string; label: string }> = [];
+		const seen = new Set<string>();
+
+		for (const repoLink of repoLinks) {
+			if (!repoLink.repo || seen.has(repoLink.workspacePath)) continue;
+			seen.add(repoLink.workspacePath);
+			const repoName = repoLink.repo.githubRepoName.split("/").pop() || repoLink.workspacePath;
+			options.push({
+				workspacePath: repoLink.workspacePath,
+				label:
+					repoLink.workspacePath === "."
+						? `${repoName} (workspace root)`
+						: `${repoName} (${repoLink.workspacePath})`,
+			});
+		}
+
+		return options;
+	}, [configurationData]);
+
 	// Session props for the right panel
 	const sessionPanelProps: SessionPanelProps | undefined = sessionData
 		? {
@@ -218,6 +246,7 @@ export function CodingSession({
 				clearGitResult,
 				pendingApprovals,
 				slackThreadUrl: sessionData.slackThreadUrl,
+				workspaceOptions,
 			}
 		: undefined;
 
@@ -300,6 +329,12 @@ export function CodingSession({
 
 	const isReady = !isLoading && !!authSession && !!sessionData && status !== "error";
 	const isSetupSession = sessionData?.sessionType === "setup";
+
+	useEffect(() => {
+		if (isSetupSession && !pinnedTabs.includes("environment")) {
+			pinTab("environment");
+		}
+	}, [isSetupSession, pinTab, pinnedTabs]);
 
 	const panelViewPicker = (
 		<div className="flex items-center gap-0.5">
@@ -493,6 +528,7 @@ export function CodingSession({
 						sessionProps={sessionPanelProps}
 						previewUrl={previewUrl}
 						runId={runId}
+						isSetupSession={isSetupSession}
 					/>
 				</div>
 			</div>
@@ -533,6 +569,7 @@ export function CodingSession({
 						sessionProps={sessionPanelProps}
 						previewUrl={previewUrl}
 						runId={runId}
+						isSetupSession={isSetupSession}
 					/>
 				) : (
 					leftPaneContent

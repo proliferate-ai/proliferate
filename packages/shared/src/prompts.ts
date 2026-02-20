@@ -15,6 +15,8 @@ Prefer local services over external ones. For example, if the project uses Postg
 
 You have tools to request environment variables from the user (\`request_env_variables\`) and to save the final snapshot (\`save_snapshot\`). For anything you genuinely can't set up locally — API keys, OAuth credentials, third-party services — use \`request_env_variables\`. Trace how environment variables flow through the codebase to understand what functionality they enable. If you're unsure whether something is required, ask anyway but mark it \`required: false\` — let the user decide what to skip, don't decide for them.
 
+When credentials are needed, explicitly tell the user to open the Environment panel and create/update a secret file by path (for example \`.env.local\`), then paste file contents there. The user, not the agent, owns secret entry.
+
 Don't edit source code. Developers set up local environments without modifying the codebase, and you should too. Config files and .env files are fine.
 
 ## Proliferate CLI
@@ -72,7 +74,14 @@ If either is missing, do it now. Text cannot substitute for tool calls.
 }
 
 export function getSetupInitialPrompt(): string {
-	return "Set up this repository for development. Get everything running and working.";
+	return `Set up this repository for development autonomously.
+Start now without waiting for more instructions:
+1. Identify required dependencies, services, and env files.
+2. Install dependencies and start required local services.
+3. Verify key flows actually work (tests, health checks, and app startup).
+4. Call verify() with evidence of what works.
+5. Call save_snapshot() when setup is complete.
+If credentials are truly required, use request_env_variables with clear descriptions and tell the user exactly which secret file path to create in Environment.`;
 }
 
 export function getCodingSystemPrompt(repoName: string): string {

@@ -4,6 +4,7 @@ import {
 	Context7Icon,
 	DeepWikiIcon,
 	FirecrawlIcon,
+	McpIcon,
 	NeonIcon,
 	PlaywrightIcon,
 	PostHogIcon,
@@ -15,7 +16,6 @@ import {
 import { cn } from "@/lib/utils";
 import type { ConnectorConfig } from "@proliferate/shared";
 import { CONNECTOR_PRESETS } from "@proliferate/shared";
-import { Plug } from "lucide-react";
 
 /** Best-effort preset key lookup for a connected tool (matches by URL). */
 export function findPresetKey(connector: ConnectorConfig): string {
@@ -64,6 +64,6 @@ export function ConnectorIcon({ presetKey, className, size = "md" }: ConnectorIc
 		case "apify":
 			return <ApifyIcon className={iconClass} />;
 		default:
-			return <Plug className={iconClass} />;
+			return <McpIcon className={iconClass} />;
 	}
 }

@@ -269,6 +269,7 @@ function ConfigurationRow({ config }: { config: Configuration }) {
 											const result = await createSession.mutateAsync({
 												configurationId: config.id,
 												sessionType: "setup",
+												initialPrompt: getSetupInitialPrompt(),
 											});
 											setPendingPrompt(getSetupInitialPrompt());
 											router.push(`/workspace/${result.sessionId}`);

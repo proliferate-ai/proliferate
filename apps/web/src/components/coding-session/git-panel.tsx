@@ -3,6 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { GitResultMessage, GitState } from "@proliferate/shared";
 import {
@@ -21,9 +28,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PanelShell } from "./panel-shell";
 
+interface WorkspaceOption {
+	workspacePath: string;
+	label: string;
+}
+
 interface GitPanelProps {
 	gitState: GitState | null;
 	gitResult: GitResultMessage["payload"] | null;
+	workspaceOptions?: WorkspaceOption[];
 	sendGetGitStatus?: (workspacePath?: string) => void;
 	sendGitCreateBranch?: (branchName: string, workspacePath?: string) => void;
 	sendGitCommit?: (
@@ -43,6 +56,7 @@ interface GitPanelProps {
 export function GitPanel({
 	gitState,
 	gitResult,
+	workspaceOptions,
 	sendGetGitStatus,
 	sendGitCreateBranch,
 	sendGitCommit,
@@ -54,12 +68,50 @@ export function GitPanel({
 	const pollPending = useRef(false);
 	const pollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 	const [pollError, setPollError] = useState<string | null>(null);
+	const [selectedWorkspacePath, setSelectedWorkspacePath] = useState(
+		workspaceOptions?.[0]?.workspacePath ?? ".",
+	);
+	const resolvedWorkspacePath = workspaceOptions?.length ? selectedWorkspacePath : undefined;
+	const showWorkspaceSelector = (workspaceOptions?.length ?? 0) > 1;
+
+	useEffect(() => {
+		if (!workspaceOptions || workspaceOptions.length === 0) return;
+		if (workspaceOptions.some((workspace) => workspace.workspacePath === selectedWorkspacePath)) {
+			return;
+		}
+		setSelectedWorkspacePath(workspaceOptions[0].workspacePath);
+	}, [workspaceOptions, selectedWorkspacePath]);
 
 	const requestStatus = useCallback(() => {
 		if (pollPending.current || !sendGetGitStatus) return;
 		pollPending.current = true;
-		sendGetGitStatus();
-	}, [sendGetGitStatus]);
+		sendGetGitStatus(resolvedWorkspacePath);
+	}, [sendGetGitStatus, resolvedWorkspacePath]);
+
+	const handleCreateBranch = useCallback(
+		(branchName: string) => {
+			sendGitCreateBranch?.(branchName, resolvedWorkspacePath);
+		},
+		[sendGitCreateBranch, resolvedWorkspacePath],
+	);
+
+	const handleCommit = useCallback(
+		(message: string, opts?: { includeUntracked?: boolean; files?: string[] }) => {
+			sendGitCommit?.(message, { ...opts, workspacePath: resolvedWorkspacePath });
+		},
+		[sendGitCommit, resolvedWorkspacePath],
+	);
+
+	const handlePush = useCallback(() => {
+		sendGitPush?.(resolvedWorkspacePath);
+	}, [sendGitPush, resolvedWorkspacePath]);
+
+	const handleCreatePr = useCallback(
+		(title: string, body?: string, baseBranch?: string) => {
+			sendGitCreatePr?.(title, body, baseBranch, resolvedWorkspacePath);
+		},
+		[sendGitCreatePr, resolvedWorkspacePath],
+	);
 
 	// Clear pending flag + poll error when we get a successful status update
 	useEffect(() => {
@@ -134,6 +186,29 @@ export function GitPanel({
 				</div>
 			) : (
 				<div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-4">
+					{showWorkspaceSelector && workspaceOptions && (
+						<div className="space-y-1.5">
+							<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+								Workspace
+							</p>
+							<Select value={selectedWorkspacePath} onValueChange={setSelectedWorkspacePath}>
+								<SelectTrigger className="h-8 text-xs">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{workspaceOptions.map((workspace) => (
+										<SelectItem
+											key={workspace.workspacePath}
+											value={workspace.workspacePath}
+											className="text-xs"
+										>
+											{workspace.label}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+					)}
 					<StatusIndicators gitState={gitState} />
 					{pollError && (
 						<div className="text-xs text-muted-foreground">Last update failed: {pollError}</div>
@@ -141,12 +216,12 @@ export function GitPanel({
 					<BranchSection
 						gitState={gitState}
 						canMutate={canMutate}
-						sendGitCreateBranch={sendGitCreateBranch}
+						sendGitCreateBranch={handleCreateBranch}
 					/>
 					<ChangesSection gitState={gitState} />
-					<CommitSection gitState={gitState} canMutate={canMutate} sendGitCommit={sendGitCommit} />
-					<PushSection gitState={gitState} canMutate={canMutate} sendGitPush={sendGitPush} />
-					<PrSection gitState={gitState} canMutate={canMutate} sendGitCreatePr={sendGitCreatePr} />
+					<CommitSection gitState={gitState} canMutate={canMutate} sendGitCommit={handleCommit} />
+					<PushSection gitState={gitState} canMutate={canMutate} sendGitPush={handlePush} />
+					<PrSection gitState={gitState} canMutate={canMutate} sendGitCreatePr={handleCreatePr} />
 					<CommitsSection gitState={gitState} />
 				</div>
 			)}
