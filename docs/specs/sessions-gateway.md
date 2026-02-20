@@ -468,6 +468,8 @@ class ApiError extends Error {
 **oRPC path** (`apps/web/src/server/routers/sessions.ts`):
 - `create` → calls `createSessionHandler()` (`sessions-create.ts`) which writes a DB record only. This is a **separate, lighter pipeline** than the gateway HTTP route — no session connections, no sandbox provisioning.
 - Setup-session entry points in web (`dashboard/configurations`, `snapshot-selector`, `configuration-group`) pass `initialPrompt: getSetupInitialPrompt()`. `createSessionHandler()` persists this and calls gateway `eagerStart()` so setup work begins automatically before the user types.
+- Setup-session UI is explicit and persistent: `SetupSessionChrome` renders a checklist describing the two required user actions (iterate with the agent until verification, and configure secrets in Environment), and setup right-panel empty state reinforces the same flow.
+- When the agent calls `request_env_variables`, the web runtime auto-opens the Environment panel. In setup sessions, Environment prioritizes **secret file creation by path + pasted content** (with key-by-key entry as advanced fallback).
 - `pause` → loads session, calls `provider.snapshot()` + `provider.terminate()`, finalizes billing, updates DB status to `"paused"` (`sessions-pause.ts`).
 - `resume` → no dedicated handler. Resume is implicit: connecting a WebSocket client to a paused session triggers `ensureRuntimeReady()`, which creates a new sandbox from the stored snapshot.
 - `delete` → calls `sessions.deleteSession()`.
@@ -479,7 +481,7 @@ class ApiError extends Error {
 - The `sessions` table has an `idempotency_key` TEXT column. When provided, callers can detect duplicate creation attempts.
 - Redis-based idempotency (`apps/gateway/src/lib/idempotency.ts`) also exists as a legacy deduplication path for the gateway HTTP route.
 
-**Files touched:** `apps/gateway/src/api/proliferate/http/sessions.ts`, `apps/gateway/src/lib/session-creator.ts`, `apps/web/src/server/routers/sessions.ts`
+**Files touched:** `apps/gateway/src/api/proliferate/http/sessions.ts`, `apps/gateway/src/lib/session-creator.ts`, `apps/web/src/server/routers/sessions.ts`, `apps/web/src/components/coding-session/setup-session-chrome.tsx`, `apps/web/src/components/coding-session/right-panel.tsx`, `apps/web/src/components/coding-session/environment-panel.tsx`, `apps/web/src/components/coding-session/runtime/message-handlers.ts`
 
 ### 6.2 Session Runtime Lifecycle — `Implemented`
 

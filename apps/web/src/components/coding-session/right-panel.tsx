@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import type {
 	ActionApprovalRequestMessage,
@@ -8,7 +9,7 @@ import type {
 	GitState,
 } from "@proliferate/shared";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, MousePointerClick } from "lucide-react";
+import { KeyRound, Loader2, MousePointerClick } from "lucide-react";
 import dynamic from "next/dynamic";
 import { ArtifactsPanel } from "./artifacts-panel";
 import { EnvironmentPanel } from "./environment-panel";
@@ -74,20 +75,17 @@ interface RightPanelProps {
 	sessionProps?: SessionPanelProps;
 	previewUrl?: string | null;
 	runId?: string;
+	isSetupSession?: boolean;
 }
 
 export function RightPanel({
-	isMobileFullScreen,
+	isMobileFullScreen: _isMobileFullScreen,
 	sessionProps,
 	previewUrl,
 	runId,
+	isSetupSession = false,
 }: RightPanelProps) {
-	const { mode, close, setMobileView } = usePreviewPanelStore();
-
-	const handleClose = () => {
-		close();
-		setMobileView("chat");
-	};
+	const { mode, togglePanel } = usePreviewPanelStore();
 
 	// If session isn't ready, show loading placeholder
 	if (!sessionProps?.sessionId && mode.type !== "url") {
@@ -103,8 +101,43 @@ export function RightPanel({
 		);
 	}
 
-	// Empty state when no panel is selected, or investigation mode without a runId
-	if (mode.type === "none" || (mode.type === "investigation" && !runId)) {
+	// Empty state when no panel is selected
+	if (mode.type === "none") {
+		if (isSetupSession) {
+			return (
+				<div className="flex h-full items-center justify-center p-4">
+					<div className="w-full max-w-sm rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+						<p className="text-sm font-medium">Setup session checklist</p>
+						<p className="text-xs text-muted-foreground">
+							1. Keep iterating with the agent in chat until setup and verification complete.
+						</p>
+						<p className="text-xs text-muted-foreground">
+							2. If credentials are needed, open Environment and create secret files (path +
+							contents).
+						</p>
+						<Button
+							size="sm"
+							className="h-8 gap-1.5 text-xs"
+							onClick={() => togglePanel("environment")}
+						>
+							<KeyRound className="h-3.5 w-3.5" />
+							Open Environment
+						</Button>
+					</div>
+				</div>
+			);
+		}
+
+		return (
+			<div className="flex flex-col h-full items-center justify-center text-muted-foreground">
+				<MousePointerClick className="h-8 w-8 mb-3 opacity-40" />
+				<p className="text-sm">Select a tool from the top bar</p>
+			</div>
+		);
+	}
+
+	// Investigation mode without a runId
+	if (mode.type === "investigation" && !runId) {
 		return (
 			<div className="flex flex-col h-full items-center justify-center text-muted-foreground">
 				<MousePointerClick className="h-8 w-8 mb-3 opacity-40" />
@@ -146,6 +179,7 @@ export function RightPanel({
 					sessionId={sessionProps.sessionId}
 					configurationId={sessionProps.configurationId}
 					repoId={sessionProps.repoId}
+					isSetupSession={isSetupSession}
 				/>
 			);
 		}

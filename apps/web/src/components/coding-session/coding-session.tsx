@@ -301,6 +301,12 @@ export function CodingSession({
 	const isReady = !isLoading && !!authSession && !!sessionData && status !== "error";
 	const isSetupSession = sessionData?.sessionType === "setup";
 
+	useEffect(() => {
+		if (isSetupSession && !pinnedTabs.includes("environment")) {
+			pinTab("environment");
+		}
+	}, [isSetupSession, pinTab, pinnedTabs]);
+
 	const panelViewPicker = (
 		<div className="flex items-center gap-0.5">
 			{pinnedTabs.map((tabType) => {
@@ -493,6 +499,7 @@ export function CodingSession({
 						sessionProps={sessionPanelProps}
 						previewUrl={previewUrl}
 						runId={runId}
+						isSetupSession={isSetupSession}
 					/>
 				</div>
 			</div>
@@ -533,6 +540,7 @@ export function CodingSession({
 						sessionProps={sessionPanelProps}
 						previewUrl={previewUrl}
 						runId={runId}
+						isSetupSession={isSetupSession}
 					/>
 				) : (
 					leftPaneContent

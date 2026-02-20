@@ -1,5 +1,6 @@
 "use client";
 
+import { SecretFilesEditor } from "@/components/repositories/secret-files-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +11,7 @@ import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/use-secret
 import { orpc } from "@/lib/orpc";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileUp, Loader2, Search, Trash2 } from "lucide-react";
+import { ChevronDown, FileLock2, FileUp, Loader2, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PanelShell } from "./panel-shell";
@@ -31,6 +32,7 @@ interface EnvironmentPanelProps {
 	sessionId: string;
 	configurationId?: string | null;
 	repoId?: string | null;
+	isSetupSession?: boolean;
 }
 
 // ============================================
@@ -420,12 +422,24 @@ function MissingKeyRow({
 // Main component
 // ============================================
 
-export function EnvironmentPanel({ sessionId, configurationId, repoId }: EnvironmentPanelProps) {
+export function EnvironmentPanel({
+	sessionId,
+	configurationId,
+	repoId,
+	isSetupSession = false,
+}: EnvironmentPanelProps) {
 	const queryClient = useQueryClient();
 	const setMissingEnvKeyCount = usePreviewPanelStore((s) => s.setMissingEnvKeyCount);
 	const [deletingId, setDeletingId] = useState<string | null>(null);
 	const [pasteMode, setPasteMode] = useState(false);
+	const [showVariableEntry, setShowVariableEntry] = useState(!isSetupSession);
 	const [filter, setFilter] = useState("");
+
+	useEffect(() => {
+		if (isSetupSession) {
+			setShowVariableEntry(false);
+		}
+	}, [isSetupSession]);
 
 	// All org secrets
 	const { data: secrets, isLoading: secretsLoading } = useSecrets();
@@ -534,8 +548,78 @@ export function EnvironmentPanel({ sessionId, configurationId, repoId }: Environ
 					</div>
 				) : (
 					<div className="p-3 space-y-3">
-						{/* Add variable / paste .env */}
-						{pasteMode ? (
+						{isSetupSession && (
+							<div className="rounded-md border border-border/70 bg-muted/20 p-3 space-y-2">
+								<div className="flex items-start gap-2">
+									<FileLock2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+									<div className="space-y-1">
+										<p className="text-xs font-medium">Recommended: create secret files</p>
+										<p className="text-[11px] text-muted-foreground leading-relaxed">
+											Paste secrets as file contents and choose the project path (for example{" "}
+											<code>.env.local</code> or <code>apps/api/.env</code>). This is the primary
+											setup workflow.
+										</p>
+									</div>
+								</div>
+								{configurationId ? (
+									<SecretFilesEditor
+										configurationId={configurationId}
+										initialCreateOpen
+										callToActionLabel="Create Secret File"
+									/>
+								) : (
+									<p className="text-[11px] text-muted-foreground">
+										Secret files are unavailable because this session is not linked to a
+										configuration.
+									</p>
+								)}
+							</div>
+						)}
+
+						{isSetupSession ? (
+							<div className="rounded-md border border-border/60 p-2.5">
+								<button
+									type="button"
+									className="w-full inline-flex items-center justify-between text-xs font-medium"
+									onClick={() => setShowVariableEntry((prev) => !prev)}
+								>
+									<span>Advanced fallback: add individual variables</span>
+									<ChevronDown
+										className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${
+											showVariableEntry ? "rotate-180" : ""
+										}`}
+									/>
+								</button>
+								{showVariableEntry && (
+									<div className="mt-2 space-y-1.5">
+										{pasteMode ? (
+											<PasteEnvForm
+												sessionId={sessionId}
+												configurationId={configurationId}
+												onSaved={handleRefresh}
+												onClose={() => setPasteMode(false)}
+											/>
+										) : (
+											<div className="space-y-1.5">
+												<AddVariableForm
+													sessionId={sessionId}
+													configurationId={configurationId}
+													onSaved={handleRefresh}
+												/>
+												<button
+													type="button"
+													className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+													onClick={() => setPasteMode(true)}
+												>
+													<FileUp className="h-3 w-3" />
+													Paste .env
+												</button>
+											</div>
+										)}
+									</div>
+								)}
+							</div>
+						) : pasteMode ? (
 							<PasteEnvForm
 								sessionId={sessionId}
 								configurationId={configurationId}

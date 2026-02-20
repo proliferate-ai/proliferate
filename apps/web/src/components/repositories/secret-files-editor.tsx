@@ -9,15 +9,21 @@ import { useState } from "react";
 
 interface SecretFilesEditorProps {
 	configurationId: string;
+	initialCreateOpen?: boolean;
+	callToActionLabel?: string;
 }
 
-export function SecretFilesEditor({ configurationId }: SecretFilesEditorProps) {
+export function SecretFilesEditor({
+	configurationId,
+	initialCreateOpen = false,
+	callToActionLabel = "Add File",
+}: SecretFilesEditorProps) {
 	const { data: filesData, isLoading } = useSecretFiles(configurationId);
 	const files = filesData?.files ?? [];
 	const upsertFile = useUpsertSecretFile(configurationId);
 	const deleteFile = useDeleteSecretFile(configurationId);
 
-	const [adding, setAdding] = useState(false);
+	const [adding, setAdding] = useState(initialCreateOpen);
 	const [newPath, setNewPath] = useState("");
 	const [newContent, setNewContent] = useState("");
 	const [editingId, setEditingId] = useState<string | null>(null);
@@ -64,10 +70,14 @@ export function SecretFilesEditor({ configurationId }: SecretFilesEditorProps) {
 				{!adding && (
 					<Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setAdding(true)}>
 						<Plus className="h-3 w-3 mr-1" />
-						Add File
+						{callToActionLabel}
 					</Button>
 				)}
 			</div>
+
+			<p className="text-[11px] text-muted-foreground">
+				Secret file values are encrypted at rest and never shown again after save.
+			</p>
 
 			{/* Existing files */}
 			{files.length > 0 ? (
@@ -90,7 +100,7 @@ export function SecretFilesEditor({ configurationId }: SecretFilesEditorProps) {
 											}
 										}}
 									>
-										{editingId === file.id ? "Cancel" : "Update"}
+										{editingId === file.id ? "Cancel" : "Replace content"}
 									</Button>
 									<Button
 										variant="ghost"
@@ -136,13 +146,13 @@ export function SecretFilesEditor({ configurationId }: SecretFilesEditorProps) {
 					<Input
 						value={newPath}
 						onChange={(e) => setNewPath(e.target.value)}
-						placeholder="File path (e.g. .env, .env.local)"
+						placeholder="Path in repo (e.g. .env.local, apps/api/.env)"
 						className="h-7 text-xs font-mono"
 					/>
 					<Textarea
 						value={newContent}
 						onChange={(e) => setNewContent(e.target.value)}
-						placeholder="File content"
+						placeholder="Paste file contents"
 						className="text-xs font-mono min-h-[80px]"
 					/>
 					<div className="flex gap-2">
