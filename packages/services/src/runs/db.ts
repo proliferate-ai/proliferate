@@ -31,10 +31,15 @@ export interface AutomationRunWithRelations extends AutomationRunRow {
 		modelId: string | null;
 		notificationChannelId: string | null;
 		notificationSlackInstallationId: string | null;
+		notificationDestinationType: string | null;
+		notificationSlackUserId: string | null;
 		enabledTools: unknown;
 		llmFilterPrompt: string | null;
 		llmAnalysisPrompt: string | null;
 		allowAgenticRepoSelection: boolean | null;
+		configSelectionStrategy: string | null;
+		fallbackConfigurationId: string | null;
+		allowedConfigurationIds: unknown;
 	} | null;
 	triggerEvent: {
 		id: string;
@@ -75,10 +80,15 @@ export async function findByIdWithRelations(
 					modelId: true,
 					notificationChannelId: true,
 					notificationSlackInstallationId: true,
+					notificationDestinationType: true,
+					notificationSlackUserId: true,
 					enabledTools: true,
 					llmFilterPrompt: true,
 					llmAnalysisPrompt: true,
 					allowAgenticRepoSelection: true,
+					configSelectionStrategy: true,
+					fallbackConfigurationId: true,
+					allowedConfigurationIds: true,
 				},
 			},
 			triggerEvent: {

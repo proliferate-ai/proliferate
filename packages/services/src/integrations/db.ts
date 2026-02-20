@@ -848,21 +848,37 @@ export async function updateStatusByGitHubInstallationId(
 /**
  * Find active Slack installation by team ID.
  * Used by the Slack events handler to look up installation for incoming events.
+ *
+ * WARNING: If multiple orgs share the same Slack workspace (same teamId),
+ * this returns the first match. Callers should use the org-scoped
+ * `getSlackInstallationForNotifications` when org context is available.
  */
 export async function findSlackInstallationByTeamId(
 	teamId: string,
 ): Promise<Pick<SlackInstallationRow, "id" | "organizationId" | "encryptedBotToken"> | null> {
 	const db = getDb();
-	const result = await db.query.slackInstallations.findFirst({
+	const logger = getServicesLogger();
+
+	const results = await db.query.slackInstallations.findMany({
 		where: and(eq(slackInstallations.teamId, teamId), eq(slackInstallations.status, "active")),
 		columns: {
 			id: true,
 			organizationId: true,
 			encryptedBotToken: true,
 		},
+		limit: 2,
 	});
 
-	return result ?? null;
+	if (results.length === 0) return null;
+
+	if (results.length > 1) {
+		logger.warn(
+			{ teamId, installationCount: results.length, orgIds: results.map((r) => r.organizationId) },
+			"Ambiguous Slack installation: multiple orgs share the same team ID",
+		);
+	}
+
+	return results[0];
 }
 
 // ============================================

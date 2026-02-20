@@ -268,7 +268,7 @@ packages/db/src/schema/
 packages/services/src/sessions/
 ├── db.ts                                # Session DB operations
 ├── service.ts                           # Session service (list, get, rename, delete, status)
-├── mapper.ts                            # DB row → Session mapping
+├── mapper.ts                            # DB row → Session mapping (includes slackThreadUrl derivation)
 ├── sandbox-env.ts                       # Sandbox environment variable building
 └── index.ts                             # Barrel exports
 ```
@@ -733,6 +733,7 @@ Token verification chain: (1) User JWT (signed with `gatewayJwtSecret`), (2) Ser
 | `sandbox-providers.md` | This → Provider | `SandboxProvider.ensureSandbox()`, `.snapshot()`, `.pause()`, `.terminate()` | Runtime calls provider for sandbox lifecycle |
 | `agent-contract.md` | This → Tools | `POST /proliferate/:sessionId/tools/:toolName`, `getInterceptedToolHandler()` | Gateway-mediated tools executed via synchronous sandbox callbacks; schemas in agent-contract |
 | `automations-runs.md` | Runs → This | `createSyncClient().createSession()` + `.postMessage()` | Worker creates session and posts initial prompt |
+| `automations-runs.md` | Notifications → This | `sessions.findByIdInternal()`, `notifications.listSubscriptionsForSession()` | Session completion DMs look up session + subscribers |
 | `repos-prebuilds.md` | This → Configurations | `resolveConfiguration()`, `configurations.getConfigurationReposWithDetails()` | Session creator resolves configuration at creation |
 | `llm-proxy.md` | Proxy → This | `sessions.buildSandboxEnvVars()` | Env vars include `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` |
 | `secrets-environment.md` | Secrets → This | `secrets.buildEnvFilesFromBundles()` | Env files passed to provider at sandbox creation |

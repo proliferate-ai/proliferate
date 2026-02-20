@@ -554,3 +554,155 @@ export async function saveSlackInstallation(
 
 	return { success: true, isUpdate: false };
 }
+
+// ============================================
+// Slack user/channel lookup utilities
+// ============================================
+
+const SLACK_API_BASE = "https://slack.com/api";
+const SLACK_TIMEOUT_MS = 10_000;
+
+/**
+ * Look up a Slack user ID by their email address using the Slack API.
+ * Returns null if the user is not found or the API call fails.
+ */
+export async function findSlackUserIdByEmail(
+	installationId: string,
+	email: string,
+): Promise<string | null> {
+	const botToken = await integrationsDb.getSlackInstallationBotToken(installationId);
+	if (!botToken) return null;
+
+	const { decrypt, getEncryptionKey } = await import("@proliferate/shared/crypto");
+	const token = decrypt(botToken, getEncryptionKey());
+
+	try {
+		const response = await fetch(
+			`${SLACK_API_BASE}/users.lookupByEmail?email=${encodeURIComponent(email)}`,
+			{
+				headers: { Authorization: `Bearer ${token}` },
+				signal: AbortSignal.timeout(SLACK_TIMEOUT_MS),
+			},
+		);
+		const result = (await response.json()) as { ok: boolean; user?: { id: string } };
+		return result.ok ? (result.user?.id ?? null) : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * List Slack workspace members for a dropdown selector.
+ * Returns basic user info (id, name, real_name, email).
+ */
+export async function listSlackMembers(
+	installationId: string,
+): Promise<Array<{ id: string; name: string; realName: string | null; email: string | null }>> {
+	const botToken = await integrationsDb.getSlackInstallationBotToken(installationId);
+	if (!botToken) return [];
+
+	const { decrypt, getEncryptionKey } = await import("@proliferate/shared/crypto");
+	const token = decrypt(botToken, getEncryptionKey());
+
+	const members: Array<{
+		id: string;
+		name: string;
+		realName: string | null;
+		email: string | null;
+	}> = [];
+	let cursor: string | undefined;
+
+	// Paginate through all members (Slack API returns up to 1000 per page)
+	do {
+		const url = new URL(`${SLACK_API_BASE}/users.list`);
+		if (cursor) url.searchParams.set("cursor", cursor);
+		url.searchParams.set("limit", "200");
+
+		const response = await fetch(url, {
+			headers: { Authorization: `Bearer ${token}` },
+			signal: AbortSignal.timeout(SLACK_TIMEOUT_MS),
+		});
+		const result = (await response.json()) as {
+			ok: boolean;
+			members?: Array<{
+				id: string;
+				name: string;
+				real_name?: string;
+				profile?: { email?: string };
+				deleted?: boolean;
+				is_bot?: boolean;
+			}>;
+			response_metadata?: { next_cursor?: string };
+		};
+
+		if (!result.ok || !result.members) break;
+
+		for (const m of result.members) {
+			// Skip bots, deleted users, and Slackbot
+			if (m.deleted || m.is_bot || m.id === "USLACKBOT") continue;
+			members.push({
+				id: m.id,
+				name: m.name,
+				realName: m.real_name ?? null,
+				email: m.profile?.email ?? null,
+			});
+		}
+
+		cursor = result.response_metadata?.next_cursor || undefined;
+	} while (cursor);
+
+	return members;
+}
+
+/**
+ * List Slack channels for a channel picker.
+ * Returns public channels the bot has access to.
+ */
+export async function listSlackChannels(
+	installationId: string,
+): Promise<Array<{ id: string; name: string; isPrivate: boolean }>> {
+	const botToken = await integrationsDb.getSlackInstallationBotToken(installationId);
+	if (!botToken) return [];
+
+	const { decrypt, getEncryptionKey } = await import("@proliferate/shared/crypto");
+	const token = decrypt(botToken, getEncryptionKey());
+
+	const channels: Array<{ id: string; name: string; isPrivate: boolean }> = [];
+	let cursor: string | undefined;
+
+	do {
+		const url = new URL(`${SLACK_API_BASE}/conversations.list`);
+		if (cursor) url.searchParams.set("cursor", cursor);
+		url.searchParams.set("limit", "200");
+		url.searchParams.set("types", "public_channel,private_channel");
+		url.searchParams.set("exclude_archived", "true");
+
+		const response = await fetch(url, {
+			headers: { Authorization: `Bearer ${token}` },
+			signal: AbortSignal.timeout(SLACK_TIMEOUT_MS),
+		});
+		const result = (await response.json()) as {
+			ok: boolean;
+			channels?: Array<{
+				id: string;
+				name: string;
+				is_private?: boolean;
+			}>;
+			response_metadata?: { next_cursor?: string };
+		};
+
+		if (!result.ok || !result.channels) break;
+
+		for (const c of result.channels) {
+			channels.push({
+				id: c.id,
+				name: c.name,
+				isPrivate: c.is_private ?? false,
+			});
+		}
+
+		cursor = result.response_metadata?.next_cursor || undefined;
+	} while (cursor);
+
+	return channels;
+}

@@ -26,6 +26,21 @@ function mapRepo(repo: RepoRow) {
 	};
 }
 
+/**
+ * Build a Slack thread deep-link URL from session client metadata.
+ * Returns null for non-Slack sessions or missing metadata.
+ */
+function buildSlackThreadUrl(clientType: string | null, clientMetadata: unknown): string | null {
+	if (clientType !== "slack" || !clientMetadata || typeof clientMetadata !== "object") return null;
+	const meta = clientMetadata as Record<string, unknown>;
+	const channelId = meta.channelId;
+	const threadTs = meta.threadTs;
+	if (typeof channelId !== "string" || typeof threadTs !== "string") return null;
+	// Slack thread URL format: https://slack.com/archives/{channelId}/p{threadTs without dot}
+	const tsNoDot = threadTs.replace(".", "");
+	return `https://slack.com/archives/${channelId}/p${tsNoDot}`;
+}
+
 interface ToSessionOptions {
 	/** Include the full initialPrompt field (detail path only). */
 	includeInitialPrompt?: boolean;
@@ -61,6 +76,7 @@ export function toSession(row: SessionWithRepoRow, options?: ToSessionOptions): 
 		clientType: row.clientType,
 		automationId: row.automationId ?? null,
 		automation: row.automation ? { id: row.automation.id, name: row.automation.name } : null,
+		slackThreadUrl: buildSlackThreadUrl(row.clientType, row.clientMetadata),
 		repo: row.repo ? mapRepo(row.repo) : undefined,
 		// Phase 2a: session telemetry
 		outcome: (row.outcome as Session["outcome"]) ?? null,
@@ -112,6 +128,7 @@ export function toSessionPartial(row: SessionRow): Omit<Session, "repo"> {
 		clientType: row.clientType,
 		automationId: row.automationId ?? null,
 		automation: null,
+		slackThreadUrl: buildSlackThreadUrl(row.clientType, row.clientMetadata),
 		// Phase 2a: session telemetry
 		outcome: (row.outcome as Session["outcome"]) ?? null,
 		summary: row.summary ?? null,

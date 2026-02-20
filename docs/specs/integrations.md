@@ -172,7 +172,7 @@ packages/providers/src/                    # Code-defined integration modules (b
 
 packages/db/src/schema/
 ├── integrations.ts                        # integrations + repo_connections tables
-├── slack.ts                               # slack_installations + slack_conversations tables
+├── slack.ts                               # slack_installations + slack_conversations + session_notification_subscriptions tables
 └── schema.ts                              # automation_connections, session_connections, org_connectors tables
 
 packages/services/src/integrations/
@@ -329,6 +329,15 @@ slack_conversations
 ├── created_at          TIMESTAMPTZ
 └── last_message_at     TIMESTAMPTZ
     UNIQUE(slack_installation_id, channel_id, thread_ts)
+
+session_notification_subscriptions
+├── id                  UUID PK
+├── session_id          UUID NOT NULL FK(sessions) CASCADE
+├── slack_installation_id UUID NOT NULL FK(slack_installations) CASCADE
+├── slack_user_id       TEXT NOT NULL
+├── created_at          TIMESTAMPTZ DEFAULT now()
+└── updated_at          TIMESTAMPTZ DEFAULT now()
+    UNIQUE(session_id, slack_user_id)
 ```
 
 ### Key Indexes & Query Patterns
@@ -460,7 +469,7 @@ function handleNangoError(err: unknown, operation: string): never {
 
 ### 6.2 Integration List and Update — `Implemented`
 
-**What it does:** Lists all integrations for an org (filtered by visibility) and allows renaming. Also includes `slackStatus` (returns team info + support channel), `slackInstallations` (lists active Slack workspaces for notification selector), `sentryStatus`, `linearStatus`, and `githubStatus` endpoints.
+**What it does:** Lists all integrations for an org (filtered by visibility) and allows renaming. Also includes `slackStatus` (returns team info + support channel), `slackInstallations` (lists active Slack workspaces for notification selector), `slackMembers` (lists workspace members for DM target picker), `slackChannels` (lists workspace channels for channel notification picker), `sentryStatus`, `linearStatus`, and `githubStatus` endpoints.
 
 **Happy path (list):**
 1. `integrationsRouter.list` calls `integrations.listIntegrations(orgId, userId)` (`apps/web/src/server/routers/integrations.ts`)
@@ -719,3 +728,4 @@ function handleNangoError(err: unknown, operation: string): never {
 - [ ] **No token refresh error handling** — If Nango returns an expired/invalid token, the error propagates directly to the caller. No automatic retry or re-auth flow exists. — Medium impact for long-running sessions.
 - [x] **Visibility filtering in memory** — Resolved. `listByOrganization` now filters by visibility at the SQL level. The old `filterByVisibility` mapper function has been deleted.
 - [ ] **Orphaned repo detection is O(n)** — `handleOrphanedRepos` iterates all non-orphaned repos and runs a count query per repo. Should be a single query. — Low impact at current scale.
+- [ ] **Slack installation disambiguation is detection-only** — `findSlackInstallationByTeamId` logs a warning when multiple orgs share the same Slack `team_id`, but returns the first match. The events handler lacks org context to resolve correctly. — Medium impact if multiple orgs install the same Slack workspace. Expected fix: pass org context through Slack events or enforce unique team_id globally.

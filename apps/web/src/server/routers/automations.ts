@@ -152,8 +152,13 @@ export const automationsRouter = {
 					llmFilterPrompt: updateData.llmFilterPrompt,
 					enabledTools: updateData.enabledTools as Record<string, unknown> | undefined,
 					llmAnalysisPrompt: updateData.llmAnalysisPrompt,
+					notificationDestinationType: updateData.notificationDestinationType,
 					notificationChannelId: updateData.notificationChannelId,
+					notificationSlackUserId: updateData.notificationSlackUserId,
 					notificationSlackInstallationId: updateData.notificationSlackInstallationId,
+					configSelectionStrategy: updateData.configSelectionStrategy,
+					fallbackConfigurationId: updateData.fallbackConfigurationId,
+					allowedConfigurationIds: updateData.allowedConfigurationIds,
 				});
 				return { automation };
 			} catch (err) {

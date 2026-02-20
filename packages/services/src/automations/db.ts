@@ -389,6 +389,16 @@ export async function update(
 		updates.notificationChannelId = input.notificationChannelId;
 	if (input.notificationSlackInstallationId !== undefined)
 		updates.notificationSlackInstallationId = input.notificationSlackInstallationId;
+	if (input.notificationDestinationType !== undefined)
+		updates.notificationDestinationType = input.notificationDestinationType;
+	if (input.notificationSlackUserId !== undefined)
+		updates.notificationSlackUserId = input.notificationSlackUserId;
+	if (input.configSelectionStrategy !== undefined)
+		updates.configSelectionStrategy = input.configSelectionStrategy;
+	if (input.fallbackConfigurationId !== undefined)
+		updates.fallbackConfigurationId = input.fallbackConfigurationId;
+	if (input.allowedConfigurationIds !== undefined)
+		updates.allowedConfigurationIds = input.allowedConfigurationIds;
 
 	await db
 		.update(automations)

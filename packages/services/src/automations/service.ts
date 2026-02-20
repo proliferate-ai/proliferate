@@ -49,8 +49,13 @@ export interface UpdateAutomationInput {
 	llmFilterPrompt?: string | null;
 	enabledTools?: Record<string, unknown> | null;
 	llmAnalysisPrompt?: string | null;
+	notificationDestinationType?: string | null;
 	notificationChannelId?: string | null;
+	notificationSlackUserId?: string | null;
 	notificationSlackInstallationId?: string | null;
+	configSelectionStrategy?: string | null;
+	fallbackConfigurationId?: string | null;
+	allowedConfigurationIds?: string[] | null;
 }
 
 // ============================================
@@ -140,8 +145,13 @@ export async function updateAutomation(
 		llmFilterPrompt: input.llmFilterPrompt,
 		enabledTools: input.enabledTools,
 		llmAnalysisPrompt: input.llmAnalysisPrompt,
+		notificationDestinationType: input.notificationDestinationType,
 		notificationChannelId: input.notificationChannelId,
+		notificationSlackUserId: input.notificationSlackUserId,
 		notificationSlackInstallationId: input.notificationSlackInstallationId,
+		configSelectionStrategy: input.configSelectionStrategy,
+		fallbackConfigurationId: input.fallbackConfigurationId,
+		allowedConfigurationIds: input.allowedConfigurationIds,
 	});
 
 	return toAutomation(row);

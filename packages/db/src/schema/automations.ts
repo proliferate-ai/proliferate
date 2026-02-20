@@ -43,8 +43,17 @@ export const automations = pgTable(
 		enabledTools: jsonb("enabled_tools").default({}),
 		llmAnalysisPrompt: text("llm_analysis_prompt"),
 
+		// Configuration selection strategy
+		configSelectionStrategy: text("config_selection_strategy").default("fixed"), // 'fixed' | 'agent_decide'
+		fallbackConfigurationId: uuid("fallback_configuration_id").references(() => configurations.id, {
+			onDelete: "set null",
+		}),
+		allowedConfigurationIds: jsonb("allowed_configuration_ids"), // string[] of config UUIDs for agent_decide
+
 		// Notifications
+		notificationDestinationType: text("notification_destination_type").default("none"), // 'slack_dm_user' | 'slack_channel' | 'none'
 		notificationChannelId: text("notification_channel_id"),
+		notificationSlackUserId: text("notification_slack_user_id"),
 		notificationSlackInstallationId: uuid("notification_slack_installation_id").references(
 			() => slackInstallations.id,
 			{ onDelete: "set null" },
@@ -77,6 +86,12 @@ export const automationsRelations = relations(automations, ({ one, many }) => ({
 	defaultConfiguration: one(configurations, {
 		fields: [automations.defaultConfigurationId],
 		references: [configurations.id],
+		relationName: "automationDefaultConfig",
+	}),
+	fallbackConfiguration: one(configurations, {
+		fields: [automations.fallbackConfigurationId],
+		references: [configurations.id],
+		relationName: "automationFallbackConfig",
 	}),
 	triggers: many(triggers),
 	schedules: many(schedules),

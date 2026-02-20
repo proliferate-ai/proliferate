@@ -163,6 +163,26 @@ export function useSlackConnect() {
 	});
 }
 
+export function useSlackMembers(installationId: string | null) {
+	return useQuery({
+		...orpc.integrations.slackMembers.queryOptions({
+			input: { installationId: installationId ?? "" },
+		}),
+		enabled: !!installationId,
+		staleTime: 5 * 60 * 1000,
+	});
+}
+
+export function useSlackChannels(installationId: string | null) {
+	return useQuery({
+		...orpc.integrations.slackChannels.queryOptions({
+			input: { installationId: installationId ?? "" },
+		}),
+		enabled: !!installationId,
+		staleTime: 5 * 60 * 1000,
+	});
+}
+
 export function useSlackDisconnect() {
 	const queryClient = useQueryClient();
 

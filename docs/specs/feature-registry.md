@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
-> **Updated:** 2026-02-19. Session UI overhaul + billing alignment Phase 1.2 (overage auto-top-up, fast reconciliation).
+> **Updated:** 2026-02-19. Session UI overhaul + billing Phase 1.2 + Slack config UX + notification destinations + config selection strategy.
 > **Evidence convention:** `Planned` entries may cite RFC/spec files until code exists; once implemented, update evidence to concrete code paths.
 
 ---
@@ -107,6 +107,11 @@
 | Target resolution | Implemented | `apps/worker/src/automation/resolve-target.ts` | Resolves which repo/configuration to use |
 | Slack notifications | Implemented | `apps/worker/src/automation/notifications.ts` | Run status posted to Slack |
 | Notification dispatch | Implemented | `apps/worker/src/automation/notifications.ts:dispatchRunNotification` | Delivery orchestration |
+| Notification destination types | Implemented | `packages/db/src/schema/automations.ts:notificationDestinationType` | `slack_dm_user`, `slack_channel`, `none` |
+| Slack DM notifications | Implemented | `apps/worker/src/automation/notifications.ts:postSlackDm` | DM to selected user via `conversations.open` |
+| Session completion notifications | Implemented | `apps/worker/src/automation/notifications.ts:dispatchSessionNotification` | DM subscribers on session complete |
+| Session notification subscriptions | Implemented | `packages/services/src/notifications/service.ts` | Upsert/delete/list subscriptions per session |
+| Configuration selection strategy | Implemented | `apps/worker/src/automation/resolve-target.ts` | `fixed` (default) or `agent_decide` with allowlist + fallback |
 | Slack async client | Implemented | `apps/worker/src/slack/client.ts` | Full bidirectional session via Slack |
 | Slack inbound handlers | Implemented | `apps/worker/src/slack/handlers/` | Text, todo, verify, default-tool |
 | Slack receiver worker | Implemented | `apps/worker/src/slack/` | BullMQ-based message processing |
@@ -244,6 +249,9 @@
 | Slack OAuth | Implemented | `apps/web/src/app/api/integrations/slack/oauth/callback/route.ts` | Workspace install stored in `slack_installations` (not Nango-managed) |
 | Slack installations | Implemented | `packages/db/src/schema/slack.ts:slackInstallations` | Workspace-level |
 | Slack conversations cache | Implemented | `packages/db/src/schema/slack.ts:slackConversations` | Channel cache |
+| Slack members API | Implemented | `apps/web/src/server/routers/integrations.ts:slackMembers` | Workspace member list for DM target picker |
+| Slack channels API | Implemented | `apps/web/src/server/routers/integrations.ts:slackChannels` | Workspace channel list for notification config |
+| Session notification subscriptions table | Implemented | `packages/db/src/schema/slack.ts:sessionNotificationSubscriptions` | Per-session DM notification opt-in |
 | Nango callback handling | Implemented | `apps/web/src/server/routers/integrations.ts:callback` | OAuth callback |
 | Integration disconnect | Implemented | `apps/web/src/server/routers/integrations.ts:disconnect` | Remove connection |
 | Connection binding (repos) | Implemented | `packages/db/src/schema/repos.ts:repoConnections` | Repo-to-integration |

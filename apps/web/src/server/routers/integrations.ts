@@ -1097,6 +1097,65 @@ export const integrationsRouter = {
 				};
 			}
 		}),
+
+	/**
+	 * List Slack workspace members for DM destination selector.
+	 */
+	slackMembers: orgProcedure
+		.input(z.object({ installationId: z.string().uuid() }))
+		.output(
+			z.object({
+				members: z.array(
+					z.object({
+						id: z.string(),
+						name: z.string(),
+						realName: z.string().nullable(),
+						email: z.string().nullable(),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			// Verify installation belongs to org
+			const installation = await integrations.getSlackInstallationForNotifications(
+				context.orgId,
+				input.installationId,
+			);
+			if (!installation) {
+				throw new ORPCError("NOT_FOUND", { message: "Slack installation not found" });
+			}
+			const members = await integrations.listSlackMembers(input.installationId);
+			return { members };
+		}),
+
+	/**
+	 * List Slack channels for notification channel selector.
+	 */
+	slackChannels: orgProcedure
+		.input(z.object({ installationId: z.string().uuid() }))
+		.output(
+			z.object({
+				channels: z.array(
+					z.object({
+						id: z.string(),
+						name: z.string(),
+						isPrivate: z.boolean(),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			// Verify installation belongs to org
+			const installation = await integrations.getSlackInstallationForNotifications(
+				context.orgId,
+				input.installationId,
+			);
+			if (!installation) {
+				throw new ORPCError("NOT_FOUND", { message: "Slack installation not found" });
+			}
+			const channels = await integrations.listSlackChannels(input.installationId);
+			return { channels };
+		}),
 };
 
 // ============================================

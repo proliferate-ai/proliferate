@@ -55,8 +55,13 @@ export interface UpdateAutomationInput {
 	llmFilterPrompt?: string | null;
 	enabledTools?: Record<string, unknown> | null;
 	llmAnalysisPrompt?: string | null;
+	notificationDestinationType?: string | null;
 	notificationChannelId?: string | null;
+	notificationSlackUserId?: string | null;
 	notificationSlackInstallationId?: string | null;
+	configSelectionStrategy?: string | null;
+	fallbackConfigurationId?: string | null;
+	allowedConfigurationIds?: string[] | null;
 }
 
 // ============================================

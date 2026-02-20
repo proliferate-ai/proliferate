@@ -7,7 +7,7 @@
  */
 
 import { ORPCError } from "@orpc/server";
-import { sessions } from "@proliferate/services";
+import { integrations, notifications, sessions } from "@proliferate/services";
 import {
 	CreateSessionInputSchema,
 	CreateSessionResponseSchema,
@@ -241,5 +241,70 @@ export const sessionsRouter = {
 				envVars: input.envVars,
 				saveToConfiguration: input.saveToConfiguration,
 			});
+		}),
+
+	/**
+	 * Subscribe current user to session completion notifications via Slack DM.
+	 */
+	subscribeNotifications: orgProcedure
+		.input(z.object({ sessionId: z.string().uuid() }))
+		.output(z.object({ subscribed: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			// Verify session belongs to org
+			const session = await sessions.getSession(input.sessionId, context.orgId);
+			if (!session) {
+				throw new ORPCError("NOT_FOUND", { message: "Session not found" });
+			}
+
+			// Find active Slack installation for the org
+			const installation = await integrations.getSlackInstallationForNotifications(context.orgId);
+			if (!installation) {
+				throw new ORPCError("BAD_REQUEST", {
+					message: "No active Slack installation. Connect Slack in Settings > Integrations.",
+				});
+			}
+
+			// Look up user's Slack user ID by email
+			const userSlackId = await integrations.findSlackUserIdByEmail(
+				installation.id,
+				context.user.email,
+			);
+
+			await notifications.subscribeToSessionNotifications({
+				sessionId: input.sessionId,
+				userId: context.user.id,
+				slackInstallationId: installation.id,
+				slackUserId: userSlackId,
+				eventTypes: ["completed"],
+			});
+			return { subscribed: true };
+		}),
+
+	/**
+	 * Unsubscribe current user from session notifications.
+	 */
+	unsubscribeNotifications: orgProcedure
+		.input(z.object({ sessionId: z.string().uuid() }))
+		.output(z.object({ unsubscribed: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			const result = await notifications.unsubscribeFromSessionNotifications(
+				input.sessionId,
+				context.user.id,
+			);
+			return { unsubscribed: result };
+		}),
+
+	/**
+	 * Check if current user is subscribed to session notifications.
+	 */
+	getNotificationSubscription: orgProcedure
+		.input(z.object({ sessionId: z.string().uuid() }))
+		.output(z.object({ subscribed: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			const subscription = await notifications.getSessionNotificationSubscription(
+				input.sessionId,
+				context.user.id,
+			);
+			return { subscribed: !!subscription };
 		}),
 };

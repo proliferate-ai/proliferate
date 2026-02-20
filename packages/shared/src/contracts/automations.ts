@@ -74,8 +74,13 @@ export const AutomationSchema = z.object({
 	llm_filter_prompt: z.string().nullable().optional(),
 	enabled_tools: z.record(z.unknown()).nullable().optional(),
 	llm_analysis_prompt: z.string().nullable().optional(),
+	notification_destination_type: z.enum(["slack_dm_user", "slack_channel", "none"]).optional(),
 	notification_channel_id: z.string().nullable().optional(),
+	notification_slack_user_id: z.string().nullable().optional(),
 	notification_slack_installation_id: z.string().uuid().nullable().optional(),
+	config_selection_strategy: z.enum(["fixed", "agent_decide"]).optional(),
+	fallback_configuration_id: z.string().uuid().nullable().optional(),
+	allowed_configuration_ids: z.array(z.string().uuid()).nullable().optional(),
 	source_template_id: z.string().nullable().optional(),
 });
 
@@ -123,8 +128,13 @@ export const UpdateAutomationInputSchema = z.object({
 	llmFilterPrompt: z.string().nullable().optional(),
 	enabledTools: z.record(z.unknown()).nullable().optional(),
 	llmAnalysisPrompt: z.string().nullable().optional(),
+	notificationDestinationType: z.enum(["slack_dm_user", "slack_channel", "none"]).optional(),
 	notificationChannelId: z.string().nullable().optional(),
+	notificationSlackUserId: z.string().nullable().optional(),
 	notificationSlackInstallationId: z.string().uuid().nullable().optional(),
+	configSelectionStrategy: z.enum(["fixed", "agent_decide"]).optional(),
+	fallbackConfigurationId: z.string().uuid().nullable().optional(),
+	allowedConfigurationIds: z.array(z.string().uuid()).nullable().optional(),
 });
 
 export type UpdateAutomationInput = z.infer<typeof UpdateAutomationInputSchema>;

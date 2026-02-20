@@ -20,7 +20,7 @@ import type { Worker } from "bullmq";
 import { writeCompletionArtifact, writeEnrichmentArtifact } from "./artifacts";
 import { EnrichmentError, buildEnrichmentPayload } from "./enrich";
 import { type FinalizerDeps, finalizeOneRun } from "./finalizer";
-import { dispatchRunNotification } from "./notifications";
+import { dispatchRunNotification, dispatchSessionNotification } from "./notifications";
 import { resolveTarget } from "./resolve-target";
 
 const LEASE_TTL_MS = 5 * 60 * 1000;
@@ -137,7 +137,7 @@ export async function handleEnrich(runId: string, logger?: Logger): Promise<void
 			"Enrichment completed (atomic)",
 		);
 	} catch (err) {
-		console.log("err", err);
+		log?.error({ err }, "Enrichment error");
 		if (err instanceof EnrichmentError) {
 			log?.warn(
 				{ errorClass: "enrichment_failed", errorMessage: err.message },
@@ -260,7 +260,11 @@ async function handleExecute(
 			},
 		};
 
-		if (target.type === "selected" && target.repoIds) {
+		// agent_decide mode never creates managed configurations; it only
+		// selects from existing ones. The repoIds path is kept only for
+		// legacy non-agent_decide selection where strategy is "fixed".
+		const strategy = automation.configSelectionStrategy ?? "fixed";
+		if (target.type === "selected" && target.repoIds && strategy !== "agent_decide") {
 			sessionRequest.managedConfiguration = { repoIds: target.repoIds };
 		} else {
 			sessionRequest.configurationId = target.configurationId;
@@ -366,6 +370,15 @@ export async function dispatchOutbox(
 				case "notify_run_terminal":
 					await dispatchRunNotification(runId, logger);
 					break;
+				case "notify_session_complete": {
+					const sessionId = (item.payload as { sessionId?: string }).sessionId;
+					if (!sessionId) {
+						await outbox.markFailed(item.id, "Missing sessionId in outbox payload");
+						continue;
+					}
+					await dispatchSessionNotification(sessionId, logger);
+					break;
+				}
 				default:
 					await outbox.markFailed(item.id, `Unknown outbox kind: ${item.kind}`);
 					continue;

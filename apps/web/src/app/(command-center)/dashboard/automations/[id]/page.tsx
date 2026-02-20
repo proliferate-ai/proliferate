@@ -106,6 +106,9 @@ function mapInputToOutput(data: UpdateAutomationInput): Record<string, unknown> 
 		else if (key === "llmAnalysisPrompt") mapped.llm_analysis_prompt = value;
 		else if (key === "notificationSlackInstallationId")
 			mapped.notification_slack_installation_id = value;
+		else if (key === "notificationDestinationType") mapped.notification_destination_type = value;
+		else if (key === "notificationSlackUserId") mapped.notification_slack_user_id = value;
+		else if (key === "notificationChannelId") mapped.notification_channel_id = value;
 		else mapped[key] = value;
 	}
 	return mapped;
@@ -134,6 +137,11 @@ export default function AutomationDetailPage({
 	const [notificationSlackInstallationId, setNotificationSlackInstallationId] = useState<
 		string | null
 	>(null);
+	const [notificationDestinationType, setNotificationDestinationType] = useState<
+		"slack_channel" | "slack_dm_user" | "none"
+	>("none");
+	const [notificationSlackUserId, setNotificationSlackUserId] = useState<string | null>(null);
+	const [notificationChannelId, setNotificationChannelId] = useState<string | null>(null);
 	const hydratedRef = useRef(false);
 
 	// Data
@@ -173,6 +181,12 @@ export default function AutomationDetailPage({
 			setLlmAnalysisPrompt(automation.llm_analysis_prompt || "");
 			setEnabledTools((automation.enabled_tools as EnabledTools) || {});
 			setNotificationSlackInstallationId(automation.notification_slack_installation_id ?? null);
+			setNotificationDestinationType(
+				(automation.notification_destination_type as "slack_channel" | "slack_dm_user" | "none") ??
+					"none",
+			);
+			setNotificationSlackUserId(automation.notification_slack_user_id ?? null);
+			setNotificationChannelId(automation.notification_channel_id ?? null);
 		}
 	}, [automation]);
 
@@ -338,6 +352,23 @@ export default function AutomationDetailPage({
 	const handleSlackInstallationChange = (installationId: string | null) => {
 		setNotificationSlackInstallationId(installationId);
 		handleUpdate({ notificationSlackInstallationId: installationId });
+	};
+
+	const handleNotificationDestinationChange = (
+		type: "slack_channel" | "slack_dm_user" | "none",
+	) => {
+		setNotificationDestinationType(type);
+		handleUpdate({ notificationDestinationType: type });
+	};
+
+	const handleNotificationSlackUserChange = (userId: string | null) => {
+		setNotificationSlackUserId(userId);
+		handleUpdate({ notificationSlackUserId: userId });
+	};
+
+	const handleNotificationChannelChange = (channelId: string | null) => {
+		setNotificationChannelId(channelId);
+		handleUpdate({ notificationChannelId: channelId });
 	};
 
 	const handleRunNow = () => {
@@ -606,9 +637,15 @@ export default function AutomationDetailPage({
 						connectedProviders={connectedProviders}
 						slackInstallations={slackInstallations}
 						notificationSlackInstallationId={notificationSlackInstallationId}
+						notificationDestinationType={notificationDestinationType}
+						notificationSlackUserId={notificationSlackUserId}
+						notificationChannelId={notificationChannelId}
 						onToolToggle={handleToolToggle}
 						onToolConfigChange={handleToolConfigChange}
 						onSlackInstallationChange={handleSlackInstallationChange}
+						onNotificationDestinationChange={handleNotificationDestinationChange}
+						onNotificationSlackUserChange={handleNotificationSlackUserChange}
+						onNotificationChannelChange={handleNotificationChannelChange}
 						onPermissionChange={(key, mode) => setActionMode.mutate({ id, key, mode })}
 						permissionsPending={setActionMode.isPending}
 					/>

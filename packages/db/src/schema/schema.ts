@@ -580,7 +580,12 @@ export const automations = pgTable(
 		llmFilterPrompt: text("llm_filter_prompt"),
 		enabledTools: jsonb("enabled_tools").default({}),
 		llmAnalysisPrompt: text("llm_analysis_prompt"),
+		configSelectionStrategy: text("config_selection_strategy").default("fixed"),
+		fallbackConfigurationId: uuid("fallback_configuration_id"),
+		allowedConfigurationIds: jsonb("allowed_configuration_ids"),
+		notificationDestinationType: text("notification_destination_type").default("none"),
 		notificationChannelId: text("notification_channel_id"),
+		notificationSlackUserId: text("notification_slack_user_id"),
 		notificationSlackInstallationId: uuid("notification_slack_installation_id"),
 		actionModes: jsonb("action_modes"),
 		sourceTemplateId: text("source_template_id"),
@@ -1124,6 +1129,47 @@ export const slackConversations = pgTable(
 	],
 );
 
+export const sessionNotificationSubscriptions = pgTable(
+	"session_notification_subscriptions",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		sessionId: uuid("session_id").notNull(),
+		userId: text("user_id").notNull(),
+		slackInstallationId: uuid("slack_installation_id").notNull(),
+		destinationType: text("destination_type").notNull().default("dm_user"),
+		slackUserId: text("slack_user_id"),
+		eventTypes: jsonb("event_types").default(["completed"]),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
+	},
+	(table) => [
+		index("idx_session_notif_sub_session").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_session_notif_sub_user").using(
+			"btree",
+			table.userId.asc().nullsLast().op("text_ops"),
+		),
+		foreignKey({
+			columns: [table.sessionId],
+			foreignColumns: [sessions.id],
+			name: "session_notification_subscriptions_session_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.userId],
+			foreignColumns: [user.id],
+			name: "session_notification_subscriptions_user_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.slackInstallationId],
+			foreignColumns: [slackInstallations.id],
+			name: "session_notification_subscriptions_slack_installation_id_fkey",
+		}).onDelete("cascade"),
+		unique("session_notification_subscriptions_session_user_key").on(table.sessionId, table.userId),
+	],
+);
+
 export const actionInvocations = pgTable(
 	"action_invocations",
 	{
@@ -1297,6 +1343,10 @@ export const slackInstallations = pgTable(
 		supportChannelName: text("support_channel_name"),
 		supportInviteId: text("support_invite_id"),
 		supportInviteUrl: text("support_invite_url"),
+		defaultConfigSelectionStrategy: text("default_config_selection_strategy").default("fixed"),
+		defaultConfigurationId: uuid("default_configuration_id"),
+		fallbackConfigurationId: uuid("fallback_configuration_id"),
+		allowedConfigurationIds: jsonb("allowed_configuration_ids"),
 	},
 	(table) => [
 		index("idx_slack_installations_org").using(
