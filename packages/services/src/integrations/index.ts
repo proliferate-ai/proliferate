@@ -71,3 +71,6 @@ export { getSlackInstallationForNotifications } from "./db";
 
 // DB functions needed for notification workspace selector
 export { listActiveSlackInstallations } from "./db";
+
+// DB functions for Slack config strategy
+export { getSlackInstallationConfigForOrg, updateSlackInstallationConfig } from "./db";

@@ -5,7 +5,7 @@
  * session notification subscriptions.
  */
 
-import { and, eq, getDb, sessionNotificationSubscriptions } from "../db/client";
+import { and, eq, getDb, isNull, sessionNotificationSubscriptions } from "../db/client";
 import { enqueueOutbox } from "../outbox/service";
 
 const TERMINAL_STATUSES = ["succeeded", "failed", "timed_out", "needs_human"];
@@ -120,9 +120,23 @@ export async function listSessionSubscriptions(
 ): Promise<SessionNotificationSubscription[]> {
 	const db = getDb();
 	const rows = await db.query.sessionNotificationSubscriptions.findMany({
-		where: eq(sessionNotificationSubscriptions.sessionId, sessionId),
+		where: and(
+			eq(sessionNotificationSubscriptions.sessionId, sessionId),
+			isNull(sessionNotificationSubscriptions.notifiedAt),
+		),
 	});
 	return rows.map(mapSubscription);
+}
+
+/**
+ * Mark a subscription as notified (idempotent delivery tracking).
+ */
+export async function markSubscriptionNotified(subscriptionId: string): Promise<void> {
+	const db = getDb();
+	await db
+		.update(sessionNotificationSubscriptions)
+		.set({ notifiedAt: new Date() })
+		.where(eq(sessionNotificationSubscriptions.id, subscriptionId));
 }
 
 /**

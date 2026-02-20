@@ -71,7 +71,10 @@ export async function selectConfiguration(
 	const { allowedConfigurationIds, context, organizationId } = input;
 
 	// 1. Fetch candidate metadata
-	const candidates = await configurations.getConfigurationCandidates(allowedConfigurationIds);
+	const candidates = await configurations.getConfigurationCandidates(
+		allowedConfigurationIds,
+		organizationId,
+	);
 
 	// 2. Filter to only those with non-empty routing descriptions
 	const eligible = candidates.filter(

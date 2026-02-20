@@ -226,6 +226,14 @@ export class MigrationController {
 					this.logger.error({ err }, "Failed to cancel session expiry after idle snapshot");
 				}
 
+				// 6b. Enqueue session completion notifications (best-effort)
+				try {
+					const orgId = this.options.runtime.getContext().session.organization_id;
+					await notifications.enqueueSessionCompletionNotification(orgId, this.options.sessionId);
+				} catch (err) {
+					this.logger.error({ err }, "Failed to enqueue session completion notification");
+				}
+
 				// 7. Reset sandbox state and signal hub
 				this.options.runtime.resetSandboxState();
 				this.options.onIdleSnapshotComplete();

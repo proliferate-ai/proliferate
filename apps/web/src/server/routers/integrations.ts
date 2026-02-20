@@ -821,6 +821,71 @@ export const integrationsRouter = {
 			return { success: true };
 		}),
 
+	/**
+	 * Get Slack installation config (strategy + default config + allowed configs).
+	 */
+	slackConfig: orgProcedure
+		.output(
+			z.object({
+				installationId: z.string().uuid().nullable(),
+				strategy: z.string().nullable(),
+				defaultConfigurationId: z.string().uuid().nullable(),
+				allowedConfigurationIds: z.array(z.string().uuid()).nullable(),
+			}),
+		)
+		.handler(async ({ context }) => {
+			const config = await integrations.getSlackInstallationConfigForOrg(context.orgId);
+			if (!config) {
+				return {
+					installationId: null,
+					strategy: null,
+					defaultConfigurationId: null,
+					allowedConfigurationIds: null,
+				};
+			}
+			return {
+				installationId: config.installationId,
+				strategy: config.defaultConfigSelectionStrategy,
+				defaultConfigurationId: config.defaultConfigurationId,
+				allowedConfigurationIds: config.allowedConfigurationIds,
+			};
+		}),
+
+	/**
+	 * Update Slack installation config strategy.
+	 */
+	updateSlackConfig: orgProcedure
+		.input(
+			z.object({
+				installationId: z.string().uuid(),
+				strategy: z.enum(["fixed", "agent_decide"]),
+				defaultConfigurationId: z.string().uuid().nullable().optional(),
+				allowedConfigurationIds: z.array(z.string().uuid()).nullable().optional(),
+			}),
+		)
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			await requireIntegrationAdmin(context.user.id, context.orgId);
+
+			const updated = await integrations.updateSlackInstallationConfig(
+				input.installationId,
+				context.orgId,
+				{
+					defaultConfigSelectionStrategy: input.strategy,
+					defaultConfigurationId: input.defaultConfigurationId,
+					allowedConfigurationIds: input.allowedConfigurationIds,
+				},
+			);
+
+			if (!updated) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Slack installation not found or not owned by this org",
+				});
+			}
+
+			return { success: true };
+		}),
+
 	// ============================================
 	// Org-Scoped MCP Connectors
 	// ============================================

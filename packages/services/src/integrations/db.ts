@@ -491,6 +491,65 @@ export async function getSlackInstallationSelectionConfig(installationId: string
 }
 
 /**
+ * Get Slack installation config for an org (org-scoped).
+ * Returns strategy, default config, and allowed config IDs.
+ */
+export async function getSlackInstallationConfigForOrg(orgId: string): Promise<{
+	installationId: string;
+	defaultConfigSelectionStrategy: string | null;
+	defaultConfigurationId: string | null;
+	allowedConfigurationIds: string[] | null;
+} | null> {
+	const db = getDb();
+	const result = await db.query.slackInstallations.findFirst({
+		where: and(
+			eq(slackInstallations.organizationId, orgId),
+			eq(slackInstallations.status, "active"),
+		),
+		columns: {
+			id: true,
+			defaultConfigSelectionStrategy: true,
+			defaultConfigurationId: true,
+			allowedConfigurationIds: true,
+		},
+	});
+	if (!result) return null;
+	return {
+		installationId: result.id,
+		defaultConfigSelectionStrategy: result.defaultConfigSelectionStrategy,
+		defaultConfigurationId: result.defaultConfigurationId,
+		allowedConfigurationIds: result.allowedConfigurationIds as string[] | null,
+	};
+}
+
+/**
+ * Update Slack installation config selection strategy.
+ * Validates org ownership via the org-scoped query.
+ */
+export async function updateSlackInstallationConfig(
+	installationId: string,
+	orgId: string,
+	update: {
+		defaultConfigSelectionStrategy?: string;
+		defaultConfigurationId?: string | null;
+		allowedConfigurationIds?: string[] | null;
+	},
+): Promise<boolean> {
+	const db = getDb();
+	const result = await db
+		.update(slackInstallations)
+		.set({
+			...update,
+			updatedAt: new Date(),
+		})
+		.where(
+			and(eq(slackInstallations.id, installationId), eq(slackInstallations.organizationId, orgId)),
+		)
+		.returning({ id: slackInstallations.id });
+	return result.length > 0;
+}
+
+/**
  * List all active Slack installations for an organization.
  * Used for the notification workspace selector UI.
  */

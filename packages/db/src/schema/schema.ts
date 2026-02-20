@@ -1140,6 +1140,7 @@ export const sessionNotificationSubscriptions = pgTable(
 		destinationType: text("destination_type").notNull().default("dm_user"),
 		slackUserId: text("slack_user_id"),
 		eventTypes: jsonb("event_types").default(["completed"]),
+		notifiedAt: timestamp("notified_at", { withTimezone: true, mode: "date" }),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
 	},

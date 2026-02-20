@@ -217,31 +217,34 @@ export class SlackClient extends AsyncClient<
 						"Configuration auto-selected",
 					);
 					configOption = { configurationId: selectionResult.configurationId };
-				} else if (selectionConfig.fallbackConfigurationId) {
-					this.logger.warn(
-						{ reason: selectionResult.reason },
-						"Configuration auto-selection failed, using fallback",
-					);
-					configOption = { configurationId: selectionConfig.fallbackConfigurationId };
 				} else {
 					this.logger.error(
 						{ reason: selectionResult.reason },
-						"Configuration auto-selection failed with no fallback",
+						"Configuration auto-selection failed",
 					);
 					await postToSlack(
 						encryptedBotToken,
 						channelId,
 						threadTs,
-						"I couldn't automatically select a configuration for this request. Please ensure your allowlisted configurations have routing descriptions, or set a fallback configuration.",
+						"I couldn't automatically select a configuration for this request. Please ensure your allowlisted configurations have routing descriptions.",
 						this.logger,
 					);
 					return;
 				}
 			} else {
-				// fixed strategy (default): use the default configuration or managed
-				configOption = selectionConfig?.defaultConfigurationId
-					? { configurationId: selectionConfig.defaultConfigurationId }
-					: { managedConfiguration: {} as { repoIds?: string[] } };
+				// fixed strategy: require an explicit default configuration
+				if (!selectionConfig?.defaultConfigurationId) {
+					this.logger.warn({ installationId }, "Fixed strategy but no default configuration set");
+					await postToSlack(
+						encryptedBotToken,
+						channelId,
+						threadTs,
+						"No default configuration is set for this Slack integration. Please configure one in your integration settings.",
+						this.logger,
+					);
+					return;
+				}
+				configOption = { configurationId: selectionConfig.defaultConfigurationId };
 			}
 
 			try {

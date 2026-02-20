@@ -1,5 +1,6 @@
 "use client";
 
+import { ConfigurationSelector } from "@/components/automations/configuration-selector";
 import {
 	IntegrationsIllustration,
 	PageEmptyState,
@@ -42,12 +43,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useActionPreferences, useToggleActionPreference } from "@/hooks/use-action-preferences";
+import { useConfigurations } from "@/hooks/use-configurations";
 import { useGitHubAppConnect } from "@/hooks/use-github-app-connect";
 import {
 	useIntegrations,
+	useSlackConfig,
 	useSlackConnect,
 	useSlackDisconnect,
 	useSlackStatus,
+	useUpdateSlackConfig,
 } from "@/hooks/use-integrations";
 import {
 	type NangoProvider,
@@ -273,6 +277,11 @@ export default function IntegrationsPage() {
 		},
 		{} as Record<Provider, IntegrationWithCreator[]>,
 	);
+
+	// ---- Slack config ----
+	const { data: slackConfig } = useSlackConfig();
+	const updateSlackConfig = useUpdateSlackConfig();
+	const { data: allConfigurations } = useConfigurations("active");
 
 	// ---- Slack handlers ----
 	const [showSlackConnectForm, setShowSlackConnectForm] = useState(false);
@@ -887,6 +896,200 @@ export default function IntegrationsPage() {
 							Add Support Channel
 						</button>
 					)}
+				</div>
+			)}
+
+			{/* Slack config strategy section (admin only) */}
+			{isAdmin && slackStatus?.connected && slackConfig?.installationId && (
+				<div className="mt-3 ml-1">
+					<div className="p-4 rounded-lg border border-border bg-card space-y-3">
+						<p className="text-sm font-medium">Session Configuration</p>
+						<p className="text-xs text-muted-foreground">
+							How sessions started from Slack pick their configuration.
+						</p>
+
+						<div className="flex items-center justify-between">
+							<span className="text-xs text-muted-foreground">
+								{slackConfig.strategy === "agent_decide"
+									? "Agent selects from allowed configurations"
+									: "Use a fixed default configuration"}
+							</span>
+							<div className="flex items-center gap-2">
+								<span className="text-xs text-muted-foreground">Fixed</span>
+								<Switch
+									checked={slackConfig.strategy === "agent_decide"}
+									onCheckedChange={(checked) => {
+										updateSlackConfig.mutate({
+											installationId: slackConfig.installationId!,
+											strategy: checked ? "agent_decide" : "fixed",
+											defaultConfigurationId: slackConfig.defaultConfigurationId,
+											allowedConfigurationIds: slackConfig.allowedConfigurationIds,
+										});
+									}}
+								/>
+								<span className="text-xs text-muted-foreground">Agent decides</span>
+							</div>
+						</div>
+
+						{slackConfig.strategy === "agent_decide" ? (
+							<div className="space-y-2">
+								<p className="text-xs text-muted-foreground">
+									Allowed configurations (agent will choose based on the message):
+								</p>
+								{allConfigurations && allConfigurations.length > 0 ? (
+									<div className="flex flex-wrap gap-1.5">
+										{allConfigurations.map((config) => {
+											const isAllowed =
+												slackConfig.allowedConfigurationIds?.includes(config.id) ?? false;
+											return (
+												<button
+													key={config.id}
+													type="button"
+													className={`px-2.5 py-1 rounded-md border text-xs transition-colors ${
+														isAllowed
+															? "border-foreground/20 bg-foreground/5 text-foreground"
+															: "border-border text-muted-foreground hover:border-foreground/20"
+													}`}
+													onClick={() => {
+														const current = slackConfig.allowedConfigurationIds ?? [];
+														const next = isAllowed
+															? current.filter((id) => id !== config.id)
+															: [...current, config.id];
+														updateSlackConfig.mutate({
+															installationId: slackConfig.installationId!,
+															strategy: "agent_decide",
+															allowedConfigurationIds: next,
+														});
+													}}
+												>
+													{config.name || "Untitled"}
+												</button>
+											);
+										})}
+									</div>
+								) : (
+									<p className="text-xs text-muted-foreground/60">
+										No configurations available. Create one first.
+									</p>
+								)}
+							</div>
+						) : (
+							<div className="space-y-2">
+								<p className="text-xs text-muted-foreground">Default configuration:</p>
+								{allConfigurations && (
+									<ConfigurationSelector
+										configurations={allConfigurations}
+										selectedId={slackConfig.defaultConfigurationId}
+										onChange={(id) => {
+											updateSlackConfig.mutate({
+												installationId: slackConfig.installationId!,
+												strategy: "fixed",
+												defaultConfigurationId: id === "none" ? null : id,
+											});
+										}}
+									/>
+								)}
+							</div>
+						)}
+					</div>
+				</div>
+			)}
+
+			{/* Slack config strategy section (admin only) */}
+			{isAdmin && slackStatus?.connected && slackConfig?.installationId && (
+				<div className="mt-3 ml-1">
+					<div className="p-4 rounded-lg border border-border bg-card space-y-3">
+						<p className="text-sm font-medium">Session Configuration</p>
+						<p className="text-xs text-muted-foreground">
+							How Slack messages pick a configuration for new sessions.
+						</p>
+						<div className="flex items-center gap-3">
+							<Button
+								variant={slackConfig.strategy !== "agent_decide" ? "default" : "outline"}
+								size="sm"
+								className="h-8 text-xs"
+								disabled={updateSlackConfig.isPending}
+								onClick={() => {
+									updateSlackConfig.mutate({
+										installationId: slackConfig.installationId!,
+										strategy: "fixed",
+										defaultConfigurationId: slackConfig.defaultConfigurationId,
+									});
+								}}
+							>
+								Fixed
+							</Button>
+							<Button
+								variant={slackConfig.strategy === "agent_decide" ? "default" : "outline"}
+								size="sm"
+								className="h-8 text-xs"
+								disabled={updateSlackConfig.isPending}
+								onClick={() => {
+									updateSlackConfig.mutate({
+										installationId: slackConfig.installationId!,
+										strategy: "agent_decide",
+										allowedConfigurationIds: slackConfig.allowedConfigurationIds,
+									});
+								}}
+							>
+								Auto-select
+							</Button>
+						</div>
+
+						{slackConfig.strategy !== "agent_decide" ? (
+							<div className="space-y-1.5">
+								<p className="text-xs text-muted-foreground">Default configuration</p>
+								<ConfigurationSelector
+									configurations={allConfigurations ?? []}
+									selectedId={slackConfig.defaultConfigurationId}
+									onChange={(id) => {
+										updateSlackConfig.mutate({
+											installationId: slackConfig.installationId!,
+											strategy: "fixed",
+											defaultConfigurationId: id === "none" ? null : id,
+										});
+									}}
+								/>
+							</div>
+						) : (
+							<div className="space-y-1.5">
+								<p className="text-xs text-muted-foreground">
+									Allowed configurations (agent picks based on message)
+								</p>
+								<div className="space-y-1">
+									{(allConfigurations ?? []).map((config) => {
+										const allowed = slackConfig.allowedConfigurationIds ?? [];
+										const isAllowed = allowed.includes(config.id);
+										return (
+											<button
+												type="button"
+												key={config.id}
+												className="flex items-center gap-2 w-full text-left px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors text-sm"
+												onClick={() => {
+													const next = isAllowed
+														? allowed.filter((id) => id !== config.id)
+														: [...allowed, config.id];
+													updateSlackConfig.mutate({
+														installationId: slackConfig.installationId!,
+														strategy: "agent_decide",
+														allowedConfigurationIds: next.length > 0 ? next : null,
+													});
+												}}
+											>
+												<Switch checked={isAllowed} className="pointer-events-none" />
+												<span className="truncate">{config.name || "Untitled configuration"}</span>
+											</button>
+										);
+									})}
+									{(allConfigurations ?? []).length === 0 && (
+										<p className="text-xs text-muted-foreground py-1">
+											No active configurations found.
+										</p>
+									)}
+								</div>
+							</div>
+						)}
+					</div>
 				</div>
 			)}
 

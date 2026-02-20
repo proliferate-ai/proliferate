@@ -142,7 +142,7 @@ export async function updateAutomation(
 		}
 
 		// Verify all allowlisted configs have routing descriptions
-		const candidates = await configurationsDb.getConfigurationCandidates(allowedIds);
+		const candidates = await configurationsDb.getConfigurationCandidates(allowedIds, orgId);
 		const missingDescription = candidates.filter(
 			(c) => !c.routingDescription || c.routingDescription.trim().length === 0,
 		);

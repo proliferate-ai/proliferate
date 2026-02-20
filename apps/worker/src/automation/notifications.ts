@@ -448,6 +448,7 @@ export async function dispatchSessionNotification(
 				logger: log,
 			});
 			if (result.sent) {
+				await notifications.markSubscriptionNotified(sub.id);
 				log.info("Session completion DM sent");
 			} else if (result.error) {
 				log.error({ error: result.error }, "Session completion DM failed");

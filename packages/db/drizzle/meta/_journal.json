@@ -277,6 +277,13 @@
       "when": 1772118600000,
       "tag": "0035_configuration_routing_description",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1772205000000,
+      "tag": "0036_session_notification_notified_at",
+      "breakpoints": true
     }
   ]
 }

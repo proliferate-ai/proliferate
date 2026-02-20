@@ -13,7 +13,14 @@ import {
 import { AutomationsIcon, BlocksIcon, BlocksLoadingIcon, SlackIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
-import { useDeleteSession, usePrefetchSession, useRenameSession } from "@/hooks/use-sessions";
+import {
+	useDeleteSession,
+	usePrefetchSession,
+	useRenameSession,
+	useSessionNotificationSubscription,
+	useSubscribeNotifications,
+	useUnsubscribeNotifications,
+} from "@/hooks/use-sessions";
 import {
 	DISPLAY_STATUS_CONFIG,
 	formatCompactMetrics,
@@ -29,9 +36,18 @@ import {
 	getBlockedReasonText,
 } from "@proliferate/shared/sessions";
 import { formatDistanceToNow } from "date-fns";
-import { AlertTriangle, GitBranch, GitPullRequest, RotateCcw, Terminal } from "lucide-react";
+import {
+	AlertTriangle,
+	Bell,
+	BellOff,
+	GitBranch,
+	GitPullRequest,
+	RotateCcw,
+	Terminal,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 interface SessionListRowProps {
 	session: Session;
@@ -128,6 +144,11 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 	const prefetchSession = usePrefetchSession();
 	const renameSession = useRenameSession();
 	const deleteSession = useDeleteSession();
+
+	const isRunning = session.status === "running";
+	const { data: isSubscribed } = useSessionNotificationSubscription(session.id, isRunning);
+	const subscribeNotifications = useSubscribeNotifications();
+	const unsubscribeNotifications = useUnsubscribeNotifications();
 
 	const [isEditing, setIsEditing] = useState(false);
 	const [editValue, setEditValue] = useState(session.title || "");
@@ -271,9 +292,60 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 
 				<OriginBadge session={session} />
 
-				<span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-					{metaParts.join(" · ")}
-				</span>
+				{/* Trailing: metadata (default) or actions menu (on hover) */}
+				<div className="shrink-0 flex items-center">
+					<span
+						className={cn(
+							"text-xs text-muted-foreground whitespace-nowrap group-hover:hidden",
+							menuOpen && "hidden",
+						)}
+					>
+						{metaParts.join(" · ")}
+					</span>
+					<div
+						className={cn("hidden group-hover:flex items-center", menuOpen && "flex")}
+						onClick={(e) => e.stopPropagation()}
+					>
+						<ItemActionsMenu
+							onRename={handleRename}
+							onDelete={() => setDeleteDialogOpen(true)}
+							customActions={
+								isRunning
+									? [
+											{
+												label: isSubscribed ? "Notifications on" : "Notify me",
+												icon: isSubscribed ? (
+													<BellOff className="h-4 w-4" />
+												) : (
+													<Bell className="h-4 w-4" />
+												),
+												onClick: async () => {
+													try {
+														if (isSubscribed) {
+															await unsubscribeNotifications.mutateAsync({
+																sessionId: session.id,
+															});
+															toast.success("Notifications turned off");
+														} else {
+															await subscribeNotifications.mutateAsync({
+																sessionId: session.id,
+															});
+															toast.success("You'll be notified when this session completes");
+														}
+													} catch (err) {
+														const message =
+															err instanceof Error ? err.message : "Failed to update notifications";
+														toast.error(message);
+													}
+												},
+											},
+										]
+									: undefined
+							}
+							onOpenChange={setMenuOpen}
+						/>
+					</div>
+				</div>
 
 				{session.prUrls && session.prUrls.length > 0 && (
 					<span className="inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">

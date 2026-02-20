@@ -161,6 +161,9 @@ export const sessionNotificationSubscriptions = pgTable(
 		// Event types to notify on
 		eventTypes: jsonb("event_types").default(["completed"]), // string[]
 
+		// Delivery tracking for idempotent retries
+		notifiedAt: timestamp("notified_at", { withTimezone: true }),
+
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 	},

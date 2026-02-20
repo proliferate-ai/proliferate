@@ -691,6 +691,7 @@ export interface ConfigurationCandidateRow {
  */
 export async function getConfigurationCandidates(
 	configurationIds: string[],
+	organizationId: string,
 ): Promise<ConfigurationCandidateRow[]> {
 	if (configurationIds.length === 0) return [];
 	const db = getDb();
@@ -707,6 +708,7 @@ export async function getConfigurationCandidates(
 					repo: {
 						columns: {
 							githubRepoName: true,
+							organizationId: true,
 						},
 					},
 				},
@@ -714,7 +716,12 @@ export async function getConfigurationCandidates(
 		},
 	});
 
-	return results.map((r) => ({
+	// Filter to only configurations that belong to the requesting org
+	const filtered = results.filter((r) =>
+		r.configurationRepos.some((cr) => cr.repo?.organizationId === organizationId),
+	);
+
+	return filtered.map((r) => ({
 		id: r.id,
 		name: r.name,
 		routingDescription: r.routingDescription,

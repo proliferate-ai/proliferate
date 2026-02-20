@@ -7,7 +7,7 @@
 
 import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
-import { billing, orgs, sessions } from "@proliferate/services";
+import { billing, notifications, orgs, sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import type { BillingPlan } from "@proliferate/shared/billing";
 import { revokeVirtualKey } from "@proliferate/shared/llm-proxy";
@@ -110,6 +110,13 @@ export async function pauseSessionHandler(
 	} catch (updateError) {
 		reqLog.error({ err: updateError }, "Failed to update session");
 		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to update session" });
+	}
+
+	// Enqueue session completion notifications (best-effort)
+	try {
+		await notifications.enqueueSessionCompletionNotification(orgId, sessionId);
+	} catch (err) {
+		reqLog.error({ err }, "Failed to enqueue session completion notification");
 	}
 
 	return {
