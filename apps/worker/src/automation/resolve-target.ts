@@ -45,6 +45,17 @@ export async function resolveTarget(input: {
 
 	// Strategy: agent_decide — choose from allowed configurations only
 	// Never create new managed configurations in this mode.
+	const allowedIds = (automation.allowedConfigurationIds as string[] | null) ?? null;
+
+	// Require an explicit allowlist for agent_decide — unbounded search is not safe
+	if (!allowedIds || allowedIds.length === 0) {
+		return {
+			type: "fallback",
+			configurationId: fallbackConfigurationId,
+			reason: "no_allowed_configurations_set",
+		};
+	}
+
 	const suggestedRepoId = extractSuggestedRepoId(enrichmentJson);
 	if (!suggestedRepoId) {
 		return {
@@ -64,8 +75,6 @@ export async function resolveTarget(input: {
 		};
 	}
 
-	// Build the candidate set: allowed configuration IDs or all ready configs
-	const allowedIds = (automation.allowedConfigurationIds as string[] | null) ?? null;
 	const existingConfigurationId = await findConfigurationForRepo(
 		suggestedRepoId,
 		organizationId,
@@ -102,17 +111,16 @@ function extractSuggestedRepoId(enrichmentJson: unknown): string | null {
 
 /**
  * Find an existing configuration that contains the given repo.
- * If allowedIds is provided, only search within that set.
+ * Only searches within the provided allowlist.
  */
 async function findConfigurationForRepo(
 	repoId: string,
 	organizationId: string,
-	allowedIds: string[] | null,
+	allowedIds: string[],
 ): Promise<string | null> {
 	const managed = await configurations.findManagedConfigurations();
 	const match = managed.find((c) => {
-		// If allowlist is set, only consider configs in the list
-		if (allowedIds && !allowedIds.includes(c.id)) return false;
+		if (!allowedIds.includes(c.id)) return false;
 		return c.configurationRepos?.some(
 			(cr) => cr.repo?.id === repoId && cr.repo?.organizationId === organizationId,
 		);

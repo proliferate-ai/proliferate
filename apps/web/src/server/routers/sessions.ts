@@ -269,6 +269,12 @@ export const sessionsRouter = {
 				installation.id,
 				context.user.email,
 			);
+			if (!userSlackId) {
+				throw new ORPCError("BAD_REQUEST", {
+					message:
+						"Could not find your Slack account. Make sure you use the same email in Slack and Proliferate.",
+				});
+			}
 
 			await notifications.subscribeToSessionNotifications({
 				sessionId: input.sessionId,

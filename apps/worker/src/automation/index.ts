@@ -350,33 +350,47 @@ export async function dispatchOutbox(
 	const claimed = await outbox.claimPendingOutbox(50);
 	for (const item of claimed) {
 		try {
-			const payload = item.payload as { runId?: string };
-			const runId = payload.runId;
-			if (!runId) {
-				await outbox.markFailed(item.id, "Missing runId in outbox payload");
-				continue;
-			}
+			const payload = item.payload as { runId?: string; sessionId?: string };
 
 			switch (item.kind) {
-				case "enqueue_enrich":
-					await queueAutomationEnrich(enrichQueue, runId);
+				case "enqueue_enrich": {
+					if (!payload.runId) {
+						await outbox.markFailed(item.id, "Missing runId in outbox payload");
+						continue;
+					}
+					await queueAutomationEnrich(enrichQueue, payload.runId);
 					break;
-				case "enqueue_execute":
-					await queueAutomationExecute(executeQueue, runId);
+				}
+				case "enqueue_execute": {
+					if (!payload.runId) {
+						await outbox.markFailed(item.id, "Missing runId in outbox payload");
+						continue;
+					}
+					await queueAutomationExecute(executeQueue, payload.runId);
 					break;
-				case "write_artifacts":
-					await writeArtifacts(runId);
+				}
+				case "write_artifacts": {
+					if (!payload.runId) {
+						await outbox.markFailed(item.id, "Missing runId in outbox payload");
+						continue;
+					}
+					await writeArtifacts(payload.runId);
 					break;
-				case "notify_run_terminal":
-					await dispatchRunNotification(runId, logger);
+				}
+				case "notify_run_terminal": {
+					if (!payload.runId) {
+						await outbox.markFailed(item.id, "Missing runId in outbox payload");
+						continue;
+					}
+					await dispatchRunNotification(payload.runId, logger);
 					break;
+				}
 				case "notify_session_complete": {
-					const sessionId = (item.payload as { sessionId?: string }).sessionId;
-					if (!sessionId) {
+					if (!payload.sessionId) {
 						await outbox.markFailed(item.id, "Missing sessionId in outbox payload");
 						continue;
 					}
-					await dispatchSessionNotification(sessionId, logger);
+					await dispatchSessionNotification(payload.sessionId, logger);
 					break;
 				}
 				default:
