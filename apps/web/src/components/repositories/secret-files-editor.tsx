@@ -15,17 +15,59 @@ interface SecretFilesEditorProps {
 	callToActionLabel?: string;
 }
 
-function parseEnvKeys(content: string): string[] {
-	const keys: string[] = [];
-	for (const line of content.split("\n")) {
-		const trimmed = line.trim();
-		if (!trimmed || trimmed.startsWith("#")) continue;
-		const separator = trimmed.indexOf("=");
+interface EnvRow {
+	id: string;
+	key: string;
+	value: string;
+}
+
+function createRow(key = "", value = ""): EnvRow {
+	return {
+		id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+		key,
+		value,
+	};
+}
+
+function parseEnvRows(content: string): EnvRow[] {
+	const rows: EnvRow[] = [];
+
+	for (const rawLine of content.split("\n")) {
+		const line = rawLine.trim();
+		if (!line || line.startsWith("#")) continue;
+
+		const normalized = line.startsWith("export ") ? line.slice(7).trim() : line;
+		const separator = normalized.indexOf("=");
 		if (separator <= 0) continue;
-		const key = trimmed.slice(0, separator).trim();
-		if (key) keys.push(key);
+
+		const key = normalized.slice(0, separator).trim();
+		let value = normalized.slice(separator + 1).trim();
+
+		// Preserve plain values but unwrap simple quoted values for editing UX.
+		if (
+			(value.startsWith('"') && value.endsWith('"')) ||
+			(value.startsWith("'") && value.endsWith("'"))
+		) {
+			value = value.slice(1, -1);
+		}
+
+		if (key) {
+			rows.push(createRow(key, value));
+		}
 	}
-	return keys;
+
+	return rows;
+}
+
+function serializeEnvRows(rows: EnvRow[]): string {
+	return rows
+		.map((row) => ({
+			key: row.key.trim(),
+			value: row.value,
+		}))
+		.filter((row) => row.key.length > 0)
+		.map((row) => `${row.key}=${row.value}`)
+		.join("\n");
 }
 
 export function SecretFilesEditor({
@@ -40,36 +82,56 @@ export function SecretFilesEditor({
 
 	const [adding, setAdding] = useState(initialCreateOpen);
 	const [newPath, setNewPath] = useState("");
-	const [newContent, setNewContent] = useState("");
+	const [rows, setRows] = useState<EnvRow[]>([createRow()]);
+	const [showPasteImport, setShowPasteImport] = useState(false);
+	const [pasteDraft, setPasteDraft] = useState("");
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editContent, setEditContent] = useState("");
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
+	const activeRows = useMemo(() => rows.filter((row) => row.key.trim().length > 0), [rows]);
+	const serializedContent = useMemo(() => serializeEnvRows(rows), [rows]);
+	const canSave = newPath.trim().length > 0 && activeRows.length > 0;
+
 	const clearComposer = () => {
 		setNewPath("");
-		setNewContent("");
+		setRows([createRow()]);
+		setShowPasteImport(false);
+		setPasteDraft("");
+
 		if (!initialCreateOpen) {
 			setAdding(false);
 		}
 	};
 
+	const openComposer = () => {
+		setAdding(true);
+		setShowPasteImport(false);
+		setPasteDraft("");
+		setRows((prev) => (prev.length > 0 ? prev : [createRow()]));
+	};
+
 	const handleAdd = async () => {
-		if (!newPath.trim() || !newContent.trim()) return;
+		if (!canSave) return;
+
 		await upsertFile.mutateAsync({
 			configurationId,
 			filePath: newPath.trim(),
-			content: newContent,
+			content: serializedContent,
 		});
+
 		clearComposer();
 	};
 
 	const handleUpdate = async (filePath: string) => {
 		if (!editContent.trim()) return;
+
 		await upsertFile.mutateAsync({
 			configurationId,
 			filePath,
 			content: editContent,
 		});
+
 		setEditingId(null);
 		setEditContent("");
 	};
@@ -83,10 +145,38 @@ export function SecretFilesEditor({
 		if (!file) return;
 
 		const content = await file.text();
+		const parsedRows = parseEnvRows(content);
+
 		setAdding(true);
 		setNewPath((prev) => prev || file.name);
-		setNewContent(content);
+		setRows(parsedRows.length > 0 ? parsedRows : [createRow()]);
+		setShowPasteImport(false);
+		setPasteDraft("");
 		event.target.value = "";
+	};
+
+	const handleImportPaste = () => {
+		const imported = parseEnvRows(pasteDraft);
+		if (imported.length === 0) return;
+
+		setRows(imported);
+		setShowPasteImport(false);
+		setPasteDraft("");
+	};
+
+	const updateRow = (id: string, field: "key" | "value", value: string) => {
+		setRows((prev) => prev.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
+	};
+
+	const removeRow = (id: string) => {
+		setRows((prev) => {
+			const next = prev.filter((row) => row.id !== id);
+			return next.length > 0 ? next : [createRow()];
+		});
+	};
+
+	const addRow = () => {
+		setRows((prev) => [...prev, createRow()]);
 	};
 
 	const formatRelativeTime = (updatedAt: string | null, createdAt: string | null): string => {
@@ -94,19 +184,6 @@ export function SecretFilesEditor({
 		if (!value) return "Unknown";
 		return formatDistanceToNow(new Date(value), { addSuffix: true });
 	};
-
-	const parsedKeys = useMemo(() => parseEnvKeys(newContent), [newContent]);
-	const parsedKeyRows = useMemo(() => {
-		const counts = new Map<string, number>();
-		return parsedKeys.map((key) => {
-			const next = (counts.get(key) ?? 0) + 1;
-			counts.set(key, next);
-			return {
-				id: `${key}-${next}`,
-				key,
-			};
-		});
-	}, [parsedKeys]);
 
 	if (isLoading) {
 		return <p className="text-xs text-muted-foreground">Loading secret files...</p>;
@@ -137,12 +214,7 @@ export function SecretFilesEditor({
 						Upload file
 					</Button>
 					{!adding && (
-						<Button
-							variant="ghost"
-							size="sm"
-							className="h-7 text-xs"
-							onClick={() => setAdding(true)}
-						>
+						<Button variant="ghost" size="sm" className="h-7 text-xs" onClick={openComposer}>
 							<Plus className="h-3 w-3 mr-1" />
 							{callToActionLabel}
 						</Button>
@@ -151,8 +223,8 @@ export function SecretFilesEditor({
 			</div>
 
 			<p className="text-[11px] text-muted-foreground">
-				Create or upload a file, choose its path in the repo, and save. Proliferate writes this file
-				for setup and future boots.
+				Use the row editor below to build env files. Paste or upload to auto-fill rows, then save
+				the file path.
 			</p>
 			<p className="text-[11px] text-muted-foreground">
 				Secret file values are encrypted at rest and never shown again after save.
@@ -162,7 +234,9 @@ export function SecretFilesEditor({
 				<div className="rounded-md border border-border/70 overflow-hidden">
 					<div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
 						<p className="text-xs font-medium">New Secret File</p>
-						<p className="text-[11px] text-muted-foreground">Paste or upload, then save</p>
+						<p className="text-[11px] text-muted-foreground">
+							{activeRows.length} {activeRows.length === 1 ? "variable" : "variables"} ready
+						</p>
 					</div>
 					<div className="p-3 space-y-2">
 						<div className="space-y-1">
@@ -174,39 +248,84 @@ export function SecretFilesEditor({
 								className="h-8 text-xs font-mono"
 							/>
 						</div>
-						<div className="space-y-1">
-							<Label className="text-[11px] text-muted-foreground">File contents</Label>
-							<Textarea
-								value={newContent}
-								onChange={(e) => setNewContent(e.target.value)}
-								placeholder="Paste file contents"
-								className="text-xs font-mono min-h-[120px]"
-							/>
-						</div>
-						{parsedKeys.length > 0 && (
-							<div className="rounded-md border border-border/60 overflow-hidden">
-								<div className="flex items-center justify-between border-b border-border bg-muted/30 px-3 py-2">
-									<p className="text-[11px] font-medium">Detected rows from paste</p>
-									<p className="text-[11px] text-muted-foreground">{parsedKeys.length} variables</p>
-								</div>
-								<div className="max-h-40 overflow-y-auto">
-									{parsedKeyRows.slice(0, 30).map((row) => (
-										<div
-											key={row.id}
-											className="flex items-center gap-3 border-b border-border/50 px-3 py-1.5 last:border-b-0"
+
+						<div className="rounded-md border border-border/60 overflow-hidden">
+							<div className="flex items-center gap-3 border-b border-border bg-muted/30 px-3 py-2 text-[11px] font-medium text-muted-foreground">
+								<span className="min-w-0 flex-1">Key</span>
+								<span className="min-w-0 flex-1">Value</span>
+								<span className="w-16 text-right">Actions</span>
+							</div>
+							{rows.map((row) => (
+								<div
+									key={row.id}
+									className="flex items-center gap-3 border-b border-border/50 px-3 py-1.5 last:border-b-0"
+								>
+									<Input
+										value={row.key}
+										onChange={(e) => updateRow(row.id, "key", e.target.value.toUpperCase())}
+										placeholder="ENV_VAR_NAME"
+										className="h-7 text-xs font-mono min-w-0 flex-1"
+										autoComplete="off"
+									/>
+									<Input
+										type="password"
+										value={row.value}
+										onChange={(e) => updateRow(row.id, "value", e.target.value)}
+										placeholder="Secret value"
+										className="h-7 text-xs font-mono min-w-0 flex-1"
+										autoComplete="off"
+									/>
+									<div className="w-16 flex justify-end">
+										<Button
+											variant="ghost"
+											size="sm"
+											className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+											onClick={() => removeRow(row.id)}
 										>
-											<span className="min-w-0 flex-1 truncate text-xs font-mono">{row.key}</span>
-											<span className="text-[11px] text-muted-foreground">••••••••••••</span>
-										</div>
-									))}
-								</div>
-								{parsedKeys.length > 30 && (
-									<div className="border-t border-border bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
-										+{parsedKeys.length - 30} more rows
+											<Trash2 className="h-3 w-3" />
+										</Button>
 									</div>
-								)}
+								</div>
+							))}
+						</div>
+
+						<div className="flex items-center justify-between">
+							<Button variant="ghost" size="sm" className="h-7 text-xs" onClick={addRow}>
+								<Plus className="h-3 w-3 mr-1" />
+								Add Row
+							</Button>
+							<Button
+								variant="ghost"
+								size="sm"
+								className="h-7 text-xs"
+								onClick={() => setShowPasteImport((prev) => !prev)}
+							>
+								Paste .env
+							</Button>
+						</div>
+
+						{showPasteImport && (
+							<div className="rounded-md border border-border/60 bg-muted/20 p-2.5 space-y-2">
+								<Label className="text-[11px] text-muted-foreground">Paste .env content</Label>
+								<Textarea
+									value={pasteDraft}
+									onChange={(e) => setPasteDraft(e.target.value)}
+									placeholder={"KEY=value\nDATABASE_URL=postgres://..."}
+									className="text-xs font-mono min-h-[100px]"
+								/>
+								<div className="flex justify-end">
+									<Button
+										size="sm"
+										className="h-7 text-xs"
+										onClick={handleImportPaste}
+										disabled={parseEnvRows(pasteDraft).length === 0}
+									>
+										Fill Rows from Paste
+									</Button>
+								</div>
 							</div>
 						)}
+
 						<div className="flex justify-end gap-2">
 							{!initialCreateOpen && (
 								<Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearComposer}>
@@ -217,7 +336,7 @@ export function SecretFilesEditor({
 								size="sm"
 								className="h-7 text-xs"
 								onClick={handleAdd}
-								disabled={upsertFile.isPending || !newPath.trim() || !newContent.trim()}
+								disabled={upsertFile.isPending || !canSave}
 							>
 								{upsertFile.isPending ? "Saving..." : "Save Secret File"}
 							</Button>
@@ -226,7 +345,6 @@ export function SecretFilesEditor({
 				</div>
 			)}
 
-			{/* Existing files */}
 			{files.length > 0 ? (
 				<div className="rounded-md border border-border/70 overflow-hidden">
 					<div className="flex items-center gap-3 border-b border-border bg-muted/30 px-3 py-2 text-[11px] font-medium text-muted-foreground">
