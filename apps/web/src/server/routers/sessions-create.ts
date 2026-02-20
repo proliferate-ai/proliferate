@@ -114,6 +114,7 @@ async function createScratchSession(input: {
 			sandboxProvider: provider.type,
 			snapshotId: null,
 			initialPrompt,
+			...(initialPrompt ? { titleStatus: "generating" } : {}),
 			agentConfig: {
 				modelId: agentConfig.modelId,
 				...(agentConfig.reasoningEffort && { reasoningEffort: agentConfig.reasoningEffort }),
@@ -126,6 +127,11 @@ async function createScratchSession(input: {
 	}
 
 	reqLog.info("Scratch session record created");
+
+	// Enqueue async title generation (fire-and-forget)
+	if (initialPrompt) {
+		void sessions.requestTitleGeneration(sessionId, orgId, initialPrompt);
+	}
 
 	return {
 		sessionId,
@@ -208,6 +214,7 @@ async function createConfigurationSession(input: {
 			sandboxProvider: provider.type,
 			snapshotId,
 			initialPrompt,
+			...(initialPrompt ? { titleStatus: "generating" } : {}),
 			agentConfig: {
 				modelId: agentConfig.modelId,
 				...(agentConfig.reasoningEffort && { reasoningEffort: agentConfig.reasoningEffort }),
@@ -220,6 +227,11 @@ async function createConfigurationSession(input: {
 	}
 
 	reqLog.info("Session record created, returning immediately");
+
+	// Enqueue async title generation (fire-and-forget)
+	if (initialPrompt) {
+		void sessions.requestTitleGeneration(sessionId, orgId, initialPrompt);
+	}
 
 	return {
 		sessionId,

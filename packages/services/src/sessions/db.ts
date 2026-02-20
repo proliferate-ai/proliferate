@@ -35,13 +35,15 @@ export type SessionRow = InferSelectModel<typeof sessions>;
 /** Repo row type from Drizzle schema (for relations) */
 export type RepoRow = InferSelectModel<typeof repos>;
 
-/** Automation summary for session list responses */
+/** Automation/configuration summary for session list responses */
 export type AutomationSummary = { id: string; name: string };
+export type ConfigurationSummary = { id: string; name: string };
 
 /** Session with repo relation */
 export type SessionWithRepoRow = SessionRow & {
 	repo: RepoRow | null;
 	automation?: AutomationSummary | null;
+	configuration?: ConfigurationSummary | null;
 };
 
 // ============================================
@@ -91,6 +93,9 @@ export async function listByOrganization(
 			automation: {
 				columns: { id: true, name: true },
 			},
+			configuration: {
+				columns: { id: true, name: true },
+			},
 		},
 		orderBy: [
 			sql`CASE WHEN ${sessions.status} IN ('starting', 'running', 'paused') THEN 0 ELSE 1 END`,
@@ -112,6 +117,9 @@ export async function findById(id: string, orgId: string): Promise<SessionWithRe
 		with: {
 			repo: true,
 			automation: {
+				columns: { id: true, name: true },
+			},
+			configuration: {
 				columns: { id: true, name: true },
 			},
 		},
@@ -154,6 +162,7 @@ export async function create(input: CreateSessionInput): Promise<SessionRow> {
 			snapshotId: input.snapshotId ?? null,
 			initialPrompt: input.initialPrompt,
 			title: input.title,
+			titleStatus: input.titleStatus ?? null,
 			clientType: input.clientType,
 			clientMetadata: input.clientMetadata,
 			agentConfig: input.agentConfig,
@@ -215,6 +224,7 @@ export async function createWithAdmissionGuard(
 			snapshotId: input.snapshotId ?? null,
 			initialPrompt: input.initialPrompt,
 			title: input.title,
+			titleStatus: input.titleStatus ?? null,
 			clientType: input.clientType,
 			clientMetadata: input.clientMetadata,
 			agentConfig: input.agentConfig,
@@ -240,6 +250,11 @@ export async function update(id: string, input: UpdateSessionInput): Promise<voi
 	if (input.sandboxId !== undefined) updates.sandboxId = input.sandboxId;
 	if (input.snapshotId !== undefined) updates.snapshotId = input.snapshotId;
 	if (input.title !== undefined) updates.title = input.title;
+	if (input.titleStatus !== undefined) updates.titleStatus = input.titleStatus;
+	if (input.initialPromptSentAt !== undefined)
+		updates.initialPromptSentAt = input.initialPromptSentAt
+			? new Date(input.initialPromptSentAt)
+			: null;
 	if (input.openCodeTunnelUrl !== undefined) updates.openCodeTunnelUrl = input.openCodeTunnelUrl;
 	if (input.previewTunnelUrl !== undefined) updates.previewTunnelUrl = input.previewTunnelUrl;
 	if (input.codingAgentSessionId !== undefined)
@@ -276,6 +291,11 @@ export async function updateWithOrgCheck(
 	if (input.sandboxId !== undefined) updates.sandboxId = input.sandboxId;
 	if (input.snapshotId !== undefined) updates.snapshotId = input.snapshotId;
 	if (input.title !== undefined) updates.title = input.title;
+	if (input.titleStatus !== undefined) updates.titleStatus = input.titleStatus;
+	if (input.initialPromptSentAt !== undefined)
+		updates.initialPromptSentAt = input.initialPromptSentAt
+			? new Date(input.initialPromptSentAt)
+			: null;
 	if (input.openCodeTunnelUrl !== undefined) updates.openCodeTunnelUrl = input.openCodeTunnelUrl;
 	if (input.previewTunnelUrl !== undefined) updates.previewTunnelUrl = input.previewTunnelUrl;
 	if (input.codingAgentSessionId !== undefined)

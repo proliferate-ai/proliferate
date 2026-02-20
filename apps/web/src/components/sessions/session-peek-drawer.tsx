@@ -97,7 +97,13 @@ function PeekDrawerContent({
 			<div className="flex-1 overflow-y-auto">
 				<SheetHeader className="border-b border-border/50">
 					<div className="flex items-center gap-2">
-						<SheetTitle className="text-base truncate flex-1">{displayTitle}</SheetTitle>
+						<SheetTitle className="text-base truncate flex-1">
+							{session.titleStatus === "generating" ? (
+								<span className="inline-block h-5 w-48 rounded bg-muted-foreground/20 animate-pulse" />
+							) : (
+								displayTitle
+							)}
+						</SheetTitle>
 						<StatusBadge session={session} />
 					</div>
 					{session.outcome && session.outcome !== "completed" && (

@@ -251,6 +251,9 @@ export class SessionHub {
 			await this.sendInit(ws);
 			this.sendStatus(ws, "running");
 			this.log("Client initialized and running", { userId });
+
+			// Auto-send initial prompt if not yet sent
+			await this.maybeSendInitialPrompt();
 		} catch (err) {
 			if (err instanceof MigrationInProgressError) {
 				this.sendStatus(ws, "migrating", "Extending session...");
@@ -260,6 +263,35 @@ export class SessionHub {
 			this.logError("Failed to initialize session", err);
 			this.sendError(ws, "Failed to initialize session");
 		}
+	}
+
+	/**
+	 * Auto-send the initial prompt to OpenCode if it hasn't been sent yet.
+	 * Guards against re-sends on reconnect via the initial_prompt_sent_at DB column.
+	 */
+	private async maybeSendInitialPrompt(): Promise<void> {
+		const context = this.runtime.getContext();
+		const { session } = context;
+
+		if (!context.initialPrompt || session.initial_prompt_sent_at) {
+			return;
+		}
+
+		const senderId = session.created_by;
+		if (!senderId) {
+			this.log("Skipping initial prompt auto-send: no created_by on session");
+			return;
+		}
+
+		this.log("Auto-sending initial prompt");
+
+		// Mark as sent immediately to prevent duplicate sends on concurrent connections
+		await sessions.update(this.sessionId, {
+			initialPromptSentAt: new Date().toISOString(),
+		});
+
+		// Use handlePrompt to broadcast to clients + send to OpenCode
+		await this.handlePrompt(context.initialPrompt, senderId, { source: "web" });
 	}
 
 	handleClientMessage(ws: WebSocket, message: ClientMessage): void {

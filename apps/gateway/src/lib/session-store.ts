@@ -47,6 +47,8 @@ export interface SessionRecord {
 	status?: string | null;
 	client_type?: string | null;
 	client_metadata?: unknown | null;
+	initial_prompt?: string | null;
+	initial_prompt_sent_at?: string | null;
 }
 
 export interface SessionContext {
@@ -62,6 +64,8 @@ export interface SessionContext {
 	snapshotHasDeps: boolean;
 	/** Resolved service commands (configuration-level or fallback from repos). */
 	serviceCommands?: ConfigurationServiceCommand[];
+	/** Initial prompt to auto-send after sandbox boot. */
+	initialPrompt?: string | null;
 }
 
 interface ConfigurationRepoRow {
@@ -126,6 +130,8 @@ export async function loadSessionContext(
 		status: sessionRow.status,
 		client_type: sessionRow.clientType,
 		client_metadata: sessionRow.clientMetadata,
+		initial_prompt: sessionRow.initialPrompt ?? null,
+		initial_prompt_sent_at: sessionRow.initialPromptSentAt?.toISOString() ?? null,
 	};
 
 	log.info(
@@ -183,6 +189,7 @@ export async function loadSessionContext(
 			},
 			envVars,
 			snapshotHasDeps: false,
+			initialPrompt: session.initial_prompt,
 		};
 	}
 
@@ -388,6 +395,7 @@ export async function loadSessionContext(
 		sshPublicKey,
 		snapshotHasDeps,
 		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
+		initialPrompt: session.initial_prompt,
 	};
 }
 

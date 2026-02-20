@@ -144,7 +144,10 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 	const repoShortName = session.repo?.githubRepoName
 		? getRepoShortName(session.repo.githubRepoName)
 		: null;
-	const configurationLabel = formatConfigurationLabel(session.configurationId);
+	const configurationLabel = formatConfigurationLabel(
+		session.configurationId,
+		session.configurationName,
+	);
 	const repoAndBranch = repoShortName
 		? `${repoShortName}${session.branchName ? ` (${session.branchName})` : ""}`
 		: "Untitled";
@@ -242,6 +245,8 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 								onClick={(e) => e.stopPropagation()}
 								className="text-sm font-medium"
 							/>
+						) : session.titleStatus === "generating" ? (
+							<span className="inline-block h-4 w-40 rounded bg-muted-foreground/20 animate-pulse" />
 						) : (
 							<span className="truncate block">{displayTitle}</span>
 						)}
@@ -261,39 +266,14 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 				)}
 
 				<div className="w-28 shrink-0 hidden md:block">
-					<span
-						className={cn(
-							"text-xs truncate block",
-							configurationLabel ? "text-muted-foreground" : "text-muted-foreground/60",
-						)}
-					>
-						{configurationLabel ?? "No config"}
-					</span>
+					<span className="text-xs truncate block text-muted-foreground">{configurationLabel}</span>
 				</div>
 
 				<OriginBadge session={session} />
 
-				{/* Trailing: metadata (default) or actions menu (on hover) */}
-				<div className="shrink-0 flex items-center">
-					<span
-						className={cn(
-							"text-xs text-muted-foreground whitespace-nowrap group-hover:hidden",
-							menuOpen && "hidden",
-						)}
-					>
-						{metaParts.join(" · ")}
-					</span>
-					<div
-						className={cn("hidden group-hover:flex items-center", menuOpen && "flex")}
-						onClick={(e) => e.stopPropagation()}
-					>
-						<ItemActionsMenu
-							onRename={handleRename}
-							onDelete={() => setDeleteDialogOpen(true)}
-							onOpenChange={setMenuOpen}
-						/>
-					</div>
-				</div>
+				<span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+					{metaParts.join(" · ")}
+				</span>
 
 				{session.prUrls && session.prUrls.length > 0 && (
 					<span className="inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">
@@ -319,13 +299,27 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 						</span>
 					)}
 
-				<span
-					className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground flex-shrink-0"
+				{/* Status + actions — three-dot menu overlays on hover without shifting layout */}
+				<div
+					className="w-[90px] flex-shrink-0 relative flex items-center gap-1.5"
 					aria-label={`Status: ${config.label}`}
 				>
-					<Icon className={`h-3.5 w-3.5 ${config.colorClassName}`} />
-					{config.label}
-				</span>
+					<Icon className={`h-3.5 w-3.5 shrink-0 ${config.colorClassName}`} />
+					<span className="text-[11px] font-medium text-muted-foreground">{config.label}</span>
+					<div
+						className={cn(
+							"absolute right-0 hidden group-hover:flex items-center",
+							menuOpen && "flex",
+						)}
+						onClick={(e) => e.stopPropagation()}
+					>
+						<ItemActionsMenu
+							onRename={handleRename}
+							onDelete={() => setDeleteDialogOpen(true)}
+							onOpenChange={setMenuOpen}
+						/>
+					</div>
+				</div>
 			</div>
 
 			{/* Delete Confirmation Dialog */}

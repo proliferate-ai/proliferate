@@ -23,7 +23,16 @@ export function useSessions(params?: {
 			input: queryParams,
 		}),
 		enabled,
-		refetchInterval: refetchInterval ?? false,
+		refetchInterval:
+			refetchInterval ??
+			((query) => {
+				// Auto-refetch while any session title is being generated
+				const sessions = query.state.data?.sessions;
+				if (sessions?.some((s: Session) => s.titleStatus === "generating")) {
+					return 3000;
+				}
+				return false;
+			}),
 		refetchIntervalInBackground: false,
 		select: (data) => data.sessions,
 	});
@@ -70,9 +79,11 @@ export function useCreateSession() {
 				sandboxId: result.sandboxId ?? null,
 				snapshotId: null,
 				configurationId: variables.configurationId ?? null,
+				configurationName: null,
 				branchName: null,
 				parentSessionId: null,
 				title: null,
+				titleStatus: variables.initialPrompt ? "generating" : null,
 				startedAt: new Date().toISOString(),
 				lastActivityAt: new Date().toISOString(),
 				pausedAt: null,

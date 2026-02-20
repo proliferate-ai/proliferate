@@ -36,6 +36,7 @@ import {
 	stopConfigurationSnapshotWorkers,
 } from "./configuration-snapshots";
 import { SessionSubscriber } from "./pubsub";
+import { startSessionTitleWorkers, stopSessionTitleWorkers } from "./session-title";
 import { SlackClient } from "./slack";
 import { startActionExpirySweeper, stopActionExpirySweeper } from "./sweepers";
 
@@ -115,6 +116,9 @@ const baseSnapshotWorkers = isModalConfigured
 if (!isModalConfigured) {
 	logger.info("Modal not configured - skipping snapshot worker startup");
 }
+
+// Session title generation worker
+const sessionTitleWorkers = startSessionTitleWorkers(logger.child({ module: "session-title" }));
 
 // Action invocation expiry sweeper
 startActionExpirySweeper(logger.child({ module: "action-expiry" }));
@@ -208,6 +212,7 @@ async function shutdown(): Promise<void> {
 	if (baseSnapshotWorkers) {
 		await stopBaseSnapshotWorkers(baseSnapshotWorkers);
 	}
+	await stopSessionTitleWorkers(sessionTitleWorkers);
 
 	// Close Redis client
 	await closeRedisClient();

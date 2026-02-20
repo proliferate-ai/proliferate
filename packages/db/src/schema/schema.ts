@@ -1340,6 +1340,8 @@ export const sessions = pgTable(
 		parentSessionId: uuid("parent_session_id"),
 		initialPrompt: text("initial_prompt"),
 		title: text(),
+		titleStatus: text("title_status"),
+		initialPromptSentAt: timestamp("initial_prompt_sent_at", { withTimezone: true, mode: "date" }),
 		automationId: uuid("automation_id"),
 		triggerId: uuid("trigger_id"),
 		triggerEventId: uuid("trigger_event_id").references((): AnyPgColumn => triggerEvents.id, {

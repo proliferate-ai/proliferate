@@ -22,6 +22,7 @@ export interface CreateSessionInput {
 	snapshotId?: string | null;
 	initialPrompt?: string;
 	title?: string;
+	titleStatus?: string | null;
 	clientType?: string;
 	clientMetadata?: Record<string, unknown>;
 	agentConfig?: Record<string, unknown>;
@@ -37,6 +38,8 @@ export interface UpdateSessionInput {
 	sandboxId?: string | null;
 	snapshotId?: string | null;
 	title?: string;
+	titleStatus?: string | null;
+	initialPromptSentAt?: string | null;
 	openCodeTunnelUrl?: string | null;
 	previewTunnelUrl?: string | null;
 	codingAgentSessionId?: string | null;

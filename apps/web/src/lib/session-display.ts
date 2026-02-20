@@ -80,10 +80,11 @@ export function parsePrUrl(url: string): { repo: string; number: number } | null
 	return { repo: match[1], number: Number.parseInt(match[2], 10) };
 }
 
-/** Render a short configuration identifier label. */
+/** Render a configuration label — uses the name if available. */
 export function formatConfigurationLabel(
 	configurationId: string | null | undefined,
-): string | null {
-	if (!configurationId) return null;
-	return `Config ${configurationId.slice(0, 8)}`;
+	configurationName: string | null | undefined,
+): string {
+	if (!configurationId) return "Scratch";
+	return configurationName || `Config ${configurationId.slice(0, 8)}`;
 }

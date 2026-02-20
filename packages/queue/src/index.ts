@@ -24,6 +24,7 @@ export const QUEUE_NAMES = {
 	BILLING_SNAPSHOT_CLEANUP: "billing-snapshot-cleanup",
 	BILLING_FAST_RECONCILE: "billing-fast-reconcile",
 	BILLING_PARTITION_MAINTENANCE: "billing-partition-maintenance",
+	SESSION_TITLE_GENERATION: "session-title-generation",
 } as const;
 
 // ============================================
@@ -159,6 +160,17 @@ export interface BillingFastReconcileJob {
 
 /** Daily partition maintenance job — creates future partitions, cleans old keys. */
 export type BillingPartitionMaintenanceJob = Record<string, never>;
+
+/**
+ * Job to generate a session title via LLM.
+ * Prompt is stored in job data to avoid race with DB reads.
+ */
+export interface SessionTitleGenerationJob {
+	sessionId: string;
+	orgId: string;
+	prompt: string;
+}
+
 
 // ============================================
 // Connection Options
@@ -385,6 +397,22 @@ const configurationSnapshotBuildJobOptions: JobsOptions = {
 	},
 };
 
+const sessionTitleGenerationJobOptions: JobsOptions = {
+	attempts: 3,
+	backoff: {
+		type: "exponential",
+		delay: 2000,
+	},
+	removeOnComplete: {
+		age: 3600, // 1 hour
+		count: 100,
+	},
+	removeOnFail: {
+		age: 86400, // 24 hours
+		count: 100,
+	},
+};
+
 // ============================================
 // Queue Factories
 // ============================================
@@ -583,6 +611,31 @@ export function createConfigurationSnapshotBuildWorker(
 			concurrency: 2,
 		},
 	);
+}
+
+/**
+ * Create the session title generation queue
+ */
+export function createSessionTitleGenerationQueue(
+	connection?: ConnectionOptions,
+): Queue<SessionTitleGenerationJob> {
+	return new Queue<SessionTitleGenerationJob>(QUEUE_NAMES.SESSION_TITLE_GENERATION, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: sessionTitleGenerationJobOptions,
+	});
+}
+
+/**
+ * Create a worker for processing session title generation jobs
+ */
+export function createSessionTitleGenerationWorker(
+	processor: (job: Job<SessionTitleGenerationJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<SessionTitleGenerationJob> {
+	return new Worker<SessionTitleGenerationJob>(QUEUE_NAMES.SESSION_TITLE_GENERATION, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 3,
+	});
 }
 
 /**

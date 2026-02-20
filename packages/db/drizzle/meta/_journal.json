@@ -256,6 +256,13 @@
       "when": 1772064000000,
       "tag": "0034_add_billing_event_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1772032200000,
+      "tag": "0034_session_title_generation",
+      "breakpoints": true
     }
   ]
 }

@@ -48,6 +48,10 @@ export const sessions = pgTable(
 
 		// Display
 		title: text("title"),
+		titleStatus: text("title_status"), // "generating" | null
+
+		// Initial prompt delivery guard
+		initialPromptSentAt: timestamp("initial_prompt_sent_at", { withTimezone: true }),
 
 		// Automation/Trigger linkage
 		automationId: uuid("automation_id"), // FK added separately

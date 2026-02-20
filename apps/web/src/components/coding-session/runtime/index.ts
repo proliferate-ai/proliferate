@@ -1,7 +1,7 @@
 "use client";
 
 import { type AppendMessage, useExternalStoreRuntime } from "@assistant-ui/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { convertToThreadMessage } from "../message-converter";
 import type { SessionStatus } from "./types";
 import { useAutoTitle } from "./use-auto-title";
@@ -21,16 +21,17 @@ interface UseCodingSessionRuntimeOptions {
 /**
  * Main hook for coding session runtime.
  * Composes smaller hooks for token, websocket, and title management.
+ *
+ * Note: The initial prompt is now auto-sent by the gateway after sandbox boot.
+ * Title generation is handled server-side via an async BullMQ job.
  */
 export function useCodingSessionRuntime({
 	sessionId,
 	initialPrompt,
-	initialImages,
 	initialTitle,
 	clientType,
 }: UseCodingSessionRuntimeOptions) {
 	const { token, isLoading: tokenLoading, error: tokenError } = useWsToken();
-	const initialPromptSentRef = useRef(false);
 
 	// Track title updates from WebSocket
 	const [wsTitle, setWsTitle] = useState<string | null>(null);
@@ -75,23 +76,6 @@ export function useCodingSessionRuntime({
 		initialTitle: wsTitle || initialTitle,
 	});
 
-	// Auto-send initial prompt when initialized
-	useEffect(() => {
-		if (
-			isInitialized &&
-			initialPrompt &&
-			!initialPromptSentRef.current &&
-			messages.length === 0 &&
-			clientType !== "automation"
-		) {
-			initialPromptSentRef.current = true;
-			sendPrompt(
-				initialPrompt,
-				initialImages && initialImages.length > 0 ? initialImages : undefined,
-			);
-		}
-	}, [isInitialized, initialPrompt, initialImages, messages.length, sendPrompt, clientType]);
-
 	// Convert messages for assistant-ui
 	const threadMessages = useMemo(() => {
 		return messages.map((msg) => convertToThreadMessage(msg, streamingText[msg.id]));
@@ -124,10 +108,7 @@ export function useCodingSessionRuntime({
 		sendCancel();
 	}, [isConnected, sendCancel]);
 
-	// Don't show running state when there are no messages and no prompt was sent —
-	// the gateway may send status events that set isRunning before user interaction.
-	const effectiveIsRunning =
-		isRunning && (threadMessages.length > 0 || initialPromptSentRef.current);
+	const effectiveIsRunning = isRunning && threadMessages.length > 0;
 
 	const runtime = useExternalStoreRuntime({
 		messages: threadMessages,
