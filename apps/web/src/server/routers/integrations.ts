@@ -887,6 +887,15 @@ export const integrationsRouter = {
 				}
 			}
 
+			// Validate agent_decide requires a non-empty allowlist
+			if (input.strategy === "agent_decide") {
+				if (!input.allowedConfigurationIds || input.allowedConfigurationIds.length === 0) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "Agent-decide strategy requires at least one allowed configuration",
+					});
+				}
+			}
+
 			// Validate allowedConfigurationIds belong to org and have routing descriptions
 			if (input.strategy === "agent_decide" && input.allowedConfigurationIds?.length) {
 				const candidates = await configurations.getConfigurationCandidates(
