@@ -25,7 +25,7 @@ Yeah, the centered logo + badges + one-liner at the top is way more professional
 
 Securely onboard coding agents to your company- with access to your real dev environments, tools, and workflows. Agents do the work in the background and come to you with results: a live preview to test, a summary of what changed, and a PR ready to merge.
 
-![Proliferate in action](product-screenshot.png?v=2)
+![Proliferate in action](hero.png)
 
 ## What can you do with it?
 
