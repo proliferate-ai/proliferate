@@ -36,6 +36,7 @@ interface ConfigurationOption {
 	id: string;
 	name: string | null;
 	status: string | null;
+	routingDescription?: string | null;
 }
 
 interface IntegrationDetailDialogProps {
@@ -365,10 +366,13 @@ function SlackSettingsContent({
 	}) => void;
 }) {
 	const isAgentDecide = slackConfig.strategy === "agent_decide";
+	const routableConfigs = readyConfigurations.filter(
+		(c) => c.routingDescription && c.routingDescription.trim().length > 0,
+	);
 	const allowedCount =
-		slackConfig.allowedConfigurationIds?.filter((id) =>
-			readyConfigurations.some((c) => c.id === id),
-		).length ?? 0;
+		slackConfig.allowedConfigurationIds?.filter((id) => routableConfigs.some((c) => c.id === id))
+			.length ?? 0;
+	const canEnableAgentDecide = routableConfigs.length > 0;
 
 	return (
 		<div className="space-y-4">
@@ -379,27 +383,59 @@ function SlackSettingsContent({
 				</p>
 			</div>
 
-			<div className="flex items-center justify-between">
-				<span className="text-xs text-muted-foreground">
-					{isAgentDecide
-						? "Agent selects from allowed configurations"
-						: "Use a fixed default configuration"}
-				</span>
-				<div className="flex items-center gap-2">
-					<span className="text-xs text-muted-foreground">Fixed</span>
-					<Switch
-						checked={isAgentDecide}
-						onCheckedChange={(checked) => {
-							onUpdate({
-								installationId: slackConfig.installationId!,
-								strategy: checked ? "agent_decide" : "fixed",
-								defaultConfigurationId: slackConfig.defaultConfigurationId,
-								allowedConfigurationIds: slackConfig.allowedConfigurationIds,
-							});
-						}}
-					/>
-					<span className="text-xs text-muted-foreground">Agent decides</span>
+			<div className="space-y-1.5">
+				<div className="flex items-center justify-between">
+					<span className="text-xs text-muted-foreground">
+						{isAgentDecide
+							? "Agent selects from allowed configurations"
+							: "Use a fixed default configuration"}
+					</span>
+					<div className="flex items-center gap-2">
+						<span className="text-xs text-muted-foreground">Fixed</span>
+						<Switch
+							checked={isAgentDecide}
+							disabled={!isAgentDecide && !canEnableAgentDecide}
+							onCheckedChange={(checked) => {
+								onUpdate({
+									installationId: slackConfig.installationId!,
+									strategy: checked ? "agent_decide" : "fixed",
+									defaultConfigurationId: slackConfig.defaultConfigurationId,
+									// Auto-select configs that have routing descriptions
+									allowedConfigurationIds: checked
+										? routableConfigs.map((c) => c.id)
+										: slackConfig.allowedConfigurationIds,
+								});
+							}}
+						/>
+						<span className="text-xs text-muted-foreground">Agent decides</span>
+					</div>
 				</div>
+				{!isAgentDecide && !canEnableAgentDecide && (
+					<p className="text-xs text-muted-foreground">
+						{readyConfigurations.length === 0 ? (
+							<>
+								<a
+									href="/dashboard/configurations"
+									className="underline hover:text-foreground transition-colors"
+								>
+									Create a configuration
+								</a>{" "}
+								with a routing description to enable agent-decide mode.
+							</>
+						) : (
+							<>
+								No configurations have routing descriptions.{" "}
+								<a
+									href="/dashboard/configurations"
+									className="underline hover:text-foreground transition-colors"
+								>
+									Add routing descriptions
+								</a>{" "}
+								to enable agent-decide mode.
+							</>
+						)}
+					</p>
+				)}
 			</div>
 
 			{isAgentDecide ? (
