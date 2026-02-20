@@ -42,7 +42,7 @@ export interface SlackClientMetadata {
 }
 
 // Tools we actually want to post about (most are too noisy)
-const SIGNIFICANT_TOOLS = ["todowrite"];
+const significantTools = ["todowrite"];
 
 // Tool handlers in priority order (first match wins)
 const toolHandlers: ToolHandler[] = [todoWriteToolHandler, defaultToolHandler];
@@ -68,7 +68,7 @@ function findToolHandler(toolName: string): ToolHandler {
  */
 function isSignificantTool(toolName: string): boolean {
 	const normalized = toolName.toLowerCase();
-	return SIGNIFICANT_TOOLS.some((t) => normalized === t || normalized.includes(t));
+	return significantTools.some((t) => normalized === t || normalized.includes(t));
 }
 
 /**
