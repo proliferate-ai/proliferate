@@ -260,15 +260,18 @@ export function SecretFilesEditor({
 		const file = event.target.files?.[0];
 		if (!file) return;
 
-		const content = await file.text();
-		const parsedRows = parseEnvRows(content);
+		try {
+			const content = await file.text();
+			const parsedRows = parseEnvRows(content);
 
-		setAdding(true);
-		setNewPath((prev) => prev || file.name);
-		setRows(parsedRows.length > 0 ? parsedRows : [createRow()]);
-		setShowPasteImport(false);
-		setPasteDraft("");
-		event.target.value = "";
+			setAdding(true);
+			setNewPath((prev) => prev || file.name);
+			setRows(parsedRows.length > 0 ? parsedRows : [createRow()]);
+			setShowPasteImport(false);
+			setPasteDraft("");
+		} finally {
+			event.target.value = "";
+		}
 	};
 
 	const handleImportPaste = () => {

@@ -517,7 +517,8 @@ export function EnvironmentPanel({
 		[specKeys, existingSpecKeys],
 	);
 
-	const missingCount = missingRequired.length;
+	const setupRequiredKeys = useMemo(() => specKeys.filter((k) => k.required), [specKeys]);
+	const missingCount = isSetupSession ? setupRequiredKeys.length : missingRequired.length;
 
 	useEffect(() => {
 		setMissingEnvKeyCount(missingCount);
@@ -603,14 +604,14 @@ export function EnvironmentPanel({
 									)}
 								</div>
 
-								{missingRequired.length > 0 && (
+								{setupRequiredKeys.length > 0 && (
 									<div className="rounded-md border border-border/60 p-2.5">
 										<p className="text-xs font-medium">Requested keys to include in your files</p>
 										<p className="text-[11px] text-muted-foreground mt-1">
 											Add these keys to the secret file(s) above.
 										</p>
 										<div className="mt-2 flex flex-wrap gap-1.5">
-											{missingRequired.map((k) => (
+											{setupRequiredKeys.map((k) => (
 												<span
 													key={k.key}
 													className="inline-flex rounded border border-border bg-background px-1.5 py-0.5 text-[11px] font-mono"
