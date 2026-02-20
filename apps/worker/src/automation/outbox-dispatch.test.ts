@@ -6,6 +6,7 @@ const {
 	mockMarkDispatched,
 	mockMarkFailed,
 	mockDispatchRunNotification,
+	mockDispatchSessionNotification,
 	mockQueueAutomationEnrich,
 	mockQueueAutomationExecute,
 } = vi.hoisted(() => ({
@@ -14,6 +15,7 @@ const {
 	mockMarkDispatched: vi.fn(),
 	mockMarkFailed: vi.fn(),
 	mockDispatchRunNotification: vi.fn(),
+	mockDispatchSessionNotification: vi.fn(),
 	mockQueueAutomationEnrich: vi.fn(),
 	mockQueueAutomationExecute: vi.fn(),
 }));
@@ -71,6 +73,7 @@ vi.mock("./artifacts", () => ({
 
 vi.mock("./notifications", () => ({
 	dispatchRunNotification: mockDispatchRunNotification,
+	dispatchSessionNotification: mockDispatchSessionNotification,
 }));
 
 const { dispatchOutbox, retryDelay } = await import("./index");
@@ -115,6 +118,7 @@ describe("dispatchOutbox", () => {
 		mockQueueAutomationEnrich.mockResolvedValue(undefined);
 		mockQueueAutomationExecute.mockResolvedValue(undefined);
 		mockDispatchRunNotification.mockResolvedValue(undefined);
+		mockDispatchSessionNotification.mockResolvedValue(undefined);
 	});
 
 	it("calls recoverStuckOutbox before claiming", async () => {
@@ -190,6 +194,53 @@ describe("dispatchOutbox", () => {
 		const expectedMax = Date.now() + 125_000;
 		expect(failedAt.getTime()).toBeGreaterThan(expectedMin);
 		expect(failedAt.getTime()).toBeLessThan(expectedMax);
+	});
+
+	it("dispatches notify_session_complete with sessionId", async () => {
+		const row = makeOutboxRow({
+			kind: "notify_session_complete",
+			payload: { sessionId: "session-1" },
+		});
+		mockClaimPendingOutbox.mockResolvedValue([row]);
+
+		await dispatchOutbox(mockEnrichQueue, mockExecuteQueue, mockLogger);
+
+		expect(mockDispatchSessionNotification).toHaveBeenCalledWith("session-1", mockLogger);
+		expect(mockMarkDispatched).toHaveBeenCalledWith("outbox-1");
+	});
+
+	it("marks failed when notify_session_complete has no sessionId", async () => {
+		const row = makeOutboxRow({
+			kind: "notify_session_complete",
+			payload: {},
+		});
+		mockClaimPendingOutbox.mockResolvedValue([row]);
+
+		await dispatchOutbox(mockEnrichQueue, mockExecuteQueue, mockLogger);
+
+		expect(mockMarkFailed).toHaveBeenCalledWith("outbox-1", "Missing sessionId in outbox payload");
+		expect(mockMarkDispatched).not.toHaveBeenCalled();
+	});
+
+	it("retries notify_session_complete on dispatch failure", async () => {
+		const row = makeOutboxRow({
+			kind: "notify_session_complete",
+			payload: { sessionId: "session-1" },
+			attempts: 1,
+		});
+		mockClaimPendingOutbox.mockResolvedValue([row]);
+		mockDispatchSessionNotification.mockRejectedValueOnce(
+			new Error("Session notification delivery failed for 1/1 subscriptions"),
+		);
+
+		await dispatchOutbox(mockEnrichQueue, mockExecuteQueue, mockLogger);
+
+		expect(mockMarkFailed).toHaveBeenCalledWith(
+			"outbox-1",
+			"Session notification delivery failed for 1/1 subscriptions",
+			expect.any(Date),
+		);
+		expect(mockMarkDispatched).not.toHaveBeenCalled();
 	});
 
 	it("marks permanently failed when runId is missing", async () => {

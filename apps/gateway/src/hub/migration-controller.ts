@@ -5,7 +5,7 @@
  */
 
 import type { Logger } from "@proliferate/logger";
-import { sessions } from "@proliferate/services";
+import { notifications, sessions } from "@proliferate/services";
 import type { SandboxProviderType, ServerMessage } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { cancelSessionExpiry } from "../expiry/expiry-queue";
@@ -288,6 +288,14 @@ export class MigrationController {
 			await sessions.markSessionStopped(this.options.sessionId);
 		} catch (err) {
 			this.logger.error({ err }, "Circuit breaker: DB update failed");
+		}
+
+		// Enqueue session completion notifications (best-effort)
+		try {
+			const orgId = this.options.runtime.getContext().session.organization_id;
+			await notifications.enqueueSessionCompletionNotification(orgId, this.options.sessionId);
+		} catch (err) {
+			this.logger.error({ err }, "Failed to enqueue session completion notification");
 		}
 
 		this.options.runtime.resetSandboxState();

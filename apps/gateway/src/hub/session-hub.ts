@@ -11,7 +11,7 @@
 
 import { randomUUID } from "crypto";
 import { type Logger, createLogger } from "@proliferate/logger";
-import { configurations, sessions } from "@proliferate/services";
+import { configurations, notifications, sessions } from "@proliferate/services";
 import type {
 	ClientMessage,
 	ClientSource,
@@ -983,6 +983,14 @@ export class SessionHub {
 			await sessions.markSessionStopped(this.sessionId);
 		} catch (err) {
 			this.logError("Failed to mark session stopped for automation", err);
+		}
+
+		// Enqueue session completion notifications (best-effort)
+		try {
+			const orgId = context.session.organization_id;
+			await notifications.enqueueSessionCompletionNotification(orgId, this.sessionId);
+		} catch (err) {
+			this.logError("Failed to enqueue session completion notification", err);
 		}
 
 		this.runtime.disconnectSse();

@@ -433,6 +433,8 @@ export async function dispatchSessionNotification(
 		},
 	];
 
+	const failures: Array<{ subscriptionId: string; error: string }> = [];
+
 	for (const sub of subscriptions) {
 		if (!sub.slackUserId) continue;
 
@@ -449,11 +451,19 @@ export async function dispatchSessionNotification(
 				log.info("Session completion DM sent");
 			} else if (result.error) {
 				log.error({ error: result.error }, "Session completion DM failed");
-				// Don't throw — continue to next subscription
+				failures.push({ subscriptionId: sub.id, error: result.error });
 			}
 		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
 			log.error({ err }, "Failed to send session notification DM");
+			failures.push({ subscriptionId: sub.id, error: message });
 		}
+	}
+
+	if (failures.length > 0) {
+		throw new Error(
+			`Session notification delivery failed for ${failures.length}/${subscriptions.length} subscriptions`,
+		);
 	}
 }
 
