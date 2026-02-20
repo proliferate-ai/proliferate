@@ -32,13 +32,6 @@ export function convertToThreadMessage(
 	message: ExtendedMessage,
 	streamingText?: string,
 ): ThreadMessageLike {
-	// Debug logging to identify duplicate rendering
-	const partsTextLen =
-		message.parts?.reduce((acc, p) => acc + (p.type === "text" ? p.text.length : 0), 0) || 0;
-	console.log(
-		`[Render] msgId=${message.id} role=${message.role} contentLen=${message.content?.length || 0} streamingLen=${streamingText?.length || 0} partsCount=${message.parts?.length || 0} partsTextLen=${partsTextLen}`,
-	);
-
 	const content: ThreadMessageLike["content"] = [];
 
 	// If we have ordered parts, use them directly

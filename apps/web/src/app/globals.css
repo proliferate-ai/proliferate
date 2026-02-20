@@ -172,3 +172,8 @@ input:-webkit-autofill:active {
 .no-scrollbar::-webkit-scrollbar {
 	display: none;
 }
+
+/* Prevent iframes from capturing pointer events during panel resize */
+body.panel-resizing iframe {
+	pointer-events: none !important;
+}

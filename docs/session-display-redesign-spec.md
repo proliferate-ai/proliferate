@@ -4,7 +4,7 @@
 
 Session listings across the UI (sessions page, inbox, my work, activity feed, command palette, dashboard) show infrastructure metadata — status dot, repo name, branch, timestamp — but nothing about what the agent **did**, is **doing**, or **produced**. A manager looking at the sessions list sees "Paused" for 15 sessions and has no idea which ones are sleeping (healthy, will resume), which are stuck on credits (need action), and which the user manually paused. The inbox shows failed automation runs with just an automation name and error — no context about what the task was or whether a PR was created.
 
-Additionally, task context is often missing entirely because **`initialPrompt` is not consistently written for web-created sessions**. The DB column exists, but the web create flow sends the prompt via WebSocket to the gateway — it never persists to PostgreSQL. This must be fixed before prompt snippets can be displayed.
+Additionally, task context is often missing entirely because **`initialPrompt` is not consistently written for web-created sessions**. The DB column exists, but web session creation currently does not persist dashboard-entered prompt text. Some flows rely on transient client state (`pendingPrompt`) for first-send behavior. This must be fixed before prompt snippets can be displayed reliably.
 
 ## Canonical Source
 
@@ -27,7 +27,7 @@ Instead, **the gateway passively observes data that already flows through it** �
 
 ### 2. Honest status over infrastructure status
 
-The DB `status` column has 6 known runtime values: `pending`, `starting`, `running`, `paused`, `suspended`, `stopped`. `SessionStatusSchema` defines 5 (`starting`, `running`, `paused`, `suspended`, `stopped`) — `pending` is written by gateway deferred create but missing from that shared enum. Session list rows currently validate `status` as `z.string()`, so this is not a row-drop risk today, but we should still add `pending` in Phase 1 for contract/runtime parity and future safety. `failed` is documented in the sessions-gateway spec but **no current code path writes `status="failed"` to sessions** (the `failed` value in `actions.ts` is an action invocation status, not a session status). `deriveDisplayStatus` handles `failed` defensively as a catch-all fallback. But "paused" conflates fundamentally different situations depending on `pauseReason`:
+The DB `status` column is text with no DB enum constraint. Current runtime writers actively use `pending`, `starting`, `running`, `paused`, and `stopped`; contracts/specs also include `suspended` and `failed` as defensive/forward-compatible states. `SessionStatusSchema` currently defines 5 values (`starting`, `running`, `paused`, `suspended`, `stopped`) — `pending` is written by gateway deferred create but missing from that shared enum. Session list rows currently validate `status` as `z.string()`, so this is not a row-drop risk today, but we should still add `pending` in Phase 1 for contract/runtime parity and future safety. `failed` is documented in the sessions-gateway spec but **no current code path writes `status="failed"` to sessions** (the `failed` value in `actions.ts` is an action invocation status, not a session status). `deriveDisplayStatus` handles `failed` defensively as a catch-all fallback. But "paused" conflates fundamentally different situations depending on `pauseReason`:
 
 | Runtime condition | User perception | Should display as |
 |---|---|---|
@@ -38,7 +38,9 @@ The DB `status` column has 6 known runtime values: `pending`, `starting`, `runni
 | `overage_cap` | Stuck, needs cap raised | **Blocked** (red) |
 | `suspended` | Account suspended, needs admin | **Blocked** (red) |
 | `orphaned` | Gateway failover, auto-recovering | **Reconnecting** (yellow pulsing) |
-| `status="stopped" + pauseReason="snapshot_failed"` | Snapshot circuit breaker tripped and session was terminated | **Failed** (red) |
+
+Terminal override (not a paused-state reason):
+- `status="stopped" + pauseReason="snapshot_failed"` → **Failed** (red)
 
 A pure function `deriveDisplayStatus(status, pauseReason)` maps raw DB state to user-facing display statuses. See **Complete Status Matrix** below.
 
@@ -74,7 +76,7 @@ status = "paused":
   pauseReason = "overage_cap"     → "blocked"
   pauseReason = "suspended"       → "blocked"       // pauseReason can also be "suspended" via org-pause
   pauseReason = "orphaned"        → "recovering"
-  (any other value)               → "recovering"    // defensive fallback
+  (any other value)               → "paused"        // safe neutral fallback for unknown future reasons
 (any other status)                → "failed"         // defensive fallback
 ```
 
@@ -91,6 +93,7 @@ UI copy note:
 - `"stopped" + pauseReason "snapshot_failed"` is the circuit breaker path (`migration-controller.ts:266`). The session is terminated, not recovering. Treat as `"failed"`.
 - User-initiated pause must explicitly write `pauseReason: "manual"` in Phase 1 (`sessions-pause.ts`).
 - Historical `status = "paused" + pauseReason = null` rows are currently user-manual pauses in production data. Keep null mapped to `"paused"` for compatibility and run a Phase 1 backfill to set `"manual"` explicitly.
+- Unknown future paused reasons should degrade to `"paused"` (neutral) until explicitly mapped. Reserve `"recovering"` for known transient infra states like `orphaned`.
 
 **Blocked reason text** (human-readable, derived from `pauseReason` or `status`):
 - `credit_limit` → "Out of credits"
@@ -109,7 +112,7 @@ UI copy note:
 | `status` | Yes | Yes | Yes (dot + label) | But "Paused" is misleading |
 | `pauseReason` | Yes | Yes | **No** | Key to honest status, unused by frontend |
 | `title` | Yes | Yes | Yes | Often null — user must manually set |
-| `initialPrompt` | Yes (column exists) | **No** (mapper drops it) | **No** | **Column exists but web create flow doesn't persist it.** Only populated for setup sessions and some automation paths. Must be fixed in Phase 1. |
+| `initialPrompt` | Yes (column exists) | **No** (mapper drops it) | **No** | **Column exists but web dashboard creation path doesn't persist entered prompt text.** Currently populated mainly by setup and certain gateway-created session paths (for example Slack session creation with `initialPrompt`). Must be fixed in Phase 1. |
 | `endedAt` | Yes | **No** (mapper drops it) | **No** | Needed for "created X ago" timestamp |
 | `snapshotId` | Yes | Yes | **No** | Non-null = resumable |
 | `repo.githubRepoName` | Yes | Yes | Yes | Currently primary subtitle |
@@ -153,7 +156,7 @@ Sessions can be resumed for new work after being paused/idle. On resume:
 - `startedAt` is NOT reset (persists as creation timestamp)
 - `pausedAt` is NOT cleared (historical)
 - `snapshotId` persists (for audit trail)
-- `latestTask` → **cleared to NULL** when session transitions out of "running" (no zombie state). Must be explicitly set in ALL pause/stop writers: gateway `markSessionStopped()`, gateway `terminateForAutomation()`, web `sessions-pause.ts` manual pause handler, billing `org-pause.ts` batch pauser, orphan sweeper. Any writer that changes status away from `running`/`starting` must include `latestTask: null`.
+- `latestTask` → **cleared to NULL** when session transitions out of "running" (no zombie state). Must be explicitly set in ALL pause/stop writers (gateway, web, services, CLI). Current writer set includes gateway idle/circuit-breaker paths, gateway `markSessionStopped()` call sites, web `sessions-pause.ts`, billing `org-pause.ts`, billing `metering.ts` auto-pause/finalizer paths, orphan sweeper direct DB cleanup, and CLI stop utilities. Any writer that changes status away from `running`/`starting` must include `latestTask: null`.
 - `metrics` → **additive across resumes** (counters accumulate). `activeSeconds` pauses during idle, resumes on thaw. This is intentional — metrics reflect the session's total lifetime work.
 - `outcome` → **overwritten** at each session end. Only the final outcome persists. For long-lived sessions this is acceptable — the last state is what matters for display.
 - `summary` → **overwritten** by each `automation.complete` call. NULL for regular sessions.
@@ -167,7 +170,10 @@ Sessions can be resumed for new work after being paused/idle. On resume:
 0. **Hard pre-slice**: `rawPrompt.substring(0, 2000)` before ANY regex. Users paste 100KB+ log files, minified JS, or base64 blobs — running regex over these will block the Node.js event loop (ReDoS risk).
 1. Strip XML/HTML tags (`<context>`, `<file path="...">`, etc.)
 2. Strip markdown formatting (`#`, `` ``` ``, `**`, etc.)
-3. Strip JSON boilerplate (leading `{`, `[`, common key patterns)
+3. Normalize JSON-ish starts with explicit heuristic:
+   - If first non-whitespace char is `{` or `[`, attempt `JSON.parse` on the pre-slice.
+   - If parse succeeds and object contains one of: `message`, `content`, `body`, `description`, `prompt`, `text`, use the first non-empty string value.
+   - If parse fails (or no useful key), strip only leading `{`, `[`, quotes, and repeated `"key":` prefixes before first sentence-like text. Do not strip arbitrary mid-string quoted content.
 4. Collapse whitespace (replace newlines + multiple spaces with single space)
 5. Truncate at nearest word boundary under 150 characters
 6. Append `…` if truncated
@@ -176,7 +182,7 @@ Sessions can be resumed for new work after being paused/idle. On resume:
 If the result after sanitization is empty or under 10 chars, fall back to NULL (don't show garbage).
 
 Performance note:
-- In Phase 1 this runs in mappers (`toSession`/`toSessionPartial`) for list responses.
+- In Phase 1 this runs in list/detail mapper paths for session payloads.
 - This is acceptable for initial rollout with the 2000-char pre-slice, but it is a hot-path cost.
 - Phase 2 revisit: cache or persist derived `promptSnippet` at write-time if profiling shows list latency regression.
 
@@ -319,40 +325,42 @@ Surface "Needs Attention" count badge linking to inbox. Show compact active sess
 
 ## Phased Rollout
 
-### Phase 1: Honest UI + Quick Wins (no DB schema changes)
+### Phase 1: Honest UI + Quick Wins (no DDL schema changes)
 
 Recommended split to reduce PR risk:
-- **Phase 1a (correctness + session list)**: items 1-12
-- **Phase 1b (inbox blocked + triage enrichment)**: items 13-17
+- **Phase 1a (correctness + session surfaces)**: items 1-12, 16, 17
+- **Phase 1b (inbox blocked + triage enrichment)**: items 13-15
 
-1. **Fix `initialPrompt` persistence**: Add `initialPrompt` to `CreateSessionInputSchema` contract. Pass through `sessions-create.ts` to DB. Update dashboard create mutation to send prompt text. **Scope boundary**: This change ensures the prompt is persisted for *display purposes* (snippets, peek drawer). Prompt *execution* remains unchanged — the existing Zustand `pendingPrompt` → WebSocket send flow continues to work as-is. We are not changing how prompts are delivered to the agent, only ensuring the text is available in the DB for the UI to read back. The existing delivery model (best-effort WebSocket send) has worked fine in production; making it transactionally safe is out of scope for this project.
+1. **Fix `initialPrompt` persistence + first-send fallback**: Add `initialPrompt` to `CreateSessionInputSchema` contract. Pass through `sessions-create.ts` to DB. Update dashboard prompt creation path to send prompt text in the create payload. Also update workspace bootstrap so initial send can fall back to `session.initialPrompt` when transient `pendingPrompt` state is absent. Prompt delivery remains best-effort WebSocket (transactional delivery is out of scope), but this removes dependence on client-only state for first prompt recovery.
 2. **Fix contract/runtime parity**: Add `pending` to `SessionStatusSchema` so deferred sessions are representable in API contracts.
 3. **Fix manual pause semantics**: Update `sessions-pause.ts` to always write `pauseReason: "manual"`. Do not rely on `pauseReason = null` to represent user intent.
-4. **Backfill legacy manual pauses**: one-time data migration script for existing rows: `UPDATE sessions SET pause_reason = 'manual' WHERE status = 'paused' AND pause_reason IS NULL`.
-5. **Add null-pause observability**: emit metric/log when a new `status = paused AND pause_reason IS NULL` row appears after backfill, so regressions are visible.
+4. **Backfill legacy manual pauses**: one-time **DML migration** for existing rows: `UPDATE sessions SET pause_reason = 'manual' WHERE status = 'paused' AND pause_reason IS NULL`. Ship as an idempotent migration in the normal DB migration pipeline (no `ALTER TABLE`). Before applying, run a diagnostic query on production (`SELECT count(*), min(started_at), max(started_at) ...`) to validate these null rows are truly legacy manual pauses. For self-host/manual ops, run the same SQL once if migration tooling is not used.
+5. **Add null-pause observability**: add a lightweight scheduled check/metric (not per-write hot-path logging) that alerts if new rows appear with `status = 'paused' AND pause_reason IS NULL` after backfill.
 6. **`deriveDisplayStatus()` utility** using complete status matrix (all 8 pause reasons, `pending`/`suspended` top-level statuses, `stopped + snapshot_failed` circuit breaker).
 7. **Prompt snippet sanitization utility** (pre-slice 2000 chars, strip tags/markdown/JSON, word-boundary truncate, hard fallback).
-8. **Expose `promptSnippet` + `endedAt` + `initialPrompt`** in mapper/contract. Add all three as optional fields to `SessionSchema` (`z.string().nullable().optional()`). Both `list` and `get` use the same schema — `initialPrompt` is simply not populated by the list mapper (left as `undefined`, omitted from JSON). Only `toSession()` (used by `get`) populates `initialPrompt`. Both `toSession()` and `toSessionPartial()` populate `promptSnippet`. This follows the existing pattern where `repo` and `automation` are optional schema fields only populated in certain responses.
+8. **Expose `promptSnippet` + `endedAt` + `initialPrompt`** in mapper/contract. Add all three as optional fields to `SessionSchema` (`z.string().nullable().optional()`). Keep `initialPrompt` omitted from list responses and populated for single-session `get` only; implement this with an explicit list-vs-detail mapper path (or equivalent option flag) so list responses cannot accidentally leak full prompts. Populate `promptSnippet` and `endedAt` for both list and get payloads.
 9. **Enrich session list row** (honest status, prompt snippet subtitle, duration, resumable indicator).
 10. **Fix filter tabs** (In Progress / Needs Attention / Paused / Completed), including pending-run cross-reference for tab counts.
 11. **Define Phase 1 click behavior explicitly**: keep row click navigation to workspace; do not introduce peek drawer until Phase 3.
-12. **Add polling policy for list freshness**: on sessions page, use conditional refetch (`refetchInterval: 5000`) only when there are `active|idle|recovering|blocked` sessions visible and page is focused; disable polling otherwise.
+12. **Add polling policy for list freshness**: on sessions page, use conditional refetch (`refetchInterval: 5000`) only when there are `active|idle|recovering|blocked` sessions visible and page is focused; disable polling otherwise. Scale note: if list-query QPS grows materially, add a short server-side cache/read-replica strategy before lowering client interval.
 13. **Add blocked sessions to inbox** — requires new lightweight aggregate endpoint (see below).
-14. **New oRPC `blockedSummary` procedure** (in `apps/web/src/server/routers/sessions.ts`, following existing oRPC conventions): Returns billing-blocked sessions grouped by cause. SQL WHERE clause: `(status = 'paused' AND pause_reason IN ('credit_limit', 'payment_failed', 'overage_cap', 'suspended')) OR (status = 'suspended')`. This explicitly covers both pause-reason billing states AND top-level `status="suspended"`. Unbounded by session list pagination. Response shape: `{ groups: [{ reason: string, count: number, previewSessions: Array<{ id: string; title: string | null; promptSnippet: string | null; startedAt: string | null; pausedAt: string | null }> }] }` with `previewSessions` capped to top 3 by recency. **Always roll up** in queue UI for billing causes, regardless of count. `reason` is the human-readable label ("Out of credits", "Payment failed", etc.), not the raw DB value. Consumed via TanStack Query hook `useBlockedSummary()` in `use-attention-inbox.ts`.
+14. **New oRPC `blockedSummary` procedure** (in `apps/web/src/server/routers/sessions.ts`, following existing oRPC conventions): Returns billing-blocked sessions grouped by cause. Implement DB query in `packages/services/src/sessions/db.ts` (called via service layer), not directly in router code. SQL WHERE clause: `(status = 'paused' AND pause_reason IN ('credit_limit', 'payment_failed', 'overage_cap', 'suspended')) OR (status = 'suspended')`. This explicitly covers both pause-reason billing states AND top-level `status="suspended"`. Unbounded by session list pagination. Response shape: `{ groups: [{ reason: string, count: number, previewSessions: Array<{ id: string; title: string | null; promptSnippet: string | null; startedAt: string | null; pausedAt: string | null }> }] }` with `previewSessions` capped to top 3 by recency. **Always roll up** in queue UI for billing causes, regardless of count. `reason` is the human-readable label ("Out of credits", "Payment failed", etc.), not the raw DB value. Consumed via TanStack Query hook `useBlockedSummary()` in `use-attention-inbox.ts`. Failure mode: if this query fails/timeouts, inbox still renders approvals+runs normally and retries in background; blocked rollups are additive, not load-bearing.
 15. **Add prompt context to run/approval triage cards**: Run triage fetches session via existing GET on-demand (single fetch when card opens). Approval triage already has `sessionId` — fetch session similarly. No contract changes needed on run/approval payloads; session data is fetched separately.
 16. **Update my-work filter** (idle ≠ blocked ≠ active).
 17. **Command palette prompt snippet fallback**.
 
-**Acceptance criteria**: After creating a session from dashboard prompt input, refreshing `/dashboard/sessions` shows the prompt snippet when title is null. Refreshing workspace page still auto-sends the initial prompt (read from DB, not lost). Idle-snapshotted sessions show as "Idle" not "Paused". Credit-limit-paused sessions show as "Blocked" with reason and appear in inbox.
+**Repo requirement**: In the same PR as implementation, update `docs/specs/sessions-gateway.md` (and any other affected spec) plus `docs/specs/feature-registry.md` to reflect behavioral changes.
+
+**Acceptance criteria**: After creating a session from dashboard prompt input, refreshing `/dashboard/sessions` shows the prompt snippet when title is null. Opening workspace after creation still auto-sends the initial prompt even if `pendingPrompt` client state is empty (fallback reads from DB). Reloading workspace does not duplicate the initial prompt once conversation messages already exist. Idle-snapshotted sessions show as "Idle" not "Paused". Credit-limit-paused sessions show as "Blocked" with reason and appear in inbox.
 
 ### Phase 2: Passive Gateway Capture (schema + infrastructure)
 
 5 new DB columns (`outcome`, `summary`, `pr_urls`, `metrics`, `latest_task`).
 
 Gateway captures passively:
-- **PR URLs** from `GitResultMessage.prUrl` after `git_create_pr`. SQL-level JSONB append. Mitigation for CLI bypass: scan assistant text parts (from `message.part.updated` when text part completes, not token deltas) for GitHub PR URL regex (`https://github.com/<org>/<repo>/pull/<n>`), normalize URL, dedupe against existing `pr_urls`, and append only new values. If a URL appears only as a reference (not newly created), it may still be captured; this is acceptable for v1 best-effort attribution.
-- **Metrics** from in-memory SSE event counters (`toolCalls`, `messagesExchanged`, `activeSeconds`). `filesEdited` is explicitly out of Phase 2 scope. Flush on pause, snapshot, **automation teardown** (automation completion bypasses snapshot — must flush before `terminateForAutomation()`), and graceful process shutdown (`SIGTERM`). For idle-snapshot path, flush inside the migration lock immediately before the CAS state write so metrics and lifecycle transitions stay coherent.
-- **Known gap: non-hub pause paths**. Web router `sessions-pause.ts` and `sessions-snapshot.ts` call providers directly, bypassing the gateway hub's in-memory state. Metrics accumulated in the hub since last flush will be lost for these paths. Acceptable for v1 — metrics are approximate UX indicators. The gateway hub's own idle-snapshot path (most common pause trigger) does flush. The web router pause path MUST still set `latestTask: null` directly in its DB update to prevent zombie text.
+- **PR URLs** from `GitResultMessage.prUrl` after `git_create_pr`. SQL-level JSONB append. Mitigation for CLI bypass: scan assistant `text_part_complete` events (single emit per completed text part; do not scan token deltas) for GitHub PR URL regex (`https://github.com/<org>/<repo>/pull/<n>`), normalize URL, dedupe against existing `pr_urls`, and append only new values. If a URL appears only as a reference (not newly created), it may still be captured; this is acceptable for v1 best-effort attribution.
+- **Metrics** from in-memory SSE event counters (`toolCalls`, `messagesExchanged`, `activeSeconds`). Count tool calls by unique `toolCallId` (not raw emitted `tool_start` messages, which can duplicate when args arrive late). `filesEdited` is explicitly out of Phase 2 scope. Flush on pause, snapshot, **automation teardown** (automation completion bypasses snapshot — must flush before `terminateForAutomation()`), and graceful process shutdown (`SIGTERM`). For idle-snapshot path, flush inside the migration lock immediately before the CAS state write so metrics and lifecycle transitions stay coherent.
+- **Known gap: non-hub status transitions**. Several paths mutate session lifecycle state outside a live hub (web `sessions-pause.ts`, billing pause/enforcement in `org-pause.ts`, metering auto-pause/finalization paths, orphan sweeper direct cleanup, CLI stop utilities). Metrics accumulated in hub memory since last flush can be lost for these paths. Acceptable for v1 — metrics are approximate UX indicators. Every such path MUST still clear `latestTask` in its DB update to prevent zombie text.
 - **Latest task** from `tool_metadata.title`. **Coverage is sparse**: `tool_metadata` is only emitted when the SSE event has `metadata.summary` present (not every tool call). `title` is also not guaranteed on those events. This means `latestTask` will only update for a subset of tool executions — treat it as a best-effort "last known activity" indicator, not a real-time status. When absent, UI shows nothing or falls back to prompt snippet. Debounce-write every **15–30s** to avoid high write churn/MVCC bloat. Dirty check required: `UPDATE ... WHERE latest_task IS DISTINCT FROM $1`. **Set to NULL on session stop/pause** to prevent zombie text.
 - **Outcome/summary** from `automation.complete` handler. Heuristic for regular sessions — **only on terminal states** (`stopped`, `failed`), never on pause/idle.
 - **Historical backfill** from `automation_runs.completionJson`:
@@ -447,7 +455,7 @@ if (status === "stopped") → outcome = "completed"  // neutral
 
 ### Phase 1: Status mapping matrix
 - For each `(status, pauseReason)` combination in the Complete Status Matrix, verify `deriveDisplayStatus()` returns the expected value
-- Include edge cases: null pauseReason (`paused`), unknown pauseReason string (`recovering`), null status
+- Include edge cases: null pauseReason (`paused`), unknown pauseReason string (`paused`), null status
 
 ### Phase 1: Prompt persistence
 - Create session from dashboard with prompt → verify `initialPrompt` column populated in DB

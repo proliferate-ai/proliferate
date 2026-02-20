@@ -8,7 +8,7 @@ export type PreviewMode =
 	| { type: "file"; file: VerificationFile }
 	| { type: "gallery"; files: VerificationFile[] }
 	| { type: "settings"; tab?: "info" | "snapshots" | "auto-start" }
-	| { type: "git"; tab?: "git" | "changes" }
+	| { type: "git" }
 	| { type: "terminal" }
 	| { type: "vscode" }
 	| { type: "artifacts" }
@@ -72,7 +72,7 @@ export const usePreviewPanelStore = create<PreviewPanelState>()(
 		(set, get) => ({
 			mode: DEFAULT_MODE,
 			mobileView: "chat",
-			pinnedTabs: ["url", "vscode"],
+			pinnedTabs: ["url", "services", "vscode", "settings"],
 			panelSizes: [35, 65],
 			panelSide: "right",
 			missingEnvKeyCount: 0,

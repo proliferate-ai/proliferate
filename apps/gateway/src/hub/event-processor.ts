@@ -396,12 +396,23 @@ export class EventProcessor {
 			return;
 		}
 
+		const hadTools = this.toolStates.size > 0;
+
 		this.callbacks.onMessageComplete?.();
 		this.callbacks.broadcast({
 			type: "message_complete",
 			payload: { messageId: this.currentAssistantMessageId },
 		});
-		this.currentAssistantMessageId = null;
+
+		if (hadTools) {
+			// Agentic loop: clear state so the next assistant message can be created
+			// after tool results are processed by OpenCode.
+			this.currentAssistantMessageId = null;
+		}
+		// Text-only responses: keep currentAssistantMessageId set to prevent
+		// duplicate messages from OpenCode. resetForNewPrompt() clears it
+		// when the next user prompt arrives.
+
 		this.toolStates.clear();
 		this.sentToolEvents.clear();
 	}

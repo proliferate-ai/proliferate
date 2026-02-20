@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { vscodeStartedSessions } from "@/hooks/use-background-vscode";
 import { GATEWAY_URL } from "@/lib/gateway";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { FileText, Loader2, ServerCrash } from "lucide-react";
@@ -18,7 +19,7 @@ function devtoolsUrl(sessionId: string, token: string, path: string): string {
 }
 
 function vscodeUrl(sessionId: string, token: string): string {
-	return `${GATEWAY_URL}/proxy/${sessionId}/${token}/devtools/vscode/`;
+	return `${GATEWAY_URL}/proxy/${sessionId}/${token}/devtools/vscode/?folder=/home/user/workspace`;
 }
 
 type SetupStage = "requesting" | "starting_process" | "checking_health" | "ready" | "error";
@@ -31,11 +32,12 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 	const togglePanel = usePreviewPanelStore((s) => s.togglePanel);
 	const [stage, setStage] = useState<SetupStage>("requesting");
 	const [errorCause, setErrorCause] = useState<string | null>(null);
-	const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+	const pollingRef = useRef<(() => void) | null>(null);
+	const startupInitiated = useRef(false);
 
 	const clearPolling = useCallback(() => {
 		if (!pollingRef.current) return;
-		clearInterval(pollingRef.current);
+		pollingRef.current();
 		pollingRef.current = null;
 	}, []);
 
@@ -98,14 +100,16 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 
 	const checkHttpHealth = useCallback(
 		(tkn: string) => {
+			console.log("[vscode] Starting health check, url:", vscodeUrl(sessionId, tkn));
 			setStage("checking_health");
 			let attempts = 0;
+			let cancelled = false;
 			clearPolling();
 
-			pollingRef.current = setInterval(async () => {
+			const poll = async () => {
+				if (cancelled) return;
 				attempts++;
 				if (attempts > MAX_HEALTH_POLL_ATTEMPTS) {
-					clearPolling();
 					await failWithDiagnostics(
 						"Process is running, but the HTTP endpoint failed to become ready.",
 					);
@@ -113,16 +117,24 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 				}
 
 				try {
-					const res = await fetch(vscodeUrl(sessionId, tkn), { method: "HEAD" });
+					const res = await fetch(vscodeUrl(sessionId, tkn), { method: "GET" });
+					console.log("[vscode] Health check attempt", attempts, "status:", res.status);
 					// 200: ready; 401/403/404: upstream responded (auth/path), so process is alive.
 					if (res.ok || res.status === 401 || res.status === 403 || res.status === 404) {
-						clearPolling();
 						setStage("ready");
+						return;
 					}
-				} catch {
-					// Keep polling.
+				} catch (err) {
+					console.log("[vscode] Health check attempt", attempts, "error:", err);
 				}
-			}, 1000);
+
+				if (!cancelled) setTimeout(poll, 1000);
+			};
+
+			pollingRef.current = () => {
+				cancelled = true;
+			};
+			setTimeout(poll, 1000);
 		},
 		[clearPolling, failWithDiagnostics, sessionId],
 	);
@@ -134,45 +146,108 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 		setStage("requesting");
 		setErrorCause(null);
 
+		console.log("[vscode] Starting VS Code setup", { sessionId, gateway: GATEWAY_URL });
+
 		try {
-			// Check if service already exists and is running.
+			// Check if service already exists in any state.
 			const servicesRes = await fetch(devtoolsUrl(sessionId, token, "/api/services"));
 			if (servicesRes.ok) {
 				const data = await servicesRes.json();
+				console.log("[vscode] Services response:", JSON.stringify(data.services, null, 2));
 				const vscodeService = data.services?.find(
-					(s: { name: string; status: string }) =>
-						s.name === "openvscode-server" && s.status === "running",
+					(s: { name: string }) => s.name === "openvscode-server",
 				);
 				if (vscodeService) {
-					checkHttpHealth(token);
+					console.log("[vscode] Found existing service:", vscodeService.status);
+					if (vscodeService.status === "running") {
+						checkHttpHealth(token);
+						return;
+					}
+					if (vscodeService.status === "error") {
+						await failWithDiagnostics("VS Code process crashed during startup.");
+						return;
+					}
+					// Service exists but still starting — skip to polling.
+					setStage("starting_process");
+					let attempts = 0;
+					let cancelled = false;
+
+					const poll = async () => {
+						if (cancelled) return;
+						attempts++;
+						if (attempts > MAX_PROCESS_POLL_ATTEMPTS) {
+							await failWithDiagnostics(
+								"Process start timed out. The sandbox may be resource constrained.",
+							);
+							return;
+						}
+
+						try {
+							const res = await fetch(devtoolsUrl(sessionId, token, "/api/services"));
+							if (res.ok) {
+								const d = await res.json();
+								const svc = d.services?.find(
+									(s: { name: string }) => s.name === "openvscode-server",
+								);
+								if (!svc) {
+									if (!cancelled) setTimeout(poll, 1000);
+									return;
+								}
+								if (svc.status === "error") {
+									await failWithDiagnostics("VS Code process crashed during startup.");
+									return;
+								}
+								if (svc.status === "running") {
+									checkHttpHealth(token);
+									return;
+								}
+							}
+						} catch {
+							// Keep polling.
+						}
+
+						if (!cancelled) setTimeout(poll, 1000);
+					};
+
+					pollingRef.current = () => {
+						cancelled = true;
+					};
+					setTimeout(poll, 1000);
 					return;
 				}
 			}
 
-			// Start openvscode-server via service manager.
-			const basePath = `/proxy/${sessionId}/${token}/devtools/vscode`;
-			const startRes = await fetch(devtoolsUrl(sessionId, token, "/api/services"), {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					name: "openvscode-server",
-					command: `openvscode-server --port 3901 --without-connection-token --host 127.0.0.1 --server-base-path=${basePath} --default-folder /home/user/workspace`,
-				}),
-			});
+			// Start openvscode-server via service manager (skip if background hook already fired).
+			if (!vscodeStartedSessions.has(sessionId)) {
+				vscodeStartedSessions.add(sessionId);
+				const basePath = `/proxy/${sessionId}/${token}/devtools/vscode`;
+				const command = `openvscode-server --port 3901 --without-connection-token --host 127.0.0.1 --server-base-path=${basePath} --default-folder /home/user/workspace`;
+				console.log("[vscode] Starting service with command:", command);
+				const startRes = await fetch(devtoolsUrl(sessionId, token, "/api/services"), {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ name: "openvscode-server", command }),
+				});
+				console.log("[vscode] Start response:", startRes.status);
 
-			// 409 can occur if a service lock/race exists; treat as dispatch success.
-			if (!startRes.ok && startRes.status !== 409) {
-				throw new Error(`Failed to dispatch service start (HTTP ${startRes.status}).`);
+				// 409 can occur if a service lock/race exists; treat as dispatch success.
+				if (!startRes.ok && startRes.status !== 409) {
+					throw new Error(`Failed to dispatch service start (HTTP ${startRes.status}).`);
+				}
+			} else {
+				console.log("[vscode] Skipped POST — background hook already started service");
 			}
 
 			setStage("starting_process");
 
 			// Poll for process presence/status.
 			let attempts = 0;
-			pollingRef.current = setInterval(async () => {
+			let cancelled = false;
+
+			const poll = async () => {
+				if (cancelled) return;
 				attempts++;
 				if (attempts > MAX_PROCESS_POLL_ATTEMPTS) {
-					clearPolling();
 					await failWithDiagnostics(
 						"Process start timed out. The sandbox may be resource constrained.",
 					);
@@ -187,21 +262,30 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 							return s.name === "openvscode-server";
 						});
 
-						if (!svc) return;
+						if (!svc) {
+							if (!cancelled) setTimeout(poll, 1000);
+							return;
+						}
 						if (svc.status === "error") {
-							clearPolling();
 							await failWithDiagnostics("VS Code process crashed during startup.");
 							return;
 						}
 						if (svc.status === "running") {
-							clearPolling();
 							checkHttpHealth(token);
+							return;
 						}
 					}
 				} catch {
 					// Keep polling.
 				}
-			}, 1000);
+
+				if (!cancelled) setTimeout(poll, 1000);
+			};
+
+			pollingRef.current = () => {
+				cancelled = true;
+			};
+			setTimeout(poll, 1000);
 		} catch (err) {
 			setStage("error");
 			setErrorCause(err instanceof Error ? err.message : "Unknown startup error.");
@@ -209,6 +293,8 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 	}, [checkHttpHealth, clearPolling, failWithDiagnostics, sessionId, token]);
 
 	useEffect(() => {
+		if (startupInitiated.current) return;
+		startupInitiated.current = true;
 		startVscodeServer();
 
 		return () => {
@@ -217,6 +303,9 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 	}, [clearPolling, startVscodeServer]);
 
 	const iframeSrc = token && stage === "ready" ? vscodeUrl(sessionId, token) : "";
+	if (iframeSrc) {
+		console.log("[vscode] Iframe src:", iframeSrc);
+	}
 	const progressMap: Record<SetupStage, number> = {
 		requesting: 10,
 		starting_process: 45,
@@ -244,7 +333,15 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 							)}
 						</div>
 						<div className="flex items-center gap-2 mt-1">
-							<Button variant="outline" size="sm" onClick={startVscodeServer}>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => {
+									startupInitiated.current = false;
+									vscodeStartedSessions.delete(sessionId);
+									startVscodeServer();
+								}}
+							>
 								Retry
 							</Button>
 							<Button variant="secondary" size="sm" onClick={() => togglePanel("services")}>
@@ -279,7 +376,18 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 						src={iframeSrc}
 						title="VS Code"
 						className="w-full h-full border-0"
-						sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
+						allow="clipboard-read; clipboard-write"
+						onLoad={(e) => {
+							try {
+								const iframe = e.target as HTMLIFrameElement;
+								console.log(
+									"[vscode] Iframe loaded, current URL:",
+									iframe.contentWindow?.location.href,
+								);
+							} catch {
+								console.log("[vscode] Iframe loaded (cross-origin, cannot read URL)");
+							}
+						}}
 					/>
 				)}
 			</div>

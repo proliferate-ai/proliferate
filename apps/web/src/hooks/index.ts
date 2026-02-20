@@ -35,6 +35,7 @@ export type { BillingState } from "./use-billing";
 // Utility hooks
 export { useCopyToClipboard } from "./use-copy-to-clipboard";
 export { useMediaQuery } from "./use-media-query";
+export { usePolledReadiness } from "./use-polled-readiness";
 export { useSignOut } from "./use-sign-out";
 
 // GitHub hooks

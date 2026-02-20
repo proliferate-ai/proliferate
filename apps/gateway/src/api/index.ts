@@ -13,6 +13,7 @@ import { createProliferateHttpRoutes } from "./proliferate/http";
 import { createProliferateWsHandler } from "./proliferate/ws";
 import { createDevtoolsProxyRoutes } from "./proxy/devtools";
 import { createProxyRoutes } from "./proxy/opencode";
+import { createPreviewHealthRoutes } from "./proxy/preview-health";
 import { createTerminalWsProxy } from "./proxy/terminal";
 import { createVscodeProxyRoutes, createVscodeWsProxy } from "./proxy/vscode";
 import { WsMultiplexer } from "./ws-multiplexer";
@@ -26,6 +27,7 @@ export function mountRoutes(app: Express, hubManager: HubManager, env: GatewayEn
 	app.use("/proxy", createProxyRoutes(hubManager, env));
 	app.use("/proxy", createDevtoolsProxyRoutes(hubManager, env));
 	app.use("/proxy", createVscodeProxyRoutes(hubManager, env));
+	app.use("/proxy", createPreviewHealthRoutes(hubManager, env));
 }
 
 export function setupWebSocket(server: Server, hubManager: HubManager, env: GatewayEnv): void {

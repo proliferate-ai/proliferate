@@ -283,18 +283,6 @@ export const Thread: FC<ThreadProps> = ({
 						AssistantMessage,
 					}}
 				/>
-
-				{/* Blinking cursor while waiting for response */}
-				<ThreadPrimitive.If running>
-					<div className="py-4 px-4">
-						<div className="max-w-2xl mx-auto flex items-start gap-3">
-							<AssistantAvatar />
-							<div className="pt-1">
-								<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-							</div>
-						</div>
-					</div>
-				</ThreadPrimitive.If>
 			</ThreadPrimitive.Viewport>
 
 			{/* Attention tray — between viewport and composer */}

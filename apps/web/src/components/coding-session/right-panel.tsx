@@ -14,6 +14,7 @@ import { ArtifactsPanel } from "./artifacts-panel";
 import { EnvironmentPanel } from "./environment-panel";
 import { GitPanel } from "./git-panel";
 import { InvestigationPanel } from "./investigation-panel";
+import { PanelErrorBoundary } from "./panel-error-boundary";
 import { PreviewPanel } from "./preview-panel";
 import { SettingsPanel } from "./settings-panel";
 import { VscodePanel } from "./vscode-panel";
@@ -116,7 +117,6 @@ export function RightPanel({
 		if (mode.type === "settings" && sessionProps) {
 			return (
 				<SettingsPanel
-					panelMode={mode}
 					sessionStatus={sessionProps.sessionStatus}
 					repoName={sessionProps.repoName}
 					branchName={sessionProps.branchName}
@@ -151,9 +151,6 @@ export function RightPanel({
 		if (mode.type === "git" && sessionProps) {
 			return (
 				<GitPanel
-					panelMode={mode}
-					sessionId={sessionProps.sessionId}
-					activityTick={sessionProps.activityTick}
 					gitState={sessionProps.gitState ?? null}
 					gitResult={sessionProps.gitResult ?? null}
 					sendGetGitStatus={sessionProps.sendGetGitStatus}
@@ -173,7 +170,7 @@ export function RightPanel({
 
 		// Services panel
 		if (mode.type === "services" && sessionProps?.sessionId) {
-			return <ServicesPanel sessionId={sessionProps.sessionId} previewUrl={previewUrl} />;
+			return <ServicesPanel sessionId={sessionProps.sessionId} />;
 		}
 
 		// VS Code panel
@@ -201,7 +198,13 @@ export function RightPanel({
 
 		// URL preview
 		if (mode.type === "url") {
-			return <PreviewPanel url={mode.url || previewUrl || null} className="h-full" />;
+			return (
+				<PreviewPanel
+					url={mode.url || previewUrl || null}
+					sessionId={sessionProps?.sessionId}
+					className="h-full"
+				/>
+			);
 		}
 
 		return null;
@@ -217,7 +220,7 @@ export function RightPanel({
 				transition={{ duration: 0.15 }}
 				className="h-full w-full"
 			>
-				{panelContent}
+				<PanelErrorBoundary key={mode.type}>{panelContent}</PanelErrorBoundary>
 			</motion.div>
 		</AnimatePresence>
 	);

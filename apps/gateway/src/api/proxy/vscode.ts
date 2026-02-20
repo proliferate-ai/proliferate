@@ -55,7 +55,9 @@ export function createVscodeProxyRoutes(hubManager: HubManager, env: GatewayEnv)
 		timeout: 30_000,
 		proxyTimeout: 30_000,
 		pathRewrite: (path: string) => {
-			return `/_proliferate/vscode${path || "/"}`;
+			const rewritten = `/_proliferate/vscode${path || "/"}`;
+			logger.debug({ originalPath: path, rewritten }, "VS Code proxy path rewrite");
+			return rewritten;
 		},
 		on: {
 			proxyReq: (proxyReq, req) => {
@@ -160,7 +162,7 @@ export function createVscodeWsProxy(
 			}
 
 			const sandboxToken = deriveSandboxMcpToken(env.serviceToken, sessionId);
-			const upstreamPath = `/_proliferate/vscode${tail || "/"}`;
+			const upstreamPath = `/_proliferate/vscode${tail || "/"}${url.search}`;
 			const upstreamUrl = `${previewUrl.replace(/^http/, "ws")}${upstreamPath}`;
 
 			logger.info(

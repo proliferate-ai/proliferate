@@ -3,13 +3,17 @@
 import { Button } from "@/components/ui/button";
 import { ExternalLink, Maximize2, Minimize2, RefreshCw } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
+import { usePolledReadiness } from "@/hooks/use-polled-readiness";
+import { GATEWAY_URL } from "@/lib/gateway";
 import { cn } from "@/lib/utils";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PanelShell } from "./panel-shell";
+import { useWsToken } from "./runtime/use-ws-token";
 
 interface PreviewPanelProps {
 	url: string | null;
+	sessionId?: string;
 	className?: string;
 }
 
@@ -90,70 +94,29 @@ function PreviewOfflineIllustration() {
 	);
 }
 
-export function PreviewPanel({ url, className }: PreviewPanelProps) {
-	const iframeRef = useRef<HTMLIFrameElement>(null);
+export function PreviewPanel({ url, sessionId, className }: PreviewPanelProps) {
 	const [isFullscreen, setIsFullscreen] = useState(false);
-	// "checking" = polling the URL, "ready" = server is up, "unavailable" = not serving
-	const [status, setStatus] = useState<"checking" | "ready" | "unavailable">("checking");
-	const [refreshKey, setRefreshKey] = useState(0);
+	const { token } = useWsToken();
 
-	const checkUrl = useCallback(async (targetUrl: string): Promise<boolean> => {
+	const checkFn = useCallback(async (): Promise<boolean> => {
+		if (!url || !sessionId || !token) return false;
 		try {
-			const res = await fetch(targetUrl, { mode: "cors" });
-			return res.ok;
+			const healthUrl = `${GATEWAY_URL}/proxy/${sessionId}/${token}/health-check?url=${encodeURIComponent(url)}`;
+			const res = await fetch(healthUrl);
+			const data = await res.json();
+			return data.ready === true;
 		} catch {
-			// CORS blocks the response — but the server DID respond, so it's up
-			// A true network error (server down) would also land here, but
-			// we distinguish by trying no-cors which always succeeds if reachable
-			try {
-				await fetch(targetUrl, { mode: "no-cors" });
-				// If this didn't throw, the server is reachable
-				return true;
-			} catch {
-				// Actual network failure — server is not reachable
-				return false;
-			}
+			return false;
 		}
-	}, []);
+	}, [url, sessionId, token]);
 
-	// Poll the URL to check if the server is actually serving.
-	// refreshKey is intentionally in deps to allow re-triggering via Retry button.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey re-triggers polling
-	useEffect(() => {
-		if (!url) return;
-
-		let cancelled = false;
-		let attempts = 0;
-		const maxAttempts = 8;
-		setStatus("checking");
-
-		const poll = async () => {
-			const ok = await checkUrl(url);
-			if (cancelled) return;
-
-			if (ok) {
-				setStatus("ready");
-				return;
-			}
-
-			attempts++;
-			if (attempts >= maxAttempts) {
-				setStatus("unavailable");
-				return;
-			}
-
-			// Exponential backoff: 1s, 2s, 4s, 8s, 10s (capped)
-			const delay = Math.min(1000 * 2 ** (attempts - 1), 10000);
-			setTimeout(() => {
-				if (!cancelled) poll();
-			}, delay);
-		};
-
-		poll();
-		return () => {
-			cancelled = true;
-		};
-	}, [url, checkUrl, refreshKey]);
+	const { status, retry: handleRefresh } = usePolledReadiness({
+		checkFn,
+		enabled: !!url && !!sessionId && !!token,
+		maxAttempts: 6,
+		baseIntervalMs: 1500,
+		maxIntervalMs: 5000,
+	});
 
 	// Esc key exits fullscreen
 	useEffect(() => {
@@ -164,10 +127,6 @@ export function PreviewPanel({ url, className }: PreviewPanelProps) {
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [isFullscreen]);
-
-	const handleRefresh = useCallback(() => {
-		setRefreshKey((k) => k + 1);
-	}, []);
 
 	const handleCopyUrl = useCallback(() => {
 		if (!url) return;
@@ -203,7 +162,7 @@ export function PreviewPanel({ url, className }: PreviewPanelProps) {
 				onClick={handleRefresh}
 				title="Refresh"
 			>
-				<RefreshCw className={cn("h-4 w-4", status === "checking" && "animate-spin")} />
+				<RefreshCw className={cn("h-4 w-4", status === "polling" && "animate-spin")} />
 			</Button>
 			<Button
 				variant="ghost"
@@ -231,28 +190,33 @@ export function PreviewPanel({ url, className }: PreviewPanelProps) {
 			)}
 		>
 			<PanelShell title="Preview" noPadding actions={toolbar}>
-				{/* URL bar */}
-				<div className="flex items-center px-3 py-1.5 border-b bg-muted/20 shrink-0">
-					<div className="flex-1 min-w-0" onClick={handleCopyUrl} title="Click to copy URL">
-						<Input
-							readOnly
-							value={url}
-							className="h-7 text-xs text-muted-foreground bg-muted/50 border-none cursor-pointer select-all focus-visible:ring-0"
-						/>
-					</div>
-				</div>
-
-				{/* Content */}
-				<div className="flex-1 relative min-h-0">
-					{status === "checking" && (
-						<div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background">
-							<RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-							<p className="text-xs text-muted-foreground">Connecting to preview...</p>
+				<div className="flex flex-col h-full">
+					{/* URL bar */}
+					<div className="flex items-center px-3 py-1.5 border-b bg-muted/20 shrink-0">
+						<div className="flex-1 min-w-0" onClick={handleCopyUrl} title="Click to copy URL">
+							<Input
+								readOnly
+								value={url}
+								className="h-7 text-xs text-muted-foreground bg-muted/50 border-none cursor-pointer select-all focus-visible:ring-0"
+							/>
 						</div>
-					)}
+					</div>
 
-					{status === "unavailable" && (
-						<div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-background">
+					{/* Content */}
+					<div className="flex-1 min-h-0 flex items-center justify-center relative">
+						{status === "polling" && (
+							<div className="text-center space-y-3 px-4">
+								<PreviewOfflineIllustration />
+								<div>
+									<p className="text-sm font-medium">Connecting to Preview</p>
+									<p className="text-xs text-muted-foreground mt-1">
+										Waiting for the dev server to start...
+									</p>
+								</div>
+							</div>
+						)}
+
+						{status === "failed" && (
 							<div className="text-center space-y-3 px-4">
 								<PreviewOfflineIllustration />
 								<div>
@@ -266,18 +230,17 @@ export function PreviewPanel({ url, className }: PreviewPanelProps) {
 									Retry
 								</Button>
 							</div>
-						</div>
-					)}
+						)}
 
-					{status === "ready" && (
-						<iframe
-							ref={iframeRef}
-							src={url}
-							className="w-full h-full border-0"
-							sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-							title="Preview"
-						/>
-					)}
+						{status === "ready" && (
+							<iframe
+								src={url}
+								className="absolute inset-0 w-full h-full border-0"
+								sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+								title="Preview"
+							/>
+						)}
+					</div>
 				</div>
 			</PanelShell>
 		</div>

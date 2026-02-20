@@ -10,8 +10,9 @@ import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/use-secret
 import { orpc } from "@/lib/orpc";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { FileUp, Loader2, Lock, Search, Trash2 } from "lucide-react";
+import { FileUp, Loader2, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { PanelShell } from "./panel-shell";
 
 // ============================================
@@ -254,30 +255,64 @@ function SecretRow({
 	onDelete: () => void;
 	isDeleting: boolean;
 }) {
+	const [showConfirm, setShowConfirm] = useState(false);
+
+	const handleCopyKey = () => {
+		navigator.clipboard.writeText(keyName);
+		toast.success("Copied to clipboard");
+	};
+
 	return (
-		<div className="flex items-center justify-between px-2 py-2 rounded-md hover:bg-muted/50 transition-colors group">
-			<div className="flex items-center gap-2 min-w-0">
-				<span className="text-xs font-medium truncate">{keyName}</span>
-				{isRequired && <span className="text-[10px] text-muted-foreground">required</span>}
-			</div>
-			<div className="flex items-center gap-2 shrink-0">
-				<span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-					<Lock className="h-3 w-3" />
-					Encrypted
-				</span>
-				<Button
-					variant="ghost"
-					size="icon"
-					className="h-6 w-6 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-					onClick={onDelete}
-					disabled={isDeleting}
-				>
-					{isDeleting ? (
-						<Loader2 className="h-3 w-3 animate-spin" />
-					) : (
+		<div className="flex items-center border-b border-border/50 hover:bg-muted/50 transition-colors px-4 py-2.5 group">
+			{/* Key name */}
+			<button
+				type="button"
+				onClick={handleCopyKey}
+				className="font-mono font-medium text-sm truncate text-left min-w-0 flex-1 hover:text-foreground/80"
+				title="Click to copy"
+			>
+				{keyName}
+			</button>
+
+			{/* Hidden value indicator */}
+			<span className="text-muted-foreground text-sm mx-4 shrink-0">••••••••</span>
+
+			{/* Actions */}
+			<div className="flex items-center gap-1 shrink-0">
+				{isRequired && <span className="text-[10px] text-muted-foreground mr-1">required</span>}
+				{showConfirm ? (
+					<div className="flex items-center gap-1">
+						<Button
+							variant="destructive"
+							size="sm"
+							className="h-6 px-2 text-[11px]"
+							onClick={() => {
+								onDelete();
+								setShowConfirm(false);
+							}}
+							disabled={isDeleting}
+						>
+							{isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Delete"}
+						</Button>
+						<Button
+							variant="ghost"
+							size="sm"
+							className="h-6 px-2 text-[11px]"
+							onClick={() => setShowConfirm(false)}
+						>
+							Cancel
+						</Button>
+					</div>
+				) : (
+					<Button
+						variant="ghost"
+						size="icon"
+						className="h-6 w-6 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+						onClick={() => setShowConfirm(true)}
+					>
 						<Trash2 className="h-3 w-3" />
-					)}
-				</Button>
+					</Button>
+				)}
 			</div>
 		</div>
 	);
@@ -336,8 +371,8 @@ function MissingKeyRow({
 
 	if (editing) {
 		return (
-			<div className="flex items-center gap-1.5 px-2 py-1.5">
-				<span className="text-xs font-medium shrink-0">{keyName}</span>
+			<div className="flex items-center gap-1.5 border-b border-border/50 px-4 py-2">
+				<span className="font-mono font-medium text-sm shrink-0">{keyName}</span>
 				<Input
 					type="password"
 					value={value}
@@ -366,11 +401,9 @@ function MissingKeyRow({
 	}
 
 	return (
-		<div className="flex items-center justify-between px-2 py-2 rounded-md hover:bg-muted/50 transition-colors">
-			<div className="flex items-center gap-2 min-w-0">
-				<span className="text-xs font-medium truncate">{keyName}</span>
-				<span className="text-[10px] text-destructive">missing</span>
-			</div>
+		<div className="flex items-center border-b border-border/50 hover:bg-muted/50 transition-colors px-4 py-2.5">
+			<span className="font-mono font-medium text-sm truncate min-w-0 flex-1">{keyName}</span>
+			<span className="text-destructive text-xs mr-3">missing</span>
 			<Button
 				variant="outline"
 				size="sm"
@@ -552,10 +585,10 @@ export function EnvironmentPanel({ sessionId, configurationId, repoId }: Environ
 						{/* Missing required keys */}
 						{filteredMissing.length > 0 && (
 							<div>
-								<p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pb-1.5">
+								<p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pb-1.5 px-4">
 									Required
 								</p>
-								<div className="space-y-0.5">
+								<div>
 									{filteredMissing.map((k) => (
 										<MissingKeyRow
 											key={k.key}
@@ -573,11 +606,11 @@ export function EnvironmentPanel({ sessionId, configurationId, repoId }: Environ
 						{filteredSecrets.length > 0 && (
 							<div>
 								{(specKeys.length > 0 || missingRequired.length > 0) && !filter && (
-									<p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pb-1.5">
+									<p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider pb-1.5 px-4">
 										Variables
 									</p>
 								)}
-								<div className="space-y-0.5">
+								<div>
 									{filteredSecrets.map((secret) => (
 										<SecretRow
 											key={secret.id}

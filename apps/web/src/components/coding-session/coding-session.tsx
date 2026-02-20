@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useBackgroundVscodeStart } from "@/hooks/use-background-vscode";
 import { useRepo } from "@/hooks/use-repos";
 import { useRenameSession, useSessionData, useSnapshotSession } from "@/hooks/use-sessions";
 import { useSession as useBetterAuthSession } from "@/lib/auth-client";
@@ -108,6 +109,9 @@ export function CodingSession({
 		clientType: sessionData?.clientType ?? null,
 	});
 
+	// Start VS Code server in the background as soon as the session connects
+	useBackgroundVscodeStart(sessionId, wsToken);
+
 	const snapshotSession = useSnapshotSession();
 	const canSnapshot = sessionData?.status === "running" && !!sessionData?.sandboxId;
 	const handleSnapshot = async () => {
@@ -148,6 +152,19 @@ export function CodingSession({
 		missingEnvKeyCount,
 	} = usePreviewPanelStore();
 	const [viewPickerOpen, setViewPickerOpen] = useState(false);
+	const [isPanelDragging, setIsPanelDragging] = useState(false);
+
+	// Disable iframe pointer events during panel resize drag
+	useEffect(() => {
+		if (!isPanelDragging) return;
+		document.body.classList.add("panel-resizing");
+		const onMouseUp = () => setIsPanelDragging(false);
+		window.addEventListener("mouseup", onMouseUp);
+		return () => {
+			document.body.classList.remove("panel-resizing");
+			window.removeEventListener("mouseup", onMouseUp);
+		};
+	}, [isPanelDragging]);
 	const activeType = mode.type === "file" || mode.type === "gallery" ? "artifacts" : mode.type;
 
 	// Auto-open investigation panel when runId is present (fires once per runId)
@@ -251,13 +268,10 @@ export function CodingSession({
 					isSessionCreating ? (status === "connecting" ? "provisioning" : "preparing") : undefined
 				}
 				repoName={repoData?.githubRepoName || sessionData.repo?.githubRepoName}
-				initialPrompt={initialPrompt}
 				showHeader={false}
 			/>
 		) : (
-			<div className="flex h-full items-center justify-center">
-				<Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-			</div>
+			<SessionLoadingShell mode="resuming" showHeader={false} />
 		)
 	) : !authSession ? (
 		<div className="flex h-full items-center justify-center">
@@ -494,13 +508,13 @@ export function CodingSession({
 			{panelSide === "left" ? (
 				<>
 					{toolPane}
-					<ResizableHandle withHandle />
+					<ResizableHandle withHandle onMouseDown={() => setIsPanelDragging(true)} />
 					{chatPane}
 				</>
 			) : (
 				<>
 					{chatPane}
-					<ResizableHandle withHandle />
+					<ResizableHandle withHandle onMouseDown={() => setIsPanelDragging(true)} />
 					{toolPane}
 				</>
 			)}

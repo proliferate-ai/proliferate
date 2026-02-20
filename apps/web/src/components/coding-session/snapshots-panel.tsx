@@ -12,7 +12,6 @@ export interface SnapshotsContentProps {
 	canSnapshot?: boolean;
 	isSnapshotting?: boolean;
 	onSnapshot?: () => void;
-	onNavigateAutoStart?: () => void;
 }
 
 export function SnapshotsContent({
@@ -22,7 +21,6 @@ export function SnapshotsContent({
 	canSnapshot,
 	isSnapshotting,
 	onSnapshot,
-	onNavigateAutoStart,
 }: SnapshotsContentProps) {
 	const hasConfiguration = !!configurationId;
 	const { data: effective, isLoading: effectiveLoading } = useEffectiveServiceCommands(
@@ -83,11 +81,7 @@ export function SnapshotsContent({
 					<h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
 						Auto-start
 					</h3>
-					<button
-						type="button"
-						onClick={onNavigateAutoStart}
-						className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full text-left"
-					>
+					<div className="flex items-center gap-2 text-xs text-muted-foreground">
 						<Play className="h-3.5 w-3.5 shrink-0" />
 						<span>
 							{commandsLoading
@@ -96,7 +90,7 @@ export function SnapshotsContent({
 									? `${commands.length} command${commands.length === 1 ? "" : "s"} configured`
 									: "Not configured"}
 						</span>
-					</button>
+					</div>
 				</div>
 			)}
 		</div>
