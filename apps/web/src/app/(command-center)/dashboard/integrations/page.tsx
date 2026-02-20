@@ -1,6 +1,5 @@
 "use client";
 
-import { ConfigurationSelector } from "@/components/automations/configuration-selector";
 import {
 	IntegrationsIllustration,
 	PageEmptyState,
@@ -903,102 +902,6 @@ export default function IntegrationsPage() {
 				</div>
 			)}
 
-			{/* Slack config strategy section (admin only) */}
-			{isAdmin && slackStatus?.connected && slackConfig?.installationId && (
-				<div className="mt-3 ml-1">
-					<div className="p-4 rounded-lg border border-border bg-card space-y-3">
-						<p className="text-sm font-medium">Session Configuration</p>
-						<p className="text-xs text-muted-foreground">
-							How sessions started from Slack pick their configuration.
-						</p>
-
-						<div className="flex items-center justify-between">
-							<span className="text-xs text-muted-foreground">
-								{slackConfig.strategy === "agent_decide"
-									? "Agent selects from allowed configurations"
-									: "Use a fixed default configuration"}
-							</span>
-							<div className="flex items-center gap-2">
-								<span className="text-xs text-muted-foreground">Fixed</span>
-								<Switch
-									checked={slackConfig.strategy === "agent_decide"}
-									onCheckedChange={(checked) => {
-										updateSlackConfig.mutate({
-											installationId: slackConfig.installationId!,
-											strategy: checked ? "agent_decide" : "fixed",
-											defaultConfigurationId: slackConfig.defaultConfigurationId,
-											allowedConfigurationIds: slackConfig.allowedConfigurationIds,
-										});
-									}}
-								/>
-								<span className="text-xs text-muted-foreground">Agent decides</span>
-							</div>
-						</div>
-
-						{slackConfig.strategy === "agent_decide" ? (
-							<div className="space-y-2">
-								<p className="text-xs text-muted-foreground">
-									Allowed configurations (agent will choose based on the message):
-								</p>
-								{readyConfigurations && readyConfigurations.length > 0 ? (
-									<div className="flex flex-wrap gap-1.5">
-										{readyConfigurations.map((config) => {
-											const isAllowed =
-												slackConfig.allowedConfigurationIds?.includes(config.id) ?? false;
-											return (
-												<button
-													key={config.id}
-													type="button"
-													className={`px-2.5 py-1 rounded-md border text-xs transition-colors ${
-														isAllowed
-															? "border-foreground/20 bg-foreground/5 text-foreground"
-															: "border-border text-muted-foreground hover:border-foreground/20"
-													}`}
-													onClick={() => {
-														const current = slackConfig.allowedConfigurationIds ?? [];
-														const next = isAllowed
-															? current.filter((id) => id !== config.id)
-															: [...current, config.id];
-														updateSlackConfig.mutate({
-															installationId: slackConfig.installationId!,
-															strategy: "agent_decide",
-															allowedConfigurationIds: next,
-														});
-													}}
-												>
-													{config.name || "Untitled"}
-												</button>
-											);
-										})}
-									</div>
-								) : (
-									<p className="text-xs text-muted-foreground/60">
-										No configurations available. Create one first.
-									</p>
-								)}
-							</div>
-						) : (
-							<div className="space-y-2">
-								<p className="text-xs text-muted-foreground">Default configuration:</p>
-								{readyConfigurations && (
-									<ConfigurationSelector
-										configurations={readyConfigurations}
-										selectedId={slackConfig.defaultConfigurationId}
-										onChange={(id) => {
-											updateSlackConfig.mutate({
-												installationId: slackConfig.installationId!,
-												strategy: "fixed",
-												defaultConfigurationId: id === "none" ? null : id,
-											});
-										}}
-									/>
-								)}
-							</div>
-						)}
-					</div>
-				</div>
-			)}
-
 			{/* Empty state (no connected integrations or connectors yet) */}
 			{!hasConnectedIntegrations && (
 				<PageEmptyState
@@ -1092,6 +995,9 @@ export default function IntegrationsPage() {
 					});
 				}}
 				onSaveConnector={handleSave}
+				slackConfig={slackConfig}
+				readyConfigurations={readyConfigurations}
+				onUpdateSlackConfig={(input) => updateSlackConfig.mutate(input)}
 			/>
 		</PageShell>
 	);

@@ -10,6 +10,7 @@ import type { GatewayEnv } from "../../../lib/env";
 import { createEnsureSessionReady, createRequireAuth } from "../../../middleware";
 import { createActionsRouter } from "./actions";
 import cancelRouter from "./cancel";
+import { createEagerStartRouter } from "./eager-start";
 import { createHeartbeatRouter } from "./heartbeat";
 import infoRouter from "./info";
 import messageRouter from "./message";
@@ -33,6 +34,9 @@ export function createProliferateHttpRoutes(hubManager: HubManager, env: Gateway
 
 	// Heartbeat — doesn't require sandbox running (resets idle timers only)
 	router.use("/:proliferateSessionId", createHeartbeatRouter(hubManager));
+
+	// Eager start — boots sandbox + sends initial prompt without WebSocket client
+	router.use("/:proliferateSessionId", createEagerStartRouter(hubManager));
 
 	// Actions routes — don't require sandbox running (DB + external API only)
 	router.use("/:proliferateSessionId/actions", createActionsRouter(env, hubManager));

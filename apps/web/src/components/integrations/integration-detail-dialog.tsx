@@ -1,5 +1,6 @@
 "use client";
 
+import { ConfigurationSelector } from "@/components/automations/configuration-selector";
 import { ConnectorForm } from "@/components/integrations/connector-form";
 import { ConnectorIcon } from "@/components/integrations/connector-icon";
 import type { CatalogEntry } from "@/components/integrations/integration-picker-dialog";
@@ -12,7 +13,9 @@ import {
 } from "@/components/integrations/provider-icon";
 import { QuickSetupForm } from "@/components/integrations/quick-setup-form";
 import { Button } from "@/components/ui/button";
+import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ConnectorConfig, ConnectorPreset } from "@proliferate/shared";
 import { CONNECTOR_PRESETS } from "@proliferate/shared";
@@ -21,6 +24,19 @@ import { CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
 // ====================================================================
 // Detail dialog
 // ====================================================================
+
+export interface SlackConfigData {
+	installationId: string | null;
+	strategy: string | null;
+	defaultConfigurationId: string | null;
+	allowedConfigurationIds: string[] | null;
+}
+
+interface ConfigurationOption {
+	id: string;
+	name: string | null;
+	status: string | null;
+}
 
 interface IntegrationDetailDialogProps {
 	entry: CatalogEntry | null;
@@ -37,6 +53,15 @@ interface IntegrationDetailDialogProps {
 	onDisconnect: () => void;
 	// MCP connector save
 	onSaveConnector: (connector: ConnectorConfig, isNew: boolean) => void;
+	// Slack config (optional — only passed for Slack)
+	slackConfig?: SlackConfigData | null;
+	readyConfigurations?: ConfigurationOption[];
+	onUpdateSlackConfig?: (input: {
+		installationId: string;
+		strategy: "fixed" | "agent_decide";
+		defaultConfigurationId?: string | null;
+		allowedConfigurationIds?: string[] | null;
+	}) => void;
 }
 
 export function IntegrationDetailDialog({
@@ -51,6 +76,9 @@ export function IntegrationDetailDialog({
 	onConnect,
 	onDisconnect,
 	onSaveConnector,
+	slackConfig,
+	readyConfigurations,
+	onUpdateSlackConfig,
 }: IntegrationDetailDialogProps) {
 	if (!entry) return null;
 
@@ -80,6 +108,8 @@ export function IntegrationDetailDialog({
 		sentry: "Also powers error monitoring triggers and automations.",
 	};
 	const platformNote = PLATFORM_NOTES[entry.key];
+
+	const showSettingsTab = entry.key === "slack" && isConnected && !!slackConfig?.installationId;
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -118,6 +148,14 @@ export function IntegrationDetailDialog({
 							>
 								About
 							</TabsTrigger>
+							{showSettingsTab && (
+								<TabsTrigger
+									value="settings"
+									className="-mb-[1px] border-b-[1.5px] border-transparent px-0 py-1 text-sm font-medium text-muted-foreground data-[state=active]:border-foreground data-[state=active]:text-foreground data-[state=active]:shadow-none rounded-none bg-transparent data-[state=active]:bg-transparent"
+								>
+									Settings
+								</TabsTrigger>
+							)}
 						</TabsList>
 
 						{/* Connect tab */}
@@ -187,6 +225,17 @@ export function IntegrationDetailDialog({
 								</div>
 							</div>
 						</TabsContent>
+
+						{/* Settings tab (Slack only) */}
+						{showSettingsTab && (
+							<TabsContent value="settings" className="flex-1 overflow-y-auto p-5 mt-0">
+								<SlackSettingsContent
+									slackConfig={slackConfig!}
+									readyConfigurations={readyConfigurations ?? []}
+									onUpdate={onUpdateSlackConfig!}
+								/>
+							</TabsContent>
+						)}
 					</Tabs>
 				</div>
 
@@ -293,6 +342,139 @@ function ConnectTabContent({
 					"Connect"
 				)}
 			</Button>
+		</div>
+	);
+}
+
+// ====================================================================
+// Slack settings tab content
+// ====================================================================
+
+function SlackSettingsContent({
+	slackConfig,
+	readyConfigurations,
+	onUpdate,
+}: {
+	slackConfig: SlackConfigData;
+	readyConfigurations: ConfigurationOption[];
+	onUpdate: (input: {
+		installationId: string;
+		strategy: "fixed" | "agent_decide";
+		defaultConfigurationId?: string | null;
+		allowedConfigurationIds?: string[] | null;
+	}) => void;
+}) {
+	const isAgentDecide = slackConfig.strategy === "agent_decide";
+	const allowedCount =
+		slackConfig.allowedConfigurationIds?.filter((id) =>
+			readyConfigurations.some((c) => c.id === id),
+		).length ?? 0;
+
+	return (
+		<div className="space-y-4">
+			<div>
+				<h3 className="text-sm font-medium mb-1">Session configuration</h3>
+				<p className="text-xs text-muted-foreground">
+					How sessions started from Slack pick their configuration.
+				</p>
+			</div>
+
+			<div className="flex items-center justify-between">
+				<span className="text-xs text-muted-foreground">
+					{isAgentDecide
+						? "Agent selects from allowed configurations"
+						: "Use a fixed default configuration"}
+				</span>
+				<div className="flex items-center gap-2">
+					<span className="text-xs text-muted-foreground">Fixed</span>
+					<Switch
+						checked={isAgentDecide}
+						onCheckedChange={(checked) => {
+							onUpdate({
+								installationId: slackConfig.installationId!,
+								strategy: checked ? "agent_decide" : "fixed",
+								defaultConfigurationId: slackConfig.defaultConfigurationId,
+								allowedConfigurationIds: slackConfig.allowedConfigurationIds,
+							});
+						}}
+					/>
+					<span className="text-xs text-muted-foreground">Agent decides</span>
+				</div>
+			</div>
+
+			{isAgentDecide ? (
+				<CollapsibleSection
+					title="Allowed configurations"
+					defaultOpen
+					actions={
+						readyConfigurations.length > 0 ? (
+							<span className="text-[11px] text-muted-foreground tabular-nums">
+								{allowedCount} of {readyConfigurations.length}
+							</span>
+						) : undefined
+					}
+				>
+					<div className="px-4 pb-2">
+						{readyConfigurations.length > 0 ? (
+							<div className="flex flex-wrap gap-1.5">
+								{readyConfigurations.map((config) => {
+									const isAllowed =
+										slackConfig.allowedConfigurationIds?.includes(config.id) ?? false;
+									return (
+										<button
+											key={config.id}
+											type="button"
+											className={`px-2.5 py-1 rounded-md border text-xs transition-colors ${
+												isAllowed
+													? "border-foreground/20 bg-foreground/5 text-foreground"
+													: "border-border text-muted-foreground hover:border-foreground/20"
+											}`}
+											onClick={() => {
+												const current = slackConfig.allowedConfigurationIds ?? [];
+												const next = isAllowed
+													? current.filter((id) => id !== config.id)
+													: [...current, config.id];
+												onUpdate({
+													installationId: slackConfig.installationId!,
+													strategy: "agent_decide",
+													allowedConfigurationIds: next,
+												});
+											}}
+										>
+											{config.name || "Untitled"}
+										</button>
+									);
+								})}
+							</div>
+						) : (
+							<p className="text-xs text-muted-foreground/60">
+								No configurations available. Create one first.
+							</p>
+						)}
+					</div>
+				</CollapsibleSection>
+			) : (
+				<div className="space-y-2">
+					<p className="text-xs text-muted-foreground">Default configuration:</p>
+					{readyConfigurations.length > 0 ? (
+						<ConfigurationSelector
+							configurations={readyConfigurations}
+							selectedId={slackConfig.defaultConfigurationId}
+							onChange={(id) => {
+								onUpdate({
+									installationId: slackConfig.installationId!,
+									strategy: "fixed",
+									defaultConfigurationId: id === "none" ? null : id,
+								});
+							}}
+						/>
+					) : (
+						<p className="text-xs text-muted-foreground/60">
+							No configurations available. Create one first.
+						</p>
+					)}
+				</div>
+			)}
 		</div>
 	);
 }

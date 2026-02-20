@@ -8,7 +8,11 @@ import { useSessions } from "@/hooks/use-sessions";
  * Only renders when the user has sessions.
  */
 export function ActivitySummary() {
-	const { data: sessions } = useSessions({ excludeSetup: true, excludeCli: true });
+	const { data: sessions } = useSessions({
+		excludeSetup: true,
+		excludeCli: true,
+		refetchInterval: 5000,
+	});
 
 	if (!sessions || sessions.length === 0) return null;
 

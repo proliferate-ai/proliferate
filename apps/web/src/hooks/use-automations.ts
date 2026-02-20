@@ -233,9 +233,10 @@ export function useUnassignRun(automationId: string) {
 	});
 }
 
-export function useMyClaimedRuns() {
+export function useMyClaimedRuns(options?: { refetchInterval?: number | false }) {
 	return useQuery({
 		...orpc.automations.myClaimedRuns.queryOptions({ input: undefined }),
+		refetchInterval: options?.refetchInterval,
 		select: (data) => data.runs,
 	});
 }

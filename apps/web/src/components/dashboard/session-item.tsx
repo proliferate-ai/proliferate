@@ -50,7 +50,8 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 	const prefetchSession = usePrefetchSession();
 
 	const isRunning = session.status === "running";
-	const { data: isSubscribed } = useSessionNotificationSubscription(session.id, isRunning);
+	const canSubscribe = isRunning || session.status === "starting";
+	const { data: isSubscribed } = useSessionNotificationSubscription(session.id, canSubscribe);
 	const subscribeNotifications = useSubscribeNotifications();
 	const unsubscribeNotifications = useUnsubscribeNotifications();
 
@@ -91,12 +92,14 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 
 	const extraActions: { label: string; icon: React.ReactNode; onClick: () => void }[] = [];
 
-	if (isRunning) {
+	if (canSubscribe) {
 		extraActions.push({
 			label: isSubscribed ? "Notifications on" : "Notify me",
 			icon: isSubscribed ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />,
 			onClick: handleToggleNotifications,
 		});
+	}
+	if (isRunning) {
 		extraActions.push({
 			label: snapshotSession.isPending ? "Saving..." : "Save Snapshot",
 			icon: <Camera className="h-4 w-4" />,

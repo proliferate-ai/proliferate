@@ -188,16 +188,58 @@ const TRIGGER_EVENT_TYPES = [
 	"issue_comment.created",
 ];
 
-const ACTION_DEFS = [
-	{ integration: "github", action: "create_pull_request", risk: "write" },
-	{ integration: "github", action: "add_comment", risk: "write" },
-	{ integration: "github", action: "list_files", risk: "read" },
-	{ integration: "github", action: "merge_pull_request", risk: "danger" },
-	{ integration: "linear", action: "create_issue", risk: "write" },
-	{ integration: "linear", action: "update_issue", risk: "write" },
-	{ integration: "linear", action: "list_issues", risk: "read" },
-	{ integration: "sentry", action: "get_issue", risk: "read" },
-	{ integration: "sentry", action: "resolve_issue", risk: "write" },
+const ACTION_DEFS_COMPLETED = [
+	{
+		integration: "github",
+		action: "add_comment",
+		risk: "write",
+		params: { pr: 142, body: "LGTM — tests pass, no regressions" },
+	},
+	{ integration: "github", action: "list_files", risk: "read", params: { pr: 138 } },
+	{
+		integration: "linear",
+		action: "update_issue",
+		risk: "write",
+		params: { issueId: "ENG-312", state: "In Review" },
+	},
+	{ integration: "linear", action: "list_issues", risk: "read", params: { project: "Backend" } },
+	{ integration: "sentry", action: "get_issue", risk: "read", params: { issueId: "SENTRY-8821" } },
+	{
+		integration: "sentry",
+		action: "resolve_issue",
+		risk: "write",
+		params: { issueId: "SENTRY-8821" },
+	},
+];
+
+const ACTION_DEFS_PENDING = [
+	{
+		integration: "github",
+		action: "create_pull_request",
+		risk: "write",
+		params: {
+			base: "main",
+			head: "fix/auth-bug",
+			title: "Fix OAuth token refresh race condition",
+			draft: false,
+		},
+	},
+	{
+		integration: "github",
+		action: "merge_pull_request",
+		risk: "danger",
+		params: { pr: 147, method: "squash", title: "feat: add rate limiting to API endpoints" },
+	},
+	{
+		integration: "linear",
+		action: "create_issue",
+		risk: "write",
+		params: {
+			title: "Investigate flaky test in CI — checkout.spec.ts",
+			priority: "high",
+			team: "Backend",
+		},
+	},
 ];
 
 // ---------------------------------------------------------------------------
@@ -365,8 +407,11 @@ async function seedOrg(
 					completedAt: isCompleted ? new Date(queuedAt.getTime() + 120_000) : null,
 					sessionId: linkedSession?.id ?? null,
 					sessionCreatedAt: linkedSession?.startedAt ?? null,
-					errorCode: status === "failed" ? "EXECUTION_TIMEOUT" : null,
-					errorMessage: status === "failed" ? "Session execution exceeded deadline" : null,
+					errorCode: status === "failed" ? "NEEDS_CLARIFICATION" : null,
+					errorMessage:
+						status === "failed"
+							? "Agent needs your input — multiple fix strategies available, awaiting direction"
+							: null,
 					lastActivityAt: isExecuting ? recentDate(6) : null,
 				};
 			}),
@@ -388,8 +433,9 @@ async function seedOrg(
 		.values(
 			actionStatuses.map((status) => {
 				const session = pick(sessionRows);
-				const actionDef = pick(ACTION_DEFS);
-				const createdAt = randomDate(21);
+				const isPending = status === "pending";
+				const actionDef = isPending ? pick(ACTION_DEFS_PENDING) : pick(ACTION_DEFS_COMPLETED);
+				const createdAt = isPending ? recentDate(4) : randomDate(21);
 				const isCompleted = status === "completed";
 				const isApproved = status === "approved" || status === "completed";
 				return {
@@ -400,10 +446,10 @@ async function seedOrg(
 					riskLevel: actionDef.risk,
 					mode: actionDef.risk === "read" ? "auto" : "manual",
 					modeSource: "org_default",
-					params: { seed: true },
+					params: actionDef.params,
 					status,
 					result: isCompleted ? { success: true } : null,
-					error: status === "failed" ? "Integration returned 503" : null,
+					error: status === "failed" ? "GitHub API rate limit exceeded (5000 req/hr)" : null,
 					deniedReason: status === "denied" ? "Action not allowed by org policy" : null,
 					durationMs: isCompleted ? Math.floor(Math.random() * 5000) + 200 : null,
 					approvedBy: isApproved ? userId : null,

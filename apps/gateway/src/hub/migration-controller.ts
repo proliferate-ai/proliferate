@@ -437,6 +437,17 @@ export class MigrationController {
 
 					if (rowsAffected === 0) {
 						this.logger.info("Expiry snapshot: CAS mismatch, another actor advanced state");
+					} else {
+						// Enqueue session completion notifications (best-effort)
+						try {
+							const orgId = this.options.runtime.getContext().session.organization_id;
+							await notifications.enqueueSessionCompletionNotification(
+								orgId,
+								this.options.sessionId,
+							);
+						} catch (err) {
+							this.logger.error({ err }, "Failed to enqueue session completion notification");
+						}
 					}
 
 					this.options.runtime.resetSandboxState();

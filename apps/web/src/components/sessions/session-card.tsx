@@ -145,8 +145,8 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 	const renameSession = useRenameSession();
 	const deleteSession = useDeleteSession();
 
-	const isRunning = session.status === "running";
-	const { data: isSubscribed } = useSessionNotificationSubscription(session.id, isRunning);
+	const canSubscribe = session.status === "running" || session.status === "starting";
+	const { data: isSubscribed } = useSessionNotificationSubscription(session.id, canSubscribe);
 	const subscribeNotifications = useSubscribeNotifications();
 	const unsubscribeNotifications = useUnsubscribeNotifications();
 
@@ -292,25 +292,53 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 
 				<OriginBadge session={session} />
 
-				{/* Trailing: metadata (default) or actions menu (on hover) */}
-				<div className="shrink-0 flex items-center">
-					<span
-						className={cn(
-							"text-xs text-muted-foreground whitespace-nowrap group-hover:hidden",
-							menuOpen && "hidden",
-						)}
-					>
-						{metaParts.join(" · ")}
+				<span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+					{metaParts.join(" · ")}
+				</span>
+
+				{session.prUrls && session.prUrls.length > 0 && (
+					<span className="inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+						<GitPullRequest className="h-3 w-3" />
+						{session.prUrls.length}
 					</span>
+				)}
+
+				{isResumable && (
+					<RotateCcw className="h-3 w-3 text-muted-foreground/50 shrink-0" aria-label="Resumable" />
+				)}
+
+				{(displayStatus === "completed" || displayStatus === "failed") &&
+					session.outcome &&
+					session.outcome !== "completed" && (
+						<span
+							className={cn(
+								"text-[11px] font-medium shrink-0",
+								getOutcomeDisplay(session.outcome).className,
+							)}
+						>
+							{getOutcomeDisplay(session.outcome).label}
+						</span>
+					)}
+
+				{/* Status + actions — three-dot menu overlays on hover */}
+				<div
+					className="w-[90px] flex-shrink-0 relative flex items-center gap-1.5"
+					aria-label={`Status: ${config.label}`}
+				>
+					<Icon className={`h-3.5 w-3.5 shrink-0 ${config.colorClassName}`} />
+					<span className="text-[11px] font-medium text-muted-foreground">{config.label}</span>
 					<div
-						className={cn("hidden group-hover:flex items-center", menuOpen && "flex")}
+						className={cn(
+							"absolute right-0 hidden group-hover:flex items-center",
+							menuOpen && "flex",
+						)}
 						onClick={(e) => e.stopPropagation()}
 					>
 						<ItemActionsMenu
 							onRename={handleRename}
 							onDelete={() => setDeleteDialogOpen(true)}
 							customActions={
-								isRunning
+								canSubscribe
 									? [
 											{
 												label: isSubscribed ? "Notifications on" : "Notify me",
@@ -342,52 +370,6 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 										]
 									: undefined
 							}
-							onOpenChange={setMenuOpen}
-						/>
-					</div>
-				</div>
-
-				{session.prUrls && session.prUrls.length > 0 && (
-					<span className="inline-flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-						<GitPullRequest className="h-3 w-3" />
-						{session.prUrls.length}
-					</span>
-				)}
-
-				{isResumable && (
-					<RotateCcw className="h-3 w-3 text-muted-foreground/50 shrink-0" aria-label="Resumable" />
-				)}
-
-				{(displayStatus === "completed" || displayStatus === "failed") &&
-					session.outcome &&
-					session.outcome !== "completed" && (
-						<span
-							className={cn(
-								"text-[11px] font-medium shrink-0",
-								getOutcomeDisplay(session.outcome).className,
-							)}
-						>
-							{getOutcomeDisplay(session.outcome).label}
-						</span>
-					)}
-
-				{/* Status + actions — three-dot menu overlays on hover without shifting layout */}
-				<div
-					className="w-[90px] flex-shrink-0 relative flex items-center gap-1.5"
-					aria-label={`Status: ${config.label}`}
-				>
-					<Icon className={`h-3.5 w-3.5 shrink-0 ${config.colorClassName}`} />
-					<span className="text-[11px] font-medium text-muted-foreground">{config.label}</span>
-					<div
-						className={cn(
-							"absolute right-0 hidden group-hover:flex items-center",
-							menuOpen && "flex",
-						)}
-						onClick={(e) => e.stopPropagation()}
-					>
-						<ItemActionsMenu
-							onRename={handleRename}
-							onDelete={() => setDeleteDialogOpen(true)}
 							onOpenChange={setMenuOpen}
 						/>
 					</div>

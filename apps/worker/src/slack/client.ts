@@ -231,20 +231,12 @@ export class SlackClient extends AsyncClient<
 					);
 					return;
 				}
-			} else {
-				// fixed strategy: require an explicit default configuration
-				if (!selectionConfig?.defaultConfigurationId) {
-					this.logger.warn({ installationId }, "Fixed strategy but no default configuration set");
-					await postToSlack(
-						encryptedBotToken,
-						channelId,
-						threadTs,
-						"No default configuration is set for this Slack integration. Please configure one in your integration settings.",
-						this.logger,
-					);
-					return;
-				}
+			} else if (selectionConfig?.defaultConfigurationId) {
+				// fixed strategy with explicit default
 				configOption = { configurationId: selectionConfig.defaultConfigurationId };
+			} else {
+				// No config set — use managed configuration (system picks repos)
+				configOption = { managedConfiguration: {} };
 			}
 
 			try {

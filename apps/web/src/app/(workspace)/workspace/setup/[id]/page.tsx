@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useCreateConfiguration } from "@/hooks/use-configurations";
 import { useCreateSession } from "@/hooks/use-sessions";
 import { useDashboardStore } from "@/stores/dashboard";
+import { getSetupInitialPrompt } from "@proliferate/shared/prompts";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -37,6 +38,7 @@ export default function SetupPage() {
 					configurationId: configurationResult.configurationId,
 					sessionType: "setup",
 					modelId: selectedModel,
+					initialPrompt: getSetupInitialPrompt(),
 				});
 
 				setSessionId(sessionResult.sessionId);

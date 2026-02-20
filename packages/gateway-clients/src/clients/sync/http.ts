@@ -146,6 +146,13 @@ export async function createSession(
 }
 
 /**
+ * Trigger eager session start (boot sandbox + send initial prompt)
+ */
+export async function eagerStart(http: HttpClient, proliferateSessionId: string): Promise<void> {
+	await http.post(`/proliferate/${proliferateSessionId}/eager-start`, {});
+}
+
+/**
  * Get session status for finalizer checks
  */
 export async function getSessionStatus(

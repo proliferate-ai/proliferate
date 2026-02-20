@@ -118,6 +118,7 @@ export function RightPanel({
 		if (mode.type === "settings" && sessionProps) {
 			return (
 				<SettingsPanel
+					sessionId={sessionProps.sessionId}
 					sessionStatus={sessionProps.sessionStatus}
 					repoName={sessionProps.repoName}
 					branchName={sessionProps.branchName}

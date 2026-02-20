@@ -5,16 +5,8 @@ import { LinearIcon, SentryIcon, SlackIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useAutomationIntegrationActions } from "@/hooks/use-automations";
-import { useSlackChannels, useSlackMembers } from "@/hooks/use-integrations";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, Plug } from "lucide-react";
 import Link from "next/link";
@@ -81,24 +73,13 @@ interface IntegrationRow {
 // Props
 // ============================================
 
-type NotificationDestinationType = "slack_channel" | "slack_dm_user" | "none";
-
 interface IntegrationPermissionsProps {
 	automationId: string;
 	enabledTools: EnabledTools;
 	actionModes: Record<string, ActionMode>;
 	connectedProviders: Set<string>;
-	slackInstallations?: Array<{ id: string; team_name: string | null; team_id: string }>;
-	notificationSlackInstallationId: string | null;
-	notificationDestinationType: NotificationDestinationType;
-	notificationSlackUserId: string | null;
-	notificationChannelId: string | null;
 	onToolToggle: (toolName: keyof EnabledTools, enabled: boolean) => void;
 	onToolConfigChange: (toolName: keyof EnabledTools, key: string, value: string) => void;
-	onSlackInstallationChange: (installationId: string | null) => void;
-	onNotificationDestinationChange: (type: NotificationDestinationType) => void;
-	onNotificationSlackUserChange: (userId: string | null) => void;
-	onNotificationChannelChange: (channelId: string | null) => void;
 	onPermissionChange: (key: string, mode: ActionMode) => void;
 	permissionsPending?: boolean;
 }
@@ -112,17 +93,8 @@ export function IntegrationPermissions({
 	enabledTools,
 	actionModes,
 	connectedProviders,
-	slackInstallations,
-	notificationSlackInstallationId,
-	notificationDestinationType,
-	notificationSlackUserId,
-	notificationChannelId,
 	onToolToggle,
 	onToolConfigChange,
-	onSlackInstallationChange,
-	onNotificationDestinationChange,
-	onNotificationSlackUserChange,
-	onNotificationChannelChange,
 	onPermissionChange,
 	permissionsPending,
 }: IntegrationPermissionsProps) {
@@ -149,21 +121,6 @@ export function IntegrationPermissions({
 				icon: SlackIcon,
 				name: "Slack",
 				toolName: "slack_notify",
-				configContent: (
-					<SlackConfig
-						enabledTools={enabledTools}
-						slackInstallations={slackInstallations}
-						notificationSlackInstallationId={notificationSlackInstallationId}
-						notificationDestinationType={notificationDestinationType}
-						notificationSlackUserId={notificationSlackUserId}
-						notificationChannelId={notificationChannelId}
-						onToolConfigChange={onToolConfigChange}
-						onSlackInstallationChange={onSlackInstallationChange}
-						onNotificationDestinationChange={onNotificationDestinationChange}
-						onNotificationSlackUserChange={onNotificationSlackUserChange}
-						onNotificationChannelChange={onNotificationChannelChange}
-					/>
-				),
 			});
 		}
 
@@ -218,16 +175,7 @@ export function IntegrationPermissions({
 		sentryActions,
 		otherIntegrations,
 		enabledTools,
-		slackInstallations,
-		notificationSlackInstallationId,
-		notificationDestinationType,
-		notificationSlackUserId,
-		notificationChannelId,
 		onToolConfigChange,
-		onSlackInstallationChange,
-		onNotificationDestinationChange,
-		onNotificationSlackUserChange,
-		onNotificationChannelChange,
 	]);
 
 	if (isLoading) {
@@ -275,168 +223,6 @@ export function IntegrationPermissions({
 // ============================================
 // Config sub-components (inlined in popover)
 // ============================================
-
-function SlackConfig({
-	enabledTools,
-	slackInstallations,
-	notificationSlackInstallationId,
-	notificationDestinationType,
-	notificationSlackUserId,
-	notificationChannelId,
-	onToolConfigChange,
-	onSlackInstallationChange,
-	onNotificationDestinationChange,
-	onNotificationSlackUserChange,
-	onNotificationChannelChange,
-}: {
-	enabledTools: EnabledTools;
-	slackInstallations?: Array<{ id: string; team_name: string | null; team_id: string }>;
-	notificationSlackInstallationId: string | null;
-	notificationDestinationType: NotificationDestinationType;
-	notificationSlackUserId: string | null;
-	notificationChannelId: string | null;
-	onToolConfigChange: (toolName: keyof EnabledTools, key: string, value: string) => void;
-	onSlackInstallationChange: (installationId: string | null) => void;
-	onNotificationDestinationChange: (type: NotificationDestinationType) => void;
-	onNotificationSlackUserChange: (userId: string | null) => void;
-	onNotificationChannelChange: (channelId: string | null) => void;
-}) {
-	// Resolve the effective installation ID for API calls
-	const effectiveInstallationId =
-		notificationSlackInstallationId ?? slackInstallations?.[0]?.id ?? null;
-
-	const { data: membersData } = useSlackMembers(
-		notificationDestinationType === "slack_dm_user" ? effectiveInstallationId : null,
-	);
-	const { data: channelsData } = useSlackChannels(
-		notificationDestinationType === "slack_channel" ? effectiveInstallationId : null,
-	);
-
-	// Derive the legacy channel ID from enabledTools for backward compat display
-	const legacyChannelId = enabledTools.slack_notify?.channelId || "";
-	const activeChannelId = notificationChannelId || legacyChannelId;
-
-	return (
-		<div className="flex flex-col gap-3 min-w-[260px]">
-			{/* Workspace selector */}
-			{slackInstallations && (slackInstallations.length > 1 || notificationSlackInstallationId) && (
-				<div className="flex flex-col gap-1.5">
-					<Label className="text-xs text-muted-foreground">Workspace</Label>
-					<Select
-						value={notificationSlackInstallationId ?? "auto"}
-						onValueChange={(value) => onSlackInstallationChange(value === "auto" ? null : value)}
-					>
-						<SelectTrigger className="h-8">
-							<SelectValue placeholder="Auto-detect" />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="auto">Auto-detect</SelectItem>
-							{slackInstallations.map((inst) => (
-								<SelectItem key={inst.id} value={inst.id}>
-									{inst.team_name ?? inst.team_id}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</div>
-			)}
-
-			{/* Notification destination type */}
-			<div className="flex flex-col gap-1.5">
-				<Label className="text-xs text-muted-foreground">Notify on completion</Label>
-				<Select
-					value={notificationDestinationType}
-					onValueChange={(value) =>
-						onNotificationDestinationChange(value as NotificationDestinationType)
-					}
-				>
-					<SelectTrigger className="h-8">
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value="slack_channel">Post to channel</SelectItem>
-						<SelectItem value="slack_dm_user">DM a user</SelectItem>
-						<SelectItem value="none">Disabled</SelectItem>
-					</SelectContent>
-				</Select>
-			</div>
-
-			{/* Channel picker (when destination is channel) */}
-			{notificationDestinationType === "slack_channel" && (
-				<div className="flex flex-col gap-1.5">
-					<Label className="text-xs text-muted-foreground">Channel</Label>
-					{channelsData?.channels && channelsData.channels.length > 0 ? (
-						<Select
-							value={activeChannelId || ""}
-							onValueChange={(value) => {
-								onNotificationChannelChange(value || null);
-								// Also sync to legacy field for backward compat
-								onToolConfigChange("slack_notify", "channelId", value);
-							}}
-						>
-							<SelectTrigger className="h-8">
-								<SelectValue placeholder="Select a channel" />
-							</SelectTrigger>
-							<SelectContent>
-								{channelsData.channels.map(
-									(ch: { id: string; name: string; isPrivate: boolean }) => (
-										<SelectItem key={ch.id} value={ch.id}>
-											{ch.isPrivate ? "🔒 " : "#"}
-											{ch.name}
-										</SelectItem>
-									),
-								)}
-							</SelectContent>
-						</Select>
-					) : (
-						<Input
-							value={activeChannelId}
-							onChange={(e) => {
-								onNotificationChannelChange(e.target.value || null);
-								onToolConfigChange("slack_notify", "channelId", e.target.value);
-							}}
-							placeholder="C01234567890"
-							className="h-8"
-						/>
-					)}
-				</div>
-			)}
-
-			{/* DM user picker (when destination is DM) */}
-			{notificationDestinationType === "slack_dm_user" && (
-				<div className="flex flex-col gap-1.5">
-					<Label className="text-xs text-muted-foreground">Send DM to</Label>
-					{membersData?.members && membersData.members.length > 0 ? (
-						<Select
-							value={notificationSlackUserId || ""}
-							onValueChange={(value) => onNotificationSlackUserChange(value || null)}
-						>
-							<SelectTrigger className="h-8">
-								<SelectValue placeholder="Select a user" />
-							</SelectTrigger>
-							<SelectContent>
-								{membersData.members.map(
-									(m: { id: string; name: string; realName: string | null }) => (
-										<SelectItem key={m.id} value={m.id}>
-											{m.realName || m.name}
-										</SelectItem>
-									),
-								)}
-							</SelectContent>
-						</Select>
-					) : (
-						<Input
-							value={notificationSlackUserId || ""}
-							onChange={(e) => onNotificationSlackUserChange(e.target.value || null)}
-							placeholder="U01234567890"
-							className="h-8"
-						/>
-					)}
-				</div>
-			)}
-		</div>
-	);
-}
 
 function LinearConfig({
 	enabledTools,
