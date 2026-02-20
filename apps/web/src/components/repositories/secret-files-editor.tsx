@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useDeleteSecretFile, useSecretFiles, useUpsertSecretFile } from "@/hooks/use-secret-files";
 import { FileLock2, Plus, Trash2 } from "lucide-react";
@@ -76,6 +77,10 @@ export function SecretFilesEditor({
 			</div>
 
 			<p className="text-[11px] text-muted-foreground">
+				Create a file path inside the repo and paste its full contents. Proliferate writes this file
+				for setup and future sessions.
+			</p>
+			<p className="text-[11px] text-muted-foreground">
 				Secret file values are encrypted at rest and never shown again after save.
 			</p>
 
@@ -143,18 +148,24 @@ export function SecretFilesEditor({
 			{/* Add new file */}
 			{adding && (
 				<div className="rounded-md border border-border/60 p-2.5 space-y-2">
-					<Input
-						value={newPath}
-						onChange={(e) => setNewPath(e.target.value)}
-						placeholder="Path in repo (e.g. .env.local, apps/api/.env)"
-						className="h-7 text-xs font-mono"
-					/>
-					<Textarea
-						value={newContent}
-						onChange={(e) => setNewContent(e.target.value)}
-						placeholder="Paste file contents"
-						className="text-xs font-mono min-h-[80px]"
-					/>
+					<div className="space-y-1">
+						<Label className="text-[11px] text-muted-foreground">File path in project</Label>
+						<Input
+							value={newPath}
+							onChange={(e) => setNewPath(e.target.value)}
+							placeholder="Path in repo (e.g. .env.local, apps/api/.env)"
+							className="h-7 text-xs font-mono"
+						/>
+					</div>
+					<div className="space-y-1">
+						<Label className="text-[11px] text-muted-foreground">File contents</Label>
+						<Textarea
+							value={newContent}
+							onChange={(e) => setNewContent(e.target.value)}
+							placeholder="Paste file contents"
+							className="text-xs font-mono min-h-[80px]"
+						/>
+					</div>
 					<div className="flex gap-2">
 						<Button
 							variant="ghost"

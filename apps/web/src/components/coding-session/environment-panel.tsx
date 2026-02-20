@@ -121,7 +121,7 @@ function AddVariableForm({
 				<Input
 					value={key}
 					onChange={(e) => setKey(e.target.value.toUpperCase())}
-					placeholder="KEY"
+					placeholder="ENV_VAR_NAME"
 					className="h-8 text-xs flex-[2]"
 					autoComplete="off"
 				/>
@@ -129,7 +129,7 @@ function AddVariableForm({
 					type="password"
 					value={value}
 					onChange={(e) => setValue(e.target.value)}
-					placeholder="Value"
+					placeholder="Secret value"
 					className="h-8 text-xs flex-[3]"
 					onKeyDown={(e) => {
 						if (e.key === "Enter") handleSave();
@@ -153,9 +153,12 @@ function AddVariableForm({
 					className="h-4 w-7 [&>span]:h-3 [&>span]:w-3"
 				/>
 				<Label htmlFor="persist" className="text-[11px] text-muted-foreground cursor-pointer">
-					{persist ? "Save to vault" : "Session only (ephemeral)"}
+					{persist ? "Save to vault for future sessions" : "Session only (not saved)"}
 				</Label>
 			</div>
+			<p className="text-[11px] text-muted-foreground">
+				Stores a single environment variable. This does not create or update files in the repo.
+			</p>
 		</div>
 	);
 }
@@ -583,7 +586,7 @@ export function EnvironmentPanel({
 									className="w-full inline-flex items-center justify-between text-xs font-medium"
 									onClick={() => setShowVariableEntry((prev) => !prev)}
 								>
-									<span>Advanced fallback: add individual variables</span>
+									<span>Fallback: single env vars only (no files)</span>
 									<ChevronDown
 										className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${
 											showVariableEntry ? "rotate-180" : ""
@@ -592,6 +595,10 @@ export function EnvironmentPanel({
 								</button>
 								{showVariableEntry && (
 									<div className="mt-2 space-y-1.5">
+										<p className="text-[11px] text-muted-foreground">
+											Use this only when you cannot provide a full secret file. Enter one key and
+											its value at a time.
+										</p>
 										{pasteMode ? (
 											<PasteEnvForm
 												sessionId={sessionId}
@@ -709,11 +716,15 @@ export function EnvironmentPanel({
 						)}
 
 						{/* Empty state */}
-						{(!secrets || secrets.length === 0) && specKeys.length === 0 && (
-							<p className="text-xs text-muted-foreground py-4 text-center">
-								No variables yet. Add one above.
-							</p>
-						)}
+						{(!secrets || secrets.length === 0) &&
+							specKeys.length === 0 &&
+							(!isSetupSession || showVariableEntry) && (
+								<p className="text-xs text-muted-foreground py-4 text-center">
+									{isSetupSession
+										? "No single env vars saved yet. Prefer the secret file flow above."
+										: "No variables yet. Add one above."}
+								</p>
+							)}
 					</div>
 				)}
 			</div>
