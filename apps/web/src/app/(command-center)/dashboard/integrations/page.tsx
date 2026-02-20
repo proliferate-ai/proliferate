@@ -281,7 +281,11 @@ export default function IntegrationsPage() {
 	// ---- Slack config ----
 	const { data: slackConfig } = useSlackConfig();
 	const updateSlackConfig = useUpdateSlackConfig();
-	const { data: allConfigurations } = useConfigurations("active");
+	const { data: rawConfigurations } = useConfigurations();
+	const readyConfigurations = useMemo(
+		() => (rawConfigurations ?? []).filter((c) => c.status === "ready" || c.status === "default"),
+		[rawConfigurations],
+	);
 
 	// ---- Slack handlers ----
 	const [showSlackConnectForm, setShowSlackConnectForm] = useState(false);
@@ -936,9 +940,9 @@ export default function IntegrationsPage() {
 								<p className="text-xs text-muted-foreground">
 									Allowed configurations (agent will choose based on the message):
 								</p>
-								{allConfigurations && allConfigurations.length > 0 ? (
+								{readyConfigurations && readyConfigurations.length > 0 ? (
 									<div className="flex flex-wrap gap-1.5">
-										{allConfigurations.map((config) => {
+										{readyConfigurations.map((config) => {
 											const isAllowed =
 												slackConfig.allowedConfigurationIds?.includes(config.id) ?? false;
 											return (
@@ -976,9 +980,9 @@ export default function IntegrationsPage() {
 						) : (
 							<div className="space-y-2">
 								<p className="text-xs text-muted-foreground">Default configuration:</p>
-								{allConfigurations && (
+								{readyConfigurations && (
 									<ConfigurationSelector
-										configurations={allConfigurations}
+										configurations={readyConfigurations}
 										selectedId={slackConfig.defaultConfigurationId}
 										onChange={(id) => {
 											updateSlackConfig.mutate({
