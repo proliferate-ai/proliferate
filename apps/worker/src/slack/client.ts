@@ -25,7 +25,6 @@ import {
 	defaultToolHandler,
 	textPartCompleteHandler,
 	todoWriteToolHandler,
-	verifyToolHandler,
 } from "./handlers";
 import { downloadSlackImageAsBase64, postToSlack, postWelcomeMessage } from "./lib";
 
@@ -43,10 +42,10 @@ export interface SlackClientMetadata {
 }
 
 // Tools we actually want to post about (most are too noisy)
-const SIGNIFICANT_TOOLS = ["verify", "todowrite"];
+const significantTools = ["todowrite"];
 
 // Tool handlers in priority order (first match wins)
-const toolHandlers: ToolHandler[] = [verifyToolHandler, todoWriteToolHandler, defaultToolHandler];
+const toolHandlers: ToolHandler[] = [todoWriteToolHandler, defaultToolHandler];
 
 /**
  * Find handler for a tool
@@ -69,7 +68,7 @@ function findToolHandler(toolName: string): ToolHandler {
  */
 function isSignificantTool(toolName: string): boolean {
 	const normalized = toolName.toLowerCase();
-	return SIGNIFICANT_TOOLS.some((t) => normalized === t || normalized.includes(t));
+	return significantTools.some((t) => normalized === t || normalized.includes(t));
 }
 
 /**

@@ -16,7 +16,6 @@ import infoRouter from "./info";
 import messageRouter from "./message";
 import { createSessionsRouter } from "./sessions";
 import { createToolsRouter } from "./tools";
-import { createVerificationMediaRouter } from "./verification-media";
 
 export function createProliferateHttpRoutes(hubManager: HubManager, env: GatewayEnv): RouterType {
 	const router: RouterType = Router();
@@ -28,9 +27,6 @@ export function createProliferateHttpRoutes(hubManager: HubManager, env: Gateway
 
 	// Session creation - may need hub manager to kick off setup sessions
 	router.use("/sessions", createSessionsRouter(env, hubManager));
-
-	// Verification media doesn't need session hub (reads from S3)
-	router.use(createVerificationMediaRouter(env));
 
 	// Heartbeat — doesn't require sandbox running (resets idle timers only)
 	router.use("/:proliferateSessionId", createHeartbeatRouter(hubManager));

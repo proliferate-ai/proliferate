@@ -27,8 +27,6 @@ import {
 	SAVE_SERVICE_COMMANDS_TOOL,
 	SAVE_SNAPSHOT_DESCRIPTION,
 	SAVE_SNAPSHOT_TOOL,
-	VERIFY_TOOL,
-	VERIFY_TOOL_DESCRIPTION,
 } from "../opencode-tools";
 import {
 	ACTIONS_BOOTSTRAP,
@@ -613,7 +611,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			const llmProxyApiKey = opts.envVars.LLM_PROXY_API_KEY;
 
 			// Build environment variables
-			// Note: S3 credentials are NOT passed to sandbox - verify tool is intercepted by gateway
+			// Note: S3 credentials are NOT passed to sandbox
 			const env: Record<string, string> = {
 				SESSION_ID: opts.sessionId,
 				// Critical: Disable OpenCode's npm-based auth plugins that don't survive snapshots
@@ -1065,8 +1063,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			// Plugin
 			writeFile(`${SANDBOX_PATHS.globalPluginDir}/proliferate.mjs`, PLUGIN_MJS),
 			// Core tools (available in all session modes)
-			writeFile(`${localToolDir}/verify.ts`, VERIFY_TOOL),
-			writeFile(`${localToolDir}/verify.txt`, VERIFY_TOOL_DESCRIPTION),
 			writeFile(`${localToolDir}/request_env_variables.ts`, REQUEST_ENV_VARIABLES_TOOL),
 			writeFile(`${localToolDir}/request_env_variables.txt`, REQUEST_ENV_VARIABLES_DESCRIPTION),
 			writeFile(`${localToolDir}/save_snapshot.ts`, SAVE_SNAPSHOT_TOOL),
@@ -1916,7 +1912,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 	/**
 	 * Read files from a folder in the sandbox filesystem.
-	 * Used by the verify tool to upload verification evidence.
 	 */
 	async readFiles(sandboxId: string, folderPath: string): Promise<FileContent[]> {
 		providerLogger.debug(

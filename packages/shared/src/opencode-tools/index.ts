@@ -145,53 +145,6 @@ Example:
 `;
 
 /**
- * Verify Tool
- *
- * Uploads verification evidence to S3 for display in the UI.
- * Calls back to Gateway via HTTP.
- */
-export const VERIFY_TOOL = `
-// Verify Tool for OpenCode
-// Calls Gateway HTTP callback to upload verification files
-
-import { randomUUID } from "crypto"
-
-${TOOL_CALLBACK_HELPER}
-
-export default {
-  name: "verify",
-  description: \`Upload verification evidence to S3 for display in the UI.
-
-Before calling this tool, collect evidence in .proliferate/.verification/:
-- Screenshots (use Playwright MCP to capture)
-- Test output logs
-- Any files proving your changes work
-
-Example:
-1. mkdir -p .proliferate/.verification
-2. Take screenshots, save to .proliferate/.verification/
-3. npm test > .proliferate/.verification/test.log 2>&1
-4. Call verify()\`,
-
-  parameters: {
-    type: "object",
-    properties: {
-      folder: {
-        type: "string",
-        description: "Folder with evidence. Defaults to .proliferate/.verification/",
-      },
-    },
-  },
-
-  async execute(args) {
-    const toolCallId = randomUUID();
-    const result = await callGatewayTool("verify", toolCallId, args || {});
-    return result.result || "Verification initiated...";
-  },
-};
-`;
-
-/**
  * Request Environment Variables Tool Description (for .txt file)
  */
 export const REQUEST_ENV_VARIABLES_DESCRIPTION = `
@@ -266,42 +219,6 @@ request_env_variables({
 `;
 
 /**
- * Verify Tool Description (for .txt file)
- */
-export const VERIFY_TOOL_DESCRIPTION = `
-Use the verify tool to upload verification evidence for display in the Proliferate UI.
-
-## How it works
-
-1. **Collect evidence** in the \`.proliferate/.verification/\` folder (or a custom folder)
-2. **Call verify()** to upload all files to S3
-3. **View in UI** - the evidence appears in the Proliferate dashboard
-
-## What to include
-
-- **Screenshots**: Browser screenshots showing your changes work
-- **Test output**: \`npm test > .proliferate/.verification/test-output.log 2>&1\`
-- **Build logs**: Save build output if relevant
-- **Any files**: Anything that proves your changes work correctly
-
-## Usage Examples
-
-### Basic usage (default folder)
-\`\`\`bash
-mkdir -p .proliferate/.verification
-playwright_browser_navigate({ url: "http://localhost:3000" })
-playwright_browser_take_screenshot({ path: ".proliferate/.verification/homepage.png" })
-npm test > .proliferate/.verification/test-output.log 2>&1
-verify()
-\`\`\`
-
-### Custom folder
-\`\`\`
-verify({ folder: "/workspace/my-custom-evidence" })
-\`\`\`
-`;
-
-/**
  * Save Snapshot Tool
  *
  * Saves a snapshot of the current sandbox environment.
@@ -330,7 +247,6 @@ Call this ONLY after:
 2. All services are running
 3. Environment variables are configured
 4. You have VERIFIED everything works (health checks, screenshots)
-5. You have called verify() to upload evidence
 
 Example:
   save_snapshot({ message: "Setup complete! Dev server on :3000" })
@@ -366,7 +282,6 @@ Only call this AFTER you have:
 4. VERIFIED everything works:
    - Health checks pass
    - Screenshots taken (for web apps)
-   - verify() called to upload evidence
 
 ## How It Works
 
@@ -386,7 +301,7 @@ save_snapshot({
 
 ## Important
 
-- Don't call this until you've VERIFIED things work
+- Don't call this until you've verified things work
 - The snapshot is saved automatically (no user confirmation needed)
 - Include a brief summary of what's working in the message
 `;

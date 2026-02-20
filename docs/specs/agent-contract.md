@@ -4,7 +4,7 @@
 
 ### In Scope
 - System prompt modes: setup, coding, automation — what each injects and how they differ
-- OpenCode tool schemas: `verify`, `save_snapshot`, `save_service_commands`, `automation.complete`, `request_env_variables`
+- OpenCode tool schemas: `save_snapshot`, `save_service_commands`, `automation.complete`, `request_env_variables`
 - Capability injection: how tools and instructions are registered in the sandbox OpenCode config
 - Tool input/output contracts and validation rules
 - Agent/model configuration and selection
@@ -33,8 +33,8 @@ The gateway selects a system prompt based on session type and client type, then 
 - **Agent config** — model ID and optional tools array stored per-session in the database.
 
 **Key invariants:**
-- Mode-scoped tool injection: setup-only tools (`save_service_commands`) are injected only for setup sessions. Shared tools (`verify`, `save_snapshot`, `request_env_variables`, `automation.complete`) are injected for all sessions. The system prompt controls which tools the agent is encouraged to use.
-- Four of five tools are gateway-mediated (executed server-side via synchronous HTTP callbacks). Only `request_env_variables` runs in the sandbox.
+- Mode-scoped tool injection: setup-only tools (`save_service_commands`) are injected only for setup sessions. Shared tools (`save_snapshot`, `request_env_variables`, `automation.complete`) are injected for all sessions. The system prompt controls which tools the agent is encouraged to use.
+- Three of four tools are gateway-mediated (executed server-side via synchronous HTTP callbacks). Only `request_env_variables` runs in the sandbox.
 - Tool definitions are string templates exported from `packages/shared/src/opencode-tools/index.ts`. They are the single source of truth for tool schemas.
 - The system prompt can be overridden per-session via `session.system_prompt` in the database.
 
@@ -51,7 +51,7 @@ Three prompt builders produce mode-specific system messages. The gateway selects
 Most platform tools are executed **server-side** by the gateway via synchronous sandbox-to-gateway HTTP callbacks. Tool execution does not use SSE interception or PATCH-based result delivery.
 
 1. OpenCode invokes a tool.
-2. For gateway-mediated tools (`verify`, `save_snapshot`, `save_service_commands`, `automation.complete`), the tool `execute()` issues a blocking `POST /proliferate/:sessionId/tools/:toolName` to the gateway using the shared `callGatewayTool()` helper.
+2. For gateway-mediated tools (`save_snapshot`, `save_service_commands`, `automation.complete`), the tool `execute()` issues a blocking `POST /proliferate/:sessionId/tools/:toolName` to the gateway using the shared `callGatewayTool()` helper.
 3. The gateway authenticates the request using the sandbox HMAC token (`Authorization: Bearer <token>`, `source: "sandbox"`).
 4. The gateway enforces idempotency by `tool_call_id` using in-memory inflight/completed caches (with a 5-minute retention window for completed results).
 5. The gateway executes the tool handler and returns the result in the HTTP response body.
@@ -145,7 +145,6 @@ apps/gateway/src/
 │   └── opencode.ts                     # OpenCode HTTP helpers (create session, send prompt, etc.)
 └── hub/capabilities/tools/
     ├── index.ts                        # Intercepted tools registry
-    ├── verify.ts                       # verify handler (S3 upload)
     ├── save-snapshot.ts                # save_snapshot handler (provider snapshot)
     ├── automation-complete.ts          # automation.complete handler (run finalization)
     └── save-service-commands.ts        # save_service_commands handler (configuration update)
@@ -247,7 +246,7 @@ Source: `packages/db/src/schema/schema.ts`
 ### Do
 - Define new tool schemas in `packages/shared/src/opencode-tools/index.ts` as string template exports — this keeps all tool definitions in one place.
 - Export both a `.ts` tool definition and a `.txt` description file for each tool — OpenCode uses both.
-- Use Zod validation in gateway handlers for tools with complex schemas (e.g., `save_service_commands`). Simpler tools (`verify`, `save_snapshot`) use inline type coercion.
+- Use Zod validation in gateway handlers for tools with complex schemas (e.g., `save_service_commands`). Simpler tools (`save_snapshot`) use inline type coercion.
 - Return `InterceptedToolResult` from all handlers — the `success` field drives error reporting.
 - Use the shared `callGatewayTool()` helper (from `TOOL_CALLBACK_HELPER`) in tool `execute()` implementations to get automatic retry-on-network-error with `tool_call_id` idempotency.
 
@@ -290,7 +289,7 @@ async execute(hub, args): Promise<InterceptedToolResult> {
 
 ### Testing Conventions
 - Tool handler tests live alongside handlers in gateway tests.
-- Test gateway tool handlers by mocking `SessionHub` methods (e.g., `hub.uploadVerificationFiles`, `hub.saveSnapshot`) and by exercising the tools route (idempotency by `tool_call_id`).
+- Test gateway tool handlers by mocking `SessionHub` methods (e.g., `hub.saveSnapshot`) and by exercising the tools route (idempotency by `tool_call_id`).
 - Verify Zod validation rejects malformed args for `save_service_commands`.
 - System prompt tests: assert each mode includes the expected tool references and omits out-of-scope ones.
 
@@ -316,8 +315,7 @@ async execute(hub, args): Promise<InterceptedToolResult> {
 | Aspect | Setup | Coding | Automation |
 |--------|-------|--------|------------|
 | Base prompt | Unique | Unique | Extends Coding |
-| Goal | Get repo running, save snapshot | Implement changes, verify | Complete task, report outcome |
-| `verify` | Required before snapshot | Encouraged | Available |
+| Goal | Get repo running, save snapshot | Implement changes | Complete task, report outcome |
 | `save_snapshot` | Required at end | Available | Available |
 | `request_env_variables` | Emphasized | Available | Available |
 | `save_service_commands` | Emphasized | Not available | Not available |
@@ -337,19 +335,6 @@ Each tool is exported as two constants from `packages/shared/src/opencode-tools/
 - `*_DESCRIPTION` — the `.txt` guidance for agents
 
 All gateway-mediated tools share the `TOOL_CALLBACK_HELPER` — a common `callGatewayTool()` function template that handles the synchronous HTTP callback to the gateway with retry logic for the Snapshot TCP-Drop scenario.
-
-#### `verify` tool — `Implemented`
-
-**Schema:**
-```typescript
-{
-  folder?: string  // Default: ".proliferate/.verification/"
-}
-```
-
-**Behavior:** Gateway executes server-side (gateway-mediated via tool callback), uploads files from the folder to S3, returns S3 key prefix. Agent collects evidence (screenshots, test logs) before calling.
-
-**Style note:** Uses raw `export default { name, description, parameters, execute }` format (not the `tool()` API).
 
 #### `save_snapshot` tool — `Implemented`
 
@@ -439,7 +424,7 @@ All gateway-mediated tools share the `TOOL_CALLBACK_HELPER` — a common `callGa
 **Mode-scoped injection rules:**
 - `save_service_commands` is injected only when `sessionType === "setup"`.
 - When `sessionType !== "setup"`, providers explicitly remove `save_service_commands` files (cleanup from setup snapshots that may include them).
-- Shared tools (`verify`, `save_snapshot`, `request_env_variables`, `automation.complete`) are injected for all sessions.
+- Shared tools (`save_snapshot`, `request_env_variables`, `automation.complete`) are injected for all sessions.
 
 **Sandbox filesystem layout after injection:**
 ```
@@ -453,7 +438,6 @@ All gateway-mediated tools share the `TOOL_CALLBACK_HELPER` — a common `callGa
 ├── .opencode/
 │   ├── instructions.md                  # ENV_INSTRUCTIONS (services, tools, setup hints)
 │   └── tool/
-│       ├── verify.ts / verify.txt
 │       ├── request_env_variables.ts / request_env_variables.txt
 │       ├── save_snapshot.ts / save_snapshot.txt
 │       ├── automation_complete.ts / automation_complete.txt
@@ -516,7 +500,6 @@ All gateway-mediated tools share the `TOOL_CALLBACK_HELPER` — a common `callGa
 
 | Tool | Gateway-mediated? | Reason |
 |------|-------------------|--------|
-| `verify` | Yes | Needs S3 credentials |
 | `save_snapshot` | Yes | Needs provider API access |
 | `automation.complete` | Yes | Needs database access |
 | `save_service_commands` | Yes | Needs database access |
@@ -554,7 +537,7 @@ All gateway-mediated tools share the `TOOL_CALLBACK_HELPER` — a common `callGa
 | `actions.md` | This -> Actions | `proliferate actions` CLI in system prompts | Prompts document CLI usage; actions spec owns the runtime |
 
 ### Security & Auth
-- Gateway-mediated tools run on the gateway with full DB/S3/provider access — sandboxes never have these credentials.
+- Gateway-mediated tools run on the gateway with full DB/provider access — sandboxes never have these credentials.
 - Tool callbacks authenticate with the sandbox HMAC token and require `source: "sandbox"` — requests from other sources are rejected with 403.
 - `request_env_variables` instructs agents to never `cat` or `echo` the env file directly — only extract specific keys with `jq`.
 - OpenCode permissions deny `question` tool to prevent native browser dialogs.
@@ -581,7 +564,6 @@ All gateway-mediated tools share the `TOOL_CALLBACK_HELPER` — a common `callGa
 
 - [ ] **`automation.complete` not yet mode-gated** — `automation.complete` is injected for all sessions, not just automation clients. The system prompt controls usage, but the tool file is present in non-automation sessions. Impact: possible out-of-mode calls. Expected fix: inject `automation_complete.ts` only when `clientType === "automation"`.
 - [ ] **`save_env_files` tool pending removal** — The `save_env_files` tool and its gateway handler (`apps/gateway/src/hub/capabilities/tools/save-env-files.ts`) still exist in the codebase but are targeted for removal. It is injected only for setup sessions. Expected fix: remove tool definition, handler, and provider injection code.
-- [ ] **Two tool definition styles** — `verify` uses raw `export default { name, description, parameters }` while other tools use the `tool()` plugin API from `@opencode-ai/plugin`. Impact: inconsistent authoring; no functional difference. Expected fix: migrate `verify` to `tool()` API.
 - [ ] **Dual registration for automation.complete** — Registered under both `automation.complete` and `automation_complete` to handle agent variation. Impact: minor registry bloat. Expected fix: standardize on one name once agent behavior is stable.
 - [ ] **No tool versioning** — Tool schemas are string templates with no version tracking. If a schema changes, running sessions continue with the old version until sandbox restart. Impact: potential schema mismatch during deploys. Expected fix: version stamp in tool file path or metadata.
 - [ ] **Custom system prompt bypass** — `session.system_prompt` in the DB overrides mode selection entirely. No validation that the custom prompt includes required tool instructions. Impact: automation sessions with custom prompts may not call `automation.complete`. Expected fix: append mode-critical instructions even when custom prompt is set.

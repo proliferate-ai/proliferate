@@ -10,7 +10,6 @@ import { automationCompleteHandler } from "./automation-complete";
 import { saveEnvFilesHandler } from "./save-env-files";
 import { saveServiceCommandsHandler } from "./save-service-commands";
 import { saveSnapshotHandler } from "./save-snapshot";
-import { verifyHandler } from "./verify";
 
 /**
  * Result from an intercepted tool execution
@@ -36,7 +35,6 @@ const interceptedTools = new Map<string, InterceptedToolHandler>();
 
 // Register built-in intercepted tools
 interceptedTools.set(saveSnapshotHandler.name, saveSnapshotHandler);
-interceptedTools.set(verifyHandler.name, verifyHandler);
 interceptedTools.set(automationCompleteHandler.name, automationCompleteHandler);
 interceptedTools.set("automation_complete", automationCompleteHandler);
 interceptedTools.set(saveServiceCommandsHandler.name, saveServiceCommandsHandler);

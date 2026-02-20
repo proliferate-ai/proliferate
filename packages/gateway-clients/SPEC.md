@@ -53,8 +53,6 @@ HTTP:
   GET  /proliferate/:proliferateSessionId
   POST /proliferate/:proliferateSessionId/message
   POST /proliferate/:proliferateSessionId/cancel
-  GET  /proliferate/:proliferateSessionId/verification-media
-
 Proxy:
   /proxy/:proliferateSessionId/:token/opencode/*
 ```
@@ -69,13 +67,7 @@ interface Client {
 
   checkHealth(): Promise<{ ok: boolean; latencyMs?: number }>;
 
-  readonly tools: {
-    verification: {
-      list(proliferateSessionId: string, options?: { prefix?: string }): Promise<VerificationFile[]>;
-      getUrl(proliferateSessionId: string, key: string): Promise<string>;
-      getStream(proliferateSessionId: string, key: string): Promise<{ data: ArrayBuffer; contentType: string }>;
-    };
-  };
+  readonly tools: {};
 }
 ```
 
@@ -204,14 +196,14 @@ createOpenCodeClient, OpenCodeClient, OpenCodeClientOptions
 ExternalClient, ExternalClientBase
 
 // Base interface
-Client, ClientTools, VerificationTools
+Client, ClientTools
 isSyncClient, isAsyncClient, isExternalClient
 
 // Auth
 ServiceAuth, TokenAuth, GatewayAuth
 
 // Types
-VerificationFile, ConnectionOptions, ReconnectOptions
+ConnectionOptions, ReconnectOptions
 PostMessageOptions, HealthCheckResult, SandboxInfo
 SyncWebSocket, WebSocketOptions
 

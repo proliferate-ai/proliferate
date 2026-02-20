@@ -98,14 +98,6 @@ export {
 	useSkipTriggerEvent,
 } from "./use-triggers";
 
-// Verification media hooks and utilities
-export {
-	useVerificationFiles,
-	useVerificationMediaUrl,
-	getCachedVerificationUrl,
-	prefetchVerificationUrls,
-} from "./use-verification-media-url";
-
 // Integration hooks
 export {
 	useIntegrations,

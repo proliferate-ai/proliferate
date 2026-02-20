@@ -19,7 +19,7 @@ export interface GatewayEnv {
 	sseReadTimeoutMs: number;
 	heartbeatTimeoutMs: number;
 	reconnectDelaysMs: number[];
-	// S3 configuration for verification uploads (optional outside cloud)
+	// S3 configuration (optional outside cloud)
 	s3Bucket?: string;
 	s3Region?: string;
 	s3EndpointUrl?: string;

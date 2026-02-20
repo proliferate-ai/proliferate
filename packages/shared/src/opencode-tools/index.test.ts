@@ -6,7 +6,6 @@ import {
 	SAVE_ENV_FILES_TOOL,
 	SAVE_SERVICE_COMMANDS_TOOL,
 	SAVE_SNAPSHOT_TOOL,
-	VERIFY_TOOL,
 } from "./index";
 
 /**
@@ -34,7 +33,6 @@ function validateToolSyntax(name: string, source: string) {
 describe("opencode tool templates", () => {
 	const tools: Record<string, string> = {
 		REQUEST_ENV_VARIABLES_TOOL,
-		VERIFY_TOOL,
 		SAVE_SNAPSHOT_TOOL,
 		AUTOMATION_COMPLETE_TOOL,
 		SAVE_SERVICE_COMMANDS_TOOL,

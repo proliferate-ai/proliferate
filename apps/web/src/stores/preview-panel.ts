@@ -1,12 +1,9 @@
-import type { VerificationFile } from "@proliferate/shared";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type PreviewMode =
 	| { type: "none" }
 	| { type: "url"; url: string | null }
-	| { type: "file"; file: VerificationFile }
-	| { type: "gallery"; files: VerificationFile[] }
 	| { type: "settings"; tab?: "info" | "snapshots" | "auto-start" }
 	| { type: "git" }
 	| { type: "terminal" }
@@ -29,8 +26,6 @@ interface PreviewPanelState {
 
 	// Actions
 	openUrl: (url: string) => void;
-	openFile: (file: VerificationFile) => void;
-	openGallery: (files: VerificationFile[]) => void;
 	close: () => void;
 	closePanel: () => void;
 
@@ -78,10 +73,6 @@ export const usePreviewPanelStore = create<PreviewPanelState>()(
 			missingEnvKeyCount: 0,
 
 			openUrl: (url: string) => set({ mode: { type: "url", url } }),
-
-			openFile: (file: VerificationFile) => set({ mode: { type: "file", file } }),
-
-			openGallery: (files: VerificationFile[]) => set({ mode: { type: "gallery", files } }),
 
 			close: () => set({ mode: DEFAULT_MODE, mobileView: "chat" }),
 

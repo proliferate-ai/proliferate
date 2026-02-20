@@ -16,8 +16,6 @@ import {
 	SAVE_SERVICE_COMMANDS_TOOL,
 	SAVE_SNAPSHOT_DESCRIPTION,
 	SAVE_SNAPSHOT_TOOL,
-	VERIFY_TOOL,
-	VERIFY_TOOL_DESCRIPTION,
 } from "../opencode-tools";
 import {
 	ACTIONS_BOOTSTRAP,
@@ -618,8 +616,6 @@ export class E2BProvider implements SandboxProvider {
 			// Plugin
 			writeFile(`${globalPluginDir}/proliferate.mjs`, PLUGIN_MJS),
 			// Core tools (available in all session modes)
-			writeFile(`${localToolDir}/verify.ts`, VERIFY_TOOL),
-			writeFile(`${localToolDir}/verify.txt`, VERIFY_TOOL_DESCRIPTION),
 			writeFile(`${localToolDir}/request_env_variables.ts`, REQUEST_ENV_VARIABLES_TOOL),
 			writeFile(`${localToolDir}/request_env_variables.txt`, REQUEST_ENV_VARIABLES_DESCRIPTION),
 			writeFile(`${localToolDir}/save_snapshot.ts`, SAVE_SNAPSHOT_TOOL),
@@ -1148,7 +1144,6 @@ export class E2BProvider implements SandboxProvider {
 
 	/**
 	 * Read files from a folder in the sandbox filesystem.
-	 * Used by the verify tool to upload verification evidence.
 	 */
 	async readFiles(sandboxId: string, folderPath: string): Promise<FileContent[]> {
 		providerLogger.debug(

@@ -5,18 +5,6 @@
 import type { ClientSource, ServerMessage } from "@proliferate/shared";
 
 /**
- * Verification file metadata
- */
-export interface VerificationFile {
-	key: string;
-	name: string;
-	path: string;
-	contentType: string;
-	size: number;
-	lastModified: string;
-}
-
-/**
  * Options for establishing a WebSocket connection
  */
 export interface ConnectionOptions {

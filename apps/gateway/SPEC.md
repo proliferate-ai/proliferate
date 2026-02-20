@@ -27,7 +27,6 @@ Client ──WebSocket──► Gateway ◄──SSE── Modal Sandbox (OpenCo
 | GET | `/health` | Health check |
 | POST | `/proliferate/sessions` | Create new session (unified API) |
 | GET | `/proliferate/:id` | Session info |
-| GET | `/proliferate/:id/verification-media` | S3 verification files |
 | POST | `/proliferate/:id/message` | Send prompt |
 | POST | `/proliferate/:id/cancel` | Cancel current prompt |
 | ALL | `/proxy/:id/:token/opencode/*` | Proxy to OpenCode HTTP |
@@ -241,8 +240,7 @@ src/
 │   │   │   ├── cancel.ts
 │   │   │   ├── info.ts
 │   │   │   ├── message.ts
-│   │   │   ├── sessions.ts          # Unified session creation
-│   │   │   └── verification-media.ts
+│   │   │   └── sessions.ts          # Unified session creation
 │   │   └── ws/                      # WebSocket handler
 │   └── proxy/
 │       └── opencode.ts              # OpenCode HTTP proxy

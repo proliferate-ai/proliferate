@@ -25,7 +25,6 @@ export type {
 export {
 	type Client,
 	type ClientTools,
-	type VerificationTools,
 	isSyncClient,
 	isAsyncClient,
 	isExternalClient,
@@ -36,7 +35,6 @@ export type { ServiceAuth, TokenAuth, GatewayAuth } from "./auth";
 
 // Shared types
 export type {
-	VerificationFile,
 	ConnectionOptions,
 	ReconnectOptions,
 	PostMessageOptions,

@@ -22,12 +22,6 @@ export {
 } from "./opencode";
 export { closeRedisConnection, publishSessionEvent } from "./redis";
 export {
-	getVerificationFileStream,
-	getVerificationFileUrl,
-	listVerificationFiles,
-	uploadVerificationFiles,
-} from "./s3";
-export {
 	type RepoRecord,
 	type SessionContext,
 	type SessionRecord,
