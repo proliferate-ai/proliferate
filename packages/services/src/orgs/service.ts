@@ -126,6 +126,12 @@ export async function getBillingInfoV2(orgId: string): Promise<{
 	shadowBalanceUpdatedAt: Date | null;
 	graceEnteredAt: Date | null;
 	graceExpiresAt: Date | null;
+	overageUsedCents: number;
+	overageCycleMonth: string | null;
+	overageTopupCount: number;
+	overageLastTopupAt: Date | null;
+	overageDeclineAt: Date | null;
+	lastReconciledAt: Date | null;
 } | null> {
 	return orgsDb.findBillingInfoV2(orgId);
 }
@@ -178,6 +184,21 @@ export async function listGraceExpiredOrgs(): Promise<{ id: string }[]> {
 export async function expireGraceForOrg(orgId: string): Promise<void> {
 	await orgsDb.expireGraceForOrg(orgId);
 }
+
+/**
+ * Get overage state for an organization.
+ */
+export const getOverageState = orgsDb.findOverageState;
+
+/**
+ * Update overage state columns.
+ */
+export const updateOverageState = orgsDb.updateOverageState;
+
+/**
+ * Update last_reconciled_at timestamp.
+ */
+export const updateLastReconciledAt = orgsDb.updateLastReconciledAt;
 
 /**
  * Mark onboarding complete for an organization.

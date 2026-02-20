@@ -40,7 +40,7 @@ export type BillingStateEvent =
  */
 export type EnforcementAction =
 	| { type: "none" }
-	| { type: "terminate_sessions"; reason: string }
+	| { type: "pause_sessions"; reason: string }
 	| { type: "block_new_sessions"; reason: string };
 
 /**
@@ -145,17 +145,17 @@ export function processStateTransition(
 			}
 
 			case "exhausted":
-				// Grace expired - terminate all sessions
+				// Grace expired - pause all sessions
 				action = {
-					type: "terminate_sessions",
-					reason: "Grace period expired. All sessions terminated.",
+					type: "pause_sessions",
+					reason: "Grace period expired. All sessions paused.",
 				};
 				break;
 
 			case "suspended":
-				// Manually suspended - terminate all sessions
+				// Manually suspended - pause all sessions
 				action = {
-					type: "terminate_sessions",
+					type: "pause_sessions",
 					reason:
 						event.type === "manual_suspend"
 							? (event as { type: "manual_suspend"; reason: string }).reason
@@ -200,9 +200,9 @@ export function canStartSessionsInState(state: BillingState): boolean {
 }
 
 /**
- * Check if existing sessions should be terminated in the given billing state.
+ * Check if existing sessions should be paused in the given billing state.
  */
-export function shouldTerminateSessionsInState(state: BillingState): boolean {
+export function shouldPauseSessionsInState(state: BillingState): boolean {
 	switch (state) {
 		case "exhausted":
 		case "suspended":
@@ -280,7 +280,7 @@ export function checkGate(
 			billingState: "exhausted",
 			shadowBalance,
 			message: "Grace period expired. Add credits to continue.",
-			action: "terminate_sessions",
+			action: "pause_sessions",
 		};
 	}
 
@@ -288,13 +288,13 @@ export function checkGate(
 	const canStart = canStartSessionsInState(state);
 
 	if (!canStart) {
-		const shouldTerminate = shouldTerminateSessionsInState(state);
+		const shouldPause = shouldPauseSessionsInState(state);
 		return {
 			allowed: false,
 			billingState: state,
 			shadowBalance,
 			message: getStateMessage(state, { graceExpiresAt: options?.graceExpiresAt, shadowBalance }),
-			action: shouldTerminate ? "terminate_sessions" : "block",
+			action: shouldPause ? "pause_sessions" : "block",
 		};
 	}
 

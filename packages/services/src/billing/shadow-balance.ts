@@ -15,7 +15,14 @@ import {
 	getStateUpdateFields,
 	processStateTransition,
 } from "@proliferate/shared/billing";
-import { billingEvents, billingReconciliations, eq, getDb, organization } from "../db/client";
+import {
+	billingEventKeys,
+	billingEvents,
+	billingReconciliations,
+	eq,
+	getDb,
+	organization,
+} from "../db/client";
 
 // ============================================
 // Types
@@ -39,8 +46,8 @@ export interface DeductResult {
 	newBalance: number;
 	stateChanged: boolean;
 	newState?: BillingState;
-	/** If true, sessions should be terminated */
-	shouldTerminateSessions: boolean;
+	/** If true, sessions should be paused/snapshotted */
+	shouldPauseSessions: boolean;
 	/** If true, new sessions should be blocked */
 	shouldBlockNewSessions: boolean;
 	/** Reason for any enforcement action */
@@ -63,7 +70,7 @@ export interface BulkDeductResult {
 	newBalance: number;
 	stateChanged: boolean;
 	newState?: BillingState;
-	shouldTerminateSessions: boolean;
+	shouldPauseSessions: boolean;
 	shouldBlockNewSessions: boolean;
 	enforcementReason?: string;
 }
@@ -111,28 +118,23 @@ export async function deductShadowBalance(update: ShadowBalanceUpdate): Promise<
 		const previousBalance = Number(org.shadowBalance ?? 0);
 		const newBalance = previousBalance - update.credits;
 		const currentState = org.billingState as BillingState;
+
+		// Trial/unconfigured orgs have no Autumn customer — mark events "skipped"
+		// so the outbox ignores them. The insert is still required for idempotency:
+		// a crash between deduction and checkpoint advancement must not double-deduct.
 		const outboxStatus =
 			currentState === "trial" || currentState === "unconfigured" ? "skipped" : "pending";
 
-		// Insert the billing event, skipping if idempotency key already exists.
-		// Uses onConflictDoNothing to avoid aborting the transaction on duplicates
-		// (a caught constraint violation still aborts the PG transaction state).
-		const inserted = await tx
-			.insert(billingEvents)
-			.values({
-				organizationId: update.organizationId,
-				eventType: update.eventType,
-				quantity: update.quantity.toString(),
-				credits: update.credits.toString(),
-				idempotencyKey: update.idempotencyKey,
-				sessionIds: update.sessionIds ?? [],
-				status: outboxStatus,
-				metadata: update.metadata ?? {},
-			})
-			.onConflictDoNothing({ target: billingEvents.idempotencyKey })
-			.returning({ id: billingEvents.id });
+		// Global idempotency check via billing_event_keys lookup table.
+		// This preserves exactly-once semantics even when billing_events is partitioned
+		// (partitioned tables cannot have cross-partition unique constraints).
+		const keyInserted = await tx
+			.insert(billingEventKeys)
+			.values({ idempotencyKey: update.idempotencyKey })
+			.onConflictDoNothing({ target: billingEventKeys.idempotencyKey })
+			.returning({ idempotencyKey: billingEventKeys.idempotencyKey });
 
-		if (inserted.length === 0) {
+		if (keyInserted.length === 0) {
 			// Already processed - idempotency key exists
 			return {
 				success: false,
@@ -140,15 +142,27 @@ export async function deductShadowBalance(update: ShadowBalanceUpdate): Promise<
 				previousBalance,
 				newBalance: previousBalance,
 				stateChanged: false,
-				shouldTerminateSessions: false,
+				shouldPauseSessions: false,
 				shouldBlockNewSessions: false,
 			};
 		}
 
+		// Insert the billing event (key table guards uniqueness globally).
+		await tx.insert(billingEvents).values({
+			organizationId: update.organizationId,
+			eventType: update.eventType,
+			quantity: update.quantity.toString(),
+			credits: update.credits.toString(),
+			idempotencyKey: update.idempotencyKey,
+			sessionIds: update.sessionIds ?? [],
+			status: outboxStatus,
+			metadata: update.metadata ?? {},
+		});
+
 		// Check if we need to transition state due to balance depletion
 		let stateChanged = false;
 		let newState = currentState;
-		let shouldTerminateSessions = false;
+		let shouldPauseSessions = false;
 		let shouldBlockNewSessions = false;
 		let enforcementReason: string | undefined;
 		let graceExpiresAt = org.graceExpiresAt;
@@ -162,8 +176,8 @@ export async function deductShadowBalance(update: ShadowBalanceUpdate): Promise<
 				newState = transition.newState;
 				graceExpiresAt = transition.graceExpiresAt ?? null;
 
-				if (transition.action.type === "terminate_sessions") {
-					shouldTerminateSessions = true;
+				if (transition.action.type === "pause_sessions") {
+					shouldPauseSessions = true;
 					enforcementReason = transition.action.reason;
 				} else if (transition.action.type === "block_new_sessions") {
 					shouldBlockNewSessions = true;
@@ -185,8 +199,8 @@ export async function deductShadowBalance(update: ShadowBalanceUpdate): Promise<
 				newState = transition.newState;
 				graceExpiresAt = null;
 				shouldBlockNewSessions = false;
-				if (transition.action.type === "terminate_sessions") {
-					shouldTerminateSessions = true;
+				if (transition.action.type === "pause_sessions") {
+					shouldPauseSessions = true;
 					enforcementReason = transition.action.reason;
 				}
 			}
@@ -227,7 +241,7 @@ export async function deductShadowBalance(update: ShadowBalanceUpdate): Promise<
 			newBalance,
 			stateChanged,
 			newState: stateChanged ? newState : undefined,
-			shouldTerminateSessions,
+			shouldPauseSessions,
 			shouldBlockNewSessions,
 			enforcementReason,
 		};
@@ -260,7 +274,7 @@ export async function bulkDeductShadowBalance(
 			previousBalance: current,
 			newBalance: current,
 			stateChanged: false,
-			shouldTerminateSessions: false,
+			shouldPauseSessions: false,
 			shouldBlockNewSessions: false,
 		};
 	}
@@ -283,47 +297,56 @@ export async function bulkDeductShadowBalance(
 
 		const previousBalance = Number(org.shadowBalance ?? 0);
 		const currentState = org.billingState as BillingState;
+
+		// Trial/unconfigured orgs have no Autumn customer — mark events "skipped"
+		// so the outbox ignores them. The insert is still required for idempotency.
 		const outboxStatus =
 			currentState === "trial" || currentState === "unconfigured" ? "skipped" : "pending";
 
-		// 2. Bulk insert billing events, skipping duplicates via idempotency key
-		const inserted = await tx
-			.insert(billingEvents)
-			.values(
-				events.map((e) => ({
-					organizationId,
-					eventType: e.eventType,
-					quantity: e.quantity.toString(),
-					credits: e.credits.toString(),
-					idempotencyKey: e.idempotencyKey,
-					sessionIds: e.sessionIds ?? [],
-					status: outboxStatus,
-					metadata: e.metadata ?? {},
-				})),
-			)
-			.onConflictDoNothing({ target: billingEvents.idempotencyKey })
-			.returning({ id: billingEvents.id, credits: billingEvents.credits });
+		// 2. Bulk insert idempotency keys — determines which events are new
+		const keysInserted = await tx
+			.insert(billingEventKeys)
+			.values(events.map((e) => ({ idempotencyKey: e.idempotencyKey })))
+			.onConflictDoNothing({ target: billingEventKeys.idempotencyKey })
+			.returning({ idempotencyKey: billingEventKeys.idempotencyKey });
 
-		if (inserted.length === 0) {
+		if (keysInserted.length === 0) {
 			return {
 				insertedCount: 0,
 				totalCreditsDeducted: 0,
 				previousBalance,
 				newBalance: previousBalance,
 				stateChanged: false,
-				shouldTerminateSessions: false,
+				shouldPauseSessions: false,
 				shouldBlockNewSessions: false,
 			};
 		}
 
-		// 3. Sum credits only for successfully inserted rows
-		const totalCreditsDeducted = inserted.reduce((sum, row) => sum + Number(row.credits), 0);
+		// 3. Insert only the newly-keyed billing events
+		const newKeySet = new Set(keysInserted.map((k) => k.idempotencyKey));
+		const newEvents = events.filter((e) => newKeySet.has(e.idempotencyKey));
+
+		await tx.insert(billingEvents).values(
+			newEvents.map((e) => ({
+				organizationId,
+				eventType: e.eventType,
+				quantity: e.quantity.toString(),
+				credits: e.credits.toString(),
+				idempotencyKey: e.idempotencyKey,
+				sessionIds: e.sessionIds ?? [],
+				status: outboxStatus,
+				metadata: e.metadata ?? {},
+			})),
+		);
+
+		// 4. Sum credits for the newly inserted events
+		const totalCreditsDeducted = newEvents.reduce((sum, e) => sum + e.credits, 0);
 		const newBalance = previousBalance - totalCreditsDeducted;
 
-		// 4. Evaluate state transitions
+		// 5. Evaluate state transitions
 		let stateChanged = false;
 		let newState = currentState;
-		let shouldTerminateSessions = false;
+		let shouldPauseSessions = false;
 		let shouldBlockNewSessions = false;
 		let enforcementReason: string | undefined;
 		let graceExpiresAt = org.graceExpiresAt;
@@ -334,8 +357,8 @@ export async function bulkDeductShadowBalance(
 				stateChanged = true;
 				newState = transition.newState;
 				graceExpiresAt = transition.graceExpiresAt ?? null;
-				if (transition.action.type === "terminate_sessions") {
-					shouldTerminateSessions = true;
+				if (transition.action.type === "pause_sessions") {
+					shouldPauseSessions = true;
 					enforcementReason = transition.action.reason;
 				} else if (transition.action.type === "block_new_sessions") {
 					shouldBlockNewSessions = true;
@@ -354,14 +377,14 @@ export async function bulkDeductShadowBalance(
 				newState = transition.newState;
 				graceExpiresAt = null;
 				shouldBlockNewSessions = false;
-				if (transition.action.type === "terminate_sessions") {
-					shouldTerminateSessions = true;
+				if (transition.action.type === "pause_sessions") {
+					shouldPauseSessions = true;
 					enforcementReason = transition.action.reason;
 				}
 			}
 		}
 
-		// 5. Update shadow balance and state atomically
+		// 6. Update shadow balance and state atomically
 		const updateFields: Record<string, unknown> = {
 			shadowBalance: newBalance.toString(),
 			shadowBalanceUpdatedAt: new Date(),
@@ -387,13 +410,13 @@ export async function bulkDeductShadowBalance(
 		await tx.update(organization).set(updateFields).where(eq(organization.id, organizationId));
 
 		return {
-			insertedCount: inserted.length,
+			insertedCount: newEvents.length,
 			totalCreditsDeducted,
 			previousBalance,
 			newBalance,
 			stateChanged,
 			newState: stateChanged ? newState : undefined,
-			shouldTerminateSessions,
+			shouldPauseSessions,
 			shouldBlockNewSessions,
 			enforcementReason,
 		};
@@ -491,7 +514,7 @@ export async function addShadowBalance(
 			newBalance,
 			stateChanged,
 			newState: stateChanged ? newState : undefined,
-			shouldTerminateSessions: false,
+			shouldPauseSessions: false,
 			shouldBlockNewSessions: false,
 		};
 	});

@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
-> **Updated:** 2026-02-19 from `feat/session-display-redesign-1a` branch. Phase 3a+3b session UI overhaul.
+> **Updated:** 2026-02-19. Session UI overhaul + billing alignment Phase 1.2 (overage auto-top-up, fast reconciliation).
 > **Evidence convention:** `Planned` entries may cite RFC/spec files until code exists; once implemented, update evidence to concrete code paths.
 
 ---
@@ -290,17 +290,19 @@
 | Checkout flow | Implemented | `apps/web/src/server/routers/billing.ts:startCheckout` | Initiate payment |
 | Credit usage | Implemented | `apps/web/src/server/routers/billing.ts:useCredits` | Deduct credits |
 | Usage metering | Implemented | `packages/services/src/billing/metering.ts` | Real-time compute metering |
-| Credit gating | Partial | `packages/shared/src/billing/` | Gating logic exists but neither gateway HTTP nor oRPC session creation routes enforce it |
+| Credit gating | Implemented | `packages/shared/src/billing/gating.ts`, `packages/services/src/billing/gate.ts`, `apps/gateway/src/api/proliferate/http/sessions.ts` | Enforced in oRPC session creation, gateway session creation, setup sessions, and runtime resume |
 | Shadow balance | Implemented | `packages/services/src/billing/shadow-balance.ts` | Fast balance approximation |
 | Org pause on zero balance | Implemented | `packages/services/src/billing/org-pause.ts` | Auto-pause all sessions |
 | Trial credits | Implemented | `packages/services/src/billing/trial-activation.ts` | Auto-provision on signup |
 | Billing reconciliation | Implemented | `packages/db/src/schema/billing.ts:billingReconciliations` | Manual adjustments with audit |
 | Billing events | Implemented | `packages/db/src/schema/billing.ts:billingEvents` | Usage event log |
 | LLM spend sync | Implemented | `packages/db/src/schema/billing.ts:llmSpendCursors` | Syncs spend from LiteLLM |
-| Distributed locks (billing) | Implemented | `packages/shared/src/billing/` | Prevents concurrent billing ops |
+| Distributed locks (billing-cycle) | Deprecated | Removed — BullMQ concurrency 1 ensures single-execution | See billing-metering.md §6.11. Note: `org-pause.ts` still uses session migration locks (`runWithMigrationLock`) for per-session enforcement; those are session-layer infrastructure, not billing-cycle locks. |
 | Billing worker | Implemented | `apps/worker/src/billing/worker.ts` | Interval-based reconciliation |
 | Autumn integration | Implemented | `packages/shared/src/billing/` | External billing provider client |
 | Overage policy (pause/allow) | Implemented | `packages/services/src/billing/org-pause.ts` | Configurable per-org |
+| Overage auto-top-up | Implemented | `packages/services/src/billing/auto-topup.ts` | Auto-charge when balance negative + policy=allow. Circuit breaker, velocity limits, cap enforcement. |
+| Fast reconciliation | Implemented | `apps/worker/src/jobs/billing/fast-reconcile.job.ts` | On-demand shadow balance sync with Autumn, triggered by payment events. |
 
 ---
 

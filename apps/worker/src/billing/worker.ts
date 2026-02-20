@@ -13,6 +13,8 @@
 import { env } from "@proliferate/environment/server";
 import type { Logger } from "@proliferate/logger";
 import {
+	createBillingFastReconcileQueue,
+	createBillingFastReconcileWorker,
 	createBillingGraceQueue,
 	createBillingGraceWorker,
 	createBillingLLMSyncDispatchQueue,
@@ -23,17 +25,21 @@ import {
 	createBillingMeteringWorker,
 	createBillingOutboxQueue,
 	createBillingOutboxWorker,
+	createBillingPartitionMaintenanceQueue,
+	createBillingPartitionMaintenanceWorker,
 	createBillingReconcileQueue,
 	createBillingReconcileWorker,
 	createBillingSnapshotCleanupQueue,
 	createBillingSnapshotCleanupWorker,
 	getConnectionOptions,
 } from "@proliferate/queue";
+import { processFastReconcileJob } from "../jobs/billing/fast-reconcile.job";
 import { processGraceJob } from "../jobs/billing/grace.job";
 import { processLLMSyncDispatchJob } from "../jobs/billing/llm-sync-dispatcher.job";
 import { processLLMSyncOrgJob } from "../jobs/billing/llm-sync-org.job";
 import { processMeteringJob } from "../jobs/billing/metering.job";
 import { processOutboxJob } from "../jobs/billing/outbox.job";
+import { processPartitionMaintenanceJob } from "../jobs/billing/partition-maintenance.job";
 import { processReconcileJob } from "../jobs/billing/reconcile.job";
 import { processSnapshotCleanupJob } from "../jobs/billing/snapshot-cleanup.job";
 
@@ -86,7 +92,9 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 	const reconcileQueue = createBillingReconcileQueue(connection);
 	const llmSyncDispatchQueue = createBillingLLMSyncDispatchQueue(connection);
 	const llmSyncOrgQueue = createBillingLLMSyncOrgQueue(connection);
+	const fastReconcileQueue = createBillingFastReconcileQueue(connection);
 	const snapshotCleanupQueue = createBillingSnapshotCleanupQueue(connection);
+	const partitionMaintenanceQueue = createBillingPartitionMaintenanceQueue(connection);
 
 	// Add repeatable schedules (idempotent — BullMQ deduplicates by repeat key)
 	await meteringQueue.add(
@@ -137,6 +145,14 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 		},
 	);
 
+	await partitionMaintenanceQueue.add(
+		"partition-maintenance",
+		{},
+		{
+			repeat: { pattern: "0 2 * * *", tz: "UTC" }, // Daily at 02:00 UTC
+		},
+	);
+
 	logger.info(
 		{
 			nextRunAt: getNextDailyUtcRunAt(1, 0),
@@ -176,8 +192,18 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 		connection,
 	);
 
+	const fastReconcileWorker = createBillingFastReconcileWorker(
+		async (job) => processFastReconcileJob(job, logger),
+		connection,
+	);
+
 	const snapshotCleanupWorker = createBillingSnapshotCleanupWorker(
 		async (job) => processSnapshotCleanupJob(job, logger),
+		connection,
+	);
+
+	const partitionMaintenanceWorker = createBillingPartitionMaintenanceWorker(
+		async (job) => processPartitionMaintenanceJob(job, logger),
 		connection,
 	);
 
@@ -189,7 +215,9 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 		reconcileWorker,
 		llmSyncDispatchWorker,
 		llmSyncOrgWorker,
+		fastReconcileWorker,
 		snapshotCleanupWorker,
+		partitionMaintenanceWorker,
 	];
 	for (const worker of workers) {
 		worker.on("failed", (job, err) => {
@@ -206,7 +234,9 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 		reconcileQueue,
 		llmSyncDispatchQueue,
 		llmSyncOrgQueue,
+		fastReconcileQueue,
 		snapshotCleanupQueue,
+		partitionMaintenanceQueue,
 	];
 
 	isRunning = true;
@@ -220,7 +250,9 @@ export async function startBillingWorker(logger: Logger): Promise<void> {
 				"billing-reconcile (daily 00:00 UTC)",
 				"billing-llm-sync-dispatch (30s)",
 				"billing-llm-sync-org (on-demand)",
+				"billing-fast-reconcile (on-demand, concurrency 3)",
 				"billing-snapshot-cleanup (daily 01:00 UTC)",
+				"billing-partition-maintenance (daily 02:00 UTC)",
 			],
 		},
 		"Billing BullMQ workers started",

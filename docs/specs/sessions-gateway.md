@@ -319,7 +319,6 @@ sessions
 ├── idle_timeout_minutes  INT DEFAULT 30
 ├── auto_delete_days      INT DEFAULT 7
 ├── metered_through_at    TIMESTAMPTZ
-├── billing_token_version INT DEFAULT 1
 ├── last_seen_alive_at    TIMESTAMPTZ
 ├── alive_check_failures  INT DEFAULT 0
 ├── pause_reason          TEXT

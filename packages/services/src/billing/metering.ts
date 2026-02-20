@@ -13,6 +13,7 @@ import {
 } from "@proliferate/shared/billing";
 import { eq, getDb, sessions } from "../db/client";
 import { getServicesLogger } from "../logger";
+import { attemptAutoTopUp } from "./auto-topup";
 import { enforceCreditsExhausted } from "./org-pause";
 import { deductShadowBalance } from "./shadow-balance";
 import { tryActivatePlanAfterTrial } from "./trial-activation";
@@ -315,14 +316,21 @@ async function billComputeInterval(
 	log.debug({ billableSeconds, credits, balance: result.newBalance }, "Billed compute interval");
 
 	// Handle state transitions
-	if (result.shouldTerminateSessions) {
+	if (result.shouldPauseSessions) {
 		if (result.previousState === "trial" && result.newState === "exhausted") {
 			const activation = await tryActivatePlanAfterTrial(session.organizationId);
 			if (activation.activated) {
-				log.info("Trial auto-activated; skipping termination");
+				log.info("Trial auto-activated; skipping enforcement");
 				return;
 			}
 		}
+		// Overage auto-top-up: buy more credits if policy allows
+		const topup = await attemptAutoTopUp(session.organizationId, Math.abs(result.newBalance));
+		if (topup.success) {
+			log.info({ creditsAdded: topup.creditsAdded }, "Auto-top-up succeeded; skipping enforcement");
+			return;
+		}
+
 		log.info(
 			{ enforcementReason: result.enforcementReason },
 			"Balance exhausted — pausing sessions",

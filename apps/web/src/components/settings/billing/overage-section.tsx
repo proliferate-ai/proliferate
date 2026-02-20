@@ -15,6 +15,7 @@ import { useState } from "react";
 
 interface OverageSectionProps {
 	billingSettings: BillingInfo["billingSettings"];
+	overage: BillingInfo["overage"];
 	onUpdate?: (settings: Partial<BillingInfo["billingSettings"]>) => Promise<void>;
 }
 
@@ -33,7 +34,7 @@ function formatCurrency(cents: number): string {
 	});
 }
 
-export function OverageSection({ billingSettings, onUpdate }: OverageSectionProps) {
+export function OverageSection({ billingSettings, overage, onUpdate }: OverageSectionProps) {
 	const [isUpdating, setIsUpdating] = useState(false);
 
 	const handlePolicyChange = async (policy: "pause" | "allow") => {
@@ -111,15 +112,13 @@ export function OverageSection({ billingSettings, onUpdate }: OverageSectionProp
 					</SettingsRow>
 				)}
 
-				{!isPaused && billingSettings.overage_used_this_month_cents > 0 && (
+				{!isPaused && overage.usedCents > 0 && (
 					<div className="px-4 py-3 bg-amber-500/10 border-t border-amber-500/20">
 						<div className="flex items-center gap-2 text-sm">
 							<AlertTriangle className="h-4 w-4 text-amber-500" />
 							<span className="text-amber-700 dark:text-amber-400">
 								Overage this month:{" "}
-								<span className="font-medium">
-									{formatCurrency(billingSettings.overage_used_this_month_cents)}
-								</span>
+								<span className="font-medium">{formatCurrency(overage.usedCents)}</span>
 							</span>
 						</div>
 					</div>

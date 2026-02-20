@@ -5,9 +5,10 @@
  * LLM spend logs are now fetched via the LiteLLM REST API (see litellm-api.ts).
  */
 
-import { arrayContains, inArray } from "drizzle-orm";
+import { arrayContains, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import {
 	and,
+	billingEventKeys,
 	billingEvents,
 	desc,
 	eq,
@@ -203,13 +204,37 @@ export async function listBillableOrgsWithCustomerId(): Promise<
 		.where(
 			and(
 				inArray(organization.billingState, ["active", "trial", "grace"]),
-				sql`${organization.autumnCustomerId} IS NOT NULL`,
+				isNotNull(organization.autumnCustomerId),
 			),
 		);
 	return rows.map((r) => ({
 		id: r.id,
 		autumnCustomerId: r.autumnCustomerId!,
 	}));
+}
+
+/**
+ * List orgs with stale reconciliation (last_reconciled_at older than maxAgeMs).
+ */
+export async function listStaleReconcileOrgs(
+	maxAgeMs: number,
+): Promise<{ id: string; lastReconciledAt: Date | null }[]> {
+	const db = getDb();
+	const threshold = new Date(Date.now() - maxAgeMs);
+	const rows = await db
+		.select({
+			id: organization.id,
+			lastReconciledAt: organization.lastReconciledAt,
+		})
+		.from(organization)
+		.where(
+			and(
+				isNotNull(organization.autumnCustomerId),
+				inArray(organization.billingState, ["active", "trial", "grace"]),
+				or(isNull(organization.lastReconciledAt), lt(organization.lastReconciledAt, threshold)),
+			),
+		);
+	return rows;
 }
 
 // ============================================
@@ -264,4 +289,78 @@ export async function updateLLMSpendCursor(cursor: LLMSpendCursor): Promise<void
 				syncedAt: cursor.syncedAt,
 			},
 		});
+}
+
+// ============================================
+// Partition Maintenance
+// ============================================
+
+/**
+ * Try to create a billing_events partition for the given month.
+ * No-op if billing_events is not partitioned or partition already exists.
+ * Returns true if the partition exists or was created; false if billing_events is not partitioned.
+ */
+export async function ensureBillingPartition(
+	partitionName: string,
+	rangeStart: string,
+	rangeEnd: string,
+): Promise<boolean> {
+	// Validate inputs to prevent SQL injection (inputs are system-generated, but defense-in-depth)
+	if (!/^billing_events_\d{6}$/.test(partitionName)) {
+		throw new Error(`Invalid partition name: ${partitionName}`);
+	}
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(rangeStart) || !/^\d{4}-\d{2}-\d{2}$/.test(rangeEnd)) {
+		throw new Error(`Invalid date range: ${rangeStart} to ${rangeEnd}`);
+	}
+
+	const db = getDb();
+	try {
+		await db.execute(
+			sql.raw(
+				`CREATE TABLE IF NOT EXISTS ${partitionName} PARTITION OF billing_events FOR VALUES FROM ('${rangeStart}') TO ('${rangeEnd}')`,
+			),
+		);
+		return true;
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		if (msg.includes("is not partitioned") || msg.includes("not a partitioned table")) {
+			return false;
+		}
+		throw err;
+	}
+}
+
+/**
+ * Clean billing_event_keys older than the given cutoff date.
+ * Returns the number of rows deleted.
+ */
+export async function cleanOldBillingEventKeys(cutoff: Date): Promise<number> {
+	const db = getDb();
+	const result = await db
+		.delete(billingEventKeys)
+		.where(lt(billingEventKeys.createdAt, cutoff))
+		.returning({ key: billingEventKeys.idempotencyKey });
+	return result.length;
+}
+
+/**
+ * List billing_events partitions (child tables via pg_inherits).
+ * Returns empty array if billing_events is not partitioned.
+ */
+export async function listBillingEventPartitions(): Promise<string[]> {
+	const db = getDb();
+	try {
+		const result = await db.execute(
+			sql`SELECT c.relname AS partition_name
+				FROM pg_inherits i
+				JOIN pg_class c ON c.oid = i.inhrelid
+				JOIN pg_class p ON p.oid = i.inhparent
+				WHERE p.relname = 'billing_events'
+				ORDER BY c.relname`,
+		);
+		const rows = (result as { rows?: Array<{ partition_name: string }> }).rows ?? [];
+		return rows.map((r) => r.partition_name);
+	} catch {
+		return [];
+	}
 }
