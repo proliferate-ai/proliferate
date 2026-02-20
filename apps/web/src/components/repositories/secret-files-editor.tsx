@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useDeleteSecretFile, useSecretFiles, useUpsertSecretFile } from "@/hooks/use-secret-files";
 import { formatDistanceToNow } from "date-fns";
 import { FileLock2, Plus, Trash2, Upload } from "lucide-react";
-import { type ChangeEvent, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type ClipboardEvent, useMemo, useRef, useState } from "react";
 
 interface SecretFilesEditorProps {
 	configurationId: string;
@@ -20,6 +20,8 @@ interface EnvRow {
 	key: string;
 	value: string;
 }
+
+const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function createRow(key = "", value = ""): EnvRow {
 	return {
@@ -42,6 +44,7 @@ function parseEnvRows(content: string): EnvRow[] {
 
 		const key = normalized.slice(0, separator).trim();
 		let value = normalized.slice(separator + 1).trim();
+		if (!ENV_KEY_PATTERN.test(key)) continue;
 
 		// Preserve plain values but unwrap simple quoted values for editing UX.
 		if (
@@ -164,6 +167,19 @@ export function SecretFilesEditor({
 		setPasteDraft("");
 	};
 
+	const handleRowPaste = (event: ClipboardEvent<HTMLInputElement>) => {
+		const pastedText = event.clipboardData.getData("text");
+		if (!pastedText) return;
+
+		const imported = parseEnvRows(pastedText);
+		if (imported.length === 0) return;
+
+		event.preventDefault();
+		setRows(imported);
+		setShowPasteImport(false);
+		setPasteDraft("");
+	};
+
 	const updateRow = (id: string, field: "key" | "value", value: string) => {
 		setRows((prev) => prev.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
 	};
@@ -263,6 +279,7 @@ export function SecretFilesEditor({
 									<Input
 										value={row.key}
 										onChange={(e) => updateRow(row.id, "key", e.target.value.toUpperCase())}
+										onPaste={handleRowPaste}
 										placeholder="ENV_VAR_NAME"
 										className="h-7 text-xs font-mono min-w-0 flex-1"
 										autoComplete="off"
@@ -271,6 +288,7 @@ export function SecretFilesEditor({
 										type="password"
 										value={row.value}
 										onChange={(e) => updateRow(row.id, "value", e.target.value)}
+										onPaste={handleRowPaste}
 										placeholder="Secret value"
 										className="h-7 text-xs font-mono min-w-0 flex-1"
 										autoComplete="off"
