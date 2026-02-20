@@ -16,7 +16,14 @@ import getNango, {
 } from "@/lib/nango";
 import { revokeToken, sendSlackConnectInvite } from "@/lib/slack";
 import { ORPCError } from "@orpc/server";
-import { actions, connectors, integrations, orgs, secrets } from "@proliferate/services";
+import {
+	actions,
+	configurations,
+	connectors,
+	integrations,
+	orgs,
+	secrets,
+} from "@proliferate/services";
 import {
 	ConnectorAuthSchema,
 	ConnectorConfigSchema,
@@ -821,6 +828,115 @@ export const integrationsRouter = {
 			return { success: true };
 		}),
 
+	/**
+	 * Get Slack installation config (strategy + default config + allowed configs).
+	 */
+	slackConfig: orgProcedure
+		.output(
+			z.object({
+				installationId: z.string().uuid().nullable(),
+				strategy: z.string().nullable(),
+				defaultConfigurationId: z.string().uuid().nullable(),
+				allowedConfigurationIds: z.array(z.string().uuid()).nullable(),
+			}),
+		)
+		.handler(async ({ context }) => {
+			const config = await integrations.getSlackInstallationConfigForOrg(context.orgId);
+			if (!config) {
+				return {
+					installationId: null,
+					strategy: null,
+					defaultConfigurationId: null,
+					allowedConfigurationIds: null,
+				};
+			}
+			return {
+				installationId: config.installationId,
+				strategy: config.defaultConfigSelectionStrategy,
+				defaultConfigurationId: config.defaultConfigurationId,
+				allowedConfigurationIds: config.allowedConfigurationIds,
+			};
+		}),
+
+	/**
+	 * Update Slack installation config strategy.
+	 */
+	updateSlackConfig: orgProcedure
+		.input(
+			z.object({
+				installationId: z.string().uuid(),
+				strategy: z.enum(["fixed", "agent_decide"]),
+				defaultConfigurationId: z.string().uuid().nullable().optional(),
+				allowedConfigurationIds: z.array(z.string().uuid()).nullable().optional(),
+			}),
+		)
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			await requireIntegrationAdmin(context.user.id, context.orgId);
+
+			// Validate defaultConfigurationId belongs to org
+			if (input.defaultConfigurationId) {
+				const belongs = await configurations.configurationBelongsToOrg(
+					input.defaultConfigurationId,
+					context.orgId,
+				);
+				if (!belongs) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "Default configuration not found in this org",
+					});
+				}
+			}
+
+			// Validate agent_decide requires a non-empty allowlist
+			if (input.strategy === "agent_decide") {
+				if (!input.allowedConfigurationIds || input.allowedConfigurationIds.length === 0) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "Agent-decide strategy requires at least one allowed configuration",
+					});
+				}
+			}
+
+			// Validate allowedConfigurationIds belong to org and have routing descriptions
+			if (input.strategy === "agent_decide" && input.allowedConfigurationIds?.length) {
+				const candidates = await configurations.getConfigurationCandidates(
+					input.allowedConfigurationIds,
+					context.orgId,
+				);
+				if (candidates.length !== input.allowedConfigurationIds.length) {
+					throw new ORPCError("BAD_REQUEST", {
+						message: "Some allowed configuration IDs are not found in this org",
+					});
+				}
+				const missingDescription = candidates.filter(
+					(c) => !c.routingDescription || c.routingDescription.trim().length === 0,
+				);
+				if (missingDescription.length > 0) {
+					const names = missingDescription.map((c) => c.name).join(", ");
+					throw new ORPCError("BAD_REQUEST", {
+						message: `All allowed configurations must have routing descriptions. Missing: ${names}`,
+					});
+				}
+			}
+
+			const updated = await integrations.updateSlackInstallationConfig(
+				input.installationId,
+				context.orgId,
+				{
+					defaultConfigSelectionStrategy: input.strategy,
+					defaultConfigurationId: input.defaultConfigurationId,
+					allowedConfigurationIds: input.allowedConfigurationIds,
+				},
+			);
+
+			if (!updated) {
+				throw new ORPCError("NOT_FOUND", {
+					message: "Slack installation not found or not owned by this org",
+				});
+			}
+
+			return { success: true };
+		}),
+
 	// ============================================
 	// Org-Scoped MCP Connectors
 	// ============================================
@@ -1096,6 +1212,65 @@ export const integrationsRouter = {
 					diagnostics: { class: diagClass, message },
 				};
 			}
+		}),
+
+	/**
+	 * List Slack workspace members for DM destination selector.
+	 */
+	slackMembers: orgProcedure
+		.input(z.object({ installationId: z.string().uuid() }))
+		.output(
+			z.object({
+				members: z.array(
+					z.object({
+						id: z.string(),
+						name: z.string(),
+						realName: z.string().nullable(),
+						email: z.string().nullable(),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			// Verify installation belongs to org
+			const installation = await integrations.getSlackInstallationForNotifications(
+				context.orgId,
+				input.installationId,
+			);
+			if (!installation) {
+				throw new ORPCError("NOT_FOUND", { message: "Slack installation not found" });
+			}
+			const members = await integrations.listSlackMembers(input.installationId);
+			return { members };
+		}),
+
+	/**
+	 * List Slack channels for notification channel selector.
+	 */
+	slackChannels: orgProcedure
+		.input(z.object({ installationId: z.string().uuid() }))
+		.output(
+			z.object({
+				channels: z.array(
+					z.object({
+						id: z.string(),
+						name: z.string(),
+						isPrivate: z.boolean(),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			// Verify installation belongs to org
+			const installation = await integrations.getSlackInstallationForNotifications(
+				context.orgId,
+				input.installationId,
+			);
+			if (!installation) {
+				throw new ORPCError("NOT_FOUND", { message: "Slack installation not found" });
+			}
+			const channels = await integrations.listSlackChannels(input.installationId);
+			return { channels };
 		}),
 };
 

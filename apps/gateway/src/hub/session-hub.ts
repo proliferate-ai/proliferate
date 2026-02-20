@@ -11,7 +11,7 @@
 
 import { randomUUID } from "crypto";
 import { type Logger, createLogger } from "@proliferate/logger";
-import { configurations, sessions } from "@proliferate/services";
+import { configurations, notifications, sessions } from "@proliferate/services";
 import type {
 	ClientMessage,
 	ClientSource,
@@ -96,6 +96,9 @@ export class SessionHub {
 	private readonly proxyConnections = new Set<string>();
 	private lastActivityAt = Date.now();
 	private lastKnownAgentIdleAt: number | null = null;
+
+	// In-memory guard for initial prompt sending (prevents concurrent sends)
+	private initialPromptSending = false;
 
 	// Hub eviction callback (set by HubManager)
 	private readonly onEvict?: () => void;
@@ -266,10 +269,26 @@ export class SessionHub {
 	}
 
 	/**
+	 * Eager start: boot the sandbox and send the initial prompt without a WebSocket client.
+	 * Called by the eager-start HTTP endpoint to start sessions in the background.
+	 */
+	async eagerStart(): Promise<void> {
+		this.log("Eager start requested");
+		await this.ensureRuntimeReady();
+		await this.maybeSendInitialPrompt();
+		this.log("Eager start complete");
+	}
+
+	/**
 	 * Auto-send the initial prompt to OpenCode if it hasn't been sent yet.
-	 * Guards against re-sends on reconnect via the initial_prompt_sent_at DB column.
+	 * Guards against re-sends via both an in-memory flag and the initial_prompt_sent_at DB column.
 	 */
 	private async maybeSendInitialPrompt(): Promise<void> {
+		// In-memory guard: prevent concurrent sends from eager-start + WebSocket init
+		if (this.initialPromptSending) {
+			return;
+		}
+
 		const context = this.runtime.getContext();
 		const { session } = context;
 
@@ -283,6 +302,7 @@ export class SessionHub {
 			return;
 		}
 
+		this.initialPromptSending = true;
 		this.log("Auto-sending initial prompt");
 
 		// Mark as sent immediately to prevent duplicate sends on concurrent connections
@@ -983,6 +1003,14 @@ export class SessionHub {
 			await sessions.markSessionStopped(this.sessionId);
 		} catch (err) {
 			this.logError("Failed to mark session stopped for automation", err);
+		}
+
+		// Enqueue session completion notifications (best-effort)
+		try {
+			const orgId = context.session.organization_id;
+			await notifications.enqueueSessionCompletionNotification(orgId, this.sessionId);
+		} catch (err) {
+			this.logError("Failed to enqueue session completion notification", err);
 		}
 
 		this.runtime.disconnectSse();

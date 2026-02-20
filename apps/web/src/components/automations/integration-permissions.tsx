@@ -5,13 +5,6 @@ import { LinearIcon, SentryIcon, SlackIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useAutomationIntegrationActions } from "@/hooks/use-automations";
 import { cn } from "@/lib/utils";
@@ -85,11 +78,8 @@ interface IntegrationPermissionsProps {
 	enabledTools: EnabledTools;
 	actionModes: Record<string, ActionMode>;
 	connectedProviders: Set<string>;
-	slackInstallations?: Array<{ id: string; team_name: string | null; team_id: string }>;
-	notificationSlackInstallationId: string | null;
 	onToolToggle: (toolName: keyof EnabledTools, enabled: boolean) => void;
 	onToolConfigChange: (toolName: keyof EnabledTools, key: string, value: string) => void;
-	onSlackInstallationChange: (installationId: string | null) => void;
 	onPermissionChange: (key: string, mode: ActionMode) => void;
 	permissionsPending?: boolean;
 }
@@ -103,11 +93,8 @@ export function IntegrationPermissions({
 	enabledTools,
 	actionModes,
 	connectedProviders,
-	slackInstallations,
-	notificationSlackInstallationId,
 	onToolToggle,
 	onToolConfigChange,
-	onSlackInstallationChange,
 	onPermissionChange,
 	permissionsPending,
 }: IntegrationPermissionsProps) {
@@ -134,15 +121,6 @@ export function IntegrationPermissions({
 				icon: SlackIcon,
 				name: "Slack",
 				toolName: "slack_notify",
-				configContent: (
-					<SlackConfig
-						enabledTools={enabledTools}
-						slackInstallations={slackInstallations}
-						notificationSlackInstallationId={notificationSlackInstallationId}
-						onToolConfigChange={onToolConfigChange}
-						onSlackInstallationChange={onSlackInstallationChange}
-					/>
-				),
 			});
 		}
 
@@ -197,10 +175,7 @@ export function IntegrationPermissions({
 		sentryActions,
 		otherIntegrations,
 		enabledTools,
-		slackInstallations,
-		notificationSlackInstallationId,
 		onToolConfigChange,
-		onSlackInstallationChange,
 	]);
 
 	if (isLoading) {
@@ -248,55 +223,6 @@ export function IntegrationPermissions({
 // ============================================
 // Config sub-components (inlined in popover)
 // ============================================
-
-function SlackConfig({
-	enabledTools,
-	slackInstallations,
-	notificationSlackInstallationId,
-	onToolConfigChange,
-	onSlackInstallationChange,
-}: {
-	enabledTools: EnabledTools;
-	slackInstallations?: Array<{ id: string; team_name: string | null; team_id: string }>;
-	notificationSlackInstallationId: string | null;
-	onToolConfigChange: (toolName: keyof EnabledTools, key: string, value: string) => void;
-	onSlackInstallationChange: (installationId: string | null) => void;
-}) {
-	return (
-		<div className="flex flex-col gap-3 min-w-[260px]">
-			{slackInstallations && (slackInstallations.length > 1 || notificationSlackInstallationId) && (
-				<div className="flex flex-col gap-1.5">
-					<Label className="text-xs text-muted-foreground">Workspace</Label>
-					<Select
-						value={notificationSlackInstallationId ?? "auto"}
-						onValueChange={(value) => onSlackInstallationChange(value === "auto" ? null : value)}
-					>
-						<SelectTrigger className="h-8">
-							<SelectValue placeholder="Auto-detect" />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="auto">Auto-detect</SelectItem>
-							{slackInstallations.map((inst) => (
-								<SelectItem key={inst.id} value={inst.id}>
-									{inst.team_name ?? inst.team_id}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</div>
-			)}
-			<div className="flex flex-col gap-1.5">
-				<Label className="text-xs text-muted-foreground">Channel ID</Label>
-				<Input
-					value={enabledTools.slack_notify?.channelId || ""}
-					onChange={(e) => onToolConfigChange("slack_notify", "channelId", e.target.value)}
-					placeholder="C01234567890"
-					className="h-8"
-				/>
-			</div>
-		</div>
-	);
-}
 
 function LinearConfig({
 	enabledTools,

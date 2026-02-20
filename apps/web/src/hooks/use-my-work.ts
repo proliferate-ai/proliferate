@@ -17,7 +17,9 @@ export function useMyWork() {
 	const { data: session } = useSession();
 	const userId = session?.user?.id;
 
-	const { data: claimedRuns, isLoading: runsLoading } = useMyClaimedRuns();
+	const { data: claimedRuns, isLoading: runsLoading } = useMyClaimedRuns({
+		refetchInterval: 10_000,
+	});
 
 	const { data: allSessions, isLoading: sessionsLoading } = useSessions({
 		excludeSetup: true,
@@ -25,6 +27,7 @@ export function useMyWork() {
 		excludeAutomation: true,
 		createdBy: userId,
 		enabled: !!userId,
+		refetchInterval: 5000,
 	});
 
 	const { data: approvals, isLoading: approvalsLoading } = useOrgActions({

@@ -31,6 +31,7 @@ export const ConfigurationSchema = z.object({
 	status: z.string().nullable(),
 	name: z.string().nullable(),
 	notes: z.string().nullable(),
+	routingDescription: z.string().nullable().optional(),
 	createdAt: z.string().nullable(),
 	createdBy: z.string().nullable(),
 	sandboxProvider: z.string().nullable(),
@@ -57,6 +58,7 @@ export const CreateConfigurationInputSchema = z.object({
 export const UpdateConfigurationInputSchema = z.object({
 	name: z.string().optional(),
 	notes: z.string().optional(),
+	routingDescription: z.string().nullable().optional(),
 });
 
 // ============================================

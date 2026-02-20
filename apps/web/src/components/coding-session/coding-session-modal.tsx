@@ -33,14 +33,26 @@ export function CodingSessionModal() {
 		creationStartedRef.current = true;
 
 		createMutation
-			.mutateAsync({ configurationId, sessionType: sessionType || "coding" })
+			.mutateAsync({
+				configurationId,
+				sessionType: sessionType || "coding",
+				...(initialPrompt ? { initialPrompt } : {}),
+			})
 			.then((result) => {
 				setSessionId(result.sessionId);
 			})
 			.catch(() => {
 				creationStartedRef.current = false;
 			});
-	}, [isOpen, sessionId, configurationId, sessionType, createMutation, setSessionId]);
+	}, [
+		isOpen,
+		sessionId,
+		configurationId,
+		sessionType,
+		initialPrompt,
+		createMutation,
+		setSessionId,
+	]);
 
 	// Reset creation state when modal closes
 	useEffect(() => {

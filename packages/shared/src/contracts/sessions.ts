@@ -49,6 +49,7 @@ export const SessionSchema = z.object({
 		})
 		.nullable()
 		.optional(),
+	slackThreadUrl: z.string().nullable().optional(),
 	repo: RepoSchema.optional(),
 	endedAt: z.string().nullable().optional(),
 	promptSnippet: z.string().nullable().optional(),

@@ -442,6 +442,114 @@ export async function getSlackInstallationForNotifications(
 }
 
 /**
+ * Get the configuration strategy fields for a Slack installation.
+ * Used by the Slack client to determine how to resolve configurations for new sessions.
+ */
+export async function getSlackInstallationConfigStrategy(installationId: string): Promise<{
+	defaultConfigurationId: string | null;
+	defaultConfigSelectionStrategy: string | null;
+} | null> {
+	const db = getDb();
+	const result = await db.query.slackInstallations.findFirst({
+		where: eq(slackInstallations.id, installationId),
+		columns: {
+			defaultConfigurationId: true,
+			defaultConfigSelectionStrategy: true,
+		},
+	});
+	return result ?? null;
+}
+
+/**
+ * Get full selection config for a Slack installation.
+ * Includes strategy, default, fallback, and allowed configuration IDs.
+ * Used by the Slack client for agent_decide configuration selection.
+ */
+export async function getSlackInstallationSelectionConfig(installationId: string): Promise<{
+	defaultConfigSelectionStrategy: string | null;
+	defaultConfigurationId: string | null;
+	fallbackConfigurationId: string | null;
+	allowedConfigurationIds: string[] | null;
+} | null> {
+	const db = getDb();
+	const result = await db.query.slackInstallations.findFirst({
+		where: eq(slackInstallations.id, installationId),
+		columns: {
+			defaultConfigSelectionStrategy: true,
+			defaultConfigurationId: true,
+			fallbackConfigurationId: true,
+			allowedConfigurationIds: true,
+		},
+	});
+	if (!result) return null;
+	return {
+		defaultConfigSelectionStrategy: result.defaultConfigSelectionStrategy,
+		defaultConfigurationId: result.defaultConfigurationId,
+		fallbackConfigurationId: result.fallbackConfigurationId,
+		allowedConfigurationIds: result.allowedConfigurationIds as string[] | null,
+	};
+}
+
+/**
+ * Get Slack installation config for an org (org-scoped).
+ * Returns strategy, default config, and allowed config IDs.
+ */
+export async function getSlackInstallationConfigForOrg(orgId: string): Promise<{
+	installationId: string;
+	defaultConfigSelectionStrategy: string | null;
+	defaultConfigurationId: string | null;
+	allowedConfigurationIds: string[] | null;
+} | null> {
+	const db = getDb();
+	const result = await db.query.slackInstallations.findFirst({
+		where: and(
+			eq(slackInstallations.organizationId, orgId),
+			eq(slackInstallations.status, "active"),
+		),
+		columns: {
+			id: true,
+			defaultConfigSelectionStrategy: true,
+			defaultConfigurationId: true,
+			allowedConfigurationIds: true,
+		},
+	});
+	if (!result) return null;
+	return {
+		installationId: result.id,
+		defaultConfigSelectionStrategy: result.defaultConfigSelectionStrategy,
+		defaultConfigurationId: result.defaultConfigurationId,
+		allowedConfigurationIds: result.allowedConfigurationIds as string[] | null,
+	};
+}
+
+/**
+ * Update Slack installation config selection strategy.
+ * Validates org ownership via the org-scoped query.
+ */
+export async function updateSlackInstallationConfig(
+	installationId: string,
+	orgId: string,
+	update: {
+		defaultConfigSelectionStrategy?: string;
+		defaultConfigurationId?: string | null;
+		allowedConfigurationIds?: string[] | null;
+	},
+): Promise<boolean> {
+	const db = getDb();
+	const result = await db
+		.update(slackInstallations)
+		.set({
+			...update,
+			updatedAt: new Date(),
+		})
+		.where(
+			and(eq(slackInstallations.id, installationId), eq(slackInstallations.organizationId, orgId)),
+		)
+		.returning({ id: slackInstallations.id });
+	return result.length > 0;
+}
+
+/**
  * List all active Slack installations for an organization.
  * Used for the notification workspace selector UI.
  */
@@ -848,21 +956,38 @@ export async function updateStatusByGitHubInstallationId(
 /**
  * Find active Slack installation by team ID.
  * Used by the Slack events handler to look up installation for incoming events.
+ *
+ * WARNING: If multiple orgs share the same Slack workspace (same teamId),
+ * this refuses the ambiguous match and returns null. Callers should use the
+ * org-scoped `getSlackInstallationForNotifications` when org context is available.
  */
 export async function findSlackInstallationByTeamId(
 	teamId: string,
 ): Promise<Pick<SlackInstallationRow, "id" | "organizationId" | "encryptedBotToken"> | null> {
 	const db = getDb();
-	const result = await db.query.slackInstallations.findFirst({
+	const logger = getServicesLogger();
+
+	const results = await db.query.slackInstallations.findMany({
 		where: and(eq(slackInstallations.teamId, teamId), eq(slackInstallations.status, "active")),
 		columns: {
 			id: true,
 			organizationId: true,
 			encryptedBotToken: true,
 		},
+		limit: 2,
 	});
 
-	return result ?? null;
+	if (results.length === 0) return null;
+
+	if (results.length > 1) {
+		logger.error(
+			{ teamId, installationCount: results.length, orgIds: results.map((r) => r.organizationId) },
+			"Refusing ambiguous Slack installation: multiple orgs share the same team ID. Events will not be routed.",
+		);
+		return null;
+	}
+
+	return results[0];
 }
 
 // ============================================

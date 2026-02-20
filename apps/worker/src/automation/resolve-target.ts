@@ -3,30 +3,38 @@
  *
  * Determines which configuration/repo to use for session creation
  * based on enrichment output and automation configuration.
+ *
+ * Key invariant: `agent_decide` mode never creates new managed configurations.
+ * It can only select from existing configurations in the allowed set.
  */
 
-import { configurations, repos } from "@proliferate/services";
+import type { Logger } from "@proliferate/logger";
 import type { runs } from "@proliferate/services";
-import type { EnrichmentPayload } from "./enrich";
+import { buildEnrichmentContext, selectConfiguration } from "./configuration-selector";
 
 export interface TargetResolution {
-	type: "default" | "selected" | "fallback";
+	type: "default" | "selected" | "fallback" | "failed";
 	configurationId?: string;
-	repoIds?: string[];
 	reason: string;
-	suggestedRepoId?: string;
 }
 
-export async function resolveTarget(input: {
-	automation: runs.AutomationRunWithRelations["automation"];
-	enrichmentJson: unknown;
-	organizationId: string;
-}): Promise<TargetResolution> {
+type AutomationType = runs.AutomationRunWithRelations["automation"];
+
+export async function resolveTarget(
+	input: {
+		automation: AutomationType;
+		enrichmentJson: unknown;
+		organizationId: string;
+	},
+	logger: Logger,
+): Promise<TargetResolution> {
 	const { automation, enrichmentJson, organizationId } = input;
 
+	const strategy = automation?.configSelectionStrategy ?? "fixed";
 	const defaultConfigurationId = automation?.defaultConfigurationId ?? undefined;
 
-	if (!automation?.allowAgenticRepoSelection) {
+	// Strategy: fixed — always use default configuration
+	if (strategy === "fixed" || !automation?.allowAgenticRepoSelection) {
 		return {
 			type: "default",
 			configurationId: defaultConfigurationId,
@@ -34,66 +42,52 @@ export async function resolveTarget(input: {
 		};
 	}
 
-	const suggestedRepoId = extractSuggestedRepoId(enrichmentJson);
-	if (!suggestedRepoId) {
+	// Strategy: agent_decide — choose from allowed configurations via LLM
+	// Never create new managed configurations in this mode.
+	const allowedIds = (automation.allowedConfigurationIds as string[] | null) ?? null;
+
+	// Require an explicit allowlist for agent_decide — unbounded search is not safe
+	if (!allowedIds || allowedIds.length === 0) {
 		return {
-			type: "default",
-			configurationId: defaultConfigurationId,
-			reason: "no_suggestion",
+			type: "failed",
+			reason: "configuration_selection_failed",
 		};
 	}
 
-	const repoValid = await repos.repoExists(suggestedRepoId, organizationId);
-	if (!repoValid) {
-		return {
-			type: "fallback",
-			configurationId: defaultConfigurationId,
-			reason: "repo_not_found_or_wrong_org",
-			suggestedRepoId,
-		};
-	}
-
-	// Reuse an existing managed configuration that already contains this repo
-	// to avoid creating a new configuration + setup session on every run.
-	const existingConfigurationId = await findManagedConfigurationForRepo(
-		suggestedRepoId,
-		organizationId,
+	const context = buildEnrichmentContext(enrichmentJson);
+	const result = await selectConfiguration(
+		{
+			allowedConfigurationIds: allowedIds,
+			context,
+			organizationId,
+		},
+		logger,
 	);
-	if (existingConfigurationId) {
+
+	if (result.status === "selected") {
 		return {
 			type: "selected",
-			configurationId: existingConfigurationId,
-			reason: "enrichment_suggestion_reused",
-			suggestedRepoId,
+			configurationId: result.configurationId,
+			reason: result.rationale,
+		};
+	}
+
+	// LLM selection failed — fall back to fallback configuration if available
+	const fallbackId = automation.fallbackConfigurationId ?? defaultConfigurationId;
+	if (fallbackId) {
+		logger.warn(
+			{ fallbackConfigurationId: fallbackId, selectionReason: result.reason },
+			"Configuration selection failed, using fallback",
+		);
+		return {
+			type: "fallback",
+			configurationId: fallbackId,
+			reason: "configuration_selection_failed_using_fallback",
 		};
 	}
 
 	return {
-		type: "selected",
-		repoIds: [suggestedRepoId],
-		reason: "enrichment_suggestion_new",
-		suggestedRepoId,
+		type: "failed",
+		reason: "configuration_selection_failed",
 	};
-}
-
-function extractSuggestedRepoId(enrichmentJson: unknown): string | null {
-	if (!enrichmentJson || typeof enrichmentJson !== "object") return null;
-	const payload = enrichmentJson as Partial<EnrichmentPayload>;
-	if (payload.version !== 1) return null;
-	if (typeof payload.suggestedRepoId !== "string" || payload.suggestedRepoId.length === 0)
-		return null;
-	return payload.suggestedRepoId;
-}
-
-async function findManagedConfigurationForRepo(
-	repoId: string,
-	organizationId: string,
-): Promise<string | null> {
-	const managed = await configurations.findManagedConfigurations();
-	const match = managed.find((c) =>
-		c.configurationRepos?.some(
-			(cr) => cr.repo?.id === repoId && cr.repo?.organizationId === organizationId,
-		),
-	);
-	return match?.id ?? null;
 }

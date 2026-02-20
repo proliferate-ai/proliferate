@@ -12,6 +12,7 @@ import type { PendingRunSummary } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
 import { AlertCircle, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { EmptyChatsIllustration, PageEmptyState, PlusBadge } from "./page-empty-state";
 import { PromptInput } from "./prompt-input";
 import { ActivitySummary } from "./session-stats";
@@ -145,6 +146,7 @@ function RecentActivity() {
 		limit: 5,
 		excludeSetup: true,
 		excludeCli: true,
+		refetchInterval: 5000,
 	});
 
 	if (isLoading || !sessions || sessions.length === 0) return null;
@@ -171,12 +173,18 @@ function RecentActivity() {
 // ============================================
 
 export function EmptyDashboard() {
+	const router = useRouter();
 	const { data: authSession } = useSession();
 	const { selectedRepoId, selectedSnapshotId, selectedModel, reasoningEffort, setPendingPrompt } =
 		useDashboardStore();
 	const createConfiguration = useCreateConfiguration();
 	const createSession = useCreateSession();
-	const { data: recentSessions } = useSessions({ limit: 1, excludeSetup: true, excludeCli: true });
+	const { data: recentSessions } = useSessions({
+		limit: 1,
+		excludeSetup: true,
+		excludeCli: true,
+		refetchInterval: 5000,
+	});
 	const hasSessions = (recentSessions ?? []).length > 0;
 
 	const firstName = authSession?.user?.name?.split(" ")[0] ?? "";
@@ -195,14 +203,7 @@ export function EmptyDashboard() {
 				initialPrompt: prompt,
 			};
 
-			if (!selectedSnapshotId && !selectedRepoId) {
-				await createSession.mutateAsync(sessionOptions);
-				// Session created — list auto-refreshes via query invalidation
-				setPendingPrompt(null);
-				return;
-			}
-
-			let configurationId = selectedSnapshotId;
+			let configurationId = selectedSnapshotId ?? undefined;
 
 			if (!configurationId && selectedRepoId) {
 				const configurationResult = await createConfiguration.mutateAsync({
@@ -211,13 +212,11 @@ export function EmptyDashboard() {
 				configurationId = configurationResult.configurationId;
 			}
 
-			if (!configurationId) return;
-
 			await createSession.mutateAsync({
 				...sessionOptions,
-				configurationId,
+				...(configurationId ? { configurationId } : {}),
 			});
-			// Session created — list auto-refreshes via query invalidation
+
 			setPendingPrompt(null);
 		} catch (error) {
 			console.error("Failed to create session:", error);

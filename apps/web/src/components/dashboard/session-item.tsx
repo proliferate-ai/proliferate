@@ -16,12 +16,15 @@ import {
 	useDeleteSession,
 	usePrefetchSession,
 	useRenameSession,
+	useSessionNotificationSubscription,
 	useSnapshotSession,
+	useSubscribeNotifications,
+	useUnsubscribeNotifications,
 } from "@/hooks/use-sessions";
 import { cn, formatRelativeTime, getRepoShortName } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Session } from "@proliferate/shared/contracts";
-import { Camera } from "lucide-react";
+import { Bell, BellOff, Camera } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -46,6 +49,27 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 	const snapshotSession = useSnapshotSession();
 	const prefetchSession = usePrefetchSession();
 
+	const isRunning = session.status === "running";
+	const canSubscribe = isRunning || session.status === "starting";
+	const { data: isSubscribed } = useSessionNotificationSubscription(session.id, canSubscribe);
+	const subscribeNotifications = useSubscribeNotifications();
+	const unsubscribeNotifications = useUnsubscribeNotifications();
+
+	const handleToggleNotifications = async () => {
+		try {
+			if (isSubscribed) {
+				await unsubscribeNotifications.mutateAsync({ sessionId: session.id });
+				toast.success("Notifications turned off");
+			} else {
+				await subscribeNotifications.mutateAsync({ sessionId: session.id });
+				toast.success("You'll be notified when this session completes");
+			}
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Failed to update notifications";
+			toast.error(message);
+		}
+	};
+
 	const handleSnapshot = async () => {
 		const toastId = toast.loading("Preparing snapshot...");
 		const stages = [
@@ -66,16 +90,24 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 		}
 	};
 
-	const snapshotAction =
-		session.status === "running"
-			? [
-					{
-						label: snapshotSession.isPending ? "Saving..." : "Save Snapshot",
-						icon: <Camera className="h-4 w-4" />,
-						onClick: handleSnapshot,
-					},
-				]
-			: undefined;
+	const extraActions: { label: string; icon: React.ReactNode; onClick: () => void }[] = [];
+
+	if (canSubscribe) {
+		extraActions.push({
+			label: isSubscribed ? "Notifications on" : "Notify me",
+			icon: isSubscribed ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />,
+			onClick: handleToggleNotifications,
+		});
+	}
+	if (isRunning) {
+		extraActions.push({
+			label: snapshotSession.isPending ? "Saving..." : "Save Snapshot",
+			icon: <Camera className="h-4 w-4" />,
+			onClick: handleSnapshot,
+		});
+	}
+
+	const customActions = extraActions.length > 0 ? extraActions : undefined;
 
 	const handleDelete = async () => {
 		await deleteSession.mutateAsync(session.id);
@@ -175,7 +207,7 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 						<ItemActionsMenu
 							onRename={handleRename}
 							onDelete={() => setDeleteDialogOpen(true)}
-							customActions={snapshotAction}
+							customActions={customActions}
 							isVisible={isActive}
 							onOpenChange={setMenuOpen}
 						/>

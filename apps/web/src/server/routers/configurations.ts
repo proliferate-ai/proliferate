@@ -90,7 +90,7 @@ export const configurationsRouter = {
 		)
 		.output(z.object({ configuration: ConfigurationSchema }))
 		.handler(async ({ input, context }) => {
-			const { id, name, notes } = input;
+			const { id, name, notes, routingDescription } = input;
 
 			// Verify the configuration exists and belongs to this org
 			const belongsToOrg = await configurations.configurationBelongsToOrg(id, context.orgId);
@@ -99,7 +99,11 @@ export const configurationsRouter = {
 			}
 
 			try {
-				const updated = await configurations.updateConfiguration(id, { name, notes });
+				const updated = await configurations.updateConfiguration(id, {
+					name,
+					notes,
+					routingDescription,
+				});
 
 				return {
 					configuration: {
@@ -108,6 +112,7 @@ export const configurationsRouter = {
 						status: updated.status ?? null,
 						name: updated.name ?? null,
 						notes: updated.notes ?? null,
+						routingDescription: updated.routingDescription ?? null,
 						createdAt: updated.createdAt?.toISOString() ?? null,
 						createdBy: updated.createdBy ?? null,
 						sandboxProvider: updated.sandboxProvider ?? null,

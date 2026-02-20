@@ -337,6 +337,7 @@ export async function update(
 
 	if (input.name !== undefined) updates.name = input.name || "Untitled";
 	if (input.notes !== undefined) updates.notes = input.notes;
+	if (input.routingDescription !== undefined) updates.routingDescription = input.routingDescription;
 	if (input.snapshotId !== undefined) updates.snapshotId = input.snapshotId;
 	if (input.status !== undefined) updates.status = input.status;
 
@@ -670,6 +671,64 @@ export async function getReposForConfiguration(
 	});
 
 	return results.map((r) => r.repo).filter((r): r is NonNullable<typeof r> => r !== null);
+}
+
+// ============================================
+// Configuration selector queries
+// ============================================
+
+/** Configuration candidate for LLM-based selection */
+export interface ConfigurationCandidateRow {
+	id: string;
+	name: string;
+	routingDescription: string | null;
+	repoNames: string[];
+}
+
+/**
+ * Get configurations by IDs with routing metadata for the selector service.
+ * Returns only configurations that exist, with their repo names.
+ */
+export async function getConfigurationCandidates(
+	configurationIds: string[],
+	organizationId: string,
+): Promise<ConfigurationCandidateRow[]> {
+	if (configurationIds.length === 0) return [];
+	const db = getDb();
+	const results = await db.query.configurations.findMany({
+		where: inArray(configurations.id, configurationIds),
+		columns: {
+			id: true,
+			name: true,
+			routingDescription: true,
+		},
+		with: {
+			configurationRepos: {
+				with: {
+					repo: {
+						columns: {
+							githubRepoName: true,
+							organizationId: true,
+						},
+					},
+				},
+			},
+		},
+	});
+
+	// Filter to only configurations that belong to the requesting org
+	const filtered = results.filter((r) =>
+		r.configurationRepos.some((cr) => cr.repo?.organizationId === organizationId),
+	);
+
+	return filtered.map((r) => ({
+		id: r.id,
+		name: r.name,
+		routingDescription: r.routingDescription,
+		repoNames: r.configurationRepos
+			.map((cr) => cr.repo?.githubRepoName)
+			.filter((n): n is string => !!n),
+	}));
 }
 
 // ============================================

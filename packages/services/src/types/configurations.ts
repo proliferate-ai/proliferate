@@ -25,6 +25,7 @@ export interface CreateConfigurationRepoInput {
 export interface UpdateConfigurationInput {
 	name?: string | null;
 	notes?: string | null;
+	routingDescription?: string | null;
 	snapshotId?: string;
 	status?: string;
 }

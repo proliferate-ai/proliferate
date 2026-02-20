@@ -68,8 +68,15 @@ export function toAutomation(
 		llm_filter_prompt: row.llmFilterPrompt ?? null,
 		enabled_tools: (row.enabledTools as Record<string, unknown>) ?? null,
 		llm_analysis_prompt: row.llmAnalysisPrompt ?? null,
+		notification_destination_type:
+			(row.notificationDestinationType as "slack_dm_user" | "slack_channel" | "none") ?? undefined,
 		notification_channel_id: row.notificationChannelId ?? null,
+		notification_slack_user_id: row.notificationSlackUserId ?? null,
 		notification_slack_installation_id: row.notificationSlackInstallationId ?? null,
+		config_selection_strategy:
+			(row.configSelectionStrategy as "fixed" | "agent_decide") ?? undefined,
+		fallback_configuration_id: row.fallbackConfigurationId ?? null,
+		allowed_configuration_ids: (row.allowedConfigurationIds as string[] | null) ?? null,
 		source_template_id: row.sourceTemplateId ?? null,
 	};
 }
@@ -118,8 +125,15 @@ export function toAutomationListItem(row: AutomationWithRelations): AutomationLi
 		llm_filter_prompt: row.llmFilterPrompt ?? null,
 		enabled_tools: (row.enabledTools as Record<string, unknown>) ?? null,
 		llm_analysis_prompt: row.llmAnalysisPrompt ?? null,
+		notification_destination_type:
+			(row.notificationDestinationType as "slack_dm_user" | "slack_channel" | "none") ?? undefined,
 		notification_channel_id: row.notificationChannelId ?? null,
+		notification_slack_user_id: row.notificationSlackUserId ?? null,
 		notification_slack_installation_id: row.notificationSlackInstallationId ?? null,
+		config_selection_strategy:
+			(row.configSelectionStrategy as "fixed" | "agent_decide") ?? undefined,
+		fallback_configuration_id: row.fallbackConfigurationId ?? null,
+		allowed_configuration_ids: (row.allowedConfigurationIds as string[] | null) ?? null,
 		source_template_id: row.sourceTemplateId ?? null,
 		_count: {
 			triggers: triggers.length,
@@ -183,8 +197,15 @@ export function toAutomationWithTriggers(row: AutomationWithTriggersRow): Automa
 		llm_filter_prompt: row.llmFilterPrompt ?? null,
 		enabled_tools: (row.enabledTools as Record<string, unknown>) ?? null,
 		llm_analysis_prompt: row.llmAnalysisPrompt ?? null,
+		notification_destination_type:
+			(row.notificationDestinationType as "slack_dm_user" | "slack_channel" | "none") ?? undefined,
 		notification_channel_id: row.notificationChannelId ?? null,
+		notification_slack_user_id: row.notificationSlackUserId ?? null,
 		notification_slack_installation_id: row.notificationSlackInstallationId ?? null,
+		config_selection_strategy:
+			(row.configSelectionStrategy as "fixed" | "agent_decide") ?? undefined,
+		fallback_configuration_id: row.fallbackConfigurationId ?? null,
+		allowed_configuration_ids: (row.allowedConfigurationIds as string[] | null) ?? null,
 		source_template_id: row.sourceTemplateId ?? null,
 		triggers: (row.triggers || []).map(toAutomationTrigger),
 	};
@@ -227,8 +248,15 @@ export function toNewAutomationListItem(
 		llm_filter_prompt: row.llmFilterPrompt ?? null,
 		enabled_tools: (row.enabledTools as Record<string, unknown>) ?? null,
 		llm_analysis_prompt: row.llmAnalysisPrompt ?? null,
+		notification_destination_type:
+			(row.notificationDestinationType as "slack_dm_user" | "slack_channel" | "none") ?? undefined,
 		notification_channel_id: row.notificationChannelId ?? null,
+		notification_slack_user_id: row.notificationSlackUserId ?? null,
 		notification_slack_installation_id: row.notificationSlackInstallationId ?? null,
+		config_selection_strategy:
+			(row.configSelectionStrategy as "fixed" | "agent_decide") ?? undefined,
+		fallback_configuration_id: row.fallbackConfigurationId ?? null,
+		allowed_configuration_ids: (row.allowedConfigurationIds as string[] | null) ?? null,
 		source_template_id: row.sourceTemplateId ?? null,
 		_count: { triggers: 0, schedules: 0 },
 		activeProviders: [],

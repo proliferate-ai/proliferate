@@ -14,6 +14,10 @@ import { ensureSlackReceiver } from "@proliferate/queue";
 import type { SlackMessageJob, SlackReceiverJob } from "@proliferate/queue";
 import { integrations, sessions } from "@proliferate/services";
 import type { ClientSource, WakeOptions } from "@proliferate/shared";
+import {
+	buildSlackMessageContext,
+	selectConfiguration,
+} from "../automation/configuration-selector";
 import { SlackApiClient } from "./api";
 import {
 	type HandlerContext,
@@ -166,13 +170,76 @@ export class SlackClient extends AsyncClient<
 			sessionId = existingSession.id;
 			this.logger.info({ sessionId }, "Found existing session");
 		} else {
-			// No session - create one via gateway SDK (handles managed configuration automatically)
+			// No session - create one via gateway SDK
 			this.logger.info("No existing session, creating via gateway SDK");
+
+			// Resolve configuration strategy from installation settings
+			const selectionConfig =
+				await integrations.getSlackInstallationSelectionConfig(installationId);
+			let configOption:
+				| { configurationId: string }
+				| { managedConfiguration: { repoIds?: string[] } };
+
+			if (selectionConfig?.defaultConfigSelectionStrategy === "agent_decide") {
+				// agent_decide: use LLM to pick from allowed configurations
+				const allowedIds = selectionConfig.allowedConfigurationIds;
+				if (!allowedIds || allowedIds.length === 0) {
+					this.logger.warn(
+						{ installationId },
+						"agent_decide strategy but no allowed configuration IDs",
+					);
+					await postToSlack(
+						encryptedBotToken,
+						channelId,
+						threadTs,
+						"Auto-selection is enabled but no configurations are allowlisted. Please configure allowed configurations in your Slack integration settings.",
+						this.logger,
+					);
+					return;
+				}
+
+				const context = buildSlackMessageContext(content);
+				const selectionResult = await selectConfiguration(
+					{
+						allowedConfigurationIds: allowedIds,
+						context,
+						organizationId,
+					},
+					this.logger,
+				);
+
+				if (selectionResult.status === "selected") {
+					this.logger.info(
+						{ configurationId: selectionResult.configurationId },
+						"Configuration auto-selected",
+					);
+					configOption = { configurationId: selectionResult.configurationId };
+				} else {
+					this.logger.error(
+						{ reason: selectionResult.reason },
+						"Configuration auto-selection failed",
+					);
+					await postToSlack(
+						encryptedBotToken,
+						channelId,
+						threadTs,
+						"I couldn't automatically select a configuration for this request. Please ensure your allowlisted configurations have routing descriptions.",
+						this.logger,
+					);
+					return;
+				}
+			} else if (selectionConfig?.defaultConfigurationId) {
+				// fixed strategy with explicit default
+				configOption = { configurationId: selectionConfig.defaultConfigurationId };
+			} else {
+				// No config set — use managed configuration (system picks repos)
+				configOption = { managedConfiguration: {} };
+			}
 
 			try {
 				const result = await this.syncClient.createSession({
 					organizationId,
-					managedConfiguration: {}, // Auto-find/create managed configuration
+					...configOption,
 					sessionType: "coding",
 					clientType: "slack",
 					clientMetadata: {

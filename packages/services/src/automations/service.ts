@@ -13,6 +13,7 @@ import type {
 	AutomationTrigger,
 	AutomationWithTriggers,
 } from "@proliferate/shared/contracts";
+import * as configurationsDb from "../configurations/db";
 import { createRunFromTriggerEvent } from "../runs/service";
 import * as automationsDb from "./db";
 import {
@@ -49,8 +50,13 @@ export interface UpdateAutomationInput {
 	llmFilterPrompt?: string | null;
 	enabledTools?: Record<string, unknown> | null;
 	llmAnalysisPrompt?: string | null;
+	notificationDestinationType?: string | null;
 	notificationChannelId?: string | null;
+	notificationSlackUserId?: string | null;
 	notificationSlackInstallationId?: string | null;
+	configSelectionStrategy?: string | null;
+	fallbackConfigurationId?: string | null;
+	allowedConfigurationIds?: string[] | null;
 }
 
 // ============================================
@@ -128,6 +134,31 @@ export async function updateAutomation(
 		}
 	}
 
+	// Validate DM notification requires a Slack user
+	if (input.notificationDestinationType === "slack_dm_user" && !input.notificationSlackUserId) {
+		throw new Error("DM notification destination requires a Slack user");
+	}
+
+	// Validate agent_decide constraints
+	if (input.configSelectionStrategy === "agent_decide") {
+		const allowedIds = input.allowedConfigurationIds;
+		if (!allowedIds || allowedIds.length === 0) {
+			throw new Error("agent_decide strategy requires at least one allowlisted configuration");
+		}
+
+		// Verify all allowlisted configs have routing descriptions
+		const candidates = await configurationsDb.getConfigurationCandidates(allowedIds, orgId);
+		const missingDescription = candidates.filter(
+			(c) => !c.routingDescription || c.routingDescription.trim().length === 0,
+		);
+		if (missingDescription.length > 0) {
+			const names = missingDescription.map((c) => c.name).join(", ");
+			throw new Error(
+				`All allowlisted configurations must have routing descriptions. Missing: ${names}`,
+			);
+		}
+	}
+
 	const row = await automationsDb.update(id, orgId, {
 		name: input.name,
 		description: input.description,
@@ -140,8 +171,13 @@ export async function updateAutomation(
 		llmFilterPrompt: input.llmFilterPrompt,
 		enabledTools: input.enabledTools,
 		llmAnalysisPrompt: input.llmAnalysisPrompt,
+		notificationDestinationType: input.notificationDestinationType,
 		notificationChannelId: input.notificationChannelId,
+		notificationSlackUserId: input.notificationSlackUserId,
 		notificationSlackInstallationId: input.notificationSlackInstallationId,
+		configSelectionStrategy: input.configSelectionStrategy,
+		fallbackConfigurationId: input.fallbackConfigurationId,
+		allowedConfigurationIds: input.allowedConfigurationIds,
 	});
 
 	return toAutomation(row);

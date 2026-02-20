@@ -14,7 +14,7 @@
  */
 
 import type { Logger } from "@proliferate/logger";
-import { sessions } from "@proliferate/services";
+import { notifications, sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { cancelSessionExpiry } from "../expiry/expiry-queue";
@@ -106,6 +106,12 @@ async function cleanupOrphanedSession(
 				pauseReason: "orphaned",
 				latestTask: null,
 			});
+			// Enqueue session completion notifications (best-effort)
+			try {
+				await notifications.enqueueSessionCompletionNotification(session.organizationId, sessionId);
+			} catch (err) {
+				logger.error({ err, sessionId }, "orphan_sweep.notification_failed");
+			}
 			logger.info({ sessionId }, "orphan_sweep.paused_no_sandbox");
 			return;
 		}
@@ -154,6 +160,13 @@ async function cleanupOrphanedSession(
 			await cancelSessionExpiry(env, sessionId);
 		} catch (err) {
 			logger.error({ err, sessionId }, "orphan_sweep.cancel_expiry_failed");
+		}
+
+		// Enqueue session completion notifications (best-effort)
+		try {
+			await notifications.enqueueSessionCompletionNotification(session.organizationId, sessionId);
+		} catch (err) {
+			logger.error({ err, sessionId }, "orphan_sweep.notification_failed");
 		}
 
 		logger.info({ sessionId, snapshotId }, "orphan_sweep.session_paused");

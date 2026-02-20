@@ -10,8 +10,7 @@ const {
 	mockUpdateEvent,
 	mockCreateSession,
 	mockPostMessage,
-	mockRepoExists,
-	mockFindManagedConfigurations,
+	mockSelectConfiguration,
 } = vi.hoisted(() => ({
 	mockClaimRun: vi.fn(),
 	mockTransitionRunStatus: vi.fn(),
@@ -22,8 +21,7 @@ const {
 	mockUpdateEvent: vi.fn(),
 	mockCreateSession: vi.fn(),
 	mockPostMessage: vi.fn(),
-	mockRepoExists: vi.fn(),
-	mockFindManagedConfigurations: vi.fn(),
+	mockSelectConfiguration: vi.fn(),
 }));
 
 vi.mock("@proliferate/environment/server", () => ({
@@ -75,11 +73,17 @@ vi.mock("@proliferate/services", () => ({
 		updateEvent: mockUpdateEvent,
 	},
 	repos: {
-		repoExists: mockRepoExists,
+		repoExists: vi.fn(),
 	},
 	configurations: {
-		findManagedConfigurations: mockFindManagedConfigurations,
+		findManagedConfigurations: vi.fn(),
 	},
+}));
+
+vi.mock("./configuration-selector", () => ({
+	selectConfiguration: mockSelectConfiguration,
+	buildEnrichmentContext: vi.fn(() => "Enrichment context"),
+	buildSlackMessageContext: vi.fn(() => "Slack message context"),
 }));
 
 vi.mock("./artifacts", () => ({
@@ -155,8 +159,6 @@ describe("handleExecute (target resolution integration)", () => {
 		mockUpdateEvent.mockResolvedValue({});
 		mockCreateSession.mockResolvedValue({ sessionId: "sess-1" });
 		mockPostMessage.mockResolvedValue({});
-		mockRepoExists.mockResolvedValue(false);
-		mockFindManagedConfigurations.mockResolvedValue([]);
 
 		const { createSyncClient } = await import("@proliferate/gateway-clients");
 		syncClient = (createSyncClient as ReturnType<typeof vi.fn>)() as typeof syncClient;
@@ -237,15 +239,18 @@ describe("handleExecute (target resolution integration)", () => {
 		);
 	});
 
-	it("selected path (new): uses managedConfiguration when no existing configuration covers repo", async () => {
+	it("agent_decide path: creates session when LLM selector succeeds", async () => {
 		mockClaimRun.mockResolvedValueOnce(makeRun());
-		mockRepoExists.mockResolvedValueOnce(true);
-		mockFindManagedConfigurations.mockResolvedValueOnce([]);
+		mockSelectConfiguration.mockResolvedValueOnce({
+			status: "selected",
+			configurationId: "cfg-selected",
+			rationale: "Best match for auth bug",
+		});
 		mockFindRunWithRelations.mockResolvedValueOnce(
 			makeContext({
 				enrichmentJson: {
 					version: 1,
-					suggestedRepoId: "repo-1",
+					summary: { title: "Fix auth bug" },
 				},
 				automation: {
 					id: "auto-1",
@@ -259,13 +264,15 @@ describe("handleExecute (target resolution integration)", () => {
 					llmFilterPrompt: null,
 					llmAnalysisPrompt: null,
 					allowAgenticRepoSelection: true,
+					configSelectionStrategy: "agent_decide",
+					allowedConfigurationIds: ["cfg-1", "cfg-2"],
+					fallbackConfigurationId: null,
 				},
 			}),
 		);
 
 		await handleExecute("run-1");
 
-		// target_resolved event
 		expect(mockInsertRunEvent).toHaveBeenCalledWith(
 			"run-1",
 			"target_resolved",
@@ -273,38 +280,27 @@ describe("handleExecute (target resolution integration)", () => {
 			"ready",
 			expect.objectContaining({
 				type: "selected",
-				reason: "enrichment_suggestion_new",
-				repoIds: ["repo-1"],
+				reason: "Best match for auth bug",
+				configurationId: "cfg-selected",
 			}),
 		);
 
-		// Session created with managedConfiguration (not configurationId)
 		expect(mockCreateSession).toHaveBeenCalledWith(
 			expect.objectContaining({
-				managedConfiguration: { repoIds: ["repo-1"] },
+				configurationId: "cfg-selected",
 			}),
 			expect.any(Object),
 		);
 	});
 
-	it("selected path (reuse): uses configurationId when existing managed configuration covers repo", async () => {
+	it("agent_decide path: fails run when LLM selector fails", async () => {
 		mockClaimRun.mockResolvedValueOnce(makeRun());
-		mockRepoExists.mockResolvedValueOnce(true);
-		mockFindManagedConfigurations.mockResolvedValueOnce([
-			{
-				id: "cfg-managed-existing",
-				snapshotId: "snap-1",
-				configurationRepos: [
-					{ repo: { id: "repo-1", organizationId: "org-1", githubRepoName: "org/repo" } },
-				],
-			},
-		]);
+		mockSelectConfiguration.mockResolvedValueOnce({
+			status: "failed",
+			reason: "no_eligible_candidates",
+		});
 		mockFindRunWithRelations.mockResolvedValueOnce(
 			makeContext({
-				enrichmentJson: {
-					version: 1,
-					suggestedRepoId: "repo-1",
-				},
 				automation: {
 					id: "auto-1",
 					name: "Bug Fixer",
@@ -317,48 +313,29 @@ describe("handleExecute (target resolution integration)", () => {
 					llmFilterPrompt: null,
 					llmAnalysisPrompt: null,
 					allowAgenticRepoSelection: true,
+					configSelectionStrategy: "agent_decide",
+					allowedConfigurationIds: ["cfg-1"],
+					fallbackConfigurationId: null,
 				},
 			}),
 		);
 
 		await handleExecute("run-1");
 
-		// target_resolved event shows reuse
-		expect(mockInsertRunEvent).toHaveBeenCalledWith(
-			"run-1",
-			"target_resolved",
-			"ready",
-			"ready",
-			expect.objectContaining({
-				type: "selected",
-				reason: "enrichment_suggestion_reused",
-			}),
-		);
+		expect(mockMarkRunFailed).toHaveBeenCalledWith({
+			runId: "run-1",
+			reason: "configuration_selection_failed",
+			stage: "execution",
+			errorMessage: "Configuration selection failed",
+		});
 
-		// Session created with configurationId (reusing existing, NOT managedConfiguration)
-		expect(mockCreateSession).toHaveBeenCalledWith(
-			expect.objectContaining({
-				configurationId: "cfg-managed-existing",
-			}),
-			expect.any(Object),
-		);
-		expect(mockCreateSession).toHaveBeenCalledWith(
-			expect.not.objectContaining({
-				managedConfiguration: expect.anything(),
-			}),
-			expect.any(Object),
-		);
+		expect(mockCreateSession).not.toHaveBeenCalled();
 	});
 
-	it("fallback path: uses configurationId when repo is invalid", async () => {
+	it("agent_decide path: fails run when allowlist is empty", async () => {
 		mockClaimRun.mockResolvedValueOnce(makeRun());
-		mockRepoExists.mockResolvedValueOnce(false);
 		mockFindRunWithRelations.mockResolvedValueOnce(
 			makeContext({
-				enrichmentJson: {
-					version: 1,
-					suggestedRepoId: "repo-bad",
-				},
 				automation: {
 					id: "auto-1",
 					name: "Bug Fixer",
@@ -371,32 +348,24 @@ describe("handleExecute (target resolution integration)", () => {
 					llmFilterPrompt: null,
 					llmAnalysisPrompt: null,
 					allowAgenticRepoSelection: true,
+					configSelectionStrategy: "agent_decide",
+					allowedConfigurationIds: [],
+					fallbackConfigurationId: null,
 				},
 			}),
 		);
 
 		await handleExecute("run-1");
 
-		// target_resolved event shows fallback
-		expect(mockInsertRunEvent).toHaveBeenCalledWith(
-			"run-1",
-			"target_resolved",
-			"ready",
-			"ready",
-			expect.objectContaining({
-				type: "fallback",
-				reason: "repo_not_found_or_wrong_org",
-				suggestedRepoId: "repo-bad",
-			}),
-		);
+		expect(mockMarkRunFailed).toHaveBeenCalledWith({
+			runId: "run-1",
+			reason: "configuration_selection_failed",
+			stage: "execution",
+			errorMessage: "Configuration selection failed",
+		});
 
-		// Session created with configurationId fallback
-		expect(mockCreateSession).toHaveBeenCalledWith(
-			expect.objectContaining({
-				configurationId: "cfg-default",
-			}),
-			expect.any(Object),
-		);
+		expect(mockSelectConfiguration).not.toHaveBeenCalled();
+		expect(mockCreateSession).not.toHaveBeenCalled();
 	});
 
 	it("fails run when no default configuration and selection disabled", async () => {

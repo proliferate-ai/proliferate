@@ -73,3 +73,7 @@ export {
 	markConfigurationDefaultNoSnapshot,
 	markConfigurationSnapshotFailed,
 } from "./db";
+
+// Configuration selector (used by worker for agent_decide)
+export { getConfigurationCandidates } from "./db";
+export type { ConfigurationCandidateRow } from "./db";

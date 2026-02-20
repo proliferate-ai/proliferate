@@ -42,12 +42,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useActionPreferences, useToggleActionPreference } from "@/hooks/use-action-preferences";
+import { useConfigurations } from "@/hooks/use-configurations";
 import { useGitHubAppConnect } from "@/hooks/use-github-app-connect";
 import {
 	useIntegrations,
+	useSlackConfig,
 	useSlackConnect,
 	useSlackDisconnect,
 	useSlackStatus,
+	useUpdateSlackConfig,
 } from "@/hooks/use-integrations";
 import {
 	type NangoProvider,
@@ -272,6 +275,15 @@ export default function IntegrationsPage() {
 			return acc;
 		},
 		{} as Record<Provider, IntegrationWithCreator[]>,
+	);
+
+	// ---- Slack config ----
+	const { data: slackConfig } = useSlackConfig();
+	const updateSlackConfig = useUpdateSlackConfig();
+	const { data: rawConfigurations } = useConfigurations();
+	const readyConfigurations = useMemo(
+		() => (rawConfigurations ?? []).filter((c) => c.status === "ready" || c.status === "default"),
+		[rawConfigurations],
 	);
 
 	// ---- Slack handlers ----
@@ -983,6 +995,9 @@ export default function IntegrationsPage() {
 					});
 				}}
 				onSaveConnector={handleSave}
+				slackConfig={slackConfig}
+				readyConfigurations={readyConfigurations}
+				onUpdateSlackConfig={(input) => updateSlackConfig.mutate(input)}
 			/>
 		</PageShell>
 	);

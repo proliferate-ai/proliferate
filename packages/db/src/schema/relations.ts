@@ -28,6 +28,7 @@ import {
 	secrets,
 	session,
 	sessionConnections,
+	sessionNotificationSubscriptions,
 	sessionToolInvocations,
 	sessions,
 	slackConversations,
@@ -436,6 +437,24 @@ export const slackInstallationsRelations = relations(slackInstallations, ({ one,
 		references: [user.id],
 	}),
 }));
+
+export const sessionNotificationSubscriptionsRelations = relations(
+	sessionNotificationSubscriptions,
+	({ one }) => ({
+		session: one(sessions, {
+			fields: [sessionNotificationSubscriptions.sessionId],
+			references: [sessions.id],
+		}),
+		user: one(user, {
+			fields: [sessionNotificationSubscriptions.userId],
+			references: [user.id],
+		}),
+		slackInstallation: one(slackInstallations, {
+			fields: [sessionNotificationSubscriptions.slackInstallationId],
+			references: [slackInstallations.id],
+		}),
+	}),
+);
 
 export const userSshKeysRelations = relations(userSshKeys, ({ one }) => ({
 	user: one(user, {

@@ -31,6 +31,7 @@ export const configurations = pgTable(
 		createdBy: text("created_by").references(() => user.id),
 		name: text("name").notNull(),
 		notes: text("notes"),
+		routingDescription: text("routing_description"),
 
 		// CLI configurations
 		userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),

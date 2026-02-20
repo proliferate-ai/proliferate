@@ -47,6 +47,7 @@ export interface CreateConfigurationResult {
 export interface UpdateConfigurationInput {
 	name?: string;
 	notes?: string;
+	routingDescription?: string | null;
 }
 
 export interface EffectiveServiceCommandsResult {
@@ -213,7 +214,11 @@ export async function updateConfiguration(
 	id: string,
 	input: UpdateConfigurationInput,
 ): Promise<Partial<Configuration>> {
-	if (input.name === undefined && input.notes === undefined) {
+	if (
+		input.name === undefined &&
+		input.notes === undefined &&
+		input.routingDescription === undefined
+	) {
 		throw new Error("No fields to update");
 	}
 

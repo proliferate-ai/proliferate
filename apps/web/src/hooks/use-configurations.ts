@@ -12,6 +12,7 @@ interface CreateConfigurationInput {
 interface UpdateConfigurationInput {
 	name?: string;
 	notes?: string;
+	routingDescription?: string | null;
 }
 
 export function useConfigurations(status?: string) {

@@ -16,6 +16,7 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import {
 	DropdownMenu,
@@ -25,7 +26,16 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InlineEdit } from "@/components/ui/inline-edit";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { PageBackLink } from "@/components/ui/page-back-link";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Switch } from "@/components/ui/switch";
 import { Text } from "@/components/ui/text";
@@ -34,7 +44,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useAutomationActionModes, useSetAutomationActionMode } from "@/hooks/use-action-modes";
 import { useAutomation, useTriggerManualRun, useUpdateAutomation } from "@/hooks/use-automations";
 import { useConfigurations } from "@/hooks/use-configurations";
-import { useIntegrations, useSlackInstallations } from "@/hooks/use-integrations";
+import {
+	useIntegrations,
+	useSlackChannels,
+	useSlackInstallations,
+	useSlackMembers,
+} from "@/hooks/use-integrations";
 import { computeReadiness } from "@/lib/automation-readiness";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -106,6 +121,11 @@ function mapInputToOutput(data: UpdateAutomationInput): Record<string, unknown> 
 		else if (key === "llmAnalysisPrompt") mapped.llm_analysis_prompt = value;
 		else if (key === "notificationSlackInstallationId")
 			mapped.notification_slack_installation_id = value;
+		else if (key === "notificationDestinationType") mapped.notification_destination_type = value;
+		else if (key === "notificationSlackUserId") mapped.notification_slack_user_id = value;
+		else if (key === "notificationChannelId") mapped.notification_channel_id = value;
+		else if (key === "configSelectionStrategy") mapped.config_selection_strategy = value;
+		else if (key === "allowedConfigurationIds") mapped.allowed_configuration_ids = value;
 		else mapped[key] = value;
 	}
 	return mapped;
@@ -134,6 +154,15 @@ export default function AutomationDetailPage({
 	const [notificationSlackInstallationId, setNotificationSlackInstallationId] = useState<
 		string | null
 	>(null);
+	const [notificationDestinationType, setNotificationDestinationType] = useState<
+		"slack_channel" | "slack_dm_user" | "none"
+	>("none");
+	const [notificationSlackUserId, setNotificationSlackUserId] = useState<string | null>(null);
+	const [notificationChannelId, setNotificationChannelId] = useState<string | null>(null);
+	const [configSelectionStrategy, setConfigSelectionStrategy] = useState<"fixed" | "agent_decide">(
+		"fixed",
+	);
+	const [allowedConfigurationIds, setAllowedConfigurationIds] = useState<string[]>([]);
 	const hydratedRef = useRef(false);
 
 	// Data
@@ -144,6 +173,16 @@ export default function AutomationDetailPage({
 	const setActionMode = useSetAutomationActionMode(id);
 	const actionModes = modesData?.modes ?? {};
 	const { data: configurations } = useConfigurations();
+
+	// Slack notification config data
+	const effectiveInstallationId =
+		notificationSlackInstallationId ?? slackInstallations?.[0]?.id ?? null;
+	const { data: slackChannelsData } = useSlackChannels(
+		notificationDestinationType === "slack_channel" ? effectiveInstallationId : null,
+	);
+	const { data: slackMembersData } = useSlackMembers(
+		notificationDestinationType === "slack_dm_user" ? effectiveInstallationId : null,
+	);
 
 	const connectedProviders = useMemo(() => {
 		const providers = new Set<string>();
@@ -173,6 +212,16 @@ export default function AutomationDetailPage({
 			setLlmAnalysisPrompt(automation.llm_analysis_prompt || "");
 			setEnabledTools((automation.enabled_tools as EnabledTools) || {});
 			setNotificationSlackInstallationId(automation.notification_slack_installation_id ?? null);
+			setNotificationDestinationType(
+				(automation.notification_destination_type as "slack_channel" | "slack_dm_user" | "none") ??
+					"none",
+			);
+			setNotificationSlackUserId(automation.notification_slack_user_id ?? null);
+			setNotificationChannelId(automation.notification_channel_id ?? null);
+			setConfigSelectionStrategy(
+				(automation.config_selection_strategy as "fixed" | "agent_decide") ?? "fixed",
+			);
+			setAllowedConfigurationIds((automation.allowed_configuration_ids as string[]) ?? []);
 		}
 	}, [automation]);
 
@@ -338,6 +387,23 @@ export default function AutomationDetailPage({
 	const handleSlackInstallationChange = (installationId: string | null) => {
 		setNotificationSlackInstallationId(installationId);
 		handleUpdate({ notificationSlackInstallationId: installationId });
+	};
+
+	const handleNotificationDestinationChange = (
+		type: "slack_channel" | "slack_dm_user" | "none",
+	) => {
+		setNotificationDestinationType(type);
+		handleUpdate({ notificationDestinationType: type });
+	};
+
+	const handleNotificationSlackUserChange = (userId: string | null) => {
+		setNotificationSlackUserId(userId);
+		handleUpdate({ notificationSlackUserId: userId });
+	};
+
+	const handleNotificationChannelChange = (channelId: string | null) => {
+		setNotificationChannelId(channelId);
+		handleUpdate({ notificationChannelId: channelId });
 	};
 
 	const handleRunNow = () => {
@@ -518,9 +584,9 @@ export default function AutomationDetailPage({
 					</div>
 				)}
 
-				{/* Model & Configuration */}
+				{/* Model */}
 				<div className="rounded-xl border border-border mb-6">
-					<div className="flex items-center justify-between px-4 py-2.5 border-b border-border/50">
+					<div className="flex items-center justify-between px-4 py-2.5">
 						<span className="text-sm text-muted-foreground">Model</span>
 						<ModelSelector
 							modelId={resolvedModelId}
@@ -529,14 +595,97 @@ export default function AutomationDetailPage({
 							triggerClassName="h-8 border-0 bg-muted/30 hover:bg-muted"
 						/>
 					</div>
-					<div className="flex items-center justify-between px-4 py-2.5">
-						<span className="text-sm text-muted-foreground">Configuration</span>
-						<ConfigurationSelector
-							configurations={readyConfigurations}
-							selectedId={automation.default_configuration_id}
-							onChange={handleConfigurationChange}
-							triggerClassName="border-0 bg-muted/30 hover:bg-muted"
-						/>
+				</div>
+
+				{/* Configuration Selection */}
+				<div className="mb-6">
+					<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+						Configuration Selection
+					</p>
+					<div className="rounded-xl border border-border">
+						{/* Strategy toggle */}
+						<div className="flex items-center gap-1 px-4 py-2.5 border-b border-border/50">
+							<Button
+								variant={configSelectionStrategy === "fixed" ? "secondary" : "ghost"}
+								size="sm"
+								className="h-7 text-xs"
+								onClick={() => {
+									setConfigSelectionStrategy("fixed");
+									handleUpdate({ configSelectionStrategy: "fixed" });
+								}}
+							>
+								Fixed
+							</Button>
+							<Button
+								variant={configSelectionStrategy === "agent_decide" ? "secondary" : "ghost"}
+								size="sm"
+								className="h-7 text-xs"
+								onClick={() => {
+									setConfigSelectionStrategy("agent_decide");
+								}}
+							>
+								Let agent decide
+							</Button>
+						</div>
+
+						{configSelectionStrategy === "fixed" ? (
+							<div className="flex items-center justify-between px-4 py-2.5">
+								<span className="text-sm text-muted-foreground">Configuration</span>
+								<ConfigurationSelector
+									configurations={readyConfigurations}
+									selectedId={automation.default_configuration_id}
+									onChange={handleConfigurationChange}
+									triggerClassName="border-0 bg-muted/30 hover:bg-muted"
+								/>
+							</div>
+						) : (
+							<div className="px-4 py-3 space-y-3">
+								<div>
+									<Label className="text-xs text-muted-foreground mb-2 block">
+										Allowed configurations
+									</Label>
+									<div className="space-y-1.5">
+										{readyConfigurations.map((config) => {
+											const isChecked = allowedConfigurationIds.includes(config.id);
+											return (
+												<Label
+													key={config.id}
+													className="flex items-center gap-2 text-sm cursor-pointer font-normal"
+												>
+													<Checkbox
+														checked={isChecked}
+														onCheckedChange={(checked) => {
+															const next = checked
+																? [...allowedConfigurationIds, config.id]
+																: allowedConfigurationIds.filter((id) => id !== config.id);
+															setAllowedConfigurationIds(next);
+															if (next.length > 0) {
+																handleUpdate({
+																	allowedConfigurationIds: next,
+																	configSelectionStrategy: "agent_decide",
+																});
+															}
+														}}
+													/>
+													<span className="truncate">
+														{config.name || "Untitled configuration"}
+													</span>
+												</Label>
+											);
+										})}
+										{readyConfigurations.length === 0 && (
+											<p className="text-xs text-muted-foreground">
+												No ready configurations available
+											</p>
+										)}
+									</div>
+									<p className="text-xs text-muted-foreground mt-2">
+										Agent will only auto-select from allowlisted configurations that have routing
+										descriptions.
+									</p>
+								</div>
+							</div>
+						)}
 					</div>
 				</div>
 
@@ -604,14 +753,150 @@ export default function AutomationDetailPage({
 						enabledTools={enabledTools}
 						actionModes={actionModes}
 						connectedProviders={connectedProviders}
-						slackInstallations={slackInstallations}
-						notificationSlackInstallationId={notificationSlackInstallationId}
 						onToolToggle={handleToolToggle}
 						onToolConfigChange={handleToolConfigChange}
-						onSlackInstallationChange={handleSlackInstallationChange}
 						onPermissionChange={(key, mode) => setActionMode.mutate({ id, key, mode })}
 						permissionsPending={setActionMode.isPending}
 					/>
+				</div>
+
+				{/* Notifications */}
+				<div className="mb-6">
+					<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+						Notifications
+					</p>
+					<div className="rounded-xl border border-border divide-y divide-border/50">
+						{connectedProviders.has("slack") ? (
+							<>
+								<div className="flex items-center justify-between px-4 py-2.5">
+									<span className="text-sm text-muted-foreground">When complete</span>
+									<Select
+										value={notificationDestinationType}
+										onValueChange={(value) =>
+											handleNotificationDestinationChange(
+												value as "slack_channel" | "slack_dm_user" | "none",
+											)
+										}
+									>
+										<SelectTrigger className="h-8 w-[180px] border-0 bg-muted/30 hover:bg-muted">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="slack_channel">Post to channel</SelectItem>
+											<SelectItem value="slack_dm_user">DM a user</SelectItem>
+											<SelectItem value="none">Disabled</SelectItem>
+										</SelectContent>
+									</Select>
+								</div>
+								{notificationDestinationType === "slack_channel" && (
+									<div className="flex items-center justify-between px-4 py-2.5">
+										<span className="text-sm text-muted-foreground">Channel</span>
+										{slackChannelsData?.channels && slackChannelsData.channels.length > 0 ? (
+											<Select
+												value={notificationChannelId || ""}
+												onValueChange={(value) => handleNotificationChannelChange(value || null)}
+											>
+												<SelectTrigger className="h-8 w-[200px] border-0 bg-muted/30 hover:bg-muted">
+													<SelectValue placeholder="Select a channel" />
+												</SelectTrigger>
+												<SelectContent>
+													{slackChannelsData.channels.map(
+														(ch: {
+															id: string;
+															name: string;
+															isPrivate: boolean;
+														}) => (
+															<SelectItem key={ch.id} value={ch.id}>
+																{ch.isPrivate ? "# " : "#"}
+																{ch.name}
+															</SelectItem>
+														),
+													)}
+												</SelectContent>
+											</Select>
+										) : (
+											<Input
+												value={notificationChannelId || ""}
+												onChange={(e) => handleNotificationChannelChange(e.target.value || null)}
+												placeholder="C01234567890"
+												className="h-8 w-[200px]"
+											/>
+										)}
+									</div>
+								)}
+								{notificationDestinationType === "slack_dm_user" && (
+									<div className="flex items-center justify-between px-4 py-2.5">
+										<span className="text-sm text-muted-foreground">Send DM to</span>
+										{slackMembersData?.members && slackMembersData.members.length > 0 ? (
+											<Select
+												value={notificationSlackUserId || ""}
+												onValueChange={(value) => handleNotificationSlackUserChange(value || null)}
+											>
+												<SelectTrigger className="h-8 w-[200px] border-0 bg-muted/30 hover:bg-muted">
+													<SelectValue placeholder="Select a user" />
+												</SelectTrigger>
+												<SelectContent>
+													{slackMembersData.members.map(
+														(m: {
+															id: string;
+															name: string;
+															realName: string | null;
+														}) => (
+															<SelectItem key={m.id} value={m.id}>
+																{m.realName || m.name}
+															</SelectItem>
+														),
+													)}
+												</SelectContent>
+											</Select>
+										) : (
+											<Input
+												value={notificationSlackUserId || ""}
+												onChange={(e) => handleNotificationSlackUserChange(e.target.value || null)}
+												placeholder="U01234567890"
+												className="h-8 w-[200px]"
+											/>
+										)}
+									</div>
+								)}
+								{slackInstallations && slackInstallations.length > 1 && (
+									<div className="flex items-center justify-between px-4 py-2.5">
+										<span className="text-sm text-muted-foreground">Workspace</span>
+										<Select
+											value={notificationSlackInstallationId ?? "auto"}
+											onValueChange={(value) =>
+												handleSlackInstallationChange(value === "auto" ? null : value)
+											}
+										>
+											<SelectTrigger className="h-8 w-[200px] border-0 bg-muted/30 hover:bg-muted">
+												<SelectValue placeholder="Auto-detect" />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="auto">Auto-detect</SelectItem>
+												{slackInstallations.map((inst) => (
+													<SelectItem key={inst.id} value={inst.id}>
+														{inst.team_name ?? inst.team_id}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+									</div>
+								)}
+							</>
+						) : (
+							<div className="px-4 py-3">
+								<p className="text-sm text-muted-foreground">
+									<Link
+										href="/dashboard/integrations"
+										className="underline hover:text-foreground transition-colors"
+									>
+										Connect Slack
+									</Link>{" "}
+									to enable run completion notifications.
+								</p>
+							</div>
+						)}
+					</div>
 				</div>
 
 				{/* Instructions */}

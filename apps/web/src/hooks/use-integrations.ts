@@ -163,6 +163,43 @@ export function useSlackConnect() {
 	});
 }
 
+export function useSlackMembers(installationId: string | null) {
+	return useQuery({
+		...orpc.integrations.slackMembers.queryOptions({
+			input: { installationId: installationId ?? "" },
+		}),
+		enabled: !!installationId,
+		staleTime: 5 * 60 * 1000,
+	});
+}
+
+export function useSlackChannels(installationId: string | null) {
+	return useQuery({
+		...orpc.integrations.slackChannels.queryOptions({
+			input: { installationId: installationId ?? "" },
+		}),
+		enabled: !!installationId,
+		staleTime: 5 * 60 * 1000,
+	});
+}
+
+export function useSlackConfig() {
+	return useQuery({
+		...orpc.integrations.slackConfig.queryOptions({ input: undefined }),
+	});
+}
+
+export function useUpdateSlackConfig() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		...orpc.integrations.updateSlackConfig.mutationOptions(),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: orpc.integrations.slackConfig.key() });
+		},
+	});
+}
+
 export function useSlackDisconnect() {
 	const queryClient = useQueryClient();
 

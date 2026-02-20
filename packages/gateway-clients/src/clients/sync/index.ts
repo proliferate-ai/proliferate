@@ -24,6 +24,7 @@ import {
 	checkHealth,
 	createHttpClient,
 	createSession,
+	eagerStart,
 	getInfo,
 	getSessionStatus,
 	postCancel,
@@ -84,6 +85,11 @@ export interface SyncClient extends Client {
 		proliferateSessionId: string,
 		organizationId?: string,
 	): Promise<SessionStatusResponse>;
+
+	/**
+	 * Trigger eager session start (boot sandbox + send initial prompt)
+	 */
+	eagerStart(proliferateSessionId: string): Promise<void>;
 }
 
 /**
@@ -138,6 +144,10 @@ class SyncClientImpl implements SyncClient {
 		organizationId?: string,
 	): Promise<SessionStatusResponse> {
 		return getSessionStatus(this.http, proliferateSessionId, organizationId);
+	}
+
+	async eagerStart(proliferateSessionId: string): Promise<void> {
+		return eagerStart(this.http, proliferateSessionId);
 	}
 
 	async checkHealth(): Promise<HealthCheckResult> {

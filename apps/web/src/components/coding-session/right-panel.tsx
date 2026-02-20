@@ -66,6 +66,7 @@ export interface SessionPanelProps {
 	) => void;
 	clearGitResult?: () => void;
 	pendingApprovals?: ActionApprovalRequestMessage["payload"][];
+	slackThreadUrl?: string | null;
 }
 
 interface RightPanelProps {
@@ -117,6 +118,7 @@ export function RightPanel({
 		if (mode.type === "settings" && sessionProps) {
 			return (
 				<SettingsPanel
+					sessionId={sessionProps.sessionId}
 					sessionStatus={sessionProps.sessionStatus}
 					repoName={sessionProps.repoName}
 					branchName={sessionProps.branchName}
@@ -132,6 +134,7 @@ export function RightPanel({
 					configurationId={sessionProps.configurationId}
 					autoStartOutput={sessionProps.autoStartOutput}
 					sendRunAutoStart={sessionProps.sendRunAutoStart}
+					slackThreadUrl={sessionProps.slackThreadUrl}
 				/>
 			);
 		}

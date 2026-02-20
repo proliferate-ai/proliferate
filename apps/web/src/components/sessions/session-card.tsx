@@ -13,7 +13,14 @@ import {
 import { AutomationsIcon, BlocksIcon, BlocksLoadingIcon, SlackIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
-import { useDeleteSession, usePrefetchSession, useRenameSession } from "@/hooks/use-sessions";
+import {
+	useDeleteSession,
+	usePrefetchSession,
+	useRenameSession,
+	useSessionNotificationSubscription,
+	useSubscribeNotifications,
+	useUnsubscribeNotifications,
+} from "@/hooks/use-sessions";
 import {
 	DISPLAY_STATUS_CONFIG,
 	formatCompactMetrics,
@@ -29,9 +36,18 @@ import {
 	getBlockedReasonText,
 } from "@proliferate/shared/sessions";
 import { formatDistanceToNow } from "date-fns";
-import { AlertTriangle, GitBranch, GitPullRequest, RotateCcw, Terminal } from "lucide-react";
+import {
+	AlertTriangle,
+	Bell,
+	BellOff,
+	GitBranch,
+	GitPullRequest,
+	RotateCcw,
+	Terminal,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 interface SessionListRowProps {
 	session: Session;
@@ -128,6 +144,11 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 	const prefetchSession = usePrefetchSession();
 	const renameSession = useRenameSession();
 	const deleteSession = useDeleteSession();
+
+	const canSubscribe = session.status === "running" || session.status === "starting";
+	const { data: isSubscribed } = useSessionNotificationSubscription(session.id, canSubscribe);
+	const subscribeNotifications = useSubscribeNotifications();
+	const unsubscribeNotifications = useUnsubscribeNotifications();
 
 	const [isEditing, setIsEditing] = useState(false);
 	const [editValue, setEditValue] = useState(session.title || "");
@@ -299,7 +320,7 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 						</span>
 					)}
 
-				{/* Status + actions — three-dot menu overlays on hover without shifting layout */}
+				{/* Status + actions — three-dot menu overlays on hover */}
 				<div
 					className="w-[90px] flex-shrink-0 relative flex items-center gap-1.5"
 					aria-label={`Status: ${config.label}`}
@@ -316,6 +337,39 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 						<ItemActionsMenu
 							onRename={handleRename}
 							onDelete={() => setDeleteDialogOpen(true)}
+							customActions={
+								canSubscribe
+									? [
+											{
+												label: isSubscribed ? "Notifications on" : "Notify me",
+												icon: isSubscribed ? (
+													<BellOff className="h-4 w-4" />
+												) : (
+													<Bell className="h-4 w-4" />
+												),
+												onClick: async () => {
+													try {
+														if (isSubscribed) {
+															await unsubscribeNotifications.mutateAsync({
+																sessionId: session.id,
+															});
+															toast.success("Notifications turned off");
+														} else {
+															await subscribeNotifications.mutateAsync({
+																sessionId: session.id,
+															});
+															toast.success("You'll be notified when this session completes");
+														}
+													} catch (err) {
+														const message =
+															err instanceof Error ? err.message : "Failed to update notifications";
+														toast.error(message);
+													}
+												},
+											},
+										]
+									: undefined
+							}
 							onOpenChange={setMenuOpen}
 						/>
 					</div>

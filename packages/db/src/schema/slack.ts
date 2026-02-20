@@ -3,8 +3,9 @@
  */
 
 import { relations } from "drizzle-orm";
-import { index, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { organization, user } from "./auth";
+import { configurations } from "./configurations";
 import { repos } from "./repos";
 import { sessions } from "./sessions";
 
@@ -40,6 +41,16 @@ export const slackInstallations = pgTable(
 
 		// Invite URL
 		inviteUrl: text("invite_url"),
+
+		// Default configuration strategy for Slack-initiated sessions
+		defaultConfigSelectionStrategy: text("default_config_selection_strategy").default("fixed"), // 'fixed' | 'agent_decide'
+		defaultConfigurationId: uuid("default_configuration_id").references(() => configurations.id, {
+			onDelete: "set null",
+		}),
+		fallbackConfigurationId: uuid("fallback_configuration_id").references(() => configurations.id, {
+			onDelete: "set null",
+		}),
+		allowedConfigurationIds: jsonb("allowed_configuration_ids"), // string[] of config UUIDs for agent_decide
 
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
@@ -124,3 +135,59 @@ export const slackConversationsRelations = relations(slackConversations, ({ one 
 		references: [repos.id],
 	}),
 }));
+
+// ============================================
+// Session Notification Subscriptions
+// ============================================
+
+export const sessionNotificationSubscriptions = pgTable(
+	"session_notification_subscriptions",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		sessionId: uuid("session_id")
+			.notNull()
+			.references(() => sessions.id, { onDelete: "cascade" }),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		slackInstallationId: uuid("slack_installation_id")
+			.notNull()
+			.references(() => slackInstallations.id, { onDelete: "cascade" }),
+
+		// Destination
+		destinationType: text("destination_type").notNull().default("dm_user"), // 'dm_user'
+		slackUserId: text("slack_user_id"), // Slack user ID for DM target
+
+		// Event types to notify on
+		eventTypes: jsonb("event_types").default(["completed"]), // string[]
+
+		// Delivery tracking for idempotent retries
+		notifiedAt: timestamp("notified_at", { withTimezone: true }),
+
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+	},
+	(table) => [
+		index("idx_session_notif_sub_session").on(table.sessionId),
+		index("idx_session_notif_sub_user").on(table.userId),
+		unique("session_notification_subscriptions_session_user_key").on(table.sessionId, table.userId),
+	],
+);
+
+export const sessionNotificationSubscriptionsRelations = relations(
+	sessionNotificationSubscriptions,
+	({ one }) => ({
+		session: one(sessions, {
+			fields: [sessionNotificationSubscriptions.sessionId],
+			references: [sessions.id],
+		}),
+		user: one(user, {
+			fields: [sessionNotificationSubscriptions.userId],
+			references: [user.id],
+		}),
+		slackInstallation: one(slackInstallations, {
+			fields: [sessionNotificationSubscriptions.slackInstallationId],
+			references: [slackInstallations.id],
+		}),
+	}),
+);

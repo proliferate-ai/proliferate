@@ -20,7 +20,7 @@ import type { Worker } from "bullmq";
 import { writeCompletionArtifact, writeEnrichmentArtifact } from "./artifacts";
 import { EnrichmentError, buildEnrichmentPayload } from "./enrich";
 import { type FinalizerDeps, finalizeOneRun } from "./finalizer";
-import { dispatchRunNotification } from "./notifications";
+import { dispatchRunNotification, dispatchSessionNotification } from "./notifications";
 import { resolveTarget } from "./resolve-target";
 
 const LEASE_TTL_MS = 5 * 60 * 1000;
@@ -137,7 +137,7 @@ export async function handleEnrich(runId: string, logger?: Logger): Promise<void
 			"Enrichment completed (atomic)",
 		);
 	} catch (err) {
-		console.log("err", err);
+		log?.error({ err }, "Enrichment error");
 		if (err instanceof EnrichmentError) {
 			log?.warn(
 				{ errorClass: "enrichment_failed", errorMessage: err.message },
@@ -185,25 +185,36 @@ async function handleExecute(
 
 	const automation = context.automation;
 
-	const target = await resolveTarget({
-		automation: context.automation,
-		enrichmentJson: context.enrichmentJson,
-		organizationId: run.organizationId,
-	});
+	const target = await resolveTarget(
+		{
+			automation: context.automation,
+			enrichmentJson: context.enrichmentJson,
+			organizationId: run.organizationId,
+		},
+		log ?? logger!,
+	);
 
 	await runs.insertRunEvent(runId, "target_resolved", run.status, run.status, {
 		type: target.type,
 		reason: target.reason,
-		suggestedRepoId: target.suggestedRepoId ?? null,
 		configurationId: target.configurationId ?? null,
-		repoIds: target.repoIds ?? null,
 	});
 
-	const hasTarget =
-		(target.type === "selected" && (target.repoIds?.length || target.configurationId)) ||
-		(target.type !== "selected" && target.configurationId);
+	if (target.type === "failed") {
+		log?.warn(
+			{ errorClass: "configuration_selection_failed", targetType: target.type },
+			"Execute aborted: configuration selection failed",
+		);
+		await runs.markRunFailed({
+			runId,
+			reason: "configuration_selection_failed",
+			stage: "execution",
+			errorMessage: "Configuration selection failed",
+		});
+		return;
+	}
 
-	if (!hasTarget) {
+	if (!target.configurationId) {
 		log?.warn(
 			{ errorClass: "missing_configuration", targetType: target.type },
 			"Execute aborted: no valid target",
@@ -255,16 +266,11 @@ async function handleExecute(
 				targetResolution: {
 					type: target.type,
 					reason: target.reason,
-					suggestedRepoId: target.suggestedRepoId,
 				},
 			},
 		};
 
-		if (target.type === "selected" && target.repoIds) {
-			sessionRequest.managedConfiguration = { repoIds: target.repoIds };
-		} else {
-			sessionRequest.configurationId = target.configurationId;
-		}
+		sessionRequest.configurationId = target.configurationId;
 
 		const session = await syncClient.createSession(sessionRequest, {
 			idempotencyKey: `run:${runId}:session`,
@@ -346,26 +352,49 @@ export async function dispatchOutbox(
 	const claimed = await outbox.claimPendingOutbox(50);
 	for (const item of claimed) {
 		try {
-			const payload = item.payload as { runId?: string };
-			const runId = payload.runId;
-			if (!runId) {
-				await outbox.markFailed(item.id, "Missing runId in outbox payload");
-				continue;
-			}
+			const payload = item.payload as { runId?: string; sessionId?: string };
 
 			switch (item.kind) {
-				case "enqueue_enrich":
-					await queueAutomationEnrich(enrichQueue, runId);
+				case "enqueue_enrich": {
+					if (!payload.runId) {
+						await outbox.markFailed(item.id, "Missing runId in outbox payload");
+						continue;
+					}
+					await queueAutomationEnrich(enrichQueue, payload.runId);
 					break;
-				case "enqueue_execute":
-					await queueAutomationExecute(executeQueue, runId);
+				}
+				case "enqueue_execute": {
+					if (!payload.runId) {
+						await outbox.markFailed(item.id, "Missing runId in outbox payload");
+						continue;
+					}
+					await queueAutomationExecute(executeQueue, payload.runId);
 					break;
-				case "write_artifacts":
-					await writeArtifacts(runId);
+				}
+				case "write_artifacts": {
+					if (!payload.runId) {
+						await outbox.markFailed(item.id, "Missing runId in outbox payload");
+						continue;
+					}
+					await writeArtifacts(payload.runId);
 					break;
-				case "notify_run_terminal":
-					await dispatchRunNotification(runId, logger);
+				}
+				case "notify_run_terminal": {
+					if (!payload.runId) {
+						await outbox.markFailed(item.id, "Missing runId in outbox payload");
+						continue;
+					}
+					await dispatchRunNotification(payload.runId, logger);
 					break;
+				}
+				case "notify_session_complete": {
+					if (!payload.sessionId) {
+						await outbox.markFailed(item.id, "Missing sessionId in outbox payload");
+						continue;
+					}
+					await dispatchSessionNotification(payload.sessionId, logger);
+					break;
+				}
 				default:
 					await outbox.markFailed(item.id, `Unknown outbox kind: ${item.kind}`);
 					continue;

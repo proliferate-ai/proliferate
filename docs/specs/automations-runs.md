@@ -146,10 +146,27 @@ automations
 ├── llm_analysis_prompt TEXT
 ├── notification_channel_id TEXT          -- Slack channel ID
 ├── notification_slack_installation_id UUID FK(slack_installations)
+├── notification_destination_type TEXT DEFAULT 'none'  -- slack_dm_user | slack_channel | none
+├── notification_slack_user_id TEXT       -- Slack user ID for DM notifications
+├── config_selection_strategy TEXT DEFAULT 'fixed'     -- fixed | agent_decide
+├── fallback_configuration_id UUID FK(configurations)  -- fallback for agent_decide
+├── allowed_configuration_ids JSONB       -- allowlist for agent_decide mode
 ├── created_by          TEXT FK(user)
 ├── created_at          TIMESTAMPTZ
 └── updated_at          TIMESTAMPTZ
 Indexes: idx_automations_org, idx_automations_enabled, idx_automations_prebuild
+
+session_notification_subscriptions
+├── id                  UUID PK
+├── session_id          UUID FK(sessions) ON DELETE CASCADE
+├── user_id             TEXT FK(user) ON DELETE CASCADE
+├── slack_installation_id TEXT FK(slack_installations)
+├── destination_type    TEXT DEFAULT 'dm_user'
+├── slack_user_id       TEXT
+├── event_types         JSONB DEFAULT '["completed"]'
+├── created_at          TIMESTAMPTZ
+└── updated_at          TIMESTAMPTZ
+Unique: (session_id, user_id)
 
 automation_connections
 ├── id                  UUID PK
@@ -436,16 +453,41 @@ try {
 
 ### 6.7 Notifications — `Implemented`
 
-**What it does:** Posts Slack messages when runs reach terminal states (succeeded, failed, timed_out, needs_human).
+**What it does:** Posts Slack messages when runs reach terminal states (succeeded, failed, timed_out, needs_human). Supports three notification destination types.
 
-**Happy path** (`apps/worker/src/automation/notifications.ts:dispatchRunNotification`):
+**Destination types:**
+- `slack_channel` — Post to a Slack channel. Resolves channel via `automation.notificationChannelId` with backward-compat fallback to `enabled_tools.slack_notify.channelId`.
+- `slack_dm_user` — DM a specific Slack user. Uses `conversations.open` to open a DM channel, then `chat.postMessage`.
+- `none` — Notifications disabled.
+
+**Run notification dispatch** (`apps/worker/src/automation/notifications.ts:dispatchRunNotification`):
 1. Load run with relations
-2. Resolve Slack channel ID: prefer `automation.notificationChannelId`, fall back to `enabled_tools.slack_notify.channelId`
-3. Look up Slack installation, decrypt bot token
-4. Build Block Kit message with status, summary, and "View Run" button
-5. POST to `chat.postMessage` with 10s timeout
+2. Check `notificationDestinationType` — return early if `none`
+3. For `slack_dm_user`: check idempotency via side effects → open DM → post message → record side effect
+4. For `slack_channel` (default/legacy): resolve channel ID → post to channel → record side effect
+5. All Slack API calls use 10s timeout and are idempotent via `automation_side_effects`
+
+**Session notification dispatch** (`apps/worker/src/automation/notifications.ts:dispatchSessionNotification`):
+1. List session notification subscriptions
+2. Load session info
+3. For each subscription with a `slackUserId`, send a DM via `conversations.open` + `chat.postMessage`
+4. Outbox provides at-most-once delivery for session notifications
+
+**Outbox kinds:** `notify_run_terminal` (existing), `notify_session_complete` (new)
 
 **Files touched:** `apps/worker/src/automation/notifications.ts`, `packages/services/src/notifications/service.ts`
+
+### 6.7.1 Configuration Selection Strategy — `Implemented`
+
+**What it does:** Controls how automation runs select which configuration to use for session creation.
+
+**Strategies:**
+- `fixed` (default) — Always use `defaultConfigurationId`. No dynamic selection.
+- `agent_decide` — Select from an explicit allowlist of configuration IDs. If enrichment suggests a repo, find an existing configuration containing that repo within the allowlist. Never creates new managed configurations. Falls back to `fallbackConfigurationId` (or `defaultConfigurationId` if no fallback set).
+
+**Invariant:** `agent_decide` mode never creates new managed configurations. It can only select from existing configurations in the allowed set.
+
+**Files touched:** `apps/worker/src/automation/resolve-target.ts`
 
 ### 6.8 Slack Async Client — `Implemented`
 
@@ -569,8 +611,9 @@ try {
 - [x] **Manual run status update** — Addressed. `resolveRun` oRPC route allows transitioning `needs_human`, `failed`, or `timed_out` runs to `succeeded` or `failed` with a resolution note. Source: `apps/web/src/server/routers/automations.ts:resolveRun`.
 - [ ] **LLM filter/analysis fields unused** — `llm_filter_prompt` and `llm_analysis_prompt` columns exist on automations but are not executed during enrichment. Impact: configuration exists in UI but has no runtime effect. Expected fix: add LLM evaluation step to trigger processing pipeline (likely in `triggers.md` scope).
 - [ ] **No run deadline enforcement at creation** — The `deadline_at` column exists but is never set during run creation. Only the finalizer checks it. Impact: runs rely solely on inactivity detection (30 min). Expected fix: set deadline from automation config at run creation.
-- [ ] **Single-channel notifications** — Only Slack is implemented. The `NotificationChannel` interface exists for future email/in-app channels but no other implementations exist. Impact: orgs without Slack get no run notifications.
+- [x] **Single-channel notifications** — Addressed. Notification destination type selector supports `slack_channel`, `slack_dm_user`, and `none`. The `NotificationChannel` interface still exists for future email/in-app channels.
 - [ ] **Notification channel resolution fallback** — The `resolveNotificationChannelId` function falls back to `enabled_tools.slack_notify.channelId` for backward compatibility. Impact: minor code complexity. Expected fix: migrate old automations and remove fallback.
+- [ ] **Slack installation ambiguity** — `findSlackInstallationByTeamId` may return the wrong org's installation if two orgs share the same Slack workspace. Mitigated: logs a warning when ambiguity is detected. Impact: cross-org message routing in edge cases. Expected fix: require explicit installation binding per automation/session.
 - [ ] **Artifact writes are not retried independently** — If S3 write fails, the entire outbox item is retried (up to 5x). Impact: a transient S3 failure delays downstream notifications. Expected fix: split artifact writes into separate outbox items per artifact type.
-- [ ] **Side effects table unused** — `automation_side_effects` table, service (`packages/services/src/side-effects/service.ts`), and `recordOrReplaySideEffect()` exist but have zero callsites in the run pipeline. Impact: dead infrastructure. Expected fix: wire into action invocations during automation runs, or remove if no longer planned.
+- [x] **Side effects table unused** — Addressed. `automation_side_effects` is now used by notification dispatch for idempotent delivery of Slack channel posts and DM notifications on run terminal transitions.
 - [ ] **Enrichment writes are not transactional** — `handleEnrich` performs `saveEnrichmentResult`, `enqueueOutbox(write_artifacts)`, `transitionRunStatus(ready)`, and `enqueueOutbox(enqueue_execute)` as four separate writes (`apps/worker/src/automation/index.ts:114-134`). A crash between writes can leave a run in an inconsistent state, recoverable only via lease expiry and re-claim. Impact: low (lease recovery works), but violates the outbox pattern's transactional intent.

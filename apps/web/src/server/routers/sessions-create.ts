@@ -1,8 +1,9 @@
 /**
  * Session creation handler.
  *
- * Creates a session record and returns immediately.
- * Sandbox provisioning is handled by the gateway when the client connects.
+ * Creates a session record and, when an initial prompt is provided,
+ * triggers eager start via the gateway so the sandbox boots and the
+ * prompt is sent immediately (without waiting for a WebSocket client).
  *
  * Two paths:
  * - Configuration-backed: existing flow with repo validation and snapshot resolution.
@@ -10,11 +11,11 @@
  */
 
 import { randomUUID } from "crypto";
+import { GATEWAY_URL, getSessionGatewayUrl } from "@/lib/gateway";
 import { logger } from "@/lib/logger";
-
-const log = logger.child({ handler: "sessions-create" });
-import { getSessionGatewayUrl } from "@/lib/gateway";
 import { ORPCError } from "@orpc/server";
+import { env } from "@proliferate/environment/server";
+import { createSyncClient } from "@proliferate/gateway-clients";
 import { billing, configurations, sessions } from "@proliferate/services";
 import {
 	type AgentConfig,
@@ -24,6 +25,8 @@ import {
 	parseModelId,
 } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
+
+const log = logger.child({ handler: "sessions-create" });
 
 interface CreateSessionHandlerInput {
 	configurationId?: string;
@@ -131,6 +134,7 @@ async function createScratchSession(input: {
 	// Enqueue async title generation (fire-and-forget)
 	if (initialPrompt) {
 		void sessions.requestTitleGeneration(sessionId, orgId, initialPrompt);
+		triggerEagerStart(sessionId);
 	}
 
 	return {
@@ -231,6 +235,7 @@ async function createConfigurationSession(input: {
 	// Enqueue async title generation (fire-and-forget)
 	if (initialPrompt) {
 		void sessions.requestTitleGeneration(sessionId, orgId, initialPrompt);
+		triggerEagerStart(sessionId);
 	}
 
 	return {
@@ -241,6 +246,33 @@ async function createConfigurationSession(input: {
 		sandboxId: null,
 		warning: null,
 	};
+}
+
+/**
+ * Trigger eager session start via the gateway (fire-and-forget).
+ * Boots the sandbox and sends the initial prompt in the background.
+ */
+function triggerEagerStart(sessionId: string): void {
+	if (!GATEWAY_URL || !env.SERVICE_TO_SERVICE_AUTH_TOKEN) {
+		log.warn(
+			{ sessionId },
+			"Skipping eager start: missing GATEWAY_URL or SERVICE_TO_SERVICE_AUTH_TOKEN",
+		);
+		return;
+	}
+
+	const gateway = createSyncClient({
+		baseUrl: GATEWAY_URL,
+		auth: {
+			type: "service",
+			name: "web-session-create",
+			secret: env.SERVICE_TO_SERVICE_AUTH_TOKEN,
+		},
+	});
+
+	gateway.eagerStart(sessionId).catch((err) => {
+		log.warn({ err, sessionId }, "Eager start request failed (session will start on connect)");
+	});
 }
 
 /**
