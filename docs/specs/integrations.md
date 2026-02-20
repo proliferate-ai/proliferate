@@ -333,11 +333,16 @@ slack_conversations
 session_notification_subscriptions
 ├── id                  UUID PK
 ├── session_id          UUID NOT NULL FK(sessions) CASCADE
+├── user_id             TEXT NOT NULL FK(user) CASCADE
 ├── slack_installation_id UUID NOT NULL FK(slack_installations) CASCADE
-├── slack_user_id       TEXT NOT NULL
+├── destination_type    TEXT NOT NULL DEFAULT 'dm_user'
+├── slack_user_id       TEXT
+├── event_types         JSONB DEFAULT '["completed"]'
+├── notified_at         TIMESTAMPTZ
 ├── created_at          TIMESTAMPTZ DEFAULT now()
 └── updated_at          TIMESTAMPTZ DEFAULT now()
-    UNIQUE(session_id, slack_user_id)
+    UNIQUE(session_id, user_id)
+    CHECK(destination_type != 'dm_user' OR slack_user_id IS NOT NULL)
 ```
 
 ### Key Indexes & Query Patterns

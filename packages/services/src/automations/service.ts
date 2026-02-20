@@ -134,6 +134,11 @@ export async function updateAutomation(
 		}
 	}
 
+	// Validate DM notification requires a Slack user
+	if (input.notificationDestinationType === "slack_dm_user" && !input.notificationSlackUserId) {
+		throw new Error("DM notification destination requires a Slack user");
+	}
+
 	// Validate agent_decide constraints
 	if (input.configSelectionStrategy === "agent_decide") {
 		const allowedIds = input.allowedConfigurationIds;
