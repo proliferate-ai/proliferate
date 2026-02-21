@@ -68,6 +68,7 @@ vi.mock("../notifications/service", () => ({
 const {
 	saveEnrichmentResult,
 	getEnrichmentResult,
+	updateRun,
 	transitionRunStatus,
 	completeEnrichment,
 	completeRun,
@@ -239,6 +240,21 @@ describe("transitionRunStatus", () => {
 		);
 		expect(mockUpdateRun).not.toHaveBeenCalled();
 		expect(mockInsertRunEvent).not.toHaveBeenCalled();
+	});
+});
+
+// ============================================
+// updateRun
+// ============================================
+
+describe("updateRun", () => {
+	beforeEach(() => vi.clearAllMocks());
+
+	it("rejects direct status writes", async () => {
+		await expect(
+			updateRun("run-1", { status: "running" } as Parameters<typeof updateRun>[1]),
+		).rejects.toThrow("Direct run status updates are not allowed");
+		expect(mockUpdateRun).not.toHaveBeenCalled();
 	});
 });
 

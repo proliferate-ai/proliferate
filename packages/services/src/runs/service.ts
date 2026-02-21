@@ -105,6 +105,11 @@ export async function updateRun(
 	runId: string,
 	updates: Partial<runsDb.AutomationRunRow>,
 ): Promise<runsDb.AutomationRunRow | null> {
+	if (updates.status !== undefined) {
+		throw new Error(
+			"Direct run status updates are not allowed. Use transitionRunStatus or terminal helpers.",
+		);
+	}
 	return runsDb.updateRun(runId, updates);
 }
 
