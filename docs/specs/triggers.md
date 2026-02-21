@@ -33,7 +33,7 @@
 - Assuming webhook handlers create runs synchronously. Run creation occurs in async workers after inbox claim (`apps/trigger-service/src/webhook-inbox/worker.ts`, `apps/trigger-service/src/lib/trigger-processor.ts`).
 - Assuming one polling job per trigger. Runtime scheduling is per poll group (`packages/services/src/poll-groups/db.ts`, `apps/trigger-service/src/polling/worker.ts`).
 - Assuming `/providers` is the complete feature list for UI providers. UI also hardcodes standalone providers (`apps/trigger-service/src/api/providers.ts`, `apps/web/src/components/automations/trigger-config-form.tsx`).
-- Assuming `scheduled` triggers run because schedules can be created. Queue primitives exist, but no scheduled worker is running in active services (`packages/queue/src/index.ts`, `apps/worker/src/index.ts`).
+- Assuming schedule CRUD in `schedules` drives runtime cron execution. Runtime cron triggers are `triggers.provider = "scheduled"` rows with `pollingCron`, executed by trigger-service workers (`apps/trigger-service/src/scheduled/worker.ts`, `packages/services/src/triggers/service.ts`).
 - Assuming direct webhooks are production-ready. `/webhooks/direct/:providerId` stores inbox rows, but inbox worker still requires a Nango `connectionId` path (`apps/trigger-service/src/api/webhooks.ts`, `apps/trigger-service/src/webhook-inbox/worker.ts`).
 - Assuming trigger list pending counts represent queued work. Current query counts `status = "pending"`, but event lifecycle uses `queued` (`packages/services/src/triggers/db.ts`, `packages/db/src/schema/triggers.ts`).
 - Assuming manual runs have a first-class trigger provider. Manual runs are represented as disabled webhook triggers with `config._manual = true` (`packages/services/src/automations/service.ts`, `packages/services/src/automations/db.ts`).
@@ -175,11 +175,13 @@ _Sections 3 (File Tree) and 4 (Data Models) are intentionally removed. Code and 
 - Rule: `ProviderTriggers` in `@proliferate/providers` is the target architecture, but trigger-service currently runs class-based adapters.
   Evidence: `packages/providers/src/types.ts`, `packages/triggers/src/service/base.ts`.
 
-### 6.9 Scheduled and Manual Trigger Invariants (Status: Partial)
+### 6.9 Scheduled and Manual Trigger Invariants (Status: Implemented)
 - Invariant: Schedule CRUD exists and validates cron format, but schedule CRUD itself does not execute runs.
   Evidence: `apps/web/src/server/routers/schedules.ts`, `packages/services/src/schedules/service.ts`.
-- Rule: Scheduled queue helpers exist; active services do not currently start a scheduled trigger worker.
-  Evidence: `packages/queue/src/index.ts`, `apps/worker/src/index.ts`.
+- Invariant: Trigger-service starts a scheduled worker and restores repeatable jobs for enabled cron triggers at startup.
+  Evidence: `apps/trigger-service/src/index.ts`, `apps/trigger-service/src/scheduled/worker.ts`, `packages/services/src/triggers/service.ts:listEnabledScheduledTriggers`.
+- Invariant: Scheduled trigger CRUD keeps BullMQ repeatable cron jobs in sync on create/update/delete paths.
+  Evidence: `packages/services/src/automations/service.ts:createAutomationTrigger`, `packages/services/src/triggers/service.ts`.
 - Invariant: Manual runs bypass external webhook/polling ingest by creating synthetic trigger events through a dedicated manual trigger marker (`config._manual = true`).
   Evidence: `packages/services/src/automations/service.ts:triggerManualRun`, `packages/services/src/automations/db.ts:findManualTrigger`.
 
@@ -217,6 +219,7 @@ _Sections 3 (File Tree) and 4 (Data Models) are intentionally removed. Code and 
 - [ ] Trigger-service starts cleanly with registered default triggers and workers (`apps/trigger-service/src/index.ts`).
 - [ ] Webhook ingress remains durable-first (payload persisted before run-side effects).
 - [ ] Poll group lifecycle works end-to-end: schedule on create/update, cleanup on orphan.
+- [ ] Scheduled trigger lifecycle works end-to-end: schedule on create/update/delete and execute by cron.
 - [ ] Trigger event lifecycle remains coherent (`queued` → `processing` → terminal or skipped).
 - [ ] This spec stays aligned with runtime invariants, mental models, and known failure modes.
 
@@ -224,7 +227,6 @@ _Sections 3 (File Tree) and 4 (Data Models) are intentionally removed. Code and 
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **Scheduled trigger execution gap (High):** Scheduled queue infrastructure exists, but no active scheduled trigger worker is started in the running services. `scheduled` triggers/schedules can be configured without guaranteed execution. Evidence: `packages/queue/src/index.ts`, `apps/worker/src/index.ts`.
 - [ ] **Direct webhook execution gap (High):** `/webhooks/direct/:providerId` stores inbox rows, but inbox worker still requires Nango `connectionId`; direct identity resolution path is not wired. Evidence: `apps/trigger-service/src/api/webhooks.ts`, `apps/trigger-service/src/webhook-inbox/worker.ts`.
 - [ ] **Fast-ack duplicate parse path (Medium):** Ingress route currently calls dispatcher logic that may parse provider events, then inbox worker parses again. This violates strict "ingress-only" intent and adds duplicate CPU. Evidence: `apps/trigger-service/src/api/webhooks.ts`, `apps/trigger-service/src/lib/webhook-dispatcher.ts`, `apps/trigger-service/src/webhook-inbox/worker.ts`.
 - [ ] **PostHog runtime registration mismatch (Medium):** PostHog provider exists in package-level provider map but is not registered in trigger-service default registry; trigger-service `/providers` will not expose it as runnable. Evidence: `packages/triggers/src/posthog.ts`, `packages/triggers/src/service/register.ts`, `apps/trigger-service/src/api/providers.ts`.

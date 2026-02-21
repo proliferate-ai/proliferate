@@ -131,7 +131,7 @@
 | Webhook ingestion (Nango) | Implemented | `apps/trigger-service/src/lib/webhook-dispatcher.ts` | `POST /webhooks/nango` |
 | Webhook dispatch + matching | Implemented | `apps/trigger-service/src/lib/trigger-processor.ts` | Matches events to triggers |
 | Polling scheduler | Implemented | `apps/trigger-service/src/polling/worker.ts` | Cursor-based stateful polling |
-| Cron scheduling | Partial | `apps/trigger-service/src/scheduled/worker.ts` | Worker directory does not exist; not wired in service entrypoint (`apps/trigger-service/src/index.ts`) |
+| Cron scheduling | Implemented | `apps/trigger-service/src/scheduled/worker.ts`, `apps/trigger-service/src/index.ts` | Scheduled worker runs in trigger-service, restores enabled cron triggers at startup, and creates trigger-driven runs |
 | GitHub provider | Implemented | `packages/triggers/src/github.ts` | Webhook triggers |
 | Linear provider | Implemented | `packages/triggers/src/linear.ts` | Webhook + polling |
 | Sentry provider | Implemented | `packages/triggers/src/sentry.ts` | Webhook only — `poll()` explicitly throws |

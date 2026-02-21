@@ -14,6 +14,7 @@ import {
 	gte,
 	inArray,
 	integrations,
+	isNotNull,
 	sql,
 	triggerEvents,
 	triggers,
@@ -67,6 +68,12 @@ export interface TriggerBasicRow {
 	id: string;
 	enabled: boolean | null;
 	provider: string;
+}
+
+// Scheduled trigger projection for startup scheduling
+export interface ScheduledTriggerCronRow {
+	id: string;
+	pollingCron: string | null;
 }
 
 // ============================================
@@ -641,6 +648,27 @@ export async function findActiveWebhookTriggers(integrationId: string): Promise<
 			eq(triggers.enabled, true),
 			eq(triggers.triggerType, "webhook"),
 		),
+	});
+
+	return results;
+}
+
+/**
+ * List enabled scheduled triggers with cron expressions.
+ * Used by trigger-service startup to restore repeatable scheduled jobs.
+ */
+export async function listEnabledScheduledTriggers(): Promise<ScheduledTriggerCronRow[]> {
+	const db = getDb();
+	const results = await db.query.triggers.findMany({
+		where: and(
+			eq(triggers.provider, "scheduled"),
+			eq(triggers.enabled, true),
+			isNotNull(triggers.pollingCron),
+		),
+		columns: {
+			id: true,
+			pollingCron: true,
+		},
 	});
 
 	return results;

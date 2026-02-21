@@ -5,6 +5,7 @@
  */
 
 import { randomBytes, randomUUID } from "crypto";
+import { addScheduledJob, createScheduledQueue } from "@proliferate/queue";
 import type {
 	Automation,
 	AutomationEvent,
@@ -14,6 +15,7 @@ import type {
 	AutomationWithTriggers,
 } from "@proliferate/shared/contracts";
 import * as configurationsDb from "../configurations/db";
+import { getServicesLogger } from "../logger";
 import { createRunFromTriggerEvent } from "../runs/service";
 import * as automationsDb from "./db";
 import {
@@ -25,6 +27,15 @@ import {
 	toAutomationWithTriggers,
 	toNewAutomationListItem,
 } from "./mapper";
+
+let scheduledQueue: ReturnType<typeof createScheduledQueue> | null = null;
+
+function getScheduledQueue() {
+	if (!scheduledQueue) {
+		scheduledQueue = createScheduledQueue();
+	}
+	return scheduledQueue;
+}
 
 // ============================================
 // Types
@@ -512,6 +523,21 @@ export async function createAutomationTrigger(
 			});
 		} catch {
 			// Ignore duplicate constraint errors - connection may already exist
+		}
+	}
+
+	if (
+		input.provider === "scheduled" &&
+		(input.enabled ?? true) &&
+		typeof input.cronExpression === "string" &&
+		input.cronExpression.trim().length > 0
+	) {
+		try {
+			await addScheduledJob(getScheduledQueue(), trigger.id, input.cronExpression);
+		} catch (err) {
+			getServicesLogger()
+				.child({ module: "automations" })
+				.error({ err, triggerId: trigger.id }, "Failed to schedule cron trigger");
 		}
 	}
 

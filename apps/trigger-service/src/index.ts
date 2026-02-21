@@ -4,6 +4,10 @@ import { registerDefaultTriggers } from "@proliferate/triggers";
 import { startInboxGcWorker } from "./gc/inbox-gc.js";
 import { logger } from "./lib/logger.js";
 import { scheduleEnabledPollGroups, startPollGroupWorker } from "./polling/worker.js";
+import {
+	scheduleEnabledScheduledTriggers,
+	startScheduledWorker,
+} from "./scheduled/worker.js";
 import { createServer } from "./server.js";
 import { startWebhookInboxWorker } from "./webhook-inbox/worker.js";
 
@@ -24,6 +28,7 @@ const server = createServer();
 
 // Start workers
 const pollGroupWorker = startPollGroupWorker();
+const scheduledWorker = startScheduledWorker();
 
 // Start async workers (returns promises)
 const workerCleanups: Array<() => Promise<void>> = [];
@@ -37,6 +42,9 @@ async function startAsyncWorkers() {
 
 	// Schedule all enabled poll groups at startup
 	await scheduleEnabledPollGroups();
+
+	// Schedule all enabled cron triggers at startup
+	await scheduleEnabledScheduledTriggers();
 }
 
 startAsyncWorkers()
@@ -52,6 +60,7 @@ startAsyncWorkers()
 
 async function gracefulShutdown() {
 	await pollGroupWorker.close();
+	await scheduledWorker.close();
 	for (const cleanup of workerCleanups) {
 		await cleanup();
 	}
