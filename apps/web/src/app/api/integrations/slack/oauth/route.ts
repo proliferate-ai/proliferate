@@ -1,6 +1,8 @@
 import { randomUUID } from "crypto";
 import { requireAuth } from "@/lib/auth-helpers";
+import { createSignedOAuthState } from "@/lib/oauth-state";
 import { getSlackOAuthUrl } from "@/lib/slack";
+import { orgs } from "@proliferate/services";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -15,6 +17,10 @@ export async function GET(request: Request) {
 	}
 
 	const userId = authResult.session.user.id;
+	const role = await orgs.getUserRole(userId, orgId);
+	if (role !== "owner" && role !== "admin") {
+		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+	}
 
 	// Get optional return URL from query params (must be a relative path)
 	const { searchParams } = new URL(request.url);
@@ -24,15 +30,13 @@ export async function GET(request: Request) {
 
 	// Generate state token for CSRF protection
 	// Contains org context, nonce, and optional return URL
-	const state = Buffer.from(
-		JSON.stringify({
-			orgId,
-			userId,
-			nonce: randomUUID(),
-			timestamp: Date.now(),
-			returnUrl: returnUrl || undefined,
-		}),
-	).toString("base64url");
+	const state = createSignedOAuthState({
+		orgId,
+		userId,
+		nonce: randomUUID(),
+		timestamp: Date.now(),
+		returnUrl: returnUrl || undefined,
+	});
 
 	let oauthUrl: string;
 	try {
