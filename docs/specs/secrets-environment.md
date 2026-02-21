@@ -90,7 +90,7 @@ Secret reads are scope-sensitive:
 - Encryption key validation is lazy per operation (`getEncryptionKey()`), not preflight startup validation.
 - `buildSandboxEnvVars` tolerates per-secret decryption failures and continues with remaining keys.
 - `submitEnvHandler` may persist some secrets before failing the overall request if sandbox write fails.
-- Bulk import uses `ON CONFLICT DO NOTHING` and reports `created` vs `skipped`.
+- Bulk import pre-filters existing org-scoped keys (`repo_id IS NULL`, `configuration_id IS NULL`) before insert, then returns `created` vs `skipped`.
 - Tool callback idempotency for intercepted tools is provided in gateway memory by `tool_call_id` caching.
 
 ### Testing Conventions
@@ -123,7 +123,7 @@ Secret reads are scope-sensitive:
 **Invariants:**
 - Parser accepts `KEY=VALUE`, quoted values, and `export` prefix.
 - Invalid/blank/comment-only lines are ignored rather than failing the import.
-- Bulk insert must be idempotent for existing keys via `ON CONFLICT DO NOTHING`.
+- Bulk insert must be idempotent for existing org-scoped keys (`repo_id IS NULL`, `configuration_id IS NULL`) via pre-filter + insert.
 - API response must expose deterministic `created` count and explicit `skipped` keys.
 
 **Rules the system must follow:**
