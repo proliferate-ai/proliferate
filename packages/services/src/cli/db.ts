@@ -397,7 +397,7 @@ export async function listCliSessions(
 	const conditions = [
 		eq(sessions.organizationId, orgId),
 		eq(sessions.origin, "cli"),
-		eq(sessions.sessionType, "terminal"),
+		eq(sessions.sessionType, "cli"),
 	];
 
 	if (localPathHash) {
@@ -445,7 +445,7 @@ export async function findResumableSession(
 			eq(sessions.organizationId, orgId),
 			eq(sessions.localPathHash, localPathHash),
 			eq(sessions.origin, "cli"),
-			eq(sessions.sessionType, "terminal"),
+			eq(sessions.sessionType, "cli"),
 			inArray(sessions.status, ["running", "paused"]),
 		),
 		columns: {

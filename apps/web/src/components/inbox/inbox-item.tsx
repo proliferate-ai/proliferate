@@ -125,7 +125,7 @@ function ApprovalItem({ data }: { data: ApprovalWithSession }) {
 				token,
 			});
 			await setActionMode.mutateAsync({
-				key: `${approval.integration}/${approval.action}`,
+				key: `${approval.integration}:${approval.action}`,
 				mode: "allow",
 			});
 		});

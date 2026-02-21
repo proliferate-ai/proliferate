@@ -446,6 +446,7 @@ export class SessionRuntime {
 			await sessions.update(this.sessionId, {
 				sandboxId: result.sandboxId,
 				status: "running",
+				pauseReason: null,
 				openCodeTunnelUrl: result.tunnelUrl,
 				previewTunnelUrl: result.previewUrl,
 				...(result.expiresAt && { sandboxExpiresAt: result.expiresAt }),

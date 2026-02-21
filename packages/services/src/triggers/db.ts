@@ -181,7 +181,7 @@ export async function getPendingEventCounts(triggerIds: string[]): Promise<Recor
 
 	const db = getDb();
 	const results = await db.query.triggerEvents.findMany({
-		where: and(inArray(triggerEvents.triggerId, triggerIds), eq(triggerEvents.status, "pending")),
+		where: and(inArray(triggerEvents.triggerId, triggerIds), eq(triggerEvents.status, "queued")),
 		columns: {
 			triggerId: true,
 		},

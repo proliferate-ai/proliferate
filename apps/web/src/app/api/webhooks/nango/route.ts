@@ -81,8 +81,8 @@ async function hmacSha256(secret: string, body: string): Promise<string> {
 
 async function verifyNangoWebhook(request: Request, body: string): Promise<boolean> {
 	if (!NANGO_SECRET_KEY) {
-		log.warn("NANGO_SECRET_KEY not configured, skipping verification");
-		return true;
+		log.error("NANGO_SECRET_KEY not configured, rejecting webhook");
+		return false;
 	}
 
 	const signature = request.headers.get("X-Nango-Hmac-Sha256");
@@ -92,7 +92,15 @@ async function verifyNangoWebhook(request: Request, body: string): Promise<boole
 	}
 
 	const expected = await hmacSha256(NANGO_SECRET_KEY, body);
-	return signature === expected;
+	const sigBuf = Buffer.from(signature);
+	const expBuf = Buffer.from(expected);
+	if (sigBuf.length !== expBuf.length) return false;
+	// Constant-time comparison to prevent timing attacks
+	let mismatch = 0;
+	for (let i = 0; i < sigBuf.length; i++) {
+		mismatch |= sigBuf[i]! ^ expBuf[i]!;
+	}
+	return mismatch === 0;
 }
 
 // ============================================

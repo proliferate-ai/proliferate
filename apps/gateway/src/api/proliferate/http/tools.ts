@@ -36,9 +36,14 @@ const completedResults = new Map<string, ToolCallResult>();
 /** How long to keep completed results for retry dedup (5 minutes). */
 const RESULT_RETENTION_MS = 5 * 60 * 1000;
 
-function evictAfterDelay(toolCallId: string): void {
+/** Build a scoped cache key to prevent cross-session collisions. */
+function cacheKey(sessionId: string, toolName: string, toolCallId: string): string {
+	return `${sessionId}:${toolName}:${toolCallId}`;
+}
+
+function evictAfterDelay(key: string): void {
 	setTimeout(() => {
-		completedResults.delete(toolCallId);
+		completedResults.delete(key);
 	}, RESULT_RETENTION_MS);
 }
 
@@ -79,8 +84,10 @@ export function createToolsRouter(_env: GatewayEnv, hubManager: HubManager): Rou
 				throw new ApiError(404, `Unknown tool: ${toolName}`);
 			}
 
+			const key = cacheKey(proliferateSessionId, toolName, toolCallId);
+
 			// Check completed result cache (retry after snapshot thaw)
-			const cached = completedResults.get(toolCallId);
+			const cached = completedResults.get(key);
 			if (cached) {
 				logger.debug({ toolCallId, toolName }, "Returning cached tool result");
 				res.json(cached);
@@ -88,7 +95,7 @@ export function createToolsRouter(_env: GatewayEnv, hubManager: HubManager): Rou
 			}
 
 			// Check in-flight dedup (retry while first call is still running)
-			const inflight = inflightCalls.get(toolCallId);
+			const inflight = inflightCalls.get(key);
 			if (inflight) {
 				logger.debug({ toolCallId, toolName }, "Awaiting in-flight tool call");
 				const result = await inflight;
@@ -111,18 +118,18 @@ export function createToolsRouter(_env: GatewayEnv, hubManager: HubManager): Rou
 				}
 			})();
 
-			inflightCalls.set(toolCallId, executePromise);
+			inflightCalls.set(key, executePromise);
 
 			try {
 				const result = await executePromise;
 
 				// Cache the result for retries
-				completedResults.set(toolCallId, result);
-				evictAfterDelay(toolCallId);
+				completedResults.set(key, result);
+				evictAfterDelay(key);
 
 				res.json(result);
 			} finally {
-				inflightCalls.delete(toolCallId);
+				inflightCalls.delete(key);
 			}
 		} catch (err) {
 			next(err);

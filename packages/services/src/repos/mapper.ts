@@ -22,7 +22,7 @@ export function toRepo(row: RepoWithConfigurationsRow): Repo {
 		defaultBranch: row.defaultBranch,
 		createdAt: toIsoString(row.createdAt),
 		source: row.source || "github",
-		isPrivate: false, // Field not in Drizzle schema, default to false for API compatibility
+		isPrivate: row.isPrivate ?? false,
 		configurationId: primaryConfig?.id ?? null,
 		configurationStatus: primaryConfig?.status ?? null,
 	};
@@ -48,6 +48,6 @@ export function toRepoPartial(row: RepoRow): Partial<Repo> {
 		defaultBranch: row.defaultBranch,
 		createdAt: toIsoString(row.createdAt),
 		source: row.source || "github",
-		isPrivate: false, // Field not in Drizzle schema, default to false for API compatibility
+		isPrivate: row.isPrivate ?? false,
 	};
 }

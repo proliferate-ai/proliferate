@@ -15,10 +15,13 @@ interface AutomationCompleteArgs {
 	[key: string]: unknown;
 }
 
-function normalizeOutcome(outcome: string | undefined): "succeeded" | "failed" | "needs_human" {
-	if (outcome === "failed") return "failed";
-	if (outcome === "needs_human") return "needs_human";
-	return "succeeded";
+const VALID_OUTCOMES = new Set(["succeeded", "failed", "needs_human"] as const);
+
+function normalizeOutcome(
+	outcome: string | undefined,
+): "succeeded" | "failed" | "needs_human" | null {
+	if (!outcome || !VALID_OUTCOMES.has(outcome as never)) return null;
+	return outcome as "succeeded" | "failed" | "needs_human";
 }
 
 export const automationCompleteHandler: InterceptedToolHandler = {
@@ -36,6 +39,12 @@ export const automationCompleteHandler: InterceptedToolHandler = {
 		}
 
 		const outcome = normalizeOutcome(payload.outcome);
+		if (!outcome) {
+			return {
+				success: false,
+				result: `Invalid outcome: "${payload.outcome}". Must be one of: succeeded, failed, needs_human`,
+			};
+		}
 
 		const run = await runs.completeRun({
 			runId,

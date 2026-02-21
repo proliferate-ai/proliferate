@@ -38,7 +38,7 @@ function getAdminUrl(): string {
 	if (!url) {
 		throw new Error("LLM_PROXY_ADMIN_URL (or LLM_PROXY_URL) is not configured");
 	}
-	return url.replace(/\/+$/, "");
+	return url.replace(/\/+$/, "").replace(/\/v1$/, "");
 }
 
 function getMasterKey(): string {
