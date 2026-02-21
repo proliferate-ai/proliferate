@@ -48,7 +48,10 @@ async function removeScheduledJobByPattern(triggerId: string, cronPattern: strin
 	});
 }
 
-function validateScheduledTriggerCron(provider: string, cronExpression: string | null | undefined): void {
+function validateScheduledTriggerCron(
+	provider: string,
+	cronExpression: string | null | undefined,
+): void {
 	if (provider !== "scheduled") return;
 
 	if (!cronExpression || cronExpression.trim().length === 0) {
