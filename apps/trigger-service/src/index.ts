@@ -4,10 +4,7 @@ import { registerDefaultTriggers } from "@proliferate/triggers";
 import { startInboxGcWorker } from "./gc/inbox-gc.js";
 import { logger } from "./lib/logger.js";
 import { scheduleEnabledPollGroups, startPollGroupWorker } from "./polling/worker.js";
-import {
-	scheduleEnabledScheduledTriggers,
-	startScheduledWorker,
-} from "./scheduled/worker.js";
+import { scheduleEnabledScheduledTriggers, startScheduledWorker } from "./scheduled/worker.js";
 import { createServer } from "./server.js";
 import { startWebhookInboxWorker } from "./webhook-inbox/worker.js";
 

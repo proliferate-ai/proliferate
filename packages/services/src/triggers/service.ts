@@ -134,7 +134,9 @@ export async function listTriggers(orgId: string): Promise<TriggerWithIntegratio
  * List enabled scheduled triggers that have cron expressions.
  * Used by trigger-service startup to restore repeatable jobs.
  */
-export async function listEnabledScheduledTriggers(): Promise<Array<{ id: string; pollingCron: string }>> {
+export async function listEnabledScheduledTriggers(): Promise<
+	Array<{ id: string; pollingCron: string }>
+> {
 	const rows = await triggersDb.listEnabledScheduledTriggers();
 	return rows.flatMap((row) =>
 		typeof row.pollingCron === "string" && row.pollingCron.trim().length > 0

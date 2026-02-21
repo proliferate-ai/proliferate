@@ -66,7 +66,10 @@ async function processScheduledJob(job: Job<ScheduledJob>): Promise<void> {
 	}
 
 	if (!trigger.enabled || !trigger.pollingCron) {
-		logger.debug({ triggerId, enabled: trigger.enabled }, "Scheduled trigger disabled or missing cron");
+		logger.debug(
+			{ triggerId, enabled: trigger.enabled },
+			"Scheduled trigger disabled or missing cron",
+		);
 		return;
 	}
 
@@ -114,7 +117,10 @@ async function processScheduledJob(job: Job<ScheduledJob>): Promise<void> {
 
 		logger.debug({ triggerId: trigger.id, jobId: job.id }, "Scheduled trigger processed");
 	} catch (err) {
-		logger.error({ err, triggerId: trigger.id, jobId: job.id }, "Failed to process scheduled trigger");
+		logger.error(
+			{ err, triggerId: trigger.id, jobId: job.id },
+			"Failed to process scheduled trigger",
+		);
 		await safeCreateSkippedEvent({
 			triggerId: trigger.id,
 			organizationId: trigger.organizationId,
@@ -158,10 +164,7 @@ export async function scheduleEnabledScheduledTriggers(): Promise<void> {
 				"Scheduled cron trigger",
 			);
 		} catch (err) {
-			logger.error(
-				{ err, triggerId: scheduledTrigger.id },
-				"Failed to schedule cron trigger",
-			);
+			logger.error({ err, triggerId: scheduledTrigger.id }, "Failed to schedule cron trigger");
 		}
 	}
 
