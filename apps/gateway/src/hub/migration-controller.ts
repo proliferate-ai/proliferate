@@ -136,6 +136,10 @@ export class MigrationController {
 				const providerType = this.options.runtime.getContext().session
 					.sandbox_provider as SandboxProviderType;
 				const provider = getSandboxProvider(providerType);
+
+				// 1. Disconnect SSE BEFORE scrub/snapshot/terminate to prevent a last-moment write race.
+				this.options.runtime.disconnectSse();
+
 				const finalizeSnapshotPrep = await prepareForSnapshot({
 					provider,
 					sandboxId: freshSandboxId,
@@ -145,9 +149,6 @@ export class MigrationController {
 					failureMode: "log",
 					reapplyAfterCapture: false,
 				});
-
-				// 1. Disconnect SSE BEFORE snapshot/terminate (prevents reconnect cycle)
-				this.options.runtime.disconnectSse();
 
 				// 2. Snapshot: memory (preferred) → pause → filesystem
 				let snapshotId: string | undefined;

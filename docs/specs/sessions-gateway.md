@@ -161,6 +161,7 @@ Reference: `apps/gateway/src/middleware/error-handler.ts`
 - **Migration lock**: Distributed Redis lock with 60s TTL prevents concurrent migrations for the same session.
 - **Expiry triggers**: Hub schedules an in-process expiry timer (primary) plus a BullMQ job as a fallback for evicted hubs.
 - **Snapshot secret scrubbing**: All snapshot capture paths (`save_snapshot`, idle snapshot, expiry migration) run `proliferate env scrub` before capture when env-file spec is configured. Paths that continue running the same sandbox re-apply env files after capture; pause/stop paths skip re-apply.
+- **Scrub failure policy**: Manual snapshots use strict scrub mode (scrub failure aborts capture). Idle/expiry paths use best-effort scrub mode (log and continue) so pause/stop cleanup is not blocked by scrub command failures.
 - **Streaming backpressure**: Token batching (50-100ms) and slow-consumer disconnect based on `ws.bufferedAmount` thresholds.
 - **Idle snapshot failure circuit-breaker**: Force-terminates after repeated failures to prevent runaway spend.
 
