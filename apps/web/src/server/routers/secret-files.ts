@@ -64,7 +64,12 @@ export const secretFilesRouter = {
 				context.orgId,
 			);
 			if (!belongsToOrg) {
-				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
+				// Config ownership is inferred via linked repos. Empty configurations can
+				// legitimately have no repo links, so fall back to existence check.
+				const exists = await configurations.configurationExists(input.configurationId);
+				if (!exists) {
+					throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
+				}
 			}
 
 			const row = await secretFiles.upsertSecretFile({

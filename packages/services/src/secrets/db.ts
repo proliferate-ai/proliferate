@@ -218,7 +218,17 @@ export async function getScopedSecretsForSession(
 			updatedAt: secrets.updatedAt,
 		})
 		.from(secrets)
-		.where(and(eq(secrets.organizationId, orgId), scopeCondition, isNull(secrets.configurationId)));
+		.leftJoin(configurationSecrets, eq(configurationSecrets.secretId, secrets.id))
+		.where(
+			and(
+				eq(secrets.organizationId, orgId),
+				scopeCondition,
+				// Scoped session reads should only include org/repo secrets that are not
+				// configuration-linked via either column or junction table.
+				isNull(secrets.configurationId),
+				isNull(configurationSecrets.secretId),
+			),
+		);
 
 	return rows;
 }
@@ -263,7 +273,7 @@ export async function upsertByRepoAndKey(input: UpsertSecretInput): Promise<bool
 	} catch (error) {
 		getServicesLogger()
 			.child({ module: "secrets-db" })
-			.error({ err: error }, "Failed to store secret");
+			.error({ err: error, secretKey: input.key }, "Failed to store secret");
 		return false;
 	}
 }
@@ -277,6 +287,11 @@ export async function bulkCreateSecrets(
 ): Promise<string[]> {
 	if (entries.length === 0) return [];
 	const db = getDb();
+	if (entries.some((entry) => entry.organizationId !== entries[0].organizationId || entry.repoId)) {
+		throw new Error(
+			"bulkCreateSecrets only supports org-wide entries for a single organization",
+		);
+	}
 
 	// Bulk import writes org-wide secrets (repo/configuration are null). Pre-filter
 	// existing keys so repeated imports remain idempotent even with nullable scopes.
