@@ -194,6 +194,9 @@ export class MigrationController {
 				} finally {
 					await finalizeSnapshotPrep();
 				}
+				if (!snapshotId) {
+					throw new Error("Idle snapshot completed without snapshotId");
+				}
 
 				// 3. Terminate (non-pause, non-memory-snapshot providers only)
 				const isMemorySnapshot = snapshotId.startsWith("mem:");
