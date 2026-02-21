@@ -160,6 +160,7 @@ Reference: `apps/gateway/src/middleware/error-handler.ts`
 - **Tool result patching**: `updateToolResult()` retries up to 5x with 1s delay (see `agent-contract.md` §5).
 - **Migration lock**: Distributed Redis lock with 60s TTL prevents concurrent migrations for the same session.
 - **Expiry triggers**: Hub schedules an in-process expiry timer (primary) plus a BullMQ job as a fallback for evicted hubs.
+- **Snapshot secret scrubbing**: All snapshot capture paths (`save_snapshot`, idle snapshot, expiry migration) run `proliferate env scrub` before capture when env-file spec is configured. Paths that continue running the same sandbox re-apply env files after capture; pause/stop paths skip re-apply.
 - **Streaming backpressure**: Token batching (50-100ms) and slow-consumer disconnect based on `ws.bufferedAmount` thresholds.
 - **Idle snapshot failure circuit-breaker**: Force-terminates after repeated failures to prevent runaway spend.
 
@@ -370,7 +371,7 @@ WHERE id = $session_id
 **Active migration (clients connected):**
 1. Acquire distributed lock (60s TTL).
 2. Wait for agent message completion (30s timeout), abort if still running.
-3. Snapshot current sandbox.
+3. Scrub configured env files from sandbox, snapshot current sandbox, then re-apply env files.
 4. Disconnect SSE, reset sandbox state.
 5. Call `ensureRuntimeReady()` — creates new sandbox from snapshot.
 6. Broadcast `status: "running"`.
@@ -378,7 +379,7 @@ WHERE id = $session_id
 **Idle migration (no clients):**
 1. Acquire lock, stop OpenCode.
 2. Guard against false-idle by checking `shouldIdleSnapshot()` (accounts for `activeHttpToolCalls > 0` and proxy connections).
-3. Pause (if E2B) or snapshot + terminate (if Modal).
+3. Scrub configured env files, then pause (if E2B) or snapshot + terminate (if Modal).
 4. Update DB: `status: "paused"` (E2B) or `status: "stopped"` (Modal).
 5. Clean up hub state, call `onEvict` for memory reclamation.
 
