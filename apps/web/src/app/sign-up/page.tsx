@@ -40,7 +40,8 @@ function SignUpContent() {
 	const hasGoogleOAuth = authProviders?.providers.google ?? false;
 
 	const trackSignup = (method: "google" | "email") => {
-		posthog.capture("user_signed_up", { method, ...getUtms() });
+		const utms = getUtms() ?? {};
+		posthog.capture("user_signed_up", { method, ...utms });
 	};
 
 	useEffect(() => {
@@ -67,7 +68,6 @@ function SignUpContent() {
 	const handleGoogleSignIn = async () => {
 		setGoogleLoading(true);
 		setLastAuthMethod("google");
-		trackSignup("google");
 		try {
 			await signIn.social({
 				provider: "google",

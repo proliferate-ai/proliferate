@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "@/lib/auth-client";
-import { captureUtms, getUtms } from "@/lib/utm";
+import { captureUtms, getCookieDomain, getUtms } from "@/lib/utm";
 import { env } from "@proliferate/environment/public";
 import posthog from "posthog-js";
 import { PostHogProvider as PHProvider, usePostHog } from "posthog-js/react";
@@ -20,7 +20,7 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
 			person_profiles: "identified_only",
 			capture_pageview: false, // We capture manually for better control
 			capture_pageleave: true,
-			cookie_domain: ".proliferate.com",
+			cookie_domain: getCookieDomain(),
 			session_recording: {
 				maskAllInputs: false,
 				maskInputOptions: {
