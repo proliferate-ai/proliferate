@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
 	InvalidRunStatusTransitionError,
-	VALID_TRANSITIONS,
+	validTransitions,
 	validateTransition,
 } from "./state-machine";
 
-describe("VALID_TRANSITIONS", () => {
+describe("validTransitions", () => {
 	it("defines transitions for every contract status", () => {
-		expect(Object.keys(VALID_TRANSITIONS).sort()).toEqual(
+		expect(Object.keys(validTransitions).sort()).toEqual(
 			[
 				"canceled",
 				"enriching",
@@ -21,6 +21,10 @@ describe("VALID_TRANSITIONS", () => {
 				"timed_out",
 			].sort(),
 		);
+	});
+
+	it("does not treat prototype keys as valid statuses", () => {
+		expect(() => validateTransition("toString", "failed")).toThrow(InvalidRunStatusTransitionError);
 	});
 });
 

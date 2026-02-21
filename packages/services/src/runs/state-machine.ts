@@ -6,7 +6,7 @@ import type { AutomationRunStatus } from "@proliferate/shared/contracts";
  * `canceled` and `skipped` are preserved for schema compatibility but have
  * no in-pipeline entry points today.
  */
-export const VALID_TRANSITIONS: Record<AutomationRunStatus, readonly AutomationRunStatus[]> = {
+export const validTransitions: Record<AutomationRunStatus, readonly AutomationRunStatus[]> = {
 	queued: ["enriching"],
 	enriching: ["ready", "failed"],
 	ready: ["running", "failed"],
@@ -20,7 +20,7 @@ export const VALID_TRANSITIONS: Record<AutomationRunStatus, readonly AutomationR
 };
 
 function isRunStatus(value: string): value is AutomationRunStatus {
-	return value in VALID_TRANSITIONS;
+	return Object.prototype.hasOwnProperty.call(validTransitions, value);
 }
 
 export class InvalidRunStatusTransitionError extends Error {
@@ -41,7 +41,7 @@ export function validateTransition(fromStatus: string, toStatus: string): void {
 	if (!isRunStatus(toStatus)) {
 		throw new InvalidRunStatusTransitionError(fromStatus, toStatus);
 	}
-	if (!VALID_TRANSITIONS[fromStatus].includes(toStatus)) {
+	if (!validTransitions[fromStatus].includes(toStatus)) {
 		throw new InvalidRunStatusTransitionError(fromStatus, toStatus);
 	}
 }

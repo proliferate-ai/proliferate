@@ -16,7 +16,7 @@ interface AutomationCompleteArgs {
 }
 
 const VALID_OUTCOMES = new Set(["succeeded", "failed", "needs_human"] as const);
-const OUTCOME_TO_TRIGGER_EVENT_STATUS = {
+const outcomeToTriggerEventStatus = {
 	succeeded: "completed",
 	failed: "failed",
 	needs_human: "skipped",
@@ -63,7 +63,7 @@ export const automationCompleteHandler: InterceptedToolHandler = {
 			return { success: false, result: "Run not found" };
 		}
 
-		const eventStatus = OUTCOME_TO_TRIGGER_EVENT_STATUS[outcome];
+		const eventStatus = outcomeToTriggerEventStatus[outcome];
 		await triggers.updateEvent(run.triggerEventId, {
 			status: eventStatus,
 			errorMessage:

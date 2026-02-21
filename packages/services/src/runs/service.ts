@@ -248,8 +248,11 @@ export async function completeEnrichment(
 				lastActivityAt: now,
 				updatedAt: now,
 			})
-			.where(eq(automationRuns.id, input.runId))
+			.where(and(eq(automationRuns.id, input.runId), eq(automationRuns.status, run.status)))
 			.returning();
+		if (!updated) {
+			throw new Error("Run status changed during enrichment completion");
+		}
 
 		// 2. Record enrichment_saved event
 		await tx.insert(automationRunEvents).values({
@@ -517,8 +520,26 @@ export async function completeRun(
 				statusReason: input.outcome,
 				updatedAt: new Date(),
 			})
-			.where(eq(automationRuns.id, input.runId))
+			.where(and(eq(automationRuns.id, input.runId), eq(automationRuns.status, run.status)))
 			.returning();
+		if (!updated) {
+			const latest = await tx.query.automationRuns.findFirst({
+				where: eq(automationRuns.id, input.runId),
+			});
+			if (!latest) return null;
+
+			if (latest.completionId === input.completionId) {
+				if (
+					latest.completionJson &&
+					JSON.stringify(latest.completionJson) !== JSON.stringify(input.completionJson)
+				) {
+					throw new Error("Completion payload mismatch for idempotent retry");
+				}
+				return latest;
+			}
+
+			throw new Error("Run status changed during completion");
+		}
 
 		await tx.insert(automationRunEvents).values({
 			runId: input.runId,

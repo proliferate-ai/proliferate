@@ -69,6 +69,8 @@ const {
 	saveEnrichmentResult,
 	getEnrichmentResult,
 	transitionRunStatus,
+	completeEnrichment,
+	completeRun,
 	resolveRun,
 	RunNotResolvableError,
 	DEFAULT_RUN_DEADLINE_MS,
@@ -237,6 +239,82 @@ describe("transitionRunStatus", () => {
 		);
 		expect(mockUpdateRun).not.toHaveBeenCalled();
 		expect(mockInsertRunEvent).not.toHaveBeenCalled();
+	});
+});
+
+// ============================================
+// completeEnrichment
+// ============================================
+
+describe("completeEnrichment", () => {
+	beforeEach(() => vi.clearAllMocks());
+
+	it("throws when run status changes before enrichment update", async () => {
+		mockTxFindFirst.mockResolvedValue(makeRun({ status: "enriching" }));
+		mockTxUpdateReturning.mockResolvedValue([]);
+
+		await expect(
+			completeEnrichment({
+				runId: "run-1",
+				organizationId: "org-1",
+				enrichmentPayload: { title: "Demo" },
+			}),
+		).rejects.toThrow("Run status changed during enrichment completion");
+
+		expect(mockTxInsertValues).not.toHaveBeenCalled();
+	});
+});
+
+// ============================================
+// completeRun
+// ============================================
+
+describe("completeRun", () => {
+	beforeEach(() => vi.clearAllMocks());
+
+	it("returns latest row for idempotent completion when CAS update misses", async () => {
+		const payload = { outcome: "succeeded", summary: "ok" };
+		const run = makeRun({ status: "running", completionId: null, completionJson: null });
+		const completed = makeRun({
+			status: "succeeded",
+			completionId: "cmp-1",
+			completionJson: payload,
+		});
+
+		mockTxFindFirst.mockResolvedValueOnce(run).mockResolvedValueOnce(completed);
+		mockTxUpdateReturning.mockResolvedValue([]);
+
+		const result = await completeRun({
+			runId: "run-1",
+			completionId: "cmp-1",
+			outcome: "succeeded",
+			completionJson: payload,
+		});
+
+		expect(result).toEqual(completed);
+		expect(mockTxInsertValues).not.toHaveBeenCalled();
+	});
+
+	it("throws when run status changes before completion update", async () => {
+		const payload = { outcome: "failed" };
+		const run = makeRun({ status: "running", completionId: null, completionJson: null });
+		const changed = makeRun({
+			status: "failed",
+			completionId: "cmp-2",
+			completionJson: payload,
+		});
+
+		mockTxFindFirst.mockResolvedValueOnce(run).mockResolvedValueOnce(changed);
+		mockTxUpdateReturning.mockResolvedValue([]);
+
+		await expect(
+			completeRun({
+				runId: "run-1",
+				completionId: "cmp-1",
+				outcome: "failed",
+				completionJson: payload,
+			}),
+		).rejects.toThrow("Run status changed during completion");
 	});
 });
 

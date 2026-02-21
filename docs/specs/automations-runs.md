@@ -423,7 +423,7 @@ Sources:
 
 ## 9. Known Limitations & Tech Debt
 
-- [x] **Transition guardrails are centrally enforced** — status writes validate legal edges via `VALID_TRANSITIONS`/`validateTransition`. Source: `packages/services/src/runs/state-machine.ts`, `packages/services/src/runs/service.ts`.
+- [x] **Transition guardrails are centrally enforced** — status writes validate legal edges via `validTransitions`/`validateTransition`. Source: `packages/services/src/runs/state-machine.ts`, `packages/services/src/runs/service.ts`.
 - [x] **Reserved run statuses are explicitly modeled** — `canceled` and `skipped` remain in shared schema with no active pipeline entry points documented in the transition table. Source: `packages/shared/src/contracts/automations.ts`, `packages/services/src/runs/state-machine.ts`.
 - [ ] **LLM filter/analysis fields are still not run-stage execution inputs** — enrichment does not use `llm_filter_prompt` / `llm_analysis_prompt`. Source: `apps/worker/src/automation/enrich.ts`.
 - [ ] **Configuration selector depends on LLM proxy availability** — `agent_decide` degrades to failure/fallback when proxy config or call fails. Source: `apps/worker/src/automation/configuration-selector.ts`.
