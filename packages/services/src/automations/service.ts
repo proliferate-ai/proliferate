@@ -17,6 +17,7 @@ import type {
 import * as configurationsDb from "../configurations/db";
 import { getServicesLogger } from "../logger";
 import { createRunFromTriggerEvent } from "../runs/service";
+import { validateCronExpression } from "../schedules/service";
 import * as automationsDb from "./db";
 import {
 	toAutomation,
@@ -492,6 +493,15 @@ export async function createAutomationTrigger(
 		const integration = await automationsDb.validateIntegration(input.integrationId, orgId);
 		if (!integration) {
 			throw new Error("Integration not found");
+		}
+	}
+
+	if (input.provider === "scheduled") {
+		if (!input.cronExpression || input.cronExpression.trim().length === 0) {
+			throw new Error("Scheduled triggers require cronExpression");
+		}
+		if (!validateCronExpression(input.cronExpression)) {
+			throw new Error("Invalid cron expression. Expected 5 or 6 fields.");
 		}
 	}
 

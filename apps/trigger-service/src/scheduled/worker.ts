@@ -154,20 +154,25 @@ export function startScheduledWorker() {
  */
 export async function scheduleEnabledScheduledTriggers(): Promise<void> {
 	const queue = createScheduledQueue();
-	const scheduledTriggers = await triggers.listEnabledScheduledTriggers();
+	let scheduledTriggers: Awaited<ReturnType<typeof triggers.listEnabledScheduledTriggers>> = [];
 
-	for (const scheduledTrigger of scheduledTriggers) {
-		try {
-			await addScheduledJob(queue, scheduledTrigger.id, scheduledTrigger.pollingCron);
-			logger.debug(
-				{ triggerId: scheduledTrigger.id, cron: scheduledTrigger.pollingCron },
-				"Scheduled cron trigger",
-			);
-		} catch (err) {
-			logger.error({ err, triggerId: scheduledTrigger.id }, "Failed to schedule cron trigger");
+	try {
+		scheduledTriggers = await triggers.listEnabledScheduledTriggers();
+
+		for (const scheduledTrigger of scheduledTriggers) {
+			try {
+				await addScheduledJob(queue, scheduledTrigger.id, scheduledTrigger.pollingCron);
+				logger.debug(
+					{ triggerId: scheduledTrigger.id, cron: scheduledTrigger.pollingCron },
+					"Scheduled cron trigger",
+				);
+			} catch (err) {
+				logger.error({ err, triggerId: scheduledTrigger.id }, "Failed to schedule cron trigger");
+			}
 		}
+	} finally {
+		await queue.close();
 	}
 
-	await queue.close();
 	logger.info({ count: scheduledTriggers.length }, "Scheduled enabled cron triggers");
 }

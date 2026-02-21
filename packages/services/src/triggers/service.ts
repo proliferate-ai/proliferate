@@ -15,6 +15,7 @@ import {
 import type { Trigger, TriggerEvent, TriggerWithIntegration } from "@proliferate/shared";
 import { getServicesLogger } from "../logger";
 import * as pollGroupsDb from "../poll-groups/db";
+import { validateCronExpression } from "../schedules/service";
 import * as triggersDb from "./db";
 import {
 	toTrigger,
@@ -45,6 +46,18 @@ async function removeScheduledJobByPattern(triggerId: string, cronPattern: strin
 	await getScheduledQueue().removeRepeatable(`scheduled:${triggerId}`, {
 		pattern: cronPattern,
 	});
+}
+
+function validateScheduledTriggerCron(provider: string, cronExpression: string | null | undefined): void {
+	if (provider !== "scheduled") return;
+
+	if (!cronExpression || cronExpression.trim().length === 0) {
+		throw new Error("Scheduled triggers require pollingCron");
+	}
+
+	if (!validateCronExpression(cronExpression)) {
+		throw new Error("Invalid cron expression. Expected 5 or 6 fields.");
+	}
 }
 
 // ============================================
@@ -170,6 +183,8 @@ export async function getTrigger(id: string, orgId: string): Promise<GetTriggerR
 export async function createTrigger(input: CreateTriggerInput): Promise<CreateTriggerResult> {
 	const triggerType = input.triggerType ?? "webhook";
 
+	validateScheduledTriggerCron(input.provider, input.pollingCron);
+
 	// Validate configuration if provided
 	if (input.defaultConfigurationId) {
 		const exists = await triggersDb.configurationExists(
@@ -273,6 +288,10 @@ export async function updateTrigger(
 	// Check if trigger exists
 	const existing = await triggersDb.findById(id, orgId);
 	if (!existing) return null;
+
+	if (existing.provider === "scheduled" && input.pollingCron !== undefined) {
+		validateScheduledTriggerCron(existing.provider, input.pollingCron);
+	}
 
 	const updated = await triggersDb.update(id, {
 		name: input.name,

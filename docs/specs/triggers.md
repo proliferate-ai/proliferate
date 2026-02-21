@@ -178,6 +178,8 @@ _Sections 3 (File Tree) and 4 (Data Models) are intentionally removed. Code and 
 ### 6.9 Scheduled and Manual Trigger Invariants (Status: Implemented)
 - Invariant: Schedule CRUD exists and validates cron format, but schedule CRUD itself does not execute runs.
   Evidence: `apps/web/src/server/routers/schedules.ts`, `packages/services/src/schedules/service.ts`.
+- Invariant: Scheduled trigger create/update paths validate cron expressions before persisting trigger rows.
+  Evidence: `packages/services/src/triggers/service.ts`, `packages/services/src/automations/service.ts`, `apps/web/src/server/routers/triggers.ts`, `apps/web/src/server/routers/automations.ts`.
 - Invariant: Trigger-service starts a scheduled worker and restores repeatable jobs for enabled cron triggers at startup.
   Evidence: `apps/trigger-service/src/index.ts`, `apps/trigger-service/src/scheduled/worker.ts`, `packages/services/src/triggers/service.ts:listEnabledScheduledTriggers`.
 - Invariant: Scheduled trigger CRUD keeps BullMQ repeatable cron jobs in sync on create/update/delete paths.

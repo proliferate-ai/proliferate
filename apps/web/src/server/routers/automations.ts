@@ -328,6 +328,12 @@ export const automationsRouter = {
 					if (err.message === "Integration not found") {
 						throw new ORPCError("NOT_FOUND", { message: err.message });
 					}
+					if (
+						err.message === "Scheduled triggers require cronExpression" ||
+						err.message.includes("Invalid cron expression")
+					) {
+						throw new ORPCError("BAD_REQUEST", { message: err.message });
+					}
 				}
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
 					message: "Failed to create trigger",

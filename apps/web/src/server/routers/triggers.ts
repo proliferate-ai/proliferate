@@ -137,6 +137,12 @@ export const triggersRouter = {
 					if (error.message === "Integration not found") {
 						throw new ORPCError("NOT_FOUND", { message: "Integration not found" });
 					}
+					if (
+						error.message === "Scheduled triggers require pollingCron" ||
+						error.message.includes("Invalid cron expression")
+					) {
+						throw new ORPCError("BAD_REQUEST", { message: error.message });
+					}
 				}
 				throw error;
 			}
@@ -155,11 +161,22 @@ export const triggersRouter = {
 		.output(z.object({ trigger: TriggerSchema }))
 		.handler(async ({ input, context }) => {
 			const { id, ...updateData } = input;
-			const trigger = await triggers.updateTrigger(id, context.orgId, updateData);
-			if (!trigger) {
-				throw new ORPCError("NOT_FOUND", { message: "Trigger not found" });
+			try {
+				const trigger = await triggers.updateTrigger(id, context.orgId, updateData);
+				if (!trigger) {
+					throw new ORPCError("NOT_FOUND", { message: "Trigger not found" });
+				}
+				return { trigger };
+			} catch (error) {
+				if (
+					error instanceof Error &&
+					(error.message === "Scheduled triggers require pollingCron" ||
+						error.message.includes("Invalid cron expression"))
+				) {
+					throw new ORPCError("BAD_REQUEST", { message: error.message });
+				}
+				throw error;
 			}
-			return { trigger };
 		}),
 
 	/**
