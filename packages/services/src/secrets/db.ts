@@ -261,14 +261,14 @@ export async function upsertByRepoAndKey(input: UpsertSecretInput): Promise<bool
 				return;
 			}
 
-			await tx.insert(secrets).values({
-				repoId: input.repoId,
-				organizationId: input.organizationId,
-				key: input.key,
-				encryptedValue: input.encryptedValue,
-				configurationId: null,
+				await tx.insert(secrets).values({
+					repoId: input.repoId,
+					organizationId: input.organizationId,
+					key: input.key,
+					encryptedValue: input.encryptedValue,
+					configurationId: null,
+				});
 			});
-		});
 		return true;
 	} catch (error) {
 		getServicesLogger()

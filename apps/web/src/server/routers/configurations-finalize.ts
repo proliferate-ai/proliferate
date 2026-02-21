@@ -174,12 +174,15 @@ export async function finalizeSetupHandler(
 					encryptedValue,
 				});
 				if (!stored) {
-					throw new Error("Failed to store secret");
+					throw new Error(`Failed to store secret key: ${key}`);
 				}
 			}
 		} catch (err) {
 			log.error({ err, repoId }, "Failed to store setup secrets");
-			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to store secrets" });
+			throw new ORPCError("INTERNAL_SERVER_ERROR", {
+				message: err instanceof Error ? err.message : "Failed to store secrets",
+				cause: err,
+			});
 		}
 	}
 
