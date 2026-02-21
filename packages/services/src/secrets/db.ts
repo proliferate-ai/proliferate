@@ -218,7 +218,7 @@ export async function getScopedSecretsForSession(
 			updatedAt: secrets.updatedAt,
 		})
 		.from(secrets)
-		.where(and(eq(secrets.organizationId, orgId), scopeCondition));
+		.where(and(eq(secrets.organizationId, orgId), scopeCondition, isNull(secrets.configurationId)));
 
 	return rows;
 }
