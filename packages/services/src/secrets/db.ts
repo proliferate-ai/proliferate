@@ -263,7 +263,7 @@ export async function upsertByRepoAndKey(input: UpsertSecretInput): Promise<bool
 	} catch (error) {
 		getServicesLogger()
 			.child({ module: "secrets-db" })
-			.error({ err: error, secretKey: input.key }, "Failed to store secret");
+			.error({ err: error }, "Failed to store secret");
 		return false;
 	}
 }

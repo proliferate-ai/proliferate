@@ -174,7 +174,7 @@ export async function finalizeSetupHandler(
 					encryptedValue,
 				});
 				if (!stored) {
-					throw new Error(`Failed to store secret key: ${key}`);
+					throw new Error("Failed to store secret");
 				}
 			}
 		} catch (err) {
