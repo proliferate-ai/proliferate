@@ -133,8 +133,11 @@ export const reposRouter = {
 			try {
 				const repositories = await repos.searchPublicGitHubRepos(input.q);
 				return { repositories };
-			} catch {
-				throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to search GitHub" });
+			} catch (err) {
+				throw new ORPCError("INTERNAL_SERVER_ERROR", {
+					message: "Failed to search GitHub",
+					cause: err,
+				});
 			}
 		}),
 
