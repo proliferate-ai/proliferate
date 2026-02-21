@@ -10,9 +10,11 @@ import { Label } from "@/components/ui/label";
 import { useAuthProviders } from "@/hooks/use-auth-providers";
 import { signIn, signUp, useSession } from "@/lib/auth-client";
 import { buildAuthLink, sanitizeRedirect } from "@/lib/auth-utils";
+import { getUtms } from "@/lib/utm";
 import { env } from "@proliferate/environment/public";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import posthog from "posthog-js";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -36,6 +38,10 @@ function SignUpContent() {
 	const [email, setEmail] = useState(prefilledEmail);
 
 	const hasGoogleOAuth = authProviders?.providers.google ?? false;
+
+	const trackSignup = (method: "google" | "email") => {
+		posthog.capture("user_signed_up", { method, ...getUtms() });
+	};
 
 	useEffect(() => {
 		if (session && !isPending) {
@@ -61,6 +67,7 @@ function SignUpContent() {
 	const handleGoogleSignIn = async () => {
 		setGoogleLoading(true);
 		setLastAuthMethod("google");
+		trackSignup("google");
 		try {
 			await signIn.social({
 				provider: "google",
@@ -90,6 +97,7 @@ function SignUpContent() {
 				toast.error(result.error.message || "Sign up failed");
 				setFormLoading(false);
 			} else {
+				trackSignup("email");
 				// When email verification is required server-side, better-auth won't
 				// return a session token. Check both the client flag and the actual
 				// response to handle build-time env mismatches.
