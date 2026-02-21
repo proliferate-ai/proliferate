@@ -92,19 +92,19 @@ export async function GET(request: Request) {
 
 	const authResult = await requireAuth();
 	if ("error" in authResult) {
-		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+		return NextResponse.redirect(`${redirectBase}?error=slack_oauth_unauthorized`);
 	}
 
 	const authUserId = authResult.session.user.id;
 	if (authUserId !== stateData.userId) {
 		log.warn({ authUserId, stateUserId: stateData.userId }, "Slack OAuth state user mismatch");
-		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+		return NextResponse.redirect(`${redirectBase}?error=slack_oauth_forbidden`);
 	}
 
 	const isMember = await orgs.isMember(authUserId, stateData.orgId);
 	if (!isMember) {
 		log.warn({ userId: authUserId, orgId: stateData.orgId }, "User is not a member of OAuth org");
-		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+		return NextResponse.redirect(`${redirectBase}?error=slack_oauth_forbidden`);
 	}
 
 	const orgId = stateData.orgId;
