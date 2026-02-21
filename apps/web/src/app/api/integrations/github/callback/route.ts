@@ -1,10 +1,19 @@
 import { requireAuth } from "@/lib/auth-helpers";
 import { listInstallationRepos, verifyInstallation } from "@/lib/github-app";
 import { logger } from "@/lib/logger";
-import { integrations, repos } from "@proliferate/services";
+import { verifySignedOAuthState } from "@/lib/oauth-state";
+import { integrations, orgs, repos } from "@proliferate/services";
 import { type NextRequest, NextResponse } from "next/server";
 
 const log = logger.child({ route: "integrations/github/callback" });
+
+interface GitHubOAuthState {
+	orgId: string;
+	userId: string;
+	nonce: string;
+	timestamp: number;
+	returnUrl?: string;
+}
 
 /**
  * Get the base URL for redirects, respecting proxy headers (ngrok, etc.)
@@ -43,6 +52,24 @@ function sanitizeReturnUrl(returnUrl: string | undefined): string {
 	return isAllowed ? trimmed : "/onboarding";
 }
 
+function isValidGitHubOAuthState(state: unknown): state is GitHubOAuthState {
+	if (!state || typeof state !== "object" || Array.isArray(state)) {
+		return false;
+	}
+
+	const stateData = state as Record<string, unknown>;
+
+	return (
+		typeof stateData.orgId === "string" &&
+		stateData.orgId.length > 0 &&
+		typeof stateData.userId === "string" &&
+		stateData.userId.length > 0 &&
+		typeof stateData.nonce === "string" &&
+		stateData.nonce.length > 0 &&
+		typeof stateData.timestamp === "number"
+	);
+}
+
 /**
  * Handle GitHub App installation callback.
  * GitHub redirects here after the user installs the app on their account/org.
@@ -58,33 +85,6 @@ export async function GET(request: NextRequest) {
 		);
 	}
 
-	// Parse state param for returnUrl and targetOrgId (CLI flows pass targetOrgId)
-	const stateParam = request.nextUrl.searchParams.get("state");
-	let returnUrl = "/onboarding";
-	let targetOrgId: string | undefined;
-
-	if (stateParam) {
-		try {
-			const state = JSON.parse(stateParam);
-			returnUrl = state.returnUrl || "/onboarding";
-			targetOrgId = state.targetOrgId;
-		} catch {
-			// Legacy: state is just the returnUrl string
-			returnUrl = stateParam;
-		}
-	}
-	returnUrl = sanitizeReturnUrl(returnUrl);
-
-	// Use targetOrgId from state if provided (CLI flow), otherwise use browser's active org
-	const orgId = targetOrgId || authResult.session.session.activeOrganizationId;
-	log.info(
-		{ orgId, targetOrgId, activeOrgId: authResult.session.session.activeOrganizationId },
-		"Using orgId",
-	);
-	if (!orgId) {
-		return NextResponse.redirect(new URL("/dashboard?error=no_org", baseUrl));
-	}
-
 	const installationId = request.nextUrl.searchParams.get("installation_id");
 	const setupAction = request.nextUrl.searchParams.get("setup_action");
 
@@ -96,6 +96,49 @@ export async function GET(request: NextRequest) {
 	if (setupAction === "uninstall") {
 		return NextResponse.redirect(new URL("/dashboard?github=uninstalled", baseUrl));
 	}
+
+	const stateParam = request.nextUrl.searchParams.get("state");
+	if (!stateParam) {
+		log.warn("Missing GitHub OAuth state");
+		return NextResponse.json({ error: "Missing OAuth state" }, { status: 400 });
+	}
+
+	const verifiedState = verifySignedOAuthState<Record<string, unknown>>(stateParam);
+	if (!verifiedState.ok) {
+		log.warn({ verificationError: verifiedState.error }, "Invalid GitHub OAuth state signature");
+		return NextResponse.json({ error: "Invalid OAuth state" }, { status: 400 });
+	}
+
+	if (!isValidGitHubOAuthState(verifiedState.payload)) {
+		log.warn("GitHub OAuth state payload is missing required fields");
+		return NextResponse.json({ error: "Invalid OAuth state" }, { status: 400 });
+	}
+
+	const stateData = verifiedState.payload;
+	const authUserId = authResult.session.user.id;
+
+	if (stateData.userId !== authUserId) {
+		log.warn({ authUserId, stateUserId: stateData.userId }, "GitHub OAuth state user mismatch");
+		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+	}
+
+	const stateMaxAgeMs = 30 * 60 * 1000;
+	if (stateData.timestamp < Date.now() - stateMaxAgeMs) {
+		return NextResponse.json({ error: "OAuth state expired" }, { status: 400 });
+	}
+
+	const isMember = await orgs.isMember(authUserId, stateData.orgId);
+	if (!isMember) {
+		log.warn({ userId: authUserId, orgId: stateData.orgId }, "User is not a member of OAuth org");
+		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+	}
+
+	const orgId = stateData.orgId;
+	const returnUrl = sanitizeReturnUrl(stateData.returnUrl);
+	log.info(
+		{ orgId, activeOrgId: authResult.session.session.activeOrganizationId },
+		"Using orgId from verified OAuth state",
+	);
 
 	try {
 		// Verify the installation exists and get details

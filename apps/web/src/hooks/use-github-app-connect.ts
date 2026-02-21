@@ -1,7 +1,6 @@
 "use client";
 
 import { useDisconnectIntegration } from "@/hooks/use-integrations";
-import { env } from "@proliferate/environment/public";
 import { useCallback } from "react";
 
 interface UseGitHubAppConnectOptions {
@@ -20,11 +19,9 @@ interface UseGitHubAppConnectReturn {
 	error: string | null;
 }
 
-const GITHUB_APP_SLUG = env.NEXT_PUBLIC_GITHUB_APP_SLUG;
-
 /**
  * Hook for connecting to GitHub via GitHub App installation flow.
- * Unlike Nango, this simply redirects to GitHub's installation page.
+ * Redirects to a server route that signs OAuth state, then forwards to GitHub.
  */
 export function useGitHubAppConnect(
 	options: UseGitHubAppConnectOptions = {},
@@ -33,19 +30,24 @@ export function useGitHubAppConnect(
 	const disconnectMutation = useDisconnectIntegration();
 
 	const connect = useCallback(() => {
-		// Simply redirect to GitHub's app installation page
-		// GitHub will redirect back to our callback URL after installation
-		let installUrl = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`;
+		let installUrl = "/api/integrations/github/oauth";
 		const resolvedReturnUrl =
 			returnUrl ??
 			(typeof window !== "undefined"
 				? `${window.location.pathname}${window.location.search}`
 				: undefined);
-		// Pass state as JSON with returnUrl and targetOrgId
-		if (resolvedReturnUrl || targetOrgId) {
-			const state = JSON.stringify({ returnUrl: resolvedReturnUrl, targetOrgId });
-			installUrl += `?state=${encodeURIComponent(state)}`;
+
+		const params = new URLSearchParams();
+		if (resolvedReturnUrl) {
+			params.set("returnUrl", resolvedReturnUrl);
 		}
+		if (targetOrgId) {
+			params.set("targetOrgId", targetOrgId);
+		}
+		if (params.size > 0) {
+			installUrl += `?${params.toString()}`;
+		}
+
 		window.location.href = installUrl;
 	}, [returnUrl, targetOrgId]);
 

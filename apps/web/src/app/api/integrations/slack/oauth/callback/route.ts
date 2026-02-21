@@ -1,11 +1,52 @@
+import { requireAuth } from "@/lib/auth-helpers";
 import { encrypt, getEncryptionKey } from "@/lib/crypto";
 import { logger } from "@/lib/logger";
+import { verifySignedOAuthState } from "@/lib/oauth-state";
 import { exchangeCodeForToken } from "@/lib/slack";
 import { env } from "@proliferate/environment/server";
-import { integrations } from "@proliferate/services";
+import { integrations, orgs } from "@proliferate/services";
 import { NextResponse } from "next/server";
 
 const log = logger.child({ handler: "slack-oauth-callback" });
+
+interface SlackOAuthState {
+	orgId: string;
+	userId: string;
+	nonce: string;
+	timestamp: number;
+	returnUrl?: string;
+}
+
+function isValidSlackOAuthState(state: unknown): state is SlackOAuthState {
+	if (!state || typeof state !== "object" || Array.isArray(state)) {
+		return false;
+	}
+
+	const stateData = state as Record<string, unknown>;
+
+	return (
+		typeof stateData.orgId === "string" &&
+		stateData.orgId.length > 0 &&
+		typeof stateData.userId === "string" &&
+		stateData.userId.length > 0 &&
+		typeof stateData.nonce === "string" &&
+		stateData.nonce.length > 0 &&
+		typeof stateData.timestamp === "number"
+	);
+}
+
+function getSafeReturnUrl(returnUrl: unknown): string | undefined {
+	if (typeof returnUrl !== "string") {
+		return undefined;
+	}
+
+	const trimmed = returnUrl.trim();
+	if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+		return undefined;
+	}
+
+	return trimmed;
+}
 
 export async function GET(request: Request) {
 	const { searchParams } = new URL(request.url);
@@ -26,22 +67,22 @@ export async function GET(request: Request) {
 		return NextResponse.redirect(`${settingsUrl}?error=slack_oauth_missing_params`);
 	}
 
-	// Decode and validate state
-	let stateData: {
-		orgId: string;
-		userId: string;
-		nonce: string;
-		timestamp: number;
-		returnUrl?: string;
-	};
-	try {
-		stateData = JSON.parse(Buffer.from(state, "base64url").toString());
-	} catch {
-		return NextResponse.redirect(`${settingsUrl}?error=slack_oauth_invalid_state`);
+	const verifiedState = verifySignedOAuthState<Record<string, unknown>>(state);
+	if (!verifiedState.ok) {
+		log.warn({ verificationError: verifiedState.error }, "Invalid Slack OAuth state signature");
+		return NextResponse.json({ error: "Invalid OAuth state" }, { status: 400 });
 	}
 
+	if (!isValidSlackOAuthState(verifiedState.payload)) {
+		log.warn("Slack OAuth state payload is missing required fields");
+		return NextResponse.json({ error: "Invalid OAuth state" }, { status: 400 });
+	}
+
+	const stateData = verifiedState.payload;
+
 	// Use returnUrl from state if provided, otherwise default to settings
-	const redirectBase = stateData.returnUrl ? `${appUrl}${stateData.returnUrl}` : settingsUrl;
+	const returnUrl = getSafeReturnUrl(stateData.returnUrl);
+	const redirectBase = returnUrl ? `${appUrl}${returnUrl}` : settingsUrl;
 
 	// Check state timestamp (5 minute expiry)
 	const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
@@ -49,7 +90,25 @@ export async function GET(request: Request) {
 		return NextResponse.redirect(`${redirectBase}?error=slack_oauth_expired`);
 	}
 
-	const { orgId, userId } = stateData;
+	const authResult = await requireAuth();
+	if ("error" in authResult) {
+		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+	}
+
+	const authUserId = authResult.session.user.id;
+	if (authUserId !== stateData.userId) {
+		log.warn({ authUserId, stateUserId: stateData.userId }, "Slack OAuth state user mismatch");
+		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+	}
+
+	const isMember = await orgs.isMember(authUserId, stateData.orgId);
+	if (!isMember) {
+		log.warn({ userId: authUserId, orgId: stateData.orgId }, "User is not a member of OAuth org");
+		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+	}
+
+	const orgId = stateData.orgId;
+	const userId = authUserId;
 
 	// Exchange code for token
 	const tokenResponse = await exchangeCodeForToken(code);
