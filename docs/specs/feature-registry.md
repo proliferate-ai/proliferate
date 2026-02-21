@@ -131,7 +131,7 @@
 | Webhook ingestion (Nango) | Implemented | `apps/trigger-service/src/lib/webhook-dispatcher.ts` | `POST /webhooks/nango` |
 | Webhook dispatch + matching | Implemented | `apps/trigger-service/src/lib/trigger-processor.ts` | Matches events to triggers |
 | Polling scheduler | Implemented | `apps/trigger-service/src/polling/worker.ts` | Cursor-based stateful polling |
-| Cron scheduling | Implemented | `apps/trigger-service/src/scheduled/worker.ts` | SCHEDULED worker creates runs from cron-only triggers |
+| Cron scheduling | Partial | `apps/trigger-service/src/scheduled/worker.ts` | Worker directory does not exist; not wired in service entrypoint (`apps/trigger-service/src/index.ts`) |
 | GitHub provider | Implemented | `packages/triggers/src/github.ts` | Webhook triggers |
 | Linear provider | Implemented | `packages/triggers/src/linear.ts` | Webhook + polling |
 | Sentry provider | Implemented | `packages/triggers/src/sentry.ts` | Webhook only — `poll()` explicitly throws |
@@ -199,7 +199,7 @@
 
 ---
 
-## 9. Repos & Configurations (`repos-configurations.md`)
+## 9. Repos & Configurations (`repos-prebuilds.md`)
 
 | Feature | Status | Evidence | Notes |
 |---------|--------|----------|-------|
@@ -216,7 +216,7 @@
 | Env file persistence | Implemented | `packages/db/src/schema/configurations.ts:envFiles` | JSONB on configurations |
 | Configuration connector configuration (deprecated) | Deprecated | `packages/db/src/schema/configurations.ts:connectors` | Legacy JSONB on configurations table; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
 | Org-scoped connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | `org_connectors` table with full CRUD via Integrations routes |
-| Org connector management UI | Implemented | `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools page with presets, secret picker, validation |
+| Org connector management UI | Implemented | `apps/web/src/app/(command-center)/dashboard/integrations/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools redirects to integrations page |
 | Org connector validation endpoint | Implemented | `apps/web/src/server/routers/integrations.ts:validateConnector` | `tools/list` preflight with diagnostics |
 | Base snapshot status tracking | Implemented | `packages/db/src/schema/configurations.ts:sandboxBaseSnapshots` | Building/ready/failed |
 | Configuration snapshot status tracking | Implemented | `packages/services/src/configurations/db.ts` | Building/default/ready/failed on configurations table |
@@ -229,8 +229,8 @@
 |---------|--------|----------|-------|
 | Secret CRUD | Implemented | `apps/web/src/server/routers/secrets.ts` | Create/delete/list |
 | Secret check (exists?) | Implemented | `apps/web/src/server/routers/secrets.ts:check` | Check without revealing value |
-| Secret bundles CRUD | Implemented | `apps/web/src/server/routers/secrets.ts` | List/create/update/delete bundles |
-| Bundle metadata update | Implemented | `apps/web/src/server/routers/secrets.ts:updateBundleMeta` | Rename, change target path |
+| Secret bundles CRUD | Deprecated | `apps/web/src/server/routers/secrets.ts` | Bundle routes removed; secrets are now flat per-org |
+| Bundle metadata update | Deprecated | `apps/web/src/server/routers/secrets.ts` | Bundle routes removed |
 | Bulk import | Implemented | `apps/web/src/server/routers/secrets.ts:bulkImport` | `.env` paste flow |
 | Secret encryption | Implemented | `packages/services/src/secrets/` | Encrypted at rest |
 | Per-secret persistence toggle | Implemented | Recent PR `c4d0abb` | Toggle whether secret persists across sessions |
@@ -243,7 +243,7 @@
 | Feature | Status | Evidence | Notes |
 |---------|--------|----------|-------|
 | Integration list/update | Implemented | `apps/web/src/server/routers/integrations.ts` | Generic integration routes |
-| GitHub OAuth (GitHub App) | Implemented | `apps/web/src/server/routers/integrations.ts:githubStatus/githubSession` | Via Nango |
+| GitHub OAuth (GitHub App) | Implemented | `apps/web/src/app/api/integrations/github/callback/route.ts` | Direct GitHub App installation flow |
 | Sentry OAuth | Implemented | `apps/web/src/server/routers/integrations.ts:sentryStatus/sentrySession` | Via Nango |
 | Linear OAuth | Implemented | `apps/web/src/server/routers/integrations.ts:linearStatus/linearSession` | Via Nango |
 | Slack OAuth | Implemented | `apps/web/src/app/api/integrations/slack/oauth/callback/route.ts` | Workspace install stored in `slack_installations` (not Nango-managed) |
@@ -261,7 +261,7 @@
 | Linear metadata | Implemented | `apps/web/src/server/routers/integrations.ts:linearMetadata` | Linear team/project metadata |
 | GitHub auth (gateway) | Implemented | `apps/gateway/src/lib/github-auth.ts` | Gateway-side GitHub token resolution |
 | Org-scoped MCP connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | Org-level connector CRUD with atomic secret provisioning |
-| Org-scoped connector management UI | Implemented | `apps/web/src/app/settings/tools/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools page with preset quick-setup, advanced form, and connection validation |
+| Org-scoped connector management UI | Implemented | `apps/web/src/app/(command-center)/dashboard/integrations/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools redirects to integrations; connector management on integrations page |
 
 ---
 
