@@ -15,7 +15,7 @@ Yeah, the centered logo + badges + one-liner at the top is way more professional
     <a href="https://docs.proliferate.com" target="_blank">
         <img src="https://img.shields.io/badge/docs-view-blue" alt="Documentation" />
     </a>
-    <a href="proliferate.ai?utm_source=github&utm_medium=social&utm_campaign=readme" target="_blank">
+    <a href="https://proliferate.com?utm_source=github&utm_medium=social&utm_campaign=readme" target="_blank">
         <img src="https://img.shields.io/website?url=https://proliferate.com&up_message=visit&up_color=blue" alt="Website" />
     </a>
     <a href="https://github.com/proliferate-ai/proliferate/blob/main/LICENSE" target="_blank">
