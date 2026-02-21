@@ -25,6 +25,12 @@ export type SecretFileMeta = Pick<
 	| "updatedAt"
 >;
 
+/** Secret file payload used at sandbox boot (includes encrypted content). */
+export type SecretFileBootRow = Pick<
+	SecretFileRow,
+	"id" | "organizationId" | "configurationId" | "filePath" | "encryptedContent" | "updatedAt"
+>;
+
 // ============================================
 // Queries
 // ============================================
@@ -55,6 +61,30 @@ export async function listByConfiguration(
 	});
 
 	return results;
+}
+
+/**
+ * List encrypted secret file rows for boot-time decrypt/injection.
+ */
+export async function listEncryptedByConfiguration(
+	orgId: string,
+	configurationId: string,
+): Promise<SecretFileBootRow[]> {
+	const db = getDb();
+	return db.query.secretFiles.findMany({
+		where: and(
+			eq(secretFiles.organizationId, orgId),
+			eq(secretFiles.configurationId, configurationId),
+		),
+		columns: {
+			id: true,
+			organizationId: true,
+			configurationId: true,
+			filePath: true,
+			encryptedContent: true,
+			updatedAt: true,
+		},
+	});
 }
 
 /**

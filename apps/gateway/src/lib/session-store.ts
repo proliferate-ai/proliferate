@@ -58,6 +58,8 @@ export interface SessionContext {
 	systemPrompt: string;
 	agentConfig: AgentConfig & { tools?: string[] };
 	envVars: Record<string, string>;
+	/** Decrypted file writes to apply at sandbox boot. */
+	secretFileWrites: Array<{ filePath: string; content: string }>;
 	/** SSH public key for CLI sessions (for rsync access) */
 	sshPublicKey?: string;
 	/** True if the snapshot includes installed dependencies. Gates service command auto-start. */
@@ -164,12 +166,13 @@ export async function loadSessionContext(
 					? parseModelId(rawModelId)
 					: defaultAgentConfig.modelId;
 
-		const envVars = await loadEnvironmentVariables(
+		const envResult = await loadEnvironmentVariables(
 			env,
 			session.id,
 			session.organization_id,
 			[],
 			[],
+			null,
 		);
 
 		log.info("Scratch session context ready");
@@ -187,7 +190,8 @@ export async function loadSessionContext(
 					reasoningEffort: session.agent_config.reasoningEffort as AgentConfig["reasoningEffort"],
 				}),
 			},
-			envVars,
+			envVars: envResult.envVars,
+			secretFileWrites: envResult.fileWrites,
 			snapshotHasDeps: false,
 			initialPrompt: session.initial_prompt,
 		};
@@ -306,24 +310,27 @@ export async function loadSessionContext(
 	const repoIds = typedConfigurationRepos.map((pr) => pr.repo.id);
 	log.info({ repoIds }, "Loading environment variables...");
 	const envVarsStartMs = Date.now();
-	const envVars = await loadEnvironmentVariables(
+	const envResult = await loadEnvironmentVariables(
 		env,
 		session.id,
 		session.organization_id,
 		repoIds,
 		repoSpecs,
+		session.configuration_id,
 	);
 	log.debug(
 		{
 			durationMs: Date.now() - envVarsStartMs,
-			keyCount: Object.keys(envVars).length,
+			keyCount: Object.keys(envResult.envVars).length,
+			fileWriteCount: envResult.fileWrites.length,
 		},
 		"store.load_context.env_vars",
 	);
 	log.info(
 		{
-			count: Object.keys(envVars).length,
-			keys: Object.keys(envVars).filter((k) => k !== "ANTHROPIC_API_KEY"),
+			count: Object.keys(envResult.envVars).length,
+			keys: Object.keys(envResult.envVars).filter((k) => k !== "ANTHROPIC_API_KEY"),
+			fileWriteCount: envResult.fileWrites.length,
 		},
 		"Environment variables loaded",
 	);
@@ -391,7 +398,8 @@ export async function loadSessionContext(
 		primaryRepo,
 		systemPrompt,
 		agentConfig,
-		envVars,
+		envVars: envResult.envVars,
+		secretFileWrites: envResult.fileWrites,
 		sshPublicKey,
 		snapshotHasDeps,
 		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
@@ -405,17 +413,25 @@ async function loadEnvironmentVariables(
 	orgId: string,
 	repoIds: string[],
 	repoSpecs: RepoSpec[],
-): Promise<Record<string, string>> {
+	configurationId: string | null,
+): Promise<{
+	envVars: Record<string, string>;
+	fileWrites: Array<{ filePath: string; content: string }>;
+}> {
 	const result = await sessions.buildSandboxEnvVars({
 		sessionId,
 		orgId,
 		repoIds,
+		configurationId,
 		repoSpecs,
 		requireProxy: process.env.LLM_PROXY_REQUIRED === "true",
 		directApiKey: env.anthropicApiKey,
 	});
 
-	return result.envVars;
+	return {
+		envVars: result.envVars,
+		fileWrites: result.fileWrites,
+	};
 }
 
 async function resolveGitHubToken(

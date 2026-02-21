@@ -375,6 +375,7 @@ export class SessionRuntime {
 					sshPublicKey: this.context.sshPublicKey,
 					snapshotHasDeps: this.context.snapshotHasDeps,
 					serviceCommands: this.context.serviceCommands,
+					secretFileWrites: this.context.secretFileWrites,
 				});
 			} catch (ensureErr) {
 				// On memory snapshot restore failure, clear snapshotId so next reconnect

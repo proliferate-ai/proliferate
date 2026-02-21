@@ -13,6 +13,7 @@ import { env } from "@proliferate/environment/server";
 import type { Logger } from "@proliferate/logger";
 import { type App, type Image, ModalClient, type Sandbox } from "modal";
 import { getDefaultAgentConfig, toOpencodeModelId } from "../agents";
+import { isValidTargetPath } from "../env-parser";
 import { getLLMProxyBaseURL } from "../llm-proxy";
 import { getSharedLogger } from "../logger";
 import {
@@ -1348,7 +1349,31 @@ export class ModalLibmodalProvider implements SandboxProvider {
 	): Promise<void> {
 		const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
 
-		// 1. Apply env files (blocking — services may depend on these)
+		// 1. Apply decrypted secret file writes before env/spec + service start.
+		if (opts.secretFileWrites?.length) {
+			for (const fileWrite of opts.secretFileWrites) {
+				const normalizedPath = fileWrite.filePath.trim().replace(/^\.\/+/, "");
+				if (!isValidTargetPath(normalizedPath)) {
+					log.warn({ filePath: fileWrite.filePath }, "Skipping invalid secret file path");
+					continue;
+				}
+
+				const absolutePath = `${workspaceDir}/${normalizedPath}`;
+				const lastSlash = absolutePath.lastIndexOf("/");
+				const directory = lastSlash >= 0 ? absolutePath.slice(0, lastSlash) : workspaceDir;
+
+				try {
+					await sandbox.exec(["mkdir", "-p", directory]);
+					const file = await sandbox.open(absolutePath, "w");
+					await file.write(encoder.encode(fileWrite.content));
+					await file.close();
+				} catch (err) {
+					log.error({ err, filePath: normalizedPath }, "Failed to apply secret file write");
+				}
+			}
+		}
+
+		// 2. Apply env files (blocking — services may depend on these)
 		if (opts.envFiles) {
 			try {
 				const proc = await sandbox.exec([
@@ -1370,7 +1395,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			}
 		}
 
-		// 2. Start services via tracked CLI (fire-and-forget per service)
+		// 3. Start services via tracked CLI (fire-and-forget per service)
 		if (!opts.snapshotHasDeps || !opts.serviceCommands?.length) return;
 
 		for (const cmd of opts.serviceCommands) {

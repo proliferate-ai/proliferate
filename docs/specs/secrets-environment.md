@@ -9,7 +9,7 @@
 - Runtime environment submission to active sandboxes, including per-secret persistence decisions (`apps/web/src/server/routers/sessions-submit-env.ts`).
 - Session boot env var assembly from encrypted secrets (`packages/services/src/sessions/sandbox-env.ts`).
 - Configuration env file spec persistence via intercepted `save_env_files` (`apps/gateway/src/hub/capabilities/tools/save-env-files.ts`, `packages/services/src/configurations/db.ts:updateConfigurationEnvFiles`).
-- Secret file CRUD (encrypted content at rest, metadata-only reads) for configuration workflows (`apps/web/src/server/routers/secret-files.ts`, `packages/services/src/secret-files/`).
+- Secret file CRUD (encrypted content at rest, metadata-only API reads) plus boot-time decrypt/write into sandboxes for configuration workflows (`apps/web/src/server/routers/secret-files.ts`, `packages/services/src/secret-files/`, `packages/services/src/sessions/sandbox-env.ts`).
 - Org-level secret resolution for connector auth (`packages/services/src/secrets/service.ts:resolveSecretValue`).
 
 ### Out of Scope
@@ -25,9 +25,7 @@ The subsystem has three distinct planes that agents often conflate:
 
 - **Vault plane (key/value):** `secrets` holds encrypted key/value records, with optional repo scope and optional configuration linkage. Runtime env injection reads from this plane (`packages/services/src/secrets/db.ts`, `packages/services/src/sessions/sandbox-env.ts`).
 - **File-spec plane (declarative):** `configurations.envFiles` stores a declarative spec of which env files should be generated at sandbox boot (`apps/gateway/src/hub/capabilities/tools/save-env-files.ts`, `apps/gateway/src/lib/session-creator.ts`).
-- **Secret-file plane (content blobs):** `secret_files` stores encrypted file contents and metadata, but read APIs currently expose metadata only (`packages/services/src/secret-files/db.ts`, `apps/web/src/server/routers/secret-files.ts`).
-
-These planes are intentionally separate in code. The current system does not treat `secret_files` as the source of runtime env var injection.
+- **Secret-file plane (content blobs):** `secret_files` stores encrypted file contents and metadata. API reads remain metadata-only, while boot-time services paths decrypt content and materialize files in sandbox workspaces (`packages/services/src/secret-files/db.ts`, `packages/services/src/sessions/sandbox-env.ts`, `apps/web/src/server/routers/secret-files.ts`).
 
 The encryption model is deployment-wide AES-256-GCM (`iv:authTag:ciphertext`) using `USER_SECRETS_ENCRYPTION_KEY` (`packages/services/src/db/crypto.ts`, `packages/shared/src/lib/crypto.ts`).
 
@@ -41,13 +39,14 @@ Both secret values and secret-file contents are encrypted with AES-256-GCM befor
 
 ### Secret Scope Axes
 Secret reads are scope-sensitive:
-- Session boot path: org-wide + repo-scoped secrets (`getSecretsForSession`).
+- Session boot path: org-wide + repo-scoped + configuration-linked secrets, with deterministic precedence (`resolveSessionBootSecretMaterial`).
+- Session boot file path: configuration-linked `secret_files` rows are decrypted and returned as file writes.
 - Configuration checks: configuration-linked keys + org-wide fallback (`findExistingKeysForConfiguration`).
 - Connector auth: org-wide keys only (`getSecretByOrgAndKey` requires `repo_id IS NULL`).
 - Reference: `packages/services/src/secrets/db.ts`.
 
 ### Configuration Linking Is a Junction Concern
-`createSecret` can receive `configurationId`, but linkage is written through `configuration_secrets` junction rows (`linkSecretToConfiguration`), not as a required direct filter in runtime session injection.
+`createSecret` can receive `configurationId`, but linkage is written through `configuration_secrets` junction rows (`linkSecretToConfiguration`), which are then consumed during runtime session boot precedence resolution.
 - Reference: `packages/services/src/secrets/service.ts:createSecret`, `packages/services/src/secrets/db.ts:linkSecretToConfiguration`.
 
 ### Runtime Submission Is Split-Path
@@ -64,8 +63,8 @@ Secret reads are scope-sensitive:
 - `request_env_variables` is not gateway-intercepted; it is a sandbox tool surfaced in UI via tool events (`packages/shared/src/opencode-tools/index.ts`, `apps/web/src/components/coding-session/runtime/message-handlers.ts`).
 - `save_env_files` is gateway-intercepted and setup-session-only (`apps/gateway/src/hub/capabilities/tools/save-env-files.ts`).
 - `checkSecrets` behavior changes when `configuration_id` is present; repo filtering is bypassed in that branch (`packages/services/src/secrets/service.ts:checkSecrets`).
-- Session boot uses `getSecretsForSession`, not `getSecretsForConfiguration` (`apps/gateway/src/lib/session-creator.ts`, `packages/services/src/sessions/sandbox-env.ts`).
-- `secret_files` read paths currently return metadata only; there is no service path that decrypts and returns file content (`packages/services/src/secret-files/db.ts`).
+- Session boot secret resolution is centralized in `resolveSessionBootSecretMaterial()` with precedence `configuration > repo > org` (`packages/services/src/sessions/sandbox-env.ts`).
+- Secret-file API reads still return metadata only; decrypted file content is only surfaced through the internal boot path (`packages/services/src/secret-files/db.ts`, `packages/services/src/sessions/sandbox-env.ts`).
 
 ---
 
@@ -81,7 +80,6 @@ Secret reads are scope-sensitive:
 - Do not return `encrypted_value` or `encrypted_content` through API responses.
 - Do not log plaintext secret values; logs should only include safe identifiers (for example `secretKey`).
 - Do not assume `save_env_files` persists values; it persists only file-generation spec metadata.
-- Do not assume configuration-linked secrets are automatically consumed by session boot.
 
 ### Error Handling
 - `DuplicateSecretError` and `EncryptionError` are translated by the secrets router to `409` and `500` respectively (`apps/web/src/server/routers/secrets.ts`).
@@ -138,7 +136,9 @@ Secret reads are scope-sensitive:
 **What it does:** Builds sandbox env vars during session creation and runtime boot.
 
 **Invariants:**
-- Runtime env assembly reads encrypted secrets via `getSecretsForSession(orgId, repoIds)`.
+- Runtime env assembly resolves all boot-time secret sources through `resolveSessionBootSecretMaterial({ orgId, repoIds, configurationId })`.
+- Precedence is deterministic: configuration-scoped > repo-scoped > org-scoped.
+- Boot-time resolver returns both merged env vars and decrypted secret file writes.
 - Decrypt failures must not abort the full env assembly; failing keys are skipped and logged.
 - Generated env vars merge with non-secret runtime keys (proxy keys, git token fallbacks).
 
@@ -172,7 +172,7 @@ Secret reads are scope-sensitive:
 - Multi-repo finalization must require explicit repo disambiguation when secret payload is present.
 
 **Rules the system must follow:**
-- Finalization should fail hard if secret persistence fails (current behavior has a gap; see §9).
+- Finalization must fail hard if secret persistence fails.
 
 **Files:** `apps/web/src/server/routers/configurations-finalize.ts`, `packages/services/src/secrets/db.ts:upsertByRepoAndKey`.
 
@@ -191,7 +191,7 @@ Secret reads are scope-sensitive:
 
 **Files:** `apps/gateway/src/hub/capabilities/tools/save-env-files.ts`, `apps/gateway/src/api/proliferate/http/tools.ts`, `packages/services/src/configurations/db.ts`, `apps/gateway/src/lib/session-creator.ts`.
 
-### 6.7 Secret Files (`Implemented`, Partial Runtime Integration)
+### 6.7 Secret Files (`Implemented`)
 **What it does:** Stores encrypted file-content blobs keyed by configuration and path.
 
 **Invariants:**
@@ -199,9 +199,11 @@ Secret reads are scope-sensitive:
 - List endpoint returns metadata only (ID/path/description/timestamps), never content.
 - Delete is org-scoped by `secret_files.id` + `organization_id`.
 - Upsert/delete require org `owner` or `admin`.
+- Upsert validates that `configurationId` belongs to the authenticated org before write.
+- Session boot decrypts configuration-linked `secret_files` and injects them as file writes.
 
 **Rules the system must follow:**
-- Secret file content should be treated as write-only unless an explicit decrypt/read path is introduced.
+- Secret file content may only be decrypted in internal runtime boot paths; API responses remain metadata-only.
 
 **Files:** `apps/web/src/server/routers/secret-files.ts`, `packages/services/src/secret-files/service.ts`, `packages/services/src/secret-files/db.ts`.
 
@@ -223,10 +225,10 @@ Secret reads are scope-sensitive:
 
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
-| Sessions / Gateway | This → Sessions | `buildSandboxEnvVars()` | Decrypts and injects runtime env vars at session boot |
+| Sessions / Gateway | This → Sessions | `buildSandboxEnvVars()` | Resolves boot secret material (env vars + file writes) with precedence and decrypts values |
 | Sessions / Gateway | This → Sessions | `submitEnvHandler()` | Writes runtime env values and optional persistence results |
 | Gateway Tool Callbacks | This ← Gateway | `save_env_files` intercepted tool | Persists declarative env file spec to `configurations.envFiles` |
-| Sandbox Providers | This → Providers | `provider.createSandbox({ envVars, envFiles })` | Providers receive assembled env vars + env file spec |
+| Sandbox Providers | This → Providers | `provider.createSandbox({ envVars, envFiles, secretFileWrites })` | Providers receive assembled env vars, declarative env specs, and decrypted file writes |
 | Sandbox Providers | This → Providers | `provider.writeEnvFile(sandboxId, envVarsMap)` | Runtime env submission path |
 | Actions / Integrations | Other → This | `resolveSecretValue(orgId, key)` | Connector auth resolves org-level secret by key |
 | Configurations | This ↔ Configurations | `updateConfigurationEnvFiles`, `getConfigurationEnvFiles` | Env file spec persistence and retrieval |
@@ -258,13 +260,10 @@ Secret reads are scope-sensitive:
 ## 9. Known Limitations & Tech Debt
 
 - [ ] **Stale bundle-era schema file remains in tree** — `packages/db/src/schema/secrets.ts` still models `secret_bundles`, while canonical exports point to `schema.ts`/`relations.ts`. Impact: easy agent confusion and wrong imports.
-- [ ] **Configuration-linked secrets are not consumed in session boot path** — `getSecretsForConfiguration()` exists but `buildSandboxEnvVars()` currently reads `getSecretsForSession()` only. Impact: configuration-linked secret expectations can diverge from runtime injection behavior.
-- [ ] **Secret file content is currently write-only in services layer** — no decrypt/read path exists beyond encrypted persistence and metadata listing. Impact: file-based secret UX is only partially wired to backend runtime flows.
-- [ ] **Conflict target mismatch risk** — DB schema unique key is `(organization_id, repo_id, key, configuration_id)` (`packages/db/src/schema/schema.ts`), but `upsertByRepoAndKey` and `bulkCreateSecrets` target only `(organizationId, repoId, key)` (`packages/services/src/secrets/db.ts`). Impact: potential upsert/insert conflict behavior mismatches.
+- [ ] **Conflict target mismatch remains in bulk insert path** — DB schema unique key is `(organization_id, repo_id, key, configuration_id)` (`packages/db/src/schema/schema.ts`), but `bulkCreateSecrets` still targets `(organizationId, repoId, key)` (`packages/services/src/secrets/db.ts`). Impact: potential `ON CONFLICT` target mismatch for bulk imports.
 - [ ] **Potential duplicate-key ambiguity with nullable scope columns** *(inference from PostgreSQL NULL uniqueness semantics)* — uniqueness constraints that include nullable scope columns may permit duplicates where scope columns are null, and runtime query order does not define deterministic winner for duplicate keys. Impact: nondeterministic secret value selection in `buildSandboxEnvVars()` / `resolveSecretValue()`.
 - [ ] **`createSecret` + configuration link is non-transactional** — secret insert and junction insert are separate operations. Impact: linkage can fail after secret row is created.
 - [ ] **`submitEnv` can return failure after partial persistence** — secret persistence happens before sandbox write, and write failure aborts request. Impact: DB and runtime state may temporarily diverge.
-- [ ] **Finalize setup ignores boolean upsert failures** — `upsertSecretByRepoAndKey()` returns `false` on DB error, but finalize flow does not enforce this as fatal. Impact: setup can report success while secret upserts silently fail.
+- [ ] **Snapshot scrub/re-apply does not yet cover `secretFileWrites`** — snapshot scrub currently targets `configurations.envFiles` spec only. Impact: file-based secrets materialized from `secret_files` may persist in snapshots until scrub parity is added.
 - [ ] **No first-class secret value update endpoint** — users rotate by add/delete workflows instead of direct update.
 - [ ] **No dedicated audit trail for secret mutations** — `created_by` exists but no append-only audit table records secret read/write/delete intent.
-- [ ] **Secret-file ownership validation is incomplete** — `secretFiles.upsert` does not verify that `configurationId` belongs to `organizationId`. Impact: cross-org referential mismatch is possible if IDs are supplied directly.

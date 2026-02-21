@@ -6,7 +6,7 @@
  */
 
 import { ORPCError } from "@orpc/server";
-import { orgs, secretFiles } from "@proliferate/services";
+import { configurations, orgs, secretFiles } from "@proliferate/services";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 
@@ -58,6 +58,13 @@ export const secretFilesRouter = {
 				throw new ORPCError("FORBIDDEN", {
 					message: "Only admins and owners can manage secret files",
 				});
+			}
+			const belongsToOrg = await configurations.configurationBelongsToOrg(
+				input.configurationId,
+				context.orgId,
+			);
+			if (!belongsToOrg) {
+				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 			}
 
 			const row = await secretFiles.upsertSecretFile({

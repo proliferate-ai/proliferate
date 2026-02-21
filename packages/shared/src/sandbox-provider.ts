@@ -91,6 +91,8 @@ export interface CreateSandboxOpts {
 	serviceCommands?: ConfigurationServiceCommand[];
 	/** Env file generation spec from configuration config. Applied on boot before service autostart. */
 	envFiles?: unknown;
+	/** Decrypted secret file writes to materialize inside /home/user/workspace at boot. */
+	secretFileWrites?: Array<{ filePath: string; content: string }>;
 }
 
 export interface CreateSandboxResult {
