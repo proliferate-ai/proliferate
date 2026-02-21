@@ -90,7 +90,7 @@ Secret reads are scope-sensitive:
 - Encryption key validation is lazy per operation (`getEncryptionKey()`), not preflight startup validation.
 - `buildSandboxEnvVars` tolerates per-secret decryption failures and continues with remaining keys.
 - `submitEnvHandler` may persist some secrets before failing the overall request if sandbox write fails.
-- Bulk import uses `ON CONFLICT DO NOTHING` and reports `created` vs `skipped`.
+- Bulk import pre-filters existing org-scoped keys (`repo_id IS NULL`, `configuration_id IS NULL`) before insert, then returns `created` vs `skipped`.
 - Tool callback idempotency for intercepted tools is provided in gateway memory by `tool_call_id` caching.
 
 ### Testing Conventions
@@ -123,7 +123,7 @@ Secret reads are scope-sensitive:
 **Invariants:**
 - Parser accepts `KEY=VALUE`, quoted values, and `export` prefix.
 - Invalid/blank/comment-only lines are ignored rather than failing the import.
-- Bulk insert must be idempotent for existing keys via `ON CONFLICT DO NOTHING`.
+- Bulk insert must be idempotent for existing org-scoped keys (`repo_id IS NULL`, `configuration_id IS NULL`) via pre-filter + insert.
 - API response must expose deterministic `created` count and explicit `skipped` keys.
 
 **Rules the system must follow:**
@@ -260,7 +260,6 @@ Secret reads are scope-sensitive:
 ## 9. Known Limitations & Tech Debt
 
 - [ ] **Stale bundle-era schema file remains in tree** — `packages/db/src/schema/secrets.ts` still models `secret_bundles`, while canonical exports point to `schema.ts`/`relations.ts`. Impact: easy agent confusion and wrong imports.
-- [ ] **Conflict target mismatch remains in bulk insert path** — DB schema unique key is `(organization_id, repo_id, key, configuration_id)` (`packages/db/src/schema/schema.ts`), but `bulkCreateSecrets` still targets `(organizationId, repoId, key)` (`packages/services/src/secrets/db.ts`). Impact: potential `ON CONFLICT` target mismatch for bulk imports.
 - [ ] **Potential duplicate-key ambiguity with nullable scope columns** *(inference from PostgreSQL NULL uniqueness semantics)* — uniqueness constraints that include nullable scope columns may permit duplicates where scope columns are null, and runtime query order does not define deterministic winner for duplicate keys. Impact: nondeterministic secret value selection in `buildSandboxEnvVars()` / `resolveSecretValue()`.
 - [ ] **`createSecret` + configuration link is non-transactional** — secret insert and junction insert are separate operations. Impact: linkage can fail after secret row is created.
 - [ ] **`submitEnv` can return failure after partial persistence** — secret persistence happens before sandbox write, and write failure aborts request. Impact: DB and runtime state may temporarily diverge.

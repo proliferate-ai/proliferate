@@ -277,21 +277,50 @@ export async function bulkCreateSecrets(
 ): Promise<string[]> {
 	if (entries.length === 0) return [];
 	const db = getDb();
+
+	// Bulk import writes org-wide secrets (repo/configuration are null). Pre-filter
+	// existing keys so repeated imports remain idempotent even with nullable scopes.
+	const organizationId = entries[0].organizationId;
+	const keys = [...new Set(entries.map((entry) => entry.key))];
+	const existingRows = await db
+		.select({ key: secrets.key })
+		.from(secrets)
+		.where(
+			and(
+				eq(secrets.organizationId, organizationId),
+				isNull(secrets.repoId),
+				isNull(secrets.configurationId),
+				inArray(secrets.key, keys),
+			),
+		);
+	const existingKeys = new Set(existingRows.map((row) => row.key));
+	const rowsToInsert = entries.filter((entry) => !existingKeys.has(entry.key));
+
+	if (rowsToInsert.length === 0) {
+		return [];
+	}
+
 	const rows = await db
 		.insert(secrets)
 		.values(
-			entries.map((e) => ({
+			rowsToInsert.map((e) => ({
 				organizationId: e.organizationId,
 				key: e.key,
 				encryptedValue: e.encryptedValue,
 				description: e.description ?? null,
 				repoId: e.repoId ?? null,
+				configurationId: null,
 				secretType: e.secretType ?? "env",
 				createdBy: e.createdBy,
 			})),
 		)
 		.onConflictDoNothing({
-			target: [secrets.organizationId, secrets.repoId, secrets.key],
+			target: [
+				secrets.organizationId,
+				secrets.repoId,
+				secrets.key,
+				secrets.configurationId,
+			],
 		})
 		.returning({ key: secrets.key });
 	return rows.map((r) => r.key);
