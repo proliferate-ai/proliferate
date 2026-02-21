@@ -20,7 +20,7 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
 			person_profiles: "identified_only",
 			capture_pageview: false, // We capture manually for better control
 			capture_pageleave: true,
-			cookie_domain: ".proliferate.ai",
+			cookie_domain: ".proliferate.com",
 			session_recording: {
 				maskAllInputs: false,
 				maskInputOptions: {

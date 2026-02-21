@@ -9,9 +9,9 @@ export type UtmData = Partial<Record<UtmKey, string>>;
 function getCookieDomain(): string | undefined {
 	if (typeof window === "undefined") return undefined;
 	const host = window.location.hostname;
-	// Only set cross-subdomain cookie on proliferate.ai domains
-	if (host === "proliferate.ai" || host.endsWith(".proliferate.ai")) {
-		return ".proliferate.ai";
+	// Only set cross-subdomain cookie on proliferate.com domains
+	if (host === "proliferate.com" || host.endsWith(".proliferate.com")) {
+		return ".proliferate.com";
 	}
 	return undefined;
 }
