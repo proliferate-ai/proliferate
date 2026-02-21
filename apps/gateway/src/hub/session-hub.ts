@@ -569,6 +569,10 @@ export class SessionHub {
 	 * grace period, clients/proxies, agent idle, SSE state, and sandbox existence.
 	 */
 	shouldIdleSnapshot(): boolean {
+		const clientType = this.runtime.getContext().session.client_type ?? null;
+		// Automation sessions are worker-driven and must not be idled by WS heuristics.
+		if (clientType === "automation") return false;
+
 		if (this.activeHttpToolCalls > 0) return false;
 		if (this.eventProcessor.hasRunningTools()) return false;
 		if (this.clients.size > 0) return false;

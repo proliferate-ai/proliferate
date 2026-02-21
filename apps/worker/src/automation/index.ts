@@ -309,7 +309,8 @@ async function handleExecute(
 
 async function finalizeRuns(syncClient: SyncClient, logger: Logger): Promise<void> {
 	const deps: FinalizerDeps = {
-		getSessionStatus: (sessionId) => syncClient.getSessionStatus(sessionId),
+		getSessionStatus: (sessionId, organizationId) =>
+			syncClient.getSessionStatus(sessionId, organizationId),
 		markRunFailed: (opts) => runs.markRunFailed(opts),
 		transitionRunStatus: (runId, toStatus, updates) =>
 			runs.transitionRunStatus(runId, toStatus, updates),

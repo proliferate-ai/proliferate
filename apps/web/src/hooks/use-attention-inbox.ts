@@ -56,8 +56,10 @@ export function useAttentionInbox(options: {
 	wsApprovals: ActionApproval[];
 	/** Current session ID (to avoid showing org-polled duplicates). */
 	sessionId?: string;
+	/** Active automation runId in workspace context (if any). */
+	runId?: string;
 }) {
-	const { wsApprovals, sessionId } = options;
+	const { wsApprovals, sessionId, runId } = options;
 
 	const { data: orgActions } = useOrgActions({ status: "pending", limit: 50 });
 	const { data: pendingRuns } = useOrgPendingRuns({ limit: 50, unassignedOnly: true });
@@ -103,6 +105,7 @@ export function useAttentionInbox(options: {
 		// 3. Pending runs
 		if (pendingRuns) {
 			for (const run of pendingRuns) {
+				if (runId && run.id !== runId) continue;
 				result.push({
 					type: "run",
 					data: run,
@@ -128,7 +131,7 @@ export function useAttentionInbox(options: {
 		result.sort((a, b) => b.timestamp - a.timestamp);
 
 		return result;
-	}, [wsApprovals, orgActions, pendingRuns, blockedGroups, sessionId]);
+	}, [wsApprovals, orgActions, pendingRuns, blockedGroups, sessionId, runId]);
 
 	return items;
 }

@@ -31,12 +31,14 @@ interface InboxTrayProps {
 	sessionId: string;
 	token: string | null;
 	pendingApprovals: ActionApproval[];
+	runId?: string;
 }
 
-export function InboxTray({ sessionId, token, pendingApprovals }: InboxTrayProps) {
+export function InboxTray({ sessionId, token, pendingApprovals, runId }: InboxTrayProps) {
 	const items = useAttentionInbox({
 		wsApprovals: pendingApprovals,
 		sessionId,
+		runId,
 	});
 
 	const { data: authSession } = useSession();

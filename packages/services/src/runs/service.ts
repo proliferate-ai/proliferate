@@ -241,6 +241,8 @@ export async function completeEnrichment(
 			.set({
 				enrichmentJson: input.enrichmentPayload,
 				status: "ready",
+				leaseOwner: null,
+				leaseExpiresAt: null,
 				enrichmentCompletedAt: now,
 				lastActivityAt: now,
 				updatedAt: now,

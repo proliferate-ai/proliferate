@@ -592,6 +592,7 @@ export function EnvironmentPanel({
 									{configurationId ? (
 										<SecretFilesEditor
 											configurationId={configurationId}
+											sessionId={sessionId}
 											initialCreateOpen
 											callToActionLabel="Create Secret File"
 											workspaceOptions={workspaceOptions}
@@ -640,6 +641,7 @@ export function EnvironmentPanel({
 											</div>
 											<SecretFilesEditor
 												configurationId={configurationId}
+												sessionId={sessionId}
 												callToActionLabel="Create Secret File"
 												workspaceOptions={workspaceOptions}
 											/>

@@ -31,6 +31,7 @@
 - **Migration/snapshot writes are fenced:** DB transitions that depend on a specific sandbox use CAS (`updateWhereSandboxIdMatches`) so stale actors cannot clobber newer state.
 - **Recovery is multi-path:** runtime reconnect and expiry are job-driven; orphan cleanup is DB-first + runtime-lease-based and works even when no hub exists in memory.
 - **Automation sessions are logically active even when headless:** automation client type is treated as having an effective client so expiry migration/reconnect behavior remains active.
+- **Automation sessions are excluded from idle snapshotting:** idle-snapshot predicates do not apply to `client_type="automation"` sessions, which are worker-managed.
 
 ### Things Agents Get Wrong
 - Assuming API routes are in the token streaming path. They are not.
@@ -164,6 +165,7 @@ Reference: `apps/gateway/src/middleware/error-handler.ts`
 - **Scrub failure policy**: Manual snapshots use strict scrub mode (scrub failure aborts capture). Idle/expiry paths use best-effort scrub mode (log and continue) so pause/stop cleanup is not blocked by scrub command failures.
 - **Streaming backpressure**: Token batching (50-100ms) and slow-consumer disconnect based on `ws.bufferedAmount` thresholds.
 - **Idle snapshot failure circuit-breaker**: Force-terminates after repeated failures to prevent runaway spend.
+- **Automation idle-snapshot exclusion**: `SessionHub.shouldIdleSnapshot()` hard-returns `false` for `client_type="automation"` to avoid terminate/recreate thrash loops.
 
 ### Testing Conventions
 - Colocate gateway tests near source.

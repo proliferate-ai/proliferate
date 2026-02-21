@@ -9,7 +9,7 @@
 - Runtime environment submission to active sandboxes, including per-secret persistence decisions (`apps/web/src/server/routers/sessions-submit-env.ts`).
 - Session boot env var assembly from encrypted secrets (`packages/services/src/sessions/sandbox-env.ts`).
 - Configuration env file spec persistence via intercepted `save_env_files` (`apps/gateway/src/hub/capabilities/tools/save-env-files.ts`, `packages/services/src/configurations/db.ts:updateConfigurationEnvFiles`).
-- Secret file CRUD (encrypted content at rest, metadata-only reads) for configuration workflows (`apps/web/src/server/routers/secret-files.ts`, `packages/services/src/secret-files/`).
+- Secret file CRUD (encrypted content at rest, metadata-only reads) for configuration workflows, plus optional live apply to an active session sandbox on upsert (`apps/web/src/server/routers/secret-files.ts`, `packages/services/src/secret-files/`).
 - Org-level secret resolution for connector auth (`packages/services/src/secrets/service.ts:resolveSecretValue`).
 
 ### Out of Scope
@@ -191,17 +191,20 @@ Secret reads are scope-sensitive:
 
 **Files:** `apps/gateway/src/hub/capabilities/tools/save-env-files.ts`, `apps/gateway/src/api/proliferate/http/tools.ts`, `packages/services/src/configurations/db.ts`, `apps/gateway/src/lib/session-creator.ts`.
 
-### 6.7 Secret Files (`Implemented`, Partial Runtime Integration)
+### 6.7 Secret Files (`Implemented`)
 **What it does:** Stores encrypted file-content blobs keyed by configuration and path.
 
 **Invariants:**
 - Upsert encrypts content before persistence.
+- Upsert can optionally apply file content to a live sandbox when `sessionId` is provided by the caller.
+- Live apply path validation requires a relative workspace path (no absolute/traversal paths).
 - List endpoint returns metadata only (ID/path/description/timestamps), never content.
 - Delete is org-scoped by `secret_files.id` + `organization_id`.
 - Upsert/delete require org `owner` or `admin`.
 
 **Rules the system must follow:**
 - Secret file content should be treated as write-only unless an explicit decrypt/read path is introduced.
+- Runtime live-apply uses provider `execCommand` without logging file content.
 
 **Files:** `apps/web/src/server/routers/secret-files.ts`, `packages/services/src/secret-files/service.ts`, `packages/services/src/secret-files/db.ts`.
 
@@ -228,6 +231,7 @@ Secret reads are scope-sensitive:
 | Gateway Tool Callbacks | This ← Gateway | `save_env_files` intercepted tool | Persists declarative env file spec to `configurations.envFiles` |
 | Sandbox Providers | This → Providers | `provider.createSandbox({ envVars, envFiles })` | Providers receive assembled env vars + env file spec |
 | Sandbox Providers | This → Providers | `provider.writeEnvFile(sandboxId, envVarsMap)` | Runtime env submission path |
+| Sandbox Providers | This → Providers | `provider.execCommand(sandboxId, ["sh","-lc", ...])` | Secret-file upsert optional live apply into active sandbox workspace |
 | Actions / Integrations | Other → This | `resolveSecretValue(orgId, key)` | Connector auth resolves org-level secret by key |
 | Configurations | This ↔ Configurations | `updateConfigurationEnvFiles`, `getConfigurationEnvFiles` | Env file spec persistence and retrieval |
 | Config: `packages/environment` | This → Config | `USER_SECRETS_ENCRYPTION_KEY` | Required for all encrypt/decrypt paths |

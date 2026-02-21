@@ -30,7 +30,7 @@ export interface FinalizerRun {
  * Dependencies injected into the finalizer (for testing).
  */
 export interface FinalizerDeps {
-	getSessionStatus(sessionId: string): Promise<SessionStatus>;
+	getSessionStatus(sessionId: string, organizationId: string): Promise<SessionStatus>;
 	markRunFailed(opts: {
 		runId: string;
 		reason: string;
@@ -110,7 +110,7 @@ export async function finalizeOneRun(run: FinalizerRun, deps: FinalizerDeps): Pr
 	// 3. Check session status (includes provider liveness)
 	let status: SessionStatus;
 	try {
-		status = await deps.getSessionStatus(run.sessionId);
+		status = await deps.getSessionStatus(run.sessionId, run.organizationId);
 	} catch (err) {
 		// Gateway unreachable — skip this run, retry next tick
 		deps.log.warn(
