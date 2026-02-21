@@ -230,30 +230,40 @@ export async function getScopedSecretsForSession(
 export async function upsertByRepoAndKey(input: UpsertSecretInput): Promise<boolean> {
 	const db = getDb();
 	try {
-		await db
-			.insert(secrets)
-			.values({
+		await db.transaction(async (tx) => {
+			const updatedRows = await tx
+				.update(secrets)
+				.set({
+					encryptedValue: input.encryptedValue,
+					updatedAt: new Date(),
+				})
+				.where(
+					and(
+						eq(secrets.organizationId, input.organizationId),
+						eq(secrets.repoId, input.repoId),
+						eq(secrets.key, input.key),
+						isNull(secrets.configurationId),
+					),
+				)
+				.returning({ id: secrets.id });
+
+			if (updatedRows.length > 0) {
+				return;
+			}
+
+			await tx.insert(secrets).values({
 				repoId: input.repoId,
 				organizationId: input.organizationId,
 				key: input.key,
 				encryptedValue: input.encryptedValue,
 				configurationId: null,
-			})
-			.onConflictDoUpdate({
-				target: [
-					secrets.organizationId,
-					secrets.repoId,
-					secrets.key,
-					secrets.configurationId,
-				],
-				set: {
-					encryptedValue: input.encryptedValue,
-					updatedAt: new Date(),
-				},
 			});
+		});
 		return true;
 	} catch (error) {
-		getServicesLogger().child({ module: "secrets-db" }).error({ err: error, secretKey: input.key }, "Failed to store secret");
+		getServicesLogger()
+			.child({ module: "secrets-db" })
+			.error({ err: error, secretKey: input.key }, "Failed to store secret");
 		return false;
 	}
 }

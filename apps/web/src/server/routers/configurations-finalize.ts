@@ -178,6 +178,7 @@ export async function finalizeSetupHandler(
 				}
 			}
 		} catch (err) {
+			log.error({ err, repoId }, "Failed to store setup secrets");
 			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to store secrets" });
 		}
 	}
