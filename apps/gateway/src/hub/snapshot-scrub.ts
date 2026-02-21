@@ -92,7 +92,7 @@ export async function prepareForSnapshot(
 				failureMode,
 				logger,
 				`${logContext}: env scrub failed before snapshot`,
-				new Error(scrubResult.stderr || `exit code ${scrubResult.exitCode}`),
+				new Error(`env scrub failed: exit code ${scrubResult.exitCode}`),
 			);
 		} else {
 			logger.info(`${logContext}: env files scrubbed before snapshot`);
@@ -113,10 +113,8 @@ export async function prepareForSnapshot(
 				{ timeoutMs: ENV_SNAPSHOT_TIMEOUT_MS },
 			);
 			if (applyResult.exitCode !== 0) {
-				logger.error(
-					{ stderr: applyResult.stderr },
-					`${logContext}: env re-apply after snapshot failed`,
-				);
+				const applyErr = new Error(`env re-apply failed: exit code ${applyResult.exitCode}`);
+				logger.error({ err: applyErr }, `${logContext}: env re-apply after snapshot failed`);
 				return;
 			}
 			logger.info(`${logContext}: env files re-applied after snapshot`);
