@@ -33,7 +33,8 @@ function stringifyCanonical(value: Record<string, unknown>): string {
 }
 
 function signPayload(payload: Record<string, unknown>): string {
-	const hmac = createHmac("sha256", env.BETTER_AUTH_SECRET);
+	// Domain-separate OAuth state signatures from other BETTER_AUTH_SECRET uses.
+	const hmac = createHmac("sha256", `oauth-state:${env.BETTER_AUTH_SECRET}`);
 	hmac.update(stringifyCanonical(payload));
 	return hmac.digest("hex");
 }
