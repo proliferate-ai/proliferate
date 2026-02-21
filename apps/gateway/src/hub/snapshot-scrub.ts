@@ -21,13 +21,19 @@ const NOOP_SNAPSHOT_CLEANUP: SnapshotCleanup = async () => {
 	// Intentionally no-op when scrub/re-apply does not apply to this path.
 };
 
+/**
+ * Normalize unknown failures into an Error while preserving call-site context.
+ */
 function toError(message: string, err: unknown): Error {
 	if (err instanceof Error) {
-		return err;
+		return new Error(`${message}: ${err.message}`);
 	}
 	return new Error(`${message}: ${String(err)}`);
 }
 
+/**
+ * Apply configured scrub failure policy: throw for strict paths, log for best-effort paths.
+ */
 function handleFailure(
 	mode: SnapshotScrubFailureMode,
 	logger: Logger,
@@ -56,11 +62,11 @@ export async function prepareForSnapshot(
 		failureMode = "log",
 		reapplyAfterCapture = true,
 	} = options;
-	const execCommand = provider.execCommand;
 
-	if (!configurationId || !execCommand) {
+	if (!configurationId || !provider.execCommand) {
 		return NOOP_SNAPSHOT_CLEANUP;
 	}
+	const execCommand = provider.execCommand.bind(provider);
 
 	let envFilesSpec: unknown;
 	try {

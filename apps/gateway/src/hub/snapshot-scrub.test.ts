@@ -112,7 +112,32 @@ describe("prepareForSnapshot", () => {
 				logContext: "test",
 				failureMode: "throw",
 			}),
-		).rejects.toThrow("env scrub failed: exit code 9");
+		).rejects.toThrow("test: env scrub failed before snapshot: env scrub failed: exit code 9");
+	});
+
+	it("binds provider context when invoking execCommand", async () => {
+		vi.spyOn(configurations, "getConfigurationEnvFiles").mockResolvedValue({ files: [] });
+		const logger = createLogger();
+		let observedThis: unknown;
+		const rawProvider = {
+			execCommand(this: object) {
+				observedThis = this;
+				return Promise.resolve({ stdout: "", stderr: "", exitCode: 0 });
+			},
+		};
+
+		const cleanup = await prepareForSnapshot({
+			provider: rawProvider as unknown as SandboxProvider,
+			sandboxId: "sandbox-1",
+			configurationId: "config-1",
+			logger,
+			logContext: "test",
+			reapplyAfterCapture: false,
+		});
+
+		await cleanup();
+
+		expect(observedThis).toBe(rawProvider);
 	});
 
 	it("logs and continues on scrub failure in log mode", async () => {
