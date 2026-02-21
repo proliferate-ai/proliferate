@@ -15,6 +15,7 @@ import { getDb } from "../db/client";
 import { enqueueRunNotification } from "../notifications/service";
 import type { TriggerEventRow } from "../triggers/db";
 import * as runsDb from "./db";
+import { validateTransition } from "./state-machine";
 
 /** Default run deadline: 2 hours from creation. */
 export const DEFAULT_RUN_DEADLINE_MS = 2 * 60 * 60 * 1000;
@@ -125,6 +126,7 @@ export async function transitionRunStatus(
 ): Promise<runsDb.AutomationRunRow | null> {
 	const run = await runsDb.findById(runId);
 	if (!run) return null;
+	validateTransition(run.status, toStatus);
 	const fromStatus = run.status ?? null;
 	const updated = await runsDb.updateRun(runId, { status: toStatus, ...updates });
 	await runsDb.insertRunEvent(runId, "status_transition", fromStatus, toStatus, data ?? null);
@@ -232,6 +234,7 @@ export async function completeEnrichment(
 			where: eq(automationRuns.id, input.runId),
 		});
 		if (!run) return null;
+		validateTransition(run.status, "ready");
 
 		const now = new Date();
 
@@ -421,6 +424,7 @@ export async function resolveRun(input: ResolveRunInput): Promise<runsDb.Automat
 
 		const fromStatus = run.status;
 		const toStatus = input.outcome;
+		validateTransition(fromStatus, toStatus);
 
 		// Conditional update: only mutate if status hasn't changed (TOCTOU guard)
 		const [updated] = await tx
@@ -501,6 +505,7 @@ export async function completeRun(
 				: input.outcome === "failed"
 					? "failed"
 					: "succeeded";
+		validateTransition(run.status, status);
 
 		const [updated] = await tx
 			.update(automationRuns)

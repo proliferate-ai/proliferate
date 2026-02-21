@@ -68,10 +68,12 @@ vi.mock("../notifications/service", () => ({
 const {
 	saveEnrichmentResult,
 	getEnrichmentResult,
+	transitionRunStatus,
 	resolveRun,
 	RunNotResolvableError,
 	DEFAULT_RUN_DEADLINE_MS,
 } = await import("./service");
+const { InvalidRunStatusTransitionError } = await import("./state-machine");
 
 // ============================================
 // Helpers
@@ -192,6 +194,49 @@ describe("getEnrichmentResult", () => {
 		const result = await getEnrichmentResult("run-1");
 
 		expect(result).toBeNull();
+	});
+});
+
+// ============================================
+// transitionRunStatus
+// ============================================
+
+describe("transitionRunStatus", () => {
+	beforeEach(() => vi.clearAllMocks());
+
+	it("updates status and writes transition event for legal transitions", async () => {
+		const run = makeRun({ status: "ready" });
+		const updated = { ...run, status: "running" };
+		mockFindById.mockResolvedValue(run);
+		mockUpdateRun.mockResolvedValue(updated);
+		mockInsertRunEvent.mockResolvedValue({});
+
+		const result = await transitionRunStatus("run-1", "running", {
+			executionStartedAt: new Date(),
+		});
+
+		expect(result?.status).toBe("running");
+		expect(mockUpdateRun).toHaveBeenCalledWith(
+			"run-1",
+			expect.objectContaining({ status: "running" }),
+		);
+		expect(mockInsertRunEvent).toHaveBeenCalledWith(
+			"run-1",
+			"status_transition",
+			"ready",
+			"running",
+			null,
+		);
+	});
+
+	it("throws on invalid transitions", async () => {
+		mockFindById.mockResolvedValue(makeRun({ status: "queued" }));
+
+		await expect(transitionRunStatus("run-1", "running")).rejects.toThrow(
+			InvalidRunStatusTransitionError,
+		);
+		expect(mockUpdateRun).not.toHaveBeenCalled();
+		expect(mockInsertRunEvent).not.toHaveBeenCalled();
 	});
 });
 
