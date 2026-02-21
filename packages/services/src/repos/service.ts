@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from "crypto";
-import type { Repo } from "@proliferate/shared";
+import type { Repo, SearchRepo } from "@proliferate/shared";
 import * as configurationsService from "../configurations/service";
 import { getServicesLogger } from "../logger";
 import type { CreateRepoInput, CreateRepoResult } from "../types/repos";
@@ -156,4 +156,68 @@ export async function createRepoWithConfiguration(
 	}
 
 	return result;
+}
+
+const GITHUB_API_HEADERS = {
+	Accept: "application/vnd.github.v3+json",
+	"User-Agent": "Proliferate-App",
+};
+
+function mapSearchRepo(repo: {
+	id: number;
+	name: string;
+	full_name: string;
+	html_url: string;
+	default_branch: string;
+	private: boolean;
+	description: string | null;
+	stargazers_count: number;
+	language: string | null;
+}): SearchRepo {
+	return {
+		id: repo.id,
+		name: repo.name,
+		full_name: repo.full_name,
+		html_url: repo.html_url,
+		default_branch: repo.default_branch,
+		private: repo.private,
+		description: repo.description,
+		stargazers_count: repo.stargazers_count,
+		language: repo.language,
+	};
+}
+
+/**
+ * Search public GitHub repositories.
+ */
+export async function searchPublicGitHubRepos(searchQuery?: string): Promise<SearchRepo[]> {
+	if (!searchQuery || searchQuery.trim().length < 2) {
+		return [];
+	}
+
+	const trimmedQuery = searchQuery.trim();
+	const isExactRepo = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(trimmedQuery);
+
+	if (isExactRepo) {
+		const response = await fetch(`https://api.github.com/repos/${trimmedQuery}`, {
+			headers: GITHUB_API_HEADERS,
+		});
+
+		if (response.ok) {
+			const repo = await response.json();
+			return [mapSearchRepo(repo)];
+		}
+	}
+
+	const searchResponse = await fetch(
+		`https://api.github.com/search/repositories?q=${encodeURIComponent(trimmedQuery)}&per_page=10&sort=stars`,
+		{ headers: GITHUB_API_HEADERS },
+	);
+
+	if (!searchResponse.ok) {
+		throw new Error("Failed to search GitHub");
+	}
+
+	const searchData = await searchResponse.json();
+	return searchData.items.filter((repo: { private: boolean }) => !repo.private).map(mapSearchRepo);
 }

@@ -3,353 +3,219 @@
 ## 1. Scope & Purpose
 
 ### In Scope
-- Secret CRUD (create, delete, list, check existence)
-- Secret bundles CRUD (list, create, update metadata, delete)
-- Bundle target path configuration for automatic env file generation
-- Bulk import (`.env` paste flow)
-- Secret encryption at rest (AES-256-GCM)
-- Per-secret persistence toggle on environment submission
-- Data flow: secrets from DB → gateway → sandbox environment variables
-- Bundle-based env file spec generation at session boot
+- Secret CRUD (create, list, delete, existence checks) through `apps/web/src/server/routers/secrets.ts` and `packages/services/src/secrets/`.
+- Secret scoping across org-wide, repo-scoped, and configuration-linked contexts (`packages/services/src/secrets/db.ts`).
+- Bulk `.env` import into encrypted secret records (`packages/services/src/secrets/service.ts:bulkImportSecrets`, `packages/shared/src/env-parser.ts:parseEnvFile`).
+- Runtime environment submission to active sandboxes, including per-secret persistence decisions (`apps/web/src/server/routers/sessions-submit-env.ts`).
+- Session boot env var assembly from encrypted secrets (`packages/services/src/sessions/sandbox-env.ts`).
+- Configuration env file spec persistence via intercepted `save_env_files` (`apps/gateway/src/hub/capabilities/tools/save-env-files.ts`, `packages/services/src/configurations/db.ts:updateConfigurationEnvFiles`).
+- Secret file CRUD (encrypted content at rest, metadata-only reads) for configuration workflows (`apps/web/src/server/routers/secret-files.ts`, `packages/services/src/secret-files/`).
+- Org-level secret resolution for connector auth (`packages/services/src/secrets/service.ts:resolveSecretValue`).
 
 ### Out of Scope
-- `save_env_files` tool schema — see `agent-contract.md` §6
-- `request_env_variables` tool schema — see `agent-contract.md` §6
-- Sandbox env var injection mechanics (provider `createSandbox`, `writeEnvFile`) — see `sandbox-providers.md`
-- Prebuild env file persistence (JSONB `envFiles` on prebuilds table) — see `repos-prebuilds.md`
-- S3 for verification file storage (the gateway S3 module handles verification uploads, not secret storage) — see `sessions-gateway.md`
+- Tool schema definitions and sandbox tool injection (`agent-contract.md` §6, `sandbox-providers.md` §6.3).
+- Sandbox provider internals for `createSandbox({ envVars, envFiles })` and `writeEnvFile()` (`sandbox-providers.md` §6.4).
+- Configuration lifecycle and snapshot orchestration beyond env-file persistence (`repos-prebuilds.md`).
+- Action execution policy and approval semantics that consume connector secrets (`actions.md`).
+- UI interaction design for Environment panel and tool cards (`sessions-gateway.md` §6.1).
 
-### Mental Model
+### Mental Models
 
-Secrets are org-scoped encrypted key-value pairs that get injected into sandbox environments at session start. Users manage secrets through the web dashboard; the agent can request missing secrets at runtime via the `request_env_variables` tool (schema owned by `agent-contract.md`).
+The subsystem has three distinct planes that agents often conflate:
 
-Secrets can optionally be grouped into **bundles** — named collections with an optional `target_path` that controls where an `.env` file is written inside the sandbox. At session creation, the gateway queries bundles with target paths and passes the resulting env file spec to the sandbox provider, which writes the files before the agent starts.
+- **Vault plane (key/value):** `secrets` holds encrypted key/value records, with optional repo scope and optional configuration linkage. Runtime env injection reads from this plane (`packages/services/src/secrets/db.ts`, `packages/services/src/sessions/sandbox-env.ts`).
+- **File-spec plane (declarative):** `configurations.envFiles` stores a declarative spec of which env files should be generated at sandbox boot (`apps/gateway/src/hub/capabilities/tools/save-env-files.ts`, `apps/gateway/src/lib/session-creator.ts`).
+- **Secret-file plane (content blobs):** `secret_files` stores encrypted file contents and metadata, but read APIs currently expose metadata only (`packages/services/src/secret-files/db.ts`, `apps/web/src/server/routers/secret-files.ts`).
 
-The encryption model is simple: AES-256-GCM with a single deployment-wide key (`USER_SECRETS_ENCRYPTION_KEY`). Values are encrypted on write and decrypted only when injected into a sandbox — they are never returned through the API.
+These planes are intentionally separate in code. The current system does not treat `secret_files` as the source of runtime env var injection.
 
-**Core entities:**
-- **Secret** — an encrypted key-value pair scoped to an org (optionally to a repo). Belongs to at most one bundle.
-- **Bundle** — a named group of secrets with optional target path for env file generation.
-
-**Key invariants:**
-- Secret values are **never** returned by list/check endpoints. Only metadata (key name, type, timestamps) is exposed.
-- A secret key is unique per `(organization_id, repo_id, key, prebuild_id)` combination (enforced by DB unique constraint `secrets_org_repo_prebuild_key_unique`). Because PostgreSQL treats NULLs as distinct in unique constraints, the same key name can exist independently at org-wide, repo, and prebuild scopes.
-- A bundle name is unique per organization (enforced by DB unique constraint).
-- Deleting a bundle sets `bundle_id` to null on associated secrets (ON DELETE SET NULL) — secrets survive bundle deletion.
-- Encryption requires `USER_SECRETS_ENCRYPTION_KEY` (64 hex chars / 32 bytes). Writes that encrypt secret values (create, bulk import) fail if this is not configured. Bundle CRUD and secret deletion do not require the encryption key.
+The encryption model is deployment-wide AES-256-GCM (`iv:authTag:ciphertext`) using `USER_SECRETS_ENCRYPTION_KEY` (`packages/services/src/db/crypto.ts`, `packages/shared/src/lib/crypto.ts`).
 
 ---
 
 ## 2. Core Concepts
 
 ### AES-256-GCM Encryption
-Secrets are encrypted using AES-256-GCM with a random 16-byte IV per secret. The ciphertext is stored as `iv:authTag:encryptedText` (all hex-encoded). The encryption key is a 32-byte key read from `USER_SECRETS_ENCRYPTION_KEY` environment variable.
-- Key detail agents get wrong: the encryption key is **not** per-org or per-secret — it is a single deployment-wide key. Key rotation requires re-encrypting all secrets.
-- Reference: `packages/services/src/db/crypto.ts`
+Both secret values and secret-file contents are encrypted with AES-256-GCM before persistence. Decryption happens server-side only when needed for runtime injection or connector auth resolution.
+- Reference: `packages/services/src/db/crypto.ts`, `packages/services/src/secret-files/service.ts`, `packages/services/src/sessions/sandbox-env.ts`.
 
-### Secret Scoping
-Secrets have two scope dimensions: `organization_id` (required) and `repo_id` (optional). Org-wide secrets (`repo_id = null`) apply to all sessions in the org. Repo-scoped secrets apply only to sessions that include that repo. At session boot, both scopes are fetched and merged.
-- Key detail agents get wrong: the runtime uniqueness constraint is on `(organization_id, repo_id, key, prebuild_id)`, not just `(organization_id, key)`. The same key can exist at org-wide scope, repo scope, and prebuild scope simultaneously. Note: the hand-written schema in `packages/db/src/schema/secrets.ts` defines a 3-column constraint but the canonical runtime schema (generated via `drizzle-kit pull`) in `packages/db/src/schema/schema.ts` includes `prebuild_id` as a fourth column.
-- Reference: `packages/db/src/schema/schema.ts:492`, constraint `secrets_org_repo_prebuild_key_unique`
+### Secret Scope Axes
+Secret reads are scope-sensitive:
+- Session boot path: org-wide + repo-scoped secrets (`getSecretsForSession`).
+- Configuration checks: configuration-linked keys + org-wide fallback (`findExistingKeysForConfiguration`).
+- Connector auth: org-wide keys only (`getSecretByOrgAndKey` requires `repo_id IS NULL`).
+- Reference: `packages/services/src/secrets/db.ts`.
 
-### Bundle Target Paths
-A bundle can have a `target_path` (e.g., `.env.local`, `apps/web/.env`). At session creation, the system queries all bundles with target paths, collects their secret keys, and generates an `EnvFileSpec` array that the sandbox provider uses to write `.env` files on boot.
-- Key detail agents get wrong: target paths must be relative, cannot contain `..`, and cannot start with `/` or a drive letter. Validation uses `isValidTargetPath()`.
-- Reference: `packages/shared/src/env-parser.ts:isValidTargetPath`
+### Configuration Linking Is a Junction Concern
+`createSecret` can receive `configurationId`, but linkage is written through `configuration_secrets` junction rows (`linkSecretToConfiguration`), not as a required direct filter in runtime session injection.
+- Reference: `packages/services/src/secrets/service.ts:createSecret`, `packages/services/src/secrets/db.ts:linkSecretToConfiguration`.
 
----
+### Runtime Submission Is Split-Path
+`submitEnvHandler` always writes submitted values to sandbox runtime env (`provider.writeEnvFile`), but persistence and runtime writes are separate operations with different failure behavior.
+- Reference: `apps/web/src/server/routers/sessions-submit-env.ts`.
 
-## 3. File Tree
+### Env File Specs Are Declarative, Not Secret Storage
+`save_env_files` stores a declarative spec on `configurations.envFiles`; providers apply that spec during boot. The spec does not itself store secret values.
+- Reference: `apps/gateway/src/hub/capabilities/tools/save-env-files.ts`, `packages/services/src/configurations/db.ts`, `apps/gateway/src/lib/session-creator.ts`.
 
-```
-packages/services/src/secrets/
-├── index.ts                  # Module exports (re-exports service + DB functions)
-├── service.ts                # Business logic (CRUD, encryption orchestration, bulk import)
-├── db.ts                     # Drizzle queries (secrets + bundles tables)
-├── mapper.ts                 # DB row → API response type transforms
-└── service.test.ts           # Vitest unit tests (mocked DB + crypto)
-
-packages/services/src/db/
-└── crypto.ts                 # AES-256-GCM encrypt/decrypt + key retrieval
-
-packages/services/src/types/
-└── secrets.ts                # DB row shapes and input types
-
-packages/services/src/sessions/
-└── sandbox-env.ts            # Builds env var map for sandbox (decrypts secrets)
-
-packages/shared/src/contracts/
-└── secrets.ts                # Zod schemas + ts-rest contract definitions
-
-packages/shared/src/
-└── env-parser.ts             # .env text parser + target path validation
-
-packages/db/src/schema/
-├── schema.ts                 # Canonical table definitions (generated via drizzle-kit pull)
-├── relations.ts              # Drizzle relations (secrets, secretBundles)
-└── secrets.ts                # Hand-written table defs (stale — not exported by index.ts)
-
-apps/web/src/server/routers/
-├── secrets.ts                # oRPC router (secret + bundle CRUD, bulk import)
-└── sessions-submit-env.ts    # Environment submission handler (persist toggle)
-
-apps/gateway/src/lib/
-└── session-creator.ts        # Session creation (env var + env file spec assembly)
-```
-
----
-
-## 4. Data Models & Schemas
-
-### Database Tables
-
-```
-secrets
-├── id                UUID PRIMARY KEY DEFAULT random
-├── organization_id   TEXT NOT NULL → organization(id) ON DELETE CASCADE
-├── repo_id           UUID → repos(id) ON DELETE CASCADE          -- null = org-wide
-├── prebuild_id       UUID → prebuilds(id) ON DELETE CASCADE      -- null = not prebuild-scoped
-├── bundle_id         UUID → secret_bundles(id) ON DELETE SET NULL -- null = unbundled
-├── key               TEXT NOT NULL
-├── encrypted_value   TEXT NOT NULL                                -- iv:authTag:ciphertext
-├── secret_type       TEXT DEFAULT 'env'                           -- 'env', 'docker_registry', 'file'
-├── description       TEXT
-├── created_by        TEXT → user(id)
-├── created_at        TIMESTAMPTZ DEFAULT now()
-└── updated_at        TIMESTAMPTZ DEFAULT now()
-
-Indexes:
-  idx_secrets_org      (organization_id)
-  idx_secrets_repo     (repo_id)
-  idx_secrets_bundle   (bundle_id)
-  UNIQUE secrets_org_repo_prebuild_key_unique (organization_id, repo_id, key, prebuild_id)
-```
-
-Note: the canonical schema is `packages/db/src/schema/schema.ts` (generated via `drizzle-kit pull`), which is exported by `packages/db/src/schema/index.ts`. The hand-written `packages/db/src/schema/secrets.ts` defines relations but uses a stale 3-column unique constraint.
-
-
-```
-secret_bundles
-├── id                UUID PRIMARY KEY DEFAULT random
-├── organization_id   TEXT NOT NULL → organization(id) ON DELETE CASCADE
-├── name              TEXT NOT NULL
-├── description       TEXT
-├── target_path       TEXT                                         -- relative path for .env file
-├── created_by        TEXT → user(id)
-├── created_at        TIMESTAMPTZ DEFAULT now()
-└── updated_at        TIMESTAMPTZ DEFAULT now()
-
-Indexes:
-  idx_secret_bundles_org         (organization_id)
-  UNIQUE (organization_id, name)
-```
-
-### Core TypeScript Types
-
-```typescript
-// packages/shared/src/contracts/secrets.ts
-interface Secret {
-  id: string;
-  key: string;
-  description: string | null;
-  secret_type: string | null;
-  repo_id: string | null;
-  bundle_id: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-}
-
-interface SecretBundle {
-  id: string;
-  name: string;
-  description: string | null;
-  target_path: string | null;
-  secret_count: number;       // computed via LEFT JOIN COUNT
-  created_at: string | null;
-  updated_at: string | null;
-}
-```
-
-### Key Indexes & Query Patterns
-- **List secrets by org** — `idx_secrets_org` on `organization_id`, ordered by `created_at` DESC.
-- **Check existence** — `findExistingKeys` queries by `(organization_id, key IN [...])` with optional repo scope.
-- **Session injection** — `getSecretsForSession` fetches by `organization_id` + `repo_id IN [...]` OR `repo_id IS NULL`, returning `(key, encrypted_value)`.
-- **Bundle target path query** — `getBundlesWithTargetPath` joins `secret_bundles` with `secrets` where `target_path IS NOT NULL`.
+### Things Agents Get Wrong
+- Secret bundles are no longer the active runtime model; current schema comment explicitly marks `secret_files` as replacing bundles (`packages/db/src/schema/schema.ts`).
+- `packages/db/src/schema/secrets.ts` still defines bundle-era tables but is not the canonical export path (`packages/db/src/schema/index.ts` exports `schema.ts` + `relations.ts`).
+- `request_env_variables` is not gateway-intercepted; it is a sandbox tool surfaced in UI via tool events (`packages/shared/src/opencode-tools/index.ts`, `apps/web/src/components/coding-session/runtime/message-handlers.ts`).
+- `save_env_files` is gateway-intercepted and setup-session-only (`apps/gateway/src/hub/capabilities/tools/save-env-files.ts`).
+- `checkSecrets` behavior changes when `configuration_id` is present; repo filtering is bypassed in that branch (`packages/services/src/secrets/service.ts:checkSecrets`).
+- Session boot uses `getSecretsForSession`, not `getSecretsForConfiguration` (`apps/gateway/src/lib/session-creator.ts`, `packages/services/src/sessions/sandbox-env.ts`).
+- `secret_files` read paths currently return metadata only; there is no service path that decrypts and returns file content (`packages/services/src/secret-files/db.ts`).
 
 ---
 
 ## 5. Conventions & Patterns
 
 ### Do
-- Always encrypt via `packages/services/src/db/crypto.ts:encrypt` before DB insert — never store plaintext.
-- Validate bundle ownership (`bundleBelongsToOrg`) before any cross-entity operation (create secret with bundle, update secret bundle, bulk import with bundle).
-- Use the `SecretListRow` shape (no `encrypted_value`) for all read paths.
-- Validate target paths with `isValidTargetPath()` before saving to bundles.
+- Encrypt on every write path before DB insert/upsert (`packages/services/src/secrets/service.ts`, `packages/services/src/secret-files/service.ts`).
+- Keep routers thin and delegate DB/business logic to services modules (`apps/web/src/server/routers/secrets.ts`, `apps/web/src/server/routers/secret-files.ts`).
+- Return metadata only on read endpoints for secrets and secret files.
+- Treat runtime env writes (`submitEnv`) and vault persistence (`createSecret`/`bulkImport`) as separate operations with separate error handling.
 
 ### Don't
-- Never return `encrypted_value` through any API endpoint. The list/check queries explicitly select only metadata columns.
-- Never import `@proliferate/db` directly in the router — use `@proliferate/services` functions.
-- Never log secret values or encrypted values. Log only `secretKey` (the key name) for debugging.
+- Do not return `encrypted_value` or `encrypted_content` through API responses.
+- Do not log plaintext secret values; logs should only include safe identifiers (for example `secretKey`).
+- Do not assume `save_env_files` persists values; it persists only file-generation spec metadata.
+- Do not assume configuration-linked secrets are automatically consumed by session boot.
 
 ### Error Handling
-
-```typescript
-// packages/services/src/secrets/service.ts
-// PostgreSQL unique violation → domain error
-if (err.code === "23505") {
-  throw new DuplicateSecretError(input.key);
-}
-
-// Router translates domain errors to HTTP:
-// DuplicateSecretError    → 409 CONFLICT
-// EncryptionError         → 500 INTERNAL_SERVER_ERROR
-// BundleOrgMismatchError  → 400 BAD_REQUEST
-// BundleNotFoundError     → 404 NOT_FOUND
-// InvalidTargetPathError  → 400 BAD_REQUEST
-// DuplicateBundleError    → 409 CONFLICT
-```
+- `DuplicateSecretError` and `EncryptionError` are translated by the secrets router to `409` and `500` respectively (`apps/web/src/server/routers/secrets.ts`).
+- `submitEnvHandler` treats duplicate persistence as non-fatal (`alreadyExisted: true`) and continues processing (`apps/web/src/server/routers/sessions-submit-env.ts`).
+- Secret file router enforces `admin`/`owner` for upsert/delete and returns `FORBIDDEN` otherwise (`apps/web/src/server/routers/secret-files.ts`).
 
 ### Reliability
-- No timeouts or retries — all queries are simple single-table reads/writes.
-- Encryption key availability is checked on first encrypt call, not at startup. If missing or invalid, `getEncryptionKey()` throws synchronously with no fallback (`packages/services/src/db/crypto.ts:53-61`).
-- Bulk import is not transactional — partial inserts are possible if the process crashes mid-batch. Duplicates are idempotent via `ON CONFLICT DO NOTHING` (`packages/services/src/secrets/db.ts:bulkCreateSecrets`).
-- Session injection: decryption failures for individual secrets are logged but do not abort session creation — remaining secrets are still injected (`packages/services/src/sessions/sandbox-env.ts:91-96`).
-- Idempotency: secret creation is not idempotent — duplicate keys return 409. Upsert is available only via `upsertByRepoAndKey` (internal path).
+- Encryption key validation is lazy per operation (`getEncryptionKey()`), not preflight startup validation.
+- `buildSandboxEnvVars` tolerates per-secret decryption failures and continues with remaining keys.
+- `submitEnvHandler` may persist some secrets before failing the overall request if sandbox write fails.
+- Bulk import uses `ON CONFLICT DO NOTHING` and reports `created` vs `skipped`.
+- Tool callback idempotency for intercepted tools is provided in gateway memory by `tool_call_id` caching.
 
 ### Testing Conventions
-- Service tests mock `./db` and `../db/crypto` modules via `vi.mock`.
-- Encryption is mocked to return `"encrypted-value"` with a fixed 64-char hex key.
-- Tests cover: CRUD happy paths, duplicate key handling, cross-org bundle rejection, bulk import with skips, bundle target path env file generation.
-- Reference: `packages/services/src/secrets/service.test.ts`
+- `packages/services/src/secrets/service.test.ts` validates core CRUD/import behavior with mocked DB+crypto.
+- `apps/web/src/test/unit/sessions-submit-env.test.ts` validates per-secret persistence semantics and sandbox write behavior.
+- `packages/shared/src/env-parser.test.ts` validates parser and path helper behavior used by bulk import.
 
 ---
 
 ## 6. Subsystem Deep Dives
 
-### 6.1 Secret CRUD
+### 6.1 Secret CRUD & Existence Checks (`Implemented`)
+**What it does:** Manages encrypted key/value secrets and non-sensitive metadata APIs.
 
-**What it does:** Create, list, delete, and check existence of org-scoped secrets. **Status: Implemented.**
+**Invariants:**
+- Secret create writes must encrypt plaintext before DB insert.
+- Secret list/check responses must never include ciphertext or plaintext.
+- When `configurationId` is supplied to create, linkage is added through `configuration_secrets`.
+- `checkSecrets` with `configuration_id` must resolve against configuration-linked keys plus org-wide fallback; without it, checks are org/repo scoped.
 
-**Happy path (create):**
-1. Router (`apps/web/src/server/routers/secrets.ts:create`) validates input via `CreateSecretInputSchema`.
-2. Service (`packages/services/src/secrets/service.ts:createSecret`) calls `getEncryptionKey()` then `encrypt(value, key)`.
-3. If `bundleId` is provided, validates bundle ownership via `secretsDb.bundleBelongsToOrg`.
-4. Inserts via `secretsDb.create` with encrypted value. Returns metadata (no value).
+**Rules the system must follow:**
+- Keep domain error translation explicit (`DuplicateSecretError`, `EncryptionError`).
+- Preserve org isolation on every query predicate.
 
-**Happy path (list):**
-1. Router calls `secrets.listSecrets(orgId)`.
-2. DB query selects all columns **except** `encrypted_value`, ordered by `created_at` DESC.
+**Files:** `apps/web/src/server/routers/secrets.ts`, `packages/services/src/secrets/service.ts`, `packages/services/src/secrets/db.ts`.
 
-**Happy path (check):**
-1. Router receives array of key names + optional `repo_id` / `prebuild_id`.
-2. `secretsDb.findExistingKeys` queries matching keys with scope filtering.
-3. Returns `{ key, exists }` for each requested key.
+### 6.2 Bulk Import (`Implemented`)
+**What it does:** Converts pasted `.env` text into encrypted secret rows.
 
-**Edge cases:**
-- Duplicate key on create → `DuplicateSecretError` → 409 CONFLICT.
-- Missing encryption key → `EncryptionError` → 500.
-- Bundle from different org → `BundleOrgMismatchError` → 400.
+**Invariants:**
+- Parser accepts `KEY=VALUE`, quoted values, and `export` prefix.
+- Invalid/blank/comment-only lines are ignored rather than failing the import.
+- Bulk insert must be idempotent for existing keys via `ON CONFLICT DO NOTHING`.
+- API response must expose deterministic `created` count and explicit `skipped` keys.
 
-**Files touched:** `apps/web/src/server/routers/secrets.ts`, `packages/services/src/secrets/service.ts`, `packages/services/src/secrets/db.ts`, `packages/services/src/db/crypto.ts`
+**Rules the system must follow:**
+- Encryption key must be required before bulk encrypting entries.
+- Import path must not return secret values back to the caller.
 
-### 6.2 Bundle CRUD
+**Files:** `packages/services/src/secrets/service.ts:bulkImportSecrets`, `packages/shared/src/env-parser.ts`, `packages/services/src/secrets/db.ts:bulkCreateSecrets`.
 
-**What it does:** Create, list, update metadata, and delete named secret groups with optional target paths. **Status: Implemented.**
+### 6.3 Secret-to-Sandbox Runtime Injection (`Implemented`)
+**What it does:** Builds sandbox env vars during session creation and runtime boot.
 
-**Happy path (create):**
-1. Router validates input via `CreateBundleInputSchema` (name 1-100 chars, optional targetPath/description).
-2. Service validates `targetPath` via `isValidTargetPath()` if provided.
-3. Inserts via `secretsDb.createBundle`. Returns bundle with `secret_count: 0`.
+**Invariants:**
+- Runtime env assembly reads encrypted secrets via `getSecretsForSession(orgId, repoIds)`.
+- Decrypt failures must not abort the full env assembly; failing keys are skipped and logged.
+- Generated env vars merge with non-secret runtime keys (proxy keys, git token fallbacks).
 
-**Happy path (list):**
-1. `secretsDb.listBundlesByOrganization` performs `LEFT JOIN` on secrets + `GROUP BY` to compute `secret_count`.
-2. Returns bundles ordered by `created_at` DESC.
+**Rules the system must follow:**
+- Secret decryption must happen server-side only.
+- Provider invocation receives assembled env vars; provider internals remain out of scope for this spec.
 
-**Happy path (update metadata):**
-1. `updateBundleMeta` validates targetPath, calls `secretsDb.updateBundle`.
-2. Fetches updated `secret_count` in a separate query.
+**Files:** `packages/services/src/sessions/sandbox-env.ts`, `apps/gateway/src/lib/session-creator.ts`.
 
-**Happy path (delete):**
-1. `secretsDb.deleteBundle` deletes the bundle row. Associated secrets have `bundle_id` set to null automatically (ON DELETE SET NULL).
+### 6.4 Runtime Submission & Persistence Toggle (`Implemented`)
+**What it does:** Accepts environment values during a live session and optionally persists secrets.
 
-**Edge cases:**
-- Duplicate bundle name → `DuplicateBundleError` → 409.
-- Invalid target path (absolute, `..` traversal, empty) → `InvalidTargetPathError` → 400.
-- Bundle not found on update → `BundleNotFoundError` → 404.
+**Invariants:**
+- Every submitted secret/env var is written to sandbox runtime env map for the active session.
+- Per-secret `persist` overrides the global `saveToConfiguration` fallback.
+- Duplicate persistence attempts are non-fatal and surfaced as `alreadyExisted`.
+- Sandbox write failure fails the request, even if some persistence already succeeded.
 
-**Files touched:** `apps/web/src/server/routers/secrets.ts`, `packages/services/src/secrets/service.ts`, `packages/services/src/secrets/db.ts`, `packages/shared/src/env-parser.ts`
+**Rules the system must follow:**
+- Session ownership and active sandbox presence must be validated before writes.
+- Persistence and runtime injection outcomes must be observable in returned `results`.
 
-### 6.3 Bulk Import
+**Files:** `apps/web/src/server/routers/sessions.ts:submitEnv`, `apps/web/src/server/routers/sessions-submit-env.ts`.
 
-**What it does:** Parses pasted `.env`-format text, encrypts each value, and bulk-inserts secrets (skipping duplicates). **Status: Implemented.**
+### 6.5 Setup Finalization Secret Upsert (`Implemented`)
+**What it does:** Stores repo-scoped secrets during setup finalization flows.
 
-**Happy path:**
-1. Router validates input via `BulkImportInputSchema` (non-empty `envText`, optional `bundleId`).
-2. Service calls `parseEnvFile(envText)` to extract `{ key, value }[]`.
-3. If `bundleId` is provided, validates bundle ownership.
-4. Encrypts all values with the deployment encryption key.
-5. `secretsDb.bulkCreateSecrets` uses `INSERT ... ON CONFLICT DO NOTHING` to skip existing keys.
-6. Returns `{ created: N, skipped: ["KEY_A", ...] }`.
+**Invariants:**
+- Finalization secrets are encrypted before upsert.
+- Upsert path targets repo-scoped secret records keyed by org/repo/key.
+- Multi-repo finalization must require explicit repo disambiguation when secret payload is present.
 
-**Parser behavior (`parseEnvFile`):**
-- Handles `KEY=VALUE`, `KEY="quoted"`, `KEY='quoted'`, `export KEY=VALUE`.
-- Strips inline `# comments` from unquoted values (preserves `#` inside quotes).
-- Skips blank lines and lines starting with `#`.
-- Lines without `=` are silently skipped.
+**Rules the system must follow:**
+- Finalization should fail hard if secret persistence fails (current behavior has a gap; see §9).
 
-**Files touched:** `apps/web/src/server/routers/secrets.ts`, `packages/services/src/secrets/service.ts`, `packages/shared/src/env-parser.ts`
+**Files:** `apps/web/src/server/routers/configurations-finalize.ts`, `packages/services/src/secrets/db.ts:upsertByRepoAndKey`.
 
-### 6.4 Secret-to-Sandbox Data Flow
+### 6.6 Env File Spec Persistence via `save_env_files` (`Implemented`)
+**What it does:** Persists configuration-level env file generation spec in setup sessions.
 
-**What it does:** Decrypts org+repo secrets and injects them as environment variables into the sandbox at session creation. **Status: Implemented.**
+**Invariants:**
+- Only setup sessions may call `save_env_files`.
+- A valid configuration ID is required to persist the spec.
+- File spec validation enforces relative paths, `format: "dotenv"`, `mode: "secret"`, and bounded file/key counts.
+- Persisted spec is read during session creation and passed to provider as `envFiles`.
 
-**Happy path:**
-1. Gateway's `createSandbox` (`apps/gateway/src/lib/session-creator.ts`) calls `loadEnvironmentVariables`.
-2. `loadEnvironmentVariables` delegates to `sessions.buildSandboxEnvVars` (`packages/services/src/sessions/sandbox-env.ts`).
-3. `buildSandboxEnvVars` calls `secrets.getSecretsForSession(orgId, repoIds)` which fetches `(key, encryptedValue)` rows for org-wide + repo-scoped secrets.
-4. Each secret is decrypted via `decrypt(encryptedValue, encryptionKey)` and added to the `envVars` map.
-5. The merged env vars map is passed to `provider.createSandbox({ envVars })`.
+**Rules the system must follow:**
+- The stored spec must remain declarative (no secret plaintext).
+- Tool callback idempotency must use `tool_call_id` for retry safety.
 
-**Bundle target path flow (env file specs):**
-1. During `createSandbox`, the session creator calls `secrets.buildEnvFilesFromBundles(organizationId)`.
-2. This queries `secretsDb.getBundlesWithTargetPath` — returns bundles with non-null `target_path` and their secret key lists.
-3. Each bundle produces an `EnvFileSpec`: `{ workspacePath: ".", path: targetPath, format: "env", mode: "secret", keys: [...] }`.
-4. These specs are merged with any prebuild-level env file specs and passed to `provider.createSandbox({ envFiles })`.
-5. The sandbox provider (e.g., Modal) executes `proliferate env apply --spec <JSON>` inside the sandbox to write the files.
+**Files:** `apps/gateway/src/hub/capabilities/tools/save-env-files.ts`, `apps/gateway/src/api/proliferate/http/tools.ts`, `packages/services/src/configurations/db.ts`, `apps/gateway/src/lib/session-creator.ts`.
 
-**Files touched:** `apps/gateway/src/lib/session-creator.ts`, `packages/services/src/sessions/sandbox-env.ts`, `packages/services/src/secrets/db.ts`, `packages/services/src/db/crypto.ts`
+### 6.7 Secret Files (`Implemented`, Partial Runtime Integration)
+**What it does:** Stores encrypted file-content blobs keyed by configuration and path.
 
-### 6.5 Per-Secret Persistence Toggle
+**Invariants:**
+- Upsert encrypts content before persistence.
+- List endpoint returns metadata only (ID/path/description/timestamps), never content.
+- Delete is org-scoped by `secret_files.id` + `organization_id`.
+- Upsert/delete require org `owner` or `admin`.
 
-**What it does:** When the agent requests environment variables via the `request_env_variables` tool, users submit values through the web dashboard. Each secret can individually opt into org-level persistence. **Status: Implemented.**
+**Rules the system must follow:**
+- Secret file content should be treated as write-only unless an explicit decrypt/read path is introduced.
 
-**Happy path:**
-1. The session router (`apps/web/src/server/routers/sessions.ts:submitEnv`) receives `{ secrets: [{ key, value, persist }], envVars, saveToPrebuild }` and delegates to `submitEnvHandler`.
-2. Handler (`apps/web/src/server/routers/sessions-submit-env.ts:submitEnvHandler`) processes each secret:
-   - If `persist` is true (or `saveToPrebuild` fallback), calls `secrets.createSecret` to encrypt and store.
-   - If duplicate, records `alreadyExisted: true` in results.
-   - Regardless of persistence, adds to `envVarsMap`.
-3. All values are written to the sandbox via `provider.writeEnvFile(sandboxId, envVarsMap)`.
-4. Returns `{ submitted: true, results: [{ key, persisted, alreadyExisted }] }`.
+**Files:** `apps/web/src/server/routers/secret-files.ts`, `packages/services/src/secret-files/service.ts`, `packages/services/src/secret-files/db.ts`.
 
-**Edge cases:**
-- Session not found or no sandbox → 404 / 400.
-- Encryption failure on persist → logs error, sets `persisted: false`.
-- Duplicate secret → skips persist, sets `alreadyExisted: true`.
+### 6.8 Connector Secret Resolution (`Implemented`)
+**What it does:** Resolves org-level secrets for connector auth at runtime.
 
-**Files touched:** `apps/web/src/server/routers/sessions-submit-env.ts`, `packages/services/src/secrets/service.ts`
+**Invariants:**
+- Resolution targets org-wide keys (`repo_id IS NULL`) and returns decrypted plaintext or `null`.
+- Resolution failures degrade gracefully to `null` and callers decide fallback behavior.
 
-### 6.6 Secret Upsert (Repo-Scoped)
+**Rules the system must follow:**
+- Connector secret values must never be exposed in API responses or logs.
 
-**What it does:** Upserts a secret by `(organization_id, repo_id, key)`. Used internally during repo setup flows. **Status: Implemented.**
-
-**Happy path:**
-1. Caller provides `{ repoId, organizationId, key, encryptedValue }`.
-2. `secretsDb.upsertByRepoAndKey` uses `INSERT ... ON CONFLICT (organizationId, repoId, key) DO UPDATE SET encrypted_value, updated_at`.
-
-**Caveat:** The conflict target is 3 columns but the runtime unique constraint is 4 columns (includes `prebuild_id`). This works when `prebuild_id` is null but could fail if prebuild-scoped secrets exist for the same key. See Known Limitations §9.
-
-**Files touched:** `packages/services/src/secrets/db.ts`
+**Files:** `packages/services/src/secrets/service.ts:resolveSecretValue`, `apps/gateway/src/api/proliferate/http/actions.ts`, `apps/web/src/server/routers/integrations.ts`.
 
 ---
 
@@ -357,26 +223,24 @@ if (err.code === "23505") {
 
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
-| Sessions / Gateway | This → Sessions | `buildSandboxEnvVars()` | Secrets decrypted and injected as env vars at session boot |
-| Sessions / Gateway | This → Sessions | `buildEnvFilesFromBundles()` | Bundle target paths generate env file specs for sandbox boot |
-| Sandbox Providers | This → Providers | `provider.createSandbox({ envVars, envFiles })` | Secrets passed as env vars + env file specs to provider |
-| Sandbox Providers | This → Providers | `provider.writeEnvFile(sandboxId, envVarsMap)` | Runtime env submission writes to sandbox |
-| Agent Contract | Other → This | `request_env_variables` tool | Agent requests secrets; user submits via `submitEnvHandler` |
-| Agent Contract | Other → This | `save_env_files` tool | Agent saves env file spec to prebuild (not secrets themselves) |
-| Repos / Prebuilds | Other → This | `prebuildEnvFiles` | Prebuild-level env file specs merged with bundle specs |
-| Config: `packages/environment` | This → Config | `USER_SECRETS_ENCRYPTION_KEY` env var | Required for all encrypt/decrypt; defined in `packages/environment/src/schema.ts` |
+| Sessions / Gateway | This → Sessions | `buildSandboxEnvVars()` | Decrypts and injects runtime env vars at session boot |
+| Sessions / Gateway | This → Sessions | `submitEnvHandler()` | Writes runtime env values and optional persistence results |
+| Gateway Tool Callbacks | This ← Gateway | `save_env_files` intercepted tool | Persists declarative env file spec to `configurations.envFiles` |
+| Sandbox Providers | This → Providers | `provider.createSandbox({ envVars, envFiles })` | Providers receive assembled env vars + env file spec |
+| Sandbox Providers | This → Providers | `provider.writeEnvFile(sandboxId, envVarsMap)` | Runtime env submission path |
+| Actions / Integrations | Other → This | `resolveSecretValue(orgId, key)` | Connector auth resolves org-level secret by key |
+| Configurations | This ↔ Configurations | `updateConfigurationEnvFiles`, `getConfigurationEnvFiles` | Env file spec persistence and retrieval |
+| Config: `packages/environment` | This → Config | `USER_SECRETS_ENCRYPTION_KEY` | Required for all encrypt/decrypt paths |
 
 ### Security & Auth
-- All secret endpoints use `orgProcedure` middleware — requires authenticated user with org membership.
-- Secret values are encrypted with AES-256-GCM before storage. Decryption occurs only in `buildSandboxEnvVars` (gateway-side).
-- The API never returns `encrypted_value` — list queries explicitly exclude it.
-- Bundle ownership is validated on every cross-entity operation to prevent IDOR.
-- Target paths are validated to prevent directory traversal attacks.
+- Secret and secret-file routes use `orgProcedure`; secret-file writes additionally require `owner`/`admin`.
+- Ciphertext is persisted in DB; plaintext is only materialized in memory for runtime injection and connector resolution.
+- List/check APIs intentionally omit secret plaintext and ciphertext fields.
 
 ### Observability
-- Service-level logging uses the injectable logger pattern (`getServicesLogger()`).
-- `sandbox-env.ts` logs: secret fetch duration, count, individual decrypt failures (with `secretKey`, not value).
-- `sessions-submit-env.ts` logs: persist/duplicate counts, write duration.
+- `sandbox-env.ts` logs fetch/decrypt timings and per-key decrypt failures without values.
+- `sessions-submit-env.ts` logs request counts, persistence stats, and sandbox write timings.
+- Gateway tool callback route logs tool execution and deduplicates retries by `tool_call_id`.
 
 ---
 
@@ -386,15 +250,21 @@ if (err.code === "23505") {
 - [ ] `packages/services/src/secrets/service.test.ts` passes
 - [ ] `apps/web/src/test/unit/sessions-submit-env.test.ts` passes
 - [ ] `packages/shared/src/env-parser.test.ts` passes
-- [ ] This spec is updated (file tree, data models, deep dives)
+- [ ] Spec deep dives are invariant/rule based (no imperative execution recipes)
+- [ ] Spec no longer documents bundle-era file-tree/data-model snapshots as source of truth
 
 ---
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **Single encryption key** — all secrets across all orgs share one `USER_SECRETS_ENCRYPTION_KEY`. No key rotation mechanism exists. Impact: a compromised key exposes all org secrets. Expected fix: per-org keys with a key versioning scheme.
-- [ ] **No secret update** — there is no endpoint to update a secret's value. Users must delete and re-create. Impact: minor friction for key rotation workflows.
-- [ ] **`secret_type` unused** — the `secret_type` column (`env`, `docker_registry`, `file`) defaults to `env` and has no behavioral differentiation in the codebase. Impact: dead schema complexity.
-- [ ] **`prebuild_id` column unused in queries** — the runtime schema (`packages/db/src/schema/schema.ts`) includes `prebuild_id` and the 4-column unique constraint includes it, but no service-layer query filters or inserts by `prebuild_id`. `CheckSecretsFilter` accepts `prebuildId` but `findExistingKeys` ignores it. The `upsertByRepoAndKey` conflict target uses only 3 columns (`organizationId, repoId, key`), which may conflict with the 4-column unique constraint if `prebuild_id` varies. Impact: potential upsert failures when prebuild-scoped secrets exist; dead schema complexity. Expected fix: align conflict targets with the 4-column constraint or add `prebuild_id` to query filters.
-- [ ] **No audit trail** — secret creation/deletion is not logged to an audit table. Only `created_by` is tracked. Impact: no forensic trail for secret management operations.
-- [ ] **S3 not used for secrets** (`Planned` / not implemented) — the feature registry and agent prompt list "S3 integration for secrets" as in scope, but `apps/gateway/src/lib/s3.ts` handles verification file uploads only. Secrets are stored exclusively in PostgreSQL with AES-256-GCM encryption. Impact: feature registry entry is misleading. Expected fix: either implement S3-backed secret storage or remove the entry from the feature registry.
+- [ ] **Stale bundle-era schema file remains in tree** — `packages/db/src/schema/secrets.ts` still models `secret_bundles`, while canonical exports point to `schema.ts`/`relations.ts`. Impact: easy agent confusion and wrong imports.
+- [ ] **Configuration-linked secrets are not consumed in session boot path** — `getSecretsForConfiguration()` exists but `buildSandboxEnvVars()` currently reads `getSecretsForSession()` only. Impact: configuration-linked secret expectations can diverge from runtime injection behavior.
+- [ ] **Secret file content is currently write-only in services layer** — no decrypt/read path exists beyond encrypted persistence and metadata listing. Impact: file-based secret UX is only partially wired to backend runtime flows.
+- [ ] **Conflict target mismatch risk** — DB schema unique key is `(organization_id, repo_id, key, configuration_id)` (`packages/db/src/schema/schema.ts`), but `upsertByRepoAndKey` and `bulkCreateSecrets` target only `(organizationId, repoId, key)` (`packages/services/src/secrets/db.ts`). Impact: potential upsert/insert conflict behavior mismatches.
+- [ ] **Potential duplicate-key ambiguity with nullable scope columns** *(inference from PostgreSQL NULL uniqueness semantics)* — uniqueness constraints that include nullable scope columns may permit duplicates where scope columns are null, and runtime query order does not define deterministic winner for duplicate keys. Impact: nondeterministic secret value selection in `buildSandboxEnvVars()` / `resolveSecretValue()`.
+- [ ] **`createSecret` + configuration link is non-transactional** — secret insert and junction insert are separate operations. Impact: linkage can fail after secret row is created.
+- [ ] **`submitEnv` can return failure after partial persistence** — secret persistence happens before sandbox write, and write failure aborts request. Impact: DB and runtime state may temporarily diverge.
+- [ ] **Finalize setup ignores boolean upsert failures** — `upsertSecretByRepoAndKey()` returns `false` on DB error, but finalize flow does not enforce this as fatal. Impact: setup can report success while secret upserts silently fail.
+- [ ] **No first-class secret value update endpoint** — users rotate by add/delete workflows instead of direct update.
+- [ ] **No dedicated audit trail for secret mutations** — `created_by` exists but no append-only audit table records secret read/write/delete intent.
+- [ ] **Secret-file ownership validation is incomplete** — `secretFiles.upsert` does not verify that `configurationId` belongs to `organizationId`. Impact: cross-org referential mismatch is possible if IDs are supplied directly.

@@ -114,7 +114,7 @@ Special:
 
 **Goal:** In-browser VS Code editor with predictable startup.
 
-**States:** Starting → Ready | Error
+**States:** Starting → Ready | Error 
 
 **Starting:** Spinner + "Starting editor..." + determinate progress bar with three stage labels:
 - Request (10%) → Process (45%) → Network (80%) → Ready (100%)

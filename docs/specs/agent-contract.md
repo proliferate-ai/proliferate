@@ -3,541 +3,214 @@
 ## 1. Scope & Purpose
 
 ### In Scope
-- System prompt modes: setup, coding, automation — what each injects and how they differ
-- OpenCode tool schemas: `verify`, `save_snapshot`, `save_service_commands`, `automation.complete`, `request_env_variables`
-- Capability injection: how tools and instructions are registered in the sandbox OpenCode config
-- Tool input/output contracts and validation rules
-- Agent/model configuration and selection
+- System prompt contract for setup, coding, automation, and scratch sessions
+- OpenCode tool schemas and execution domains:
+	- `verify`
+	- `save_snapshot`
+	- `save_service_commands`
+	- `save_env_files`
+	- `automation.complete`
+	- `request_env_variables`
+- Capability injection rules (which files must be written into sandboxes, and when)
+- Gateway callback contract for intercepted tools (`POST /proliferate/:sessionId/tools/:toolName`)
+- Agent/model configuration contract (canonical IDs, OpenCode IDs, provider mapping)
 
 ### Out of Scope
-- How gateway-mediated tools are executed at runtime by the gateway hub — see `sessions-gateway.md`
-- How tool files are written into the sandbox filesystem (provider boot) — see `sandbox-providers.md`
-- Action tools / external-service operations (`proliferate actions`) — see `actions.md`
-- Automation run lifecycle that calls `automation.complete` — see `automations-runs.md` §6
-- LLM proxy key generation and model routing — see `llm-proxy.md`
+- Gateway websocket/session runtime state machine (see `sessions-gateway.md`)
+- Provider boot internals and snapshot restoration mechanics (see `sandbox-providers.md`)
+- Automation run orchestration beyond the `automation.complete` interface (see `automations-runs.md`)
+- Secret CRUD, encryption, and env-file generation runtime (see `secrets-environment.md`)
+- LLM proxy key issuance and spend accounting (see `llm-proxy.md`)
 
-### Mental Model
+### Mental Models
 
-The agent contract defines **what the agent can do and how it should behave** inside a sandbox. It is the interface between the Proliferate platform and the OpenCode coding agent, expressed through three artifacts:
+1. **Contract, not implementation detail inventory.** This spec defines behavioral contracts and invariants. File trees and concrete model structs live in code.
+2. **Two channels exist for tool execution.**
+	- Gateway-mediated tools execute server-side over synchronous HTTP callbacks.
+	- Sandbox-local tools execute in the OpenCode runtime and drive UI through streamed tool events.
+3. **Prompts are policy; tools are capability.** Prompts tell the agent what it should do, while tool files define what it can do.
+4. **Providers do capability injection, not business logic.** Modal and E2B write the same tool/config artifacts; gateway handlers own platform side effects.
+5. **Mode-gating is defense in depth.** Availability is enforced by both injected file set and handler runtime checks for setup-only tools.
 
-1. **System prompts** — mode-specific instructions that shape agent behavior
-2. **Tool definitions** — TypeScript modules written into the sandbox that give the agent platform capabilities
-3. **OpenCode configuration** — JSON config that sets the model, provider, plugin, and permissions
+### Things Agents Get Wrong
 
-The gateway selects a system prompt based on session type and client type, then both providers (Modal and E2B) write identical tool files and config into the sandbox. OpenCode discovers tools by scanning `.opencode/tool/` at startup.
+- `automation` prompt **extends** coding prompt; it does not replace it (`getAutomationSystemPrompt()` wraps `getCodingSystemPrompt()`).
+- Setup mode wins precedence over automation in prompt selection (`session_type === "setup"` is checked before `client_type === "automation"`).
+- `request_env_variables` is **not** gateway-mediated; it runs locally and returns immediately.
+- `save_env_files` is active and setup-only; it is not a removed/legacy capability.
+- `automation.complete` is injected in all session modes today; prompt guidance, not file-level gating, prevents out-of-mode calls.
+- OpenCode tool registration is file discovery from `.opencode/tool/*.ts`; `opencode.json` does not register tools.
+- OpenCode config currently sets `"mcp": {}`; it does not explicitly provision Playwright MCP in `getOpencodeConfig()`.
+- Gateway callback idempotency is in-memory and retention-based (5 minutes), not durable.
+- Most tool wrappers return `result.result` text to OpenCode even on gateway-side `success: false`; failures are often surfaced as tool output, not thrown exceptions.
+- `session.system_prompt` fully overrides mode-derived prompt selection.
 
-**Core entities:**
-- **System prompt** — a mode-specific instruction string injected as the agent's system message. Three modes: setup, coding, automation.
-- **Tool definition** — a TypeScript module + companion `.txt` description file placed in `{repoDir}/.opencode/tool/`. Defines the tool's schema and an `execute()` implementation that either (a) performs a synchronous gateway callback for gateway-mediated tools, or (b) runs locally for sandbox-local tools (`request_env_variables`).
-- **OpenCode config** — JSON written to `{repoDir}/opencode.json` and `/home/user/.config/opencode/opencode.json`. Sets model, provider, plugin, permissions, and MCP servers.
-- **Agent config** — model ID and optional tools array stored per-session in the database.
-
-**Key invariants:**
-- Mode-scoped tool injection: setup-only tools (`save_service_commands`) are injected only for setup sessions. Shared tools (`verify`, `save_snapshot`, `request_env_variables`, `automation.complete`) are injected for all sessions. The system prompt controls which tools the agent is encouraged to use.
-- Four of five tools are gateway-mediated (executed server-side via synchronous HTTP callbacks). Only `request_env_variables` runs in the sandbox.
-- Tool definitions are string templates exported from `packages/shared/src/opencode-tools/index.ts`. They are the single source of truth for tool schemas.
-- The system prompt can be overridden per-session via `session.system_prompt` in the database.
+### Key Invariants
+- Tool schema source of truth is `packages/shared/src/opencode-tools/index.ts`.
+- Setup-only tools are `save_service_commands` and `save_env_files`; all other contract tools are injected in all session modes.
+- Gateway intercept registry is authoritative for server-side execution (`apps/gateway/src/hub/capabilities/tools/index.ts`).
+- Sandbox callback auth must validate `req.auth.source === "sandbox"` on tool routes.
+- Session-scoped sandbox auth token and gateway URL must be injected before OpenCode tool callbacks can work.
 
 ---
 
 ## 2. Core Concepts
 
-### System Prompt Modes — `Implemented`
-Three prompt builders produce mode-specific system messages. The gateway selects one based on `session_type` and `client_type`. All prompts identify the agent as running inside **Proliferate** and document the `proliferate` CLI capabilities (services, actions, local workflow via `npx @proliferate/cli`). The setup prompt additionally includes a UI handoff line telling the agent to direct users to the "Done — Save Snapshot" button when setup is complete.
-- Key detail agents get wrong: automation mode extends coding mode (it appends to it), not replaces it.
-- Reference: `packages/shared/src/prompts.ts`
+### System Prompt Selection — `Implemented`
+- Prompt builders live in `packages/shared/src/prompts.ts`.
+- Selection precedence in `apps/gateway/src/lib/session-store.ts`:
+	- Setup session -> `getSetupSystemPrompt(repoName)`
+	- Else automation client -> `getAutomationSystemPrompt(repoName)`
+	- Else coding -> `getCodingSystemPrompt(repoName)`
+- Scratch sessions use `getScratchSystemPrompt()` when no configuration exists.
+- `session.system_prompt` overrides all computed prompt selection.
 
-### Gateway-Mediated Tools (Synchronous Callbacks) — `Implemented`
-Most platform tools are executed **server-side** by the gateway via synchronous sandbox-to-gateway HTTP callbacks. Tool execution does not use SSE interception or PATCH-based result delivery.
+### Tool Surface — `Implemented`
 
-1. OpenCode invokes a tool.
-2. For gateway-mediated tools (`verify`, `save_snapshot`, `save_service_commands`, `automation.complete`), the tool `execute()` issues a blocking `POST /proliferate/:sessionId/tools/:toolName` to the gateway using the shared `callGatewayTool()` helper.
-3. The gateway authenticates the request using the sandbox HMAC token (`Authorization: Bearer <token>`, `source: "sandbox"`).
-4. The gateway enforces idempotency by `tool_call_id` using in-memory inflight/completed caches (with a 5-minute retention window for completed results).
-5. The gateway executes the tool handler and returns the result in the HTTP response body.
+| Tool | Execution domain | Mode availability | Key schema constraints |
+|---|---|---|---|
+| `verify` | Gateway-mediated | All sessions | `{ folder?: string }` |
+| `save_snapshot` | Gateway-mediated | All sessions | `{ message?: string }` |
+| `automation.complete` (`automation_complete` alias) | Gateway-mediated | Injected in all sessions | `run_id`, `completion_id`, `outcome` required by handler |
+| `save_service_commands` | Gateway-mediated | Setup only | `commands[]` 1-10; name/command/cwd/workspacePath limits validated in gateway |
+| `save_env_files` | Gateway-mediated | Setup only | `files[]` 1-10; relative paths only; format=`dotenv`; mode=`secret`; keys[] 1-50 |
+| `request_env_variables` | Sandbox-local | All sessions | `keys[]` with optional `type`, `required`, `suggestions` |
 
-Sandbox-side retry requirement:
-- The `callGatewayTool()` helper retries network-level failures (`ECONNRESET`, `ECONNREFUSED`, `fetch failed`, timeout) with exponential backoff (500ms base, up to 5 retries) using the same `tool_call_id`.
-- This is required for snapshot boundaries: `save_snapshot` may freeze the sandbox and drop the active TCP socket mid-request (see Snapshot TCP-Drop Retry Trap below).
+Primary references:
+- Tool definitions: `packages/shared/src/opencode-tools/index.ts`
+- Handler registry: `apps/gateway/src/hub/capabilities/tools/index.ts`
+- Handler implementations: `apps/gateway/src/hub/capabilities/tools/*.ts`
 
-- Key detail agents get wrong: `request_env_variables` is NOT gateway-mediated — it runs in the sandbox. The gateway detects it via SSE events to show the UI prompt.
-- Reference: `apps/gateway/src/api/proliferate/http/tools.ts`, `apps/gateway/src/hub/capabilities/tools/`, `packages/shared/src/opencode-tools/index.ts`
+### Gateway Callback Contract — `Implemented`
+- Sandbox wrappers call:
+	- `POST /proliferate/:sessionId/tools/:toolName`
+	- Body: `{ tool_call_id: string, args: Record<string, unknown> }`
+	- Auth: `Authorization: Bearer <SANDBOX_MCP_AUTH_TOKEN>`
+- Router behavior in `apps/gateway/src/api/proliferate/http/tools.ts`:
+	- Reject non-sandbox sources (`403`).
+	- Deduplicate by `tool_call_id` via in-memory inflight + completed caches.
+	- Completed cache retention is 5 minutes.
+	- Execute handler once per idempotency key and reuse cached result for retries.
 
-### Snapshot TCP-Drop Retry Trap — `Implemented`
-`save_snapshot` can freeze the sandbox at the provider layer, which tears down active TCP sockets. When the sandbox resumes, an in-flight callback request from the sandbox tool wrapper may surface as `fetch failed`, `ECONNRESET`, or `ETIMEDOUT`.
+### Snapshot Boundary Retry Semantics — `Implemented`
+- `TOOL_CALLBACK_HELPER` retries callback transport failures (`ECONNRESET`, `ECONNREFUSED`, `fetch failed`, `AbortError`) with exponential backoff.
+- Retries must reuse the same `tool_call_id`.
+- `save_snapshot` can trigger freeze/thaw boundaries where this retry behavior is required for correctness.
 
-Sandbox-side requirement:
-- Generate `tool_call_id` once per logical tool execution.
-- Retry network-level callback failures with the **same** `tool_call_id`.
-- Keep retrying until success or a non-retriable application error.
-
-Gateway-side requirement:
-- Use in-memory inflight dedup (`tool_call_id` -> `Promise`) and completed-result cache to ensure retries do not duplicate side effects.
-
-This pair guarantees that snapshot-boundary drops are recoverable without double execution.
-
-Reference wrapper loop (from `TOOL_CALLBACK_HELPER` in `packages/shared/src/opencode-tools/index.ts`):
-
-```ts
-async function callGatewayTool(toolName, toolCallId, args) {
-	const url = GATEWAY_URL + "/proliferate/" + SESSION_ID + "/tools/" + toolName;
-	for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-		try {
-			const res = await fetch(url, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: "Bearer " + AUTH_TOKEN,
-				},
-				body: JSON.stringify({ tool_call_id: toolCallId, args }),
-				signal: AbortSignal.timeout(120000),
-			});
-			if (!res.ok) {
-				return { success: false, result: "Gateway error " + res.status };
-			}
-			return await res.json();
-		} catch (err) {
-			const isRetryable = err?.cause?.code === "ECONNRESET"
-				|| err?.message?.includes("fetch failed")
-				|| err?.message?.includes("ECONNRESET")
-				|| err?.message?.includes("ECONNREFUSED")
-				|| err?.name === "AbortError";
-			if (isRetryable && attempt < MAX_RETRIES) {
-				await new Promise(r => setTimeout(r, RETRY_BASE_MS * Math.pow(2, attempt)));
-				continue;
-			}
-			throw err;
-		}
-	}
-}
-```
-
-### OpenCode Tool Discovery — `Implemented`
-OpenCode automatically discovers tools by scanning `{repoDir}/.opencode/tool/*.ts` at startup. Tools are not registered in `opencode.json` — they are filesystem-discovered.
-- Key detail agents get wrong: the `opencode.json` config does not list tools. Tool registration is purely file-based.
-- Reference: `packages/shared/src/sandbox/opencode.ts:getOpencodeConfig`
+### Capability Injection — `Implemented`
+- Both providers write:
+	- Tool `.ts` + `.txt` pairs in `{repoDir}/.opencode/tool/`
+	- OpenCode config to both global and repo-local paths
+	- Plugin at `/home/user/.config/opencode/plugin/proliferate.mjs`
+	- `.opencode/instructions.md` and `.proliferate/actions-guide.md`
+	- Preinstalled tool deps (`package.json`, `node_modules`) into `.opencode/tool/`
+- Setup-only tool files are removed in non-setup sessions to prevent setup snapshot leakage.
 
 ### Agent/Model Configuration — `Implemented`
-A static registry maps agent types to supported models. Currently only the `opencode` agent type exists, with three model options. Model IDs are transformed between internal canonical format, OpenCode format, and Anthropic API format.
-- Key detail agents get wrong: OpenCode model IDs use a different format (`anthropic/claude-opus-4-6`) than canonical IDs (`claude-opus-4.6`) or API IDs (`claude-opus-4-6`).
-- Reference: `packages/shared/src/agents.ts`
-
----
-
-## 3. File Tree
-
-```
-packages/shared/src/
-├── prompts.ts                          # System prompt builders (setup/coding/automation)
-├── agents.ts                           # Agent/model registry and ID transforms
-├── opencode-tools/
-│   └── index.ts                        # All tool definitions (string templates) + descriptions
-│                                       #   incl. TOOL_CALLBACK_HELPER (shared HTTP retry logic)
-└── sandbox/
-    ├── config.ts                       # Plugin template, env instructions, paths, ports
-    └── opencode.ts                     # OpenCode config generator, readiness check
-
-apps/gateway/src/
-├── api/proliferate/http/
-│   └── tools.ts                        # POST /:sessionId/tools/:toolName (sandbox callbacks)
-├── lib/
-│   ├── session-store.ts                # buildSystemPrompt() — mode selection logic
-│   └── opencode.ts                     # OpenCode HTTP helpers (create session, send prompt, etc.)
-└── hub/capabilities/tools/
-    ├── index.ts                        # Intercepted tools registry
-    ├── verify.ts                       # verify handler (S3 upload)
-    ├── save-snapshot.ts                # save_snapshot handler (provider snapshot)
-    ├── automation-complete.ts          # automation.complete handler (run finalization)
-    └── save-service-commands.ts        # save_service_commands handler (configuration update)
-```
-
----
-
-## 4. Data Models & Schemas
-
-### Core TypeScript Types
-
-```typescript
-// packages/shared/src/agents.ts
-type ModelId = "claude-opus-4.6" | "claude-opus-4.5" | "claude-sonnet-4";
-type AgentType = "opencode";
-
-interface AgentConfig {
-  agentType: AgentType;
-  modelId: ModelId;
-}
-
-// apps/gateway/src/hub/capabilities/tools/index.ts
-interface InterceptedToolResult {
-  success: boolean;
-  result: string;
-  data?: Record<string, unknown>;
-}
-
-interface InterceptedToolHandler {
-  name: string;
-  execute(hub: SessionHub, args: Record<string, unknown>): Promise<InterceptedToolResult>;
-}
-```
-
-### Tool Callback Request/Response
-
-```typescript
-// POST /proliferate/:sessionId/tools/:toolName
-// Auth: sandbox HMAC token (Authorization: Bearer <token>)
-
-// Request body
-interface ToolCallbackRequest {
-  tool_call_id: string;   // Unique per tool call, used for idempotency
-  args: Record<string, unknown>;
-}
-
-// Response body (200 OK)
-interface ToolCallbackResponse {
-  success: boolean;
-  result: string;
-  data?: Record<string, unknown>;
-}
-```
-
-### Model ID Transforms
-
-| Context | `claude-opus-4.6` | `claude-opus-4.5` | `claude-sonnet-4` |
-|---------|-------------------|--------------------|--------------------|
-| Canonical (DB, internal) | `claude-opus-4.6` | `claude-opus-4.5` | `claude-sonnet-4` |
-| OpenCode config | `anthropic/claude-opus-4-6` | `anthropic/claude-opus-4-5` | `anthropic/claude-sonnet-4-5` |
-| Anthropic API | `claude-opus-4-6` | `claude-opus-4-5-20251101` | `claude-sonnet-4-20250514` |
-
-Source: `packages/shared/src/agents.ts:toOpencodeModelId`, `toAnthropicApiModelId`
-
-### Session Agent Config (DB column)
-
-```typescript
-// Stored in sessions.agent_config JSONB column
-{
-  modelId?: string;   // Canonical model ID
-  tools?: string[];   // Optional tool filter (not currently used for filtering)
-}
-```
-
-Source: `apps/gateway/src/lib/session-store.ts:SessionRecord`
-
-### Session Tool Invocations (DB table)
-
-```typescript
-// packages/db/src/schema/schema.ts — session_tool_invocations
-{
-  id: uuid;                // Primary key
-  sessionId: uuid;         // FK → sessions.id (cascade delete)
-  organizationId: text;    // FK → organization.id (cascade delete)
-  toolName: text;
-  toolCallId: text;        // Idempotency key
-  status: text;            // e.g. "completed", "failed"
-  createdAt: timestamp;
-}
-// Indexes: session, organization, status
-```
-
-Source: `packages/db/src/schema/schema.ts`
+- Only `opencode` agent type exists.
+- Canonical model IDs are defined in `packages/shared/src/agents.ts` and map to:
+	- `anthropic/*` OpenCode IDs for Anthropic models
+	- `litellm/*` OpenCode IDs for non-Anthropic models
+- `getOpencodeConfig()` emits provider blocks for both `anthropic` and `litellm`, with `permission: { "*": "allow", "question": "deny" }` and currently empty MCP config (`"mcp": {}`).
 
 ---
 
 ## 5. Conventions & Patterns
 
 ### Do
-- Define new tool schemas in `packages/shared/src/opencode-tools/index.ts` as string template exports — this keeps all tool definitions in one place.
-- Export both a `.ts` tool definition and a `.txt` description file for each tool — OpenCode uses both.
-- Use Zod validation in gateway handlers for tools with complex schemas (e.g., `save_service_commands`). Simpler tools (`verify`, `save_snapshot`) use inline type coercion.
-- Return `InterceptedToolResult` from all handlers — the `success` field drives error reporting.
-- Use the shared `callGatewayTool()` helper (from `TOOL_CALLBACK_HELPER`) in tool `execute()` implementations to get automatic retry-on-network-error with `tool_call_id` idempotency.
+- Define all contract tools in `packages/shared/src/opencode-tools/index.ts` as exported string templates.
+- Export both `.ts` and `.txt` artifacts per tool.
+- Keep setup-only tool gating aligned in both places:
+	- Provider injection/removal logic
+	- Gateway handler runtime checks
+- Use `tool_call_id` consistently for callback idempotency.
+- Use Zod validation for structured handler args (`save_service_commands`, `save_env_files`).
 
 ### Don't
-- Register tools in `opencode.json` — OpenCode discovers them by scanning `.opencode/tool/`.
-- Add new `console.*` calls in gateway tool handlers — use `@proliferate/logger`.
-- Modify system prompts without considering all three modes — automation extends coding, so changes to coding affect automation too.
-- Add tool-specific logic to providers — providers write files, the gateway handles execution.
+- Do not register tools in `opencode.json`.
+- Do not move gateway side effects (DB/provider/S3 writes) into sandbox tool code.
+- Do not assume `session.agent_config.tools` filters injected tools; it is currently carried through context but not enforced.
+- Do not modify coding/setup prompts without checking automation prompt side effects.
 
 ### Error Handling
-
-```typescript
-// Standard pattern for gateway tool handlers
-// Source: apps/gateway/src/hub/capabilities/tools/save-service-commands.ts
-async execute(hub, args): Promise<InterceptedToolResult> {
-  const parsed = ArgsSchema.safeParse(args);
-  if (!parsed.success) {
-    return {
-      success: false,
-      result: `Invalid arguments: ${parsed.error.issues.map(i => i.message).join(", ")}`,
-    };
-  }
-  try {
-    // ... perform operation
-    return { success: true, result: "...", data: { ... } };
-  } catch (err) {
-    return {
-      success: false,
-      result: `Failed to ...: ${err instanceof Error ? err.message : "Unknown error"}`,
-    };
-  }
-}
-```
+- Intercepted handlers return `InterceptedToolResult` with `{ success, result, data? }`.
+- Callback helper converts HTTP/network errors into structured `{ success: false, result: string }`.
+- Tool wrappers usually return `result.result` to OpenCode; callers should treat tool output content as authoritative for success/failure messaging.
 
 ### Reliability
-- **Gateway-mediated tool execution**: Tools are executed via blocking sandbox-to-gateway HTTP callbacks (`POST /proliferate/:sessionId/tools/:toolName`) and return results synchronously. No SSE interception or PATCH-based result delivery.
-- **Idempotency**: Tool calls are idempotent by `tool_call_id` via in-memory inflight/completed caches in the gateway tools router. `automation.complete` additionally accepts a `completion_id` idempotency key at the domain level.
-- **Retry semantics**: The `callGatewayTool()` helper retries on network-level failures (`ECONNRESET`, `ECONNREFUSED`, `fetch failed`, `AbortError`) with exponential backoff (500ms base, max 5 retries) using the same `tool_call_id`. The gateway returns the cached result for duplicate `tool_call_id`s.
-- **Timeouts**: Tool callbacks use a 120-second `AbortSignal.timeout`. OpenCode readiness check uses exponential backoff (200ms base, 1.5x, max 2s per attempt, 30s total). Source: `packages/shared/src/sandbox/opencode.ts:waitForOpenCodeReady`
+- Callback timeout per attempt is 120 seconds.
+- Retry behavior is exponential backoff with `MAX_RETRIES = 5` (up to 6 attempts total including first try).
+- OpenCode readiness probe uses exponential backoff (200ms base, 1.5x, max 2s, 30s budget).
+- Idempotency is process-memory scoped and lost on gateway restart.
 
 ### Testing Conventions
-- Tool handler tests live alongside handlers in gateway tests.
-- Test gateway tool handlers by mocking `SessionHub` methods (e.g., `hub.uploadVerificationFiles`, `hub.saveSnapshot`) and by exercising the tools route (idempotency by `tool_call_id`).
-- Verify Zod validation rejects malformed args for `save_service_commands`.
-- System prompt tests: assert each mode includes the expected tool references and omits out-of-scope ones.
+- Unit-test each intercepted handler's schema + guard behavior.
+- Route-level tests should assert:
+	- sandbox-source auth enforcement
+	- inflight dedup behavior
+	- completed-result cache reuse by `tool_call_id`
+- Prompt tests should assert mode-specific expectations, especially setup vs automation precedence.
 
 ---
 
-## 6. Subsystem Deep Dives
+## 6. Subsystem Deep Dives (Invariant Set)
 
-### 6.1 System Prompt Mode Selection — `Implemented`
+### 6.1 Prompt Contract Invariants — `Implemented`
+- The prompt selection function must stay pure and precedence-ordered: setup first, then automation, then coding.
+- Scratch sessions must not reuse configuration-backed prompt selection logic.
+- `session.system_prompt` override remains authoritative and bypasses mode-derived prompt composition.
+- Automation prompt must continue to include coding prompt content plus explicit completion requirements.
+- Setup prompt must preserve setup-only behavioral constraints (no source edits, explicit verification/snapshot workflow, env-file guidance).
 
-**What it does:** Selects the appropriate system prompt based on session type and client type.
+### 6.2 Tool Definition Invariants — `Implemented`
+- The canonical tool schema and wrapper logic must live in a single module (`opencode-tools/index.ts`).
+- Each tool must ship as a pair: executable module (`*.ts`) and companion guidance (`*.txt`).
+- Schema invariants are part of this contract:
+	- `verify`: optional `folder`.
+	- `save_snapshot`: optional `message`.
+	- `automation.complete`: required `run_id`, `completion_id`, and `outcome`.
+	- `save_service_commands`: `commands[]` length 1-10 with bounded command metadata fields.
+	- `save_env_files`: `files[]` length 1-10, relative paths only, `format=dotenv`, `mode=secret`.
+	- `request_env_variables`: `keys[]` payload with optional `type`, `required`, and `suggestions`.
+- Tool names in wrappers, provider-written filenames, and gateway registry must remain consistent:
+	- `automation.complete` wrapper file is `automation_complete.ts`.
+	- Gateway must continue supporting both `automation.complete` and `automation_complete`.
+- Setup-only capabilities (`save_service_commands`, `save_env_files`) must not be available in non-setup sessions after provider initialization.
 
-**Happy path:**
-1. Gateway loads session context via `loadSessionContext()` (`apps/gateway/src/lib/session-store.ts:85`)
-2. If `session.system_prompt` is set (custom override), use it directly (`session-store.ts:223-229`)
-3. Otherwise, call `buildSystemPrompt(session_type, repoName, client_type)` (`session-store.ts:71-83`)
-4. Selection logic:
-   - `session_type === "setup"` -> `getSetupSystemPrompt(repoName)`
-   - `client_type === "automation"` -> `getAutomationSystemPrompt(repoName)`
-   - Otherwise -> `getCodingSystemPrompt(repoName)`
+### 6.3 Callback Transport Invariants — `Implemented`
+- Gateway-mediated tools must execute through synchronous HTTP callbacks, not patching OpenCode parts post hoc.
+- Callback auth must reject any non-sandbox caller regardless of bearer token presence.
+- Idempotency key semantics:
+	- `tool_call_id` uniquely identifies the logical callback execution window.
+	- Duplicate in-flight keys must await the same promise.
+	- Duplicate completed keys within retention must return cached results.
+- Snapshot-boundary retries must preserve `tool_call_id`.
+- `automation.complete` must use `completion_id` as callback idempotency key in the tool wrapper.
 
-**Mode differences:**
+### 6.4 Capability Injection Invariants — `Implemented`
+- Providers must write equivalent contract artifacts regardless of provider backend (Modal/E2B).
+- OpenCode config must be written to both global and repo-local paths.
+- Provider boot must set callback-critical env vars in sandbox runtime:
+	- `SANDBOX_MCP_AUTH_TOKEN`
+	- `PROLIFERATE_GATEWAY_URL`
+	- `PROLIFERATE_SESSION_ID`
+- Provider restore paths must remove setup-only tools in non-setup sessions to prevent snapshot contamination.
 
-| Aspect | Setup | Coding | Automation |
-|--------|-------|--------|------------|
-| Base prompt | Unique | Unique | Extends Coding |
-| Goal | Get repo running, save snapshot | Implement changes, verify | Complete task, report outcome |
-| `verify` | Required before snapshot | Encouraged | Available |
-| `save_snapshot` | Required at end | Available | Available |
-| `request_env_variables` | Emphasized | Available | Available |
-| `save_service_commands` | Emphasized | Not available | Not available |
-| `automation.complete` | Not mentioned | Not mentioned | **Mandatory** |
-| Source code edits | Forbidden | Encouraged | Encouraged |
-| `proliferate` CLI | Documented | Documented | Documented |
-| Actions integration | Documented | Documented | Documented |
+### 6.5 OpenCode Runtime Configuration Invariants — `Implemented`
+- OpenCode server must bind to `0.0.0.0:4096`.
+- Plugin path must reference the global Proliferate plugin file.
+- Permission policy must continue to deny `question` while allowing command execution (`"*": "allow"`).
+- Canonical model IDs must remain transformable into:
+	- OpenCode model ID (`toOpencodeModelId`)
+	- Provider API model ID (`toApiModelId`)
+- Non-Anthropic models must route via the `litellm` OpenCode provider block.
 
-**Files touched:** `packages/shared/src/prompts.ts`, `apps/gateway/src/lib/session-store.ts`
-
-### 6.2 Tool Definitions and Schemas
-
-**What it does:** Defines all platform tools as TypeScript string templates that get written into sandbox filesystems.
-
-Each tool is exported as two constants from `packages/shared/src/opencode-tools/index.ts`:
-- `*_TOOL` — the `.ts` module source (OpenCode tool API)
-- `*_DESCRIPTION` — the `.txt` guidance for agents
-
-All gateway-mediated tools share the `TOOL_CALLBACK_HELPER` — a common `callGatewayTool()` function template that handles the synchronous HTTP callback to the gateway with retry logic for the Snapshot TCP-Drop scenario.
-
-#### `verify` tool — `Implemented`
-
-**Schema:**
-```typescript
-{
-  folder?: string  // Default: ".proliferate/.verification/"
-}
-```
-
-**Behavior:** Gateway executes server-side (gateway-mediated via tool callback), uploads files from the folder to S3, returns S3 key prefix. Agent collects evidence (screenshots, test logs) before calling.
-
-**Style note:** Uses raw `export default { name, description, parameters, execute }` format (not the `tool()` API).
-
-#### `save_snapshot` tool — `Implemented`
-
-**Schema:**
-```typescript
-{
-  message?: string  // Brief summary of what's configured
-}
-```
-
-**Behavior:** Gateway executes server-side (gateway-mediated via tool callback), triggers provider snapshot. For setup sessions: updates configuration snapshot. For coding sessions: updates session snapshot. Returns `{ snapshotId, target }`.
-
-#### `save_service_commands` tool — `Implemented`
-
-**Schema:**
-```typescript
-{
-  commands: Array<{
-    name: string       // 1-100 chars
-    command: string    // 1-1000 chars
-    cwd?: string       // max 500 chars, relative to workspace root
-    workspacePath?: string  // max 500 chars, for multi-repo setups
-  }>  // min 1, max 10 items
-}
-```
-
-**Behavior:** Gateway executes server-side (gateway-mediated via tool callback), validates with Zod, persists to configuration `service_commands` JSONB. Requires `session.configuration_id`. Returns `{ configurationId, commandCount }`.
-
-**Scope:** Setup sessions only. The tool file is only injected into sandboxes when `sessionType === "setup"`. The gateway handler also rejects calls from non-setup sessions at runtime as a defense-in-depth measure.
-
-#### `automation.complete` tool — `Implemented`
-
-**Schema:**
-```typescript
-{
-  run_id: string            // Required
-  completion_id: string     // Required (idempotency key)
-  outcome: "succeeded" | "failed" | "needs_human"
-  summary_markdown?: string
-  citations?: string[]
-  diff_ref?: string
-  test_report_ref?: string
-  side_effect_refs?: string[]
-}
-```
-
-**Behavior:** Gateway executes server-side (gateway-mediated via tool callback), updates run record with outcome + completion JSON, updates trigger event status. Registered under both `automation.complete` and `automation_complete` names. Source: `apps/gateway/src/hub/capabilities/tools/index.ts:41`
-
-#### `request_env_variables` tool — `Implemented`
-
-**Schema:**
-```typescript
-{
-  keys: Array<{
-    key: string             // Env var name
-    description?: string
-    type?: "env" | "secret" // env = file only, secret = file + encrypted DB
-    required?: boolean      // Default: true
-    suggestions?: Array<{
-      label: string
-      value?: string        // Preset value
-      instructions?: string // Setup instructions
-    }>
-  }>
-}
-```
-
-**Behavior:** NOT gateway-mediated. Runs in sandbox, returns immediately with a summary string. The gateway detects this tool call via SSE events and triggers a form in the user's UI. User-submitted values are written to `/tmp/.proliferate_env.json`. The agent then extracts values with `jq` into config files.
-
-**Files touched:** `packages/shared/src/opencode-tools/index.ts`
-
-### 6.3 Capability Injection Pipeline — `Implemented`
-
-**What it does:** Writes tool files, config, plugin, and instructions into the sandbox so OpenCode can discover them.
-
-**Happy path:**
-1. Provider (Modal or E2B) calls `setupEssentialDependencies()` during sandbox boot (`packages/shared/src/providers/modal-libmodal.ts:988`, `packages/shared/src/providers/e2b.ts:568`)
-2. Plugin written to `/home/user/.config/opencode/plugin/proliferate.mjs` — minimal SSE-mode plugin (`PLUGIN_MJS` from `packages/shared/src/sandbox/config.ts:16-31`)
-3. Tool `.ts` files + `.txt` description files written to `{repoDir}/.opencode/tool/` (count varies by mode — see mode-scoped injection rules below)
-4. Pre-installed `package.json` + `node_modules/` copied from `/home/user/.opencode-tools/` to `{repoDir}/.opencode/tool/`
-5. OpenCode config written to both `{repoDir}/opencode.json` and `/home/user/.config/opencode/opencode.json`
-6. Environment instructions appended to `{repoDir}/.opencode/instructions.md` (from `ENV_INSTRUCTIONS` in `config.ts`)
-7. Actions bootstrap guide written to `{repoDir}/.proliferate/actions-guide.md` (from `ACTIONS_BOOTSTRAP` in `config.ts`). This guide identifies the agent as running inside Proliferate, documents the `proliferate actions` CLI, and mentions the local CLI (`npx @proliferate/cli`).
-8. OpenCode server started: `cd {repoDir} && opencode serve --port 4096 --hostname 0.0.0.0`
-9. Gateway waits for readiness via `waitForOpenCodeReady()` with exponential backoff
-
-**Mode-scoped injection rules:**
-- `save_service_commands` is injected only when `sessionType === "setup"`.
-- When `sessionType !== "setup"`, providers explicitly remove `save_service_commands` files (cleanup from setup snapshots that may include them).
-- Shared tools (`verify`, `save_snapshot`, `request_env_variables`, `automation.complete`) are injected for all sessions.
-
-**Sandbox filesystem layout after injection:**
-```
-/home/user/.config/opencode/
-├── opencode.json                        # Global config
-└── plugin/
-    └── proliferate.mjs                  # SSE-mode plugin (no event pushing)
-
-{repoDir}/
-├── opencode.json                        # Local config (same content)
-├── .opencode/
-│   ├── instructions.md                  # ENV_INSTRUCTIONS (services, tools, setup hints)
-│   └── tool/
-│       ├── verify.ts / verify.txt
-│       ├── request_env_variables.ts / request_env_variables.txt
-│       ├── save_snapshot.ts / save_snapshot.txt
-│       ├── automation_complete.ts / automation_complete.txt
-│       ├── save_service_commands.ts / save_service_commands.txt  [setup only]
-│       ├── package.json                 # Pre-installed deps
-│       └── node_modules/                # Pre-installed deps
-└── .proliferate/
-    └── actions-guide.md                 # CLI actions documentation
-```
-
-**Edge cases:**
-- Config is written to both global and local paths for OpenCode discovery reliability.
-- File write mechanics differ by provider (Modal uses shell commands, E2B uses `files.write` SDK). For provider-specific boot details, see `sandbox-providers.md` §6.
-
-**Files touched:** `packages/shared/src/sandbox/config.ts`, `packages/shared/src/sandbox/opencode.ts`, `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`
-
-### 6.4 OpenCode Configuration — `Implemented`
-
-**What it does:** Generates the `opencode.json` that configures the agent's model, provider, permissions, and MCP servers.
-
-**Generated config structure:**
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "model": "anthropic/claude-opus-4-6",
-  "provider": {
-    "anthropic": {
-      "options": {
-        "baseURL": "https://llm-proxy.example.com",
-        "apiKey": "..."
-      }
-    }
-  },
-  "server": { "port": 4096, "hostname": "0.0.0.0" },
-  "plugin": ["/home/user/.config/opencode/plugin/proliferate.mjs"],
-  "permission": { "*": "allow", "question": "deny" },
-  "mcp": {
-    "playwright": {
-      "type": "local",
-      "command": ["playwright-mcp", "--headless", "--browser", "chromium",
-                  "--no-sandbox", "--isolated", "--caps", "vision"],
-      "enabled": true
-    }
-  }
-}
-```
-
-**Key decisions:**
-- `permission: { "*": "allow", "question": "deny" }` — agent can run any command, but cannot use native browser dialogs.
-- Playwright MCP is always enabled with headless Chromium and vision capabilities.
-- Server binds to `0.0.0.0:4096` so the gateway can reach it via tunnel URL.
-
-**Files touched:** `packages/shared/src/sandbox/opencode.ts:getOpencodeConfig`
-
-### 6.5 Gateway-Mediated Tools Contract — `Implemented`
-
-**What it does:** Defines the contract between sandbox-side tool implementations and gateway-side handlers using synchronous HTTP callbacks.
-
-**Gateway-mediated vs sandbox-local tools:**
-
-| Tool | Gateway-mediated? | Reason |
-|------|-------------------|--------|
-| `verify` | Yes | Needs S3 credentials |
-| `save_snapshot` | Yes | Needs provider API access |
-| `automation.complete` | Yes | Needs database access |
-| `save_service_commands` | Yes | Needs database access |
-| `request_env_variables` | No | Runs locally; gateway uses SSE events to drive UI |
-
-**Callback request:**
-- Method: `POST /proliferate/:sessionId/tools/:toolName`
-- Auth: sandbox HMAC token (`Authorization: Bearer <token>`, verified as `source: "sandbox"`)
-- Body:
-  - `tool_call_id: string` (unique per tool call, used for idempotency)
-  - `args: Record<string, unknown>`
-
-**Callback response:**
-- `200`: `{ success: boolean, result: string, data?: object }`
-- `4xx/5xx`: standard error response
-
-**Idempotency:** The gateway tools router maintains in-memory inflight (`tool_call_id` -> `Promise<ToolCallResult>`) and completed-result (`tool_call_id` -> `ToolCallResult`, 5-minute retention) caches. Duplicate calls return the cached result without re-executing. The `session_tool_invocations` DB table records tool calls for audit and observability.
-
-**Handler contract:** Every gateway tool handler implements `InterceptedToolHandler` — a `name` string and an `execute(hub, args)` method returning `InterceptedToolResult { success, result, data? }`. Handlers are registered in `apps/gateway/src/hub/capabilities/tools/index.ts`.
-
-**Registration:** `automation.complete` is registered under two names (`automation.complete` and `automation_complete`) to handle both dot-notation and underscore-notation from agents. Source: `apps/gateway/src/hub/capabilities/tools/index.ts:40-41`
+### 6.6 Environment Request and Persistence Invariants — `Implemented`
+- `request_env_variables` must remain sandbox-local and non-blocking from gateway callback perspective.
+- UI env-request state depends on streamed tool events (`tool_start`) and must remain compatible with `request_env_variables` payload shape.
+- User env submissions must merge into `/tmp/.proliferate_env.json` via provider `writeEnvFile()` implementations.
+- Secret persistence policy is controlled by submission inputs (`persist` per key, fallback `saveToConfiguration`) and is not owned by the tool schema itself.
+- `save_env_files` must persist env-file generation spec (not secret values) and remain setup-session-gated.
 
 ---
 
@@ -545,25 +218,25 @@ All gateway-mediated tools share the `TOOL_CALLBACK_HELPER` — a common `callGa
 
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
-| `sessions-gateway.md` | This -> Gateway | `POST /proliferate/:sessionId/tools/:toolName` | Gateway executes tool handlers via synchronous callbacks; tool schemas defined here |
-| `sandbox-providers.md` | This -> Providers | Tool file templates + `getOpencodeConfig()` | Providers consume definitions, write files into sandbox |
-| `automations-runs.md` | Runs -> This | `automation.complete` tool schema | Automation runs inject `run_id`/`completion_id` via system prompt; agent calls tool to finalize |
-| `repos-prebuilds.md` | This -> Prebuilds | `save_service_commands` | Tool persists config to configuration records |
-| `secrets-environment.md` | Secrets -> This | `request_env_variables` + `/tmp/.proliferate_env.json` | Secrets written to env file; tool requests new ones |
-| `llm-proxy.md` | Proxy -> This | `anthropicBaseUrl` / `anthropicApiKey` in OpenCode config | LLM proxy URL embedded in agent config |
-| `actions.md` | This -> Actions | `proliferate actions` CLI in system prompts | Prompts document CLI usage; actions spec owns the runtime |
+| `sessions-gateway.md` | This -> Gateway | `POST /proliferate/:sessionId/tools/:toolName` | Tool callbacks are part of gateway runtime lifecycle |
+| `sandbox-providers.md` | This -> Providers | Tool/config injection contract | Providers materialize tool files and OpenCode config defined here |
+| `automations-runs.md` | Runs -> This | `automation.complete` payload contract | Run completion depends on this tool schema and idempotency rules |
+| `repos-prebuilds.md` | This -> Configurations | `save_service_commands`, `save_env_files` writes | Setup tools persist reusable configuration metadata |
+| `secrets-environment.md` | This <-> Secrets | `request_env_variables`, submit-env write path | Tool requests values; secrets subsystem persists optional org secrets |
+| `llm-proxy.md` | Proxy -> This | OpenCode provider options | Proxy URL/key populate OpenCode provider options |
+| `actions.md` | This -> Actions | Prompt + actions bootstrap guidance | Prompts and bootstrap file document `proliferate actions` usage |
 
 ### Security & Auth
-- Gateway-mediated tools run on the gateway with full DB/S3/provider access — sandboxes never have these credentials.
-- Tool callbacks authenticate with the sandbox HMAC token and require `source: "sandbox"` — requests from other sources are rejected with 403.
-- `request_env_variables` instructs agents to never `cat` or `echo` the env file directly — only extract specific keys with `jq`.
-- OpenCode permissions deny `question` tool to prevent native browser dialogs.
-- System prompts instruct agents never to ask for API keys for connected integrations (tokens resolved server-side).
+- Gateway-mediated tools execute with server-side credentials; sandbox code does not receive direct DB/S3/provider credentials.
+- Callback endpoints enforce sandbox-origin authentication (`req.auth.source === "sandbox"`).
+- Prompt/tool guidance requires key-level extraction from env JSON, avoiding full-file echoing.
+- Prompts continue to forbid requesting raw integration API keys when integrations are connected.
 
 ### Observability
-- Gateway tool handlers log via `@proliferate/logger` with `sessionId` context.
-- Tool callback executions log `toolName`, `toolCallId`, duration, and final status. The `session_tool_invocations` DB table provides an audit trail.
-- `waitForOpenCodeReady()` logs latency metrics with `[P-LATENCY]` prefix.
+- Tool callback route logs execution events with `toolName`, `toolCallId`, and `sessionId`.
+- Session telemetry tracks tool call IDs and active tool call counts.
+- OpenCode readiness and key runtime operations emit `[P-LATENCY]`/latency logs.
+- `session_tool_invocations` schema exists for audit, but current callback router does not use it as a write-through idempotency store.
 
 ---
 
@@ -571,18 +244,19 @@ All gateway-mediated tools share the `TOOL_CALLBACK_HELPER` — a common `callGa
 
 - [ ] Typecheck passes (`pnpm typecheck`)
 - [ ] Gateway tool handler tests pass
-- [ ] System prompts reference only tools that exist in `packages/shared/src/opencode-tools/index.ts`
-- [ ] Tool definitions in `opencode-tools/index.ts` match handler schemas in `apps/gateway/src/hub/capabilities/tools/`
-- [ ] This spec is updated (file tree, tool schemas, mode table)
+- [ ] Prompt/tool references are synchronized (including `save_env_files`)
+- [ ] Provider injection rules match handler runtime gates for setup-only tools
+- [ ] Section 6 invariants are validated against current implementation
+- [ ] If contract behavior changed, `docs/specs/feature-registry.md` is updated
 
 ---
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **`automation.complete` not yet mode-gated** — `automation.complete` is injected for all sessions, not just automation clients. The system prompt controls usage, but the tool file is present in non-automation sessions. Impact: possible out-of-mode calls. Expected fix: inject `automation_complete.ts` only when `clientType === "automation"`.
-- [ ] **`save_env_files` tool pending removal** — The `save_env_files` tool and its gateway handler (`apps/gateway/src/hub/capabilities/tools/save-env-files.ts`) still exist in the codebase but are targeted for removal. It is injected only for setup sessions. Expected fix: remove tool definition, handler, and provider injection code.
-- [ ] **Two tool definition styles** — `verify` uses raw `export default { name, description, parameters }` while other tools use the `tool()` plugin API from `@opencode-ai/plugin`. Impact: inconsistent authoring; no functional difference. Expected fix: migrate `verify` to `tool()` API.
-- [ ] **Dual registration for automation.complete** — Registered under both `automation.complete` and `automation_complete` to handle agent variation. Impact: minor registry bloat. Expected fix: standardize on one name once agent behavior is stable.
-- [ ] **No tool versioning** — Tool schemas are string templates with no version tracking. If a schema changes, running sessions continue with the old version until sandbox restart. Impact: potential schema mismatch during deploys. Expected fix: version stamp in tool file path or metadata.
-- [ ] **Custom system prompt bypass** — `session.system_prompt` in the DB overrides mode selection entirely. No validation that the custom prompt includes required tool instructions. Impact: automation sessions with custom prompts may not call `automation.complete`. Expected fix: append mode-critical instructions even when custom prompt is set.
-- [ ] **In-memory idempotency only** — Tool call idempotency uses in-memory maps on the gateway instance. If the gateway restarts between a tool call and its retry, the cached result is lost. The `session_tool_invocations` DB table exists for audit but is not currently used for idempotency lookups. Impact: rare double-execution on gateway restart during snapshot thaw. Expected fix: use `session_tool_invocations` as the idempotency store.
+- [ ] **`automation.complete` is not mode-gated at injection time** — injected in non-automation sessions; enforced only by prompt expectations.
+- [ ] **Dual naming for automation completion** — registry supports both `automation.complete` and `automation_complete` for compatibility.
+- [ ] **Mixed tool authoring styles** — `verify` still uses raw export object while other tools use `tool()` API.
+- [ ] **Custom prompt override bypasses safety text** — `session.system_prompt` can omit mode-critical instructions.
+- [ ] **Idempotency cache is in-memory only** — gateway restart drops dedup state and may permit rare duplicate side effects.
+- [ ] **Idempotency key namespace is global to process map** — cache key is `tool_call_id` only, not scoped by session/tool.
+- [ ] **`session_tool_invocations` table is not integrated into callback execution path** — durable audit/idempotency coupling is still missing.

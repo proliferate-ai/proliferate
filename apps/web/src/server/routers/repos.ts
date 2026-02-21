@@ -130,85 +130,12 @@ export const reposRouter = {
 		.input(z.object({ q: z.string().optional() }))
 		.output(z.object({ repositories: z.array(SearchRepoSchema) }))
 		.handler(async ({ input }) => {
-			const searchQuery = input.q;
-
-			if (!searchQuery || searchQuery.trim().length < 2) {
-				return { repositories: [] };
-			}
-
-			const trimmedQuery = searchQuery.trim();
-			const isExactRepo = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(trimmedQuery);
-
-			if (isExactRepo) {
-				const response = await fetch(`https://api.github.com/repos/${trimmedQuery}`, {
-					headers: {
-						Accept: "application/vnd.github.v3+json",
-						"User-Agent": "Proliferate-App",
-					},
-				});
-
-				if (response.ok) {
-					const repo = await response.json();
-					return {
-						repositories: [
-							{
-								id: repo.id,
-								name: repo.name,
-								full_name: repo.full_name,
-								html_url: repo.html_url,
-								default_branch: repo.default_branch,
-								private: repo.private,
-								description: repo.description,
-								stargazers_count: repo.stargazers_count,
-								language: repo.language,
-							},
-						],
-					};
-				}
-			}
-
-			const searchResponse = await fetch(
-				`https://api.github.com/search/repositories?q=${encodeURIComponent(trimmedQuery)}&per_page=10&sort=stars`,
-				{
-					headers: {
-						Accept: "application/vnd.github.v3+json",
-						"User-Agent": "Proliferate-App",
-					},
-				},
-			);
-
-			if (!searchResponse.ok) {
+			try {
+				const repositories = await repos.searchPublicGitHubRepos(input.q);
+				return { repositories };
+			} catch {
 				throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to search GitHub" });
 			}
-
-			const searchData = await searchResponse.json();
-			const publicRepos = searchData.items
-				.filter((repo: { private: boolean }) => !repo.private)
-				.map(
-					(repo: {
-						id: number;
-						name: string;
-						full_name: string;
-						html_url: string;
-						default_branch: string;
-						private: boolean;
-						description: string | null;
-						stargazers_count: number;
-						language: string | null;
-					}) => ({
-						id: repo.id,
-						name: repo.name,
-						full_name: repo.full_name,
-						html_url: repo.html_url,
-						default_branch: repo.default_branch,
-						private: repo.private,
-						description: repo.description,
-						stargazers_count: repo.stargazers_count,
-						language: repo.language,
-					}),
-				);
-
-			return { repositories: publicRepos };
 		}),
 
 	/**

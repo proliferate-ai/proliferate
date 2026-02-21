@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Proliferate — Network Architecture Diagram</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  body {
+    background: #fff;
+    margin: 0;
+    padding: 40px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { text-align: center; font-size: 22px; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: #666; font-size: 13px; margin-bottom: 32px; }
+  .mermaid { display: flex; justify-content: center; }
+  .legend {
+    margin-top: 32px;
+    padding: 20px 28px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .legend h3 { margin-top: 0; font-size: 14px; }
+  .legend ul { padding-left: 18px; }
+  .legend li { margin-bottom: 2px; }
+  .legend .section-title { font-weight: 600; margin-top: 12px; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Proliferate — Network Architecture</h1>
+<p class="subtitle">Production environment · AWS EKS · Last updated February 2026</p>
+
+<div class="mermaid">
+flowchart TB
+
+  %% ──────────── External / Public Zone ────────────
+  subgraph EXTERNAL["☁️  External / Public Internet"]
+    direction LR
+    BROWSER["🖥️ Web Browser<br/>(proliferate.com)"]
+    CLI["⌨️ CLI Client<br/>(Device Auth + File Sync)"]
+    GH["GitHub<br/>(Webhooks · OAuth)"]
+    LINEAR["Linear<br/>(Webhooks · OAuth)"]
+    SENTRY["Sentry<br/>(Webhooks · OAuth)"]
+    POSTHOG["PostHog<br/>(Webhooks)"]
+    SLACK["Slack<br/>(OAuth · Notifications)"]
+    NANGO["Nango<br/>(OAuth Broker)"]
+    LLM_PROVIDERS["LLM Providers<br/>(Anthropic · OpenAI · etc.)"]
+    MODAL_EXT["Modal<br/>(Sandbox Provider)"]
+    E2B_EXT["E2B<br/>(Sandbox Provider)"]
+    AUTUMN["Autumn<br/>(Billing Provider)"]
+  end
+
+  %% ──────────── AWS Cloud Boundary ────────────
+  subgraph AWS["🔒  AWS Cloud (VPC 10.0.0.0/16)"]
+
+    %% ── Public Subnets ──
+    subgraph PUBLIC_SUBNETS["Public Subnets (10.0.101-103.0/24)"]
+      IGW["Internet Gateway"]
+      ALB["Application Load Balancer<br/>(NGINX Ingress Controller)<br/>+ TLS Termination"]
+      NAT["NAT Gateway"]
+    end
+
+    %% ── EKS Cluster ──
+    subgraph EKS["Amazon EKS Cluster (Private Subnets 10.0.1-3.0/24)"]
+      direction TB
+
+      subgraph APP_PODS["Application Pods"]
+        WEB["Next.js Web<br/>(API + Frontend)<br/>──────────<br/>Session lifecycle<br/>oRPC procedures<br/>better-auth"]
+        GW["Gateway Service<br/>──────────<br/>WebSocket hub<br/>Real-time streaming<br/>Message state"]
+        WORKER["Worker Service<br/>──────────<br/>BullMQ consumer<br/>Background jobs<br/>Automation runs"]
+        LLM_PROXY["LLM Proxy<br/>(LiteLLM)<br/>──────────<br/>Model routing<br/>Virtual keys<br/>Spend tracking"]
+        TRIGGER["Trigger Service<br/>──────────<br/>Webhook ingestion<br/>Polling · Cron<br/>GitHub/Linear/Sentry"]
+      end
+
+      subgraph PLATFORM_ADDONS["Platform Add-ons"]
+        EXT_SECRETS["External Secrets<br/>Operator"]
+        INGRESS_CTRL["NGINX Ingress<br/>Controller"]
+      end
+    end
+
+    %% ── Data Layer (Private Subnets) ──
+    subgraph DATA_LAYER["Data Layer (Private Subnets · Encrypted at Rest)"]
+      RDS["Amazon RDS<br/>PostgreSQL<br/>──────────<br/>Metadata only<br/>Multi-AZ · Encrypted<br/>SG: port 5432 VPC-only"]
+      ELASTICACHE["Amazon ElastiCache<br/>Redis 7<br/>──────────<br/>BullMQ job queue<br/>Encrypted at rest<br/>SG: port 6379 VPC-only"]
+    end
+
+    %% ── Secrets & Storage ──
+    subgraph SECRETS_STORAGE["Secrets & Storage"]
+      SM["AWS Secrets Manager<br/>──────────<br/>App secrets<br/>DB credentials<br/>API keys"]
+      S3["Amazon S3<br/>──────────<br/>Verification artifacts<br/>AES-256 encryption<br/>Public access blocked"]
+      ECR["Amazon ECR<br/>──────────<br/>Container images<br/>Scan-on-push enabled"]
+    end
+
+  end
+
+  %% ──────────── Sandbox Zone ────────────
+  subgraph SANDBOX_ZONE["🔧  Sandbox Execution Zone (Isolated)"]
+    MODAL["Modal Sandboxes<br/>──────────<br/>Ephemeral compute<br/>OpenCode agent<br/>Git workspace"]
+    E2B["E2B Sandboxes<br/>──────────<br/>Ephemeral compute<br/>OpenCode agent<br/>Git workspace"]
+  end
+
+  %% ──────────── CI/CD ────────────
+  subgraph CICD["⚙️  CI/CD"]
+    GHA["GitHub Actions<br/>──────────<br/>Build · Test · Deploy<br/>ECR push · Pulumi"]
+  end
+
+  %% ──────────── Connections ────────────
+
+  %% User access
+  BROWSER -- "HTTPS" --> ALB
+  CLI -- "HTTPS" --> ALB
+
+  %% ALB → Ingress → Pods
+  IGW --> ALB
+  ALB -- "TLS" --> INGRESS_CTRL
+  INGRESS_CTRL --> WEB
+  INGRESS_CTRL --> GW
+  INGRESS_CTRL --> TRIGGER
+
+  %% WebSocket path
+  BROWSER -. "WSS (real-time)" .-> GW
+
+  %% Internal service communication
+  WEB -- "HTTP" --> GW
+  WEB -- "HTTP" --> LLM_PROXY
+  GW -- "HTTP" --> MODAL
+  GW -- "HTTP" --> E2B
+  WORKER -- "HTTP" --> GW
+  WORKER -- "HTTP" --> LLM_PROXY
+  TRIGGER -- "HTTP" --> WEB
+
+  %% Data connections
+  WEB -- "TCP 5432<br/>(SG-restricted)" --> RDS
+  GW -- "TCP 5432" --> RDS
+  WORKER -- "TCP 5432" --> RDS
+  TRIGGER -- "TCP 5432" --> RDS
+  WEB -- "TCP 6379<br/>(SG-restricted)" --> ELASTICACHE
+  GW -- "TCP 6379" --> ELASTICACHE
+  WORKER -- "TCP 6379" --> ELASTICACHE
+  TRIGGER -- "TCP 6379" --> ELASTICACHE
+
+  %% Secrets
+  EXT_SECRETS -- "IRSA" --> SM
+  SM -. "synced" .-> APP_PODS
+
+  %% External integrations
+  GH -- "Webhooks" --> TRIGGER
+  LINEAR -- "Webhooks" --> TRIGGER
+  SENTRY -- "Webhooks" --> TRIGGER
+  POSTHOG -- "Webhooks" --> TRIGGER
+  WEB -- "OAuth" --> NANGO
+  NANGO -- "OAuth" --> GH
+  NANGO -- "OAuth" --> LINEAR
+  NANGO -- "OAuth" --> SENTRY
+  NANGO -- "OAuth" --> SLACK
+  WORKER -- "Notifications" --> SLACK
+  LLM_PROXY -- "HTTPS" --> LLM_PROVIDERS
+  WEB -- "HTTPS" --> AUTUMN
+
+  %% Sandbox callbacks
+  MODAL -- "HTTP (SSE)" --> GW
+  E2B -- "HTTP (SSE)" --> GW
+
+  %% Outbound via NAT
+  EKS -- "outbound" --> NAT
+  NAT --> IGW
+
+  %% CI/CD
+  GHA -- "Push images" --> ECR
+  GHA -- "Pulumi deploy" --> EKS
+
+  %% Styling
+  classDef external fill:#f0f4ff,stroke:#4a6fa5,color:#1a1a1a
+  classDef aws fill:#fff8f0,stroke:#d48806,color:#1a1a1a
+  classDef eks fill:#e8f5e9,stroke:#2e7d32,color:#1a1a1a
+  classDef data fill:#fce4ec,stroke:#c62828,color:#1a1a1a
+  classDef sandbox fill:#f3e5f5,stroke:#6a1b9a,color:#1a1a1a
+  classDef security fill:#fff3e0,stroke:#e65100,color:#1a1a1a
+
+  class BROWSER,CLI,GH,LINEAR,SENTRY,POSTHOG,SLACK,NANGO,LLM_PROVIDERS,MODAL_EXT,E2B_EXT,AUTUMN external
+  class ALB,IGW,NAT aws
+  class WEB,GW,WORKER,LLM_PROXY,TRIGGER,EXT_SECRETS,INGRESS_CTRL eks
+  class RDS,ELASTICACHE data
+  class SM,S3,ECR security
+  class MODAL,E2B sandbox
+</div>
+
+<div class="legend">
+  <h3>Legend &amp; Security Controls</h3>
+
+  <div class="section-title">Network Boundaries</div>
+  <ul>
+    <li><strong>External / Public Internet</strong> — end-user browsers, CLI clients, third-party SaaS integrations</li>
+    <li><strong>AWS VPC (10.0.0.0/16)</strong> — isolated virtual network containing all production infrastructure</li>
+    <li><strong>Public Subnets (10.0.101–103.0/24)</strong> — Internet Gateway, ALB/Load Balancer, NAT Gateway only</li>
+    <li><strong>Private Subnets (10.0.1–3.0/24)</strong> — EKS worker nodes, RDS, ElastiCache (no direct internet access)</li>
+    <li><strong>Sandbox Zone</strong> — ephemeral, isolated compute environments (Modal / E2B) with no direct DB access</li>
+  </ul>
+
+  <div class="section-title">Security Controls</div>
+  <ul>
+    <li><strong>TLS everywhere</strong> — all external traffic encrypted via TLS termination at NGINX Ingress</li>
+    <li><strong>Security Groups</strong> — DB SG allows TCP 5432 from VPC CIDR only; Redis SG allows TCP 6379 from VPC CIDR only</li>
+    <li><strong>NAT Gateway</strong> — private subnet outbound traffic routes through NAT (no inbound from internet)</li>
+    <li><strong>AWS Secrets Manager + External Secrets Operator</strong> — secrets synced into K8s via IRSA (no static credentials)</li>
+    <li><strong>ECR image scanning</strong> — vulnerability scan on every push</li>
+    <li><strong>S3</strong> — AES-256 server-side encryption, all public access blocked</li>
+    <li><strong>RDS</strong> — storage encrypted at rest, Multi-AZ, private subnet only</li>
+    <li><strong>ElastiCache</strong> — encryption at rest enabled, private subnet only</li>
+    <li><strong>Authentication</strong> — better-auth for user auth; OAuth via Nango for third-party integrations; IRSA for AWS service access</li>
+    <li><strong>NGINX Ingress Controller</strong> — single entry point, rate limiting, request filtering</li>
+  </ul>
+
+  <div class="section-title">Data Flows &amp; PII Separation</div>
+  <ul>
+    <li><strong>PostgreSQL (RDS)</strong> — stores org/user metadata, session records, billing data. Customer PII is scoped per-org with row-level ownership.</li>
+    <li><strong>Redis (ElastiCache)</strong> — transient job queues (BullMQ) and session state. No persistent PII storage.</li>
+    <li><strong>Sandboxes (Modal/E2B)</strong> — ephemeral, isolated per-session. No direct database access. Communicate only with the Gateway via HTTP/SSE.</li>
+    <li><strong>LLM Proxy</strong> — routes model requests to providers (Anthropic, OpenAI). Per-org virtual keys for spend isolation.</li>
+    <li><strong>S3</strong> — verification artifacts only, encrypted, no public access.</li>
+    <li><strong>No PII in logs</strong> — structured logging (Pino) with sensitive field redaction. Tokens, credentials, and prompt content are never logged.</li>
+  </ul>
+
+  <div class="section-title">Solid lines</div>
+  <ul>
+    <li>Solid arrows (→) = synchronous HTTP/TCP connections</li>
+    <li>Dashed arrows (⇢) = WebSocket / async / synced data</li>
+  </ul>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'neutral',
+    flowchart: {
+      useMaxWidth: true,
+      htmlLabels: true,
+      curve: 'basis',
+      nodeSpacing: 40,
+      rankSpacing: 60,
+    },
+    securityLevel: 'loose',
+  });
+</script>
+</body>
+</html>

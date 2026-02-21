@@ -1,335 +1,167 @@
-# LLM Proxy — System Spec
+# LLM Proxy - System Spec
 
 ## 1. Scope & Purpose
 
 ### In Scope
-- Virtual key generation: per-session, per-org temporary keys via LiteLLM admin API
-- Key scoping model: team = org, user = session for cost isolation
-- Key duration and lifecycle
-- LiteLLM API integration contract (endpoints called, auth model)
-- Spend tracking via LiteLLM's Admin REST API (`GET /spend/logs/v2`)
-- LLM spend cursors (per-org DB sync state for billing reconciliation)
-- Environment configuration (`LLM_PROXY_URL`, `LLM_PROXY_MASTER_KEY`, `LLM_PROXY_KEY_DURATION`, etc.)
-- How providers (Modal, E2B) pass the virtual key to sandboxes
+- LiteLLM integration contract for Proliferate services and sandboxes.
+- Virtual key lifecycle (team provisioning, key generation, key revocation).
+- URL contract (`LLM_PROXY_URL`, `LLM_PROXY_ADMIN_URL`, `LLM_PROXY_PUBLIC_URL`) and sandbox-facing base URL rules.
+- Spend ingestion from LiteLLM Admin REST API (`GET /spend/logs/v2`) into billing events.
+- Per-org cursor semantics for LLM spend sync.
+- Model routing contract between canonical model IDs, OpenCode provider config, and LiteLLM YAML routing.
+- Environment configuration for proxy and provider credentials.
+- Non-sandbox server-side proxy usage that is part of current runtime behavior.
+
+### Out of Scope
+- Billing policy, plan economics, and credit state machine behavior (see `billing-metering.md`).
+- Session lifecycle orchestration (see `sessions-gateway.md`).
+- Sandbox boot mechanics beyond LLM credential/base URL contract (see `sandbox-providers.md`).
+- Secret storage and encryption lifecycle (see `secrets-environment.md`).
+- LiteLLM internals that are not part of Proliferate-owned integration code.
 
 ### Feature Status
 
 | Feature | Status | Evidence |
-|---------|--------|----------|
-| Virtual key generation | Implemented | `packages/shared/src/llm-proxy.ts:generateVirtualKey` |
-| Key scoping (team/user) | Implemented | `packages/shared/src/llm-proxy.ts:generateVirtualKey` — `team_id=orgId`, `user_id=sessionId` |
-| Key duration config | Implemented | `packages/environment/src/schema.ts:LLM_PROXY_KEY_DURATION` |
-| Team (org) provisioning | Implemented | `packages/shared/src/llm-proxy.ts:ensureTeamExists` |
-| Sandbox key injection (Modal) | Implemented | `packages/shared/src/providers/modal-libmodal.ts:createSandbox` |
-| Sandbox key injection (E2B) | Implemented | `packages/shared/src/providers/e2b.ts:createSandbox` |
-| Spend sync (per-org REST API) | Implemented | `apps/worker/src/billing/worker.ts:syncLLMSpend`, `packages/services/src/billing/litellm-api.ts:fetchSpendLogs` |
-| LLM spend cursors (per-org) | Implemented | `packages/db/src/schema/billing.ts:llmSpendCursors` (keyed by `organization_id`) |
-| Model routing config | Implemented | `apps/llm-proxy/litellm/config.yaml` |
-| Key revocation on session end | Implemented | `packages/shared/src/llm-proxy.ts:revokeVirtualKey`, called from `sessions-pause.ts`, `org-pause.ts` |
-| Dynamic max budget from shadow balance | Implemented | `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars` |
-| Key alias (sessionId) | Implemented | `packages/shared/src/llm-proxy.ts:generateVirtualKey` — `key_alias=sessionId` |
+|---|---|---|
+| Per-session virtual key generation | Implemented | `packages/shared/src/llm-proxy.ts:generateVirtualKey` |
+| Team provisioning before key generation | Implemented | `packages/shared/src/llm-proxy.ts:ensureTeamExists`, `packages/shared/src/llm-proxy.ts:generateSessionAPIKey` |
+| Key scoping (`team_id=org`, `user_id=session`) | Implemented | `packages/shared/src/llm-proxy.ts:generateVirtualKey` |
+| Budget cap on key generation (`max_budget`) | Implemented | `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`, `packages/shared/src/llm-proxy.ts:generateVirtualKey` |
+| Public/admin URL split and `/v1` normalization | Implemented | `packages/shared/src/llm-proxy.ts:getLLMProxyBaseURL`, `packages/shared/src/llm-proxy.ts:generateVirtualKey` |
+| Sandbox injection (Modal + E2B) | Implemented | `packages/shared/src/providers/modal-libmodal.ts:createSandbox`, `packages/shared/src/providers/e2b.ts:createSandbox` |
+| LLM spend sync dispatcher + per-org workers | Implemented | `apps/worker/src/jobs/billing/llm-sync-dispatcher.job.ts`, `apps/worker/src/jobs/billing/llm-sync-org.job.ts` |
+| Per-org spend cursor | Implemented | `packages/services/src/billing/db.ts:getLLMSpendCursor`, `packages/services/src/billing/db.ts:updateLLMSpendCursor` |
+| Spend REST client (`/spend/logs/v2`) | Implemented | `packages/services/src/billing/litellm-api.ts:fetchSpendLogs` |
+| Key revocation on pause/exhaustion paths | Implemented | `apps/web/src/server/routers/sessions-pause.ts:pauseSessionHandler`, `packages/services/src/billing/org-pause.ts:pauseSessionWithSnapshot`, `packages/shared/src/llm-proxy.ts:revokeVirtualKey` |
+| Model routing in LiteLLM YAML | Implemented | `apps/llm-proxy/litellm/config.yaml` |
+| Server-side proxy usage outside sandboxes | Implemented | `apps/worker/src/automation/configuration-selector.ts:callLLM` |
 
-### Out of Scope
-- LiteLLM service internals (model routing config, caching, rate limiting) — external dependency, not our code
-- Billing policy, credit gating, charging — see `billing-metering.md`
-- Sandbox boot mechanics — see `sandbox-providers.md`
-- Session lifecycle (create/pause/resume/delete) — see `sessions-gateway.md`
-- Secret decryption and injection — see `secrets-environment.md`
+### Mental Models
 
-### Mental Model
+The LLM proxy is an external LiteLLM service and this spec is the Proliferate-side contract for using it. The code here defines identity boundaries, billing attribution boundaries, and integration rules. It does not define LiteLLM internals.
 
-The LLM proxy is an **external LiteLLM service** that Proliferate routes sandbox LLM requests through. This spec documents our **integration contract** with it — the API calls we make, the keys we generate, and the spend data we read back — not the service itself.
+Treat the proxy as two planes with different auth models:
+- Control plane: server-side admin/API calls with `LLM_PROXY_MASTER_KEY` for team management, key generation, spend reads, and selected worker-side LLM calls.
+- Data plane: sandbox LLM traffic authenticated with short-lived virtual keys that never expose real provider credentials.
 
-The integration solves two problems: (1) **security** — sandboxes never see real API keys; they get short-lived virtual keys scoped to a single session, and (2) **cost isolation** — every LLM request is attributed to an org (team) and session (user) in LiteLLM's spend tracking, enabling per-org billing.
+Spend ingestion is eventually consistent. Billing correctness depends on idempotent event insertion, not on perfect cursor monotonicity from LiteLLM.
 
-The flow is: session creation → generate virtual key → pass key + proxy base URL to sandbox → sandbox makes LLM calls through proxy → LiteLLM logs spend → billing worker syncs spend logs into billing events.
+Model routing is a three-surface contract:
+- Canonical model IDs in Proliferate (`packages/shared/src/agents.ts`).
+- OpenCode provider config generated in sandbox (`packages/shared/src/sandbox/opencode.ts`).
+- LiteLLM model mapping and aliases in YAML (`apps/llm-proxy/litellm/config.yaml`).
 
-**Core entities:**
-- **Virtual key** — a temporary LiteLLM API key (e.g., `sk-xxx`) scoped to one session and one org. Generated via LiteLLM's `/key/generate` admin endpoint.
-- **Team** — LiteLLM's grouping for cost tracking. Maps 1:1 to a Proliferate org. Created via `/team/new` if it doesn't exist.
-- **LLM spend cursor** — a per-org DB table tracking the sync position when reading spend logs from LiteLLM's REST API.
+### Things agents get wrong
 
-**Key invariants:**
-- Virtual keys are always scoped: `team_id = orgId`, `user_id = sessionId`.
-- When `LLM_PROXY_URL` is not set, sandboxes fall back to a direct `ANTHROPIC_API_KEY` (no proxy, no spend tracking).
-- When `LLM_PROXY_REQUIRED=true` and `LLM_PROXY_URL` is unset, session creation fails hard.
-- The spend sync is eventually consistent — logs appear in LiteLLM's table and are polled every 30 seconds by the billing worker.
+- The proxy is optional unless `LLM_PROXY_REQUIRED=true`; otherwise sessions can fall back to direct `ANTHROPIC_API_KEY` (`packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`).
+- `LLM_PROXY_API_KEY` is a staging env var between services and providers. The sandbox runtime actually consumes `ANTHROPIC_API_KEY` and `ANTHROPIC_BASE_URL` (`packages/shared/src/providers/modal-libmodal.ts:createSandbox`, `packages/shared/src/providers/e2b.ts:createSandbox`).
+- Key generation is replace-by-alias, not append-only. Existing key aliases are revoked before generating a new key for the same session (`packages/shared/src/llm-proxy.ts:generateVirtualKey`).
+- Team creation is not a separate operational step for callers. `generateSessionAPIKey` always enforces team existence (`packages/shared/src/llm-proxy.ts:generateSessionAPIKey`).
+- `LLM_PROXY_PUBLIC_URL` controls sandbox-facing URL, not admin traffic (`packages/shared/src/llm-proxy.ts:getLLMProxyBaseURL`).
+- E2B snapshot resume intentionally strips proxy credentials from shell profile re-export and only passes them to the OpenCode process env (`packages/shared/src/providers/e2b.ts:createSandbox`).
+- Spend sync is no longer a single `syncLLMSpend` loop. It is a dispatcher queue plus per-org jobs (`apps/worker/src/billing/worker.ts`, `apps/worker/src/jobs/billing/llm-sync-dispatcher.job.ts`, `apps/worker/src/jobs/billing/llm-sync-org.job.ts`).
+- LiteLLM spend API auth/header format differs from key-generation auth. Spend reads use `api-key`, key/team management uses `Authorization: Bearer` (`packages/services/src/billing/litellm-api.ts:fetchSpendLogs`, `packages/shared/src/llm-proxy.ts:generateVirtualKey`).
+- LiteLLM spend API date format is not ISO8601 in this integration; it requires `YYYY-MM-DD HH:MM:SS` UTC (`packages/services/src/billing/litellm-api.ts:formatDateForLiteLLM`).
+- Spend log ordering is not assumed stable. Client-side sorting by `startTime` + `request_id` is required before cursor advancement (`apps/worker/src/jobs/billing/llm-sync-org.job.ts:processLLMSyncOrgJob`).
+- Cursor progression alone is not the dedup guarantee. Billing idempotency keying (`llm:{request_id}`) and `billing_event_keys` are the dedup authority (`apps/worker/src/jobs/billing/llm-sync-org.job.ts:processLLMSyncOrgJob`, `packages/services/src/billing/shadow-balance.ts:bulkDeductShadowBalance`).
+- Not all proxy usage is sandbox virtual-key traffic. Worker configuration selection calls `/v1/chat/completions` server-side with master key and explicit `team_id` metadata (`apps/worker/src/automation/configuration-selector.ts:callLLM`).
 
 ---
 
 ## 2. Core Concepts
 
-### LiteLLM Virtual Keys
-LiteLLM's virtual key system (free tier) generates temporary API keys that the proxy validates on each request. Each key carries `team_id` and `user_id` metadata, which LiteLLM uses to attribute spend.
-- Key detail agents get wrong: we use virtual keys (free tier), NOT JWT auth (enterprise tier). The master key is only used for admin API calls, never passed to sandboxes.
-- Reference: [LiteLLM virtual keys docs](https://docs.litellm.ai/docs/proxy/virtual_keys)
+### Virtual Keys
+LiteLLM virtual keys are short-lived credentials for sandbox data-plane requests. Proliferate mints them per session and org, with `key_alias=sessionId` for deterministic revocation and replacement (`packages/shared/src/llm-proxy.ts:generateVirtualKey`).
 
-### Admin URL vs Public URL
-Two separate URLs exist for the proxy: the **admin URL** for key generation and team management (requires master key, may be internal-only), and the **public URL** for sandbox LLM requests (accepts virtual keys, must be reachable from sandboxes).
-- Key detail agents get wrong: `LLM_PROXY_ADMIN_URL` is optional — if unset, `LLM_PROXY_URL` is used for both admin calls and public access. `LLM_PROXY_PUBLIC_URL` controls what base URL sandboxes see.
-- Reference: `packages/shared/src/llm-proxy.ts:generateVirtualKey`, `packages/shared/src/llm-proxy.ts:getLLMProxyBaseURL`
+### Team Mapping
+LiteLLM `team_id` is the organization ID. Team creation is idempotent with read-before-create plus duplicate-tolerant create handling (`packages/shared/src/llm-proxy.ts:ensureTeamExists`).
 
-### Model Routing Configuration
-The LiteLLM config (`apps/llm-proxy/litellm/config.yaml`) maps OpenCode model IDs (e.g., `anthropic/claude-sonnet-4-5`) to actual Anthropic API model IDs (often with date suffixes, e.g., `anthropic/claude-sonnet-4-5-20250929`, though some like `anthropic/claude-opus-4-6` map without a suffix). The proxy also accepts short aliases (e.g., `claude-sonnet-4-5`).
-- Key detail agents get wrong: model routing is configured in `config.yaml`, not in our TypeScript code. Adding a new model requires editing the YAML config and redeploying the proxy container.
-- Reference: `apps/llm-proxy/litellm/config.yaml`
+### URL Roles
+- `LLM_PROXY_ADMIN_URL` (or fallback `LLM_PROXY_URL`) is used for admin and spend REST calls.
+- `LLM_PROXY_PUBLIC_URL` (or fallback `LLM_PROXY_URL`) is what sandboxes should see.
+- Sandbox SDK-facing URL is normalized to exactly one `/v1` suffix (`packages/shared/src/llm-proxy.ts:getLLMProxyBaseURL`).
 
-### Spend Sync Architecture
-Our billing worker reads spend data from LiteLLM's Admin REST API (`GET /spend/logs/v2`) per org and converts logs into billing events via bulk ledger deduction. Cursors are tracked per-org in the `llm_spend_cursors` table.
-- Key detail agents get wrong: we use the REST API, not cross-schema SQL. The old `LITELLM_DB_SCHEMA` env var is no longer used.
-- Reference: `packages/services/src/billing/litellm-api.ts:fetchSpendLogs`
+### Spend Ingestion Contract
+Billing workers read spend logs from LiteLLM REST API per org and convert positive-spend rows into bulk ledger deductions (`packages/services/src/billing/litellm-api.ts:fetchSpendLogs`, `apps/worker/src/jobs/billing/llm-sync-org.job.ts:processLLMSyncOrgJob`).
 
----
-
-## 3. File Tree
-
-```
-apps/llm-proxy/
-├── Dockerfile                          # LiteLLM container image (ghcr.io/berriai/litellm)
-├── README.md                           # Deployment docs, architecture diagram
-└── litellm/
-    └── config.yaml                     # Model routing, master key, DB URL, retry settings
-
-packages/shared/src/
-├── llm-proxy.ts                        # Virtual key generation, team management, URL helpers
-
-packages/services/src/
-├── sessions/
-│   └── sandbox-env.ts                  # Calls generateSessionAPIKey during session creation
-└── billing/
-    ├── db.ts                           # LLM spend cursor CRUD (per-org)
-    └── litellm-api.ts                  # LiteLLM Admin REST API client (GET /spend/logs/v2)
-
-packages/environment/src/
-└── schema.ts                           # LLM_PROXY_* env var definitions
-
-packages/db/src/schema/
-└── billing.ts                          # llmSpendCursors table definition
-
-apps/worker/src/billing/
-└── worker.ts                           # syncLLMSpend() — polling loop that reads spend logs
-
-packages/shared/src/providers/
-├── modal-libmodal.ts                   # Passes LLM_PROXY_API_KEY + ANTHROPIC_BASE_URL to sandbox
-└── e2b.ts                             # Same key/URL injection pattern as Modal
-```
-
----
-
-## 4. Data Models & Schemas
-
-### Database Tables
-
-```sql
-llm_spend_cursors (per-org)
-├── organization_id TEXT PRIMARY KEY FK → organization.id (CASCADE)
-├── last_start_time TIMESTAMPTZ NOT NULL               -- cursor position for REST API pagination
-├── last_request_id TEXT                               -- tie-breaker for deterministic ordering
-├── records_processed INTEGER DEFAULT 0                -- total records synced (monotonic)
-└── synced_at       TIMESTAMPTZ DEFAULT NOW()          -- last sync timestamp
-```
-
-### Core TypeScript Types
-
-```typescript
-// packages/shared/src/llm-proxy.ts
-interface VirtualKeyOptions {
-  duration?: string;       // e.g., "15m", "1h", "24h"
-  maxBudget?: number;      // max spend in USD
-  metadata?: Record<string, unknown>;
-}
-
-interface VirtualKeyResponse {
-  key: string;             // "sk-xxx" — the virtual key
-  expires: string;         // ISO timestamp
-  team_id: string;         // orgId
-  user_id: string;         // sessionId
-}
-
-// packages/services/src/billing/litellm-api.ts
-interface LiteLLMSpendLog {
-  request_id: string;
-  team_id: string | null;  // our orgId
-  end_user: string | null; // our sessionId
-  spend: number;           // cost in USD
-  model: string;
-  model_group: string | null;
-  total_tokens: number;
-  prompt_tokens: number;
-  completion_tokens: number;
-  startTime?: string;
-}
-
-// packages/services/src/billing/db.ts
-interface LLMSpendCursor {
-  organizationId: string;
-  lastStartTime: Date;
-  lastRequestId: string | null;
-  recordsProcessed: number;
-  syncedAt: Date;
-}
-```
-
-### Key Indexes & Query Patterns
-- `llm_spend_cursors` — primary key lookup by `organization_id`. One row per active org.
-- Spend logs are now fetched via LiteLLM's REST API (`GET /spend/logs/v2?team_id=...&start_date=...`), not raw SQL.
+### Model Routing Contract
+Canonical IDs map to OpenCode IDs in `packages/shared/src/agents.ts:toOpencodeModelId`, then resolve to provider-specific models in `apps/llm-proxy/litellm/config.yaml`. Non-Anthropic models use the `litellm` OpenCode provider block and still route through the same proxy base URL (`packages/shared/src/sandbox/opencode.ts:getOpencodeConfig`).
 
 ---
 
 ## 5. Conventions & Patterns
 
 ### Do
-- Always call `ensureTeamExists(orgId)` before generating a virtual key — `generateSessionAPIKey` does this automatically (`packages/shared/src/llm-proxy.ts:generateSessionAPIKey`)
-- Use `buildSandboxEnvVars()` from `packages/services/src/sessions/sandbox-env.ts` to generate all sandbox env vars, including the virtual key — it handles the proxy/direct key decision centrally
-- Strip trailing slashes and `/v1` before appending paths to admin URLs — `generateVirtualKey` does this (`adminUrl` normalization at line 69)
+- Use `buildSandboxEnvVars()` as the single entry point for session sandbox LLM env resolution (`packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`).
+- Use `generateSessionAPIKey()` for session keys instead of calling `generateVirtualKey()` directly (`packages/shared/src/llm-proxy.ts:generateSessionAPIKey`).
+- Derive `maxBudget` from shadow balance only in the sandbox env builder where billing context exists (`packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`).
+- Keep spend ingestion per-org and idempotent by using `llm:{request_id}` keys and bulk deduction (`apps/worker/src/jobs/billing/llm-sync-org.job.ts:processLLMSyncOrgJob`).
 
 ### Don't
-- Don't pass `LLM_PROXY_MASTER_KEY` to sandboxes — only virtual keys go to sandboxes
-- Don't query LiteLLM's database directly — use the REST API client (`packages/services/src/billing/litellm-api.ts:fetchSpendLogs`)
-- Don't assume `LLM_PROXY_URL` is always set — graceful fallback to direct API key is required unless `LLM_PROXY_REQUIRED=true`
+- Do not pass `LLM_PROXY_MASTER_KEY` into sandbox env.
+- Do not assume `LLM_PROXY_API_KEY` is directly consumed by OpenCode. Providers must map it to `ANTHROPIC_API_KEY` and set `ANTHROPIC_BASE_URL` when proxy mode is active.
+- Do not query LiteLLM tables directly from app code. Use the REST client (`packages/services/src/billing/litellm-api.ts`).
+- Do not assume REST response ordering from `/spend/logs/v2`.
 
 ### Error Handling
-
-```typescript
-// Key generation failure is fatal when proxy is configured
-if (!proxyUrl) {
-  if (requireProxy) {
-    throw new Error("LLM proxy is required but LLM_PROXY_URL is not set");
-  }
-  envVars.ANTHROPIC_API_KEY = directApiKey ?? "";
-} else {
-  try {
-    const apiKey = await generateSessionAPIKey(sessionId, orgId);
-    envVars.LLM_PROXY_API_KEY = apiKey;
-  } catch (err) {
-    throw new Error(`LLM proxy enabled but failed to generate session key: ${message}`);
-  }
-}
-```
-_Source: `packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`_
+- If proxy is required and `LLM_PROXY_URL` is missing, sandbox env build fails hard (`packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`).
+- If proxy is enabled and key generation fails, session creation fails hard; there is no silent fallback.
+- Revocation is best-effort by design and must not block pause/termination flows (`packages/shared/src/llm-proxy.ts:revokeVirtualKey`, call sites in pause/enforcement paths).
 
 ### Reliability
-- Team creation is idempotent — `ensureTeamExists` checks via `GET /team/info` first, handles "already exists" errors from `POST /team/new` (`packages/shared/src/llm-proxy.ts:ensureTeamExists`)
-- Spend sync uses per-org cursors with `start_date` filtering via the REST API to avoid reprocessing (`packages/services/src/billing/db.ts:getLLMSpendCursor`)
-- Idempotency keys (`llm:{request_id}`) on billing events prevent double-billing even if the same logs are fetched twice (`packages/services/src/billing/shadow-balance.ts:bulkDeductShadowBalance`)
+- Key alias pre-revocation avoids uniqueness conflicts on resume/recreate (`packages/shared/src/llm-proxy.ts:generateVirtualKey`).
+- Per-org LLM sync jobs are retried by BullMQ and fanned out per org (`llm-sync:${orgId}` naming), limiting failure blast radius to the affected org path (`packages/queue/src/index.ts`, `apps/worker/src/jobs/billing/llm-sync-dispatcher.job.ts`).
+- Cursor advancement happens even when all fetched rows are skipped for zero/negative spend, preventing endless re-fetch loops (`apps/worker/src/jobs/billing/llm-sync-org.job.ts:processLLMSyncOrgJob`).
 
 ### Testing Conventions
-- No dedicated tests exist for the LLM proxy integration. Key generation and spend sync are verified via manual testing and production observability.
-- To test locally, run LiteLLM via Docker Compose (`docker compose up -d llm-proxy`) and set `LLM_PROXY_URL=http://localhost:4000`.
+- There are currently no dedicated automated tests for this integration slice (virtual key lifecycle + spend sync).
+- Validation is primarily runtime behavior plus worker logs and billing ledger outcomes.
 
 ---
 
-## 6. Subsystem Deep Dives
+## 6. Subsystem Deep Dives (Invariants and Rules)
 
-### 6.1 Virtual Key Generation
+### 6.1 Key Lifecycle Invariants
+- Every session-scoped key must carry `team_id=orgId`, `user_id=sessionId`, and `key_alias=sessionId`.
+- Team existence must be ensured before key generation.
+- Key generation for an existing session alias must revoke prior alias-bound keys before minting a new key.
+- Default key TTL is `LLM_PROXY_KEY_DURATION` or `24h` when unset.
+- When billing context is available, `max_budget` must be derived from shadow balance dollars (`credits * 0.01`, clamped at `>= 0`).
+- If proxy mode is active, inability to mint a key is a terminal session startup error.
 
-**What it does:** Generates a short-lived LiteLLM virtual key for a sandbox session, scoped to an org for spend tracking.
+### 6.2 Sandbox Injection and Routing Invariants
+- Sandboxes must receive only virtual-key credentials (or direct key in fallback mode), never the master key.
+- Proxy mode requires both `ANTHROPIC_API_KEY=<virtual-key>` and `ANTHROPIC_BASE_URL=<proxy-v1-url>` in runtime env.
+- Providers must filter `ANTHROPIC_API_KEY`, `LLM_PROXY_API_KEY`, and `ANTHROPIC_BASE_URL` from generic pass-through env loops to avoid leaks and duplicate sources.
+- E2B resume path must not persist proxy credentials in shell profile exports; credentials are process-scoped when launching OpenCode.
+- If proxy mode is unavailable and not required, direct key fallback must remain functional.
 
-**Happy path:**
-1. `buildSandboxEnvVars()` is called during session creation (`packages/services/src/sessions/sandbox-env.ts`)
-2. It checks if `LLM_PROXY_URL` is set. If yes, calls `generateSessionAPIKey(sessionId, orgId)` (`packages/shared/src/llm-proxy.ts:generateSessionAPIKey`)
-3. `generateSessionAPIKey` first calls `ensureTeamExists(orgId)` — `GET /team/info?team_id={orgId}` to check, then `POST /team/new` if needed (`packages/shared/src/llm-proxy.ts:ensureTeamExists`)
-4. When billing is enabled, fetches org's `shadow_balance` via `getBillingInfoV2`, computes `maxBudget = Math.max(0, shadow_balance * 0.01)` (`packages/services/src/sessions/sandbox-env.ts:buildSandboxEnvVars`)
-5. Calls `generateVirtualKey(sessionId, orgId, { maxBudget })` — `POST /key/generate` with `team_id=orgId`, `user_id=sessionId`, `key_alias=sessionId`, `max_budget`, `duration` from env (`packages/shared/src/llm-proxy.ts:generateVirtualKey`)
-6. Returns the `key` string. The caller stores it as `envVars.LLM_PROXY_API_KEY`
+### 6.3 Spend Sync Invariants
+- LLM spend sync is a two-stage queue system: repeatable dispatcher (30s) plus per-org worker jobs.
+- Only billable org states (`active`, `trial`, `grace`) are dispatched for sync.
+- First sync for an org must start from a bounded lookback window (5 minutes) when no cursor exists.
+- Spend API calls must include org scoping (`team_id`) and bounded time range (`start_date`, `end_date`).
+- Log processing order must be deterministic (`startTime` asc, then `request_id` asc).
+- Rows with `spend <= 0` are non-billable; rows with `total_tokens > 0 && spend <= 0` must raise anomaly logging.
+- Billing event idempotency key is always `llm:{request_id}`.
+- Cursor must advance to the latest processed log position even when no billable events are inserted.
+- Enforcement decisions after deduction must follow billing service outputs (`shouldPauseSessions`, `shouldBlockNewSessions`) and preserve trial auto-activation and auto-top-up checks.
 
-**Edge cases:**
-- `LLM_PROXY_URL` unset + `LLM_PROXY_REQUIRED=false` → falls back to direct `ANTHROPIC_API_KEY`
-- `LLM_PROXY_URL` unset + `LLM_PROXY_REQUIRED=true` → throws, blocking session creation
-- Team creation race condition → `ensureTeamExists` tolerates "already exists" / "duplicate" errors
-- Key generation failure → throws, blocking session creation (no silent fallback when proxy is configured)
+### 6.4 Revocation Invariants
+- Revocation target is session alias, not raw key value.
+- Revocation 404 responses are treated as success.
+- Revocation is best-effort and non-blocking in pause/enforcement paths.
+- Missing proxy URL or master key makes revocation a no-op, not a fatal error.
 
-**Files touched:** `packages/shared/src/llm-proxy.ts`, `packages/services/src/sessions/sandbox-env.ts`
+### 6.5 Model Routing Invariants
+- Canonical model IDs must map deterministically to OpenCode provider IDs.
+- LiteLLM YAML is the source of truth for final model/provider routing and aliases.
+- Adding a user-selectable model requires synchronized updates across model catalog surfaces, not a one-file change.
+- Non-Anthropic models must continue using the custom `litellm` provider configuration in OpenCode and route through the same proxy endpoint.
 
-**Status:** Implemented
-
-### 6.2 Sandbox Key Injection
-
-**What it does:** Passes the virtual key and proxy base URL to the sandbox so OpenCode routes LLM requests through the proxy.
-
-**Happy path:**
-1. Provider reads `opts.envVars.LLM_PROXY_API_KEY` (set by `buildSandboxEnvVars`) and calls `getLLMProxyBaseURL()` (`packages/shared/src/llm-proxy.ts:getLLMProxyBaseURL`)
-2. `getLLMProxyBaseURL()` returns `LLM_PROXY_PUBLIC_URL || LLM_PROXY_URL` normalized with `/v1` suffix
-3. Provider sets two env vars on the sandbox: `ANTHROPIC_API_KEY = virtualKey`, `ANTHROPIC_BASE_URL = proxyBaseUrl`
-4. OpenCode inside the sandbox uses these standard env vars to route all Anthropic API calls through the proxy
-5. The same env vars are set again as process-level env when launching the OpenCode server (after `setupEssentialDependencies` writes config files)
-
-**Edge cases:**
-- No proxy configured → `ANTHROPIC_API_KEY` is set to the direct key, `ANTHROPIC_BASE_URL` is not set
-- E2B snapshot resume → proxy vars (`ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`) are **excluded** from the shell profile re-injection and only passed as process-level env vars to the OpenCode server process via `envs: opencodeEnv`. Other env vars are re-exported to the shell. (`packages/shared/src/providers/e2b.ts:createSandbox`, lines ~182-189 and ~646-659)
-
-**Files touched:** `packages/shared/src/providers/modal-libmodal.ts:createSandbox`, `packages/shared/src/providers/e2b.ts:createSandbox`, `packages/shared/src/llm-proxy.ts:getLLMProxyBaseURL`
-
-**Status:** Implemented
-
-### 6.3 LLM Spend Sync
-
-**What it does:** Periodically reads LLM spend logs from LiteLLM's REST API and converts them into billing events for Proliferate's billing system via bulk ledger deduction.
-
-**Happy path:**
-1. Billing worker calls `syncLLMSpend()` every 30 seconds, guarded by `NEXT_PUBLIC_BILLING_ENABLED` and `LLM_PROXY_ADMIN_URL` (`apps/worker/src/billing/worker.ts`)
-2. Lists all billable orgs (billing state in `active`, `trial`, or `grace`) via `billing.listBillableOrgIds()` (`packages/services/src/billing/db.ts`)
-3. For each org:
-   a. Reads per-org cursor — `billing.getLLMSpendCursor(orgId)` (`packages/services/src/billing/db.ts`)
-   b. Fetches spend logs via REST API — `billing.fetchSpendLogs(orgId, startDate)` (`packages/services/src/billing/litellm-api.ts`)
-   c. Filters logs with positive `spend`, converts to `BulkDeductEvent[]` using `calculateLLMCredits(spend)` with idempotency key `llm:{request_id}`
-   d. Calls `billing.bulkDeductShadowBalance(orgId, events)` — single transaction: locks org row, bulk inserts billing events, deducts total from shadow balance (`packages/services/src/billing/shadow-balance.ts`)
-   e. Updates cursor to latest log's `startTime` — `billing.updateLLMSpendCursor()` (`packages/services/src/billing/db.ts`)
-4. Handles state transitions: if `shouldPauseSessions`, calls `billing.enforceCreditsExhausted(orgId)`
-
-**Edge cases:**
-- First run for an org (no cursor) → starts from 5-minute lookback window (`now - 5min`)
-- No logs returned → cursor is not advanced (no-op for that org)
-- Duplicate logs → `bulkDeductShadowBalance` uses `ON CONFLICT (idempotency_key) DO NOTHING`, duplicates are silently skipped
-- REST API failure for one org → logged and skipped; other orgs continue; retried next cycle
-- `LLM_PROXY_ADMIN_URL` not set → entire sync is skipped (no proxy configured)
-
-**Files touched:** `apps/worker/src/billing/worker.ts:syncLLMSpend`, `packages/services/src/billing/db.ts`, `packages/services/src/billing/litellm-api.ts`, `packages/services/src/billing/shadow-balance.ts`
-
-**Status:** Implemented
-
-### 6.4 Synchronous Key Revocation
-
-**What it does:** Revokes a session's virtual key when the session is terminated, paused, or exhausted.
-
-**Happy path:**
-1. A session ends (user pause, billing termination, or credit exhaustion)
-2. The caller invokes `revokeVirtualKey(sessionId)` as fire-and-forget after `provider.terminate()` (`packages/shared/src/llm-proxy.ts:revokeVirtualKey`)
-3. `revokeVirtualKey` calls `POST /key/delete` with `{ key_aliases: [sessionId] }` — the alias was set during key generation via `key_alias: sessionId`
-4. 404 responses are treated as success (key already deleted or expired)
-
-**Edge cases:**
-- Proxy not configured (`LLM_PROXY_URL` unset) → returns immediately, no-op
-- Master key missing → returns immediately, no-op
-- Network failure → error is caught and logged at debug level by callers; does not block session termination
-
-**Call sites:**
-- `apps/web/src/server/routers/sessions-pause.ts:pauseSessionHandler` — after snapshot + terminate
-- `packages/services/src/billing/org-pause.ts:enforceCreditsExhausted` — per-session during exhaustion enforcement
-- `packages/services/src/billing/org-pause.ts:terminateAllOrgSessions` — per-session during bulk termination
-
-**Files touched:** `packages/shared/src/llm-proxy.ts:revokeVirtualKey`, `apps/web/src/server/routers/sessions-pause.ts`, `packages/services/src/billing/org-pause.ts`
-
-**Status:** Implemented
-
-### 6.5 Environment Configuration
-
-**What it does:** Six env vars control the LLM proxy integration.
-
-| Env Var | Required | Default | Purpose |
-|---------|----------|---------|---------|
-| `LLM_PROXY_URL` | No | — | Base URL of the LiteLLM proxy. When set, enables proxy mode. |
-| `LLM_PROXY_ADMIN_URL` | No | `LLM_PROXY_URL` | Separate admin URL for key/team management and REST API spend queries. Falls back to `LLM_PROXY_URL`. |
-| `LLM_PROXY_PUBLIC_URL` | No | `LLM_PROXY_URL` | Public-facing URL that sandboxes use. Falls back to `LLM_PROXY_URL`. |
-| `LLM_PROXY_MASTER_KEY` | When proxy is enabled | — | Master key for LiteLLM admin API (key generation, team management, spend queries). |
-| `LLM_PROXY_KEY_DURATION` | No | `"24h"` | Default virtual key validity duration. Supports LiteLLM duration strings. |
-| `LLM_PROXY_REQUIRED` | No | `false` | When `true`, session creation fails if proxy is not configured. |
-
-The spend sync uses `LLM_PROXY_ADMIN_URL` and `LLM_PROXY_MASTER_KEY` (same vars as key generation) to call `GET /spend/logs/v2`. No additional env vars are required.
-
-**Files touched:** `packages/environment/src/schema.ts` (LLM_PROXY_* vars), `packages/shared/src/llm-proxy.ts`, `packages/services/src/billing/litellm-api.ts`
-
-**Status:** Implemented
+### 6.6 Server-Side Proxy Usage Invariants
+- Server-side worker calls that use the proxy directly must authenticate with master key and must attach org attribution metadata when available.
+- Server-side direct proxy calls are control-plane usage and must not be treated as sandbox virtual-key traffic.
 
 ---
 
@@ -337,37 +169,43 @@ The spend sync uses `LLM_PROXY_ADMIN_URL` and `LLM_PROXY_MASTER_KEY` (same vars 
 
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
-| Sandbox Providers | Providers → This | `getLLMProxyBaseURL()`, reads `envVars.LLM_PROXY_API_KEY` | Both Modal and E2B inject the virtual key and base URL at sandbox boot. See `sandbox-providers.md` §6. |
-| Sessions | Sessions → This | `buildSandboxEnvVars()` → `generateSessionAPIKey()` | Session creation triggers key generation. See `sessions-gateway.md` §6. |
-| Billing & Metering | Billing → This | `syncLLMSpend()` calls `fetchSpendLogs()` REST API, writes `billing_events` via `bulkDeductShadowBalance()` | Billing worker polls spend data per org. Charging policy owned by `billing-metering.md`. |
-| Environment | This → Environment | `env.LLM_PROXY_*` | Typed `LLM_PROXY_*` vars read from env schema (`packages/environment/src/schema.ts`). |
+| Sessions | Sessions -> LLM Proxy | `sessions.buildSandboxEnvVars()` | Session creation/resume chooses proxy vs direct key path and computes key budget input. |
+| Sandbox Providers | Providers -> LLM Proxy | `getLLMProxyBaseURL()`, `envVars.LLM_PROXY_API_KEY` | Providers translate staging vars into OpenCode-consumable env and enforce filtering rules. |
+| Billing | Billing -> LLM Proxy | `fetchSpendLogs()`, cursor CRUD, `bulkDeductShadowBalance()` | Billing owns charging policy; this integration owns spend ingestion contract and attribution fields. |
+| Worker Queue | Worker -> LLM Proxy | Dispatch + per-org LLM sync jobs | Queue topology and retry behavior shape eventual consistency and failure isolation. |
+| Agent Model Catalog | Shared -> LLM Proxy | `toOpencodeModelId()`, `getOpencodeConfig()`, LiteLLM YAML | Model IDs are stable only when shared model transforms and YAML routing stay aligned. |
+| Automation Selector | Worker -> LLM Proxy | `configuration-selector.callLLM()` | Server-side LLM call path that uses proxy master key with org metadata, outside sandbox flow. |
+| Environment Schema | Env -> LLM Proxy | `LLM_PROXY_*`, provider API key vars | Typed env schema is the contract surface for deployment configuration. |
 
 ### Security & Auth
-- The master key (`LLM_PROXY_MASTER_KEY`) is never exposed to sandboxes — it stays server-side for admin API calls only.
-- Virtual keys are the only credential sandboxes receive. They are short-lived (default 24h) and scoped to a single session.
-- The master key authenticates all admin API calls via `Authorization: Bearer {masterKey}` header.
-- Sandbox env vars filter out `LLM_PROXY_API_KEY`, `ANTHROPIC_API_KEY`, and `ANTHROPIC_BASE_URL` from the pass-through env loop to prevent double-setting or leaking the real key when proxy is active (`packages/shared/src/providers/modal-libmodal.ts:createSandbox`, `packages/shared/src/providers/e2b.ts:createSandbox`).
+- Master key scope is server-side only.
+- Sandbox credentials are scoped virtual keys (or direct key in non-proxy fallback mode).
+- Key/team admin endpoints use `Authorization: Bearer <masterKey>`.
+- Spend REST endpoint uses `api-key: <masterKey>`.
+- Provider env assembly explicitly strips proxy-sensitive keys from generic env forwarding paths.
 
 ### Observability
-- Key generation latency is logged at debug level: `"Generated LLM proxy session key"` with `durationMs` (`packages/services/src/sessions/sandbox-env.ts`)
-- Spend sync logs totals: `"Synced LLM spend logs"` with `totalProcessed` and `batchCount` (`apps/worker/src/billing/worker.ts`)
-- Key generation failures log at error level before throwing (`packages/services/src/sessions/sandbox-env.ts`)
+- Key generation success includes duration and optional max budget (`"Generated LLM proxy session key"` in `sandbox-env.ts`).
+- Key generation failure is logged at error level before rethrow (`"Failed to generate LLM proxy session key"`).
+- LLM sync dispatch emits org fan-out visibility (`"Dispatching LLM sync jobs"`).
+- Per-org spend sync logs fetched/inserted totals and credit deductions (`"Synced LLM spend"`).
+- Spend anomalies are explicitly logged for tokenized zero-spend rows.
 
 ---
 
 ## 8. Acceptance Gates
 
-- [ ] Typecheck passes
-- [ ] Relevant tests pass
-- [ ] This spec is updated (file tree, data models, deep dives)
-- [ ] LLM proxy env vars documented in environment schema if added/changed
-- [ ] Virtual key duration and scoping unchanged unless explicitly approved
+- [ ] Typecheck passes for touched TypeScript surfaces (if code changes are included with spec updates).
+- [ ] `docs/specs/llm-proxy.md` reflects current worker job topology (dispatcher + per-org), not legacy `syncLLMSpend` wording.
+- [ ] Section 6 remains invariant/rule based and avoids imperative step-by-step execution scripts.
+- [ ] Section 3 and Section 4 are intentionally omitted; code is the source of truth for file tree and data models.
+- [ ] Any newly introduced or changed `LLM_PROXY_*` env vars are reflected in `packages/environment/src/schema.ts`.
 
 ---
 
 ## 9. Known Limitations & Tech Debt
 
-- [x] ~~**No key revocation on session end**~~ — Resolved. `revokeVirtualKey(sessionId)` is called fire-and-forget on session pause, exhaustion, and bulk termination.
-- [x] ~~**Shared database coupling**~~ — resolved. Spend sync now uses LiteLLM's REST API (`GET /spend/logs/v2`) via `litellm-api.ts` instead of cross-schema SQL.
-- [x] ~~**Single global cursor**~~ — resolved. Cursors are now per-org (`llm_spend_cursors` table keyed by `organization_id`).
-- [x] ~~**No budget enforcement on virtual keys**~~ — Resolved. `buildSandboxEnvVars` fetches `shadow_balance` when billing is enabled and passes `maxBudget = Math.max(0, shadow_balance * 0.01)` to `generateVirtualKey`.
+- No dedicated automated tests currently validate virtual-key lifecycle behavior end-to-end or spend-sync idempotency edge cases.
+- Admin URL normalization is inconsistent across call paths: key/team management strips `/v1`, spend REST client does not. Misconfigured URLs can therefore behave differently between features.
+- LLM sync dispatcher schedules every billable org every 30 seconds, even when an org has no recent spend, which can create avoidable control-plane traffic at scale.
+- Worker-side configuration selection has a hardcoded model identifier (`claude-haiku-4-5-20251001`) and bypasses the shared model transform/YAML routing abstraction used by sandbox sessions.

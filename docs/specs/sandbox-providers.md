@@ -3,536 +3,236 @@
 ## 1. Scope & Purpose
 
 ### In Scope
-- `SandboxProvider` interface and provider contract
-- Modal provider implementation (libmodal JS SDK)
-- E2B provider implementation
-- Modal image + deploy script (Python)
-- Sandbox-MCP: API server, terminal WebSocket, service manager, auth, CLI setup
-- Sandbox environment variable injection at boot
-- OpenCode plugin injection (`PLUGIN_MJS` template string)
-- Snapshot version key computation
-- Snapshot resolution (which snapshot to use)
-- Git freshness / pull cadence
-- Port exposure (`proliferate services expose`)
+- `SandboxProvider` interface contract and capability flags
+- Provider factory selection (`modal` vs `e2b`)
+- Modal provider implementation (`ModalLibmodalProvider`)
+- E2B provider implementation (`E2BProvider`)
+- Sandbox boot orchestration (workspace clone/restore, tool injection, OpenCode startup)
+- Snapshot behavior (filesystem snapshot, pause snapshot, memory snapshot)
+- Git freshness on restore (`shouldPullOnRestore` + provider integrations)
+- Base snapshot version key + Modal base/configuration snapshot build paths
+- sandbox-mcp sidecar (`api-server`, terminal WS, service manager, in-sandbox CLI)
+- Sandbox auth token wiring (`SANDBOX_MCP_AUTH_TOKEN`)
+- Caddy preview/proxy integration (`/_proliferate/mcp/*`, `/_proliferate/vscode/*`)
 
 ### Out of Scope
-- Session lifecycle that calls the provider — see `sessions-gateway.md`
-- Tool schemas and prompt templates — see `agent-contract.md`
-- Snapshot build jobs (base snapshot workers) — see `repos-prebuilds.md`
-- Secret values and bundle management — see `secrets-environment.md`
-- LLM key generation — see `llm-proxy.md`
+- Session lifecycle orchestration, hub ownership, SSE runtime state machine — see `sessions-gateway.md`
+- Tool schemas/prompts and interception semantics — see `agent-contract.md`
+- Configuration lifecycle and snapshot build triggering policy — see `repos-prebuilds.md`
+- Secret CRUD and bundle lifecycle — see `secrets-environment.md`
+- LLM proxy key issuance/routing policy — see `llm-proxy.md`
 
-### Mental Model
+### Mental Models
 
-A **sandbox** is a remote compute environment (Modal container or E2B sandbox) where the coding agent runs. This spec owns _how_ sandboxes are created, configured, and managed — the provider layer. The session lifecycle that _decides when_ to create or destroy sandboxes belongs to `sessions-gateway.md`.
+A sandbox provider is a compute orchestration adapter, not a session orchestrator. Session code decides *when* to create, resume, pause, or terminate; provider code decides *how* that action is executed against Modal or E2B.
 
-The provider abstraction lets callers swap between Modal and E2B without code changes. Both providers perform the same boot sequence: resolve an image/template, create or recover a sandbox, clone repos (or restore from snapshot), inject config files + tools + plugin, start OpenCode, start infrastructure services, and start sandbox-mcp. Configurations define per-repo settings (service commands, env files, etc.) that are applied at sandbox boot.
+The core abstraction is capability-based, not provider-uniform:
+- Filesystem snapshot exists on both providers.
+- Pause/resume exists only on E2B (`supportsPause`, `supportsAutoPause`).
+- Memory snapshot exists only on Modal (`supportsMemorySnapshot`, `memorySnapshot`, `restoreFromMemorySnapshot`).
 
-Inside every sandbox, **sandbox-mcp** runs as a sidecar providing an HTTP API (port 4000) and terminal WebSocket for the gateway to interact with the sandbox beyond OpenCode's SSE stream.
+Every sandbox has two control planes:
+- OpenCode plane on port `4096` for agent interaction.
+- sandbox-mcp plane on port `4000` for terminal/services/git inspection, fronted by Caddy on preview port `20000`.
 
-**Core entities:**
-- **SandboxProvider** — The interface both Modal and E2B implement. Defined in `packages/shared/src/sandbox-provider.ts`.
-- **sandbox-mcp** — The in-sandbox HTTP/WS server and CLI. Lives in `packages/sandbox-mcp/`.
-- **Snapshots** — Two tiers: base snapshot (pre-baked image) and configuration/session snapshot (full state including cloned repo). The `resolveSnapshotId()` function picks the best available layer, with configuration snapshots taking priority. If no snapshot is available, the sandbox boots from the base image with a live clone.
+Boot is intentionally split into two phases:
+- Essential phase (blocking): required for a usable agent session.
+- Additional phase (async): improves runtime ergonomics but should not block session readiness.
 
-**Key invariants:**
-- Providers must be stateless across calls. All state lives in the sandbox filesystem or metadata file (`/home/user/.proliferate/metadata.json`).
-- `ensureSandbox()` is idempotent: recover an existing sandbox if alive, else create a new one.
-- `terminate()` is idempotent: "not found" errors are treated as success.
-- Secrets are never logged. Error messages pass through `redactSecrets()` before storage.
+State is intentionally split:
+- Durable session metadata in DB (`sessions` row and linked records).
+- In-sandbox operational metadata at `/home/user/.proliferate/metadata.json`.
+- Provider instances themselves are ephemeral/stateless across calls.
+
+### Things Agents Get Wrong
+
+- `ensureSandbox()` is the default lifecycle entry point; `createSandbox()` is for explicit fresh creation only (`packages/shared/src/sandbox-provider.ts`, `packages/shared/src/providers/*.ts`).
+- Modal and E2B use different identity primitives for recovery:
+  - Modal finds by sandbox name = `sessionId` (`fromName`).
+  - E2B finds by stored `currentSandboxId` (`Sandbox.getInfo`) (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`).
+- Memory snapshot IDs are prefixed `mem:` and only Modal can restore them (`restoreFromMemorySnapshot`) (`packages/shared/src/providers/modal-libmodal.ts`).
+- Snapshot resolution utility no longer does repo-level fallback; it is configuration snapshot or `null` only (`packages/shared/src/snapshot-resolution.ts`).
+- Setup-only tools are session-type gated; they are injected for `setup` sessions and explicitly removed for non-setup restores (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`).
+- `PLUGIN_MJS` logs execute inside sandbox runtime, not in provider process (`packages/shared/src/sandbox/config.ts`).
+- `checkSandboxes()` must be side-effect free; E2B must not use `Sandbox.connect()` there (`packages/shared/src/providers/provider-contract.test.ts`, `packages/shared/src/providers/e2b.ts`).
+- Snapshot restore freshness is cadence-gated and metadata-aware; cadence advances only when all pulls succeed (`packages/shared/src/sandbox/git-freshness.ts`, `packages/shared/src/providers/pull-on-restore.test.ts`).
+- Gateway callback tools (`verify`, `save_snapshot`, etc.) require `PROLIFERATE_GATEWAY_URL`, `PROLIFERATE_SESSION_ID`, and `SANDBOX_MCP_AUTH_TOKEN` in sandbox env (`packages/shared/src/opencode-tools/index.ts`).
+- Direct provider instantiation is valid for snapshot workers, not for session runtime code paths (`apps/worker/src/base-snapshots/index.ts`, `apps/worker/src/configuration-snapshots/index.ts`, `packages/shared/src/providers/index.ts`).
 
 ---
 
 ## 2. Core Concepts
 
 ### Provider Factory
-Callers obtain a provider via `getSandboxProvider(type?)` (`packages/shared/src/providers/index.ts`). If no `type` is passed, it reads `DEFAULT_SANDBOX_PROVIDER` from the environment schema (`packages/environment/src/schema.ts`). The provider type is persisted in the session DB record (`sessions.sandbox_provider`) so that resume always uses the same provider that created the sandbox. A thin alias `getSandboxProviderForSnapshot()` exists but is currently unused — gateway code calls `getSandboxProvider(providerType)` directly.
-- Key detail agents get wrong: Session-facing code (gateway, API routes) should go through the factory — not instantiate providers directly. However, snapshot build workers (`apps/worker/src/base-snapshots/`, `apps/worker/src/configuration-snapshots/`) and the CLI snapshot script (`apps/gateway/src/bin/create-modal-base-snapshot.ts`) instantiate `ModalLibmodalProvider` directly because they need provider-specific methods like `createBaseSnapshot()` / `createConfigurationSnapshot()` that aren't on the `SandboxProvider` interface.
-- Reference: `packages/shared/src/providers/index.ts`
+`getSandboxProvider(type?)` resolves provider implementation from explicit type or `DEFAULT_SANDBOX_PROVIDER` and returns a fresh provider instance (`packages/shared/src/providers/index.ts`).
 
-### SandboxProvider Interface
-The common contract for all providers. Defines required methods (`ensureSandbox`, `createSandbox`, `snapshot`, `pause`, `terminate`, `writeEnvFile`, `health`) and optional methods (`checkSandboxes`, `resolveTunnels`, `readFiles`, `testServiceCommands`, `execCommand`).
+Session runtime persists and reuses provider type via `sessions.sandbox_provider` to keep resume/snapshot behavior provider-consistent (`apps/gateway/src/hub/session-runtime.ts`, `apps/gateway/src/hub/session-hub.ts`).
 
-Memory snapshot support is provider-capability based:
-- Providers may advertise `supportsMemorySnapshot`.
-- Providers may implement dedicated memory snapshot methods (`memorySnapshot`, `restoreFromMemorySnapshot`) in addition to existing snapshot/pause paths.
-- Session orchestration must treat these as provider-specific capabilities and branch explicitly rather than assuming universal support.
+### SandboxProvider Contract
+`SandboxProvider` defines required lifecycle methods plus optional capability methods (`checkSandboxes`, `resolveTunnels`, `execCommand`, memory snapshot methods) (`packages/shared/src/sandbox-provider.ts`).
 
-Reference capability shape:
+Capability flags are authoritative:
+- `supportsPause` / `supportsAutoPause` (E2B)
+- `supportsMemorySnapshot` (Modal)
 
-```ts
-interface SandboxProvider {
-	supportsMemorySnapshot?: boolean;
-	memorySnapshot?(sessionId: string, sandboxId: string): Promise<{ snapshotId: string }>;
-	restoreFromMemorySnapshot?(
-		sessionId: string,
-		snapshotId: string,
-		opts?: { envVars?: Record<string, string> },
-	): Promise<CreateSandboxResult>;
-}
-```
+Callers must branch on capabilities rather than assuming parity.
 
-- Key detail agents get wrong: `ensureSandbox` is the preferred entry point, not `createSandbox`. The former handles recovery; the latter always creates fresh.
-- Reference: `packages/shared/src/sandbox-provider.ts`
+### Snapshot Surfaces
+Current snapshot surfaces in active runtime flow:
+- Configuration/session snapshot IDs (plain string IDs)
+- Pause snapshots (E2B: snapshot ID equals sandbox ID)
+- Memory snapshots (Modal: `mem:<id>`)
+- Base snapshots for cold-start acceleration (Modal only)
 
-### Agent & Model Configuration
-The `AgentConfig` type (`packages/shared/src/agents.ts`) carries agent type and model ID through the stack. The default is `opencode` agent with `claude-opus-4.6` model. Model IDs are canonical (e.g., `"claude-opus-4.6"`) and transformed to provider-specific formats: `toOpencodeModelId()` produces `"anthropic/claude-opus-4-6"` for OpenCode's config file.
-- Key detail agents get wrong: OpenCode model IDs have NO date suffix — OpenCode handles the mapping internally. Don't use Anthropic API format (`claude-opus-4-6-20250514`) in OpenCode config.
-- Reference: `packages/shared/src/agents.ts:toOpencodeModelId`
+`resolveSnapshotId()` is intentionally a pure utility with simple semantics: return `configurationSnapshotId` if present, else `null` (`packages/shared/src/snapshot-resolution.ts`).
 
-### Snapshot Resolution
-Snapshot resolution uses a two-tier priority chain via `resolveSnapshotId()` (`packages/shared/src/snapshot-resolution.ts`). The input uses configuration-level naming (`configurationSnapshotId`, `configurationRepos`):
+### OpenCode + Model Configuration
+Canonical model IDs live in `agents.ts`, and providers convert to OpenCode model IDs via `toOpencodeModelId()` (`packages/shared/src/agents.ts`).
 
-1. **Configuration/session snapshot** (`configurationSnapshotId`) — always wins if present.
-2. **Repo snapshot** — only for Modal provider, single-repo, `workspacePath = "."`, status `"ready"`.
-3. **No snapshot** — start from base image with live clone.
+Default model is `claude-sonnet-4.6` (not Opus) (`packages/shared/src/agents.ts`).
 
-There is no separate three-tier chain. Snapshots are either base snapshots (pre-baked image) or configuration/session snapshots (full working state).
+OpenCode config and readiness are shared utilities (`getOpencodeConfig`, `waitForOpenCodeReady`) used by both providers (`packages/shared/src/sandbox/opencode.ts`).
 
-- Key detail agents get wrong: Repo snapshots are only used for Modal provider, single-repo, `workspacePath = "."`. E2B sessions skip this layer.
-- Reference: `packages/shared/src/snapshot-resolution.ts`
+### Metadata + Freshness
+Providers maintain `SessionMetadata` in `/home/user/.proliferate/metadata.json` for repo directory and freshness cadence tracking (`packages/shared/src/sandbox/opencode.ts`, `packages/shared/src/providers/*.ts`).
 
-### Git Freshness
-When restoring from a snapshot, repos may be stale. The `shouldPullOnRestore()` function gates `git pull --ff-only` on: (1) feature flag `SANDBOX_GIT_PULL_ON_RESTORE`, (2) having a snapshot, (3) cadence timer `SANDBOX_GIT_PULL_CADENCE_SECONDS`.
-- Key detail agents get wrong: Cadence is only advanced when _all_ repo pulls succeed. A single failure leaves the timer unchanged so the next restore retries.
-- Reference: `packages/shared/src/sandbox/git-freshness.ts`
+`shouldPullOnRestore()` is the shared policy function. Providers own actual git credential rewrite/pull execution and metadata timestamp updates (`packages/shared/src/sandbox/git-freshness.ts`).
 
-### Thawed-TCP + Restore Freshness Guardrail
-Memory snapshot restore resumes process memory and open-process state, which can make the runtime appear instantly ready while still reflecting stale repo state from the freeze point.
+### sandbox-mcp Sidecar
+sandbox-mcp provides in-sandbox HTTP/WS APIs for service management, terminal access, and git introspection (`packages/sandbox-mcp/src/index.ts`, `packages/sandbox-mcp/src/api-server.ts`, `packages/sandbox-mcp/src/terminal.ts`).
 
-Requirement:
-- Immediately after restore is confirmed, run stateless freshness reconciliation (`git pull --ff-only` when cadence/flag policy allows) before unblocking prompts.
-- This reconciliation must happen in the provider restore flow, not deferred to agent behavior.
-
-Key detail agents get wrong: restore shortcuts boot-time setup, so freshness checks cannot rely on "normal boot" hooks alone. Memory snapshot restore now blocks on OpenCode readiness (`waitForOpenCodeReady`) before returning tunnel URLs, preventing post-restore `/session` races.
-
-### OpenCode Plugin (PLUGIN_MJS)
-A minimal ESM plugin injected into every sandbox at `~/.config/opencode/plugin/proliferate.mjs`. It exports a `ProliferatePlugin` async function with empty hooks. All event streaming flows via SSE (gateway pulls from OpenCode) — the plugin does NOT push events.
-- Key detail agents get wrong: The `console.log` calls inside `PLUGIN_MJS` run _inside the sandbox_, not in the provider. They are template string literals, not actual server-side calls. Do not migrate them to structured logging.
-- Reference: `packages/shared/src/sandbox/config.ts:PLUGIN_MJS`
-
----
-
-## 3. File Tree
-
-```
-packages/shared/src/
-├── sandbox-provider.ts              # SandboxProvider interface + all types
-├── snapshot-resolution.ts           # resolveSnapshotId() — snapshot layer picker
-├── agents.ts                        # AgentConfig, ModelId, toOpencodeModelId()
-├── sandbox/
-│   ├── index.ts                     # Barrel export
-│   ├── config.ts                    # PLUGIN_MJS, DEFAULT_CADDYFILE, SANDBOX_PATHS/PORTS, env instructions, service command parsing
-│   ├── opencode.ts                  # getOpencodeConfig(), waitForOpenCodeReady(), SessionMetadata
-│   ├── git-freshness.ts             # shouldPullOnRestore()
-│   ├── version-key.ts              # computeBaseSnapshotVersionKey()
-│   ├── errors.ts                    # SandboxProviderError, redactSecrets()
-│   └── fetch.ts                     # fetchWithTimeout(), providerFetch(), DEFAULT_TIMEOUTS
-├── providers/
-│   ├── index.ts                     # getSandboxProvider() factory, getSandboxProviderForSnapshot()
-│   ├── modal-libmodal.ts            # ModalLibmodalProvider (default)
-│   └── e2b.ts                       # E2BProvider
-
-packages/sandbox-mcp/src/
-├── index.ts                         # Entry point — starts API server + terminal WS
-├── api-server.ts                    # Express HTTP API on port 4000
-├── terminal.ts                      # PTY-over-WebSocket at /api/terminal
-├── service-manager.ts               # Start/stop/expose services, state persistence
-├── auth.ts                          # Bearer token validation
-├── types.ts                         # ServiceInfo, State types
-├── proliferate-cli.ts               # `proliferate` CLI (services, env, actions)
-├── actions-grants.ts                # Grant request/list command handlers
-├── actions-grants.test.ts           # Tests for grant handlers
-└── proliferate-cli-env.test.ts      # Tests for env apply/scrub
-
-packages/modal-sandbox/
-├── deploy.py                        # Modal app definition + get_image_id endpoint
-└── Dockerfile                       # Base sandbox image
-```
-
----
-
-## 4. Data Models & Schemas
-
-### Core TypeScript Types
-
-```typescript
-// packages/shared/src/sandbox-provider.ts
-type SandboxProviderType = "modal" | "e2b";
-
-/**
- * A single service command to auto-run after sandbox init.
- */
-interface ServiceCommand {
-  name: string;
-  command: string;
-  cwd?: string;
-}
-
-/**
- * A configuration-level service command that supports multi-repo workspaces.
- * Unlike ServiceCommand (per-repo), this includes an optional workspacePath
- * to target a specific repo directory in multi-repo configurations.
- */
-interface ConfigurationServiceCommand {
-  name: string;
-  command: string;
-  workspacePath?: string;
-  cwd?: string;
-}
-
-interface CreateSandboxOpts {
-  sessionId: string;
-  repos: RepoSpec[];           // Always an array, even for single repo
-  branch: string;
-  envVars: Record<string, string>;
-  systemPrompt: string;
-  snapshotId?: string;         // Restore from this snapshot
-  baseSnapshotId?: string;     // Use as base layer (skip get_image_id)
-  agentConfig?: AgentConfig;
-  currentSandboxId?: string;   // For ensureSandbox recovery (E2B)
-  sshPublicKey?: string;
-  triggerContext?: Record<string, unknown>;
-  snapshotHasDeps?: boolean;   // True if snapshot includes installed deps. Gates service command auto-start.
-  serviceCommands?: ConfigurationServiceCommand[];  // Resolved service commands (configuration-level or fallback from repos)
-  envFiles?: unknown;          // Env file generation spec
-  sessionType?: "coding" | "setup" | "cli" | null;  // Controls tool injection
-}
-
-interface CreateSandboxResult {
-  sandboxId: string;
-  tunnelUrl: string;           // OpenCode API URL
-  previewUrl: string;          // Caddy preview proxy URL
-  sshHost?: string;
-  sshPort?: number;
-  expiresAt?: number;          // Epoch ms
-}
-
-// packages/shared/src/sandbox/opencode.ts
-interface SessionMetadata {
-  sessionId: string;
-  repoDir: string;
-  createdAt: number;
-  lastGitFetchAt?: number;     // Used by cadence gate
-}
-
-// packages/sandbox-mcp/src/types.ts
-interface ServiceInfo {
-  name: string;
-  command: string;
-  cwd: string;
-  pid: number;
-  status: "running" | "stopped" | "error";
-  startedAt: number;
-  logFile: string;
-}
-```
-
-### Sandbox Filesystem Layout
-
-```
-/home/user/
-├── .config/opencode/
-│   ├── opencode.json                # Global OpenCode config
-│   └── plugin/proliferate.mjs       # Proliferate SSE plugin
-├── .proliferate/
-│   ├── metadata.json                # SessionMetadata (repoDir, cadence)
-│   ├── actions-guide.md             # Actions bootstrap hint
-│   └── caddy/user.caddy             # User port expose snippet
-├── .env.proliferate                 # Environment profile (E2B resume)
-├── .opencode-tools/                 # Pre-installed tool node_modules
-├── Caddyfile                        # Main Caddy config
-└── workspace/                       # Cloned repos live here
-    ├── .opencode/
-    │   ├── instructions.md          # System prompt + env instructions
-    │   └── tool/                    # OpenCode custom tools (verify, save_snapshot, etc.)
-    ├── opencode.json                # Local OpenCode config (copy of global)
-    └── .proliferate/
-        └── trigger-context.json     # Automation trigger context (if applicable)
-```
-
-### Standard Ports
-
-| Port | Service | Encrypted | Reference |
-|------|---------|-----------|-----------|
-| 4096 | OpenCode API | Yes (HTTPS) | `SANDBOX_PORTS.opencode` |
-| 20000 | Caddy preview proxy | Yes (HTTPS) | `SANDBOX_PORTS.preview` |
-| 22 | SSH (CLI sessions) | No (raw TCP) | `SANDBOX_PORTS.ssh` |
-| 3901 | openvscode-server | Proxied via Caddy | `SANDBOX_PORTS.vscode` |
-| 4000 | sandbox-mcp API | Internal only | `api-server.ts` |
-
-### Environment Variables (`packages/environment/src/schema.ts`)
-
-| Variable | Type | Default | Required | Notes |
-|----------|------|---------|----------|-------|
-| `DEFAULT_SANDBOX_PROVIDER` | `"modal" \| "e2b"` | — | Yes | Selects active provider |
-| `SANDBOX_TIMEOUT_SECONDS` | int | `3600` | No | Max sandbox lifetime |
-| `SANDBOX_GIT_PULL_ON_RESTORE` | boolean | `false` | No | Enable git pull on snapshot restore |
-| `SANDBOX_GIT_PULL_CADENCE_SECONDS` | int (>=0) | `0` | No | Min seconds between pulls; 0 = always |
-| `SANDBOX_IMAGE_VERSION` | string | — | No | Optional base snapshot cache-buster input for version-key |
-| `MODAL_APP_NAME` | string | — | If modal | Modal app name |
-| `MODAL_APP_SUFFIX` | string | — | No | Per-developer suffix (e.g., `"pablo"`) |
-| `MODAL_BASE_SNAPSHOT_ID` | string | — | No | Pre-baked base snapshot image ID |
-| `MODAL_TOKEN_ID` | string | — | If modal | `ak-...` format |
-| `MODAL_TOKEN_SECRET` | string | — | If modal | `as-...` format |
-| `MODAL_ENDPOINT_URL` | string | — | No | Test/custom endpoint only |
-| `E2B_API_KEY` | string | — | If e2b | E2B API key |
-| `E2B_DOMAIN` | string | — | If e2b | Self-hosted E2B domain |
-| `E2B_TEMPLATE` | string | — | If e2b | E2B template ID |
-| `E2B_TEMPLATE_ALIAS` | string | — | If e2b | E2B template alias |
-
-Note: `SANDBOX_MCP_AUTH_TOKEN` is NOT in the environment schema — it's injected by the provider into the sandbox at boot via `CreateSandboxOpts.envVars` and read from `process.env` inside the sandbox.
-
-### Base Sandbox Image (`packages/modal-sandbox/Dockerfile`)
-
-The Dockerfile builds an Ubuntu 22.04 image with:
-
-| Category | Contents |
-|----------|----------|
-| **Languages** | Node.js 20 (pnpm, yarn), Python 3.11 (uv, pip) |
-| **AI Agents** | OpenCode |
-| **Sandbox Tooling** | `proliferate-sandbox-mcp` (npm global) |
-| **Docker** | Docker CE 27.5.0, Compose plugin, Buildx, runc 1.3.0 |
-| **Web** | Caddy (preview proxy), openvscode-server 1.106.3 |
-| **Git** | Git, GitHub CLI (`gh`), custom credential helpers (`git-credential-proliferate`, `git-askpass`) |
-| **System** | SSH server (key-only auth), rsync, tmux, jq, procps |
-| **Scripts** | `start-services.sh` (sshd), `start-dockerd.sh` (Docker daemon with iptables NAT), `proliferate-info` |
-| **User** | Non-root `user` with passwordless sudo |
-| **Pre-installed** | `@aws-sdk/client-s3` + `@opencode-ai/plugin` at `/home/user/.opencode-tools/` |
+It is reachable externally through Caddy’s `/_proliferate/mcp/*` path (`packages/shared/src/sandbox/config.ts`).
 
 ---
 
 ## 5. Conventions & Patterns
 
 ### Do
-- Use `ensureSandbox()` for session initialization — it handles recovery automatically.
-- Pass environment variables via `CreateSandboxOpts.envVars` — providers handle injection.
-- Use `shellEscape()` for any user-provided values in shell commands (`packages/shared/src/sandbox/config.ts:shellEscape`).
-- Wrap errors with `SandboxProviderError.fromError()` to ensure secret redaction.
-- Use `capOutput()` to truncate command output to 16KB before logging.
+- Use `getSandboxProvider()` for runtime selection in gateway/session code.
+- Use `ensureSandbox()` for runtime bootstrap/recovery.
+- Gate provider-specific behavior with capability flags (`supportsPause`, `supportsMemorySnapshot`).
+- Pass callback/auth env vars whenever sandbox tools/services depend on gateway callbacks.
+- Use `shellEscape()` for shell-interpolated values and `capOutput()` for logged command output.
+- Wrap/normalize provider errors via `SandboxProviderError`.
+- Treat provider `terminate()` as idempotent and tolerant of not-found.
 
-### Don't
-- Don't call `createSandbox()` directly unless you explicitly want a fresh sandbox.
-- Don't log raw `envVars` or API keys — they contain secrets.
-- Don't assume sandbox filesystem state persists after `terminate()`.
-- Don't migrate `console.log` in `PLUGIN_MJS` — it's a template string that runs inside sandboxes.
+### Don’t
+- Don’t assume snapshot IDs are interchangeable across providers.
+- Don’t call `Sandbox.connect()` in `checkSandboxes()` (side effects on paused E2B sandboxes).
+- Don’t log raw secrets or unredacted provider errors.
+- Don’t expose setup-only tools in non-setup sessions.
+- Don’t block session readiness on async additional dependency setup.
 
-### Error Handling
-
-```typescript
-// packages/shared/src/sandbox/errors.ts
-// Modal wraps errors consistently:
-throw SandboxProviderError.fromError(error, "modal", "createSandbox");
-// Redacts API keys, tokens, JWTs from messages automatically
-```
-
-**Caveat:** E2B's `createSandbox` throws raw `Error` for validation failures (missing repos, missing template) at `e2b.ts:226-242`. Only `terminate` and `pause` wrap with `SandboxProviderError`. Modal is more consistent in wrapping.
-
-### Reliability
-- **Timeouts**: Sandbox lifetime defaults to 3600s (`SANDBOX_TIMEOUT_SECONDS`). OpenCode readiness poll: 30s with exponential backoff (200ms base, 1.5x, max 2s). Both providers use their respective SDK calls (libmodal / E2B SDK) — not the `fetchWithTimeout()`/`providerFetch()` utilities in `packages/shared/src/sandbox/fetch.ts`. Those utilities and `DEFAULT_TIMEOUTS` are exported but currently unused by provider implementations.
-- **Retries**: `proliferate` CLI retries API calls up to 10 times with 1s delay for `ECONNREFUSED`/`fetch failed` (`proliferate-cli.ts:fetchWithRetry`).
-- **Idempotency**: `terminate()` treats "not found" as success. `ensureSandbox()` recovers existing sandboxes.
-
-### Testing Conventions
-- Grant command handlers are extracted into `actions-grants.ts` with injectable dependencies for pure unit testing.
-- Env apply/scrub logic tested in `proliferate-cli-env.test.ts`.
-- Snapshot resolution is a pure function — unit test `resolveSnapshotId()` directly.
+### Reliability Notes
+- OpenCode readiness probes are bounded and best-effort on create; runtime recovery should tolerate transient failure and reconnect (`packages/shared/src/sandbox/opencode.ts`, `packages/shared/src/providers/*.ts`).
+- sandbox-mcp CLI retries transient local API connection errors (`packages/sandbox-mcp/src/proliferate-cli.ts`).
 
 ---
 
-## 6. Subsystem Deep Dives
+## 6. Subsystem Deep Dives (Declarative Invariants)
 
-### 6.1 Provider Factory — `Implemented`
+### 6.1 Provider Selection Invariants — `Implemented`
+- Provider choice for a session must be stable after session creation (`sessions.sandbox_provider`).
+- `getSandboxProvider()` must fail fast on unknown/missing provider type.
+- Session-facing runtime code must call providers through the factory.
+- Direct class instantiation is permitted only in provider-specific build/ops paths (base/config snapshot workers, snapshot CLI).
 
-**What it does:** Selects and instantiates the correct provider based on configuration.
+References: `packages/shared/src/providers/index.ts`, `apps/gateway/src/hub/session-runtime.ts`, `apps/worker/src/base-snapshots/index.ts`, `apps/worker/src/configuration-snapshots/index.ts`.
 
-**Happy path** (`packages/shared/src/providers/index.ts:getSandboxProvider`):
-1. Accept optional `type` parameter (e.g., from session DB record).
-2. Fall back to `env.DEFAULT_SANDBOX_PROVIDER` if no type given.
-3. Look up factory in `providers` map (`{ modal: () => new ModalLibmodalProvider(), e2b: () => new E2BProvider() }`).
-4. Return fresh provider instance (providers are stateless — new instance per call).
+### 6.2 Lifecycle Entry Invariants — `Implemented`
+- `ensureSandbox()` must preserve recovery-first semantics: reuse live sandbox when possible, otherwise create.
+- Recovery must return fresh tunnel/preview endpoints via `resolveTunnels()`.
+- Provider-level state must not be required between calls; only DB and sandbox filesystem state are authoritative.
 
-**Usage in gateway:**
-- Session creation: `getSandboxProvider()` — uses default from env (`apps/gateway/src/api/proliferate/http/sessions.ts`).
-- Session resume/runtime: `getSandboxProvider(session.sandbox_provider)` — uses type from DB record (`apps/gateway/src/hub/session-runtime.ts`).
-- Snapshot operations: `getSandboxProvider(providerType)` — uses type from session/snapshot record (`apps/gateway/src/hub/session-hub.ts`).
+References: `packages/shared/src/sandbox-provider.ts`, `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`.
 
-**Files touched:** `packages/shared/src/providers/index.ts`
+### 6.3 Modal Provider Invariants — `Implemented`
+- Modal declares `supportsPause=false`, `supportsAutoPause=false`, `supportsMemorySnapshot=true`.
+- Modal image selection precedence is invariant:
+  - restore snapshot (`opts.snapshotId`) first
+  - base snapshot (`opts.baseSnapshotId` or `MODAL_BASE_SNAPSHOT_ID`) second
+  - `get_image_id` fallback last
+- Modal memory snapshots must round-trip through `mem:` ID prefix and `restoreFromMemorySnapshot()`.
+- Memory restore must not return control before OpenCode readiness succeeds.
+- `pause()` must always fail with explicit unsupported error.
 
-### 6.2 Provider: Modal (ModalLibmodalProvider) — `Implemented`
+References: `packages/shared/src/providers/modal-libmodal.ts`, `packages/modal-sandbox/deploy.py`.
 
-**What it does:** Creates sandboxes using the Modal JS SDK (`libmodal`). Default provider.
+### 6.4 E2B Provider Invariants — `Implemented`
+- E2B declares `supportsPause=true`, `supportsAutoPause=true`.
+- E2B snapshot semantics are pause semantics (`snapshot()` delegates to `pause()`, snapshot ID = sandbox ID).
+- E2B resume path (`Sandbox.connect(snapshotId)`) is allowed to fall back to fresh create on failure.
+- `checkSandboxes()` must use listing APIs only and remain side-effect free.
 
-**Happy path (createSandbox):**
-1. Authenticate with Modal API via `ensureModalAuth()` — validates token format before calling API (`modal-libmodal.ts:160`).
-2. Resolve sandbox image: restore snapshot > base snapshot (`MODAL_BASE_SNAPSHOT_ID`) > base image (via `get_image_id` endpoint) (`modal-libmodal.ts:541-565`).
-3. Build env vars: inject `SESSION_ID`, LLM proxy config (`ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL`), and user-provided vars (`modal-libmodal.ts:586-612`).
-4. Create sandbox with `client.sandboxes.create()` — Docker enabled, 2 CPU, 4GB RAM, encrypted ports for OpenCode+preview, unencrypted for SSH (`modal-libmodal.ts:621-631`).
-5. Get tunnel URLs via `sandbox.tunnels(30000)` (`modal-libmodal.ts:642-656`).
-6. **Essential setup (blocking)**: Clone repos, write plugin/tools/config/instructions, start OpenCode server (`modal-libmodal.ts:662-678`).
-7. **Additional setup (async)**: Git identity, git freshness pull, start services (sshd), start Caddy, start sandbox-mcp, boot service commands (`modal-libmodal.ts:691`).
-8. Wait for OpenCode readiness (poll `/session` endpoint, 30s timeout) (`modal-libmodal.ts:701`).
+References: `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/provider-contract.test.ts`.
 
-**Edge cases:**
-- Branch clone fails -> falls back to default branch (`modal-libmodal.ts:909-919`).
-- Memory snapshot restore now blocks on OpenCode readiness (`waitForOpenCodeReady`) before returning tunnel URLs, preventing post-restore `/session` races.
-- Modal does not support `pause()` — throws `SandboxProviderError` (`modal-libmodal.ts:1496`).
-- `findSandbox()` uses `sessionId` as Modal sandbox name for 1:1 lookup (`modal-libmodal.ts:810`).
+### 6.5 Boot Pipeline Invariants — `Implemented`
+- Essential boot work must complete before `createSandbox()` resolves:
+  - workspace clone/restore resolution
+  - OpenCode config + plugin + tools/instructions/actions-guide writes
+  - OpenCode process launch
+- Additional boot work runs async and must not fail session creation:
+  - start infra services
+  - Caddy startup
+  - sandbox-mcp startup
+  - env apply + service autostart bootstrapping
+- Setup-only tools (`save_service_commands`, `save_env_files`) are only present in setup sessions.
+- Non-setup sessions must proactively remove setup-only tools when restoring from setup snapshots.
 
-**Files touched:** `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/sandbox/config.ts`, `packages/shared/src/sandbox/opencode.ts`
+References: `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/opencode-tools/index.ts`.
 
-### 6.3 Provider: E2B (E2BProvider) — `Implemented`
+### 6.6 Service Boot + Env File Invariants — `Implemented`
+- Env files must be applied before tracked service autostart commands run.
+- Service autostart requires both `snapshotHasDeps=true` and non-empty resolved service commands.
+- Services started via `proliferate services start` are expected to be tracked by service-manager state/log APIs.
 
-**What it does:** Creates sandboxes using the E2B TypeScript SDK. Supports pause/resume natively.
+References: `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/sandbox-mcp/src/proliferate-cli.ts`, `packages/sandbox-mcp/src/service-manager.ts`.
 
-**Happy path (createSandbox):**
-1. Build env vars (same pattern as Modal) (`e2b.ts:119-148`).
-2. If snapshot: `Sandbox.connect(snapshotId)` auto-resumes paused sandbox. Re-injects env vars via JSON file + `jq` export (`e2b.ts:165-209`).
-3. If fresh: `Sandbox.create(E2B_TEMPLATE, opts)` with configured timeout (`e2b.ts:222-238`).
-4. Setup workspace, essential deps, additional deps (same sequence as Modal).
-5. Get tunnel URLs via `sandbox.getHost(port)` (`e2b.ts:288-292`).
-6. Wait for OpenCode readiness (`e2b.ts:304-325`).
+### 6.7 Freshness Invariants — `Implemented`
+- Pull-on-restore must be policy-driven (`SANDBOX_GIT_PULL_ON_RESTORE`, cadence, snapshot presence, repo count).
+- Providers must refresh git credentials before pull attempts when pull policy is active.
+- `lastGitFetchAt` may advance only when all repo pulls succeed.
+- Pull failures must be non-fatal to sandbox restore/startup.
 
-**Key differences from Modal:**
-- `supportsPause = true`, `supportsAutoPause = true` — E2B can pause/resume sandboxes (`e2b.ts:93-94`).
-- `pause()` calls `Sandbox.betaPause()`. The `sandboxId` itself becomes the snapshot ID (`e2b.ts:960-975`).
-- `snapshot()` maps 1:1 to `pause()` (`e2b.ts:955-958`).
-- `findSandbox()` uses `currentSandboxId` from DB (E2B auto-generates IDs) (`e2b.ts:406-417`).
-- `checkSandboxes()` uses `Sandbox.list()` — side-effect free, doesn't resume paused sandboxes (`e2b.ts:1199-1238`).
-- Snapshot resume failures fall back to fresh sandbox creation (`e2b.ts:210-219`).
+References: `packages/shared/src/sandbox/git-freshness.ts`, `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/pull-on-restore.test.ts`.
 
-**Files touched:** `packages/shared/src/providers/e2b.ts`
+### 6.8 Snapshot Resolution Invariants — `Implemented`
+- `resolveSnapshotId()` must never invent provider-specific fallback IDs.
+- If `configurationSnapshotId` exists, return it.
+- If absent, return `null`.
 
-### 6.4 Sandbox Boot Sequence — `Implemented`
+References: `packages/shared/src/snapshot-resolution.ts`, `packages/shared/src/snapshot-resolution.test.ts`.
 
-**What it does:** Both providers follow the same two-phase boot sequence after sandbox creation.
+### 6.9 sandbox-mcp API Invariants — `Implemented`
+- HTTP API listens on port `4000`; terminal WS endpoint is `/api/terminal`.
+- All endpoints except `/api/health` require bearer auth token validation.
+- Git endpoints must constrain repo/file paths to workspace boundaries.
+- Git diff responses must be capped to prevent oversized payloads.
 
-**Phase 1 — Essential (blocking):**
-1. Clone repos (or read metadata from snapshot) — `setupSandbox()`. For scratch sessions (`repos: []`), cloning is skipped and the workspace defaults to `/workspace/`.
-2. Write config files in parallel: plugin, tool pairs (.ts + .txt), OpenCode config (global + local), instructions.md, actions-guide.md, pre-installed tool deps.
-   - **Setup-only tools** (`save_service_commands`, `save_env_files`) are only written when `opts.sessionType === "setup"` — coding/CLI sessions never see them.
-   - **Gateway-mediated tools** are implemented as synchronous callbacks. Providers must inject the gateway base URL + sandbox auth token into the sandbox environment and ensure tool stubs can call `POST /internal/tools/:toolName` (either via native OpenCode "remote tool" support or a local wrapper script).
-3. **Modal only:** Write SSH keys if CLI session (`modal-libmodal.ts:1062`), write trigger context if automation-triggered (`modal-libmodal.ts:1071`). E2B does not handle SSH or trigger context.
-4. Start OpenCode server (`opencode serve --port 4096`).
+References: `packages/sandbox-mcp/src/index.ts`, `packages/sandbox-mcp/src/api-server.ts`, `packages/sandbox-mcp/src/terminal.ts`, `packages/sandbox-mcp/src/auth.ts`.
 
-**Phase 2 — Additional (fire-and-forget):**
-1. Configure git identity (`git config --global user.name/email`).
-2. Git freshness pull (if enabled and cadence elapsed).
-3. Start infrastructure services (`/usr/local/bin/start-services.sh`).
-4. Create Caddy import directory, write Caddyfile, start Caddy.
-5. Start sandbox-mcp API server (`sandbox-mcp api`, port 4000).
-6. Apply env files via `proliferate env apply` (blocking within phase 2).
-7. Start service commands via `proliferate services start` (fire-and-forget).
+### 6.10 Service Manager Invariants — `Implemented`
+- Service state is persisted in `/tmp/proliferate/state.json`; logs in `/tmp/proliferate/logs/`.
+- Starting a service with an existing name must replace prior process ownership.
+- Process group termination semantics must be used when possible to avoid orphan children.
+- Exposed port routing must be written to `/home/user/.proliferate/caddy/user.caddy` and reloaded via Caddy signal.
 
-**Files touched:** Both provider files, `packages/shared/src/sandbox/config.ts`
+References: `packages/sandbox-mcp/src/service-manager.ts`, `packages/shared/src/sandbox/config.ts`.
 
-### 6.5 Snapshot Resolution — `Implemented`
+### 6.11 Proliferate CLI Invariants — `Implemented`
+- `services` commands are sandbox-mcp API clients and require auth token.
+- `env apply` is two-pass (validate then write) and path-constrained to workspace.
+- `env scrub` removes secret-mode files and local override file.
+- `actions` commands call gateway APIs and must support approval-polling flow.
 
-**What it does:** Pure function that picks the best snapshot for a session.
+References: `packages/sandbox-mcp/src/proliferate-cli.ts`, `packages/sandbox-mcp/src/proliferate-cli-env.test.ts`, `packages/sandbox-mcp/src/actions-grants.ts`.
 
-**Priority chain** (`packages/shared/src/snapshot-resolution.ts:resolveSnapshotId`):
-1. **Configuration/session snapshot** (`configurationSnapshotId`) — always wins if present.
-2. **Repo snapshot** — only for Modal provider, single-repo, `workspacePath = "."`, status `"ready"`.
-3. **No snapshot** — start from base image with live clone.
+### 6.12 Base + Configuration Snapshot Build Invariants — `Implemented`
+- Base snapshot version key must deterministically hash runtime-baked files/config + image version salt.
+- Base snapshot builds are Modal-only and run out-of-band (worker/ops scripts), not in session request path.
+- Configuration snapshot builds are Modal-only; non-Modal configurations are marked default/no-snapshot.
 
-**Edge cases:**
-- Multi-repo configurations never use repo snapshots (returns `null`).
-- Unknown/null provider skips repo snapshot layer.
-- Repo snapshot must have matching provider (`"modal"` or null).
-
-### 6.6 Snapshot Version Key — `Implemented`
-
-**What it does:** Computes a SHA-256 hash of everything baked into a base snapshot (`packages/shared/src/sandbox/version-key.ts:computeBaseSnapshotVersionKey`).
-
-**Inputs hashed:** `PLUGIN_MJS` + `DEFAULT_CADDYFILE` + `getOpencodeConfig(defaultModelId)` + `SANDBOX_IMAGE_VERSION` (fallback `"v1.0.0"` when unset).
-
-When this key changes, the base snapshot is stale and must be rebuilt. Used by base snapshot build workers (see `repos-prebuilds.md`).
-
-### 6.7 Git Freshness — `Implemented`
-
-**What it does:** Decides whether to `git pull --ff-only` when restoring from snapshot.
-
-**Decision function** (`packages/shared/src/sandbox/git-freshness.ts:shouldPullOnRestore`):
-- Returns `false` if: disabled, no snapshot, no repos, or cadence window hasn't elapsed.
-- Returns `true` if: cadence is 0 (always), no `lastGitFetchAt` (legacy), or enough time has passed.
-
-**Env vars:** `SANDBOX_GIT_PULL_ON_RESTORE` (boolean), `SANDBOX_GIT_PULL_CADENCE_SECONDS` (number, 0 = always).
-
-Both providers re-write git credentials before pulling (snapshot tokens may be stale) and only advance the cadence timer when all pulls succeed.
-
-**Restore ordering requirement:** For memory-restore paths, freshness reconciliation runs before control returns to the hub for prompt handling. If freshness pull is skipped by policy (flag/cadence), the restore proceeds but retains the previous freshness timestamp semantics.
-
-### 6.8 Sandbox-MCP API Server — `Implemented`
-
-**What it does:** Express HTTP server on port 4000 inside the sandbox. Routed externally via Caddy at `/_proliferate/mcp/*`.
-
-**Endpoints** (`packages/sandbox-mcp/src/api-server.ts`):
-
-| Method | Path | Auth | Purpose |
-|--------|------|------|---------|
-| GET | `/api/health` | No | Health check |
-| GET | `/api/auth/check` | Yes | Caddy forward_auth for VS Code |
-| GET | `/api/services` | Yes | List services + exposed port |
-| POST | `/api/services` | Yes | Start a service |
-| DELETE | `/api/services/:name` | Yes | Stop a service |
-| POST | `/api/expose` | Yes | Expose port via Caddy |
-| GET | `/api/logs/:name` | Yes | Stream service logs (SSE) |
-| GET | `/api/git/repos` | Yes | Discover git repos in workspace |
-| GET | `/api/git/status` | Yes | Git status (porcelain v2) |
-| GET | `/api/git/diff` | Yes | Git diff (capped at 64KB) |
-
-**Security:** All endpoints except `/api/health` require `Authorization: Bearer <token>` validated against `SANDBOX_MCP_AUTH_TOKEN` (falls back to `SERVICE_TO_SERVICE_AUTH_TOKEN`) (`packages/sandbox-mcp/src/auth.ts`). Repo ID is base64-encoded path, validated against workspace directory to prevent traversal.
-
-### 6.9 Terminal WebSocket — `Implemented`
-
-**What it does:** Interactive bash PTY over WebSocket at `/api/terminal`.
-
-**Protocol** (`packages/sandbox-mcp/src/terminal.ts`):
-- Auth: `Authorization: Bearer <token>` header on WS upgrade (no query-param auth).
-- Client sends text frames (keystrokes) or JSON `{ type: "resize", cols, rows }`.
-- Server sends PTY output as text frames.
-- Spawns `bash` with `xterm-256color` terminal, cwd = `WORKSPACE_DIR`.
-
-### 6.10 Service Manager — `Implemented`
-
-**What it does:** Manages long-running processes inside the sandbox with state persistence.
-
-**Key behaviors** (`packages/sandbox-mcp/src/service-manager.ts`):
-- State persisted to `/tmp/proliferate/state.json`. Logs to `/tmp/proliferate/logs/<name>.log`.
-- `startService()`: kills existing service with same name (handles both in-memory and orphaned PIDs via process group kill), spawns new process detached.
-- `stopService()`: SIGTERM to process group (negative PID).
-- `exposePort()`: writes Caddy snippet to `/home/user/.proliferate/caddy/user.caddy`, reloads Caddy via `pkill -USR1 caddy`. The snippet's `handle` block takes priority over the default multi-port fallback in the main Caddyfile.
-- Process exit updates state (`stopped` on code 0, `error` otherwise).
-
-### 6.11 Proliferate CLI — `Implemented`
-
-**What it does:** CLI tool available inside sandboxes as `proliferate`. Provides subcommands for services, env, and actions.
-
-**Command groups** (`packages/sandbox-mcp/src/proliferate-cli.ts`):
-
-| Group | Command | Description |
-|-------|---------|-------------|
-| `services` | `list/start/stop/restart/expose/logs` | Manage sandbox services via sandbox-mcp API |
-| `env` | `apply --spec <json>` | Generate env files from spec + process.env + `/tmp/.proliferate_env.json` overrides |
-| `env` | `scrub --spec <json>` | Delete secret env files |
-| `actions` | `list` | List available integrations (calls gateway) |
-| `actions` | `guide --integration <i>` | Show provider usage guide (calls gateway) |
-| `actions` | `run --integration <i> --action <a>` | Execute action, poll for approval if write (calls gateway) |
-| `actions` | `grant request/grants list` | Request/list grants (calls gateway) |
-
-**Env apply** adds generated files to `.git/info/exclude` automatically. Resolves values from process.env with `/tmp/.proliferate_env.json` overrides. Two-pass: validates all required keys exist before writing any files.
-
-### 6.12 Modal Image + Deploy — `Implemented`
-
-**What it does:** Python script that registers the Modal app and exposes a `get_image_id` endpoint.
-
-**How it works** (`packages/modal-sandbox/deploy.py`):
-- Builds image from `Dockerfile` using `modal.Image.from_dockerfile()`.
-- Exposes `GET get_image_id` — returns `{"image_id": BASE_IMAGE.object_id}`. Called once by the TS provider at startup to resolve the base image.
-- Exposes `GET health` — returns `{"status": "ok"}`.
-- Supports per-developer deployments via `MODAL_APP_SUFFIX` env var (e.g., `proliferate-sandbox-pablo`).
-
-**Deploy:** `cd packages/modal-sandbox && modal deploy deploy.py`
+References: `packages/shared/src/sandbox/version-key.ts`, `apps/worker/src/base-snapshots/index.ts`, `apps/worker/src/configuration-snapshots/index.ts`, `apps/gateway/src/bin/create-modal-base-snapshot.ts`.
 
 ---
 
@@ -540,41 +240,43 @@ Both providers re-write git credentials before pulling (snapshot tokens may be s
 
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
-| Sessions/Gateway | Gateway -> Provider | `SandboxProvider.ensureSandbox()` | Gateway calls provider to create/recover sandboxes. See `sessions-gateway.md`. |
-| Agent Contract | Provider -> Sandbox | Tool files written to `.opencode/tool/` | Provider injects tool implementations at boot. Tool schemas defined in `agent-contract.md`. |
-| Repos/Configurations | Provider <- Worker | `createBaseSnapshot()`, `createConfigurationSnapshot()` | Snapshot workers call Modal provider directly. See `repos-prebuilds.md`. |
-| Secrets/Environment | Provider <- Gateway | `CreateSandboxOpts.envVars` | Gateway assembles env vars from secrets. See `secrets-environment.md`. |
-| LLM Proxy | Provider -> Sandbox | `ANTHROPIC_BASE_URL`/`ANTHROPIC_API_KEY` env vars | Virtual key injected as env var. See `llm-proxy.md`. |
-| Actions | CLI -> Gateway | `proliferate actions run` | CLI calls gateway action endpoints. See `actions.md`. |
+| Sessions/Gateway runtime | Gateway -> Provider | `ensureSandbox`, `snapshot`, `pause`, `terminate`, `execCommand` | Runtime lifecycle orchestration belongs to `sessions-gateway.md`; providers execute compute operations. |
+| Agent tooling | Provider -> Sandbox FS | `.opencode/tool/*`, plugin file, instructions | Tool schemas/behavior are owned by `agent-contract.md`; providers only inject runtime artifacts. |
+| Repos/Configurations | Workers -> Modal provider | `createBaseSnapshot`, `createConfigurationSnapshot` | Build scheduling/ownership is in `repos-prebuilds.md`. |
+| Secrets/Environment | Services/Gateway -> Provider | `CreateSandboxOpts.envVars`, env files spec | Secret CRUD and schema ownership is in `secrets-environment.md`. |
+| LLM proxy | Services -> Provider/Sandbox | `LLM_PROXY_API_KEY`, `ANTHROPIC_BASE_URL` | Key issuance/routing policy is in `llm-proxy.md`. |
+| Actions | sandbox CLI -> Gateway | `/proliferate/:sessionId/actions/*` | Approval/risk/grants logic is in `actions.md`; provider responsibility is env wiring and CLI availability. |
 
 ### Security & Auth
-- **sandbox-mcp auth**: Bearer token via `SANDBOX_MCP_AUTH_TOKEN` env var (falls back to `SERVICE_TO_SERVICE_AUTH_TOKEN`). Secure-by-default — returns `false` if no token configured (`packages/sandbox-mcp/src/auth.ts`).
-- **Secret redaction**: `SandboxProviderError` auto-redacts API keys, tokens, JWTs from error messages via regex patterns (`packages/shared/src/sandbox/errors.ts:redactSecrets`).
-- **Git credentials**: Written to `/tmp/.git-credentials.json`. Credentials DO persist in snapshots but become stale — both providers re-write with fresh tokens inside the `if (doPull)` block on restore (`modal-libmodal.ts:1178`, `e2b.ts:842`).
-- **Path traversal prevention**: sandbox-mcp validates all repo paths stay within workspace directory, dereferencing symlinks (`api-server.ts:validateInsideWorkspace`).
+- sandbox-mcp auth is bearer-token based and deny-by-default when token is absent (`packages/sandbox-mcp/src/auth.ts`).
+- Gateway derives per-session sandbox token via HMAC and uses it when proxying terminal/devtools flows (`apps/gateway/src/lib/sandbox-mcp-token.ts`, `apps/gateway/src/api/proxy/terminal.ts`).
+- Provider error surfaces must redact secrets via `SandboxProviderError` and `redactSecrets()` (`packages/shared/src/sandbox/errors.ts`).
+- Snapshot save flow scrubs secret env files before snapshot and reapplies afterward (`apps/gateway/src/hub/session-hub.ts`).
 
 ### Observability
-- Both providers use structured logging via `@proliferate/logger` with `{ module: "modal" | "e2b" }` child loggers.
-- Latency events logged at every step: `provider.create_sandbox.start`, `provider.create_sandbox.auth_ok`, `provider.create_sandbox.sandbox_created`, `provider.create_sandbox.tunnels`, `provider.create_sandbox.opencode_ready`, `provider.create_sandbox.complete`.
-- sandbox-mcp uses `createLogger({ service: "sandbox-mcp" })`.
+- Providers emit structured latency markers across critical lifecycle edges (`provider.*` events) (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`).
+- sandbox-mcp logs via service-scoped logger for API/terminal components (`packages/sandbox-mcp/src/api-server.ts`, `packages/sandbox-mcp/src/terminal.ts`).
 
 ---
 
 ## 8. Acceptance Gates
 
 - [ ] Typecheck passes (`pnpm typecheck`)
-- [ ] `packages/sandbox-mcp` tests pass (`pnpm -C packages/sandbox-mcp test`)
-- [ ] This spec is updated (file tree, data models, deep dives)
-- [ ] No secrets or API keys in error messages (check `redactSecrets` coverage)
+- [ ] Shared/provider tests pass (`pnpm -C packages/shared test`)
+- [ ] sandbox-mcp tests pass (`pnpm -C packages/sandbox-mcp test`)
+- [ ] This spec removes sectioned file-tree/data-model inventories and keeps deep dives declarative
+- [ ] No spec statements conflict with provider capabilities (`supportsPause`, `supportsMemorySnapshot`) in code
 
 ---
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **Modal does not support pause** — `pause()` throws (`modal-libmodal.ts:1496`). Sessions on Modal must snapshot + terminate, then create fresh from snapshot on resume. No impact on correctness but slower than E2B's native pause/resume.
-- [ ] **E2B snapshot resume fallback** — If `Sandbox.connect()` fails on a paused sandbox, E2B falls back to fresh creation silently. This loses the snapshot state without user notification.
-- [ ] **Stale git credentials in snapshots** — Credentials persist in snapshots at `/tmp/.git-credentials.json` but may be expired. Both providers only re-write credentials when git pull is actually performed (inside the `if (doPull)` block). If cadence gate says no pull, stale credentials remain until the next pull window.
-- [ ] **Service manager state in /tmp** — Process state is stored in `/tmp/proliferate/state.json`. This survives within a session but is lost on Modal sandbox recreation. E2B pause/resume preserves it.
-- [ ] **No health monitoring for sandbox-mcp** — If sandbox-mcp crashes after boot, there's no automatic restart. The process runs fire-and-forget.
-- [ ] **Caddy fallback ports hardcoded** — The default Caddyfile tries ports 3000, 5173, 8000, 4321 in order. No mechanism to configure this per-configuration without using `exposePort()`.
-- [ ] **Setup-only tools not scrubbed before snapshot** — Snapshots of setup sessions include `save_service_commands` and `save_env_files` tools. These are cleaned up reactively on restore (via `rm -f` in `setupEssentialDependencies`) instead of being removed before snapshotting. Scrubbing before snapshot would eliminate the cleanup path and keep snapshots in a clean state.
+- [ ] **Modal pause is unsupported** — Modal sessions cannot use native pause semantics and rely on snapshot + recreate paths (`packages/shared/src/providers/modal-libmodal.ts`).
+- [ ] **E2B resume fallback is silent** — failed `Sandbox.connect(snapshotId)` falls back to fresh sandbox creation without user-visible warning (`packages/shared/src/providers/e2b.ts`).
+- [ ] **Immediate sandbox creation path does not inject gateway callback env vars by default** — `session-creator` direct `provider.createSandbox()` path omits `SANDBOX_MCP_AUTH_TOKEN`, `PROLIFERATE_GATEWAY_URL`, and `PROLIFERATE_SESSION_ID`, while tool callbacks/sandbox-mcp auth depend on them (`apps/gateway/src/lib/session-creator.ts`, `apps/gateway/src/hub/session-runtime.ts`, `packages/shared/src/opencode-tools/index.ts`, `packages/shared/src/providers/*.ts`).
+- [ ] **Freshness logic is duplicated across layers** — providers run cadence-aware pull-on-restore, and runtime also runs a best-effort pull from `/home/user/workspace`; this creates overlap and uneven multi-repo behavior (`packages/shared/src/providers/*.ts`, `apps/gateway/src/hub/session-runtime.ts`).
+- [ ] **E2B setup parity gap** — E2B provider currently does not write SSH authorized keys or trigger context files, unlike Modal (`packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/modal-libmodal.ts`).
+- [ ] **`resolveSnapshotId()` is currently not on the primary session-start path** — runtime/session-creator consume snapshot IDs directly from resolved configuration/session state, leaving this utility as a pure helper/test surface (`packages/shared/src/snapshot-resolution.ts`, `apps/gateway/src/lib/configuration-resolver.ts`, `apps/gateway/src/lib/session-creator.ts`).
+- [ ] **Setup-only tool cleanup is reactive** — non-setup sessions remove setup-only tools during restore instead of pre-snapshot scrubbing (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`).
+- [ ] **sandbox-mcp/service processes are fire-and-forget** — no built-in supervisor for OpenCode, Caddy, or sandbox-mcp after provider startup (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`).
+- [ ] **Service-manager state is `/tmp`-backed** — persistence characteristics differ across provider lifecycle semantics and are not durable across fresh sandbox recreation (`packages/sandbox-mcp/src/service-manager.ts`).
