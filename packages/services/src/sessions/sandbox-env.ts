@@ -5,25 +5,38 @@
  * and default Git token setup so both web and gateway use identical behavior.
  */
 
-import type { RepoSpec } from "@proliferate/shared";
+import { type RepoSpec, isValidTargetPath } from "@proliferate/shared";
 import { generateSessionAPIKey } from "@proliferate/shared/llm-proxy";
 import { decrypt, getEncryptionKey } from "../db/crypto";
 import { getServicesLogger } from "../logger";
 import { getBillingInfoV2 } from "../orgs/service";
+import * as secretFiles from "../secret-files";
 import * as secrets from "../secrets";
 
 export interface SandboxEnvInput {
 	sessionId: string;
 	orgId: string;
 	repoIds: string[];
+	configurationId?: string | null;
 	repoSpecs?: RepoSpec[];
 	requireProxy?: boolean;
 	directApiKey?: string;
 }
 
+export interface SandboxFileWrite {
+	filePath: string;
+	content: string;
+}
+
 export interface SandboxEnvResult {
 	envVars: Record<string, string>;
 	usesProxy: boolean;
+	fileWrites: SandboxFileWrite[];
+}
+
+export interface SessionBootSecretMaterial {
+	envVars: Record<string, string>;
+	fileWrites: SandboxFileWrite[];
 }
 
 const normalizeBoolean = (value: unknown, fallback = false) => {
@@ -36,6 +49,139 @@ function resolveDefaultGitToken(repoSpecs?: RepoSpec[]): string | null {
 	if (!repoSpecs || repoSpecs.length === 0) return null;
 	const primaryToken = repoSpecs.find((spec) => Boolean(spec.token))?.token;
 	return primaryToken || null;
+}
+
+interface ResolvedSecretValue {
+	value: string;
+	priority: number;
+	updatedAtMs: number;
+}
+
+function normalizeFilePath(filePath: string): string {
+	return filePath.trim().replace(/^\.\/+/, "");
+}
+
+function updatedAtMs(updatedAt: Date | null): number {
+	return updatedAt ? updatedAt.getTime() : 0;
+}
+
+function assignSecretWithPrecedence(
+	target: Record<string, ResolvedSecretValue>,
+	key: string,
+	entry: ResolvedSecretValue,
+): void {
+	const existing = target[key];
+	if (!existing) {
+		target[key] = entry;
+		return;
+	}
+	if (entry.priority > existing.priority) {
+		target[key] = entry;
+		return;
+	}
+	if (entry.priority === existing.priority && entry.updatedAtMs >= existing.updatedAtMs) {
+		target[key] = entry;
+	}
+}
+
+/**
+ * Canonical session-boot secret resolver.
+ *
+ * Precedence: configuration-scoped > repo-scoped > org-scoped.
+ */
+export async function resolveSessionBootSecretMaterial(input: {
+	sessionId: string;
+	orgId: string;
+	repoIds: string[];
+	configurationId?: string | null;
+}): Promise<SessionBootSecretMaterial> {
+	const logger = getServicesLogger().child({
+		module: "sandbox-env",
+		phase: "resolve-session-boot-secret-material",
+		sessionId: input.sessionId,
+		orgId: input.orgId,
+		configurationId: input.configurationId ?? null,
+	});
+
+	const fetchStartMs = Date.now();
+	const [sessionScopeRows, configurationScopeRows, secretFileRows] = await Promise.all([
+		secrets.getScopedSecretsForSession(input.orgId, input.repoIds),
+		input.configurationId
+			? secrets.getScopedSecretsForConfiguration(input.orgId, input.configurationId)
+			: Promise.resolve([]),
+		input.configurationId
+			? secretFiles.listEncryptedByConfiguration(input.orgId, input.configurationId)
+			: Promise.resolve([]),
+	]);
+	logger.debug(
+		{
+			durationMs: Date.now() - fetchStartMs,
+			orgRepoSecretCount: sessionScopeRows.length,
+			configurationSecretCount: configurationScopeRows.length,
+			secretFileCount: secretFileRows.length,
+		},
+		"Fetched boot-time secret sources",
+	);
+
+	const encryptionKey = getEncryptionKey();
+	const resolvedSecrets: Record<string, ResolvedSecretValue> = {};
+
+	for (const secret of sessionScopeRows) {
+		try {
+			assignSecretWithPrecedence(resolvedSecrets, secret.key, {
+				value: decrypt(secret.encryptedValue, encryptionKey),
+				priority: secret.repoId ? 1 : 0,
+				updatedAtMs: updatedAtMs(secret.updatedAt),
+			});
+		} catch (err) {
+			logger.error({ err, secretKey: secret.key }, "Failed to decrypt org/repo secret");
+		}
+	}
+
+	for (const secret of configurationScopeRows) {
+		try {
+			assignSecretWithPrecedence(resolvedSecrets, secret.key, {
+				value: decrypt(secret.encryptedValue, encryptionKey),
+				priority: 2,
+				updatedAtMs: updatedAtMs(secret.updatedAt),
+			});
+		} catch (err) {
+			logger.error(
+				{ err, secretKey: secret.key, configurationId: input.configurationId ?? null },
+				"Failed to decrypt configuration secret",
+			);
+		}
+	}
+
+	const envVars = Object.fromEntries(
+		Object.entries(resolvedSecrets).map(([key, value]) => [key, value.value]),
+	);
+
+	const fileWrites: SandboxFileWrite[] = [];
+	for (const row of secretFileRows) {
+		const normalizedPath = normalizeFilePath(row.filePath);
+		if (!isValidTargetPath(normalizedPath)) {
+			logger.warn(
+				{ filePath: row.filePath, normalizedPath },
+				"Skipping invalid secret file path at boot",
+			);
+			continue;
+		}
+
+		try {
+			fileWrites.push({
+				filePath: normalizedPath,
+				content: decrypt(row.encryptedContent, encryptionKey),
+			});
+		} catch (err) {
+			logger.error(
+				{ err, filePath: row.filePath, secretFileId: row.id },
+				"Failed to decrypt secret file content",
+			);
+		}
+	}
+
+	return { envVars, fileWrites };
 }
 
 export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<SandboxEnvResult> {
@@ -98,23 +244,23 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 		}
 	}
 
-	// Decrypt and add secrets (both org-scoped and repo-scoped)
+	// Resolve and merge all boot-time secrets (env vars + secret files).
 	const secretsStartMs = Date.now();
-	const secretRows = await secrets.getSecretsForSession(input.orgId, input.repoIds);
+	const secretMaterial = await resolveSessionBootSecretMaterial({
+		sessionId: input.sessionId,
+		orgId: input.orgId,
+		repoIds: input.repoIds,
+		configurationId: input.configurationId,
+	});
+	Object.assign(envVars, secretMaterial.envVars);
 	logger.debug(
-		{ durationMs: Date.now() - secretsStartMs, count: secretRows?.length ?? 0 },
-		"Fetched secrets",
+		{
+			durationMs: Date.now() - secretsStartMs,
+			envKeyCount: Object.keys(secretMaterial.envVars).length,
+			fileWriteCount: secretMaterial.fileWrites.length,
+		},
+		"Resolved boot-time secret material",
 	);
-	if (secretRows && secretRows.length > 0) {
-		const encryptionKey = getEncryptionKey();
-		for (const secret of secretRows) {
-			try {
-				envVars[secret.key] = decrypt(secret.encryptedValue, encryptionKey);
-			} catch (err) {
-				logger.error({ err, secretKey: secret.key }, "Failed to decrypt secret");
-			}
-		}
-	}
 
 	// Default git/GitHub tokens for post-clone operations
 	const defaultGitToken = resolveDefaultGitToken(input.repoSpecs);
@@ -128,8 +274,9 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 			durationMs: Date.now() - startMs,
 			envKeyCount: Object.keys(envVars).length,
 			usesProxy: useProxy,
+			fileWriteCount: secretMaterial.fileWrites.length,
 		},
 		"Sandbox env vars build complete",
 	);
-	return { envVars, usesProxy: useProxy };
+	return { envVars, usesProxy: useProxy, fileWrites: secretMaterial.fileWrites };
 }

@@ -32,6 +32,12 @@ import type {
 // ============================================
 
 export type SecretRow = InferSelectModel<typeof secrets>;
+export interface ScopedSecretForSessionRow {
+	key: string;
+	encryptedValue: string;
+	repoId: string | null;
+	updatedAt: Date | null;
+}
 
 // ============================================
 // Secrets Queries
@@ -183,6 +189,21 @@ export async function getSecretsForSession(
 	orgId: string,
 	repoIds: string[],
 ): Promise<SecretForSessionRow[]> {
+	const rows = await getScopedSecretsForSession(orgId, repoIds);
+	return rows.map((row) => ({
+		key: row.key,
+		encryptedValue: row.encryptedValue,
+	}));
+}
+
+/**
+ * Get org/repo-scoped secrets for session injection with scope metadata.
+ * Used by boot-time precedence resolution.
+ */
+export async function getScopedSecretsForSession(
+	orgId: string,
+	repoIds: string[],
+): Promise<ScopedSecretForSessionRow[]> {
 	const db = getDb();
 
 	// Include org-wide secrets (repoId is null) and repo-specific secrets
@@ -193,6 +214,8 @@ export async function getSecretsForSession(
 		.select({
 			key: secrets.key,
 			encryptedValue: secrets.encryptedValue,
+			repoId: secrets.repoId,
+			updatedAt: secrets.updatedAt,
 		})
 		.from(secrets)
 		.where(and(eq(secrets.organizationId, orgId), scopeCondition));
@@ -201,7 +224,7 @@ export async function getSecretsForSession(
 }
 
 /**
- * Upsert a secret (insert or update by repo_id,key).
+ * Upsert a repo-scoped secret (insert or update by org/repo/key/configuration scope).
  * Returns true on success.
  */
 export async function upsertByRepoAndKey(input: UpsertSecretInput): Promise<boolean> {
@@ -214,9 +237,15 @@ export async function upsertByRepoAndKey(input: UpsertSecretInput): Promise<bool
 				organizationId: input.organizationId,
 				key: input.key,
 				encryptedValue: input.encryptedValue,
+				configurationId: null,
 			})
 			.onConflictDoUpdate({
-				target: [secrets.organizationId, secrets.repoId, secrets.key],
+				target: [
+					secrets.organizationId,
+					secrets.repoId,
+					secrets.key,
+					secrets.configurationId,
+				],
 				set: {
 					encryptedValue: input.encryptedValue,
 					updatedAt: new Date(),
@@ -305,9 +334,28 @@ export async function getSecretsForConfiguration(
 	orgId: string,
 	configurationId: string,
 ): Promise<SecretForSessionRow[]> {
+	const rows = await getScopedSecretsForConfiguration(orgId, configurationId);
+	return rows.map((row) => ({
+		key: row.key,
+		encryptedValue: row.encryptedValue,
+	}));
+}
+
+/**
+ * Get configuration-linked secrets with metadata for precedence resolution.
+ */
+export async function getScopedSecretsForConfiguration(
+	orgId: string,
+	configurationId: string,
+): Promise<ScopedSecretForSessionRow[]> {
 	const db = getDb();
 	const rows = await db
-		.select({ key: secrets.key, encryptedValue: secrets.encryptedValue })
+		.select({
+			key: secrets.key,
+			encryptedValue: secrets.encryptedValue,
+			repoId: secrets.repoId,
+			updatedAt: secrets.updatedAt,
+		})
 		.from(configurationSecrets)
 		.innerJoin(secrets, eq(configurationSecrets.secretId, secrets.id))
 		.where(

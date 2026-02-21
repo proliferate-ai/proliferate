@@ -2,6 +2,6 @@
  * Secret Files module exports.
  */
 
-export { listByConfiguration, deleteById } from "./db";
-export type { SecretFileMeta } from "./db";
+export { listByConfiguration, listEncryptedByConfiguration, deleteById } from "./db";
+export type { SecretFileMeta, SecretFileBootRow } from "./db";
 export { upsertSecretFile } from "./service";

@@ -2,6 +2,7 @@ import { env } from "@proliferate/environment/server";
 import type { Logger } from "@proliferate/logger";
 import { FileType, Sandbox, type SandboxApiOpts, type SandboxConnectOpts } from "e2b";
 import { getDefaultAgentConfig, toOpencodeModelId } from "../agents";
+import { isValidTargetPath } from "../env-parser";
 import { getLLMProxyBaseURL } from "../llm-proxy";
 import { getSharedLogger } from "../logger";
 import {
@@ -769,7 +770,29 @@ export class E2BProvider implements SandboxProvider {
 	): Promise<void> {
 		const workspaceDir = "/home/user/workspace";
 
-		// 1. Apply env files (blocking — services may depend on these)
+		// 1. Apply decrypted secret file writes before env/spec + service start.
+		if (opts.secretFileWrites?.length) {
+			for (const fileWrite of opts.secretFileWrites) {
+				const normalizedPath = fileWrite.filePath.trim().replace(/^\.\/+/, "");
+				if (!isValidTargetPath(normalizedPath)) {
+					log.warn({ filePath: fileWrite.filePath }, "Skipping invalid secret file path");
+					continue;
+				}
+
+				const absolutePath = `${workspaceDir}/${normalizedPath}`;
+				const lastSlash = absolutePath.lastIndexOf("/");
+				const directory = lastSlash >= 0 ? absolutePath.slice(0, lastSlash) : workspaceDir;
+
+				try {
+					await sandbox.commands.run(`mkdir -p ${shellEscape(directory)}`, { timeoutMs: 30_000 });
+					await sandbox.files.write(absolutePath, fileWrite.content);
+				} catch (err) {
+					log.error({ err, filePath: normalizedPath }, "Failed to apply secret file write");
+				}
+			}
+		}
+
+		// 2. Apply env files (blocking — services may depend on these)
 		if (opts.envFiles) {
 			try {
 				const specJson = JSON.stringify(opts.envFiles);
@@ -790,7 +813,7 @@ export class E2BProvider implements SandboxProvider {
 			}
 		}
 
-		// 2. Start services via tracked CLI (fire-and-forget per service)
+		// 3. Start services via tracked CLI (fire-and-forget per service)
 		if (!opts.snapshotHasDeps || !opts.serviceCommands?.length) return;
 
 		for (const cmd of opts.serviceCommands) {

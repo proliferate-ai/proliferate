@@ -478,6 +478,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			sessionId,
 			orgId: organizationId,
 			repoIds: [],
+			configurationId,
 			repoSpecs: [],
 			requireProxy: process.env.LLM_PROXY_REQUIRED === "true",
 			directApiKey: env.anthropicApiKey,
@@ -508,6 +509,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			baseSnapshotId,
 			sshPublicKey,
 			triggerContext,
+			secretFileWrites: baseEnvResult.fileWrites,
 		});
 		log.debug(
 			{
@@ -615,23 +617,25 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 
 	// Build environment variables
 	const envStartMs = Date.now();
-	const envVars = await loadEnvironmentVariables(
+	const envResult = await loadEnvironmentVariables(
 		env,
 		sessionId,
 		organizationId,
 		typedConfigurationRepos.map((pr) => pr.repo!.id),
+		configurationId,
 		repoSpecs,
 		integrationEnvVars,
 	);
 	log.debug(
 		{
 			durationMs: Date.now() - envStartMs,
-			envKeyCount: Object.keys(envVars).length,
+			envKeyCount: Object.keys(envResult.envVars).length,
+			fileWriteCount: envResult.fileWrites.length,
 		},
 		"session_creator.create_sandbox.env_vars",
 	);
 	const mergedEnvVars = {
-		...envVars,
+		...envResult.envVars,
 		...mandatoryRuntimeEnv,
 	};
 
@@ -670,6 +674,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		snapshotHasDeps,
 		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
 		envFiles,
+		secretFileWrites: envResult.fileWrites,
 	});
 	log.debug(
 		{
@@ -705,21 +710,29 @@ async function loadEnvironmentVariables(
 	sessionId: string,
 	orgId: string,
 	repoIds: string[],
+	configurationId: string,
 	repoSpecs: RepoSpec[],
 	integrationEnvVars: Record<string, string>,
-): Promise<Record<string, string>> {
+): Promise<{
+	envVars: Record<string, string>;
+	fileWrites: Array<{ filePath: string; content: string }>;
+}> {
 	const result = await sessions.buildSandboxEnvVars({
 		sessionId,
 		orgId,
 		repoIds,
+		configurationId,
 		repoSpecs,
 		requireProxy: process.env.LLM_PROXY_REQUIRED === "true",
 		directApiKey: env.anthropicApiKey,
 	});
 
 	return {
-		...result.envVars,
-		...(process.env.ACTIONS_PLANE_LEGACY_TOKENS === "true" ? integrationEnvVars : {}),
+		envVars: {
+			...result.envVars,
+			...(process.env.ACTIONS_PLANE_LEGACY_TOKENS === "true" ? integrationEnvVars : {}),
+		},
+		fileWrites: result.fileWrites,
 	};
 }
 

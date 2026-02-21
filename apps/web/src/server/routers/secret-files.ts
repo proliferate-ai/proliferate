@@ -8,7 +8,7 @@
 import path from "node:path";
 import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
-import { orgs, secretFiles, sessions } from "@proliferate/services";
+import { configurations, orgs, secretFiles, sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { z } from "zod";
@@ -151,6 +151,13 @@ export const secretFilesRouter = {
 				throw new ORPCError("FORBIDDEN", {
 					message: "Only admins and owners can manage secret files",
 				});
+			}
+			const belongsToOrg = await configurations.configurationBelongsToOrg(
+				input.configurationId,
+				context.orgId,
+			);
+			if (!belongsToOrg) {
+				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
 			}
 
 			const row = await secretFiles.upsertSecretFile({
