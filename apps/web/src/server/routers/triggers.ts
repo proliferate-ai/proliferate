@@ -6,7 +6,7 @@
 
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
-import { triggers } from "@proliferate/services";
+import { schedules, triggers } from "@proliferate/services";
 import {
 	CreateTriggerInputSchema,
 	TriggerEventSchema,
@@ -137,10 +137,7 @@ export const triggersRouter = {
 					if (error.message === "Integration not found") {
 						throw new ORPCError("NOT_FOUND", { message: "Integration not found" });
 					}
-					if (
-						error.message === "Scheduled triggers require pollingCron" ||
-						error.message.includes("Invalid cron expression")
-					) {
+					if (schedules.isCronValidationError(error)) {
 						throw new ORPCError("BAD_REQUEST", { message: error.message });
 					}
 				}
@@ -168,11 +165,7 @@ export const triggersRouter = {
 				}
 				return { trigger };
 			} catch (error) {
-				if (
-					error instanceof Error &&
-					(error.message === "Scheduled triggers require pollingCron" ||
-						error.message.includes("Invalid cron expression"))
-				) {
+				if (schedules.isCronValidationError(error)) {
 					throw new ORPCError("BAD_REQUEST", { message: error.message });
 				}
 				throw error;

@@ -328,10 +328,7 @@ export const automationsRouter = {
 					if (err.message === "Integration not found") {
 						throw new ORPCError("NOT_FOUND", { message: err.message });
 					}
-					if (
-						err.message === "Scheduled triggers require cronExpression" ||
-						err.message.includes("Invalid cron expression")
-					) {
+					if (schedules.isCronValidationError(err)) {
 						throw new ORPCError("BAD_REQUEST", { message: err.message });
 					}
 				}
@@ -398,7 +395,7 @@ export const automationsRouter = {
 				);
 				return { schedule };
 			} catch (err) {
-				if (err instanceof Error && err.message.includes("Invalid cron")) {
+				if (schedules.isCronValidationError(err)) {
 					throw new ORPCError("BAD_REQUEST", { message: err.message });
 				}
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {

@@ -15,7 +15,7 @@ import {
 import type { Trigger, TriggerEvent, TriggerWithIntegration } from "@proliferate/shared";
 import { getServicesLogger } from "../logger";
 import * as pollGroupsDb from "../poll-groups/db";
-import { validateCronExpression } from "../schedules/service";
+import { CronValidationError, assertValidCronExpression } from "../schedules/service";
 import * as triggersDb from "./db";
 import {
 	toTrigger,
@@ -55,12 +55,10 @@ function validateScheduledTriggerCron(
 	if (provider !== "scheduled") return;
 
 	if (!cronExpression || cronExpression.trim().length === 0) {
-		throw new Error("Scheduled triggers require pollingCron");
+		throw new CronValidationError("Scheduled triggers require pollingCron");
 	}
 
-	if (!validateCronExpression(cronExpression)) {
-		throw new Error("Invalid cron expression. Expected 5 or 6 fields.");
-	}
+	assertValidCronExpression(cronExpression);
 }
 
 // ============================================

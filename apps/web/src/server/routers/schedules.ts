@@ -48,7 +48,7 @@ export const schedulesRouter = {
 				});
 				return { schedule };
 			} catch (err) {
-				if (err instanceof Error && err.message.includes("Invalid cron")) {
+				if (schedules.isCronValidationError(err)) {
 					throw new ORPCError("BAD_REQUEST", { message: err.message });
 				}
 				throw new ORPCError("NOT_FOUND", { message: "Schedule not found" });
