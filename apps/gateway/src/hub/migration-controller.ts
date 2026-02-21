@@ -13,8 +13,8 @@ import type { GatewayEnv } from "../lib/env";
 import { runWithMigrationLock } from "../lib/lock";
 import { abortOpenCodeSession } from "../lib/opencode";
 import type { EventProcessor } from "./event-processor";
-import { prepareForSnapshot } from "./snapshot-scrub";
 import type { SessionRuntime } from "./session-runtime";
+import { prepareForSnapshot } from "./snapshot-scrub";
 import { MigrationConfig, type MigrationState } from "./types";
 
 export interface MigrationControllerOptions {

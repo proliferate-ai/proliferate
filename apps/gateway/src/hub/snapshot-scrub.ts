@@ -17,6 +17,9 @@ export interface PrepareForSnapshotOptions {
 type SnapshotCleanup = () => Promise<void>;
 
 const ENV_SNAPSHOT_TIMEOUT_MS = 15_000;
+const NOOP_SNAPSHOT_CLEANUP: SnapshotCleanup = async () => {
+	// Intentionally no-op when scrub/re-apply does not apply to this path.
+};
 
 function toError(message: string, err: unknown): Error {
 	if (err instanceof Error) {
@@ -41,7 +44,9 @@ function handleFailure(
  * Best-effort env-file scrub before snapshot capture.
  * Returns a post-capture cleanup function that optionally re-applies env files.
  */
-export async function prepareForSnapshot(options: PrepareForSnapshotOptions): Promise<SnapshotCleanup> {
+export async function prepareForSnapshot(
+	options: PrepareForSnapshotOptions,
+): Promise<SnapshotCleanup> {
 	const {
 		provider,
 		sandboxId,
@@ -51,9 +56,10 @@ export async function prepareForSnapshot(options: PrepareForSnapshotOptions): Pr
 		failureMode = "log",
 		reapplyAfterCapture = true,
 	} = options;
+	const execCommand = provider.execCommand;
 
-	if (!configurationId || !provider.execCommand) {
-		return async () => {};
+	if (!configurationId || !execCommand) {
+		return NOOP_SNAPSHOT_CLEANUP;
 	}
 
 	let envFilesSpec: unknown;
@@ -66,17 +72,17 @@ export async function prepareForSnapshot(options: PrepareForSnapshotOptions): Pr
 			`${logContext}: failed to load env file spec before snapshot`,
 			err,
 		);
-		return async () => {};
+		return NOOP_SNAPSHOT_CLEANUP;
 	}
 
 	if (!envFilesSpec) {
-		return async () => {};
+		return NOOP_SNAPSHOT_CLEANUP;
 	}
 
 	const specJson = JSON.stringify(envFilesSpec);
 
 	try {
-		const scrubResult = await provider.execCommand(
+		const scrubResult = await execCommand(
 			sandboxId,
 			["proliferate", "env", "scrub", "--spec", specJson],
 			{ timeoutMs: ENV_SNAPSHOT_TIMEOUT_MS },
@@ -96,12 +102,12 @@ export async function prepareForSnapshot(options: PrepareForSnapshotOptions): Pr
 	}
 
 	if (!reapplyAfterCapture) {
-		return async () => {};
+		return NOOP_SNAPSHOT_CLEANUP;
 	}
 
 	return async () => {
 		try {
-			const applyResult = await provider.execCommand(
+			const applyResult = await execCommand(
 				sandboxId,
 				["proliferate", "env", "apply", "--spec", specJson],
 				{ timeoutMs: ENV_SNAPSHOT_TIMEOUT_MS },

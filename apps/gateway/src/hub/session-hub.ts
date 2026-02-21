@@ -46,9 +46,9 @@ import type { ClientConnection, OpenCodeEvent, SandboxInfo } from "../types";
 import { EventProcessor } from "./event-processor";
 import { GitOperations } from "./git-operations";
 import { MigrationController } from "./migration-controller";
-import { prepareForSnapshot } from "./snapshot-scrub";
 import { MigrationInProgressError, SessionRuntime } from "./session-runtime";
 import { SessionTelemetry, extractPrUrls } from "./session-telemetry";
+import { prepareForSnapshot } from "./snapshot-scrub";
 import type { PromptOptions } from "./types";
 
 interface HubDependencies {
