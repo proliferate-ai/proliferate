@@ -58,8 +58,8 @@ export async function GET(request: NextRequest) {
 		return NextResponse.json({ error: "No active organization" }, { status: 400 });
 	}
 
-	const isMember = await orgs.isMember(userId, orgId);
-	if (!isMember) {
+	const role = await orgs.getUserRole(userId, orgId);
+	if (role !== "owner" && role !== "admin") {
 		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 	}
 

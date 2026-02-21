@@ -159,9 +159,9 @@ Sections 3 and 4 were intentionally removed in this spec revision. File tree and
 
 ### 6.3 GitHub App Installation Invariants — `Implemented`
 - Callback must authenticate caller (or redirect to sign-in with callback retry URL).
-- OAuth start must mint base64url JSON state containing org/user context + nonce + timestamp + optional return URL, signed with server-side HMAC.
+- OAuth start must require an admin/owner caller and mint base64url JSON state containing org/user context + nonce + timestamp + optional return URL, signed with server-side HMAC.
 - Callback must reject missing, unsigned, tampered, or expired OAuth state before trusting any state fields.
-- Callback must re-validate that the authenticated user is a member of the state org before persistence.
+- Callback must re-validate that the authenticated user is an admin/owner in the state org before persistence.
 - Callback return URL must be sanitized to approved relative-path prefixes.
 - Installation must be verified against GitHub API before persistence.
 - Persistence must upsert by `(connectionId, organizationId)` using `connectionId = github-app-{installationId}`.
@@ -178,10 +178,10 @@ Sections 3 and 4 were intentionally removed in this spec revision. File tree and
 - Evidence: `apps/web/src/server/routers/integrations.ts:disconnect`, `packages/services/src/integrations/service.ts:deleteIntegration`.
 
 ### 6.5 Slack Lifecycle Invariants — `Implemented`
-- Slack OAuth start must require authenticated session with active org.
+- Slack OAuth start must require authenticated session with active org and admin/owner role.
 - OAuth state must embed org/user context + nonce + timestamp + optional relative return URL and must be HMAC-signed server-side.
 - OAuth callback must reject missing params, invalid/unsigned/tampered state, and state older than 5 minutes.
-- OAuth callback must re-validate that the authenticated callback user matches state user and is still a member of the state org.
+- OAuth callback must re-validate that the authenticated callback user matches state user and is still an admin/owner in the state org.
 - Slack token from OAuth exchange must be encrypted before persistence.
 - Save path must upsert by `(organizationId, teamId)` semantics (create or reactivate/update existing install).
 - Slack disconnect must mark local installation revoked even if upstream `auth.revoke` fails.

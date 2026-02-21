@@ -101,9 +101,12 @@ export async function GET(request: Request) {
 		return NextResponse.redirect(`${redirectBase}?error=slack_oauth_forbidden`);
 	}
 
-	const isMember = await orgs.isMember(authUserId, stateData.orgId);
-	if (!isMember) {
-		log.warn({ userId: authUserId, orgId: stateData.orgId }, "User is not a member of OAuth org");
+	const role = await orgs.getUserRole(authUserId, stateData.orgId);
+	if (role !== "owner" && role !== "admin") {
+		log.warn(
+			{ userId: authUserId, orgId: stateData.orgId, role },
+			"User is not an integration admin for OAuth org",
+		);
 		return NextResponse.redirect(`${redirectBase}?error=slack_oauth_forbidden`);
 	}
 

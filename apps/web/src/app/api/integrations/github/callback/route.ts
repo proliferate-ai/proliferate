@@ -127,9 +127,12 @@ export async function GET(request: NextRequest) {
 		return NextResponse.json({ error: "OAuth state expired" }, { status: 400 });
 	}
 
-	const isMember = await orgs.isMember(authUserId, stateData.orgId);
-	if (!isMember) {
-		log.warn({ userId: authUserId, orgId: stateData.orgId }, "User is not a member of OAuth org");
+	const role = await orgs.getUserRole(authUserId, stateData.orgId);
+	if (role !== "owner" && role !== "admin") {
+		log.warn(
+			{ userId: authUserId, orgId: stateData.orgId, role },
+			"User is not an integration admin for OAuth org",
+		);
 		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 	}
 

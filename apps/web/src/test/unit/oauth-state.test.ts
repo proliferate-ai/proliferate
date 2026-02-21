@@ -62,4 +62,32 @@ describe("oauth-state", () => {
 		const verified = verifySignedOAuthState<Record<string, unknown>>(unsignedState);
 		expect(verified).toEqual({ ok: false, error: "missing_signature" });
 	});
+
+	it("uses stable key ordering for signatures across payload insertion order", () => {
+		const payloadA = {
+			"key-2": "value-2",
+			key_1: "value-1",
+			keyA: "value-a",
+			keyB: "value-b",
+		};
+		const payloadB = {
+			keyB: "value-b",
+			keyA: "value-a",
+			key_1: "value-1",
+			"key-2": "value-2",
+		};
+
+		const stateA = createSignedOAuthState(payloadA);
+		const stateB = createSignedOAuthState(payloadB);
+		const decodedA = JSON.parse(Buffer.from(stateA, "base64url").toString("utf8")) as Record<
+			string,
+			unknown
+		>;
+		const decodedB = JSON.parse(Buffer.from(stateB, "base64url").toString("utf8")) as Record<
+			string,
+			unknown
+		>;
+
+		expect(decodedA._sig).toBe(decodedB._sig);
+	});
 });
