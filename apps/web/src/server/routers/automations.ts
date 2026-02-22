@@ -85,6 +85,7 @@ export const automationsRouter = {
 				});
 				return { automation };
 			} catch (err) {
+				if (err instanceof ORPCError) throw err;
 				if (err instanceof Error && err.message === "Configuration not found") {
 					throw new ORPCError("NOT_FOUND", { message: err.message });
 				}
