@@ -198,7 +198,7 @@ export class SessionHub {
 		return (
 			session.client_type === "automation" &&
 			(session.status === "paused" || session.status === "stopped") &&
-			session.pause_reason === "automation_completed"
+			Boolean(session.outcome)
 		);
 	}
 
@@ -1078,6 +1078,10 @@ export class SessionHub {
 		userId: string,
 		options?: PromptOptions,
 	): Promise<void> {
+		if (this.isCompletedAutomationSession()) {
+			throw new Error("Cannot send messages to a completed automation session.");
+		}
+
 		// Block prompts during migration
 		const migrationState = this.migrationController.getState();
 		if (migrationState !== "normal") {

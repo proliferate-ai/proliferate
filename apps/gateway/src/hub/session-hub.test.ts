@@ -63,6 +63,25 @@ type HandleSseDisconnectMethod = (
 	reason: string,
 ) => void;
 
+type HandlePromptMethod = (
+	this: {
+		isCompletedAutomationSession: () => boolean;
+		migrationController: { getState: () => "normal" | "migrating" };
+		log: ReturnType<typeof vi.fn>;
+		touchActivity: ReturnType<typeof vi.fn>;
+		lastKnownAgentIdleAt: number | null;
+		ensureRuntimeReady: ReturnType<typeof vi.fn>;
+		runtime: { getOpenCodeSessionId: () => string | null; getOpenCodeUrl: () => string | null };
+		broadcast: ReturnType<typeof vi.fn>;
+		telemetry: { recordUserPrompt: ReturnType<typeof vi.fn> };
+		logger: { debug: ReturnType<typeof vi.fn> };
+		eventProcessor: { resetForNewPrompt: ReturnType<typeof vi.fn> };
+	},
+	content: string,
+	userId: string,
+	options?: { source?: string; images?: unknown[] },
+) => Promise<void>;
+
 function createHubStub(): HubStub {
 	return {
 		sessionId: "session-1",
@@ -293,14 +312,14 @@ describe("SessionHub SSE reconnect policy", () => {
 });
 
 describe("SessionHub completed automation detection", () => {
-	it("treats paused automation_completed sessions as completed", () => {
+	it("treats paused automation sessions with outcome as completed", () => {
 		const hub = {
 			runtime: {
 				getContext: () => ({
 					session: {
 						client_type: "automation",
 						status: "paused",
-						pause_reason: "automation_completed",
+						outcome: "succeeded",
 					},
 				}),
 			},
@@ -314,14 +333,14 @@ describe("SessionHub completed automation detection", () => {
 		expect(isCompletedAutomationSession.call(hub)).toBe(true);
 	});
 
-	it("treats stopped automation_completed sessions as completed", () => {
+	it("treats stopped automation sessions with outcome as completed", () => {
 		const hub = {
 			runtime: {
 				getContext: () => ({
 					session: {
 						client_type: "automation",
 						status: "stopped",
-						pause_reason: "automation_completed",
+						outcome: "failed",
 					},
 				}),
 			},
@@ -333,5 +352,54 @@ describe("SessionHub completed automation detection", () => {
 		).isCompletedAutomationSession;
 
 		expect(isCompletedAutomationSession.call(hub)).toBe(true);
+	});
+
+	it("does not treat automation sessions without outcome as completed", () => {
+		const hub = {
+			runtime: {
+				getContext: () => ({
+					session: {
+						client_type: "automation",
+						status: "paused",
+						outcome: null,
+					},
+				}),
+			},
+		};
+		const isCompletedAutomationSession = (
+			SessionHub.prototype as unknown as {
+				isCompletedAutomationSession: (this: typeof hub) => boolean;
+			}
+		).isCompletedAutomationSession;
+
+		expect(isCompletedAutomationSession.call(hub)).toBe(false);
+	});
+});
+
+describe("SessionHub prompt guards", () => {
+	it("rejects prompts for completed automation sessions in handlePrompt", async () => {
+		const hub = {
+			isCompletedAutomationSession: () => true,
+			migrationController: { getState: () => "normal" as const },
+			log: vi.fn(),
+			touchActivity: vi.fn(),
+			lastKnownAgentIdleAt: null,
+			ensureRuntimeReady: vi.fn(),
+			runtime: {
+				getOpenCodeSessionId: () => null,
+				getOpenCodeUrl: () => null,
+			},
+			broadcast: vi.fn(),
+			telemetry: { recordUserPrompt: vi.fn() },
+			logger: { debug: vi.fn() },
+			eventProcessor: { resetForNewPrompt: vi.fn() },
+		};
+		const handlePrompt = (SessionHub.prototype as unknown as { handlePrompt: HandlePromptMethod })
+			.handlePrompt;
+
+		await expect(handlePrompt.call(hub, "hello", "user-1")).rejects.toThrow(
+			"Cannot send messages to a completed automation session.",
+		);
+		expect(hub.ensureRuntimeReady).not.toHaveBeenCalled();
 	});
 });

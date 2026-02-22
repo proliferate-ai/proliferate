@@ -207,7 +207,7 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 - The Git panel is workspace-aware in multi-repo sessions: users choose the target repository/workspace, and git status + branch/commit/push/PR actions are scoped to that `workspacePath`.
 - `pause` → loads session, calls `provider.snapshot()` + `provider.terminate()`, finalizes billing, updates DB status to `"paused"` (`sessions-pause.ts`).
 - `resume` → no dedicated handler. Resume is implicit for normal sessions: connecting a WebSocket client to a paused session triggers `ensureRuntimeReady()`, which creates a new sandbox from the stored snapshot.
-- `resume` exception (automation-completed) → if `client_type="automation"` and `pause_reason="automation_completed"`, client init/get_messages hydrate transcript without calling `ensureRuntimeReady()`, preventing post-completion OpenCode session identity churn.
+- `resume` exception (automation-completed) → if `client_type="automation"` and session is terminal (`status in {"paused","stopped"}` with non-null `outcome`), client init/get_messages hydrate transcript without calling `ensureRuntimeReady()`, preventing post-completion OpenCode session identity churn.
 - `delete` → calls `sessions.deleteSession()`.
 - `rename` → calls `sessions.renameSession()`.
 - `snapshot` → calls `snapshotSessionHandler()` (`sessions-snapshot.ts`).
@@ -397,11 +397,17 @@ WHERE id = $session_id
 4. Update DB: `status: "paused"` (E2B) or `status: "stopped"` (Modal).
 5. Clean up hub state, call `onEvict` for memory reclamation.
 
+**Orphan sweep snapshot path (no local hub):**
+1. Acquire migration lock + re-validate no lease and `status="running"`.
+2. Reuse `prepareForSnapshot()` before memory/pause/filesystem capture (best-effort `failureMode="log"`, `reapplyAfterCapture=false`).
+3. Capture snapshot via memory/pause/filesystem path, then CAS-update session state.
+
 **Automation completion behavior:**
 - If `automation.complete` is invoked, the run is finalized and session outcome/summary are persisted.
 - The gateway marks the session `paused` immediately (with `pauseReason="automation_completed"`) to prevent headless reconnect/orphan churn from rotating OpenCode session IDs.
 - Runtime is not force-terminated in the completion handler, so users can open the automation session and inspect transcript history.
-- For `automation_completed` sessions, WebSocket init/get_messages do not auto-resume runtime; they hydrate from stored OpenCode coordinates and fall back to persisted session prompt/summary when OpenCode history is unavailable.
+- For completed automation sessions, WebSocket init/get_messages do not auto-resume runtime; the guard keys off terminal automation status + non-null `outcome` (not `pauseReason`) so generic sweeps cannot disable transcript protection.
+- Completed automation prompts are blocked for both HTTP and WebSocket paths to prevent accidental runtime wake-ups after completion.
 - Normal expiry/cleanup paths still apply.
 
 **Circuit breaker:** After `MAX_SNAPSHOT_FAILURES` (3) consecutive idle snapshot failures, the migration controller stops attempting further snapshots.

@@ -368,7 +368,9 @@ export async function fetchOpenCodeMessages(
 ): Promise<OpenCodeMessage[]> {
 	const startMs = Date.now();
 	logger.info({ sessionId }, "Fetching messages");
-	const response = await fetch(`${baseUrl}/session/${sessionId}/message`);
+	const response = await fetch(`${baseUrl}/session/${sessionId}/message`, {
+		signal: AbortSignal.timeout(opencodeLookupTimeoutMs),
+	});
 	logger.debug({ sessionId, status: response.status, ok: response.ok }, "Messages response");
 	if (!response.ok) {
 		logger.debug(
