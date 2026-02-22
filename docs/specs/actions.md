@@ -29,6 +29,7 @@
 - Mode map keys are `sourceId:actionId` (colon), not slash.
 - `POST /approve` executes the action immediately after status transition; approval is not "mark-only".
 - There is no gateway "approve with always mode" payload contract; "always allow" is implemented by a second org/automation mode write from web UI.
+- Gateway `/invoke` now forwards `session.automationId` to `actions.invokeAction()`, so automation-level mode overrides apply in live automation sessions.
 - Connector listing failures are degraded to empty tool lists; they do not fail the entire `/available` response.
 - Connector drift guard only applies when a stored tool hash exists; absence of a stored hash means "not drifted".
 - Sandbox callers can invoke/list/guide/status, but only user tokens with `owner|admin` can approve/deny.
@@ -208,9 +209,9 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 ## 9. Known Limitations & Tech Debt
 
 - [ ] **In-memory rate limiting**: gateway per-session limit is process-local; multi-instance deployments do not share counters.
-- [ ] **Automation override not wired in invoke path**: `actions.invokeAction()` supports `automationId`, but gateway `/invoke` currently does not pass `session.automationId`, so automation overrides are not applied in that path.
+- [x] **Automation override wiring in invoke path**: gateway `/invoke` forwards `session.automationId` to `actions.invokeAction()`, so automation mode overrides now apply in that path (`apps/gateway/src/api/proliferate/http/actions.ts`).
 - [ ] **Connector drift hash persistence gap**: drift checks read `org_connectors.tool_risk_overrides[*].hash`, but there is no first-class write flow in current connector CRUD/permissions UI to persist these hashes.
-- [ ] **Inbox "Always Allow" key format mismatch**: inbox writes org mode keys as `${integration}/${action}` while resolver expects `${sourceId}:${actionId}`.
+- [x] **Inbox "Always Allow" key format**: inbox writes org mode keys as `${integration}:${action}`, matching resolver expectations (`apps/web/src/components/inbox/inbox-item.tsx`).
 - [ ] **Connector permission UX gap**: integration detail page shows placeholder text for connector tool permissions; connector action-mode editing is not fully exposed there.
 - [ ] **Action-level user preferences not enforced in gateway**: preference schema supports `actionId`, but gateway enforcement currently checks disabled sources only.
 - [ ] **Legacy grant CLI commands remain**: sandbox CLI still exposes `proliferate actions grant*` commands even though gateway grant routes are removed.

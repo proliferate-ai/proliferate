@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 	const devUserId = env.DEV_USER_ID;
 	const url = new URL(request.url);
 	const useDevBypass =
-		!!devUserId && devUserId !== "disabled" && (nodeEnv !== "production" || env.CI);
+		!!devUserId && devUserId !== "disabled" && nodeEnv !== "production" && !env.CI;
 
 	// Dev mode: skip auth and return session for the specified user
 	if (useDevBypass && url.pathname === "/api/auth/get-session") {

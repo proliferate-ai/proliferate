@@ -325,10 +325,36 @@ async function pauseSessionWithSnapshot(
 			snapshotId = result.snapshotId;
 
 			// Terminate non-pause/non-memory providers
+			let terminated = true;
 			try {
 				await provider.terminate(sessionId, session.sandboxId);
 			} catch (err) {
 				logger.error({ err }, "Failed to terminate after snapshot");
+				terminated = false;
+			}
+
+			// Never clear sandbox pointer if termination failed.
+			if (!terminated) {
+				const rowsAffected = await updateWhereSandboxIdMatches(sessionId, session.sandboxId, {
+					snapshotId,
+					sandboxId: session.sandboxId,
+					status: "paused",
+					pausedAt: new Date().toISOString(),
+					pauseReason: reason,
+					latestTask: null,
+				});
+
+				if (rowsAffected === 0) {
+					logger.info("CAS mismatch — another actor advanced state");
+					return;
+				}
+
+				revokeVirtualKey(sessionId).catch((revokeErr) => {
+					logger.debug({ err: revokeErr }, "Failed to revoke virtual key");
+				});
+
+				logger.info({ snapshotId, reason }, "Session paused with snapshot");
+				return;
 			}
 		}
 

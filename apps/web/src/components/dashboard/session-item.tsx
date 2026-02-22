@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
+import { useHasSlackInstallation } from "@/hooks/use-integrations";
 import {
 	useDeleteSession,
 	usePrefetchSession,
@@ -54,6 +55,7 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 	const { data: isSubscribed } = useSessionNotificationSubscription(session.id, canSubscribe);
 	const subscribeNotifications = useSubscribeNotifications();
 	const unsubscribeNotifications = useUnsubscribeNotifications();
+	const { hasSlack } = useHasSlackInstallation();
 
 	const handleToggleNotifications = async () => {
 		try {
@@ -90,13 +92,21 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 		}
 	};
 
-	const extraActions: { label: string; icon: React.ReactNode; onClick: () => void }[] = [];
+	const extraActions: {
+		label: string;
+		icon: React.ReactNode;
+		onClick: () => void;
+		disabled?: boolean;
+		description?: string;
+	}[] = [];
 
 	if (canSubscribe) {
 		extraActions.push({
 			label: isSubscribed ? "Notifications on" : "Notify me",
 			icon: isSubscribed ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />,
 			onClick: handleToggleNotifications,
+			disabled: !hasSlack,
+			description: !hasSlack ? "Connect Slack in Settings" : undefined,
 		});
 	}
 	if (isRunning) {

@@ -47,7 +47,7 @@ The system is intentionally **at-least-once** at dispatch boundaries. Idempotenc
 - Enrichment completion is atomic (payload + status + outbox) and no longer sequential best-effort (`packages/services/src/runs/service.ts:completeEnrichment`).
 - `transitionRunStatus` does not enforce allowed transition edges; callers must preserve lifecycle correctness (`packages/services/src/runs/service.ts:transitionRunStatus`).
 - Session notifications are not automation-only; gateway idle/orphan paths can also enqueue `notify_session_complete` (`apps/gateway/src/hub/migration-controller.ts`, `apps/gateway/src/sweeper/orphan-sweeper.ts`).
-- Run claim route checks automation existence at API layer, but DB assignment is scoped by `run_id + organization_id` only (`apps/web/src/server/routers/automations.ts:assignRun`, `packages/services/src/runs/db.ts:assignRunToUser`).
+- Run claim/unclaim are available to any org member, while resolve remains `owner|admin`; DB mutations are scoped by `run_id + organization_id + automation_id` when automation context is provided (`apps/web/src/server/routers/automations.ts`, `packages/services/src/runs/db.ts`).
 
 ---
 
@@ -331,12 +331,13 @@ Sources:
 
 **Invariants**
 - Assignment is org-scoped and single-owner (`assigned_to` nullable with conflict semantics).
+- Automation run listing is scoped by both `automation_id` and `organization_id`.
 - Resolve operation is org-scoped, automation-scoped, and status-gated with TOCTOU-safe conditional update.
 - Manual resolution always appends `manual_resolution` event data including actor metadata.
 
 **Rules**
-- API layer validates automation existence before assignment/unassignment operations.
-- Assignment DB mutation itself is scoped by run + org, not run + org + automation.
+- API layer validates automation existence, allows assignment/unassignment for any org member, and requires `owner|admin` for resolve.
+- Assignment/unassignment DB mutations are scoped by run + org and additionally by automation ID when provided by caller.
 
 Sources:
 - `packages/services/src/runs/service.ts:assignRunToUser`
@@ -414,7 +415,7 @@ Sources:
 - [ ] **Configuration selector depends on LLM proxy availability** — `agent_decide` degrades to failure/fallback when proxy config or call fails. Source: `apps/worker/src/automation/configuration-selector.ts`.
 - [ ] **Notification channel fallback remains for backward compatibility** — channel resolution still reads legacy `enabled_tools.slack_notify.channelId`. Source: `apps/worker/src/automation/notifications.ts:resolveNotificationChannelId`.
 - [ ] **Artifact retries are coarse-grained** — `write_artifacts` retries the whole outbox item; completion and enrichment artifact writes are not independently queued. Source: `apps/worker/src/automation/index.ts:writeArtifacts`.
-- [ ] **Assignment scoping split across layers** — API guards automation ownership, but assignment DB mutation does not include automation ID in WHERE clause. Source: `apps/web/src/server/routers/automations.ts:assignRun`, `packages/services/src/runs/db.ts:assignRunToUser`.
+- [x] **Assignment scoping alignment across layers** — API layer validates automation ownership and triage role, and DB assignment/unassignment can include automation ID in mutation WHERE predicates. Source: `apps/web/src/server/routers/automations.ts`, `packages/services/src/runs/db.ts`, `packages/services/src/runs/service.ts`.
 - [x] **Run deadline enforcement at creation** — Addressed via `DEFAULT_RUN_DEADLINE_MS` in run creation transaction. Source: `packages/services/src/runs/service.ts:createRunFromTriggerEvent`.
 - [x] **Enrichment writes non-transactional** — Addressed via `completeEnrichment` transactional write + outbox enqueue. Source: `packages/services/src/runs/service.ts:completeEnrichment`.
 - [x] **Side-effects table unused** — Addressed; run/DM notifications now use side-effect idempotency keys. Source: `apps/worker/src/automation/notifications.ts`, `packages/services/src/side-effects/service.ts`.

@@ -35,8 +35,8 @@
 - Org/member/invitation writes are mostly plugin-owned (`organization.create`, `organization.setActive`, `organization.inviteMember`, `organization.updateMemberRole`, `organization.removeMember`, `organization.acceptInvitation`) and are invoked in frontend code (`apps/web/src/components/settings/members/use-members-page.ts`, `apps/web/src/app/invite/[id]/page.tsx`).
 - `orgProcedure` does not mean "input org ID equals active org ID". It only requires an active org to exist; service methods still enforce membership against the requested org ID (`apps/web/src/server/routers/orgs.ts`, `packages/services/src/orgs/service.ts`).
 - Auth resolution precedence is strict: dev bypass, then API key, then cookie session (`apps/web/src/lib/auth-helpers.ts:getSession`).
-- `DEV_USER_ID` bypass is active in non-production or CI unless explicitly set to `disabled`; this logic exists both in auth helpers and better-auth GET session route wrapper (`apps/web/src/lib/auth-helpers.ts`, `apps/web/src/app/api/auth/[...all]/route.ts`).
-- "First organization" fallback is not explicitly ordered by creation time or role (`packages/services/src/orgs/db.ts:getUserOrgIds`, `packages/services/src/cli/db.ts:getUserFirstOrganization`), so consumers should treat it as best-effort defaulting.
+- `DEV_USER_ID` bypass is active only in non-production and only when `CI` is false; this logic exists both in auth helpers and better-auth GET session route wrapper (`apps/web/src/lib/auth-helpers.ts`, `apps/web/src/app/api/auth/[...all]/route.ts`).
+- "First organization" fallback is deterministic: membership rows are ordered by `member.createdAt` then `member.organizationId` (`packages/services/src/orgs/db.ts:getUserOrgIds`, `packages/services/src/cli/db.ts:getUserFirstOrganization`).
 - Invitation acceptance is two-phase: pre-auth basic invite resolution via server action/service, then authenticated better-auth invitation fetch with email-match enforcement in UI (`apps/web/src/app/invite/actions.ts`, `apps/web/src/app/invite/[id]/page.tsx`).
 - Personal-org deletion after invite acceptance is best-effort and intentionally blocked when org-scoped sessions still exist (`packages/services/src/orgs/db.ts:deletePersonalOrg`).
 - API keys are created at CLI poll completion, not at device authorization submission (`apps/web/src/server/routers/cli.ts:pollDevice`).
@@ -65,7 +65,7 @@ Invitation acceptance is identity/org membership behavior, but post-accept UX (a
 - Reference: `apps/web/src/app/invite/[id]/page.tsx`, `apps/web/src/app/invite/actions.ts`, `packages/services/src/orgs/service.ts`
 
 ### API Key Path for CLI
-API keys are better-auth resources used as Bearer credentials in web middleware and internal verification routes. Org context may come from headers or fallback membership lookup.
+API keys are better-auth resources used as Bearer credentials in web middleware and internal verification routes. Org context can come from a validated `x-org-id` membership match, or from deterministic fallback membership lookup when no header is supplied.
 - Reference: `apps/web/src/server/routers/cli.ts`, `apps/web/src/lib/auth-helpers.ts`, `apps/web/src/app/api/internal/verify-cli-token/route.ts`
 
 ### Super-Admin Impersonation
@@ -101,7 +101,7 @@ Impersonation is a cookie-backed overlay gated by super-admin checks and members
 ### Testing Conventions
 - Test service functions and route handlers (Vitest), especially auth context assembly and org membership enforcement.
 - Validate both cookie-session and API-key auth paths when changing auth middleware behavior.
-- Keep `DEV_USER_ID` bypass assumptions explicit in tests that cover local/CI-only auth behavior.
+- Keep `DEV_USER_ID` bypass assumptions explicit in tests that cover local development vs CI/prod auth behavior.
 
 ---
 
@@ -112,7 +112,7 @@ Impersonation is a cookie-backed overlay gated by super-admin checks and members
 **Invariants**
 - Exactly one auth source produces the request identity: dev bypass, API key, or cookie session, in that precedence order.
 - API-key auth is only valid when `auth.api.verifyApiKey` returns a valid key and backing user exists.
-- If `x-org-id` is provided with API key auth, organization context is only accepted when membership exists; otherwise fallback org resolution is used.
+- If `x-org-id` is provided with API key auth, organization context is only accepted when membership exists; otherwise auth fails closed (no fallback org resolution).
 - `requireAuth` never silently returns unauthenticated context; missing/invalid auth yields explicit unauthorized result.
 - Impersonation overlay only applies when the real authenticated user is a super-admin.
 
@@ -208,7 +208,7 @@ Impersonation is a cookie-backed overlay gated by super-admin checks and members
 
 **Invariants**
 - CLI API key issuance happens during device poll completion, not during device authorization submit.
-- API key verification for web requests runs through better-auth and resolves org context via header-validated membership or fallback membership.
+- API key verification for web requests runs through better-auth and resolves org context via header-validated membership or deterministic fallback membership when no header is provided.
 - Internal CLI token verification route is protected by service-to-service token and returns user plus best-effort org context.
 
 **Rules**

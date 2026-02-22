@@ -115,7 +115,7 @@
 | Slack async client | Implemented | `apps/worker/src/slack/client.ts` | Full bidirectional session via Slack |
 | Slack inbound handlers | Implemented | `apps/worker/src/slack/handlers/` | Text, todo, verify, default-tool |
 | Slack receiver worker | Implemented | `apps/worker/src/slack/` | BullMQ-based message processing |
-| Run claiming / manual update | Implemented | `apps/web/src/server/routers/automations.ts` | Claim, unclaim, resolve runs via `assignRun`/`unassignRun`/`resolveRun` routes |
+| Run claiming / manual update | Implemented | `apps/web/src/server/routers/automations.ts` | Claim/unclaim for org members; resolve for owner/admin via `assignRun`/`unassignRun`/`resolveRun` routes |
 | Org pending runs query | Implemented | `packages/services/src/runs/db.ts:listOrgPendingRuns`, `apps/web/src/server/routers/automations.ts` | Failed/needs_human/timed_out runs for attention inbox |
 | Schedules for automations | Implemented | `packages/db/src/schema/schedules.ts` | Cron schedules with timezone |
 
@@ -188,10 +188,10 @@
 | Local config management | Implemented | `packages/cli/src/state/config.ts` | Project-local `.proliferate/` config |
 | File sync (local → sandbox) | Implemented | `packages/cli/src/lib/sync.ts` | Unidirectional rsync-based push |
 | OpenCode launch | Implemented | `packages/cli/src/agents/opencode.ts` | Opens OpenCode UI |
-| CLI API routes (auth) | Implemented | `apps/web/src/server/routers/cli.ts:cliAuthRouter` | Device code create/authorize/poll |
+| CLI API routes (auth) | Implemented | `apps/web/src/server/routers/cli.ts:cliAuthRouter`, `apps/web/src/app/api/cli/auth/device/route.ts`, `apps/web/src/app/api/cli/auth/device/poll/route.ts` | oRPC-backed auth flows plus `/api/cli/auth/*` compatibility handlers |
 | CLI API routes (repos) | Implemented | `apps/web/src/server/routers/cli.ts:cliReposRouter` | Get/create repos from CLI |
 | CLI API routes (sessions) | Implemented | `apps/web/src/server/routers/cli.ts:cliSessionsRouter` | Session creation for CLI |
-| CLI API routes (SSH keys) | Implemented | `apps/web/src/server/routers/cli.ts:cliSshKeysRouter` | SSH key management |
+| CLI API routes (SSH keys) | Implemented | `apps/web/src/server/routers/cli.ts:cliSshKeysRouter`, `apps/web/src/app/api/cli/ssh-keys/route.ts` | oRPC-backed key management plus `/api/cli/ssh-keys` compatibility handler |
 | CLI API routes (GitHub) | Implemented | `apps/web/src/server/routers/cli.ts:cliGitHubRouter` | GitHub connection for CLI |
 | CLI API routes (configurations) | Implemented | `apps/web/src/server/routers/cli.ts:cliConfigurationsRouter` | Configuration listing for CLI |
 | GitHub repo selection | Implemented | `packages/db/src/schema/cli.ts:cliGithubSelections` | Selection history |

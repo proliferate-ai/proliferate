@@ -45,9 +45,14 @@ async function getApiKeyUser() {
 		// If CLI passed an org ID, verify user is a member of that org
 		if (orgIdHeader) {
 			const role = await orgs.getUserRole(user.id, orgIdHeader);
-			if (role) {
-				orgId = orgIdHeader;
+			if (!role) {
+				log.warn(
+					{ userId: user.id, orgId: orgIdHeader },
+					"API key org header is not authorized for user",
+				);
+				return null;
 			}
+			orgId = orgIdHeader;
 		}
 
 		// Fallback: get first org (for backwards compatibility)
@@ -140,7 +145,7 @@ export async function getSession() {
 	// Dev mode bypass - always return this user as logged in
 	const devUserId = env.DEV_USER_ID;
 	const useDevBypass =
-		!!devUserId && devUserId !== "disabled" && (nodeEnv !== "production" || env.CI);
+		!!devUserId && devUserId !== "disabled" && nodeEnv !== "production" && !env.CI;
 	if (useDevBypass) {
 		// Get user from database
 		const user = await users.findById(devUserId);

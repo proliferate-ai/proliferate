@@ -4,9 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Mock setup
 // ============================================
 
-const { mockCreateInvocation, mockListPendingBySession } = vi.hoisted(() => ({
+const { mockCreateInvocation, mockListPendingBySession, mockResolveMode } = vi.hoisted(() => ({
 	mockCreateInvocation: vi.fn(),
 	mockListPendingBySession: vi.fn(),
+	mockResolveMode: vi.fn(),
 }));
 
 vi.mock("./db", () => ({
@@ -28,6 +29,10 @@ vi.mock("../logger", () => ({
 			error: vi.fn(),
 		}),
 	}),
+}));
+
+vi.mock("./modes", () => ({
+	resolveMode: mockResolveMode,
 }));
 
 const { invokeAction, PendingLimitError } = await import("./service");
@@ -77,6 +82,17 @@ describe("invokeAction", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockListPendingBySession.mockResolvedValue([]);
+		mockResolveMode.mockImplementation(
+			async (input: { riskLevel: "read" | "write" | "danger" }) => {
+				if (input.riskLevel === "read") {
+					return { mode: "allow", source: "inferred_default" };
+				}
+				if (input.riskLevel === "danger") {
+					return { mode: "deny", source: "inferred_default" };
+				}
+				return { mode: "require_approval", source: "inferred_default" };
+			},
+		);
 	});
 
 	it("auto-approves read actions", async () => {

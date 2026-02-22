@@ -15,6 +15,8 @@ interface CustomAction {
 	icon: React.ReactNode;
 	onClick: () => void;
 	variant?: "default" | "destructive";
+	disabled?: boolean;
+	description?: string;
 }
 
 interface ItemActionsMenuProps {
@@ -75,11 +77,19 @@ export function ItemActionsMenu({
 				{customActions?.map((action) => (
 					<DropdownMenuItem
 						key={action.label}
-						onClick={action.onClick}
+						onClick={action.disabled ? undefined : action.onClick}
+						disabled={action.disabled}
 						className={cn(action.variant === "destructive" && "text-destructive")}
 					>
 						{action.icon}
-						<span className="ml-2">{action.label}</span>
+						<div className="ml-2">
+							<span>{action.label}</span>
+							{action.description && (
+								<span className="block text-[11px] text-muted-foreground font-normal">
+									{action.description}
+								</span>
+							)}
+						</div>
 					</DropdownMenuItem>
 				))}
 				{onDelete && (

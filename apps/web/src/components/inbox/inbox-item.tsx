@@ -6,6 +6,7 @@ import { SanitizedMarkdown } from "@/components/ui/sanitized-markdown";
 import { useSetActionMode } from "@/hooks/use-action-modes";
 import { useApproveAction, useDenyAction } from "@/hooks/use-actions";
 import type { ApprovalWithSession, AttentionItem, BlockedGroup } from "@/hooks/use-attention-inbox";
+import { useAssignRun } from "@/hooks/use-automations";
 import { useOrgMembersAndInvitations } from "@/hooks/use-orgs";
 import { useSessionData } from "@/hooks/use-sessions";
 import { useSession } from "@/lib/auth-client";
@@ -207,6 +208,8 @@ function RunItem({ data }: { data: PendingRunSummary }) {
 	const statusInfo = getRunStatusDisplay(data.status);
 	const StatusIcon = statusInfo.icon;
 	const { data: session } = useSessionData(data.session_id ?? "");
+	const assignRun = useAssignRun(data.automation_id);
+	const claimBtn = useButtonState();
 
 	const title =
 		data.status === "failed"
@@ -222,6 +225,16 @@ function RunItem({ data }: { data: PendingRunSummary }) {
 	const contextLine = session?.latestTask ?? session?.promptSnippet;
 	const metricsStr = session?.metrics ? formatCompactMetrics(session.metrics) : null;
 	const prCount = session?.prUrls?.length ?? 0;
+	const claimError = assignRun.error?.message ?? null;
+
+	const handleClaim = () => {
+		claimBtn.trigger(async () => {
+			await assignRun.mutateAsync({
+				id: data.automation_id,
+				runId: data.id,
+			});
+		});
+	};
 
 	return (
 		<div className="rounded-xl border border-border bg-card p-3 hover:bg-muted/30 transition-colors">
@@ -257,15 +270,28 @@ function RunItem({ data }: { data: PendingRunSummary }) {
 							)}
 						</p>
 					)}
+					{claimError && <p className="text-xs text-destructive mt-1.5">{claimError}</p>}
 				</div>
-				{data.session_id && (
-					<Link href={`/workspace/${data.session_id}?runId=${data.id}`} className="shrink-0 mt-0.5">
-						<Button size="sm" variant="outline" className="h-7 text-xs px-2.5">
-							<ExternalLink className="h-3 w-3" />
-							<span className="ml-1">View Session</span>
-						</Button>
-					</Link>
-				)}
+				<div className="shrink-0 mt-0.5 flex items-center gap-1.5">
+					<Button
+						size="sm"
+						variant="default"
+						className="h-7 text-xs px-2.5"
+						disabled={claimBtn.state === "pending"}
+						onClick={handleClaim}
+					>
+						<MicroIcon state={claimBtn.state} idle={Shield} />
+						<span className="ml-1">Claim</span>
+					</Button>
+					{data.session_id && (
+						<Link href={`/workspace/${data.session_id}?runId=${data.id}`}>
+							<Button size="sm" variant="outline" className="h-7 text-xs px-2.5">
+								<ExternalLink className="h-3 w-3" />
+								<span className="ml-1">View Session</span>
+							</Button>
+						</Link>
+					)}
+				</div>
 			</div>
 		</div>
 	);

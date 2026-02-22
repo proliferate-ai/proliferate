@@ -118,6 +118,14 @@ export const secretFilesRouter = {
 		.input(z.object({ configurationId: z.string().uuid() }))
 		.output(z.object({ files: z.array(SecretFileMetaSchema) }))
 		.handler(async ({ input, context }) => {
+			const belongsToOrg = await configurations.configurationBelongsToOrg(
+				input.configurationId,
+				context.orgId,
+			);
+			if (!belongsToOrg) {
+				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
+			}
+
 			const rows = await secretFiles.listByConfiguration(context.orgId, input.configurationId);
 			return {
 				files: rows.map((r) => ({

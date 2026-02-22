@@ -94,7 +94,7 @@ Both gateway runtime and worker build paths prefer repo-linked integrations, the
 
 ### Error Handling
 - Services throw `Error`; routers map to `ORPCError` codes (`apps/web/src/server/routers/repos.ts`, `apps/web/src/server/routers/configurations.ts`).
-- Non-critical side effects are often best-effort with logging (repo connection insert, auto-config creation, CLI configuration-repo upsert).
+- Some side effects are best-effort with logging (for example repo-connection insert and auto-config creation), but configuration-repo link writes are fail-fast to preserve configuration integrity.
 
 ### Reliability
 - Base snapshot queue: attempts `3`, exponential backoff `10s`, worker concurrency `1` (`packages/queue/src/index.ts`).
@@ -157,7 +157,7 @@ Both gateway runtime and worker build paths prefer repo-linked integrations, the
 - Exactly one resolution mode is valid: direct ID, managed, or CLI (`apps/gateway/src/lib/configuration-resolver.ts:resolveConfiguration`).
 - Managed resolution without explicit repo IDs prefers an existing managed configuration for org, preferring one that already has a snapshot.
 - CLI resolution is device-scoped by `(userId, localPathHash)` and may create both a CLI configuration and a local repo.
-- CLI configuration-repo link failure is currently non-fatal in resolver flow; session creation may proceed with partial setup.
+- CLI configuration-repo link failure is fatal in resolver/session-create flows; session creation does not proceed with partially linked configuration state.
 
 ### 6.9 Setup Finalization Invariants
 - Finalization requires a setup session with sandbox and matching org.

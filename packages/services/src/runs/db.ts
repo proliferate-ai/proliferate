@@ -230,6 +230,7 @@ export interface RunListItem extends AutomationRunRow {
 
 export async function listRunsForAutomation(
 	automationId: string,
+	orgId: string,
 	options: { status?: string; limit?: number; offset?: number } = {},
 ): Promise<{ runs: RunListItem[]; total: number }> {
 	const db = getDb();
@@ -237,8 +238,12 @@ export async function listRunsForAutomation(
 	const offset = options.offset ?? 0;
 
 	const where = options.status
-		? and(eq(automationRuns.automationId, automationId), eq(automationRuns.status, options.status))
-		: eq(automationRuns.automationId, automationId);
+		? and(
+				eq(automationRuns.automationId, automationId),
+				eq(automationRuns.organizationId, orgId),
+				eq(automationRuns.status, options.status),
+			)
+		: and(eq(automationRuns.automationId, automationId), eq(automationRuns.organizationId, orgId));
 
 	const [runs, countResult] = await Promise.all([
 		db.query.automationRuns.findMany({
@@ -291,8 +296,14 @@ export async function assignRunToUser(
 	runId: string,
 	orgId: string,
 	userId: string,
+	automationId?: string,
 ): Promise<AutomationRunRow | null> {
 	const db = getDb();
+	const conditions = [eq(automationRuns.id, runId), eq(automationRuns.organizationId, orgId)];
+	if (automationId) {
+		conditions.push(eq(automationRuns.automationId, automationId));
+	}
+
 	const [row] = await db
 		.update(automationRuns)
 		.set({
@@ -302,8 +313,7 @@ export async function assignRunToUser(
 		})
 		.where(
 			and(
-				eq(automationRuns.id, runId),
-				eq(automationRuns.organizationId, orgId),
+				...conditions,
 				or(isNull(automationRuns.assignedTo), eq(automationRuns.assignedTo, userId)),
 			),
 		)
@@ -311,8 +321,17 @@ export async function assignRunToUser(
 	return row ?? null;
 }
 
-export async function unassignRun(runId: string, orgId: string): Promise<AutomationRunRow | null> {
+export async function unassignRun(
+	runId: string,
+	orgId: string,
+	automationId?: string,
+): Promise<AutomationRunRow | null> {
 	const db = getDb();
+	const conditions = [eq(automationRuns.id, runId), eq(automationRuns.organizationId, orgId)];
+	if (automationId) {
+		conditions.push(eq(automationRuns.automationId, automationId));
+	}
+
 	const [row] = await db
 		.update(automationRuns)
 		.set({
@@ -320,7 +339,7 @@ export async function unassignRun(runId: string, orgId: string): Promise<Automat
 			assignedAt: null,
 			updatedAt: new Date(),
 		})
-		.where(and(eq(automationRuns.id, runId), eq(automationRuns.organizationId, orgId)))
+		.where(and(...conditions))
 		.returning();
 	return row ?? null;
 }

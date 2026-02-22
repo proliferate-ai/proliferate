@@ -1,5 +1,6 @@
 "use client";
 
+import { useHasSlackInstallation } from "@/hooks/use-integrations";
 import {
 	useSessionNotificationSubscription,
 	useSubscribeNotifications,
@@ -68,6 +69,7 @@ export function SettingsPanel({
 	);
 	const subscribeNotifications = useSubscribeNotifications();
 	const unsubscribeNotifications = useUnsubscribeNotifications();
+	const { hasSlack } = useHasSlackInstallation();
 
 	const handleToggleNotifications = async () => {
 		if (!sessionId) return;
@@ -130,15 +132,23 @@ export function SettingsPanel({
 						<div className="px-4 py-3">
 							<button
 								type="button"
-								className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+								className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full disabled:opacity-50 disabled:pointer-events-none"
 								onClick={handleToggleNotifications}
+								disabled={!hasSlack}
 							>
 								{isSubscribed ? (
 									<BellOff className="h-3.5 w-3.5" />
 								) : (
 									<Bell className="h-3.5 w-3.5" />
 								)}
-								<span>{isSubscribed ? "Notifications on" : "Notify me when done"}</span>
+								<div>
+									<span>{isSubscribed ? "Notifications on" : "Notify me when done"}</span>
+									{!hasSlack && (
+										<span className="block text-[11px] text-muted-foreground">
+											Connect Slack in Settings
+										</span>
+									)}
+								</div>
 							</button>
 						</div>
 					</>

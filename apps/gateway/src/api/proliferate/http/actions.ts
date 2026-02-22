@@ -547,6 +547,7 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 						: await findIntegrationId(sessionId, integration),
 					integration,
 					action,
+					automationId: session.automationId ?? undefined,
 					riskLevel: resolved.actionDef.riskLevel,
 					params: validatedParams,
 					isDrifted: resolved.isDrifted,

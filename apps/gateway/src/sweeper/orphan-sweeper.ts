@@ -150,6 +150,8 @@ async function cleanupOrphanedSession(
 						await provider.terminate(sessionId, sandboxId);
 					} catch (err) {
 						logger.error({ err, sessionId }, "orphan_sweep.terminate_failed");
+						// Keep pointer when terminate fails so a later pass can retry safely.
+						keepSandbox = true;
 					}
 				}
 			} finally {

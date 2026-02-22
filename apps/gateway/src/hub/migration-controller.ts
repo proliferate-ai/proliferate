@@ -212,12 +212,14 @@ export class MigrationController {
 
 				// 3. Terminate (non-pause, non-memory-snapshot providers only)
 				const isMemorySnapshot = snapshotId.startsWith("mem:");
-				const keepSandbox = isMemorySnapshot || provider.supportsPause;
+				let keepSandbox = isMemorySnapshot || provider.supportsPause;
 				if (!keepSandbox) {
 					try {
 						await provider.terminate(this.options.sessionId, freshSandboxId);
 					} catch (err) {
 						this.logger.error({ err }, "Failed to terminate after idle snapshot");
+						// Never clear sandbox pointer if terminate failed.
+						keepSandbox = true;
 					}
 				}
 

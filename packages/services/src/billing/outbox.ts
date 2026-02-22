@@ -87,24 +87,21 @@ async function processEvent(event: PendingBillingEvent): Promise<void> {
 	const db = getDb();
 	try {
 		const credits = Number(event.credits);
+		const org = await db.query.organization.findFirst({
+			where: eq(organization.id, event.organizationId),
+			columns: { autumnCustomerId: true },
+		});
+		if (!org?.autumnCustomerId) {
+			throw new Error("Organization is missing Autumn customer ID");
+		}
+
 		// Post to Autumn - all event types deduct from the 'credits' feature
 		const result = await autumnDeductCredits(
-			event.organizationId,
+			org.autumnCustomerId,
 			AUTUMN_FEATURES.credits, // All events deduct credits
 			credits,
 			event.idempotencyKey,
 		);
-
-		// Mark as posted
-		await db
-			.update(billingEvents)
-			.set({
-				status: "posted",
-				autumnResponse: result,
-			})
-			.where(eq(billingEvents.id, event.id));
-
-		logger.debug("Posted event");
 
 		// If Autumn denies, try auto-top-up before enforcing exhausted state
 		if (!result.allowed) {
@@ -126,8 +123,24 @@ async function processEvent(event: PendingBillingEvent): Promise<void> {
 					graceExpiresAt: null,
 				})
 				.where(eq(organization.id, event.organizationId));
-			await enforceCreditsExhausted(event.organizationId);
+			const enforcement = await enforceCreditsExhausted(event.organizationId);
+			if (enforcement.failed > 0) {
+				throw new Error(
+					`Failed to pause ${enforcement.failed} session(s) for credits-exhausted enforcement`,
+				);
+			}
 		}
+
+		// Mark as posted only after all denial/enforcement logic completes.
+		await db
+			.update(billingEvents)
+			.set({
+				status: "posted",
+				autumnResponse: result,
+			})
+			.where(eq(billingEvents.id, event.id));
+
+		logger.debug("Posted event");
 	} catch (err) {
 		// Calculate exponential backoff
 		const retryCount = (event.retryCount ?? 0) + 1;

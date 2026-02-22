@@ -17,7 +17,6 @@ import {
 	repos,
 	type sessions,
 } from "../db/client";
-import { getServicesLogger } from "../logger";
 import type {
 	CreateConfigurationFullInput,
 	CreateConfigurationInput,
@@ -535,17 +534,11 @@ export async function createSingleConfigurationRepo(
 	workspacePath: string,
 ): Promise<void> {
 	const db = getDb();
-	try {
-		await db.insert(configurationRepos).values({
-			configurationId,
-			repoId,
-			workspacePath,
-		});
-	} catch (error) {
-		getServicesLogger()
-			.child({ module: "configurations-db" })
-			.error({ err: error, configurationId, repoId }, "Failed to create configuration_repos entry");
-	}
+	await db.insert(configurationRepos).values({
+		configurationId,
+		repoId,
+		workspacePath,
+	});
 }
 
 /**

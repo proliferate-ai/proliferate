@@ -2,13 +2,15 @@
 
 import { InboxEmpty } from "@/components/inbox/inbox-empty";
 import { InboxItem } from "@/components/inbox/inbox-item";
+import { Button } from "@/components/ui/button";
 import type { AttentionItem, BlockedGroup } from "@/hooks/use-attention-inbox";
 import { useAttentionInbox } from "@/hooks/use-attention-inbox";
+import { useAssignRun } from "@/hooks/use-automations";
 import { getRunStatusDisplay } from "@/lib/run-status";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/utils";
 import type { PendingRunSummary } from "@proliferate/shared";
-import { AlertOctagon, Search, Shield } from "lucide-react";
+import { AlertOctagon, Loader2, Search, Shield } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
@@ -170,6 +172,19 @@ function QueueRow({
 	}
 
 	const run = item.data as PendingRunSummary;
+	return <RunQueueRow run={run} selected={selected} onClick={onClick} />;
+}
+
+function RunQueueRow({
+	run,
+	selected,
+	onClick,
+}: {
+	run: PendingRunSummary;
+	selected: boolean;
+	onClick: () => void;
+}) {
+	const assignRun = useAssignRun(run.automation_id);
 	const statusInfo = getRunStatusDisplay(run.status);
 	const StatusIcon = statusInfo.icon;
 	const timeAgo = run.completed_at
@@ -177,24 +192,43 @@ function QueueRow({
 		: formatRelativeTime(run.queued_at);
 
 	return (
-		<button
-			type="button"
-			onClick={onClick}
+		<div
 			className={cn(
-				"flex items-center gap-2.5 w-full px-4 py-2.5 border-b border-border/50 hover:bg-muted/50 transition-colors text-sm text-left last:border-0",
+				"flex items-center gap-2.5 w-full px-4 py-2 border-b border-border/50 hover:bg-muted/50 transition-colors text-sm last:border-0",
 				selected && "bg-muted/50",
 			)}
 		>
-			<StatusIcon className={cn("h-4 w-4 shrink-0", statusInfo.className)} />
-			<div className="min-w-0 flex-1">
-				<span className="text-sm font-medium text-foreground truncate block">
-					{run.automation_name}
-				</span>
-				<span className="text-xs text-muted-foreground truncate block">
-					{[statusInfo.label, timeAgo].filter(Boolean).join(" · ")}
-				</span>
-			</div>
-		</button>
+			<button
+				type="button"
+				onClick={onClick}
+				className="flex items-center gap-2.5 flex-1 min-w-0 text-left py-0.5"
+			>
+				<StatusIcon className={cn("h-4 w-4 shrink-0", statusInfo.className)} />
+				<div className="min-w-0 flex-1">
+					<span className="text-sm font-medium text-foreground truncate block">
+						{run.automation_name}
+					</span>
+					<span className="text-xs text-muted-foreground truncate block">
+						{[statusInfo.label, timeAgo].filter(Boolean).join(" · ")}
+					</span>
+				</div>
+			</button>
+			<Button
+				size="sm"
+				variant="outline"
+				className="h-6 text-[11px] px-2 shrink-0"
+				disabled={assignRun.isPending}
+				onClick={() =>
+					assignRun.mutate({
+						id: run.automation_id,
+						runId: run.id,
+					})
+				}
+			>
+				{assignRun.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+				<span className={assignRun.isPending ? "ml-1" : ""}>Claim</span>
+			</Button>
+		</div>
 	);
 }
 

@@ -151,6 +151,18 @@ export function useSlackInstallations() {
 	});
 }
 
+/**
+ * Returns whether the org has at least one active Slack installation.
+ * Useful for gating UI features that require Slack (e.g. "Notify me").
+ */
+export function useHasSlackInstallation() {
+	const { data: installations, isLoading } = useSlackInstallations();
+	return {
+		hasSlack: (installations?.length ?? 0) > 0,
+		isLoading,
+	};
+}
+
 export function useSlackConnect() {
 	const queryClient = useQueryClient();
 

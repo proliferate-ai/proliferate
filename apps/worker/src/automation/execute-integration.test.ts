@@ -293,7 +293,7 @@ describe("handleExecute (target resolution integration)", () => {
 		);
 	});
 
-	it("agent_decide path: fails run when LLM selector fails", async () => {
+	it("agent_decide path: falls back to default configuration when LLM selector fails", async () => {
 		mockClaimRun.mockResolvedValueOnce(makeRun());
 		mockSelectConfiguration.mockResolvedValueOnce({
 			status: "failed",
@@ -322,14 +322,24 @@ describe("handleExecute (target resolution integration)", () => {
 
 		await handleExecute("run-1");
 
-		expect(mockMarkRunFailed).toHaveBeenCalledWith({
-			runId: "run-1",
-			reason: "configuration_selection_failed",
-			stage: "execution",
-			errorMessage: "Configuration selection failed",
-		});
-
-		expect(mockCreateSession).not.toHaveBeenCalled();
+		expect(mockInsertRunEvent).toHaveBeenCalledWith(
+			"run-1",
+			"target_resolved",
+			"ready",
+			"ready",
+			expect.objectContaining({
+				type: "fallback",
+				reason: "configuration_selection_failed_using_fallback",
+				configurationId: "cfg-default",
+			}),
+		);
+		expect(mockMarkRunFailed).not.toHaveBeenCalled();
+		expect(mockCreateSession).toHaveBeenCalledWith(
+			expect.objectContaining({
+				configurationId: "cfg-default",
+			}),
+			expect.any(Object),
+		);
 	});
 
 	it("agent_decide path: fails run when allowlist is empty", async () => {

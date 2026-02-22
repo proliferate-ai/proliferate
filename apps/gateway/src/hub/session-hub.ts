@@ -628,7 +628,8 @@ export class SessionHub {
 		if (this.eventProcessor.hasRunningTools()) return false;
 		if (this.clients.size > 0) return false;
 		if (this.proxyConnections.size > 0) return false;
-		if (this.eventProcessor.getCurrentAssistantMessageId() !== null) return false;
+		const assistantMessageOpen = this.eventProcessor.getCurrentAssistantMessageId() !== null;
+		if (assistantMessageOpen && this.lastKnownAgentIdleAt === null) return false;
 
 		const sseReady = this.runtime.isReady();
 		if (!sseReady && this.lastKnownAgentIdleAt === null) return false;
@@ -1327,9 +1328,18 @@ export class SessionHub {
 		const wasBusy = this.eventProcessor.getCurrentAssistantMessageId() !== null;
 		this.eventProcessor.process(event);
 		const nowIdle = this.eventProcessor.getCurrentAssistantMessageId() === null;
+		const reportedIdle =
+			event.type === "session.idle" ||
+			(event.type === "session.status" &&
+				(event.properties as { status?: { type?: string } } | undefined)?.status?.type === "idle");
 
 		if (wasBusy && nowIdle) {
 			this.touchActivity(); // marks agent-done boundary, starts grace period
+			this.lastKnownAgentIdleAt = Date.now();
+		}
+		if (reportedIdle) {
+			// Text-only completions can retain assistant message id for de-dup; treat explicit idle as done.
+			this.touchActivity();
 			this.lastKnownAgentIdleAt = Date.now();
 		}
 	}

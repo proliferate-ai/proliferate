@@ -6,7 +6,7 @@
 
 import { GATEWAY_URL } from "@/lib/gateway";
 import { ORPCError } from "@orpc/server";
-import { automations, configurations, runs, schedules, templates } from "@proliferate/services";
+import { automations, configurations, orgs, runs, schedules, templates } from "@proliferate/services";
 import {
 	AutomationConnectionSchema,
 	AutomationEventDetailSchema,
@@ -30,6 +30,15 @@ import {
 } from "@proliferate/shared";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
+
+async function assertRunResolvePermission(userId: string, orgId: string): Promise<void> {
+	const role = await orgs.getUserRole(userId, orgId);
+	if (role !== "owner" && role !== "admin") {
+		throw new ORPCError("FORBIDDEN", {
+			message: "Only admins and owners can resolve runs",
+		});
+	}
+}
 
 export const automationsRouter = {
 	/**
@@ -646,7 +655,12 @@ export const automationsRouter = {
 			}
 
 			try {
-				const updated = await runs.assignRunToUser(input.runId, context.orgId, context.user.id);
+				const updated = await runs.assignRunToUser(
+					input.runId,
+					context.orgId,
+					context.user.id,
+					input.id,
+				);
 				if (!updated) {
 					throw new ORPCError("NOT_FOUND", { message: "Run not found" });
 				}
@@ -676,7 +690,7 @@ export const automationsRouter = {
 				throw new ORPCError("NOT_FOUND", { message: "Automation not found" });
 			}
 
-			const updated = await runs.unassignRun(input.runId, context.orgId);
+			const updated = await runs.unassignRun(input.runId, context.orgId, input.id);
 			if (!updated) {
 				throw new ORPCError("NOT_FOUND", { message: "Run not found" });
 			}
@@ -716,6 +730,7 @@ export const automationsRouter = {
 			if (!exists) {
 				throw new ORPCError("NOT_FOUND", { message: "Automation not found" });
 			}
+			await assertRunResolvePermission(context.user.id, context.orgId);
 
 			try {
 				const updated = await runs.resolveRun({

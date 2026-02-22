@@ -27,7 +27,7 @@
 - **Session record vs hub vs runtime:** DB session row is durable metadata; `SessionHub` is per-process coordination state; `SessionRuntime` owns sandbox/OpenCode/SSE readiness.
 - **Creation vs activation:** Creating a session record does not guarantee a sandbox exists. Runtime activation happens when a hub ensures readiness (or eager-start runs).
 - **Ownership vs liveness:** Owner lease answers "which gateway instance may act"; runtime lease answers "is there a live runtime heartbeat".
-- **Idle is a predicate, not just "no sockets":** idle snapshot requires no WS clients, no proxy clients, no active HTTP tool callbacks, no running tools, no active assistant turn, and grace-period satisfaction.
+- **Idle is a predicate, not just "no sockets":** idle snapshot requires no WS clients, no proxy clients, no active HTTP tool callbacks, no running tools, and grace-period satisfaction; assistant-turn gating can also be satisfied by explicit agent-idle signals.
 - **Migration/snapshot writes are fenced:** DB transitions that depend on a specific sandbox use CAS (`updateWhereSandboxIdMatches`) so stale actors cannot clobber newer state.
 - **Recovery is multi-path:** runtime reconnect and expiry are job-driven; orphan cleanup is DB-first + runtime-lease-based and works even when no hub exists in memory.
 - **Automation sessions are logically active even when headless:** automation client type is treated as active for expiry decisions, but SSE auto-reconnect is skipped while no WS client is attached.
@@ -266,7 +266,7 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 | `message.updated` (assistant) | `message` (new) | Creates assistant message stub |
 | `message.part.updated` (text) | `token`, `text_part_complete` | Streaming tokens |
 | `message.part.updated` (tool-like) | `tool_start`, `tool_metadata`, `tool_end` | Any part carrying `callID` + `tool` is treated as a tool lifecycle event |
-| `session.idle` / `session.status` (idle) | `message_complete` | Marks assistant done |
+| `session.idle` / `session.status` (idle) | `message_complete` | Marks assistant done and records known-idle even if assistant message ID is retained for dedup |
 | `session.error` | `error` | Skips `MessageAbortedError` |
 | `server.connected`, `server.heartbeat` | (ignored) | Transport-level |
 
@@ -394,7 +394,7 @@ WHERE id = $session_id
 1. Acquire lock, stop OpenCode.
 2. Guard against false-idle by checking `shouldIdleSnapshot()` (accounts for `activeHttpToolCalls > 0` and proxy connections).
 3. Scrub configured env files, then pause (if E2B) or snapshot + terminate (if Modal).
-4. Update DB: `status: "paused"` (E2B) or `status: "stopped"` (Modal).
+4. Update DB with CAS fencing: `status: "paused"` and snapshot metadata; if terminate fails after snapshot, keep `sandboxId` pointer so later cleanup remains fenced.
 5. Clean up hub state, call `onEvict` for memory reclamation.
 
 **Orphan sweep snapshot path (no local hub):**
