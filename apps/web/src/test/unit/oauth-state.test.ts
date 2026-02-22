@@ -6,7 +6,11 @@ vi.mock("@proliferate/environment/server", () => ({
 	},
 }));
 
-import { createSignedOAuthState, verifySignedOAuthState } from "@/lib/oauth-state";
+import {
+	createSignedOAuthState,
+	sanitizeOAuthReturnUrl,
+	verifySignedOAuthState,
+} from "@/lib/oauth-state";
 
 describe("oauth-state", () => {
 	beforeEach(() => {
@@ -89,5 +93,13 @@ describe("oauth-state", () => {
 		>;
 
 		expect(decodedA._sig).toBe(decodedB._sig);
+	});
+
+	it("sanitizes OAuth return URLs to allowed app paths", () => {
+		expect(sanitizeOAuthReturnUrl("/dashboard/integrations")).toBe("/dashboard/integrations");
+		expect(sanitizeOAuthReturnUrl("/workspace/123?tab=chat")).toBe("/workspace/123?tab=chat");
+		expect(sanitizeOAuthReturnUrl("https://evil.test")).toBeUndefined();
+		expect(sanitizeOAuthReturnUrl("//evil.test/path")).toBeUndefined();
+		expect(sanitizeOAuthReturnUrl("/admin", "/onboarding")).toBe("/onboarding");
 	});
 });

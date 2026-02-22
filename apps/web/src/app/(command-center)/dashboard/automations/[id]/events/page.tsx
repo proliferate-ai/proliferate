@@ -8,81 +8,49 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FilterButtonGroup } from "@/components/ui/filter-button-group";
-import { Text } from "@/components/ui/text";
+import { PageBackLink } from "@/components/ui/page-back-link";
 import { useAutomation, useAutomationRuns } from "@/hooks/use-automations";
-import { cn } from "@/lib/utils";
+import { getRunStatusDisplay } from "@/lib/run-status";
+import { cn, formatRelativeTime } from "@/lib/utils";
 import type { AutomationRun, AutomationRunStatus, ParsedEventContext } from "@proliferate/shared";
-import { formatDistanceToNow } from "date-fns";
-import {
-	AlertCircle,
-	ArrowLeft,
-	Bot,
-	CheckCircle2,
-	ChevronRight,
-	Clock,
-	Filter,
-	Hand,
-	Inbox,
-	Loader2,
-	RefreshCw,
-	Timer,
-	XCircle,
-} from "lucide-react";
+import { AlertCircle, Bot, ChevronRight, Inbox, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 
-// ============================================
-// Helpers
-// ============================================
+type RunStatusFilter = "all" | AutomationRunStatus;
 
-const STATUS_FILTERS = [
-	{ value: "all" as const, label: "All" },
-	{ value: "succeeded" as const, label: "Succeeded" },
-	{ value: "running" as const, label: "Running" },
-	{ value: "queued" as const, label: "Queued" },
-	{ value: "failed" as const, label: "Failed" },
-	{ value: "needs_human" as const, label: "Needs Human" },
-	{ value: "timed_out" as const, label: "Timed Out" },
-	{ value: "skipped" as const, label: "Skipped" },
-	{ value: "filtered" as const, label: "Filtered" },
+const RUN_STATUS_FILTERS: Array<{ value: RunStatusFilter; label: string }> = [
+	{ value: "all", label: "All" },
+	{ value: "running", label: "Running" },
+	{ value: "queued", label: "Queued" },
+	{ value: "enriching", label: "Enriching" },
+	{ value: "ready", label: "Ready" },
+	{ value: "succeeded", label: "Succeeded" },
+	{ value: "failed", label: "Failed" },
+	{ value: "needs_human", label: "Needs attention" },
+	{ value: "timed_out", label: "Timed out" },
+	{ value: "skipped", label: "Skipped" },
+	{ value: "canceled", label: "Canceled" },
 ];
 
-function getRunStatusInfo(status: string): {
-	icon: React.ElementType;
-	label: string;
-	className: string;
-} {
-	switch (status) {
-		case "succeeded":
-			return { icon: CheckCircle2, label: "Succeeded", className: "text-emerald-600" };
-		case "running":
-			return { icon: Loader2, label: "Running", className: "text-blue-500 animate-spin" };
-		case "enriching":
-			return { icon: Loader2, label: "Enriching", className: "text-blue-400 animate-spin" };
-		case "ready":
-			return { icon: Clock, label: "Ready", className: "text-blue-400" };
-		case "queued":
-			return { icon: Clock, label: "Queued", className: "text-muted-foreground" };
-		case "failed":
-			return { icon: XCircle, label: "Failed", className: "text-red-500" };
-		case "needs_human":
-			return { icon: Hand, label: "Needs Human", className: "text-amber-500" };
-		case "timed_out":
-			return { icon: Timer, label: "Timed Out", className: "text-orange-500" };
-		case "canceled":
-			return { icon: XCircle, label: "Canceled", className: "text-muted-foreground" };
-		case "skipped":
-			return { icon: AlertCircle, label: "Skipped", className: "text-muted-foreground" };
-		case "filtered":
-			return { icon: Filter, label: "Filtered", className: "text-yellow-500" };
+function normalizeProvider(provider: string | null | undefined): Provider {
+	switch (provider) {
+		case "github":
+		case "sentry":
+		case "linear":
+		case "posthog":
+		case "slack":
+		case "gmail":
+		case "webhook":
+		case "scheduled":
+			return provider;
 		default:
-			return { icon: Clock, label: status, className: "text-muted-foreground" };
+			return "webhook";
 	}
 }
 
-function getEventTypeLabel(eventType: string | null | undefined, provider: string): string {
+function getEventTypeLabel(eventType: string | null | undefined, provider: Provider): string {
 	if (eventType) {
 		switch (eventType) {
 			case "$rageclick":
@@ -95,210 +63,189 @@ function getEventTypeLabel(eventType: string | null | undefined, provider: strin
 				return eventType.replace(/^\$/, "");
 		}
 	}
-	switch (provider) {
-		case "linear":
-			return "Linear";
-		case "sentry":
-			return "Sentry";
-		case "github":
-			return "GitHub";
-		case "posthog":
-			return "PostHog";
-		case "custom":
-		case "webhook":
-			return "Webhook";
-		default:
-			return provider;
+
+	if (provider === "scheduled") {
+		return "Schedule";
 	}
+
+	return getProviderDisplayName(provider);
 }
 
-function getSeverityColor(severity: string) {
+function getSeverityDotClass(severity: string | null): string {
 	switch (severity) {
 		case "critical":
-			return "bg-red-500";
+			return "bg-destructive";
 		case "high":
 			return "bg-orange-500";
 		case "medium":
 			return "bg-yellow-500";
 		case "low":
-			return "bg-green-500";
+			return "bg-emerald-500";
 		default:
-			return "bg-muted";
+			return "bg-muted-foreground";
 	}
 }
 
-// ============================================
-// Inline Detail Section
-// ============================================
+function RunStatusPill({ status }: { status: AutomationRunStatus }) {
+	const statusDisplay = getRunStatusDisplay(status);
+	const StatusIcon = statusDisplay.icon;
+	const shouldSpin = status === "running";
+
+	return (
+		<span
+			className={cn(
+				"inline-flex items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-medium",
+				statusDisplay.className,
+			)}
+		>
+			<StatusIcon className={cn("h-3 w-3", shouldSpin && "animate-spin")} />
+			{statusDisplay.label}
+		</span>
+	);
+}
 
 function RunDetailSection({ run }: { run: AutomationRun }) {
 	const parsedContext = run.trigger_event?.parsed_context as ParsedEventContext | null;
-	const provider = (run.trigger?.provider || "webhook") as Provider;
+	const provider = normalizeProvider(run.trigger?.provider);
 	const eventType = getEventTypeLabel(run.trigger_event?.provider_event_type, provider);
 
-	const analysis = (parsedContext as Record<string, unknown> | null)?.llm_analysis_result as {
-		severity: string;
-		summary: string;
-		rootCause?: string;
-		recommendedActions: string[];
-	} | null;
+	const rawAnalysis = (parsedContext as Record<string, unknown> | null)
+		?.llm_analysis_result as Record<string, unknown> | null;
+	const analysis = rawAnalysis
+		? {
+				severity: typeof rawAnalysis.severity === "string" ? rawAnalysis.severity : null,
+				summary: typeof rawAnalysis.summary === "string" ? rawAnalysis.summary : null,
+				rootCause: typeof rawAnalysis.rootCause === "string" ? rawAnalysis.rootCause : null,
+				recommendedActions: Array.isArray(rawAnalysis.recommendedActions)
+					? rawAnalysis.recommendedActions.filter(
+							(action): action is string => typeof action === "string",
+						)
+					: [],
+			}
+		: null;
 
-	// Build a context summary from provider-specific data
-	const contextParts: string[] = [];
-	if (parsedContext?.title) {
-		contextParts.push(parsedContext.title);
-	}
-	const ctx = parsedContext as Record<string, unknown> | null;
-	if (ctx?.posthog) {
-		const ph = ctx.posthog as Record<string, unknown>;
-		if (ph.current_url) contextParts.push(`URL: ${ph.current_url}`);
-		if (ph.person) {
-			const person = ph.person as Record<string, unknown>;
-			contextParts.push(`User: ${person.name || person.email || "Anonymous"}`);
+	const contextParts = useMemo(() => {
+		const parts: string[] = [];
+		if (parsedContext?.title) {
+			parts.push(parsedContext.title);
 		}
-	}
-	if (ctx?.sentry) {
-		const s = ctx.sentry as Record<string, unknown>;
-		if (s.issue_title) contextParts.push(`Issue: ${s.issue_title}`);
-		if (s.project) contextParts.push(`Project: ${s.project}`);
-	}
-	if (ctx?.github) {
-		const gh = ctx.github as Record<string, unknown>;
-		if (gh.repo) contextParts.push(`Repo: ${gh.repo}`);
-		if (gh.title) contextParts.push(`Title: ${gh.title}`);
-	}
+
+		const context = parsedContext as Record<string, unknown> | null;
+		if (context?.posthog) {
+			const posthog = context.posthog as Record<string, unknown>;
+			if (posthog.current_url) parts.push(`URL: ${posthog.current_url}`);
+			if (posthog.person) {
+				const person = posthog.person as Record<string, unknown>;
+				parts.push(`User: ${person.name || person.email || "Anonymous"}`);
+			}
+		}
+
+		if (context?.sentry) {
+			const sentry = context.sentry as Record<string, unknown>;
+			if (sentry.issue_title) parts.push(`Issue: ${sentry.issue_title}`);
+			if (sentry.project) parts.push(`Project: ${sentry.project}`);
+		}
+
+		if (context?.github) {
+			const github = context.github as Record<string, unknown>;
+			if (github.repo) parts.push(`Repo: ${github.repo}`);
+			if (github.title) parts.push(`Title: ${github.title}`);
+		}
+
+		return parts;
+	}, [parsedContext]);
 
 	return (
-		<div className="bg-muted border-b border-border px-6 py-4 space-y-4">
-			{/* Trigger Source */}
-			<div>
-				<Text variant="small" color="muted" className="mb-1.5 font-medium uppercase tracking-wide">
-					Trigger Source
-				</Text>
-				<div className="flex items-center gap-2 mb-1">
-					<ProviderIcon provider={provider} size="sm" />
-					<Text variant="body" className="font-medium">
-						{getProviderDisplayName(provider)}
-					</Text>
-					<Badge variant="outline" className="text-xs">
-						{eventType}
-					</Badge>
-				</div>
-				{contextParts.length > 0 && (
-					<div className="text-sm text-muted-foreground mt-1 space-y-0.5">
-						{contextParts.map((part) => (
-							<div key={part}>{part}</div>
-						))}
+		<div className="border-t border-border/60 bg-muted/20 px-4 py-4">
+			<div className="grid gap-4 md:grid-cols-2">
+				<section className="space-y-2">
+					<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+						Trigger
+					</p>
+					<div className="flex items-center gap-2">
+						<ProviderIcon provider={provider} size="sm" />
+						<span className="text-sm font-medium text-foreground">
+							{getProviderDisplayName(provider)}
+						</span>
+						<Badge variant="outline" className="text-[10px] font-medium">
+							{eventType}
+						</Badge>
 					</div>
+					{contextParts.length > 0 && (
+						<div className="space-y-1">
+							{contextParts.map((part) => (
+								<p key={part} className="text-xs text-muted-foreground">
+									{part}
+								</p>
+							))}
+						</div>
+					)}
+				</section>
+
+				{analysis && (
+					<section className="space-y-2">
+						<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+							Analysis
+						</p>
+						<div className="flex items-center gap-2">
+							<span
+								className={cn("h-2.5 w-2.5 rounded-full", getSeverityDotClass(analysis.severity))}
+							/>
+							<span className="text-sm font-medium capitalize text-foreground">
+								{analysis.severity || "Unknown"}
+							</span>
+						</div>
+						{analysis.summary && <p className="text-sm text-foreground">{analysis.summary}</p>}
+						{analysis.rootCause && (
+							<p className="text-xs text-muted-foreground">
+								<span className="font-medium text-foreground">Root cause:</span>{" "}
+								{analysis.rootCause}
+							</p>
+						)}
+						{analysis.recommendedActions.length > 0 && (
+							<div className="flex flex-wrap gap-1.5">
+								{analysis.recommendedActions.map((action) => (
+									<Badge key={action} variant="outline">
+										{action}
+									</Badge>
+								))}
+							</div>
+						)}
+					</section>
 				)}
 			</div>
 
-			{/* Analysis */}
-			{analysis && (
-				<div>
-					<Text
-						variant="small"
-						color="muted"
-						className="mb-1.5 font-medium uppercase tracking-wide"
-					>
-						Analysis
-					</Text>
-					<div className="space-y-2">
-						<div className="flex items-center gap-2">
-							<div
-								className={cn("w-2.5 h-2.5 rounded-full", getSeverityColor(analysis.severity))}
-							/>
-							<Text variant="body" className="capitalize font-medium">
-								{analysis.severity}
-							</Text>
-						</div>
-						{analysis.summary && (
-							<Text variant="body" className="text-foreground">
-								{analysis.summary}
-							</Text>
-						)}
-						{analysis.rootCause && (
-							<div>
-								<Text variant="small" color="muted" className="mb-0.5">
-									Root Cause
-								</Text>
-								<Text variant="body">{analysis.rootCause}</Text>
-							</div>
-						)}
-						{analysis.recommendedActions?.length > 0 && (
-							<div>
-								<Text variant="small" color="muted" className="mb-1">
-									Recommended Actions
-								</Text>
-								<div className="flex flex-wrap gap-1.5">
-									{analysis.recommendedActions.map((action) => (
-										<Badge key={action} variant="outline">
-											{action}
-										</Badge>
-									))}
-								</div>
-							</div>
-						)}
-					</div>
-				</div>
-			)}
-
-			{/* Agent Session Link */}
 			{run.session_id && (
-				<div>
-					<Text
-						variant="small"
-						color="muted"
-						className="mb-1.5 font-medium uppercase tracking-wide"
-					>
-						Agent Session
-					</Text>
+				<div className="mt-4">
 					<Link href={`/workspace/${run.session_id}`}>
-						<Button variant="outline" size="sm" className="gap-1.5">
-							<Bot className="w-3.5 h-3.5" />
+						<Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+							<Bot className="h-3.5 w-3.5" />
 							View agent session
 						</Button>
 					</Link>
 				</div>
 			)}
 
-			{/* Status Info */}
 			{(run.status_reason || run.error_message) && (
-				<div>
-					<Text
-						variant="small"
-						color="muted"
-						className="mb-1.5 font-medium uppercase tracking-wide"
-					>
-						Status Info
-					</Text>
+				<div className="mt-4 space-y-1.5">
+					<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+						Status info
+					</p>
 					{run.status_reason && (
-						<div className="mb-1">
-							<Text variant="small" color="muted" className="mb-0.5">
-								Reason
-							</Text>
-							<Text variant="body">{run.status_reason}</Text>
-						</div>
+						<p className="text-xs text-muted-foreground">
+							<span className="font-medium text-foreground">Reason:</span> {run.status_reason}
+						</p>
 					)}
 					{run.error_message && (
-						<div>
-							<Text variant="small" color="muted" className="mb-0.5">
-								Error
-							</Text>
-							<Text variant="small" color="destructive">
-								{run.error_message}
-							</Text>
-						</div>
+						<p className="text-xs text-destructive">
+							<span className="font-medium">Error:</span> {run.error_message}
+						</p>
 					)}
 				</div>
 			)}
 		</div>
 	);
 }
-
-// ============================================
-// Run Row
-// ============================================
 
 function RunRow({
 	run,
@@ -310,92 +257,76 @@ function RunRow({
 	onToggle: () => void;
 }) {
 	const parsedContext = run.trigger_event?.parsed_context as ParsedEventContext | null;
-	const provider = run.trigger?.provider || "unknown";
-	const statusInfo = getRunStatusInfo(run.status);
-	const StatusIcon = statusInfo.icon;
-
-	const title = parsedContext?.title || "Run";
+	const provider = normalizeProvider(run.trigger?.provider);
 	const eventType = getEventTypeLabel(run.trigger_event?.provider_event_type, provider);
 
-	const queuedAt = run.queued_at ? new Date(run.queued_at) : null;
-	const timeAgo = queuedAt ? formatDistanceToNow(queuedAt, { addSuffix: true }) : "Unknown";
-	const exactTime = queuedAt ? queuedAt.toLocaleString() : "";
-
+	const title = parsedContext?.title || run.trigger?.name || "Automation run";
+	const timeAgo = run.queued_at ? formatRelativeTime(run.queued_at) : "unknown";
+	const exactTime = run.queued_at ? new Date(run.queued_at).toLocaleString() : "";
 	const hasSession = !!run.session_id;
 
 	return (
-		<>
-			<Button
+		<div className="border-b border-border/60 last:border-b-0">
+			<button
 				type="button"
-				variant="ghost"
 				onClick={onToggle}
+				aria-expanded={isExpanded}
+				aria-controls={`run-${run.id}-details`}
 				className={cn(
-					"w-full h-auto grid grid-cols-[minmax(0,1fr)_120px_100px_36px_120px_24px] items-center gap-3",
-					"px-4 py-3 rounded-none border-b border-border last:border-b-0",
-					"hover:bg-accent transition-colors cursor-pointer text-left",
-					isExpanded && "bg-accent",
+					"w-full px-4 py-3 text-left transition-colors hover:bg-muted/40",
+					isExpanded && "bg-muted/30",
 				)}
 			>
-				{/* Summary */}
-				<div className="min-w-0">
-					<div className="flex items-center gap-2">
-						<span className="text-sm font-medium text-foreground truncate">{title}</span>
-						{hasSession && (
-							<span className="inline-flex items-center gap-0.5 rounded-full border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-								<Bot className="w-2.5 h-2.5" />
-								Session
-							</span>
-						)}
+				<div className="flex w-full items-start gap-3">
+					<div className="mt-0.5 text-muted-foreground">
+						<ProviderIcon provider={provider} size="sm" />
 					</div>
-					<span className="text-xs text-muted-foreground truncate block">{eventType}</span>
+
+					<div className="min-w-0 flex-1">
+						<div className="flex flex-wrap items-center gap-2">
+							<span className="truncate text-sm font-medium text-foreground">{title}</span>
+							{hasSession && (
+								<Badge variant="outline" className="h-5 px-1.5 text-[10px] font-medium">
+									<Bot className="mr-1 h-2.5 w-2.5" />
+									Session
+								</Badge>
+							)}
+							{run.assignee && (
+								<Avatar className="h-5 w-5">
+									<AvatarImage src={run.assignee.image ?? undefined} />
+									<AvatarFallback className="text-[10px] bg-muted text-muted-foreground">
+										{run.assignee.name?.[0]?.toUpperCase() ?? "?"}
+									</AvatarFallback>
+								</Avatar>
+							)}
+						</div>
+						<div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+							<span className="truncate">{eventType}</span>
+							<span>·</span>
+							<span title={exactTime}>{timeAgo}</span>
+						</div>
+					</div>
+
+					<div className="flex shrink-0 items-center gap-2 pl-2">
+						<RunStatusPill status={run.status} />
+						<ChevronRight
+							className={cn(
+								"h-4 w-4 text-muted-foreground/60 transition-transform",
+								isExpanded && "rotate-90",
+							)}
+						/>
+					</div>
 				</div>
+			</button>
 
-				{/* Run Status */}
-				<div className="flex items-center gap-1.5">
-					<StatusIcon className={cn("w-3.5 h-3.5", statusInfo.className)} />
-					<span className="text-sm text-muted-foreground">{statusInfo.label}</span>
+			{isExpanded && (
+				<div id={`run-${run.id}-details`}>
+					<RunDetailSection run={run} />
 				</div>
-
-				{/* Assignee */}
-				<div className="flex items-center justify-center">
-					{run.assignee ? (
-						<Avatar className="h-6 w-6">
-							<AvatarImage src={run.assignee.image ?? undefined} />
-							<AvatarFallback className="text-[10px] bg-muted text-muted-foreground">
-								{run.assignee.name?.[0]?.toUpperCase() ?? "?"}
-							</AvatarFallback>
-						</Avatar>
-					) : (
-						<span className="text-xs text-muted-foreground/50">--</span>
-					)}
-				</div>
-
-				{/* Spacer */}
-				<span />
-
-				{/* Time */}
-				<span className="text-sm text-muted-foreground" title={exactTime}>
-					{timeAgo}
-				</span>
-
-				{/* Chevron */}
-				<ChevronRight
-					className={cn(
-						"w-4 h-4 text-muted-foreground/50 transition-transform duration-200",
-						isExpanded && "rotate-90",
-					)}
-				/>
-			</Button>
-
-			{/* Expanded Detail Section */}
-			{isExpanded && <RunDetailSection run={run} />}
-		</>
+			)}
+		</div>
 	);
 }
-
-// ============================================
-// Page Component
-// ============================================
 
 export default function AutomationRunsPage({
 	params,
@@ -405,140 +336,125 @@ export default function AutomationRunsPage({
 	const { id: automationId } = use(params);
 	const searchParams = useSearchParams();
 	const deepLinkRunId = searchParams.get("runId");
-	const [statusFilter, setStatusFilter] = useState<string[]>(["all"]);
+
+	const [statusFilter, setStatusFilter] = useState<RunStatusFilter>("all");
 	const [expandedRunId, setExpandedRunId] = useState<string | null>(deepLinkRunId);
 
-	// Auto-expand deep-linked run when data loads
 	useEffect(() => {
 		if (deepLinkRunId) {
 			setExpandedRunId(deepLinkRunId);
 		}
 	}, [deepLinkRunId]);
 
-	const filterValue = statusFilter.includes("all")
-		? undefined
-		: (statusFilter[0] as AutomationRunStatus);
-
+	const filterValue = statusFilter === "all" ? undefined : statusFilter;
 	const { data: automation } = useAutomation(automationId);
-
 	const {
 		data: runsData,
 		isLoading,
 		error,
 		refetch,
 		isFetching,
-	} = useAutomationRuns(automationId, {
-		status: filterValue,
-	});
+	} = useAutomationRuns(automationId, { status: filterValue });
 
-	const runsList = runsData?.runs ?? [];
+	const runs = runsData?.runs ?? [];
 	const total = runsData?.total ?? 0;
+	const runLabel = total === 1 ? "run" : "runs";
 
 	function handleToggleRun(runId: string) {
-		setExpandedRunId((prev) => (prev === runId ? null : runId));
+		setExpandedRunId((previous) => (previous === runId ? null : runId));
 	}
 
 	return (
-		<div className="flex-1 overflow-y-auto flex max-h-screen justify-center">
-			<div className="w-full max-w-4xl p-6 py-8">
-				{/* Header */}
-				<header className="flex items-center justify-between mb-6">
-					<div className="flex items-center gap-3">
-						<Link href={`/dashboard/automations/${automationId}`}>
-							<Button variant="ghost" size="icon" className="h-8 w-8">
-								<ArrowLeft className="h-4 w-4" />
-							</Button>
-						</Link>
-						<div>
-							<h1 className="text-lg font-semibold text-foreground">Runs</h1>
-							<p className="text-sm text-muted-foreground">
-								{automation?.name || "Automation"} · {total} {total === 1 ? "run" : "runs"}
-							</p>
-						</div>
+		<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
+			<div className="w-full max-w-5xl mx-auto px-6 py-6">
+				<PageBackLink
+					href={`/dashboard/automations/${automationId}`}
+					label="Automation"
+					className="mb-3"
+				/>
+
+				<div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<h1 className="text-lg font-semibold tracking-tight text-foreground">Runs</h1>
+						<p className="mt-1 text-sm text-muted-foreground">
+							{automation?.name || "Automation"} · {total} {runLabel}
+						</p>
 					</div>
 					<Button
 						variant="outline"
 						size="sm"
 						onClick={() => refetch()}
 						disabled={isFetching}
-						className="h-8"
+						className="h-8 gap-1.5 text-xs"
 					>
-						<RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isFetching ? "animate-spin" : ""}`} />
+						<RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
 						Refresh
 					</Button>
-				</header>
-
-				{/* Filters */}
-				<div className="mb-6">
-					<FilterButtonGroup
-						items={STATUS_FILTERS}
-						selected={statusFilter}
-						onChange={setStatusFilter}
-						size="sm"
-					/>
 				</div>
 
-				{/* Table */}
-				{isLoading ? (
-					<div className="rounded-2xl border-2 border-border bg-card overflow-hidden">
-						<div className="space-y-0">
-							{[1, 2, 3].map((i) => (
-								<div
-									key={i}
-									className="h-16 border-b border-border last:border-b-0 animate-pulse bg-muted"
-								/>
-							))}
-						</div>
-					</div>
-				) : error ? (
-					<div className="text-center py-12 rounded-2xl border-2 border-border bg-muted">
-						<Text variant="body" color="destructive">
-							Failed to load runs
-						</Text>
-					</div>
-				) : runsList.length === 0 ? (
-					<div className="text-center py-12 rounded-2xl border-2 border-border bg-muted">
-						<div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center mx-auto mb-3">
-							<Inbox className="w-5 h-5 text-muted-foreground" />
-						</div>
-						<Text variant="body" className="font-medium text-foreground mb-1">
-							No runs yet
-						</Text>
-						<Text variant="small" color="muted">
-							Runs will appear here when your triggers fire
-						</Text>
-					</div>
-				) : (
-					<div className="rounded-2xl border-2 border-border bg-card overflow-hidden">
-						{/* Table Header */}
-						<div
+				<div className="mb-4 flex flex-wrap gap-1">
+					{RUN_STATUS_FILTERS.map((filter) => (
+						<button
+							key={filter.value}
+							type="button"
+							onClick={() => setStatusFilter(filter.value)}
 							className={cn(
-								"grid grid-cols-[minmax(0,1fr)_120px_100px_36px_120px_24px] items-center gap-3",
-								"px-4 py-2 bg-muted border-b-2 border-border",
-								"sticky top-0 z-10",
+								"rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+								statusFilter === filter.value
+									? "bg-secondary text-foreground"
+									: "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
 							)}
 						>
-							<span className="text-sm font-medium text-muted-foreground">Summary</span>
-							<span className="text-sm font-medium text-muted-foreground">Status</span>
-							<span className="text-sm font-medium text-muted-foreground text-center">
-								Assignee
-							</span>
-							<span />
-							<span className="text-sm font-medium text-muted-foreground">Time</span>
-							<span />
-						</div>
+							{filter.label}
+						</button>
+					))}
+				</div>
 
-						{/* Table Body */}
-						<div>
-							{runsList.map((run) => (
-								<RunRow
-									key={run.id}
-									run={run}
-									isExpanded={expandedRunId === run.id}
-									onToggle={() => handleToggleRun(run.id)}
-								/>
-							))}
+				{isLoading ? (
+					<div className="rounded-xl border border-border bg-card overflow-hidden">
+						{[1, 2, 3, 4].map((index) => (
+							<div
+								key={index}
+								className="h-[68px] border-b border-border/60 last:border-b-0 animate-pulse bg-muted/30"
+							/>
+						))}
+					</div>
+				) : error ? (
+					<div className="rounded-xl border border-border bg-card px-6 py-10 text-center">
+						<AlertCircle className="mx-auto h-5 w-5 text-destructive" />
+						<p className="mt-3 text-sm font-medium text-foreground">Failed to load runs</p>
+						<p className="mt-1 text-xs text-muted-foreground">
+							Try refreshing the page to retry the request.
+						</p>
+						<Button
+							variant="outline"
+							size="sm"
+							className="mt-4 h-8 text-xs"
+							onClick={() => refetch()}
+						>
+							Retry
+						</Button>
+					</div>
+				) : runs.length === 0 ? (
+					<div className="rounded-xl border border-border bg-card px-6 py-12 text-center">
+						<div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+							<Inbox className="h-5 w-5 text-muted-foreground" />
 						</div>
+						<p className="mt-3 text-sm font-medium text-foreground">No runs yet</p>
+						<p className="mt-1 text-xs text-muted-foreground">
+							Runs will appear here when this automation is triggered.
+						</p>
+					</div>
+				) : (
+					<div className="rounded-xl border border-border bg-card overflow-hidden">
+						{runs.map((run) => (
+							<RunRow
+								key={run.id}
+								run={run}
+								isExpanded={expandedRunId === run.id}
+								onToggle={() => handleToggleRun(run.id)}
+							/>
+						))}
 					</div>
 				)}
 			</div>

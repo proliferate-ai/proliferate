@@ -289,27 +289,55 @@ async function handleExecute(
 			processedAt: new Date(),
 		});
 
-		log?.info({ sessionId }, "Session created for run");
+		log?.info(
+			{
+				sessionId,
+				configurationId: sessionRequest.configurationId,
+				targetType: target.type,
+				targetReason: target.reason,
+				sandboxMode: sessionRequest.sandboxMode,
+				clientType: sessionRequest.clientType,
+				modelId: sessionRequest.agentConfig?.modelId ?? null,
+			},
+			"Session created for run",
+		);
 	}
 
 	if (!run.promptSentAt) {
 		const prompt = buildPrompt(automation.agentInstructions, runId);
+		const promptIdempotencyKey = `run:${runId}:prompt:v1`;
+		log?.info(
+			{
+				sessionId,
+				promptLength: prompt.length,
+				idempotencyKey: promptIdempotencyKey,
+			},
+			"Dispatching automation prompt",
+		);
 		await syncClient.postMessage(sessionId, {
 			content: prompt,
 			userId: "automation",
-			idempotencyKey: `run:${runId}:prompt:v1`,
+			idempotencyKey: promptIdempotencyKey,
 		});
 		await runs.updateRun(runId, {
 			promptSentAt: new Date(),
 			lastActivityAt: new Date(),
 		});
-		log?.info({ sessionId }, "Prompt sent to session");
+		log?.info(
+			{
+				sessionId,
+				promptLength: prompt.length,
+				idempotencyKey: promptIdempotencyKey,
+			},
+			"Prompt sent to session",
+		);
 	}
 }
 
 async function finalizeRuns(syncClient: SyncClient, logger: Logger): Promise<void> {
 	const deps: FinalizerDeps = {
-		getSessionStatus: (sessionId) => syncClient.getSessionStatus(sessionId),
+		getSessionStatus: (sessionId, organizationId) =>
+			syncClient.getSessionStatus(sessionId, organizationId),
 		markRunFailed: (opts) => runs.markRunFailed(opts),
 		transitionRunStatus: (runId, toStatus, updates) =>
 			runs.transitionRunStatus(runId, toStatus, updates),

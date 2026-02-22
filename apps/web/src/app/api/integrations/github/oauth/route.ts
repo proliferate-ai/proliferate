@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { requireAuth } from "@/lib/auth-helpers";
-import { createSignedOAuthState } from "@/lib/oauth-state";
+import { createSignedOAuthState, sanitizeOAuthReturnUrl } from "@/lib/oauth-state";
 import { env } from "@proliferate/environment/server";
 import { orgs } from "@proliferate/services";
 import { type NextRequest, NextResponse } from "next/server";
@@ -12,30 +12,6 @@ function getBaseUrl(request: NextRequest): string {
 		return `${forwardedProto}://${forwardedHost}`;
 	}
 	return request.nextUrl.origin;
-}
-
-function sanitizeReturnUrl(returnUrl: string | undefined): string | undefined {
-	if (!returnUrl) return undefined;
-
-	const trimmed = returnUrl.trim();
-	if (!trimmed.startsWith("/") || trimmed.startsWith("//")) return undefined;
-
-	const path = trimmed.split("?")[0] || "";
-	const allowedPrefixes = [
-		"/onboarding",
-		"/device-github",
-		"/dashboard",
-		"/settings",
-		"/preview",
-		"/workspace",
-		"/repos",
-		"/invite",
-	];
-	const isAllowed = allowedPrefixes.some(
-		(prefix) => path === prefix || path.startsWith(`${prefix}/`),
-	);
-
-	return isAllowed ? trimmed : undefined;
 }
 
 export async function GET(request: NextRequest) {
@@ -51,7 +27,7 @@ export async function GET(request: NextRequest) {
 	const userId = authResult.session.user.id;
 	const rawReturnUrl = request.nextUrl.searchParams.get("returnUrl") ?? undefined;
 	const targetOrgId = request.nextUrl.searchParams.get("targetOrgId") ?? undefined;
-	const returnUrl = sanitizeReturnUrl(rawReturnUrl);
+	const returnUrl = sanitizeOAuthReturnUrl(rawReturnUrl);
 	const orgId = targetOrgId || authResult.session.session.activeOrganizationId;
 
 	if (!orgId) {

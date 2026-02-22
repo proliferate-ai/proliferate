@@ -8,7 +8,7 @@
 - Distributed safety primitives: owner/runtime leases, migration locks, CAS/fencing writes, orphan sweep recovery.
 - Real-time protocol surface: WebSocket session protocol, HTTP prompt/cancel/info/status/tool routes.
 - Gateway-intercepted tool execution over synchronous sandbox callbacks.
-- Expiry/idle behavior: BullMQ expiry jobs, idle snapshotting, automation fast-path termination.
+- Expiry/idle behavior: BullMQ expiry jobs, idle snapshotting, automation transcript-preserving completion.
 - Session telemetry capture and flush pipeline (`metrics`, `pr_urls`, `latest_task`).
 - Devtools and OpenCode proxying via gateway (`/proxy/*`) including sandbox-mcp auth token injection.
 - Gateway client library contracts (`packages/gateway-clients`) used by web and workers.
@@ -30,7 +30,8 @@
 - **Idle is a predicate, not just "no sockets":** idle snapshot requires no WS clients, no proxy clients, no active HTTP tool callbacks, no running tools, no active assistant turn, and grace-period satisfaction.
 - **Migration/snapshot writes are fenced:** DB transitions that depend on a specific sandbox use CAS (`updateWhereSandboxIdMatches`) so stale actors cannot clobber newer state.
 - **Recovery is multi-path:** runtime reconnect and expiry are job-driven; orphan cleanup is DB-first + runtime-lease-based and works even when no hub exists in memory.
-- **Automation sessions are logically active even when headless:** automation client type is treated as having an effective client so expiry migration/reconnect behavior remains active.
+- **Automation sessions are logically active even when headless:** automation client type is treated as active for expiry decisions, but SSE auto-reconnect is skipped while no WS client is attached.
+- **Automation sessions are excluded from idle snapshotting:** idle-snapshot predicates do not apply to `client_type="automation"` sessions, which are worker-managed.
 
 ### Things Agents Get Wrong
 - Assuming API routes are in the token streaming path. They are not.
@@ -150,7 +151,8 @@ Reference: `apps/gateway/src/middleware/error-handler.ts`
 ### Reliability
 - **SSE read timeout**: Configurable via `env.sseReadTimeoutMs`. Stream read uses `readWithTimeout()` to detect stuck connections.
 - **Heartbeat monitoring**: `SseClient` checks for event activity every ~`heartbeatTimeoutMs / 3`. Exceeding the timeout triggers reconnection.
-- **Reconnection**: Exponential backoff via `env.reconnectDelaysMs` array. Stops if all clients disconnect (unless automation session).
+- **Reconnection**: Exponential backoff via `env.reconnectDelaysMs` array. Headless automation sessions (`client_type="automation"` with no WS clients) skip auto-reconnect on SSE disconnect to avoid OpenCode session churn; reconnect happens when a client explicitly attaches.
+- **SSE disconnect continuity**: Runtime preserves OpenCode session identity across transient SSE disconnects and re-validates the stored OpenCode session ID on reconnect before creating a replacement.
 - **Ownership lease**: A hub must hold a Redis ownership lease (`lease:owner:{sessionId}`) to act as the session owner; renewed by heartbeat (~10s interval) while the hub is alive. Lease loss triggers split-brain suicide (see §2).
 - **Runtime lease**: Sandbox-alive signal (`lease:runtime:{sessionId}`) with 20s TTL, set after successful runtime boot and used for orphan detection.
 - **Hub eviction**: Hubs are evicted on idle TTL (no connected WS clients) and under a hard cap (LRU) to bound memory usage. `HubManager.remove()` is called via `onEvict` callback.
@@ -160,8 +162,13 @@ Reference: `apps/gateway/src/middleware/error-handler.ts`
 - **Tool result patching**: `updateToolResult()` retries up to 5x with 1s delay (see `agent-contract.md` §5).
 - **Migration lock**: Distributed Redis lock with 60s TTL prevents concurrent migrations for the same session.
 - **Expiry triggers**: Hub schedules an in-process expiry timer (primary) plus a BullMQ job as a fallback for evicted hubs.
+- **Expiry timestamp source-of-truth**: Newly created sandboxes use provider-reported expiry only; stored DB expiry is reused only when recovering the same sandbox ID.
+- **Snapshot secret scrubbing**: All snapshot capture paths (`save_snapshot`, idle snapshot, expiry migration) run `proliferate env scrub` before capture when env-file spec is configured. Paths that continue running the same sandbox re-apply env files after capture; pause/stop paths skip re-apply.
+- **Scrub failure policy**: Manual snapshots use strict scrub mode (scrub failure aborts capture). Idle/expiry paths use best-effort scrub mode (log and continue) so pause/stop cleanup is not blocked by scrub command failures.
 - **Streaming backpressure**: Token batching (50-100ms) and slow-consumer disconnect based on `ws.bufferedAmount` thresholds.
 - **Idle snapshot failure circuit-breaker**: Force-terminates after repeated failures to prevent runaway spend.
+- **Automation idle-snapshot exclusion**: `SessionHub.shouldIdleSnapshot()` hard-returns `false` for `client_type="automation"` to avoid terminate/recreate thrash loops.
+- **Orphan sweeper terminal-sandbox handling**: If provider snapshot calls return `FAILED_PRECONDITION` (`Sandbox has already finished`), sweeper treats the sandbox as terminal and CAS-pauses the session instead of retrying snapshot.
 
 ### Testing Conventions
 - Colocate gateway tests near source.
@@ -184,6 +191,8 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 3. `resolveConfiguration()` resolves or creates a configuration record (`apps/gateway/src/lib/configuration-resolver.ts`).
 4. `createSession()` writes DB record, creates session connections, and optionally creates sandbox (`apps/gateway/src/lib/session-creator.ts`).
 5. For new managed configurations, fires a setup session with auto-generated prompt.
+6. Immediate sandbox boot now injects the same gateway callback env vars used by runtime resume (`SANDBOX_MCP_AUTH_TOKEN`, `PROLIFERATE_GATEWAY_URL`, `PROLIFERATE_SESSION_ID`) so intercepted tools (including `automation.complete`) work on first boot.
+7. Immediate sandbox boot persists provider expiry (`sandbox_expires_at`) on the initial session update, instead of waiting for a later runtime reconciliation pass.
 
 **Scratch sessions** (no configuration):
 - `configurationId` is optional in `CreateSessionInputSchema`. When omitted, the oRPC path creates a **scratch session** with `configurationId: null`, `snapshotId: null`.
@@ -197,7 +206,8 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 - When the agent calls `request_env_variables`, the web runtime opens the Environment panel and the tool UI also renders an `Open Environment Panel` CTA card so users can reopen it from the conversation. In setup sessions, Environment is **file-based only**: users create secret files with a row-based env editor (`Key`/`Value` columns), can import via `.env` paste/upload, and save by target path. In multi-repo configurations, users must pick a repository/workspace first; the entered file path is interpreted relative to that workspace.
 - The Git panel is workspace-aware in multi-repo sessions: users choose the target repository/workspace, and git status + branch/commit/push/PR actions are scoped to that `workspacePath`.
 - `pause` → loads session, calls `provider.snapshot()` + `provider.terminate()`, finalizes billing, updates DB status to `"paused"` (`sessions-pause.ts`).
-- `resume` → no dedicated handler. Resume is implicit: connecting a WebSocket client to a paused session triggers `ensureRuntimeReady()`, which creates a new sandbox from the stored snapshot.
+- `resume` → no dedicated handler. Resume is implicit for normal sessions: connecting a WebSocket client to a paused session triggers `ensureRuntimeReady()`, which creates a new sandbox from the stored snapshot.
+- `resume` exception (automation-completed) → if `client_type="automation"` and session is terminal (`status in {"paused","stopped"}` with non-null `outcome`), client init/get_messages hydrate transcript without calling `ensureRuntimeReady()`, preventing post-completion OpenCode session identity churn.
 - `delete` → calls `sessions.deleteSession()`.
 - `rename` → calls `sessions.renameSession()`.
 - `snapshot` → calls `snapshotSessionHandler()` (`sessions-snapshot.ts`).
@@ -227,13 +237,18 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 4. Call `provider.ensureSandbox()` — recovers existing or creates new sandbox.
 5. Update session DB record with `sandboxId`, `status: "running"`, tunnel URLs.
 6. Schedule expiry job via BullMQ (`expiry/expiry-queue.ts:scheduleSessionExpiry`).
-7. Ensure OpenCode session exists (verify stored ID or create new one).
+7. Ensure OpenCode session exists:
+   - First verify stored `coding_agent_session_id` via direct `GET /session/:id` lookup.
+   - If not found, fall back to `GET /session` list/adopt, then create only when no reusable session exists.
 8. Connect SSE to `{tunnelUrl}/event`.
 9. Broadcast `status: "running"` to all WebSocket clients.
 
 **Edge cases:**
 - Concurrent `ensureRuntimeReady()` calls coalesce into a single promise (`ensureReadyPromise`) within an instance.
 - OpenCode session creation uses bounded retry with exponential backoff for transient transport failures (fetch/socket and retryable 5xx/429), with per-attempt latency logs.
+- On direct lookup transport failures, runtime keeps the stored session ID instead of rotating immediately, preventing message-history churn during transient tunnel/list instability.
+- OpenCode session creation emits explicit reason-coded logs when identity rotation is required (`missing_stored_id` / `stored_id_not_found`) so churn can be traced per session lifecycle.
+- LLM proxy usage is explicitly gated by `LLM_PROXY_REQUIRED=true`; when false, sandboxes use direct `ANTHROPIC_API_KEY` even if `LLM_PROXY_URL` is present in env.
 - E2B auto-pause: if provider supports auto-pause, `sandboxId` is stored as `snapshotId` for implicit recovery.
 - Stored tunnel URLs are used as fallback if provider returns empty values on recovery.
 - If lease renewal lag exceeds TTL during runtime work, self-terminate immediately to prevent split-brain ownership (see §2 Lease Heartbeat Lag Guard).
@@ -250,7 +265,7 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 |-----------|-------------------|-------|
 | `message.updated` (assistant) | `message` (new) | Creates assistant message stub |
 | `message.part.updated` (text) | `token`, `text_part_complete` | Streaming tokens |
-| `message.part.updated` (tool) | `tool_start`, `tool_metadata`, `tool_end` | Tool lifecycle |
+| `message.part.updated` (tool-like) | `tool_start`, `tool_metadata`, `tool_end` | Any part carrying `callID` + `tool` is treated as a tool lifecycle event |
 | `session.idle` / `session.status` (idle) | `message_complete` | Marks assistant done |
 | `session.error` | `error` | Skips `MessageAbortedError` |
 | `server.connected`, `server.heartbeat` | (ignored) | Transport-level |
@@ -318,7 +333,7 @@ WHERE id = $session_id
 
 | Path | Outcome | Location |
 |------|---------|----------|
-| `automation.complete` tool | From completion payload | `automation-complete.ts` — persists before terminate |
+| `automation.complete` tool | From completion payload | `automation-complete.ts` — persists and marks session `paused` |
 | CLI stop | `"completed"` | `cli/db.ts:stopSession`, `stopAllCliSessions` |
 | Force terminate (circuit breaker) | `"failed"` | `migration-controller.ts:forceTerminate` |
 
@@ -342,7 +357,7 @@ WHERE id = $session_id
 | `prompt` | userId required | Sends prompt to OpenCode |
 | `cancel` | userId required | Aborts OpenCode session |
 | `get_status` | Connection | Returns current status |
-| `get_messages` | Connection | Re-sends init payload |
+| `get_messages` | Connection | Re-sends init payload (for automation-completed sessions, serves transcript without runtime resume) |
 | `save_snapshot` | Connection | Triggers snapshot |
 | `run_auto_start` | userId required | Tests service commands |
 | `get_git_status` | Connection | Returns git status |
@@ -370,7 +385,7 @@ WHERE id = $session_id
 **Active migration (clients connected):**
 1. Acquire distributed lock (60s TTL).
 2. Wait for agent message completion (30s timeout), abort if still running.
-3. Snapshot current sandbox.
+3. Scrub configured env files from sandbox, snapshot current sandbox, then re-apply env files.
 4. Disconnect SSE, reset sandbox state.
 5. Call `ensureRuntimeReady()` — creates new sandbox from snapshot.
 6. Broadcast `status: "running"`.
@@ -378,13 +393,22 @@ WHERE id = $session_id
 **Idle migration (no clients):**
 1. Acquire lock, stop OpenCode.
 2. Guard against false-idle by checking `shouldIdleSnapshot()` (accounts for `activeHttpToolCalls > 0` and proxy connections).
-3. Pause (if E2B) or snapshot + terminate (if Modal).
+3. Scrub configured env files, then pause (if E2B) or snapshot + terminate (if Modal).
 4. Update DB: `status: "paused"` (E2B) or `status: "stopped"` (Modal).
 5. Clean up hub state, call `onEvict` for memory reclamation.
 
-**Automation completion fast-path:**
-- If `automation.complete` is invoked, bypass idle snapshotting and migration timers.
-- Terminate runtime immediately, set session `status: "stopped"`, then evict hub.
+**Orphan sweep snapshot path (no local hub):**
+1. Acquire migration lock + re-validate no lease and `status="running"`.
+2. Reuse `prepareForSnapshot()` before memory/pause/filesystem capture (best-effort `failureMode="log"`, `reapplyAfterCapture=false`).
+3. Capture snapshot via memory/pause/filesystem path, then CAS-update session state.
+
+**Automation completion behavior:**
+- If `automation.complete` is invoked, the run is finalized and session outcome/summary are persisted.
+- The gateway marks the session `paused` immediately (with `pauseReason="automation_completed"`) to prevent headless reconnect/orphan churn from rotating OpenCode session IDs.
+- Runtime is not force-terminated in the completion handler, so users can open the automation session and inspect transcript history.
+- For completed automation sessions, WebSocket init/get_messages do not auto-resume runtime; the guard keys off terminal automation status + non-null `outcome` (not `pauseReason`) so generic sweeps cannot disable transcript protection.
+- Completed automation prompts are blocked for both HTTP and WebSocket paths to prevent accidental runtime wake-ups after completion.
+- Normal expiry/cleanup paths still apply.
 
 **Circuit breaker:** After `MAX_SNAPSHOT_FAILURES` (3) consecutive idle snapshot failures, the migration controller stops attempting further snapshots.
 

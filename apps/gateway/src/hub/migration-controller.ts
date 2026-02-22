@@ -14,6 +14,7 @@ import { runWithMigrationLock } from "../lib/lock";
 import { abortOpenCodeSession } from "../lib/opencode";
 import type { EventProcessor } from "./event-processor";
 import type { SessionRuntime } from "./session-runtime";
+import { prepareForSnapshot } from "./snapshot-scrub";
 import { MigrationConfig, type MigrationState } from "./types";
 
 export interface MigrationControllerOptions {
@@ -77,9 +78,21 @@ export class MigrationController {
 		}
 
 		const startMs = Date.now();
+		const session = this.options.runtime.getContext().session;
 		const hasClients = this.options.getClientCount() > 0;
-		this.logger.debug({ hasClients }, "migration.run_expiry.start");
-		await this.migrateToNewSandbox({ createNewSandbox: hasClients });
+		const createNewSandbox = hasClients;
+		this.logger.debug(
+			{
+				hasClients,
+				createNewSandbox,
+				clientType: session.client_type ?? null,
+				sessionStatus: session.status ?? null,
+				sandboxId: session.sandbox_id ?? null,
+				sandboxExpiresAt: session.sandbox_expires_at ?? null,
+			},
+			"migration.run_expiry.start",
+		);
+		await this.migrateToNewSandbox({ createNewSandbox });
 		this.logger.info({ durationMs: Date.now() - startMs }, "migration.run_expiry.complete");
 	}
 
@@ -136,47 +149,65 @@ export class MigrationController {
 					.sandbox_provider as SandboxProviderType;
 				const provider = getSandboxProvider(providerType);
 
-				// 1. Disconnect SSE BEFORE snapshot/terminate (prevents reconnect cycle)
+				// 1. Disconnect SSE BEFORE scrub/snapshot/terminate to prevent a last-moment write race.
 				this.options.runtime.disconnectSse();
+
+				const finalizeSnapshotPrep = await prepareForSnapshot({
+					provider,
+					sandboxId: freshSandboxId,
+					configurationId: this.options.runtime.getContext().session.configuration_id,
+					logger: this.logger,
+					logContext: "idle_snapshot",
+					failureMode: "log",
+					reapplyAfterCapture: false,
+				});
 
 				// 2. Snapshot: memory (preferred) → pause → filesystem
 				let snapshotId: string | undefined;
+				try {
+					if (provider.supportsMemorySnapshot && provider.memorySnapshot) {
+						try {
+							this.logger.info("Taking memory snapshot for idle shutdown");
+							const memStartMs = Date.now();
+							const result = await provider.memorySnapshot(this.options.sessionId, freshSandboxId);
+							this.logger.debug(
+								{ provider: provider.type, durationMs: Date.now() - memStartMs },
+								"migration.memory_snapshot",
+							);
+							snapshotId = result.snapshotId;
+						} catch (memErr) {
+							this.logger.warn(
+								{ err: memErr },
+								"Memory snapshot failed, falling back to filesystem",
+							);
+						}
+					}
 
-				if (provider.supportsMemorySnapshot && provider.memorySnapshot) {
-					try {
-						this.logger.info("Taking memory snapshot for idle shutdown");
-						const memStartMs = Date.now();
-						const result = await provider.memorySnapshot(this.options.sessionId, freshSandboxId);
+					if (!snapshotId && provider.supportsPause) {
+						this.logger.info("Pausing sandbox for idle shutdown");
+						const pauseStartMs = Date.now();
+						const result = await provider.pause(this.options.sessionId, freshSandboxId);
 						this.logger.debug(
-							{ provider: provider.type, durationMs: Date.now() - memStartMs },
-							"migration.memory_snapshot",
+							{ provider: provider.type, durationMs: Date.now() - pauseStartMs },
+							"migration.pause",
 						);
 						snapshotId = result.snapshotId;
-					} catch (memErr) {
-						this.logger.warn({ err: memErr }, "Memory snapshot failed, falling back to filesystem");
 					}
+					if (!snapshotId) {
+						this.logger.info("Taking filesystem snapshot for idle shutdown");
+						const snapStartMs = Date.now();
+						const result = await provider.snapshot(this.options.sessionId, freshSandboxId);
+						this.logger.debug(
+							{ provider: provider.type, durationMs: Date.now() - snapStartMs },
+							"migration.snapshot",
+						);
+						snapshotId = result.snapshotId;
+					}
+				} finally {
+					await finalizeSnapshotPrep();
 				}
-
-				if (!snapshotId && provider.supportsPause) {
-					this.logger.info("Pausing sandbox for idle shutdown");
-					const pauseStartMs = Date.now();
-					const result = await provider.pause(this.options.sessionId, freshSandboxId);
-					this.logger.debug(
-						{ provider: provider.type, durationMs: Date.now() - pauseStartMs },
-						"migration.pause",
-					);
-					snapshotId = result.snapshotId;
-				}
-
 				if (!snapshotId) {
-					this.logger.info("Taking filesystem snapshot for idle shutdown");
-					const snapStartMs = Date.now();
-					const result = await provider.snapshot(this.options.sessionId, freshSandboxId);
-					this.logger.debug(
-						{ provider: provider.type, durationMs: Date.now() - snapStartMs },
-						"migration.snapshot",
-					);
-					snapshotId = result.snapshotId;
+					throw new Error("Idle snapshot completed without snapshotId");
 				}
 
 				// 3. Terminate (non-pause, non-memory-snapshot providers only)
@@ -326,7 +357,17 @@ export class MigrationController {
 				const providerType = context.session.sandbox_provider as SandboxProviderType;
 				const provider = getSandboxProvider(providerType);
 
-				this.logger.debug({ createNewSandbox, provider: provider.type }, "migration.lock_acquired");
+				this.logger.debug(
+					{
+						createNewSandbox,
+						provider: provider.type,
+						sessionStatus: context.session.status ?? null,
+						clientType: context.session.client_type ?? null,
+						sandboxId,
+						snapshotId: context.session.snapshot_id ?? null,
+					},
+					"migration.lock_acquired",
+				);
 
 				if (createNewSandbox) {
 					this.migrationState = "migrating";
@@ -344,12 +385,27 @@ export class MigrationController {
 				if (createNewSandbox) {
 					// Take snapshot
 					this.logger.info({ createNewSandbox }, "Taking snapshot before migration");
+					const finalizeSnapshotPrep = await prepareForSnapshot({
+						provider,
+						sandboxId,
+						configurationId: context.session.configuration_id,
+						logger: this.logger,
+						logContext: "expiry_active_migration",
+						failureMode: "log",
+						reapplyAfterCapture: true,
+					});
 					const snapshotStartMs = Date.now();
-					const { snapshotId } = await provider.snapshot(this.options.sessionId, sandboxId);
-					this.logger.debug(
-						{ provider: provider.type, durationMs: Date.now() - snapshotStartMs },
-						"migration.snapshot",
-					);
+					let snapshotId: string;
+					try {
+						const result = await provider.snapshot(this.options.sessionId, sandboxId);
+						this.logger.debug(
+							{ provider: provider.type, durationMs: Date.now() - snapshotStartMs },
+							"migration.snapshot",
+						);
+						snapshotId = result.snapshotId;
+					} finally {
+						await finalizeSnapshotPrep();
+					}
 
 					// Update session with new snapshot
 					const dbStartMs = Date.now();
@@ -383,24 +439,37 @@ export class MigrationController {
 					// Cancel reconnect timers to prevent races.
 					this.options.cancelReconnect();
 					this.options.runtime.disconnectSse();
+					const finalizeSnapshotPrep = await prepareForSnapshot({
+						provider,
+						sandboxId,
+						configurationId: context.session.configuration_id,
+						logger: this.logger,
+						logContext: "expiry_idle_snapshot",
+						failureMode: "log",
+						reapplyAfterCapture: false,
+					});
 
 					let snapshotId: string;
-					if (provider.supportsPause) {
-						const pauseStartMs = Date.now();
-						const result = await provider.pause(this.options.sessionId, sandboxId);
-						this.logger.debug(
-							{ provider: provider.type, durationMs: Date.now() - pauseStartMs },
-							"migration.pause",
-						);
-						snapshotId = result.snapshotId;
-					} else {
-						const snapshotStartMs = Date.now();
-						const result = await provider.snapshot(this.options.sessionId, sandboxId);
-						this.logger.debug(
-							{ provider: provider.type, durationMs: Date.now() - snapshotStartMs },
-							"migration.snapshot",
-						);
-						snapshotId = result.snapshotId;
+					try {
+						if (provider.supportsPause) {
+							const pauseStartMs = Date.now();
+							const result = await provider.pause(this.options.sessionId, sandboxId);
+							this.logger.debug(
+								{ provider: provider.type, durationMs: Date.now() - pauseStartMs },
+								"migration.pause",
+							);
+							snapshotId = result.snapshotId;
+						} else {
+							const snapshotStartMs = Date.now();
+							const result = await provider.snapshot(this.options.sessionId, sandboxId);
+							this.logger.debug(
+								{ provider: provider.type, durationMs: Date.now() - snapshotStartMs },
+								"migration.snapshot",
+							);
+							snapshotId = result.snapshotId;
+						}
+					} finally {
+						await finalizeSnapshotPrep();
 					}
 
 					// Terminate (non-pause providers only)

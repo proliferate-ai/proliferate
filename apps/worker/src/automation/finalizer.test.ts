@@ -178,6 +178,7 @@ describe("finalizeOneRun", () => {
 		expect(deps.markRunFailed).not.toHaveBeenCalled();
 		expect(deps.transitionRunStatus).not.toHaveBeenCalled();
 		expect(deps.updateTriggerEvent).not.toHaveBeenCalled();
+		expect(deps.getSessionStatus).toHaveBeenCalledWith("session-1", "org-1");
 	});
 
 	it("leaves run alone when session is running and sandbox liveness is unknown (null)", async () => {

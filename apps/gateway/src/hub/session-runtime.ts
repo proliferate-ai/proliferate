@@ -23,6 +23,7 @@ import { waitForMigrationLockRelease } from "../lib/lock";
 import {
 	type OpenCodeSessionCreateError,
 	createOpenCodeSession,
+	getOpenCodeSession,
 	listOpenCodeSessions,
 } from "../lib/opencode";
 import { deriveSandboxMcpToken } from "../lib/sandbox-mcp-token";
@@ -75,7 +76,6 @@ export class SessionRuntime {
 	private sshHost: string | null = null;
 	private sshPort: number | null = null;
 	private openCodeSessionId: string | null = null;
-	private openCodeSessionUrl: string | null = null;
 	private sandboxExpiresAt: number | null = null;
 	private lifecycleStartTime = 0;
 
@@ -256,8 +256,8 @@ export class SessionRuntime {
 		this.sshPort = null;
 		this.sandboxExpiresAt = null;
 		this.openCodeSessionId = null;
-		this.openCodeSessionUrl = null;
 		this.context.session.sandbox_id = null;
+		this.context.session.sandbox_expires_at = null;
 	}
 
 	// ============================================
@@ -292,10 +292,19 @@ export class SessionRuntime {
 				hasSandbox: Boolean(this.context.session.sandbox_id),
 				hasSnapshot: Boolean(this.context.session.snapshot_id),
 			});
+			this.log(
+				`Session context loaded: status=${this.context.session.status ?? "null"} sandboxId=${this.context.session.sandbox_id ?? "null"} snapshotId=${this.context.session.snapshot_id ?? "null"} clientType=${this.context.session.client_type ?? "null"}`,
+			);
 
-			// Abort auto-reconnect if session was paused (idle snapshot completed while we waited)
-			if (options?.reason === "auto_reconnect" && this.context.session.status === "paused") {
-				this.log("Auto-reconnect aborted: session is paused");
+			// Abort auto-reconnect when session has transitioned to a terminal/non-running state
+			// while we were waiting on locks/loading context.
+			if (
+				options?.reason === "auto_reconnect" &&
+				(this.context.session.status === "paused" || this.context.session.status === "stopped")
+			) {
+				this.log("Auto-reconnect aborted: session is no longer running", {
+					status: this.context.session.status,
+				});
 				return;
 			}
 
@@ -406,12 +415,29 @@ export class SessionRuntime {
 
 			this.openCodeUrl = result.tunnelUrl;
 			this.previewUrl = result.previewUrl;
+			const previousSandboxId = this.context.session.sandbox_id ?? null;
 			const storedExpiry = this.context.session.sandbox_expires_at
 				? Date.parse(this.context.session.sandbox_expires_at)
 				: null;
-			this.sandboxExpiresAt = result.expiresAt || storedExpiry || null;
+			const storedExpiryMs =
+				typeof storedExpiry === "number" && Number.isFinite(storedExpiry) ? storedExpiry : null;
+			const canReuseStoredExpiry = result.recovered && previousSandboxId === result.sandboxId;
+			const resolvedExpiryMs = result.expiresAt ?? (canReuseStoredExpiry ? storedExpiryMs : null);
+			this.sandboxExpiresAt = resolvedExpiryMs;
 			this.sshHost = result.sshHost || null;
 			this.sshPort = result.sshPort || null;
+			this.log("Resolved sandbox expiry", {
+				previousSandboxId,
+				sandboxId: result.sandboxId,
+				recovered: result.recovered,
+				providerExpiresAt: result.expiresAt ? new Date(result.expiresAt).toISOString() : null,
+				storedExpiresAt: storedExpiryMs ? new Date(storedExpiryMs).toISOString() : null,
+				canReuseStoredExpiry,
+				resolvedExpiresAt: resolvedExpiryMs ? new Date(resolvedExpiryMs).toISOString() : null,
+			});
+			this.log(
+				`Resolved sandbox expiry: previous=${previousSandboxId ?? "null"} current=${result.sandboxId} recovered=${result.recovered} provider=${result.expiresAt ? new Date(result.expiresAt).toISOString() : "null"} stored=${storedExpiryMs ? new Date(storedExpiryMs).toISOString() : "null"} resolved=${resolvedExpiryMs ? new Date(resolvedExpiryMs).toISOString() : "null"}`,
+			);
 
 			this.log(result.recovered ? "Sandbox recovered" : "Sandbox created", {
 				sandboxId: result.sandboxId,
@@ -450,7 +476,7 @@ export class SessionRuntime {
 				pauseReason: null,
 				openCodeTunnelUrl: result.tunnelUrl,
 				previewTunnelUrl: result.previewUrl,
-				...(result.expiresAt && { sandboxExpiresAt: result.expiresAt }),
+				sandboxExpiresAt: resolvedExpiryMs,
 				...(provider.supportsAutoPause &&
 					!this.context.session.snapshot_id && { snapshotId: result.sandboxId }),
 			});
@@ -460,9 +486,9 @@ export class SessionRuntime {
 
 			// Update in-memory context
 			this.context.session.sandbox_id = result.sandboxId;
-			if (result.expiresAt) {
-				this.context.session.sandbox_expires_at = new Date(result.expiresAt).toISOString();
-			}
+			this.context.session.sandbox_expires_at = resolvedExpiryMs
+				? new Date(resolvedExpiryMs).toISOString()
+				: null;
 			if (provider.supportsAutoPause && !this.context.session.snapshot_id) {
 				this.context.session.snapshot_id = result.sandboxId;
 			}
@@ -524,36 +550,103 @@ export class SessionRuntime {
 			throw new Error("Agent URL missing");
 		}
 
-		if (this.openCodeSessionId && this.openCodeSessionUrl === this.openCodeUrl) {
-			return;
-		}
+		const sessionMeta = {
+			sessionStatus: this.context.session.status ?? null,
+			pauseReason: this.context.session.pause_reason ?? null,
+			clientType: this.context.session.client_type ?? null,
+			sandboxId: this.context.session.sandbox_id ?? null,
+		};
+		let openCodeSessionCreateReason: "missing_stored_id" | "stored_id_not_found" =
+			"missing_stored_id";
 
-		// Check if we have a stored OpenCode session ID
-		const storedId = this.context.session.coding_agent_session_id;
-
+		// Prefer a direct lookup for the stored OpenCode session ID.
+		// The list endpoint can lag and cause false negatives, which would churn IDs.
+		const storedId = this.openCodeSessionId ?? this.context.session.coding_agent_session_id;
 		if (storedId) {
-			const listStartMs = Date.now();
 			this.log("Verifying stored OpenCode session...", { storedId });
-			const sessions = await listOpenCodeSessions(this.openCodeUrl);
-			this.logLatency("runtime.opencode_session.list", {
-				durationMs: Date.now() - listStartMs,
-				count: sessions.length,
-				hadStoredId: true,
-			});
-			const exists = sessions.some((s) => s.id === storedId);
+			const getStartMs = Date.now();
+			try {
+				const exists = await getOpenCodeSession(this.openCodeUrl, storedId);
+				this.logLatency("runtime.opencode_session.get", {
+					durationMs: Date.now() - getStartMs,
+					storedId,
+					exists,
+				});
 
-			if (exists) {
-				this.log("Stored OpenCode session is valid", { storedId });
+				if (exists) {
+					this.log("Stored OpenCode session is valid", { storedId, verification: "direct_get" });
+					this.openCodeSessionId = storedId;
+					return;
+				}
+
+				this.log("Stored OpenCode session not found via direct lookup", {
+					storedId,
+				});
+				openCodeSessionCreateReason = "stored_id_not_found";
+			} catch (error) {
+				this.logLatency("runtime.opencode_session.get", {
+					durationMs: Date.now() - getStartMs,
+					storedId,
+					exists: false,
+					error: error instanceof Error ? error.message : String(error),
+				});
+
+				// Keep using the stored ID on transient lookup failures to avoid
+				// rotating sessions and losing in-progress message history.
+				this.logger.warn(
+					{
+						storedId,
+						error: error instanceof Error ? error.message : String(error),
+					},
+					"OpenCode direct session lookup failed; reusing stored session id",
+				);
 				this.openCodeSessionId = storedId;
-				this.openCodeSessionUrl = this.openCodeUrl;
 				return;
 			}
-			this.log("Stored OpenCode session not found, creating new one");
+		}
+
+		// No valid stored session ID: list and adopt newest before creating a new one.
+		const listStartMs = Date.now();
+		const listedSessions = await listOpenCodeSessions(this.openCodeUrl);
+		this.logLatency("runtime.opencode_session.list", {
+			durationMs: Date.now() - listStartMs,
+			count: listedSessions.length,
+			hadStoredId: Boolean(storedId),
+		});
+		this.log("OpenCode sessions listed", {
+			count: listedSessions.length,
+			availableSessionIds: listedSessions.map((session) => session.id),
+		});
+
+		// Reuse the newest existing OpenCode session before creating a new one.
+		if (listedSessions.length > 0) {
+			const newest = listedSessions.reduce((latest, current) => {
+				const latestUpdated = latest.time?.updated ?? latest.time?.created ?? 0;
+				const currentUpdated = current.time?.updated ?? current.time?.created ?? 0;
+				return currentUpdated >= latestUpdated ? current : latest;
+			});
+			this.openCodeSessionId = newest.id;
+			this.context.session.coding_agent_session_id = newest.id;
+			await sessions.update(this.sessionId, { codingAgentSessionId: newest.id });
+			this.log("Adopted existing OpenCode session", {
+				sessionId: newest.id,
+				updatedAt: newest.time?.updated ?? newest.time?.created ?? null,
+				...sessionMeta,
+			});
+			return;
 		}
 
 		// Create new OpenCode session
 		const createStartMs = Date.now();
-		this.log("Creating new OpenCode session...");
+		this.logger.warn(
+			{
+				storedId,
+				openCodeSessionCreateReason,
+				listedSessionCount: listedSessions.length,
+				...sessionMeta,
+			},
+			"Creating new OpenCode session; this can rotate transcript identity",
+		);
 		const sessionId = await this.createOpenCodeSessionWithRetry();
 		this.log("OpenCode session created", { sessionId });
 		this.logLatency("runtime.opencode_session.create", {
@@ -561,7 +654,6 @@ export class SessionRuntime {
 		});
 
 		this.openCodeSessionId = sessionId;
-		this.openCodeSessionUrl = this.openCodeUrl;
 		this.context.session.coding_agent_session_id = sessionId;
 
 		// Store the new ID
@@ -656,9 +748,11 @@ export class SessionRuntime {
 	private handleSseDisconnect(reason: string): void {
 		this.log("SSE disconnected", { reason });
 		this.logLatency("runtime.sse.disconnect", { reason });
-		this.openCodeUrl = null;
-		this.openCodeSessionId = null;
-		this.openCodeSessionUrl = null;
+		this.log("SSE disconnected; preserving OpenCode session identity for reconnect", {
+			reason,
+			openCodeUrl: this.openCodeUrl,
+			openCodeSessionId: this.openCodeSessionId,
+		});
 		this.onDisconnect(reason);
 	}
 }

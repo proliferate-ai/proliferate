@@ -108,6 +108,10 @@ export class EventProcessor {
 					? info.sessionId
 					: null;
 		if (openCodeSessionId && sessionId && sessionId !== openCodeSessionId) {
+			this.logger.debug(
+				{ messageId, role, sessionId, openCodeSessionId },
+				"Dropping message update from different OpenCode session",
+			);
 			return;
 		}
 
@@ -122,6 +126,17 @@ export class EventProcessor {
 		if (role !== "assistant") {
 			return;
 		}
+
+		this.logger.debug(
+			{
+				messageId,
+				role,
+				sessionId,
+				hasError: Boolean(info.error),
+				completedAt: info.time?.completed ?? null,
+			},
+			"Processing assistant message update",
+		);
 
 		// If OpenCode creates an assistant message but fails before emitting any parts, we still want
 		// clients to see the assistant "start" (and any error attached to the message).
@@ -143,6 +158,10 @@ export class EventProcessor {
 
 		const errorMessage = getOpenCodeErrorMessage(info.error);
 		if (errorMessage) {
+			this.logger.debug(
+				{ messageId, errorMessage, openCodeSessionId: sessionId ?? null },
+				"Assistant message update includes error",
+			);
 			this.callbacks.broadcast({ type: "error", payload: { message: errorMessage } });
 		}
 
@@ -206,13 +225,46 @@ export class EventProcessor {
 
 		// Filter to current session
 		if (openCodeSessionId && part.sessionID !== openCodeSessionId) {
+			this.logger.debug(
+				{
+					partId: part.id,
+					partType: part.type,
+					partSessionId: part.sessionID,
+					openCodeSessionId,
+				},
+				"Dropping part update from different OpenCode session",
+			);
 			return;
 		}
 
 		if (part.type === "text") {
 			this.handleTextPart(part, delta);
-		} else if (part.type === "tool" && part.callID && part.tool) {
+		} else if (part.callID && part.tool) {
+			this.logger.debug(
+				{
+					partId: part.id,
+					messageId: part.messageID,
+					sessionId: part.sessionID,
+					toolCallId: part.callID,
+					toolName: part.tool,
+					toolStatus: part.state?.status ?? null,
+					hasInput: Boolean(part.state?.input),
+					hasOutput: Boolean(part.state?.output),
+					hasError: Boolean(part.state?.error),
+				},
+				"Processing tool part update",
+			);
 			this.handleToolPart(part, part.callID, part.tool);
+		} else {
+			this.logger.debug(
+				{
+					partId: part.id,
+					partType: part.type,
+					hasCallId: Boolean(part.callID),
+					hasTool: Boolean(part.tool),
+				},
+				"Ignoring non-text/non-tool part update",
+			);
 		}
 	}
 
@@ -307,6 +359,16 @@ export class EventProcessor {
 				},
 			};
 			this.callbacks.broadcast(payload);
+			this.logger.debug(
+				{
+					partId: part.id,
+					toolCallId,
+					toolName,
+					messageId: this.currentAssistantMessageId,
+					hasArgs,
+				},
+				"Emitted tool_start",
+			);
 			this.callbacks.onToolStart?.(toolCallId);
 			this.toolStates.set(toolCallId, {
 				startEmitted: true,
@@ -327,6 +389,15 @@ export class EventProcessor {
 				},
 			};
 			this.callbacks.broadcast(payload);
+			this.logger.debug(
+				{
+					partId: part.id,
+					toolCallId,
+					toolName,
+					messageId: this.currentAssistantMessageId,
+				},
+				"Emitted tool_start (args update)",
+			);
 		}
 
 		// Handle metadata (e.g., task summaries)
@@ -345,6 +416,15 @@ export class EventProcessor {
 					},
 				};
 				this.callbacks.broadcast(payload);
+				this.logger.debug(
+					{
+						partId: part.id,
+						toolCallId,
+						toolName,
+						summaryLength: metadata.summary.length,
+					},
+					"Emitted tool_metadata",
+				);
 				this.callbacks.onToolMetadata?.(part.state?.title);
 			}
 		}
@@ -365,6 +445,15 @@ export class EventProcessor {
 					},
 				};
 				this.callbacks.broadcast(payload);
+				this.logger.debug(
+					{
+						partId: part.id,
+						toolCallId,
+						toolName,
+						status,
+					},
+					"Emitted tool_end",
+				);
 				const state = this.toolStates.get(toolCallId);
 				if (state) {
 					state.status = status === "completed" ? "completed" : "error";
@@ -403,6 +492,14 @@ export class EventProcessor {
 			type: "message_complete",
 			payload: { messageId: this.currentAssistantMessageId },
 		});
+		this.logger.debug(
+			{
+				messageId: this.currentAssistantMessageId,
+				hadTools,
+				toolStateCount: this.toolStates.size,
+			},
+			"Emitted message_complete",
+		);
 
 		if (hadTools) {
 			// Agentic loop: clear state so the next assistant message can be created

@@ -84,8 +84,12 @@ export async function runWithMigrationLock<T>(
 ): Promise<T | null> {
 	const redlock = getRedlock();
 	const lockKey = getMigrationLockKey(sessionId);
+	let lock: { release: () => Promise<void> } | null = null;
+
 	try {
-		return await redlock.using([lockKey], ttlMs, { retryCount: 0 }, async () => fn());
+		lock = await redlock.acquire([lockKey], ttlMs, {
+			retryCount: 0,
+		});
 	} catch (err) {
 		const isLockContention =
 			err instanceof Error && (err.message.includes("quorum") || err.message.includes("attempts"));
@@ -95,5 +99,15 @@ export async function runWithMigrationLock<T>(
 				.warn({ err, lockKey }, "Lock acquire failed (not contention)");
 		}
 		return null;
+	}
+
+	try {
+		return await fn();
+	} finally {
+		try {
+			await lock?.release();
+		} catch (err) {
+			getServicesLogger().child({ module: "lock" }).warn({ err, lockKey }, "Lock release failed");
+		}
 	}
 }

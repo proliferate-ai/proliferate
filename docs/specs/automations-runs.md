@@ -175,6 +175,7 @@ Sources:
 - Enrichment is deterministic extraction from trigger context; no external APIs and no model call.
 - `parsedContext.title` is mandatory; absence is a terminal enrichment failure.
 - Enrichment completion persists payload, transitions run to `ready`, records events, and enqueues `write_artifacts` + `enqueue_execute` in one transaction.
+- Enrichment completion clears the claim lease (`leaseOwner`, `leaseExpiresAt`) when transitioning to `ready` so execute workers can claim immediately.
 
 **Rules**
 - Enrichment worker may only claim `queued|enriching` runs.
@@ -246,6 +247,7 @@ Sources:
 - Missing session, terminated-without-completion, and provider-dead sandbox are terminal failure conditions.
 - Deadline exceedance transitions run to `timed_out` and enqueues terminal notification.
 - Trigger event is marked failed when finalizer determines terminal failure/timed-out path.
+- Finalizer gateway status checks include `organizationId` to satisfy service-to-service auth requirements.
 
 **Rules**
 - If gateway status lookup fails, finalizer skips mutation and retries on next tick.

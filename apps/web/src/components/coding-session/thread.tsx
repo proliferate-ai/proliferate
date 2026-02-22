@@ -251,6 +251,7 @@ interface ThreadProps {
 	sessionId?: string;
 	token?: string | null;
 	pendingApprovals?: ActionApprovalRequestMessage["payload"][];
+	runId?: string;
 }
 
 export const Thread: FC<ThreadProps> = ({
@@ -262,6 +263,7 @@ export const Thread: FC<ThreadProps> = ({
 	sessionId,
 	token,
 	pendingApprovals,
+	runId,
 }) => {
 	return (
 		<ThreadPrimitive.Root className="flex h-full flex-col">
@@ -291,6 +293,7 @@ export const Thread: FC<ThreadProps> = ({
 					sessionId={sessionId}
 					token={token ?? null}
 					pendingApprovals={pendingApprovals ?? []}
+					runId={runId}
 				/>
 			)}
 

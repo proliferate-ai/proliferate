@@ -18,6 +18,7 @@ import { type ChangeEvent, type ClipboardEvent, useEffect, useMemo, useRef, useS
 
 interface SecretFilesEditorProps {
 	configurationId: string;
+	sessionId?: string;
 	initialCreateOpen?: boolean;
 	callToActionLabel?: string;
 	workspaceOptions?: WorkspaceOption[];
@@ -148,6 +149,7 @@ function buildDestinationTree(workspacePath: string, relativePath: string): stri
 
 export function SecretFilesEditor({
 	configurationId,
+	sessionId,
 	initialCreateOpen = false,
 	callToActionLabel = "Add File",
 	workspaceOptions,
@@ -234,6 +236,7 @@ export function SecretFilesEditor({
 			configurationId,
 			filePath: resolvedFilePath,
 			content: serializedContent,
+			...(sessionId ? { sessionId } : {}),
 		});
 
 		clearComposer();
@@ -246,6 +249,7 @@ export function SecretFilesEditor({
 			configurationId,
 			filePath,
 			content: editContent,
+			...(sessionId ? { sessionId } : {}),
 		});
 
 		setEditingId(null);

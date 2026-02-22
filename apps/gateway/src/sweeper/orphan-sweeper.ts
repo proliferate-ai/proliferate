@@ -19,6 +19,7 @@ import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { cancelSessionExpiry } from "../expiry/expiry-queue";
 import type { HubManager } from "../hub";
+import { prepareForSnapshot } from "../hub/snapshot-scrub";
 import type { GatewayEnv } from "../lib/env";
 import { runWithMigrationLock } from "../lib/lock";
 import { hasRuntimeLease } from "../lib/session-leases";
@@ -118,31 +119,60 @@ async function cleanupOrphanedSession(
 
 		const providerType = session.sandboxProvider as SandboxProviderType;
 		const provider = getSandboxProvider(providerType);
+		const finalizeSnapshotPrep = await prepareForSnapshot({
+			provider,
+			sandboxId,
+			configurationId: session.configurationId,
+			logger,
+			logContext: "orphan_sweep",
+			failureMode: "log",
+			reapplyAfterCapture: false,
+		});
 
 		// Snapshot: memory (preferred) → pause → filesystem
-		let snapshotId: string;
-		if (provider.supportsMemorySnapshot && provider.memorySnapshot) {
-			const result = await provider.memorySnapshot(sessionId, sandboxId);
-			snapshotId = result.snapshotId;
-		} else if (provider.supportsPause) {
-			const result = await provider.pause(sessionId, sandboxId);
-			snapshotId = result.snapshotId;
-		} else {
-			const result = await provider.snapshot(sessionId, sandboxId);
-			snapshotId = result.snapshotId;
-
+		let snapshotId: string | undefined;
+		let keepSandbox = false;
+		try {
 			try {
-				await provider.terminate(sessionId, sandboxId);
-			} catch (err) {
-				logger.error({ err, sessionId }, "orphan_sweep.terminate_failed");
+				if (provider.supportsMemorySnapshot && provider.memorySnapshot) {
+					const result = await provider.memorySnapshot(sessionId, sandboxId);
+					snapshotId = result.snapshotId;
+					keepSandbox = true;
+				} else if (provider.supportsPause) {
+					const result = await provider.pause(sessionId, sandboxId);
+					snapshotId = result.snapshotId;
+					keepSandbox = true;
+				} else {
+					const result = await provider.snapshot(sessionId, sandboxId);
+					snapshotId = result.snapshotId;
+
+					try {
+						await provider.terminate(sessionId, sandboxId);
+					} catch (err) {
+						logger.error({ err, sessionId }, "orphan_sweep.terminate_failed");
+					}
+				}
+			} finally {
+				await finalizeSnapshotPrep();
 			}
+		} catch (err) {
+			if (!isSandboxAlreadyFinishedError(err)) {
+				throw err;
+			}
+			logger.info(
+				{
+					sessionId,
+					sandboxId,
+					error: err instanceof Error ? err.message : String(err),
+				},
+				"orphan_sweep.sandbox_already_finished",
+			);
+			keepSandbox = false;
 		}
 
 		// CAS DB update (keep sandbox alive for memory snapshot / pause providers)
-		const isMemorySnapshot = snapshotId.startsWith("mem:");
-		const keepSandbox = isMemorySnapshot || provider.supportsPause;
 		const rowsAffected = await sessions.updateWhereSandboxIdMatches(sessionId, sandboxId, {
-			snapshotId,
+			...(snapshotId ? { snapshotId } : {}),
 			sandboxId: keepSandbox ? sandboxId : null,
 			status: "paused",
 			pausedAt: new Date().toISOString(),
@@ -175,6 +205,16 @@ async function cleanupOrphanedSession(
 	if (ran === null) {
 		logger.info({ sessionId }, "orphan_sweep.lock_held");
 	}
+}
+
+function isSandboxAlreadyFinishedError(err: unknown): boolean {
+	if (!(err instanceof Error)) {
+		return false;
+	}
+	return (
+		err.message.includes("FAILED_PRECONDITION") &&
+		err.message.includes("Sandbox has already finished")
+	);
 }
 
 /**

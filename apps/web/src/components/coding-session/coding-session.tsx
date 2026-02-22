@@ -323,6 +323,7 @@ export function CodingSession({
 				sessionId={sessionId}
 				token={wsToken}
 				pendingApprovals={pendingApprovals}
+				runId={runId}
 			/>
 		</SessionContext.Provider>
 	);

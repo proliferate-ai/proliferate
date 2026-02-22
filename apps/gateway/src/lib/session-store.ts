@@ -45,10 +45,14 @@ export interface SessionRecord {
 	agent_config?: { modelId?: string; tools?: string[]; reasoningEffort?: string } | null;
 	system_prompt?: string | null;
 	status?: string | null;
+	pause_reason?: string | null;
 	client_type?: string | null;
 	client_metadata?: unknown | null;
 	initial_prompt?: string | null;
 	initial_prompt_sent_at?: string | null;
+	outcome?: string | null;
+	summary?: string | null;
+	latest_task?: string | null;
 }
 
 export interface SessionContext {
@@ -130,10 +134,14 @@ export async function loadSessionContext(
 		agent_config: sessionRow.agentConfig as SessionRecord["agent_config"],
 		system_prompt: sessionRow.systemPrompt,
 		status: sessionRow.status,
+		pause_reason: sessionRow.pauseReason,
 		client_type: sessionRow.clientType,
 		client_metadata: sessionRow.clientMetadata,
 		initial_prompt: sessionRow.initialPrompt ?? null,
 		initial_prompt_sent_at: sessionRow.initialPromptSentAt?.toISOString() ?? null,
+		outcome: sessionRow.outcome ?? null,
+		summary: sessionRow.summary ?? null,
+		latest_task: sessionRow.latestTask ?? null,
 	};
 
 	log.info(

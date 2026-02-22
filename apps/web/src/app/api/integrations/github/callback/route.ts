@@ -1,7 +1,7 @@
 import { requireAuth } from "@/lib/auth-helpers";
 import { listInstallationRepos, verifyInstallation } from "@/lib/github-app";
 import { logger } from "@/lib/logger";
-import { verifySignedOAuthState } from "@/lib/oauth-state";
+import { sanitizeOAuthReturnUrl, verifySignedOAuthState } from "@/lib/oauth-state";
 import { integrations, orgs, repos } from "@proliferate/services";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -25,31 +25,6 @@ function getBaseUrl(request: NextRequest): string {
 		return `${forwardedProto}://${forwardedHost}`;
 	}
 	return request.nextUrl.origin;
-}
-
-function sanitizeReturnUrl(returnUrl: string | undefined): string {
-	if (!returnUrl) return "/onboarding";
-
-	const trimmed = returnUrl.trim();
-	if (!trimmed.startsWith("/")) return "/onboarding";
-	if (trimmed.startsWith("//")) return "/onboarding";
-
-	const path = trimmed.split("?")[0] || "";
-	const allowedPrefixes = [
-		"/onboarding",
-		"/device-github",
-		"/dashboard",
-		"/settings",
-		"/preview",
-		"/workspace",
-		"/repos",
-		"/invite",
-	];
-	const isAllowed = allowedPrefixes.some(
-		(prefix) => path === prefix || path.startsWith(`${prefix}/`),
-	);
-
-	return isAllowed ? trimmed : "/onboarding";
 }
 
 function isValidGitHubOAuthState(state: unknown): state is GitHubOAuthState {
@@ -137,7 +112,7 @@ export async function GET(request: NextRequest) {
 	}
 
 	const orgId = stateData.orgId;
-	const returnUrl = sanitizeReturnUrl(stateData.returnUrl);
+	const returnUrl = sanitizeOAuthReturnUrl(stateData.returnUrl, "/onboarding") || "/onboarding";
 	log.info(
 		{ orgId, activeOrgId: authResult.session.session.activeOrganizationId },
 		"Using orgId from verified OAuth state",

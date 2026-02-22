@@ -1,7 +1,7 @@
 import { requireAuth } from "@/lib/auth-helpers";
 import { encrypt, getEncryptionKey } from "@/lib/crypto";
 import { logger } from "@/lib/logger";
-import { verifySignedOAuthState } from "@/lib/oauth-state";
+import { sanitizeOAuthReturnUrl, verifySignedOAuthState } from "@/lib/oauth-state";
 import { exchangeCodeForToken } from "@/lib/slack";
 import { env } from "@proliferate/environment/server";
 import { integrations, orgs } from "@proliferate/services";
@@ -33,19 +33,6 @@ function isValidSlackOAuthState(state: unknown): state is SlackOAuthState {
 		stateData.nonce.length > 0 &&
 		typeof stateData.timestamp === "number"
 	);
-}
-
-function getSafeReturnUrl(returnUrl: unknown): string | undefined {
-	if (typeof returnUrl !== "string") {
-		return undefined;
-	}
-
-	const trimmed = returnUrl.trim();
-	if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
-		return undefined;
-	}
-
-	return trimmed;
 }
 
 export async function GET(request: Request) {
@@ -81,7 +68,7 @@ export async function GET(request: Request) {
 	const stateData = verifiedState.payload;
 
 	// Use returnUrl from state if provided, otherwise default to settings
-	const returnUrl = getSafeReturnUrl(stateData.returnUrl);
+	const returnUrl = sanitizeOAuthReturnUrl(stateData.returnUrl);
 	const redirectBase = returnUrl ? `${appUrl}${returnUrl}` : settingsUrl;
 
 	// Check state timestamp (5 minute expiry)

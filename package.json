@@ -13,6 +13,7 @@
 		"dev:web": "pnpm --filter @proliferate/web dev",
 		"dev:web:webpack": "pnpm --filter @proliferate/web dev:webpack",
 		"dev:web:polling": "pnpm --filter @proliferate/web dev:polling",
+		"dev:logs": "bash ./scripts/dev-with-logs.sh",
 		"dev:cli": "pnpm --filter @proliferate/cli dev",
 		"dev:gateway": "pnpm --filter @proliferate/gateway dev",
 		"dev:worker": "pnpm --filter @proliferate/worker dev",

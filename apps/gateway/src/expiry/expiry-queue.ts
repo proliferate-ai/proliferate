@@ -102,6 +102,18 @@ export function startSessionExpiryWorker(env: GatewayEnv, hubManager: HubManager
 					logger.info({ sessionId, jobId: job.id }, "expiry.job.skip (hub already evicted)");
 					return;
 				}
+				const context = hub.getContext();
+				logger.debug(
+					{
+						sessionId,
+						jobId: job.id,
+						status: context.session.status ?? null,
+						clientType: context.session.client_type ?? null,
+						sandboxId: context.session.sandbox_id ?? null,
+						sandboxExpiresAt: context.session.sandbox_expires_at ?? null,
+					},
+					"expiry.job.context",
+				);
 
 				await hub.runExpiryMigration();
 				logger.info(
