@@ -7,7 +7,7 @@
 
 import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
-import { billing, notifications, orgs, sessions } from "@proliferate/services";
+import { billing, notifications, orgs, prepareForSnapshot, sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import type { BillingPlan } from "@proliferate/shared/billing";
 import { revokeVirtualKey } from "@proliferate/shared/llm-proxy";
@@ -65,11 +65,22 @@ export async function pauseSessionHandler(
 
 	if (capacity.allowed) {
 		// Take snapshot before terminating
+		const finalizeSnapshotPrep = await prepareForSnapshot({
+			provider,
+			sandboxId: session.sandboxId,
+			configurationId: session.configurationId ?? null,
+			logger: reqLog,
+			logContext: "web_pause_snapshot",
+			failureMode: "log",
+			reapplyAfterCapture: false,
+		});
 		try {
 			const snapshotResult = await provider.snapshot(sessionId, session.sandboxId);
 			snapshotId = snapshotResult.snapshotId;
 		} catch (err) {
 			reqLog.error({ err }, "Snapshot error, pausing without snapshot");
+		} finally {
+			await finalizeSnapshotPrep();
 		}
 	} else {
 		reqLog.warn("Snapshot quota exceeded, pausing without snapshot");

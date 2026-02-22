@@ -7,7 +7,7 @@
 
 import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
-import { billing, orgs, sessions } from "@proliferate/services";
+import { billing, orgs, prepareForSnapshot, sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
 import type { BillingPlan } from "@proliferate/shared/billing";
 import { getSandboxProvider } from "@proliferate/shared/providers";
@@ -62,16 +62,29 @@ export async function snapshotSessionHandler(
 
 		const providerType = session.sandboxProvider as SandboxProviderType | undefined;
 		const provider = getSandboxProvider(providerType);
-		const result = await provider.snapshot(sessionId, session.sandboxId);
-		const providerMs = Date.now() - startTime;
-		reqLog.info({ providerMs, providerType: provider.type }, "Provider snapshot complete");
+		const finalizeSnapshotPrep = await prepareForSnapshot({
+			provider,
+			sandboxId: session.sandboxId,
+			configurationId: session.configurationId ?? null,
+			logger: reqLog,
+			logContext: "web_manual_snapshot",
+			failureMode: "throw",
+			reapplyAfterCapture: true,
+		});
+		try {
+			const result = await provider.snapshot(sessionId, session.sandboxId);
+			const providerMs = Date.now() - startTime;
+			reqLog.info({ providerMs, providerType: provider.type }, "Provider snapshot complete");
 
-		// Update session with snapshot_id
-		await sessions.updateSession(sessionId, { snapshotId: result.snapshotId });
-		const totalMs = Date.now() - startTime;
-		reqLog.info({ totalMs, providerMs, dbMs: totalMs - providerMs }, "Snapshot complete");
+			// Update session with snapshot_id
+			await sessions.updateSession(sessionId, { snapshotId: result.snapshotId });
+			const totalMs = Date.now() - startTime;
+			reqLog.info({ totalMs, providerMs, dbMs: totalMs - providerMs }, "Snapshot complete");
 
-		return { snapshot_id: result.snapshotId };
+			return { snapshot_id: result.snapshotId };
+		} finally {
+			await finalizeSnapshotPrep();
+		}
 	} catch (err) {
 		reqLog.error({ err }, "Snapshot error");
 		throw new ORPCError("INTERNAL_SERVER_ERROR", {
