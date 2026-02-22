@@ -6,7 +6,7 @@
 
 import { GATEWAY_URL } from "@/lib/gateway";
 import { ORPCError } from "@orpc/server";
-import { automations, runs, schedules, templates } from "@proliferate/services";
+import { automations, configurations, runs, schedules, templates } from "@proliferate/services";
 import {
 	AutomationConnectionSchema,
 	AutomationEventDetailSchema,
@@ -64,11 +64,18 @@ export const automationsRouter = {
 		.output(z.object({ automation: AutomationListItemSchema }))
 		.handler(async ({ input, context }) => {
 			try {
+				let defaultConfigurationId = input.defaultConfigurationId;
+				if (!defaultConfigurationId) {
+					const configs = await configurations.listConfigurations(context.orgId);
+					const ready = configs.find((c) => c.status === "ready" || c.status === "default");
+					if (ready) defaultConfigurationId = ready.id;
+				}
+
 				const automation = await automations.createAutomation(context.orgId, context.user.id, {
 					name: input.name,
 					description: input.description,
 					agentInstructions: input.agentInstructions,
-					defaultConfigurationId: input.defaultConfigurationId,
+					defaultConfigurationId,
 					allowAgenticRepoSelection: input.allowAgenticRepoSelection,
 				});
 				return { automation };

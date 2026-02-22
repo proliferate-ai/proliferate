@@ -54,21 +54,6 @@ export function ConfigurationSelector({
 					<CommandInput placeholder="Search configurations..." />
 					<CommandList>
 						<CommandEmpty>No configurations found.</CommandEmpty>
-						<CommandItem
-							value="no-configuration"
-							onSelect={() => {
-								onChange("none");
-								setOpen(false);
-							}}
-							className="flex items-center gap-2"
-						>
-							{!selectedId || selectedId === "none" ? (
-								<Check className="h-4 w-4 text-primary shrink-0" />
-							) : (
-								<span className="h-4 w-4 shrink-0" />
-							)}
-							<span>No configuration</span>
-						</CommandItem>
 						{configurations.map((config) => {
 							const isSelected = config.id === selectedId;
 							return (

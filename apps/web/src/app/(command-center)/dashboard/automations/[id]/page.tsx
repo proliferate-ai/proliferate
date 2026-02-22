@@ -335,9 +335,7 @@ export default function AutomationDetailPage({
 
 	const handleConfigurationChange = useCallback(
 		(configurationId: string) => {
-			handleUpdate({
-				defaultConfigurationId: configurationId === "none" ? null : configurationId,
-			});
+			handleUpdate({ defaultConfigurationId: configurationId });
 		},
 		[handleUpdate],
 	);
