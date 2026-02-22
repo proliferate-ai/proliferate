@@ -8,6 +8,7 @@ import type { OrgBillingSettings, OrgOverageState } from "@proliferate/shared/bi
 import {
 	type InferSelectModel,
 	and,
+	asc,
 	eq,
 	getDb,
 	gt,
@@ -248,6 +249,7 @@ export async function getUserOrgIds(userId: string): Promise<string[]> {
 	const db = getDb();
 	const results = await db.query.member.findMany({
 		where: eq(member.userId, userId),
+		orderBy: [asc(member.createdAt), asc(member.organizationId)],
 		columns: {
 			organizationId: true,
 		},

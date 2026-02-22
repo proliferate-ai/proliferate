@@ -188,14 +188,16 @@ Corrects drift between local shadow balance and Autumn balances.
 
 **Invariants**
 - Outbox only processes events in retryable states with due retry time.
-- Successful Autumn post marks event `posted` with provider response payload.
+- Outbox resolves Autumn customer identity from `organization.autumnCustomerId`; missing customer ID fails closed.
 - Autumn denial attempts overage top-up before forcing `exhausted` enforcement.
+- Event status transitions to `posted` only after denial/top-up/enforcement branches complete.
 - Retry metadata (`retryCount`, `nextRetryAt`, `lastError`) is updated on failure.
 - Permanent failures emit alerting logs.
 
 **Rules**
 - `skipped` events are never part of outbox processing.
 - Outbox idempotency must rely on the original event idempotency key.
+- If credits-exhausted enforcement fails to pause all targeted sessions, outbox processing throws so the event remains retryable.
 
 ### 6.7 Org Enforcement (Pause/Snapshot) — `Implemented`
 
@@ -334,9 +336,9 @@ Corrects drift between local shadow balance and Autumn balances.
 ## 9. Known Limitations & Tech Debt
 
 ### Behavioral / Financial Risk
-- [ ] **Enforcement retry gap (P0)** — `enforceCreditsExhausted` logs per-session pause failures but does not queue targeted retries; sessions can remain running until another enforcement cycle catches them (`packages/services/src/billing/org-pause.ts`).
+- [x] **Enforcement retry path from outbox denial flow (P0)** — denied events now throw when credits-exhausted enforcement leaves failed targets, so outbox retries re-drive enforcement (`packages/services/src/billing/outbox.ts`, `packages/services/src/billing/org-pause.ts`).
 - [ ] **LLM cursor update is not atomic with deduction (P1)** — cursor advance happens after `bulkDeductShadowBalance`, so worker crashes can replay logs (idempotent but noisy) (`apps/worker/src/jobs/billing/llm-sync-org.job.ts`).
-- [ ] **Outbox uses org ID as Autumn customer ID (P1)** — `autumnDeductCredits(event.organizationId, ...)` assumes customer ID equals org ID; this is brittle if Autumn customer IDs diverge (`packages/services/src/billing/outbox.ts`).
+- [x] **Outbox customer ID source (P1)** — outbox now posts against persisted `organization.autumnCustomerId` and fails closed when missing (`packages/services/src/billing/outbox.ts`).
 
 ### Reliability / Operational Risk
 - [ ] **Metered-through crash window (P2)** — session `meteredThroughAt` update is separate from deduction transaction; idempotency prevents overcharge but can cause replay noise (`packages/services/src/billing/metering.ts`).

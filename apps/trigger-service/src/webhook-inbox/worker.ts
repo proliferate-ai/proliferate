@@ -59,22 +59,47 @@ async function processInboxRow(row: webhookInbox.WebhookInboxRow): Promise<void>
 	const payload = row.payload as Record<string, unknown>;
 	const headers = (row.headers ?? {}) as Record<string, string | string[] | undefined>;
 
-	// For Nango-forwarded webhooks, resolve via connectionId
-	const connectionId = extractConnectionId(payload);
-	if (!connectionId) {
-		throw new Error("Direct webhook processing not yet implemented (no connectionId)");
-	}
+	let resolvedIntegrationId: string | null = null;
 
-	const integration = await integrations.findByConnectionIdAndProvider(connectionId, "nango");
-	if (!integration) {
-		logger.debug({ inboxId: row.id, connectionId }, "Integration not found for connection");
+	// For Nango-forwarded webhooks, resolve via connectionId first.
+	const connectionId = extractConnectionId(payload);
+	if (connectionId) {
+		const integration = await integrations.findByConnectionIdAndProvider(connectionId, "nango");
+		if (!integration) {
+			logger.debug({ inboxId: row.id, connectionId }, "Integration not found for connection");
+			return;
+		}
+		if (integration.status !== "active") {
+			logger.debug({ inboxId: row.id, integrationId: integration.id }, "Integration not active");
+			return;
+		}
+		resolvedIntegrationId = integration.id;
+	} else {
+		// Direct webhook path: require explicit integration identity.
+		const integrationId = extractIntegrationId(payload);
+		if (!integrationId) {
+			throw new Error("Direct webhook payload is missing integrationId/connectionId");
+		}
+
+		const integration = await integrations.findById(integrationId);
+		if (!integration) {
+			logger.debug({ inboxId: row.id, integrationId }, "Integration not found for direct webhook");
+			return;
+		}
+		if (integration.status !== "active") {
+			logger.debug({ inboxId: row.id, integrationId }, "Integration not active for direct webhook");
+			return;
+		}
+		resolvedIntegrationId = integration.id;
+	}
+	if (!resolvedIntegrationId) {
 		return;
 	}
 
 	// Find active webhook triggers for this integration
-	const triggerRows = await triggerService.findActiveWebhookTriggers(integration.id);
+	const triggerRows = await triggerService.findActiveWebhookTriggers(resolvedIntegrationId);
 	if (triggerRows.length === 0) {
-		logger.debug({ inboxId: row.id, integrationId: integration.id }, "No active triggers");
+		logger.debug({ inboxId: row.id, integrationId: resolvedIntegrationId }, "No active triggers");
 		return;
 	}
 
@@ -117,6 +142,28 @@ function extractConnectionId(payload: Record<string, unknown>): string | null {
 		const from = payload.from as Record<string, unknown>;
 		if (from.connectionId && typeof from.connectionId === "string") {
 			return from.connectionId;
+		}
+	}
+	return null;
+}
+
+/**
+ * Extract integrationId for direct webhook processing.
+ */
+function extractIntegrationId(payload: Record<string, unknown>): string | null {
+	if (payload.integrationId && typeof payload.integrationId === "string") {
+		return payload.integrationId;
+	}
+	if (payload.integration_id && typeof payload.integration_id === "string") {
+		return payload.integration_id;
+	}
+	if (payload.from && typeof payload.from === "object") {
+		const from = payload.from as Record<string, unknown>;
+		if (from.integrationId && typeof from.integrationId === "string") {
+			return from.integrationId;
+		}
+		if (from.integration_id && typeof from.integration_id === "string") {
+			return from.integration_id;
 		}
 	}
 	return null;

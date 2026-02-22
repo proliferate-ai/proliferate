@@ -95,6 +95,9 @@ Run/session read APIs in this spec are org-scoped procedures and enforce org own
 - Claim is only allowed when a run is unassigned or already assigned to the same user.
 - Manual resolve is only legal from `failed`, `needs_human`, or `timed_out`, and target outcome must be `succeeded` or `failed`.
 - Resolve writes a `manual_resolution` run event and preserves org + automation ownership checks in transaction scope.
+- Claim/unclaim route access is available to any org member.
+- Resolve route access is restricted to org `owner|admin`.
+- Dashboard inbox run listings expose a Claim action directly on queue rows and triage detail cards.
 
 ### 6.5 Session Triage Signals
 - Urgency indicator on session rows is driven by presence of a pending run mapped to that session ID.

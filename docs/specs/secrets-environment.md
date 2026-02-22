@@ -168,7 +168,7 @@ Secret reads are scope-sensitive:
 
 **Invariants:**
 - Finalization secrets are encrypted before upsert.
-- Upsert path targets repo-scoped secret records keyed by org/repo/key.
+- Upsert path targets repo-scoped secret records with conflict target aligned to schema uniqueness (`organization_id`, `repo_id`, `key`, `configuration_id` with `configuration_id = NULL` for repo-scoped writes).
 - Multi-repo finalization must require explicit repo disambiguation when secret payload is present.
 
 **Rules the system must follow:**
@@ -201,7 +201,7 @@ Secret reads are scope-sensitive:
 - List endpoint returns metadata only (ID/path/description/timestamps), never content.
 - Delete is org-scoped by `secret_files.id` + `organization_id`.
 - Upsert/delete require org `owner` or `admin`.
-- Upsert validates that `configurationId` belongs to the authenticated org before write.
+- List/upsert validate that `configurationId` belongs to the caller organization before touching `secret_files`.
 - Session boot decrypts configuration-linked `secret_files` and injects them as file writes.
 
 **Rules the system must follow:**
@@ -264,9 +264,14 @@ Secret reads are scope-sensitive:
 ## 9. Known Limitations & Tech Debt
 
 - [ ] **Stale bundle-era schema file remains in tree** — `packages/db/src/schema/secrets.ts` still models `secret_bundles`, while canonical exports point to `schema.ts`/`relations.ts`. Impact: easy agent confusion and wrong imports.
+- [ ] **Configuration-linked secrets are not consumed in session boot path** — `getSecretsForConfiguration()` exists but `buildSandboxEnvVars()` currently reads `getSecretsForSession()` only. Impact: configuration-linked secret expectations can diverge from runtime injection behavior.
+- [ ] **Secret file content is currently write-only in services layer** — no decrypt/read path exists beyond encrypted persistence and metadata listing. Impact: file-based secret UX is only partially wired to backend runtime flows.
+- [x] **Conflict target alignment for repo-scoped writes** — `upsertByRepoAndKey` and `bulkCreateSecrets` now use schema-aligned conflict targets including `configurationId` and explicitly write `configurationId: null` for repo-scoped rows (`packages/services/src/secrets/db.ts`).
 - [ ] **Potential duplicate-key ambiguity with nullable scope columns** *(inference from PostgreSQL NULL uniqueness semantics)* — uniqueness constraints that include nullable scope columns may permit duplicates where scope columns are null, and runtime query order does not define deterministic winner for duplicate keys. Impact: nondeterministic secret value selection in `buildSandboxEnvVars()` / `resolveSecretValue()`.
 - [ ] **`createSecret` + configuration link is non-transactional** — secret insert and junction insert are separate operations. Impact: linkage can fail after secret row is created.
 - [ ] **`submitEnv` can return failure after partial persistence** — secret persistence happens before sandbox write, and write failure aborts request. Impact: DB and runtime state may temporarily diverge.
 - [ ] **Snapshot scrub/re-apply does not yet cover `secretFileWrites`** — snapshot scrub currently targets `configurations.envFiles` spec only. Impact: file-based secrets materialized from `secret_files` may persist in snapshots until scrub parity is added. Tracking: `TODO(secretfilewrites-snapshot-scrub-parity)` (see ISSUE-####).
+- [x] **Finalize setup enforces upsert success** — finalize now treats failed `upsertSecretByRepoAndKey()` writes as fatal and returns an error instead of false success (`apps/web/src/server/routers/configurations-finalize.ts`).
 - [ ] **No first-class secret value update endpoint** — users rotate by add/delete workflows instead of direct update.
 - [ ] **No dedicated audit trail for secret mutations** — `created_by` exists but no append-only audit table records secret read/write/delete intent.
+- [x] **Secret-file configuration ownership validation** — secret-file list/upsert now verify `configurationId` belongs to the caller org before proceeding (`apps/web/src/server/routers/secret-files.ts`).

@@ -69,13 +69,38 @@ webhookRouter.post("/nango", async (req, res) => {
 webhookRouter.post("/direct/:providerId", async (req, res) => {
 	try {
 		const { providerId } = req.params;
+		const payload =
+			req.body && typeof req.body === "object" && !Array.isArray(req.body)
+				? ({ ...(req.body as Record<string, unknown>) } as Record<string, unknown>)
+				: {};
+		const queryIntegrationId =
+			typeof req.query.integrationId === "string" ? req.query.integrationId : null;
+		const queryConnectionId =
+			typeof req.query.connectionId === "string" ? req.query.connectionId : null;
+
+		if (queryIntegrationId && !payload.integrationId && !payload.integration_id) {
+			payload.integrationId = queryIntegrationId;
+		}
+		if (queryConnectionId && !payload.connectionId) {
+			payload.connectionId = queryConnectionId;
+		}
+
+		const hasRoutingIdentity =
+			typeof payload.connectionId === "string" ||
+			typeof payload.integrationId === "string" ||
+			typeof payload.integration_id === "string";
+		if (!hasRoutingIdentity) {
+			return res.status(400).json({
+				error: "Direct webhooks require integrationId (or connectionId) for routing",
+			});
+		}
 
 		// TODO: Look up provider from vNext ProviderRegistry once implemented
-		// For now, store all direct webhooks in the inbox with provider ID
+		// For now, store direct webhooks in the inbox with explicit routing identity.
 		await webhookInbox.insertInboxRow({
 			provider: providerId,
 			headers: req.headers as Record<string, unknown>,
-			payload: req.body,
+			payload,
 		});
 
 		logger.debug({ provider: providerId }, "Direct webhook received and queued");

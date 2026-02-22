@@ -6,7 +6,6 @@
 
 import crypto from "node:crypto";
 import { randomBytes } from "node:crypto";
-import { getServicesLogger } from "../logger";
 import type {
 	CliConfigurationRow,
 	CliSessionFullRow,
@@ -652,18 +651,11 @@ export async function createCliSessionFull(
 	}
 
 	// 3. Link repo to configuration (upsert to avoid race conditions)
-	try {
-		await cliDb.upsertConfigurationRepo({
-			configurationId,
-			repoId,
-			workspacePath: ".",
-		});
-	} catch (error) {
-		// Non-fatal - log and continue
-		getServicesLogger()
-			.child({ module: "cli" })
-			.error({ err: error, configurationId, repoId }, "Failed to link repo to configuration");
-	}
+	await cliDb.upsertConfigurationRepo({
+		configurationId,
+		repoId,
+		workspacePath: ".",
+	});
 
 	// 4. Create session with type "cli"
 	await cliDb.createCliSessionWithConfiguration({

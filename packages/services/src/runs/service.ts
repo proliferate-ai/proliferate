@@ -298,24 +298,28 @@ export async function getEnrichmentResult(runId: string): Promise<Record<string,
 
 export async function listRunsForAutomation(
 	automationId: string,
-	_orgId: string,
+	orgId: string,
 	options: { status?: string; limit?: number; offset?: number } = {},
 ): Promise<{ runs: runsDb.RunListItem[]; total: number }> {
-	return runsDb.listRunsForAutomation(automationId, options);
+	return runsDb.listRunsForAutomation(automationId, orgId, options);
 }
 
 export async function assignRunToUser(
 	runId: string,
 	orgId: string,
 	userId: string,
+	automationId?: string,
 ): Promise<runsDb.AutomationRunRow | null> {
-	const updated = await runsDb.assignRunToUser(runId, orgId, userId);
+	const updated = await runsDb.assignRunToUser(runId, orgId, userId, automationId);
 	if (updated) {
 		return updated;
 	}
 
 	const existing = await runsDb.findById(runId);
 	if (!existing || existing.organizationId !== orgId) {
+		return null;
+	}
+	if (automationId && existing.automationId !== automationId) {
 		return null;
 	}
 
@@ -329,8 +333,9 @@ export async function assignRunToUser(
 export async function unassignRun(
 	runId: string,
 	orgId: string,
+	automationId?: string,
 ): Promise<runsDb.AutomationRunRow | null> {
-	return runsDb.unassignRun(runId, orgId);
+	return runsDb.unassignRun(runId, orgId, automationId);
 }
 
 export async function listRunsAssignedToUser(

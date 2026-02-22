@@ -28,7 +28,7 @@
 
 ### Things Agents Get Wrong
 - Assuming API routes are in the streaming path. They are not; real-time flows are gateway-based.
-- Assuming `/api/cli/*` routes are all implemented in Next.js route handlers. In this repo, only `/api/cli/sessions` is a direct route handler; most CLI procedures live under oRPC.
+- Assuming `/api/cli/*` routes are fully absent. This repo now provides compatibility handlers for `/api/cli/sessions`, `/api/cli/auth/device`, `/api/cli/auth/device/poll`, and `/api/cli/ssh-keys`, while broader CLI logic still lives under oRPC.
 - Assuming device authorization itself creates the token. Token creation happens in poll completion (`pollDevice`).
 - Assuming `hashLocalPath()` is the correct identifier for CLI sessions. Runtime uses `hashPrebuildPath()` (device-scoped).
 - Assuming config precedence is env-over-file. `getConfig()` currently resolves `apiUrl` as file override first, then env/default.
@@ -83,9 +83,9 @@ Reference points:
 - `packages/cli/src/lib/ssh.ts`
 
 ### 2.5 API Surface Split
-- CLI runtime currently mixes gateway HTTP and legacy app REST-style endpoints for auth/SSH key upload.
+- CLI runtime currently mixes gateway HTTP, compatibility REST-style endpoints (`/api/cli/auth/*`, `/api/cli/ssh-keys`), and oRPC-backed server logic.
 - oRPC is the authoritative router surface in web app code.
-- The standalone `/api/cli/sessions` route is a bridge to gateway session creation with deferred mode.
+- Standalone compatibility routes bridge legacy CLI contracts while backend business logic remains service/oRPC-driven.
 
 Reference points:
 - `packages/cli/src/state/auth.ts`
@@ -197,7 +197,7 @@ Evidence:
 ### 6.7 Web/Service CLI Surface Invariants
 - Business logic for CLI metadata and auth state transitions lives in `packages/services/src/cli`.
 - Web app CLI router exposes oRPC procedures under `/api/rpc`, not standalone REST handlers for every CLI domain.
-- `/api/cli/sessions` is a standalone compatibility route that delegates creation to gateway.
+- `/api/cli/sessions`, `/api/cli/auth/device`, `/api/cli/auth/device/poll`, and `/api/cli/ssh-keys` are standalone compatibility routes over service/oRPC logic.
 - CLI GitHub selection is short-lived and consumed-on-success to avoid stale polling state.
 
 Evidence:
@@ -243,7 +243,7 @@ Evidence:
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **CLI auth endpoint surface drift**: CLI runtime calls `/api/cli/auth/*` and `/api/cli/ssh-keys`, while this web app only declares `/api/cli/sessions` as a standalone route and otherwise serves CLI procedures via `/api/rpc`. Impact: ambiguous deploy/runtime compatibility and high confusion risk for agents.
+- [x] **CLI auth endpoint compatibility surface**: compatibility handlers exist for `/api/cli/auth/*` and `/api/cli/ssh-keys` alongside `/api/cli/sessions`, reducing `/api/rpc` vs `/api/cli/*` contract drift (`apps/web/src/app/api/cli/auth/device/route.ts`, `apps/web/src/app/api/cli/auth/device/poll/route.ts`, `apps/web/src/app/api/cli/ssh-keys/route.ts`, `apps/web/src/app/api/cli/sessions/route.ts`).
 - [ ] **Legacy session query filters**: CLI service list/resume queries still filter `session_type = "terminal"` while gateway CLI session creation uses `sessionType: "cli"`. Impact: stale CLI session views/resume logic risk.
 - [ ] **`lib/api.ts` is stale and inconsistent**: it references endpoints and imports (`getAuth` from config module) that do not match current runtime path. Impact: dead-code traps and incorrect agent edits.
 - [ ] **Duplicate OpenCode binary path logic**: both `packages/cli/src/lib/opencode.ts` and `packages/cli/src/agents/opencode.ts` implement similar resolution logic. Impact: drift risk and duplicated fixes.

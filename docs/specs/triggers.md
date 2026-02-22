@@ -34,7 +34,7 @@
 - Assuming one polling job per trigger. Runtime scheduling is per poll group (`packages/services/src/poll-groups/db.ts`, `apps/trigger-service/src/polling/worker.ts`).
 - Assuming `/providers` is the complete feature list for UI providers. UI also hardcodes standalone providers (`apps/trigger-service/src/api/providers.ts`, `apps/web/src/components/automations/trigger-config-form.tsx`).
 - Assuming schedule CRUD in `schedules` drives runtime cron execution. Runtime cron triggers are `triggers.provider = "scheduled"` rows with `pollingCron`, executed by trigger-service workers (`apps/trigger-service/src/scheduled/worker.ts`, `packages/services/src/triggers/service.ts`).
-- Assuming direct webhooks are production-ready. `/webhooks/direct/:providerId` stores inbox rows, but inbox worker still requires a Nango `connectionId` path (`apps/trigger-service/src/api/webhooks.ts`, `apps/trigger-service/src/webhook-inbox/worker.ts`).
+- Assuming direct webhooks can be routed without identity. Direct webhook ingress now requires `integrationId` or `connectionId` and rejects requests that omit both (`apps/trigger-service/src/api/webhooks.ts`).
 - Assuming trigger list pending counts represent queued work. Current query counts `status = "pending"`, but event lifecycle uses `queued` (`packages/services/src/triggers/db.ts`, `packages/db/src/schema/triggers.ts`).
 - Assuming manual runs have a first-class trigger provider. Manual runs are represented as disabled webhook triggers with `config._manual = true` (`packages/services/src/automations/service.ts`, `packages/services/src/automations/db.ts`).
 
@@ -106,10 +106,10 @@ _Sections 3 (File Tree) and 4 (Data Models) are intentionally removed. Code and 
   Evidence: `apps/trigger-service/src/api/webhooks.ts`, `packages/services/src/webhook-inbox/db.ts`.
 - Invariant: Trigger-service webhook endpoints do not create `trigger_events` or `automation_runs` directly.
   Evidence: `apps/trigger-service/src/api/webhooks.ts`, `packages/services/src/runs/service.ts`.
-- Invariant: `/webhooks/nango` is the only fully wired production ingress for trigger events today.
+- Invariant: `/webhooks/nango` and `/webhooks/direct/:providerId` are both wired into inbox processing, with different identity requirements.
   Evidence: `apps/trigger-service/src/api/webhooks.ts`, `apps/trigger-service/src/webhook-inbox/worker.ts`.
-- Rule: `/webhooks/direct/:providerId` is currently ingress-only; downstream identity resolution is not complete.
-  Evidence: `apps/trigger-service/src/api/webhooks.ts`, `apps/trigger-service/src/webhook-inbox/worker.ts`.
+- Rule: `/webhooks/direct/:providerId` must include routing identity (`integrationId` or `connectionId`), otherwise ingress fails with `400`.
+  Evidence: `apps/trigger-service/src/api/webhooks.ts`.
 
 ### 6.2 Webhook Inbox State Invariants (Status: Implemented)
 - Invariant: Inbox rows are claimed in batches with row-level locking semantics.
@@ -120,14 +120,14 @@ _Sections 3 (File Tree) and 4 (Data Models) are intentionally removed. Code and 
   Evidence: `apps/trigger-service/src/gc/inbox-gc.ts`, `packages/services/src/webhook-inbox/db.ts:gcOldRows`.
 
 ### 6.3 Webhook Matching Invariants (Status: Implemented/Partial)
-- Invariant: Inbox processing resolves integration identity from Nango `connectionId`, then fetches active webhook triggers by integration ID.
+- Invariant: Inbox processing resolves integration identity from Nango `connectionId` first, with direct-webhook `integrationId` fallback, then fetches active webhook triggers by integration ID.
   Evidence: `apps/trigger-service/src/webhook-inbox/worker.ts`, `packages/services/src/triggers/db.ts:findActiveWebhookTriggers`.
 - Invariant: Provider matching only runs when trigger row provider matches trigger definition provider.
   Evidence: `apps/trigger-service/src/webhook-inbox/worker.ts`.
 - Rule: If integration is absent or no active triggers exist, inbox rows are treated as completed no-op work.
   Evidence: `apps/trigger-service/src/webhook-inbox/worker.ts`.
-- Rule: No-connection direct rows currently error and become failed rows.
-  Evidence: `apps/trigger-service/src/webhook-inbox/worker.ts:extractConnectionId`.
+- Rule: Direct rows without both `connectionId` and `integrationId` fail with explicit missing-identity errors.
+  Evidence: `apps/trigger-service/src/webhook-inbox/worker.ts`.
 
 ### 6.4 Trigger Processing Invariants (Status: Implemented)
 - Invariant: Automation enabled-state gates trigger execution; disabled automations produce skipped trigger events.
@@ -231,7 +231,7 @@ _Sections 3 (File Tree) and 4 (Data Models) are intentionally removed. Code and 
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **Direct webhook execution gap (High):** `/webhooks/direct/:providerId` stores inbox rows, but inbox worker still requires Nango `connectionId`; direct identity resolution path is not wired. Evidence: `apps/trigger-service/src/api/webhooks.ts`, `apps/trigger-service/src/webhook-inbox/worker.ts`.
+- [x] **Direct webhook identity routing path (High):** direct webhooks now require `integrationId`/`connectionId` at ingress and worker resolution supports integration-id fallback for execution routing. Evidence: `apps/trigger-service/src/api/webhooks.ts`, `apps/trigger-service/src/webhook-inbox/worker.ts`.
 - [ ] **Fast-ack duplicate parse path (Medium):** Ingress route currently calls dispatcher logic that may parse provider events, then inbox worker parses again. This violates strict "ingress-only" intent and adds duplicate CPU. Evidence: `apps/trigger-service/src/api/webhooks.ts`, `apps/trigger-service/src/lib/webhook-dispatcher.ts`, `apps/trigger-service/src/webhook-inbox/worker.ts`.
 - [ ] **PostHog runtime registration mismatch (Medium):** PostHog provider exists in package-level provider map but is not registered in trigger-service default registry; trigger-service `/providers` will not expose it as runnable. Evidence: `packages/triggers/src/posthog.ts`, `packages/triggers/src/service/register.ts`, `apps/trigger-service/src/api/providers.ts`.
 - [ ] **Webhook URL path mismatch (Medium):** Trigger rows store `webhookUrlPath` values (for `/webhooks/t_*` style URLs), but trigger-service currently exposes `/webhooks/nango` and `/webhooks/direct/:providerId` only; web app form still shows legacy `/api/webhooks/automation/:id` and `/api/webhooks/posthog/:id` paths that do not exist. Evidence: `packages/services/src/triggers/service.ts`, `apps/trigger-service/src/api/webhooks.ts`, `apps/web/src/components/automations/trigger-config-form.tsx`, `apps/web/src/app/api/webhooks/`.

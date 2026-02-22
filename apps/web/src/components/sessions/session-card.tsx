@@ -13,6 +13,7 @@ import {
 import { AutomationsIcon, BlocksIcon, BlocksLoadingIcon, SlackIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
+import { useHasSlackInstallation } from "@/hooks/use-integrations";
 import {
 	useDeleteSession,
 	usePrefetchSession,
@@ -149,6 +150,7 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 	const { data: isSubscribed } = useSessionNotificationSubscription(session.id, canSubscribe);
 	const subscribeNotifications = useSubscribeNotifications();
 	const unsubscribeNotifications = useUnsubscribeNotifications();
+	const { hasSlack } = useHasSlackInstallation();
 
 	const [isEditing, setIsEditing] = useState(false);
 	const [editValue, setEditValue] = useState(session.title || "");
@@ -366,6 +368,8 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 														toast.error(message);
 													}
 												},
+												disabled: !hasSlack,
+												description: !hasSlack ? "Connect Slack in Settings" : undefined,
 											},
 										]
 									: undefined

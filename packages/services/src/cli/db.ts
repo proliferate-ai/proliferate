@@ -7,6 +7,7 @@
 import {
 	type InferSelectModel,
 	and,
+	asc,
 	cliDeviceCodes,
 	cliGithubSelections,
 	configurationRepos,
@@ -815,6 +816,7 @@ export async function getUserFirstOrganization(
 	const db = getDb();
 	const row = await db.query.member.findFirst({
 		where: eq(member.userId, userId),
+		orderBy: [asc(member.createdAt), asc(member.organizationId)],
 		columns: {
 			organizationId: true,
 		},

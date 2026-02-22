@@ -7,12 +7,9 @@
  * - CLI device-scoped configuration find/create
  */
 
-import { createLogger } from "@proliferate/logger";
 import { cli, configurations } from "@proliferate/services";
 import type { SandboxProvider } from "@proliferate/shared";
 import { ApiError } from "../middleware";
-
-const logger = createLogger({ service: "gateway" }).child({ module: "configuration-resolver" });
 
 export interface ResolvedConfiguration {
 	id: string;
@@ -278,16 +275,11 @@ async function resolveCli(
 	}
 
 	// Link repo to configuration
-	try {
-		await cli.upsertConfigurationRepo({
-			configurationId,
-			repoId,
-			workspacePath: ".",
-		});
-	} catch (err) {
-		logger.error({ err }, "Failed to link repo to configuration");
-		// Non-fatal
-	}
+	await cli.upsertConfigurationRepo({
+		configurationId,
+		repoId,
+		workspacePath: ".",
+	});
 
 	return {
 		id: configurationId,

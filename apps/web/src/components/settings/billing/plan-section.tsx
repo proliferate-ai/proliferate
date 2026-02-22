@@ -85,14 +85,37 @@ export function PlanSection({
 	const targetPlan = confirmPlan ? (PLANS.find((p) => p.id === confirmPlan) ?? null) : null;
 
 	const handleConfirm = async () => {
-		if (!confirmPlan || !isAdmin || (currentPlanId && confirmPlan === currentPlanId)) return;
+		if (!confirmPlan) {
+			console.info("[plan-section] Skipping plan confirmation: missing selected plan");
+			return;
+		}
+		if (currentPlanId && confirmPlan === currentPlanId) {
+			console.info("[plan-section] Skipping plan confirmation: plan unchanged", {
+				plan: confirmPlan,
+			});
+			return;
+		}
+		console.info("[plan-section] Attempting plan activation", {
+			plan: confirmPlan,
+			isAdmin,
+		});
 		try {
 			const result = await activatePlan.mutateAsync({ plan: confirmPlan });
+			console.info("[plan-section] Plan activation mutation succeeded", {
+				plan: confirmPlan,
+				hasCheckoutUrl: Boolean(result.checkoutUrl),
+			});
 			if (result.checkoutUrl) {
 				window.location.href = result.checkoutUrl;
 				return;
 			}
 			window.location.reload();
+		} catch (error) {
+			console.error("[plan-section] Plan activation mutation failed", {
+				plan: confirmPlan,
+				isAdmin,
+				error,
+			});
 		} finally {
 			setConfirmPlan(null);
 		}
@@ -133,7 +156,7 @@ export function PlanSection({
 							const isCurrent =
 								hasActiveSubscription && currentPlanId !== null && p.id === currentPlanId;
 							const isSelected = !hasActiveSubscription && p.id === selectedPlan;
-							const showAction = isAdmin && !isCurrent;
+							const showAction = !isCurrent;
 
 							return (
 								<div
@@ -226,57 +249,54 @@ export function PlanSection({
 				</div>
 			</SettingsCard>
 
-			{/* Confirmation dialog (admin only) */}
-			{isAdmin && (
-				<AlertDialog
-					open={confirmPlan !== null && targetPlan !== null}
-					onOpenChange={(open) => {
-						if (!open) setConfirmPlan(null);
-					}}
-				>
-					{targetPlan && (
-						<AlertDialogContent>
-							<AlertDialogHeader>
-								<AlertDialogTitle>
-									{!hasActiveSubscription
-										? `Activate ${targetPlan.name}?`
-										: confirmPlan === "pro" && currentPlanId === "dev"
-											? `Upgrade to ${targetPlan.name}?`
-											: confirmPlan === "dev" && currentPlanId === "pro"
-												? `Downgrade to ${targetPlan.name}?`
-												: `Switch to ${targetPlan.name}?`}
-								</AlertDialogTitle>
-								<AlertDialogDescription>
-									{hasActiveSubscription ? (
-										<>
-											Your plan will change to {targetPlan.name} at {targetPlan.price}/mo with{" "}
-											{targetPlan.creditsIncluded.toLocaleString()} credits and{" "}
-											{targetPlan.maxConcurrentSessions} concurrent sessions.
-										</>
-									) : (
-										<>
-											Activate your {targetPlan.name} plan at {targetPlan.price}
-											/mo. Your card will be charged when trial credits are used.
-										</>
-									)}
-								</AlertDialogDescription>
-							</AlertDialogHeader>
-							<AlertDialogFooter>
-								<AlertDialogCancel disabled={activatePlan.isPending}>Cancel</AlertDialogCancel>
-								<AlertDialogAction
-									onClick={(e) => {
-										e.preventDefault();
-										handleConfirm();
-									}}
-									disabled={activatePlan.isPending}
-								>
-									{activatePlan.isPending ? "Processing..." : "Confirm"}
-								</AlertDialogAction>
-							</AlertDialogFooter>
-						</AlertDialogContent>
-					)}
-				</AlertDialog>
-			)}
+			<AlertDialog
+				open={confirmPlan !== null && targetPlan !== null}
+				onOpenChange={(open) => {
+					if (!open) setConfirmPlan(null);
+				}}
+			>
+				{targetPlan && (
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>
+								{!hasActiveSubscription
+									? `Activate ${targetPlan.name}?`
+									: confirmPlan === "pro" && currentPlanId === "dev"
+										? `Upgrade to ${targetPlan.name}?`
+										: confirmPlan === "dev" && currentPlanId === "pro"
+											? `Downgrade to ${targetPlan.name}?`
+											: `Switch to ${targetPlan.name}?`}
+							</AlertDialogTitle>
+							<AlertDialogDescription>
+								{hasActiveSubscription ? (
+									<>
+										Your plan will change to {targetPlan.name} at {targetPlan.price}/mo with{" "}
+										{targetPlan.creditsIncluded.toLocaleString()} credits and{" "}
+										{targetPlan.maxConcurrentSessions} concurrent sessions.
+									</>
+								) : (
+									<>
+										Activate your {targetPlan.name} plan at {targetPlan.price}
+										/mo. Your card will be charged when trial credits are used.
+									</>
+								)}
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel disabled={activatePlan.isPending}>Cancel</AlertDialogCancel>
+							<AlertDialogAction
+								onClick={(e) => {
+									e.preventDefault();
+									handleConfirm();
+								}}
+								disabled={activatePlan.isPending}
+							>
+								{activatePlan.isPending ? "Processing..." : "Confirm"}
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				)}
+			</AlertDialog>
 		</SettingsSection>
 	);
 }

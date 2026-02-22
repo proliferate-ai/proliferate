@@ -43,7 +43,7 @@ A session is snapshot-eligible only when `SessionHub.shouldIdleSnapshot()` retur
 - no running tools in event processor
 - `clients.size === 0`
 - `proxyConnections.size === 0`
-- `currentAssistantMessageId === null`
+- no unresolved assistant turn OR explicit known-idle signal (`lastKnownAgentIdleAt !== null`)
 - SSE ready OR previously observed agent-idle (`lastKnownAgentIdleAt !== null`)
 - sandbox exists in context (`sandbox_id`)
 - grace period elapsed (`apps/gateway/src/hub/session-hub.ts:570-587`)
@@ -126,6 +126,7 @@ Evidence: `apps/gateway/src/middleware/lifecycle.ts`, `apps/gateway/src/api/prox
   - else pause if supported
   - else filesystem snapshot
 - Sandbox termination is required only when snapshot method does not preserve resumable sandbox identity.
+- If termination fails after snapshot capture, the system keeps `sandbox_id` in session state so later cleanup can fence against the live sandbox.
 - DB update must be CAS-fenced on expected sandbox ID.
 - Telemetry flush and expiry cancellation are best-effort side effects.
 - Runtime state is reset after success, CAS mismatch, and caught failure paths.
@@ -155,6 +156,7 @@ Evidence: `apps/gateway/src/hub/migration-controller.ts:38-47`, `104-112`, `246-
 - If local hub exists, sweeper defers to `hub.shouldIdleSnapshot()` + `hub.runIdleSnapshot()`.
 - If no local hub, sweeper performs locked direct cleanup and writes `pauseReason: "orphaned"`.
 - Direct orphan cleanup uses same provider capability order (memory -> pause -> filesystem).
+- Direct orphan cleanup keeps `sandbox_id` when terminate fails, so future retries remain fenced.
 
 Evidence: `apps/gateway/src/sweeper/orphan-sweeper.ts`, `packages/services/src/sessions/db.ts:587-594`.
 
@@ -191,7 +193,7 @@ Correction: normal timer-driven idle snapshot stops idle monitor but does not ev
 Correction: heartbeat returns 404 if no active hub and does not create one (`apps/gateway/src/api/proliferate/http/heartbeat.ts:23-27`).
 
 6. "session.idle always clears assistant busy state."
-Correction: `EventProcessor` retains `currentAssistantMessageId` for text-only responses to avoid duplicate messages; only tool-loop completions clear it (`apps/gateway/src/hub/event-processor.ts:390-415`).
+Correction: `EventProcessor` may retain `currentAssistantMessageId` for text-only responses, but explicit `session.idle` / `session.status(idle)` now still marks known-idle (`lastKnownAgentIdleAt`) for snapshot eligibility (`apps/gateway/src/hub/session-hub.ts`).
 
 7. "Generation guard in reconnect timer is enough to prevent resume races."
 Correction: runtime also re-checks intent after lock wait and DB reload (`apps/gateway/src/hub/session-runtime.ts:296-300`).
@@ -221,8 +223,8 @@ Correction: migration controller failure path invokes `onIdleSnapshotComplete` (
 2. `pauseReason` is not explicitly cleared during resume.
 Session status returns to `running`, but stale pause reason may persist in DB unless overwritten elsewhere (`apps/gateway/src/hub/session-runtime.ts:446-454`).
 
-3. Text-only assistant completions can suppress idle eligibility.
-`EventProcessor` retains `currentAssistantMessageId` for text-only responses, which can keep `shouldIdleSnapshot()` false (`apps/gateway/src/hub/event-processor.ts:390-415`, `apps/gateway/src/hub/session-hub.ts:575`).
+3. Text-only assistant completions rely on explicit idle signals for eligibility.
+If upstream stops emitting `session.idle` / `session.status(idle)`, retained `currentAssistantMessageId` can still suppress idle eligibility (`apps/gateway/src/hub/session-hub.ts`, `apps/gateway/src/hub/event-processor.ts`).
 
 4. Heartbeat route exists, but no direct web caller is evident in this repo.
 Preview-only activity that bypasses gateway websocket/proxy channels may be under-observed without heartbeat adoption (`apps/gateway/src/api/proliferate/http/heartbeat.ts`; no `apps/web` heartbeat caller found).
