@@ -46,20 +46,10 @@ export function devConsoleLog(
 		if (typeof navigator !== "undefined" && "sendBeacon" in navigator) {
 			const blob = new Blob([json], { type: "application/json" });
 			navigator.sendBeacon(endpoint, blob);
-			return;
 		}
 	} catch {
-		// Fall through to fetch.
-	}
-
-	void fetch(endpoint, {
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: json,
-		keepalive: true,
-	}).catch(() => {
 		// Best-effort logging only.
-	});
+	}
 }
 
 function safeJson(value: unknown): string | null {
