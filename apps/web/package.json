@@ -65,7 +65,7 @@
 		"next": "16.1.6",
 		"next-themes": "^0.4.6",
 		"pg": "^8.17.0",
-		"posthog-js": "^1.328.0",
+		"posthog-js": "^1.352.0",
 		"react": "^19.2.3",
 		"react-dom": "^19.2.3",
 		"react-js-cron": "^5.2.0",
