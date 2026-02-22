@@ -112,7 +112,7 @@ describe("prepareForSnapshot", () => {
 				logContext: "test",
 				failureMode: "throw",
 			}),
-		).rejects.toThrow("test: env scrub failed before snapshot: env scrub failed: exit code 9");
+		).rejects.toThrow(/^test: env scrub failed before snapshot: env scrub failed: exit code 9$/);
 	});
 
 	it("binds provider context when invoking execCommand", async () => {

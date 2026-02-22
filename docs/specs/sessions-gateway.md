@@ -160,10 +160,10 @@ Reference: `apps/gateway/src/middleware/error-handler.ts`
 - **Initial prompt reliability**: `maybeSendInitialPrompt()` uses an in-memory `initialPromptSending` guard to prevent concurrent sends (eager start + runtime init), marks `initial_prompt_sent_at` before dispatch to avoid duplicates, and rolls that DB marker back on send failure so a later runtime init can retry. The in-memory guard is always reset in a `finally` block.
 - **Tool call idempotency**: In-memory `inflightCalls` + `completedResults` maps per process, keyed by `tool_call_id`, with 5-minute retention for completed results.
 - **Tool result patching**: `updateToolResult()` retries up to 5x with 1s delay (see `agent-contract.md` §5).
-- **Migration lock**: Distributed Redis lock with 60s TTL prevents concurrent migrations for the same session.
+- **Migration lock**: Distributed Redis lock prevents concurrent migrations for the same session. Active expiry migrations use a 120s TTL to cover OpenCode stop + scrub/snapshot/re-apply + runtime bring-up critical path.
 - **Expiry triggers**: Hub schedules an in-process expiry timer (primary) plus a BullMQ job as a fallback for evicted hubs.
 - **Expiry timestamp source-of-truth**: Newly created sandboxes use provider-reported expiry only; stored DB expiry is reused only when recovering the same sandbox ID.
-- **Snapshot secret scrubbing**: All snapshot capture paths (`save_snapshot`, idle snapshot, expiry migration) run `proliferate env scrub` before capture when env-file spec is configured. Paths that continue running the same sandbox re-apply env files after capture; pause/stop paths skip re-apply.
+- **Snapshot secret scrubbing**: All snapshot capture paths (`save_snapshot`, idle snapshot, expiry migration, web `sessions.pause`, web `sessions.snapshot`) run `proliferate env scrub` before capture when env-file spec is configured. Paths that continue running the same sandbox re-apply env files after capture; pause/stop paths skip re-apply.
 - **Scrub failure policy**: Manual snapshots use strict scrub mode (scrub failure aborts capture). Idle/expiry paths use best-effort scrub mode (log and continue) so pause/stop cleanup is not blocked by scrub command failures.
 - **Streaming backpressure**: Token batching (50-100ms) and slow-consumer disconnect based on `ws.bufferedAmount` thresholds.
 - **Idle snapshot failure circuit-breaker**: Force-terminates after repeated failures to prevent runaway spend.
@@ -205,12 +205,12 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 - Setup-session UI is explicit and persistent: `SetupSessionChrome` renders a checklist describing the two required user actions (iterate with the agent until verification, and configure secrets in Environment), and setup right-panel empty state reinforces the same flow.
 - When the agent calls `request_env_variables`, the web runtime opens the Environment panel and the tool UI also renders an `Open Environment Panel` CTA card so users can reopen it from the conversation. In setup sessions, Environment is **file-based only**: users create secret files with a row-based env editor (`Key`/`Value` columns), can import via `.env` paste/upload, and save by target path. In multi-repo configurations, users must pick a repository/workspace first; the entered file path is interpreted relative to that workspace.
 - The Git panel is workspace-aware in multi-repo sessions: users choose the target repository/workspace, and git status + branch/commit/push/PR actions are scoped to that `workspacePath`.
-- `pause` → loads session, calls `provider.snapshot()` + `provider.terminate()`, finalizes billing, updates DB status to `"paused"` (`sessions-pause.ts`).
+- `pause` → loads session, runs shared snapshot scrub prep (`prepareForSnapshot`, best-effort, no re-apply), calls `provider.snapshot()` + `provider.terminate()`, finalizes billing, updates DB status to `"paused"` (`sessions-pause.ts`).
 - `resume` → no dedicated handler. Resume is implicit for normal sessions: connecting a WebSocket client to a paused session triggers `ensureRuntimeReady()`, which creates a new sandbox from the stored snapshot.
 - `resume` exception (automation-completed) → if `client_type="automation"` and session is terminal (`status in {"paused","stopped"}` with non-null `outcome`), client init/get_messages hydrate transcript without calling `ensureRuntimeReady()`, preventing post-completion OpenCode session identity churn.
 - `delete` → calls `sessions.deleteSession()`.
 - `rename` → calls `sessions.renameSession()`.
-- `snapshot` → calls `snapshotSessionHandler()` (`sessions-snapshot.ts`).
+- `snapshot` → calls `snapshotSessionHandler()` (`sessions-snapshot.ts`) which runs shared snapshot scrub prep (`prepareForSnapshot`, strict mode, re-apply after capture) before provider snapshot.
 - `submitEnv` → writes secrets to DB, writes env file to sandbox via provider.
 
 **Idempotency:**
@@ -376,14 +376,14 @@ WHERE id = $session_id
 
 **Guards:**
 1. Ownership lease: only the session owner may migrate.
-2. Migration lock: distributed Redis lock with 60s TTL prevents concurrent migrations for the same session.
+2. Migration lock: distributed Redis lock with path-specific TTL prevents concurrent migrations for the same session (120s for active expiry migrations).
 
 **Expiry triggers:**
 1. Primary: in-process timer on the hub (fires at expiry minus `GRACE_MS`).
 2. Fallback: BullMQ job `"session-expiry"` (needed when the hub was evicted before expiry). Job delay: `max(0, expiresAtMs - now - GRACE_MS)`. Worker calls `hub.runExpiryMigration()`.
 
 **Active migration (clients connected):**
-1. Acquire distributed lock (60s TTL).
+1. Acquire distributed lock (120s TTL).
 2. Wait for agent message completion (30s timeout), abort if still running.
 3. Scrub configured env files from sandbox, snapshot current sandbox, then re-apply env files.
 4. Disconnect SSE, reset sandbox state.

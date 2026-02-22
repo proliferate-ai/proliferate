@@ -45,3 +45,10 @@ export { setServicesLogger, getServicesLogger } from "./logger";
 
 // Shared DB client
 export { getDb, resetDb } from "./db/client";
+
+// Snapshot scrub helper shared by gateway and web snapshot paths.
+export {
+	prepareForSnapshot,
+	type PrepareForSnapshotOptions,
+	type SnapshotCleanup,
+} from "./lib/snapshot-scrub";
