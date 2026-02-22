@@ -556,7 +556,11 @@ export async function createAutomationTrigger(
 	}
 
 	const triggerType = input.triggerType ?? "webhook";
-	if (triggerType === "polling" && input.cronExpression !== null && input.cronExpression !== undefined) {
+	if (
+		triggerType === "polling" &&
+		input.cronExpression !== null &&
+		input.cronExpression !== undefined
+	) {
 		if (input.cronExpression.trim().length === 0) {
 			throw new CronValidationError("Polling triggers require cronExpression");
 		}
