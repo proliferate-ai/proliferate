@@ -350,7 +350,8 @@ export class MigrationController {
 			return;
 		}
 
-		const ran = await runWithMigrationLock(this.options.sessionId, 60_000, async () => {
+		// Active migration can include OpenCode shutdown + scrub/snapshot/re-apply + runtime bring-up.
+		const ran = await runWithMigrationLock(this.options.sessionId, 120_000, async () => {
 			try {
 				const migrationStartMs = Date.now();
 				const oldSandboxId = sandboxId;
