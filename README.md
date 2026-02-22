@@ -3,7 +3,7 @@
     <a href="https://proliferate.com"> <img width="50%" src="https://d1uh4o7rpdqkkl.cloudfront.net/logotype-with-words.webp" /></a>
 </h2>
 
-<p align="center">The open-source platform for building company-specific coding agents</p>
+<p align="center">The open-source platform for building company-specific background agents</p>
 
 <p align="center">
     <a href="https://join.slack.com/t/proliferatepublic/shared_invite/zt-3ngfqqttg-qyE2cgQBQQ0klmd9Vbh9Ow" target="_blank">
@@ -19,8 +19,6 @@
         <img src="https://img.shields.io/static/v1?label=license&message=MIT&color=blue" alt="License" />
     </a>
 </p>
-
-Securely onboard coding agents to your company- with access to your real dev environments, tools, and workflows. Agents do the work in the background and come to you with results: a live preview to test, a summary of what changed, and a PR ready to merge.
 
 Local coding agents force you to supervise a terminal alone. Proliferate gives your agents secure access to your real dev environments, internal APIs, and workflows. They do the heavy lifting in the background and return with results your whole team can verify: a live preview of the running app, a command log, and a PR ready to merge.
 
