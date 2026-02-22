@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { requireAuth } from "@/lib/auth-helpers";
-import { createSignedOAuthState } from "@/lib/oauth-state";
+import { createSignedOAuthState, sanitizeOAuthReturnUrl } from "@/lib/oauth-state";
 import { getSlackOAuthUrl } from "@/lib/slack";
 import { orgs } from "@proliferate/services";
 import { NextResponse } from "next/server";
@@ -24,9 +24,8 @@ export async function GET(request: Request) {
 
 	// Get optional return URL from query params (must be a relative path)
 	const { searchParams } = new URL(request.url);
-	const rawReturnUrl = searchParams.get("returnUrl");
-	const returnUrl =
-		rawReturnUrl?.startsWith("/") && !rawReturnUrl.startsWith("//") ? rawReturnUrl : null;
+	const rawReturnUrl = searchParams.get("returnUrl") ?? undefined;
+	const returnUrl = sanitizeOAuthReturnUrl(rawReturnUrl);
 
 	// Generate state token for CSRF protection
 	// Contains org context, nonce, and optional return URL
@@ -35,7 +34,7 @@ export async function GET(request: Request) {
 		userId,
 		nonce: randomUUID(),
 		timestamp: Date.now(),
-		returnUrl: returnUrl || undefined,
+		returnUrl,
 	});
 
 	let oauthUrl: string;

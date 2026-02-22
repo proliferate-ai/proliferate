@@ -7,6 +7,17 @@ export type OAuthStateVerificationError =
 	| "missing_signature"
 	| "invalid_signature";
 
+const ALLOWED_OAUTH_RETURN_URL_PREFIXES = [
+	"/onboarding",
+	"/device-github",
+	"/dashboard",
+	"/settings",
+	"/preview",
+	"/workspace",
+	"/repos",
+	"/invite",
+] as const;
+
 function canonicalize(value: unknown): unknown {
 	if (Array.isArray(value)) {
 		return value.map((item) => canonicalize(item));
@@ -97,4 +108,23 @@ export function verifySignedOAuthState<T extends Record<string, unknown>>(
 	}
 
 	return { ok: true, payload: payload as T };
+}
+
+export function sanitizeOAuthReturnUrl(
+	returnUrl: string | undefined,
+	fallback?: string,
+): string | undefined {
+	if (!returnUrl) return fallback;
+
+	const trimmed = returnUrl.trim();
+	if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+		return fallback;
+	}
+
+	const path = trimmed.split("?")[0] || "";
+	const isAllowed = ALLOWED_OAUTH_RETURN_URL_PREFIXES.some(
+		(prefix) => path === prefix || path.startsWith(`${prefix}/`),
+	);
+
+	return isAllowed ? trimmed : fallback;
 }

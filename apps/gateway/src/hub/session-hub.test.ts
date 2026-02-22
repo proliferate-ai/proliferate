@@ -56,7 +56,6 @@ type HandleSseDisconnectMethod = (
 			};
 		};
 		clients: Map<unknown, unknown>;
-		shouldReconnectWithoutClients: ReturnType<typeof vi.fn>;
 		log: ReturnType<typeof vi.fn>;
 		broadcastStatus: ReturnType<typeof vi.fn>;
 		scheduleReconnect: ReturnType<typeof vi.fn>;
@@ -277,7 +276,6 @@ describe("SessionHub SSE reconnect policy", () => {
 				}),
 			},
 			clients: new Map(),
-			shouldReconnectWithoutClients: vi.fn(() => true),
 			log: vi.fn(),
 			broadcastStatus: vi.fn(),
 			scheduleReconnect: vi.fn(),
@@ -291,5 +289,49 @@ describe("SessionHub SSE reconnect policy", () => {
 		expect(hub.scheduleReconnect).not.toHaveBeenCalled();
 		expect(hub.broadcastStatus).not.toHaveBeenCalled();
 		expect(hub.log).toHaveBeenCalledWith("Skipping auto-reconnect for headless automation session");
+	});
+});
+
+describe("SessionHub completed automation detection", () => {
+	it("treats paused automation_completed sessions as completed", () => {
+		const hub = {
+			runtime: {
+				getContext: () => ({
+					session: {
+						client_type: "automation",
+						status: "paused",
+						pause_reason: "automation_completed",
+					},
+				}),
+			},
+		};
+		const isCompletedAutomationSession = (
+			SessionHub.prototype as unknown as {
+				isCompletedAutomationSession: (this: typeof hub) => boolean;
+			}
+		).isCompletedAutomationSession;
+
+		expect(isCompletedAutomationSession.call(hub)).toBe(true);
+	});
+
+	it("treats stopped automation_completed sessions as completed", () => {
+		const hub = {
+			runtime: {
+				getContext: () => ({
+					session: {
+						client_type: "automation",
+						status: "stopped",
+						pause_reason: "automation_completed",
+					},
+				}),
+			},
+		};
+		const isCompletedAutomationSession = (
+			SessionHub.prototype as unknown as {
+				isCompletedAutomationSession: (this: typeof hub) => boolean;
+			}
+		).isCompletedAutomationSession;
+
+		expect(isCompletedAutomationSession.call(hub)).toBe(true);
 	});
 });

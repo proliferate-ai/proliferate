@@ -193,18 +193,11 @@ export class SessionHub {
 		return 0;
 	}
 
-	private shouldReconnectWithoutClients(): boolean {
-		const session = this.runtime.getContext().session;
-		const clientType = session.client_type ?? null;
-		const status = session.status ?? null;
-		return clientType === "automation" && status === "running";
-	}
-
 	private isCompletedAutomationSession(): boolean {
 		const session = this.runtime.getContext().session;
 		return (
 			session.client_type === "automation" &&
-			session.status === "paused" &&
+			(session.status === "paused" || session.status === "stopped") &&
 			session.pause_reason === "automation_completed"
 		);
 	}
@@ -561,15 +554,17 @@ export class SessionHub {
 	/**
 	 * Post a prompt via HTTP (for workers without WebSocket connections)
 	 */
-	postPrompt(content: string, userId: string, source?: ClientSource, images?: string[]): void {
+	async postPrompt(
+		content: string,
+		userId: string,
+		source?: ClientSource,
+		images?: string[],
+	): Promise<void> {
+		if (this.isCompletedAutomationSession()) {
+			throw new Error("Cannot send messages to a completed automation session.");
+		}
 		const normalizedImages = this.normalizeImages(images);
-		this.handlePrompt(content, userId, { images: normalizedImages, source }).catch((err) => {
-			this.logError("Failed to handle HTTP prompt", err);
-			this.broadcast({
-				type: "error",
-				payload: { message: "Failed to send prompt" },
-			});
-		});
+		await this.handlePrompt(content, userId, { images: normalizedImages, source });
 	}
 
 	/**
@@ -1337,7 +1332,6 @@ export class SessionHub {
 
 	private handleSseDisconnect(reason: string): void {
 		const context = this.runtime.getContext();
-		const shouldReconnectWithoutClients = this.shouldReconnectWithoutClients();
 		const isHeadlessAutomation =
 			this.clients.size === 0 &&
 			context.session.client_type === "automation" &&
@@ -1349,7 +1343,6 @@ export class SessionHub {
 			sessionStatus: context.session.status ?? null,
 			sandboxId: context.session.sandbox_id ?? null,
 			sandboxExpiresAt: context.session.sandbox_expires_at ?? null,
-			shouldReconnectWithoutClients,
 			isHeadlessAutomation,
 		});
 
@@ -1361,7 +1354,7 @@ export class SessionHub {
 		}
 
 		// Only reconnect automatically when at least one WS client is attached.
-		if (this.clients.size === 0 && !shouldReconnectWithoutClients) {
+		if (this.clients.size === 0) {
 			this.log("No clients connected, skipping reconnection");
 			return;
 		}
@@ -1397,7 +1390,7 @@ export class SessionHub {
 			}
 
 			// Check again - clients may have disconnected during delay
-			if (this.clients.size === 0 && !this.shouldReconnectWithoutClients()) {
+			if (this.clients.size === 0) {
 				this.log("No clients connected, aborting reconnection");
 				this.reconnectAttempt = 0;
 				return;

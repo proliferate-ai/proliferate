@@ -6,6 +6,7 @@
  */
 
 import path from "node:path";
+import { logger } from "@/lib/logger";
 import { ORPCError } from "@orpc/server";
 import { orgs, secretFiles, sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
@@ -29,6 +30,7 @@ target="$PROLIFERATE_SECRET_FILE_TARGET"
 mkdir -p "$(dirname "$target")"
 printf '%s' "$PROLIFERATE_SECRET_FILE_CONTENT_B64" | base64 -d > "$target"
 `;
+const log = logger.child({ handler: "secret-files" });
 
 export function normalizeSecretFilePathForSandbox(filePath: string): string {
 	const trimmed = filePath.trim();
@@ -162,13 +164,27 @@ export const secretFilesRouter = {
 
 			// Optional live apply for active session UX (Environment panel path).
 			if (input.sessionId) {
-				await applySecretFileToActiveSession({
-					orgId: context.orgId,
-					sessionId: input.sessionId,
-					configurationId: input.configurationId,
-					filePath: input.filePath,
-					content: input.content,
-				});
+				try {
+					await applySecretFileToActiveSession({
+						orgId: context.orgId,
+						sessionId: input.sessionId,
+						configurationId: input.configurationId,
+						filePath: input.filePath,
+						content: input.content,
+					});
+				} catch (error) {
+					// Best effort: the DB save succeeded even if runtime apply failed.
+					log.warn(
+						{
+							err: error,
+							orgId: context.orgId,
+							configurationId: input.configurationId,
+							sessionId: input.sessionId,
+							filePath: input.filePath,
+						},
+						"Failed to live-apply secret file to active sandbox",
+					);
+				}
 			}
 
 			return {

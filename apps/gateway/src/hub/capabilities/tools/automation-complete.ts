@@ -107,12 +107,17 @@ export const automationCompleteHandler: InterceptedToolHandler = {
 		});
 		const hubContext = hub.getContext();
 		hubContext.session.status = "paused";
+		hubContext.session.pause_reason = "automation_completed";
+		hubContext.session.outcome = outcome;
+		hubContext.session.summary = payload.summary_markdown ?? null;
+		hubContext.session.latest_task = null;
 		logger.info(
 			{
 				sessionId: hub.getSessionId(),
 				runId,
 				outcome,
 				sessionStatus: "paused",
+				pauseReason: "automation_completed",
 			},
 			"automation.complete.session_updated",
 		);

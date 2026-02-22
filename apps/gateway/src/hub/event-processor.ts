@@ -238,16 +238,6 @@ export class EventProcessor {
 		}
 
 		if (part.type === "text") {
-			this.logger.debug(
-				{
-					partId: part.id,
-					messageId: part.messageID,
-					sessionId: part.sessionID,
-					deltaLength: typeof delta === "string" ? delta.length : 0,
-					textLength: typeof part.text === "string" ? part.text.length : 0,
-				},
-				"Processing text part update",
-			);
 			this.handleTextPart(part, delta);
 		} else if (part.callID && part.tool) {
 			this.logger.debug(

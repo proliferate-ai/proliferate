@@ -449,9 +449,7 @@ async function startSetupSession(
 	// Use HubManager to get/create hub and post prompt directly (fire-and-forget)
 	hubManager
 		.getOrCreate(sessionId)
-		.then((hub) => {
-			hub.postPrompt(prompt, "managed-configuration-setup");
-		})
+		.then((hub) => hub.postPrompt(prompt, "managed-configuration-setup"))
 		.catch((err) => {
 			logger.error({ err }, "Failed to start setup session");
 		});
