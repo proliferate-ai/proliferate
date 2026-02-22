@@ -68,7 +68,12 @@ export const automationsRouter = {
 				if (!defaultConfigurationId) {
 					const configs = await configurations.listConfigurations(context.orgId);
 					const ready = configs.find((c) => c.status === "ready" || c.status === "default");
-					if (ready) defaultConfigurationId = ready.id;
+					if (!ready) {
+						throw new ORPCError("BAD_REQUEST", {
+							message: "No ready configuration available. Please create a configuration first.",
+						});
+					}
+					defaultConfigurationId = ready.id;
 				}
 
 				const automation = await automations.createAutomation(context.orgId, context.user.id, {
