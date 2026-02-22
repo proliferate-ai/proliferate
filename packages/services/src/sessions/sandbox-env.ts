@@ -57,14 +57,24 @@ interface ResolvedSecretValue {
 	updatedAtMs: number;
 }
 
+/**
+ * Normalizes a file path by trimming whitespace and removing leading dot-slashes.
+ */
 function normalizeFilePath(filePath: string): string {
 	return filePath.trim().replace(/^\.\/+/, "");
 }
 
+/**
+ * Extracts the Unix timestamp in milliseconds from a Date object, defaulting to 0 if null.
+ */
 function updatedAtMs(updatedAt: Date | null): number {
 	return updatedAt ? updatedAt.getTime() : 0;
 }
 
+/**
+ * Assigns a secret value to the target map if it has higher precedence
+ * or is newer than the existing value.
+ */
 function assignSecretWithPrecedence(
 	target: Record<string, ResolvedSecretValue>,
 	key: string,
