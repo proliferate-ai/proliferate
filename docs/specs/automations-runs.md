@@ -5,7 +5,7 @@
 ### In Scope
 - Automation CRUD and configuration (instructions, model, routing strategy, notifications)
 - Automation connections (integration bindings)
-- Run lifecycle state model (`queued → enriching → ready → running → succeeded|failed|needs_human|timed_out`)
+- Run lifecycle state model (`queued → enriching → ready → running → succeeded|failed|needs_human|timed_out`; `canceled`/`skipped` are reserved with no active entry paths)
 - Run pipeline ownership and invariants (enrich → execute → finalize)
 - Enrichment worker (deterministic context extraction)
 - Execution worker (configuration resolution, session creation, prompt dispatch)
@@ -45,7 +45,7 @@ The system is intentionally **at-least-once** at dispatch boundaries. Idempotenc
 - `agent_decide` never creates new managed configurations. It only selects from allowlisted existing configurations (`apps/worker/src/automation/resolve-target.ts`).
 - Run creation now sets a default deadline (2 hours) at insert time (`packages/services/src/runs/service.ts:DEFAULT_RUN_DEADLINE_MS`, `createRunFromTriggerEvent`).
 - Enrichment completion is atomic (payload + status + outbox) and no longer sequential best-effort (`packages/services/src/runs/service.ts:completeEnrichment`).
-- `transitionRunStatus` does not enforce allowed transition edges; callers must preserve lifecycle correctness (`packages/services/src/runs/service.ts:transitionRunStatus`).
+- Run status transitions are centrally validated (`packages/services/src/runs/state-machine.ts`); adding a new transition path requires updating the shared transition graph.
 - Session notifications are not automation-only; gateway idle/orphan paths can also enqueue `notify_session_complete` (`apps/gateway/src/hub/migration-controller.ts`, `apps/gateway/src/sweeper/orphan-sweeper.ts`).
 - Run claim route checks automation existence at API layer, but DB assignment is scoped by `run_id + organization_id` only (`apps/web/src/server/routers/automations.ts:assignRun`, `packages/services/src/runs/db.ts:assignRunToUser`).
 
@@ -98,7 +98,7 @@ Session-complete notifications are subscription-driven (`session_notification_su
 
 ### Don't
 - Don't bypass outbox and enqueue BullMQ jobs directly from business services.
-- Don't assume `transitionRunStatus` validates edge legality.
+- Don't bypass the run state machine when writing `automation_runs.status`.
 - Don't treat `llmFilterPrompt` / `llmAnalysisPrompt` as enrichment execution logic.
 - Don't send Slack notifications without decrypting installation bot token at send time.
 
@@ -161,11 +161,27 @@ Sources:
 
 **Rules**
 - Run ownership for processing requires both allowed status and non-active lease.
-- Lifecycle edge validity is caller-owned; DB helpers do not enforce a strict finite-state machine.
+- Lifecycle edge validity is enforced centrally via `validateTransition` before status writes.
 - Every meaningful status mutation should emit a run event for auditability.
+
+**Legal Run Status Transitions**
+
+| From | Allowed To | Notes |
+|---|---|---|
+| `queued` | `enriching` | Enrichment worker start |
+| `enriching` | `ready`, `failed` | Enrichment success/failure |
+| `ready` | `running`, `failed` | Execute start or pre-run execution failure |
+| `running` | `succeeded`, `failed`, `needs_human`, `timed_out` | Completion/finalizer terminalization |
+| `needs_human` | `succeeded`, `failed` | Manual resolution |
+| `failed` | `failed`, `succeeded` | Manual resolution (including reaffirm failure) |
+| `timed_out` | `failed`, `succeeded` | Manual resolution |
+| `succeeded` | _(none)_ | Terminal |
+| `canceled` | _(none)_ | Reserved in schema; no active entry point |
+| `skipped` | _(none)_ | Reserved in schema; no active entry point |
 
 Sources:
 - `packages/services/src/runs/service.ts`
+- `packages/services/src/runs/state-machine.ts`
 - `packages/services/src/runs/db.ts`
 - `packages/db/src/schema/schema.ts`
 
@@ -233,6 +249,7 @@ Sources:
 **Rules**
 - Completion session ID mismatch is rejected.
 - Automation session cleanup is best-effort and intentionally asynchronous after tool response.
+- Trigger event status mapping is explicit: `succeeded -> completed`, `failed -> failed`, `needs_human -> skipped`.
 
 Sources:
 - `apps/gateway/src/hub/capabilities/tools/automation-complete.ts`
@@ -406,8 +423,8 @@ Sources:
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **Transition guardrails are caller-enforced** — `transitionRunStatus` allows arbitrary `toStatus`; invalid edges are possible if callers misuse it. Source: `packages/services/src/runs/service.ts:transitionRunStatus`.
-- [ ] **Run status schema includes unused states** — `canceled` and `skipped` exist in shared schema but are not currently produced by the run pipeline. Source: `packages/shared/src/contracts/automations.ts`.
+- [x] **Transition guardrails are centrally enforced** — status writes validate legal edges via `validTransitions`/`validateTransition`. Source: `packages/services/src/runs/state-machine.ts`, `packages/services/src/runs/service.ts`.
+- [x] **Reserved run statuses are explicitly modeled** — `canceled` and `skipped` remain in shared schema with no active pipeline entry points documented in the transition table. Source: `packages/shared/src/contracts/automations.ts`, `packages/services/src/runs/state-machine.ts`.
 - [ ] **LLM filter/analysis fields are still not run-stage execution inputs** — enrichment does not use `llm_filter_prompt` / `llm_analysis_prompt`. Source: `apps/worker/src/automation/enrich.ts`.
 - [ ] **Configuration selector depends on LLM proxy availability** — `agent_decide` degrades to failure/fallback when proxy config or call fails. Source: `apps/worker/src/automation/configuration-selector.ts`.
 - [ ] **Notification channel fallback remains for backward compatibility** — channel resolution still reads legacy `enabled_tools.slack_notify.channelId`. Source: `apps/worker/src/automation/notifications.ts:resolveNotificationChannelId`.

@@ -16,6 +16,11 @@ interface AutomationCompleteArgs {
 }
 
 const VALID_OUTCOMES = new Set(["succeeded", "failed", "needs_human"] as const);
+const outcomeToTriggerEventStatus = {
+	succeeded: "completed",
+	failed: "failed",
+	needs_human: "skipped",
+} as const;
 
 function normalizeOutcome(
 	outcome: string | undefined,
@@ -58,10 +63,15 @@ export const automationCompleteHandler: InterceptedToolHandler = {
 			return { success: false, result: "Run not found" };
 		}
 
-		const eventStatus = outcome === "succeeded" ? "completed" : "failed";
+		const eventStatus = outcomeToTriggerEventStatus[outcome];
 		await triggers.updateEvent(run.triggerEventId, {
 			status: eventStatus,
-			errorMessage: outcome === "failed" ? "Run failed" : null,
+			errorMessage:
+				outcome === "failed"
+					? "Run failed"
+					: outcome === "needs_human"
+						? "Run requires human review"
+						: null,
 			processedAt: new Date(),
 		});
 

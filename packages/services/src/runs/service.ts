@@ -15,6 +15,7 @@ import { getDb } from "../db/client";
 import { enqueueRunNotification } from "../notifications/service";
 import type { TriggerEventRow } from "../triggers/db";
 import * as runsDb from "./db";
+import { validateTransition } from "./state-machine";
 
 /** Default run deadline: 2 hours from creation. */
 export const DEFAULT_RUN_DEADLINE_MS = 2 * 60 * 60 * 1000;
@@ -104,6 +105,11 @@ export async function updateRun(
 	runId: string,
 	updates: Partial<runsDb.AutomationRunRow>,
 ): Promise<runsDb.AutomationRunRow | null> {
+	if (updates.status !== undefined) {
+		throw new Error(
+			"Direct run status updates are not allowed. Use transitionRunStatus or terminal helpers.",
+		);
+	}
 	return runsDb.updateRun(runId, updates);
 }
 
@@ -125,6 +131,7 @@ export async function transitionRunStatus(
 ): Promise<runsDb.AutomationRunRow | null> {
 	const run = await runsDb.findById(runId);
 	if (!run) return null;
+	validateTransition(run.status, toStatus);
 	const fromStatus = run.status ?? null;
 	const updated = await runsDb.updateRun(runId, { status: toStatus, ...updates });
 	await runsDb.insertRunEvent(runId, "status_transition", fromStatus, toStatus, data ?? null);
@@ -232,6 +239,7 @@ export async function completeEnrichment(
 			where: eq(automationRuns.id, input.runId),
 		});
 		if (!run) return null;
+		validateTransition(run.status, "ready");
 
 		const now = new Date();
 
@@ -245,8 +253,11 @@ export async function completeEnrichment(
 				lastActivityAt: now,
 				updatedAt: now,
 			})
-			.where(eq(automationRuns.id, input.runId))
+			.where(and(eq(automationRuns.id, input.runId), eq(automationRuns.status, run.status)))
 			.returning();
+		if (!updated) {
+			throw new Error("Run status changed during enrichment completion");
+		}
 
 		// 2. Record enrichment_saved event
 		await tx.insert(automationRunEvents).values({
@@ -421,6 +432,7 @@ export async function resolveRun(input: ResolveRunInput): Promise<runsDb.Automat
 
 		const fromStatus = run.status;
 		const toStatus = input.outcome;
+		validateTransition(fromStatus, toStatus);
 
 		// Conditional update: only mutate if status hasn't changed (TOCTOU guard)
 		const [updated] = await tx
@@ -501,6 +513,7 @@ export async function completeRun(
 				: input.outcome === "failed"
 					? "failed"
 					: "succeeded";
+		validateTransition(run.status, status);
 
 		const [updated] = await tx
 			.update(automationRuns)
@@ -512,8 +525,26 @@ export async function completeRun(
 				statusReason: input.outcome,
 				updatedAt: new Date(),
 			})
-			.where(eq(automationRuns.id, input.runId))
+			.where(and(eq(automationRuns.id, input.runId), eq(automationRuns.status, run.status)))
 			.returning();
+		if (!updated) {
+			const latest = await tx.query.automationRuns.findFirst({
+				where: eq(automationRuns.id, input.runId),
+			});
+			if (!latest) return null;
+
+			if (latest.completionId === input.completionId) {
+				if (
+					latest.completionJson &&
+					JSON.stringify(latest.completionJson) !== JSON.stringify(input.completionJson)
+				) {
+					throw new Error("Completion payload mismatch for idempotent retry");
+				}
+				return latest;
+			}
+
+			throw new Error("Run status changed during completion");
+		}
 
 		await tx.insert(automationRunEvents).values({
 			runId: input.runId,
