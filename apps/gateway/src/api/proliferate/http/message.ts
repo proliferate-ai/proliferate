@@ -6,6 +6,7 @@
  * Send a prompt to the session.
  */
 
+import { createLogger } from "@proliferate/logger";
 import type { ClientSource } from "@proliferate/shared";
 import { Router, type Router as RouterType } from "express";
 import {
@@ -17,6 +18,7 @@ import {
 import { ApiError } from "../../../middleware";
 
 const router: RouterType = Router({ mergeParams: true });
+const logger = createLogger({ service: "gateway" }).child({ module: "message-route" });
 
 interface MessageBody {
 	type: string;
@@ -32,10 +34,25 @@ interface MessageBody {
  */
 router.post("/message", async (req, res, next) => {
 	let idempotencyState: { orgId: string; key: string } | null = null;
+	const startMs = Date.now();
 	try {
 		const body = req.body as MessageBody;
 		const orgId = req.auth?.orgId;
 		const idempotencyKey = req.header("Idempotency-Key");
+		const sessionId = (req.params as Record<string, string>)?.proliferateSessionId ?? null;
+		logger.info(
+			{
+				sessionId,
+				orgId: orgId ?? null,
+				authSource: req.auth?.source ?? null,
+				idempotencyKey: idempotencyKey ?? null,
+				type: body.type,
+				contentLength: typeof body.content === "string" ? body.content.length : 0,
+				imageCount: Array.isArray(body.images) ? body.images.length : 0,
+				source: body.source ?? null,
+			},
+			"message.request.received",
+		);
 
 		if (idempotencyKey && orgId) {
 			const existing = await readIdempotencyResponse(orgId, idempotencyKey);
@@ -76,11 +93,30 @@ router.post("/message", async (req, res, next) => {
 				);
 			}
 
+			logger.info(
+				{
+					sessionId,
+					userId,
+					source: body.source ?? null,
+					contentLength: body.content.length,
+					imageCount: Array.isArray(body.images) ? body.images.length : 0,
+				},
+				"message.request.dispatching_prompt",
+			);
+
 			await req.hub!.postPrompt(body.content, userId, body.source, body.images);
 			const response = { ok: true };
 			if (idempotencyState) {
 				await storeIdempotencyResponse(idempotencyState.orgId, idempotencyState.key, response);
 			}
+			logger.info(
+				{
+					sessionId,
+					userId,
+					durationMs: Date.now() - startMs,
+				},
+				"message.request.completed",
+			);
 			res.json(response);
 			return;
 		}
@@ -90,6 +126,14 @@ router.post("/message", async (req, res, next) => {
 		if (idempotencyState) {
 			await clearIdempotencyKey(idempotencyState.orgId, idempotencyState.key);
 		}
+		logger.error(
+			{
+				err,
+				sessionId: (req.params as Record<string, string>)?.proliferateSessionId ?? null,
+				durationMs: Date.now() - startMs,
+			},
+			"message.request.failed",
+		);
 		next(err);
 	}
 });

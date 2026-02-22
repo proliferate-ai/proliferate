@@ -47,23 +47,25 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 		false,
 	);
 	const proxyUrl = process.env.LLM_PROXY_URL;
+	const useProxy = requireProxy && Boolean(proxyUrl);
 
 	logger.debug(
 		{
 			repoCount: input.repoIds.length,
 			requireProxy,
+			useProxy,
 			hasProxyUrl: Boolean(proxyUrl),
 			hasDirectApiKey: Boolean(input.directApiKey ?? process.env.ANTHROPIC_API_KEY),
 		},
 		"Building sandbox env vars",
 	);
 
-	if (!proxyUrl) {
-		if (requireProxy) {
-			throw new Error("LLM proxy is required but LLM_PROXY_URL is not set");
-		}
+	if (!requireProxy) {
 		envVars.ANTHROPIC_API_KEY = input.directApiKey ?? process.env.ANTHROPIC_API_KEY ?? "";
 	} else {
+		if (!proxyUrl) {
+			throw new Error("LLM proxy is required but LLM_PROXY_URL is not set");
+		}
 		try {
 			const keyStartMs = Date.now();
 
@@ -125,9 +127,9 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 		{
 			durationMs: Date.now() - startMs,
 			envKeyCount: Object.keys(envVars).length,
-			usesProxy: Boolean(proxyUrl),
+			usesProxy: useProxy,
 		},
 		"Sandbox env vars build complete",
 	);
-	return { envVars, usesProxy: Boolean(proxyUrl) };
+	return { envVars, usesProxy: useProxy };
 }

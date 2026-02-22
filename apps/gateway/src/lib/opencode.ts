@@ -2,6 +2,7 @@ import { createLogger } from "@proliferate/logger";
 import type { Message, MessagePart, ToolCall, ToolPart } from "@proliferate/shared";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "opencode" });
+const opencodeLookupTimeoutMs = 5000;
 
 function getBaseUrlHost(baseUrl: string): string | null {
 	try {
@@ -157,7 +158,9 @@ export async function createOpenCodeSession(baseUrl: string, title?: string): Pr
 
 export async function getOpenCodeSession(baseUrl: string, sessionId: string): Promise<boolean> {
 	const startMs = Date.now();
-	const response = await fetch(`${baseUrl}/session/${sessionId}`);
+	const response = await fetch(`${baseUrl}/session/${sessionId}`, {
+		signal: AbortSignal.timeout(opencodeLookupTimeoutMs),
+	});
 	logger.debug(
 		{
 			host: getBaseUrlHost(baseUrl),
@@ -184,7 +187,9 @@ export interface OpenCodeSessionInfo {
  */
 export async function listOpenCodeSessions(baseUrl: string): Promise<OpenCodeSessionInfo[]> {
 	const startMs = Date.now();
-	const response = await fetch(`${baseUrl}/session`);
+	const response = await fetch(`${baseUrl}/session`, {
+		signal: AbortSignal.timeout(opencodeLookupTimeoutMs),
+	});
 	if (!response.ok) {
 		logger.debug(
 			{
@@ -519,7 +524,7 @@ export function mapOpenCodeMessages(messages: OpenCodeMessage[]): Message[] {
 				continue;
 			}
 
-			if (part.type === "tool" && part.callID && part.tool) {
+			if (part.callID && part.tool) {
 				const status = mapToolStatus(part.state?.status);
 				const toolPart: ToolPart = {
 					type: "tool",
@@ -542,6 +547,16 @@ export function mapOpenCodeMessages(messages: OpenCodeMessage[]): Message[] {
 			}
 		}
 
+		// Preserve assistant-side errors for init/history hydration.
+		// Without this fallback, failed assistant turns become visually blank.
+		if (message.info.role === "assistant" && parts.length === 0 && !content) {
+			const errorText = getOpenCodeMessageError(message.info.error);
+			if (errorText) {
+				parts.push({ type: "text", text: errorText });
+				content = errorText;
+			}
+		}
+
 		return {
 			id: message.info.id,
 			role: message.info.role,
@@ -552,4 +567,20 @@ export function mapOpenCodeMessages(messages: OpenCodeMessage[]): Message[] {
 			parts: parts.length > 0 ? parts : undefined,
 		};
 	});
+}
+
+function getOpenCodeMessageError(error: unknown): string | null {
+	if (!error) return null;
+	if (typeof error === "string") return error;
+	if (typeof error !== "object") return String(error);
+
+	const obj = error as {
+		name?: unknown;
+		message?: unknown;
+		data?: { message?: unknown } | null;
+	};
+	if (typeof obj.data?.message === "string" && obj.data.message) return obj.data.message;
+	if (typeof obj.message === "string" && obj.message) return obj.message;
+	if (typeof obj.name === "string" && obj.name) return obj.name;
+	return null;
 }

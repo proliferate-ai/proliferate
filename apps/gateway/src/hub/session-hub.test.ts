@@ -43,6 +43,27 @@ type MaybeSendInitialPromptMethod = (this: {
 	handlePrompt: ReturnType<typeof vi.fn>;
 }) => Promise<void>;
 
+type HandleSseDisconnectMethod = (
+	this: {
+		runtime: {
+			getContext: () => {
+				session: {
+					client_type?: string | null;
+					status?: string | null;
+					sandbox_id?: string | null;
+					sandbox_expires_at?: string | null;
+				};
+			};
+		};
+		clients: Map<unknown, unknown>;
+		shouldReconnectWithoutClients: ReturnType<typeof vi.fn>;
+		log: ReturnType<typeof vi.fn>;
+		broadcastStatus: ReturnType<typeof vi.fn>;
+		scheduleReconnect: ReturnType<typeof vi.fn>;
+	},
+	reason: string,
+) => void;
+
 function createHubStub(): HubStub {
 	return {
 		sessionId: "session-1",
@@ -239,5 +260,36 @@ describe("SessionHub initial prompt auto-send", () => {
 
 		expect(updateSpy).toHaveBeenCalledTimes(3);
 		expect(hub.handlePrompt).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe("SessionHub SSE reconnect policy", () => {
+	it("skips auto-reconnect for headless running automation sessions", () => {
+		const hub = {
+			runtime: {
+				getContext: () => ({
+					session: {
+						client_type: "automation",
+						status: "running",
+						sandbox_id: "sb-1",
+						sandbox_expires_at: null,
+					},
+				}),
+			},
+			clients: new Map(),
+			shouldReconnectWithoutClients: vi.fn(() => true),
+			log: vi.fn(),
+			broadcastStatus: vi.fn(),
+			scheduleReconnect: vi.fn(),
+		};
+		const handleSseDisconnect = (
+			SessionHub.prototype as unknown as { handleSseDisconnect: HandleSseDisconnectMethod }
+		).handleSseDisconnect;
+
+		handleSseDisconnect.call(hub, "stream_closed");
+
+		expect(hub.scheduleReconnect).not.toHaveBeenCalled();
+		expect(hub.broadcastStatus).not.toHaveBeenCalled();
+		expect(hub.log).toHaveBeenCalledWith("Skipping auto-reconnect for headless automation session");
 	});
 });

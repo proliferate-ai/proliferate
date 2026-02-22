@@ -33,6 +33,7 @@ import {
 } from "@proliferate/shared/sandbox";
 import type { GatewayEnv } from "./env";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
+import { deriveSandboxMcpToken } from "./sandbox-mcp-token";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "session-creator" });
 
@@ -314,9 +315,14 @@ export async function createSession(
 			sandboxId: result.sandboxId,
 			openCodeTunnelUrl: result.tunnelUrl || null,
 			previewTunnelUrl: result.previewUrl,
+			sandboxExpiresAt: result.expiresAt ?? null,
 		});
 		log.debug(
-			{ durationMs: Date.now() - updateStartMs },
+			{
+				durationMs: Date.now() - updateStartMs,
+				hasSandboxExpiry: Boolean(result.expiresAt),
+				sandboxExpiresAt: result.expiresAt ? new Date(result.expiresAt).toISOString() : null,
+			},
 			"session_creator.create_session.db.update_session",
 		);
 
@@ -376,6 +382,7 @@ interface CreateSandboxResult {
 	previewUrl: string;
 	sshHost?: string;
 	sshPort?: number;
+	expiresAt?: number;
 	integrationWarnings: IntegrationWarning[];
 }
 
@@ -442,6 +449,14 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 
 	// SSH public key (concatenate all keys for authorized_keys)
 	const sshPublicKey = sshOptions?.publicKeys?.join("\n");
+	const mandatoryRuntimeEnv = {
+		SANDBOX_MCP_AUTH_TOKEN: deriveSandboxMcpToken(env.serviceToken, sessionId),
+		PROLIFERATE_GATEWAY_URL: env.gatewayUrl,
+		PROLIFERATE_SESSION_ID: sessionId,
+	};
+	log.info(
+		`Runtime env injection: gatewayUrl=${env.gatewayUrl ? "set" : "missing"} mcpToken=set sessionId=${sessionId}`,
+	);
 
 	// Resolve integration tokens
 	const integrationsStartMs = Date.now();
@@ -478,6 +493,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			...baseEnvResult.envVars,
 			...(process.env.ACTIONS_PLANE_LEGACY_TOKENS === "true" ? integrationEnvVars : {}),
 			...(sshOptions.envVars || {}),
+			...mandatoryRuntimeEnv,
 		};
 
 		const providerStartMs = Date.now();
@@ -513,6 +529,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			previewUrl: result.previewUrl,
 			sshHost: result.sshHost,
 			sshPort: result.sshPort,
+			expiresAt: result.expiresAt,
 			integrationWarnings,
 		};
 	}
@@ -613,6 +630,10 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		},
 		"session_creator.create_sandbox.env_vars",
 	);
+	const mergedEnvVars = {
+		...envVars,
+		...mandatoryRuntimeEnv,
+	};
 
 	// Build system prompt
 	const primaryRepo = typedConfigurationRepos[0].repo!;
@@ -634,7 +655,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		sessionType,
 		repos: repoSpecs,
 		branch: primaryRepo.defaultBranch || "main",
-		envVars,
+		envVars: mergedEnvVars,
 		systemPrompt,
 		snapshotId: snapshotId || undefined,
 		baseSnapshotId,
@@ -671,6 +692,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		previewUrl: result.previewUrl,
 		sshHost: result.sshHost,
 		sshPort: result.sshPort,
+		expiresAt: result.expiresAt,
 		integrationWarnings,
 	};
 }

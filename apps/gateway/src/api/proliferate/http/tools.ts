@@ -64,6 +64,16 @@ export function createToolsRouter(_env: GatewayEnv, hubManager: HubManager): Rou
 				args?: Record<string, unknown>;
 			};
 
+			logger.info(
+				{
+					sessionId: proliferateSessionId,
+					toolName,
+					toolCallId: toolCallId ?? null,
+					authSource: req.auth?.source ?? null,
+				},
+				"Tool callback received",
+			);
+
 			if (!proliferateSessionId) {
 				throw new ApiError(400, "Missing session ID");
 			}
@@ -112,6 +122,17 @@ export function createToolsRouter(_env: GatewayEnv, hubManager: HubManager): Rou
 				hub.trackToolCallStart();
 				try {
 					const result = await handler.execute(hub, toolArgs);
+					logger.info(
+						{
+							toolCallId,
+							toolName,
+							sessionId: proliferateSessionId,
+							success: result.success,
+							resultLength: result.result.length,
+							hasData: Boolean(result.data),
+						},
+						"Tool execution completed",
+					);
 					return { success: result.success, result: result.result, data: result.data };
 				} finally {
 					hub.trackToolCallEnd();
@@ -127,11 +148,30 @@ export function createToolsRouter(_env: GatewayEnv, hubManager: HubManager): Rou
 				completedResults.set(key, result);
 				evictAfterDelay(key);
 
+				logger.info(
+					{
+						toolCallId,
+						toolName,
+						sessionId: proliferateSessionId,
+						success: result.success,
+						resultLength: result.result.length,
+						hasData: Boolean(result.data),
+					},
+					"Tool callback response sent",
+				);
 				res.json(result);
 			} finally {
 				inflightCalls.delete(key);
 			}
 		} catch (err) {
+			logger.error(
+				{
+					err,
+					sessionId: (req.params as Record<string, string>)?.proliferateSessionId ?? null,
+					toolName: (req.params as Record<string, string>)?.toolName ?? null,
+				},
+				"Tool callback failed",
+			);
 			next(err);
 		}
 	});

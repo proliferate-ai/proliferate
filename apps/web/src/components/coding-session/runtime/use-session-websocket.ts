@@ -1,5 +1,6 @@
 "use client";
 
+import { devConsoleLog } from "@/lib/dev-console-log";
 import { GATEWAY_URL } from "@/lib/gateway";
 import {
 	type ServerMessage,
@@ -74,6 +75,62 @@ interface UseSessionWebSocketReturn {
 	) => void;
 	clearEnvRequest: () => void;
 	clearGitResult: () => void;
+}
+
+function debugWs(
+	event: string,
+	payload: Record<string, unknown>,
+	options?: { persist?: boolean },
+): void {
+	devConsoleLog("coding-session:ws", event, payload, options);
+}
+
+function summarizeServerEvent(data: ServerMessage): Record<string, unknown> {
+	const payload = (data as { payload?: Record<string, unknown> }).payload;
+	switch (data.type) {
+		case "init":
+			return {
+				type: data.type,
+				messageCount: Array.isArray(payload?.messages) ? payload.messages.length : 0,
+				hasPreviewUrl: Boolean(
+					payload?.config &&
+						typeof payload.config === "object" &&
+						(payload.config as Record<string, unknown>).previewTunnelUrl,
+				),
+			};
+		case "message":
+			return {
+				type: data.type,
+				messageId: payload?.id ?? null,
+				role: payload?.role ?? null,
+				contentLength: typeof payload?.content === "string" ? payload.content.length : 0,
+				partCount: Array.isArray(payload?.parts) ? payload.parts.length : 0,
+			};
+		case "token":
+			return {
+				type: data.type,
+				messageId: payload?.messageId ?? null,
+				tokenLength: typeof payload?.token === "string" ? payload.token.length : 0,
+			};
+		case "tool_start":
+		case "tool_end":
+		case "tool_metadata":
+			return {
+				type: data.type,
+				messageId: payload?.messageId ?? null,
+				toolCallId: payload?.toolCallId ?? null,
+				tool: payload?.tool ?? null,
+			};
+		case "message_complete":
+		case "message_cancelled":
+			return { type: data.type, messageId: payload?.messageId ?? null };
+		case "status":
+			return { type: data.type, status: payload?.status ?? null };
+		case "error":
+			return { type: data.type, message: payload?.message ?? null };
+		default:
+			return { type: data.type };
+	}
 }
 
 /**
@@ -156,15 +213,26 @@ export function useSessionWebSocket({
 			onOpen: () => {
 				setIsConnected(true);
 				setError(null);
+				debugWs("open", { sessionId, gatewayUrl: GATEWAY_URL });
 			},
 			onClose: () => {
 				setIsConnected(false);
 				setIsRunning(false);
+				debugWs("close", { sessionId });
 			},
 			onReconnectFailed: () => {
 				setError("Connection lost");
+				debugWs("reconnect_failed", { sessionId });
 			},
 			onEvent: (data: ServerMessage) => {
+				debugWs(
+					"event",
+					{
+						sessionId,
+						...summarizeServerEvent(data),
+					},
+					{ persist: data.type !== "token" },
+				);
 				handleServerMessage(data, ctx);
 			},
 		});

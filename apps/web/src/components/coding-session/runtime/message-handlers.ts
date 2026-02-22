@@ -1,3 +1,4 @@
+import { devConsoleLog } from "@/lib/dev-console-log";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useSetupProgressStore } from "@/stores/setup-progress";
 import type {
@@ -19,6 +20,14 @@ import { type EnvRequest, type ServerPart, convertServerParts } from "./types";
 
 type SetMessages = React.Dispatch<React.SetStateAction<ExtendedMessage[]>>;
 type SetStreamingText = React.Dispatch<React.SetStateAction<Record<string, string>>>;
+
+function debugLog(
+	event: string,
+	payload: Record<string, unknown>,
+	options?: { persist?: boolean },
+): void {
+	devConsoleLog("coding-session", event, payload, options);
+}
 
 export interface MessageHandlerContext {
 	sessionId: string;
@@ -45,6 +54,19 @@ export interface MessageHandlerContext {
 /** Handle init message - sets initial messages and config */
 export function handleInit(payload: any, ctx: MessageHandlerContext) {
 	if (!payload?.messages) return;
+	const messageList = Array.isArray(payload.messages) ? payload.messages : [];
+	debugLog("init.received", {
+		sessionId: ctx.sessionId,
+		messageCount: messageList.length,
+		summaries: messageList.slice(-20).map((m: any) => ({
+			id: m.id ?? null,
+			role: m.role ?? null,
+			isComplete: Boolean(m.isComplete),
+			contentLength: typeof m.content === "string" ? m.content.length : 0,
+			partCount: Array.isArray(m.parts) ? m.parts.length : 0,
+			toolCallCount: Array.isArray(m.toolCalls) ? m.toolCalls.length : 0,
+		})),
+	});
 
 	ctx.streamingTextRef.current = {};
 	ctx.setMessages(
@@ -86,6 +108,15 @@ export function handleInit(payload: any, ctx: MessageHandlerContext) {
 /** Handle new message or message update */
 export function handleMessage(payload: any, ctx: MessageHandlerContext) {
 	if (!payload) return;
+	debugLog("message.received", {
+		sessionId: ctx.sessionId,
+		messageId: payload.id ?? null,
+		role: payload.role ?? null,
+		isComplete: Boolean(payload.isComplete),
+		contentLength: typeof payload.content === "string" ? payload.content.length : 0,
+		partCount: Array.isArray(payload.parts) ? payload.parts.length : 0,
+		toolCallCount: Array.isArray(payload.toolCalls) ? payload.toolCalls.length : 0,
+	});
 
 	ctx.setMessages((prev) => {
 		const exists = prev.some((m) => m.id === payload.id);
@@ -112,6 +143,15 @@ export function handleToken(
 	ctx: MessageHandlerContext,
 ) {
 	if (!payload?.messageId || !payload?.token) return;
+	debugLog(
+		"token.received",
+		{
+			sessionId: ctx.sessionId,
+			messageId: payload.messageId,
+			tokenLength: payload.token.length,
+		},
+		{ persist: false },
+	);
 
 	const msgId = payload.messageId;
 	ctx.streamingTextRef.current[msgId] = (ctx.streamingTextRef.current[msgId] || "") + payload.token;
@@ -125,6 +165,13 @@ export function handleToken(
 /** Handle tool start - add tool part to message */
 export function handleToolStart(data: ToolStartMessage, ctx: MessageHandlerContext) {
 	const payload = data.payload;
+	debugLog("tool_start.received", {
+		sessionId: ctx.sessionId,
+		messageId: payload.messageId ?? null,
+		toolCallId: payload.toolCallId,
+		tool: payload.tool,
+		hasArgs: Boolean(payload.args),
+	});
 	useSetupProgressStore.getState().onToolStart(ctx.sessionId, payload.tool);
 	const messageId = payload.messageId || ctx.getLastAssistantMessageId();
 
@@ -174,6 +221,12 @@ export function handleToolStart(data: ToolStartMessage, ctx: MessageHandlerConte
 /** Handle tool end - mark tool as complete with result */
 export function handleToolEnd(data: ToolEndMessage, ctx: MessageHandlerContext) {
 	const payload = data.payload;
+	debugLog("tool_end.received", {
+		sessionId: ctx.sessionId,
+		toolCallId: payload.toolCallId,
+		tool: payload.tool,
+		hasResult: payload.result !== undefined,
+	});
 	useSetupProgressStore.getState().onToolEnd(ctx.sessionId);
 	// Ensure result is truthy (empty string causes issues)
 	const result = payload.result || " ";
@@ -196,6 +249,13 @@ export function handleToolEnd(data: ToolEndMessage, ctx: MessageHandlerContext) 
 /** Handle tool metadata update (sub-agent progress) */
 export function handleToolMetadata(data: ToolMetadataMessage, ctx: MessageHandlerContext) {
 	const payload = data.payload;
+	debugLog("tool_metadata.received", {
+		sessionId: ctx.sessionId,
+		toolCallId: payload.toolCallId,
+		tool: payload.tool,
+		title: payload.title ?? null,
+		summaryLength: Array.isArray(payload.metadata?.summary) ? payload.metadata.summary.length : 0,
+	});
 
 	ctx.setMessages((prev) =>
 		prev.map((m) => {
@@ -220,6 +280,10 @@ export function handleToolMetadata(data: ToolMetadataMessage, ctx: MessageHandle
 /** Handle message complete */
 export function handleMessageComplete(payload: { messageId?: string }, ctx: MessageHandlerContext) {
 	if (!payload?.messageId) return;
+	debugLog("message_complete.received", {
+		sessionId: ctx.sessionId,
+		messageId: payload.messageId,
+	});
 
 	flushStreamingText(payload.messageId, ctx);
 	ctx.setMessages((msgs) =>
@@ -234,6 +298,10 @@ export function handleMessageCancelled(
 	ctx: MessageHandlerContext,
 ) {
 	if (!payload?.messageId) return;
+	debugLog("message_cancelled.received", {
+		sessionId: ctx.sessionId,
+		messageId: payload.messageId,
+	});
 
 	flushStreamingText(payload.messageId, ctx);
 	ctx.setMessages((msgs) =>

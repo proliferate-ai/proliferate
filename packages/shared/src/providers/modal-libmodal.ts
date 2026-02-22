@@ -38,6 +38,7 @@ import {
 	SANDBOX_PATHS,
 	SANDBOX_PORTS,
 	SANDBOX_TIMEOUT_MS,
+	SANDBOX_TIMEOUT_SECONDS,
 	type SandboxOperation,
 	SandboxProviderError,
 	type SessionMetadata,
@@ -648,6 +649,9 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			// Create sandbox with Modal SDK
 			// Note: command starts Docker daemon, experimentalOptions enables Docker support
 			// SSH uses unencryptedPorts for raw TCP (SSH handles its own encryption)
+			log.info(
+				`Creating Modal sandbox with timeoutSeconds=${SANDBOX_TIMEOUT_SECONDS} timeoutMs=${SANDBOX_TIMEOUT_MS}`,
+			);
 			const createStartMs = Date.now();
 			const sandbox = await this.client.sandboxes.create(app, sandboxImage, {
 				command: ["sh", "-c", "rm -f /var/run/docker.pid && exec /usr/local/bin/start-dockerd.sh"],

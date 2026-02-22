@@ -194,8 +194,56 @@ export class SessionHub {
 	}
 
 	private shouldReconnectWithoutClients(): boolean {
-		const clientType = this.runtime.getContext().session.client_type ?? null;
-		return clientType === "automation";
+		const session = this.runtime.getContext().session;
+		const clientType = session.client_type ?? null;
+		const status = session.status ?? null;
+		return clientType === "automation" && status === "running";
+	}
+
+	private isCompletedAutomationSession(): boolean {
+		const session = this.runtime.getContext().session;
+		return (
+			session.client_type === "automation" &&
+			session.status === "paused" &&
+			session.pause_reason === "automation_completed"
+		);
+	}
+
+	private buildCompletedAutomationFallbackMessages(): Message[] {
+		const session = this.runtime.getContext().session;
+		const fallbackMessages: Message[] = [];
+		const now = Date.now();
+		const initialPrompt = session.initial_prompt?.trim();
+		const summary =
+			session.summary?.trim() ||
+			(session.outcome ? `Automation ${session.outcome}.` : null) ||
+			(session.latest_task ? `Latest task: ${session.latest_task}` : null);
+
+		if (initialPrompt) {
+			fallbackMessages.push({
+				id: `${this.sessionId}:fallback:user`,
+				role: "user",
+				content: initialPrompt,
+				isComplete: true,
+				createdAt: now - 1,
+				source: "automation",
+				parts: [{ type: "text", text: initialPrompt }],
+			});
+		}
+
+		if (summary) {
+			fallbackMessages.push({
+				id: `${this.sessionId}:fallback:assistant`,
+				role: "assistant",
+				content: summary,
+				isComplete: true,
+				createdAt: now,
+				source: "automation",
+				parts: [{ type: "text", text: summary }],
+			});
+		}
+
+		return fallbackMessages;
 	}
 
 	// ============================================
@@ -249,8 +297,16 @@ export class SessionHub {
 	}
 
 	private async initializeClient(ws: WebSocket, userId?: string): Promise<void> {
-		this.sendStatus(ws, "resuming", "Connecting to coding agent...");
 		try {
+			if (this.isCompletedAutomationSession()) {
+				this.log("Initializing completed automation session without runtime resume");
+				await this.sendInit(ws);
+				this.sendStatus(ws, "paused", "Automation run completed");
+				this.log("Client initialized for completed automation session", { userId });
+				return;
+			}
+
+			this.sendStatus(ws, "resuming", "Connecting to coding agent...");
 			await this.ensureRuntimeReady();
 			await this.sendInit(ws);
 			this.sendStatus(ws, "running");
@@ -1163,7 +1219,9 @@ export class SessionHub {
 
 	private handleGetStatus(ws: WebSocket): void {
 		let status: "creating" | "resuming" | "running" | "paused" | "stopped" | "error" | "migrating";
-		if (this.migrationController.getState() === "migrating") {
+		if (this.isCompletedAutomationSession()) {
+			status = "paused";
+		} else if (this.migrationController.getState() === "migrating") {
 			status = "migrating";
 		} else if (!this.runtime.isConnecting() && !this.runtime.hasOpenCodeUrl()) {
 			status = "stopped";
@@ -1177,6 +1235,16 @@ export class SessionHub {
 
 	private handleGetMessages(ws: WebSocket): void {
 		this.log("Handling get_messages request");
+		if (this.isCompletedAutomationSession()) {
+			this.sendInit(ws)
+				.then(() => this.sendStatus(ws, "paused", "Automation run completed"))
+				.catch((err) => {
+					this.logError("Failed to send completed automation messages", err);
+					this.sendError(ws, "Failed to fetch messages");
+				});
+			return;
+		}
+
 		this.ensureRuntimeReady()
 			.then(() => this.sendInit(ws))
 			.catch((err) => {
@@ -1268,10 +1336,32 @@ export class SessionHub {
 	}
 
 	private handleSseDisconnect(reason: string): void {
-		this.log("SSE disconnected", { reason });
+		const context = this.runtime.getContext();
+		const shouldReconnectWithoutClients = this.shouldReconnectWithoutClients();
+		const isHeadlessAutomation =
+			this.clients.size === 0 &&
+			context.session.client_type === "automation" &&
+			context.session.status === "running";
+		this.log("SSE disconnected", {
+			reason,
+			connectedClients: this.clients.size,
+			clientType: context.session.client_type ?? null,
+			sessionStatus: context.session.status ?? null,
+			sandboxId: context.session.sandbox_id ?? null,
+			sandboxExpiresAt: context.session.sandbox_expires_at ?? null,
+			shouldReconnectWithoutClients,
+			isHeadlessAutomation,
+		});
 
-		// Only reconnect if we still have clients (or this is a headless automation session).
-		if (this.clients.size === 0 && !this.shouldReconnectWithoutClients()) {
+		// For headless automation runs, avoid reconnect loops that churn OpenCode session identity.
+		// We'll reconnect when a client explicitly attaches (workspace open / get_messages).
+		if (isHeadlessAutomation) {
+			this.log("Skipping auto-reconnect for headless automation session");
+			return;
+		}
+
+		// Only reconnect automatically when at least one WS client is attached.
+		if (this.clients.size === 0 && !shouldReconnectWithoutClients) {
 			this.log("No clients connected, skipping reconnection");
 			return;
 		}
@@ -1389,29 +1479,102 @@ export class SessionHub {
 	}
 
 	private async sendInit(ws: WebSocket): Promise<void> {
-		const openCodeUrl = this.runtime.getOpenCodeUrl();
-		const openCodeSessionId = this.runtime.getOpenCodeSessionId();
-		const previewUrl = this.runtime.getPreviewUrl();
-		if (!openCodeUrl || !openCodeSessionId) {
+		const contextSession = this.runtime.getContext().session;
+		const openCodeUrl =
+			this.runtime.getOpenCodeUrl() ?? contextSession.open_code_tunnel_url ?? null;
+		const openCodeSessionId =
+			this.runtime.getOpenCodeSessionId() ?? contextSession.coding_agent_session_id ?? null;
+		const previewUrl = this.runtime.getPreviewUrl() ?? contextSession.preview_tunnel_url ?? null;
+		const isCompletedAutomationSession = this.isCompletedAutomationSession();
+
+		let transformed: Message[] = [];
+		if (openCodeUrl && openCodeSessionId) {
+			try {
+				this.log("Fetching OpenCode messages for init...", {
+					openCodeSessionId,
+					openCodeUrl,
+				});
+				const messages = await fetchOpenCodeMessages(openCodeUrl, openCodeSessionId);
+				const rawSummaries = messages.slice(-20).map((message) => ({
+					id: message.info?.id ?? null,
+					role: message.info?.role ?? null,
+					partCount: message.parts?.length ?? 0,
+					hasError: Boolean(message.info?.error),
+					createdAt: message.info?.time?.created ?? null,
+					completedAt: message.info?.time?.completed ?? null,
+					parts: (message.parts ?? []).slice(0, 5).map((part) => ({
+						type: part.type,
+						hasCallId: Boolean(part.callID),
+						tool: part.tool ?? null,
+						status: part.state?.status ?? null,
+						textLength: typeof part.text === "string" ? part.text.length : 0,
+					})),
+				}));
+				const roleCounts = messages.reduce<Record<string, number>>((acc, message) => {
+					const role = message.info?.role ?? "unknown";
+					acc[role] = (acc[role] ?? 0) + 1;
+					return acc;
+				}, {});
+				this.log("Fetched OpenCode messages", {
+					rawMessageCount: messages.length,
+					roleCounts,
+					rawSummaries,
+				});
+				transformed = mapOpenCodeMessages(messages);
+			} catch (err) {
+				if (!isCompletedAutomationSession) {
+					throw err;
+				}
+				this.logError(
+					"OpenCode fetch failed for completed automation; using fallback transcript",
+					err,
+				);
+			}
+		} else if (!isCompletedAutomationSession) {
 			throw new Error("Missing agent session info");
 		}
 
-		this.log("Fetching OpenCode messages for init...", {
+		if (transformed.length === 0 && isCompletedAutomationSession) {
+			transformed = this.buildCompletedAutomationFallbackMessages();
+			this.log("Using completed automation fallback transcript", {
+				messageCount: transformed.length,
+				hasInitialPrompt: Boolean(contextSession.initial_prompt),
+				hasSummary: Boolean(contextSession.summary),
+				outcome: contextSession.outcome ?? null,
+			});
+		}
+
+		const transformedSummaries = transformed.slice(-20).map((message) => ({
+			id: message.id,
+			role: message.role,
+			isComplete: message.isComplete,
+			contentLength: message.content.length,
+			partCount: message.parts?.length ?? 0,
+			toolCallCount: message.toolCalls?.length ?? 0,
+			parts: (message.parts ?? []).slice(0, 5).map((part) => {
+				if (part.type === "text") {
+					return { type: "text", textLength: part.text.length };
+				}
+				if (part.type === "image") {
+					return { type: "image" };
+				}
+				return {
+					type: "tool",
+					toolCallId: part.toolCallId,
+					toolName: part.toolName,
+					status: part.status,
+				};
+			}),
+		}));
+		this.log("Transformed OpenCode messages for init", {
 			openCodeSessionId,
-			openCodeUrl,
+			transformedCount: transformed.length,
+			transformedSummaries,
 		});
-		const messages = await fetchOpenCodeMessages(openCodeUrl, openCodeSessionId);
-		const roleCounts = messages.reduce<Record<string, number>>((acc, message) => {
-			const role = message.info?.role ?? "unknown";
-			acc[role] = (acc[role] ?? 0) + 1;
-			return acc;
-		}, {});
-		this.log("Fetched OpenCode messages", {
-			rawMessageCount: messages.length,
-			roleCounts,
+		this.log("Sending init to client", {
+			messageCount: transformed.length,
+			isCompletedAutomationSession,
 		});
-		const transformed = mapOpenCodeMessages(messages);
-		this.log("Sending init to client", { messageCount: transformed.length });
 
 		const initPayload: ServerMessage = {
 			type: "init",

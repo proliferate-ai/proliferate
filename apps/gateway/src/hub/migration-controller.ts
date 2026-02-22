@@ -78,9 +78,21 @@ export class MigrationController {
 		}
 
 		const startMs = Date.now();
+		const session = this.options.runtime.getContext().session;
 		const hasClients = this.options.getClientCount() > 0;
-		this.logger.debug({ hasClients }, "migration.run_expiry.start");
-		await this.migrateToNewSandbox({ createNewSandbox: hasClients });
+		const createNewSandbox = hasClients;
+		this.logger.debug(
+			{
+				hasClients,
+				createNewSandbox,
+				clientType: session.client_type ?? null,
+				sessionStatus: session.status ?? null,
+				sandboxId: session.sandbox_id ?? null,
+				sandboxExpiresAt: session.sandbox_expires_at ?? null,
+			},
+			"migration.run_expiry.start",
+		);
+		await this.migrateToNewSandbox({ createNewSandbox });
 		this.logger.info({ durationMs: Date.now() - startMs }, "migration.run_expiry.complete");
 	}
 
@@ -345,7 +357,17 @@ export class MigrationController {
 				const providerType = context.session.sandbox_provider as SandboxProviderType;
 				const provider = getSandboxProvider(providerType);
 
-				this.logger.debug({ createNewSandbox, provider: provider.type }, "migration.lock_acquired");
+				this.logger.debug(
+					{
+						createNewSandbox,
+						provider: provider.type,
+						sessionStatus: context.session.status ?? null,
+						clientType: context.session.client_type ?? null,
+						sandboxId,
+						snapshotId: context.session.snapshot_id ?? null,
+					},
+					"migration.lock_acquired",
+				);
 
 				if (createNewSandbox) {
 					this.migrationState = "migrating";
