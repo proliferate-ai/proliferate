@@ -10,12 +10,24 @@ export { WebFetchToolUI } from "./web-fetch-tool";
 export { VerificationToolUI } from "./verification-tool";
 export { EnvRequestToolUI, SessionContext } from "./env-request-tool";
 export { SaveSnapshotToolUI } from "./save-snapshot-tool";
+export {
+	AutomationCompleteToolUI,
+	AutomationCompleteToolUIAlias,
+} from "./automation-complete-tool";
+export { SaveServiceCommandsToolUI } from "./save-service-commands-tool";
+export { SaveEnvFilesToolUI } from "./save-env-files-tool";
 
+import {
+	AutomationCompleteToolUI,
+	AutomationCompleteToolUIAlias,
+} from "./automation-complete-tool";
 import { EnvRequestToolUI } from "./env-request-tool";
 import { FileEditToolUI } from "./file-edit-tool";
 import { GlobToolUI } from "./glob-tool";
 import { GrepToolUI } from "./grep-tool";
 import { ReadFileToolUI } from "./read-file-tool";
+import { SaveEnvFilesToolUI } from "./save-env-files-tool";
+import { SaveServiceCommandsToolUI } from "./save-service-commands-tool";
 import { SaveSnapshotToolUI } from "./save-snapshot-tool";
 import { ShellToolUI } from "./shell-tool";
 import { TaskToolUI } from "./task-tool";
@@ -37,4 +49,8 @@ export const allToolUIs = [
 	{ id: "verify", Component: VerificationToolUI },
 	{ id: "request_env_variables", Component: EnvRequestToolUI },
 	{ id: "save_snapshot", Component: SaveSnapshotToolUI },
+	{ id: "automation.complete", Component: AutomationCompleteToolUI },
+	{ id: "automation_complete", Component: AutomationCompleteToolUIAlias },
+	{ id: "save_service_commands", Component: SaveServiceCommandsToolUI },
+	{ id: "save_env_files", Component: SaveEnvFilesToolUI },
 ];
