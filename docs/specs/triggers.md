@@ -178,12 +178,14 @@ _Sections 3 (File Tree) and 4 (Data Models) are intentionally removed. Code and 
 ### 6.9 Scheduled and Manual Trigger Invariants (Status: Implemented)
 - Invariant: Schedule CRUD exists and validates cron format, but schedule CRUD itself does not execute runs.
   Evidence: `apps/web/src/server/routers/schedules.ts`, `packages/services/src/schedules/service.ts`.
-- Invariant: Scheduled trigger create/update paths validate cron expressions before persisting trigger rows.
+- Invariant: Trigger create/update paths validate cron expressions before persisting scheduled trigger rows, and validate polling trigger `pollingCron` when provided.
   Evidence: `packages/services/src/triggers/service.ts`, `packages/services/src/automations/service.ts`, `apps/web/src/server/routers/triggers.ts`, `apps/web/src/server/routers/automations.ts`.
 - Invariant: Trigger-service starts a scheduled worker and restores repeatable jobs for enabled cron triggers at startup.
   Evidence: `apps/trigger-service/src/index.ts`, `apps/trigger-service/src/scheduled/worker.ts`, `packages/services/src/triggers/service.ts:listEnabledScheduledTriggers`.
 - Invariant: Scheduled trigger CRUD keeps BullMQ repeatable cron jobs in sync on create/update/delete paths.
   Evidence: `packages/services/src/automations/service.ts:createAutomationTrigger`, `packages/services/src/triggers/service.ts`.
+- Invariant: Automation deletion cleans up queue artifacts left by cascading trigger deletion (scheduled repeatables and orphaned poll groups).
+  Evidence: `packages/services/src/automations/service.ts:deleteAutomation`, `packages/services/src/automations/db.ts:listTriggerSchedulesForAutomation`, `packages/services/src/poll-groups/db.ts:deleteOrphanedGroups`.
 - Invariant: Manual runs bypass external webhook/polling ingest by creating synthetic trigger events through a dedicated manual trigger marker (`config._manual = true`).
   Evidence: `packages/services/src/automations/service.ts:triggerManualRun`, `packages/services/src/automations/db.ts:findManualTrigger`.
 

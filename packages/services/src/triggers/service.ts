@@ -48,14 +48,25 @@ async function removeScheduledJobByPattern(triggerId: string, cronPattern: strin
 	});
 }
 
-function validateScheduledTriggerCron(
+function validateTriggerCron(
 	provider: string,
+	triggerType: string | undefined,
 	cronExpression: string | null | undefined,
 ): void {
-	if (provider !== "scheduled") return;
+	if (provider === "scheduled") {
+		if (!cronExpression || cronExpression.trim().length === 0) {
+			throw new CronValidationError("Scheduled triggers require pollingCron");
+		}
+		assertValidCronExpression(cronExpression);
+		return;
+	}
 
-	if (!cronExpression || cronExpression.trim().length === 0) {
-		throw new CronValidationError("Scheduled triggers require pollingCron");
+	if (triggerType !== "polling" || cronExpression === null || cronExpression === undefined) {
+		return;
+	}
+
+	if (cronExpression.trim().length === 0) {
+		throw new CronValidationError("Polling triggers require pollingCron");
 	}
 
 	assertValidCronExpression(cronExpression);
@@ -184,7 +195,7 @@ export async function getTrigger(id: string, orgId: string): Promise<GetTriggerR
 export async function createTrigger(input: CreateTriggerInput): Promise<CreateTriggerResult> {
 	const triggerType = input.triggerType ?? "webhook";
 
-	validateScheduledTriggerCron(input.provider, input.pollingCron);
+	validateTriggerCron(input.provider, triggerType, input.pollingCron);
 
 	// Validate configuration if provided
 	if (input.defaultConfigurationId) {
@@ -290,8 +301,8 @@ export async function updateTrigger(
 	const existing = await triggersDb.findById(id, orgId);
 	if (!existing) return null;
 
-	if (existing.provider === "scheduled" && input.pollingCron !== undefined) {
-		validateScheduledTriggerCron(existing.provider, input.pollingCron);
+	if (input.pollingCron !== undefined) {
+		validateTriggerCron(existing.provider, existing.triggerType, input.pollingCron);
 	}
 
 	const updated = await triggersDb.update(id, {
@@ -332,18 +343,22 @@ export async function updateTrigger(
 	}
 
 	if (updated.provider === "scheduled") {
-		try {
-			if (existing.pollingCron) {
-				await removeScheduledJobByPattern(id, existing.pollingCron);
-			}
+		const scheduleChanged =
+			existing.pollingCron !== updated.pollingCron || existing.enabled !== updated.enabled;
+		if (scheduleChanged) {
+			try {
+				if (existing.pollingCron) {
+					await removeScheduledJobByPattern(id, existing.pollingCron);
+				}
 
-			if (updated.enabled && updated.pollingCron) {
-				await addScheduledJob(getScheduledQueue(), id, updated.pollingCron);
+				if (updated.enabled && updated.pollingCron) {
+					await addScheduledJob(getScheduledQueue(), id, updated.pollingCron);
+				}
+			} catch (err) {
+				getServicesLogger()
+					.child({ module: "triggers" })
+					.error({ err, triggerId: id }, "Failed to update cron trigger schedule");
 			}
-		} catch (err) {
-			getServicesLogger()
-				.child({ module: "triggers" })
-				.error({ err, triggerId: id }, "Failed to update cron trigger schedule");
 		}
 	}
 

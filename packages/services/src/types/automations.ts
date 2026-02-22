@@ -87,8 +87,8 @@ export interface CreateTriggerForAutomationInput {
 	enabled: boolean;
 	config: Json;
 	integrationId: string | null;
-	webhookUrlPath: string;
-	webhookSecret: string;
+	webhookUrlPath: string | null;
+	webhookSecret: string | null;
 	pollingCron: string | null;
 	createdBy: string;
 }

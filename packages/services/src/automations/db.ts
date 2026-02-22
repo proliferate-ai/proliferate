@@ -174,6 +174,15 @@ export interface TriggerForAutomationRow {
 	name: string | null;
 }
 
+/** Trigger schedule fields used for queue cleanup */
+export interface TriggerScheduleCleanupRow {
+	id: string;
+	provider: string;
+	triggerType: string;
+	enabled: boolean | null;
+	pollingCron: string | null;
+}
+
 /** Webhook trigger with automation */
 export interface WebhookTriggerWithAutomation {
 	id: string;
@@ -746,6 +755,29 @@ export async function listTriggersForAutomation(
 	});
 
 	return results as TriggerForAutomationRow[];
+}
+
+/**
+ * List trigger schedule metadata for an automation in an org.
+ * Used for queue cleanup during automation deletion.
+ */
+export async function listTriggerSchedulesForAutomation(
+	automationId: string,
+	orgId: string,
+): Promise<TriggerScheduleCleanupRow[]> {
+	const db = getDb();
+	const results = await db.query.triggers.findMany({
+		where: and(eq(triggers.automationId, automationId), eq(triggers.organizationId, orgId)),
+		columns: {
+			id: true,
+			provider: true,
+			triggerType: true,
+			enabled: true,
+			pollingCron: true,
+		},
+	});
+
+	return results as TriggerScheduleCleanupRow[];
 }
 
 /**
