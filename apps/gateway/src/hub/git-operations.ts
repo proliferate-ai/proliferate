@@ -11,16 +11,17 @@ import type {
 	GitFileChange,
 	GitResultCode,
 	GitState,
+	RepoSpec,
 	SandboxProvider,
 } from "@proliferate/shared";
-import { SANDBOX_PATHS } from "@proliferate/shared/sandbox";
+import { SANDBOX_PATHS, buildGitCredentialsMap, shellEscape } from "@proliferate/shared/sandbox";
+import type { GitIdentity } from "../lib/git-identity";
 
 const WORKSPACE_DIR = `${SANDBOX_PATHS.home}/workspace`;
 
 /** Non-interactive env for all git/gh commands. */
 const GIT_BASE_ENV: Record<string, string> = {
 	GIT_TERMINAL_PROMPT: "0",
-	GIT_ASKPASS: "/bin/false",
 	GH_PAGER: "cat",
 	LC_ALL: "C",
 };
@@ -42,6 +43,8 @@ export class GitOperations {
 	constructor(
 		private provider: SandboxProvider,
 		private sandboxId: string,
+		private gitIdentity: GitIdentity | null = null,
+		private repos: RepoSpec[] = [],
 	) {}
 
 	private resolveGitDir(workspacePath?: string): string {
@@ -63,6 +66,77 @@ export class GitOperations {
 		return this.provider.execCommand(this.sandboxId, argv, opts);
 	}
 
+	private getGitIdentityEnv(): Record<string, string> {
+		if (!this.gitIdentity) {
+			return {};
+		}
+		return {
+			GIT_AUTHOR_NAME: this.gitIdentity.name,
+			GIT_AUTHOR_EMAIL: this.gitIdentity.email,
+			GIT_COMMITTER_NAME: this.gitIdentity.name,
+			GIT_COMMITTER_EMAIL: this.gitIdentity.email,
+		};
+	}
+
+	private getMutableEnv(): Record<string, string> {
+		return {
+			...GIT_BASE_ENV,
+			...this.getGitIdentityEnv(),
+		};
+	}
+
+	private getReadOnlyEnv(): Record<string, string> {
+		return {
+			...GIT_READONLY_ENV,
+			...this.getGitIdentityEnv(),
+		};
+	}
+
+	private getWorkspaceToken(workspacePath?: string): string | null {
+		if (this.repos.length === 0) {
+			return null;
+		}
+
+		if (workspacePath && workspacePath !== "." && workspacePath !== "") {
+			const exact = this.repos.find((repo) => repo.workspacePath === workspacePath);
+			if (exact?.token) {
+				return exact.token;
+			}
+		}
+
+		if (this.repos.length === 1 && this.repos[0]?.token) {
+			return this.repos[0].token;
+		}
+
+		const rootRepo = this.repos.find((repo) => repo.workspacePath === "." && repo.token);
+		if (rootRepo?.token) {
+			return rootRepo.token;
+		}
+
+		return this.repos.find((repo) => Boolean(repo.token))?.token || null;
+	}
+
+	private getAuthEnv(workspacePath?: string): Record<string, string> {
+		const token = this.getWorkspaceToken(workspacePath);
+		if (!token) {
+			return {};
+		}
+		return {
+			GIT_TOKEN: token,
+			GH_TOKEN: token,
+			GIT_USERNAME: "x-access-token",
+		};
+	}
+
+	private async refreshGitCredentialsFile(): Promise<void> {
+		const credentials = buildGitCredentialsMap(this.repos);
+		const encoded = Buffer.from(JSON.stringify(credentials)).toString("base64");
+		await this.exec(
+			["sh", "-c", `echo ${shellEscape(encoded)} | base64 -d > /tmp/.git-credentials.json`],
+			{ timeoutMs: 10_000, env: this.getMutableEnv() },
+		);
+	}
+
 	// ============================================
 	// Status
 	// ============================================
@@ -75,12 +149,12 @@ export class GitOperations {
 			this.exec(["git", "status", "--porcelain=v2", "--branch", "-z"], {
 				cwd,
 				timeoutMs: 10_000,
-				env: GIT_READONLY_ENV,
+				env: this.getReadOnlyEnv(),
 			}),
 			this.exec(["git", "log", "--format=%x1e%H%x1f%s%x1f%an%x1f%aI", "-n", "20"], {
 				cwd,
 				timeoutMs: 10_000,
-				env: GIT_READONLY_ENV,
+				env: this.getReadOnlyEnv(),
 			}),
 			this.exec(
 				[
@@ -91,7 +165,7 @@ export class GitOperations {
 						'echo "rebase:$(git rev-parse -q --verify REBASE_HEAD >/dev/null 2>&1 && echo 1 || echo 0)";' +
 						'echo "merge:$(git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 && echo 1 || echo 0)"',
 				],
-				{ cwd, timeoutMs: 10_000, env: GIT_READONLY_ENV },
+				{ cwd, timeoutMs: 10_000, env: this.getReadOnlyEnv() },
 			),
 		]);
 
@@ -142,7 +216,7 @@ export class GitOperations {
 		const check = await this.exec(["git", "show-ref", "--verify", `refs/heads/${name}`], {
 			cwd,
 			timeoutMs: 10_000,
-			env: GIT_BASE_ENV,
+			env: this.getMutableEnv(),
 		});
 		if (check.exitCode === 0) {
 			return { success: false, code: "BRANCH_EXISTS", message: `Branch '${name}' already exists` };
@@ -151,7 +225,7 @@ export class GitOperations {
 		const result = await this.exec(["git", "checkout", "-b", name], {
 			cwd,
 			timeoutMs: 15_000,
-			env: GIT_BASE_ENV,
+			env: this.getMutableEnv(),
 		});
 
 		if (result.exitCode !== 0) {
@@ -182,7 +256,7 @@ export class GitOperations {
 			const addResult = await this.exec(["git", "add", "--", ...files], {
 				cwd,
 				timeoutMs: 15_000,
-				env: GIT_BASE_ENV,
+				env: this.getMutableEnv(),
 			});
 			if (addResult.exitCode !== 0) {
 				return {
@@ -195,7 +269,7 @@ export class GitOperations {
 			const addResult = await this.exec(["git", "add", "-A"], {
 				cwd,
 				timeoutMs: 15_000,
-				env: GIT_BASE_ENV,
+				env: this.getMutableEnv(),
 			});
 			if (addResult.exitCode !== 0) {
 				return {
@@ -209,7 +283,7 @@ export class GitOperations {
 			const addResult = await this.exec(["git", "add", "-u"], {
 				cwd,
 				timeoutMs: 15_000,
-				env: GIT_BASE_ENV,
+				env: this.getMutableEnv(),
 			});
 			if (addResult.exitCode !== 0) {
 				return {
@@ -225,7 +299,7 @@ export class GitOperations {
 		const diffCheck = await this.exec(["git", "diff", "--cached", "--quiet"], {
 			cwd,
 			timeoutMs: 10_000,
-			env: GIT_BASE_ENV,
+			env: this.getMutableEnv(),
 		});
 		if (diffCheck.exitCode === 0) {
 			return { success: false, code: "NOTHING_TO_COMMIT", message: "Nothing to commit" };
@@ -241,7 +315,7 @@ export class GitOperations {
 		const commitResult = await this.exec(["git", "commit", "-m", message], {
 			cwd,
 			timeoutMs: 30_000,
-			env: GIT_BASE_ENV,
+			env: this.getMutableEnv(),
 		});
 
 		if (commitResult.exitCode !== 0) {
@@ -272,12 +346,20 @@ export class GitOperations {
 
 	async push(workspacePath?: string): Promise<GitActionResult> {
 		const cwd = this.resolveGitDir(workspacePath);
+		const authEnv = this.getAuthEnv(workspacePath);
+
+		try {
+			await this.refreshGitCredentialsFile();
+		} catch {
+			// Non-fatal: commands still have env-token fallback.
+		}
+		const commandEnv = { ...this.getMutableEnv(), ...authEnv };
 
 		// Get current branch
 		const branchResult = await this.exec(["git", "rev-parse", "--abbrev-ref", "HEAD"], {
 			cwd,
 			timeoutMs: 10_000,
-			env: GIT_BASE_ENV,
+			env: commandEnv,
 		});
 		const branch = branchResult.stdout.trim();
 
@@ -295,7 +377,7 @@ export class GitOperations {
 		let result = await this.exec(["git", "push", ...pushStrategy.args], {
 			cwd,
 			timeoutMs: 60_000,
-			env: GIT_BASE_ENV,
+			env: commandEnv,
 		});
 
 		// If push fails with shallow-related error, try deepening and retry
@@ -303,12 +385,12 @@ export class GitOperations {
 			await this.exec(["git", "fetch", "--deepen", "100"], {
 				cwd,
 				timeoutMs: 30_000,
-				env: GIT_BASE_ENV,
+				env: commandEnv,
 			});
 			result = await this.exec(["git", "push", ...pushStrategy.args], {
 				cwd,
 				timeoutMs: 60_000,
-				env: GIT_BASE_ENV,
+				env: commandEnv,
 			});
 			if (result.exitCode !== 0 && result.stderr.includes("shallow")) {
 				return {
@@ -318,8 +400,8 @@ export class GitOperations {
 				};
 			}
 		}
-
 		if (result.exitCode !== 0) {
+			console.log("result", result);
 			if (
 				result.stderr.includes("Authentication failed") ||
 				result.stderr.includes("could not read Username") ||
@@ -341,7 +423,7 @@ export class GitOperations {
 		const upstreamResult = await this.exec(["git", "rev-parse", "--abbrev-ref", "@{upstream}"], {
 			cwd,
 			timeoutMs: 10_000,
-			env: GIT_BASE_ENV,
+			env: this.getMutableEnv(),
 		});
 		if (upstreamResult.exitCode === 0) {
 			// Upstream exists, just push
@@ -352,7 +434,7 @@ export class GitOperations {
 		const remoteResult = await this.exec(["git", "remote"], {
 			cwd,
 			timeoutMs: 10_000,
-			env: GIT_BASE_ENV,
+			env: this.getMutableEnv(),
 		});
 		const remotes = remoteResult.stdout.trim().split("\n").filter(Boolean);
 
@@ -388,6 +470,8 @@ export class GitOperations {
 		workspacePath?: string,
 	): Promise<GitActionResult> {
 		const cwd = this.resolveGitDir(workspacePath);
+		const authEnv = this.getAuthEnv(workspacePath);
+		const commandEnv = { ...this.getMutableEnv(), ...authEnv, GH_PROMPT_DISABLED: "1" };
 
 		// Push first
 		const pushResult = await this.push(workspacePath);
@@ -404,7 +488,7 @@ export class GitOperations {
 		const result = await this.exec(args, {
 			cwd,
 			timeoutMs: 30_000,
-			env: { ...GIT_BASE_ENV, GH_PROMPT_DISABLED: "1" },
+			env: commandEnv,
 		});
 
 		if (result.exitCode === 127) {
@@ -437,7 +521,7 @@ export class GitOperations {
 		const urlResult = await this.exec(["gh", "pr", "view", "--json", "url", "--jq", ".url"], {
 			cwd,
 			timeoutMs: 10_000,
-			env: { ...GIT_BASE_ENV, GH_PROMPT_DISABLED: "1" },
+			env: commandEnv,
 		});
 		const prUrl = urlResult.exitCode === 0 ? urlResult.stdout.trim() : result.stdout.trim();
 		return { success: true, code: "SUCCESS", message: "Pull request created", prUrl };

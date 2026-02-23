@@ -22,10 +22,11 @@ import {
 	useSubscribeNotifications,
 	useUnsubscribeNotifications,
 } from "@/hooks/use-sessions";
+import { startSnapshotProgressToast } from "@/lib/snapshot-progress-toast";
 import { cn, formatRelativeTime, getRepoShortName } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Session } from "@proliferate/shared/contracts";
-import { Bell, BellOff, Camera } from "lucide-react";
+import { Bell, BellOff, Camera, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -73,22 +74,17 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 	};
 
 	const handleSnapshot = async () => {
-		const toastId = toast.loading("Preparing snapshot...");
-		const stages = [
-			{ delay: 3000, message: "Capturing filesystem..." },
-			{ delay: 10000, message: "Compressing data..." },
-			{ delay: 25000, message: "Almost done..." },
-		];
-		const timeouts = stages.map(({ delay, message }) =>
-			setTimeout(() => toast.loading(message, { id: toastId }), delay),
-		);
+		const progressToast = startSnapshotProgressToast();
 		try {
 			await snapshotSession.mutateAsync(session.id);
-			toast.success("Snapshot saved", { id: toastId });
-		} catch {
-			toast.error("Failed to save snapshot", { id: toastId });
+			progressToast.success();
+		} catch (error) {
+			progressToast.error(
+				"Failed to save snapshot",
+				error instanceof Error ? error.message : undefined,
+			);
 		} finally {
-			timeouts.forEach(clearTimeout);
+			progressToast.dispose();
 		}
 	};
 
@@ -111,9 +107,15 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 	}
 	if (isRunning) {
 		extraActions.push({
-			label: snapshotSession.isPending ? "Saving..." : "Save Snapshot",
-			icon: <Camera className="h-4 w-4" />,
+			label: snapshotSession.isPending ? "Saving snapshot..." : "Save Snapshot",
+			icon: snapshotSession.isPending ? (
+				<Loader2 className="h-4 w-4 animate-spin" />
+			) : (
+				<Camera className="h-4 w-4" />
+			),
 			onClick: handleSnapshot,
+			disabled: snapshotSession.isPending,
+			description: "Can take around a minute",
 		});
 	}
 

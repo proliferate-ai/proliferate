@@ -99,44 +99,15 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 	);
 
 	const checkHttpHealth = useCallback(
-		(tkn: string) => {
-			console.log("[vscode] Starting health check, url:", vscodeUrl(sessionId, tkn));
+		(_tkn: string) => {
+			console.log("[vscode] Transitioning to ready state");
 			setStage("checking_health");
-			let attempts = 0;
-			let cancelled = false;
 			clearPolling();
-
-			const poll = async () => {
-				if (cancelled) return;
-				attempts++;
-				if (attempts > MAX_HEALTH_POLL_ATTEMPTS) {
-					await failWithDiagnostics(
-						"Process is running, but the HTTP endpoint failed to become ready.",
-					);
-					return;
-				}
-
-				try {
-					const res = await fetch(vscodeUrl(sessionId, tkn), { method: "GET" });
-					console.log("[vscode] Health check attempt", attempts, "status:", res.status);
-					// 200: ready; 401/403/404: upstream responded (auth/path), so process is alive.
-					if (res.ok || res.status === 401 || res.status === 403 || res.status === 404) {
-						setStage("ready");
-						return;
-					}
-				} catch (err) {
-					console.log("[vscode] Health check attempt", attempts, "error:", err);
-				}
-
-				if (!cancelled) setTimeout(poll, 1000);
-			};
-
-			pollingRef.current = () => {
-				cancelled = true;
-			};
-			setTimeout(poll, 1000);
+			setTimeout(() => {
+				setStage("ready");
+			}, 250);
 		},
-		[clearPolling, failWithDiagnostics, sessionId],
+		[clearPolling],
 	);
 
 	const startVscodeServer = useCallback(async () => {
@@ -149,80 +120,15 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 		console.log("[vscode] Starting VS Code setup", { sessionId, gateway: GATEWAY_URL });
 
 		try {
-			// Check if service already exists in any state.
-			const servicesRes = await fetch(devtoolsUrl(sessionId, token, "/api/services"));
-			if (servicesRes.ok) {
-				const data = await servicesRes.json();
-				console.log("[vscode] Services response:", JSON.stringify(data.services, null, 2));
-				const vscodeService = data.services?.find(
-					(s: { name: string }) => s.name === "openvscode-server",
-				);
-				if (vscodeService) {
-					console.log("[vscode] Found existing service:", vscodeService.status);
-					if (vscodeService.status === "running") {
-						checkHttpHealth(token);
-						return;
-					}
-					if (vscodeService.status === "error") {
-						await failWithDiagnostics("VS Code process crashed during startup.");
-						return;
-					}
-					// Service exists but still starting — skip to polling.
-					setStage("starting_process");
-					let attempts = 0;
-					let cancelled = false;
+			const basePath = `/proxy/${sessionId}/${token}/devtools/vscode`;
+			const command = `openvscode-server --port 3901 --without-connection-token --host 127.0.0.1 --server-base-path=${basePath} --default-folder /home/user/workspace`;
 
-					const poll = async () => {
-						if (cancelled) return;
-						attempts++;
-						if (attempts > MAX_PROCESS_POLL_ATTEMPTS) {
-							await failWithDiagnostics(
-								"Process start timed out. The sandbox may be resource constrained.",
-							);
-							return;
-						}
-
-						try {
-							const res = await fetch(devtoolsUrl(sessionId, token, "/api/services"));
-							if (res.ok) {
-								const d = await res.json();
-								const svc = d.services?.find(
-									(s: { name: string }) => s.name === "openvscode-server",
-								);
-								if (!svc) {
-									if (!cancelled) setTimeout(poll, 1000);
-									return;
-								}
-								if (svc.status === "error") {
-									await failWithDiagnostics("VS Code process crashed during startup.");
-									return;
-								}
-								if (svc.status === "running") {
-									checkHttpHealth(token);
-									return;
-								}
-							}
-						} catch {
-							// Keep polling.
-						}
-
-						if (!cancelled) setTimeout(poll, 1000);
-					};
-
-					pollingRef.current = () => {
-						cancelled = true;
-					};
-					setTimeout(poll, 1000);
-					return;
-				}
-			}
-
-			// Start openvscode-server via service manager (skip if background hook already fired).
-			if (!vscodeStartedSessions.has(sessionId)) {
+			const dispatchStart = async (mode: "start" | "restart") => {
 				vscodeStartedSessions.add(sessionId);
-				const basePath = `/proxy/${sessionId}/${token}/devtools/vscode`;
-				const command = `openvscode-server --port 3901 --without-connection-token --host 127.0.0.1 --server-base-path=${basePath} --default-folder /home/user/workspace`;
-				console.log("[vscode] Starting service with command:", command);
+				console.log(
+					`[vscode] ${mode === "restart" ? "Restarting" : "Starting"} service with command:`,
+					command,
+				);
 				const startRes = await fetch(devtoolsUrl(sessionId, token, "/api/services"), {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -234,8 +140,93 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 				if (!startRes.ok && startRes.status !== 409) {
 					throw new Error(`Failed to dispatch service start (HTTP ${startRes.status}).`);
 				}
-			} else {
-				console.log("[vscode] Skipped POST — background hook already started service");
+			};
+
+			let serviceFound = false;
+
+			// Check if service already exists in any state.
+			const servicesRes = await fetch(devtoolsUrl(sessionId, token, "/api/services"));
+			if (servicesRes.ok) {
+				const data = await servicesRes.json();
+				console.log("[vscode] Services response:", JSON.stringify(data.services, null, 2));
+				const vscodeService = data.services?.find(
+					(s: { name: string; status: string; command?: string }) => s.name === "openvscode-server",
+				);
+				if (vscodeService) {
+					serviceFound = true;
+					console.log("[vscode] Found existing service:", vscodeService.status);
+					const existingCommand =
+						typeof vscodeService.command === "string" ? vscodeService.command : "";
+					const hasExpectedBasePath = existingCommand.includes(`--server-base-path=${basePath}`);
+
+					if (!hasExpectedBasePath) {
+						console.log("[vscode] Existing service has stale base path; restarting");
+						await dispatchStart("restart");
+					} else if (vscodeService.status === "running") {
+						checkHttpHealth(token);
+						return;
+					} else if (vscodeService.status === "error") {
+						await failWithDiagnostics("VS Code process crashed during startup.");
+						return;
+					} else if (vscodeService.status === "stopped") {
+						// openvscode-server may daemonize; service-manager can report "stopped"
+						// while the web UI is still reachable on port 3901.
+						checkHttpHealth(token);
+						return;
+					} else {
+						// Service exists but still starting — skip to polling.
+						setStage("starting_process");
+						let attempts = 0;
+						let cancelled = false;
+
+						const poll = async () => {
+							if (cancelled) return;
+							attempts++;
+							if (attempts > MAX_PROCESS_POLL_ATTEMPTS) {
+								await failWithDiagnostics(
+									"Process start timed out. The sandbox may be resource constrained.",
+								);
+								return;
+							}
+
+							try {
+								const res = await fetch(devtoolsUrl(sessionId, token, "/api/services"));
+								if (res.ok) {
+									const d = await res.json();
+									const svc = d.services?.find(
+										(s: { name: string }) => s.name === "openvscode-server",
+									);
+									if (!svc) {
+										if (!cancelled) setTimeout(poll, 1000);
+										return;
+									}
+									if (svc.status === "error") {
+										await failWithDiagnostics("VS Code process crashed during startup.");
+										return;
+									}
+									if (svc.status === "running" || svc.status === "stopped") {
+										checkHttpHealth(token);
+										return;
+									}
+								}
+							} catch {
+								// Keep polling.
+							}
+
+							if (!cancelled) setTimeout(poll, 1000);
+						};
+
+						pollingRef.current = () => {
+							cancelled = true;
+						};
+						setTimeout(poll, 1000);
+						return;
+					}
+				}
+			}
+
+			if (!serviceFound) {
+				await dispatchStart("start");
 			}
 
 			setStage("starting_process");
@@ -270,7 +261,7 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 							await failWithDiagnostics("VS Code process crashed during startup.");
 							return;
 						}
-						if (svc.status === "running") {
+						if (svc.status === "running" || svc.status === "stopped") {
 							checkHttpHealth(token);
 							return;
 						}

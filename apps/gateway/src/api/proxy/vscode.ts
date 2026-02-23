@@ -30,6 +30,19 @@ import type { UpgradeHandler } from "../ws-multiplexer";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "vscode-proxy" });
 
+function rewriteVscodeRedirectLocation(location: string): string {
+	if (!/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//i.test(location)) {
+		return location;
+	}
+
+	try {
+		const parsed = new URL(location);
+		return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+	} catch {
+		return location;
+	}
+}
+
 // ──────────────────────────────────────────────
 // HTTP proxy
 // ──────────────────────────────────────────────
@@ -72,6 +85,18 @@ export function createVscodeProxyRoutes(hubManager: HubManager, env: GatewayEnv)
 				fixRequestBody(proxyReq, req as Request);
 			},
 			proxyRes: (proxyRes, req) => {
+				const locationHeader = proxyRes.headers.location;
+				if (typeof locationHeader === "string") {
+					const rewrittenLocation = rewriteVscodeRedirectLocation(locationHeader);
+					if (rewrittenLocation !== locationHeader) {
+						proxyRes.headers.location = rewrittenLocation;
+						logger.debug(
+							{ from: locationHeader, to: rewrittenLocation },
+							"Rewrote VS Code redirect location",
+						);
+					}
+				}
+
 				if (proxyRes.statusCode && proxyRes.statusCode >= 400) {
 					logger.warn(
 						{ status: proxyRes.statusCode, path: (req as Request).originalUrl },

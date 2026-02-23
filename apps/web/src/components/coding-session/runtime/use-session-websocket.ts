@@ -114,18 +114,29 @@ function summarizeServerEvent(data: ServerMessage): Record<string, unknown> {
 			};
 		case "tool_start":
 		case "tool_end":
-		case "tool_metadata":
+		case "tool_metadata": {
+			const metadata =
+				payload && typeof payload === "object"
+					? (payload as { metadata?: { summary?: unknown[] } }).metadata
+					: undefined;
 			return {
 				type: data.type,
 				messageId: payload?.messageId ?? null,
 				toolCallId: payload?.toolCallId ?? null,
 				tool: payload?.tool ?? null,
+				title: payload?.title ?? null,
+				summaryLength: Array.isArray(metadata?.summary) ? metadata.summary.length : 0,
 			};
+		}
 		case "message_complete":
 		case "message_cancelled":
 			return { type: data.type, messageId: payload?.messageId ?? null };
 		case "status":
-			return { type: data.type, status: payload?.status ?? null };
+			return {
+				type: data.type,
+				status: payload?.status ?? null,
+				message: payload?.message ?? null,
+			};
 		case "error":
 			return { type: data.type, message: payload?.message ?? null };
 		default:
@@ -384,6 +395,11 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 			break;
 
 		case "status":
+			debugWs("status.received", {
+				sessionId: ctx.sessionId,
+				status: data.payload?.status ?? null,
+				message: data.payload?.message ?? null,
+			});
 			if (data.payload?.status === "resuming") {
 				ctx.setIsRunning(true);
 				ctx.setIsMigrating(false);

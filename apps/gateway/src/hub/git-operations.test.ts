@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { parseBusyState, parseLogOutput, parseStatusV2 } from "./git-operations";
+import type { SandboxProvider } from "@proliferate/shared";
+import { describe, expect, it, vi } from "vitest";
+import { GitOperations, parseBusyState, parseLogOutput, parseStatusV2 } from "./git-operations";
 
 describe("parseStatusV2", () => {
 	it("parses empty output (clean repo)", () => {
@@ -248,6 +249,80 @@ describe("parseBusyState", () => {
 			isBusy: false,
 			rebaseInProgress: false,
 			mergeInProgress: false,
+		});
+	});
+});
+
+describe("GitOperations", () => {
+	it("injects git identity env vars for commit commands", async () => {
+		const execCommand = vi
+			.fn()
+			.mockResolvedValueOnce({ stdout: "", stderr: "", exitCode: 0 }) // git add -u
+			.mockResolvedValueOnce({ stdout: "", stderr: "", exitCode: 1 }) // git diff --cached --quiet (has diff)
+			.mockResolvedValueOnce({ stdout: "", stderr: "", exitCode: 0 }); // git commit
+
+		const provider = { execCommand } as unknown as SandboxProvider;
+		const ops = new GitOperations(provider, "sandbox-123", {
+			name: "pablonyx",
+			email: "pablo@example.com",
+		});
+
+		const result = await ops.commit("feat: test identity", false);
+		expect(result).toEqual({ success: true, code: "SUCCESS", message: "Changes committed" });
+
+		for (const call of execCommand.mock.calls) {
+			const callOptions = call[2] as { env?: Record<string, string> } | undefined;
+			expect(callOptions?.env).toMatchObject({
+				GIT_AUTHOR_NAME: "pablonyx",
+				GIT_AUTHOR_EMAIL: "pablo@example.com",
+				GIT_COMMITTER_NAME: "pablonyx",
+				GIT_COMMITTER_EMAIL: "pablo@example.com",
+			});
+		}
+	});
+
+	it("uses repo token for push auth and refreshes git credential file", async () => {
+		const execCommand = vi
+			.fn()
+			.mockResolvedValueOnce({ stdout: "", stderr: "", exitCode: 0 }) // refresh credentials file
+			.mockResolvedValueOnce({ stdout: "main\n", stderr: "", exitCode: 0 }) // current branch
+			.mockResolvedValueOnce({ stdout: "origin/main\n", stderr: "", exitCode: 0 }) // upstream exists
+			.mockResolvedValueOnce({ stdout: "", stderr: "", exitCode: 0 }); // push
+
+		const provider = { execCommand } as unknown as SandboxProvider;
+		const ops = new GitOperations(
+			provider,
+			"sandbox-123",
+			{ name: "pablonyx", email: "pablo@example.com" },
+			[
+				{
+					repoUrl: "https://github.com/proliferate-ai/landing/",
+					workspacePath: ".",
+					token: "ghs_test_token",
+				},
+			],
+		);
+
+		const result = await ops.push(".");
+		expect(result).toEqual({ success: true, code: "SUCCESS", message: "Pushed to main" });
+
+		const refreshCall = execCommand.mock.calls[0];
+		expect(refreshCall[1]).toEqual([
+			"sh",
+			"-c",
+			expect.stringContaining("/tmp/.git-credentials.json"),
+		]);
+
+		const pushCall = execCommand.mock.calls[3];
+		const pushOptions = pushCall[2] as { env?: Record<string, string> } | undefined;
+		expect(pushOptions?.env).toMatchObject({
+			GIT_TOKEN: "ghs_test_token",
+			GH_TOKEN: "ghs_test_token",
+			GIT_USERNAME: "x-access-token",
+			GIT_AUTHOR_NAME: "pablonyx",
+			GIT_AUTHOR_EMAIL: "pablo@example.com",
+			GIT_COMMITTER_NAME: "pablonyx",
+			GIT_COMMITTER_EMAIL: "pablo@example.com",
 		});
 	});
 });

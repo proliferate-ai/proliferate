@@ -16,6 +16,7 @@ import {
 	gte,
 	inArray,
 	integrations,
+	sessions,
 	sql,
 	triggerEvents,
 	triggers,
@@ -440,6 +441,16 @@ export async function update(
  */
 export async function deleteById(id: string, orgId: string): Promise<void> {
 	const db = getDb();
+
+	// Clear session FK references before deleting. The automation cascade
+	// deletes triggers → trigger_events, and PostgreSQL's concurrent SET NULL
+	// on sessions.automation_id / trigger_event_id causes a circular FK check
+	// failure. Nullifying upfront avoids the conflict.
+	await db
+		.update(sessions)
+		.set({ automationId: null, triggerId: null, triggerEventId: null })
+		.where(eq(sessions.automationId, id));
+
 	await db
 		.delete(automations)
 		.where(and(eq(automations.id, id), eq(automations.organizationId, orgId)));

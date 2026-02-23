@@ -52,11 +52,13 @@ export function SnapshotsContent({
 						) : (
 							<Camera className="h-4 w-4" />
 						)}
-						{isSnapshotting ? "Saving..." : "Save Snapshot"}
+						{isSnapshotting ? "Saving snapshot..." : "Save Snapshot"}
 					</Button>
 					<p className="text-xs text-muted-foreground">
 						{canSnapshot
-							? "Capture the current filesystem state."
+							? isSnapshotting
+								? "Saving snapshot. This can take around a minute."
+								: "Capture the current filesystem state. Saving can take around a minute."
 							: "Session must be running to save a snapshot."}
 					</p>
 				</div>

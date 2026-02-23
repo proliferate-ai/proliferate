@@ -11,6 +11,7 @@ import { useConfiguration } from "@/hooks/use-configurations";
 import { useRepo } from "@/hooks/use-repos";
 import { useRenameSession, useSessionData, useSnapshotSession } from "@/hooks/use-sessions";
 import { useSession as useBetterAuthSession } from "@/lib/auth-client";
+import { startSnapshotProgressToast } from "@/lib/snapshot-progress-toast";
 import { cn } from "@/lib/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
@@ -32,7 +33,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 import type { SessionPanelProps } from "./right-panel";
 import { RightPanel } from "./right-panel";
 import { SessionHeader } from "./session-header";
@@ -120,24 +120,14 @@ export function CodingSession({
 	const snapshotSession = useSnapshotSession();
 	const canSnapshot = sessionData?.status === "running" && !!sessionData?.sandboxId;
 	const handleSnapshot = async () => {
-		const toastId = toast.loading("Preparing snapshot...");
-		const stages = [
-			{ delay: 3000, message: "Capturing filesystem..." },
-			{ delay: 10000, message: "Compressing data..." },
-			{ delay: 25000, message: "Almost done..." },
-		];
-		const timeouts = stages.map(({ delay, message }) =>
-			setTimeout(() => toast.loading(message, { id: toastId }), delay),
-		);
+		const progressToast = startSnapshotProgressToast();
 		try {
 			await snapshotSession.mutateAsync(sessionId);
-			toast.success("Snapshot saved", { id: toastId });
+			progressToast.success();
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : "Failed to save snapshot", {
-				id: toastId,
-			});
+			progressToast.error(err instanceof Error ? err.message : "Failed to save snapshot");
 		} finally {
-			timeouts.forEach(clearTimeout);
+			progressToast.dispose();
 		}
 	};
 

@@ -190,6 +190,7 @@ References: `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/
 
 ### 6.7 Freshness Invariants — `Implemented`
 - Pull-on-restore must be policy-driven (`SANDBOX_GIT_PULL_ON_RESTORE`, cadence, snapshot presence, repo count).
+- Providers must refresh git credentials with newly resolved repo tokens on snapshot restore, independent of pull cadence, so subsequent push/PR commands avoid stale-token auth failures.
 - Providers must refresh git credentials before pull attempts when pull policy is active.
 - `lastGitFetchAt` may advance only when all repo pulls succeed.
 - Pull failures must be non-fatal to sandbox restore/startup.

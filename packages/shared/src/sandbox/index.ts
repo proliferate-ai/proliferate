@@ -42,6 +42,7 @@ export {
 
 // Git freshness
 export { shouldPullOnRestore, type ShouldPullOpts } from "./git-freshness";
+export { buildGitCredentialsMap } from "./git-credentials";
 
 // Version key
 export { computeBaseSnapshotVersionKey } from "./version-key";

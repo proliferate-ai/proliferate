@@ -129,6 +129,10 @@ export class SseClient {
 				try {
 					const parsed = JSON.parse(event.data) as OpenCodeEvent;
 					this.lastEventTime = Date.now();
+					const summary = summarizeOpenCodeEvent(parsed);
+					if (summary) {
+						this.logger.debug(summary, "SSE event received");
+					}
 					this.options.onEvent(parsed);
 				} catch (err) {
 					this.logger.warn({ err }, "Invalid JSON payload");
@@ -308,4 +312,58 @@ function extractSocketInfo(socket: unknown): Record<string, unknown> | null {
 	if (typed.remotePort) info.remotePort = typed.remotePort;
 	if (typed.remoteFamily) info.remoteFamily = typed.remoteFamily;
 	return Object.keys(info).length > 0 ? info : null;
+}
+
+function summarizeOpenCodeEvent(event: OpenCodeEvent): Record<string, unknown> | null {
+	switch (event.type) {
+		case "server.connected":
+		case "server.heartbeat":
+			return null;
+		case "message.updated":
+			return {
+				type: event.type,
+				messageId: event.properties?.info?.id ?? null,
+				role: event.properties?.info?.role ?? null,
+				hasError: Boolean(event.properties?.info?.error),
+				completedAt: event.properties?.info?.time?.completed ?? null,
+			};
+		case "message.part.updated": {
+			const part = event.properties?.part;
+			const isToolEvent = Boolean(part?.callID && part?.tool);
+			const isTextComplete =
+				part?.type === "text" && !event.properties?.delta && Boolean(part?.text);
+			if (!isToolEvent && !isTextComplete) {
+				return null;
+			}
+
+			return {
+				type: event.type,
+				partId: part?.id ?? null,
+				partType: part?.type ?? null,
+				messageId: part?.messageID ?? null,
+				toolCallId: part?.callID ?? null,
+				tool: part?.tool ?? null,
+				toolStatus: part?.state?.status ?? null,
+				title: part?.state?.title ?? null,
+				hasSummary: Boolean(part?.state?.metadata?.summary),
+				summaryLength: Array.isArray(part?.state?.metadata?.summary)
+					? part.state.metadata.summary.length
+					: 0,
+				isTextComplete,
+			};
+		}
+		case "session.idle":
+			return { type: event.type };
+		case "session.status":
+			return {
+				type: event.type,
+				statusType: event.properties?.status?.type ?? null,
+			};
+		case "session.error":
+			return {
+				type: event.type,
+				errorName: event.properties?.error?.name ?? null,
+				errorMessage: event.properties?.error?.data?.message ?? null,
+			};
+	}
 }

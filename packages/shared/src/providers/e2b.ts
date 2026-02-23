@@ -29,6 +29,7 @@ import {
 	SANDBOX_TIMEOUT_MS,
 	SandboxProviderError,
 	type SessionMetadata,
+	buildGitCredentialsMap,
 	capOutput,
 	getOpencodeConfig,
 	shellEscape,
@@ -482,14 +483,7 @@ export class E2BProvider implements SandboxProvider {
 		}
 
 		// Write git credentials file for per-repo auth (used by git-credential-proliferate helper)
-		const gitCredentials: Record<string, string> = {};
-		for (const repo of repos) {
-			if (repo.token) {
-				// Store both with and without .git suffix for flexibility
-				gitCredentials[repo.repoUrl] = repo.token;
-				gitCredentials[repo.repoUrl.replace(/\.git$/, "")] = repo.token;
-			}
-		}
+		const gitCredentials = buildGitCredentialsMap(repos);
 		if (Object.keys(gitCredentials).length > 0) {
 			log.debug({ repoCount: repos.length }, "Writing git credentials");
 			await sandbox.files.write("/tmp/.git-credentials.json", JSON.stringify(gitCredentials));
@@ -867,21 +861,15 @@ export class E2BProvider implements SandboxProvider {
 			lastGitFetchAt: metadata?.lastGitFetchAt,
 		});
 
-		if (!doPull) return;
-
-		const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
-
-		// Re-write git credentials with fresh tokens (snapshot tokens may be stale)
-		const gitCredentials: Record<string, string> = {};
-		for (const repo of opts.repos) {
-			if (repo.token) {
-				gitCredentials[repo.repoUrl] = repo.token;
-				gitCredentials[repo.repoUrl.replace(/\.git$/, "")] = repo.token;
-			}
-		}
+		// Always refresh git credentials on restore. Pull cadence controls pulls only.
+		const gitCredentials = buildGitCredentialsMap(opts.repos);
 		if (Object.keys(gitCredentials).length > 0) {
 			await sandbox.files.write("/tmp/.git-credentials.json", JSON.stringify(gitCredentials));
 		}
+
+		if (!doPull) return;
+
+		const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
 
 		// Pull each repo (ff-only, non-fatal)
 		let allPullsSucceeded = true;

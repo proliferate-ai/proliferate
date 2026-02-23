@@ -11,7 +11,7 @@ export interface GitHubIntegration {
 }
 
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
-const tokenCacheDurationMs = 50 * 60 * 1000;
+const tokenExpirySkewMs = 2 * 60 * 1000;
 
 let cachedNango: Nango | null = null;
 
@@ -95,7 +95,15 @@ async function generateAppJwt(env: GatewayEnv): Promise<string> {
 		.sign(await importPrivateKey(privateKey));
 }
 
-async function getInstallationToken(env: GatewayEnv, installationId: string): Promise<string> {
+async function getInstallationToken(
+	env: GatewayEnv,
+	installationId: string,
+	options?: { forceRefresh?: boolean },
+): Promise<string> {
+	if (options?.forceRefresh) {
+		tokenCache.delete(installationId);
+	}
+
 	const cached = tokenCache.get(installationId);
 	if (cached && cached.expiresAt > Date.now()) {
 		return cached.token;
@@ -119,12 +127,16 @@ async function getInstallationToken(env: GatewayEnv, installationId: string): Pr
 		throw new Error(`Failed to get installation token: ${error}`);
 	}
 
-	const data = (await response.json()) as { token: string };
+	const data = (await response.json()) as { token: string; expires_at?: string };
 	const token = data.token;
+	const expiresAt = data.expires_at ? Date.parse(data.expires_at) : Number.NaN;
+	const cachedExpiry = Number.isFinite(expiresAt)
+		? Math.max(Date.now() + 60_000, expiresAt - tokenExpirySkewMs)
+		: Date.now() + 50 * 60 * 1000;
 
 	tokenCache.set(installationId, {
 		token,
-		expiresAt: Date.now() + tokenCacheDurationMs,
+		expiresAt: cachedExpiry,
 	});
 
 	return token;
@@ -133,9 +145,10 @@ async function getInstallationToken(env: GatewayEnv, installationId: string): Pr
 export async function getGitHubTokenForIntegration(
 	env: GatewayEnv,
 	integration: GitHubIntegration,
+	options?: { forceRefresh?: boolean },
 ): Promise<string> {
 	if (integration.github_installation_id) {
-		return getInstallationToken(env, integration.github_installation_id);
+		return getInstallationToken(env, integration.github_installation_id, options);
 	}
 
 	if (integration.connection_id) {

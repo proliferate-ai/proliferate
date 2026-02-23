@@ -158,11 +158,18 @@ export class EventProcessor {
 
 		const errorMessage = getOpenCodeErrorMessage(info.error);
 		if (errorMessage) {
-			this.logger.debug(
-				{ messageId, errorMessage, openCodeSessionId: sessionId ?? null },
-				"Assistant message update includes error",
-			);
-			this.callbacks.broadcast({ type: "error", payload: { message: errorMessage } });
+			if (isAbortLikeOpenCodeError(info.error)) {
+				this.logger.debug(
+					{ messageId, errorMessage, openCodeSessionId: sessionId ?? null },
+					"Ignoring expected abort error on assistant message update",
+				);
+			} else {
+				this.logger.debug(
+					{ messageId, errorMessage, openCodeSessionId: sessionId ?? null },
+					"Assistant message update includes error",
+				);
+				this.callbacks.broadcast({ type: "error", payload: { message: errorMessage } });
+			}
 		}
 
 		const completed = info.time?.completed;
@@ -404,6 +411,14 @@ export class EventProcessor {
 		const metadata = part.state?.metadata;
 		if (metadata?.summary) {
 			const summaryKey = `${part.id}:summary:${metadata.summary.length}`;
+			const summaryStateCounts = metadata.summary.reduce<Record<string, number>>((acc, item) => {
+				const key = item.state.status || "unknown";
+				acc[key] = (acc[key] ?? 0) + 1;
+				return acc;
+			}, {});
+			const summarySignature = metadata.summary
+				.map((item) => `${item.id}:${item.tool}:${item.state.status}:${item.state.title ?? ""}`)
+				.join("|");
 			if (!this.sentToolEvents.has(summaryKey)) {
 				this.sentToolEvents.add(summaryKey);
 				const payload: ToolMetadataMessage = {
@@ -425,7 +440,33 @@ export class EventProcessor {
 					},
 					"Emitted tool_metadata",
 				);
+				this.logger.info(
+					{
+						partId: part.id,
+						messageId: this.currentAssistantMessageId,
+						toolCallId,
+						toolName,
+						title: part.state?.title,
+						summaryLength: metadata.summary.length,
+						summaryStateCounts,
+						summarySignature,
+					},
+					"Forwarded tool metadata update",
+				);
 				this.callbacks.onToolMetadata?.(part.state?.title);
+			} else {
+				this.logger.debug(
+					{
+						partId: part.id,
+						toolCallId,
+						toolName,
+						summaryKey,
+						summaryLength: metadata.summary.length,
+						summaryStateCounts,
+						summarySignature,
+					},
+					"Skipped duplicate tool_metadata event",
+				);
 			}
 		}
 
@@ -520,8 +561,14 @@ export class EventProcessor {
 		}
 		const { error } = properties;
 
-		// Skip MessageAbortedError - expected when user cancels
-		if (error?.name === "MessageAbortedError") {
+		if (isAbortLikeOpenCodeError(error)) {
+			this.logger.debug(
+				{
+					errorName: error?.name ?? null,
+					errorMessage: error?.data?.message ?? null,
+				},
+				"Ignoring expected abort error on session.error",
+			);
 			return;
 		}
 
@@ -556,4 +603,46 @@ function getOpenCodeErrorMessage(error: unknown): string | null {
 		return err.name;
 	}
 	return null;
+}
+
+function isAbortLikeOpenCodeError(error: unknown): boolean {
+	if (!error) {
+		return false;
+	}
+
+	const details =
+		typeof error === "string"
+			? { name: null, message: error, dataMessage: null }
+			: typeof error === "object"
+				? {
+						name:
+							typeof (error as { name?: unknown }).name === "string"
+								? ((error as { name?: unknown }).name as string)
+								: null,
+						message:
+							typeof (error as { message?: unknown }).message === "string"
+								? ((error as { message?: unknown }).message as string)
+								: null,
+						dataMessage:
+							typeof (error as { data?: { message?: unknown } | null }).data?.message === "string"
+								? ((error as { data?: { message?: unknown } | null }).data?.message as string)
+								: null,
+					}
+				: { name: null, message: String(error), dataMessage: null };
+
+	const normalizedName = details.name?.toLowerCase();
+	if (normalizedName === "messageabortederror" || normalizedName === "aborterror") {
+		return true;
+	}
+
+	const messages = [details.message, details.dataMessage]
+		.filter((value): value is string => typeof value === "string")
+		.map((value) => value.toLowerCase());
+
+	return messages.some(
+		(message) =>
+			message.includes("operation was aborted") ||
+			message.includes("signal is aborted") ||
+			message === "aborterror",
+	);
 }

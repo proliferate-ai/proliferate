@@ -43,6 +43,7 @@ import {
 	type SandboxOperation,
 	SandboxProviderError,
 	type SessionMetadata,
+	buildGitCredentialsMap,
 	capOutput,
 	getOpencodeConfig,
 	shellEscape,
@@ -916,14 +917,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		await mkdirProc.wait();
 
 		// Write git credentials file for per-repo auth (used by git-credential-proliferate helper)
-		const gitCredentials: Record<string, string> = {};
-		for (const repo of opts.repos) {
-			if (repo.token) {
-				// Store both with and without .git suffix for flexibility
-				gitCredentials[repo.repoUrl] = repo.token;
-				gitCredentials[repo.repoUrl.replace(/\.git$/, "")] = repo.token;
-			}
-		}
+		const gitCredentials = buildGitCredentialsMap(opts.repos);
 		if (Object.keys(gitCredentials).length > 0) {
 			log.debug({ repoCount: opts.repos.length }, "Writing git credentials");
 			const credsFile = await sandbox.open("/tmp/.git-credentials.json", "w");
@@ -1216,22 +1210,16 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				lastGitFetchAt: metadata?.lastGitFetchAt,
 			});
 
+			// Always refresh git credentials on restore. Pull cadence controls pulls only.
+			const gitCredentials = buildGitCredentialsMap(opts.repos);
+			if (Object.keys(gitCredentials).length > 0) {
+				const credsFile = await sandbox.open("/tmp/.git-credentials.json", "w");
+				await credsFile.write(encoder.encode(JSON.stringify(gitCredentials)));
+				await credsFile.close();
+			}
+
 			if (doPull) {
 				const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
-
-				// Re-write git credentials with fresh tokens (snapshot tokens may be stale)
-				const gitCredentials: Record<string, string> = {};
-				for (const repo of opts.repos) {
-					if (repo.token) {
-						gitCredentials[repo.repoUrl] = repo.token;
-						gitCredentials[repo.repoUrl.replace(/\.git$/, "")] = repo.token;
-					}
-				}
-				if (Object.keys(gitCredentials).length > 0) {
-					const credsFile = await sandbox.open("/tmp/.git-credentials.json", "w");
-					await credsFile.write(encoder.encode(JSON.stringify(gitCredentials)));
-					await credsFile.close();
-				}
 
 				// Pull each repo (ff-only, non-fatal)
 				let allPullsSucceeded = true;

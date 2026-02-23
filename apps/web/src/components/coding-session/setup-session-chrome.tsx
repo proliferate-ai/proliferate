@@ -5,12 +5,12 @@ import { SetupIntroModal } from "@/components/sessions/setup-intro-modal";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useFinalizeSetup } from "@/hooks/use-sessions";
+import { startSnapshotProgressToast } from "@/lib/snapshot-progress-toast";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useSetupProgressStore } from "@/stores/setup-progress";
-import { Check, KeyRound, MessageSquare, Settings } from "lucide-react";
+import { Check, KeyRound, Loader2, MessageSquare, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { toast } from "sonner";
 
 interface SetupSessionChromeProps {
 	sessionId: string;
@@ -52,31 +52,40 @@ export function SetupSessionChrome({
 	}, [sessionId, setActiveSession, resetProgress]);
 
 	const handleFinalize = async () => {
+		const progressToast = startSnapshotProgressToast({
+			initialMessage: "Saving setup snapshot...",
+		});
 		try {
 			await finalizeSetupMutation.mutateAsync({
 				repoId,
 				sessionId,
 			});
-			toast.success("Snapshot saved!", {
-				description: "Your environment is ready. Start a coding session to begin building.",
-			});
+			progressToast.success(
+				"Snapshot saved",
+				"Your environment is ready. Start a coding session to begin building.",
+			);
 			router.push("/dashboard");
 		} catch (error) {
-			toast.error("Failed to save snapshot", {
-				description: error instanceof Error ? error.message : "Please try again.",
-			});
+			progressToast.error(
+				"Failed to save snapshot",
+				error instanceof Error ? error.message : "Please try again.",
+			);
+		} finally {
+			progressToast.dispose();
 		}
 	};
 
-	const progressText = snapshotSaved
-		? "Setup complete \u2014 save the snapshot to finish"
-		: verified
-			? "Environment verified \u2014 ready to save"
-			: envRequested
-				? "Secrets requested \u2014 open Environment and create secret files"
-				: hasActivity
-					? "Installing dependencies and configuring services\u2026"
-					: "The agent is starting setup\u2026";
+	const progressText = finalizeSetupMutation.isPending
+		? "Saving snapshot. This can take around a minute."
+		: snapshotSaved
+			? "Setup complete \u2014 save the snapshot to finish"
+			: verified
+				? "Environment verified \u2014 ready to save"
+				: envRequested
+					? "Secrets requested \u2014 open Environment and create secret files"
+					: hasActivity
+						? "Installing dependencies and configuring services\u2026"
+						: "The agent is starting setup\u2026";
 
 	return (
 		<>
@@ -100,13 +109,19 @@ export function SetupSessionChrome({
 									size="sm"
 									className="gap-1.5 shrink-0"
 								>
-									<Check className="h-3.5 w-3.5" />
-									{finalizeSetupMutation.isPending ? "Saving..." : "Done \u2014 Save Snapshot"}
+									{finalizeSetupMutation.isPending ? (
+										<Loader2 className="h-3.5 w-3.5 animate-spin" />
+									) : (
+										<Check className="h-3.5 w-3.5" />
+									)}
+									{finalizeSetupMutation.isPending
+										? "Saving snapshot..."
+										: "Done \u2014 Save Snapshot"}
 								</Button>
 							</TooltipTrigger>
 							<TooltipContent side="bottom" align="end" className="max-w-[240px]">
 								Saves this environment as a reusable snapshot. Future coding sessions will boot from
-								this state.
+								this state. Larger workspaces can take around a minute.
 							</TooltipContent>
 						</Tooltip>
 					</TooltipProvider>

@@ -247,6 +247,8 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 - Concurrent `ensureRuntimeReady()` calls coalesce into a single promise (`ensureReadyPromise`) within an instance.
 - OpenCode session creation uses bounded retry with exponential backoff for transient transport failures (fetch/socket and retryable 5xx/429), with per-attempt latency logs.
 - On direct lookup transport failures, runtime keeps the stored session ID instead of rotating immediately, preventing message-history churn during transient tunnel/list instability.
+- Git identity is resolved from `sessions.created_by` (`users.findById`) and exported into sandbox env as `GIT_AUTHOR_*`/`GIT_COMMITTER_*` during both deferred runtime boot and immediate session creation, preventing fallback to provider host identities like `root@modal.(none)`.
+- Repo token selection prefers GitHub App installation-backed connections over non-App connections when both are present, and falls back across candidates when a token cannot access the target repository.
 - OpenCode session creation emits explicit reason-coded logs when identity rotation is required (`missing_stored_id` / `stored_id_not_found`) so churn can be traced per session lifecycle.
 - LLM proxy usage is explicitly gated by `LLM_PROXY_REQUIRED=true`; when false, sandboxes use direct `ANTHROPIC_API_KEY` even if `LLM_PROXY_URL` is present in env.
 - E2B auto-pause: if provider supports auto-pause, `sandboxId` is stored as `snapshotId` for implicit recovery.
@@ -424,8 +426,11 @@ Source: `apps/gateway/src/hub/migration-controller.ts`
 - `commit()` — stages files (selective, tracked-only, or all), checks for empty diff, commits.
 - `push()` — detects upstream, selects push strategy, handles shallow clone errors with `git fetch --deepen`.
 - `createPr()` — pushes first, then `gh pr create`, retrieves PR URL via `gh pr view --json`.
+- Before each git action/status request, the hub refreshes git context from `loadSessionContext()` so per-repo integration tokens are re-resolved and not pinned to session-start values.
 
 **Security**: `resolveGitDir()` validates workspace paths stay within `/home/user/workspace/`. All commands use `GIT_TERMINAL_PROMPT=0` and `GIT_ASKPASS=/bin/false` to prevent interactive prompts.
+**Commit identity**: `GitOperations` merges session git identity into command env (`GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`) so commit actions succeed even when repo/global git config is absent.
+**Push/PR auth resilience**: `GitOperations` refreshes `/tmp/.git-credentials.json` from current session repo tokens before push, injects `GIT_TOKEN`/`GH_TOKEN` env fallbacks, and supports URL variants (`.git`, no suffix, trailing slash) to avoid credential-helper lookup misses.
 
 ### 6.7 Port Forwarding Proxy — `Implemented`
 

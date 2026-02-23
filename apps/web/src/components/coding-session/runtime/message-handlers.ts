@@ -249,12 +249,22 @@ export function handleToolEnd(data: ToolEndMessage, ctx: MessageHandlerContext) 
 /** Handle tool metadata update (sub-agent progress) */
 export function handleToolMetadata(data: ToolMetadataMessage, ctx: MessageHandlerContext) {
 	const payload = data.payload;
+	const summary = Array.isArray(payload.metadata?.summary) ? payload.metadata.summary : [];
+	const summaryStateCounts = summary.reduce<Record<string, number>>((acc, item) => {
+		const key = item.state.status || "unknown";
+		acc[key] = (acc[key] ?? 0) + 1;
+		return acc;
+	}, {});
 	debugLog("tool_metadata.received", {
 		sessionId: ctx.sessionId,
 		toolCallId: payload.toolCallId,
 		tool: payload.tool,
 		title: payload.title ?? null,
-		summaryLength: Array.isArray(payload.metadata?.summary) ? payload.metadata.summary.length : 0,
+		summaryLength: summary.length,
+		summaryStateCounts,
+		summarySignature: summary
+			.map((item) => `${item.id}:${item.tool}:${item.state.status}:${item.state.title ?? ""}`)
+			.join("|"),
 	});
 
 	ctx.setMessages((prev) =>
@@ -297,16 +307,18 @@ export function handleMessageCancelled(
 	payload: { messageId?: string },
 	ctx: MessageHandlerContext,
 ) {
-	if (!payload?.messageId) return;
+	const messageId = payload?.messageId;
 	debugLog("message_cancelled.received", {
 		sessionId: ctx.sessionId,
-		messageId: payload.messageId,
+		messageId: messageId ?? null,
 	});
 
-	flushStreamingText(payload.messageId, ctx);
-	ctx.setMessages((msgs) =>
-		msgs.map((m) => (m.id === payload.messageId ? { ...m, isComplete: true } : m)),
-	);
+	if (messageId) {
+		flushStreamingText(messageId, ctx);
+		ctx.setMessages((msgs) =>
+			msgs.map((m) => (m.id === messageId ? { ...m, isComplete: true } : m)),
+		);
+	}
 	ctx.setIsRunning(false);
 }
 

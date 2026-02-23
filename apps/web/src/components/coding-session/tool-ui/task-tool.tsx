@@ -27,16 +27,25 @@ export const TaskToolUI = makeAssistantToolUI<TaskArgs, string>({
 		const agentType = args.subagent_type || "agent";
 		const metadata = args.__metadata;
 		const summary = metadata?.summary || [];
+		const canExpand = summary.length > 0 || Boolean(result);
 
-		// Find current running tool
-		const currentTool = summary.find((item) => item.state.status === "pending");
+		// Show the current active summary item while the task tool is still running.
+		const currentTool = summary.find(
+			(item) =>
+				item.state.status === "running" ||
+				item.state.status === "pending" ||
+				item.state.status === "in_progress",
+		);
 
 		return (
 			<div className="ml-4 my-0.5">
 				<Button
 					variant="ghost"
-					onClick={() => result && setIsExpanded(!isExpanded)}
-					disabled={!result}
+					onClick={() => {
+						if (!canExpand) return;
+						setIsExpanded(!isExpanded);
+					}}
+					disabled={!canExpand}
 					className="h-auto p-0 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-transparent disabled:cursor-default group max-w-full"
 				>
 					{isRunning ? (
@@ -48,9 +57,9 @@ export const TaskToolUI = makeAssistantToolUI<TaskArgs, string>({
 					)}
 					<span className="shrink-0">{capitalizeFirst(agentType)}</span>
 					<span className="text-muted-foreground/70 truncate min-w-0">({description})</span>
-					{isRunning && currentTool && (
+					{isRunning && (currentTool || metadata?.title) && (
 						<span className="text-xs text-muted-foreground/50 shrink-0">
-							· {currentTool.tool}...
+							· {metadata?.title || `${currentTool?.tool}...`}
 						</span>
 					)}
 					{!isRunning && summary.length > 0 && (
@@ -61,7 +70,7 @@ export const TaskToolUI = makeAssistantToolUI<TaskArgs, string>({
 				</Button>
 
 				{/* Expanded: tool summary list */}
-				{isExpanded && result && summary.length > 0 && (
+				{isExpanded && summary.length > 0 && (
 					<div className="ml-4 mt-1 space-y-0.5">
 						{summary.map((item, index) => (
 							<div

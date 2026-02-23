@@ -32,6 +32,7 @@ import {
 	resolveServiceCommands,
 } from "@proliferate/shared/sandbox";
 import type { GatewayEnv } from "./env";
+import { resolveGitIdentity, toGitIdentityEnv } from "./git-identity";
 import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
 import { deriveSandboxMcpToken } from "./sandbox-mcp-token";
 
@@ -419,6 +420,9 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		"session_creator.create_sandbox.start",
 	);
 
+	const gitIdentity = await resolveGitIdentity(userId);
+	const gitIdentityEnv = toGitIdentityEnv(gitIdentity);
+
 	// Resolve base snapshot from DB for Modal provider
 	let baseSnapshotId: string | undefined;
 	if (provider.type === "modal") {
@@ -492,6 +496,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 		);
 		const mergedEnvVars = {
 			...baseEnvResult.envVars,
+			...gitIdentityEnv,
 			...(process.env.ACTIONS_PLANE_LEGACY_TOKENS === "true" ? integrationEnvVars : {}),
 			...(sshOptions.envVars || {}),
 			...mandatoryRuntimeEnv,
@@ -569,7 +574,13 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	const githubStartMs = Date.now();
 	const repoSpecs: RepoSpec[] = await Promise.all(
 		typedConfigurationRepos.map(async (pr) => {
-			const token = await resolveGitHubToken(env, organizationId, pr.repo!.id, userId);
+			const token = await resolveGitHubToken(
+				env,
+				organizationId,
+				pr.repo!.id,
+				userId,
+				pr.repo!.githubUrl,
+			);
 			const serviceCommands = parseServiceCommands(pr.repo!.serviceCommands);
 			return {
 				repoUrl: pr.repo!.githubUrl,
@@ -636,6 +647,7 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 	);
 	const mergedEnvVars = {
 		...envResult.envVars,
+		...gitIdentityEnv,
 		...mandatoryRuntimeEnv,
 	};
 
@@ -744,6 +756,7 @@ async function resolveGitHubToken(
 	orgId: string,
 	repoId: string,
 	userId: string | undefined,
+	repoUrl: string,
 ): Promise<string> {
 	try {
 		// Get repo connections with integration details
@@ -753,67 +766,169 @@ async function resolveGitHubToken(
 			(rc) => rc.integration && rc.integration.status === "active",
 		);
 
-		let selectedIntegration: GitHubIntegration | null = null;
+		const candidateIntegrations: GitHubIntegration[] = [];
+		const seenCandidateIds = new Set<string>();
+		const addCandidate = (integration: GitHubIntegration | null) => {
+			if (!integration || seenCandidateIds.has(integration.id)) {
+				return;
+			}
+			seenCandidateIds.add(integration.id);
+			candidateIntegrations.push(integration);
+		};
 
 		if (activeConnections.length > 0) {
-			if (userId) {
-				const userConnection = activeConnections.find((rc) => rc.integration?.createdBy === userId);
-				if (userConnection?.integration) {
-					selectedIntegration = {
-						id: userConnection.integration.id,
-						github_installation_id: userConnection.integration.githubInstallationId,
-						connection_id: userConnection.integration.connectionId,
-					};
-				}
-			}
+			// Selection priority:
+			// 1) user-linked GitHub App install
+			// 2) any GitHub App install
+			// 3) user-linked non-App connection
+			// 4) all remaining active connections
+			const userGitHubApp = userId
+				? activeConnections.find(
+						(rc) =>
+							rc.integration?.createdBy === userId && Boolean(rc.integration.githubInstallationId),
+					)
+				: null;
+			const anyGitHubApp = activeConnections.find((rc) =>
+				Boolean(rc.integration?.githubInstallationId),
+			);
+			const userConnection = userId
+				? activeConnections.find((rc) => rc.integration?.createdBy === userId)
+				: null;
+			const prioritizedConnections = [
+				userGitHubApp,
+				anyGitHubApp,
+				userConnection,
+				...activeConnections,
+			];
 
-			if (!selectedIntegration && activeConnections[0]?.integration) {
-				const int = activeConnections[0].integration;
-				selectedIntegration = {
+			for (const connection of prioritizedConnections) {
+				const int = connection?.integration;
+				if (!int) {
+					continue;
+				}
+				addCandidate({
 					id: int.id,
 					github_installation_id: int.githubInstallationId,
 					connection_id: int.connectionId,
-				};
+				});
 			}
 		}
 
-		if (!selectedIntegration) {
-			// Try GitHub App integration
-			const githubAppIntegration = await integrations.findActiveGitHubApp(orgId);
+		// Also include org-level fallbacks as trailing candidates.
+		const githubAppIntegration = await integrations.findActiveGitHubApp(orgId);
 
-			if (githubAppIntegration) {
-				selectedIntegration = {
-					id: githubAppIntegration.id,
-					github_installation_id: githubAppIntegration.githubInstallationId,
-					connection_id: githubAppIntegration.connectionId,
-				};
-			} else {
-				// Try Nango GitHub integration
-				if (env.nangoGithubIntegrationId) {
-					const nangoIntegration = await integrations.findActiveNangoGitHub(
-						orgId,
-						env.nangoGithubIntegrationId,
-					);
+		if (githubAppIntegration) {
+			addCandidate({
+				id: githubAppIntegration.id,
+				github_installation_id: githubAppIntegration.githubInstallationId,
+				connection_id: githubAppIntegration.connectionId,
+			});
+		}
 
-					if (nangoIntegration) {
-						selectedIntegration = {
-							id: nangoIntegration.id,
-							github_installation_id: nangoIntegration.githubInstallationId,
-							connection_id: nangoIntegration.connectionId,
-						};
-					}
-				}
+		// Try Nango GitHub integration
+		if (env.nangoGithubIntegrationId) {
+			const nangoIntegration = await integrations.findActiveNangoGitHub(
+				orgId,
+				env.nangoGithubIntegrationId,
+			);
+
+			if (nangoIntegration) {
+				addCandidate({
+					id: nangoIntegration.id,
+					github_installation_id: nangoIntegration.githubInstallationId,
+					connection_id: nangoIntegration.connectionId,
+				});
 			}
 		}
 
-		if (!selectedIntegration) {
+		if (candidateIntegrations.length === 0) {
 			return "";
 		}
 
-		return await getGitHubTokenForIntegration(env, selectedIntegration);
+		for (const candidate of candidateIntegrations) {
+			try {
+				let token = await getGitHubTokenForIntegration(env, candidate);
+				let hasAccess = await tokenHasRepoAccess(token, repoUrl);
+
+				// Installation tokens can become stale before cache expiry (permission changes/reinstalls).
+				if (!hasAccess && candidate.github_installation_id) {
+					token = await getGitHubTokenForIntegration(env, candidate, { forceRefresh: true });
+					hasAccess = await tokenHasRepoAccess(token, repoUrl);
+				}
+
+				if (hasAccess) {
+					return token;
+				}
+				logger.warn(
+					{
+						repoId,
+						repoUrl,
+						integrationId: candidate.id,
+						hasInstallationId: Boolean(candidate.github_installation_id),
+					},
+					"GitHub token lacks repo access, trying fallback integration",
+				);
+			} catch (err) {
+				logger.warn(
+					{
+						err,
+						repoId,
+						repoUrl,
+						integrationId: candidate.id,
+						hasInstallationId: Boolean(candidate.github_installation_id),
+					},
+					"Failed to resolve GitHub token for candidate integration",
+				);
+			}
+		}
+
+		return "";
 	} catch (err) {
 		logger.warn({ err }, "Failed to resolve GitHub token");
 		return "";
+	}
+}
+
+function parseGitHubRepoSlug(repoUrl: string): string | null {
+	try {
+		const normalized = repoUrl
+			.replace(/^git@github\.com:/, "https://github.com/")
+			.replace(/^ssh:\/\/git@github\.com\//, "https://github.com/");
+		const parsed = new URL(normalized);
+		if (parsed.hostname !== "github.com") {
+			return null;
+		}
+		const pathname = parsed.pathname
+			.replace(/^\/+/, "")
+			.replace(/\/+$/, "")
+			.replace(/\.git$/, "");
+		const [owner, repo] = pathname.split("/");
+		if (!owner || !repo) {
+			return null;
+		}
+		return `${owner}/${repo}`;
+	} catch {
+		return null;
+	}
+}
+
+async function tokenHasRepoAccess(token: string, repoUrl: string): Promise<boolean> {
+	const slug = parseGitHubRepoSlug(repoUrl);
+	if (!slug) {
+		return true;
+	}
+
+	try {
+		const response = await fetch(`https://api.github.com/repos/${slug}`, {
+			headers: {
+				Authorization: `Bearer ${token}`,
+				Accept: "application/vnd.github+json",
+				"X-GitHub-Api-Version": "2022-11-28",
+			},
+		});
+		return response.ok;
+	} catch {
+		return false;
 	}
 }
 

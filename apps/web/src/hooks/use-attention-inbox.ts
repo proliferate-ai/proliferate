@@ -40,11 +40,51 @@ export type AttentionItem =
  * Failure-isolated: if this query fails, approvals + runs still render.
  */
 function useBlockedSummary() {
+	const queryOptions = orpc.sessions.blockedSummary.queryOptions({ input: undefined });
+
 	return useQuery({
-		...orpc.sessions.blockedSummary.queryOptions({ input: undefined }),
+		...queryOptions,
 		refetchInterval: 30_000,
+		queryFn: async (context) => {
+			try {
+				return await queryOptions.queryFn(context);
+			} catch (error) {
+				if (isAbortLikeError(error)) {
+					return { groups: [] };
+				}
+				throw error;
+			}
+		},
 		select: (data) => data.groups,
 	});
+}
+
+function isAbortLikeError(error: unknown): boolean {
+	if (!error) {
+		return false;
+	}
+	if (error instanceof DOMException && error.name === "AbortError") {
+		return true;
+	}
+	if (error instanceof Error) {
+		const message = error.message.toLowerCase();
+		return (
+			error.name === "AbortError" ||
+			message.includes("operation was aborted") ||
+			message.includes("signal is aborted")
+		);
+	}
+	if (typeof error === "object" && error !== null) {
+		const name = (error as { name?: unknown }).name;
+		const message = (error as { message?: unknown }).message;
+		return (
+			name === "AbortError" ||
+			(typeof message === "string" &&
+				(message.toLowerCase().includes("operation was aborted") ||
+					message.toLowerCase().includes("signal is aborted")))
+		);
+	}
+	return false;
 }
 
 /**

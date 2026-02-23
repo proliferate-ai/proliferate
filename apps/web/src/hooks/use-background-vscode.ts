@@ -27,6 +27,8 @@ export function useBackgroundVscodeStart(sessionId: string | undefined, token: s
 		vscodeStartedSessions.add(sessionId);
 
 		const servicesUrl = `${GATEWAY_URL}/proxy/${sessionId}/${token}/devtools/mcp/api/services`;
+		const basePath = `/proxy/${sessionId}/${token}/devtools/vscode`;
+		const command = `openvscode-server --port 3901 --without-connection-token --host 127.0.0.1 --server-base-path=${basePath} --default-folder /home/user/workspace`;
 
 		(async () => {
 			try {
@@ -35,22 +37,32 @@ export function useBackgroundVscodeStart(sessionId: string | undefined, token: s
 				if (checkRes.ok) {
 					const data = await checkRes.json();
 					const existing = data.services?.find(
-						(s: { name: string }) => s.name === "openvscode-server",
+						(s: { name: string; status: string; command?: string }) =>
+							s.name === "openvscode-server",
 					);
 					if (existing) {
-						console.log("[vscode-bg] Service already exists:", existing.status);
-						return;
+						const existingCommand = typeof existing.command === "string" ? existing.command : "";
+						const hasExpectedBasePath = existingCommand.includes(`--server-base-path=${basePath}`);
+
+						if (existing.status === "running" && hasExpectedBasePath) {
+							console.log("[vscode-bg] Service already running with current base path");
+							return;
+						}
+
+						console.log(
+							"[vscode-bg] Existing service is stale or not running, restarting:",
+							existing.status,
+						);
 					}
 				}
 
-				const basePath = `/proxy/${sessionId}/${token}/devtools/vscode`;
 				console.log("[vscode-bg] Starting openvscode-server in background");
 				const startRes = await fetch(servicesUrl, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
 						name: "openvscode-server",
-						command: `openvscode-server --port 3901 --without-connection-token --host 127.0.0.1 --server-base-path=${basePath} --default-folder /home/user/workspace`,
+						command,
 					}),
 				});
 				console.log("[vscode-bg] Start response:", startRes.status);

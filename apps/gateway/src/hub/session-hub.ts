@@ -1264,7 +1264,12 @@ export class SessionHub {
 	private getGitOps(): GitOperations {
 		const info = this.runtime.getProviderAndSandboxId();
 		if (!info) throw new Error("Runtime not ready");
-		return new GitOperations(info.provider, info.sandboxId);
+		return new GitOperations(
+			info.provider,
+			info.sandboxId,
+			this.runtime.getContext().gitIdentity,
+			this.runtime.getContext().repos,
+		);
 	}
 
 	private assertCanMutateSession(ws: WebSocket, userId?: string): boolean {
@@ -1284,6 +1289,11 @@ export class SessionHub {
 
 	private async handleGitStatus(ws: WebSocket, workspacePath?: string): Promise<void> {
 		await this.ensureRuntimeReady();
+		try {
+			await this.runtime.refreshGitContext();
+		} catch (err) {
+			this.logError("Failed to refresh git context (using cached values)", err);
+		}
 		const status = await this.getGitOps().getStatus(workspacePath);
 		this.sendMessage(ws, { type: "git_status", payload: status });
 	}
@@ -1295,6 +1305,11 @@ export class SessionHub {
 		workspacePath?: string,
 	): Promise<void> {
 		await this.ensureRuntimeReady();
+		try {
+			await this.runtime.refreshGitContext();
+		} catch (err) {
+			this.logError("Failed to refresh git context (using cached values)", err);
+		}
 		try {
 			const result = await fn();
 			if (result.prUrl) {
@@ -1445,6 +1460,48 @@ export class SessionHub {
 	// ============================================
 
 	private broadcast(message: ServerMessage): void {
+		if (
+			message.type === "status" ||
+			message.type === "tool_start" ||
+			message.type === "tool_metadata" ||
+			message.type === "tool_end" ||
+			message.type === "message_complete" ||
+			message.type === "error"
+		) {
+			const payload = "payload" in message ? message.payload : undefined;
+			this.logger.debug(
+				{
+					type: message.type,
+					clientCount: this.clients.size,
+					status:
+						message.type === "status" && payload && typeof payload === "object"
+							? ((payload as { status?: string }).status ?? null)
+							: null,
+					statusMessage:
+						message.type === "status" && payload && typeof payload === "object"
+							? ((payload as { message?: string }).message ?? null)
+							: null,
+					toolCallId:
+						(message.type === "tool_start" ||
+							message.type === "tool_metadata" ||
+							message.type === "tool_end") &&
+						payload &&
+						typeof payload === "object"
+							? ((payload as { toolCallId?: string }).toolCallId ?? null)
+							: null,
+					tool:
+						(message.type === "tool_start" ||
+							message.type === "tool_metadata" ||
+							message.type === "tool_end") &&
+						payload &&
+						typeof payload === "object"
+							? ((payload as { tool?: string }).tool ?? null)
+							: null,
+				},
+				"Broadcasting session event to WS clients",
+			);
+		}
+
 		const payload = JSON.stringify(message);
 		for (const [ws] of this.clients) {
 			try {
@@ -1467,6 +1524,14 @@ export class SessionHub {
 		status: "creating" | "resuming" | "running" | "paused" | "stopped" | "error" | "migrating",
 		message?: string,
 	): void {
+		this.logger.info(
+			{
+				status,
+				message: message ?? null,
+				clientCount: this.clients.size,
+			},
+			"Broadcasting session status",
+		);
 		this.broadcast({
 			type: "status",
 			payload: { status, ...(message ? { message } : {}) },
@@ -1478,6 +1543,13 @@ export class SessionHub {
 		status: "creating" | "resuming" | "running" | "paused" | "stopped" | "error" | "migrating",
 		message?: string,
 	): void {
+		this.logger.debug(
+			{
+				status,
+				message: message ?? null,
+			},
+			"Sending session status to WS client",
+		);
 		this.sendMessage(ws, { type: "status", payload: { status, ...(message ? { message } : {}) } });
 	}
 

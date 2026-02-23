@@ -128,6 +128,16 @@ export class SessionRuntime {
 		return this.context;
 	}
 
+	/**
+	 * Refresh git-related context fields so git operations can use
+	 * newly-resolved integration tokens and latest user identity.
+	 */
+	async refreshGitContext(): Promise<void> {
+		const refreshed = await loadSessionContext(this.env, this.sessionId);
+		this.context.repos = refreshed.repos;
+		this.context.gitIdentity = refreshed.gitIdentity;
+	}
+
 	getOpenCodeUrl(): string | null {
 		return this.openCodeUrl;
 	}
