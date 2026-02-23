@@ -271,8 +271,7 @@ export const sessionsRouter = {
 			);
 			if (!userSlackId) {
 				throw new ORPCError("BAD_REQUEST", {
-					message:
-						"Could not find your Slack account. Make sure you use the same email in Slack and Proliferate.",
+					message: `Could not find a Slack account for ${context.user.email}. Make sure you use the same email in Slack and Proliferate.`,
 				});
 			}
 

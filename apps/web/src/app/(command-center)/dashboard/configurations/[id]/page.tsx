@@ -29,7 +29,8 @@ import {
 import { useCreateSession } from "@/hooks/use-sessions";
 import { getSetupInitialPrompt } from "@/lib/prompts";
 import { useDashboardStore } from "@/stores/dashboard";
-import { ArrowLeft, FolderGit2, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, FolderGit2, Loader2, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
@@ -90,6 +91,9 @@ export default function ConfigurationDetailPage() {
 	}
 	const displayName = config.name || "Untitled configuration";
 	const repos = (config.configurationRepos ?? []).filter((cr) => cr.repo !== null);
+	const activeSetup = (config.setupSessions ?? []).find(
+		(s) => s.sessionType === "setup" && (s.status === "running" || s.status === "starting"),
+	);
 	const lifecycle = getConfigurationLifecycleState(config.status);
 	return (
 		<div className="h-full overflow-y-auto">
@@ -102,28 +106,41 @@ export default function ConfigurationDetailPage() {
 						<ConfigurationStatusBadges status={config.status} align="start" />
 					</div>
 					<p className="mt-2 text-xs text-muted-foreground">{lifecycle.nextStep}</p>
-					{(config.status === "default" || config.status === "ready") && (
-						<Button
-							size="sm"
-							className="mt-3"
-							disabled={createSession.isPending}
-							onClick={async () => {
-								const result = await createSession.mutateAsync({
-									configurationId,
-									sessionType: "setup",
-									initialPrompt: getSetupInitialPrompt(),
-								});
-								setPendingPrompt(getSetupInitialPrompt());
-								router.push(`/workspace/${result.sessionId}`);
-							}}
-						>
-							<Play className="h-3.5 w-3.5 mr-1.5" />
-							{createSession.isPending
-								? "Starting..."
-								: config.status === "ready"
-									? "Update Environment"
-									: "Set Up Environment"}
-						</Button>
+					{activeSetup ? (
+						<div className="mt-3 flex items-center gap-3">
+							<Link
+								href={`/workspace/${activeSetup.id}`}
+								className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-muted/50 text-sm font-medium hover:bg-muted transition-colors"
+							>
+								<Loader2 className="h-3.5 w-3.5 animate-spin" />
+								View Running Setup
+							</Link>
+							<span className="text-xs text-muted-foreground">A setup session is in progress</span>
+						</div>
+					) : (
+						(config.status === "default" || config.status === "ready") && (
+							<Button
+								size="sm"
+								className="mt-3"
+								disabled={createSession.isPending}
+								onClick={async () => {
+									const result = await createSession.mutateAsync({
+										configurationId,
+										sessionType: "setup",
+										initialPrompt: getSetupInitialPrompt(),
+									});
+									setPendingPrompt(getSetupInitialPrompt());
+									router.push(`/workspace/${result.sessionId}`);
+								}}
+							>
+								<Play className="h-3.5 w-3.5 mr-1.5" />
+								{createSession.isPending
+									? "Starting..."
+									: config.status === "ready"
+										? "Update Environment"
+										: "Set Up Environment"}
+							</Button>
+						)
 					)}
 				</div>
 				{/* Routing description */}

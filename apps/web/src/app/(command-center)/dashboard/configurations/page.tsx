@@ -26,7 +26,7 @@ import { getSetupInitialPrompt } from "@/lib/prompts";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Configuration } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
-import { FolderGit2, Plus, Search } from "lucide-react";
+import { FolderGit2, Loader2, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -169,6 +169,9 @@ export default function ConfigurationsPage() {
 function ConfigurationRow({ config }: { config: Configuration }) {
 	const displayName = config.name || "Untitled configuration";
 	const repos = (config.configurationRepos ?? []).filter((cr) => cr.repo !== null);
+	const activeSetup = (config.setupSessions ?? []).find(
+		(s) => s.sessionType === "setup" && (s.status === "running" || s.status === "starting"),
+	);
 	const timeAgo = config.createdAt
 		? formatDistanceToNow(new Date(config.createdAt), { addSuffix: true })
 		: "\u2014";
@@ -195,8 +198,14 @@ function ConfigurationRow({ config }: { config: Configuration }) {
 						</div>
 					)}
 				</div>
-				<span className="w-40 flex justify-center shrink-0">
+				<span className="w-40 flex justify-center items-center gap-1.5 shrink-0">
 					<ConfigurationStatusBadges status={config.status} />
+					{activeSetup && (
+						<span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+							<Loader2 className="h-3 w-3 animate-spin" />
+							Setup running
+						</span>
+					)}
 				</span>
 				<span className="w-28 text-center text-xs text-muted-foreground shrink-0">{timeAgo}</span>
 			</Link>

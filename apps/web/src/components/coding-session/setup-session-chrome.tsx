@@ -4,13 +4,20 @@ import { HelpLink } from "@/components/help/help-link";
 import { SetupIntroModal } from "@/components/sessions/setup-intro-modal";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useFinalizeSetup } from "@/hooks/use-sessions";
+import { useHasSlackInstallation } from "@/hooks/use-integrations";
+import {
+	useFinalizeSetup,
+	useSessionNotificationSubscription,
+	useSubscribeNotifications,
+	useUnsubscribeNotifications,
+} from "@/hooks/use-sessions";
 import { startSnapshotProgressToast } from "@/lib/snapshot-progress-toast";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useSetupProgressStore } from "@/stores/setup-progress";
-import { Check, KeyRound, Loader2, MessageSquare, Settings } from "lucide-react";
+import { Bell, BellOff, Check, KeyRound, Loader2, MessageSquare, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { toast } from "sonner";
 
 interface SetupSessionChromeProps {
 	sessionId: string;
@@ -38,6 +45,26 @@ export function SetupSessionChrome({
 	);
 	const setActiveSession = useSetupProgressStore((s) => s.setActiveSession);
 	const resetProgress = useSetupProgressStore((s) => s.reset);
+
+	const { hasSlack } = useHasSlackInstallation();
+	const { data: isSubscribed } = useSessionNotificationSubscription(sessionId);
+	const subscribeNotifications = useSubscribeNotifications();
+	const unsubscribeNotifications = useUnsubscribeNotifications();
+
+	const handleToggleNotifications = async () => {
+		try {
+			if (isSubscribed) {
+				await unsubscribeNotifications.mutateAsync({ sessionId });
+				toast.success("Notifications turned off");
+			} else {
+				await subscribeNotifications.mutateAsync({ sessionId });
+				toast.success("You'll be notified on Slack when this session needs attention");
+			}
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "Failed to update notifications";
+			toast.error(message);
+		}
+	};
 
 	const openEnvironmentPanel = () => {
 		if (mode.type !== "environment") {
@@ -148,6 +175,28 @@ export function SetupSessionChrome({
 						<KeyRound className="h-3.5 w-3.5" />
 						Open Environment
 					</Button>
+					{hasSlack ? (
+						<button
+							type="button"
+							className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 py-1 hover:text-foreground transition-colors"
+							onClick={handleToggleNotifications}
+						>
+							{isSubscribed ? (
+								<BellOff className="h-3.5 w-3.5 text-muted-foreground" />
+							) : (
+								<Bell className="h-3.5 w-3.5 text-muted-foreground" />
+							)}
+							{isSubscribed ? "Slack notifications on" : "Notify me on Slack"}
+						</button>
+					) : (
+						<a
+							href="/settings/connections"
+							className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 py-1 hover:text-foreground transition-colors"
+						>
+							<Bell className="h-3.5 w-3.5 text-muted-foreground" />
+							Connect Slack to get notified
+						</a>
+					)}
 				</div>
 			</div>
 		</>
