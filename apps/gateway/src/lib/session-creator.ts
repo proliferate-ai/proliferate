@@ -918,9 +918,9 @@ async function tokenHasRepoAccess(token: string, repoUrl: string): Promise<boole
 		return true;
 	}
 
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), 10_000);
 	try {
-		const controller = new AbortController();
-		const timeout = setTimeout(() => controller.abort(), 10_000);
 		const response = await fetch(`https://api.github.com/repos/${slug}`, {
 			headers: {
 				Authorization: `Bearer ${token}`,
@@ -929,10 +929,11 @@ async function tokenHasRepoAccess(token: string, repoUrl: string): Promise<boole
 			},
 			signal: controller.signal,
 		});
-		clearTimeout(timeout);
 		return response.ok;
 	} catch {
 		return false;
+	} finally {
+		clearTimeout(timeout);
 	}
 }
 

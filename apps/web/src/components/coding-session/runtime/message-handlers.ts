@@ -263,9 +263,7 @@ export function handleToolMetadata(data: ToolMetadataMessage, ctx: MessageHandle
 		title: payload.title ?? null,
 		summaryLength: summary.length,
 		summaryStateCounts,
-		summarySignature: summary
-			.map((item) => `${item.id}:${item.tool}:${item.state.status}:${item.state.title ?? ""}`)
-			.join("|"),
+		summarySignatureLength: summary.length,
 	});
 
 	ctx.setMessages((prev) =>

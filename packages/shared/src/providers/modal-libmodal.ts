@@ -850,12 +850,13 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			}
 		}
 
+		const usedFallback = Boolean(existingSandboxId && opts.currentSandboxId);
 		logLatency("provider.ensure_sandbox.find_existing", {
 			provider: this.type,
 			sessionId: opts.sessionId,
 			durationMs: Date.now() - findStartMs,
 			found: Boolean(existingSandboxId),
-			usedFallback: Boolean(!existingSandboxId || (existingSandboxId && opts.currentSandboxId)),
+			usedFallback,
 		});
 
 		if (existingSandboxId) {
