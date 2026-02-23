@@ -279,8 +279,7 @@ async function seedOrg(
 	const sessionStatuses = [
 		...Array(5).fill("running"),
 		...Array(5).fill("paused"),
-		...Array(8).fill("stopped"),
-		...Array(2).fill("failed"),
+		...Array(10).fill("stopped"),
 	] as string[];
 
 	const sessionRows = await db
@@ -289,7 +288,7 @@ async function seedOrg(
 			sessionStatuses.map((status, i) => {
 				const startedAt = randomDate(30);
 				const isActive = status === "running";
-				const isStopped = status === "stopped" || status === "failed";
+				const isStopped = status === "stopped";
 				return {
 					organizationId: orgId,
 					repoId: pick(repoRows).id,
@@ -346,10 +345,8 @@ async function seedOrg(
 
 	// 5. Trigger events
 	const triggerEventStatuses = [
-		...Array(6).fill("processed"),
+		...Array(8).fill("processed"),
 		...Array(2).fill("queued"),
-		...Array(1).fill("skipped"),
-		...Array(1).fill("failed"),
 	] as string[];
 
 	const triggerEventRows = await db
@@ -365,7 +362,7 @@ async function seedOrg(
 					status,
 					rawPayload: { event: "seed", timestamp: new Date().toISOString() },
 					processedAt: status === "processed" ? randomDate(14) : null,
-					skipReason: status === "skipped" ? "Filtered by LLM analysis" : null,
+					skipReason: null,
 					dedupKey: uuid(),
 				};
 			}),
@@ -375,10 +372,9 @@ async function seedOrg(
 
 	// 6. Automation runs (one per trigger event — unique FK constraint)
 	const runStatuses = [
-		...Array(4).fill("completed"),
+		...Array(5).fill("completed"),
 		...Array(3).fill("executing"),
 		...Array(2).fill("queued"),
-		...Array(1).fill("failed"),
 	] as string[];
 
 	const runnableSessions = pickN(sessionRows, 6);
@@ -424,8 +420,6 @@ async function seedOrg(
 		...Array(6).fill("completed"),
 		...Array(3).fill("pending"),
 		...Array(3).fill("approved"),
-		...Array(2).fill("failed"),
-		...Array(1).fill("denied"),
 	] as string[];
 
 	const actionRows = await db
@@ -449,8 +443,8 @@ async function seedOrg(
 					params: actionDef.params,
 					status,
 					result: isCompleted ? { success: true } : null,
-					error: status === "failed" ? "GitHub API rate limit exceeded (5000 req/hr)" : null,
-					deniedReason: status === "denied" ? "Action not allowed by org policy" : null,
+					error: null,
+					deniedReason: null,
 					durationMs: isCompleted ? Math.floor(Math.random() * 5000) + 200 : null,
 					approvedBy: isApproved ? userId : null,
 					approvedAt: isApproved ? new Date(createdAt.getTime() + 30_000) : null,
