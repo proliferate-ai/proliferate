@@ -1,6 +1,5 @@
 "use client";
 
-import { HelpLink } from "@/components/help";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -132,7 +131,7 @@ export function SnapshotSelector({
 	// Get trigger text
 	const getTriggerText = () => {
 		if (!selectedSnapshotId || !selectedSnapshot) {
-			return "Select snapshot...";
+			return "Select configuration...";
 		}
 		const name = getSnapshotDisplayName(selectedSnapshot);
 		const repoCount = selectedSnapshotRepos.length;
@@ -185,7 +184,7 @@ export function SnapshotSelector({
 									type="text"
 									value={snapshotSearchQuery}
 									onChange={(e) => setSnapshotSearchQuery(e.target.value)}
-									placeholder="Search snapshots..."
+									placeholder="Search configurations..."
 									className="pl-8 h-8 border-0 bg-muted/50 focus-visible:ring-1"
 								/>
 							</div>
@@ -197,8 +196,8 @@ export function SnapshotSelector({
 								<div className="py-8 text-center">
 									<Text variant="small" color="muted">
 										{snapshotSearchQuery
-											? `No snapshots match "${snapshotSearchQuery}"`
-											: "No snapshots yet"}
+											? `No configurations match "${snapshotSearchQuery}"`
+											: "No configurations yet"}
 									</Text>
 								</div>
 							) : (
@@ -425,8 +424,7 @@ export function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) 
 			<div className="px-4 pt-4 pb-3 border-b border-border">
 				<Text className="font-semibold">New configuration</Text>
 				<Text variant="small" color="muted" className="mt-1">
-					Group the repositories for this project. Build starts automatically, then setup finishes
-					configuration.
+					Group the repositories for this project, then run setup to configure.
 				</Text>
 			</div>
 
@@ -577,11 +575,8 @@ export function CreateSnapshotContent({ onCreate }: CreateSnapshotContentProps) 
 									: `Create and start setup (${selectedRepoIds.size} ${selectedRepoIds.size === 1 ? "repo" : "repos"})`}
 					</Button>
 					<Text variant="small" color="muted" className="text-center block">
-						Build runs in the background. Save your setup session to mark this configuration ready.
+						Save your setup session to finish configuring this environment.
 					</Text>
-					<HelpLink topic="snapshots" className="justify-center">
-						How build and configure work
-					</HelpLink>
 				</div>
 			</div>
 		</div>

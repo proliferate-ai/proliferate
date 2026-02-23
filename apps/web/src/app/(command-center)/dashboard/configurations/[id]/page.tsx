@@ -3,6 +3,16 @@ import {
 	ConfigurationStatusBadges,
 	getConfigurationLifecycleState,
 } from "@/components/dashboard/configuration-lifecycle";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,14 +22,14 @@ import { Textarea } from "@/components/ui/textarea";
 import {
 	useConfigurationServiceCommands,
 	useConfigurations,
-	useDetachRepo,
+	useDeleteConfiguration,
 	useUpdateConfiguration,
 	useUpdateConfigurationServiceCommands,
 } from "@/hooks/use-configurations";
 import { useCreateSession } from "@/hooks/use-sessions";
 import { getSetupInitialPrompt } from "@/lib/prompts";
 import { useDashboardStore } from "@/stores/dashboard";
-import { ArrowLeft, FolderGit2, Pencil, Play, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, FolderGit2, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
@@ -29,7 +39,9 @@ export default function ConfigurationDetailPage() {
 	const configurationId = params.id;
 	const { data: configurations, isLoading } = useConfigurations();
 	const createSession = useCreateSession();
+	const deleteConfiguration = useDeleteConfiguration();
 	const { setPendingPrompt } = useDashboardStore();
+	const [deleteOpen, setDeleteOpen] = useState(false);
 
 	const updateConfiguration = useUpdateConfiguration();
 
@@ -136,10 +148,55 @@ export default function ConfigurationDetailPage() {
 				</section>
 
 				{/* Attached repos */}
-				<AttachedReposSection configurationId={configurationId} repos={repos} />
+				<AttachedReposSection repos={repos} />
 				{/* Service Commands */}
 				<ServiceCommandsSection configurationId={configurationId} />
+
+				{/* Danger zone */}
+				<section className="pt-4 border-t border-border">
+					<div className="flex items-center justify-between">
+						<div>
+							<h2 className="text-sm font-medium">Delete configuration</h2>
+							<p className="text-xs text-muted-foreground mt-0.5">
+								Permanently remove this configuration and its service commands.
+							</p>
+						</div>
+						<Button
+							variant="outline"
+							size="sm"
+							className="text-destructive border-destructive/40 hover:bg-destructive/10"
+							onClick={() => setDeleteOpen(true)}
+						>
+							<Trash2 className="h-3.5 w-3.5 mr-1.5" />
+							Delete
+						</Button>
+					</div>
+				</section>
 			</div>
+
+			<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Delete configuration</AlertDialogTitle>
+						<AlertDialogDescription>
+							Are you sure you want to delete &ldquo;{displayName}&rdquo;? This will remove the
+							configuration and its service commands.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={async () => {
+								await deleteConfiguration.mutateAsync(config.id);
+								router.push("/dashboard/configurations");
+							}}
+							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+						>
+							{deleteConfiguration.isPending ? "Deleting..." : "Delete"}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }
@@ -154,26 +211,16 @@ interface ConfigurationRepo {
 		githubUrl: string;
 	} | null;
 }
-function AttachedReposSection({
-	configurationId,
-	repos,
-}: {
-	configurationId: string;
-	repos: ConfigurationRepo[];
-}) {
-	const detachRepo = useDetachRepo();
-	const handleDetach = async (repoId: string) => {
-		await detachRepo.mutateAsync({ configurationId, repoId });
-	};
+function AttachedReposSection({ repos }: { repos: ConfigurationRepo[] }) {
 	return (
 		<section>
 			<div className="flex items-center justify-between mb-3">
-				<h2 className="text-sm font-medium">Attached Repositories</h2>
+				<h2 className="text-sm font-medium">Repositories</h2>
 			</div>
 			{repos.length > 0 ? (
 				<div className="rounded-lg border border-border/80 bg-background divide-y divide-border/60">
 					{repos.map((cr) => (
-						<div key={cr.repo!.id} className="flex items-center justify-between px-4 py-2.5">
+						<div key={cr.repo!.id} className="flex items-center px-4 py-2.5">
 							<div className="flex items-center gap-2 min-w-0">
 								<FolderGit2 className="h-4 w-4 text-muted-foreground shrink-0" />
 								<span className="text-sm truncate">{cr.repo!.githubRepoName}</span>
@@ -181,25 +228,12 @@ function AttachedReposSection({
 									<span className="text-xs text-muted-foreground">{cr.workspacePath}</span>
 								)}
 							</div>
-							<Button
-								variant="ghost"
-								size="sm"
-								className="h-7 text-xs text-muted-foreground hover:text-destructive shrink-0"
-								onClick={() => handleDetach(cr.repo!.id)}
-								disabled={detachRepo.isPending}
-							>
-								<X className="h-3 w-3 mr-1" />
-								Detach
-							</Button>
 						</div>
 					))}
 				</div>
 			) : (
 				<div className="rounded-lg border border-dashed border-border/80 py-8 text-center">
 					<p className="text-sm text-muted-foreground">No repositories attached</p>
-					<p className="text-xs text-muted-foreground mt-1">
-						Attach repositories from the repos page or via the API
-					</p>
 				</div>
 			)}
 		</section>

@@ -1,9 +1,6 @@
 "use client";
 
-import {
-	ConfigurationLifecycleExplainer,
-	ConfigurationStatusBadges,
-} from "@/components/dashboard/configuration-lifecycle";
+import { ConfigurationStatusBadges } from "@/components/dashboard/configuration-lifecycle";
 import {
 	GearIllustration,
 	InfoBadge,
@@ -13,16 +10,6 @@ import {
 import { PageShell } from "@/components/dashboard/page-shell";
 import { CreateSnapshotContent } from "@/components/dashboard/snapshot-selector";
 import { GitHubConnectButton } from "@/components/integrations/github-connect-button";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -31,24 +18,15 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import { useConfigurations, useDeleteConfiguration } from "@/hooks/use-configurations";
+import { useConfigurations } from "@/hooks/use-configurations";
 import { useIntegrations } from "@/hooks/use-integrations";
-import { useCreateSession } from "@/hooks/use-sessions";
 import { getSetupInitialPrompt } from "@/lib/prompts";
-import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Configuration } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
-import { ChevronRight, FolderGit2, MoreVertical, Play, Plus, Search, Trash2 } from "lucide-react";
+import { FolderGit2, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -82,10 +60,7 @@ export default function ConfigurationsPage() {
 
 	if (isLoading) {
 		return (
-			<PageShell
-				title="Configurations"
-				subtitle="Build snapshots automatically, then configure once in a setup session."
-			>
+			<PageShell title="Configurations" subtitle="Configure environments for your projects.">
 				<div className="py-12 flex justify-center">
 					<LoadingDots size="md" className="text-muted-foreground" />
 				</div>
@@ -99,7 +74,7 @@ export default function ConfigurationsPage() {
 	return (
 		<PageShell
 			title="Configurations"
-			subtitle="Build snapshots automatically, then configure once in a setup session."
+			subtitle="Configure environments for your projects."
 			actions={
 				<div className="flex items-center gap-2">
 					{hasConfigs && (
@@ -125,16 +100,13 @@ export default function ConfigurationsPage() {
 				</div>
 			}
 		>
-			<div className="mb-4">
-				<ConfigurationLifecycleExplainer />
-			</div>
 			{!hasConfigs ? (
 				hasGitHub ? (
 					<PageEmptyState
 						illustration={<GearIllustration />}
 						badge={<PlusBadge />}
 						title="No configurations yet"
-						description="Choose repos to create a configuration. Build runs automatically; setup finishes configuration."
+						description="Choose repos and run a setup session to configure your environment."
 					>
 						<Button size="sm" onClick={() => setCreateOpen(true)}>
 							<Plus className="h-3.5 w-3.5 mr-1.5" />
@@ -160,10 +132,9 @@ export default function ConfigurationsPage() {
 			) : (
 				<div className="rounded-xl border border-border overflow-hidden">
 					{/* Table header */}
-					<div className="flex items-center px-4 py-2 pr-12 text-xs text-muted-foreground border-b border-border/50">
+					<div className="flex items-center px-4 py-2 text-xs text-muted-foreground border-b border-border/50">
 						<span className="flex-1 min-w-0">Name</span>
-						<span className="w-52 text-center shrink-0">Build / Configure</span>
-						<span className="w-32 text-center shrink-0">Repos</span>
+						<span className="w-40 text-center shrink-0">Status</span>
 						<span className="w-28 text-center shrink-0">Created</span>
 					</div>
 
@@ -196,139 +167,39 @@ export default function ConfigurationsPage() {
 // ============================================
 
 function ConfigurationRow({ config }: { config: Configuration }) {
-	const router = useRouter();
-	const deleteConfiguration = useDeleteConfiguration();
-	const createSession = useCreateSession();
-	const { setPendingPrompt } = useDashboardStore();
-	const [deleteOpen, setDeleteOpen] = useState(false);
-	const [expanded, setExpanded] = useState(false);
-
 	const displayName = config.name || "Untitled configuration";
 	const repos = (config.configurationRepos ?? []).filter((cr) => cr.repo !== null);
-	const repoCount = repos.length;
 	const timeAgo = config.createdAt
 		? formatDistanceToNow(new Date(config.createdAt), { addSuffix: true })
 		: "\u2014";
 
-	const handleDelete = async () => {
-		await deleteConfiguration.mutateAsync(config.id);
-		setDeleteOpen(false);
-	};
-
 	return (
-		<>
-			<div className={cn("border-b border-border/50 last:border-0", expanded && "bg-muted/30")}>
-				<div className="flex items-center hover:bg-muted/50 transition-colors">
-					<button
-						type="button"
-						onClick={() => repoCount > 0 && setExpanded(!expanded)}
-						className="flex-1 min-w-0 flex items-center px-4 py-2.5 text-sm text-left"
-					>
-						<span className="flex-1 min-w-0 flex items-center gap-1.5">
-							{repoCount > 0 ? (
-								<ChevronRight
-									className={cn(
-										"h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0",
-										expanded && "rotate-90",
-									)}
-								/>
-							) : (
-								<span className="w-3.5 shrink-0" />
-							)}
-							<Link
-								href={`/dashboard/configurations/${config.id}`}
-								onClick={(e) => e.stopPropagation()}
-								className="font-medium truncate hover:underline"
-							>
-								{displayName}
-							</Link>
-						</span>
-						<span className="w-52 flex justify-center shrink-0">
-							<ConfigurationStatusBadges status={config.status} />
-						</span>
-						<span className="w-32 text-center text-xs text-muted-foreground shrink-0">
-							{repoCount > 0 ? `${repoCount} repo${repoCount !== 1 ? "s" : ""}` : "\u2014"}
-						</span>
-						<span className="w-28 text-center text-xs text-muted-foreground shrink-0">
-							{timeAgo}
-						</span>
-					</button>
-
-					<div className="pr-3 shrink-0">
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<Button variant="ghost" size="icon" className="h-7 w-7">
-									<MoreVertical className="h-3.5 w-3.5" />
-								</Button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="end">
-								{(config.status === "default" || config.status === "ready") && (
-									<DropdownMenuItem
-										disabled={createSession.isPending}
-										onClick={async () => {
-											const result = await createSession.mutateAsync({
-												configurationId: config.id,
-												sessionType: "setup",
-												initialPrompt: getSetupInitialPrompt(),
-											});
-											setPendingPrompt(getSetupInitialPrompt());
-											router.push(`/workspace/${result.sessionId}`);
-										}}
-									>
-										<Play className="h-4 w-4 mr-2" />
-										{config.status === "ready" ? "Update Environment" : "Set Up Environment"}
-									</DropdownMenuItem>
-								)}
-								<DropdownMenuItem
-									onClick={() => router.push(`/dashboard/configurations/${config.id}`)}
+		<div className="border-b border-border/50 last:border-0">
+			<Link
+				href={`/dashboard/configurations/${config.id}`}
+				className="flex items-center px-4 py-2.5 text-sm hover:bg-muted/50 transition-colors"
+			>
+				<div className="flex-1 min-w-0">
+					<span className="font-medium truncate block">{displayName}</span>
+					{repos.length > 0 && (
+						<div className="flex items-center gap-1.5 mt-1">
+							{repos.map((cr) => (
+								<span
+									key={cr.repo!.id}
+									className="inline-flex items-center gap-1 text-xs text-muted-foreground"
 								>
-									Edit
-								</DropdownMenuItem>
-								<DropdownMenuSeparator />
-								<DropdownMenuItem onClick={() => setDeleteOpen(true)} className="text-destructive">
-									<Trash2 className="h-4 w-4 mr-2" />
-									Delete
-								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
-					</div>
-				</div>
-
-				{/* Expanded repos list */}
-				{expanded && repos.length > 0 && (
-					<div className="px-4 pb-3 pl-10 space-y-1">
-						{repos.map((cr) => (
-							<div key={cr.repo!.id} className="flex items-center gap-2 py-1">
-								<FolderGit2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-								<span className="text-xs text-muted-foreground truncate">
-									{cr.repo!.githubRepoName}
+									<FolderGit2 className="h-3 w-3 shrink-0" />
+									<span className="truncate">{cr.repo!.githubRepoName.split("/").pop()}</span>
 								</span>
-							</div>
-						))}
-					</div>
-				)}
-			</div>
-
-			<AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Delete configuration</AlertDialogTitle>
-						<AlertDialogDescription>
-							Are you sure you want to delete &ldquo;{displayName}&rdquo;? This will remove all
-							associated snapshots and service commands.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							onClick={handleDelete}
-							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-						>
-							{deleteConfiguration.isPending ? "Deleting..." : "Delete"}
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
-		</>
+							))}
+						</div>
+					)}
+				</div>
+				<span className="w-40 flex justify-center shrink-0">
+					<ConfigurationStatusBadges status={config.status} />
+				</span>
+				<span className="w-28 text-center text-xs text-muted-foreground shrink-0">{timeAgo}</span>
+			</Link>
+		</div>
 	);
 }
