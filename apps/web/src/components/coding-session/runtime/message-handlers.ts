@@ -35,6 +35,7 @@ export interface MessageHandlerContext {
 	setStreamingText: SetStreamingText;
 	setIsRunning: (running: boolean) => void;
 	setIsMigrating: (migrating: boolean) => void;
+	setStatusMessage: (message: string | null) => void;
 	setIsInitialized: (initialized: boolean) => void;
 	setPreviewUrl: (url: string | null) => void;
 	setEnvRequest: (request: EnvRequest | null) => void;

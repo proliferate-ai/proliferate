@@ -6,6 +6,7 @@
  */
 
 import path from "path";
+import type { Logger } from "@proliferate/logger";
 import type {
 	GitCommitSummary,
 	GitFileChange,
@@ -45,6 +46,7 @@ export class GitOperations {
 		private sandboxId: string,
 		private gitIdentity: GitIdentity | null = null,
 		private repos: RepoSpec[] = [],
+		private logger?: Logger,
 	) {}
 
 	private resolveGitDir(workspacePath?: string): string {
@@ -348,6 +350,20 @@ export class GitOperations {
 		const cwd = this.resolveGitDir(workspacePath);
 		const authEnv = this.getAuthEnv(workspacePath);
 
+		const hasEnvToken = Boolean(authEnv.GIT_TOKEN);
+		if (!hasEnvToken && this.repos.length > 0) {
+			this.logger?.warn(
+				{ repoCount: this.repos.length, workspacePath },
+				"No push-capable token available for any repo",
+			);
+			return {
+				success: false,
+				code: "AUTH_FAILED",
+				message:
+					"No push-capable token available. Check that the GitHub App has write access to this repository.",
+			};
+		}
+
 		try {
 			await this.refreshGitCredentialsFile();
 		} catch {
@@ -401,7 +417,10 @@ export class GitOperations {
 			}
 		}
 		if (result.exitCode !== 0) {
-			console.log("result", result);
+			this.logger?.warn(
+				{ exitCode: result.exitCode, stderr: result.stderr, hasEnvToken, branch },
+				"Git push failed",
+			);
 			if (
 				result.stderr.includes("Authentication failed") ||
 				result.stderr.includes("could not read Username") ||
@@ -412,6 +431,7 @@ export class GitOperations {
 			return { success: false, code: "UNKNOWN_ERROR", message: result.stderr || "Push failed" };
 		}
 
+		this.logger?.info({ branch }, "Git push succeeded");
 		return { success: true, code: "SUCCESS", message: `Pushed to ${branch}` };
 	}
 

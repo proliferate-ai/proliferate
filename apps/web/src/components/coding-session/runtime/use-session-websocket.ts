@@ -45,6 +45,7 @@ interface UseSessionWebSocketReturn {
 	isInitialized: boolean;
 	isRunning: boolean;
 	isMigrating: boolean;
+	statusMessage: string | null;
 	error: string | null;
 	previewUrl: string | null;
 	envRequest: EnvRequest | null;
@@ -158,6 +159,7 @@ export function useSessionWebSocket({
 	const [isInitialized, setIsInitialized] = useState(false);
 	const [isRunning, setIsRunning] = useState(false);
 	const [isMigrating, setIsMigrating] = useState(false);
+	const [statusMessage, setStatusMessage] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 	const [envRequest, setEnvRequest] = useState<EnvRequest | null>(null);
@@ -174,6 +176,9 @@ export function useSessionWebSocket({
 	const streamingTextRef = useRef<Record<string, string>>({});
 	const messagesRef = useRef<ExtendedMessage[]>([]);
 	const wsRef = useRef<SyncWebSocket | null>(null);
+	const activeToolsRef = useRef<
+		Map<string, { tool: string; startedAt: number; lastUpdateAt: number }>
+	>(new Map());
 
 	// Keep messagesRef in sync
 	useEffect(() => {
@@ -200,6 +205,7 @@ export function useSessionWebSocket({
 			setStreamingText,
 			setIsRunning,
 			setIsMigrating,
+			setStatusMessage,
 			setIsInitialized,
 			setPreviewUrl,
 			setEnvRequest,
@@ -229,6 +235,8 @@ export function useSessionWebSocket({
 			onClose: () => {
 				setIsConnected(false);
 				setIsRunning(false);
+				setStatusMessage(null);
+				activeToolsRef.current.clear();
 				debugWs("close", { sessionId });
 			},
 			onReconnectFailed: () => {
@@ -236,6 +244,30 @@ export function useSessionWebSocket({
 				debugWs("reconnect_failed", { sessionId });
 			},
 			onEvent: (data: ServerMessage) => {
+				const now = Date.now();
+				if (data.type === "tool_start" && data.payload?.toolCallId) {
+					const existing = activeToolsRef.current.get(data.payload.toolCallId);
+					activeToolsRef.current.set(data.payload.toolCallId, {
+						tool: data.payload.tool || existing?.tool || "tool",
+						startedAt: existing?.startedAt ?? now,
+						lastUpdateAt: now,
+					});
+				} else if (data.type === "tool_metadata" && data.payload?.toolCallId) {
+					const existing = activeToolsRef.current.get(data.payload.toolCallId);
+					if (existing) {
+						existing.lastUpdateAt = now;
+						existing.tool = data.payload.tool || existing.tool;
+					}
+				} else if (data.type === "tool_end" && data.payload?.toolCallId) {
+					activeToolsRef.current.delete(data.payload.toolCallId);
+				} else if (
+					data.type === "message_complete" ||
+					data.type === "message_cancelled" ||
+					data.type === "error"
+				) {
+					activeToolsRef.current.clear();
+				}
+
 				debugWs(
 					"event",
 					{
@@ -249,14 +281,34 @@ export function useSessionWebSocket({
 		});
 
 		wsRef.current = ws;
+		const toolWatchdogTimer = setInterval(() => {
+			const runningTools = Array.from(activeToolsRef.current.entries());
+			if (runningTools.length === 0) {
+				return;
+			}
+
+			const now = Date.now();
+			debugWs("tool_watchdog", {
+				sessionId,
+				runningTools: runningTools.map(([toolCallId, tool]) => ({
+					toolCallId,
+					tool: tool.tool,
+					elapsedSeconds: Math.max(1, Math.floor((now - tool.startedAt) / 1000)),
+					quietSeconds: Math.max(1, Math.floor((now - tool.lastUpdateAt) / 1000)),
+				})),
+			});
+		}, 10_000);
 
 		return () => {
+			clearInterval(toolWatchdogTimer);
 			ws.close();
 			wsRef.current = null;
+			activeToolsRef.current.clear();
 		};
 	}, [token, sessionId, onTitleUpdate, getLastAssistantMessageId]);
 
 	const sendPrompt = useCallback((content: string, images?: string[]) => {
+		setStatusMessage(null);
 		wsRef.current?.sendPrompt(content, images);
 		setIsRunning(true); // Show cursor immediately while waiting for assistant response
 	}, []);
@@ -321,6 +373,7 @@ export function useSessionWebSocket({
 		isInitialized,
 		isRunning,
 		isMigrating,
+		statusMessage,
 		error,
 		previewUrl,
 		envRequest,
@@ -363,20 +416,24 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 
 		case "tool_end":
 			handleToolEnd(data as ToolEndMessage, ctx);
+			ctx.setStatusMessage(null);
 			ctx.incrementActivityTick();
 			break;
 
 		case "tool_metadata":
 			handleToolMetadata(data as ToolMetadataMessage, ctx);
+			ctx.setStatusMessage(null);
 			break;
 
 		case "message_complete":
 			handleMessageComplete(data.payload as { messageId?: string }, ctx);
+			ctx.setStatusMessage(null);
 			ctx.incrementActivityTick();
 			break;
 
 		case "message_cancelled":
 			handleMessageCancelled(data.payload as { messageId?: string }, ctx);
+			ctx.setStatusMessage(null);
 			break;
 
 		case "error":
@@ -384,10 +441,12 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 				ctx.setError(data.payload.message);
 				ctx.setIsRunning(false);
 			}
+			ctx.setStatusMessage(null);
 			break;
 
 		case "session_paused":
 			ctx.setIsRunning(false);
+			ctx.setStatusMessage(null);
 			break;
 
 		case "session_resumed":
@@ -400,6 +459,11 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 				status: data.payload?.status ?? null,
 				message: data.payload?.message ?? null,
 			});
+			if (typeof data.payload?.message === "string" && data.payload.message.trim()) {
+				ctx.setStatusMessage(data.payload.message.trim());
+			} else {
+				ctx.setStatusMessage(null);
+			}
 			if (data.payload?.status === "resuming") {
 				ctx.setIsRunning(true);
 				ctx.setIsMigrating(false);

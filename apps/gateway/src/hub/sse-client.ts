@@ -168,7 +168,12 @@ export class SseClient {
 					this.logLatency("sse.read_timeout", errorInfo);
 				}
 				if (isStreamTerminationError(err)) {
-					this.logger.warn(errorInfo, "Stream closed");
+					const cause =
+						err instanceof Error ? (err.cause as { code?: string } | undefined) : undefined;
+					this.logger.warn(
+						errorInfo,
+						`Stream closed — ${err instanceof Error ? err.message : "unknown"} (cause: ${cause?.code ?? "none"}, uptime: ${errorInfo.timeSinceConnectMs}ms, lastEvent: ${errorInfo.timeSinceLastEventMs}ms)`,
+					);
 					this.logLatency("sse.stream_closed", errorInfo);
 					this.handleDisconnect("stream_closed");
 					return;

@@ -81,27 +81,28 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 			term.loadAddon(fit);
 			term.open(container);
 
-			try {
-				const dims = fit.proposeDimensions();
-				if (dims) fit.fit();
-			} catch {
-				// Container not ready yet — ResizeObserver will handle it
-			}
-
 			const wsUrl = buildTerminalWsUrl(sessionId, tkn);
 			const ws = new WebSocket(wsUrl);
+			const syncSize = () => {
+				try {
+					fit.fit();
+					if (ws.readyState === WebSocket.OPEN && term.cols > 0 && term.rows > 0) {
+						ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+					}
+				} catch {
+					// Terminal not ready yet (panel mount/unmount race in dev)
+				}
+			};
+
+			requestAnimationFrame(() => {
+				if (!isActive) return;
+				syncSize();
+			});
 
 			ws.onopen = () => {
 				if (!isActive) return;
 				setStatus("connected");
-				try {
-					const dims = fit.proposeDimensions();
-					if (dims) {
-						ws.send(JSON.stringify({ type: "resize", cols: dims.cols, rows: dims.rows }));
-					}
-				} catch {
-					// Terminal not ready
-				}
+				syncSize();
 			};
 
 			ws.onclose = () => {
@@ -149,17 +150,7 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 			});
 
 			const observer = new ResizeObserver(() => {
-				try {
-					const dims = fit.proposeDimensions();
-					if (dims) {
-						fit.fit();
-						if (ws.readyState === WebSocket.OPEN) {
-							ws.send(JSON.stringify({ type: "resize", cols: dims.cols, rows: dims.rows }));
-						}
-					}
-				} catch {
-					// Terminal not ready
-				}
+				syncSize();
 			});
 			observer.observe(container);
 

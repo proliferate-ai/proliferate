@@ -42,9 +42,19 @@ export interface EventProcessorCallbacks {
 }
 
 export class EventProcessor {
+	private static readonly toolProgressHeartbeatMs = 15_000;
 	private currentAssistantMessageId: string | null = null;
 	private currentOpenCodeUserMessageId: string | null = null;
 	private readonly toolStates = new Map<string, ToolState>();
+	private readonly runningToolWatch = new Map<
+		string,
+		{
+			toolName: string;
+			startedAt: number;
+			lastUpdateAt: number;
+			lastStatusBroadcastAt: number;
+		}
+	>();
 	private readonly sentToolEvents = new Set<string>();
 	private readonly logger: Logger;
 
@@ -60,6 +70,7 @@ export class EventProcessor {
 	 */
 	process(event: OpenCodeEvent): void {
 		try {
+			this.maybeBroadcastToolProgressHeartbeat(event.type);
 			switch (event.type) {
 				case "server.connected":
 				case "server.heartbeat":
@@ -185,6 +196,7 @@ export class EventProcessor {
 		this.currentAssistantMessageId = null;
 		this.currentOpenCodeUserMessageId = null;
 		this.toolStates.clear();
+		this.runningToolWatch.clear();
 		this.sentToolEvents.clear();
 	}
 
@@ -201,6 +213,7 @@ export class EventProcessor {
 	clearCurrentAssistantMessageId(): void {
 		this.currentAssistantMessageId = null;
 		this.toolStates.clear();
+		this.runningToolWatch.clear();
 		this.sentToolEvents.clear();
 	}
 
@@ -344,6 +357,7 @@ export class EventProcessor {
 		const args = part.state?.input || {};
 		const status = part.state?.status;
 		const hasArgs = Object.keys(args).length > 0;
+		const now = Date.now();
 
 		const startKey = `${part.id}:start`;
 		const argsKey = `${part.id}:args`;
@@ -383,6 +397,12 @@ export class EventProcessor {
 				endEmitted: false,
 				status: "running",
 			});
+			this.runningToolWatch.set(toolCallId, {
+				toolName,
+				startedAt: now,
+				lastUpdateAt: now,
+				lastStatusBroadcastAt: 0,
+			});
 		} else if (hasArgs && !this.sentToolEvents.has(argsKey)) {
 			this.sentToolEvents.add(argsKey);
 			const payload: ToolStartMessage = {
@@ -405,12 +425,16 @@ export class EventProcessor {
 				},
 				"Emitted tool_start (args update)",
 			);
+			const watch = this.runningToolWatch.get(toolCallId);
+			if (watch) {
+				watch.lastUpdateAt = now;
+				watch.toolName = toolName;
+			}
 		}
 
 		// Handle metadata (e.g., task summaries)
 		const metadata = part.state?.metadata;
 		if (metadata?.summary) {
-			const summaryKey = `${part.id}:summary:${metadata.summary.length}`;
 			const summaryStateCounts = metadata.summary.reduce<Record<string, number>>((acc, item) => {
 				const key = item.state.status || "unknown";
 				acc[key] = (acc[key] ?? 0) + 1;
@@ -419,6 +443,8 @@ export class EventProcessor {
 			const summarySignature = metadata.summary
 				.map((item) => `${item.id}:${item.tool}:${item.state.status}:${item.state.title ?? ""}`)
 				.join("|");
+			const summaryTitle = part.state?.title ?? "";
+			const summaryKey = `${part.id}:summary:${summaryTitle}:${summarySignature}`;
 			if (!this.sentToolEvents.has(summaryKey)) {
 				this.sentToolEvents.add(summaryKey);
 				const payload: ToolMetadataMessage = {
@@ -454,16 +480,21 @@ export class EventProcessor {
 					"Forwarded tool metadata update",
 				);
 				this.callbacks.onToolMetadata?.(part.state?.title);
+				const watch = this.runningToolWatch.get(toolCallId);
+				if (watch) {
+					watch.lastUpdateAt = now;
+					watch.toolName = toolName;
+				}
 			} else {
 				this.logger.debug(
 					{
 						partId: part.id,
 						toolCallId,
 						toolName,
-						summaryKey,
 						summaryLength: metadata.summary.length,
 						summaryStateCounts,
-						summarySignature,
+						summarySignatureLength: summarySignature.length,
+						title: summaryTitle || null,
 					},
 					"Skipped duplicate tool_metadata event",
 				);
@@ -500,6 +531,7 @@ export class EventProcessor {
 					state.status = status === "completed" ? "completed" : "error";
 					state.endEmitted = true;
 				}
+				this.runningToolWatch.delete(toolCallId);
 			}
 		}
 	}
@@ -552,6 +584,7 @@ export class EventProcessor {
 		// when the next user prompt arrives.
 
 		this.toolStates.clear();
+		this.runningToolWatch.clear();
 		this.sentToolEvents.clear();
 	}
 
@@ -574,6 +607,48 @@ export class EventProcessor {
 
 		const errorMessage = error?.data?.message || error?.name || "Unknown error";
 		this.callbacks.broadcast({ type: "error", payload: { message: errorMessage } });
+	}
+
+	private maybeBroadcastToolProgressHeartbeat(sourceEventType: OpenCodeEvent["type"]): void {
+		if (this.runningToolWatch.size === 0) {
+			return;
+		}
+
+		const now = Date.now();
+		for (const [toolCallId, watch] of this.runningToolWatch) {
+			const quietForMs = now - watch.lastUpdateAt;
+			const sinceLastHeartbeatMs = now - watch.lastStatusBroadcastAt;
+
+			if (quietForMs < EventProcessor.toolProgressHeartbeatMs) {
+				continue;
+			}
+			if (sinceLastHeartbeatMs < EventProcessor.toolProgressHeartbeatMs) {
+				continue;
+			}
+
+			const elapsedSeconds = Math.max(1, Math.floor((now - watch.startedAt) / 1000));
+			const quietSeconds = Math.max(1, Math.floor(quietForMs / 1000));
+			const message = `Working on ${watch.toolName} (${elapsedSeconds}s elapsed, no update for ${quietSeconds}s)`;
+
+			this.callbacks.broadcast({
+				type: "status",
+				payload: {
+					status: "running",
+					message,
+				},
+			});
+			this.logger.debug(
+				{
+					toolCallId,
+					toolName: watch.toolName,
+					elapsedSeconds,
+					quietSeconds,
+					sourceEventType,
+				},
+				"Broadcasted tool progress heartbeat",
+			);
+			watch.lastStatusBroadcastAt = now;
+		}
 	}
 }
 

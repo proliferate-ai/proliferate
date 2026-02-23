@@ -1269,6 +1269,7 @@ export class SessionHub {
 			info.sandboxId,
 			this.runtime.getContext().gitIdentity,
 			this.runtime.getContext().repos,
+			this.logger,
 		);
 	}
 

@@ -347,7 +347,11 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		const sandboxName = `base-snapshot-${Date.now()}`;
 		const createStartMs = Date.now();
 		const sandbox = await this.client.sandboxes.create(app, image, {
-			command: ["sh", "-c", "rm -f /var/run/docker.pid && exec /usr/local/bin/start-dockerd.sh"],
+			command: [
+				"sh",
+				"-c",
+				"rm -f /var/run/docker.pid /var/run/docker/containerd/containerd.pid && exec /usr/local/bin/start-dockerd.sh",
+			],
 			encryptedPorts: [SANDBOX_PORTS.opencode, SANDBOX_PORTS.preview],
 			unencryptedPorts: [],
 			env: {
@@ -461,7 +465,11 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		const sandboxName = `cfgsnapshot-${shortId}-${Date.now()}`;
 		const createStartMs = Date.now();
 		const sandbox = await this.client.sandboxes.create(app, sandboxImage, {
-			command: ["sh", "-c", "rm -f /var/run/docker.pid && exec /usr/local/bin/start-dockerd.sh"],
+			command: [
+				"sh",
+				"-c",
+				"rm -f /var/run/docker.pid /var/run/docker/containerd/containerd.pid && exec /usr/local/bin/start-dockerd.sh",
+			],
 			encryptedPorts: [],
 			unencryptedPorts: [],
 			env: {
@@ -656,7 +664,13 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			);
 			const createStartMs = Date.now();
 			const sandbox = await this.client.sandboxes.create(app, sandboxImage, {
-				command: ["sh", "-c", "rm -f /var/run/docker.pid && exec /usr/local/bin/start-dockerd.sh"],
+				// Clean stale Docker/containerd state from snapshot restores before starting dockerd.
+				// Without this, dockerd finds a ghost containerd PID, waits 15s, then exits.
+				command: [
+					"sh",
+					"-c",
+					"rm -f /var/run/docker.pid /var/run/docker/containerd/containerd.pid && exec /usr/local/bin/start-dockerd.sh",
+				],
 				encryptedPorts: [SANDBOX_PORTS.opencode, SANDBOX_PORTS.preview],
 				unencryptedPorts: [SANDBOX_PORTS.ssh],
 				env,
@@ -664,7 +678,7 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				name: opts.sessionId,
 				cpu: 2,
 				memoryMiB: 4096,
-				experimentalOptions: { enable_docker: true, enable_snapshot: true },
+				experimentalOptions: { enable_docker: true },
 			});
 			logLatency("provider.create_sandbox.sandbox_created", {
 				provider: this.type,
@@ -809,40 +823,80 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			return { ...result, recovered: false };
 		}
 
-		// For Modal, sessionId IS the sandbox identifier (we use it as the unique name)
-		// This is equivalent to E2B using currentSandboxId - both are "find by ID"
+		// Look up sandbox by name first, then fall back to currentSandboxId from DB.
+		// Name lookup can fail when a previous reconnect created a sandbox with the
+		// same name (Modal de-registers the old name), but the sandbox is still alive.
 		const findStartMs = Date.now();
-		const existingSandboxId = await this.findSandbox(opts.sessionId);
+		let existingSandboxId = await this.findSandbox(opts.sessionId);
+
+		// Fallback: if name lookup failed but DB has a sandbox ID, verify it directly
+		if (!existingSandboxId && opts.currentSandboxId) {
+			log.info(
+				{ currentSandboxId: opts.currentSandboxId },
+				"Name lookup failed, trying currentSandboxId from DB",
+			);
+			try {
+				const sandbox = await this.client.sandboxes.fromId(opts.currentSandboxId);
+				if (sandbox?.sandboxId) {
+					existingSandboxId = sandbox.sandboxId;
+					log.info({ sandboxId: existingSandboxId }, "Found sandbox via currentSandboxId fallback");
+				}
+			} catch (err) {
+				const errMsg = err instanceof Error ? err.message : String(err);
+				log.debug(
+					{ currentSandboxId: opts.currentSandboxId, error: errMsg },
+					"currentSandboxId fallback failed",
+				);
+			}
+		}
+
 		logLatency("provider.ensure_sandbox.find_existing", {
 			provider: this.type,
 			sessionId: opts.sessionId,
 			durationMs: Date.now() - findStartMs,
 			found: Boolean(existingSandboxId),
+			usedFallback: Boolean(!existingSandboxId || (existingSandboxId && opts.currentSandboxId)),
 		});
 
 		if (existingSandboxId) {
 			log.debug({ sandboxId: existingSandboxId }, "Found existing sandbox");
 			const resolveStartMs = Date.now();
-			const tunnels = await this.resolveTunnels(existingSandboxId);
-			logLatency("provider.ensure_sandbox.resolve_tunnels", {
-				provider: this.type,
-				sessionId: opts.sessionId,
-				durationMs: Date.now() - resolveStartMs,
-				hasTunnelUrl: Boolean(tunnels.openCodeUrl),
-				hasPreviewUrl: Boolean(tunnels.previewUrl),
-			});
-			logLatency("provider.ensure_sandbox.complete", {
-				provider: this.type,
-				sessionId: opts.sessionId,
-				recovered: true,
-				durationMs: Date.now() - startTime,
-			});
-			return {
-				sandboxId: existingSandboxId,
-				tunnelUrl: tunnels.openCodeUrl,
-				previewUrl: tunnels.previewUrl,
-				recovered: true,
-			};
+			try {
+				const tunnels = await this.resolveTunnels(existingSandboxId);
+				logLatency("provider.ensure_sandbox.resolve_tunnels", {
+					provider: this.type,
+					sessionId: opts.sessionId,
+					durationMs: Date.now() - resolveStartMs,
+					hasTunnelUrl: Boolean(tunnels.openCodeUrl),
+					hasPreviewUrl: Boolean(tunnels.previewUrl),
+				});
+				logLatency("provider.ensure_sandbox.complete", {
+					provider: this.type,
+					sessionId: opts.sessionId,
+					recovered: true,
+					durationMs: Date.now() - startTime,
+				});
+				return {
+					sandboxId: existingSandboxId,
+					tunnelUrl: tunnels.openCodeUrl,
+					previewUrl: tunnels.previewUrl,
+					recovered: true,
+				};
+			} catch (tunnelErr) {
+				const errMsg = tunnelErr instanceof Error ? tunnelErr.message : String(tunnelErr);
+				log.warn(
+					{ sandboxId: existingSandboxId, error: errMsg },
+					"Existing sandbox is dead or unreachable, will create a new one",
+				);
+				logLatency("provider.ensure_sandbox.resolve_tunnels.dead", {
+					provider: this.type,
+					sessionId: opts.sessionId,
+					durationMs: Date.now() - resolveStartMs,
+					sandboxId: existingSandboxId,
+					error: errMsg,
+				});
+				// Fall through to create a new sandbox
+			}
 		}
 
 		log.debug("No existing sandbox found, creating new");
@@ -864,14 +918,20 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		try {
 			await this.ensureModalAuth("createSandbox");
 			const appName = getModalAppName();
+			providerLogger.debug({ appName, sessionId }, "findSandbox.lookup");
 			const sandbox = await this.client.sandboxes.fromName(appName, sessionId);
+			providerLogger.debug(
+				{ appName, sessionId, sandboxId: sandbox.sandboxId },
+				"findSandbox.found",
+			);
 			return sandbox.sandboxId;
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : String(error);
-			if (errorMessage.includes("not found") || errorMessage.includes("NotFound")) {
-				return null;
-			}
-			providerLogger.error({ err: error }, "Failed to find sandbox");
+			const errorName = error instanceof Error ? error.name : undefined;
+			providerLogger.warn(
+				{ sessionId, errorName, errorMessage },
+				`findSandbox.error — ${errorName}: ${errorMessage}`,
+			);
 			return null;
 		}
 	}
@@ -1315,11 +1375,13 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 		sandbox
 			.exec(["sh", "-c", "/usr/bin/sandbox-mcp api > /tmp/sandbox-mcp.log 2>&1"], { env: mcpEnvs })
-			.then(() => {
-				log.warn("sandbox-mcp API exited unexpectedly");
+			.then(async (proc) => {
+				const exitCode = await proc.wait();
+				log.warn({ exitCode }, "sandbox-mcp API exited unexpectedly");
 			})
 			.catch((err) => {
-				log.error({ err }, "sandbox-mcp API failed to start");
+				// Expected when sandbox terminates — the exec promise rejects
+				log.debug({ err }, "sandbox-mcp API process ended");
 			});
 
 		// Apply env files + start services via proliferate CLI (tracked in service-manager)

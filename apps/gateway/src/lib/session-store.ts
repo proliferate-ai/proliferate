@@ -561,6 +561,15 @@ async function resolveGitHubToken(
 				}
 
 				if (hasAccess) {
+					logger.info(
+						{
+							repoUrl,
+							integrationId: candidate.id,
+							authType: candidate.github_installation_id ? "github-app" : "nango-oauth",
+							tokenPrefix: token.substring(0, 6),
+						},
+						"Resolved git token for repo",
+					);
 					return token;
 				}
 				logger.warn(
@@ -630,7 +639,18 @@ async function tokenHasRepoAccess(token: string, repoUrl: string): Promise<boole
 				"X-GitHub-Api-Version": "2022-11-28",
 			},
 		});
-		return response.ok;
+		if (!response.ok) {
+			return false;
+		}
+		const data = (await response.json()) as { permissions?: { push?: boolean } };
+		if (data.permissions && !data.permissions.push) {
+			logger.warn(
+				{ repoUrl: slug, permissions: data.permissions },
+				"Token has repo access but lacks push permission — skipping",
+			);
+			return false;
+		}
+		return true;
 	} catch {
 		return false;
 	}

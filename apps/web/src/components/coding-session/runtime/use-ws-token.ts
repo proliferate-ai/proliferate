@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 const WS_TOKEN_QUERY_KEY = ["ws-token"] as const;
 const STALE_TIME = 30 * 60 * 1000; // 30 minutes (token valid for 60 min)
 const GC_TIME = 60 * 60 * 1000; // 1 hour — match token lifetime
+const REFRESH_INTERVAL = 25 * 60 * 1000; // Refresh before expiry in long-lived tabs
 
 async function fetchWsToken(): Promise<string> {
 	const { token } = await orpc.auth.wsToken.call({});
@@ -29,6 +30,8 @@ export function useWsToken(): WsTokenState {
 		queryFn: fetchWsToken,
 		staleTime: STALE_TIME,
 		gcTime: GC_TIME,
+		refetchInterval: REFRESH_INTERVAL,
+		refetchIntervalInBackground: true,
 		refetchOnWindowFocus: false,
 		retry: 2,
 	});

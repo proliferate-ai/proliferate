@@ -250,6 +250,7 @@ interface ThreadProps {
 	showSnapshot?: boolean;
 	sessionId?: string;
 	token?: string | null;
+	statusMessage?: string | null;
 	pendingApprovals?: ActionApprovalRequestMessage["payload"][];
 	runId?: string;
 }
@@ -262,6 +263,7 @@ export const Thread: FC<ThreadProps> = ({
 	showSnapshot = false,
 	sessionId,
 	token,
+	statusMessage,
 	pendingApprovals,
 	runId,
 }) => {
@@ -295,6 +297,15 @@ export const Thread: FC<ThreadProps> = ({
 					pendingApprovals={pendingApprovals ?? []}
 					runId={runId}
 				/>
+			)}
+
+			{statusMessage && (
+				<div className="shrink-0 px-3 pt-2">
+					<div className="mx-auto flex max-w-2xl items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+						<Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+						<span className="truncate">{statusMessage}</span>
+					</div>
+				</div>
 			)}
 
 			{/* Fixed composer at bottom */}

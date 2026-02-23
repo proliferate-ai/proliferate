@@ -274,6 +274,8 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 
 **Tool events:**
 - The SSE tool lifecycle events (`tool_start` / `tool_metadata` / `tool_end`) are forwarded to clients as UI observability.
+- `tool_metadata` deduplication keys on task-summary content (title + per-item status/title signature), not just summary length, so in-place progress changes continue streaming to clients during long-running task tools.
+- If a tool is running with no metadata/output updates, the gateway emits periodic `status: "running"` heartbeat messages with elapsed-time context so clients can show liveness during long tasks.
 - Gateway-mediated tools are executed via synchronous sandbox callbacks (`POST /proliferate/:sessionId/tools/:toolName`) rather than SSE interception. Idempotency is provided by in-memory `inflightCalls` + `completedResults` maps, keyed by `tool_call_id`. Invocations are also persisted in `session_tool_invocations`.
 - See `agent-contract.md` for the tool callback contract and tool schemas.
 
@@ -476,6 +478,8 @@ Token verification chain: (1) User JWT (signed with `gatewayJwtSecret`), (2) Ser
 **Session display helpers** (`apps/web/src/lib/session-display.ts`): Pure formatting functions: `formatActiveTime(seconds)`, `formatCompactMetrics({toolCalls, activeSeconds})`, `getOutcomeDisplay(outcome)`, `formatConfigurationLabel(configurationId)`, `parsePrUrl(url)`. Used across session list rows, peek drawer, and my-work pages.
 
 **Session peek drawer** (`apps/web/src/components/sessions/session-peek-drawer.tsx`): URL-routable right-side sheet. Opened via `?peek=<sessionId>` query param on the sessions page (`apps/web/src/app/(command-center)/dashboard/sessions/page.tsx`). Content sections: header (title + status + outcome), initial prompt, sanitized summary markdown, PR links, metrics grid, timeline, and context (repo/branch/automation). Footer has "Enter Workspace" or "Resume Session" CTA. Uses `useSessionData(id)` for detail data (includes `initialPrompt`). The sessions page wraps its content in `<Suspense>` for `useSearchParams()`.
+
+**Coding session thread status banner** (`apps/web/src/components/coding-session/thread.tsx`, `apps/web/src/components/coding-session/runtime/use-session-websocket.ts`): When gateway sends `status` with a non-empty `message` (including long-task heartbeat updates), the thread renders an inline progress banner above the composer; it clears when tool output resumes (`tool_metadata` / `tool_end`) or the assistant turn completes.
 
 **Sanitized markdown** (`apps/web/src/components/ui/sanitized-markdown.tsx`): Reusable markdown renderer using `react-markdown` + `rehype-sanitize` with a restrictive schema: allowed tags limited to structural/inline elements (no `img`, `iframe`, `script`, `style`), `href` restricted to `http`/`https` protocols (blocking `javascript:` URLs). Optional `maxLength` prop for truncation. Used to render LLM-generated `session.summary` safely.
 

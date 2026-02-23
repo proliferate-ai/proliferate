@@ -100,7 +100,6 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 
 	const checkHttpHealth = useCallback(
 		(_tkn: string) => {
-			console.log("[vscode] Transitioning to ready state");
 			setStage("checking_health");
 			clearPolling();
 			setTimeout(() => {
@@ -117,24 +116,17 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 		setStage("requesting");
 		setErrorCause(null);
 
-		console.log("[vscode] Starting VS Code setup", { sessionId, gateway: GATEWAY_URL });
-
 		try {
 			const basePath = `/proxy/${sessionId}/${token}/devtools/vscode`;
 			const command = `openvscode-server --port 3901 --without-connection-token --host 127.0.0.1 --server-base-path=${basePath} --default-folder /home/user/workspace`;
 
 			const dispatchStart = async (mode: "start" | "restart") => {
 				vscodeStartedSessions.add(sessionId);
-				console.log(
-					`[vscode] ${mode === "restart" ? "Restarting" : "Starting"} service with command:`,
-					command,
-				);
 				const startRes = await fetch(devtoolsUrl(sessionId, token, "/api/services"), {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({ name: "openvscode-server", command }),
 				});
-				console.log("[vscode] Start response:", startRes.status);
 
 				// 409 can occur if a service lock/race exists; treat as dispatch success.
 				if (!startRes.ok && startRes.status !== 409) {
@@ -148,19 +140,16 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 			const servicesRes = await fetch(devtoolsUrl(sessionId, token, "/api/services"));
 			if (servicesRes.ok) {
 				const data = await servicesRes.json();
-				console.log("[vscode] Services response:", JSON.stringify(data.services, null, 2));
 				const vscodeService = data.services?.find(
 					(s: { name: string; status: string; command?: string }) => s.name === "openvscode-server",
 				);
 				if (vscodeService) {
 					serviceFound = true;
-					console.log("[vscode] Found existing service:", vscodeService.status);
 					const existingCommand =
 						typeof vscodeService.command === "string" ? vscodeService.command : "";
 					const hasExpectedBasePath = existingCommand.includes(`--server-base-path=${basePath}`);
 
 					if (!hasExpectedBasePath) {
-						console.log("[vscode] Existing service has stale base path; restarting");
 						await dispatchStart("restart");
 					} else if (vscodeService.status === "running") {
 						checkHttpHealth(token);
@@ -294,9 +283,6 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 	}, [clearPolling, startVscodeServer]);
 
 	const iframeSrc = token && stage === "ready" ? vscodeUrl(sessionId, token) : "";
-	if (iframeSrc) {
-		console.log("[vscode] Iframe src:", iframeSrc);
-	}
 	const progressMap: Record<SetupStage, number> = {
 		requesting: 10,
 		starting_process: 45,
@@ -368,17 +354,6 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 						title="VS Code"
 						className="w-full h-full border-0"
 						allow="clipboard-read; clipboard-write"
-						onLoad={(e) => {
-							try {
-								const iframe = e.target as HTMLIFrameElement;
-								console.log(
-									"[vscode] Iframe loaded, current URL:",
-									iframe.contentWindow?.location.href,
-								);
-							} catch {
-								console.log("[vscode] Iframe loaded (cross-origin, cannot read URL)");
-							}
-						}}
 					/>
 				)}
 			</div>

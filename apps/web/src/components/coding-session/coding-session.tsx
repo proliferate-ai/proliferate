@@ -90,6 +90,7 @@ export function CodingSession({
 		runtime,
 		error,
 		previewUrl,
+		statusMessage,
 		sessionTitle,
 		updateTitle,
 		isMigrating,
@@ -312,6 +313,7 @@ export function CodingSession({
 				description={description}
 				sessionId={sessionId}
 				token={wsToken}
+				statusMessage={statusMessage}
 				pendingApprovals={pendingApprovals}
 				runId={runId}
 			/>
