@@ -210,6 +210,7 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 		SLACK_CLIENT_SECRET: optionalString,
 		SLACK_SIGNING_SECRET: optionalString,
 		STRICT_ENV: optionalBoolean,
+		ALLOWED_SIGNUP_EMAILS: optionalString, // Comma-separated allowlist; empty = open signup
 		SUPER_ADMIN_EMAILS: z.string().default(""),
 		TEST_REPO_ID: optionalString, // Only used in test scripts
 		TEST_TOKEN: optionalString, // Only used in test scripts

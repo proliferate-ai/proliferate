@@ -57,6 +57,13 @@ if (isDev) {
 // Coerce because SKIP_ENV_VALIDATION returns raw env strings.
 const sendVerificationEmails = String(env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION) === "true";
 
+// Optional signup allowlist – when set, only these emails can create accounts.
+const allowedSignupEmails = env.ALLOWED_SIGNUP_EMAILS
+	? env.ALLOWED_SIGNUP_EMAILS.split(",")
+			.map((e) => e.trim().toLowerCase())
+			.filter(Boolean)
+	: null;
+
 export const auth = betterAuth({
 	database: pool,
 	baseURL: appUrl,
@@ -181,6 +188,14 @@ export const auth = betterAuth({
 	databaseHooks: {
 		user: {
 			create: {
+				before: async (user) => {
+					if (allowedSignupEmails && !allowedSignupEmails.includes(user.email.toLowerCase())) {
+						throw new Error(
+							"Signups are currently invite-only. Join the waitlist at proliferate.com/waitlist",
+						);
+					}
+					return { data: user };
+				},
 				after: async (user) => {
 					// Auto-create a personal organization for new users
 					const slug = user.name
