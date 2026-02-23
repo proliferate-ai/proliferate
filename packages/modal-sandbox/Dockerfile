@@ -8,7 +8,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Core build tools and utilities
 RUN apt-get update && apt-get install -y \
-    git curl wget build-essential ca-certificates \
+    git curl wget build-essential ca-certificates vim \
     openssh-client openssh-server sudo \
     net-tools iproute2 \
     procps lsof netcat-openbsd jq rsync tmux \

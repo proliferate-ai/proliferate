@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     lsof \
     netcat-openbsd \
     jq \
+    vim \
     && rm -rf /var/lib/apt/lists/*
 
 # Create user if not exists (e2bdev/base now includes 'user')
