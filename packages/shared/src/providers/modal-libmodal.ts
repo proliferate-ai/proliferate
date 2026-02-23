@@ -978,12 +978,13 @@ export class ModalLibmodalProvider implements SandboxProvider {
 
 		// Write git credentials file for per-repo auth (used by git-credential-proliferate helper)
 		const gitCredentials = buildGitCredentialsMap(opts.repos);
-		if (Object.keys(gitCredentials).length > 0) {
-			log.debug({ repoCount: opts.repos.length }, "Writing git credentials");
-			const credsFile = await sandbox.open("/tmp/.git-credentials.json", "w");
-			await credsFile.write(encoder.encode(JSON.stringify(gitCredentials)));
-			await credsFile.close();
-		}
+		log.debug(
+			{ repoCount: opts.repos.length, credentialCount: Object.keys(gitCredentials).length },
+			"Writing git credentials",
+		);
+		const credsFile = await sandbox.open("/tmp/.git-credentials.json", "w");
+		await credsFile.write(encoder.encode(JSON.stringify(gitCredentials)));
+		await credsFile.close();
 
 		// Clone each repository
 		let firstRepoDir: string | null = null;
@@ -1270,13 +1271,11 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				lastGitFetchAt: metadata?.lastGitFetchAt,
 			});
 
-			// Always refresh git credentials on restore. Pull cadence controls pulls only.
+			// Always refresh git credentials on restore (write even if empty to clear stale tokens).
 			const gitCredentials = buildGitCredentialsMap(opts.repos);
-			if (Object.keys(gitCredentials).length > 0) {
-				const credsFile = await sandbox.open("/tmp/.git-credentials.json", "w");
-				await credsFile.write(encoder.encode(JSON.stringify(gitCredentials)));
-				await credsFile.close();
-			}
+			const credsFileRestore = await sandbox.open("/tmp/.git-credentials.json", "w");
+			await credsFileRestore.write(encoder.encode(JSON.stringify(gitCredentials)));
+			await credsFileRestore.close();
 
 			if (doPull) {
 				const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;

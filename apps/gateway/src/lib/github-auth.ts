@@ -131,7 +131,7 @@ async function getInstallationToken(
 	const token = data.token;
 	const expiresAt = data.expires_at ? Date.parse(data.expires_at) : Number.NaN;
 	const cachedExpiry = Number.isFinite(expiresAt)
-		? Math.max(Date.now() + 60_000, expiresAt - tokenExpirySkewMs)
+		? Math.min(expiresAt, Math.max(Date.now() + 60_000, expiresAt - tokenExpirySkewMs))
 		: Date.now() + 50 * 60 * 1000;
 
 	tokenCache.set(installationId, {

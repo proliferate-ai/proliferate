@@ -186,10 +186,12 @@ export default function ConfigurationDetailPage() {
 					<AlertDialogFooter>
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
 						<AlertDialogAction
-							onClick={async () => {
+							onClick={async (e) => {
+								e.preventDefault();
 								await deleteConfiguration.mutateAsync(config.id);
 								router.push("/dashboard/configurations");
 							}}
+							disabled={deleteConfiguration.isPending}
 							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 						>
 							{deleteConfiguration.isPending ? "Deleting..." : "Delete"}

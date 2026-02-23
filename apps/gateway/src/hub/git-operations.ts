@@ -134,7 +134,11 @@ export class GitOperations {
 		const credentials = buildGitCredentialsMap(this.repos);
 		const encoded = Buffer.from(JSON.stringify(credentials)).toString("base64");
 		await this.exec(
-			["sh", "-c", `echo ${shellEscape(encoded)} | base64 -d > /tmp/.git-credentials.json`],
+			[
+				"sh",
+				"-c",
+				`umask 077 && echo ${shellEscape(encoded)} | base64 -d > /tmp/.git-credentials.json`,
+			],
 			{ timeoutMs: 10_000, env: this.getMutableEnv() },
 		);
 	}

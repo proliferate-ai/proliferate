@@ -919,13 +919,17 @@ async function tokenHasRepoAccess(token: string, repoUrl: string): Promise<boole
 	}
 
 	try {
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 10_000);
 		const response = await fetch(`https://api.github.com/repos/${slug}`, {
 			headers: {
 				Authorization: `Bearer ${token}`,
 				Accept: "application/vnd.github+json",
 				"X-GitHub-Api-Version": "2022-11-28",
 			},
+			signal: controller.signal,
 		});
+		clearTimeout(timeout);
 		return response.ok;
 	} catch {
 		return false;

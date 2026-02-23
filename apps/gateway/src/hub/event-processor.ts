@@ -475,7 +475,6 @@ export class EventProcessor {
 						title: part.state?.title,
 						summaryLength: metadata.summary.length,
 						summaryStateCounts,
-						summarySignature,
 					},
 					"Forwarded tool metadata update",
 				);

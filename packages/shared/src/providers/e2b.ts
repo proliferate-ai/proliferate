@@ -861,11 +861,9 @@ export class E2BProvider implements SandboxProvider {
 			lastGitFetchAt: metadata?.lastGitFetchAt,
 		});
 
-		// Always refresh git credentials on restore. Pull cadence controls pulls only.
+		// Always refresh git credentials on restore (write even if empty to clear stale tokens).
 		const gitCredentials = buildGitCredentialsMap(opts.repos);
-		if (Object.keys(gitCredentials).length > 0) {
-			await sandbox.files.write("/tmp/.git-credentials.json", JSON.stringify(gitCredentials));
-		}
+		await sandbox.files.write("/tmp/.git-credentials.json", JSON.stringify(gitCredentials));
 
 		if (!doPull) return;
 
