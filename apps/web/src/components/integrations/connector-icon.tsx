@@ -6,6 +6,7 @@ import {
 	FirecrawlIcon,
 	McpIcon,
 	NeonIcon,
+	NewRelicIcon,
 	PlaywrightIcon,
 	PostHogIcon,
 	SemgrepIcon,
@@ -61,6 +62,8 @@ export function ConnectorIcon({ presetKey, className, size = "md" }: ConnectorIc
 			return <SemgrepIcon className={iconClass} />;
 		case "deepwiki":
 			return <DeepWikiIcon className={iconClass} />;
+		case "newrelic":
+			return <NewRelicIcon className={iconClass} />;
 		case "apify":
 			return <ApifyIcon className={iconClass} />;
 		default:

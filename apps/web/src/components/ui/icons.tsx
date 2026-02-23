@@ -554,6 +554,13 @@ export function DeepWikiIcon({ className }: IconProps) {
 }
 
 /**
+ * New Relic brand icon
+ */
+export function NewRelicIcon({ className }: IconProps) {
+	return <img src="/logos/newrelic.png" alt="" className={cn("object-contain", className)} />;
+}
+
+/**
  * MCP (Model Context Protocol) generic icon for custom connectors
  */
 export function McpIcon({ className }: IconProps) {

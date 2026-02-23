@@ -315,6 +315,26 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
 		docsUrl: "https://docs.proliferate.com/integrations/semgrep",
 	},
 	{
+		key: "newrelic",
+		name: "New Relic",
+		description: "Query telemetry, investigate incidents, and analyze application performance",
+		category: "monitoring",
+		defaults: {
+			name: "New Relic",
+			transport: "remote_http",
+			url: "https://mcp.newrelic.com/mcp/",
+			auth: { type: "custom_header", secretKey: "", headerName: "api-key" },
+			riskPolicy: { defaultRisk: "read" },
+			enabled: true,
+		},
+		quickSetup: true,
+		secretLabel: "New Relic User API key (NRAK-...)",
+		recommendedSecretKey: "NEW_RELIC_API_KEY",
+		docsUrl: "https://docs.newrelic.com/docs/agentic-ai/mcp/setup/",
+		guidance:
+			'You must enable the "New Relic AI MCP server" preview in your New Relic account (Administration → Previews & Trials) before connecting.',
+	},
+	{
 		key: "deepwiki",
 		name: "DeepWiki",
 		description: "Search and query documentation for open-source repositories",
