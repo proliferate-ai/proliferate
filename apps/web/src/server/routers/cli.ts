@@ -8,11 +8,10 @@ import { auth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ handler: "cli" });
-import getNango, { NANGO_GITHUB_INTEGRATION_ID, requireNangoIntegrationId } from "@/lib/nango";
+import { NANGO_GITHUB_INTEGRATION_ID, requireNangoIntegrationId } from "@/lib/nango";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
 import { cli } from "@proliferate/services";
-import type { SandboxProviderType } from "@proliferate/shared";
 import {
 	CliConfigurationSchema,
 	CliRepoConnectionSchema,
@@ -189,6 +188,7 @@ export const cliAuthRouter = {
 
 	/**
 	 * Poll for device authorization status.
+	 * Note: auth.api.createApiKey() stays in the router (better-auth is web-only).
 	 */
 	pollDevice: publicProcedure
 		.input(z.object({ deviceCode: z.string() }))
@@ -223,7 +223,7 @@ export const cliAuthRouter = {
 			// Status is "authorized"
 			const codeData = pollResult.codeData!;
 
-			// Create API key
+			// Create API key (better-auth is web-only, cannot move to services)
 			const apiKeyResult = await auth.api.createApiKey({
 				body: {
 					name: "cli-token",
@@ -332,25 +332,8 @@ export const cliSessionsRouter = {
 	deleteAll: orgProcedure
 		.output(z.object({ success: z.boolean(), terminated: z.number() }))
 		.handler(async ({ context }) => {
-			const sessions = await cli.getCliSessionsForTermination(context.orgId);
-
-			const provider = getSandboxProvider();
-			for (const session of sessions) {
-				try {
-					await provider.terminate(session.id, session.sandbox_id ?? undefined);
-				} catch (err) {
-					log.error({ err, sessionId: session.id }, "Failed to terminate session");
-				}
-			}
-
-			try {
-				await cli.stopAllCliSessions(context.orgId);
-			} catch (err) {
-				log.error({ err }, "Error stopping CLI sessions");
-				throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to stop sessions" });
-			}
-
-			return { success: true, terminated: sessions.length };
+			const terminated = await cli.terminateAllCliSessions(context.orgId);
+			return { success: true, terminated };
 		}),
 
 	/**
@@ -376,32 +359,14 @@ export const cliSessionsRouter = {
 		.input(z.object({ id: z.string().uuid() }))
 		.output(z.object({ success: z.boolean(), message: z.string().optional() }))
 		.handler(async ({ input, context }) => {
-			const session = await cli.getSessionForTermination(input.id, context.orgId);
-
-			if (!session) {
-				throw new ORPCError("NOT_FOUND", { message: "Session not found" });
-			}
-
-			if (session.status === "stopped") {
-				return { success: true, message: "Session already stopped" };
-			}
-
-			if (session.sandbox_id && session.status === "running") {
-				try {
-					const provider = getSandboxProvider(session.sandbox_provider as SandboxProviderType);
-					await provider.terminate(session.id, session.sandbox_id);
-				} catch (err) {
-					log.error({ err, sessionId: input.id }, "Failed to terminate sandbox for session");
-				}
-			}
-
 			try {
-				await cli.stopSession(input.id);
-			} catch {
-				throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to stop session" });
+				return await cli.terminateCliSession(input.id, context.orgId);
+			} catch (err) {
+				if (err instanceof cli.CliSessionNotFoundError) {
+					throw new ORPCError("NOT_FOUND", { message: err.message });
+				}
+				throw err;
 			}
-
-			return { success: true };
 		}),
 
 	/**
@@ -449,33 +414,19 @@ export const cliGitHubRouter = {
 	connect: orgProcedure
 		.output(z.object({ connectUrl: z.string(), endUserId: z.string() }))
 		.handler(async ({ context }) => {
-			const orgName = await cli.getOrganizationName(context.orgId);
-
-			if (!orgName) {
-				throw new ORPCError("NOT_FOUND", { message: "Organization not found" });
+			try {
+				return await cli.createGitHubConnectSession({
+					orgId: context.orgId,
+					userId: context.user.id,
+					userEmail: context.user.email,
+					userName: context.user.name || context.user.email,
+				});
+			} catch (err) {
+				if (err instanceof Error && err.message === "Organization not found") {
+					throw new ORPCError("NOT_FOUND", { message: err.message });
+				}
+				throw err;
 			}
-
-			const nango = getNango();
-			const githubIntegrationId = requireNangoIntegrationId("github");
-			const endUserId = `org_${context.orgId}`;
-
-			const session = await nango.createConnectSession({
-				end_user: {
-					id: endUserId,
-					email: context.user.email,
-					display_name: context.user.name || context.user.email,
-				},
-				organization: {
-					id: context.orgId,
-					display_name: orgName,
-				},
-				allowed_integrations: [githubIntegrationId],
-			});
-
-			return {
-				connectUrl: session.data.connect_link,
-				endUserId,
-			};
 		}),
 
 	/**
@@ -490,66 +441,7 @@ export const cliGitHubRouter = {
 			}),
 		)
 		.handler(async ({ context }) => {
-			// Check for recent selection
-			const selection = await cli.checkCliGitHubSelection(context.user.id, context.orgId);
-
-			if (selection?.valid) {
-				await cli.consumeCliGitHubSelection(context.user.id, context.orgId);
-				return { connected: true, connectionId: selection.connectionId };
-			}
-
-			// Check for existing integration
-			const providers = ["github-app", NANGO_GITHUB_INTEGRATION_ID].filter(Boolean) as string[];
-			const integration = await cli.getActiveIntegrationByProviders(context.orgId, providers);
-
-			if (integration) {
-				return { connected: true, connectionId: integration.id };
-			}
-
-			if (!env.NEXT_PUBLIC_INTEGRATIONS_ENABLED) {
-				return { connected: false, error: "Integrations are disabled" };
-			}
-
-			const githubIntegrationId = NANGO_GITHUB_INTEGRATION_ID;
-			if (!githubIntegrationId) {
-				return { connected: false, error: "Nango GitHub integration not configured" };
-			}
-
-			// Check Nango for connections
-			const endUserId = `org_${context.orgId}`;
-
-			try {
-				const nango = getNango();
-				const listed = await nango.listConnections();
-				const orgConnections = (listed.connections ?? []).filter(
-					(c) => c.provider_config_key === githubIntegrationId && c.end_user?.id === endUserId,
-				);
-
-				if (orgConnections.length === 0) {
-					return { connected: false };
-				}
-
-				const sorted = orgConnections.sort(
-					(a, b) => new Date(b.created).getTime() - new Date(a.created).getTime(),
-				);
-				const newest = sorted[0];
-
-				// Verify credentials
-				const connection = await nango.getConnection(githubIntegrationId, newest.connection_id);
-
-				const credentials = connection.credentials as { access_token?: string };
-				if (!credentials?.access_token) {
-					return {
-						connected: false,
-						error: "Connection exists but no access token available",
-					};
-				}
-
-				return { connected: true, connectionId: newest.connection_id };
-			} catch (err) {
-				log.error({ err }, "Failed to check GitHub connection status");
-				return { connected: false, error: "Failed to check connection status" };
-			}
+			return cli.checkGitHubConnectStatus(context.user.id, context.orgId);
 		}),
 
 	/**
@@ -593,30 +485,18 @@ export const cliConfigurationsRouter = {
 		.input(z.object({ localPathHash: z.string(), sessionId: z.string(), sandboxId: z.string() }))
 		.output(z.object({ configuration: CliConfigurationSchema, snapshotId: z.string() }))
 		.handler(async ({ input, context }) => {
-			const { localPathHash, sessionId, sandboxId } = input;
-			const provider = getSandboxProvider();
-
 			try {
-				log.info({ sessionId }, "Taking snapshot of session");
-				const snapshotResult = await provider.snapshot(sessionId, sandboxId);
-				log.info({ snapshotId: snapshotResult.snapshotId }, "Snapshot created");
-
-				const configuration = await cli.upsertCliConfiguration(
+				return await cli.createCliSnapshot(
 					context.user.id,
-					localPathHash,
-					snapshotResult.snapshotId,
-					provider.type,
+					input.localPathHash,
+					input.sessionId,
+					input.sandboxId,
 				);
-
-				return {
-					configuration,
-					snapshotId: snapshotResult.snapshotId,
-				};
 			} catch (err) {
-				log.error({ err }, "Error creating snapshot");
-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: `Failed to create snapshot: ${err instanceof Error ? err.message : "Unknown error"}`,
-				});
+				if (err instanceof cli.CliSnapshotError) {
+					throw new ORPCError("INTERNAL_SERVER_ERROR", { message: err.message });
+				}
+				throw err;
 			}
 		}),
 

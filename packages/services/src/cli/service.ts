@@ -6,6 +6,11 @@
 
 import crypto from "node:crypto";
 import { randomBytes } from "node:crypto";
+import { env } from "@proliferate/environment/server";
+import type { SandboxProviderType } from "@proliferate/shared";
+import { getSandboxProvider } from "@proliferate/shared/providers";
+import { getNango, getNangoIntegrationId, requireNangoIntegrationId } from "../lib/nango";
+import { getServicesLogger } from "../logger";
 import type {
 	CliConfigurationRow,
 	CliSessionFullRow,
@@ -16,6 +21,8 @@ import type {
 	SshKeyRow,
 } from "../types/cli";
 import * as cliDb from "./db";
+
+const logger = getServicesLogger().child({ module: "cli" });
 
 // ============================================
 // Helper functions
@@ -675,4 +682,231 @@ export async function createCliSessionFull(
 		configurationId,
 		hasSnapshot: Boolean(snapshotId),
 	};
+}
+
+// ============================================
+// Session Termination
+// ============================================
+
+/**
+ * Terminate all CLI sessions for an organization.
+ * Terminates each sandbox via the provider, then marks all stopped.
+ */
+export async function terminateAllCliSessions(orgId: string): Promise<number> {
+	const sessions = await cliDb.getCliSessionsForTermination(orgId);
+
+	const provider = getSandboxProvider();
+	for (const session of sessions) {
+		try {
+			await provider.terminate(session.id, session.sandbox_id ?? undefined);
+		} catch (err) {
+			logger.error({ err, sessionId: session.id }, "Failed to terminate session");
+		}
+	}
+
+	await cliDb.stopAllCliSessions(orgId);
+
+	return sessions.length;
+}
+
+/**
+ * Terminate a specific CLI session.
+ *
+ * @throws SessionNotFoundError if session doesn't exist
+ */
+export async function terminateCliSession(
+	sessionId: string,
+	orgId: string,
+): Promise<{ success: boolean; message?: string }> {
+	const session = await cliDb.getSessionForTermination(sessionId, orgId);
+
+	if (!session) {
+		throw new CliSessionNotFoundError();
+	}
+
+	if (session.status === "stopped") {
+		return { success: true, message: "Session already stopped" };
+	}
+
+	if (session.sandbox_id && session.status === "running") {
+		try {
+			const provider = getSandboxProvider(session.sandbox_provider as SandboxProviderType);
+			await provider.terminate(session.id, session.sandbox_id);
+		} catch (err) {
+			logger.error({ err, sessionId }, "Failed to terminate sandbox for session");
+		}
+	}
+
+	await cliDb.stopSession(sessionId);
+
+	return { success: true };
+}
+
+export class CliSessionNotFoundError extends Error {
+	constructor() {
+		super("Session not found");
+		this.name = "CliSessionNotFoundError";
+	}
+}
+
+// ============================================
+// GitHub Nango Connect
+// ============================================
+
+/**
+ * Create a Nango Connect Session for GitHub OAuth.
+ *
+ * @throws Error if org not found or Nango integration not configured
+ */
+export async function createGitHubConnectSession(input: {
+	orgId: string;
+	userId: string;
+	userEmail: string;
+	userName: string;
+}): Promise<{ connectUrl: string; endUserId: string }> {
+	const orgName = await cliDb.getOrganization(input.orgId).then((org) => org?.name ?? null);
+
+	if (!orgName) {
+		throw new Error("Organization not found");
+	}
+
+	const nango = getNango();
+	const githubIntegrationId = requireNangoIntegrationId("github");
+	const endUserId = `org_${input.orgId}`;
+
+	const session = await nango.createConnectSession({
+		end_user: {
+			id: endUserId,
+			email: input.userEmail,
+			display_name: input.userName || input.userEmail,
+		},
+		organization: {
+			id: input.orgId,
+			display_name: orgName,
+		},
+		allowed_integrations: [githubIntegrationId],
+	});
+
+	return {
+		connectUrl: session.data.connect_link,
+		endUserId,
+	};
+}
+
+/**
+ * Check GitHub connection status via Nango.
+ *
+ * Checks in order: CLI selection, existing integration, Nango connections.
+ */
+export async function checkGitHubConnectStatus(
+	userId: string,
+	orgId: string,
+): Promise<{ connected: boolean; connectionId?: string; error?: string }> {
+	// Check for recent selection
+	const selection = await cliDb.getCliGitHubSelection(userId, orgId);
+	if (selection && new Date(selection.expires_at) > new Date()) {
+		await cliDb.deleteCliGitHubSelection(userId, orgId);
+		return { connected: true, connectionId: selection.connection_id };
+	}
+
+	// Check for existing integration
+	const githubIntegrationId = getNangoIntegrationId("github");
+	const providers = ["github-app", githubIntegrationId].filter(Boolean) as string[];
+	const integration = await cliDb.getActiveIntegrationById(orgId, providers);
+
+	if (integration) {
+		return { connected: true, connectionId: integration.id };
+	}
+
+	if (!env.NEXT_PUBLIC_INTEGRATIONS_ENABLED) {
+		return { connected: false, error: "Integrations are disabled" };
+	}
+
+	if (!githubIntegrationId) {
+		return { connected: false, error: "Nango GitHub integration not configured" };
+	}
+
+	// Check Nango for connections
+	const endUserId = `org_${orgId}`;
+
+	try {
+		const nango = getNango();
+		const listed = await nango.listConnections();
+		const orgConnections = (listed.connections ?? []).filter(
+			(c) => c.provider_config_key === githubIntegrationId && c.end_user?.id === endUserId,
+		);
+
+		if (orgConnections.length === 0) {
+			return { connected: false };
+		}
+
+		const sorted = orgConnections.sort(
+			(a, b) => new Date(b.created).getTime() - new Date(a.created).getTime(),
+		);
+		const newest = sorted[0];
+
+		// Verify credentials
+		const connection = await nango.getConnection(githubIntegrationId, newest.connection_id);
+
+		const credentials = connection.credentials as { access_token?: string };
+		if (!credentials?.access_token) {
+			return {
+				connected: false,
+				error: "Connection exists but no access token available",
+			};
+		}
+
+		return { connected: true, connectionId: newest.connection_id };
+	} catch (err) {
+		logger.error({ err }, "Failed to check GitHub connection status");
+		return { connected: false, error: "Failed to check connection status" };
+	}
+}
+
+// ============================================
+// CLI Snapshot (Configuration Create)
+// ============================================
+
+export class CliSnapshotError extends Error {
+	constructor(cause?: unknown) {
+		super(
+			`Failed to create snapshot: ${cause instanceof Error ? cause.message : "Unknown error"}`,
+		);
+		this.name = "CliSnapshotError";
+	}
+}
+
+/**
+ * Take a sandbox snapshot and upsert the CLI configuration.
+ *
+ * @throws CliSnapshotError if snapshot creation fails
+ */
+export async function createCliSnapshot(
+	userId: string,
+	localPathHash: string,
+	sessionId: string,
+	sandboxId: string,
+): Promise<{ configuration: CliConfigurationRow; snapshotId: string }> {
+	const provider = getSandboxProvider();
+
+	try {
+		logger.info({ sessionId }, "Taking snapshot of session");
+		const snapshotResult = await provider.snapshot(sessionId, sandboxId);
+		logger.info({ snapshotId: snapshotResult.snapshotId }, "Snapshot created");
+
+		const configuration = await cliDb.upsertCliConfiguration({
+			userId,
+			localPathHash,
+			snapshotId: snapshotResult.snapshotId,
+			sandboxProvider: provider.type,
+		});
+
+		return {
+			configuration,
+			snapshotId: snapshotResult.snapshotId,
+		};
+	} catch (err) {
+		logger.error({ err }, "Error creating snapshot");
+		throw new CliSnapshotError(err);
+	}
 }
