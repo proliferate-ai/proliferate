@@ -1,8 +1,8 @@
-[
-	"packages/services/src/automations/create-from-template.ts",
-	"packages/services/src/billing/auto-topup.ts",
-	"packages/services/src/billing/shadow-balance.ts",
-	"packages/services/src/connectors/service.ts",
-	"packages/services/src/outbox/service.ts",
-	"packages/services/src/runs/service.ts"
-]
+{
+	"packages/services/src/automations/create-from-template.ts": 4,
+	"packages/services/src/billing/auto-topup.ts": 7,
+	"packages/services/src/billing/shadow-balance.ts": 16,
+	"packages/services/src/connectors/service.ts": 1,
+	"packages/services/src/outbox/service.ts": 4,
+	"packages/services/src/runs/service.ts": 14
+}

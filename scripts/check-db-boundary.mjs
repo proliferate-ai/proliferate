@@ -10,8 +10,9 @@ const baselinePath = path.join(workspaceRoot, "scripts", "db-boundary-baseline.j
 
 const scanExtensions = new Set([".ts"]);
 
-const drizzleOpPattern = /\b(?:db|tx)\s*\.\s*(?:select|insert|update|delete|execute)\s*\(/g;
-const drizzleQueryPattern = /\b(?:db|tx)\s*\.\s*query\s*\./g;
+const drizzleOpPattern =
+	/\b(?:db|tx|database|client)\s*\.\s*(?:select|insert|update|delete|execute)\s*\(/g;
+const drizzleQueryPattern = /\b(?:db|tx|database|client)\s*\.\s*query\s*\./g;
 
 function lineFromIndex(content, index) {
 	let line = 1;
@@ -36,9 +37,13 @@ function isExcluded(fileName, relPath) {
 async function loadBaseline() {
 	try {
 		const raw = await fs.readFile(baselinePath, "utf8");
-		return new Set(JSON.parse(raw));
+		const parsed = JSON.parse(raw);
+		if (Array.isArray(parsed)) {
+			return new Map(parsed.map((f) => [f, Number.POSITIVE_INFINITY]));
+		}
+		return new Map(Object.entries(parsed));
 	} catch {
-		return new Set();
+		return new Map();
 	}
 }
 
@@ -63,7 +68,7 @@ async function walk(dir, acc = []) {
 async function main() {
 	const baseline = await loadBaseline();
 	const files = await walk(targetRoot);
-	const findings = [];
+	const findingsByFile = new Map();
 
 	for (const filePath of files) {
 		const rel = path.relative(workspaceRoot, filePath);
@@ -74,9 +79,10 @@ async function main() {
 		}
 
 		const content = await fs.readFile(filePath, "utf8");
+		const fileFindings = [];
 
 		for (const match of content.matchAll(drizzleOpPattern)) {
-			findings.push({
+			fileFindings.push({
 				file: rel,
 				line: lineFromIndex(content, match.index ?? 0),
 				snippet: match[0].trim(),
@@ -84,47 +90,69 @@ async function main() {
 		}
 
 		for (const match of content.matchAll(drizzleQueryPattern)) {
-			findings.push({
+			fileFindings.push({
 				file: rel,
 				line: lineFromIndex(content, match.index ?? 0),
 				snippet: match[0].trim(),
 			});
 		}
-	}
 
-	const baselined = [];
-	const newViolations = [];
-
-	for (const f of findings) {
-		if (baseline.has(f.file)) {
-			baselined.push(f);
-		} else {
-			newViolations.push(f);
+		if (fileFindings.length > 0) {
+			findingsByFile.set(rel, fileFindings);
 		}
 	}
 
-	if (baselined.length > 0) {
-		const files = [...new Set(baselined.map((f) => f.file))];
+	let baselinedTotal = 0;
+	const newViolations = [];
+	const regressions = [];
+
+	for (const [file, fileFindings] of findingsByFile) {
+		const allowedCount = baseline.get(file);
+
+		if (allowedCount === undefined) {
+			newViolations.push(...fileFindings);
+		} else if (fileFindings.length > allowedCount) {
+			regressions.push({ file, allowed: allowedCount, actual: fileFindings.length });
+			for (const f of fileFindings.slice(allowedCount)) {
+				newViolations.push(f);
+			}
+			baselinedTotal += allowedCount;
+		} else {
+			baselinedTotal += fileFindings.length;
+		}
+	}
+
+	if (baselinedTotal > 0) {
+		const fileCount = [...findingsByFile.keys()].filter((f) => baseline.has(f)).length;
 		console.log(
-			`DB boundary: ${baselined.length} known violation(s) in ${files.length} baselined file(s).`,
+			`DB boundary: ${baselinedTotal} known violation(s) in ${fileCount} baselined file(s).`,
 		);
 	}
 
-	if (newViolations.length === 0) {
+	if (regressions.length > 0) {
+		console.error("DB boundary regressions in baselined files:");
+		for (const r of regressions) {
+			console.error(`- ${r.file}: was ${r.allowed}, now ${r.actual} (+${r.actual - r.allowed})`);
+		}
+	}
+
+	if (newViolations.length === 0 && regressions.length === 0) {
 		console.log("No new DB boundary violations found.");
 		return;
 	}
 
-	console.error("Found NEW DB operations outside of db.ts files in packages/services/:");
-	for (const finding of newViolations) {
-		console.error(`- ${finding.file}:${finding.line} ${finding.snippet}`);
+	if (newViolations.length > 0) {
+		console.error("Found NEW DB operations outside of db.ts files in packages/services/:");
+		for (const finding of newViolations) {
+			console.error(`- ${finding.file}:${finding.line} ${finding.snippet}`);
+		}
 	}
 	console.error(
 		"\nAll database operations (db.select, db.insert, db.update, db.delete, db.query, db.execute)",
 	);
 	console.error("must live in files named db.ts (or *-db.ts) within packages/services/src/.");
 	console.error(
-		"If migrating an existing file, remove it from scripts/db-boundary-baseline.json after.",
+		"If migrating an existing file, update its count in scripts/db-boundary-baseline.json.",
 	);
 	process.exit(1);
 }

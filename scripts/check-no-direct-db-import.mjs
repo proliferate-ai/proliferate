@@ -8,7 +8,8 @@ const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
 
 const scanExtensions = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
-const dbImportPattern = /(?:from|import)\s+['"]@proliferate\/db(?:\/[^'"]*)?['"]/g;
+const dbImportPattern =
+	/(?:from|import)\s+['"]@proliferate\/db(?:\/[^'"]*)?['"]|(?:import|require)\s*\(\s*['"]@proliferate\/db(?:\/[^'"]*)?['"]\s*\)/g;
 
 function lineFromIndex(content, index) {
 	let line = 1;
