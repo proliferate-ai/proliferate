@@ -6,11 +6,30 @@
 
 import { randomUUID } from "crypto";
 import type { Integration, IntegrationWithCreator } from "@proliferate/shared";
+import * as configurationsModule from "../configurations";
+import { decrypt, getEncryptionKey } from "../db/crypto";
 import { toIsoString } from "../db/serialize";
+import {
+	type NangoProviderType,
+	getNango,
+	getNangoIntegrationId,
+	requireNangoIntegrationId,
+} from "../lib/nango";
 import { getServicesLogger } from "../logger";
+import * as orgsModule from "../orgs";
 import * as sessions from "../sessions";
 import * as integrationsDb from "./db";
 import { attachCreators, groupByProvider, toIntegration, toIntegrationWithCreator } from "./mapper";
+import {
+	type JiraMetadata,
+	type LinearMetadata,
+	type SentryMetadata,
+	fetchJiraMetadata,
+	fetchLinearMetadata,
+	fetchSentryMetadata,
+} from "./providers";
+
+const logger = getServicesLogger().child({ module: "integrations" });
 
 // ============================================
 // Types
@@ -723,4 +742,425 @@ export async function listSlackChannels(
 	} while (cursor);
 
 	return channels;
+}
+
+// ============================================
+// Error classes
+// ============================================
+
+export class IntegrationNotFoundError extends Error {
+	constructor(id?: string) {
+		super(id ? `Integration ${id} not found` : "Integration not found");
+		this.name = "IntegrationNotFoundError";
+	}
+}
+
+export class IntegrationInactiveError extends Error {
+	constructor() {
+		super("Integration is not active");
+		this.name = "IntegrationInactiveError";
+	}
+}
+
+export class NangoApiError extends Error {
+	constructor(operation: string, detail: string) {
+		super(`${operation}: ${detail}`);
+		this.name = "NangoApiError";
+	}
+}
+
+export class IntegrationAdminRequiredError extends Error {
+	constructor() {
+		super("Admin or owner role required");
+		this.name = "IntegrationAdminRequiredError";
+	}
+}
+
+export class NoAccessTokenError extends Error {
+	constructor() {
+		super("No access token available");
+		this.name = "NoAccessTokenError";
+	}
+}
+
+export class SlackConfigValidationError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "SlackConfigValidationError";
+	}
+}
+
+// ============================================
+// Admin check
+// ============================================
+
+/**
+ * Assert the user has admin or owner role in the organization.
+ */
+export async function assertIntegrationAdmin(userId: string, orgId: string): Promise<void> {
+	const role = await orgsModule.getUserRole(userId, orgId);
+	if (role !== "owner" && role !== "admin") {
+		throw new IntegrationAdminRequiredError();
+	}
+}
+
+// ============================================
+// Nango helpers
+// ============================================
+
+type NangoConnection = {
+	credentials: unknown;
+	connection_config?: unknown;
+};
+
+/**
+ * Extract a useful error message from Nango SDK failures and throw a NangoApiError.
+ */
+function handleNangoError(err: unknown, operation: string): never {
+	const axiosResponse = (err as { response?: { status?: number; data?: unknown } }).response;
+	if (axiosResponse) {
+		const { status, data } = axiosResponse;
+		logger.error({ status, data, operation }, "Nango API error");
+		const message =
+			(typeof data === "object" &&
+			data !== null &&
+			"error" in data &&
+			typeof data.error === "string"
+				? data.error
+				: null) ??
+			(typeof data === "object" &&
+			data !== null &&
+			"message" in data &&
+			typeof data.message === "string"
+				? data.message
+				: null) ??
+			`Nango API error (HTTP ${status})`;
+		throw new NangoApiError(operation, message);
+	}
+	throw err;
+}
+
+/**
+ * Get Nango connection credentials for a provider.
+ * Validates integration status and fetches credentials from Nango.
+ */
+async function getNangoCredentials(
+	integrationId: string,
+	orgId: string,
+	providerType: NangoProviderType,
+): Promise<{ credentials: Record<string, unknown>; connectionConfig?: Record<string, unknown> }> {
+	const integration = await integrationsDb.getIntegrationWithStatus(integrationId, orgId);
+
+	if (!integration) {
+		throw new IntegrationNotFoundError(integrationId);
+	}
+
+	if (integration.status !== "active") {
+		throw new IntegrationInactiveError();
+	}
+
+	const nango = getNango();
+	const nangoIntegrationId = requireNangoIntegrationId(providerType);
+	let connection: NangoConnection;
+	try {
+		connection = await nango.getConnection(nangoIntegrationId, integration.connectionId!);
+	} catch (err) {
+		handleNangoError(
+			err,
+			`getConnection(${providerType}, connection=${integration.connectionId})`,
+		);
+	}
+
+	return {
+		credentials: connection.credentials as Record<string, unknown>,
+		connectionConfig: connection.connection_config as Record<string, unknown> | undefined,
+	};
+}
+
+// ============================================
+// Nango connect sessions
+// ============================================
+
+export interface CreateNangoConnectSessionInput {
+	provider: NangoProviderType;
+	orgId: string;
+	userId: string;
+	userEmail: string;
+	userDisplayName: string;
+}
+
+/**
+ * Create a Nango connect session for OAuth flow.
+ * Generic for all providers (github, sentry, linear, jira).
+ */
+export async function createNangoConnectSession(
+	input: CreateNangoConnectSessionInput,
+): Promise<{ sessionToken: string }> {
+	const { provider, orgId, userId, userEmail, userDisplayName } = input;
+
+	const org = await integrationsDb.getOrganization(orgId);
+	if (!org) {
+		throw new Error("Organization not found");
+	}
+
+	const nango = getNango();
+	const nangoIntegrationId = requireNangoIntegrationId(provider);
+
+	try {
+		const result = await nango.createConnectSession({
+			end_user: {
+				id: userId,
+				email: userEmail,
+				display_name: userDisplayName,
+			},
+			organization: {
+				id: orgId,
+				display_name: org.name,
+			},
+			allowed_integrations: [nangoIntegrationId],
+		});
+
+		return { sessionToken: result.data.token };
+	} catch (err) {
+		handleNangoError(
+			err,
+			`createConnectSession(${provider}, integration=${nangoIntegrationId})`,
+		);
+	}
+}
+
+// ============================================
+// Provider metadata
+// ============================================
+
+/**
+ * Fetch Sentry metadata via Nango credentials.
+ */
+export async function getSentryMetadata(
+	integrationId: string,
+	orgId: string,
+	projectSlug?: string,
+): Promise<SentryMetadata> {
+	const { credentials, connectionConfig } = await getNangoCredentials(
+		integrationId,
+		orgId,
+		"sentry",
+	);
+	const creds = credentials as { apiKey?: string; access_token?: string };
+	const authToken = creds.apiKey || creds.access_token;
+	if (!authToken) throw new NoAccessTokenError();
+
+	const hostname =
+		(connectionConfig as { hostname?: string } | undefined)?.hostname || "sentry.io";
+	return fetchSentryMetadata(authToken, hostname, projectSlug);
+}
+
+/**
+ * Fetch Linear metadata via Nango credentials.
+ */
+export async function getLinearMetadata(
+	integrationId: string,
+	orgId: string,
+	teamId?: string,
+): Promise<LinearMetadata> {
+	const { credentials } = await getNangoCredentials(integrationId, orgId, "linear");
+	const creds = credentials as { apiKey?: string; access_token?: string };
+	const authToken = creds.apiKey || creds.access_token;
+	if (!authToken) throw new NoAccessTokenError();
+
+	return fetchLinearMetadata(authToken, teamId);
+}
+
+/**
+ * Fetch Jira metadata via Nango credentials.
+ */
+export async function getJiraMetadata(
+	integrationId: string,
+	orgId: string,
+	siteId?: string,
+	projectId?: string,
+): Promise<JiraMetadata> {
+	const { credentials } = await getNangoCredentials(integrationId, orgId, "jira");
+	const creds = credentials as { access_token?: string };
+	const authToken = creds.access_token;
+	if (!authToken) throw new NoAccessTokenError();
+
+	return fetchJiraMetadata(authToken, siteId, projectId);
+}
+
+// ============================================
+// Disconnect
+// ============================================
+
+/**
+ * Disconnect an integration, including Nango cleanup.
+ * Checks role-based access: admins can disconnect any, members only their own.
+ */
+export async function disconnectIntegrationWithNango(
+	integrationId: string,
+	orgId: string,
+	userId: string,
+): Promise<void> {
+	const integration = await getIntegration(integrationId, orgId);
+	if (!integration) {
+		throw new IntegrationNotFoundError(integrationId);
+	}
+
+	// Admin can disconnect anything; members can only disconnect their own
+	const role = await orgsModule.getUserRole(userId, orgId);
+	const isAdmin = role === "owner" || role === "admin";
+	if (!isAdmin && integration.created_by !== userId) {
+		throw new IntegrationAdminRequiredError();
+	}
+
+	const isGitHubApp = integration.provider === "github-app";
+
+	// For Nango-managed connections, delete from Nango first
+	if (!isGitHubApp && integration.connection_id) {
+		const nango = getNango();
+		try {
+			await nango.deleteConnection(integration.integration_id!, integration.connection_id);
+		} catch (err) {
+			handleNangoError(
+				err,
+				`deleteConnection(${integration.integration_id}, ${integration.connection_id})`,
+			);
+		}
+	}
+
+	// Delete from database and handle orphaned repos
+	const result = await deleteIntegration(integrationId, orgId);
+	if (!result.success) {
+		throw new Error(result.error || "Failed to disconnect integration");
+	}
+}
+
+/**
+ * Disconnect Slack installation: revoke token with Slack API and mark revoked in DB.
+ */
+export async function disconnectSlack(orgId: string): Promise<void> {
+	const installation = await getSlackInstallationForDisconnect(orgId);
+	if (!installation) {
+		throw new IntegrationNotFoundError();
+	}
+
+	// Decrypt and revoke token with Slack API
+	try {
+		const botToken = decrypt(installation.encryptedBotToken, getEncryptionKey());
+		await fetch("https://slack.com/api/auth.revoke", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+				Authorization: `Bearer ${botToken}`,
+			},
+		});
+	} catch (err) {
+		logger.error({ err }, "Failed to revoke Slack token");
+		// Continue with local revocation even if Slack API fails
+	}
+
+	await revokeSlackInstallation(installation.id);
+}
+
+// ============================================
+// Slack config validation
+// ============================================
+
+export interface UpdateSlackConfigInput {
+	installationId: string;
+	orgId: string;
+	strategy: "fixed" | "agent_decide";
+	defaultConfigurationId?: string | null;
+	allowedConfigurationIds?: string[] | null;
+}
+
+/**
+ * Update Slack config with validation for strategy constraints.
+ */
+export async function updateSlackConfigWithValidation(
+	input: UpdateSlackConfigInput,
+): Promise<void> {
+	const { installationId, orgId, strategy, defaultConfigurationId, allowedConfigurationIds } =
+		input;
+
+	if (defaultConfigurationId) {
+		const belongs = await configurationsModule.configurationBelongsToOrg(
+			defaultConfigurationId,
+			orgId,
+		);
+		if (!belongs) {
+			throw new SlackConfigValidationError("Default configuration not found in this org");
+		}
+	}
+
+	if (strategy === "agent_decide") {
+		if (!allowedConfigurationIds || allowedConfigurationIds.length === 0) {
+			throw new SlackConfigValidationError(
+				"Agent-decide strategy requires at least one allowed configuration",
+			);
+		}
+	}
+
+	if (strategy === "agent_decide" && allowedConfigurationIds?.length) {
+		const candidates = await configurationsModule.getConfigurationCandidates(
+			allowedConfigurationIds,
+			orgId,
+		);
+		if (candidates.length !== allowedConfigurationIds.length) {
+			throw new SlackConfigValidationError(
+				"Some allowed configuration IDs are not found in this org",
+			);
+		}
+		const missingDescription = candidates.filter(
+			(c) => !c.routingDescription || c.routingDescription.trim().length === 0,
+		);
+		if (missingDescription.length > 0) {
+			const names = missingDescription.map((c) => c.name).join(", ");
+			throw new SlackConfigValidationError(
+				`All allowed configurations must have routing descriptions. Missing: ${names}`,
+			);
+		}
+	}
+
+	const updated = await integrationsDb.updateSlackInstallationConfig(installationId, orgId, {
+		defaultConfigSelectionStrategy: strategy,
+		defaultConfigurationId,
+		allowedConfigurationIds,
+	});
+
+	if (!updated) {
+		throw new IntegrationNotFoundError();
+	}
+}
+
+// ============================================
+// Display names
+// ============================================
+
+/**
+ * Get display name for a Nango provider config key.
+ */
+export function getDisplayNameForProvider(providerConfigKey: string): string {
+	const staticNames: Record<string, string> = {
+		github: "GitHub",
+		sentry: "Sentry",
+		linear: "Linear",
+		jira: "Jira",
+	};
+
+	if (staticNames[providerConfigKey]) {
+		return staticNames[providerConfigKey];
+	}
+
+	const githubId = getNangoIntegrationId("github");
+	const sentryId = getNangoIntegrationId("sentry");
+	const linearId = getNangoIntegrationId("linear");
+	const jiraId = getNangoIntegrationId("jira");
+
+	if (githubId && providerConfigKey === githubId) return "GitHub";
+	if (sentryId && providerConfigKey === sentryId) return "Sentry";
+	if (linearId && providerConfigKey === linearId) return "Linear";
+	if (jiraId && providerConfigKey === jiraId) return "Jira";
+
+	return providerConfigKey;
 }

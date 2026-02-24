@@ -4,6 +4,7 @@
 
 export * from "./service";
 export * from "./mapper";
+export * from "./providers";
 
 // Token resolution
 export {
