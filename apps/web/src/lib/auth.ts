@@ -1,3 +1,4 @@
+import { isEmailEnabled, sendInvitationEmail, sendVerificationEmail } from "@/lib/email";
 import { logger } from "@/lib/logger";
 import { nextPhase } from "@proliferate/environment/runtime";
 import { env, features } from "@proliferate/environment/server";
@@ -5,7 +6,6 @@ import { betterAuth } from "better-auth";
 import { apiKey, organization } from "better-auth/plugins";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { Pool } from "pg";
-import { Resend } from "resend";
 
 const log = logger.child({ module: "auth" });
 
@@ -14,9 +14,6 @@ const log = logger.child({ module: "auth" });
 const isBuild = nextPhase === PHASE_PRODUCTION_BUILD;
 const appUrl = env.NEXT_PUBLIC_APP_URL ?? (isBuild ? "http://localhost:3000" : undefined);
 const authSecret = env.BETTER_AUTH_SECRET ?? (isBuild ? "build-placeholder" : undefined);
-
-const resend = features.emailEnabled ? new Resend(env.RESEND_API_KEY) : null;
-const emailFrom = env.EMAIL_FROM ?? "";
 
 const isLocalDb =
 	env.DATABASE_URL?.includes("localhost") || env.DATABASE_URL?.includes("127.0.0.1");
@@ -75,30 +72,10 @@ export const auth = betterAuth({
 					sendOnSignUp: true,
 					autoSignInAfterVerification: true,
 					sendVerificationEmail: async ({ user, url }) => {
-						if (!resend) {
+						if (!isEmailEnabled()) {
 							throw new Error("Email is disabled but verification is required.");
 						}
-
-						await resend.emails.send({
-							from: emailFrom,
-							to: user.email,
-							subject: "Verify your email address",
-							html: `
-				<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-					<h2>Verify your email</h2>
-					<p>Hi ${user.name},</p>
-					<p>Please verify your email address to complete your registration.</p>
-					<p style="margin: 24px 0;">
-						<a href="${url}" style="background: #000; color: #fff; padding: 12px 24px; border-radius: 6px; text-decoration: none;">
-							Verify Email
-						</a>
-					</p>
-					<p style="color: #666; font-size: 14px;">
-						If the button doesn't work, copy and paste this link into your browser.
-					</p>
-				</div>
-			`,
-						});
+						await sendVerificationEmail(user, url);
 					},
 				},
 			}
@@ -135,32 +112,11 @@ export const auth = betterAuth({
 			creatorRole: "owner",
 			invitationExpiresIn: 7 * 24 * 60 * 60, // 7 days
 			sendInvitationEmail: async (data) => {
-				if (!resend) {
+				if (!isEmailEnabled()) {
 					log.warn("Email is disabled; skipping invite email");
 					return;
 				}
-				const inviteUrl = `${env.NEXT_PUBLIC_APP_URL}/invite/${data.id}`;
-
-				await resend.emails.send({
-					from: emailFrom,
-					to: data.email,
-					subject: `You've been invited to join ${data.organization.name}`,
-					html: `
-					<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-						<h2>You're invited!</h2>
-						<p>${data.inviter.user.name} has invited you to join <strong>${data.organization.name}</strong> on Proliferate.</p>
-						<p>You'll be joining as a <strong>${data.role}</strong>.</p>
-						<p style="margin: 24px 0;">
-							<a href="${inviteUrl}" style="background: #000; color: #fff; padding: 12px 24px; border-radius: 6px; text-decoration: none;">
-								Accept Invitation
-							</a>
-						</p>
-						<p style="color: #666; font-size: 14px;">
-							This invitation expires in 7 days.
-						</p>
-					</div>
-				`,
-				});
+				await sendInvitationEmail(data);
 			},
 		}),
 	],
