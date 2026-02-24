@@ -1,4 +1,4 @@
-import { requireAuth } from "@/lib/auth-helpers";
+import { isAuthError, requireOrgAuth } from "@/lib/auth-helpers";
 import { GATEWAY_URL } from "@/lib/gateway";
 import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
@@ -25,15 +25,12 @@ const SERVICE_TOKEN = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
  * - displayName?: string (directory name for UI)
  */
 export async function POST(request: Request) {
-	const authResult = await requireAuth();
-	if ("error" in authResult) {
+	const authResult = await requireOrgAuth();
+	if (isAuthError(authResult)) {
 		return NextResponse.json({ error: authResult.error }, { status: authResult.status });
 	}
 
-	const orgId = authResult.session.session.activeOrganizationId;
-	if (!orgId) {
-		return NextResponse.json({ error: "No active organization" }, { status: 400 });
-	}
+	const { orgId } = authResult;
 
 	const body = await request.json();
 	const { localPathHash, displayName } = body as {

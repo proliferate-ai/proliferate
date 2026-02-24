@@ -154,7 +154,7 @@ interface AuthResult {
 interface AuthError {
 	session?: never;
 	error: string;
-	status: 401;
+	status: 400 | 401 | 403;
 }
 
 export type RequireAuthResult = AuthResult | AuthError;
@@ -255,6 +255,44 @@ export async function requireAuth(): Promise<RequireAuthResult> {
 			},
 		},
 		impersonation,
+	};
+}
+
+interface OrgAuthResult {
+	session: AuthResult["session"];
+	orgId: string;
+	impersonation?: ImpersonationContext;
+	error?: never;
+	status?: never;
+}
+
+export type RequireOrgAuthResult = OrgAuthResult | AuthError;
+
+/**
+ * Require authentication + verified org membership.
+ * Mirrors `orgProcedure` semantics for non-oRPC route handlers:
+ * - 401 if not authenticated
+ * - 400 if no active organization
+ * - 403 if user is not a member of the active organization
+ */
+export async function requireOrgAuth(): Promise<RequireOrgAuthResult> {
+	const authResult = await requireAuth();
+	if (isAuthError(authResult)) return authResult;
+
+	const orgId = authResult.session.session.activeOrganizationId;
+	if (!orgId) {
+		return { error: "No active organization", status: 400 };
+	}
+
+	const role = await orgs.getUserRole(authResult.session.user.id, orgId);
+	if (!role) {
+		return { error: "Not a member of this organization", status: 403 };
+	}
+
+	return {
+		session: authResult.session,
+		orgId,
+		impersonation: authResult.impersonation,
 	};
 }
 
