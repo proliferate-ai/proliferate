@@ -7,13 +7,18 @@
 import { randomUUID } from "crypto";
 import { env } from "@proliferate/environment/server";
 import { createConfigurationSnapshotBuildQueue } from "@proliferate/queue";
-import type { Configuration, ConfigurationServiceCommand } from "@proliferate/shared";
+import type { Configuration, ConfigurationServiceCommand, SandboxProviderType } from "@proliferate/shared";
+import { getSandboxProvider } from "@proliferate/shared/providers";
 import {
 	parseConfigurationServiceCommands,
 	parseServiceCommands,
 	resolveServiceCommands,
 } from "@proliferate/shared/sandbox";
+import { encrypt, getEncryptionKey } from "../db/crypto";
 import { getServicesLogger } from "../logger";
+import * as repos from "../repos";
+import * as secrets from "../secrets";
+import * as sessions from "../sessions";
 import * as configurationsDb from "./db";
 import { toConfiguration, toConfigurationPartial, toConfigurations } from "./mapper";
 
@@ -314,4 +319,288 @@ export async function requestConfigurationSnapshotBuild(
 			.child({ module: "configurations" })
 			.warn({ err: error, configurationId }, "Failed to enqueue configuration snapshot build");
 	}
+}
+
+// ============================================
+// Finalize Setup
+// ============================================
+
+const logger = getServicesLogger().child({ module: "configurations" });
+
+export class SessionNotFoundError extends Error {
+	constructor() {
+		super("Session not found");
+		this.name = "SessionNotFoundError";
+	}
+}
+
+export class SetupSessionRequiredError extends Error {
+	constructor() {
+		super("Only setup sessions can be finalized");
+		this.name = "SetupSessionRequiredError";
+	}
+}
+
+export class NoSandboxError extends Error {
+	constructor() {
+		super("No sandbox associated with session");
+		this.name = "NoSandboxError";
+	}
+}
+
+export class RepoIdRequiredError extends Error {
+	constructor(message?: string) {
+		super(message ?? "repoId is required when session has no configuration");
+		this.name = "RepoIdRequiredError";
+	}
+}
+
+export class AmbiguousRepoError extends Error {
+	constructor() {
+		super("repoId required for multi-repo secret persistence");
+		this.name = "AmbiguousRepoError";
+	}
+}
+
+export class SnapshotFailedError extends Error {
+	constructor(cause?: unknown) {
+		super(
+			`Failed to create snapshot: ${cause instanceof Error ? cause.message : "Unknown error"}`,
+		);
+		this.name = "SnapshotFailedError";
+	}
+}
+
+export class RepoNotFoundError extends Error {
+	constructor() {
+		super("Repo not found");
+		this.name = "RepoNotFoundError";
+	}
+}
+
+export class SessionRepoMismatchError extends Error {
+	constructor() {
+		super("Session not found for this repo");
+		this.name = "SessionRepoMismatchError";
+	}
+}
+
+export interface FinalizeSetupInput {
+	repoId?: string;
+	sessionId: string;
+	secrets?: Record<string, string>;
+	name?: string;
+	notes?: string;
+	updateSnapshotId?: string;
+	keepRunning?: boolean;
+	userId: string;
+	orgId: string;
+}
+
+export interface FinalizeSetupResult {
+	configurationId: string;
+	snapshotId: string;
+	success: boolean;
+}
+
+/**
+ * Resolve the target repoId for finalization.
+ *
+ * Decision tree:
+ * 1. If caller supplied repoId: use it.
+ * 2. Else if session.repoId is non-null: use it.
+ * 3. Else if session.configurationId is null: reject.
+ * 4. Else load configurationRepos:
+ *    - Exactly one repo: use that repo.
+ *    - Multiple repos + secrets payload non-empty: reject (ambiguous).
+ *    - Multiple repos + no secrets: return the first repo (secrets skipped by caller).
+ *    - Zero repos: reject.
+ */
+async function resolveRepoId(
+	explicitRepoId: string | undefined,
+	session: { repoId: string | null; configurationId: string | null },
+	hasSecrets: boolean,
+): Promise<string> {
+	if (explicitRepoId) return explicitRepoId;
+	if (session.repoId) return session.repoId;
+	if (!session.configurationId) {
+		throw new RepoIdRequiredError();
+	}
+
+	const configRepos = await configurationsDb.getConfigurationReposWithDetails(
+		session.configurationId,
+	);
+	const repoIds = configRepos.map((cr) => cr.repo?.id).filter(Boolean) as string[];
+	if (repoIds.length === 0) {
+		throw new RepoIdRequiredError("Configuration has no repos");
+	}
+	if (repoIds.length === 1) {
+		return repoIds[0];
+	}
+	// Multiple repos
+	if (hasSecrets) {
+		throw new AmbiguousRepoError();
+	}
+	return repoIds[0];
+}
+
+/**
+ * Finalize a setup session: snapshot the sandbox, store secrets,
+ * and create or update the configuration.
+ *
+ * @throws SessionNotFoundError
+ * @throws SetupSessionRequiredError
+ * @throws NoSandboxError
+ * @throws RepoIdRequiredError
+ * @throws AmbiguousRepoError
+ * @throws SnapshotFailedError
+ * @throws RepoNotFoundError
+ * @throws SessionRepoMismatchError
+ */
+export async function finalizeSetup(input: FinalizeSetupInput): Promise<FinalizeSetupResult> {
+	const {
+		repoId: explicitRepoId,
+		sessionId,
+		secrets: inputSecrets = {},
+		name,
+		notes,
+		updateSnapshotId,
+		keepRunning = true,
+		userId,
+		orgId,
+	} = input;
+
+	// 1. Get session
+	const session = await sessions.findSessionByIdInternal(sessionId);
+
+	if (!session || session.organizationId !== orgId) {
+		throw new SessionNotFoundError();
+	}
+
+	if (session.sessionType !== "setup") {
+		throw new SetupSessionRequiredError();
+	}
+
+	const sandboxId = session.sandboxId;
+	if (!sandboxId) {
+		throw new NoSandboxError();
+	}
+
+	// 2. Resolve repoId (may be derived from session/configuration)
+	const repoId = await resolveRepoId(
+		explicitRepoId,
+		{ repoId: session.repoId, configurationId: session.configurationId },
+		Object.keys(inputSecrets).length > 0,
+	);
+
+	// Verify repoId matches session or session's configuration contains this repo
+	const sessionBelongsToRepo = session.repoId === repoId;
+	let sessionBelongsToConfiguration = false;
+
+	if (session.configurationId && !sessionBelongsToRepo) {
+		sessionBelongsToConfiguration = await configurationsDb.configurationContainsRepo(
+			session.configurationId,
+			repoId,
+		);
+	}
+
+	if (!sessionBelongsToRepo && !sessionBelongsToConfiguration) {
+		throw new SessionRepoMismatchError();
+	}
+
+	// 3. Take filesystem snapshot via provider
+	const provider = getSandboxProvider(session.sandboxProvider as SandboxProviderType);
+	let snapshotId: string | null = null;
+
+	try {
+		const snapshotResult = await provider.snapshot(sessionId, sandboxId);
+		snapshotId = snapshotResult.snapshotId;
+	} catch (err) {
+		throw new SnapshotFailedError(err);
+	}
+
+	// Get the repo to find organization_id
+	const organizationId = await repos.getOrganizationId(repoId);
+
+	if (!organizationId) {
+		throw new RepoNotFoundError();
+	}
+
+	// 4. Encrypt and store secrets
+	if (Object.keys(inputSecrets).length > 0) {
+		const encryptionKey = getEncryptionKey();
+
+		for (const [key, value] of Object.entries(inputSecrets)) {
+			const encryptedValue = encrypt(value, encryptionKey);
+
+			const stored = await secrets.upsertSecretByRepoAndKey({
+				repoId,
+				organizationId,
+				key,
+				encryptedValue,
+			});
+			if (!stored) {
+				throw new Error(`Failed to store secret key: ${key}`);
+			}
+		}
+	}
+
+	if (!snapshotId) {
+		throw new SnapshotFailedError(null);
+	}
+
+	let configurationId: string;
+
+	// Determine which configuration to update
+	const existingConfigurationId = updateSnapshotId || session.configurationId;
+
+	if (existingConfigurationId) {
+		// Update existing configuration record
+		configurationId = existingConfigurationId;
+		await configurationsDb.update(existingConfigurationId, {
+			snapshotId,
+			status: "ready",
+			name: name || null,
+			notes: notes || null,
+		});
+	} else {
+		// Create new configuration record
+		configurationId = randomUUID();
+		await configurationsDb.createFull({
+			id: configurationId,
+			snapshotId,
+			status: "ready",
+			name: name || null,
+			notes: notes || null,
+			createdBy: userId,
+			sandboxProvider: provider.type,
+		});
+
+		// Create configuration_repos entry for this repo
+		const repoName = repoId.slice(0, 8);
+		const githubRepoName = await repos.getGithubRepoName(repoId);
+		const workspacePath = githubRepoName?.split("/")[1] || repoName;
+
+		await configurationsDb.createSingleConfigurationRepo(configurationId, repoId, workspacePath);
+
+		// Update session with the new configuration_id
+		await sessions.updateSessionConfigurationId(sessionId, configurationId);
+	}
+
+	// 5. Terminate sandbox and end session (unless keepRunning)
+	if (!keepRunning) {
+		try {
+			await provider.terminate(sessionId, sandboxId);
+		} catch (err) {
+			logger.warn({ err, sessionId, sandboxId }, "Failed to terminate sandbox");
+		}
+
+		await sessions.markSessionStopped(sessionId);
+	}
+
+	return {
+		configurationId,
+		snapshotId,
+		success: true,
+	};
 }
