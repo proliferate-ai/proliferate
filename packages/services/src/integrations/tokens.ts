@@ -5,9 +5,8 @@
  * Abstracts over Nango and GitHub App providers.
  */
 
-import { Nango } from "@nangohq/node";
-import { env } from "@proliferate/environment/server";
 import { getDb, inArray, integrations } from "../db/client";
+import { getNango } from "../lib/nango";
 import { getInstallationToken } from "./github-app";
 
 // ============================================
@@ -40,22 +39,6 @@ export interface TokenError {
 export interface ResolveTokensResult {
 	tokens: TokenResult[];
 	errors: TokenError[];
-}
-
-// ============================================
-// Nango Client
-// ============================================
-
-let nangoInstance: Nango | null = null;
-
-function getNango(): Nango {
-	if (!nangoInstance) {
-		if (!env.NANGO_SECRET_KEY) {
-			throw new Error("Missing NANGO_SECRET_KEY");
-		}
-		nangoInstance = new Nango({ secretKey: env.NANGO_SECRET_KEY });
-	}
-	return nangoInstance;
 }
 
 // ============================================
