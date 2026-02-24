@@ -32,10 +32,7 @@ export interface OnboardingStatusResult extends OnboardingStatus {}
 /**
  * Get onboarding status for an organization.
  */
-export async function getOnboardingStatus(
-	orgId: string | undefined,
-	nangoGithubIntegrationId?: string,
-): Promise<OnboardingStatus> {
+export async function getOnboardingStatus(orgId: string | undefined): Promise<OnboardingStatus> {
 	if (!orgId) {
 		return {
 			hasOrg: false,
@@ -49,7 +46,7 @@ export async function getOnboardingStatus(
 	const [hasSlackConnection, hasGitHubConnection, reposWithStatus, meta, billingInfo] =
 		await Promise.all([
 			onboardingDb.hasSlackConnection(orgId),
-			onboardingDb.hasGitHubConnection(orgId, nangoGithubIntegrationId),
+			onboardingDb.hasGitHubConnection(orgId, env.NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID),
 			onboardingDb.getReposWithConfigurationStatus(orgId),
 			onboardingDb.getOnboardingMeta(orgId),
 			orgsDb.findBillingInfo(orgId),
@@ -279,10 +276,7 @@ export async function startTrial(input: StartTrialInput): Promise<StartTrialResu
 				});
 			} catch (retryErr) {
 				const retryMsg = retryErr instanceof Error ? retryErr.message : "";
-				if (
-					retryMsg.includes("already scheduled") ||
-					retryMsg.includes("can't attach again")
-				) {
+				if (retryMsg.includes("already scheduled") || retryMsg.includes("can't attach again")) {
 					logger.info("Product already attached on retry, skipping");
 				} else {
 					throw retryErr;
