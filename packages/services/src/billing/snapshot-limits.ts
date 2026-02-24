@@ -13,8 +13,14 @@
 
 import { env } from "@proliferate/environment/server";
 import { type BillingPlan, PLAN_CONFIGS } from "@proliferate/shared/billing";
-import { and, asc, eq, getDb, isNotNull, lt, sessions, sql } from "../db/client";
 import { getServicesLogger } from "../logger";
+import {
+	clearSnapshotId,
+	countSnapshotsByOrganization,
+	findAllExpiredSnapshots,
+	findExpiredSnapshots,
+	findSnapshotsByOrganization,
+} from "../sessions/db";
 
 // ============================================
 // Types
@@ -56,13 +62,7 @@ function getRetentionDays(plan?: BillingPlan): number {
  * Get current snapshot count for an organization.
  */
 export async function getSnapshotCount(orgId: string): Promise<number> {
-	const db = getDb();
-	const [result] = await db
-		.select({ count: sql<number>`count(*)` })
-		.from(sessions)
-		.where(and(eq(sessions.organizationId, orgId), isNotNull(sessions.snapshotId)));
-
-	return Number(result?.count ?? 0);
+	return countSnapshotsByOrganization(orgId);
 }
 
 /**
@@ -120,18 +120,7 @@ export async function ensureSnapshotCapacity(
 	}
 
 	// Pass 2: fall back to all snapshots by pausedAt (oldest first)
-	const db = getDb();
-	const allSnapshots = (await db.query.sessions.findMany({
-		where: and(eq(sessions.organizationId, orgId), isNotNull(sessions.snapshotId)),
-		columns: {
-			id: true,
-			snapshotId: true,
-			sandboxProvider: true,
-			pausedAt: true,
-		},
-		orderBy: [asc(sessions.pausedAt)],
-		limit: 3, // Cap work in hot path
-	})) as SessionWithSnapshot[];
+	const allSnapshots = (await findSnapshotsByOrganization(orgId, 3)) as SessionWithSnapshot[];
 
 	for (const candidate of allSnapshots) {
 		if (!candidate.snapshotId) continue;
@@ -162,23 +151,7 @@ export async function getExpiredSnapshots(
 	const cutoffDate = new Date();
 	cutoffDate.setDate(cutoffDate.getDate() - days);
 
-	const db = getDb();
-	const results = (await db.query.sessions.findMany({
-		where: and(
-			eq(sessions.organizationId, orgId),
-			isNotNull(sessions.snapshotId),
-			lt(sessions.pausedAt, cutoffDate),
-		),
-		columns: {
-			id: true,
-			snapshotId: true,
-			sandboxProvider: true,
-			pausedAt: true,
-		},
-		orderBy: [asc(sessions.pausedAt)],
-	})) as SessionWithSnapshot[];
-
-	return results ?? [];
+	return (await findExpiredSnapshots(orgId, cutoffDate)) as SessionWithSnapshot[];
 }
 
 /**
@@ -224,18 +197,7 @@ export async function cleanupAllExpiredSnapshots(): Promise<{ deletedCount: numb
 	const cutoffDate = new Date();
 	cutoffDate.setDate(cutoffDate.getDate() - globalCap);
 
-	const db = getDb();
-	const expired = (await db.query.sessions.findMany({
-		where: and(isNotNull(sessions.snapshotId), lt(sessions.pausedAt, cutoffDate)),
-		columns: {
-			id: true,
-			snapshotId: true,
-			sandboxProvider: true,
-			pausedAt: true,
-		},
-		orderBy: [asc(sessions.pausedAt)],
-		limit: 500, // Bound work per cycle
-	})) as SessionWithSnapshot[];
+	const expired = (await findAllExpiredSnapshots(cutoffDate, 500)) as SessionWithSnapshot[];
 
 	if (!expired.length) {
 		return { deletedCount: 0 };
@@ -331,9 +293,8 @@ async function evictSnapshot(
 	}
 
 	// Clear snapshot reference in session
-	const db = getDb();
 	const snapshotId = session.snapshotId;
-	await db.update(sessions).set({ snapshotId: null }).where(eq(sessions.id, session.id));
+	await clearSnapshotId(session.id);
 
 	logger.info({ snapshotId, sessionId: session.id }, "Evicted snapshot");
 	return { deletedSnapshotId: snapshotId };

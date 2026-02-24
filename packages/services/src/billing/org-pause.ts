@@ -16,10 +16,14 @@ import type { SandboxProviderType } from "@proliferate/shared";
 import type { PauseReason } from "@proliferate/shared/billing";
 import { revokeVirtualKey } from "@proliferate/shared/llm-proxy";
 import { getSandboxProvider } from "@proliferate/shared/providers";
-import { and, eq, getDb, sessions } from "../db/client";
 import { runWithMigrationLock } from "../lib/lock";
 import { getServicesLogger } from "../logger";
-import { updateWhereSandboxIdMatches } from "../sessions/db";
+import {
+	findRunningById,
+	findRunningByOrganization,
+	pauseSession,
+	updateWhereSandboxIdMatches,
+} from "../sessions/db";
 
 // ============================================
 // Bulk Pause
@@ -42,15 +46,11 @@ export async function pauseAllOrgSessions(
 	reason: PauseReason,
 	concurrency = 5,
 ): Promise<BulkPauseResult> {
-	const db = getDb();
 	// Get all running sessions
-	const sessionRows = await db.query.sessions.findMany({
-		where: and(eq(sessions.organizationId, orgId), eq(sessions.status, "running")),
-		columns: {
-			id: true,
-			sandboxId: true,
-			sandboxProvider: true,
-		},
+	const sessionRows = await findRunningByOrganization(orgId, {
+		id: true,
+		sandboxId: true,
+		sandboxProvider: true,
 	});
 
 	if (!sessionRows.length) {
@@ -92,16 +92,7 @@ export async function pauseAllOrgSessions(
  * Does NOT handle snapshot/terminate - that happens in the DO/worker.
  */
 async function pauseSingleSession(sessionId: string, reason: PauseReason): Promise<void> {
-	const db = getDb();
-	await db
-		.update(sessions)
-		.set({
-			status: "paused",
-			pauseReason: reason,
-			pausedAt: new Date(),
-			latestTask: null,
-		})
-		.where(and(eq(sessions.id, sessionId), eq(sessions.status, "running")));
+	await pauseSession(sessionId, reason, "running");
 }
 
 // ============================================
@@ -123,11 +114,7 @@ export async function canOrgStartSession(
 	_requiredCredits: number,
 	maxConcurrent: number,
 ): Promise<CanStartSessionResult> {
-	const db = getDb();
-	const result = await db.query.sessions.findMany({
-		where: and(eq(sessions.organizationId, orgId), eq(sessions.status, "running")),
-		columns: { id: true },
-	});
+	const result = await findRunningByOrganization(orgId, { id: true });
 
 	const count = result.length;
 	if (count >= maxConcurrent) {
@@ -157,16 +144,11 @@ export async function canOrgStartSession(
 export async function enforceCreditsExhausted(
 	orgId: string,
 ): Promise<{ paused: number; failed: number }> {
-	const db = getDb();
-
 	// Get all running sessions
-	const sessionRows = await db.query.sessions.findMany({
-		where: and(eq(sessions.organizationId, orgId), eq(sessions.status, "running")),
-		columns: {
-			id: true,
-			sandboxId: true,
-			sandboxProvider: true,
-		},
+	const sessionRows = await findRunningByOrganization(orgId, {
+		id: true,
+		sandboxId: true,
+		sandboxProvider: true,
 	});
 
 	const logger = getServicesLogger().child({ module: "org-pause", orgId });
@@ -215,15 +197,10 @@ export async function terminateAllOrgSessions(
 	reason: PauseReason,
 	_providers?: Map<string, unknown>,
 ): Promise<{ terminated: number; failed: number }> {
-	const db = getDb();
-
-	const sessionRows = await db.query.sessions.findMany({
-		where: and(eq(sessions.organizationId, orgId), eq(sessions.status, "running")),
-		columns: {
-			id: true,
-			sandboxId: true,
-			sandboxProvider: true,
-		},
+	const sessionRows = await findRunningByOrganization(orgId, {
+		id: true,
+		sandboxId: true,
+		sandboxProvider: true,
 	});
 
 	const logger = getServicesLogger().child({ module: "org-pause", orgId });
@@ -278,16 +255,7 @@ async function pauseSessionWithSnapshot(
 
 	if (!sandboxId) {
 		// No sandbox — just mark as paused
-		const db = getDb();
-		await db
-			.update(sessions)
-			.set({
-				status: "paused",
-				pauseReason: reason,
-				pausedAt: new Date(),
-				latestTask: null,
-			})
-			.where(and(eq(sessions.id, sessionId), eq(sessions.status, "running")));
+		await pauseSession(sessionId, reason, "running");
 
 		revokeVirtualKey(sessionId).catch((err) => {
 			logger.debug({ err }, "Failed to revoke virtual key");
@@ -296,13 +264,8 @@ async function pauseSessionWithSnapshot(
 	}
 
 	const ran = await runWithMigrationLock(sessionId, 300_000, async () => {
-		const db = getDb();
-
 		// Re-verify session is still running (may have been paused by gateway)
-		const session = await db.query.sessions.findFirst({
-			where: and(eq(sessions.id, sessionId), eq(sessions.status, "running")),
-			columns: { id: true, sandboxId: true },
-		});
+		const session = await findRunningById(sessionId);
 
 		if (!session || !session.sandboxId) {
 			logger.info("Session already paused or no sandbox");

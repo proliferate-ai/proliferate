@@ -11,8 +11,14 @@ import {
 	type PauseReason,
 	calculateComputeCredits,
 } from "@proliferate/shared/billing";
-import { eq, getDb, sessions } from "../db/client";
 import { getServicesLogger } from "../logger";
+import {
+	findAllRunningForMetering,
+	findForMetering,
+	pauseSession,
+	updateAliveCheck,
+	updateMeteredThroughAt,
+} from "../sessions/db";
 import { attemptAutoTopUp } from "./auto-topup";
 import { enforceCreditsExhausted } from "./org-pause";
 import { deductShadowBalance } from "./shadow-balance";
@@ -46,23 +52,9 @@ interface SessionForMetering {
  */
 export async function runMeteringCycle(providers: Map<string, SandboxProvider>): Promise<void> {
 	const nowMs = Date.now();
-	const db = getDb();
 
 	// Get all running sessions
-	const sessionsToMeter = (await db.query.sessions.findMany({
-		where: eq(sessions.status, "running"),
-		columns: {
-			id: true,
-			organizationId: true,
-			sandboxId: true,
-			sandboxProvider: true,
-			meteredThroughAt: true,
-			startedAt: true,
-			status: true,
-			lastSeenAliveAt: true,
-			aliveCheckFailures: true,
-		},
-	})) as SessionForMetering[];
+	const sessionsToMeter = (await findAllRunningForMetering()) as SessionForMetering[];
 
 	const logger = getServicesLogger().child({ module: "metering" });
 
@@ -107,7 +99,6 @@ async function checkSandboxesWithGrace(
 	providers: Map<string, SandboxProvider>,
 ): Promise<Map<string, boolean>> {
 	const result = new Map<string, boolean>();
-	const db = getDb();
 
 	// Group sessions by provider
 	const sessionsByProvider = new Map<string, SessionForMetering[]>();
@@ -145,23 +136,17 @@ async function checkSandboxesWithGrace(
 
 			if (isAliveNow) {
 				// Reset failure count
-				await db
-					.update(sessions)
-					.set({
-						lastSeenAliveAt: new Date(),
-						aliveCheckFailures: 0,
-					})
-					.where(eq(sessions.id, session.id));
+				await updateAliveCheck(session.id, {
+					lastSeenAliveAt: new Date(),
+					aliveCheckFailures: 0,
+				});
 
 				result.set(session.sandboxId!, true);
 			} else {
 				// Increment failure count
 				const newFailures = (session.aliveCheckFailures ?? 0) + 1;
 
-				await db
-					.update(sessions)
-					.set({ aliveCheckFailures: newFailures })
-					.where(eq(sessions.id, session.id));
+				await updateAliveCheck(session.id, { aliveCheckFailures: newFailures });
 
 				// Only declare dead after N consecutive failures
 				const isDead = newFailures >= METERING_CONFIG.graceFailures;
@@ -240,16 +225,7 @@ async function billFinalInterval(session: SessionForMetering, _nowMs: number): P
 
 	// Mark session as paused (not stopped) — preserves resumability.
 	// Use "inactivity" since the sandbox became unreachable.
-	const db = getDb();
-	await db
-		.update(sessions)
-		.set({
-			status: "paused",
-			pauseReason: "inactivity",
-			pausedAt: new Date(),
-			latestTask: null,
-		})
-		.where(eq(sessions.id, session.id));
+	await pauseSession(session.id, "inactivity");
 
 	getServicesLogger()
 		.child({ module: "metering", sessionId: session.id })
@@ -268,7 +244,6 @@ async function billComputeInterval(
 	billedThroughMs: number,
 	idempotencyKey: string,
 ): Promise<void> {
-	const db = getDb();
 	const credits = calculateComputeCredits(billableSeconds);
 	const meteredThroughMs = session.meteredThroughAt
 		? session.meteredThroughAt.getTime()
@@ -296,10 +271,7 @@ async function billComputeInterval(
 
 	// Idempotent - already processed
 	if (!result.success) {
-		await db
-			.update(sessions)
-			.set({ meteredThroughAt: new Date(billedThroughMs) })
-			.where(eq(sessions.id, session.id));
+		await updateMeteredThroughAt(session.id, new Date(billedThroughMs));
 		log.debug(
 			{ idempotencyKey, fromMs: meteredThroughMs, toMs: billedThroughMs, billableSeconds },
 			"Idempotent skip",
@@ -308,10 +280,7 @@ async function billComputeInterval(
 	}
 
 	// Advance metered_through_at
-	await db
-		.update(sessions)
-		.set({ meteredThroughAt: new Date(billedThroughMs) })
-		.where(eq(sessions.id, session.id));
+	await updateMeteredThroughAt(session.id, new Date(billedThroughMs));
 
 	log.debug({ billableSeconds, credits, balance: result.newBalance }, "Billed compute interval");
 
@@ -355,19 +324,9 @@ export async function finalizeSessionBilling(
 	endTimeMs?: number,
 ): Promise<{ creditsBilled: number; secondsBilled: number }> {
 	const nowMs = endTimeMs ?? Date.now();
-	const db = getDb();
 
 	// Fetch session with billing fields
-	const session = (await db.query.sessions.findFirst({
-		where: eq(sessions.id, sessionId),
-		columns: {
-			id: true,
-			organizationId: true,
-			meteredThroughAt: true,
-			startedAt: true,
-			status: true,
-		},
-	})) as SessionForMetering | null;
+	const session = (await findForMetering(sessionId)) as SessionForMetering | null;
 
 	if (!session) {
 		getServicesLogger()
@@ -415,10 +374,7 @@ export async function finalizeSessionBilling(
 	}
 
 	// Advance metered_through_at
-	await db
-		.update(sessions)
-		.set({ meteredThroughAt: new Date(nowMs) })
-		.where(eq(sessions.id, session.id));
+	await updateMeteredThroughAt(session.id, new Date(nowMs));
 
 	getServicesLogger()
 		.child({ module: "metering", sessionId: session.id })
@@ -441,17 +397,8 @@ export async function autoPauseSession(
 	session: { id: string; organizationId: string },
 	reason: PauseReason,
 ): Promise<void> {
-	const db = getDb();
 	// Update session status
-	await db
-		.update(sessions)
-		.set({
-			status: "paused",
-			pauseReason: reason,
-			pausedAt: new Date(),
-			latestTask: null,
-		})
-		.where(eq(sessions.id, session.id));
+	await pauseSession(session.id, reason);
 
 	getServicesLogger()
 		.child({ module: "metering", sessionId: session.id })

@@ -3,6 +3,7 @@
  */
 
 import {
+	type Database,
 	and,
 	automationRunEvents,
 	automationRuns,
@@ -59,6 +60,16 @@ export interface AutomationRunWithRelations extends AutomationRunRow {
 export async function findById(runId: string): Promise<AutomationRunRow | null> {
 	const db = getDb();
 	const result = await db.query.automationRuns.findFirst({
+		where: eq(automationRuns.id, runId),
+	});
+	return result ?? null;
+}
+
+export async function findByIdInTx(
+	tx: Pick<Database, "query">,
+	runId: string,
+): Promise<AutomationRunRow | null> {
+	const result = await tx.query.automationRuns.findFirst({
 		where: eq(automationRuns.id, runId),
 	});
 	return result ?? null;

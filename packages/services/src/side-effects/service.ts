@@ -2,10 +2,9 @@
  * Side effects service - idempotent external actions.
  */
 
-import { and, automationSideEffects, eq, getDb } from "../db/client";
-import type { InferSelectModel } from "../db/client";
+import { type AutomationSideEffectRow, findByOrgAndEffectId, insertSideEffect } from "./db";
 
-export type AutomationSideEffectRow = InferSelectModel<typeof automationSideEffects>;
+export type { AutomationSideEffectRow } from "./db";
 
 export interface RecordSideEffectInput {
 	organizationId: string;
@@ -20,35 +19,22 @@ export interface RecordSideEffectInput {
 export async function recordSideEffect(
 	input: RecordSideEffectInput,
 ): Promise<AutomationSideEffectRow> {
-	const db = getDb();
-	const [row] = await db
-		.insert(automationSideEffects)
-		.values({
-			organizationId: input.organizationId,
-			runId: input.runId,
-			effectId: input.effectId,
-			kind: input.kind,
-			provider: input.provider ?? null,
-			requestHash: input.requestHash ?? null,
-			responseJson: input.responseJson ?? null,
-		})
-		.returning();
-
-	return row;
+	return insertSideEffect({
+		organizationId: input.organizationId,
+		runId: input.runId,
+		effectId: input.effectId,
+		kind: input.kind,
+		provider: input.provider ?? null,
+		requestHash: input.requestHash ?? null,
+		responseJson: input.responseJson ?? null,
+	});
 }
 
 export async function findSideEffect(
 	organizationId: string,
 	effectId: string,
 ): Promise<AutomationSideEffectRow | null> {
-	const db = getDb();
-	const result = await db.query.automationSideEffects.findFirst({
-		where: and(
-			eq(automationSideEffects.organizationId, organizationId),
-			eq(automationSideEffects.effectId, effectId),
-		),
-	});
-	return result ?? null;
+	return findByOrgAndEffectId(organizationId, effectId);
 }
 
 export async function recordOrReplaySideEffect(

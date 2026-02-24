@@ -9,15 +9,8 @@
 
 import { randomBytes, randomUUID } from "crypto";
 import type { AutomationListItem } from "@proliferate/shared/contracts";
-import {
-	and,
-	automationConnections,
-	automations,
-	eq,
-	getDb,
-	integrations,
-	triggers,
-} from "../db/client";
+import { automationConnections, automations, eq, getDb, triggers } from "../db/client";
+import { findForBindingValidation } from "../integrations/db";
 import { getTemplateById } from "../templates/catalog";
 import type { AutomationTemplate } from "../templates/types";
 import { toNewAutomationListItem } from "./mapper";
@@ -157,7 +150,6 @@ async function validateIntegrationBindings(
 	orgId: string,
 	bindings: Record<string, string>,
 ): Promise<Map<string, ValidatedIntegration>> {
-	const db = getDb();
 	const validated = new Map<string, ValidatedIntegration>();
 
 	// Don't enforce required integrations here — templates create paused drafts
@@ -168,10 +160,7 @@ async function validateIntegrationBindings(
 	for (const [bindingKey, integrationId] of Object.entries(bindings)) {
 		if (!integrationId) continue;
 
-		const integration = await db.query.integrations.findFirst({
-			where: and(eq(integrations.id, integrationId), eq(integrations.organizationId, orgId)),
-			columns: { id: true, provider: true, integrationId: true, status: true },
-		});
+		const integration = await findForBindingValidation(integrationId, orgId);
 
 		if (!integration) {
 			throw new Error(`Integration ${integrationId} not found in organization`);

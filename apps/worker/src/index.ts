@@ -11,7 +11,6 @@
 
 import { createServer } from "node:http";
 import type { Server } from "node:http";
-import { getDb } from "@proliferate/db";
 import { getEnvStatus } from "@proliferate/environment";
 import { env } from "@proliferate/environment/server";
 import { createSyncClient } from "@proliferate/gateway-clients";
@@ -25,6 +24,7 @@ import {
 	getRedisClient,
 } from "@proliferate/queue";
 import { sessions } from "@proliferate/services";
+import { getDb } from "@proliferate/services/db/client";
 import { setLockRedisClient } from "@proliferate/services/lock";
 import { setServicesLogger } from "@proliferate/services/logger";
 import { setSharedLogger } from "@proliferate/shared/logger";

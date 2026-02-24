@@ -11,9 +11,16 @@ import {
 	METERING_CONFIG,
 	autumnDeductCredits,
 } from "@proliferate/shared/billing";
-import { and, asc, billingEvents, eq, getDb, inArray, lt, organization } from "../db/client";
 import { getServicesLogger } from "../logger";
 import { attemptAutoTopUp } from "./auto-topup";
+import {
+	findAutumnCustomerId,
+	findOutboxStatsEvents,
+	findRetryableEvents,
+	markEventPosted,
+	markOrgBillingExhausted,
+	updateEventRetry,
+} from "./db";
 import { enforceCreditsExhausted } from "./org-pause";
 
 // ============================================
@@ -42,27 +49,12 @@ interface PendingBillingEvent {
  */
 export async function processOutbox(batchSize = 100): Promise<void> {
 	const logger = getServicesLogger().child({ module: "outbox" });
-	const db = getDb();
 
 	// Get pending/failed events ready for retry
-	const events = (await db.query.billingEvents.findMany({
-		where: and(
-			inArray(billingEvents.status, ["pending", "failed"]),
-			lt(billingEvents.retryCount, METERING_CONFIG.maxRetries),
-			lt(billingEvents.nextRetryAt, new Date()),
-		),
-		columns: {
-			id: true,
-			organizationId: true,
-			eventType: true,
-			credits: true,
-			idempotencyKey: true,
-			retryCount: true,
-			lastError: true,
-		},
-		orderBy: [asc(billingEvents.createdAt)],
-		limit: batchSize,
-	})) as PendingBillingEvent[];
+	const events = (await findRetryableEvents(
+		METERING_CONFIG.maxRetries,
+		batchSize,
+	)) as PendingBillingEvent[];
 
 	if (!events.length) {
 		return;
@@ -84,13 +76,9 @@ async function processEvent(event: PendingBillingEvent): Promise<void> {
 		eventId: event.id,
 		orgId: event.organizationId,
 	});
-	const db = getDb();
 	try {
 		const credits = Number(event.credits);
-		const org = await db.query.organization.findFirst({
-			where: eq(organization.id, event.organizationId),
-			columns: { autumnCustomerId: true },
-		});
+		const org = await findAutumnCustomerId(event.organizationId);
 		if (!org?.autumnCustomerId) {
 			throw new Error("Organization is missing Autumn customer ID");
 		}
@@ -115,14 +103,7 @@ async function processEvent(event: PendingBillingEvent): Promise<void> {
 			}
 
 			logger.warn("Autumn denied credits; enforcing exhausted state");
-			await db
-				.update(organization)
-				.set({
-					billingState: "exhausted",
-					graceEnteredAt: null,
-					graceExpiresAt: null,
-				})
-				.where(eq(organization.id, event.organizationId));
+			await markOrgBillingExhausted(event.organizationId);
 			const enforcement = await enforceCreditsExhausted(event.organizationId);
 			if (enforcement.failed > 0) {
 				throw new Error(
@@ -132,13 +113,7 @@ async function processEvent(event: PendingBillingEvent): Promise<void> {
 		}
 
 		// Mark as posted only after all denial/enforcement logic completes.
-		await db
-			.update(billingEvents)
-			.set({
-				status: "posted",
-				autumnResponse: result,
-			})
-			.where(eq(billingEvents.id, event.id));
+		await markEventPosted(event.id, result);
 
 		logger.debug("Posted event");
 	} catch (err) {
@@ -151,15 +126,12 @@ async function processEvent(event: PendingBillingEvent): Promise<void> {
 
 		const status = retryCount >= METERING_CONFIG.maxRetries ? "failed" : "pending";
 
-		await db
-			.update(billingEvents)
-			.set({
-				status,
-				retryCount,
-				nextRetryAt: new Date(Date.now() + backoffMs),
-				lastError: err instanceof Error ? err.message : String(err),
-			})
-			.where(eq(billingEvents.id, event.id));
+		await updateEventRetry(event.id, {
+			status,
+			retryCount,
+			nextRetryAt: new Date(Date.now() + backoffMs),
+			lastError: err instanceof Error ? err.message : String(err),
+		});
 
 		if (status === "failed") {
 			logger.error(
@@ -187,22 +159,7 @@ interface OutboxStats {
  * Get outbox statistics for monitoring.
  */
 export async function getOutboxStats(orgId?: string): Promise<OutboxStats> {
-	const db = getDb();
-	const baseWhere = orgId
-		? and(
-				eq(billingEvents.organizationId, orgId),
-				inArray(billingEvents.status, ["pending", "failed"]),
-			)
-		: inArray(billingEvents.status, ["pending", "failed"]);
-
-	const events = await db.query.billingEvents.findMany({
-		where: baseWhere,
-		columns: {
-			status: true,
-			retryCount: true,
-			credits: true,
-		},
-	});
+	const events = await findOutboxStatsEvents(orgId);
 
 	const pending =
 		events.filter(

@@ -5,8 +5,8 @@
  * session notification subscriptions.
  */
 
-import { and, eq, getDb, isNull, sessionNotificationSubscriptions } from "../db/client";
 import { enqueueOutbox } from "../outbox/service";
+import * as notificationsDb from "./db";
 
 const TERMINAL_STATUSES = ["succeeded", "failed", "timed_out", "needs_human"];
 
@@ -50,27 +50,14 @@ export async function subscribeToSessionNotifications(input: {
 	slackUserId?: string | null;
 	eventTypes?: string[];
 }): Promise<SessionNotificationSubscription> {
-	const db = getDb();
-	const [row] = await db
-		.insert(sessionNotificationSubscriptions)
-		.values({
-			sessionId: input.sessionId,
-			userId: input.userId,
-			slackInstallationId: input.slackInstallationId,
-			destinationType: "dm_user",
-			slackUserId: input.slackUserId ?? null,
-			eventTypes: input.eventTypes ?? ["completed"],
-		})
-		.onConflictDoUpdate({
-			target: [sessionNotificationSubscriptions.sessionId, sessionNotificationSubscriptions.userId],
-			set: {
-				slackInstallationId: input.slackInstallationId,
-				slackUserId: input.slackUserId ?? null,
-				eventTypes: input.eventTypes ?? ["completed"],
-				updatedAt: new Date(),
-			},
-		})
-		.returning();
+	const row = await notificationsDb.upsertSubscription({
+		sessionId: input.sessionId,
+		userId: input.userId,
+		slackInstallationId: input.slackInstallationId,
+		destinationType: "dm_user",
+		slackUserId: input.slackUserId ?? null,
+		eventTypes: input.eventTypes ?? ["completed"],
+	});
 
 	return mapSubscription(row);
 }
@@ -82,17 +69,7 @@ export async function unsubscribeFromSessionNotifications(
 	sessionId: string,
 	userId: string,
 ): Promise<boolean> {
-	const db = getDb();
-	const result = await db
-		.delete(sessionNotificationSubscriptions)
-		.where(
-			and(
-				eq(sessionNotificationSubscriptions.sessionId, sessionId),
-				eq(sessionNotificationSubscriptions.userId, userId),
-			),
-		)
-		.returning({ id: sessionNotificationSubscriptions.id });
-	return result.length > 0;
+	return notificationsDb.deleteSubscription(sessionId, userId);
 }
 
 /**
@@ -102,13 +79,7 @@ export async function getSessionNotificationSubscription(
 	sessionId: string,
 	userId: string,
 ): Promise<SessionNotificationSubscription | null> {
-	const db = getDb();
-	const row = await db.query.sessionNotificationSubscriptions.findFirst({
-		where: and(
-			eq(sessionNotificationSubscriptions.sessionId, sessionId),
-			eq(sessionNotificationSubscriptions.userId, userId),
-		),
-	});
+	const row = await notificationsDb.findSubscription(sessionId, userId);
 	return row ? mapSubscription(row) : null;
 }
 
@@ -118,13 +89,7 @@ export async function getSessionNotificationSubscription(
 export async function listSessionSubscriptions(
 	sessionId: string,
 ): Promise<SessionNotificationSubscription[]> {
-	const db = getDb();
-	const rows = await db.query.sessionNotificationSubscriptions.findMany({
-		where: and(
-			eq(sessionNotificationSubscriptions.sessionId, sessionId),
-			isNull(sessionNotificationSubscriptions.notifiedAt),
-		),
-	});
+	const rows = await notificationsDb.findUnnotifiedSubscriptions(sessionId);
 	return rows.map(mapSubscription);
 }
 
@@ -132,11 +97,7 @@ export async function listSessionSubscriptions(
  * Mark a subscription as notified (idempotent delivery tracking).
  */
 export async function markSubscriptionNotified(subscriptionId: string): Promise<void> {
-	const db = getDb();
-	await db
-		.update(sessionNotificationSubscriptions)
-		.set({ notifiedAt: new Date() })
-		.where(eq(sessionNotificationSubscriptions.id, subscriptionId));
+	await notificationsDb.markNotified(subscriptionId);
 }
 
 /**

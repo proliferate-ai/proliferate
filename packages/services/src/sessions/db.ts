@@ -8,10 +8,13 @@ import type { ClientSource } from "@proliferate/shared";
 import {
 	type InferSelectModel,
 	and,
+	asc,
 	desc,
 	eq,
 	getDb,
+	isNotNull,
 	isNull,
+	lt,
 	ne,
 	type repos,
 	sessionConnections,
@@ -735,6 +738,288 @@ export function groupBlockedRows(rows: BlockedFlatRow[]): BlockedGroupRow[] {
 		}
 	}
 	return [...groupMap.values()];
+}
+
+// ============================================
+// Billing-Related Session Queries
+// ============================================
+
+/**
+ * Find running sessions for an organization (billing/enforcement use).
+ */
+export async function findRunningByOrganization(
+	orgId: string,
+	columns: { id: true; sandboxId: true; sandboxProvider: true },
+): Promise<{ id: string; sandboxId: string | null; sandboxProvider: string | null }[]>;
+export async function findRunningByOrganization(
+	orgId: string,
+	columns: { id: true },
+): Promise<{ id: string }[]>;
+export async function findRunningByOrganization(
+	orgId: string,
+	columns: Record<string, true>,
+): Promise<Record<string, unknown>[]> {
+	const db = getDb();
+	return db.query.sessions.findMany({
+		where: and(eq(sessions.organizationId, orgId), eq(sessions.status, "running")),
+		columns,
+	});
+}
+
+/**
+ * Find a running session by ID (re-verification during lock-safe operations).
+ */
+export async function findRunningById(
+	sessionId: string,
+): Promise<{ id: string; sandboxId: string | null } | null> {
+	const db = getDb();
+	const result = await db.query.sessions.findFirst({
+		where: and(eq(sessions.id, sessionId), eq(sessions.status, "running")),
+		columns: { id: true, sandboxId: true },
+	});
+	return result ?? null;
+}
+
+/**
+ * Pause a single session (set status, reason, timestamp, clear task).
+ */
+export async function pauseSession(
+	sessionId: string,
+	reason: string,
+	additionalWhere?: "running",
+): Promise<void> {
+	const db = getDb();
+	const conditions = [eq(sessions.id, sessionId)];
+	if (additionalWhere === "running") {
+		conditions.push(eq(sessions.status, "running"));
+	}
+	await db
+		.update(sessions)
+		.set({
+			status: "paused",
+			pauseReason: reason,
+			pausedAt: new Date(),
+			latestTask: null,
+		})
+		.where(and(...conditions));
+}
+
+/**
+ * Find a session by ID for metering finalization.
+ */
+export async function findForMetering(sessionId: string): Promise<{
+	id: string;
+	organizationId: string;
+	meteredThroughAt: Date | null;
+	startedAt: Date;
+	status: string;
+} | null> {
+	const db = getDb();
+	const result = await db.query.sessions.findFirst({
+		where: eq(sessions.id, sessionId),
+		columns: {
+			id: true,
+			organizationId: true,
+			meteredThroughAt: true,
+			startedAt: true,
+			status: true,
+		},
+	});
+	return (
+		(result as
+			| {
+					id: string;
+					organizationId: string;
+					meteredThroughAt: Date | null;
+					startedAt: Date;
+					status: string;
+			  }
+			| undefined) ?? null
+	);
+}
+
+/**
+ * Find all running sessions with metering fields.
+ */
+export async function findAllRunningForMetering(): Promise<
+	{
+		id: string;
+		organizationId: string;
+		sandboxId: string | null;
+		sandboxProvider: string | null;
+		meteredThroughAt: Date | null;
+		startedAt: Date;
+		status: string;
+		lastSeenAliveAt: Date | null;
+		aliveCheckFailures: number | null;
+	}[]
+> {
+	const db = getDb();
+	return db.query.sessions.findMany({
+		where: eq(sessions.status, "running"),
+		columns: {
+			id: true,
+			organizationId: true,
+			sandboxId: true,
+			sandboxProvider: true,
+			meteredThroughAt: true,
+			startedAt: true,
+			status: true,
+			lastSeenAliveAt: true,
+			aliveCheckFailures: true,
+		},
+	}) as Promise<
+		{
+			id: string;
+			organizationId: string;
+			sandboxId: string | null;
+			sandboxProvider: string | null;
+			meteredThroughAt: Date | null;
+			startedAt: Date;
+			status: string;
+			lastSeenAliveAt: Date | null;
+			aliveCheckFailures: number | null;
+		}[]
+	>;
+}
+
+/**
+ * Update alive check fields for a session.
+ */
+export async function updateAliveCheck(
+	sessionId: string,
+	fields: { lastSeenAliveAt?: Date; aliveCheckFailures?: number },
+): Promise<void> {
+	const db = getDb();
+	await db.update(sessions).set(fields).where(eq(sessions.id, sessionId));
+}
+
+/**
+ * Advance metered_through_at for a session.
+ */
+export async function updateMeteredThroughAt(
+	sessionId: string,
+	meteredThroughAt: Date,
+): Promise<void> {
+	const db = getDb();
+	await db.update(sessions).set({ meteredThroughAt }).where(eq(sessions.id, sessionId));
+}
+
+// ============================================
+// Snapshot-Related Session Queries
+// ============================================
+
+/**
+ * Count sessions with a snapshot for an organization.
+ */
+export async function countSnapshotsByOrganization(orgId: string): Promise<number> {
+	const db = getDb();
+	const [result] = await db
+		.select({ count: sql<number>`count(*)` })
+		.from(sessions)
+		.where(and(eq(sessions.organizationId, orgId), isNotNull(sessions.snapshotId)));
+	return Number(result?.count ?? 0);
+}
+
+/**
+ * Find sessions with expired snapshots for an organization.
+ */
+export async function findExpiredSnapshots(
+	orgId: string,
+	cutoffDate: Date,
+): Promise<
+	{ id: string; snapshotId: string | null; sandboxProvider: string | null; pausedAt: Date | null }[]
+> {
+	const db = getDb();
+	return db.query.sessions.findMany({
+		where: and(
+			eq(sessions.organizationId, orgId),
+			isNotNull(sessions.snapshotId),
+			lt(sessions.pausedAt, cutoffDate),
+		),
+		columns: {
+			id: true,
+			snapshotId: true,
+			sandboxProvider: true,
+			pausedAt: true,
+		},
+		orderBy: [asc(sessions.pausedAt)],
+	}) as Promise<
+		{
+			id: string;
+			snapshotId: string | null;
+			sandboxProvider: string | null;
+			pausedAt: Date | null;
+		}[]
+	>;
+}
+
+/**
+ * Find all sessions with snapshots for an organization (oldest first, limited).
+ */
+export async function findSnapshotsByOrganization(
+	orgId: string,
+	limit: number,
+): Promise<
+	{ id: string; snapshotId: string | null; sandboxProvider: string | null; pausedAt: Date | null }[]
+> {
+	const db = getDb();
+	return db.query.sessions.findMany({
+		where: and(eq(sessions.organizationId, orgId), isNotNull(sessions.snapshotId)),
+		columns: {
+			id: true,
+			snapshotId: true,
+			sandboxProvider: true,
+			pausedAt: true,
+		},
+		orderBy: [asc(sessions.pausedAt)],
+		limit,
+	}) as Promise<
+		{
+			id: string;
+			snapshotId: string | null;
+			sandboxProvider: string | null;
+			pausedAt: Date | null;
+		}[]
+	>;
+}
+
+/**
+ * Find all expired snapshots across all orgs (global cleanup).
+ */
+export async function findAllExpiredSnapshots(
+	cutoffDate: Date,
+	limit: number,
+): Promise<
+	{ id: string; snapshotId: string | null; sandboxProvider: string | null; pausedAt: Date | null }[]
+> {
+	const db = getDb();
+	return db.query.sessions.findMany({
+		where: and(isNotNull(sessions.snapshotId), lt(sessions.pausedAt, cutoffDate)),
+		columns: {
+			id: true,
+			snapshotId: true,
+			sandboxProvider: true,
+			pausedAt: true,
+		},
+		orderBy: [asc(sessions.pausedAt)],
+		limit,
+	}) as Promise<
+		{
+			id: string;
+			snapshotId: string | null;
+			sandboxProvider: string | null;
+			pausedAt: Date | null;
+		}[]
+	>;
+}
+
+/**
+ * Clear snapshot reference for a session.
+ */
+export async function clearSnapshotId(sessionId: string): Promise<void> {
+	const db = getDb();
+	await db.update(sessions).set({ snapshotId: null }).where(eq(sessions.id, sessionId));
 }
 
 // ============================================

@@ -648,6 +648,56 @@ export async function getIntegrationWithStatus(
 	return result ?? null;
 }
 
+/**
+ * Find integration by ID and org with fields needed for binding validation.
+ */
+export async function findForBindingValidation(
+	id: string,
+	orgId: string,
+): Promise<Pick<IntegrationRow, "id" | "provider" | "integrationId" | "status"> | null> {
+	const db = getDb();
+	const result = await db.query.integrations.findFirst({
+		where: and(eq(integrations.id, id), eq(integrations.organizationId, orgId)),
+		columns: { id: true, provider: true, integrationId: true, status: true },
+	});
+
+	return result ?? null;
+}
+
+/**
+ * Find integrations by IDs with fields needed for token resolution.
+ */
+export async function findManyForTokens(
+	integrationIds: string[],
+): Promise<
+	Pick<
+		IntegrationRow,
+		| "id"
+		| "provider"
+		| "integrationId"
+		| "connectionId"
+		| "githubInstallationId"
+		| "organizationId"
+		| "status"
+	>[]
+> {
+	if (integrationIds.length === 0) return [];
+
+	const db = getDb();
+	return db.query.integrations.findMany({
+		where: inArray(integrations.id, integrationIds),
+		columns: {
+			id: true,
+			provider: true,
+			integrationId: true,
+			connectionId: true,
+			githubInstallationId: true,
+			organizationId: true,
+			status: true,
+		},
+	});
+}
+
 // ============================================
 // Repo connection queries (for orphan handling)
 // ============================================

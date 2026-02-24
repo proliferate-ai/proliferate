@@ -8,6 +8,7 @@
 import { arrayContains, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import {
 	and,
+	asc,
 	billingEventKeys,
 	billingEvents,
 	desc,
@@ -342,6 +343,145 @@ export async function cleanOldBillingEventKeys(cutoff: Date): Promise<number> {
 		.returning({ key: billingEventKeys.idempotencyKey });
 	return result.length;
 }
+
+// ============================================
+// Outbox Queries
+// ============================================
+
+/**
+ * Find pending/failed billing events ready for retry.
+ */
+export async function findRetryableEvents(
+	maxRetries: number,
+	batchSize: number,
+): Promise<
+	{
+		id: string;
+		organizationId: string;
+		eventType: string;
+		credits: string;
+		idempotencyKey: string;
+		retryCount: number | null;
+		lastError: string | null;
+	}[]
+> {
+	const db = getDb();
+	return db.query.billingEvents.findMany({
+		where: and(
+			inArray(billingEvents.status, ["pending", "failed"]),
+			lt(billingEvents.retryCount, maxRetries),
+			lt(billingEvents.nextRetryAt, new Date()),
+		),
+		columns: {
+			id: true,
+			organizationId: true,
+			eventType: true,
+			credits: true,
+			idempotencyKey: true,
+			retryCount: true,
+			lastError: true,
+		},
+		orderBy: [asc(billingEvents.createdAt)],
+		limit: batchSize,
+	}) as Promise<
+		{
+			id: string;
+			organizationId: string;
+			eventType: string;
+			credits: string;
+			idempotencyKey: string;
+			retryCount: number | null;
+			lastError: string | null;
+		}[]
+	>;
+}
+
+/**
+ * Find Autumn customer ID for an organization.
+ */
+export async function findAutumnCustomerId(
+	orgId: string,
+): Promise<{ autumnCustomerId: string | null } | null> {
+	const db = getDb();
+	const result = await db.query.organization.findFirst({
+		where: eq(organization.id, orgId),
+		columns: { autumnCustomerId: true },
+	});
+	return result ?? null;
+}
+
+/**
+ * Mark an organization's billing state as exhausted (clear grace fields).
+ */
+export async function markOrgBillingExhausted(orgId: string): Promise<void> {
+	const db = getDb();
+	await db
+		.update(organization)
+		.set({
+			billingState: "exhausted",
+			graceEnteredAt: null,
+			graceExpiresAt: null,
+		})
+		.where(eq(organization.id, orgId));
+}
+
+/**
+ * Mark a billing event as posted with Autumn response.
+ */
+export async function markEventPosted(eventId: string, autumnResponse: unknown): Promise<void> {
+	const db = getDb();
+	await db
+		.update(billingEvents)
+		.set({
+			status: "posted",
+			autumnResponse,
+		})
+		.where(eq(billingEvents.id, eventId));
+}
+
+/**
+ * Update a billing event retry state (backoff or permanent failure).
+ */
+export async function updateEventRetry(
+	eventId: string,
+	fields: {
+		status: string;
+		retryCount: number;
+		nextRetryAt: Date;
+		lastError: string;
+	},
+): Promise<void> {
+	const db = getDb();
+	await db.update(billingEvents).set(fields).where(eq(billingEvents.id, eventId));
+}
+
+/**
+ * Find pending/failed billing events for outbox stats.
+ */
+export async function findOutboxStatsEvents(
+	orgId?: string,
+): Promise<{ status: string; retryCount: number | null; credits: string }[]> {
+	const db = getDb();
+	const baseWhere = orgId
+		? and(
+				eq(billingEvents.organizationId, orgId),
+				inArray(billingEvents.status, ["pending", "failed"]),
+			)
+		: inArray(billingEvents.status, ["pending", "failed"]);
+
+	return db.query.billingEvents.findMany({
+		where: baseWhere,
+		columns: {
+			status: true,
+			retryCount: true,
+			credits: true,
+		},
+	}) as Promise<{ status: string; retryCount: number | null; credits: string }[]>;
+}
+
+// ============================================
+// Partition Maintenance
+// ============================================
 
 /**
  * List billing_events partitions (child tables via pg_inherits).

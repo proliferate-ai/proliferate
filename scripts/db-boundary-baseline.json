@@ -1,0 +1,8 @@
+[
+	"packages/services/src/automations/create-from-template.ts",
+	"packages/services/src/billing/auto-topup.ts",
+	"packages/services/src/billing/shadow-balance.ts",
+	"packages/services/src/connectors/service.ts",
+	"packages/services/src/outbox/service.ts",
+	"packages/services/src/runs/service.ts"
+]

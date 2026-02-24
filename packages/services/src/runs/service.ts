@@ -228,9 +228,7 @@ export async function completeEnrichment(
 	const db = getDb();
 
 	return db.transaction(async (tx) => {
-		const run = await tx.query.automationRuns.findFirst({
-			where: eq(automationRuns.id, input.runId),
-		});
+		const run = await runsDb.findByIdInTx(tx, input.runId);
 		if (!run) return null;
 
 		const now = new Date();
@@ -414,9 +412,7 @@ export async function resolveRun(input: ResolveRunInput): Promise<runsDb.Automat
 	const db = getDb();
 	return db.transaction(async (tx) => {
 		// Read inside transaction for consistency
-		const run = await tx.query.automationRuns.findFirst({
-			where: eq(automationRuns.id, input.runId),
-		});
+		const run = await runsDb.findByIdInTx(tx, input.runId);
 		if (!run) return null;
 
 		if (run.organizationId !== input.orgId) return null;
@@ -480,9 +476,7 @@ export async function completeRun(
 	const db = getDb();
 
 	return db.transaction(async (tx) => {
-		const run = await tx.query.automationRuns.findFirst({
-			where: eq(automationRuns.id, input.runId),
-		});
+		const run = await runsDb.findByIdInTx(tx, input.runId);
 		if (!run) return null;
 
 		if (input.sessionId && run.sessionId && run.sessionId !== input.sessionId) {

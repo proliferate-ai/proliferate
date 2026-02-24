@@ -55,6 +55,12 @@ jobs:
       - name: Enforce no raw local /api fetch
         run: pnpm lint:no-raw-api-fetch
 
+      - name: Enforce no direct @proliferate/db imports
+        run: pnpm lint:no-direct-db-import
+
+      - name: Enforce DB boundary in services
+        run: pnpm lint:db-boundary
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest

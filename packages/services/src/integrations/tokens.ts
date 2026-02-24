@@ -5,8 +5,8 @@
  * Abstracts over Nango and GitHub App providers.
  */
 
-import { getDb, inArray, integrations } from "../db/client";
 import { getNango } from "../lib/nango";
+import { findManyForTokens } from "./db";
 import { getInstallationToken } from "./github-app";
 
 // ============================================
@@ -133,19 +133,7 @@ export async function getIntegrationsForTokens(
 ): Promise<IntegrationForToken[]> {
 	if (integrationIds.length === 0) return [];
 
-	const db = getDb();
-	const rows = await db.query.integrations.findMany({
-		where: inArray(integrations.id, integrationIds),
-		columns: {
-			id: true,
-			provider: true,
-			integrationId: true,
-			connectionId: true,
-			githubInstallationId: true,
-			organizationId: true,
-			status: true,
-		},
-	});
+	const rows = await findManyForTokens(integrationIds);
 
 	// Filter to active integrations belonging to the org
 	return rows
