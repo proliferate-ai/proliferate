@@ -1,7 +1,7 @@
 /**
  * Onboarding oRPC router.
  *
- * Handles onboarding status and finalization.
+ * Thin wrapper that delegates to onboarding service.
  */
 
 import { isBillingEnabled } from "@/lib/billing";
@@ -12,8 +12,7 @@ const log = logger.child({ handler: "onboarding" });
 import { NANGO_GITHUB_INTEGRATION_ID } from "@/lib/nango";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
-import { createSyncClient } from "@proliferate/gateway-clients";
-import { getOrCreateManagedConfiguration, onboarding, orgs } from "@proliferate/services";
+import { onboarding, orgs } from "@proliferate/services";
 import {
 	FinalizeOnboardingInputSchema,
 	FinalizeOnboardingResponseSchema,
@@ -21,12 +20,9 @@ import {
 	SaveQuestionnaireInputSchema,
 	SaveToolSelectionsInputSchema,
 } from "@proliferate/shared";
-import { TRIAL_CREDITS, autumnAttach, autumnCreateCustomer } from "@proliferate/shared/billing";
+import { TRIAL_CREDITS } from "@proliferate/shared/billing";
 import { z } from "zod";
 import { orgProcedure, protectedProcedure } from "./middleware";
-
-const GATEWAY_URL = env.NEXT_PUBLIC_GATEWAY_URL;
-const SERVICE_TO_SERVICE_AUTH_TOKEN = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
 
 export const onboardingRouter = {
 	/**
@@ -47,120 +43,16 @@ export const onboardingRouter = {
 			}),
 		)
 		.handler(async ({ input, context }) => {
-			const selectedPlan = input.plan || "dev";
-
-			// If billing not configured, just mark onboarding complete
-			if (!isBillingEnabled()) {
-				try {
-					await orgs.markOnboardingComplete(context.orgId, true);
-					await orgs.updateBillingPlan(context.orgId, selectedPlan);
-				} catch (err) {
-					log.error({ err }, "Failed to mark onboarding as complete");
-				}
-
-				return {
-					success: true,
-					message: "Billing not configured - trial started without payment",
-				};
-			}
-
-			// Check if org already has a customer ID
-			const org = await orgs.getBillingInfoV2(context.orgId);
-
-			if (!org) {
-				log.error({ orgId: context.orgId }, "Failed to fetch organization row");
-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: "Failed to check organization billing state",
-				});
-			}
-
 			try {
-				await orgs.updateBillingPlan(context.orgId, selectedPlan);
-
-				const baseUrl = env.NEXT_PUBLIC_APP_URL;
-				let customerId = org.autumnCustomerId ?? context.orgId;
-				try {
-					const customer = await autumnCreateCustomer({
-						id: customerId,
-						name: org.name,
-						email: context.user.email,
-					});
-					customerId = customer.customer?.id ?? customer.data?.id ?? customer.id ?? customerId;
-					if (customerId !== org.autumnCustomerId) {
-						await orgs.updateAutumnCustomerId(context.orgId, customerId);
-					}
-				} catch (err) {
-					log.warn({ err }, "Failed to create Autumn customer");
-				}
-
-				let setup: Awaited<ReturnType<typeof autumnAttach>> | null = null;
-				try {
-					setup = await autumnAttach({
-						customer_id: customerId,
-						product_id: selectedPlan,
-						success_url: `${baseUrl}/onboarding/complete`,
-						cancel_url: `${baseUrl}/onboarding`,
-						customer_data: {
-							email: context.user.email,
-							name: org.name,
-						},
-						// Collect a payment method as part of onboarding, even if one
-						// already exists (e.g. retries). Autumn will no-op if it can.
-						force_checkout: true,
-					});
-				} catch (attachErr) {
-					const msg = attachErr instanceof Error ? attachErr.message : "";
-					if (msg.includes("already scheduled") || msg.includes("can't attach again")) {
-						// Product already attached from a previous attempt — treat as success.
-						log.info("Product already attached, skipping autumnAttach");
-					} else if (msg.includes("force_checkout")) {
-						// Autumn rejects force_checkout on upgrade/downgrade (e.g. onboarding
-						// retry when customer already has a product). Retry without it.
-						log.warn("force_checkout rejected, retrying without it");
-						try {
-							setup = await autumnAttach({
-								customer_id: customerId,
-								product_id: selectedPlan,
-								success_url: `${baseUrl}/onboarding/complete`,
-								cancel_url: `${baseUrl}/onboarding`,
-								customer_data: {
-									email: context.user.email,
-									name: org.name,
-								},
-							});
-						} catch (retryErr) {
-							const retryMsg = retryErr instanceof Error ? retryErr.message : "";
-							if (
-								retryMsg.includes("already scheduled") ||
-								retryMsg.includes("can't attach again")
-							) {
-								log.info("Product already attached on retry, skipping");
-							} else {
-								throw retryErr;
-							}
-						}
-					} else {
-						throw attachErr;
-					}
-				}
-
-				const checkoutUrl = setup?.checkout_url ?? setup?.url;
-				if (checkoutUrl) {
-					return {
-						success: true,
-						checkoutUrl,
-						message: "Card required to start trial",
-					};
-				}
-
-				if (org.billingState === "unconfigured") {
-					await orgs.initializeBillingState(context.orgId, "trial", TRIAL_CREDITS);
-				}
-
-				return {
-					success: true,
-					message: "Trial started",
-				};
+				return await onboarding.startTrial({
+					orgId: context.orgId,
+					userId: context.user.id,
+					userEmail: context.user.email,
+					orgName: context.user.name || context.user.email,
+					plan: input.plan,
+					billingEnabled: isBillingEnabled(),
+					appUrl: env.NEXT_PUBLIC_APP_URL,
+				});
 			} catch (err) {
 				log.error({ err }, "Failed to start trial");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
@@ -217,22 +109,10 @@ export const onboardingRouter = {
 
 		const status = await onboarding.getOnboardingStatus(orgId, NANGO_GITHUB_INTEGRATION_ID);
 
-		// If the active org hasn't completed onboarding, check if the user has
-		// ANY org that has completed. If so, mark the current org complete too
-		// to prevent onboarding loops when switching orgs.
 		if (orgId && !status.onboardingComplete) {
-			const hasCompleted = await orgs.hasAnyOrgCompletedOnboarding(context.user.id);
-			if (hasCompleted) {
-				log.info(
-					{ orgId, userId: context.user.id },
-					"Active org not onboarded but user has another completed org — auto-completing",
-				);
-				try {
-					await orgs.markOnboardingComplete(orgId, true);
-					status.onboardingComplete = true;
-				} catch (err) {
-					log.warn({ err, orgId }, "Failed to auto-complete onboarding for org");
-				}
+			const autoCompleted = await onboarding.autoCompleteIfNeeded(orgId, context.user.id);
+			if (autoCompleted) {
+				status.onboardingComplete = true;
 			}
 		}
 
@@ -297,7 +177,7 @@ export const onboardingRouter = {
 				});
 			}
 
-			// Fetch available repos from GitHub to get details
+			// Fetch available repos from GitHub (web-only: uses @octokit/auth-app)
 			const gitHubIntegration: GitHubIntegration = {
 				id: integration.id,
 				githubInstallationId: integration.github_installation_id,
@@ -333,50 +213,20 @@ export const onboardingRouter = {
 				});
 			}
 
-			// Upsert repos into database
-			const createdRepoIds: string[] = [];
-
-			for (const repo of selectedRepos) {
-				try {
-					const repoId = await onboarding.upsertRepoFromGitHub(orgId, userId, repo, integrationId);
-					createdRepoIds.push(repoId);
-				} catch (err) {
-					log.error({ err }, "Failed to insert repo");
-				}
-			}
-
-			if (createdRepoIds.length === 0) {
-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: "Failed to add any repos",
-				});
-			}
-
-			// Create managed configuration with specific repo IDs
+			// Delegate repo upsert + config creation to service
 			try {
-				const gateway = createSyncClient({
-					baseUrl: GATEWAY_URL,
-					auth: {
-						type: "service",
-						name: "onboarding-finalize",
-						secret: SERVICE_TO_SERVICE_AUTH_TOKEN,
-					},
+				return await onboarding.finalizeOnboarding({
+					orgId,
+					userId,
+					selectedRepos,
+					integrationId,
+					gatewayUrl: env.NEXT_PUBLIC_GATEWAY_URL,
+					serviceToken: env.SERVICE_TO_SERVICE_AUTH_TOKEN,
 				});
-
-				const configuration = await getOrCreateManagedConfiguration({
-					organizationId: orgId,
-					gateway,
-					repoIds: createdRepoIds,
-				});
-
-				return {
-					configurationId: configuration.id,
-					repoIds: createdRepoIds,
-					isNew: configuration.isNew,
-				};
 			} catch (err) {
-				log.error({ err }, "Failed to create managed configuration");
+				log.error({ err }, "Failed to finalize onboarding");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: err instanceof Error ? err.message : "Failed to create managed configuration",
+					message: err instanceof Error ? err.message : "Failed to finalize onboarding",
 				});
 			}
 		}),
