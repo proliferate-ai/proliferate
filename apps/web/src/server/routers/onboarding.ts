@@ -9,7 +9,6 @@ import { type GitHubIntegration, listGitHubRepos } from "@/lib/github";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ handler: "onboarding" });
-import { NANGO_GITHUB_INTEGRATION_ID } from "@/lib/nango";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
 import { onboarding, orgs } from "@proliferate/services";
@@ -107,7 +106,7 @@ export const onboardingRouter = {
 			log.warn({ userId: context.user.id }, "No active organization for onboarding status check");
 		}
 
-		const status = await onboarding.getOnboardingStatus(orgId, NANGO_GITHUB_INTEGRATION_ID);
+		const status = await onboarding.getOnboardingStatus(orgId);
 
 		if (orgId && !status.onboardingComplete) {
 			const autoCompleted = await onboarding.autoCompleteIfNeeded(orgId, context.user.id);
