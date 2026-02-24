@@ -6,6 +6,7 @@
  */
 
 import { decrypt, getEncryptionKey } from "@/lib/crypto";
+import { isEmailEnabled, sendIntegrationRequestEmail } from "@/lib/email";
 import { logger } from "@/lib/logger";
 import getNango, {
 	NANGO_GITHUB_INTEGRATION_ID,
@@ -457,36 +458,19 @@ export const integrationsRouter = {
 		.input(z.object({ integrationName: z.string().min(1).max(200) }))
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
-			const { Resend } = await import("resend");
-			const { env } = await import("@proliferate/environment/server");
-
-			const apiKey = env.RESEND_API_KEY;
-			const emailFrom = env.EMAIL_FROM;
-
-			if (!apiKey || !emailFrom) {
-				log.warn("RESEND_API_KEY or EMAIL_FROM not configured, skipping integration request email");
+			if (!isEmailEnabled()) {
+				log.warn("Email not configured, skipping integration request email");
 				return { success: true };
 			}
 
-			const resend = new Resend(apiKey);
 			const org = await integrations.getOrganizationForSession(context.orgId);
-			const orgName = org?.name;
-
-			const userName = escapeHtml(context.user.name || context.user.email);
-			const displayOrg = escapeHtml(orgName || context.orgId);
-			const integrationName = escapeHtml(input.integrationName);
-			const userEmail = escapeHtml(context.user.email);
 
 			try {
-				await resend.emails.send({
-					from: emailFrom,
-					to: emailFrom,
-					subject: `Integration request: ${input.integrationName}`,
-					html: `
-						<p><strong>${userName}</strong> from <strong>${displayOrg}</strong> requested:</p>
-						<p style="font-size: 18px; padding: 12px 0;">${integrationName}</p>
-						<p style="color: #666;">User email: ${userEmail}</p>
-					`,
+				await sendIntegrationRequestEmail({
+					userName: context.user.name || context.user.email,
+					userEmail: context.user.email,
+					orgName: org?.name || context.orgId,
+					integrationName: input.integrationName,
 				});
 				log.info(
 					{ orgId: context.orgId, userId: context.user.id, integration: input.integrationName },
@@ -1537,14 +1521,4 @@ async function requireIntegrationAdmin(userId: string, orgId: string): Promise<v
 	if (role !== "owner" && role !== "admin") {
 		throw new ORPCError("FORBIDDEN", { message: "Admin or owner role required" });
 	}
-}
-
-/** Escape user-provided strings before embedding in HTML email templates. */
-function escapeHtml(str: string): string {
-	return str
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&#39;");
 }
