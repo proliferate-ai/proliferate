@@ -24,7 +24,7 @@ export interface ServiceAuth {
  */
 export interface TokenAuth {
 	type: "token";
-	/** User's auth token (e.g., from /api/auth/ws-token) */
+	/** User's auth token (e.g., from oRPC auth.wsToken) */
 	token: string;
 }
 
