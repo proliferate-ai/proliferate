@@ -4,13 +4,13 @@
 
 ### In Scope
 - External connectivity lifecycle for org-scoped OAuth integrations (`nango`, `github-app`) and Slack workspace installations.
-- OAuth session creation and callback persistence for Sentry, Linear, and optional GitHub-via-Nango.
+- OAuth session creation and callback persistence for Sentry, Linear, Jira, and optional GitHub-via-Nango.
 - GitHub App installation callback persistence and lifecycle webhook state reconciliation.
 - Nango auth/sync webhook reconciliation for integration status.
 - Token resolution primitives for downstream runtimes (`getToken`, `resolveTokens`, `getIntegrationsForTokens`, `getEnvVarName`).
 - Integration list/update/disconnect behavior, including visibility filtering and creator/admin permissions.
 - Slack installation lifecycle (OAuth install, status, disconnect, support-channel setup, config strategy).
-- Sentry/Linear metadata read APIs used during trigger/action configuration.
+- Sentry/Linear/Jira metadata read APIs used during trigger/action configuration.
 - Org-scoped MCP connector catalog lifecycle (CRUD, atomic secret provisioning, validation preflight).
 - Integration request intake (`requestIntegration`) and connector/tooling support endpoints (`slackMembers`, `slackChannels`).
 
@@ -189,13 +189,14 @@ Sections 3 and 4 were intentionally removed in this spec revision. File tree and
 - Slack config updates must validate strategy constraints and org ownership of configuration IDs.
 - Evidence: `apps/web/src/app/api/integrations/slack/oauth/route.ts`, `apps/web/src/app/api/integrations/slack/oauth/callback/route.ts`, `apps/web/src/server/routers/integrations.ts`, `packages/services/src/integrations/service.ts`, `packages/services/src/integrations/db.ts`.
 
-### 6.6 Metadata Query Invariants (Sentry/Linear) — `Implemented`
+### 6.6 Metadata Query Invariants (Sentry/Linear/Jira) — `Implemented`
 - Metadata endpoints must only operate on integration row in caller org.
 - Metadata endpoints must require integration status `active` before external API calls.
 - Credentials must be pulled from live Nango connection at request time.
 - Sentry metadata must return `{ projects, environments, levels }` with fixed severity level set.
 - Linear metadata must return teams/states/labels/users/projects from GraphQL response.
-- Evidence: `apps/web/src/server/routers/integrations.ts:sentryMetadata`, `apps/web/src/server/routers/integrations.ts:linearMetadata`.
+- Jira metadata must return `{ sites, selectedSiteId, projects, issueTypes }` via Atlassian Cloud REST API v3. Multi-site accounts are supported via `siteId` parameter; defaults to first accessible site.
+- Evidence: `apps/web/src/server/routers/integrations.ts:sentryMetadata`, `apps/web/src/server/routers/integrations.ts:linearMetadata`, `apps/web/src/server/routers/integrations.ts:jiraMetadata`.
 
 ### 6.7 Token Resolution Invariants — `Implemented`
 - Runtime token resolution must flow through `getToken()` provider branching.

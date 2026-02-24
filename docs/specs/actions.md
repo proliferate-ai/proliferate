@@ -5,7 +5,7 @@
 ### In Scope
 - Gateway-mediated action listing, invocation, approval, denial, and status polling.
 - Three-mode policy resolution (`allow`, `require_approval`, `deny`) and mode-source attribution.
-- Provider-backed action sources (Linear, Sentry, Slack) and connector-backed MCP action sources.
+- Provider-backed action sources (Linear, Sentry, Slack, Jira) and connector-backed MCP action sources.
 - Org-level and automation-level action mode overrides.
 - User action source preferences (source-level enable/disable) in list/invoke paths.
 - Invocation persistence, expiry sweep, redaction, and truncation.

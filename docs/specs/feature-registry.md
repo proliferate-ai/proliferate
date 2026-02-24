@@ -259,6 +259,9 @@
 | Connection binding (sessions) | Implemented | `packages/db/src/schema/sessions.ts:sessionConnections` | Session-to-integration |
 | Sentry metadata | Implemented | `apps/web/src/server/routers/integrations.ts:sentryMetadata` | Sentry project/org metadata |
 | Linear metadata | Implemented | `apps/web/src/server/routers/integrations.ts:linearMetadata` | Linear team/project metadata |
+| Jira OAuth | Implemented | `apps/web/src/server/routers/integrations.ts:jiraStatus/jiraSession` | Via Nango (Atlassian 3LO) |
+| Jira metadata | Implemented | `apps/web/src/server/routers/integrations.ts:jiraMetadata` | Sites, projects, issue types |
+| Jira action adapter | Implemented | `packages/providers/src/providers/jira/actions.ts` | 6 actions: list_sites, list/get/create/update issues, add_comment |
 | GitHub auth (gateway) | Implemented | `apps/gateway/src/lib/github-auth.ts` | Gateway-side GitHub token resolution |
 | Org-scoped MCP connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | Org-level connector CRUD with atomic secret provisioning |
 | Org-scoped connector management UI | Implemented | `apps/web/src/app/(command-center)/dashboard/integrations/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools redirects to integrations; connector management on integrations page |
