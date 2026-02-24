@@ -5,6 +5,7 @@
  */
 
 import { auth } from "@/lib/auth";
+import { getDevUserId } from "@/lib/auth-helpers";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ handler: "cli" });
@@ -133,7 +134,7 @@ export const cliAuthRouter = {
 			}),
 		)
 		.handler(async () => {
-			const devUserId = env.DEV_USER_ID;
+			const devUserId = getDevUserId();
 			const result = await cli.createDeviceCode(devUserId);
 
 			if (devUserId) {

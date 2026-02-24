@@ -6,11 +6,9 @@
 
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
-import { SignJWT } from "jose";
+import { signGatewayToken } from "@proliferate/shared";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure } from "./middleware";
-
-const TOKEN_LIFETIME = "1h";
 
 const AuthProvidersSchema = z.object({
 	providers: z.object({
@@ -46,15 +44,14 @@ export const authRouter = {
 				throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Server misconfigured" });
 			}
 
-			const token = await new SignJWT({
-				sub: context.user.id,
-				email: context.user.email || undefined,
-				orgId: context.session.activeOrganizationId || undefined,
-			})
-				.setProtectedHeader({ alg: "HS256" })
-				.setIssuedAt()
-				.setExpirationTime(TOKEN_LIFETIME)
-				.sign(new TextEncoder().encode(env.GATEWAY_JWT_SECRET));
+			const token = await signGatewayToken(
+				{
+					sub: context.user.id,
+					email: context.user.email || undefined,
+					orgId: context.session.activeOrganizationId || undefined,
+				},
+				env.GATEWAY_JWT_SECRET,
+			);
 
 			return { token };
 		}),

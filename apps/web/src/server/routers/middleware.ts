@@ -2,8 +2,14 @@
  * oRPC middleware and base procedures.
  */
 
-import { type ImpersonationContext, isAuthError, requireAuth } from "@/lib/auth-helpers";
+import {
+	type ImpersonationContext,
+	getSession,
+	isAuthError,
+	requireAuth,
+} from "@/lib/auth-helpers";
 import { logger } from "@/lib/logger";
+import { isSuperAdmin } from "@/lib/super-admin";
 import { os, ORPCError } from "@orpc/server";
 import { nodeEnv, runtimeEnv } from "@proliferate/environment/runtime";
 import { BillingGateError } from "@proliferate/shared/billing";
@@ -34,6 +40,15 @@ export interface AuthContext {
 
 export interface OrgContext extends AuthContext {
 	orgId: string;
+}
+
+export interface AdminContext {
+	user: {
+		id: string;
+		email: string;
+		name: string;
+	};
+	sessionId: string;
 }
 
 function createRequestId() {
@@ -214,4 +229,27 @@ export const billingGatedProcedure = orgProcedure.use(async ({ next }) => {
 		}
 		throw err;
 	}
+});
+
+// ============================================
+// Admin procedure (super admin only)
+// ============================================
+
+export const adminProcedure = os.use(async ({ next }) => {
+	const session = await getSession();
+
+	if (!session?.user) {
+		throw new ORPCError("UNAUTHORIZED", { message: "Unauthorized" });
+	}
+
+	if (!isSuperAdmin(session.user.email)) {
+		throw new ORPCError("FORBIDDEN", { message: "Forbidden" });
+	}
+
+	return next({
+		context: {
+			user: session.user,
+			sessionId: session.session.id,
+		} satisfies AdminContext,
+	});
 });

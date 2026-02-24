@@ -1,14 +1,13 @@
 import { requireAuth } from "@/lib/auth-helpers";
 import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
-import { SignJWT } from "jose";
+import { signGatewayToken } from "@proliferate/shared";
 import { NextResponse } from "next/server";
 
 const log = logger.child({ route: "verification-media" });
 
 const JWT_SECRET = env.GATEWAY_JWT_SECRET;
 const GATEWAY_URL = env.NEXT_PUBLIC_GATEWAY_URL;
-const TOKEN_LIFETIME = "1h";
 
 function extractSessionId(keyOrPrefix: string): string {
 	const match = keyOrPrefix.match(/^sessions\/([^/]+)\//);
@@ -50,11 +49,7 @@ export async function GET(req: Request) {
 	const userId = authResult.session.user.id;
 	const email = authResult.session.user.email || undefined;
 
-	const token = await new SignJWT({ sub: userId, email })
-		.setProtectedHeader({ alg: "HS256" })
-		.setIssuedAt()
-		.setExpirationTime(TOKEN_LIFETIME)
-		.sign(new TextEncoder().encode(JWT_SECRET));
+	const token = await signGatewayToken({ sub: userId, email }, JWT_SECRET);
 
 	const baseUrl = GATEWAY_URL.replace(/^ws:\/\//, "http://")
 		.replace(/^wss:\/\//, "https://")

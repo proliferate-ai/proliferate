@@ -42,6 +42,27 @@ export function verifyInternalToken(authHeader: string | null, expectedSecret: s
 }
 
 /**
+ * Sign a gateway-bound JWT for user authentication (WebSocket, verification media, etc.)
+ *
+ * @param payload - User identity claims (sub is required; email and orgId are optional)
+ * @param jwtSecret - The shared GATEWAY_JWT_SECRET
+ * @param expiresIn - Token expiration (default: "1h")
+ */
+export async function signGatewayToken(
+	payload: { sub: string; email?: string; orgId?: string },
+	jwtSecret: string,
+	expiresIn = "1h",
+): Promise<string> {
+	const secretKey = new TextEncoder().encode(jwtSecret);
+
+	return await new SignJWT(payload)
+		.setProtectedHeader({ alg: "HS256" })
+		.setIssuedAt()
+		.setExpirationTime(expiresIn)
+		.sign(secretKey);
+}
+
+/**
  * Sign a service-to-service JWT token
  * Used for worker -> Gateway authentication
  *

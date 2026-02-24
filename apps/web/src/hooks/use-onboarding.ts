@@ -1,12 +1,8 @@
 "use client";
 
 import { orpc } from "@/lib/orpc";
-import type {
-	FinalizeOnboardingInput,
-	OnboardingRepo,
-	OnboardingStatus,
-} from "@proliferate/shared";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { OnboardingRepo, OnboardingStatus } from "@proliferate/shared";
+import { useQuery } from "@tanstack/react-query";
 
 export interface OnboardingState extends OnboardingStatus {
 	hasRepos: boolean;
@@ -25,28 +21,4 @@ export function useOnboarding() {
 			};
 		},
 	});
-}
-
-export function useFinalizeOnboarding() {
-	const queryClient = useQueryClient();
-
-	const mutation = useMutation({
-		...orpc.onboarding.finalize.mutationOptions(),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: orpc.onboarding.getStatus.key() });
-		},
-	});
-
-	const mutateAsync = async (data: FinalizeOnboardingInput) => {
-		const result = await mutation.mutateAsync(data);
-		return result;
-	};
-
-	return {
-		...mutation,
-		mutateAsync,
-		mutate: (data: FinalizeOnboardingInput) => {
-			mutation.mutate(data);
-		},
-	};
 }

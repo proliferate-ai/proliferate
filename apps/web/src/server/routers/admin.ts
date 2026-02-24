@@ -24,42 +24,25 @@ import {
 	ImpersonatingUserSchema,
 } from "@proliferate/shared";
 import { z } from "zod";
+import { adminProcedure } from "./middleware";
 
 // ============================================
-// Admin Context
+// Error Mapping
 // ============================================
 
-interface AdminContext {
-	user: {
-		id: string;
-		email: string;
-		name: string;
-	};
-	sessionId: string;
+const IMPERSONATION_ORPC_MAP: Record<
+	admin.ImpersonationErrorCode,
+	{ code: "NOT_FOUND" | "BAD_REQUEST"; message: string }
+> = {
+	USER_NOT_FOUND: { code: "NOT_FOUND", message: "User not found" },
+	ORG_NOT_FOUND: { code: "NOT_FOUND", message: "Organization not found" },
+	NOT_A_MEMBER: { code: "BAD_REQUEST", message: "User is not a member of this organization" },
+};
+
+function throwImpersonationError(error: admin.ImpersonationError): never {
+	const mapped = IMPERSONATION_ORPC_MAP[error.code];
+	throw new ORPCError(mapped.code, { message: mapped.message });
 }
-
-// ============================================
-// Admin Procedure (super admin only)
-// ============================================
-
-const adminProcedure = os.use(async ({ next }) => {
-	const session = await getSession();
-
-	if (!session?.user) {
-		throw new ORPCError("UNAUTHORIZED", { message: "Unauthorized" });
-	}
-
-	if (!isSuperAdmin(session.user.email)) {
-		throw new ORPCError("FORBIDDEN", { message: "Forbidden" });
-	}
-
-	return next({
-		context: {
-			user: session.user,
-			sessionId: session.session.id,
-		} satisfies AdminContext,
-	});
-});
 
 // ============================================
 // Router
@@ -187,17 +170,7 @@ export const adminRouter = {
 				};
 			} catch (error) {
 				if (error instanceof admin.ImpersonationError) {
-					if (error.code === "USER_NOT_FOUND") {
-						throw new ORPCError("NOT_FOUND", { message: "User not found" });
-					}
-					if (error.code === "ORG_NOT_FOUND") {
-						throw new ORPCError("NOT_FOUND", { message: "Organization not found" });
-					}
-					if (error.code === "NOT_A_MEMBER") {
-						throw new ORPCError("BAD_REQUEST", {
-							message: "User is not a member of this organization",
-						});
-					}
+					throwImpersonationError(error);
 				}
 				throw error;
 			}
@@ -238,11 +211,7 @@ export const adminRouter = {
 				return { success: true };
 			} catch (error) {
 				if (error instanceof admin.ImpersonationError) {
-					if (error.code === "NOT_A_MEMBER") {
-						throw new ORPCError("BAD_REQUEST", {
-							message: "User is not a member of this organization",
-						});
-					}
+					throwImpersonationError(error);
 				}
 				throw error;
 			}

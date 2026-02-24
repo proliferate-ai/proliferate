@@ -8,10 +8,62 @@ import { env } from "@proliferate/environment/server";
 import { orgs, users } from "@proliferate/services";
 import { headers } from "next/headers";
 
+export interface SessionResult {
+	user: {
+		id: string;
+		email: string;
+		name: string;
+	};
+	session: {
+		id: string;
+		activeOrganizationId?: string | null;
+	};
+}
+
+/**
+ * Returns the DEV_USER_ID when the dev bypass is active, otherwise undefined.
+ * Active when: DEV_USER_ID is set and not "disabled", not production, not CI.
+ */
+export function getDevUserId(): string | undefined {
+	const devUserId = env.DEV_USER_ID;
+	if (devUserId && devUserId !== "disabled" && nodeEnv !== "production" && !env.CI) {
+		return devUserId;
+	}
+	return undefined;
+}
+
+/**
+ * Returns a mock session for the DEV_USER_ID user, or null if dev bypass is inactive.
+ */
+async function getDevBypassSession(): Promise<SessionResult | null> {
+	const devUserId = getDevUserId();
+	if (!devUserId) return null;
+
+	const user = await users.findById(devUserId);
+	if (!user) {
+		log.error({ devUserId }, "DEV MODE: User not found");
+		return null;
+	}
+
+	const orgId = await orgs.getFirstOrgIdForUser(devUserId);
+
+	return {
+		user: {
+			id: user.id,
+			email: user.email,
+			name: user.name,
+		},
+		session: {
+			id: `dev-session-${devUserId}`,
+			activeOrganizationId: orgId ?? null,
+		},
+	};
+}
+
 /**
  * Check for API key in Authorization header and return user if valid
  */
-async function getApiKeyUser() {
+async function getApiKeyUser(): Promise<SessionResult | null> {
 	const headersList = await headers();
 	const authorization = headersList.get("authorization");
 
@@ -143,40 +195,12 @@ export function authErrorResponse(authResult: AuthError) {
  */
 export async function getSession() {
 	// Dev mode bypass - always return this user as logged in
-	const devUserId = env.DEV_USER_ID;
-	const useDevBypass =
-		!!devUserId && devUserId !== "disabled" && nodeEnv !== "production" && !env.CI;
-	if (useDevBypass) {
-		// Get user from database
-		const user = await users.findById(devUserId);
-
-		if (!user) {
-			log.error({ devUserId }, "DEV MODE: User not found");
-			return null;
-		}
-
-		// Get user's organization
-		const orgId = await orgs.getFirstOrgIdForUser(devUserId);
-
-		// Return mock session matching better-auth structure
-		return {
-			user: {
-				id: user.id,
-				email: user.email,
-				name: user.name,
-			},
-			session: {
-				id: `dev-session-${devUserId}`,
-				activeOrganizationId: orgId ?? null,
-			},
-		};
-	}
+	const devSession = await getDevBypassSession();
+	if (devSession) return devSession;
 
 	// Check for API key authentication (CLI tokens)
 	const apiKeySession = await getApiKeyUser();
-	if (apiKeySession) {
-		return apiKeySession;
-	}
+	if (apiKeySession) return apiKeySession;
 
 	// Normal cookie-based auth flow
 	const headersList = await headers();

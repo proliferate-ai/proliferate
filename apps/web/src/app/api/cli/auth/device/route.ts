@@ -1,3 +1,4 @@
+import { getDevUserId } from "@/lib/auth-helpers";
 import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
 import { cli } from "@proliferate/services";
@@ -8,9 +9,7 @@ const log = logger.child({ route: "cli/auth/device" });
 
 export async function POST() {
 	try {
-		const devUserId =
-			env.DEV_USER_ID && env.DEV_USER_ID !== "disabled" ? env.DEV_USER_ID : undefined;
-		const result = await cli.createDeviceCode(devUserId);
+		const result = await cli.createDeviceCode(getDevUserId());
 		const requestHeaders = await headers();
 		const forwardedHost = requestHeaders.get("x-forwarded-host");
 		const forwardedProto = requestHeaders.get("x-forwarded-proto") || "https";
