@@ -4,8 +4,8 @@
  * Handles CLI authentication, SSH keys, repos, sessions, GitHub, and configurations.
  */
 
-import { auth } from "@/lib/auth";
-import { getDevUserId } from "@/lib/auth-helpers";
+import { auth } from "@/lib/auth/server";
+import { getDevUserId } from "@/lib/auth/server/helpers";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ handler: "cli" });

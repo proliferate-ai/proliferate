@@ -1,4 +1,6 @@
-import { auth } from "@/lib/auth";
+import "server-only";
+
+import { auth } from "@/lib/auth/server";
 import { logger } from "@/lib/logger";
 import { getImpersonationCookie, isSuperAdmin } from "@/lib/super-admin";
 

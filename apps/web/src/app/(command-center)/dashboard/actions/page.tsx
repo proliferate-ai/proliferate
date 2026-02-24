@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { useApproveAction, useDenyAction, useOrgActions } from "@/hooks/use-actions";
 import { useOrgMembersAndInvitations } from "@/hooks/use-orgs";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { hasRoleOrHigher } from "@/lib/roles";
 import { ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";

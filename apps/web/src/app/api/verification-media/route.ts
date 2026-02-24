@@ -1,4 +1,4 @@
-import { requireAuth } from "@/lib/auth-helpers";
+import { requireAuth } from "@/lib/auth/server/helpers";
 import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
 import { signGatewayToken } from "@proliferate/shared";

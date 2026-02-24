@@ -5,7 +5,7 @@
  * organization listing, and impersonation.
  */
 
-import { getSession } from "@/lib/auth-helpers";
+import { getSession } from "@/lib/auth/server/helpers";
 import {
 	clearImpersonationCookie,
 	getImpersonationCookie,

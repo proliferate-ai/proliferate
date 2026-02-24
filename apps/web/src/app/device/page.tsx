@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Text } from "@/components/ui/text";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { orpc } from "@/lib/orpc";
 import { useMutation } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";

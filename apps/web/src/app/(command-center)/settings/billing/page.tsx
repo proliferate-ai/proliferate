@@ -8,7 +8,7 @@ import {
 	PlanSection,
 } from "@/components/settings/billing";
 import { useBilling, useOrgMembers, useUpdateBillingSettings } from "@/hooks";
-import { useActiveOrganization, useSession } from "@/lib/auth-client";
+import { useActiveOrganization, useSession } from "@/lib/auth/client";
 import type { BillingInfo } from "@/types/billing";
 import { env } from "@proliferate/environment/public";
 import { useRouter } from "next/navigation";

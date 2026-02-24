@@ -6,7 +6,7 @@ import {
 } from "@/components/actions/action-invocation-card";
 import { useApproveAction, useDenyAction, useSessionActions } from "@/hooks/use-actions";
 import { useOrgMembersAndInvitations } from "@/hooks/use-orgs";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { hasRoleOrHigher } from "@/lib/roles";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";

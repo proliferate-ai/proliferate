@@ -1,4 +1,4 @@
-import { requireAuth } from "@/lib/auth-helpers";
+import { requireAuth } from "@/lib/auth/server/helpers";
 import { encrypt, getEncryptionKey } from "@/lib/crypto";
 import { logger } from "@/lib/logger";
 import { sanitizeOAuthReturnUrl, verifySignedOAuthState } from "@/lib/oauth-state";

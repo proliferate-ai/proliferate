@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { AutomationsIcon } from "@/components/ui/icons";
 import { Textarea } from "@/components/ui/textarea";
 import { useAssignRun, useResolveRun, useRun, useRunEvents } from "@/hooks/use-automations";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { getRunStatusDisplay } from "@/lib/run-status";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";

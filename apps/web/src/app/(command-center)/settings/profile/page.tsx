@@ -4,7 +4,7 @@ import { PageShell } from "@/components/dashboard/page-shell";
 import { SettingsCard, SettingsRow } from "@/components/settings/settings-row";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { CheckCircle2 } from "lucide-react";
 
 export default function ProfilePage() {

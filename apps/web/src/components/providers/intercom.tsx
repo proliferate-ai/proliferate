@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { orpc } from "@/lib/orpc";
 import { env } from "@proliferate/environment/public";
 import { useQuery } from "@tanstack/react-query";

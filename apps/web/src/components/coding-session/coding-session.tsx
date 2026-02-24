@@ -10,7 +10,7 @@ import { useBackgroundVscodeStart } from "@/hooks/use-background-vscode";
 import { useConfiguration } from "@/hooks/use-configurations";
 import { useRepo } from "@/hooks/use-repos";
 import { useRenameSession, useSessionData, useSnapshotSession } from "@/hooks/use-sessions";
-import { useSession as useBetterAuthSession } from "@/lib/auth-client";
+import { useSession as useBetterAuthSession } from "@/lib/auth/client";
 import { startSnapshotProgressToast } from "@/lib/snapshot-progress-toast";
 import { cn } from "@/lib/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";

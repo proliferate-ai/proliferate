@@ -1,6 +1,6 @@
 "use client";
 
-import { signOut } from "@/lib/auth-client";
+import { signOut } from "@/lib/auth/client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { useOnboardingStore } from "@/stores/onboarding";
 import { useQueryClient } from "@tanstack/react-query";

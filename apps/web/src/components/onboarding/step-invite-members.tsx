@@ -9,7 +9,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth/client";
 import { Mail, X } from "lucide-react";
 import { useState } from "react";
 import { OnboardingCardImage } from "./onboarding-card-image";

@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { auth } from "@/lib/auth/server";
 import { logger } from "@/lib/logger";
 import { requireNangoIntegrationId } from "@/lib/nango";
 import { env } from "@proliferate/environment/server";

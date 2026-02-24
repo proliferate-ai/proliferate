@@ -14,7 +14,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
 import { useAttentionInbox } from "@/hooks/use-attention-inbox";
 import { useSignOut } from "@/hooks/use-sign-out";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { env } from "@proliferate/environment/public";

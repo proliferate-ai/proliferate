@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { captureUtms, getCookieDomain, getUtms } from "@/lib/utm";
 import { env } from "@proliferate/environment/public";
 import posthog from "posthog-js";

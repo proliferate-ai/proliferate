@@ -65,7 +65,7 @@ import {
 	useUpdateOrgConnector,
 } from "@/hooks/use-org-connectors";
 import { useOrgMembers } from "@/hooks/use-orgs";
-import { useActiveOrganization, useSession } from "@/lib/auth-client";
+import { useActiveOrganization, useSession } from "@/lib/auth/client";
 import { orpc } from "@/lib/orpc";
 import { type OrgRole, hasRoleOrHigher } from "@/lib/roles";
 import { CONNECTOR_PRESETS, type ConnectorConfig } from "@proliferate/shared";

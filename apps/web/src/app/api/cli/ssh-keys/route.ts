@@ -1,4 +1,4 @@
-import { requireAuth } from "@/lib/auth-helpers";
+import { requireAuth } from "@/lib/auth/server/helpers";
 import { logger } from "@/lib/logger";
 import { cli } from "@proliferate/services";
 import { NextResponse } from "next/server";

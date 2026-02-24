@@ -1,6 +1,6 @@
 "use client";
 
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { deriveDisplayStatus } from "@proliferate/shared/sessions";
 import { useMemo } from "react";
 import { useOrgActions } from "./use-actions";

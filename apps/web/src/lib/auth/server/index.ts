@@ -1,3 +1,5 @@
+import "server-only";
+
 import { isEmailEnabled, sendInvitationEmail, sendVerificationEmail } from "@/lib/email";
 import { logger } from "@/lib/logger";
 import { nextPhase } from "@proliferate/environment/runtime";

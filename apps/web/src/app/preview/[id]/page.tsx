@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { PreviewSession } from "@/components/preview-session";
-import { organization, useActiveOrganization } from "@/lib/auth-client";
+import { organization, useActiveOrganization } from "@/lib/auth/client";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";

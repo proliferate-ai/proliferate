@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ChatBubbleIcon } from "@/components/ui/icons";
 import { useBilling } from "@/hooks/use-billing";
 import { useOnboarding } from "@/hooks/use-onboarding";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { env } from "@proliferate/environment/public";
 import { BookOpen, Search } from "lucide-react";

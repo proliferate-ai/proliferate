@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
-import { organization } from "@/lib/auth-client";
+import { organization } from "@/lib/auth/client";
 import { useOnboardingStore } from "@/stores/onboarding";
 import { useState } from "react";
 import { OnboardingCardImage } from "./onboarding-card-image";

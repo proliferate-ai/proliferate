@@ -2,8 +2,8 @@
 
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { Button } from "@/components/ui/button";
-import { sendVerificationEmail, signOut, useSession } from "@/lib/auth-client";
-import { sanitizeRedirect } from "@/lib/auth-utils";
+import { sendVerificationEmail, signOut, useSession } from "@/lib/auth/client";
+import { sanitizeRedirect } from "@/lib/auth/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 

@@ -1,4 +1,4 @@
-import { requireAuth } from "@/lib/auth-helpers";
+import { requireAuth } from "@/lib/auth/server/helpers";
 import { listInstallationRepos, verifyInstallation } from "@/lib/github-app";
 import { logger } from "@/lib/logger";
 import { sanitizeOAuthReturnUrl, verifySignedOAuthState } from "@/lib/oauth-state";

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { requireAuth } from "@/lib/auth-helpers";
+import { requireAuth } from "@/lib/auth/server/helpers";
 import { createSignedOAuthState, sanitizeOAuthReturnUrl } from "@/lib/oauth-state";
 import { env } from "@proliferate/environment/server";
 import { orgs } from "@proliferate/services";

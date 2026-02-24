@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { GithubIcon } from "@/components/ui/icons";
-import { signIn } from "@/lib/auth-client";
+import { signIn } from "@/lib/auth/client";
 import { useState } from "react";
 
 export function GitHubButton() {

@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { requireAuth } from "@/lib/auth-helpers";
+import { requireAuth } from "@/lib/auth/server/helpers";
 import { createSignedOAuthState, sanitizeOAuthReturnUrl } from "@/lib/oauth-state";
 import { getSlackOAuthUrl } from "@/lib/slack";
 import { orgs } from "@proliferate/services";

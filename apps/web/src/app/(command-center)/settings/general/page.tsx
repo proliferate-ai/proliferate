@@ -3,7 +3,7 @@
 import { PageShell } from "@/components/dashboard/page-shell";
 import { DangerZoneSection, WorkspaceSection } from "@/components/settings/general";
 import { useOrgMembers } from "@/hooks/use-orgs";
-import { useActiveOrganization, useSession } from "@/lib/auth-client";
+import { useActiveOrganization, useSession } from "@/lib/auth/client";
 
 export default function GeneralPage() {
 	const { data: activeOrg, isPending: isActiveOrgPending } = useActiveOrganization();

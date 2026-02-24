@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
 import { useOnboardingStore } from "@/stores/onboarding";
 import { env } from "@proliferate/environment/public";

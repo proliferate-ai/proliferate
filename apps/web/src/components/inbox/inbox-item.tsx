@@ -9,7 +9,7 @@ import type { ApprovalWithSession, AttentionItem, BlockedGroup } from "@/hooks/u
 import { useAssignRun } from "@/hooks/use-automations";
 import { useOrgMembersAndInvitations } from "@/hooks/use-orgs";
 import { useSessionData } from "@/hooks/use-sessions";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { type OrgRole, hasRoleOrHigher } from "@/lib/roles";
 import { getRunStatusDisplay } from "@/lib/run-status";
 import { formatCompactMetrics } from "@/lib/session-display";

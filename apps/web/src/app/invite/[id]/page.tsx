@@ -3,7 +3,7 @@
 import { deletePersonalOrg, getBasicInviteInfo } from "@/app/invite/actions";
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
-import { organization, signOut, useSession } from "@/lib/auth-client";
+import { organization, signOut, useSession } from "@/lib/auth/client";
 import { Check, Clock, LogOut, Users, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";

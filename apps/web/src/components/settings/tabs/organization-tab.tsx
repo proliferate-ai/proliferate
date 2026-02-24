@@ -28,7 +28,7 @@ import {
 	useActiveOrganization,
 	useListOrganizations,
 	useSession,
-} from "@/lib/auth-client";
+} from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
 import { env } from "@proliferate/environment/public";
 import { useQueryClient } from "@tanstack/react-query";

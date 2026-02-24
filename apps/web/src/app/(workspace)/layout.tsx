@@ -1,7 +1,7 @@
 "use client";
 
 import { useBilling } from "@/hooks/use-billing";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { env } from "@proliferate/environment/public";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";

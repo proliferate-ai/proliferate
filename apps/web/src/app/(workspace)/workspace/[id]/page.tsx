@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { CodingSession } from "@/components/coding-session/coding-session";
 import { useSessionData } from "@/hooks/use-sessions";
-import { organization, useActiveOrganization } from "@/lib/auth-client";
+import { organization, useActiveOrganization } from "@/lib/auth/client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { X, Zap } from "lucide-react";
 import { useSearchParams } from "next/navigation";

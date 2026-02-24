@@ -4,7 +4,7 @@ import { SessionListRow } from "@/components/sessions/session-card";
 import { useOrgPendingRuns } from "@/hooks/use-automations";
 import { useCreateConfiguration } from "@/hooks/use-configurations";
 import { useCreateSession, useSessions } from "@/hooks/use-sessions";
-import { useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { modelSupportsReasoning } from "@proliferate/shared/agents";
