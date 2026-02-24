@@ -2,23 +2,12 @@ import "server-only";
 
 import { isEmailEnabled, sendInvitationEmail, sendVerificationEmail } from "@/lib/email";
 import { logger } from "@/lib/logger";
-import { nextPhase } from "@proliferate/environment/runtime";
 import { env, features } from "@proliferate/environment/server";
 import { betterAuth } from "better-auth";
 import { apiKey, organization } from "better-auth/plugins";
-import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { Pool } from "pg";
 
 const log = logger.child({ module: "auth" });
-
-// During `next build`, env vars may be empty — provide safe fallbacks so
-// better-auth's module-scope initialization doesn't crash the build.
-const isBuild = nextPhase === PHASE_PRODUCTION_BUILD;
-const appUrl = env.NEXT_PUBLIC_APP_URL ?? (isBuild ? "http://localhost:3000" : undefined);
-const authSecret = env.BETTER_AUTH_SECRET ?? (isBuild ? "build-placeholder" : undefined);
-
-const isLocalDb =
-	env.DATABASE_URL?.includes("localhost") || env.DATABASE_URL?.includes("127.0.0.1");
 
 // Prevent Next.js HMR from creating orphaned pools on every file save
 const globalForAuthDb = globalThis as unknown as { authPool: Pool | undefined };
@@ -33,15 +22,14 @@ const pool =
 		keepAlive: features.isDev,
 		// Explicit ssl avoids the pg v8 deprecation warning about sslmode aliases.
 		// RDS certs aren't in the default trust store, so rejectUnauthorized: false.
-		ssl: isLocalDb ? false : { rejectUnauthorized: false },
+		ssl: features.isLocalDb ? false : { rejectUnauthorized: false },
 	});
 
 if (features.isDev) {
 	globalForAuthDb.authPool = pool;
 }
 
-// When true, blocks login until email is verified and sends verification emails.
-const sendVerificationEmails = Boolean(env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION);
+const sendVerificationEmails = env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION;
 
 // Optional signup allowlist – when set, only these emails can create accounts.
 const allowedSignupEmails = env.ALLOWED_SIGNUP_EMAILS
@@ -52,13 +40,16 @@ const allowedSignupEmails = env.ALLOWED_SIGNUP_EMAILS
 
 export const auth = betterAuth({
 	database: pool,
-	baseURL: appUrl,
-	secret: authSecret,
+	baseURL: env.NEXT_PUBLIC_APP_URL,
+	secret: env.BETTER_AUTH_SECRET,
 
 	// Trust localhost + ngrok origins (wildcards for any ngrok subdomain)
-	trustedOrigins: ["http://localhost:3000", appUrl, "*.ngrok-free.dev", "*.ngrok.app"].filter(
-		Boolean,
-	) as string[],
+	trustedOrigins: [
+		"http://localhost:3000",
+		env.NEXT_PUBLIC_APP_URL,
+		"*.ngrok-free.dev",
+		"*.ngrok.app",
+	].filter(Boolean) as string[],
 
 	// Email/Password authentication
 	emailAndPassword: {

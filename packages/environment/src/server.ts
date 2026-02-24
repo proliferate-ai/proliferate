@@ -1,4 +1,5 @@
 import { createEnv } from "@t3-oss/env-core";
+import { nextPhase } from "./runtime";
 import { createPublicSchema, createServerSchema } from "./schema";
 
 const rawEnv = createEnv({
@@ -37,9 +38,20 @@ const normalizeInt = (value: unknown, fallback: number) => {
 	return fallback;
 };
 
+// During `next build`, env vars may be empty. Provide safe fallbacks so
+// module-scope initialization (e.g. betterAuth()) doesn't crash the build.
+const isBuild = nextPhase === "phase-production-build";
+
 export const env = new Proxy(rawEnv as typeof rawEnv, {
 	get(target, prop, receiver) {
 		const value = Reflect.get(target, prop, receiver);
+
+		// Build-phase fallbacks — return safe defaults when vars are missing during `next build`
+		if (isBuild) {
+			if (prop === "NEXT_PUBLIC_APP_URL" && !value) return "http://localhost:3000";
+			if (prop === "BETTER_AUTH_SECRET" && !value) return "build-placeholder";
+		}
+
 		if (prop === "DEPLOYMENT_PROFILE") return value === "cloud" ? "cloud" : "self_host";
 		if (prop === "SUPER_ADMIN_EMAILS") return typeof value === "string" ? value : "";
 
@@ -71,11 +83,19 @@ export const env = new Proxy(rawEnv as typeof rawEnv, {
 
 /** Derived feature flags — read once from `env`, importable as constants. */
 export const features = {
+	get isBuild() {
+		return isBuild;
+	},
 	get isDev() {
 		return process.env.NODE_ENV === "development";
 	},
 	get isCloud() {
 		return env.DEPLOYMENT_PROFILE === "cloud";
+	},
+	get isLocalDb() {
+		return Boolean(
+			env.DATABASE_URL?.includes("localhost") || env.DATABASE_URL?.includes("127.0.0.1"),
+		);
 	},
 	get emailEnabled() {
 		return env.EMAIL_ENABLED || env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION;
