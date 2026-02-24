@@ -12,6 +12,7 @@ import { logger } from "@/lib/logger";
 import { isSuperAdmin } from "@/lib/super-admin";
 import { os, ORPCError } from "@orpc/server";
 import { nodeEnv, runtimeEnv } from "@proliferate/environment/runtime";
+import { orgs } from "@proliferate/services";
 import { BillingGateError } from "@proliferate/shared/billing";
 
 const log = logger.child({ module: "orpc-middleware" });
@@ -200,6 +201,14 @@ export const orgProcedure = os.use(async ({ next, path }) => {
 	if (!orgId) {
 		throw new ORPCError("BAD_REQUEST", {
 			message: "No active organization",
+		});
+	}
+
+	// Verify the user is still a member of the active org (catches stale sessions)
+	const isMember = await orgs.isMember(authResult.session.user.id, orgId);
+	if (!isMember) {
+		throw new ORPCError("NOT_FOUND", {
+			message: "Organization not found",
 		});
 	}
 
