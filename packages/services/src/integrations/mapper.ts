@@ -94,10 +94,12 @@ export function groupByProvider(integrations: IntegrationWithCreator[]): {
 	github: IntegrationWithCreator[];
 	sentry: IntegrationWithCreator[];
 	linear: IntegrationWithCreator[];
+	jira: IntegrationWithCreator[];
 } {
 	return {
 		github: integrations.filter((i) => i.integration_id?.includes("github")),
 		sentry: integrations.filter((i) => i.integration_id?.includes("sentry")),
 		linear: integrations.filter((i) => i.integration_id?.includes("linear")),
+		jira: integrations.filter((i) => i.integration_id?.includes("jira")),
 	};
 }

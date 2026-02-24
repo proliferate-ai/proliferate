@@ -5,6 +5,7 @@ export type Provider =
 	| "sentry"
 	| "linear"
 	| "github"
+	| "jira"
 	| "posthog"
 	| "gmail"
 	| "slack"
@@ -35,6 +36,13 @@ export function ProviderIcon({ provider, className, size = "md" }: ProviderIconP
 
 		case "linear":
 			return <LinearIcon className={iconClass} />;
+
+		case "jira":
+			return (
+				<svg className={iconClass} viewBox="0 0 24 24" fill="currentColor">
+					<path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84a.84.84 0 0 0-.84-.84H11.53zM6.77 6.8a4.36 4.36 0 0 0 4.34 4.34h1.8v1.72a4.36 4.36 0 0 0 4.34 4.34V7.63a.84.84 0 0 0-.83-.83H6.77zM2 11.6a4.35 4.35 0 0 0 4.35 4.35h1.78v1.71c0 2.4 1.94 4.34 4.34 4.34V12.44a.84.84 0 0 0-.84-.84H2z" />
+				</svg>
+			);
 
 		case "posthog":
 			return <PostHogIcon className={iconClass} />;
@@ -108,6 +116,8 @@ export function getProviderDisplayName(provider: Provider): string {
 			return "Sentry";
 		case "linear":
 			return "Linear";
+		case "jira":
+			return "Jira";
 		case "slack":
 			return "Slack";
 		case "gmail":
@@ -131,6 +141,8 @@ export function getProviderManageUrl(provider: Provider): string | null {
 			return "https://sentry.io/settings/integrations/";
 		case "linear":
 			return "https://linear.app/settings/integrations";
+		case "jira":
+			return null;
 		case "slack":
 			return "https://slack.com/apps/manage";
 		case "gmail":

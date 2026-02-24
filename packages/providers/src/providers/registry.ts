@@ -7,6 +7,7 @@
  */
 
 import type { ActionDefinition, ActionExecutionContext, ActionResult } from "../types";
+import * as jiraActions from "./jira/actions";
 import * as linearActions from "./linear/actions";
 import * as sentryActions from "./sentry/actions";
 import * as slackActions from "./slack/actions";
@@ -31,6 +32,7 @@ export interface ProviderActionModule {
 
 const registry = new Map<string, ProviderActionModule>();
 
+registry.set("jira", jiraActions);
 registry.set("linear", linearActions);
 registry.set("sentry", sentryActions);
 registry.set("slack", slackActions);

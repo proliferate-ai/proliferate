@@ -1,4 +1,4 @@
-export type AdapterProvider = "linear" | "sentry";
+export type AdapterProvider = "linear" | "sentry" | "jira";
 
 export interface ActionMeta {
 	name: string;
@@ -59,6 +59,27 @@ export const ACTION_ADAPTERS: AdapterMeta[] = [
 				description: "Update an issue (resolve, assign, etc.)",
 				riskLevel: "write",
 			},
+		],
+	},
+	{
+		integration: "jira",
+		displayName: "Jira",
+		description: "Create, read, and update Jira issues from sessions",
+		actions: [
+			{
+				name: "list_sites",
+				description: "List accessible Jira Cloud sites",
+				riskLevel: "read",
+			},
+			{ name: "list_issues", description: "Search issues using JQL", riskLevel: "read" },
+			{
+				name: "get_issue",
+				description: "Get a specific issue by key or ID",
+				riskLevel: "read",
+			},
+			{ name: "create_issue", description: "Create a new issue", riskLevel: "write" },
+			{ name: "update_issue", description: "Update an existing issue", riskLevel: "write" },
+			{ name: "add_comment", description: "Add a comment to an issue", riskLevel: "write" },
 		],
 	},
 ];

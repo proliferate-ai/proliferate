@@ -15,7 +15,7 @@ import { getProviderFromIntegrationId } from "@/hooks/use-nango-connect";
 import { CheckCircle2, Plus } from "lucide-react";
 import { useState } from "react";
 
-const PROVIDERS: Provider[] = ["github", "sentry", "linear"];
+const PROVIDERS: Provider[] = ["github", "sentry", "linear", "jira"];
 
 export interface ConnectionsTabProps {
 	connect: (provider: Provider) => Promise<void>;

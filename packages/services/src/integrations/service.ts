@@ -20,11 +20,13 @@ export interface ListIntegrationsResult {
 	github: { connected: boolean };
 	sentry: { connected: boolean };
 	linear: { connected: boolean };
+	jira: { connected: boolean };
 	integrations: IntegrationWithCreator[];
 	byProvider: {
 		github: IntegrationWithCreator[];
 		sentry: IntegrationWithCreator[];
 		linear: IntegrationWithCreator[];
+		jira: IntegrationWithCreator[];
 	};
 }
 
@@ -89,6 +91,7 @@ export async function listIntegrations(
 		github: { connected: byProvider.github.length > 0 },
 		sentry: { connected: byProvider.sentry.length > 0 },
 		linear: { connected: byProvider.linear.length > 0 },
+		jira: { connected: byProvider.jira.length > 0 },
 		integrations: integrationsWithCreator,
 		byProvider,
 	};
@@ -266,6 +269,21 @@ export async function getLinearStatus(
 	}
 
 	const integration = await integrationsDb.findActiveByIntegrationId(orgId, linearIntegrationId);
+	return { connected: !!integration };
+}
+
+/**
+ * Get Jira connection status.
+ */
+export async function getJiraStatus(
+	orgId: string | null,
+	jiraIntegrationId: string,
+): Promise<{ connected: boolean }> {
+	if (!orgId) {
+		return { connected: false };
+	}
+
+	const integration = await integrationsDb.findActiveByIntegrationId(orgId, jiraIntegrationId);
 	return { connected: !!integration };
 }
 

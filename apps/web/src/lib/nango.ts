@@ -22,25 +22,28 @@ export function getNango(): Nango {
 export const NANGO_GITHUB_INTEGRATION_ID = env.NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID;
 export const NANGO_SENTRY_INTEGRATION_ID = env.NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID;
 export const NANGO_LINEAR_INTEGRATION_ID = env.NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID;
+export const NANGO_JIRA_INTEGRATION_ID = env.NEXT_PUBLIC_NANGO_JIRA_INTEGRATION_ID;
 
 // Feature flag for using Nango for GitHub OAuth (vs GitHub App)
 // Note: Uses NEXT_PUBLIC_ prefix so it's available on both client and server
 export const USE_NANGO_GITHUB = env.NEXT_PUBLIC_USE_NANGO_GITHUB;
 
 // Provider types
-export type NangoProviderType = "github" | "sentry" | "linear";
+export type NangoProviderType = "github" | "sentry" | "linear" | "jira";
 
 // Map provider type to integration ID
 export const PROVIDER_TO_INTEGRATION_ID: Record<NangoProviderType, string | undefined> = {
 	github: NANGO_GITHUB_INTEGRATION_ID,
 	sentry: NANGO_SENTRY_INTEGRATION_ID,
 	linear: NANGO_LINEAR_INTEGRATION_ID,
+	jira: NANGO_JIRA_INTEGRATION_ID,
 };
 
 const PROVIDER_TO_ENV_KEY: Record<NangoProviderType, string> = {
 	github: "NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID",
 	sentry: "NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID",
 	linear: "NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID",
+	jira: "NEXT_PUBLIC_NANGO_JIRA_INTEGRATION_ID",
 };
 
 export function requireNangoIntegrationId(provider: NangoProviderType): string {
@@ -62,6 +65,9 @@ export function getProviderFromIntegrationId(integrationId: string): NangoProvid
 	}
 	if (integrationId === NANGO_LINEAR_INTEGRATION_ID || integrationId === "linear") {
 		return "linear";
+	}
+	if (integrationId === NANGO_JIRA_INTEGRATION_ID || integrationId === "jira") {
+		return "jira";
 	}
 	return null;
 }

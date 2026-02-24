@@ -151,6 +151,39 @@ export const LinearMetadataSchema = z.object({
 
 export type LinearMetadata = z.infer<typeof LinearMetadataSchema>;
 
+/**
+ * Jira metadata types.
+ */
+export const JiraSiteSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	url: z.string(),
+	avatarUrl: z.string().nullable(),
+});
+
+export const JiraProjectSchema = z.object({
+	id: z.string(),
+	key: z.string(),
+	name: z.string(),
+	projectTypeKey: z.string(),
+});
+
+export const JiraIssueTypeSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	subtask: z.boolean(),
+	description: z.string().nullable(),
+});
+
+export const JiraMetadataSchema = z.object({
+	sites: z.array(JiraSiteSchema),
+	selectedSiteId: z.string().nullable(),
+	projects: z.array(JiraProjectSchema),
+	issueTypes: z.array(JiraIssueTypeSchema),
+});
+
+export type JiraMetadata = z.infer<typeof JiraMetadataSchema>;
+
 // ============================================
 // Contract
 // ============================================
@@ -168,11 +201,13 @@ export const integrationsContract = c.router(
 					github: z.object({ connected: z.boolean() }),
 					sentry: z.object({ connected: z.boolean() }),
 					linear: z.object({ connected: z.boolean() }),
+					jira: z.object({ connected: z.boolean() }),
 					integrations: z.array(IntegrationWithCreatorSchema),
 					byProvider: z.object({
 						github: z.array(IntegrationWithCreatorSchema),
 						sentry: z.array(IntegrationWithCreatorSchema),
 						linear: z.array(IntegrationWithCreatorSchema),
+						jira: z.array(IntegrationWithCreatorSchema),
 					}),
 				}),
 				401: ErrorResponseSchema,
@@ -384,6 +419,61 @@ export const integrationsContract = c.router(
 				500: ErrorResponseSchema,
 			},
 			summary: "Get Linear teams, states, labels, users, and projects",
+		},
+
+		// ----------------------------------------
+		// Jira endpoints
+		// ----------------------------------------
+
+		/**
+		 * Get Jira connection status.
+		 */
+		jiraStatus: {
+			method: "GET",
+			path: "/integrations/jira/status",
+			responses: {
+				200: ProviderStatusSchema,
+				401: ErrorResponseSchema,
+			},
+			summary: "Get Jira connection status",
+		},
+
+		/**
+		 * Create a Nango connect session for Jira OAuth.
+		 */
+		jiraSession: {
+			method: "POST",
+			path: "/integrations/jira/session",
+			body: c.noBody(),
+			responses: {
+				200: z.object({ sessionToken: z.string() }),
+				400: ErrorResponseSchema,
+				401: ErrorResponseSchema,
+				404: ErrorResponseSchema,
+				500: ErrorResponseSchema,
+			},
+			summary: "Create Nango connect session for Jira OAuth",
+		},
+
+		/**
+		 * Get Jira metadata (sites, projects, issue types).
+		 */
+		jiraMetadata: {
+			method: "GET",
+			path: "/integrations/jira/metadata",
+			query: z.object({
+				connectionId: z.string(),
+				siteId: z.string().optional(),
+				projectId: z.string().optional(),
+			}),
+			responses: {
+				200: JiraMetadataSchema,
+				400: ErrorResponseSchema,
+				401: ErrorResponseSchema,
+				404: ErrorResponseSchema,
+				500: ErrorResponseSchema,
+			},
+			summary: "Get Jira sites, projects, and issue types",
 		},
 
 		// ----------------------------------------

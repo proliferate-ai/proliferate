@@ -121,6 +121,14 @@ const INTEGRATION_CATALOG: CatalogEntry[] = [
 		type: "oauth",
 		provider: "linear",
 	},
+	{
+		key: "jira",
+		name: "Jira",
+		description: "Create, track, and manage issues across your Jira Cloud projects",
+		category: "project-management",
+		type: "oauth",
+		provider: "jira",
+	},
 
 	// Communication
 	{
@@ -264,7 +272,7 @@ export default function IntegrationsPage() {
 	const slackConnect = useSlackConnect();
 	const integrations = integrationsData?.integrations ?? [];
 
-	const OAUTH_PROVIDERS: Provider[] = ["github", "sentry", "linear"];
+	const OAUTH_PROVIDERS: Provider[] = ["github", "sentry", "linear", "jira"];
 	const integrationsByProvider = OAUTH_PROVIDERS.reduce(
 		(acc, provider) => {
 			acc[provider] = integrations.filter((i) => {

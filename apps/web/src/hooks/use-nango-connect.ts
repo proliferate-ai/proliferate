@@ -10,7 +10,7 @@ import { useCallback, useRef, useState } from "react";
 export const USE_NANGO_GITHUB = env.NEXT_PUBLIC_USE_NANGO_GITHUB;
 
 // Providers that use Nango for OAuth (excludes standalone triggers like webhook/scheduled)
-export type NangoManagedProvider = "github" | "sentry" | "linear";
+export type NangoManagedProvider = "github" | "sentry" | "linear" | "jira";
 
 // NangoProvider type excludes GitHub unless USE_NANGO_GITHUB is enabled, and always excludes standalone triggers
 export type NangoProvider =
@@ -22,6 +22,7 @@ const ALL_NANGO_INTEGRATION_IDS: Record<NangoManagedProvider, string | undefined
 	github: env.NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID,
 	sentry: env.NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID,
 	linear: env.NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID,
+	jira: env.NEXT_PUBLIC_NANGO_JIRA_INTEGRATION_ID,
 };
 
 // Export for backward compatibility - excludes GitHub unless flag is enabled
@@ -42,6 +43,7 @@ export function getProviderFromIntegrationId(integrationId: string): NangoManage
 	if (integrationId === "github-app" || integrationId === "github") return "github";
 	if (integrationId.includes("sentry")) return "sentry";
 	if (integrationId === "linear") return "linear";
+	if (integrationId.includes("jira")) return "jira";
 	return null;
 }
 
@@ -106,6 +108,7 @@ export function useNangoConnect(options: UseNangoConnectOptions = {}): UseNangoC
 					github: orpc.integrations.githubSession,
 					sentry: orpc.integrations.sentrySession,
 					linear: orpc.integrations.linearSession,
+					jira: orpc.integrations.jiraSession,
 				}[provider as NangoManagedProvider];
 
 				if (!sessionProcedure) {

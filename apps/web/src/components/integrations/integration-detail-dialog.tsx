@@ -94,6 +94,7 @@ export function IntegrationDetailDialog({
 		slack: "https://docs.proliferate.com/integrations/slack",
 		linear: "https://docs.proliferate.com/integrations/linear",
 		sentry: "https://docs.proliferate.com/integrations/sentry",
+		jira: "https://docs.proliferate.com/integrations/jira",
 	};
 	const proliferateDocsUrl =
 		PROLIFERATE_DOCS[entry.key] ??
@@ -107,6 +108,7 @@ export function IntegrationDetailDialog({
 		slack: "Also powers notifications and agent interaction from Slack.",
 		linear: "Also powers issue tracking triggers and automations.",
 		sentry: "Also powers error monitoring triggers and automations.",
+		jira: "Also powers issue management agent tools.",
 	};
 	const platformNote = PLATFORM_NOTES[entry.key];
 

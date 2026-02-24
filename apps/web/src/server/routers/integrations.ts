@@ -9,6 +9,7 @@ import { decrypt, getEncryptionKey } from "@/lib/crypto";
 import { logger } from "@/lib/logger";
 import getNango, {
 	NANGO_GITHUB_INTEGRATION_ID,
+	NANGO_JIRA_INTEGRATION_ID,
 	NANGO_LINEAR_INTEGRATION_ID,
 	NANGO_SENTRY_INTEGRATION_ID,
 	USE_NANGO_GITHUB,
@@ -31,6 +32,7 @@ import {
 	GitHubStatusSchema,
 	IntegrationSchema,
 	IntegrationWithCreatorSchema,
+	JiraMetadataSchema,
 	LinearMetadataSchema,
 	SentryMetadataSchema,
 	SlackStatusSchema,
@@ -85,6 +87,8 @@ const DISPLAY_NAMES: Record<string, string> = {
 	...(NANGO_GITHUB_INTEGRATION_ID ? { [NANGO_GITHUB_INTEGRATION_ID]: "GitHub" } : {}),
 	...(NANGO_SENTRY_INTEGRATION_ID ? { [NANGO_SENTRY_INTEGRATION_ID]: "Sentry" } : {}),
 	...(NANGO_LINEAR_INTEGRATION_ID ? { [NANGO_LINEAR_INTEGRATION_ID]: "Linear" } : {}),
+	jira: "Jira",
+	...(NANGO_JIRA_INTEGRATION_ID ? { [NANGO_JIRA_INTEGRATION_ID]: "Jira" } : {}),
 };
 
 // Sentry severity levels
@@ -292,6 +296,155 @@ async function fetchLinearMetadata(authToken: string, teamId?: string): Promise<
 	};
 }
 
+// Atlassian API base URL for Jira Cloud (OAuth 2.0 3LO)
+const ATLASSIAN_API_BASE = "https://api.atlassian.com";
+
+interface JiraSite {
+	id: string;
+	name: string;
+	url: string;
+	avatarUrl: string | null;
+}
+
+interface JiraProject {
+	id: string;
+	key: string;
+	name: string;
+	projectTypeKey: string;
+}
+
+interface JiraIssueType {
+	id: string;
+	name: string;
+	subtask: boolean;
+	description: string | null;
+}
+
+interface JiraMetadata {
+	sites: JiraSite[];
+	selectedSiteId: string | null;
+	projects: JiraProject[];
+	issueTypes: JiraIssueType[];
+}
+
+async function fetchJiraMetadata(
+	authToken: string,
+	siteId?: string,
+	projectId?: string,
+): Promise<JiraMetadata> {
+	// 1. Fetch accessible sites (Atlassian Cloud resources)
+	const sitesResponse = await fetch(`${ATLASSIAN_API_BASE}/oauth/token/accessible-resources`, {
+		headers: {
+			Authorization: `Bearer ${authToken}`,
+			Accept: "application/json",
+		},
+	});
+
+	if (!sitesResponse.ok) {
+		throw new Error(`Atlassian accessible-resources error: ${sitesResponse.status}`);
+	}
+
+	const rawSites = (await sitesResponse.json()) as Array<{
+		id: string;
+		name: string;
+		url: string;
+		avatarUrl?: string;
+	}>;
+
+	const sites: JiraSite[] = rawSites.map((s) => ({
+		id: s.id,
+		name: s.name,
+		url: s.url,
+		avatarUrl: s.avatarUrl ?? null,
+	}));
+
+	if (sites.length === 0) {
+		return { sites: [], selectedSiteId: null, projects: [], issueTypes: [] };
+	}
+
+	// 2. Resolve target site
+	const selectedSiteId = siteId ?? sites[0].id;
+	const baseUrl = `${ATLASSIAN_API_BASE}/ex/jira/${selectedSiteId}/rest/api/3`;
+
+	// 3. Fetch projects
+	const projectsResponse = await fetch(`${baseUrl}/project/search?maxResults=100`, {
+		headers: {
+			Authorization: `Bearer ${authToken}`,
+			Accept: "application/json",
+		},
+	});
+
+	let projects: JiraProject[] = [];
+	if (projectsResponse.ok) {
+		const projectData = (await projectsResponse.json()) as {
+			values: Array<{
+				id: string;
+				key: string;
+				name: string;
+				projectTypeKey: string;
+			}>;
+		};
+		projects = projectData.values.map((p) => ({
+			id: p.id,
+			key: p.key,
+			name: p.name,
+			projectTypeKey: p.projectTypeKey,
+		}));
+	}
+
+	// 4. Fetch issue types
+	let issueTypes: JiraIssueType[] = [];
+	if (projectId) {
+		// Fetch issue types for a specific project
+		const issueTypesResponse = await fetch(`${baseUrl}/issuetype/project?projectId=${projectId}`, {
+			headers: {
+				Authorization: `Bearer ${authToken}`,
+				Accept: "application/json",
+			},
+		});
+
+		if (issueTypesResponse.ok) {
+			const rawTypes = (await issueTypesResponse.json()) as Array<{
+				id: string;
+				name: string;
+				subtask: boolean;
+				description?: string;
+			}>;
+			issueTypes = rawTypes.map((t) => ({
+				id: t.id,
+				name: t.name,
+				subtask: t.subtask,
+				description: t.description ?? null,
+			}));
+		}
+	} else {
+		// Fetch all issue types for the site
+		const issueTypesResponse = await fetch(`${baseUrl}/issuetype`, {
+			headers: {
+				Authorization: `Bearer ${authToken}`,
+				Accept: "application/json",
+			},
+		});
+
+		if (issueTypesResponse.ok) {
+			const rawTypes = (await issueTypesResponse.json()) as Array<{
+				id: string;
+				name: string;
+				subtask: boolean;
+				description?: string;
+			}>;
+			issueTypes = rawTypes.map((t) => ({
+				id: t.id,
+				name: t.name,
+				subtask: t.subtask,
+				description: t.description ?? null,
+			}));
+		}
+	}
+
+	return { sites, selectedSiteId, projects, issueTypes };
+}
+
 // ============================================
 // Router
 // ============================================
@@ -363,11 +516,13 @@ export const integrationsRouter = {
 				github: z.object({ connected: z.boolean() }),
 				sentry: z.object({ connected: z.boolean() }),
 				linear: z.object({ connected: z.boolean() }),
+				jira: z.object({ connected: z.boolean() }),
 				integrations: z.array(IntegrationWithCreatorSchema),
 				byProvider: z.object({
 					github: z.array(IntegrationWithCreatorSchema),
 					sentry: z.array(IntegrationWithCreatorSchema),
 					linear: z.array(IntegrationWithCreatorSchema),
+					jira: z.array(IntegrationWithCreatorSchema),
 				}),
 			}),
 		)
@@ -710,6 +865,105 @@ export const integrationsRouter = {
 
 			// Fetch metadata from Linear GraphQL API
 			return fetchLinearMetadata(authToken, teamId);
+		}),
+
+	// ----------------------------------------
+	// Jira endpoints
+	// ----------------------------------------
+
+	/**
+	 * Get Jira connection status.
+	 */
+	jiraStatus: orgProcedure
+		.output(z.object({ connected: z.boolean() }))
+		.handler(async ({ context }) => {
+			const jiraIntegrationId = requireNangoIntegrationId("jira");
+			return integrations.getJiraStatus(context.orgId, jiraIntegrationId);
+		}),
+
+	/**
+	 * Create a Nango connect session for Jira OAuth.
+	 */
+	jiraSession: orgProcedure
+		.output(z.object({ sessionToken: z.string() }))
+		.handler(async ({ context }) => {
+			await requireIntegrationAdmin(context.user.id, context.orgId);
+			const org = await integrations.getOrganizationForSession(context.orgId);
+
+			if (!org) {
+				throw new ORPCError("NOT_FOUND", { message: "Organization not found" });
+			}
+
+			const nango = getNango();
+			const jiraIntegrationId = requireNangoIntegrationId("jira");
+
+			try {
+				const result = await nango.createConnectSession({
+					end_user: {
+						id: context.user.id,
+						email: context.user.email,
+						display_name: context.user.name || context.user.email,
+					},
+					organization: {
+						id: context.orgId,
+						display_name: org.name,
+					},
+					allowed_integrations: [jiraIntegrationId],
+				});
+
+				return { sessionToken: result.data.token };
+			} catch (err) {
+				handleNangoError(err, `createConnectSession(jira, integration=${jiraIntegrationId})`);
+			}
+		}),
+
+	/**
+	 * Get Jira metadata (sites, projects, issue types).
+	 */
+	jiraMetadata: orgProcedure
+		.input(
+			z.object({
+				connectionId: z.string(),
+				siteId: z.string().optional(),
+				projectId: z.string().optional(),
+			}),
+		)
+		.output(JiraMetadataSchema)
+		.handler(async ({ input, context }) => {
+			const { connectionId, siteId, projectId } = input;
+
+			// Get the integration record
+			const integration = await integrations.getIntegrationWithStatus(connectionId, context.orgId);
+
+			if (!integration) {
+				throw new ORPCError("NOT_FOUND", { message: "Integration not found" });
+			}
+
+			if (integration.status !== "active") {
+				throw new ORPCError("BAD_REQUEST", { message: "Integration is not active" });
+			}
+
+			// Get credentials from Nango
+			const nango = getNango();
+			const jiraIntegrationId = requireNangoIntegrationId("jira");
+			let connection: NangoConnection;
+			try {
+				connection = await nango.getConnection(jiraIntegrationId, integration.connectionId!);
+			} catch (err) {
+				handleNangoError(err, `getConnection(jira, connection=${integration.connectionId})`);
+			}
+
+			const credentials = connection.credentials as {
+				access_token?: string;
+			};
+
+			const authToken = credentials.access_token;
+			if (!authToken) {
+				throw new ORPCError("BAD_REQUEST", { message: "No access token available" });
+			}
+
+			// Fetch metadata from Jira REST API
+			return fetchJiraMetadata(authToken, siteId, projectId);
 		}),
 
 	// ----------------------------------------

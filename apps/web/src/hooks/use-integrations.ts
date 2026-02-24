@@ -14,6 +14,7 @@ export function useIntegrations() {
 			github: data.github,
 			sentry: data.sentry,
 			linear: data.linear,
+			jira: data.jira,
 			integrations: data.integrations,
 			byProvider: data.byProvider,
 		}),
@@ -45,6 +46,7 @@ export function useDisconnectIntegration() {
 			queryClient.invalidateQueries({ queryKey: orpc.integrations.githubStatus.key() });
 			queryClient.invalidateQueries({ queryKey: orpc.integrations.sentryStatus.key() });
 			queryClient.invalidateQueries({ queryKey: orpc.integrations.linearStatus.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.integrations.jiraStatus.key() });
 			queryClient.invalidateQueries({ queryKey: orpc.integrations.slackStatus.key() });
 		},
 	});
@@ -129,6 +131,29 @@ export function useLinearMetadata(connectionId: string, teamId?: string) {
 	return useQuery({
 		...orpc.integrations.linearMetadata.queryOptions({
 			input: { connectionId, teamId },
+		}),
+		enabled: !!connectionId,
+	});
+}
+
+// ============================================
+// Jira Hooks
+// ============================================
+
+export function useJiraStatus() {
+	return useQuery({
+		...orpc.integrations.jiraStatus.queryOptions({ input: undefined }),
+	});
+}
+
+export function useJiraSession() {
+	return useMutation(orpc.integrations.jiraSession.mutationOptions());
+}
+
+export function useJiraMetadata(connectionId: string, siteId?: string, projectId?: string) {
+	return useQuery({
+		...orpc.integrations.jiraMetadata.queryOptions({
+			input: { connectionId, siteId, projectId },
 		}),
 		enabled: !!connectionId,
 	});

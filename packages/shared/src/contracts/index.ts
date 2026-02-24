@@ -148,6 +148,7 @@ export type {
 	IntegrationWithCreator,
 	SentryMetadata,
 	LinearMetadata,
+	JiraMetadata,
 } from "./integrations";
 export {
 	IntegrationSchema,
@@ -157,6 +158,7 @@ export {
 	SlackStatusSchema,
 	SentryMetadataSchema,
 	LinearMetadataSchema,
+	JiraMetadataSchema,
 } from "./integrations";
 
 // Re-export verification types

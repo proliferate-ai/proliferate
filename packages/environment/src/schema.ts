@@ -81,6 +81,10 @@ export const createPublicSchema = (env: EnvLike = process.env) => {
 			integrationsEnabled,
 			"Required when integrations are enabled",
 		),
+		NEXT_PUBLIC_NANGO_JIRA_INTEGRATION_ID: requiredWhen(
+			integrationsEnabled,
+			"Required when integrations are enabled",
+		),
 		NEXT_PUBLIC_POSTHOG_HOST: optionalString,
 		NEXT_PUBLIC_POSTHOG_KEY: optionalString,
 		NEXT_PUBLIC_USE_NANGO_GITHUB: optionalBoolean,
