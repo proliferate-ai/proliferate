@@ -234,7 +234,7 @@ export const AUTUMN_PRODUCTS = {
 /**
  * Top-up product configuration.
  * This is the "tiptop" product in Autumn: $5 for 500 credits (one-time purchase).
- * Used by /api/billing/buy-credits endpoint.
+ * Used by oRPC `billing.buyCredits` procedure.
  */
 export const TOP_UP_PRODUCT = {
 	productId: "tiptop",
