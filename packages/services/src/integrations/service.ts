@@ -1031,7 +1031,10 @@ export async function disconnectIntegrationWithNango(
 	// Delete from database and handle orphaned repos
 	const result = await deleteIntegration(integrationId, orgId);
 	if (!result.success) {
-		throw new Error(result.error || "Failed to disconnect integration");
+		if (result.error === "Access denied") {
+			throw new IntegrationAdminRequiredError();
+		}
+		throw new IntegrationNotFoundError(integrationId);
 	}
 }
 

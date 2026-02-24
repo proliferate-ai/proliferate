@@ -37,6 +37,8 @@ export async function createSessionHandler(input: {
 		if (err instanceof sessions.ConfigurationRepoUnauthorizedError) {
 			throw new ORPCError("UNAUTHORIZED", { message: err.message });
 		}
-		throw err;
+		throw new ORPCError("INTERNAL_SERVER_ERROR", {
+			message: err instanceof Error ? err.message : "Failed to create session",
+		});
 	}
 }
