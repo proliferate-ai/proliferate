@@ -31,7 +31,6 @@ export interface GatewayEnv {
 	llmProxyUrl?: string;
 	actionsLegacyTokens: boolean;
 	billingEnabled: boolean;
-	deploymentProfile: string;
 }
 
 export function loadGatewayEnv(): GatewayEnv {
@@ -62,6 +61,5 @@ export function loadGatewayEnv(): GatewayEnv {
 		llmProxyUrl: env.LLM_PROXY_URL,
 		actionsLegacyTokens: env.ACTIONS_PLANE_LEGACY_TOKENS,
 		billingEnabled: env.NEXT_PUBLIC_BILLING_ENABLED,
-		deploymentProfile: env.DEPLOYMENT_PROFILE,
 	};
 }

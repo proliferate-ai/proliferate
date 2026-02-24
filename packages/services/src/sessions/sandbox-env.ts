@@ -23,7 +23,6 @@ export interface SandboxEnvInput {
 	directApiKey?: string;
 	proxyUrl?: string;
 	billingEnabled?: boolean;
-	deploymentProfile?: string;
 }
 
 export interface SandboxFileWrite {
@@ -220,7 +219,7 @@ export async function buildSandboxEnvVars(input: SandboxEnvInput): Promise<Sandb
 		envVars.ANTHROPIC_API_KEY = input.directApiKey ?? "";
 	} else {
 		if (!proxyUrl) {
-			throw new Error("LLM proxy is required but LLM_PROXY_URL is not set");
+			throw new Error("LLM proxy is required but proxyUrl was not provided");
 		}
 		try {
 			const keyStartMs = Date.now();

@@ -446,7 +446,6 @@ async function loadEnvironmentVariables(
 		directApiKey: env.anthropicApiKey,
 		proxyUrl: env.llmProxyUrl,
 		billingEnabled: env.billingEnabled,
-		deploymentProfile: env.deploymentProfile,
 	});
 
 	return {

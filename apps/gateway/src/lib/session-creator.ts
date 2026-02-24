@@ -488,7 +488,6 @@ async function createSandbox(params: CreateSandboxParams): Promise<CreateSandbox
 			directApiKey: env.anthropicApiKey,
 			proxyUrl: env.llmProxyUrl,
 			billingEnabled: env.billingEnabled,
-			deploymentProfile: env.deploymentProfile,
 		});
 		log.debug(
 			{
@@ -742,7 +741,6 @@ async function loadEnvironmentVariables(
 		directApiKey: env.anthropicApiKey,
 		proxyUrl: env.llmProxyUrl,
 		billingEnabled: env.billingEnabled,
-		deploymentProfile: env.deploymentProfile,
 	});
 
 	return {
