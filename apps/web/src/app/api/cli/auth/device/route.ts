@@ -1,4 +1,4 @@
-import { getDevUserId } from "@/lib/auth-helpers";
+import { getDevUserId } from "@/lib/auth/server/helpers";
 import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";
 import { cli } from "@proliferate/services";

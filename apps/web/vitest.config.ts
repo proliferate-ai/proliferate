@@ -16,6 +16,8 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"@": path.resolve(__dirname, "./src"),
+			// Allow vitest to import server-only modules without Next.js runtime
+			"server-only": path.resolve(__dirname, "./src/test/__mocks__/server-only.ts"),
 		},
 	},
 });
