@@ -13,6 +13,9 @@ import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
+import { normalizeSecretFilePathForSandbox } from "./secret-files-utils";
+
+export { normalizeSecretFilePathForSandbox };
 
 const SecretFileMetaSchema = z.object({
 	id: z.string().uuid(),
@@ -31,31 +34,6 @@ mkdir -p "$(dirname "$target")"
 printf '%s' "$PROLIFERATE_SECRET_FILE_CONTENT_B64" | base64 -d > "$target"
 `;
 const log = logger.child({ handler: "secret-files" });
-
-export function normalizeSecretFilePathForSandbox(filePath: string): string {
-	const trimmed = filePath.trim();
-	if (!trimmed) {
-		throw new ORPCError("BAD_REQUEST", { message: "Secret file path is required" });
-	}
-	if (trimmed.includes("\0")) {
-		throw new ORPCError("BAD_REQUEST", { message: "Secret file path contains invalid characters" });
-	}
-
-	const normalized = path.posix.normalize(trimmed.replaceAll("\\", "/"));
-	if (
-		normalized.startsWith("/") ||
-		normalized === "." ||
-		normalized === ".." ||
-		normalized.startsWith("../") ||
-		normalized.includes("/../")
-	) {
-		throw new ORPCError("BAD_REQUEST", {
-			message: "Secret file path must be a relative path under workspace",
-		});
-	}
-
-	return normalized;
-}
 
 async function applySecretFileToActiveSession(params: {
 	orgId: string;

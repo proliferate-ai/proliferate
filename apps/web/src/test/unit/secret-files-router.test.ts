@@ -1,4 +1,4 @@
-import { normalizeSecretFilePathForSandbox } from "@/server/routers/secret-files";
+import { normalizeSecretFilePathForSandbox } from "@/server/routers/secret-files-utils";
 import { describe, expect, it } from "vitest";
 
 describe("normalizeSecretFilePathForSandbox", () => {
