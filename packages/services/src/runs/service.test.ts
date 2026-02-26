@@ -4,14 +4,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Mock setup
 // ============================================
 
-const { mockFindById, mockUpdateRun, mockInsertRunEvent } = vi.hoisted(() => ({
+const { mockFindById, mockFindByIdInTx, mockUpdateRun, mockInsertRunEvent } = vi.hoisted(() => ({
 	mockFindById: vi.fn(),
+	mockFindByIdInTx: vi.fn(),
 	mockUpdateRun: vi.fn(),
 	mockInsertRunEvent: vi.fn(),
 }));
 
 vi.mock("./db", () => ({
 	findById: mockFindById,
+	findByIdInTx: mockFindByIdInTx,
 	updateRun: mockUpdateRun,
 	insertRunEvent: mockInsertRunEvent,
 	findByIdWithRelations: vi.fn(),
@@ -205,7 +207,7 @@ describe("resolveRun", () => {
 	it("resolves a needs_human run to succeeded", async () => {
 		const run = makeRun({ status: "needs_human" });
 		const updated = { ...run, status: "succeeded" };
-		mockTxFindFirst.mockResolvedValue(run);
+		mockFindByIdInTx.mockResolvedValue(run);
 		mockTxUpdateReturning.mockResolvedValue([updated]);
 		mockEnqueueRunNotification.mockResolvedValue(undefined);
 
@@ -241,7 +243,7 @@ describe("resolveRun", () => {
 	it("resolves a failed run to succeeded", async () => {
 		const run = makeRun({ status: "failed" });
 		const updated = { ...run, status: "succeeded" };
-		mockTxFindFirst.mockResolvedValue(run);
+		mockFindByIdInTx.mockResolvedValue(run);
 		mockTxUpdateReturning.mockResolvedValue([updated]);
 		mockEnqueueRunNotification.mockResolvedValue(undefined);
 
@@ -259,7 +261,7 @@ describe("resolveRun", () => {
 	it("resolves a timed_out run to failed", async () => {
 		const run = makeRun({ status: "timed_out" });
 		const updated = { ...run, status: "failed" };
-		mockTxFindFirst.mockResolvedValue(run);
+		mockFindByIdInTx.mockResolvedValue(run);
 		mockTxUpdateReturning.mockResolvedValue([updated]);
 		mockEnqueueRunNotification.mockResolvedValue(undefined);
 
@@ -280,7 +282,7 @@ describe("resolveRun", () => {
 
 	it("throws RunNotResolvableError for running status", async () => {
 		const run = makeRun({ status: "running" });
-		mockTxFindFirst.mockResolvedValue(run);
+		mockFindByIdInTx.mockResolvedValue(run);
 
 		await expect(
 			resolveRun({
@@ -295,7 +297,7 @@ describe("resolveRun", () => {
 
 	it("throws RunNotResolvableError for queued status", async () => {
 		const run = makeRun({ status: "queued" });
-		mockTxFindFirst.mockResolvedValue(run);
+		mockFindByIdInTx.mockResolvedValue(run);
 
 		await expect(
 			resolveRun({
@@ -321,7 +323,7 @@ describe("resolveRun", () => {
 	});
 
 	it("returns null for nonexistent run", async () => {
-		mockTxFindFirst.mockResolvedValue(null);
+		mockFindByIdInTx.mockResolvedValue(null);
 
 		const result = await resolveRun({
 			runId: "nonexistent",
@@ -336,7 +338,7 @@ describe("resolveRun", () => {
 
 	it("returns null when org does not match", async () => {
 		const run = makeRun({ organizationId: "org-other" });
-		mockTxFindFirst.mockResolvedValue(run);
+		mockFindByIdInTx.mockResolvedValue(run);
 
 		const result = await resolveRun({
 			runId: "run-1",
@@ -352,7 +354,7 @@ describe("resolveRun", () => {
 
 	it("returns null when automationId does not match", async () => {
 		const run = makeRun({ automationId: "auto-other" });
-		mockTxFindFirst.mockResolvedValue(run);
+		mockFindByIdInTx.mockResolvedValue(run);
 
 		const result = await resolveRun({
 			runId: "run-1",
@@ -370,7 +372,7 @@ describe("resolveRun", () => {
 		const existingDate = new Date("2025-01-01");
 		const run = makeRun({ status: "needs_human", completedAt: existingDate });
 		const updated = { ...run, status: "succeeded" };
-		mockTxFindFirst.mockResolvedValue(run);
+		mockFindByIdInTx.mockResolvedValue(run);
 		mockTxUpdateReturning.mockResolvedValue([updated]);
 		mockEnqueueRunNotification.mockResolvedValue(undefined);
 
@@ -389,7 +391,7 @@ describe("resolveRun", () => {
 	it("uses default reason when none provided", async () => {
 		const run = makeRun({ status: "needs_human" });
 		const updated = { ...run, status: "succeeded" };
-		mockTxFindFirst.mockResolvedValue(run);
+		mockFindByIdInTx.mockResolvedValue(run);
 		mockTxUpdateReturning.mockResolvedValue([updated]);
 		mockEnqueueRunNotification.mockResolvedValue(undefined);
 
@@ -408,7 +410,7 @@ describe("resolveRun", () => {
 
 	it("throws RunNotResolvableError on concurrent status change (empty update)", async () => {
 		const run = makeRun({ status: "needs_human" });
-		mockTxFindFirst.mockResolvedValue(run);
+		mockFindByIdInTx.mockResolvedValue(run);
 		// Conditional update returns empty — status changed between read and write
 		mockTxUpdateReturning.mockResolvedValue([]);
 
