@@ -17,12 +17,7 @@ import {
 } from "@/lib/nango";
 import { sendSlackConnectInvite } from "@/lib/slack";
 import { ORPCError } from "@orpc/server";
-import {
-	actions,
-	connectors,
-	integrations,
-	secrets,
-} from "@proliferate/services";
+import { actions, connectors, integrations, secrets } from "@proliferate/services";
 import {
 	ConnectorAuthSchema,
 	ConnectorConfigSchema,
@@ -785,10 +780,7 @@ export const integrationsRouter = {
 				const { zodToJsonSchema } = await import("@proliferate/providers/helpers/schema");
 				const tools = result.actions.map((a) => {
 					const schema = zodToJsonSchema(a.params);
-					const properties = (schema.properties ?? {}) as Record<
-						string,
-						Record<string, unknown>
-					>;
+					const properties = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
 					const requiredSet = new Set(
 						Array.isArray(schema.required) ? (schema.required as string[]) : [],
 					);
@@ -907,4 +899,3 @@ export const integrationsRouter = {
 			return { channels };
 		}),
 };
-

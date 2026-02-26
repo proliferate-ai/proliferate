@@ -24,7 +24,9 @@ export const PROVIDER_TO_INTEGRATION_ID: Record<string, string | undefined> = {
 
 // Map integration ID to provider type (reverse lookup)
 // Built dynamically so it stays in sync with the env vars
-export function getProviderFromIntegrationId(integrationId: string): "github" | "sentry" | "linear" | "jira" | null {
+export function getProviderFromIntegrationId(
+	integrationId: string,
+): "github" | "sentry" | "linear" | "jira" | null {
 	if (integrationId === NANGO_GITHUB_INTEGRATION_ID || integrationId === "github") {
 		return "github";
 	}

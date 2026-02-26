@@ -869,9 +869,7 @@ export async function checkGitHubConnectStatus(
 
 export class CliSnapshotError extends Error {
 	constructor(cause?: unknown) {
-		super(
-			`Failed to create snapshot: ${cause instanceof Error ? cause.message : "Unknown error"}`,
-		);
+		super(`Failed to create snapshot: ${cause instanceof Error ? cause.message : "Unknown error"}`);
 		this.name = "CliSnapshotError";
 	}
 }

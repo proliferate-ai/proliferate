@@ -69,7 +69,9 @@ export async function generateVirtualKey(
 	const adminUrl = proxyUrl.replace(/\/+$/, "").replace(/\/v1$/, "");
 
 	// Delete any existing key with this alias to avoid uniqueness conflicts on resume
-	await revokeVirtualKey(sessionId).catch(() => {});
+	await revokeVirtualKey(sessionId).catch(() => {
+		// Intentional: key may not exist yet; ignore revocation errors
+	});
 
 	const response = await fetch(`${adminUrl}/key/generate`, {
 		method: "POST",

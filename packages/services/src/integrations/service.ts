@@ -865,10 +865,7 @@ async function getNangoCredentials(
 	try {
 		connection = await nango.getConnection(nangoIntegrationId, integration.connectionId!);
 	} catch (err) {
-		handleNangoError(
-			err,
-			`getConnection(${providerType}, connection=${integration.connectionId})`,
-		);
+		handleNangoError(err, `getConnection(${providerType}, connection=${integration.connectionId})`);
 	}
 
 	return {
@@ -922,10 +919,7 @@ export async function createNangoConnectSession(
 
 		return { sessionToken: result.data.token };
 	} catch (err) {
-		handleNangoError(
-			err,
-			`createConnectSession(${provider}, integration=${nangoIntegrationId})`,
-		);
+		handleNangoError(err, `createConnectSession(${provider}, integration=${nangoIntegrationId})`);
 	}
 }
 
@@ -950,8 +944,7 @@ export async function getSentryMetadata(
 	const authToken = creds.apiKey || creds.access_token;
 	if (!authToken) throw new NoAccessTokenError();
 
-	const hostname =
-		(connectionConfig as { hostname?: string } | undefined)?.hostname || "sentry.io";
+	const hostname = (connectionConfig as { hostname?: string } | undefined)?.hostname || "sentry.io";
 	return fetchSentryMetadata(authToken, hostname, projectSlug);
 }
 

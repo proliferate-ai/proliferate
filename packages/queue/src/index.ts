@@ -171,7 +171,6 @@ export interface SessionTitleGenerationJob {
 	prompt: string;
 }
 
-
 // ============================================
 // Connection Options
 // ============================================

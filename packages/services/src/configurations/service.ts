@@ -7,7 +7,11 @@
 import { randomUUID } from "crypto";
 import { env } from "@proliferate/environment/server";
 import { createConfigurationSnapshotBuildQueue } from "@proliferate/queue";
-import type { Configuration, ConfigurationServiceCommand, SandboxProviderType } from "@proliferate/shared";
+import type {
+	Configuration,
+	ConfigurationServiceCommand,
+	SandboxProviderType,
+} from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import {
 	parseConfigurationServiceCommands,
@@ -364,9 +368,7 @@ export class AmbiguousRepoError extends Error {
 
 export class SnapshotFailedError extends Error {
 	constructor(cause?: unknown) {
-		super(
-			`Failed to create snapshot: ${cause instanceof Error ? cause.message : "Unknown error"}`,
-		);
+		super(`Failed to create snapshot: ${cause instanceof Error ? cause.message : "Unknown error"}`);
 		this.name = "SnapshotFailedError";
 	}
 }

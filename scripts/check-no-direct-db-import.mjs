@@ -50,7 +50,10 @@ async function walk(dir, acc = []) {
 				entry.name === ".git" ||
 				entry.name === "dist" ||
 				entry.name === ".next" ||
-				entry.name === ".worktrees"
+				entry.name === ".worktrees" ||
+				entry.name === ".claude" ||
+				entry.name === ".codex" ||
+				entry.name === ".cursor"
 			) {
 				continue;
 			}

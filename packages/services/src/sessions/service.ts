@@ -8,7 +8,7 @@
 
 import { randomUUID } from "crypto";
 import { createSyncClient } from "@proliferate/gateway-clients";
-import type { AgentConfig, Session, SandboxProviderType } from "@proliferate/shared";
+import type { AgentConfig, SandboxProviderType, Session } from "@proliferate/shared";
 import { getDefaultAgentConfig, isValidModelId, parseModelId } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { getBlockedReasonText, sanitizePromptSnippet } from "@proliferate/shared/sessions";
@@ -16,7 +16,12 @@ import * as billing from "../billing";
 import * as configurations from "../configurations";
 import { toIsoString } from "../db/serialize";
 import { getServicesLogger } from "../logger";
-import type { CreateSessionInput as DbCreateSessionInput, ListSessionsOptions, SessionStatus, UpdateSessionInput } from "../types/sessions";
+import type {
+	CreateSessionInput as DbCreateSessionInput,
+	ListSessionsOptions,
+	SessionStatus,
+	UpdateSessionInput,
+} from "../types/sessions";
 import type { SessionRow } from "./db";
 import * as sessionsDb from "./db";
 import { requestTitleGeneration } from "./generate-title";
@@ -395,8 +400,7 @@ async function createConfigurationSession(input: {
 	const configurationProvider = configuration.sandboxProvider;
 
 	// Get repos from configuration_repos junction table
-	const configurationRepos =
-		await configurations.getConfigurationReposWithDetails(configurationId);
+	const configurationRepos = await configurations.getConfigurationReposWithDetails(configurationId);
 
 	if (configurationRepos.length === 0) {
 		throw new ConfigurationNoReposError();
@@ -466,10 +470,7 @@ async function createConfigurationSession(input: {
  */
 function triggerEagerStart(sessionId: string, gatewayUrl: string, serviceToken: string): void {
 	if (!gatewayUrl || !serviceToken) {
-		logger.warn(
-			{ sessionId },
-			"Skipping eager start: missing gatewayUrl or serviceToken",
-		);
+		logger.warn({ sessionId }, "Skipping eager start: missing gatewayUrl or serviceToken");
 		return;
 	}
 

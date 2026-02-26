@@ -310,15 +310,12 @@ export async function fetchJiraMetadata(
 
 	let issueTypes: JiraIssueType[] = [];
 	if (projectId) {
-		const issueTypesResponse = await fetch(
-			`${baseUrl}/issuetype/project?projectId=${projectId}`,
-			{
-				headers: {
-					Authorization: `Bearer ${authToken}`,
-					Accept: "application/json",
-				},
+		const issueTypesResponse = await fetch(`${baseUrl}/issuetype/project?projectId=${projectId}`, {
+			headers: {
+				Authorization: `Bearer ${authToken}`,
+				Accept: "application/json",
 			},
-		);
+		});
 
 		if (issueTypesResponse.ok) {
 			const rawTypes = (await issueTypesResponse.json()) as Array<{
