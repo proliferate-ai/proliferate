@@ -237,16 +237,13 @@ export const LinearProvider: TriggerProvider<LinearTriggerConfig, PollState, Lin
 		return [
 			{
 				...p.data,
-				// Store action on the item for action filtering
 				action: p.action,
-			} as any,
+			},
 		];
 	},
 
 	computeDedupKey(item: LinearIssue): string | null {
-		// For Linear, dedupe on issue ID + action
-		// The action is stored on the item by parseWebhook
-		const action = (item as any).action || "create";
+		const action = item.action ?? "create";
 		return `linear:${item.id}:${action}`;
 	},
 
@@ -255,8 +252,7 @@ export const LinearProvider: TriggerProvider<LinearTriggerConfig, PollState, Lin
 	},
 
 	getEventType(item: LinearIssue): string {
-		const action = (item as any).action || "create";
-		return `Issue:${action}`;
+		return `Issue:${item.action ?? "create"}`;
 	},
 };
 
@@ -270,8 +266,7 @@ export function filterLinearByAction(
 ): boolean {
 	if (!actionFilters?.length) return true;
 
-	const action = (item as any).action || "create";
-	return actionFilters.includes(action);
+	return actionFilters.includes(item.action ?? "create");
 }
 
 export default LinearProvider;

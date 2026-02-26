@@ -391,6 +391,8 @@ export interface LinearIssue {
 	url?: string;
 	createdAt?: string;
 	updatedAt?: string;
+	/** Webhook action that produced this item. Set by parseWebhook(), absent for polled items. */
+	action?: "create" | "update";
 }
 
 /**
