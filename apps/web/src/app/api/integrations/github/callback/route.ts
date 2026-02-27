@@ -15,6 +15,11 @@ interface GitHubOAuthState {
 	returnUrl?: string;
 }
 
+function isGitHubOpaqueState(state: string): boolean {
+	// GitHub can send an opaque UUID-like state for direct installation management flows.
+	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(state);
+}
+
 /**
  * Get the base URL for redirects, respecting proxy headers (ngrok, etc.)
  */
@@ -72,51 +77,72 @@ export async function GET(request: NextRequest) {
 		return NextResponse.redirect(new URL("/dashboard?github=uninstalled", baseUrl));
 	}
 
+	const authUserId = authResult.session.user.id;
 	const stateParam = request.nextUrl.searchParams.get("state");
 	if (!stateParam) {
 		log.warn("Missing GitHub OAuth state");
 		return NextResponse.json({ error: "Missing OAuth state" }, { status: 400 });
 	}
 
+	let orgId: string;
+	let returnUrl: string;
+
 	const verifiedState = verifySignedOAuthState<Record<string, unknown>>(stateParam);
-	if (!verifiedState.ok) {
-		log.warn({ verificationError: verifiedState.error }, "Invalid GitHub OAuth state signature");
-		return NextResponse.json({ error: "Invalid OAuth state" }, { status: 400 });
+	if (verifiedState.ok) {
+		if (!isValidGitHubOAuthState(verifiedState.payload)) {
+			log.warn("GitHub OAuth state payload is missing required fields");
+			return NextResponse.json({ error: "Invalid OAuth state" }, { status: 400 });
+		}
+
+		// Signed state from our /api/integrations/github/oauth route
+		const stateData = verifiedState.payload;
+
+		if (stateData.userId !== authUserId) {
+			log.warn({ authUserId, stateUserId: stateData.userId }, "GitHub OAuth state user mismatch");
+			return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+		}
+
+		const stateMaxAgeMs = 30 * 60 * 1000;
+		if (stateData.timestamp < Date.now() - stateMaxAgeMs) {
+			return NextResponse.json({ error: "OAuth state expired" }, { status: 400 });
+		}
+
+		orgId = stateData.orgId;
+		returnUrl = sanitizeOAuthReturnUrl(stateData.returnUrl, "/onboarding") || "/onboarding";
+	} else {
+		const activeOrgId = authResult.session.session.activeOrganizationId;
+		const canUseOpaqueStateFallback =
+			(setupAction === "install" || setupAction === "update") &&
+			Boolean(activeOrgId) &&
+			isGitHubOpaqueState(stateParam);
+
+		if (!canUseOpaqueStateFallback) {
+			log.warn(
+				{
+					verificationError: verifiedState.error,
+					setupAction,
+					hasActiveOrg: Boolean(activeOrgId),
+				},
+				"Invalid GitHub OAuth state signature",
+			);
+			return NextResponse.json({ error: "Invalid OAuth state" }, { status: 400 });
+		}
+		if (!activeOrgId) {
+			return NextResponse.redirect(new URL("/dashboard?error=no_active_org", baseUrl));
+		}
+
+		// GitHub-generated opaque state from direct install/manage flows.
+		orgId = activeOrgId;
+		returnUrl = "/dashboard/integrations";
+		log.info({ setupAction, orgId }, "Using active org fallback for GitHub opaque OAuth state");
 	}
 
-	if (!isValidGitHubOAuthState(verifiedState.payload)) {
-		log.warn("GitHub OAuth state payload is missing required fields");
-		return NextResponse.json({ error: "Invalid OAuth state" }, { status: 400 });
-	}
-
-	const stateData = verifiedState.payload;
-	const authUserId = authResult.session.user.id;
-
-	if (stateData.userId !== authUserId) {
-		log.warn({ authUserId, stateUserId: stateData.userId }, "GitHub OAuth state user mismatch");
-		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-	}
-
-	const stateMaxAgeMs = 30 * 60 * 1000;
-	if (stateData.timestamp < Date.now() - stateMaxAgeMs) {
-		return NextResponse.json({ error: "OAuth state expired" }, { status: 400 });
-	}
-
-	const role = await orgs.getUserRole(authUserId, stateData.orgId);
+	const role = await orgs.getUserRole(authUserId, orgId);
 	if (role !== "owner" && role !== "admin") {
-		log.warn(
-			{ userId: authUserId, orgId: stateData.orgId, role },
-			"User is not an integration admin for OAuth org",
-		);
+		log.warn({ userId: authUserId, orgId, role }, "User is not an integration admin for OAuth org");
 		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 	}
-
-	const orgId = stateData.orgId;
-	const returnUrl = sanitizeOAuthReturnUrl(stateData.returnUrl, "/onboarding") || "/onboarding";
-	log.info(
-		{ orgId, activeOrgId: authResult.session.session.activeOrganizationId },
-		"Using orgId from verified OAuth state",
-	);
+	log.info({ orgId }, "Resolved org for GitHub callback");
 
 	try {
 		// Verify the installation exists and get details
