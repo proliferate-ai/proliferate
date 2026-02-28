@@ -70,6 +70,7 @@ Transport direction rule:
 - Resume:
   - Resolve pinned compute identity from run/session `boot_snapshot` (`provider/templateId/imageDigest`)
   - Provider reconnect by stored id (`connect()` resumes paused E2B sandboxes)
+  - Re-hydrate fresh short-lived credentials (git/app tokens, virtual LLM key) via control plane before resuming task execution
   - Runtime restarts stream
   - Session continues from durable DB context
 
@@ -100,6 +101,7 @@ To avoid stale snapshots:
 ## Security requirements
 - Do not inject privileged long-lived tokens into sandbox by default
 - Sandbox-native git operations may use short-lived, repo-scoped credentials (ephemeral)
+- Ephemeral credentials must be minted/refreshed on cold boot and resume; never restored from frozen snapshot values
 - Keep non-git action/integration execution server-side
 - Sandbox can request actions; gateway approves/executes
 

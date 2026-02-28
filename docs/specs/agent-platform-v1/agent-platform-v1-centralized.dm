@@ -597,6 +597,7 @@ Transport direction rule:
 - Resume:
   - Resolve pinned compute identity from run/session `boot_snapshot` (`provider/templateId/imageDigest`)
   - Provider reconnect by stored id (`connect()` resumes paused E2B sandboxes)
+  - Re-hydrate fresh short-lived credentials (git/app tokens, virtual LLM key) via control plane before resuming task execution
   - Runtime restarts stream
   - Session continues from durable DB context
 
@@ -627,6 +628,7 @@ To avoid stale snapshots:
 ## Security requirements
 - Do not inject privileged long-lived tokens into sandbox by default
 - Sandbox-native git operations may use short-lived, repo-scoped credentials (ephemeral)
+- Ephemeral credentials must be minted/refreshed on cold boot and resume; never restored from frozen snapshot values
 - Keep non-git action/integration execution server-side
 - Sandbox can request actions; gateway approves/executes
 
@@ -773,6 +775,7 @@ Allowed in sandbox:
 Required constraints:
 - Credentials must be short-lived and repo-scoped.
 - Credentials are minted server-side and injected only for session runtime.
+- Credentials must be refreshed on resume/rehydration paths; expired credentials must not be replayed from stored runtime snapshots.
 - No long-lived org action secrets are injected for this path.
 - Non-git side effects (for example ticket changes, deploy actions, analytics writes) stay in gateway action execution path.
 - Audit must still record actor, run identity, repo, and resulting PR metadata.
@@ -2458,6 +2461,14 @@ AZ/zone scheduling safety (required for RWO volumes):
 - If same-zone scheduling cannot be guaranteed, operators must use RWX-capable shared storage (for example EFS/Filestore) for session workspaces.
 - Avoid ambiguous cross-zone resume behavior that can deadlock pod attach in `ContainerCreating`.
 
+Unschedulable fallback (required):
+- If resume pod cannot schedule/attach due to PVC affinity or volume attach failures beyond bounded timeout (default `3m`), system must trigger controlled fallback:
+  1. Mark trapped resume attempt as degraded with reason.
+  2. Tombstone old session runtime binding (retain audit trail).
+  3. Start fresh sandbox in healthy zone/node pool.
+  4. Rehydrate from durable control-plane state (`boot_snapshot`, repo state, and persisted run context), then continue.
+- This fallback must be explicit and observable in run/session timeline to avoid silent state loss.
+
 ### D) Enterprise controlled environment
 - Same as self-host, with stricter network/policy constraints.
 - Customer controls ingress, secrets manager, observability stack, and upgrade windows.
@@ -2671,8 +2682,10 @@ Current related runtime store:
 - `.env.local` (development env) is allowed as onboarding input.
 - Raw `.env.local` values are persisted as encrypted env bundle records.
 - `boot_snapshot` stores only references (`envBundleRef`, version, digest), never plaintext env values.
+- Short-lived runtime credentials (for example GitHub installation tokens, session virtual LLM keys) are never persisted in `boot_snapshot`.
 - Action/integration secrets (OAuth tokens, connector secrets) are not part of env bundle or boot snapshot payload.
 - Runtime boot resolves env bundle values just-in-time through daemon-scoped secret context.
+- Runtime boot/resume must hydrate fresh short-lived credentials from control plane; snapshot only stores credential policy/context, not token material.
 - Avoid exporting env bundles as global shell environment for unrelated sandbox processes.
 - Optional compatibility mode may materialize an app-scoped `.env` file in workspace (excluded from VCS) when required by local tooling.
 
@@ -2685,6 +2698,7 @@ Current related runtime store:
 5. `boot_snapshot` writes must reject plaintext secret keys/values and only accept env references.
 6. PR ownership mode is frozen per run (`sandbox_pr` or `gateway_pr`) and cannot mutate mid-run.
 7. Resume/restart must request the pinned compute identity (`provider`, `templateId`, `imageDigest`) for reproducible runtime behavior.
+8. Resume/restart must refresh short-lived credentials dynamically; replaying stale credential values from snapshot is forbidden.
 
 Live-security override rule (TOCTOU safety):
 - Frozen snapshot does not bypass live org security controls.
@@ -2819,17 +2833,18 @@ apps/worker/src/jobs/billing/
 ## Runtime contract
 
 ### 1) Session key generation
-When session starts:
+When runtime boots or resumes:
 1. Ensure proxy team exists for org (`team_id = organizationId`)
-2. Generate short-lived virtual key (`user_id = sessionId`, alias bound to session)
+2. Generate fresh short-lived virtual key (`user_id = sessionId`, alias bound to session)
 3. Inject proxy base URL + virtual key into sandbox runtime env
 4. Attach synchronous budget/rate limits to virtual key (org/session policy)
 
 Rules:
 - Duration defaults from `LLM_PROXY_KEY_DURATION` (or sensible default)
-- Replace/revoke prior alias key for same session when regenerating
+- Replace/revoke prior alias key for same session when regenerating (boot or resume)
 - Fail fast if proxy is required and key generation fails
 - Key-level budget/rate limits must be set at issuance time for real-time enforcement (not only async billing)
+- Expired virtual keys must never be revived from persisted snapshot/env state.
 
 ### 2) Sandbox env injection
 Preferred secure mode:
@@ -2850,6 +2865,10 @@ Sandbox must not receive:
 On pause/termination/enforcement:
 - revoke session alias key best-effort
 - revocation failure should not block lifecycle transitions
+
+Resume behavior:
+- On resume, runtime must request a newly valid session virtual key before first model call.
+- `401/invalid_key` from proxy should trigger one controlled refresh path before surfacing hard failure.
 
 ### 4) Spend ingestion
 Worker pipeline:

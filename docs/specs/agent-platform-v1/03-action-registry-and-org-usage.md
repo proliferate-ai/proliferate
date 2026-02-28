@@ -106,6 +106,7 @@ Allowed in sandbox:
 Required constraints:
 - Credentials must be short-lived and repo-scoped.
 - Credentials are minted server-side and injected only for session runtime.
+- Credentials must be refreshed on resume/rehydration paths; expired credentials must not be replayed from stored runtime snapshots.
 - No long-lived org action secrets are injected for this path.
 - Non-git side effects (for example ticket changes, deploy actions, analytics writes) stay in gateway action execution path.
 - Audit must still record actor, run identity, repo, and resulting PR metadata.

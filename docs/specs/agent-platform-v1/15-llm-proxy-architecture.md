@@ -78,17 +78,18 @@ apps/worker/src/jobs/billing/
 ## Runtime contract
 
 ### 1) Session key generation
-When session starts:
+When runtime boots or resumes:
 1. Ensure proxy team exists for org (`team_id = organizationId`)
-2. Generate short-lived virtual key (`user_id = sessionId`, alias bound to session)
+2. Generate fresh short-lived virtual key (`user_id = sessionId`, alias bound to session)
 3. Inject proxy base URL + virtual key into sandbox runtime env
 4. Attach synchronous budget/rate limits to virtual key (org/session policy)
 
 Rules:
 - Duration defaults from `LLM_PROXY_KEY_DURATION` (or sensible default)
-- Replace/revoke prior alias key for same session when regenerating
+- Replace/revoke prior alias key for same session when regenerating (boot or resume)
 - Fail fast if proxy is required and key generation fails
 - Key-level budget/rate limits must be set at issuance time for real-time enforcement (not only async billing)
+- Expired virtual keys must never be revived from persisted snapshot/env state.
 
 ### 2) Sandbox env injection
 Preferred secure mode:
@@ -109,6 +110,10 @@ Sandbox must not receive:
 On pause/termination/enforcement:
 - revoke session alias key best-effort
 - revocation failure should not block lifecycle transitions
+
+Resume behavior:
+- On resume, runtime must request a newly valid session virtual key before first model call.
+- `401/invalid_key` from proxy should trigger one controlled refresh path before surfacing hard failure.
 
 ### 4) Spend ingestion
 Worker pipeline:

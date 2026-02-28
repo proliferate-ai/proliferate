@@ -38,6 +38,14 @@ AZ/zone scheduling safety (required for RWO volumes):
 - If same-zone scheduling cannot be guaranteed, operators must use RWX-capable shared storage (for example EFS/Filestore) for session workspaces.
 - Avoid ambiguous cross-zone resume behavior that can deadlock pod attach in `ContainerCreating`.
 
+Unschedulable fallback (required):
+- If resume pod cannot schedule/attach due to PVC affinity or volume attach failures beyond bounded timeout (default `3m`), system must trigger controlled fallback:
+  1. Mark trapped resume attempt as degraded with reason.
+  2. Tombstone old session runtime binding (retain audit trail).
+  3. Start fresh sandbox in healthy zone/node pool.
+  4. Rehydrate from durable control-plane state (`boot_snapshot`, repo state, and persisted run context), then continue.
+- This fallback must be explicit and observable in run/session timeline to avoid silent state loss.
+
 ### D) Enterprise controlled environment
 - Same as self-host, with stricter network/policy constraints.
 - Customer controls ingress, secrets manager, observability stack, and upgrade windows.

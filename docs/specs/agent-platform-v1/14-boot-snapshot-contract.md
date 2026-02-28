@@ -89,8 +89,10 @@ Current related runtime store:
 - `.env.local` (development env) is allowed as onboarding input.
 - Raw `.env.local` values are persisted as encrypted env bundle records.
 - `boot_snapshot` stores only references (`envBundleRef`, version, digest), never plaintext env values.
+- Short-lived runtime credentials (for example GitHub installation tokens, session virtual LLM keys) are never persisted in `boot_snapshot`.
 - Action/integration secrets (OAuth tokens, connector secrets) are not part of env bundle or boot snapshot payload.
 - Runtime boot resolves env bundle values just-in-time through daemon-scoped secret context.
+- Runtime boot/resume must hydrate fresh short-lived credentials from control plane; snapshot only stores credential policy/context, not token material.
 - Avoid exporting env bundles as global shell environment for unrelated sandbox processes.
 - Optional compatibility mode may materialize an app-scoped `.env` file in workspace (excluded from VCS) when required by local tooling.
 
@@ -103,6 +105,7 @@ Current related runtime store:
 5. `boot_snapshot` writes must reject plaintext secret keys/values and only accept env references.
 6. PR ownership mode is frozen per run (`sandbox_pr` or `gateway_pr`) and cannot mutate mid-run.
 7. Resume/restart must request the pinned compute identity (`provider`, `templateId`, `imageDigest`) for reproducible runtime behavior.
+8. Resume/restart must refresh short-lived credentials dynamically; replaying stale credential values from snapshot is forbidden.
 
 Live-security override rule (TOCTOU safety):
 - Frozen snapshot does not bypass live org security controls.
