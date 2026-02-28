@@ -160,7 +160,8 @@ Sections 3 and 4 were intentionally removed in this spec revision. File tree and
 ### 6.3 GitHub App Installation Invariants — `Implemented`
 - Callback must authenticate caller (or redirect to sign-in with callback retry URL).
 - OAuth start must require an admin/owner caller and mint base64url JSON state containing org/user context + nonce + timestamp + optional return URL, signed with server-side HMAC.
-- Callback must require a state parameter; signed state must be verified and rejected when tampered or expired before trusting state fields.
+- Callback may receive missing `state` for direct GitHub install/manage callbacks (`setup_action=install|update`) and may fall back to the authenticated session active org.
+- When present, signed state must be verified and rejected when tampered or expired before trusting state fields.
 - Callback may accept GitHub opaque UUID-like state for direct install/manage callbacks (`setup_action=install|update`) by falling back to the authenticated session active org.
 - Callback must re-validate that the authenticated user is an admin/owner in the resolved org before persistence (state org for signed payloads, active org for opaque fallback).
 - Callback return URL must be sanitized to approved relative-path prefixes.
