@@ -14,9 +14,9 @@ Example:
 ## Runtime model
 
 ### A) Manager agent (supervisor role)
-- Runs as an isolated \"lean\" sandbox agent (not inside control-plane Node.js process)
+- Runs as an isolated "lean" sandbox agent (not inside control-plane Node.js process)
 - Durable identity and objective
-- Reads inbox (chat, webhook, cron wake) via gateway tools
+- Reads grouped inbox summaries (chat, webhook, cron wake) via gateway tools
 - Decides what to do next
 - Spawns child runs for concrete work
 
@@ -43,6 +43,42 @@ Do not rely on in-memory gateway state for long-running correctness.
 
 The control plane does not run open-ended LLM planning logic directly.
 
+Lease/locking requirement:
+- Only one manager harness instance may be active per coworker at a time.
+- Claim must use durable lock/lease semantics to prevent duplicate orchestration loops.
+- Trigger wake events must be coalesced to avoid duplicate manager boots.
+
+## Implementation file tree (current and planned owners)
+
+```text
+apps/worker/src/automation/
+  index.ts                  # run execution orchestration
+  resolve-target.ts         # target repo/config resolution
+  finalizer.ts              # completion + side effects
+  notifications.ts          # run status notifications
+
+apps/trigger-service/src/
+  api/webhooks.ts           # webhook ingestion
+  polling/worker.ts         # cron polling ingestion
+
+packages/services/src/
+  automations/service.ts    # coworker definitions and config
+  runs/service.ts           # run lifecycle + transitions
+  sessions/service.ts       # session lifecycle linkage
+  outbox/service.ts         # durable async dispatch
+```
+
+## Core data models for long-running behavior
+
+| Model | Purpose | File |
+|---|---|---|
+| `automations` | Coworker identity, instructions, enabled state, notification destination | `packages/db/src/schema/automations.ts` |
+| `triggers` | What wakes the coworker and with which provider/cadence | `packages/db/src/schema/triggers.ts` |
+| `trigger_events` | Durable queue/history of incoming wake events | `packages/db/src/schema/triggers.ts` |
+| `automation_runs` | Per-wake execution record and status transitions | `packages/db/src/schema/schema.ts` (`automationRuns`) |
+| `sessions` | Child coding session runtime and sandbox linkage | `packages/db/src/schema/sessions.ts` |
+| `outbox` | Follow-up dispatch for notifications/side effects | `packages/db/src/schema/schema.ts` (`outbox`) |
+
 ## Wake model
 Use hybrid wake strategy:
 - Webhooks for interactive/near-real-time events (GitHub mentions, Slack)
@@ -50,11 +86,22 @@ Use hybrid wake strategy:
 
 Internally both become inbox events.
 
+## Query-from-anywhere contract
+Users should be able to ask coworkers for status from web (primary) and Slack/GitHub (secondary).
+
+Required behavior:
+- A status query resolves from durable run/session rows first.
+- If manager agent is currently running, include live addendum from current context.
+- Response always includes concrete links (run details, PRs, approvals).
+
 ## Idle/suspend behavior
 When agent has no immediate work:
 - Persist current state and summary
 - Pause sandbox (E2B) or stop safely
 - Resume on next wake event
+
+Default idle timeout:
+- `10m` for both normal idle periods and approval-wait idle periods.
 
 ## User controls
 Required controls:
@@ -82,3 +129,4 @@ Required controls:
 - [ ] Agent survives process restart without losing control state
 - [ ] Pause/resume behavior is stable for day-scale workflows
 - [ ] Manager/supervisor cognition runs in isolated sandbox, not control-plane process
+- [ ] Status queries are available from dashboard and at least one external channel (Slack/GitHub)

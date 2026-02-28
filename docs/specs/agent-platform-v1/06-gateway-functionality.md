@@ -18,6 +18,32 @@ Current code anchors:
 - [session hub](/Users/pablo/proliferate/apps/gateway/src/hub/session-hub.ts)
 - [event processor](/Users/pablo/proliferate/apps/gateway/src/hub/event-processor.ts)
 
+## Gateway file tree (runtime-critical paths)
+
+```text
+apps/gateway/src/
+  api/proliferate/http/
+    actions.ts                # action invoke/approve/deny
+    sessions.ts               # session lifecycle endpoints used by clients
+    tools.ts                  # tool surface and callback handling
+  api/proxy/
+    devtools.ts               # runtime proxy surfaces
+    terminal.ts               # terminal websocket proxy
+  hub/
+    session-hub.ts            # per-session fanout and client coordination
+    session-runtime.ts        # provider runtime ensure/reconnect
+    event-processor.ts        # stream normalization + telemetry/compute metering intercept
+```
+
+## Core data models gateway reads/writes
+
+| Model | Gateway usage | File |
+|---|---|---|
+| `sessions` | status transitions, runtime metadata (`sandboxId`, tunnel urls, telemetry) | `packages/db/src/schema/sessions.ts` |
+| `action_invocations` | side-effect lifecycle and approvals | `packages/db/src/schema/schema.ts` (`actionInvocations`) |
+| `integrations` / `org_connectors` | action source resolution and auth lookup context | `packages/db/src/schema/integrations.ts`, `packages/db/src/schema/schema.ts` |
+| `outbox` | downstream async notifications/events after runtime transitions | `packages/db/src/schema/schema.ts` (`outbox`) |
+
 ## Required responsibilities
 
 ### 1) Session runtime control
@@ -31,6 +57,8 @@ Current code anchors:
 - Invoke action
 - Approve/deny invocation
 - Emit invocation status updates
+- Applies to non-git side effects; sandbox-native git push/PR path follows coding harness contract
+- If PR ownership mode is `gateway_pr` (future strict mode), gateway also owns PR creation side effect
 
 ### 3) Policy/identity checkpoint
 Before side effects:
@@ -39,6 +67,11 @@ Before side effects:
 - Resolve execution identity/credential owner
 - Revalidate delayed invocations after approval and before execution
 
+Approval-wait response contract:
+- On `require_approval`, gateway persists pending state and returns immediate suspended response (`202` semantic).
+- Session may remain running until idle timeout; standard idle pause (`10m`) handles hibernation.
+- On approval/deny, gateway emits a deterministic resume event (`sys_event.tool_resume`) with invocation outcome for harness continuation.
+
 ### 4) Durable persistence
 - Persist invocation rows and status transitions
 - Persist tool/action outputs needed for audit and UI replay
@@ -46,6 +79,12 @@ Before side effects:
 ### 5) Live fanout
 - Broadcast runtime and invocation updates over websocket
 - Allow multi-viewer visibility for same session
+
+### 6) Metering and telemetry intercept
+- Parse runtime `agent_event` frames for observability and realtime UX telemetry
+- Persist deterministic compute lifecycle cut points (`start`, `pause`, `resume`, `end`) for billing
+- Do not create billable LLM token events from stream frames
+- LLM token billing truth comes from LiteLLM spend ingestion (`15-llm-proxy-architecture.md`)
 
 ## DB-first + stream-attach UX split
 
@@ -59,12 +98,17 @@ Before side effects:
 
 This prevents dashboards from breaking when streams reconnect.
 
+Streaming contracts for terminal/code/preview transport are detailed in:
+- [11-streaming-preview-transport-v2.md](/Users/pablo/proliferate/docs/specs/agent-platform-v1/11-streaming-preview-transport-v2.md)
+- [canonical streaming spec](/Users/pablo/proliferate/docs/specs/streaming-preview.md)
+
 ## Failure behavior
 Gateway must be explicit about:
 - Disconnected runtime
 - Invocation pending approval
 - Invocation denied
 - Provider/integration execution error
+- Suspended-waiting-for-approval status with deterministic resume path
 
 Each must have clear status and retry path.
 
@@ -81,3 +125,5 @@ Each must have clear status and retry path.
 - [ ] DB-first org dashboard + live session detail split is implemented
 - [ ] Gateway evaluates runtime permissions against immutable `boot_snapshot`
 - [ ] Post-approval revalidation is enforced before executing pending actions
+- [ ] Gateway route handlers remain transport-only and do not import Drizzle models directly
+- [ ] Gateway stream telemetry does not directly write billable LLM token events

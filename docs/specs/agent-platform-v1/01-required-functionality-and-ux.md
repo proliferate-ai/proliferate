@@ -1,83 +1,170 @@
 # Required Functionality End to End (Including UX)
 
 ## Goal
-Ship a usable V1 where teams can:
-- Run one-off coding tasks
-- Run persistent background engineering agents
-- Review outputs and approve risky actions
-- Track work in a reliable org dashboard
+Ship a product where users can rely on Proliferate as a real coworker:
+- Long-running coworkers that keep working in the background
+- High-quality coding sessions with strong runtime visibility
+- Broad integrations (org-wide and personal) with safe action execution
+- Clean onboarding that gets teams productive fast
 
-## User-visible features (must-have)
+This spec is the practical bar for V1 plus near-term parity direction (Cursor/Lovable/Claude cowork-style behavior).
 
-### A) Interactive coding run
+## Product bar (plain language)
+Users should feel:
+- "I can ask this coworker to do real work, not just chat."
+- "I can check status from anywhere, especially the web dashboard."
+- "I can safely connect tools and know who is acting with which credentials."
+- "Coding runs are transparent: I can see terminal, changes, preview, and outcomes."
+
+## Must-have workflows (end to end)
+
+### A) Clean setup and onboarding
 User flow:
-1. User opens web app (or Slack/GitHub entry point)
-2. User asks for a task (for example: "fix this failing test")
-3. Session starts in E2B sandbox
-4. Agent edits code, runs checks, produces result
-5. User sees PR link, summary, logs/artifacts
+1. Connect GitHub
+2. Pick repo
+3. Paste `.env.local` (development env) or select existing env bundle
+4. Run setup/onboarding job that prepares workspace and snapshot
+5. Connect tools/integrations needed for this coworker
+6. Set communication preferences
+7. Start first task
 
 Acceptance:
-- User can start run in under 1 minute
-- Session page shows live progress and persisted history
-- Final output includes at least summary + PR link or failure reason
-- Final output includes a visual artifact (screenshot or short recording) showing app behavior or test UI state when relevant
+- Setup is guided and understandable by non-platform engineers
+- First useful run starts without manual infra steps
+- Onboarding produces a reusable baseline snapshot/config for follow-up runs
+- Docs include a one-liner start path and clear troubleshooting
+- Development env values are stored as encrypted env bundles; `boot_snapshot` stores env references only
+- Action/integration secrets are managed separately from `.env.local` bundles
 
-### B) Persistent background agent
+### B) Create a coworker in chat-first style
 User flow:
-1. User creates agent (for example: "Sentry Auto-Fixer")
-2. User connects sources (Sentry + GitHub + Slack)
-3. Agent wakes from cron/webhooks, triages, spawns child runs
-4. User asks: "what got fixed today?"
-5. Agent replies with links to runs/PRs and pending approvals
+1. User opens "Create coworker"
+2. Describes goal in plain English (for example "watch Sentry and fix regressions")
+3. System proposes sources, actions, cadence, and safety mode
+4. User confirms and saves
+5. Coworker starts and posts first status update
 
 Acceptance:
-- Agent can wake repeatedly without manual restart
-- Child runs are tracked with clear status
-- User can pause/resume/cancel the persistent agent
+- User can create a useful coworker without editing JSON/YAML
+- Coworker definition includes objective, sources, allowed actions, and schedule
+- Coworker can spawn child coding runs when needed
 
-### C) Approval workflow
+### C) Long-running coworker lifecycle
 User flow:
-1. Agent requests risky action
-2. System marks invocation pending approval
-3. Approver approves or denies from UI
-4. Agent receives decision and continues/halts
+1. Coworker wakes from webhook/cron
+2. Triages new work
+3. Spawns child runs for concrete tasks
+4. Reports progress and outcomes in its thread/channel
+5. User asks "what did you finish today?" and gets a concrete answer
 
 Acceptance:
-- Approval list is DB-driven (works even if no live stream)
-- Every approval/deny has audit row with actor and timestamp
+- Repeated wake/sleep cycles work without manual intervention
+- Parent/child runs are linked and inspectable
+- User can pause/resume/cancel and update coworker objectives
 
-### D) Org dashboard reliability model
-The dashboard should:
-- Read durable rows first (sessions, invocations, runs)
-- Attach to live stream only when user opens detail view
+### D) Coding session UX quality
+Session must expose:
+- Live terminal output
+- Code changes and git diff
+- Preview URL/app status
+- Services/logs visibility
+- Final PR/outcome summary
 
 Acceptance:
-- Org list pages are usable with stream disconnected
-- Session detail page shows both persisted and live updates
+- Session stream is responsive and reconnect-safe
+- Final output always includes summary + links + failure reason (if failed)
+- Visual proof artifact exists when UI/runtime behavior is part of the task
+
+### E) Action safety and approvals
+User flow:
+1. Coworker requests side-effect action (for example comment, ticket update, deploy trigger)
+2. System checks mode (`allow`, `require_approval`, `deny`)
+3. If approval needed, inbox/slack notification is sent
+4. Runtime is marked waiting and continues through standard idle lifecycle
+5. Approver accepts or rejects
+6. Coworker resumes with decision
+
+Acceptance:
+- Approvals are DB-backed and auditable
+- Post-approval revalidation runs before delayed execution
+- All invocations show actor, run-as identity, and credential owner
+- Idle timeout defaults to `10m` for approval waits and normal inactivity
+
+### F) Query from anywhere
+Entry points:
+- Web dashboard (primary)
+- Slack/GitHub mentions (secondary)
+- Later desktop client
+
+Acceptance:
+- User can ask status/questions and receive actionable links
+- Dashboard works from durable DB state even during stream interruptions
+
+## Integration model requirements (org-wide + personal)
+
+### Org-wide connections
+- Admins can connect org integrations (GitHub org bot, Sentry org project access, PostHog, analytics, shared MCP tools)
+- Used by default for background coworkers
+
+### Personal connections
+- Users can connect personal tools/accounts
+- Personal credentials are not silently reused for shared templates
+- Sharing a coworker template prompts recipient to attach their own personal integration where required
+
+### Actions page expectations
+- One place to manage both org-wide and personal sources
+- Clear badges for "Org" vs "Personal"
+- Clear warnings before sharing coworkers that depend on personal integrations
+
+## Implementation file references (current code anchors)
+
+### UX and orchestration
+- `apps/web/src/server/routers/automations.ts`
+- `apps/web/src/server/routers/sessions.ts`
+- `apps/web/src/server/routers/triggers.ts`
+- `apps/worker/src/automation/index.ts`
+- `apps/worker/src/automation/finalizer.ts`
+
+### Runtime/coding sessions
+- `apps/gateway/src/hub/session-hub.ts`
+- `apps/gateway/src/hub/session-runtime.ts`
+- `packages/shared/src/providers/e2b.ts`
+- `packages/shared/src/sandbox/opencode.ts`
+
+### Actions/integrations/approvals
+- `apps/gateway/src/api/proliferate/http/actions.ts`
+- `packages/services/src/actions/service.ts`
+- `apps/web/src/server/routers/integrations.ts`
+- `packages/services/src/integrations/service.ts`
+- `packages/services/src/connectors/service.ts`
+
+### Notifications and inbox
+- `packages/services/src/notifications/service.ts`
+- `apps/worker/src/automation/notifications.ts`
+- `packages/services/src/outbox/service.ts`
 
 ## Key UX surfaces
 
 ### 1) Mission Control (org-level)
 Shows:
-- Active background agents
+- Active coworkers
 - Running/failed/pending runs
 - Approval queue
-- Quick links to child runs and PRs
+- Recent outcomes and links to PRs/issues
 
-### 2) Agent detail page
+### 2) Coworker detail page
 Shows:
-- Agent config and status
-- Last wake time
-- Current objective
-- Recent outputs and run history
+- Objective, schedule, and source bindings
+- Current status + last wake time
+- Recent runs and spawned child runs
+- Conversation/history ("what it did and why")
 
-### 3) Session detail page
+### 3) Session/run detail page
 Shows:
 - Live stream (terminal/events)
 - Persisted timeline
 - Tool/action outputs
-- Git state + artifact links
+- Git state, previews, logs, artifacts
 
 ### 4) Approval inbox
 Shows:
@@ -88,35 +175,40 @@ Shows:
 
 ## Data model requirements (plain language)
 Minimum durable records:
-- Agent
+- Coworker/Agent
 - Session
-- Run (if distinct from session in V1 implementation)
+- Run (if separate)
 - Action invocation
 - Trigger event
 - Inbox event
-
-Plus key links:
-- Session belongs to agent
-- Invocation belongs to session
-- Trigger event can create run/session
+- Notification preference + channel target
 
 Additional immutable runtime record:
-- `boot_snapshot` on each session/run, capturing prompt, model, tool grants, and execution identity at start time
+- `boot_snapshot` on each session/run (prompt, model, grants, identity, env bundle references)
 
 Why:
-- Running work must not change behavior because someone edits live agent config mid-run
-- Audit/replay must reflect what the agent was actually allowed to do at that moment
+- Running work must not change behavior when live config edits happen
+- Audit/replay must reflect exact allowed behavior at run start
+
+Core tables that back this UX:
+- `automations` (coworker identity, prompt, notification destination) — `packages/db/src/schema/automations.ts`
+- `sessions` (interactive/child run state, runtime metadata) — `packages/db/src/schema/sessions.ts`
+- `triggers` + `trigger_events` (wake pipeline, dedup, processing status) — `packages/db/src/schema/triggers.ts`
+- `integrations` + `org_connectors` (OAuth and MCP source access) — `packages/db/src/schema/integrations.ts`, `packages/db/src/schema/schema.ts`
+- `action_invocations` (approval and side-effect audit) — `packages/db/src/schema/schema.ts`
+- `outbox` + `session_notification_subscriptions` (delivery and subscriber preferences) — `packages/db/src/schema/schema.ts`, `packages/db/src/schema/slack.ts`
 
 ## Non-goals (for V1)
-- General-purpose no-code workflow editor
-- Broad non-engineering automation catalog
-- Perfect autonomous merge/deploy with zero approvals
+- Full no-code workflow builder
+- Arbitrary business-process automation marketplace
+- Fully autonomous deploy/merge with zero guardrails
 
 ## Definition of done checklist
-- [ ] Interactive run works from user prompt to reviewable output
-- [ ] Persistent agent wakes repeatedly and can spawn child runs
-- [ ] Approval queue gates risky actions
-- [ ] Org dashboard is DB-first and resilient
-- [ ] Session detail combines live stream + persisted outputs
+- [ ] Setup flow works from repo connect to first successful run
+- [ ] Coworker can be created conversationally and run on schedule
+- [ ] Persistent coworker wakes repeatedly and can spawn child runs
+- [ ] Org + personal integration model is visible and safe
+- [ ] Approval queue gates risky actions with auditability
+- [ ] Dashboard is DB-first and resilient; detail views stream live state
 - [ ] Session/run stores immutable `boot_snapshot` at creation time
-- [ ] Coding runs publish visual proof artifact in final output bundle
+- [ ] Coding runs publish visual proof artifact when task requires it

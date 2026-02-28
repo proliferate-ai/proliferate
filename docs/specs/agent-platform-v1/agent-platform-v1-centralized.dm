@@ -1,6 +1,6 @@
-# Agent Platform V1 (Combined)
+# Agent Platform V1 (Centralized)
 
-> Auto-generated from `docs/specs/agent-platform-v1/*.md`
+> Generated via bash from `README.md` + numbered subsystem specs.
 
 ---
 

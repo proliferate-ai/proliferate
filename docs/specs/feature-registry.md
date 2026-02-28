@@ -317,6 +317,26 @@
 
 ---
 
+## 14. Streaming & Preview (`streaming-preview.md`)
+
+This section tracks the clean-slate V2 transport architecture contract defined in `streaming-preview.md`.
+
+| Feature | Status | Evidence | Notes |
+|---------|--------|----------|-------|
+| Unified client stream transport (`/v1/sessions/:id/stream`) | Planned | `docs/specs/streaming-preview.md` | Single multiplexed WebSocket stream for terminal, fs, agent events, and preview signals |
+| Gateway two-hop zero-trust auth with per-request HMAC signature | Planned | `docs/specs/streaming-preview.md` | Strip browser auth headers; sign hop-2 requests with nonce + expiry |
+| `sandbox-daemon` PID 1 runtime bridge | Planned | `docs/specs/streaming-preview.md` | Owns PTY, FS RPC, watcher events, and port discovery |
+| PTY ring replay (`last_seq`) with dual caps (lines + bytes) | Planned | `docs/specs/streaming-preview.md` | 10k-line or 8MB cap; warm replay semantics |
+| Native Monaco FS RPC with strict workspace jail | Planned | `docs/specs/streaming-preview.md` | Replaces VS Code server file browsing/edit path |
+| Event-driven git/code-changes updates from FS watcher | Planned | `docs/specs/streaming-preview.md` | No polling; WS `fs_change` invalidates client queries |
+| Dynamic preview port discovery and Caddy hot-reload | Planned | `docs/specs/streaming-preview.md` | Detect listener ports via `ss -tln`; emit `port_opened` |
+| Slow-consumer backpressure isolation | Planned | `docs/specs/streaming-preview.md` | Per-client bounded queue with disconnect on overflow |
+| VS Code server transport surface | Deprecated | `apps/gateway/src/api/proxy/vscode.ts`, `apps/web/src/components/coding-session/vscode-panel.tsx` | Explicit removal in V2 clean-slate mandate |
+| Polling-based right-sidebar refresh hooks | Deprecated | `apps/web/src/components/coding-session/*` | Polling banned; replaced by daemon-driven events |
+| Direct browser access to provider tunnel URLs | Deprecated | `docs/specs/streaming-preview.md` | Gateway-only routing and auth injection contract |
+
+---
+
 ## Cross-Cutting (not a spec — covered within relevant specs)
 
 | Feature | Where documented | Evidence |
