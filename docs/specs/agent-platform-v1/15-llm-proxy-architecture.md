@@ -82,11 +82,13 @@ When session starts:
 1. Ensure proxy team exists for org (`team_id = organizationId`)
 2. Generate short-lived virtual key (`user_id = sessionId`, alias bound to session)
 3. Inject proxy base URL + virtual key into sandbox runtime env
+4. Attach synchronous budget/rate limits to virtual key (org/session policy)
 
 Rules:
 - Duration defaults from `LLM_PROXY_KEY_DURATION` (or sensible default)
 - Replace/revoke prior alias key for same session when regenerating
 - Fail fast if proxy is required and key generation fails
+- Key-level budget/rate limits must be set at issuance time for real-time enforcement (not only async billing)
 
 ### 2) Sandbox env injection
 Preferred secure mode:
@@ -123,6 +125,11 @@ Billing source-of-truth rule:
 - LiteLLM spend ingestion is the sole source-of-truth for billable LLM token usage.
 - Gateway runtime stream telemetry may provide realtime usage hints for UX, but must not be used as authoritative token billing.
 
+Real-time budget enforcement rule:
+- Async spend ingestion is ledger truth, but budget blocking must occur synchronously in proxy/key enforcement path.
+- When key budget is exhausted, proxy rejects requests immediately (for example 429/policy denial).
+- Runtime must treat budget-denied responses as terminal or pause-worthy policy events, not transient transport errors.
+
 ## URL and environment contract
 
 Required env:
@@ -155,6 +162,7 @@ Any model add/change must update all three surfaces in one change.
 - Sandbox uses short-lived virtual keys only, preferably via daemon-local proxy indirection.
 - Proxy key generation and spend reads are audited and attributable to org/session context.
 - No browser client can call proxy admin endpoints directly.
+- Budget/rate policy must be enforced at proxy ingress for each virtual key.
 
 ## Self-hosting expectations
 

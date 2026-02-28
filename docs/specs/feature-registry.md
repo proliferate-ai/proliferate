@@ -172,6 +172,7 @@
 | Virtual key generation | Implemented | `packages/shared/src/llm-proxy.ts` | Per-session/org temp keys via LiteLLM API |
 | Key scoping (team/user) | Implemented | `packages/shared/src/llm-proxy.ts` | Team = org, user = session for cost isolation |
 | Key duration config | Implemented | `packages/environment/src/schema.ts:LLM_PROXY_KEY_DURATION` | Configurable via env |
+| Virtual key budget/rate enforcement | Planned | `docs/specs/agent-platform-v1/15-llm-proxy-architecture.md` | Enforce hard spend/rate limits synchronously at proxy layer |
 | Model routing | Implemented | External LiteLLM service | Not a local app — external dependency |
 | Spend tracking (per-org) | Implemented | `packages/shared/src/llm-proxy.ts` | Via LiteLLM virtual key spend APIs |
 | LLM spend cursors (DB) | Implemented | `packages/db/src/schema/billing.ts:llmSpendCursors` | Tracks spend sync state |
@@ -329,7 +330,9 @@ This section tracks the clean-slate V2 transport architecture contract defined i
 | PTY ring replay (`last_seq`) with dual caps (lines + bytes) | Planned | `docs/specs/streaming-preview.md` | 10k-line or 8MB cap; warm replay semantics |
 | Native Monaco FS RPC with strict workspace jail | Planned | `docs/specs/streaming-preview.md` | Replaces VS Code server file browsing/edit path |
 | Event-driven git/code-changes updates from FS watcher | Planned | `docs/specs/streaming-preview.md` | No polling; WS `fs_change` invalidates client queries |
-| Dynamic preview port discovery and Caddy hot-reload | Planned | `docs/specs/streaming-preview.md` | Detect listener ports via `ss -tln`; emit `port_opened` |
+| Dynamic preview port discovery and daemon in-memory routing | Planned | `docs/specs/streaming-preview.md` | Explicit preview registration preferred; `ss -tln` fallback + stability gating |
+| Cross-replica gateway control-stream backplane | Planned | `docs/specs/streaming-preview.md` | Redis/NATS for low-volume control events; PTY data stays on session-owner gateway path |
+| Approval-state reconciliation on reconnect | Planned | `docs/specs/streaming-preview.md` | Daemon/harness pulls pending invocation outcomes after resume |
 | Slow-consumer backpressure isolation | Planned | `docs/specs/streaming-preview.md` | Per-client bounded queue with disconnect on overflow |
 | VS Code server transport surface | Deprecated | `apps/gateway/src/api/proxy/vscode.ts`, `apps/web/src/components/coding-session/vscode-panel.tsx` | Explicit removal in V2 clean-slate mandate |
 | Polling-based right-sidebar refresh hooks | Deprecated | `apps/web/src/components/coding-session/*` | Polling banned; replaced by daemon-driven events |

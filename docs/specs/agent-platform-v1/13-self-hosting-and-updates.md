@@ -32,6 +32,12 @@ Kubernetes state persistence contract:
 - Resume path must reattach the same PVC before continuing work.
 - Lean manager sessions are ephemeral by default and do not require PVC persistence unless explicitly configured.
 
+AZ/zone scheduling safety (required for RWO volumes):
+- If storage class is zonal + `ReadWriteOnce` (EBS/PersistentDisk), resume scheduling must honor PVC zone affinity.
+- Resume controller must schedule replacement pod in the same zone as the bound PVC.
+- If same-zone scheduling cannot be guaranteed, operators must use RWX-capable shared storage (for example EFS/Filestore) for session workspaces.
+- Avoid ambiguous cross-zone resume behavior that can deadlock pod attach in `ContainerCreating`.
+
 ### D) Enterprise controlled environment
 - Same as self-host, with stricter network/policy constraints.
 - Customer controls ingress, secrets manager, observability stack, and upgrade windows.

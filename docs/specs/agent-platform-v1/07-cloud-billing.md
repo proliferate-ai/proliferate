@@ -67,6 +67,11 @@ If LLM proxy spend data is unavailable for a path, meter runtime minutes as fall
 - Pause/resume boundaries must create deterministic metering cut points to avoid double counting.
 - Approval-wait time is billable only while session is still running; once idle pause triggers, paused window is not billable.
 
+Budget enforcement split (required):
+- Ledger truth remains async (spend ingestion).
+- Hard budget/rate enforcement must happen synchronously at LLM proxy virtual-key layer.
+- Billing worker reconciliation must not be the first line of budget defense for runaway loops.
+
 ## Metering event model
 Create durable usage records when:
 - Session starts/stops

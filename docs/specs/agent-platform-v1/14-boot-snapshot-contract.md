@@ -104,6 +104,11 @@ Current related runtime store:
 6. PR ownership mode is frozen per run (`sandbox_pr` or `gateway_pr`) and cannot mutate mid-run.
 7. Resume/restart must request the pinned compute identity (`provider`, `templateId`, `imageDigest`) for reproducible runtime behavior.
 
+Live-security override rule (TOCTOU safety):
+- Frozen snapshot does not bypass live org security controls.
+- At execution time, gateway/services must re-check live revocation/disablement state for integrations and credentials.
+- Live revocations override frozen snapshot permissions immediately.
+
 ## Mutable vs immutable during run
 
 Immutable for current run:

@@ -20,6 +20,11 @@ Example:
 - Decides what to do next
 - Spawns child runs for concrete work
 
+Efficiency constraints:
+- Manager sessions should be burst-oriented and short-lived (triage/decide/dispatch, then exit).
+- Do not keep lean manager sandboxes idling for long periods when no work remains.
+- Deterministic pre-processing (dedupe/grouping/routing prep) may run in trigger-service/worker before manager boot.
+
 ### B) Child runs
 - Isolated coding sessions
 - One task per run
@@ -102,6 +107,10 @@ When agent has no immediate work:
 
 Default idle timeout:
 - `10m` for both normal idle periods and approval-wait idle periods.
+
+Cost guardrail:
+- Prefer stopping completed/idle manager sessions rather than hibernating them.
+- Reserve pause/hibernate primarily for worker coding sessions with expensive warm state.
 
 ## User controls
 Required controls:

@@ -156,6 +156,14 @@ Mode requirements:
 4. Execute or fail with revalidation error
 5. Persist final state + broadcast update
 
+Revalidation precedence contract (required):
+- Frozen `boot_snapshot` remains source-of-truth for run intent (prompt/tooling/run identity defaults).
+- Live org security state is source-of-truth at execution time:
+  - integration/token revocations
+  - org kill switches / connector disablement
+  - credential validity/expiry
+- If live security state is stricter than frozen snapshot, execution must fail closed.
+
 ## Invocation state machine and idempotency
 
 Allowed transitions:

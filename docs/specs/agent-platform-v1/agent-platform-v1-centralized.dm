@@ -823,6 +823,14 @@ Mode requirements:
 4. Execute or fail with revalidation error
 5. Persist final state + broadcast update
 
+Revalidation precedence contract (required):
+- Frozen `boot_snapshot` remains source-of-truth for run intent (prompt/tooling/run identity defaults).
+- Live org security state is source-of-truth at execution time:
+  - integration/token revocations
+  - org kill switches / connector disablement
+  - credential validity/expiry
+- If live security state is stricter than frozen snapshot, execution must fail closed.
+
 ## Invocation state machine and idempotency
 
 Allowed transitions:
@@ -903,6 +911,11 @@ Example:
 - Reads grouped inbox summaries (chat, webhook, cron wake) via gateway tools
 - Decides what to do next
 - Spawns child runs for concrete work
+
+Efficiency constraints:
+- Manager sessions should be burst-oriented and short-lived (triage/decide/dispatch, then exit).
+- Do not keep lean manager sandboxes idling for long periods when no work remains.
+- Deterministic pre-processing (dedupe/grouping/routing prep) may run in trigger-service/worker before manager boot.
 
 ### B) Child runs
 - Isolated coding sessions
@@ -986,6 +999,10 @@ When agent has no immediate work:
 
 Default idle timeout:
 - `10m` for both normal idle periods and approval-wait idle periods.
+
+Cost guardrail:
+- Prefer stopping completed/idle manager sessions rather than hibernating them.
+- Reserve pause/hibernate primarily for worker coding sessions with expensive warm state.
 
 ## User controls
 Required controls:
@@ -1186,6 +1203,7 @@ apps/gateway/src/
     session-hub.ts            # per-session fanout and client coordination
     session-runtime.ts        # provider runtime ensure/reconnect
     event-processor.ts        # stream normalization + telemetry/compute metering intercept
+    backplane.ts              # cross-replica pub/sub fanout bridge
 ```
 
 ## Core data models gateway reads/writes
@@ -1224,6 +1242,7 @@ Approval-wait response contract:
 - On `require_approval`, gateway persists pending state and returns immediate suspended response (`202` semantic).
 - Session may remain running until idle timeout; standard idle pause (`10m`) handles hibernation.
 - On approval/deny, gateway emits a deterministic resume event (`sys_event.tool_resume`) with invocation outcome for harness continuation.
+- Because paused sandboxes drop connections, harness/daemon must reconcile pending invocation states on reconnect (pull-based sync), not rely only on pushed resume events.
 
 ### 4) Durable persistence
 - Persist invocation rows and status transitions
@@ -1232,6 +1251,17 @@ Approval-wait response contract:
 ### 5) Live fanout
 - Broadcast runtime and invocation updates over websocket
 - Allow multi-viewer visibility for same session
+
+Horizontal scale contract:
+- Split runtime traffic into:
+  - Control stream: low-volume lifecycle/invocation events (approval state, status changes, coordination).
+  - Data stream: high-volume PTY/FS/runtime byte streams.
+- Use shared backplane (Redis Pub/Sub or equivalent) for control stream only.
+- Do not publish raw PTY/FS high-throughput frames to Redis backplane by default.
+- Each session has an owner gateway replica for daemon data-plane connection.
+- Browser stream attachment must route to owner gateway (consistent hash, owner lookup + redirect/proxy, or equivalent).
+- Sticky sessions may be used as optimization but are not sufficient as sole correctness mechanism.
+- On owner failover, new owner reattaches runtime and resumes using replay/reconciliation semantics.
 
 ### 6) Metering and telemetry intercept
 - Parse runtime `agent_event` frames for observability and realtime UX telemetry
@@ -1262,6 +1292,7 @@ Gateway must be explicit about:
 - Invocation denied
 - Provider/integration execution error
 - Suspended-waiting-for-approval status with deterministic resume path
+- Reconnect reconciliation failures (for pending invocation/status pull)
 
 Each must have clear status and retry path.
 
@@ -1354,6 +1385,11 @@ If LLM proxy spend data is unavailable for a path, meter runtime minutes as fall
 - Session compute duration is derived from durable lifecycle timestamps (`startedAt`, `pausedAt`, `endedAt`) with pause windows excluded.
 - Pause/resume boundaries must create deterministic metering cut points to avoid double counting.
 - Approval-wait time is billable only while session is still running; once idle pause triggers, paused window is not billable.
+
+Budget enforcement split (required):
+- Ledger truth remains async (spend ingestion).
+- Hard budget/rate enforcement must happen synchronously at LLM proxy virtual-key layer.
+- Billing worker reconciliation must not be the first line of budget defense for runaway loops.
 
 ## Metering event model
 Create durable usage records when:
@@ -1904,6 +1940,12 @@ Important:
 
 `/sandbox-daemon` runs as PID 1 and owns runtime transport.
 
+Process supervision requirement:
+- Sandbox runtime must correctly reap child processes and forward signals.
+- Acceptable patterns:
+  - `tini`/`dumb-init` as PID 1 launching `sandbox-daemon`, or
+  - daemon implementation explicitly handling init-style reaping/signal duties.
+
 ### 2.1 Unified in-sandbox router (no Caddy)
 `/sandbox-daemon` binds to one exposed sandbox port and routes in memory:
 - `/_proliferate/pty/*` -> PTY attach/input/replay APIs
@@ -1932,11 +1974,13 @@ Preview proxy compatibility requirements:
 - `/fs/write` max payload: `10MB`.
 
 ### 2.4 Dynamic preview port discovery
-- Poll `ss -tln` every `500ms`.
-- Track safe candidate ports and select active preview target.
+- Preferred path: harness/runner explicitly registers preview intent with daemon (port + intent metadata).
+- Fallback path: daemon polls `ss -tln` every `500ms` when explicit registration is unavailable.
+- Track safe candidate ports and select active preview target with stability gating.
 - Only proxy allowlisted preview port ranges by policy (default `3000-9999`).
 - Never proxy denylisted infra/internal ports (`22`, `2375`, `2376`, `4096`, `26500`) even if in range.
-- Emit `port_opened` / `port_closed` events on changes.
+- Emit `port_opened` only after stability window/health check to avoid short-lived test-port flicker.
+- Emit `port_closed` on durable closure.
 - Gateway maps preview requests by host pattern (`:previewPort-:sessionId--preview`) to target session and safe port.
 
 ### 2.5 Daemon runtime modes
@@ -1965,11 +2009,25 @@ Backpressure:
 - Per-client queue cap in Gateway: `1000` messages OR `2MB`.
 - On overflow, disconnect slow consumer (`1011`) without affecting other viewers.
 
+Gateway horizontal scale contract:
+- Separate control-plane and data-plane streaming:
+  - Control-plane events (invocation status, approvals, session state) may use shared backplane.
+  - Data-plane events (`pty_out` and other high-frequency runtime streams) stay on session owner gateway path.
+- Multiple gateway replicas require a shared control backplane (Redis Pub/Sub or equivalent).
+- Session owner gateway maintains primary daemon data stream attachment.
+- Browser connections must resolve to session owner gateway (owner lookup + redirect/proxy/consistent-hash strategy).
+- Sticky sessions can improve locality but are not a complete correctness mechanism.
+- On owner loss, ownership transfers and new owner reattaches using replay/reconciliation contracts.
+
 Initial hydration requirement:
 - Before applying websocket deltas, UI must fetch baseline runtime state:
   - `GET /v1/sessions/:id/fs/tree`
   - `GET /v1/sessions/:id/preview/ports`
 - Websocket events are deltas layered on top of this baseline.
+
+Reconnect reconciliation requirement:
+- On daemon/harness reconnect after pause/resume, runtime must fetch pending invocation outcomes from gateway (for example approvals resolved while sandbox slept).
+- Resume correctness must not depend solely on in-flight websocket push events.
 
 ## 4. E2B-Specific Contracts (from docs)
 
@@ -2029,8 +2087,10 @@ Measured at Gateway with OpenTelemetry, aggregated in Datadog/Prometheus (rollin
 apps/gateway/src/
   api/proliferate/ws/           # unified stream endpoint
   api/proxy/                    # fs/preview/terminal proxy surfaces
+  api/proliferate/http/         # runtime reconciliation endpoints
   hub/session-runtime.ts        # runtime ensure + reconnect
   hub/event-processor.ts        # event normalization + metering intercept
+  hub/backplane.ts              # cross-replica stream fanout
 
 packages/shared/src/providers/
   e2b.ts                        # provider tunnel host resolution
@@ -2392,6 +2452,12 @@ Kubernetes state persistence contract:
 - Resume path must reattach the same PVC before continuing work.
 - Lean manager sessions are ephemeral by default and do not require PVC persistence unless explicitly configured.
 
+AZ/zone scheduling safety (required for RWO volumes):
+- If storage class is zonal + `ReadWriteOnce` (EBS/PersistentDisk), resume scheduling must honor PVC zone affinity.
+- Resume controller must schedule replacement pod in the same zone as the bound PVC.
+- If same-zone scheduling cannot be guaranteed, operators must use RWX-capable shared storage (for example EFS/Filestore) for session workspaces.
+- Avoid ambiguous cross-zone resume behavior that can deadlock pod attach in `ContainerCreating`.
+
 ### D) Enterprise controlled environment
 - Same as self-host, with stricter network/policy constraints.
 - Customer controls ingress, secrets manager, observability stack, and upgrade windows.
@@ -2620,6 +2686,11 @@ Current related runtime store:
 6. PR ownership mode is frozen per run (`sandbox_pr` or `gateway_pr`) and cannot mutate mid-run.
 7. Resume/restart must request the pinned compute identity (`provider`, `templateId`, `imageDigest`) for reproducible runtime behavior.
 
+Live-security override rule (TOCTOU safety):
+- Frozen snapshot does not bypass live org security controls.
+- At execution time, gateway/services must re-check live revocation/disablement state for integrations and credentials.
+- Live revocations override frozen snapshot permissions immediately.
+
 ## Mutable vs immutable during run
 
 Immutable for current run:
@@ -2752,11 +2823,13 @@ When session starts:
 1. Ensure proxy team exists for org (`team_id = organizationId`)
 2. Generate short-lived virtual key (`user_id = sessionId`, alias bound to session)
 3. Inject proxy base URL + virtual key into sandbox runtime env
+4. Attach synchronous budget/rate limits to virtual key (org/session policy)
 
 Rules:
 - Duration defaults from `LLM_PROXY_KEY_DURATION` (or sensible default)
 - Replace/revoke prior alias key for same session when regenerating
 - Fail fast if proxy is required and key generation fails
+- Key-level budget/rate limits must be set at issuance time for real-time enforcement (not only async billing)
 
 ### 2) Sandbox env injection
 Preferred secure mode:
@@ -2793,6 +2866,11 @@ Billing source-of-truth rule:
 - LiteLLM spend ingestion is the sole source-of-truth for billable LLM token usage.
 - Gateway runtime stream telemetry may provide realtime usage hints for UX, but must not be used as authoritative token billing.
 
+Real-time budget enforcement rule:
+- Async spend ingestion is ledger truth, but budget blocking must occur synchronously in proxy/key enforcement path.
+- When key budget is exhausted, proxy rejects requests immediately (for example 429/policy denial).
+- Runtime must treat budget-denied responses as terminal or pause-worthy policy events, not transient transport errors.
+
 ## URL and environment contract
 
 Required env:
@@ -2825,6 +2903,7 @@ Any model add/change must update all three surfaces in one change.
 - Sandbox uses short-lived virtual keys only, preferably via daemon-local proxy indirection.
 - Proxy key generation and spend reads are audited and attributable to org/session context.
 - No browser client can call proxy admin endpoints directly.
+- Budget/rate policy must be enforced at proxy ingress for each virtual key.
 
 ## Self-hosting expectations
 

@@ -33,6 +33,7 @@ apps/gateway/src/
     session-hub.ts            # per-session fanout and client coordination
     session-runtime.ts        # provider runtime ensure/reconnect
     event-processor.ts        # stream normalization + telemetry/compute metering intercept
+    backplane.ts              # cross-replica pub/sub fanout bridge
 ```
 
 ## Core data models gateway reads/writes
@@ -71,6 +72,7 @@ Approval-wait response contract:
 - On `require_approval`, gateway persists pending state and returns immediate suspended response (`202` semantic).
 - Session may remain running until idle timeout; standard idle pause (`10m`) handles hibernation.
 - On approval/deny, gateway emits a deterministic resume event (`sys_event.tool_resume`) with invocation outcome for harness continuation.
+- Because paused sandboxes drop connections, harness/daemon must reconcile pending invocation states on reconnect (pull-based sync), not rely only on pushed resume events.
 
 ### 4) Durable persistence
 - Persist invocation rows and status transitions
@@ -79,6 +81,17 @@ Approval-wait response contract:
 ### 5) Live fanout
 - Broadcast runtime and invocation updates over websocket
 - Allow multi-viewer visibility for same session
+
+Horizontal scale contract:
+- Split runtime traffic into:
+  - Control stream: low-volume lifecycle/invocation events (approval state, status changes, coordination).
+  - Data stream: high-volume PTY/FS/runtime byte streams.
+- Use shared backplane (Redis Pub/Sub or equivalent) for control stream only.
+- Do not publish raw PTY/FS high-throughput frames to Redis backplane by default.
+- Each session has an owner gateway replica for daemon data-plane connection.
+- Browser stream attachment must route to owner gateway (consistent hash, owner lookup + redirect/proxy, or equivalent).
+- Sticky sessions may be used as optimization but are not sufficient as sole correctness mechanism.
+- On owner failover, new owner reattaches runtime and resumes using replay/reconciliation semantics.
 
 ### 6) Metering and telemetry intercept
 - Parse runtime `agent_event` frames for observability and realtime UX telemetry
@@ -109,6 +122,7 @@ Gateway must be explicit about:
 - Invocation denied
 - Provider/integration execution error
 - Suspended-waiting-for-approval status with deterministic resume path
+- Reconnect reconciliation failures (for pending invocation/status pull)
 
 Each must have clear status and retry path.
 

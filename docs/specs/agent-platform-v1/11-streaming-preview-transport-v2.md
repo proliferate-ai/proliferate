@@ -36,6 +36,12 @@ Important:
 
 `/sandbox-daemon` runs as PID 1 and owns runtime transport.
 
+Process supervision requirement:
+- Sandbox runtime must correctly reap child processes and forward signals.
+- Acceptable patterns:
+  - `tini`/`dumb-init` as PID 1 launching `sandbox-daemon`, or
+  - daemon implementation explicitly handling init-style reaping/signal duties.
+
 ### 2.1 Unified in-sandbox router (no Caddy)
 `/sandbox-daemon` binds to one exposed sandbox port and routes in memory:
 - `/_proliferate/pty/*` -> PTY attach/input/replay APIs
@@ -64,11 +70,13 @@ Preview proxy compatibility requirements:
 - `/fs/write` max payload: `10MB`.
 
 ### 2.4 Dynamic preview port discovery
-- Poll `ss -tln` every `500ms`.
-- Track safe candidate ports and select active preview target.
+- Preferred path: harness/runner explicitly registers preview intent with daemon (port + intent metadata).
+- Fallback path: daemon polls `ss -tln` every `500ms` when explicit registration is unavailable.
+- Track safe candidate ports and select active preview target with stability gating.
 - Only proxy allowlisted preview port ranges by policy (default `3000-9999`).
 - Never proxy denylisted infra/internal ports (`22`, `2375`, `2376`, `4096`, `26500`) even if in range.
-- Emit `port_opened` / `port_closed` events on changes.
+- Emit `port_opened` only after stability window/health check to avoid short-lived test-port flicker.
+- Emit `port_closed` on durable closure.
 - Gateway maps preview requests by host pattern (`:previewPort-:sessionId--preview`) to target session and safe port.
 
 ### 2.5 Daemon runtime modes
@@ -97,11 +105,25 @@ Backpressure:
 - Per-client queue cap in Gateway: `1000` messages OR `2MB`.
 - On overflow, disconnect slow consumer (`1011`) without affecting other viewers.
 
+Gateway horizontal scale contract:
+- Separate control-plane and data-plane streaming:
+  - Control-plane events (invocation status, approvals, session state) may use shared backplane.
+  - Data-plane events (`pty_out` and other high-frequency runtime streams) stay on session owner gateway path.
+- Multiple gateway replicas require a shared control backplane (Redis Pub/Sub or equivalent).
+- Session owner gateway maintains primary daemon data stream attachment.
+- Browser connections must resolve to session owner gateway (owner lookup + redirect/proxy/consistent-hash strategy).
+- Sticky sessions can improve locality but are not a complete correctness mechanism.
+- On owner loss, ownership transfers and new owner reattaches using replay/reconciliation contracts.
+
 Initial hydration requirement:
 - Before applying websocket deltas, UI must fetch baseline runtime state:
   - `GET /v1/sessions/:id/fs/tree`
   - `GET /v1/sessions/:id/preview/ports`
 - Websocket events are deltas layered on top of this baseline.
+
+Reconnect reconciliation requirement:
+- On daemon/harness reconnect after pause/resume, runtime must fetch pending invocation outcomes from gateway (for example approvals resolved while sandbox slept).
+- Resume correctness must not depend solely on in-flight websocket push events.
 
 ## 4. E2B-Specific Contracts (from docs)
 
@@ -161,8 +183,10 @@ Measured at Gateway with OpenTelemetry, aggregated in Datadog/Prometheus (rollin
 apps/gateway/src/
   api/proliferate/ws/           # unified stream endpoint
   api/proxy/                    # fs/preview/terminal proxy surfaces
+  api/proliferate/http/         # runtime reconciliation endpoints
   hub/session-runtime.ts        # runtime ensure + reconnect
   hub/event-processor.ts        # event normalization + metering intercept
+  hub/backplane.ts              # cross-replica stream fanout
 
 packages/shared/src/providers/
   e2b.ts                        # provider tunnel host resolution
