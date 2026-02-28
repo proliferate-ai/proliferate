@@ -70,8 +70,8 @@ export type NangoAuthFlow = "connectUI" | "auth";
 interface UseNangoConnectOptions {
 	/**
 	 * Which auth flow to use:
-	 * - "connectUI": Opens Nango's managed Connect UI modal
-	 * - "auth" (default): Opens a headless popup directly to the provider
+	 * - "connectUI" (default): Opens Nango's managed Connect UI modal
+	 * - "auth": Opens a headless popup directly to the provider (legacy, doesn't support all auth modes)
 	 */
 	flow?: NangoAuthFlow;
 	onSuccess?: (provider: NangoProvider) => void;
@@ -88,7 +88,7 @@ interface UseNangoConnectReturn {
 }
 
 export function useNangoConnect(options: UseNangoConnectOptions = {}): UseNangoConnectReturn {
-	const { flow = "auth", onSuccess, onError } = options;
+	const { flow = "connectUI", onSuccess, onError } = options;
 	const [loadingProvider, setLoadingProvider] = useState<NangoProvider | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [isConnectUIOpen, setIsConnectUIOpen] = useState(false);
