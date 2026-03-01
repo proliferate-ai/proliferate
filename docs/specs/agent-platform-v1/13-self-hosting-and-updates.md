@@ -5,6 +5,10 @@ Define how Proliferate is deployed, upgraded, and operated outside managed cloud
 
 This is a product requirement, not only infra detail.
 
+Clean-slate assumption:
+- This spec targets the rewrite baseline.
+- No legacy cutover or backward-compatibility track is required for initial release.
+
 ## Deployment modes
 
 ### A) Managed cloud (default)
@@ -14,37 +18,12 @@ This is a product requirement, not only infra detail.
 ### B) Self-host Docker
 - Customer runs platform services via Docker Compose or equivalent container runtime.
 - Best for single-team/self-managed deployments.
-- Provider choice remains configurable.
+- Sandbox compute still runs on E2B in V1.
 
 ### C) Self-host Kubernetes
 - Customer deploys platform services in Kubernetes (Helm + Postgres + Redis baseline).
 - Best for multi-team and stricter SRE controls.
-
-Kubernetes runtime networking contract:
-- Gateway and sandbox pods must run inside the same cluster/VPC trust boundary.
-- Gateway connects to sandbox-daemon via internal cluster routing (Service DNS or pod IP).
-- Do not depend on creating external ingress resources per short-lived session pod.
-- Browser traffic still goes only to web/gateway ingress; browser never connects directly to sandbox pods.
-
-Kubernetes state persistence contract:
-- Worker coding sessions that need pause/resume parity must mount a session-scoped PVC at `/workspace`.
-- When a worker pod idles out, pod may be destroyed but PVC remains bound to `sessionId`.
-- Resume path must reattach the same PVC before continuing work.
-- Lean manager sessions are ephemeral by default and do not require PVC persistence unless explicitly configured.
-
-AZ/zone scheduling safety (required for RWO volumes):
-- If storage class is zonal + `ReadWriteOnce` (EBS/PersistentDisk), resume scheduling must honor PVC zone affinity.
-- Resume controller must schedule replacement pod in the same zone as the bound PVC.
-- If same-zone scheduling cannot be guaranteed, operators must use RWX-capable shared storage (for example EFS/Filestore) for session workspaces.
-- Avoid ambiguous cross-zone resume behavior that can deadlock pod attach in `ContainerCreating`.
-
-Unschedulable fallback (required):
-- If resume pod cannot schedule/attach due to PVC affinity or volume attach failures beyond bounded timeout (default `3m`), system must trigger controlled fallback:
-  1. Mark trapped resume attempt as degraded with reason.
-  2. Tombstone old session runtime binding (retain audit trail).
-  3. Start fresh sandbox in healthy zone/node pool.
-  4. Rehydrate from durable control-plane state (`boot_snapshot`, repo state, and persisted run context), then continue.
-- This fallback must be explicit and observable in run/session timeline to avoid silent state loss.
+- Sandbox compute still runs on E2B in V1.
 
 ### D) Enterprise controlled environment
 - Same as self-host, with stricter network/policy constraints.
@@ -52,11 +31,21 @@ Unschedulable fallback (required):
 
 ## V1 support matrix
 
+Control plane hosting:
+
 | Mode | Support status | Notes |
 |---|---|---|
 | Managed cloud | Supported | Default customer path |
 | Self-host Docker | Supported | Fastest self-host path |
 | Self-host Kubernetes | Supported | Recommended for larger orgs |
+
+Sandbox compute provider:
+
+| Provider | V1 status | Notes |
+|---|---|---|
+| E2B | Supported | Required in all deployment modes for V1 |
+| Self-host Docker/Kubernetes sandbox provider | Future | Not in V1 implementation contract |
+| Modal | Out of scope | Not part of this V1 spec pack |
 
 ## Implementation file tree (self-host and update surfaces)
 
@@ -82,11 +71,14 @@ Required services:
 - `trigger-service` (webhook and polling ingestion)
 - Postgres (durable state)
 - Redis (queues/coordination where configured)
+- In-house OAuth/token services (inside `web` + `packages/services/src/integrations`) for core providers
 
 Optional/external:
-- E2B/Modal provider endpoints
+- E2B provider endpoints (required for sandbox compute)
+- ngrok (or equivalent public tunnel) only when needed for local dev, OAuth callback, or optional webhook ingress
 - external observability stack
 - customer-managed secrets manager (recommended)
+- third-party OAuth brokers (not required)
 
 ## Update channels
 
@@ -96,9 +88,7 @@ Optional/external:
 
 ### Database versioning
 - All schema changes must ship as forward migrations in `packages/db/drizzle/`.
-- App version compatibility matrix:
-  - `N` app supports schema `N` and `N-1` during rolling deploy window.
-  - destructive migration steps require explicit release notes + operator action.
+- App release notes must state required schema version and any destructive/operator-managed steps.
 
 ### Config versioning
 - Env schema changes are tracked in `packages/environment/src/schema.ts`.
@@ -107,16 +97,16 @@ Optional/external:
 ## Upgrade process (self-host operator runbook)
 
 1. Preflight:
-- Validate target version compatibility notes.
+- Validate target version release notes.
 - Backup Postgres and critical object storage artifacts.
-- Verify secrets and env var schema compatibility.
+- Verify secrets and env var schema requirements.
 
 2. Schema migration:
 - Apply DB migrations first.
 - Confirm migration health and lock duration bounds.
 
 3. Service rollout:
-- Roll `worker` + `trigger-service` first (consumer compatibility).
+- Roll `worker` + `trigger-service` first.
 - Roll `gateway` next.
 - Roll `web` last.
 
@@ -132,10 +122,18 @@ Optional/external:
 
 ## Self-hosting support for E2B-specific patterns
 
-If operator chooses E2B as provider:
+V1 compute contract:
+- E2B is mandatory for sandbox execution in managed and self-host control-plane deployments.
+
+Required E2B behavior:
 - Runtime uses provider host resolution per port (`getHost(port)` semantics).
 - Paused sandboxes drop active network streams; gateway reconnect behavior is mandatory.
 - Snapshot/pause behavior should be treated as optimization, not correctness source.
+
+Core wake model in self-host:
+- Core coworker operation does not require inbound public webhooks.
+- Tick -> wake manager session -> manager inspects sources/tools -> manager decides orchestration/actions.
+- Optional webhooks feed same durable trigger pipeline when enabled.
 
 (Reference obtained from E2B docs via Context7.)
 
@@ -143,14 +141,17 @@ If operator chooses E2B as provider:
 
 - No direct browser-to-sandbox tunnel exposure.
 - Gateway remains mandatory policy and auth boundary.
+- Browser should never connect directly to E2B sandbox runtime.
 - Secret sources should be pluggable (K8s secrets, external secret manager).
 - Audit tables must remain enabled and queryable in all deployment modes.
+- OAuth token lifecycle (exchange/refresh/revoke) must run within Proliferate control plane, with encrypted token storage and no broker lock-in.
+- Sandbox-integrated SaaS access should primarily route through gateway-backed tools instead of unconstrained sandbox egress.
 
 ## Core data models impacted by upgrades
 
 | Model | Upgrade sensitivity | File |
 |---|---|---|
-| `sessions` | runtime compatibility, status transitions, reconnect behavior | `packages/db/src/schema/sessions.ts` |
+| `sessions` | runtime behavior, status transitions, reconnect behavior | `packages/db/src/schema/sessions.ts` |
 | `action_invocations` | approval and action replay correctness | `packages/db/src/schema/schema.ts` (`actionInvocations`) |
 | `automation_runs` | long-running orchestration continuity | `packages/db/src/schema/schema.ts` (`automationRuns`) |
 | `outbox` | delivery reliability across deploys | `packages/db/src/schema/schema.ts` (`outbox`) |
@@ -159,6 +160,6 @@ If operator chooses E2B as provider:
 ## Definition of done checklist
 - [ ] Self-host deployment topology is documented and reproducible
 - [ ] Upgrade order and rollback policy are explicitly defined
-- [ ] DB migration compatibility contract is documented
+- [ ] DB upgrade contract is documented
 - [ ] Health checks cover runtime, actions, triggers, and billing paths
 - [ ] Security boundary remains identical in cloud and self-host modes

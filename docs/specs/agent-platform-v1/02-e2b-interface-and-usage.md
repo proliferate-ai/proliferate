@@ -3,6 +3,10 @@
 ## Goal
 Use E2B as the only execution provider in V1, while keeping code structured so we can add Docker/K8s later without rewriting control-plane logic.
 
+V1 support boundary:
+- Managed cloud and self-hosted control plane are both supported.
+- Sandbox execution provider remains E2B in all modes for V1.
+
 ## Hard boundary
 - Control plane decides **when** to run
 - E2B provider decides **how** to start/stop/exec in sandbox
@@ -36,7 +40,7 @@ packages/services/src/sessions/
 | Model | Why it matters | File |
 |---|---|---|
 | `sessions` | Stores `sandboxId`, provider, status, tunnel URLs, pause state | `packages/db/src/schema/sessions.ts` |
-| `configurations` | Default snapshot/config selection for faster start | `packages/db/src/schema/configurations.ts` |
+| `repo_baseline` | Default baseline command/context selection for faster start | `packages/db/src/schema/schema.ts` (target) |
 | `repos` | Repo identity and setup context used during boot | `packages/db/src/schema/repos.ts` |
 
 ## Provider contract (V1 expected behavior)
@@ -68,7 +72,7 @@ Transport direction rule:
   - Provider pause call executed (`betaPause` path in E2B SDK)
   - Session row updated with paused state and snapshot/sandbox reference
 - Resume:
-  - Resolve pinned compute identity from run/session `boot_snapshot` (`provider/templateId/imageDigest`)
+  - Resolve pinned compute identity from immutable session core fields (`provider/templateId/imageDigest`)
   - Provider reconnect by stored id (`connect()` resumes paused E2B sandboxes)
   - Re-hydrate fresh short-lived credentials (git/app tokens, virtual LLM key) via control plane before resuming task execution
   - Runtime restarts stream
@@ -96,7 +100,7 @@ To avoid stale snapshots:
 1. Detect dependency-shape changes on default branch (`package-lock`, `pnpm-lock`, `poetry.lock`, `requirements*`, `Dockerfile`, `.devcontainer/*`).
 2. Mark configuration snapshot stale.
 3. Rebuild baseline setup snapshot asynchronously.
-4. New sessions use refreshed snapshot; existing active sessions continue until completion.
+4. New sessions use refreshed baseline snapshot; existing active sessions continue until completion.
 
 ## Security requirements
 - Do not inject privileged long-lived tokens into sandbox by default

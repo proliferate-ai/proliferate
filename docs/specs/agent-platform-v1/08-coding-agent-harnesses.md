@@ -39,6 +39,7 @@ Relevant code paths:
 - [gateway tool route](/Users/pablo/proliferate/apps/gateway/src/api/proliferate/http/tools.ts)
 - [agent contract spec](/Users/pablo/proliferate/docs/specs/agent-contract.md)
 - [sandbox provider spec](/Users/pablo/proliferate/docs/specs/sandbox-providers.md)
+- [tool contract spec](/Users/pablo/proliferate/docs/specs/agent-platform-v1/16-agent-tool-contract.md)
 
 ## Harness file tree (V1)
 
@@ -103,12 +104,39 @@ PR ownership mode support:
 
 ## Async approval handoff contract
 
-When harness requests a gateway action and receives suspended approval response (`202` semantic):
+When harness requests a gateway action and receives `status=pending_approval`:
 - Harness must treat it as "waiting", not failure.
-- Harness should yield/idle its reasoning loop without busy polling.
+- Harness must persist checkpoint state (`waiting_for_approval`, `invocationId`) and yield/exit loop cleanly.
+- Harness must not busy poll.
 - Session follows normal idle policy (default `10m`) and may pause.
-- On approval/deny resolution, gateway emits resume event with invocation outcome.
-- Harness continues with injected tool result/error context on resume.
+- Gateway resume push event (`sys_event.tool_resume`) is best-effort only.
+- On reconnect/resume, harness/daemon must reconcile invocation states from gateway before next reasoning step.
+- Reconciliation outcomes include `approved/executed`, `denied`, `failed`, and `expired`.
+
+Resume source-of-truth:
+- Harness continuation is driven by durable worker-owned resume orchestration, not by websocket push delivery guarantees.
+- Harness must assume it can wake in:
+  - same resumed origin session, or
+  - continuation session created after resume fallback.
+- Harness must dedupe already-applied reconciliation outcomes by `invocationId`.
+
+OpenCode continuation baseline (V1):
+- Default to stateless continuation mode (no required native in-process checkpoint primitive).
+- After reconciliation, restart a new reasoning turn with:
+  - prior run summary
+  - resolved invocation outcome
+  - explicit continue instruction from control plane
+- Use stateful checkpoint resume only if explicitly supported and verified in harness implementation docs.
+
+Continuation identity contract:
+- If running in continuation session, control plane must include `continuedFromSessionId` context.
+- Harness must treat this as the same logical task lineage and continue from durable state, not from stale in-memory assumptions.
+
+Invocation response handling (required):
+- Harness tool adapter must consume one structured envelope:
+  - `success`: inject result payload to reasoning loop
+  - `failed`: inject structured error (`code`, `message`, `retryable`)
+  - `pending_approval`: checkpoint + yield flow above
 
 ## Security constraints for harnesses
 - Harness never receives privileged org tokens by default

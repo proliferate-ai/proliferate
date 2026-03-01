@@ -5,7 +5,7 @@ Define a stable, production-safe LLM proxy architecture for V1 that matches the 
 - short-lived virtual keys for sandbox traffic
 - server-side control-plane key management
 - durable spend ingestion into billing events
-- model routing compatibility with OpenCode/runtime config
+- model routing alignment with OpenCode/runtime config
 
 This spec intentionally follows the old/current architecture rather than inventing a new proxy stack.
 
@@ -98,9 +98,9 @@ Preferred secure mode:
 - Harness points `ANTHROPIC_BASE_URL` at local daemon proxy endpoint.
 - Harness uses non-sensitive placeholder api key value; real virtual key is attached by daemon when forwarding to LiteLLM.
 
-Compatibility mode (legacy/simple):
+Direct env mode (simple, less hardened):
 - Sandbox process receives `ANTHROPIC_API_KEY` (virtual key) and `ANTHROPIC_BASE_URL` directly.
-- Allowed for migration/dev but not preferred for hardened environments.
+- Allowed for controlled environments, but not preferred for hardened environments.
 
 Sandbox must not receive:
 - `LLM_PROXY_MASTER_KEY`
@@ -150,7 +150,7 @@ Optional env:
 URL rules:
 - admin calls use admin URL role
 - sandbox base URL uses public URL role
-- normalize base URL to single `/v1` suffix for SDK/runtime compatibility
+- normalize base URL to single `/v1` suffix for consistent SDK/runtime behavior
 
 ## Model routing contract
 

@@ -1,141 +1,176 @@
 # Long-Running Agents
 
 ## Goal
-Support persistent agents that keep working over time, can spawn child coding runs, survive restarts, and remain inspectable by humans.
+Support durable coworkers that wake repeatedly, preserve manager continuity, orchestrate isolated coding children, and remain auditable per wake.
 
 ## Product behavior
-A long-running agent should feel like a teammate that owns a job.
-
-Example:
-- "Sentry Auto-Fixer" runs all day
-- It checks new issues, spawns child coding runs, and reports results
-- User can ask "what got fixed?" and get concrete links
+A long-running coworker should behave like a persistent teammate:
+- keep one durable objective
+- wake on schedule
+- inspect connected sources
+- delegate concrete coding work to children
+- report progress with inspectable per-wake history
 
 ## Runtime model
 
-### A) Manager agent (supervisor role)
-- Runs as an isolated "lean" sandbox agent (not inside control-plane Node.js process)
-- Durable identity and objective
-- Reads grouped inbox summaries (chat, webhook, cron wake) via gateway tools
-- Decides what to do next
-- Spawns child runs for concrete work
+### A) Manager session (persistent home sandbox)
+- Every automation owns one persistent `manager_session`.
+- Manager wakes reuse the same paused E2B sandbox whenever possible.
+- Continuity includes transcript/thread state, file tree state, and lightweight local memory files.
+- On each wake, manager receives a short wake note (elapsed time + reminder objective + new notes).
+- When no work remains, manager pauses again.
 
-Efficiency constraints:
-- Manager sessions should be burst-oriented and short-lived (triage/decide/dispatch, then exit).
-- Do not keep lean manager sandboxes idling for long periods when no work remains.
-- Deterministic pre-processing (dedupe/grouping/routing prep) may run in trigger-service/worker before manager boot.
+Manager repo-env default:
+- Worker sessions always receive repo runtime env/baseline context for coding tasks.
+- Manager sessions receive full repo runtime env only when automation is explicitly repo-bound and local repo context is required by policy.
+- Default manager mode is orchestration-first, not full coding runtime.
 
-### B) Child runs
-- Isolated coding sessions
-- One task per run
-- Produce reviewable outputs (PR, logs, summary)
+### B) Automation run (one wake cycle)
+- Every wake creates one new `automation_run`.
+- `automation_run` points to the same persistent `manager_session`.
+- Timeline, actions, and summaries must be attributable per `automation_run`.
 
-### C) Durable state in DB
-Persist:
-- Agent status and intent
-- Run graph (parent/child links)
-- Progress summaries
-- Approvals and action results
-- Source cursors/checkpoints (for polling sources)
+### C) Worker sessions (child coding sessions)
+- Manager can spawn child `worker_sessions` for concrete tasks.
+- Each worker session uses fresh sandbox/runtime and independent branch constraints.
+- Worker sessions are task-oriented and disposable.
+- Worker sessions never share filesystem state with manager or sibling workers.
 
-Do not rely on in-memory gateway state for long-running correctness.
+### D) Durable fallback summary
+Primary continuity is paused sandbox state. Platform must still persist a small durable summary at end of each wake:
+- objective state
+- open items
+- open child sessions
+- pending approvals
 
-### D) Control plane backend responsibilities (no LLM loop)
-- Route events to inbox
-- Orchestrate session/run lifecycle
-- Enforce policy/approvals
-- Persist and broadcast runtime state
+If manager sandbox resume fails, create replacement manager session from last durable summary and continue.
+- Resume failure/replacement MUST be emitted as a durable continuity event visible in session/run timeline.
 
-The control plane does not run open-ended LLM planning logic directly.
+## Orchestration and concurrency
 
-Lease/locking requirement:
-- Only one manager harness instance may be active per coworker at a time.
-- Claim must use durable lock/lease semantics to prevent duplicate orchestration loops.
-- Trigger wake events must be coalesced to avoid duplicate manager boots.
+### Default concurrency
+- Manager default max in-flight children: `10`.
+- Enforced alongside org-level and coworker-level caps.
 
-## Implementation file tree (current and planned owners)
+### Manager capabilities (required baseline)
+- `child.spawn`
+- `child.list`
+- `child.inspect`
+- `child.message`
+- `child.cancel`
+
+Source capabilities are added by policy/config (for example `sentry.read`, `linear.write`, `github.read`).
+
+### Delegation rules
+When manager creates child session:
+- child capabilities must be a strict subset of manager capabilities
+- manager cannot escalate run-as identity, credential owner, or approval mode
+- manager may only narrow scope, tool access, and repo/task constraints
+
+Delegation is restrictive-only, never expansive.
+
+## Message flow between manager and child
+
+Storage:
+- messages are `session_messages` rows
+- semantics are queued instruction/events, not free-form side channels
+
+Manager -> child message types:
+- directive
+- reprioritization
+- clarification
+- cancel request
+- status request
+
+Child -> manager message types:
+- status note
+- question
+- blocked reason
+- completion summary
+
+Delivery behavior:
+- active child: inject at next safe reasoning checkpoint
+- paused/waiting child: queue and inject on resume before next reasoning step
+- no mid-command interruption in V1
+
+V1 non-goals:
+- no shared terminal control between manager and child
+- no arbitrary mid-command interrupt/kill injection
+- no shared filesystem between manager and child sandboxes
+
+## Operational UX requirements
+
+- `/sessions` is the operational workspace for manager + child sessions.
+- Approval prompts appear inline in session context.
+- No separate approval-only operational inbox.
+
+Session row baseline fields:
+- title/objective
+- branch
+- creator
+- runtime status
+- operator status
+- recent activity indicator
+- inline approval affordance when waiting
+
+## Runtime and operator status layers
+
+Runtime status:
+- `starting`
+- `running`
+- `paused`
+- `completed`
+- `failed`
+- `cancelled`
+
+Operator status:
+- `active`
+- `waiting_for_approval`
+- `needs_input`
+- `ready_for_review`
+- `errored`
+- `done`
+
+## Implementation file tree (current/planned owners)
 
 ```text
 apps/worker/src/automation/
-  index.ts                  # run execution orchestration
-  resolve-target.ts         # target repo/config resolution
-  finalizer.ts              # completion + side effects
-  notifications.ts          # run status notifications
+  index.ts
+  resolve-target.ts
+  finalizer.ts
+  notifications.ts
 
 apps/trigger-service/src/
-  api/webhooks.ts           # webhook ingestion
-  polling/worker.ts         # cron polling ingestion
+  polling/worker.ts
+  api/webhooks.ts
 
 packages/services/src/
-  automations/service.ts    # coworker definitions and config
-  runs/service.ts           # run lifecycle + transitions
-  sessions/service.ts       # session lifecycle linkage
-  outbox/service.ts         # durable async dispatch
+  automations/service.ts
+  runs/service.ts
+  sessions/service.ts
+  outbox/service.ts
 ```
 
-## Core data models for long-running behavior
+## Core data models
 
 | Model | Purpose | File |
 |---|---|---|
-| `automations` | Coworker identity, instructions, enabled state, notification destination | `packages/db/src/schema/automations.ts` |
-| `triggers` | What wakes the coworker and with which provider/cadence | `packages/db/src/schema/triggers.ts` |
-| `trigger_events` | Durable queue/history of incoming wake events | `packages/db/src/schema/triggers.ts` |
-| `automation_runs` | Per-wake execution record and status transitions | `packages/db/src/schema/schema.ts` (`automationRuns`) |
-| `sessions` | Child coding session runtime and sandbox linkage | `packages/db/src/schema/sessions.ts` |
-| `outbox` | Follow-up dispatch for notifications/side effects | `packages/db/src/schema/schema.ts` (`outbox`) |
-
-## Wake model
-Use hybrid wake strategy:
-- Webhooks for interactive/near-real-time events (GitHub mentions, Slack)
-- Cron polling for periodic batch checks (for example Sentry triage sweep)
-
-Internally both become inbox events.
-
-## Query-from-anywhere contract
-Users should be able to ask coworkers for status from web (primary) and Slack/GitHub (secondary).
-
-Required behavior:
-- A status query resolves from durable run/session rows first.
-- If manager agent is currently running, include live addendum from current context.
-- Response always includes concrete links (run details, PRs, approvals).
-
-## Idle/suspend behavior
-When agent has no immediate work:
-- Persist current state and summary
-- Pause sandbox (E2B) or stop safely
-- Resume on next wake event
-
-Default idle timeout:
-- `10m` for both normal idle periods and approval-wait idle periods.
-
-Cost guardrail:
-- Prefer stopping completed/idle manager sessions rather than hibernating them.
-- Reserve pause/hibernate primarily for worker coding sessions with expensive warm state.
-
-## User controls
-Required controls:
-- Pause agent
-- Resume agent
-- Cancel current child run
-- Reprioritize objective (chat command)
-- See current status and recent outcomes
-
-## Safety controls
-- Concurrency cap per agent and per org
-- Retry limits and backoff
-- Idempotency on side effects
-- Budget/time limits per run
-
-## Practical V1 constraints
-- Keep one clear parent/child model (avoid deep recursive fanout)
-- Keep child run objective small and explicit
-- Prefer deterministic run completion criteria (tests pass, PR created)
+| `automations` | durable coworker identity, objective, defaults | `packages/db/src/schema/automations.ts` |
+| `automation_runs` | per-wake execution record and per-wake audit grouping | `packages/db/src/schema/schema.ts` (`automationRuns`) |
+| `sessions` | manager and worker session runtime linkage/state | `packages/db/src/schema/sessions.ts` |
+| `session_capabilities` | session-scoped permissions | `packages/db/src/schema/schema.ts` (target) |
+| `session_skills` | session-scoped skill bindings | `packages/db/src/schema/schema.ts` (target) |
+| `session_messages` | queued manager/child/user messages | `packages/db/src/schema/schema.ts` (target) |
+| `action_invocations` | side-effect and approval audit | `packages/db/src/schema/schema.ts` (`actionInvocations`) |
+| `trigger_events` | durable tick/event ingest history | `packages/db/src/schema/triggers.ts` |
+| `outbox` | follow-up notifications and durable dispatch | `packages/db/src/schema/schema.ts` (`outbox`) |
 
 ## Definition of done checklist
-- [ ] Persistent agent can wake repeatedly from inbox events
-- [ ] Agent can spawn and track child runs
-- [ ] Parent/child statuses are visible in UI
-- [ ] Agent survives process restart without losing control state
-- [ ] Pause/resume behavior is stable for day-scale workflows
-- [ ] Manager/supervisor cognition runs in isolated sandbox, not control-plane process
-- [ ] Status queries are available from dashboard and at least one external channel (Slack/GitHub)
+- [ ] Persistent manager session resumes across wakes in steady state
+- [ ] Every wake creates `automation_run` linked to same manager session
+- [ ] Manager can spawn, inspect, message, and cancel child sessions
+- [ ] Child sessions are isolated and disposable with no shared filesystem
+- [ ] Per-wake durable summary exists for manager failure fallback
+- [ ] Runtime and operator status layers are visible in sessions workspace
+- [ ] Manager repo-env default policy is explicit (orchestration-first baseline)
+- [ ] Resume failure continuity events are emitted for manager rehydration paths

@@ -1,156 +1,155 @@
-# Boot Snapshot Contract
+# Session Runtime Contract (Boot Snapshot Replacement)
 
 ## Goal
-Make run-time behavior deterministic by freezing critical execution context when a session/run starts.
+Replace the broad `boot_snapshot`-as-primary contract with a cleaner immutable session contract made of normalized fields and session-scoped bindings.
 
-Without this, live config edits can silently change in-flight behavior and break auditability.
+## Status
+- Applies to: V1
+- Normative: Yes
 
-## Scope
-In scope:
-- what is frozen at start
-- where it is stored
-- what is mutable after start
-- how gateway/actions enforce it
-- how environment references are represented safely
+## Core decision
 
-Out of scope:
-- prompt engineering details
-- sandbox provider snapshot internals
+V1 must not rely on one giant frozen JSON payload as the primary runtime contract.
 
-## Snapshot record location
+Replace broad `boot_snapshot` with:
+1. Small immutable `sessions` core fields
+2. `session_capabilities` rows
+3. `session_skills` rows
+4. `session_messages` rows
+5. `automation_runs` for per-wake manager execution context
 
-Target contract:
-- `boot_snapshot` is stored on session/run record as JSON (or side table keyed by session/run id).
-- Gateway and action execution read from `boot_snapshot`, not mutable live coworker row.
-- `boot_snapshot` is execution context only (not filesystem/memory checkpoint state).
+`boot_snapshot` may still exist as a compatibility/debug envelope where needed, but it is not the authoritative model boundary.
 
-Current related runtime store:
-- `sessions.agentConfig`, `sessions.systemPrompt` in `/Users/pablo/proliferate/packages/db/src/schema/sessions.ts`.
+## Immutable session core fields (required)
 
-## Required snapshot schema (logical)
+Each session must freeze core execution identity at creation:
+- session kind (`adhoc_interactive | manager | worker_child`)
+- actor/run-as policy
+- automation linkage (`automation_id`, optional `automation_run_id`)
+- repo/branch/base-commit baseline
+- env bundle references (not plaintext values)
+- compute profile
+- visibility mode
+- model/instruction references (if pinned)
 
-```json
-{
-  "snapshotVersion": 1,
-  "createdAt": "2026-02-27T00:00:00Z",
-  "sessionId": "...",
-  "runId": "...",
-  "identity": {
-    "actorUserId": "...",
-    "requestedRunAs": "actor_user | org_system | explicit_user",
-    "credentialOwnerPolicy": "prefer_user | prefer_org | strict_user | strict_org"
-  },
-  "model": {
-    "provider": "anthropic",
-    "modelId": "claude-sonnet-4-20250514",
-    "temperature": 0.2
-  },
-  "instructions": {
-    "systemPrompt": "...",
-    "agentInstructions": "..."
-  },
-  "tooling": {
-    "enabledTools": ["..."] ,
-    "actionModeOverrides": {
-      "linear:update_issue": "require_approval"
-    },
-    "connectorBindings": ["connector:uuid-1"]
-  },
-  "workspace": {
-    "repoId": "...",
-    "branch": "...",
-    "baseCommit": "...",
-    "configurationId": "...",
-    "snapshotId": "..."
-  },
-  "compute": {
-    "provider": "e2b",
-    "templateId": "tpl_abc123",
-    "imageDigest": "sha256:..."
-  },
-  "git": {
-    "prOwnershipMode": "sandbox_pr"
-  },
-  "environment": {
-    "envBundleRef": "env_bundle_uuid",
-    "envBundleVersion": 3,
-    "envDigest": "sha256:..."
-  },
-  "limits": {
-    "maxDurationMs": 3600000,
-    "maxConcurrentChildren": 3,
-    "budgetCents": 500
-  }
-}
-```
+These fields are immutable for in-flight execution.
 
-## Environment and secret boundary (required)
+## Session capabilities contract
 
-- `.env.local` (development env) is allowed as onboarding input.
-- Raw `.env.local` values are persisted as encrypted env bundle records.
-- `boot_snapshot` stores only references (`envBundleRef`, version, digest), never plaintext env values.
-- Short-lived runtime credentials (for example GitHub installation tokens, session virtual LLM keys) are never persisted in `boot_snapshot`.
-- Action/integration secrets (OAuth tokens, connector secrets) are not part of env bundle or boot snapshot payload.
-- Runtime boot resolves env bundle values just-in-time through daemon-scoped secret context.
-- Runtime boot/resume must hydrate fresh short-lived credentials from control plane; snapshot only stores credential policy/context, not token material.
-- Avoid exporting env bundles as global shell environment for unrelated sandbox processes.
-- Optional compatibility mode may materialize an app-scoped `.env` file in workspace (excluded from VCS) when required by local tooling.
+`session_capabilities` is authoritative for runtime permissions.
 
-## Enforcement rules
+Each row defines:
+- `capability_key` (for example `sentry.read`, `child.spawn`, `github.pr.create`)
+- mode (`allow | require_approval`)
+- credential owner policy context
+- optional scope limits (repo/project/resource)
+- created-at/audit metadata
 
-1. Action invocation policy resolution must use snapshot identity + mode context.
-2. Credential owner resolution must use snapshot policy defaults.
-3. Tool availability in runtime must be subset of snapshot-enabled tools.
-4. Mid-run edits to coworker config do not affect current run; they apply to next run only.
-5. `boot_snapshot` writes must reject plaintext secret keys/values and only accept env references.
-6. PR ownership mode is frozen per run (`sandbox_pr` or `gateway_pr`) and cannot mutate mid-run.
-7. Resume/restart must request the pinned compute identity (`provider`, `templateId`, `imageDigest`) for reproducible runtime behavior.
-8. Resume/restart must refresh short-lived credentials dynamically; replaying stale credential values from snapshot is forbidden.
+Rules:
+- denied capabilities do not appear in agent-visible tooling
+- live security revocations still override session-bound allow/approval states
+- policy checks happen at invocation time in gateway
 
-Live-security override rule (TOCTOU safety):
-- Frozen snapshot does not bypass live org security controls.
-- At execution time, gateway/services must re-check live revocation/disablement state for integrations and credentials.
-- Live revocations override frozen snapshot permissions immediately.
+## Session skills contract
 
-## Mutable vs immutable during run
+`session_skills` stores behavior packs attached to a session.
 
-Immutable for current run:
-- run identity policy (`run_as`, credential owner policy)
-- model and system prompt
-- enabled tool set and action-mode override baseline
-- workspace baseline ref (`repo/config/snapshot`) at run start
-- compute baseline (`provider/templateId/imageDigest`)
+Each row defines:
+- `skill_id`
+- `version`
+- optional config payload
 
-Mutable during run:
-- live progress summary/status
+Rules:
+- skills shape behavior, workflow style, and prompting
+- skills never grant permissions
+- permission source of truth is always `session_capabilities`
+
+## Session messages contract
+
+`session_messages` stores queued instructions/events.
+
+Supported directions:
+- user -> session
+- manager -> child
+- child -> manager
+
+Delivery rules:
+- active session: inject at next safe reasoning checkpoint
+- paused/waiting session: queue and inject on resume before next reasoning step
+- no arbitrary mid-command interruption in V1
+
+## Manager run linkage
+
+Because manager session is persistent across wakes:
+- every wake creates `automation_run`
+- manager-side action/timeline/audit events must attach to active `automation_run_id`
+- run-level inspectability is required even when `manager_session_id` is stable
+
+## Environment and secret boundary
+
+Storage:
+- env bundles are encrypted at rest in control plane
+
+Runtime boot/resume:
+- decrypt env bundle at boot/resume
+- materialize as process environment
+- optional app-scoped env file materialization if tooling requires it
+
+Safety:
+- never persist plaintext env values in session metadata
+- do not expose env values in UI payloads
+- do not emit env values in logs by default
+- do not persist env values in artifacts by default
+
+Secret classes:
+- repo/runtime env may materialize in sandbox runtime
+- integration/OAuth/action secrets remain server-side unless explicitly projected into runtime env policy
+
+## Mutable vs immutable
+
+Immutable for current session execution:
+- session core fields listed above
+- `session_capabilities` bindings
+- `session_skills` bindings
+
+Mutable during execution:
+- progress/status
+- action outcomes and approval states
 - emitted artifacts
-- approval outcomes and invocation statuses
-- retry counters and transient runtime state
+- transient retries/checkpoints
+- queued `session_messages`
 
-## Size and retention constraints
+## Enforcement requirements
 
-- Target max snapshot payload size: `64KB` compressed JSON equivalent.
-- Store full snapshot for audit retention window equal to session/run retention policy.
-- If snapshot is externalized to object storage, DB must store stable reference + digest.
+1. Runtime authorization executes from immutable session core + `session_capabilities`.
+2. Gateway validates invocation input shape, capability binding, credential policy, and live revocation state.
+3. Mid-session automation/config edits do not alter active session bindings.
+4. Resume/restart must preserve session contract identity and refresh short-lived credentials dynamically.
+5. Live revocations/disabled integrations/credential invalidation override frozen session bindings immediately.
 
-## Core files that consume this contract
+## Implementation file anchors
 
 - `/Users/pablo/proliferate/apps/gateway/src/hub/session-runtime.ts`
 - `/Users/pablo/proliferate/apps/gateway/src/api/proliferate/http/actions.ts`
-- `/Users/pablo/proliferate/packages/services/src/actions/service.ts`
+- `/Users/pablo/proliferate/apps/gateway/src/api/proliferate/http/tools.ts`
 - `/Users/pablo/proliferate/packages/services/src/sessions/service.ts`
+- `/Users/pablo/proliferate/packages/services/src/actions/service.ts`
 
 ## Core data models
 
 | Model | Contract relevance | File |
 |---|---|---|
-| `sessions` | stores frozen execution context for session-scoped runs | `packages/db/src/schema/sessions.ts` |
-| `automation_runs` | stores frozen context for automation execution runs | `packages/db/src/schema/schema.ts` (`automationRuns`) |
-| `action_invocations` | records behavior evaluated under snapshot context | `packages/db/src/schema/schema.ts` (`actionInvocations`) |
+| `sessions` | immutable session core identity and linkage | `packages/db/src/schema/sessions.ts` |
+| `session_capabilities` | session-scoped permission bindings | `packages/db/src/schema/schema.ts` (target) |
+| `session_skills` | session-scoped skill attachments/version pinning | `packages/db/src/schema/schema.ts` (target) |
+| `session_messages` | queued inter-session/user instructions | `packages/db/src/schema/schema.ts` (target) |
+| `automation_runs` | per-wake manager execution and audit grouping | `packages/db/src/schema/schema.ts` (`automationRuns`) |
+| `action_invocations` | side-effect audit under session capability policy | `packages/db/src/schema/schema.ts` (`actionInvocations`) |
 
 ## Definition of done checklist
-- [ ] Snapshot schema is defined and versioned
-- [ ] Snapshot is persisted at run/session creation
-- [ ] Gateway/actions read frozen snapshot context during execution
-- [ ] Mid-run config edits do not alter in-flight permissions/tools/model
-- [ ] Snapshot retention and size policy are documented and enforced
+- [ ] Session contract is defined as core fields + capability/skill/message bindings
+- [ ] New sessions persist immutable capability and skill bindings at creation
+- [ ] Tool/action visibility excludes denied capabilities
+- [ ] Manager-side actions are attributable to active `automation_run_id`
+- [ ] Env handling is encrypted-at-rest and plaintext-free in metadata/log/artifact paths
+- [ ] Runtime policy checks enforce live security overrides

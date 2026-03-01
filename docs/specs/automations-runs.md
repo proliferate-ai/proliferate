@@ -409,6 +409,9 @@ Sources:
 
 ## 9. Known Limitations & Tech Debt
 
+- [ ] **Manager tick orchestration is not first-class yet (High):** run creation is still trigger/manual-event driven; there is no dedicated "tick worker" stage that performs routine source polling and then conditionally spawns child coding sessions. Source: `apps/trigger-service/src/lib/trigger-processor.ts`, `packages/services/src/runs/service.ts:createRunFromTriggerEvent`, `apps/worker/src/automation/index.ts:handleExecute`.
+- [ ] **No single-active-tick lease/idempotency per agent profile (High):** current leasing/idempotency protects run/session execution and outbox dispatch, but there is no explicit one-tick-per-agent guardrail contract. Source: `apps/worker/src/automation/index.ts`, `packages/services/src/outbox/service.ts`.
+- [ ] **Sessions are automation-linked, not agent-profile-linked (Medium):** current session linkage uses `sessions.automation_id`; there is no separate nullable `agent_id` path in the current schema for ad-hoc-vs-manager identity partitioning. Source: `packages/db/src/schema/sessions.ts`, `packages/services/src/sessions/db.ts`.
 - [ ] **Transition guardrails are caller-enforced** — `transitionRunStatus` allows arbitrary `toStatus`; invalid edges are possible if callers misuse it. Source: `packages/services/src/runs/service.ts:transitionRunStatus`.
 - [ ] **Run status schema includes unused states** — `canceled` and `skipped` exist in shared schema but are not currently produced by the run pipeline. Source: `packages/shared/src/contracts/automations.ts`.
 - [ ] **LLM filter/analysis fields are still not run-stage execution inputs** — enrichment does not use `llm_filter_prompt` / `llm_analysis_prompt`. Source: `apps/worker/src/automation/enrich.ts`.

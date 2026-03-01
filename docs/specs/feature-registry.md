@@ -85,6 +85,8 @@
 | Shared run status display | Implemented | `apps/web/src/lib/run-status.ts` | Consolidated getRunStatusDisplay used by inbox, activity, my-work |
 | Activity run titles | Implemented | `apps/web/src/app/(command-center)/dashboard/activity/page.tsx` | Shows session title or trigger name instead of generic label |
 | My-work run enrichment | Implemented | `apps/web/src/app/(command-center)/dashboard/my-work/page.tsx` | Claimed runs show session title, consistent status display |
+| Immutable session boot snapshot envelope | Planned | `docs/specs/sessions-gateway.md` | Current session/runtime context is live-derived; no dedicated `boot_snapshot` column yet |
+| Centralized resume-time credential rehydration contract | Planned | `docs/specs/sessions-gateway.md` | Credential refresh exists in multiple runtime paths but not as one enforced contract |
 
 ---
 
@@ -139,6 +141,9 @@
 | Gmail provider | Partial | `packages/triggers/src/service/adapters/gmail.ts` | Full polling impl via Composio, but not in HTTP provider registry (`getProviderByType()` returns null) |
 | Provider registry | Implemented | `packages/triggers/src/index.ts` | Maps provider types to implementations |
 | PubSub session events | Implemented | `apps/worker/src/pubsub/` | Subscriber for session lifecycle events |
+| Tick-based manager scheduler (outbound cadence polling) | Planned | `docs/specs/triggers.md` | Planned migration from webhook-first ingestion toward cadence-driven source polling |
+| Per-agent/per-source checkpoint cursors | Planned | `docs/specs/triggers.md` | Current cursor persistence is poll-group scoped, not manager-agent scoped |
+| Trigger artifact retirement plan (`triggers`/`trigger_events`/`webhook_inbox`) | Planned | `docs/specs/triggers.md` | Requires staged deprecation and cutover verification before schema removal |
 
 ---
 
@@ -162,6 +167,8 @@
 | Inline attention inbox tray | Implemented | `apps/web/src/components/coding-session/inbox-tray.tsx`, `apps/web/src/hooks/use-attention-inbox.ts` | Merges WS approvals, org-polled approvals, and pending runs into inline tray in thread |
 | Connector-backed action sources (`remote_http` MCP via Actions) | Implemented | `packages/services/src/actions/connectors/`, `apps/gateway/src/api/proliferate/http/actions.ts` | Gateway-mediated remote MCP connectors through Actions pipeline (connector source: org-scoped `org_connectors` table) |
 | MCP connector 404 session recovery (re-init + retry-once) | Implemented | `packages/services/src/actions/connectors/client.ts:callConnectorTool` | Stateless per call; SDK handles session ID internally; 404 triggers fresh re-init |
+| Post-approval live-policy revalidation | Planned | `docs/specs/actions.md` | Current approval flow does not re-resolve mode/drift/kill-switch state before execution |
+| Live revocation override contract (TOCTOU guard) | Planned | `docs/specs/actions.md` | Needs explicit execution-time precedence for org kill-switch + credential revocation |
 
 ---
 
@@ -337,6 +344,21 @@ This section tracks the clean-slate V2 transport architecture contract defined i
 | VS Code server transport surface | Deprecated | `apps/gateway/src/api/proxy/vscode.ts`, `apps/web/src/components/coding-session/vscode-panel.tsx` | Explicit removal in V2 clean-slate mandate |
 | Polling-based right-sidebar refresh hooks | Deprecated | `apps/web/src/components/coding-session/*` | Polling banned; replaced by daemon-driven events |
 | Direct browser access to provider tunnel URLs | Deprecated | `docs/specs/streaming-preview.md` | Gateway-only routing and auth injection contract |
+
+---
+
+## 15. Code Quality Contract (`agent-platform-v1/20-code-quality-contract.md`)
+
+| Feature | Status | Evidence | Notes |
+|---------|--------|----------|-------|
+| Direct DB import guard outside allowed packages | Implemented | `scripts/check-no-direct-db-import.mjs`, `package.json:lint:no-direct-db-import` | Blocking in `pnpm lint` |
+| Raw local API fetch guard in web source | Implemented | `scripts/check-no-raw-api-fetch.mjs`, `package.json:lint:no-raw-api-fetch` | Enforces oRPC usage in web app |
+| Services DB-boundary baseline ratchet | Implemented | `scripts/check-db-boundary.mjs`, `scripts/db-boundary-baseline.json`, `package.json:lint:db-boundary` | Prevents new DB misuse in `packages/services` |
+| Touched-file no-net-quality-debt policy | Planned | `docs/specs/agent-platform-v1/20-code-quality-contract.md` | Expand ratchet beyond DB boundary |
+| File-size and function-size touched-file gates | Planned | `docs/specs/agent-platform-v1/20-code-quality-contract.md` | Add script-backed checks in CI |
+| Complexity gate for touched files | Planned | `docs/specs/agent-platform-v1/20-code-quality-contract.md` | Blocking after rollout phase |
+| Duplicate signature/crypto helper gate | Planned | `docs/specs/agent-platform-v1/20-code-quality-contract.md` | Prevent repeated HMAC helper implementations |
+| Time-boxed exception protocol for quality rules | Planned | `docs/specs/agent-platform-v1/20-code-quality-contract.md` | Owner + expiry + follow-up ticket required |
 
 ---
 

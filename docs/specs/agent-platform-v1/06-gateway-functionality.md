@@ -23,7 +23,7 @@ Current code anchors:
 ```text
 apps/gateway/src/
   api/proliferate/http/
-    actions.ts                # action invoke/approve/deny
+    actions.ts                # action invoke/approve/deny + reconcile read endpoint
     sessions.ts               # session lifecycle endpoints used by clients
     tools.ts                  # tool surface and callback handling
   api/proxy/
@@ -51,7 +51,7 @@ apps/gateway/src/
 - Ensure sandbox runtime is ready
 - Maintain stream lifecycle and reconnect behavior
 - Expose runtime status to clients
-- Enforce immutable run/session `boot_snapshot` during runtime and policy checks
+- Enforce immutable session core + capability bindings during runtime and policy checks
 
 ### 2) Action invocation boundary
 - List available actions
@@ -60,6 +60,7 @@ apps/gateway/src/
 - Emit invocation status updates
 - Applies to non-git side effects; sandbox-native git push/PR path follows coding harness contract
 - If PR ownership mode is `gateway_pr` (future strict mode), gateway also owns PR creation side effect
+- Enforce tool contract envelopes defined in `16-agent-tool-contract.md`
 
 ### 3) Policy/identity checkpoint
 Before side effects:
@@ -68,11 +69,38 @@ Before side effects:
 - Resolve execution identity/credential owner
 - Revalidate delayed invocations after approval and before execution
 
+Approval resume ownership contract:
+- Gateway owns live runtime signaling and invocation persistence.
+- Worker owns durable approval-triggered resume orchestration via claimed `resume_intent` rows/outbox.
+- Gateway push (`sys_event.tool_resume`) is best-effort and never the source-of-truth resume mechanism.
+- Resume intent is emitted only for final invocation outcomes tied to waiting origin executions (`completed|failed|denied|expired`).
+- Intermediate `approved` does not emit resume intent.
+
 Approval-wait response contract:
 - On `require_approval`, gateway persists pending state and returns immediate suspended response (`202` semantic).
+- Response payload must be structured as `status=pending_approval` + `invocationId` + summary context.
+- Harness writes checkpoint and yields; gateway must not require long-held open request sockets.
 - Session may remain running until idle timeout; standard idle pause (`10m`) handles hibernation.
 - On approval/deny, gateway emits a deterministic resume event (`sys_event.tool_resume`) with invocation outcome for harness continuation.
 - Because paused sandboxes drop connections, harness/daemon must reconcile pending invocation states on reconnect (pull-based sync), not rely only on pushed resume events.
+- Pending approval rows auto-expire after `24h`; expiration outcome must be included in reconciliation responses.
+
+Reconciliation read contract:
+- Gateway exposes deterministic reconciliation endpoint (see `16-agent-tool-contract.md`):
+  - `GET /api/proliferate/http/actions/reconcile?sessionId=:id&after=:cursor`
+- Response ordering is stable (`updatedAt`, `invocationId`) and idempotent for repeated reads.
+- Harness reconciliation is mandatory before continuing reasoning after reconnect/resume from waiting state.
+
+Resume orchestration contract (worker-owned):
+1. Worker claims durable `resume_intent` (unique on `(origin_session_id, invocation_id)`).
+2. Worker attempts to resume the same paused origin session first.
+3. On transient provider/runtime failures, retry with bounded exponential backoff (default 3 attempts).
+4. On permanent failure (for example sandbox missing) or exhausted retries, create one continuation session and inject reconciliation outcome.
+5. If continuation bootstrap fails, mark `resume_failed` durably and emit notifications.
+
+Resume timeout contract:
+- No separate expiry for resume intents in V1.
+- Resume orchestration terminates in `satisfied`, `continued`, or `resume_failed`, bounded by run/session deadline policy.
 
 ### 4) Durable persistence
 - Persist invocation rows and status transitions
@@ -114,6 +142,7 @@ This prevents dashboards from breaking when streams reconnect.
 Streaming contracts for terminal/code/preview transport are detailed in:
 - [11-streaming-preview-transport-v2.md](/Users/pablo/proliferate/docs/specs/agent-platform-v1/11-streaming-preview-transport-v2.md)
 - [canonical streaming spec](/Users/pablo/proliferate/docs/specs/streaming-preview.md)
+- [16-agent-tool-contract.md](/Users/pablo/proliferate/docs/specs/agent-platform-v1/16-agent-tool-contract.md)
 
 ## Failure behavior
 Gateway must be explicit about:
@@ -123,6 +152,7 @@ Gateway must be explicit about:
 - Provider/integration execution error
 - Suspended-waiting-for-approval status with deterministic resume path
 - Reconnect reconciliation failures (for pending invocation/status pull)
+- Resume orchestration state transitions (`resume_queued`, `resuming`, `continued`, `resume_failed`) from durable DB state
 
 Each must have clear status and retry path.
 
@@ -137,7 +167,7 @@ Each must have clear status and retry path.
 - [ ] Invocation rows persist all status transitions
 - [ ] Websocket broadcasts include pending/completed/failed states
 - [ ] DB-first org dashboard + live session detail split is implemented
-- [ ] Gateway evaluates runtime permissions against immutable `boot_snapshot`
+- [ ] Gateway evaluates runtime permissions against immutable session contract
 - [ ] Post-approval revalidation is enforced before executing pending actions
 - [ ] Gateway route handlers remain transport-only and do not import Drizzle models directly
 - [ ] Gateway stream telemetry does not directly write billable LLM token events

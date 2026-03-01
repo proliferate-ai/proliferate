@@ -30,7 +30,7 @@ This spec uses one network model for runtime transport:
 Important:
 - This V2 transport **does not** depend on a sandbox-initiated outbound control websocket for runtime readiness.
 - Readiness is based on successful signed health check over provider ingress.
-- For Kubernetes self-host mode, gateway must route to sandbox-daemon over internal cluster networking (service DNS/pod IP), not per-session public ingress.
+- V1 runtime compute assumes E2B ingress semantics; non-E2B provider networking is future extension work.
 
 ## 2. `sandbox-daemon` Responsibilities
 
@@ -143,18 +143,18 @@ Reconnect reconciliation requirement:
 - Default idle timeout for this spec pack is `10m`.
 - Gateway/runtime must treat paused sandboxes as expected reconnect events, not hard failures.
 
-## 5. Provider Contract (Agnostic, but strict)
+## 5. Provider Contract
 
-Any provider used with this architecture must support:
+V1 provider contract:
+- Sandbox compute provider is E2B only.
+
+Future provider extension contract:
+- Any additional provider used with this architecture must support:
 - inbound HTTP/WS tunnel to sandbox daemon port,
 - websocket upgrades,
 - low-latency request/response for interactive transport.
 
-If provider cannot satisfy these transport primitives, it is out of contract.
-
-Kubernetes self-host contract:
-- Gateway must run in the same cluster/VPC network plane as sandbox pods.
-- Gateway reaches sandbox-daemon via internal addresses (K8s Service DNS or pod IP), without dynamic external ingress objects per session.
+- If provider cannot satisfy these transport primitives, it is out of contract.
 
 ## 6. Billing and Telemetry Intercept Requirements
 

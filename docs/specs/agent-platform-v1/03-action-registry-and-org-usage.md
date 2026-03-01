@@ -36,6 +36,7 @@ packages/services/src/integrations/
   service.ts                 # integration lifecycle
   tokens.ts                  # OAuth token resolution boundary
   github-app.ts              # GitHub App installation token path
+  oauth.ts                   # provider OAuth exchange + refresh lifecycle (target)
 
 packages/services/src/connectors/
   service.ts                 # org connector CRUD and validation
@@ -49,6 +50,7 @@ Reference docs:
 - `docs/specs/actions.md`
 - `docs/specs/integrations.md`
 - `docs/sim-architecture-spec.md` (for control-plane credential handling pattern)
+- `docs/specs/agent-platform-v1/16-agent-tool-contract.md`
 
 ## Core data models
 
@@ -67,6 +69,10 @@ Minimum invocation fields to persist:
 - `actorUserId`, `requestedRunAs`, `credentialOwnerType`
 - `status`, `approvedBy`, `approvedAt`, `executedAt`, `error`
 
+Session-scoped execution rule:
+- Actions are never executed "by automation row" directly.
+- Every invocation must be attributable to a concrete session execution context.
+
 ## Action source architecture
 
 ### One catalog, two source types
@@ -84,10 +90,17 @@ The runtime pipeline is unified after source resolution.
 ## OAuth and MCP credential path (required behavior)
 
 ### OAuth-backed actions
-- Integration rows store connection references, not raw token material for Nango-managed providers.
+- OAuth is managed in Proliferate control-plane (no external broker dependency).
+- Provider account references and encrypted credential material are stored in Proliferate DB/secret boundary.
 - Runtime obtains fresh token server-side via `packages/services/src/integrations/tokens.ts:getToken`.
+- Refresh flow is provider-specific and executed by integration token service (`oauth.ts` target ownership).
 - GitHub App path mints short-lived installation tokens server-side (`github-app.ts`).
 - Sandbox never receives long-lived OAuth secrets.
+- Final target is one in-house OAuth lifecycle:
+  1. Auth code exchange
+  2. Encrypted token persistence
+  3. Refresh/retry lifecycle
+  4. Revocation/disconnect lifecycle
 
 ### MCP connector-backed actions
 - Connector config is org-owned (`org_connectors`).
@@ -123,7 +136,7 @@ Required constraints:
 - Gateway creates PR server-side with policy-controlled identity.
 
 Mode requirements:
-- PR ownership mode is explicit and must be frozen in run/session `boot_snapshot`.
+- PR ownership mode is explicit and must be frozen in immutable session core fields.
 - Mid-run mode changes do not affect in-flight run behavior.
 
 ## Invocation flow (end to end)
@@ -132,8 +145,9 @@ Mode requirements:
 1. Resolve session org + identity
 2. Load built-in provider actions
 3. Load enabled org connectors and discover tools
-4. Apply source/user visibility and policy hints
-5. Return normalized list with schema + mode hints
+4. Normalize to tool manifest contract (title/when-to-use/schema/risk/mode hint)
+5. Freeze manifest in immutable session capability/tool contract for that session
+6. Return normalized list with schema + mode hints
 
 ### 2) Invoke action
 1. Validate input schema
@@ -142,10 +156,10 @@ Mode requirements:
 - org override
 - default risk mode
 3. Create invocation row
-4. If `deny`: persist denied + return
-5. If `require_approval`: persist pending + emit notification + return suspended response immediately
+4. If action is not visible to session capability set, reject as policy denied
+5. If `require_approval`: persist pending + emit notification + return structured `pending_approval` response immediately
 6. If `allow`: execute immediately via provider/connector adapter
-7. Persist final status and output summary
+7. Persist final status and normalized output summary
 
 ### 3) Approve/deny pending invocation
 1. Validate approver role
@@ -156,9 +170,11 @@ Mode requirements:
 - policy still permits this exact request
 4. Execute or fail with revalidation error
 5. Persist final state + broadcast update
+6. If unresolved beyond expiry window, transition to `expired` and publish deterministic outcome for harness reconciliation
+7. For origin execution still marked `waiting_for_approval`, write durable `resume_intent` in the same transaction as final invocation outcome persistence.
 
 Revalidation precedence contract (required):
-- Frozen `boot_snapshot` remains source-of-truth for run intent (prompt/tooling/run identity defaults).
+- Frozen immutable session contract remains source-of-truth for run intent (identity/tooling defaults).
 - Live org security state is source-of-truth at execution time:
   - integration/token revocations
   - org kill switches / connector disablement
@@ -176,6 +192,21 @@ Idempotency requirements:
 - Every invocation must carry an `idempotencyKey` unique per org + action intent.
 - Retry of the same request must return existing invocation/result instead of duplicating side effects.
 - External provider request IDs should be stored when available for reconciliation.
+
+Approval-triggered resume contract:
+- Resume intent is created only on final resolved outcomes for a previously pending invocation:
+  - `completed` (approved path executed successfully)
+  - `failed` (approved path but execution/revalidation failed)
+  - `denied`
+  - `expired`
+- Do not create resume intent for intermediate `approved` state.
+- Resume intent uniqueness key is `(origin_session_id, invocation_id)`.
+- Runtime/harness injection dedupe key is `invocation_id`.
+- Resume intent processing is owned by worker/orchestration queue and does not rely on live gateway stream connectivity.
+
+Approval expiration policy:
+- Pending approvals auto-expire after `24h` if unanswered.
+- Expiration is durable (`status=expired`) and must be visible in session approval surfaces + harness reconciliation payloads.
 
 ## Org-wide vs personal integration behavior
 
@@ -208,6 +239,13 @@ Required UX semantics:
 - All invocations are auditable and queryable by session/coworker/org.
 - Approval-required actions must be durable and recoverable across restarts.
 - Connector and OAuth auth materials are resolved server-side only.
+
+## OAuth baseline (clean-slate)
+
+Required baseline:
+1. Use in-house OAuth for provider auth code exchange, encrypted token persistence, refresh, and revoke.
+2. Do not route runtime token resolution through broker APIs.
+3. Keep one token-resolution path (`integrations/tokens.ts`) for all OAuth-backed actions.
 
 ## Definition of done checklist
 - [ ] Single invocation lifecycle covers provider and MCP connector actions

@@ -7,7 +7,7 @@ import { Providers } from "./providers";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-	title: "Proliferate | The Autonomous Engineering Organization",
+	title: "Proliferate",
 	description:
 		"A single workspace for coding agents, engineers, and operators to build together, faster. Ship features, fix bugs, and automate maintenance with AI agents.",
 	keywords: [
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
 		type: "website",
 		locale: "en_US",
 		url: "https://proliferate.com",
-		title: "Proliferate | The Autonomous Engineering Organization",
+		title: "Proliferate ",
 		description:
 			"A single workspace for coding agents, engineers, and operators to build together, faster. Ship features, fix bugs, and automate maintenance with AI agents.",
 		siteName: "Proliferate",
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
 		card: "summary_large_image",
 		site: "@proliferateai",
 		creator: "@proliferateai",
-		title: "Proliferate | The Autonomous Engineering Organization",
+		title: "Proliferate ",
 		description:
 			"A single workspace for coding agents, engineers, and operators to build together, faster.",
 		images: ["https://d1uh4o7rpdqkkl.cloudfront.net/og.png?v=3"],

@@ -23,6 +23,7 @@
 | 12 | `auth-orgs.md` | better-auth, user/org/member model, invitations, onboarding/trial activation, API keys, admin/impersonation. | 3 |
 | 13 | `billing-metering.md` | Usage metering, credit gating, trial credits, reconciliation, org pause, Autumn integration. Owns charging/gating policy. | 3 |
 | 14 | `streaming-preview.md` | Clean-slate V2 transport and preview plane: unified WS contracts, sandbox-daemon, gateway zero-trust proxying, terminal/FS/preview event model. | 2 |
+| 15 | `agent-platform-v1/20-code-quality-contract.md` | Cross-cutting code quality rules, touched-file ratchet policy, CI gates, and exception protocol for migration. | 1 |
 
 ### Phase ordering
 
