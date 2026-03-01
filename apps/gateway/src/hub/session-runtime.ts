@@ -560,28 +560,28 @@ export class SessionRuntime {
 				hasOpenCodeSessionId: Boolean(this.openCodeSessionId),
 			});
 
-				// Connect to daemon event stream via harness adapter
-				const sseStartMs = Date.now();
-				this.log("Connecting to coding harness event stream...", { url: this.openCodeUrl });
-				this.eventStreamHandle?.disconnect();
-				this.eventStreamHandle = await this.codingHarness.streamEvents({
-					baseUrl: this.openCodeUrl,
-					env: this.env,
-					logger: this.logger,
-					onDisconnect: (reason) => this.handleSseDisconnect(reason),
-					onEvent: (event) => {
-						this.logger.debug(
-							{ channel: event.channel, type: event.type },
-							"runtime.daemon_event.normalized",
-						);
-						this.onEvent(event.rawEvent);
-					},
-				});
-				this.eventStreamConnected = true;
-				this.log("Harness event stream connected");
-				this.logLatency("runtime.ensure_ready.sse.connect", {
-					durationMs: Date.now() - sseStartMs,
-				});
+			// Connect to daemon event stream via harness adapter
+			const sseStartMs = Date.now();
+			this.log("Connecting to coding harness event stream...", { url: this.openCodeUrl });
+			this.eventStreamHandle?.disconnect();
+			this.eventStreamHandle = await this.codingHarness.streamEvents({
+				baseUrl: this.openCodeUrl,
+				env: this.env,
+				logger: this.logger,
+				onDisconnect: (reason) => this.handleSseDisconnect(reason),
+				onEvent: (event) => {
+					this.logger.debug(
+						{ channel: event.channel, type: event.type },
+						"runtime.daemon_event.normalized",
+					);
+					this.onEvent(event.rawEvent);
+				},
+			});
+			this.eventStreamConnected = true;
+			this.log("Harness event stream connected");
+			this.logLatency("runtime.ensure_ready.sse.connect", {
+				durationMs: Date.now() - sseStartMs,
+			});
 
 			this.onStatus("running");
 			this.log("Runtime lifecycle complete - status: running");
