@@ -21,6 +21,20 @@ import type {
 } from "./coding-harness";
 import { normalizeDaemonEvent } from "./daemon-event-bridge";
 
+function isTransientLookupError(error: unknown): boolean {
+	if (!(error instanceof Error)) {
+		return false;
+	}
+	const message = error.message.toLowerCase();
+	return (
+		error.name === "AbortError" ||
+		message.includes("fetch failed") ||
+		message.includes("network") ||
+		message.includes("timeout") ||
+		message.includes("socket")
+	);
+}
+
 export class OpenCodeCodingHarnessAdapter implements CodingHarnessAdapter {
 	readonly name = "opencode";
 
@@ -36,9 +50,12 @@ export class OpenCodeCodingHarnessAdapter implements CodingHarnessAdapter {
 				if (exists) {
 					return { sessionId: input.sessionId, mode: "reused" };
 				}
-			} catch {
-				// Conservative fallback: keep existing session ID on transient lookup failures.
-				return { sessionId: input.sessionId, mode: "reused" };
+			} catch (error) {
+				if (isTransientLookupError(error)) {
+					// Preserve active flow during transient network/timeout lookup failures.
+					return { sessionId: input.sessionId, mode: "reused" };
+				}
+				throw error;
 			}
 		}
 

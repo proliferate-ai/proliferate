@@ -81,7 +81,7 @@
   - `pnpm lint` ✅
   - `pnpm test` ✅
 - open comments:
-  - Pending CI rerun after approval route ownership + terminal side-effect resilience fixes.
+  - Pending CI rerun after follow-up routing/idempotency patch.
 - fixes applied:
   - Added V1 task-session create/lookup helpers and unified service entrypoint.
   - Added terminal task follow-up routing contract: live task -> same session; terminal task -> ad-hoc continuation/rerun with `workerId=null` and `workerRunId=null`.
@@ -136,7 +136,7 @@
   - `pnpm test` ✅
   - `pnpm build` ⚠️ fails locally due required env vars for `apps/web` build-time validation.
 - open comments:
-  - CI and automated review pending.
+  - Pending CI rerun after harness lifecycle + adapter encapsulation follow-ups.
 - fixes applied:
   - Added shared coding harness interface (`start`, `resume`, `interrupt`, `shutdown`, `streamEvents`, `collectOutputs`).
   - Added OpenCode coding harness adapter implementation over existing OpenCode API + SSE transport.
@@ -146,6 +146,11 @@
   - Updated runtime to instantiate harness adapters and use normalized daemon-event hooks.
   - Added explicit harness-family selection by `sessions.kind` (`manager-claude` vs `coding-opencode`) in runtime lifecycle.
   - Extended gateway session context records to carry `kind` from DB rows.
+  - Updated manager runtime initialization to call `start()` for cold init and `resume()` only for auto reconnect.
+  - Tightened coding-harness resume fallback to reuse only on transient lookup errors and rethrow non-transient failures.
+  - Routed OpenCode session resolution + event-stream connection through the coding-harness adapter contract (removed runtime direct lookup/list/SSE wiring).
+  - Added daemon bridge test coverage for `session.error` terminal normalization.
+  - Added harness adapter unit tests for resume behavior across success/transient/non-transient lookup paths.
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Broaden runtime lifecycle integration to route all harness operations through the adapter contract.

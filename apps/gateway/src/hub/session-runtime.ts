@@ -18,20 +18,14 @@ import { getModalAppName, getSandboxProvider } from "@proliferate/shared/provide
 import { SandboxProviderError } from "@proliferate/shared/sandbox";
 import { computeBaseSnapshotVersionKey } from "@proliferate/shared/sandbox";
 import { scheduleSessionExpiry } from "../expiry/expiry-queue";
-import { normalizeDaemonEvent } from "../harness/daemon-event-bridge";
+import type { CodingHarnessEventStreamHandle } from "../harness/coding-harness";
 import { ClaudeManagerHarnessAdapter } from "../harness/manager-claude-harness";
 import { OpenCodeCodingHarnessAdapter } from "../harness/opencode-coding-harness";
 import type { GatewayEnv } from "../lib/env";
 import { waitForMigrationLockRelease } from "../lib/lock";
-import {
-	type OpenCodeSessionCreateError,
-	getOpenCodeSession,
-	listOpenCodeSessions,
-} from "../lib/opencode";
 import { deriveSandboxMcpToken } from "../lib/sandbox-mcp-token";
 import { type SessionContext, loadSessionContext } from "../lib/session-store";
 import type { OpenCodeEvent, SandboxInfo } from "../types";
-import { SseClient } from "./sse-client";
 
 export class MigrationInProgressError extends Error {
 	constructor(message = "Migration in progress") {
@@ -59,17 +53,14 @@ export interface SessionRuntimeOptions {
 }
 
 export class SessionRuntime {
-	private static readonly openCodeCreateBaseDelayMs = 500;
-	private static readonly openCodeCreateMaxDelayMs = 5000;
-
 	private readonly env: GatewayEnv;
 	private readonly sessionId: string;
 	private context: SessionContext;
 	private readonly logger: Logger;
 
-	private readonly sseClient: SseClient;
 	private readonly codingHarness: OpenCodeCodingHarnessAdapter;
 	private readonly managerHarness: ClaudeManagerHarnessAdapter;
+	private readonly onEvent: SessionRuntimeOptions["onEvent"];
 	private readonly onStatus: SessionRuntimeOptions["onStatus"];
 	private readonly onBroadcast?: SessionRuntimeOptions["onBroadcast"];
 	private readonly onDisconnect: SessionRuntimeOptions["onDisconnect"];
@@ -82,6 +73,8 @@ export class SessionRuntime {
 	private openCodeSessionId: string | null = null;
 	private sandboxExpiresAt: number | null = null;
 	private lifecycleStartTime = 0;
+	private eventStreamHandle: CodingHarnessEventStreamHandle | null = null;
+	private eventStreamConnected = false;
 
 	private ensureReadyPromise: Promise<void> | null = null;
 
@@ -93,25 +86,12 @@ export class SessionRuntime {
 			module: "runtime",
 			sessionId: options.sessionId,
 		});
+		this.onEvent = options.onEvent;
 		this.onStatus = options.onStatus;
 		this.onBroadcast = options.onBroadcast;
 		this.onDisconnect = options.onDisconnect;
 		this.codingHarness = new OpenCodeCodingHarnessAdapter();
 		this.managerHarness = new ClaudeManagerHarnessAdapter();
-
-		this.sseClient = new SseClient({
-			onEvent: (event) => {
-				const normalized = normalizeDaemonEvent(event);
-				this.logger.debug(
-					{ channel: normalized.channel, type: normalized.type },
-					"runtime.daemon_event.normalized",
-				);
-				options.onEvent(normalized.rawEvent);
-			},
-			onDisconnect: (reason) => this.handleSseDisconnect(reason),
-			env: this.env,
-			logger: this.logger,
-		});
 	}
 
 	private logLatency(event: string, data?: Record<string, unknown>): void {
@@ -168,7 +148,7 @@ export class SessionRuntime {
 	}
 
 	isReady(): boolean {
-		return Boolean(this.openCodeUrl && this.openCodeSessionId && this.sseClient.isConnected());
+		return Boolean(this.openCodeUrl && this.openCodeSessionId && this.eventStreamConnected);
 	}
 
 	isConnecting(): boolean {
@@ -180,7 +160,7 @@ export class SessionRuntime {
 	}
 
 	isSseConnected(): boolean {
-		return this.sseClient.isConnected();
+		return this.eventStreamConnected;
 	}
 
 	private isManagerSessionKind(): boolean {
@@ -277,10 +257,15 @@ export class SessionRuntime {
 	}
 
 	disconnectSse(): void {
-		this.sseClient.disconnect();
+		this.eventStreamHandle?.disconnect();
+		this.eventStreamHandle = null;
+		this.eventStreamConnected = false;
 	}
 
 	resetSandboxState(): void {
+		this.eventStreamHandle?.disconnect();
+		this.eventStreamHandle = null;
+		this.eventStreamConnected = false;
 		this.openCodeUrl = null;
 		this.previewUrl = null;
 		this.sshHost = null;
@@ -332,7 +317,11 @@ export class SessionRuntime {
 				sessionKind: this.context.session.kind ?? "unknown",
 			});
 			if (harnessFamily === "manager-claude") {
-				await this.managerHarness.resume({ managerSessionId: this.sessionId });
+				if (options?.reason === "auto_reconnect") {
+					await this.managerHarness.resume({ managerSessionId: this.sessionId });
+				} else {
+					await this.managerHarness.start({ managerSessionId: this.sessionId });
+				}
 			}
 
 			// Abort auto-reconnect when session has transitioned to a terminal/non-running state
@@ -571,14 +560,28 @@ export class SessionRuntime {
 				hasOpenCodeSessionId: Boolean(this.openCodeSessionId),
 			});
 
-			// Connect to SSE
-			const sseStartMs = Date.now();
-			this.log("Connecting to OpenCode SSE...", { url: this.openCodeUrl });
-			await this.sseClient.connect(this.openCodeUrl);
-			this.log("SSE connected");
-			this.logLatency("runtime.ensure_ready.sse.connect", {
-				durationMs: Date.now() - sseStartMs,
-			});
+				// Connect to daemon event stream via harness adapter
+				const sseStartMs = Date.now();
+				this.log("Connecting to coding harness event stream...", { url: this.openCodeUrl });
+				this.eventStreamHandle?.disconnect();
+				this.eventStreamHandle = await this.codingHarness.streamEvents({
+					baseUrl: this.openCodeUrl,
+					env: this.env,
+					logger: this.logger,
+					onDisconnect: (reason) => this.handleSseDisconnect(reason),
+					onEvent: (event) => {
+						this.logger.debug(
+							{ channel: event.channel, type: event.type },
+							"runtime.daemon_event.normalized",
+						);
+						this.onEvent(event.rawEvent);
+					},
+				});
+				this.eventStreamConnected = true;
+				this.log("Harness event stream connected");
+				this.logLatency("runtime.ensure_ready.sse.connect", {
+					durationMs: Date.now() - sseStartMs,
+				});
 
 			this.onStatus("running");
 			this.log("Runtime lifecycle complete - status: running");
@@ -597,114 +600,26 @@ export class SessionRuntime {
 			throw new Error("Agent URL missing");
 		}
 
-		const sessionMeta = {
-			sessionStatus: this.context.session.status ?? null,
-			pauseReason: this.context.session.pause_reason ?? null,
-			clientType: this.context.session.client_type ?? null,
-			sandboxId: this.context.session.sandbox_id ?? null,
-		};
-		let openCodeSessionCreateReason: "missing_stored_id" | "stored_id_not_found" =
-			"missing_stored_id";
-
-		// Prefer a direct lookup for the stored OpenCode session ID.
-		// The list endpoint can lag and cause false negatives, which would churn IDs.
 		const storedId = this.openCodeSessionId ?? this.context.session.coding_agent_session_id;
-		if (storedId) {
-			this.log("Verifying stored OpenCode session...", { storedId });
-			const getStartMs = Date.now();
-			try {
-				const exists = await getOpenCodeSession(this.openCodeUrl, storedId);
-				this.logLatency("runtime.opencode_session.get", {
-					durationMs: Date.now() - getStartMs,
-					storedId,
-					exists,
-				});
-
-				if (exists) {
-					this.log("Stored OpenCode session is valid", { storedId, verification: "direct_get" });
-					this.openCodeSessionId = storedId;
-					return;
-				}
-
-				this.log("Stored OpenCode session not found via direct lookup", {
-					storedId,
-				});
-				openCodeSessionCreateReason = "stored_id_not_found";
-			} catch (error) {
-				this.logLatency("runtime.opencode_session.get", {
-					durationMs: Date.now() - getStartMs,
-					storedId,
-					exists: false,
-					error: error instanceof Error ? error.message : String(error),
-				});
-
-				// Keep using the stored ID on transient lookup failures to avoid
-				// rotating sessions and losing in-progress message history.
-				this.logger.warn(
-					{
-						storedId,
-						error: error instanceof Error ? error.message : String(error),
-					},
-					"OpenCode direct session lookup failed; reusing stored session id",
-				);
-				this.openCodeSessionId = storedId;
-				return;
-			}
-		}
-
-		// No valid stored session ID: list and adopt newest before creating a new one.
-		const listStartMs = Date.now();
-		const listedSessions = await listOpenCodeSessions(this.openCodeUrl);
-		this.logLatency("runtime.opencode_session.list", {
-			durationMs: Date.now() - listStartMs,
-			count: listedSessions.length,
+		const resumeStartMs = Date.now();
+		const resumed = await this.codingHarness.resume({
+			baseUrl: this.openCodeUrl,
+			sessionId: storedId,
+			title: this.context.session.title ?? undefined,
+		});
+		this.logLatency("runtime.opencode_session.resume", {
+			durationMs: Date.now() - resumeStartMs,
+			mode: resumed.mode,
 			hadStoredId: Boolean(storedId),
 		});
-		this.log("OpenCode sessions listed", {
-			count: listedSessions.length,
-			availableSessionIds: listedSessions.map((session) => session.id),
+		this.log("OpenCode session resolved via harness adapter", {
+			sessionId: resumed.sessionId,
+			mode: resumed.mode,
 		});
 
-		// Reuse the newest existing OpenCode session before creating a new one.
-		if (listedSessions.length > 0) {
-			const newest = listedSessions.reduce((latest, current) => {
-				const latestUpdated = latest.time?.updated ?? latest.time?.created ?? 0;
-				const currentUpdated = current.time?.updated ?? current.time?.created ?? 0;
-				return currentUpdated >= latestUpdated ? current : latest;
-			});
-			this.openCodeSessionId = newest.id;
-			this.context.session.coding_agent_session_id = newest.id;
-			await sessions.update(this.sessionId, { codingAgentSessionId: newest.id });
-			this.log("Adopted existing OpenCode session", {
-				sessionId: newest.id,
-				updatedAt: newest.time?.updated ?? newest.time?.created ?? null,
-				...sessionMeta,
-			});
-			return;
-		}
-
-		// Create new OpenCode session
-		const createStartMs = Date.now();
-		this.logger.warn(
-			{
-				storedId,
-				openCodeSessionCreateReason,
-				listedSessionCount: listedSessions.length,
-				...sessionMeta,
-			},
-			"Creating new OpenCode session; this can rotate transcript identity",
-		);
-		const sessionId = await this.createOpenCodeSessionWithRetry();
-		this.log("OpenCode session created", { sessionId });
-		this.logLatency("runtime.opencode_session.create", {
-			durationMs: Date.now() - createStartMs,
-		});
-
-		this.openCodeSessionId = sessionId;
-		this.context.session.coding_agent_session_id = sessionId;
-
-		// Store the new ID
-		await sessions.update(this.sessionId, { codingAgentSessionId: sessionId });
+		this.openCodeSessionId = resumed.sessionId;
+		this.context.session.coding_agent_session_id = resumed.sessionId;
+		await sessions.update(this.sessionId, { codingAgentSessionId: resumed.sessionId });
 	}
 
 	/**
@@ -763,94 +678,13 @@ export class SessionRuntime {
 		}
 	}
 
-	private async createOpenCodeSessionWithRetry(): Promise<string> {
-		if (!this.openCodeUrl) {
-			throw new Error("Agent URL missing");
-		}
-
-		// Restores from snapshot can take longer for OpenCode to accept session create calls.
-		const maxAttempts = this.context.session.snapshot_id ? 5 : 3;
-		let lastError: unknown;
-
-		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-			const attemptStartMs = Date.now();
-			try {
-				const { sessionId } = await this.codingHarness.start({
-					baseUrl: this.openCodeUrl,
-				});
-				this.logLatency("runtime.opencode_session.create.attempt", {
-					attempt,
-					maxAttempts,
-					durationMs: Date.now() - attemptStartMs,
-					success: true,
-				});
-				return sessionId;
-			} catch (error) {
-				lastError = error;
-				const err = error as OpenCodeSessionCreateError;
-				const retryable = this.isRetryableOpenCodeCreateError(error);
-				const errorMessage = error instanceof Error ? error.message : String(error);
-				this.logLatency("runtime.opencode_session.create.attempt", {
-					attempt,
-					maxAttempts,
-					durationMs: Date.now() - attemptStartMs,
-					success: false,
-					retryable,
-					error: errorMessage,
-					status: err.status,
-					code: err.code,
-					phase: err.phase,
-				});
-
-				if (!retryable || attempt >= maxAttempts) {
-					break;
-				}
-
-				const delayMs = Math.min(
-					SessionRuntime.openCodeCreateBaseDelayMs * 2 ** (attempt - 1),
-					SessionRuntime.openCodeCreateMaxDelayMs,
-				);
-				this.logger.warn(
-					{
-						attempt,
-						maxAttempts,
-						delayMs,
-						error: errorMessage,
-						status: err.status,
-						code: err.code,
-						phase: err.phase,
-					},
-					"OpenCode session create failed; retrying",
-				);
-				await new Promise((resolve) => setTimeout(resolve, delayMs));
-			}
-		}
-
-		throw lastError instanceof Error ? lastError : new Error(String(lastError));
-	}
-
-	private isRetryableOpenCodeCreateError(error: unknown): boolean {
-		const err = error as OpenCodeSessionCreateError;
-		if (typeof err.retryable === "boolean") {
-			return err.retryable;
-		}
-		const message =
-			error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-		return (
-			message.includes("fetch failed") ||
-			message.includes("other side closed") ||
-			message.includes("econnreset") ||
-			message.includes("econnrefused") ||
-			message.includes("etimedout") ||
-			message.includes("und_err")
-		);
-	}
-
 	// ============================================
 	// SSE handling
 	// ============================================
 
 	private handleSseDisconnect(reason: string): void {
+		this.eventStreamConnected = false;
+		this.eventStreamHandle = null;
 		this.log("SSE disconnected", { reason });
 		this.logLatency("runtime.sse.disconnect", { reason });
 		this.log("SSE disconnected; preserving OpenCode session identity for reconnect", {

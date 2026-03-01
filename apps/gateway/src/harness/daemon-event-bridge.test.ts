@@ -26,6 +26,17 @@ describe("normalizeDaemonEvent", () => {
 		expect(normalized.isTerminal).toBe(true);
 	});
 
+	it("marks session.error as terminal", () => {
+		const event: OpenCodeEvent = {
+			type: "session.error",
+			properties: {},
+		};
+
+		const normalized = normalizeDaemonEvent(event);
+		expect(normalized.channel).toBe("session");
+		expect(normalized.isTerminal).toBe(true);
+	});
+
 	it("maps server events to server channel", () => {
 		const event: OpenCodeEvent = {
 			type: "server.connected",
