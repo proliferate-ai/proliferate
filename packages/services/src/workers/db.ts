@@ -7,9 +7,13 @@
 import {
 	type InferSelectModel,
 	and,
+	asc,
 	desc,
 	eq,
 	getDb,
+	inArray,
+	sql,
+	wakeEvents,
 	workerRunEvents,
 	workerRuns,
 	workers,
@@ -22,8 +26,69 @@ const MAX_WORKER_RUNS = 100;
 // ============================================
 
 export type WorkerRow = InferSelectModel<typeof workers>;
+export type WakeEventRow = InferSelectModel<typeof wakeEvents>;
 export type WorkerRunRow = InferSelectModel<typeof workerRuns>;
 export type WorkerRunEventRow = InferSelectModel<typeof workerRunEvents>;
+
+const ACTIVE_WORKER_RUN_STATUSES = ["queued", "running"] as const;
+const COALESCEABLE_WAKE_SOURCES = ["tick", "webhook"] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function extractWakeDedupeKey(payload: unknown): string | null {
+	if (!isRecord(payload)) {
+		return null;
+	}
+
+	const directKey = payload.dedupeKey;
+	if (typeof directKey === "string" && directKey.trim().length > 0) {
+		return directKey.trim();
+	}
+
+	const providerEventId = payload.providerEventId;
+	if (typeof providerEventId === "string" && providerEventId.trim().length > 0) {
+		return providerEventId.trim();
+	}
+
+	const externalEventId = payload.externalEventId;
+	if (typeof externalEventId === "string" && externalEventId.trim().length > 0) {
+		return externalEventId.trim();
+	}
+
+	return null;
+}
+
+function buildMergedWakePayload(
+	basePayload: unknown,
+	coalescedRows: WakeEventRow[],
+): Record<string, unknown> {
+	const base = isRecord(basePayload) ? { ...basePayload } : {};
+
+	const existingIdsRaw = base.coalescedWakeEventIds;
+	const existingIds =
+		Array.isArray(existingIdsRaw) && existingIdsRaw.every((id) => typeof id === "string")
+			? existingIdsRaw
+			: [];
+
+	const mergedIds = Array.from(new Set([...existingIds, ...coalescedRows.map((row) => row.id)]));
+
+	const existingRefsRaw = base.coalescedWakeRefs;
+	const existingRefs = Array.isArray(existingRefsRaw) ? existingRefsRaw : [];
+
+	const newRefs = coalescedRows.map((row) => ({
+		wakeEventId: row.id,
+		source: row.source,
+		dedupeKey: extractWakeDedupeKey(row.payloadJson),
+	}));
+
+	return {
+		...base,
+		coalescedWakeEventIds: mergedIds,
+		coalescedWakeRefs: [...existingRefs, ...newRefs],
+	};
+}
 
 // ============================================
 // Workers — Queries
@@ -104,6 +169,42 @@ export async function updateWorkerStatus(
 	return row;
 }
 
+export async function transitionWorkerStatus(
+	id: string,
+	organizationId: string,
+	fromStatuses: string[],
+	toStatus: string,
+	fields?: {
+		lastWakeAt?: Date;
+		lastCompletedRunAt?: Date;
+		lastErrorCode?: string | null;
+		pausedAt?: Date | null;
+		pausedBy?: string | null;
+	},
+): Promise<WorkerRow | undefined> {
+	if (fromStatuses.length === 0) {
+		throw new Error("fromStatuses must include at least one status");
+	}
+
+	const db = getDb();
+	const [row] = await db
+		.update(workers)
+		.set({
+			status: toStatus,
+			updatedAt: new Date(),
+			...fields,
+		})
+		.where(
+			and(
+				eq(workers.id, id),
+				eq(workers.organizationId, organizationId),
+				inArray(workers.status, fromStatuses),
+			),
+		)
+		.returning();
+	return row;
+}
+
 // ============================================
 // Worker Runs — Queries
 // ============================================
@@ -141,6 +242,26 @@ export async function findWorkerRunById(id: string): Promise<WorkerRunRow | unde
 	return row;
 }
 
+export async function findActiveRunByWorker(
+	workerId: string,
+	organizationId: string,
+): Promise<WorkerRunRow | undefined> {
+	const db = getDb();
+	const [row] = await db
+		.select()
+		.from(workerRuns)
+		.where(
+			and(
+				eq(workerRuns.workerId, workerId),
+				eq(workerRuns.organizationId, organizationId),
+				inArray(workerRuns.status, [...ACTIVE_WORKER_RUN_STATUSES]),
+			),
+		)
+		.orderBy(desc(workerRuns.createdAt))
+		.limit(1);
+	return row;
+}
+
 export async function updateWorkerRunStatus(
 	id: string,
 	organizationId: string,
@@ -156,6 +277,35 @@ export async function updateWorkerRunStatus(
 	return row;
 }
 
+export async function transitionWorkerRunStatus(
+	id: string,
+	organizationId: string,
+	fromStatuses: string[],
+	toStatus: string,
+	fields?: { summary?: string; completedAt?: Date; startedAt?: Date },
+): Promise<WorkerRunRow | undefined> {
+	if (fromStatuses.length === 0) {
+		throw new Error("fromStatuses must include at least one status");
+	}
+
+	const db = getDb();
+	const [row] = await db
+		.update(workerRuns)
+		.set({
+			status: toStatus,
+			...fields,
+		})
+		.where(
+			and(
+				eq(workerRuns.id, id),
+				eq(workerRuns.organizationId, organizationId),
+				inArray(workerRuns.status, fromStatuses),
+			),
+		)
+		.returning();
+	return row;
+}
+
 export async function listRunsByWorker(workerId: string, limit = 10): Promise<WorkerRunRow[]> {
 	const normalizedLimit = Number.isFinite(limit) ? Math.floor(limit) : 10;
 	const sanitizedLimit = Math.max(1, Math.min(MAX_WORKER_RUNS, normalizedLimit));
@@ -166,6 +316,234 @@ export async function listRunsByWorker(workerId: string, limit = 10): Promise<Wo
 		.where(eq(workerRuns.workerId, workerId))
 		.orderBy(desc(workerRuns.createdAt))
 		.limit(sanitizedLimit);
+}
+
+export interface ClaimNextWakeAndCreateRunResult {
+	worker: WorkerRow;
+	wakeEvent: WakeEventRow;
+	workerRun: WorkerRunRow;
+	wakeStartedEvent: WorkerRunEventRow;
+	coalescedWakeEventIds: string[];
+}
+
+/**
+ * Claims one eligible wake for a worker and creates the corresponding run atomically.
+ *
+ * Claim gating:
+ * - worker must be active
+ * - worker must not already have an active run
+ *
+ * Priority:
+ * 1) manual_message
+ * 2) manual
+ * 3) webhook
+ * 4) tick
+ */
+export async function claimNextWakeAndCreateRun(
+	workerId: string,
+	organizationId: string,
+): Promise<ClaimNextWakeAndCreateRunResult | null> {
+	const db = getDb();
+
+	return db.transaction(async (tx) => {
+		const [worker] = await tx
+			.select()
+			.from(workers)
+			.where(and(eq(workers.id, workerId), eq(workers.organizationId, organizationId)))
+			.limit(1);
+
+		if (!worker || worker.status !== "active") {
+			return null;
+		}
+
+		const [activeRun] = await tx
+			.select({ id: workerRuns.id })
+			.from(workerRuns)
+			.where(
+				and(
+					eq(workerRuns.workerId, workerId),
+					eq(workerRuns.organizationId, organizationId),
+					inArray(workerRuns.status, [...ACTIVE_WORKER_RUN_STATUSES]),
+				),
+			)
+			.limit(1);
+
+		if (activeRun) {
+			return null;
+		}
+
+		const claimedRows = await tx.execute<WakeEventRow>(sql`
+			UPDATE ${wakeEvents}
+			SET "status" = 'claimed',
+			    "claimed_at" = now()
+			WHERE ${wakeEvents.id} IN (
+				SELECT ${wakeEvents.id}
+				FROM ${wakeEvents}
+				WHERE ${wakeEvents.workerId} = ${workerId}
+				  AND ${wakeEvents.organizationId} = ${organizationId}
+				  AND ${wakeEvents.status} = 'queued'
+				  AND EXISTS (
+					SELECT 1
+					FROM ${workers}
+					WHERE ${workers.id} = ${wakeEvents.workerId}
+					  AND ${workers.organizationId} = ${organizationId}
+					  AND ${workers.status} = 'active'
+				  )
+				  AND NOT EXISTS (
+					SELECT 1
+					FROM ${workerRuns}
+					WHERE ${workerRuns.workerId} = ${wakeEvents.workerId}
+					  AND ${workerRuns.organizationId} = ${organizationId}
+					  AND ${workerRuns.status} IN ('queued', 'running')
+				  )
+				ORDER BY
+					CASE ${wakeEvents.source}
+						WHEN 'manual_message' THEN 1
+						WHEN 'manual' THEN 2
+						WHEN 'webhook' THEN 3
+						WHEN 'tick' THEN 4
+						ELSE 99
+					END ASC,
+					${wakeEvents.createdAt} ASC
+				LIMIT 1
+				FOR UPDATE SKIP LOCKED
+			)
+			RETURNING *
+		`);
+
+		let claimedWake = claimedRows[0];
+		if (!claimedWake) {
+			return null;
+		}
+
+		const coalescedRows: WakeEventRow[] = [];
+		if (
+			COALESCEABLE_WAKE_SOURCES.includes(
+				claimedWake.source as (typeof COALESCEABLE_WAKE_SOURCES)[number],
+			)
+		) {
+			const queuedSameSource = await tx
+				.select()
+				.from(wakeEvents)
+				.where(
+					and(
+						eq(wakeEvents.workerId, workerId),
+						eq(wakeEvents.organizationId, organizationId),
+						eq(wakeEvents.status, "queued"),
+						eq(wakeEvents.source, claimedWake.source),
+					),
+				)
+				.orderBy(asc(wakeEvents.createdAt));
+
+			const wakeDedupeKey = extractWakeDedupeKey(claimedWake.payloadJson);
+			const candidates =
+				claimedWake.source === "webhook"
+					? wakeDedupeKey
+						? queuedSameSource.filter(
+								(row) => extractWakeDedupeKey(row.payloadJson) === wakeDedupeKey,
+							)
+						: []
+					: queuedSameSource;
+
+			for (const candidate of candidates) {
+				const [coalescedRow] = await tx
+					.update(wakeEvents)
+					.set({
+						status: "coalesced",
+						coalescedIntoWakeEventId: claimedWake.id,
+					})
+					.where(
+						and(
+							eq(wakeEvents.id, candidate.id),
+							eq(wakeEvents.organizationId, organizationId),
+							eq(wakeEvents.status, "queued"),
+						),
+					)
+					.returning();
+
+				if (coalescedRow) {
+					coalescedRows.push(coalescedRow);
+				}
+			}
+
+			if (coalescedRows.length > 0) {
+				const [updatedWake] = await tx
+					.update(wakeEvents)
+					.set({
+						payloadJson: buildMergedWakePayload(claimedWake.payloadJson, coalescedRows),
+					})
+					.where(
+						and(eq(wakeEvents.id, claimedWake.id), eq(wakeEvents.organizationId, organizationId)),
+					)
+					.returning();
+
+				if (updatedWake) {
+					claimedWake = updatedWake;
+				}
+			}
+		}
+
+		const [workerRun] = await tx
+			.insert(workerRuns)
+			.values({
+				workerId: worker.id,
+				organizationId: worker.organizationId,
+				managerSessionId: worker.managerSessionId,
+				wakeEventId: claimedWake.id,
+			})
+			.returning();
+
+		const [consumedWake] = await tx
+			.update(wakeEvents)
+			.set({
+				status: "consumed",
+				consumedAt: new Date(),
+			})
+			.where(
+				and(
+					eq(wakeEvents.id, claimedWake.id),
+					eq(wakeEvents.organizationId, organizationId),
+					eq(wakeEvents.status, "claimed"),
+				),
+			)
+			.returning();
+
+		if (!consumedWake) {
+			throw new Error("Failed to mark claimed wake as consumed");
+		}
+
+		await tx
+			.update(workers)
+			.set({
+				lastWakeAt: new Date(),
+				updatedAt: new Date(),
+			})
+			.where(and(eq(workers.id, worker.id), eq(workers.organizationId, organizationId)));
+
+		const [wakeStartedEvent] = await tx
+			.insert(workerRunEvents)
+			.values({
+				workerRunId: workerRun.id,
+				workerId: worker.id,
+				eventIndex: 0,
+				eventType: "wake_started",
+				payloadJson: {
+					wakeEventId: consumedWake.id,
+					source: consumedWake.source,
+					coalescedWakeEventIds: coalescedRows.map((row) => row.id),
+				},
+				payloadVersion: 1,
+			})
+			.returning();
+
+		return {
+			worker,
+			wakeEvent: consumedWake,
+			workerRun,
+			wakeStartedEvent,
+			coalescedWakeEventIds: coalescedRows.map((row) => row.id),
+		};
+	});
 }
 
 // ============================================
@@ -205,6 +583,32 @@ export async function createWorkerRunEvent(
 		})
 		.returning();
 	return row;
+}
+
+export async function findWorkerRunEventByDedupeKey(
+	workerRunId: string,
+	dedupeKey: string,
+): Promise<WorkerRunEventRow | undefined> {
+	const db = getDb();
+	const [row] = await db
+		.select()
+		.from(workerRunEvents)
+		.where(
+			and(eq(workerRunEvents.workerRunId, workerRunId), eq(workerRunEvents.dedupeKey, dedupeKey)),
+		)
+		.limit(1);
+	return row;
+}
+
+export async function getNextWorkerRunEventIndex(workerRunId: string): Promise<number> {
+	const db = getDb();
+	const [lastRow] = await db
+		.select({ eventIndex: workerRunEvents.eventIndex })
+		.from(workerRunEvents)
+		.where(eq(workerRunEvents.workerRunId, workerRunId))
+		.orderBy(desc(workerRunEvents.eventIndex))
+		.limit(1);
+	return (lastRow?.eventIndex ?? -1) + 1;
 }
 
 export async function listEventsByRun(workerRunId: string): Promise<WorkerRunEventRow[]> {

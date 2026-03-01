@@ -34,3 +34,28 @@
 - carry-over TODOs:
   - Process CI/human/Greptile feedback.
   - After PR1 merge, rebase/retarget `v1/02-*` onward.
+
+## PR 2
+- branch name: `v1/02-workers-wakes-runs`
+- PR URL/number: `TBD`
+- scope: Phase 2 worker wake/run orchestration (`workers` + `wakes` DB/service modules, wake claim/coalesce/consume flow, run/event transition guards, state-transition tests)
+- check results:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅
+  - `pnpm build` ⚠️ fails locally due required env vars for `apps/web` build-time validation.
+- open comments:
+  - TBD
+- fixes applied:
+  - Added atomic wake claim helper with priority ordering and active-worker/no-active-run claim gating.
+  - Implemented wake coalescing during claim for `tick` and dedupe-keyed `webhook` sources.
+  - Added atomic consume + `worker_run` creation + initial `wake_started` timeline event write.
+  - Added worker status transition helper and worker run transition helper with conditional from-status checks.
+  - Added run-event helpers for monotonic `eventIndex` allocation and optional dedupe-key idempotency.
+  - Added worker service lifecycle methods (`pause`, `resume`, `run now`, run start/complete/fail, event append).
+  - Enforced `run now` paused behavior with deterministic `resume_required` error.
+  - Added wake service transition guard helpers and cancel/fail helpers.
+  - Added state-transition unit tests covering workers, wakes, and worker runs.
+- merge SHA: `TBD`
+- carry-over TODOs:
+  - Open PR and monitor CI/human/Greptile feedback to completion before starting PR3.
