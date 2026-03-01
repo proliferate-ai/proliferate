@@ -36,7 +36,7 @@ import {
 	renewOwnerLease,
 	setRuntimeLease,
 } from "../lib/session-leases";
-import type { SessionContext } from "../lib/session-store";
+import type { SessionContext, SessionRecord } from "../lib/session-store";
 import type { ClientConnection, OpenCodeEvent, SandboxInfo } from "../types";
 import { buildControlPlaneSnapshot, buildInitConfig } from "./control-plane";
 import { EventProcessor } from "./event-processor";
@@ -87,6 +87,15 @@ export class SessionHub {
 	private reconnectAttempt = 0;
 	private reconnectTimerId: ReturnType<typeof setTimeout> | null = null;
 	private reconnectGeneration = 0;
+	private latestBroadcastStatus:
+		| "creating"
+		| "resuming"
+		| "running"
+		| "paused"
+		| "stopped"
+		| "error"
+		| "migrating"
+		| null = null;
 
 	// Session leases
 	private leaseRenewTimer: ReturnType<typeof setInterval> | null = null;
@@ -1534,6 +1543,7 @@ export class SessionHub {
 		status: "creating" | "resuming" | "running" | "paused" | "stopped" | "error" | "migrating",
 		message?: string,
 	): void {
+		this.latestBroadcastStatus = status;
 		this.logger.info(
 			{
 				status,
@@ -1569,6 +1579,7 @@ export class SessionHub {
 
 	private async sendInit(ws: WebSocket): Promise<void> {
 		const contextSession = this.runtime.getContext().session;
+		const snapshotSession = await this.getFreshControlPlaneSession(contextSession);
 		const openCodeUrl =
 			this.runtime.getOpenCodeUrl() ?? contextSession.open_code_tunnel_url ?? null;
 		const openCodeSessionId =
@@ -1652,8 +1663,64 @@ export class SessionHub {
 		this.sendMessage(ws, initPayload);
 		this.sendMessage(ws, {
 			type: "control_plane_snapshot",
-			payload: buildControlPlaneSnapshot(contextSession, this.reconnectGeneration),
+			payload: buildControlPlaneSnapshot(
+				snapshotSession,
+				this.reconnectGeneration,
+				this.mapHubStatusToControlPlaneRuntime(this.latestBroadcastStatus),
+			),
 		});
+	}
+
+	private mapHubStatusToControlPlaneRuntime(
+		status:
+			| "creating"
+			| "resuming"
+			| "running"
+			| "paused"
+			| "stopped"
+			| "error"
+			| "migrating"
+			| null,
+	): string | null {
+		switch (status) {
+			case "creating":
+			case "resuming":
+			case "migrating":
+				return "starting";
+			case "running":
+				return "running";
+			case "paused":
+				return "paused";
+			case "error":
+				return "failed";
+			case "stopped":
+			case null:
+				return null;
+		}
+	}
+
+	private async getFreshControlPlaneSession(base: SessionRecord): Promise<SessionRecord> {
+		try {
+			const fresh = await sessions.findByIdInternal(this.sessionId);
+			if (!fresh) {
+				return base;
+			}
+
+			return {
+				...base,
+				status: fresh.status ?? base.status ?? null,
+				runtime_status: fresh.runtimeStatus ?? base.runtime_status ?? null,
+				operator_status: fresh.operatorStatus ?? base.operator_status ?? null,
+				capabilities_version: fresh.capabilitiesVersion ?? base.capabilities_version ?? null,
+				visibility: fresh.visibility ?? base.visibility ?? null,
+				worker_id: fresh.workerId ?? base.worker_id ?? null,
+				worker_run_id: fresh.workerRunId ?? base.worker_run_id ?? null,
+				sandbox_id: fresh.sandboxId ?? base.sandbox_id ?? null,
+			};
+		} catch (error) {
+			this.logError("Failed to refresh control-plane snapshot session state", error);
+			return base;
+		}
 	}
 
 	// ============================================

@@ -182,6 +182,9 @@
   - Updated gateway init flow to emit `control_plane_snapshot` immediately after `init`.
   - Extended session context mapping with runtime/operator/capability/visibility/worker linkage fields required by control-plane snapshots.
   - Added gateway contract tests for preview config exposure and control-plane snapshot payload shape.
+  - Aligned gateway snapshot payload type to shared contract (`ControlPlaneSnapshotMessage[\"payload\"]`) to prevent local/shared drift.
+  - Hardened `sandboxAvailable` derivation to require non-terminal runtime status, not just historical sandbox ID presence.
+  - Added reconnect-time DB refresh for control-plane fields and runtime-status override mapping from live hub status.
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Complete reconnect/resubscribe contract coverage from workspace client perspective.

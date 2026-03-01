@@ -64,4 +64,21 @@ describe("control-plane helpers", () => {
 			}),
 		);
 	});
+
+	it("marks sandbox unavailable for terminal runtime states", () => {
+		const snapshot = buildControlPlaneSnapshot(
+			makeSession({ sandbox_id: "sb-1", runtime_status: "failed" }),
+			2,
+		);
+		expect(snapshot.sandboxAvailable).toBe(false);
+	});
+
+	it("prefers runtime status override for reconnect snapshots", () => {
+		const snapshot = buildControlPlaneSnapshot(
+			makeSession({ runtime_status: "starting", status: "running" }),
+			3,
+			"running",
+		);
+		expect(snapshot.runtimeStatus).toBe("running");
+	});
 });
