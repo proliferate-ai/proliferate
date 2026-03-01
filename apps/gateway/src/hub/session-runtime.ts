@@ -605,7 +605,6 @@ export class SessionRuntime {
 		const resumed = await this.codingHarness.resume({
 			baseUrl: this.openCodeUrl,
 			sessionId: storedId,
-			title: this.context.session.title ?? undefined,
 		});
 		this.logLatency("runtime.opencode_session.resume", {
 			durationMs: Date.now() - resumeStartMs,
