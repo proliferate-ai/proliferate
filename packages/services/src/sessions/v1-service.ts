@@ -128,6 +128,28 @@ export async function sendTaskFollowup(
 				sessionMessage: existing.sessionMessage,
 			};
 		}
+
+		const existingFollowupSession = await v1Db.findLatestTerminalFollowupSession({
+			organizationId: input.organizationId,
+			sourceSessionId: source.id,
+			mode,
+		});
+		if (existingFollowupSession) {
+			const existingFollowupMessage = await v1Db.enqueueSessionMessage({
+				sessionId: existingFollowupSession.id,
+				direction: "user_to_task",
+				messageType: input.messageType,
+				payloadJson: input.payloadJson,
+				dedupeKey: input.dedupeKey,
+				deliverAfter: input.deliverAfter,
+				senderUserId: input.userId,
+			});
+			return {
+				deliverySessionId: existingFollowupSession.id,
+				mode,
+				sessionMessage: existingFollowupMessage,
+			};
+		}
 	}
 
 	const nextTask = await createUnifiedTaskSession({

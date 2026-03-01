@@ -5,6 +5,7 @@ const {
 	mockFindSessionById,
 	mockEnqueueSessionMessage,
 	mockFindTerminalFollowupMessageByDedupe,
+	mockFindLatestTerminalFollowupSession,
 	mockClaimDeliverableSessionMessages,
 	mockTransitionSessionMessageDeliveryState,
 	mockPersistSessionOutcome,
@@ -14,6 +15,7 @@ const {
 	mockFindSessionById: vi.fn(),
 	mockEnqueueSessionMessage: vi.fn(),
 	mockFindTerminalFollowupMessageByDedupe: vi.fn(),
+	mockFindLatestTerminalFollowupSession: vi.fn(),
 	mockClaimDeliverableSessionMessages: vi.fn(),
 	mockTransitionSessionMessageDeliveryState: vi.fn(),
 	mockPersistSessionOutcome: vi.fn(),
@@ -25,6 +27,7 @@ vi.mock("./v1-db", () => ({
 	findSessionById: mockFindSessionById,
 	enqueueSessionMessage: mockEnqueueSessionMessage,
 	findTerminalFollowupMessageByDedupe: mockFindTerminalFollowupMessageByDedupe,
+	findLatestTerminalFollowupSession: mockFindLatestTerminalFollowupSession,
 	claimDeliverableSessionMessages: mockClaimDeliverableSessionMessages,
 	transitionSessionMessageDeliveryState: mockTransitionSessionMessageDeliveryState,
 	persistSessionOutcome: mockPersistSessionOutcome,
@@ -99,6 +102,7 @@ describe("sessions v1 service", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockFindTerminalFollowupMessageByDedupe.mockResolvedValue(undefined);
+		mockFindLatestTerminalFollowupSession.mockResolvedValue(undefined);
 	});
 
 	it("keeps follow-up in same live task session", async () => {
@@ -219,6 +223,35 @@ describe("sessions v1 service", () => {
 		expect(result.sessionMessage.id).toBe("msg-dedupe");
 		expect(mockCreateTaskSession).not.toHaveBeenCalled();
 		expect(mockEnqueueSessionMessage).not.toHaveBeenCalled();
+	});
+
+	it("reuses existing terminal follow-up session before creating another child", async () => {
+		mockFindSessionById.mockResolvedValue(makeTaskSession({ runtimeStatus: "completed" }));
+		mockFindLatestTerminalFollowupSession.mockResolvedValue(
+			makeTaskSession({ id: "task-existing", workerId: null, workerRunId: null }),
+		);
+		mockEnqueueSessionMessage.mockResolvedValue(
+			makeSessionMessage({ id: "msg-existing", sessionId: "task-existing" }),
+		);
+
+		const result = await sendTaskFollowup({
+			sessionId: "task-1",
+			organizationId: "org-1",
+			userId: "user-1",
+			messageType: "follow_up",
+			payloadJson: { text: "retry delivery" },
+			dedupeKey: "dedupe-existing-session",
+		});
+
+		expect(result.mode).toBe("continuation");
+		expect(result.deliverySessionId).toBe("task-existing");
+		expect(mockCreateTaskSession).not.toHaveBeenCalled();
+		expect(mockEnqueueSessionMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sessionId: "task-existing",
+				dedupeKey: "dedupe-existing-session",
+			}),
+		);
 	});
 
 	it("rejects follow-up routing for non-task sessions", async () => {
