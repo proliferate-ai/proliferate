@@ -195,7 +195,7 @@ ALTER TABLE "sessions" ADD COLUMN "worker_id" uuid;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "worker_run_id" uuid;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "repo_baseline_id" uuid;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "repo_baseline_target_id" uuid;--> statement-breakpoint
-ALTER TABLE "sessions" ADD COLUMN "capabilities_version" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "capabilities_version" integer DEFAULT 1;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "continued_from_session_id" uuid;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "rerun_of_session_id" uuid;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "replaces_session_id" uuid;--> statement-breakpoint
@@ -213,7 +213,6 @@ ALTER TABLE "repo_baseline_targets" ADD CONSTRAINT "repo_baseline_targets_repo_b
 ALTER TABLE "repo_baselines" ADD CONSTRAINT "repo_baselines_repo_id_fkey" FOREIGN KEY ("repo_id") REFERENCES "public"."repos"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "repo_baselines" ADD CONSTRAINT "repo_baselines_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "repo_baselines" ADD CONSTRAINT "repo_baselines_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "repo_baselines" ADD CONSTRAINT "repo_baselines_setup_session_id_fkey" FOREIGN KEY ("setup_session_id") REFERENCES "public"."sessions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "resume_intents" ADD CONSTRAINT "resume_intents_origin_session_id_fkey" FOREIGN KEY ("origin_session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "resume_intents" ADD CONSTRAINT "resume_intents_invocation_id_fkey" FOREIGN KEY ("invocation_id") REFERENCES "public"."action_invocations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session_acl" ADD CONSTRAINT "session_acl_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -222,13 +221,11 @@ ALTER TABLE "session_capabilities" ADD CONSTRAINT "session_capabilities_session_
 ALTER TABLE "session_messages" ADD CONSTRAINT "session_messages_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session_pull_requests" ADD CONSTRAINT "session_pull_requests_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session_pull_requests" ADD CONSTRAINT "session_pull_requests_repo_id_fkey" FOREIGN KEY ("repo_id") REFERENCES "public"."repos"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "session_pull_requests" ADD CONSTRAINT "session_pull_requests_continued_from_session_id_fkey" FOREIGN KEY ("continued_from_session_id") REFERENCES "public"."sessions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session_skills" ADD CONSTRAINT "session_skills_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session_user_state" ADD CONSTRAINT "session_user_state_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session_user_state" ADD CONSTRAINT "session_user_state_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "wake_events" ADD CONSTRAINT "wake_events_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "public"."workers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "wake_events" ADD CONSTRAINT "wake_events_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "wake_events" ADD CONSTRAINT "wake_events_coalesced_into_wake_event_id_fkey" FOREIGN KEY ("coalesced_into_wake_event_id") REFERENCES "public"."wake_events"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "worker_run_events" ADD CONSTRAINT "worker_run_events_worker_run_id_fkey" FOREIGN KEY ("worker_run_id") REFERENCES "public"."worker_runs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "worker_run_events" ADD CONSTRAINT "worker_run_events_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "public"."workers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "worker_runs" ADD CONSTRAINT "worker_runs_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "public"."workers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -253,7 +250,6 @@ CREATE INDEX "idx_session_capabilities_session" ON "session_capabilities" USING 
 CREATE INDEX "idx_session_messages_session" ON "session_messages" USING btree ("session_id" uuid_ops);--> statement-breakpoint
 CREATE INDEX "idx_session_messages_delivery_state" ON "session_messages" USING btree ("delivery_state" text_ops);--> statement-breakpoint
 CREATE INDEX "idx_session_messages_session_state" ON "session_messages" USING btree ("session_id" uuid_ops,"delivery_state" text_ops);--> statement-breakpoint
-CREATE UNIQUE INDEX "uq_session_messages_dedupe" ON "session_messages" USING btree ("session_id","dedupe_key") WHERE dedupe_key IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "idx_session_pull_requests_session" ON "session_pull_requests" USING btree ("session_id" uuid_ops);--> statement-breakpoint
 CREATE INDEX "idx_session_pull_requests_repo" ON "session_pull_requests" USING btree ("repo_id" uuid_ops);--> statement-breakpoint
 CREATE INDEX "idx_session_skills_session" ON "session_skills" USING btree ("session_id" uuid_ops);--> statement-breakpoint

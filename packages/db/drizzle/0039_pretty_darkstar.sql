@@ -24,7 +24,6 @@ ALTER TABLE "workspace_cache_snapshots" ADD CONSTRAINT "workspace_cache_snapshot
 CREATE INDEX "idx_workspace_cache_snapshots_org" ON "workspace_cache_snapshots" USING btree ("organization_id" text_ops);--> statement-breakpoint
 CREATE INDEX "idx_workspace_cache_snapshots_repo" ON "workspace_cache_snapshots" USING btree ("repo_id" uuid_ops);--> statement-breakpoint
 CREATE INDEX "idx_workspace_cache_snapshots_baseline" ON "workspace_cache_snapshots" USING btree ("repo_baseline_id" uuid_ops);--> statement-breakpoint
-CREATE INDEX "idx_workspace_cache_snapshots_baseline_target" ON "workspace_cache_snapshots" USING btree ("repo_baseline_target_id" uuid_ops);--> statement-breakpoint
 ALTER TABLE "action_invocations" ADD CONSTRAINT "action_invocations_status_check" CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'denied'::text, 'expired'::text, 'executing'::text, 'completed'::text, 'failed'::text]));--> statement-breakpoint
 ALTER TABLE "repo_baselines" ADD CONSTRAINT "repo_baselines_status_check" CHECK (status = ANY (ARRAY['validating'::text, 'ready'::text, 'stale'::text, 'failed'::text]));--> statement-breakpoint
 ALTER TABLE "resume_intents" ADD CONSTRAINT "resume_intents_status_check" CHECK (status = ANY (ARRAY['queued'::text, 'claimed'::text, 'resuming'::text, 'satisfied'::text, 'continued'::text, 'resume_failed'::text]));--> statement-breakpoint

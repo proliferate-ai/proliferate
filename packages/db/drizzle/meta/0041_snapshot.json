@@ -6869,28 +6869,28 @@
           "name": "kind",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "default": "'task'"
         },
         "runtime_status": {
           "name": "runtime_status",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "default": "'starting'"
         },
         "operator_status": {
           "name": "operator_status",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "default": "'active'"
         },
         "visibility": {
           "name": "visibility",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "default": "'private'"
         },
         "worker_id": {

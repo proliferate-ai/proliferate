@@ -34,7 +34,6 @@ import {
 	sessionAcl,
 	sessionCapabilities,
 	sessionConnections,
-	sessionEvents,
 	sessionMessages,
 	sessionNotificationSubscriptions,
 	sessionPullRequests,
@@ -447,7 +446,6 @@ export const sessionsRelations = relations(sessions, ({ one, many }) => ({
 	capabilities: many(sessionCapabilities),
 	skills: many(sessionSkills),
 	messages: many(sessionMessages),
-	events: many(sessionEvents),
 	acl: many(sessionAcl),
 	userStates: many(sessionUserState),
 	pullRequests: many(sessionPullRequests),
@@ -720,13 +718,6 @@ export const sessionSkillsRelations = relations(sessionSkills, ({ one }) => ({
 export const sessionMessagesRelations = relations(sessionMessages, ({ one }) => ({
 	session: one(sessions, {
 		fields: [sessionMessages.sessionId],
-		references: [sessions.id],
-	}),
-}));
-
-export const sessionEventsRelations = relations(sessionEvents, ({ one }) => ({
-	session: one(sessions, {
-		fields: [sessionEvents.sessionId],
 		references: [sessions.id],
 	}),
 }));

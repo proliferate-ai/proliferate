@@ -1460,29 +1460,38 @@ export const sessions = pgTable(
 		// ── V1 fields ──────────────────────────────────────────────
 
 		// V1 session kind: manager | task | setup
-		kind: text("kind").default("task").notNull(),
+		kind: text("kind").default("task"),
 
 		// V1 runtime status: starting | running | paused | completed | failed | cancelled
-		runtimeStatus: text("runtime_status").default("starting").notNull(),
+		runtimeStatus: text("runtime_status").default("starting"),
 
 		// V1 operator status: active | waiting_for_approval | needs_input | ready_for_review | errored | done
-		operatorStatus: text("operator_status").default("active").notNull(),
+		operatorStatus: text("operator_status").default("active"),
 
 		// V1 visibility: private | shared | org
-		visibility: text("visibility").default("private").notNull(),
+		visibility: text("visibility").default("private"),
 
 		// V1 worker linkage
-		workerId: uuid("worker_id").references((): AnyPgColumn => workers.id),
-		workerRunId: uuid("worker_run_id").references((): AnyPgColumn => workerRuns.id),
+		workerId: uuid("worker_id").references((): AnyPgColumn => workers.id, {
+			onDelete: "set null",
+		}),
+		workerRunId: uuid("worker_run_id").references((): AnyPgColumn => workerRuns.id, {
+			onDelete: "set null",
+		}),
 
 		// V1 repo baseline linkage
-		repoBaselineId: uuid("repo_baseline_id").references((): AnyPgColumn => repoBaselines.id),
+		repoBaselineId: uuid("repo_baseline_id").references((): AnyPgColumn => repoBaselines.id, {
+			onDelete: "set null",
+		}),
 		repoBaselineTargetId: uuid("repo_baseline_target_id").references(
 			(): AnyPgColumn => repoBaselineTargets.id,
+			{
+				onDelete: "set null",
+			},
 		),
 
 		// V1 capabilities version (incremented on capability row changes)
-		capabilitiesVersion: integer("capabilities_version").default(1).notNull(),
+		capabilitiesVersion: integer("capabilities_version").default(1),
 
 		// V1 lineage (continuation/rerun)
 		continuedFromSessionId: uuid("continued_from_session_id"),
@@ -1635,7 +1644,7 @@ export const sessions = pgTable(
 		),
 		check(
 			"sessions_task_linkage_check",
-			sql`(kind != 'task'::text) OR (repo_id IS NOT NULL AND repo_baseline_id IS NOT NULL)`,
+			sql`(kind != 'task'::text) OR (repo_id IS NOT NULL AND repo_baseline_id IS NOT NULL AND repo_baseline_target_id IS NOT NULL)`,
 		),
 		check(
 			"sessions_setup_requires_repo_check",
@@ -2275,11 +2284,6 @@ export const wakeEvents = pgTable(
 			foreignColumns: [organization.id],
 			name: "wake_events_organization_id_fkey",
 		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.coalescedIntoWakeEventId],
-			foreignColumns: [table.id],
-			name: "wake_events_coalesced_into_wake_event_id_fkey",
-		}).onDelete("set null"),
 	],
 );
 
@@ -2485,9 +2489,6 @@ export const sessionMessages = pgTable(
 			table.sessionId.asc().nullsLast().op("uuid_ops"),
 			table.deliveryState.asc().nullsLast().op("text_ops"),
 		),
-		uniqueIndex("uq_session_messages_dedupe")
-			.on(table.sessionId, table.dedupeKey)
-			.where(sql`dedupe_key IS NOT NULL`),
 		check(
 			"session_messages_direction_check",
 			sql`direction = ANY (ARRAY['user_to_manager'::text, 'user_to_task'::text, 'manager_to_task'::text, 'task_to_manager'::text])`,
@@ -2500,40 +2501,6 @@ export const sessionMessages = pgTable(
 			columns: [table.sessionId],
 			foreignColumns: [sessions.id],
 			name: "session_messages_session_id_fkey",
-		}).onDelete("cascade"),
-	],
-);
-
-// ============================================
-// V1: Session Events
-// ============================================
-
-export const sessionEvents = pgTable(
-	"session_events",
-	{
-		id: uuid().defaultRandom().primaryKey().notNull(),
-		sessionId: uuid("session_id").notNull(),
-		eventType: text("event_type").notNull(),
-		payloadJson: jsonb("payload_json"),
-		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
-	},
-	(table) => [
-		index("idx_session_events_session").using(
-			"btree",
-			table.sessionId.asc().nullsLast().op("uuid_ops"),
-		),
-		index("idx_session_events_type").using(
-			"btree",
-			table.eventType.asc().nullsLast().op("text_ops"),
-		),
-		check(
-			"session_events_type_check",
-			sql`event_type = ANY (ARRAY['session_started'::text, 'session_paused'::text, 'session_resumed'::text, 'session_completed'::text, 'session_failed'::text, 'session_cancelled'::text, 'session_outcome_persisted'::text])`,
-		),
-		foreignKey({
-			columns: [table.sessionId],
-			foreignColumns: [sessions.id],
-			name: "session_events_session_id_fkey",
 		}).onDelete("cascade"),
 	],
 );
@@ -2657,11 +2624,6 @@ export const sessionPullRequests = pgTable(
 			foreignColumns: [repos.id],
 			name: "session_pull_requests_repo_id_fkey",
 		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.continuedFromSessionId],
-			foreignColumns: [sessions.id],
-			name: "session_pull_requests_continued_from_session_id_fkey",
-		}).onDelete("set null"),
 	],
 );
 
@@ -2679,9 +2641,7 @@ export const repoBaselines = pgTable(
 		version: text("version"),
 		snapshotId: text("snapshot_id"),
 		sandboxProvider: text("sandbox_provider"),
-		setupSessionId: uuid("setup_session_id").references((): AnyPgColumn => sessions.id, {
-			onDelete: "set null",
-		}),
+		setupSessionId: uuid("setup_session_id"),
 		installCommands: jsonb("install_commands"),
 		runCommands: jsonb("run_commands"),
 		testCommands: jsonb("test_commands"),
@@ -2779,10 +2739,6 @@ export const workspaceCacheSnapshots = pgTable(
 		index("idx_workspace_cache_snapshots_baseline").using(
 			"btree",
 			table.repoBaselineId.asc().nullsLast().op("uuid_ops"),
-		),
-		index("idx_workspace_cache_snapshots_baseline_target").using(
-			"btree",
-			table.repoBaselineTargetId.asc().nullsLast().op("uuid_ops"),
 		),
 		unique("uq_workspace_cache_snapshots_cache_key").on(table.cacheKey),
 		foreignKey({

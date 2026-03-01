@@ -2,42 +2,19 @@
 
 ## PR 1
 - branch name: `v1/01-schema-data-contracts`
-- PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/251`
+- PR URL/number: `TBD (not opened yet)`
 - scope: Phase 1 contract and schema lock (`workers`, `wake_events`, `worker_runs`, `session_*`, `repo_baseline*`, `resume_intents`, minimal DB service modules and contract tests)
 - check results:
   - `pnpm typecheck` ✅
   - `pnpm lint` ✅
   - `pnpm test` ✅
-- open comments:
-  - Pending thread follow-up for bootstrap-cycle rationale (`workers.manager_session_id` remains required per V1 contract).
-  - Pending thread follow-up for wake `claimed_at` false positive (column is nullable by contract/schema).
+- open comments: `none yet`
 - fixes applied:
   - Enforced `workers.managerSessionId` required + unique.
   - Added manager/task session shape constraints.
   - Added per-user archive timestamp to `session_user_state` and DB helper support.
   - Added guard test for worker creation invariant.
-  - Added `session_messages` dedupe partial unique index.
-  - Added wake-event self-FK for coalescing references.
-  - Added missing setup-session FK and baseline-target lookup index.
-  - Tightened sessions FK delete semantics for required manager/task linkage.
-  - Switched new service DB helpers to canonical `@proliferate/services/db/client` imports.
-  - Hardened worker/session DB helper validation/update semantics.
-  - Added org-scoped wake status updates (`wake_events.id` + `organization_id`) to prevent cross-tenant mutation.
-  - Added missing `resume_intents.origin_session_id -> sessions.id` FK wiring in modular schema.
-  - Locked V1 session control-plane columns (`kind`, `runtime_status`, `operator_status`, `visibility`) as non-null in schema and migration.
-  - Ensured newly added Drizzle journal entries use unique increasing `idx` values (pre-existing `_journal.json` ordering was not rewritten in this PR).
-  - Relaxed `sessions_task_linkage_check` to allow `repo_baseline_target_id` to remain optional for task sessions (baseline target is optional by V1 repo lifecycle contract).
-  - Updated queued wake ordering to honor canonical priority (`manual_message > manual > webhook > tick`) and FIFO behavior within a priority class.
-  - Added transactional `capabilitiesVersion` increments on `session_capabilities` and `session_skills` upserts.
-  - Switched V1 session-message helper signatures to canonical shared contract types (`SessionMessageDirection`, `SessionMessageDeliveryState`).
-  - Added canonical `session_events` table contract (schema + relations + migration `0046_mixed_maestro.sql`) with required lifecycle event-type check.
-  - Added `isValidSessionOperatorTransition` contract helper and expanded operator-status state-machine tests.
-  - Added canonical V1 error taxonomy exports (`V1_ERROR_CODES`, `isV1ErrorCode`) with contract tests.
-  - Removed duplicate V1 table definitions from modular schema files (`actions.ts`, `repos.ts`, `sessions.ts`, `workers.ts`) and converted them to canonical re-exports from generated `schema.ts`/`relations.ts` to keep a single DB source of truth (spec refs: `01-schema-and-data-contracts.md`, `10-layering-and-mapping-rules.md`).
-  - Moved V1 session persistence helpers into the canonical `packages/services/src/sessions/db.ts` and left `v1-db.ts` as a shim export only (spec ref: `10-layering-and-mapping-rules.md` canonical `db.ts/service.ts/mapper.ts` layout).
-  - Removed router/service-style input validation from `workers/db.ts` so DB modules remain persistence-only (spec refs: `10-layering-and-mapping-rules.md`, `20-code-quality-contract.md`).
-  - Re-ran full branch gates after cleanup (`typecheck`, `lint`, `test`) with zero regressions (spec ref: `08-testing-and-quality-gates.md`).
 - merge SHA: `TBD`
 - carry-over TODOs:
-  - Process CI/human/Greptile feedback.
+  - Open PR and process CI/human/Greptile feedback.
   - After PR1 merge, rebase/retarget `v1/02-*` onward.

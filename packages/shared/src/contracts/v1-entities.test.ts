@@ -1,19 +1,27 @@
 import { describe, expect, it } from "vitest";
 import {
-	ACTION_INVOCATION_STATUSES,
+	// Action invocation
 	ACTIVE_RESUME_INTENT_STATUSES,
 	NON_TERMINAL_SESSION_RUNTIME_STATUSES,
 	NON_TERMINAL_WORKER_RUN_STATUSES,
+	// Repo baseline
 	REPO_BASELINE_STATUSES,
+	// Resume intent
 	RESUME_INTENT_STATUSES,
+	// Session kind
 	SESSION_KINDS,
+	// Session message direction
 	SESSION_MESSAGE_DIRECTIONS,
+	// Session operator
 	SESSION_OPERATOR_STATUSES,
+	// Session runtime
 	SESSION_RUNTIME_STATUSES,
-	V1_ERROR_CODES,
+	// Wake event
 	WAKE_EVENT_SOURCES,
 	WAKE_EVENT_STATUSES,
+	// Worker run
 	WORKER_RUN_STATUSES,
+	// Worker status
 	WORKER_STATUSES,
 	isActiveResumeIntentStatus,
 	isNonTerminalSessionRuntimeStatus,
@@ -21,11 +29,9 @@ import {
 	isTerminalSessionRuntimeStatus,
 	isTerminalWakeEventStatus,
 	isTerminalWorkerRunStatus,
-	isV1ErrorCode,
 	isValidActionInvocationTransition,
 	isValidRepoBaselineTransition,
 	isValidResumeIntentTransition,
-	isValidSessionOperatorTransition,
 	isValidSessionRuntimeTransition,
 	isValidWakeEventTransition,
 	isValidWorkerRunTransition,
@@ -239,22 +245,6 @@ describe("Session operator status", () => {
 			"done",
 		]);
 	});
-
-	it("allows active -> waiting_for_approval", () => {
-		expect(isValidSessionOperatorTransition("active", "waiting_for_approval")).toBe(true);
-	});
-
-	it("allows waiting_for_approval -> active", () => {
-		expect(isValidSessionOperatorTransition("waiting_for_approval", "active")).toBe(true);
-	});
-
-	it("allows active -> done", () => {
-		expect(isValidSessionOperatorTransition("active", "done")).toBe(true);
-	});
-
-	it("rejects done -> active (terminal)", () => {
-		expect(isValidSessionOperatorTransition("done", "active")).toBe(false);
-	});
 });
 
 // ============================================
@@ -321,18 +311,6 @@ describe("Repo baseline status machine", () => {
 // ============================================
 
 describe("Action invocation status machine", () => {
-	it("has exactly the canonical statuses", () => {
-		expect(ACTION_INVOCATION_STATUSES).toEqual([
-			"pending",
-			"approved",
-			"denied",
-			"expired",
-			"executing",
-			"completed",
-			"failed",
-		]);
-	});
-
 	it("allows pending -> approved -> executing -> completed", () => {
 		expect(isValidActionInvocationTransition("pending", "approved")).toBe(true);
 		expect(isValidActionInvocationTransition("approved", "executing")).toBe(true);
@@ -353,48 +331,10 @@ describe("Action invocation status machine", () => {
 });
 
 // ============================================
-// Canonical Error Taxonomy
-// ============================================
-
-describe("V1 error taxonomy", () => {
-	it("contains the minimum canonical error codes", () => {
-		expect(V1_ERROR_CODES).toEqual([
-			"CAPABILITY_NOT_VISIBLE",
-			"POLICY_DENIED",
-			"APPROVAL_EXPIRED",
-			"INTEGRATION_REVOKED",
-			"CREDENTIAL_MISSING",
-			"CONNECTOR_DISABLED",
-			"SANDBOX_RESUME_FAILED",
-			"SANDBOX_LOST",
-			"BASELINE_STALE",
-			"BUDGET_EXHAUSTED",
-		]);
-	});
-
-	it("validates known/unknown error codes", () => {
-		expect(isV1ErrorCode("SANDBOX_LOST")).toBe(true);
-		expect(isV1ErrorCode("BUDGET_EXHAUSTED")).toBe(true);
-		expect(isV1ErrorCode("NOT_A_REAL_CODE")).toBe(false);
-	});
-});
-
-// ============================================
 // Resume Intent Status Machine
 // ============================================
 
 describe("Resume intent status machine", () => {
-	it("has exactly the canonical statuses", () => {
-		expect(RESUME_INTENT_STATUSES).toEqual([
-			"queued",
-			"claimed",
-			"resuming",
-			"satisfied",
-			"continued",
-			"resume_failed",
-		]);
-	});
-
 	it("allows queued -> claimed -> resuming -> satisfied", () => {
 		expect(isValidResumeIntentTransition("queued", "claimed")).toBe(true);
 		expect(isValidResumeIntentTransition("claimed", "resuming")).toBe(true);

@@ -13,9 +13,7 @@ import {
 	workerRunEvents,
 	workerRuns,
 	workers,
-} from "@proliferate/services/db/client";
-
-const MAX_WORKER_RUNS = 100;
+} from "../db/client";
 
 // ============================================
 // Type Exports
@@ -59,6 +57,10 @@ export interface CreateWorkerInput {
 }
 
 export async function createWorker(input: CreateWorkerInput): Promise<WorkerRow> {
+	if (!input.managerSessionId) {
+		throw new Error("workers.managerSessionId is required");
+	}
+
 	const db = getDb();
 	const [row] = await db
 		.insert(workers)
@@ -77,7 +79,6 @@ export async function createWorker(input: CreateWorkerInput): Promise<WorkerRow>
 
 export async function updateWorkerStatus(
 	id: string,
-	organizationId: string,
 	status: string,
 	fields?: {
 		lastWakeAt?: Date;
@@ -95,7 +96,7 @@ export async function updateWorkerStatus(
 			updatedAt: new Date(),
 			...fields,
 		})
-		.where(and(eq(workers.id, id), eq(workers.organizationId, organizationId)))
+		.where(eq(workers.id, id))
 		.returning();
 	return row;
 }
@@ -115,6 +116,9 @@ export interface CreateWorkerRunInput {
  * Create a worker run. managerSessionId must be set (required invariant).
  */
 export async function createWorkerRun(input: CreateWorkerRunInput): Promise<WorkerRunRow> {
+	if (!input.managerSessionId) {
+		throw new Error("worker_runs.managerSessionId is required (immutable snapshot)");
+	}
 	const db = getDb();
 	const [row] = await db
 		.insert(workerRuns)
@@ -136,7 +140,6 @@ export async function findWorkerRunById(id: string): Promise<WorkerRunRow | unde
 
 export async function updateWorkerRunStatus(
 	id: string,
-	organizationId: string,
 	status: string,
 	fields?: { summary?: string; completedAt?: Date; startedAt?: Date },
 ): Promise<WorkerRunRow | undefined> {
@@ -144,21 +147,19 @@ export async function updateWorkerRunStatus(
 	const [row] = await db
 		.update(workerRuns)
 		.set({ status, ...fields })
-		.where(and(eq(workerRuns.id, id), eq(workerRuns.organizationId, organizationId)))
+		.where(eq(workerRuns.id, id))
 		.returning();
 	return row;
 }
 
 export async function listRunsByWorker(workerId: string, limit = 10): Promise<WorkerRunRow[]> {
-	const normalizedLimit = Number.isFinite(limit) ? Math.floor(limit) : 10;
-	const sanitizedLimit = Math.max(1, Math.min(MAX_WORKER_RUNS, normalizedLimit));
 	const db = getDb();
 	return db
 		.select()
 		.from(workerRuns)
 		.where(eq(workerRuns.workerId, workerId))
 		.orderBy(desc(workerRuns.createdAt))
-		.limit(sanitizedLimit);
+		.limit(limit);
 }
 
 // ============================================
