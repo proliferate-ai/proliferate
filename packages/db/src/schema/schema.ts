@@ -1460,16 +1460,16 @@ export const sessions = pgTable(
 		// ── V1 fields ──────────────────────────────────────────────
 
 		// V1 session kind: manager | task | setup
-		kind: text("kind").default("task"),
+		kind: text("kind").default("task").notNull(),
 
 		// V1 runtime status: starting | running | paused | completed | failed | cancelled
-		runtimeStatus: text("runtime_status").default("starting"),
+		runtimeStatus: text("runtime_status").default("starting").notNull(),
 
 		// V1 operator status: active | waiting_for_approval | needs_input | ready_for_review | errored | done
-		operatorStatus: text("operator_status").default("active"),
+		operatorStatus: text("operator_status").default("active").notNull(),
 
 		// V1 visibility: private | shared | org
-		visibility: text("visibility").default("private"),
+		visibility: text("visibility").default("private").notNull(),
 
 		// V1 worker linkage
 		workerId: uuid("worker_id").references((): AnyPgColumn => workers.id),

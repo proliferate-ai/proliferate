@@ -12,7 +12,6 @@ import { relations } from "drizzle-orm";
 import {
 	check,
 	index,
-	integer,
 	jsonb,
 	pgTable,
 	text,
@@ -22,6 +21,7 @@ import {
 } from "drizzle-orm/pg-core";
 // Circular import: schema.ts re-exports this module.
 import { actionInvocations } from "./schema";
+import { sessions } from "./sessions";
 
 // ============================================
 // Action Invocation Events (V1)
@@ -69,7 +69,9 @@ export const resumeIntents = pgTable(
 		id: uuid("id").primaryKey().defaultRandom(),
 
 		// Origin session that needs to resume after approval
-		originSessionId: uuid("origin_session_id").notNull(),
+		originSessionId: uuid("origin_session_id")
+			.notNull()
+			.references(() => sessions.id, { onDelete: "cascade" }),
 
 		// The action invocation that triggered the resume need
 		invocationId: uuid("invocation_id")
@@ -107,6 +109,10 @@ export const resumeIntents = pgTable(
 );
 
 export const resumeIntentsRelations = relations(resumeIntents, ({ one }) => ({
+	originSession: one(sessions, {
+		fields: [resumeIntents.originSessionId],
+		references: [sessions.id],
+	}),
 	actionInvocation: one(actionInvocations, {
 		fields: [resumeIntents.invocationId],
 		references: [actionInvocations.id],
