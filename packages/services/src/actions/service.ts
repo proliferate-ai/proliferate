@@ -6,7 +6,12 @@
 
 import { truncateJson } from "@proliferate/providers/helpers/truncation";
 import { getServicesLogger } from "../logger";
-import type { ActionInvocationRow, ActionInvocationWithSession } from "./db";
+import type {
+	ActionInvocationRow,
+	ActionInvocationStatus,
+	ActionInvocationWithSession,
+	SessionCapabilityMode,
+} from "./db";
 import * as actionsDb from "./db";
 import { resolveMode } from "./modes";
 
@@ -42,6 +47,13 @@ export class PendingLimitError extends Error {
 	}
 }
 
+export class ApprovalAuthorityError extends Error {
+	constructor(message = "You do not have approval authority for this session") {
+		super(message);
+		this.name = "ApprovalAuthorityError";
+	}
+}
+
 const PENDING_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes for approval timeout
 const MAX_PENDING_PER_SESSION = 10;
 const MAX_RESULT_SIZE = 10 * 1024; // 10KB max for stored results
@@ -53,6 +65,14 @@ const SENSITIVE_KEYS = new Set([
 	"api_key",
 	"apikey",
 ]);
+
+const MODE_PRIORITY: Record<"allow" | "require_approval" | "deny", number> = {
+	allow: 1,
+	require_approval: 2,
+	deny: 3,
+};
+
+const WAITING_FOR_APPROVAL_STATUS = "waiting_for_approval";
 
 // ============================================
 // Redaction
@@ -84,14 +104,7 @@ function truncateResult(data: unknown): unknown {
 // Types
 // ============================================
 
-export type ActionStatus =
-	| "pending"
-	| "approved"
-	| "executing"
-	| "completed"
-	| "denied"
-	| "failed"
-	| "expired";
+export type ActionStatus = ActionInvocationStatus;
 
 export interface InvokeActionInput {
 	sessionId: string;
@@ -105,12 +118,141 @@ export interface InvokeActionInput {
 	automationId?: string;
 	/** Whether this tool has drifted from last admin review (connector tools) */
 	isDrifted?: boolean;
+	/** Optional explicit capability key; defaults to `${integration}.${action}`. */
+	capabilityKey?: string;
 }
 
 export interface InvokeActionResult {
 	invocation: ActionInvocationRow;
 	/** Whether the action needs user approval before execution */
 	needsApproval: boolean;
+}
+
+function parseMode(value: string | null | undefined): "allow" | "require_approval" | "deny" | null {
+	if (value === "allow" || value === "require_approval" || value === "deny") {
+		return value;
+	}
+	return null;
+}
+
+function strictestMode(
+	left: "allow" | "require_approval" | "deny",
+	right: "allow" | "require_approval" | "deny",
+): "allow" | "require_approval" | "deny" {
+	return MODE_PRIORITY[left] >= MODE_PRIORITY[right] ? left : right;
+}
+
+function getCapabilityKey(input: {
+	integration: string;
+	action: string;
+	capabilityKey?: string;
+}): string {
+	return input.capabilityKey ?? `${input.integration}.${input.action}`;
+}
+
+async function resolveEffectiveMode(input: {
+	sessionId: string;
+	organizationId: string;
+	integration: string;
+	action: string;
+	riskLevel: "read" | "write" | "danger";
+	automationId?: string;
+	isDrifted?: boolean;
+	capabilityKey?: string;
+}): Promise<{
+	effectiveMode: "allow" | "require_approval" | "deny";
+	modeSource: string;
+	capabilityMode?: SessionCapabilityMode;
+	capabilityKey: string;
+}> {
+	const resolved = await resolveMode({
+		sourceId: input.integration,
+		actionId: input.action,
+		riskLevel: input.riskLevel,
+		orgId: input.organizationId,
+		automationId: input.automationId,
+		isDrifted: input.isDrifted,
+	});
+
+	const capabilityKey = getCapabilityKey(input);
+	const capabilityMode = await actionsDb.getSessionCapabilityMode(input.sessionId, capabilityKey);
+
+	const resolvedMode = parseMode(resolved.mode);
+	if (!resolvedMode) {
+		return {
+			effectiveMode: "deny",
+			modeSource: `unknown_mode:${resolved.mode}`,
+			capabilityMode,
+			capabilityKey,
+		};
+	}
+
+	const effectiveMode = capabilityMode ? strictestMode(resolvedMode, capabilityMode) : resolvedMode;
+	const modeSource = capabilityMode ? `${resolved.source}+session_capability` : resolved.source;
+
+	return {
+		effectiveMode,
+		modeSource,
+		capabilityMode,
+		capabilityKey,
+	};
+}
+
+async function queueResumeIntentIfNeeded(input: {
+	invocation: ActionInvocationRow;
+	terminalStatus: "completed" | "failed" | "denied" | "expired";
+}): Promise<void> {
+	if (input.invocation.mode !== "require_approval") {
+		return;
+	}
+
+	const session = await actionsDb.getSessionApprovalContext(input.invocation.sessionId);
+	if (!session || session.operatorStatus !== WAITING_FOR_APPROVAL_STATUS) {
+		return;
+	}
+
+	const capabilityKey = getCapabilityKey({
+		integration: input.invocation.integration,
+		action: input.invocation.action,
+	});
+	const capabilityMode = await actionsDb.getSessionCapabilityMode(session.id, capabilityKey);
+	const liveMode = await resolveMode({
+		sourceId: input.invocation.integration,
+		actionId: input.invocation.action,
+		riskLevel: input.invocation.riskLevel as "read" | "write" | "danger",
+		orgId: input.invocation.organizationId,
+		automationId: session.automationId ?? undefined,
+	});
+
+	await actionsDb.createOrGetActiveResumeIntent({
+		originSessionId: input.invocation.sessionId,
+		invocationId: input.invocation.id,
+		payloadJson: {
+			terminalStatus: input.terminalStatus,
+			strategy: "same_session_first",
+			fallback: "continuation",
+			revalidation: {
+				liveMode: liveMode.mode,
+				liveModeSource: liveMode.source,
+				capabilityMode: capabilityMode ?? null,
+				integrationAvailable: null,
+			},
+		},
+	});
+}
+
+async function recordEvent(input: {
+	invocationId: string;
+	eventType: string;
+	actorUserId?: string | null;
+	payloadJson?: unknown;
+}): Promise<void> {
+	await actionsDb.createActionInvocationEvent({
+		actionInvocationId: input.invocationId,
+		eventType: input.eventType,
+		actorUserId: input.actorUserId,
+		payloadJson: input.payloadJson,
+	});
 }
 
 // ============================================
@@ -122,18 +264,20 @@ export interface InvokeActionResult {
  *
  * Mode resolution: automation override → org default → inferred from risk hint.
  * Drift guard: if a connector tool has drifted, `allow` downgrades to `require_approval`.
+ * Session capability rows are authoritative at invocation time.
  */
 export async function invokeAction(input: InvokeActionInput): Promise<InvokeActionResult> {
 	const log = getServicesLogger().child({ module: "actions" });
 
-	// Resolve mode via the three-tier cascade
-	const { mode, source: modeSource } = await resolveMode({
-		sourceId: input.integration,
-		actionId: input.action,
+	const effective = await resolveEffectiveMode({
+		sessionId: input.sessionId,
+		organizationId: input.organizationId,
+		integration: input.integration,
+		action: input.action,
 		riskLevel: input.riskLevel,
-		orgId: input.organizationId,
 		automationId: input.automationId,
 		isDrifted: input.isDrifted,
+		capabilityKey: input.capabilityKey,
 	});
 
 	const baseInput = {
@@ -144,19 +288,28 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 		action: input.action,
 		riskLevel: input.riskLevel,
 		params: input.params,
-		mode,
-		modeSource,
+		mode: effective.effectiveMode,
+		modeSource: effective.modeSource,
 	};
 
-	switch (mode) {
+	switch (effective.effectiveMode) {
 		case "deny": {
 			const invocation = await actionsDb.createInvocation({
 				...baseInput,
 				status: "denied",
 				deniedReason: "policy",
 			});
+			await recordEvent({
+				invocationId: invocation.id,
+				eventType: "denied",
+				payloadJson: {
+					reason: "policy",
+					capabilityKey: effective.capabilityKey,
+					capabilityMode: effective.capabilityMode ?? null,
+				},
+			});
 			log.info(
-				{ invocationId: invocation.id, action: input.action, modeSource },
+				{ invocationId: invocation.id, action: input.action, modeSource: effective.modeSource },
 				"Action denied by policy",
 			);
 			return { invocation, needsApproval: false };
@@ -167,8 +320,9 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 				...baseInput,
 				status: "approved",
 			});
+			await recordEvent({ invocationId: invocation.id, eventType: "approved" });
 			log.info(
-				{ invocationId: invocation.id, action: input.action, modeSource },
+				{ invocationId: invocation.id, action: input.action, modeSource: effective.modeSource },
 				"Action auto-approved",
 			);
 			return { invocation, needsApproval: false };
@@ -187,25 +341,24 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 				status: "pending",
 				expiresAt,
 			});
+			await recordEvent({
+				invocationId: invocation.id,
+				eventType: "pending",
+				payloadJson: {
+					expiresAt: expiresAt.toISOString(),
+					capabilityKey: effective.capabilityKey,
+					capabilityMode: effective.capabilityMode ?? null,
+				},
+			});
+			await actionsDb.setSessionOperatorStatus({
+				sessionId: input.sessionId,
+				toStatus: WAITING_FOR_APPROVAL_STATUS,
+			});
 			log.info(
-				{ invocationId: invocation.id, action: input.action, modeSource },
+				{ invocationId: invocation.id, action: input.action, modeSource: effective.modeSource },
 				"Action pending approval",
 			);
 			return { invocation, needsApproval: true };
-		}
-
-		default: {
-			// Unknown mode from JSONB — deny as a safe fallback
-			const invocation = await actionsDb.createInvocation({
-				...baseInput,
-				status: "denied",
-				deniedReason: `unknown_mode:${mode}`,
-			});
-			log.warn(
-				{ invocationId: invocation.id, action: input.action, mode },
-				"Action denied — unknown mode from JSONB",
-			);
-			return { invocation, needsApproval: false };
 		}
 	}
 }
@@ -216,7 +369,15 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 export async function markExecuting(
 	invocationId: string,
 ): Promise<ActionInvocationRow | undefined> {
-	return actionsDb.updateInvocationStatus(invocationId, "executing");
+	const row = await actionsDb.transitionInvocationStatus({
+		id: invocationId,
+		fromStatuses: ["approved"],
+		toStatus: "executing",
+	});
+	if (row) {
+		await recordEvent({ invocationId, eventType: "executing" });
+	}
+	return row;
 }
 
 /**
@@ -227,11 +388,21 @@ export async function markCompleted(
 	result: unknown,
 	durationMs: number,
 ): Promise<ActionInvocationRow | undefined> {
-	return actionsDb.updateInvocationStatus(invocationId, "completed", {
-		result: truncateResult(redactData(result)),
-		completedAt: new Date(),
-		durationMs,
+	const row = await actionsDb.transitionInvocationStatus({
+		id: invocationId,
+		fromStatuses: ["executing"],
+		toStatus: "completed",
+		data: {
+			result: truncateResult(redactData(result)),
+			completedAt: new Date(),
+			durationMs,
+		},
 	});
+	if (row) {
+		await recordEvent({ invocationId, eventType: "completed" });
+		await queueResumeIntentIfNeeded({ invocation: row, terminalStatus: "completed" });
+	}
+	return row;
 }
 
 /**
@@ -242,15 +413,27 @@ export async function markFailed(
 	error: string,
 	durationMs?: number,
 ): Promise<ActionInvocationRow | undefined> {
-	return actionsDb.updateInvocationStatus(invocationId, "failed", {
-		error,
-		completedAt: new Date(),
-		durationMs,
+	const row = await actionsDb.transitionInvocationStatus({
+		id: invocationId,
+		fromStatuses: ["approved", "executing"],
+		toStatus: "failed",
+		data: {
+			error,
+			completedAt: new Date(),
+			durationMs,
+		},
 	});
+	if (row) {
+		await recordEvent({ invocationId, eventType: "failed", payloadJson: { error } });
+		await queueResumeIntentIfNeeded({ invocation: row, terminalStatus: "failed" });
+	}
+	return row;
 }
 
 /**
  * Approve a pending invocation.
+ *
+ * Revalidates live capability + policy before transition.
  */
 export async function approveAction(
 	invocationId: string,
@@ -264,21 +447,73 @@ export async function approveAction(
 	if (invocation.status !== "pending") {
 		throw new ActionConflictError(`Cannot approve invocation in status: ${invocation.status}`);
 	}
-	if (invocation.expiresAt && invocation.expiresAt <= new Date()) {
-		await actionsDb.updateInvocationStatus(invocationId, "expired", {
-			completedAt: new Date(),
+
+	const now = new Date();
+	if (invocation.expiresAt && invocation.expiresAt <= now) {
+		const expired = await actionsDb.transitionInvocationStatus({
+			id: invocationId,
+			fromStatuses: ["pending"],
+			toStatus: "expired",
+			data: { completedAt: now },
 		});
+		if (expired) {
+			await recordEvent({ invocationId, eventType: "expired" });
+			await queueResumeIntentIfNeeded({ invocation: expired, terminalStatus: "expired" });
+		}
 		throw new ActionExpiredError();
 	}
 
-	const updated = await actionsDb.updateInvocationStatus(invocationId, "approved", {
-		approvedBy: userId,
-		approvedAt: new Date(),
+	const session = await actionsDb.getSessionApprovalContext(invocation.sessionId);
+	if (!session || session.organizationId !== orgId) {
+		throw new ActionNotFoundError();
+	}
+
+	const effective = await resolveEffectiveMode({
+		sessionId: invocation.sessionId,
+		organizationId: invocation.organizationId,
+		integration: invocation.integration,
+		action: invocation.action,
+		riskLevel: invocation.riskLevel as "read" | "write" | "danger",
+		automationId: session.automationId ?? undefined,
 	});
-	if (!updated) {
+
+	if (effective.effectiveMode === "deny") {
+		const denied = await actionsDb.transitionInvocationStatus({
+			id: invocationId,
+			fromStatuses: ["pending"],
+			toStatus: "denied",
+			data: {
+				deniedReason: "policy_revalidated_deny",
+				completedAt: now,
+			},
+		});
+		if (denied) {
+			await recordEvent({
+				invocationId,
+				eventType: "denied",
+				actorUserId: userId,
+				payloadJson: { reason: "policy_revalidated_deny" },
+			});
+			await queueResumeIntentIfNeeded({ invocation: denied, terminalStatus: "denied" });
+		}
+		throw new ActionConflictError("Invocation denied by current policy");
+	}
+
+	const approved = await actionsDb.transitionInvocationStatus({
+		id: invocationId,
+		fromStatuses: ["pending"],
+		toStatus: "approved",
+		data: {
+			approvedBy: userId,
+			approvedAt: now,
+		},
+	});
+	if (!approved) {
 		throw new ActionConflictError("Failed to update invocation");
 	}
-	return updated;
+
+	await recordEvent({ invocationId, eventType: "approved", actorUserId: userId });
+	return approved;
 }
 
 /**
@@ -297,14 +532,49 @@ export async function denyAction(
 		throw new ActionConflictError(`Cannot deny invocation in status: ${invocation.status}`);
 	}
 
-	const updated = await actionsDb.updateInvocationStatus(invocationId, "denied", {
-		approvedBy: userId,
-		completedAt: new Date(),
+	const updated = await actionsDb.transitionInvocationStatus({
+		id: invocationId,
+		fromStatuses: ["pending"],
+		toStatus: "denied",
+		data: {
+			approvedBy: userId,
+			completedAt: new Date(),
+		},
 	});
 	if (!updated) {
 		throw new ActionConflictError("Failed to update invocation");
 	}
+
+	await recordEvent({ invocationId, eventType: "denied", actorUserId: userId });
+	await queueResumeIntentIfNeeded({ invocation: updated, terminalStatus: "denied" });
 	return updated;
+}
+
+/**
+ * Verify session visibility + ACL-based authority for approval decisions.
+ *
+ * Caller should also enforce org-role gates separately.
+ */
+export async function assertApprovalAuthority(input: {
+	sessionId: string;
+	organizationId: string;
+	userId: string;
+}): Promise<void> {
+	const session = await actionsDb.getSessionApprovalContext(input.sessionId);
+	if (!session || session.organizationId !== input.organizationId) {
+		throw new ApprovalAuthorityError("Session access denied");
+	}
+
+	const aclRole = await actionsDb.getSessionAclRole(input.sessionId, input.userId);
+	if (aclRole === "viewer") {
+		throw new ApprovalAuthorityError("Viewer role cannot approve or deny actions");
+	}
+
+	if (session.visibility === "private" && session.createdBy !== input.userId) {
+		if (aclRole !== "editor" && aclRole !== "reviewer") {
+			throw new ApprovalAuthorityError("Private session approval requires explicit ACL access");
+		}
+	}
 }
 
 /**
@@ -335,7 +605,26 @@ export async function listPendingActions(sessionId: string): Promise<ActionInvoc
  * Expire stale pending invocations (called by worker sweeper).
  */
 export async function expireStaleInvocations(): Promise<number> {
-	return actionsDb.expirePendingInvocations(new Date());
+	const now = new Date();
+	const candidates = await actionsDb.listExpirablePendingInvocations(now);
+	let expiredCount = 0;
+
+	for (const invocation of candidates) {
+		const expired = await actionsDb.transitionInvocationStatus({
+			id: invocation.id,
+			fromStatuses: ["pending"],
+			toStatus: "expired",
+			data: { completedAt: now },
+		});
+		if (!expired) {
+			continue;
+		}
+		expiredCount += 1;
+		await recordEvent({ invocationId: invocation.id, eventType: "expired" });
+		await queueResumeIntentIfNeeded({ invocation: expired, terminalStatus: "expired" });
+	}
+
+	return expiredCount;
 }
 
 /**
