@@ -40,7 +40,7 @@
 
 ## PR 2
 - branch name: `v1/02-workers-wakes-runs`
-- PR URL/number: `TBD`
+- PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/252`
 - scope: Phase 2 worker wake/run orchestration (`workers` + `wakes` DB/service modules, wake claim/coalesce/consume flow, run/event transition guards, state-transition tests)
 - check results:
   - `pnpm typecheck` ✅
@@ -48,7 +48,7 @@
   - `pnpm test` ✅
   - `pnpm build` ⚠️ fails locally due required env vars for `apps/web` build-time validation.
 - open comments:
-  - TBD
+  - CI and automated review pending.
 - fixes applied:
   - Added atomic wake claim helper with priority ordering and active-worker/no-active-run claim gating.
   - Implemented wake coalescing during claim for `tick` and dedupe-keyed `webhook` sources.
