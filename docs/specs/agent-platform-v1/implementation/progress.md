@@ -164,3 +164,25 @@
 - carry-over TODOs:
   - Wire manager Claude harness behavior into end-to-end orchestration loops in later phases.
   - Run full `pnpm test` suite as stack-level validation in PR8.
+
+## PR 6
+- branch name: `v1/06-gateway-streaming`
+- PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/256`
+- scope: Phase 6 gateway/streaming authority updates (control-plane snapshot event contract, reconnect metadata exposure, browser isolation from provider-internal tunnel URLs)
+- check results:
+  - `pnpm -C apps/gateway typecheck` ✅
+  - `pnpm -C apps/gateway test` ✅
+  - `pnpm -C packages/shared typecheck` ✅
+  - `pnpm build` ⚠️ deferred to final hardening pass due local required env vars in `apps/web`.
+- open comments:
+  - CI and automated review pending.
+- fixes applied:
+  - Added shared websocket contract type `control_plane_snapshot` for reconnect-safe control-plane state hydration.
+  - Added gateway control-plane helper to enforce init config exposure (`previewTunnelUrl` only) and build deterministic snapshot payloads.
+  - Updated gateway init flow to emit `control_plane_snapshot` immediately after `init`.
+  - Extended session context mapping with runtime/operator/capability/visibility/worker linkage fields required by control-plane snapshots.
+  - Added gateway contract tests for preview config exposure and control-plane snapshot payload shape.
+- merge SHA: `TBD`
+- carry-over TODOs:
+  - Complete reconnect/resubscribe contract coverage from workspace client perspective.
+  - Resolve CI/human/Greptile review feedback after full stack implementation.
