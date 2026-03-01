@@ -10,6 +10,14 @@ describe("workers db invariants", () => {
 				managerSessionId: "",
 			}),
 		).rejects.toThrow("workers.managerSessionId is required");
+
+		await expect(
+			createWorker({
+				organizationId: "org_test",
+				name: "My Worker",
+				managerSessionId: "   ",
+			}),
+		).rejects.toThrow("workers.managerSessionId is required");
 	});
 
 	it("requires managerSessionId when creating worker_runs", async () => {
@@ -18,6 +26,15 @@ describe("workers db invariants", () => {
 				workerId: "worker_test",
 				organizationId: "org_test",
 				managerSessionId: "",
+				wakeEventId: "wake_test",
+			}),
+		).rejects.toThrow("worker_runs.managerSessionId is required");
+
+		await expect(
+			createWorkerRun({
+				workerId: "worker_test",
+				organizationId: "org_test",
+				managerSessionId: "   ",
 				wakeEventId: "wake_test",
 			}),
 		).rejects.toThrow("worker_runs.managerSessionId is required");

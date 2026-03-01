@@ -20,6 +20,8 @@ import {
 	uniqueIndex,
 	uuid,
 } from "drizzle-orm/pg-core";
+// Circular import: schema.ts re-exports this module.
+import { actionInvocations } from "./schema";
 
 // ============================================
 // Action Invocation Events (V1)
@@ -29,7 +31,9 @@ export const actionInvocationEvents = pgTable(
 	"action_invocation_events",
 	{
 		id: uuid("id").primaryKey().defaultRandom(),
-		actionInvocationId: uuid("action_invocation_id").notNull(),
+		actionInvocationId: uuid("action_invocation_id")
+			.notNull()
+			.references(() => actionInvocations.id, { onDelete: "cascade" }),
 
 		// Event type (e.g. 'created', 'approved', 'denied', 'executing', 'completed', 'failed', 'expired')
 		eventType: text("event_type").notNull(),
@@ -68,7 +72,9 @@ export const resumeIntents = pgTable(
 		originSessionId: uuid("origin_session_id").notNull(),
 
 		// The action invocation that triggered the resume need
-		invocationId: uuid("invocation_id").notNull(),
+		invocationId: uuid("invocation_id")
+			.notNull()
+			.references(() => actionInvocations.id, { onDelete: "cascade" }),
 
 		// Status: queued | claimed | resuming | satisfied | continued | resume_failed
 		status: text("status").notNull().default("queued"),
@@ -106,6 +112,3 @@ export const resumeIntentsRelations = relations(resumeIntents, ({ one }) => ({
 		references: [actionInvocations.id],
 	}),
 }));
-
-// Forward declaration
-import { actionInvocations } from "./schema";

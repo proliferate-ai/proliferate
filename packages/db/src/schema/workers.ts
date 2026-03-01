@@ -7,6 +7,7 @@
 import { sql } from "drizzle-orm";
 import {
 	check,
+	foreignKey,
 	index,
 	integer,
 	jsonb,
@@ -39,7 +40,9 @@ export const workers = pgTable(
 		status: text("status").notNull().default("active"),
 
 		// Current manager session (1:1, points to sessions(kind=manager))
-		managerSessionId: uuid("manager_session_id").notNull(),
+		managerSessionId: uuid("manager_session_id")
+			.notNull()
+			.references(() => sessions.id),
 
 		// Agent config
 		modelId: text("model_id"),
@@ -115,6 +118,11 @@ export const wakeEvents = pgTable(
 			"wake_events_status_check",
 			sql`status = ANY (ARRAY['queued'::text, 'claimed'::text, 'consumed'::text, 'coalesced'::text, 'cancelled'::text, 'failed'::text])`,
 		),
+		foreignKey({
+			columns: [table.coalescedIntoWakeEventId],
+			foreignColumns: [table.id],
+			name: "wake_events_coalesced_into_wake_event_id_fkey",
+		}).onDelete("set null"),
 	],
 );
 
@@ -134,7 +142,9 @@ export const workerRuns = pgTable(
 			.references(() => organization.id, { onDelete: "cascade" }),
 
 		// Required FK: immutable snapshot of executing manager session
-		managerSessionId: uuid("manager_session_id").notNull(),
+		managerSessionId: uuid("manager_session_id")
+			.notNull()
+			.references(() => sessions.id),
 
 		// Required FK: unique per wake event
 		wakeEventId: uuid("wake_event_id")
@@ -220,3 +230,6 @@ export const workerRunEvents = pgTable(
 			.where(sql`dedupe_key IS NOT NULL`),
 	],
 );
+
+// Forward declarations
+import { sessions } from "./sessions";

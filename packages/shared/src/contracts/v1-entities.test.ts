@@ -1,27 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
-	// Action invocation
+	ACTION_INVOCATION_STATUSES,
 	ACTIVE_RESUME_INTENT_STATUSES,
 	NON_TERMINAL_SESSION_RUNTIME_STATUSES,
 	NON_TERMINAL_WORKER_RUN_STATUSES,
-	// Repo baseline
 	REPO_BASELINE_STATUSES,
-	// Resume intent
 	RESUME_INTENT_STATUSES,
-	// Session kind
 	SESSION_KINDS,
-	// Session message direction
 	SESSION_MESSAGE_DIRECTIONS,
-	// Session operator
 	SESSION_OPERATOR_STATUSES,
-	// Session runtime
 	SESSION_RUNTIME_STATUSES,
-	// Wake event
 	WAKE_EVENT_SOURCES,
 	WAKE_EVENT_STATUSES,
-	// Worker run
 	WORKER_RUN_STATUSES,
-	// Worker status
 	WORKER_STATUSES,
 	isActiveResumeIntentStatus,
 	isNonTerminalSessionRuntimeStatus,
@@ -311,6 +302,18 @@ describe("Repo baseline status machine", () => {
 // ============================================
 
 describe("Action invocation status machine", () => {
+	it("has exactly the canonical statuses", () => {
+		expect(ACTION_INVOCATION_STATUSES).toEqual([
+			"pending",
+			"approved",
+			"denied",
+			"expired",
+			"executing",
+			"completed",
+			"failed",
+		]);
+	});
+
 	it("allows pending -> approved -> executing -> completed", () => {
 		expect(isValidActionInvocationTransition("pending", "approved")).toBe(true);
 		expect(isValidActionInvocationTransition("approved", "executing")).toBe(true);
@@ -335,6 +338,17 @@ describe("Action invocation status machine", () => {
 // ============================================
 
 describe("Resume intent status machine", () => {
+	it("has exactly the canonical statuses", () => {
+		expect(RESUME_INTENT_STATUSES).toEqual([
+			"queued",
+			"claimed",
+			"resuming",
+			"satisfied",
+			"continued",
+			"resume_failed",
+		]);
+	});
+
 	it("allows queued -> claimed -> resuming -> satisfied", () => {
 		expect(isValidResumeIntentTransition("queued", "claimed")).toBe(true);
 		expect(isValidResumeIntentTransition("claimed", "resuming")).toBe(true);

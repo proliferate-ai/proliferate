@@ -4,7 +4,14 @@
  * Raw Drizzle queries for wake_events.
  */
 
-import { type InferSelectModel, and, desc, eq, getDb, wakeEvents } from "../db/client";
+import {
+	type InferSelectModel,
+	and,
+	desc,
+	eq,
+	getDb,
+	wakeEvents,
+} from "@proliferate/services/db/client";
 
 // ============================================
 // Type Exports

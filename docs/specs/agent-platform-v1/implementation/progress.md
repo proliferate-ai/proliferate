@@ -8,12 +8,20 @@
   - `pnpm typecheck` ✅
   - `pnpm lint` ✅
   - `pnpm test` ✅
-- open comments: `none yet`
+- open comments:
+  - CodeRabbit review bundle (resolved with follow-up changes).
+  - Human review pending.
 - fixes applied:
   - Enforced `workers.managerSessionId` required + unique.
   - Added manager/task session shape constraints.
   - Added per-user archive timestamp to `session_user_state` and DB helper support.
   - Added guard test for worker creation invariant.
+  - Added `session_messages` dedupe partial unique index.
+  - Added wake-event self-FK for coalescing references.
+  - Added missing setup-session FK and baseline-target lookup index.
+  - Tightened sessions FK delete semantics for required manager/task linkage.
+  - Switched new service DB helpers to canonical `@proliferate/services/db/client` imports.
+  - Hardened worker/session DB helper validation/update semantics.
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Process CI/human/Greptile feedback.

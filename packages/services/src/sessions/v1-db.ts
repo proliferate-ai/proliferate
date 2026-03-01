@@ -19,7 +19,7 @@ import {
 	sessionSkills,
 	sessionUserState,
 	sessions,
-} from "../db/client";
+} from "@proliferate/services/db/client";
 
 export type SessionCapabilityRow = InferSelectModel<typeof sessionCapabilities>;
 export type SessionSkillRow = InferSelectModel<typeof sessionSkills>;
@@ -54,8 +54,8 @@ export async function upsertSessionCapability(
 			target: [sessionCapabilities.sessionId, sessionCapabilities.capabilityKey],
 			set: {
 				mode: input.mode,
-				scope: input.scope ?? null,
-				origin: input.origin ?? null,
+				...(input.scope !== undefined && { scope: input.scope }),
+				...(input.origin !== undefined && { origin: input.origin }),
 				updatedAt: now,
 			},
 		})
@@ -187,8 +187,8 @@ export async function upsertSessionUserState(
 		.onConflictDoUpdate({
 			target: [sessionUserState.sessionId, sessionUserState.userId],
 			set: {
-				lastViewedAt: input.lastViewedAt ?? null,
-				archivedAt: input.archivedAt ?? null,
+				...(input.lastViewedAt !== undefined && { lastViewedAt: input.lastViewedAt }),
+				...(input.archivedAt !== undefined && { archivedAt: input.archivedAt }),
 				updatedAt: now,
 			},
 		})
