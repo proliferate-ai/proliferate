@@ -47,6 +47,12 @@ export interface SessionRecord {
 	agent_config?: { modelId?: string; tools?: string[]; reasoningEffort?: string } | null;
 	system_prompt?: string | null;
 	status?: string | null;
+	runtime_status?: string | null;
+	operator_status?: string | null;
+	capabilities_version?: number | null;
+	visibility?: string | null;
+	worker_id?: string | null;
+	worker_run_id?: string | null;
 	pause_reason?: string | null;
 	client_type?: string | null;
 	client_metadata?: unknown | null;
@@ -138,6 +144,12 @@ export async function loadSessionContext(
 		agent_config: sessionRow.agentConfig as SessionRecord["agent_config"],
 		system_prompt: sessionRow.systemPrompt,
 		status: sessionRow.status,
+		runtime_status: sessionRow.runtimeStatus,
+		operator_status: sessionRow.operatorStatus,
+		capabilities_version: sessionRow.capabilitiesVersion ?? null,
+		visibility: sessionRow.visibility ?? null,
+		worker_id: sessionRow.workerId ?? null,
+		worker_run_id: sessionRow.workerRunId ?? null,
 		pause_reason: sessionRow.pauseReason,
 		client_type: sessionRow.clientType,
 		client_metadata: sessionRow.clientMetadata,

@@ -38,6 +38,7 @@ import {
 } from "../lib/session-leases";
 import type { SessionContext } from "../lib/session-store";
 import type { ClientConnection, OpenCodeEvent, SandboxInfo } from "../types";
+import { buildControlPlaneSnapshot, buildInitConfig } from "./control-plane";
 import { EventProcessor } from "./event-processor";
 import { GitOperations } from "./git-operations";
 import { MigrationController } from "./migration-controller";
@@ -1644,11 +1645,15 @@ export class SessionHub {
 			type: "init",
 			payload: {
 				messages: transformed,
-				config: previewUrl ? { previewTunnelUrl: previewUrl } : undefined,
+				config: buildInitConfig(previewUrl),
 			},
 		};
 
 		this.sendMessage(ws, initPayload);
+		this.sendMessage(ws, {
+			type: "control_plane_snapshot",
+			payload: buildControlPlaneSnapshot(contextSession, this.reconnectGeneration),
+		});
 	}
 
 	// ============================================

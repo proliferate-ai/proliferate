@@ -417,6 +417,22 @@ export interface ActionCompletedMessage {
 	};
 }
 
+export interface ControlPlaneSnapshotMessage {
+	type: "control_plane_snapshot";
+	payload: {
+		sessionId: string;
+		runtimeStatus: string | null;
+		operatorStatus: string | null;
+		capabilitiesVersion: number | null;
+		visibility: string | null;
+		workerId: string | null;
+		workerRunId: string | null;
+		sandboxAvailable: boolean;
+		reconnectSequence: number;
+		emittedAt: string;
+	};
+}
+
 export type ServerMessage =
 	| InitMessage
 	| NewMessageEvent
@@ -442,7 +458,8 @@ export type ServerMessage =
 	| GitResultMessage
 	| ActionApprovalRequestMessage
 	| ActionApprovalResultMessage
-	| ActionCompletedMessage;
+	| ActionCompletedMessage
+	| ControlPlaneSnapshotMessage;
 
 export * from "./auth";
 
