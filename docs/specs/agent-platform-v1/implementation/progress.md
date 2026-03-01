@@ -91,6 +91,9 @@
   - Added guarded message delivery transitions (`consumed`, `failed`) for service use.
   - Added terminal outcome persistence and canonical outcome read helpers.
   - Added V1 session service tests for follow-up routing, outcome guards, and delivery wrappers.
+  - Changed terminal follow-up default to continuation; rerun now requires explicit `terminalMode=\"rerun\"`.
+  - Added terminal follow-up dedupe lookup so retries reuse existing child-session delivery instead of creating new tasks.
+  - Reworked atomic message-claim SQL to preserve deterministic delivery order after `UPDATE ... RETURNING`.
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Resolve CI/human/Greptile feedback.
