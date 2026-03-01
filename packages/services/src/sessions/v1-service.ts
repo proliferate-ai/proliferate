@@ -61,6 +61,7 @@ export interface SendTaskFollowupInput {
 	payloadJson: unknown;
 	dedupeKey?: string;
 	deliverAfter?: Date;
+	terminalMode?: "continuation" | "rerun";
 }
 
 export interface SendTaskFollowupResult {
@@ -72,7 +73,8 @@ export interface SendTaskFollowupResult {
 /**
  * Follow-up contract:
  * - Live task session => follow-up stays in the same task session.
- * - Terminal task session => create ad-hoc continuation/rerun (`workerId=null`, `workerRunId=null`).
+ * - Terminal task session => create ad-hoc continuation by default (`workerId=null`, `workerRunId=null`).
+ * - Rerun mode is opt-in (`terminalMode="rerun"`).
  */
 export async function sendTaskFollowup(
 	input: SendTaskFollowupInput,
@@ -110,8 +112,23 @@ export async function sendTaskFollowup(
 		);
 	}
 
-	const mode: SendTaskFollowupResult["mode"] =
-		runtimeStatus === "completed" ? "continuation" : "rerun";
+	const mode: SendTaskFollowupResult["mode"] = input.terminalMode === "rerun" ? "rerun" : "continuation";
+	if (input.dedupeKey) {
+		const existing = await v1Db.findTerminalFollowupMessageByDedupe({
+			organizationId: input.organizationId,
+			sourceSessionId: source.id,
+			dedupeKey: input.dedupeKey,
+			mode,
+		});
+		if (existing) {
+			return {
+				deliverySessionId: existing.deliverySessionId,
+				mode,
+				sessionMessage: existing.sessionMessage,
+			};
+		}
+	}
+
 	const nextTask = await createUnifiedTaskSession({
 		organizationId: input.organizationId,
 		createdBy: input.userId,

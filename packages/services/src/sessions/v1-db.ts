@@ -201,6 +201,13 @@ export interface EnqueueSessionMessageInput {
 	senderSessionId?: string;
 }
 
+export interface FindTerminalFollowupMessageByDedupeInput {
+	organizationId: string;
+	sourceSessionId: string;
+	dedupeKey: string;
+	mode: "continuation" | "rerun";
+}
+
 export async function enqueueSessionMessage(
 	input: EnqueueSessionMessageInput,
 ): Promise<SessionMessageRow> {
@@ -253,6 +260,40 @@ export async function enqueueSessionMessage(
 	return existing;
 }
 
+export async function findTerminalFollowupMessageByDedupe(
+	input: FindTerminalFollowupMessageByDedupeInput,
+): Promise<{ deliverySessionId: string; sessionMessage: SessionMessageRow } | undefined> {
+	const db = getDb();
+	const lineageFilter =
+		input.mode === "continuation"
+			? eq(sessions.continuedFromSessionId, input.sourceSessionId)
+			: eq(sessions.rerunOfSessionId, input.sourceSessionId);
+
+	const [row] = await db
+		.select({
+			deliverySessionId: sessions.id,
+			sessionMessage: sessionMessages,
+		})
+		.from(sessionMessages)
+		.innerJoin(sessions, eq(sessionMessages.sessionId, sessions.id))
+		.where(
+			and(
+				eq(sessions.organizationId, input.organizationId),
+				eq(sessionMessages.dedupeKey, input.dedupeKey),
+				eq(sessionMessages.direction, "user_to_task"),
+				lineageFilter,
+			),
+		)
+		.orderBy(asc(sessionMessages.queuedAt), asc(sessionMessages.id))
+		.limit(1);
+
+	if (!row) {
+		return undefined;
+	}
+
+	return row;
+}
+
 export async function listQueuedSessionMessages(sessionId: string): Promise<SessionMessageRow[]> {
 	const db = getDb();
 	return db
@@ -293,11 +334,8 @@ export async function claimDeliverableSessionMessages(
 ): Promise<SessionMessageRow[]> {
 	const db = getDb();
 	const rows = await db.execute<SessionMessageRow>(sql`
-		UPDATE ${sessionMessages}
-		SET "delivery_state" = 'delivered',
-		    "delivered_at" = now()
-		WHERE ${sessionMessages.id} IN (
-			SELECT ${sessionMessages.id}
+		WITH selected AS (
+			SELECT ${sessionMessages.id}, ${sessionMessages.queuedAt}
 			FROM ${sessionMessages}
 			WHERE ${sessionMessages.sessionId} = ${sessionId}
 			  AND ${sessionMessages.deliveryState} = 'queued'
@@ -305,9 +343,18 @@ export async function claimDeliverableSessionMessages(
 			ORDER BY ${sessionMessages.queuedAt} ASC, ${sessionMessages.id} ASC
 			LIMIT ${limit}
 			FOR UPDATE SKIP LOCKED
+		), updated AS (
+			UPDATE ${sessionMessages}
+			SET "delivery_state" = 'delivered',
+				"delivered_at" = now()
+			WHERE ${sessionMessages.id} IN (SELECT id FROM selected)
+			RETURNING *
 		)
-		RETURNING *
-	`);
+		SELECT updated.*
+		FROM updated
+		INNER JOIN selected ON selected.id = updated.id
+		ORDER BY selected.queued_at ASC, selected.id ASC
+		`);
 	return Array.from(rows);
 }
 

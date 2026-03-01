@@ -4,6 +4,7 @@ const {
 	mockCreateTaskSession,
 	mockFindSessionById,
 	mockEnqueueSessionMessage,
+	mockFindTerminalFollowupMessageByDedupe,
 	mockClaimDeliverableSessionMessages,
 	mockTransitionSessionMessageDeliveryState,
 	mockPersistSessionOutcome,
@@ -12,6 +13,7 @@ const {
 	mockCreateTaskSession: vi.fn(),
 	mockFindSessionById: vi.fn(),
 	mockEnqueueSessionMessage: vi.fn(),
+	mockFindTerminalFollowupMessageByDedupe: vi.fn(),
 	mockClaimDeliverableSessionMessages: vi.fn(),
 	mockTransitionSessionMessageDeliveryState: vi.fn(),
 	mockPersistSessionOutcome: vi.fn(),
@@ -22,6 +24,7 @@ vi.mock("./v1-db", () => ({
 	createTaskSession: mockCreateTaskSession,
 	findSessionById: mockFindSessionById,
 	enqueueSessionMessage: mockEnqueueSessionMessage,
+	findTerminalFollowupMessageByDedupe: mockFindTerminalFollowupMessageByDedupe,
 	claimDeliverableSessionMessages: mockClaimDeliverableSessionMessages,
 	transitionSessionMessageDeliveryState: mockTransitionSessionMessageDeliveryState,
 	persistSessionOutcome: mockPersistSessionOutcome,
@@ -95,6 +98,7 @@ function makeSessionMessage(overrides: Record<string, unknown> = {}) {
 describe("sessions v1 service", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockFindTerminalFollowupMessageByDedupe.mockResolvedValue(undefined);
 	});
 
 	it("keeps follow-up in same live task session", async () => {
@@ -141,7 +145,7 @@ describe("sessions v1 service", () => {
 		);
 	});
 
-	it("creates ad-hoc rerun follow-up for terminal failed task", async () => {
+	it("creates ad-hoc continuation follow-up for terminal failed task by default", async () => {
 		mockFindSessionById.mockResolvedValue(makeTaskSession({ runtimeStatus: "failed" }));
 		mockCreateTaskSession.mockResolvedValue(
 			makeTaskSession({ id: "task-3", workerId: null, workerRunId: null }),
@@ -156,16 +160,65 @@ describe("sessions v1 service", () => {
 			payloadJson: { text: "retry" },
 		});
 
-		expect(result.mode).toBe("rerun");
+		expect(result.mode).toBe("continuation");
 		expect(result.deliverySessionId).toBe("task-3");
 		expect(mockCreateTaskSession).toHaveBeenCalledWith(
 			expect.objectContaining({
-				continuedFromSessionId: null,
-				rerunOfSessionId: "task-1",
+				continuedFromSessionId: "task-1",
+				rerunOfSessionId: null,
 				workerId: null,
 				workerRunId: null,
 			}),
 		);
+	});
+
+	it("creates ad-hoc rerun follow-up only when explicitly requested", async () => {
+		mockFindSessionById.mockResolvedValue(makeTaskSession({ runtimeStatus: "failed" }));
+		mockCreateTaskSession.mockResolvedValue(
+			makeTaskSession({ id: "task-4", workerId: null, workerRunId: null }),
+		);
+		mockEnqueueSessionMessage.mockResolvedValue(makeSessionMessage({ sessionId: "task-4" }));
+
+		const result = await sendTaskFollowup({
+			sessionId: "task-1",
+			organizationId: "org-1",
+			userId: "user-1",
+			messageType: "follow_up",
+			payloadJson: { text: "retry" },
+			terminalMode: "rerun",
+		});
+
+		expect(result.mode).toBe("rerun");
+		expect(result.deliverySessionId).toBe("task-4");
+		expect(mockCreateTaskSession).toHaveBeenCalledWith(
+			expect.objectContaining({
+				continuedFromSessionId: null,
+				rerunOfSessionId: "task-1",
+			}),
+		);
+	});
+
+	it("reuses existing terminal follow-up delivery when dedupe key matches", async () => {
+		mockFindSessionById.mockResolvedValue(makeTaskSession({ runtimeStatus: "completed" }));
+		mockFindTerminalFollowupMessageByDedupe.mockResolvedValue({
+			deliverySessionId: "task-2",
+			sessionMessage: makeSessionMessage({ id: "msg-dedupe", sessionId: "task-2" }),
+		});
+
+		const result = await sendTaskFollowup({
+			sessionId: "task-1",
+			organizationId: "org-1",
+			userId: "user-1",
+			messageType: "follow_up",
+			payloadJson: { text: "next iteration" },
+			dedupeKey: "dedupe-1",
+		});
+
+		expect(result.mode).toBe("continuation");
+		expect(result.deliverySessionId).toBe("task-2");
+		expect(result.sessionMessage.id).toBe("msg-dedupe");
+		expect(mockCreateTaskSession).not.toHaveBeenCalled();
+		expect(mockEnqueueSessionMessage).not.toHaveBeenCalled();
 	});
 
 	it("rejects follow-up routing for non-task sessions", async () => {
