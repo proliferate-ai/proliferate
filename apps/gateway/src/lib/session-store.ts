@@ -34,6 +34,7 @@ export interface SessionRecord {
 	created_by: string | null;
 	configuration_id: string | null;
 	session_type: string | null;
+	kind?: string | null;
 	sandbox_id: string | null;
 	sandbox_provider: string | null;
 	snapshot_id: string | null;
@@ -124,6 +125,7 @@ export async function loadSessionContext(
 		created_by: sessionRow.createdBy,
 		configuration_id: sessionRow.configurationId,
 		session_type: sessionRow.sessionType,
+		kind: sessionRow.kind,
 		sandbox_id: sessionRow.sandboxId,
 		sandbox_provider: sessionRow.sandboxProvider,
 		snapshot_id: sessionRow.snapshotId,

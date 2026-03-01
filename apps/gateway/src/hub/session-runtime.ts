@@ -18,11 +18,13 @@ import { getModalAppName, getSandboxProvider } from "@proliferate/shared/provide
 import { SandboxProviderError } from "@proliferate/shared/sandbox";
 import { computeBaseSnapshotVersionKey } from "@proliferate/shared/sandbox";
 import { scheduleSessionExpiry } from "../expiry/expiry-queue";
+import { normalizeDaemonEvent } from "../harness/daemon-event-bridge";
+import { ClaudeManagerHarnessAdapter } from "../harness/manager-claude-harness";
+import { OpenCodeCodingHarnessAdapter } from "../harness/opencode-coding-harness";
 import type { GatewayEnv } from "../lib/env";
 import { waitForMigrationLockRelease } from "../lib/lock";
 import {
 	type OpenCodeSessionCreateError,
-	createOpenCodeSession,
 	getOpenCodeSession,
 	listOpenCodeSessions,
 } from "../lib/opencode";
@@ -66,6 +68,8 @@ export class SessionRuntime {
 	private readonly logger: Logger;
 
 	private readonly sseClient: SseClient;
+	private readonly codingHarness: OpenCodeCodingHarnessAdapter;
+	private readonly managerHarness: ClaudeManagerHarnessAdapter;
 	private readonly onStatus: SessionRuntimeOptions["onStatus"];
 	private readonly onBroadcast?: SessionRuntimeOptions["onBroadcast"];
 	private readonly onDisconnect: SessionRuntimeOptions["onDisconnect"];
@@ -92,9 +96,18 @@ export class SessionRuntime {
 		this.onStatus = options.onStatus;
 		this.onBroadcast = options.onBroadcast;
 		this.onDisconnect = options.onDisconnect;
+		this.codingHarness = new OpenCodeCodingHarnessAdapter();
+		this.managerHarness = new ClaudeManagerHarnessAdapter();
 
 		this.sseClient = new SseClient({
-			onEvent: options.onEvent,
+			onEvent: (event) => {
+				const normalized = normalizeDaemonEvent(event);
+				this.logger.debug(
+					{ channel: normalized.channel, type: normalized.type },
+					"runtime.daemon_event.normalized",
+				);
+				options.onEvent(normalized.rawEvent);
+			},
 			onDisconnect: (reason) => this.handleSseDisconnect(reason),
 			env: this.env,
 			logger: this.logger,
@@ -168,6 +181,14 @@ export class SessionRuntime {
 
 	isSseConnected(): boolean {
 		return this.sseClient.isConnected();
+	}
+
+	private isManagerSessionKind(): boolean {
+		return this.context.session.kind === "manager";
+	}
+
+	private getHarnessFamily(): "manager-claude" | "coding-opencode" {
+		return this.isManagerSessionKind() ? "manager-claude" : "coding-opencode";
 	}
 
 	// ============================================
@@ -305,6 +326,14 @@ export class SessionRuntime {
 			this.log(
 				`Session context loaded: status=${this.context.session.status ?? "null"} sandboxId=${this.context.session.sandbox_id ?? "null"} snapshotId=${this.context.session.snapshot_id ?? "null"} clientType=${this.context.session.client_type ?? "null"}`,
 			);
+			const harnessFamily = this.getHarnessFamily();
+			this.log("Selected harness family", {
+				harnessFamily,
+				sessionKind: this.context.session.kind ?? "unknown",
+			});
+			if (harnessFamily === "manager-claude") {
+				await this.managerHarness.resume({ managerSessionId: this.sessionId });
+			}
 
 			// Abort auto-reconnect when session has transitioned to a terminal/non-running state
 			// while we were waiting on locks/loading context.
@@ -746,7 +775,9 @@ export class SessionRuntime {
 		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
 			const attemptStartMs = Date.now();
 			try {
-				const sessionId = await createOpenCodeSession(this.openCodeUrl);
+				const { sessionId } = await this.codingHarness.start({
+					baseUrl: this.openCodeUrl,
+				});
 				this.logLatency("runtime.opencode_session.create.attempt", {
 					attempt,
 					maxAttempts,
