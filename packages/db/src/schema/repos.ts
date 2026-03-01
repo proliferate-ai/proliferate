@@ -100,7 +100,9 @@ export const repoBaselines = pgTable(
 		sandboxProvider: text("sandbox_provider"),
 
 		// Setup session that validated this baseline
-		setupSessionId: uuid("setup_session_id"),
+		setupSessionId: uuid("setup_session_id").references(() => sessions.id, {
+			onDelete: "set null",
+		}),
 
 		// Recipes
 		installCommands: jsonb("install_commands"),
@@ -207,6 +209,7 @@ export const workspaceCacheSnapshots = pgTable(
 		index("idx_workspace_cache_snapshots_org").on(table.organizationId),
 		index("idx_workspace_cache_snapshots_repo").on(table.repoId),
 		index("idx_workspace_cache_snapshots_baseline").on(table.repoBaselineId),
+		index("idx_workspace_cache_snapshots_baseline_target").on(table.repoBaselineTargetId),
 		unique("uq_workspace_cache_snapshots_cache_key").on(table.cacheKey),
 	],
 );
@@ -238,3 +241,4 @@ import { configurationRepos } from "./configurations";
 import { repoConnections } from "./integrations";
 // Forward declarations for circular references
 import { secrets } from "./secrets";
+import { sessions } from "./sessions";

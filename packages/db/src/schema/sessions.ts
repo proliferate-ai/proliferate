@@ -259,6 +259,7 @@ export const sessionsRelations = relations(sessions, ({ one, many }) => ({
 	skills: many(sessionSkills),
 	messages: many(sessionMessages),
 	acl: many(sessionAcl),
+	userStates: many(sessionUserState),
 	pullRequests: many(sessionPullRequests),
 }));
 
@@ -390,6 +391,9 @@ export const sessionMessages = pgTable(
 		index("idx_session_messages_session").on(table.sessionId),
 		index("idx_session_messages_delivery_state").on(table.deliveryState),
 		index("idx_session_messages_session_state").on(table.sessionId, table.deliveryState),
+		uniqueIndex("uq_session_messages_dedupe")
+			.on(table.sessionId, table.dedupeKey)
+			.where(sql`dedupe_key IS NOT NULL`),
 		check(
 			"session_messages_direction_check",
 			sql`direction = ANY (ARRAY['user_to_manager'::text, 'user_to_task'::text, 'manager_to_task'::text, 'task_to_manager'::text])`,

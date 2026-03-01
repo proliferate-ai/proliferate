@@ -1472,22 +1472,13 @@ export const sessions = pgTable(
 		visibility: text("visibility").default("private"),
 
 		// V1 worker linkage
-		workerId: uuid("worker_id").references((): AnyPgColumn => workers.id, {
-			onDelete: "set null",
-		}),
-		workerRunId: uuid("worker_run_id").references((): AnyPgColumn => workerRuns.id, {
-			onDelete: "set null",
-		}),
+		workerId: uuid("worker_id").references((): AnyPgColumn => workers.id),
+		workerRunId: uuid("worker_run_id").references((): AnyPgColumn => workerRuns.id),
 
 		// V1 repo baseline linkage
-		repoBaselineId: uuid("repo_baseline_id").references((): AnyPgColumn => repoBaselines.id, {
-			onDelete: "set null",
-		}),
+		repoBaselineId: uuid("repo_baseline_id").references((): AnyPgColumn => repoBaselines.id),
 		repoBaselineTargetId: uuid("repo_baseline_target_id").references(
 			(): AnyPgColumn => repoBaselineTargets.id,
-			{
-				onDelete: "set null",
-			},
 		),
 
 		// V1 capabilities version (incremented on capability row changes)
@@ -2284,6 +2275,11 @@ export const wakeEvents = pgTable(
 			foreignColumns: [organization.id],
 			name: "wake_events_organization_id_fkey",
 		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.coalescedIntoWakeEventId],
+			foreignColumns: [table.id],
+			name: "wake_events_coalesced_into_wake_event_id_fkey",
+		}).onDelete("set null"),
 	],
 );
 
@@ -2489,6 +2485,9 @@ export const sessionMessages = pgTable(
 			table.sessionId.asc().nullsLast().op("uuid_ops"),
 			table.deliveryState.asc().nullsLast().op("text_ops"),
 		),
+		uniqueIndex("uq_session_messages_dedupe")
+			.on(table.sessionId, table.dedupeKey)
+			.where(sql`dedupe_key IS NOT NULL`),
 		check(
 			"session_messages_direction_check",
 			sql`direction = ANY (ARRAY['user_to_manager'::text, 'user_to_task'::text, 'manager_to_task'::text, 'task_to_manager'::text])`,
@@ -2641,7 +2640,9 @@ export const repoBaselines = pgTable(
 		version: text("version"),
 		snapshotId: text("snapshot_id"),
 		sandboxProvider: text("sandbox_provider"),
-		setupSessionId: uuid("setup_session_id"),
+		setupSessionId: uuid("setup_session_id").references((): AnyPgColumn => sessions.id, {
+			onDelete: "set null",
+		}),
 		installCommands: jsonb("install_commands"),
 		runCommands: jsonb("run_commands"),
 		testCommands: jsonb("test_commands"),
@@ -2739,6 +2740,10 @@ export const workspaceCacheSnapshots = pgTable(
 		index("idx_workspace_cache_snapshots_baseline").using(
 			"btree",
 			table.repoBaselineId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_workspace_cache_snapshots_baseline_target").using(
+			"btree",
+			table.repoBaselineTargetId.asc().nullsLast().op("uuid_ops"),
 		),
 		unique("uq_workspace_cache_snapshots_cache_key").on(table.cacheKey),
 		foreignKey({
