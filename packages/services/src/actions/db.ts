@@ -1,17 +1,23 @@
 /**
  * Actions DB operations.
  *
- * Raw Drizzle queries for action_invocations.
+ * Raw Drizzle queries for action_invocations + V1 approval event/resume helpers.
  */
 
 import {
 	type InferSelectModel,
+	actionInvocationEvents,
 	actionInvocations,
 	and,
 	desc,
 	eq,
 	getDb,
+	inArray,
 	lte,
+	notInArray,
+	resumeIntents,
+	sessionAcl,
+	sessionCapabilities,
 	sessions,
 	sql,
 } from "../db/client";
@@ -21,10 +27,47 @@ import {
 // ============================================
 
 export type ActionInvocationRow = InferSelectModel<typeof actionInvocations>;
+export type ActionInvocationEventRow = InferSelectModel<typeof actionInvocationEvents>;
+export type ResumeIntentRow = InferSelectModel<typeof resumeIntents>;
+
+export type ActionInvocationStatus =
+	| "pending"
+	| "approved"
+	| "executing"
+	| "completed"
+	| "denied"
+	| "failed"
+	| "expired";
+
+export type ResumeIntentStatus =
+	| "queued"
+	| "claimed"
+	| "resuming"
+	| "satisfied"
+	| "continued"
+	| "resume_failed";
+
+export type SessionCapabilityMode = "allow" | "require_approval" | "deny";
 
 export type ActionInvocationWithSession = ActionInvocationRow & {
 	sessionTitle: string | null;
 };
+
+export interface SessionApprovalContext {
+	id: string;
+	organizationId: string;
+	automationId: string | null;
+	operatorStatus: string | null;
+	visibility: string | null;
+	createdBy: string | null;
+	repoId: string | null;
+}
+
+const TERMINAL_RESUME_INTENT_STATUSES: ResumeIntentStatus[] = [
+	"satisfied",
+	"continued",
+	"resume_failed",
+];
 
 // ============================================
 // Queries
@@ -38,7 +81,7 @@ export interface CreateInvocationInput {
 	action: string;
 	riskLevel: "read" | "write" | "danger";
 	params: unknown;
-	status: string;
+	status: ActionInvocationStatus;
 	mode?: string;
 	modeSource?: string;
 	deniedReason?: string;
@@ -92,7 +135,7 @@ export async function getInvocationById(id: string): Promise<ActionInvocationRow
 
 export async function updateInvocationStatus(
 	id: string,
-	status: string,
+	status: ActionInvocationStatus,
 	data?: {
 		result?: unknown;
 		error?: string;
@@ -100,6 +143,8 @@ export async function updateInvocationStatus(
 		approvedAt?: Date;
 		completedAt?: Date;
 		durationMs?: number;
+		deniedReason?: string;
+		expiresAt?: Date | null;
 	},
 ): Promise<ActionInvocationRow | undefined> {
 	const db = getDb();
@@ -110,6 +155,42 @@ export async function updateInvocationStatus(
 			...data,
 		})
 		.where(eq(actionInvocations.id, id))
+		.returning();
+	return row;
+}
+
+export async function transitionInvocationStatus(input: {
+	id: string;
+	fromStatuses: ActionInvocationStatus[];
+	toStatus: ActionInvocationStatus;
+	data?: {
+		result?: unknown;
+		error?: string;
+		approvedBy?: string;
+		approvedAt?: Date;
+		completedAt?: Date;
+		durationMs?: number;
+		deniedReason?: string;
+		expiresAt?: Date | null;
+	};
+}): Promise<ActionInvocationRow | undefined> {
+	if (input.fromStatuses.length === 0) {
+		throw new Error("fromStatuses must include at least one status");
+	}
+
+	const db = getDb();
+	const [row] = await db
+		.update(actionInvocations)
+		.set({
+			status: input.toStatus,
+			...input.data,
+		})
+		.where(
+			and(
+				eq(actionInvocations.id, input.id),
+				inArray(actionInvocations.status, input.fromStatuses),
+			),
+		)
 		.returning();
 	return row;
 }
@@ -132,6 +213,14 @@ export async function listPendingBySession(sessionId: string): Promise<ActionInv
 		.orderBy(desc(actionInvocations.createdAt));
 }
 
+export async function listExpirablePendingInvocations(now: Date): Promise<ActionInvocationRow[]> {
+	const db = getDb();
+	return db
+		.select()
+		.from(actionInvocations)
+		.where(and(eq(actionInvocations.status, "pending"), lte(actionInvocations.expiresAt, now)));
+}
+
 export async function expirePendingInvocations(now: Date): Promise<number> {
 	const db = getDb();
 	const rows = await db
@@ -140,6 +229,199 @@ export async function expirePendingInvocations(now: Date): Promise<number> {
 		.where(and(eq(actionInvocations.status, "pending"), lte(actionInvocations.expiresAt, now)))
 		.returning({ id: actionInvocations.id });
 	return rows.length;
+}
+
+export async function getSessionApprovalContext(
+	sessionId: string,
+): Promise<SessionApprovalContext | undefined> {
+	const db = getDb();
+	const [row] = await db
+		.select({
+			id: sessions.id,
+			organizationId: sessions.organizationId,
+			automationId: sessions.automationId,
+			operatorStatus: sessions.operatorStatus,
+			visibility: sessions.visibility,
+			createdBy: sessions.createdBy,
+			repoId: sessions.repoId,
+		})
+		.from(sessions)
+		.where(eq(sessions.id, sessionId))
+		.limit(1);
+	return row;
+}
+
+export async function getSessionAclRole(
+	sessionId: string,
+	userId: string,
+): Promise<"viewer" | "editor" | "reviewer" | undefined> {
+	const db = getDb();
+	const [row] = await db
+		.select({ role: sessionAcl.role })
+		.from(sessionAcl)
+		.where(and(eq(sessionAcl.sessionId, sessionId), eq(sessionAcl.userId, userId)))
+		.limit(1);
+
+	const role = row?.role;
+	if (role === "viewer" || role === "editor" || role === "reviewer") {
+		return role;
+	}
+	return undefined;
+}
+
+export async function setSessionOperatorStatus(input: {
+	sessionId: string;
+	toStatus: string;
+	fromStatuses?: string[];
+}): Promise<boolean> {
+	const db = getDb();
+	const where = input.fromStatuses?.length
+		? and(eq(sessions.id, input.sessionId), inArray(sessions.operatorStatus, input.fromStatuses))
+		: eq(sessions.id, input.sessionId);
+
+	const rows = await db
+		.update(sessions)
+		.set({ operatorStatus: input.toStatus })
+		.where(where)
+		.returning({ id: sessions.id });
+
+	return rows.length > 0;
+}
+
+export async function getSessionCapabilityMode(
+	sessionId: string,
+	capabilityKey: string,
+): Promise<SessionCapabilityMode | undefined> {
+	const db = getDb();
+	const [row] = await db
+		.select({ mode: sessionCapabilities.mode })
+		.from(sessionCapabilities)
+		.where(
+			and(
+				eq(sessionCapabilities.sessionId, sessionId),
+				eq(sessionCapabilities.capabilityKey, capabilityKey),
+			),
+		)
+		.limit(1);
+
+	const mode = row?.mode;
+	if (mode === "allow" || mode === "require_approval" || mode === "deny") {
+		return mode;
+	}
+	return undefined;
+}
+
+export async function createActionInvocationEvent(input: {
+	actionInvocationId: string;
+	eventType: string;
+	actorUserId?: string | null;
+	payloadJson?: unknown;
+}): Promise<ActionInvocationEventRow> {
+	const db = getDb();
+	const [row] = await db
+		.insert(actionInvocationEvents)
+		.values({
+			actionInvocationId: input.actionInvocationId,
+			eventType: input.eventType,
+			actorUserId: input.actorUserId ?? null,
+			payloadJson: input.payloadJson ?? null,
+		})
+		.returning();
+	return row;
+}
+
+export async function listActionInvocationEvents(
+	actionInvocationId: string,
+): Promise<ActionInvocationEventRow[]> {
+	const db = getDb();
+	return db
+		.select()
+		.from(actionInvocationEvents)
+		.where(eq(actionInvocationEvents.actionInvocationId, actionInvocationId))
+		.orderBy(desc(actionInvocationEvents.createdAt));
+}
+
+export async function getActiveResumeIntent(
+	originSessionId: string,
+	invocationId: string,
+): Promise<ResumeIntentRow | undefined> {
+	const db = getDb();
+	const [row] = await db
+		.select()
+		.from(resumeIntents)
+		.where(
+			and(
+				eq(resumeIntents.originSessionId, originSessionId),
+				eq(resumeIntents.invocationId, invocationId),
+				notInArray(resumeIntents.status, TERMINAL_RESUME_INTENT_STATUSES),
+			),
+		)
+		.limit(1);
+	return row;
+}
+
+export async function createOrGetActiveResumeIntent(input: {
+	originSessionId: string;
+	invocationId: string;
+	payloadJson?: unknown;
+}): Promise<ResumeIntentRow> {
+	const existing = await getActiveResumeIntent(input.originSessionId, input.invocationId);
+	if (existing) {
+		return existing;
+	}
+
+	const db = getDb();
+	try {
+		const [row] = await db
+			.insert(resumeIntents)
+			.values({
+				originSessionId: input.originSessionId,
+				invocationId: input.invocationId,
+				status: "queued",
+				payloadJson: input.payloadJson ?? null,
+			})
+			.returning();
+		return row;
+	} catch (error) {
+		const duplicate =
+			error instanceof Error &&
+			(error.message.includes("uq_resume_intents_one_active") ||
+				error.message.includes("duplicate key value"));
+		if (!duplicate) {
+			throw error;
+		}
+		const retry = await getActiveResumeIntent(input.originSessionId, input.invocationId);
+		if (!retry) {
+			throw error;
+		}
+		return retry;
+	}
+}
+
+export async function transitionResumeIntentStatus(input: {
+	id: string;
+	fromStatuses: ResumeIntentStatus[];
+	toStatus: ResumeIntentStatus;
+	errorMessage?: string | null;
+	resolvedAt?: Date | null;
+	claimedAt?: Date | null;
+}): Promise<ResumeIntentRow | undefined> {
+	if (input.fromStatuses.length === 0) {
+		throw new Error("fromStatuses must include at least one status");
+	}
+
+	const db = getDb();
+	const [row] = await db
+		.update(resumeIntents)
+		.set({
+			status: input.toStatus,
+			errorMessage: input.errorMessage,
+			resolvedAt: input.resolvedAt,
+			claimedAt: input.claimedAt,
+		})
+		.where(and(eq(resumeIntents.id, input.id), inArray(resumeIntents.status, input.fromStatuses)))
+		.returning();
+	return row;
 }
 
 export async function listByOrg(

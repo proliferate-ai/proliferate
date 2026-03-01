@@ -673,6 +673,18 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			const { invocationId } = req.params;
 			const session = await requireSessionOrgAccess(req.proliferateSessionId!, auth.orgId);
 			await requireAdminRole(auth.userId, session.organizationId);
+			try {
+				await actions.assertApprovalAuthority({
+					sessionId: req.proliferateSessionId!,
+					organizationId: session.organizationId,
+					userId: auth.userId,
+				});
+			} catch (err) {
+				if (err instanceof actions.ApprovalAuthorityError) {
+					throw new ApiError(403, err.message);
+				}
+				throw err;
+			}
 
 			// Approve the invocation (checks status + org + expiry)
 			let invocation: Awaited<ReturnType<typeof actions.approveAction>>;
@@ -768,8 +780,14 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 
 			let invocation: Awaited<ReturnType<typeof actions.denyAction>>;
 			try {
+				await actions.assertApprovalAuthority({
+					sessionId: req.proliferateSessionId!,
+					organizationId: session.organizationId,
+					userId: auth.userId,
+				});
 				invocation = await actions.denyAction(invocationId, session.organizationId, auth.userId);
 			} catch (err) {
+				if (err instanceof actions.ApprovalAuthorityError) throw new ApiError(403, err.message);
 				if (err instanceof actions.ActionNotFoundError) throw new ApiError(404, err.message);
 				if (err instanceof actions.ActionConflictError) throw new ApiError(409, err.message);
 				throw err;
