@@ -100,3 +100,30 @@
 - carry-over TODOs:
   - Resolve CI/human/Greptile feedback.
   - Wire gateway call-sites to V1 session-message orchestration in subsequent phases.
+
+## PR 4
+- branch name: `v1/04-capabilities-approvals-actions`
+- PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/254`
+- scope: Phase 4 live capability and approval lifecycle contracts (capability-authoritative invoke resolution, approval transition guards, terminal-outcome resume-intent semantics, session visibility/ACL authority checks)
+- check results:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅
+  - `pnpm build` ⚠️ fails locally due required env vars for `apps/web` build-time validation.
+- open comments:
+  - CI and automated review pending.
+- fixes applied:
+  - Added action DB transition helpers for strict invocation status changes.
+  - Added `action_invocation_events` write/list helpers for lifecycle auditing.
+  - Added idempotent `resume_intents` create/get + transition DB helpers.
+  - Added session capability mode, ACL role, and operator-status helper queries for approval authority + lifecycle updates.
+  - Enforced strictest mode precedence at invocation time with live `session_capabilities` authority.
+  - Set session operator status to `waiting_for_approval` on pending approval; no `resume_intent` is created at pending.
+  - Added approval-time policy revalidation before `pending -> approved`.
+  - Added terminal blocked-path resume-intent queuing (`completed|failed|denied|expired`) only when origin session is still waiting for approval.
+  - Added gateway-layer enforcement for session visibility + ACL role approval authority checks.
+  - Added service tests covering capability precedence, pending semantics, revalidation, terminal resume-intent timing, and viewer ACL denial.
+- merge SHA: `TBD`
+- carry-over TODOs:
+  - Resolve CI/human/Greptile feedback.
+  - Complete downstream runtime handling for resume-intent processing strategy metadata.
