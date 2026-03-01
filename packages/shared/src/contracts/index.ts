@@ -245,3 +245,6 @@ export {
 	CreateAutomationTriggerInputSchema,
 	CreateAutomationScheduleInputSchema,
 } from "./automations";
+
+// Re-export V1 entity contracts
+export * from "./v1-entities";

@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm/relations";
 import {
 	account,
+	actionInvocationEvents,
 	actionInvocations,
 	apikey,
 	automationConnections,
@@ -20,16 +21,25 @@ import {
 	orgConnectors,
 	organization,
 	outbox,
+	repoBaselineTargets,
+	repoBaselines,
 	repoConnections,
 	repos,
+	resumeIntents,
 	sandboxBaseSnapshots,
 	schedules,
 	secretFiles,
 	secrets,
 	session,
+	sessionAcl,
+	sessionCapabilities,
 	sessionConnections,
+	sessionMessages,
 	sessionNotificationSubscriptions,
+	sessionPullRequests,
+	sessionSkills,
 	sessionToolInvocations,
+	sessionUserState,
 	sessions,
 	slackConversations,
 	slackInstallations,
@@ -39,7 +49,12 @@ import {
 	user,
 	userActionPreferences,
 	userSshKeys,
+	wakeEvents,
 	webhookInbox,
+	workerRunEvents,
+	workerRuns,
+	workers,
+	workspaceCacheSnapshots,
 } from "./schema";
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -148,6 +163,8 @@ export const reposRelations = relations(repos, ({ one, many }) => ({
 	slackConversations: many(slackConversations),
 	sessions: many(sessions),
 	configurationRepos: many(configurationRepos),
+	repoBaselines: many(repoBaselines),
+	workspaceCacheSnapshots: many(workspaceCacheSnapshots),
 }));
 
 export const configurationsRelations = relations(configurations, ({ one, many }) => ({
@@ -408,7 +425,30 @@ export const sessionsRelations = relations(sessions, ({ one, many }) => ({
 		fields: [sessions.configurationId],
 		references: [configurations.id],
 	}),
+	worker: one(workers, {
+		fields: [sessions.workerId],
+		references: [workers.id],
+	}),
+	workerRun: one(workerRuns, {
+		fields: [sessions.workerRunId],
+		references: [workerRuns.id],
+	}),
+	repoBaseline: one(repoBaselines, {
+		fields: [sessions.repoBaselineId],
+		references: [repoBaselines.id],
+	}),
+	repoBaselineTarget: one(repoBaselineTargets, {
+		fields: [sessions.repoBaselineTargetId],
+		references: [repoBaselineTargets.id],
+	}),
 	toolInvocations: many(sessionToolInvocations),
+	// V1 relations
+	capabilities: many(sessionCapabilities),
+	skills: many(sessionSkills),
+	messages: many(sessionMessages),
+	acl: many(sessionAcl),
+	userStates: many(sessionUserState),
+	pullRequests: many(sessionPullRequests),
 }));
 
 export const slackConversationsRelations = relations(slackConversations, ({ one }) => ({
@@ -594,5 +634,184 @@ export const configurationSecretsRelations = relations(configurationSecrets, ({ 
 	secret: one(secrets, {
 		fields: [configurationSecrets.secretId],
 		references: [secrets.id],
+	}),
+}));
+
+// ============================================
+// V1 Table Relations
+// ============================================
+
+export const workersRelations = relations(workers, ({ one, many }) => ({
+	organization: one(organization, {
+		fields: [workers.organizationId],
+		references: [organization.id],
+	}),
+	createdByUser: one(user, {
+		fields: [workers.createdBy],
+		references: [user.id],
+	}),
+	managerSession: one(sessions, {
+		fields: [workers.managerSessionId],
+		references: [sessions.id],
+	}),
+	wakeEvents: many(wakeEvents),
+	runs: many(workerRuns),
+}));
+
+export const wakeEventsRelations = relations(wakeEvents, ({ one }) => ({
+	worker: one(workers, {
+		fields: [wakeEvents.workerId],
+		references: [workers.id],
+	}),
+	organization: one(organization, {
+		fields: [wakeEvents.organizationId],
+		references: [organization.id],
+	}),
+}));
+
+export const workerRunsRelations = relations(workerRuns, ({ one, many }) => ({
+	worker: one(workers, {
+		fields: [workerRuns.workerId],
+		references: [workers.id],
+	}),
+	organization: one(organization, {
+		fields: [workerRuns.organizationId],
+		references: [organization.id],
+	}),
+	managerSession: one(sessions, {
+		fields: [workerRuns.managerSessionId],
+		references: [sessions.id],
+	}),
+	wakeEvent: one(wakeEvents, {
+		fields: [workerRuns.wakeEventId],
+		references: [wakeEvents.id],
+	}),
+	events: many(workerRunEvents),
+	taskSessions: many(sessions),
+}));
+
+export const workerRunEventsRelations = relations(workerRunEvents, ({ one }) => ({
+	workerRun: one(workerRuns, {
+		fields: [workerRunEvents.workerRunId],
+		references: [workerRuns.id],
+	}),
+	worker: one(workers, {
+		fields: [workerRunEvents.workerId],
+		references: [workers.id],
+	}),
+}));
+
+export const sessionCapabilitiesRelations = relations(sessionCapabilities, ({ one }) => ({
+	session: one(sessions, {
+		fields: [sessionCapabilities.sessionId],
+		references: [sessions.id],
+	}),
+}));
+
+export const sessionSkillsRelations = relations(sessionSkills, ({ one }) => ({
+	session: one(sessions, {
+		fields: [sessionSkills.sessionId],
+		references: [sessions.id],
+	}),
+}));
+
+export const sessionMessagesRelations = relations(sessionMessages, ({ one }) => ({
+	session: one(sessions, {
+		fields: [sessionMessages.sessionId],
+		references: [sessions.id],
+	}),
+}));
+
+export const sessionAclRelations = relations(sessionAcl, ({ one }) => ({
+	session: one(sessions, {
+		fields: [sessionAcl.sessionId],
+		references: [sessions.id],
+	}),
+	user: one(user, {
+		fields: [sessionAcl.userId],
+		references: [user.id],
+	}),
+}));
+
+export const sessionUserStateRelations = relations(sessionUserState, ({ one }) => ({
+	session: one(sessions, {
+		fields: [sessionUserState.sessionId],
+		references: [sessions.id],
+	}),
+	user: one(user, {
+		fields: [sessionUserState.userId],
+		references: [user.id],
+	}),
+}));
+
+export const sessionPullRequestsRelations = relations(sessionPullRequests, ({ one }) => ({
+	session: one(sessions, {
+		fields: [sessionPullRequests.sessionId],
+		references: [sessions.id],
+	}),
+	repo: one(repos, {
+		fields: [sessionPullRequests.repoId],
+		references: [repos.id],
+	}),
+}));
+
+export const repoBaselinesRelations = relations(repoBaselines, ({ one, many }) => ({
+	repo: one(repos, {
+		fields: [repoBaselines.repoId],
+		references: [repos.id],
+	}),
+	organization: one(organization, {
+		fields: [repoBaselines.organizationId],
+		references: [organization.id],
+	}),
+	targets: many(repoBaselineTargets),
+	workspaceCacheSnapshots: many(workspaceCacheSnapshots),
+}));
+
+export const repoBaselineTargetsRelations = relations(repoBaselineTargets, ({ one }) => ({
+	baseline: one(repoBaselines, {
+		fields: [repoBaselineTargets.repoBaselineId],
+		references: [repoBaselines.id],
+	}),
+}));
+
+export const workspaceCacheSnapshotsRelations = relations(workspaceCacheSnapshots, ({ one }) => ({
+	organization: one(organization, {
+		fields: [workspaceCacheSnapshots.organizationId],
+		references: [organization.id],
+	}),
+	repo: one(repos, {
+		fields: [workspaceCacheSnapshots.repoId],
+		references: [repos.id],
+	}),
+	repoBaseline: one(repoBaselines, {
+		fields: [workspaceCacheSnapshots.repoBaselineId],
+		references: [repoBaselines.id],
+	}),
+	repoBaselineTarget: one(repoBaselineTargets, {
+		fields: [workspaceCacheSnapshots.repoBaselineTargetId],
+		references: [repoBaselineTargets.id],
+	}),
+	createdByUser: one(user, {
+		fields: [workspaceCacheSnapshots.createdBy],
+		references: [user.id],
+	}),
+}));
+
+export const actionInvocationEventsRelations = relations(actionInvocationEvents, ({ one }) => ({
+	actionInvocation: one(actionInvocations, {
+		fields: [actionInvocationEvents.actionInvocationId],
+		references: [actionInvocations.id],
+	}),
+}));
+
+export const resumeIntentsRelations = relations(resumeIntents, ({ one }) => ({
+	originSession: one(sessions, {
+		fields: [resumeIntents.originSessionId],
+		references: [sessions.id],
+	}),
+	actionInvocation: one(actionInvocations, {
+		fields: [resumeIntents.invocationId],
+		references: [actionInvocations.id],
 	}),
 }));

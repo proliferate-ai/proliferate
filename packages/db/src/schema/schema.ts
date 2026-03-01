@@ -1234,6 +1234,10 @@ export const actionInvocations = pgTable(
 			foreignColumns: [sessions.id],
 			name: "action_invocations_session_id_fkey",
 		}).onDelete("cascade"),
+		check(
+			"action_invocations_status_check",
+			sql`status = ANY (ARRAY['pending'::text, 'approved'::text, 'denied'::text, 'expired'::text, 'executing'::text, 'completed'::text, 'failed'::text])`,
+		),
 	],
 );
 
@@ -1452,6 +1456,68 @@ export const sessions = pgTable(
 		prUrls: jsonb("pr_urls"),
 		metrics: jsonb("metrics"),
 		latestTask: text("latest_task"),
+
+		// ── V1 fields ──────────────────────────────────────────────
+
+		// V1 session kind: manager | task | setup
+		kind: text("kind").default("task"),
+
+		// V1 runtime status: starting | running | paused | completed | failed | cancelled
+		runtimeStatus: text("runtime_status").default("starting"),
+
+		// V1 operator status: active | waiting_for_approval | needs_input | ready_for_review | errored | done
+		operatorStatus: text("operator_status").default("active"),
+
+		// V1 visibility: private | shared | org
+		visibility: text("visibility").default("private"),
+
+		// V1 worker linkage
+		workerId: uuid("worker_id").references((): AnyPgColumn => workers.id, {
+			onDelete: "set null",
+		}),
+		workerRunId: uuid("worker_run_id").references((): AnyPgColumn => workerRuns.id, {
+			onDelete: "set null",
+		}),
+
+		// V1 repo baseline linkage
+		repoBaselineId: uuid("repo_baseline_id").references((): AnyPgColumn => repoBaselines.id, {
+			onDelete: "set null",
+		}),
+		repoBaselineTargetId: uuid("repo_baseline_target_id").references(
+			(): AnyPgColumn => repoBaselineTargets.id,
+			{
+				onDelete: "set null",
+			},
+		),
+
+		// V1 capabilities version (incremented on capability row changes)
+		capabilitiesVersion: integer("capabilities_version").default(1),
+
+		// V1 lineage (continuation/rerun)
+		continuedFromSessionId: uuid("continued_from_session_id"),
+		rerunOfSessionId: uuid("rerun_of_session_id"),
+
+		// V1 manager replacement lineage
+		replacesSessionId: uuid("replaces_session_id"),
+		replacedBySessionId: uuid("replaced_by_session_id"),
+
+		// V1 last visible update (for unread computation)
+		lastVisibleUpdateAt: timestamp("last_visible_update_at", { withTimezone: true, mode: "date" }),
+
+		// V1 structured outcome (terminal task sessions)
+		outcomeJson: jsonb("outcome_json"),
+		outcomeVersion: integer("outcome_version"),
+		outcomePersistedAt: timestamp("outcome_persisted_at", { withTimezone: true, mode: "date" }),
+
+		// V1 archive/delete soft state
+		archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
+		archivedBy: text("archived_by").references((): AnyPgColumn => user.id, {
+			onDelete: "set null",
+		}),
+		deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
+		deletedBy: text("deleted_by").references((): AnyPgColumn => user.id, {
+			onDelete: "set null",
+		}),
 	},
 	(table) => [
 		index("idx_sessions_automation").using(
@@ -1514,6 +1580,26 @@ export const sessions = pgTable(
 			name: "sessions_parent_session_id_fkey",
 		}),
 		foreignKey({
+			columns: [table.continuedFromSessionId],
+			foreignColumns: [table.id],
+			name: "sessions_continued_from_session_id_fkey",
+		}).onDelete("set null"),
+		foreignKey({
+			columns: [table.rerunOfSessionId],
+			foreignColumns: [table.id],
+			name: "sessions_rerun_of_session_id_fkey",
+		}).onDelete("set null"),
+		foreignKey({
+			columns: [table.replacesSessionId],
+			foreignColumns: [table.id],
+			name: "sessions_replaces_session_id_fkey",
+		}).onDelete("set null"),
+		foreignKey({
+			columns: [table.replacedBySessionId],
+			foreignColumns: [table.id],
+			name: "sessions_replaced_by_session_id_fkey",
+		}).onDelete("set null"),
+		foreignKey({
 			columns: [table.automationId],
 			foreignColumns: [automations.id],
 			name: "sessions_automation_id_fkey",
@@ -1532,6 +1618,59 @@ export const sessions = pgTable(
 			"sessions_sandbox_provider_check",
 			sql`sandbox_provider = ANY (ARRAY['modal'::text, 'e2b'::text])`,
 		),
+		check(
+			"sessions_kind_check",
+			sql`kind = ANY (ARRAY['manager'::text, 'task'::text, 'setup'::text])`,
+		),
+		check(
+			"sessions_runtime_status_check",
+			sql`runtime_status = ANY (ARRAY['starting'::text, 'running'::text, 'paused'::text, 'completed'::text, 'failed'::text, 'cancelled'::text])`,
+		),
+		check(
+			"sessions_operator_status_check",
+			sql`operator_status = ANY (ARRAY['active'::text, 'waiting_for_approval'::text, 'needs_input'::text, 'ready_for_review'::text, 'errored'::text, 'done'::text])`,
+		),
+		check(
+			"sessions_visibility_v1_check",
+			sql`visibility = ANY (ARRAY['private'::text, 'shared'::text, 'org'::text])`,
+		),
+		check(
+			"sessions_manager_worker_run_null_check",
+			sql`(kind != 'manager'::text) OR (worker_run_id IS NULL)`,
+		),
+		check(
+			"sessions_manager_shape_check",
+			sql`(kind != 'manager'::text) OR (worker_id IS NOT NULL AND worker_run_id IS NULL AND continued_from_session_id IS NULL AND rerun_of_session_id IS NULL)`,
+		),
+		check(
+			"sessions_task_linkage_check",
+			sql`(kind != 'task'::text) OR (repo_id IS NOT NULL AND repo_baseline_id IS NOT NULL AND repo_baseline_target_id IS NOT NULL)`,
+		),
+		check(
+			"sessions_setup_requires_repo_check",
+			sql`(kind != 'setup'::text) OR (repo_id IS NOT NULL)`,
+		),
+
+		// V1 indexes
+		index("idx_sessions_kind").using("btree", table.kind.asc().nullsLast().op("text_ops")),
+		index("idx_sessions_runtime_status").using(
+			"btree",
+			table.runtimeStatus.asc().nullsLast().op("text_ops"),
+		),
+		index("idx_sessions_operator_status").using(
+			"btree",
+			table.operatorStatus.asc().nullsLast().op("text_ops"),
+		),
+		index("idx_sessions_worker").using("btree", table.workerId.asc().nullsLast().op("uuid_ops")),
+		index("idx_sessions_worker_run").using(
+			"btree",
+			table.workerRunId.asc().nullsLast().op("uuid_ops"),
+		),
+
+		// One non-terminal setup session per repo (partial unique)
+		uniqueIndex("uq_sessions_one_active_setup_per_repo")
+			.on(table.repoId)
+			.where(sql`kind = 'setup' AND runtime_status NOT IN ('completed', 'failed', 'cancelled')`),
 	],
 );
 
@@ -2039,5 +2178,674 @@ export const configurationSecrets = pgTable(
 			columns: [table.configurationId, table.secretId],
 			name: "configuration_secrets_pkey",
 		}),
+	],
+);
+
+// ============================================
+// V1: Workers
+// ============================================
+
+export const workers = pgTable(
+	"workers",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id").notNull(),
+		name: text("name").notNull(),
+		objective: text("objective"),
+		status: text("status").notNull().default("active"),
+		managerSessionId: uuid("manager_session_id").notNull(),
+		modelId: text("model_id"),
+		computeProfile: text("compute_profile"),
+		lastWakeAt: timestamp("last_wake_at", { withTimezone: true, mode: "date" }),
+		lastCompletedRunAt: timestamp("last_completed_run_at", { withTimezone: true, mode: "date" }),
+		lastErrorCode: text("last_error_code"),
+		pausedAt: timestamp("paused_at", { withTimezone: true, mode: "date" }),
+		pausedBy: text("paused_by"),
+		createdBy: text("created_by"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_workers_org").using("btree", table.organizationId.asc().nullsLast().op("text_ops")),
+		index("idx_workers_status").using("btree", table.status.asc().nullsLast().op("text_ops")),
+		index("idx_workers_manager_session").using(
+			"btree",
+			table.managerSessionId.asc().nullsLast().op("uuid_ops"),
+		),
+		unique("uq_workers_manager_session").on(table.managerSessionId),
+		check(
+			"workers_status_check",
+			sql`status = ANY (ARRAY['active'::text, 'paused'::text, 'degraded'::text, 'failed'::text])`,
+		),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "workers_organization_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [user.id],
+			name: "workers_created_by_fkey",
+		}),
+		foreignKey({
+			columns: [table.managerSessionId],
+			foreignColumns: [sessions.id],
+			name: "workers_manager_session_id_fkey",
+		}),
+	],
+);
+
+// ============================================
+// V1: Wake Events
+// ============================================
+
+export const wakeEvents = pgTable(
+	"wake_events",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		workerId: uuid("worker_id").notNull(),
+		organizationId: text("organization_id").notNull(),
+		source: text("source").notNull(),
+		status: text("status").notNull().default("queued"),
+		coalescedIntoWakeEventId: uuid("coalesced_into_wake_event_id"),
+		payloadJson: jsonb("payload_json"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+		claimedAt: timestamp("claimed_at", { withTimezone: true, mode: "date" }),
+		consumedAt: timestamp("consumed_at", { withTimezone: true, mode: "date" }),
+		failedAt: timestamp("failed_at", { withTimezone: true, mode: "date" }),
+	},
+	(table) => [
+		index("idx_wake_events_worker").using("btree", table.workerId.asc().nullsLast().op("uuid_ops")),
+		index("idx_wake_events_status").using("btree", table.status.asc().nullsLast().op("text_ops")),
+		index("idx_wake_events_worker_status").using(
+			"btree",
+			table.workerId.asc().nullsLast().op("uuid_ops"),
+			table.status.asc().nullsLast().op("text_ops"),
+		),
+		index("idx_wake_events_org").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
+		),
+		check(
+			"wake_events_source_check",
+			sql`source = ANY (ARRAY['tick'::text, 'webhook'::text, 'manual'::text, 'manual_message'::text])`,
+		),
+		check(
+			"wake_events_status_check",
+			sql`status = ANY (ARRAY['queued'::text, 'claimed'::text, 'consumed'::text, 'coalesced'::text, 'cancelled'::text, 'failed'::text])`,
+		),
+		foreignKey({
+			columns: [table.workerId],
+			foreignColumns: [workers.id],
+			name: "wake_events_worker_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "wake_events_organization_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
+// ============================================
+// V1: Worker Runs
+// ============================================
+
+export const workerRuns = pgTable(
+	"worker_runs",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		workerId: uuid("worker_id").notNull(),
+		organizationId: text("organization_id").notNull(),
+		managerSessionId: uuid("manager_session_id").notNull(),
+		wakeEventId: uuid("wake_event_id").notNull(),
+		status: text("status").notNull().default("queued"),
+		summary: text("summary"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+		startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+		completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+	},
+	(table) => [
+		index("idx_worker_runs_worker").using("btree", table.workerId.asc().nullsLast().op("uuid_ops")),
+		index("idx_worker_runs_status").using("btree", table.status.asc().nullsLast().op("text_ops")),
+		index("idx_worker_runs_org").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
+		),
+		unique("uq_worker_runs_wake_event").on(table.wakeEventId),
+		uniqueIndex("uq_worker_runs_one_active_per_worker")
+			.on(table.workerId)
+			.where(sql`status NOT IN ('completed', 'failed', 'cancelled', 'health_degraded')`),
+		check(
+			"worker_runs_status_check",
+			sql`status = ANY (ARRAY['queued'::text, 'running'::text, 'completed'::text, 'failed'::text, 'cancelled'::text, 'health_degraded'::text])`,
+		),
+		foreignKey({
+			columns: [table.workerId],
+			foreignColumns: [workers.id],
+			name: "worker_runs_worker_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "worker_runs_organization_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.managerSessionId],
+			foreignColumns: [sessions.id],
+			name: "worker_runs_manager_session_id_fkey",
+		}),
+		foreignKey({
+			columns: [table.wakeEventId],
+			foreignColumns: [wakeEvents.id],
+			name: "worker_runs_wake_event_id_fkey",
+		}),
+	],
+);
+
+// ============================================
+// V1: Worker Run Events
+// ============================================
+
+export const workerRunEvents = pgTable(
+	"worker_run_events",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		workerRunId: uuid("worker_run_id").notNull(),
+		workerId: uuid("worker_id").notNull(),
+		eventIndex: integer("event_index").notNull(),
+		eventType: text("event_type").notNull(),
+		summaryText: text("summary_text"),
+		payloadJson: jsonb("payload_json"),
+		payloadVersion: integer("payload_version").default(1),
+		sessionId: uuid("session_id"),
+		actionInvocationId: uuid("action_invocation_id"),
+		dedupeKey: text("dedupe_key"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_worker_run_events_run").using(
+			"btree",
+			table.workerRunId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_worker_run_events_worker").using(
+			"btree",
+			table.workerId.asc().nullsLast().op("uuid_ops"),
+		),
+		unique("uq_worker_run_events_run_index").on(table.workerRunId, table.eventIndex),
+		uniqueIndex("uq_worker_run_events_dedupe")
+			.on(table.workerRunId, table.dedupeKey)
+			.where(sql`dedupe_key IS NOT NULL`),
+		foreignKey({
+			columns: [table.workerRunId],
+			foreignColumns: [workerRuns.id],
+			name: "worker_run_events_worker_run_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.workerId],
+			foreignColumns: [workers.id],
+			name: "worker_run_events_worker_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
+// ============================================
+// V1: Session Capabilities
+// ============================================
+
+export const sessionCapabilities = pgTable(
+	"session_capabilities",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		sessionId: uuid("session_id").notNull(),
+		capabilityKey: text("capability_key").notNull(),
+		mode: text("mode").notNull().default("allow"),
+		scope: jsonb("scope"),
+		origin: text("origin"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_session_capabilities_session").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
+		),
+		unique("uq_session_capabilities_session_key").on(table.sessionId, table.capabilityKey),
+		check(
+			"session_capabilities_mode_check",
+			sql`mode = ANY (ARRAY['allow'::text, 'require_approval'::text, 'deny'::text])`,
+		),
+		foreignKey({
+			columns: [table.sessionId],
+			foreignColumns: [sessions.id],
+			name: "session_capabilities_session_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
+// ============================================
+// V1: Session Skills
+// ============================================
+
+export const sessionSkills = pgTable(
+	"session_skills",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		sessionId: uuid("session_id").notNull(),
+		skillKey: text("skill_key").notNull(),
+		configJson: jsonb("config_json"),
+		origin: text("origin"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_session_skills_session").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
+		),
+		unique("uq_session_skills_session_key").on(table.sessionId, table.skillKey),
+		foreignKey({
+			columns: [table.sessionId],
+			foreignColumns: [sessions.id],
+			name: "session_skills_session_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
+// ============================================
+// V1: Session Messages
+// ============================================
+
+export const sessionMessages = pgTable(
+	"session_messages",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		sessionId: uuid("session_id").notNull(),
+		direction: text("direction").notNull(),
+		messageType: text("message_type").notNull(),
+		payloadJson: jsonb("payload_json").notNull(),
+		deliveryState: text("delivery_state").notNull().default("queued"),
+		dedupeKey: text("dedupe_key"),
+		queuedAt: timestamp("queued_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+		deliverAfter: timestamp("deliver_after", { withTimezone: true, mode: "date" }),
+		deliveredAt: timestamp("delivered_at", { withTimezone: true, mode: "date" }),
+		consumedAt: timestamp("consumed_at", { withTimezone: true, mode: "date" }),
+		failedAt: timestamp("failed_at", { withTimezone: true, mode: "date" }),
+		failureReason: text("failure_reason"),
+		senderUserId: text("sender_user_id"),
+		senderSessionId: uuid("sender_session_id"),
+	},
+	(table) => [
+		index("idx_session_messages_session").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_session_messages_delivery_state").using(
+			"btree",
+			table.deliveryState.asc().nullsLast().op("text_ops"),
+		),
+		index("idx_session_messages_session_state").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
+			table.deliveryState.asc().nullsLast().op("text_ops"),
+		),
+		check(
+			"session_messages_direction_check",
+			sql`direction = ANY (ARRAY['user_to_manager'::text, 'user_to_task'::text, 'manager_to_task'::text, 'task_to_manager'::text])`,
+		),
+		check(
+			"session_messages_delivery_state_check",
+			sql`delivery_state = ANY (ARRAY['queued'::text, 'delivered'::text, 'consumed'::text, 'failed'::text])`,
+		),
+		foreignKey({
+			columns: [table.sessionId],
+			foreignColumns: [sessions.id],
+			name: "session_messages_session_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
+// ============================================
+// V1: Session ACL
+// ============================================
+
+export const sessionAcl = pgTable(
+	"session_acl",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		sessionId: uuid("session_id").notNull(),
+		userId: text("user_id").notNull(),
+		role: text("role").notNull(),
+		grantedBy: text("granted_by"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_session_acl_session").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_session_acl_user").using("btree", table.userId.asc().nullsLast().op("text_ops")),
+		unique("uq_session_acl_session_user").on(table.sessionId, table.userId),
+		check(
+			"session_acl_role_check",
+			sql`role = ANY (ARRAY['viewer'::text, 'editor'::text, 'reviewer'::text])`,
+		),
+		foreignKey({
+			columns: [table.sessionId],
+			foreignColumns: [sessions.id],
+			name: "session_acl_session_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.userId],
+			foreignColumns: [user.id],
+			name: "session_acl_user_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
+// ============================================
+// V1: Session User State
+// ============================================
+
+export const sessionUserState = pgTable(
+	"session_user_state",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		sessionId: uuid("session_id").notNull(),
+		userId: text("user_id").notNull(),
+		lastViewedAt: timestamp("last_viewed_at", { withTimezone: true, mode: "date" }),
+		archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_session_user_state_session").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_session_user_state_user").using(
+			"btree",
+			table.userId.asc().nullsLast().op("text_ops"),
+		),
+		unique("uq_session_user_state_session_user").on(table.sessionId, table.userId),
+		foreignKey({
+			columns: [table.sessionId],
+			foreignColumns: [sessions.id],
+			name: "session_user_state_session_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.userId],
+			foreignColumns: [user.id],
+			name: "session_user_state_user_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
+// ============================================
+// V1: Session Pull Requests
+// ============================================
+
+export const sessionPullRequests = pgTable(
+	"session_pull_requests",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		sessionId: uuid("session_id").notNull(),
+		repoId: uuid("repo_id").notNull(),
+		branchName: text("branch_name").notNull(),
+		provider: text("provider").notNull(),
+		pullRequestNumber: integer("pull_request_number"),
+		pullRequestUrl: text("pull_request_url"),
+		pullRequestState: text("pull_request_state"),
+		headCommitSha: text("head_commit_sha"),
+		continuedFromSessionId: uuid("continued_from_session_id"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_session_pull_requests_session").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_session_pull_requests_repo").using(
+			"btree",
+			table.repoId.asc().nullsLast().op("uuid_ops"),
+		),
+		check(
+			"session_pull_requests_state_check",
+			sql`pull_request_state IS NULL OR pull_request_state = ANY (ARRAY['open'::text, 'closed'::text, 'merged'::text, 'draft'::text])`,
+		),
+		foreignKey({
+			columns: [table.sessionId],
+			foreignColumns: [sessions.id],
+			name: "session_pull_requests_session_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.repoId],
+			foreignColumns: [repos.id],
+			name: "session_pull_requests_repo_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
+// ============================================
+// V1: Repo Baselines
+// ============================================
+
+export const repoBaselines = pgTable(
+	"repo_baselines",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		repoId: uuid("repo_id").notNull(),
+		organizationId: text("organization_id").notNull(),
+		status: text("status").notNull().default("validating"),
+		version: text("version"),
+		snapshotId: text("snapshot_id"),
+		sandboxProvider: text("sandbox_provider"),
+		setupSessionId: uuid("setup_session_id"),
+		installCommands: jsonb("install_commands"),
+		runCommands: jsonb("run_commands"),
+		testCommands: jsonb("test_commands"),
+		serviceCommands: jsonb("service_commands"),
+		errorMessage: text("error_message"),
+		createdBy: text("created_by"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_repo_baselines_repo").using("btree", table.repoId.asc().nullsLast().op("uuid_ops")),
+		uniqueIndex("uq_repo_baselines_one_active_per_repo")
+			.on(table.repoId)
+			.where(sql`status = 'ready'`),
+		check(
+			"repo_baselines_status_check",
+			sql`status = ANY (ARRAY['validating'::text, 'ready'::text, 'stale'::text, 'failed'::text])`,
+		),
+		foreignKey({
+			columns: [table.repoId],
+			foreignColumns: [repos.id],
+			name: "repo_baselines_repo_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "repo_baselines_organization_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [user.id],
+			name: "repo_baselines_created_by_fkey",
+		}),
+	],
+);
+
+// ============================================
+// V1: Repo Baseline Targets
+// ============================================
+
+export const repoBaselineTargets = pgTable(
+	"repo_baseline_targets",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		repoBaselineId: uuid("repo_baseline_id").notNull(),
+		name: text("name").notNull(),
+		description: text("description"),
+		configJson: jsonb("config_json"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_repo_baseline_targets_baseline").using(
+			"btree",
+			table.repoBaselineId.asc().nullsLast().op("uuid_ops"),
+		),
+		foreignKey({
+			columns: [table.repoBaselineId],
+			foreignColumns: [repoBaselines.id],
+			name: "repo_baseline_targets_repo_baseline_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
+// ============================================
+// V1: Workspace Cache Snapshots (optimization-only)
+// ============================================
+
+export const workspaceCacheSnapshots = pgTable(
+	"workspace_cache_snapshots",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id").notNull(),
+		repoId: uuid("repo_id").notNull(),
+		repoBaselineId: uuid("repo_baseline_id"),
+		repoBaselineTargetId: uuid("repo_baseline_target_id"),
+		cacheKey: text("cache_key").notNull(),
+		snapshotId: text("snapshot_id").notNull(),
+		sandboxProvider: text("sandbox_provider"),
+		metadataJson: jsonb("metadata_json"),
+		createdBy: text("created_by"),
+		lastAccessedAt: timestamp("last_accessed_at", { withTimezone: true, mode: "date" }),
+		expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_workspace_cache_snapshots_org").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
+		),
+		index("idx_workspace_cache_snapshots_repo").using(
+			"btree",
+			table.repoId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_workspace_cache_snapshots_baseline").using(
+			"btree",
+			table.repoBaselineId.asc().nullsLast().op("uuid_ops"),
+		),
+		unique("uq_workspace_cache_snapshots_cache_key").on(table.cacheKey),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "workspace_cache_snapshots_organization_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.repoId],
+			foreignColumns: [repos.id],
+			name: "workspace_cache_snapshots_repo_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.repoBaselineId],
+			foreignColumns: [repoBaselines.id],
+			name: "workspace_cache_snapshots_repo_baseline_id_fkey",
+		}).onDelete("set null"),
+		foreignKey({
+			columns: [table.repoBaselineTargetId],
+			foreignColumns: [repoBaselineTargets.id],
+			name: "workspace_cache_snapshots_repo_baseline_target_id_fkey",
+		}).onDelete("set null"),
+		foreignKey({
+			columns: [table.createdBy],
+			foreignColumns: [user.id],
+			name: "workspace_cache_snapshots_created_by_fkey",
+		}),
+	],
+);
+
+// ============================================
+// V1: Action Invocation Events
+// ============================================
+
+export const actionInvocationEvents = pgTable(
+	"action_invocation_events",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		actionInvocationId: uuid("action_invocation_id").notNull(),
+		eventType: text("event_type").notNull(),
+		actorUserId: text("actor_user_id"),
+		payloadJson: jsonb("payload_json"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_action_invocation_events_invocation").using(
+			"btree",
+			table.actionInvocationId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_action_invocation_events_type").using(
+			"btree",
+			table.eventType.asc().nullsLast().op("text_ops"),
+		),
+		foreignKey({
+			columns: [table.actionInvocationId],
+			foreignColumns: [actionInvocations.id],
+			name: "action_invocation_events_action_invocation_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
+// ============================================
+// V1: Resume Intents
+// ============================================
+
+export const resumeIntents = pgTable(
+	"resume_intents",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		originSessionId: uuid("origin_session_id").notNull(),
+		invocationId: uuid("invocation_id").notNull(),
+		status: text("status").notNull().default("queued"),
+		payloadJson: jsonb("payload_json"),
+		errorMessage: text("error_message"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+		claimedAt: timestamp("claimed_at", { withTimezone: true, mode: "date" }),
+		resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: "date" }),
+	},
+	(table) => [
+		index("idx_resume_intents_origin_session").using(
+			"btree",
+			table.originSessionId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_resume_intents_invocation").using(
+			"btree",
+			table.invocationId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_resume_intents_status").using(
+			"btree",
+			table.status.asc().nullsLast().op("text_ops"),
+		),
+		uniqueIndex("uq_resume_intents_one_active")
+			.on(table.originSessionId, table.invocationId)
+			.where(sql`status NOT IN ('satisfied', 'continued', 'resume_failed')`),
+		check(
+			"resume_intents_status_check",
+			sql`status = ANY (ARRAY['queued'::text, 'claimed'::text, 'resuming'::text, 'satisfied'::text, 'continued'::text, 'resume_failed'::text])`,
+		),
+		foreignKey({
+			columns: [table.originSessionId],
+			foreignColumns: [sessions.id],
+			name: "resume_intents_origin_session_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.invocationId],
+			foreignColumns: [actionInvocations.id],
+			name: "resume_intents_invocation_id_fkey",
+		}).onDelete("cascade"),
 	],
 );

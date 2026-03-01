@@ -32,6 +32,8 @@ export * as outbox from "./outbox";
 export * as notifications from "./notifications";
 export * as webhookInbox from "./webhook-inbox";
 export * as pollGroups from "./poll-groups";
+export * as workers from "./workers";
+export * as wakes from "./wakes";
 
 // Legacy exports (to be migrated)
 export {

@@ -284,6 +284,34 @@
       "when": 1772205000000,
       "tag": "0036_session_notification_notified_at",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1772365158266,
+      "tag": "0038_mute_stardust",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1772366860735,
+      "tag": "0039_pretty_darkstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1772366998712,
+      "tag": "0040_flippant_dracula",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1772368053107,
+      "tag": "0041_motionless_slapstick",
+      "breakpoints": true
     }
   ]
 }
