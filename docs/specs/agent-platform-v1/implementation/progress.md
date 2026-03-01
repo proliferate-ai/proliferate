@@ -79,7 +79,7 @@
   - `pnpm lint` ⚠️ deferred in this worktree (`node_modules` missing).
   - `pnpm build` ⚠️ fails locally due required env vars for `apps/web` build-time validation.
 - open comments:
-  - CI and automated review pending.
+  - Pending CI rerun after approval route ownership + terminal side-effect resilience fixes.
 - fixes applied:
   - Added V1 task-session create/lookup helpers and unified service entrypoint.
   - Added terminal task follow-up routing contract: live task -> same session; terminal task -> ad-hoc continuation/rerun with `workerId=null` and `workerRunId=null`.
@@ -121,6 +121,8 @@
   - Added terminal blocked-path resume-intent queuing (`completed|failed|denied|expired`) only when origin session is still waiting for approval.
   - Added gateway-layer enforcement for session visibility + ACL role approval authority checks.
   - Added service tests covering capability precedence, pending semantics, revalidation, terminal resume-intent timing, and viewer ACL denial.
+  - Hardened approve/deny routes to require invocation ownership by the path session before authority checks.
+  - Made terminal action side effects best-effort so `markCompleted`/`markFailed` cannot fail after durable status transitions.
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Resolve CI/human/Greptile feedback.
