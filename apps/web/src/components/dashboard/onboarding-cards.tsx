@@ -221,7 +221,7 @@ export function OnboardingCards({ hideHeader }: { hideHeader?: boolean } = {}) {
 				ctaLabel="Create"
 				onCtaClick={async () => {
 					const automation = await createAutomationMutation.mutateAsync({});
-					router.push(`/dashboard/automations/${automation.id}`);
+					router.push(`/coworkers/${automation.id}`);
 				}}
 				isLoading={createAutomationMutation.isPending}
 				onDismiss={() => dismissOnboardingCard("automation")}

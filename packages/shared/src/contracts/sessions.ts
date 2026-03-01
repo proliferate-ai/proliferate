@@ -25,8 +25,11 @@ export const SessionSchema = z.object({
 	repoId: z.string().uuid().nullable(),
 	organizationId: z.string(),
 	createdBy: z.string().nullable(),
+	kind: z.enum(["manager", "task", "setup"]).nullable().optional(),
 	sessionType: z.string().nullable(),
 	status: z.string().nullable(), // DB returns string, not enum
+	runtimeStatus: z.string().nullable().optional(),
+	operatorStatus: z.string().nullable().optional(),
 	sandboxId: z.string().nullable(),
 	snapshotId: z.string().nullable(),
 	configurationId: z.string().uuid().nullable(),

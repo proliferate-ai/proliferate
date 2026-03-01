@@ -32,6 +32,7 @@ export const sessionsRouter = {
 				.object({
 					repoId: z.string().uuid().optional(),
 					status: z.string().optional(),
+					kinds: z.array(z.enum(["manager", "task", "setup"])).optional(),
 					limit: z.number().int().min(1).max(50).optional(),
 					excludeSetup: z.boolean().optional(),
 					excludeCli: z.boolean().optional(),
@@ -45,6 +46,7 @@ export const sessionsRouter = {
 			const sessionsList = await sessions.listSessions(context.orgId, {
 				repoId: input?.repoId,
 				status: input?.status,
+				kinds: input?.kinds,
 				limit: input?.limit,
 				excludeSetup: input?.excludeSetup,
 				excludeCli: input?.excludeCli,

@@ -84,6 +84,10 @@ export async function listByOrganization(
 		conditions.push(eq(sessions.status, filters.status));
 	}
 
+	if (filters?.kinds && filters.kinds.length > 0) {
+		conditions.push(inArray(sessions.kind, filters.kinds));
+	}
+
 	if (filters?.excludeSetup) {
 		conditions.push(ne(sessions.sessionType, "setup"));
 	}

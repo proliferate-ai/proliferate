@@ -64,6 +64,7 @@ export interface UpdateSessionInput {
 export interface ListSessionsFilters {
 	repoId?: string;
 	status?: string;
+	kinds?: Array<"manager" | "task" | "setup">;
 	limit?: number;
 	excludeSetup?: boolean;
 	excludeCli?: boolean;
@@ -78,6 +79,7 @@ export interface ListSessionsFilters {
 export interface ListSessionsOptions {
 	repoId?: string;
 	status?: string;
+	kinds?: Array<"manager" | "task" | "setup">;
 	limit?: number;
 	excludeSetup?: boolean;
 	excludeCli?: boolean;

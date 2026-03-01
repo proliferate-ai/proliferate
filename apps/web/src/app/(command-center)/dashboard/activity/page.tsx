@@ -88,7 +88,7 @@ export default function ActivityPage() {
 									href={
 										run.session_id
 											? `/workspace/${run.session_id}?runId=${run.id}`
-											: `/dashboard/automations/${run.automation_id}/events`
+											: `/coworkers/${run.automation_id}/events`
 									}
 								>
 									<div className="flex items-center px-4 py-2.5 border-b border-border/50 hover:bg-muted/50 transition-colors text-sm cursor-pointer last:border-0 gap-3">

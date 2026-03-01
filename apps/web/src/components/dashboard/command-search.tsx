@@ -12,7 +12,7 @@ import {
 import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
 import { useSessions } from "@/hooks/use-sessions";
 import { useDashboardStore } from "@/stores/dashboard";
-import { Activity, Plus, Search, User } from "lucide-react";
+import { Blocks, Home, Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { AutomationRow } from "./automation-row";
@@ -28,7 +28,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
 
 	// Fetch sessions
-	const { data: sessions } = useSessions();
+	const { data: sessions } = useSessions({ kinds: ["task"], excludeSetup: true });
 
 	// Fetch automations
 	const { data: automations = [] } = useAutomations();
@@ -36,20 +36,22 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 	// Create automation mutation
 	const createAutomation = useCreateAutomation();
 
-	// Filter out setup sessions
-	const filteredSessions = sessions?.filter((session) => session.sessionType !== "setup");
+	// Sessions is task-first in V1; fallback excludes setup if kind is absent.
+	const filteredSessions = sessions?.filter((session) =>
+		session.kind ? session.kind === "task" : session.sessionType !== "setup",
+	);
 
 	const handleNewSession = useCallback(() => {
 		clearPendingPrompt();
 		setActiveSession(null);
-		router.push("/dashboard");
+		router.push("/sessions");
 		onOpenChange(false);
 	}, [clearPendingPrompt, setActiveSession, router, onOpenChange]);
 
 	const handleNewAutomation = useCallback(async () => {
 		try {
 			const automation = await createAutomation.mutateAsync({});
-			router.push(`/dashboard/automations/${automation.id}`);
+			router.push(`/coworkers/${automation.id}`);
 		} catch (error) {
 			console.error("Failed to create automation:", error);
 		}
@@ -68,7 +70,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 
 	const handleSelectAutomation = useCallback(
 		(automationId: string) => {
-			router.push(`/dashboard/automations/${automationId}`);
+			router.push(`/coworkers/${automationId}`);
 			onOpenChange(false);
 		},
 		[router, onOpenChange],
@@ -76,7 +78,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 
 	return (
 		<CommandDialog open={open} onOpenChange={onOpenChange}>
-			<CommandInput autoFocus placeholder="Search sessions and automations..." />
+			<CommandInput autoFocus placeholder="Search sessions and coworkers..." />
 			<CommandList>
 				<CommandEmpty>No results found.</CommandEmpty>
 
@@ -88,7 +90,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 					</CommandItem>
 					<CommandItem onSelect={handleNewAutomation}>
 						<Plus className="mr-2 h-4 w-4" />
-						<span>New Automation</span>
+						<span>New Coworker</span>
 					</CommandItem>
 				</CommandGroup>
 
@@ -98,21 +100,21 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 				<CommandGroup heading="Navigate">
 					<CommandItem
 						onSelect={() => {
-							router.push("/dashboard/my-work");
+							router.push("/");
 							onOpenChange(false);
 						}}
 					>
-						<User className="mr-2 h-4 w-4" />
-						<span>My Work</span>
+						<Home className="mr-2 h-4 w-4" />
+						<span>Home</span>
 					</CommandItem>
 					<CommandItem
 						onSelect={() => {
-							router.push("/dashboard/activity");
+							router.push("/coworkers");
 							onOpenChange(false);
 						}}
 					>
-						<Activity className="mr-2 h-4 w-4" />
-						<span>Activity</span>
+						<Blocks className="mr-2 h-4 w-4" />
+						<span>Coworkers</span>
 					</CommandItem>
 				</CommandGroup>
 
@@ -138,9 +140,9 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 					</CommandGroup>
 				)}
 
-				{/* Automations */}
+				{/* Coworkers */}
 				{automations.length > 0 && (
-					<CommandGroup heading="Automations">
+					<CommandGroup heading="Coworkers">
 						{automations.slice(0, 10).map((automation) => (
 							<CommandItem
 								key={automation.id}

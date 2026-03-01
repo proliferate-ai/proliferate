@@ -8,7 +8,7 @@ export default function TriggersPage() {
 	const router = useRouter();
 
 	useEffect(() => {
-		router.replace("/dashboard/automations");
+		router.replace("/coworkers");
 	}, [router]);
 
 	return (

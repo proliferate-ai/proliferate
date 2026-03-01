@@ -367,17 +367,13 @@ export default function AutomationRunsPage({
 	return (
 		<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
 			<div className="w-full max-w-5xl mx-auto px-6 py-6">
-				<PageBackLink
-					href={`/dashboard/automations/${automationId}`}
-					label="Automation"
-					className="mb-3"
-				/>
+				<PageBackLink href={`/coworkers/${automationId}`} label="Coworker" className="mb-3" />
 
 				<div className="mb-5 flex flex-wrap items-start justify-between gap-3">
 					<div>
 						<h1 className="text-lg font-semibold tracking-tight text-foreground">Runs</h1>
 						<p className="mt-1 text-sm text-muted-foreground">
-							{automation?.name || "Automation"} · {total} {runLabel}
+							{automation?.name || "Coworker"} · {total} {runLabel}
 						</p>
 					</div>
 					<Button
@@ -442,7 +438,7 @@ export default function AutomationRunsPage({
 						</div>
 						<p className="mt-3 text-sm font-medium text-foreground">No runs yet</p>
 						<p className="mt-1 text-xs text-muted-foreground">
-							Runs will appear here when this automation is triggered.
+							Runs will appear here when this coworker is triggered.
 						</p>
 					</div>
 				) : (

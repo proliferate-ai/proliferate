@@ -58,7 +58,7 @@ export function AutomationListRow({
 
 	return (
 		<Link
-			href={`/dashboard/automations/${id}`}
+			href={`/coworkers/${id}`}
 			className="group flex items-center gap-4 px-4 py-3 border-b border-border/50 hover:bg-muted/50 transition-colors text-sm last:border-0"
 		>
 			{/* Status + Name */}

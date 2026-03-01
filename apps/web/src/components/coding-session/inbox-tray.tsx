@@ -241,7 +241,7 @@ function getRunStatusInfo(status: string) {
 function RunCard({ run }: { run: PendingRunSummary }) {
 	const statusInfo = getRunStatusInfo(run.status);
 	const StatusIcon = statusInfo.icon;
-	const viewHref = `/dashboard/automations/${run.automation_id}/events?runId=${run.id}`;
+	const viewHref = `/coworkers/${run.automation_id}/events?runId=${run.id}`;
 
 	return (
 		<div className="flex items-center gap-3 rounded-lg border bg-muted/50 px-3 py-2 text-sm">

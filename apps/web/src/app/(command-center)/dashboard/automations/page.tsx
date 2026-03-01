@@ -89,10 +89,10 @@ export default function AutomationsPage() {
 			const automation = await createAutomation.mutateAsync({});
 			setPickerOpen(false);
 			startTransition(() => {
-				router.push(`/dashboard/automations/${automation.id}`);
+				router.push(`/coworkers/${automation.id}`);
 			});
 		} catch (err) {
-			setCreateError(err instanceof Error ? err.message : "Failed to create automation");
+			setCreateError(err instanceof Error ? err.message : "Failed to create coworker");
 		}
 	};
 
@@ -120,11 +120,11 @@ export default function AutomationsPage() {
 			});
 			setPickerOpen(false);
 			startTransition(() => {
-				router.push(`/dashboard/automations/${automation.id}`);
+				router.push(`/coworkers/${automation.id}`);
 			});
 		} catch (err) {
 			setCreateError(
-				err instanceof Error ? err.message : "Failed to create automation from template",
+				err instanceof Error ? err.message : "Failed to create coworker from template",
 			);
 		}
 	};
@@ -133,8 +133,8 @@ export default function AutomationsPage() {
 
 	return (
 		<PageShell
-			title="Automations"
-			subtitle="Event-driven agents that respond to triggers across your stack."
+			title="Coworkers"
+			subtitle="Durable background agents that monitor sources and spawn task sessions."
 			actions={
 				<>
 					<Button
@@ -166,8 +166,8 @@ export default function AutomationsPage() {
 				<PageEmptyState
 					illustration={<AutomationIllustration />}
 					badge={<PlusBadge />}
-					title="No automations set up"
-					description="Create workflows that automatically triage, assign, and resolve issues as they come in."
+					title="No coworkers created"
+					description="Create a coworker to monitor sources and manage async engineering work."
 				>
 					<Button
 						variant="outline"
@@ -230,8 +230,8 @@ export default function AutomationsPage() {
 						<div className="text-center py-12">
 							<p className="text-sm text-muted-foreground">
 								{searchQuery.trim()
-									? "No automations match your search."
-									: `No ${activeTab} automations.`}
+									? "No coworkers match your search."
+									: `No ${activeTab} coworkers.`}
 							</p>
 						</div>
 					) : (

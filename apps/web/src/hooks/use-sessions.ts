@@ -8,6 +8,7 @@ import { useCallback } from "react";
 
 export function useSessions(params?: {
 	status?: string;
+	kinds?: Array<"manager" | "task" | "setup">;
 	repoId?: string;
 	limit?: number;
 	excludeSetup?: boolean;

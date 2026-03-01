@@ -30,7 +30,7 @@ export function AutomationCard({
 	const timeAgo = formatDistanceToNow(new Date(updatedAt), { addSuffix: true });
 
 	return (
-		<Link href={`/dashboard/automations/${id}`}>
+		<Link href={`/coworkers/${id}`}>
 			<div
 				className={cn(
 					"group p-4 rounded-lg border border-border bg-card",

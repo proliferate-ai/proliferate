@@ -18,11 +18,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 const PAGE_TITLES: Record<string, string> = {
+	"/": "Home",
 	"/dashboard": "Home",
-	"/dashboard/inbox": "Inbox",
+	"/sessions": "Sessions",
 	"/dashboard/sessions": "Sessions",
-	"/dashboard/automations": "Automations",
-	"/dashboard/repos": "Repos",
+	"/coworkers": "Coworkers",
+	"/dashboard/automations": "Coworkers",
+	"/integrations": "Integrations",
 	"/dashboard/integrations": "Integrations",
 	"/dashboard/actions": "Actions",
 	"/dashboard/triggers": "Triggers",
@@ -39,7 +41,7 @@ const PAGE_TITLES: Record<string, string> = {
 
 function getPageTitle(pathname: string): string {
 	if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
-	// For detail pages like /dashboard/automations/[id], use the parent title
+	// For detail pages like /coworkers/[id], use the parent title.
 	for (const [path, title] of Object.entries(PAGE_TITLES)) {
 		if (pathname.startsWith(`${path}/`)) return title;
 	}

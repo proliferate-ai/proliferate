@@ -46,6 +46,10 @@ interface ToSessionOptions {
 	includeInitialPrompt?: boolean;
 }
 
+function toSessionKind(kind: string | null): Session["kind"] {
+	return kind === "manager" || kind === "task" || kind === "setup" ? kind : null;
+}
+
 /**
  * Map a DB row (camelCase with repo) to API Session type (camelCase).
  */
@@ -55,8 +59,11 @@ export function toSession(row: SessionWithRepoRow, options?: ToSessionOptions): 
 		repoId: row.repoId,
 		organizationId: row.organizationId,
 		createdBy: row.createdBy,
+		kind: toSessionKind(row.kind),
 		sessionType: row.sessionType,
 		status: row.status,
+		runtimeStatus: row.runtimeStatus ?? null,
+		operatorStatus: row.operatorStatus ?? null,
 		sandboxId: row.sandboxId,
 		snapshotId: row.snapshotId,
 		configurationId: row.configurationId ?? null,
@@ -108,8 +115,11 @@ export function toSessionPartial(row: SessionRow): Omit<Session, "repo"> {
 		repoId: row.repoId,
 		organizationId: row.organizationId,
 		createdBy: row.createdBy,
+		kind: toSessionKind(row.kind),
 		sessionType: row.sessionType,
 		status: row.status,
+		runtimeStatus: row.runtimeStatus ?? null,
+		operatorStatus: row.operatorStatus ?? null,
 		sandboxId: row.sandboxId,
 		snapshotId: row.snapshotId,
 		configurationId: row.configurationId ?? null,

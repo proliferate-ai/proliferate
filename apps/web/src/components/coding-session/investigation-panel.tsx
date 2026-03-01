@@ -59,7 +59,7 @@ export function InvestigationPanel({ runId }: InvestigationPanelProps) {
 						<span className="text-sm font-medium">{statusDisplay.label}</span>
 					</div>
 					<Link
-						href={`/dashboard/automations/${run.automation_id}/events`}
+						href={`/coworkers/${run.automation_id}/events`}
 						className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
 					>
 						<AutomationsIcon className="h-3 w-3" />

@@ -295,7 +295,7 @@ export default function AutomationDetailPage({
 			}
 		},
 		onSuccess: () => {
-			router.push("/dashboard");
+			router.push("/coworkers");
 		},
 		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: orpc.automations.list.key() });
@@ -424,7 +424,7 @@ export default function AutomationDetailPage({
 						action: runId
 							? {
 									label: "View",
-									onClick: () => router.push(`/dashboard/automations/${id}/events?runId=${runId}`),
+									onClick: () => router.push(`/coworkers/${id}/events?runId=${runId}`),
 								}
 							: undefined,
 					});
@@ -455,7 +455,7 @@ export default function AutomationDetailPage({
 			<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto">
 				<div className="w-full max-w-4xl mx-auto px-6 py-8">
 					<Text variant="body" color="destructive">
-						Failed to load automation
+						Failed to load coworker
 					</Text>
 				</div>
 			</div>
@@ -486,7 +486,7 @@ export default function AutomationDetailPage({
 		<div className="bg-background flex flex-col grow min-h-0 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
 			<div className="w-full max-w-4xl mx-auto px-6 py-6">
 				{/* Back navigation */}
-				<PageBackLink href="/dashboard/automations" label="Automations" className="mb-3" />
+				<PageBackLink href="/coworkers" label="Coworkers" className="mb-3" />
 
 				{/* Header */}
 				<div className="flex items-center gap-3 mb-6">
@@ -511,7 +511,7 @@ export default function AutomationDetailPage({
 					<TooltipProvider delayDuration={300}>
 						<Tooltip>
 							<TooltipTrigger asChild>
-								<Link href={`/dashboard/automations/${id}/events`} className="ml-1">
+								<Link href={`/coworkers/${id}/events`} className="ml-1">
 									<Button variant="ghost" size="sm" className="h-7 gap-1.5 text-sm">
 										<History className="h-3.5 w-3.5" />
 										Events
@@ -520,7 +520,7 @@ export default function AutomationDetailPage({
 							</TooltipTrigger>
 							<TooltipContent side="bottom" className="max-w-[260px]">
 								<p className="text-xs">
-									You can view all runs for all automations at the Events page
+									You can view all runs for all coworkers on the coworker events page.
 								</p>
 							</TooltipContent>
 						</Tooltip>
@@ -565,9 +565,7 @@ export default function AutomationDetailPage({
 				{/* Readiness warning */}
 				{!readiness.ready && (
 					<div className="rounded-xl border border-border bg-muted/30 px-4 py-3 mb-6">
-						<p className="text-sm font-medium text-foreground mb-1">
-							Cannot enable this automation
-						</p>
+						<p className="text-sm font-medium text-foreground mb-1">Cannot enable this coworker</p>
 						<ul className="text-xs text-muted-foreground space-y-0.5">
 							{readiness.issues.map((issue) => (
 								<li key={issue.message}>
@@ -966,7 +964,7 @@ export default function AutomationDetailPage({
 						<Textarea
 							value={instructionsValue}
 							onChange={(e) => handleInstructionsChange(e.target.value)}
-							placeholder="Tell the agent what to do when this automation is triggered..."
+							placeholder="Tell this coworker what to do when it is triggered..."
 							className={cn(
 								"w-full text-sm focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 border-none resize-none px-4 py-3.5 bg-transparent rounded-none min-h-0",
 								"placeholder:text-muted-foreground/60",
@@ -1029,7 +1027,7 @@ export default function AutomationDetailPage({
 			<AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Delete Automation</AlertDialogTitle>
+						<AlertDialogTitle>Delete Coworker</AlertDialogTitle>
 						<AlertDialogDescription>
 							This will permanently delete &quot;{automation.name}&quot; and all its triggers. This
 							action cannot be undone.

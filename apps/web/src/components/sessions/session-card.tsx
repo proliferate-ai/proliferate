@@ -111,7 +111,7 @@ function OriginBadge({ session }: { session: Session }) {
 				onClick={(e) => {
 					e.preventDefault();
 					e.stopPropagation();
-					router.push(`/dashboard/automations/${session.automation!.id}/events`);
+					router.push(`/coworkers/${session.automation!.id}/events`);
 				}}
 			>
 				<AutomationsIcon className="h-3 w-3" />
