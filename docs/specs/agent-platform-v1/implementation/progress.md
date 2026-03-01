@@ -48,7 +48,7 @@
   - `pnpm test` ✅
   - `pnpm build` ⚠️ fails locally due required env vars for `apps/web` build-time validation.
 - open comments:
-  - CI and automated review pending.
+  - Followed up on DB-orchestration coverage request with DB-layer claim/coalesce/consume tests.
 - fixes applied:
   - Added atomic wake claim helper with priority ordering and active-worker/no-active-run claim gating.
   - Implemented wake coalescing during claim for `tick` and dedupe-keyed `webhook` sources.
@@ -59,6 +59,10 @@
   - Enforced `run now` paused behavior with deterministic `resume_required` error.
   - Added wake service transition guard helpers and cancel/fail helpers.
   - Added state-transition unit tests covering workers, wakes, and worker runs.
+  - Added DB-layer orchestration tests for `claimNextWakeAndCreateRun` covering:
+    - priority claim selection (`manual_message > manual > webhook > tick`)
+    - coalescing semantics (`tick` merge and webhook dedupe-key scoping)
+    - atomic claim/consume/run/event behavior and active-run gating.
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Open PR and monitor CI/human/Greptile feedback to completion before starting PR3.
