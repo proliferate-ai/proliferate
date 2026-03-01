@@ -12,8 +12,13 @@
 import {
 	type InferSelectModel,
 	and,
+	asc,
 	eq,
 	getDb,
+	inArray,
+	isNull,
+	lte,
+	or,
 	sql,
 	sessionCapabilities,
 	sessionMessages,
@@ -26,10 +31,77 @@ import type {
 	SessionMessageDirection,
 } from "@proliferate/shared/contracts";
 
+export type SessionRow = InferSelectModel<typeof sessions>;
 export type SessionCapabilityRow = InferSelectModel<typeof sessionCapabilities>;
 export type SessionSkillRow = InferSelectModel<typeof sessionSkills>;
 export type SessionMessageRow = InferSelectModel<typeof sessionMessages>;
 export type SessionUserStateRow = InferSelectModel<typeof sessionUserState>;
+
+export interface CreateTaskSessionInput {
+	id?: string;
+	organizationId: string;
+	createdBy: string;
+	repoId: string;
+	repoBaselineId: string;
+	repoBaselineTargetId: string;
+	workerId?: string | null;
+	workerRunId?: string | null;
+	parentSessionId?: string | null;
+	continuedFromSessionId?: string | null;
+	rerunOfSessionId?: string | null;
+	configurationId?: string | null;
+	visibility?: "private" | "shared" | "org";
+	initialPrompt?: string | null;
+	title?: string | null;
+}
+
+export async function createTaskSession(input: CreateTaskSessionInput): Promise<SessionRow> {
+	if (!input.repoId || !input.repoBaselineId || !input.repoBaselineTargetId) {
+		throw new Error("Task session requires repo + baseline + baseline target linkage");
+	}
+
+	const db = getDb();
+	const [row] = await db
+		.insert(sessions)
+		.values({
+			id: input.id,
+			organizationId: input.organizationId,
+			createdBy: input.createdBy,
+			sessionType: "coding",
+			kind: "task",
+			status: "starting",
+			runtimeStatus: "starting",
+			operatorStatus: "active",
+			visibility: input.visibility ?? "private",
+			repoId: input.repoId,
+			repoBaselineId: input.repoBaselineId,
+			repoBaselineTargetId: input.repoBaselineTargetId,
+			workerId: input.workerId ?? null,
+			workerRunId: input.workerRunId ?? null,
+			parentSessionId: input.parentSessionId ?? null,
+			continuedFromSessionId: input.continuedFromSessionId ?? null,
+			rerunOfSessionId: input.rerunOfSessionId ?? null,
+			configurationId: input.configurationId ?? null,
+			initialPrompt: input.initialPrompt ?? null,
+			title: input.title ?? null,
+		})
+		.returning();
+
+	return row;
+}
+
+export async function findSessionById(
+	sessionId: string,
+	organizationId: string,
+): Promise<SessionRow | undefined> {
+	const db = getDb();
+	const [row] = await db
+		.select()
+		.from(sessions)
+		.where(and(eq(sessions.id, sessionId), eq(sessions.organizationId, organizationId)))
+		.limit(1);
+	return row;
+}
 
 export interface UpsertSessionCapabilityInput {
 	sessionId: string;
@@ -133,20 +205,52 @@ export async function enqueueSessionMessage(
 	input: EnqueueSessionMessageInput,
 ): Promise<SessionMessageRow> {
 	const db = getDb();
-	const [row] = await db
-		.insert(sessionMessages)
-		.values({
-			sessionId: input.sessionId,
-			direction: input.direction,
-			messageType: input.messageType,
-			payloadJson: input.payloadJson,
-			dedupeKey: input.dedupeKey ?? null,
-			deliverAfter: input.deliverAfter ?? null,
-			senderUserId: input.senderUserId ?? null,
-			senderSessionId: input.senderSessionId ?? null,
-		})
-		.returning();
-	return row;
+	const values = {
+		sessionId: input.sessionId,
+		direction: input.direction,
+		messageType: input.messageType,
+		payloadJson: input.payloadJson,
+		dedupeKey: input.dedupeKey ?? null,
+		deliverAfter: input.deliverAfter ?? null,
+		senderUserId: input.senderUserId ?? null,
+		senderSessionId: input.senderSessionId ?? null,
+	};
+
+	const rows = input.dedupeKey
+		? await db
+				.insert(sessionMessages)
+				.values(values)
+				.onConflictDoNothing({
+					target: [sessionMessages.sessionId, sessionMessages.dedupeKey],
+				})
+				.returning()
+		: await db.insert(sessionMessages).values(values).returning();
+
+	const inserted = rows[0];
+	if (inserted) {
+		return inserted;
+	}
+
+	if (!input.dedupeKey) {
+		throw new Error("Failed to enqueue session message");
+	}
+
+	const [existing] = await db
+		.select()
+		.from(sessionMessages)
+		.where(
+			and(
+				eq(sessionMessages.sessionId, input.sessionId),
+				eq(sessionMessages.dedupeKey, input.dedupeKey),
+			),
+		)
+		.limit(1);
+
+	if (!existing) {
+		throw new Error("Failed to resolve deduped session message");
+	}
+
+	return existing;
 }
 
 export async function listQueuedSessionMessages(sessionId: string): Promise<SessionMessageRow[]> {
@@ -158,6 +262,53 @@ export async function listQueuedSessionMessages(sessionId: string): Promise<Sess
 			and(eq(sessionMessages.sessionId, sessionId), eq(sessionMessages.deliveryState, "queued")),
 		)
 		.orderBy(sessionMessages.queuedAt);
+}
+
+export async function listDeliverableSessionMessages(
+	sessionId: string,
+	now = new Date(),
+): Promise<SessionMessageRow[]> {
+	const db = getDb();
+	return db
+		.select()
+		.from(sessionMessages)
+		.where(
+			and(
+				eq(sessionMessages.sessionId, sessionId),
+				eq(sessionMessages.deliveryState, "queued"),
+				or(isNull(sessionMessages.deliverAfter), lte(sessionMessages.deliverAfter, now)),
+			),
+		)
+		.orderBy(asc(sessionMessages.queuedAt), asc(sessionMessages.id));
+}
+
+/**
+ * Atomically claims queued + deliverable messages for delivery.
+ *
+ * Delivery order is deterministic: queuedAt ASC, id ASC.
+ */
+export async function claimDeliverableSessionMessages(
+	sessionId: string,
+	limit = 50,
+): Promise<SessionMessageRow[]> {
+	const db = getDb();
+	const rows = await db.execute<SessionMessageRow>(sql`
+		UPDATE ${sessionMessages}
+		SET "delivery_state" = 'delivered',
+		    "delivered_at" = now()
+		WHERE ${sessionMessages.id} IN (
+			SELECT ${sessionMessages.id}
+			FROM ${sessionMessages}
+			WHERE ${sessionMessages.sessionId} = ${sessionId}
+			  AND ${sessionMessages.deliveryState} = 'queued'
+			  AND (${sessionMessages.deliverAfter} IS NULL OR ${sessionMessages.deliverAfter} <= now())
+			ORDER BY ${sessionMessages.queuedAt} ASC, ${sessionMessages.id} ASC
+			LIMIT ${limit}
+			FOR UPDATE SKIP LOCKED
+		)
+		RETURNING *
+	`);
+	return Array.from(rows);
 }
 
 export async function updateSessionMessageDeliveryState(
@@ -181,6 +332,41 @@ export async function updateSessionMessageDeliveryState(
 			failureReason: fields?.failureReason,
 		})
 		.where(eq(sessionMessages.id, id))
+		.returning();
+	return row;
+}
+
+export async function transitionSessionMessageDeliveryState(input: {
+	id: string;
+	fromStates: SessionMessageDeliveryState[];
+	toState: SessionMessageDeliveryState;
+	fields?: {
+		deliveredAt?: Date | null;
+		consumedAt?: Date | null;
+		failedAt?: Date | null;
+		failureReason?: string | null;
+	};
+}): Promise<SessionMessageRow | undefined> {
+	if (input.fromStates.length === 0) {
+		throw new Error("fromStates must include at least one state");
+	}
+
+	const db = getDb();
+	const [row] = await db
+		.update(sessionMessages)
+		.set({
+			deliveryState: input.toState,
+			deliveredAt: input.fields?.deliveredAt,
+			consumedAt: input.fields?.consumedAt,
+			failedAt: input.fields?.failedAt,
+			failureReason: input.fields?.failureReason,
+		})
+		.where(
+			and(
+				eq(sessionMessages.id, input.id),
+				inArray(sessionMessages.deliveryState, input.fromStates),
+			),
+		)
 		.returning();
 	return row;
 }
@@ -225,15 +411,42 @@ export interface PersistSessionOutcomeInput {
 	outcomeVersion?: number;
 }
 
-export async function persistSessionOutcome(input: PersistSessionOutcomeInput): Promise<void> {
+export async function persistSessionOutcome(
+	input: PersistSessionOutcomeInput,
+): Promise<SessionRow | undefined> {
 	const db = getDb();
 	const now = new Date();
-	await db
+	const [row] = await db
 		.update(sessions)
 		.set({
 			outcomeJson: input.outcomeJson,
 			outcomeVersion: input.outcomeVersion ?? 1,
 			outcomePersistedAt: now,
 		})
-		.where(eq(sessions.id, input.sessionId));
+		.where(eq(sessions.id, input.sessionId))
+		.returning();
+	return row;
+}
+
+export async function getSessionOutcome(sessionId: string): Promise<{
+	outcomeJson: unknown;
+	outcomeVersion: number | null;
+	outcomePersistedAt: Date | null;
+} | null> {
+	const db = getDb();
+	const [row] = await db
+		.select({
+			outcomeJson: sessions.outcomeJson,
+			outcomeVersion: sessions.outcomeVersion,
+			outcomePersistedAt: sessions.outcomePersistedAt,
+		})
+		.from(sessions)
+		.where(eq(sessions.id, sessionId))
+		.limit(1);
+
+	if (!row) {
+		return null;
+	}
+
+	return row;
 }
