@@ -112,7 +112,8 @@ export async function sendTaskFollowup(
 		);
 	}
 
-	const mode: SendTaskFollowupResult["mode"] = input.terminalMode === "rerun" ? "rerun" : "continuation";
+	const mode: SendTaskFollowupResult["mode"] =
+		input.terminalMode === "rerun" ? "rerun" : "continuation";
 	if (input.dedupeKey) {
 		const existing = await v1Db.findTerminalFollowupMessageByDedupe({
 			organizationId: input.organizationId,
