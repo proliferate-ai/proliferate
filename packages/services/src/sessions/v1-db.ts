@@ -103,6 +103,26 @@ export async function findSessionById(
 	return row;
 }
 
+export async function findLatestTerminalFollowupSession(input: {
+	organizationId: string;
+	sourceSessionId: string;
+	mode: "continuation" | "rerun";
+}): Promise<SessionRow | undefined> {
+	const db = getDb();
+	return db.query.sessions.findFirst({
+		where: and(
+			eq(sessions.organizationId, input.organizationId),
+			eq(sessions.kind, "task"),
+			isNull(sessions.workerId),
+			isNull(sessions.workerRunId),
+			input.mode === "continuation"
+				? eq(sessions.continuedFromSessionId, input.sourceSessionId)
+				: eq(sessions.rerunOfSessionId, input.sourceSessionId),
+		),
+		orderBy: (table, { desc }) => [desc(table.createdAt), desc(table.id)],
+	});
+}
+
 export interface UpsertSessionCapabilityInput {
 	sessionId: string;
 	capabilityKey: string;
