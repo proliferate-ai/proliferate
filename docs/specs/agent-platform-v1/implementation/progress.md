@@ -67,4 +67,28 @@
   - Replaced misleading run-now degraded status error with explicit `WorkerNotActiveError`.
 - merge SHA: `TBD`
 - carry-over TODOs:
-  - Open PR and monitor CI/human/Greptile feedback to completion before starting PR3.
+  - Resolve remaining CI/human/Greptile feedback and merge before stack cutover.
+
+## PR 3
+- branch name: `v1/03-sessions-messaging`
+- PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/253`
+- scope: Phase 3 sessions + messaging contracts (unified task session path, follow-up routing semantics, queued delivery helpers, terminal outcome persistence guards)
+- check results:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅
+  - `pnpm build` ⚠️ fails locally due required env vars for `apps/web` build-time validation.
+- open comments:
+  - CI and automated review pending.
+- fixes applied:
+  - Added V1 task-session create/lookup helpers and unified service entrypoint.
+  - Added terminal task follow-up routing contract: live task -> same session; terminal task -> ad-hoc continuation/rerun with `workerId=null` and `workerRunId=null`.
+  - Added idempotent `session_messages` enqueue semantics with dedupe-key conflict fallback lookup.
+  - Added deterministic deliverable message query + atomic claim (`queued -> delivered`) helper.
+  - Added guarded message delivery transitions (`consumed`, `failed`) for service use.
+  - Added terminal outcome persistence and canonical outcome read helpers.
+  - Added V1 session service tests for follow-up routing, outcome guards, and delivery wrappers.
+- merge SHA: `TBD`
+- carry-over TODOs:
+  - Resolve CI/human/Greptile feedback.
+  - Wire gateway call-sites to V1 session-message orchestration in subsequent phases.
