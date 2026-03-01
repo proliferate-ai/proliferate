@@ -41,19 +41,19 @@ export const sessions = pgTable(
 		sessionType: text("session_type").default("coding"), // 'setup', 'coding', 'terminal'
 
 		// V1 session kind: manager | task | setup
-		kind: text("kind").default("task"),
+		kind: text("kind").default("task").notNull(),
 
 		// Legacy status (kept for compat)
 		status: text("status").default("starting"), // 'starting', 'running', 'paused', 'stopped', 'failed'
 
 		// V1 runtime status: starting | running | paused | completed | failed | cancelled
-		runtimeStatus: text("runtime_status").default("starting"),
+		runtimeStatus: text("runtime_status").default("starting").notNull(),
 
 		// V1 operator status: active | waiting_for_approval | needs_input | ready_for_review | errored | done
-		operatorStatus: text("operator_status").default("active"),
+		operatorStatus: text("operator_status").default("active").notNull(),
 
 		// V1 visibility: private | shared | org
-		visibility: text("visibility").default("private"),
+		visibility: text("visibility").default("private").notNull(),
 
 		// Sandbox
 		sandboxId: text("sandbox_id"),

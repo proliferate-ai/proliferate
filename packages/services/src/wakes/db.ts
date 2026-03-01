@@ -52,6 +52,7 @@ export async function findWakeEventById(id: string): Promise<WakeEventRow | unde
 
 export async function updateWakeEventStatus(
 	id: string,
+	organizationId: string,
 	status: string,
 	fields?: {
 		coalescedIntoWakeEventId?: string;
@@ -64,7 +65,7 @@ export async function updateWakeEventStatus(
 	const [row] = await db
 		.update(wakeEvents)
 		.set({ status, ...fields })
-		.where(eq(wakeEvents.id, id))
+		.where(and(eq(wakeEvents.id, id), eq(wakeEvents.organizationId, organizationId)))
 		.returning();
 	return row;
 }

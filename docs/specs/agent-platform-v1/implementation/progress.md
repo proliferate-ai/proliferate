@@ -9,8 +9,8 @@
   - `pnpm lint` ✅
   - `pnpm test` ✅
 - open comments:
-  - CodeRabbit review bundle (resolved with follow-up changes).
-  - Human review pending.
+  - Pending thread follow-up for bootstrap-cycle rationale (`workers.manager_session_id` remains required per V1 contract).
+  - Pending thread follow-up for wake `claimed_at` false positive (column is nullable by contract/schema).
 - fixes applied:
   - Enforced `workers.managerSessionId` required + unique.
   - Added manager/task session shape constraints.
@@ -22,6 +22,10 @@
   - Tightened sessions FK delete semantics for required manager/task linkage.
   - Switched new service DB helpers to canonical `@proliferate/services/db/client` imports.
   - Hardened worker/session DB helper validation/update semantics.
+  - Added org-scoped wake status updates (`wake_events.id` + `organization_id`) to prevent cross-tenant mutation.
+  - Added missing `resume_intents.origin_session_id -> sessions.id` FK wiring in modular schema.
+  - Locked V1 session control-plane columns (`kind`, `runtime_status`, `operator_status`, `visibility`) as non-null in schema and migration.
+  - Normalized Drizzle journal indices to strict monotonic order to remove duplicate `idx` entries.
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Process CI/human/Greptile feedback.
