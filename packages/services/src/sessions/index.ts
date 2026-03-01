@@ -6,6 +6,7 @@ export * from "./service";
 export * from "./mapper";
 export * from "./sandbox-env";
 export * from "./generate-title";
+export * from "./v1-service";
 
 // DB row types (from Drizzle schema)
 export type { SessionRow, SessionWithRepoRow, RepoRow as SessionRepoRow } from "./db";
