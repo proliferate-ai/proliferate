@@ -125,3 +125,28 @@
 - carry-over TODOs:
   - Run full checks once dependencies are available in this worktree.
   - Resolve any additional CI/human/Greptile follow-ups.
+
+## PR 5
+- branch name: `v1/05-harnesses-sandbox-runtime`
+- PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/255`
+- scope: Phase 5 harness/runtime split scaffolding (coding harness contract, OpenCode adapter module, manager Claude harness module, daemon event bridge, runtime integration points)
+- check results:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅
+  - `pnpm build` ⚠️ fails locally due required env vars for `apps/web` build-time validation.
+- open comments:
+  - CI and automated review pending.
+- fixes applied:
+  - Added shared coding harness interface (`start`, `resume`, `interrupt`, `shutdown`, `streamEvents`, `collectOutputs`).
+  - Added OpenCode coding harness adapter implementation over existing OpenCode API + SSE transport.
+  - Added manager Claude harness adapter module for orchestration-first manager session runtime shape.
+  - Added daemon event bridge to normalize OpenCode/daemon events into runtime event envelopes.
+  - Added daemon bridge tests for event-channel and terminal-event normalization semantics.
+  - Updated runtime to instantiate harness adapters and use normalized daemon-event hooks.
+  - Added explicit harness-family selection by `sessions.kind` (`manager-claude` vs `coding-opencode`) in runtime lifecycle.
+  - Extended gateway session context records to carry `kind` from DB rows.
+- merge SHA: `TBD`
+- carry-over TODOs:
+  - Broaden runtime lifecycle integration to route all harness operations through the adapter contract.
+  - Wire manager Claude harness behavior into end-to-end orchestration loops in later phases.
