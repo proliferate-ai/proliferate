@@ -67,6 +67,7 @@ const {
 	PendingLimitError,
 	denyAction,
 	markCompleted,
+	markFailed,
 	approveAction,
 	ActionConflictError,
 	assertApprovalAuthority,
@@ -216,6 +217,56 @@ describe("actions v1 service", () => {
 		await markCompleted("inv-1", { ok: true }, 12);
 
 		expect(mockCreateOrGetActiveResumeIntent).toHaveBeenCalled();
+	});
+
+	it("returns completed invocation even when completion side effects fail", async () => {
+		mockTransitionInvocationStatus.mockResolvedValue(
+			makeInvocationRow({ status: "completed", mode: "require_approval" }),
+		);
+		mockGetSessionApprovalContext.mockResolvedValue({
+			id: "session-1",
+			organizationId: "org-1",
+			automationId: null,
+			operatorStatus: "waiting_for_approval",
+			visibility: "private",
+			createdBy: "user-1",
+			repoId: "repo-1",
+		});
+		mockCreateActionInvocationEvent.mockRejectedValueOnce(new Error("event-write-failed"));
+		mockCreateOrGetActiveResumeIntent.mockRejectedValueOnce(new Error("resume-write-failed"));
+
+		await expect(markCompleted("inv-1", { ok: true }, 12)).resolves.toMatchObject({
+			id: "inv-1",
+			status: "completed",
+		});
+		expect(mockTransitionInvocationStatus).toHaveBeenCalledWith(
+			expect.objectContaining({ id: "inv-1", toStatus: "completed" }),
+		);
+	});
+
+	it("returns failed invocation even when failure side effects fail", async () => {
+		mockTransitionInvocationStatus.mockResolvedValue(
+			makeInvocationRow({ status: "failed", mode: "require_approval" }),
+		);
+		mockGetSessionApprovalContext.mockResolvedValue({
+			id: "session-1",
+			organizationId: "org-1",
+			automationId: null,
+			operatorStatus: "waiting_for_approval",
+			visibility: "private",
+			createdBy: "user-1",
+			repoId: "repo-1",
+		});
+		mockCreateActionInvocationEvent.mockRejectedValueOnce(new Error("event-write-failed"));
+		mockCreateOrGetActiveResumeIntent.mockRejectedValueOnce(new Error("resume-write-failed"));
+
+		await expect(markFailed("inv-1", "boom", 12)).resolves.toMatchObject({
+			id: "inv-1",
+			status: "failed",
+		});
+		expect(mockTransitionInvocationStatus).toHaveBeenCalledWith(
+			expect.objectContaining({ id: "inv-1", toStatus: "failed" }),
+		);
 	});
 
 	it("revalidates policy at approval time and rejects when now denied", async () => {

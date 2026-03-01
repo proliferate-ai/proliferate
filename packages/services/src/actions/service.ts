@@ -255,6 +255,37 @@ async function recordEvent(input: {
 	});
 }
 
+async function recordTerminalOutcomeSideEffects(input: {
+	invocation: ActionInvocationRow;
+	eventType: "completed" | "failed";
+	terminalStatus: "completed" | "failed";
+	payloadJson?: unknown;
+}): Promise<void> {
+	const log = getServicesLogger().child({ module: "actions", invocationId: input.invocation.id });
+
+	try {
+		await recordEvent({
+			invocationId: input.invocation.id,
+			eventType: input.eventType,
+			payloadJson: input.payloadJson,
+		});
+	} catch (error) {
+		log.error({ error, eventType: input.eventType }, "Failed to record terminal action event");
+	}
+
+	try {
+		await queueResumeIntentIfNeeded({
+			invocation: input.invocation,
+			terminalStatus: input.terminalStatus,
+		});
+	} catch (error) {
+		log.error(
+			{ error, terminalStatus: input.terminalStatus },
+			"Failed to queue resume intent after terminal action",
+		);
+	}
+}
+
 // ============================================
 // Service Functions
 // ============================================
@@ -399,8 +430,11 @@ export async function markCompleted(
 		},
 	});
 	if (row) {
-		await recordEvent({ invocationId, eventType: "completed" });
-		await queueResumeIntentIfNeeded({ invocation: row, terminalStatus: "completed" });
+		await recordTerminalOutcomeSideEffects({
+			invocation: row,
+			eventType: "completed",
+			terminalStatus: "completed",
+		});
 	}
 	return row;
 }
@@ -424,8 +458,12 @@ export async function markFailed(
 		},
 	});
 	if (row) {
-		await recordEvent({ invocationId, eventType: "failed", payloadJson: { error } });
-		await queueResumeIntentIfNeeded({ invocation: row, terminalStatus: "failed" });
+		await recordTerminalOutcomeSideEffects({
+			invocation: row,
+			eventType: "failed",
+			terminalStatus: "failed",
+			payloadJson: { error },
+		});
 	}
 	return row;
 }

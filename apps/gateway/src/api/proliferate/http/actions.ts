@@ -670,16 +670,20 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(401, "User authentication required for approvals");
 			}
 
-			const { invocationId } = req.params;
-			const session = await requireSessionOrgAccess(req.proliferateSessionId!, auth.orgId);
-			await requireAdminRole(auth.userId, session.organizationId);
-			try {
-				await actions.assertApprovalAuthority({
-					sessionId: req.proliferateSessionId!,
-					organizationId: session.organizationId,
-					userId: auth.userId,
-				});
-			} catch (err) {
+				const { invocationId } = req.params;
+				const session = await requireSessionOrgAccess(req.proliferateSessionId!, auth.orgId);
+				const targetInvocation = await actions.getActionStatus(invocationId, session.organizationId);
+				if (!targetInvocation || targetInvocation.sessionId !== req.proliferateSessionId) {
+					throw new ApiError(404, "Invocation not found");
+				}
+				await requireAdminRole(auth.userId, session.organizationId);
+				try {
+					await actions.assertApprovalAuthority({
+						sessionId: targetInvocation.sessionId,
+						organizationId: session.organizationId,
+						userId: auth.userId,
+					});
+				} catch (err) {
 				if (err instanceof actions.ApprovalAuthorityError) {
 					throw new ApiError(403, err.message);
 				}
@@ -774,17 +778,21 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(401, "User authentication required for denials");
 			}
 
-			const { invocationId } = req.params;
-			const session = await requireSessionOrgAccess(req.proliferateSessionId!, auth.orgId);
-			await requireAdminRole(auth.userId, session.organizationId);
+				const { invocationId } = req.params;
+				const session = await requireSessionOrgAccess(req.proliferateSessionId!, auth.orgId);
+				const targetInvocation = await actions.getActionStatus(invocationId, session.organizationId);
+				if (!targetInvocation || targetInvocation.sessionId !== req.proliferateSessionId) {
+					throw new ApiError(404, "Invocation not found");
+				}
+				await requireAdminRole(auth.userId, session.organizationId);
 
-			let invocation: Awaited<ReturnType<typeof actions.denyAction>>;
-			try {
-				await actions.assertApprovalAuthority({
-					sessionId: req.proliferateSessionId!,
-					organizationId: session.organizationId,
-					userId: auth.userId,
-				});
+				let invocation: Awaited<ReturnType<typeof actions.denyAction>>;
+				try {
+					await actions.assertApprovalAuthority({
+						sessionId: targetInvocation.sessionId,
+						organizationId: session.organizationId,
+						userId: auth.userId,
+					});
 				invocation = await actions.denyAction(invocationId, session.organizationId, auth.userId);
 			} catch (err) {
 				if (err instanceof actions.ApprovalAuthorityError) throw new ApiError(403, err.message);
