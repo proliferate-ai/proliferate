@@ -218,3 +218,24 @@
 - carry-over TODOs:
   - Complete coworker detail activity/timeline parity with final V1 `worker_run_events` model.
   - Resolve CI/human/Greptile follow-ups after rerun.
+
+## PR 8
+- branch name: `v1/08-hardening-rollout`
+- PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/258`
+- scope: Phase 8 hardening/quality gates (canonical route IA drift guard, V1 naming drift guard, CI lint wiring)
+- check results:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅
+  - `pnpm build` ⚠️ deferred; local build remains environment-gated in `apps/web`.
+- open comments:
+  - CI and automated review pending.
+- fixes applied:
+  - Added `check-v1-route-ia.mjs` guard for canonical IA route presence and sidebar primary-route drift.
+  - Added `check-v1-naming-drift.mjs` guard to prevent `automation*` naming leakage in V1 runtime-focused paths.
+  - Wired new guards into root lint pipeline (`lint:v1-route-ia`, `lint:v1-naming-drift`).
+  - Validated hardening checks via direct script runs and full root lint/typecheck/test execution.
+- merge SHA: `TBD`
+- carry-over TODOs:
+  - Apply canary/default-on rollout runbook steps with feature flags at deployment time.
+  - Complete post-merge legacy cleanup PRs after stabilization window.
