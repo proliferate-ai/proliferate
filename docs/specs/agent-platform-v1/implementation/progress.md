@@ -192,3 +192,27 @@
 - carry-over TODOs:
   - Complete reconnect/resubscribe contract coverage from workspace client perspective.
   - Resolve CI/human/Greptile review feedback after full stack implementation.
+
+## PR 7
+- branch name: `v1/07-ui-navigation`
+- PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/257`
+- scope: Phase 7 UI/navigation alignment (canonical route surfaces, sidebar IA reduction, coworker route terminology, task-first session list filtering via `kind`)
+- check results:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅
+  - `pnpm build` ⚠️ deferred; current local environment still requires full web build-time env configuration.
+- open comments:
+  - CI and automated review pending.
+- fixes applied:
+  - Added canonical app routes `/sessions`, `/coworkers`, `/coworkers/[id]`, `/coworkers/[id]/events`, and `/integrations` in command-center shell.
+  - Updated root and `/workspace` redirects to task-first operational entry route `/sessions`.
+  - Reduced primary sidebar/navigation IA to Home/Sessions/Coworkers/Integrations/Settings.
+  - Updated command palette navigation and labels to coworker terminology.
+  - Repointed coworker-related deep links from legacy `/dashboard/automations/*` paths to `/coworkers/*`.
+  - Added `kind`, `runtimeStatus`, and `operatorStatus` fields to shared session contract mapping (non-breaking optional fields).
+  - Added `kinds` session list filter through Router -> Service -> DB and used `kinds: [\"task\"]` for task-first operational surfaces.
+- merge SHA: `TBD`
+- carry-over TODOs:
+  - Complete coworker detail activity/timeline parity with final V1 `worker_run_events` model.
+  - Finalize legacy `/dashboard/*` route cleanup during rollout hardening window.
