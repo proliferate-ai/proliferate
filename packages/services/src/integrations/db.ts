@@ -101,6 +101,19 @@ export async function listByOrganization(orgId: string, userId: string): Promise
 }
 
 /**
+ * List all integrations for an organization (no visibility filtering).
+ * Used for privileged server-side operations like credential resolution
+ * where user context is not available.
+ */
+export async function listAllByOrganization(orgId: string): Promise<IntegrationRow[]> {
+	const db = getDb();
+	return db.query.integrations.findMany({
+		where: eq(integrations.organizationId, orgId),
+		orderBy: [desc(integrations.createdAt)],
+	});
+}
+
+/**
  * Find users by IDs.
  */
 export async function findUsersByIds(userIds: string[]): Promise<UserRow[]> {

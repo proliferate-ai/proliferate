@@ -2893,3 +2893,77 @@ export const notificationPreferences = pgTable(
 		}).onDelete("cascade"),
 	],
 );
+
+// ============================================
+// V1: Worker Source Bindings
+// ============================================
+
+type SourceType = "sentry" | "linear" | "github";
+
+export const workerSourceBindings = pgTable(
+	"worker_source_bindings",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		workerId: uuid("worker_id").notNull(),
+		organizationId: text("organization_id").notNull(),
+		sourceType: text("source_type").$type<SourceType>().notNull(),
+		sourceRef: text("source_ref").notNull(),
+		label: text("label"),
+		config: jsonb("config").default({}),
+		credentialOwnerId: text("credential_owner_id"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_worker_source_bindings_worker").using(
+			"btree",
+			table.workerId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_worker_source_bindings_org").using(
+			"btree",
+			table.organizationId.asc().nullsLast().op("text_ops"),
+		),
+		unique("uq_worker_source_bindings_worker_source").on(
+			table.workerId,
+			table.sourceType,
+			table.sourceRef,
+		),
+		check(
+			"worker_source_bindings_source_type_check",
+			sql`source_type = ANY (ARRAY['sentry'::text, 'linear'::text, 'github'::text])`,
+		),
+		foreignKey({
+			columns: [table.workerId],
+			foreignColumns: [workers.id],
+			name: "worker_source_bindings_worker_id_fkey",
+		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organization.id],
+			name: "worker_source_bindings_organization_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
+// ============================================
+// V1: Worker Source Cursors
+// ============================================
+
+export const workerSourceCursors = pgTable(
+	"worker_source_cursors",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		bindingId: uuid("binding_id").notNull(),
+		cursorValue: text("cursor_value"),
+		lastPolledAt: timestamp("last_polled_at", { withTimezone: true, mode: "date" }),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		unique("uq_worker_source_cursors_binding").on(table.bindingId),
+		foreignKey({
+			columns: [table.bindingId],
+			foreignColumns: [workerSourceBindings.id],
+			name: "worker_source_cursors_binding_id_fkey",
+		}).onDelete("cascade"),
+	],
+);

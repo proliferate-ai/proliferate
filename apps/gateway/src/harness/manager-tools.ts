@@ -9,8 +9,35 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Logger } from "@proliferate/logger";
-import { sessions, workers } from "@proliferate/services";
+import { sessions, sourceReads, workers } from "@proliferate/services";
 import type { ManagerToolContext } from "./manager-types";
+
+// ============================================
+// Source-read capability keys
+// ============================================
+
+const SOURCE_READ_TOOL_NAMES = new Set(["read_source", "get_source_item", "list_source_bindings"]);
+
+/**
+ * Filter manager tools based on session capabilities.
+ * Source-read tools are hidden when all source.*.read keys are denied.
+ * Individual source types are gated at the service layer (CREDENTIAL_MISSING).
+ *
+ * Default for source reads: no-approval (allow by default).
+ */
+export function filterToolsByCapabilities(
+	tools: Anthropic.Tool[],
+	deniedCapabilities: Set<string>,
+): Anthropic.Tool[] {
+	// If any source.*.read is denied, check if ALL are denied
+	const sourceReadKeys = ["source.sentry.read", "source.linear.read", "source.github.read"];
+	const allSourceDenied = sourceReadKeys.every((key) => deniedCapabilities.has(key));
+
+	if (!allSourceDenied) return tools;
+
+	// Remove source-read tools entirely when all sources are denied
+	return tools.filter((tool) => !SOURCE_READ_TOOL_NAMES.has(tool.name));
+}
 
 // ============================================
 // Tool Definitions
@@ -94,20 +121,51 @@ export const MANAGER_TOOLS: Anthropic.Tool[] = [
 	{
 		name: "read_source",
 		description:
-			"Read data from a source binding (e.g., GitHub issues, Sentry errors). Returns source-specific data. Currently returns empty results (source reads are implemented in Phase L).",
+			"Read data from a connected source binding (Sentry issues, Linear tickets, GitHub issues/PRs). Use list_source_bindings first to discover available bindings.",
 		input_schema: {
 			type: "object" as const,
 			properties: {
-				source_type: {
+				binding_id: {
 					type: "string",
-					description: "The source type to read (e.g., github_issues, sentry_errors)",
+					description: "The binding ID to query (from list_source_bindings)",
 				},
-				query: {
+				cursor: {
 					type: "string",
-					description: "Optional query/filter for the source",
+					description: "Pagination cursor from a previous query",
+				},
+				limit: {
+					type: "number",
+					description: "Max items to return (1-100, default 25)",
 				},
 			},
-			required: ["source_type"],
+			required: ["binding_id"],
+		},
+	},
+	{
+		name: "get_source_item",
+		description: "Get detailed information about a single source item by its reference ID.",
+		input_schema: {
+			type: "object" as const,
+			properties: {
+				binding_id: {
+					type: "string",
+					description: "The binding ID this item belongs to",
+				},
+				item_ref: {
+					type: "string",
+					description: "The source-specific item reference (e.g., issue ID)",
+				},
+			},
+			required: ["binding_id", "item_ref"],
+		},
+	},
+	{
+		name: "list_source_bindings",
+		description:
+			"List all connected source bindings for this coworker. Returns binding IDs, source types (sentry/linear/github), and labels.",
+		input_schema: {
+			type: "object" as const,
+			properties: {},
 		},
 	},
 	{
@@ -231,7 +289,11 @@ export async function executeManagerTool(
 		case "cancel_child":
 			return handleCancelChild(args, ctx, log);
 		case "read_source":
-			return handleReadSource(args, log);
+			return handleReadSource(args, ctx, log);
+		case "get_source_item":
+			return handleGetSourceItem(args, ctx, log);
+		case "list_source_bindings":
+			return handleListSourceBindings(ctx, log);
 		case "list_capabilities":
 			return handleListCapabilities(ctx, log);
 		case "invoke_action":
@@ -457,14 +519,96 @@ async function handleCancelChild(
 	return JSON.stringify({ ok: true, session_id: sessionId });
 }
 
-async function handleReadSource(args: Record<string, unknown>, log: Logger): Promise<string> {
-	const sourceType = args.source_type as string;
-	log.debug({ sourceType }, "Source read stub called");
-	return JSON.stringify({
-		source_type: sourceType,
-		results: [],
-		note: "Source reads are not yet implemented (Phase L). No data available.",
-	});
+async function handleReadSource(
+	args: Record<string, unknown>,
+	ctx: ManagerToolContext,
+	log: Logger,
+): Promise<string> {
+	const bindingId = args.binding_id as string;
+	const cursor = args.cursor as string | undefined;
+	const limit = args.limit as number | undefined;
+
+	try {
+		const result = await sourceReads.querySource(bindingId, ctx.organizationId, cursor, limit);
+
+		// Emit source_observation for each item
+		for (const item of result.items) {
+			await workers.appendWorkerRunEvent({
+				workerRunId: ctx.workerRunId,
+				workerId: ctx.workerId,
+				eventType: "source_observation",
+				summaryText: item.title,
+				payloadJson: {
+					sourceType: item.sourceType,
+					sourceRef: item.sourceRef,
+					severity: item.severity,
+				},
+				dedupeKey: `source:${item.sourceType}:${item.sourceRef}`,
+			});
+		}
+
+		log.info({ bindingId, itemCount: result.items.length }, "Source read completed");
+		return JSON.stringify(result);
+	} catch (err) {
+		if (err instanceof sourceReads.BindingNotFoundError) {
+			return JSON.stringify({ error: err.message, code: err.code });
+		}
+		if (err instanceof sourceReads.CredentialMissingError) {
+			return JSON.stringify({ error: err.message, code: err.code });
+		}
+		return JSON.stringify({ error: `Source read failed: ${String(err)}` });
+	}
+}
+
+async function handleGetSourceItem(
+	args: Record<string, unknown>,
+	ctx: ManagerToolContext,
+	log: Logger,
+): Promise<string> {
+	const bindingId = args.binding_id as string;
+	const itemRef = args.item_ref as string;
+
+	try {
+		const item = await sourceReads.getSourceItem(bindingId, ctx.organizationId, itemRef);
+		if (!item) {
+			return JSON.stringify({ error: "Source item not found" });
+		}
+
+		// Emit source_observation
+		await workers.appendWorkerRunEvent({
+			workerRunId: ctx.workerRunId,
+			workerId: ctx.workerId,
+			eventType: "source_observation",
+			summaryText: item.title,
+			payloadJson: {
+				sourceType: item.sourceType,
+				sourceRef: item.sourceRef,
+				severity: item.severity,
+			},
+			dedupeKey: `source:${item.sourceType}:${item.sourceRef}`,
+		});
+
+		log.info({ bindingId, itemRef }, "Source item retrieved");
+		return JSON.stringify({ item });
+	} catch (err) {
+		if (err instanceof sourceReads.BindingNotFoundError) {
+			return JSON.stringify({ error: err.message, code: err.code });
+		}
+		if (err instanceof sourceReads.CredentialMissingError) {
+			return JSON.stringify({ error: err.message, code: err.code });
+		}
+		return JSON.stringify({ error: `Source item read failed: ${String(err)}` });
+	}
+}
+
+async function handleListSourceBindings(ctx: ManagerToolContext, log: Logger): Promise<string> {
+	try {
+		const bindings = await sourceReads.listBindings(ctx.workerId, ctx.organizationId);
+		log.debug({ count: bindings.length }, "Listed source bindings");
+		return JSON.stringify({ bindings });
+	} catch (err) {
+		return JSON.stringify({ error: `Failed to list bindings: ${String(err)}` });
+	}
 }
 
 async function handleListCapabilities(ctx: ManagerToolContext, log: Logger): Promise<string> {

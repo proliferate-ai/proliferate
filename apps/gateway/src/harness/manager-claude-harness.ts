@@ -10,13 +10,13 @@
 
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
 import type { Logger } from "@proliferate/logger";
-import { sessions, wakes, workers } from "@proliferate/services";
+import { sessions, sourceReads, wakes, workers } from "@proliferate/services";
 import type {
 	ManagerHarnessAdapter,
 	ManagerHarnessStartInput,
 	ManagerHarnessState,
 } from "@proliferate/shared/contracts";
-import { MANAGER_TOOLS, executeManagerTool } from "./manager-tools";
+import { MANAGER_TOOLS, executeManagerTool, filterToolsByCapabilities } from "./manager-tools";
 import {
 	type ManagerToolContext,
 	PHASE_TIMEOUT_MS,
@@ -64,6 +64,7 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 	private conversationHistory: Anthropic.MessageParam[] = [];
 	private managerSessionId = "";
 	private currentRunId: string | null = null;
+	private filteredTools: Anthropic.Tool[] = MANAGER_TOOLS;
 
 	constructor(logger: Logger) {
 		this.logger = logger.child({ module: "manager-harness" });
@@ -183,6 +184,22 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 		} catch (err) {
 			runLog.error({ err }, "Failed to transition run to running");
 			return;
+		}
+
+		// Load session capabilities and filter tools
+		try {
+			const capabilities = await sessions.listSessionCapabilities(input.managerSessionId);
+			const deniedKeys = new Set(
+				capabilities.filter((c) => c.mode === "deny").map((c) => c.capabilityKey),
+			);
+			this.filteredTools = filterToolsByCapabilities(MANAGER_TOOLS, deniedKeys);
+			runLog.debug(
+				{ totalTools: MANAGER_TOOLS.length, filteredTools: this.filteredTools.length },
+				"Filtered tools by capabilities",
+			);
+		} catch (err) {
+			runLog.warn({ err }, "Failed to load capabilities, using full tool set");
+			this.filteredTools = MANAGER_TOOLS;
 		}
 
 		this.abortController = new AbortController();
@@ -352,9 +369,16 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 			// Non-critical
 		}
 
-		parts.push(
-			"\n## Source Data\nSource reads not yet available. Use the read_source tool to query external data sources.",
-		);
+		// Enrich with source data from wake event payload
+		const sourceDataParts = await this.enrichFromWakePayload(ctx, log);
+		if (sourceDataParts.length > 0) {
+			parts.push("\n## Source Data");
+			parts.push(...sourceDataParts);
+		} else {
+			parts.push(
+				"\n## Source Data\nNo source refs in wake payload. Use list_source_bindings and read_source tools to query external data sources.",
+			);
+		}
 
 		const ingestContext = parts.join("\n");
 
@@ -560,7 +584,7 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 					max_tokens: 4096,
 					system: systemPrompt,
 					messages: this.conversationHistory,
-					tools: MANAGER_TOOLS,
+					tools: this.filteredTools,
 				},
 				{ signal: this.abortController?.signal },
 			);
@@ -640,6 +664,73 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 	// ============================================
 	// Helpers
 	// ============================================
+
+	/**
+	 * Extract source refs from the wake payload and fetch full details.
+	 * Wake payloads from webhook triggers may contain sourceRefs like:
+	 *   { sourceRefs: [{ bindingId, itemRef }] }
+	 * Coalesced wakes merge refs from multiple events.
+	 */
+	private async enrichFromWakePayload(ctx: RunContext, log: Logger): Promise<string[]> {
+		const parts: string[] = [];
+		const payload = ctx.wakePayload as Record<string, unknown> | null;
+		if (!payload) return parts;
+
+		const sourceRefs = payload.sourceRefs as
+			| Array<{ bindingId?: string; itemRef?: string; sourceType?: string; sourceRef?: string }>
+			| undefined;
+
+		if (!sourceRefs || !Array.isArray(sourceRefs) || sourceRefs.length === 0) {
+			return parts;
+		}
+
+		log.info({ refCount: sourceRefs.length }, "Enriching wake context with source data");
+
+		for (const ref of sourceRefs.slice(0, 10)) {
+			try {
+				if (ref.bindingId && ref.itemRef) {
+					const item = await sourceReads.getSourceItem(
+						ref.bindingId,
+						ctx.organizationId,
+						ref.itemRef,
+					);
+					if (item) {
+						parts.push(
+							`### [${item.sourceType}] ${item.title}`,
+							`- Status: ${item.status ?? "unknown"}`,
+							`- Severity: ${item.severity ?? "none"}`,
+							`- URL: ${item.url ?? "N/A"}`,
+						);
+						if (item.body) {
+							const truncated =
+								item.body.length > 500 ? `${item.body.slice(0, 500)}...` : item.body;
+							parts.push(`- Description: ${truncated}`);
+						}
+						parts.push("");
+
+						// Emit source_observation
+						await workers.appendWorkerRunEvent({
+							workerRunId: ctx.workerRunId,
+							workerId: ctx.workerId,
+							eventType: "source_observation",
+							summaryText: item.title,
+							payloadJson: {
+								sourceType: item.sourceType,
+								sourceRef: item.sourceRef,
+								severity: item.severity,
+							},
+							dedupeKey: `source:${item.sourceType}:${item.sourceRef}`,
+						});
+					}
+				}
+			} catch (err) {
+				log.warn({ err, ref }, "Failed to enrich source ref");
+				parts.push(`### Source ref (fetch failed): ${ref.sourceType ?? "unknown"}`);
+			}
+		}
+
+		return parts;
+	}
 
 	private async emitTriageEvent(ctx: RunContext, decision: string, reason?: string): Promise<void> {
 		await workers.appendWorkerRunEvent({

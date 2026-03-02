@@ -55,6 +55,8 @@ import {
 	webhookInbox,
 	workerRunEvents,
 	workerRuns,
+	workerSourceBindings,
+	workerSourceCursors,
 	workers,
 } from "./schema";
 
@@ -645,6 +647,7 @@ export const workersRelations = relations(workers, ({ one, many }) => ({
 	}),
 	wakeEvents: many(wakeEvents),
 	runs: many(workerRuns),
+	sourceBindings: many(workerSourceBindings),
 }));
 
 export const wakeEventsRelations = relations(wakeEvents, ({ one }) => ({
@@ -807,5 +810,24 @@ export const notificationPreferencesRelations = relations(notificationPreference
 	user: one(user, {
 		fields: [notificationPreferences.userId],
 		references: [user.id],
+	}),
+}));
+
+export const workerSourceBindingsRelations = relations(workerSourceBindings, ({ one, many }) => ({
+	worker: one(workers, {
+		fields: [workerSourceBindings.workerId],
+		references: [workers.id],
+	}),
+	organization: one(organization, {
+		fields: [workerSourceBindings.organizationId],
+		references: [organization.id],
+	}),
+	cursors: many(workerSourceCursors),
+}));
+
+export const workerSourceCursorsRelations = relations(workerSourceCursors, ({ one }) => ({
+	binding: one(workerSourceBindings, {
+		fields: [workerSourceCursors.bindingId],
+		references: [workerSourceBindings.id],
 	}),
 }));

@@ -1330,6 +1330,11 @@ export async function upsertSessionCapability(
 	});
 }
 
+export async function listSessionCapabilities(sessionId: string): Promise<SessionCapabilityRow[]> {
+	const db = getDb();
+	return db.select().from(sessionCapabilities).where(eq(sessionCapabilities.sessionId, sessionId));
+}
+
 export interface UpsertSessionSkillInput {
 	sessionId: string;
 	skillKey: string;
