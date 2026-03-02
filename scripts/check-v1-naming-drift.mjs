@@ -17,7 +17,7 @@ const scanTargets = [
 ];
 
 const scanExtensions = new Set([".ts", ".tsx", ".js", ".jsx"]);
-const forbiddenPattern = /\bautomation(?:s|Id|_id)?\b/gi;
+const forbiddenPattern = /\bautomation[a-zA-Z0-9_]*\b/gi;
 
 async function walk(fullPath, files = []) {
 	const stat = await fs.stat(fullPath);
@@ -53,13 +53,11 @@ async function main() {
 
 	for (const target of scanTargets) {
 		const fullTarget = path.join(workspaceRoot, target);
-		let stats;
 		try {
-			stats = await fs.stat(fullTarget);
+			await fs.stat(fullTarget);
 		} catch {
 			continue;
 		}
-		if (!stats) continue;
 
 		const files = await walk(fullTarget);
 		for (const filePath of files) {

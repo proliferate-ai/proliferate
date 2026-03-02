@@ -229,12 +229,16 @@
   - `pnpm test` ✅
   - `pnpm build` ⚠️ deferred; local build remains environment-gated in `apps/web`.
 - open comments:
-  - CI and automated review pending.
+  - Followed up on route IA and naming-guard hardening review comments (Greptile + human).
 - fixes applied:
   - Added `check-v1-route-ia.mjs` guard for canonical IA route presence and sidebar primary-route drift.
   - Added `check-v1-naming-drift.mjs` guard to prevent `automation*` naming leakage in V1 runtime-focused paths.
   - Wired new guards into root lint pipeline (`lint:v1-route-ia`, `lint:v1-naming-drift`).
   - Validated hardening checks via direct script runs and full root lint/typecheck/test execution.
+  - Added `/integrations` canonical route file assertion to route IA guard.
+  - Added file-existence guards before reading root route/sidebar files in route IA guard.
+  - Switched sidebar route verification to extract exact route literals from navigation calls (no substring drift false positives).
+  - Broadened naming-drift regex to match all `automation*` legacy variants and removed redundant file-stat check.
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Apply canary/default-on rollout runbook steps with feature flags at deployment time.

@@ -10,6 +10,7 @@ const requiredRouteFiles = [
 	{ route: "/", file: "apps/web/src/app/page.tsx" },
 	{ route: "/sessions", file: "apps/web/src/app/(command-center)/sessions/page.tsx" },
 	{ route: "/coworkers", file: "apps/web/src/app/(command-center)/coworkers/page.tsx" },
+	{ route: "/integrations", file: "apps/web/src/app/(command-center)/integrations/page.tsx" },
 	{ route: "/workspace/[id]", file: "apps/web/src/app/(workspace)/workspace/[id]/page.tsx" },
 	{
 		route: "/settings/repositories",
@@ -42,6 +43,26 @@ async function fileExists(relPath) {
 	}
 }
 
+function extractSidebarRoutes(sidebarContent) {
+	const routes = new Set();
+	const routePatterns = [
+		/handleNavigate\(\s*["'`]([^"'`]+)["'`]\s*\)/g,
+		/router\.push\(\s*["'`]([^"'`]+)["'`]\s*\)/g,
+		/href=\s*["'`]([^"'`]+)["'`]/g,
+	];
+
+	for (const pattern of routePatterns) {
+		for (const match of sidebarContent.matchAll(pattern)) {
+			const route = match[1]?.trim();
+			if (route?.startsWith("/")) {
+				routes.add(route);
+			}
+		}
+	}
+
+	return routes;
+}
+
 async function main() {
 	const failures = [];
 
@@ -51,21 +72,28 @@ async function main() {
 		}
 	}
 
-	const rootPage = await fs.readFile(path.join(workspaceRoot, "apps/web/src/app/page.tsx"), "utf8");
-	if (!rootPage.includes('redirect("/sessions")') && !rootPage.includes("redirect('/sessions')")) {
-		failures.push("Root route '/' must redirect to '/sessions' for V1 IA consistency.");
+	const rootPagePath = "apps/web/src/app/page.tsx";
+	if (await fileExists(rootPagePath)) {
+		const rootPage = await fs.readFile(path.join(workspaceRoot, rootPagePath), "utf8");
+		if (!rootPage.includes('redirect("/sessions")') && !rootPage.includes("redirect('/sessions')")) {
+			failures.push("Root route '/' must redirect to '/sessions' for V1 IA consistency.");
+		}
 	}
 
-	const sidebar = await fs.readFile(path.join(workspaceRoot, sidebarPath), "utf8");
+	let sidebarTargets = new Set();
+	if (await fileExists(sidebarPath)) {
+		const sidebar = await fs.readFile(path.join(workspaceRoot, sidebarPath), "utf8");
+		sidebarTargets = extractSidebarRoutes(sidebar);
+	}
 
 	for (const target of requiredPrimaryTargets) {
-		if (!sidebar.includes(target)) {
+		if (!sidebarTargets.has(target)) {
 			failures.push(`Sidebar is missing required primary target: ${target}`);
 		}
 	}
 
 	for (const target of bannedPrimaryTargets) {
-		if (sidebar.includes(target)) {
+		if (sidebarTargets.has(target)) {
 			failures.push(`Sidebar still references legacy primary target: ${target}`);
 		}
 	}
