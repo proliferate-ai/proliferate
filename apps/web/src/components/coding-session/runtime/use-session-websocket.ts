@@ -138,6 +138,13 @@ function summarizeServerEvent(data: ServerMessage): Record<string, unknown> {
 				status: payload?.status ?? null,
 				message: payload?.message ?? null,
 			};
+		case "control_plane_snapshot":
+			return {
+				type: data.type,
+				runtimeStatus: payload?.runtimeStatus ?? null,
+				operatorStatus: payload?.operatorStatus ?? null,
+				reconnectSequence: payload?.reconnectSequence ?? null,
+			};
 		case "error":
 			return { type: data.type, message: payload?.message ?? null };
 		default:
@@ -526,6 +533,9 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 					prev.filter((a) => a.invocationId !== data.payload.invocationId),
 				);
 			}
+			break;
+
+		case "control_plane_snapshot":
 			break;
 	}
 }

@@ -170,21 +170,25 @@
 - PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/256`
 - scope: Phase 6 gateway/streaming authority updates (control-plane snapshot event contract, reconnect metadata exposure, browser isolation from provider-internal tunnel URLs)
 - check results:
-  - `pnpm -C apps/gateway typecheck` ✅
-  - `pnpm -C apps/gateway test` ✅
-  - `pnpm -C packages/shared typecheck` ✅
-  - `pnpm build` ⚠️ deferred to final hardening pass due local required env vars in `apps/web`.
+  - `pnpm -C apps/gateway typecheck` ⚠️ blocked in this worktree (`node_modules` missing; `tsc` not found).
+  - `pnpm -C apps/gateway test src/hub/control-plane.test.ts` ⚠️ blocked in this worktree (`node_modules` missing; `vitest` not found).
+  - `pnpm -C packages/shared typecheck` ⚠️ blocked in this worktree (`node_modules` missing; `tsc` not found).
+  - `pnpm -C apps/web typecheck` ⚠️ blocked in this worktree (`node_modules` missing; `tsc` not found).
 - open comments:
-  - CI and automated review pending.
+  - Critique 6 processed; CI rerun pending.
 - fixes applied:
   - Added shared websocket contract type `control_plane_snapshot` for reconnect-safe control-plane state hydration.
-  - Added gateway control-plane helper to enforce init config exposure (`previewTunnelUrl` only) and build deterministic snapshot payloads.
+  - Updated gateway init config helper to omit provider preview tunnel URLs from the browser init payload.
   - Updated gateway init flow to emit `control_plane_snapshot` immediately after `init`.
   - Extended session context mapping with runtime/operator/capability/visibility/worker linkage fields required by control-plane snapshots.
   - Added gateway contract tests for preview config exposure and control-plane snapshot payload shape.
   - Aligned gateway snapshot payload type to shared contract (`ControlPlaneSnapshotMessage[\"payload\"]`) to prevent local/shared drift.
   - Hardened `sandboxAvailable` derivation to require non-terminal runtime status, not just historical sandbox ID presence.
   - Added reconnect-time DB refresh for control-plane fields and runtime-status override mapping from live hub status.
+  - Tightened shared control-plane snapshot enums (`runtimeStatus`, `operatorStatus`, `visibility`) to canonical shared contract literal unions.
+  - Strengthened `SessionRecord` typing for mapped control-plane fields by making V1 runtime/operator/capability/visibility/worker fields non-optional.
+  - Added explicit no-op handling for `control_plane_snapshot` in web websocket summarization and message switch to prevent silent fall-through.
+  - Extended control-plane snapshot test assertion to verify dynamic `emittedAt` field presence.
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Complete reconnect/resubscribe contract coverage from workspace client perspective.

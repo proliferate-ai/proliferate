@@ -1,6 +1,11 @@
 // Message types for Client <-> Durable Object WebSocket communication
 
 import type { AutoStartOutputEntry, ConfigurationServiceCommand } from "./sandbox-provider";
+import type {
+	SessionOperatorStatus,
+	SessionRuntimeStatus,
+	SessionVisibility,
+} from "./contracts/v1-entities";
 
 // Client source - where the message originated from
 export type ClientSource = "slack" | "web" | "api" | "cli" | "automation";
@@ -421,10 +426,10 @@ export interface ControlPlaneSnapshotMessage {
 	type: "control_plane_snapshot";
 	payload: {
 		sessionId: string;
-		runtimeStatus: string | null;
-		operatorStatus: string | null;
+		runtimeStatus: SessionRuntimeStatus | null;
+		operatorStatus: SessionOperatorStatus | null;
 		capabilitiesVersion: number | null;
-		visibility: string | null;
+		visibility: SessionVisibility | null;
 		workerId: string | null;
 		workerRunId: string | null;
 		sandboxAvailable: boolean;

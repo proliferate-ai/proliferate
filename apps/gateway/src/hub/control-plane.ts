@@ -1,23 +1,21 @@
-import type { ControlPlaneSnapshotMessage } from "@proliferate/shared";
+import type { ControlPlaneSnapshotMessage, SessionRuntimeStatus } from "@proliferate/shared";
 import type { SessionRecord } from "../lib/session-store";
 
 export type ControlPlaneSnapshotPayload = ControlPlaneSnapshotMessage["payload"];
 
 export function buildInitConfig(
-	previewUrl: string | null,
-): { previewTunnelUrl: string } | undefined {
-	if (!previewUrl) {
-		return undefined;
-	}
-	return { previewTunnelUrl: previewUrl };
+	_previewUrl: string | null,
+): undefined {
+	return undefined;
 }
 
 export function buildControlPlaneSnapshot(
 	session: SessionRecord,
 	reconnectSequence: number,
-	runtimeStatusOverride?: string | null,
+	runtimeStatusOverride?: SessionRuntimeStatus | null,
 ): ControlPlaneSnapshotPayload {
-	const runtimeStatus = runtimeStatusOverride ?? session.runtime_status ?? session.status ?? null;
+	const runtimeStatus: SessionRuntimeStatus | null =
+		runtimeStatusOverride ?? session.runtime_status ?? null;
 	const unavailableStatuses = new Set(["stopped", "error", "failed", "completed", "cancelled"]);
 
 	return {

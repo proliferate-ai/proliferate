@@ -19,6 +19,7 @@ import type {
 	Message,
 	SandboxProviderType,
 	ServerMessage,
+	SessionRuntimeStatus,
 	SessionEventMessage,
 	SnapshotResultMessage,
 } from "@proliferate/shared";
@@ -1681,7 +1682,7 @@ export class SessionHub {
 			| "error"
 			| "migrating"
 			| null,
-	): string | null {
+	): SessionRuntimeStatus | null {
 		switch (status) {
 			case "creating":
 			case "resuming":
@@ -1709,10 +1710,14 @@ export class SessionHub {
 			return {
 				...base,
 				status: fresh.status ?? base.status ?? null,
-				runtime_status: fresh.runtimeStatus ?? base.runtime_status ?? null,
-				operator_status: fresh.operatorStatus ?? base.operator_status ?? null,
+				runtime_status:
+					(fresh.runtimeStatus as SessionRuntimeStatus | null) ?? base.runtime_status ?? null,
+				operator_status:
+					(fresh.operatorStatus as SessionRecord["operator_status"]) ??
+					base.operator_status ??
+					null,
 				capabilities_version: fresh.capabilitiesVersion ?? base.capabilities_version ?? null,
-				visibility: fresh.visibility ?? base.visibility ?? null,
+				visibility: (fresh.visibility as SessionRecord["visibility"]) ?? base.visibility ?? null,
 				worker_id: fresh.workerId ?? base.worker_id ?? null,
 				worker_run_id: fresh.workerRunId ?? base.worker_run_id ?? null,
 				sandbox_id: fresh.sandboxId ?? base.sandbox_id ?? null,

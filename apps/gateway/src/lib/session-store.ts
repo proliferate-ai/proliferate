@@ -4,6 +4,9 @@ import {
 	type AgentConfig,
 	type ModelId,
 	type RepoSpec,
+	type SessionOperatorStatus,
+	type SessionRuntimeStatus,
+	type SessionVisibility,
 	getAutomationSystemPrompt,
 	getCodingSystemPrompt,
 	getDefaultAgentConfig,
@@ -47,12 +50,12 @@ export interface SessionRecord {
 	agent_config?: { modelId?: string; tools?: string[]; reasoningEffort?: string } | null;
 	system_prompt?: string | null;
 	status?: string | null;
-	runtime_status?: string | null;
-	operator_status?: string | null;
-	capabilities_version?: number | null;
-	visibility?: string | null;
-	worker_id?: string | null;
-	worker_run_id?: string | null;
+	runtime_status: SessionRuntimeStatus | null;
+	operator_status: SessionOperatorStatus | null;
+	capabilities_version: number | null;
+	visibility: SessionVisibility | null;
+	worker_id: string | null;
+	worker_run_id: string | null;
 	pause_reason?: string | null;
 	client_type?: string | null;
 	client_metadata?: unknown | null;
@@ -144,10 +147,10 @@ export async function loadSessionContext(
 		agent_config: sessionRow.agentConfig as SessionRecord["agent_config"],
 		system_prompt: sessionRow.systemPrompt,
 		status: sessionRow.status,
-		runtime_status: sessionRow.runtimeStatus,
-		operator_status: sessionRow.operatorStatus,
+		runtime_status: (sessionRow.runtimeStatus as SessionRuntimeStatus | null) ?? null,
+		operator_status: (sessionRow.operatorStatus as SessionOperatorStatus | null) ?? null,
 		capabilities_version: sessionRow.capabilitiesVersion ?? null,
-		visibility: sessionRow.visibility ?? null,
+		visibility: (sessionRow.visibility as SessionVisibility | null) ?? null,
 		worker_id: sessionRow.workerId ?? null,
 		worker_run_id: sessionRow.workerRunId ?? null,
 		pause_reason: sessionRow.pauseReason,

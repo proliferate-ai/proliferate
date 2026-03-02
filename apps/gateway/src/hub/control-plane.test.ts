@@ -41,11 +41,9 @@ function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
 }
 
 describe("control-plane helpers", () => {
-	it("buildInitConfig only exposes preview tunnel config", () => {
+	it("buildInitConfig omits provider tunnel config", () => {
 		const config = buildInitConfig("https://preview.example");
-		expect(config).toEqual({ previewTunnelUrl: "https://preview.example" });
-		// Browser contract: do not expose internal daemon tunnel URLs.
-		expect(config).not.toHaveProperty("openCodeTunnelUrl");
+		expect(config).toBeUndefined();
 	});
 
 	it("buildControlPlaneSnapshot returns DB/gateway control-plane state", () => {
@@ -61,6 +59,7 @@ describe("control-plane helpers", () => {
 				workerRunId: "run-1",
 				sandboxAvailable: true,
 				reconnectSequence: 4,
+				emittedAt: expect.any(String),
 			}),
 		);
 	});
