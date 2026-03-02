@@ -11,6 +11,7 @@ import type {
 } from "@proliferate/shared/contracts";
 import {
 	type InferSelectModel,
+	actionInvocations,
 	and,
 	asc,
 	desc,
@@ -31,6 +32,7 @@ import {
 	sessionUserState,
 	sessions,
 	sql,
+	workers,
 } from "../db/client";
 import type {
 	CreateSessionInput,
@@ -58,6 +60,13 @@ export type SessionWithRepoRow = SessionRow & {
 	repo: RepoRow | null;
 	automation?: AutomationSummary | null;
 	configuration?: ConfigurationSummary | null;
+};
+
+/** Enriched session row with unread, worker name, and pending approval count */
+export type EnrichedSessionRow = SessionWithRepoRow & {
+	workerName: string | null;
+	isUnread: boolean;
+	pendingApprovalCount: number;
 };
 
 // ============================================
@@ -89,11 +98,12 @@ export async function listByOrganization(
 	}
 
 	if (filters?.excludeSetup) {
-		conditions.push(ne(sessions.sessionType, "setup"));
+		// Use or(ne, isNull) because NULL <> 'setup' evaluates to NULL in SQL
+		conditions.push(or(ne(sessions.sessionType, "setup"), isNull(sessions.sessionType))!);
 	}
 
 	if (filters?.excludeCli) {
-		conditions.push(ne(sessions.origin, "cli"));
+		conditions.push(or(ne(sessions.origin, "cli"), isNull(sessions.origin))!);
 	}
 
 	if (filters?.excludeAutomation) {
@@ -143,6 +153,134 @@ export async function listByOrganization(
 	});
 
 	return results;
+}
+
+/**
+ * List sessions for an organization with enrichment data (unread, worker name, pending approvals).
+ *
+ * Enrichments:
+ * 1. Left-join sessionUserState to compute isUnread
+ * 2. Left-join workers to get worker name
+ * 3. Subquery count of pending action_invocations per session
+ * 4. Optional operator status priority sorting
+ */
+export async function listByOrganizationEnriched(
+	orgId: string,
+	userId: string,
+	filters?: ListSessionsFilters,
+): Promise<EnrichedSessionRow[]> {
+	const db = getDb();
+
+	// Build where conditions (same as listByOrganization)
+	const conditions = [eq(sessions.organizationId, orgId)];
+
+	if (filters?.repoId) {
+		conditions.push(eq(sessions.repoId, filters.repoId));
+	}
+
+	if (filters?.status) {
+		conditions.push(eq(sessions.status, filters.status));
+	}
+
+	if (filters?.kinds && filters.kinds.length > 0) {
+		const kindConditions = [inArray(sessions.kind, filters.kinds)];
+		if (filters.kinds.includes("task")) {
+			kindConditions.push(isNull(sessions.kind));
+		}
+		conditions.push(or(...kindConditions)!);
+	}
+
+	if (filters?.excludeSetup) {
+		conditions.push(or(ne(sessions.sessionType, "setup"), isNull(sessions.sessionType))!);
+	}
+
+	if (filters?.excludeCli) {
+		conditions.push(or(ne(sessions.origin, "cli"), isNull(sessions.origin))!);
+	}
+
+	if (filters?.excludeAutomation) {
+		conditions.push(isNull(sessions.automationId));
+	}
+
+	if (filters?.createdBy) {
+		conditions.push(eq(sessions.createdBy, filters.createdBy));
+	}
+
+	// Pending approval count subquery
+	const pendingApprovalCount = db
+		.select({
+			sessionId: actionInvocations.sessionId,
+			count: sql<number>`count(*)`.as("pending_count"),
+		})
+		.from(actionInvocations)
+		.where(eq(actionInvocations.status, "pending"))
+		.groupBy(actionInvocations.sessionId)
+		.as("pending_approvals");
+
+	const rows = await db
+		.select({
+			session: sessions,
+			workerName: workers.name,
+			lastViewedAt: sessionUserState.lastViewedAt,
+			pendingApprovalCount: pendingApprovalCount.count,
+		})
+		.from(sessions)
+		.leftJoin(workers, eq(sessions.workerId, workers.id))
+		.leftJoin(
+			sessionUserState,
+			and(eq(sessionUserState.sessionId, sessions.id), eq(sessionUserState.userId, userId)),
+		)
+		.leftJoin(pendingApprovalCount, eq(pendingApprovalCount.sessionId, sessions.id))
+		.where(and(...conditions))
+		.orderBy(
+			// Operator status priority: waiting_for_approval/needs_input first, then running, then failed, then others
+			sql`CASE
+				WHEN ${sessions.operatorStatus} IN ('waiting_for_approval', 'needs_input') THEN 0
+				WHEN ${sessions.status} IN ('starting', 'running') THEN 1
+				WHEN ${sessions.operatorStatus} = 'errored' THEN 2
+				WHEN ${sessions.status} IN ('paused') THEN 3
+				ELSE 4
+			END`,
+			desc(sessions.lastActivityAt),
+		)
+		.limit(filters?.limit ?? 50);
+
+	// Fetch repos, automations, and configurations for the result set
+	const sessionIds = rows.map((r) => r.session.id);
+	if (sessionIds.length === 0) return [];
+
+	// Use the relational query to get repos/automations/configurations
+	const sessionsWithRelations = await db.query.sessions.findMany({
+		where: inArray(sessions.id, sessionIds),
+		with: {
+			repo: true,
+			automation: {
+				columns: { id: true, name: true },
+			},
+			configuration: {
+				columns: { id: true, name: true },
+			},
+		},
+	});
+
+	const relationsMap = new Map(sessionsWithRelations.map((s) => [s.id, s]));
+
+	return rows.map((row) => {
+		const relations = relationsMap.get(row.session.id);
+		const isUnread =
+			row.session.lastVisibleUpdateAt != null &&
+			(row.lastViewedAt == null || row.session.lastVisibleUpdateAt > row.lastViewedAt);
+
+		return {
+			...row.session,
+			repo: relations?.repo ?? null,
+			automation: relations?.automation ?? null,
+			configuration: relations?.configuration ?? null,
+			workerName: row.workerName ?? null,
+			isUnread,
+			pendingApprovalCount: Number(row.pendingApprovalCount ?? 0),
+		};
+	});
 }
 
 /**
@@ -210,7 +348,9 @@ export async function create(input: CreateSessionInput): Promise<SessionRow> {
 			triggerId: input.triggerId ?? null,
 			triggerEventId: input.triggerEventId ?? null,
 			...(input.visibility && { visibility: input.visibility }),
-			...(input.kind && { kind: input.kind }),
+			...("kind" in input ? { kind: input.kind } : {}),
+			continuedFromSessionId: input.continuedFromSessionId ?? null,
+			rerunOfSessionId: input.rerunOfSessionId ?? null,
 		})
 		.returning();
 
@@ -274,7 +414,9 @@ export async function createWithAdmissionGuard(
 			triggerId: input.triggerId ?? null,
 			triggerEventId: input.triggerEventId ?? null,
 			...(input.visibility && { visibility: input.visibility }),
-			...(input.kind && { kind: input.kind }),
+			...("kind" in input ? { kind: input.kind } : {}),
+			continuedFromSessionId: input.continuedFromSessionId ?? null,
+			rerunOfSessionId: input.rerunOfSessionId ?? null,
 		});
 
 		return { created: true };

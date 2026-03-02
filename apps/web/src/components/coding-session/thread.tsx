@@ -4,6 +4,7 @@ import { ModelSelector } from "@/components/automations/model-selector";
 import { Button } from "@/components/ui/button";
 import { BlocksIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
+import { useCreateFollowUp } from "@/hooks/use-follow-up";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import {
@@ -28,7 +29,7 @@ import {
 	X,
 } from "lucide-react";
 import type { FC } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 import { InboxTray } from "./inbox-tray";
@@ -242,6 +243,16 @@ const AssistantAvatar: FC = () => (
 	</div>
 );
 
+interface SessionStateForComposer {
+	sessionId: string;
+	status: string | null;
+	runtimeStatus?: string | null;
+	operatorStatus?: string | null;
+	pauseReason?: string | null;
+	outcome?: string | null;
+	workerId?: string | null;
+}
+
 interface ThreadProps {
 	title?: string;
 	description?: string;
@@ -253,6 +264,7 @@ interface ThreadProps {
 	statusMessage?: string | null;
 	pendingApprovals?: ActionApprovalRequestMessage["payload"][];
 	runId?: string;
+	sessionState?: SessionStateForComposer;
 }
 
 export const Thread: FC<ThreadProps> = ({
@@ -266,6 +278,7 @@ export const Thread: FC<ThreadProps> = ({
 	statusMessage,
 	pendingApprovals,
 	runId,
+	sessionState,
 }) => {
 	return (
 		<ThreadPrimitive.Root className="flex h-full flex-col">
@@ -324,7 +337,7 @@ export const Thread: FC<ThreadProps> = ({
 						</Button>
 					</div>
 				)}
-				<Composer />
+				<Composer sessionState={sessionState} />
 			</div>
 
 			{allToolUIs.map(({ id, Component }) => (
@@ -334,13 +347,60 @@ export const Thread: FC<ThreadProps> = ({
 	);
 };
 
-const Composer: FC = () => {
+type ComposerMode = "normal" | "paused" | "waiting_approval" | "completed" | "failed";
+
+function deriveComposerMode(sessionState?: SessionStateForComposer): ComposerMode {
+	if (!sessionState) return "normal";
+
+	const { status, runtimeStatus, operatorStatus, pauseReason, outcome } = sessionState;
+
+	if (operatorStatus === "waiting_for_approval") return "waiting_approval";
+
+	if (runtimeStatus === "failed" || (status === "stopped" && pauseReason === "snapshot_failed")) {
+		return "failed";
+	}
+
+	if (runtimeStatus === "completed" || (status === "stopped" && outcome)) {
+		return "completed";
+	}
+
+	if (status === "paused") return "paused";
+
+	return "normal";
+}
+
+const COMPOSER_LABELS: Record<ComposerMode, string | null> = {
+	normal: null,
+	paused: "Session is paused. Sending a message will resume it.",
+	waiting_approval: "Waiting for approval. Message will be delivered after resolution.",
+	completed: "Session completed. Sending will start a new continuation.",
+	failed: "Session failed. Sending will start a new rerun.",
+};
+
+const COMPOSER_PLACEHOLDERS: Record<ComposerMode, string> = {
+	normal: "Send a follow-up...",
+	paused: "Send a message to resume...",
+	waiting_approval: "Queue a message...",
+	completed: "Start a continuation...",
+	failed: "Start a rerun...",
+};
+
+interface ComposerProps {
+	sessionState?: SessionStateForComposer;
+}
+
+const Composer: FC<ComposerProps> = ({ sessionState }) => {
 	const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const threadRuntime = useThreadRuntime();
 	const composerRuntime = useComposerRuntime();
 	const { selectedModel, setSelectedModel } = useDashboardStore();
+	const createFollowUp = useCreateFollowUp();
+
+	const composerMode = deriveComposerMode(sessionState);
+	const label = COMPOSER_LABELS[composerMode];
+	const placeholder = COMPOSER_PLACEHOLDERS[composerMode];
 
 	const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } =
 		useSpeechRecognition();
@@ -380,9 +440,39 @@ const Composer: FC = () => {
 		}
 	};
 
+	const handleFollowUpSubmit = useCallback(
+		(text: string) => {
+			if (!sessionState) return;
+
+			if (composerMode === "completed") {
+				createFollowUp.mutate({
+					sourceSessionId: sessionState.sessionId,
+					mode: "continuation",
+					initialPrompt: text,
+				});
+			} else if (composerMode === "failed") {
+				createFollowUp.mutate({
+					sourceSessionId: sessionState.sessionId,
+					mode: "rerun",
+					initialPrompt: text,
+				});
+			}
+		},
+		[sessionState, composerMode, createFollowUp],
+	);
+
+	const isTerminal = composerMode === "completed" || composerMode === "failed";
+
 	const handleSendWithAttachments = () => {
 		const text = composerRuntime.getState().text.trim();
 		if (!text && attachments.length === 0) return;
+
+		if (isTerminal && text) {
+			handleFollowUpSubmit(text);
+			composerRuntime.setText("");
+			setAttachments([]);
+			return;
+		}
 
 		const content: Array<{ type: "text"; text: string } | { type: "image"; image: string }> = [];
 		if (text) content.push({ type: "text", text });
@@ -407,6 +497,8 @@ const Composer: FC = () => {
 				className="hidden"
 			/>
 
+			{label && <p className="text-xs text-muted-foreground px-5 pb-1.5">{label}</p>}
+
 			<div className="flex flex-col rounded-3xl border border-border bg-muted/40 dark:bg-card">
 				{attachments.length > 0 && (
 					<div className="flex gap-2 px-4 pt-3 pb-0 flex-wrap">
@@ -422,14 +514,19 @@ const Composer: FC = () => {
 				)}
 
 				<ComposerPrimitive.Input
-					placeholder="Ask anything..."
+					placeholder={placeholder}
 					className="flex-1 resize-none bg-transparent px-5 py-3.5 text-sm outline-none placeholder:text-muted-foreground"
 					rows={1}
 					autoFocus
 					onKeyDown={(e) => {
-						if (e.key === "Enter" && !e.shiftKey && attachments.length > 0) {
-							e.preventDefault();
-							handleSendWithAttachments();
+						if (e.key === "Enter" && !e.shiftKey) {
+							if (isTerminal) {
+								e.preventDefault();
+								handleSendWithAttachments();
+							} else if (attachments.length > 0) {
+								e.preventDefault();
+								handleSendWithAttachments();
+							}
 						}
 					}}
 				/>
@@ -446,15 +543,27 @@ const Composer: FC = () => {
 						</Button>
 						<ComposerActionsLeft selectedModel={selectedModel} onModelChange={setSelectedModel} />
 					</div>
-					<ComposerActionsRight
-						hasAttachments={attachments.length > 0}
-						hasContent={!!hasContent}
-						onSendWithAttachments={handleSendWithAttachments}
-						onAttachClick={handleAttachClick}
-						onToggleRecording={toggleRecording}
-						listening={listening}
-						browserSupportsSpeechRecognition={browserSupportsSpeechRecognition}
-					/>
+					<div className="flex items-center gap-0.5">
+						{sessionState?.workerId && (
+							<Button
+								variant="ghost"
+								size="sm"
+								className="h-7 text-xs text-muted-foreground hover:text-foreground px-2"
+								disabled
+							>
+								Send back to coworker
+							</Button>
+						)}
+						<ComposerActionsRight
+							hasAttachments={attachments.length > 0}
+							hasContent={!!hasContent}
+							onSendWithAttachments={handleSendWithAttachments}
+							onAttachClick={handleAttachClick}
+							onToggleRecording={toggleRecording}
+							listening={listening}
+							browserSupportsSpeechRecognition={browserSupportsSpeechRecognition}
+						/>
+					</div>
 				</div>
 			</div>
 		</ComposerPrimitive.Root>

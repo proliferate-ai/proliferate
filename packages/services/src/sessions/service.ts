@@ -55,6 +55,27 @@ export async function listSessions(
 }
 
 /**
+ * List all sessions for an organization with enrichment data (unread, worker name, pending approvals).
+ */
+export async function listSessionsEnriched(
+	orgId: string,
+	userId: string,
+	options?: ListSessionsOptions,
+): Promise<Session[]> {
+	const rows = await sessionsDb.listByOrganizationEnriched(orgId, userId, {
+		repoId: options?.repoId,
+		status: options?.status,
+		kinds: options?.kinds,
+		limit: options?.limit,
+		excludeSetup: options?.excludeSetup,
+		excludeCli: options?.excludeCli,
+		excludeAutomation: options?.excludeAutomation,
+		createdBy: options?.createdBy,
+	});
+	return rows.map((row) => toSession(row));
+}
+
+/**
  * Get a single session by ID.
  */
 export async function getSession(id: string, orgId: string): Promise<Session | null> {
@@ -244,6 +265,8 @@ export interface CreateSessionInput {
 	userId: string;
 	gatewayUrl: string;
 	serviceToken: string;
+	continuedFromSessionId?: string;
+	rerunOfSessionId?: string;
 }
 
 export interface CreateSessionResult {
@@ -278,6 +301,8 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		userId,
 		gatewayUrl,
 		serviceToken,
+		continuedFromSessionId,
+		rerunOfSessionId,
 	} = input;
 
 	// Check billing/credits before creating session
@@ -305,6 +330,8 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 			userId,
 			gatewayUrl,
 			serviceToken,
+			continuedFromSessionId,
+			rerunOfSessionId,
 		});
 	}
 
@@ -318,6 +345,8 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		userId,
 		gatewayUrl,
 		serviceToken,
+		continuedFromSessionId,
+		rerunOfSessionId,
 	});
 }
 
@@ -329,9 +358,20 @@ async function createScratchSession(input: {
 	userId: string;
 	gatewayUrl: string;
 	serviceToken: string;
+	continuedFromSessionId?: string;
+	rerunOfSessionId?: string;
 }): Promise<CreateSessionResult> {
-	const { sessionType, agentConfig, initialPrompt, orgId, userId, gatewayUrl, serviceToken } =
-		input;
+	const {
+		sessionType,
+		agentConfig,
+		initialPrompt,
+		orgId,
+		userId,
+		gatewayUrl,
+		serviceToken,
+		continuedFromSessionId,
+		rerunOfSessionId,
+	} = input;
 
 	const provider = getSandboxProvider();
 	const sessionId = randomUUID();
@@ -339,7 +379,7 @@ async function createScratchSession(input: {
 	const doUrl = `${gatewayUrl}/session/${sessionId}`;
 	reqLog.info({ sessionType }, "Creating scratch session");
 
-	// K2: Ad-hoc task sessions default to private visibility
+	// K2: Scratch sessions have no repo/worker linkage — kind=null (ad-hoc)
 	await createSessionWithAdmission(orgId, {
 		id: sessionId,
 		configurationId: null,
@@ -350,12 +390,15 @@ async function createScratchSession(input: {
 		sandboxProvider: provider.type,
 		snapshotId: null,
 		initialPrompt,
+		kind: null,
 		visibility: "private",
 		...(initialPrompt ? { titleStatus: "generating" } : {}),
 		agentConfig: {
 			modelId: agentConfig.modelId,
 			...(agentConfig.reasoningEffort && { reasoningEffort: agentConfig.reasoningEffort }),
 		},
+		continuedFromSessionId: continuedFromSessionId ?? null,
+		rerunOfSessionId: rerunOfSessionId ?? null,
 	});
 
 	reqLog.info("Scratch session record created");
@@ -390,6 +433,8 @@ async function createConfigurationSession(input: {
 	userId: string;
 	gatewayUrl: string;
 	serviceToken: string;
+	continuedFromSessionId?: string;
+	rerunOfSessionId?: string;
 }): Promise<CreateSessionResult> {
 	const {
 		configurationId,
@@ -400,6 +445,8 @@ async function createConfigurationSession(input: {
 		userId,
 		gatewayUrl,
 		serviceToken,
+		continuedFromSessionId,
+		rerunOfSessionId,
 	} = input;
 
 	// Get configuration by ID
@@ -461,6 +508,8 @@ async function createConfigurationSession(input: {
 			modelId: agentConfig.modelId,
 			...(agentConfig.reasoningEffort && { reasoningEffort: agentConfig.reasoningEffort }),
 		},
+		continuedFromSessionId: continuedFromSessionId ?? null,
+		rerunOfSessionId: rerunOfSessionId ?? null,
 	});
 
 	reqLog.info("Session record created, returning immediately");

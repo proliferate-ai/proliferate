@@ -4,7 +4,7 @@ import { orpc } from "@/lib/orpc";
 import type { CreateSessionInput, FinalizeSetupInput } from "@proliferate/shared";
 import type { Session } from "@proliferate/shared/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 export function useSessions(params?: {
 	status?: string;
@@ -257,6 +257,24 @@ export function useUnsubscribeNotifications() {
 			);
 		},
 	});
+}
+
+export function useMarkSessionViewed(sessionId: string | undefined) {
+	const queryClient = useQueryClient();
+	const markedRef = useRef<string | null>(null);
+
+	const mutation = useMutation({
+		...orpc.sessions.markViewed.mutationOptions(),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: orpc.sessions.list.key() });
+		},
+	});
+
+	useEffect(() => {
+		if (!sessionId || markedRef.current === sessionId) return;
+		markedRef.current = sessionId;
+		mutation.mutate({ id: sessionId });
+	}, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 export function useFinalizeSetup() {

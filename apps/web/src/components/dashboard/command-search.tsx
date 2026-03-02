@@ -12,7 +12,7 @@ import {
 import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
 import { useSessions } from "@/hooks/use-sessions";
 import { useDashboardStore } from "@/stores/dashboard";
-import { Blocks, Home, Plus, Search } from "lucide-react";
+import { Blocks, Home, Plug, Plus, Search, Settings, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { AutomationRow } from "./automation-row";
@@ -28,7 +28,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
 
 	// Fetch sessions
-	const { data: sessions } = useSessions({ kinds: ["task"], excludeSetup: true });
+	const { data: sessions } = useSessions({ excludeSetup: true });
 
 	// Fetch automations
 	const { data: automations = [] } = useAutomations();
@@ -92,6 +92,15 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 						<Plus className="mr-2 h-4 w-4" />
 						<span>New Coworker</span>
 					</CommandItem>
+					<CommandItem
+						onSelect={() => {
+							router.push("/settings/repositories");
+							onOpenChange(false);
+						}}
+					>
+						<Plug className="mr-2 h-4 w-4" />
+						<span>Connect Repository</span>
+					</CommandItem>
 				</CommandGroup>
 
 				<CommandSeparator />
@@ -109,12 +118,39 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 					</CommandItem>
 					<CommandItem
 						onSelect={() => {
+							router.push("/sessions");
+							onOpenChange(false);
+						}}
+					>
+						<User className="mr-2 h-4 w-4" />
+						<span>Sessions</span>
+					</CommandItem>
+					<CommandItem
+						onSelect={() => {
 							router.push("/coworkers");
 							onOpenChange(false);
 						}}
 					>
 						<Blocks className="mr-2 h-4 w-4" />
 						<span>Coworkers</span>
+					</CommandItem>
+					<CommandItem
+						onSelect={() => {
+							router.push("/integrations");
+							onOpenChange(false);
+						}}
+					>
+						<Plug className="mr-2 h-4 w-4" />
+						<span>Integrations</span>
+					</CommandItem>
+					<CommandItem
+						onSelect={() => {
+							router.push("/settings/profile");
+							onOpenChange(false);
+						}}
+					>
+						<Settings className="mr-2 h-4 w-4" />
+						<span>Settings</span>
 					</CommandItem>
 				</CommandGroup>
 

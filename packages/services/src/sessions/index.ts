@@ -23,7 +23,12 @@ export {
 export * from "./v1-service";
 
 // DB row types (from Drizzle schema)
-export type { SessionRow, SessionWithRepoRow, RepoRow as SessionRepoRow } from "./db";
+export type {
+	SessionRow,
+	SessionWithRepoRow,
+	EnrichedSessionRow,
+	RepoRow as SessionRepoRow,
+} from "./db";
 
 // Input/service types
 export type {

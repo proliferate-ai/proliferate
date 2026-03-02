@@ -340,6 +340,13 @@
       "when": 1772576400000,
       "tag": "0044_add_session_created_event_type",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1772437208032,
+      "tag": "0049_tense_inertia",
+      "breakpoints": true
     }
   ]
 }

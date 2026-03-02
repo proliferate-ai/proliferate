@@ -10,7 +10,7 @@ import { useDashboardStore } from "@/stores/dashboard";
 import { modelSupportsReasoning } from "@proliferate/shared/agents";
 import type { PendingRunSummary } from "@proliferate/shared/contracts";
 import { formatDistanceToNow } from "date-fns";
-import { AlertCircle, ArrowRight } from "lucide-react";
+import { AlertCircle, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EmptyChatsIllustration, PageEmptyState, PlusBadge } from "./page-empty-state";
@@ -147,7 +147,6 @@ function NeedsAttention() {
 
 function RecentActivity() {
 	const { data: sessions, isLoading } = useSessions({
-		kinds: ["task"],
 		limit: 5,
 		excludeSetup: true,
 		excludeCli: true,
@@ -185,7 +184,6 @@ export function EmptyDashboard() {
 	const createConfiguration = useCreateConfiguration();
 	const createSession = useCreateSession();
 	const { data: recentSessions } = useSessions({
-		kinds: ["task"],
 		limit: 1,
 		excludeSetup: true,
 		excludeCli: true,
@@ -257,7 +255,22 @@ export function EmptyDashboard() {
 							badge={<PlusBadge />}
 							title="Start your first session"
 							description="Type a prompt above to spin up a coding agent in a cloud environment."
-						/>
+						>
+							<Link
+								href="/settings/repositories"
+								className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+							>
+								<Plus className="h-3.5 w-3.5" />
+								Connect a repository
+							</Link>
+							<Link
+								href="/coworkers"
+								className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+							>
+								<Plus className="h-3.5 w-3.5" />
+								Create a coworker
+							</Link>
+						</PageEmptyState>
 					)}
 
 					{/* Activity summary for returning users */}
