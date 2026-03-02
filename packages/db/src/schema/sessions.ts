@@ -210,7 +210,7 @@ export const sessions = pgTable(
 		),
 		check(
 			"sessions_task_linkage_check",
-			sql`(kind != 'task'::text) OR (repo_id IS NOT NULL AND repo_baseline_id IS NOT NULL AND repo_baseline_target_id IS NOT NULL)`,
+			sql`(kind != 'task'::text) OR (repo_id IS NOT NULL AND repo_baseline_id IS NOT NULL)`,
 		),
 		check(
 			"sessions_setup_requires_repo_check",
