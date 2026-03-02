@@ -170,12 +170,11 @@
 - PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/256`
 - scope: Phase 6 gateway/streaming authority updates (control-plane snapshot event contract, reconnect metadata exposure, browser isolation from provider-internal tunnel URLs)
 - check results:
-  - `pnpm -C apps/gateway typecheck` ⚠️ blocked in this worktree (`node_modules` missing; `tsc` not found).
-  - `pnpm -C apps/gateway test src/hub/control-plane.test.ts` ⚠️ blocked in this worktree (`node_modules` missing; `vitest` not found).
-  - `pnpm -C packages/shared typecheck` ⚠️ blocked in this worktree (`node_modules` missing; `tsc` not found).
-  - `pnpm -C apps/web typecheck` ⚠️ blocked in this worktree (`node_modules` missing; `tsc` not found).
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm -C apps/gateway test src/hub/control-plane.test.ts` ✅ (targeted subset for touched gateway control-plane modules)
 - open comments:
-  - Critique 6 processed; CI rerun pending.
+  - Critique 6 processed; awaiting CI/Greptile rerun on rebased stack.
 - fixes applied:
   - Added shared websocket contract type `control_plane_snapshot` for reconnect-safe control-plane state hydration.
   - Updated gateway init config helper to omit provider preview tunnel URLs from the browser init payload.
