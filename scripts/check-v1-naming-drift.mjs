@@ -34,7 +34,7 @@ const ignoreStringPatterns = [
 	/^configuration(?:s|Id|_id)?$/i,
 ];
 
-const sessionKindsFile = "packages/db/src/schema/sessions.ts";
+const sessionKindsFile = "packages/db/src/schema/schema.ts";
 const sharedSessionContractFile = "packages/shared/src/contracts/sessions.ts";
 const allowedSessionKinds = ["manager", "task", "setup"];
 
