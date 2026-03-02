@@ -23,7 +23,7 @@ const scanTargets = [
 ];
 
 const scanExtensions = new Set([".ts", ".tsx", ".js", ".jsx"]);
-const forbiddenPattern = /\b(?:automation|configuration)(?:s|Id|_id)?\b/gi;
+const forbiddenPattern = /\b(?:automation[a-zA-Z0-9_]*|configuration[a-zA-Z0-9_]*)\b/gi;
 const stringLiteralPattern = /(["'`])((?:\\.|(?!\1)[\s\S])*?)\1/g;
 const skipTermScanPathPatterns = [/^packages\/db\/src\/schema\//];
 const ignoreStringPatterns = [
