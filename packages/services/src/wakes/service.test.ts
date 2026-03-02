@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockCreateWakeEvent, mockTransitionWakeEventStatus, mockFindWakeEventById } = vi.hoisted(() => ({
-	mockCreateWakeEvent: vi.fn(),
-	mockTransitionWakeEventStatus: vi.fn(),
-	mockFindWakeEventById: vi.fn(),
-}));
+const { mockCreateWakeEvent, mockTransitionWakeEventStatus, mockFindWakeEventById } = vi.hoisted(
+	() => ({
+		mockCreateWakeEvent: vi.fn(),
+		mockTransitionWakeEventStatus: vi.fn(),
+		mockFindWakeEventById: vi.fn(),
+	}),
+);
 
 vi.mock("./db", () => ({
 	createWakeEvent: mockCreateWakeEvent,

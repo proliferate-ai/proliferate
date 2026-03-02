@@ -89,7 +89,10 @@ export async function failClaimedWake(
 	});
 }
 
-export async function isTerminalWake(wakeEventId: string, organizationId: string): Promise<boolean> {
+export async function isTerminalWake(
+	wakeEventId: string,
+	organizationId: string,
+): Promise<boolean> {
 	const wake = await wakesDb.findWakeEventById(wakeEventId, organizationId);
 	if (!wake) return false;
 	return isTerminalWakeEventStatus(wake.status as WakeEventStatus);
