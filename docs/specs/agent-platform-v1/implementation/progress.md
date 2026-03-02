@@ -230,7 +230,7 @@
   - `node scripts/check-v1-route-ia.mjs` ✅
   - `node scripts/check-v1-naming-drift.mjs` ✅
 - open comments:
-  - Critique 8 processed; CI and automated review rerun pending.
+  - Critique 8 processed; CI currently in progress on PR #258 (`Lint`, `Typecheck`, `Web Tests`, `Build`, `E2E`).
 - fixes applied:
   - Updated workspace resume semantics to `from=coworker` (`searchParams`, banner copy, and coworker-event deep links).
   - Hardened route IA guard with explicit required canonical route files, including `/coworkers/[id]` and `/workspace/setup/[id]`.
