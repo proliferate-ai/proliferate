@@ -14,12 +14,12 @@ import {
 	and,
 	eq,
 	getDb,
-	sql,
 	sessionCapabilities,
 	sessionMessages,
 	sessionSkills,
 	sessionUserState,
 	sessions,
+	sql,
 } from "@proliferate/services/db/client";
 import type {
 	SessionMessageDeliveryState,
