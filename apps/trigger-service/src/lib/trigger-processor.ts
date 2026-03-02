@@ -159,7 +159,7 @@ function toRawPayload(payload: unknown): Record<string, unknown> {
 
 /**
  * V1 Bridge: route trigger events to wake_events(source=webhook) for a V1 worker.
- * Deduplicates by checking for an existing queued webhook wake before creating.
+ * Deduplicates via trigger_events.dedup_key and writes an audit event per bridged wake.
  */
 async function bridgeToWakeEvents(
 	workerId: string,
@@ -169,13 +169,15 @@ async function bridgeToWakeEvents(
 ): Promise<ProcessResult> {
 	let processed = 0;
 	let skipped = 0;
+	const parsedConfig = triggerDef.configSchema.safeParse(triggerRow.config ?? {});
+	const config = parsedConfig.success ? parsedConfig.data : (triggerRow.config ?? {});
 
 	for (const event of events) {
 		const dedupKey = triggerDef.idempotencyKey(event);
 		const providerEventType = inferProviderEventType(triggerRow.provider, event.payload);
 		const rawPayload = toRawPayload(event.payload);
 
-		if (!triggerDef.filter(event, triggerRow.config ?? {})) {
+		if (!triggerDef.filter(event, config)) {
 			await safeCreateSkippedEvent({
 				triggerId: triggerRow.id,
 				organizationId: triggerRow.organizationId,
@@ -221,7 +223,8 @@ async function bridgeToWakeEvents(
 				rawPayload,
 				parsedContext,
 				dedupKey,
-				status: "queued",
+				status: "skipped",
+				skipReason: "bridged_to_worker",
 			});
 			processed++;
 		} catch (err) {

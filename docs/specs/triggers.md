@@ -138,6 +138,8 @@ _Sections 3 (File Tree) and 4 (Data Models) are intentionally removed. Code and 
   Evidence: `apps/trigger-service/src/lib/trigger-processor.ts`, `packages/services/src/triggers/db.ts:eventExistsByDedupKey`, `packages/db/src/schema/triggers.ts`.
 - Invariant: Run-creation failures are recorded as skipped trigger events with `run_create_failed`.
   Evidence: `apps/trigger-service/src/lib/trigger-processor.ts`.
+- Invariant: When an automation is bound to `automations.worker_id`, trigger-service bridges matched events to `wake_events(source=webhook)` and writes trigger-event audit rows as `status = skipped` with `skipReason = bridged_to_worker`.
+  Evidence: `apps/trigger-service/src/lib/trigger-processor.ts`, `packages/services/src/automations/db.ts`.
 
 ### 6.5 Poll Group Invariants (Status: Implemented)
 - Invariant: Poll worker executes one provider poll call per poll group and fans results out to all active triggers in that group.
@@ -189,6 +191,14 @@ _Sections 3 (File Tree) and 4 (Data Models) are intentionally removed. Code and 
 - Invariant: Manual runs bypass external webhook/polling ingest by creating synthetic trigger events through a dedicated manual trigger marker (`config._manual = true`).
   Evidence: `packages/services/src/automations/service.ts:triggerManualRun`, `packages/services/src/automations/db.ts:findManualTrigger`.
 
+### 6.10 V1 Tick Engine Invariants (Status: Implemented)
+- Invariant: Trigger-service schedules a repeatable tick job at startup and reconciles prior tick repeatables to a single active schedule.
+  Evidence: `apps/trigger-service/src/index.ts`, `apps/trigger-service/src/tick/worker.ts`.
+- Invariant: Tick execution is guarded by a global Redis lock to prevent concurrent active-worker scans across replicas.
+  Evidence: `apps/trigger-service/src/tick/worker.ts`, `packages/queue/src/index.ts:REDIS_KEYS.tickLock`.
+- Invariant: Tick production only creates `wake_events(source=tick)` for active workers that do not already have a queued tick wake.
+  Evidence: `apps/trigger-service/src/tick/worker.ts`, `packages/services/src/workers/db.ts:listActiveWorkers`, `packages/services/src/wakes/db.ts:hasQueuedWakeBySource`.
+
 ---
 
 ## 7. Cross-Cutting Concerns
@@ -196,10 +206,11 @@ _Sections 3 (File Tree) and 4 (Data Models) are intentionally removed. Code and 
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
 | Automations/Runs | Triggers → Automations | `runs.createRunFromTriggerEvent()` | Atomic trigger event + run + outbox insertion. |
+| Workers/Wakes (V1 bridge) | Triggers → Workers | `automations.getAutomationWorkerId()`, `wakes.createWakeEvent()` | Worker-bound automations bridge webhook/poll events to wake events instead of creating automation runs. |
 | Outbox/Workers | Triggers → Worker | `outbox.kind = enqueue_enrich` | Trigger system hands off via outbox, not direct queue push. |
 | Integrations | Triggers → Integrations | `findByConnectionIdAndProvider()`, `findById()` | Nango `connectionId` resolution and poll-group connection lookup. |
 | Queue/BullMQ | Triggers → Queue | `createWebhookInboxWorker`, `createPollGroupWorker`, repeatables | Inbox drain, poll groups, and GC scheduling. |
-| Redis | Triggers → Redis | `REDIS_KEYS.pollGroupLock()` | Distributed lock for per-group poll mutual exclusion. |
+| Redis | Triggers → Redis | `REDIS_KEYS.pollGroupLock()`, `REDIS_KEYS.tickLock()` | Distributed locks for per-group poll mutual exclusion and global tick-cycle coordination. |
 | Providers Runtime | Trigger-service → `@proliferate/triggers` | `registry`, `WebhookTrigger`, `PollingTrigger` | Current runtime matching/parsing contract. |
 | Providers Target Contract | Triggers ↔ `@proliferate/providers` | `ProviderTriggers`, `NormalizedTriggerEvent` | Migration target; not yet trigger-service runtime path. |
 | Web App Lifecycle Webhooks | Web app ↔ Integrations | `/api/webhooks/nango`, `/api/webhooks/github-app` | Handles auth/sync and installation lifecycle, not trigger event execution. |

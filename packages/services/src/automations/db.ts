@@ -20,6 +20,7 @@ import {
 	sql,
 	triggerEvents,
 	triggers,
+	workers,
 } from "../db/client";
 import type {
 	CreateAutomationInput,
@@ -515,11 +516,17 @@ export async function setActionMode(
  */
 export async function getAutomationWorkerId(id: string, orgId: string): Promise<string | null> {
 	const db = getDb();
-	const result = await db.query.automations.findFirst({
+	const automation = await db.query.automations.findFirst({
 		where: and(eq(automations.id, id), eq(automations.organizationId, orgId)),
 		columns: { workerId: true },
 	});
-	return result?.workerId ?? null;
+	if (!automation?.workerId) return null;
+
+	const worker = await db.query.workers.findFirst({
+		where: and(eq(workers.id, automation.workerId), eq(workers.organizationId, orgId)),
+		columns: { id: true },
+	});
+	return worker?.id ?? null;
 }
 
 /**

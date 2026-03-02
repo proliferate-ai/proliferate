@@ -257,6 +257,12 @@ export const REDIS_KEYS = {
 	 * TTL: 120 seconds. Prevents concurrent polls for the same group.
 	 */
 	pollGroupLock: (groupId: string) => `poll-group:lock:${groupId}`,
+
+	/**
+	 * Global lock during tick execution: tick:lock
+	 * TTL should exceed one tick cycle. Prevents concurrent tick scans across replicas.
+	 */
+	tickLock: () => "tick:lock",
 } as const;
 
 // ============================================
