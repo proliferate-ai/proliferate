@@ -58,6 +58,10 @@ RUN OVSCODE_VERSION="1.106.3" \
 # Install OpenCode CLI + sandbox-mcp
 RUN npm install -g opencode-ai@latest proliferate-sandbox-mcp@0.1.19
 
+# Install sandbox-daemon (bundled CJS — provides FS, PTY, ports, health endpoints)
+COPY sandbox-daemon.cjs /usr/local/bin/sandbox-daemon
+RUN chmod +x /usr/local/bin/sandbox-daemon
+
 # Install Python tools
 RUN pip install httpx uv playwright psycopg2-binary redis
 

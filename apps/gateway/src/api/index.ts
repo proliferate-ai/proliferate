@@ -23,15 +23,19 @@ export function mountRoutes(app: Express, hubManager: HubManager, env: GatewayEn
 	// Health check
 	app.use(healthRouter);
 
+	// Daemon proxy routes MUST be mounted before proliferate HTTP routes.
+	// The HTTP routes use router.use("/:proliferateSessionId", ...) which
+	// matches any first segment as prefix — including "v1" from daemon proxy
+	// paths like /v1/sessions/:id/fs/tree, causing ensureSessionReady to
+	// look up session "v1" and fail with 503.
+	app.use("/proliferate", createDaemonProxyRoutes(hubManager, env));
+
 	// Proliferate routes (HTTP and proxy)
 	app.use("/proliferate", createProliferateHttpRoutes(hubManager, env));
 	app.use("/proxy", createProxyRoutes(hubManager, env));
 	app.use("/proxy", createDevtoolsProxyRoutes(hubManager, env));
 	app.use("/proxy", createVscodeProxyRoutes(hubManager, env));
 	app.use("/proxy", createPreviewHealthRoutes(hubManager, env));
-
-	// Daemon proxy routes (G1: hop 2 gateway -> daemon)
-	app.use("/proliferate", createDaemonProxyRoutes(hubManager, env));
 }
 
 export function setupWebSocket(server: Server, hubManager: HubManager, env: GatewayEnv): void {

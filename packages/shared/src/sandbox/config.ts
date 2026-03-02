@@ -55,6 +55,11 @@ export const DEFAULT_CADDYFILE = `{
         }
     }
 
+    # Sandbox daemon endpoints: fs, pty, ports, health, events, token refresh
+    handle /_proliferate/* {
+        reverse_proxy localhost:8470
+    }
+
     # User-exposed port snippet (written by exposePort). When populated, its
     # bare "handle" block intentionally takes priority over the default fallback
     # below, routing all non-devtools traffic to the user's chosen port.

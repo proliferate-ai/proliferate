@@ -745,6 +745,25 @@ export class E2BProvider implements SandboxProvider {
 			});
 		// Don't await - runs in background
 
+		// Start sandbox-daemon (FS, PTY, ports, health on port 8470)
+		log.debug("Starting sandbox-daemon (async)");
+		const daemonEnvs: Record<string, string> = {
+			NODE_ENV: "production",
+			PROLIFERATE_WORKSPACE_ROOT: "/home/user/workspace",
+		};
+		if (opts.envVars.SANDBOX_MCP_AUTH_TOKEN) {
+			daemonEnvs.PROLIFERATE_SESSION_TOKEN = opts.envVars.SANDBOX_MCP_AUTH_TOKEN;
+		}
+		sandbox.commands
+			.run("sandbox-daemon --mode=worker > /tmp/sandbox-daemon.log 2>&1", {
+				timeoutMs: 3600000,
+				envs: daemonEnvs,
+			})
+			.catch((err: unknown) => {
+				providerLogger.debug({ err }, "sandbox-daemon process ended");
+			});
+		// Don't await - runs in background
+
 		// Apply env files + start services via proliferate CLI (tracked in service-manager)
 		this.bootServices(sandbox, opts, log);
 	}

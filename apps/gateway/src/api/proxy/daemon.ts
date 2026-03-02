@@ -42,6 +42,7 @@ async function daemonFetch(
 ): Promise<globalThis.Response> {
 	const token = deriveSandboxMcpToken(opts.serviceToken, opts.sessionId);
 	const url = `${previewUrl}${daemonPath}`;
+	logger.debug({ url, method: opts.method ?? "GET", sessionId: opts.sessionId }, "daemonFetch");
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 15_000);
 
