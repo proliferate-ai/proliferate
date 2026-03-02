@@ -890,38 +890,6 @@ export const triggerEvents = pgTable(
 	],
 );
 
-export const triggerEventActions = pgTable(
-	"trigger_event_actions",
-	{
-		id: uuid().defaultRandom().primaryKey().notNull(),
-		triggerEventId: uuid("trigger_event_id").notNull(),
-		toolName: text("tool_name").notNull(),
-		status: text().default("pending"),
-		inputData: jsonb("input_data"),
-		outputData: jsonb("output_data"),
-		errorMessage: text("error_message"),
-		startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
-		completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
-		durationMs: integer("duration_ms"),
-		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
-	},
-	(table) => [
-		index("idx_trigger_event_actions_event").using(
-			"btree",
-			table.triggerEventId.asc().nullsLast().op("uuid_ops"),
-		),
-		index("idx_trigger_event_actions_status").using(
-			"btree",
-			table.status.asc().nullsLast().op("text_ops"),
-		),
-		foreignKey({
-			columns: [table.triggerEventId],
-			foreignColumns: [triggerEvents.id],
-			name: "trigger_event_actions_trigger_event_id_fkey",
-		}).onDelete("cascade"),
-	],
-);
-
 export const automationRuns = pgTable(
 	"automation_runs",
 	{
@@ -2028,52 +1996,6 @@ export const triggerPollGroups = pgTable(
 		unique("uq_poll_groups_org_provider_integration")
 			.on(table.organizationId, table.provider, table.integrationId)
 			.nullsNotDistinct(),
-	],
-);
-
-/**
- * Session tool invocations — records tool calls within sessions for audit and observability.
- */
-export const sessionToolInvocations = pgTable(
-	"session_tool_invocations",
-	{
-		id: uuid().defaultRandom().primaryKey().notNull(),
-		sessionId: uuid("session_id").notNull(),
-		organizationId: text("organization_id").notNull(),
-		toolName: text("tool_name").notNull(),
-		toolSource: text("tool_source"),
-		status: text().default("pending"),
-		input: jsonb(),
-		output: jsonb(),
-		error: text(),
-		durationMs: integer("duration_ms"),
-		startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
-		completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
-		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
-	},
-	(table) => [
-		index("idx_session_tool_invocations_session").using(
-			"btree",
-			table.sessionId.asc().nullsLast().op("uuid_ops"),
-		),
-		index("idx_session_tool_invocations_org").using(
-			"btree",
-			table.organizationId.asc().nullsLast().op("text_ops"),
-		),
-		index("idx_session_tool_invocations_status").using(
-			"btree",
-			table.status.asc().nullsLast().op("text_ops"),
-		),
-		foreignKey({
-			columns: [table.sessionId],
-			foreignColumns: [sessions.id],
-			name: "session_tool_invocations_session_id_fkey",
-		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.organizationId],
-			foreignColumns: [organization.id],
-			name: "session_tool_invocations_organization_id_fkey",
-		}).onDelete("cascade"),
 	],
 );
 

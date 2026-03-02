@@ -39,7 +39,6 @@ import {
 	sessionNotificationSubscriptions,
 	sessionPullRequests,
 	sessionSkills,
-	sessionToolInvocations,
 	sessionUserState,
 	sessions,
 	slackConversations,
@@ -442,7 +441,6 @@ export const sessionsRelations = relations(sessions, ({ one, many }) => ({
 		fields: [sessions.repoBaselineTargetId],
 		references: [repoBaselineTargets.id],
 	}),
-	toolInvocations: many(sessionToolInvocations),
 	// V1 relations
 	capabilities: many(sessionCapabilities),
 	skills: many(sessionSkills),
@@ -588,17 +586,6 @@ export const triggerPollGroupsRelations = relations(triggerPollGroups, ({ one })
 	integration: one(integrations, {
 		fields: [triggerPollGroups.integrationId],
 		references: [integrations.id],
-	}),
-}));
-
-export const sessionToolInvocationsRelations = relations(sessionToolInvocations, ({ one }) => ({
-	session: one(sessions, {
-		fields: [sessionToolInvocations.sessionId],
-		references: [sessions.id],
-	}),
-	organization: one(organization, {
-		fields: [sessionToolInvocations.organizationId],
-		references: [organization.id],
 	}),
 }));
 

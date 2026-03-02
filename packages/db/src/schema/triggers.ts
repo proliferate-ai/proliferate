@@ -6,7 +6,6 @@ import { relations } from "drizzle-orm";
 import {
 	boolean,
 	index,
-	integer,
 	jsonb,
 	pgTable,
 	text,
@@ -175,41 +174,6 @@ export const triggerEventsRelations = relations(triggerEvents, ({ one, many }) =
 	session: one(sessions, {
 		fields: [triggerEvents.sessionId],
 		references: [sessions.id],
-	}),
-	actions: many(triggerEventActions),
-}));
-
-// ============================================
-// Trigger Event Actions (tool execution audit log)
-// ============================================
-
-export const triggerEventActions = pgTable(
-	"trigger_event_actions",
-	{
-		id: uuid("id").primaryKey().defaultRandom(),
-		triggerEventId: uuid("trigger_event_id")
-			.notNull()
-			.references(() => triggerEvents.id, { onDelete: "cascade" }),
-		toolName: text("tool_name").notNull(),
-		status: text("status").default("pending"),
-		inputData: jsonb("input_data"),
-		outputData: jsonb("output_data"),
-		errorMessage: text("error_message"),
-		startedAt: timestamp("started_at", { withTimezone: true }),
-		completedAt: timestamp("completed_at", { withTimezone: true }),
-		durationMs: integer("duration_ms"),
-		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-	},
-	(table) => [
-		index("idx_trigger_event_actions_event").on(table.triggerEventId),
-		index("idx_trigger_event_actions_status").on(table.status),
-	],
-);
-
-export const triggerEventActionsRelations = relations(triggerEventActions, ({ one }) => ({
-	triggerEvent: one(triggerEvents, {
-		fields: [triggerEventActions.triggerEventId],
-		references: [triggerEvents.id],
 	}),
 }));
 

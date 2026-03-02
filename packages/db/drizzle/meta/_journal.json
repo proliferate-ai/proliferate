@@ -319,6 +319,13 @@
       "when": 1772417340641,
       "tag": "0046_mixed_maestro",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1772454453000,
+      "tag": "0042_drop_v0_legacy_telemetry_tables",
+      "breakpoints": true
     }
   ]
 }
