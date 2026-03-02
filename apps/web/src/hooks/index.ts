@@ -128,12 +128,6 @@ export {
 	useSlackDisconnect,
 } from "./use-integrations";
 
-// My Work hooks
-export { useMyWork } from "./use-my-work";
-
-// Org Activity hooks
-export { useOrgActivity } from "./use-org-activity";
-
 // Configuration hooks
 export {
 	useConfigurations,
