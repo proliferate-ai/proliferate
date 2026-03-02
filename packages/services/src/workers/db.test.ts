@@ -1,10 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, getDb, organization, repos, sessions, wakeEvents, workerRuns, workers } from "../db/client";
+import { env } from "@proliferate/environment/server";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+	and,
+	eq,
+	getDb,
+	organization,
+	repos,
+	sessions,
+	wakeEvents,
+	workerRuns,
+	workers,
+} from "../db/client";
 import { claimNextWakeAndCreateRun, createWorker, createWorkerRun } from "./db";
 
-const hasDatabaseUrl =
-	typeof process.env.DATABASE_URL === "string" && process.env.DATABASE_URL.trim().length > 0;
+const hasDatabaseUrl = typeof env.DATABASE_URL === "string" && env.DATABASE_URL.trim().length > 0;
 const describeDb = hasDatabaseUrl ? describe : describe.skip;
 
 const orgIdsToCleanup = new Set<string>();
@@ -254,7 +264,10 @@ describeDb("workers db orchestration (DB-backed)", () => {
 		const result = await claimNextWakeAndCreateRun(fixture.workerId, fixture.organizationId);
 		expect(result).toBeNull();
 
-		const [unchangedWake] = await db.select().from(wakeEvents).where(eq(wakeEvents.id, queuedWake.id));
+		const [unchangedWake] = await db
+			.select()
+			.from(wakeEvents)
+			.where(eq(wakeEvents.id, queuedWake.id));
 		expect(unchangedWake?.status).toBe("queued");
 	});
 });
