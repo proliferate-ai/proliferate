@@ -59,10 +59,6 @@ export interface CreateWorkerInput {
 }
 
 export async function createWorker(input: CreateWorkerInput): Promise<WorkerRow> {
-	if (!input.managerSessionId || input.managerSessionId.trim() === "") {
-		throw new Error("workers.managerSessionId is required");
-	}
-
 	const db = getDb();
 	const [row] = await db
 		.insert(workers)
@@ -119,9 +115,6 @@ export interface CreateWorkerRunInput {
  * Create a worker run. managerSessionId must be set (required invariant).
  */
 export async function createWorkerRun(input: CreateWorkerRunInput): Promise<WorkerRunRow> {
-	if (!input.managerSessionId || input.managerSessionId.trim() === "") {
-		throw new Error("worker_runs.managerSessionId is required (immutable snapshot)");
-	}
 	const db = getDb();
 	const [row] = await db
 		.insert(workerRuns)
