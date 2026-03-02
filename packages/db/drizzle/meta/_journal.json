@@ -333,6 +333,13 @@
       "when": 1772490000000,
       "tag": "0043_add_session_events_table",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1772576400000,
+      "tag": "0044_add_session_created_event_type",
+      "breakpoints": true
     }
   ]
 }

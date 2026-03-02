@@ -306,6 +306,29 @@ export const sessionsRouter = {
 		}),
 
 	/**
+	 * Share a session by granting access to another user (K2: ACL grant).
+	 */
+	share: orgProcedure
+		.input(
+			z.object({
+				id: z.string().uuid(),
+				userId: z.string(),
+				role: z.enum(["viewer", "editor", "reviewer"]),
+			}),
+		)
+		.output(z.object({ shared: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			await sessions.grantSessionAccess({
+				sessionId: input.id,
+				organizationId: context.orgId,
+				targetUserId: input.userId,
+				role: input.role,
+				grantedBy: context.user.id,
+			});
+			return { shared: true };
+		}),
+
+	/**
 	 * Get session lifecycle events (K5).
 	 */
 	events: orgProcedure

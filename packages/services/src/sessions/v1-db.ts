@@ -115,6 +115,14 @@ export async function grantSessionAcl(input: {
 		});
 }
 
+export async function updateSessionVisibility(
+	sessionId: string,
+	visibility: "private" | "shared" | "org",
+): Promise<void> {
+	const db = getDb();
+	await db.update(sessions).set({ visibility }).where(eq(sessions.id, sessionId));
+}
+
 // ============================================
 // K6: Archive and delete
 // ============================================

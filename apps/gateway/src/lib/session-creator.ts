@@ -269,6 +269,13 @@ export async function createSession(
 
 	log.info("Session record created");
 
+	// K5: Record session_created lifecycle event (best-effort)
+	try {
+		await sessions.recordSessionEvent({ sessionId, eventType: "session_created" });
+	} catch (err) {
+		log.warn({ err }, "Failed to record session_created event");
+	}
+
 	// If deferred, return immediately
 	if (effectiveSandboxMode === "deferred") {
 		log.info(

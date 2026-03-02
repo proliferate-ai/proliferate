@@ -9,6 +9,14 @@ const {
 	mockClaimDeliverableSessionMessages,
 	mockTransitionSessionMessageDeliveryState,
 	mockPersistSessionOutcome,
+	mockGetSessionOutcome,
+	mockGetSessionAclRole,
+	mockGrantSessionAcl,
+	mockUpdateSessionVisibility,
+	mockUpsertSessionUserState,
+	mockArchiveSession,
+	mockUnarchiveSession,
+	mockSoftDeleteSession,
 } = vi.hoisted(() => ({
 	mockCreateTaskSession: vi.fn(),
 	mockFindSessionById: vi.fn(),
@@ -18,6 +26,14 @@ const {
 	mockClaimDeliverableSessionMessages: vi.fn(),
 	mockTransitionSessionMessageDeliveryState: vi.fn(),
 	mockPersistSessionOutcome: vi.fn(),
+	mockGetSessionOutcome: vi.fn(),
+	mockGetSessionAclRole: vi.fn(),
+	mockGrantSessionAcl: vi.fn(),
+	mockUpdateSessionVisibility: vi.fn(),
+	mockUpsertSessionUserState: vi.fn(),
+	mockArchiveSession: vi.fn(),
+	mockUnarchiveSession: vi.fn(),
+	mockSoftDeleteSession: vi.fn(),
 }));
 
 vi.mock("./v1-db", () => ({
@@ -29,15 +45,31 @@ vi.mock("./v1-db", () => ({
 	claimDeliverableSessionMessages: mockClaimDeliverableSessionMessages,
 	transitionSessionMessageDeliveryState: mockTransitionSessionMessageDeliveryState,
 	persistSessionOutcome: mockPersistSessionOutcome,
+	getSessionOutcome: mockGetSessionOutcome,
+	getSessionAclRole: mockGetSessionAclRole,
+	grantSessionAcl: mockGrantSessionAcl,
+	updateSessionVisibility: mockUpdateSessionVisibility,
+	upsertSessionUserState: mockUpsertSessionUserState,
+	archiveSession: mockArchiveSession,
+	unarchiveSession: mockUnarchiveSession,
+	softDeleteSession: mockSoftDeleteSession,
 }));
 
 const {
+	SessionAccessDeniedError,
 	SessionKindError,
+	SessionNotFoundError,
 	SessionRuntimeStatusError,
+	assertSessionAccess,
 	claimQueuedSessionMessagesForDelivery,
+	getSessionAccessRole,
+	grantSessionAccess,
 	markSessionMessageConsumed,
+	markSessionViewed,
 	persistTerminalTaskOutcome,
 	sendTaskFollowup,
+	archiveSession,
+	softDeleteSession,
 } = await import("./v1-service");
 
 function makeTaskSession(overrides: Record<string, unknown> = {}) {
@@ -326,5 +358,189 @@ describe("sessions v1 service", () => {
 				toState: "consumed",
 			}),
 		);
+	});
+});
+
+describe("session ACL (K2)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("returns 'owner' for session creator", async () => {
+		mockFindSessionById.mockResolvedValue(makeTaskSession({ createdBy: "user-1" }));
+		mockGetSessionAclRole.mockResolvedValue(null);
+
+		const role = await getSessionAccessRole({
+			sessionId: "task-1",
+			organizationId: "org-1",
+			userId: "user-1",
+		});
+
+		expect(role).toBe("owner");
+		expect(mockGetSessionAclRole).not.toHaveBeenCalled();
+	});
+
+	it("returns explicit ACL role for non-creator", async () => {
+		mockFindSessionById.mockResolvedValue(makeTaskSession({ createdBy: "user-1" }));
+		mockGetSessionAclRole.mockResolvedValue("editor");
+
+		const role = await getSessionAccessRole({
+			sessionId: "task-1",
+			organizationId: "org-1",
+			userId: "user-2",
+		});
+
+		expect(role).toBe("editor");
+	});
+
+	it("returns 'viewer' for org-visible sessions with no explicit ACL", async () => {
+		mockFindSessionById.mockResolvedValue(
+			makeTaskSession({ createdBy: "user-1", visibility: "org" }),
+		);
+		mockGetSessionAclRole.mockResolvedValue(null);
+
+		const role = await getSessionAccessRole({
+			sessionId: "task-1",
+			organizationId: "org-1",
+			userId: "user-3",
+		});
+
+		expect(role).toBe("viewer");
+	});
+
+	it("returns null for private sessions with no ACL (access denied)", async () => {
+		mockFindSessionById.mockResolvedValue(
+			makeTaskSession({ createdBy: "user-1", visibility: "private" }),
+		);
+		mockGetSessionAclRole.mockResolvedValue(null);
+
+		const role = await getSessionAccessRole({
+			sessionId: "task-1",
+			organizationId: "org-1",
+			userId: "user-3",
+		});
+
+		expect(role).toBeNull();
+	});
+
+	it("assertSessionAccess throws for no access", async () => {
+		mockFindSessionById.mockResolvedValue(
+			makeTaskSession({ createdBy: "user-1", visibility: "private" }),
+		);
+		mockGetSessionAclRole.mockResolvedValue(null);
+
+		await expect(
+			assertSessionAccess({
+				sessionId: "task-1",
+				organizationId: "org-1",
+				userId: "user-3",
+			}),
+		).rejects.toBeInstanceOf(SessionAccessDeniedError);
+	});
+
+	it("assertSessionAccess enforces role hierarchy", async () => {
+		mockFindSessionById.mockResolvedValue(
+			makeTaskSession({ createdBy: "user-1", visibility: "org" }),
+		);
+		mockGetSessionAclRole.mockResolvedValue(null);
+
+		// user-3 gets "viewer" via org visibility — should fail when "editor" required
+		await expect(
+			assertSessionAccess({
+				sessionId: "task-1",
+				organizationId: "org-1",
+				userId: "user-3",
+				requiredRole: "editor",
+			}),
+		).rejects.toBeInstanceOf(SessionAccessDeniedError);
+	});
+
+	it("grantSessionAccess promotes private to shared", async () => {
+		mockFindSessionById.mockResolvedValue(
+			makeTaskSession({ createdBy: "user-1", visibility: "private" }),
+		);
+		mockGrantSessionAcl.mockResolvedValue(undefined);
+		mockUpdateSessionVisibility.mockResolvedValue(undefined);
+
+		await grantSessionAccess({
+			sessionId: "task-1",
+			organizationId: "org-1",
+			targetUserId: "user-2",
+			role: "editor",
+			grantedBy: "user-1",
+		});
+
+		expect(mockGrantSessionAcl).toHaveBeenCalledWith({
+			sessionId: "task-1",
+			userId: "user-2",
+			role: "editor",
+			grantedBy: "user-1",
+		});
+		expect(mockUpdateSessionVisibility).toHaveBeenCalledWith("task-1", "shared");
+	});
+
+	it("grantSessionAccess does not change visibility for org-visible sessions", async () => {
+		mockFindSessionById.mockResolvedValue(
+			makeTaskSession({ createdBy: "user-1", visibility: "org" }),
+		);
+		mockGrantSessionAcl.mockResolvedValue(undefined);
+
+		await grantSessionAccess({
+			sessionId: "task-1",
+			organizationId: "org-1",
+			targetUserId: "user-2",
+			role: "viewer",
+			grantedBy: "user-1",
+		});
+
+		expect(mockUpdateSessionVisibility).not.toHaveBeenCalled();
+	});
+});
+
+describe("markSessionViewed (K3)", () => {
+	it("upserts session user state with lastViewedAt", async () => {
+		mockUpsertSessionUserState.mockResolvedValue({});
+
+		await markSessionViewed({ sessionId: "task-1", userId: "user-1" });
+
+		expect(mockUpsertSessionUserState).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sessionId: "task-1",
+				userId: "user-1",
+				lastViewedAt: expect.any(Date),
+			}),
+		);
+	});
+});
+
+describe("archive and soft-delete (K6)", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
+	it("archiveSession calls v1Db.archiveSession", async () => {
+		mockFindSessionById.mockResolvedValue(makeTaskSession());
+		mockArchiveSession.mockResolvedValue(undefined);
+
+		await archiveSession({ sessionId: "task-1", organizationId: "org-1", userId: "user-1" });
+
+		expect(mockArchiveSession).toHaveBeenCalledWith("task-1", "user-1");
+	});
+
+	it("archiveSession throws for missing session", async () => {
+		mockFindSessionById.mockResolvedValue(undefined);
+
+		await expect(
+			archiveSession({ sessionId: "missing", organizationId: "org-1", userId: "user-1" }),
+		).rejects.toBeInstanceOf(SessionNotFoundError);
+	});
+
+	it("softDeleteSession calls v1Db.softDeleteSession", async () => {
+		mockFindSessionById.mockResolvedValue(makeTaskSession());
+		mockSoftDeleteSession.mockResolvedValue(undefined);
+
+		await softDeleteSession({ sessionId: "task-1", organizationId: "org-1", userId: "user-1" });
+
+		expect(mockSoftDeleteSession).toHaveBeenCalledWith("task-1", "user-1");
 	});
 });

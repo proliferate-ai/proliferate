@@ -95,18 +95,28 @@ export async function projectOperatorStatus(input: {
 	organizationId: string;
 	runtimeStatus: string;
 	hasPendingApproval: boolean;
+	isAgentIdle?: boolean;
 	logger: Logger;
 }): Promise<string> {
-	const { sessionId, organizationId, runtimeStatus, hasPendingApproval, logger: log } = input;
+	const {
+		sessionId,
+		organizationId,
+		runtimeStatus,
+		hasPendingApproval,
+		isAgentIdle,
+		logger: log,
+	} = input;
 
 	let operatorStatus: string;
 
 	if (runtimeStatus === "completed" || runtimeStatus === "cancelled") {
-		operatorStatus = "done";
+		operatorStatus = "ready_for_review";
 	} else if (runtimeStatus === "failed") {
 		operatorStatus = "errored";
 	} else if (hasPendingApproval) {
 		operatorStatus = "waiting_for_approval";
+	} else if (isAgentIdle) {
+		operatorStatus = "needs_input";
 	} else if (runtimeStatus === "running") {
 		operatorStatus = "active";
 	} else {

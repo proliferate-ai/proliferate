@@ -2590,7 +2590,7 @@ export const sessionEvents = pgTable(
 		),
 		check(
 			"session_events_type_check",
-			sql`event_type = ANY (ARRAY['session_started'::text, 'session_paused'::text, 'session_resumed'::text, 'session_completed'::text, 'session_failed'::text, 'session_cancelled'::text, 'session_outcome_persisted'::text])`,
+			sql`event_type = ANY (ARRAY['session_created'::text, 'session_started'::text, 'session_paused'::text, 'session_resumed'::text, 'session_completed'::text, 'session_failed'::text, 'session_cancelled'::text, 'session_outcome_persisted'::text])`,
 		),
 		foreignKey({
 			columns: [table.sessionId],

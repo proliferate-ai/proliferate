@@ -1148,7 +1148,21 @@ export class SessionHub {
 		}
 
 		this.touchActivity();
+		const wasIdle = this.lastKnownAgentIdleAt !== null;
 		this.lastKnownAgentIdleAt = null; // new work starting, invalidates previous idle state
+
+		// K4: Project active when transitioning from idle to working
+		if (wasIdle) {
+			const orgId = this.runtime.getContext().session.organization_id;
+			void projectOperatorStatus({
+				sessionId: this.sessionId,
+				organizationId: orgId,
+				runtimeStatus: "running",
+				hasPendingApproval: false,
+				isAgentIdle: false,
+				logger: this.logger,
+			});
+		}
 
 		this.log("Handling prompt", {
 			userId,
@@ -1411,6 +1425,8 @@ export class SessionHub {
 				(rawEvent.properties as { status?: { type?: string } } | undefined)?.status?.type ===
 					"idle");
 
+		const becameIdle = (wasBusy && nowIdle) || reportedIdle;
+
 		if (wasBusy && nowIdle) {
 			this.touchActivity(); // marks agent-done boundary, starts grace period
 			this.lastKnownAgentIdleAt = Date.now();
@@ -1419,6 +1435,19 @@ export class SessionHub {
 			// Text-only completions can retain assistant message id for de-dup; treat explicit idle as done.
 			this.touchActivity();
 			this.lastKnownAgentIdleAt = Date.now();
+		}
+
+		// K4: Project needs_input when agent becomes idle
+		if (becameIdle) {
+			const orgId = this.runtime.getContext().session.organization_id;
+			void projectOperatorStatus({
+				sessionId: this.sessionId,
+				organizationId: orgId,
+				runtimeStatus: "running",
+				hasPendingApproval: false,
+				isAgentIdle: true,
+				logger: this.logger,
+			});
 		}
 	}
 
@@ -1617,13 +1646,12 @@ export class SessionHub {
 		if (status === "paused") {
 			// K5: Record session paused event
 			recordLifecycleEvent(this.sessionId, "session_paused", this.logger);
-			// K3: Touch visible update
+			// K3: Touch visible update on pause
 			touchLastVisibleUpdate(this.sessionId, this.logger);
-			// K4: Keep operator status as "active" (paused is non-terminal)
 		} else if (status === "stopped") {
 			// K3: Touch visible update on terminal state
 			touchLastVisibleUpdate(this.sessionId, this.logger);
-			// K4: Project terminal operator status
+			// K4: Project terminal operator status (ready_for_review)
 			projectOperatorStatus({
 				sessionId: this.sessionId,
 				organizationId: orgId,
@@ -1631,6 +1659,8 @@ export class SessionHub {
 				hasPendingApproval: false,
 				logger: this.logger,
 			});
+			// K5: Record terminal event
+			recordLifecycleEvent(this.sessionId, "session_completed", this.logger);
 		} else if (status === "error") {
 			// K3: Touch visible update on error
 			touchLastVisibleUpdate(this.sessionId, this.logger);
@@ -1642,12 +1672,16 @@ export class SessionHub {
 				hasPendingApproval: false,
 				logger: this.logger,
 			});
+			// K5: Record failure event
+			recordLifecycleEvent(this.sessionId, "session_failed", this.logger);
 		} else if (status === "running") {
 			// K3: Touch visible update when session starts running
 			touchLastVisibleUpdate(this.sessionId, this.logger);
 		} else if (status === "resuming") {
 			// K5: Record session resumed event
 			recordLifecycleEvent(this.sessionId, "session_resumed", this.logger);
+			// K3: Touch visible update on resume
+			touchLastVisibleUpdate(this.sessionId, this.logger);
 		}
 	}
 

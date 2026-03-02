@@ -26,6 +26,7 @@ import type { SessionRow } from "./db";
 import * as sessionsDb from "./db";
 import { requestTitleGeneration } from "./generate-title";
 import { toSession, toSessions } from "./mapper";
+import { createSessionEvent } from "./v1-db";
 
 // ============================================
 // Service functions
@@ -359,6 +360,11 @@ async function createScratchSession(input: {
 
 	reqLog.info("Scratch session record created");
 
+	// K5: Record session_created lifecycle event (best-effort)
+	createSessionEvent({ sessionId, eventType: "session_created" }).catch((err) => {
+		reqLog.warn({ err }, "Failed to record session_created event");
+	});
+
 	// Enqueue async title generation (fire-and-forget)
 	if (initialPrompt) {
 		void requestTitleGeneration(sessionId, orgId, initialPrompt);
@@ -458,6 +464,11 @@ async function createConfigurationSession(input: {
 	});
 
 	reqLog.info("Session record created, returning immediately");
+
+	// K5: Record session_created lifecycle event (best-effort)
+	createSessionEvent({ sessionId, eventType: "session_created" }).catch((err) => {
+		reqLog.warn({ err }, "Failed to record session_created event");
+	});
 
 	// Enqueue async title generation (fire-and-forget)
 	if (initialPrompt) {

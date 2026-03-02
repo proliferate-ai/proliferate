@@ -123,6 +123,20 @@ export async function pauseSessionHandler(
 		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: "Failed to update session" });
 	}
 
+	// K3: Touch lastVisibleUpdateAt on pause (best-effort)
+	try {
+		await sessions.updateLastVisibleUpdateAt(sessionId);
+	} catch (err) {
+		reqLog.warn({ err }, "Failed to update lastVisibleUpdateAt on pause");
+	}
+
+	// K5: Record session paused lifecycle event (best-effort)
+	try {
+		await sessions.recordSessionEvent({ sessionId, eventType: "session_paused" });
+	} catch (err) {
+		reqLog.warn({ err }, "Failed to record session_paused event");
+	}
+
 	// Enqueue session completion notifications (best-effort)
 	try {
 		await notifications.enqueueSessionCompletionNotification(orgId, sessionId);

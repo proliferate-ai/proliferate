@@ -332,6 +332,33 @@ export async function assertSessionAccess(input: {
 	return role;
 }
 
+/**
+ * Grant a user access to a session with a specific role.
+ * Session creator always has owner access (not stored in ACL).
+ */
+export async function grantSessionAccess(input: {
+	sessionId: string;
+	organizationId: string;
+	targetUserId: string;
+	role: string;
+	grantedBy: string;
+}): Promise<void> {
+	const session = await v1Db.findSessionById(input.sessionId, input.organizationId);
+	if (!session) {
+		throw new SessionNotFoundError(input.sessionId);
+	}
+	await v1Db.grantSessionAcl({
+		sessionId: input.sessionId,
+		userId: input.targetUserId,
+		role: input.role,
+		grantedBy: input.grantedBy,
+	});
+	// If session was private, promote to shared so ACL grants are honored
+	if (session.visibility === "private") {
+		await v1Db.updateSessionVisibility(input.sessionId, "shared");
+	}
+}
+
 // ============================================
 // K3: Mark session viewed
 // ============================================
