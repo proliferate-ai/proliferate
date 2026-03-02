@@ -1,17 +1,18 @@
-import type { TriggerEvent, WebhookTrigger } from "@proliferate/triggers";
-import { parseNangoForwardWebhook, registry } from "@proliferate/triggers";
+import { parseNangoForwardWebhook } from "@proliferate/triggers";
 import type { Request } from "express";
 
 export interface WebhookDispatchResult {
 	integrationProvider: string;
 	provider: string;
 	connectionId: string;
-	matches: Array<{
-		triggerDef: WebhookTrigger;
-		events: TriggerEvent[];
-	}>;
 }
 
+/**
+ * Extract routing metadata from an integration webhook.
+ *
+ * This is the fast-ack path — it only extracts provider + connectionId
+ * for inbox storage. Full event parsing happens in the inbox worker.
+ */
 export async function dispatchIntegrationWebhook(
 	integrationProvider: string,
 	req: Request,
@@ -24,33 +25,15 @@ export async function dispatchIntegrationWebhook(
 	}
 }
 
-async function dispatchNangoWebhook(req: Request): Promise<WebhookDispatchResult | null> {
+function dispatchNangoWebhook(req: Request): WebhookDispatchResult | null {
 	const forward = parseNangoForwardWebhook(req);
 	if (!forward) return null;
 
 	const providerKey = forward.providerConfigKey || forward.from;
-	const triggerDefs = registry.webhooksByProvider(providerKey);
-	if (triggerDefs.length === 0) {
-		return {
-			integrationProvider: "nango",
-			provider: providerKey,
-			connectionId: forward.connectionId,
-			matches: [],
-		};
-	}
-
-	const matches: WebhookDispatchResult["matches"] = [];
-	for (const triggerDef of triggerDefs) {
-		const events = await triggerDef.webhook(req);
-		if (events.length > 0) {
-			matches.push({ triggerDef, events });
-		}
-	}
 
 	return {
 		integrationProvider: "nango",
 		provider: providerKey,
 		connectionId: forward.connectionId,
-		matches,
 	};
 }

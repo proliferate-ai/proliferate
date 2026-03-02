@@ -511,6 +511,18 @@ export async function setActionMode(
 }
 
 /**
+ * Get the V1 worker_id bound to an automation (null if legacy).
+ */
+export async function getAutomationWorkerId(id: string, orgId: string): Promise<string | null> {
+	const db = getDb();
+	const result = await db.query.automations.findFirst({
+		where: and(eq(automations.id, id), eq(automations.organizationId, orgId)),
+		columns: { workerId: true },
+	});
+	return result?.workerId ?? null;
+}
+
+/**
  * Get automation name for display.
  */
 export async function getAutomationName(

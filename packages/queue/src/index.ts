@@ -25,6 +25,7 @@ export const QUEUE_NAMES = {
 	BILLING_FAST_RECONCILE: "billing-fast-reconcile",
 	BILLING_PARTITION_MAINTENANCE: "billing-partition-maintenance",
 	SESSION_TITLE_GENERATION: "session-title-generation",
+	TICK: "tick",
 } as const;
 
 // ============================================
@@ -116,6 +117,12 @@ export interface WebhookInboxJob {
 export interface InboxGcJob {
 	retentionDays?: number;
 }
+
+/**
+ * Job to produce tick wake events for all active V1 workers.
+ * Runs on a repeatable schedule (e.g. every 60s).
+ */
+export type TickJob = Record<string, never>;
 
 /**
  * Result of adding a scheduled job.
@@ -380,6 +387,18 @@ const inboxGcJobOptions: JobsOptions = {
 	},
 };
 
+const tickJobOptions: JobsOptions = {
+	attempts: 1, // Tick is best-effort; next tick will catch up
+	removeOnComplete: {
+		age: 3600, // 1 hour
+		count: 100,
+	},
+	removeOnFail: {
+		age: 86400, // 24 hours
+		count: 100,
+	},
+};
+
 const configurationSnapshotBuildJobOptions: JobsOptions = {
 	attempts: 3,
 	backoff: {
@@ -634,6 +653,29 @@ export function createSessionTitleGenerationWorker(
 	return new Worker<SessionTitleGenerationJob>(QUEUE_NAMES.SESSION_TITLE_GENERATION, processor, {
 		connection: connection ?? getConnectionOptions(),
 		concurrency: 3,
+	});
+}
+
+/**
+ * Create the tick queue (V1 worker wake ticks)
+ */
+export function createTickQueue(connection?: ConnectionOptions): Queue<TickJob> {
+	return new Queue<TickJob>(QUEUE_NAMES.TICK, {
+		connection: connection ?? getConnectionOptions(),
+		defaultJobOptions: tickJobOptions,
+	});
+}
+
+/**
+ * Create a worker for processing tick jobs
+ */
+export function createTickWorker(
+	processor: (job: Job<TickJob>) => Promise<void>,
+	connection?: ConnectionOptions,
+): Worker<TickJob> {
+	return new Worker<TickJob>(QUEUE_NAMES.TICK, processor, {
+		connection: connection ?? getConnectionOptions(),
+		concurrency: 1, // Single concurrency — one tick at a time
 	});
 }
 

@@ -63,6 +63,15 @@ export async function findWorkerById(id: string, orgId: string): Promise<WorkerR
 	return row;
 }
 
+/**
+ * List all active workers across all organizations.
+ * Used by the tick engine to produce wake events.
+ */
+export async function listActiveWorkers(): Promise<WorkerRow[]> {
+	const db = getDb();
+	return db.select().from(workers).where(eq(workers.status, "active"));
+}
+
 export async function listWorkersByOrg(orgId: string): Promise<WorkerRow[]> {
 	const db = getDb();
 	return db
