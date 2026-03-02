@@ -218,3 +218,33 @@
 - carry-over TODOs:
   - Complete coworker detail activity/timeline parity with final V1 `worker_run_events` model.
   - Resolve CI/human/Greptile follow-ups after rerun.
+
+## PR 8
+- branch name: `v1/08-hardening-rollout`
+- PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/258`
+- scope: Phase 8 hardening/quality gates (canonical route IA drift guard, V1 naming drift guard, CI lint wiring)
+- check results:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅
+  - `node scripts/check-v1-route-ia.mjs` ✅
+  - `node scripts/check-v1-naming-drift.mjs` ✅
+- open comments:
+  - Critique 8 processed; awaiting CI/Greptile rerun on rebased stack.
+- fixes applied:
+  - Updated workspace resume semantics to `from=coworker` (`searchParams`, banner copy, and coworker-event deep links).
+  - Hardened route IA guard with explicit required canonical route files, including `/coworkers/[id]` and `/workspace/setup/[id]`.
+  - Added route IA guard checks for banned legacy primary nav targets (`/dashboard/actions`, `/dashboard/repos`) and preserved exact-route extraction from navigation calls.
+  - Replaced brittle root check with regex-based assertion that `/` does not redirect to `/sessions`.
+  - Added guard to fail canonical routes that redirect back to legacy `/dashboard/*` IA paths.
+  - Updated Home nav targets to `/` in sidebar and command palette so route guard verifies canonical top-level IA.
+  - Expanded naming-drift forbidden term pattern to include both `automation*` and `configuration*`.
+  - Extended naming-drift target coverage to include key web IA surfaces and DB schema contract files.
+  - Reworked naming-drift detection to inspect string literals in guarded surfaces (avoids noisy identifier/import false positives) and retained explicit ignore rules for technical literals.
+  - Added session-kind contract guard enforcing canonical vocabulary `manager|task|setup` from DB schema checks plus shared contract assertion.
+  - Simplified naming guard internals (`statOrNull`, modern line-number math via `substring(...).split('\\n').length`, removed redundant stat checks).
+- merge SHA: `TBD`
+- carry-over TODOs:
+  - Apply canary/default-on rollout runbook steps with feature flags at deployment time.
+  - Add explicit enum/contract drift checks against `docs/specs/agent-platform-v1/12-reference-index-files-and-models.md`.
+  - Add explicit error-code taxonomy drift checks (or codify a dedicated allowlist source) in a follow-up hardening pass.

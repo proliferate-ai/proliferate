@@ -145,7 +145,7 @@ export function Sidebar() {
 					className="h-8 w-8 text-muted-foreground hover:text-foreground"
 					onClick={(e) => {
 						e.stopPropagation();
-						router.push("/dashboard");
+						router.push("/");
 					}}
 					title="Home"
 				>
@@ -436,7 +436,7 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 					icon={Home}
 					label="Home"
 					active={!!isHomePage}
-					onClick={() => handleNavigate("/dashboard")}
+					onClick={() => handleNavigate("/")}
 				/>
 				<NavItem
 					icon={SquareTerminal}
