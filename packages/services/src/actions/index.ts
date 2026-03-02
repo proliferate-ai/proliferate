@@ -3,6 +3,7 @@
  */
 
 export * from "./service";
+export * from "./mapper";
 
 export type { ActionInvocationRow, ActionInvocationWithSession, CreateInvocationInput } from "./db";
 

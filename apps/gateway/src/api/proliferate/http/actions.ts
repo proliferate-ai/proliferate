@@ -22,7 +22,6 @@ import type {
 } from "@proliferate/providers";
 import { ProviderActionSource } from "@proliferate/providers/action-source";
 import { computeDefinitionHash, zodToJsonSchema } from "@proliferate/providers/helpers/schema";
-import { truncateJson } from "@proliferate/providers/helpers/truncation";
 import { getProviderActions } from "@proliferate/providers/providers/registry";
 import {
 	actions,
@@ -322,15 +321,9 @@ async function requireSessionOrgAccess(
 	return session;
 }
 
-/**
- * Verify user has admin or owner role in the org.
- * Used for approve/deny — members can view but not approve.
- */
-async function requireAdminRole(userId: string, orgId: string): Promise<void> {
+async function isOrgAdmin(userId: string, orgId: string): Promise<boolean> {
 	const role = await orgs.getUserRole(userId, orgId);
-	if (role !== "owner" && role !== "admin") {
-		throw new ApiError(403, "Admin or owner role required for action approvals");
-	}
+	return role === "owner" || role === "admin";
 }
 
 // ============================================
@@ -364,6 +357,10 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 	router.get("/available", async (req, res, next) => {
 		try {
 			const sessionId = req.proliferateSessionId!;
+			const sessionRow = await sessions.findByIdInternal(sessionId);
+			if (!sessionRow) {
+				throw new ApiError(404, "Session not found");
+			}
 
 			// Org check for non-sandbox callers
 			if (req.auth?.source !== "sandbox") {
@@ -375,17 +372,18 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			// Filter to active integrations that have a provider module
 			const available = connections
 				.filter((c) => c.integration?.status === "active")
-				.map((c) => {
+				.flatMap((c) => {
 					const module = getProviderActions(c.integration!.integrationId);
-					if (!module) return null;
-					return {
-						integrationId: c.integrationId,
-						integration: c.integration!.integrationId,
-						displayName: c.integration!.displayName,
-						actions: module.actions.map(actionToResponse),
-					};
-				})
-				.filter(Boolean);
+					if (!module) return [];
+					return [
+						{
+							integrationId: c.integrationId,
+							integration: c.integration!.integrationId,
+							displayName: c.integration!.displayName,
+							actions: module.actions.map(actionToResponse),
+						},
+					];
+				});
 
 			// Merge connector-backed tools
 			const connectorTools = await listSessionConnectorTools(sessionId);
@@ -401,21 +399,44 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			let allIntegrations = [...available, ...connectorIntegrations];
 
 			// Apply user action preference pre-filter
-			const sessionRow =
-				req.auth?.source === "sandbox" ? await sessions.findByIdInternal(sessionId) : null;
-			const userId = req.auth?.source !== "sandbox" ? req.auth?.userId : sessionRow?.createdBy;
+			const userId = req.auth?.source !== "sandbox" ? req.auth?.userId : sessionRow.createdBy;
 
 			if (userId) {
-				const orgId = req.auth?.orgId ?? sessionRow?.organizationId;
+				const orgId = req.auth?.orgId ?? sessionRow.organizationId;
 				if (orgId) {
 					const disabled = await userActionPreferences.getDisabledSourceIds(userId, orgId);
 					if (disabled.size > 0) {
-						allIntegrations = allIntegrations.filter((i) => i && !disabled.has(i.integration));
+						allIntegrations = allIntegrations.filter((i) => !disabled.has(i.integration));
 					}
 				}
 			}
 
-			res.json({ integrations: allIntegrations });
+			const capabilityFiltered: typeof allIntegrations = [];
+			for (const integrationEntry of allIntegrations) {
+				const visibleActions: typeof integrationEntry.actions = [];
+				for (const actionEntry of integrationEntry.actions) {
+					const denied = await actions.isActionDeniedForSession({
+						sessionId,
+						organizationId: sessionRow.organizationId,
+						integration: integrationEntry.integration,
+						action: actionEntry.name,
+						riskLevel: actionEntry.riskLevel,
+						automationId: sessionRow.automationId ?? undefined,
+					});
+					if (!denied) {
+						visibleActions.push(actionEntry);
+					}
+				}
+
+				if (visibleActions.length > 0) {
+					capabilityFiltered.push({
+						...integrationEntry,
+						actions: visibleActions,
+					});
+				}
+			}
+
+			res.json({ integrations: capabilityFiltered });
 		} catch (err) {
 			next(err);
 		}
@@ -561,30 +582,17 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 
 			// Auto-approved: execute via ActionSource
 			if (!result.needsApproval && result.invocation.status === "approved") {
-				const startMs = Date.now();
 				try {
-					await actions.markExecuting(result.invocation.id);
-
-					const actionResult = await resolved.source.execute(action, validatedParams, resolved.ctx);
-
-					const durationMs = Date.now() - startMs;
-
-					if (!actionResult.success) {
-						throw new Error(actionResult.error ?? "Action failed");
-					}
-
-					// Truncate before sending HTTP response AND storing in DB
-					const truncated = truncateJson(actionResult.data);
-					const invocation = await actions.markCompleted(
-						result.invocation.id,
-						truncated,
-						durationMs,
-					);
-					res.json({ invocation, result: truncated });
+					const execution = await actions.executeApprovedInvocation({
+						invocationId: result.invocation.id,
+						execute: () => resolved.source.execute(action, validatedParams, resolved.ctx),
+					});
+					res.json({
+						invocation: actions.toActionInvocation(execution.invocation),
+						result: execution.result,
+					});
 				} catch (err) {
-					const durationMs = Date.now() - startMs;
 					const errorMsg = err instanceof Error ? err.message : String(err);
-					await actions.markFailed(result.invocation.id, errorMsg, durationMs);
 					logger.error({ err, invocationId: result.invocation.id }, "Action execution failed");
 					throw new ApiError(502, `Action failed: ${errorMsg}`);
 				}
@@ -594,7 +602,7 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			// Denied
 			if (result.invocation.status === "denied") {
 				res.status(403).json({
-					invocation: result.invocation,
+					invocation: actions.toActionInvocation(result.invocation),
 					error: "Action denied: danger-level actions are not allowed",
 				});
 				return;
@@ -616,13 +624,13 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				});
 
 				res.status(202).json({
-					invocation: result.invocation,
+					invocation: actions.toActionInvocation(result.invocation),
 					message: "Action requires approval",
 				});
 				return;
 			}
 
-			res.json({ invocation: result.invocation });
+			res.json({ invocation: actions.toActionInvocation(result.invocation) });
 		} catch (err) {
 			next(err);
 		}
@@ -644,7 +652,7 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				if (!found) {
 					throw new ApiError(404, "Invocation not found");
 				}
-				res.json({ invocation: found });
+				res.json({ invocation: actions.toActionInvocation(found) });
 			} else {
 				// User callers: verify org membership
 				const session = await requireSessionOrgAccess(sessionId, req.auth?.orgId);
@@ -652,7 +660,7 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				if (!invocation) {
 					throw new ApiError(404, "Invocation not found");
 				}
-				res.json({ invocation });
+				res.json({ invocation: actions.toActionInvocation(invocation) });
 			}
 		} catch (err) {
 			next(err);
@@ -676,12 +684,13 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			if (!targetInvocation || targetInvocation.sessionId !== req.proliferateSessionId) {
 				throw new ApiError(404, "Invocation not found");
 			}
-			await requireAdminRole(auth.userId, session.organizationId);
+			const adminOverride = await isOrgAdmin(auth.userId, session.organizationId);
 			try {
 				await actions.assertApprovalAuthority({
 					sessionId: targetInvocation.sessionId,
 					organizationId: session.organizationId,
 					userId: auth.userId,
+					isOrgAdmin: adminOverride,
 				});
 			} catch (err) {
 				if (err instanceof actions.ApprovalAuthorityError) {
@@ -701,33 +710,23 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				throw err;
 			}
 
-			// Execute the action immediately after approval
-			const startMs = Date.now();
+			// Resolve action source from the stored invocation
+			const resolved = await resolveActionSource(
+				invocation.sessionId,
+				invocation.integration,
+				invocation.action,
+			);
+
 			try {
-				await actions.markExecuting(invocationId);
-
-				// Resolve action source from the stored invocation
-				const resolved = await resolveActionSource(
-					invocation.sessionId,
-					invocation.integration,
-					invocation.action,
-				);
-
-				const actionResult = await resolved.source.execute(
-					invocation.action,
-					(invocation.params as Record<string, unknown>) ?? {},
-					resolved.ctx,
-				);
-
-				const durationMs = Date.now() - startMs;
-
-				if (!actionResult.success) {
-					throw new Error(actionResult.error ?? "Action failed");
-				}
-
-				// Truncate before sending HTTP response AND storing in DB
-				const truncated = truncateJson(actionResult.data);
-				const completed = await actions.markCompleted(invocationId, truncated, durationMs);
+				const execution = await actions.executeApprovedInvocation({
+					invocationId,
+					execute: () =>
+						resolved.source.execute(
+							invocation.action,
+							(invocation.params as Record<string, unknown>) ?? {},
+							resolved.ctx,
+						),
+				});
 
 				// Broadcast completion
 				const hub = await tryGetHub(invocation.sessionId);
@@ -736,18 +735,16 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 					payload: {
 						invocationId,
 						status: "completed",
-						result: truncated,
+						result: execution.result,
 					},
 				});
 
 				res.json({
-					invocation: completed,
-					result: truncated,
+					invocation: actions.toActionInvocation(execution.invocation),
+					result: execution.result,
 				});
 			} catch (err) {
-				const durationMs = Date.now() - startMs;
 				const errorMsg = err instanceof Error ? err.message : String(err);
-				await actions.markFailed(invocationId, errorMsg, durationMs);
 
 				const hub = await tryGetHub(invocation.sessionId);
 				hub?.broadcastMessage({
@@ -784,7 +781,7 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			if (!targetInvocation || targetInvocation.sessionId !== req.proliferateSessionId) {
 				throw new ApiError(404, "Invocation not found");
 			}
-			await requireAdminRole(auth.userId, session.organizationId);
+			const adminOverride = await isOrgAdmin(auth.userId, session.organizationId);
 
 			let invocation: Awaited<ReturnType<typeof actions.denyAction>>;
 			try {
@@ -792,6 +789,7 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 					sessionId: targetInvocation.sessionId,
 					organizationId: session.organizationId,
 					userId: auth.userId,
+					isOrgAdmin: adminOverride,
 				});
 				invocation = await actions.denyAction(invocationId, session.organizationId, auth.userId);
 			} catch (err) {
@@ -812,7 +810,7 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				},
 			});
 
-			res.json({ invocation });
+			res.json({ invocation: actions.toActionInvocation(invocation) });
 		} catch (err) {
 			next(err);
 		}
@@ -832,7 +830,7 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 			}
 
 			const invocations = await actions.listSessionActions(sessionId);
-			res.json({ invocations });
+			res.json({ invocations: actions.toActionInvocations(invocations) });
 		} catch (err) {
 			next(err);
 		}
