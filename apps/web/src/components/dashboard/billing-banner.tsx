@@ -23,8 +23,8 @@ export function BillingBanner() {
 	const { data: entitlementStatus } = useEntitlementStatus();
 	const [dismissed, setDismissed] = useState(false);
 
-	// Don't show anything while loading or if dismissed
-	if (!billingEnabled || !isLoaded || dismissed) {
+	// Don't show anything while loading
+	if (!billingEnabled || !isLoaded) {
 		return null;
 	}
 

@@ -511,7 +511,7 @@ export const billingRouter = {
 			z.array(
 				z.object({
 					label: z.string(),
-					entityId: z.string(),
+					entityId: z.string().nullable(),
 					entityType: z.string(),
 					credits: z.number(),
 					eventCount: z.number(),

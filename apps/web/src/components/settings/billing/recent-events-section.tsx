@@ -26,12 +26,20 @@ function formatTime(iso: string): string {
 }
 
 export function RecentEventsSection() {
-	const { data, isPending } = useRecentEvents(10);
+	const { data, isPending, isError } = useRecentEvents(10);
 
 	if (isPending) {
 		return (
 			<SettingsSection title="Recent Billing Events">
 				<div className="h-20 rounded-lg bg-muted/30 animate-pulse" />
+			</SettingsSection>
+		);
+	}
+
+	if (isError) {
+		return (
+			<SettingsSection title="Recent Billing Events">
+				<p className="text-sm text-muted-foreground py-4">Failed to load billing events.</p>
 			</SettingsSection>
 		);
 	}

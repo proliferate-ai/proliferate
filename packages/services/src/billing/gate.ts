@@ -94,17 +94,17 @@ export async function checkBillingGateForOrg(
 		return deny("Failed to verify session counts");
 	}
 
-	// Fetch coworker count and monthly usage (best-effort, non-blocking)
-	let activeCoworkerCount: number | undefined;
-	let monthlyUsage: number | undefined;
+	// Fetch coworker count and monthly usage (fail-closed)
+	let activeCoworkerCount: number;
+	let monthlyUsage: number;
 	try {
 		[activeCoworkerCount, monthlyUsage] = await Promise.all([
 			getActiveCoworkerCount(orgId),
 			getMonthlyUsageTotal(orgId),
 		]);
 	} catch (err) {
-		log.warn({ err }, "Could not load coworker count or monthly usage for gate");
-		// Non-critical: proceed without these checks
+		log.error({ err }, "FAIL-CLOSED: could not load entitlement metrics");
+		return deny("Failed to verify entitlement limits");
 	}
 
 	// Build pure-gate input

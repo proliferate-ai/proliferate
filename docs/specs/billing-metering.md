@@ -156,7 +156,7 @@ Corrects drift between local shadow balance and Autumn balances.
   - active coworker limit (`maxActiveCoworkers` per plan)
   - monthly usage threshold (blocks when overage policy is "pause" and usage >= included credits)
 - `session_resume` and `cli_connect` enforce state rules only (no minimum-credit/concurrency check).
-- Coworker and monthly usage checks are best-effort; failures are non-fatal and do not block the gate.
+- Coworker and monthly usage metric lookups are fail-closed; load errors deny the gate.
 
 **Rules**
 - Grace expiry denial should trigger best-effort state cleanup (`expireGraceForOrg`).
@@ -309,7 +309,7 @@ Corrects drift between local shadow balance and Autumn balances.
 
 **Rules**
 - Warning banners are dismissable for approaching/critical levels; non-dismissable for exhausted/suspended.
-- Entitlement status queries are best-effort in the gate; failures do not block session creation.
+- Entitlement metric lookups (coworker count, monthly usage) are fail-closed; load errors deny the gate.
 - Monthly usage threshold gate only blocks when overage policy is "pause"; "allow" defers to shadow balance + auto-top-up.
 
 ### 6.15 Removed Subsystems — `Removed`
