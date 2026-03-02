@@ -72,8 +72,6 @@ const MODE_PRIORITY: Record<"allow" | "require_approval" | "deny", number> = {
 	deny: 3,
 };
 
-const WAITING_FOR_APPROVAL_STATUS = "waiting_for_approval";
-
 // ============================================
 // Redaction
 // ============================================
@@ -126,6 +124,22 @@ export interface InvokeActionResult {
 	invocation: ActionInvocationRow;
 	/** Whether the action needs user approval before execution */
 	needsApproval: boolean;
+}
+
+export interface ActionExecutionOutput {
+	success: boolean;
+	data?: unknown;
+	error?: string;
+}
+
+export interface ExecuteApprovedInvocationInput {
+	invocationId: string;
+	execute: () => Promise<ActionExecutionOutput>;
+}
+
+export interface ExecuteApprovedInvocationResult {
+	invocation: ActionInvocationRow;
+	result: unknown;
 }
 
 function parseMode(value: string | null | undefined): "allow" | "require_approval" | "deny" | null {
@@ -198,17 +212,17 @@ async function resolveEffectiveMode(input: {
 	};
 }
 
-async function queueResumeIntentIfNeeded(input: {
+async function buildResumeIntentPayload(input: {
 	invocation: ActionInvocationRow;
 	terminalStatus: "completed" | "failed" | "denied" | "expired";
-}): Promise<void> {
+}): Promise<unknown | undefined> {
 	if (input.invocation.mode !== "require_approval") {
-		return;
+		return undefined;
 	}
 
 	const session = await actionsDb.getSessionApprovalContext(input.invocation.sessionId);
-	if (!session || session.operatorStatus !== WAITING_FOR_APPROVAL_STATUS) {
-		return;
+	if (!session) {
+		return undefined;
 	}
 
 	const capabilityKey = getCapabilityKey({
@@ -224,66 +238,24 @@ async function queueResumeIntentIfNeeded(input: {
 		automationId: session.automationId ?? undefined,
 	});
 
-	await actionsDb.createOrGetActiveResumeIntent({
-		originSessionId: input.invocation.sessionId,
-		invocationId: input.invocation.id,
-		payloadJson: {
-			terminalStatus: input.terminalStatus,
-			strategy: "same_session_first",
-			fallback: "continuation",
-			revalidation: {
-				liveMode: liveMode.mode,
-				liveModeSource: liveMode.source,
-				capabilityMode: capabilityMode ?? null,
-				integrationAvailable: null,
-			},
+	return {
+		terminalStatus: input.terminalStatus,
+		strategy: "same_session_first",
+		fallback: "continuation",
+		revalidation: {
+			liveMode: liveMode.mode,
+			liveModeSource: liveMode.source,
+			capabilityMode: capabilityMode ?? null,
+			integrationAvailable: null,
 		},
-	});
+	};
 }
 
-async function recordEvent(input: {
-	invocationId: string;
-	eventType: string;
-	actorUserId?: string | null;
-	payloadJson?: unknown;
-}): Promise<void> {
-	await actionsDb.createActionInvocationEvent({
-		actionInvocationId: input.invocationId,
-		eventType: input.eventType,
-		actorUserId: input.actorUserId,
-		payloadJson: input.payloadJson,
-	});
-}
-
-async function recordTerminalOutcomeSideEffects(input: {
-	invocation: ActionInvocationRow;
-	eventType: "completed" | "failed";
-	terminalStatus: "completed" | "failed";
-	payloadJson?: unknown;
-}): Promise<void> {
-	const log = getServicesLogger().child({ module: "actions", invocationId: input.invocation.id });
-
-	try {
-		await recordEvent({
-			invocationId: input.invocation.id,
-			eventType: input.eventType,
-			payloadJson: input.payloadJson,
-		});
-	} catch (error) {
-		log.error({ error, eventType: input.eventType }, "Failed to record terminal action event");
+function resumeIntentArg(payload: unknown | undefined): { payloadJson?: unknown } | undefined {
+	if (payload === undefined) {
+		return undefined;
 	}
-
-	try {
-		await queueResumeIntentIfNeeded({
-			invocation: input.invocation,
-			terminalStatus: input.terminalStatus,
-		});
-	} catch (error) {
-		log.error(
-			{ error, terminalStatus: input.terminalStatus },
-			"Failed to queue resume intent after terminal action",
-		);
-	}
+	return { payloadJson: payload };
 }
 
 // ============================================
@@ -330,8 +302,8 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 				status: "denied",
 				deniedReason: "policy",
 			});
-			await recordEvent({
-				invocationId: invocation.id,
+			await actionsDb.createActionInvocationEvent({
+				actionInvocationId: invocation.id,
 				eventType: "denied",
 				payloadJson: {
 					reason: "policy",
@@ -351,7 +323,10 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 				...baseInput,
 				status: "approved",
 			});
-			await recordEvent({ invocationId: invocation.id, eventType: "approved" });
+			await actionsDb.createActionInvocationEvent({
+				actionInvocationId: invocation.id,
+				eventType: "approved",
+			});
 			log.info(
 				{ invocationId: invocation.id, action: input.action, modeSource: effective.modeSource },
 				"Action auto-approved",
@@ -360,7 +335,6 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 		}
 
 		case "require_approval": {
-			// Enforce pending cap before creating pending invocation
 			const pending = await actionsDb.listPendingBySession(input.sessionId);
 			if (pending.length >= MAX_PENDING_PER_SESSION) {
 				throw new PendingLimitError();
@@ -372,8 +346,8 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 				status: "pending",
 				expiresAt,
 			});
-			await recordEvent({
-				invocationId: invocation.id,
+			await actionsDb.createActionInvocationEvent({
+				actionInvocationId: invocation.id,
 				eventType: "pending",
 				payloadJson: {
 					expiresAt: expiresAt.toISOString(),
@@ -383,7 +357,7 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 			});
 			await actionsDb.setSessionOperatorStatus({
 				sessionId: input.sessionId,
-				toStatus: WAITING_FOR_APPROVAL_STATUS,
+				toStatus: "waiting_for_approval",
 			});
 			log.info(
 				{ invocationId: invocation.id, action: input.action, modeSource: effective.modeSource },
@@ -395,20 +369,35 @@ export async function invokeAction(input: InvokeActionInput): Promise<InvokeActi
 }
 
 /**
+ * Used by tool discovery to hide capabilities that resolve to deny.
+ */
+export async function isActionDeniedForSession(input: {
+	sessionId: string;
+	organizationId: string;
+	integration: string;
+	action: string;
+	riskLevel: "read" | "write" | "danger";
+	automationId?: string;
+	isDrifted?: boolean;
+	capabilityKey?: string;
+}): Promise<boolean> {
+	const resolved = await resolveEffectiveMode(input);
+	return resolved.effectiveMode === "deny";
+}
+
+/**
  * Mark an invocation as executing (before calling the adapter).
  */
 export async function markExecuting(
 	invocationId: string,
 ): Promise<ActionInvocationRow | undefined> {
-	const row = await actionsDb.transitionInvocationStatus({
+	const { invocation } = await actionsDb.transitionInvocationWithEffects({
 		id: invocationId,
 		fromStatuses: ["approved"],
 		toStatus: "executing",
+		event: { eventType: "executing" },
 	});
-	if (row) {
-		await recordEvent({ invocationId, eventType: "executing" });
-	}
-	return row;
+	return invocation;
 }
 
 /**
@@ -419,7 +408,15 @@ export async function markCompleted(
 	result: unknown,
 	durationMs: number,
 ): Promise<ActionInvocationRow | undefined> {
-	const row = await actionsDb.transitionInvocationStatus({
+	const existing = await actionsDb.getInvocationById(invocationId);
+	const resumePayload = existing
+		? await buildResumeIntentPayload({
+				invocation: existing,
+				terminalStatus: "completed",
+			})
+		: undefined;
+
+	const { invocation } = await actionsDb.transitionInvocationWithEffects({
 		id: invocationId,
 		fromStatuses: ["executing"],
 		toStatus: "completed",
@@ -428,15 +425,10 @@ export async function markCompleted(
 			completedAt: new Date(),
 			durationMs,
 		},
+		event: { eventType: "completed" },
+		resumeIntent: resumeIntentArg(resumePayload),
 	});
-	if (row) {
-		await recordTerminalOutcomeSideEffects({
-			invocation: row,
-			eventType: "completed",
-			terminalStatus: "completed",
-		});
-	}
-	return row;
+	return invocation;
 }
 
 /**
@@ -447,7 +439,15 @@ export async function markFailed(
 	error: string,
 	durationMs?: number,
 ): Promise<ActionInvocationRow | undefined> {
-	const row = await actionsDb.transitionInvocationStatus({
+	const existing = await actionsDb.getInvocationById(invocationId);
+	const resumePayload = existing
+		? await buildResumeIntentPayload({
+				invocation: existing,
+				terminalStatus: "failed",
+			})
+		: undefined;
+
+	const { invocation } = await actionsDb.transitionInvocationWithEffects({
 		id: invocationId,
 		fromStatuses: ["approved", "executing"],
 		toStatus: "failed",
@@ -456,16 +456,60 @@ export async function markFailed(
 			completedAt: new Date(),
 			durationMs,
 		},
-	});
-	if (row) {
-		await recordTerminalOutcomeSideEffects({
-			invocation: row,
+		event: {
 			eventType: "failed",
-			terminalStatus: "failed",
 			payloadJson: { error },
-		});
+		},
+		resumeIntent: resumeIntentArg(resumePayload),
+	});
+	return invocation;
+}
+
+/**
+ * Execute an approved invocation through a provided action executor.
+ *
+ * This keeps execution lifecycle orchestration in the service layer.
+ */
+export async function executeApprovedInvocation(
+	input: ExecuteApprovedInvocationInput,
+): Promise<ExecuteApprovedInvocationResult> {
+	const log = getServicesLogger().child({ module: "actions", invocationId: input.invocationId });
+	const executing = await markExecuting(input.invocationId);
+	if (!executing) {
+		throw new ActionConflictError("Invocation is not in an approvable state for execution");
 	}
-	return row;
+
+	const startedAt = Date.now();
+	try {
+		const actionResult = await input.execute();
+		if (!actionResult.success) {
+			throw new Error(actionResult.error ?? "Action failed");
+		}
+
+		const completed = await markCompleted(input.invocationId, actionResult.data, Date.now() - startedAt);
+		if (!completed) {
+			throw new ActionConflictError("Failed to mark invocation as completed");
+		}
+
+		return {
+			invocation: completed,
+			result: completed.result,
+		};
+	} catch (error) {
+		const durationMs = Date.now() - startedAt;
+		const errorMessage = error instanceof Error ? error.message : String(error);
+
+		try {
+			await markFailed(input.invocationId, errorMessage, durationMs);
+		} catch (markFailedError) {
+			log.error(
+				{ error: markFailedError },
+				"Failed to persist action failure after execution error",
+			);
+		}
+
+		throw new Error(errorMessage);
+	}
 }
 
 /**
@@ -488,16 +532,18 @@ export async function approveAction(
 
 	const now = new Date();
 	if (invocation.expiresAt && invocation.expiresAt <= now) {
-		const expired = await actionsDb.transitionInvocationStatus({
+		const resumePayload = await buildResumeIntentPayload({
+			invocation,
+			terminalStatus: "expired",
+		});
+		await actionsDb.transitionInvocationWithEffects({
 			id: invocationId,
 			fromStatuses: ["pending"],
 			toStatus: "expired",
 			data: { completedAt: now },
+			event: { eventType: "expired" },
+			resumeIntent: resumeIntentArg(resumePayload),
 		});
-		if (expired) {
-			await recordEvent({ invocationId, eventType: "expired" });
-			await queueResumeIntentIfNeeded({ invocation: expired, terminalStatus: "expired" });
-		}
 		throw new ActionExpiredError();
 	}
 
@@ -516,7 +562,11 @@ export async function approveAction(
 	});
 
 	if (effective.effectiveMode === "deny") {
-		const denied = await actionsDb.transitionInvocationStatus({
+		const resumePayload = await buildResumeIntentPayload({
+			invocation,
+			terminalStatus: "denied",
+		});
+		const { invocation: denied } = await actionsDb.transitionInvocationWithEffects({
 			id: invocationId,
 			fromStatuses: ["pending"],
 			toStatus: "denied",
@@ -524,20 +574,21 @@ export async function approveAction(
 				deniedReason: "policy_revalidated_deny",
 				completedAt: now,
 			},
-		});
-		if (denied) {
-			await recordEvent({
-				invocationId,
+			event: {
 				eventType: "denied",
 				actorUserId: userId,
 				payloadJson: { reason: "policy_revalidated_deny" },
-			});
-			await queueResumeIntentIfNeeded({ invocation: denied, terminalStatus: "denied" });
+			},
+			resumeIntent: resumeIntentArg(resumePayload),
+		});
+
+		if (!denied) {
+			throw new ActionConflictError("Failed to update invocation");
 		}
 		throw new ActionConflictError("Invocation denied by current policy");
 	}
 
-	const approved = await actionsDb.transitionInvocationStatus({
+	const { invocation: approved } = await actionsDb.transitionInvocationWithEffects({
 		id: invocationId,
 		fromStatuses: ["pending"],
 		toStatus: "approved",
@@ -545,12 +596,12 @@ export async function approveAction(
 			approvedBy: userId,
 			approvedAt: now,
 		},
+		event: { eventType: "approved", actorUserId: userId },
 	});
 	if (!approved) {
 		throw new ActionConflictError("Failed to update invocation");
 	}
 
-	await recordEvent({ invocationId, eventType: "approved", actorUserId: userId });
 	return approved;
 }
 
@@ -570,7 +621,11 @@ export async function denyAction(
 		throw new ActionConflictError(`Cannot deny invocation in status: ${invocation.status}`);
 	}
 
-	const updated = await actionsDb.transitionInvocationStatus({
+	const resumePayload = await buildResumeIntentPayload({
+		invocation,
+		terminalStatus: "denied",
+	});
+	const { invocation: updated } = await actionsDb.transitionInvocationWithEffects({
 		id: invocationId,
 		fromStatuses: ["pending"],
 		toStatus: "denied",
@@ -578,40 +633,46 @@ export async function denyAction(
 			approvedBy: userId,
 			completedAt: new Date(),
 		},
+		event: {
+			eventType: "denied",
+			actorUserId: userId,
+		},
+		resumeIntent: resumeIntentArg(resumePayload),
 	});
 	if (!updated) {
 		throw new ActionConflictError("Failed to update invocation");
 	}
 
-	await recordEvent({ invocationId, eventType: "denied", actorUserId: userId });
-	await queueResumeIntentIfNeeded({ invocation: updated, terminalStatus: "denied" });
 	return updated;
 }
 
 /**
  * Verify session visibility + ACL-based authority for approval decisions.
- *
- * Caller should also enforce org-role gates separately.
  */
 export async function assertApprovalAuthority(input: {
 	sessionId: string;
 	organizationId: string;
 	userId: string;
+	isOrgAdmin: boolean;
 }): Promise<void> {
 	const session = await actionsDb.getSessionApprovalContext(input.sessionId);
 	if (!session || session.organizationId !== input.organizationId) {
 		throw new ApprovalAuthorityError("Session access denied");
 	}
 
-	const aclRole = await actionsDb.getSessionAclRole(input.sessionId, input.userId);
-	if (aclRole === "viewer") {
-		throw new ApprovalAuthorityError("Viewer role cannot approve or deny actions");
+	if (session.createdBy === input.userId) {
+		return;
 	}
 
-	if (session.visibility === "private" && session.createdBy !== input.userId) {
-		if (aclRole !== "editor" && aclRole !== "reviewer") {
-			throw new ApprovalAuthorityError("Private session approval requires explicit ACL access");
-		}
+	if (input.isOrgAdmin) {
+		return;
+	}
+
+	const aclRole = await actionsDb.getSessionAclRole(input.sessionId, input.userId);
+	if (aclRole !== "reviewer") {
+		throw new ApprovalAuthorityError(
+			"Approval authority requires reviewer ACL grant or org-admin override",
+		);
 	}
 }
 
@@ -648,18 +709,22 @@ export async function expireStaleInvocations(): Promise<number> {
 	let expiredCount = 0;
 
 	for (const invocation of candidates) {
-		const expired = await actionsDb.transitionInvocationStatus({
+		const resumePayload = await buildResumeIntentPayload({
+			invocation,
+			terminalStatus: "expired",
+		});
+		const { invocation: expired } = await actionsDb.transitionInvocationWithEffects({
 			id: invocation.id,
 			fromStatuses: ["pending"],
 			toStatus: "expired",
 			data: { completedAt: now },
+			event: { eventType: "expired" },
+			resumeIntent: resumeIntentArg(resumePayload),
 		});
 		if (!expired) {
 			continue;
 		}
 		expiredCount += 1;
-		await recordEvent({ invocationId: invocation.id, eventType: "expired" });
-		await queueResumeIntentIfNeeded({ invocation: expired, terminalStatus: "expired" });
 	}
 
 	return expiredCount;

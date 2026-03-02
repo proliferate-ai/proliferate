@@ -106,26 +106,22 @@
 - PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/254`
 - scope: Phase 4 live capability and approval lifecycle contracts (capability-authoritative invoke resolution, approval transition guards, terminal-outcome resume-intent semantics, session visibility/ACL authority checks)
 - check results:
-  - `pnpm typecheck` ✅
-  - `pnpm lint` ✅
-  - `pnpm test` ✅
-  - `pnpm build` ⚠️ fails locally due required env vars for `apps/web` build-time validation.
+  - `pnpm -C packages/services test src/actions/service.test.ts` ⚠️ blocked in this worktree (`node_modules` missing; `vitest` not found).
+  - `pnpm -C packages/services typecheck` ⚠️ blocked in this worktree (`node_modules` missing; `tsc` not found).
+  - `pnpm -C packages/services lint` ⚠️ blocked in this worktree (`node_modules` missing / local package execution failed).
 - open comments:
-  - CI and automated review pending.
+  - Critique 4 actionable items processed; CI rerun pending.
 - fixes applied:
-  - Added action DB transition helpers for strict invocation status changes.
-  - Added `action_invocation_events` write/list helpers for lifecycle auditing.
-  - Added idempotent `resume_intents` create/get + transition DB helpers.
-  - Added session capability mode, ACL role, and operator-status helper queries for approval authority + lifecycle updates.
-  - Enforced strictest mode precedence at invocation time with live `session_capabilities` authority.
-  - Set session operator status to `waiting_for_approval` on pending approval; no `resume_intent` is created at pending.
-  - Added approval-time policy revalidation before `pending -> approved`.
-  - Added terminal blocked-path resume-intent queuing (`completed|failed|denied|expired`) only when origin session is still waiting for approval.
-  - Added gateway-layer enforcement for session visibility + ACL role approval authority checks.
-  - Added service tests covering capability precedence, pending semantics, revalidation, terminal resume-intent timing, and viewer ACL denial.
-  - Hardened approve/deny routes to require invocation ownership by the path session before authority checks.
-  - Made terminal action side effects best-effort so `markCompleted`/`markFailed` cannot fail after durable status transitions.
+  - Hardened approval authority to fail closed: only session creator, explicit `reviewer`, or org-admin override can approve/deny.
+  - Removed router-level hard admin prerequisite from approve/deny routes; now computes org-admin override and delegates authority checks to service.
+  - Added actions domain mapper (`packages/services/src/actions/mapper.ts`) and switched router responses to mapped DTOs instead of raw DB rows.
+  - Moved action execution orchestration (`approved -> executing -> completed|failed`) into service (`executeApprovedInvocation`) so router is transport-focused.
+  - Added tool-discovery deny filtering in `GET /available` by resolving effective mode against live `session_capabilities`.
+  - Added atomic DB transition helper (`transitionInvocationWithEffects`) to persist status transition + event + optional resume-intent in one transaction.
+  - Updated terminal approval paths (`markCompleted`, `markFailed`, `approveAction`, `denyAction`, expiry paths) to use atomic transition helper.
+  - Updated unread semantics: `setSessionOperatorStatus` now updates `sessions.lastVisibleUpdateAt` for attention statuses; approval-resolution transitions (`approved|denied|expired`) now touch visibility timestamp.
+  - Expanded service tests to cover ACL edge conditions (`editor`, implicit org viewer, explicit `reviewer`, org-admin override) and atomic transition expectations.
 - merge SHA: `TBD`
 - carry-over TODOs:
-  - Resolve CI/human/Greptile feedback.
-  - Complete downstream runtime handling for resume-intent processing strategy metadata.
+  - Run full checks once dependencies are available in this worktree.
+  - Resolve any additional CI/human/Greptile follow-ups.

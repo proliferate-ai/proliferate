@@ -68,6 +68,20 @@ const TERMINAL_RESUME_INTENT_STATUSES: ResumeIntentStatus[] = [
 	"continued",
 	"resume_failed",
 ];
+const ATTENTION_OPERATOR_STATUSES = new Set(["waiting_for_approval", "needs_input", "errored"]);
+const APPROVAL_RESOLUTION_STATUSES = new Set<ActionInvocationStatus>([
+	"approved",
+	"denied",
+	"expired",
+]);
+
+function isDuplicateActiveResumeIntentError(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		(error.message.includes("uq_resume_intents_one_active") ||
+			error.message.includes("duplicate key value"))
+	);
+}
 
 // ============================================
 // Queries
@@ -275,13 +289,17 @@ export async function setSessionOperatorStatus(input: {
 	fromStatuses?: string[];
 }): Promise<boolean> {
 	const db = getDb();
+	const shouldTouchVisibility = ATTENTION_OPERATOR_STATUSES.has(input.toStatus);
 	const where = input.fromStatuses?.length
 		? and(eq(sessions.id, input.sessionId), inArray(sessions.operatorStatus, input.fromStatuses))
 		: eq(sessions.id, input.sessionId);
 
 	const rows = await db
 		.update(sessions)
-		.set({ operatorStatus: input.toStatus })
+		.set({
+			operatorStatus: input.toStatus,
+			...(shouldTouchVisibility && { lastVisibleUpdateAt: new Date() }),
+		})
 		.where(where)
 		.returning({ id: sessions.id });
 
@@ -328,6 +346,142 @@ export async function createActionInvocationEvent(input: {
 		})
 		.returning();
 	return row;
+}
+
+export interface TransitionInvocationWithEffectsInput {
+	id: string;
+	fromStatuses: ActionInvocationStatus[];
+	toStatus: ActionInvocationStatus;
+	data?: {
+		result?: unknown;
+		error?: string;
+		approvedBy?: string;
+		approvedAt?: Date;
+		completedAt?: Date;
+		durationMs?: number;
+		deniedReason?: string;
+		expiresAt?: Date | null;
+	};
+	event?: {
+		eventType: string;
+		actorUserId?: string | null;
+		payloadJson?: unknown;
+	};
+	resumeIntent?: {
+		payloadJson?: unknown;
+	};
+}
+
+export interface TransitionInvocationWithEffectsResult {
+	invocation: ActionInvocationRow | undefined;
+	resumeIntent: ResumeIntentRow | undefined;
+}
+
+export async function transitionInvocationWithEffects(
+	input: TransitionInvocationWithEffectsInput,
+): Promise<TransitionInvocationWithEffectsResult> {
+	if (input.fromStatuses.length === 0) {
+		throw new Error("fromStatuses must include at least one status");
+	}
+
+	const db = getDb();
+	return db.transaction(async (tx) => {
+		const [invocation] = await tx
+			.update(actionInvocations)
+			.set({
+				status: input.toStatus,
+				...input.data,
+			})
+			.where(
+				and(
+					eq(actionInvocations.id, input.id),
+					inArray(actionInvocations.status, input.fromStatuses),
+				),
+			)
+			.returning();
+
+		if (!invocation) {
+			return { invocation: undefined, resumeIntent: undefined };
+		}
+
+		if (input.event) {
+			await tx.insert(actionInvocationEvents).values({
+				actionInvocationId: invocation.id,
+				eventType: input.event.eventType,
+				actorUserId: input.event.actorUserId ?? null,
+				payloadJson: input.event.payloadJson ?? null,
+			});
+		}
+
+		if (APPROVAL_RESOLUTION_STATUSES.has(input.toStatus)) {
+			await tx
+				.update(sessions)
+				.set({ lastVisibleUpdateAt: new Date() })
+				.where(eq(sessions.id, invocation.sessionId));
+		}
+
+		let resumeIntent: ResumeIntentRow | undefined;
+		if (input.resumeIntent && invocation.mode === "require_approval") {
+			const [session] = await tx
+				.select({ operatorStatus: sessions.operatorStatus })
+				.from(sessions)
+				.where(eq(sessions.id, invocation.sessionId))
+				.limit(1);
+
+			if (session?.operatorStatus === "waiting_for_approval") {
+				const [existing] = await tx
+					.select()
+					.from(resumeIntents)
+					.where(
+						and(
+							eq(resumeIntents.originSessionId, invocation.sessionId),
+							eq(resumeIntents.invocationId, invocation.id),
+							notInArray(resumeIntents.status, TERMINAL_RESUME_INTENT_STATUSES),
+						),
+					)
+					.limit(1);
+
+				if (existing) {
+					resumeIntent = existing;
+				} else {
+					try {
+						const [created] = await tx
+							.insert(resumeIntents)
+							.values({
+								originSessionId: invocation.sessionId,
+								invocationId: invocation.id,
+								status: "queued",
+								payloadJson: input.resumeIntent.payloadJson ?? null,
+							})
+							.returning();
+						resumeIntent = created;
+					} catch (error) {
+						if (!isDuplicateActiveResumeIntentError(error)) {
+							throw error;
+						}
+
+						const [retried] = await tx
+							.select()
+							.from(resumeIntents)
+							.where(
+								and(
+									eq(resumeIntents.originSessionId, invocation.sessionId),
+									eq(resumeIntents.invocationId, invocation.id),
+									notInArray(resumeIntents.status, TERMINAL_RESUME_INTENT_STATUSES),
+								),
+							)
+							.limit(1);
+						if (!retried) {
+							throw error;
+						}
+						resumeIntent = retried;
+					}
+				}
+			}
+		}
+
+		return { invocation, resumeIntent };
+	});
 }
 
 export async function listActionInvocationEvents(
@@ -383,11 +537,7 @@ export async function createOrGetActiveResumeIntent(input: {
 			.returning();
 		return row;
 	} catch (error) {
-		const duplicate =
-			error instanceof Error &&
-			(error.message.includes("uq_resume_intents_one_active") ||
-				error.message.includes("duplicate key value"));
-		if (!duplicate) {
+		if (!isDuplicateActiveResumeIntentError(error)) {
 			throw error;
 		}
 		const retry = await getActiveResumeIntent(input.originSessionId, input.invocationId);

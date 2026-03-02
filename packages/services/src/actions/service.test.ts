@@ -8,9 +8,9 @@ const {
 	mockSetSessionOperatorStatus,
 	mockCreateActionInvocationEvent,
 	mockGetInvocation,
-	mockTransitionInvocationStatus,
+	mockGetInvocationById,
+	mockTransitionInvocationWithEffects,
 	mockGetSessionApprovalContext,
-	mockCreateOrGetActiveResumeIntent,
 	mockListExpirablePendingInvocations,
 	mockGetSessionAclRole,
 } = vi.hoisted(() => ({
@@ -21,9 +21,9 @@ const {
 	mockSetSessionOperatorStatus: vi.fn(),
 	mockCreateActionInvocationEvent: vi.fn(),
 	mockGetInvocation: vi.fn(),
-	mockTransitionInvocationStatus: vi.fn(),
+	mockGetInvocationById: vi.fn(),
+	mockTransitionInvocationWithEffects: vi.fn(),
 	mockGetSessionApprovalContext: vi.fn(),
-	mockCreateOrGetActiveResumeIntent: vi.fn(),
 	mockListExpirablePendingInvocations: vi.fn(),
 	mockGetSessionAclRole: vi.fn(),
 }));
@@ -31,9 +31,10 @@ const {
 vi.mock("./db", () => ({
 	createInvocation: mockCreateInvocation,
 	getInvocation: mockGetInvocation,
-	getInvocationById: vi.fn(),
+	getInvocationById: mockGetInvocationById,
 	updateInvocationStatus: vi.fn(),
-	transitionInvocationStatus: mockTransitionInvocationStatus,
+	transitionInvocationStatus: vi.fn(),
+	transitionInvocationWithEffects: mockTransitionInvocationWithEffects,
 	listBySession: vi.fn().mockResolvedValue([]),
 	listPendingBySession: mockListPendingBySession,
 	listExpirablePendingInvocations: mockListExpirablePendingInvocations,
@@ -44,7 +45,7 @@ vi.mock("./db", () => ({
 	setSessionOperatorStatus: mockSetSessionOperatorStatus,
 	createActionInvocationEvent: mockCreateActionInvocationEvent,
 	getSessionApprovalContext: mockGetSessionApprovalContext,
-	createOrGetActiveResumeIntent: mockCreateOrGetActiveResumeIntent,
+	createOrGetActiveResumeIntent: vi.fn(),
 	getSessionAclRole: mockGetSessionAclRole,
 }));
 
@@ -67,7 +68,6 @@ const {
 	PendingLimitError,
 	denyAction,
 	markCompleted,
-	markFailed,
 	approveAction,
 	ActionConflictError,
 	assertApprovalAuthority,
@@ -94,6 +94,7 @@ function makeInvocationRow(overrides: Record<string, unknown> = {}) {
 		completedAt: null,
 		expiresAt: null,
 		createdAt: new Date(),
+		updatedAt: new Date(),
 		...overrides,
 	};
 }
@@ -115,7 +116,6 @@ describe("actions v1 service", () => {
 		mockGetSessionCapabilityMode.mockResolvedValue(undefined);
 		mockSetSessionOperatorStatus.mockResolvedValue(true);
 		mockCreateActionInvocationEvent.mockResolvedValue({ id: "evt-1" });
-		mockCreateOrGetActiveResumeIntent.mockResolvedValue({ id: "resume-1" });
 		mockListExpirablePendingInvocations.mockResolvedValue([]);
 		mockResolveMode.mockImplementation(
 			async (input: { riskLevel: "read" | "write" | "danger" }) => {
@@ -130,7 +130,7 @@ describe("actions v1 service", () => {
 		);
 	});
 
-	it("requires approval for write actions, sets waiting status, and does not queue resume intent", async () => {
+	it("requires approval for write actions and sets waiting status", async () => {
 		const row = makeInvocationRow({ status: "pending", expiresAt: new Date() });
 		mockCreateInvocation.mockResolvedValue(row);
 
@@ -144,7 +144,6 @@ describe("actions v1 service", () => {
 				toStatus: "waiting_for_approval",
 			}),
 		);
-		expect(mockCreateOrGetActiveResumeIntent).not.toHaveBeenCalled();
 	});
 
 	it("applies live session capability authority with strictest precedence", async () => {
@@ -173,12 +172,9 @@ describe("actions v1 service", () => {
 		expect(mockCreateInvocation).not.toHaveBeenCalled();
 	});
 
-	it("queues resume intent only after terminal denied outcome on blocked path", async () => {
+	it("writes denied transition atomically with resume payload", async () => {
 		mockGetInvocation.mockResolvedValue(
 			makeInvocationRow({ status: "pending", mode: "require_approval" }),
-		);
-		mockTransitionInvocationStatus.mockResolvedValue(
-			makeInvocationRow({ status: "denied", mode: "require_approval" }),
 		);
 		mockGetSessionApprovalContext.mockResolvedValue({
 			id: "session-1",
@@ -188,21 +184,29 @@ describe("actions v1 service", () => {
 			visibility: "private",
 			createdBy: "user-1",
 			repoId: "repo-1",
+		});
+		mockTransitionInvocationWithEffects.mockResolvedValue({
+			invocation: makeInvocationRow({ status: "denied", mode: "require_approval" }),
+			resumeIntent: { id: "resume-1" },
 		});
 
 		await denyAction("inv-1", "org-1", "user-1");
 
-		expect(mockCreateOrGetActiveResumeIntent).toHaveBeenCalledWith(
+		expect(mockTransitionInvocationWithEffects).toHaveBeenCalledWith(
 			expect.objectContaining({
-				originSessionId: "session-1",
-				invocationId: "inv-1",
+				id: "inv-1",
+				toStatus: "denied",
+				event: expect.objectContaining({ eventType: "denied" }),
+				resumeIntent: expect.objectContaining({
+					payloadJson: expect.objectContaining({ terminalStatus: "denied" }),
+				}),
 			}),
 		);
 	});
 
-	it("queues resume intent after completed terminal outcome for approval-gated invocation", async () => {
-		mockTransitionInvocationStatus.mockResolvedValue(
-			makeInvocationRow({ status: "completed", mode: "require_approval" }),
+	it("writes completed transition atomically with terminal side effects", async () => {
+		mockGetInvocationById.mockResolvedValue(
+			makeInvocationRow({ status: "executing", mode: "require_approval" }),
 		);
 		mockGetSessionApprovalContext.mockResolvedValue({
 			id: "session-1",
@@ -212,60 +216,23 @@ describe("actions v1 service", () => {
 			visibility: "private",
 			createdBy: "user-1",
 			repoId: "repo-1",
+		});
+		mockTransitionInvocationWithEffects.mockResolvedValue({
+			invocation: makeInvocationRow({ status: "completed", mode: "require_approval" }),
+			resumeIntent: { id: "resume-1" },
 		});
 
 		await markCompleted("inv-1", { ok: true }, 12);
 
-		expect(mockCreateOrGetActiveResumeIntent).toHaveBeenCalled();
-	});
-
-	it("returns completed invocation even when completion side effects fail", async () => {
-		mockTransitionInvocationStatus.mockResolvedValue(
-			makeInvocationRow({ status: "completed", mode: "require_approval" }),
-		);
-		mockGetSessionApprovalContext.mockResolvedValue({
-			id: "session-1",
-			organizationId: "org-1",
-			automationId: null,
-			operatorStatus: "waiting_for_approval",
-			visibility: "private",
-			createdBy: "user-1",
-			repoId: "repo-1",
-		});
-		mockCreateActionInvocationEvent.mockRejectedValueOnce(new Error("event-write-failed"));
-		mockCreateOrGetActiveResumeIntent.mockRejectedValueOnce(new Error("resume-write-failed"));
-
-		await expect(markCompleted("inv-1", { ok: true }, 12)).resolves.toMatchObject({
-			id: "inv-1",
-			status: "completed",
-		});
-		expect(mockTransitionInvocationStatus).toHaveBeenCalledWith(
-			expect.objectContaining({ id: "inv-1", toStatus: "completed" }),
-		);
-	});
-
-	it("returns failed invocation even when failure side effects fail", async () => {
-		mockTransitionInvocationStatus.mockResolvedValue(
-			makeInvocationRow({ status: "failed", mode: "require_approval" }),
-		);
-		mockGetSessionApprovalContext.mockResolvedValue({
-			id: "session-1",
-			organizationId: "org-1",
-			automationId: null,
-			operatorStatus: "waiting_for_approval",
-			visibility: "private",
-			createdBy: "user-1",
-			repoId: "repo-1",
-		});
-		mockCreateActionInvocationEvent.mockRejectedValueOnce(new Error("event-write-failed"));
-		mockCreateOrGetActiveResumeIntent.mockRejectedValueOnce(new Error("resume-write-failed"));
-
-		await expect(markFailed("inv-1", "boom", 12)).resolves.toMatchObject({
-			id: "inv-1",
-			status: "failed",
-		});
-		expect(mockTransitionInvocationStatus).toHaveBeenCalledWith(
-			expect.objectContaining({ id: "inv-1", toStatus: "failed" }),
+		expect(mockTransitionInvocationWithEffects).toHaveBeenCalledWith(
+			expect.objectContaining({
+				id: "inv-1",
+				toStatus: "completed",
+				event: expect.objectContaining({ eventType: "completed" }),
+				resumeIntent: expect.objectContaining({
+					payloadJson: expect.objectContaining({ terminalStatus: "completed" }),
+				}),
+			}),
 		);
 	});
 
@@ -283,20 +250,20 @@ describe("actions v1 service", () => {
 			repoId: "repo-1",
 		});
 		mockResolveMode.mockResolvedValue({ mode: "deny", source: "org_default" });
-		mockTransitionInvocationStatus.mockResolvedValue(
-			makeInvocationRow({ status: "denied", mode: "require_approval" }),
-		);
+		mockTransitionInvocationWithEffects.mockResolvedValue({
+			invocation: makeInvocationRow({ status: "denied", mode: "require_approval" }),
+			resumeIntent: { id: "resume-1" },
+		});
 
 		await expect(approveAction("inv-1", "org-1", "approver-1")).rejects.toBeInstanceOf(
 			ActionConflictError,
 		);
-		expect(mockTransitionInvocationStatus).toHaveBeenCalledWith(
+		expect(mockTransitionInvocationWithEffects).toHaveBeenCalledWith(
 			expect.objectContaining({ toStatus: "denied" }),
 		);
-		expect(mockCreateOrGetActiveResumeIntent).toHaveBeenCalled();
 	});
 
-	it("blocks viewer ACL from approval authority", async () => {
+	it("blocks editor ACL from approval authority", async () => {
 		mockGetSessionApprovalContext.mockResolvedValue({
 			id: "session-1",
 			organizationId: "org-1",
@@ -306,14 +273,80 @@ describe("actions v1 service", () => {
 			createdBy: "owner-1",
 			repoId: "repo-1",
 		});
-		mockGetSessionAclRole.mockResolvedValue("viewer");
+		mockGetSessionAclRole.mockResolvedValue("editor");
 
 		await expect(
 			assertApprovalAuthority({
 				sessionId: "session-1",
 				organizationId: "org-1",
 				userId: "user-1",
+				isOrgAdmin: false,
 			}),
 		).rejects.toBeInstanceOf(ApprovalAuthorityError);
+	});
+
+	it("blocks implicit org viewers without explicit reviewer ACL", async () => {
+		mockGetSessionApprovalContext.mockResolvedValue({
+			id: "session-1",
+			organizationId: "org-1",
+			automationId: null,
+			operatorStatus: "active",
+			visibility: "org",
+			createdBy: "owner-1",
+			repoId: "repo-1",
+		});
+		mockGetSessionAclRole.mockResolvedValue(undefined);
+
+		await expect(
+			assertApprovalAuthority({
+				sessionId: "session-1",
+				organizationId: "org-1",
+				userId: "user-1",
+				isOrgAdmin: false,
+			}),
+		).rejects.toBeInstanceOf(ApprovalAuthorityError);
+	});
+
+	it("allows explicit reviewer ACL", async () => {
+		mockGetSessionApprovalContext.mockResolvedValue({
+			id: "session-1",
+			organizationId: "org-1",
+			automationId: null,
+			operatorStatus: "active",
+			visibility: "org",
+			createdBy: "owner-1",
+			repoId: "repo-1",
+		});
+		mockGetSessionAclRole.mockResolvedValue("reviewer");
+
+		await expect(
+			assertApprovalAuthority({
+				sessionId: "session-1",
+				organizationId: "org-1",
+				userId: "reviewer-1",
+				isOrgAdmin: false,
+			}),
+		).resolves.toBeUndefined();
+	});
+
+	it("allows org-admin override without ACL row", async () => {
+		mockGetSessionApprovalContext.mockResolvedValue({
+			id: "session-1",
+			organizationId: "org-1",
+			automationId: null,
+			operatorStatus: "active",
+			visibility: "shared",
+			createdBy: "owner-1",
+			repoId: "repo-1",
+		});
+
+		await expect(
+			assertApprovalAuthority({
+				sessionId: "session-1",
+				organizationId: "org-1",
+				userId: "admin-1",
+				isOrgAdmin: true,
+			}),
+		).resolves.toBeUndefined();
 	});
 });
