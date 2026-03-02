@@ -379,7 +379,7 @@ async function createScratchSession(input: {
 	const doUrl = `${gatewayUrl}/session/${sessionId}`;
 	reqLog.info({ sessionType }, "Creating scratch session");
 
-	// K2: Ad-hoc task sessions default to private visibility
+	// K2: Scratch sessions have no repo/worker linkage — kind=null (ad-hoc)
 	await createSessionWithAdmission(orgId, {
 		id: sessionId,
 		configurationId: null,
@@ -390,6 +390,7 @@ async function createScratchSession(input: {
 		sandboxProvider: provider.type,
 		snapshotId: null,
 		initialPrompt,
+		kind: null,
 		visibility: "private",
 		...(initialPrompt ? { titleStatus: "generating" } : {}),
 		agentConfig: {

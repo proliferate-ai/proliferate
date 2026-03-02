@@ -28,7 +28,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
 
 	// Fetch sessions
-	const { data: sessions } = useSessions({ kinds: ["task"], excludeSetup: true });
+	const { data: sessions } = useSessions({ excludeSetup: true });
 
 	// Fetch automations
 	const { data: automations = [] } = useAutomations();

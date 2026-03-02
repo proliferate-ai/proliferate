@@ -98,11 +98,12 @@ export async function listByOrganization(
 	}
 
 	if (filters?.excludeSetup) {
-		conditions.push(ne(sessions.sessionType, "setup"));
+		// Use or(ne, isNull) because NULL <> 'setup' evaluates to NULL in SQL
+		conditions.push(or(ne(sessions.sessionType, "setup"), isNull(sessions.sessionType))!);
 	}
 
 	if (filters?.excludeCli) {
-		conditions.push(ne(sessions.origin, "cli"));
+		conditions.push(or(ne(sessions.origin, "cli"), isNull(sessions.origin))!);
 	}
 
 	if (filters?.excludeAutomation) {
@@ -190,11 +191,11 @@ export async function listByOrganizationEnriched(
 	}
 
 	if (filters?.excludeSetup) {
-		conditions.push(ne(sessions.sessionType, "setup"));
+		conditions.push(or(ne(sessions.sessionType, "setup"), isNull(sessions.sessionType))!);
 	}
 
 	if (filters?.excludeCli) {
-		conditions.push(ne(sessions.origin, "cli"));
+		conditions.push(or(ne(sessions.origin, "cli"), isNull(sessions.origin))!);
 	}
 
 	if (filters?.excludeAutomation) {
@@ -347,7 +348,7 @@ export async function create(input: CreateSessionInput): Promise<SessionRow> {
 			triggerId: input.triggerId ?? null,
 			triggerEventId: input.triggerEventId ?? null,
 			...(input.visibility && { visibility: input.visibility }),
-			...(input.kind && { kind: input.kind }),
+			...("kind" in input ? { kind: input.kind } : {}),
 			continuedFromSessionId: input.continuedFromSessionId ?? null,
 			rerunOfSessionId: input.rerunOfSessionId ?? null,
 		})
@@ -413,7 +414,7 @@ export async function createWithAdmissionGuard(
 			triggerId: input.triggerId ?? null,
 			triggerEventId: input.triggerEventId ?? null,
 			...(input.visibility && { visibility: input.visibility }),
-			...(input.kind && { kind: input.kind }),
+			...("kind" in input ? { kind: input.kind } : {}),
 			continuedFromSessionId: input.continuedFromSessionId ?? null,
 			rerunOfSessionId: input.rerunOfSessionId ?? null,
 		});

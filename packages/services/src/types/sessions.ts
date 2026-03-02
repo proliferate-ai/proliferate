@@ -32,7 +32,7 @@ export interface CreateSessionInput {
 	triggerId?: string | null;
 	triggerEventId?: string | null;
 	visibility?: "private" | "shared" | "org";
-	kind?: "manager" | "task" | "setup";
+	kind?: "manager" | "task" | "setup" | null;
 	// V1: lineage
 	continuedFromSessionId?: string | null;
 	rerunOfSessionId?: string | null;

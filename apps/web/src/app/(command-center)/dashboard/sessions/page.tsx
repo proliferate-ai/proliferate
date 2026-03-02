@@ -111,7 +111,6 @@ function SessionsContent() {
 	const [hasLiveSessions, setHasLiveSessions] = useState(false);
 
 	const { data: sessions, isLoading } = useSessions({
-		kinds: ["task"],
 		excludeSetup: true,
 		refetchInterval: hasLiveSessions ? 5000 : false,
 	});
@@ -131,9 +130,8 @@ function SessionsContent() {
 	}, [pendingRuns]);
 
 	const result = useMemo(() => {
-		// V1 default scope is task sessions only.
-		const baseSessions =
-			sessions?.filter((s) => (s.kind ? s.kind === "task" : s.sessionType !== "setup")) ?? [];
+		// V1 default scope: task sessions + ad-hoc (kind=null), exclude setup/manager.
+		const baseSessions = sessions?.filter((s) => !s.kind || s.kind === "task") ?? [];
 
 		// Derive display status for all sessions once
 		const withStatus = baseSessions.map((s) => ({

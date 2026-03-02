@@ -1456,8 +1456,8 @@ export const sessions = pgTable(
 
 		// ── V1 fields ──────────────────────────────────────────────
 
-		// V1 session kind: manager | task | setup
-		kind: text("kind").default("task").notNull(),
+		// V1 session kind: manager | task | setup | null (ad-hoc/scratch)
+		kind: text("kind"),
 
 		// V1 runtime status: starting | running | paused | completed | failed | cancelled
 		runtimeStatus: text("runtime_status").default("starting").notNull(),
@@ -1608,7 +1608,7 @@ export const sessions = pgTable(
 		),
 		check(
 			"sessions_kind_check",
-			sql`kind = ANY (ARRAY['manager'::text, 'task'::text, 'setup'::text])`,
+			sql`kind IS NULL OR kind = ANY (ARRAY['manager'::text, 'task'::text, 'setup'::text])`,
 		),
 		check(
 			"sessions_runtime_status_check",

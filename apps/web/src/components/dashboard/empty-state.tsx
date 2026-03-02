@@ -147,7 +147,6 @@ function NeedsAttention() {
 
 function RecentActivity() {
 	const { data: sessions, isLoading } = useSessions({
-		kinds: ["task"],
 		limit: 5,
 		excludeSetup: true,
 		excludeCli: true,
@@ -185,7 +184,6 @@ export function EmptyDashboard() {
 	const createConfiguration = useCreateConfiguration();
 	const createSession = useCreateSession();
 	const { data: recentSessions } = useSessions({
-		kinds: ["task"],
 		limit: 1,
 		excludeSetup: true,
 		excludeCli: true,
