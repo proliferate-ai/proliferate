@@ -112,9 +112,7 @@ async function validateSessionKindEnum(failures) {
 	if (enumMatch) {
 		kinds = Array.from(enumMatch[1].matchAll(/["']([^"']+)["']/g)).map((m) => m[1]);
 	} else {
-		const checkMatch = content.match(
-			/sessions_kind_check[\s\S]*?ARRAY\[(?<values>[\s\S]*?)\]/,
-		);
+		const checkMatch = content.match(/sessions_kind_check[\s\S]*?ARRAY\[(?<values>[\s\S]*?)\]/);
 		if (!checkMatch?.groups?.values) {
 			failures.push(`Could not locate session_kind enum declaration in ${sessionKindsFile}.`);
 			return;
@@ -142,7 +140,8 @@ async function validateSessionKindEnum(failures) {
 async function validateSharedSessionKindContract(failures) {
 	const fullPath = path.join(workspaceRoot, sharedSessionContractFile);
 	const content = await fs.readFile(fullPath, "utf8");
-	const expectedEnumPattern = /z\.enum\(\s*\[\s*["']manager["']\s*,\s*["']task["']\s*,\s*["']setup["']\s*\]\s*\)/;
+	const expectedEnumPattern =
+		/z\.enum\(\s*\[\s*["']manager["']\s*,\s*["']task["']\s*,\s*["']setup["']\s*\]\s*\)/;
 	if (!expectedEnumPattern.test(content)) {
 		failures.push(
 			`Expected shared session kind enum z.enum(["manager", "task", "setup"]) in ${sharedSessionContractFile}.`,
@@ -176,7 +175,9 @@ async function main() {
 	}
 
 	if (findings.length > 0) {
-		console.error("V1 naming drift guard failed (legacy automation/configuration naming in guarded paths):");
+		console.error(
+			"V1 naming drift guard failed (legacy automation/configuration naming in guarded paths):",
+		);
 		for (const finding of findings) {
 			console.error(`- ${finding.file}:${finding.line} ${finding.snippet}`);
 		}

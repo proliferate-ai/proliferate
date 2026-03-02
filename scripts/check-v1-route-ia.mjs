@@ -46,7 +46,8 @@ const bannedPrimaryTargets = [
 ];
 
 const rootMustNotRedirectToSessionsPattern = /redirect\(\s*["']\/sessions["']\s*\)/;
-const canonicalRouteMustNotRedirectToLegacyPattern = /redirect\(\s*["']\/dashboard(?:\/[^"']*)?["']\s*\)/;
+const canonicalRouteMustNotRedirectToLegacyPattern =
+	/redirect\(\s*["']\/dashboard(?:\/[^"']*)?["']\s*\)/;
 
 async function fileExists(relPath) {
 	try {
