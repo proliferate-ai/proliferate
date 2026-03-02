@@ -1,4 +1,5 @@
-import { parseNangoForwardWebhook } from "@proliferate/triggers";
+import { runtimeEnv } from "@proliferate/environment/runtime";
+import { getRawBody, parseNangoForwardWebhook, verifyNangoSignature } from "@proliferate/triggers";
 import type { Request } from "express";
 
 export interface WebhookDispatchResult {
@@ -26,6 +27,8 @@ export async function dispatchIntegrationWebhook(
 }
 
 function dispatchNangoWebhook(req: Request): WebhookDispatchResult | null {
+	verifyNangoWebhookSignature(req);
+
 	const forward = parseNangoForwardWebhook(req);
 	if (!forward) return null;
 
@@ -36,4 +39,20 @@ function dispatchNangoWebhook(req: Request): WebhookDispatchResult | null {
 		provider: providerKey,
 		connectionId: forward.connectionId,
 	};
+}
+
+function verifyNangoWebhookSignature(req: Request): void {
+	const secret = runtimeEnv.NANGO_SECRET_KEY;
+	if (!secret) return;
+
+	const headerValue = req.headers["x-nango-hmac-sha256"];
+	const signature = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+	if (!signature) {
+		throw new Error("Invalid signature");
+	}
+
+	const rawBody = getRawBody(req);
+	if (!verifyNangoSignature(rawBody, signature, secret)) {
+		throw new Error("Invalid signature");
+	}
 }
