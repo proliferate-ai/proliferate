@@ -74,7 +74,7 @@ export const sessions = pgTable(
 		repoBaselineTargetId: uuid("repo_baseline_target_id"),
 
 		// V1 capabilities version (incremented on capability row changes)
-		capabilitiesVersion: integer("capabilities_version").default(1),
+		capabilitiesVersion: integer("capabilities_version").default(1).notNull(),
 
 		// Git
 		branchName: text("branch_name"),
@@ -527,7 +527,9 @@ export const sessionPullRequests = pgTable(
 		headCommitSha: text("head_commit_sha"),
 
 		// Continuation lineage
-		continuedFromSessionId: uuid("continued_from_session_id"),
+		continuedFromSessionId: uuid("continued_from_session_id").references(() => sessions.id, {
+			onDelete: "set null",
+		}),
 
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

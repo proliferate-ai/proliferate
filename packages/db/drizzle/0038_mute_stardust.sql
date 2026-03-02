@@ -195,7 +195,7 @@ ALTER TABLE "sessions" ADD COLUMN "worker_id" uuid;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "worker_run_id" uuid;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "repo_baseline_id" uuid;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "repo_baseline_target_id" uuid;--> statement-breakpoint
-ALTER TABLE "sessions" ADD COLUMN "capabilities_version" integer DEFAULT 1;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "capabilities_version" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "continued_from_session_id" uuid;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "rerun_of_session_id" uuid;--> statement-breakpoint
 ALTER TABLE "sessions" ADD COLUMN "replaces_session_id" uuid;--> statement-breakpoint
@@ -222,6 +222,7 @@ ALTER TABLE "session_capabilities" ADD CONSTRAINT "session_capabilities_session_
 ALTER TABLE "session_messages" ADD CONSTRAINT "session_messages_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session_pull_requests" ADD CONSTRAINT "session_pull_requests_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session_pull_requests" ADD CONSTRAINT "session_pull_requests_repo_id_fkey" FOREIGN KEY ("repo_id") REFERENCES "public"."repos"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "session_pull_requests" ADD CONSTRAINT "session_pull_requests_continued_from_session_id_fkey" FOREIGN KEY ("continued_from_session_id") REFERENCES "public"."sessions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session_skills" ADD CONSTRAINT "session_skills_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session_user_state" ADD CONSTRAINT "session_user_state_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session_user_state" ADD CONSTRAINT "session_user_state_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
