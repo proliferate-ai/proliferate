@@ -119,8 +119,8 @@ export async function findLatestTerminalFollowupSession(input: {
 				? eq(sessions.continuedFromSessionId, input.sourceSessionId)
 				: eq(sessions.rerunOfSessionId, input.sourceSessionId),
 		),
-			orderBy: (table, { desc }) => [desc(table.startedAt), desc(table.id)],
-		});
+		orderBy: (table, { desc }) => [desc(table.startedAt), desc(table.id)],
+	});
 }
 
 export interface UpsertSessionCapabilityInput {
