@@ -5,18 +5,10 @@
  * model and is expected to call canonical gateway control-plane tools.
  */
 
-export interface ManagerHarnessState {
-	managerSessionId: string;
-	status: "running" | "interrupted" | "stopped";
-}
+import type { ManagerHarnessAdapter, ManagerHarnessState } from "@proliferate/shared/contracts";
 
-export interface ManagerHarnessAdapter {
-	readonly name: string;
-	start(input: { managerSessionId: string }): Promise<ManagerHarnessState>;
-	resume(input: { managerSessionId: string }): Promise<ManagerHarnessState>;
-	interrupt(input: { managerSessionId: string }): Promise<ManagerHarnessState>;
-	shutdown(input: { managerSessionId: string }): Promise<ManagerHarnessState>;
-}
+// Re-export shared types so existing gateway imports continue to work.
+export type { ManagerHarnessAdapter, ManagerHarnessState } from "@proliferate/shared/contracts";
 
 export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 	readonly name = "claude-manager";

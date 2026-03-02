@@ -248,3 +248,19 @@ export {
 
 // Re-export V1 entity contracts
 export * from "./v1-entities";
+
+// Re-export harness contract interfaces
+export type {
+	RuntimeDaemonEvent,
+	CodingHarnessPromptImage,
+	CodingHarnessStartInput,
+	CodingHarnessStartResult,
+	CodingHarnessResumeInput,
+	CodingHarnessResumeResult,
+	CodingHarnessInterruptInput,
+	CodingHarnessShutdownInput,
+	CodingHarnessSendPromptInput,
+	CodingHarnessCollectOutputsInput,
+	ManagerHarnessState,
+	ManagerHarnessAdapter,
+} from "./harness";
