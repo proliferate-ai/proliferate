@@ -41,9 +41,13 @@ function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
 }
 
 describe("control-plane helpers", () => {
-	it("buildInitConfig omits provider tunnel config", () => {
+	it("buildInitConfig returns previewTunnelUrl when provided", () => {
 		const config = buildInitConfig("https://preview.example");
-		expect(config).toBeUndefined();
+		expect(config).toEqual({ previewTunnelUrl: "https://preview.example" });
+	});
+
+	it("buildInitConfig returns undefined when no preview URL", () => {
+		expect(buildInitConfig(null)).toBeUndefined();
 	});
 
 	it("buildControlPlaneSnapshot returns DB/gateway control-plane state", () => {

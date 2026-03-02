@@ -3,8 +3,11 @@ import type { SessionRecord } from "../lib/session-store";
 
 export type ControlPlaneSnapshotPayload = ControlPlaneSnapshotMessage["payload"];
 
-export function buildInitConfig(_previewUrl: string | null): undefined {
-	return undefined;
+export function buildInitConfig(
+	previewUrl: string | null,
+): { previewTunnelUrl: string } | undefined {
+	if (!previewUrl) return undefined;
+	return { previewTunnelUrl: previewUrl };
 }
 
 export function buildControlPlaneSnapshot(
