@@ -28,7 +28,6 @@ export async function dispatchIntegrationWebhook(
 
 function dispatchNangoWebhook(req: Request): WebhookDispatchResult | null {
 	verifyNangoWebhookSignature(req);
-
 	const forward = parseNangoForwardWebhook(req);
 	if (!forward) return null;
 
