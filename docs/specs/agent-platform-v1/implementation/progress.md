@@ -33,6 +33,10 @@
   - Added canonical `session_events` table contract (schema + relations + migration `0046_mixed_maestro.sql`) with required lifecycle event-type check.
   - Added `isValidSessionOperatorTransition` contract helper and expanded operator-status state-machine tests.
   - Added canonical V1 error taxonomy exports (`V1_ERROR_CODES`, `isV1ErrorCode`) with contract tests.
+  - Removed duplicate V1 table definitions from modular schema files (`actions.ts`, `repos.ts`, `sessions.ts`, `workers.ts`) and converted them to canonical re-exports from generated `schema.ts`/`relations.ts` to keep a single DB source of truth (spec refs: `01-schema-and-data-contracts.md`, `10-layering-and-mapping-rules.md`).
+  - Moved V1 session persistence helpers into the canonical `packages/services/src/sessions/db.ts` and left `v1-db.ts` as a shim export only (spec ref: `10-layering-and-mapping-rules.md` canonical `db.ts/service.ts/mapper.ts` layout).
+  - Removed router/service-style input validation from `workers/db.ts` so DB modules remain persistence-only (spec refs: `10-layering-and-mapping-rules.md`, `20-code-quality-contract.md`).
+  - Re-ran full branch gates after cleanup (`typecheck`, `lint`, `test`) with zero regressions (spec ref: `08-testing-and-quality-gates.md`).
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Process CI/human/Greptile feedback.
