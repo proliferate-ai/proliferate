@@ -417,7 +417,7 @@ function SlackSettingsContent({
 						{readyConfigurations.length === 0 ? (
 							<>
 								<a
-									href="/dashboard/configurations"
+									href="/settings/repositories"
 									className="underline hover:text-foreground transition-colors"
 								>
 									Create a configuration
@@ -428,7 +428,7 @@ function SlackSettingsContent({
 							<>
 								No configurations have routing descriptions.{" "}
 								<a
-									href="/dashboard/configurations"
+									href="/settings/repositories"
 									className="underline hover:text-foreground transition-colors"
 								>
 									Add routing descriptions

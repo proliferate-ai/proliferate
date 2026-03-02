@@ -31,7 +31,7 @@ export default function RepoDetailPage() {
 					variant="ghost"
 					size="sm"
 					className="mt-2"
-					onClick={() => router.push("/dashboard/repos")}
+					onClick={() => router.push("/settings/repositories")}
 				>
 					<ArrowLeft className="h-4 w-4 mr-1" />
 					Back to repositories
@@ -47,7 +47,7 @@ export default function RepoDetailPage() {
 				<div>
 					<button
 						type="button"
-						onClick={() => router.push("/dashboard/repos")}
+						onClick={() => router.push("/settings/repositories")}
 						className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mb-3"
 					>
 						<ArrowLeft className="h-3 w-3" />

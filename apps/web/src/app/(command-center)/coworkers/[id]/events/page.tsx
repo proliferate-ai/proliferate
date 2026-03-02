@@ -217,7 +217,7 @@ function RunDetailSection({ run }: { run: AutomationRun }) {
 
 			{run.session_id && (
 				<div className="mt-4">
-					<Link href={`/workspace/${run.session_id}?from=coworker&runId=${run.id}`}>
+					<Link href={`/workspace/${run.session_id}`}>
 						<Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
 							<Bot className="h-3.5 w-3.5" />
 							View agent session
@@ -260,7 +260,7 @@ function RunRow({
 	const provider = normalizeProvider(run.trigger?.provider);
 	const eventType = getEventTypeLabel(run.trigger_event?.provider_event_type, provider);
 
-	const title = parsedContext?.title || run.trigger?.name || "Coworker run";
+	const title = parsedContext?.title || run.trigger?.name || "Automation run";
 	const timeAgo = run.queued_at ? formatRelativeTime(run.queued_at) : "unknown";
 	const exactTime = run.queued_at ? new Date(run.queued_at).toLocaleString() : "";
 	const hasSession = !!run.session_id;

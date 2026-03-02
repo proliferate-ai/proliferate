@@ -48,7 +48,7 @@ export function InboxTray({ sessionId, token, pendingApprovals, runId }: InboxTr
 	const canApprove =
 		!!orgData?.currentUserRole && hasRoleOrHigher(orgData.currentUserRole, "admin");
 
-	// Blocked groups are org-level concerns — only shown on /dashboard/inbox
+	// Blocked groups are org-level concerns — not shown in tray
 	const trayItems = items.filter((i) => i.type !== "blocked");
 
 	if (trayItems.length === 0) return null;

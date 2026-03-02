@@ -645,7 +645,7 @@ export default function AutomationDetailPage({
 										{readyConfigurations.length === 0 ? (
 											<>
 												<a
-													href="/dashboard/configurations"
+													href="/settings/repositories"
 													className="underline hover:text-foreground transition-colors"
 												>
 													Create a configuration
@@ -656,7 +656,7 @@ export default function AutomationDetailPage({
 											<>
 												No configurations have routing descriptions.{" "}
 												<a
-													href="/dashboard/configurations"
+													href="/settings/repositories"
 													className="underline hover:text-foreground transition-colors"
 												>
 													Add routing descriptions
@@ -731,7 +731,7 @@ export default function AutomationDetailPage({
 										<p className="text-xs text-muted-foreground">
 											No configurations with routing descriptions.{" "}
 											<a
-												href="/dashboard/configurations"
+												href="/settings/repositories"
 												className="underline hover:text-foreground transition-colors"
 											>
 												Add routing descriptions
