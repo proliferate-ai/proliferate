@@ -2,13 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
 	mockCreateWakeEvent,
-	mockClaimNextQueuedWakeForWorker,
 	mockFindWakeEventByIdForOrg,
 	mockTransitionWakeEventStatus,
 	mockFindWakeEventById,
 } = vi.hoisted(() => ({
 	mockCreateWakeEvent: vi.fn(),
-	mockClaimNextQueuedWakeForWorker: vi.fn(),
 	mockFindWakeEventByIdForOrg: vi.fn(),
 	mockTransitionWakeEventStatus: vi.fn(),
 	mockFindWakeEventById: vi.fn(),
@@ -16,7 +14,6 @@ const {
 
 vi.mock("./db", () => ({
 	createWakeEvent: mockCreateWakeEvent,
-	claimNextQueuedWakeForWorker: mockClaimNextQueuedWakeForWorker,
 	findWakeEventByIdForOrg: mockFindWakeEventByIdForOrg,
 	transitionWakeEventStatus: mockTransitionWakeEventStatus,
 	findWakeEventById: mockFindWakeEventById,
@@ -25,7 +22,6 @@ vi.mock("./db", () => ({
 const {
 	WakeTransitionError,
 	cancelQueuedWake,
-	claimNextQueuedWake,
 	enqueueWake,
 	isTerminalWake,
 	transitionWakeStatus,
@@ -66,15 +62,6 @@ describe("wakes service", () => {
 
 		expect(result.id).toBe("wake-1");
 		expect(mockCreateWakeEvent).toHaveBeenCalled();
-	});
-
-	it("claims next queued wake", async () => {
-		mockClaimNextQueuedWakeForWorker.mockResolvedValue(makeWake({ status: "claimed" }));
-
-		const row = await claimNextQueuedWake("worker-1", "org-1");
-
-		expect(row?.status).toBe("claimed");
-		expect(mockClaimNextQueuedWakeForWorker).toHaveBeenCalledWith("worker-1", "org-1");
 	});
 
 	it("transitions queued -> cancelled", async () => {

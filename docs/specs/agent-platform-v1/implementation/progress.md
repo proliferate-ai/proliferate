@@ -40,9 +40,8 @@
 - PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/252`
 - scope: Phase 2 worker wake/run orchestration (`workers` + `wakes` DB/service modules, wake claim/coalesce/consume flow, run/event transition guards, state-transition tests)
 - check results:
-  - `pnpm typecheck` ✅
-  - `pnpm lint` ✅
-  - `pnpm test` ✅
+  - `pnpm -C packages/services test src/workers/service.test.ts src/wakes/service.test.ts src/workers/db.test.ts` ✅
+  - `pnpm -C packages/services typecheck` ⚠️ fails in this worktree due unresolved workspace package links (`@proliferate/gateway-clients`, `@proliferate/triggers`) unrelated to PR2 changes.
   - `pnpm build` ⚠️ fails locally due required env vars for `apps/web` build-time validation.
 - open comments:
   - Followed up on DB-orchestration coverage request with DB-layer claim/coalesce/consume tests.
@@ -60,6 +59,12 @@
     - priority claim selection (`manual_message > manual > webhook > tick`)
     - coalescing semantics (`tick` merge and webhook dedupe-key scoping)
     - atomic claim/consume/run/event behavior and active-run gating.
+  - Removed wake-level claim helpers to enforce the invariant that wake claim always happens via worker orchestration (`claimNextWakeAndCreateRun`) and never as a standalone wake operation.
+  - Eliminated raw wake-row mapping risk in orchestration claim path by returning the claimed wake id and re-reading through Drizzle-mapped selects.
+  - Replaced per-candidate coalescing updates with a single bulk update to avoid N+1 write loops under lock.
+  - Added atomic worker-run event append helper with per-run row locking for race-safe dedupe reuse and monotonic `eventIndex` allocation.
+  - Added atomic terminal transition helper that updates `worker_runs` status and inserts the terminal timeline event in one transaction.
+  - Replaced misleading run-now degraded status error with explicit `WorkerNotActiveError`.
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Open PR and monitor CI/human/Greptile feedback to completion before starting PR3.

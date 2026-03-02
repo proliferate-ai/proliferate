@@ -14,8 +14,6 @@ import {
 	inArray,
 	sql,
 	wakeEvents,
-	workerRuns,
-	workers,
 } from "@proliferate/services/db/client";
 
 // ============================================
@@ -23,13 +21,6 @@ import {
 // ============================================
 
 export type WakeEventRow = InferSelectModel<typeof wakeEvents>;
-
-export const WAKE_SOURCE_PRIORITY = {
-	manual_message: 1,
-	manual: 2,
-	webhook: 3,
-	tick: 4,
-} as const;
 
 // ============================================
 // Queries
@@ -145,58 +136,6 @@ export async function updateWakePayload(
 		.where(and(eq(wakeEvents.id, id), eq(wakeEvents.organizationId, organizationId)))
 		.returning();
 	return row;
-}
-
-/**
- * Atomically claims the highest-priority queued wake for a worker when:
- * - worker status is active
- * - worker has no active/non-terminal run
- */
-export async function claimNextQueuedWakeForWorker(
-	workerId: string,
-	organizationId: string,
-): Promise<WakeEventRow | undefined> {
-	const db = getDb();
-	const rows = await db.execute<WakeEventRow>(sql`
-		UPDATE ${wakeEvents}
-		SET "status" = 'claimed',
-		    "claimed_at" = now()
-		WHERE ${wakeEvents.id} IN (
-			SELECT ${wakeEvents.id}
-			FROM ${wakeEvents}
-			WHERE ${wakeEvents.workerId} = ${workerId}
-			  AND ${wakeEvents.organizationId} = ${organizationId}
-			  AND ${wakeEvents.status} = 'queued'
-			  AND EXISTS (
-				SELECT 1
-				FROM ${workers}
-				WHERE ${workers.id} = ${wakeEvents.workerId}
-				  AND ${workers.organizationId} = ${organizationId}
-				  AND ${workers.status} = 'active'
-			  )
-			  AND NOT EXISTS (
-				SELECT 1
-				FROM ${workerRuns}
-				WHERE ${workerRuns.workerId} = ${wakeEvents.workerId}
-				  AND ${workerRuns.organizationId} = ${organizationId}
-				  AND ${workerRuns.status} IN ('queued', 'running')
-			  )
-			ORDER BY
-				CASE ${wakeEvents.source}
-					WHEN 'manual_message' THEN 1
-					WHEN 'manual' THEN 2
-					WHEN 'webhook' THEN 3
-					WHEN 'tick' THEN 4
-					ELSE 99
-				END ASC,
-				${wakeEvents.createdAt} ASC
-			LIMIT 1
-			FOR UPDATE SKIP LOCKED
-		)
-		RETURNING *
-	`);
-
-	return rows[0];
 }
 
 export async function listQueuedByWorker(workerId: string): Promise<WakeEventRow[]> {

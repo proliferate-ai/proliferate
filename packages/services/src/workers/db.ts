@@ -372,7 +372,7 @@ export async function claimNextWakeAndCreateRun(
 			return null;
 		}
 
-		const claimedRows = await tx.execute<WakeEventRow>(sql`
+		const claimedRows = await tx.execute<{ id: string }>(sql`
 			UPDATE ${wakeEvents}
 			SET "status" = 'claimed',
 			    "claimed_at" = now()
@@ -408,13 +408,22 @@ export async function claimNextWakeAndCreateRun(
 				LIMIT 1
 				FOR UPDATE SKIP LOCKED
 			)
-			RETURNING *
+			RETURNING ${wakeEvents.id}
 		`);
 
-		let claimedWake = claimedRows[0];
-		if (!claimedWake) {
+		const claimedWakeId = claimedRows[0]?.id;
+		if (!claimedWakeId) {
 			return null;
 		}
+		const [claimedWakeRow] = await tx
+			.select()
+			.from(wakeEvents)
+			.where(and(eq(wakeEvents.id, claimedWakeId), eq(wakeEvents.organizationId, organizationId)))
+			.limit(1);
+		if (!claimedWakeRow) {
+			return null;
+		}
+		let claimedWake = claimedWakeRow;
 
 		const coalescedRows: WakeEventRow[] = [];
 		if (
@@ -445,8 +454,9 @@ export async function claimNextWakeAndCreateRun(
 						: []
 					: queuedSameSource;
 
-			for (const candidate of candidates) {
-				const [coalescedRow] = await tx
+			const candidateIds = candidates.map((candidate) => candidate.id);
+			if (candidateIds.length > 0) {
+				const updatedRows = await tx
 					.update(wakeEvents)
 					.set({
 						status: "coalesced",
@@ -454,16 +464,13 @@ export async function claimNextWakeAndCreateRun(
 					})
 					.where(
 						and(
-							eq(wakeEvents.id, candidate.id),
+							inArray(wakeEvents.id, candidateIds),
 							eq(wakeEvents.organizationId, organizationId),
 							eq(wakeEvents.status, "queued"),
 						),
 					)
 					.returning();
-
-				if (coalescedRow) {
-					coalescedRows.push(coalescedRow);
-				}
+				coalescedRows.push(...updatedRows);
 			}
 
 			if (coalescedRows.length > 0) {
@@ -583,6 +590,161 @@ export async function createWorkerRunEvent(
 		})
 		.returning();
 	return row;
+}
+
+export interface AppendWorkerRunEventAtomicInput {
+	workerRunId: string;
+	workerId: string;
+	eventType: string;
+	summaryText?: string;
+	payloadJson?: unknown;
+	payloadVersion?: number;
+	sessionId?: string;
+	actionInvocationId?: string;
+	dedupeKey?: string;
+}
+
+/**
+ * Append a worker run event atomically per run.
+ *
+ * The worker_run row lock serializes writes for a run, guaranteeing monotonic
+ * eventIndex allocation and race-safe dedupe reuse.
+ */
+export async function appendWorkerRunEventAtomic(
+	input: AppendWorkerRunEventAtomicInput,
+): Promise<WorkerRunEventRow> {
+	const db = getDb();
+	return db.transaction(async (tx) => {
+		const [lockedRun] = await tx
+			.select({ id: workerRuns.id })
+			.from(workerRuns)
+			.where(eq(workerRuns.id, input.workerRunId))
+			.for("update")
+			.limit(1);
+		if (!lockedRun) {
+			throw new Error(`Worker run not found for event append: ${input.workerRunId}`);
+		}
+
+		if (input.dedupeKey) {
+			const [existing] = await tx
+				.select()
+				.from(workerRunEvents)
+				.where(
+					and(
+						eq(workerRunEvents.workerRunId, input.workerRunId),
+						eq(workerRunEvents.dedupeKey, input.dedupeKey),
+					),
+				)
+				.limit(1);
+			if (existing) {
+				return existing;
+			}
+		}
+
+		const [lastRow] = await tx
+			.select({ eventIndex: workerRunEvents.eventIndex })
+			.from(workerRunEvents)
+			.where(eq(workerRunEvents.workerRunId, input.workerRunId))
+			.orderBy(desc(workerRunEvents.eventIndex))
+			.limit(1);
+		const eventIndex = (lastRow?.eventIndex ?? -1) + 1;
+
+		const [row] = await tx
+			.insert(workerRunEvents)
+			.values({
+				workerRunId: input.workerRunId,
+				workerId: input.workerId,
+				eventIndex,
+				eventType: input.eventType,
+				summaryText: input.summaryText ?? null,
+				payloadJson: input.payloadJson ?? null,
+				payloadVersion: input.payloadVersion ?? 1,
+				sessionId: input.sessionId ?? null,
+				actionInvocationId: input.actionInvocationId ?? null,
+				dedupeKey: input.dedupeKey ?? null,
+			})
+			.returning();
+		return row;
+	});
+}
+
+export interface TransitionWorkerRunWithTerminalEventInput {
+	workerRunId: string;
+	organizationId: string;
+	fromStatuses: string[];
+	toStatus: string;
+	summary?: string;
+	completedAt: Date;
+	eventType: string;
+	eventPayloadJson?: unknown;
+	eventSummaryText?: string;
+}
+
+/**
+ * Atomically transitions a worker run and appends the terminal timeline event.
+ */
+export async function transitionWorkerRunWithTerminalEvent(
+	input: TransitionWorkerRunWithTerminalEventInput,
+): Promise<{ workerRun: WorkerRunRow; event: WorkerRunEventRow } | null> {
+	const db = getDb();
+	return db.transaction(async (tx) => {
+		const [run] = await tx
+			.select()
+			.from(workerRuns)
+			.where(
+				and(eq(workerRuns.id, input.workerRunId), eq(workerRuns.organizationId, input.organizationId)),
+			)
+			.for("update")
+			.limit(1);
+		if (!run) {
+			return null;
+		}
+		if (!input.fromStatuses.includes(run.status)) {
+			return null;
+		}
+
+		const [updatedRun] = await tx
+			.update(workerRuns)
+			.set({
+				status: input.toStatus,
+				summary: input.summary,
+				completedAt: input.completedAt,
+			})
+			.where(
+				and(
+					eq(workerRuns.id, input.workerRunId),
+					eq(workerRuns.organizationId, input.organizationId),
+					inArray(workerRuns.status, input.fromStatuses),
+				),
+			)
+			.returning();
+		if (!updatedRun) {
+			return null;
+		}
+
+		const [lastRow] = await tx
+			.select({ eventIndex: workerRunEvents.eventIndex })
+			.from(workerRunEvents)
+			.where(eq(workerRunEvents.workerRunId, updatedRun.id))
+			.orderBy(desc(workerRunEvents.eventIndex))
+			.limit(1);
+		const nextEventIndex = (lastRow?.eventIndex ?? -1) + 1;
+
+		const [event] = await tx
+			.insert(workerRunEvents)
+			.values({
+				workerRunId: updatedRun.id,
+				workerId: updatedRun.workerId,
+				eventIndex: nextEventIndex,
+				eventType: input.eventType,
+				summaryText: input.eventSummaryText ?? null,
+				payloadJson: input.eventPayloadJson ?? null,
+				payloadVersion: 1,
+			})
+			.returning();
+
+		return { workerRun: updatedRun, event };
+	});
 }
 
 export async function findWorkerRunEventByDedupeKey(
