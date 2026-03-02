@@ -18,6 +18,7 @@ import {
 	workerRuns,
 	workers,
 } from "@proliferate/services/db/client";
+import { buildMergedWakePayload, extractWakeDedupeKey } from "../wakes/mapper";
 
 const MAX_WORKER_RUNS = 100;
 
@@ -32,63 +33,6 @@ export type WorkerRunEventRow = InferSelectModel<typeof workerRunEvents>;
 
 const ACTIVE_WORKER_RUN_STATUSES = ["queued", "running"] as const;
 const COALESCEABLE_WAKE_SOURCES = ["tick", "webhook"] as const;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function extractWakeDedupeKey(payload: unknown): string | null {
-	if (!isRecord(payload)) {
-		return null;
-	}
-
-	const directKey = payload.dedupeKey;
-	if (typeof directKey === "string" && directKey.trim().length > 0) {
-		return directKey.trim();
-	}
-
-	const providerEventId = payload.providerEventId;
-	if (typeof providerEventId === "string" && providerEventId.trim().length > 0) {
-		return providerEventId.trim();
-	}
-
-	const externalEventId = payload.externalEventId;
-	if (typeof externalEventId === "string" && externalEventId.trim().length > 0) {
-		return externalEventId.trim();
-	}
-
-	return null;
-}
-
-function buildMergedWakePayload(
-	basePayload: unknown,
-	coalescedRows: WakeEventRow[],
-): Record<string, unknown> {
-	const base = isRecord(basePayload) ? { ...basePayload } : {};
-
-	const existingIdsRaw = base.coalescedWakeEventIds;
-	const existingIds =
-		Array.isArray(existingIdsRaw) && existingIdsRaw.every((id) => typeof id === "string")
-			? existingIdsRaw
-			: [];
-
-	const mergedIds = Array.from(new Set([...existingIds, ...coalescedRows.map((row) => row.id)]));
-
-	const existingRefsRaw = base.coalescedWakeRefs;
-	const existingRefs = Array.isArray(existingRefsRaw) ? existingRefsRaw : [];
-
-	const newRefs = coalescedRows.map((row) => ({
-		wakeEventId: row.id,
-		source: row.source,
-		dedupeKey: extractWakeDedupeKey(row.payloadJson),
-	}));
-
-	return {
-		...base,
-		coalescedWakeEventIds: mergedIds,
-		coalescedWakeRefs: [...existingRefs, ...newRefs],
-	};
-}
 
 // ============================================
 // Workers — Queries
