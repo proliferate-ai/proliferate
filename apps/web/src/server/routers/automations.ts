@@ -1010,7 +1010,7 @@ export const automationsRouter = {
 		.input(
 			z.object({
 				workerId: z.string().uuid(),
-				limit: z.number().optional(),
+				limit: z.number().int().positive().max(100).optional(),
 			}),
 		)
 		.output(
@@ -1078,7 +1078,7 @@ export const automationsRouter = {
 		.input(
 			z.object({
 				workerId: z.string().uuid(),
-				limit: z.number().optional(),
+				limit: z.number().int().positive().max(100).optional(),
 			}),
 		)
 		.output(

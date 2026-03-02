@@ -763,7 +763,7 @@ export async function listWorkersByOrgWithCounts(orgId: string): Promise<WorkerW
 				SELECT count(*)::int FROM ${sessions}
 				WHERE ${sessions.workerId} = ${workers.id}
 				AND ${sessions.kind} = 'task'
-				AND ${sessions.status} NOT IN ('completed', 'failed', 'cancelled')
+				AND ${sessions.status} NOT IN ('stopped', 'completed', 'failed', 'cancelled')
 			)`.as("active_task_count"),
 			pendingApprovalCount: sql<number>`(
 				SELECT count(*)::int FROM ${actionInvocations}
@@ -875,9 +875,23 @@ export async function updateWorker(
 
 export async function deleteWorker(id: string, orgId: string): Promise<boolean> {
 	const db = getDb();
-	const result = await db
-		.delete(workers)
-		.where(and(eq(workers.id, id), eq(workers.organizationId, orgId)))
-		.returning({ id: workers.id });
-	return result.length > 0;
+	return db.transaction(async (tx) => {
+		// Nullify FK references from sessions and worker_runs before deleting
+		await tx
+			.update(sessions)
+			.set({ workerId: null, workerRunId: null })
+			.where(and(eq(sessions.workerId, id), eq(sessions.organizationId, orgId)));
+		await tx.delete(workerRunEvents).where(eq(workerRunEvents.workerId, id));
+		await tx
+			.delete(workerRuns)
+			.where(and(eq(workerRuns.workerId, id), eq(workerRuns.organizationId, orgId)));
+		await tx
+			.delete(wakeEvents)
+			.where(and(eq(wakeEvents.workerId, id), eq(wakeEvents.organizationId, orgId)));
+		const result = await tx
+			.delete(workers)
+			.where(and(eq(workers.id, id), eq(workers.organizationId, orgId)))
+			.returning({ id: workers.id });
+		return result.length > 0;
+	});
 }
