@@ -9,7 +9,6 @@ const {
 	mockClaimDeliverableSessionMessages,
 	mockTransitionSessionMessageDeliveryState,
 	mockPersistSessionOutcome,
-	mockGetSessionOutcome,
 } = vi.hoisted(() => ({
 	mockCreateTaskSession: vi.fn(),
 	mockFindSessionById: vi.fn(),
@@ -19,7 +18,6 @@ const {
 	mockClaimDeliverableSessionMessages: vi.fn(),
 	mockTransitionSessionMessageDeliveryState: vi.fn(),
 	mockPersistSessionOutcome: vi.fn(),
-	mockGetSessionOutcome: vi.fn(),
 }));
 
 vi.mock("./v1-db", () => ({
@@ -31,7 +29,6 @@ vi.mock("./v1-db", () => ({
 	claimDeliverableSessionMessages: mockClaimDeliverableSessionMessages,
 	transitionSessionMessageDeliveryState: mockTransitionSessionMessageDeliveryState,
 	persistSessionOutcome: mockPersistSessionOutcome,
-	getSessionOutcome: mockGetSessionOutcome,
 }));
 
 const {
@@ -270,8 +267,7 @@ describe("sessions v1 service", () => {
 
 	it("persists terminal task outcome for completed sessions", async () => {
 		mockFindSessionById.mockResolvedValue(makeTaskSession({ runtimeStatus: "completed" }));
-		mockPersistSessionOutcome.mockResolvedValue(undefined);
-		mockGetSessionOutcome.mockResolvedValue({
+		mockPersistSessionOutcome.mockResolvedValue({
 			outcomeJson: { summary: "done" },
 			outcomeVersion: 2,
 			outcomePersistedAt: new Date(),

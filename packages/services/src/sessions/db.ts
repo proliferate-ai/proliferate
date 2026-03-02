@@ -1381,7 +1381,11 @@ export interface PersistSessionOutcomeInput {
 	outcomeVersion?: number;
 }
 
-export async function persistSessionOutcome(input: PersistSessionOutcomeInput): Promise<void> {
+export async function persistSessionOutcome(input: PersistSessionOutcomeInput): Promise<{
+	outcomeJson: unknown;
+	outcomeVersion: number | null;
+	outcomePersistedAt: Date | null;
+}> {
 	const db = getDb();
 	const now = new Date();
 	const [row] = await db
@@ -1392,10 +1396,15 @@ export async function persistSessionOutcome(input: PersistSessionOutcomeInput): 
 			outcomePersistedAt: now,
 		})
 		.where(eq(sessions.id, input.sessionId))
-		.returning({ id: sessions.id });
+		.returning({
+			outcomeJson: sessions.outcomeJson,
+			outcomeVersion: sessions.outcomeVersion,
+			outcomePersistedAt: sessions.outcomePersistedAt,
+		});
 	if (!row) {
 		throw new Error(`Session not found for outcome persistence: ${input.sessionId}`);
 	}
+	return row;
 }
 
 export async function findSessionById(
@@ -1482,47 +1491,42 @@ export async function claimDeliverableSessionMessages(
 	limit = 50,
 ): Promise<SessionMessageRow[]> {
 	const db = getDb();
-	const result = await db.execute<SessionMessageRow>(sql`
-		WITH selected AS (
-			SELECT ${sessionMessages.id}, ${sessionMessages.queuedAt}
-			FROM ${sessionMessages}
-			WHERE ${sessionMessages.sessionId} = ${sessionId}
-			  AND ${sessionMessages.deliveryState} = 'queued'
-			  AND (${sessionMessages.deliverAfter} IS NULL OR ${sessionMessages.deliverAfter} <= now())
-			ORDER BY ${sessionMessages.queuedAt} ASC, ${sessionMessages.id} ASC
-			LIMIT ${limit}
-			FOR UPDATE SKIP LOCKED
-		), updated AS (
-			UPDATE ${sessionMessages}
-			SET "delivery_state" = 'delivered',
-				"delivered_at" = now()
-			WHERE ${sessionMessages.id} IN (SELECT id FROM selected)
-			RETURNING
-				${sessionMessages.id} as "id",
-				${sessionMessages.sessionId} as "sessionId",
-				${sessionMessages.direction} as "direction",
-				${sessionMessages.messageType} as "messageType",
-				${sessionMessages.payloadJson} as "payloadJson",
-				${sessionMessages.deliveryState} as "deliveryState",
-				${sessionMessages.dedupeKey} as "dedupeKey",
-				${sessionMessages.queuedAt} as "queuedAt",
-				${sessionMessages.deliverAfter} as "deliverAfter",
-				${sessionMessages.deliveredAt} as "deliveredAt",
-				${sessionMessages.consumedAt} as "consumedAt",
-				${sessionMessages.failedAt} as "failedAt",
-				${sessionMessages.failureReason} as "failureReason",
-				${sessionMessages.senderUserId} as "senderUserId",
-				${sessionMessages.senderSessionId} as "senderSessionId"
-		)
-		SELECT updated.*
-		FROM updated
-		INNER JOIN selected ON selected.id = updated.id
-		ORDER BY selected.queued_at ASC, selected.id ASC
-		`);
-	const rows = Array.isArray(result)
-		? result
-		: ((result as { rows?: SessionMessageRow[] }).rows ?? []);
-	return rows as SessionMessageRow[];
+	return db.transaction(async (tx) => {
+		const selectedRows = await tx
+			.select({
+				id: sessionMessages.id,
+			})
+			.from(sessionMessages)
+			.where(
+				and(
+					eq(sessionMessages.sessionId, sessionId),
+					eq(sessionMessages.deliveryState, "queued"),
+					or(isNull(sessionMessages.deliverAfter), lte(sessionMessages.deliverAfter, new Date())),
+				),
+			)
+			.orderBy(asc(sessionMessages.queuedAt), asc(sessionMessages.id))
+			.limit(limit)
+			.for("update", { skipLocked: true });
+
+		if (selectedRows.length === 0) {
+			return [];
+		}
+
+		const selectedIds = selectedRows.map((row) => row.id);
+		const orderById = new Map<string, number>(selectedIds.map((id, index) => [id, index]));
+
+		const updatedRows = await tx
+			.update(sessionMessages)
+			.set({
+				deliveryState: "delivered",
+				deliveredAt: new Date(),
+			})
+			.where(inArray(sessionMessages.id, selectedIds))
+			.returning();
+
+		updatedRows.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
+		return updatedRows;
+	});
 }
 
 export async function transitionSessionMessageDeliveryState(input: {

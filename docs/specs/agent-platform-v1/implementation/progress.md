@@ -43,9 +43,9 @@
 - PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/252`
 - scope: Phase 2 worker wake/run orchestration (`workers` + `wakes` DB/service modules, wake claim/coalesce/consume flow, run/event transition guards, state-transition tests)
 - check results:
-  - `pnpm -C packages/services test src/workers/service.test.ts src/wakes/service.test.ts src/workers/db.test.ts` ✅
-  - `pnpm -C packages/services typecheck` ⚠️ fails in this worktree due unresolved workspace package links (`@proliferate/gateway-clients`, `@proliferate/triggers`) unrelated to PR2 changes.
-  - `pnpm build` ⚠️ fails locally due required env vars for `apps/web` build-time validation.
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅
 - open comments:
   - Followed up on DB-orchestration coverage request with DB-layer claim/coalesce/consume tests.
 - fixes applied:
@@ -77,10 +77,9 @@
 - PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/253`
 - scope: Phase 3 sessions + messaging contracts (unified task session path, follow-up routing semantics, queued delivery helpers, terminal outcome persistence guards)
 - check results:
-  - `pnpm -C packages/services test src/sessions/v1-service.test.ts` ⚠️ blocked in this worktree (`node_modules` missing).
-  - `pnpm typecheck` ⚠️ deferred in this worktree (`node_modules` missing).
-  - `pnpm lint` ⚠️ deferred in this worktree (`node_modules` missing).
-  - `pnpm build` ⚠️ fails locally due required env vars for `apps/web` build-time validation.
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅
 - open comments:
   - CI and automated review pending.
 - fixes applied:
@@ -94,9 +93,9 @@
   - Changed terminal follow-up default to continuation; rerun now requires explicit `terminalMode=\"rerun\"`.
   - Added terminal follow-up dedupe lookup so retries reuse existing child-session delivery instead of creating new tasks.
   - Reworked atomic message-claim SQL to preserve deterministic delivery order after `UPDATE ... RETURNING`.
-  - Fixed dedupe insert path for partial unique index by adding `targetWhere: isNotNull(session_messages.dedupe_key)` to `ON CONFLICT DO NOTHING`.
-  - Hardened claim-delivery raw SQL handling by returning aliased camelCase fields and normalizing driver row extraction (`array` vs `.rows`).
-  - Removed redundant post-persist fetch in terminal outcome persistence by returning data directly from `persistSessionOutcome(...).returning()`.
+  - Kept partial-index dedupe inserts safe with `ON CONFLICT DO NOTHING` + `where: isNotNull(session_messages.dedupe_key)` in Drizzle’s supported API shape.
+  - Replaced raw `db.execute` claim-delivery SQL with a transaction-safe query-builder flow (`SELECT ... FOR UPDATE SKIP LOCKED` + ordered `UPDATE ... RETURNING`) to preserve deterministic FIFO ordering without snake_case mapping risk.
+  - Removed redundant terminal-outcome roundtrip by returning outcome fields directly from `persistSessionOutcome(...).returning(...)` and using that return value in service code.
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Resolve CI/human/Greptile feedback.

@@ -241,15 +241,11 @@ export async function persistTerminalTaskOutcome(input: {
 		);
 	}
 
-	await v1Db.persistSessionOutcome({
+	const outcome = await v1Db.persistSessionOutcome({
 		sessionId: input.sessionId,
 		outcomeJson: input.outcomeJson,
 		outcomeVersion: input.outcomeVersion,
 	});
-	const outcome = await v1Db.getSessionOutcome(input.sessionId);
-	if (!outcome) {
-		throw new SessionNotFoundError(input.sessionId);
-	}
 	return {
 		outcomeJson: outcome.outcomeJson,
 		outcomeVersion: outcome.outcomeVersion ?? null,
