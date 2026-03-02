@@ -153,7 +153,10 @@ Corrects drift between local shadow balance and Autumn balances.
   - state allow-list
   - minimum credits (`MIN_CREDITS_TO_START = 11`)
   - concurrent session limit
+  - active coworker limit (`maxActiveCoworkers` per plan)
+  - monthly usage threshold (blocks when overage policy is "pause" and usage >= included credits)
 - `session_resume` and `cli_connect` enforce state rules only (no minimum-credit/concurrency check).
+- Coworker and monthly usage metric lookups are fail-closed; load errors deny the gate.
 
 **Rules**
 - Grace expiry denial should trigger best-effort state cleanup (`expireGraceForOrg`).
@@ -292,7 +295,24 @@ Corrects drift between local shadow balance and Autumn balances.
 **Rules**
 - Financial correctness must not depend on whether physical partitioning is enabled.
 
-### 6.14 Removed Subsystems — `Removed`
+### 6.14 Billing UI & Entitlement Status — `Implemented`
+
+**Invariants**
+- Billing page (`apps/web/src/app/(command-center)/settings/billing/page.tsx`) shows: credit balance, usage summary, plan limits/entitlement status, top cost drivers, recent billing events, plan selection, overage settings.
+- Usage summary aggregates billing events by type (compute/llm) for the current calendar month (`packages/services/src/billing/db.ts:getUsageSummary`).
+- Top cost drivers are grouped by session from billing event `sessionIds` arrays (`packages/services/src/billing/db.ts:getTopCostDrivers`).
+- Entitlement status includes concurrent sessions, active coworkers, and monthly usage with warning levels (`packages/services/src/billing/gate.ts:getEntitlementStatus`).
+- Warning thresholds: approaching (80%), critical (95%), exhausted (100%) of plan-included credits (`packages/shared/src/billing/types.ts:WARNING_THRESHOLDS`).
+- Billing banner (`apps/web/src/components/dashboard/billing-banner.tsx`) displays nearing-limit warnings at approaching and critical thresholds; non-dismissable for exhausted/suspended/grace states.
+- Plan limits include `maxActiveCoworkers` per plan (dev: 3, pro: 25).
+- Error codes: `COWORKER_LIMIT`, `MONTHLY_LIMIT`, `BUDGET_EXHAUSTED` added to `BillingErrorCode`.
+
+**Rules**
+- Warning banners are dismissable for approaching/critical levels; non-dismissable for exhausted/suspended.
+- Entitlement metric lookups (coworker count, monthly usage) are fail-closed; load errors deny the gate.
+- Monthly usage threshold gate only blocks when overage policy is "pause"; "allow" defers to shadow balance + auto-top-up.
+
+### 6.15 Removed Subsystems — `Removed`
 
 - Distributed lock helper was removed; BullMQ queue/worker semantics are used.
 - Billing token subsystem and `sessions.billing_token_version` were removed.

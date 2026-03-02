@@ -45,8 +45,11 @@ export interface OrgBillingInfo {
 	/** Locally cached plan limits (from Autumn) */
 	planLimits?: {
 		maxConcurrentSessions: number;
+		maxActiveCoworkers: number;
 		creditsIncluded: number;
 	} | null;
+	/** Overage policy for monthly limit check */
+	overagePolicy?: "pause" | "allow" | null;
 }
 
 /**
@@ -67,6 +70,10 @@ export interface GateCheckOptions {
 	sessionCounts: SessionCounts;
 	/** Minimum credits required to start (default: 11) */
 	minCreditsRequired?: number;
+	/** Active coworker count for coworker limit check */
+	activeCoworkerCount?: number;
+	/** Monthly usage credits consumed so far */
+	monthlyUsage?: number;
 }
 
 /**
@@ -74,7 +81,13 @@ export interface GateCheckOptions {
  */
 export interface ExtendedGatingResult extends GatingResult {
 	/** Specific error code if not allowed */
-	errorCode?: "NO_CREDITS" | "CONCURRENT_LIMIT" | "STATE_BLOCKED" | "GRACE_EXPIRED";
+	errorCode?:
+		| "NO_CREDITS"
+		| "CONCURRENT_LIMIT"
+		| "COWORKER_LIMIT"
+		| "MONTHLY_LIMIT"
+		| "STATE_BLOCKED"
+		| "GRACE_EXPIRED";
 	/** Whether this is a terminal error (can't be fixed by waiting) */
 	terminal?: boolean;
 }
@@ -189,6 +202,49 @@ export function checkBillingGate(
 		}
 	}
 
+	// Step 5: Check active coworker limit
+	if (
+		options.activeCoworkerCount !== undefined &&
+		(operation === "session_start" || operation === "automation_trigger")
+	) {
+		const maxCoworkers =
+			org.planLimits?.maxActiveCoworkers ?? getPlanCoworkerLimit(billingState, org.planId);
+		if (options.activeCoworkerCount >= maxCoworkers) {
+			return {
+				allowed: false,
+				billingState,
+				shadowBalance,
+				message: `Active coworker limit reached. Your plan allows ${maxCoworkers} active coworker${maxCoworkers === 1 ? "" : "s"}. Pause or remove a coworker to continue.`,
+				action: "block",
+				errorCode: "COWORKER_LIMIT",
+				terminal: false,
+			};
+		}
+	}
+
+	// Step 6: Check monthly usage threshold
+	if (
+		options.monthlyUsage !== undefined &&
+		(operation === "session_start" || operation === "automation_trigger")
+	) {
+		const creditsIncluded = planLimits.creditsIncluded;
+		if (creditsIncluded > 0 && options.monthlyUsage >= creditsIncluded) {
+			// Over monthly included credits — only block if overage policy is "pause"
+			// (overage "allow" is handled by shadow balance + auto-top-up)
+			if (!org.overagePolicy || org.overagePolicy === "pause") {
+				return {
+					allowed: false,
+					billingState,
+					shadowBalance,
+					message: `Monthly usage limit reached (${Math.round(options.monthlyUsage)} / ${creditsIncluded} credits). Add credits or upgrade your plan.`,
+					action: "block",
+					errorCode: "MONTHLY_LIMIT",
+					terminal: false,
+				};
+			}
+		}
+	}
+
 	// All checks passed
 	return {
 		allowed: true,
@@ -242,6 +298,16 @@ function getPlanLimitsFromState(
 		default:
 			return DEFAULT_PLAN_LIMITS;
 	}
+}
+
+/**
+ * Get default coworker limit based on billing state and plan.
+ */
+function getPlanCoworkerLimit(state: BillingState, planId?: BillingPlan | null): number {
+	if ((state === "active" || state === "trial") && planId && PLAN_CONFIGS[planId]) {
+		return PLAN_CONFIGS[planId].maxActiveCoworkers;
+	}
+	return 1; // Conservative default
 }
 
 /**

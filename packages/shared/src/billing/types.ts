@@ -54,6 +54,7 @@ export interface PlanConfig {
 	monthlyPriceCents: number;
 	creditsIncluded: number;
 	maxConcurrentSessions: number;
+	maxActiveCoworkers: number;
 	maxSnapshots: number;
 	snapshotRetentionDays: number;
 }
@@ -65,6 +66,7 @@ export const PLAN_CONFIGS: Record<BillingPlan, PlanConfig> = {
 		monthlyPriceCents: 2000, // $20
 		creditsIncluded: 1000,
 		maxConcurrentSessions: 10,
+		maxActiveCoworkers: 3,
 		maxSnapshots: 5,
 		snapshotRetentionDays: 30,
 	},
@@ -74,6 +76,7 @@ export const PLAN_CONFIGS: Record<BillingPlan, PlanConfig> = {
 		monthlyPriceCents: 50000, // $500
 		creditsIncluded: 7500,
 		maxConcurrentSessions: 100,
+		maxActiveCoworkers: 25,
 		maxSnapshots: 200,
 		snapshotRetentionDays: 90,
 	},
@@ -281,12 +284,74 @@ export interface SessionBillingFields {
 }
 
 // ============================================
+// Warning Thresholds
+// ============================================
+
+/** Budget warning level for nearing-limit notifications. */
+export type BudgetWarningLevel = "none" | "approaching" | "critical" | "exhausted";
+
+/** Configurable warning thresholds as percentage of plan credits. */
+export const WARNING_THRESHOLDS = {
+	/** First warning at 80% usage */
+	approaching: 0.8,
+	/** Critical warning at 95% usage */
+	critical: 0.95,
+	/** Hard limit at 100% */
+	exhausted: 1.0,
+} as const;
+
+/**
+ * Compute the warning level based on usage ratio.
+ * @param used - Credits consumed this period
+ * @param included - Credits included in plan
+ * @returns Warning level
+ */
+export function computeWarningLevel(used: number, included: number): BudgetWarningLevel {
+	if (included <= 0) return "none";
+	const ratio = used / included;
+	if (ratio >= WARNING_THRESHOLDS.exhausted) return "exhausted";
+	if (ratio >= WARNING_THRESHOLDS.critical) return "critical";
+	if (ratio >= WARNING_THRESHOLDS.approaching) return "approaching";
+	return "none";
+}
+
+/** Usage summary for the current billing period. */
+export interface UsageSummary {
+	totalCredits: number;
+	computeCredits: number;
+	llmCredits: number;
+	eventCount: number;
+	periodStart: string;
+	periodEnd: string;
+}
+
+/** Cost driver breakdown for billing insights. */
+export interface CostDriver {
+	label: string;
+	entityId: string;
+	entityType: "session" | "worker" | "repo";
+	credits: number;
+	eventCount: number;
+	percentage: number;
+}
+
+/** Entitlement limit status for UI display. */
+export interface EntitlementStatus {
+	concurrentSessions: { current: number; max: number };
+	activeCoworkers: { current: number; max: number };
+	monthlyUsage: { used: number; included: number; warningLevel: BudgetWarningLevel };
+}
+
+// ============================================
 // Gating Errors
 // ============================================
 
 export type BillingErrorCode =
 	| "NO_CREDITS"
 	| "CONCURRENT_LIMIT"
+	| "COWORKER_LIMIT"
+	| "MONTHLY_LIMIT"
+	| "BUDGET_EXHAUSTED"
 	| "BILLING_NOT_CONFIGURED"
 	| "STATE_BLOCKED"
 	| "GRACE_EXPIRED";

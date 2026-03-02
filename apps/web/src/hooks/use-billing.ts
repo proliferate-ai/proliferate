@@ -151,3 +151,55 @@ export function useActivatePlan() {
 		},
 	});
 }
+
+/**
+ * Hook to fetch usage summary for the current billing period.
+ */
+export function useUsageSummary() {
+	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
+
+	return useQuery({
+		...orpc.billing.getUsageSummary.queryOptions({ input: {} }),
+		enabled: billingEnabled,
+		staleTime: 2 * 60 * 1000,
+	});
+}
+
+/**
+ * Hook to fetch top cost drivers for the current billing period.
+ */
+export function useCostDrivers(limit = 10) {
+	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
+
+	return useQuery({
+		...orpc.billing.getCostDrivers.queryOptions({ input: { limit } }),
+		enabled: billingEnabled,
+		staleTime: 2 * 60 * 1000,
+	});
+}
+
+/**
+ * Hook to fetch recent billing events with pagination.
+ */
+export function useRecentEvents(limit = 20, offset = 0) {
+	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
+
+	return useQuery({
+		...orpc.billing.getRecentEvents.queryOptions({ input: { limit, offset } }),
+		enabled: billingEnabled,
+		staleTime: 2 * 60 * 1000,
+	});
+}
+
+/**
+ * Hook to fetch entitlement status (usage vs plan limits).
+ */
+export function useEntitlementStatus() {
+	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
+
+	return useQuery({
+		...orpc.billing.getEntitlementStatus.queryOptions({ input: {} }),
+		enabled: billingEnabled,
+		staleTime: 60 * 1000,
+	});
+}

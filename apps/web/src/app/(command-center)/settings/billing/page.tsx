@@ -3,9 +3,13 @@
 import { PageShell } from "@/components/dashboard/page-shell";
 import {
 	BuyCreditsSection,
+	CostDriversSection,
 	CreditUsageSection,
+	EntitlementStatusSection,
 	OverageSection,
 	PlanSection,
+	RecentEventsSection,
+	UsageSummarySection,
 } from "@/components/settings/billing";
 import { useBilling, useOrgMembers, useUpdateBillingSettings } from "@/hooks";
 import { useActiveOrganization, useSession } from "@/lib/auth/client";
@@ -74,7 +78,11 @@ export default function BillingPage() {
 		<PageShell title="Billing" subtitle="Credits, plans, and usage" maxWidth="2xl">
 			<div className="space-y-10">
 				<CreditUsageSection credits={billing.credits} />
+				<UsageSummarySection />
+				<EntitlementStatusSection />
 				{isAdmin && <BuyCreditsSection />}
+				<CostDriversSection />
+				<RecentEventsSection />
 				<PlanSection
 					plan={billing.plan}
 					limits={billing.limits}
