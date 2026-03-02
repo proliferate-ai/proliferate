@@ -54,6 +54,9 @@ importers:
 
   apps/gateway:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.71.2
+        version: 0.71.2(zod@3.25.76)
       '@aws-sdk/client-s3':
         specifier: ^3.978.0
         version: 3.978.0

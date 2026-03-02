@@ -57,6 +57,8 @@ export {
 	update,
 	deleteById,
 	findByIdInternal,
+	findSessionById,
+	listChildSessionsByRun,
 	createSetupSession,
 	createSetupSessionWithAdmissionGuard,
 	createWithAdmissionGuard,

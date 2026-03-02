@@ -74,15 +74,26 @@ export interface CodingHarnessCollectOutputsInput {
 // Manager harness
 // ---------------------------------------------------------------------------
 
+export interface ManagerHarnessStartInput {
+	managerSessionId: string;
+	organizationId: string;
+	workerId: string | null;
+	gatewayUrl: string;
+	serviceToken: string;
+	anthropicApiKey: string;
+	llmProxyUrl?: string;
+}
+
 export interface ManagerHarnessState {
 	managerSessionId: string;
-	status: "running" | "interrupted" | "stopped";
+	status: "running" | "interrupted" | "stopped" | "idle";
+	currentRunId?: string;
 }
 
 export interface ManagerHarnessAdapter {
 	readonly name: string;
-	start(input: { managerSessionId: string }): Promise<ManagerHarnessState>;
-	resume(input: { managerSessionId: string }): Promise<ManagerHarnessState>;
-	interrupt(input: { managerSessionId: string }): Promise<ManagerHarnessState>;
-	shutdown(input: { managerSessionId: string }): Promise<ManagerHarnessState>;
+	start(input: ManagerHarnessStartInput): Promise<ManagerHarnessState>;
+	resume(input: ManagerHarnessStartInput): Promise<ManagerHarnessState>;
+	interrupt(): Promise<ManagerHarnessState>;
+	shutdown(): Promise<ManagerHarnessState>;
 }

@@ -1452,6 +1452,26 @@ export async function findSessionById(
 	return row;
 }
 
+export async function listChildSessionsByRun(
+	parentSessionId: string,
+	workerRunId: string,
+	organizationId: string,
+): Promise<SessionRow[]> {
+	const db = getDb();
+	return db
+		.select()
+		.from(sessions)
+		.where(
+			and(
+				eq(sessions.parentSessionId, parentSessionId),
+				eq(sessions.workerRunId, workerRunId),
+				eq(sessions.organizationId, organizationId),
+				eq(sessions.kind, "task"),
+			),
+		)
+		.orderBy(asc(sessions.startedAt));
+}
+
 export async function findLatestTerminalFollowupSession(input: {
 	organizationId: string;
 	sourceSessionId: string;

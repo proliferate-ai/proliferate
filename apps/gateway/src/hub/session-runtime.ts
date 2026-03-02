@@ -96,7 +96,7 @@ export class SessionRuntime {
 		this.onBroadcast = options.onBroadcast;
 		this.onDisconnect = options.onDisconnect;
 		this.codingHarness = new OpenCodeCodingHarnessAdapter();
-		this.managerHarness = new ClaudeManagerHarnessAdapter();
+		this.managerHarness = new ClaudeManagerHarnessAdapter(this.logger);
 	}
 
 	private logLatency(event: string, data?: Record<string, unknown>): void {
@@ -576,10 +576,19 @@ export class SessionRuntime {
 
 			if (harnessFamily === "manager-claude") {
 				const managerHarnessStartMs = Date.now();
+				const harnessInput = {
+					managerSessionId: this.sessionId,
+					organizationId: this.context.session.organization_id,
+					workerId: this.context.session.worker_id,
+					gatewayUrl: this.env.gatewayUrl,
+					serviceToken: this.env.serviceToken,
+					anthropicApiKey: this.env.anthropicApiKey,
+					llmProxyUrl: this.env.llmProxyUrl,
+				};
 				if (options?.reason === "auto_reconnect") {
-					await this.managerHarness.resume({ managerSessionId: this.sessionId });
+					await this.managerHarness.resume(harnessInput);
 				} else {
-					await this.managerHarness.start({ managerSessionId: this.sessionId });
+					await this.managerHarness.start(harnessInput);
 				}
 				this.logLatency("runtime.ensure_ready.manager_harness.start", {
 					durationMs: Date.now() - managerHarnessStartMs,

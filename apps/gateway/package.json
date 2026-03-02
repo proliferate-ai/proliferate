@@ -11,6 +11,7 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
+		"@anthropic-ai/sdk": "^0.71.2",
 		"@aws-sdk/client-s3": "^3.978.0",
 		"@aws-sdk/s3-request-presigner": "^3.970.0",
 		"@google-cloud/storage": "^7.15.2",
