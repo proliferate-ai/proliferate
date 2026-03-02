@@ -224,13 +224,13 @@
 - PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/258`
 - scope: Phase 8 hardening/quality gates (canonical route IA drift guard, V1 naming drift guard, CI lint wiring)
 - check results:
-  - `pnpm typecheck` ⚠️ fails in this worktree (`turbo: command not found`; local `node_modules` links are missing).
-  - `pnpm lint` ⚠️ fails in this worktree (`turbo: command not found`; local `node_modules` links are missing).
-  - `pnpm test` ⚠️ fails in this worktree (`turbo: command not found`; local `node_modules` links are missing).
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅
   - `node scripts/check-v1-route-ia.mjs` ✅
   - `node scripts/check-v1-naming-drift.mjs` ✅
 - open comments:
-  - Critique 8 processed; CI currently in progress on PR #258 (`Lint`, `Typecheck`, `Web Tests`, `Build`, `E2E`).
+  - Critique 8 processed; awaiting CI/Greptile rerun on rebased stack.
 - fixes applied:
   - Updated workspace resume semantics to `from=coworker` (`searchParams`, banner copy, and coworker-event deep links).
   - Hardened route IA guard with explicit required canonical route files, including `/coworkers/[id]` and `/workspace/setup/[id]`.
