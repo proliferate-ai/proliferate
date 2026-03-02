@@ -486,7 +486,11 @@ export async function executeApprovedInvocation(
 			throw new Error(actionResult.error ?? "Action failed");
 		}
 
-		const completed = await markCompleted(input.invocationId, actionResult.data, Date.now() - startedAt);
+		const completed = await markCompleted(
+			input.invocationId,
+			actionResult.data,
+			Date.now() - startedAt,
+		);
 		if (!completed) {
 			throw new ActionConflictError("Failed to mark invocation as completed");
 		}

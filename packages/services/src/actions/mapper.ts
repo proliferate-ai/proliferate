@@ -4,7 +4,7 @@
  * Maps action invocation DB rows to API DTOs.
  */
 
-import { toIsoString, toIsoStringRequired } from "../db/serialize";
+import { toIsoString } from "../db/serialize";
 import type { ActionInvocationRow, ActionInvocationWithSession } from "./db";
 
 export interface ActionInvocationDto {
@@ -27,8 +27,8 @@ export interface ActionInvocationDto {
 	completedAt: string | null;
 	expiresAt: string | null;
 	deniedReason: string | null;
-	createdAt: string;
-	updatedAt: string;
+	createdAt: string | null;
+	updatedAt: string | null;
 }
 
 export interface ActionInvocationWithSessionDto extends ActionInvocationDto {
@@ -56,8 +56,8 @@ export function toActionInvocation(row: ActionInvocationRow): ActionInvocationDt
 		completedAt: toIsoString(row.completedAt),
 		expiresAt: toIsoString(row.expiresAt),
 		deniedReason: row.deniedReason,
-		createdAt: toIsoStringRequired(row.createdAt),
-		updatedAt: toIsoStringRequired(row.updatedAt),
+		createdAt: toIsoString(row.createdAt),
+		updatedAt: toIsoString(row.completedAt ?? row.approvedAt ?? row.createdAt),
 	};
 }
 
