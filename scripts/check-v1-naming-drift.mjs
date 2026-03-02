@@ -23,7 +23,7 @@ const scanTargets = [
 ];
 
 // Dead DB tables that were dropped in PR 11. Guard against schema re-introduction.
-const bannedSchemaSymbols = ["sessionToolInvocations", "triggerEventActions"];
+const bannedSchemaSymbols = ["sessionToolInvocations", "triggerEventActions", "workspaceCacheSnapshots"];
 
 const scanExtensions = new Set([".ts", ".tsx", ".js", ".jsx"]);
 const forbiddenPattern = /\b(?:automation[a-zA-Z0-9_]*|configuration[a-zA-Z0-9_]*)\b/gi;

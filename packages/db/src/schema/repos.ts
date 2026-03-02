@@ -5,10 +5,9 @@
  * Relation definitions are centralized in `relations.ts`.
  */
 
-export { repoBaselines, repoBaselineTargets, repos, workspaceCacheSnapshots } from "./schema";
+export { repoBaselines, repoBaselineTargets, repos } from "./schema";
 export {
 	repoBaselinesRelations,
 	repoBaselineTargetsRelations,
 	reposRelations,
-	workspaceCacheSnapshotsRelations,
 } from "./relations";
