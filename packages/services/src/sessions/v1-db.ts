@@ -14,6 +14,9 @@ import {
 	and,
 	eq,
 	getDb,
+	isNull,
+	lte,
+	or,
 	sessionCapabilities,
 	sessionMessages,
 	sessionSkills,
@@ -102,8 +105,8 @@ export async function upsertSessionSkill(input: UpsertSessionSkillInput): Promis
 			.onConflictDoUpdate({
 				target: [sessionSkills.sessionId, sessionSkills.skillKey],
 				set: {
-					configJson: input.configJson ?? null,
-					origin: input.origin ?? null,
+					...(input.configJson !== undefined && { configJson: input.configJson }),
+					...(input.origin !== undefined && { origin: input.origin }),
 					updatedAt: now,
 				},
 			})
@@ -151,11 +154,16 @@ export async function enqueueSessionMessage(
 
 export async function listQueuedSessionMessages(sessionId: string): Promise<SessionMessageRow[]> {
 	const db = getDb();
+	const now = new Date();
 	return db
 		.select()
 		.from(sessionMessages)
 		.where(
-			and(eq(sessionMessages.sessionId, sessionId), eq(sessionMessages.deliveryState, "queued")),
+			and(
+				eq(sessionMessages.sessionId, sessionId),
+				eq(sessionMessages.deliveryState, "queued"),
+				or(isNull(sessionMessages.deliverAfter), lte(sessionMessages.deliverAfter, now)),
+			),
 		)
 		.orderBy(sessionMessages.queuedAt);
 }
@@ -228,12 +236,16 @@ export interface PersistSessionOutcomeInput {
 export async function persistSessionOutcome(input: PersistSessionOutcomeInput): Promise<void> {
 	const db = getDb();
 	const now = new Date();
-	await db
+	const [row] = await db
 		.update(sessions)
 		.set({
 			outcomeJson: input.outcomeJson,
 			outcomeVersion: input.outcomeVersion ?? 1,
 			outcomePersistedAt: now,
 		})
-		.where(eq(sessions.id, input.sessionId));
+		.where(eq(sessions.id, input.sessionId))
+		.returning({ id: sessions.id });
+	if (!row) {
+		throw new Error(`Session not found for outcome persistence: ${input.sessionId}`);
+	}
 }

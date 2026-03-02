@@ -46,9 +46,16 @@ export async function createWakeEvent(input: CreateWakeEventInput): Promise<Wake
 	return row;
 }
 
-export async function findWakeEventById(id: string): Promise<WakeEventRow | undefined> {
+export async function findWakeEventById(
+	id: string,
+	organizationId: string,
+): Promise<WakeEventRow | undefined> {
 	const db = getDb();
-	const [row] = await db.select().from(wakeEvents).where(eq(wakeEvents.id, id)).limit(1);
+	const [row] = await db
+		.select()
+		.from(wakeEvents)
+		.where(and(eq(wakeEvents.id, id), eq(wakeEvents.organizationId, organizationId)))
+		.limit(1);
 	return row;
 }
 
@@ -72,12 +79,21 @@ export async function updateWakeEventStatus(
 	return row;
 }
 
-export async function listQueuedByWorker(workerId: string): Promise<WakeEventRow[]> {
+export async function listQueuedByWorker(
+	workerId: string,
+	organizationId: string,
+): Promise<WakeEventRow[]> {
 	const db = getDb();
 	return db
 		.select()
 		.from(wakeEvents)
-		.where(and(eq(wakeEvents.workerId, workerId), eq(wakeEvents.status, "queued")))
+		.where(
+			and(
+				eq(wakeEvents.workerId, workerId),
+				eq(wakeEvents.organizationId, organizationId),
+				eq(wakeEvents.status, "queued"),
+			),
+		)
 		.orderBy(
 			sql`CASE ${wakeEvents.source}
 				WHEN 'manual_message' THEN 1
@@ -90,12 +106,16 @@ export async function listQueuedByWorker(workerId: string): Promise<WakeEventRow
 		);
 }
 
-export async function listByWorker(workerId: string, limit = 20): Promise<WakeEventRow[]> {
+export async function listByWorker(
+	workerId: string,
+	organizationId: string,
+	limit = 20,
+): Promise<WakeEventRow[]> {
 	const db = getDb();
 	return db
 		.select()
 		.from(wakeEvents)
-		.where(eq(wakeEvents.workerId, workerId))
+		.where(and(eq(wakeEvents.workerId, workerId), eq(wakeEvents.organizationId, organizationId)))
 		.orderBy(desc(wakeEvents.createdAt))
 		.limit(limit);
 }

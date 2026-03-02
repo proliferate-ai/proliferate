@@ -1482,7 +1482,7 @@ export const sessions = pgTable(
 		),
 
 		// V1 capabilities version (incremented on capability row changes)
-		capabilitiesVersion: integer("capabilities_version").default(1),
+		capabilitiesVersion: integer("capabilities_version").default(1).notNull(),
 
 		// V1 lineage (continuation/rerun)
 		continuedFromSessionId: uuid("continued_from_session_id"),
@@ -2623,6 +2623,11 @@ export const sessionPullRequests = pgTable(
 			foreignColumns: [repos.id],
 			name: "session_pull_requests_repo_id_fkey",
 		}).onDelete("cascade"),
+		foreignKey({
+			columns: [table.continuedFromSessionId],
+			foreignColumns: [sessions.id],
+			name: "session_pull_requests_continued_from_session_id_fkey",
+		}).onDelete("set null"),
 	],
 );
 

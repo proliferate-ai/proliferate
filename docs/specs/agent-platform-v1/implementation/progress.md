@@ -25,7 +25,7 @@
   - Added org-scoped wake status updates (`wake_events.id` + `organization_id`) to prevent cross-tenant mutation.
   - Added missing `resume_intents.origin_session_id -> sessions.id` FK wiring in modular schema.
   - Locked V1 session control-plane columns (`kind`, `runtime_status`, `operator_status`, `visibility`) as non-null in schema and migration.
-  - Normalized Drizzle journal indices to strict monotonic order to remove duplicate `idx` entries.
+  - Ensured newly added Drizzle journal entries use unique increasing `idx` values (pre-existing `_journal.json` ordering was not rewritten in this PR).
   - Relaxed `sessions_task_linkage_check` to allow `repo_baseline_target_id` to remain optional for task sessions (baseline target is optional by V1 repo lifecycle contract).
   - Updated queued wake ordering to honor canonical priority (`manual_message > manual > webhook > tick`) and FIFO behavior within a priority class.
   - Added transactional `capabilitiesVersion` increments on `session_capabilities` and `session_skills` upserts.
