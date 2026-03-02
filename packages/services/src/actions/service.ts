@@ -5,13 +5,9 @@
  */
 
 import { truncateJson } from "@proliferate/providers/helpers/truncation";
+import type { ActionInvocationStatus, CapabilityMode } from "@proliferate/shared/contracts";
 import { getServicesLogger } from "../logger";
-import type {
-	ActionInvocationRow,
-	ActionInvocationStatus,
-	ActionInvocationWithSession,
-	SessionCapabilityMode,
-} from "./db";
+import type { ActionInvocationRow, ActionInvocationWithSession, ResumeIntentRow } from "./db";
 import * as actionsDb from "./db";
 import { resolveMode } from "./modes";
 
@@ -176,7 +172,7 @@ async function resolveEffectiveMode(input: {
 }): Promise<{
 	effectiveMode: "allow" | "require_approval" | "deny";
 	modeSource: string;
-	capabilityMode?: SessionCapabilityMode;
+	capabilityMode?: CapabilityMode;
 	capabilityKey: string;
 }> {
 	const resolved = await resolveMode({
@@ -256,6 +252,119 @@ function resumeIntentArg(payload: unknown | undefined): { payloadJson?: unknown 
 		return undefined;
 	}
 	return { payloadJson: payload };
+}
+
+// ============================================
+// Transactional Transition with Side Effects
+// ============================================
+
+export interface TransitionInvocationWithEffectsInput {
+	id: string;
+	fromStatuses: ActionInvocationStatus[];
+	toStatus: ActionInvocationStatus;
+	data?: {
+		result?: unknown;
+		error?: string;
+		approvedBy?: string;
+		approvedAt?: Date;
+		completedAt?: Date;
+		durationMs?: number;
+		deniedReason?: string;
+		expiresAt?: Date | null;
+	};
+	event?: {
+		eventType: string;
+		actorUserId?: string | null;
+		payloadJson?: unknown;
+	};
+	resumeIntent?: {
+		payloadJson?: unknown;
+	};
+}
+
+export interface TransitionInvocationWithEffectsResult {
+	invocation: ActionInvocationRow | undefined;
+	resumeIntent: ResumeIntentRow | undefined;
+}
+
+/**
+ * Atomically transition an invocation status and apply side effects:
+ *   1. Update invocation status (CAS guard on fromStatuses)
+ *   2. Insert an invocation event
+ *   3. Touch session lastVisibleUpdateAt for approval-resolution statuses
+ *   4. Conditionally create a resume intent when the session is waiting_for_approval
+ *
+ * All writes happen inside a single DB transaction.
+ */
+async function transitionInvocationWithEffects(
+	input: TransitionInvocationWithEffectsInput,
+): Promise<TransitionInvocationWithEffectsResult> {
+	if (input.fromStatuses.length === 0) {
+		throw new Error("fromStatuses must include at least one status");
+	}
+
+	return actionsDb.withTransaction(async (tx) => {
+		const invocation = await actionsDb.transitionInvocationStatusTx(
+			tx,
+			input.id,
+			input.fromStatuses,
+			input.toStatus,
+			input.data,
+		);
+
+		if (!invocation) {
+			return { invocation: undefined, resumeIntent: undefined };
+		}
+
+		if (input.event) {
+			await actionsDb.insertInvocationEventTx(tx, invocation.id, input.event);
+		}
+
+		if (actionsDb.APPROVAL_RESOLUTION_STATUSES.has(input.toStatus)) {
+			await actionsDb.touchSessionLastVisibleUpdate(tx, invocation.sessionId);
+		}
+
+		let resumeIntent: ResumeIntentRow | undefined;
+		if (input.resumeIntent && invocation.mode === "require_approval") {
+			const operatorStatus = await actionsDb.getSessionOperatorStatusTx(tx, invocation.sessionId);
+
+			if (operatorStatus === "waiting_for_approval") {
+				const existing = await actionsDb.findActiveResumeIntentTx(
+					tx,
+					invocation.sessionId,
+					invocation.id,
+				);
+
+				if (existing) {
+					resumeIntent = existing;
+				} else {
+					try {
+						resumeIntent = await actionsDb.insertResumeIntentTx(tx, {
+							originSessionId: invocation.sessionId,
+							invocationId: invocation.id,
+							payloadJson: input.resumeIntent.payloadJson,
+						});
+					} catch (error) {
+						if (!actionsDb.isDuplicateActiveResumeIntentError(error)) {
+							throw error;
+						}
+
+						const retried = await actionsDb.findActiveResumeIntentTx(
+							tx,
+							invocation.sessionId,
+							invocation.id,
+						);
+						if (!retried) {
+							throw error;
+						}
+						resumeIntent = retried;
+					}
+				}
+			}
+		}
+
+		return { invocation, resumeIntent };
+	});
 }
 
 // ============================================
@@ -391,7 +500,7 @@ export async function isActionDeniedForSession(input: {
 export async function markExecuting(
 	invocationId: string,
 ): Promise<ActionInvocationRow | undefined> {
-	const { invocation } = await actionsDb.transitionInvocationWithEffects({
+	const { invocation } = await transitionInvocationWithEffects({
 		id: invocationId,
 		fromStatuses: ["approved"],
 		toStatus: "executing",
@@ -416,7 +525,7 @@ export async function markCompleted(
 			})
 		: undefined;
 
-	const { invocation } = await actionsDb.transitionInvocationWithEffects({
+	const { invocation } = await transitionInvocationWithEffects({
 		id: invocationId,
 		fromStatuses: ["executing"],
 		toStatus: "completed",
@@ -447,7 +556,7 @@ export async function markFailed(
 			})
 		: undefined;
 
-	const { invocation } = await actionsDb.transitionInvocationWithEffects({
+	const { invocation } = await transitionInvocationWithEffects({
 		id: invocationId,
 		fromStatuses: ["approved", "executing"],
 		toStatus: "failed",
@@ -540,7 +649,7 @@ export async function approveAction(
 			invocation,
 			terminalStatus: "expired",
 		});
-		await actionsDb.transitionInvocationWithEffects({
+		await transitionInvocationWithEffects({
 			id: invocationId,
 			fromStatuses: ["pending"],
 			toStatus: "expired",
@@ -570,7 +679,7 @@ export async function approveAction(
 			invocation,
 			terminalStatus: "denied",
 		});
-		const { invocation: denied } = await actionsDb.transitionInvocationWithEffects({
+		const { invocation: denied } = await transitionInvocationWithEffects({
 			id: invocationId,
 			fromStatuses: ["pending"],
 			toStatus: "denied",
@@ -592,7 +701,7 @@ export async function approveAction(
 		throw new ActionConflictError("Invocation denied by current policy");
 	}
 
-	const { invocation: approved } = await actionsDb.transitionInvocationWithEffects({
+	const { invocation: approved } = await transitionInvocationWithEffects({
 		id: invocationId,
 		fromStatuses: ["pending"],
 		toStatus: "approved",
@@ -629,7 +738,7 @@ export async function denyAction(
 		invocation,
 		terminalStatus: "denied",
 	});
-	const { invocation: updated } = await actionsDb.transitionInvocationWithEffects({
+	const { invocation: updated } = await transitionInvocationWithEffects({
 		id: invocationId,
 		fromStatuses: ["pending"],
 		toStatus: "denied",
@@ -716,7 +825,7 @@ export async function expireStaleInvocations(): Promise<number> {
 			invocation,
 			terminalStatus: "expired",
 		});
-		const { invocation: expired } = await actionsDb.transitionInvocationWithEffects({
+		const { invocation: expired } = await transitionInvocationWithEffects({
 			id: invocation.id,
 			fromStatuses: ["pending"],
 			toStatus: "expired",

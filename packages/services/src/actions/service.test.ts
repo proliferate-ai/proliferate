@@ -9,10 +9,16 @@ const {
 	mockCreateActionInvocationEvent,
 	mockGetInvocation,
 	mockGetInvocationById,
-	mockTransitionInvocationWithEffects,
 	mockGetSessionApprovalContext,
 	mockListExpirablePendingInvocations,
 	mockGetSessionAclRole,
+	mockWithTransaction,
+	mockTransitionInvocationStatusTx,
+	mockInsertInvocationEventTx,
+	mockTouchSessionLastVisibleUpdate,
+	mockFindActiveResumeIntentTx,
+	mockInsertResumeIntentTx,
+	mockGetSessionOperatorStatusTx,
 } = vi.hoisted(() => ({
 	mockCreateInvocation: vi.fn(),
 	mockListPendingBySession: vi.fn(),
@@ -22,10 +28,16 @@ const {
 	mockCreateActionInvocationEvent: vi.fn(),
 	mockGetInvocation: vi.fn(),
 	mockGetInvocationById: vi.fn(),
-	mockTransitionInvocationWithEffects: vi.fn(),
 	mockGetSessionApprovalContext: vi.fn(),
 	mockListExpirablePendingInvocations: vi.fn(),
 	mockGetSessionAclRole: vi.fn(),
+	mockWithTransaction: vi.fn(),
+	mockTransitionInvocationStatusTx: vi.fn(),
+	mockInsertInvocationEventTx: vi.fn(),
+	mockTouchSessionLastVisibleUpdate: vi.fn(),
+	mockFindActiveResumeIntentTx: vi.fn(),
+	mockInsertResumeIntentTx: vi.fn(),
+	mockGetSessionOperatorStatusTx: vi.fn(),
 }));
 
 vi.mock("./db", () => ({
@@ -34,7 +46,6 @@ vi.mock("./db", () => ({
 	getInvocationById: mockGetInvocationById,
 	updateInvocationStatus: vi.fn(),
 	transitionInvocationStatus: vi.fn(),
-	transitionInvocationWithEffects: mockTransitionInvocationWithEffects,
 	listBySession: vi.fn().mockResolvedValue([]),
 	listPendingBySession: mockListPendingBySession,
 	listExpirablePendingInvocations: mockListExpirablePendingInvocations,
@@ -47,6 +58,18 @@ vi.mock("./db", () => ({
 	getSessionApprovalContext: mockGetSessionApprovalContext,
 	createOrGetActiveResumeIntent: vi.fn(),
 	getSessionAclRole: mockGetSessionAclRole,
+	withTransaction: mockWithTransaction,
+	transitionInvocationStatusTx: mockTransitionInvocationStatusTx,
+	insertInvocationEventTx: mockInsertInvocationEventTx,
+	touchSessionLastVisibleUpdate: mockTouchSessionLastVisibleUpdate,
+	findActiveResumeIntentTx: mockFindActiveResumeIntentTx,
+	insertResumeIntentTx: mockInsertResumeIntentTx,
+	getSessionOperatorStatusTx: mockGetSessionOperatorStatusTx,
+	isDuplicateActiveResumeIntentError: (error: unknown) =>
+		error instanceof Error &&
+		(error.message.includes("uq_resume_intents_one_active") ||
+			error.message.includes("duplicate key value")),
+	APPROVAL_RESOLUTION_STATUSES: new Set(["approved", "denied", "expired"]),
 }));
 
 vi.mock("../logger", () => ({
@@ -128,6 +151,14 @@ describe("actions v1 service", () => {
 				return { mode: "require_approval", source: "inferred_default" };
 			},
 		);
+		// withTransaction executes the callback with a fake tx object
+		mockWithTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn({}));
+		mockTransitionInvocationStatusTx.mockResolvedValue(undefined);
+		mockInsertInvocationEventTx.mockResolvedValue(undefined);
+		mockTouchSessionLastVisibleUpdate.mockResolvedValue(undefined);
+		mockFindActiveResumeIntentTx.mockResolvedValue(undefined);
+		mockInsertResumeIntentTx.mockResolvedValue(undefined);
+		mockGetSessionOperatorStatusTx.mockResolvedValue(null);
 	});
 
 	it("requires approval for write actions and sets waiting status", async () => {
@@ -185,22 +216,28 @@ describe("actions v1 service", () => {
 			createdBy: "user-1",
 			repoId: "repo-1",
 		});
-		mockTransitionInvocationWithEffects.mockResolvedValue({
-			invocation: makeInvocationRow({ status: "denied", mode: "require_approval" }),
-			resumeIntent: { id: "resume-1" },
-		});
+		const deniedRow = makeInvocationRow({ status: "denied", mode: "require_approval" });
+		mockTransitionInvocationStatusTx.mockResolvedValue(deniedRow);
+		mockGetSessionOperatorStatusTx.mockResolvedValue("waiting_for_approval");
+		mockInsertResumeIntentTx.mockResolvedValue({ id: "resume-1" });
 
 		await denyAction("inv-1", "org-1", "user-1");
 
-		expect(mockTransitionInvocationWithEffects).toHaveBeenCalledWith(
-			expect.objectContaining({
-				id: "inv-1",
-				toStatus: "denied",
-				event: expect.objectContaining({ eventType: "denied" }),
-				resumeIntent: expect.objectContaining({
-					payloadJson: expect.objectContaining({ terminalStatus: "denied" }),
-				}),
-			}),
+		expect(mockTransitionInvocationStatusTx).toHaveBeenCalledWith(
+			expect.anything(),
+			"inv-1",
+			["pending"],
+			"denied",
+			expect.objectContaining({ completedAt: expect.any(Date) }),
+		);
+		expect(mockInsertInvocationEventTx).toHaveBeenCalledWith(
+			expect.anything(),
+			deniedRow.id,
+			expect.objectContaining({ eventType: "denied" }),
+		);
+		expect(mockTouchSessionLastVisibleUpdate).toHaveBeenCalledWith(
+			expect.anything(),
+			deniedRow.sessionId,
 		);
 	});
 
@@ -217,22 +254,27 @@ describe("actions v1 service", () => {
 			createdBy: "user-1",
 			repoId: "repo-1",
 		});
-		mockTransitionInvocationWithEffects.mockResolvedValue({
-			invocation: makeInvocationRow({ status: "completed", mode: "require_approval" }),
-			resumeIntent: { id: "resume-1" },
-		});
+		const completedRow = makeInvocationRow({ status: "completed", mode: "require_approval" });
+		mockTransitionInvocationStatusTx.mockResolvedValue(completedRow);
+		mockGetSessionOperatorStatusTx.mockResolvedValue("waiting_for_approval");
+		mockInsertResumeIntentTx.mockResolvedValue({ id: "resume-1" });
 
 		await markCompleted("inv-1", { ok: true }, 12);
 
-		expect(mockTransitionInvocationWithEffects).toHaveBeenCalledWith(
+		expect(mockTransitionInvocationStatusTx).toHaveBeenCalledWith(
+			expect.anything(),
+			"inv-1",
+			["executing"],
+			"completed",
 			expect.objectContaining({
-				id: "inv-1",
-				toStatus: "completed",
-				event: expect.objectContaining({ eventType: "completed" }),
-				resumeIntent: expect.objectContaining({
-					payloadJson: expect.objectContaining({ terminalStatus: "completed" }),
-				}),
+				completedAt: expect.any(Date),
+				durationMs: 12,
 			}),
+		);
+		expect(mockInsertInvocationEventTx).toHaveBeenCalledWith(
+			expect.anything(),
+			completedRow.id,
+			expect.objectContaining({ eventType: "completed" }),
 		);
 	});
 
@@ -250,16 +292,22 @@ describe("actions v1 service", () => {
 			repoId: "repo-1",
 		});
 		mockResolveMode.mockResolvedValue({ mode: "deny", source: "org_default" });
-		mockTransitionInvocationWithEffects.mockResolvedValue({
-			invocation: makeInvocationRow({ status: "denied", mode: "require_approval" }),
-			resumeIntent: { id: "resume-1" },
-		});
+		const deniedRow = makeInvocationRow({ status: "denied", mode: "require_approval" });
+		mockTransitionInvocationStatusTx.mockResolvedValue(deniedRow);
+		mockGetSessionOperatorStatusTx.mockResolvedValue("waiting_for_approval");
+		mockInsertResumeIntentTx.mockResolvedValue({ id: "resume-1" });
 
 		await expect(approveAction("inv-1", "org-1", "approver-1")).rejects.toBeInstanceOf(
 			ActionConflictError,
 		);
-		expect(mockTransitionInvocationWithEffects).toHaveBeenCalledWith(
-			expect.objectContaining({ toStatus: "denied" }),
+		expect(mockTransitionInvocationStatusTx).toHaveBeenCalledWith(
+			expect.anything(),
+			"inv-1",
+			["pending"],
+			"denied",
+			expect.objectContaining({
+				deniedReason: "policy_revalidated_deny",
+			}),
 		);
 	});
 
