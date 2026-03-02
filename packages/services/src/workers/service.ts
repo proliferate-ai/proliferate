@@ -357,6 +357,20 @@ export async function failWorkerRun(input: {
 	if (!terminal) {
 		throw new Error("Worker run failure update failed due to concurrent state change");
 	}
+
+	// If retryable, create a new wake event so the worker will be retried
+	if (input.retryable) {
+		await wakesDb.createWakeEvent({
+			workerId: workerRun.workerId,
+			organizationId: input.organizationId,
+			source: "manual",
+			payloadJson: {
+				retryOfRunId: input.workerRunId,
+				errorCode: input.errorCode,
+			},
+		});
+	}
+
 	return terminal.workerRun;
 }
 

@@ -95,8 +95,8 @@ webhookRouter.post("/direct/:providerId", async (req, res) => {
 			});
 		}
 
-		// TODO: Look up provider from vNext ProviderRegistry once implemented
-		// For now, store direct webhooks in the inbox with explicit routing identity.
+		logger.warn({ provider: providerId }, "Direct webhook accepted without HMAC verification");
+
 		await webhookInbox.insertInboxRow({
 			provider: providerId,
 			headers: req.headers as Record<string, unknown>,

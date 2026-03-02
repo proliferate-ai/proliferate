@@ -104,6 +104,13 @@ export async function listAutomations(orgId: string): Promise<AutomationListItem
 }
 
 /**
+ * Get the V1 worker_id bound to an automation (null if legacy).
+ */
+export async function getAutomationWorkerId(id: string, orgId: string): Promise<string | null> {
+	return automationsDb.getAutomationWorkerId(id, orgId);
+}
+
+/**
  * Get a single automation by ID with triggers.
  */
 export async function getAutomation(

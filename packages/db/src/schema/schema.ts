@@ -618,6 +618,7 @@ export const automations = pgTable(
 		notificationSlackUserId: text("notification_slack_user_id"),
 		notificationSlackInstallationId: uuid("notification_slack_installation_id"),
 		actionModes: jsonb("action_modes"),
+		workerId: uuid("worker_id"),
 		sourceTemplateId: text("source_template_id"),
 	},
 	(table) => [
@@ -631,6 +632,10 @@ export const automations = pgTable(
 		index("idx_automations_configuration").using(
 			"btree",
 			table.defaultConfigurationId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_automations_worker_id").using(
+			"btree",
+			table.workerId.asc().nullsLast().op("uuid_ops"),
 		),
 		foreignKey({
 			columns: [table.organizationId],

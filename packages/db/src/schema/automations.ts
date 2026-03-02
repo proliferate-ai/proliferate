@@ -59,6 +59,9 @@ export const automations = pgTable(
 			{ onDelete: "set null" },
 		),
 
+		// V1 Worker Bridge — when set, trigger events create wake_events instead of automation_runs
+		workerId: uuid("worker_id"),
+
 		// Telemetry
 		sourceTemplateId: text("source_template_id"),
 
@@ -71,6 +74,7 @@ export const automations = pgTable(
 		index("idx_automations_org").on(table.organizationId),
 		index("idx_automations_enabled").on(table.enabled),
 		index("idx_automations_configuration").on(table.defaultConfigurationId),
+		index("idx_automations_worker_id").on(table.workerId),
 	],
 );
 

@@ -361,6 +361,13 @@
       "when": 1772430251873,
       "tag": "0051_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1772662800000,
+      "tag": "0052_add_worker_id_to_automations",
+      "breakpoints": true
     }
   ]
 }

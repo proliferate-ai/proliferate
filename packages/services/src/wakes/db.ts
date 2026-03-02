@@ -180,6 +180,29 @@ export async function listQueuedByWorkerAndSource(
 		.orderBy(asc(wakeEvents.createdAt));
 }
 
+/**
+ * Check if a worker has any queued wake event with the given source.
+ * Used by the tick engine to deduplicate — skip creating a tick if one is already queued.
+ */
+export async function hasQueuedWakeBySource(
+	workerId: string,
+	source: WakeEventSource,
+): Promise<boolean> {
+	const db = getDb();
+	const [row] = await db
+		.select({ id: wakeEvents.id })
+		.from(wakeEvents)
+		.where(
+			and(
+				eq(wakeEvents.workerId, workerId),
+				eq(wakeEvents.status, "queued"),
+				eq(wakeEvents.source, source),
+			),
+		)
+		.limit(1);
+	return !!row;
+}
+
 export async function listByWorker(
 	workerId: string,
 	organizationId: string,
