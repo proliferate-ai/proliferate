@@ -5,18 +5,16 @@ const {
 	mockTransitionWorkerStatus,
 	mockFindWorkerRunById,
 	mockTransitionWorkerRunStatus,
-	mockFindWorkerRunEventByDedupeKey,
-	mockGetNextWorkerRunEventIndex,
-	mockCreateWorkerRunEvent,
+	mockAppendWorkerRunEventAtomic,
+	mockTransitionWorkerRunWithTerminalEvent,
 	mockCreateWakeEvent,
 } = vi.hoisted(() => ({
 	mockFindWorkerById: vi.fn(),
 	mockTransitionWorkerStatus: vi.fn(),
 	mockFindWorkerRunById: vi.fn(),
 	mockTransitionWorkerRunStatus: vi.fn(),
-	mockFindWorkerRunEventByDedupeKey: vi.fn(),
-	mockGetNextWorkerRunEventIndex: vi.fn(),
-	mockCreateWorkerRunEvent: vi.fn(),
+	mockAppendWorkerRunEventAtomic: vi.fn(),
+	mockTransitionWorkerRunWithTerminalEvent: vi.fn(),
 	mockCreateWakeEvent: vi.fn(),
 }));
 
@@ -25,9 +23,8 @@ vi.mock("./db", () => ({
 	transitionWorkerStatus: mockTransitionWorkerStatus,
 	findWorkerRunById: mockFindWorkerRunById,
 	transitionWorkerRunStatus: mockTransitionWorkerRunStatus,
-	findWorkerRunEventByDedupeKey: mockFindWorkerRunEventByDedupeKey,
-	getNextWorkerRunEventIndex: mockGetNextWorkerRunEventIndex,
-	createWorkerRunEvent: mockCreateWorkerRunEvent,
+	appendWorkerRunEventAtomic: mockAppendWorkerRunEventAtomic,
+	transitionWorkerRunWithTerminalEvent: mockTransitionWorkerRunWithTerminalEvent,
 	claimNextWakeAndCreateRun: vi.fn(),
 	listEventsByRun: vi.fn(),
 }));
@@ -37,8 +34,8 @@ vi.mock("../wakes/db", () => ({
 }));
 
 const {
+	WorkerNotActiveError,
 	WorkerResumeRequiredError,
-	WorkerStatusTransitionError,
 	WorkerRunTransitionError,
 	pauseWorker,
 	runNow,
@@ -153,22 +150,22 @@ describe("workers service", () => {
 
 	it("completes running worker run and writes wake_completed event", async () => {
 		mockFindWorkerRunById.mockResolvedValue(makeWorkerRun({ status: "running" }));
-		mockTransitionWorkerRunStatus.mockResolvedValue(makeWorkerRun({ status: "completed" }));
-		mockFindWorkerRunEventByDedupeKey.mockResolvedValue(undefined);
-		mockGetNextWorkerRunEventIndex.mockResolvedValue(1);
-		mockCreateWorkerRunEvent.mockResolvedValue({
-			id: "event-1",
-			workerRunId: "run-1",
-			workerId: "worker-1",
-			eventIndex: 1,
-			eventType: "wake_completed",
-			summaryText: "done",
-			payloadJson: { result: "completed" },
-			payloadVersion: 1,
-			sessionId: null,
-			actionInvocationId: null,
-			dedupeKey: null,
-			createdAt: new Date(),
+		mockTransitionWorkerRunWithTerminalEvent.mockResolvedValue({
+			workerRun: makeWorkerRun({ status: "completed" }),
+			event: {
+				id: "event-1",
+				workerRunId: "run-1",
+				workerId: "worker-1",
+				eventIndex: 1,
+				eventType: "wake_completed",
+				summaryText: "done",
+				payloadJson: { result: "completed" },
+				payloadVersion: 1,
+				sessionId: null,
+				actionInvocationId: null,
+				dedupeKey: null,
+				createdAt: new Date(),
+			},
 		});
 
 		const result = await completeWorkerRun({
@@ -179,10 +176,10 @@ describe("workers service", () => {
 		});
 
 		expect(result.status).toBe("completed");
-		expect(mockCreateWorkerRunEvent).toHaveBeenCalledWith(
+		expect(mockTransitionWorkerRunWithTerminalEvent).toHaveBeenCalledWith(
 			expect.objectContaining({
 				workerRunId: "run-1",
-				workerId: "worker-1",
+				toStatus: "completed",
 				eventType: "wake_completed",
 			}),
 		);
@@ -203,7 +200,7 @@ describe("workers service", () => {
 			dedupeKey: "note-1",
 			createdAt: new Date(),
 		};
-		mockFindWorkerRunEventByDedupeKey.mockResolvedValue(existing);
+		mockAppendWorkerRunEventAtomic.mockResolvedValue(existing);
 
 		const row = await appendWorkerRunEvent({
 			workerRunId: "run-1",
@@ -213,14 +210,18 @@ describe("workers service", () => {
 		});
 
 		expect(row.id).toBe("event-existing");
-		expect(mockGetNextWorkerRunEventIndex).not.toHaveBeenCalled();
-		expect(mockCreateWorkerRunEvent).not.toHaveBeenCalled();
+		expect(mockAppendWorkerRunEventAtomic).toHaveBeenCalledWith(
+			expect.objectContaining({
+				workerRunId: "run-1",
+				dedupeKey: "note-1",
+			}),
+		);
 	});
 
 	it("runNow rejects degraded worker as not active", async () => {
 		mockFindWorkerById.mockResolvedValue(makeWorker({ status: "degraded" }));
 
-		await expect(runNow("worker-1", "org-1")).rejects.toBeInstanceOf(WorkerStatusTransitionError);
+		await expect(runNow("worker-1", "org-1")).rejects.toBeInstanceOf(WorkerNotActiveError);
 		expect(mockCreateWakeEvent).not.toHaveBeenCalled();
 	});
 });

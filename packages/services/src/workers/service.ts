@@ -39,6 +39,12 @@ export class WorkerResumeRequiredError extends Error {
 	}
 }
 
+export class WorkerNotActiveError extends Error {
+	constructor(workerId: string, status: string) {
+		super(`Worker ${workerId} must be active to run now (current: ${status})`);
+	}
+}
+
 export class WorkerRunNotFoundError extends Error {
 	constructor(workerRunId: string) {
 		super(`Worker run not found: ${workerRunId}`);
@@ -163,7 +169,7 @@ export async function runNow(
 		throw new WorkerResumeRequiredError(workerId);
 	}
 	if (status !== "active") {
-		throw new WorkerStatusTransitionError(status, "active");
+		throw new WorkerNotActiveError(workerId, status);
 	}
 
 	const wakeEvent = await wakesDb.createWakeEvent({
@@ -229,32 +235,24 @@ export async function completeWorkerRun(input: {
 		throw new WorkerRunTransitionError(fromStatus, "completed");
 	}
 
-	const updated = await workersDb.transitionWorkerRunStatus(
-		input.workerRunId,
-		input.organizationId,
-		[fromStatus],
-		"completed",
-		{
-			summary: input.summary,
-			completedAt: new Date(),
-		},
-	);
-	if (!updated) {
-		throw new Error("Worker run completion failed due to concurrent state change");
-	}
-
-	await appendWorkerRunEvent({
-		workerRunId: updated.id,
-		workerId: updated.workerId,
+	const terminal = await workersDb.transitionWorkerRunWithTerminalEvent({
+		workerRunId: input.workerRunId,
+		organizationId: input.organizationId,
+		fromStatuses: [fromStatus],
+		toStatus: "completed",
+		summary: input.summary,
+		completedAt: new Date(),
 		eventType: "wake_completed",
-		summaryText: input.summary,
-		payloadJson: {
+		eventSummaryText: input.summary,
+		eventPayloadJson: {
 			result: input.result ?? "completed",
 			summary: input.summary ?? null,
 		},
 	});
-
-	return updated;
+	if (!terminal) {
+		throw new Error("Worker run completion failed due to concurrent state change");
+	}
+	return terminal.workerRun;
 }
 
 export async function failWorkerRun(input: {
@@ -274,32 +272,24 @@ export async function failWorkerRun(input: {
 		throw new WorkerRunTransitionError(fromStatus, "failed");
 	}
 
-	const updated = await workersDb.transitionWorkerRunStatus(
-		input.workerRunId,
-		input.organizationId,
-		[fromStatus],
-		"failed",
-		{
-			summary: input.errorCode,
-			completedAt: new Date(),
-		},
-	);
-	if (!updated) {
-		throw new Error("Worker run failure update failed due to concurrent state change");
-	}
-
-	await appendWorkerRunEvent({
-		workerRunId: updated.id,
-		workerId: updated.workerId,
+	const terminal = await workersDb.transitionWorkerRunWithTerminalEvent({
+		workerRunId: input.workerRunId,
+		organizationId: input.organizationId,
+		fromStatuses: [fromStatus],
+		toStatus: "failed",
+		summary: input.errorCode,
+		completedAt: new Date(),
 		eventType: "wake_failed",
-		payloadJson: {
+		eventPayloadJson: {
 			errorCode: input.errorCode,
 			errorMessage: input.errorMessage ?? null,
 			retryable: input.retryable ?? false,
 		},
 	});
-
-	return updated;
+	if (!terminal) {
+		throw new Error("Worker run failure update failed due to concurrent state change");
+	}
+	return terminal.workerRun;
 }
 
 export async function appendWorkerRunEvent(
@@ -308,22 +298,9 @@ export async function appendWorkerRunEvent(
 	if (!WORKER_RUN_EVENT_TYPES_SET.has(input.eventType)) {
 		throw new WorkerRunEventTypeError(input.eventType);
 	}
-
-	if (input.dedupeKey) {
-		const existing = await workersDb.findWorkerRunEventByDedupeKey(
-			input.workerRunId,
-			input.dedupeKey,
-		);
-		if (existing) {
-			return existing;
-		}
-	}
-
-	const eventIndex = await workersDb.getNextWorkerRunEventIndex(input.workerRunId);
-	return workersDb.createWorkerRunEvent({
+	return workersDb.appendWorkerRunEventAtomic({
 		workerRunId: input.workerRunId,
 		workerId: input.workerId,
-		eventIndex,
 		eventType: input.eventType,
 		summaryText: input.summaryText,
 		payloadJson: input.payloadJson,

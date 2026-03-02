@@ -28,13 +28,6 @@ export async function enqueueWake(input: CreateWakeEventInput): Promise<WakeEven
 	return wakesDb.createWakeEvent(input);
 }
 
-export async function claimNextQueuedWake(
-	workerId: string,
-	organizationId: string,
-): Promise<WakeEventRow | null> {
-	return (await wakesDb.claimNextQueuedWakeForWorker(workerId, organizationId)) ?? null;
-}
-
 export async function transitionWakeStatus(input: {
 	wakeEventId: string;
 	organizationId: string;
