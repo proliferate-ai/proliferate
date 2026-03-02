@@ -18,6 +18,8 @@ import {
 	integrations,
 	invitation,
 	member,
+	notificationPreferences,
+	notifications,
 	orgConnectors,
 	organization,
 	outbox,
@@ -783,5 +785,27 @@ export const resumeIntentsRelations = relations(resumeIntents, ({ one }) => ({
 	actionInvocation: one(actionInvocations, {
 		fields: [resumeIntents.invocationId],
 		references: [actionInvocations.id],
+	}),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+	organization: one(organization, {
+		fields: [notifications.organizationId],
+		references: [organization.id],
+	}),
+	user: one(user, {
+		fields: [notifications.userId],
+		references: [user.id],
+	}),
+}));
+
+export const notificationPreferencesRelations = relations(notificationPreferences, ({ one }) => ({
+	organization: one(organization, {
+		fields: [notificationPreferences.organizationId],
+		references: [organization.id],
+	}),
+	user: one(user, {
+		fields: [notificationPreferences.userId],
+		references: [user.id],
 	}),
 }));

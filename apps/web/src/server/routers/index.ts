@@ -14,6 +14,7 @@ import { cliRouter } from "./cli";
 import { configurationsRouter } from "./configurations";
 import { integrationsRouter } from "./integrations";
 import { intercomRouter } from "./intercom";
+import { notificationsRouter } from "./notifications";
 import { onboardingRouter } from "./onboarding";
 import { orgsRouter } from "./orgs";
 import { reposRouter } from "./repos";
@@ -35,6 +36,7 @@ export const appRouter = {
 	cli: cliRouter,
 	integrations: integrationsRouter,
 	intercom: intercomRouter,
+	notifications: notificationsRouter,
 	onboarding: onboardingRouter,
 	orgs: orgsRouter,
 	configurations: configurationsRouter,

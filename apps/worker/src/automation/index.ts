@@ -20,7 +20,11 @@ import type { Worker } from "bullmq";
 import { writeCompletionArtifact, writeEnrichmentArtifact } from "./artifacts";
 import { EnrichmentError, buildEnrichmentPayload } from "./enrich";
 import { type FinalizerDeps, finalizeOneRun } from "./finalizer";
-import { dispatchRunNotification, dispatchSessionNotification } from "./notifications";
+import {
+	dispatchRunNotification,
+	dispatchSessionNotification,
+	dispatchV1Notification,
+} from "./notifications";
 import { resolveTarget } from "./resolve-target";
 
 const LEASE_TTL_MS = 5 * 60 * 1000;
@@ -421,6 +425,42 @@ export async function dispatchOutbox(
 						continue;
 					}
 					await dispatchSessionNotification(payload.sessionId, logger);
+					break;
+				}
+				case "notify_v1": {
+					const v1Payload = item.payload as {
+						userId?: string;
+						category?: string;
+						payload?: Record<string, unknown>;
+						workerId?: string | null;
+						sessionId?: string | null;
+						runId?: string | null;
+					};
+					if (!v1Payload.userId || !v1Payload.category || !v1Payload.payload) {
+						await outbox.markFailed(
+							item.id,
+							"Missing userId/category/payload in notify_v1 outbox payload",
+						);
+						continue;
+					}
+					await dispatchV1Notification(
+						item.organizationId,
+						{
+							userId: v1Payload.userId,
+							category: v1Payload.category,
+							payload: v1Payload.payload as {
+								title: string;
+								summary: string;
+								deepLinks: Array<{ label: string; url: string }>;
+								severity: "urgent" | "high" | "normal";
+								actionContext?: Record<string, unknown>;
+							},
+							workerId: v1Payload.workerId ?? null,
+							sessionId: v1Payload.sessionId ?? null,
+							runId: v1Payload.runId ?? null,
+						},
+						logger,
+					);
 					break;
 				}
 				default:

@@ -12,6 +12,7 @@ import {
 	triggerEvents,
 } from "../db/client";
 import { getDb } from "../db/client";
+import { onRunTerminal } from "../notifications/hooks";
 import { enqueueRunNotification } from "../notifications/service";
 import type { TriggerEventRow } from "../triggers/db";
 import * as runsDb from "./db";
@@ -152,7 +153,19 @@ export async function markRunFailed(options: {
 
 	if (updated) {
 		try {
-			await enqueueRunNotification(updated.organizationId, options.runId, "failed");
+			await Promise.all([
+				enqueueRunNotification(updated.organizationId, options.runId, "failed"),
+				updated.assignedTo
+					? onRunTerminal({
+							organizationId: updated.organizationId,
+							userId: updated.assignedTo,
+							sessionId: updated.sessionId ?? null,
+							runId: updated.id,
+							status: "failed",
+							errorMessage: options.errorMessage,
+						})
+					: Promise.resolve(),
+			]);
 		} catch {
 			// Non-critical: don't let notification failures break callers
 		}
@@ -461,7 +474,19 @@ export async function resolveRun(input: ResolveRunInput): Promise<runsDb.Automat
 		});
 
 		try {
-			await enqueueRunNotification(updated.organizationId, input.runId, toStatus);
+			const v1Status = toStatus === "succeeded" || toStatus === "failed" ? toStatus : null;
+			await Promise.all([
+				enqueueRunNotification(updated.organizationId, input.runId, toStatus),
+				v1Status && updated.assignedTo
+					? onRunTerminal({
+							organizationId: updated.organizationId,
+							userId: updated.assignedTo,
+							sessionId: updated.sessionId ?? null,
+							runId: updated.id,
+							status: v1Status,
+						})
+					: Promise.resolve(),
+			]);
 		} catch {
 			// Non-critical
 		}
@@ -535,6 +560,21 @@ export async function completeRun(
 			kind: "notify_run_terminal",
 			payload: { runId: run.id, status },
 		});
+
+		// V1 durable notification (enqueued outside tx — non-critical)
+		if (run.assignedTo && (status === "succeeded" || status === "failed")) {
+			try {
+				await onRunTerminal({
+					organizationId: run.organizationId,
+					userId: run.assignedTo,
+					sessionId: run.sessionId ?? null,
+					runId: run.id,
+					status,
+				});
+			} catch {
+				// Non-critical
+			}
+		}
 
 		return updated ?? null;
 	});

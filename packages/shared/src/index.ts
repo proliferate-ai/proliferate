@@ -438,6 +438,22 @@ export interface ControlPlaneSnapshotMessage {
 	};
 }
 
+export interface NotificationMessage {
+	type: "notification";
+	payload: {
+		id: string;
+		category: string;
+		title: string;
+		summary: string;
+		severity: string;
+		deepLinks: Array<{ label: string; url: string }>;
+		sessionId: string | null;
+		workerId: string | null;
+		runId: string | null;
+		createdAt: string;
+	};
+}
+
 export type ServerMessage =
 	| InitMessage
 	| NewMessageEvent
@@ -464,7 +480,8 @@ export type ServerMessage =
 	| ActionApprovalRequestMessage
 	| ActionApprovalResultMessage
 	| ActionCompletedMessage
-	| ControlPlaneSnapshotMessage;
+	| ControlPlaneSnapshotMessage
+	| NotificationMessage;
 
 export * from "./auth";
 

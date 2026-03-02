@@ -510,3 +510,164 @@ function extractSummary(completionJson: unknown): string | null {
 	if (typeof json.summaryMarkdown === "string") return json.summaryMarkdown;
 	return null;
 }
+
+// ============================================
+// V1 Notification dispatch (all categories)
+// ============================================
+
+interface V1NotificationPayload {
+	userId: string;
+	category: string;
+	payload: {
+		title: string;
+		summary: string;
+		deepLinks: Array<{ label: string; url: string }>;
+		severity: "urgent" | "high" | "normal";
+		actionContext?: Record<string, unknown>;
+	};
+	workerId: string | null;
+	sessionId: string | null;
+	runId: string | null;
+}
+
+/**
+ * Build Slack blocks for a V1 notification.
+ * Supports all V1 categories including approval_required with action buttons.
+ */
+function buildV1SlackBlocks(payload: V1NotificationPayload): SlackBlock[] {
+	const p = payload.payload;
+	const primaryLink = p.deepLinks[0];
+
+	const blocks: SlackBlock[] = [
+		{
+			type: "section",
+			text: {
+				type: "mrkdwn",
+				text: `*${p.title}*\n${p.summary}`,
+			},
+			...(primaryLink
+				? {
+						accessory: {
+							type: "button",
+							text: { type: "plain_text", text: primaryLink.label, emoji: true },
+							url: primaryLink.url,
+						},
+					}
+				: {}),
+		},
+	];
+
+	return blocks;
+}
+
+/**
+ * Dispatch a V1 notification.
+ *
+ * Creates the durable notification row (with noise policy) and
+ * optionally sends to Slack if the category routing includes Slack.
+ */
+export async function dispatchV1Notification(
+	organizationId: string,
+	payload: V1NotificationPayload,
+	logger: Logger,
+): Promise<void> {
+	const { CATEGORY_ROUTING } = await import("@proliferate/shared/contracts");
+	const category = payload.category as keyof typeof CATEGORY_ROUTING;
+	const routing = CATEGORY_ROUTING[category];
+
+	// Create the durable in-app notification row (includes noise policy)
+	const row = await notifications.createNotification({
+		organizationId,
+		userId: payload.userId,
+		category: category,
+		payload: payload.payload,
+		workerId: payload.workerId,
+		sessionId: payload.sessionId,
+		runId: payload.runId,
+		channel: "in_app",
+	});
+
+	if (!row) {
+		logger.debug({ category, runId: payload.runId }, "Notification suppressed by noise policy");
+		return;
+	}
+
+	// Mark in-app as delivered immediately (durable row = delivered)
+	await notifications.markDelivered(row.id, "in_app");
+
+	// If Slack is in the default channels, also send via Slack
+	if (routing?.defaultChannels.includes("slack")) {
+		const channels = await notifications.resolveChannels(
+			payload.userId,
+			organizationId,
+			category,
+			payload.workerId,
+		);
+
+		if (channels.includes("slack")) {
+			try {
+				await sendV1SlackNotification(organizationId, payload, logger);
+			} catch (err) {
+				logger.warn(
+					{ err, notificationId: row.id },
+					"Slack delivery failed for V1 notification (in-app row persisted)",
+				);
+			}
+		}
+	}
+
+	logger.info(
+		{ notificationId: row.id, category, userId: payload.userId },
+		"V1 notification dispatched",
+	);
+}
+
+/**
+ * Send a V1 notification via Slack DM to the target user.
+ * Uses the existing Slack DM infrastructure via sendSlackDmNotification.
+ */
+async function sendV1SlackNotification(
+	organizationId: string,
+	payload: V1NotificationPayload,
+	logger: Logger,
+): Promise<void> {
+	// For V1 notifications, we need a Slack user ID to DM.
+	// If the notification is linked to a session, check for subscription-based
+	// Slack user mapping. Otherwise, skip Slack delivery.
+	if (!payload.sessionId) {
+		logger.debug(
+			{ orgId: organizationId, category: payload.category },
+			"No session context for V1 Slack notification, skipping DM",
+		);
+		return;
+	}
+
+	const subscriptions = await notifications.listSessionSubscriptions(payload.sessionId);
+	const userSub = subscriptions.find((s) => s.userId === payload.userId && s.slackUserId);
+	if (!userSub?.slackUserId) {
+		logger.debug(
+			{ orgId: organizationId, userId: payload.userId },
+			"No Slack user mapping for V1 notification",
+		);
+		return;
+	}
+
+	const blocks = buildV1SlackBlocks(payload);
+
+	const result = await sendSlackDmNotification({
+		organizationId,
+		slackInstallationId: userSub.slackInstallationId,
+		slackUserId: userSub.slackUserId,
+		blocks,
+		logger,
+	});
+
+	if (result.sent) {
+		logger.info(
+			{ orgId: organizationId, category: payload.category },
+			"V1 Slack DM notification sent",
+		);
+	} else if (result.error) {
+		logger.warn({ error: result.error, orgId: organizationId }, "V1 Slack DM notification failed");
+	}
+}

@@ -246,6 +246,29 @@ export {
 	CreateAutomationScheduleInputSchema,
 } from "./automations";
 
+// Re-export notification types
+export type {
+	NotificationCategory,
+	NotificationPriority,
+	NotificationChannel,
+	NotificationStatus,
+	NotificationPayload,
+	Notification,
+	CategoryRouting,
+} from "./notifications";
+export {
+	NotificationCategorySchema,
+	NotificationPrioritySchema,
+	NotificationChannelSchema,
+	NotificationStatusSchema,
+	NotificationPayloadSchema,
+	NotificationSchema,
+	CATEGORY_ROUTING,
+	SUPPRESSION_WINDOW_MS,
+	MAX_NOTIFICATIONS_PER_WORKER_PER_HOUR,
+	IMMEDIATE_CATEGORIES,
+} from "./notifications";
+
 // Re-export V1 entity contracts
 export * from "./v1-entities";
 
