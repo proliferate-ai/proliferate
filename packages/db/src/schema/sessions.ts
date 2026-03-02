@@ -2,7 +2,7 @@
  * Sessions schema — V1 session model and session-related tables.
  *
  * Tables: sessions, session_capabilities, session_skills, session_messages,
- *         session_acl, session_user_state, session_pull_requests
+ *         session_events, session_acl, session_user_state, session_pull_requests
  */
 
 import { sql } from "drizzle-orm";
@@ -258,6 +258,7 @@ export const sessionsRelations = relations(sessions, ({ one, many }) => ({
 	capabilities: many(sessionCapabilities),
 	skills: many(sessionSkills),
 	messages: many(sessionMessages),
+	events: many(sessionEvents),
 	acl: many(sessionAcl),
 	userStates: many(sessionUserState),
 	pullRequests: many(sessionPullRequests),
@@ -408,6 +409,43 @@ export const sessionMessages = pgTable(
 export const sessionMessagesRelations = relations(sessionMessages, ({ one }) => ({
 	session: one(sessions, {
 		fields: [sessionMessages.sessionId],
+		references: [sessions.id],
+	}),
+}));
+
+// ============================================
+// Session Events
+// ============================================
+
+export const sessionEvents = pgTable(
+	"session_events",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		sessionId: uuid("session_id")
+			.notNull()
+			.references(() => sessions.id, { onDelete: "cascade" }),
+
+		// Event type (required lifecycle event log)
+		eventType: text("event_type").notNull(),
+
+		// Event payload
+		payloadJson: jsonb("payload_json"),
+
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_session_events_session").on(table.sessionId),
+		index("idx_session_events_type").on(table.eventType),
+		check(
+			"session_events_type_check",
+			sql`event_type = ANY (ARRAY['session_started'::text, 'session_paused'::text, 'session_resumed'::text, 'session_completed'::text, 'session_failed'::text, 'session_cancelled'::text, 'session_outcome_persisted'::text])`,
+		),
+	],
+);
+
+export const sessionEventsRelations = relations(sessionEvents, ({ one }) => ({
+	session: one(sessions, {
+		fields: [sessionEvents.sessionId],
 		references: [sessions.id],
 	}),
 }));

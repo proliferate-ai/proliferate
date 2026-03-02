@@ -10,6 +10,7 @@ import {
 	SESSION_MESSAGE_DIRECTIONS,
 	SESSION_OPERATOR_STATUSES,
 	SESSION_RUNTIME_STATUSES,
+	V1_ERROR_CODES,
 	WAKE_EVENT_SOURCES,
 	WAKE_EVENT_STATUSES,
 	WORKER_RUN_STATUSES,
@@ -20,9 +21,11 @@ import {
 	isTerminalSessionRuntimeStatus,
 	isTerminalWakeEventStatus,
 	isTerminalWorkerRunStatus,
+	isV1ErrorCode,
 	isValidActionInvocationTransition,
 	isValidRepoBaselineTransition,
 	isValidResumeIntentTransition,
+	isValidSessionOperatorTransition,
 	isValidSessionRuntimeTransition,
 	isValidWakeEventTransition,
 	isValidWorkerRunTransition,
@@ -236,6 +239,22 @@ describe("Session operator status", () => {
 			"done",
 		]);
 	});
+
+	it("allows active -> waiting_for_approval", () => {
+		expect(isValidSessionOperatorTransition("active", "waiting_for_approval")).toBe(true);
+	});
+
+	it("allows waiting_for_approval -> active", () => {
+		expect(isValidSessionOperatorTransition("waiting_for_approval", "active")).toBe(true);
+	});
+
+	it("allows active -> done", () => {
+		expect(isValidSessionOperatorTransition("active", "done")).toBe(true);
+	});
+
+	it("rejects done -> active (terminal)", () => {
+		expect(isValidSessionOperatorTransition("done", "active")).toBe(false);
+	});
 });
 
 // ============================================
@@ -330,6 +349,33 @@ describe("Action invocation status machine", () => {
 
 	it("rejects completed -> anything (terminal)", () => {
 		expect(isValidActionInvocationTransition("completed", "pending")).toBe(false);
+	});
+});
+
+// ============================================
+// Canonical Error Taxonomy
+// ============================================
+
+describe("V1 error taxonomy", () => {
+	it("contains the minimum canonical error codes", () => {
+		expect(V1_ERROR_CODES).toEqual([
+			"CAPABILITY_NOT_VISIBLE",
+			"POLICY_DENIED",
+			"APPROVAL_EXPIRED",
+			"INTEGRATION_REVOKED",
+			"CREDENTIAL_MISSING",
+			"CONNECTOR_DISABLED",
+			"SANDBOX_RESUME_FAILED",
+			"SANDBOX_LOST",
+			"BASELINE_STALE",
+			"BUDGET_EXHAUSTED",
+		]);
+	});
+
+	it("validates known/unknown error codes", () => {
+		expect(isV1ErrorCode("SANDBOX_LOST")).toBe(true);
+		expect(isV1ErrorCode("BUDGET_EXHAUSTED")).toBe(true);
+		expect(isV1ErrorCode("NOT_A_REAL_CODE")).toBe(false);
 	});
 });
 

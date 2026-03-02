@@ -171,6 +171,21 @@ export const SESSION_OPERATOR_STATUSES = [
 ] as const;
 export type SessionOperatorStatus = (typeof SESSION_OPERATOR_STATUSES)[number];
 
+const SESSION_OPERATOR_TRANSITIONS: Record<string, readonly SessionOperatorStatus[]> = {
+	active: ["waiting_for_approval", "needs_input", "ready_for_review", "errored", "done"],
+	waiting_for_approval: ["active", "needs_input", "ready_for_review", "errored", "done"],
+	needs_input: ["active", "waiting_for_approval", "ready_for_review", "errored", "done"],
+	ready_for_review: ["active", "waiting_for_approval", "needs_input", "errored", "done"],
+	errored: ["active", "done"],
+};
+
+export function isValidSessionOperatorTransition(
+	from: SessionOperatorStatus,
+	to: SessionOperatorStatus,
+): boolean {
+	return SESSION_OPERATOR_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
 // ============================================
 // Session Message Direction
 // ============================================
@@ -342,3 +357,25 @@ export type WorkerRunEventType = (typeof WORKER_RUN_EVENT_TYPES)[number];
 
 export const PULL_REQUEST_STATES = ["open", "closed", "merged", "draft"] as const;
 export type PullRequestState = (typeof PULL_REQUEST_STATES)[number];
+
+// ============================================
+// Canonical Error Taxonomy (Minimum Set)
+// ============================================
+
+export const V1_ERROR_CODES = [
+	"CAPABILITY_NOT_VISIBLE",
+	"POLICY_DENIED",
+	"APPROVAL_EXPIRED",
+	"INTEGRATION_REVOKED",
+	"CREDENTIAL_MISSING",
+	"CONNECTOR_DISABLED",
+	"SANDBOX_RESUME_FAILED",
+	"SANDBOX_LOST",
+	"BASELINE_STALE",
+	"BUDGET_EXHAUSTED",
+] as const;
+export type V1ErrorCode = (typeof V1_ERROR_CODES)[number];
+
+export function isV1ErrorCode(code: string): code is V1ErrorCode {
+	return (V1_ERROR_CODES as readonly string[]).includes(code);
+}

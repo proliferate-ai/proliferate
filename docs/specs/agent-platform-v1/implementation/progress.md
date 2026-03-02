@@ -30,6 +30,9 @@
   - Updated queued wake ordering to honor canonical priority (`manual_message > manual > webhook > tick`) and FIFO behavior within a priority class.
   - Added transactional `capabilitiesVersion` increments on `session_capabilities` and `session_skills` upserts.
   - Switched V1 session-message helper signatures to canonical shared contract types (`SessionMessageDirection`, `SessionMessageDeliveryState`).
+  - Added canonical `session_events` table contract (schema + relations + migration `0046_mixed_maestro.sql`) with required lifecycle event-type check.
+  - Added `isValidSessionOperatorTransition` contract helper and expanded operator-status state-machine tests.
+  - Added canonical V1 error taxonomy exports (`V1_ERROR_CODES`, `isV1ErrorCode`) with contract tests.
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Process CI/human/Greptile feedback.
