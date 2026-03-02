@@ -15,6 +15,7 @@ import { createHeartbeatRouter } from "./heartbeat";
 import infoRouter from "./info";
 import messageRouter from "./message";
 import { createSessionsRouter } from "./sessions";
+import { createSourceRouter } from "./source";
 import { createToolsRouter } from "./tools";
 import { createVerificationMediaRouter } from "./verification-media";
 
@@ -40,6 +41,9 @@ export function createProliferateHttpRoutes(hubManager: HubManager, env: Gateway
 
 	// Actions routes — don't require sandbox running (DB + external API only)
 	router.use("/:proliferateSessionId/actions", createActionsRouter(env, hubManager));
+
+	// Source read routes — don't require sandbox running (DB + external API only)
+	router.use("/:proliferateSessionId/source", createSourceRouter(env));
 
 	// Tool callback routes — sandbox calls these synchronously during tool execution
 	router.use("/:proliferateSessionId/tools", createToolsRouter(env, hubManager));

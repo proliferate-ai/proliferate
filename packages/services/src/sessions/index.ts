@@ -65,4 +65,7 @@ export {
 	updateWhereSandboxIdMatches,
 	listRunningSessionIds,
 	flushTelemetry,
+	upsertSessionCapability,
+	listSessionCapabilities,
+	type SessionCapabilityRow,
 } from "./db";
