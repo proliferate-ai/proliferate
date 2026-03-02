@@ -19,8 +19,8 @@ import type {
 	Message,
 	SandboxProviderType,
 	ServerMessage,
-	SessionRuntimeStatus,
 	SessionEventMessage,
+	SessionRuntimeStatus,
 	SnapshotResultMessage,
 } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";

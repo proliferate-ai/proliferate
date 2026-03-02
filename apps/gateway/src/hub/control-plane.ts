@@ -3,9 +3,7 @@ import type { SessionRecord } from "../lib/session-store";
 
 export type ControlPlaneSnapshotPayload = ControlPlaneSnapshotMessage["payload"];
 
-export function buildInitConfig(
-	_previewUrl: string | null,
-): undefined {
+export function buildInitConfig(_previewUrl: string | null): undefined {
 	return undefined;
 }
 

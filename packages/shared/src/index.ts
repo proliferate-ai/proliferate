@@ -1,11 +1,11 @@
 // Message types for Client <-> Durable Object WebSocket communication
 
-import type { AutoStartOutputEntry, ConfigurationServiceCommand } from "./sandbox-provider";
 import type {
 	SessionOperatorStatus,
 	SessionRuntimeStatus,
 	SessionVisibility,
 } from "./contracts/v1-entities";
+import type { AutoStartOutputEntry, ConfigurationServiceCommand } from "./sandbox-provider";
 
 // Client source - where the message originated from
 export type ClientSource = "slack" | "web" | "api" | "cli" | "automation";
