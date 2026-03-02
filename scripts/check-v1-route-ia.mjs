@@ -28,6 +28,7 @@ const requiredRouteFiles = [
 ];
 
 const sidebarPath = "apps/web/src/components/dashboard/sidebar.tsx";
+const commandSearchPath = "apps/web/src/components/dashboard/command-search.tsx";
 
 const requiredPrimaryTargets = [
 	"/",
@@ -45,7 +46,7 @@ const bannedPrimaryTargets = [
 	"/dashboard/repos",
 ];
 
-const rootMustNotRedirectToSessionsPattern = /redirect\(\s*["']\/sessions["']\s*\)/;
+const rootCanonicalRedirectPattern = /redirect\(\s*["']\/dashboard["']\s*\)/;
 const canonicalRouteMustNotRedirectToLegacyPattern =
 	/redirect\(\s*["']\/dashboard(?:\/[^"']*)?["']\s*\)/;
 
@@ -90,8 +91,8 @@ async function main() {
 	const rootPagePath = "apps/web/src/app/page.tsx";
 	if (await fileExists(rootPagePath)) {
 		const rootPage = await fs.readFile(path.join(workspaceRoot, rootPagePath), "utf8");
-		if (rootMustNotRedirectToSessionsPattern.test(rootPage)) {
-			failures.push("Root route '/' must not redirect to '/sessions'.");
+		if (!rootCanonicalRedirectPattern.test(rootPage)) {
+			failures.push("Root route '/' must redirect to '/dashboard' (canonical composer route).");
 		}
 	}
 
@@ -110,6 +111,7 @@ async function main() {
 		}
 	}
 
+	// Sidebar: check both required and banned targets (primary nav)
 	let sidebarTargets = new Set();
 	if (await fileExists(sidebarPath)) {
 		const sidebar = await fs.readFile(path.join(workspaceRoot, sidebarPath), "utf8");
@@ -125,6 +127,18 @@ async function main() {
 	for (const target of bannedPrimaryTargets) {
 		if (sidebarTargets.has(target)) {
 			failures.push(`Sidebar still references legacy primary target: ${target}`);
+		}
+	}
+
+	// Command search: check banned targets only (supplementary nav surface)
+	if (await fileExists(commandSearchPath)) {
+		const commandSearch = await fs.readFile(path.join(workspaceRoot, commandSearchPath), "utf8");
+		const commandSearchTargets = extractSidebarRoutes(commandSearch);
+
+		for (const target of bannedPrimaryTargets) {
+			if (commandSearchTargets.has(target)) {
+				failures.push(`Command search still references legacy primary target: ${target}`);
+			}
 		}
 	}
 

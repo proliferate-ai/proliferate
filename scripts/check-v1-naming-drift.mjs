@@ -75,29 +75,45 @@ function lineFromIndex(content, index) {
 
 function shouldIgnoreStringLiteral(raw) {
 	const value = raw.trim();
-	if (!value || value.includes("${")) {
+	if (!value) {
 		return true;
 	}
 	return ignoreStringPatterns.some((pattern) => pattern.test(value));
+}
+
+/**
+ * Extract static segments from a template literal, splitting on `${...}` expressions.
+ * For plain strings (no interpolation), returns the full string as a single segment.
+ */
+function staticSegments(literalContent) {
+	if (!literalContent.includes("${")) {
+		return [literalContent];
+	}
+	return literalContent.split(/\$\{[^}]*\}/g).filter(Boolean);
 }
 
 function collectTermFindings(content, file) {
 	const findings = [];
 	for (const literalMatch of content.matchAll(stringLiteralPattern)) {
 		const literalContent = literalMatch[2] ?? "";
-		if (shouldIgnoreStringLiteral(literalContent)) {
-			continue;
-		}
+		const segments = staticSegments(literalContent);
 
-		for (const match of literalContent.matchAll(forbiddenPattern)) {
-			const literalStart = literalMatch.index ?? 0;
-			const relativeOffset = match.index ?? 0;
-			const absoluteIndex = literalStart + relativeOffset;
-			findings.push({
-				file,
-				line: lineFromIndex(content, absoluteIndex),
-				snippet: match[0],
-			});
+		for (const segment of segments) {
+			if (shouldIgnoreStringLiteral(segment)) {
+				continue;
+			}
+
+			for (const match of segment.matchAll(forbiddenPattern)) {
+				const literalStart = literalMatch.index ?? 0;
+				const segmentOffset = literalContent.indexOf(segment);
+				const relativeOffset = segmentOffset + (match.index ?? 0);
+				const absoluteIndex = literalStart + relativeOffset;
+				findings.push({
+					file,
+					line: lineFromIndex(content, absoluteIndex),
+					snippet: match[0],
+				});
+			}
 		}
 	}
 	return findings;
