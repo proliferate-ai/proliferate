@@ -1,0 +1,31 @@
+{
+	"name": "@proliferate/sandbox-daemon",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./src/index.ts",
+	"types": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"bin": {
+		"sandbox-daemon": "./dist/daemon.cjs"
+	},
+	"scripts": {
+		"build": "tsc",
+		"bundle": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/daemon.cjs --banner:js='#!/usr/bin/env node' --external:pino-pretty && chmod +x dist/daemon.cjs",
+		"dev": "tsc --watch",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@proliferate/logger": "workspace:*",
+		"@proliferate/shared": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/node": "^25.1.0",
+		"esbuild": "^0.27.3",
+		"typescript": "^5.3.3",
+		"vitest": "^4.0.18"
+	}
+}
