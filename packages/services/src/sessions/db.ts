@@ -1268,7 +1268,7 @@ export async function enqueueSessionMessage(
 				.values(values)
 				.onConflictDoNothing({
 					target: [sessionMessages.sessionId, sessionMessages.dedupeKey],
-					targetWhere: isNotNull(sessionMessages.dedupeKey),
+					where: isNotNull(sessionMessages.dedupeKey),
 				})
 				.returning()
 		: await db.insert(sessionMessages).values(values).returning();
