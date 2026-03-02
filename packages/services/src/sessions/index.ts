@@ -6,6 +6,21 @@ export * from "./service";
 export * from "./mapper";
 export * from "./sandbox-env";
 export * from "./generate-title";
+// K-phase DB helpers (lifecycle, ACL, archive) — defined in v1-db.ts
+export {
+	type CreateSessionEventInput,
+	updateLastVisibleUpdateAt,
+	updateOperatorStatus,
+	createSessionEvent,
+	listSessionEvents,
+	getSessionAclRole,
+	grantSessionAcl,
+	archiveSession,
+	unarchiveSession,
+	softDeleteSession,
+	updateSessionVisibility,
+} from "./v1-db";
+
 export * from "./v1-service";
 
 // DB row types (from Drizzle schema)

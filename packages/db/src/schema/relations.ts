@@ -447,6 +447,7 @@ export const sessionsRelations = relations(sessions, ({ one, many }) => ({
 	acl: many(sessionAcl),
 	userStates: many(sessionUserState),
 	pullRequests: many(sessionPullRequests),
+	events: many(sessionEvents),
 }));
 
 export const slackConversationsRelations = relations(slackConversations, ({ one }) => ({
@@ -735,6 +736,13 @@ export const sessionUserStateRelations = relations(sessionUserState, ({ one }) =
 	user: one(user, {
 		fields: [sessionUserState.userId],
 		references: [user.id],
+	}),
+}));
+
+export const sessionEventsRelations = relations(sessionEvents, ({ one }) => ({
+	session: one(sessions, {
+		fields: [sessionEvents.sessionId],
+		references: [sessions.id],
 	}),
 }));
 

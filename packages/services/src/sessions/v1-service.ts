@@ -250,3 +250,246 @@ export async function persistTerminalTaskOutcome(input: {
 		outcomePersistedAt: outcome.outcomePersistedAt ?? null,
 	};
 }
+
+// ============================================
+// K2: Session access check
+// ============================================
+
+export class SessionAccessDeniedError extends Error {
+	constructor(sessionId: string) {
+		super(`Access denied to session: ${sessionId}`);
+		this.name = "SessionAccessDeniedError";
+	}
+}
+
+/**
+ * Check if a user can access a session based on visibility + ACL.
+ * - Creator always has access.
+ * - org visibility: all org members can view.
+ * - shared visibility: explicit ACL only.
+ * - private visibility: creator + explicit ACL only.
+ *
+ * Returns the user's effective role or null if no access.
+ */
+export async function getSessionAccessRole(input: {
+	sessionId: string;
+	organizationId: string;
+	userId: string;
+}): Promise<string | null> {
+	const session = await v1Db.findSessionById(input.sessionId, input.organizationId);
+	if (!session) {
+		return null;
+	}
+
+	// Creator always has full access
+	if (session.createdBy === input.userId) {
+		return "owner";
+	}
+
+	// Check explicit ACL
+	const aclRole = await v1Db.getSessionAclRole(input.sessionId, input.userId);
+	if (aclRole) {
+		return aclRole;
+	}
+
+	// org visibility: all org members get viewer-only
+	if (session.visibility === "org") {
+		return "viewer";
+	}
+
+	// private/shared with no explicit ACL: no access
+	return null;
+}
+
+/**
+ * Assert that a user can access a session. Throws if denied.
+ */
+export async function assertSessionAccess(input: {
+	sessionId: string;
+	organizationId: string;
+	userId: string;
+	requiredRole?: string;
+}): Promise<string> {
+	const role = await getSessionAccessRole({
+		sessionId: input.sessionId,
+		organizationId: input.organizationId,
+		userId: input.userId,
+	});
+	if (!role) {
+		throw new SessionAccessDeniedError(input.sessionId);
+	}
+	if (input.requiredRole) {
+		const roleHierarchy: Record<string, number> = {
+			viewer: 1,
+			editor: 2,
+			reviewer: 3,
+			owner: 4,
+		};
+		if ((roleHierarchy[role] ?? 0) < (roleHierarchy[input.requiredRole] ?? 0)) {
+			throw new SessionAccessDeniedError(input.sessionId);
+		}
+	}
+	return role;
+}
+
+// ============================================
+// K3: Mark session viewed
+// ============================================
+
+export async function markSessionViewed(input: {
+	sessionId: string;
+	userId: string;
+}): Promise<void> {
+	await v1Db.upsertSessionUserState({
+		sessionId: input.sessionId,
+		userId: input.userId,
+		lastViewedAt: new Date(),
+	});
+}
+
+// ============================================
+// K4: Operator status projection
+// ============================================
+
+export async function updateSessionOperatorStatus(input: {
+	sessionId: string;
+	organizationId: string;
+	operatorStatus: string;
+}): Promise<void> {
+	await v1Db.updateOperatorStatus(input.sessionId, input.operatorStatus);
+}
+
+// ============================================
+// K5: Session lifecycle events
+// ============================================
+
+export async function recordSessionEvent(input: {
+	sessionId: string;
+	eventType: string;
+	actorUserId?: string | null;
+	payloadJson?: unknown;
+}): Promise<void> {
+	await v1Db.createSessionEvent({
+		sessionId: input.sessionId,
+		eventType: input.eventType,
+		actorUserId: input.actorUserId,
+		payloadJson: input.payloadJson,
+	});
+}
+
+export async function getSessionEvents(sessionId: string) {
+	return v1Db.listSessionEvents(sessionId);
+}
+
+// ============================================
+// K6: Archive and delete
+// ============================================
+
+export async function archiveSession(input: {
+	sessionId: string;
+	organizationId: string;
+	userId: string;
+}): Promise<void> {
+	const session = await v1Db.findSessionById(input.sessionId, input.organizationId);
+	if (!session) {
+		throw new SessionNotFoundError(input.sessionId);
+	}
+	await v1Db.archiveSession(input.sessionId, input.userId);
+}
+
+export async function unarchiveSession(input: {
+	sessionId: string;
+	organizationId: string;
+}): Promise<void> {
+	const session = await v1Db.findSessionById(input.sessionId, input.organizationId);
+	if (!session) {
+		throw new SessionNotFoundError(input.sessionId);
+	}
+	await v1Db.unarchiveSession(input.sessionId);
+}
+
+export async function softDeleteSession(input: {
+	sessionId: string;
+	organizationId: string;
+	userId: string;
+}): Promise<void> {
+	const session = await v1Db.findSessionById(input.sessionId, input.organizationId);
+	if (!session) {
+		throw new SessionNotFoundError(input.sessionId);
+	}
+	await v1Db.softDeleteSession(input.sessionId, input.userId);
+}
+
+export async function archiveSessionForUser(input: {
+	sessionId: string;
+	userId: string;
+}): Promise<void> {
+	await v1Db.archiveSessionForUser(input);
+}
+
+export async function unarchiveSessionForUser(input: {
+	sessionId: string;
+	userId: string;
+}): Promise<void> {
+	await v1Db.unarchiveSessionForUser(input);
+}
+
+// ============================================
+// K7: Follow-up — send back to coworker
+// ============================================
+
+export async function sendBackToCoworker(input: {
+	sessionId: string;
+	organizationId: string;
+	userId: string;
+	workerId: string;
+	workerRunId: string;
+	messageType: string;
+	payloadJson: unknown;
+	dedupeKey?: string;
+}): Promise<SendTaskFollowupResult> {
+	const source = await v1Db.findSessionById(input.sessionId, input.organizationId);
+	if (!source) {
+		throw new SessionNotFoundError(input.sessionId);
+	}
+	if (source.kind !== "task") {
+		throw new SessionKindError("task", source.kind);
+	}
+	if (!isTerminalRuntimeStatus(source.runtimeStatus ?? "starting")) {
+		throw new SessionRuntimeStatusError(
+			`Session ${input.sessionId} is not terminal — cannot send back to coworker`,
+		);
+	}
+	if (!source.repoId || !source.repoBaselineId || !source.repoBaselineTargetId) {
+		throw new SessionRuntimeStatusError(
+			"Send-back-to-coworker requires repo + baseline linkage on the source session",
+		);
+	}
+
+	const nextTask = await createUnifiedTaskSession({
+		organizationId: input.organizationId,
+		createdBy: input.userId,
+		repoId: source.repoId,
+		repoBaselineId: source.repoBaselineId,
+		repoBaselineTargetId: source.repoBaselineTargetId,
+		visibility: (source.visibility as "private" | "shared" | "org") ?? "private",
+		continuedFromSessionId: source.id,
+		workerId: input.workerId,
+		workerRunId: input.workerRunId,
+	});
+
+	const nextSessionMessage = await v1Db.enqueueSessionMessage({
+		sessionId: nextTask.id,
+		direction: "user_to_task",
+		messageType: input.messageType,
+		payloadJson: input.payloadJson,
+		dedupeKey: input.dedupeKey,
+		senderUserId: input.userId,
+	});
+
+	return {
+		deliverySessionId: nextTask.id,
+		mode: "continuation",
+		sessionMessage: nextSessionMessage,
+	};
+}

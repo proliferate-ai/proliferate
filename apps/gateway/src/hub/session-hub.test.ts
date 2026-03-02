@@ -2,16 +2,26 @@ import { sessions } from "@proliferate/services";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as leases from "../lib/session-leases";
 import { SessionHub } from "./session-hub";
+vi.mock("./session-lifecycle", () => ({
+	persistTerminalOutcome: vi.fn(async () => undefined),
+	projectOperatorStatus: vi.fn(async () => "active"),
+	recordLifecycleEvent: vi.fn(async () => undefined),
+	touchLastVisibleUpdate: vi.fn(async () => undefined),
+}));
 
 type HubStub = {
 	sessionId: string;
 	lifecycleStartTime: number;
 	lastKnownAgentIdleAt: number | null;
-	runtime: { ensureRuntimeReady: ReturnType<typeof vi.fn> };
+	runtime: {
+		ensureRuntimeReady: ReturnType<typeof vi.fn>;
+		getContext: ReturnType<typeof vi.fn>;
+	};
 	telemetry: { startRunning: ReturnType<typeof vi.fn> };
 	startLeaseRenewal: ReturnType<typeof vi.fn>;
 	stopLeaseRenewal: ReturnType<typeof vi.fn>;
 	startMigrationMonitor: ReturnType<typeof vi.fn>;
+	logger: { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn> };
 };
 
 type EnsureRuntimeReadyMethod = (
@@ -89,6 +99,9 @@ function createHubStub(): HubStub {
 		lastKnownAgentIdleAt: Date.now(),
 		runtime: {
 			ensureRuntimeReady: vi.fn(async () => undefined),
+			getContext: vi.fn(() => ({
+				session: { organization_id: "org-1" },
+			})),
 		},
 		telemetry: {
 			startRunning: vi.fn(() => undefined),
@@ -96,6 +109,10 @@ function createHubStub(): HubStub {
 		startLeaseRenewal: vi.fn(async () => undefined),
 		stopLeaseRenewal: vi.fn(() => undefined),
 		startMigrationMonitor: vi.fn(() => undefined),
+		logger: {
+			info: vi.fn(),
+			warn: vi.fn(),
+		},
 	};
 }
 

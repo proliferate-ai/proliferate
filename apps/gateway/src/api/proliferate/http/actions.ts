@@ -35,6 +35,7 @@ import {
 import type { ConnectorConfig } from "@proliferate/shared";
 import { Router, type Router as RouterType } from "express";
 import type { HubManager } from "../../../hub";
+import { projectOperatorStatus, touchLastVisibleUpdate } from "../../../hub/session-lifecycle";
 import type { GatewayEnv } from "../../../lib/env";
 import { ApiError } from "../../../middleware";
 
@@ -623,6 +624,17 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 					},
 				});
 
+				// K4: Project operator status to waiting_for_approval
+				void projectOperatorStatus({
+					sessionId,
+					organizationId: session.organizationId,
+					runtimeStatus: "running",
+					hasPendingApproval: true,
+					logger,
+				});
+				// K3: Touch lastVisibleUpdateAt on approval request
+				void touchLastVisibleUpdate(sessionId, logger);
+
 				res.status(202).json({
 					invocation: actions.toActionInvocation(result.invocation),
 					message: "Action requires approval",
@@ -743,6 +755,17 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 					invocation: actions.toActionInvocation(execution.invocation),
 					result: execution.result,
 				});
+
+				// K3: Touch lastVisibleUpdateAt after action approval completes
+				void touchLastVisibleUpdate(invocation.sessionId, logger);
+				// K4: Reset operator status to active after approval resolution
+				void projectOperatorStatus({
+					sessionId: invocation.sessionId,
+					organizationId: session.organizationId,
+					runtimeStatus: "running",
+					hasPendingApproval: false,
+					logger,
+				});
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err);
 
@@ -754,6 +777,17 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 						status: "failed",
 						error: errorMsg,
 					},
+				});
+
+				// K3: Touch lastVisibleUpdateAt even on failure
+				void touchLastVisibleUpdate(invocation.sessionId, logger);
+				// K4: Reset operator status to active after failed approval
+				void projectOperatorStatus({
+					sessionId: invocation.sessionId,
+					organizationId: session.organizationId,
+					runtimeStatus: "running",
+					hasPendingApproval: false,
+					logger,
 				});
 
 				logger.error({ err, invocationId }, "Action execution failed after approval");
@@ -808,6 +842,18 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 					status: "denied",
 					approvedBy: auth.userId,
 				},
+			});
+
+			// K3: Touch lastVisibleUpdateAt after action denial
+			void touchLastVisibleUpdate(invocation.sessionId, logger);
+			// K4: Reset operator status to active after denial
+			const denyOrgId = session.organizationId;
+			void projectOperatorStatus({
+				sessionId: invocation.sessionId,
+				organizationId: denyOrgId,
+				runtimeStatus: "running",
+				hasPendingApproval: false,
+				logger,
 			});
 
 			res.json({ invocation: actions.toActionInvocation(invocation) });

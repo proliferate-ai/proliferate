@@ -2566,6 +2566,41 @@ export const sessionUserState = pgTable(
 );
 
 // ============================================
+// V1: Session Events Lifecycle Log
+// ============================================
+
+export const sessionEvents = pgTable(
+	"session_events",
+	{
+		id: uuid().defaultRandom().primaryKey().notNull(),
+		sessionId: uuid("session_id").notNull(),
+		eventType: text("event_type").notNull(),
+		actorUserId: text("actor_user_id"),
+		payloadJson: jsonb("payload_json"),
+		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+	},
+	(table) => [
+		index("idx_session_events_session").using(
+			"btree",
+			table.sessionId.asc().nullsLast().op("uuid_ops"),
+		),
+		index("idx_session_events_type").using(
+			"btree",
+			table.eventType.asc().nullsLast().op("text_ops"),
+		),
+		check(
+			"session_events_type_check",
+			sql`event_type = ANY (ARRAY['session_started'::text, 'session_paused'::text, 'session_resumed'::text, 'session_completed'::text, 'session_failed'::text, 'session_cancelled'::text, 'session_outcome_persisted'::text])`,
+		),
+		foreignKey({
+			columns: [table.sessionId],
+			foreignColumns: [sessions.id],
+			name: "session_events_session_id_fkey",
+		}).onDelete("cascade"),
+	],
+);
+
+// ============================================
 // V1: Session Pull Requests
 // ============================================
 

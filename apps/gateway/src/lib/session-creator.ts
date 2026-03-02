@@ -196,6 +196,11 @@ export async function createSession(
 	// Snapshot ID comes from the caller (configuration's snapshotId)
 	const snapshotId = inputSnapshotId ?? null;
 
+	// K2: Determine visibility and kind based on session/client type
+	const visibility: "private" | "org" =
+		sessionType === "setup" ? "org" : clientType === "automation" ? "org" : "private";
+	const kind: "task" | "setup" = sessionType === "setup" ? "setup" : "task";
+
 	// Create session record via services (with atomic concurrent admission guard)
 	try {
 		const dbStartMs = Date.now();
@@ -218,6 +223,8 @@ export async function createSession(
 			automationId,
 			triggerId,
 			triggerEventId,
+			visibility,
+			kind,
 		};
 
 		const planLimits = await billing.getOrgPlanLimits(organizationId);

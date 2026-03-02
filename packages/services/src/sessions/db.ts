@@ -104,6 +104,26 @@ export async function listByOrganization(
 		conditions.push(eq(sessions.createdBy, filters.createdBy));
 	}
 
+	// K6: Exclude soft-deleted sessions
+	conditions.push(isNull(sessions.deletedAt));
+
+	// K6: Exclude archived sessions by default
+	if (!filters?.includeArchived) {
+		conditions.push(isNull(sessions.archivedAt));
+	}
+
+	// K2: Visibility + ACL filtering
+	if (filters?.userId) {
+		// Show sessions where: user is creator, OR visibility is 'org', OR user has explicit ACL
+		conditions.push(
+			or(
+				eq(sessions.createdBy, filters.userId),
+				eq(sessions.visibility, "org"),
+				sql`EXISTS (SELECT 1 FROM session_acl WHERE session_acl.session_id = ${sessions.id} AND session_acl.user_id = ${filters.userId})`,
+			)!,
+		);
+	}
+
 	const results = await db.query.sessions.findMany({
 		where: and(...conditions),
 		with: {
@@ -189,6 +209,8 @@ export async function create(input: CreateSessionInput): Promise<SessionRow> {
 			automationId: input.automationId ?? null,
 			triggerId: input.triggerId ?? null,
 			triggerEventId: input.triggerEventId ?? null,
+			...(input.visibility && { visibility: input.visibility }),
+			...(input.kind && { kind: input.kind }),
 		})
 		.returning();
 
@@ -251,6 +273,8 @@ export async function createWithAdmissionGuard(
 			automationId: input.automationId ?? null,
 			triggerId: input.triggerId ?? null,
 			triggerEventId: input.triggerEventId ?? null,
+			...(input.visibility && { visibility: input.visibility }),
+			...(input.kind && { kind: input.kind }),
 		});
 
 		return { created: true };
@@ -486,6 +510,8 @@ export async function createSetupSession(input: CreateSetupSessionInput): Promis
 		status: "starting",
 		initialPrompt: input.initialPrompt,
 		source: "managed-configuration",
+		visibility: "org",
+		kind: "setup",
 	});
 }
 
@@ -525,6 +551,8 @@ export async function createSetupSessionWithAdmissionGuard(
 			status: "starting",
 			initialPrompt: input.initialPrompt,
 			source: "managed-configuration",
+			visibility: "org",
+			kind: "setup",
 		});
 
 		return { created: true };

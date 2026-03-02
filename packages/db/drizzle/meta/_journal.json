@@ -326,6 +326,13 @@
       "when": 1772454453000,
       "tag": "0042_drop_v0_legacy_telemetry_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1772490000000,
+      "tag": "0043_add_session_events_table",
+      "breakpoints": true
     }
   ]
 }

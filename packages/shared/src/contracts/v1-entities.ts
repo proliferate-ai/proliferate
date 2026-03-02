@@ -379,3 +379,43 @@ export type V1ErrorCode = (typeof V1_ERROR_CODES)[number];
 export function isV1ErrorCode(code: string): code is V1ErrorCode {
 	return (V1_ERROR_CODES as readonly string[]).includes(code);
 }
+
+// ============================================
+// Session Event Types
+// ============================================
+
+export const SESSION_EVENT_TYPES = [
+	"session_created",
+	"session_started",
+	"session_paused",
+	"session_resumed",
+	"session_completed",
+	"session_failed",
+	"session_cancelled",
+	"session_outcome_persisted",
+] as const;
+export type SessionEventType = (typeof SESSION_EVENT_TYPES)[number];
+
+// ============================================
+// Structured Terminal Outcome
+// ============================================
+
+export interface SessionOutcome {
+	summary: string | null;
+	changedFileCount: number;
+	topChangedFiles: string[];
+	testSummary: {
+		ran: number;
+		passed: number;
+		failed: number;
+		skipped: number;
+	} | null;
+	pullRequest: {
+		url: string;
+		number: number;
+		state: PullRequestState;
+		branch: string;
+	} | null;
+	errorCode: string | null;
+	errorMessage: string | null;
+}

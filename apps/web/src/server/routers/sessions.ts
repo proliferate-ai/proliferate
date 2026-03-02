@@ -52,6 +52,8 @@ export const sessionsRouter = {
 				excludeCli: input?.excludeCli,
 				excludeAutomation: input?.excludeAutomation,
 				createdBy: input?.createdBy,
+				// K2: Pass userId for visibility + ACL filtering
+				userId: context.user.id,
 			});
 			return { sessions: sessionsList };
 		}),
@@ -243,6 +245,98 @@ export const sessionsRouter = {
 				envVars: input.envVars,
 				saveToConfiguration: input.saveToConfiguration,
 			});
+		}),
+
+	/**
+	 * Mark a session as viewed by the current user (K3: unread tracking).
+	 */
+	markViewed: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ viewed: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			await sessions.markSessionViewed({
+				sessionId: input.id,
+				userId: context.user.id,
+			});
+			return { viewed: true };
+		}),
+
+	/**
+	 * Archive a session (K6: soft-state archive).
+	 */
+	archive: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ archived: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			await sessions.archiveSession({
+				sessionId: input.id,
+				organizationId: context.orgId,
+				userId: context.user.id,
+			});
+			return { archived: true };
+		}),
+
+	/**
+	 * Unarchive a session (K6).
+	 */
+	unarchive: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ unarchived: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			await sessions.unarchiveSession({
+				sessionId: input.id,
+				organizationId: context.orgId,
+			});
+			return { unarchived: true };
+		}),
+
+	/**
+	 * Soft-delete a session (K6).
+	 */
+	softDelete: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ deleted: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			await sessions.softDeleteSession({
+				sessionId: input.id,
+				organizationId: context.orgId,
+				userId: context.user.id,
+			});
+			return { deleted: true };
+		}),
+
+	/**
+	 * Get session lifecycle events (K5).
+	 */
+	events: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(
+			z.object({
+				events: z.array(
+					z.object({
+						id: z.string(),
+						eventType: z.string(),
+						actorUserId: z.string().nullable(),
+						createdAt: z.coerce.date(),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			// Verify session belongs to org
+			const session = await sessions.getSession(input.id, context.orgId);
+			if (!session) {
+				throw new ORPCError("NOT_FOUND", { message: "Session not found" });
+			}
+			const eventList = await sessions.getSessionEvents(input.id);
+			return {
+				events: eventList.map((e) => ({
+					id: e.id,
+					eventType: e.eventType,
+					actorUserId: e.actorUserId,
+					createdAt: e.createdAt,
+				})),
+			};
 		}),
 
 	/**

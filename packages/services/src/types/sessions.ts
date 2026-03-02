@@ -31,6 +31,8 @@ export interface CreateSessionInput {
 	automationId?: string | null;
 	triggerId?: string | null;
 	triggerEventId?: string | null;
+	visibility?: "private" | "shared" | "org";
+	kind?: "manager" | "task" | "setup";
 }
 
 export interface UpdateSessionInput {
@@ -70,6 +72,8 @@ export interface ListSessionsFilters {
 	excludeCli?: boolean;
 	excludeAutomation?: boolean;
 	createdBy?: string;
+	userId?: string;
+	includeArchived?: boolean;
 }
 
 // ============================================
@@ -85,6 +89,8 @@ export interface ListSessionsOptions {
 	excludeCli?: boolean;
 	excludeAutomation?: boolean;
 	createdBy?: string;
+	userId?: string;
+	includeArchived?: boolean;
 }
 
 export interface SessionStatus {

@@ -47,6 +47,8 @@ export async function listSessions(
 		excludeCli: options?.excludeCli,
 		excludeAutomation: options?.excludeAutomation,
 		createdBy: options?.createdBy,
+		userId: options?.userId,
+		includeArchived: options?.includeArchived,
 	});
 	return toSessions(rows);
 }
@@ -336,6 +338,7 @@ async function createScratchSession(input: {
 	const doUrl = `${gatewayUrl}/session/${sessionId}`;
 	reqLog.info({ sessionType }, "Creating scratch session");
 
+	// K2: Ad-hoc task sessions default to private visibility
 	await createSessionWithAdmission(orgId, {
 		id: sessionId,
 		configurationId: null,
@@ -346,6 +349,7 @@ async function createScratchSession(input: {
 		sandboxProvider: provider.type,
 		snapshotId: null,
 		initialPrompt,
+		visibility: "private",
 		...(initialPrompt ? { titleStatus: "generating" } : {}),
 		agentConfig: {
 			modelId: agentConfig.modelId,
@@ -428,6 +432,10 @@ async function createConfigurationSession(input: {
 	const doUrl = `${gatewayUrl}/session/${sessionId}`;
 	reqLog.info("Session creation started");
 
+	// K2: Visibility defaults by kind/origin — setup sessions are org-visible, ad-hoc tasks are private
+	const visibility: "private" | "org" = sessionType === "setup" ? "org" : "private";
+	const kind: "task" | "setup" = sessionType === "setup" ? "setup" : "task";
+
 	// Create session record and return immediately.
 	// Sandbox provisioning is handled by the gateway when the client connects.
 	await createSessionWithAdmission(orgId, {
@@ -440,6 +448,8 @@ async function createConfigurationSession(input: {
 		sandboxProvider: provider.type,
 		snapshotId,
 		initialPrompt,
+		visibility,
+		kind,
 		...(initialPrompt ? { titleStatus: "generating" } : {}),
 		agentConfig: {
 			modelId: agentConfig.modelId,
