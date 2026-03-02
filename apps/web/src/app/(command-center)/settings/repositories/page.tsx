@@ -199,13 +199,13 @@ function RepoRow({ repo, baseline }: { repo: Repo; baseline?: BaselineInfo }) {
 						{repo.defaultBranch || "main"}
 					</span>
 					<span className="w-24 text-center text-xs text-muted-foreground shrink-0 truncate">
-						{baseline?.version ?? "\u2014"}
+						{baseline?.version ?? "—"}
 					</span>
 					<span className="w-20 flex justify-center shrink-0">
 						{baseline ? (
 							<BaselineStatusBadge status={baseline.status} />
 						) : (
-							<span className="text-xs text-muted-foreground">\u2014</span>
+							<span className="text-xs text-muted-foreground">—</span>
 						)}
 					</span>
 					<span className="w-16 text-center text-xs text-muted-foreground shrink-0">
