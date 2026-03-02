@@ -10,6 +10,10 @@
 - Gateway-native session creation and OpenCode attach
 - Local-to-sandbox file sync semantics
 - CLI-related service/router behavior used by auth, session metadata, and GitHub selection
+- **Command mode**: Namespace commands for sandbox control-plane operations (session, manager, source, action, baseline)
+- **JSON envelope contract**: Standardized response format for all command-mode operations
+- **Exit code contract**: Differentiated exit codes mapped to error classes
+- **Auth refresh**: Env-var based token with single retry on 401
 
 ### Out of Scope
 - Gateway runtime internals after session creation (`sessions-gateway.md`)
@@ -17,14 +21,17 @@
 - Global auth internals and key revocation UX (`auth-orgs.md`)
 - Billing policy design (`billing-metering.md`)
 - Nango/provider lifecycle outside CLI-specific handoff (`integrations.md`)
+- Daemon-mediated IPC token refresh (deferred to Phase B, PR 24)
 
 ### Mental Models
 - The CLI is an orchestrator, not a platform. It coordinates existing systems and exits.
+- The CLI has two modes: **interactive** (auth → session → sync → OpenCode) and **command** (namespace commands for sandbox use).
 - The authoritative runtime path is gateway-native for session creation and attach (`@proliferate/gateway-clients`).
+- Command mode is the canonical sandbox control-plane interface. Manager tools and coding harness operations route through it.
 - Device auth is a two-phase handshake: browser authorization marks state; poll completion mints the API key.
 - `localPathHash` is device-scoped identity for a workspace, not a global repo identity.
 - Sync is intentionally one-way (local -> sandbox) and best-effort relative to session startup.
-- CLI UX is deterministic and linear: auth gate, config gate, session gate, sync, handoff to OpenCode.
+- All command-mode responses use the JSON envelope format. Interactive mode uses human-readable output (chalk/spinners).
 
 ### Things Agents Get Wrong
 - Assuming API routes are in the streaming path. They are not; real-time flows are gateway-based.
@@ -35,6 +42,8 @@
 - Assuming CLI session listings reflect gateway-created CLI sessions without drift. Legacy query filters still expect `session_type = "terminal"`.
 - Assuming sync failure is fatal. Current runtime warns and continues.
 - Assuming the CLI supports Windows. It exits early with a WSL2 recommendation.
+- Assuming command-mode output is human-readable. All command output is JSON envelope to stdout.
+- Assuming exit code 1 means error. CLI uses differentiated codes: 2=validation, 3=policy denied, 4=approval required, 5=retryable, 6=terminal.
 
 ---
 
@@ -93,6 +102,84 @@ Reference points:
 - `apps/web/src/app/api/rpc/[[...rest]]/route.ts`
 - `apps/web/src/server/routers/cli.ts`
 
+### 2.6 JSON Envelope Contract
+All command-mode responses use a standardized envelope:
+```json
+{
+  "ok": true,
+  "data": {},
+  "error": null,
+  "meta": {
+    "requestId": "uuid",
+    "sessionId": "sess_x",
+    "capabilitiesVersion": 12,
+    "cursor": null
+  }
+}
+```
+Error responses set `ok: false`, `data: null`, and `error` to a human-readable message.
+
+Reference points:
+- `packages/cli/src/lib/envelope.ts`
+
+### 2.7 Exit Code Contract
+| Code | Meaning | When |
+|------|---------|------|
+| 0 | Success | Command completed |
+| 2 | Validation | Bad arguments, invalid JSON (HTTP 400/422) |
+| 3 | Policy denied | Forbidden by policy (HTTP 403) |
+| 4 | Approval required | Action pending approval (HTTP 202) |
+| 5 | Retryable | Transient failure, safe to retry (HTTP 429/5xx) |
+| 6 | Terminal | Fatal failure, do not retry (HTTP 401 after refresh, 404) |
+
+Interactive mode preserves OpenCode child process exit code propagation.
+
+Reference points:
+- `packages/cli/src/lib/exit-codes.ts`
+
+### 2.8 Auth Refresh (Sandbox Mode)
+- CLI reads `PROLIFERATE_SESSION_TOKEN` from env at each request (not cached at module load).
+- On 401, re-reads the token from env and retries once.
+- If the retry also returns 401, exits with code 6 (`auth_expired`).
+- CLI never persists long-lived auth on disk in sandbox mode.
+- Daemon-mediated IPC refresh is deferred to Phase B (PR 24).
+
+Reference points:
+- `packages/cli/src/lib/gateway-client.ts`
+
+---
+
+## 3. File Tree
+
+```
+packages/cli/src/
+  index.ts                    # Entrypoint: command routing + interactive fallback
+  main.ts                     # Interactive flow: auth → config → session → sync → OpenCode
+  commands/
+    session.ts                # session info|status|capabilities
+    manager.ts                # manager child spawn|list|inspect|message|cancel
+    source.ts                 # source list-bindings|query|get
+    action.ts                 # action invoke|status
+    baseline.ts               # baseline info|targets
+  lib/
+    constants.ts              # CLI_VERSION, GATEWAY_URL
+    device.ts                 # Device ID generation and persistence
+    env.ts                    # CLI env adapter (apiUrl, gatewayUrl)
+    envelope.ts               # JSON envelope types and helpers
+    exit-codes.ts             # Exit code constants and HTTP status mapper
+    gateway-client.ts         # Authenticated gateway HTTP client with 401 retry
+    opencode.ts               # OpenCode binary resolution + launch
+    ssh.ts                    # SSH key generation, fingerprinting, path hashing
+    sync.ts                   # rsync-based file sync to sandbox
+  lib/__tests__/
+    envelope.test.ts          # Golden contract: envelope shape
+    exit-codes.test.ts        # Golden contract: exit code mapping
+    gateway-client.test.ts    # Golden contract: auth refresh behavior
+  state/
+    auth.ts                   # Auth persistence + device flow
+    config.ts                 # Config persistence
+```
+
 ---
 
 ## 5. Conventions & Patterns
@@ -103,23 +190,30 @@ Reference points:
 - Use `hashPrebuildPath()` for CLI workspace identity.
 - Preserve local file permission constraints (`0o700` dir, `0o600` state files).
 - Treat gateway as source of truth for session creation semantics.
+- Use the JSON envelope for all command-mode output.
+- Map HTTP errors to differentiated exit codes.
+- Read session token at request time (not module load) to support future daemon refresh.
 
-### Don’t
-- Don’t introduce alternate orchestration paths in CLI command handling.
-- Don’t route real-time/session streaming behavior through web API wrappers.
-- Don’t assume `/api/cli/*` compatibility without verifying deployed routing.
-- Don’t silently change session typing/origin semantics without updating gateway + services together.
-- Don’t duplicate OpenCode binary resolution logic in new locations.
+### Don't
+- Don't introduce alternate orchestration paths in CLI command handling.
+- Don't route real-time/session streaming behavior through web API wrappers.
+- Don't assume `/api/cli/*` compatibility without verifying deployed routing.
+- Don't silently change session typing/origin semantics without updating gateway + services together.
+- Don't duplicate OpenCode binary resolution logic in new locations (single source: `lib/opencode.ts`).
+- Don't use human-readable output (chalk, spinners) in command mode.
+- Don't cache env-var tokens at module load time.
 
 ### Error Semantics
 - Session creation errors are fatal and terminate the CLI process.
 - Sync errors are warnings and do not block OpenCode launch.
-- Token invalidation triggers state clear + re-auth path.
+- Token invalidation triggers state clear + re-auth path (interactive) or exit code 6 (command mode).
 - Duplicate SSH key registration is treated as a safe, non-fatal condition in CLI auth flow.
+- Unknown commands in namespace routing produce exit code 2 (validation).
 
 ### Reliability Semantics
 - Device polling tolerates transient network failures and continues until timeout.
-- CLI process exit code mirrors OpenCode child process exit.
+- Interactive mode: CLI process exit code mirrors OpenCode child process exit.
+- Command mode: CLI exit code maps from HTTP response status.
 - Missing SSH connectivity metadata (`sshHost`, `sshPort`) is treated as fatal for sync-enabled startup.
 
 ---
@@ -127,26 +221,29 @@ Reference points:
 ## 6. Subsystem Deep Dives (Invariants)
 
 ### 6.1 CLI Runtime Invariants
-- CLI command surface is intentionally minimal: main flow plus reset.
+- CLI has two modes: interactive (default) and command (namespace routing).
+- Namespace commands: `session`, `manager`, `source`, `action`, `baseline`.
 - Unsupported platforms fail fast before any stateful operation.
-- Unknown positional arguments do not create alternate commands; they fall through to main flow.
+- Unknown top-level commands fall through to interactive mode.
 - Main flow ordering is fixed by dependency gates: auth must resolve before session creation.
+- Command mode requires `PROLIFERATE_SESSION_TOKEN`, `PROLIFERATE_GATEWAY_URL`, and `PROLIFERATE_SESSION_ID` env vars.
 
 Evidence:
 - `packages/cli/src/index.ts`
 - `packages/cli/src/main.ts`
 
 ### 6.2 Auth & Token Invariants
-- Auth cache is optimistic but must pass gateway health check on each invocation.
-- Device auth completion must return token + user + org before local auth state is written.
-- Polling cadence is server-driven (`interval`) with hard attempt bounds in CLI.
-- Device codes are single-use from a practical perspective: completion deletes the code record.
-- SSH key bootstrap is part of post-auth readiness, but failure to register existing duplicates is non-fatal.
+- Interactive: Auth cache is optimistic but must pass gateway health check on each invocation.
+- Interactive: Device auth completion must return token + user + org before local auth state is written.
+- Interactive: Polling cadence is server-driven (`interval`) with hard attempt bounds in CLI.
+- Command mode: Token is read from `PROLIFERATE_SESSION_TOKEN` env var at each request.
+- Command mode: On 401, token is re-read from env and request is retried once.
+- Command mode: Double 401 produces `CliError` with exit code 6 and code `auth_expired`.
 
 Evidence:
 - `packages/cli/src/state/auth.ts`
-- `apps/web/src/server/routers/cli.ts` (`createDeviceCode`, `authorizeDevice`, `pollDevice`)
-- `packages/services/src/cli/service.ts`
+- `packages/cli/src/lib/gateway-client.ts`
+- `packages/cli/src/lib/__tests__/gateway-client.test.ts`
 
 ### 6.3 Configuration & Identity Invariants
 - Local config read must be side-effect free except for ensuring state directory existence.
@@ -185,16 +282,31 @@ Evidence:
 
 ### 6.6 OpenCode Handoff Invariants
 - Attach URL is generated through gateway proxy semantics and includes encoded bearer token.
-- Binary resolution must search development and installed layouts before failing.
-- OpenCode child process inherits terminal stdio and runtime-filtered environment.
+- Binary resolution is consolidated in `lib/opencode.ts` (single source of truth).
+- Binary resolution searches development path, installed path, and same-dir path before failing.
+- OpenCode child process inherits terminal stdio and process environment.
 - Parent CLI exits with the child process exit code.
 
 Evidence:
 - `packages/gateway-clients/src/clients/external/opencode.ts`
-- `packages/cli/src/agents/opencode.ts`
+- `packages/cli/src/lib/opencode.ts`
 - `packages/cli/src/main.ts`
 
-### 6.7 Web/Service CLI Surface Invariants
+### 6.7 Envelope & Exit Code Invariants
+- All command-mode output is JSON envelope to stdout.
+- Envelope always has: `ok` (boolean), `data` (payload or null), `error` (string or null), `meta` (object).
+- `meta` always has: `requestId` (UUID), `sessionId`, `capabilitiesVersion`, `cursor` (all nullable).
+- Each request generates a unique `requestId`.
+- Exit codes never use 1 (reserved for general/unhandled errors).
+- HTTP 202 maps to exit code 4 (approval required) with a success envelope.
+
+Evidence:
+- `packages/cli/src/lib/envelope.ts`
+- `packages/cli/src/lib/exit-codes.ts`
+- `packages/cli/src/lib/__tests__/envelope.test.ts`
+- `packages/cli/src/lib/__tests__/exit-codes.test.ts`
+
+### 6.8 Web/Service CLI Surface Invariants
 - Business logic for CLI metadata and auth state transitions lives in `packages/services/src/cli`.
 - Web app CLI router exposes oRPC procedures under `/api/rpc`, not standalone REST handlers for every CLI domain.
 - `/api/cli/sessions`, `/api/cli/auth/device`, `/api/cli/auth/device/poll`, and `/api/cli/ssh-keys` are standalone compatibility routes over service/oRPC logic.
@@ -218,34 +330,45 @@ Evidence:
 | `billing-metering.md` | Gateway -> Billing | `assertBillingGateForOrg` | Enforced before session creation |
 | `integrations.md` | CLI router/services -> Integrations/Nango | status/select/connect flows | GitHub connection check and selection handoff |
 | `repos-prebuilds.md` | Gateway resolver -> Config/Repo linkage | CLI config+repo linking | Device-scoped workspace to configuration mapping |
+| `actions.md` | CLI -> Gateway | `/proliferate/:sessionId/actions/invoke` | Action invocation in command mode |
 
 ### Security
 - Device code TTL and one-time completion behavior reduce replay window.
 - API keys produced by device flow are currently non-expiring.
 - SSH private key material remains local; only public key is uploaded.
 - Local auth/config/device identity files are permissioned for single-user access.
+- Command-mode tokens are read from env vars, never persisted to disk.
+- Gateway client sends Authorization header; token is never logged.
 
 ### Observability
 - Gateway and web CLI paths emit structured logs with CLI-specific context.
-- CLI process logging is user-facing (chalk/spinner UX), not centralized structured telemetry.
+- CLI process logging is user-facing (chalk/spinner UX) in interactive mode, not centralized structured telemetry.
+- Command-mode output is machine-parseable JSON envelope.
 
 ---
 
 ## 8. Acceptance Gates
 
-- [ ] `docs/specs/cli.md` reflects current runtime contracts and drift points.
-- [ ] Section 6 remains invariant-based (no imperative runbook steps).
-- [ ] Mental model + agent-error guidance is updated from source behavior.
+- [x] `docs/specs/cli.md` reflects current runtime contracts and drift points.
+- [x] Section 6 remains invariant-based (no imperative runbook steps).
+- [x] Mental model + agent-error guidance is updated from source behavior.
 - [ ] Manual sanity checks pass for: auth flow, session creation, sync warning path, OpenCode handoff.
-- [ ] Any behavior change introduced alongside this spec update is reflected in code and referenced specs.
+- [x] JSON envelope and exit codes match spec contract.
+- [x] Auth/token lifecycle works with env-var auth (daemon-mediated refresh deferred to Phase B).
+- [x] Golden contract tests pass (50 tests across envelope, exit codes, auth refresh).
+- [ ] Manager child orchestration commands work end-to-end (requires live gateway).
+- [ ] Source read commands work through gateway mediation (requires source endpoints from PR 19).
+- [ ] Action invocation returns correct exit codes for approval/denial/failure (requires live gateway).
 
 ---
 
 ## 9. Known Limitations & Tech Debt
 
-- [x] **CLI auth endpoint compatibility surface**: compatibility handlers exist for `/api/cli/auth/*` and `/api/cli/ssh-keys` alongside `/api/cli/sessions`, reducing `/api/rpc` vs `/api/cli/*` contract drift (`apps/web/src/app/api/cli/auth/device/route.ts`, `apps/web/src/app/api/cli/auth/device/poll/route.ts`, `apps/web/src/app/api/cli/ssh-keys/route.ts`, `apps/web/src/app/api/cli/sessions/route.ts`).
+- [x] **CLI auth endpoint compatibility surface**: compatibility handlers exist for `/api/cli/auth/*` and `/api/cli/ssh-keys` alongside `/api/cli/sessions`, reducing `/api/rpc` vs `/api/cli/*` contract drift.
 - [ ] **Legacy session query filters**: CLI service list/resume queries still filter `session_type = "terminal"` while gateway CLI session creation uses `sessionType: "cli"`. Impact: stale CLI session views/resume logic risk.
-- [ ] **`lib/api.ts` is stale and inconsistent**: it references endpoints and imports (`getAuth` from config module) that do not match current runtime path. Impact: dead-code traps and incorrect agent edits.
-- [ ] **Duplicate OpenCode binary path logic**: both `packages/cli/src/lib/opencode.ts` and `packages/cli/src/agents/opencode.ts` implement similar resolution logic. Impact: drift risk and duplicated fixes.
+- [x] **~~`lib/api.ts` is stale and inconsistent~~**: Deleted. Was dead code referencing removed endpoints.
+- [x] **~~Duplicate OpenCode binary path logic~~**: Consolidated into `packages/cli/src/lib/opencode.ts`. `agents/opencode.ts` deleted.
 - [ ] **Long-lived API keys**: device-flow API keys are created without expiration. Impact: credential lifetime risk.
 - [ ] **Empty config sync defaults**: `CONFIG_SYNC_JOBS` is currently empty. Impact: user environment parity in sandbox relies mostly on repo contents and manual setup.
+- [ ] **Daemon-mediated IPC refresh (C2b)**: Deferred to Phase B (PR 24). Currently, 401 retry re-reads the same env var. When the daemon exists, it will update the env var before the retry reads it.
+- [ ] **Source/baseline gateway endpoints**: CLI commands for source reads and baseline info call gateway endpoints that may not exist yet (depend on PR 19 and future work). Commands are structurally correct and will work when endpoints are available.

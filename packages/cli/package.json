@@ -9,6 +9,8 @@
 	"scripts": {
 		"dev": "echo 'CLI does not run in dev mode - use pnpm dev:cli to test'",
 		"start": "deno run --allow-all src/index.ts",
+		"test": "vitest run",
+		"test:watch": "vitest",
 		"typecheck": "echo 'CLI uses Deno - typecheck runs during release build'",
 		"compile": "deno compile --no-check --allow-all --include=package.json --output=binaries/proliferate src/index.ts",
 		"compile:darwin-arm64": "deno compile --no-check --allow-all --include=package.json --target=aarch64-apple-darwin --output=binaries/proliferate-darwin-arm64 src/index.ts",
@@ -24,6 +26,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "^20.11.0",
-		"typescript": "^5.3.3"
+		"typescript": "^5.3.3",
+		"vitest": "^2.0.0"
 	}
 }

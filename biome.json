@@ -83,6 +83,9 @@
 			"include": [
 				"packages/environment/src/**",
 				"packages/cli/src/lib/env.ts",
+				"packages/cli/src/lib/gateway-client.ts",
+				"packages/cli/src/lib/opencode.ts",
+				"packages/cli/src/lib/__tests__/**",
 				"packages/sandbox-mcp/src/env.ts",
 				"apps/web/next.config.js",
 				"scripts/**",

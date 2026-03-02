@@ -1,3 +1,10 @@
+/**
+ * OpenCode Binary Resolution + Launch
+ *
+ * Single source of truth for finding and launching the bundled OpenCode binary.
+ */
+
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,4 +45,33 @@ export function getOpenCodeBinaryPath(): string {
 	throw new Error(
 		`OpenCode binary not found. Tried:\n  - ${devPath}\n  - ${installedPath}\n  - ${sameDirPath}\nPlease reinstall proliferate or ensure opencode binary is available.`,
 	);
+}
+
+/**
+ * Launch OpenCode in attach mode.
+ * Returns the child process exit code.
+ */
+export function launchOpenCode(attachUrl: string): Promise<number> {
+	return new Promise((resolve, reject) => {
+		let opencodePath: string;
+		try {
+			opencodePath = getOpenCodeBinaryPath();
+		} catch (err) {
+			reject(err);
+			return;
+		}
+
+		const opencode = spawn(opencodePath, ["attach", attachUrl], {
+			stdio: "inherit",
+			env: process.env,
+		});
+
+		opencode.on("error", (err) => {
+			reject(new Error(`Failed to start coding agent: ${err.message}`));
+		});
+
+		opencode.on("exit", (code) => {
+			resolve(code ?? 0);
+		});
+	});
 }
