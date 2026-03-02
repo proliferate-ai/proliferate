@@ -14,12 +14,17 @@ import {
 	and,
 	eq,
 	getDb,
+	sql,
 	sessionCapabilities,
 	sessionMessages,
 	sessionSkills,
 	sessionUserState,
 	sessions,
 } from "@proliferate/services/db/client";
+import type {
+	SessionMessageDeliveryState,
+	SessionMessageDirection,
+} from "@proliferate/shared/contracts";
 
 export type SessionCapabilityRow = InferSelectModel<typeof sessionCapabilities>;
 export type SessionSkillRow = InferSelectModel<typeof sessionSkills>;
@@ -39,28 +44,37 @@ export async function upsertSessionCapability(
 ): Promise<SessionCapabilityRow> {
 	const db = getDb();
 	const now = new Date();
-	const [row] = await db
-		.insert(sessionCapabilities)
-		.values({
-			sessionId: input.sessionId,
-			capabilityKey: input.capabilityKey,
-			mode: input.mode,
-			scope: input.scope ?? null,
-			origin: input.origin ?? null,
-			createdAt: now,
-			updatedAt: now,
-		})
-		.onConflictDoUpdate({
-			target: [sessionCapabilities.sessionId, sessionCapabilities.capabilityKey],
-			set: {
+
+	return db.transaction(async (tx) => {
+		const [row] = await tx
+			.insert(sessionCapabilities)
+			.values({
+				sessionId: input.sessionId,
+				capabilityKey: input.capabilityKey,
 				mode: input.mode,
-				...(input.scope !== undefined && { scope: input.scope }),
-				...(input.origin !== undefined && { origin: input.origin }),
+				scope: input.scope ?? null,
+				origin: input.origin ?? null,
+				createdAt: now,
 				updatedAt: now,
-			},
-		})
-		.returning();
-	return row;
+			})
+			.onConflictDoUpdate({
+				target: [sessionCapabilities.sessionId, sessionCapabilities.capabilityKey],
+				set: {
+					mode: input.mode,
+					...(input.scope !== undefined && { scope: input.scope }),
+					...(input.origin !== undefined && { origin: input.origin }),
+					updatedAt: now,
+				},
+			})
+			.returning();
+
+		await tx
+			.update(sessions)
+			.set({ capabilitiesVersion: sql`${sessions.capabilitiesVersion} + 1` })
+			.where(eq(sessions.id, input.sessionId));
+
+		return row;
+	});
 }
 
 export interface UpsertSessionSkillInput {
@@ -73,31 +87,40 @@ export interface UpsertSessionSkillInput {
 export async function upsertSessionSkill(input: UpsertSessionSkillInput): Promise<SessionSkillRow> {
 	const db = getDb();
 	const now = new Date();
-	const [row] = await db
-		.insert(sessionSkills)
-		.values({
-			sessionId: input.sessionId,
-			skillKey: input.skillKey,
-			configJson: input.configJson ?? null,
-			origin: input.origin ?? null,
-			createdAt: now,
-			updatedAt: now,
-		})
-		.onConflictDoUpdate({
-			target: [sessionSkills.sessionId, sessionSkills.skillKey],
-			set: {
+
+	return db.transaction(async (tx) => {
+		const [row] = await tx
+			.insert(sessionSkills)
+			.values({
+				sessionId: input.sessionId,
+				skillKey: input.skillKey,
 				configJson: input.configJson ?? null,
 				origin: input.origin ?? null,
+				createdAt: now,
 				updatedAt: now,
-			},
-		})
-		.returning();
-	return row;
+			})
+			.onConflictDoUpdate({
+				target: [sessionSkills.sessionId, sessionSkills.skillKey],
+				set: {
+					configJson: input.configJson ?? null,
+					origin: input.origin ?? null,
+					updatedAt: now,
+				},
+			})
+			.returning();
+
+		await tx
+			.update(sessions)
+			.set({ capabilitiesVersion: sql`${sessions.capabilitiesVersion} + 1` })
+			.where(eq(sessions.id, input.sessionId));
+
+		return row;
+	});
 }
 
 export interface EnqueueSessionMessageInput {
 	sessionId: string;
-	direction: "user_to_manager" | "user_to_task" | "manager_to_task" | "task_to_manager";
+	direction: SessionMessageDirection;
 	messageType: string;
 	payloadJson: unknown;
 	dedupeKey?: string;
@@ -139,7 +162,7 @@ export async function listQueuedSessionMessages(sessionId: string): Promise<Sess
 
 export async function updateSessionMessageDeliveryState(
 	id: string,
-	deliveryState: "queued" | "delivered" | "consumed" | "failed",
+	deliveryState: SessionMessageDeliveryState,
 	fields?: {
 		deliveredAt?: Date | null;
 		consumedAt?: Date | null;

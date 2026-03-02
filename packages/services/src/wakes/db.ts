@@ -7,9 +7,11 @@
 import {
 	type InferSelectModel,
 	and,
+	asc,
 	desc,
 	eq,
 	getDb,
+	sql,
 	wakeEvents,
 } from "@proliferate/services/db/client";
 
@@ -76,7 +78,16 @@ export async function listQueuedByWorker(workerId: string): Promise<WakeEventRow
 		.select()
 		.from(wakeEvents)
 		.where(and(eq(wakeEvents.workerId, workerId), eq(wakeEvents.status, "queued")))
-		.orderBy(desc(wakeEvents.createdAt));
+		.orderBy(
+			sql`CASE ${wakeEvents.source}
+				WHEN 'manual_message' THEN 1
+				WHEN 'manual' THEN 2
+				WHEN 'webhook' THEN 3
+				WHEN 'tick' THEN 4
+				ELSE 99
+			END`,
+			asc(wakeEvents.createdAt),
+		);
 }
 
 export async function listByWorker(workerId: string, limit = 20): Promise<WakeEventRow[]> {
