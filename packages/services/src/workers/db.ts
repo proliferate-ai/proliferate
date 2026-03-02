@@ -6,12 +6,15 @@
 
 import {
 	type InferSelectModel,
+	actionInvocations,
 	and,
 	asc,
 	desc,
 	eq,
 	getDb,
 	inArray,
+	sessionMessages,
+	sessions,
 	sql,
 	wakeEvents,
 	workerRunEvents,
@@ -45,6 +48,8 @@ export type WorkerRow = InferSelectModel<typeof workers>;
 export type WakeEventRow = InferSelectModel<typeof wakeEvents>;
 export type WorkerRunRow = InferSelectModel<typeof workerRuns>;
 export type WorkerRunEventRow = InferSelectModel<typeof workerRunEvents>;
+export type SessionRow = InferSelectModel<typeof sessions>;
+export type SessionMessageRow = InferSelectModel<typeof sessionMessages>;
 
 const ACTIVE_WORKER_RUN_STATUSES = ["queued", "running"] as const;
 export const COALESCEABLE_WAKE_SOURCES = ["tick", "webhook"] as const;
@@ -738,4 +743,141 @@ export async function listEventsByRun(workerRunId: string): Promise<WorkerRunEve
 		.from(workerRunEvents)
 		.where(eq(workerRunEvents.workerRunId, workerRunId))
 		.orderBy(workerRunEvents.eventIndex);
+}
+
+// ============================================
+// Workers — Aggregate Queries (Coworker UI)
+// ============================================
+
+export type WorkerWithCounts = WorkerRow & {
+	activeTaskCount: number;
+	pendingApprovalCount: number;
+};
+
+export async function listWorkersByOrgWithCounts(orgId: string): Promise<WorkerWithCounts[]> {
+	const db = getDb();
+	const rows = await db
+		.select({
+			worker: workers,
+			activeTaskCount: sql<number>`(
+				SELECT count(*)::int FROM ${sessions}
+				WHERE ${sessions.workerId} = ${workers.id}
+				AND ${sessions.kind} = 'task'
+				AND ${sessions.status} NOT IN ('completed', 'failed', 'cancelled')
+			)`.as("active_task_count"),
+			pendingApprovalCount: sql<number>`(
+				SELECT count(*)::int FROM ${actionInvocations}
+				WHERE ${actionInvocations.sessionId} IN (
+					SELECT ${sessions.id} FROM ${sessions}
+					WHERE ${sessions.workerId} = ${workers.id}
+				)
+				AND ${actionInvocations.status} = 'pending'
+			)`.as("pending_approval_count"),
+		})
+		.from(workers)
+		.where(eq(workers.organizationId, orgId))
+		.orderBy(desc(workers.updatedAt));
+
+	return rows.map((row) => ({
+		...row.worker,
+		activeTaskCount: row.activeTaskCount,
+		pendingApprovalCount: row.pendingApprovalCount,
+	}));
+}
+
+export async function listRunsByWorkerWithEvents(
+	workerId: string,
+	limit = 10,
+): Promise<Array<WorkerRunRow & { events: WorkerRunEventRow[] }>> {
+	const runs = await listRunsByWorker(workerId, limit);
+	const results = await Promise.all(
+		runs.map(async (run) => {
+			const events = await listEventsByRun(run.id);
+			return { ...run, events };
+		}),
+	);
+	return results;
+}
+
+export async function listSessionsByWorker(
+	workerId: string,
+	orgId: string,
+	limit = 50,
+): Promise<SessionRow[]> {
+	const db = getDb();
+	return db
+		.select()
+		.from(sessions)
+		.where(
+			and(
+				eq(sessions.workerId, workerId),
+				eq(sessions.organizationId, orgId),
+				eq(sessions.kind, "task"),
+			),
+		)
+		.orderBy(desc(sessions.startedAt))
+		.limit(limit);
+}
+
+export async function listChildSessionsByWorkerRun(
+	workerRunId: string,
+	orgId: string,
+): Promise<SessionRow[]> {
+	const db = getDb();
+	return db
+		.select()
+		.from(sessions)
+		.where(
+			and(
+				eq(sessions.workerRunId, workerRunId),
+				eq(sessions.organizationId, orgId),
+				eq(sessions.kind, "task"),
+			),
+		)
+		.orderBy(desc(sessions.startedAt));
+}
+
+export async function listPendingDirectives(
+	managerSessionId: string,
+): Promise<SessionMessageRow[]> {
+	const db = getDb();
+	return db
+		.select()
+		.from(sessionMessages)
+		.where(
+			and(
+				eq(sessionMessages.sessionId, managerSessionId),
+				eq(sessionMessages.deliveryState, "queued"),
+				eq(sessionMessages.direction, "user_to_manager"),
+			),
+		)
+		.orderBy(asc(sessionMessages.queuedAt));
+}
+
+export async function updateWorker(
+	id: string,
+	orgId: string,
+	fields: { name?: string; objective?: string; modelId?: string },
+): Promise<WorkerRow | undefined> {
+	const db = getDb();
+	const setFields: Record<string, unknown> = { updatedAt: new Date() };
+	if (fields.name !== undefined) setFields.name = fields.name;
+	if (fields.objective !== undefined) setFields.objective = fields.objective;
+	if (fields.modelId !== undefined) setFields.modelId = fields.modelId;
+
+	const [row] = await db
+		.update(workers)
+		.set(setFields)
+		.where(and(eq(workers.id, id), eq(workers.organizationId, orgId)))
+		.returning();
+	return row;
+}
+
+export async function deleteWorker(id: string, orgId: string): Promise<boolean> {
+	const db = getDb();
+	const result = await db
+		.delete(workers)
+		.where(and(eq(workers.id, id), eq(workers.organizationId, orgId)))
+		.returning({ id: workers.id });
+	return result.length > 0;
 }

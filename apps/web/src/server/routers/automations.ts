@@ -13,6 +13,8 @@ import {
 	runs,
 	schedules,
 	templates,
+	wakes,
+	workers,
 } from "@proliferate/services";
 import {
 	AutomationConnectionSchema,
@@ -891,7 +893,490 @@ export const automationsRouter = {
 				total: result.total,
 			};
 		}),
+
+	// ============================================
+	// Workers (Coworker UI)
+	// ============================================
+
+	/**
+	 * List all workers for the org with aggregate counts.
+	 */
+	listWorkers: orgProcedure
+		.output(
+			z.object({
+				workers: z.array(
+					z.object({
+						id: z.string().uuid(),
+						name: z.string(),
+						status: z.string(),
+						objective: z.string().nullable(),
+						modelId: z.string().nullable(),
+						managerSessionId: z.string().uuid(),
+						lastWakeAt: z.coerce.date().nullable(),
+						lastCompletedRunAt: z.coerce.date().nullable(),
+						lastErrorCode: z.string().nullable(),
+						pausedAt: z.coerce.date().nullable(),
+						createdAt: z.coerce.date(),
+						updatedAt: z.coerce.date(),
+						activeTaskCount: z.number(),
+						pendingApprovalCount: z.number(),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ context }) => {
+			const workersList = await workers.listWorkersByOrgWithCounts(context.orgId);
+			return {
+				workers: workersList.map((w) => ({
+					id: w.id,
+					name: w.name,
+					status: w.status,
+					objective: w.objective,
+					modelId: w.modelId,
+					managerSessionId: w.managerSessionId,
+					lastWakeAt: w.lastWakeAt,
+					lastCompletedRunAt: w.lastCompletedRunAt,
+					lastErrorCode: w.lastErrorCode,
+					pausedAt: w.pausedAt,
+					createdAt: w.createdAt,
+					updatedAt: w.updatedAt,
+					activeTaskCount: w.activeTaskCount,
+					pendingApprovalCount: w.pendingApprovalCount,
+				})),
+			};
+		}),
+
+	/**
+	 * Get a single worker by ID with org check.
+	 */
+	getWorker: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(
+			z.object({
+				worker: z.object({
+					id: z.string().uuid(),
+					name: z.string(),
+					status: z.string(),
+					objective: z.string().nullable(),
+					modelId: z.string().nullable(),
+					managerSessionId: z.string().uuid(),
+					lastWakeAt: z.coerce.date().nullable(),
+					lastCompletedRunAt: z.coerce.date().nullable(),
+					lastErrorCode: z.string().nullable(),
+					pausedAt: z.coerce.date().nullable(),
+					createdBy: z.string().nullable(),
+					computeProfile: z.string().nullable(),
+					pausedBy: z.string().nullable(),
+					createdAt: z.coerce.date(),
+					updatedAt: z.coerce.date(),
+					activeTaskCount: z.number(),
+					pendingApprovalCount: z.number(),
+				}),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const workersList = await workers.listWorkersByOrgWithCounts(context.orgId);
+			const worker = workersList.find((w) => w.id === input.id);
+			if (!worker) {
+				throw new ORPCError("NOT_FOUND", { message: "Worker not found" });
+			}
+			return {
+				worker: {
+					id: worker.id,
+					name: worker.name,
+					status: worker.status,
+					objective: worker.objective,
+					modelId: worker.modelId,
+					managerSessionId: worker.managerSessionId,
+					lastWakeAt: worker.lastWakeAt,
+					lastCompletedRunAt: worker.lastCompletedRunAt,
+					lastErrorCode: worker.lastErrorCode,
+					pausedAt: worker.pausedAt,
+					createdBy: worker.createdBy,
+					computeProfile: worker.computeProfile,
+					pausedBy: worker.pausedBy,
+					createdAt: worker.createdAt,
+					updatedAt: worker.updatedAt,
+					activeTaskCount: worker.activeTaskCount,
+					pendingApprovalCount: worker.pendingApprovalCount,
+				},
+			};
+		}),
+
+	/**
+	 * List worker runs with events, paginated.
+	 */
+	listWorkerRuns: orgProcedure
+		.input(
+			z.object({
+				workerId: z.string().uuid(),
+				limit: z.number().optional(),
+			}),
+		)
+		.output(
+			z.object({
+				runs: z.array(
+					z.object({
+						id: z.string().uuid(),
+						workerId: z.string().uuid(),
+						status: z.string(),
+						summary: z.string().nullable(),
+						wakeEventId: z.string().uuid(),
+						createdAt: z.coerce.date(),
+						startedAt: z.coerce.date().nullable(),
+						completedAt: z.coerce.date().nullable(),
+						events: z.array(
+							z.object({
+								id: z.string().uuid(),
+								eventIndex: z.number(),
+								eventType: z.string(),
+								summaryText: z.string().nullable(),
+								payloadJson: z.unknown().nullable(),
+								sessionId: z.string().uuid().nullable(),
+								actionInvocationId: z.string().uuid().nullable(),
+								createdAt: z.coerce.date(),
+							}),
+						),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const worker = await workers.findWorkerById(input.workerId, context.orgId);
+			if (!worker) {
+				throw new ORPCError("NOT_FOUND", { message: "Worker not found" });
+			}
+			const runsList = await workers.listRunsByWorkerWithEvents(input.workerId, input.limit);
+			return {
+				runs: runsList.map((run) => ({
+					id: run.id,
+					workerId: run.workerId,
+					status: run.status,
+					summary: run.summary,
+					wakeEventId: run.wakeEventId,
+					createdAt: run.createdAt,
+					startedAt: run.startedAt,
+					completedAt: run.completedAt,
+					events: run.events.map((e) => ({
+						id: e.id,
+						eventIndex: e.eventIndex,
+						eventType: e.eventType,
+						summaryText: e.summaryText,
+						payloadJson: e.payloadJson,
+						sessionId: e.sessionId,
+						actionInvocationId: e.actionInvocationId,
+						createdAt: e.createdAt,
+					})),
+				})),
+			};
+		}),
+
+	/**
+	 * List task sessions for a worker.
+	 */
+	listWorkerSessions: orgProcedure
+		.input(
+			z.object({
+				workerId: z.string().uuid(),
+				limit: z.number().optional(),
+			}),
+		)
+		.output(
+			z.object({
+				sessions: z.array(
+					z.object({
+						id: z.string().uuid(),
+						title: z.string().nullable(),
+						status: z.string().nullable(),
+						repoId: z.string().uuid().nullable(),
+						branchName: z.string().nullable(),
+						operatorStatus: z.string(),
+						updatedAt: z.coerce.date().nullable(),
+						startedAt: z.coerce.date().nullable(),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const worker = await workers.findWorkerById(input.workerId, context.orgId);
+			if (!worker) {
+				throw new ORPCError("NOT_FOUND", { message: "Worker not found" });
+			}
+			const sessionsList = await workers.listSessionsByWorker(
+				input.workerId,
+				context.orgId,
+				input.limit,
+			);
+			return {
+				sessions: sessionsList.map((s) => ({
+					id: s.id,
+					title: s.title,
+					status: s.status,
+					repoId: s.repoId,
+					branchName: s.branchName,
+					operatorStatus: s.operatorStatus,
+					updatedAt: s.lastActivityAt,
+					startedAt: s.startedAt,
+				})),
+			};
+		}),
+
+	/**
+	 * List queued session messages for a worker's manager session.
+	 */
+	listPendingDirectives: orgProcedure
+		.input(z.object({ workerId: z.string().uuid() }))
+		.output(
+			z.object({
+				directives: z.array(
+					z.object({
+						id: z.string().uuid(),
+						messageType: z.string(),
+						payloadJson: z.unknown(),
+						queuedAt: z.coerce.date(),
+						senderUserId: z.string().nullable(),
+					}),
+				),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const worker = await workers.findWorkerById(input.workerId, context.orgId);
+			if (!worker) {
+				throw new ORPCError("NOT_FOUND", { message: "Worker not found" });
+			}
+			const messages = await workers.listPendingDirectives(worker.managerSessionId);
+			return {
+				directives: messages.map((m) => ({
+					id: m.id,
+					messageType: m.messageType,
+					payloadJson: m.payloadJson,
+					queuedAt: m.queuedAt,
+					senderUserId: m.senderUserId,
+				})),
+			};
+		}),
+
+	/**
+	 * Send a directive/message to a worker's manager session.
+	 */
+	sendDirective: orgProcedure
+		.input(
+			z.object({
+				workerId: z.string().uuid(),
+				content: z.string().min(1).max(10000),
+			}),
+		)
+		.output(
+			z.object({
+				success: z.boolean(),
+				messageId: z.string(),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const worker = await workers.findWorkerById(input.workerId, context.orgId);
+			if (!worker) {
+				throw new ORPCError("NOT_FOUND", { message: "Worker not found" });
+			}
+
+			const { messageId } = await workers.sendDirective({
+				managerSessionId: worker.managerSessionId,
+				content: input.content,
+				senderUserId: context.user.id,
+			});
+
+			// Create a wake event if the worker is active
+			if (worker.status === "active") {
+				try {
+					await wakes.createWakeEvent({
+						workerId: worker.id,
+						organizationId: context.orgId,
+						source: "manual_message",
+						payloadJson: { messageId },
+					});
+				} catch {
+					// Non-fatal: the directive is queued regardless
+				}
+			}
+
+			return { success: true, messageId };
+		}),
+
+	/**
+	 * Pause a worker.
+	 */
+	pauseWorker: orgProcedure
+		.input(z.object({ workerId: z.string().uuid() }))
+		.output(
+			z.object({
+				worker: z.object({
+					id: z.string().uuid(),
+					name: z.string(),
+					status: z.string(),
+					objective: z.string().nullable(),
+					modelId: z.string().nullable(),
+					managerSessionId: z.string().uuid(),
+					lastWakeAt: z.coerce.date().nullable(),
+					lastCompletedRunAt: z.coerce.date().nullable(),
+					lastErrorCode: z.string().nullable(),
+					pausedAt: z.coerce.date().nullable(),
+					createdBy: z.string().nullable(),
+					computeProfile: z.string().nullable(),
+					pausedBy: z.string().nullable(),
+					createdAt: z.coerce.date(),
+					updatedAt: z.coerce.date(),
+				}),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			try {
+				const worker = await workers.pauseWorker(input.workerId, context.orgId, context.user.id);
+				return { worker: mapWorkerToDetail(worker) };
+			} catch (err) {
+				if (err instanceof workers.WorkerNotFoundError) {
+					throw new ORPCError("NOT_FOUND", { message: err.message });
+				}
+				throw err;
+			}
+		}),
+
+	/**
+	 * Resume a worker.
+	 */
+	resumeWorker: orgProcedure
+		.input(z.object({ workerId: z.string().uuid() }))
+		.output(
+			z.object({
+				worker: z.object({
+					id: z.string().uuid(),
+					name: z.string(),
+					status: z.string(),
+					objective: z.string().nullable(),
+					modelId: z.string().nullable(),
+					managerSessionId: z.string().uuid(),
+					lastWakeAt: z.coerce.date().nullable(),
+					lastCompletedRunAt: z.coerce.date().nullable(),
+					lastErrorCode: z.string().nullable(),
+					pausedAt: z.coerce.date().nullable(),
+					createdBy: z.string().nullable(),
+					computeProfile: z.string().nullable(),
+					pausedBy: z.string().nullable(),
+					createdAt: z.coerce.date(),
+					updatedAt: z.coerce.date(),
+				}),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			try {
+				const worker = await workers.resumeWorker(input.workerId, context.orgId);
+				return { worker: mapWorkerToDetail(worker) };
+			} catch (err) {
+				if (err instanceof workers.WorkerNotFoundError) {
+					throw new ORPCError("NOT_FOUND", { message: err.message });
+				}
+				throw err;
+			}
+		}),
+
+	/**
+	 * Trigger a manual wake for a worker.
+	 */
+	runWorkerNow: orgProcedure
+		.input(z.object({ workerId: z.string().uuid() }))
+		.output(z.object({ wakeEventId: z.string() }))
+		.handler(async ({ input, context }) => {
+			try {
+				const result = await workers.runNow(input.workerId, context.orgId);
+				return { wakeEventId: result.wakeEvent.id };
+			} catch (err) {
+				if (err instanceof workers.WorkerNotFoundError) {
+					throw new ORPCError("NOT_FOUND", { message: err.message });
+				}
+				if (err instanceof workers.WorkerResumeRequiredError) {
+					throw new ORPCError("CONFLICT", { message: err.message });
+				}
+				if (err instanceof workers.WorkerNotActiveError) {
+					throw new ORPCError("CONFLICT", { message: err.message });
+				}
+				throw err;
+			}
+		}),
+
+	/**
+	 * Update worker name, objective, or modelId.
+	 */
+	updateWorker: orgProcedure
+		.input(
+			z.object({
+				id: z.string().uuid(),
+				name: z.string().optional(),
+				objective: z.string().optional(),
+				modelId: z.string().optional(),
+			}),
+		)
+		.output(
+			z.object({
+				worker: z.object({
+					id: z.string().uuid(),
+					name: z.string(),
+					status: z.string(),
+					objective: z.string().nullable(),
+					modelId: z.string().nullable(),
+					managerSessionId: z.string().uuid(),
+					lastWakeAt: z.coerce.date().nullable(),
+					lastCompletedRunAt: z.coerce.date().nullable(),
+					lastErrorCode: z.string().nullable(),
+					pausedAt: z.coerce.date().nullable(),
+					createdBy: z.string().nullable(),
+					computeProfile: z.string().nullable(),
+					pausedBy: z.string().nullable(),
+					createdAt: z.coerce.date(),
+					updatedAt: z.coerce.date(),
+				}),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const { id, ...fields } = input;
+			const updated = await workers.updateWorker(id, context.orgId, fields);
+			if (!updated) {
+				throw new ORPCError("NOT_FOUND", { message: "Worker not found" });
+			}
+			return { worker: mapWorkerToDetail(updated) };
+		}),
+
+	/**
+	 * Delete a worker.
+	 */
+	deleteWorker: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			const deleted = await workers.deleteWorker(input.id, context.orgId);
+			if (!deleted) {
+				throw new ORPCError("NOT_FOUND", { message: "Worker not found" });
+			}
+			return { success: true };
+		}),
 };
+
+function mapWorkerToDetail(w: workers.WorkerRow) {
+	return {
+		id: w.id,
+		name: w.name,
+		status: w.status,
+		objective: w.objective,
+		modelId: w.modelId,
+		managerSessionId: w.managerSessionId,
+		lastWakeAt: w.lastWakeAt,
+		lastCompletedRunAt: w.lastCompletedRunAt,
+		lastErrorCode: w.lastErrorCode,
+		pausedAt: w.pausedAt,
+		createdBy: w.createdBy,
+		computeProfile: w.computeProfile,
+		pausedBy: w.pausedBy,
+		createdAt: w.createdAt,
+		updatedAt: w.updatedAt,
+	};
+}
 
 function mapRunToSchema(run: runs.RunListItem) {
 	const parsedContext = run.triggerEvent?.parsedContext as Record<string, unknown> | null;

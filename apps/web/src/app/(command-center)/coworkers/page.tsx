@@ -5,6 +5,7 @@ import {
 	type TemplateEntry,
 	TemplatePickerDialog,
 } from "@/components/automations/template-picker-dialog";
+import { WorkerListRow } from "@/components/automations/worker-list-row";
 import {
 	AutomationIllustration,
 	PageEmptyState,
@@ -16,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
 import { useIntegrations, useSlackInstallations } from "@/hooks/use-integrations";
 import { useCreateFromTemplate, useTemplateCatalog } from "@/hooks/use-templates";
+import { useWorkers } from "@/hooks/use-workers";
 import { cn } from "@/lib/utils";
 import { BookTemplate, Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -29,25 +31,25 @@ const TABS: { value: Tab; label: string }[] = [
 	{ value: "paused", label: "Paused" },
 ];
 
-export default function AutomationsPage() {
+type WorkerStatus = "active" | "paused" | "degraded" | "failed";
+
+export default function CoworkersPage() {
 	const router = useRouter();
-	const { data: automations = [], isLoading } = useAutomations();
+	const { data: automations = [], isLoading: isLoadingAutomations } = useAutomations();
+	const { data: workersList = [], isLoading: isLoadingWorkers } = useWorkers();
 	const createAutomation = useCreateAutomation();
 	const createFromTemplate = useCreateFromTemplate();
 	const { data: templateCatalog = [] } = useTemplateCatalog();
 
-	// Fetch org integrations for connection status badges
 	const { data: integrationsData } = useIntegrations();
 	const { data: slackInstallations } = useSlackInstallations();
 
 	const connectedProviders = useMemo(() => {
 		const providers = new Set<string>();
 		if (!integrationsData) return providers;
-		// github/sentry/linear flags use integration_id matching (correct for Nango)
 		if (integrationsData.github.connected) providers.add("github");
 		if (integrationsData.sentry.connected) providers.add("sentry");
 		if (integrationsData.linear.connected) providers.add("linear");
-		// Slack uses a separate installations table
 		if (slackInstallations && slackInstallations.length > 0) providers.add("slack");
 		return providers;
 	}, [integrationsData, slackInstallations]);
@@ -57,7 +59,21 @@ export default function AutomationsPage() {
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [createError, setCreateError] = useState<string | null>(null);
 
-	const counts = useMemo(
+	// Determine if we have V1 workers — show worker table when present, legacy automation list otherwise
+	const hasWorkers = workersList.length > 0;
+	const isLoading = hasWorkers ? isLoadingWorkers : isLoadingAutomations;
+
+	// Worker counts
+	const workerCounts = useMemo(
+		() => ({
+			all: workersList.length,
+			active: workersList.filter((w) => w.status === "active").length,
+			paused: workersList.filter((w) => w.status === "paused").length,
+		}),
+		[workersList],
+	);
+
+	const automationCounts = useMemo(
 		() => ({
 			all: automations.length,
 			active: automations.filter((a) => a.enabled).length,
@@ -66,20 +82,28 @@ export default function AutomationsPage() {
 		[automations],
 	);
 
+	const counts = hasWorkers ? workerCounts : automationCounts;
+
+	// Filtered lists
+	const filteredWorkers = useMemo(() => {
+		let result = workersList;
+		if (activeTab === "active") result = result.filter((w) => w.status === "active");
+		else if (activeTab === "paused") result = result.filter((w) => w.status === "paused");
+		if (searchQuery.trim()) {
+			const q = searchQuery.toLowerCase().trim();
+			result = result.filter((w) => w.name.toLowerCase().includes(q));
+		}
+		return result;
+	}, [workersList, activeTab, searchQuery]);
+
 	const filteredAutomations = useMemo(() => {
 		let result = automations;
-
-		if (activeTab === "active") {
-			result = result.filter((a) => a.enabled);
-		} else if (activeTab === "paused") {
-			result = result.filter((a) => !a.enabled);
-		}
-
+		if (activeTab === "active") result = result.filter((a) => a.enabled);
+		else if (activeTab === "paused") result = result.filter((a) => !a.enabled);
 		if (searchQuery.trim()) {
 			const q = searchQuery.toLowerCase().trim();
 			result = result.filter((a) => a.name.toLowerCase().includes(q));
 		}
-
 		return result;
 	}, [automations, activeTab, searchQuery]);
 
@@ -98,9 +122,6 @@ export default function AutomationsPage() {
 
 	const handleTemplateSelect = async (template: TemplateEntry) => {
 		setCreateError(null);
-		// Build integration bindings from connected providers.
-		// Integration rows store provider as "nango" (auth mechanism) and
-		// integration_id as the actual service ("github", "sentry", "linear").
 		const integrationBindings: Record<string, string> = {};
 		if (integrationsData) {
 			for (const req of template.requiredIntegrations) {
@@ -112,7 +133,6 @@ export default function AutomationsPage() {
 				}
 			}
 		}
-
 		try {
 			const automation = await createFromTemplate.mutateAsync({
 				templateId: template.id,
@@ -130,6 +150,7 @@ export default function AutomationsPage() {
 	};
 
 	const isPending = createAutomation.isPending || createFromTemplate.isPending;
+	const totalItems = hasWorkers ? workersList.length : automations.length;
 
 	return (
 		<PageShell
@@ -162,7 +183,7 @@ export default function AutomationsPage() {
 						/>
 					))}
 				</div>
-			) : automations.length === 0 ? (
+			) : totalItems === 0 ? (
 				<PageEmptyState
 					illustration={<AutomationIllustration />}
 					badge={<PlusBadge />}
@@ -225,8 +246,43 @@ export default function AutomationsPage() {
 						</div>
 					</div>
 
-					{/* List */}
-					{filteredAutomations.length === 0 ? (
+					{/* Workers table (V1) */}
+					{hasWorkers ? (
+						filteredWorkers.length === 0 ? (
+							<div className="text-center py-12">
+								<p className="text-sm text-muted-foreground">
+									{searchQuery.trim()
+										? "No coworkers match your search."
+										: `No ${activeTab} coworkers.`}
+								</p>
+							</div>
+						) : (
+							<div className="rounded-xl border border-border overflow-hidden">
+								<div className="flex items-center gap-4 px-4 py-2 border-b border-border bg-muted/30 text-xs text-muted-foreground">
+									<div className="flex-1 min-w-0">Name</div>
+									<div className="hidden sm:block w-20 shrink-0">Status</div>
+									<div className="hidden md:block w-24 shrink-0">Last wake</div>
+									<div className="hidden md:block w-16 shrink-0">Tasks</div>
+									<div className="hidden lg:block w-20 shrink-0">Approvals</div>
+									<div className="w-16 shrink-0 text-right">Updated</div>
+								</div>
+								{filteredWorkers.map((worker) => (
+									<WorkerListRow
+										key={worker.id}
+										id={worker.id}
+										name={worker.name}
+										status={worker.status as WorkerStatus}
+										objective={worker.objective}
+										lastWakeAt={worker.lastWakeAt?.toISOString() ?? null}
+										activeTaskCount={worker.activeTaskCount}
+										pendingApprovalCount={worker.pendingApprovalCount}
+										updatedAt={worker.updatedAt.toISOString()}
+									/>
+								))}
+							</div>
+						)
+					) : /* Legacy automation list (fallback) */
+					filteredAutomations.length === 0 ? (
 						<div className="text-center py-12">
 							<p className="text-sm text-muted-foreground">
 								{searchQuery.trim()
@@ -236,7 +292,6 @@ export default function AutomationsPage() {
 						</div>
 					) : (
 						<div className="rounded-xl border border-border overflow-hidden">
-							{/* Column headers */}
 							<div className="flex items-center gap-4 px-4 py-2 border-b border-border bg-muted/30 text-xs text-muted-foreground">
 								<div className="flex-1 min-w-0">Name</div>
 								<div className="hidden sm:block w-16 shrink-0">Scope</div>
@@ -264,7 +319,6 @@ export default function AutomationsPage() {
 				</>
 			)}
 
-			{/* Template picker modal */}
 			<TemplatePickerDialog
 				open={pickerOpen}
 				onOpenChange={setPickerOpen}

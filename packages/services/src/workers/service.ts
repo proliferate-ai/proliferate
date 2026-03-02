@@ -11,6 +11,7 @@ import {
 	isValidWorkerRunTransition,
 	isValidWorkerTransition,
 } from "@proliferate/shared/contracts";
+import * as sessionsDb from "../sessions/db";
 import type { WakeEventRow } from "../wakes/db";
 import * as wakesDb from "../wakes/db";
 import { buildMergedWakePayload, extractWakeDedupeKey } from "../wakes/mapper";
@@ -395,4 +396,19 @@ export async function appendWorkerRunEvent(
 
 export async function listWorkerRunEvents(workerRunId: string): Promise<WorkerRunEventRow[]> {
 	return workersDb.listEventsByRun(workerRunId);
+}
+
+export async function sendDirective(input: {
+	managerSessionId: string;
+	content: string;
+	senderUserId: string;
+}): Promise<{ messageId: string }> {
+	const message = await sessionsDb.enqueueSessionMessage({
+		sessionId: input.managerSessionId,
+		direction: "user_to_manager",
+		messageType: "directive",
+		payloadJson: { content: input.content },
+		senderUserId: input.senderUserId,
+	});
+	return { messageId: message.id };
 }
