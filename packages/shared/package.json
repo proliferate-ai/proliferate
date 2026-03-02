@@ -11,6 +11,7 @@
 		"./auth": "./src/auth.ts",
 		"./agents": "./src/agents.ts",
 		"./crypto": "./src/lib/crypto.ts",
+		"./type-guards": "./src/lib/type-guards.ts",
 		"./llm-proxy": "./src/llm-proxy.ts",
 		"./prompts": "./src/prompts.ts",
 		"./verification": "./src/verification.ts",

@@ -14,6 +14,7 @@ import {
 } from "@proliferate/shared/contracts";
 import type { WakeEventRow } from "../wakes/db";
 import * as wakesDb from "../wakes/db";
+import { buildMergedWakePayload, extractWakeDedupeKey } from "../wakes/mapper";
 import type { WorkerRow, WorkerRunEventRow, WorkerRunRow } from "./db";
 import * as workersDb from "./db";
 
@@ -80,12 +81,33 @@ export interface AppendWorkerRunEventInput {
 	dedupeKey?: string;
 }
 
-function toWorkerStatus(status: string): WorkerStatus {
-	return status as WorkerStatus;
-}
+async function transitionWorker(
+	workerId: string,
+	organizationId: string,
+	toStatus: WorkerStatus,
+	idempotentFrom: WorkerStatus,
+	fields?: { pausedAt?: Date | null; pausedBy?: string | null },
+): Promise<WorkerRow> {
+	const worker = await workersDb.findWorkerById(workerId, organizationId);
+	if (!worker) throw new WorkerNotFoundError(workerId);
 
-function toWorkerRunStatus(status: string): WorkerRunStatus {
-	return status as WorkerRunStatus;
+	if (worker.status === idempotentFrom) return worker;
+
+	if (!isValidWorkerTransition(worker.status as WorkerStatus, toStatus)) {
+		throw new WorkerStatusTransitionError(worker.status, toStatus);
+	}
+
+	const updated = await workersDb.transitionWorkerStatus(
+		worker.id,
+		organizationId,
+		[worker.status as WorkerStatus],
+		toStatus,
+		fields,
+	);
+	if (!updated) {
+		throw new Error(`Worker ${toStatus} failed due to concurrent state change`);
+	}
+	return updated;
 }
 
 export async function pauseWorker(
@@ -93,65 +115,17 @@ export async function pauseWorker(
 	organizationId: string,
 	pausedBy?: string | null,
 ): Promise<WorkerRow> {
-	const worker = await workersDb.findWorkerById(workerId, organizationId);
-	if (!worker) {
-		throw new WorkerNotFoundError(workerId);
-	}
-
-	const fromStatus = toWorkerStatus(worker.status);
-	if (fromStatus === "paused") {
-		return worker;
-	}
-	if (!isValidWorkerTransition(fromStatus, "paused")) {
-		throw new WorkerStatusTransitionError(fromStatus, "paused");
-	}
-
-	const updated = await workersDb.transitionWorkerStatus(
-		worker.id,
-		organizationId,
-		[fromStatus],
-		"paused",
-		{
-			pausedAt: new Date(),
-			pausedBy: pausedBy ?? null,
-		},
-	);
-	if (!updated) {
-		throw new Error("Worker pause failed due to concurrent state change");
-	}
-
-	return updated;
+	return transitionWorker(workerId, organizationId, "paused", "paused", {
+		pausedAt: new Date(),
+		pausedBy: pausedBy ?? null,
+	});
 }
 
 export async function resumeWorker(workerId: string, organizationId: string): Promise<WorkerRow> {
-	const worker = await workersDb.findWorkerById(workerId, organizationId);
-	if (!worker) {
-		throw new WorkerNotFoundError(workerId);
-	}
-
-	const fromStatus = toWorkerStatus(worker.status);
-	if (fromStatus === "active") {
-		return worker;
-	}
-	if (!isValidWorkerTransition(fromStatus, "active")) {
-		throw new WorkerStatusTransitionError(fromStatus, "active");
-	}
-
-	const updated = await workersDb.transitionWorkerStatus(
-		worker.id,
-		organizationId,
-		[fromStatus],
-		"active",
-		{
-			pausedAt: null,
-			pausedBy: null,
-		},
-	);
-	if (!updated) {
-		throw new Error("Worker resume failed due to concurrent state change");
-	}
-
-	return updated;
+	return transitionWorker(workerId, organizationId, "active", "active", {
+		pausedAt: null,
+		pausedBy: null,
+	});
 }
 
 export async function runNow(
@@ -164,7 +138,7 @@ export async function runNow(
 		throw new WorkerNotFoundError(workerId);
 	}
 
-	const status = toWorkerStatus(worker.status);
+	const status = worker.status as WorkerStatus;
 	if (status === "paused") {
 		throw new WorkerResumeRequiredError(workerId);
 	}
@@ -189,7 +163,102 @@ export async function orchestrateNextWakeAndCreateRun(
 	workerId: string,
 	organizationId: string,
 ): Promise<workersDb.ClaimNextWakeAndCreateRunResult | null> {
-	return workersDb.claimNextWakeAndCreateRun(workerId, organizationId);
+	return workersDb.withTransaction(async (tx) => {
+		// Gating: worker must be active
+		const worker = await workersDb.findWorkerForClaim(tx, workerId, organizationId);
+		if (!worker || worker.status !== "active") return null;
+
+		// Gating: no active run
+		if (await workersDb.hasActiveWorkerRun(tx, workerId, organizationId)) return null;
+
+		// Claim highest-priority queued wake
+		const claimedWakeId = await workersDb.claimNextQueuedWakeEvent(tx, workerId, organizationId);
+		if (!claimedWakeId) return null;
+
+		const claimedWakeRow = await workersDb.fetchWakeEventRow(tx, claimedWakeId, organizationId);
+		if (!claimedWakeRow) return null;
+		let claimedWake = claimedWakeRow;
+
+		// Coalescing: merge same-source queued wakes into the claimed wake
+		const coalescedRows: workersDb.WakeEventRow[] = [];
+		if (
+			workersDb.COALESCEABLE_WAKE_SOURCES.includes(
+				claimedWake.source as (typeof workersDb.COALESCEABLE_WAKE_SOURCES)[number],
+			)
+		) {
+			const queuedSameSource = await workersDb.findQueuedWakesBySource(
+				tx,
+				workerId,
+				organizationId,
+				claimedWake.source,
+			);
+
+			const wakeDedupeKey = extractWakeDedupeKey(claimedWake.payloadJson);
+			const candidates =
+				claimedWake.source === "webhook"
+					? wakeDedupeKey
+						? queuedSameSource.filter(
+								(row) => extractWakeDedupeKey(row.payloadJson) === wakeDedupeKey,
+							)
+						: []
+					: queuedSameSource;
+
+			const candidateIds = candidates.map((candidate) => candidate.id);
+			if (candidateIds.length > 0) {
+				const updatedRows = await workersDb.bulkCoalesceWakeEvents(
+					tx,
+					candidateIds,
+					organizationId,
+					claimedWake.id,
+				);
+				coalescedRows.push(...updatedRows);
+			}
+
+			if (coalescedRows.length > 0) {
+				const updatedWake = await workersDb.updateWakeEventPayload(
+					tx,
+					claimedWake.id,
+					organizationId,
+					buildMergedWakePayload(claimedWake.payloadJson, coalescedRows),
+				);
+				if (updatedWake) {
+					claimedWake = updatedWake;
+				}
+			}
+		}
+
+		// Create worker run
+		const workerRun = await workersDb.insertWorkerRun(tx, {
+			workerId: worker.id,
+			organizationId: worker.organizationId,
+			managerSessionId: worker.managerSessionId,
+			wakeEventId: claimedWake.id,
+		});
+
+		// Consume the wake event
+		const consumedWake = await workersDb.consumeWakeEvent(tx, claimedWake.id, organizationId);
+		if (!consumedWake) {
+			throw new Error("Failed to mark claimed wake as consumed");
+		}
+
+		// Touch worker last wake timestamp
+		await workersDb.touchWorkerLastWake(tx, worker.id, organizationId);
+
+		// Create wake_started event
+		const wakeStartedEvent = await workersDb.insertWakeStartedEvent(tx, workerRun.id, worker.id, {
+			wakeEventId: consumedWake.id,
+			source: consumedWake.source,
+			coalescedWakeEventIds: coalescedRows.map((row) => row.id),
+		});
+
+		return {
+			worker,
+			wakeEvent: consumedWake,
+			workerRun,
+			wakeStartedEvent,
+			coalescedWakeEventIds: coalescedRows.map((row) => row.id),
+		};
+	});
 }
 
 export async function startWorkerRun(
@@ -201,7 +270,7 @@ export async function startWorkerRun(
 		throw new WorkerRunNotFoundError(workerRunId);
 	}
 
-	const fromStatus = toWorkerRunStatus(workerRun.status);
+	const fromStatus = workerRun.status as WorkerRunStatus;
 	if (!isValidWorkerRunTransition(fromStatus, "running")) {
 		throw new WorkerRunTransitionError(fromStatus, "running");
 	}
@@ -230,7 +299,7 @@ export async function completeWorkerRun(input: {
 		throw new WorkerRunNotFoundError(input.workerRunId);
 	}
 
-	const fromStatus = toWorkerRunStatus(workerRun.status);
+	const fromStatus = workerRun.status as WorkerRunStatus;
 	if (!isValidWorkerRunTransition(fromStatus, "completed")) {
 		throw new WorkerRunTransitionError(fromStatus, "completed");
 	}
@@ -267,7 +336,7 @@ export async function failWorkerRun(input: {
 		throw new WorkerRunNotFoundError(input.workerRunId);
 	}
 
-	const fromStatus = toWorkerRunStatus(workerRun.status);
+	const fromStatus = workerRun.status as WorkerRunStatus;
 	if (!isValidWorkerRunTransition(fromStatus, "failed")) {
 		throw new WorkerRunTransitionError(fromStatus, "failed");
 	}

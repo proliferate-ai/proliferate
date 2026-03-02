@@ -25,8 +25,25 @@ vi.mock("./db", () => ({
 	transitionWorkerRunStatus: mockTransitionWorkerRunStatus,
 	appendWorkerRunEventAtomic: mockAppendWorkerRunEventAtomic,
 	transitionWorkerRunWithTerminalEvent: mockTransitionWorkerRunWithTerminalEvent,
-	claimNextWakeAndCreateRun: vi.fn(),
 	listEventsByRun: vi.fn(),
+	withTransaction: vi.fn(),
+	findWorkerForClaim: vi.fn(),
+	hasActiveWorkerRun: vi.fn(),
+	claimNextQueuedWakeEvent: vi.fn(),
+	fetchWakeEventRow: vi.fn(),
+	findQueuedWakesBySource: vi.fn(),
+	bulkCoalesceWakeEvents: vi.fn(),
+	updateWakeEventPayload: vi.fn(),
+	insertWorkerRun: vi.fn(),
+	consumeWakeEvent: vi.fn(),
+	touchWorkerLastWake: vi.fn(),
+	insertWakeStartedEvent: vi.fn(),
+	COALESCEABLE_WAKE_SOURCES: ["tick", "webhook"],
+}));
+
+vi.mock("../wakes/mapper", () => ({
+	extractWakeDedupeKey: vi.fn(),
+	buildMergedWakePayload: vi.fn(),
 }));
 
 vi.mock("../wakes/db", () => ({

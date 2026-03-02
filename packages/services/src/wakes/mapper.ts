@@ -4,11 +4,8 @@
  * Pure functions for wake payload parsing and coalescing logic.
  */
 
+import { isRecord } from "@proliferate/shared/type-guards";
 import type { WakeEventRow } from "./db";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export function extractWakeDedupeKey(payload: unknown): string | null {
 	if (!isRecord(payload)) {

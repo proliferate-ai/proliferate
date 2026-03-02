@@ -12,7 +12,8 @@ import {
 	workerRuns,
 	workers,
 } from "../db/client";
-import { claimNextWakeAndCreateRun, createWorker, createWorkerRun } from "./db";
+import { createWorker, createWorkerRun } from "./db";
+import { orchestrateNextWakeAndCreateRun } from "./service";
 
 const hasDatabaseUrl = typeof env.DATABASE_URL === "string" && env.DATABASE_URL.trim().length > 0;
 const describeDb = hasDatabaseUrl ? describe : describe.skip;
@@ -135,7 +136,7 @@ describeDb("workers db orchestration (DB-backed)", () => {
 			createdAt: new Date(now - 4_000),
 		});
 
-		const result = await claimNextWakeAndCreateRun(fixture.workerId, fixture.organizationId);
+		const result = await orchestrateNextWakeAndCreateRun(fixture.workerId, fixture.organizationId);
 		expect(result).not.toBeNull();
 		expect(result?.wakeEvent.source).toBe("manual");
 		expect(result?.wakeEvent.status).toBe("consumed");
@@ -170,7 +171,7 @@ describeDb("workers db orchestration (DB-backed)", () => {
 			createdAt: new Date(now - 3_000),
 		});
 
-		const result = await claimNextWakeAndCreateRun(fixture.workerId, fixture.organizationId);
+		const result = await orchestrateNextWakeAndCreateRun(fixture.workerId, fixture.organizationId);
 		expect(result).not.toBeNull();
 		expect(result?.wakeEvent.id).toBe(claimedCandidate.id);
 		expect(result?.coalescedWakeEventIds.sort()).toEqual([coalescedOne.id, coalescedTwo.id].sort());
@@ -217,7 +218,7 @@ describeDb("workers db orchestration (DB-backed)", () => {
 			payloadJson: { dedupeKey: "provider-event-2" },
 		});
 
-		const result = await claimNextWakeAndCreateRun(fixture.workerId, fixture.organizationId);
+		const result = await orchestrateNextWakeAndCreateRun(fixture.workerId, fixture.organizationId);
 		expect(result).not.toBeNull();
 		expect(result?.wakeEvent.id).toBe(claimedCandidate.id);
 		expect(result?.coalescedWakeEventIds).toEqual([sameDedupe.id]);
@@ -261,7 +262,7 @@ describeDb("workers db orchestration (DB-backed)", () => {
 			.set({ status: "running", startedAt: new Date() })
 			.where(eq(workerRuns.id, activeRun.id));
 
-		const result = await claimNextWakeAndCreateRun(fixture.workerId, fixture.organizationId);
+		const result = await orchestrateNextWakeAndCreateRun(fixture.workerId, fixture.organizationId);
 		expect(result).toBeNull();
 
 		const [unchangedWake] = await db
