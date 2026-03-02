@@ -1426,7 +1426,7 @@ export async function findLatestTerminalFollowupSession(input: {
 				? eq(sessions.continuedFromSessionId, input.sourceSessionId)
 				: eq(sessions.rerunOfSessionId, input.sourceSessionId),
 		),
-		orderBy: (table, { desc: d }) => [d(table.createdAt), d(table.id)],
+		orderBy: (table, { desc: d }) => [d(table.startedAt), d(table.id)],
 	});
 }
 
