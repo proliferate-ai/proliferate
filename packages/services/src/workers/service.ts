@@ -7,7 +7,6 @@
 import {
 	WORKER_RUN_EVENT_TYPES,
 	type WorkerRunEventType,
-	type WorkerRunStatus,
 	type WorkerStatus,
 	isValidWorkerRunTransition,
 	isValidWorkerTransition,
@@ -93,14 +92,14 @@ async function transitionWorker(
 
 	if (worker.status === idempotentFrom) return worker;
 
-	if (!isValidWorkerTransition(worker.status as WorkerStatus, toStatus)) {
+	if (!isValidWorkerTransition(worker.status, toStatus)) {
 		throw new WorkerStatusTransitionError(worker.status, toStatus);
 	}
 
 	const updated = await workersDb.transitionWorkerStatus(
 		worker.id,
 		organizationId,
-		[worker.status as WorkerStatus],
+		[worker.status],
 		toStatus,
 		fields,
 	);
@@ -138,7 +137,7 @@ export async function runNow(
 		throw new WorkerNotFoundError(workerId);
 	}
 
-	const status = worker.status as WorkerStatus;
+	const status = worker.status;
 	if (status === "paused") {
 		throw new WorkerResumeRequiredError(workerId);
 	}
@@ -270,7 +269,7 @@ export async function startWorkerRun(
 		throw new WorkerRunNotFoundError(workerRunId);
 	}
 
-	const fromStatus = workerRun.status as WorkerRunStatus;
+	const fromStatus = workerRun.status;
 	if (!isValidWorkerRunTransition(fromStatus, "running")) {
 		throw new WorkerRunTransitionError(fromStatus, "running");
 	}
@@ -299,7 +298,7 @@ export async function completeWorkerRun(input: {
 		throw new WorkerRunNotFoundError(input.workerRunId);
 	}
 
-	const fromStatus = workerRun.status as WorkerRunStatus;
+	const fromStatus = workerRun.status;
 	if (!isValidWorkerRunTransition(fromStatus, "completed")) {
 		throw new WorkerRunTransitionError(fromStatus, "completed");
 	}
@@ -336,7 +335,7 @@ export async function failWorkerRun(input: {
 		throw new WorkerRunNotFoundError(input.workerRunId);
 	}
 
-	const fromStatus = workerRun.status as WorkerRunStatus;
+	const fromStatus = workerRun.status;
 	if (!isValidWorkerRunTransition(fromStatus, "failed")) {
 		throw new WorkerRunTransitionError(fromStatus, "failed");
 	}

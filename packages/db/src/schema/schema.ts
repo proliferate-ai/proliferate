@@ -18,6 +18,35 @@ import {
 	uuid,
 } from "drizzle-orm/pg-core";
 
+// Typed status unions for V1 worker tables.
+// These mirror the canonical types in @proliferate/shared/contracts/v1-entities.ts.
+// Defined inline because @proliferate/db cannot depend on @proliferate/shared.
+type WorkerStatus = "active" | "paused" | "degraded" | "failed";
+type WakeEventSource = "tick" | "webhook" | "manual" | "manual_message";
+type WakeEventStatus = "queued" | "claimed" | "consumed" | "coalesced" | "cancelled" | "failed";
+type WorkerRunStatus =
+	| "queued"
+	| "running"
+	| "completed"
+	| "failed"
+	| "cancelled"
+	| "health_degraded";
+type WorkerRunEventType =
+	| "wake_started"
+	| "triage_summary"
+	| "source_observation"
+	| "directive_received"
+	| "task_spawned"
+	| "action_requested"
+	| "action_pending_approval"
+	| "action_completed"
+	| "action_failed"
+	| "action_denied"
+	| "action_expired"
+	| "manager_note"
+	| "wake_completed"
+	| "wake_failed";
+
 export const user = pgTable(
 	"user",
 	{
@@ -2183,7 +2212,7 @@ export const workers = pgTable(
 		organizationId: text("organization_id").notNull(),
 		name: text("name").notNull(),
 		objective: text("objective"),
-		status: text("status").notNull().default("active"),
+		status: text("status").$type<WorkerStatus>().notNull().default("active"),
 		managerSessionId: uuid("manager_session_id").notNull(),
 		modelId: text("model_id"),
 		computeProfile: text("compute_profile"),
@@ -2236,8 +2265,8 @@ export const wakeEvents = pgTable(
 		id: uuid().defaultRandom().primaryKey().notNull(),
 		workerId: uuid("worker_id").notNull(),
 		organizationId: text("organization_id").notNull(),
-		source: text("source").notNull(),
-		status: text("status").notNull().default("queued"),
+		source: text("source").$type<WakeEventSource>().notNull(),
+		status: text("status").$type<WakeEventStatus>().notNull().default("queued"),
 		coalescedIntoWakeEventId: uuid("coalesced_into_wake_event_id"),
 		payloadJson: jsonb("payload_json"),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
@@ -2295,7 +2324,7 @@ export const workerRuns = pgTable(
 		organizationId: text("organization_id").notNull(),
 		managerSessionId: uuid("manager_session_id").notNull(),
 		wakeEventId: uuid("wake_event_id").notNull(),
-		status: text("status").notNull().default("queued"),
+		status: text("status").$type<WorkerRunStatus>().notNull().default("queued"),
 		summary: text("summary"),
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 		startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
@@ -2350,7 +2379,7 @@ export const workerRunEvents = pgTable(
 		workerRunId: uuid("worker_run_id").notNull(),
 		workerId: uuid("worker_id").notNull(),
 		eventIndex: integer("event_index").notNull(),
-		eventType: text("event_type").notNull(),
+		eventType: text("event_type").$type<WorkerRunEventType>().notNull(),
 		summaryText: text("summary_text"),
 		payloadJson: jsonb("payload_json"),
 		payloadVersion: integer("payload_version").default(1),

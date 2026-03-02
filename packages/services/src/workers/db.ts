@@ -18,7 +18,12 @@ import {
 	workerRuns,
 	workers,
 } from "@proliferate/services/db/client";
-import type { WorkerRunStatus, WorkerStatus } from "@proliferate/shared/contracts";
+import type {
+	WakeEventSource,
+	WorkerRunEventType,
+	WorkerRunStatus,
+	WorkerStatus,
+} from "@proliferate/shared/contracts";
 
 // ============================================
 // Transaction Helpers
@@ -372,7 +377,7 @@ export async function findQueuedWakesBySource(
 	tx: DbTransaction,
 	workerId: string,
 	organizationId: string,
-	source: string,
+	source: WakeEventSource,
 ): Promise<WakeEventRow[]> {
 	return tx
 		.select()
@@ -502,7 +507,7 @@ export interface CreateWorkerRunEventInput {
 	workerRunId: string;
 	workerId: string;
 	eventIndex: number;
-	eventType: string;
+	eventType: WorkerRunEventType;
 	summaryText?: string;
 	payloadJson?: unknown;
 	payloadVersion?: number;
@@ -536,7 +541,7 @@ export async function createWorkerRunEvent(
 export interface AppendWorkerRunEventAtomicInput {
 	workerRunId: string;
 	workerId: string;
-	eventType: string;
+	eventType: WorkerRunEventType;
 	summaryText?: string;
 	payloadJson?: unknown;
 	payloadVersion?: number;
@@ -616,7 +621,7 @@ export interface TransitionWorkerRunWithTerminalEventInput {
 	toStatus: WorkerRunStatus;
 	summary?: string;
 	completedAt: Date;
-	eventType: string;
+	eventType: WorkerRunEventType;
 	eventPayloadJson?: unknown;
 	eventSummaryText?: string;
 }
@@ -643,7 +648,7 @@ export async function transitionWorkerRunWithTerminalEvent(
 		if (!run) {
 			return null;
 		}
-		if (!input.fromStatuses.includes(run.status as WorkerRunStatus)) {
+		if (!input.fromStatuses.includes(run.status)) {
 			return null;
 		}
 

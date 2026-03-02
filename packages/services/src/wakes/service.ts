@@ -44,7 +44,7 @@ export async function transitionWakeStatus(input: {
 		throw new WakeNotFoundError(input.wakeEventId);
 	}
 
-	const fromStatus = wake.status as WakeEventStatus;
+	const fromStatus = wake.status;
 	if (!isValidWakeEventTransition(fromStatus, input.toStatus)) {
 		throw new WakeTransitionError(fromStatus, input.toStatus);
 	}
@@ -95,5 +95,5 @@ export async function isTerminalWake(
 ): Promise<boolean> {
 	const wake = await wakesDb.findWakeEventById(wakeEventId, organizationId);
 	if (!wake) return false;
-	return isTerminalWakeEventStatus(wake.status as WakeEventStatus);
+	return isTerminalWakeEventStatus(wake.status);
 }

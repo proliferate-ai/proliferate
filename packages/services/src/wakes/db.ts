@@ -15,6 +15,7 @@ import {
 	sql,
 	wakeEvents,
 } from "@proliferate/services/db/client";
+import type { WakeEventSource, WakeEventStatus } from "@proliferate/shared/contracts";
 
 // ============================================
 // Type Exports
@@ -29,7 +30,7 @@ export type WakeEventRow = InferSelectModel<typeof wakeEvents>;
 export interface CreateWakeEventInput {
 	workerId: string;
 	organizationId: string;
-	source: string;
+	source: WakeEventSource;
 	payloadJson?: unknown;
 }
 
@@ -63,7 +64,7 @@ export async function findWakeEventById(
 export async function updateWakeEventStatus(
 	id: string,
 	organizationId: string,
-	status: string,
+	status: WakeEventStatus,
 	fields?: {
 		coalescedIntoWakeEventId?: string;
 		claimedAt?: Date;
@@ -83,8 +84,8 @@ export async function updateWakeEventStatus(
 export async function transitionWakeEventStatus(input: {
 	id: string;
 	organizationId: string;
-	fromStatuses: string[];
-	toStatus: string;
+	fromStatuses: WakeEventStatus[];
+	toStatus: WakeEventStatus;
 	fields?: {
 		coalescedIntoWakeEventId?: string | null;
 		claimedAt?: Date | null;
@@ -162,7 +163,7 @@ export async function listQueuedByWorker(
 export async function listQueuedByWorkerAndSource(
 	workerId: string,
 	organizationId: string,
-	source: string,
+	source: WakeEventSource,
 ): Promise<WakeEventRow[]> {
 	const db = getDb();
 	return db
