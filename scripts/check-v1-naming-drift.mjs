@@ -22,6 +22,9 @@ const scanTargets = [
 	"packages/db/src/schema",
 ];
 
+// Dead DB tables that were dropped in PR 11. Guard against schema re-introduction.
+const bannedSchemaSymbols = ["sessionToolInvocations", "triggerEventActions"];
+
 const scanExtensions = new Set([".ts", ".tsx", ".js", ".jsx"]);
 const forbiddenPattern = /\b(?:automation[a-zA-Z0-9_]*|configuration[a-zA-Z0-9_]*)\b/gi;
 const stringLiteralPattern = /(["'`])((?:\\.|(?!\1)[\s\S])*?)\1/g;
@@ -180,6 +183,23 @@ async function main() {
 			const content = await fs.readFile(filePath, "utf8");
 			findings.push(...collectTermFindings(content, relative));
 		}
+	}
+
+	// Check that dropped DB tables haven't been re-introduced in the schema.
+	const schemaPath = path.join(workspaceRoot, "packages/db/src/schema/schema.ts");
+	try {
+		const schemaContent = await fs.readFile(schemaPath, "utf8");
+		for (const symbol of bannedSchemaSymbols) {
+			if (schemaContent.includes(symbol)) {
+				findings.push({
+					file: "packages/db/src/schema/schema.ts",
+					line: lineFromIndex(schemaContent, schemaContent.indexOf(symbol)),
+					snippet: `${symbol} (dropped table re-introduced)`,
+				});
+			}
+		}
+	} catch {
+		// Schema file missing is fine — skip this check.
 	}
 
 	await validateSessionKindEnum(failures);

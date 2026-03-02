@@ -43,7 +43,31 @@ const bannedPrimaryTargets = [
 	"/dashboard/activity",
 	"/dashboard/actions",
 	"/dashboard/configurations",
+	"/dashboard/automations",
 	"/dashboard/repos",
+	"/dashboard/runs",
+	"/dashboard/triggers",
+];
+
+// Legacy route directories that were deleted in PR 09 and must not reappear.
+const bannedRouteDirectories = [
+	"apps/web/src/app/(command-center)/dashboard/actions",
+	"apps/web/src/app/(command-center)/dashboard/activity",
+	"apps/web/src/app/(command-center)/dashboard/automations",
+	"apps/web/src/app/(command-center)/dashboard/configurations",
+	"apps/web/src/app/(command-center)/dashboard/inbox",
+	"apps/web/src/app/(command-center)/dashboard/my-work",
+	"apps/web/src/app/(command-center)/dashboard/repos",
+	"apps/web/src/app/(command-center)/dashboard/runs",
+	"apps/web/src/app/(command-center)/dashboard/triggers",
+];
+
+// Dead code files that were removed and must not be re-created.
+const bannedDeadFiles = [
+	"apps/web/src/hooks/use-my-work.ts",
+	"apps/web/src/hooks/use-org-activity.ts",
+	"apps/web/src/components/inbox/inbox-empty.tsx",
+	"apps/web/src/components/inbox/inbox-item.tsx",
 ];
 
 const rootCanonicalRedirectPattern = /redirect\(\s*["']\/dashboard["']\s*\)/;
@@ -139,6 +163,20 @@ async function main() {
 			if (commandSearchTargets.has(target)) {
 				failures.push(`Command search still references legacy primary target: ${target}`);
 			}
+		}
+	}
+
+	// Ensure deleted legacy route directories haven't reappeared.
+	for (const dir of bannedRouteDirectories) {
+		if (await fileExists(dir)) {
+			failures.push(`Legacy route directory must not exist: ${dir}`);
+		}
+	}
+
+	// Ensure deleted dead-code files haven't been re-created.
+	for (const file of bannedDeadFiles) {
+		if (await fileExists(file)) {
+			failures.push(`Dead code file must not exist: ${file}`);
 		}
 	}
 
