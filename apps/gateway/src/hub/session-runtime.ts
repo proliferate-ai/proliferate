@@ -148,6 +148,9 @@ export class SessionRuntime {
 	}
 
 	isReady(): boolean {
+		if (this.isManagerSessionKind()) {
+			return Boolean(this.provider && this.context.session.sandbox_id);
+		}
 		return Boolean(this.openCodeUrl && this.openCodeSessionId && this.eventStreamConnected);
 	}
 
@@ -316,13 +319,6 @@ export class SessionRuntime {
 				harnessFamily,
 				sessionKind: this.context.session.kind ?? "unknown",
 			});
-			if (harnessFamily === "manager-claude") {
-				if (options?.reason === "auto_reconnect") {
-					await this.managerHarness.resume({ managerSessionId: this.sessionId });
-				} else {
-					await this.managerHarness.start({ managerSessionId: this.sessionId });
-				}
-			}
 
 			// Abort auto-reconnect when session has transitioned to a terminal/non-running state
 			// while we were waiting on locks/loading context.
@@ -538,6 +534,29 @@ export class SessionRuntime {
 			if (this.previewUrl && this.onBroadcast) {
 				this.onBroadcast({ type: "preview_url", payload: { url: this.previewUrl } });
 				await sessions.update(this.sessionId, { previewTunnelUrl: this.previewUrl });
+			}
+
+			if (harnessFamily === "manager-claude") {
+				const managerHarnessStartMs = Date.now();
+				if (options?.reason === "auto_reconnect") {
+					await this.managerHarness.resume({ managerSessionId: this.sessionId });
+				} else {
+					await this.managerHarness.start({ managerSessionId: this.sessionId });
+				}
+				this.logLatency("runtime.ensure_ready.manager_harness.start", {
+					durationMs: Date.now() - managerHarnessStartMs,
+				});
+
+				// Manager sessions do not run OpenCode; clear coding-session state.
+				this.eventStreamHandle?.disconnect();
+				this.eventStreamHandle = null;
+				this.eventStreamConnected = false;
+				this.openCodeSessionId = null;
+
+				this.onStatus("running");
+				this.log("Runtime lifecycle complete - manager harness ready");
+				this.logLatency("runtime.ensure_ready.complete");
+				return;
 			}
 
 			if (!this.openCodeUrl) {

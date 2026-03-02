@@ -15,7 +15,7 @@ describe("normalizeDaemonEvent", () => {
 		expect(normalized.rawEvent).toBe(event);
 	});
 
-	it("marks session.idle as terminal", () => {
+	it("keeps session.idle non-terminal", () => {
 		const event: OpenCodeEvent = {
 			type: "session.idle",
 			properties: {},
@@ -23,7 +23,7 @@ describe("normalizeDaemonEvent", () => {
 
 		const normalized = normalizeDaemonEvent(event);
 		expect(normalized.channel).toBe("session");
-		expect(normalized.isTerminal).toBe(true);
+		expect(normalized.isTerminal).toBe(false);
 	});
 
 	it("marks session.error as terminal", () => {

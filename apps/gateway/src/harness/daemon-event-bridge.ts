@@ -12,7 +12,7 @@ function resolveChannel(eventType: string): RuntimeDaemonEvent["channel"] {
 }
 
 function isTerminalEvent(eventType: string): boolean {
-	return eventType === "session.idle" || eventType === "session.error";
+	return eventType === "session.error";
 }
 
 export function normalizeDaemonEvent(event: OpenCodeEvent): RuntimeDaemonEvent {

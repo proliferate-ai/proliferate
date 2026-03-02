@@ -131,12 +131,11 @@
 - PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/255`
 - scope: Phase 5 harness/runtime split scaffolding (coding harness contract, OpenCode adapter module, manager Claude harness module, daemon event bridge, runtime integration points)
 - check results:
-  - `pnpm typecheck` ✅
-  - `pnpm lint` ✅
-  - `pnpm test` ✅
-  - `pnpm build` ⚠️ fails locally due required env vars for `apps/web` build-time validation.
+  - `pnpm -C apps/gateway test src/harness/daemon-event-bridge.test.ts src/harness/opencode-coding-harness.test.ts` ⚠️ blocked in this worktree (`node_modules` missing; `vitest` not found).
+  - `pnpm -C apps/gateway typecheck` ⚠️ blocked in this worktree (`node_modules` missing; `tsc` not found).
+  - `pnpm -C apps/gateway lint` ⚠️ blocked in this worktree (`node_modules` missing / local package execution failed).
 - open comments:
-  - Pending CI rerun after harness lifecycle + adapter encapsulation follow-ups.
+  - Critique 5 processed; CI rerun pending.
 - fixes applied:
   - Added shared coding harness interface (`start`, `resume`, `interrupt`, `shutdown`, `streamEvents`, `collectOutputs`).
   - Added OpenCode coding harness adapter implementation over existing OpenCode API + SSE transport.
@@ -151,6 +150,10 @@
   - Routed OpenCode session resolution + event-stream connection through the coding-harness adapter contract (removed runtime direct lookup/list/SSE wiring).
   - Added daemon bridge test coverage for `session.error` terminal normalization.
   - Added harness adapter unit tests for resume behavior across success/transient/non-transient lookup paths.
+  - Fixed runtime boot-order inversion by moving manager harness `start/resume` until after sandbox provisioning and provider readiness.
+  - Added manager-specific runtime branch so `kind=manager` sessions skip OpenCode readiness/session/SSE initialization entirely.
+  - Updated manager readiness semantics (`isReady`) to rely on provisioned sandbox/provider state instead of OpenCode session state.
+  - Corrected daemon bridge terminal classification so `session.idle` is non-terminal and only error events mark terminal.
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Broaden runtime lifecycle integration to route all harness operations through the adapter contract.
