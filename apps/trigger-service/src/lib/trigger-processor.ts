@@ -55,6 +55,23 @@ export async function processTriggerEvents(
 		triggerRow.organizationId,
 	);
 	if (workerId) {
+		// Enforce trigger-level enabled check before bridging (automation.enabled checked above)
+		if (!triggerRow.enabled) {
+			for (const event of events) {
+				await safeCreateSkippedEvent({
+					triggerId: triggerRow.id,
+					organizationId: triggerRow.organizationId,
+					externalEventId: event.externalId,
+					providerEventType: inferProviderEventType(triggerRow.provider, event.payload),
+					rawPayload: toRawPayload(event.payload),
+					parsedContext: null,
+					dedupKey: triggerDef.idempotencyKey(event),
+					skipReason: "trigger_disabled",
+				});
+				skipped++;
+			}
+			return { processed, skipped };
+		}
 		return bridgeToWakeEvents(workerId, triggerRow, triggerDef, events);
 	}
 
@@ -198,6 +215,22 @@ async function bridgeToWakeEvents(
 					dedupeKey: dedupKey ?? undefined,
 				},
 			});
+
+			// Persist trigger event for dedupe so redelivered webhooks are caught
+			// by eventExistsByDedupKey on subsequent deliveries
+			if (dedupKey) {
+				await safeCreateSkippedEvent({
+					triggerId: triggerRow.id,
+					organizationId: triggerRow.organizationId,
+					externalEventId: event.externalId,
+					providerEventType: inferProviderEventType(triggerRow.provider, event.payload),
+					rawPayload: toRawPayload(event.payload),
+					parsedContext: triggerDef.context(event) as Record<string, unknown>,
+					dedupKey,
+					skipReason: "bridged_to_wake",
+				});
+			}
+
 			processed++;
 		} catch (err) {
 			logger.error(
