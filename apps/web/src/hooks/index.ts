@@ -25,10 +25,15 @@ export {
 
 // Billing hooks
 export {
+	useActivatePlan,
 	useBilling,
 	useBillingState,
 	useBuyCredits,
+	useCostDrivers,
+	useEntitlementStatus,
+	useRecentEvents,
 	useUpdateBillingSettings,
+	useUsageSummary,
 } from "./use-billing";
 export type { BillingState } from "./use-billing";
 

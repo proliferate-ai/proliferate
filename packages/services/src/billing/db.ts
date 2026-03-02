@@ -18,6 +18,7 @@ import {
 	llmSpendCursors,
 	organization,
 	sql,
+	workers,
 } from "../db/client";
 
 // ============================================
@@ -169,6 +170,118 @@ export async function listBillingEvents(options: ListBillingEventsOptions): Prom
 		events,
 		total: Number(countRow?.count ?? 0),
 	};
+}
+
+// ============================================
+// Usage Summary & Cost Drivers
+// ============================================
+
+export interface UsageSummaryRow {
+	eventType: string;
+	totalCredits: string;
+	eventCount: number;
+}
+
+/**
+ * Get aggregated usage summary for an org within a billing period.
+ */
+export async function getUsageSummary(
+	orgId: string,
+	periodStart: Date,
+	periodEnd: Date,
+): Promise<UsageSummaryRow[]> {
+	const db = getDb();
+	return db
+		.select({
+			eventType: billingEvents.eventType,
+			totalCredits: sql<string>`coalesce(sum(${billingEvents.credits}::numeric), 0)::text`,
+			eventCount: sql<number>`count(*)::int`,
+		})
+		.from(billingEvents)
+		.where(
+			and(
+				eq(billingEvents.organizationId, orgId),
+				inArray(billingEvents.status, ["pending", "posted"]),
+				gte(billingEvents.createdAt, periodStart),
+				lt(billingEvents.createdAt, periodEnd),
+			),
+		)
+		.groupBy(billingEvents.eventType);
+}
+
+export interface CostDriverRow {
+	sessionId: string;
+	totalCredits: string;
+	eventCount: number;
+}
+
+/**
+ * Get top cost drivers grouped by session for an org within a billing period.
+ * Returns the top N sessions by credit usage.
+ */
+export async function getTopCostDrivers(
+	orgId: string,
+	periodStart: Date,
+	periodEnd: Date,
+	limit = 10,
+): Promise<CostDriverRow[]> {
+	const db = getDb();
+	return db
+		.select({
+			sessionId: sql<string>`unnest(${billingEvents.sessionIds})`,
+			totalCredits: sql<string>`coalesce(sum(${billingEvents.credits}::numeric), 0)::text`,
+			eventCount: sql<number>`count(*)::int`,
+		})
+		.from(billingEvents)
+		.where(
+			and(
+				eq(billingEvents.organizationId, orgId),
+				inArray(billingEvents.status, ["pending", "posted"]),
+				gte(billingEvents.createdAt, periodStart),
+				lt(billingEvents.createdAt, periodEnd),
+			),
+		)
+		.groupBy(sql`unnest(${billingEvents.sessionIds})`)
+		.orderBy(sql`sum(${billingEvents.credits}::numeric) desc`)
+		.limit(limit);
+}
+
+/**
+ * Get total monthly usage credits for an org (current month).
+ */
+export async function getMonthlyUsageTotal(orgId: string): Promise<number> {
+	const now = new Date();
+	const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+	const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+	const db = getDb();
+	const [row] = await db
+		.select({
+			total: sql<string>`coalesce(sum(${billingEvents.credits}::numeric), 0)::text`,
+		})
+		.from(billingEvents)
+		.where(
+			and(
+				eq(billingEvents.organizationId, orgId),
+				inArray(billingEvents.status, ["pending", "posted"]),
+				gte(billingEvents.createdAt, periodStart),
+				lt(billingEvents.createdAt, periodEnd),
+			),
+		);
+
+	return Number(row?.total ?? 0);
+}
+
+/**
+ * Count active coworkers (workers with status 'active') for an org.
+ */
+export async function getActiveCoworkerCount(orgId: string): Promise<number> {
+	const db = getDb();
+	const [row] = await db
+		.select({ count: sql<number>`count(*)::int` })
+		.from(workers)
+		.where(and(eq(workers.organizationId, orgId), eq(workers.status, "active")));
+	return row?.count ?? 0;
 }
 
 // ============================================

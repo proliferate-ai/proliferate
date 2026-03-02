@@ -21,6 +21,7 @@ import {
 	autumnAttach,
 	autumnGetCustomer,
 	canPossiblyStart,
+	computeWarningLevel,
 	getStateMessage,
 } from "@proliferate/shared/billing";
 import { z } from "zod";
@@ -453,5 +454,190 @@ export const billingRouter = {
 					message: "Failed to process purchase",
 				});
 			}
+		}),
+
+	/**
+	 * Get usage summary for the current billing period.
+	 */
+	getUsageSummary: orgProcedure
+		.input(z.object({}).optional())
+		.output(
+			z.object({
+				totalCredits: z.number(),
+				computeCredits: z.number(),
+				llmCredits: z.number(),
+				eventCount: z.number(),
+				periodStart: z.string(),
+				periodEnd: z.string(),
+			}),
+		)
+		.handler(async ({ context }) => {
+			const now = new Date();
+			const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+			const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+			const rows = await billing.getUsageSummary(context.orgId, periodStart, periodEnd);
+
+			let computeCredits = 0;
+			let llmCredits = 0;
+			let eventCount = 0;
+
+			for (const row of rows) {
+				const credits = Number(row.totalCredits);
+				eventCount += row.eventCount;
+				if (row.eventType === "compute") {
+					computeCredits = credits;
+				} else if (row.eventType === "llm") {
+					llmCredits = credits;
+				}
+			}
+
+			return {
+				totalCredits: computeCredits + llmCredits,
+				computeCredits,
+				llmCredits,
+				eventCount,
+				periodStart: periodStart.toISOString(),
+				periodEnd: periodEnd.toISOString(),
+			};
+		}),
+
+	/**
+	 * Get top cost drivers for the current billing period.
+	 */
+	getCostDrivers: orgProcedure
+		.input(z.object({ limit: z.number().int().min(1).max(50).default(10) }).optional())
+		.output(
+			z.array(
+				z.object({
+					label: z.string(),
+					entityId: z.string(),
+					entityType: z.string(),
+					credits: z.number(),
+					eventCount: z.number(),
+					percentage: z.number(),
+				}),
+			),
+		)
+		.handler(async ({ context, input }) => {
+			const now = new Date();
+			const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+			const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+			const rows = await billing.getTopCostDrivers(
+				context.orgId,
+				periodStart,
+				periodEnd,
+				input?.limit ?? 10,
+			);
+
+			// Compute total for percentage calculation
+			const totalCredits = rows.reduce((sum, r) => sum + Number(r.totalCredits), 0);
+
+			return rows.map((row) => {
+				const credits = Number(row.totalCredits);
+				return {
+					label: row.sessionId ? `Session ${row.sessionId.slice(0, 8)}` : "Unknown",
+					entityId: row.sessionId,
+					entityType: "session" as const,
+					credits,
+					eventCount: row.eventCount,
+					percentage: totalCredits > 0 ? (credits / totalCredits) * 100 : 0,
+				};
+			});
+		}),
+
+	/**
+	 * Get recent billing events with pagination.
+	 */
+	getRecentEvents: orgProcedure
+		.input(
+			z
+				.object({
+					limit: z.number().int().min(1).max(100).default(20),
+					offset: z.number().int().min(0).default(0),
+					eventType: z.enum(["compute", "llm"]).optional(),
+				})
+				.optional(),
+		)
+		.output(
+			z.object({
+				events: z.array(
+					z.object({
+						id: z.string(),
+						eventType: z.string(),
+						credits: z.number(),
+						quantity: z.number(),
+						status: z.string(),
+						sessionIds: z.array(z.string()).nullable(),
+						metadata: z.record(z.unknown()).nullable(),
+						createdAt: z.string(),
+					}),
+				),
+				total: z.number(),
+			}),
+		)
+		.handler(async ({ context, input }) => {
+			const { events, total } = await billing.listBillingEvents({
+				orgId: context.orgId,
+				limit: input?.limit ?? 20,
+				offset: input?.offset ?? 0,
+				eventType: input?.eventType,
+			});
+
+			return {
+				events: events.map((e) => ({
+					id: e.id,
+					eventType: e.eventType,
+					credits: Number(e.credits),
+					quantity: Number(e.quantity),
+					status: e.status,
+					sessionIds: e.sessionIds,
+					metadata: e.metadata,
+					createdAt: e.createdAt.toISOString(),
+				})),
+				total,
+			};
+		}),
+
+	/**
+	 * Get entitlement status (current usage vs plan limits).
+	 */
+	getEntitlementStatus: orgProcedure
+		.input(z.object({}).optional())
+		.output(
+			z.object({
+				concurrentSessions: z.object({ current: z.number(), max: z.number() }),
+				activeCoworkers: z.object({ current: z.number(), max: z.number() }),
+				monthlyUsage: z.object({
+					used: z.number(),
+					included: z.number(),
+					warningLevel: z.enum(["none", "approaching", "critical", "exhausted"]),
+				}),
+			}),
+		)
+		.handler(async ({ context }) => {
+			const status = await billing.getEntitlementStatus(context.orgId);
+
+			if (!status) {
+				// Billing disabled — return unlimited defaults
+				return {
+					concurrentSessions: { current: 0, max: 999 },
+					activeCoworkers: { current: 0, max: 999 },
+					monthlyUsage: { used: 0, included: 0, warningLevel: "none" as const },
+				};
+			}
+
+			return {
+				...status,
+				monthlyUsage: {
+					...status.monthlyUsage,
+					warningLevel: status.monthlyUsage.warningLevel as
+						| "none"
+						| "approaching"
+						| "critical"
+						| "exhausted",
+				},
+			};
 		}),
 };
