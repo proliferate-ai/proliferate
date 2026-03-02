@@ -53,7 +53,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 			const automation = await createAutomation.mutateAsync({});
 			router.push(`/coworkers/${automation.id}`);
 		} catch (error) {
-			console.error("Failed to create automation:", error);
+			console.error("Failed to create coworker:", error);
 		}
 		onOpenChange(false);
 	}, [createAutomation, router, onOpenChange]);
@@ -100,7 +100,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 				<CommandGroup heading="Navigate">
 					<CommandItem
 						onSelect={() => {
-							router.push("/dashboard");
+							router.push("/");
 							onOpenChange(false);
 						}}
 					>

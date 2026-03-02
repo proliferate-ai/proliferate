@@ -24,8 +24,8 @@ export default function SessionDetailPage({
 	const [switchError, setSwitchError] = useState<string | null>(null);
 	const [isSwitching, setIsSwitching] = useState(false);
 	const runId = searchParams.get("runId");
-	const fromAutomation = searchParams.get("from") === "automation";
-	const [showAutomationBanner, setShowAutomationBanner] = useState(fromAutomation && !runId);
+	const fromCoworker = searchParams.get("from") === "coworker";
+	const [showCoworkerBanner, setShowCoworkerBanner] = useState(fromCoworker && !runId);
 	const shouldSwitchOrg = useMemo(
 		() => Boolean(targetOrgId && activeOrg?.id && activeOrg.id !== targetOrgId),
 		[targetOrgId, activeOrg?.id],
@@ -71,13 +71,13 @@ export default function SessionDetailPage({
 
 	return (
 		<div className="flex-1 min-h-0 flex flex-col">
-			{showAutomationBanner && (
+			{showCoworkerBanner && (
 				<div className="flex items-center gap-2 px-4 py-2 bg-muted/60 border-b border-border text-sm text-muted-foreground shrink-0">
 					<Zap className="h-3.5 w-3.5" />
-					<span>Resumed from Automation</span>
+					<span>Resumed from Coworker</span>
 					<button
 						type="button"
-						onClick={() => setShowAutomationBanner(false)}
+						onClick={() => setShowCoworkerBanner(false)}
 						className="ml-auto text-muted-foreground/60 hover:text-foreground transition-colors"
 					>
 						<X className="h-3.5 w-3.5" />

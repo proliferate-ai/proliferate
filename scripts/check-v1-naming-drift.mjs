@@ -7,6 +7,11 @@ import { fileURLToPath } from "node:url";
 const workspaceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const scanTargets = [
+	"apps/web/src/app/(workspace)/workspace/[id]/page.tsx",
+	"apps/web/src/app/(command-center)/sessions/page.tsx",
+	"apps/web/src/components/dashboard/sidebar.tsx",
+	"apps/web/src/components/dashboard/command-search.tsx",
+	"apps/web/src/components/dashboard/empty-state.tsx",
 	"packages/services/src/workers",
 	"packages/services/src/wakes",
 	"packages/services/src/sessions/v1-db.ts",
@@ -14,13 +19,39 @@ const scanTargets = [
 	"apps/gateway/src/harness",
 	"apps/gateway/src/hub/control-plane.ts",
 	"apps/gateway/src/hub/control-plane.test.ts",
+	"packages/db/src/schema",
 ];
 
 const scanExtensions = new Set([".ts", ".tsx", ".js", ".jsx"]);
-const forbiddenPattern = /\bautomation[a-zA-Z0-9_]*\b/gi;
+const forbiddenPattern = /\b(?:automation|configuration)(?:s|Id|_id)?\b/gi;
+const stringLiteralPattern = /(["'`])((?:\\.|(?!\1)[\s\S])*?)\1/g;
+const skipTermScanPathPatterns = [/^packages\/db\/src\/schema\//];
+const ignoreStringPatterns = [
+	/^\/dashboard\//,
+	/^@\//,
+	/^\.\/automation-/,
+	/^automation(?:[._][a-z0-9_]+)?$/i,
+	/^configuration(?:s|Id|_id)?$/i,
+];
+
+const sessionKindsFile = "packages/db/src/schema/sessions.ts";
+const sharedSessionContractFile = "packages/shared/src/contracts/sessions.ts";
+const allowedSessionKinds = ["manager", "task", "setup"];
+
+async function statOrNull(fullPath) {
+	try {
+		return await fs.stat(fullPath);
+	} catch {
+		return null;
+	}
+}
 
 async function walk(fullPath, files = []) {
-	const stat = await fs.stat(fullPath);
+	const stat = await statOrNull(fullPath);
+	if (!stat) {
+		return files;
+	}
+
 	if (stat.isFile()) {
 		if (scanExtensions.has(path.extname(fullPath))) {
 			files.push(fullPath);
@@ -30,7 +61,7 @@ async function walk(fullPath, files = []) {
 
 	const entries = await fs.readdir(fullPath, { withFileTypes: true });
 	for (const entry of entries) {
-		if (entry.name === "node_modules" || entry.name === "dist") {
+		if (entry.name === "node_modules" || entry.name === "dist" || entry.name === ".next") {
 			continue;
 		}
 		await walk(path.join(fullPath, entry.name), files);
@@ -39,50 +70,127 @@ async function walk(fullPath, files = []) {
 }
 
 function lineFromIndex(content, index) {
-	let line = 1;
-	for (let i = 0; i < index; i++) {
-		if (content.charCodeAt(i) === 10) {
-			line++;
+	return content.substring(0, index).split("\n").length;
+}
+
+function shouldIgnoreStringLiteral(raw) {
+	const value = raw.trim();
+	if (!value || value.includes("${")) {
+		return true;
+	}
+	return ignoreStringPatterns.some((pattern) => pattern.test(value));
+}
+
+function collectTermFindings(content, file) {
+	const findings = [];
+	for (const literalMatch of content.matchAll(stringLiteralPattern)) {
+		const literalContent = literalMatch[2] ?? "";
+		if (shouldIgnoreStringLiteral(literalContent)) {
+			continue;
+		}
+
+		for (const match of literalContent.matchAll(forbiddenPattern)) {
+			const literalStart = literalMatch.index ?? 0;
+			const relativeOffset = match.index ?? 0;
+			const absoluteIndex = literalStart + relativeOffset;
+			findings.push({
+				file,
+				line: lineFromIndex(content, absoluteIndex),
+				snippet: match[0],
+			});
 		}
 	}
-	return line;
+	return findings;
+}
+
+async function validateSessionKindEnum(failures) {
+	const fullPath = path.join(workspaceRoot, sessionKindsFile);
+	const content = await fs.readFile(fullPath, "utf8");
+
+	let kinds = [];
+	const enumMatch = content.match(/pgEnum\(\s*["']session_kind["']\s*,\s*\[([\s\S]*?)\]\s*\)/);
+	if (enumMatch) {
+		kinds = Array.from(enumMatch[1].matchAll(/["']([^"']+)["']/g)).map((m) => m[1]);
+	} else {
+		const checkMatch = content.match(
+			/sessions_kind_check[\s\S]*?ARRAY\[(?<values>[\s\S]*?)\]/,
+		);
+		if (!checkMatch?.groups?.values) {
+			failures.push(`Could not locate session_kind enum declaration in ${sessionKindsFile}.`);
+			return;
+		}
+		kinds = Array.from(checkMatch.groups.values.matchAll(/'([^']+)'::text/g)).map((m) => m[1]);
+	}
+	const sortedKinds = [...kinds].sort();
+	const sortedAllowed = [...allowedSessionKinds].sort();
+	if (sortedKinds.length !== sortedAllowed.length) {
+		failures.push(
+			`session_kind enum must be exactly [${sortedAllowed.join(", ")}], found [${sortedKinds.join(", ")}].`,
+		);
+		return;
+	}
+	for (let i = 0; i < sortedAllowed.length; i++) {
+		if (sortedKinds[i] !== sortedAllowed[i]) {
+			failures.push(
+				`session_kind enum must be exactly [${sortedAllowed.join(", ")}], found [${sortedKinds.join(", ")}].`,
+			);
+			return;
+		}
+	}
+}
+
+async function validateSharedSessionKindContract(failures) {
+	const fullPath = path.join(workspaceRoot, sharedSessionContractFile);
+	const content = await fs.readFile(fullPath, "utf8");
+	const expectedEnumPattern = /z\.enum\(\s*\[\s*["']manager["']\s*,\s*["']task["']\s*,\s*["']setup["']\s*\]\s*\)/;
+	if (!expectedEnumPattern.test(content)) {
+		failures.push(
+			`Expected shared session kind enum z.enum(["manager", "task", "setup"]) in ${sharedSessionContractFile}.`,
+		);
+	}
 }
 
 async function main() {
 	const findings = [];
+	const failures = [];
 
 	for (const target of scanTargets) {
 		const fullTarget = path.join(workspaceRoot, target);
-		try {
-			await fs.stat(fullTarget);
-		} catch {
-			continue;
-		}
-
 		const files = await walk(fullTarget);
 		for (const filePath of files) {
-			const content = await fs.readFile(filePath, "utf8");
-			for (const match of content.matchAll(forbiddenPattern)) {
-				findings.push({
-					file: path.relative(workspaceRoot, filePath),
-					line: lineFromIndex(content, match.index ?? 0),
-					snippet: match[0],
-				});
+			const relative = path.relative(workspaceRoot, filePath);
+			if (skipTermScanPathPatterns.some((pattern) => pattern.test(relative))) {
+				continue;
 			}
+			const content = await fs.readFile(filePath, "utf8");
+			findings.push(...collectTermFindings(content, relative));
 		}
 	}
 
-	if (findings.length === 0) {
+	await validateSessionKindEnum(failures);
+	await validateSharedSessionKindContract(failures);
+
+	if (findings.length === 0 && failures.length === 0) {
 		console.log("V1 naming drift guard passed.");
 		return;
 	}
 
-	console.error("V1 naming drift guard failed (legacy automation naming in V1 paths):");
-	for (const finding of findings) {
-		console.error(`- ${finding.file}:${finding.line} ${finding.snippet}`);
+	if (findings.length > 0) {
+		console.error("V1 naming drift guard failed (legacy automation/configuration naming in guarded paths):");
+		for (const finding of findings) {
+			console.error(`- ${finding.file}:${finding.line} ${finding.snippet}`);
+		}
 	}
+
+	if (failures.length > 0) {
+		console.error("V1 naming drift guard failed (session kind contract checks):");
+		for (const failure of failures) {
+			console.error(`- ${failure}`);
+		}
+	}
+
 	console.error(
-		"Use canonical V1 terms: worker / worker_run / coworker (UI), not automation* in V1 runtime paths.",
+		"Use canonical V1 terms in guarded surfaces: coworker (UI), worker / worker_run (runtime), session kinds manager|task|setup.",
 	);
 	process.exit(1);
 }

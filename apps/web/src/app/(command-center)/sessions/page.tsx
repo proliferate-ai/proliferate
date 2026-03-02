@@ -22,7 +22,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 
 type FilterTab = "in_progress" | "needs_attention" | "paused" | "completed";
-type OriginFilter = "all" | "manual" | "automation" | "slack" | "cli";
+type OriginFilter = "all" | "manual" | "coworker" | "slack" | "cli";
 
 const TABS: { value: FilterTab; label: string }[] = [
 	{ value: "in_progress", label: "In Progress" },
@@ -40,7 +40,7 @@ function getSessionOrigin(session: {
 	origin?: string | null;
 	clientType?: string | null;
 }): OriginFilter {
-	if (session.automationId) return "automation";
+	if (session.automationId) return "coworker";
 	if (session.origin === "slack" || session.clientType === "slack") return "slack";
 	if (session.origin === "cli" || session.clientType === "cli") return "cli";
 	return "manual";
@@ -230,7 +230,7 @@ function SessionsContent() {
 						<SelectContent>
 							<SelectItem value="all">All Origins</SelectItem>
 							<SelectItem value="manual">Manual</SelectItem>
-							<SelectItem value="automation">Automation</SelectItem>
+							<SelectItem value="coworker">Coworker</SelectItem>
 							<SelectItem value="slack">Slack</SelectItem>
 							<SelectItem value="cli">CLI</SelectItem>
 						</SelectContent>
