@@ -70,6 +70,14 @@ export const SessionSchema = z.object({
 		.nullable()
 		.optional(),
 	latestTask: z.string().nullable().optional(),
+	// V1: enrichment fields
+	workerId: z.string().uuid().nullable().optional(),
+	workerName: z.string().nullable().optional(),
+	visibility: z.enum(["private", "shared", "org"]).nullable().optional(),
+	continuedFromSessionId: z.string().uuid().nullable().optional(),
+	rerunOfSessionId: z.string().uuid().nullable().optional(),
+	unread: z.boolean().optional(),
+	pendingApprovalCount: z.number().optional(),
 });
 
 export type Session = z.infer<typeof SessionSchema>;

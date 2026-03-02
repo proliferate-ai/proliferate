@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { useOrgPendingRuns } from "@/hooks/use-automations";
 import { useSessions } from "@/hooks/use-sessions";
+import { useSession } from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { type DisplayStatus, deriveDisplayStatus } from "@proliferate/shared/sessions";
@@ -23,6 +24,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 
 type FilterTab = "in_progress" | "needs_attention" | "paused" | "completed";
 type OriginFilter = "all" | "manual" | "automation" | "slack" | "cli";
+type CreatorFilter = "all" | "mine";
 
 const TABS: { value: FilterTab; label: string }[] = [
 	{ value: "in_progress", label: "In Progress" },
@@ -46,13 +48,49 @@ function getSessionOrigin(session: {
 	return "manual";
 }
 
+/**
+ * Sort sessions by urgency priority then recency.
+ * 1. waiting_for_approval / needs_input / errored (operatorStatus)
+ * 2. running (runtimeStatus)
+ * 3. failed
+ * 4. Recently updated (default)
+ * 5. completed / archived lower
+ */
+function sortSessions<T extends { session: SessionEntry }>(items: T[]): T[] {
+	const priority = (s: SessionEntry) => {
+		if (
+			s.operatorStatus === "waiting_for_approval" ||
+			s.operatorStatus === "needs_input" ||
+			s.operatorStatus === "errored"
+		) {
+			return 0;
+		}
+		if (s.runtimeStatus === "running" || s.status === "running") return 1;
+		if (s.runtimeStatus === "failed" || s.status === "failed") return 2;
+		if (s.runtimeStatus === "completed" || s.status === "stopped") return 4;
+		return 3;
+	};
+	return [...items].sort(
+		(a, b) =>
+			priority(a.session) - priority(b.session) ||
+			new Date(b.session.lastActivityAt ?? 0).getTime() -
+				new Date(a.session.lastActivityAt ?? 0).getTime(),
+	);
+}
+
+type SessionEntry = NonNullable<ReturnType<typeof useSessions>["data"]>[number];
+
 function SessionsContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
+	const { data: authSession } = useSession();
 	const [activeTab, setActiveTab] = useState<FilterTab>("in_progress");
 	const [searchQuery, setSearchQuery] = useState("");
 	const [originFilter, setOriginFilter] = useState<OriginFilter>("all");
+	const [creatorFilter, setCreatorFilter] = useState<CreatorFilter>("all");
+
+	const currentUserId = authSession?.user?.id;
 
 	// Peek drawer via URL param
 	const peekSessionId = searchParams.get("peek");
@@ -104,9 +142,17 @@ function SessionsContent() {
 			origin: getSessionOrigin(s),
 		}));
 
+		// Apply creator filter
+		const creatorFiltered =
+			creatorFilter === "all" || !currentUserId
+				? withStatus
+				: withStatus.filter((s) => s.session.createdBy === currentUserId);
+
 		// Apply origin filter for counting
 		const originFiltered =
-			originFilter === "all" ? withStatus : withStatus.filter((s) => s.origin === originFilter);
+			originFilter === "all"
+				? creatorFiltered
+				: creatorFiltered.filter((s) => s.origin === originFilter);
 
 		// Count per tab
 		const tabCounts = {
@@ -171,13 +217,24 @@ function SessionsContent() {
 			});
 		}
 
+		// Apply urgency-based sorting
+		const sorted = sortSessions(finalFiltered);
+
 		return {
-			filtered: finalFiltered.map((s) => s.session),
+			filtered: sorted.map((s) => s.session),
 			counts: tabCounts,
 			totalCount: baseSessions.length,
 			visibleHasLive: finalFiltered.some((s) => LIVE_STATUSES.has(s.displayStatus)),
 		};
-	}, [sessions, activeTab, searchQuery, originFilter, pendingRunsBySession]);
+	}, [
+		sessions,
+		activeTab,
+		searchQuery,
+		originFilter,
+		creatorFilter,
+		currentUserId,
+		pendingRunsBySession,
+	]);
 
 	// Sync polling state outside of useMemo to avoid side-effects during render
 	useEffect(() => {
@@ -200,49 +257,78 @@ function SessionsContent() {
 				</Button>
 			}
 		>
-			{/* Filter tabs + search + origin filter */}
-			<div className="flex items-center justify-between gap-4 mb-4">
-				<div className="flex items-center gap-1">
-					{TABS.map((tab) => (
-						<button
-							key={tab.value}
-							type="button"
-							onClick={() => setActiveTab(tab.value)}
-							className={cn(
-								"px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-								activeTab === tab.value
-									? "bg-muted text-foreground"
-									: "text-muted-foreground hover:text-foreground hover:bg-muted/50",
-							)}
-						>
-							{tab.label}
-							<span className="ml-1.5 text-xs text-muted-foreground">
-								{result.counts[tab.value]}
-							</span>
-						</button>
-					))}
-				</div>
-				<div className="flex items-center gap-2">
-					<Select value={originFilter} onValueChange={(v) => setOriginFilter(v as OriginFilter)}>
-						<SelectTrigger className="h-8 w-[130px] text-sm">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="all">All Origins</SelectItem>
-							<SelectItem value="manual">Manual</SelectItem>
-							<SelectItem value="automation">Coworker</SelectItem>
-							<SelectItem value="slack">Slack</SelectItem>
-							<SelectItem value="cli">CLI</SelectItem>
-						</SelectContent>
-					</Select>
-					<div className="relative">
-						<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-						<Input
-							value={searchQuery}
-							onChange={(e) => setSearchQuery(e.target.value)}
-							placeholder="Search sessions..."
-							className="h-8 w-48 pl-8 text-sm"
-						/>
+			{/* Filter tabs + search + filters */}
+			<div className="flex flex-col gap-3 mb-4">
+				<div className="flex items-center justify-between gap-4">
+					<div className="flex items-center gap-1">
+						{TABS.map((tab) => (
+							<button
+								key={tab.value}
+								type="button"
+								onClick={() => setActiveTab(tab.value)}
+								className={cn(
+									"px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+									activeTab === tab.value
+										? "bg-muted text-foreground"
+										: "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+								)}
+							>
+								{tab.label}
+								<span className="ml-1.5 text-xs text-muted-foreground">
+									{result.counts[tab.value]}
+								</span>
+							</button>
+						))}
+					</div>
+					<div className="flex items-center gap-2">
+						{/* Creator filter toggle */}
+						<div className="flex items-center rounded-md border border-border/50 overflow-hidden">
+							<button
+								type="button"
+								onClick={() => setCreatorFilter("all")}
+								className={cn(
+									"px-2.5 py-1 text-xs font-medium transition-colors",
+									creatorFilter === "all"
+										? "bg-muted text-foreground"
+										: "text-muted-foreground hover:text-foreground",
+								)}
+							>
+								All
+							</button>
+							<button
+								type="button"
+								onClick={() => setCreatorFilter("mine")}
+								className={cn(
+									"px-2.5 py-1 text-xs font-medium transition-colors",
+									creatorFilter === "mine"
+										? "bg-muted text-foreground"
+										: "text-muted-foreground hover:text-foreground",
+								)}
+							>
+								Mine
+							</button>
+						</div>
+						<Select value={originFilter} onValueChange={(v) => setOriginFilter(v as OriginFilter)}>
+							<SelectTrigger className="h-8 w-[130px] text-sm">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All Origins</SelectItem>
+								<SelectItem value="manual">Manual</SelectItem>
+								<SelectItem value="automation">Coworker</SelectItem>
+								<SelectItem value="slack">Slack</SelectItem>
+								<SelectItem value="cli">CLI</SelectItem>
+							</SelectContent>
+						</Select>
+						<div className="relative">
+							<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+							<Input
+								value={searchQuery}
+								onChange={(e) => setSearchQuery(e.target.value)}
+								placeholder="Search sessions..."
+								className="h-8 w-48 pl-8 text-sm"
+							/>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -283,9 +369,17 @@ function SessionsContent() {
 				</div>
 			) : (
 				<div className="rounded-lg border border-border bg-card overflow-hidden">
-					<div className="hidden md:flex items-center px-4 py-1.5 border-b border-border/50 bg-muted/20 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-						<span className="flex-1">Session</span>
-						<span className="w-28 shrink-0">Repository</span>
+					{/* Table header */}
+					<div className="flex items-center px-4 py-1.5 border-b border-border/50 bg-muted/20 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+						<span className="flex-1 min-w-0">Session</span>
+						<span className="w-24 shrink-0 hidden md:block">Repo</span>
+						<span className="w-28 shrink-0 hidden md:block">Branch</span>
+						<span className="w-20 shrink-0">Status</span>
+						<span className="w-24 shrink-0">Attention</span>
+						<span className="w-20 shrink-0 hidden md:block">Origin</span>
+						<span className="w-20 shrink-0 hidden md:block">Creator</span>
+						<span className="w-20 shrink-0">Updated</span>
+						<span className="w-6 shrink-0" />
 					</div>
 					{result.filtered.map((session) => (
 						<SessionListRow

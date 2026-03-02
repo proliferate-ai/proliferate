@@ -33,6 +33,9 @@ export interface CreateSessionInput {
 	triggerEventId?: string | null;
 	visibility?: "private" | "shared" | "org";
 	kind?: "manager" | "task" | "setup";
+	// V1: lineage
+	continuedFromSessionId?: string | null;
+	rerunOfSessionId?: string | null;
 }
 
 export interface UpdateSessionInput {

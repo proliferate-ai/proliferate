@@ -17,12 +17,22 @@ export async function createSessionHandler(input: {
 	initialPrompt?: string;
 	orgId: string;
 	userId: string;
+	continuedFromSessionId?: string;
+	rerunOfSessionId?: string;
 }): Promise<sessions.CreateSessionResult> {
 	try {
 		return await sessions.createSession({
-			...input,
+			configurationId: input.configurationId,
+			sessionType: input.sessionType,
+			modelId: input.modelId,
+			reasoningEffort: input.reasoningEffort,
+			initialPrompt: input.initialPrompt,
+			orgId: input.orgId,
+			userId: input.userId,
 			gatewayUrl: GATEWAY_URL ?? "",
 			serviceToken: env.SERVICE_TO_SERVICE_AUTH_TOKEN ?? "",
+			continuedFromSessionId: input.continuedFromSessionId,
+			rerunOfSessionId: input.rerunOfSessionId,
 		});
 	} catch (err) {
 		if (err instanceof sessions.SessionLimitError) {

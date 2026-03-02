@@ -25,6 +25,7 @@ import { submitEnvHandler } from "./sessions-submit-env";
 export const sessionsRouter = {
 	/**
 	 * List all sessions for the current organization.
+	 * When `enriched` is true, includes unread state, worker name, and pending approval counts.
 	 */
 	list: orgProcedure
 		.input(
@@ -38,12 +39,13 @@ export const sessionsRouter = {
 					excludeCli: z.boolean().optional(),
 					excludeAutomation: z.boolean().optional(),
 					createdBy: z.string().optional(),
+					enriched: z.boolean().optional(),
 				})
 				.optional(),
 		)
 		.output(z.object({ sessions: z.array(SessionSchema) }))
 		.handler(async ({ input, context }) => {
-			const sessionsList = await sessions.listSessions(context.orgId, {
+			const opts = {
 				repoId: input?.repoId,
 				status: input?.status,
 				kinds: input?.kinds,
@@ -54,7 +56,12 @@ export const sessionsRouter = {
 				createdBy: input?.createdBy,
 				// K2: Pass userId for visibility + ACL filtering
 				userId: context.user.id,
-			});
+			};
+
+			const sessionsList = input?.enriched
+				? await sessions.listSessionsEnriched(context.orgId, context.user.id, opts)
+				: await sessions.listSessions(context.orgId, opts);
+
 			return { sessions: sessionsList };
 		}),
 
@@ -70,6 +77,46 @@ export const sessionsRouter = {
 				throw new ORPCError("NOT_FOUND", { message: "Session not found" });
 			}
 			return { session };
+		}),
+
+	/**
+	 * Mark a session as viewed by the current user (clears unread state).
+	 */
+	markViewed: orgProcedure
+		.input(z.object({ id: z.string().uuid() }))
+		.output(z.object({ success: z.boolean() }))
+		.handler(async ({ input, context }) => {
+			await sessions.markSessionViewed({ sessionId: input.id, userId: context.user.id });
+			return { success: true };
+		}),
+
+	/**
+	 * Create a follow-up session (continuation or rerun) from an existing session.
+	 */
+	createFollowUp: billingGatedProcedure
+		.input(
+			z.object({
+				sourceSessionId: z.string().uuid(),
+				mode: z.enum(["continuation", "rerun"]),
+				initialPrompt: z.string().optional(),
+			}),
+		)
+		.output(CreateSessionResponseSchema)
+		.handler(async ({ input, context }) => {
+			const source = await sessions.getSession(input.sourceSessionId, context.orgId);
+			if (!source) {
+				throw new ORPCError("NOT_FOUND", { message: "Source session not found" });
+			}
+
+			return createSessionHandler({
+				configurationId: source.configurationId ?? undefined,
+				sessionType: "coding",
+				initialPrompt: input.initialPrompt,
+				orgId: context.orgId,
+				userId: context.user.id,
+				continuedFromSessionId: input.mode === "continuation" ? input.sourceSessionId : undefined,
+				rerunOfSessionId: input.mode === "rerun" ? input.sourceSessionId : undefined,
+			});
 		}),
 
 	/**
@@ -245,20 +292,6 @@ export const sessionsRouter = {
 				envVars: input.envVars,
 				saveToConfiguration: input.saveToConfiguration,
 			});
-		}),
-
-	/**
-	 * Mark a session as viewed by the current user (K3: unread tracking).
-	 */
-	markViewed: orgProcedure
-		.input(z.object({ id: z.string().uuid() }))
-		.output(z.object({ viewed: z.boolean() }))
-		.handler(async ({ input, context }) => {
-			await sessions.markSessionViewed({
-				sessionId: input.id,
-				userId: context.user.id,
-			});
-			return { viewed: true };
 		}),
 
 	/**

@@ -7,7 +7,7 @@
 import type { Session } from "@proliferate/shared";
 import { sanitizePromptSnippet } from "@proliferate/shared/sessions";
 import { toIsoString } from "../db/serialize";
-import type { RepoRow, SessionRow, SessionWithRepoRow } from "./db";
+import type { EnrichedSessionRow, RepoRow, SessionRow, SessionWithRepoRow } from "./db";
 
 /**
  * Map a repo row (camelCase) to the API Repo type (camelCase, minimal version for sessions).
@@ -53,7 +53,11 @@ function toSessionKind(kind: string | null): Session["kind"] {
 /**
  * Map a DB row (camelCase with repo) to API Session type (camelCase).
  */
-export function toSession(row: SessionWithRepoRow, options?: ToSessionOptions): Session {
+export function toSession(
+	row: SessionWithRepoRow | EnrichedSessionRow,
+	options?: ToSessionOptions,
+): Session {
+	const enriched = isEnrichedRow(row);
 	return {
 		id: row.id,
 		repoId: row.repoId,
@@ -96,7 +100,19 @@ export function toSession(row: SessionWithRepoRow, options?: ToSessionOptions): 
 				activeSeconds: number;
 			} | null) ?? null,
 		latestTask: row.latestTask ?? null,
+		// V1: enrichment fields
+		workerId: row.workerId ?? null,
+		workerName: enriched ? row.workerName : null,
+		visibility: (row.visibility as Session["visibility"]) ?? null,
+		continuedFromSessionId: row.continuedFromSessionId ?? null,
+		rerunOfSessionId: row.rerunOfSessionId ?? null,
+		unread: enriched ? row.isUnread : undefined,
+		pendingApprovalCount: enriched ? row.pendingApprovalCount : undefined,
 	};
+}
+
+function isEnrichedRow(row: SessionWithRepoRow | EnrichedSessionRow): row is EnrichedSessionRow {
+	return "isUnread" in row;
 }
 
 /**
@@ -150,5 +166,10 @@ export function toSessionPartial(row: SessionRow): Omit<Session, "repo"> {
 				activeSeconds: number;
 			} | null) ?? null,
 		latestTask: row.latestTask ?? null,
+		// V1: enrichment fields (partial row — no enrichment data available)
+		workerId: row.workerId ?? null,
+		visibility: (row.visibility as Session["visibility"]) ?? null,
+		continuedFromSessionId: row.continuedFromSessionId ?? null,
+		rerunOfSessionId: row.rerunOfSessionId ?? null,
 	};
 }

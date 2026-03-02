@@ -3,6 +3,7 @@
 import { ImpersonationBanner } from "@/components/admin/impersonation-banner";
 import { BillingBanner } from "@/components/dashboard/billing-banner";
 import { CommandSearch } from "@/components/dashboard/command-search";
+import { NotificationTray } from "@/components/dashboard/notification-tray";
 import { MobileSidebar, MobileSidebarTrigger, Sidebar } from "@/components/dashboard/sidebar";
 import { openIntercomMessenger } from "@/components/providers";
 import { Button } from "@/components/ui/button";
@@ -162,6 +163,7 @@ export default function CommandCenterLayout({
 								<ChatBubbleIcon className="h-3.5 w-3.5" />
 								<span className="text-xs">Help</span>
 							</Button>
+							<NotificationTray />
 						</div>
 					</div>
 

@@ -316,6 +316,15 @@ export function CodingSession({
 				statusMessage={statusMessage}
 				pendingApprovals={pendingApprovals}
 				runId={runId}
+				sessionState={{
+					sessionId,
+					status: sessionData.status,
+					runtimeStatus: sessionData.runtimeStatus,
+					operatorStatus: sessionData.operatorStatus,
+					pauseReason: sessionData.pauseReason,
+					outcome: sessionData.outcome,
+					workerId: sessionData.workerId,
+				}}
 			/>
 		</SessionContext.Provider>
 	);
