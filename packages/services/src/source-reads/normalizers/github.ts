@@ -66,7 +66,7 @@ function normalizeIssue(issue: GitHubIssue, sourceRef: string): NormalizedSource
 
 	return {
 		sourceType: "github",
-		sourceRef: String(issue.number),
+		sourceRef: `${sourceRef}#${issue.number}`,
 		title: `${isPr ? "PR" : "Issue"} #${issue.number}: ${issue.title ?? "Untitled"}`,
 		body: issue.body ?? null,
 		severity: null,
