@@ -16,6 +16,7 @@ import {
 	ArrowLeft,
 	Building2,
 	CreditCard,
+	FolderGit2,
 	Home,
 	Key,
 	LifeBuoy,
@@ -24,6 +25,7 @@ import {
 	Moon,
 	Plug,
 	Settings,
+	SquareTerminal,
 	Sun,
 	User,
 	Users,
@@ -143,7 +145,7 @@ export function Sidebar() {
 					className="h-8 w-8 text-muted-foreground hover:text-foreground"
 					onClick={(e) => {
 						e.stopPropagation();
-						router.push("/");
+						router.push("/dashboard");
 					}}
 					title="Home"
 				>
@@ -159,7 +161,7 @@ export function Sidebar() {
 					}}
 					title="Sessions"
 				>
-					<User className="h-4 w-4" />
+					<SquareTerminal className="h-4 w-4" />
 				</Button>
 				<Button
 					variant={isCoworkersPage ? "secondary" : "ghost"}
@@ -434,10 +436,10 @@ function DashboardNav({ onNavigate }: { onNavigate?: () => void }) {
 					icon={Home}
 					label="Home"
 					active={!!isHomePage}
-					onClick={() => handleNavigate("/")}
+					onClick={() => handleNavigate("/dashboard")}
 				/>
 				<NavItem
-					icon={User}
+					icon={SquareTerminal}
 					label="Sessions"
 					active={!!isSessionsPage}
 					onClick={() => handleNavigate("/sessions")}
@@ -475,6 +477,7 @@ function SettingsNav({ onNavigate }: { onNavigate?: () => void }) {
 	const isProfilePage = pathname === "/settings/profile";
 	const isGeneralPage = pathname === "/settings/general";
 	const isMembersPage = pathname === "/settings/members";
+	const isRepositoriesPage = pathname === "/settings/repositories";
 	const isSecretsPage = pathname === "/settings/secrets";
 	const isBillingPage = pathname === "/settings/billing";
 
@@ -520,6 +523,12 @@ function SettingsNav({ onNavigate }: { onNavigate?: () => void }) {
 					label="Members"
 					active={!!isMembersPage}
 					onClick={() => handleNavigate("/settings/members")}
+				/>
+				<NavItem
+					icon={FolderGit2}
+					label="Repositories"
+					active={!!isRepositoriesPage}
+					onClick={() => handleNavigate("/settings/repositories")}
 				/>
 				<NavItem
 					icon={Key}

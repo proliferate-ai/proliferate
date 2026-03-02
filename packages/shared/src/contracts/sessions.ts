@@ -137,6 +137,7 @@ export const sessionsContract = c.router(
 			query: z.object({
 				repoId: z.string().optional(),
 				status: z.string().optional(),
+				kinds: z.array(z.enum(["manager", "task", "setup"])).optional(),
 			}),
 			responses: {
 				200: z.object({ sessions: z.array(SessionSchema) }),

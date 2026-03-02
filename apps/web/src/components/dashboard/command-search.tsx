@@ -44,7 +44,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 	const handleNewSession = useCallback(() => {
 		clearPendingPrompt();
 		setActiveSession(null);
-		router.push("/sessions");
+		router.push("/dashboard");
 		onOpenChange(false);
 	}, [clearPendingPrompt, setActiveSession, router, onOpenChange]);
 
@@ -100,7 +100,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 				<CommandGroup heading="Navigate">
 					<CommandItem
 						onSelect={() => {
-							router.push("/");
+							router.push("/dashboard");
 							onOpenChange(false);
 						}}
 					>

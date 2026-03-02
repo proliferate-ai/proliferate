@@ -101,7 +101,13 @@ function NeedsAttention() {
 					return (
 						<Link
 							key={run.id}
-							href={run.session_id ? `/workspace/${run.session_id}` : "/sessions"}
+							href={
+								run.session_id
+									? `/workspace/${run.session_id}`
+									: run.automation_id
+										? `/coworkers/${run.automation_id}/events?runId=${run.id}`
+										: "/coworkers"
+							}
 							className="group flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors text-sm border-b border-border/50 last:border-0"
 						>
 							<div className="flex items-center gap-3 min-w-0">

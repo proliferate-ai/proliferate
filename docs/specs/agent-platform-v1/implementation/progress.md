@@ -198,21 +198,23 @@
 - PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/257`
 - scope: Phase 7 UI/navigation alignment (canonical route surfaces, sidebar IA reduction, coworker route terminology, task-first session list filtering via `kind`)
 - check results:
-  - `pnpm typecheck` ✅
-  - `pnpm lint` ✅
-  - `pnpm test` ✅
-  - `pnpm build` ⚠️ deferred; current local environment still requires full web build-time env configuration.
+  - `pnpm typecheck` ⚠️ fails in this worktree because package-local `node_modules` links are missing (workspace resolution errors in `packages/db`).
+  - `pnpm lint` ⚠️ fails in this worktree for the same package-local workspace-link issue (`@proliferate/db` build step cannot resolve modules).
+  - `pnpm test` ⚠️ deferred in this pass due the same dependency-linking issue in this worktree.
 - open comments:
-  - CI and automated review pending.
+  - Critique 7 processed; CI and automated review rerun pending.
 - fixes applied:
-  - Added canonical app routes `/sessions`, `/coworkers`, `/coworkers/[id]`, `/coworkers/[id]/events`, and `/integrations` in command-center shell.
-  - Updated root and `/workspace` redirects to task-first operational entry route `/sessions`.
-  - Reduced primary sidebar/navigation IA to Home/Sessions/Coworkers/Integrations/Settings.
-  - Updated command palette navigation and labels to coworker terminology.
-  - Repointed coworker-related deep links from legacy `/dashboard/automations/*` paths to `/coworkers/*`.
-  - Added `kind`, `runtimeStatus`, and `operatorStatus` fields to shared session contract mapping (non-breaking optional fields).
-  - Added `kinds` session list filter through Router -> Service -> DB and used `kinds: [\"task\"]` for task-first operational surfaces.
+  - Replaced canonical route re-export placeholders with real page ownership by moving implementations to `/sessions`, `/coworkers`, `/coworkers/[id]`, and `/coworkers/[id]/events`.
+  - Converted legacy `/dashboard/sessions` and `/dashboard/automations/*` pages into explicit redirects to canonical V1 routes.
+  - Restored Home and New Session flows to the composer entry by routing sidebar/command-palette/new-session actions to `/dashboard` instead of `/sessions`.
+  - Updated `app/page.tsx` redirect target from `/sessions` to `/dashboard` so Home no longer loops into task list.
+  - Added Settings navigation entry for `Repositories` and kept route discoverable at `/settings/repositories`.
+  - Moved repositories page implementation to canonical `/settings/repositories`; legacy `/dashboard/repos` now redirects forward.
+  - Fixed Needs Attention fallback link for runs without `session_id` to route into coworker events (`/coworkers/[id]/events?runId=...`) instead of task sessions.
+  - Updated Sessions nav iconography from `User` to `SquareTerminal` for IA semantics.
+  - Added missing `kinds` query field to shared `sessionsContract.list` schema to keep router/shared contract parity.
+  - Explicitly kept `sessions.kind IS NULL` compatibility fallback out of scope per migration directive (no backward compatibility required for legacy architecture/users).
 - merge SHA: `TBD`
 - carry-over TODOs:
   - Complete coworker detail activity/timeline parity with final V1 `worker_run_events` model.
-  - Finalize legacy `/dashboard/*` route cleanup during rollout hardening window.
+  - Resolve CI/human/Greptile follow-ups after rerun.
