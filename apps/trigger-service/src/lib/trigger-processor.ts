@@ -171,12 +171,25 @@ async function bridgeToWakeEvents(
 	let skipped = 0;
 
 	for (const event of events) {
+		const dedupKey = triggerDef.idempotencyKey(event);
+		const providerEventType = inferProviderEventType(triggerRow.provider, event.payload);
+		const rawPayload = toRawPayload(event.payload);
+
 		if (!triggerDef.filter(event, triggerRow.config ?? {})) {
+			await safeCreateSkippedEvent({
+				triggerId: triggerRow.id,
+				organizationId: triggerRow.organizationId,
+				externalEventId: event.externalId,
+				providerEventType,
+				rawPayload,
+				parsedContext: null,
+				dedupKey,
+				skipReason: "filter_mismatch",
+			});
 			skipped++;
 			continue;
 		}
 
-		const dedupKey = triggerDef.idempotencyKey(event);
 		if (dedupKey) {
 			const isDuplicate = await triggers.eventExistsByDedupKey(triggerRow.id, dedupKey);
 			if (isDuplicate) {
@@ -184,6 +197,8 @@ async function bridgeToWakeEvents(
 				continue;
 			}
 		}
+
+		const parsedContext = triggerDef.context(event) as Record<string, unknown>;
 
 		try {
 			await wakes.createWakeEvent({
@@ -194,9 +209,19 @@ async function bridgeToWakeEvents(
 					triggerId: triggerRow.id,
 					provider: triggerRow.provider,
 					externalEventId: event.externalId,
-					context: triggerDef.context(event),
+					context: parsedContext,
 					dedupeKey: dedupKey ?? undefined,
 				},
+			});
+			await triggers.createEvent({
+				triggerId: triggerRow.id,
+				organizationId: triggerRow.organizationId,
+				externalEventId: event.externalId,
+				providerEventType,
+				rawPayload,
+				parsedContext,
+				dedupKey,
+				status: "queued",
 			});
 			processed++;
 		} catch (err) {
@@ -204,6 +229,16 @@ async function bridgeToWakeEvents(
 				{ err, workerId, triggerId: triggerRow.id },
 				"Failed to create wake event for V1 bridge",
 			);
+			await safeCreateSkippedEvent({
+				triggerId: triggerRow.id,
+				organizationId: triggerRow.organizationId,
+				externalEventId: event.externalId,
+				providerEventType,
+				rawPayload,
+				parsedContext,
+				dedupKey,
+				skipReason: "wake_create_failed",
+			});
 			skipped++;
 		}
 	}
