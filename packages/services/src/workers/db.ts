@@ -685,7 +685,10 @@ export async function transitionWorkerRunWithTerminalEvent(
 			.select()
 			.from(workerRuns)
 			.where(
-				and(eq(workerRuns.id, input.workerRunId), eq(workerRuns.organizationId, input.organizationId)),
+				and(
+					eq(workerRuns.id, input.workerRunId),
+					eq(workerRuns.organizationId, input.organizationId),
+				),
 			)
 			.for("update")
 			.limit(1);
