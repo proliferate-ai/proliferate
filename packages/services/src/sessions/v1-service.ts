@@ -241,17 +241,18 @@ export async function persistTerminalTaskOutcome(input: {
 		);
 	}
 
-	const persisted = await v1Db.persistSessionOutcome({
+	await v1Db.persistSessionOutcome({
 		sessionId: input.sessionId,
 		outcomeJson: input.outcomeJson,
 		outcomeVersion: input.outcomeVersion,
 	});
-	if (!persisted) {
+	const outcome = await v1Db.getSessionOutcome(input.sessionId);
+	if (!outcome) {
 		throw new SessionNotFoundError(input.sessionId);
 	}
 	return {
-		outcomeJson: persisted.outcomeJson,
-		outcomeVersion: persisted.outcomeVersion ?? null,
-		outcomePersistedAt: persisted.outcomePersistedAt ?? null,
+		outcomeJson: outcome.outcomeJson,
+		outcomeVersion: outcome.outcomeVersion ?? null,
+		outcomePersistedAt: outcome.outcomePersistedAt ?? null,
 	};
 }
