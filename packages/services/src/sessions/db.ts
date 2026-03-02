@@ -1268,6 +1268,7 @@ export async function enqueueSessionMessage(
 				.values(values)
 				.onConflictDoNothing({
 					target: [sessionMessages.sessionId, sessionMessages.dedupeKey],
+					targetWhere: isNotNull(sessionMessages.dedupeKey),
 				})
 				.returning()
 		: await db.insert(sessionMessages).values(values).returning();
@@ -1481,7 +1482,7 @@ export async function claimDeliverableSessionMessages(
 	limit = 50,
 ): Promise<SessionMessageRow[]> {
 	const db = getDb();
-	const rows = await db.execute<SessionMessageRow>(sql`
+	const result = await db.execute<SessionMessageRow>(sql`
 		WITH selected AS (
 			SELECT ${sessionMessages.id}, ${sessionMessages.queuedAt}
 			FROM ${sessionMessages}
@@ -1496,14 +1497,32 @@ export async function claimDeliverableSessionMessages(
 			SET "delivery_state" = 'delivered',
 				"delivered_at" = now()
 			WHERE ${sessionMessages.id} IN (SELECT id FROM selected)
-			RETURNING *
+			RETURNING
+				${sessionMessages.id} as "id",
+				${sessionMessages.sessionId} as "sessionId",
+				${sessionMessages.direction} as "direction",
+				${sessionMessages.messageType} as "messageType",
+				${sessionMessages.payloadJson} as "payloadJson",
+				${sessionMessages.deliveryState} as "deliveryState",
+				${sessionMessages.dedupeKey} as "dedupeKey",
+				${sessionMessages.queuedAt} as "queuedAt",
+				${sessionMessages.deliverAfter} as "deliverAfter",
+				${sessionMessages.deliveredAt} as "deliveredAt",
+				${sessionMessages.consumedAt} as "consumedAt",
+				${sessionMessages.failedAt} as "failedAt",
+				${sessionMessages.failureReason} as "failureReason",
+				${sessionMessages.senderUserId} as "senderUserId",
+				${sessionMessages.senderSessionId} as "senderSessionId"
 		)
 		SELECT updated.*
 		FROM updated
 		INNER JOIN selected ON selected.id = updated.id
 		ORDER BY selected.queued_at ASC, selected.id ASC
 		`);
-	return Array.from(rows);
+	const rows = Array.isArray(result)
+		? result
+		: ((result as { rows?: SessionMessageRow[] }).rows ?? []);
+	return rows as SessionMessageRow[];
 }
 
 export async function transitionSessionMessageDeliveryState(input: {
