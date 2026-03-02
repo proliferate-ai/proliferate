@@ -329,6 +329,29 @@ describe("actions v1 service", () => {
 		).resolves.toBeUndefined();
 	});
 
+	it("allows session creator without explicit ACL", async () => {
+		mockGetSessionApprovalContext.mockResolvedValue({
+			id: "session-1",
+			organizationId: "org-1",
+			automationId: null,
+			operatorStatus: "active",
+			visibility: "shared",
+			createdBy: "creator-1",
+			repoId: "repo-1",
+		});
+
+		await expect(
+			assertApprovalAuthority({
+				sessionId: "session-1",
+				organizationId: "org-1",
+				userId: "creator-1",
+				isOrgAdmin: false,
+			}),
+		).resolves.toBeUndefined();
+
+		expect(mockGetSessionAclRole).not.toHaveBeenCalled();
+	});
+
 	it("allows org-admin override without ACL row", async () => {
 		mockGetSessionApprovalContext.mockResolvedValue({
 			id: "session-1",

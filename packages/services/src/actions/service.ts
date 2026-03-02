@@ -634,7 +634,6 @@ export async function denyAction(
 		fromStatuses: ["pending"],
 		toStatus: "denied",
 		data: {
-			approvedBy: userId,
 			completedAt: new Date(),
 		},
 		event: {
