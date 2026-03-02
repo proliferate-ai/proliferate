@@ -6,7 +6,9 @@ export * from "./service";
 export * from "./mapper";
 export * from "./sandbox-env";
 export * from "./generate-title";
-// K-phase DB helpers (lifecycle, ACL, archive) — defined in v1-db.ts
+// K-phase DB helpers (lifecycle, ACL) — defined in v1-db.ts
+// Note: archiveSession/unarchiveSession/softDeleteSession are NOT re-exported from v1-db
+// because v1-service.ts defines service-layer wrappers with the same names (object args + org check).
 export {
 	type CreateSessionEventInput,
 	updateLastVisibleUpdateAt,
@@ -15,9 +17,6 @@ export {
 	listSessionEvents,
 	getSessionAclRole,
 	grantSessionAcl,
-	archiveSession,
-	unarchiveSession,
-	softDeleteSession,
 	updateSessionVisibility,
 } from "./v1-db";
 

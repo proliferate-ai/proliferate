@@ -151,10 +151,26 @@ export async function softDeleteSession(sessionId: string, userId: string): Prom
 		.where(eq(sessions.id, sessionId));
 }
 
-export async function updateSessionVisibility(
-	sessionId: string,
-	visibility: "private" | "shared" | "org",
-): Promise<void> {
-	const db = getDb();
-	await db.update(sessions).set({ visibility }).where(eq(sessions.id, sessionId));
+export async function archiveSessionForUser(input: {
+	sessionId: string;
+	userId: string;
+}): Promise<void> {
+	const { upsertSessionUserState } = await import("./db");
+	await upsertSessionUserState({
+		sessionId: input.sessionId,
+		userId: input.userId,
+		archivedAt: new Date(),
+	});
+}
+
+export async function unarchiveSessionForUser(input: {
+	sessionId: string;
+	userId: string;
+}): Promise<void> {
+	const { upsertSessionUserState } = await import("./db");
+	await upsertSessionUserState({
+		sessionId: input.sessionId,
+		userId: input.userId,
+		archivedAt: null,
+	});
 }

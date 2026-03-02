@@ -482,7 +482,9 @@ export async function sendBackToCoworker(input: {
 	if (source.kind !== "task") {
 		throw new SessionKindError("task", source.kind);
 	}
-	if (!isTerminalRuntimeStatus(source.runtimeStatus ?? "starting")) {
+	if (
+		!isTerminalSessionRuntimeStatus((source.runtimeStatus ?? "starting") as SessionRuntimeStatus)
+	) {
 		throw new SessionRuntimeStatusError(
 			`Session ${input.sessionId} is not terminal — cannot send back to coworker`,
 		);
