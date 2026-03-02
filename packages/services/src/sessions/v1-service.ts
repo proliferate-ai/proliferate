@@ -6,14 +6,12 @@
  */
 
 import { randomUUID } from "crypto";
+import {
+	type SessionRuntimeStatus,
+	isTerminalSessionRuntimeStatus,
+} from "@proliferate/shared/contracts";
 import type { SessionMessageRow, SessionRow } from "./v1-db";
 import * as v1Db from "./v1-db";
-
-const TERMINAL_RUNTIME_STATUSES = new Set(["completed", "failed", "cancelled"]);
-
-function isTerminalRuntimeStatus(status: string | null | undefined): boolean {
-	return status ? TERMINAL_RUNTIME_STATUSES.has(status) : false;
-}
 
 export class SessionNotFoundError extends Error {
 	constructor(sessionId: string) {
@@ -87,8 +85,8 @@ export async function sendTaskFollowup(
 		throw new SessionKindError("task", source.kind);
 	}
 
-	const runtimeStatus = source.runtimeStatus ?? "starting";
-	if (!isTerminalRuntimeStatus(runtimeStatus)) {
+	const runtimeStatus = (source.runtimeStatus ?? "starting") as SessionRuntimeStatus;
+	if (!isTerminalSessionRuntimeStatus(runtimeStatus)) {
 		const sameSessionMessage = await v1Db.enqueueSessionMessage({
 			sessionId: source.id,
 			direction: "user_to_task",
@@ -235,7 +233,7 @@ export async function persistTerminalTaskOutcome(input: {
 	if (session.kind !== "task") {
 		throw new SessionKindError("task", session.kind);
 	}
-	if (!isTerminalRuntimeStatus(session.runtimeStatus)) {
+	if (!isTerminalSessionRuntimeStatus(session.runtimeStatus as SessionRuntimeStatus)) {
 		throw new SessionRuntimeStatusError(
 			`Session ${input.sessionId} is not terminal (runtimeStatus=${session.runtimeStatus})`,
 		);
