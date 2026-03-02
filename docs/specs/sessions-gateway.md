@@ -531,6 +531,8 @@ References: `apps/gateway/src/server.ts`, `apps/gateway/src/hub/session-runtime.
 
 ## 9. Known Limitations & Tech Debt
 
+- [ ] **No immutable `boot_snapshot` persistence model in current session schema** — runtime policy/context is assembled from live session/config/integration state at boot time; there is no dedicated frozen JSON envelope column on `sessions` today. Evidence: `packages/db/src/schema/sessions.ts`, `apps/gateway/src/lib/session-store.ts`.
+- [ ] **Credential refresh semantics are distributed across runtime paths** — token refresh behaviors exist (for example git credential rewrites before pull/push), but there is no single "rehydrate all short-lived credentials on every resume" contract boundary. Evidence: `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/modal-libmodal.ts`, `apps/gateway/src/hub/git-operations.ts`.
 - [ ] **Hub memory growth is lifecycle-driven, not cap-driven** — current `HubManager` has no explicit hard-cap/LRU policy; cleanup depends on hub lifecycle callbacks and shutdown.
 - [ ] **Expiry migration trigger is queue-driven** — there is no separate in-process precise expiry timer in current gateway runtime path.
 - [ ] **Tool callback idempotency is process-local** — duplicate callbacks routed to different pods can bypass in-memory dedup.

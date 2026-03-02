@@ -228,7 +228,6 @@ export default function IntegrationsPage() {
 		disconnect: nangoDisconnect,
 		loadingProvider: nangoLoadingProvider,
 	} = useNangoConnect({
-		flow: "auth",
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: orpc.integrations.list.key() });
 		},

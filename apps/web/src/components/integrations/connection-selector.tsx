@@ -72,7 +72,6 @@ export function ConnectionSelector({
 
 	// Nango connection hook for Linear/Sentry
 	const { connect: nangoConnect, loadingProvider: nangoLoadingProvider } = useNangoConnect({
-		flow: "auth",
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: orpc.integrations.list.key() });
 			onConnectSuccess?.();

@@ -86,7 +86,6 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 		queryClient.invalidateQueries({ queryKey: orpc.integrations.list.key() });
 	};
 	const { connect: nangoConnect, loadingProvider: nangoLoadingProvider } = useNangoConnect({
-		flow: "auth",
 		onSuccess: invalidateIntegrations,
 	});
 	const { connect: githubAppConnect, isLoading: githubAppLoading } = useGitHubAppConnect({

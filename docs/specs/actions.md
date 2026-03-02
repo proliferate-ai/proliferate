@@ -208,6 +208,8 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 
 ## 9. Known Limitations & Tech Debt
 
+- [ ] **Post-approval revalidation gap (High):** `approveAction()` currently transitions `pending -> approved` without re-evaluating policy mode/drift/live org kill-switch state at approval time; execution path trusts invocation payload captured at request time. Evidence: `packages/services/src/actions/service.ts:approveAction`, `apps/gateway/src/api/proliferate/http/actions.ts`.
+- [ ] **Explicit TOCTOU contract for revocation overrides is not codified (High):** the spec does not yet enforce a formal rule that live credential revocations and org-level emergency denies must override previously pending approvals before side effects execute. Evidence: `docs/specs/actions.md`, `packages/services/src/actions/modes.ts`.
 - [ ] **In-memory rate limiting**: gateway per-session limit is process-local; multi-instance deployments do not share counters.
 - [x] **Automation override wiring in invoke path**: gateway `/invoke` forwards `session.automationId` to `actions.invokeAction()`, so automation mode overrides now apply in that path (`apps/gateway/src/api/proliferate/http/actions.ts`).
 - [ ] **Connector drift hash persistence gap**: drift checks read `org_connectors.tool_risk_overrides[*].hash`, but there is no first-class write flow in current connector CRUD/permissions UI to persist these hashes.

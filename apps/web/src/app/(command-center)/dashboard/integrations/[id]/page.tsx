@@ -158,7 +158,6 @@ function OAuthConnectionTab({
 		disconnect: nangoDisconnect,
 		loadingProvider,
 	} = useNangoConnect({
-		flow: "auth",
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: orpc.integrations.list.key() });
 		},

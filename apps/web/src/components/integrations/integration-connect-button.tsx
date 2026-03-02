@@ -29,7 +29,7 @@ export function IntegrationConnectButton({
 	hasConnection = false,
 	iconOnly = false,
 	icon,
-	flow = "auth", // Default to auth for backwards compatibility in wizards/inline
+	flow = "connectUI",
 }: IntegrationConnectButtonProps) {
 	const providerLabel = provider.charAt(0).toUpperCase() + provider.slice(1);
 

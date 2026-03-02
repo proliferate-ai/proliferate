@@ -52,7 +52,6 @@ export function OnboardingCards({ hideHeader }: { hideHeader?: boolean } = {}) {
 		queryClient.invalidateQueries({ queryKey: orpc.onboarding.getStatus.key() });
 	};
 	const { connect: nangoConnect, loadingProvider: nangoLoadingProvider } = useNangoConnect({
-		flow: "auth",
 		onSuccess: invalidateIntegrations,
 	});
 	const { connect: githubAppConnect, isLoading: githubAppLoading } = useGitHubAppConnect({
