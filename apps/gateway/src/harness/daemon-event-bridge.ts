@@ -22,6 +22,6 @@ export function normalizeDaemonEvent(event: OpenCodeEvent): RuntimeDaemonEvent {
 		type: event.type,
 		isTerminal: isTerminalEvent(event.type),
 		occurredAt: new Date().toISOString(),
-		rawEvent: event,
+		payload: event,
 	};
 }

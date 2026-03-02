@@ -131,9 +131,9 @@
 - PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/255`
 - scope: Phase 5 harness/runtime split scaffolding (coding harness contract, OpenCode adapter module, manager Claude harness module, daemon event bridge, runtime integration points)
 - check results:
-  - `pnpm -C apps/gateway test src/harness/daemon-event-bridge.test.ts src/harness/opencode-coding-harness.test.ts` ⚠️ blocked in this worktree (`node_modules` missing; `vitest` not found).
-  - `pnpm -C apps/gateway typecheck` ⚠️ blocked in this worktree (`node_modules` missing; `tsc` not found).
-  - `pnpm -C apps/gateway lint` ⚠️ blocked in this worktree (`node_modules` missing / local package execution failed).
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm -C apps/gateway test src/harness/daemon-event-bridge.test.ts src/harness/opencode-coding-harness.test.ts` ✅ (targeted subset for touched harness modules)
 - open comments:
   - Critique 5 processed; CI rerun pending.
 - fixes applied:
@@ -154,7 +154,13 @@
   - Added manager-specific runtime branch so `kind=manager` sessions skip OpenCode readiness/session/SSE initialization entirely.
   - Updated manager readiness semantics (`isReady`) to rely on provisioned sandbox/provider state instead of OpenCode session state.
   - Corrected daemon bridge terminal classification so `session.idle` is non-terminal and only error events mark terminal.
+  - Added `sendPrompt` to the coding-harness adapter contract and routed prompt submission through `SessionRuntime` + adapter boundary.
+  - Routed cancellation through adapter-backed `interrupt` via `SessionRuntime.interruptCurrentRun`.
+  - Routed transcript bootstrap through adapter-backed `collectOutputs` via `SessionRuntime.collectOutputs` (removed hub direct OpenCode message fetch coupling).
+  - Made harness contract payloads provider-agnostic: normalized daemon event now carries generic `payload: unknown`, and collect-output contract returns canonical `Message[]` instead of OpenCode-specific rows.
+  - Updated hub runtime event handling to consume normalized daemon envelopes and only process payloads that satisfy an `OpenCodeEvent` type guard.
+  - Added adapter tests covering `sendPrompt` and `collectOutputs` behavior.
 - merge SHA: `TBD`
 - carry-over TODOs:
-  - Broaden runtime lifecycle integration to route all harness operations through the adapter contract.
   - Wire manager Claude harness behavior into end-to-end orchestration loops in later phases.
+  - Run full `pnpm test` suite as stack-level validation in PR8.

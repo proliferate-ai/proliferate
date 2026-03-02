@@ -1,7 +1,6 @@
 import type { Logger } from "@proliferate/logger";
+import type { Message } from "@proliferate/shared";
 import type { GatewayEnv } from "../lib/env";
-import type { OpenCodeMessage } from "../lib/opencode";
-import type { OpenCodeEvent } from "../types";
 
 export interface RuntimeDaemonEvent {
 	source: "daemon";
@@ -9,7 +8,12 @@ export interface RuntimeDaemonEvent {
 	type: string;
 	isTerminal: boolean;
 	occurredAt: string;
-	rawEvent: OpenCodeEvent;
+	payload: unknown;
+}
+
+export interface CodingHarnessPromptImage {
+	data: string;
+	mediaType: string;
 }
 
 export interface CodingHarnessStartInput {
@@ -42,6 +46,13 @@ export interface CodingHarnessShutdownInput {
 	sessionId: string;
 }
 
+export interface CodingHarnessSendPromptInput {
+	baseUrl: string;
+	sessionId: string;
+	content: string;
+	images?: CodingHarnessPromptImage[];
+}
+
 export interface CodingHarnessStreamInput {
 	baseUrl: string;
 	env: GatewayEnv;
@@ -60,13 +71,14 @@ export interface CodingHarnessCollectOutputsInput {
 }
 
 export interface CodingHarnessCollectOutputsResult {
-	messages: OpenCodeMessage[];
+	messages: Message[];
 }
 
 export interface CodingHarnessAdapter {
 	readonly name: string;
 	start(input: CodingHarnessStartInput): Promise<CodingHarnessStartResult>;
 	resume(input: CodingHarnessResumeInput): Promise<CodingHarnessResumeResult>;
+	sendPrompt(input: CodingHarnessSendPromptInput): Promise<void>;
 	interrupt(input: CodingHarnessInterruptInput): Promise<void>;
 	shutdown(input: CodingHarnessShutdownInput): Promise<void>;
 	streamEvents(input: CodingHarnessStreamInput): Promise<CodingHarnessEventStreamHandle>;

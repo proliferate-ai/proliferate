@@ -24,13 +24,8 @@ import type {
 } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import type { WebSocket } from "ws";
+import type { RuntimeDaemonEvent } from "../harness/coding-harness";
 import type { GatewayEnv } from "../lib/env";
-import {
-	abortOpenCodeSession,
-	fetchOpenCodeMessages,
-	mapOpenCodeMessages,
-	sendPromptAsync,
-} from "../lib/opencode";
 import { publishSessionEvent } from "../lib/redis";
 import { uploadVerificationFiles } from "../lib/s3";
 import {
@@ -60,6 +55,14 @@ interface HubDependencies {
 
 /** Renewal interval: ~1/3 of owner lease TTL. */
 const LEASE_RENEW_INTERVAL_MS = Math.floor(OWNER_LEASE_TTL_MS / 3);
+
+function isOpenCodeEvent(value: unknown): value is OpenCodeEvent {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const candidate = value as { type?: unknown };
+	return typeof candidate.type === "string";
+}
 
 export class SessionHub {
 	private readonly env: GatewayEnv;
@@ -148,7 +151,7 @@ export class SessionHub {
 			env: this.env,
 			sessionId: this.sessionId,
 			context: deps.context,
-			onEvent: (event) => this.handleOpenCodeEvent(event),
+			onEvent: (event) => this.handleRuntimeDaemonEvent(event),
 			onDisconnect: (reason) => this.handleSseDisconnect(reason),
 			onStatus: (status, message) => this.broadcastStatus(status, message),
 			onBroadcast: (message) => this.broadcast(message),
@@ -1155,7 +1158,7 @@ export class SessionHub {
 
 		this.log("Sending prompt to OpenCode...");
 		const sendStartMs = Date.now();
-		await sendPromptAsync(openCodeUrl, openCodeSessionId, content, options?.images);
+		await this.runtime.sendPrompt(content, options?.images);
 		this.log("Prompt sent to OpenCode");
 		this.logger.debug(
 			{
@@ -1193,15 +1196,13 @@ export class SessionHub {
 			throw err;
 		}
 
-		const openCodeUrl = this.runtime.getOpenCodeUrl();
-		const openCodeSessionId = this.runtime.getOpenCodeSessionId();
-		if (!openCodeUrl || !openCodeSessionId) {
+		if (!this.runtime.getOpenCodeUrl() || !this.runtime.getOpenCodeSessionId()) {
 			this.log("No OpenCode session to cancel");
 			return;
 		}
 
 		try {
-			await abortOpenCodeSession(openCodeUrl, openCodeSessionId);
+			await this.runtime.interruptCurrentRun();
 			this.log("OpenCode session aborted");
 		} catch (err) {
 			this.logError("OpenCode abort failed", err);
@@ -1339,15 +1340,22 @@ export class SessionHub {
 	// Private: SSE Event Handling
 	// ============================================
 
-	private handleOpenCodeEvent(event: OpenCodeEvent): void {
+	private handleRuntimeDaemonEvent(event: RuntimeDaemonEvent): void {
+		const rawEvent = event.payload;
+		if (!isOpenCodeEvent(rawEvent)) {
+			this.logger.warn({ eventType: event.type }, "Ignoring unsupported daemon event payload");
+			return;
+		}
+
 		this.touchActivity();
 		const wasBusy = this.eventProcessor.getCurrentAssistantMessageId() !== null;
-		this.eventProcessor.process(event);
+		this.eventProcessor.process(rawEvent);
 		const nowIdle = this.eventProcessor.getCurrentAssistantMessageId() === null;
 		const reportedIdle =
 			event.type === "session.idle" ||
 			(event.type === "session.status" &&
-				(event.properties as { status?: { type?: string } } | undefined)?.status?.type === "idle");
+				(rawEvent.properties as { status?: { type?: string } } | undefined)?.status?.type ===
+					"idle");
 
 		if (wasBusy && nowIdle) {
 			this.touchActivity(); // marks agent-done boundary, starts grace period
@@ -1570,43 +1578,19 @@ export class SessionHub {
 		let transformed: Message[] = [];
 		if (openCodeUrl && openCodeSessionId) {
 			try {
-				this.log("Fetching OpenCode messages for init...", {
+				this.log("Fetching harness outputs for init...", {
 					openCodeSessionId,
-					openCodeUrl,
 				});
-				const messages = await fetchOpenCodeMessages(openCodeUrl, openCodeSessionId);
-				const rawSummaries = messages.slice(-20).map((message) => ({
-					id: message.info?.id ?? null,
-					role: message.info?.role ?? null,
-					partCount: message.parts?.length ?? 0,
-					hasError: Boolean(message.info?.error),
-					createdAt: message.info?.time?.created ?? null,
-					completedAt: message.info?.time?.completed ?? null,
-					parts: (message.parts ?? []).slice(0, 5).map((part) => ({
-						type: part.type,
-						hasCallId: Boolean(part.callID),
-						tool: part.tool ?? null,
-						status: part.state?.status ?? null,
-						textLength: typeof part.text === "string" ? part.text.length : 0,
-					})),
-				}));
-				const roleCounts = messages.reduce<Record<string, number>>((acc, message) => {
-					const role = message.info?.role ?? "unknown";
-					acc[role] = (acc[role] ?? 0) + 1;
-					return acc;
-				}, {});
-				this.log("Fetched OpenCode messages", {
-					rawMessageCount: messages.length,
-					roleCounts,
-					rawSummaries,
+				transformed = await this.runtime.collectOutputs();
+				this.log("Fetched harness outputs", {
+					messageCount: transformed.length,
 				});
-				transformed = mapOpenCodeMessages(messages);
 			} catch (err) {
 				if (!isCompletedAutomationSession) {
 					throw err;
 				}
 				this.logError(
-					"OpenCode fetch failed for completed automation; using fallback transcript",
+					"Harness output fetch failed for completed automation; using fallback transcript",
 					err,
 				);
 			}

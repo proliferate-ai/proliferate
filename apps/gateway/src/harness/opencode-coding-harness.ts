@@ -5,6 +5,8 @@ import {
 	fetchOpenCodeMessages,
 	getOpenCodeSession,
 	listOpenCodeSessions,
+	mapOpenCodeMessages,
+	sendPromptAsync,
 } from "../lib/opencode";
 import type {
 	CodingHarnessAdapter,
@@ -14,6 +16,7 @@ import type {
 	CodingHarnessInterruptInput,
 	CodingHarnessResumeInput,
 	CodingHarnessResumeResult,
+	CodingHarnessSendPromptInput,
 	CodingHarnessShutdownInput,
 	CodingHarnessStartInput,
 	CodingHarnessStartResult,
@@ -73,6 +76,10 @@ export class OpenCodeCodingHarnessAdapter implements CodingHarnessAdapter {
 		return { sessionId: created.sessionId, mode: "created" };
 	}
 
+	async sendPrompt(input: CodingHarnessSendPromptInput): Promise<void> {
+		await sendPromptAsync(input.baseUrl, input.sessionId, input.content, input.images);
+	}
+
 	async interrupt(input: CodingHarnessInterruptInput): Promise<void> {
 		await abortOpenCodeSession(input.baseUrl, input.sessionId);
 	}
@@ -98,7 +105,7 @@ export class OpenCodeCodingHarnessAdapter implements CodingHarnessAdapter {
 	async collectOutputs(
 		input: CodingHarnessCollectOutputsInput,
 	): Promise<CodingHarnessCollectOutputsResult> {
-		const messages = await fetchOpenCodeMessages(input.baseUrl, input.sessionId);
-		return { messages };
+		const rawMessages = await fetchOpenCodeMessages(input.baseUrl, input.sessionId);
+		return { messages: mapOpenCodeMessages(rawMessages) };
 	}
 }

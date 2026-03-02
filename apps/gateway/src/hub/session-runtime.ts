@@ -10,6 +10,7 @@ import { baseSnapshots, billing, sessions } from "@proliferate/services";
 import type {
 	AutoStartOutputEntry,
 	ConfigurationServiceCommand,
+	Message,
 	SandboxProvider,
 	SandboxProviderType,
 	ServerMessage,
@@ -18,14 +19,18 @@ import { getModalAppName, getSandboxProvider } from "@proliferate/shared/provide
 import { SandboxProviderError } from "@proliferate/shared/sandbox";
 import { computeBaseSnapshotVersionKey } from "@proliferate/shared/sandbox";
 import { scheduleSessionExpiry } from "../expiry/expiry-queue";
-import type { CodingHarnessEventStreamHandle } from "../harness/coding-harness";
+import type {
+	CodingHarnessEventStreamHandle,
+	CodingHarnessPromptImage,
+	RuntimeDaemonEvent,
+} from "../harness/coding-harness";
 import { ClaudeManagerHarnessAdapter } from "../harness/manager-claude-harness";
 import { OpenCodeCodingHarnessAdapter } from "../harness/opencode-coding-harness";
 import type { GatewayEnv } from "../lib/env";
 import { waitForMigrationLockRelease } from "../lib/lock";
 import { deriveSandboxMcpToken } from "../lib/sandbox-mcp-token";
 import { type SessionContext, loadSessionContext } from "../lib/session-store";
-import type { OpenCodeEvent, SandboxInfo } from "../types";
+import type { SandboxInfo } from "../types";
 
 export class MigrationInProgressError extends Error {
 	constructor(message = "Migration in progress") {
@@ -43,7 +48,7 @@ export interface SessionRuntimeOptions {
 	env: GatewayEnv;
 	sessionId: string;
 	context: SessionContext;
-	onEvent: (event: OpenCodeEvent) => void;
+	onEvent: (event: RuntimeDaemonEvent) => void;
 	onDisconnect: (reason: string) => void;
 	onStatus: (
 		status: "creating" | "resuming" | "running" | "paused" | "stopped" | "error" | "migrating",
@@ -137,6 +142,39 @@ export class SessionRuntime {
 
 	getOpenCodeSessionId(): string | null {
 		return this.openCodeSessionId;
+	}
+
+	async sendPrompt(content: string, images?: CodingHarnessPromptImage[]): Promise<void> {
+		if (!this.openCodeUrl || !this.openCodeSessionId) {
+			throw new Error("Agent session unavailable");
+		}
+		await this.codingHarness.sendPrompt({
+			baseUrl: this.openCodeUrl,
+			sessionId: this.openCodeSessionId,
+			content,
+			images,
+		});
+	}
+
+	async interruptCurrentRun(): Promise<void> {
+		if (!this.openCodeUrl || !this.openCodeSessionId) {
+			return;
+		}
+		await this.codingHarness.interrupt({
+			baseUrl: this.openCodeUrl,
+			sessionId: this.openCodeSessionId,
+		});
+	}
+
+	async collectOutputs(): Promise<Message[]> {
+		if (!this.openCodeUrl || !this.openCodeSessionId) {
+			throw new Error("Missing agent session info");
+		}
+		const result = await this.codingHarness.collectOutputs({
+			baseUrl: this.openCodeUrl,
+			sessionId: this.openCodeSessionId,
+		});
+		return result.messages;
 	}
 
 	getPreviewUrl(): string | null {
@@ -593,7 +631,7 @@ export class SessionRuntime {
 						{ channel: event.channel, type: event.type },
 						"runtime.daemon_event.normalized",
 					);
-					this.onEvent(event.rawEvent);
+					this.onEvent(event);
 				},
 			});
 			this.eventStreamConnected = true;

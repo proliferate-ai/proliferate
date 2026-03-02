@@ -12,7 +12,7 @@ describe("normalizeDaemonEvent", () => {
 		const normalized = normalizeDaemonEvent(event);
 		expect(normalized.channel).toBe("message");
 		expect(normalized.isTerminal).toBe(false);
-		expect(normalized.rawEvent).toBe(event);
+		expect(normalized.payload).toBe(event);
 	});
 
 	it("keeps session.idle non-terminal", () => {
