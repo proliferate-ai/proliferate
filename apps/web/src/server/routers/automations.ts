@@ -913,6 +913,8 @@ export const automationsRouter = {
 				name: z.string().min(1).max(200).optional(),
 				objective: z.string().max(5000).optional(),
 				modelId: z.string().optional(),
+				repoId: z.string().uuid().optional(),
+				configurationId: z.string().uuid().optional(),
 			}),
 		)
 		.output(
@@ -934,6 +936,8 @@ export const automationsRouter = {
 			const placeholderSession = await sessions.createManagerSessionPlaceholder({
 				organizationId: context.orgId,
 				createdBy: context.user.id,
+				repoId: input?.repoId,
+				configurationId: input?.configurationId,
 				visibility: "org",
 				title: `Manager: ${name}`,
 			});
@@ -1395,6 +1399,8 @@ export const automationsRouter = {
 				name: z.string().optional(),
 				objective: z.string().optional(),
 				modelId: z.string().optional(),
+				repoId: z.string().uuid().nullable().optional(),
+				configurationId: z.string().uuid().nullable().optional(),
 			}),
 		)
 		.output(
@@ -1419,11 +1425,20 @@ export const automationsRouter = {
 			}),
 		)
 		.handler(async ({ input, context }) => {
-			const { id, ...fields } = input;
+			const { id, repoId, configurationId, ...fields } = input;
 			const updated = await workers.updateWorker(id, context.orgId, fields);
 			if (!updated) {
 				throw new ORPCError("NOT_FOUND", { message: "Worker not found" });
 			}
+
+			// Propagate repo/configuration changes to the manager session
+			if (repoId !== undefined || configurationId !== undefined) {
+				await sessions.updateManagerSessionLinkage(updated.managerSessionId, {
+					repoId: repoId ?? null,
+					configurationId: configurationId ?? null,
+				});
+			}
+
 			return { worker: mapWorkerToDetail(updated) };
 		}),
 

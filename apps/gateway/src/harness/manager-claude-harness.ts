@@ -1,11 +1,6 @@
 /**
  * Manager Claude harness adapter.
- *
- * Replaces the no-op stub with a real four-phase wake-cycle engine backed
- * by the Claude SDK. Runs gateway-side as a temporary exception until
- * Phase B builds the sandbox daemon (PR 24).
- *
- * Phases: ingest → triage → orchestrate → finalize
+ * Four-phase wake-cycle engine backed by the Claude SDK.
  */
 
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";

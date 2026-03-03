@@ -69,6 +69,7 @@ export {
 	createWithAdmissionGuard,
 	createManagerSessionPlaceholder,
 	promoteToManagerSession,
+	updateManagerSessionLinkage,
 	type CreateManagerSessionInput,
 	updateWhereSandboxIdMatches,
 	listRunningSessionIds,

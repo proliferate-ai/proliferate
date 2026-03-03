@@ -1775,6 +1775,7 @@ export interface CreateManagerSessionInput {
 	repoId?: string | null;
 	repoBaselineId?: string | null;
 	repoBaselineTargetId?: string | null;
+	configurationId?: string | null;
 	visibility?: "private" | "shared" | "org";
 	title?: string | null;
 }
@@ -1804,6 +1805,7 @@ export async function createManagerSessionPlaceholder(
 			repoId: input.repoId ?? null,
 			repoBaselineId: input.repoBaselineId ?? null,
 			repoBaselineTargetId: input.repoBaselineTargetId ?? null,
+			configurationId: input.configurationId ?? null,
 			title: input.title ?? null,
 		})
 		.returning();
@@ -1830,6 +1832,24 @@ export async function promoteToManagerSession(
 	return row;
 }
 
+/**
+ * Update a manager session's repo/configuration linkage.
+ *
+ * Used when a worker's repo is changed via the settings UI — propagates
+ * the change to the manager session so child tasks inherit the correct repo.
+ */
+export async function updateManagerSessionLinkage(
+	sessionId: string,
+	linkage: { repoId?: string | null; configurationId?: string | null },
+): Promise<void> {
+	const db = getDb();
+	const updates: Record<string, string | null> = {};
+	if (linkage.repoId !== undefined) updates.repoId = linkage.repoId;
+	if (linkage.configurationId !== undefined) updates.configurationId = linkage.configurationId;
+	if (Object.keys(updates).length === 0) return;
+	await db.update(sessions).set(updates).where(eq(sessions.id, sessionId));
+}
+
 // ============================================
 // Task Session Creation
 // ============================================
@@ -1854,10 +1874,12 @@ export interface CreateTaskSessionInput {
 }
 
 export async function createTaskSession(input: CreateTaskSessionInput): Promise<SessionRow> {
-	// Configured task sessions require full repo linkage;
-	// scratch tasks (configurationId=null) can omit it per sessions_task_linkage_check.
+	// Configured task sessions require full repo linkage for baseline diffing,
+	// UNLESS they're spawned by a manager (parentSessionId set) — those only
+	// need configurationId for snapshot/repo resolution, not baseline tracking.
 	if (
 		input.configurationId &&
+		!input.parentSessionId &&
 		(!input.repoId || !input.repoBaselineId || !input.repoBaselineTargetId)
 	) {
 		throw new Error("Configured task session requires repo + baseline + baseline target linkage");
