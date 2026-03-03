@@ -4,13 +4,13 @@
 
 ### In Scope
 - Session lifecycle orchestration: create, eager-start, pause, snapshot, stop, status, delete, rename.
-- Gateway runtime orchestration: hub ownership, sandbox lifecycle, OpenCode session lifecycle, SSE streaming, reconnect.
+- Gateway runtime orchestration: hub ownership, sandbox lifecycle, harness selection (`coding-opencode` vs `manager-claude`), OpenCode session lifecycle, SSE streaming, reconnect.
 - Distributed safety primitives: owner/runtime leases, migration locks, CAS/fencing writes, orphan sweep recovery.
-- Real-time protocol surface: WebSocket session protocol, HTTP prompt/cancel/info/status/tool routes.
+- Real-time protocol surface: WebSocket session protocol, control-plane snapshot emission, HTTP prompt/cancel/info/status/tool/source routes.
 - Gateway-intercepted tool execution over synchronous sandbox callbacks.
 - Expiry/idle behavior: BullMQ expiry jobs, idle snapshotting, automation transcript-preserving completion.
 - Session telemetry capture and flush pipeline (`metrics`, `pr_urls`, `latest_task`).
-- Devtools and OpenCode proxying via gateway (`/proxy/*`) including sandbox-mcp auth token injection.
+- Devtools, VS Code, preview-health, OpenCode, and daemon proxying via gateway (`/proxy/*`, `/proliferate/v1/sessions/*`) including sandbox auth token injection.
 - Gateway client library contracts (`packages/gateway-clients`) used by web and workers.
 - Session-focused web surfaces backed by the above contracts (session list, peek drawer, inbox session context).
 
@@ -25,11 +25,13 @@
 ### Mental Models
 - **Control plane vs stream plane:** Next.js/oRPC/API routes create and mutate metadata; live model streaming is only Client ↔ Gateway ↔ Sandbox.
 - **Session record vs hub vs runtime:** DB session row is durable metadata; `SessionHub` is per-process coordination state; `SessionRuntime` owns sandbox/OpenCode/SSE readiness.
+- **Harness family is session-kind driven:** manager sessions (`kind="manager"`) run the Claude manager harness; task/setup sessions run the OpenCode coding harness.
 - **Creation vs activation:** Creating a session record does not guarantee a sandbox exists. Runtime activation happens when a hub ensures readiness (or eager-start runs).
 - **Ownership vs liveness:** Owner lease answers "which gateway instance may act"; runtime lease answers "is there a live runtime heartbeat".
 - **Idle is a predicate, not just "no sockets":** idle snapshot requires no WS clients, no proxy clients, no active HTTP tool callbacks, no running tools, and grace-period satisfaction; assistant-turn gating can also be satisfied by explicit agent-idle signals.
 - **Migration/snapshot writes are fenced:** DB transitions that depend on a specific sandbox use CAS (`updateWhereSandboxIdMatches`) so stale actors cannot clobber newer state.
 - **Recovery is multi-path:** runtime reconnect and expiry are job-driven; orphan cleanup is DB-first + runtime-lease-based and works even when no hub exists in memory.
+- **Control-plane state is explicit:** reconnect-safe client hydration uses a dedicated `control_plane_snapshot` payload (runtime status, operator status, capabilities version, visibility, worker linkage).
 - **Automation sessions are logically active even when headless:** automation client type is treated as active for expiry decisions, but SSE auto-reconnect is skipped while no WS client is attached.
 - **Automation sessions are excluded from idle snapshotting:** idle-snapshot predicates do not apply to `client_type="automation"` sessions, which are worker-managed.
 
@@ -45,6 +47,7 @@
 - Assuming tool callback idempotency is global. It is in-memory per gateway process.
 - Assuming SSE carries bidirectional traffic. SSE is read-only (sandbox → gateway); prompts/cancel are HTTP.
 - Assuming preview/devtools proxies can skip session readiness checks. Most proxy routes require runtime readiness to resolve targets.
+- Assuming all websocket message contracts in `packages/shared/src/index.ts` are currently emitted by the gateway runtime. Several workspace transport message shapes are contract-defined but not emitted yet.
 - Assuming markdown summaries are safe to render raw. UI must use sanitized markdown renderer.
 
 ---
@@ -89,6 +92,15 @@ Reference: `apps/gateway/src/hub/session-hub.ts`
 
 Reference: `apps/gateway/src/hub/session-runtime.ts`
 
+### Harness Runtime Split
+Runtime behavior is adapter-driven by `sessions.kind`.
+
+- `kind="manager"` selects `ClaudeManagerHarnessAdapter` and skips OpenCode session/SSE bootstrap.
+- `kind!="manager"` selects `OpenCodeCodingHarnessAdapter` and drives OpenCode prompt/interrupt/collect-output paths.
+- Runtime readiness for manager sessions is sandbox/provider-based; coding readiness requires OpenCode session + stream connectivity.
+
+References: `apps/gateway/src/hub/session-runtime.ts`, `apps/gateway/src/harness/manager-claude-harness.ts`, `apps/gateway/src/harness/opencode-coding-harness.ts`
+
 ### Session Creation Paths
 There are two intentional creation paths.
 
@@ -105,6 +117,15 @@ SSE is transport-only and unidirectional.
 - Heartbeat/read timeout failures map to disconnect reasons that drive hub reconnect logic.
 
 References: `apps/gateway/src/hub/sse-client.ts`, `apps/gateway/src/hub/session-hub.ts`
+
+### Control-Plane Snapshot Contract
+Gateway sends a reconnect-safe control-plane payload after `init`.
+
+- Message type: `control_plane_snapshot`.
+- Payload includes `runtimeStatus`, `operatorStatus`, `capabilitiesVersion`, `visibility`, `workerId`, `workerRunId`, and derived `sandboxAvailable`.
+- Hub refreshes DB state before emitting to reduce stale reconnect metadata.
+
+References: `apps/gateway/src/hub/control-plane.ts`, `apps/gateway/src/hub/session-hub.ts`, `packages/shared/src/index.ts`
 
 ### Migration + Idle + Orphan Recovery
 Migration and cleanup are lock/fencing-driven.
@@ -155,13 +176,13 @@ Reference: `apps/gateway/src/middleware/error-handler.ts`
 - **SSE disconnect continuity**: Runtime preserves OpenCode session identity across transient SSE disconnects and re-validates the stored OpenCode session ID on reconnect before creating a replacement.
 - **Ownership lease**: A hub must hold a Redis ownership lease (`lease:owner:{sessionId}`) to act as the session owner; renewed by heartbeat (~10s interval) while the hub is alive. Lease loss triggers split-brain suicide (see §2).
 - **Runtime lease**: Sandbox-alive signal (`lease:runtime:{sessionId}`) with 20s TTL, set after successful runtime boot and used for orphan detection.
-- **Hub eviction**: Hubs are evicted on idle TTL (no connected WS clients) and under a hard cap (LRU) to bound memory usage. `HubManager.remove()` is called via `onEvict` callback.
+- **Hub eviction**: Hubs are evicted on idle TTL (no connected WS clients). `HubManager.remove()` is called via `onEvict` callback.
 - **Session create idempotency**: DB-based via `sessions.idempotency_key` column. Redis-based idempotency (`idempotency.ts`) still exists as a legacy path.
 - **Initial prompt reliability**: `maybeSendInitialPrompt()` uses an in-memory `initialPromptSending` guard to prevent concurrent sends (eager start + runtime init), marks `initial_prompt_sent_at` before dispatch to avoid duplicates, and rolls that DB marker back on send failure so a later runtime init can retry. The in-memory guard is always reset in a `finally` block.
 - **Tool call idempotency**: In-memory `inflightCalls` + `completedResults` maps per process, keyed by `tool_call_id`, with 5-minute retention for completed results.
-- **Tool result patching**: `updateToolResult()` retries up to 5x with 1s delay (see `agent-contract.md` §5).
+- **Tool result patching**: `updateToolResult()` retries up to 5x with 1s delay (see `apps/gateway/src/lib/opencode.ts:updateToolResult`).
 - **Migration lock**: Distributed Redis lock prevents concurrent migrations for the same session. Active expiry migrations use a 120s TTL to cover OpenCode stop + scrub/snapshot/re-apply + runtime bring-up critical path.
-- **Expiry triggers**: Hub schedules an in-process expiry timer (primary) plus a BullMQ job as a fallback for evicted hubs.
+- **Expiry triggers**: BullMQ expiry job is the primary trigger; the migration controller's periodic polling serves as a fallback for evicted hubs.
 - **Expiry timestamp source-of-truth**: Newly created sandboxes use provider-reported expiry only; stored DB expiry is reused only when recovering the same sandbox ID.
 - **Snapshot secret scrubbing**: All snapshot capture paths (`save_snapshot`, idle snapshot, expiry migration, web `sessions.pause`, web `sessions.snapshot`) run `proliferate env scrub` before capture when env-file spec is configured. Paths that continue running the same sandbox re-apply env files after capture; pause/stop paths skip re-apply.
 - **Scrub failure policy**: Manual snapshots use strict scrub mode (scrub failure aborts capture). Idle/expiry paths use best-effort scrub mode (log and continue) so pause/stop cleanup is not blocked by scrub command failures.
@@ -276,7 +297,7 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 - The SSE tool lifecycle events (`tool_start` / `tool_metadata` / `tool_end`) are forwarded to clients as UI observability.
 - `tool_metadata` deduplication keys on task-summary content (title + per-item status/title signature), not just summary length, so in-place progress changes continue streaming to clients during long-running task tools.
 - If a tool is running with no metadata/output updates, the gateway emits periodic `status: "running"` heartbeat messages with elapsed-time context so clients can show liveness during long tasks.
-- Gateway-mediated tools are executed via synchronous sandbox callbacks (`POST /proliferate/:sessionId/tools/:toolName`) rather than SSE interception. Idempotency is provided by in-memory `inflightCalls` + `completedResults` maps, keyed by `tool_call_id`. Invocations are also persisted in `session_tool_invocations`.
+- Gateway-mediated tools are executed via synchronous sandbox callbacks (`POST /proliferate/:sessionId/tools/:toolName`) rather than SSE interception. Idempotency is provided by in-memory `inflightCalls` + `completedResults` maps, keyed by `tool_call_id`.
 - See `agent-contract.md` for the tool callback contract and tool schemas.
 
 **Files touched:** `apps/gateway/src/hub/event-processor.ts`, `apps/gateway/src/hub/session-hub.ts`
@@ -341,7 +362,7 @@ WHERE id = $session_id
 | CLI stop | `"completed"` | `cli/db.ts:stopSession`, `stopAllCliSessions` |
 | Force terminate (circuit breaker) | `"failed"` | `migration-controller.ts:forceTerminate` |
 
-**latestTask clearing:** All 12 non-hub write paths that transition sessions away from active states set `latestTask: null` to prevent zombie text (billing pause, manual pause, CLI stop, orphan sweeper, migration CAS).
+**latestTask clearing:** All non-hub write paths that transition sessions away from active states set `latestTask: null` to prevent zombie text (billing pause, manual pause, CLI stop, orphan sweeper, migration CAS).
 
 **Files touched:** `apps/gateway/src/hub/session-telemetry.ts`, `apps/gateway/src/hub/session-hub.ts`, `apps/gateway/src/hub/event-processor.ts`, `apps/gateway/src/hub/migration-controller.ts`, `apps/gateway/src/hub/hub-manager.ts`, `packages/services/src/sessions/db.ts`
 
@@ -372,7 +393,9 @@ WHERE id = $session_id
 
 **Mutation auth**: Requires `userId` to match `session.created_by` (or `created_by` is null for headless sessions). Source: `session-hub.ts:assertCanMutateSession`.
 
-**Server → Client messages**: `status`, `message`, `token`, `text_part_complete`, `tool_start`, `tool_metadata`, `tool_end`, `message_complete`, `message_cancelled`, `error`, `snapshot_result`, `init`, `preview_url`, `git_status`, `git_result`, `auto_start_output`, `pong`.
+**Server → Client messages**: `status`, `message`, `token`, `text_part_complete`, `tool_start`, `tool_metadata`, `tool_end`, `message_complete`, `message_cancelled`, `error`, `snapshot_result`, `init`, `control_plane_snapshot`, `preview_url`, `git_status`, `git_result`, `auto_start_output`, `pong`.
+
+**Workspace transport contract note:** shared message types `daemon_stream`, `workspace_state`, `port_event`, and `fs_change` are defined in `packages/shared/src/index.ts`, but current gateway runtime path does not emit them yet.
 
 ### 6.5 Session Migration — `Implemented`
 
@@ -383,8 +406,8 @@ WHERE id = $session_id
 2. Migration lock: distributed Redis lock with path-specific TTL prevents concurrent migrations for the same session (120s for active expiry migrations).
 
 **Expiry triggers:**
-1. Primary: in-process timer on the hub (fires at expiry minus `GRACE_MS`).
-2. Fallback: BullMQ job `"session-expiry"` (needed when the hub was evicted before expiry). Job delay: `max(0, expiresAtMs - now - GRACE_MS)`. Worker calls `hub.runExpiryMigration()`.
+1. Primary: BullMQ job `"session-expiry"` with delay `max(0, expiresAtMs - now - GRACE_MS)`. Worker calls `hub.runExpiryMigration()`.
+2. Fallback: Migration controller periodic polling detects expired sessions when BullMQ job delivery is missed (e.g., hub eviction or queue issues).
 
 **Active migration (clients connected):**
 1. Acquire distributed lock (120s TTL).
@@ -442,7 +465,20 @@ Source: `apps/gateway/src/hub/migration-controller.ts`
 
 Auth is token-in-path (required for SSE clients that can't set headers). `createRequireProxyAuth()` validates the token. `createEnsureSessionReady()` ensures the hub and sandbox are ready. `http-proxy-middleware` forwards to the sandbox OpenCode URL with path rewriting.
 
-### 6.8 Gateway Client Libraries — `Implemented`
+### 6.8 Gateway Proxy Surface (Devtools/VS Code/Preview/Daemon) — `Implemented`
+
+**What it does:** Exposes gateway-authenticated proxy routes for developer tooling and workspace transport operations.
+
+- Devtools HTTP proxy: `apps/gateway/src/api/proxy/devtools.ts`
+- VS Code HTTP/WS proxy: `apps/gateway/src/api/proxy/vscode.ts`
+- Preview health probe: `apps/gateway/src/api/proxy/preview-health.ts`
+- Daemon FS/PTY/ports/health proxy: `apps/gateway/src/api/proxy/daemon.ts`
+
+`mountRoutes()` wires these under `/proxy/*` and `/proliferate/v1/sessions/*`; runtime readiness gating still applies for session-scoped targets.
+
+Reference: `apps/gateway/src/api/index.ts`
+
+### 6.9 Gateway Client Libraries — `Implemented`
 
 **What it does:** TypeScript client libraries for programmatic gateway access.
 
@@ -462,7 +498,7 @@ Auth is token-in-path (required for SSE clients that can't set headers). `create
 
 Source: `packages/gateway-clients/src/`
 
-### 6.9 Gateway Middleware — `Implemented`
+### 6.10 Gateway Middleware — `Implemented`
 
 **Auth** (`apps/gateway/src/middleware/auth.ts`):
 Token verification chain: (1) User JWT (signed with `gatewayJwtSecret`), (2) Service JWT (signed with `serviceToken`, must have `service` claim), (3) Sandbox HMAC token (HMAC-SHA256 of `serviceToken + sessionId`), (4) CLI API key (HTTP call to web app for DB lookup).
@@ -471,9 +507,9 @@ Token verification chain: (1) User JWT (signed with `gatewayJwtSecret`), (2) Ser
 
 **Error handler** (`apps/gateway/src/middleware/error-handler.ts`): Catches `ApiError` for structured JSON responses. Unhandled errors logged via `@proliferate/logger` and returned as 500.
 
-### 6.10 Session UI Surfaces — `Implemented`
+### 6.11 Session UI Surfaces — `Implemented`
 
-**Session list rows** (`apps/web/src/components/sessions/session-card.tsx`): Enriched with Phase 2a telemetry. Active rows show `latestTask` as subtitle; idle rows show `latestTask` → `promptSnippet` fallback; completed/failed rows show outcome label + compact metrics + PR count. An outcome badge appears for non-"completed" outcomes. A `GitPullRequest` icon + count shows when `prUrls` is populated. Sessions list now includes a dedicated **Configuration** column (short `configurationId`, fallback "No config") rendered for every row on desktop widths. The row accepts an optional `onClick` prop — when provided, it fires the callback instead of navigating directly. The sessions page uses this to open the peek drawer; other pages (my-work) omit it and navigate to `/workspace/:id`.
+**Session list rows** (`apps/web/src/components/sessions/session-card.tsx`): Enriched with session telemetry. Active rows show `latestTask` as subtitle; idle rows show `latestTask` → `promptSnippet` fallback; completed/failed rows show outcome label + compact metrics + PR count. An outcome badge appears for non-"completed" outcomes. A `GitPullRequest` icon + count shows when `prUrls` is populated. Sessions list now includes a dedicated **Configuration** column (short `configurationId`, fallback "No config") rendered for every row on desktop widths. The row accepts an optional `onClick` prop — when provided, it fires the callback instead of navigating directly. The sessions page uses this to open the peek drawer; other pages (my-work) omit it and navigate to `/workspace/:id`.
 
 **Session display helpers** (`apps/web/src/lib/session-display.ts`): Pure formatting functions: `formatActiveTime(seconds)`, `formatCompactMetrics({toolCalls, activeSeconds})`, `getOutcomeDisplay(outcome)`, `formatConfigurationLabel(configurationId)`, `parsePrUrl(url)`. Used across session list rows, peek drawer, and my-work pages.
 
@@ -534,9 +570,10 @@ References: `apps/gateway/src/server.ts`, `apps/gateway/src/hub/session-runtime.
 - [ ] **Hub memory growth is lifecycle-driven, not cap-driven** — current `HubManager` has no explicit hard-cap/LRU policy; cleanup depends on hub lifecycle callbacks and shutdown.
 - [ ] **Expiry migration trigger is queue-driven** — there is no separate in-process precise expiry timer in current gateway runtime path.
 - [ ] **Tool callback idempotency is process-local** — duplicate callbacks routed to different pods can bypass in-memory dedup.
-- [ ] **Session create idempotency is Redis path-dependent** — `sessions.idempotency_key` exists in schema but is not the active enforcement path in gateway creation.
+- [ ] **Session create idempotency has no durable DB fallback** — gateway HTTP create uses Redis idempotency envelopes; database `sessions.idempotency_key` is not the active enforcement path.
 - [ ] **Dual session creation pipelines remain** — gateway HTTP and web oRPC creation are still separate behavioral paths.
 - [ ] **GitHub token resolution logic is duplicated** — similar selection logic exists in both `session-store.ts` and `session-creator.ts`.
 - [ ] **No durable chat transcript persistence in gateway/session DB path** — message history continuity depends on sandbox/OpenCode continuity.
+- [ ] **Workspace transport message emission gap** — `daemon_stream`/`workspace_state`/`port_event`/`fs_change` contracts exist in shared types, but current gateway runtime does not emit them.
 - [ ] **CORS is permissive (`*`)** — production hardening still depends on token controls rather than origin restrictions.
 - [ ] **Session status remains a text column in DB** — invalid status writes are possible without DB enum/check constraints.

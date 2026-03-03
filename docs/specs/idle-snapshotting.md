@@ -1,5 +1,7 @@
 # Idle Snapshotting - System Spec
 
+> Note: This is a supplemental spec covering idle-snapshotting behavior. The primary session lifecycle spec is `sessions-gateway.md`.
+
 ## 1. Scope & Purpose
 
 ### In Scope
@@ -46,7 +48,7 @@ A session is snapshot-eligible only when `SessionHub.shouldIdleSnapshot()` retur
 - no unresolved assistant turn OR explicit known-idle signal (`lastKnownAgentIdleAt !== null`)
 - SSE ready OR previously observed agent-idle (`lastKnownAgentIdleAt !== null`)
 - sandbox exists in context (`sandbox_id`)
-- grace period elapsed (`apps/gateway/src/hub/session-hub.ts:570-587`)
+- grace period elapsed (`apps/gateway/src/hub/session-hub.ts:shouldIdleSnapshot`)
 
 ### Activity Clock
 `lastActivityAt` is the grace-period anchor and is updated through `touchActivity()` from multiple paths:
@@ -59,16 +61,16 @@ A session is snapshot-eligible only when `SessionHub.shouldIdleSnapshot()` retur
 - heartbeat route (`apps/gateway/src/api/proliferate/http/heartbeat.ts`)
 
 ### Known-Idle Fallback
-If SSE drops after the hub observed a busy->idle transition, `lastKnownAgentIdleAt` allows idle snapshotting to proceed even while `runtime.isReady()` is false (`apps/gateway/src/hub/session-hub.ts:1278-1291`, `570-579`).
+If SSE drops after the hub observed a busy->idle transition, `lastKnownAgentIdleAt` allows idle snapshotting to proceed even while `runtime.isReady()` is false (`apps/gateway/src/hub/session-hub.ts:shouldIdleSnapshot`, `markAgentIdle`).
 
 ### Reconnect Intent
-Auto-reconnect uses timer generation guards in hub code and a post-lock intent check in runtime code. The runtime must abort `auto_reconnect` when DB status is already `paused` (`apps/gateway/src/hub/session-hub.ts:1307-1359`, `apps/gateway/src/hub/session-runtime.ts:296-300`).
+Auto-reconnect uses timer generation guards in hub code and a post-lock intent check in runtime code. The runtime must abort `auto_reconnect` when DB status is already `paused` (`apps/gateway/src/hub/session-hub.ts:scheduleAutoReconnect`, `apps/gateway/src/hub/session-runtime.ts:ensureRuntimeReady`).
 
 ### Distributed Fencing
 Idle transitions are fenced by lock + CAS:
 - lock: `runWithMigrationLock(sessionId, 300_000, ...)`
 - CAS: `updateWhereSandboxIdMatches(sessionId, expectedSandboxId, ...)`
-A stale actor must not overwrite newer sandbox state (`apps/gateway/src/hub/migration-controller.ts`, `packages/services/src/sessions/db.ts:322-345`).
+A stale actor must not overwrite newer sandbox state (`apps/gateway/src/hub/migration-controller.ts`, `packages/services/src/sessions/db.ts:updateWhereSandboxIdMatches`).
 
 ### Orphan Backstop
 A 15-minute sweeper scans DB `running` sessions and checks runtime lease. Missing leases trigger cleanup through local hub logic (if present) or direct locked DB/provider flow (if no hub) (`apps/gateway/src/sweeper/orphan-sweeper.ts`).
@@ -83,10 +85,10 @@ Sections 3 and 4 are intentionally omitted. File layout and data model details a
 - `running`: active runtime is expected (normal steady state).
 - `paused` + `pauseReason: "inactivity"`: idle snapshot/expiry-idle success path.
 - `paused` + `pauseReason: "orphaned"`: orphan sweeper cleanup path.
-- `stopped` + `pauseReason: "snapshot_failed"`: idle snapshot circuit-breaker terminal path (`apps/gateway/src/hub/migration-controller.ts:268-311`).
+- `stopped` + `pauseReason: "snapshot_failed"`: idle snapshot circuit-breaker terminal path (`apps/gateway/src/hub/migration-controller.ts:handleCircuitBreaker`).
 
 ### Ownership Layers
-- Hub-local ownership: one `SessionHub` per session per process via `HubManager.pending` dedupe (`apps/gateway/src/hub/hub-manager.ts:14-54`).
+- Hub-local ownership: one `SessionHub` per session per process via `HubManager.pending` dedupe (`apps/gateway/src/hub/hub-manager.ts`).
 - Cross-process ownership: Redis owner lease (`lease:owner:{sessionId}`) and runtime lease (`lease:runtime:{sessionId}`) (`apps/gateway/src/lib/session-leases.ts`).
 - Cross-operation exclusion: migration lock in shared services lock module (`packages/services/src/lib/lock.ts`).
 
@@ -98,12 +100,13 @@ Sections 3 and 4 are intentionally omitted. File layout and data model details a
 - The full idle predicate must be checked both before and inside the migration lock.
 - Idle eligibility must include callback/tool/proxy activity, not just websocket presence.
 - Grace period depends on session client type:
-  - `automation` / `slack`: fixed 30s
+  - `automation`: excluded from idle-snapshot predicate entirely (early return `false` in `shouldIdleSnapshot`); note that `getIdleGraceMs()` automation branch is unreachable from `shouldIdleSnapshot`
+  - `slack`: fixed 30s
   - others: `IDLE_SNAPSHOT_DELAY_SECONDS`
 - `sandbox_id` must be present before attempting idle snapshot.
 - A busy->idle state transition is detected by comparing `currentAssistantMessageId` before/after event processing.
 
-Evidence: `apps/gateway/src/hub/session-hub.ts:570-595`, `965-979`, `1278-1291`.
+Evidence: `apps/gateway/src/hub/session-hub.ts:shouldIdleSnapshot`, `getIdleGraceMs`, `markAgentIdle`.
 
 ### 6.2 Ingress Activity Invariants
 - Any ingress path that may race with idle snapshot must update activity before potentially blocking work:
@@ -131,7 +134,7 @@ Evidence: `apps/gateway/src/middleware/lifecycle.ts`, `apps/gateway/src/api/prox
 - Telemetry flush and expiry cancellation are best-effort side effects.
 - Runtime state is reset after success, CAS mismatch, and caught failure paths.
 
-Evidence: `apps/gateway/src/hub/migration-controller.ts:94-262`.
+Evidence: `apps/gateway/src/hub/migration-controller.ts:runIdleSnapshot`.
 
 ### 6.4 Resume Invariants
 - `ensureRuntimeReady()` coalesces concurrent callers with a single in-flight promise.
@@ -141,14 +144,14 @@ Evidence: `apps/gateway/src/hub/migration-controller.ts:94-262`.
 - Modal memory-restore failures clear `snapshotId` in DB and rethrow the error.
 - Successful resume writes session status back to `running`, schedules expiry, and reconnects SSE.
 
-Evidence: `apps/gateway/src/hub/session-runtime.ts:209-234`, `267-300`, `379-395`, `444-510`.
+Evidence: `apps/gateway/src/hub/session-runtime.ts:ensureRuntimeReady`, `resume`, `handleResumeSuccess`.
 
 ### 6.5 Failure & Circuit-Breaker Invariants
 - Consecutive idle snapshot failures are counted per migration controller instance.
 - At `MAX_SNAPSHOT_FAILURES` (3), controller force-terminates and marks session terminal (`stopped`, `snapshot_failed`, `outcome: failed`).
 - Lock contention is a no-op (`runWithMigrationLock` returns `null`).
 
-Evidence: `apps/gateway/src/hub/migration-controller.ts:38-47`, `104-112`, `246-261`, `268-311`, `packages/services/src/lib/lock.ts:80-98`.
+Evidence: `apps/gateway/src/hub/migration-controller.ts:runIdleSnapshot`, `handleCircuitBreaker`, `packages/services/src/lib/lock.ts:runWithMigrationLock`.
 
 ### 6.6 Orphan Backstop Invariants
 - Sweeper scans `status = running` sessions only.
@@ -158,7 +161,7 @@ Evidence: `apps/gateway/src/hub/migration-controller.ts:38-47`, `104-112`, `246-
 - Direct orphan cleanup uses same provider capability order (memory -> pause -> filesystem).
 - Direct orphan cleanup keeps `sandbox_id` when terminate fails, so future retries remain fenced.
 
-Evidence: `apps/gateway/src/sweeper/orphan-sweeper.ts`, `packages/services/src/sessions/db.ts:587-594`.
+Evidence: `apps/gateway/src/sweeper/orphan-sweeper.ts`, `packages/services/src/sessions/db.ts`.
 
 ---
 
@@ -178,40 +181,40 @@ Evidence: `apps/gateway/src/sweeper/orphan-sweeper.ts`, `packages/services/src/s
 ## 8. Things Agents Get Wrong
 
 1. "No websocket clients means idle."
-Correction: idle requires no websocket clients, no proxy connections, no active tool callbacks, no running tools, no assistant message, grace elapsed, and sandbox present (`apps/gateway/src/hub/session-hub.ts:570-587`).
+Correction: idle requires no websocket clients, no proxy connections, no active tool callbacks, no running tools, no assistant message, grace elapsed, and sandbox present (`apps/gateway/src/hub/session-hub.ts:shouldIdleSnapshot`).
 
 2. "SSE disconnect always blocks idle snapshot."
-Correction: known-idle fallback (`lastKnownAgentIdleAt`) allows idle snapshot after SSE loss if idle was previously observed (`apps/gateway/src/hub/session-hub.ts:577-579`, `1288-1291`).
+Correction: known-idle fallback (`lastKnownAgentIdleAt`) allows idle snapshot after SSE loss if idle was previously observed (`apps/gateway/src/hub/session-hub.ts:shouldIdleSnapshot`, `markAgentIdle`).
 
 3. "Modal idle path is memory-only today."
-Correction: current implementation falls back from memory snapshot to pause/filesystem snapshot on failure (`apps/gateway/src/hub/migration-controller.ts:145-180`, `apps/gateway/src/sweeper/orphan-sweeper.ts:122-133`).
+Correction: current implementation falls back from memory snapshot to pause/filesystem snapshot on failure (`apps/gateway/src/hub/migration-controller.ts:runIdleSnapshot`, `apps/gateway/src/sweeper/orphan-sweeper.ts`).
 
 4. "Idle snapshot always evicts the hub."
-Correction: normal timer-driven idle snapshot stops idle monitor but does not evict hub; explicit sweeper-triggered `hub.runIdleSnapshot()` calls `onEvict()` afterward (`apps/gateway/src/hub/session-hub.ts:170-172`, `825-828`).
+Correction: normal timer-driven idle snapshot stops idle monitor but does not evict hub; explicit sweeper-triggered `hub.runIdleSnapshot()` calls `onEvict()` afterward (`apps/gateway/src/hub/session-hub.ts:runIdleSnapshot`, `onIdleSnapshotComplete`).
 
 5. "Heartbeat keeps a session alive even when no hub exists."
-Correction: heartbeat returns 404 if no active hub and does not create one (`apps/gateway/src/api/proliferate/http/heartbeat.ts:23-27`).
+Correction: heartbeat returns 404 if no active hub and does not create one (`apps/gateway/src/api/proliferate/http/heartbeat.ts`).
 
 6. "session.idle always clears assistant busy state."
 Correction: `EventProcessor` may retain `currentAssistantMessageId` for text-only responses, but explicit `session.idle` / `session.status(idle)` now still marks known-idle (`lastKnownAgentIdleAt`) for snapshot eligibility (`apps/gateway/src/hub/session-hub.ts`).
 
 7. "Generation guard in reconnect timer is enough to prevent resume races."
-Correction: runtime also re-checks intent after lock wait and DB reload (`apps/gateway/src/hub/session-runtime.ts:296-300`).
+Correction: runtime also re-checks intent after lock wait and DB reload (`apps/gateway/src/hub/session-runtime.ts:ensureRuntimeReady`).
 
 8. "CAS mismatch is an error condition."
-Correction: CAS mismatch is treated as benign stale-actor detection; local runtime state is still reset (`apps/gateway/src/hub/migration-controller.ts:214-220`).
+Correction: CAS mismatch is treated as benign stale-actor detection; local runtime state is still reset (`apps/gateway/src/hub/migration-controller.ts:runIdleSnapshot`).
 
 9. "Orphan sweeper only inspects in-memory hubs."
-Correction: it is DB-first (`listRunningSessionIds`) and lease-driven, then optionally delegates to local hub (`apps/gateway/src/sweeper/orphan-sweeper.ts:31-67`).
+Correction: it is DB-first (`listRunningSessionIds`) and lease-driven, then optionally delegates to local hub (`apps/gateway/src/sweeper/orphan-sweeper.ts`).
 
 10. "Expiry worker recreates missing hubs to migrate sessions."
-Correction: expiry worker skips jobs when hub is missing (`apps/gateway/src/expiry/expiry-queue.ts:98-104`).
+Correction: expiry worker skips jobs when hub is missing (`apps/gateway/src/expiry/expiry-queue.ts`).
 
 11. "Resume clears pause metadata automatically."
-Correction: current runtime update sets status to `running` but does not explicitly clear `pauseReason` (`apps/gateway/src/hub/session-runtime.ts:446-454`).
+Correction: current runtime update sets status to `running` but does not explicitly clear `pauseReason` (`apps/gateway/src/hub/session-runtime.ts:handleResumeSuccess`).
 
 12. "Idle monitor keeps retrying after snapshot failures."
-Correction: migration controller failure path invokes `onIdleSnapshotComplete` (stopping idle monitor) and resets runtime state; retries rely on later re-entry (reconnect/sweeper/new runtime) (`apps/gateway/src/hub/migration-controller.ts:246-256`, `apps/gateway/src/hub/session-hub.ts:170-172`).
+Correction: migration controller failure path invokes `onIdleSnapshotComplete` (stopping idle monitor) and resets runtime state; retries rely on later re-entry (reconnect/sweeper/new runtime) (`apps/gateway/src/hub/migration-controller.ts:runIdleSnapshot`, `apps/gateway/src/hub/session-hub.ts:onIdleSnapshotComplete`).
 
 ---
 
@@ -221,7 +224,7 @@ Correction: migration controller failure path invokes `onIdleSnapshotComplete` (
 `runIdleSnapshot()` and orphan cleanup both allow fallback to non-memory snapshot modes. If product policy is memory-only, migration and sweeper flows need a coordinated change (`apps/gateway/src/hub/migration-controller.ts`, `apps/gateway/src/sweeper/orphan-sweeper.ts`).
 
 2. `pauseReason` is not explicitly cleared during resume.
-Session status returns to `running`, but stale pause reason may persist in DB unless overwritten elsewhere (`apps/gateway/src/hub/session-runtime.ts:446-454`).
+Session status returns to `running`, but stale pause reason may persist in DB unless overwritten elsewhere (`apps/gateway/src/hub/session-runtime.ts:handleResumeSuccess`).
 
 3. Text-only assistant completions rely on explicit idle signals for eligibility.
 If upstream stops emitting `session.idle` / `session.status(idle)`, retained `currentAssistantMessageId` can still suppress idle eligibility (`apps/gateway/src/hub/session-hub.ts`, `apps/gateway/src/hub/event-processor.ts`).
@@ -230,4 +233,4 @@ If upstream stops emitting `session.idle` / `session.status(idle)`, retained `cu
 Preview-only activity that bypasses gateway websocket/proxy channels may be under-observed without heartbeat adoption (`apps/gateway/src/api/proliferate/http/heartbeat.ts`; no `apps/web` heartbeat caller found).
 
 5. Local idle snapshot success/failure does not evict hubs by default.
-This preserves fast resume handoff but can accumulate paused hubs and ongoing lease renewal until explicit eviction/shutdown (`apps/gateway/src/hub/session-hub.ts:170-172`, `803-812`).
+This preserves fast resume handoff but can accumulate paused hubs and ongoing lease renewal until explicit eviction/shutdown (`apps/gateway/src/hub/session-hub.ts:onIdleSnapshotComplete`, `runIdleSnapshot`).

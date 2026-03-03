@@ -236,7 +236,7 @@ Corrects drift between local shadow balance and Autumn balances.
 - Trial depletion can attempt automatic paid plan activation (`tryActivatePlanAfterTrial`).
 - Plan activation and credit purchase may return checkout URLs or immediate success.
 - Immediate purchases attempt local balance credit and then enqueue fast reconcile.
-- Legacy `/api/billing/*` endpoints are adapters; oRPC router is the primary API surface.
+- oRPC router is the API surface for billing operations.
 
 **Rules**
 - Billing settings and plan mutations require admin/owner permissions.
@@ -305,7 +305,7 @@ Corrects drift between local shadow balance and Autumn balances.
 - Warning thresholds: approaching (80%), critical (95%), exhausted (100%) of plan-included credits (`packages/shared/src/billing/types.ts:WARNING_THRESHOLDS`).
 - Billing banner (`apps/web/src/components/dashboard/billing-banner.tsx`) displays nearing-limit warnings at approaching and critical thresholds; non-dismissable for exhausted/suspended/grace states.
 - Plan limits include `maxActiveCoworkers` per plan (dev: 3, pro: 25).
-- Error codes: `COWORKER_LIMIT`, `MONTHLY_LIMIT`, `BUDGET_EXHAUSTED` added to `BillingErrorCode`.
+- Error codes: `COWORKER_LIMIT`, `MONTHLY_LIMIT`, `BUDGET_EXHAUSTED` added to `BillingErrorCode` (`packages/shared/src/billing/types.ts:BillingErrorCode`).
 
 **Rules**
 - Warning banners are dismissable for approaching/critical levels; non-dismissable for exhausted/suspended.
@@ -363,7 +363,7 @@ Corrects drift between local shadow balance and Autumn balances.
 ### Reliability / Operational Risk
 - [ ] **Metered-through crash window (P2)** — session `meteredThroughAt` update is separate from deduction transaction; idempotency prevents overcharge but can cause replay noise (`packages/services/src/billing/metering.ts`).
 - [ ] **LLM dispatcher has no enqueue dedupe by org (P2)** — multiple jobs for same org can coexist under backlog conditions; correctness depends on idempotency keys (`apps/worker/src/jobs/billing/llm-sync-dispatcher.job.ts`).
-- [ ] **Grace-null behavior is implicit (P2)** — `graceExpiresAt IS NULL` is treated as immediately expired (fail-closed) without explicit schema-level guardrails (`packages/services/src/orgs/db.ts`, `packages/shared/src/billing/state.ts`).
+- [ ] **Grace-null behavior is implicit (P2)** — `graceExpiresAt IS NULL` is treated as immediately expired (fail-closed) without explicit schema-level guardrails (`packages/shared/src/billing/state.ts`).
 
 ### Data Lifecycle / Drift
 - [ ] **Partition archival remains operator-driven (P1)** — maintenance logs detachment candidates but does not auto-archive old partitions (`apps/worker/src/jobs/billing/partition-maintenance.job.ts`).

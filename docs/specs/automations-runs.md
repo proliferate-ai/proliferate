@@ -11,7 +11,7 @@
 - Execution worker (configuration resolution, session creation, prompt dispatch)
 - Finalizer reconciliation against session and sandbox liveness
 - Run event log (`automation_run_events`)
-- Outbox dispatch (`enqueue_enrich`, `enqueue_execute`, `write_artifacts`, `notify_run_terminal`, `notify_session_complete`)
+- Outbox dispatch (`enqueue_enrich`, `enqueue_execute`, `write_artifacts`, `notify_run_terminal`, `notify_session_complete`, `notify_v1`)
 - Side-effect idempotency (`automation_side_effects`) for external notifications
 - Artifact writes (completion + enrichment JSON to S3)
 - Run assignment, manual resolution, org-level pending run query
@@ -34,7 +34,7 @@ An **automation** is policy. A **run** is execution state. A **session** is the 
 The automations subsystem is a database-orchestrated pipeline with explicit durability boundaries:
 - Trigger-side code creates a trigger event + run + first outbox row in one transaction (`packages/services/src/runs/service.ts:createRunFromTriggerEvent`).
 - Workers claim runs through leases (`packages/services/src/runs/db.ts:claimRun`) and claim outbox rows through `FOR UPDATE SKIP LOCKED` (`packages/services/src/outbox/service.ts:claimPendingOutbox`).
-- Completion is closed by a tool callback path (`apps/gateway/src/hub/capabilities/tools/automation-complete.ts`) that writes terminal run state transactionally and then terminates the automation session fast-path (`apps/gateway/src/hub/session-hub.ts:terminateForAutomation`).
+- Completion is closed by a tool callback path (`apps/gateway/src/hub/capabilities/tools/automation-complete.ts`) that writes terminal run state transactionally and then pauses the automation session (preserving transcript access).
 
 The system is intentionally **at-least-once** at dispatch boundaries. Idempotency is applied at state boundaries (`completion_id`) and side-effect boundaries (`automation_side_effects`).
 
@@ -229,16 +229,15 @@ Sources:
 - `completeRun` writes terminal run state + completion event + outbox items (`write_artifacts`, `notify_run_terminal`) transactionally.
 - Completion retries with identical `completion_id` and identical payload are idempotent.
 - Completion retries with same `completion_id` but different payload are rejected.
-- Gateway updates trigger event terminal status and persists session outcome/summary before session fast-path termination.
+- Gateway updates trigger event terminal status and persists session outcome/summary, then pauses the session (status=paused, pauseReason=automation_completed) to preserve transcript access.
 
 **Rules**
 - Completion session ID mismatch is rejected.
-- Automation session cleanup is best-effort and intentionally asynchronous after tool response.
+- Automation session pausing is best-effort and intentionally asynchronous after tool response.
 
 Sources:
 - `apps/gateway/src/hub/capabilities/tools/automation-complete.ts`
 - `packages/services/src/runs/service.ts:completeRun`
-- `apps/gateway/src/hub/session-hub.ts:terminateForAutomation`
 
 ### 6.6 Finalizer Invariants — `Implemented`
 
@@ -269,6 +268,7 @@ Sources:
   - `write_artifacts` -> inline S3 writes
   - `notify_run_terminal` -> inline run notification dispatch
   - `notify_session_complete` -> inline session notification dispatch
+  - `notify_v1` -> V1 durable notification creation + optional Slack DM
 
 **Rules**
 - Successful dispatch must call `markDispatched`.
@@ -292,9 +292,14 @@ Sources:
 - Slack API/network timeout errors are retryable through outbox retry semantics.
 - Session notification dispatch throws on partial failure so outbox can retry remaining subscriptions.
 
+**Dual notification paths**: Two independent notification paths exist for terminal runs:
+1. `notify_run_terminal` — automation-configured Slack channel/DM notifications dispatched by the outbox worker (`apps/worker/src/automation/notifications.ts`).
+2. `notify_v1` — V1 durable in-app + Slack DM notifications enqueued by `onRunTerminal` when `completeRun` or `markRunFailed` is called (`packages/services/src/notifications/hooks.ts`).
+
 Sources:
 - `apps/worker/src/automation/notifications.ts`
 - `packages/services/src/notifications/service.ts`
+- `packages/services/src/notifications/hooks.ts`
 - `packages/services/src/side-effects/service.ts`
 
 ### 6.9 Slack Async Client Invariants — `Implemented`

@@ -12,6 +12,7 @@
 - Git freshness on restore (`shouldPullOnRestore` + provider integrations)
 - Base snapshot version key + Modal base/configuration snapshot build paths
 - sandbox-mcp sidecar (`api-server`, terminal WS, service manager, in-sandbox CLI)
+- sandbox-daemon package contract (`packages/sandbox-daemon`) and gateway daemon-proxy boundary
 - Sandbox auth token wiring (`SANDBOX_MCP_AUTH_TOKEN`)
 - Caddy preview/proxy integration (`/_proliferate/mcp/*`, `/_proliferate/vscode/*`)
 
@@ -31,9 +32,11 @@ The core abstraction is capability-based, not provider-uniform:
 - Pause/resume exists only on E2B (`supportsPause`, `supportsAutoPause`).
 - Memory snapshot exists only on Modal (`supportsMemorySnapshot`, `memorySnapshot`, `restoreFromMemorySnapshot`).
 
-Every sandbox has two control planes:
+Every sandbox has two active control planes today:
 - OpenCode plane on port `4096` for agent interaction.
 - sandbox-mcp plane on port `4000` for terminal/services/git inspection, fronted by Caddy on preview port `20000`.
+
+The repo also includes a sandbox-daemon transport package and gateway daemon proxy surface, but provider startup is still sandbox-mcp-first in current `main`.
 
 Boot is intentionally split into two phases:
 - Essential phase (blocking): required for a usable agent session.
@@ -57,6 +60,7 @@ State is intentionally split:
 - `checkSandboxes()` must be side-effect free; E2B must not use `Sandbox.connect()` there (`packages/shared/src/providers/provider-contract.test.ts`, `packages/shared/src/providers/e2b.ts`).
 - Snapshot restore freshness is cadence-gated and metadata-aware; cadence advances only when all pulls succeed (`packages/shared/src/sandbox/git-freshness.ts`, `packages/shared/src/providers/pull-on-restore.test.ts`).
 - Gateway callback tools (`verify`, `save_snapshot`, etc.) require `PROLIFERATE_GATEWAY_URL`, `PROLIFERATE_SESSION_ID`, and `SANDBOX_MCP_AUTH_TOKEN` in sandbox env (`packages/shared/src/opencode-tools/index.ts`).
+- sandbox-daemon code existing in the repo does not imply provider boot integration is complete; validate provider startup paths (`packages/shared/src/providers/*.ts`) before assuming daemon-backed runtime transport.
 - Direct provider instantiation is valid for snapshot workers, not for session runtime code paths (`apps/worker/src/base-snapshots/index.ts`, `apps/worker/src/configuration-snapshots/index.ts`, `packages/shared/src/providers/index.ts`).
 
 ---
@@ -102,6 +106,11 @@ Providers maintain `SessionMetadata` in `/home/user/.proliferate/metadata.json` 
 sandbox-mcp provides in-sandbox HTTP/WS APIs for service management, terminal access, and git introspection (`packages/sandbox-mcp/src/index.ts`, `packages/sandbox-mcp/src/api-server.ts`, `packages/sandbox-mcp/src/terminal.ts`).
 
 It is reachable externally through Caddy’s `/_proliferate/mcp/*` path (`packages/shared/src/sandbox/config.ts`).
+
+### sandbox-daemon Transport Artifact
+The repo contains a dedicated `packages/sandbox-daemon` transport daemon with PTY/FS/ports/event-stream router and token refresh endpoints (`packages/sandbox-daemon/src/index.ts`, `packages/sandbox-daemon/src/router.ts`).
+
+Gateway has matching daemon proxy routes under `/proliferate/v1/sessions/*` (`apps/gateway/src/api/proxy/daemon.ts`), but provider boot flows in `main` still start sandbox-mcp rather than sandbox-daemon as the primary in-sandbox transport process.
 
 ---
 
@@ -235,6 +244,13 @@ References: `packages/sandbox-mcp/src/proliferate-cli.ts`, `packages/sandbox-mcp
 
 References: `packages/shared/src/sandbox/version-key.ts`, `apps/worker/src/base-snapshots/index.ts`, `apps/worker/src/configuration-snapshots/index.ts`, `apps/gateway/src/bin/create-modal-base-snapshot.ts`.
 
+### 6.13 Daemon Transport Invariants — `Partial`
+- `packages/sandbox-daemon` APIs must stay auth-gated except health routes (`/_proliferate/health`).
+- Gateway daemon proxy must derive per-session auth tokens and forward requests only after session readiness.
+- Provider startup paths are the activation boundary: until providers launch sandbox-daemon by default, daemon routes remain a partial transport surface.
+
+References: `packages/sandbox-daemon/src/router.ts`, `apps/gateway/src/api/proxy/daemon.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/modal-libmodal.ts`.
+
 ---
 
 ## 7. Cross-Cutting Concerns
@@ -265,6 +281,7 @@ References: `packages/shared/src/sandbox/version-key.ts`, `apps/worker/src/base-
 - [ ] Typecheck passes (`pnpm typecheck`)
 - [ ] Shared/provider tests pass (`pnpm -C packages/shared test`)
 - [ ] sandbox-mcp tests pass (`pnpm -C packages/sandbox-mcp test`)
+- [ ] sandbox-daemon tests pass (`pnpm -C packages/sandbox-daemon test`)
 - [ ] This spec removes sectioned file-tree/data-model inventories and keeps deep dives declarative
 - [ ] No spec statements conflict with provider capabilities (`supportsPause`, `supportsMemorySnapshot`) in code
 
@@ -274,7 +291,8 @@ References: `packages/shared/src/sandbox/version-key.ts`, `apps/worker/src/base-
 
 - [ ] **Modal pause is unsupported** — Modal sessions cannot use native pause semantics and rely on snapshot + recreate paths (`packages/shared/src/providers/modal-libmodal.ts`).
 - [ ] **E2B resume fallback is silent** — failed `Sandbox.connect(snapshotId)` falls back to fresh sandbox creation without user-visible warning (`packages/shared/src/providers/e2b.ts`).
-- [ ] **Immediate sandbox creation path does not inject gateway callback env vars by default** — `session-creator` direct `provider.createSandbox()` path omits `SANDBOX_MCP_AUTH_TOKEN`, `PROLIFERATE_GATEWAY_URL`, and `PROLIFERATE_SESSION_ID`, while tool callbacks/sandbox-mcp auth depend on them (`apps/gateway/src/lib/session-creator.ts`, `apps/gateway/src/hub/session-runtime.ts`, `packages/shared/src/opencode-tools/index.ts`, `packages/shared/src/providers/*.ts`).
+- [ ] **sandbox-daemon rollout is incomplete** — daemon package and gateway proxy routes exist, but provider startup still boots sandbox-mcp as primary runtime transport (`packages/sandbox-daemon/src/index.ts`, `apps/gateway/src/api/proxy/daemon.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/modal-libmodal.ts`).
+- [ ] **Immediate sandbox creation env-var parity relies on session-creator wiring** — callback-critical env vars are now injected on immediate create, but parity remains sensitive to any alternate provider boot call sites (`apps/gateway/src/lib/session-creator.ts`, `packages/shared/src/providers/*.ts`).
 - [ ] **Freshness logic is duplicated across layers** — providers run cadence-aware pull-on-restore, and runtime also runs a best-effort pull from `/home/user/workspace`; this creates overlap and uneven multi-repo behavior (`packages/shared/src/providers/*.ts`, `apps/gateway/src/hub/session-runtime.ts`).
 - [ ] **E2B setup parity gap** — E2B provider currently does not write SSH authorized keys or trigger context files, unlike Modal (`packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/modal-libmodal.ts`).
 - [ ] **`resolveSnapshotId()` is currently not on the primary session-start path** — runtime/session-creator consume snapshot IDs directly from resolved configuration/session state, leaving this utility as a pure helper/test surface (`packages/shared/src/snapshot-resolution.ts`, `apps/gateway/src/lib/configuration-resolver.ts`, `apps/gateway/src/lib/session-creator.ts`).

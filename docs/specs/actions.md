@@ -32,7 +32,7 @@
 - Gateway `/invoke` now forwards `session.automationId` to `actions.invokeAction()`, so automation-level mode overrides apply in live automation sessions.
 - Connector listing failures are degraded to empty tool lists; they do not fail the entire `/available` response.
 - Connector drift guard only applies when a stored tool hash exists; absence of a stored hash means "not drifted".
-- Sandbox callers can invoke/list/guide/status, but only user tokens with `owner|admin` can approve/deny.
+- Sandbox callers can invoke/list/guide/status, but only user tokens from the session creator, an org admin/owner, or a user with `reviewer` ACL role on the session can approve/deny.
 - Result handling is not passthrough: DB writes always redact sensitive keys and structurally truncate JSON.
 
 ---
@@ -50,7 +50,7 @@ The resolved mode and mode source are stored on every invocation row.
 
 ### 2.2 `ActionSource` Polymorphism
 All execution flows through `ActionSource` (`packages/providers/src/action-source.ts`):
-- `ProviderActionSource` wraps static modules in `packages/providers/src/providers/*`.
+- `ProviderActionSource` wraps static modules in `packages/providers/src/providers/*/actions.ts` (Linear, Sentry, Slack, Jira).
 - `McpConnectorActionSource` wraps org-scoped connector config and resolves tools dynamically (`packages/services/src/actions/connectors/action-source.ts`).
 
 Gateway invocation code remains source-agnostic; it resolves source + action definition, validates params, and executes through a shared contract.
@@ -89,7 +89,7 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 - Don't persist raw provider responses or credential-shaped fields.
 - Don't allow sandbox tokens to approve/deny.
 - Don't assume connector permissions and drift state are discoverable from static UI metadata.
-- Don't depend on legacy grant endpoints (`/actions/grants`) for policy management.
+- Don't depend on legacy grant endpoints — gateway `/actions/grants` routes have been removed. The sandbox CLI still exposes orphaned `proliferate actions grant*` commands that call non-existent endpoints.
 
 ### Error Handling
 - Service error classes map to explicit gateway statuses:
@@ -124,6 +124,9 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 - Connector/tool discovery failures must degrade to omission, not global request failure.
 - User source-level disable preferences must be enforced in both listing and invoke paths.
 
+### 6.1a User Preference Enforcement at Invoke Time
+- Sandbox invoke paths also enforce user source preferences for the session creator, filtering disabled sources before action execution.
+
 ### 6.2 Invocation and Policy Invariants
 - Every invocation must resolve to exactly one mode and one mode source.
 - Mode resolution order must remain: automation override → org default → inferred default.
@@ -139,7 +142,7 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 
 ### 6.4 Auth and Transport Invariants
 - Only sandbox auth can call `/invoke`.
-- Approval/denial requires user auth plus org role `owner|admin`.
+- Approval/denial requires user auth plus one of: session creator, org role `owner|admin`, or `reviewer` ACL role on the session.
 - Session-scoped sandbox callers can only read invocations from their own session.
 - User callers must belong to session org to list/inspect/approve/deny.
 
@@ -175,7 +178,7 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 | `integrations.md` | Actions → Integrations | `sessions.listSessionConnections()`, `integrations.getToken()` | Provider availability + token resolution |
 | `integrations.md` | Actions ↔ Connectors | `connectors.listEnabledConnectors()`, `connectors.getConnector()`, `connectors.getToolRiskOverrides()` | Connector catalog + drift inputs |
 | `secrets-environment.md` | Actions → Secrets | `secrets.resolveSecretValue(orgId, key)` | Connector auth secret resolution |
-| `auth-orgs.md` | Actions → Orgs | `orgs.getUserRole(userId, orgId)` | Approval role checks |
+| `auth-orgs.md` | Actions → Orgs | `orgs.getUserRole(userId, orgId)` | Approval role checks (org admin/owner, session creator, reviewer ACL) |
 | `agent-contract.md` | Contract → Actions | `ACTIONS_BOOTSTRAP`, system prompt CLI instructions | Agent discovery and usage model |
 | `sessions-gateway.md` | Actions → Gateway WS | `action_approval_request`, `action_completed`, `action_approval_result` | Human-in-loop signaling |
 | `automations-runs.md` | Actions ↔ Automations | automation mode APIs + integration-action resolver | Automation-scoped permissions UI/metadata |
@@ -211,9 +214,9 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 - [ ] **In-memory rate limiting**: gateway per-session limit is process-local; multi-instance deployments do not share counters.
 - [x] **Automation override wiring in invoke path**: gateway `/invoke` forwards `session.automationId` to `actions.invokeAction()`, so automation mode overrides now apply in that path (`apps/gateway/src/api/proliferate/http/actions.ts`).
 - [ ] **Connector drift hash persistence gap**: drift checks read `org_connectors.tool_risk_overrides[*].hash`, but there is no first-class write flow in current connector CRUD/permissions UI to persist these hashes.
-- [x] **Inbox "Always Allow" key format**: inbox writes org mode keys as `${integration}:${action}`, matching resolver expectations (`apps/web/src/components/inbox/inbox-item.tsx`).
+- [x] **Inbox "Always Allow" key format**: inbox writes org mode keys as `${integration}:${action}`, matching resolver expectations (`apps/web/src/components/coding-session/inbox-tray.tsx`).
 - [ ] **Connector permission UX gap**: integration detail page shows placeholder text for connector tool permissions; connector action-mode editing is not fully exposed there.
 - [ ] **Action-level user preferences not enforced in gateway**: preference schema supports `actionId`, but gateway enforcement currently checks disabled sources only.
-- [ ] **Legacy grant CLI commands remain**: sandbox CLI still exposes `proliferate actions grant*` commands even though gateway grant routes are removed.
+- [ ] **Orphaned grant CLI commands**: sandbox CLI still exposes `proliferate actions grant*` commands that call non-existent gateway endpoints (gateway `/actions/grants` routes have been fully removed).
 - [ ] **Gateway route test gap**: no route-level automated tests currently cover `apps/gateway/src/api/proliferate/http/actions.ts`.
 - [ ] **Database connectors planned**: provider-backed + MCP connector-backed sources are implemented; DB-native action sources are still planned.
