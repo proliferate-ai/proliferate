@@ -1,16 +1,18 @@
 # Inbox & Workspace — System Spec
 
+> Note: This is a supplemental spec covering attention-surface UI design. Many surfaces described here are Planned. Only the inline inbox tray (`apps/web/src/components/coding-session/inbox-tray.tsx`) is Implemented.
+
 ## 1. Scope & Purpose
 
 ### In Scope
-- Attention surfaces that help humans triage work: `/dashboard/inbox`, workspace inbox tray, and sidebar inbox badge.
+- Attention surfaces that help humans triage work: `/dashboard/inbox` **(Planned)**, workspace inbox tray, and sidebar inbox badge. Note: the `/dashboard/inbox` route does not exist yet; inbox functionality currently exists only as `inbox-tray.tsx` in the coding session workspace.
 - Session visibility affordances: origin badges, urgency indicators, and run-aware deep links.
 - Workspace investigation mode (`PreviewMode: "investigation"`) and run triage UI in the right panel.
 - Org run visibility endpoints: `automations.getRun`, `automations.listRunEvents`, `automations.listOrgRuns`, `automations.listOrgPendingRuns`.
 - Billing-blocked rollup endpoint for inbox: `sessions.blockedSummary`.
-- My Work page aggregation (claimed runs + active manual sessions + pending approvals).
-- Activity page (org-wide paginated run history with status filtering).
-- Dashboard navigation and command search entries for My Work and Activity.
+- My Work page aggregation (claimed runs + active manual sessions + pending approvals) **(Planned)**.
+- Activity page (org-wide paginated run history with status filtering) **(Planned)**. Note: the backend `listOrgRuns` exists but the frontend page is not implemented.
+- Dashboard navigation and command search entries for My Work and Activity **(Planned)**.
 
 ### Out of Scope
 - Run lifecycle execution/enrichment/finalization — see `automations-runs.md`.
@@ -41,7 +43,9 @@ Investigation is rendered by the existing workspace right panel system. `runId` 
 ### Runs and sessions are coupled for triage, but queried independently
 Run details come from run APIs (`getRun`, `listRunEvents`) and session chrome comes from session APIs. Deep links tie them together via `/workspace/{sessionId}?runId={runId}`.
 
-### My Work is responsibility-focused, not inbox-focused
+### My Work is responsibility-focused, not inbox-focused **(Planned)**
+**Status: Planned.** Backend routes exist (`myClaimedRuns`) but no frontend surface is rendered.
+
 My Work combines:
 - Runs assigned to the current user.
 - Active manual sessions created by the current user.
@@ -65,7 +69,7 @@ Run/session read APIs in this spec are org-scoped procedures and enforce org own
 
 ### Polling and Freshness
 - `useRun`, `useRunEvents`, `useOrgRuns`, `useOrgPendingRuns`, and `useOrgActions` poll every 30s.
-- My Work uses faster polling for responsibility surfaces: claimed runs (10s) and active sessions (5s).
+- My Work **(Planned)** uses faster polling for responsibility surfaces: claimed runs (10s) and active sessions (5s).
 - Sessions page polls every 5s only when visible rows include live statuses.
 
 ### Cache Coherency After Run Mutations
@@ -105,8 +109,8 @@ Run/session read APIs in this spec are org-scoped procedures and enforce org own
 - Session-level urgency does not alter canonical session status; it is a cross-entity attention overlay.
 
 ### 6.6 Work Surface Boundaries
-- My Work is user-responsibility scoped for runs/sessions, but approvals remain org-wide.
-- Activity is org-wide and paginated; it is an audit/visibility surface, not an ownership queue.
+- My Work **(Planned)** is user-responsibility scoped for runs/sessions, but approvals remain org-wide.
+- Activity **(Planned)** is org-wide and paginated; it is an audit/visibility surface, not an ownership queue.
 - Inbox is triage-first and includes blocked billing state; it is broader than run assignment.
 
 ## 7. Things Agents Get Wrong
@@ -117,9 +121,9 @@ Run/session read APIs in this spec are org-scoped procedures and enforce org own
 - Investigation is not a modal or route; it is a `PreviewMode` variant in the existing right panel.
 - `runId` is propagated via workspace URL search params and component props, not via Zustand global run state.
 - Unassigned filtering is server-side in `listOrgPendingRuns`; client filtering is not the source of truth.
-- My Work “pending approvals” are currently org-wide; they are not assigned to the current user.
+- My Work **(Planned)** “pending approvals” are currently org-wide; they are not assigned to the current user.
 - Sessions origin classification is client-derived from multiple fields; there is no single persisted “origin kind” field.
-- Activity page UX pagination does not define backend bounds; backend enforces 90-day scope and max query limits.
+- Activity page **(Planned)** UX pagination does not define backend bounds; backend enforces 90-day scope and max query limits.
 - Claim/resolve mutations rely on query invalidation and refetch; optimistic UI is intentionally minimal.
 - `listRunEvents` returns `NOT_FOUND` when run/org scope check fails; this is not equivalent to “empty timeline”.
 - `blockedSummary` reasons are normalized for display text in services, not exposed as raw DB pause-reason labels.
@@ -130,6 +134,6 @@ Run/session read APIs in this spec are org-scoped procedures and enforce org own
 - [ ] Sessions list has no server-side pagination; high-cardinality orgs will require it.
 - [ ] Investigation still requires `runId` in URL; no first-class “open latest run for this session” affordance in workspace.
 - [ ] Pending-run overlay on session rows shows one mapped run per session, not a multi-run stack.
-- [ ] Activity has fixed backend 90-day horizon and no user-configurable date range.
-- [ ] My Work approvals are org-level because per-user approval assignment does not yet exist.
+- [ ] Activity **(Planned)** has fixed backend 90-day horizon and no user-configurable date range.
+- [ ] My Work **(Planned)** approvals are org-level because per-user approval assignment does not yet exist.
 - [ ] Claim/resolve flows are not optimistic and can feel latent on high-latency links.

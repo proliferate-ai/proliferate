@@ -1,5 +1,9 @@
 # Agent Platform V1 Progress Log
 
+> Status: historical rollout log (non-canonical).
+> Source of truth for current behavior is code on `main` + canonical specs in `docs/specs/*.md`.
+> This file is retained for implementation context and PR chronology.
+
 ## PR 1
 - branch name: `v1/01-schema-data-contracts`
 - PR URL/number: `https://github.com/proliferate-ai/proliferate/pull/251`

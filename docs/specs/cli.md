@@ -21,7 +21,7 @@
 - Global auth internals and key revocation UX (`auth-orgs.md`)
 - Billing policy design (`billing-metering.md`)
 - Nango/provider lifecycle outside CLI-specific handoff (`integrations.md`)
-- Daemon-mediated IPC token refresh (deferred to Phase B, PR 24)
+- Sandbox-daemon token rotation internals (`packages/sandbox-daemon/`)
 
 ### Mental Models
 - The CLI is an orchestrator, not a platform. It coordinates existing systems and exits.
@@ -39,7 +39,7 @@
 - Assuming device authorization itself creates the token. Token creation happens in poll completion (`pollDevice`).
 - Assuming `hashLocalPath()` is the correct identifier for CLI sessions. Runtime uses `hashPrebuildPath()` (device-scoped).
 - Assuming config precedence is env-over-file. `getConfig()` currently resolves `apiUrl` as file override first, then env/default.
-- Assuming CLI session listings reflect gateway-created CLI sessions without drift. Legacy query filters still expect `session_type = "terminal"`.
+- Assuming source/baseline namespace endpoints are fully path-aligned with gateway routes. Source command paths currently use a legacy pluralized URL shape and baseline endpoints are not exposed by gateway yet.
 - Assuming sync failure is fatal. Current runtime warns and continues.
 - Assuming the CLI supports Windows. It exits early with a WSL2 recommendation.
 - Assuming command-mode output is human-readable. All command output is JSON envelope to stdout.
@@ -142,7 +142,7 @@ Reference points:
 - On 401, re-reads the token from env and retries once.
 - If the retry also returns 401, exits with code 6 (`auth_expired`).
 - CLI never persists long-lived auth on disk in sandbox mode.
-- Daemon-mediated IPC refresh is deferred to Phase B (PR 24).
+- Sandbox-mode auth refresh is env-var based with a single 401 retry; token rotation internals live in sandbox-daemon.
 
 Reference points:
 - `packages/cli/src/lib/gateway-client.ts`
@@ -354,10 +354,10 @@ Evidence:
 - [x] Mental model + agent-error guidance is updated from source behavior.
 - [ ] Manual sanity checks pass for: auth flow, session creation, sync warning path, OpenCode handoff.
 - [x] JSON envelope and exit codes match spec contract.
-- [x] Auth/token lifecycle works with env-var auth (daemon-mediated refresh deferred to Phase B).
+- [x] Auth/token lifecycle works with env-var auth and 401 retry semantics.
 - [x] Golden contract tests pass (50 tests across envelope, exit codes, auth refresh).
 - [ ] Manager child orchestration commands work end-to-end (requires live gateway).
-- [ ] Source read commands work through gateway mediation (requires source endpoints from PR 19).
+- [ ] Source read commands work through gateway mediation with path parity (CLI/gateway route mismatch currently open).
 - [ ] Action invocation returns correct exit codes for approval/denial/failure (requires live gateway).
 
 ---
@@ -365,10 +365,11 @@ Evidence:
 ## 9. Known Limitations & Tech Debt
 
 - [x] **CLI auth endpoint compatibility surface**: compatibility handlers exist for `/api/cli/auth/*` and `/api/cli/ssh-keys` alongside `/api/cli/sessions`, reducing `/api/rpc` vs `/api/cli/*` contract drift.
-- [ ] **Legacy session query filters**: CLI service list/resume queries still filter `session_type = "terminal"` while gateway CLI session creation uses `sessionType: "cli"`. Impact: stale CLI session views/resume logic risk.
+- [x] **Legacy session query filters**: removed. CLI DB/service paths now filter `origin="cli"` + `sessionType="cli"` consistently.
 - [x] **~~`lib/api.ts` is stale and inconsistent~~**: Deleted. Was dead code referencing removed endpoints.
 - [x] **~~Duplicate OpenCode binary path logic~~**: Consolidated into `packages/cli/src/lib/opencode.ts`. `agents/opencode.ts` deleted.
 - [ ] **Long-lived API keys**: device-flow API keys are created without expiration. Impact: credential lifetime risk.
 - [ ] **Empty config sync defaults**: `CONFIG_SYNC_JOBS` is currently empty. Impact: user environment parity in sandbox relies mostly on repo contents and manual setup.
-- [ ] **Daemon-mediated IPC refresh (C2b)**: Deferred to Phase B (PR 24). Currently, 401 retry re-reads the same env var. When the daemon exists, it will update the env var before the retry reads it.
-- [ ] **Source/baseline gateway endpoints**: CLI commands for source reads and baseline info call gateway endpoints that may not exist yet (depend on PR 19 and future work). Commands are structurally correct and will work when endpoints are available.
+- [ ] **Daemon-mediated token refresh coupling is indirect**: gateway client retries by re-reading env vars, but CLI does not directly invoke sandbox-daemon refresh endpoints; correctness depends on external token update orchestration.
+- [ ] **Source command route mismatch**: CLI `source` commands use `/proliferate/:sessionId/sources/...` paths while gateway exposes `/proliferate/:sessionId/source/{bindings|query|get}` query-style routes.
+- [ ] **Baseline namespace endpoints are not wired in gateway**: CLI `baseline info|targets` commands call `/proliferate/:sessionId/baseline*`, but current gateway HTTP routes do not expose baseline endpoints.

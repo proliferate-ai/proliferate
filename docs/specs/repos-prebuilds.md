@@ -142,7 +142,7 @@ Both gateway runtime and worker build paths prefer repo-linked integrations, the
 - Env file spec paths are constrained to safe relative paths by tool input validation.
 
 ### 6.6 Base Snapshot Invariants
-- Base snapshot freshness is keyed by `computeBaseSnapshotVersionKey()` plus provider/app-name dimensions.
+- Base snapshot freshness is keyed by `computeBaseSnapshotVersionKey()` (`packages/shared/src/sandbox/version-key.ts:computeBaseSnapshotVersionKey`) plus provider/app-name dimensions.
 - At most one canonical row exists per `(versionKey, provider, modalAppName)`; failed rows are reset to building on retry (`packages/services/src/base-snapshots/service.ts:startBuild`).
 - Base snapshot builds are Modal-provider operations invoked by worker code only.
 
@@ -154,6 +154,8 @@ Both gateway runtime and worker build paths prefer repo-linked integrations, the
 - Snapshot build requests are best-effort queue writes; queue failure must not fail configuration creation paths.
 
 ### 6.8 Resolver Invariants (Gateway)
+> Note: The configuration resolver (`apps/gateway/src/lib/configuration-resolver.ts`) is owned by `sessions-gateway.md`. This section documents the resolution contract as a consumed interface.
+
 - Exactly one resolution mode is valid: direct ID, managed, or CLI (`apps/gateway/src/lib/configuration-resolver.ts:resolveConfiguration`).
 - Managed resolution without explicit repo IDs prefers an existing managed configuration for org, preferring one that already has a snapshot.
 - CLI resolution is device-scoped by `(userId, localPathHash)` and may create both a CLI configuration and a local repo.

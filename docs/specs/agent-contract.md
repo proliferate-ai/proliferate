@@ -11,6 +11,11 @@
 	- `save_env_files`
 	- `automation.complete`
 	- `request_env_variables`
+- Manager-harness tool contract for coworker orchestration:
+	- `spawn_child_task`, `list_children`, `inspect_child`, `message_child`, `cancel_child`
+	- `read_source`, `get_source_item`, `list_source_bindings`
+	- `list_capabilities`, `invoke_action`, `request_approval`
+	- `send_notification`, `skip_run`, `complete_run`
 - Capability injection rules (which files must be written into sandboxes, and when)
 - Gateway callback contract for intercepted tools (`POST /proliferate/:sessionId/tools/:toolName`)
 - Agent/model configuration contract (canonical IDs, OpenCode IDs, provider mapping)
@@ -39,6 +44,7 @@
 - `request_env_variables` is **not** gateway-mediated; it runs locally and returns immediately.
 - `save_env_files` is active and setup-only; it is not a removed/legacy capability.
 - `automation.complete` is injected in all session modes today; prompt guidance, not file-level gating, prevents out-of-mode calls.
+- Manager-harness tools are gateway-native Claude tools, not `.opencode/tool/*.ts` files in the sandbox.
 - OpenCode tool registration is file discovery from `.opencode/tool/*.ts`; `opencode.json` does not register tools.
 - OpenCode config currently sets `"mcp": {}`; it does not explicitly provision Playwright MCP in `getOpencodeConfig()`.
 - Gateway callback idempotency is in-memory and retention-based (5 minutes), not durable.
@@ -47,6 +53,7 @@
 
 ### Key Invariants
 - Tool schema source of truth is `packages/shared/src/opencode-tools/index.ts`.
+- Manager-harness tool schema source of truth is `apps/gateway/src/harness/manager-tools.ts`.
 - Setup-only tools are `save_service_commands` and `save_env_files`; all other contract tools are injected in all session modes.
 - Gateway intercept registry is authoritative for server-side execution (`apps/gateway/src/hub/capabilities/tools/index.ts`).
 - Sandbox callback auth must validate `req.auth.source === "sandbox"` on tool routes.
@@ -81,6 +88,12 @@ Primary references:
 - Handler registry: `apps/gateway/src/hub/capabilities/tools/index.ts`
 - Handler implementations: `apps/gateway/src/hub/capabilities/tools/*.ts`
 
+### Manager Harness Tool Plane — `Implemented`
+- Tool definitions live in `apps/gateway/src/harness/manager-tools.ts` (`MANAGER_TOOLS`).
+- Execution is gateway-side via Claude SDK tool use in `apps/gateway/src/harness/manager-claude-harness.ts`.
+- Tools orchestrate child sessions, source reads, action invocations, approval requests, and run terminalization (`skip_run`/`complete_run`).
+- Session capabilities can remove source-read tools when all `source.*.read` keys are denied (`filterToolsByCapabilities`).
+
 ### Gateway Callback Contract — `Implemented`
 - Sandbox wrappers call:
 	- `POST /proliferate/:sessionId/tools/:toolName`
@@ -111,7 +124,7 @@ Primary references:
 - Canonical model IDs are defined in `packages/shared/src/agents.ts` and map to:
 	- `anthropic/*` OpenCode IDs for Anthropic models
 	- `litellm/*` OpenCode IDs for non-Anthropic models
-- `getOpencodeConfig()` emits provider blocks for both `anthropic` and `litellm`, with `permission: { "*": "allow", "question": "deny" }` and currently empty MCP config (`"mcp": {}`).
+- `getOpencodeConfig()` (`packages/shared/src/sandbox/opencode.ts:getOpencodeConfig`) emits provider blocks for both `anthropic` and `litellm`, with `permission: { "*": "allow", "question": "deny" }` and currently empty MCP config (`"mcp": {}`).
 
 ---
 
@@ -140,7 +153,7 @@ Primary references:
 ### Reliability
 - Callback timeout per attempt is 120 seconds.
 - Retry behavior is exponential backoff with `MAX_RETRIES = 5` (up to 6 attempts total including first try).
-- OpenCode readiness probe uses exponential backoff (200ms base, 1.5x, max 2s, 30s budget).
+- OpenCode readiness probe exists in two places: the shared utility (`packages/shared/src/sandbox/opencode.ts:waitForOpenCodeReady`) uses exponential backoff (200ms base, 1.5x, max 2s, 30s budget), while the gateway runtime (`apps/gateway/src/hub/session-runtime.ts:waitForOpenCodeReady`) uses a fixed-interval strategy (8 max attempts, 1500ms interval, 2000ms per-attempt timeout). The gateway probe is the one used at session startup.
 - Idempotency is process-memory scoped and lost on gateway restart.
 
 ### Testing Conventions
@@ -212,6 +225,12 @@ Primary references:
 - Secret persistence policy is controlled by submission inputs (`persist` per key, fallback `saveToConfiguration`) and is not owned by the tool schema itself.
 - `save_env_files` must persist env-file generation spec (not secret values) and remain setup-session-gated.
 
+### 6.7 Manager Harness Tool Invariants — `Implemented`
+- Manager harness must expose the canonical `MANAGER_TOOLS` schema list to Claude tool-use calls.
+- Tool execution must route through `executeManagerTool` with run/session context (`ManagerToolContext`) and never bypass services auth boundaries.
+- Source-read tools remain capability-filtered via denied `source.*.read` keys before model execution.
+- Manager run termination semantics require explicit terminal tool calls (`skip_run` or `complete_run`) in successful cycles.
+
 ---
 
 ## 7. Cross-Cutting Concerns
@@ -225,6 +244,7 @@ Primary references:
 | `secrets-environment.md` | This <-> Secrets | `request_env_variables`, submit-env write path | Tool requests values; secrets subsystem persists optional org secrets |
 | `llm-proxy.md` | Proxy -> This | OpenCode provider options | Proxy URL/key populate OpenCode provider options |
 | `actions.md` | This -> Actions | Prompt + actions bootstrap guidance | Prompts and bootstrap file document `proliferate actions` usage |
+| `sessions-gateway.md` | This <-> Manager harness | `MANAGER_TOOLS`, wake-cycle tool execution | Manager tool calls execute in gateway runtime, not sandbox tool callbacks |
 
 ### Security & Auth
 - Gateway-mediated tools execute with server-side credentials; sandbox code does not receive direct DB/S3/provider credentials.
@@ -236,7 +256,6 @@ Primary references:
 - Tool callback route logs execution events with `toolName`, `toolCallId`, and `sessionId`.
 - Session telemetry tracks tool call IDs and active tool call counts.
 - OpenCode readiness and key runtime operations emit `[P-LATENCY]`/latency logs.
-- `session_tool_invocations` schema exists for audit, but current callback router does not use it as a write-through idempotency store.
 
 ---
 
@@ -258,5 +277,4 @@ Primary references:
 - [ ] **Mixed tool authoring styles** — `verify` still uses raw export object while other tools use `tool()` API.
 - [ ] **Custom prompt override bypasses safety text** — `session.system_prompt` can omit mode-critical instructions.
 - [ ] **Idempotency cache is in-memory only** — gateway restart drops dedup state and may permit rare duplicate side effects.
-- [ ] **Idempotency key namespace is global to process map** — cache key is `tool_call_id` only, not scoped by session/tool.
-- [ ] **`session_tool_invocations` table is not integrated into callback execution path** — durable audit/idempotency coupling is still missing.
+- [ ] **Manager-harness tool contract is gateway-local** — manager tools are not injected as sandbox `.opencode` tools, so cross-runtime parity work remains.

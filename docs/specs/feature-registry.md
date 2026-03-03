@@ -2,7 +2,7 @@
 
 > **Purpose:** Single source of truth for every product feature, its implementation status, and which spec owns it.
 > **Status key:** `Implemented` | `Partial` | `Planned` | `Deprecated`
-> **Updated:** 2026-02-19. Session UI overhaul + billing Phase 1.2 + Slack config UX + notification destinations + config selection strategy.
+> **Updated:** 2026-03-02. V1 post-merge sync for harness/runtime split, source reads, coworker surfaces, and sandbox-daemon transport artifacts.
 > **Evidence convention:** `Planned` entries may cite RFC/spec files until code exists; once implemented, update evidence to concrete code paths.
 
 ---
@@ -21,6 +21,8 @@
 | `automation.complete` tool | Implemented | `packages/shared/src/opencode-tools/index.ts:AUTOMATION_COMPLETE_TOOL` | Marks automation run outcome with artifacts |
 | `request_env_variables` tool | Implemented | `packages/shared/src/opencode-tools/index.ts:REQUEST_ENV_VARIABLES_TOOL` | Requests secrets from user with suggestions |
 | Tool capability injection | Implemented | `packages/shared/src/sandbox/config.ts` | Plugin injection into sandbox OpenCode config |
+| Manager harness tool surface (`spawn_child_task`, `read_source`, `invoke_action`, `complete_run`, etc.) | Implemented | `apps/gateway/src/harness/manager-tools.ts` | Gateway-side Claude manager tool contract (distinct from sandbox OpenCode tools) |
+| Manager wake-cycle orchestration (`ingest -> triage -> orchestrate -> finalize`) | Implemented | `apps/gateway/src/harness/manager-claude-harness.ts` | Claude SDK-backed manager loop for coworker runs |
 
 ---
 
@@ -37,6 +39,9 @@
 | Sandbox-MCP service manager | Implemented | `packages/sandbox-mcp/src/service-manager.ts` | Start/stop/expose sandbox services |
 | Sandbox-MCP auth | Implemented | `packages/sandbox-mcp/src/auth.ts` | Token-based sandbox auth |
 | Sandbox-MCP CLI setup | Implemented | `packages/sandbox-mcp/src/proliferate-cli.ts` | Sets up `proliferate` CLI inside sandbox |
+| Sandbox-daemon package | Implemented | `packages/sandbox-daemon/src/index.ts`, `packages/sandbox-daemon/src/router.ts` | In-sandbox transport daemon with PTY/FS/ports/event stream APIs |
+| Gateway daemon proxy routes | Implemented | `apps/gateway/src/api/proxy/daemon.ts` | Authenticated hop-2 proxy to daemon endpoints |
+| Provider boot integration for sandbox-daemon | Partial | `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/modal-libmodal.ts` | Daemon package exists, but provider startup still uses sandbox-mcp as primary runtime path |
 | Sandbox env var injection | Implemented | `packages/shared/src/sandbox/config.ts` | Env vars passed at sandbox boot |
 | OpenCode plugin injection | Implemented | `packages/shared/src/sandbox/config.ts:PLUGIN_MJS` | SSE plugin template string |
 | Snapshot version key | Implemented | `packages/shared/src/sandbox/version-key.ts` | Deterministic snapshot versioning |
@@ -58,20 +63,28 @@
 | Gateway hub manager | Implemented | `apps/gateway/src/hub/hub-manager.ts` | Creates/retrieves session hubs |
 | Session hub | Implemented | `apps/gateway/src/hub/session-hub.ts` | Per-session runtime management |
 | Session runtime | Implemented | `apps/gateway/src/hub/session-runtime.ts` | Runtime state coordination |
+| Runtime harness split (`coding-opencode` vs `manager-claude`) | Implemented | `apps/gateway/src/hub/session-runtime.ts`, `apps/gateway/src/harness/` | Session kind drives harness family selection |
 | Event processor | Implemented | `apps/gateway/src/hub/event-processor.ts` | Processes sandbox SSE events |
 | WebSocket streaming | Implemented | `apps/gateway/src/api/proliferate/ws/` | Bidirectional real-time |
-| HTTP message route | Implemented | `apps/gateway/src/api/proliferate/http/sessions.ts` | `POST /:sessionId/message` |
+| HTTP message route | Implemented | `apps/gateway/src/api/proliferate/http/message.ts` | `POST /:sessionId/message` |
 | Session status route | Implemented | `apps/gateway/src/api/proliferate/http/sessions.ts` | `GET /:sessionId/status` |
 | SSE bridge to OpenCode | Implemented | `apps/gateway/src/hub/sse-client.ts` | Connects gateway to sandbox OpenCode |
 | Session migration controller | Implemented | `apps/gateway/src/hub/migration-controller.ts` | Auto-migration on sandbox expiry |
+| Control-plane snapshot event (`control_plane_snapshot`) | Implemented | `apps/gateway/src/hub/control-plane.ts`, `apps/gateway/src/hub/session-hub.ts`, `packages/shared/src/index.ts` | Reconnect-safe runtime/operator/capability/visibility hydration |
 | Preview/sharing URLs | Implemented | `apps/web/src/app/preview/[id]/page.tsx` | Public preview via `previewTunnelUrl` |
 | Port forwarding proxy | Implemented | `apps/gateway/src/api/proxy/opencode.ts` | Token-auth proxy to sandbox ports |
+| Devtools proxy routes | Implemented | `apps/gateway/src/api/proxy/devtools.ts` | HTTP proxy into sandbox devtools surfaces |
+| VS Code proxy routes | Implemented | `apps/gateway/src/api/proxy/vscode.ts` | HTTP + WS proxy for VS Code tunnel |
+| Preview health proxy | Implemented | `apps/gateway/src/api/proxy/preview-health.ts` | Preview liveliness probe route |
 | Git operations | Implemented | `apps/gateway/src/hub/git-operations.ts` | Stateless git/gh via gateway |
 | Session store | Implemented | `apps/gateway/src/lib/session-store.ts` | In-memory session state |
 | Session connections (DB) | Implemented | `packages/db/src/schema/sessions.ts` | `session_connections` table |
 | Session telemetry capture | Implemented | `apps/gateway/src/hub/session-telemetry.ts` | Passive metrics, PR URLs, latest task |
 | Session telemetry DB flush | Implemented | `packages/services/src/sessions/db.ts:flushTelemetry` | SQL-level atomic increment |
 | Session outcome derivation | Implemented | `apps/gateway/src/hub/capabilities/tools/automation-complete.ts` | Set at explicit terminal call sites |
+| Source-read gateway routes | Implemented | `apps/gateway/src/api/proliferate/http/source.ts` | Worker-bound source bindings/query/get endpoints |
+| V1 session control-plane columns (`kind`, `runtime_status`, `operator_status`, `visibility`) | Implemented | `packages/db/src/schema/schema.ts` | Stored in sessions table and surfaced in hub control-plane snapshots |
+| V1 workspace transport message contracts (`daemon_stream`, `workspace_state`, `port_event`, `fs_change`) | Partial | `packages/shared/src/index.ts` | Shared message contracts exist; gateway emission path is not yet wired |
 | Async graceful shutdown (telemetry) | Implemented | `apps/gateway/src/index.ts`, `apps/gateway/src/hub/hub-manager.ts` | Bounded 5s flush on SIGTERM/SIGINT |
 | Gateway auth middleware | Implemented | `apps/gateway/src/middleware/auth.ts` | Token verification |
 | Gateway CORS | Implemented | `apps/gateway/src/middleware/cors.ts` | CORS policy |
@@ -93,9 +106,13 @@
 | Feature | Status | Evidence | Notes |
 |---------|--------|----------|-------|
 | Automation CRUD | Implemented | `apps/web/src/server/routers/automations.ts` | Create/update/delete/list |
+| Coworker canonical route surfaces (`/coworkers`, detail, events) | Implemented | `apps/web/src/app/(command-center)/coworkers/` | V1 UI ownership for manager workers and run timeline |
+| Worker lifecycle services (`active/paused`, run-now, transitions) | Implemented | `packages/services/src/workers/service.ts`, `packages/services/src/workers/db.ts` | Durable manager-worker control plane |
+| Wake queue services (`wake_events` enqueue/transition) | Implemented | `packages/services/src/wakes/service.ts`, `packages/services/src/wakes/db.ts` | Durable wake ingestion and transitions |
+| Worker run + timeline event tables (`worker_runs`, `worker_run_events`) | Implemented | `packages/db/src/schema/schema.ts` | Per-run execution state and timeline events |
 | Automation triggers binding | Implemented | `apps/web/src/server/routers/automations.ts` | Add/remove triggers on automation |
 | Automation connections | Implemented | `packages/db/src/schema/automations.ts` | `automation_connections` table |
-| Run lifecycle (pending → enriching → executing → completed) | Implemented | `apps/worker/src/automation/index.ts` | Orchestrates pipeline |
+| Run lifecycle (`queued → enriching → ready → running → succeeded/failed/needs_human/timed_out`) | Implemented | `apps/worker/src/automation/index.ts` | Orchestrates pipeline |
 | Run enrichment | Implemented | `apps/worker/src/automation/enrich.ts` | Extracts trigger context deterministically |
 | Run execution | Implemented | `apps/worker/src/automation/index.ts` | Creates session for run |
 | Run finalization | Implemented | `apps/worker/src/automation/finalizer.ts` | Post-execution cleanup |
@@ -128,6 +145,7 @@
 | Trigger CRUD | Implemented | `apps/web/src/server/routers/triggers.ts` | Create/update/delete/list |
 | Trigger events log | Implemented | `packages/db/src/schema/triggers.ts` | `trigger_events` + `trigger_event_actions` |
 | Trigger service (dedicated app) | Implemented | `apps/trigger-service/src/` | Standalone Express service |
+| Tick wake bridge (`wake_events.source = tick`) | Implemented | `apps/trigger-service/src/tick/worker.ts`, `packages/services/src/wakes/db.ts` | Periodic wake synthesis for active workers |
 | Webhook ingestion (Nango) | Implemented | `apps/trigger-service/src/lib/webhook-dispatcher.ts` | `POST /webhooks/nango` |
 | Webhook dispatch + matching | Implemented | `apps/trigger-service/src/lib/trigger-processor.ts` | Matches events to triggers |
 | Polling scheduler | Implemented | `apps/trigger-service/src/polling/worker.ts` | Cursor-based stateful polling |
@@ -149,15 +167,15 @@
 | Action invocations | Implemented | `packages/services/src/actions/db.ts` | `action_invocations` table |
 | Invocation lifecycle (pending → approved/denied → expired) | Implemented | `packages/services/src/actions/` | Full state machine |
 | Risk classification (read/write/danger) | Implemented | `packages/services/src/actions/db.ts` | Three-level risk model |
-| Action grants | Implemented | `packages/services/src/actions/grants.ts` | Scoped reusable permissions with call budgets |
-| Grant CRUD + evaluation | Implemented | `packages/services/src/actions/grants.ts` | Create, list, evaluate, revoke |
-| Gateway action routes | Implemented | `apps/gateway/src/api/proliferate/http/` | Invoke, approve, deny, list, grants |
+| Action grants | Deprecated | `packages/services/src/actions/modes.ts` | Replaced by session capabilities + mode resolution |
+| Grant CRUD + evaluation | Deprecated | `packages/services/src/actions/modes.ts` | Replaced by session capabilities + mode resolution |
+| Gateway action routes | Implemented | `apps/gateway/src/api/proliferate/http/` | Invoke, approve, deny, list |
 | Provider guide/bootstrap | Implemented | `apps/gateway/src/api/proliferate/http/` | `GET /:sessionId/actions/guide/:integration` |
 | Linear adapter | Implemented | `packages/services/src/actions/adapters/linear.ts` | Linear API operations |
 | Sentry adapter | Implemented | `packages/services/src/actions/adapters/sentry.ts` | Sentry API operations |
 | Slack adapter | Implemented | `packages/services/src/actions/adapters/slack.ts` | Slack `send_message` action via `chat.postMessage` |
 | Invocation sweeper | Implemented | `apps/worker/src/sweepers/index.ts` | Expires stale invocations |
-| Sandbox-MCP grants handler | Implemented | `packages/sandbox-mcp/src/actions-grants.ts` | Grant handling inside sandbox |
+| Sandbox-MCP grants handler | Deprecated | `packages/sandbox-mcp/src/actions-grants.ts` | Orphaned CLI stub; gateway grant routes removed |
 | Actions list (web) | Implemented | `apps/web/src/server/routers/actions.ts` | Org-level actions inbox (oRPC route) |
 | Inline attention inbox tray | Implemented | `apps/web/src/components/coding-session/inbox-tray.tsx`, `apps/web/src/hooks/use-attention-inbox.ts` | Merges WS approvals, org-polled approvals, and pending runs into inline tray in thread |
 | Connector-backed action sources (`remote_http` MCP via Actions) | Implemented | `packages/services/src/actions/connectors/`, `apps/gateway/src/api/proliferate/http/actions.ts` | Gateway-mediated remote MCP connectors through Actions pipeline (connector source: org-scoped `org_connectors` table) |
@@ -187,7 +205,8 @@
 | Device auth flow | Implemented | `packages/cli/src/state/auth.ts` | OAuth device code flow, token saved to `~/.proliferate/token` |
 | Local config management | Implemented | `packages/cli/src/state/config.ts` | Project-local `.proliferate/` config |
 | File sync (local → sandbox) | Implemented | `packages/cli/src/lib/sync.ts` | Unidirectional rsync-based push |
-| OpenCode launch | Implemented | `packages/cli/src/agents/opencode.ts` | Opens OpenCode UI |
+| OpenCode launch | Implemented | `packages/cli/src/lib/opencode.ts` | Opens OpenCode UI |
+| Command-mode namespaces (`session`, `manager`, `source`, `action`, `baseline`) | Implemented | `packages/cli/src/commands/` | JSON-envelope command plane used by sandbox runtime tooling |
 | CLI API routes (auth) | Implemented | `apps/web/src/server/routers/cli.ts:cliAuthRouter`, `apps/web/src/app/api/cli/auth/device/route.ts`, `apps/web/src/app/api/cli/auth/device/poll/route.ts` | oRPC-backed auth flows plus `/api/cli/auth/*` compatibility handlers |
 | CLI API routes (repos) | Implemented | `apps/web/src/server/routers/cli.ts:cliReposRouter` | Get/create repos from CLI |
 | CLI API routes (sessions) | Implemented | `apps/web/src/server/routers/cli.ts:cliSessionsRouter` | Session creation for CLI |
@@ -205,13 +224,14 @@
 |---------|--------|----------|-------|
 | Repo CRUD | Implemented | `apps/web/src/server/routers/repos.ts` | List/get/create/delete |
 | Repo search | Implemented | `apps/web/src/server/routers/repos.ts:search` | Search available repos |
-| Repo connections | Implemented | `packages/db/src/schema/repos.ts:repoConnections` | Integration bindings |
+| Repo connections | Implemented | `packages/db/src/schema/integrations.ts:repoConnections` | Integration bindings |
 | Configuration CRUD | Implemented | `apps/web/src/server/routers/configurations.ts` | List/create/update/delete |
 | Configuration-repo associations | Implemented | `packages/db/src/schema/configurations.ts:configurationRepos` | Many-to-many |
 | Effective service commands | Implemented | `apps/web/src/server/routers/configurations.ts:getEffectiveServiceCommands` | Resolved config |
 | Base snapshot builds | Implemented | `apps/worker/src/base-snapshots/index.ts` | Worker queue, deduplication |
 | Configuration snapshot builds | Implemented | `apps/worker/src/configuration-snapshots/index.ts` | Multi-repo, tightly coupled to configuration creation |
 | Configuration resolver | Implemented | `apps/gateway/src/lib/configuration-resolver.ts` | Resolves config at session start |
+| Repo baseline lifecycle + targets | Implemented | `packages/services/src/repos/db.ts`, `packages/db/src/schema/schema.ts` | Durable baseline records and optional baseline-target linkage for task sessions |
 | Service commands persistence | Implemented | `packages/db/src/schema/configurations.ts:serviceCommands` | JSONB on configurations |
 | Env file persistence | Implemented | `packages/db/src/schema/configurations.ts:envFiles` | JSONB on configurations |
 | Configuration connector configuration (deprecated) | Deprecated | `packages/db/src/schema/configurations.ts:connectors` | Legacy JSONB on configurations table; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
@@ -254,7 +274,7 @@
 | Session notification subscriptions table | Implemented | `packages/db/src/schema/slack.ts:sessionNotificationSubscriptions` | Per-session DM notification opt-in |
 | Nango callback handling | Implemented | `apps/web/src/server/routers/integrations.ts:callback` | OAuth callback |
 | Integration disconnect | Implemented | `apps/web/src/server/routers/integrations.ts:disconnect` | Remove connection |
-| Connection binding (repos) | Implemented | `packages/db/src/schema/repos.ts:repoConnections` | Repo-to-integration |
+| Connection binding (repos) | Implemented | `packages/db/src/schema/integrations.ts:repoConnections` | Repo-to-integration |
 | Connection binding (automations) | Implemented | `packages/db/src/schema/automations.ts:automationConnections` | Automation-to-integration |
 | Connection binding (sessions) | Implemented | `packages/db/src/schema/sessions.ts:sessionConnections` | Session-to-integration |
 | Sentry metadata | Implemented | `apps/web/src/server/routers/integrations.ts:sentryMetadata` | Sentry project/org metadata |
@@ -307,6 +327,7 @@
 | Trial credits | Implemented | `packages/services/src/billing/trial-activation.ts` | Auto-provision on signup |
 | Billing reconciliation | Implemented | `packages/db/src/schema/billing.ts:billingReconciliations` | Manual adjustments with audit |
 | Billing events | Implemented | `packages/db/src/schema/billing.ts:billingEvents` | Usage event log |
+| Entitlement gate dimensions (sessions, coworkers, monthly usage) | Implemented | `packages/services/src/billing/gate.ts:getEntitlementStatus` | Includes active coworker limit enforcement and warnings |
 | LLM spend sync | Implemented | `packages/db/src/schema/billing.ts:llmSpendCursors` | Syncs spend from LiteLLM |
 | Distributed locks (billing-cycle) | Deprecated | Removed — BullMQ concurrency 1 ensures single-execution | See billing-metering.md §6.11. Note: `org-pause.ts` still uses session migration locks (`runWithMigrationLock`) for per-session enforcement; those are session-layer infrastructure, not billing-cycle locks. |
 | Billing worker | Implemented | `apps/worker/src/billing/worker.ts` | Interval-based reconciliation |

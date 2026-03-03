@@ -23,7 +23,7 @@
 - Action execution policy beyond org-level mode persistence/read APIs (see `actions.md`)
 
 ### Mental Models
-- Identity is a composed context, not a single token check. The effective actor is built from auth source resolution (`apps/web/src/lib/auth-helpers.ts`), optional impersonation overlay (`apps/web/src/lib/super-admin.ts`), and active organization context (`apps/web/src/server/routers/middleware.ts`).
+- Identity is a composed context, not a single token check. The effective actor is built from auth source resolution (`apps/web/src/lib/auth/server/helpers.ts`), optional impersonation overlay (`apps/web/src/lib/super-admin.ts`), and active organization context (`apps/web/src/server/routers/middleware.ts`).
 - Organization membership is the primary authorization primitive. Most org-scoped reads re-check membership at service level, even when upstream middleware already required auth (`packages/services/src/orgs/service.ts`).
 - `activeOrganizationId` is a routing hint, not a universal authorization guarantee. It is required for `orgProcedure`, but access to a specific org ID is still validated by membership checks in org services.
 - better-auth owns identity write surfaces for core auth/org tables and plugin routes. The Proliferate service layer mainly adds read composition, enrichment, and product-specific behavior around those primitives.
@@ -34,8 +34,8 @@
 - better-auth organization operations are server endpoints, not client-only helpers. The client SDK calls plugin-backed routes mounted under `apps/web/src/app/api/auth/[...all]/route.ts`.
 - Org/member/invitation writes are mostly plugin-owned (`organization.create`, `organization.setActive`, `organization.inviteMember`, `organization.updateMemberRole`, `organization.removeMember`, `organization.acceptInvitation`) and are invoked in frontend code (`apps/web/src/components/settings/members/use-members-page.ts`, `apps/web/src/app/invite/[id]/page.tsx`).
 - `orgProcedure` does not mean "input org ID equals active org ID". It only requires an active org to exist; service methods still enforce membership against the requested org ID (`apps/web/src/server/routers/orgs.ts`, `packages/services/src/orgs/service.ts`).
-- Auth resolution precedence is strict: dev bypass, then API key, then cookie session (`apps/web/src/lib/auth-helpers.ts:getSession`).
-- `DEV_USER_ID` bypass is active only in non-production and only when `CI` is false; this logic exists both in auth helpers and better-auth GET session route wrapper (`apps/web/src/lib/auth-helpers.ts`, `apps/web/src/app/api/auth/[...all]/route.ts`).
+- Auth resolution precedence is strict: dev bypass, then API key, then cookie session (`apps/web/src/lib/auth/server/helpers.ts:getSession`).
+- `DEV_USER_ID` bypass is active only in non-production and only when `CI` is false; this logic exists both in auth helpers and better-auth GET session route wrapper (`apps/web/src/lib/auth/server/helpers.ts`, `apps/web/src/app/api/auth/[...all]/route.ts`).
 - "First organization" fallback is deterministic: membership rows are ordered by `member.createdAt` then `member.organizationId` (`packages/services/src/orgs/db.ts:getUserOrgIds`, `packages/services/src/cli/db.ts:getUserFirstOrganization`).
 - Invitation acceptance is two-phase: pre-auth basic invite resolution via server action/service, then authenticated better-auth invitation fetch with email-match enforcement in UI (`apps/web/src/app/invite/actions.ts`, `apps/web/src/app/invite/[id]/page.tsx`).
 - Personal-org deletion after invite acceptance is best-effort and intentionally blocked when org-scoped sessions still exist (`packages/services/src/orgs/db.ts:deletePersonalOrg`).
@@ -50,15 +50,15 @@
 
 ### better-auth
 better-auth is the source framework for authentication/session/account lifecycle and plugin-backed org/API-key behavior.
-- Reference: `apps/web/src/lib/auth.ts`
+- Reference: `apps/web/src/lib/auth/server/index.ts`
 
 ### Auth Context Composition
 Auth context is built from middleware helpers, not directly from cookies everywhere. `requireAuth()` produces the effective user/session/org context and optional impersonation metadata consumed by oRPC middleware.
-- Reference: `apps/web/src/lib/auth-helpers.ts`, `apps/web/src/server/routers/middleware.ts`
+- Reference: `apps/web/src/lib/auth/server/helpers.ts`, `apps/web/src/server/routers/middleware.ts`
 
 ### Organization Plugin Ownership
 The organization plugin is the write-plane for most organization lifecycle operations. Proliferate-specific oRPC routes primarily expose read composition and app-specific adjunct behavior.
-- Reference: `apps/web/src/lib/auth-client.ts`, `apps/web/src/server/routers/orgs.ts`
+- Reference: `apps/web/src/lib/auth/client/index.ts`, `apps/web/src/server/routers/orgs.ts`
 
 ### Invitation + Onboarding Coupling
 Invitation acceptance is identity/org membership behavior, but post-accept UX (active-org switch and optional personal-org cleanup) is implemented in the invite experience and org service.
@@ -66,7 +66,7 @@ Invitation acceptance is identity/org membership behavior, but post-accept UX (a
 
 ### API Key Path for CLI
 API keys are better-auth resources used as Bearer credentials in web middleware and internal verification routes. Org context can come from a validated `x-org-id` membership match, or from deterministic fallback membership lookup when no header is supplied.
-- Reference: `apps/web/src/server/routers/cli.ts`, `apps/web/src/lib/auth-helpers.ts`, `apps/web/src/app/api/internal/verify-cli-token/route.ts`
+- Reference: `apps/web/src/server/routers/cli.ts`, `apps/web/src/lib/auth/server/helpers.ts`, `apps/web/src/app/api/internal/verify-cli-token/route.ts`
 
 ### Super-Admin Impersonation
 Impersonation is a cookie-backed overlay gated by super-admin checks and membership validation before activation or org switching.
@@ -93,8 +93,8 @@ Impersonation is a cookie-backed overlay gated by super-admin checks and members
 - Admin impersonation validation uses typed domain errors (`ImpersonationError`) that routers translate to API error semantics (`packages/services/src/admin/service.ts`, `apps/web/src/server/routers/admin.ts`).
 
 ### Reliability
-- Session duration is 7 days, with 24-hour update age (`apps/web/src/lib/auth.ts:session`).
-- Invitation expiration is 7 days (`apps/web/src/lib/auth.ts:organization({ invitationExpiresIn })`).
+- Session duration is 7 days, with 24-hour update age (`apps/web/src/lib/auth/server/index.ts:session`).
+- Invitation expiration is 7 days (`apps/web/src/lib/auth/server/index.ts:organization({ invitationExpiresIn })`).
 - Impersonation cookie is httpOnly, strict sameSite, 24-hour max age (`apps/web/src/lib/super-admin.ts:setImpersonationCookie`).
 - Personal org creation/deletion paths are intentionally best-effort and non-blocking relative to auth success UX.
 
@@ -121,7 +121,7 @@ Impersonation is a cookie-backed overlay gated by super-admin checks and members
 - Any new auth source must preserve deterministic precedence and explicit failure semantics.
 
 **Evidence**
-- `apps/web/src/lib/auth-helpers.ts`
+- `apps/web/src/lib/auth/server/helpers.ts`
 - `apps/web/src/server/routers/middleware.ts`
 
 ### 6.2 Signup & Personal Organization Bootstrapping — `Partial`
@@ -136,7 +136,7 @@ Impersonation is a cookie-backed overlay gated by super-admin checks and members
 - Any change to personal-org semantics must preserve idempotency/safety across retries and collisions.
 
 **Evidence**
-- `apps/web/src/lib/auth.ts:databaseHooks`
+- `apps/web/src/lib/auth/server/index.ts:databaseHooks`
 
 ### 6.3 Email Verification & Invitation Email Delivery — `Implemented`
 
@@ -149,7 +149,7 @@ Impersonation is a cookie-backed overlay gated by super-admin checks and members
 - Verification requirements and invitation delivery behavior must remain configuration-driven, not hardcoded by environment assumptions.
 
 **Evidence**
-- `apps/web/src/lib/auth.ts`
+- `apps/web/src/lib/auth/server/index.ts`
 
 ### 6.4 Organization Reads/Writes Authorization Boundary — `Partial`
 
@@ -217,7 +217,7 @@ Impersonation is a cookie-backed overlay gated by super-admin checks and members
 
 **Evidence**
 - `apps/web/src/server/routers/cli.ts:pollDevice`
-- `apps/web/src/lib/auth-helpers.ts:getApiKeyUser`
+- `apps/web/src/lib/auth/server/helpers.ts:getApiKeyUser`
 - `apps/web/src/app/api/internal/verify-cli-token/route.ts`
 
 ### 6.8 Super-Admin & Impersonation — `Partial`
@@ -236,7 +236,7 @@ Impersonation is a cookie-backed overlay gated by super-admin checks and members
 - `apps/web/src/server/routers/admin.ts`
 - `packages/services/src/admin/service.ts`
 - `apps/web/src/lib/super-admin.ts`
-- `apps/web/src/lib/auth-helpers.ts:requireAuth`
+- `apps/web/src/lib/auth/server/helpers.ts:requireAuth`
 
 ### 6.9 Organization Creation & Active Org Switching — `Implemented`
 
@@ -249,7 +249,7 @@ Impersonation is a cookie-backed overlay gated by super-admin checks and members
 - Keep plugin as default owner for org create/switch lifecycle unless there is a deliberate migration plan.
 
 **Evidence**
-- `apps/web/src/lib/auth.ts:organization`
+- `apps/web/src/lib/auth/server/index.ts:organization`
 - `apps/web/src/components/onboarding/step-create-org.tsx`
 - `apps/web/src/components/dashboard/org-switcher.tsx`
 - `apps/web/src/server/routers/admin.ts:switchOrg`
@@ -268,14 +268,14 @@ Impersonation is a cookie-backed overlay gated by super-admin checks and members
 | `actions.md` | This ↔ Actions | Org-level `actionModes` read/write surface | Auth/org scope stores org-level default action mode values |
 
 ### Security & Auth
-- better-auth owns session/auth/account primitives and API key verification (`apps/web/src/lib/auth.ts`).
+- better-auth owns session/auth/account primitives and API key verification (`apps/web/src/lib/auth/server/index.ts`).
 - oRPC authz tiers are explicit: `publicProcedure`, `protectedProcedure`, `orgProcedure` (`apps/web/src/server/routers/middleware.ts`).
-- Impersonation metadata is propagated for audit-aware downstream behavior (`apps/web/src/lib/auth-helpers.ts`).
+- Impersonation metadata is propagated for audit-aware downstream behavior (`apps/web/src/lib/auth/server/helpers.ts`).
 - Super-admin trust root is environment configuration, not mutable DB state (`apps/web/src/lib/super-admin.ts`).
 
 ### Observability
-- Auth logger module: `apps/web/src/lib/auth.ts`
-- Auth helper logger module: `apps/web/src/lib/auth-helpers.ts`
+- Auth logger module: `apps/web/src/lib/auth/server/index.ts`
+- Auth helper logger module: `apps/web/src/lib/auth/server/helpers.ts`
 - Onboarding router logger: `apps/web/src/server/routers/onboarding.ts`
 - Admin/router paths rely mostly on structured ORPC error mapping with contextual logs in services/routers
 
@@ -292,9 +292,8 @@ Impersonation is a cookie-backed overlay gated by super-admin checks and members
 
 ## 9. Known Limitations & Tech Debt
 
-- [ ] **Personal org creation is best-effort only** — signup hook uses `ON CONFLICT (slug) DO NOTHING`; collision/failure can leave user without auto-provisioned org. (`apps/web/src/lib/auth.ts`)
+- [ ] **Personal org creation is best-effort only** — signup hook uses `ON CONFLICT (slug) DO NOTHING`; collision/failure can leave user without auto-provisioned org. (`apps/web/src/lib/auth/server/index.ts`)
 - [ ] **Service-layer org write paths are partially unwired** — `updateDomains`, `updateMemberRole`, `removeMember` exist in `packages/services/src/orgs/service.ts` but primary product writes use better-auth plugin calls from frontend. Ownership is duplicated and unclear.
-- [ ] **First-org fallback is non-deterministic** — fallback org resolution uses first matched membership without explicit ordering in multiple paths (`packages/services/src/orgs/db.ts:getUserOrgIds`, `packages/services/src/cli/db.ts:getUserFirstOrganization`).
-- [x] **Active org context can drift from current membership** — mitigated: `orgProcedure` middleware and `requireOrgAuth()` now verify membership on every request (`apps/web/src/server/routers/middleware.ts`, `apps/web/src/lib/auth-helpers.ts`). Remaining non-oRPC routes that only need auth (not org) still use `requireAuth()`.
+- [ ] **First-org fallback is non-deterministic** — non-determinism is only in the better-auth session `create.before` hook (`apps/web/src/lib/auth/server/index.ts`), which uses `LIMIT 1` without `ORDER BY`. Service-layer functions `getUserOrgIds` and `getUserFirstOrganization` are correctly ordered by `createdAt, organizationId`.
+- [x] **Active org context can drift from current membership** — mitigated: `orgProcedure` middleware and `requireOrgAuth()` now verify membership on every request (`apps/web/src/server/routers/middleware.ts`, `apps/web/src/lib/auth/server/helpers.ts`). Remaining non-oRPC routes that only need auth (not org) still use `requireAuth()`.
 - [ ] **Personal-org cleanup after invite accept is opportunistic** — deletion is skipped when org-scoped sessions exist, leaving extra personal orgs for some users (`packages/services/src/orgs/db.ts:deletePersonalOrg`).
-- [ ] **`admin.sentryTestError` is publicly callable in oRPC router** — endpoint is not behind auth middleware in current code (`apps/web/src/server/routers/admin.ts`). If this is intended only for controlled environments, scope should be tightened or explicitly gated.

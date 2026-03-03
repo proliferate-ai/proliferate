@@ -264,8 +264,8 @@ Secret reads are scope-sensitive:
 ## 9. Known Limitations & Tech Debt
 
 - [ ] **Stale bundle-era schema file remains in tree** — `packages/db/src/schema/secrets.ts` still models `secret_bundles`, while canonical exports point to `schema.ts`/`relations.ts`. Impact: easy agent confusion and wrong imports.
-- [ ] **Configuration-linked secrets are not consumed in session boot path** — `getSecretsForConfiguration()` exists but `buildSandboxEnvVars()` currently reads `getSecretsForSession()` only. Impact: configuration-linked secret expectations can diverge from runtime injection behavior.
-- [ ] **Secret file content is currently write-only in services layer** — no decrypt/read path exists beyond encrypted persistence and metadata listing. Impact: file-based secret UX is only partially wired to backend runtime flows.
+- [x] **Configuration-linked secrets are not consumed in session boot path** — (Resolved: `resolveSessionBootSecretMaterial` in `packages/services/src/sessions/sandbox-env.ts` merges configuration-scoped secrets at priority 2).
+- [x] **Secret file content is currently write-only in services layer** — (Resolved: `sandbox-env.ts` decrypts configuration-linked `secret_files` and returns them as file writes at boot).
 - [x] **Conflict target alignment for repo-scoped writes** — `upsertByRepoAndKey` and `bulkCreateSecrets` now use schema-aligned conflict targets including `configurationId` and explicitly write `configurationId: null` for repo-scoped rows (`packages/services/src/secrets/db.ts`).
 - [ ] **Potential duplicate-key ambiguity with nullable scope columns** *(inference from PostgreSQL NULL uniqueness semantics)* — uniqueness constraints that include nullable scope columns may permit duplicates where scope columns are null, and runtime query order does not define deterministic winner for duplicate keys. Impact: nondeterministic secret value selection in `buildSandboxEnvVars()` / `resolveSecretValue()`.
 - [ ] **`createSecret` + configuration link is non-transactional** — secret insert and junction insert are separate operations. Impact: linkage can fail after secret row is created.
