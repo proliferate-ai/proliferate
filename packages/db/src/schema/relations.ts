@@ -10,8 +10,6 @@ import {
 	automationSideEffects,
 	automations,
 	billingEvents,
-	cliDeviceCodes,
-	cliGithubSelections,
 	configurationRepos,
 	configurationSecrets,
 	configurations,
@@ -85,11 +83,9 @@ export const userRelations = relations(user, ({ many }) => ({
 	automations: many(automations),
 	schedules: many(schedules),
 	userSshKeys: many(userSshKeys),
-	cliDeviceCodes: many(cliDeviceCodes),
 	apikeys: many(apikey),
 	slackInstallations: many(slackInstallations),
 	sessions_createdBy: many(sessions),
-	cliGithubSelections: many(cliGithubSelections),
 }));
 
 export const accountRelations = relations(account, ({ one }) => ({
@@ -122,11 +118,9 @@ export const organizationRelations = relations(organization, ({ many }) => ({
 	triggerEvents: many(triggerEvents),
 	automationRuns: many(automationRuns),
 	outbox: many(outbox),
-	cliDeviceCodes: many(cliDeviceCodes),
 	slackInstallations: many(slackInstallations),
 	sessions: many(sessions),
 	billingEvents: many(billingEvents),
-	cliGithubSelections: many(cliGithubSelections),
 	orgConnectors: many(orgConnectors),
 }));
 
@@ -505,17 +499,6 @@ export const userSshKeysRelations = relations(userSshKeys, ({ one }) => ({
 	}),
 }));
 
-export const cliDeviceCodesRelations = relations(cliDeviceCodes, ({ one }) => ({
-	user: one(user, {
-		fields: [cliDeviceCodes.userId],
-		references: [user.id],
-	}),
-	organization: one(organization, {
-		fields: [cliDeviceCodes.orgId],
-		references: [organization.id],
-	}),
-}));
-
 export const apikeyRelations = relations(apikey, ({ one }) => ({
 	user: one(user, {
 		fields: [apikey.userId],
@@ -538,17 +521,6 @@ export const configurationReposRelations = relations(configurationRepos, ({ one 
 	repo: one(repos, {
 		fields: [configurationRepos.repoId],
 		references: [repos.id],
-	}),
-}));
-
-export const cliGithubSelectionsRelations = relations(cliGithubSelections, ({ one }) => ({
-	user: one(user, {
-		fields: [cliGithubSelections.userId],
-		references: [user.id],
-	}),
-	organization: one(organization, {
-		fields: [cliGithubSelections.organizationId],
-		references: [organization.id],
 	}),
 }));
 

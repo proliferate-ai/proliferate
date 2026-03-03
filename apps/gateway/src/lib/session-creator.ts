@@ -1,49 +1,20 @@
 /**
  * Session Creator
  *
- * Handles session creation logic including:
- * - Creating session record in database
- * - Optionally creating sandbox immediately
- * - Setting up environment variables and secrets
- * - Generating LLM proxy JWT
+ * Writes a session DB record and records lifecycle events.
+ * Sandbox boot is always deferred — callers trigger eager-start after creation.
  */
 
 import { createLogger } from "@proliferate/logger";
-import {
-	automations,
-	baseSnapshots,
-	billing,
-	configurations,
-	integrations,
-	sessions,
-} from "@proliferate/services";
-import {
-	type ModelId,
-	type RepoSpec,
-	type SandboxProvider,
-	getDefaultAgentConfig,
-	isValidModelId,
-	parseModelId,
-} from "@proliferate/shared";
-import { getModalAppName } from "@proliferate/shared/providers";
-import {
-	computeBaseSnapshotVersionKey,
-	parseServiceCommands,
-	resolveServiceCommands,
-} from "@proliferate/shared/sandbox";
-import type { GatewayEnv } from "./env";
-import { resolveGitIdentity, toGitIdentityEnv } from "./git-identity";
-import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
-import { deriveSandboxMcpToken } from "./sandbox-mcp-token";
+import { automations, billing, sessions } from "@proliferate/services";
+import type { SandboxProvider } from "@proliferate/shared";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "session-creator" });
 
-export type SessionType = "coding" | "setup" | "cli";
-export type ClientType = "web" | "slack" | "cli" | "automation";
-export type SandboxMode = "immediate" | "deferred";
+export type SessionType = "coding" | "setup";
+export type ClientType = "web" | "slack" | "automation";
 
 export interface CreateSessionOptions {
-	env: GatewayEnv;
 	provider: SandboxProvider;
 
 	// Required
@@ -55,12 +26,10 @@ export interface CreateSessionOptions {
 	// Optional
 	userId?: string;
 	snapshotId?: string | null;
-	configurationStatus?: string | null;
 	initialPrompt?: string;
 	title?: string;
 	clientMetadata?: Record<string, unknown>;
 	agentConfig?: { modelId?: string };
-	sandboxMode?: SandboxMode;
 	automationId?: string;
 	triggerId?: string;
 	triggerEventId?: string;
@@ -68,50 +37,14 @@ export interface CreateSessionOptions {
 	/** Explicit integration IDs for OAuth token injection.
 	 * If not provided, will inherit from automationId's connections. */
 	integrationIds?: string[];
-
-	/** Trigger context written to .proliferate/trigger-context.json in sandbox */
-	triggerContext?: Record<string, unknown>;
-
-	// SSH access (can be enabled on any session type)
-	sshOptions?: {
-		publicKeys: string[];
-		localPath?: string;
-		localPathHash?: string;
-		gitToken?: string;
-		envVars?: Record<string, string>;
-	};
-}
-
-export interface IntegrationWarning {
-	integrationId: string;
-	message: string;
 }
 
 export interface CreateSessionResult {
 	sessionId: string;
 	configurationId: string;
-	status: "pending" | "starting" | "running";
+	status: "pending";
 	hasSnapshot: boolean;
 	isNewConfiguration: boolean;
-	sandbox?: {
-		sandboxId: string;
-		previewUrl: string | null;
-		sshHost?: string;
-		sshPort?: number;
-	};
-	/** Warnings for integrations that failed token resolution. */
-	integrationWarnings?: IntegrationWarning[];
-}
-
-interface ConfigurationRepoRow {
-	workspacePath: string;
-	repo: {
-		id: string;
-		githubUrl: string;
-		githubRepoName: string;
-		defaultBranch: string | null;
-		serviceCommands?: unknown;
-	} | null;
 }
 
 /**
@@ -122,7 +55,6 @@ export async function createSession(
 	isNewConfiguration = false,
 ): Promise<CreateSessionResult> {
 	const {
-		env,
 		provider,
 		organizationId,
 		configurationId,
@@ -134,57 +66,32 @@ export async function createSession(
 		title,
 		clientMetadata,
 		agentConfig,
-		sandboxMode = "deferred",
 		automationId,
 		triggerId,
 		triggerEventId,
-		integrationIds: explicitIntegrationIds,
-		configurationStatus,
-		triggerContext,
-		sshOptions,
+		integrationIds: explicitIntegrationIds = [],
 	} = options;
 
 	const sessionId = crypto.randomUUID();
 	const startMs = Date.now();
-
 	const log = logger.child({ sessionId });
+
 	log.info(
 		{
 			sessionType,
 			clientType,
-			sandboxMode,
 			hasSnapshot: Boolean(inputSnapshotId),
-			sshEnabled: Boolean(sshOptions),
 			explicitIntegrations: explicitIntegrationIds?.length ?? 0,
 		},
 		"Creating session",
 	);
-	log.debug(
-		{ isNewConfiguration, hasSnapshotId: Boolean(inputSnapshotId) },
-		"session_creator.create_session.start",
-	);
-
-	// SSH sessions are always immediate (need to return SSH connection info)
-	const effectiveSandboxMode = sshOptions ? "immediate" : sandboxMode;
-	const initialStatus = effectiveSandboxMode === "immediate" ? "starting" : "pending";
 
 	// Resolve integration IDs (explicit or inherited from automation)
-	let resolvedIntegrationIds: string[] = [];
-	if (explicitIntegrationIds?.length) {
-		resolvedIntegrationIds = explicitIntegrationIds;
-	} else if (automationId) {
+	let resolvedIntegrationIds: string[] = explicitIntegrationIds;
+	if (!resolvedIntegrationIds.length && automationId) {
 		try {
-			const listStartMs = Date.now();
 			const automationConnections =
 				await automations.listAutomationConnectionsInternal(automationId);
-			log.debug(
-				{
-					durationMs: Date.now() - listStartMs,
-					automationId,
-					connectionCount: automationConnections.length,
-				},
-				"session_creator.create_session.integration_ids.resolve",
-			);
 			resolvedIntegrationIds = automationConnections
 				.filter((c) => c.integration?.status === "active")
 				.map((c) => c.integrationId);
@@ -193,24 +100,20 @@ export async function createSession(
 		}
 	}
 
-	// Snapshot ID comes from the caller (configuration's snapshotId)
 	const snapshotId = inputSnapshotId ?? null;
-
-	// K2: Determine visibility and kind based on session/client type
 	const visibility: "private" | "org" =
 		sessionType === "setup" ? "org" : clientType === "automation" ? "org" : "private";
 	const kind: "task" | "setup" = sessionType === "setup" ? "setup" : "task";
 
-	// Create session record via services (with atomic concurrent admission guard)
+	// Write session record (atomic admission guard when plan limits apply)
 	try {
-		const dbStartMs = Date.now();
 		const sessionInput = {
 			id: sessionId,
 			configurationId,
 			organizationId,
 			sessionType,
 			clientType,
-			status: initialStatus,
+			status: "pending",
 			sandboxProvider: provider.type,
 			createdBy: userId,
 			snapshotId,
@@ -218,8 +121,6 @@ export async function createSession(
 			title,
 			clientMetadata,
 			agentConfig,
-			localPathHash: sshOptions?.localPathHash,
-			origin: sshOptions?.localPathHash ? "cli" : undefined,
 			automationId,
 			triggerId,
 			triggerEventId,
@@ -241,33 +142,22 @@ export async function createSession(
 		} else {
 			await sessions.create(sessionInput);
 		}
-		log.debug({ durationMs: Date.now() - dbStartMs }, "session_creator.create_session.db.create");
 	} catch (err) {
-		log.error({ err, durationMs: Date.now() - startMs }, "Failed to create session");
+		log.error({ err }, "Failed to create session");
 		throw new Error(
 			`Failed to create session: ${err instanceof Error ? err.message : String(err)}`,
 		);
 	}
 
-	// Create session connections (record which integrations are associated)
+	// Record integration connections
 	if (resolvedIntegrationIds.length > 0) {
 		try {
-			const connectionsStartMs = Date.now();
 			await sessions.createSessionConnections(sessionId, resolvedIntegrationIds);
-			log.debug(
-				{
-					durationMs: Date.now() - connectionsStartMs,
-					connectionCount: resolvedIntegrationIds.length,
-				},
-				"session_creator.create_session.db.create_connections",
-			);
 			log.info({ connectionCount: resolvedIntegrationIds.length }, "Recorded session connections");
 		} catch (err) {
 			log.warn({ err }, "Failed to record session connections");
 		}
 	}
-
-	log.info("Session record created");
 
 	// K5: Record session_created lifecycle event (best-effort)
 	try {
@@ -276,759 +166,12 @@ export async function createSession(
 		log.warn({ err }, "Failed to record session_created event");
 	}
 
-	// If deferred, return immediately
-	if (effectiveSandboxMode === "deferred") {
-		log.info(
-			{ durationMs: Date.now() - startMs, mode: "deferred" },
-			"session_creator.create_session.complete",
-		);
-		return {
-			sessionId,
-			configurationId,
-			status: "pending",
-			hasSnapshot: Boolean(snapshotId),
-			isNewConfiguration,
-		};
-	}
-
-	// Create sandbox immediately
-	let integrationWarnings: IntegrationWarning[] = [];
-	try {
-		const createSandboxStartMs = Date.now();
-		const result = await createSandbox({
-			env,
-			provider,
-			sessionId,
-			configurationId,
-			organizationId,
-			sessionType,
-			userId,
-			snapshotId,
-			configurationStatus,
-			agentConfig,
-			integrationIds: resolvedIntegrationIds,
-			triggerContext,
-			sshOptions,
-		});
-		log.debug(
-			{
-				provider: provider.type,
-				durationMs: Date.now() - createSandboxStartMs,
-				hasTunnelUrl: Boolean(result.tunnelUrl),
-				hasPreviewUrl: Boolean(result.previewUrl),
-				sshEnabled: Boolean(sshOptions),
-				warningCount: result.integrationWarnings.length,
-			},
-			"session_creator.create_session.create_sandbox",
-		);
-		integrationWarnings = result.integrationWarnings;
-
-		// Update session with sandbox info
-		const updateStartMs = Date.now();
-		await sessions.update(sessionId, {
-			status: "running",
-			sandboxId: result.sandboxId,
-			openCodeTunnelUrl: result.tunnelUrl || null,
-			previewTunnelUrl: result.previewUrl,
-			sandboxExpiresAt: result.expiresAt ?? null,
-		});
-		log.debug(
-			{
-				durationMs: Date.now() - updateStartMs,
-				hasSandboxExpiry: Boolean(result.expiresAt),
-				sandboxExpiresAt: result.expiresAt ? new Date(result.expiresAt).toISOString() : null,
-			},
-			"session_creator.create_session.db.update_session",
-		);
-
-		log.info(
-			{ durationMs: Date.now() - startMs, mode: "immediate" },
-			"session_creator.create_session.complete",
-		);
-		return {
-			sessionId,
-			configurationId,
-			status: "running",
-			hasSnapshot: Boolean(snapshotId),
-			isNewConfiguration,
-			sandbox: {
-				sandboxId: result.sandboxId,
-				previewUrl: result.previewUrl,
-				sshHost: result.sshHost,
-				sshPort: result.sshPort,
-			},
-			integrationWarnings: integrationWarnings.length > 0 ? integrationWarnings : undefined,
-		};
-	} catch (err) {
-		// Clean up session on sandbox creation failure
-		log.error({ err }, "Sandbox creation failed");
-		const deleteStartMs = Date.now();
-		await sessions.deleteById(sessionId, organizationId);
-		log.debug(
-			{ durationMs: Date.now() - deleteStartMs },
-			"session_creator.create_session.cleanup.delete_session",
-		);
-		log.debug({ durationMs: Date.now() - startMs }, "session_creator.create_session.error");
-		throw err;
-	}
-}
-
-interface CreateSandboxParams {
-	env: GatewayEnv;
-	provider: SandboxProvider;
-	sessionId: string;
-	configurationId: string;
-	organizationId: string;
-	sessionType: SessionType;
-	userId?: string;
-	snapshotId?: string | null;
-	configurationStatus?: string | null;
-	agentConfig?: { modelId?: string };
-	/** Resolved integration IDs for token injection. */
-	integrationIds?: string[];
-	/** Trigger context written to .proliferate/trigger-context.json */
-	triggerContext?: Record<string, unknown>;
-	sshOptions?: CreateSessionOptions["sshOptions"];
-}
-
-interface CreateSandboxResult {
-	sandboxId: string;
-	tunnelUrl?: string;
-	previewUrl: string;
-	sshHost?: string;
-	sshPort?: number;
-	expiresAt?: number;
-	integrationWarnings: IntegrationWarning[];
-}
-
-/**
- * Create a sandbox with all options unified.
- * Handles both coding sessions (with repo cloning) and CLI sessions (with SSH).
- */
-async function createSandbox(params: CreateSandboxParams): Promise<CreateSandboxResult> {
-	const {
-		env,
-		provider,
-		sessionId,
-		configurationId,
-		organizationId,
-		sessionType,
-		userId,
-		snapshotId,
-		configurationStatus,
-		agentConfig,
-		integrationIds,
-		triggerContext,
-		sshOptions,
-	} = params;
-
-	const startMs = Date.now();
-	const log = logger.child({ sessionId });
-	log.debug(
-		{
-			provider: provider.type,
-			hasSnapshotId: Boolean(snapshotId),
-			sshEnabled: Boolean(sshOptions),
-			explicitIntegrationCount: integrationIds?.length ?? 0,
-		},
-		"session_creator.create_sandbox.start",
-	);
-
-	const gitIdentity = await resolveGitIdentity(userId);
-	const gitIdentityEnv = toGitIdentityEnv(gitIdentity);
-
-	// Resolve base snapshot from DB for Modal provider
-	let baseSnapshotId: string | undefined;
-	if (provider.type === "modal") {
-		try {
-			const versionKey = computeBaseSnapshotVersionKey();
-			const modalAppName = getModalAppName();
-			const dbSnapshotId = await baseSnapshots.getReadySnapshotId(
-				versionKey,
-				"modal",
-				modalAppName,
-			);
-			if (dbSnapshotId) {
-				baseSnapshotId = dbSnapshotId;
-				log.info(
-					{ baseSnapshotId, versionKey: versionKey.slice(0, 12) },
-					"Base snapshot resolved from DB",
-				);
-			} else {
-				log.debug(
-					{ versionKey: versionKey.slice(0, 12) },
-					"No ready base snapshot in DB, using env fallback",
-				);
-			}
-		} catch (err) {
-			log.warn({ err }, "Failed to resolve base snapshot from DB (non-fatal)");
-		}
-	}
-
-	// SSH public key (concatenate all keys for authorized_keys)
-	const sshPublicKey = sshOptions?.publicKeys?.join("\n");
-	const mandatoryRuntimeEnv = {
-		SANDBOX_MCP_AUTH_TOKEN: deriveSandboxMcpToken(env.serviceToken, sessionId),
-		PROLIFERATE_GATEWAY_URL: env.gatewayUrl,
-		PROLIFERATE_SESSION_ID: sessionId,
-	};
-	log.info(
-		`Runtime env injection: gatewayUrl=${env.gatewayUrl ? "set" : "missing"} mcpToken=set sessionId=${sessionId}`,
-	);
-
-	// Resolve integration tokens
-	const integrationsStartMs = Date.now();
-	const { envVars: integrationEnvVars, warnings: integrationWarnings } =
-		await resolveIntegrationEnvVars(sessionId, organizationId, integrationIds);
-	log.debug(
-		{
-			durationMs: Date.now() - integrationsStartMs,
-			envKeyCount: Object.keys(integrationEnvVars).length,
-			warningCount: integrationWarnings.length,
-		},
-		"session_creator.create_sandbox.integration_env_vars",
-	);
-
-	// For CLI/SSH sessions, we don't need to load repos (sync via rsync)
-	if (sshOptions) {
-		const envStartMs = Date.now();
-		const baseEnvResult = await sessions.buildSandboxEnvVars({
-			sessionId,
-			orgId: organizationId,
-			repoIds: [],
-			configurationId,
-			repoSpecs: [],
-			requireProxy: env.llmProxyRequired,
-			directApiKey: env.anthropicApiKey,
-			proxyUrl: env.llmProxyUrl,
-			billingEnabled: env.billingEnabled,
-		});
-		log.debug(
-			{
-				durationMs: Date.now() - envStartMs,
-				envKeyCount: Object.keys(baseEnvResult.envVars).length,
-			},
-			"session_creator.create_sandbox.env_vars",
-		);
-		const mergedEnvVars = {
-			...baseEnvResult.envVars,
-			...gitIdentityEnv,
-			...(env.actionsLegacyTokens ? integrationEnvVars : {}),
-			...(sshOptions.envVars || {}),
-			...mandatoryRuntimeEnv,
-		};
-
-		const providerStartMs = Date.now();
-		const result = await provider.createSandbox({
-			sessionId,
-			sessionType,
-			repos: [],
-			branch: "main",
-			envVars: mergedEnvVars,
-			systemPrompt: "CLI terminal session",
-			snapshotId: snapshotId || undefined,
-			baseSnapshotId,
-			sshPublicKey,
-			triggerContext,
-			secretFileWrites: baseEnvResult.fileWrites,
-		});
-		log.debug(
-			{
-				provider: provider.type,
-				durationMs: Date.now() - providerStartMs,
-				isSsh: true,
-				hasTunnelUrl: Boolean(result.tunnelUrl),
-				hasPreviewUrl: Boolean(result.previewUrl),
-			},
-			"session_creator.create_sandbox.provider.create_sandbox",
-		);
-
-		log.info(
-			{ durationMs: Date.now() - startMs, isSsh: true },
-			"session_creator.create_sandbox.complete",
-		);
-		return {
-			sandboxId: result.sandboxId,
-			previewUrl: result.previewUrl,
-			sshHost: result.sshHost,
-			sshPort: result.sshPort,
-			expiresAt: result.expiresAt,
-			integrationWarnings,
-		};
-	}
-
-	// Load configuration repos for coding sessions
-	const configStartMs = Date.now();
-	const configurationRepoRows =
-		await configurations.getConfigurationReposWithDetails(configurationId);
-	log.info(
-		{
-			durationMs: Date.now() - configStartMs,
-			count: configurationRepoRows?.length ?? 0,
-			repos: configurationRepoRows?.map((r) => r.repo?.githubRepoName).filter(Boolean),
-		},
-		"session_creator.create_sandbox.configuration_repos",
-	);
-
-	if (!configurationRepoRows || configurationRepoRows.length === 0) {
-		throw new Error("Configuration has no associated repos");
-	}
-
-	// Filter out repos with null values and convert to expected shape
-	const typedConfigurationRepos: ConfigurationRepoRow[] = configurationRepoRows
-		.filter((pr) => pr.repo !== null)
-		.map((pr) => ({
-			workspacePath: pr.workspacePath,
-			repo: pr.repo,
-		}));
-
-	if (typedConfigurationRepos.length === 0) {
-		throw new Error("Configuration has no associated repos");
-	}
-
-	// Resolve GitHub tokens for each repo
-	const githubStartMs = Date.now();
-	const repoSpecs: RepoSpec[] = await Promise.all(
-		typedConfigurationRepos.map(async (pr) => {
-			const token = await resolveGitHubToken(
-				env,
-				organizationId,
-				pr.repo!.id,
-				userId,
-				pr.repo!.githubUrl,
-			);
-			const serviceCommands = parseServiceCommands(pr.repo!.serviceCommands);
-			return {
-				repoUrl: pr.repo!.githubUrl,
-				token,
-				workspacePath: pr.workspacePath,
-				repoId: pr.repo!.id,
-				...(serviceCommands.length > 0 ? { serviceCommands } : {}),
-			};
-		}),
-	);
-	log.info(
-		{
-			durationMs: Date.now() - githubStartMs,
-			repoCount: repoSpecs.length,
-			tokensPresent: repoSpecs.filter((r) => Boolean(r.token)).length,
-			repos: repoSpecs.map((r) => ({
-				url: r.repoUrl,
-				hasToken: Boolean(r.token),
-				workspacePath: r.workspacePath,
-			})),
-		},
-		"session_creator.create_sandbox.github_tokens",
-	);
-
-	// Derive snapshotHasDeps: true only when snapshot includes installed deps.
-	// "default" configuration snapshots are clone-only (no deps); only "ready" has deps.
-	// Legacy repo snapshots (clone-only) also don't have deps.
-	const repoSnapshotFallback =
-		configurationRepoRows.length === 1 &&
-		configurationRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
-		configurationRepoRows[0].repo?.repoSnapshotId
-			? configurationRepoRows[0].repo.repoSnapshotId
-			: null;
-	const snapshotHasDeps =
-		Boolean(snapshotId) && snapshotId !== repoSnapshotFallback && configurationStatus === "ready";
-
-	// Resolve service commands: configuration-level first, then per-repo fallback
-	const configSvcRow = await configurations.getConfigurationServiceCommands(configurationId);
-	const resolvedServiceCommands = resolveServiceCommands(configSvcRow?.serviceCommands, repoSpecs);
-
-	// Load env file generation spec (if configured)
-	const configEnvFiles = await configurations.getConfigurationEnvFiles(configurationId);
-	const configList = Array.isArray(configEnvFiles) ? configEnvFiles : [];
-	const envFiles = configList.length > 0 ? configList : undefined;
-
-	// Build environment variables
-	const envStartMs = Date.now();
-	const envResult = await loadEnvironmentVariables(
-		env,
-		sessionId,
-		organizationId,
-		typedConfigurationRepos.map((pr) => pr.repo!.id),
-		configurationId,
-		repoSpecs,
-		integrationEnvVars,
-	);
-	log.debug(
-		{
-			durationMs: Date.now() - envStartMs,
-			envKeyCount: Object.keys(envResult.envVars).length,
-			fileWriteCount: envResult.fileWrites.length,
-		},
-		"session_creator.create_sandbox.env_vars",
-	);
-	const mergedEnvVars = {
-		...envResult.envVars,
-		...gitIdentityEnv,
-		...mandatoryRuntimeEnv,
-	};
-
-	// Build system prompt
-	const primaryRepo = typedConfigurationRepos[0].repo!;
-	const systemPrompt = `You are an AI coding assistant. Help the user with their coding tasks in the ${primaryRepo.githubRepoName} repository.`;
-
-	const defaultAgentConfig = getDefaultAgentConfig();
-	const rawModelId = agentConfig?.modelId;
-	const modelId: ModelId =
-		rawModelId && isValidModelId(rawModelId)
-			? rawModelId
-			: rawModelId
-				? parseModelId(rawModelId)
-				: defaultAgentConfig.modelId;
-
-	// Create sandbox with all options
-	const providerStartMs = Date.now();
-	const result = await provider.createSandbox({
-		sessionId,
-		sessionType,
-		repos: repoSpecs,
-		branch: primaryRepo.defaultBranch || "main",
-		envVars: mergedEnvVars,
-		systemPrompt,
-		snapshotId: snapshotId || undefined,
-		baseSnapshotId,
-		agentConfig: agentConfig
-			? {
-					agentType: "opencode" as const,
-					modelId,
-				}
-			: undefined,
-		sshPublicKey,
-		triggerContext,
-		snapshotHasDeps,
-		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
-		envFiles,
-		secretFileWrites: envResult.fileWrites,
-	});
-	log.debug(
-		{
-			provider: provider.type,
-			durationMs: Date.now() - providerStartMs,
-			isSsh: Boolean(sshOptions),
-			hasTunnelUrl: Boolean(result.tunnelUrl),
-			hasPreviewUrl: Boolean(result.previewUrl),
-		},
-		"session_creator.create_sandbox.provider.create_sandbox",
-	);
-
-	log.info(
-		{ durationMs: Date.now() - startMs, isSsh: Boolean(sshOptions) },
-		"session_creator.create_sandbox.complete",
-	);
+	log.info({ durationMs: Date.now() - startMs }, "session_creator.create_session.complete");
 	return {
-		sandboxId: result.sandboxId,
-		tunnelUrl: result.tunnelUrl,
-		previewUrl: result.previewUrl,
-		sshHost: result.sshHost,
-		sshPort: result.sshPort,
-		expiresAt: result.expiresAt,
-		integrationWarnings,
-	};
-}
-
-/**
- * Load environment variables for a session
- */
-async function loadEnvironmentVariables(
-	env: GatewayEnv,
-	sessionId: string,
-	orgId: string,
-	repoIds: string[],
-	configurationId: string,
-	repoSpecs: RepoSpec[],
-	integrationEnvVars: Record<string, string>,
-): Promise<{
-	envVars: Record<string, string>;
-	fileWrites: Array<{ filePath: string; content: string }>;
-}> {
-	const result = await sessions.buildSandboxEnvVars({
 		sessionId,
-		orgId,
-		repoIds,
 		configurationId,
-		repoSpecs,
-		requireProxy: env.llmProxyRequired,
-		directApiKey: env.anthropicApiKey,
-		proxyUrl: env.llmProxyUrl,
-		billingEnabled: env.billingEnabled,
-	});
-
-	return {
-		envVars: {
-			...result.envVars,
-			...(env.actionsLegacyTokens ? integrationEnvVars : {}),
-		},
-		fileWrites: result.fileWrites,
+		status: "pending",
+		hasSnapshot: Boolean(snapshotId),
+		isNewConfiguration,
 	};
-}
-
-/**
- * Resolve GitHub token for a repo
- */
-async function resolveGitHubToken(
-	env: GatewayEnv,
-	orgId: string,
-	repoId: string,
-	userId: string | undefined,
-	repoUrl: string,
-): Promise<string> {
-	try {
-		// Get repo connections with integration details
-		const repoConnections = await integrations.getRepoConnectionsWithIntegrations(repoId);
-
-		const activeConnections = repoConnections.filter(
-			(rc) => rc.integration && rc.integration.status === "active",
-		);
-
-		const candidateIntegrations: GitHubIntegration[] = [];
-		const seenCandidateIds = new Set<string>();
-		const addCandidate = (integration: GitHubIntegration | null) => {
-			if (!integration || seenCandidateIds.has(integration.id)) {
-				return;
-			}
-			seenCandidateIds.add(integration.id);
-			candidateIntegrations.push(integration);
-		};
-
-		if (activeConnections.length > 0) {
-			// Selection priority:
-			// 1) user-linked GitHub App install
-			// 2) any GitHub App install
-			// 3) user-linked non-App connection
-			// 4) all remaining active connections
-			const userGitHubApp = userId
-				? activeConnections.find(
-						(rc) =>
-							rc.integration?.createdBy === userId && Boolean(rc.integration.githubInstallationId),
-					)
-				: null;
-			const anyGitHubApp = activeConnections.find((rc) =>
-				Boolean(rc.integration?.githubInstallationId),
-			);
-			const userConnection = userId
-				? activeConnections.find((rc) => rc.integration?.createdBy === userId)
-				: null;
-			const prioritizedConnections = [
-				userGitHubApp,
-				anyGitHubApp,
-				userConnection,
-				...activeConnections,
-			];
-
-			for (const connection of prioritizedConnections) {
-				const int = connection?.integration;
-				if (!int) {
-					continue;
-				}
-				addCandidate({
-					id: int.id,
-					github_installation_id: int.githubInstallationId,
-					connection_id: int.connectionId,
-				});
-			}
-		}
-
-		// Also include org-level fallbacks as trailing candidates.
-		const githubAppIntegration = await integrations.findActiveGitHubApp(orgId);
-
-		if (githubAppIntegration) {
-			addCandidate({
-				id: githubAppIntegration.id,
-				github_installation_id: githubAppIntegration.githubInstallationId,
-				connection_id: githubAppIntegration.connectionId,
-			});
-		}
-
-		// Try Nango GitHub integration
-		if (env.nangoGithubIntegrationId) {
-			const nangoIntegration = await integrations.findActiveNangoGitHub(
-				orgId,
-				env.nangoGithubIntegrationId,
-			);
-
-			if (nangoIntegration) {
-				addCandidate({
-					id: nangoIntegration.id,
-					github_installation_id: nangoIntegration.githubInstallationId,
-					connection_id: nangoIntegration.connectionId,
-				});
-			}
-		}
-
-		if (candidateIntegrations.length === 0) {
-			return "";
-		}
-
-		for (const candidate of candidateIntegrations) {
-			try {
-				let token = await getGitHubTokenForIntegration(env, candidate);
-				let hasAccess = await tokenHasRepoAccess(token, repoUrl);
-
-				// Installation tokens can become stale before cache expiry (permission changes/reinstalls).
-				if (!hasAccess && candidate.github_installation_id) {
-					token = await getGitHubTokenForIntegration(env, candidate, { forceRefresh: true });
-					hasAccess = await tokenHasRepoAccess(token, repoUrl);
-				}
-
-				if (hasAccess) {
-					return token;
-				}
-				logger.warn(
-					{
-						repoId,
-						repoUrl,
-						integrationId: candidate.id,
-						hasInstallationId: Boolean(candidate.github_installation_id),
-					},
-					"GitHub token lacks repo access, trying fallback integration",
-				);
-			} catch (err) {
-				logger.warn(
-					{
-						err,
-						repoId,
-						repoUrl,
-						integrationId: candidate.id,
-						hasInstallationId: Boolean(candidate.github_installation_id),
-					},
-					"Failed to resolve GitHub token for candidate integration",
-				);
-			}
-		}
-
-		return "";
-	} catch (err) {
-		logger.warn({ err }, "Failed to resolve GitHub token");
-		return "";
-	}
-}
-
-function parseGitHubRepoSlug(repoUrl: string): string | null {
-	try {
-		const normalized = repoUrl
-			.replace(/^git@github\.com:/, "https://github.com/")
-			.replace(/^ssh:\/\/git@github\.com\//, "https://github.com/");
-		const parsed = new URL(normalized);
-		if (parsed.hostname !== "github.com") {
-			return null;
-		}
-		const pathname = parsed.pathname
-			.replace(/^\/+/, "")
-			.replace(/\/+$/, "")
-			.replace(/\.git$/, "");
-		const [owner, repo] = pathname.split("/");
-		if (!owner || !repo) {
-			return null;
-		}
-		return `${owner}/${repo}`;
-	} catch {
-		return null;
-	}
-}
-
-async function tokenHasRepoAccess(token: string, repoUrl: string): Promise<boolean> {
-	const slug = parseGitHubRepoSlug(repoUrl);
-	if (!slug) {
-		return true;
-	}
-
-	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), 10_000);
-	try {
-		const response = await fetch(`https://api.github.com/repos/${slug}`, {
-			headers: {
-				Authorization: `Bearer ${token}`,
-				Accept: "application/vnd.github+json",
-				"X-GitHub-Api-Version": "2022-11-28",
-			},
-			signal: controller.signal,
-		});
-		return response.ok;
-	} catch {
-		return false;
-	} finally {
-		clearTimeout(timeout);
-	}
-}
-
-/**
- * Resolve integration tokens and return as env vars.
- */
-async function resolveIntegrationEnvVars(
-	sessionId: string,
-	orgId: string,
-	integrationIds?: string[],
-): Promise<{ envVars: Record<string, string>; warnings: IntegrationWarning[] }> {
-	if (!integrationIds?.length) {
-		return { envVars: {}, warnings: [] };
-	}
-
-	try {
-		const startMs = Date.now();
-		const log = logger.child({ sessionId });
-		log.debug(
-			{ integrationCount: integrationIds.length },
-			"session_creator.integration_tokens.start",
-		);
-		// Fetch integration details for token resolution
-		const fetchStartMs = Date.now();
-		const integrationsForTokens = await integrations.getIntegrationsForTokens(
-			integrationIds,
-			orgId,
-		);
-		log.debug(
-			{ durationMs: Date.now() - fetchStartMs, count: integrationsForTokens.length },
-			"session_creator.integration_tokens.fetch",
-		);
-
-		// Resolve tokens
-		const resolveStartMs = Date.now();
-		const { tokens, errors } = await integrations.resolveTokens(integrationsForTokens);
-		log.debug(
-			{
-				durationMs: Date.now() - resolveStartMs,
-				tokenCount: tokens.length,
-				errorCount: errors.length,
-			},
-			"session_creator.integration_tokens.resolve",
-		);
-
-		// Build env vars
-		const envVars: Record<string, string> = {};
-		for (const token of tokens) {
-			const envVarName = integrations.getEnvVarName(token.integrationTypeId, token.integrationId);
-			envVars[envVarName] = token.token;
-			log.info({ envVarName: envVarName.replace(/_[^_]+$/, "_***") }, "Injected integration token");
-		}
-
-		// Convert errors to warnings
-		const warnings: IntegrationWarning[] = errors.map((e) => ({
-			integrationId: e.integrationId,
-			message: e.message,
-		}));
-
-		if (warnings.length > 0) {
-			log.warn(
-				{ warningCount: warnings.length, warnings: warnings.map((w) => w.message) },
-				"Failed to resolve integration tokens",
-			);
-		}
-
-		log.debug(
-			{
-				durationMs: Date.now() - startMs,
-				envKeyCount: Object.keys(envVars).length,
-				warningCount: warnings.length,
-			},
-			"session_creator.integration_tokens.complete",
-		);
-		return { envVars, warnings };
-	} catch (err) {
-		logger.error({ err, sessionId }, "Error resolving integration tokens");
-		return { envVars: {}, warnings: [] };
-	}
 }

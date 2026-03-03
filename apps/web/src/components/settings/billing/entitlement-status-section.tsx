@@ -1,7 +1,7 @@
 "use client";
 
 import { SettingsCard, SettingsSection } from "@/components/settings/settings-row";
-import { useEntitlementStatus } from "@/hooks";
+import { useEntitlementStatus } from "@/hooks/org/use-billing";
 
 function LimitRow({
 	label,

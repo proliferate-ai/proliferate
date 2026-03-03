@@ -81,8 +81,6 @@ export interface CreateSandboxOpts {
 	agentConfig?: AgentConfig;
 	/** Current sandbox ID from DB, if any. Used by ensureSandbox to check if existing sandbox is still alive. */
 	currentSandboxId?: string;
-	/** SSH public key for SSH access */
-	sshPublicKey?: string;
 	/** Trigger context to write to .proliferate/trigger-context.json */
 	triggerContext?: Record<string, unknown>;
 	/** True if the snapshot includes installed dependencies (configuration/session snapshots). Gates service command auto-start. */
@@ -99,10 +97,6 @@ export interface CreateSandboxResult {
 	sandboxId: string;
 	tunnelUrl: string;
 	previewUrl: string;
-	/** SSH host for SSH access */
-	sshHost?: string;
-	/** SSH port for SSH access */
-	sshPort?: number;
 	/** Timestamp (ms since epoch) when sandbox will be killed by the provider */
 	expiresAt?: number;
 }

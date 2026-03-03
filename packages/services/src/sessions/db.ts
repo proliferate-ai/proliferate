@@ -25,8 +25,10 @@ import {
 	ne,
 	or,
 	type repos,
+	sessionAcl,
 	sessionCapabilities,
 	sessionConnections,
+	sessionEvents,
 	sessionMessages,
 	sessionSkills,
 	sessionUserState,
@@ -102,10 +104,6 @@ export async function listByOrganization(
 	if (filters?.excludeSetup) {
 		// Use or(ne, isNull) because NULL <> 'setup' evaluates to NULL in SQL
 		conditions.push(or(ne(sessions.sessionType, "setup"), isNull(sessions.sessionType))!);
-	}
-
-	if (filters?.excludeCli) {
-		conditions.push(or(ne(sessions.origin, "cli"), isNull(sessions.origin))!);
 	}
 
 	if (filters?.excludeAutomation) {
@@ -194,10 +192,6 @@ export async function listByOrganizationEnriched(
 
 	if (filters?.excludeSetup) {
 		conditions.push(or(ne(sessions.sessionType, "setup"), isNull(sessions.sessionType))!);
-	}
-
-	if (filters?.excludeCli) {
-		conditions.push(or(ne(sessions.origin, "cli"), isNull(sessions.origin))!);
 	}
 
 	if (filters?.excludeAutomation) {
@@ -345,8 +339,6 @@ export async function create(input: CreateSessionInput): Promise<SessionRow> {
 			clientType: input.clientType,
 			clientMetadata: input.clientMetadata,
 			agentConfig: input.agentConfig,
-			localPathHash: input.localPathHash,
-			origin: input.origin,
 			automationId: input.automationId ?? null,
 			triggerId: input.triggerId ?? null,
 			triggerEventId: input.triggerEventId ?? null,
@@ -412,8 +404,6 @@ export async function createWithAdmissionGuard(
 			clientType: input.clientType,
 			clientMetadata: input.clientMetadata,
 			agentConfig: input.agentConfig,
-			localPathHash: input.localPathHash,
-			origin: input.origin,
 			automationId: input.automationId ?? null,
 			triggerId: input.triggerId ?? null,
 			triggerEventId: input.triggerEventId ?? null,
@@ -1949,4 +1939,160 @@ export async function createTaskSession(input: CreateTaskSessionInput): Promise<
 		.returning();
 
 	return row;
+}
+
+// ============================================
+// K3: Session visible update
+// ============================================
+
+export async function updateLastVisibleUpdateAt(sessionId: string): Promise<void> {
+	const db = getDb();
+	await db
+		.update(sessions)
+		.set({ lastVisibleUpdateAt: new Date() })
+		.where(eq(sessions.id, sessionId));
+}
+
+// ============================================
+// K4: Operator status projection
+// ============================================
+
+export async function updateOperatorStatus(
+	sessionId: string,
+	operatorStatus: string,
+): Promise<void> {
+	const db = getDb();
+	await db.update(sessions).set({ operatorStatus }).where(eq(sessions.id, sessionId));
+}
+
+// ============================================
+// K5: Session events
+// ============================================
+
+export interface CreateSessionEventInput {
+	sessionId: string;
+	eventType: string;
+	actorUserId?: string | null;
+	payloadJson?: unknown;
+}
+
+export async function createSessionEvent(input: CreateSessionEventInput): Promise<void> {
+	const db = getDb();
+	await db.insert(sessionEvents).values({
+		sessionId: input.sessionId,
+		eventType: input.eventType,
+		actorUserId: input.actorUserId ?? null,
+		payloadJson: input.payloadJson ?? null,
+	});
+}
+
+export async function listSessionEvents(sessionId: string): Promise<
+	Array<{
+		id: string;
+		sessionId: string;
+		eventType: string;
+		actorUserId: string | null;
+		payloadJson: unknown;
+		createdAt: Date;
+	}>
+> {
+	const db = getDb();
+	return db
+		.select()
+		.from(sessionEvents)
+		.where(eq(sessionEvents.sessionId, sessionId))
+		.orderBy(asc(sessionEvents.createdAt));
+}
+
+// ============================================
+// K2: Session ACL
+// ============================================
+
+export async function getSessionAclRole(sessionId: string, userId: string): Promise<string | null> {
+	const db = getDb();
+	const [row] = await db
+		.select({ role: sessionAcl.role })
+		.from(sessionAcl)
+		.where(and(eq(sessionAcl.sessionId, sessionId), eq(sessionAcl.userId, userId)))
+		.limit(1);
+	return row?.role ?? null;
+}
+
+export async function grantSessionAcl(input: {
+	sessionId: string;
+	userId: string;
+	role: string;
+	grantedBy?: string | null;
+}): Promise<void> {
+	const db = getDb();
+	await db
+		.insert(sessionAcl)
+		.values({
+			sessionId: input.sessionId,
+			userId: input.userId,
+			role: input.role,
+			grantedBy: input.grantedBy ?? null,
+		})
+		.onConflictDoUpdate({
+			target: [sessionAcl.sessionId, sessionAcl.userId],
+			set: { role: input.role, grantedBy: input.grantedBy ?? null },
+		});
+}
+
+export async function updateSessionVisibility(
+	sessionId: string,
+	visibility: "private" | "shared" | "org",
+): Promise<void> {
+	const db = getDb();
+	await db.update(sessions).set({ visibility }).where(eq(sessions.id, sessionId));
+}
+
+// ============================================
+// K6: Archive and delete
+// ============================================
+
+export async function archiveSession(sessionId: string, userId: string): Promise<void> {
+	const db = getDb();
+	await db
+		.update(sessions)
+		.set({ archivedAt: new Date(), archivedBy: userId })
+		.where(eq(sessions.id, sessionId));
+}
+
+export async function unarchiveSession(sessionId: string): Promise<void> {
+	const db = getDb();
+	await db
+		.update(sessions)
+		.set({ archivedAt: null, archivedBy: null })
+		.where(eq(sessions.id, sessionId));
+}
+
+export async function softDeleteSession(sessionId: string, userId: string): Promise<void> {
+	const db = getDb();
+	await db
+		.update(sessions)
+		.set({ deletedAt: new Date(), deletedBy: userId })
+		.where(eq(sessions.id, sessionId));
+}
+
+export async function archiveSessionForUser(input: {
+	sessionId: string;
+	userId: string;
+}): Promise<void> {
+	await upsertSessionUserState({
+		sessionId: input.sessionId,
+		userId: input.userId,
+		archivedAt: new Date(),
+	});
+}
+
+export async function unarchiveSessionForUser(input: {
+	sessionId: string;
+	userId: string;
+}): Promise<void> {
+	await upsertSessionUserState({
+		sessionId: input.sessionId,
+		userId: input.userId,
+		archivedAt: null,
+	});
 }

@@ -1,0 +1,131 @@
+import "server-only";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { env } from "@proliferate/environment/server";
+
+export type OAuthStateVerificationError =
+	| "invalid_encoding"
+	| "invalid_payload"
+	| "missing_signature"
+	| "invalid_signature";
+
+const ALLOWED_OAUTH_RETURN_URL_PREFIXES = [
+	"/onboarding",
+	"/device-github",
+	"/dashboard",
+	"/settings",
+	"/preview",
+	"/workspace",
+	"/repos",
+	"/invite",
+] as const;
+
+function canonicalize(value: unknown): unknown {
+	if (Array.isArray(value)) {
+		return value.map((item) => canonicalize(item));
+	}
+
+	if (value && typeof value === "object") {
+		const result: Record<string, unknown> = {};
+		const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+			a < b ? -1 : a > b ? 1 : 0,
+		);
+
+		for (const [key, item] of entries) {
+			result[key] = canonicalize(item);
+		}
+
+		return result;
+	}
+
+	return value;
+}
+
+function stringifyCanonical(value: Record<string, unknown>): string {
+	return JSON.stringify(canonicalize(value));
+}
+
+function signPayload(payload: Record<string, unknown>): string {
+	// Domain-separate OAuth state signatures from other BETTER_AUTH_SECRET uses.
+	const hmac = createHmac("sha256", `oauth-state:${env.BETTER_AUTH_SECRET}`);
+	hmac.update(stringifyCanonical(payload));
+	return hmac.digest("hex");
+}
+
+function safeHexBuffer(value: string): Buffer | null {
+	if (!/^[0-9a-f]+$/i.test(value) || value.length % 2 !== 0) {
+		return null;
+	}
+	return Buffer.from(value, "hex");
+}
+
+function signaturesMatch(provided: string, expected: string): boolean {
+	const providedBuffer = safeHexBuffer(provided);
+	const expectedBuffer = safeHexBuffer(expected);
+
+	if (!providedBuffer || !expectedBuffer) {
+		return false;
+	}
+
+	if (providedBuffer.length !== expectedBuffer.length) {
+		return false;
+	}
+
+	return timingSafeEqual(providedBuffer, expectedBuffer);
+}
+
+export function createSignedOAuthState(payload: Record<string, unknown>): string {
+	const signature = signPayload(payload);
+	const signedPayload = {
+		...payload,
+		_sig: signature,
+	};
+	return Buffer.from(JSON.stringify(signedPayload)).toString("base64url");
+}
+
+export function verifySignedOAuthState<T extends Record<string, unknown>>(
+	state: string,
+): { ok: true; payload: T } | { ok: false; error: OAuthStateVerificationError } {
+	let parsedState: unknown;
+	try {
+		parsedState = JSON.parse(Buffer.from(state, "base64url").toString("utf8"));
+	} catch {
+		return { ok: false, error: "invalid_encoding" };
+	}
+
+	if (!parsedState || typeof parsedState !== "object" || Array.isArray(parsedState)) {
+		return { ok: false, error: "invalid_payload" };
+	}
+
+	const signedPayload = parsedState as Record<string, unknown>;
+	const signature = signedPayload._sig;
+	if (typeof signature !== "string" || signature.length === 0) {
+		return { ok: false, error: "missing_signature" };
+	}
+
+	const { _sig: _ignored, ...payload } = signedPayload;
+	const expectedSignature = signPayload(payload);
+	if (!signaturesMatch(signature, expectedSignature)) {
+		return { ok: false, error: "invalid_signature" };
+	}
+
+	return { ok: true, payload: payload as T };
+}
+
+export function sanitizeOAuthReturnUrl(
+	returnUrl: string | undefined,
+	fallback?: string,
+): string | undefined {
+	if (!returnUrl) return fallback;
+
+	const trimmed = returnUrl.trim();
+	if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+		return fallback;
+	}
+
+	const path = trimmed.split("?")[0] || "";
+	const isAllowed = ALLOWED_OAUTH_RETURN_URL_PREFIXES.some(
+		(prefix) => path === prefix || path.startsWith(`${prefix}/`),
+	);
+
+	return isAllowed ? trimmed : fallback;
+}

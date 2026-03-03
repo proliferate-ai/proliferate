@@ -6,7 +6,7 @@
  * integration and remain as separate handlers imported here.
  */
 
-import { GATEWAY_URL } from "@/lib/gateway";
+import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
 import { integrations, notifications, sessions } from "@proliferate/services";

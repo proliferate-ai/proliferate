@@ -23,9 +23,6 @@ export {
 // Automations types
 export * from "./automations";
 
-// CLI types
-export * from "./cli";
-
 // Integrations types (export with prefix to avoid conflicts)
 export {
 	IntegrationRow,

@@ -4,8 +4,8 @@ import { ModelSelector } from "@/components/automations/model-selector";
 import { Button } from "@/components/ui/button";
 import { BlocksIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
-import { useCreateFollowUp } from "@/hooks/use-follow-up";
-import { cn } from "@/lib/utils";
+import { useCreateFollowUp } from "@/hooks/sessions/use-follow-up";
+import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import {
 	ComposerPrimitive,

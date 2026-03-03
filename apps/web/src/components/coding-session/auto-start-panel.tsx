@@ -10,11 +10,11 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { useServiceCommands, useUpdateServiceCommands } from "@/hooks/org/use-repos";
 import {
 	useEffectiveServiceCommands,
 	useUpdateConfigurationServiceCommands,
-} from "@/hooks/use-configurations";
-import { useServiceCommands, useUpdateServiceCommands } from "@/hooks/use-repos";
+} from "@/hooks/sessions/use-configurations";
 import type {
 	AutoStartOutputEntry,
 	AutoStartOutputMessage,

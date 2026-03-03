@@ -4,7 +4,7 @@
  * Handles automation CRUD, triggers, schedules, and events.
  */
 
-import { GATEWAY_URL } from "@/lib/gateway";
+import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { ORPCError } from "@orpc/server";
 import {
 	automations,

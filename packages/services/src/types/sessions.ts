@@ -27,8 +27,6 @@ export interface CreateSessionInput {
 	clientType?: string;
 	clientMetadata?: Record<string, unknown>;
 	agentConfig?: Record<string, unknown>;
-	localPathHash?: string;
-	origin?: string;
 	automationId?: string | null;
 	triggerId?: string | null;
 	triggerEventId?: string | null;
@@ -73,7 +71,6 @@ export interface ListSessionsFilters {
 	kinds?: Array<"manager" | "task" | "setup">;
 	limit?: number;
 	excludeSetup?: boolean;
-	excludeCli?: boolean;
 	excludeAutomation?: boolean;
 	createdBy?: string;
 	userId?: string;
@@ -90,7 +87,6 @@ export interface ListSessionsOptions {
 	kinds?: Array<"manager" | "task" | "setup">;
 	limit?: number;
 	excludeSetup?: boolean;
-	excludeCli?: boolean;
 	excludeAutomation?: boolean;
 	createdBy?: string;
 	userId?: string;

@@ -3,9 +3,9 @@
 import { Button } from "@/components/ui/button";
 import { ExternalLink, Maximize2, Minimize2, RefreshCw } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
-import { usePolledReadiness } from "@/hooks/use-polled-readiness";
-import { GATEWAY_URL } from "@/lib/gateway";
-import { cn } from "@/lib/utils";
+import { usePolledReadiness } from "@/hooks/ui/use-polled-readiness";
+import { cn } from "@/lib/display/utils";
+import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PanelShell } from "./panel-shell";

@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import type { PreviewMode } from "@/stores/preview-panel";
 import { MessageSquare, PanelRight } from "lucide-react";
 

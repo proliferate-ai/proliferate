@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Loader2, SlackIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
-import { useSlackConnect } from "@/hooks/use-integrations";
+import { useSlackConnect } from "@/hooks/integrations/use-integrations";
 import { useEffect, useRef, useState } from "react";
 
 interface StepSlackConnectProps {

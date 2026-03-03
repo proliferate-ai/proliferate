@@ -5,8 +5,8 @@ import {
 	prefetchVerificationUrls,
 	useVerificationFiles,
 	useVerificationMediaUrl,
-} from "@/hooks/use-verification-media-url";
-import { formatBytes } from "@/lib/utils";
+} from "@/hooks/sessions/use-verification-media-url";
+import { formatBytes } from "@/lib/display/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { makeAssistantToolUI } from "@assistant-ui/react";
 import {

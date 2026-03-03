@@ -9,9 +9,9 @@ export * from "./pause";
 export * from "./snapshot";
 export * from "./submit-env";
 export * from "./generate-title";
-// K-phase DB helpers (lifecycle, ACL) — defined in v1-db.ts
-// Note: archiveSession/unarchiveSession/softDeleteSession are NOT re-exported from v1-db
-// because v1-service.ts defines service-layer wrappers with the same names (object args + org check).
+// K-phase DB helpers (lifecycle, ACL) — defined in db.ts
+// Note: archiveSession/unarchiveSession/softDeleteSession are NOT re-exported from db
+// because service.ts defines service-layer wrappers with the same names (object args + org check).
 export {
 	type CreateSessionEventInput,
 	updateLastVisibleUpdateAt,
@@ -21,9 +21,7 @@ export {
 	getSessionAclRole,
 	grantSessionAcl,
 	updateSessionVisibility,
-} from "./v1-db";
-
-export * from "./v1-service";
+} from "./db";
 
 // DB row types (from Drizzle schema)
 export type {

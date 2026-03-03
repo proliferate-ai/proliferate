@@ -6,7 +6,7 @@
  * to the trigger service.
  */
 
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/infra/logger";
 import { env } from "@proliferate/environment/server";
 import { integrations } from "@proliferate/services";
 import { GitHubProvider } from "@proliferate/triggers";

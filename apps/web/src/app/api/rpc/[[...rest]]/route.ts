@@ -4,7 +4,7 @@
  * All oRPC procedures are handled through this single endpoint.
  */
 
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/infra/logger";
 import { appRouter } from "@/server/routers";
 import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";

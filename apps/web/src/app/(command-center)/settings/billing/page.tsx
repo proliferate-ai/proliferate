@@ -11,7 +11,8 @@ import {
 	RecentEventsSection,
 	UsageSummarySection,
 } from "@/components/settings/billing";
-import { useBilling, useOrgMembers, useUpdateBillingSettings } from "@/hooks";
+import { useBilling, useUpdateBillingSettings } from "@/hooks/org/use-billing";
+import { useOrgMembers } from "@/hooks/org/use-orgs";
 import { useActiveOrganization, useSession } from "@/lib/auth/client";
 import type { BillingInfo } from "@/types/billing";
 import { env } from "@proliferate/environment/public";

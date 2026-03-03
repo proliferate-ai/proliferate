@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { AlertTriangle, CheckCircle2, Loader2, Pause, XCircle } from "lucide-react";
 
 // ---------------------------------------------------------------------------

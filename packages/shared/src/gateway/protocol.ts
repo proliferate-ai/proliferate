@@ -9,7 +9,7 @@ import type {
 	SessionOperatorStatus,
 	SessionRuntimeStatus,
 	SessionVisibility,
-} from "../contracts/v1-entities";
+} from "../contracts/entities";
 import type { AutoStartOutputEntry, ConfigurationServiceCommand } from "../providers/contract";
 
 // Client source - where the message originated from

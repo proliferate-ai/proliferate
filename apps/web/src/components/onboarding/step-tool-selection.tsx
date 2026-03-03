@@ -13,7 +13,7 @@ import {
 	SlackIcon,
 	StripeIcon,
 } from "@/components/ui/icons";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { useOnboardingStore } from "@/stores/onboarding";
 import { Check } from "lucide-react";
 import { OnboardingCardImage } from "./onboarding-card-image";

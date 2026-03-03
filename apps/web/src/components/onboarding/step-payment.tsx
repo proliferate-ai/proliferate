@@ -1,8 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
+import { orpc } from "@/lib/infra/orpc";
 import { useMutation } from "@tanstack/react-query";
 import { Check, Zap } from "lucide-react";
 import { useState } from "react";

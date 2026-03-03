@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth/server";
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/infra/logger";
 import { env } from "@proliferate/environment/server";
 import { cli } from "@proliferate/services";
 import { NextResponse } from "next/server";

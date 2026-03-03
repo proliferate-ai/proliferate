@@ -7,8 +7,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { GATEWAY_URL } from "@/lib/gateway";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
+import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileCode, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";

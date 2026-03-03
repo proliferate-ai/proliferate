@@ -13,7 +13,7 @@ import { WorkerSettingsTab } from "@/components/automations/worker-settings-tab"
 import { Button } from "@/components/ui/button";
 import { PageBackLink } from "@/components/ui/page-back-link";
 import { StatusDot } from "@/components/ui/status-dot";
-import { useAutomation } from "@/hooks/use-automations";
+import { useAutomation } from "@/hooks/automations/use-automations";
 import {
 	useDeleteWorker,
 	usePauseWorker,
@@ -25,8 +25,8 @@ import {
 	useWorker,
 	useWorkerRuns,
 	useWorkerSessions,
-} from "@/hooks/use-workers";
-import { cn } from "@/lib/utils";
+} from "@/hooks/automations/use-workers";
+import { cn } from "@/lib/display/utils";
 import { ExternalLink, Loader2, Pause, Play } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

@@ -13,9 +13,9 @@ import { prepareForSnapshot } from "../lib/snapshot-scrub";
 import { getServicesLogger } from "../logger";
 import * as notifications from "../notifications";
 import * as orgs from "../orgs";
+import { updateLastVisibleUpdateAt } from "./db";
 import { getFullSession, updateSession } from "./service";
-import { updateLastVisibleUpdateAt } from "./v1-db";
-import { SessionNotFoundError, recordSessionEvent } from "./v1-service";
+import { SessionNotFoundError, recordSessionEvent } from "./service";
 
 export { SessionNotFoundError };
 

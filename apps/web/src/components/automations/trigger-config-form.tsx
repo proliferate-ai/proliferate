@@ -18,9 +18,9 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
-import { useLinearMetadata, useSentryMetadata } from "@/hooks/use-integrations";
-import { useTriggerProviders } from "@/hooks/use-trigger-providers";
+import { useTriggerProviders } from "@/hooks/automations/use-trigger-providers";
+import { useLinearMetadata, useSentryMetadata } from "@/hooks/integrations/use-integrations";
+import { useCopyToClipboard } from "@/hooks/ui/use-copy-to-clipboard";
 import type {
 	GitHubTriggerConfig,
 	LinearTriggerConfig,

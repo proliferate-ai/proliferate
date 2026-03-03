@@ -14,11 +14,11 @@ import {
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
-import { useIntegrations, useSlackInstallations } from "@/hooks/use-integrations";
-import { useCreateFromTemplate, useTemplateCatalog } from "@/hooks/use-templates";
-import { useCreateWorker, useWorkers } from "@/hooks/use-workers";
-import { cn } from "@/lib/utils";
+import { useAutomations, useCreateAutomation } from "@/hooks/automations/use-automations";
+import { useCreateWorker, useWorkers } from "@/hooks/automations/use-workers";
+import { useIntegrations, useSlackInstallations } from "@/hooks/integrations/use-integrations";
+import { useCreateFromTemplate, useTemplateCatalog } from "@/hooks/org/use-templates";
+import { cn } from "@/lib/display/utils";
 import { BookTemplate, Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { startTransition, useMemo, useState } from "react";

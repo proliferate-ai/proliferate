@@ -1,11 +1,11 @@
 "use client";
 
 import { SessionListRow } from "@/components/sessions/session-card";
-import { useOrgPendingRuns } from "@/hooks/use-automations";
-import { useCreateConfiguration } from "@/hooks/use-configurations";
-import { useCreateSession, useSessions } from "@/hooks/use-sessions";
+import { useOrgPendingRuns } from "@/hooks/automations/use-automations";
+import { useCreateConfiguration } from "@/hooks/sessions/use-configurations";
+import { useCreateSession, useSessions } from "@/hooks/sessions/use-sessions";
 import { useSession } from "@/lib/auth/client";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { modelSupportsReasoning } from "@proliferate/shared/agents";
 import type { PendingRunSummary } from "@proliferate/shared/contracts";

@@ -151,7 +151,5 @@ export interface SandboxInfo {
 	sandboxId: string | null;
 	status: string;
 	previewUrl: string | null;
-	sshHost: string | null;
-	sshPort: number | null;
 	expiresAt: number | null;
 }

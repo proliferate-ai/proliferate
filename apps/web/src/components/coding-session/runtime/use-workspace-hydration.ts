@@ -1,6 +1,6 @@
 "use client";
 
-import { GATEWAY_URL } from "@/lib/gateway";
+import { GATEWAY_URL } from "@/lib/infra/gateway";
 import type { PreviewPort } from "@proliferate/shared/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { useWsToken } from "./use-ws-token";

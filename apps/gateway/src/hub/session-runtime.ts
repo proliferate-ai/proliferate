@@ -73,8 +73,7 @@ export class SessionRuntime {
 	private provider: SandboxProvider | null = null;
 	private openCodeUrl: string | null = null;
 	private previewUrl: string | null = null;
-	private sshHost: string | null = null;
-	private sshPort: number | null = null;
+
 	private openCodeSessionId: string | null = null;
 	private sandboxExpiresAt: number | null = null;
 	private lifecycleStartTime = 0;
@@ -323,8 +322,6 @@ export class SessionRuntime {
 			sandboxId: this.context.session.sandbox_id || null,
 			status: this.context.session.status || "unknown",
 			previewUrl: this.previewUrl,
-			sshHost: this.sshHost,
-			sshPort: this.sshPort,
 			expiresAt: this.sandboxExpiresAt,
 		};
 	}
@@ -341,8 +338,6 @@ export class SessionRuntime {
 		this.eventStreamConnected = false;
 		this.openCodeUrl = null;
 		this.previewUrl = null;
-		this.sshHost = null;
-		this.sshPort = null;
 		this.sandboxExpiresAt = null;
 		this.openCodeSessionId = null;
 		this.context.session.sandbox_id = null;
@@ -466,7 +461,7 @@ export class SessionRuntime {
 			try {
 				result = await provider.ensureSandbox({
 					sessionId: this.sessionId,
-					sessionType: this.context.session.session_type as "coding" | "setup" | "cli" | null,
+					sessionType: this.context.session.session_type as "coding" | "setup" | null,
 					repos: this.context.repos,
 					branch: this.context.primaryRepo.default_branch || "main",
 					envVars: envVarsWithToken,
@@ -475,7 +470,6 @@ export class SessionRuntime {
 					baseSnapshotId,
 					agentConfig: this.context.agentConfig,
 					currentSandboxId: this.context.session.sandbox_id || undefined,
-					sshPublicKey: this.context.sshPublicKey,
 					snapshotHasDeps: this.context.snapshotHasDeps,
 					serviceCommands: this.context.serviceCommands,
 					secretFileWrites: this.context.secretFileWrites,
@@ -518,8 +512,6 @@ export class SessionRuntime {
 			const canReuseStoredExpiry = result.recovered && previousSandboxId === result.sandboxId;
 			const resolvedExpiryMs = result.expiresAt ?? (canReuseStoredExpiry ? storedExpiryMs : null);
 			this.sandboxExpiresAt = resolvedExpiryMs;
-			this.sshHost = result.sshHost || null;
-			this.sshPort = result.sshPort || null;
 			this.log("Resolved sandbox expiry", {
 				previousSandboxId,
 				sandboxId: result.sandboxId,
@@ -537,8 +529,6 @@ export class SessionRuntime {
 				sandboxId: result.sandboxId,
 				tunnelUrl: this.openCodeUrl,
 				previewUrl: this.previewUrl,
-				sshHost: this.sshHost,
-				sshPort: this.sshPort,
 				expiresAt: this.sandboxExpiresAt ? new Date(this.sandboxExpiresAt).toISOString() : null,
 				recovered: result.recovered,
 			});

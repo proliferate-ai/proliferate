@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { GithubIcon } from "@/components/ui/icons";
 import { Label } from "@/components/ui/label";
 import { useSession } from "@/lib/auth/client";
-import { orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/infra/orpc";
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, Laptop, Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";

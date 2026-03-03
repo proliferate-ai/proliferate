@@ -10,7 +10,7 @@ import {
 	createSignedOAuthState,
 	sanitizeOAuthReturnUrl,
 	verifySignedOAuthState,
-} from "@/lib/oauth-state";
+} from "@/lib/integrations/oauth-state";
 
 describe("oauth-state", () => {
 	beforeEach(() => {

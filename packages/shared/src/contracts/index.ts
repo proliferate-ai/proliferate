@@ -208,7 +208,7 @@ export {
 export * from "./trigger-configs";
 
 // Re-export V1 entity contracts
-export * from "./v1-entities";
+export * from "./entities";
 
 // Re-export harness contract interfaces
 export type {

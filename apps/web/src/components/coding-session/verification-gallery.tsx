@@ -6,9 +6,9 @@ import {
 	fetchVerificationTextContent,
 	prefetchVerificationUrls,
 	useVerificationMediaUrl,
-} from "@/hooks/use-verification-media-url";
-import { formatBytes } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+} from "@/hooks/sessions/use-verification-media-url";
+import { formatBytes } from "@/lib/display/utils";
+import { cn } from "@/lib/display/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import type { VerificationFile } from "@proliferate/shared";
 import { File, FileText, Image, Loader2, Play, Video } from "lucide-react";

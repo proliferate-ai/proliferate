@@ -7,8 +7,8 @@ import {
 } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
+import { orpc } from "@/lib/infra/orpc";
 import type {
 	AutomationTrigger,
 	GitHubTriggerConfig,

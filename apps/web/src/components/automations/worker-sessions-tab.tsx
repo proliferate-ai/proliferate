@@ -1,7 +1,7 @@
 "use client";
 
 import { StatusDot } from "@/components/ui/status-dot";
-import { formatRelativeTime } from "@/lib/utils";
+import { formatRelativeTime } from "@/lib/display/utils";
 import Link from "next/link";
 
 export interface WorkerSession {

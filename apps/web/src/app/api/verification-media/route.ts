@@ -1,5 +1,5 @@
 import { requireAuth } from "@/lib/auth/server/helpers";
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/infra/logger";
 import { env } from "@proliferate/environment/server";
 import { signGatewayToken } from "@proliferate/shared";
 import { NextResponse } from "next/server";

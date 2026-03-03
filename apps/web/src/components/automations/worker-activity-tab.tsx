@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Textarea } from "@/components/ui/textarea";
-import { formatRelativeTime } from "@/lib/utils";
+import { formatRelativeTime } from "@/lib/display/utils";
 import {
 	CheckCircle2,
 	ChevronDown,

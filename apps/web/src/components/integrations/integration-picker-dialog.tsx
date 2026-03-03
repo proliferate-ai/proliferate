@@ -5,8 +5,8 @@ import { type Provider, ProviderIcon } from "@/components/integrations/provider-
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
+import { orpc } from "@/lib/infra/orpc";
 import type { IntegrationCategory } from "@proliferate/shared";
 import { CheckCircle2, Loader2, Search, Send } from "lucide-react";
 import { useMemo, useState } from "react";

@@ -7,9 +7,9 @@ import {
 } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useTriggerProviders } from "@/hooks/use-trigger-providers";
-import { orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
+import { useTriggerProviders } from "@/hooks/automations/use-trigger-providers";
+import { cn } from "@/lib/display/utils";
+import { orpc } from "@/lib/infra/orpc";
 import type { TriggerProvider } from "@proliferate/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, CirclePlus, Loader2, Plus } from "lucide-react";

@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/lib/auth/client";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { useOnboardingStore } from "@/stores/onboarding";
 import { env } from "@proliferate/environment/public";
 import { useRouter } from "next/navigation";

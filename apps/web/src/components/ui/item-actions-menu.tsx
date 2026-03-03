@@ -7,7 +7,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { Copy, MoreVertical, Pencil, Trash2 } from "lucide-react";
 
 interface CustomAction {

@@ -1,5 +1,5 @@
 import { createLogger } from "@proliferate/logger";
-import { cli, configurations, integrations, sessions } from "@proliferate/services";
+import { configurations, integrations, sessions } from "@proliferate/services";
 import {
 	type AgentConfig,
 	type ModelId,
@@ -76,8 +76,6 @@ export interface SessionContext {
 	envVars: Record<string, string>;
 	/** Decrypted file writes to apply at sandbox boot. */
 	secretFileWrites: Array<{ filePath: string; content: string }>;
-	/** SSH public key for CLI sessions (for rsync access) */
-	sshPublicKey?: string;
 	/** True if the snapshot includes installed dependencies. Gates service command auto-start. */
 	snapshotHasDeps: boolean;
 	/** Resolved service commands (configuration-level or fallback from repos). */
@@ -368,26 +366,6 @@ export async function loadSessionContext(
 		"Environment variables loaded",
 	);
 
-	// Load SSH public key for CLI sessions
-	let sshPublicKey: string | undefined;
-	if (session.session_type === "cli" && session.created_by) {
-		log.info("Loading SSH public key for CLI session...");
-		const sshStartMs = Date.now();
-		const sshKeys = await cli.getSshPublicKeys(session.created_by);
-		log.debug(
-			{ durationMs: Date.now() - sshStartMs, count: sshKeys?.length ?? 0 },
-			"store.load_context.ssh_keys",
-		);
-
-		const publicKey = sshKeys?.[0];
-		if (publicKey) {
-			sshPublicKey = publicKey;
-			log.info({ fingerprint: `${publicKey.slice(0, 50)}...` }, "SSH public key loaded");
-		} else {
-			log.info("No SSH public key found for user");
-		}
-	}
-
 	// Derive snapshotHasDeps: true only when snapshot includes installed deps.
 	// - Pause snapshots always have deps (they capture full state after user work).
 	// - "default" configuration snapshots are clone-only (no deps).
@@ -434,7 +412,6 @@ export async function loadSessionContext(
 		gitIdentity,
 		envVars: envResult.envVars,
 		secretFileWrites: envResult.fileWrites,
-		sshPublicKey,
 		snapshotHasDeps,
 		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
 		initialPrompt: session.initial_prompt,

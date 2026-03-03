@@ -1,6 +1,6 @@
 "use client";
 
-import { useBilling } from "@/hooks/use-billing";
+import { useBilling } from "@/hooks/org/use-billing";
 import { useSession } from "@/lib/auth/client";
 import { env } from "@proliferate/environment/public";
 import { useRouter } from "next/navigation";

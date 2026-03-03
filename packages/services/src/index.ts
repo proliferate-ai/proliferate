@@ -12,7 +12,6 @@ export * as baseSnapshots from "./base-snapshots";
 export * as automations from "./automations";
 export * as baselines from "./baselines";
 export * as billing from "./billing";
-export * as cli from "./cli";
 export * as connectors from "./connectors";
 export * as integrations from "./integrations";
 export * as onboarding from "./onboarding";

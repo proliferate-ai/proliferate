@@ -781,8 +781,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				sandboxId: sandbox.sandboxId,
 				tunnelUrl,
 				previewUrl,
-				sshHost: sshHost || undefined,
-				sshPort: sshPort || undefined,
 				expiresAt: sandboxCreatedAt + SANDBOX_TIMEOUT_MS,
 			};
 		} catch (error) {
@@ -1174,15 +1172,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 			);
 		}
 
-		// Add SSH public key if provided (for rsync from CLI)
-		if (opts.sshPublicKey) {
-			log.debug("Writing SSH authorized_keys");
-			writePromises.push(
-				writeFile("/root/.ssh/authorized_keys", opts.sshPublicKey),
-				writeFile("/home/user/.ssh/authorized_keys", opts.sshPublicKey),
-			);
-		}
-
 		// Write trigger context if provided (for automation-triggered sessions)
 		if (opts.triggerContext) {
 			log.debug("Writing trigger context");
@@ -1195,18 +1184,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 		}
 
 		await Promise.all(writePromises);
-
-		// Start sshd if SSH key was provided (CLI sessions need SSH ready immediately)
-		if (opts.sshPublicKey) {
-			log.debug("Starting sshd for CLI session");
-			// Generate host keys if needed and start sshd
-			await sandbox.exec([
-				"sh",
-				"-c",
-				"ssh-keygen -A 2>/dev/null || true; mkdir -p /run/sshd; /usr/sbin/sshd",
-			]);
-			log.debug("sshd started");
-		}
 
 		// Start OpenCode server in background
 		log.debug("Starting OpenCode server");
@@ -1762,8 +1739,6 @@ export class ModalLibmodalProvider implements SandboxProvider {
 				sandboxId: newSandboxId,
 				tunnelUrl: openCodeUrl,
 				previewUrl: previewTunnel?.url || "",
-				sshHost: sshTunnel?.unencryptedHost || undefined,
-				sshPort: sshTunnel?.unencryptedPort || undefined,
 				expiresAt: Date.now() + SANDBOX_TIMEOUT_MS,
 			};
 		} catch (error) {

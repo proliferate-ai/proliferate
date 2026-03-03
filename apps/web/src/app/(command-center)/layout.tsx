@@ -8,8 +8,8 @@ import { MobileSidebar, MobileSidebarTrigger, Sidebar } from "@/components/dashb
 import { openIntercomMessenger } from "@/components/providers";
 import { Button } from "@/components/ui/button";
 import { ChatBubbleIcon } from "@/components/ui/icons";
-import { useBilling } from "@/hooks/use-billing";
-import { useOnboarding } from "@/hooks/use-onboarding";
+import { useBilling } from "@/hooks/org/use-billing";
+import { useOnboarding } from "@/hooks/org/use-onboarding";
 import { useSession } from "@/lib/auth/client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { env } from "@proliferate/environment/public";

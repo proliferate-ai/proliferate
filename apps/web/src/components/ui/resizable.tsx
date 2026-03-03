@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { GripVertical } from "lucide-react";
 import {
 	Group,

@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useActivatePlan } from "@/hooks/use-billing";
-import { cn } from "@/lib/utils";
+import { useActivatePlan } from "@/hooks/org/use-billing";
+import { cn } from "@/lib/display/utils";
 import type { BillingInfo } from "@/types/billing";
 import { Check } from "lucide-react";
 import { useState } from "react";
