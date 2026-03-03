@@ -353,7 +353,7 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 
 	/**
 	 * GET /available — list available integrations + actions for this session.
-	 * Auth: sandbox token or user token (user must belong to session's org).
+	 * Auth: sandbox token, service token, or user token (user must belong to session's org).
 	 */
 	router.get("/available", async (req, res, next) => {
 		try {
@@ -363,8 +363,8 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 				throw new ApiError(404, "Session not found");
 			}
 
-			// Org check for non-sandbox callers
-			if (req.auth?.source !== "sandbox") {
+			// Org check for non-sandbox/service callers
+			if (req.auth?.source !== "sandbox" && req.auth?.source !== "service") {
 				await requireSessionOrgAccess(sessionId, req.auth?.orgId);
 			}
 
@@ -445,13 +445,13 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 
 	/**
 	 * GET /guide/:integration — get the provider guide for an integration.
-	 * Auth: sandbox token or user token (user must belong to session's org).
+	 * Auth: sandbox token, service token, or user token (user must belong to session's org).
 	 */
 	router.get("/guide/:integration", async (req, res, next) => {
 		try {
 			const sessionId = req.proliferateSessionId!;
 
-			if (req.auth?.source !== "sandbox") {
+			if (req.auth?.source !== "sandbox" && req.auth?.source !== "service") {
 				await requireSessionOrgAccess(sessionId, req.auth?.orgId);
 			}
 
@@ -509,12 +509,12 @@ export function createActionsRouter(_env: GatewayEnv, hubManager: HubManager): R
 
 	/**
 	 * POST /invoke — invoke an action.
-	 * Auth: sandbox token only.
+	 * Auth: sandbox token or service token (manager harness).
 	 */
 	router.post("/invoke", async (req, res, next) => {
 		try {
-			// Only sandbox agents can invoke actions
-			if (req.auth?.source !== "sandbox") {
+			// Only sandbox agents and internal services can invoke actions
+			if (req.auth?.source !== "sandbox" && req.auth?.source !== "service") {
 				throw new ApiError(403, "Only sandbox agents can invoke actions");
 			}
 
