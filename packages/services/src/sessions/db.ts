@@ -1621,6 +1621,29 @@ export async function listChildSessionsByRun(
 		.orderBy(asc(sessions.startedAt));
 }
 
+/**
+ * List ALL child sessions for a manager, across all runs.
+ * Used by the manager harness list_children tool so it can see and interact
+ * with children from previous runs that are still running.
+ */
+export async function listAllChildSessions(
+	parentSessionId: string,
+	organizationId: string,
+): Promise<SessionRow[]> {
+	const db = getDb();
+	return db
+		.select()
+		.from(sessions)
+		.where(
+			and(
+				eq(sessions.parentSessionId, parentSessionId),
+				eq(sessions.organizationId, organizationId),
+				eq(sessions.kind, "task"),
+			),
+		)
+		.orderBy(desc(sessions.startedAt));
+}
+
 export async function findLatestTerminalFollowupSession(input: {
 	organizationId: string;
 	sourceSessionId: string;

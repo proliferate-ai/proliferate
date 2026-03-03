@@ -377,7 +377,7 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 			// Non-critical
 		}
 
-		// Fetch pending directives
+		// Fetch pending directives and mark them as delivered
 		try {
 			const pendingDirectives = await workers.listPendingDirectives(ctx.managerSessionId);
 			if (pendingDirectives.length > 0) {
@@ -386,6 +386,12 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 					const payload = d.payloadJson as Record<string, unknown>;
 					const content = (payload?.content as string) ?? JSON.stringify(payload);
 					parts.push(`- ${content}`);
+				}
+				// Mark all ingested directives as delivered so they don't repeat
+				for (const d of pendingDirectives) {
+					await sessions.updateSessionMessageDeliveryState(d.id, "delivered", {
+						deliveredAt: new Date(),
+					});
 				}
 			}
 		} catch {

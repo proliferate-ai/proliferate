@@ -64,6 +64,7 @@ export {
 	findByIdInternal,
 	findSessionById,
 	listChildSessionsByRun,
+	listAllChildSessions,
 	createSetupSession,
 	createSetupSessionWithAdmissionGuard,
 	createWithAdmissionGuard,
@@ -77,4 +78,5 @@ export {
 	upsertSessionCapability,
 	listSessionCapabilities,
 	type SessionCapabilityRow,
+	updateSessionMessageDeliveryState,
 } from "./db";
