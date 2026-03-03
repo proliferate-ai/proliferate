@@ -19,6 +19,7 @@ export function createEagerStartRouter(hubManager: HubManager): RouterType {
 	const router: RouterType = Router({ mergeParams: true });
 
 	router.post("/eager-start", async (req, res, next) => {
+		console.log("creating eager start!");
 		try {
 			const auth = req.auth;
 			if (!auth || auth.source !== "service") {

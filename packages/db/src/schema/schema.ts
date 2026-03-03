@@ -1264,47 +1264,6 @@ export const userSshKeys = pgTable(
 	],
 );
 
-export const cliDeviceCodes = pgTable(
-	"cli_device_codes",
-	{
-		id: uuid().defaultRandom().primaryKey().notNull(),
-		userCode: text("user_code").notNull(),
-		deviceCode: text("device_code").notNull(),
-		userId: text("user_id"),
-		orgId: text("org_id"),
-		status: text().default("pending").notNull(),
-		expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
-		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
-		authorizedAt: timestamp("authorized_at", { withTimezone: true, mode: "date" }),
-	},
-	(table) => [
-		index("idx_cli_device_codes_device_code").using(
-			"btree",
-			table.deviceCode.asc().nullsLast().op("text_ops"),
-		),
-		index("idx_cli_device_codes_expires").using(
-			"btree",
-			table.expiresAt.asc().nullsLast().op("timestamptz_ops"),
-		),
-		index("idx_cli_device_codes_user_code").using(
-			"btree",
-			table.userCode.asc().nullsLast().op("text_ops"),
-		),
-		foreignKey({
-			columns: [table.userId],
-			foreignColumns: [user.id],
-			name: "cli_device_codes_user_id_fkey",
-		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.orgId],
-			foreignColumns: [organization.id],
-			name: "cli_device_codes_org_id_fkey",
-		}).onDelete("cascade"),
-		unique("cli_device_codes_user_code_key").on(table.userCode),
-		unique("cli_device_codes_device_code_key").on(table.deviceCode),
-	],
-);
-
 export const apikey = pgTable(
 	"apikey",
 	{
@@ -1757,37 +1716,6 @@ export const configurationRepos = pgTable(
 		primaryKey({
 			columns: [table.configurationId, table.repoId],
 			name: "configuration_repos_pkey",
-		}),
-	],
-);
-
-export const cliGithubSelections = pgTable(
-	"cli_github_selections",
-	{
-		userId: text("user_id").notNull(),
-		organizationId: text("organization_id").notNull(),
-		connectionId: text("connection_id").notNull(),
-		expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
-		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
-	},
-	(table) => [
-		index("idx_cli_github_selections_expires_at").using(
-			"btree",
-			table.expiresAt.asc().nullsLast().op("timestamptz_ops"),
-		),
-		foreignKey({
-			columns: [table.userId],
-			foreignColumns: [user.id],
-			name: "cli_github_selections_user_id_fkey",
-		}).onDelete("cascade"),
-		foreignKey({
-			columns: [table.organizationId],
-			foreignColumns: [organization.id],
-			name: "cli_github_selections_organization_id_fkey",
-		}).onDelete("cascade"),
-		primaryKey({
-			columns: [table.userId, table.organizationId],
-			name: "cli_github_selections_pkey",
 		}),
 	],
 );

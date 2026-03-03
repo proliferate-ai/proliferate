@@ -1,8 +1,4 @@
-import { initContract } from "@ts-rest/core";
 import { z } from "zod";
-import { ErrorResponseSchema } from "./common";
-
-const c = initContract();
 
 // ============================================
 // Schemas
@@ -42,37 +38,3 @@ export const TextContentResponseSchema = z.object({
 export const FileListResponseSchema = z.object({
 	files: z.array(VerificationFileSchema),
 });
-
-// ============================================
-// Contract
-// ============================================
-
-export const verificationContract = c.router(
-	{
-		getMedia: {
-			method: "GET",
-			path: "/verification-media",
-			query: VerificationMediaQuerySchema,
-			responses: {
-				// Note: actual response varies based on query params
-				// - key only -> { url }
-				// - key + content=true -> { content, contentType }
-				// - key + stream=true -> binary (not representable in JSON schema)
-				// - prefix -> { files }
-				200: z.union([
-					PresignedUrlResponseSchema,
-					TextContentResponseSchema,
-					FileListResponseSchema,
-				]),
-				400: ErrorResponseSchema,
-				401: ErrorResponseSchema,
-				404: ErrorResponseSchema,
-				500: ErrorResponseSchema,
-			},
-			summary: "Get verification media (presigned URL, content, or file list)",
-		},
-	},
-	{
-		pathPrefix: "/api",
-	},
-);

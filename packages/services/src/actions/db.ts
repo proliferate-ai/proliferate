@@ -123,32 +123,6 @@ export async function getInvocationById(id: string): Promise<ActionInvocationRow
 	return row;
 }
 
-export async function updateInvocationStatus(
-	id: string,
-	status: ActionInvocationStatus,
-	data?: {
-		result?: unknown;
-		error?: string;
-		approvedBy?: string;
-		approvedAt?: Date;
-		completedAt?: Date;
-		durationMs?: number;
-		deniedReason?: string;
-		expiresAt?: Date | null;
-	},
-): Promise<ActionInvocationRow | undefined> {
-	const db = getDb();
-	const [row] = await db
-		.update(actionInvocations)
-		.set({
-			status,
-			...data,
-		})
-		.where(eq(actionInvocations.id, id))
-		.returning();
-	return row;
-}
-
 export async function transitionInvocationStatus(input: {
 	id: string;
 	fromStatuses: ActionInvocationStatus[];
@@ -209,16 +183,6 @@ export async function listExpirablePendingInvocations(now: Date): Promise<Action
 		.select()
 		.from(actionInvocations)
 		.where(and(eq(actionInvocations.status, "pending"), lte(actionInvocations.expiresAt, now)));
-}
-
-export async function expirePendingInvocations(now: Date): Promise<number> {
-	const db = getDb();
-	const rows = await db
-		.update(actionInvocations)
-		.set({ status: "expired", completedAt: now })
-		.where(and(eq(actionInvocations.status, "pending"), lte(actionInvocations.expiresAt, now)))
-		.returning({ id: actionInvocations.id });
-	return rows.length;
 }
 
 export async function getSessionApprovalContext(

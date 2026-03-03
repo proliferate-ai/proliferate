@@ -8,7 +8,6 @@ export {
 	listConnectorToolsOrThrow,
 	listConnectorToolsRaw,
 	callConnectorTool,
-	computeDriftStatus,
 	type McpRawTool,
 } from "./client";
 export { deriveRiskLevel, type McpToolAnnotations } from "./risk";

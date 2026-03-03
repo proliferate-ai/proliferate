@@ -1,335 +1,379 @@
-# Gateway Specification
+# Gateway Specification (Current)
 
-Real-time bridge between Proliferate clients and OpenCode sandboxes.
+Real-time runtime orchestration service for Proliferate sessions.  
+Gateway owns session runtime readiness, WebSocket delivery, proxy surfaces, tool callbacks, and expiry/orphan safety.
 
-## Architecture
+## 1) Architecture
 
 ```
-Client ──WebSocket──► Gateway ◄──SSE── Modal Sandbox (OpenCode)
-                         │
-                         ▼
-                     PostgreSQL (session metadata via Drizzle ORM)
+Client (web/worker/cli)
+   ├─ WS /proliferate/:sessionId
+   ├─ HTTP /proliferate/*
+   └─ HTTP/WS /proxy/*
+            │
+            ▼
+         Gateway
+   ├─ SessionHub (per-session coordinator)
+   ├─ SessionRuntime (sandbox + harness lifecycle)
+   ├─ MigrationController (expiry/idle snapshot logic)
+   ├─ BullMQ expiry worker
+   └─ Orphan sweeper
+            │
+            ├─ PostgreSQL via @proliferate/services (session metadata, actions, telemetry)
+            ├─ Redis (leases, locks, expiry queue)
+            └─ Sandbox provider (Modal/E2B) + OpenCode/manager harness
 ```
 
-## Request Flow
+## 2) Boot Sequence
 
-1. Client opens WebSocket to `/proliferate/:sessionId`
-2. Gateway ensures runtime ready (sandbox + OpenCode session + SSE)
-3. Client sends prompts via WebSocket
-4. Gateway forwards to OpenCode, streams events back to all clients
+Gateway startup (`src/index.ts`) does the following:
 
-## Routes
+1. Loads env and validates required settings.
+2. Connects Redis and initializes shared migration-lock client.
+3. Creates server (`src/server.ts`):
+	- Express middleware (`cors`, request logger, JSON body parser)
+	- HTTP routes
+	- WebSocket multiplexer
+	- BullMQ expiry worker
+	- Orphan sweeper (15m interval)
+4. Registers graceful shutdown:
+	- Flushes per-hub telemetry
+	- Releases owner/runtime leases
+	- Closes server
 
-### HTTP Endpoints
+## 3) Runtime Models
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Health check |
-| POST | `/proliferate/sessions` | Create new session (unified API) |
-| GET | `/proliferate/:id` | Session info |
-| GET | `/proliferate/:id/verification-media` | S3 verification files |
-| POST | `/proliferate/:id/message` | Send prompt |
-| POST | `/proliferate/:id/cancel` | Cancel current prompt |
-| ALL | `/proxy/:id/:token/opencode/*` | Proxy to OpenCode HTTP |
+Gateway supports two runtime families:
+
+- **Coding sessions (`kind != "manager"`)**
+	- Ensure sandbox
+	- Ensure OpenCode session
+	- Stream daemon events
+- **Manager sessions (`kind === "manager"`)**
+	- Ensure sandbox
+	- Start/resume Claude manager harness
+	- No OpenCode SSE session lifecycle
+
+`SessionRuntime.ensureRuntimeReady()` is single-flight and idempotent per hub instance.
+
+## 4) Auth Model
+
+Unified auth middleware supports:
+
+- **User JWT** (`source: "jwt"`)
+- **CLI API key** (`source: "cli"`, verified against web internal endpoint)
+- **Service JWT** (`source: "service"`)
+- **Sandbox HMAC token** (`source: "sandbox"`, derived from `serviceToken + sessionId`)
+
+Rules:
+
+- `/proliferate/*` uses bearer token middleware.
+- `/proxy/*` uses path token middleware (`/:sessionId/:token/...`).
+- Tool callback routes require `source === "sandbox"`.
+- Session mutations derive identity from auth context; client-supplied `userId` is never trusted for user-auth flows.
+
+## 5) Public Routes
+
+### Core HTTP
+
+- `GET /health`
+- `POST /proliferate/sessions`
+- `GET /proliferate/sessions/:sessionId/status`
+- `GET /proliferate/:sessionId/verification-media`
+- `POST /proliferate/:sessionId/heartbeat`
+- `POST /proliferate/:sessionId/eager-start` (service auth only)
+- `GET /proliferate/:sessionId`
+- `POST /proliferate/:sessionId/message`
+- `POST /proliferate/:sessionId/cancel`
+- `POST /proliferate/:sessionId/tools/:toolName`
+
+### Actions Plane (under `/proliferate/:sessionId/actions`)
+
+- `GET /available`
+- `GET /guide/:integration`
+- `POST /invoke`
+- `GET /invocations/:invocationId`
+- `POST /invocations/:invocationId/approve`
+- `POST /invocations/:invocationId/deny`
+- `GET /invocations`
+
+### Source Read Plane (under `/proliferate/:sessionId/source`)
+
+- `GET /bindings`
+- `GET /query`
+- `GET /get`
+
+### Proxy HTTP
+
+- `ALL /proxy/:sessionId/:token/opencode/*`
+- `ALL /proxy/:sessionId/:token/devtools/mcp/*`
+- `ALL /proxy/:sessionId/:token/devtools/vscode/*`
+- `GET /proxy/:sessionId/:token/health-check?url=...`
+
+### Daemon Proxy HTTP (mounted under `/proliferate`)
+
+- `GET /proliferate/v1/sessions/:sessionId/fs/tree`
+- `GET /proliferate/v1/sessions/:sessionId/fs/read`
+- `POST /proliferate/v1/sessions/:sessionId/fs/write`
+- `GET /proliferate/v1/sessions/:sessionId/pty/replay`
+- `POST /proliferate/v1/sessions/:sessionId/pty/write`
+- `GET /proliferate/v1/sessions/:sessionId/preview/ports`
+- `GET /proliferate/v1/sessions/:sessionId/daemon/health`
 
 ### WebSocket
 
-| Path | Description |
-|------|-------------|
-| `/proliferate/:id` | Real-time client connection (upgrade) |
+- `WS /proliferate/:sessionId` (primary session protocol)
+- `WS /proxy/:sessionId/:token/devtools/terminal`
+- `WS /proxy/:sessionId/:token/devtools/vscode/*`
 
-## Middleware Stack
+WebSocket upgrades are routed by `WsMultiplexer`.
 
-```
-cors → json → auth → ensureSessionReady → route handler → errorHandler
-```
+## 6) Hub and Runtime Responsibilities
 
-- **cors**: CORS headers + OPTIONS preflight
-- **auth**: JWT or CLI token verification
-- **ensureSessionReady**: Loads hub, ensures runtime ready (sandbox + OpenCode session + SSE)
+### HubManager (`src/hub/hub-manager.ts`)
 
-## Key Components
+- In-memory registry for `SessionHub` by session ID
+- Coalesces concurrent `getOrCreate` calls
+- Loads fresh DB-backed session context before first hub creation
+- Best-effort telemetry flush and lifecycle cleanup on shutdown
 
-### SessionHub
+### SessionHub (`src/hub/session-hub.ts`)
 
-Core orchestrator per session. Responsibilities:
+- Manages connected WS clients
+- Owns reconnect policy (runtime does not self-reconnect)
+- Delegates runtime readiness to `SessionRuntime`
+- Handles WS protocol (`prompt`, `cancel`, `get_status`, `get_messages`, git ops, snapshot)
+- Tracks proxy connections + active HTTP tool calls for idle heuristics
+- Publishes session events and lifecycle projections
 
-- Client WebSocket connection management
-- Delegates runtime lifecycle to SessionRuntime
-- Message routing between clients and sandbox
-- Intercepted tool execution
+### SessionRuntime (`src/hub/session-runtime.ts`)
 
-### SessionRuntime
+`ensureRuntimeReady()` pipeline:
 
-Owns sandbox lifecycle, OpenCode session lifecycle, and SSE connection.
+1. Wait for migration lock release (unless explicitly skipped by controlled migration path)
+2. Reload session context from DB
+3. Enforce billing gate for resume/cold start
+4. Ensure sandbox via provider abstraction
+5. Persist sandbox metadata (`sandboxId`, URLs, expiry)
+6. Schedule expiry job (`expiresAt - 5m`)
+7. Start manager harness **or** ensure OpenCode session + daemon stream
+8. Broadcast runtime status
 
-- Single entry point: `ensureRuntimeReady()` (sandbox + OpenCode session + SSE)
-- Reloads session context fresh before lifecycle operations
-- Exposes current runtime state (openCodeUrl, sessionId, expiresAt)
+## 7) Session Creation Flow
 
-### MigrationController
+`POST /proliferate/sessions`:
 
-Schedules snapshot-before-expiry and executes migration/termination.
+- Requires exactly one configuration mode:
+	- `configurationId`
+	- `managedConfiguration`
+	- `cliConfiguration`
+- Applies billing gate (`session_start` / `automation_trigger`)
+- Uses Redis-backed idempotency envelope (`Idempotency-Key`)
+- Calls `createSession(...)` for DB row plus optional immediate sandbox boot
+- Returns gateway URL + status + sandbox metadata (if immediate mode)
 
-- Runs when runtime is ready
-- Enforces the "snapshot at expiresAt - 5 minutes" rule
-- Uses a distributed lock to prevent concurrent migrations
+If a managed configuration is newly created, gateway also starts a setup session and posts an initial setup prompt via HubManager.
 
-### EventProcessor
+## 8) WebSocket Protocol (Primary)
 
-Transforms OpenCode SSE events into client messages:
+### Client -> Gateway
 
-- Filters events to current session
-- Tracks tool execution state
-- Detects and delegates intercepted tools
-- Emits message, token, tool_start, tool_end, etc.
+- `ping`
+- `prompt`
+- `cancel`
+- `get_status`
+- `get_messages`
+- `save_snapshot`
+- `run_auto_start`
+- `get_git_status`
+- `git_create_branch`
+- `git_commit`
+- `git_push`
+- `git_create_pr`
 
-### SseClient
+### Gateway -> Client
 
-Transport-only SSE client:
+- `init`
+- `control_plane_snapshot`
+- `status`
+- `message`
+- `token`
+- `text_part_complete`
+- `tool_start`
+- `tool_metadata`
+- `tool_end`
+- `message_complete`
+- `message_cancelled`
+- `error`
+- `preview_url`
+- `snapshot_result`
+- `git_status`
+- `git_result`
+- `auto_start_output`
+- `pong`
 
-- Connects and reads SSE stream
-- Parses SSE protocol
-- Reports disconnects to SessionRuntime/SessionHub
-- Reconnection is owned by SessionHub
+Automation sessions with terminal outcomes have a no-resume fallback transcript path to avoid unnecessary runtime resurrection.
 
-### HubManager
+## 9) Event Processing
 
-Factory and cache for SessionHub instances:
+`EventProcessor` transforms daemon events to client protocol:
 
-- Creates hubs on demand from session store
-- Caches active hubs by session ID
-- Coalesces concurrent `getOrCreate()` calls per session ID
-- Provides `getDb()` for routes needing DB access (Drizzle ORM)
+- Filters out events from stale OpenCode session IDs
+- Emits assistant message creation lazily
+- Streams token deltas (`token`) and completed text parts (`text_part_complete`)
+- Emits tool lifecycle events from part updates (`tool_start`, `tool_metadata`, `tool_end`)
+- Completes messages on `session.idle` / idle status when no tools are running
+- Emits heartbeat status updates for long-running tools with no metadata progress
+- Suppresses expected abort-like errors to reduce noisy user-facing failures
 
-### PrebuildResolver
+## 10) Intercepted Tools via HTTP Callbacks
 
-Handles prebuild resolution for session creation:
+Sandbox invokes:
 
-- Direct lookup by `prebuildId`
-- Managed prebuild find/create (all org repos)
-- CLI device-scoped prebuild find/create
+- `POST /proliferate/:sessionId/tools/:toolName`
 
-### SessionCreator
+Behavior:
 
-Creates session records and optionally sandboxes:
+- Sandbox-auth only
+- In-memory idempotency by `sessionId + toolName + tool_call_id`
+	- dedupes in-flight retries
+	- caches completed results for 5 minutes
+- Tracks active tool call count on hub to block false idle snapshots
+- Dispatches to handlers in `src/hub/capabilities/tools/*`
 
-- Inserts session record with proper fields
-- Handles `immediate` vs `deferred` sandbox modes
-- Loads environment variables and secrets
-- Resolves GitHub tokens for repos
+## 11) Leases, Locks, and Split-Brain Safety
 
-## Types
+### Redis Leases
 
-Express Request is augmented with:
+- Owner lease: `lease:owner:{sessionId}` (TTL 30s)
+- Runtime lease: `lease:runtime:{sessionId}` (TTL 20s)
 
-```typescript
-interface Request {
-  auth?: AuthResult;        // From auth middleware
-  hub?: SessionHub;         // From ensureSessionReady
-  proliferateSessionId?: string;
-}
-```
+Hub acquires owner lease before runtime work and renews both leases periodically.  
+If renewal lag exceeds owner TTL or ownership is lost, hub self-terminates to avoid split-brain behavior.
 
-OpenCode events use discriminated unions for type narrowing:
+### Migration Lock
 
-```typescript
-type OpenCodeEvent =
-  | { type: "server.connected"; properties: Record<string, unknown> }
-  | { type: "message.part.updated"; properties: PartUpdateProperties }
-  | { type: "session.idle"; properties: SessionStatusProperties }
-  | { type: "session.error"; properties: SessionErrorProperties }
-  // ...
-```
+- Shared lock key via services lock module (`lock:session:{sessionId}:migration`)
+- Readiness waits for lock release by default
+- Migration/idle/orphan cleanup paths use lock + CAS (`updateWhereSandboxIdMatches`) fencing
 
-## Session Creation API
+## 12) Expiry, Idle Snapshot, and Orphan Recovery
 
-`POST /proliferate/sessions` is the unified endpoint for creating sessions across all client types.
+### Expiry Scheduling
 
-### Request
+- BullMQ delayed job `session-expiry`
+- Delay = `expiresAt - now - GRACE_MS` (`GRACE_MS = 5m`)
+- Rescheduled on runtime re-ensure
 
-```typescript
-interface CreateSessionRequest {
-  organizationId: string;
+### Expiry Execution
 
-  // Prebuild resolution (exactly one required)
-  prebuildId?: string;                    // Direct prebuild lookup
-  managedPrebuild?: { repoIds?: string[] }; // Auto-find/create managed prebuild
-  cliPrebuild?: { localPathHash: string; displayName?: string }; // CLI device-scoped
+- If effective clients exist: active migration path (snapshot + reinit to new sandbox)
+- If no clients: idle pause/snapshot path (pause when supported; otherwise snapshot + terminate)
 
-  // Session config
-  sessionType: "coding" | "setup" | "cli";
-  clientType: "web" | "slack" | "cli" | "automation";
-  clientMetadata?: Record<string, unknown>;
+### Idle Snapshot Trigger
 
-  // Options
-  sandboxMode?: "immediate" | "deferred"; // Default: "deferred"
-  snapshotId?: string;
-  initialPrompt?: string;
-  title?: string;
-  agentConfig?: { modelId?: string };
+Idle snapshot runs only if all are true:
 
-  // SSH access (can be enabled on any session type)
-  sshOptions?: {
-    publicKeys: string[];
-    cloneInstructions?: CloneInstructions;
-    localPath?: string;
-    gitToken?: string;
-    envVars?: Record<string, string>;
-  };
-}
-```
+- non-automation session
+- non-manager session
+- no WS clients
+- no proxy connections
+- no active HTTP tool calls
+- no running tool states
+- sandbox exists
+- idle grace elapsed
+- agent considered idle (or runtime disconnected in allowed state)
 
-### Response
+### Orphan Sweeper
 
-```typescript
-interface CreateSessionResponse {
-  sessionId: string;
-  prebuildId: string;
-  status: "pending" | "starting" | "running";
-  gatewayUrl: string;
-  hasSnapshot: boolean;
-  isNewPrebuild: boolean;
-  sandbox?: {
-    sandboxId: string;
-    previewUrl: string | null;
-    sshHost?: string;
-    sshPort?: number;
-  };
-}
-```
+- Every 15 minutes, scans DB sessions with status `running`
+- If runtime lease missing:
+	- delegates to local hub idle snapshot when available, or
+	- performs lock-protected direct cleanup (snapshot/pause/terminate + CAS pause update)
 
-### Prebuild Resolution
+## 13) Control Plane Snapshot
 
-The endpoint handles three prebuild resolution strategies:
+Every init payload includes `control_plane_snapshot` with:
 
-1. **Direct (`prebuildId`)**: Looks up existing prebuild by ID
-2. **Managed (`managedPrebuild`)**: Finds or creates org-wide managed prebuild with all repos
-3. **CLI (`cliPrebuild`)**: Finds or creates device-scoped prebuild for local directory
+- `runtimeStatus`
+- `operatorStatus`
+- `capabilitiesVersion`
+- `visibility`
+- `workerId` / `workerRunId`
+- `sandboxAvailable`
+- `reconnectSequence`
+- `emittedAt`
 
-### Sandbox Modes
+This keeps UI state aligned with latest DB control-plane values, even after reconnects.
 
-- **`deferred`** (default): Creates session record only; sandbox starts on first WebSocket connect
-- **`immediate`**: Creates sandbox immediately and returns sandbox info in response
+## 14) Key Environment Knobs
 
-Sessions with `sshOptions` always use `immediate` mode (SSH connection info must be returned).
+- `REDIS_URL` (required: leases, locks, expiry queue)
+- `GATEWAY_PORT`
+- `NEXT_PUBLIC_GATEWAY_URL`
+- `NEXT_PUBLIC_API_URL`
+- `SERVICE_TO_SERVICE_AUTH_TOKEN`
+- `GATEWAY_JWT_SECRET`
+- `IDLE_SNAPSHOT_DELAY_SECONDS`
+- `LLM_PROXY_REQUIRED`, `LLM_PROXY_URL`
+- `ANTHROPIC_API_KEY`
 
-### Setup Sessions
+Static runtime constants:
 
-When a new managed prebuild is created, the gateway automatically:
-1. Creates a setup session with type `"setup"`
-2. Uses HubManager to post an initial prompt that kicks off workspace setup
+- SSE read timeout: 60s
+- Heartbeat timeout: 45s
+- Reconnect delays: `[1s, 2s, 5s, 10s, 30s]`
 
-## Intercepted Tools
-
-Tools that the gateway executes server-side instead of the sandbox:
-
-- **save_snapshot**: Creates Modal snapshot, returns snapshot ID
-- **verify**: Uploads verification files to S3
-
-Registered at module load in `hub/capabilities/tools/index.ts`.
-
-## File Structure
+## 15) Source Files (Current Map)
 
 ```
 src/
 ├── api/
-│   ├── health.ts                    # Health endpoint
-│   ├── index.ts                     # Route mounting
+│   ├── health.ts
+│   ├── index.ts
+│   ├── ws-multiplexer.ts
 │   ├── proliferate/
-│   │   ├── http/                    # HTTP routes
-│   │   │   ├── cancel.ts
-│   │   │   ├── info.ts
-│   │   │   ├── message.ts
-│   │   │   ├── sessions.ts          # Unified session creation
-│   │   │   └── verification-media.ts
-│   │   └── ws/                      # WebSocket handler
+│   │   ├── ws/
+│   │   └── http/
+│   │       ├── sessions.ts
+│   │       ├── message.ts
+│   │       ├── cancel.ts
+│   │       ├── info.ts
+│   │       ├── heartbeat.ts
+│   │       ├── eager-start.ts
+│   │       ├── verification-media.ts
+│   │       ├── tools.ts
+│   │       ├── actions.ts
+│   │       └── source.ts
 │   └── proxy/
-│       └── opencode.ts              # OpenCode HTTP proxy
+│       ├── opencode.ts
+│       ├── daemon.ts
+│       ├── devtools.ts
+│       ├── terminal.ts
+│       ├── vscode.ts
+│       └── preview-health.ts
 ├── hub/
-│   ├── session-hub.ts               # Core hub class
-│   ├── hub-manager.ts               # Hub factory/cache
-│   ├── session-runtime.ts           # Runtime lifecycle (sandbox + OpenCode + SSE)
-│   ├── migration-controller.ts      # Snapshot/migration scheduling
-│   ├── event-processor.ts           # Event transformation
-│   ├── sse-client.ts                # SSE connection
-│   ├── types.ts                     # Hub-specific types
-│   └── capabilities/
-│       └── tools/                   # Intercepted tools
-├── middleware/
-│   ├── auth.ts                      # Token verification
-│   ├── cors.ts                      # CORS handling
-│   ├── error-handler.ts             # Error formatting
-│   └── lifecycle.ts                 # Session loading
-├── lib/
-│   ├── env.ts                       # Environment config
-│   ├── opencode.ts                  # OpenCode API client
-│   ├── prebuild-resolver.ts         # Prebuild resolution strategies
-│   ├── redis.ts                     # Redis pub/sub
-│   ├── s3.ts                        # S3 operations
-│   ├── session-creator.ts           # Session creation logic
-│   └── session-store.ts             # Session persistence
-├── server.ts                        # Express app setup
-├── types.ts                         # Shared types + Express augmentation
-└── index.ts                         # Entry point
+│   ├── hub-manager.ts
+│   ├── session-hub.ts
+│   ├── session-runtime.ts
+│   ├── migration-controller.ts
+│   ├── event-processor.ts
+│   ├── control-plane.ts
+│   ├── session-telemetry.ts
+│   ├── session-lifecycle.ts
+│   └── capabilities/tools/*
+├── expiry/expiry-queue.ts
+├── sweeper/orphan-sweeper.ts
+├── middleware/{auth,cors,lifecycle,error-handler}.ts
+├── lib/{env,session-store,session-creator,session-leases,lock,...}
+├── server.ts
+├── types.ts
+└── index.ts
 ```
 
-## Design Principles
+## 16) Known Limitations
 
-1. **No type casts**: Express module augmentation provides typed `req.auth`, `req.hub`
-2. **All routes require auth**: Applied at router level, not per-route
-3. **All routes require runtime ready**: Use `ensureSessionReady` middleware
-4. **Discriminated unions**: OpenCode events narrow on `type` field
-5. **One middleware, one job**: CORS, auth, lifecycle are separate
-6. **Fire-and-forget where appropriate**: `postCancel()` doesn't await response
-
-## Runtime Readiness
-
-`ensureRuntimeReady()` is the single readiness gate:
-
-- Loads session context fresh
-- Ensures sandbox exists (create or recover)
-- Ensures OpenCode session exists
-- Connects SSE
-
-It is idempotent and serializes concurrent calls.
-
-## Migration & Expiry
-
-### Rule
-
-**Snapshot at `expiresAt - 5 minutes` unless provider auto-pauses idle sandboxes.**
-
-- If clients exist → migrate (create new sandbox from the snapshot)
-- If no clients:
-  - Pause-capable provider → call `pause()` and skip terminate
-  - Otherwise → terminate sandbox after `snapshot()`
-
-For auto-pause providers, `snapshot_id` is set to `sandbox_id` on creation
-so paused sandboxes can be resumed later.
-
-### Scheduling
-
-Scheduling is durable via BullMQ delayed jobs:
-
-- When a sandbox is created/recovered, gateway enqueues a delayed job
-  for `expiresAt - 5 minutes`.
-- `jobId = session_expiry:{sessionId}` to dedupe.
-- If `expiresAt` changes, the job is rescheduled.
-
-Redis is required for expiry scheduling and locking; gateway startup requires `REDIS_URL`.
-
-### Migration Lock
-
-Migration uses a distributed lock (Redlock on Redis):
-
-- Lock key: `lock:session:{sessionId}:migration`
-- Lock is auto-extended while migration runs
-- If lock is held, other gateways must not migrate
-
-### Ready Gate During Migration
-
-While migration is in progress:
-
-- `ensureRuntimeReady()` waits for the migration lock (no timeout)
-- No new sandbox can be created until the snapshot is committed
+- Tool callback idempotency cache is process-local (not shared across pods).
+- Connector/action invoke rate limiting is process-local (in-memory).
+- Hub registry has no hard LRU cap; cleanup depends on lifecycle eviction paths.
+- Some proxy and daemon routes assume preview ingress stability; upstream topology changes require route rewrite updates.

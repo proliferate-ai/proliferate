@@ -1,44 +1,11 @@
 /**
  * Trigger Provider Exports
- *
- * Import this module to get access to all trigger providers.
  */
 
-// Types
-export type {
-	TriggerProvider,
-	PollState,
-	OAuthConnection,
-	PollResult,
-	ParsedEventContext,
-	SentryParsedContext,
-	LinearParsedContext,
-	GitHubParsedContext,
-	GmailParsedContext,
-	PostHogParsedContext,
-	LinearTriggerConfig,
-	SentryTriggerConfig,
-	GitHubTriggerConfig,
-	GmailTriggerConfig,
-	PostHogTriggerConfig,
-	ProviderConfig,
-	LinearIssue,
-	LinearWebhookPayloadInternal,
-	SentryIssue,
-	SentryEvent,
-	SentryWebhookPayloadInternal,
-	SentryItem,
-	GitHubItem,
-	GitHubWebhookPayload,
-	PostHogWebhookPayload,
-	PostHogItem,
-	TriggerProviderType,
-} from "./types";
+// Public contract types
+export type { TriggerProvider, TriggerProviderType, ParsedEventContext } from "./types";
 
-// Registry functions
-export { getProvider, registerProvider, getProviderRegistry } from "./types";
-
-// Provider implementations (importing registers them)
+// Provider implementations
 export { LinearProvider, filterLinearByAction } from "./linear";
 export { SentryProvider } from "./sentry";
 export { GitHubProvider } from "./github";
@@ -47,16 +14,13 @@ export { PostHogProvider } from "./posthog";
 // Trigger-service definitions and adapters
 export * from "./service";
 
+// Provider map and factory
 import { GitHubProvider } from "./github";
-// Re-export for convenience
 import { LinearProvider } from "./linear";
 import { PostHogProvider } from "./posthog";
 import { SentryProvider } from "./sentry";
 import type { TriggerProvider, TriggerProviderType } from "./types";
 
-/**
- * Map of provider type to implementation
- */
 export const providers: Record<
 	"linear" | "sentry" | "github" | "posthog",
 	TriggerProvider<unknown, unknown, unknown>
@@ -67,9 +31,6 @@ export const providers: Record<
 	posthog: PostHogProvider,
 };
 
-/**
- * Get provider by type with type safety
- */
 export function getProviderByType(
 	type: TriggerProviderType,
 ): TriggerProvider<unknown, unknown, unknown> | null {

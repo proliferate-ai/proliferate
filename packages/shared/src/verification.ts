@@ -9,12 +9,5 @@ export interface VerificationResult {
 	key: string; // S3 prefix where files were uploaded (e.g., "sessions/{sessionId}/verification/{timestamp}")
 }
 
-// File metadata returned when listing verification files from S3
-export interface VerificationFile {
-	key: string; // Full S3 object key
-	name: string; // Filename only
-	path: string; // Relative path from the prefix (e.g., "screenshots/home.png")
-	contentType: string; // MIME type from S3 metadata or inferred from extension
-	size: number; // File size in bytes
-	lastModified: string; // ISO timestamp
-}
+// VerificationFile type is defined in contracts/verification.ts; re-exported here for the named package sub-path
+export type { VerificationFile } from "./contracts/verification";

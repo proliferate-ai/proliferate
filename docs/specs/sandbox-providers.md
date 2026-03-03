@@ -156,7 +156,6 @@ References: `packages/shared/src/sandbox-provider.ts`, `packages/shared/src/prov
 - Memory restore must not return control before OpenCode readiness succeeds.
 - `pause()` must always fail with explicit unsupported error.
 
-References: `packages/shared/src/providers/modal-libmodal.ts`, `packages/modal-sandbox/deploy.py`.
 
 ### 6.4 E2B Provider Invariants — `Implemented`
 - E2B declares `supportsPause=true`, `supportsAutoPause=true`.

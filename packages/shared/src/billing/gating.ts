@@ -267,8 +267,6 @@ function getOperationDescription(operation: GatedOperation): string {
 			return "start a session";
 		case "session_resume":
 			return "resume the session";
-		case "cli_connect":
-			return "connect via CLI";
 		case "automation_trigger":
 			return "run this automation";
 	}

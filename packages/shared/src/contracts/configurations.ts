@@ -1,8 +1,4 @@
-import { initContract } from "@ts-rest/core";
 import { z } from "zod";
-import { ErrorResponseSchema } from "./common";
-
-const c = initContract();
 
 // ============================================
 // Schemas
@@ -60,78 +56,3 @@ export const UpdateConfigurationInputSchema = z.object({
 	notes: z.string().optional(),
 	routingDescription: z.string().nullable().optional(),
 });
-
-// ============================================
-// Contract
-// ============================================
-
-export const configurationsContract = c.router(
-	{
-		list: {
-			method: "GET",
-			path: "/configurations",
-			query: z.object({
-				status: z.string().optional(),
-			}),
-			responses: {
-				200: z.object({ configurations: z.array(ConfigurationSchema) }),
-				401: ErrorResponseSchema,
-				500: ErrorResponseSchema,
-			},
-			summary: "List configurations for the current organization",
-		},
-
-		create: {
-			method: "POST",
-			path: "/configurations",
-			body: CreateConfigurationInputSchema,
-			responses: {
-				200: z.object({
-					configurationId: z.string().uuid(),
-					repos: z.number(),
-				}),
-				400: ErrorResponseSchema,
-				401: ErrorResponseSchema,
-				403: ErrorResponseSchema,
-				404: ErrorResponseSchema,
-				500: ErrorResponseSchema,
-			},
-			summary: "Create a new configuration with multiple repos",
-		},
-
-		update: {
-			method: "PATCH",
-			path: "/configurations/:id",
-			pathParams: z.object({
-				id: z.string().uuid(),
-			}),
-			body: UpdateConfigurationInputSchema,
-			responses: {
-				200: z.object({ configuration: ConfigurationSchema }),
-				400: ErrorResponseSchema,
-				401: ErrorResponseSchema,
-				404: ErrorResponseSchema,
-				500: ErrorResponseSchema,
-			},
-			summary: "Update a configuration (name, notes)",
-		},
-
-		delete: {
-			method: "DELETE",
-			path: "/configurations/:id",
-			pathParams: z.object({
-				id: z.string().uuid(),
-			}),
-			body: c.noBody(),
-			responses: {
-				200: z.object({ success: z.boolean() }),
-				401: ErrorResponseSchema,
-				500: ErrorResponseSchema,
-			},
-			summary: "Delete a configuration",
-		},
-	},
-	{
-		pathPrefix: "/api",
-	},
-);

@@ -6,17 +6,11 @@ import {
 	WorkerActivityTab,
 	type WorkerRunWithEvents,
 } from "@/components/automations/worker-activity-tab";
+import { WorkerOrb } from "@/components/automations/worker-card";
 import { WorkerFailureBanner } from "@/components/automations/worker-failure-banner";
 import { WorkerSessionsTab } from "@/components/automations/worker-sessions-tab";
 import { WorkerSettingsTab } from "@/components/automations/worker-settings-tab";
 import { Button } from "@/components/ui/button";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { PageBackLink } from "@/components/ui/page-back-link";
 import { StatusDot } from "@/components/ui/status-dot";
 import { useAutomation } from "@/hooks/use-automations";
@@ -33,7 +27,7 @@ import {
 	useWorkerSessions,
 } from "@/hooks/use-workers";
 import { cn } from "@/lib/utils";
-import { ExternalLink, Loader2, MoreVertical, Pause, Play, RotateCcw } from "lucide-react";
+import { ExternalLink, Loader2, Pause, Play } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useMemo, useState } from "react";
@@ -228,33 +222,27 @@ export default function CoworkerDetailPage({
 					<PageBackLink href="/coworkers" label="Coworkers" className="mb-3" />
 
 					{/* Header */}
-					<div className="flex items-center gap-3 mb-4">
-						<h1 className="text-lg font-semibold tracking-tight text-foreground truncate">
-							{worker.name}
-						</h1>
-
-						<div className="flex items-center gap-2 ml-2">
-							<StatusDot
-								status={
-									workerStatus === "active"
-										? "active"
-										: workerStatus === "paused"
-											? "paused"
-											: "error"
-								}
-								size="sm"
-							/>
-							<span className="text-sm capitalize text-muted-foreground">{workerStatus}</span>
+					<div className="flex items-center gap-4 mb-5">
+						<WorkerOrb name={worker.name} size={44} />
+						<div className="min-w-0 flex-1">
+							<div className="flex items-center gap-2">
+								<h1 className="text-base font-semibold text-foreground truncate">{worker.name}</h1>
+								<StatusDot
+									status={
+										workerStatus === "active"
+											? "active"
+											: workerStatus === "paused"
+												? "paused"
+												: "error"
+									}
+									size="sm"
+								/>
+							</div>
+							{worker.objective && (
+								<p className="text-xs text-muted-foreground mt-0.5 truncate">{worker.objective}</p>
+							)}
 						</div>
-
-						{worker.objective && (
-							<span className="text-xs text-muted-foreground truncate hidden md:block ml-2">
-								{worker.objective}
-							</span>
-						)}
-
-						<div className="flex items-center gap-1.5 ml-auto">
-							{/* Quick actions based on status */}
+						<div className="flex items-center gap-1.5 shrink-0">
 							{workerStatus === "active" && (
 								<>
 									<Button
@@ -295,33 +283,12 @@ export default function CoworkerDetailPage({
 									Resume
 								</Button>
 							)}
-
-							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<Button variant="ghost" size="icon" className="h-8 w-8">
-										<MoreVertical className="h-4 w-4" />
-									</Button>
-								</DropdownMenuTrigger>
-								<DropdownMenuContent align="end">
-									<DropdownMenuItem asChild>
-										<Link href={`/workspace/${worker.managerSessionId}`}>
-											<ExternalLink className="h-4 w-4 mr-2" />
-											Open manager session
-										</Link>
-									</DropdownMenuItem>
-									{workerStatus === "active" && (
-										<DropdownMenuItem onClick={handleRunNow} disabled={runNow.isPending}>
-											<Play className="h-4 w-4 mr-2" />
-											Run now
-										</DropdownMenuItem>
-									)}
-									<DropdownMenuSeparator />
-									<DropdownMenuItem onClick={handleDelete} className="text-destructive">
-										<RotateCcw className="h-4 w-4 mr-2" />
-										Delete
-									</DropdownMenuItem>
-								</DropdownMenuContent>
-							</DropdownMenu>
+							<Link
+								href={`/workspace/${worker.managerSessionId}`}
+								className="inline-flex items-center gap-1 h-7 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+							>
+								<ExternalLink className="h-3 w-3" />
+							</Link>
 						</div>
 					</div>
 
@@ -426,11 +393,6 @@ export default function CoworkerDetailPage({
 // ============================================
 
 function LegacyAutomationDetail({ id }: { id: string }) {
-	const router = useRouter();
-
-	// Redirect to the original detail page pattern
-	// For the legacy automation flow, we keep the existing page as-is
-	// by importing the components directly
 	const { data: automation, isLoading, error } = useAutomation(id);
 
 	if (isLoading) {

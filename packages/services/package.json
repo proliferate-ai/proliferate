@@ -10,7 +10,8 @@
 		"./db/client": "./src/db/client.ts",
 		"./logger": "./src/logger.ts",
 		"./lock": "./src/lib/lock.ts",
-		"./nango": "./src/lib/nango.ts"
+		"./nango": "./src/lib/nango.ts",
+		"./sessions": "./src/sessions/index.ts"
 	},
 	"scripts": {
 		"build": "tsc",

@@ -11,7 +11,7 @@
 
 import { randomUUID } from "crypto";
 import { type Logger, createLogger } from "@proliferate/logger";
-import { configurations, notifications, sessions } from "@proliferate/services";
+import { configurations, sessions } from "@proliferate/services";
 import type {
 	ClientMessage,
 	ClientSource,
@@ -44,7 +44,6 @@ import { EventProcessor } from "./event-processor";
 import { GitOperations } from "./git-operations";
 import { MigrationController } from "./migration-controller";
 import {
-	persistTerminalOutcome,
 	projectOperatorStatus,
 	recordLifecycleEvent,
 	touchLastVisibleUpdate,
@@ -681,7 +680,7 @@ export class SessionHub {
 
 	private getIdleGraceMs(): number {
 		const sessionType = this.runtime.getContext().session.client_type;
-		if (sessionType === "automation" || sessionType === "slack") {
+		if (sessionType === "slack") {
 			return 30_000;
 		}
 		return this.env.idleSnapshotGraceSeconds * 1000;
@@ -1054,81 +1053,6 @@ export class SessionHub {
 			.catch((err) => {
 				this.logError("Idle snapshot failed", err);
 			});
-	}
-
-	// ============================================
-	// Automation Fast-Path (terminal cleanup, no snapshot)
-	// ============================================
-
-	/**
-	 * Terminate the session immediately without snapshotting.
-	 * Used by automation.complete — automations are terminal.
-	 */
-	async terminateForAutomation(): Promise<void> {
-		this.log("Terminating session for automation fast-path");
-		const context = this.runtime.getContext();
-		const sandboxId = context.session.sandbox_id;
-
-		// Stop all monitoring
-		this.stopMigrationMonitor();
-
-		// Flush telemetry before stopping (best-effort)
-		try {
-			this.telemetry.stopRunning();
-			await this.flushTelemetry();
-		} catch (err) {
-			this.logError("Telemetry flush failed before automation terminate", err);
-		}
-
-		if (sandboxId) {
-			const providerType = context.session.sandbox_provider as SandboxProviderType;
-			const provider = getSandboxProvider(providerType);
-
-			try {
-				await provider.terminate(this.sessionId, sandboxId);
-				this.log("Sandbox terminated for automation");
-			} catch (err) {
-				this.logError("Failed to terminate sandbox for automation", err);
-			}
-		}
-
-		try {
-			await sessions.markSessionStopped(this.sessionId);
-		} catch (err) {
-			this.logError("Failed to mark session stopped for automation", err);
-		}
-
-		// Enqueue session completion notifications (best-effort)
-		const orgId = context.session.organization_id;
-		try {
-			await notifications.enqueueSessionCompletionNotification(orgId, this.sessionId);
-		} catch (err) {
-			this.logError("Failed to enqueue session completion notification", err);
-		}
-
-		// K1: Persist structured terminal outcome
-		await persistTerminalOutcome({
-			sessionId: this.sessionId,
-			organizationId: orgId,
-			runtimeStatus: "completed",
-			logger: this.logger,
-		});
-
-		// K3: Final visible update timestamp
-		await touchLastVisibleUpdate(this.sessionId, this.logger);
-
-		// K4: Project terminal operator status
-		await projectOperatorStatus({
-			sessionId: this.sessionId,
-			organizationId: orgId,
-			runtimeStatus: "completed",
-			hasPendingApproval: false,
-			logger: this.logger,
-		});
-
-		this.runtime.disconnectSse();
-		this.runtime.resetSandboxState();
-		this.onEvict?.();
 	}
 
 	/**

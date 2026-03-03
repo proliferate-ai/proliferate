@@ -5,7 +5,7 @@
  */
 
 import { env } from "@proliferate/environment/server";
-import type { SandboxProvider, SandboxProviderType } from "../sandbox-provider";
+import type { SandboxProvider, SandboxProviderType } from "./contract";
 import { E2BProvider } from "./e2b";
 import { ModalLibmodalProvider } from "./modal-libmodal";
 
@@ -36,20 +36,9 @@ export function getSandboxProvider(type?: SandboxProviderType): SandboxProvider 
 	return factory();
 }
 
-/**
- * Get a provider for restoring from a snapshot.
- * The provider type should come from the snapshot/session record.
- *
- * @param provider - The provider type from the snapshot record
- * @returns SandboxProvider instance
- */
-export function getSandboxProviderForSnapshot(provider: SandboxProviderType): SandboxProvider {
-	return getSandboxProvider(provider);
-}
-
 // Re-export provider classes for direct instantiation if needed
 export { ModalLibmodalProvider, getModalAppName } from "./modal-libmodal";
 export { E2BProvider } from "./e2b";
 
 // Re-export types
-export type { SandboxProvider, SandboxProviderType } from "../sandbox-provider";
+export type { SandboxProvider, SandboxProviderType } from "./contract";

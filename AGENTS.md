@@ -12,9 +12,7 @@
 
 ## Stack & Architecture
 
-- **TypeScript** - Primary language for API, frontend, and Gateway
-- **Python** - Modal image + deploy script only (`packages/modal-sandbox/`)
-- **Frontend**: Next.js + React + TanStack Query + Zustand + Tailwind + shadcn/ui
+- **TypeScript** - Primary language for API, frontend, and Gateway- **Frontend**: Next.js + React + TanStack Query + Zustand + Tailwind + shadcn/ui
 - **API**: Next.js API routes (session lifecycle, repo management, NOT real-time streaming)
 - **Real-Time**: Gateway service (WebSocket connections, message state)
 - **Sandboxes**: Modal (default) or E2B providers + OpenCode (coding agent)
@@ -36,7 +34,6 @@ PostgreSQL: metadata persistence only (not in streaming path)
 
 ```
 apps/                 # web, gateway, worker, llm-proxy, trigger-service
-packages/             # shared, services, db, gateway-clients, environment, cli, modal-sandbox
 docs/specs/           # system specs (authoritative subsystem docs)
 charts/               # Helm chart
 infra/                # pulumi-k8s (EKS), pulumi-k8s-gcp (GKE), legacy ECS
@@ -98,14 +95,6 @@ ws.sendPrompt(content, userId);
 - oRPC procedures live in `apps/web/src/server/routers/` and are consumed via hooks or direct oRPC client.
 - Drizzle only; no raw SQL unless absolutely necessary.
 - Throw errors, don’t return `{ ok: false }` objects.
-
-## Sandboxes
-
-- Providers: Modal (default) and E2B (`packages/shared/src/providers/`).
-- Python only in `packages/modal-sandbox/` (image + `deploy.py`).
-- Deploy Modal: `cd packages/modal-sandbox && modal deploy deploy.py`
-- Modal docs: https://docs.proliferate.com/self-hosting/modal-setup
-- OpenCode plugin is **minimal SSE** (no event pushing). See `packages/shared/src/sandbox/config.ts`.
 
 ## Workers & Infra (K8s/EKS)
 

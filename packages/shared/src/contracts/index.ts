@@ -1,58 +1,3 @@
-import { initContract } from "@ts-rest/core";
-import { adminContract } from "./admin";
-import { automationsContract } from "./automations";
-import { cliContract } from "./cli";
-import { configurationsContract } from "./configurations";
-import { integrationsContract } from "./integrations";
-import { miscContract } from "./misc";
-import { onboardingContract } from "./onboarding";
-import { orgsContract } from "./orgs";
-import { reposContract } from "./repos";
-import { schedulesContract } from "./schedules";
-import { secretsContract } from "./secrets";
-import { sessionsContract } from "./sessions";
-import { triggersContract } from "./triggers";
-import { verificationContract } from "./verification";
-
-const c = initContract();
-
-/**
- * Combined API contract for all endpoints.
- * Each domain has its own contract file that is merged here.
- */
-export const contract = c.router({
-	admin: adminContract,
-	automations: automationsContract,
-	cli: cliContract,
-	configurations: configurationsContract,
-	integrations: integrationsContract,
-	misc: miscContract,
-	onboarding: onboardingContract,
-	orgs: orgsContract,
-	repos: reposContract,
-	schedules: schedulesContract,
-	secrets: secretsContract,
-	sessions: sessionsContract,
-	triggers: triggersContract,
-	verification: verificationContract,
-});
-
-// Re-export individual contracts for direct access
-export { adminContract } from "./admin";
-export { automationsContract } from "./automations";
-export { cliContract } from "./cli";
-export { configurationsContract } from "./configurations";
-export { integrationsContract } from "./integrations";
-export { miscContract } from "./misc";
-export { onboardingContract } from "./onboarding";
-export { orgsContract } from "./orgs";
-export { reposContract } from "./repos";
-export { schedulesContract } from "./schedules";
-export { secretsContract } from "./secrets";
-export { sessionsContract } from "./sessions";
-export { triggersContract } from "./triggers";
-export { verificationContract } from "./verification";
-
 // Re-export common types
 export type { ErrorResponse, Pagination } from "./common";
 export { ErrorResponseSchema, PaginationSchema } from "./common";
@@ -131,17 +76,6 @@ export {
 	SaveQuestionnaireInputSchema,
 } from "./onboarding";
 
-// Re-export CLI types
-export {
-	CliRepoSchema,
-	CliRepoConnectionSchema,
-	DeviceCodeResponseSchema,
-	DevicePollResponseSchema,
-	SshKeySchema,
-	CliSessionSchema,
-	CliConfigurationSchema,
-} from "./cli";
-
 // Re-export integration types
 export type {
 	Integration,
@@ -194,6 +128,7 @@ export type {
 	TriggerEventWithRelations,
 	CreateTriggerInput,
 	UpdateTriggerInput,
+	TriggerProvider,
 } from "./triggers";
 export {
 	TriggerSchema,
@@ -268,6 +203,9 @@ export {
 	MAX_NOTIFICATIONS_PER_WORKER_PER_HOUR,
 	IMMEDIATE_CATEGORIES,
 } from "./notifications";
+
+// Re-export trigger configs
+export * from "./trigger-configs";
 
 // Re-export V1 entity contracts
 export * from "./v1-entities";

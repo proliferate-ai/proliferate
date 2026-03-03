@@ -116,31 +116,6 @@ export async function createWorker(
 	return row;
 }
 
-export async function updateWorkerStatus(
-	id: string,
-	organizationId: string,
-	status: WorkerStatus,
-	fields?: {
-		lastWakeAt?: Date;
-		lastCompletedRunAt?: Date;
-		lastErrorCode?: string | null;
-		pausedAt?: Date | null;
-		pausedBy?: string | null;
-	},
-): Promise<WorkerRow | undefined> {
-	const db = getDb();
-	const [row] = await db
-		.update(workers)
-		.set({
-			status,
-			updatedAt: new Date(),
-			...fields,
-		})
-		.where(and(eq(workers.id, id), eq(workers.organizationId, organizationId)))
-		.returning();
-	return row;
-}
-
 export async function transitionWorkerStatus(
 	id: string,
 	organizationId: string,
@@ -228,21 +203,6 @@ export async function findActiveRunByWorker(
 		)
 		.orderBy(desc(workerRuns.createdAt))
 		.limit(1);
-	return row;
-}
-
-export async function updateWorkerRunStatus(
-	id: string,
-	organizationId: string,
-	status: WorkerRunStatus,
-	fields?: { summary?: string; completedAt?: Date; startedAt?: Date },
-): Promise<WorkerRunRow | undefined> {
-	const db = getDb();
-	const [row] = await db
-		.update(workerRuns)
-		.set({ status, ...fields })
-		.where(and(eq(workerRuns.id, id), eq(workerRuns.organizationId, organizationId)))
-		.returning();
 	return row;
 }
 
@@ -520,41 +480,6 @@ export async function insertWakeStartedEvent(
 // Worker Run Events — Queries
 // ============================================
 
-export interface CreateWorkerRunEventInput {
-	workerRunId: string;
-	workerId: string;
-	eventIndex: number;
-	eventType: WorkerRunEventType;
-	summaryText?: string;
-	payloadJson?: unknown;
-	payloadVersion?: number;
-	sessionId?: string;
-	actionInvocationId?: string;
-	dedupeKey?: string;
-}
-
-export async function createWorkerRunEvent(
-	input: CreateWorkerRunEventInput,
-): Promise<WorkerRunEventRow> {
-	const db = getDb();
-	const [row] = await db
-		.insert(workerRunEvents)
-		.values({
-			workerRunId: input.workerRunId,
-			workerId: input.workerId,
-			eventIndex: input.eventIndex,
-			eventType: input.eventType,
-			summaryText: input.summaryText ?? null,
-			payloadJson: input.payloadJson ?? null,
-			payloadVersion: input.payloadVersion ?? 1,
-			sessionId: input.sessionId ?? null,
-			actionInvocationId: input.actionInvocationId ?? null,
-			dedupeKey: input.dedupeKey ?? null,
-		})
-		.returning();
-	return row;
-}
-
 export interface AppendWorkerRunEventAtomicInput {
 	workerRunId: string;
 	workerId: string;
@@ -711,32 +636,6 @@ export async function transitionWorkerRunWithTerminalEvent(
 
 		return { workerRun: updatedRun, event };
 	});
-}
-
-export async function findWorkerRunEventByDedupeKey(
-	workerRunId: string,
-	dedupeKey: string,
-): Promise<WorkerRunEventRow | undefined> {
-	const db = getDb();
-	const [row] = await db
-		.select()
-		.from(workerRunEvents)
-		.where(
-			and(eq(workerRunEvents.workerRunId, workerRunId), eq(workerRunEvents.dedupeKey, dedupeKey)),
-		)
-		.limit(1);
-	return row;
-}
-
-export async function getNextWorkerRunEventIndex(workerRunId: string): Promise<number> {
-	const db = getDb();
-	const [lastRow] = await db
-		.select({ eventIndex: workerRunEvents.eventIndex })
-		.from(workerRunEvents)
-		.where(eq(workerRunEvents.workerRunId, workerRunId))
-		.orderBy(desc(workerRunEvents.eventIndex))
-		.limit(1);
-	return (lastRow?.eventIndex ?? -1) + 1;
 }
 
 export async function listEventsByRun(workerRunId: string): Promise<WorkerRunEventRow[]> {

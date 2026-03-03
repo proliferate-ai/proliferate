@@ -12,9 +12,9 @@
 import { env } from "@proliferate/environment/server";
 import type { Logger } from "@proliferate/logger";
 import { type App, type Image, ModalClient, type Sandbox } from "modal";
-import { getDefaultAgentConfig, toOpencodeModelId } from "../agents";
-import { isValidTargetPath } from "../env-parser";
-import { getLLMProxyBaseURL } from "../llm-proxy";
+import { getDefaultAgentConfig, toOpencodeModelId } from "../agents/index";
+import { getLLMProxyBaseURL } from "../agents/llm-proxy";
+import { isValidTargetPath } from "../lib/env-parser";
 import { getSharedLogger } from "../logger";
 import {
 	AUTOMATION_COMPLETE_DESCRIPTION,
@@ -60,7 +60,7 @@ import type {
 	PauseResult,
 	SandboxProvider,
 	SnapshotResult,
-} from "../sandbox-provider";
+} from "./contract";
 
 // TextEncoder/TextDecoder for file operations (Modal SDK requires Uint8Array)
 const encoder = new TextEncoder();

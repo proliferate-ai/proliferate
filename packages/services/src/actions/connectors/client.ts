@@ -17,11 +17,11 @@
 import { Client } from "@modelcontextprotocol/sdk/client";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { ActionDefinition } from "@proliferate/providers";
-import { computeDefinitionHash, jsonSchemaToZod } from "@proliferate/providers/helpers/schema";
+import { jsonSchemaToZod } from "@proliferate/providers/helpers/schema";
 import type { ConnectorConfig } from "@proliferate/shared";
 import { getServicesLogger } from "../../logger";
 import { deriveRiskLevel } from "./risk";
-import type { ConnectorCallResult, ConnectorToolList, ConnectorToolListWithDrift } from "./types";
+import type { ConnectorCallResult, ConnectorToolList } from "./types";
 
 const logger = () => getServicesLogger().child({ module: "mcp-connector" });
 
@@ -43,7 +43,7 @@ interface McpCallToolResultShape {
  * Normalize MCP tool result content for storage and CLI output.
  * Priority: structuredContent -> text content -> raw content blocks.
  */
-export function extractToolCallContent(result: McpCallToolResultShape): unknown {
+function extractToolCallContent(result: McpCallToolResultShape): unknown {
 	if (result.structuredContent !== undefined) {
 		return result.structuredContent;
 	}
@@ -266,43 +266,4 @@ export async function callConnectorTool(
 		}
 		throw err;
 	}
-}
-
-// ============================================
-// Drift Detection
-// ============================================
-
-/**
- * Compute drift status for connector tools by comparing current definition
- * hashes against stored hashes in tool_risk_overrides.
- *
- * @param tools - Current tool list from the MCP server (Zod-based ActionDefinitions)
- * @param storedOverrides - Persisted tool_risk_overrides from org_connectors row
- * @returns Per-tool drift status map and updated hashes
- */
-export function computeDriftStatus(
-	tools: ConnectorToolList,
-	storedOverrides: Record<string, { mode?: string; hash?: string }> | null,
-): ConnectorToolListWithDrift {
-	const driftStatus: Record<string, boolean> = {};
-	const overrides = storedOverrides ?? {};
-
-	for (const action of tools.actions) {
-		const stored = overrides[action.id];
-		if (!stored?.hash) {
-			// No stored hash — tool is new, not drifted (needs initial review)
-			driftStatus[action.id] = false;
-			continue;
-		}
-
-		// Compute current hash — params is already a Zod schema, computeDefinitionHash handles both
-		const currentHash = computeDefinitionHash({
-			id: action.id,
-			params: action.params,
-		});
-
-		driftStatus[action.id] = currentHash !== stored.hash;
-	}
-
-	return { ...tools, driftStatus };
 }

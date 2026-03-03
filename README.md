@@ -1,4 +1,6 @@
 
+
+
 <h2 align="center">
     <a href="https://proliferate.com"> <img width="50%" src="https://d1uh4o7rpdqkkl.cloudfront.net/logotype-with-words.webp" /></a>
 </h2>
@@ -19,6 +21,9 @@
         <img src="https://img.shields.io/static/v1?label=license&message=MIT&color=blue" alt="License" />
     </a>
 </p>
+
+> **⚠️ Note:** This repository is currently undergoing an active migration and may be unstable for the next couple of days.
+
 
 Local coding agents force you to supervise a terminal alone. Proliferate gives your agents secure access to your real dev environments, internal APIs, and workflows. They do the heavy lifting in the background and return with results your whole team can verify: a live preview of the running app, a command log, and a PR ready to merge.
 

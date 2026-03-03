@@ -7,7 +7,7 @@
 
 import { createHash } from "node:crypto";
 import { env } from "@proliferate/environment/server";
-import { getDefaultAgentConfig, toOpencodeModelId } from "../agents";
+import { getDefaultAgentConfig, toOpencodeModelId } from "../agents/index";
 import { DEFAULT_CADDYFILE, PLUGIN_MJS } from "./config";
 import { getOpencodeConfig } from "./opencode";
 

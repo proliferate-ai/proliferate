@@ -34,7 +34,6 @@ Reject these outputs during implementation and review:
 ## Stack & Architecture
 
 - **TypeScript** - Primary language for API, frontend, and Gateway
-- **Python** - Modal image + deploy script only (`packages/modal-sandbox/`)
 - **Frontend**: Next.js + React + TanStack Query + Zustand + Tailwind + shadcn/ui
 - **API**: Next.js API routes (session lifecycle, repo management, NOT real-time streaming)
 - **Real-Time**: Gateway service (WebSocket connections, message state)
@@ -57,7 +56,7 @@ PostgreSQL: metadata persistence only (not in streaming path)
 
 ```
 apps/                 # web, gateway, worker, llm-proxy, trigger-service
-packages/             # shared, services, db, gateway-clients, environment, cli, modal-sandbox
+packages/             # shared, services, db, gateway-clients, environment, cli
 docs/specs/           # system specs (authoritative subsystem docs)
 charts/               # Helm chart
 infra/                # pulumi-k8s (EKS), pulumi-k8s-gcp (GKE), legacy ECS

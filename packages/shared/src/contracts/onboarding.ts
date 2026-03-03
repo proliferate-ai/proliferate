@@ -1,8 +1,4 @@
-import { initContract } from "@ts-rest/core";
 import { z } from "zod";
-import { ErrorResponseSchema } from "./common";
-
-const c = initContract();
 
 // ============================================
 // Schemas
@@ -57,38 +53,3 @@ export const SaveQuestionnaireInputSchema = z.object({
 });
 
 export type SaveQuestionnaireInput = z.infer<typeof SaveQuestionnaireInputSchema>;
-
-// ============================================
-// Contract
-// ============================================
-
-export const onboardingContract = c.router(
-	{
-		getStatus: {
-			method: "GET",
-			path: "/onboarding",
-			responses: {
-				200: OnboardingStatusSchema,
-				401: ErrorResponseSchema,
-				500: ErrorResponseSchema,
-			},
-			summary: "Get onboarding status for the current user/organization",
-		},
-
-		finalize: {
-			method: "POST",
-			path: "/onboarding/finalize",
-			body: FinalizeOnboardingInputSchema,
-			responses: {
-				200: FinalizeOnboardingResponseSchema,
-				400: ErrorResponseSchema,
-				401: ErrorResponseSchema,
-				500: ErrorResponseSchema,
-			},
-			summary: "Finalize onboarding by selecting repos and creating a managed configuration",
-		},
-	},
-	{
-		pathPrefix: "/api",
-	},
-);

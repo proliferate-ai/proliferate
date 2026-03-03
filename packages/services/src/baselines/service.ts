@@ -277,70 +277,6 @@ export async function restartValidation(input: {
 	});
 }
 
-/**
- * Rollback to a prior validated baseline.
- * The target baseline must be in stale status (previous ready that was superseded).
- */
-export async function rollbackToBaseline(input: {
-	baselineId: string;
-	orgId: string;
-	repoId: string;
-}): Promise<RepoBaselineRow> {
-	// Get the target baseline
-	const baseline = await baselinesDb.findBaselineById(input.baselineId, input.orgId);
-	if (!baseline) {
-		throw new Error(`Baseline ${input.baselineId} not found`);
-	}
-
-	if (baseline.status !== "stale") {
-		throw new Error(
-			`Cannot rollback to baseline ${input.baselineId} — status is ${baseline.status}, expected stale`,
-		);
-	}
-
-	// Mark the current active baseline as stale first
-	const currentActive = await baselinesDb.findActiveBaseline(input.repoId, input.orgId);
-	if (currentActive) {
-		await baselinesDb.transitionBaselineStatus({
-			id: currentActive.id,
-			orgId: input.orgId,
-			fromStatus: "ready",
-			toStatus: "stale",
-		});
-	}
-
-	// Promote the target baseline back to validating, then ready
-	// Since stale → validating is valid, then we immediately mark ready
-	const validating = await baselinesDb.transitionBaselineStatus({
-		id: input.baselineId,
-		orgId: input.orgId,
-		fromStatus: "stale",
-		toStatus: "validating",
-	});
-
-	if (!validating) {
-		throw new Error(`Failed to transition baseline ${input.baselineId} from stale to validating`);
-	}
-
-	const ready = await baselinesDb.transitionBaselineStatus({
-		id: input.baselineId,
-		orgId: input.orgId,
-		fromStatus: "validating",
-		toStatus: "ready",
-	});
-
-	if (!ready) {
-		throw new Error(`Failed to transition baseline ${input.baselineId} from validating to ready`);
-	}
-
-	logger().info(
-		{ baselineId: input.baselineId, repoId: input.repoId },
-		"Rolled back to previous baseline",
-	);
-
-	return ready;
-}
-
 // ============================================
 // J3: Setup Session Invariant
 // ============================================
@@ -363,13 +299,6 @@ export async function checkSetupSessionInvariant(
 // ============================================
 // Query helpers
 // ============================================
-
-/**
- * Get a baseline by ID.
- */
-export async function getBaseline(id: string, orgId: string): Promise<RepoBaselineRow | null> {
-	return baselinesDb.findBaselineById(id, orgId);
-}
 
 /**
  * List baselines for a repo.

@@ -7,7 +7,6 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { executeGrantRequest, executeGrantsList, parseGrantRequestFlags } from "./actions-grants";
 import { sandboxEnv } from "./env";
 
 const BASE_URL = sandboxEnv.baseUrl;
@@ -36,9 +35,6 @@ Commands:
   actions list                                     List available integrations and actions
   actions guide --integration <i>                   Show provider usage guide
   actions run --integration <i> --action <a> [--params <json>]  Run an action
-  actions grant request --integration <i> --action <a> [--scope session|org] [--max-calls <n>]
-                                                   Request a grant
-  actions grants list                              List active grants
 `);
 	process.exit(2);
 }
@@ -488,26 +484,6 @@ async function actionsRun(flags: Record<string, string | boolean>): Promise<void
 	writeJson(body);
 }
 
-async function actionsGrantRequest(flags: Record<string, string | boolean>): Promise<void> {
-	const parsed = parseGrantRequestFlags(flags);
-	if ("error" in parsed) {
-		fatal(parsed.error, parsed.exitCode);
-	}
-	const result = await executeGrantRequest(gatewayRequest, parsed);
-	if (!result.ok) {
-		fatal(result.errorMessage, result.exitCode);
-	}
-	writeJson(result.data);
-}
-
-async function actionsGrantsList(): Promise<void> {
-	const result = await executeGrantsList(gatewayRequest);
-	if (!result.ok) {
-		fatal(result.errorMessage, result.exitCode);
-	}
-	writeJson(result.data);
-}
-
 // ── Main dispatch ──
 
 async function main(): Promise<void> {
@@ -566,25 +542,6 @@ async function main(): Promise<void> {
 			case "run":
 				await actionsRun(flags);
 				break;
-			case "grant": {
-				const subAction = args[2];
-				const subFlags = parseFlags(args.slice(3));
-				if (subAction === "request") {
-					await actionsGrantRequest(subFlags);
-				} else {
-					usage();
-				}
-				break;
-			}
-			case "grants": {
-				const subAction = args[2];
-				if (subAction === "list") {
-					await actionsGrantsList();
-				} else {
-					usage();
-				}
-				break;
-			}
 			default:
 				usage();
 		}

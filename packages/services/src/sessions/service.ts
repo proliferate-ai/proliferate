@@ -2,8 +2,8 @@
  * Sessions service.
  *
  * Business logic that orchestrates DB operations.
- * Note: Pause and resume operations remain in the API routes
- * due to sandbox provider state management.
+ * Note: Pause, snapshot, and submit-env operations are in dedicated files
+ * in this directory (pause.ts, snapshot.ts, submit-env.ts).
  */
 
 import { randomUUID } from "crypto";
@@ -335,6 +335,18 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		});
 	}
 
+	console.log("Creating confiugration session with these params", {
+		configurationId,
+		sessionType,
+		agentConfig,
+		initialPrompt,
+		orgId,
+		userId,
+		gatewayUrl,
+		serviceToken,
+		continuedFromSessionId,
+		rerunOfSessionId,
+	});
 	// Configuration-backed path: existing flow
 	return createConfigurationSession({
 		configurationId,
@@ -518,7 +530,6 @@ async function createConfigurationSession(input: {
 
 	reqLog.info("Session record created, returning immediately");
 
-	// K5: Record session_created lifecycle event (best-effort)
 	createSessionEvent({ sessionId, eventType: "session_created" }).catch((err) => {
 		reqLog.warn({ err }, "Failed to record session_created event");
 	});

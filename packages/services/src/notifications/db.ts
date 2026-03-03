@@ -154,14 +154,6 @@ export async function insertNotification(
 	return rows[0] ?? null;
 }
 
-export async function findNotificationById(id: string): Promise<NotificationRow | null> {
-	const db = getDb();
-	const row = await db.query.notifications.findFirst({
-		where: eq(notifications.id, id),
-	});
-	return row ?? null;
-}
-
 export interface ListNotificationsFilter {
 	userId: string;
 	organizationId: string;
@@ -242,11 +234,6 @@ export async function markNotificationDismissed(id: string): Promise<void> {
 		.update(notifications)
 		.set({ status: "dismissed", dismissedAt: new Date() })
 		.where(eq(notifications.id, id));
-}
-
-export async function markNotificationFailed(id: string): Promise<void> {
-	const db = getDb();
-	await db.update(notifications).set({ status: "failed" }).where(eq(notifications.id, id));
 }
 
 export async function bulkMarkNotificationsRead(ids: string[], userId: string): Promise<number> {

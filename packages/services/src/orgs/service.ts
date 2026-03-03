@@ -186,16 +186,6 @@ export async function expireGraceForOrg(orgId: string): Promise<void> {
 }
 
 /**
- * Get overage state for an organization.
- */
-export const getOverageState = orgsDb.findOverageState;
-
-/**
- * Update overage state columns.
- */
-export const updateOverageState = orgsDb.updateOverageState;
-
-/**
  * Update last_reconciled_at timestamp.
  */
 export const updateLastReconciledAt = orgsDb.updateLastReconciledAt;

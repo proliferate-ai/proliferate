@@ -151,19 +151,6 @@ export async function findExistingKeys(
 }
 
 /**
- * Check if a secret with the given key exists in the organization.
- */
-export async function existsByKey(orgId: string, key: string): Promise<boolean> {
-	const db = getDb();
-	const row = await db.query.secrets.findFirst({
-		columns: { id: true },
-		where: and(eq(secrets.organizationId, orgId), eq(secrets.key, key)),
-	});
-
-	return !!row;
-}
-
-/**
  * Get a single org-wide secret by key for connector auth resolution.
  * Returns the encrypted value for server-side decryption.
  */

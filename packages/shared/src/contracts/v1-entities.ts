@@ -91,6 +91,7 @@ export const TERMINAL_WORKER_RUN_STATUSES: readonly WorkerRunStatus[] = [
 	"cancelled",
 	"health_degraded",
 ];
+
 export const NON_TERMINAL_WORKER_RUN_STATUSES: readonly WorkerRunStatus[] = ["queued", "running"];
 
 const WORKER_RUN_TRANSITIONS: Record<string, readonly WorkerRunStatus[]> = {

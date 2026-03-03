@@ -1,9 +1,9 @@
 import { env } from "@proliferate/environment/server";
 import type { Logger } from "@proliferate/logger";
 import { FileType, Sandbox, type SandboxApiOpts, type SandboxConnectOpts } from "e2b";
-import { getDefaultAgentConfig, toOpencodeModelId } from "../agents";
-import { isValidTargetPath } from "../env-parser";
-import { getLLMProxyBaseURL } from "../llm-proxy";
+import { getDefaultAgentConfig, toOpencodeModelId } from "../agents/index";
+import { getLLMProxyBaseURL } from "../agents/llm-proxy";
+import { isValidTargetPath } from "../lib/env-parser";
 import { getSharedLogger } from "../logger";
 import {
 	AUTOMATION_COMPLETE_DESCRIPTION,
@@ -46,7 +46,7 @@ import type {
 	PauseResult,
 	SandboxProvider,
 	SnapshotResult,
-} from "../sandbox-provider";
+} from "./contract";
 
 /**
  * E2B Sandbox Provider

@@ -511,8 +511,4 @@ export interface GatingResult {
 /**
  * Operations that require billing gate check.
  */
-export type GatedOperation =
-	| "session_start"
-	| "session_resume"
-	| "cli_connect"
-	| "automation_trigger";
+export type GatedOperation = "session_start" | "session_resume" | "automation_trigger";
