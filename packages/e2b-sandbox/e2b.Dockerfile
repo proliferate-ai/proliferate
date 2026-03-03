@@ -59,6 +59,8 @@ RUN OVSCODE_VERSION="1.106.3" \
 RUN npm install -g opencode-ai@latest proliferate-sandbox-mcp@0.1.19
 
 # Install sandbox-daemon (bundled CJS — provides FS, PTY, ports, health endpoints)
+# Built via: pnpm --filter @proliferate/sandbox-daemon bundle
+# Then copied into this directory before template build (see prebuild:template script)
 COPY sandbox-daemon.cjs /usr/local/bin/sandbox-daemon
 RUN chmod +x /usr/local/bin/sandbox-daemon
 

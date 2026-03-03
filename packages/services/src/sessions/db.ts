@@ -45,6 +45,8 @@ import type {
 // Types
 // ============================================
 
+export type DbTransaction = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+
 /** Session row type from Drizzle schema */
 export type SessionRow = InferSelectModel<typeof sessions>;
 
@@ -1812,8 +1814,9 @@ export interface CreateManagerSessionInput {
  */
 export async function createManagerSessionPlaceholder(
 	input: CreateManagerSessionInput,
+	tx?: DbTransaction,
 ): Promise<SessionRow> {
-	const db = getDb();
+	const db = tx ?? getDb();
 	const [row] = await db
 		.insert(sessions)
 		.values({
@@ -1844,13 +1847,18 @@ export async function createManagerSessionPlaceholder(
 export async function promoteToManagerSession(
 	sessionId: string,
 	workerId: string,
+	tx?: DbTransaction,
 ): Promise<SessionRow> {
-	const db = getDb();
+	const db = tx ?? getDb();
 	const [row] = await db
 		.update(sessions)
 		.set({ kind: "manager", workerId })
 		.where(eq(sessions.id, sessionId))
 		.returning();
+
+	if (!row) {
+		throw new Error(`Session ${sessionId} not found during promotion to manager`);
+	}
 
 	return row;
 }

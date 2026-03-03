@@ -4,6 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
+		"prebuild:template": "pnpm --filter @proliferate/sandbox-daemon bundle && cp ../sandbox-daemon/dist/daemon.cjs ./sandbox-daemon.cjs",
 		"build:template": "npx tsx build.ts"
 	},
 	"dependencies": {

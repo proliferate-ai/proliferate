@@ -96,8 +96,11 @@ export interface CreateWorkerInput {
 	createdBy?: string;
 }
 
-export async function createWorker(input: CreateWorkerInput): Promise<WorkerRow> {
-	const db = getDb();
+export async function createWorker(
+	input: CreateWorkerInput,
+	tx?: DbTransaction,
+): Promise<WorkerRow> {
+	const db = tx ?? getDb();
 	const [row] = await db
 		.insert(workers)
 		.values({

@@ -932,28 +932,39 @@ export const automationsRouter = {
 		.handler(async ({ input, context }) => {
 			const name = input?.name || "Untitled coworker";
 
-			// Step 1: Create placeholder session (kind=null to avoid manager_shape_check)
-			const placeholderSession = await sessions.createManagerSessionPlaceholder({
-				organizationId: context.orgId,
-				createdBy: context.user.id,
-				repoId: input?.repoId,
-				configurationId: input?.configurationId,
-				visibility: "org",
-				title: `Manager: ${name}`,
-			});
+			// All three steps run in a single transaction to avoid orphaned rows on partial failure
+			const worker = await workers.withTransaction(async (tx) => {
+				// Step 1: Create placeholder session (kind=null to avoid manager_shape_check)
+				const placeholderSession = await sessions.createManagerSessionPlaceholder(
+					{
+						organizationId: context.orgId,
+						createdBy: context.user.id,
+						repoId: input?.repoId,
+						configurationId: input?.configurationId,
+						visibility: "org",
+						title: `Manager: ${name}`,
+					},
+					tx,
+				);
 
-			// Step 2: Create worker linked to the placeholder session
-			const worker = await workers.createWorker({
-				organizationId: context.orgId,
-				name,
-				objective: input?.objective,
-				managerSessionId: placeholderSession.id,
-				modelId: input?.modelId,
-				createdBy: context.user.id,
-			});
+				// Step 2: Create worker linked to the placeholder session
+				const w = await workers.createWorker(
+					{
+						organizationId: context.orgId,
+						name,
+						objective: input?.objective,
+						managerSessionId: placeholderSession.id,
+						modelId: input?.modelId,
+						createdBy: context.user.id,
+					},
+					tx,
+				);
 
-			// Step 3: Promote session to kind='manager' with worker linkage
-			await sessions.promoteToManagerSession(placeholderSession.id, worker.id);
+				// Step 3: Promote session to kind='manager' with worker linkage
+				await sessions.promoteToManagerSession(placeholderSession.id, w.id, tx);
+
+				return w;
+			});
 
 			return {
 				worker: {
