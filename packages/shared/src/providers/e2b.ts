@@ -717,6 +717,10 @@ export class E2BProvider implements SandboxProvider {
 		// Start Caddy for preview proxy (run in background, non-blocking)
 		log.debug("Starting Caddy preview proxy (async)");
 		await sandbox.files.write(SANDBOX_PATHS.caddyfile, DEFAULT_CADDYFILE);
+		// Stop the template's default Caddy (systemd-started, port 80) before
+		// starting our custom instance on port 20000. Without this, the second
+		// caddy process fails silently due to admin API / lock conflicts.
+		await sandbox.commands.run("pkill caddy || true", { timeoutMs: 5000 }).catch(() => {});
 		sandbox.commands
 			.run(`caddy run --config ${SANDBOX_PATHS.caddyfile}`, {
 				timeoutMs: 3600000,
