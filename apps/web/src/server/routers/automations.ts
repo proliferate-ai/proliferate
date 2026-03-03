@@ -1372,17 +1372,20 @@ export const automationsRouter = {
 				if (worker && GATEWAY_URL) {
 					const { createSyncClient } = await import("@proliferate/gateway-clients");
 					const { env } = await import("@proliferate/environment/server");
-					const gateway = createSyncClient({
-						baseUrl: GATEWAY_URL,
-						auth: {
-							type: "service",
-							name: "web-run-worker",
-							secret: env.SERVICE_TO_SERVICE_AUTH_TOKEN ?? "",
-						},
-					});
-					gateway.eagerStart(worker.managerSessionId).catch(() => {
-						// Best-effort: session will start on next WebSocket connect if this fails
-					});
+					const authToken = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
+					if (authToken) {
+						const gateway = createSyncClient({
+							baseUrl: GATEWAY_URL,
+							auth: {
+								type: "service",
+								name: "web-run-worker",
+								secret: authToken,
+							},
+						});
+						gateway.eagerStart(worker.managerSessionId).catch(() => {
+							// Best-effort: session will start on next WebSocket connect if this fails
+						});
+					}
 				}
 
 				return { wakeEventId: result.wakeEvent.id };
@@ -1444,7 +1447,7 @@ export const automationsRouter = {
 
 			// Propagate repo/configuration changes to the manager session
 			if (repoId !== undefined || configurationId !== undefined) {
-				await sessions.updateManagerSessionLinkage(updated.managerSessionId, {
+				await sessions.updateManagerSessionLinkage(updated.managerSessionId, context.orgId, {
 					repoId: repoId ?? null,
 					configurationId: configurationId ?? null,
 				});

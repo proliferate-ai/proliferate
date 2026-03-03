@@ -1871,6 +1871,7 @@ export async function promoteToManagerSession(
  */
 export async function updateManagerSessionLinkage(
 	sessionId: string,
+	organizationId: string,
 	linkage: { repoId?: string | null; configurationId?: string | null },
 ): Promise<void> {
 	const db = getDb();
@@ -1878,7 +1879,10 @@ export async function updateManagerSessionLinkage(
 	if (linkage.repoId !== undefined) updates.repoId = linkage.repoId;
 	if (linkage.configurationId !== undefined) updates.configurationId = linkage.configurationId;
 	if (Object.keys(updates).length === 0) return;
-	await db.update(sessions).set(updates).where(eq(sessions.id, sessionId));
+	await db
+		.update(sessions)
+		.set(updates)
+		.where(and(eq(sessions.id, sessionId), eq(sessions.organizationId, organizationId)));
 }
 
 // ============================================

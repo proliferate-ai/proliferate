@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"prebuild:template": "pnpm --filter @proliferate/sandbox-daemon bundle && cp ../sandbox-daemon/dist/daemon.cjs ./sandbox-daemon.cjs",
+		"prebuild:template": "pnpm --filter @proliferate/sandbox-daemon bundle && test -f ../sandbox-daemon/dist/daemon.cjs && cp ../sandbox-daemon/dist/daemon.cjs ./sandbox-daemon.cjs || (echo 'ERROR: sandbox-daemon bundle not found' && exit 1)",
 		"build:template": "npx tsx build.ts"
 	},
 	"dependencies": {

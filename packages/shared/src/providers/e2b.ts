@@ -804,7 +804,7 @@ export class E2BProvider implements SandboxProvider {
 				envs: daemonEnvs,
 			})
 			.catch((err: unknown) => {
-				providerLogger.debug({ err }, "sandbox-daemon process ended");
+				providerLogger.warn({ err }, "sandbox-daemon process failed");
 			});
 		// Don't await - runs in background
 
