@@ -12,7 +12,11 @@ import type { RepoRow, RepoWithConfigurationsRow } from "./db";
  * Map a DB row (with configurations) to API Repo type.
  */
 export function toRepo(row: RepoWithConfigurationsRow): Repo {
-	const primaryConfig = row.configurationRepos?.[0]?.configuration;
+	// Prefer a "ready" configuration (has a snapshot) over pending/default ones
+	const configs = row.configurationRepos ?? [];
+	const primaryConfig =
+		configs.find((cr) => cr.configuration?.status === "ready")?.configuration ??
+		configs[0]?.configuration;
 	return {
 		id: row.id,
 		organizationId: row.organizationId,

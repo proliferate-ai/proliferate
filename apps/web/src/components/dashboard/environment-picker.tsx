@@ -111,9 +111,9 @@ export function EnvironmentPicker({ disabled }: EnvironmentPickerProps) {
 		if (selectedRepoId && !repos.some((r) => r.id === selectedRepoId)) {
 			setSelectedRepo(null);
 			setSelectedSnapshot(null);
-		} else if (selectedRepoId && selectedSnapshotId) {
+		} else if (selectedRepoId) {
 			const repo = repos.find((r) => r.id === selectedRepoId);
-			if (repo && selectedSnapshotId !== repo.configurationId) {
+			if (repo && selectedSnapshotId !== (repo.configurationId ?? null)) {
 				setSelectedSnapshot(repo.configurationId ?? null);
 			}
 		} else if (selectedSnapshotId && !selectedRepoId) {

@@ -166,16 +166,22 @@ export class E2BProvider implements SandboxProvider {
 
 		if (isSnapshot) {
 			try {
-				// Resume from paused sandbox - connecting auto-resumes
-				log.debug({ snapshotId: opts.snapshotId }, "Resuming from snapshot");
 				const connectStartMs = Date.now();
-				sandbox = await Sandbox.connect(opts.snapshotId!, getE2BConnectOpts());
+				if (opts.currentSandboxId) {
+					// Pause/resume: reconnect to the same (paused) sandbox
+					log.debug({ sandboxId: opts.currentSandboxId }, "Resuming paused sandbox");
+					sandbox = await Sandbox.connect(opts.currentSandboxId, getE2BConnectOpts());
+				} else {
+					// Snapshot branching: create a NEW sandbox from a snapshot
+					log.debug({ snapshotId: opts.snapshotId }, "Creating sandbox from snapshot");
+					sandbox = await Sandbox.create(opts.snapshotId!, sandboxOpts);
+				}
 				logLatency("provider.create_sandbox.resume.connect", {
 					provider: this.type,
 					sessionId: opts.sessionId,
 					durationMs: Date.now() - connectStartMs,
 				});
-				log.debug({ sandboxId: sandbox.sandboxId }, "Sandbox resumed");
+				log.debug({ sandboxId: sandbox.sandboxId }, "Sandbox ready from snapshot");
 
 				// Re-inject environment variables (they don't persist across pause/resume)
 				// Using JSON file approach to avoid shell escaping issues (security)
@@ -1049,8 +1055,16 @@ export class E2BProvider implements SandboxProvider {
 	}
 
 	async snapshot(sessionId: string, sandboxId: string): Promise<SnapshotResult> {
-		providerLogger.info({ sessionId }, "Taking snapshot");
-		return this.pause(sessionId, sandboxId);
+		providerLogger.info({ sessionId, sandboxId }, "Taking snapshot (createSnapshot)");
+		const startMs = Date.now();
+
+		const result = await Sandbox.createSnapshot(sandboxId, getE2BApiOpts());
+
+		providerLogger.info(
+			{ sandboxId, snapshotId: result.snapshotId, durationMs: Date.now() - startMs },
+			"Snapshot created",
+		);
+		return { snapshotId: result.snapshotId };
 	}
 
 	async pause(sessionId: string, sandboxId: string): Promise<PauseResult> {

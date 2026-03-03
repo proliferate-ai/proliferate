@@ -769,8 +769,8 @@ importers:
         specifier: ^3.52.1
         version: 3.52.1(@types/node@25.1.0)(zod@3.25.76)
       e2b:
-        specifier: ^2.10.2
-        version: 2.10.2
+        specifier: ^2.13.0
+        version: 2.13.0
       ioredis:
         specifier: ^5.4.1
         version: 5.9.1
@@ -8665,7 +8665,7 @@ packages:
       '@vitest/spy': 2.1.9
       estree-walker: 3.0.3
       magic-string: 0.30.21
-      vite: 5.4.21(@types/node@20.19.29)
+      vite: 5.4.21(@types/node@25.1.0)
 
   /@vitest/mocker@4.0.18(vite@7.3.1):
     resolution: {integrity: sha512-HhVd0MDnzzsgevnOWCBj5Otnzobjy5wLBe4EdeeFGv8luMsGcYqDuFRMcttKWZA5vVO8RFjexVovXvAM4JoJDQ==}
@@ -10236,6 +10236,22 @@ packages:
       openapi-fetch: 0.14.1
       platform: 1.3.6
       tar: 7.5.3
+    dev: false
+
+  /e2b@2.13.0:
+    resolution: {integrity: sha512-tYsRDXKx47WoV0lVHZxg1uGlSGC2+085Vy+LMxAnnw96vCQm0lBIKPaxV59xDkQZp4yI9/vgZtd2NzNNnoQPTg==}
+    engines: {node: '>=20'}
+    dependencies:
+      '@bufbuild/protobuf': 2.10.2
+      '@connectrpc/connect': 2.0.0-rc.3(@bufbuild/protobuf@2.10.2)
+      '@connectrpc/connect-web': 2.0.0-rc.3(@bufbuild/protobuf@2.10.2)(@connectrpc/connect@2.0.0-rc.3)
+      chalk: 5.6.2
+      compare-versions: 6.1.1
+      dockerfile-ast: 0.7.1
+      glob: 11.1.0
+      openapi-fetch: 0.14.1
+      platform: 1.3.6
+      tar: 7.5.9
     dev: false
 
   /eastasianwidth@0.2.0:
@@ -15056,6 +15072,17 @@ packages:
       yallist: 5.0.0
     dev: false
 
+  /tar@7.5.9:
+    resolution: {integrity: sha512-BTLcK0xsDh2+PUe9F6c2TlRp4zOOBMTkoQHQIWSIzI0R7KG46uEwq4OPk2W7bZcprBMsuaeFsqwYr7pjh6CuHg==}
+    engines: {node: '>=18'}
+    dependencies:
+      '@isaacs/fs-minipass': 4.0.1
+      chownr: 3.0.0
+      minipass: 7.1.2
+      minizlib: 3.1.0
+      yallist: 5.0.0
+    dev: false
+
   /teeny-request@9.0.0:
     resolution: {integrity: sha512-resvxdc6Mgb7YEThw6G6bExlXKkv6+YbuzGg9xuXxSgxJF7Ozs+o8Y9+2R3sArdWdW8nOokoQb1yrpFB0pQK2g==}
     engines: {node: '>=14'}
@@ -15746,7 +15773,6 @@ packages:
       rollup: 4.55.1
     optionalDependencies:
       fsevents: 2.3.3
-    dev: true
 
   /vite@7.3.1(@types/node@20.19.29):
     resolution: {integrity: sha512-w+N7Hifpc3gRjZ63vYBXA56dvvRlNWRczTdmCBBa+CotUzAPf5b7YMdMR/8CQoeYE5LX3W4wj6RYTgonm1b9DA==}

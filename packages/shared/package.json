@@ -33,7 +33,7 @@
 		"@proliferate/environment": "workspace:*",
 		"@proliferate/logger": "workspace:*",
 		"@ts-rest/core": "^3.52.1",
-		"e2b": "^2.10.2",
+		"e2b": "^2.13.0",
 		"ioredis": "^5.4.1",
 		"jose": "^5.2.0",
 		"modal": "^0.6.0",
