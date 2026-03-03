@@ -33,7 +33,7 @@ export type {
 	ManagerHarnessState,
 } from "@proliferate/shared/contracts";
 
-const MAX_CONVERSATION_TURNS = 50;
+const MAX_CONVERSATION_TURNS = 15;
 const MAX_RETRY_ATTEMPTS = 1;
 const MODEL_ID = "claude-sonnet-4-5-20250929";
 
@@ -144,10 +144,23 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 			return;
 		}
 
-		const activeRun = await workers.findActiveRunByWorker(input.workerId, input.organizationId);
+		let activeRun = await workers.findActiveRunByWorker(input.workerId, input.organizationId);
 		if (!activeRun) {
-			log.info("No active run found for worker; manager idle");
-			return;
+			// No active run — try to claim a queued wake event and create one
+			log.info("No active run; attempting to claim next queued wake event");
+			const orchestrated = await workers.orchestrateNextWakeAndCreateRun(
+				input.workerId,
+				input.organizationId,
+			);
+			if (!orchestrated) {
+				log.info("No queued wake events; manager idle");
+				return;
+			}
+			activeRun = orchestrated.workerRun;
+			log.info(
+				{ workerRunId: activeRun.id, wakeEventId: orchestrated.wakeEvent.id },
+				"Claimed wake event and created run",
+			);
 		}
 
 		this.currentRunId = activeRun.id;
@@ -250,7 +263,7 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 
 			// Phase 3: Orchestrate
 			const orchestrateResult = await this.runPhase("orchestrate", log, () =>
-				this.runOrchestratePhase(ctx, input, log),
+				this.runOrchestratePhase(ctx, input, ingestContext, log),
 			);
 			phasesCompleted.push("orchestrate");
 			childSessionIds.push(...orchestrateResult.childSessionIds);
@@ -369,6 +382,21 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 			// Non-critical
 		}
 
+		// Fetch pending directives
+		try {
+			const pendingDirectives = await workers.listPendingDirectives(ctx.managerSessionId);
+			if (pendingDirectives.length > 0) {
+				parts.push("\n## Pending Directives");
+				for (const d of pendingDirectives) {
+					const payload = d.payloadJson as Record<string, unknown>;
+					const content = (payload?.content as string) ?? JSON.stringify(payload);
+					parts.push(`- ${content}`);
+				}
+			}
+		} catch {
+			// Non-critical
+		}
+
 		// Enrich with source data from wake event payload
 		const sourceDataParts = await this.enrichFromWakePayload(ctx, log);
 		if (sourceDataParts.length > 0) {
@@ -453,11 +481,22 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 	private async runOrchestratePhase(
 		ctx: RunContext,
 		input: ManagerHarnessStartInput,
+		ingestContext: string,
 		log: Logger,
 	): Promise<{ childSessionIds: string[] }> {
 		const childSessionIds: string[] = [];
 		const toolCtx = this.buildToolContext(ctx, input);
 		let turnCount = 0;
+
+		// Reset conversation for orchestrate phase to avoid dangling tool_use
+		// blocks from the triage response. Include ingest context so Claude
+		// knows what directives/events to act on.
+		this.conversationHistory = [
+			{
+				role: "user",
+				content: `Triage decided to act. Here is the context:\n\n${ingestContext}\n\nExecute the planned work using your tools. Call complete_run when done.`,
+			},
+		];
 
 		while (turnCount < MAX_CONVERSATION_TURNS) {
 			this.checkAborted();
@@ -756,8 +795,25 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 	private truncateConversation(): void {
 		const maxTurns = 30;
 		if (this.conversationHistory.length <= maxTurns) return;
+
 		const first = this.conversationHistory[0];
-		const recent = this.conversationHistory.slice(-(maxTurns - 1));
+		let startIdx = this.conversationHistory.length - (maxTurns - 1);
+
+		// Ensure we don't start on a user message with tool_result blocks, which
+		// would reference tool_use_ids from a preceding assistant message that got
+		// truncated away.  Move one message back to keep the pair intact.
+		if (startIdx > 1) {
+			const msg = this.conversationHistory[startIdx];
+			if (
+				msg.role === "user" &&
+				Array.isArray(msg.content) &&
+				(msg.content as Array<{ type?: string }>).some((b) => b.type === "tool_result")
+			) {
+				startIdx--;
+			}
+		}
+
+		const recent = this.conversationHistory.slice(startIdx);
 		this.conversationHistory = [first, ...recent];
 	}
 
@@ -790,13 +846,17 @@ function buildOrchestrateSystemPrompt(ctx: RunContext): string {
 
 You are in the orchestration phase. Use your tools to:
 1. Spawn child coding tasks with spawn_child_task
-2. Monitor progress with list_children and inspect_child
+2. Check status once or twice with inspect_child — do NOT poll repeatedly
 3. Send follow-ups with message_child if needed
-4. When done, call complete_run with a summary
+4. Call complete_run with a summary when you have spawned all tasks
+
+IMPORTANT: Child tasks run asynchronously and may take minutes to complete.
+Do NOT wait for children to finish. Spawn all needed tasks, check them once,
+then call complete_run immediately. The next wake cycle will check results.
 
 ${ctx.workerObjective ? `Your standing objective: ${ctx.workerObjective}` : ""}
 
-When you are finished, you must call complete_run.`;
+You MUST call complete_run before your turn budget runs out.`;
 }
 
 // ============================================

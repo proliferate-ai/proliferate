@@ -2,10 +2,13 @@
  * V1 Tick Engine — produces wake_events(source=tick) for active workers.
  *
  * Runs as a repeatable BullMQ job on a configurable interval (default 60s).
- * For each active worker without a pending tick wake, creates a new tick wake event.
+ * For each active worker without a pending tick wake, creates a new tick wake event
+ * and notifies the gateway to eager-start the worker's manager session.
  */
 
 import { runtimeEnv } from "@proliferate/environment/runtime";
+import { env } from "@proliferate/environment/server";
+import { createSyncClient } from "@proliferate/gateway-clients";
 import { REDIS_KEYS, createTickQueue, createTickWorker, getRedisClient } from "@proliferate/queue";
 import type { Worker } from "@proliferate/queue";
 import { wakes, workers as workersService } from "@proliferate/services";
@@ -75,6 +78,7 @@ async function processTickCycle(): Promise<void> {
 
 		let created = 0;
 		let skipped = 0;
+		const wokenManagerSessionIds: string[] = [];
 
 		for (const worker of activeWorkers) {
 			const hasQueuedTick = await wakes.hasQueuedWakeBySource(worker.id, "tick");
@@ -88,7 +92,25 @@ async function processTickCycle(): Promise<void> {
 				organizationId: worker.organizationId,
 				source: "tick",
 			});
+			wokenManagerSessionIds.push(worker.managerSessionId);
 			created++;
+		}
+
+		// Notify the gateway to eager-start manager sessions so they pick up the tick wakes.
+		if (wokenManagerSessionIds.length > 0) {
+			const gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL;
+			const serviceToken = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
+			if (gatewayUrl && serviceToken) {
+				const gateway = createSyncClient({
+					baseUrl: gatewayUrl,
+					auth: { type: "service", name: "tick-engine", secret: serviceToken },
+				});
+				for (const sessionId of wokenManagerSessionIds) {
+					gateway.eagerStart(sessionId).catch((err) => {
+						logger.warn({ err, sessionId }, "Failed to eager-start manager session after tick");
+					});
+				}
+			}
 		}
 
 		if (created > 0 || skipped > 0) {

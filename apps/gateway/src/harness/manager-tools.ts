@@ -10,6 +10,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Logger } from "@proliferate/logger";
 import { sessions, sourceReads, workers } from "@proliferate/services";
+import { signServiceToken } from "@proliferate/shared";
 import type { ManagerToolContext } from "./manager-types";
 
 // ============================================
@@ -312,6 +313,15 @@ export async function executeManagerTool(
 }
 
 // ============================================
+// Auth Helper
+// ============================================
+
+/** Sign a short-lived service JWT for gateway-to-gateway HTTP calls. */
+async function getServiceJwt(ctx: ManagerToolContext): Promise<string> {
+	return signServiceToken("manager-harness", ctx.serviceToken, "5m");
+}
+
+// ============================================
 // Individual Tool Handlers
 // ============================================
 
@@ -329,20 +339,13 @@ async function handleSpawnChildTask(
 		return JSON.stringify({ error: "Manager session not found" });
 	}
 
-	if (
-		!managerSession.repoId ||
-		!managerSession.repoBaselineId ||
-		!managerSession.repoBaselineTargetId
-	) {
-		return JSON.stringify({ error: "Manager session missing repo linkage for child task" });
-	}
-
+	// Scratch task sessions (no configurationId) can omit repo linkage
 	const childSession = await sessions.createUnifiedTaskSession({
 		organizationId: ctx.organizationId,
 		createdBy: managerSession.createdBy ?? "system",
-		repoId: managerSession.repoId,
-		repoBaselineId: managerSession.repoBaselineId,
-		repoBaselineTargetId: managerSession.repoBaselineTargetId,
+		repoId: managerSession.repoId ?? null,
+		repoBaselineId: managerSession.repoBaselineId ?? null,
+		repoBaselineTargetId: managerSession.repoBaselineTargetId ?? null,
 		workerId: ctx.workerId,
 		workerRunId: ctx.workerRunId,
 		parentSessionId: ctx.managerSessionId,
@@ -366,19 +369,18 @@ async function handleSpawnChildTask(
 
 	// Boot the child session via gateway HTTP eager-start
 	try {
+		const jwt = await getServiceJwt(ctx);
 		const res = await fetch(`${ctx.gatewayUrl}/proliferate/${childSession.id}/eager-start`, {
 			method: "POST",
 			headers: {
-				Authorization: `Bearer ${ctx.serviceToken}`,
+				Authorization: `Bearer ${jwt}`,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({ organizationId: ctx.organizationId }),
 		});
 		if (!res.ok) {
-			log.warn(
-				{ status: res.status, childSessionId: childSession.id },
-				"Eager-start returned non-ok",
-			);
+			const body = await res.text().catch(() => "");
+			log.warn({ childSessionId: childSession.id }, `Eager-start returned ${res.status}: ${body}`);
 		}
 	} catch (err) {
 		log.warn({ err, childSessionId: childSession.id }, "Eager-start request failed");
@@ -459,10 +461,11 @@ async function handleMessageChild(
 
 	// Send message via gateway HTTP
 	try {
+		const jwt = await getServiceJwt(ctx);
 		const res = await fetch(`${ctx.gatewayUrl}/proliferate/${sessionId}/message`, {
 			method: "POST",
 			headers: {
-				Authorization: `Bearer ${ctx.serviceToken}`,
+				Authorization: `Bearer ${jwt}`,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
@@ -501,10 +504,11 @@ async function handleCancelChild(
 
 	// Cancel via gateway HTTP
 	try {
+		const jwt = await getServiceJwt(ctx);
 		const res = await fetch(`${ctx.gatewayUrl}/proliferate/${sessionId}/cancel`, {
 			method: "POST",
 			headers: {
-				Authorization: `Bearer ${ctx.serviceToken}`,
+				Authorization: `Bearer ${jwt}`,
 				"Content-Type": "application/json",
 			},
 		});
@@ -614,11 +618,12 @@ async function handleListSourceBindings(ctx: ManagerToolContext, log: Logger): P
 async function handleListCapabilities(ctx: ManagerToolContext, log: Logger): Promise<string> {
 	// List available actions via gateway HTTP
 	try {
+		const jwt = await getServiceJwt(ctx);
 		const res = await fetch(
 			`${ctx.gatewayUrl}/proliferate/${ctx.managerSessionId}/actions/available`,
 			{
 				headers: {
-					Authorization: `Bearer ${ctx.serviceToken}`,
+					Authorization: `Bearer ${jwt}`,
 				},
 			},
 		);
@@ -643,12 +648,13 @@ async function handleInvokeAction(
 	const params = (args.params as Record<string, unknown>) ?? {};
 
 	try {
+		const jwt = await getServiceJwt(ctx);
 		const res = await fetch(
 			`${ctx.gatewayUrl}/proliferate/${ctx.managerSessionId}/actions/invoke`,
 			{
 				method: "POST",
 				headers: {
-					Authorization: `Bearer ${ctx.serviceToken}`,
+					Authorization: `Bearer ${jwt}`,
 					"Content-Type": "application/json",
 				},
 				body: JSON.stringify({ integration, action, params }),

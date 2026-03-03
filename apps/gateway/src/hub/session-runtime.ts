@@ -212,6 +212,38 @@ export class SessionRuntime {
 		return this.isManagerSessionKind() ? "manager-claude" : "coding-opencode";
 	}
 
+	/**
+	 * Trigger a new wake cycle on the manager harness.
+	 * Called by eagerStart when the runtime is already ready (sandbox exists)
+	 * but a new wake event needs processing.
+	 */
+	async triggerManagerWakeCycle(): Promise<void> {
+		if (!this.isManagerSessionKind()) return;
+
+		let managerApiKey = this.env.anthropicApiKey;
+		let managerProxyUrl: string | undefined;
+		if (this.env.llmProxyRequired && this.env.llmProxyUrl) {
+			const { generateSessionAPIKey } = await import("@proliferate/shared/llm-proxy");
+			managerApiKey = await generateSessionAPIKey(
+				this.sessionId,
+				this.context.session.organization_id,
+			);
+			managerProxyUrl = this.env.llmProxyUrl;
+		}
+
+		const internalGatewayUrl = `http://localhost:${this.env.port}`;
+		const harnessInput = {
+			managerSessionId: this.sessionId,
+			organizationId: this.context.session.organization_id,
+			workerId: this.context.session.worker_id,
+			gatewayUrl: internalGatewayUrl,
+			serviceToken: this.env.serviceToken,
+			anthropicApiKey: managerApiKey,
+			llmProxyUrl: managerProxyUrl,
+		};
+		await this.managerHarness.resume(harnessInput);
+	}
+
 	// ============================================
 	// Provider access (for git operations, etc.)
 	// ============================================
@@ -576,14 +608,31 @@ export class SessionRuntime {
 
 			if (harnessFamily === "manager-claude") {
 				const managerHarnessStartMs = Date.now();
+
+				// Resolve API key + proxy for the manager harness.
+				let managerApiKey = this.env.anthropicApiKey;
+				let managerProxyUrl: string | undefined;
+				if (this.env.llmProxyRequired && this.env.llmProxyUrl) {
+					const { generateSessionAPIKey } = await import("@proliferate/shared/llm-proxy");
+					managerApiKey = await generateSessionAPIKey(
+						this.sessionId,
+						this.context.session.organization_id,
+					);
+					managerProxyUrl = this.env.llmProxyUrl;
+				}
+
+				// Use the local URL for internal HTTP calls (eager-start, message, cancel)
+				// since the manager harness runs in the same process as the gateway.
+				const internalGatewayUrl = `http://localhost:${this.env.port}`;
+
 				const harnessInput = {
 					managerSessionId: this.sessionId,
 					organizationId: this.context.session.organization_id,
 					workerId: this.context.session.worker_id,
-					gatewayUrl: this.env.gatewayUrl,
+					gatewayUrl: internalGatewayUrl,
 					serviceToken: this.env.serviceToken,
-					anthropicApiKey: this.env.anthropicApiKey,
-					llmProxyUrl: this.env.llmProxyUrl,
+					anthropicApiKey: managerApiKey,
+					llmProxyUrl: managerProxyUrl,
 				};
 				if (options?.reason === "auto_reconnect") {
 					await this.managerHarness.resume(harnessInput);

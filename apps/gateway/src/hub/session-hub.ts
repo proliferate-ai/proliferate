@@ -345,9 +345,18 @@ export class SessionHub {
 	/**
 	 * Eager start: boot the sandbox and send the initial prompt without a WebSocket client.
 	 * Called by the eager-start HTTP endpoint to start sessions in the background.
+	 *
+	 * For manager sessions that are already running, this triggers a new wake cycle
+	 * so the manager picks up newly queued wake events (e.g. from tick engine).
 	 */
 	async eagerStart(): Promise<void> {
 		this.log("Eager start requested");
+		if (this.runtime.isReady() && this.runtime.getContext().session.kind === "manager") {
+			this.log("Manager runtime already ready — triggering new wake cycle");
+			await this.runtime.triggerManagerWakeCycle();
+			this.log("Manager wake cycle triggered");
+			return;
+		}
 		await this.ensureRuntimeReady();
 		await this.maybeSendInitialPrompt();
 		this.log("Eager start complete");
@@ -644,9 +653,12 @@ export class SessionHub {
 	 * grace period, clients/proxies, agent idle, SSE state, and sandbox existence.
 	 */
 	shouldIdleSnapshot(): boolean {
-		const clientType = this.runtime.getContext().session.client_type ?? null;
+		const session = this.runtime.getContext().session;
+		const clientType = session.client_type ?? null;
 		// Automation sessions are worker-driven and must not be idled by WS heuristics.
 		if (clientType === "automation") return false;
+		// Manager sessions run a harness loop — never idle-snapshot them.
+		if (session.kind === "manager") return false;
 
 		if (this.activeHttpToolCalls > 0) return false;
 		if (this.eventProcessor.hasRunningTools()) return false;

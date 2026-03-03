@@ -1351,6 +1351,25 @@ export const automationsRouter = {
 		.handler(async ({ input, context }) => {
 			try {
 				const result = await workers.runNow(input.workerId, context.orgId);
+
+				// Notify the gateway to start/resume the manager session so it picks up the wake
+				const worker = await workers.findWorkerById(input.workerId, context.orgId);
+				if (worker && GATEWAY_URL) {
+					const { createSyncClient } = await import("@proliferate/gateway-clients");
+					const { env } = await import("@proliferate/environment/server");
+					const gateway = createSyncClient({
+						baseUrl: GATEWAY_URL,
+						auth: {
+							type: "service",
+							name: "web-run-worker",
+							secret: env.SERVICE_TO_SERVICE_AUTH_TOKEN ?? "",
+						},
+					});
+					gateway.eagerStart(worker.managerSessionId).catch(() => {
+						// Best-effort: session will start on next WebSocket connect if this fails
+					});
+				}
+
 				return { wakeEventId: result.wakeEvent.id };
 			} catch (err) {
 				if (err instanceof workers.WorkerNotFoundError) {
