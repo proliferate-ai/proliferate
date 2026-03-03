@@ -1850,6 +1850,7 @@ export interface CreateTaskSessionInput {
 	visibility?: "private" | "shared" | "org";
 	initialPrompt?: string | null;
 	title?: string | null;
+	sandboxProvider?: "modal" | "e2b";
 }
 
 export async function createTaskSession(input: CreateTaskSessionInput): Promise<SessionRow> {
@@ -1886,6 +1887,7 @@ export async function createTaskSession(input: CreateTaskSessionInput): Promise<
 			configurationId: input.configurationId ?? null,
 			initialPrompt: input.initialPrompt ?? null,
 			title: input.title ?? null,
+			...(input.sandboxProvider ? { sandboxProvider: input.sandboxProvider } : {}),
 		})
 		.returning();
 

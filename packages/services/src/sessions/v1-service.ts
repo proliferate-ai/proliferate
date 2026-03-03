@@ -48,6 +48,7 @@ export async function createUnifiedTaskSession(
 		visibility: input.visibility ?? "private",
 		initialPrompt: input.initialPrompt ?? null,
 		title: input.title ?? null,
+		sandboxProvider: input.sandboxProvider,
 	});
 }
 

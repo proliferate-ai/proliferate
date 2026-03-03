@@ -339,7 +339,8 @@ async function handleSpawnChildTask(
 		return JSON.stringify({ error: "Manager session not found" });
 	}
 
-	// Scratch task sessions (no configurationId) can omit repo linkage
+	// Scratch task sessions (no configurationId) can omit repo linkage.
+	// Inherit sandbox provider from the manager session so children use the same provider (e.g. E2B).
 	const childSession = await sessions.createUnifiedTaskSession({
 		organizationId: ctx.organizationId,
 		createdBy: managerSession.createdBy ?? "system",
@@ -353,6 +354,7 @@ async function handleSpawnChildTask(
 		visibility: (managerSession.visibility as "private" | "shared" | "org") ?? "private",
 		initialPrompt: instructions,
 		title,
+		sandboxProvider: managerSession.sandboxProvider as "modal" | "e2b" | undefined,
 	});
 
 	// Emit task_spawned run event
