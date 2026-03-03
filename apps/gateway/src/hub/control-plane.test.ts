@@ -11,7 +11,7 @@ function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
 		session_type: "coding",
 		kind: "task",
 		sandbox_id: "sb-1",
-		sandbox_provider: "modal",
+		sandbox_provider: "e2b",
 		snapshot_id: null,
 		sandbox_expires_at: null,
 		branch_name: null,

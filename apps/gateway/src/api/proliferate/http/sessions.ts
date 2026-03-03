@@ -100,21 +100,19 @@ export function createSessionsRouter(env: GatewayEnv, hubManager: HubManager): R
 			}
 
 			// Validate exactly one configuration option is provided
-			const configurationOptions = [
-				body.configurationId,
-				body.managedConfiguration,
-				body.cliConfiguration,
-			].filter(Boolean);
+			const configurationOptions = [body.configurationId, body.managedConfiguration].filter(
+				Boolean,
+			);
 			if (configurationOptions.length === 0) {
 				throw new ApiError(
 					400,
-					"One of configurationId, managedConfiguration, or cliConfiguration is required",
+					"One of configurationId or managedConfiguration is required",
 				);
 			}
 			if (configurationOptions.length > 1) {
 				throw new ApiError(
 					400,
-					"Only one of configurationId, managedConfiguration, or cliConfiguration can be provided",
+					"Only one of configurationId or managedConfiguration can be provided",
 				);
 			}
 

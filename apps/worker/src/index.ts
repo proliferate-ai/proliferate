@@ -105,17 +105,12 @@ if (billingEnabled) {
 
 const automationWorkers = startAutomationWorkers(logger.child({ module: "automation" }));
 
-// Modal-only workers: configuration snapshots + base snapshots require Modal provider
-const isModalConfigured = Boolean(env.MODAL_APP_NAME);
-const configurationSnapshotWorkers = isModalConfigured
-	? startConfigurationSnapshotWorkers(logger.child({ module: "configuration-snapshots" }))
-	: null;
-const baseSnapshotWorkers = isModalConfigured
-	? startBaseSnapshotWorkers(logger.child({ module: "base-snapshots" }))
-	: null;
-if (!isModalConfigured) {
-	logger.info("Modal not configured - skipping snapshot worker startup");
-}
+const configurationSnapshotWorkers = startConfigurationSnapshotWorkers(
+	logger.child({ module: "configuration-snapshots" }),
+);
+const baseSnapshotWorkers = startBaseSnapshotWorkers(
+	logger.child({ module: "base-snapshots" }),
+);
 
 // Session title generation worker
 const sessionTitleWorkers = startSessionTitleWorkers(logger.child({ module: "session-title" }));
@@ -129,8 +124,8 @@ logger.info(
 		slackReceiver: 10,
 		billingEnabled,
 		automationWorkers: ["enrich", "execute", "outbox", "finalizer"],
-		configurationSnapshotWorkers: isModalConfigured ? ["build"] : [],
-		baseSnapshotWorkers: isModalConfigured ? ["build"] : [],
+		configurationSnapshotWorkers: ["build"],
+		baseSnapshotWorkers: ["build"],
 	},
 	"Workers started",
 );

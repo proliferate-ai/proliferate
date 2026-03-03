@@ -111,8 +111,11 @@ ws.sendPrompt(content, userId);
 - **Client-only state**: Zustand (onboarding, UI state). Server state stays in TanStack Query.
 - **UI**: Tailwind + shadcn/ui only. No native `alert/confirm/prompt`.
 - **Colors & theming**: Always use the CSS custom properties from `globals.css` via Tailwind classes (`bg-background`, `text-foreground`, `border-border`, `bg-muted`, etc.). Never hardcode hex/rgb/hsl values. Key tokens: `background`, `foreground`, `card`, `popover`, `primary`, `secondary`, `muted`, `accent`, `destructive`, `border`, `input`, `ring`, `sidebar`, `chat-input`. All tokens have light and dark mode variants already defined.
+- **Semantic status tokens**: Use `success`, `warning`, and `info` theme tokens (plus `destructive`) instead of raw Tailwind palette classes for status styling.
 - **Component reuse**: check `components/ui/` before creating new patterns.
 - **No raw HTML form elements in pages**: In route components under `apps/web/src/app/**` (pages/layouts/templates) and feature components under `apps/web/src/components/` (except `ui/`), prefer shadcn/ui primitives (`Button`, `Input`, `Label`, `Select`, `Textarea`) from `@/components/ui/` over raw `<button>`, `<input>`, `<label>`, `<select>`, `<textarea>`. Raw elements are expected inside `apps/web/src/components/ui/**` primitives themselves.
+- **No raw Tailwind palette colors outside `components/ui/`**: In `apps/web/src/app/**` and non-`ui` feature components, do not use classes like `text-blue-500`, `bg-gray-900`, `border-red-500`, etc. Use semantic token classes only (`text-foreground`, `bg-card`, `border-border`, `text-success`, etc.).
+- **Variant-first styling**: If a new look is needed for button/input/label/badge/text, add or extend a `components/ui/` variant instead of local ad-hoc class stacks in route/feature files.
 - **Hooks**: kebab-case filenames (`use-repos.ts`).
 
 ## Backend Rules

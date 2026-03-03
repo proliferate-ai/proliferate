@@ -129,16 +129,12 @@ async function cleanupOrphanedSession(
 			reapplyAfterCapture: false,
 		});
 
-		// Snapshot: memory (preferred) → pause → filesystem
+		// Snapshot: pause (preferred) → filesystem + terminate
 		let snapshotId: string | undefined;
 		let keepSandbox = false;
 		try {
 			try {
-				if (provider.supportsMemorySnapshot && provider.memorySnapshot) {
-					const result = await provider.memorySnapshot(sessionId, sandboxId);
-					snapshotId = result.snapshotId;
-					keepSandbox = true;
-				} else if (provider.supportsPause) {
+				if (provider.supportsPause) {
 					const result = await provider.pause(sessionId, sandboxId);
 					snapshotId = result.snapshotId;
 					keepSandbox = true;
@@ -150,7 +146,6 @@ async function cleanupOrphanedSession(
 						await provider.terminate(sessionId, sandboxId);
 					} catch (err) {
 						logger.error({ err, sessionId }, "orphan_sweep.terminate_failed");
-						// Keep pointer when terminate fails so a later pass can retry safely.
 						keepSandbox = true;
 					}
 				}

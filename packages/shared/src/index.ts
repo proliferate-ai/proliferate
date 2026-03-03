@@ -9,7 +9,7 @@ export * from "./agents";
 export * from "./agents/prompts";
 
 // Sandbox provider interface
-export * from "./providers/contract";
+export * from "./providers/types";
 
 // OpenCode tool definitions
 export * from "./opencode-tools";

@@ -9,155 +9,52 @@ import { StepInviteMembers } from "@/components/onboarding/step-invite-members";
 import { StepPathChoice } from "@/components/onboarding/step-path-choice";
 import { StepQuestionnaire } from "@/components/onboarding/step-questionnaire";
 import { StepToolSelection } from "@/components/onboarding/step-tool-selection";
-import { useOnboarding } from "@/hooks/org/use-onboarding";
-import { orpc } from "@/lib/infra/orpc";
-import { type FlowType, useOnboardingStore } from "@/stores/onboarding";
-import { env } from "@proliferate/environment/public";
-import { useMutation } from "@tanstack/react-query";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useOnboardingFlow } from "@/hooks/org/use-onboarding-flow";
 
 export default function OnboardingPage() {
-	const router = useRouter();
-	const searchParams = useSearchParams();
-	const { refetch } = useOnboarding();
-	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
+	const {
+		step,
+		billingEnabled,
+		isFinishing,
+		isQuestionnaireSubmitting,
+		isToolsSubmitting,
+		isFinishSubmitting,
+		finishError,
+		onPathSelect,
+		onOrgCreated,
+		onQuestionnaireComplete,
+		onToolsComplete,
+		onInviteComplete,
+		onBillingComplete,
+		onFinish,
+	} = useOnboardingFlow();
 
-	const flowType = useOnboardingStore((state) => state.flowType);
-	const step = useOnboardingStore((state) => state.step);
-	const setFlowType = useOnboardingStore((state) => state.setFlowType);
-	const setStep = useOnboardingStore((state) => state.setStep);
-	const reset = useOnboardingStore((state) => state.reset);
-
-	// Handle billing success callback - go to complete step
-	useEffect(() => {
-		if (searchParams.get("success") === "billing") {
-			refetch();
-			setStep("complete");
-			window.history.replaceState({}, "", "/onboarding");
-		}
-	}, [searchParams, refetch, setStep]);
-
-	// If billing is disabled, skip the billing step
-	useEffect(() => {
-		if (!billingEnabled && step === "billing") {
-			refetch();
-			setStep("complete");
-		}
-	}, [billingEnabled, step, refetch, setStep]);
-
-	const saveToolsMutation = useMutation({
-		...orpc.onboarding.saveToolSelections.mutationOptions(),
-	});
-
-	const saveQuestionnaireMutation = useMutation({
-		...orpc.onboarding.saveQuestionnaire.mutationOptions(),
-	});
-
-	const markCompleteMutation = useMutation({
-		...orpc.onboarding.markComplete.mutationOptions(),
-	});
-
-	const handlePathSelect = (type: FlowType) => {
-		setFlowType(type);
-
-		if (type === "developer") {
-			// Developer flow: skip org creation, go to tool selection
-			setStep("tools");
-		} else {
-			// Organization flow: create org first
-			setStep("create-org");
-		}
-	};
-
-	const handleOrgCreated = () => {
-		setStep("questionnaire");
-	};
-
-	const handleQuestionnaireComplete = (data: {
-		referralSource?: string;
-		companyWebsite?: string;
-		teamSize?: string;
-	}) => {
-		saveQuestionnaireMutation.mutate(data, {
-			onSettled: () => {
-				setStep("tools");
-			},
-		});
-	};
-
-	const handleToolsComplete = (selectedTools: string[]) => {
-		saveToolsMutation.mutate(
-			{ selectedTools },
-			{
-				onSettled: () => {
-					if (flowType === "organization") {
-						setStep("invite");
-					} else if (billingEnabled) {
-						setStep("billing");
-					} else {
-						setStep("complete");
-					}
-				},
-			},
-		);
-	};
-
-	const handleInviteComplete = () => {
-		if (billingEnabled) {
-			setStep("billing");
-		} else {
-			setStep("complete");
-		}
-	};
-
-	const handleBillingComplete = () => {
-		refetch();
-		setStep("complete");
-	};
-
-	const handleFinish = () => {
-		markCompleteMutation.mutate(undefined, {
-			onSuccess: async () => {
-				await refetch();
-				// Navigate first, then reset the store to avoid flashing the path choice step
-				router.push("/dashboard");
-				reset();
-			},
-			onError: (err) => {
-				console.error("Failed to complete onboarding:", err);
-			},
-		});
-	};
-
-	// While finishing, keep showing the complete step (don't flash path choice)
-	if (markCompleteMutation.isSuccess) {
+	if (isFinishing) {
 		return null;
 	}
 
 	return (
 		<div key={step} className="animate-in fade-in duration-300">
-			{step === "path" && <StepPathChoice onSelect={handlePathSelect} />}
-			{step === "create-org" && <StepCreateOrg onComplete={handleOrgCreated} />}
+			{step === "path" && <StepPathChoice onSelect={onPathSelect} />}
+			{step === "create-org" && <StepCreateOrg onComplete={onOrgCreated} />}
 			{step === "questionnaire" && (
 				<StepQuestionnaire
-					onComplete={handleQuestionnaireComplete}
-					isSubmitting={saveQuestionnaireMutation.isPending}
+					onComplete={onQuestionnaireComplete}
+					isSubmitting={isQuestionnaireSubmitting}
 				/>
 			)}
 			{step === "tools" && (
-				<StepToolSelection
-					onComplete={handleToolsComplete}
-					isSubmitting={saveToolsMutation.isPending}
-				/>
+				<StepToolSelection onComplete={onToolsComplete} isSubmitting={isToolsSubmitting} />
 			)}
-			{step === "invite" && <StepInviteMembers onComplete={handleInviteComplete} />}
-			{step === "billing" && billingEnabled && <StepBilling onComplete={handleBillingComplete} />}
+			{step === "invite" && <StepInviteMembers onComplete={onInviteComplete} />}
+			{step === "billing" && billingEnabled && (
+				<StepBilling onComplete={onBillingComplete} />
+			)}
 			{step === "complete" && (
 				<StepComplete
-					onComplete={handleFinish}
-					isSubmitting={markCompleteMutation.isPending}
-					error={markCompleteMutation.error?.message}
+					onComplete={onFinish}
+					isSubmitting={isFinishSubmitting}
+					error={finishError}
 				/>
 			)}
 		</div>

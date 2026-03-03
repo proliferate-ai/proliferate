@@ -275,12 +275,9 @@ async function pauseSessionWithSnapshot(
 		const providerType = sandboxProvider as SandboxProviderType;
 		const provider = getSandboxProvider(providerType);
 
-		// Snapshot: memory (preferred) → pause → filesystem
+		// Snapshot: pause (preferred) → filesystem
 		let snapshotId: string;
-		if (provider.supportsMemorySnapshot && provider.memorySnapshot) {
-			const result = await provider.memorySnapshot(sessionId, session.sandboxId);
-			snapshotId = result.snapshotId;
-		} else if (provider.supportsPause) {
+		if (provider.supportsPause) {
 			const result = await provider.pause(sessionId, session.sandboxId);
 			snapshotId = result.snapshotId;
 		} else {

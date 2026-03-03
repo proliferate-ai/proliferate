@@ -37,14 +37,7 @@ const optionalLogLevel = optionalString
 const requiredWhen = (enabled: boolean, message: string) =>
 	optionalString.refine((val) => !enabled || (val && val.length > 0), { message });
 
-// Provider-specific: only required when DEFAULT_SANDBOX_PROVIDER matches
-const requiredForProvider = (env: EnvLike, provider: "e2b" | "modal") =>
-	z
-		.string()
-		.optional()
-		.refine((val) => env.DEFAULT_SANDBOX_PROVIDER !== provider || (val && val.length > 0), {
-			message: `Required when DEFAULT_SANDBOX_PROVIDER is '${provider}'`,
-		});
+const requiredE2B = optionalString;
 
 // GitHub App vars: only required when NOT using Nango for GitHub auth
 const requiredForGitHubApp = (env: EnvLike) =>
@@ -124,13 +117,13 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 		CI: optionalBoolean,
 		COMPOSIO_API_KEY: optionalString,
 		COMPOSIO_BASE_URL: optionalString,
-		DEFAULT_SANDBOX_PROVIDER: z.enum(["e2b", "modal"]),
+		DEFAULT_SANDBOX_PROVIDER: optionalString,
 		DEV_CONSOLE_LOG_PATH: optionalString, // Dev-only: file path for client console log capture
 		DEV_USER_ID: optionalString, // Local dev convenience
-		E2B_API_KEY: requiredForProvider(env, "e2b"),
-		E2B_DOMAIN: requiredForProvider(env, "e2b"),
-		E2B_TEMPLATE: requiredForProvider(env, "e2b"),
-		E2B_TEMPLATE_ALIAS: requiredForProvider(env, "e2b"),
+		E2B_API_KEY: requiredE2B,
+		E2B_DOMAIN: requiredE2B,
+		E2B_TEMPLATE: requiredE2B,
+		E2B_TEMPLATE_ALIAS: requiredE2B,
 		EMAIL_FROM: requiredWhen(
 			emailEnabled,
 			"Required when email is enabled (EMAIL_ENABLED=true, NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION=true, or cloud profile)",
@@ -153,12 +146,6 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 		LLM_PROXY_PUBLIC_URL: optionalString,
 		LOG_LEVEL: optionalLogLevel,
 		LOG_PRETTY: optionalBoolean,
-		MODAL_APP_NAME: requiredForProvider(env, "modal"),
-		MODAL_APP_SUFFIX: optionalString, // Optional per-dev suffix (e.g., "pablo" → "proliferate-sandbox-pablo")
-		MODAL_BASE_SNAPSHOT_ID: optionalString, // Optional base snapshot (pre-baked filesystem) for near-zero session startup
-		MODAL_ENDPOINT_URL: optionalString, // Only used in test scripts, not production
-		MODAL_TOKEN_ID: requiredForProvider(env, "modal"),
-		MODAL_TOKEN_SECRET: requiredForProvider(env, "modal"),
 		NANGO_SECRET_KEY: requiredWhen(integrationsEnabled, "Required when integrations are enabled"),
 		NEXT_BUILD_STANDALONE: optionalBoolean,
 		OPENAI_API_KEY: optionalString, // Used by LLM proxy for OpenAI model routing

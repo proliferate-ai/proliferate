@@ -57,7 +57,7 @@ export function getEnvStatus(env: NodeJS.ProcessEnv = process.env): EnvStatus {
 	requireKey("GATEWAY_JWT_SECRET", "Signs user WebSocket auth JWTs for the gateway", "core", true);
 	requireKey("USER_SECRETS_ENCRYPTION_KEY", "Encrypts user secrets at rest", "core", true);
 	requireKey("BETTER_AUTH_SECRET", "Auth session signing secret", "core", true);
-	requireKey("DEFAULT_SANDBOX_PROVIDER", "Selects sandbox provider (e2b|modal)", "core");
+	requireKey("DEFAULT_SANDBOX_PROVIDER", "Sandbox provider (e2b)", "core");
 	requireKey("ANTHROPIC_API_KEY", "Claude API key (direct or for LLM proxy)", "core", true);
 
 	if (profile === "self_host") {
@@ -66,17 +66,11 @@ export function getEnvStatus(env: NodeJS.ProcessEnv = process.env): EnvStatus {
 		requireKey("NEXT_PUBLIC_GATEWAY_URL", "Public gateway URL (build/runtime)", "core");
 	}
 
-	// Sandbox provider requirements
-	if (env.DEFAULT_SANDBOX_PROVIDER === "e2b") {
-		requireKey("E2B_API_KEY", "E2B API key", "feature", true);
-		requireKey("E2B_DOMAIN", "E2B API domain", "feature");
-		requireKey("E2B_TEMPLATE", "E2B template name", "feature");
-		requireKey("E2B_TEMPLATE_ALIAS", "E2B template alias", "feature");
-	} else if (env.DEFAULT_SANDBOX_PROVIDER === "modal") {
-		requireKey("MODAL_APP_NAME", "Modal app name", "feature");
-		requireKey("MODAL_TOKEN_ID", "Modal token ID", "feature", true);
-		requireKey("MODAL_TOKEN_SECRET", "Modal token secret", "feature", true);
-	}
+	// E2B sandbox provider requirements
+	requireKey("E2B_API_KEY", "E2B API key", "feature", true);
+	requireKey("E2B_DOMAIN", "E2B API domain", "feature");
+	requireKey("E2B_TEMPLATE", "E2B template name", "feature");
+	requireKey("E2B_TEMPLATE_ALIAS", "E2B template alias", "feature");
 
 	// LLM proxy requirements (if enabled)
 	if (llmProxyEnabled) {

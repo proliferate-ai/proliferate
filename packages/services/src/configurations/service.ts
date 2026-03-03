@@ -296,20 +296,13 @@ export async function getEffectiveServiceCommands(
 /**
  * Request a configuration snapshot build (fire-and-forget).
  *
- * Enqueues a background job that boots a sandbox from the base snapshot,
- * clones all configuration repos, and captures a filesystem snapshot.
- * Only works when Modal is configured (MODAL_APP_NAME is set).
+ * With E2B, snapshots are created via setup sessions. This enqueues a job
+ * that marks the configuration as default if no snapshot exists yet.
  */
 export async function requestConfigurationSnapshotBuild(
 	configurationId: string,
 	options?: { force?: boolean },
 ): Promise<void> {
-	if (!env.MODAL_APP_NAME) {
-		// Modal not configured — mark as default without snapshot so config isn't stuck in "building"
-		await configurationsDb.markConfigurationDefaultNoSnapshot(configurationId);
-		return;
-	}
-
 	try {
 		const queue = getConfigSnapshotBuildQueue();
 		const jobId = `config:${configurationId}:${Date.now()}`;

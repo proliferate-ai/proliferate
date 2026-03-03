@@ -6,7 +6,7 @@
  */
 
 import { type Logger, createLogger } from "@proliferate/logger";
-import { baseSnapshots, billing, sessions } from "@proliferate/services";
+import { billing, sessions } from "@proliferate/services";
 import type {
 	AutoStartOutputEntry,
 	ConfigurationServiceCommand,
@@ -15,9 +15,7 @@ import type {
 	SandboxProviderType,
 	ServerMessage,
 } from "@proliferate/shared";
-import { getModalAppName, getSandboxProvider } from "@proliferate/shared/providers";
-import { SandboxProviderError } from "@proliferate/shared/sandbox";
-import { computeBaseSnapshotVersionKey } from "@proliferate/shared/sandbox";
+import { getSandboxProvider } from "@proliferate/shared/providers";
 import { scheduleSessionExpiry } from "../expiry/expiry-queue";
 import type {
 	CodingHarnessEventStreamHandle,
@@ -419,34 +417,6 @@ export class SessionRuntime {
 			this.provider = provider;
 			this.log("Using sandbox provider", { provider: provider.type });
 
-			// Resolve base snapshot from DB for Modal provider
-			let baseSnapshotId: string | undefined;
-			if (provider.type === "modal") {
-				try {
-					const versionKey = computeBaseSnapshotVersionKey();
-					const modalAppName = getModalAppName();
-					const dbSnapshotId = await baseSnapshots.getReadySnapshotId(
-						versionKey,
-						"modal",
-						modalAppName,
-					);
-					if (dbSnapshotId) {
-						baseSnapshotId = dbSnapshotId;
-						this.logger.info(
-							{ baseSnapshotId, versionKey: versionKey.slice(0, 12) },
-							"Base snapshot resolved from DB",
-						);
-					} else {
-						this.logger.debug(
-							{ versionKey: versionKey.slice(0, 12) },
-							"No ready base snapshot in DB, using env fallback",
-						);
-					}
-				} catch (err) {
-					this.logger.warn({ err }, "Failed to resolve base snapshot from DB (non-fatal)");
-				}
-			}
-
 			// Derive per-session sandbox-mcp auth token and merge into env vars
 			const sandboxMcpToken = deriveSandboxMcpToken(this.env.serviceToken, this.sessionId);
 			const envVarsWithToken = {
@@ -467,7 +437,6 @@ export class SessionRuntime {
 					envVars: envVarsWithToken,
 					systemPrompt: this.context.systemPrompt,
 					snapshotId: this.context.session.snapshot_id || undefined,
-					baseSnapshotId,
 					agentConfig: this.context.agentConfig,
 					currentSandboxId: this.context.session.sandbox_id || undefined,
 					snapshotHasDeps: this.context.snapshotHasDeps,
@@ -475,20 +444,6 @@ export class SessionRuntime {
 					secretFileWrites: this.context.secretFileWrites,
 				});
 			} catch (ensureErr) {
-				// On memory snapshot restore failure, clear snapshotId so next reconnect
-				// creates a fresh sandbox instead of looping on a dead snapshot.
-				if (
-					ensureErr instanceof SandboxProviderError &&
-					ensureErr.operation === "restoreFromMemorySnapshot"
-				) {
-					this.logger.error(
-						{ err: ensureErr },
-						"Memory snapshot restore failed, clearing snapshotId",
-					);
-					await sessions.update(this.sessionId, { snapshotId: null }).catch((dbErr) => {
-						this.logger.error({ err: dbErr }, "Failed to clear snapshotId after restore failure");
-					});
-				}
 				throw ensureErr;
 			}
 			this.logLatency("runtime.ensure_ready.provider.ensure_sandbox", {

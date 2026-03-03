@@ -18,7 +18,7 @@ export const configurations = pgTable(
 
 		// Sandbox
 		snapshotId: text("snapshot_id"), // NULL means configuration is being set up
-		sandboxProvider: text("sandbox_provider").default("modal"),
+		sandboxProvider: text("sandbox_provider").default("e2b"),
 
 		// Status
 		status: text("status").default("building"), // 'building', 'ready', 'failed'

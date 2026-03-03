@@ -162,28 +162,10 @@ export class MigrationController {
 					reapplyAfterCapture: false,
 				});
 
-				// 2. Snapshot: memory (preferred) → pause → filesystem
+				// 2. Snapshot: pause (preferred) → filesystem
 				let snapshotId: string | undefined;
 				try {
-					if (provider.supportsMemorySnapshot && provider.memorySnapshot) {
-						try {
-							this.logger.info("Taking memory snapshot for idle shutdown");
-							const memStartMs = Date.now();
-							const result = await provider.memorySnapshot(this.options.sessionId, freshSandboxId);
-							this.logger.debug(
-								{ provider: provider.type, durationMs: Date.now() - memStartMs },
-								"migration.memory_snapshot",
-							);
-							snapshotId = result.snapshotId;
-						} catch (memErr) {
-							this.logger.warn(
-								{ err: memErr },
-								"Memory snapshot failed, falling back to filesystem",
-							);
-						}
-					}
-
-					if (!snapshotId && provider.supportsPause) {
+					if (provider.supportsPause) {
 						this.logger.info("Pausing sandbox for idle shutdown");
 						const pauseStartMs = Date.now();
 						const result = await provider.pause(this.options.sessionId, freshSandboxId);

@@ -355,7 +355,7 @@ async function handleSpawnChildTask(
 		visibility: (managerSession.visibility as "private" | "shared" | "org") ?? "private",
 		initialPrompt: instructions,
 		title,
-		sandboxProvider: managerSession.sandboxProvider as "modal" | "e2b" | undefined,
+		sandboxProvider: managerSession.sandboxProvider as "e2b" | undefined,
 	});
 
 	// Emit task_spawned run event

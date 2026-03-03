@@ -46,7 +46,7 @@ import type {
 	PauseResult,
 	SandboxProvider,
 	SnapshotResult,
-} from "./contract";
+} from "./types";
 
 /**
  * E2B Sandbox Provider
@@ -80,15 +80,6 @@ const getE2BConnectOpts = (): SandboxConnectOpts => ({
 	...getE2BApiOpts(),
 	timeoutMs: SANDBOX_TIMEOUT_MS,
 });
-
-// Re-export shared configs for backwards compatibility with existing tests
-export {
-	DEFAULT_CADDYFILE,
-	ENV_INSTRUCTIONS,
-	PLUGIN_MJS,
-	getOpencodeConfig,
-	waitForOpenCodeReady,
-} from "../sandbox";
 
 export class E2BProvider implements SandboxProvider {
 	readonly type = "e2b" as const;

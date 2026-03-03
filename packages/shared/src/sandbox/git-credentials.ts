@@ -1,4 +1,4 @@
-import type { RepoSpec } from "../providers/contract";
+import type { RepoSpec } from "../providers/types";
 
 function addCredentialVariant(target: Record<string, string>, url: string, token: string): void {
 	if (!url) {

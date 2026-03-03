@@ -10,7 +10,7 @@ import type {
 	SessionRuntimeStatus,
 	SessionVisibility,
 } from "../contracts/entities";
-import type { AutoStartOutputEntry, ConfigurationServiceCommand } from "../providers/contract";
+import type { AutoStartOutputEntry, ConfigurationServiceCommand } from "../providers/types";
 
 // Client source - where the message originated from
 export type ClientSource = "slack" | "web" | "api" | "cli" | "automation";
