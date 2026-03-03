@@ -251,6 +251,20 @@ export class E2BProvider implements SandboxProvider {
 			durationMs: Date.now() - setupWorkspaceStartMs,
 		});
 
+		// Kill stale processes from snapshot resume to avoid port conflicts.
+		// Must run BEFORE setupEssential starts new processes (OpenCode on :4096).
+		// On fresh sandboxes this is a no-op.
+		// Uses fuser to kill by port (more reliable than pkill in E2B snapshots
+		// where frozen processes may not appear in pkill's process scan).
+		if (isSnapshot) {
+			await sandbox.commands
+				.run(
+					"fuser -k 4096/tcp 4000/tcp 8470/tcp 2>/dev/null || true; pkill -9 caddy || true; sleep 0.5",
+					{ timeoutMs: 10000 },
+				)
+				.catch(() => {});
+		}
+
 		// Setup essential dependencies (blocking - must complete before API returns)
 		const setupEssentialStartMs = Date.now();
 		await this.setupEssentialDependencies(
@@ -731,16 +745,6 @@ export class E2BProvider implements SandboxProvider {
 		await sandbox.commands.run("/usr/local/bin/start-services.sh", {
 			timeoutMs: 30000,
 		});
-
-		// Kill stale processes from snapshot resume to avoid port conflicts.
-		// On fresh sandboxes these are no-ops. On resumed snapshots, the old
-		// processes still hold ports (4096, 4000, 8470, 80/20000).
-		await sandbox.commands
-			.run(
-				"pkill -f 'opencode serve' || true; pkill -f sandbox-mcp || true; pkill -f sandbox-daemon || true; pkill caddy || true",
-				{ timeoutMs: 5000 },
-			)
-			.catch(() => {});
 
 		// Create caddy import directory (must exist before Caddy starts)
 		await sandbox.commands.run(
