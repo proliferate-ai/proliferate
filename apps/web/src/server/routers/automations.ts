@@ -12,6 +12,7 @@ import {
 	orgs,
 	runs,
 	schedules,
+	sessions,
 	templates,
 	wakes,
 	workers,
@@ -897,6 +898,70 @@ export const automationsRouter = {
 	// ============================================
 	// Workers (Coworker UI)
 	// ============================================
+
+	/**
+	 * Create a new worker (coworker) with its manager session.
+	 *
+	 * Uses a 3-step process to handle the circular FK between workers and sessions:
+	 * 1. Create a placeholder session (kind=null)
+	 * 2. Create the worker referencing that session
+	 * 3. Promote the session to kind='manager' with the worker ID
+	 */
+	createWorker: orgProcedure
+		.input(
+			z.object({
+				name: z.string().min(1).max(200).optional(),
+				objective: z.string().max(5000).optional(),
+				modelId: z.string().optional(),
+			}),
+		)
+		.output(
+			z.object({
+				worker: z.object({
+					id: z.string().uuid(),
+					name: z.string(),
+					status: z.string(),
+					objective: z.string().nullable(),
+					modelId: z.string().nullable(),
+					managerSessionId: z.string().uuid(),
+				}),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const name = input?.name || "Untitled coworker";
+
+			// Step 1: Create placeholder session (kind=null to avoid manager_shape_check)
+			const placeholderSession = await sessions.createManagerSessionPlaceholder({
+				organizationId: context.orgId,
+				createdBy: context.user.id,
+				visibility: "org",
+				title: `Manager: ${name}`,
+			});
+
+			// Step 2: Create worker linked to the placeholder session
+			const worker = await workers.createWorker({
+				organizationId: context.orgId,
+				name,
+				objective: input?.objective,
+				managerSessionId: placeholderSession.id,
+				modelId: input?.modelId,
+				createdBy: context.user.id,
+			});
+
+			// Step 3: Promote session to kind='manager' with worker linkage
+			await sessions.promoteToManagerSession(placeholderSession.id, worker.id);
+
+			return {
+				worker: {
+					id: worker.id,
+					name: worker.name,
+					status: worker.status,
+					objective: worker.objective,
+					modelId: worker.modelId,
+					managerSessionId: worker.managerSessionId,
+				},
+			};
+		}),
 
 	/**
 	 * List all workers for the org with aggregate counts.

@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
 import { useIntegrations, useSlackInstallations } from "@/hooks/use-integrations";
 import { useCreateFromTemplate, useTemplateCatalog } from "@/hooks/use-templates";
-import { useWorkers } from "@/hooks/use-workers";
+import { useCreateWorker, useWorkers } from "@/hooks/use-workers";
 import { cn } from "@/lib/utils";
 import { BookTemplate, Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -38,6 +38,7 @@ export default function CoworkersPage() {
 	const { data: automations = [], isLoading: isLoadingAutomations } = useAutomations();
 	const { data: workersList = [], isLoading: isLoadingWorkers } = useWorkers();
 	const createAutomation = useCreateAutomation();
+	const createWorker = useCreateWorker();
 	const createFromTemplate = useCreateFromTemplate();
 	const { data: templateCatalog = [] } = useTemplateCatalog();
 
@@ -110,10 +111,10 @@ export default function CoworkersPage() {
 	const handleBlankCreate = async () => {
 		setCreateError(null);
 		try {
-			const automation = await createAutomation.mutateAsync({});
+			const result = await createWorker.mutateAsync({});
 			setPickerOpen(false);
 			startTransition(() => {
-				router.push(`/coworkers/${automation.id}`);
+				router.push(`/coworkers/${result.worker.id}`);
 			});
 		} catch (err) {
 			setCreateError(err instanceof Error ? err.message : "Failed to create coworker");
@@ -149,7 +150,8 @@ export default function CoworkersPage() {
 		}
 	};
 
-	const isPending = createAutomation.isPending || createFromTemplate.isPending;
+	const isPending =
+		createAutomation.isPending || createWorker.isPending || createFromTemplate.isPending;
 	const totalItems = hasWorkers ? workersList.length : automations.length;
 
 	return (

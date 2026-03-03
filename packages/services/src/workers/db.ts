@@ -876,10 +876,11 @@ export async function updateWorker(
 export async function deleteWorker(id: string, orgId: string): Promise<boolean> {
 	const db = getDb();
 	return db.transaction(async (tx) => {
-		// Nullify FK references from sessions and worker_runs before deleting
+		// Clear kind before nullifying worker_id to satisfy sessions_manager_shape_check
+		// (the constraint requires worker_id IS NOT NULL when kind = 'manager')
 		await tx
 			.update(sessions)
-			.set({ workerId: null, workerRunId: null })
+			.set({ kind: null, workerId: null, workerRunId: null })
 			.where(and(eq(sessions.workerId, id), eq(sessions.organizationId, orgId)));
 		await tx.delete(workerRunEvents).where(eq(workerRunEvents.workerId, id));
 		await tx

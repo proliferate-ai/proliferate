@@ -76,6 +76,19 @@ export function usePendingDirectives(workerId: string) {
 // Mutations
 // ============================================
 
+export function useCreateWorker() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		...orpc.automations.createWorker.mutationOptions(),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: orpc.automations.listWorkers.key(),
+			});
+		},
+	});
+}
+
 export function useSendDirective(workerId: string) {
 	const queryClient = useQueryClient();
 

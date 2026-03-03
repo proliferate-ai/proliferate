@@ -1765,6 +1765,75 @@ export async function transitionSessionMessageDeliveryState(input: {
 	return row;
 }
 
+// ============================================
+// Manager Session Creation
+// ============================================
+
+export interface CreateManagerSessionInput {
+	organizationId: string;
+	createdBy: string;
+	repoId?: string | null;
+	repoBaselineId?: string | null;
+	repoBaselineTargetId?: string | null;
+	visibility?: "private" | "shared" | "org";
+	title?: string | null;
+}
+
+/**
+ * Create a placeholder session for a new manager.
+ *
+ * Inserts with kind=NULL to avoid the `sessions_manager_shape_check` constraint
+ * (which requires worker_id IS NOT NULL for manager sessions). The caller must
+ * call `promoteToManagerSession()` after the worker row exists.
+ */
+export async function createManagerSessionPlaceholder(
+	input: CreateManagerSessionInput,
+): Promise<SessionRow> {
+	const db = getDb();
+	const [row] = await db
+		.insert(sessions)
+		.values({
+			organizationId: input.organizationId,
+			createdBy: input.createdBy,
+			sessionType: "coding",
+			kind: null,
+			status: "starting",
+			runtimeStatus: "starting",
+			operatorStatus: "active",
+			visibility: input.visibility ?? "org",
+			repoId: input.repoId ?? null,
+			repoBaselineId: input.repoBaselineId ?? null,
+			repoBaselineTargetId: input.repoBaselineTargetId ?? null,
+			title: input.title ?? null,
+		})
+		.returning();
+
+	return row;
+}
+
+/**
+ * Promote a placeholder session to kind='manager' and link it to a worker.
+ *
+ * Must be called after the worker row is created so the FK and check constraint are satisfied.
+ */
+export async function promoteToManagerSession(
+	sessionId: string,
+	workerId: string,
+): Promise<SessionRow> {
+	const db = getDb();
+	const [row] = await db
+		.update(sessions)
+		.set({ kind: "manager", workerId })
+		.where(eq(sessions.id, sessionId))
+		.returning();
+
+	return row;
+}
+
+// ============================================
+// Task Session Creation
+// ============================================
+
 export interface CreateTaskSessionInput {
 	id?: string;
 	organizationId: string;
