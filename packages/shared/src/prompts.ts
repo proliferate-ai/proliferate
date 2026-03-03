@@ -44,6 +44,17 @@ Write actions require user approval and will block until approved in the UI.
 ### Local Workflow
 The user can also install the Proliferate CLI on their local machine (\`npx @proliferate/cli\`) to sync files with this sandbox and use their own IDE. If they ask about local development, VS Code, Cursor, or file syncing, let them know.
 
+## Service Commands (Auto-Start)
+
+After verifying that services work (dev servers, databases, watchers, etc.), call \`save_service_commands()\` with the commands needed to start them. Future sessions will automatically run these commands on boot so the project is ready immediately.
+
+For example, if a Next.js project needs \`pnpm dev\` to start the dev server:
+\`\`\`
+save_service_commands({ commands: [{ name: "dev-server", command: "pnpm dev", cwd: "." }] })
+\`\`\`
+
+Always save service commands **before** calling \`save_snapshot()\`.
+
 ## Environment Files & Secrets
 
 After identifying which env files the project needs (e.g. \`.env.local\`, \`.env\`), call \`save_env_files()\` to record the spec. Future sessions will automatically generate these files from stored secrets on boot. Secret env files are automatically scrubbed before snapshots and restored after, so \`save_snapshot()\` is always safe to call.
@@ -65,11 +76,12 @@ When setup is verified, write a preview manifest to \`.proliferate/previews.json
 
 ---
 
-Before your final message, confirm you have done both:
+Before your final message, confirm you have done all three:
 1. \`verify\` — uploaded screenshots, health checks, or test output
-2. \`save_snapshot\` — saved the working state
+2. \`save_service_commands\` — saved the startup commands for dev servers and services
+3. \`save_snapshot\` — saved the working state
 
-If either is missing, do it now. Text cannot substitute for tool calls.
+If any is missing, do it now. Text cannot substitute for tool calls.
 `;
 }
 
@@ -80,7 +92,8 @@ Start now without waiting for more instructions:
 2. Install dependencies and start required local services.
 3. Verify key flows actually work (tests, health checks, and app startup).
 4. Call verify() with evidence of what works.
-5. Call save_snapshot() when setup is complete.
+5. Call save_service_commands() with the commands to start the dev server and any other services.
+6. Call save_snapshot() when setup is complete.
 If credentials are truly required, use request_env_variables with clear descriptions and tell the user exactly which secret file path to create in Environment.`;
 }
 

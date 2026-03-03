@@ -1838,9 +1838,9 @@ export interface CreateTaskSessionInput {
 	id?: string;
 	organizationId: string;
 	createdBy: string;
-	repoId: string;
-	repoBaselineId: string;
-	repoBaselineTargetId: string;
+	repoId?: string | null;
+	repoBaselineId?: string | null;
+	repoBaselineTargetId?: string | null;
 	workerId?: string | null;
 	workerRunId?: string | null;
 	parentSessionId?: string | null;
@@ -1853,8 +1853,13 @@ export interface CreateTaskSessionInput {
 }
 
 export async function createTaskSession(input: CreateTaskSessionInput): Promise<SessionRow> {
-	if (!input.repoId || !input.repoBaselineId || !input.repoBaselineTargetId) {
-		throw new Error("Task session requires repo + baseline + baseline target linkage");
+	// Configured task sessions require full repo linkage;
+	// scratch tasks (configurationId=null) can omit it per sessions_task_linkage_check.
+	if (
+		input.configurationId &&
+		(!input.repoId || !input.repoBaselineId || !input.repoBaselineTargetId)
+	) {
+		throw new Error("Configured task session requires repo + baseline + baseline target linkage");
 	}
 
 	const db = getDb();
@@ -1870,9 +1875,9 @@ export async function createTaskSession(input: CreateTaskSessionInput): Promise<
 			runtimeStatus: "starting",
 			operatorStatus: "active",
 			visibility: input.visibility ?? "private",
-			repoId: input.repoId,
-			repoBaselineId: input.repoBaselineId,
-			repoBaselineTargetId: input.repoBaselineTargetId,
+			repoId: input.repoId ?? null,
+			repoBaselineId: input.repoBaselineId ?? null,
+			repoBaselineTargetId: input.repoBaselineTargetId ?? null,
 			workerId: input.workerId ?? null,
 			workerRunId: input.workerRunId ?? null,
 			parentSessionId: input.parentSessionId ?? null,

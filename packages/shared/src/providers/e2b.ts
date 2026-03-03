@@ -486,6 +486,7 @@ export class E2BProvider implements SandboxProvider {
 		const gitCredentials = buildGitCredentialsMap(repos);
 		if (Object.keys(gitCredentials).length > 0) {
 			log.debug({ repoCount: repos.length }, "Writing git credentials");
+			await sandbox.commands.run("rm -f /tmp/.git-credentials.json", { timeoutMs: 5000 });
 			await sandbox.files.write("/tmp/.git-credentials.json", JSON.stringify(gitCredentials));
 		}
 
@@ -675,15 +676,38 @@ export class E2BProvider implements SandboxProvider {
 			log.warn("OpenCode using direct key (no LLM proxy)");
 			opencodeEnv.ANTHROPIC_API_KEY = opts.envVars.ANTHROPIC_API_KEY;
 		} else {
-			log.warn("OpenCode has no LLM proxy AND no direct key");
+			log.error(
+				"OpenCode has no LLM proxy AND no direct ANTHROPIC_API_KEY — it will fail to start",
+			);
 		}
 		sandbox.commands
 			.run(
 				`cd ${repoDir} && opencode serve --print-logs --log-level ERROR --port 4096 --hostname 0.0.0.0 > /tmp/opencode.log 2>&1`,
 				{ timeoutMs: 3600000, envs: opencodeEnv }, // Long timeout, runs in background
 			)
+			.then(async (result) => {
+				if (result.exitCode !== 0) {
+					let logTail = "";
+					try {
+						const tailResult = await sandbox.commands.run("tail -50 /tmp/opencode.log", {
+							timeoutMs: 5000,
+						});
+						logTail = tailResult.stdout;
+					} catch {
+						/* sandbox may already be gone */
+					}
+					log.warn(
+						{
+							exitCode: result.exitCode,
+							stderr: capOutput(result.stderr),
+							logTail: capOutput(logTail),
+						},
+						"OpenCode exited unexpectedly",
+					);
+				}
+			})
 			.catch((err: unknown) => {
-				providerLogger.debug({ err }, "OpenCode process ended");
+				log.warn({ err }, "OpenCode process failed");
 			});
 		// Don't await - let it run in background
 	}
@@ -708,6 +732,16 @@ export class E2BProvider implements SandboxProvider {
 			timeoutMs: 30000,
 		});
 
+		// Kill stale processes from snapshot resume to avoid port conflicts.
+		// On fresh sandboxes these are no-ops. On resumed snapshots, the old
+		// processes still hold ports (4096, 4000, 8470, 80/20000).
+		await sandbox.commands
+			.run(
+				"pkill -f 'opencode serve' || true; pkill -f sandbox-mcp || true; pkill -f sandbox-daemon || true; pkill caddy || true",
+				{ timeoutMs: 5000 },
+			)
+			.catch(() => {});
+
 		// Create caddy import directory (must exist before Caddy starts)
 		await sandbox.commands.run(
 			`mkdir -p ${SANDBOX_PATHS.userCaddyDir} && touch ${SANDBOX_PATHS.userCaddyFile}`,
@@ -717,10 +751,6 @@ export class E2BProvider implements SandboxProvider {
 		// Start Caddy for preview proxy (run in background, non-blocking)
 		log.debug("Starting Caddy preview proxy (async)");
 		await sandbox.files.write(SANDBOX_PATHS.caddyfile, DEFAULT_CADDYFILE);
-		// Stop the template's default Caddy (systemd-started, port 80) before
-		// starting our custom instance on port 20000. Without this, the second
-		// caddy process fails silently due to admin API / lock conflicts.
-		await sandbox.commands.run("pkill caddy || true", { timeoutMs: 5000 }).catch(() => {});
 		sandbox.commands
 			.run(`caddy run --config ${SANDBOX_PATHS.caddyfile}`, {
 				timeoutMs: 3600000,
@@ -886,6 +916,7 @@ export class E2BProvider implements SandboxProvider {
 
 		// Always refresh git credentials on restore (write even if empty to clear stale tokens).
 		const gitCredentials = buildGitCredentialsMap(opts.repos);
+		await sandbox.commands.run("rm -f /tmp/.git-credentials.json", { timeoutMs: 5000 });
 		await sandbox.files.write("/tmp/.git-credentials.json", JSON.stringify(gitCredentials));
 
 		if (!doPull) return;
