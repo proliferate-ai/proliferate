@@ -7,7 +7,15 @@
 import { truncateJson } from "@proliferate/providers/helpers/truncation";
 import type { ActionInvocationStatus, CapabilityMode } from "@proliferate/shared/contracts/actions";
 import { getServicesLogger } from "../logger";
-import type { ActionInvocationRow, ActionInvocationWithSession, ResumeIntentRow } from "./db";
+import type {
+	ActionInvocationRow,
+	ActionInvocationWithSession,
+	CreateInvocationInput,
+	ResumeIntentRow,
+} from "./db";
+
+// Re-exported DB row types (service DTO boundary)
+export type { ActionInvocationRow, ActionInvocationWithSession, CreateInvocationInput };
 import * as actionsDb from "./db";
 import { resolveMode } from "./modes";
 
@@ -855,4 +863,35 @@ export async function listOrgActions(
 		actionsDb.countByOrg(orgId, options?.status),
 	]);
 	return { invocations, total };
+}
+
+export interface ActionInvocationTransport
+	extends Omit<
+		ActionInvocationWithSession,
+		"approvedAt" | "completedAt" | "expiresAt" | "createdAt"
+	> {
+	approvedAt: string | null;
+	completedAt: string | null;
+	expiresAt: string | null;
+	createdAt: string | null;
+}
+
+/**
+ * List org actions with transport-safe ISO timestamp fields.
+ */
+export async function listOrgActionsForTransport(
+	orgId: string,
+	options?: { status?: string; limit?: number; offset?: number },
+): Promise<{ invocations: ActionInvocationTransport[]; total: number }> {
+	const { invocations, total } = await listOrgActions(orgId, options);
+	return {
+		invocations: invocations.map((row) => ({
+			...row,
+			approvedAt: row.approvedAt?.toISOString() ?? null,
+			completedAt: row.completedAt?.toISOString() ?? null,
+			expiresAt: row.expiresAt?.toISOString() ?? null,
+			createdAt: row.createdAt?.toISOString() ?? null,
+		})),
+		total,
+	};
 }

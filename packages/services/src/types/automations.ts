@@ -2,29 +2,9 @@
  * Automations type definitions.
  *
  * Input types for DB operations.
- * DB row types are defined in automations/db.ts.
+ * DB row types are defined in automations/db.ts and
+ * re-exported through automations/service.ts.
  */
-
-// Re-export DB types for backwards compatibility
-export type {
-	AutomationRow,
-	AutomationWithRelations,
-	AutomationWithTriggers,
-	AutomationConnectionWithIntegration,
-	CreatorSummary,
-	IntegrationSummary,
-	ListEventsResult,
-	ConfigurationSummary,
-	ScheduleSummary,
-	TriggerEventDetailRow,
-	TriggerEventInsertRow,
-	TriggerEventRow,
-	TriggerForAutomationRow,
-	TriggerSummary,
-	TriggerWithIntegration,
-	WebhookTriggerInfo,
-	WebhookTriggerWithAutomation,
-} from "../automations/db";
 
 // JSON type for Drizzle fields
 export type Json = Record<string, unknown> | unknown[] | string | number | boolean | null;

@@ -19,7 +19,7 @@ import type {
 	AutomationTrigger,
 	AutomationWithTriggers,
 } from "@proliferate/shared/contracts/automations";
-import * as configurationsDb from "../configurations/db";
+import * as configurationsDb from "../configurations";
 import { getServicesLogger } from "../logger";
 import * as pollGroupsDb from "../poll-groups/db";
 import { createRunFromTriggerEvent } from "../runs/service";
@@ -338,6 +338,35 @@ export async function automationExists(id: string, orgId: string): Promise<boole
 
 export type { ActionMode, ActionModesMap } from "./db";
 
+// Re-exported DB row types (service DTO boundary)
+export type {
+	AutomationRow,
+	AutomationWithRelations,
+	AutomationWithTriggers as AutomationWithTriggersRow,
+	AutomationConnectionWithIntegration,
+	ConfigurationSummary,
+	CreatorSummary,
+	TriggerSummary,
+	ScheduleSummary,
+	IntegrationSummary,
+	TriggerWithIntegration,
+	TriggerEventRow,
+	TriggerEventDetailRow,
+	TriggerForAutomationRow,
+	WebhookTriggerWithAutomation,
+	WebhookTriggerInfo,
+	TriggerEventInsertRow,
+	Json,
+	ListEventsResult as DbListEventsResult,
+} from "./db";
+export type {
+	CreateAutomationInput as CreateAutomationDbInput,
+	UpdateAutomationInput as UpdateAutomationDbInput,
+	CreateTriggerForAutomationInput,
+	CreateTriggerEventInput as CreateTriggerEventDbInput,
+	ListEventsOptions as DbListEventsOptions,
+} from "../types/automations";
+
 /**
  * Get action_modes for an automation.
  */
@@ -496,6 +525,16 @@ export async function listAutomationConnections(
 	const exists = await automationsDb.exists(automationId, orgId);
 	assertAutomationExistsOrThrow(exists);
 
+	return automationsDb.listAutomationConnections(automationId);
+}
+
+/**
+ * List connections for an automation (no org-scoped existence check).
+ * Used by session creation when the orgId is not conveniently available.
+ */
+export async function listAutomationConnectionsInternal(
+	automationId: string,
+): Promise<automationsDb.AutomationConnectionWithIntegration[]> {
 	return automationsDb.listAutomationConnections(automationId);
 }
 

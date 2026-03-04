@@ -11,6 +11,7 @@ export {
 	createConnectorWithSecret,
 	updateConnector,
 	deleteConnector,
+	validateConnector,
 	toConnectorConfig,
 	PresetNotFoundError,
 	ConnectorValidationError,
@@ -18,7 +19,8 @@ export {
 	type CreateConnectorWithSecretInput,
 	type CreateConnectorWithSecretResult,
 	type UpdateConnectorInput,
+	type ConnectorValidationDiagnosticClass,
+	type ConnectorValidationResult,
+	type ConnectorValidationTool,
+	type ConnectorValidationToolParam,
 } from "./service";
-
-export { listOrgSecretKeys } from "./db";
-export type { OrgConnectorRow } from "./db";

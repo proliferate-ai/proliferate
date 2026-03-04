@@ -6,7 +6,7 @@
  */
 
 import type { TriggerProvider } from "@proliferate/triggers";
-import * as automationsDb from "../automations/db";
+import * as automationsService from "../automations/service";
 import { getServicesLogger } from "../logger";
 import * as runsService from "../runs/service";
 import type { TriggerRow } from "../types/triggers";
@@ -70,7 +70,10 @@ async function processEventForTrigger(
 	}
 
 	// Load automation
-	const automation = await automationsDb.findById(trigger.automationId, trigger.organizationId);
+	const automation = await automationsService.getAutomation(
+		trigger.automationId,
+		trigger.organizationId,
+	);
 	if (!automation || !automation.enabled) {
 		await safeCreateSkippedEvent(trigger, item, provider, "automation_disabled");
 		return { processed: 0, skipped: 1 };

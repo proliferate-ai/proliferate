@@ -6,7 +6,9 @@
 
 import type { ConnectorAuth, ConnectorConfig, ConnectorRiskPolicy } from "@proliferate/shared";
 import { getConnectorPresetByKey } from "@proliferate/shared";
+import { listConnectorToolsOrThrow } from "../actions/connectors/client";
 import { encrypt, getEncryptionKey } from "../db/crypto";
+import { resolveSecretValue } from "../secrets/service";
 
 import * as db from "./db";
 
@@ -31,6 +33,37 @@ export interface UpdateConnectorInput {
 	auth?: ConnectorAuth;
 	riskPolicy?: ConnectorRiskPolicy | null;
 	enabled?: boolean;
+}
+
+export type ConnectorValidationDiagnosticClass =
+	| "auth"
+	| "timeout"
+	| "unreachable"
+	| "protocol"
+	| "unknown";
+
+export interface ConnectorValidationToolParam {
+	name: string;
+	type: "string" | "number" | "boolean" | "object";
+	required: boolean;
+	description: string;
+}
+
+export interface ConnectorValidationTool {
+	name: string;
+	description: string;
+	riskLevel: "read" | "write" | "danger";
+	params: ConnectorValidationToolParam[];
+}
+
+export interface ConnectorValidationResult {
+	ok: boolean;
+	tools: ConnectorValidationTool[];
+	error: string | null;
+	diagnostics: {
+		class: ConnectorValidationDiagnosticClass;
+		message: string;
+	} | null;
 }
 
 // ============================================
@@ -135,6 +168,88 @@ export async function updateConnector(
  */
 export async function deleteConnector(id: string, organizationId: string): Promise<boolean> {
 	return db.deleteById(id, organizationId);
+}
+
+/**
+ * Resolve secret and validate connector by calling MCP tools/list.
+ */
+export async function validateConnector(
+	organizationId: string,
+	connector: ConnectorConfig,
+): Promise<ConnectorValidationResult> {
+	const resolvedSecret = await resolveSecretValue(organizationId, connector.auth.secretKey);
+	if (!resolvedSecret) {
+		return {
+			ok: false,
+			tools: [],
+			error: `Secret "${connector.auth.secretKey}" not found or could not be decrypted`,
+			diagnostics: { class: "auth", message: "Secret not found" },
+		};
+	}
+
+	try {
+		const result = await listConnectorToolsOrThrow(connector, resolvedSecret);
+		if (result.actions.length === 0) {
+			return {
+				ok: false,
+				tools: [],
+				error: "Connected successfully but no tools were returned",
+				diagnostics: {
+					class: "protocol",
+					message: "Server returned zero tools from tools/list",
+				},
+			};
+		}
+
+		const { zodToJsonSchema } = await import("@proliferate/providers/helpers/schema");
+		const tools: ConnectorValidationTool[] = result.actions.map((action) => {
+			const schema = zodToJsonSchema(action.params);
+			const properties = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
+			const requiredSet = new Set(
+				Array.isArray(schema.required) ? (schema.required as string[]) : [],
+			);
+			return {
+				name: action.id,
+				description: action.description,
+				riskLevel: action.riskLevel,
+				params: Object.entries(properties).map(([name, property]) => {
+					const t = property.type as string;
+					const type: "string" | "number" | "boolean" | "object" =
+						t === "string"
+							? "string"
+							: t === "number"
+								? "number"
+								: t === "boolean"
+									? "boolean"
+									: "object";
+					return {
+						name,
+						type,
+						required: requiredSet.has(name),
+						description: (property.description as string) ?? "",
+					};
+				}),
+			};
+		});
+
+		return {
+			ok: true,
+			tools,
+			error: null,
+			diagnostics: null,
+		};
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		return {
+			ok: false,
+			tools: [],
+			error: message,
+			diagnostics: {
+				class: classifyConnectorValidationError(message),
+				message,
+			},
+		};
+	}
 }
 
 // ============================================
@@ -268,6 +383,24 @@ export class ConnectorValidationError extends Error {
 		super(message);
 		this.name = "ConnectorValidationError";
 	}
+}
+
+function classifyConnectorValidationError(message: string): ConnectorValidationDiagnosticClass {
+	if (message.includes("timeout")) return "timeout";
+	if (
+		message.includes("ECONNREFUSED") ||
+		message.includes("ENOTFOUND") ||
+		message.includes("fetch failed")
+	) {
+		return "unreachable";
+	}
+	if (message.includes("401") || message.includes("403")) {
+		return "auth";
+	}
+	if (message.includes("JSON") || message.includes("parse")) {
+		return "protocol";
+	}
+	return "unknown";
 }
 
 // ============================================

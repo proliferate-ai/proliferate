@@ -1,1 +1,5 @@
-export * from "./db";
+/**
+ * Webhook Inbox module exports.
+ */
+
+export * from "./service";

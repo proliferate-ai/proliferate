@@ -24,30 +24,27 @@ export const actionsRouter = {
 				})
 				.optional(),
 		)
+		.output(
+			z.object({
+				invocations: z.array(z.any()),
+				total: z.number(),
+				limit: z.number(),
+				offset: z.number(),
+			}),
+		)
 		.handler(async ({ input, context }) => {
 			const limit = input?.limit ?? 50;
 			const offset = input?.offset ?? 0;
-			const result = await actions.listOrgActions(context.orgId, {
+			const result = await actions.listOrgActionsForTransport(context.orgId, {
 				status: input?.status,
 				limit,
 				offset,
 			});
 			return {
-				invocations: result.invocations.map(serializeInvocation),
+				invocations: result.invocations,
 				total: result.total,
 				limit,
 				offset,
 			};
 		}),
 };
-
-/** Serialize dates to ISO strings for transport. */
-function serializeInvocation(row: actions.ActionInvocationWithSession) {
-	return {
-		...row,
-		approvedAt: row.approvedAt?.toISOString() ?? null,
-		completedAt: row.completedAt?.toISOString() ?? null,
-		expiresAt: row.expiresAt?.toISOString() ?? null,
-		createdAt: row.createdAt?.toISOString() ?? null,
-	};
-}

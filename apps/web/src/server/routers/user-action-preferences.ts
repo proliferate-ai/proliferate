@@ -9,14 +9,28 @@ import { userActionPreferences } from "@proliferate/services";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 
+const UserActionPreferenceSchema = z.object({
+	id: z.string(),
+	userId: z.string(),
+	organizationId: z.string(),
+	sourceId: z.string(),
+	actionId: z.string().nullable(),
+	enabled: z.boolean(),
+	createdAt: z.coerce.date().nullable(),
+	updatedAt: z.coerce.date().nullable(),
+});
+
 export const userActionPreferencesRouter = {
 	/**
 	 * List all preferences for the current user + org.
 	 */
-	list: orgProcedure.handler(async ({ context }) => {
-		const prefs = await userActionPreferences.listPreferences(context.user.id, context.orgId);
-		return { preferences: prefs };
-	}),
+	list: orgProcedure
+		.input(z.object({}).optional())
+		.output(z.object({ preferences: z.array(UserActionPreferenceSchema) }))
+		.handler(async ({ context }) => {
+			const prefs = await userActionPreferences.listPreferences(context.user.id, context.orgId);
+			return { preferences: prefs };
+		}),
 
 	/**
 	 * Toggle a single source or action.
@@ -29,6 +43,7 @@ export const userActionPreferencesRouter = {
 				enabled: z.boolean(),
 			}),
 		)
+		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
 			if (input.actionId) {
 				await userActionPreferences.setActionEnabled(
@@ -63,6 +78,7 @@ export const userActionPreferencesRouter = {
 				),
 			}),
 		)
+		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
 			await userActionPreferences.bulkSetPreferences(
 				context.user.id,

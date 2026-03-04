@@ -99,24 +99,27 @@ export const onboardingRouter = {
 	/**
 	 * Get onboarding status for the current user/organization.
 	 */
-	getStatus: protectedProcedure.output(OnboardingStatusSchema).handler(async ({ context }) => {
-		const orgId = context.session.activeOrganizationId;
+	getStatus: protectedProcedure
+		.input(z.object({}).optional())
+		.output(OnboardingStatusSchema)
+		.handler(async ({ context }) => {
+			const orgId = context.session.activeOrganizationId;
 
-		if (!orgId) {
-			log.warn({ userId: context.user.id }, "No active organization for onboarding status check");
-		}
-
-		const status = await onboarding.getOnboardingStatus(orgId);
-
-		if (orgId && !status.onboardingComplete) {
-			const autoCompleted = await onboarding.autoCompleteIfNeeded(orgId, context.user.id);
-			if (autoCompleted) {
-				status.onboardingComplete = true;
+			if (!orgId) {
+				log.warn({ userId: context.user.id }, "No active organization for onboarding status check");
 			}
-		}
 
-		return status;
-	}),
+			const status = await onboarding.getOnboardingStatus(orgId);
+
+			if (orgId && !status.onboardingComplete) {
+				const autoCompleted = await onboarding.autoCompleteIfNeeded(orgId, context.user.id);
+				if (autoCompleted) {
+					status.onboardingComplete = true;
+				}
+			}
+
+			return status;
+		}),
 
 	/**
 	 * Save tool selections during onboarding.

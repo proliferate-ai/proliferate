@@ -474,3 +474,56 @@ export async function skipTriggerEvent(id: string, orgId: string): Promise<SkipE
 export async function triggerExists(id: string, orgId: string): Promise<boolean> {
 	return triggersDb.exists(id, orgId);
 }
+
+// ============================================
+// DB passthrough wrappers
+// (Thin service-layer wrappers so callers never import from db.ts directly)
+// ============================================
+
+/**
+ * Find a trigger by ID with its automation (no org check).
+ * Used by webhook/scheduled workers that operate outside org context.
+ */
+export async function findTriggerWithAutomationById(
+	id: string,
+): Promise<triggersDb.TriggerWithAutomationRow | null> {
+	return triggersDb.findTriggerWithAutomationById(id);
+}
+
+/**
+ * Update a trigger event status and metadata.
+ */
+export async function updateEvent(
+	id: string,
+	input: {
+		status?: string;
+		sessionId?: string | null;
+		errorMessage?: string | null;
+		processedAt?: Date | null;
+	},
+): Promise<void> {
+	return triggersDb.updateEvent(id, input);
+}
+
+/**
+ * Create a skipped trigger event.
+ */
+export async function createSkippedEvent(input: triggersDb.CreateSkippedEventInput): Promise<void> {
+	return triggersDb.createSkippedEvent(input);
+}
+
+/**
+ * Find active webhook triggers for an integration.
+ */
+export async function findActiveWebhookTriggers(
+	integrationId: string,
+): Promise<triggersDb.TriggerRow[]> {
+	return triggersDb.findActiveWebhookTriggers(integrationId);
+}
+
+/**
+ * Check if a trigger event exists by dedup key.
+ */
+export async function eventExistsByDedupKey(triggerId: string, dedupKey: string): Promise<boolean> {
+	return triggersDb.eventExistsByDedupKey(triggerId, dedupKey);
+}

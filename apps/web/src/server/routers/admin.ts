@@ -129,9 +129,12 @@ export const adminRouter = {
 	/**
 	 * Throw a server-side error intentionally for Sentry verification.
 	 */
-	sentryTestError: adminProcedure.input(z.object({}).optional()).handler(async () => {
-		throw new Error("Sentry Test: Server-side API error thrown intentionally!");
-	}),
+	sentryTestError: adminProcedure
+		.input(z.object({}).optional())
+		.output(z.never())
+		.handler(async () => {
+			throw new Error("Sentry Test: Server-side API error thrown intentionally!");
+		}),
 
 	/**
 	 * Start impersonating a user in an organization.

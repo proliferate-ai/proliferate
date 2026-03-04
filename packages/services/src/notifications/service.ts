@@ -15,9 +15,14 @@ import {
 	type NotificationPayload,
 	SUPPRESSION_WINDOW_MS,
 } from "@proliferate/shared/contracts/notifications";
+import * as integrationsService from "../integrations/service";
 import { enqueueOutbox } from "../outbox/service";
+import * as sessionsService from "../sessions/service";
 import * as notificationsDb from "./db";
-import type { NotificationRow } from "./db";
+import type { NotificationPreferenceRow, NotificationRow } from "./db";
+
+// Re-exported DB row types (service DTO boundary)
+export type { NotificationRow, NotificationPreferenceRow };
 
 const TERMINAL_STATUSES = ["succeeded", "failed", "timed_out", "needs_human"];
 
@@ -50,6 +55,29 @@ export interface SessionNotificationSubscription {
 	createdAt: Date | null;
 }
 
+export class SessionNotificationSessionNotFoundError extends Error {
+	constructor(message = "Session not found") {
+		super(message);
+		this.name = "SessionNotificationSessionNotFoundError";
+	}
+}
+
+export class SessionNotificationSlackInstallMissingError extends Error {
+	constructor(message = "No active Slack installation. Connect Slack in Settings > Integrations.") {
+		super(message);
+		this.name = "SessionNotificationSlackInstallMissingError";
+	}
+}
+
+export class SessionNotificationSlackUserMissingError extends Error {
+	constructor(email: string) {
+		super(
+			`Could not find a Slack account for ${email}. Make sure you use the same email in Slack and Proliferate.`,
+		);
+		this.name = "SessionNotificationSlackUserMissingError";
+	}
+}
+
 /**
  * Subscribe a user to session completion notifications.
  * Upserts — calling again for the same session+user updates the subscription.
@@ -71,6 +99,44 @@ export async function subscribeToSessionNotifications(input: {
 	});
 
 	return mapSubscription(row);
+}
+
+/**
+ * Resolve and subscribe the current user to completion notifications for a session.
+ */
+export async function subscribeCurrentUserToSessionNotifications(input: {
+	sessionId: string;
+	organizationId: string;
+	userId: string;
+	userEmail: string;
+}): Promise<void> {
+	const session = await sessionsService.getSession(input.sessionId, input.organizationId);
+	if (!session) {
+		throw new SessionNotificationSessionNotFoundError();
+	}
+
+	const installation = await integrationsService.getSlackInstallationForNotifications(
+		input.organizationId,
+	);
+	if (!installation) {
+		throw new SessionNotificationSlackInstallMissingError();
+	}
+
+	const slackUserId = await integrationsService.findSlackUserIdByEmail(
+		installation.id,
+		input.userEmail,
+	);
+	if (!slackUserId) {
+		throw new SessionNotificationSlackUserMissingError(input.userEmail);
+	}
+
+	await subscribeToSessionNotifications({
+		sessionId: input.sessionId,
+		userId: input.userId,
+		slackInstallationId: installation.id,
+		slackUserId,
+		eventTypes: ["completed"],
+	});
 }
 
 /**

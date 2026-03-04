@@ -6,7 +6,7 @@ import WebSocket from "ws";
  * Mock the auth middleware so verifyToken resolves without real JWT/CLI logic.
  */
 const mockVerifyToken = vi.fn();
-vi.mock("../../../middleware", () => ({
+vi.mock("../../../middleware/auth", () => ({
 	verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
 }));
 

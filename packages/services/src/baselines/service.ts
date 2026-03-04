@@ -12,6 +12,9 @@ import { getServicesLogger } from "../logger";
 import * as baselinesDb from "./db";
 import type { RepoBaselineRow, RepoBaselineTargetRow } from "./db";
 
+// Re-exported DB row types (service DTO boundary)
+export type { RepoBaselineRow, RepoBaselineTargetRow };
+
 const logger = () => getServicesLogger().child({ module: "baselines" });
 
 // ============================================

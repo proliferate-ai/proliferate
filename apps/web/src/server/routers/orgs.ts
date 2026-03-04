@@ -100,6 +100,7 @@ export const orgsRouter = {
 	 * Get org-level action modes (3-mode permission cascade).
 	 */
 	getActionModes: orgProcedure
+		.input(z.object({}).optional())
 		.output(z.object({ modes: z.record(z.enum(["allow", "require_approval", "deny"])) }))
 		.handler(async ({ context }) => {
 			const modes = await orgs.getActionModes(context.orgId);

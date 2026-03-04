@@ -24,20 +24,3 @@ export type {
 	ListEventsOptions as DbListEventsOptions,
 	CreateSkippedEventInput as DbCreateSkippedEventInput,
 } from "../types/triggers";
-
-// Direct DB exports for webhook route (bypass service layer)
-export {
-	findTriggerWithAutomationById,
-	findTriggerBasicById,
-	findDuplicateEventByDedupKey,
-	createEvent,
-	findByIdWithIntegrationNoOrg,
-	updatePollingState,
-	updateEvent,
-} from "./db";
-
-// DB functions needed by GitHub App webhook handler
-export { findActiveByIntegrationId, findEventByDedupKey, createSkippedEvent } from "./db";
-
-// DB functions needed by Nango webhook handler
-export { findActiveWebhookTriggers, eventExistsByDedupKey } from "./db";

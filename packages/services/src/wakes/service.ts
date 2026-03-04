@@ -5,12 +5,15 @@
  */
 
 import {
+	type WakeEventSource,
 	type WakeEventStatus,
 	isTerminalWakeEventStatus,
 	isValidWakeEventTransition,
 } from "@proliferate/shared/contracts/workers";
 import type { CreateWakeEventInput, WakeEventRow } from "./db";
 import * as wakesDb from "./db";
+
+export type { WakeEventRow, CreateWakeEventInput } from "./db";
 
 export class WakeNotFoundError extends Error {
 	constructor(wakeEventId: string) {
@@ -26,6 +29,65 @@ export class WakeTransitionError extends Error {
 
 export async function enqueueWake(input: CreateWakeEventInput): Promise<WakeEventRow> {
 	return wakesDb.createWakeEvent(input);
+}
+
+/**
+ * Create a new wake event. Thin wrapper over DB.
+ */
+export async function createWakeEvent(input: CreateWakeEventInput): Promise<WakeEventRow> {
+	return wakesDb.createWakeEvent(input);
+}
+
+/**
+ * Find a wake event by ID and organization.
+ */
+export async function findWakeEventById(
+	id: string,
+	organizationId: string,
+): Promise<WakeEventRow | undefined> {
+	return wakesDb.findWakeEventById(id, organizationId);
+}
+
+/**
+ * Check if a worker has any queued wake event with the given source.
+ */
+export async function hasQueuedWakeBySource(
+	workerId: string,
+	source: WakeEventSource,
+): Promise<boolean> {
+	return wakesDb.hasQueuedWakeBySource(workerId, source);
+}
+
+/**
+ * List queued wake events for a worker, ordered by priority and time.
+ */
+export async function listQueuedByWorker(
+	workerId: string,
+	organizationId: string,
+): Promise<WakeEventRow[]> {
+	return wakesDb.listQueuedByWorker(workerId, organizationId);
+}
+
+/**
+ * List queued wake events for a worker filtered by source.
+ */
+export async function listQueuedByWorkerAndSource(
+	workerId: string,
+	organizationId: string,
+	source: WakeEventSource,
+): Promise<WakeEventRow[]> {
+	return wakesDb.listQueuedByWorkerAndSource(workerId, organizationId, source);
+}
+
+/**
+ * List recent wake events for a worker.
+ */
+export async function listByWorker(
+	workerId: string,
+	organizationId: string,
+	limit?: number,
+): Promise<WakeEventRow[]> {
+	return wakesDb.listByWorker(workerId, organizationId, limit);
 }
 
 export async function transitionWakeStatus(input: {

@@ -4,6 +4,7 @@
  * Business rules around worker lifecycle, wake/run orchestration, and run events.
  */
 
+import { createSyncClient } from "@proliferate/gateway-clients";
 import {
 	WORKER_RUN_EVENT_TYPES,
 	type WorkerRunEventType,
@@ -11,6 +12,7 @@ import {
 	isValidWorkerRunTransition,
 	isValidWorkerTransition,
 } from "@proliferate/shared/contracts/workers";
+import { getServicesLogger } from "../logger";
 import * as sessionsDb from "../sessions/db";
 import type { WakeEventRow } from "../wakes/db";
 import * as wakesDb from "../wakes/db";
@@ -19,6 +21,7 @@ import type { WorkerRow, WorkerRunEventRow, WorkerRunRow } from "./db";
 import * as workersDb from "./db";
 
 const WORKER_RUN_EVENT_TYPES_SET = new Set<string>(WORKER_RUN_EVENT_TYPES);
+const logger = getServicesLogger().child({ module: "workers" });
 
 export class WorkerNotFoundError extends Error {
 	constructor(workerId: string) {
@@ -67,6 +70,14 @@ export class WorkerRunEventTypeError extends Error {
 export interface RunNowResult {
 	status: "queued";
 	wakeEvent: WakeEventRow;
+}
+
+export interface RunWorkerNowInput {
+	workerId: string;
+	organizationId: string;
+	gatewayUrl?: string | null;
+	serviceToken?: string | null;
+	payloadJson?: unknown;
 }
 
 export interface AppendWorkerRunEventInput {
@@ -519,6 +530,37 @@ export async function runNow(
 		status: "queued",
 		wakeEvent,
 	};
+}
+
+/**
+ * Queue a manual wake and best-effort eager-start the worker manager session.
+ */
+export async function runWorkerNow(input: RunWorkerNowInput): Promise<{ wakeEventId: string }> {
+	const result = await runNow(input.workerId, input.organizationId, input.payloadJson);
+	const worker = await findWorkerById(input.workerId, input.organizationId);
+	if (worker && input.gatewayUrl && input.serviceToken) {
+		eagerStartManagerSession(worker.managerSessionId, input.gatewayUrl, input.serviceToken);
+	}
+	return { wakeEventId: result.wakeEvent.id };
+}
+
+function eagerStartManagerSession(
+	sessionId: string,
+	gatewayUrl: string,
+	serviceToken: string,
+): void {
+	const gateway = createSyncClient({
+		baseUrl: gatewayUrl,
+		auth: {
+			type: "service",
+			name: "web-run-worker",
+			secret: serviceToken,
+		},
+	});
+
+	gateway.eagerStart(sessionId).catch((err: unknown) => {
+		logger.warn({ err, sessionId }, "Worker eager start request failed");
+	});
 }
 
 export async function orchestrateNextWakeAndCreateRun(

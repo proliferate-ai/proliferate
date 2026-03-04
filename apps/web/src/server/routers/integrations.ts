@@ -10,13 +10,12 @@ import { logger } from "@/lib/infra/logger";
 import { requireNangoIntegrationId } from "@/lib/integrations/nango";
 import { sendSlackConnectInvite } from "@/lib/integrations/slack";
 import { ORPCError } from "@orpc/server";
-import { actions, connectors, integrations, secrets } from "@proliferate/services";
+import { connectors, integrations } from "@proliferate/services";
 import {
 	ConnectorAuthSchema,
 	ConnectorConfigSchema,
 	ConnectorRiskPolicySchema,
 } from "@proliferate/shared";
-import type { ConnectorConfig } from "@proliferate/shared";
 import {
 	GitHubStatusSchema,
 	IntegrationSchema,
@@ -724,103 +723,7 @@ export const integrationsRouter = {
 			} catch (err) {
 				throwAsORPC(err);
 			}
-
-			const connector: ConnectorConfig = input.connector;
-
-			const resolvedSecret = await secrets.resolveSecretValue(
-				context.orgId,
-				connector.auth.secretKey,
-			);
-			if (!resolvedSecret) {
-				return {
-					ok: false,
-					tools: [],
-					error: `Secret "${connector.auth.secretKey}" not found or could not be decrypted`,
-					diagnostics: { class: "auth" as const, message: "Secret not found" },
-				};
-			}
-
-			try {
-				const result = await actions.connectors.listConnectorToolsOrThrow(
-					connector,
-					resolvedSecret,
-				);
-
-				if (result.actions.length === 0) {
-					return {
-						ok: false,
-						tools: [],
-						error: "Connected successfully but no tools were returned",
-						diagnostics: {
-							class: "protocol" as const,
-							message: "Server returned zero tools from tools/list",
-						},
-					};
-				}
-
-				const { zodToJsonSchema } = await import("@proliferate/providers/helpers/schema");
-				const tools = result.actions.map((a) => {
-					const schema = zodToJsonSchema(a.params);
-					const properties = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
-					const requiredSet = new Set(
-						Array.isArray(schema.required) ? (schema.required as string[]) : [],
-					);
-					return {
-						name: a.id,
-						description: a.description,
-						riskLevel: a.riskLevel,
-						params: Object.entries(properties).map(([name, prop]) => {
-							const t = prop.type as string;
-							const type: "string" | "number" | "boolean" | "object" =
-								t === "string"
-									? "string"
-									: t === "number"
-										? "number"
-										: t === "boolean"
-											? "boolean"
-											: "object";
-							return {
-								name,
-								type,
-								required: requiredSet.has(name),
-								description: (prop.description as string) ?? "",
-							};
-						}),
-					};
-				});
-
-				return {
-					ok: true,
-					tools,
-					error: null,
-					diagnostics: null,
-				};
-			} catch (err) {
-				const message = err instanceof Error ? err.message : String(err);
-				let diagClass: "auth" | "timeout" | "unreachable" | "protocol" | "unknown" = "unknown";
-
-				if (message.includes("timeout")) {
-					diagClass = "timeout";
-				} else if (
-					message.includes("ECONNREFUSED") ||
-					message.includes("ENOTFOUND") ||
-					message.includes("fetch failed")
-				) {
-					diagClass = "unreachable";
-				} else if (message.includes("401") || message.includes("403")) {
-					diagClass = "auth";
-				} else if (message.includes("JSON") || message.includes("parse")) {
-					diagClass = "protocol";
-				}
-
-				log.warn({ err, connectorId: connector.id }, "Connector validation failed");
-				return {
-					ok: false,
-					tools: [],
-					error: message,
-					diagnostics: { class: diagClass, message },
-				};
-			}
+			return connectors.validateConnector(context.orgId, input.connector);
 		}),
 
 	/**

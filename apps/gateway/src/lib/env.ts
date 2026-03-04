@@ -10,6 +10,7 @@ export interface GatewayEnv {
 	gatewayUrl: string;
 	serviceToken: string;
 	gatewayJwtSecret: string;
+	userSecretsEncryptionKey: string;
 	anthropicApiKey: string;
 	githubAppId?: string;
 	githubAppPrivateKey?: string;
@@ -28,6 +29,8 @@ export interface GatewayEnv {
 	idleSnapshotGraceSeconds: number;
 	llmProxyRequired: boolean;
 	llmProxyUrl?: string;
+	actionsLegacyTokens: boolean;
+	billingEnabled: boolean;
 }
 
 export function loadGatewayEnv(): GatewayEnv {
@@ -37,6 +40,7 @@ export function loadGatewayEnv(): GatewayEnv {
 		gatewayUrl: env.NEXT_PUBLIC_GATEWAY_URL,
 		serviceToken: env.SERVICE_TO_SERVICE_AUTH_TOKEN,
 		gatewayJwtSecret: env.GATEWAY_JWT_SECRET,
+		userSecretsEncryptionKey: env.USER_SECRETS_ENCRYPTION_KEY,
 		anthropicApiKey: env.ANTHROPIC_API_KEY,
 		githubAppId: env.GITHUB_APP_ID,
 		githubAppPrivateKey: env.GITHUB_APP_PRIVATE_KEY,
@@ -55,5 +59,7 @@ export function loadGatewayEnv(): GatewayEnv {
 		idleSnapshotGraceSeconds: env.IDLE_SNAPSHOT_DELAY_SECONDS,
 		llmProxyRequired: env.LLM_PROXY_REQUIRED,
 		llmProxyUrl: env.LLM_PROXY_URL,
+		actionsLegacyTokens: env.ACTIONS_PLANE_LEGACY_TOKENS,
+		billingEnabled: env.NEXT_PUBLIC_BILLING_ENABLED,
 	};
 }

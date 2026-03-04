@@ -6,6 +6,7 @@
 
 import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { ORPCError } from "@orpc/server";
+import { env } from "@proliferate/environment/server";
 import { automations, orgs, runs, schedules, templates, workers } from "@proliferate/services";
 import {
 	AutomationConnectionSchema,
@@ -52,6 +53,18 @@ function throwAutomationORPCError(err: unknown, fallbackMessage: string): never 
 	}
 	if (err instanceof automations.AutomationValidationError) {
 		throw new ORPCError("BAD_REQUEST", { message: err.message });
+	}
+	if (
+		err instanceof automations.TemplateIntegrationInactiveError ||
+		err instanceof automations.TemplateIntegrationBindingMismatchError
+	) {
+		throw new ORPCError("BAD_REQUEST", { message: err.message });
+	}
+	if (
+		err instanceof automations.TemplateNotFoundError ||
+		err instanceof automations.TemplateIntegrationNotFoundError
+	) {
+		throw new ORPCError("NOT_FOUND", { message: err.message });
 	}
 	if (schedules.isCronValidationError(err)) {
 		throw new ORPCError("BAD_REQUEST", { message: err.message });
@@ -154,17 +167,6 @@ export const automationsRouter = {
 				});
 				return { automation };
 			} catch (err) {
-				if (err instanceof Error && err.message.includes("not found")) {
-					throw new ORPCError("NOT_FOUND", { message: err.message });
-				}
-				if (
-					err instanceof Error &&
-					(err.message.includes("not active") ||
-						err.message.includes("Missing required") ||
-						err.message.includes("is for"))
-				) {
-					throw new ORPCError("BAD_REQUEST", { message: err.message });
-				}
 				throwAutomationORPCError(err, "Failed to create automation from template");
 			}
 		}),
@@ -191,14 +193,6 @@ export const automationsRouter = {
 				);
 				return { automation };
 			} catch (err) {
-				if (
-					err instanceof Error &&
-					(err.message.includes("no snapshot") ||
-						err.message.includes("agent_decide") ||
-						err.message.includes("routing descriptions"))
-				) {
-					throw new ORPCError("BAD_REQUEST", { message: err.message });
-				}
 				throwAutomationORPCError(err, "Failed to update automation");
 			}
 		}),
@@ -1246,30 +1240,12 @@ export const automationsRouter = {
 		.output(z.object({ wakeEventId: z.string() }))
 		.handler(async ({ input, context }) => {
 			try {
-				const result = await workers.runNow(input.workerId, context.orgId);
-
-				// Notify the gateway to start/resume the manager session so it picks up the wake
-				const worker = await workers.findWorkerById(input.workerId, context.orgId);
-				if (worker && GATEWAY_URL) {
-					const { createSyncClient } = await import("@proliferate/gateway-clients");
-					const { env } = await import("@proliferate/environment/server");
-					const authToken = env.SERVICE_TO_SERVICE_AUTH_TOKEN;
-					if (authToken) {
-						const gateway = createSyncClient({
-							baseUrl: GATEWAY_URL,
-							auth: {
-								type: "service",
-								name: "web-run-worker",
-								secret: authToken,
-							},
-						});
-						gateway.eagerStart(worker.managerSessionId).catch(() => {
-							// Best-effort: session will start on next WebSocket connect if this fails
-						});
-					}
-				}
-
-				return { wakeEventId: result.wakeEvent.id };
+				return await workers.runWorkerNow({
+					workerId: input.workerId,
+					organizationId: context.orgId,
+					gatewayUrl: GATEWAY_URL,
+					serviceToken: env.SERVICE_TO_SERVICE_AUTH_TOKEN,
+				});
 			} catch (err) {
 				if (err instanceof workers.WorkerNotFoundError) {
 					throw new ORPCError("NOT_FOUND", { message: err.message });

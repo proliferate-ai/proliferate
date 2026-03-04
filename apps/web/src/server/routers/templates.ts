@@ -14,6 +14,7 @@ export const templatesRouter = {
 	 * List all available automation templates.
 	 */
 	list: orgProcedure
+		.input(z.object({}).optional())
 		.output(z.object({ templates: z.array(AutomationTemplateSchema) }))
 		.handler(async () => {
 			return {

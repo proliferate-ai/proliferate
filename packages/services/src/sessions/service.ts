@@ -1007,6 +1007,30 @@ export async function getSessionEvents(sessionId: string) {
 	return sessionsDb.listSessionEvents(sessionId);
 }
 
+export interface SessionLifecycleEvent {
+	id: string;
+	eventType: string;
+	actorUserId: string | null;
+	createdAt: Date;
+}
+
+export async function getSessionEventsForOrg(
+	sessionId: string,
+	orgId: string,
+): Promise<SessionLifecycleEvent[]> {
+	const session = await getSession(sessionId, orgId);
+	if (!session) {
+		throw new SessionNotFoundError(sessionId);
+	}
+	const events = await getSessionEvents(sessionId);
+	return events.map((event) => ({
+		id: event.id,
+		eventType: event.eventType,
+		actorUserId: event.actorUserId,
+		createdAt: event.createdAt,
+	}));
+}
+
 // ============================================
 // K6: Archive and delete
 // ============================================

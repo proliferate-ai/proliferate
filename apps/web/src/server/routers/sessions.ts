@@ -9,7 +9,7 @@
 import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
-import { integrations, notifications, sessions } from "@proliferate/services";
+import { notifications, sessions } from "@proliferate/services";
 import {
 	CreateSessionInputSchema,
 	CreateSessionResponseSchema,
@@ -42,6 +42,15 @@ function throwMappedSessionError(err: unknown, fallbackMessage: string): never {
 	}
 	if (err instanceof sessions.SessionSnapshotQuotaError) {
 		throw new ORPCError("CONFLICT", { message: err.message });
+	}
+	if (err instanceof notifications.SessionNotificationSessionNotFoundError) {
+		throw new ORPCError("NOT_FOUND", { message: err.message });
+	}
+	if (err instanceof notifications.SessionNotificationSlackInstallMissingError) {
+		throw new ORPCError("BAD_REQUEST", { message: err.message });
+	}
+	if (err instanceof notifications.SessionNotificationSlackUserMissingError) {
+		throw new ORPCError("BAD_REQUEST", { message: err.message });
 	}
 	throw new ORPCError("INTERNAL_SERVER_ERROR", {
 		message: err instanceof Error ? err.message : fallbackMessage,
@@ -280,6 +289,7 @@ export const sessionsRouter = {
 	 * Get billing-blocked sessions grouped by reason for inbox display.
 	 */
 	blockedSummary: orgProcedure
+		.input(z.object({}).optional())
 		.output(
 			z.object({
 				groups: z.array(
@@ -441,20 +451,12 @@ export const sessionsRouter = {
 			}),
 		)
 		.handler(async ({ input, context }) => {
-			// Verify session belongs to org
-			const session = await sessions.getSession(input.id, context.orgId);
-			if (!session) {
-				throw new ORPCError("NOT_FOUND", { message: "Session not found" });
+			try {
+				const events = await sessions.getSessionEventsForOrg(input.id, context.orgId);
+				return { events };
+			} catch (err) {
+				throwMappedSessionError(err, "Failed to load session events");
 			}
-			const eventList = await sessions.getSessionEvents(input.id);
-			return {
-				events: eventList.map((e) => ({
-					id: e.id,
-					eventType: e.eventType,
-					actorUserId: e.actorUserId,
-					createdAt: e.createdAt,
-				})),
-			};
 		}),
 
 	/**
@@ -464,39 +466,17 @@ export const sessionsRouter = {
 		.input(z.object({ sessionId: z.string().uuid() }))
 		.output(z.object({ subscribed: z.boolean() }))
 		.handler(async ({ input, context }) => {
-			// Verify session belongs to org
-			const session = await sessions.getSession(input.sessionId, context.orgId);
-			if (!session) {
-				throw new ORPCError("NOT_FOUND", { message: "Session not found" });
-			}
-
-			// Find active Slack installation for the org
-			const installation = await integrations.getSlackInstallationForNotifications(context.orgId);
-			if (!installation) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: "No active Slack installation. Connect Slack in Settings > Integrations.",
+			try {
+				await notifications.subscribeCurrentUserToSessionNotifications({
+					sessionId: input.sessionId,
+					organizationId: context.orgId,
+					userId: context.user.id,
+					userEmail: context.user.email,
 				});
+				return { subscribed: true };
+			} catch (err) {
+				throwMappedSessionError(err, "Failed to subscribe to notifications");
 			}
-
-			// Look up user's Slack user ID by email
-			const userSlackId = await integrations.findSlackUserIdByEmail(
-				installation.id,
-				context.user.email,
-			);
-			if (!userSlackId) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: `Could not find a Slack account for ${context.user.email}. Make sure you use the same email in Slack and Proliferate.`,
-				});
-			}
-
-			await notifications.subscribeToSessionNotifications({
-				sessionId: input.sessionId,
-				userId: context.user.id,
-				slackInstallationId: installation.id,
-				slackUserId: userSlackId,
-				eventTypes: ["completed"],
-			});
-			return { subscribed: true };
 		}),
 
 	/**

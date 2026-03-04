@@ -3,4 +3,3 @@
  */
 
 export * from "./service";
-export type { RepoBaselineRow, RepoBaselineTargetRow } from "./db";

@@ -39,10 +39,13 @@ export const notificationsRouter = {
 	/**
 	 * Get unread notification count for badge display.
 	 */
-	unreadCount: orgProcedure.output(z.object({ count: z.number() })).handler(async ({ context }) => {
-		const count = await notifications.getUnreadCount(context.user.id, context.orgId);
-		return { count };
-	}),
+	unreadCount: orgProcedure
+		.input(z.object({}).optional())
+		.output(z.object({ count: z.number() }))
+		.handler(async ({ context }) => {
+			const count = await notifications.getUnreadCount(context.user.id, context.orgId);
+			return { count };
+		}),
 
 	/**
 	 * Mark a single notification as read.

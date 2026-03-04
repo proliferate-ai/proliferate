@@ -439,6 +439,264 @@ export async function getEffectiveServiceCommands(
 	return { source, commands, workspaces };
 }
 
+// ============================================
+// Re-exported DB types for external consumers
+// ============================================
+
+export type {
+	ConfigurationRow,
+	ConfigurationRepoRow,
+	RepoBasicRow,
+	ConfigurationForSessionRow,
+	ConfigurationRepoDetailRow,
+	RepoConfigurationRow,
+	ConfigurationRepoWithConfigurationRow,
+	SnapshotRepoRow,
+	ConfigurationWithRelationsRow,
+	ConfigurationWithOrgRow,
+	ManagedConfigurationRow,
+	RepoWithNameRow,
+	ConfigurationSnapshotBuildInfoRow,
+	ConfigurationCandidateRow,
+} from "./db";
+
+// Re-export input types
+export type {
+	CreateConfigurationInput as DbCreateConfigurationInput,
+	CreateConfigurationRepoInput,
+	UpdateConfigurationInput as DbUpdateConfigurationInput,
+	CreateConfigurationFullInput,
+	SnapshotRow,
+} from "../types/configurations";
+
+// ============================================
+// Thin service wrappers for DB operations
+// (Route all external access through service layer)
+// ============================================
+
+/**
+ * Get configuration by ID for session creation.
+ */
+export async function findByIdForSession(id: string) {
+	return configurationsDb.findByIdForSession(id);
+}
+
+/**
+ * Get configuration repos with full repo details for session creation.
+ */
+export async function getConfigurationReposWithDetails(configurationId: string) {
+	return configurationsDb.getConfigurationReposWithDetails(configurationId);
+}
+
+/**
+ * Get configuration env file spec.
+ */
+export async function getConfigurationEnvFiles(configurationId: string) {
+	return configurationsDb.getConfigurationEnvFiles(configurationId);
+}
+
+/**
+ * Update configuration-level env file spec.
+ */
+export async function updateConfigurationEnvFiles(input: {
+	configurationId: string;
+	envFiles: unknown;
+	updatedBy: string;
+}) {
+	return configurationsDb.updateConfigurationEnvFiles(input);
+}
+
+/**
+ * Get configuration-level service commands.
+ */
+export async function getConfigurationServiceCommands(configurationId: string) {
+	return configurationsDb.getConfigurationServiceCommands(configurationId);
+}
+
+/**
+ * Update configuration-level service commands.
+ */
+export async function updateConfigurationServiceCommands(input: {
+	configurationId: string;
+	serviceCommands: unknown;
+	updatedBy: string;
+}) {
+	return configurationsDb.updateConfigurationServiceCommands(input);
+}
+
+/**
+ * Update configuration snapshot_id only if currently null.
+ */
+export async function updateSnapshotIdIfNull(configurationId: string, snapshotId: string) {
+	return configurationsDb.updateSnapshotIdIfNull(configurationId, snapshotId);
+}
+
+/**
+ * Low-level configuration update (used by gateway snapshot flow).
+ */
+export async function update(
+	id: string,
+	input: import("../types/configurations").UpdateConfigurationInput,
+) {
+	return configurationsDb.update(id, input);
+}
+
+/**
+ * Create a new configuration with full details (for finalize).
+ */
+export async function createConfigurationFull(
+	input: import("../types/configurations").CreateConfigurationFullInput,
+) {
+	return configurationsDb.createFull(input);
+}
+
+/**
+ * Check if a configuration contains a specific repo.
+ */
+export async function configurationContainsRepo(configurationId: string, repoId: string) {
+	return configurationsDb.configurationContainsRepo(configurationId, repoId);
+}
+
+/**
+ * Create a single configuration_repo junction entry.
+ */
+export async function createSingleConfigurationRepo(
+	configurationId: string,
+	repoId: string,
+	workspacePath: string,
+) {
+	return configurationsDb.createSingleConfigurationRepo(configurationId, repoId, workspacePath);
+}
+
+/**
+ * Delete a configuration_repo junction entry.
+ */
+export async function deleteConfigurationRepo(configurationId: string, repoId: string) {
+	return configurationsDb.deleteConfigurationRepo(configurationId, repoId);
+}
+
+/**
+ * List configurations for a specific repo.
+ */
+export async function listByRepoId(repoId: string) {
+	return configurationsDb.listByRepoId(repoId);
+}
+
+/**
+ * Get configuration_repos with configuration data for a specific repo.
+ */
+export async function getConfigurationReposWithConfigurations(repoId: string) {
+	return configurationsDb.getConfigurationReposWithConfigurations(repoId);
+}
+
+/**
+ * Get repos linked to a configuration.
+ */
+export async function getReposForConfiguration(configurationId: string) {
+	return configurationsDb.getReposForConfiguration(configurationId);
+}
+
+/**
+ * Get a configuration by ID with minimal repos (for auth check).
+ */
+export async function findById(id: string) {
+	return configurationsDb.findById(id);
+}
+
+/**
+ * Get a configuration by ID with full relations.
+ */
+export async function findByIdFull(id: string) {
+	return configurationsDb.findByIdFull(id);
+}
+
+/**
+ * Find managed configurations with their repos.
+ */
+export async function findManagedConfigurations() {
+	return configurationsDb.findManagedConfigurations();
+}
+
+/**
+ * Get repos for an organization by IDs (or all if no IDs provided).
+ */
+export async function getReposForManagedConfiguration(orgId: string, repoIds?: string[]) {
+	return configurationsDb.getReposForManagedConfiguration(orgId, repoIds);
+}
+
+/**
+ * Create a managed configuration record.
+ */
+export async function createManagedConfiguration(
+	input: import("../types/configurations").CreateManagedConfigurationInput,
+) {
+	return configurationsDb.createManagedConfiguration(input);
+}
+
+/**
+ * Create configuration_repos junction entries.
+ */
+export async function createConfigurationRepos(
+	entries: import("../types/configurations").CreateConfigurationRepoInput[],
+) {
+	return configurationsDb.createConfigurationRepos(entries);
+}
+
+/**
+ * Get configuration snapshot build info (for worker).
+ */
+export async function getConfigurationSnapshotBuildInfo(configurationId: string) {
+	return configurationsDb.getConfigurationSnapshotBuildInfo(configurationId);
+}
+
+/**
+ * Mark a configuration as building (snapshot build in progress).
+ */
+export async function markConfigurationSnapshotBuilding(configurationId: string) {
+	return configurationsDb.markConfigurationSnapshotBuilding(configurationId);
+}
+
+/**
+ * Mark a configuration snapshot as default (auto-built with repos cloned).
+ */
+export async function markConfigurationSnapshotDefault(
+	configurationId: string,
+	snapshotId: string,
+) {
+	return configurationsDb.markConfigurationSnapshotDefault(configurationId, snapshotId);
+}
+
+/**
+ * Mark a configuration as default without a snapshot.
+ */
+export async function markConfigurationDefaultNoSnapshot(configurationId: string) {
+	return configurationsDb.markConfigurationDefaultNoSnapshot(configurationId);
+}
+
+/**
+ * Mark a configuration snapshot build as failed.
+ */
+export async function markConfigurationSnapshotFailed(configurationId: string, error: string) {
+	return configurationsDb.markConfigurationSnapshotFailed(configurationId, error);
+}
+
+/**
+ * Get configurations by IDs with routing metadata for the selector service.
+ */
+export async function getConfigurationCandidates(
+	configurationIds: string[],
+	organizationId: string,
+) {
+	return configurationsDb.getConfigurationCandidates(configurationIds, organizationId);
+}
+
+/**
+ * List configurations with repos and setup sessions (raw DB rows).
+ */
+export async function listAll(status?: string) {
+	return configurationsDb.listAll(status);
+}
+
 /**
  * Request a configuration snapshot build (fire-and-forget).
  *

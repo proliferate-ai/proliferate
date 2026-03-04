@@ -5,8 +5,6 @@
 export * from "./service";
 export * from "./mapper";
 
-export type { ActionInvocationRow, ActionInvocationWithSession, CreateInvocationInput } from "./db";
-
 // MCP connector module
 export * as connectors from "./connectors";
 

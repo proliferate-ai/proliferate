@@ -13,7 +13,7 @@ import { createLogger } from "@proliferate/logger";
 import { type WebSocket, WebSocketServer } from "ws";
 import type { HubManager } from "../../../hub";
 import type { GatewayEnv } from "../../../lib/env";
-import { verifyToken } from "../../../middleware";
+import { verifyToken } from "../../../middleware/auth";
 import type { AuthResult } from "../../../types";
 import type { UpgradeHandler } from "../../ws-multiplexer";
 

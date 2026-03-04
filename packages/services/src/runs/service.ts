@@ -14,7 +14,7 @@ import {
 import { getDb } from "../db/client";
 import { onRunTerminal } from "../notifications/hooks";
 import { enqueueRunNotification } from "../notifications/service";
-import type { TriggerEventRow } from "../triggers/db";
+import type { TriggerEventRow } from "../types/triggers";
 import * as runsDb from "./db";
 
 /** Default run deadline: 2 hours from creation. */

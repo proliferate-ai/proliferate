@@ -130,6 +130,27 @@ export async function updateServiceCommands(input: {
 }
 
 /**
+ * Get repo's organization_id.
+ */
+export async function getOrganizationId(repoId: string): Promise<string | null> {
+	return reposDb.getOrganizationId(repoId);
+}
+
+/**
+ * Get repo's github_repo_name by ID.
+ */
+export async function getGithubRepoName(repoId: string): Promise<string | null> {
+	return reposDb.getGithubRepoName(repoId);
+}
+
+/**
+ * List repos for an organization with configuration status (raw rows).
+ */
+export async function listByOrganization(orgId: string) {
+	return reposDb.listByOrganization(orgId);
+}
+
+/**
  * Create a repo and auto-create an associated single-repo configuration.
  *
  * The configuration creation is tightly coupled to snapshot building —

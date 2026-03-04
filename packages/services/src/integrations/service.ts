@@ -1140,6 +1140,229 @@ export async function updateSlackConfigWithValidation(
 }
 
 // ============================================
+// DB passthrough wrappers
+// (Thin service-layer wrappers so callers never import from db.ts directly)
+// ============================================
+
+/**
+ * Find integration by ID (no org scoping).
+ * Used by webhook/polling workers that operate outside an org context.
+ */
+export async function findById(id: string): Promise<integrationsDb.IntegrationRow | null> {
+	return integrationsDb.findById(id);
+}
+
+/**
+ * Find integration by ID scoped to an organization.
+ */
+export async function findByIdAndOrg(
+	id: string,
+	orgId: string,
+): Promise<integrationsDb.IntegrationRow | null> {
+	return integrationsDb.findByIdAndOrg(id, orgId);
+}
+
+/**
+ * Find active GitHub App integration for an organization.
+ */
+export async function findActiveGitHubApp(
+	orgId: string,
+): Promise<integrationsDb.IntegrationRow | null> {
+	return integrationsDb.findActiveGitHubApp(orgId);
+}
+
+/**
+ * Find active integration by provider type (org-scoped).
+ */
+export async function findActiveByIntegrationId(
+	orgId: string,
+	integrationId: string,
+): Promise<Pick<integrationsDb.IntegrationRow, "id" | "connectionId"> | null> {
+	return integrationsDb.findActiveByIntegrationId(orgId, integrationId);
+}
+
+/**
+ * Find active Nango GitHub integration for an organization.
+ */
+export async function findActiveNangoGitHub(
+	orgId: string,
+	integrationId: string,
+): Promise<Pick<
+	integrationsDb.IntegrationRow,
+	"id" | "githubInstallationId" | "connectionId"
+> | null> {
+	return integrationsDb.findActiveNangoGitHub(orgId, integrationId);
+}
+
+/**
+ * Get repo connections with integration details for a repo.
+ */
+export async function getRepoConnectionsWithIntegrations(
+	repoId: string,
+): Promise<integrationsDb.RepoConnectionIntegrationRow[]> {
+	return integrationsDb.getRepoConnectionsWithIntegrations(repoId);
+}
+
+/**
+ * Mark a repo as orphaned (no remaining connections).
+ */
+export async function markRepoOrphaned(repoId: string): Promise<void> {
+	return integrationsDb.markRepoOrphaned(repoId);
+}
+
+/**
+ * Find a specific active integration by ID and organization (for available repos).
+ */
+export async function findActiveIntegrationForRepos(
+	integrationId: string,
+	orgId: string,
+): Promise<integrationsDb.GitHubIntegrationRow | null> {
+	return integrationsDb.findActiveIntegrationForRepos(integrationId, orgId);
+}
+
+/**
+ * Find first active GitHub App integration for repos.
+ */
+export async function findFirstActiveGitHubAppForRepos(
+	orgId: string,
+): Promise<integrationsDb.GitHubIntegrationRow | null> {
+	return integrationsDb.findFirstActiveGitHubAppForRepos(orgId);
+}
+
+/**
+ * Find first active Nango GitHub integration for repos.
+ */
+export async function findFirstActiveNangoGitHubForRepos(
+	orgId: string,
+	nangoIntegrationId: string,
+): Promise<integrationsDb.GitHubIntegrationRow | null> {
+	return integrationsDb.findFirstActiveNangoGitHubForRepos(orgId, nangoIntegrationId);
+}
+
+/**
+ * Find active integration by GitHub installation ID.
+ * Used by GitHub App webhooks.
+ */
+export async function findActiveByGitHubInstallationId(
+	installationId: string,
+): Promise<integrationsDb.GitHubAppIntegrationRow | null> {
+	return integrationsDb.findActiveByGitHubInstallationId(installationId);
+}
+
+/**
+ * Update integration status by GitHub installation ID.
+ * Used for installation lifecycle events.
+ */
+export async function updateStatusByGitHubInstallationId(
+	installationId: string,
+	status: string,
+): Promise<void> {
+	return integrationsDb.updateStatusByGitHubInstallationId(installationId, status);
+}
+
+/**
+ * Find integration by connection ID and provider.
+ * Used by Nango/webhook handlers.
+ */
+export async function findByConnectionIdAndProvider(
+	connectionId: string,
+	provider: string,
+): Promise<Pick<integrationsDb.IntegrationRow, "id" | "organizationId" | "status"> | null> {
+	return integrationsDb.findByConnectionIdAndProvider(connectionId, provider);
+}
+
+/**
+ * Update integration status.
+ */
+export async function updateStatus(id: string, status: string): Promise<void> {
+	return integrationsDb.updateStatus(id, status);
+}
+
+/**
+ * Get encrypted bot token for a Slack installation.
+ */
+export async function getSlackInstallationBotToken(installationId: string): Promise<string | null> {
+	return integrationsDb.getSlackInstallationBotToken(installationId);
+}
+
+/**
+ * Get the configuration strategy fields for a Slack installation.
+ */
+export async function getSlackInstallationConfigStrategy(installationId: string): Promise<{
+	defaultConfigurationId: string | null;
+	defaultConfigSelectionStrategy: string | null;
+} | null> {
+	return integrationsDb.getSlackInstallationConfigStrategy(installationId);
+}
+
+/**
+ * Get full selection config for a Slack installation.
+ */
+export async function getSlackInstallationSelectionConfig(installationId: string): Promise<{
+	defaultConfigSelectionStrategy: string | null;
+	defaultConfigurationId: string | null;
+	fallbackConfigurationId: string | null;
+	allowedConfigurationIds: string[] | null;
+} | null> {
+	return integrationsDb.getSlackInstallationSelectionConfig(installationId);
+}
+
+/**
+ * Get active Slack installation for notifications.
+ */
+export async function getSlackInstallationForNotifications(
+	orgId: string,
+	installationId?: string | null,
+): Promise<Pick<integrationsDb.SlackInstallationRow, "id" | "encryptedBotToken"> | null> {
+	return integrationsDb.getSlackInstallationForNotifications(orgId, installationId);
+}
+
+/**
+ * List all active Slack installations for an organization.
+ */
+export async function listActiveSlackInstallations(
+	orgId: string,
+): Promise<Pick<integrationsDb.SlackInstallationRow, "id" | "teamId" | "teamName">[]> {
+	return integrationsDb.listActiveSlackInstallations(orgId);
+}
+
+/**
+ * Get Slack installation config for an org.
+ */
+export async function getSlackInstallationConfigForOrg(orgId: string): Promise<{
+	installationId: string;
+	defaultConfigSelectionStrategy: string | null;
+	defaultConfigurationId: string | null;
+	allowedConfigurationIds: string[] | null;
+} | null> {
+	return integrationsDb.getSlackInstallationConfigForOrg(orgId);
+}
+
+/**
+ * Find integration for binding validation.
+ * Used by automation template creation.
+ */
+export async function findForBindingValidation(
+	id: string,
+	orgId: string,
+): Promise<Pick<
+	integrationsDb.IntegrationRow,
+	"id" | "provider" | "integrationId" | "status"
+> | null> {
+	return integrationsDb.findForBindingValidation(id, orgId);
+}
+
+/**
+ * List all integrations for an organization (no visibility filtering).
+ * Used for privileged server-side operations like credential resolution.
+ */
+export async function listAllByOrganization(
+	orgId: string,
+): Promise<integrationsDb.IntegrationRow[]> {
+	return integrationsDb.listAllByOrganization(orgId);
+}
+
+// ============================================
 // Display names
 // ============================================
 

@@ -10,7 +10,7 @@
  * 3. Fail with CREDENTIAL_MISSING
  */
 
-import * as integrationsDb from "../integrations/db";
+import * as integrationsService from "../integrations/service";
 import { getToken } from "../integrations/tokens";
 import { getServicesLogger } from "../logger";
 import * as sourceDb from "./db";
@@ -89,7 +89,7 @@ async function resolveCredential(binding: SourceBindingRow): Promise<string> {
 	const integrationTypeId = binding.sourceType;
 
 	// Find active integrations for this org and type
-	const orgIntegrations = await integrationsDb.listAllByOrganization(binding.organizationId);
+	const orgIntegrations = await integrationsService.listAllByOrganization(binding.organizationId);
 	const matchingIntegrations = orgIntegrations.filter(
 		(i) => i.integrationId === integrationTypeId && i.status === "active",
 	);

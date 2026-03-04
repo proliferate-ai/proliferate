@@ -10,7 +10,7 @@
 import { randomBytes, randomUUID } from "crypto";
 import type { AutomationListItem } from "@proliferate/shared/contracts/automations";
 import { automationConnections, automations, eq, getDb, triggers } from "../db/client";
-import { findForBindingValidation } from "../integrations/db";
+import { findForBindingValidation } from "../integrations/service";
 import { getTemplateById } from "../templates/catalog";
 import type { AutomationTemplate } from "../templates/types";
 import { toNewAutomationListItem } from "./mapper";
@@ -34,6 +34,34 @@ interface ValidatedIntegration {
 	status: string | null;
 }
 
+export class TemplateNotFoundError extends Error {
+	constructor(templateId: string) {
+		super(`Template not found: ${templateId}`);
+		this.name = "TemplateNotFoundError";
+	}
+}
+
+export class TemplateIntegrationNotFoundError extends Error {
+	constructor(integrationId: string) {
+		super(`Integration ${integrationId} not found in organization`);
+		this.name = "TemplateIntegrationNotFoundError";
+	}
+}
+
+export class TemplateIntegrationInactiveError extends Error {
+	constructor(integrationId: string, status: string | null) {
+		super(`Integration ${integrationId} is not active (status: ${status})`);
+		this.name = "TemplateIntegrationInactiveError";
+	}
+}
+
+export class TemplateIntegrationBindingMismatchError extends Error {
+	constructor(integrationId: string, actualBinding: string, expectedBinding: string) {
+		super(`Integration ${integrationId} is for "${actualBinding}", not "${expectedBinding}"`);
+		this.name = "TemplateIntegrationBindingMismatchError";
+	}
+}
+
 // ============================================
 // Main function
 // ============================================
@@ -49,7 +77,7 @@ export async function createFromTemplate(
 ): Promise<AutomationListItem> {
 	const template = getTemplateById(input.templateId);
 	if (!template) {
-		throw new Error(`Template not found: ${input.templateId}`);
+		throw new TemplateNotFoundError(input.templateId);
 	}
 
 	// S3: Validate all integration bindings before starting transaction
@@ -163,18 +191,20 @@ async function validateIntegrationBindings(
 		const integration = await findForBindingValidation(integrationId, orgId);
 
 		if (!integration) {
-			throw new Error(`Integration ${integrationId} not found in organization`);
+			throw new TemplateIntegrationNotFoundError(integrationId);
 		}
 
 		if (integration.status !== "active") {
-			throw new Error(`Integration ${integrationId} is not active (status: ${integration.status})`);
+			throw new TemplateIntegrationInactiveError(integrationId, integration.status);
 		}
 
 		// Verify the integration's service type matches the binding key.
 		// integrationId column holds the actual service (e.g., "github", "linear").
 		if (integration.integrationId && integration.integrationId !== bindingKey) {
-			throw new Error(
-				`Integration ${integrationId} is for "${integration.integrationId}", not "${bindingKey}"`,
+			throw new TemplateIntegrationBindingMismatchError(
+				integrationId,
+				integration.integrationId,
+				bindingKey,
 			);
 		}
 
