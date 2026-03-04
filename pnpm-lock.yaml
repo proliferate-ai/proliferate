@@ -75,9 +75,6 @@ importers:
       '@proliferate/environment':
         specifier: workspace:*
         version: link:../../packages/environment
-      '@proliferate/infra':
-        specifier: workspace:*
-        version: link:../../packages/infra
       '@proliferate/logger':
         specifier: workspace:*
         version: link:../../packages/logger
