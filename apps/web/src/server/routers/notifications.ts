@@ -50,8 +50,8 @@ export const notificationsRouter = {
 	markRead: orgProcedure
 		.input(z.object({ id: z.string().uuid() }))
 		.output(z.object({ success: z.boolean() }))
-		.handler(async ({ input }) => {
-			await notifications.markRead(input.id);
+		.handler(async ({ input, context }) => {
+			await notifications.markRead(input.id, context.user.id, context.orgId);
 			return { success: true };
 		}),
 
@@ -61,8 +61,8 @@ export const notificationsRouter = {
 	dismiss: orgProcedure
 		.input(z.object({ id: z.string().uuid() }))
 		.output(z.object({ success: z.boolean() }))
-		.handler(async ({ input }) => {
-			await notifications.markDismissed(input.id);
+		.handler(async ({ input, context }) => {
+			await notifications.markDismissed(input.id, context.user.id, context.orgId);
 			return { success: true };
 		}),
 

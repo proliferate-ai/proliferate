@@ -34,6 +34,15 @@ function throwMappedConfigurationError(error: unknown, internalMessage: string):
 	if (error instanceof configurations.ConfigurationValidationError) {
 		throw new ORPCError("BAD_REQUEST", { message: error.message });
 	}
+	if (error instanceof configurations.RepoNotInConfigurationError) {
+		throw new ORPCError("NOT_FOUND", { message: error.message });
+	}
+	if (error instanceof configurations.ConfigurationRepoLinkError) {
+		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: error.message });
+	}
+	if (error instanceof configurations.SecretStorageError) {
+		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: error.message });
+	}
 
 	log.error({ err: error }, internalMessage);
 	throw new ORPCError("INTERNAL_SERVER_ERROR", { message: internalMessage });

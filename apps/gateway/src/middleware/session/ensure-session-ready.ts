@@ -1,16 +1,12 @@
 /**
- * Lifecycle Middleware
- *
- * Ensures the session hub exists and sandbox is running.
+ * Session readiness middleware.
  */
-
 import type { RequestHandler } from "express";
-import type { HubManager } from "../hub/hub-manager";
-import { ApiError } from "./error-handler";
+import type { HubManager } from "../../hub/hub-manager";
+import { ApiError } from "../errors/api-error";
 
 /**
- * Create middleware that ensures the session is ready.
- * Loads session context and ensures sandbox is running.
+ * Ensures the session hub exists and runtime is ready.
  */
 export function createEnsureSessionReady(hubManager: HubManager): RequestHandler {
 	return async (req, _res, next) => {

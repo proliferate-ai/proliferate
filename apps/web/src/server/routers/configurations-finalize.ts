@@ -38,6 +38,9 @@ export async function finalizeSetupHandler(
 		if (err instanceof configurations.SessionRepoMismatchError) {
 			throw new ORPCError("NOT_FOUND", { message: err.message });
 		}
+		if (err instanceof configurations.SecretStorageError) {
+			throw new ORPCError("INTERNAL_SERVER_ERROR", { message: err.message });
+		}
 		throw err;
 	}
 }

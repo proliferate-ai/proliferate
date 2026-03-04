@@ -220,20 +220,40 @@ export async function markNotificationDelivered(id: string, channel: string): Pr
 		.where(and(eq(notifications.id, id), eq(notifications.status, "pending")));
 }
 
-export async function markNotificationRead(id: string): Promise<void> {
+export async function markNotificationRead(
+	id: string,
+	userId: string,
+	organizationId: string,
+): Promise<void> {
 	const db = getDb();
 	await db
 		.update(notifications)
 		.set({ status: "read", readAt: new Date() })
-		.where(eq(notifications.id, id));
+		.where(
+			and(
+				eq(notifications.id, id),
+				eq(notifications.userId, userId),
+				eq(notifications.organizationId, organizationId),
+			),
+		);
 }
 
-export async function markNotificationDismissed(id: string): Promise<void> {
+export async function markNotificationDismissed(
+	id: string,
+	userId: string,
+	organizationId: string,
+): Promise<void> {
 	const db = getDb();
 	await db
 		.update(notifications)
 		.set({ status: "dismissed", dismissedAt: new Date() })
-		.where(eq(notifications.id, id));
+		.where(
+			and(
+				eq(notifications.id, id),
+				eq(notifications.userId, userId),
+				eq(notifications.organizationId, organizationId),
+			),
+		);
 }
 
 export async function bulkMarkNotificationsRead(ids: string[], userId: string): Promise<number> {

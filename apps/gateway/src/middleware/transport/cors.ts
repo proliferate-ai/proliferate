@@ -1,13 +1,10 @@
 /**
- * CORS Middleware
- *
- * Handles CORS preflight and headers for all routes.
+ * CORS middleware.
  */
-
 import type { RequestHandler } from "express";
 
 /**
- * CORS headers for responses
+ * CORS headers for responses.
  */
 export const corsHeaders = {
 	"Access-Control-Allow-Origin": "*",
@@ -17,7 +14,7 @@ export const corsHeaders = {
 } as const;
 
 /**
- * CORS middleware - adds headers and handles preflight
+ * Adds CORS headers and handles preflight requests.
  */
 export const cors: RequestHandler = (req, res, next) => {
 	res.setHeader("Access-Control-Allow-Origin", "*");

@@ -152,6 +152,20 @@ export class TriggerEventNotQueueableError extends Error {
 	}
 }
 
+export class TriggerConfigurationNotFoundError extends Error {
+	constructor() {
+		super("Configuration not found");
+		this.name = "TriggerConfigurationNotFoundError";
+	}
+}
+
+export class TriggerIntegrationNotFoundError extends Error {
+	constructor() {
+		super("Integration not found");
+		this.name = "TriggerIntegrationNotFoundError";
+	}
+}
+
 // ============================================
 // Service functions
 // ============================================
@@ -215,7 +229,7 @@ export async function createTrigger(input: CreateTriggerInput): Promise<CreateTr
 			input.organizationId,
 		);
 		if (!exists) {
-			throw new Error("Configuration not found");
+			throw new TriggerConfigurationNotFoundError();
 		}
 	}
 
@@ -223,7 +237,7 @@ export async function createTrigger(input: CreateTriggerInput): Promise<CreateTr
 	if (input.integrationId) {
 		const exists = await triggersDb.integrationExists(input.integrationId, input.organizationId);
 		if (!exists) {
-			throw new Error("Integration not found");
+			throw new TriggerIntegrationNotFoundError();
 		}
 	}
 

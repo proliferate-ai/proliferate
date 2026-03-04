@@ -263,15 +263,19 @@ export async function markDelivered(id: string, channel: NotificationChannel): P
 /**
  * Mark a notification as read.
  */
-export async function markRead(id: string): Promise<void> {
-	await notificationsDb.markNotificationRead(id);
+export async function markRead(id: string, userId: string, organizationId: string): Promise<void> {
+	await notificationsDb.markNotificationRead(id, userId, organizationId);
 }
 
 /**
  * Mark a notification as dismissed.
  */
-export async function markDismissed(id: string): Promise<void> {
-	await notificationsDb.markNotificationDismissed(id);
+export async function markDismissed(
+	id: string,
+	userId: string,
+	organizationId: string,
+): Promise<void> {
+	await notificationsDb.markNotificationDismissed(id, userId, organizationId);
 }
 
 /**

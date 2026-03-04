@@ -18,6 +18,7 @@
 		"@nangohq/node": "^0.42.22",
 		"@proliferate/db": "workspace:*",
 		"@proliferate/environment": "workspace:*",
+		"@proliferate/infra": "workspace:*",
 		"@proliferate/logger": "workspace:*",
 		"@proliferate/providers": "workspace:*",
 		"@proliferate/services": "workspace:*",

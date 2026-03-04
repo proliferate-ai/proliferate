@@ -1,8 +1,8 @@
 /**
- * Middleware exports
+ * Middleware exports (intent-based groups)
  */
 
 export { createRequireAuth, createRequireProxyAuth, verifyCliToken, verifyToken } from "./auth";
-export { cors, corsHeaders } from "./cors";
-export { ApiError, errorHandler } from "./error-handler";
-export { createEnsureSessionReady } from "./lifecycle";
+export { cors, corsHeaders } from "./transport";
+export { ApiError, errorHandler } from "./errors";
+export { createEnsureSessionReady } from "./session";

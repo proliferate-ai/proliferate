@@ -83,6 +83,27 @@ export class ConfigurationValidationError extends Error {
 	}
 }
 
+export class RepoNotInConfigurationError extends Error {
+	constructor(message = "One or more repos not found") {
+		super(message);
+		this.name = "RepoNotInConfigurationError";
+	}
+}
+
+export class SecretStorageError extends Error {
+	constructor(key: string) {
+		super(`Failed to store secret key: ${key}`);
+		this.name = "SecretStorageError";
+	}
+}
+
+export class ConfigurationRepoLinkError extends Error {
+	constructor() {
+		super("Failed to link repos to configuration");
+		this.name = "ConfigurationRepoLinkError";
+	}
+}
+
 // ============================================
 // Service functions
 // ============================================
@@ -114,7 +135,9 @@ export async function getConfiguration(id: string): Promise<Configuration | null
 /**
  * Create a new configuration with repos.
  *
- * @throws Error if repos not found or unauthorized
+ * @throws ConfigurationValidationError if no repos provided
+ * @throws RepoNotInConfigurationError if repos not found
+ * @throws ConfigurationForbiddenError if unauthorized access to repo
  */
 export async function createConfiguration(
 	input: CreateConfigurationInput,
@@ -122,19 +145,19 @@ export async function createConfiguration(
 	const { organizationId, userId, repoIds, name } = input;
 
 	if (!repoIds || repoIds.length === 0) {
-		throw new Error("At least one repo is required");
+		throw new ConfigurationValidationError("At least one repo is required");
 	}
 
 	// Verify repos exist and belong to organization
 	const repos = await configurationsDb.getReposByIds(repoIds);
 
 	if (!repos || repos.length !== repoIds.length) {
-		throw new Error("One or more repos not found");
+		throw new RepoNotInConfigurationError("One or more repos not found");
 	}
 
 	for (const repo of repos) {
 		if (repo.organizationId !== organizationId) {
-			throw new Error("Unauthorized access to repo");
+			throw new ConfigurationForbiddenError("Unauthorized access to repo");
 		}
 	}
 
@@ -167,7 +190,7 @@ export async function createConfiguration(
 	} catch (error) {
 		// Rollback: delete the configuration if junction creation fails
 		await configurationsDb.deleteById(configurationId);
-		throw new Error("Failed to link repos to configuration");
+		throw new ConfigurationRepoLinkError();
 	}
 
 	// Tightly coupled: configuration creation always triggers snapshot build
@@ -182,7 +205,9 @@ export async function createConfiguration(
 /**
  * Attach a repo to a configuration.
  *
- * @throws Error if configuration or repo not found, or unauthorized
+ * @throws ConfigurationNotFoundError if configuration not found
+ * @throws RepoNotInConfigurationError if repo not found
+ * @throws ConfigurationForbiddenError if unauthorized access to repo
  */
 export async function attachRepo(
 	configurationId: string,
@@ -194,13 +219,14 @@ export async function attachRepo(
 	if (!belongs) {
 		// For new configurations with no repos yet, verify the configuration exists
 		const config = await configurationsDb.findByIdForSession(configurationId);
-		if (!config) throw new Error("Configuration not found");
+		if (!config) throw new ConfigurationNotFoundError();
 	}
 
 	// Verify repo exists
 	const repos = await configurationsDb.getReposByIds([repoId]);
-	if (!repos.length) throw new Error("Repo not found");
-	if (repos[0].organizationId !== orgId) throw new Error("Unauthorized access to repo");
+	if (!repos.length) throw new RepoNotInConfigurationError("Repo not found");
+	if (repos[0].organizationId !== orgId)
+		throw new ConfigurationForbiddenError("Unauthorized access to repo");
 
 	// Check if already attached
 	const alreadyAttached = await configurationsDb.configurationContainsRepo(configurationId, repoId);
@@ -219,7 +245,7 @@ export async function attachRepo(
 /**
  * Detach a repo from a configuration.
  *
- * @throws Error if configuration not found
+ * @throws ConfigurationNotFoundError if configuration not found
  */
 export async function detachRepo(
 	configurationId: string,
@@ -227,7 +253,7 @@ export async function detachRepo(
 	orgId: string,
 ): Promise<void> {
 	const belongs = await configurationBelongsToOrg(configurationId, orgId);
-	if (!belongs) throw new Error("Configuration not found");
+	if (!belongs) throw new ConfigurationNotFoundError();
 
 	await configurationsDb.deleteConfigurationRepo(configurationId, repoId);
 }
@@ -235,7 +261,7 @@ export async function detachRepo(
 /**
  * Update a configuration.
  *
- * @throws Error if nothing to update
+ * @throws ConfigurationValidationError if no fields to update
  */
 export async function updateConfiguration(
 	id: string,
@@ -246,7 +272,7 @@ export async function updateConfiguration(
 		input.notes === undefined &&
 		input.routingDescription === undefined
 	) {
-		throw new Error("No fields to update");
+		throw new ConfigurationValidationError("No fields to update");
 	}
 
 	const updated = await configurationsDb.update(id, input);
@@ -309,21 +335,7 @@ export async function createConfigurationForOrg(input: {
 	repoIds: string[];
 	name?: string;
 }): Promise<CreateConfigurationResult> {
-	try {
-		return await createConfiguration(input);
-	} catch (error) {
-		const message = error instanceof Error ? error.message : "Failed to create configuration";
-		if (message === "At least one repo is required") {
-			throw new ConfigurationValidationError(message);
-		}
-		if (message === "One or more repos not found") {
-			throw new ConfigurationNotFoundError(message);
-		}
-		if (message === "Unauthorized access to repo") {
-			throw new ConfigurationForbiddenError(message);
-		}
-		throw error;
-	}
+	return createConfiguration(input);
 }
 
 export async function updateConfigurationForOrg(
@@ -332,15 +344,7 @@ export async function updateConfigurationForOrg(
 	input: UpdateConfigurationInput,
 ): Promise<Configuration> {
 	await assertConfigurationBelongsToOrg(configurationId, orgId);
-	try {
-		await updateConfiguration(configurationId, input);
-	} catch (error) {
-		const message = error instanceof Error ? error.message : "Failed to update configuration";
-		if (message === "No fields to update") {
-			throw new ConfigurationValidationError(message);
-		}
-		throw error;
-	}
+	await updateConfiguration(configurationId, input);
 
 	const updated = await getConfiguration(configurationId);
 	if (!updated) {
@@ -394,18 +398,7 @@ export async function attachRepoForOrg(
 	repoId: string,
 	orgId: string,
 ): Promise<void> {
-	try {
-		await attachRepo(configurationId, repoId, orgId);
-	} catch (error) {
-		const message = error instanceof Error ? error.message : "Failed to attach repo";
-		if (message === "Configuration not found" || message === "Repo not found") {
-			throw new ConfigurationNotFoundError(message);
-		}
-		if (message === "Unauthorized access to repo") {
-			throw new ConfigurationForbiddenError(message);
-		}
-		throw error;
-	}
+	await attachRepo(configurationId, repoId, orgId);
 }
 
 export async function detachRepoForOrg(
@@ -413,15 +406,7 @@ export async function detachRepoForOrg(
 	repoId: string,
 	orgId: string,
 ): Promise<void> {
-	try {
-		await detachRepo(configurationId, repoId, orgId);
-	} catch (error) {
-		const message = error instanceof Error ? error.message : "Failed to detach repo";
-		if (message === "Configuration not found") {
-			throw new ConfigurationNotFoundError(message);
-		}
-		throw error;
-	}
+	await detachRepo(configurationId, repoId, orgId);
 }
 
 /**
@@ -696,7 +681,7 @@ export async function finalizeSetup(input: FinalizeSetupInput): Promise<Finalize
 				encryptedValue,
 			});
 			if (!stored) {
-				throw new Error(`Failed to store secret key: ${key}`);
+				throw new SecretStorageError(key);
 			}
 		}
 	}

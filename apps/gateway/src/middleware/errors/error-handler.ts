@@ -1,31 +1,15 @@
 /**
- * Error Handler Middleware
- *
- * Consistent error responses across all routes.
+ * Error handler middleware.
  */
-
 import { createLogger } from "@proliferate/logger";
 import { BillingGateError } from "@proliferate/shared/billing";
 import type { ErrorRequestHandler } from "express";
+import { ApiError } from "./api-error";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "error-handler" });
 
 /**
- * API error with status code and optional details
- */
-export class ApiError extends Error {
-	constructor(
-		public readonly statusCode: number,
-		message: string,
-		public readonly details?: unknown,
-	) {
-		super(message);
-		this.name = "ApiError";
-	}
-}
-
-/**
- * Express error handler middleware
+ * Express error handler middleware.
  */
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 	if (err instanceof BillingGateError) {

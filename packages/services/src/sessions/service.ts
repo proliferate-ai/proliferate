@@ -338,18 +338,21 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		});
 	}
 
-	console.log("Creating confiugration session with these params", {
-		configurationId,
-		sessionType,
-		agentConfig,
-		initialPrompt,
-		orgId,
-		userId,
-		gatewayUrl,
-		serviceToken,
-		continuedFromSessionId,
-		rerunOfSessionId,
-	});
+	logger.debug(
+		{
+			configurationId,
+			sessionType,
+			agentConfig,
+			initialPrompt,
+			orgId,
+			userId,
+			gatewayUrl,
+			hasServiceToken: Boolean(serviceToken),
+			continuedFromSessionId,
+			rerunOfSessionId,
+		},
+		"Creating configuration-backed session",
+	);
 	// Configuration-backed path: existing flow
 	return createConfigurationSession({
 		configurationId,

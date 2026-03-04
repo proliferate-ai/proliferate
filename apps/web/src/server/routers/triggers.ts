@@ -113,16 +113,14 @@ export const triggersRouter = {
 				});
 				return result;
 			} catch (error) {
-				if (error instanceof Error) {
-					if (error.message === "Configuration not found") {
-						throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
-					}
-					if (error.message === "Integration not found") {
-						throw new ORPCError("NOT_FOUND", { message: "Integration not found" });
-					}
-					if (schedules.isCronValidationError(error)) {
-						throw new ORPCError("BAD_REQUEST", { message: error.message });
-					}
+				if (error instanceof triggers.TriggerConfigurationNotFoundError) {
+					throw new ORPCError("NOT_FOUND", { message: error.message });
+				}
+				if (error instanceof triggers.TriggerIntegrationNotFoundError) {
+					throw new ORPCError("NOT_FOUND", { message: error.message });
+				}
+				if (schedules.isCronValidationError(error)) {
+					throw new ORPCError("BAD_REQUEST", { message: error.message });
 				}
 				throw error;
 			}

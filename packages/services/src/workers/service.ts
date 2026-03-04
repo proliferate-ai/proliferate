@@ -257,6 +257,34 @@ export async function getWorkerForOrg(
 	return worker;
 }
 
+/**
+ * Service-owned compatibility wrapper for optional worker lookups.
+ * Prefer getWorkerForOrg() for strict existence checks.
+ */
+export async function findWorkerById(
+	workerId: string,
+	organizationId: string,
+): Promise<WorkerRow | undefined> {
+	return workersDb.findWorkerById(workerId, organizationId);
+}
+
+/**
+ * Service-owned wrapper used by manager harness wake-cycle orchestration.
+ */
+export async function findActiveRunByWorker(
+	workerId: string,
+	organizationId: string,
+): Promise<WorkerRunRow | undefined> {
+	return workersDb.findActiveRunByWorker(workerId, organizationId);
+}
+
+/**
+ * Service-owned wrapper used by tick scheduling and sweeps.
+ */
+export async function listActiveWorkers(): Promise<WorkerRow[]> {
+	return workersDb.listActiveWorkers();
+}
+
 export async function listWorkerRunsForOrg(
 	workerId: string,
 	organizationId: string,
@@ -311,6 +339,22 @@ export async function listPendingDirectivesForOrg(
 ): Promise<PendingDirectiveItem[]> {
 	const worker = await getWorkerForOrg(workerId, organizationId);
 	const messages = await workersDb.listPendingDirectives(worker.managerSessionId);
+	return messages.map((message) => ({
+		id: message.id,
+		messageType: message.messageType,
+		payloadJson: message.payloadJson,
+		queuedAt: message.queuedAt,
+		senderUserId: message.senderUserId,
+	}));
+}
+
+/**
+ * Service-owned wrapper for manager-session directive queue reads.
+ */
+export async function listPendingDirectives(
+	managerSessionId: string,
+): Promise<PendingDirectiveItem[]> {
+	const messages = await workersDb.listPendingDirectives(managerSessionId);
 	return messages.map((message) => ({
 		id: message.id,
 		messageType: message.messageType,
@@ -390,6 +434,13 @@ export async function updateWorkerForOrg(input: {
 	}
 
 	return toWorkerDetail(updated);
+}
+
+/**
+ * Service-owned wrapper for worker deletion.
+ */
+export async function deleteWorker(id: string, orgId: string): Promise<boolean> {
+	return workersDb.deleteWorker(id, orgId);
 }
 
 async function transitionWorker(

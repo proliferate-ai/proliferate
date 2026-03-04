@@ -3,71 +3,36 @@
  */
 
 import { env } from "@proliferate/environment/server";
+import { createRedisClientManager } from "@proliferate/infra";
 import { createLogger } from "@proliferate/logger";
 import { SESSION_EVENTS_CHANNEL, type SessionEventMessage } from "@proliferate/shared";
 import type IORedis from "ioredis";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "redis" });
-
-let redisClient: IORedis | null = null;
-let connectionPromise: Promise<void> | null = null;
-
-/**
- * Get or create the Redis client.
- * Lazy connection - connects on first use.
- */
-async function getRedisClient(): Promise<IORedis> {
-	const redisUrl = env.REDIS_URL;
-	if (!redisUrl) {
-		throw new Error("REDIS_URL is required for gateway startup");
-	}
-
-	if (!redisClient) {
-		// Dynamic import to avoid issues if ioredis is not installed
-		const { default: IORedis } = await import("ioredis");
-		redisClient = new IORedis(redisUrl, {
-			maxRetriesPerRequest: 3,
-			enableReadyCheck: true,
-			lazyConnect: true,
-		});
-
-		redisClient.on("error", (err: Error) => {
-			logger.error({ err }, "Connection error");
-		});
-
-		redisClient.on("connect", () => {
-			logger.info("Connected");
-		});
-	}
-
-	return redisClient;
+const redisUrl = env.REDIS_URL;
+if (!redisUrl) {
+	throw new Error("REDIS_URL is required for gateway startup");
 }
+const redisManager = createRedisClientManager({
+	redisUrl,
+	onError: (err) => {
+		logger.error({ err }, "Connection error");
+	},
+	onConnect: () => {
+		logger.info("Connected");
+	},
+});
 
 /**
  * Ensure Redis is connected (lazy connect on first use)
  */
 export async function ensureRedisConnected(): Promise<IORedis> {
-	const client = await getRedisClient();
-
-	// Check if already connected (status is "ready" when connected)
-	const status = client.status as string;
-	if (status === "ready") {
-		return client;
+	try {
+		return await redisManager.ensureConnected();
+	} catch (err) {
+		logger.error({ err }, "Failed to connect");
+		throw err;
 	}
-
-	if (!connectionPromise) {
-		connectionPromise = client.connect().catch((err: Error) => {
-			logger.error({ err }, "Failed to connect");
-			connectionPromise = null;
-		});
-	}
-
-	await connectionPromise;
-	// Re-check status after connection attempt
-	if ((client.status as string) !== "ready") {
-		throw new Error("Redis connection not ready");
-	}
-	return client;
 }
 
 /**
@@ -91,9 +56,5 @@ export async function publishSessionEvent(event: SessionEventMessage): Promise<v
  * Close the Redis connection (for graceful shutdown)
  */
 export async function closeRedisConnection(): Promise<void> {
-	if (redisClient) {
-		await redisClient.quit();
-		redisClient = null;
-		connectionPromise = null;
-	}
+	await redisManager.close();
 }

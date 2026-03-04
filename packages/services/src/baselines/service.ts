@@ -15,6 +15,59 @@ import type { RepoBaselineRow, RepoBaselineTargetRow } from "./db";
 const logger = () => getServicesLogger().child({ module: "baselines" });
 
 // ============================================
+// Errors
+// ============================================
+
+export class BaselineNotFoundError extends Error {
+	constructor(repoId: string) {
+		super(
+			`No active baseline found for repo ${repoId}. Run setup to create a validated baseline before starting task sessions.`,
+		);
+		this.name = "BaselineNotFoundError";
+	}
+}
+
+export class BaselineTargetNotFoundError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "BaselineTargetNotFoundError";
+	}
+}
+
+export class BaselineTargetMismatchError extends Error {
+	constructor(targetId: string, baselineId: string) {
+		super(`Target ${targetId} does not belong to baseline ${baselineId}`);
+		this.name = "BaselineTargetMismatchError";
+	}
+}
+
+export class BaselineNoTargetsError extends Error {
+	constructor(baselineId: string) {
+		super(
+			`Baseline ${baselineId} has no targets. At least one target must be created during setup.`,
+		);
+		this.name = "BaselineNoTargetsError";
+	}
+}
+
+export class BaselineInvalidTransitionError extends Error {
+	constructor(fromStatus: string, toStatus: string) {
+		super(`Invalid baseline transition: ${fromStatus} → ${toStatus}`);
+		this.name = "BaselineInvalidTransitionError";
+	}
+}
+
+export class BaselineTransitionConflictError extends Error {
+	constructor(baselineId: string, expectedStatus: string) {
+		super(
+			`Baseline ${baselineId} transition failed — ` +
+				`expected status ${expectedStatus} but current status differs (CAS conflict)`,
+		);
+		this.name = "BaselineTransitionConflictError";
+	}
+}
+
+// ============================================
 // Types
 // ============================================
 
@@ -46,9 +99,7 @@ export async function resolveActiveBaseline(
 	const baseline = await baselinesDb.findActiveBaseline(repoId, orgId);
 
 	if (!baseline) {
-		throw new Error(
-			`No active baseline found for repo ${repoId}. Run setup to create a validated baseline before starting task sessions.`,
-		);
+		throw new BaselineNotFoundError(repoId);
 	}
 
 	return baseline;
@@ -67,12 +118,12 @@ export async function resolveTarget(input: ResolveTargetInput): Promise<RepoBase
 	if (input.repoBaselineTargetId) {
 		const target = await baselinesDb.findTargetById(input.repoBaselineTargetId);
 		if (!target) {
-			throw new Error(`Baseline target ${input.repoBaselineTargetId} not found`);
+			throw new BaselineTargetNotFoundError(
+				`Baseline target ${input.repoBaselineTargetId} not found`,
+			);
 		}
 		if (target.repoBaselineId !== input.baselineId) {
-			throw new Error(
-				`Target ${input.repoBaselineTargetId} does not belong to baseline ${input.baselineId}`,
-			);
+			throw new BaselineTargetMismatchError(input.repoBaselineTargetId, input.baselineId);
 		}
 		return target;
 	}
@@ -81,7 +132,7 @@ export async function resolveTarget(input: ResolveTargetInput): Promise<RepoBase
 	if (input.targetName) {
 		const target = await baselinesDb.findTargetByName(input.baselineId, input.targetName);
 		if (!target) {
-			throw new Error(
+			throw new BaselineTargetNotFoundError(
 				`No target named "${input.targetName}" found in baseline ${input.baselineId}`,
 			);
 		}
@@ -92,9 +143,7 @@ export async function resolveTarget(input: ResolveTargetInput): Promise<RepoBase
 	const targets = await baselinesDb.listTargetsByBaseline(input.baselineId);
 
 	if (targets.length === 0) {
-		throw new Error(
-			`Baseline ${input.baselineId} has no targets. At least one target must be created during setup.`,
-		);
+		throw new BaselineNoTargetsError(input.baselineId);
 	}
 
 	if (targets.length === 1) {
@@ -165,7 +214,7 @@ export async function transitionStatus(input: {
 	};
 }): Promise<RepoBaselineRow> {
 	if (!isValidRepoBaselineTransition(input.fromStatus, input.toStatus)) {
-		throw new Error(`Invalid baseline transition: ${input.fromStatus} → ${input.toStatus}`);
+		throw new BaselineInvalidTransitionError(input.fromStatus, input.toStatus);
 	}
 
 	const result = await baselinesDb.transitionBaselineStatus({
@@ -177,10 +226,7 @@ export async function transitionStatus(input: {
 	});
 
 	if (!result) {
-		throw new Error(
-			`Baseline ${input.baselineId} transition failed — ` +
-				`expected status ${input.fromStatus} but current status differs (CAS conflict)`,
-		);
+		throw new BaselineTransitionConflictError(input.baselineId, input.fromStatus);
 	}
 
 	logger().info(

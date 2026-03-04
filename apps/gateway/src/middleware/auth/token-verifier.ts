@@ -1,23 +1,12 @@
-/**
- * Auth Middleware
- *
- * Unified authentication for all gateway routes.
- * Supports both JWT tokens (web clients) and CLI API keys.
- */
-
 import { createLogger } from "@proliferate/logger";
 import { verifyToken as verifyJwt } from "@proliferate/shared";
-import type { Request, RequestHandler } from "express";
-import type { GatewayEnv } from "../lib/env";
-import { deriveSandboxMcpToken } from "../lib/sandbox-mcp-token";
-import type { AuthResult } from "../types";
-import { ApiError } from "./error-handler";
+import type { Request } from "express";
+import type { GatewayEnv } from "../../lib/env";
+import { deriveSandboxMcpToken } from "../../lib/sandbox-mcp-token";
+import type { AuthResult } from "../../types";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "auth" });
 
-/**
- * CLI token verification result
- */
 export interface VerifyCliTokenResult {
 	valid: boolean;
 	userId?: string;
@@ -33,7 +22,7 @@ const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
  * Route-level middleware runs before params are attached for nested param routes,
  * so fall back to the first URL segment when needed.
  */
-function getSessionIdForSandboxAuth(req: Request): string | undefined {
+export function getSessionIdForSandboxAuth(req: Request): string | undefined {
 	const paramValue = req.params.proliferateSessionId;
 	if (paramValue && SESSION_ID_PATTERN.test(paramValue)) {
 		return paramValue;
@@ -49,7 +38,6 @@ function getSessionIdForSandboxAuth(req: Request): string | undefined {
 
 /**
  * Verify a CLI API key via the web app's internal endpoint.
- * CLI tokens are better-auth API keys stored in the database.
  */
 export async function verifyCliToken(
 	token: string,
@@ -111,55 +99,4 @@ export async function verifyToken(
 	}
 
 	return null;
-}
-
-/**
- * Extract bearer token from Authorization header
- */
-function extractBearerToken(authHeader: string | undefined): string | null {
-	if (!authHeader?.startsWith("Bearer ")) return null;
-	return authHeader.slice(7);
-}
-
-/**
- * Create auth middleware for header-based authentication (Bearer token).
- * Used by /proliferate routes.
- */
-export function createRequireAuth(env: GatewayEnv): RequestHandler {
-	return async (req, _res, next) => {
-		const token = extractBearerToken(req.headers.authorization);
-		if (!token) {
-			return next(new ApiError(401, "Missing authorization"));
-		}
-
-		const sessionId = getSessionIdForSandboxAuth(req);
-		const auth = await verifyToken(token, env, sessionId);
-		if (!auth) {
-			return next(new ApiError(401, "Invalid token"));
-		}
-
-		req.auth = auth;
-		next();
-	};
-}
-
-/**
- * Create auth middleware for path-based authentication (token in URL).
- * Used by /proxy routes where SSE clients can't use headers.
- */
-export function createRequireProxyAuth(env: GatewayEnv): RequestHandler {
-	return async (req, _res, next) => {
-		const { token } = req.params;
-		if (!token) {
-			return next(new ApiError(401, "Missing token in path"));
-		}
-
-		const auth = await verifyToken(token, env);
-		if (!auth) {
-			return next(new ApiError(401, "Invalid token"));
-		}
-
-		req.auth = auth;
-		next();
-	};
 }

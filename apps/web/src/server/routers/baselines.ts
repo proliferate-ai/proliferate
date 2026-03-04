@@ -15,6 +15,32 @@ import {
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 
+function throwMappedBaselineError(error: unknown, internalMessage: string): never {
+	if (error instanceof ORPCError) {
+		throw error;
+	}
+	if (error instanceof baselines.BaselineNotFoundError) {
+		throw new ORPCError("NOT_FOUND", { message: error.message });
+	}
+	if (error instanceof baselines.BaselineTargetNotFoundError) {
+		throw new ORPCError("NOT_FOUND", { message: error.message });
+	}
+	if (error instanceof baselines.BaselineTargetMismatchError) {
+		throw new ORPCError("BAD_REQUEST", { message: error.message });
+	}
+	if (error instanceof baselines.BaselineNoTargetsError) {
+		throw new ORPCError("BAD_REQUEST", { message: error.message });
+	}
+	if (error instanceof baselines.BaselineInvalidTransitionError) {
+		throw new ORPCError("BAD_REQUEST", { message: error.message });
+	}
+	if (error instanceof baselines.BaselineTransitionConflictError) {
+		throw new ORPCError("CONFLICT", { message: error.message });
+	}
+
+	throw new ORPCError("INTERNAL_SERVER_ERROR", { message: internalMessage });
+}
+
 function toIso(d: Date | null | undefined): string | null {
 	if (!d) return null;
 	return d instanceof Date ? d.toISOString() : String(d);
@@ -167,9 +193,7 @@ export const baselinesRouter = {
 				});
 				return { baseline: serializeBaseline(row) };
 			} catch (err) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: err instanceof Error ? err.message : "Failed to mark baseline ready",
-				});
+				throwMappedBaselineError(err, "Failed to mark baseline ready");
 			}
 		}),
 
@@ -193,9 +217,7 @@ export const baselinesRouter = {
 				});
 				return { baseline: serializeBaseline(row) };
 			} catch (err) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: err instanceof Error ? err.message : "Failed to mark baseline failed",
-				});
+				throwMappedBaselineError(err, "Failed to mark baseline failed");
 			}
 		}),
 
@@ -213,9 +235,7 @@ export const baselinesRouter = {
 				});
 				return { baseline: serializeBaseline(row) };
 			} catch (err) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: err instanceof Error ? err.message : "Failed to mark baseline stale",
-				});
+				throwMappedBaselineError(err, "Failed to mark baseline stale");
 			}
 		}),
 
@@ -241,9 +261,7 @@ export const baselinesRouter = {
 				});
 				return { baseline: serializeBaseline(row) };
 			} catch (err) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: err instanceof Error ? err.message : "Failed to restart validation",
-				});
+				throwMappedBaselineError(err, "Failed to restart validation");
 			}
 		}),
 
