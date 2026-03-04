@@ -14,6 +14,7 @@ function getBaseUrl(request: NextRequest): string {
 
 export async function GET(request: NextRequest) {
 	const baseUrl = getBaseUrl(request);
+	const callbackUrl = `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/api/integrations/linear/oauth/callback`;
 	const authResult = await requireAuth();
 	if ("error" in authResult) {
 		const returnUrl = `${request.nextUrl.pathname}${request.nextUrl.search}`;
@@ -53,10 +54,7 @@ export async function GET(request: NextRequest) {
 
 	const authorizeUrl = new URL("https://linear.app/oauth/authorize");
 	authorizeUrl.searchParams.set("client_id", env.LINEAR_OAUTH_CLIENT_ID);
-	authorizeUrl.searchParams.set(
-		"redirect_uri",
-		`${baseUrl}/api/integrations/linear/oauth/callback`,
-	);
+	authorizeUrl.searchParams.set("redirect_uri", callbackUrl);
 	authorizeUrl.searchParams.set("response_type", "code");
 	authorizeUrl.searchParams.set("scope", "read,write");
 	authorizeUrl.searchParams.set("state", state);

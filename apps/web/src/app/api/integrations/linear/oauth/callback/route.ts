@@ -25,6 +25,7 @@ function isValidState(state: unknown): state is LinearOAuthState {
 
 export async function GET(request: Request) {
 	const url = new URL(request.url);
+	const callbackUrl = `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/api/integrations/linear/oauth/callback`;
 	const code = url.searchParams.get("code");
 	const state = url.searchParams.get("state");
 	const oauthError = url.searchParams.get("error");
@@ -77,7 +78,7 @@ export async function GET(request: Request) {
 		body: new URLSearchParams({
 			grant_type: "authorization_code",
 			code,
-			redirect_uri: `${url.origin}/api/integrations/linear/oauth/callback`,
+			redirect_uri: callbackUrl,
 			client_id: env.LINEAR_OAUTH_CLIENT_ID,
 			client_secret: env.LINEAR_OAUTH_CLIENT_SECRET,
 		}),

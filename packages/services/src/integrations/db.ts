@@ -314,7 +314,7 @@ export async function upsertOAuthAppIntegration(input: {
 			updatedAt: now,
 		})
 		.onConflictDoUpdate({
-			target: [integrations.connectionId],
+			target: [integrations.connectionId, integrations.organizationId],
 			set: {
 				displayName: input.displayName,
 				scopes: input.scopes ?? null,

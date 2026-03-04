@@ -78,22 +78,20 @@ export function getEnvStatus(env: NodeJS.ProcessEnv = process.env): EnvStatus {
 		requireKey("LLM_PROXY_MASTER_KEY", "LLM proxy master key", "feature", true);
 	}
 
-	// Integrations (Nango) requirements
-	if (integrationsEnabled) {
-		requireKey("NANGO_SECRET_KEY", "Nango secret key", "feature", true);
-		requireKey("NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID", "Nango GitHub integration ID", "feature");
-		requireKey("NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID", "Nango Linear integration ID", "feature");
-		requireKey("NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID", "Nango Sentry integration ID", "feature");
-	}
+	// GitHub App requirements (repo access)
+	requireKey("GITHUB_APP_ID", "GitHub App ID (repo access)", "feature");
+	requireKey("GITHUB_APP_PRIVATE_KEY", "GitHub App private key", "feature", true);
+	requireKey("GITHUB_APP_WEBHOOK_SECRET", "GitHub App webhook secret", "feature", true);
+	requireKey("NEXT_PUBLIC_GITHUB_APP_SLUG", "GitHub App slug (install URL)", "feature");
 
-	const useNangoGitHub =
-		env.NEXT_PUBLIC_USE_NANGO_GITHUB === "true" || env.NEXT_PUBLIC_USE_NANGO_GITHUB === "1";
-	// GitHub App requirements (when not using Nango for GitHub)
-	if (!useNangoGitHub) {
-		requireKey("GITHUB_APP_ID", "GitHub App ID (repo access)", "feature");
-		requireKey("GITHUB_APP_PRIVATE_KEY", "GitHub App private key", "feature", true);
-		requireKey("GITHUB_APP_WEBHOOK_SECRET", "GitHub App webhook secret", "feature", true);
-		requireKey("NEXT_PUBLIC_GITHUB_APP_SLUG", "GitHub App slug (install URL)", "feature");
+	// First-party OAuth app requirements (when integrations are enabled)
+	if (integrationsEnabled) {
+		requireKey("LINEAR_OAUTH_CLIENT_ID", "Linear OAuth app client ID", "feature");
+		requireKey("LINEAR_OAUTH_CLIENT_SECRET", "Linear OAuth app client secret", "feature", true);
+		requireKey("SENTRY_OAUTH_CLIENT_ID", "Sentry OAuth app client ID", "feature");
+		requireKey("SENTRY_OAUTH_CLIENT_SECRET", "Sentry OAuth app client secret", "feature", true);
+		requireKey("JIRA_OAUTH_CLIENT_ID", "Jira OAuth app client ID", "feature");
+		requireKey("JIRA_OAUTH_CLIENT_SECRET", "Jira OAuth app client secret", "feature", true);
 	}
 
 	// Billing requirements (cloud or explicitly enabled)
