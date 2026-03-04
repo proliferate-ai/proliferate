@@ -11,7 +11,8 @@ import { mountRoutes, setupWebSocket } from "./api";
 import { startSessionExpiryWorker } from "./expiry/expiry-queue";
 import { HubManager } from "./hub";
 import type { GatewayEnv } from "./lib/env";
-import { cors, errorHandler } from "./middleware";
+import { errorHandler } from "./middleware/errors";
+import { cors } from "./middleware/transport";
 import { startOrphanSweeper } from "./sweeper/orphan-sweeper";
 
 export interface ServerDependencies {

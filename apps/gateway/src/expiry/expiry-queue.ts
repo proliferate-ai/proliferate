@@ -1,7 +1,7 @@
 import { createLogger } from "@proliferate/logger";
 import { Queue, Worker } from "bullmq";
 import type { HubManager } from "../hub";
-import { MigrationConfig } from "../hub/types";
+import { MigrationConfig } from "../hub/shared/types";
 import type { GatewayEnv } from "../lib/env";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "expiry" });

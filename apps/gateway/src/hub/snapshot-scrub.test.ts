@@ -2,7 +2,7 @@ import type { Logger } from "@proliferate/logger";
 import { configurations } from "@proliferate/services";
 import type { SandboxProvider } from "@proliferate/shared/providers";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { prepareForSnapshot } from "./snapshot-scrub";
+import { prepareForSnapshot } from "./session/migration/snapshot-scrub";
 
 type ExecResult = { stdout: string; stderr: string; exitCode: number };
 

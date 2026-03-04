@@ -19,9 +19,9 @@ import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { cancelSessionExpiry } from "../expiry/expiry-queue";
 import type { HubManager } from "../hub";
-import { prepareForSnapshot } from "../hub/snapshot-scrub";
+import { runWithMigrationLock } from "../hub/session/migration/lock";
+import { prepareForSnapshot } from "../hub/session/migration/snapshot-scrub";
 import type { GatewayEnv } from "../lib/env";
-import { runWithMigrationLock } from "../lib/lock";
 import { hasRuntimeLease } from "../lib/session-leases";
 
 /** Sweep interval: 15 minutes. */

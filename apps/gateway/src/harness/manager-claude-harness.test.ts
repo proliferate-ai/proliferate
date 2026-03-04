@@ -110,7 +110,7 @@ vi.mock("@proliferate/logger", () => ({
 
 vi.stubGlobal("fetch", mockFetch);
 
-import { ClaudeManagerHarnessAdapter } from "./manager-claude-harness";
+import { ClaudeManagerHarnessAdapter } from "./manager/adapter";
 
 // ============================================
 // Helpers

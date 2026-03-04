@@ -13,14 +13,14 @@ export type {
 	CodingHarnessStartResult,
 	CodingHarnessStreamInput,
 	RuntimeDaemonEvent,
-} from "./coding-harness";
+} from "./contracts/coding";
 
-export { normalizeDaemonEvent } from "./daemon-event-bridge";
+export { normalizeDaemonEvent } from "./daemon/event-normalizer";
 
 export {
 	ClaudeManagerHarnessAdapter,
 	type ManagerHarnessAdapter,
 	type ManagerHarnessState,
-} from "./manager-claude-harness";
+} from "./manager/adapter";
 
-export { OpenCodeCodingHarnessAdapter } from "./opencode-coding-harness";
+export { OpenCodeCodingHarnessAdapter } from "./coding/opencode/adapter";

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { type FlushFn, SessionTelemetry, extractPrUrls } from "./session-telemetry";
+import { type FlushFn, SessionTelemetry, extractPrUrls } from "./session/runtime/session-telemetry";
 
 // ============================================
 // extractPrUrls

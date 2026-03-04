@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OpenCodeEvent } from "../types";
-import { normalizeDaemonEvent } from "./daemon-event-bridge";
+import { normalizeDaemonEvent } from "./daemon/event-normalizer";
 
 describe("normalizeDaemonEvent", () => {
 	it("maps message events to message channel", () => {

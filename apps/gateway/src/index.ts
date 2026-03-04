@@ -8,8 +8,8 @@ import { getEnvStatus } from "@proliferate/environment";
 import { createLogger } from "@proliferate/logger";
 import { setServicesLogger } from "@proliferate/services/logger";
 import { setSharedLogger } from "@proliferate/shared/logger";
+import { setLockRedisClient } from "./hub/session/migration/lock";
 import { loadGatewayEnv } from "./lib/env";
-import { setLockRedisClient } from "./lib/lock";
 import { ensureRedisConnected } from "./lib/redis";
 import { createServer } from "./server";
 

@@ -4,22 +4,13 @@
 
 export { decryptSecret } from "./crypto";
 export { type GatewayEnv, loadGatewayEnv } from "./env";
-export { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
 export {
-	type OpenCodeMessage,
-	type OpenCodeMessageInfo,
-	type OpenCodeMessagePart,
-	type OpenCodeSessionInfo,
-	type OpenCodeToolState,
-	abortOpenCodeSession,
-	createOpenCodeSession,
-	fetchOpenCodeMessages,
-	getOpenCodeSession,
-	listOpenCodeSessions,
-	mapOpenCodeMessages,
-	sendPromptAsync,
-	updateToolResult,
-} from "./opencode";
+	IDEMPOTENCY_IN_FLIGHT_TTL_SECONDS,
+	clearIdempotencyKey,
+	readIdempotencyResponse,
+	reserveIdempotencyKey,
+	storeIdempotencyResponse,
+} from "./idempotency";
 export { closeRedisConnection, publishSessionEvent } from "./redis";
 export {
 	getVerificationFileStream,
@@ -28,8 +19,11 @@ export {
 	uploadVerificationFiles,
 } from "./s3";
 export {
-	type RepoRecord,
-	type SessionContext,
-	type SessionRecord,
-	loadSessionContext,
-} from "./session-store";
+	OWNER_LEASE_TTL_MS,
+	acquireOwnerLease,
+	clearRuntimeLease,
+	hasRuntimeLease,
+	releaseOwnerLease,
+	renewOwnerLease,
+	setRuntimeLease,
+} from "./session-leases";
