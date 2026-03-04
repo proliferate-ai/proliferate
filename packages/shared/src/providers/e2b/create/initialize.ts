@@ -1,13 +1,22 @@
 import { Sandbox } from "e2b";
-import { getLLMProxyBaseURL } from "../../agents/llm-proxy";
-import { SANDBOX_PATHS, SANDBOX_TIMEOUT_MS } from "../../sandbox";
-import { buildEnvExportCommand } from "./commands";
+import { getLLMProxyBaseURL } from "../../../agents/llm-proxy";
+import { SANDBOX_PATHS, SANDBOX_TIMEOUT_MS } from "../../../sandbox";
+import { E2B_TEMPLATE, getE2BApiOpts, getE2BConnectOpts } from "../shared/config";
 import type {
 	CreateSandboxContext,
 	PreparedSandboxEnv,
 	SandboxInitializationResult,
-} from "./types";
+} from "../shared/types";
 
+/** Builds the jq-based env export command for resumed snapshots. */
+function buildEnvExportCommand(): string {
+	return `for key in $(jq -r 'keys[]' ${SANDBOX_PATHS.envProfileFile}); do export "$key=$(jq -r --arg k "$key" '.[$k]' ${SANDBOX_PATHS.envProfileFile})"; done`;
+}
+
+/**
+ * Normalizes sandbox env vars and wires LLM proxy values when available.
+ * Also forces OpenCode default plugins off so provider tools remain authoritative.
+ */
 export function prepareSandboxEnvironment(
 	envVars: Record<string, string>,
 	sessionId: string,
@@ -21,7 +30,7 @@ export function prepareSandboxEnvironment(
 	};
 
 	if (llmProxyBaseUrl && llmProxyApiKey) {
-		log.debug({ llmProxyBaseUrl, hasApiKey: true }, "Using LLM proxy");
+		log.debug({ llmProxyBaseUrl }, "Using LLM proxy");
 		envs.ANTHROPIC_API_KEY = llmProxyApiKey;
 		envs.ANTHROPIC_BASE_URL = llmProxyBaseUrl;
 	} else {
@@ -31,7 +40,11 @@ export function prepareSandboxEnvironment(
 	}
 
 	for (const [key, value] of Object.entries(envVars)) {
-		if (key === "ANTHROPIC_API_KEY" || key === "LLM_PROXY_API_KEY" || key === "ANTHROPIC_BASE_URL") {
+		if (
+			key === "ANTHROPIC_API_KEY" ||
+			key === "LLM_PROXY_API_KEY" ||
+			key === "ANTHROPIC_BASE_URL"
+		) {
 			continue;
 		}
 		envs[key] = value;
@@ -41,10 +54,14 @@ export function prepareSandboxEnvironment(
 	return { envs, llmProxyBaseUrl, llmProxyApiKey };
 }
 
+/**
+ * Creates or restores a sandbox from snapshot and guarantees a usable instance.
+ * Snapshot failures are treated as non-fatal and transparently fall back to fresh create.
+ */
 export async function initializeSandbox(
 	context: CreateSandboxContext,
 ): Promise<SandboxInitializationResult> {
-	const { opts, providerType, logLatency, getConnectOpts, templateId } = context;
+	const { opts } = context;
 	const sandboxCreatedAt = Date.now();
 	const preparedEnv = prepareSandboxEnvironment(opts.envVars, opts.sessionId, context.log);
 	let isSnapshot = Boolean(opts.snapshotId);
@@ -53,7 +70,7 @@ export async function initializeSandbox(
 		timeoutMs: SANDBOX_TIMEOUT_MS,
 		envs: preparedEnv.envs,
 	};
-	const apiDomain = context.getApiOpts().domain;
+	const apiDomain = getE2BApiOpts().domain;
 	if (apiDomain) {
 		sandboxOpts.domain = apiDomain;
 	}
@@ -61,70 +78,39 @@ export async function initializeSandbox(
 	let sandbox: Sandbox | null = null;
 	if (isSnapshot) {
 		try {
-			const connectStartMs = Date.now();
 			if (opts.currentSandboxId) {
 				context.log.debug({ sandboxId: opts.currentSandboxId }, "Resuming paused sandbox");
-				sandbox = await Sandbox.connect(opts.currentSandboxId, getConnectOpts());
+				sandbox = await Sandbox.connect(opts.currentSandboxId, getE2BConnectOpts());
 			} else {
 				context.log.debug({ snapshotId: opts.snapshotId }, "Creating sandbox from snapshot");
 				sandbox = await Sandbox.create(opts.snapshotId!, sandboxOpts);
 			}
-			logLatency("provider.create_sandbox.resume.connect", {
-				provider: providerType,
-				sessionId: opts.sessionId,
-				durationMs: Date.now() - connectStartMs,
-			});
-			context.log.debug({ sandboxId: sandbox.sandboxId }, "Sandbox ready from snapshot");
+			context.log.info({ sandboxId: sandbox.sandboxId }, "Sandbox ready from snapshot");
 
-			context.log.debug("Re-injecting environment variables");
 			let envsForProfile = { ...preparedEnv.envs };
 			if (preparedEnv.llmProxyBaseUrl && preparedEnv.llmProxyApiKey) {
-				const { ANTHROPIC_API_KEY: _apiKey, ANTHROPIC_BASE_URL: _baseUrl, ...rest } = envsForProfile;
+				const {
+					ANTHROPIC_API_KEY: _apiKey,
+					ANTHROPIC_BASE_URL: _baseUrl,
+					...rest
+				} = envsForProfile;
 				envsForProfile = rest;
 			}
 
-			const envWriteStartMs = Date.now();
 			await sandbox.files.write(SANDBOX_PATHS.envProfileFile, JSON.stringify(envsForProfile));
-			logLatency("provider.create_sandbox.resume.env_write", {
-				provider: providerType,
-				sessionId: opts.sessionId,
-				keyCount: Object.keys(envsForProfile).length,
-				durationMs: Date.now() - envWriteStartMs,
-			});
-
-			const envExportStartMs = Date.now();
 			await sandbox.commands.run(buildEnvExportCommand(), { timeoutMs: 10000 });
-			logLatency("provider.create_sandbox.resume.env_export", {
-				provider: providerType,
-				sessionId: opts.sessionId,
-				timeoutMs: 10000,
-				durationMs: Date.now() - envExportStartMs,
-			});
 		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
 			context.log.warn({ err }, "Snapshot resume failed, falling back to fresh sandbox");
-			logLatency("provider.create_sandbox.resume.fallback", {
-				provider: providerType,
-				sessionId: opts.sessionId,
-				error: message,
-			});
 			isSnapshot = false;
 		}
 	}
 
 	if (!isSnapshot) {
-		context.log.debug("Creating fresh sandbox (no snapshot)");
-		if (!templateId) {
+		if (!E2B_TEMPLATE) {
 			throw new Error("E2B_TEMPLATE is required to create a sandbox");
 		}
-		const createStartMs = Date.now();
-		sandbox = await Sandbox.create(templateId, sandboxOpts);
-		logLatency("provider.create_sandbox.fresh.create", {
-			provider: providerType,
-			sessionId: opts.sessionId,
-			durationMs: Date.now() - createStartMs,
-		});
-		context.log.debug({ sandboxId: sandbox.sandboxId }, "Sandbox created");
+		sandbox = await Sandbox.create(E2B_TEMPLATE, sandboxOpts);
+		context.log.info({ sandboxId: sandbox.sandboxId }, "Fresh sandbox created");
 	}
 
 	if (!sandbox) {
@@ -134,14 +120,12 @@ export async function initializeSandbox(
 	return { sandbox, isSnapshot, sandboxCreatedAt, preparedEnv };
 }
 
-export async function findRunningSandbox(
-	sandboxId: string | undefined,
-	getApiOpts: () => ReturnType<CreateSandboxContext["getApiOpts"]>,
-): Promise<string | null> {
+/** Returns sandbox id only when the provided sandbox is still running. */
+export async function findRunningSandbox(sandboxId: string | undefined): Promise<string | null> {
 	if (!sandboxId) return null;
 
 	try {
-		const info = await Sandbox.getInfo(sandboxId, getApiOpts());
+		const info = await Sandbox.getInfo(sandboxId, getE2BApiOpts());
 		return info.endAt ? null : info.sandboxId;
 	} catch {
 		return null;

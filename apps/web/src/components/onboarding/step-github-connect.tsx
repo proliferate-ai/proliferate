@@ -54,7 +54,7 @@ export function StepGitHubConnect({
 							</div>
 							<div className="flex gap-3">
 								<GitHubConnectButton onSuccess={onComplete} hasGitHubConnection />
-								<Button variant="dark" onClick={onComplete} className="h-11 w-full rounded-lg">
+								<Button variant="contrast" onClick={onComplete} className="h-11 w-full rounded-lg">
 									Continue
 								</Button>
 							</div>

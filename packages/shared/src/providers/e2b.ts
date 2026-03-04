@@ -1,41 +1,19 @@
 import { env } from "@proliferate/environment/server";
-import type { Logger } from "@proliferate/logger";
-import { FileType, Sandbox, type SandboxApiOpts, type SandboxConnectOpts } from "e2b";
-import { getDefaultAgentConfig, toOpencodeModelId } from "../agents/index";
-import { getLLMProxyBaseURL } from "../agents/llm-proxy";
-import { isValidTargetPath } from "../lib/env-parser";
+import { Sandbox } from "e2b";
 import { getSharedLogger } from "../logger";
+import { SandboxProviderError, capOutput, shellEscape, waitForOpenCodeReady } from "../sandbox";
+import { setupAdditionalDependencies } from "./e2b/bootstrap/background";
+import { setupEssentialDependencies } from "./e2b/bootstrap/essential";
+import { findRunningSandbox, initializeSandbox } from "./e2b/create/initialize";
+import { setupWorkspace } from "./e2b/create/workspace";
 import {
-	AUTOMATION_COMPLETE_DESCRIPTION,
-	AUTOMATION_COMPLETE_TOOL,
-	ENV_FILE,
-	REQUEST_ENV_VARIABLES_DESCRIPTION,
-	REQUEST_ENV_VARIABLES_TOOL,
-	SAVE_ENV_FILES_DESCRIPTION,
-	SAVE_ENV_FILES_TOOL,
-	SAVE_SERVICE_COMMANDS_DESCRIPTION,
-	SAVE_SERVICE_COMMANDS_TOOL,
-	SAVE_SNAPSHOT_DESCRIPTION,
-	SAVE_SNAPSHOT_TOOL,
-	VERIFY_TOOL,
-	VERIFY_TOOL_DESCRIPTION,
-} from "../opencode-tools";
-import {
-	ACTIONS_BOOTSTRAP,
-	DEFAULT_CADDYFILE,
-	ENV_INSTRUCTIONS,
-	PLUGIN_MJS,
-	SANDBOX_PATHS,
-	SANDBOX_TIMEOUT_MS,
-	SandboxProviderError,
-	type SessionMetadata,
-	buildGitCredentialsMap,
-	capOutput,
-	getOpencodeConfig,
-	shellEscape,
-	shouldPullOnRestore,
-	waitForOpenCodeReady,
-} from "../sandbox";
+	buildCreateSandboxExpiresAt,
+	execSandboxCommand,
+	readSandboxFiles,
+	resolveTunnelUrls,
+	writeSandboxEnvFile,
+} from "./e2b/runtime/io";
+import { getE2BApiOpts, getE2BConnectOpts } from "./e2b/shared/config";
 import type {
 	AutoStartOutputEntry,
 	ConfigurationServiceCommand,
@@ -48,38 +26,11 @@ import type {
 	SnapshotResult,
 } from "./types";
 
-/**
- * E2B Sandbox Provider
- *
- * Uses the E2B TypeScript SDK directly to manage sandboxes.
- * Provides full Docker support.
- *
- * Prerequisites:
- * 1. Build the template: `cd packages/e2b-sandbox && e2b template build`
- * 2. Set E2B_API_KEY environment variable
- *
- * For self-hosted E2B:
- * - Set E2B_DOMAIN to your custom domain (e.g., "e2b.company.com")
- * - Build template with: E2B_DOMAIN=e2b.company.com e2b template build
- */
+/** Kills stale listeners/processes that can conflict with restored snapshots. */
+const CLEAR_STALE_PROCESSES_COMMAND =
+	"fuser -k 4096/tcp 4000/tcp 8470/tcp 2>/dev/null || true; pkill -9 caddy || true; sleep 0.5";
 
-// Configuration from environment
-const E2B_TEMPLATE = env.E2B_TEMPLATE;
-const E2B_DOMAIN = env.E2B_DOMAIN;
-
-const providerLogger = getSharedLogger().child({ module: "e2b" });
-const logLatency = (event: string, data?: Record<string, unknown>) => {
-	providerLogger.info(data ?? {}, event);
-};
-
-const getE2BApiOpts = (): SandboxApiOpts => ({
-	domain: E2B_DOMAIN,
-});
-
-const getE2BConnectOpts = (): SandboxConnectOpts => ({
-	...getE2BApiOpts(),
-	timeoutMs: SANDBOX_TIMEOUT_MS,
-});
+const log = getSharedLogger().child({ module: "e2b" });
 
 export class E2BProvider implements SandboxProvider {
 	readonly type = "e2b" as const;
@@ -87,309 +38,73 @@ export class E2BProvider implements SandboxProvider {
 	readonly supportsAutoPause = true;
 
 	async createSandbox(opts: CreateSandboxOpts): Promise<CreateSandboxResult> {
-		const startTime = Date.now();
-		const log = providerLogger.child({ sessionId: opts.sessionId });
+		const sessionLog = log.child({ sessionId: opts.sessionId });
 
-		logLatency("provider.create_sandbox.start", {
-			provider: this.type,
-			sessionId: opts.sessionId,
-			repoCount: opts.repos.length,
-			hasSnapshotId: Boolean(opts.snapshotId),
-			timeoutMs: SANDBOX_TIMEOUT_MS,
+		// 1. Create or restore sandbox (snapshot resume with fresh-create fallback)
+		const { sandbox, isSnapshot, sandboxCreatedAt, preparedEnv } = await initializeSandbox({
+			opts,
+			log: sessionLog,
 		});
 
-		log.debug(
-			{ repoCount: opts.repos.length, snapshotId: opts.snapshotId || "none" },
-			"Creating session",
-		);
+		// 2. Resolve workspace directory (clone repos or read metadata from snapshot)
+		const repoDir = await setupWorkspace(sandbox, opts, isSnapshot, sessionLog);
 
-		// LLM Proxy configuration - when set, sandboxes route through proxy instead of direct API
-		// This avoids exposing real API keys in sandboxes
-		const llmProxyBaseUrl = getLLMProxyBaseURL();
-		const llmProxyApiKey = opts.envVars.LLM_PROXY_API_KEY; // Virtual key for this session
-
-		// Build environment variables - don't include real API keys when using proxy
-		const envs: Record<string, string> = {
-			SESSION_ID: opts.sessionId,
-		};
-
-		// Only include ANTHROPIC_API_KEY if NOT using proxy (backward compatibility)
-		if (llmProxyBaseUrl && llmProxyApiKey) {
-			log.debug({ llmProxyBaseUrl, hasApiKey: !!llmProxyApiKey }, "Using LLM proxy");
-			envs.ANTHROPIC_API_KEY = llmProxyApiKey;
-			envs.ANTHROPIC_BASE_URL = llmProxyBaseUrl;
-		} else {
-			const hasDirectKey = !!opts.envVars.ANTHROPIC_API_KEY;
-			log.warn({ hasDirectKey }, "No LLM proxy, using direct key");
-			envs.ANTHROPIC_API_KEY = opts.envVars.ANTHROPIC_API_KEY || "";
-		}
-
-		// Add other env vars (but filter out sensitive keys when using proxy)
-		for (const [key, value] of Object.entries(opts.envVars)) {
-			// Skip proxy-specific and sensitive keys (they're handled separately)
-			if (
-				key === "ANTHROPIC_API_KEY" ||
-				key === "LLM_PROXY_API_KEY" ||
-				key === "ANTHROPIC_BASE_URL"
-			)
-				continue;
-			envs[key] = value;
-		}
-
-		// Disable default OpenCode plugins for snapshot stability (parity with Modal)
-		envs.OPENCODE_DISABLE_DEFAULT_PLUGINS = "true";
-
-		let isSnapshot = !!opts.snapshotId;
-
-		// Calculate expiration time before creating sandbox
-		const sandboxCreatedAt = Date.now();
-
-		// Build sandbox options (supports self-hosted via E2B_DOMAIN)
-		const sandboxOpts: Parameters<typeof Sandbox.create>[1] = {
-			timeoutMs: SANDBOX_TIMEOUT_MS,
-			envs,
-		};
-		if (E2B_DOMAIN) {
-			sandboxOpts.domain = E2B_DOMAIN;
-		}
-
-		let sandbox: Sandbox | null = null;
-
-		if (isSnapshot) {
-			try {
-				const connectStartMs = Date.now();
-				if (opts.currentSandboxId) {
-					// Pause/resume: reconnect to the same (paused) sandbox
-					log.debug({ sandboxId: opts.currentSandboxId }, "Resuming paused sandbox");
-					sandbox = await Sandbox.connect(opts.currentSandboxId, getE2BConnectOpts());
-				} else {
-					// Snapshot branching: create a NEW sandbox from a snapshot
-					log.debug({ snapshotId: opts.snapshotId }, "Creating sandbox from snapshot");
-					sandbox = await Sandbox.create(opts.snapshotId!, sandboxOpts);
-				}
-				logLatency("provider.create_sandbox.resume.connect", {
-					provider: this.type,
-					sessionId: opts.sessionId,
-					durationMs: Date.now() - connectStartMs,
-				});
-				log.debug({ sandboxId: sandbox.sandboxId }, "Sandbox ready from snapshot");
-
-				// Re-inject environment variables (they don't persist across pause/resume)
-				// Using JSON file approach to avoid shell escaping issues (security)
-				log.debug("Re-injecting environment variables");
-				let envsForProfile = { ...envs };
-				if (llmProxyBaseUrl && llmProxyApiKey) {
-					const {
-						ANTHROPIC_API_KEY: _apiKey,
-						ANTHROPIC_BASE_URL: _baseUrl,
-						...rest
-					} = envsForProfile;
-					envsForProfile = rest;
-				}
-				const envWriteStartMs = Date.now();
-				await sandbox.files.write(SANDBOX_PATHS.envProfileFile, JSON.stringify(envsForProfile));
-				logLatency("provider.create_sandbox.resume.env_write", {
-					provider: this.type,
-					sessionId: opts.sessionId,
-					keyCount: Object.keys(envsForProfile).length,
-					durationMs: Date.now() - envWriteStartMs,
-				});
-				// Use jq to safely export env vars from JSON (handles special chars properly)
-				const envExportStartMs = Date.now();
-				await sandbox.commands.run(
-					`for key in $(jq -r 'keys[]' ${SANDBOX_PATHS.envProfileFile}); do export "$key=$(jq -r --arg k "$key" '.[$k]' ${SANDBOX_PATHS.envProfileFile})"; done`,
-					{ timeoutMs: 10000 },
-				);
-				logLatency("provider.create_sandbox.resume.env_export", {
-					provider: this.type,
-					sessionId: opts.sessionId,
-					timeoutMs: 10000,
-					durationMs: Date.now() - envExportStartMs,
-				});
-			} catch (err) {
-				const message = err instanceof Error ? err.message : String(err);
-				log.warn({ err }, "Snapshot resume failed, falling back to fresh sandbox");
-				logLatency("provider.create_sandbox.resume.fallback", {
-					provider: this.type,
-					sessionId: opts.sessionId,
-					error: message,
-				});
-				isSnapshot = false;
-			}
-		}
-
-		if (!isSnapshot) {
-			// Create fresh sandbox
-			log.debug("Creating fresh sandbox (no snapshot)");
-			if (!E2B_TEMPLATE) {
-				throw new Error("E2B_TEMPLATE is required to create a sandbox");
-			}
-			const createStartMs = Date.now();
-			sandbox = await Sandbox.create(E2B_TEMPLATE, sandboxOpts);
-			logLatency("provider.create_sandbox.fresh.create", {
-				provider: this.type,
-				sessionId: opts.sessionId,
-				durationMs: Date.now() - createStartMs,
-			});
-			log.debug({ sandboxId: sandbox.sandboxId }, "Sandbox created");
-		}
-
-		if (!sandbox) {
-			throw new Error("Failed to initialize sandbox");
-		}
-
-		// Setup the sandbox (clone repos or restore from snapshot)
-		const setupWorkspaceStartMs = Date.now();
-		const repoDir = await this.setupSandbox(sandbox, opts, isSnapshot, log);
-		logLatency("provider.create_sandbox.setup_workspace", {
-			provider: this.type,
-			sessionId: opts.sessionId,
-			isSnapshot,
-			durationMs: Date.now() - setupWorkspaceStartMs,
-		});
-
-		// Kill stale processes from snapshot resume to avoid port conflicts.
-		// Must run BEFORE setupEssential starts new processes (OpenCode on :4096).
-		// On fresh sandboxes this is a no-op.
-		// Uses fuser to kill by port (more reliable than pkill in E2B snapshots
-		// where frozen processes may not appear in pkill's process scan).
+		// 3. Kill frozen processes from snapshot to avoid port conflicts before bootstrap
 		if (isSnapshot) {
 			await sandbox.commands
-				.run(
-					"fuser -k 4096/tcp 4000/tcp 8470/tcp 2>/dev/null || true; pkill -9 caddy || true; sleep 0.5",
-					{ timeoutMs: 10000 },
-				)
+				.run(CLEAR_STALE_PROCESSES_COMMAND, { timeoutMs: 10000 })
 				.catch(() => {});
 		}
 
-		// Setup essential dependencies (blocking - must complete before API returns)
-		const setupEssentialStartMs = Date.now();
-		await this.setupEssentialDependencies(
+		// 4. Blocking bootstrap: write tools/config/instructions, start OpenCode server
+		await setupEssentialDependencies(
 			sandbox,
 			repoDir,
 			opts,
-			log,
-			llmProxyBaseUrl,
-			llmProxyApiKey,
+			sessionLog,
+			preparedEnv.llmProxyBaseUrl,
+			preparedEnv.llmProxyApiKey,
 		);
-		logLatency("provider.create_sandbox.setup_essential", {
-			provider: this.type,
-			sessionId: opts.sessionId,
-			durationMs: Date.now() - setupEssentialStartMs,
+
+		// 5. Non-blocking bootstrap: sidecars, preview proxy, git freshness, service commands
+		setupAdditionalDependencies(sandbox, opts, sessionLog, log).catch((err) => {
+			sessionLog.warn({ err }, "Additional dependencies setup failed");
 		});
 
-		// Setup additional dependencies (async - fire and forget)
-		logLatency("provider.create_sandbox.setup_additional.start_async", {
-			provider: this.type,
-			sessionId: opts.sessionId,
-		});
-		this.setupAdditionalDependencies(sandbox, opts, log).catch((err) => {
-			log.warn({ err }, "Additional dependencies setup failed");
-			logLatency("provider.create_sandbox.setup_additional.error", {
-				provider: this.type,
-				sessionId: opts.sessionId,
-				error: err instanceof Error ? err.message : String(err),
-			});
-		});
-
-		// Get tunnel URLs
-		log.debug("Getting tunnel URLs");
-		const tunnelsStartMs = Date.now();
+		// 6. Resolve tunnel URLs for OpenCode and preview
 		const tunnelHost = sandbox.getHost(4096);
 		const previewHost = sandbox.getHost(20000);
-
 		const tunnelUrl = tunnelHost ? `https://${tunnelHost}` : "";
 		const previewUrl = previewHost ? `https://${previewHost}` : "";
-		logLatency("provider.create_sandbox.tunnels", {
-			provider: this.type,
-			sessionId: opts.sessionId,
-			durationMs: Date.now() - tunnelsStartMs,
-			hasTunnelUrl: Boolean(tunnelUrl),
-			hasPreviewUrl: Boolean(previewUrl),
-		});
 
-		log.debug({ tunnelUrl, previewUrl }, "Tunnel URLs resolved");
-
-		// Wait for OpenCode to be ready (with exponential backoff)
+		// 7. Wait for OpenCode to be serving before returning
 		if (tunnelUrl) {
-			log.debug("Waiting for OpenCode readiness");
 			try {
-				const readyStartMs = Date.now();
-				await waitForOpenCodeReady(tunnelUrl, 30000, (msg) => log.debug(msg));
-				logLatency("provider.create_sandbox.opencode_ready", {
-					provider: this.type,
-					sessionId: opts.sessionId,
-					durationMs: Date.now() - readyStartMs,
-					timeoutMs: 30000,
-				});
-			} catch (error) {
-				// Log but don't fail - client can retry connection
-				logLatency("provider.create_sandbox.opencode_ready.warn", {
-					provider: this.type,
-					sessionId: opts.sessionId,
-					timeoutMs: 30000,
-					error: error instanceof Error ? error.message : String(error),
-				});
-				log.warn({ err: error }, "OpenCode readiness check failed");
+				await waitForOpenCodeReady(tunnelUrl, 30000, (msg) => sessionLog.debug(msg));
+			} catch (err) {
+				sessionLog.warn({ err }, "OpenCode readiness check failed");
 			}
 		}
 
-		log.info(
-			{ sandboxId: sandbox.sandboxId, elapsedMs: Date.now() - startTime },
-			"Sandbox creation complete",
-		);
-		logLatency("provider.create_sandbox.complete", {
-			provider: this.type,
-			sessionId: opts.sessionId,
-			durationMs: Date.now() - startTime,
-			isSnapshot,
-		});
+		sessionLog.info({ sandboxId: sandbox.sandboxId, isSnapshot }, "Sandbox created");
+
 		return {
 			sandboxId: sandbox.sandboxId,
 			tunnelUrl,
 			previewUrl,
-			expiresAt: sandboxCreatedAt + SANDBOX_TIMEOUT_MS,
+			expiresAt: buildCreateSandboxExpiresAt(sandboxCreatedAt),
 		};
 	}
 
 	async ensureSandbox(opts: CreateSandboxOpts): Promise<EnsureSandboxResult> {
-		providerLogger.debug({ sessionId: opts.sessionId }, "Ensuring sandbox");
-		const startMs = Date.now();
-		logLatency("provider.ensure_sandbox.start", {
-			provider: this.type,
-			sessionId: opts.sessionId,
-			hasCurrentSandboxId: Boolean(opts.currentSandboxId),
-			hasSnapshotId: Boolean(opts.snapshotId),
-		});
+		const sessionLog = log.child({ sessionId: opts.sessionId });
 
-		// For E2B, we use currentSandboxId from DB as the identifier
-		// (E2B auto-generates IDs, unlike Modal where we set sessionId as the name)
-		const findStartMs = Date.now();
-		const existingSandboxId = await this.findSandbox(opts.currentSandboxId);
-		logLatency("provider.ensure_sandbox.find_existing", {
-			provider: this.type,
-			sessionId: opts.sessionId,
-			durationMs: Date.now() - findStartMs,
-			found: Boolean(existingSandboxId),
-		});
+		// Try to recover an existing running sandbox (side-effect-free check)
+		const existingSandboxId = await findRunningSandbox(opts.currentSandboxId);
 
 		if (existingSandboxId) {
-			providerLogger.debug({ sandboxId: existingSandboxId }, "Found existing sandbox");
-			const resolveStartMs = Date.now();
-			const tunnels = await this.resolveTunnels(existingSandboxId);
-			logLatency("provider.ensure_sandbox.resolve_tunnels", {
-				provider: this.type,
-				sessionId: opts.sessionId,
-				durationMs: Date.now() - resolveStartMs,
-				hasTunnelUrl: Boolean(tunnels.openCodeUrl),
-				hasPreviewUrl: Boolean(tunnels.previewUrl),
-			});
-			logLatency("provider.ensure_sandbox.complete", {
-				provider: this.type,
-				sessionId: opts.sessionId,
-				recovered: true,
-				durationMs: Date.now() - startMs,
-			});
+			const tunnels = await resolveTunnelUrls(existingSandboxId);
+			sessionLog.info({ sandboxId: existingSandboxId }, "Sandbox recovered");
 			return {
 				sandboxId: existingSandboxId,
 				tunnelUrl: tunnels.openCodeUrl,
@@ -398,570 +113,9 @@ export class E2BProvider implements SandboxProvider {
 			};
 		}
 
-		providerLogger.debug("No existing sandbox found, creating new");
+		// No running sandbox found — full create path
 		const result = await this.createSandbox(opts);
-		logLatency("provider.ensure_sandbox.complete", {
-			provider: this.type,
-			sessionId: opts.sessionId,
-			recovered: false,
-			durationMs: Date.now() - startMs,
-		});
 		return { ...result, recovered: false };
-	}
-
-	/**
-	 * Find a running sandbox by its ID.
-	 * Uses Sandbox.getInfo() to check if sandbox exists without connecting.
-	 */
-	private async findSandbox(sandboxId: string | undefined): Promise<string | null> {
-		if (!sandboxId) return null;
-
-		try {
-			const info = await Sandbox.getInfo(sandboxId, getE2BApiOpts());
-			// Check if sandbox is still running (not ended)
-			return info.endAt ? null : info.sandboxId;
-		} catch {
-			// Sandbox not found
-			return null;
-		}
-	}
-
-	/**
-	 * Setup the sandbox workspace:
-	 * - For fresh sandboxes: Clone repositories and save metadata
-	 * - For snapshots: Read metadata to get existing repoDir (repos already in snapshot)
-	 *
-	 * @returns The repoDir path
-	 */
-	private async setupSandbox(
-		sandbox: Sandbox,
-		opts: CreateSandboxOpts,
-		isSnapshot: boolean,
-		log: Logger,
-	): Promise<string> {
-		const workspaceDir = "/home/user/workspace";
-
-		if (isSnapshot) {
-			// Snapshot restore: repos are already in the filesystem, just read metadata
-			log.info("Restoring from snapshot - reading metadata (skipping clone)");
-			try {
-				const metadataStr = await sandbox.files.read(SANDBOX_PATHS.metadataFile);
-				const metadata: SessionMetadata = JSON.parse(metadataStr);
-				log.info({ repoDir: metadata.repoDir }, "Found repoDir from snapshot metadata");
-				return metadata.repoDir;
-			} catch (metadataErr) {
-				// Fallback to find command if metadata doesn't exist (legacy snapshots)
-				log.warn({ err: metadataErr }, "Snapshot metadata not found, falling back to find command");
-				const findResult = await sandbox.commands.run(
-					"find /home/user -maxdepth 5 -name '.git' -type d 2>/dev/null | head -1",
-					{ timeoutMs: 30000 },
-				);
-
-				if (findResult.stdout.trim()) {
-					const gitDir = findResult.stdout.trim();
-					const repoDir = gitDir.replace("/.git", "");
-					log.info({ repoDir }, "Found repo via find fallback");
-					return repoDir;
-				}
-
-				// Last resort fallback
-				const lsResult = await sandbox.commands.run(
-					"ls -d /home/user/workspace/*/repo 2>/dev/null | head -1",
-					{ timeoutMs: 10000 },
-				);
-				const repoDir = lsResult.stdout.trim() || "/home/user";
-				log.warn({ repoDir }, "Using last-resort repo fallback (repos likely missing)");
-				return repoDir;
-			}
-		}
-
-		// Fresh sandbox: clone repositories (or just set up workspace for scratch sessions)
-		const repos = opts.repos ?? [];
-		log.info({ repoCount: repos.length }, "Setting up workspace");
-		await sandbox.commands.run(`mkdir -p ${workspaceDir}`, {
-			timeoutMs: 10000,
-		});
-
-		if (repos.length === 0) {
-			log.info("Scratch session — no repos to clone");
-			const metadata: SessionMetadata = {
-				sessionId: opts.sessionId,
-				repoDir: workspaceDir,
-				createdAt: Date.now(),
-			};
-			await sandbox.files.write(SANDBOX_PATHS.metadataFile, JSON.stringify(metadata));
-			return workspaceDir;
-		}
-
-		// Write git credentials file for per-repo auth (used by git-credential-proliferate helper)
-		const gitCredentials = buildGitCredentialsMap(repos);
-		if (Object.keys(gitCredentials).length > 0) {
-			log.debug({ repoCount: repos.length }, "Writing git credentials");
-			await sandbox.commands.run("rm -f /tmp/.git-credentials.json", { timeoutMs: 5000 });
-			await sandbox.files.write("/tmp/.git-credentials.json", JSON.stringify(gitCredentials));
-		}
-
-		// Clone each repo
-		let firstRepoDir: string | null = null;
-		for (let i = 0; i < repos.length; i++) {
-			const repo = repos[i];
-			const targetDir = `${workspaceDir}/${repo.workspacePath}`;
-			if (firstRepoDir === null) {
-				firstRepoDir = targetDir;
-			}
-
-			// Build clone URL with token if provided
-			let cloneUrl = repo.repoUrl;
-			if (repo.token) {
-				cloneUrl = repo.repoUrl.replace("https://", `https://x-access-token:${repo.token}@`);
-			}
-
-			log.info(
-				{
-					repo: repo.workspacePath,
-					repoUrl: repo.repoUrl,
-					hasToken: Boolean(repo.token),
-					index: i + 1,
-					total: repos.length,
-					targetDir,
-				},
-				"Cloning repo",
-			);
-			const repoBranch = repo.branch ?? opts.branch;
-			const cloneResult = await sandbox.commands.run(
-				`git clone --depth 1 --branch ${shellEscape(repoBranch)} '${cloneUrl}' ${shellEscape(targetDir)}`,
-				{ timeoutMs: 120000 },
-			);
-			if (cloneResult.exitCode !== 0) {
-				log.warn(
-					{ repo: repo.workspacePath, exitCode: cloneResult.exitCode, stderr: cloneResult.stderr },
-					"Branch clone failed, trying default",
-				);
-				const fallbackResult = await sandbox.commands.run(
-					`git clone --depth 1 '${cloneUrl}' ${shellEscape(targetDir)}`,
-					{
-						timeoutMs: 120000,
-					},
-				);
-				if (fallbackResult.exitCode !== 0) {
-					log.error(
-						{
-							repo: repo.workspacePath,
-							exitCode: fallbackResult.exitCode,
-							stderr: fallbackResult.stderr,
-						},
-						"Repo clone failed completely",
-					);
-					throw new Error(`git clone failed for ${repo.repoUrl}: ${fallbackResult.stderr}`);
-				}
-				log.info({ repo: repo.workspacePath }, "Repo cloned successfully (default branch)");
-			} else {
-				log.info({ repo: repo.workspacePath }, "Repo cloned successfully");
-			}
-		}
-
-		// Set repoDir (first repo for single, workspace root for multi)
-		const repoDir = repos.length > 1 ? workspaceDir : firstRepoDir || workspaceDir;
-		log.info({ repoDir, repoCount: repos.length }, "All repositories cloned");
-
-		// Save session metadata for robust state tracking across pause/resume
-		const metadata: SessionMetadata = {
-			sessionId: opts.sessionId,
-			repoDir,
-			createdAt: Date.now(),
-		};
-		await sandbox.files.write(SANDBOX_PATHS.metadataFile, JSON.stringify(metadata, null, 2));
-		log.debug("Session metadata saved");
-
-		return repoDir;
-	}
-
-	/**
-	 * Setup essential dependencies (blocking - must complete before API returns):
-	 * - Write all config files in parallel (each ensures its directory exists)
-	 * - Copy pre-installed tool dependencies
-	 * - Start OpenCode server
-	 */
-	private async setupEssentialDependencies(
-		sandbox: Sandbox,
-		repoDir: string,
-		opts: CreateSandboxOpts,
-		log: Logger,
-		llmProxyBaseUrl?: string,
-		llmProxyApiKey?: string,
-	): Promise<void> {
-		const globalOpencodeDir = SANDBOX_PATHS.globalOpencodeDir;
-		const globalPluginDir = SANDBOX_PATHS.globalPluginDir;
-		const localOpencodeDir = `${repoDir}/.opencode`;
-		const localToolDir = `${localOpencodeDir}/tool`;
-
-		// Prepare config content
-		const agentConfig = opts.agentConfig || getDefaultAgentConfig();
-		const opencodeModelId = toOpencodeModelId(agentConfig.modelId);
-		let opencodeConfig: string;
-		if (llmProxyBaseUrl && llmProxyApiKey) {
-			log.debug({ llmProxyBaseUrl }, "Using LLM proxy");
-			opencodeConfig = getOpencodeConfig(opencodeModelId, llmProxyBaseUrl);
-		} else {
-			log.debug("Direct API mode (no proxy)");
-			opencodeConfig = getOpencodeConfig(opencodeModelId);
-		}
-		log.debug({ modelId: agentConfig.modelId, opencodeModelId }, "Using model");
-
-		const basePrompt = opts.systemPrompt || "You are a senior engineer working on this codebase.";
-		const instructions = `${basePrompt}\n\n${ENV_INSTRUCTIONS}`;
-
-		// Helper to write a file (ensures parent directory exists to avoid race conditions)
-		const writeFile = async (path: string, content: string) => {
-			const dir = path.substring(0, path.lastIndexOf("/"));
-			await sandbox.commands.run(`mkdir -p ${dir}`, { timeoutMs: 10000 });
-			await sandbox.files.write(path, content);
-		};
-
-		// Write all files in parallel (each write ensures its directory exists)
-		log.debug("Writing OpenCode files (parallel)");
-		const isSetupSession = opts.sessionType === "setup";
-		const writePromises = [
-			// Plugin
-			writeFile(`${globalPluginDir}/proliferate.mjs`, PLUGIN_MJS),
-			// Core tools (available in all session modes)
-			writeFile(`${localToolDir}/verify.ts`, VERIFY_TOOL),
-			writeFile(`${localToolDir}/verify.txt`, VERIFY_TOOL_DESCRIPTION),
-			writeFile(`${localToolDir}/request_env_variables.ts`, REQUEST_ENV_VARIABLES_TOOL),
-			writeFile(`${localToolDir}/request_env_variables.txt`, REQUEST_ENV_VARIABLES_DESCRIPTION),
-			writeFile(`${localToolDir}/save_snapshot.ts`, SAVE_SNAPSHOT_TOOL),
-			writeFile(`${localToolDir}/save_snapshot.txt`, SAVE_SNAPSHOT_DESCRIPTION),
-			writeFile(`${localToolDir}/automation_complete.ts`, AUTOMATION_COMPLETE_TOOL),
-			writeFile(`${localToolDir}/automation_complete.txt`, AUTOMATION_COMPLETE_DESCRIPTION),
-			// Config (2 files)
-			writeFile(`${globalOpencodeDir}/opencode.json`, opencodeConfig),
-			writeFile(`${repoDir}/opencode.json`, opencodeConfig),
-			// Instructions
-			writeFile(`${localOpencodeDir}/instructions.md`, instructions),
-			// Actions bootstrap hint
-			writeFile(`${repoDir}/.proliferate/actions-guide.md`, ACTIONS_BOOTSTRAP),
-			// Copy pre-installed tool dependencies (runs in parallel with file writes)
-			(async () => {
-				await sandbox.commands.run(`mkdir -p ${localToolDir}`, { timeoutMs: 10000 });
-				await sandbox.commands.run(
-					`cp ${SANDBOX_PATHS.preinstalledToolsDir}/package.json ${localToolDir}/ && ` +
-						`cp -r ${SANDBOX_PATHS.preinstalledToolsDir}/node_modules ${localToolDir}/`,
-					{ timeoutMs: 30000 },
-				);
-			})(),
-		];
-
-		if (isSetupSession) {
-			// Setup-only tools persist configuration.
-			writePromises.push(
-				writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
-				writeFile(`${localToolDir}/save_service_commands.txt`, SAVE_SERVICE_COMMANDS_DESCRIPTION),
-				writeFile(`${localToolDir}/save_env_files.ts`, SAVE_ENV_FILES_TOOL),
-				writeFile(`${localToolDir}/save_env_files.txt`, SAVE_ENV_FILES_DESCRIPTION),
-			);
-		} else {
-			// Ensure setup-only tools are removed when restoring from setup snapshots.
-			writePromises.push(
-				(async () => {
-					await sandbox.commands.run(
-						`rm -f ${localToolDir}/save_service_commands.ts ${localToolDir}/save_service_commands.txt ${localToolDir}/save_env_files.ts ${localToolDir}/save_env_files.txt`,
-						{ timeoutMs: 10000 },
-					);
-				})(),
-			);
-		}
-
-		await Promise.all(writePromises);
-
-		// Start OpenCode server in background
-		log.debug("Starting OpenCode server");
-		const opencodeEnv: Record<string, string> = {
-			SESSION_ID: opts.sessionId,
-			OPENCODE_DISABLE_DEFAULT_PLUGINS: "true",
-		};
-		if (llmProxyBaseUrl && llmProxyApiKey) {
-			log.debug({ llmProxyBaseUrl, hasApiKey: !!llmProxyApiKey }, "OpenCode using LLM proxy");
-			opencodeEnv.ANTHROPIC_API_KEY = llmProxyApiKey;
-			opencodeEnv.ANTHROPIC_BASE_URL = llmProxyBaseUrl;
-		} else if (opts.envVars.ANTHROPIC_API_KEY) {
-			log.warn("OpenCode using direct key (no LLM proxy)");
-			opencodeEnv.ANTHROPIC_API_KEY = opts.envVars.ANTHROPIC_API_KEY;
-		} else {
-			log.error(
-				"OpenCode has no LLM proxy AND no direct ANTHROPIC_API_KEY — it will fail to start",
-			);
-		}
-		sandbox.commands
-			.run(
-				`cd ${repoDir} && opencode serve --print-logs --log-level ERROR --port 4096 --hostname 0.0.0.0 > /tmp/opencode.log 2>&1`,
-				{ timeoutMs: 3600000, envs: opencodeEnv }, // Long timeout, runs in background
-			)
-			.then(async (result) => {
-				if (result.exitCode !== 0) {
-					let logTail = "";
-					try {
-						const tailResult = await sandbox.commands.run("tail -50 /tmp/opencode.log", {
-							timeoutMs: 5000,
-						});
-						logTail = tailResult.stdout;
-					} catch {
-						/* sandbox may already be gone */
-					}
-					log.warn(
-						{
-							exitCode: result.exitCode,
-							stderr: capOutput(result.stderr),
-							logTail: capOutput(logTail),
-						},
-						"OpenCode exited unexpectedly",
-					);
-				}
-			})
-			.catch((err: unknown) => {
-				log.warn({ err }, "OpenCode process failed");
-			});
-		// Don't await - let it run in background
-	}
-
-	/**
-	 * Setup additional dependencies (async - fire and forget):
-	 * - Start services (Docker daemon)
-	 * - Start Caddy preview proxy
-	 * - Run per-repo service commands (if snapshot has deps)
-	 */
-	private async setupAdditionalDependencies(
-		sandbox: Sandbox,
-		opts: CreateSandboxOpts,
-		log: Logger,
-	): Promise<void> {
-		// Git freshness pull on restored snapshots (opt-in, non-fatal)
-		await this.pullOnRestore(sandbox, opts, log);
-
-		// Start services (Docker daemon)
-		log.debug("Starting services (async)");
-		await sandbox.commands.run("/usr/local/bin/start-services.sh", {
-			timeoutMs: 30000,
-		});
-
-		// Create caddy import directory (must exist before Caddy starts)
-		await sandbox.commands.run(
-			`mkdir -p ${SANDBOX_PATHS.userCaddyDir} && touch ${SANDBOX_PATHS.userCaddyFile}`,
-			{ timeoutMs: 5000 },
-		);
-
-		// Start Caddy for preview proxy (run in background, non-blocking)
-		log.debug("Starting Caddy preview proxy (async)");
-		await sandbox.files.write(SANDBOX_PATHS.caddyfile, DEFAULT_CADDYFILE);
-		sandbox.commands
-			.run(`caddy run --config ${SANDBOX_PATHS.caddyfile}`, {
-				timeoutMs: 3600000,
-			})
-			.catch((err: unknown) => {
-				providerLogger.debug({ err }, "Caddy process ended");
-			});
-		// Don't await - runs in background
-
-		// Start sandbox-mcp API server in background
-		log.debug("Starting sandbox-mcp API (async)");
-		const sandboxMcpEnvs: Record<string, string> = {
-			WORKSPACE_DIR: "/home/user/workspace",
-			NODE_ENV: "production",
-		};
-		if (opts.envVars.SANDBOX_MCP_AUTH_TOKEN) {
-			sandboxMcpEnvs.SANDBOX_MCP_AUTH_TOKEN = opts.envVars.SANDBOX_MCP_AUTH_TOKEN;
-		}
-		sandbox.commands
-			.run("sandbox-mcp api > /tmp/sandbox-mcp.log 2>&1", {
-				timeoutMs: 3600000,
-				envs: sandboxMcpEnvs,
-			})
-			.catch((err: unknown) => {
-				providerLogger.debug({ err }, "sandbox-mcp process ended");
-			});
-		// Don't await - runs in background
-
-		// Start sandbox-daemon (FS, PTY, ports, health on port 8470)
-		log.debug("Starting sandbox-daemon (async)");
-		const daemonEnvs: Record<string, string> = {
-			NODE_ENV: "production",
-			PROLIFERATE_WORKSPACE_ROOT: "/home/user/workspace",
-		};
-		if (opts.envVars.SANDBOX_MCP_AUTH_TOKEN) {
-			daemonEnvs.PROLIFERATE_SESSION_TOKEN = opts.envVars.SANDBOX_MCP_AUTH_TOKEN;
-		}
-		sandbox.commands
-			.run("sandbox-daemon --mode=worker > /tmp/sandbox-daemon.log 2>&1", {
-				timeoutMs: 3600000,
-				envs: daemonEnvs,
-			})
-			.catch((err: unknown) => {
-				providerLogger.warn({ err }, "sandbox-daemon process failed");
-			});
-		// Don't await - runs in background
-
-		// Apply env files + start services via proliferate CLI (tracked in service-manager)
-		this.bootServices(sandbox, opts, log);
-	}
-
-	/**
-	 * Boot services via the proliferate CLI.
-	 * 1. Apply env files (blocking — services may depend on these)
-	 * 2. Start each service command via `proliferate services start` (fire-and-forget)
-	 *
-	 * Services started this way are tracked by service-manager and visible in the
-	 * Services panel + logs SSE, unlike the old /tmp/svc-*.log approach.
-	 */
-	private async bootServices(
-		sandbox: Sandbox,
-		opts: CreateSandboxOpts,
-		log: Logger,
-	): Promise<void> {
-		const workspaceDir = "/home/user/workspace";
-
-		// 1. Apply decrypted secret file writes before env/spec + service start.
-		if (opts.secretFileWrites?.length) {
-			for (const fileWrite of opts.secretFileWrites) {
-				const normalizedPath = fileWrite.filePath.trim().replace(/^\.\/+/, "");
-				if (!isValidTargetPath(normalizedPath)) {
-					log.warn({ filePath: fileWrite.filePath }, "Skipping invalid secret file path");
-					continue;
-				}
-
-				const absolutePath = `${workspaceDir}/${normalizedPath}`;
-				const lastSlash = absolutePath.lastIndexOf("/");
-				const directory = lastSlash >= 0 ? absolutePath.slice(0, lastSlash) : workspaceDir;
-
-				try {
-					await sandbox.commands.run(`mkdir -p ${shellEscape(directory)}`, { timeoutMs: 30_000 });
-					await sandbox.files.write(absolutePath, fileWrite.content);
-				} catch (err) {
-					log.error({ err, filePath: normalizedPath }, "Failed to apply secret file write");
-				}
-			}
-		}
-
-		// 2. Apply env files (blocking — services may depend on these)
-		if (opts.envFiles) {
-			try {
-				const specJson = JSON.stringify(opts.envFiles);
-				const result = await sandbox.commands.run(
-					`proliferate env apply --spec ${shellEscape(specJson)}`,
-					{ timeoutMs: 30000 },
-				);
-				if (result.exitCode !== 0) {
-					log.error(
-						{ exitCode: result.exitCode, stderr: result.stderr },
-						"proliferate env apply failed",
-					);
-				} else {
-					log.info("Env files applied");
-				}
-			} catch (err) {
-				log.error({ err }, "proliferate env apply failed");
-			}
-		}
-
-		// 3. Start services via tracked CLI (fire-and-forget per service)
-		if (!opts.snapshotHasDeps || !opts.serviceCommands?.length) return;
-
-		for (const cmd of opts.serviceCommands) {
-			const baseDir =
-				cmd.workspacePath && cmd.workspacePath !== "."
-					? `${workspaceDir}/${cmd.workspacePath}`
-					: workspaceDir;
-			const cwd = cmd.cwd ? `${baseDir}/${cmd.cwd}` : baseDir;
-
-			log.info({ name: cmd.name, cwd }, "Starting service (tracked)");
-
-			sandbox.commands
-				.run(
-					`proliferate services start --name ${shellEscape(cmd.name)} --command ${shellEscape(cmd.command)} --cwd ${shellEscape(cwd)}`,
-					{ timeoutMs: 60000 },
-				)
-				.catch((err) => {
-					log.error({ err, name: cmd.name }, "proliferate services start failed");
-				});
-		}
-	}
-
-	/**
-	 * Pull latest changes on snapshot restore (non-fatal).
-	 *
-	 * Mirrors Modal's pull-on-restore behavior:
-	 * 1. Check cadence gate via shouldPullOnRestore()
-	 * 2. Re-write git credentials with fresh tokens
-	 * 3. git pull --ff-only each repo
-	 * 4. Update metadata with lastGitFetchAt
-	 */
-	private async pullOnRestore(
-		sandbox: Sandbox,
-		opts: CreateSandboxOpts,
-		log: Logger,
-	): Promise<void> {
-		// Read metadata for cadence check
-		let metadata: SessionMetadata | null = null;
-		try {
-			const raw = await sandbox.files.read(SANDBOX_PATHS.metadataFile);
-			metadata = JSON.parse(raw) as SessionMetadata;
-		} catch {
-			// No metadata → legacy snapshot or fresh sandbox
-		}
-
-		const doPull = shouldPullOnRestore({
-			enabled: env.SANDBOX_GIT_PULL_ON_RESTORE,
-			hasSnapshot: Boolean(opts.snapshotId),
-			repoCount: opts.repos.length,
-			cadenceSeconds: env.SANDBOX_GIT_PULL_CADENCE_SECONDS,
-			lastGitFetchAt: metadata?.lastGitFetchAt,
-		});
-
-		// Always refresh git credentials on restore (write even if empty to clear stale tokens).
-		const gitCredentials = buildGitCredentialsMap(opts.repos);
-		await sandbox.commands.run("rm -f /tmp/.git-credentials.json", { timeoutMs: 5000 });
-		await sandbox.files.write("/tmp/.git-credentials.json", JSON.stringify(gitCredentials));
-
-		if (!doPull) return;
-
-		const workspaceDir = `${SANDBOX_PATHS.home}/workspace`;
-
-		// Pull each repo (ff-only, non-fatal)
-		let allPullsSucceeded = true;
-		for (const repo of opts.repos) {
-			const targetDir =
-				repo.workspacePath === "." ? workspaceDir : `${workspaceDir}/${repo.workspacePath}`;
-			const pullStartMs = Date.now();
-			try {
-				const result = await sandbox.commands.run(
-					`cd ${shellEscape(targetDir)} && git pull --ff-only 2>&1`,
-					{ timeoutMs: 60000 },
-				);
-				log.info(
-					{
-						repo: repo.workspacePath,
-						durationMs: Date.now() - pullStartMs,
-						output: capOutput(result.stdout),
-					},
-					"Git freshness pull complete",
-				);
-			} catch (err) {
-				allPullsSucceeded = false;
-				log.warn(
-					{ err, repo: repo.workspacePath, durationMs: Date.now() - pullStartMs },
-					"Git freshness pull failed (non-fatal)",
-				);
-			}
-		}
-
-		// Only advance cadence when every pull succeeded so transient failures
-		// don't suppress retries for an entire cadence window.
-		if (allPullsSucceeded && metadata) {
-			try {
-				const updated: SessionMetadata = { ...metadata, lastGitFetchAt: Date.now() };
-				await sandbox.files.write(SANDBOX_PATHS.metadataFile, JSON.stringify(updated, null, 2));
-			} catch {
-				// Non-fatal — cadence will just re-pull next time
-			}
-		}
 	}
 
 	async testServiceCommands(
@@ -969,8 +123,8 @@ export class E2BProvider implements SandboxProvider {
 		commands: ConfigurationServiceCommand[],
 		opts: { timeoutMs: number; runId: string },
 	): Promise<AutoStartOutputEntry[]> {
-		const log = providerLogger.child({ sandboxId: sandboxId.slice(0, 16), runId: opts.runId });
-		log.info({ commandCount: commands.length }, "Testing service commands");
+		const cmdLog = log.child({ sandboxId: sandboxId.slice(0, 16), runId: opts.runId });
+		cmdLog.info({ commandCount: commands.length }, "Testing service commands");
 
 		const sandbox = await Sandbox.connect(sandboxId, getE2BConnectOpts());
 		const workspaceDir = "/home/user/workspace";
@@ -986,8 +140,6 @@ export class E2BProvider implements SandboxProvider {
 			const slug = cmd.name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
 			const logFile = `/tmp/auto-start-test-${opts.runId}-${i}-${slug}.log`;
 
-			log.info({ name: cmd.name, cwd, logFile }, "Running test command");
-
 			try {
 				const result = await sandbox.commands.run(
 					`cd ${shellEscape(cwd)} && sh -c ${shellEscape(cmd.command)} > ${shellEscape(logFile)} 2>&1; EXIT_CODE=$?; cat ${shellEscape(logFile)}; exit $EXIT_CODE`,
@@ -1002,7 +154,7 @@ export class E2BProvider implements SandboxProvider {
 					logFile,
 				});
 			} catch (err) {
-				log.error({ err, name: cmd.name }, "Test command failed");
+				cmdLog.error({ err, name: cmd.name }, "Test command failed");
 				entries.push({
 					name: cmd.name,
 					workspacePath: cmd.workspacePath,
@@ -1026,59 +178,23 @@ export class E2BProvider implements SandboxProvider {
 			env?: Record<string, string>;
 		},
 	): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-		const sandbox = await Sandbox.connect(sandboxId, getE2BConnectOpts());
-		const timeoutSec = Math.ceil((opts?.timeoutMs ?? 30_000) / 1000);
-		// E2B's commands.run() only accepts a shell string, not argv.
-		// We shellEscape each argument to maintain the no-injection contract.
-		// All values come from our code or validated user input (branch names, commit messages).
-		const escapedArgs = ["timeout", String(timeoutSec), ...argv].map(shellEscape).join(" ");
-		const cmd = opts?.cwd ? `cd ${shellEscape(opts.cwd)} && ${escapedArgs}` : escapedArgs;
-
-		const result = await sandbox.commands.run(cmd, {
-			timeoutMs: (opts?.timeoutMs ?? 30_000) + 5_000, // E2B-level timeout slightly above our timeout command
-			envs: opts?.env,
-		});
-		return {
-			stdout: capOutput(result.stdout),
-			stderr: capOutput(result.stderr),
-			exitCode: result.exitCode,
-		};
+		return execSandboxCommand(sandboxId, argv, opts);
 	}
 
 	async snapshot(sessionId: string, sandboxId: string): Promise<SnapshotResult> {
-		providerLogger.info({ sessionId, sandboxId }, "Taking snapshot (createSnapshot)");
-		const startMs = Date.now();
-
 		const result = await Sandbox.createSnapshot(sandboxId, getE2BApiOpts());
-
-		providerLogger.info(
-			{ sandboxId, snapshotId: result.snapshotId, durationMs: Date.now() - startMs },
-			"Snapshot created",
-		);
+		log.info({ sessionId, sandboxId, snapshotId: result.snapshotId }, "Snapshot created");
 		return { snapshotId: result.snapshotId };
 	}
 
 	async pause(sessionId: string, sandboxId: string): Promise<PauseResult> {
-		providerLogger.info({ sessionId }, "Pausing sandbox");
-		const startMs = Date.now();
-
-		// The sandboxId becomes the snapshot ID for E2B (can resume with connect)
-		providerLogger.debug({ sandboxId }, "Pausing sandbox (creating snapshot)");
+		// E2B pause freezes the sandbox in place; the sandboxId becomes the resume handle
 		await Sandbox.betaPause(sandboxId, getE2BApiOpts());
-
-		providerLogger.info({ sandboxId }, "Snapshot created");
-		logLatency("provider.pause.complete", {
-			provider: this.type,
-			sessionId,
-			durationMs: Date.now() - startMs,
-		});
+		log.info({ sessionId, sandboxId }, "Sandbox paused");
 		return { snapshotId: sandboxId };
 	}
 
 	async terminate(sessionId: string, sandboxId?: string): Promise<void> {
-		providerLogger.info({ sessionId }, "Terminating session");
-		const startMs = Date.now();
-
 		if (!sandboxId) {
 			throw new SandboxProviderError({
 				provider: "e2b",
@@ -1089,225 +205,62 @@ export class E2BProvider implements SandboxProvider {
 		}
 
 		try {
-			const killStartMs = Date.now();
 			await Sandbox.kill(sandboxId, getE2BApiOpts());
-			providerLogger.info({ sandboxId }, "Sandbox terminated");
-			logLatency("provider.terminate.complete", {
-				provider: this.type,
-				sessionId,
-				durationMs: Date.now() - killStartMs,
-			});
+			log.info({ sessionId, sandboxId }, "Sandbox terminated");
 		} catch (error) {
-			// Check if it's a "not found" error - sandbox already terminated is idempotent
+			// Treat "not found" as success — sandbox is already gone
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			if (
 				errorMessage.includes("not found") ||
 				errorMessage.includes("404") ||
 				errorMessage.includes("does not exist")
 			) {
-				providerLogger.debug({ sandboxId }, "Sandbox already terminated (idempotent)");
-				logLatency("provider.terminate.idempotent", {
-					provider: this.type,
-					sessionId,
-					durationMs: Date.now() - startMs,
-				});
+				log.debug({ sessionId, sandboxId }, "Sandbox already terminated (idempotent)");
 				return;
 			}
-
 			throw SandboxProviderError.fromError(error, "e2b", "terminate");
 		}
 	}
 
 	async writeEnvFile(sandboxId: string, envVars: Record<string, string>): Promise<void> {
-		providerLogger.debug({ sandboxId: sandboxId.slice(0, 16) }, "Writing env vars to sandbox");
-		const startMs = Date.now();
-
-		const connectStartMs = Date.now();
-		const sandbox = await Sandbox.connect(sandboxId, getE2BConnectOpts());
-		logLatency("provider.write_env_file.connect", {
-			provider: this.type,
-			sandboxId,
-			durationMs: Date.now() - connectStartMs,
-		});
-
-		// Merge with existing env vars if any
-		let existing: Record<string, string> = {};
-		try {
-			const readStartMs = Date.now();
-			const existingJson = await sandbox.files.read(ENV_FILE);
-			logLatency("provider.write_env_file.read_existing", {
-				provider: this.type,
-				sandboxId,
-				durationMs: Date.now() - readStartMs,
-			});
-			if (existingJson.trim()) {
-				existing = JSON.parse(existingJson);
-			}
-		} catch {
-			// File doesn't exist yet
-		}
-
-		const merged = { ...existing, ...envVars };
-		const writeStartMs = Date.now();
-		await sandbox.files.write(ENV_FILE, JSON.stringify(merged));
-		logLatency("provider.write_env_file.write", {
-			provider: this.type,
-			sandboxId,
-			keyCount: Object.keys(envVars).length,
-			durationMs: Date.now() - writeStartMs,
-		});
-
-		providerLogger.debug({ keyCount: Object.keys(envVars).length }, "Wrote env vars to sandbox");
-		logLatency("provider.write_env_file.complete", {
-			provider: this.type,
-			sandboxId,
-			keyCount: Object.keys(envVars).length,
-			durationMs: Date.now() - startMs,
-		});
+		await writeSandboxEnvFile(sandboxId, envVars);
 	}
 
 	async health(): Promise<boolean> {
-		// E2B health is determined by whether we can make API calls
-		// Actually call the API to validate the key
 		try {
-			// Check if we have the required env var first
 			if (!env.E2B_API_KEY) {
-				providerLogger.warn("Health check failed: E2B_API_KEY not set");
+				log.warn("Health check failed: E2B_API_KEY not set");
 				return false;
 			}
-
-			// Call Sandbox.list() to validate the API key works
-			// This makes a real API call without creating or modifying any sandboxes
 			await Sandbox.list(getE2BApiOpts());
 			return true;
 		} catch (error) {
-			providerLogger.warn({ err: error }, "Health check failed");
+			log.warn({ err: error }, "Health check failed");
 			return false;
 		}
 	}
 
 	async resolveTunnels(sandboxId: string): Promise<{ openCodeUrl: string; previewUrl: string }> {
-		const startMs = Date.now();
-		const connectStartMs = Date.now();
-		const sandbox = await Sandbox.connect(sandboxId, getE2BConnectOpts());
-		logLatency("provider.resolve_tunnels.connect", {
-			provider: this.type,
-			sandboxId,
-			durationMs: Date.now() - connectStartMs,
-		});
-		const hostStartMs = Date.now();
-		const tunnelHost = sandbox.getHost(4096);
-		const previewHost = sandbox.getHost(20000);
-		logLatency("provider.resolve_tunnels.get_host", {
-			provider: this.type,
-			sandboxId,
-			durationMs: Date.now() - hostStartMs,
-		});
-
-		const result = {
-			openCodeUrl: tunnelHost ? `https://${tunnelHost}` : "",
-			previewUrl: previewHost ? `https://${previewHost}` : "",
-		};
-		logLatency("provider.resolve_tunnels.complete", {
-			provider: this.type,
-			sandboxId,
-			durationMs: Date.now() - startMs,
-			hasTunnelUrl: Boolean(result.openCodeUrl),
-			hasPreviewUrl: Boolean(result.previewUrl),
-		});
-		return result;
+		return resolveTunnelUrls(sandboxId);
 	}
 
-	/**
-	 * Read files from a folder in the sandbox filesystem.
-	 * Used by the verify tool to upload verification evidence.
-	 */
 	async readFiles(sandboxId: string, folderPath: string): Promise<FileContent[]> {
-		providerLogger.debug(
-			{ folderPath, sandboxId: sandboxId.slice(0, 16) },
-			"Reading files from sandbox",
+		const files = await readSandboxFiles(sandboxId, folderPath);
+		log.debug(
+			{ sandboxId: sandboxId.slice(0, 16), folderPath, fileCount: files.length },
+			"Read files from sandbox",
 		);
-		const startMs = Date.now();
-
-		const sandbox = await Sandbox.connect(sandboxId, getE2BConnectOpts());
-		const exists = await sandbox.files.exists(folderPath);
-
-		if (!exists) {
-			providerLogger.debug({ folderPath }, "Folder does not exist");
-			logLatency("provider.read_files.missing", {
-				provider: this.type,
-				sandboxId,
-				folderPath,
-				durationMs: Date.now() - startMs,
-			});
-			return [];
-		}
-
-		const normalizedFolder = folderPath.replace(/\/$/, "");
-		const files: FileContent[] = [];
-		const directories: string[] = [normalizedFolder];
-
-		while (directories.length > 0) {
-			const dir = directories.pop();
-			if (!dir) break;
-
-			const entries = await sandbox.files.list(dir).catch((err) => {
-				providerLogger.warn({ err, dir }, "Failed to list directory");
-				return null;
-			});
-			if (!entries) {
-				continue;
-			}
-
-			for (const entry of entries) {
-				if (entry.type === FileType.DIR) {
-					directories.push(entry.path);
-					continue;
-				}
-				if (entry.type !== FileType.FILE) {
-					continue;
-				}
-
-				try {
-					const data = await sandbox.files.read(entry.path, { format: "bytes" });
-					const relativePath = entry.path.replace(`${normalizedFolder}/`, "");
-					files.push({ path: relativePath, data });
-				} catch (err) {
-					providerLogger.warn({ err, path: entry.path }, "Failed to read file");
-				}
-			}
-		}
-
-		providerLogger.debug({ fileCount: files.length, folderPath }, "Read files from sandbox");
-		logLatency("provider.read_files.complete", {
-			provider: this.type,
-			sandboxId,
-			folderPath,
-			fileCount: files.length,
-			durationMs: Date.now() - startMs,
-		});
 		return files;
 	}
 
-	/**
-	 * Check which sandboxes are still alive.
-	 * Returns array of sandbox IDs that are still running.
-	 *
-	 * IMPORTANT: Uses Sandbox.list() instead of connect() to avoid
-	 * auto-resuming paused sandboxes. connect() has side effects that
-	 * resume paused sandboxes and reset timeouts.
-	 */
 	async checkSandboxes(sandboxIds: string[]): Promise<string[]> {
 		if (sandboxIds.length === 0) {
 			return [];
 		}
 
+		// Uses Sandbox.list() (not connect) to avoid resuming paused sandboxes
 		try {
-			// Use Sandbox.list() to get all running sandboxes
-			// This is side-effect free - it doesn't resume or modify sandboxes
 			const paginator = Sandbox.list(getE2BApiOpts());
-
-			// Collect all running sandboxes from all pages
 			const runningSandboxIds: string[] = [];
 			while (paginator.hasNext) {
 				const items = await paginator.nextItems();
@@ -1316,24 +269,10 @@ export class E2BProvider implements SandboxProvider {
 				}
 			}
 
-			// Create a Set for O(1) lookup
 			const runningIds = new Set(runningSandboxIds);
-
-			// Filter the requested IDs to only those that are running
-			const alive = sandboxIds.filter((id) => runningIds.has(id));
-
-			// Log sandboxes that are no longer running
-			for (const id of sandboxIds) {
-				if (!runningIds.has(id)) {
-					providerLogger.debug({ sandboxId: id.slice(0, 16) }, "Sandbox not running");
-				}
-			}
-
-			return alive;
+			return sandboxIds.filter((id) => runningIds.has(id));
 		} catch (error) {
-			// If the list call fails, we can't determine status
-			// Log the error but don't throw - return empty array as safe default
-			providerLogger.error({ err: error }, "Failed to list sandboxes");
+			log.error({ err: error }, "Failed to list sandboxes");
 			return [];
 		}
 	}

@@ -1,7 +1,6 @@
 import type { Logger } from "@proliferate/logger";
 import type { Sandbox } from "e2b";
-import { getDefaultAgentConfig, toOpencodeModelId } from "../../agents/index";
-import type { CreateSandboxOpts } from "../types";
+import { getDefaultAgentConfig, toOpencodeModelId } from "../../../agents";
 import {
 	AUTOMATION_COMPLETE_DESCRIPTION,
 	AUTOMATION_COMPLETE_TOOL,
@@ -15,16 +14,21 @@ import {
 	SAVE_SNAPSHOT_TOOL,
 	VERIFY_TOOL,
 	VERIFY_TOOL_DESCRIPTION,
-} from "../../opencode-tools";
+} from "../../../opencode-tools";
 import {
 	ACTIONS_BOOTSTRAP,
-	capOutput,
 	ENV_INSTRUCTIONS,
-	getOpencodeConfig,
 	PLUGIN_MJS,
 	SANDBOX_PATHS,
-} from "../../sandbox";
+	capOutput,
+	getOpencodeConfig,
+} from "../../../sandbox";
+import type { CreateSandboxOpts } from "../../types";
 
+/**
+ * Performs blocking sandbox bootstrap required before the session can accept prompts:
+ * tools, instructions, config, and OpenCode process startup.
+ */
 export async function setupEssentialDependencies(
 	sandbox: Sandbox,
 	repoDir: string,

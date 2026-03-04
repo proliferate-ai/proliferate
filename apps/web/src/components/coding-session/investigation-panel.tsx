@@ -204,7 +204,7 @@ function ResolutionSection({
 			<div className="flex items-center gap-1.5">
 				<Button
 					size="sm"
-					variant={activeOutcome === "succeeded" ? "default" : "outline"}
+					variant={activeOutcome === "succeeded" ? "primary" : "outline"}
 					className="h-7 text-xs"
 					onClick={() => setActiveOutcome(activeOutcome === "succeeded" ? null : "succeeded")}
 					disabled={resolveRun.isPending}

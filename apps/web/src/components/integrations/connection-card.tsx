@@ -271,7 +271,7 @@ export function ConnectionCard({
 							Connect {providerName} to use this trigger type
 						</p>
 					</div>
-					<Button variant="default" size="sm" onClick={onConnect} disabled={disabled || isLoading}>
+					<Button variant="primary" size="sm" onClick={onConnect} disabled={disabled || isLoading}>
 						{isLoading ? "Connecting..." : "Connect"}
 					</Button>
 				</div>

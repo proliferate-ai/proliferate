@@ -79,7 +79,7 @@ export function StepBilling({ onComplete }: StepBillingProps) {
 					)}
 
 					<Button
-						variant="dark"
+						variant="contrast"
 						onClick={handleStartTrial}
 						disabled={startTrialMutation.isPending}
 						className="h-11 w-full rounded-lg mt-5"

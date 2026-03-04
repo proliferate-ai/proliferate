@@ -1,16 +1,20 @@
 import { env } from "@proliferate/environment/server";
 import type { Logger } from "@proliferate/logger";
 import type { Sandbox } from "e2b";
-import type { CreateSandboxOpts } from "../types";
 import {
-	buildGitCredentialsMap,
-	capOutput,
 	SANDBOX_PATHS,
 	type SessionMetadata,
-	shouldPullOnRestore,
+	buildGitCredentialsMap,
+	capOutput,
 	shellEscape,
-} from "../../sandbox";
+	shouldPullOnRestore,
+} from "../../../sandbox";
+import type { CreateSandboxOpts } from "../../types";
 
+/**
+ * Optionally runs `git pull --ff-only` on restored snapshots based on cadence policy.
+ * This is best-effort and never blocks sandbox startup on pull failures.
+ */
 export async function pullOnRestore(
 	sandbox: Sandbox,
 	opts: CreateSandboxOpts,
@@ -24,6 +28,10 @@ export async function pullOnRestore(
 		// No metadata -> legacy snapshot or fresh sandbox
 	}
 
+	// TODO: Consider always pulling on restore instead of cadence-gating.
+	// The cadence logic adds complexity to avoid redundant pulls on rapid pause/resume,
+	// but with E2B's native pause the resume path is fast enough that always pulling
+	// (and doing it async/non-blocking) may be simpler and more predictable.
 	const doPull = shouldPullOnRestore({
 		enabled: env.SANDBOX_GIT_PULL_ON_RESTORE,
 		hasSnapshot: Boolean(opts.snapshotId),
@@ -42,7 +50,8 @@ export async function pullOnRestore(
 	let allPullsSucceeded = true;
 
 	for (const repo of opts.repos) {
-		const targetDir = repo.workspacePath === "." ? workspaceDir : `${workspaceDir}/${repo.workspacePath}`;
+		const targetDir =
+			repo.workspacePath === "." ? workspaceDir : `${workspaceDir}/${repo.workspacePath}`;
 		const pullStartMs = Date.now();
 		try {
 			const result = await sandbox.commands.run(

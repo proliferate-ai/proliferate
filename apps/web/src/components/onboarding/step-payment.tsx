@@ -134,7 +134,7 @@ export function StepPayment({ onComplete }: StepPaymentProps) {
 						</ul>
 
 						<Button
-							variant={plan.popular ? "default" : "outline"}
+							variant={plan.popular ? "primary" : "outline"}
 							onClick={() => handleSelectPlan(plan.id)}
 							disabled={startTrialMutation.isPending && selectedPlan === plan.id}
 							className="w-full"

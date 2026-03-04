@@ -79,7 +79,7 @@ export function StepToolSelection({ onComplete, isSubmitting }: StepToolSelectio
 					</div>
 
 					<Button
-						variant="dark"
+						variant="contrast"
 						onClick={() => onComplete(Array.from(selected))}
 						disabled={isSubmitting}
 						className="h-11 w-full rounded-lg mt-5"

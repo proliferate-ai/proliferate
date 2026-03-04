@@ -102,7 +102,7 @@ export function StepQuestionnaire({ onComplete, isSubmitting }: StepQuestionnair
 					</div>
 
 					<Button
-						variant="dark"
+						variant="contrast"
 						onClick={handleSubmit}
 						disabled={isSubmitting}
 						className="h-11 w-full rounded-lg mt-5"

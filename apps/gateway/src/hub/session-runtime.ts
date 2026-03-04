@@ -96,11 +96,6 @@ export class SessionRuntime {
 		this.managerHarness = new ClaudeManagerHarnessAdapter(this.logger);
 	}
 
-	private logLatency(event: string, data?: Record<string, unknown>): void {
-		const elapsedMs = this.lifecycleStartTime ? Date.now() - this.lifecycleStartTime : undefined;
-		this.logger.debug({ elapsedMs, ...data }, event);
-	}
-
 	// ============================================
 	// Logging
 	// ============================================
@@ -297,13 +292,9 @@ export class SessionRuntime {
 		}
 
 		this.lifecycleStartTime = Date.now();
-		this.log("Starting runtime lifecycle");
-		this.logLatency("runtime.ensure_ready.start", {
-			skipMigrationLock: Boolean(options?.skipMigrationLock),
+		this.log("Starting runtime lifecycle", {
 			hasSandboxId: Boolean(this.context.session.sandbox_id),
 			hasSnapshotId: Boolean(this.context.session.snapshot_id),
-			hasOpenCodeUrl: Boolean(this.openCodeUrl),
-			hasOpenCodeSessionId: Boolean(this.openCodeSessionId),
 		});
 
 		this.ensureReadyPromise = this.doEnsureRuntimeReady(options);
@@ -349,42 +340,22 @@ export class SessionRuntime {
 	private async doEnsureRuntimeReady(options?: EnsureRuntimeOptions): Promise<void> {
 		try {
 			if (!options?.skipMigrationLock) {
-				const lockStartMs = Date.now();
 				await waitForMigrationLockRelease(this.sessionId);
-				this.logLatency("runtime.ensure_ready.migration_lock_wait", {
-					durationMs: Date.now() - lockStartMs,
-				});
 			}
 
-			// Reload context fresh from database
 			const contextStartMs = Date.now();
-			this.log("Loading session context...");
 			this.context = await loadSessionContext(this.env, this.sessionId);
-			this.logLatency("runtime.ensure_ready.load_context", {
+			this.log("Session context loaded", {
 				durationMs: Date.now() - contextStartMs,
 				configurationId: this.context.session.configuration_id,
 				repoCount: this.context.repos.length,
-				hasSandbox: Boolean(this.context.session.sandbox_id),
-				hasSnapshot: Boolean(this.context.session.snapshot_id),
-			});
-			this.log("Session context loaded", {
-				configurationId: this.context.session.configuration_id,
-				repoCount: this.context.repos.length,
 				primaryRepo: this.context.primaryRepo.github_repo_name,
+				status: this.context.session.status,
 				hasSandbox: Boolean(this.context.session.sandbox_id),
 				hasSnapshot: Boolean(this.context.session.snapshot_id),
 			});
-			this.log(
-				`Session context loaded: status=${this.context.session.status ?? "null"} sandboxId=${this.context.session.sandbox_id ?? "null"} snapshotId=${this.context.session.snapshot_id ?? "null"} clientType=${this.context.session.client_type ?? "null"}`,
-			);
 			const harnessFamily = this.getHarnessFamily();
-			this.log("Selected harness family", {
-				harnessFamily,
-				sessionKind: this.context.session.kind ?? "unknown",
-			});
 
-			// Abort auto-reconnect when session has transitioned to a terminal/non-running state
-			// while we were waiting on locks/loading context.
 			if (
 				options?.reason === "auto_reconnect" &&
 				(this.context.session.status === "paused" || this.context.session.status === "stopped")
@@ -396,8 +367,6 @@ export class SessionRuntime {
 			}
 
 			// Billing gate: deny resume/cold-start when org is blocked or exhausted.
-			// Uses "session_resume" which skips credit minimum but enforces state-level checks.
-			// Already-running sessions skip this entirely (ensureRuntimeReady returns early).
 			const orgId = this.context.session.organization_id;
 			if (orgId) {
 				const gateResult = await billing.checkBillingGateForOrg(orgId, "session_resume");
@@ -415,9 +384,7 @@ export class SessionRuntime {
 			const providerType = this.context.session.sandbox_provider as SandboxProviderType | undefined;
 			const provider = getSandboxProvider(providerType);
 			this.provider = provider;
-			this.log("Using sandbox provider", { provider: provider.type });
 
-			// Derive per-session sandbox-mcp auth token and merge into env vars
 			const sandboxMcpToken = deriveSandboxMcpToken(this.env.serviceToken, this.sessionId);
 			const envVarsWithToken = {
 				...this.context.envVars,
@@ -427,33 +394,19 @@ export class SessionRuntime {
 			};
 
 			const ensureSandboxStartMs = Date.now();
-			let result: Awaited<ReturnType<SandboxProvider["ensureSandbox"]>>;
-			try {
-				result = await provider.ensureSandbox({
-					sessionId: this.sessionId,
-					sessionType: this.context.session.session_type as "coding" | "setup" | null,
-					repos: this.context.repos,
-					branch: this.context.primaryRepo.default_branch || "main",
-					envVars: envVarsWithToken,
-					systemPrompt: this.context.systemPrompt,
-					snapshotId: this.context.session.snapshot_id || undefined,
-					agentConfig: this.context.agentConfig,
-					currentSandboxId: this.context.session.sandbox_id || undefined,
-					snapshotHasDeps: this.context.snapshotHasDeps,
-					serviceCommands: this.context.serviceCommands,
-					secretFileWrites: this.context.secretFileWrites,
-				});
-			} catch (ensureErr) {
-				throw ensureErr;
-			}
-			this.logLatency("runtime.ensure_ready.provider.ensure_sandbox", {
-				provider: provider.type,
-				durationMs: Date.now() - ensureSandboxStartMs,
-				recovered: result.recovered,
-				sandboxId: result.sandboxId,
-				hasTunnelUrl: Boolean(result.tunnelUrl),
-				hasPreviewUrl: Boolean(result.previewUrl),
-				hasExpiresAt: Boolean(result.expiresAt),
+			const result = await provider.ensureSandbox({
+				sessionId: this.sessionId,
+				sessionType: this.context.session.session_type as "coding" | "setup" | null,
+				repos: this.context.repos,
+				branch: this.context.primaryRepo.default_branch || "main",
+				envVars: envVarsWithToken,
+				systemPrompt: this.context.systemPrompt,
+				snapshotId: this.context.session.snapshot_id || undefined,
+				agentConfig: this.context.agentConfig,
+				currentSandboxId: this.context.session.sandbox_id || undefined,
+				snapshotHasDeps: this.context.snapshotHasDeps,
+				serviceCommands: this.context.serviceCommands,
+				secretFileWrites: this.context.secretFileWrites,
 			});
 
 			this.openCodeUrl = result.tunnelUrl;
@@ -467,48 +420,28 @@ export class SessionRuntime {
 			const canReuseStoredExpiry = result.recovered && previousSandboxId === result.sandboxId;
 			const resolvedExpiryMs = result.expiresAt ?? (canReuseStoredExpiry ? storedExpiryMs : null);
 			this.sandboxExpiresAt = resolvedExpiryMs;
-			this.log("Resolved sandbox expiry", {
-				previousSandboxId,
-				sandboxId: result.sandboxId,
-				recovered: result.recovered,
-				providerExpiresAt: result.expiresAt ? new Date(result.expiresAt).toISOString() : null,
-				storedExpiresAt: storedExpiryMs ? new Date(storedExpiryMs).toISOString() : null,
-				canReuseStoredExpiry,
-				resolvedExpiresAt: resolvedExpiryMs ? new Date(resolvedExpiryMs).toISOString() : null,
-			});
-			this.log(
-				`Resolved sandbox expiry: previous=${previousSandboxId ?? "null"} current=${result.sandboxId} recovered=${result.recovered} provider=${result.expiresAt ? new Date(result.expiresAt).toISOString() : "null"} stored=${storedExpiryMs ? new Date(storedExpiryMs).toISOString() : "null"} resolved=${resolvedExpiryMs ? new Date(resolvedExpiryMs).toISOString() : "null"}`,
-			);
 
 			this.log(result.recovered ? "Sandbox recovered" : "Sandbox created", {
+				durationMs: Date.now() - ensureSandboxStartMs,
 				sandboxId: result.sandboxId,
-				tunnelUrl: this.openCodeUrl,
-				previewUrl: this.previewUrl,
-				expiresAt: this.sandboxExpiresAt ? new Date(this.sandboxExpiresAt).toISOString() : null,
 				recovered: result.recovered,
+				expiresAt: resolvedExpiryMs ? new Date(resolvedExpiryMs).toISOString() : null,
 			});
 
-			// Git Freshness Post-Thaw: pull latest changes after restoring from snapshot.
-			// The repo may be stale if time has passed since the snapshot was taken.
+			// TODO: This duplicates the provider-level git freshness pull in create/git-freshness.ts.
+			// One of them should be removed once we confirm the provider always handles it.
 			if (this.context.session.snapshot_id && provider.execCommand) {
 				try {
-					const gitStartMs = Date.now();
-					const gitResult = await provider.execCommand(
+					await provider.execCommand(
 						result.sandboxId,
 						["bash", "-c", "cd /home/user/workspace && git pull --ff-only 2>&1 || true"],
 						{ timeoutMs: 30_000 },
 					);
-					this.logLatency("runtime.ensure_ready.git_freshness", {
-						durationMs: Date.now() - gitStartMs,
-						exitCode: gitResult.exitCode,
-					});
 				} catch (err) {
 					this.logger.warn({ err }, "Git freshness pull failed (non-fatal)");
 				}
 			}
 
-			// Update session with sandbox info
-			const updateStartMs = Date.now();
 			await sessions.update(this.sessionId, {
 				sandboxId: result.sandboxId,
 				status: "running",
@@ -519,11 +452,7 @@ export class SessionRuntime {
 				...(provider.supportsAutoPause &&
 					!this.context.session.snapshot_id && { snapshotId: result.sandboxId }),
 			});
-			this.logLatency("runtime.ensure_ready.db.update_session", {
-				durationMs: Date.now() - updateStartMs,
-			});
 
-			// Update in-memory context
 			this.context.session.sandbox_id = result.sandboxId;
 			this.context.session.sandbox_expires_at = resolvedExpiryMs
 				? new Date(resolvedExpiryMs).toISOString()
@@ -532,18 +461,11 @@ export class SessionRuntime {
 				this.context.session.snapshot_id = result.sandboxId;
 			}
 
-			// Fallback to stored URLs if provider didn't return them
 			this.openCodeUrl = this.openCodeUrl || this.context.session.open_code_tunnel_url || null;
 			this.previewUrl = this.previewUrl || this.context.session.preview_tunnel_url || null;
 
-			// Schedule expiry snapshot/migration
-			const expiryScheduleStartMs = Date.now();
 			scheduleSessionExpiry(this.env, this.sessionId, this.sandboxExpiresAt).catch((err) => {
 				this.logError("Failed to schedule expiry job", err);
-			});
-			this.logLatency("runtime.ensure_ready.expiry.schedule", {
-				durationMs: Date.now() - expiryScheduleStartMs,
-				expiresAt: this.sandboxExpiresAt ? new Date(this.sandboxExpiresAt).toISOString() : null,
 			});
 
 			if (this.previewUrl && this.onBroadcast) {
@@ -552,9 +474,8 @@ export class SessionRuntime {
 			}
 
 			if (harnessFamily === "manager-claude") {
-				const managerHarnessStartMs = Date.now();
+				const managerStartMs = Date.now();
 
-				// Resolve API key + proxy for the manager harness.
 				let managerApiKey = this.env.anthropicApiKey;
 				let managerProxyUrl: string | undefined;
 				if (this.env.llmProxyRequired && this.env.llmProxyUrl) {
@@ -566,10 +487,7 @@ export class SessionRuntime {
 					managerProxyUrl = this.env.llmProxyUrl;
 				}
 
-				// Use the local URL for internal HTTP calls (eager-start, message, cancel)
-				// since the manager harness runs in the same process as the gateway.
 				const internalGatewayUrl = `http://localhost:${this.env.port}`;
-
 				const harnessInput = {
 					managerSessionId: this.sessionId,
 					organizationId: this.context.session.organization_id,
@@ -584,19 +502,16 @@ export class SessionRuntime {
 				} else {
 					await this.managerHarness.start(harnessInput);
 				}
-				this.logLatency("runtime.ensure_ready.manager_harness.start", {
-					durationMs: Date.now() - managerHarnessStartMs,
-				});
 
-				// Manager sessions do not run OpenCode; clear coding-session state.
 				this.eventStreamHandle?.disconnect();
 				this.eventStreamHandle = null;
 				this.eventStreamConnected = false;
 				this.openCodeSessionId = null;
 
 				this.onStatus("running");
-				this.log("Runtime lifecycle complete - manager harness ready");
-				this.logLatency("runtime.ensure_ready.complete");
+				this.log("Runtime lifecycle complete — manager harness ready", {
+					durationMs: Date.now() - managerStartMs,
+				});
 				return;
 			}
 
@@ -604,25 +519,10 @@ export class SessionRuntime {
 				throw new Error("Missing agent tunnel URL");
 			}
 
-			// Wait for OpenCode to become reachable before session operations.
-			// After sandbox recovery the tunnel may resolve before OpenCode is serving.
-			const readinessStartMs = Date.now();
 			await this.waitForOpenCodeReady();
-			this.logLatency("runtime.ensure_ready.opencode_ready", {
-				durationMs: Date.now() - readinessStartMs,
-			});
-
-			// Ensure OpenCode session exists
-			const ensureOpenCodeStartMs = Date.now();
 			await this.ensureOpenCodeSession();
-			this.logLatency("runtime.ensure_ready.opencode_session.ensure", {
-				durationMs: Date.now() - ensureOpenCodeStartMs,
-				hasOpenCodeSessionId: Boolean(this.openCodeSessionId),
-			});
 
-			// Connect to daemon event stream via harness adapter
 			const sseStartMs = Date.now();
-			this.log("Connecting to coding harness event stream...", { url: this.openCodeUrl });
 			this.eventStreamHandle?.disconnect();
 			this.eventStreamHandle = await this.codingHarness.streamEvents({
 				baseUrl: this.openCodeUrl,
@@ -638,19 +538,14 @@ export class SessionRuntime {
 				},
 			});
 			this.eventStreamConnected = true;
-			this.log("Harness event stream connected");
-			this.logLatency("runtime.ensure_ready.sse.connect", {
-				durationMs: Date.now() - sseStartMs,
-			});
+			this.log("Event stream connected", { durationMs: Date.now() - sseStartMs });
 
 			this.onStatus("running");
-			this.log("Runtime lifecycle complete - status: running");
-			this.logLatency("runtime.ensure_ready.complete");
+			this.log("Runtime lifecycle complete");
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : "Unknown error";
 			this.onStatus("error", errorMessage);
 			this.logError(`Failed to initialize session — ${errorMessage}`, err);
-			this.logLatency("runtime.ensure_ready.error", { error: errorMessage });
 			throw err;
 		}
 	}
@@ -666,12 +561,8 @@ export class SessionRuntime {
 			baseUrl: this.openCodeUrl,
 			sessionId: storedId,
 		});
-		this.logLatency("runtime.opencode_session.resume", {
+		this.log("OpenCode session resolved", {
 			durationMs: Date.now() - resumeStartMs,
-			mode: resumed.mode,
-			hadStoredId: Boolean(storedId),
-		});
-		this.log("OpenCode session resolved via harness adapter", {
 			sessionId: resumed.sessionId,
 			mode: resumed.mode,
 		});

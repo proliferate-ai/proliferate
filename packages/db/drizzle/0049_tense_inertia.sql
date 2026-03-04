@@ -1,9 +1,3 @@
-ALTER TABLE "session_tool_invocations" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "trigger_event_actions" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "workspace_cache_snapshots" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
-DROP TABLE "session_tool_invocations" CASCADE;--> statement-breakpoint
-DROP TABLE "trigger_event_actions" CASCADE;--> statement-breakpoint
-DROP TABLE "workspace_cache_snapshots" CASCADE;--> statement-breakpoint
 ALTER TABLE "session_events" DROP CONSTRAINT "session_events_type_check";--> statement-breakpoint
 ALTER TABLE "sessions" DROP CONSTRAINT "sessions_kind_check";--> statement-breakpoint
 ALTER TABLE "sessions" ALTER COLUMN "kind" DROP DEFAULT;--> statement-breakpoint

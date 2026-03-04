@@ -200,7 +200,7 @@ export function PlanSection({
 									{showAction && (
 										<Button
 											size="sm"
-											variant={p.id === "pro" ? "default" : "outline"}
+											variant={p.id === "pro" ? "primary" : "outline"}
 											className="mt-3 w-full"
 											onClick={() => setConfirmPlan(p.id)}
 											disabled={activatePlan.isPending}

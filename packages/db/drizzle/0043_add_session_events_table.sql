@@ -12,4 +12,13 @@ CREATE TABLE IF NOT EXISTS "session_events" (
 CREATE INDEX IF NOT EXISTS "idx_session_events_session" ON "session_events" USING btree ("session_id");
 CREATE INDEX IF NOT EXISTS "idx_session_events_type" ON "session_events" USING btree ("event_type");
 
-ALTER TABLE "session_events" ADD CONSTRAINT "session_events_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'session_events_session_id_fkey'
+  ) THEN
+    ALTER TABLE "session_events" ADD CONSTRAINT "session_events_session_id_fkey"
+      FOREIGN KEY ("session_id") REFERENCES "public"."sessions"("id") ON DELETE cascade ON UPDATE no action;
+  END IF;
+END
+$$;

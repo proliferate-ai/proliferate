@@ -1,10 +1,14 @@
 import type { Logger } from "@proliferate/logger";
 import type { Sandbox } from "e2b";
-import { isValidTargetPath } from "../../lib/env-parser";
-import type { CreateSandboxOpts } from "../types";
-import { DEFAULT_CADDYFILE, SANDBOX_PATHS, shellEscape } from "../../sandbox";
-import { pullOnRestore } from "./git-freshness";
+import { isValidTargetPath } from "../../../lib/env-parser";
+import { DEFAULT_CADDYFILE, SANDBOX_PATHS, shellEscape } from "../../../sandbox";
+import type { CreateSandboxOpts } from "../../types";
+import { pullOnRestore } from "../create/git-freshness";
 
+/**
+ * Runs non-blocking sandbox bootstrap tasks (services, preview proxy, MCP daemons).
+ * Failures are logged and do not fail session creation.
+ */
 export async function setupAdditionalDependencies(
 	sandbox: Sandbox,
 	opts: CreateSandboxOpts,
@@ -66,6 +70,7 @@ export async function setupAdditionalDependencies(
 	void bootServices(sandbox, opts, log);
 }
 
+/** Applies secret/env file writes and starts tracked service commands. */
 async function bootServices(sandbox: Sandbox, opts: CreateSandboxOpts, log: Logger): Promise<void> {
 	const workspaceDir = "/home/user/workspace";
 
@@ -114,7 +119,9 @@ async function bootServices(sandbox: Sandbox, opts: CreateSandboxOpts, log: Logg
 
 	for (const cmd of opts.serviceCommands) {
 		const baseDir =
-			cmd.workspacePath && cmd.workspacePath !== "." ? `${workspaceDir}/${cmd.workspacePath}` : workspaceDir;
+			cmd.workspacePath && cmd.workspacePath !== "."
+				? `${workspaceDir}/${cmd.workspacePath}`
+				: workspaceDir;
 		const cwd = cmd.cwd ? `${baseDir}/${cmd.cwd}` : baseDir;
 		log.info({ name: cmd.name, cwd }, "Starting service (tracked)");
 

@@ -49,12 +49,12 @@ State is intentionally split:
 - `ensureSandbox()` is the default lifecycle entry point; `createSandbox()` is for explicit fresh creation only (`packages/shared/src/sandbox-provider.ts`, `packages/shared/src/providers/*.ts`).
 - Modal and E2B use different identity primitives for recovery:
   - Modal finds by sandbox name = `sessionId` (`fromName`).
-  - E2B finds by stored `currentSandboxId` (`Sandbox.getInfo`) (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`).
+  - E2B finds by stored `currentSandboxId` (`Sandbox.getInfo`) (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/*.ts`).
 - Memory snapshot IDs are prefixed `mem:` and only Modal can restore them (`restoreFromMemorySnapshot`) (`packages/shared/src/providers/modal-libmodal.ts`).
 - Snapshot resolution utility no longer does repo-level fallback; it is configuration snapshot or `null` only (`packages/shared/src/snapshot-resolution.ts`).
-- Setup-only tools are session-type gated; they are injected for `setup` sessions and explicitly removed for non-setup restores (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`).
+- Setup-only tools are session-type gated; they are injected for `setup` sessions and explicitly removed for non-setup restores (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/*.ts`).
 - `PLUGIN_MJS` logs execute inside sandbox runtime, not in provider process (`packages/shared/src/sandbox/config.ts`).
-- `checkSandboxes()` must be side-effect free; E2B must not use `Sandbox.connect()` there (`packages/shared/src/providers/provider-contract.test.ts`, `packages/shared/src/providers/e2b.ts`).
+- `checkSandboxes()` must be side-effect free; E2B must not use `Sandbox.connect()` there (`packages/shared/src/providers/provider-contract.test.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/*.ts`).
 - Snapshot restore freshness is cadence-gated and metadata-aware; cadence advances only when all pulls succeed (`packages/shared/src/sandbox/git-freshness.ts`, `packages/shared/src/providers/pull-on-restore.test.ts`).
 - Gateway callback tools (`verify`, `save_snapshot`, etc.) require `PROLIFERATE_GATEWAY_URL`, `PROLIFERATE_SESSION_ID`, and `SANDBOX_MCP_AUTH_TOKEN` in sandbox env (`packages/shared/src/opencode-tools/index.ts`).
 - Direct provider instantiation is valid for snapshot workers, not for session runtime code paths (`apps/worker/src/base-snapshots/index.ts`, `apps/worker/src/configuration-snapshots/index.ts`, `packages/shared/src/providers/index.ts`).
@@ -144,7 +144,7 @@ References: `packages/shared/src/providers/index.ts`, `apps/gateway/src/hub/sess
 - Recovery must return fresh tunnel/preview endpoints via `resolveTunnels()`.
 - Provider-level state must not be required between calls; only DB and sandbox filesystem state are authoritative.
 
-References: `packages/shared/src/sandbox-provider.ts`, `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`.
+References: `packages/shared/src/sandbox-provider.ts`, `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/*.ts`.
 
 ### 6.3 Modal Provider Invariants — `Implemented`
 - Modal declares `supportsPause=false`, `supportsAutoPause=false`, `supportsMemorySnapshot=true`.
@@ -163,7 +163,7 @@ References: `packages/shared/src/sandbox-provider.ts`, `packages/shared/src/prov
 - E2B resume path (`Sandbox.connect(snapshotId)`) is allowed to fall back to fresh create on failure.
 - `checkSandboxes()` must use listing APIs only and remain side-effect free.
 
-References: `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/provider-contract.test.ts`.
+References: `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/*.ts`, `packages/shared/src/providers/provider-contract.test.ts`.
 
 ### 6.5 Boot Pipeline Invariants — `Implemented`
 - Essential boot work must complete before `createSandbox()` resolves:
@@ -178,14 +178,14 @@ References: `packages/shared/src/providers/e2b.ts`, `packages/shared/src/provide
 - Setup-only tools (`save_service_commands`, `save_env_files`) are only present in setup sessions.
 - Non-setup sessions must proactively remove setup-only tools when restoring from setup snapshots.
 
-References: `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/opencode-tools/index.ts`.
+References: `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/*.ts`, `packages/shared/src/opencode-tools/index.ts`.
 
 ### 6.6 Service Boot + Env File Invariants — `Implemented`
 - Env files must be applied before tracked service autostart commands run.
 - Service autostart requires both `snapshotHasDeps=true` and non-empty resolved service commands.
 - Services started via `proliferate services start` are expected to be tracked by service-manager state/log APIs.
 
-References: `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/sandbox-mcp/src/proliferate-cli.ts`, `packages/sandbox-mcp/src/service-manager.ts`.
+References: `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/*.ts`, `packages/sandbox-mcp/src/proliferate-cli.ts`, `packages/sandbox-mcp/src/service-manager.ts`.
 
 ### 6.7 Freshness Invariants — `Implemented`
 - Pull-on-restore must be policy-driven (`SANDBOX_GIT_PULL_ON_RESTORE`, cadence, snapshot presence, repo count).
@@ -194,7 +194,7 @@ References: `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/
 - `lastGitFetchAt` may advance only when all repo pulls succeed.
 - Pull failures must be non-fatal to sandbox restore/startup.
 
-References: `packages/shared/src/sandbox/git-freshness.ts`, `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/pull-on-restore.test.ts`.
+References: `packages/shared/src/sandbox/git-freshness.ts`, `packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/*.ts`, `packages/shared/src/providers/pull-on-restore.test.ts`.
 
 ### 6.8 Snapshot Resolution Invariants — `Implemented`
 - `resolveSnapshotId()` must never invent provider-specific fallback IDs.
@@ -254,7 +254,7 @@ References: `packages/shared/src/sandbox/version-key.ts`, `apps/worker/src/base-
 - Snapshot save flow scrubs secret env files before snapshot and reapplies afterward (`apps/gateway/src/hub/session-hub.ts`).
 
 ### Observability
-- Providers emit structured latency markers across critical lifecycle edges (`provider.*` events) (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`).
+- Providers emit structured latency markers across critical lifecycle edges (`provider.*` events) (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/*.ts`).
 - sandbox-mcp logs via service-scoped logger for API/terminal components (`packages/sandbox-mcp/src/api-server.ts`, `packages/sandbox-mcp/src/terminal.ts`).
 
 ---
@@ -272,11 +272,11 @@ References: `packages/shared/src/sandbox/version-key.ts`, `apps/worker/src/base-
 ## 9. Known Limitations & Tech Debt
 
 - [ ] **Modal pause is unsupported** — Modal sessions cannot use native pause semantics and rely on snapshot + recreate paths (`packages/shared/src/providers/modal-libmodal.ts`).
-- [ ] **E2B resume fallback is silent** — failed `Sandbox.connect(snapshotId)` falls back to fresh sandbox creation without user-visible warning (`packages/shared/src/providers/e2b.ts`).
+- [ ] **E2B resume fallback is silent** — failed `Sandbox.connect(snapshotId)` falls back to fresh sandbox creation without user-visible warning (`packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/create/initialize.ts`).
 - [ ] **Immediate sandbox creation path does not inject gateway callback env vars by default** — `session-creator` direct `provider.createSandbox()` path omits `SANDBOX_MCP_AUTH_TOKEN`, `PROLIFERATE_GATEWAY_URL`, and `PROLIFERATE_SESSION_ID`, while tool callbacks/sandbox-mcp auth depend on them (`apps/gateway/src/lib/session-creator.ts`, `apps/gateway/src/hub/session-runtime.ts`, `packages/shared/src/opencode-tools/index.ts`, `packages/shared/src/providers/*.ts`).
 - [ ] **Freshness logic is duplicated across layers** — providers run cadence-aware pull-on-restore, and runtime also runs a best-effort pull from `/home/user/workspace`; this creates overlap and uneven multi-repo behavior (`packages/shared/src/providers/*.ts`, `apps/gateway/src/hub/session-runtime.ts`).
-- [ ] **E2B setup parity gap** — E2B provider currently does not write SSH authorized keys or trigger context files, unlike Modal (`packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/modal-libmodal.ts`).
+- [ ] **E2B setup parity gap** — E2B provider currently does not write SSH authorized keys or trigger context files, unlike Modal (`packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/*.ts`, `packages/shared/src/providers/modal-libmodal.ts`).
 - [ ] **`resolveSnapshotId()` is currently not on the primary session-start path** — runtime/session-creator consume snapshot IDs directly from resolved configuration/session state, leaving this utility as a pure helper/test surface (`packages/shared/src/snapshot-resolution.ts`, `apps/gateway/src/lib/configuration-resolver.ts`, `apps/gateway/src/lib/session-creator.ts`).
-- [ ] **Setup-only tool cleanup is reactive** — non-setup sessions remove setup-only tools during restore instead of pre-snapshot scrubbing (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`).
-- [ ] **sandbox-mcp/service processes are fire-and-forget** — no built-in supervisor for OpenCode, Caddy, or sandbox-mcp after provider startup (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`).
+- [ ] **Setup-only tool cleanup is reactive** — non-setup sessions remove setup-only tools during restore instead of pre-snapshot scrubbing (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/*.ts`).
+- [ ] **sandbox-mcp/service processes are fire-and-forget** — no built-in supervisor for OpenCode, Caddy, or sandbox-mcp after provider startup (`packages/shared/src/providers/modal-libmodal.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/*.ts`).
 - [ ] **Service-manager state is `/tmp`-backed** — persistence characteristics differ across provider lifecycle semantics and are not durable across fresh sandbox recreation (`packages/sandbox-mcp/src/service-manager.ts`).

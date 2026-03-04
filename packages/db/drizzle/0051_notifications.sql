@@ -29,12 +29,6 @@ CREATE TABLE "notifications" (
 	"dismissed_at" timestamp with time zone
 );
 --> statement-breakpoint
-ALTER TABLE "session_tool_invocations" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "trigger_event_actions" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "workspace_cache_snapshots" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
-DROP TABLE "session_tool_invocations" CASCADE;--> statement-breakpoint
-DROP TABLE "trigger_event_actions" CASCADE;--> statement-breakpoint
-DROP TABLE "workspace_cache_snapshots" CASCADE;--> statement-breakpoint
 ALTER TABLE "sessions" DROP CONSTRAINT "sessions_worker_id_workers_id_fk";
 --> statement-breakpoint
 ALTER TABLE "sessions" DROP CONSTRAINT "sessions_worker_run_id_worker_runs_id_fk";
@@ -44,7 +38,6 @@ ALTER TABLE "sessions" DROP CONSTRAINT "sessions_repo_baseline_id_repo_baselines
 ALTER TABLE "sessions" DROP CONSTRAINT "sessions_repo_baseline_target_id_repo_baseline_targets_id_fk";
 --> statement-breakpoint
 ALTER TABLE "workers" ALTER COLUMN "manager_session_id" SET NOT NULL;--> statement-breakpoint
-ALTER TABLE "session_user_state" ADD COLUMN "archived_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "notification_preferences" ADD CONSTRAINT "notification_preferences_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notification_preferences" ADD CONSTRAINT "notification_preferences_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -59,9 +52,4 @@ ALTER TABLE "repo_baselines" ADD CONSTRAINT "repo_baselines_setup_session_id_ses
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_worker_id_workers_id_fk" FOREIGN KEY ("worker_id") REFERENCES "public"."workers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_worker_run_id_worker_runs_id_fk" FOREIGN KEY ("worker_run_id") REFERENCES "public"."worker_runs"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_repo_baseline_id_repo_baselines_id_fk" FOREIGN KEY ("repo_baseline_id") REFERENCES "public"."repo_baselines"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "sessions" ADD CONSTRAINT "sessions_repo_baseline_target_id_repo_baseline_targets_id_fk" FOREIGN KEY ("repo_baseline_target_id") REFERENCES "public"."repo_baseline_targets"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "wake_events" ADD CONSTRAINT "wake_events_coalesced_into_wake_event_id_fkey" FOREIGN KEY ("coalesced_into_wake_event_id") REFERENCES "public"."wake_events"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "uq_session_messages_dedupe" ON "session_messages" USING btree ("session_id","dedupe_key") WHERE dedupe_key IS NOT NULL;--> statement-breakpoint
-ALTER TABLE "workers" ADD CONSTRAINT "uq_workers_manager_session" UNIQUE("manager_session_id");--> statement-breakpoint
-ALTER TABLE "sessions" ADD CONSTRAINT "sessions_manager_shape_check" CHECK ((kind != 'manager'::text) OR (worker_id IS NOT NULL AND worker_run_id IS NULL AND continued_from_session_id IS NULL AND rerun_of_session_id IS NULL));--> statement-breakpoint
-ALTER TABLE "sessions" ADD CONSTRAINT "sessions_task_linkage_check" CHECK ((kind != 'task'::text) OR (repo_id IS NOT NULL AND repo_baseline_id IS NOT NULL AND repo_baseline_target_id IS NOT NULL));
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_repo_baseline_target_id_repo_baseline_targets_id_fk" FOREIGN KEY ("repo_baseline_target_id") REFERENCES "public"."repo_baseline_targets"("id") ON DELETE no action ON UPDATE no action;

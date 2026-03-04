@@ -1,14 +1,35 @@
 import type { Logger } from "@proliferate/logger";
 import type { Sandbox } from "e2b";
-import type { CreateSandboxOpts } from "../types";
-import { buildGitCredentialsMap, SANDBOX_PATHS, type SessionMetadata, shellEscape } from "../../sandbox";
 import {
-	buildCloneCommand,
-	buildCloneDefaultBranchCommand,
-	FIND_GIT_DIR_FALLBACK_COMMAND,
-	FIND_WORKSPACE_REPO_FALLBACK_COMMAND,
-} from "./commands";
+	SANDBOX_PATHS,
+	type SessionMetadata,
+	buildGitCredentialsMap,
+	shellEscape,
+} from "../../../sandbox";
+import type { CreateSandboxOpts } from "../../types";
 
+/** Finds a repo `.git` directory when metadata is missing on restore. */
+const FIND_GIT_DIR_FALLBACK_COMMAND =
+	"find /home/user -maxdepth 5 -name '.git' -type d 2>/dev/null | head -1";
+
+/** Last-resort fallback to locate default workspace repo path. */
+const FIND_WORKSPACE_REPO_FALLBACK_COMMAND =
+	"ls -d /home/user/workspace/*/repo 2>/dev/null | head -1";
+
+/** Builds a branch-targeted shallow clone command. */
+function buildCloneCommand(branch: string, cloneUrl: string, targetDir: string): string {
+	return `git clone --depth 1 --branch ${shellEscape(branch)} '${cloneUrl}' ${shellEscape(targetDir)}`;
+}
+
+/** Builds a default-branch shallow clone fallback command. */
+function buildCloneDefaultBranchCommand(cloneUrl: string, targetDir: string): string {
+	return `git clone --depth 1 '${cloneUrl}' ${shellEscape(targetDir)}`;
+}
+
+/**
+ * Ensures workspace state exists for the session and returns the primary repo directory.
+ * On snapshot restore it prefers persisted metadata, then best-effort filesystem fallbacks.
+ */
 export async function setupWorkspace(
 	sandbox: Sandbox,
 	opts: CreateSandboxOpts,
@@ -26,7 +47,9 @@ export async function setupWorkspace(
 			return metadata.repoDir;
 		} catch (metadataErr) {
 			log.warn({ err: metadataErr }, "Snapshot metadata not found, falling back to find command");
-			const findResult = await sandbox.commands.run(FIND_GIT_DIR_FALLBACK_COMMAND, { timeoutMs: 30000 });
+			const findResult = await sandbox.commands.run(FIND_GIT_DIR_FALLBACK_COMMAND, {
+				timeoutMs: 30000,
+			});
 
 			if (findResult.stdout.trim()) {
 				const gitDir = findResult.stdout.trim();
@@ -92,9 +115,12 @@ export async function setupWorkspace(
 		);
 
 		const repoBranch = repo.branch ?? opts.branch;
-		const cloneResult = await sandbox.commands.run(buildCloneCommand(repoBranch, cloneUrl, targetDir), {
-			timeoutMs: 120000,
-		});
+		const cloneResult = await sandbox.commands.run(
+			buildCloneCommand(repoBranch, cloneUrl, targetDir),
+			{
+				timeoutMs: 120000,
+			},
+		);
 
 		if (cloneResult.exitCode !== 0) {
 			log.warn(
