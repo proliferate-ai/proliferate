@@ -695,9 +695,6 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.26.0
         version: 1.26.0(zod@3.25.76)
-      '@nangohq/node':
-        specifier: ^0.69.22
-        version: 0.69.22
       '@proliferate/db':
         specifier: workspace:*
         version: link:../db
