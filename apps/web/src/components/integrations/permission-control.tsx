@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { PERMISSION_MODES } from "@/config/integrations";
 import { cn } from "@/lib/display/utils";
 
 type ActionMode = "allow" | "require_approval" | "deny";
@@ -12,32 +13,11 @@ interface PermissionControlProps {
 	disabled?: boolean;
 }
 
-const MODES: { value: ActionMode; label: string; dotClass: string; tooltip: string }[] = [
-	{
-		value: "allow",
-		label: "Allow",
-		dotClass: "bg-success",
-		tooltip: "Executes automatically without human review",
-	},
-	{
-		value: "require_approval",
-		label: "Approval",
-		dotClass: "bg-warning",
-		tooltip: "Pauses for human approval (5 min timeout)",
-	},
-	{
-		value: "deny",
-		label: "Deny",
-		dotClass: "bg-destructive",
-		tooltip: "Agent is blocked from using this action",
-	},
-];
-
 export function PermissionControl({ value, onChange, disabled }: PermissionControlProps) {
 	return (
 		<TooltipProvider delayDuration={300}>
 			<div className="inline-flex rounded-md border border-border bg-muted/30 p-0.5">
-				{MODES.map((mode) => (
+				{PERMISSION_MODES.map((mode) => (
 					<Tooltip key={mode.value}>
 						<TooltipTrigger asChild>
 							<Button

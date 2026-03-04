@@ -5,6 +5,7 @@ import { type Provider, ProviderIcon } from "@/components/integrations/provider-
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { INTEGRATION_CATEGORY_LABELS, INTEGRATION_CATEGORY_ORDER } from "@/config/integrations";
 import { cn } from "@/lib/display/utils";
 import { orpc } from "@/lib/infra/orpc";
 import type { IntegrationCategory } from "@proliferate/shared";
@@ -27,29 +28,10 @@ export interface CatalogEntry {
 	presetKey?: string;
 }
 
-export const CATEGORY_ORDER: IntegrationCategory[] = [
-	"source-control",
-	"monitoring",
-	"project-management",
-	"communication",
-	"data",
-	"commerce",
-	"security",
-	"automation",
-	"developer-tools",
-];
-
-export const CATEGORY_LABELS: Record<IntegrationCategory, string> = {
-	"source-control": "Source Control",
-	monitoring: "Monitoring",
-	"project-management": "Project Management",
-	communication: "Communication",
-	data: "Data & Analytics",
-	commerce: "Commerce",
-	security: "Security",
-	automation: "Automation",
-	"developer-tools": "Developer Tools",
-};
+export {
+	INTEGRATION_CATEGORY_ORDER as CATEGORY_ORDER,
+	INTEGRATION_CATEGORY_LABELS as CATEGORY_LABELS,
+} from "@/config/integrations";
 
 // ====================================================================
 // Picker dialog
@@ -75,7 +57,7 @@ export function IntegrationPickerDialog({
 
 	const availableCategories = useMemo(() => {
 		const cats = new Set(catalog.map((e) => e.category));
-		return CATEGORY_ORDER.filter((c) => cats.has(c));
+		return INTEGRATION_CATEGORY_ORDER.filter((c) => cats.has(c));
 	}, [catalog]);
 
 	const filteredEntries = useMemo(() => {
@@ -93,7 +75,7 @@ export function IntegrationPickerDialog({
 	}, [catalog, selectedCategory, searchQuery]);
 
 	const categoryLabel =
-		selectedCategory === "all" ? "All integrations" : CATEGORY_LABELS[selectedCategory];
+		selectedCategory === "all" ? "All integrations" : INTEGRATION_CATEGORY_LABELS[selectedCategory];
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -136,7 +118,7 @@ export function IntegrationPickerDialog({
 										)}
 										onClick={() => setSelectedCategory(cat)}
 									>
-										{CATEGORY_LABELS[cat]}
+										{INTEGRATION_CATEGORY_LABELS[cat]}
 									</Button>
 								</li>
 							))}

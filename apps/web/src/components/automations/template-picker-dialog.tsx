@@ -8,26 +8,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/display/utils";
 import {
-	Bug,
-	CircleDot,
-	CircuitBoard,
-	GitPullRequest,
-	Loader2,
-	Plus,
-	Search,
-	Shield,
-	Zap,
-} from "lucide-react";
+	TEMPLATE_CATEGORY_LABELS,
+	TEMPLATE_CATEGORY_ORDER,
+	TEMPLATE_ICON_MAP,
+	type TemplateCategory,
+} from "@/config/automations";
+import { cn } from "@/lib/display/utils";
+import { Bug, Loader2, Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 // ====================================================================
 // Types
 // ====================================================================
-
-type TemplateCategory = "bug-fixing" | "code-quality" | "project-management" | "devops";
 
 interface TemplateTrigger {
 	provider: string;
@@ -57,34 +51,6 @@ export interface TemplateEntry {
 	requiredIntegrations: IntegrationRequirement[];
 	requiresRepo: boolean;
 }
-
-// ====================================================================
-// Constants
-// ====================================================================
-
-const CATEGORY_ORDER: TemplateCategory[] = [
-	"bug-fixing",
-	"code-quality",
-	"project-management",
-	"devops",
-];
-
-const CATEGORY_LABELS: Record<TemplateCategory, string> = {
-	"bug-fixing": "Bug Fixing",
-	"code-quality": "Code Quality",
-	"project-management": "Project Management",
-	devops: "DevOps",
-};
-
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-	bug: Bug,
-	"git-pull-request": GitPullRequest,
-	"circle-dot": CircleDot,
-	"alert-triangle": Zap,
-	// Fallbacks for future templates
-	"circuit-board": CircuitBoard,
-	shield: Shield,
-};
 
 // ====================================================================
 // Template Picker Dialog
@@ -117,7 +83,7 @@ export function TemplatePickerDialog({
 
 	const availableCategories = useMemo(() => {
 		const cats = new Set(templates.map((t) => t.category));
-		return CATEGORY_ORDER.filter((c) => cats.has(c));
+		return TEMPLATE_CATEGORY_ORDER.filter((c) => cats.has(c));
 	}, [templates]);
 
 	const filteredTemplates = useMemo(() => {
@@ -137,7 +103,7 @@ export function TemplatePickerDialog({
 	const categoryLabel =
 		selectedCategory === "all"
 			? "All templates"
-			: CATEGORY_LABELS[selectedCategory as TemplateCategory];
+			: TEMPLATE_CATEGORY_LABELS[selectedCategory as TemplateCategory];
 
 	const getMissingIntegrations = (template: TemplateEntry) => {
 		return template.requiredIntegrations.filter(
@@ -187,7 +153,7 @@ export function TemplatePickerDialog({
 										)}
 										onClick={() => setSelectedCategory(cat)}
 									>
-										{CATEGORY_LABELS[cat]}
+										{TEMPLATE_CATEGORY_LABELS[cat]}
 									</Button>
 								</li>
 							))}
@@ -233,7 +199,7 @@ export function TemplatePickerDialog({
 								{/* Template cards */}
 								{filteredTemplates.map((template) => {
 									const missing = getMissingIntegrations(template);
-									const Icon = ICON_MAP[template.icon] ?? Bug;
+									const Icon = TEMPLATE_ICON_MAP[template.icon] ?? Bug;
 
 									return (
 										<Button

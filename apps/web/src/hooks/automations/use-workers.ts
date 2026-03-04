@@ -3,6 +3,12 @@
 import { orpc } from "@/lib/infra/orpc";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+export type CoworkerCapabilityInput = {
+	capabilityKey: string;
+	mode: "allow" | "require_approval" | "deny";
+	origin?: string;
+};
+
 // ============================================
 // Worker List & Detail
 // ============================================
@@ -172,6 +178,7 @@ export function useUpdateWorker(workerId: string) {
 		name?: string;
 		objective?: string;
 		modelId?: string;
+		capabilities?: CoworkerCapabilityInput[];
 	}) => {
 		const result = await mutation.mutateAsync({ id: workerId, ...fields });
 		return result.worker;
@@ -180,7 +187,12 @@ export function useUpdateWorker(workerId: string) {
 	return {
 		...mutation,
 		mutateAsync,
-		mutate: (fields: { name?: string; objective?: string; modelId?: string }) => {
+		mutate: (fields: {
+			name?: string;
+			objective?: string;
+			modelId?: string;
+			capabilities?: CoworkerCapabilityInput[];
+		}) => {
 			mutation.mutate({ id: workerId, ...fields });
 		},
 	};

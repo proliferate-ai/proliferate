@@ -9,6 +9,12 @@ import { Button } from "@/components/ui/button";
 import { DashedAddIconButton } from "@/components/ui/dashed-add-icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { StackedListButton } from "@/components/ui/stacked-list-button";
+import {
+	ALL_PROVIDERS_LIST,
+	DEFAULT_TRIGGER_CONFIGS,
+	INTEGRATION_PROVIDERS,
+	STANDALONE_PROVIDERS,
+} from "@/config/triggers";
 import { useTriggerProviders } from "@/hooks/automations/use-trigger-providers";
 import { cn } from "@/lib/display/utils";
 import { orpc } from "@/lib/infra/orpc";
@@ -17,19 +23,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, CirclePlus, Loader2, Plus } from "lucide-react";
 import { useState } from "react";
 import { TriggerConfigForm, type TriggerFormData } from "./trigger-config-form";
-
-const integrationProviders: Provider[] = ["github", "linear", "sentry"];
-const standaloneProviders: Provider[] = ["posthog", "webhook", "scheduled"];
-const allProvidersList: Provider[] = [...integrationProviders, ...standaloneProviders];
-
-/** Default configs per provider for immediate trigger creation */
-const defaultConfigs: Record<string, Record<string, unknown>> = {
-	linear: { actionFilters: ["create"] },
-	sentry: {},
-	github: { eventTypes: ["issues"], actionFilters: ["opened"] },
-	posthog: {},
-	webhook: {},
-};
 
 interface Integration {
 	id: string;
@@ -92,7 +85,7 @@ export function AddTriggerButton({
 	const handleProviderSelect = (provider: Provider) => {
 		// Find the integration ID if this provider needs one
 		let integrationId: string | undefined;
-		if (integrationProviders.includes(provider)) {
+		if (INTEGRATION_PROVIDERS.includes(provider)) {
 			const matching = integrations.filter(
 				(i) => i.integration_id === provider && i.status === "active",
 			);
@@ -109,20 +102,20 @@ export function AddTriggerButton({
 			id: automationId,
 			provider: provider as TriggerProvider,
 			integrationId,
-			config: defaultConfigs[provider] ?? {},
+			config: DEFAULT_TRIGGER_CONFIGS[provider] ?? {},
 		});
 	};
 
 	// Determine available providers
 	const { data: triggerProvidersData } = useTriggerProviders();
 	const allProviders = (() => {
-		if (!triggerProvidersData?.providers) return allProvidersList;
+		if (!triggerProvidersData?.providers) return ALL_PROVIDERS_LIST;
 		const available = new Set<Provider>();
 		for (const entry of Object.values(triggerProvidersData.providers)) {
 			available.add(entry.provider as Provider);
 		}
-		for (const p of standaloneProviders) available.add(p);
-		return allProvidersList.filter((p) => available.has(p));
+		for (const p of STANDALONE_PROVIDERS) available.add(p);
+		return ALL_PROVIDERS_LIST.filter((p) => available.has(p));
 	})();
 
 	// For locked providers (scheduled), keep the full form
@@ -205,7 +198,7 @@ function ProviderPickerList({
 	return (
 		<div className="flex flex-col py-1 min-w-[200px]">
 			{providers.map((p) => {
-				const needsConnection = integrationProviders.includes(p);
+				const needsConnection = INTEGRATION_PROVIDERS.includes(p);
 				const isDisabled = (needsConnection && !connectedProviders.has(p)) || isPending;
 				return (
 					<Button

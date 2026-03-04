@@ -1,6 +1,26 @@
+import type { Provider } from "@/components/integrations/provider-icon";
 import { BlocksIcon, LinearIcon, SlackIcon } from "@/components/ui/icons";
 
 export type CoworkerListTab = "all" | "active" | "paused";
+
+export const COWORKER_LIST_TABS: { value: CoworkerListTab; label: string }[] = [
+	{ value: "all", label: "All" },
+	{ value: "active", label: "Active" },
+	{ value: "paused", label: "Paused" },
+];
+
+type CapabilityProvider = Extract<Provider, "github" | "linear" | "sentry" | "slack" | "jira">;
+
+export interface CapabilitySuggestion {
+	capabilityKey: string;
+	provider?: CapabilityProvider;
+}
+
+export const SUGGESTED_CAPABILITIES: CapabilitySuggestion[] = [
+	{ capabilityKey: "source.github.read", provider: "github" },
+	{ capabilityKey: "source.linear.read", provider: "linear" },
+	{ capabilityKey: "source.sentry.read", provider: "sentry" },
+];
 
 export type DetailTab = "activity" | "sessions" | "settings";
 

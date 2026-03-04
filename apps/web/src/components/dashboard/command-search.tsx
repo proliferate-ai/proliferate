@@ -10,7 +10,7 @@ import {
 	CommandList,
 	CommandSeparator,
 } from "@/components/ui/command";
-import { useAutomations, useCreateAutomation } from "@/hooks/automations/use-automations";
+import { useAutomations } from "@/hooks/automations/use-automations";
 import { useSessions } from "@/hooks/sessions/use-sessions";
 import { useDashboardStore } from "@/stores/dashboard";
 import { Blocks, Home, Plug, Plus, Search, Settings, User } from "lucide-react";
@@ -34,9 +34,6 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 	// Fetch automations
 	const { data: automations = [] } = useAutomations();
 
-	// Create automation mutation
-	const createAutomation = useCreateAutomation();
-
 	// Sessions is task-first in V1; fallback excludes setup if kind is absent.
 	const filteredSessions = sessions?.filter((session) =>
 		session.kind ? session.kind === "task" : session.sessionType !== "setup",
@@ -49,15 +46,10 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 		onOpenChange(false);
 	}, [clearPendingPrompt, setActiveSession, router, onOpenChange]);
 
-	const handleNewAutomation = useCallback(async () => {
-		try {
-			const automation = await createAutomation.mutateAsync({});
-			router.push(`/coworkers/${automation.id}`);
-		} catch (error) {
-			console.error("Failed to create coworker:", error);
-		}
+	const handleNewAutomation = useCallback(() => {
+		router.push("/coworkers?create=1");
 		onOpenChange(false);
-	}, [createAutomation, router, onOpenChange]);
+	}, [router, onOpenChange]);
 
 	const handleSelectSession = useCallback(
 		(sessionId: string) => {

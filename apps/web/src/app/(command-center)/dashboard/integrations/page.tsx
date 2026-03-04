@@ -12,11 +12,8 @@ import { ConnectorIcon } from "@/components/integrations/connector-icon";
 import { findPresetKey } from "@/components/integrations/connector-icon";
 import { ConnectorMenu } from "@/components/integrations/connector-menu";
 import { IntegrationDetailDialog } from "@/components/integrations/integration-detail-dialog";
-import {
-	type CatalogEntry,
-	IntegrationPickerDialog,
-} from "@/components/integrations/integration-picker-dialog";
-import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
+import { IntegrationPickerDialog } from "@/components/integrations/integration-picker-dialog";
+import { ProviderIcon } from "@/components/integrations/provider-icon";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -30,535 +27,66 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import {
-	useActionPreferences,
-	useToggleActionPreference,
-} from "@/hooks/actions/use-action-preferences";
-import { useGitHubAppConnect } from "@/hooks/integrations/use-github-app-connect";
-import {
-	useIntegrations,
-	useSlackConfig,
-	useSlackConnect,
-	useSlackDisconnect,
-	useSlackStatus,
-	useUpdateSlackConfig,
-} from "@/hooks/integrations/use-integrations";
-import {
-	type NangoProvider,
-	getProviderFromIntegrationId,
-	shouldUseNangoForProvider,
-	useNangoConnect,
-} from "@/hooks/integrations/use-nango-connect";
-import {
-	useCreateOrgConnector,
-	useDeleteOrgConnector,
-	useOrgConnectors,
-	useUpdateOrgConnector,
-} from "@/hooks/integrations/use-org-connectors";
-import { useOrgMembers } from "@/hooks/org/use-orgs";
-import { useConfigurations } from "@/hooks/sessions/use-configurations";
-import { useActiveOrganization, useSession } from "@/lib/auth/client";
-import { type OrgRole, hasRoleOrHigher } from "@/lib/auth/roles";
-import { orpc } from "@/lib/infra/orpc";
-import { CONNECTOR_PRESETS, type ConnectorConfig } from "@proliferate/shared";
-import type { IntegrationWithCreator } from "@proliferate/shared/contracts/integrations";
-import { useQueryClient } from "@tanstack/react-query";
+import { CORE_ENTRIES, CORE_PLATFORM_NOTES } from "@/config/integrations";
+import { useIntegrationsPage } from "@/hooks/integrations/use-integrations-page";
 import { CheckCircle2, Plus, Search } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
-
-// ====================================================================
-// Catalog data
-// ====================================================================
-
-const quickPresets = CONNECTOR_PRESETS.filter((p) => p.quickSetup);
-const advancedPresets = CONNECTOR_PRESETS.filter((p) => !p.quickSetup && p.key !== "custom");
-
-const INTEGRATION_CATALOG: CatalogEntry[] = [
-	// Source Control
-	{
-		key: "github",
-		name: "GitHub",
-		description: "Connect your repositories so agents can manage code and open pull requests",
-		category: "source-control",
-		type: "oauth",
-		provider: "github",
-	},
-
-	// Monitoring
-	{
-		key: "sentry",
-		name: "Sentry",
-		description: "Monitor errors and track performance issues across your applications",
-		category: "monitoring",
-		type: "oauth",
-		provider: "sentry",
-	},
-
-	// Project Management
-	{
-		key: "linear",
-		name: "Linear",
-		description: "Track issues and manage projects with your development team",
-		category: "project-management",
-		type: "oauth",
-		provider: "linear",
-	},
-	{
-		key: "jira",
-		name: "Jira",
-		description: "Create, track, and manage issues across your Jira Cloud projects",
-		category: "project-management",
-		type: "oauth",
-		provider: "jira",
-	},
-
-	// Communication
-	{
-		key: "slack",
-		name: "Slack",
-		description: "Get notifications and interact with your agents from Slack",
-		category: "communication",
-		type: "slack",
-		provider: "slack",
-	},
-
-	// MCP presets (categorized by preset.category, defaults to "developer-tools")
-	...quickPresets.map(
-		(preset): CatalogEntry => ({
-			key: `mcp-${preset.key}`,
-			name: preset.name,
-			description: preset.description,
-			category: preset.category ?? "developer-tools",
-			type: "mcp-preset",
-			presetKey: preset.key,
-		}),
-	),
-	...advancedPresets.map(
-		(preset): CatalogEntry => ({
-			key: `mcp-${preset.key}`,
-			name: preset.name,
-			description: preset.description,
-			category: preset.category ?? "developer-tools",
-			type: "mcp-preset",
-			presetKey: preset.key,
-		}),
-	),
-
-	// Custom MCP Server
-	{
-		key: "custom-mcp",
-		name: "Custom MCP Server",
-		description: "Connect any MCP-compatible tool server with your own URL and credentials",
-		category: "developer-tools",
-		type: "custom-mcp",
-	},
-];
-
-// Core product integrations — always shown as cards at the top of the page
-const CORE_ENTRIES = INTEGRATION_CATALOG.filter((e) =>
-	["github", "slack", "linear", "sentry"].includes(e.key),
-);
-
-// Short descriptions of platform features each core integration powers (beyond tools)
-const CORE_PLATFORM_NOTES: Record<string, string> = {
-	github: "Repos, pull requests, triggers, and agent tools",
-	slack: "Notifications, agent interaction, and agent tools",
-	linear: "Issue tracking, triggers, automations, and agent tools",
-	sentry: "Error monitoring, triggers, automations, and agent tools",
-};
-
-// ====================================================================
-// Page component
-// ====================================================================
 
 export default function IntegrationsPage() {
-	const queryClient = useQueryClient();
-
-	// ---- Role detection ----
-	const { data: activeOrg } = useActiveOrganization();
-	const { data: authSession } = useSession();
-	const currentUserId = authSession?.user?.id;
-	const { data: members } = useOrgMembers(activeOrg?.id ?? "");
-	const currentUserRole = members?.find((m: { userId: string }) => m.userId === currentUserId)
-		?.role as OrgRole | undefined;
-	const isAdmin = currentUserRole ? hasRoleOrHigher(currentUserRole, "admin") : false;
-
-	// ---- User action preferences ----
-	const { data: preferences } = useActionPreferences();
-	const togglePreference = useToggleActionPreference();
-
-	const disabledSourceIds = useMemo(() => {
-		const set = new Set<string>();
-		if (!preferences) return set;
-		for (const pref of preferences) {
-			if (!pref.actionId && !pref.enabled) {
-				set.add(pref.sourceId);
-			}
-		}
-		return set;
-	}, [preferences]);
-
-	// ---- Modal state ----
-	const [pickerOpen, setPickerOpen] = useState(false);
-	const [selectedEntry, setSelectedEntry] = useState<CatalogEntry | null>(null);
-	const [openedFromPicker, setOpenedFromPicker] = useState(false);
-	const [searchQuery, setSearchQuery] = useState("");
-
-	// ---- OAuth integration state ----
 	const {
-		connect: nangoConnect,
-		disconnect: nangoDisconnect,
-		loadingProvider: nangoLoadingProvider,
-	} = useNangoConnect({
-		flow: "auth",
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: orpc.integrations.list.key() });
-		},
-	});
-
-	const {
-		connect: githubConnect,
-		disconnect: githubDisconnect,
-		isLoading: githubLoading,
-	} = useGitHubAppConnect({
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: orpc.integrations.list.key() });
-			queryClient.invalidateQueries({ queryKey: orpc.onboarding.getStatus.key() });
-		},
-	});
-
-	const connectOAuth = useCallback(
-		async (provider: Provider) => {
-			if (shouldUseNangoForProvider(provider)) {
-				await nangoConnect(provider as NangoProvider);
-			} else {
-				await githubConnect();
-			}
-		},
-		[nangoConnect, githubConnect],
-	);
-
-	const disconnectOAuth = async (provider: Provider, integrationId: string) => {
-		if (shouldUseNangoForProvider(provider)) {
-			await nangoDisconnect(provider as NangoProvider, integrationId);
-		} else {
-			await githubDisconnect(integrationId);
-		}
-	};
-
-	const loadingProvider: Provider | null = githubLoading ? "github" : nangoLoadingProvider;
-
-	const { data: integrationsData, isLoading: integrationsLoading } = useIntegrations();
-	const { data: slackStatus } = useSlackStatus();
-	const slackDisconnect = useSlackDisconnect();
-	const slackConnect = useSlackConnect();
-	const integrations = integrationsData?.integrations ?? [];
-
-	const OAUTH_PROVIDERS: Provider[] = ["github", "sentry", "linear", "jira"];
-	const integrationsByProvider = OAUTH_PROVIDERS.reduce(
-		(acc, provider) => {
-			acc[provider] = integrations.filter((i) => {
-				if (!i.integration_id) return false;
-				const mappedProvider = getProviderFromIntegrationId(i.integration_id);
-				return mappedProvider === provider && i.status === "active";
-			});
-			return acc;
-		},
-		{} as Record<Provider, IntegrationWithCreator[]>,
-	);
-
-	// ---- Slack config ----
-	const { data: slackConfig } = useSlackConfig();
-	const updateSlackConfig = useUpdateSlackConfig();
-	const { data: rawConfigurations } = useConfigurations();
-	const readyConfigurations = useMemo(
-		() => (rawConfigurations ?? []).filter((c) => c.status === "ready" || c.status === "default"),
-		[rawConfigurations],
-	);
-
-	// ---- Slack handlers ----
-	const [showSlackConnectForm, setShowSlackConnectForm] = useState(false);
-	const [slackConnectChannelName, setSlackConnectChannelName] = useState("");
-
-	const handleSlackConnect = useCallback(() => {
-		window.location.href = `/api/integrations/slack/oauth?returnUrl=${encodeURIComponent("/dashboard/integrations")}`;
-	}, []);
-
-	const handleSlackDisconnect = async () => {
-		try {
-			await slackDisconnect.mutateAsync({});
-			queryClient.invalidateQueries({ queryKey: orpc.onboarding.getStatus.key() });
-		} catch (_err) {
-			// Slack disconnect error is surfaced via query invalidation
-		}
-	};
-
-	const handleCreateSlackConnect = async () => {
-		if (!slackConnectChannelName.trim()) return;
-		try {
-			await slackConnect.mutateAsync({
-				channelName: `proliferate-${slackConnectChannelName.trim()}`,
-			});
-			setShowSlackConnectForm(false);
-			setSlackConnectChannelName("");
-		} catch (_err) {
-			// Slack Connect channel creation error is surfaced via mutation state
-		}
-	};
-
-	// ---- MCP connector state ----
-	const [editingId, setEditingId] = useState<string | null>(null);
-
-	const { data: connectors, isLoading: connectorsLoading } = useOrgConnectors();
-	const createMutation = useCreateOrgConnector();
-	const updateMutation = useUpdateOrgConnector();
-	const deleteMutation = useDeleteOrgConnector();
-
-	// ---- Source preference helpers (needs connectors) ----
-	const getSourceId = useCallback(
-		(entry: CatalogEntry): string | null => {
-			if (entry.type === "oauth" && entry.provider) return entry.provider;
-			if (entry.type === "slack") return "slack";
-			if (entry.type === "mcp-preset" && entry.presetKey) {
-				const connector = (connectors ?? []).find(
-					(c: ConnectorConfig) => c.name.toLowerCase() === entry.name.toLowerCase(),
-				);
-				return connector ? `connector:${connector.id}` : null;
-			}
-			return null;
-		},
-		[connectors],
-	);
-
-	const isSourceEnabled = useCallback(
-		(entry: CatalogEntry): boolean => {
-			const sourceId = getSourceId(entry);
-			if (!sourceId) return true;
-			return !disabledSourceIds.has(sourceId);
-		},
-		[getSourceId, disabledSourceIds],
-	);
-
-	const handleToggleSource = useCallback(
-		(entry: CatalogEntry) => {
-			const sourceId = getSourceId(entry);
-			if (!sourceId) return;
-			const currentlyEnabled = !disabledSourceIds.has(sourceId);
-			togglePreference.mutate({ sourceId, enabled: !currentlyEnabled });
-		},
-		[getSourceId, disabledSourceIds, togglePreference],
-	);
-
-	const handleToggleConnectorSource = useCallback(
-		(connectorId: string) => {
-			const sourceId = `connector:${connectorId}`;
-			const currentlyEnabled = !disabledSourceIds.has(sourceId);
-			togglePreference.mutate({ sourceId, enabled: !currentlyEnabled });
-		},
-		[disabledSourceIds, togglePreference],
-	);
-
-	const isConnectorEnabled = useCallback(
-		(connectorId: string): boolean => {
-			return !disabledSourceIds.has(`connector:${connectorId}`);
-		},
-		[disabledSourceIds],
-	);
-
-	const handleRemove = useCallback(
-		async (id: string) => {
-			await deleteMutation.mutateAsync({ id });
-		},
-		[deleteMutation],
-	);
-
-	const handleToggle = useCallback(
-		async (connector: ConnectorConfig) => {
-			await updateMutation.mutateAsync({
-				id: connector.id,
-				enabled: !connector.enabled,
-			});
-		},
-		[updateMutation],
-	);
-
-	const handleSave = useCallback(
-		async (connector: ConnectorConfig, isNew: boolean) => {
-			if (isNew) {
-				await createMutation.mutateAsync({
-					name: connector.name,
-					transport: connector.transport,
-					url: connector.url,
-					auth: connector.auth,
-					riskPolicy: connector.riskPolicy,
-					enabled: connector.enabled,
-				});
-			} else {
-				await updateMutation.mutateAsync({
-					id: connector.id,
-					name: connector.name,
-					url: connector.url,
-					auth: connector.auth,
-					riskPolicy: connector.riskPolicy,
-					enabled: connector.enabled,
-				});
-			}
-			setEditingId(null);
-		},
-		[createMutation, updateMutation],
-	);
-
-	// ---- Disconnect confirmation dialog ----
-	const [disconnectTarget, setDisconnectTarget] = useState<{
-		entry: CatalogEntry;
-		integrationId?: string;
-	} | null>(null);
-
-	const handleConfirmDisconnect = async () => {
-		if (!disconnectTarget) return;
-		const { entry, integrationId } = disconnectTarget;
-
-		if (entry.type === "oauth" && entry.provider && integrationId) {
-			await disconnectOAuth(entry.provider, integrationId);
-		} else if (entry.type === "slack") {
-			await handleSlackDisconnect();
-		}
-		setDisconnectTarget(null);
-	};
-
-	// ---- Connection status helpers ----
-	const getConnectionStatus = useCallback(
-		(entry: CatalogEntry): boolean => {
-			switch (entry.type) {
-				case "oauth":
-					return entry.provider ? (integrationsByProvider[entry.provider]?.length ?? 0) > 0 : false;
-				case "slack":
-					return slackStatus?.connected ?? false;
-				case "mcp-preset":
-					return false;
-				default:
-					return false;
-			}
-		},
-		[integrationsByProvider, slackStatus],
-	);
-
-	const getLoadingStatus = useCallback(
-		(entry: CatalogEntry): boolean => {
-			switch (entry.type) {
-				case "oauth":
-					return loadingProvider === entry.provider;
-				case "slack":
-					return slackDisconnect.isPending;
-				case "mcp-preset":
-					return false;
-				default:
-					return false;
-			}
-		},
-		[loadingProvider, slackDisconnect.isPending],
-	);
-
-	const getConnectedMeta = useCallback(
-		(entry: CatalogEntry): string | null => {
-			if (entry.type === "oauth" && entry.provider) {
-				const providerIntegrations = integrationsByProvider[entry.provider];
-				if (providerIntegrations?.length > 0) {
-					const first = providerIntegrations[0];
-					return first.creator?.name || first.creator?.email || null;
-				}
-			}
-			if (entry.type === "slack" && slackStatus?.connected) {
-				return slackStatus.teamName || null;
-			}
-			return null;
-		},
-		[integrationsByProvider, slackStatus],
-	);
-
-	// ---- Handle connect action ----
-	const handleConnect = useCallback(
-		(entry: CatalogEntry) => {
-			switch (entry.type) {
-				case "oauth":
-					if (entry.provider) connectOAuth(entry.provider);
-					break;
-				case "slack":
-					handleSlackConnect();
-					break;
-				case "mcp-preset":
-					// MCP presets connect through the detail modal form
-					break;
-			}
-		},
-		[connectOAuth, handleSlackConnect],
-	);
-
-	// ---- Handle opening detail from picker ----
-	const handleSelectFromPicker = useCallback((entry: CatalogEntry) => {
-		setPickerOpen(false);
-		setSelectedEntry(entry);
-		setOpenedFromPicker(true);
-	}, []);
-
-	// ---- Handle opening detail from connected row ----
-	const handleSelectFromRow = useCallback((entry: CatalogEntry) => {
-		setSelectedEntry(entry);
-		setOpenedFromPicker(false);
-	}, []);
-
-	// ---- Handle detail modal back / close ----
-	const handleDetailBack = useCallback(() => {
-		setSelectedEntry(null);
-		setPickerOpen(true);
-	}, []);
-
-	const handleDetailOpenChange = useCallback(
-		(open: boolean) => {
-			if (!open) {
-				setSelectedEntry(null);
-				if (openedFromPicker) {
-					setPickerOpen(false);
-				}
-			}
-		},
-		[openedFromPicker],
-	);
-
-	// ---- Connected integrations list ----
-	const connectedEntries = useMemo(() => {
-		let entries = INTEGRATION_CATALOG.filter((entry) => getConnectionStatus(entry));
-
-		if (searchQuery.trim()) {
-			const q = searchQuery.toLowerCase();
-			entries = entries.filter(
-				(e) => e.name.toLowerCase().includes(q) || e.description.toLowerCase().includes(q),
-			);
-		}
-
-		return entries;
-	}, [getConnectionStatus, searchQuery]);
-
-	const filteredConnectors = useMemo(() => {
-		let list = connectors ?? [];
-		if (searchQuery.trim()) {
-			const q = searchQuery.toLowerCase();
-			list = list.filter(
-				(c: ConnectorConfig) => c.name.toLowerCase().includes(q) || c.url.toLowerCase().includes(q),
-			);
-		}
-		return list;
-	}, [connectors, searchQuery]);
-
-	const [deleteConnectorTarget, setDeleteConnectorTarget] = useState<string | null>(null);
-
-	const handleConfirmDeleteConnector = async () => {
-		if (!deleteConnectorTarget) return;
-		await handleRemove(deleteConnectorTarget);
-		setDeleteConnectorTarget(null);
-	};
-
-	const pickerCatalog = INTEGRATION_CATALOG;
+		isAdmin,
+		searchQuery,
+		setSearchQuery,
+		integrationsLoading,
+		connectorsLoading,
+		integrationsByProvider,
+		slackStatus,
+		slackConnectIsPending,
+		handleConnect,
+		getConnectionStatus,
+		getLoadingStatus,
+		getConnectedMeta,
+		connectedEntries,
+		connectors,
+		filteredConnectors,
+		editingId,
+		setEditingId,
+		updateMutationIsPending,
+		handleToggle,
+		handleSave,
+		isSourceEnabled,
+		handleToggleSource,
+		handleToggleConnectorSource,
+		isConnectorEnabled,
+		togglePreferenceIsPending,
+		pickerOpen,
+		setPickerOpen,
+		selectedEntry,
+		openedFromPicker,
+		handleSelectFromPicker,
+		handleSelectFromRow,
+		handleDetailBack,
+		handleDetailOpenChange,
+		pickerCatalog,
+		disconnectTarget,
+		setDisconnectTarget,
+		handleConfirmDisconnect,
+		getDisconnectDescription,
+		handleSetDisconnectTargetForEntry,
+		deleteConnectorTarget,
+		setDeleteConnectorTarget,
+		handleConfirmDeleteConnector,
+		slackConfig,
+		readyConfigurations,
+		handleUpdateSlackConfig,
+		showSlackConnectForm,
+		setShowSlackConnectForm,
+		slackConnectChannelName,
+		setSlackConnectChannelName,
+		handleCreateSlackConnect,
+		handleCancelSlackConnectForm,
+		hasConnectedIntegrations,
+		handleOpenEntry,
+	} = useIntegrationsPage();
 
 	// ---- Loading state ----
 	if (integrationsLoading && connectorsLoading) {
@@ -582,16 +110,6 @@ export default function IntegrationsPage() {
 			</PageShell>
 		);
 	}
-
-	const hasConnectedIntegrations = connectedEntries.length > 0 || (connectors ?? []).length > 0;
-
-	const getDisconnectDescription = (entry: CatalogEntry) => {
-		if (entry.provider === "github") {
-			return "Repos using this connection will be marked as orphaned until reconnected.";
-		}
-		const name = entry.name;
-		return `Triggers and automations using this ${name} connection will stop working.`;
-	};
 
 	return (
 		<PageShell
@@ -627,10 +145,7 @@ export default function IntegrationsPage() {
 							key={entry.key}
 							variant="ghost"
 							className="flex flex-col items-start p-4 pb-3 h-auto rounded-2xl border border-border bg-card hover:border-foreground/20 transition-colors text-left"
-							onClick={() => {
-								setSelectedEntry(entry);
-								setOpenedFromPicker(false);
-							}}
+							onClick={() => handleOpenEntry(entry)}
 						>
 							<div className="w-7 h-7 rounded-lg border border-border bg-background flex items-center justify-center p-1 shrink-0">
 								{entry.provider ? <ProviderIcon provider={entry.provider} size="md" /> : null}
@@ -720,7 +235,7 @@ export default function IntegrationsPage() {
 											<Switch
 												checked={enabled}
 												onCheckedChange={() => handleToggleSource(entry)}
-												disabled={togglePreference.isPending}
+												disabled={togglePreferenceIsPending}
 											/>
 										</div>
 									)}
@@ -732,15 +247,7 @@ export default function IntegrationsPage() {
 												entry={entry}
 												isLoading={isLoading}
 												onReconnect={() => handleConnect(entry)}
-												onDisconnect={() =>
-													setDisconnectTarget({
-														entry,
-														integrationId:
-															entry.type === "oauth" && entry.provider
-																? integrationsByProvider[entry.provider]?.[0]?.id
-																: undefined,
-													})
-												}
+												onDisconnect={() => handleSetDisconnectTargetForEntry(entry)}
 											/>
 										</div>
 									)}
@@ -791,7 +298,7 @@ export default function IntegrationsPage() {
 											<Switch
 												checked={c.enabled}
 												onCheckedChange={() => handleToggle(c)}
-												disabled={updateMutation.isPending}
+												disabled={updateMutationIsPending}
 											/>
 										</div>
 									)}
@@ -802,7 +309,7 @@ export default function IntegrationsPage() {
 											<Switch
 												checked={isConnectorEnabled(c.id)}
 												onCheckedChange={() => handleToggleConnectorSource(c.id)}
-												disabled={togglePreference.isPending || !c.enabled}
+												disabled={togglePreferenceIsPending || !c.enabled}
 												title={!c.enabled ? "Disabled by admin" : undefined}
 											/>
 										</div>
@@ -854,7 +361,7 @@ export default function IntegrationsPage() {
 											e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""),
 										)
 									}
-									disabled={slackConnect.isPending}
+									disabled={slackConnectIsPending}
 									className="h-8 rounded-l-none text-sm"
 								/>
 							</div>
@@ -862,20 +369,17 @@ export default function IntegrationsPage() {
 								<Button
 									variant="ghost"
 									size="sm"
-									onClick={() => {
-										setShowSlackConnectForm(false);
-										setSlackConnectChannelName("");
-									}}
-									disabled={slackConnect.isPending}
+									onClick={handleCancelSlackConnectForm}
+									disabled={slackConnectIsPending}
 								>
 									Cancel
 								</Button>
 								<Button
 									size="sm"
 									onClick={handleCreateSlackConnect}
-									disabled={slackConnect.isPending || !slackConnectChannelName.trim()}
+									disabled={slackConnectIsPending || !slackConnectChannelName.trim()}
 								>
-									{slackConnect.isPending ? "Creating..." : "Create Channel"}
+									{slackConnectIsPending ? "Creating..." : "Create Channel"}
 								</Button>
 							</div>
 						</div>
@@ -974,20 +478,11 @@ export default function IntegrationsPage() {
 				isLoading={selectedEntry ? getLoadingStatus(selectedEntry) : false}
 				connectedMeta={selectedEntry ? getConnectedMeta(selectedEntry) : null}
 				onConnect={() => selectedEntry && handleConnect(selectedEntry)}
-				onDisconnect={() => {
-					if (!selectedEntry) return;
-					setDisconnectTarget({
-						entry: selectedEntry,
-						integrationId:
-							selectedEntry.type === "oauth" && selectedEntry.provider
-								? integrationsByProvider[selectedEntry.provider]?.[0]?.id
-								: undefined,
-					});
-				}}
+				onDisconnect={() => selectedEntry && handleSetDisconnectTargetForEntry(selectedEntry)}
 				onSaveConnector={handleSave}
 				slackConfig={slackConfig}
 				readyConfigurations={readyConfigurations}
-				onUpdateSlackConfig={(input) => updateSlackConfig.mutate(input)}
+				onUpdateSlackConfig={handleUpdateSlackConfig}
 			/>
 		</PageShell>
 	);
