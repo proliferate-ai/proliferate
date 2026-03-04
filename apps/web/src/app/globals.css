@@ -36,6 +36,12 @@
 		/* ─── Status Colors (Use sparingly, NO tinted backgrounds) ─── */
 		--destructive: 0 84% 60%; /* Crisp Red */
 		--destructive-foreground: 0 0% 98%;
+		--success: 142 72% 38%;
+		--success-foreground: 0 0% 98%;
+		--warning: 38 92% 50%;
+		--warning-foreground: 0 0% 10%;
+		--info: 217 91% 60%;
+		--info-foreground: 0 0% 98%;
 
 		/* ─── Geometry ─── */
 		--radius: 0.5rem; /* 8px base for product */
@@ -75,6 +81,12 @@
 		/* ─── Status Colors ─── */
 		--destructive: 0 63% 31%; /* Darker red for contrast */
 		--destructive-foreground: 0 0% 98%;
+		--success: 142 70% 42%;
+		--success-foreground: 0 0% 98%;
+		--warning: 38 90% 56%;
+		--warning-foreground: 0 0% 10%;
+		--info: 217 88% 66%;
+		--info-foreground: 0 0% 10%;
 	}
 }
 

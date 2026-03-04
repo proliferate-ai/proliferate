@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { type NangoAuthFlow, useNangoConnect } from "@/hooks/use-nango-connect";
+import { type NangoAuthFlow, useNangoConnect } from "@/hooks/integrations/use-nango-connect";
 import { RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 

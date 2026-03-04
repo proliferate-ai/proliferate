@@ -41,9 +41,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { useActionPreferences, useToggleActionPreference } from "@/hooks/use-action-preferences";
-import { useConfigurations } from "@/hooks/use-configurations";
-import { useGitHubAppConnect } from "@/hooks/use-github-app-connect";
+import {
+	useActionPreferences,
+	useToggleActionPreference,
+} from "@/hooks/actions/use-action-preferences";
+import { useGitHubAppConnect } from "@/hooks/integrations/use-github-app-connect";
 import {
 	useIntegrations,
 	useSlackConfig,
@@ -51,23 +53,24 @@ import {
 	useSlackDisconnect,
 	useSlackStatus,
 	useUpdateSlackConfig,
-} from "@/hooks/use-integrations";
+} from "@/hooks/integrations/use-integrations";
 import {
 	type NangoProvider,
 	getProviderFromIntegrationId,
 	shouldUseNangoForProvider,
 	useNangoConnect,
-} from "@/hooks/use-nango-connect";
+} from "@/hooks/integrations/use-nango-connect";
 import {
 	useCreateOrgConnector,
 	useDeleteOrgConnector,
 	useOrgConnectors,
 	useUpdateOrgConnector,
-} from "@/hooks/use-org-connectors";
-import { useOrgMembers } from "@/hooks/use-orgs";
+} from "@/hooks/integrations/use-org-connectors";
+import { useOrgMembers } from "@/hooks/org/use-orgs";
+import { useConfigurations } from "@/hooks/sessions/use-configurations";
 import { useActiveOrganization, useSession } from "@/lib/auth/client";
-import { orpc } from "@/lib/orpc";
-import { type OrgRole, hasRoleOrHigher } from "@/lib/roles";
+import { type OrgRole, hasRoleOrHigher } from "@/lib/auth/roles";
+import { orpc } from "@/lib/infra/orpc";
 import { CONNECTOR_PRESETS, type ConnectorConfig } from "@proliferate/shared";
 import type { IntegrationWithCreator } from "@proliferate/shared";
 import { useQueryClient } from "@tanstack/react-query";

@@ -2,7 +2,7 @@
 
 import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 

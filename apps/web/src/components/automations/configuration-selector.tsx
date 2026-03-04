@@ -9,7 +9,7 @@ import {
 	CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { Check, Layers } from "lucide-react";
 import { useState } from "react";
 

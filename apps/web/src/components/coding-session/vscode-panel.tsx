@@ -2,8 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { vscodeStartedSessions } from "@/hooks/use-background-vscode";
-import { GATEWAY_URL } from "@/lib/gateway";
+import { vscodeStartedSessions } from "@/hooks/sessions/use-background-vscode";
+import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { FileText, Loader2, ServerCrash } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";

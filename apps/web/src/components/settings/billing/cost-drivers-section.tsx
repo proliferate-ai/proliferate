@@ -1,7 +1,7 @@
 "use client";
 
 import { SettingsCard, SettingsSection } from "@/components/settings/settings-row";
-import { useCostDrivers } from "@/hooks";
+import { useCostDrivers } from "@/hooks/org/use-billing";
 
 function formatCredits(n: number): string {
 	return Math.round(n).toLocaleString();

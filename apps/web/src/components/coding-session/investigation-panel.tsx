@@ -3,10 +3,15 @@
 import { Button } from "@/components/ui/button";
 import { AutomationsIcon } from "@/components/ui/icons";
 import { Textarea } from "@/components/ui/textarea";
-import { useAssignRun, useResolveRun, useRun, useRunEvents } from "@/hooks/use-automations";
+import {
+	useAssignRun,
+	useResolveRun,
+	useRun,
+	useRunEvents,
+} from "@/hooks/automations/use-automations";
 import { useSession } from "@/lib/auth/client";
-import { getRunStatusDisplay } from "@/lib/run-status";
-import { cn } from "@/lib/utils";
+import { getRunStatusDisplay } from "@/lib/display/run-status";
+import { cn } from "@/lib/display/utils";
 import { formatDistanceToNow } from "date-fns";
 import { Check, CheckCircle2, ExternalLink, Loader2, XCircle } from "lucide-react";
 import Link from "next/link";
@@ -199,7 +204,7 @@ function ResolutionSection({
 			<div className="flex items-center gap-1.5">
 				<Button
 					size="sm"
-					variant={activeOutcome === "succeeded" ? "default" : "outline"}
+					variant={activeOutcome === "succeeded" ? "primary" : "outline"}
 					className="h-7 text-xs"
 					onClick={() => setActiveOutcome(activeOutcome === "succeeded" ? null : "succeeded")}
 					disabled={resolveRun.isPending}

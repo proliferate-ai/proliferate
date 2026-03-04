@@ -5,11 +5,12 @@ import {
 	ProviderIcon,
 	getProviderDisplayName,
 } from "@/components/integrations/provider-icon";
-import { Button } from "@/components/ui/button";
+import { DashedAddIconButton } from "@/components/ui/dashed-add-icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useTriggerProviders } from "@/hooks/use-trigger-providers";
-import { orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
+import { StackedListButton } from "@/components/ui/stacked-list-button";
+import { useTriggerProviders } from "@/hooks/automations/use-trigger-providers";
+import { cn } from "@/lib/display/utils";
+import { orpc } from "@/lib/infra/orpc";
 import type { TriggerProvider } from "@proliferate/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, CirclePlus, Loader2, Plus } from "lucide-react";
@@ -163,14 +164,10 @@ export function AddTriggerButton({
 		return (
 			<Popover open={open} onOpenChange={handleOpenChange}>
 				<PopoverTrigger asChild>
-					<Button
-						variant="stacked"
-						size="stacked"
-						className={cn(isFirst && "rounded-t-xl", isLast && "rounded-b-xl")}
-					>
+					<StackedListButton className={cn(isFirst && "rounded-t-xl", isLast && "rounded-b-xl")}>
 						<CirclePlus className="w-[18px] h-[18px] shrink-0" />
 						<div className="flex min-w-0 items-center grow gap-1.5 px-2 py-2">{label}</div>
-					</Button>
+					</StackedListButton>
 				</PopoverTrigger>
 				{popoverContent}
 			</Popover>
@@ -180,13 +177,9 @@ export function AddTriggerButton({
 	return (
 		<Popover open={open} onOpenChange={handleOpenChange}>
 			<PopoverTrigger asChild>
-				<Button
-					variant="ghost"
-					size="icon"
-					className="w-8 h-8 rounded-full border border-dashed border-border bg-card hover:bg-muted hover:border-primary/50"
-				>
+				<DashedAddIconButton ariaLabel="Add trigger">
 					<Plus className="h-4 w-4 text-muted-foreground" />
-				</Button>
+				</DashedAddIconButton>
 			</PopoverTrigger>
 			{popoverContent}
 		</Popover>

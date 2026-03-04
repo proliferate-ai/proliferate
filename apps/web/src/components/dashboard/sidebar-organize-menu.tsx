@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { Check, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";

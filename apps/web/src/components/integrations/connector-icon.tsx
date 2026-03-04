@@ -14,7 +14,7 @@ import {
 	SupabaseIcon,
 	ZapierIcon,
 } from "@/components/ui/icons";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import type { ConnectorConfig } from "@proliferate/shared";
 import { CONNECTOR_PRESETS } from "@proliferate/shared";
 

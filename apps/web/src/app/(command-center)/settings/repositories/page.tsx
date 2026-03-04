@@ -22,9 +22,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import { useActiveBaselinesByRepos } from "@/hooks/use-baselines";
-import { useCreateRepo, useDeleteRepo, useRepos, useSearchRepos } from "@/hooks/use-repos";
-import { cn } from "@/lib/utils";
+import { useCreateRepo, useDeleteRepo, useRepos, useSearchRepos } from "@/hooks/org/use-repos";
+import { useActiveBaselinesByRepos } from "@/hooks/sessions/use-baselines";
+import { cn } from "@/lib/display/utils";
 import type { GitHubRepo, Repo } from "@/types";
 import { ExternalLink, MoreVertical, Plus, Search, Star, Trash2 } from "lucide-react";
 import Link from "next/link";

@@ -1,4 +1,4 @@
-import { devConsoleLog } from "@/lib/dev-console-log";
+import { devConsoleLog } from "@/lib/analytics/dev-console-log";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useSetupProgressStore } from "@/stores/setup-progress";
 import type {

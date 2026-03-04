@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 
 type StatusType = "active" | "paused" | "running" | "stopped" | "error";
 

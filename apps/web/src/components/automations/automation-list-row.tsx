@@ -3,7 +3,7 @@
 import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
 import { BlocksIcon, LinearIcon, SlackIcon } from "@/components/ui/icons";
 import { StatusDot } from "@/components/ui/status-dot";
-import { formatRelativeTime } from "@/lib/utils";
+import { formatRelativeTime } from "@/lib/display/utils";
 import { Building2 } from "lucide-react";
 import Link from "next/link";
 

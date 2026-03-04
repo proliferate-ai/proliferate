@@ -6,7 +6,7 @@ import { ReasoningSelector } from "@/components/dashboard/reasoning-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { ArrowUp, Mic, Paperclip } from "lucide-react";
 import { useEffect, useRef, useState } from "react";

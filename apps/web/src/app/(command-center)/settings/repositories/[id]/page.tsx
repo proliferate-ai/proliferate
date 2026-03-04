@@ -14,19 +14,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import {
-	useActiveBaseline,
-	useBaselineTargets,
-	useLatestSetupSession,
-	useMarkBaselineStale,
-} from "@/hooks/use-baselines";
-import {
 	useDeleteRepo,
 	useRepo,
 	useServiceCommands,
 	useUpdateServiceCommands,
-} from "@/hooks/use-repos";
-import { useSecrets } from "@/hooks/use-secrets";
-import { cn } from "@/lib/utils";
+} from "@/hooks/org/use-repos";
+import { useSecrets } from "@/hooks/org/use-secrets";
+import {
+	useActiveBaseline,
+	useBaselineTargets,
+	useLatestSetupSession,
+	useMarkBaselineStale,
+} from "@/hooks/sessions/use-baselines";
+import { cn } from "@/lib/display/utils";
 import { ArrowLeft, ExternalLink, Key, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";

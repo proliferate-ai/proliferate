@@ -1,8 +1,8 @@
 "use client";
 
 import { BlocksIcon, BlocksLoadingIcon } from "@/components/ui/icons";
-import { cn } from "@/lib/utils";
-import { formatRelativeTime, getRepoShortName } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
+import { formatRelativeTime, getRepoShortName } from "@/lib/display/utils";
 import { deriveDisplayStatus } from "@proliferate/shared/sessions";
 
 interface SessionRowProps {

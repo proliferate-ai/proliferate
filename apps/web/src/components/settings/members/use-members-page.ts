@@ -1,8 +1,8 @@
 "use client";
 
-import { useOrgMembersAndInvitations } from "@/hooks/use-orgs";
+import { useOrgMembersAndInvitations } from "@/hooks/org/use-orgs";
 import { organization, useActiveOrganization, useSession } from "@/lib/auth/client";
-import { orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/infra/orpc";
 import { env } from "@proliferate/environment/public";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";

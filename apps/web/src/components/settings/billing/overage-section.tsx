@@ -70,7 +70,7 @@ export function OverageSection({ billingSettings, overage, onUpdate }: OverageSe
 				>
 					<div className="flex items-center gap-2">
 						<Button
-							variant={isPaused ? "default" : "outline"}
+							variant={isPaused ? "primary" : "outline"}
 							size="sm"
 							className="gap-1.5"
 							onClick={() => handlePolicyChange("pause")}
@@ -80,7 +80,7 @@ export function OverageSection({ billingSettings, overage, onUpdate }: OverageSe
 							Pause sessions
 						</Button>
 						<Button
-							variant={!isPaused ? "default" : "outline"}
+							variant={!isPaused ? "primary" : "outline"}
 							size="sm"
 							className="gap-1.5"
 							onClick={() => handlePolicyChange("allow")}

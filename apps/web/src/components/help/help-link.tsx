@@ -1,7 +1,7 @@
 "use client";
 
 import type { HelpTopic } from "@/content/help";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { openHelp } from "@/stores/help";
 import { HelpCircleIcon } from "lucide-react";
 import type { ReactNode } from "react";

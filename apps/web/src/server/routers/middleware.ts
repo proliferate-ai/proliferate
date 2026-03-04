@@ -8,8 +8,8 @@ import {
 	isAuthError,
 	requireAuth,
 } from "@/lib/auth/server/helpers";
-import { logger } from "@/lib/logger";
-import { isSuperAdmin } from "@/lib/super-admin";
+import { isSuperAdmin } from "@/lib/auth/super-admin";
+import { logger } from "@/lib/infra/logger";
 import { os, ORPCError } from "@orpc/server";
 import { nodeEnv, runtimeEnv } from "@proliferate/environment/runtime";
 import { orgs } from "@proliferate/services";

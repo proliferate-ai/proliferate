@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import {
 	Bug,
 	CircleDot,

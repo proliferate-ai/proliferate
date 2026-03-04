@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { Bug, Clock, GitPullRequest, Plus } from "lucide-react";
 import type { ComponentType } from "react";
 

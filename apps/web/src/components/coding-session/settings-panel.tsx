@@ -1,11 +1,11 @@
 "use client";
 
-import { useHasSlackInstallation } from "@/hooks/use-integrations";
+import { useHasSlackInstallation } from "@/hooks/integrations/use-integrations";
 import {
 	useSessionNotificationSubscription,
 	useSubscribeNotifications,
 	useUnsubscribeNotifications,
-} from "@/hooks/use-sessions";
+} from "@/hooks/sessions/use-sessions";
 import type { AutoStartOutputMessage, ConfigurationServiceCommand } from "@proliferate/shared";
 import { Bell, BellOff } from "lucide-react";
 import { toast } from "sonner";

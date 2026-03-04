@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { AlertTriangle, CheckCircle2, Loader2, Pause, XCircle } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -107,7 +107,7 @@ export function WorkspaceStateBanner({
 			{/* Actions */}
 			<div className="flex items-center gap-1.5 shrink-0">
 				{state === "paused" && onResume && (
-					<Button variant="default" size="sm" className="h-7 text-xs" onClick={onResume}>
+					<Button variant="primary" size="sm" className="h-7 text-xs" onClick={onResume}>
 						Resume
 					</Button>
 				)}
