@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { useCreateSession } from "@/hooks/use-sessions";
+import { useCreateSession } from "@/hooks/sessions/use-sessions";
 import { useCodingSessionStore } from "@/stores/coding-session-store";
 import { useEffect, useRef } from "react";
 import { CodingSession } from "./coding-session";

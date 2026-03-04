@@ -2,8 +2,8 @@
 
 import { ProviderIcon } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
-import type { AdapterMeta } from "@/lib/action-adapters";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
+import type { AdapterMeta } from "@/lib/integrations/action-adapters";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 

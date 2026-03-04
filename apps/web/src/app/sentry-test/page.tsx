@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/infra/orpc";
 import * as Sentry from "@sentry/nextjs";
 
 export default function SentryTestPage() {

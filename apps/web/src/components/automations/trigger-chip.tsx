@@ -7,8 +7,9 @@ import {
 } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
+import { StackedListButton } from "@/components/ui/stacked-list-button";
+import { cn } from "@/lib/display/utils";
+import { orpc } from "@/lib/infra/orpc";
 import type {
 	AutomationTrigger,
 	GitHubTriggerConfig,
@@ -225,9 +226,7 @@ export function TriggerChip({
 		return (
 			<Popover open={open} onOpenChange={handleOpenChange}>
 				<PopoverTrigger asChild>
-					<Button
-						variant="stacked"
-						size="stacked"
+					<StackedListButton
 						disabled={isDisabled}
 						className={cn(
 							isFirst && "rounded-t-xl",
@@ -243,7 +242,7 @@ export function TriggerChip({
 							</span>
 						</div>
 						{!isDisabled && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />}
-					</Button>
+					</StackedListButton>
 				</PopoverTrigger>
 				{popoverContent}
 			</Popover>

@@ -9,7 +9,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Text } from "@/components/ui/text";
-import { useAvailableRepos, useCreateRepo } from "@/hooks/use-repos";
+import { useAvailableRepos, useCreateRepo } from "@/hooks/org/use-repos";
 import type { GitHubRepo } from "@/types";
 import { useEffect, useState } from "react";
 

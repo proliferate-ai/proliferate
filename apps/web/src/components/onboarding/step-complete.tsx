@@ -51,7 +51,7 @@ export function StepComplete({ onComplete, isSubmitting, error }: StepCompletePr
 					)}
 
 					<Button
-						variant="dark"
+						variant="contrast"
 						onClick={onComplete}
 						disabled={isSubmitting}
 						className="h-11 w-full rounded-lg"

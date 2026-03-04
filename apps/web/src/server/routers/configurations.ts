@@ -4,7 +4,7 @@
  * Handles configuration CRUD operations.
  */
 
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/infra/logger";
 import { ORPCError } from "@orpc/server";
 import { configurations } from "@proliferate/services";
 import {

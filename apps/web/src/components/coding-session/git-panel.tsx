@@ -328,7 +328,7 @@ function BranchSection({
 						autoFocus
 					/>
 					<Button
-						variant="default"
+						variant="primary"
 						size="sm"
 						className="h-7 px-2 text-xs"
 						onClick={handleCreate}
@@ -470,7 +470,7 @@ function CommitSection({
 				</label>
 			)}
 			<Button
-				variant="default"
+				variant="primary"
 				size="sm"
 				className="w-full h-7 text-xs"
 				onClick={handleCommit}
@@ -598,7 +598,7 @@ function PrSection({
 					/>
 					<div className="flex gap-1.5">
 						<Button
-							variant="default"
+							variant="primary"
 							size="sm"
 							className="flex-1 h-7 text-xs"
 							onClick={handleCreate}

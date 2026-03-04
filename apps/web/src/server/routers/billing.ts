@@ -4,9 +4,9 @@
  * Handles credit purchases and billing operations.
  */
 
-import { isBillingEnabled } from "@/lib/billing";
-import { logger } from "@/lib/logger";
-import { getUserOrgRole } from "@/lib/permissions";
+import { getUserOrgRole } from "@/lib/auth/permissions";
+import { isBillingEnabled } from "@/lib/infra/billing";
+import { logger } from "@/lib/infra/logger";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
 import { createBillingFastReconcileQueue } from "@proliferate/queue";

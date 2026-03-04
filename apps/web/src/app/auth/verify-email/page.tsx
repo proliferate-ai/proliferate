@@ -174,7 +174,7 @@ function VerifyEmailContent() {
 					<div className="space-y-2">
 						{email && (
 							<Button
-								variant="light"
+								variant="secondary"
 								size="lg"
 								className="w-full"
 								onClick={handleResend}

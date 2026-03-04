@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import * as React from "react";
 
 export interface CardButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {}

@@ -3,8 +3,8 @@
 import { Badge } from "@/components/ui/badge";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { Text } from "@/components/ui/text";
-import { orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
+import { orpc } from "@/lib/infra/orpc";
 import type { EnvStatus, RequirementScope } from "@proliferate/environment";
 import { useQuery } from "@tanstack/react-query";
 

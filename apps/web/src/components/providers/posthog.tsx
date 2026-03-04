@@ -1,7 +1,7 @@
 "use client";
 
+import { captureUtms, getCookieDomain, getUtms } from "@/lib/analytics/utm";
 import { useSession } from "@/lib/auth/client";
-import { captureUtms, getCookieDomain, getUtms } from "@/lib/utm";
 import { env } from "@proliferate/environment/public";
 import posthog from "posthog-js";
 import { PostHogProvider as PHProvider, usePostHog } from "posthog-js/react";

@@ -4,7 +4,7 @@ import { GitHubConnectButton } from "@/components/integrations/github-connect-bu
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Text } from "@/components/ui/text";
-import type { OnboardingState } from "@/hooks/use-onboarding";
+import type { OnboardingState } from "@/hooks/org/use-onboarding";
 import { Check, Circle } from "lucide-react";
 
 interface OnboardingChecklistProps {

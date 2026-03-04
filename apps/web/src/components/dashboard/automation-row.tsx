@@ -3,8 +3,8 @@
 import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Text } from "@/components/ui/text";
-import { cn } from "@/lib/utils";
-import { formatRelativeTime } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
+import { formatRelativeTime } from "@/lib/display/utils";
 
 interface AutomationRowProps {
 	name: string;

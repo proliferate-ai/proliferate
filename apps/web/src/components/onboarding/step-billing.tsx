@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/infra/orpc";
 import { useMutation } from "@tanstack/react-query";
 import { Coins, LayoutGrid } from "lucide-react";
 import { OnboardingCardImage } from "./onboarding-card-image";
@@ -79,7 +79,7 @@ export function StepBilling({ onComplete }: StepBillingProps) {
 					)}
 
 					<Button
-						variant="dark"
+						variant="contrast"
 						onClick={handleStartTrial}
 						disabled={startTrialMutation.isPending}
 						className="h-11 w-full rounded-lg mt-5"

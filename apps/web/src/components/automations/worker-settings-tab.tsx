@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/inline-edit";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import type { ModelId } from "@proliferate/shared";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";

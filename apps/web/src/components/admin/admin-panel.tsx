@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAdmin, useAdminOrganizations, useAdminUsers } from "@/hooks/use-admin";
+import { useAdmin, useAdminOrganizations, useAdminUsers } from "@/hooks/org/use-admin";
 import { Building, Loader2, User, UserCheck } from "lucide-react";
 import { useState } from "react";
 

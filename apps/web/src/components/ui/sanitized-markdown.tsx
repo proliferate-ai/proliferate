@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import type { FC } from "react";
 import Markdown from "react-markdown";
 import rehypeSanitize, { type Options } from "rehype-sanitize";

@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Repo } from "@/hooks/use-onboarding";
+import type { Repo } from "@/hooks/org/use-onboarding";
 import { ExternalLink } from "lucide-react";
 
 interface RepoListProps {

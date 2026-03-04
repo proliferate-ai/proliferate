@@ -2,11 +2,14 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useApproveAction, useDenyAction } from "@/hooks/use-actions";
-import { type ApprovalWithSession, useAttentionInbox } from "@/hooks/use-attention-inbox";
-import { useOrgMembersAndInvitations } from "@/hooks/use-orgs";
+import { useApproveAction, useDenyAction } from "@/hooks/actions/use-actions";
+import {
+	type ApprovalWithSession,
+	useAttentionInbox,
+} from "@/hooks/automations/use-attention-inbox";
+import { useOrgMembersAndInvitations } from "@/hooks/org/use-orgs";
 import { useSession } from "@/lib/auth/client";
-import { hasRoleOrHigher } from "@/lib/roles";
+import { hasRoleOrHigher } from "@/lib/auth/roles";
 import type { PendingRunSummary } from "@proliferate/shared";
 import type { ActionApprovalRequestMessage } from "@proliferate/shared";
 import {

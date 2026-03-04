@@ -21,7 +21,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Text } from "@/components/ui/text";
-import { useOrgInvitations, useOrgMembers } from "@/hooks/use-orgs";
+import { useOrgInvitations, useOrgMembers } from "@/hooks/org/use-orgs";
 import {
 	organization,
 	sendVerificationEmail,
@@ -29,7 +29,7 @@ import {
 	useListOrganizations,
 	useSession,
 } from "@/lib/auth/client";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { env } from "@proliferate/environment/public";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Mail, Pencil, Plus, Users, X } from "lucide-react";

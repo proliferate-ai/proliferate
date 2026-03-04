@@ -1,8 +1,8 @@
 import "server-only";
 
 import { auth } from "@/lib/auth/server";
-import { logger } from "@/lib/logger";
-import { getImpersonationCookie, isSuperAdmin } from "@/lib/super-admin";
+import { getImpersonationCookie, isSuperAdmin } from "@/lib/auth/super-admin";
+import { logger } from "@/lib/infra/logger";
 
 const log = logger.child({ module: "auth-helpers" });
 import { nodeEnv } from "@proliferate/environment/runtime";

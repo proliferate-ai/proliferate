@@ -2,9 +2,9 @@
 
 import { SessionLoadingShell } from "@/components/coding-session/session-loading-shell";
 import { Button } from "@/components/ui/button";
-import { useCreateConfiguration } from "@/hooks/use-configurations";
-import { useRepo } from "@/hooks/use-repos";
-import { useCreateSession } from "@/hooks/use-sessions";
+import { useRepo } from "@/hooks/org/use-repos";
+import { useCreateConfiguration } from "@/hooks/sessions/use-configurations";
+import { useCreateSession } from "@/hooks/sessions/use-sessions";
 import { useDashboardStore } from "@/stores/dashboard";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";

@@ -7,7 +7,7 @@ import {
 	ProliferateIconQuick,
 } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import {
 	DEFAULT_AGENT_TYPE,
 	type ModelId,

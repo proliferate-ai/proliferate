@@ -8,7 +8,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useAdmin } from "@/hooks/use-admin";
+import { useAdmin } from "@/hooks/org/use-admin";
 import { organization, useActiveOrganization, useListOrganizations } from "@/lib/auth/client";
 import { Building2, Check, ChevronsUpDown, Settings, User } from "lucide-react";
 import { useRouter } from "next/navigation";

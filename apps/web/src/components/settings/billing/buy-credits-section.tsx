@@ -10,7 +10,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { useBuyCredits } from "@/hooks/use-billing";
+import { useBuyCredits } from "@/hooks/org/use-billing";
 import { CreditCard, Loader2, Minus, Plus } from "lucide-react";
 import { useState } from "react";
 

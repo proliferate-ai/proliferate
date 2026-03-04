@@ -8,7 +8,7 @@
  * import { Check, Plus, GoogleIcon, GithubIcon } from "@/components/ui/icons";
  */
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { Croissant } from "lucide-react";
 
 // Re-export LucideIcon type for typed icon props

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Eye, EyeOff, GoogleIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuthProviders } from "@/hooks/use-auth-providers";
+import { useAuthProviders } from "@/hooks/integrations/use-auth-providers";
 import { signIn, useSession } from "@/lib/auth/client";
 import { buildAuthLink, sanitizeRedirect } from "@/lib/auth/utils";
 import Link from "next/link";

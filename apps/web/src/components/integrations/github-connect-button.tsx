@@ -2,8 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { GithubIcon, RefreshCw } from "@/components/ui/icons";
-import { useGitHubAppConnect } from "@/hooks/use-github-app-connect";
-import { USE_NANGO_GITHUB, useNangoConnect } from "@/hooks/use-nango-connect";
+import { useGitHubAppConnect } from "@/hooks/integrations/use-github-app-connect";
+import { USE_NANGO_GITHUB, useNangoConnect } from "@/hooks/integrations/use-nango-connect";
 import type { ReactNode } from "react";
 
 interface GitHubConnectButtonProps {

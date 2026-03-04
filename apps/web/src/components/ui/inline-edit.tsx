@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface InlineEditProps {

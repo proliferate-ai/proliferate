@@ -4,8 +4,9 @@ import { ModelSelector } from "@/components/automations/model-selector";
 import { Button } from "@/components/ui/button";
 import { BlocksIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
-import { useCreateFollowUp } from "@/hooks/use-follow-up";
-import { cn } from "@/lib/utils";
+import { RoundIconActionButton } from "@/components/ui/round-icon-action-button";
+import { useCreateFollowUp } from "@/hooks/sessions/use-follow-up";
+import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import {
 	ComposerPrimitive,
@@ -207,30 +208,25 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 		</Button>
 		<ThreadPrimitive.If running={false}>
 			{hasAttachments ? (
-				<Button
-					size="icon"
-					className="h-7 w-7 rounded-full bg-primary text-primary-foreground"
+				<RoundIconActionButton
+					ariaLabel="Send message"
+					icon={<ArrowUp className="h-4 w-4" />}
 					onClick={onSendWithAttachments}
 					disabled={!hasContent}
-				>
-					<ArrowUp className="h-4 w-4" />
-				</Button>
+				/>
 			) : (
 				<ComposerPrimitive.Send asChild>
-					<Button size="icon" className="h-7 w-7 rounded-full bg-primary text-primary-foreground">
-						<ArrowUp className="h-4 w-4" />
-					</Button>
+					<RoundIconActionButton ariaLabel="Send message" icon={<ArrowUp className="h-4 w-4" />} />
 				</ComposerPrimitive.Send>
 			)}
 		</ThreadPrimitive.If>
 		<ThreadPrimitive.If running>
 			<ComposerPrimitive.Cancel asChild>
-				<Button
-					size="icon"
-					className="h-7 w-7 rounded-full bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-				>
-					<Square className="h-3 w-3 fill-current" />
-				</Button>
+				<RoundIconActionButton
+					ariaLabel="Stop generation"
+					intent="muted"
+					icon={<Square className="h-3 w-3 fill-current" />}
+				/>
 			</ComposerPrimitive.Cancel>
 		</ThreadPrimitive.If>
 	</div>
