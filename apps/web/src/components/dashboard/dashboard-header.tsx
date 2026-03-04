@@ -3,8 +3,8 @@
 import { AdminPanel } from "@/components/admin/admin-panel";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { useAdmin } from "@/hooks/use-admin";
-import { useSignOut } from "@/hooks/use-sign-out";
+import { useAdmin } from "@/hooks/org/use-admin";
+import { useSignOut } from "@/hooks/ui/use-sign-out";
 import { useSession } from "@/lib/auth/client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { PanelLeft, ShieldCheck } from "lucide-react";

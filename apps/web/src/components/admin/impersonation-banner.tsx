@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
-import { useAdmin } from "@/hooks/use-admin";
+import { useAdmin } from "@/hooks/org/use-admin";
 import { AlertTriangle, X } from "lucide-react";
 
 export function ImpersonationBanner() {

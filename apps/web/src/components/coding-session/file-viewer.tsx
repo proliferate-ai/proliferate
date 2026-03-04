@@ -5,9 +5,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
 	fetchVerificationTextContent,
 	useVerificationMediaUrl,
-} from "@/hooks/use-verification-media-url";
-import { formatBytes } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+} from "@/hooks/sessions/use-verification-media-url";
+import { formatBytes } from "@/lib/display/utils";
+import { cn } from "@/lib/display/utils";
 import type { VerificationFile } from "@proliferate/shared";
 import {
 	ChevronLeft,

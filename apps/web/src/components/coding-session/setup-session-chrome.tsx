@@ -4,14 +4,14 @@ import { HelpLink } from "@/components/help/help-link";
 import { SetupIntroModal } from "@/components/sessions/setup-intro-modal";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useHasSlackInstallation } from "@/hooks/use-integrations";
+import { useHasSlackInstallation } from "@/hooks/integrations/use-integrations";
 import {
 	useFinalizeSetup,
 	useSessionNotificationSubscription,
 	useSubscribeNotifications,
 	useUnsubscribeNotifications,
-} from "@/hooks/use-sessions";
-import { startSnapshotProgressToast } from "@/lib/snapshot-progress-toast";
+} from "@/hooks/sessions/use-sessions";
+import { startSnapshotProgressToast } from "@/lib/display/snapshot-progress-toast";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { useSetupProgressStore } from "@/stores/setup-progress";
 import { Bell, BellOff, Check, KeyRound, Loader2, MessageSquare, Settings } from "lucide-react";

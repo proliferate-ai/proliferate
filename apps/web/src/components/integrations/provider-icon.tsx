@@ -1,5 +1,5 @@
 import { GithubIcon, LinearIcon, PostHogIcon, SentryIcon, SlackIcon } from "@/components/ui/icons";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 
 export type Provider =
 	| "sentry"

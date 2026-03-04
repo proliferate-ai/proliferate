@@ -10,17 +10,17 @@ import {
 	SentryIcon,
 	SlackIcon,
 } from "@/components/ui/icons";
-import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
-import { useGitHubAppConnect } from "@/hooks/use-github-app-connect";
-import { useIntegrations } from "@/hooks/use-integrations";
+import { useAutomations, useCreateAutomation } from "@/hooks/automations/use-automations";
+import { useGitHubAppConnect } from "@/hooks/integrations/use-github-app-connect";
+import { useIntegrations } from "@/hooks/integrations/use-integrations";
 import {
 	type NangoProvider,
 	shouldUseNangoForProvider,
 	useNangoConnect,
-} from "@/hooks/use-nango-connect";
-import { useOnboarding } from "@/hooks/use-onboarding";
-import { useRepos } from "@/hooks/use-repos";
-import { orpc } from "@/lib/orpc";
+} from "@/hooks/integrations/use-nango-connect";
+import { useOnboarding } from "@/hooks/org/use-onboarding";
+import { useRepos } from "@/hooks/org/use-repos";
+import { orpc } from "@/lib/infra/orpc";
 import { useDashboardStore } from "@/stores/dashboard";
 import * as Popover from "@radix-ui/react-popover";
 import { useQueryClient } from "@tanstack/react-query";

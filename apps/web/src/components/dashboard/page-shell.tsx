@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 
 const MAX_WIDTH_MAP = {
 	"2xl": "max-w-2xl",

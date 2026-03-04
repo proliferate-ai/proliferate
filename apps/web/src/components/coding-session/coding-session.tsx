@@ -6,13 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useBackgroundVscodeStart } from "@/hooks/use-background-vscode";
-import { useConfiguration } from "@/hooks/use-configurations";
-import { useRepo } from "@/hooks/use-repos";
-import { useRenameSession, useSessionData, useSnapshotSession } from "@/hooks/use-sessions";
+import { useRepo } from "@/hooks/org/use-repos";
+import { useBackgroundVscodeStart } from "@/hooks/sessions/use-background-vscode";
+import { useConfiguration } from "@/hooks/sessions/use-configurations";
+import {
+	useRenameSession,
+	useSessionData,
+	useSnapshotSession,
+} from "@/hooks/sessions/use-sessions";
 import { useSession as useBetterAuthSession } from "@/lib/auth/client";
-import { startSnapshotProgressToast } from "@/lib/snapshot-progress-toast";
-import { cn } from "@/lib/utils";
+import { startSnapshotProgressToast } from "@/lib/display/snapshot-progress-toast";
+import { cn } from "@/lib/display/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import {

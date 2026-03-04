@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import Image from "next/image";
 import type { ReactNode } from "react";
 

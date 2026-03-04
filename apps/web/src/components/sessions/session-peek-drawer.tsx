@@ -10,15 +10,15 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
-import { useSessionData } from "@/hooks/use-sessions";
+import { useSessionData } from "@/hooks/sessions/use-sessions";
 import {
 	DISPLAY_STATUS_CONFIG,
 	formatActiveTime,
 	getOutcomeDisplay,
 	isHttpsUrl,
 	parsePrUrl,
-} from "@/lib/session-display";
-import { cn } from "@/lib/utils";
+} from "@/lib/display/session-display";
+import { cn } from "@/lib/display/utils";
 import type { Session } from "@proliferate/shared/contracts";
 import { deriveDisplayStatus, getBlockedReasonText } from "@proliferate/shared/sessions";
 import { formatDistanceToNow } from "date-fns";

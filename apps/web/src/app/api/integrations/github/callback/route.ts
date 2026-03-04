@@ -1,7 +1,7 @@
 import { requireAuth } from "@/lib/auth/server/helpers";
-import { listInstallationRepos, verifyInstallation } from "@/lib/github-app";
-import { logger } from "@/lib/logger";
-import { sanitizeOAuthReturnUrl, verifySignedOAuthState } from "@/lib/oauth-state";
+import { logger } from "@/lib/infra/logger";
+import { listInstallationRepos, verifyInstallation } from "@/lib/integrations/github-app";
+import { sanitizeOAuthReturnUrl, verifySignedOAuthState } from "@/lib/integrations/oauth-state";
 import { integrations, orgs, repos } from "@proliferate/services";
 import { type NextRequest, NextResponse } from "next/server";
 

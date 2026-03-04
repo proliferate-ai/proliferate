@@ -2,8 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useOrgActions } from "@/hooks/use-actions";
-import { useOrgPendingRuns } from "@/hooks/use-automations";
+import { useOrgActions } from "@/hooks/actions/use-actions";
+import { useOrgPendingRuns } from "@/hooks/automations/use-automations";
 import type { PendingRunSummary } from "@proliferate/shared";
 import { formatDistanceToNow } from "date-fns";
 import { Bell, ExternalLink, Hand, Shield, Timer, XCircle } from "lucide-react";

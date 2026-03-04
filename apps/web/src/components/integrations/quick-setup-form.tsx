@@ -15,8 +15,8 @@ import {
 import {
 	useCreateOrgConnectorWithSecret,
 	useValidateOrgConnector,
-} from "@/hooks/use-org-connectors";
-import { useSecrets } from "@/hooks/use-secrets";
+} from "@/hooks/integrations/use-org-connectors";
+import { useSecrets } from "@/hooks/org/use-secrets";
 import type { ConnectorAuth, ConnectorPreset } from "@proliferate/shared";
 import { Check, ExternalLink, Loader2 } from "lucide-react";
 import { useState } from "react";

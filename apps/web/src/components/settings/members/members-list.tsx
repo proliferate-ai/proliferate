@@ -14,7 +14,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { X } from "lucide-react";
 import { SettingsSection } from "../settings-row";
 

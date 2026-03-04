@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { AlertTriangle, ExternalLink, Eye, EyeOff, RefreshCw, X } from "lucide-react";
 import { useState } from "react";
 import {
@@ -271,7 +271,7 @@ export function ConnectionCard({
 							Connect {providerName} to use this trigger type
 						</p>
 					</div>
-					<Button variant="default" size="sm" onClick={onConnect} disabled={disabled || isLoading}>
+					<Button variant="primary" size="sm" onClick={onConnect} disabled={disabled || isLoading}>
 						{isLoading ? "Connecting..." : "Connect"}
 					</Button>
 				</div>

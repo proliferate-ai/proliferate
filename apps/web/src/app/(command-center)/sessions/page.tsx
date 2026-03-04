@@ -12,9 +12,9 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import { useOrgPendingRuns } from "@/hooks/use-automations";
-import { useSessions } from "@/hooks/use-sessions";
-import { cn } from "@/lib/utils";
+import { useOrgPendingRuns } from "@/hooks/automations/use-automations";
+import { useSessions } from "@/hooks/sessions/use-sessions";
+import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { type DisplayStatus, deriveDisplayStatus } from "@proliferate/shared/sessions";
 import { Plus, Search } from "lucide-react";

@@ -11,7 +11,11 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useDeleteSecretFile, useSecretFiles, useUpsertSecretFile } from "@/hooks/use-secret-files";
+import {
+	useDeleteSecretFile,
+	useSecretFiles,
+	useUpsertSecretFile,
+} from "@/hooks/org/use-secret-files";
 import { formatDistanceToNow } from "date-fns";
 import { FileLock2, Plus, Trash2, Upload } from "lucide-react";
 import { type ChangeEvent, type ClipboardEvent, useEffect, useMemo, useRef, useState } from "react";

@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
-import { useBillingState, useEntitlementStatus } from "@/hooks/use-billing";
+import { useBillingState, useEntitlementStatus } from "@/hooks/org/use-billing";
 import { env } from "@proliferate/environment/public";
 import { AlertOctagon, AlertTriangle, Clock, CreditCard, X } from "lucide-react";
 import { useState } from "react";

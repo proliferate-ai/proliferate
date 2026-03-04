@@ -5,7 +5,7 @@ import {
 	type TemplateEntry,
 	TemplatePickerDialog,
 } from "@/components/automations/template-picker-dialog";
-import { WorkerListRow } from "@/components/automations/worker-list-row";
+import { WorkerCard } from "@/components/automations/worker-card";
 import {
 	AutomationIllustration,
 	PageEmptyState,
@@ -14,11 +14,11 @@ import {
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
-import { useIntegrations, useSlackInstallations } from "@/hooks/use-integrations";
-import { useCreateFromTemplate, useTemplateCatalog } from "@/hooks/use-templates";
-import { useCreateWorker, useWorkers } from "@/hooks/use-workers";
-import { cn } from "@/lib/utils";
+import { useAutomations, useCreateAutomation } from "@/hooks/automations/use-automations";
+import { useCreateWorker, useWorkers } from "@/hooks/automations/use-workers";
+import { useIntegrations, useSlackInstallations } from "@/hooks/integrations/use-integrations";
+import { useCreateFromTemplate, useTemplateCatalog } from "@/hooks/org/use-templates";
+import { cn } from "@/lib/display/utils";
 import { BookTemplate, Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { startTransition, useMemo, useState } from "react";
@@ -157,7 +157,7 @@ export default function CoworkersPage() {
 	return (
 		<PageShell
 			title="Coworkers"
-			subtitle="Durable background agents that monitor sources and spawn task sessions."
+			subtitle="Background agents that monitor sources and run tasks."
 			actions={
 				<>
 					<Button
@@ -177,12 +177,9 @@ export default function CoworkersPage() {
 			}
 		>
 			{isLoading ? (
-				<div className="rounded-xl border border-border overflow-hidden">
+				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
 					{[1, 2, 3].map((i) => (
-						<div
-							key={i}
-							className="h-12 border-b border-border/50 last:border-0 animate-pulse bg-muted/30"
-						/>
+						<div key={i} className="h-16 rounded-2xl animate-pulse bg-muted/20" />
 					))}
 				</div>
 			) : totalItems === 0 ? (
@@ -248,7 +245,7 @@ export default function CoworkersPage() {
 						</div>
 					</div>
 
-					{/* Workers table (V1) */}
+					{/* Workers grid (V1) */}
 					{hasWorkers ? (
 						filteredWorkers.length === 0 ? (
 							<div className="text-center py-12">
@@ -259,17 +256,9 @@ export default function CoworkersPage() {
 								</p>
 							</div>
 						) : (
-							<div className="rounded-xl border border-border overflow-hidden">
-								<div className="flex items-center gap-4 px-4 py-2 border-b border-border bg-muted/30 text-xs text-muted-foreground">
-									<div className="flex-1 min-w-0">Name</div>
-									<div className="hidden sm:block w-20 shrink-0">Status</div>
-									<div className="hidden md:block w-24 shrink-0">Last wake</div>
-									<div className="hidden md:block w-16 shrink-0">Tasks</div>
-									<div className="hidden lg:block w-20 shrink-0">Approvals</div>
-									<div className="w-16 shrink-0 text-right">Updated</div>
-								</div>
+							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
 								{filteredWorkers.map((worker) => (
-									<WorkerListRow
+									<WorkerCard
 										key={worker.id}
 										id={worker.id}
 										name={worker.name}
@@ -278,7 +267,6 @@ export default function CoworkersPage() {
 										lastWakeAt={worker.lastWakeAt?.toISOString() ?? null}
 										activeTaskCount={worker.activeTaskCount}
 										pendingApprovalCount={worker.pendingApprovalCount}
-										updatedAt={worker.updatedAt.toISOString()}
 									/>
 								))}
 							</div>

@@ -6,7 +6,7 @@
  * trigger service via apps/trigger-service/src/api/webhooks.ts.
  */
 
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/infra/logger";
 import { env } from "@proliferate/environment/server";
 import { integrations } from "@proliferate/services";
 import { NextResponse } from "next/server";

@@ -1,6 +1,6 @@
 "use client";
 
-import { orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/infra/orpc";
 import { useQuery } from "@tanstack/react-query";
 
 const WS_TOKEN_QUERY_KEY = ["ws-token"] as const;

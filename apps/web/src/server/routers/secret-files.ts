@@ -6,7 +6,7 @@
  */
 
 import path from "node:path";
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/infra/logger";
 import { ORPCError } from "@orpc/server";
 import { configurations, orgs, secretFiles, sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";

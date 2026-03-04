@@ -93,7 +93,7 @@ export function StepCreateOrg({ onComplete }: StepCreateOrgProps) {
 
 						<Button
 							type="submit"
-							variant="dark"
+							variant="contrast"
 							className="h-11 w-full rounded-lg"
 							disabled={isCreating || !orgName.trim()}
 						>

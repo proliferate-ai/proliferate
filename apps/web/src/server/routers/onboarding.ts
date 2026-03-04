@@ -4,9 +4,9 @@
  * Thin wrapper that delegates to onboarding service.
  */
 
-import { isBillingEnabled } from "@/lib/billing";
-import { type GitHubIntegration, listGitHubRepos } from "@/lib/github";
-import { logger } from "@/lib/logger";
+import { isBillingEnabled } from "@/lib/infra/billing";
+import { logger } from "@/lib/infra/logger";
+import { type GitHubIntegration, listGitHubRepos } from "@/lib/integrations/github";
 
 const log = logger.child({ handler: "onboarding" });
 import { ORPCError } from "@orpc/server";

@@ -5,17 +5,10 @@
  * Handles integration management for GitHub, Slack, Sentry, Linear, and MCP connectors.
  */
 
-import { isEmailEnabled, sendIntegrationRequestEmail } from "@/lib/email";
-import { logger } from "@/lib/logger";
-import {
-	NANGO_GITHUB_INTEGRATION_ID,
-	NANGO_JIRA_INTEGRATION_ID,
-	NANGO_LINEAR_INTEGRATION_ID,
-	NANGO_SENTRY_INTEGRATION_ID,
-	USE_NANGO_GITHUB,
-	requireNangoIntegrationId,
-} from "@/lib/nango";
-import { sendSlackConnectInvite } from "@/lib/slack";
+import { isEmailEnabled, sendIntegrationRequestEmail } from "@/lib/infra/email";
+import { logger } from "@/lib/infra/logger";
+import { requireNangoIntegrationId } from "@/lib/integrations/nango";
+import { sendSlackConnectInvite } from "@/lib/integrations/slack";
 import { ORPCError } from "@orpc/server";
 import { actions, connectors, integrations, secrets } from "@proliferate/services";
 import {
@@ -213,23 +206,9 @@ export const integrationsRouter = {
 	githubSession: orgProcedure
 		.output(z.object({ sessionToken: z.string() }))
 		.handler(async ({ context }) => {
-			if (!USE_NANGO_GITHUB) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: "Nango GitHub OAuth is not enabled. Use GitHub App flow instead.",
-				});
-			}
-			try {
-				await integrations.assertIntegrationAdmin(context.user.id, context.orgId);
-				return await integrations.createNangoConnectSession({
-					provider: "github",
-					orgId: context.orgId,
-					userId: context.user.id,
-					userEmail: context.user.email,
-					userDisplayName: context.user.name || context.user.email,
-				});
-			} catch (err) {
-				throwAsORPC(err);
-			}
+			throw new ORPCError("BAD_REQUEST", {
+				message: "Nango GitHub OAuth is not enabled. Use GitHub App flow instead.",
+			});
 		}),
 
 	// ----------------------------------------

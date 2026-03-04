@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { Loader2, Play, RefreshCw, RotateCw, Square } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";

@@ -10,16 +10,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { IconAction } from "@/components/ui/icon-action";
 import { Input } from "@/components/ui/input";
-import { useGitHubAppConnect } from "@/hooks/use-github-app-connect";
-import { useIntegrations, useUpdateIntegration } from "@/hooks/use-integrations";
+import { useGitHubAppConnect } from "@/hooks/integrations/use-github-app-connect";
+import { useIntegrations, useUpdateIntegration } from "@/hooks/integrations/use-integrations";
 import {
 	NANGO_INTEGRATION_IDS,
 	type NangoManagedProvider,
 	type NangoProvider,
 	useNangoConnect,
-} from "@/hooks/use-nango-connect";
-import { orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
+} from "@/hooks/integrations/use-nango-connect";
+import { cn } from "@/lib/display/utils";
+import { orpc } from "@/lib/infra/orpc";
 import type { IntegrationWithCreator } from "@proliferate/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, Laptop, Pencil, Plus, RefreshCw } from "lucide-react";

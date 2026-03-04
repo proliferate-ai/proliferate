@@ -1,7 +1,7 @@
 import "server-only";
 
-import { isEmailEnabled, sendInvitationEmail, sendVerificationEmail } from "@/lib/email";
-import { logger } from "@/lib/logger";
+import { isEmailEnabled, sendInvitationEmail, sendVerificationEmail } from "@/lib/infra/email";
+import { logger } from "@/lib/infra/logger";
 import { env, features } from "@proliferate/environment/server";
 import { betterAuth } from "better-auth";
 import { apiKey, organization } from "better-auth/plugins";

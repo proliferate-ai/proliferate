@@ -1,19 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import {
-	Context7Icon,
-	FirecrawlIcon,
-	GithubIcon,
-	LinearIcon,
-	NeonIcon,
-	PlaywrightIcon,
-	PostHogIcon,
-	SentryIcon,
-	SlackIcon,
-	StripeIcon,
-} from "@/components/ui/icons";
-import { cn } from "@/lib/utils";
+import { ONBOARDING_TOOLS } from "@/config/onboarding";
+import { cn } from "@/lib/display/utils";
 import { useOnboardingStore } from "@/stores/onboarding";
 import { Check } from "lucide-react";
 import { OnboardingCardImage } from "./onboarding-card-image";
@@ -22,69 +11,6 @@ interface StepToolSelectionProps {
 	onComplete: (selectedTools: string[]) => void;
 	isSubmitting?: boolean;
 }
-
-const TOOLS = [
-	{
-		id: "github",
-		name: "GitHub",
-		description: "Source control and pull requests",
-		icon: GithubIcon,
-	},
-	{
-		id: "slack",
-		name: "Slack",
-		description: "Notifications and automations",
-		icon: SlackIcon,
-	},
-	{
-		id: "linear",
-		name: "Linear",
-		description: "Issue tracking and project management",
-		icon: LinearIcon,
-	},
-	{
-		id: "sentry",
-		name: "Sentry",
-		description: "Error monitoring and debugging",
-		icon: SentryIcon,
-	},
-	{
-		id: "posthog",
-		name: "PostHog",
-		description: "Product analytics and insights",
-		icon: PostHogIcon,
-	},
-	{
-		id: "context7",
-		name: "Context7",
-		description: "Up-to-date docs and code examples",
-		icon: Context7Icon,
-	},
-	{
-		id: "stripe",
-		name: "Stripe",
-		description: "Payment processing and billing",
-		icon: StripeIcon,
-	},
-	{
-		id: "firecrawl",
-		name: "Firecrawl",
-		description: "Web scraping and crawling",
-		icon: FirecrawlIcon,
-	},
-	{
-		id: "neon",
-		name: "Neon",
-		description: "Serverless Postgres databases",
-		icon: NeonIcon,
-	},
-	{
-		id: "playwright",
-		name: "Playwright",
-		description: "Browser testing and automation",
-		icon: PlaywrightIcon,
-	},
-] as const;
 
 export function StepToolSelection({ onComplete, isSubmitting }: StepToolSelectionProps) {
 	const selectedTools = useOnboardingStore((s) => s.selectedTools);
@@ -105,10 +31,8 @@ export function StepToolSelection({ onComplete, isSubmitting }: StepToolSelectio
 	return (
 		<div className="w-[520px]">
 			<div className="rounded-2xl overflow-hidden border border-border">
-				{/* Image Area */}
 				<OnboardingCardImage src="/tool2.png" alt="Select your tools" label="Integrations" />
 
-				{/* Content */}
 				<div className="p-6 bg-card">
 					<div className="mb-5 text-center">
 						<h1 className="text-xl font-semibold text-foreground">Which tools do you use?</h1>
@@ -118,7 +42,7 @@ export function StepToolSelection({ onComplete, isSubmitting }: StepToolSelectio
 					</div>
 
 					<div className="grid grid-cols-2 gap-1.5">
-						{TOOLS.map((tool) => {
+						{ONBOARDING_TOOLS.map((tool) => {
 							const Icon = tool.icon;
 							const isSelected = selected.has(tool.id);
 							return (
@@ -155,7 +79,7 @@ export function StepToolSelection({ onComplete, isSubmitting }: StepToolSelectio
 					</div>
 
 					<Button
-						variant="dark"
+						variant="contrast"
 						onClick={() => onComplete(Array.from(selected))}
 						disabled={isSubmitting}
 						className="h-11 w-full rounded-lg mt-5"

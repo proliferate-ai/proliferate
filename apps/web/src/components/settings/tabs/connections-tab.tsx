@@ -10,8 +10,8 @@ import {
 	useSlackConnect,
 	useSlackDisconnect,
 	useSlackStatus,
-} from "@/hooks/use-integrations";
-import { getProviderFromIntegrationId } from "@/hooks/use-nango-connect";
+} from "@/hooks/integrations/use-integrations";
+import { getProviderFromIntegrationId } from "@/hooks/integrations/use-nango-connect";
 import { CheckCircle2, Plus } from "lucide-react";
 import { useState } from "react";
 

@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { GithubIcon } from "@/components/ui/icons";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { Box, Circle, Clock, ExternalLink, GitBranch, Moon, Sun, Users } from "lucide-react";
 import { useTheme } from "next-themes";
 

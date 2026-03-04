@@ -1,10 +1,10 @@
 import { requireAuth } from "@/lib/auth/server/helpers";
-import { encrypt, getEncryptionKey } from "@/lib/crypto";
-import { logger } from "@/lib/logger";
-import { sanitizeOAuthReturnUrl, verifySignedOAuthState } from "@/lib/oauth-state";
-import { exchangeCodeForToken } from "@/lib/slack";
+import { logger } from "@/lib/infra/logger";
+import { sanitizeOAuthReturnUrl, verifySignedOAuthState } from "@/lib/integrations/oauth-state";
+import { exchangeCodeForToken } from "@/lib/integrations/slack";
 import { env } from "@proliferate/environment/server";
 import { integrations, orgs } from "@proliferate/services";
+import { encrypt, getEncryptionKey } from "@proliferate/shared/crypto";
 import { NextResponse } from "next/server";
 
 const log = logger.child({ handler: "slack-oauth-callback" });

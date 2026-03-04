@@ -10,32 +10,18 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { REFERRAL_SOURCES, TEAM_SIZES } from "@/config/onboarding";
 import { useOnboardingStore } from "@/stores/onboarding";
 import { OnboardingCardImage } from "./onboarding-card-image";
 
-interface QuestionnaireData {
-	referralSource?: string;
-	companyWebsite?: string;
-	teamSize?: string;
-}
-
 interface StepQuestionnaireProps {
-	onComplete: (data: QuestionnaireData) => void;
+	onComplete: (data: {
+		referralSource?: string;
+		companyWebsite?: string;
+		teamSize?: string;
+	}) => void;
 	isSubmitting?: boolean;
 }
-
-const REFERRAL_SOURCES = [
-	"Twitter / X",
-	"LinkedIn",
-	"Friend or colleague",
-	"Blog post",
-	"Search engine",
-	"YouTube",
-	"Conference or event",
-	"Other",
-];
-
-const TEAM_SIZES = ["1-5", "6-20", "21-100", "100+"];
 
 export function StepQuestionnaire({ onComplete, isSubmitting }: StepQuestionnaireProps) {
 	const questionnaire = useOnboardingStore((s) => s.questionnaire);
@@ -53,10 +39,8 @@ export function StepQuestionnaire({ onComplete, isSubmitting }: StepQuestionnair
 	return (
 		<div className="w-[480px]">
 			<div className="rounded-2xl overflow-hidden border border-border">
-				{/* Image Area */}
 				<OnboardingCardImage src="/about2.png" alt="Tell us about your team" label="About You" />
 
-				{/* Form Content */}
 				<div className="p-6 bg-card">
 					<div className="mb-5 text-center">
 						<h1 className="text-xl font-semibold text-foreground">Tell us about your team</h1>
@@ -118,7 +102,7 @@ export function StepQuestionnaire({ onComplete, isSubmitting }: StepQuestionnair
 					</div>
 
 					<Button
-						variant="dark"
+						variant="contrast"
 						onClick={handleSubmit}
 						disabled={isSubmitting}
 						className="h-11 w-full rounded-lg mt-5"

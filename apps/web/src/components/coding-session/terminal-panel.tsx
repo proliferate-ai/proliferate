@@ -1,8 +1,8 @@
 "use client";
 
 import "xterm/css/xterm.css";
-import { GATEWAY_URL } from "@/lib/gateway";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
+import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { Circle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
