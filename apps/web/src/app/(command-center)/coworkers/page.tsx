@@ -1,10 +1,8 @@
 "use client";
 
 import { AutomationListRow } from "@/components/automations/automation-list-row";
-import {
-	type TemplateEntry,
-	TemplatePickerDialog,
-} from "@/components/automations/template-picker-dialog";
+import { TemplatePickerDialog } from "@/components/automations/template-picker-dialog";
+import { WorkerCapabilityEditor } from "@/components/automations/worker-capability-editor";
 import { WorkerCard } from "@/components/automations/worker-card";
 import {
 	AutomationIllustration,
@@ -13,146 +11,44 @@ import {
 } from "@/components/dashboard/page-empty-state";
 import { PageShell } from "@/components/dashboard/page-shell";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useAutomations, useCreateAutomation } from "@/hooks/automations/use-automations";
-import { useCreateWorker, useWorkers } from "@/hooks/automations/use-workers";
-import { useIntegrations, useSlackInstallations } from "@/hooks/integrations/use-integrations";
-import { useCreateFromTemplate, useTemplateCatalog } from "@/hooks/org/use-templates";
+import { Textarea } from "@/components/ui/textarea";
+import { COWORKER_LIST_TABS, type WorkerStatus } from "@/config/coworkers";
+import { useCoworkersPage } from "@/hooks/automations/use-coworkers-page";
 import { cn } from "@/lib/display/utils";
 import { BookTemplate, Plus, Search } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { startTransition, useMemo, useState } from "react";
-
-type Tab = "all" | "active" | "paused";
-
-const TABS: { value: Tab; label: string }[] = [
-	{ value: "all", label: "All" },
-	{ value: "active", label: "Active" },
-	{ value: "paused", label: "Paused" },
-];
-
-type WorkerStatus = "active" | "paused" | "degraded" | "failed";
 
 export default function CoworkersPage() {
-	const router = useRouter();
-	const { data: automations = [], isLoading: isLoadingAutomations } = useAutomations();
-	const { data: workersList = [], isLoading: isLoadingWorkers } = useWorkers();
-	const createAutomation = useCreateAutomation();
-	const createWorker = useCreateWorker();
-	const createFromTemplate = useCreateFromTemplate();
-	const { data: templateCatalog = [] } = useTemplateCatalog();
-
-	const { data: integrationsData } = useIntegrations();
-	const { data: slackInstallations } = useSlackInstallations();
-
-	const connectedProviders = useMemo(() => {
-		const providers = new Set<string>();
-		if (!integrationsData) return providers;
-		if (integrationsData.github.connected) providers.add("github");
-		if (integrationsData.sentry.connected) providers.add("sentry");
-		if (integrationsData.linear.connected) providers.add("linear");
-		if (slackInstallations && slackInstallations.length > 0) providers.add("slack");
-		return providers;
-	}, [integrationsData, slackInstallations]);
-
-	const [activeTab, setActiveTab] = useState<Tab>("all");
-	const [searchQuery, setSearchQuery] = useState("");
-	const [pickerOpen, setPickerOpen] = useState(false);
-	const [createError, setCreateError] = useState<string | null>(null);
-
-	// Determine if we have V1 workers — show worker table when present, legacy automation list otherwise
-	const hasWorkers = workersList.length > 0;
-	const isLoading = hasWorkers ? isLoadingWorkers : isLoadingAutomations;
-
-	// Worker counts
-	const workerCounts = useMemo(
-		() => ({
-			all: workersList.length,
-			active: workersList.filter((w) => w.status === "active").length,
-			paused: workersList.filter((w) => w.status === "paused").length,
-		}),
-		[workersList],
-	);
-
-	const automationCounts = useMemo(
-		() => ({
-			all: automations.length,
-			active: automations.filter((a) => a.enabled).length,
-			paused: automations.filter((a) => !a.enabled).length,
-		}),
-		[automations],
-	);
-
-	const counts = hasWorkers ? workerCounts : automationCounts;
-
-	// Filtered lists
-	const filteredWorkers = useMemo(() => {
-		let result = workersList;
-		if (activeTab === "active") result = result.filter((w) => w.status === "active");
-		else if (activeTab === "paused") result = result.filter((w) => w.status === "paused");
-		if (searchQuery.trim()) {
-			const q = searchQuery.toLowerCase().trim();
-			result = result.filter((w) => w.name.toLowerCase().includes(q));
-		}
-		return result;
-	}, [workersList, activeTab, searchQuery]);
-
-	const filteredAutomations = useMemo(() => {
-		let result = automations;
-		if (activeTab === "active") result = result.filter((a) => a.enabled);
-		else if (activeTab === "paused") result = result.filter((a) => !a.enabled);
-		if (searchQuery.trim()) {
-			const q = searchQuery.toLowerCase().trim();
-			result = result.filter((a) => a.name.toLowerCase().includes(q));
-		}
-		return result;
-	}, [automations, activeTab, searchQuery]);
-
-	const handleBlankCreate = async () => {
-		setCreateError(null);
-		try {
-			const result = await createWorker.mutateAsync({});
-			setPickerOpen(false);
-			startTransition(() => {
-				router.push(`/coworkers/${result.worker.id}`);
-			});
-		} catch (err) {
-			setCreateError(err instanceof Error ? err.message : "Failed to create coworker");
-		}
-	};
-
-	const handleTemplateSelect = async (template: TemplateEntry) => {
-		setCreateError(null);
-		const integrationBindings: Record<string, string> = {};
-		if (integrationsData) {
-			for (const req of template.requiredIntegrations) {
-				const integration = integrationsData.integrations.find(
-					(i) => i.integration_id === req.provider && i.status === "active",
-				);
-				if (integration) {
-					integrationBindings[req.provider] = integration.id;
-				}
-			}
-		}
-		try {
-			const automation = await createFromTemplate.mutateAsync({
-				templateId: template.id,
-				integrationBindings,
-			});
-			setPickerOpen(false);
-			startTransition(() => {
-				router.push(`/coworkers/${automation.id}`);
-			});
-		} catch (err) {
-			setCreateError(
-				err instanceof Error ? err.message : "Failed to create coworker from template",
-			);
-		}
-	};
-
-	const isPending =
-		createAutomation.isPending || createWorker.isPending || createFromTemplate.isPending;
-	const totalItems = hasWorkers ? workersList.length : automations.length;
+	const {
+		templateCatalog,
+		connectedProviders,
+		filteredWorkers,
+		filteredAutomations,
+		hasWorkers,
+		isLoading,
+		isPending,
+		totalItems,
+		counts,
+		activeTab,
+		setActiveTab,
+		searchQuery,
+		setSearchQuery,
+		pickerOpen,
+		setPickerOpen,
+		createDialogOpen,
+		setCreateDialogOpen,
+		createName,
+		setCreateName,
+		createObjective,
+		setCreateObjective,
+		createCapabilities,
+		setCreateCapabilities,
+		createError,
+		openBlankCreateDialog,
+		handleBlankCreate,
+		handleTemplateSelect,
+	} = useCoworkersPage();
 
 	return (
 		<PageShell
@@ -169,7 +65,7 @@ export default function CoworkersPage() {
 						<BookTemplate className="h-3.5 w-3.5 mr-1.5" />
 						Templates
 					</Button>
-					<Button size="sm" onClick={handleBlankCreate} disabled={isPending}>
+					<Button size="sm" onClick={openBlankCreateDialog} disabled={isPending}>
 						<Plus className="h-4 w-4 mr-1.5" />
 						New
 					</Button>
@@ -198,7 +94,7 @@ export default function CoworkersPage() {
 						<BookTemplate className="h-3.5 w-3.5 mr-1.5" />
 						Browse templates
 					</Button>
-					<Button size="sm" onClick={handleBlankCreate} disabled={isPending}>
+					<Button size="sm" onClick={openBlankCreateDialog} disabled={isPending}>
 						<Plus className="h-4 w-4 mr-1.5" />
 						New
 					</Button>
@@ -208,7 +104,7 @@ export default function CoworkersPage() {
 					{/* Tabs + Search */}
 					<div className="flex items-center justify-between gap-4 mb-4">
 						<div className="flex items-center gap-1">
-							{TABS.map((tab) => (
+							{COWORKER_LIST_TABS.map((tab) => (
 								<Button
 									key={tab.value}
 									variant="ghost"
@@ -315,10 +211,65 @@ export default function CoworkersPage() {
 				templates={templateCatalog}
 				connectedProviders={connectedProviders}
 				onSelectTemplate={handleTemplateSelect}
-				onSelectBlank={handleBlankCreate}
+				onSelectBlank={openBlankCreateDialog}
 				isPending={isPending}
 				error={createError}
 			/>
+
+			<Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+				<DialogContent className="max-w-2xl">
+					<DialogHeader>
+						<DialogTitle>Create coworker</DialogTitle>
+					</DialogHeader>
+					<div className="flex flex-col gap-4">
+						<div className="flex flex-col gap-1.5">
+							<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+								Name
+							</p>
+							<Input
+								value={createName}
+								onChange={(event) => setCreateName(event.target.value)}
+								placeholder="Untitled coworker"
+							/>
+						</div>
+						<div className="flex flex-col gap-1.5">
+							<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+								Objective
+							</p>
+							<Textarea
+								value={createObjective}
+								onChange={(event) => setCreateObjective(event.target.value)}
+								placeholder="Describe what this coworker should own."
+								className="min-h-[100px]"
+							/>
+						</div>
+						<div className="flex flex-col gap-1.5">
+							<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+								Capabilities
+							</p>
+							<WorkerCapabilityEditor
+								value={createCapabilities}
+								onChange={setCreateCapabilities}
+								disabled={isPending}
+								connectedProviders={Array.from(connectedProviders)}
+							/>
+						</div>
+						{createError && <p className="text-sm text-destructive">{createError}</p>}
+						<div className="flex items-center justify-end gap-2">
+							<Button
+								variant="ghost"
+								onClick={() => setCreateDialogOpen(false)}
+								disabled={isPending}
+							>
+								Cancel
+							</Button>
+							<Button onClick={handleBlankCreate} disabled={isPending}>
+								{isPending ? "Creating..." : "Create coworker"}
+							</Button>
+						</div>
+					</div>
+				</DialogContent>
+			</Dialog>
 		</PageShell>
 	);
 }

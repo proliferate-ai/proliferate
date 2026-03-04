@@ -9,39 +9,19 @@ import { OverageSection } from "@/components/settings/billing/overage-section";
 import { PlanSection } from "@/components/settings/billing/plan-section";
 import { RecentEventsSection } from "@/components/settings/billing/recent-events-section";
 import { UsageSummarySection } from "@/components/settings/billing/usage-summary-section";
-import { useBilling, useUpdateBillingSettings } from "@/hooks/org/use-billing";
-import { useOrgMembers } from "@/hooks/org/use-orgs";
-import { useActiveOrganization, useSession } from "@/lib/auth/client";
-import type { BillingInfo } from "@/types/billing";
-import { env } from "@proliferate/environment/public";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useBillingPage } from "@/hooks/settings/use-billing-page";
 
 export default function BillingPage() {
-	const billingEnabled = env.NEXT_PUBLIC_BILLING_ENABLED;
-	const router = useRouter();
-	const { data: activeOrg, isPending: isOrgPending } = useActiveOrganization();
-	const { data: authSession } = useSession();
-	const currentUserId = authSession?.user?.id;
-
-	const { data: members } = useOrgMembers(activeOrg?.id ?? "");
-
-	const currentUserRole = members?.find((m) => m.userId === currentUserId)?.role;
-	const isAdmin = currentUserRole === "owner" || currentUserRole === "admin";
-
-	const { data: billing, isPending: isBillingPending, error } = useBilling();
-
-	const updateSettingsMutation = useUpdateBillingSettings();
-
-	useEffect(() => {
-		if (!billingEnabled) {
-			router.replace("/settings/general");
-		}
-	}, [billingEnabled, router]);
-
-	const handleUpdateBillingSettings = async (settings: Partial<BillingInfo["billingSettings"]>) => {
-		await updateSettingsMutation.mutateAsync(settings);
-	};
+	const {
+		billingEnabled,
+		activeOrg,
+		isOrgPending,
+		isAdmin,
+		billing,
+		isBillingPending,
+		error,
+		handleUpdateBillingSettings,
+	} = useBillingPage();
 
 	if (!billingEnabled) {
 		return null;

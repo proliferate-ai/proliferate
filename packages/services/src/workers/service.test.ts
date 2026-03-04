@@ -8,6 +8,12 @@ const {
 	mockAppendWorkerRunEventAtomic,
 	mockTransitionWorkerRunWithTerminalEvent,
 	mockCreateWakeEvent,
+	mockWithTransaction,
+	mockCreateWorker,
+	mockUpdateWorker,
+	mockCreateManagerSessionPlaceholder,
+	mockPromoteToManagerSession,
+	mockUpsertSessionCapability,
 } = vi.hoisted(() => ({
 	mockFindWorkerById: vi.fn(),
 	mockTransitionWorkerStatus: vi.fn(),
@@ -16,6 +22,12 @@ const {
 	mockAppendWorkerRunEventAtomic: vi.fn(),
 	mockTransitionWorkerRunWithTerminalEvent: vi.fn(),
 	mockCreateWakeEvent: vi.fn(),
+	mockWithTransaction: vi.fn(),
+	mockCreateWorker: vi.fn(),
+	mockUpdateWorker: vi.fn(),
+	mockCreateManagerSessionPlaceholder: vi.fn(),
+	mockPromoteToManagerSession: vi.fn(),
+	mockUpsertSessionCapability: vi.fn(),
 }));
 
 vi.mock("./db", () => ({
@@ -26,7 +38,9 @@ vi.mock("./db", () => ({
 	appendWorkerRunEventAtomic: mockAppendWorkerRunEventAtomic,
 	transitionWorkerRunWithTerminalEvent: mockTransitionWorkerRunWithTerminalEvent,
 	listEventsByRun: vi.fn(),
-	withTransaction: vi.fn(),
+	withTransaction: mockWithTransaction,
+	createWorker: mockCreateWorker,
+	updateWorker: mockUpdateWorker,
 	findWorkerForClaim: vi.fn(),
 	hasActiveWorkerRun: vi.fn(),
 	claimNextQueuedWakeEvent: vi.fn(),
@@ -39,6 +53,15 @@ vi.mock("./db", () => ({
 	touchWorkerLastWake: vi.fn(),
 	insertWakeStartedEvent: vi.fn(),
 	COALESCEABLE_WAKE_SOURCES: ["tick", "webhook"],
+}));
+
+vi.mock("../sessions/db", () => ({
+	createManagerSessionPlaceholder: mockCreateManagerSessionPlaceholder,
+	promoteToManagerSession: mockPromoteToManagerSession,
+	upsertSessionCapability: mockUpsertSessionCapability,
+	updateManagerSessionLinkage: vi.fn(),
+	enqueueSessionMessage: vi.fn(),
+	listSessionCapabilities: vi.fn(),
 }));
 
 vi.mock("../wakes/mapper", () => ({
@@ -59,6 +82,8 @@ const {
 	startWorkerRun,
 	completeWorkerRun,
 	appendWorkerRunEvent,
+	createWorkerWithManagerSession,
+	updateWorkerForOrg,
 } = await import("./service");
 
 function makeWorker(overrides: Record<string, unknown> = {}) {
@@ -102,6 +127,7 @@ function makeWorkerRun(overrides: Record<string, unknown> = {}) {
 describe("workers service", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mockWithTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn({}));
 	});
 
 	it("pauses active workers", async () => {
@@ -240,5 +266,61 @@ describe("workers service", () => {
 
 		await expect(runNow("worker-1", "org-1")).rejects.toBeInstanceOf(WorkerNotActiveError);
 		expect(mockCreateWakeEvent).not.toHaveBeenCalled();
+	});
+
+	it("createWorkerWithManagerSession persists provided capabilities", async () => {
+		mockCreateManagerSessionPlaceholder.mockResolvedValue({ id: "session-manager-1" });
+		mockCreateWorker.mockResolvedValue(
+			makeWorker({ id: "worker-2", managerSessionId: "session-manager-1" }),
+		);
+		mockPromoteToManagerSession.mockResolvedValue(undefined);
+
+		await createWorkerWithManagerSession({
+			organizationId: "org-1",
+			createdBy: "user-1",
+			name: "Ops Coworker",
+			capabilities: [
+				{ capabilityKey: "source.sentry.read", mode: "deny" },
+				{ capabilityKey: "source.sentry.read", mode: "allow" },
+				{ capabilityKey: "source.github.read", mode: "deny" },
+			],
+		});
+
+		expect(mockUpsertSessionCapability).toHaveBeenCalledTimes(2);
+		expect(mockUpsertSessionCapability).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sessionId: "session-manager-1",
+				capabilityKey: "source.sentry.read",
+				mode: "allow",
+			}),
+		);
+		expect(mockUpsertSessionCapability).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sessionId: "session-manager-1",
+				capabilityKey: "source.github.read",
+				mode: "deny",
+			}),
+		);
+	});
+
+	it("updateWorkerForOrg upserts capabilities on manager session", async () => {
+		mockUpdateWorker.mockResolvedValue(
+			makeWorker({ id: "worker-3", managerSessionId: "session-manager-3" }),
+		);
+
+		await updateWorkerForOrg({
+			workerId: "worker-3",
+			organizationId: "org-1",
+			fields: { objective: "Handle high priority bugs" },
+			capabilities: [{ capabilityKey: "source.linear.read", mode: "deny" }],
+		});
+
+		expect(mockUpsertSessionCapability).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sessionId: "session-manager-3",
+				capabilityKey: "source.linear.read",
+				mode: "deny",
+			}),
+		);
 	});
 });

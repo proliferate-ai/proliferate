@@ -11,12 +11,9 @@ import type { GatewayEnv } from "../lib/env";
 import healthRouter from "./health";
 import { createProliferateHttpRoutes } from "./proliferate/http";
 import { createProliferateWsHandler } from "./proliferate/ws";
-import { createDaemonProxyRoutes } from "./proxy/daemon";
-import { createDevtoolsProxyRoutes } from "./proxy/devtools";
-import { createProxyRoutes } from "./proxy/opencode";
-import { createPreviewHealthRoutes } from "./proxy/preview-health";
-import { createTerminalWsProxy } from "./proxy/terminal";
-import { createVscodeProxyRoutes, createVscodeWsProxy } from "./proxy/vscode";
+import { createTerminalWsProxy } from "./proliferate/ws/devtools/terminal";
+import { createVscodeWsProxy } from "./proliferate/ws/devtools/vscode";
+import { createGatewayProxyRoutes } from "./proxy";
 import { WsMultiplexer } from "./ws-multiplexer";
 
 export function mountRoutes(app: Express, hubManager: HubManager, env: GatewayEnv): void {
@@ -24,32 +21,24 @@ export function mountRoutes(app: Express, hubManager: HubManager, env: GatewayEn
 	app.use(healthRouter);
 
 	// Daemon proxy routes MUST be mounted before proliferate HTTP routes.
-	// The HTTP routes use router.use("/:proliferateSessionId", ...) which
-	// matches any first segment as prefix — including "v1" from daemon proxy
-	// paths like /v1/sessions/:id/fs/tree, causing ensureSessionReady to
-	// look up session "v1" and fail with 503.
-	app.use("/proliferate", createDaemonProxyRoutes(hubManager, env));
-
-	// Proliferate routes (HTTP and proxy)
+	// Daemon routes now live under proliferate/http/daemon and are mounted by createProliferateHttpRoutes.
 	app.use("/proliferate", createProliferateHttpRoutes(hubManager, env));
-	app.use("/proxy", createProxyRoutes(hubManager, env));
-	app.use("/proxy", createDevtoolsProxyRoutes(hubManager, env));
-	app.use("/proxy", createVscodeProxyRoutes(hubManager, env));
-	app.use("/proxy", createPreviewHealthRoutes(hubManager, env));
+
+	// Proxy domains
+	app.use("/proxy", createGatewayProxyRoutes(hubManager, env));
 }
 
 export function setupWebSocket(server: Server, hubManager: HubManager, env: GatewayEnv): void {
 	const mux = new WsMultiplexer();
 
-	// Proliferate main WS (existing — /proliferate/:sessionId)
+	// Session WS domain
 	const proliferateWs = createProliferateWsHandler(hubManager, env);
 	mux.addHandler(proliferateWs.handleUpgrade);
 
-	// Terminal WS proxy (/proxy/:sessionId/:token/devtools/terminal)
+	// Devtools WS domains
 	const terminalWs = createTerminalWsProxy(hubManager, env);
 	mux.addHandler(terminalWs.handleUpgrade);
 
-	// VS Code WS proxy (/proxy/:sessionId/:token/devtools/vscode/*)
 	const vscodeWs = createVscodeWsProxy(hubManager, env);
 	mux.addHandler(vscodeWs.handleUpgrade);
 

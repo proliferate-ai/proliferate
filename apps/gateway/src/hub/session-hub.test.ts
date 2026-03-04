@@ -2,7 +2,7 @@ import { sessions } from "@proliferate/services";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as leases from "../lib/session-leases";
 import { SessionHub } from "./session-hub";
-vi.mock("./session-lifecycle", () => ({
+vi.mock("./session/session-lifecycle", () => ({
 	persistTerminalOutcome: vi.fn(async () => undefined),
 	projectOperatorStatus: vi.fn(async () => "active"),
 	recordLifecycleEvent: vi.fn(async () => undefined),

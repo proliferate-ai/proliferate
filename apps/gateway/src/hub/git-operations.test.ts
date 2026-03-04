@@ -1,6 +1,11 @@
 import type { SandboxProvider } from "@proliferate/shared";
 import { describe, expect, it, vi } from "vitest";
-import { GitOperations, parseBusyState, parseLogOutput, parseStatusV2 } from "./git-operations";
+import {
+	GitOperations,
+	parseBusyState,
+	parseLogOutput,
+	parseStatusV2,
+} from "./session/git/git-operations";
 
 describe("parseStatusV2", () => {
 	it("parses empty output (clean repo)", () => {

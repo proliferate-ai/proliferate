@@ -5,7 +5,7 @@ import {
 	projectOperatorStatus,
 	recordLifecycleEvent,
 	touchLastVisibleUpdate,
-} from "./session-lifecycle";
+} from "./session/session-lifecycle";
 
 vi.mock("@proliferate/services", () => ({
 	sessions: {

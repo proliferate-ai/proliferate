@@ -18,7 +18,7 @@ const {
 	mockSendPromptAsync: vi.fn(),
 }));
 
-vi.mock("../lib/opencode", () => ({
+vi.mock("./coding/opencode/client", () => ({
 	abortOpenCodeSession: mockAbortOpenCodeSession,
 	createOpenCodeSession: mockCreateOpenCodeSession,
 	fetchOpenCodeMessages: mockFetchOpenCodeMessages,
@@ -28,7 +28,7 @@ vi.mock("../lib/opencode", () => ({
 	sendPromptAsync: mockSendPromptAsync,
 }));
 
-const { OpenCodeCodingHarnessAdapter } = await import("./opencode-coding-harness");
+const { OpenCodeCodingHarnessAdapter } = await import("./coding/opencode/adapter");
 
 describe("OpenCodeCodingHarnessAdapter resume", () => {
 	beforeEach(() => {

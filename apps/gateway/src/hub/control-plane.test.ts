@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { SessionRecord } from "../lib/session-store";
-import { buildControlPlaneSnapshot, buildInitConfig } from "./control-plane";
+import { buildControlPlaneSnapshot, buildInitConfig } from "./session/control-plane";
+import type { SessionRecord } from "./session/runtime/session-context-store";
 
 function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
 	return {

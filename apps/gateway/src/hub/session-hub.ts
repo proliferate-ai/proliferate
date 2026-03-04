@@ -25,7 +25,7 @@ import type {
 import type { SessionRuntimeStatus } from "@proliferate/shared/contracts/sessions";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import type { WebSocket } from "ws";
-import type { RuntimeDaemonEvent } from "../harness/coding-harness";
+import type { RuntimeDaemonEvent } from "../harness/contracts/coding";
 import type { GatewayEnv } from "../lib/env";
 import { publishSessionEvent } from "../lib/redis";
 import { uploadVerificationFiles } from "../lib/s3";
@@ -37,21 +37,21 @@ import {
 	renewOwnerLease,
 	setRuntimeLease,
 } from "../lib/session-leases";
-import type { SessionContext, SessionRecord } from "../lib/session-store";
 import type { ClientConnection, OpenCodeEvent, SandboxInfo } from "../types";
-import { buildControlPlaneSnapshot, buildInitConfig } from "./control-plane";
-import { EventProcessor } from "./event-processor";
-import { GitOperations } from "./git-operations";
-import { MigrationController } from "./migration-controller";
+import { MigrationInProgressError, SessionRuntime } from "./session-runtime";
+import { buildControlPlaneSnapshot, buildInitConfig } from "./session/control-plane";
+import { GitOperations } from "./session/git/git-operations";
+import { MigrationController } from "./session/migration/migration-controller";
+import { prepareForSnapshot } from "./session/migration/snapshot-scrub";
+import { EventProcessor } from "./session/runtime/event-processor";
+import type { SessionContext, SessionRecord } from "./session/runtime/session-context-store";
+import { SessionTelemetry, extractPrUrls } from "./session/runtime/session-telemetry";
 import {
 	projectOperatorStatus,
 	recordLifecycleEvent,
 	touchLastVisibleUpdate,
-} from "./session-lifecycle";
-import { MigrationInProgressError, SessionRuntime } from "./session-runtime";
-import { SessionTelemetry, extractPrUrls } from "./session-telemetry";
-import { prepareForSnapshot } from "./snapshot-scrub";
-import type { PromptOptions } from "./types";
+} from "./session/session-lifecycle";
+import type { PromptOptions } from "./shared/types";
 
 interface HubDependencies {
 	env: GatewayEnv;

@@ -10,6 +10,45 @@ import {
 	SlackIcon,
 	StripeIcon,
 } from "@/components/ui/icons";
+import type { PlanId } from "@/config/billing";
+
+export interface OnboardingPlan {
+	id: PlanId;
+	name: string;
+	price: string;
+	priceNote?: string;
+	description: string;
+	features: string[];
+	cta: string;
+	popular?: boolean;
+}
+
+export const ONBOARDING_PLANS: OnboardingPlan[] = [
+	{
+		id: "dev",
+		name: "Developer",
+		price: "$20",
+		priceNote: "/month",
+		description: "For solo builders and small projects",
+		features: ["1,000 free trial credits", "10 concurrent sessions", "5 snapshots"],
+		cta: "Start free trial",
+	},
+	{
+		id: "pro",
+		name: "Professional",
+		price: "$500",
+		priceNote: "/month",
+		description: "For teams shipping fast",
+		features: [
+			"1,000 free trial credits",
+			"7,500 credits/month",
+			"100 concurrent sessions",
+			"200 snapshots",
+		],
+		cta: "Start free trial",
+		popular: true,
+	},
+];
 
 export const REFERRAL_SOURCES = [
 	"Twitter / X",

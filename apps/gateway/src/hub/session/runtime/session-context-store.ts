@@ -1,0 +1,654 @@
+import { createLogger } from "@proliferate/logger";
+import { configurations, integrations, sessions } from "@proliferate/services";
+import {
+	type AgentConfig,
+	type ModelId,
+	type RepoSpec,
+	getAutomationSystemPrompt,
+	getCodingSystemPrompt,
+	getDefaultAgentConfig,
+	getScratchSystemPrompt,
+	getSetupSystemPrompt,
+	isValidModelId,
+	parseModelId,
+} from "@proliferate/shared";
+import type { ConfigurationServiceCommand } from "@proliferate/shared";
+import type {
+	SessionOperatorStatus,
+	SessionRuntimeStatus,
+	SessionVisibility,
+} from "@proliferate/shared/contracts/sessions";
+import { parseServiceCommands, resolveServiceCommands } from "@proliferate/shared/sandbox";
+import type { GatewayEnv } from "../../../lib/env";
+import { type GitIdentity, resolveGitIdentity, toGitIdentityEnv } from "./git-identity";
+import { type GitHubIntegration, getGitHubTokenForIntegration } from "./github-auth";
+
+const logger = createLogger({ service: "gateway" }).child({ module: "session-store" });
+
+export interface RepoRecord {
+	id: string;
+	github_url: string;
+	github_repo_name: string;
+	default_branch: string | null;
+	service_commands?: unknown;
+}
+
+export interface SessionRecord {
+	id: string;
+	organization_id: string;
+	created_by: string | null;
+	configuration_id: string | null;
+	session_type: string | null;
+	kind?: string | null;
+	sandbox_id: string | null;
+	sandbox_provider: string | null;
+	snapshot_id: string | null;
+	sandbox_expires_at?: string | null;
+	branch_name: string | null;
+	base_commit_sha: string | null;
+	coding_agent_session_id?: string | null;
+	open_code_tunnel_url?: string | null;
+	preview_tunnel_url?: string | null;
+	agent_config?: { modelId?: string; tools?: string[]; reasoningEffort?: string } | null;
+	system_prompt?: string | null;
+	status?: string | null;
+	runtime_status: SessionRuntimeStatus | null;
+	operator_status: SessionOperatorStatus | null;
+	capabilities_version: number | null;
+	visibility: SessionVisibility | null;
+	worker_id: string | null;
+	worker_run_id: string | null;
+	pause_reason?: string | null;
+	client_type?: string | null;
+	client_metadata?: unknown | null;
+	initial_prompt?: string | null;
+	initial_prompt_sent_at?: string | null;
+	outcome?: string | null;
+	summary?: string | null;
+	latest_task?: string | null;
+}
+
+export interface SessionContext {
+	session: SessionRecord;
+	repos: RepoSpec[];
+	primaryRepo: RepoRecord;
+	systemPrompt: string;
+	agentConfig: AgentConfig & { tools?: string[] };
+	gitIdentity: GitIdentity | null;
+	envVars: Record<string, string>;
+	/** Decrypted file writes to apply at sandbox boot. */
+	secretFileWrites: Array<{ filePath: string; content: string }>;
+	/** True if the snapshot includes installed dependencies. Gates service command auto-start. */
+	snapshotHasDeps: boolean;
+	/** Resolved service commands (configuration-level or fallback from repos). */
+	serviceCommands?: ConfigurationServiceCommand[];
+	/** Initial prompt to auto-send after sandbox boot. */
+	initialPrompt?: string | null;
+}
+
+interface ConfigurationRepoRow {
+	workspace_path: string;
+	repo: RepoRecord;
+}
+
+function buildSystemPrompt(
+	sessionType: string | null,
+	repoName: string,
+	clientType: string | null,
+): string {
+	if (sessionType === "setup") {
+		return getSetupSystemPrompt(repoName);
+	}
+	if (clientType === "automation") {
+		return getAutomationSystemPrompt(repoName);
+	}
+	return getCodingSystemPrompt(repoName);
+}
+
+export async function loadSessionContext(
+	env: GatewayEnv,
+	sessionId: string,
+): Promise<SessionContext> {
+	const startMs = Date.now();
+	const log = logger.child({ sessionId });
+	log.debug("store.load_context.start");
+
+	// Load session without repo relationship (repos now come from configuration_repos)
+	log.info("Loading session from database...");
+	const sessionRowStartMs = Date.now();
+	const sessionRow = await sessions.findByIdInternal(sessionId);
+	log.debug(
+		{ durationMs: Date.now() - sessionRowStartMs, found: Boolean(sessionRow) },
+		"store.load_context.session_row",
+	);
+
+	if (!sessionRow) {
+		log.warn("Session not found");
+		throw new Error("Session not found");
+	}
+
+	// Convert from camelCase to snake_case for SessionRecord compatibility
+	const session: SessionRecord = {
+		id: sessionRow.id,
+		organization_id: sessionRow.organizationId,
+		created_by: sessionRow.createdBy,
+		configuration_id: sessionRow.configurationId,
+		session_type: sessionRow.sessionType,
+		kind: sessionRow.kind,
+		sandbox_id: sessionRow.sandboxId,
+		sandbox_provider: sessionRow.sandboxProvider,
+		snapshot_id: sessionRow.snapshotId,
+		sandbox_expires_at: sessionRow.sandboxExpiresAt?.toISOString() ?? null,
+		branch_name: sessionRow.branchName,
+		base_commit_sha: sessionRow.baseCommitSha,
+		coding_agent_session_id: sessionRow.codingAgentSessionId,
+		open_code_tunnel_url: sessionRow.openCodeTunnelUrl,
+		preview_tunnel_url: sessionRow.previewTunnelUrl,
+		agent_config: sessionRow.agentConfig as SessionRecord["agent_config"],
+		system_prompt: sessionRow.systemPrompt,
+		status: sessionRow.status,
+		runtime_status: (sessionRow.runtimeStatus as SessionRuntimeStatus | null) ?? null,
+		operator_status: (sessionRow.operatorStatus as SessionOperatorStatus | null) ?? null,
+		capabilities_version: sessionRow.capabilitiesVersion ?? null,
+		visibility: (sessionRow.visibility as SessionVisibility | null) ?? null,
+		worker_id: sessionRow.workerId ?? null,
+		worker_run_id: sessionRow.workerRunId ?? null,
+		pause_reason: sessionRow.pauseReason,
+		client_type: sessionRow.clientType,
+		client_metadata: sessionRow.clientMetadata,
+		initial_prompt: sessionRow.initialPrompt ?? null,
+		initial_prompt_sent_at: sessionRow.initialPromptSentAt?.toISOString() ?? null,
+		outcome: sessionRow.outcome ?? null,
+		summary: sessionRow.summary ?? null,
+		latest_task: sessionRow.latestTask ?? null,
+	};
+
+	log.info(
+		{
+			configurationId: session.configuration_id,
+			sandboxId: session.sandbox_id,
+			status: session.status,
+			sessionType: session.session_type,
+		},
+		"Session loaded",
+	);
+
+	const gitIdentity = await resolveGitIdentity(session.created_by);
+
+	// Scratch session: no configuration, no repos — boot from base snapshot only
+	if (!session.configuration_id) {
+		log.info("Scratch session (no configuration)");
+
+		const scratchPrimaryRepo: RepoRecord = {
+			id: "scratch",
+			github_url: "",
+			github_repo_name: "scratch",
+			default_branch: "main",
+		};
+
+		const defaultAgentConfig = getDefaultAgentConfig();
+		const rawModelId = session.agent_config?.modelId;
+		const modelId: ModelId =
+			rawModelId && isValidModelId(rawModelId)
+				? rawModelId
+				: rawModelId
+					? parseModelId(rawModelId)
+					: defaultAgentConfig.modelId;
+
+		const envResult = await loadEnvironmentVariables(
+			env,
+			session.id,
+			session.organization_id,
+			[],
+			[],
+			null,
+			gitIdentity,
+		);
+
+		log.info("Scratch session context ready");
+		log.debug({ durationMs: Date.now() - startMs }, "store.load_context.complete");
+		return {
+			session,
+			repos: [],
+			primaryRepo: scratchPrimaryRepo,
+			systemPrompt: session.system_prompt || getScratchSystemPrompt(),
+			agentConfig: {
+				agentType: "opencode" as const,
+				modelId,
+				tools: session.agent_config?.tools,
+				...(session.agent_config?.reasoningEffort && {
+					reasoningEffort: session.agent_config.reasoningEffort as AgentConfig["reasoningEffort"],
+				}),
+			},
+			gitIdentity,
+			envVars: envResult.envVars,
+			secretFileWrites: envResult.fileWrites,
+			snapshotHasDeps: false,
+			initialPrompt: session.initial_prompt,
+		};
+	}
+
+	// Configuration-backed session: load repos, tokens, service commands
+	log.info(
+		{ configurationId: session.configuration_id },
+		"Loading repos from configuration_repos...",
+	);
+	const configurationReposStartMs = Date.now();
+	const configurationRepoRows = await configurations.getConfigurationReposWithDetails(
+		session.configuration_id,
+	);
+	log.debug(
+		{
+			durationMs: Date.now() - configurationReposStartMs,
+			count: configurationRepoRows?.length ?? 0,
+		},
+		"store.load_context.configuration_repos",
+	);
+
+	if (!configurationRepoRows || configurationRepoRows.length === 0) {
+		log.warn("Configuration has no repos");
+		throw new Error("Configuration has no associated repos");
+	}
+
+	// Convert to the expected shape
+	const typedConfigurationRepos: ConfigurationRepoRow[] = configurationRepoRows
+		.filter((pr) => pr.repo !== null)
+		.map((pr) => ({
+			workspace_path: pr.workspacePath,
+			repo: {
+				id: pr.repo!.id,
+				github_url: pr.repo!.githubUrl,
+				github_repo_name: pr.repo!.githubRepoName,
+				default_branch: pr.repo!.defaultBranch,
+				service_commands: pr.repo!.serviceCommands,
+			},
+		}));
+
+	log.info(
+		{
+			count: typedConfigurationRepos.length,
+			repos: typedConfigurationRepos.map((pr) => ({
+				name: pr.repo.github_repo_name,
+				path: pr.workspace_path,
+			})),
+		},
+		"Configuration repos loaded",
+	);
+
+	// Primary repo (first one) for system prompt context
+	const primaryRepo = typedConfigurationRepos[0].repo;
+
+	// Resolve GitHub token for each repo (may differ per installation)
+	log.info("Resolving GitHub tokens for repos...");
+	const tokenResolutionStartMs = Date.now();
+	const repoSpecs: RepoSpec[] = await Promise.all(
+		typedConfigurationRepos.map(async (pr) => {
+			const token = await resolveGitHubToken(
+				env,
+				session.organization_id,
+				pr.repo.id,
+				session.created_by,
+				pr.repo.github_url,
+			);
+			log.info(
+				{ repo: pr.repo.github_repo_name, hasToken: Boolean(token) },
+				"Token resolved for repo",
+			);
+			const serviceCommands = parseServiceCommands(pr.repo.service_commands);
+			return {
+				repoUrl: pr.repo.github_url,
+				token,
+				workspacePath: pr.workspace_path,
+				repoId: pr.repo.id,
+				...(serviceCommands.length > 0 ? { serviceCommands } : {}),
+			};
+		}),
+	);
+	log.debug(
+		{
+			durationMs: Date.now() - tokenResolutionStartMs,
+			repoCount: repoSpecs.length,
+			tokensPresent: repoSpecs.filter((r) => Boolean(r.token)).length,
+		},
+		"store.load_context.github_tokens",
+	);
+
+	const systemPrompt =
+		session.system_prompt ||
+		buildSystemPrompt(
+			session.session_type,
+			primaryRepo.github_repo_name,
+			session.client_type ?? null,
+		);
+
+	const defaultAgentConfig = getDefaultAgentConfig();
+	const rawModelId = session.agent_config?.modelId;
+	const modelId: ModelId =
+		rawModelId && isValidModelId(rawModelId)
+			? rawModelId
+			: rawModelId
+				? parseModelId(rawModelId)
+				: defaultAgentConfig.modelId;
+	const agentConfig = {
+		agentType: "opencode" as const,
+		modelId,
+		tools: session.agent_config?.tools,
+		...(session.agent_config?.reasoningEffort && {
+			reasoningEffort: session.agent_config.reasoningEffort as AgentConfig["reasoningEffort"],
+		}),
+	};
+
+	// Load env vars for all repos in the configuration
+	const repoIds = typedConfigurationRepos.map((pr) => pr.repo.id);
+	log.info({ repoIds }, "Loading environment variables...");
+	const envVarsStartMs = Date.now();
+	const envResult = await loadEnvironmentVariables(
+		env,
+		session.id,
+		session.organization_id,
+		repoIds,
+		repoSpecs,
+		session.configuration_id,
+		gitIdentity,
+	);
+	log.debug(
+		{
+			durationMs: Date.now() - envVarsStartMs,
+			keyCount: Object.keys(envResult.envVars).length,
+			fileWriteCount: envResult.fileWrites.length,
+		},
+		"store.load_context.env_vars",
+	);
+	log.info(
+		{
+			count: Object.keys(envResult.envVars).length,
+			keys: Object.keys(envResult.envVars).filter((k) => k !== "ANTHROPIC_API_KEY"),
+			fileWriteCount: envResult.fileWrites.length,
+		},
+		"Environment variables loaded",
+	);
+
+	// Derive snapshotHasDeps: true only when snapshot includes installed deps.
+	// - Pause snapshots always have deps (they capture full state after user work).
+	// - "default" configuration snapshots are clone-only (no deps).
+	// - "ready" configuration snapshots have deps.
+	// - Legacy repo snapshots don't have deps.
+	const wasPaused = Boolean(sessionRow.pausedAt);
+	const repoSnapshotFallback =
+		configurationRepoRows.length === 1 &&
+		configurationRepoRows[0].repo?.repoSnapshotStatus === "ready" &&
+		configurationRepoRows[0].repo?.repoSnapshotId
+			? configurationRepoRows[0].repo.repoSnapshotId
+			: null;
+	let snapshotHasDeps: boolean;
+	if (!session.snapshot_id) {
+		snapshotHasDeps = false;
+	} else if (session.snapshot_id === repoSnapshotFallback) {
+		snapshotHasDeps = false;
+	} else if (wasPaused) {
+		// Pause snapshot always captures full state (deps installed, env applied)
+		snapshotHasDeps = true;
+	} else {
+		// Creation snapshot — check current configuration status
+		const configInfo = await configurations.findByIdForSession(session.configuration_id);
+		snapshotHasDeps = configInfo?.status === "ready";
+	}
+
+	// Resolve service commands: configuration-level first, then per-repo fallback
+	const configSvcRow = await configurations.getConfigurationServiceCommands(
+		session.configuration_id,
+	);
+	const resolvedServiceCommands = resolveServiceCommands(configSvcRow?.serviceCommands, repoSpecs);
+
+	log.info("Session context ready");
+	log.debug(
+		{ durationMs: Date.now() - startMs, repoCount: repoSpecs.length, snapshotHasDeps },
+		"store.load_context.complete",
+	);
+	return {
+		session,
+		repos: repoSpecs,
+		primaryRepo,
+		systemPrompt,
+		agentConfig,
+		gitIdentity,
+		envVars: envResult.envVars,
+		secretFileWrites: envResult.fileWrites,
+		snapshotHasDeps,
+		serviceCommands: resolvedServiceCommands.length > 0 ? resolvedServiceCommands : undefined,
+		initialPrompt: session.initial_prompt,
+	};
+}
+
+async function loadEnvironmentVariables(
+	env: GatewayEnv,
+	sessionId: string,
+	orgId: string,
+	repoIds: string[],
+	repoSpecs: RepoSpec[],
+	configurationId: string | null,
+	gitIdentity: GitIdentity | null,
+): Promise<{
+	envVars: Record<string, string>;
+	fileWrites: Array<{ filePath: string; content: string }>;
+}> {
+	const result = await sessions.buildSandboxEnvVars({
+		sessionId,
+		orgId,
+		repoIds,
+		configurationId,
+		repoSpecs,
+		requireProxy: env.llmProxyRequired,
+		directApiKey: env.anthropicApiKey,
+		proxyUrl: env.llmProxyUrl,
+		billingEnabled: env.billingEnabled,
+	});
+
+	return {
+		envVars: {
+			...result.envVars,
+			...toGitIdentityEnv(gitIdentity),
+		},
+		fileWrites: result.fileWrites,
+	};
+}
+
+async function resolveGitHubToken(
+	env: GatewayEnv,
+	orgId: string,
+	repoId: string,
+	userId: string | null,
+	repoUrl: string,
+): Promise<string> {
+	try {
+		// Get repo connections with integration details
+		const repoConnections = await integrations.getRepoConnectionsWithIntegrations(repoId);
+
+		const activeConnections = repoConnections.filter(
+			(rc) => rc.integration && rc.integration.status === "active",
+		);
+
+		const candidateIntegrations: GitHubIntegration[] = [];
+		const seenCandidateIds = new Set<string>();
+		const addCandidate = (integration: GitHubIntegration | null) => {
+			if (!integration || seenCandidateIds.has(integration.id)) {
+				return;
+			}
+			seenCandidateIds.add(integration.id);
+			candidateIntegrations.push(integration);
+		};
+
+		if (activeConnections.length > 0) {
+			// Selection priority:
+			// 1) user-linked GitHub App install
+			// 2) any GitHub App install
+			// 3) user-linked non-App connection
+			// 4) all remaining active connections
+			const userGitHubApp = userId
+				? activeConnections.find(
+						(rc) =>
+							rc.integration?.createdBy === userId && Boolean(rc.integration.githubInstallationId),
+					)
+				: null;
+			const anyGitHubApp = activeConnections.find((rc) =>
+				Boolean(rc.integration?.githubInstallationId),
+			);
+			const userConnection = userId
+				? activeConnections.find((rc) => rc.integration?.createdBy === userId)
+				: null;
+			const prioritizedConnections = [
+				userGitHubApp,
+				anyGitHubApp,
+				userConnection,
+				...activeConnections,
+			];
+
+			for (const connection of prioritizedConnections) {
+				const int = connection?.integration;
+				if (!int) {
+					continue;
+				}
+				addCandidate({
+					id: int.id,
+					github_installation_id: int.githubInstallationId,
+					connection_id: int.connectionId,
+				});
+			}
+		}
+
+		// Also include org-level fallbacks as trailing candidates.
+		const githubAppIntegration = await integrations.findActiveGitHubApp(orgId);
+
+		if (githubAppIntegration) {
+			addCandidate({
+				id: githubAppIntegration.id,
+				github_installation_id: githubAppIntegration.githubInstallationId,
+				connection_id: githubAppIntegration.connectionId,
+			});
+		}
+
+		// Try Nango GitHub integration
+		if (env.nangoGithubIntegrationId) {
+			const nangoIntegration = await integrations.findActiveNangoGitHub(
+				orgId,
+				env.nangoGithubIntegrationId,
+			);
+
+			if (nangoIntegration) {
+				addCandidate({
+					id: nangoIntegration.id,
+					github_installation_id: nangoIntegration.githubInstallationId,
+					connection_id: nangoIntegration.connectionId,
+				});
+			}
+		}
+
+		if (candidateIntegrations.length === 0) {
+			return "";
+		}
+
+		for (const candidate of candidateIntegrations) {
+			try {
+				let token = await getGitHubTokenForIntegration(env, candidate);
+				let hasAccess = await tokenHasRepoAccess(token, repoUrl);
+
+				// Installation tokens can become stale before cache expiry (permission changes/reinstalls).
+				if (!hasAccess && candidate.github_installation_id) {
+					token = await getGitHubTokenForIntegration(env, candidate, { forceRefresh: true });
+					hasAccess = await tokenHasRepoAccess(token, repoUrl);
+				}
+
+				if (hasAccess) {
+					logger.info(
+						{
+							repoUrl,
+							integrationId: candidate.id,
+							authType: candidate.github_installation_id ? "github-app" : "nango-oauth",
+							tokenPrefix: token.substring(0, 6),
+						},
+						"Resolved git token for repo",
+					);
+					return token;
+				}
+				logger.warn(
+					{
+						repoId,
+						repoUrl,
+						integrationId: candidate.id,
+						hasInstallationId: Boolean(candidate.github_installation_id),
+					},
+					"GitHub token lacks repo access, trying fallback integration",
+				);
+			} catch (err) {
+				logger.warn(
+					{
+						err,
+						repoId,
+						repoUrl,
+						integrationId: candidate.id,
+						hasInstallationId: Boolean(candidate.github_installation_id),
+					},
+					"Failed to resolve GitHub token for candidate integration",
+				);
+			}
+		}
+
+		return "";
+	} catch (err) {
+		logger.warn({ err }, "Failed to resolve GitHub token");
+		return "";
+	}
+}
+
+function parseGitHubRepoSlug(repoUrl: string): string | null {
+	try {
+		const normalized = repoUrl
+			.replace(/^git@github\.com:/, "https://github.com/")
+			.replace(/^ssh:\/\/git@github\.com\//, "https://github.com/");
+		const parsed = new URL(normalized);
+		if (parsed.hostname !== "github.com") {
+			return null;
+		}
+		const pathname = parsed.pathname
+			.replace(/^\/+/, "")
+			.replace(/\/+$/, "")
+			.replace(/\.git$/, "");
+		const [owner, repo] = pathname.split("/");
+		if (!owner || !repo) {
+			return null;
+		}
+		return `${owner}/${repo}`;
+	} catch {
+		return null;
+	}
+}
+
+async function tokenHasRepoAccess(token: string, repoUrl: string): Promise<boolean> {
+	const slug = parseGitHubRepoSlug(repoUrl);
+	if (!slug) {
+		return true;
+	}
+
+	try {
+		const response = await fetch(`https://api.github.com/repos/${slug}`, {
+			headers: {
+				Authorization: `Bearer ${token}`,
+				Accept: "application/vnd.github+json",
+				"X-GitHub-Api-Version": "2022-11-28",
+			},
+		});
+		if (!response.ok) {
+			return false;
+		}
+		const data = (await response.json()) as { permissions?: { push?: boolean } };
+		if (data.permissions && !data.permissions.push) {
+			logger.warn(
+				{ repoUrl: slug, permissions: data.permissions },
+				"Token has repo access but lacks push permission — allowing anyway (may fail on push)",
+			);
+		}
+		return true;
+	} catch {
+		return false;
+	}
+}

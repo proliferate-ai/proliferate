@@ -2,6 +2,10 @@
 
 import { ModelSelector } from "@/components/automations/model-selector";
 import {
+	type WorkerCapabilityDraft,
+	WorkerCapabilityEditor,
+} from "@/components/automations/worker-capability-editor";
+import {
 	AlertDialog,
 	AlertDialogAction,
 	AlertDialogCancel,
@@ -15,10 +19,11 @@ import { Button } from "@/components/ui/button";
 import { InlineEdit } from "@/components/ui/inline-edit";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useIntegrations, useSlackInstallations } from "@/hooks/integrations/use-integrations";
 import { cn } from "@/lib/display/utils";
 import type { ModelId } from "@proliferate/shared";
 import { Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 
 interface WorkerSettingsTabProps {
@@ -28,8 +33,14 @@ interface WorkerSettingsTabProps {
 		objective: string | null;
 		status: string;
 		modelId: string | null;
+		capabilities?: WorkerCapabilityDraft[];
 	};
-	onUpdate: (fields: { name?: string; objective?: string; modelId?: string }) => void;
+	onUpdate: (fields: {
+		name?: string;
+		objective?: string;
+		modelId?: string;
+		capabilities?: WorkerCapabilityDraft[];
+	}) => void;
 	onPause: () => void;
 	onResume: () => void;
 	onDelete: () => void;
@@ -47,6 +58,27 @@ export function WorkerSettingsTab({
 	const [objectiveValue, setObjectiveValue] = useState(worker.objective || "");
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [hasPendingChanges, setHasPendingChanges] = useState(false);
+	const { data: integrationsData } = useIntegrations();
+	const { data: slackInstallations } = useSlackInstallations();
+	const [capabilitiesValue, setCapabilitiesValue] = useState<WorkerCapabilityDraft[]>(
+		worker.capabilities ?? [],
+	);
+	const connectedProviders = useMemo(() => {
+		const providers: string[] = [];
+		if (!integrationsData) return providers;
+
+		if (integrationsData.github.connected) providers.push("github");
+		if (integrationsData.sentry.connected) providers.push("sentry");
+		if (integrationsData.linear.connected) providers.push("linear");
+		if (integrationsData.jira.connected) providers.push("jira");
+		if (slackInstallations && slackInstallations.length > 0) providers.push("slack");
+
+		return providers;
+	}, [integrationsData, slackInstallations]);
+
+	useEffect(() => {
+		setCapabilitiesValue(worker.capabilities ?? []);
+	}, [worker.capabilities]);
 
 	const debouncedSaveObjective = useDebouncedCallback((value: string) => {
 		onUpdate({ objective: value || undefined });
@@ -115,6 +147,22 @@ export function WorkerSettingsTab({
 						/>
 					</div>
 				</div>
+			</div>
+
+			{/* Capabilities */}
+			<div>
+				<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+					Capabilities
+				</p>
+				<WorkerCapabilityEditor
+					value={capabilitiesValue}
+					disabled={isUpdating}
+					connectedProviders={connectedProviders}
+					onChange={(next) => {
+						setCapabilitiesValue(next);
+						onUpdate({ capabilities: next });
+					}}
+				/>
 			</div>
 
 			{/* Status toggle */}

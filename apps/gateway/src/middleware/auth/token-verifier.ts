@@ -2,8 +2,8 @@ import { createLogger } from "@proliferate/logger";
 import { verifyToken as verifyJwt } from "@proliferate/shared";
 import type { Request } from "express";
 import type { GatewayEnv } from "../../lib/env";
-import { deriveSandboxMcpToken } from "../../lib/sandbox-mcp-token";
 import type { AuthResult } from "../../types";
+import { deriveSandboxMcpToken } from "./sandbox-mcp-token";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "auth" });
 

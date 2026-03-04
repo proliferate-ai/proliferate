@@ -4,12 +4,12 @@ export const dynamic = "force-dynamic";
 
 import { CodingSession } from "@/components/coding-session/coding-session";
 import { Button } from "@/components/ui/button";
+import { useOrgSwitch } from "@/hooks/org/use-org-switch";
 import { useMarkSessionViewed, useSessionData } from "@/hooks/sessions/use-sessions";
-import { organization, useActiveOrganization } from "@/lib/auth/client";
 import { useDashboardStore } from "@/stores/dashboard";
 import { X, Zap } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 
 export default function SessionDetailPage({
 	params,
@@ -22,32 +22,23 @@ export default function SessionDetailPage({
 	useMarkSessionViewed(id);
 	const searchParams = useSearchParams();
 	const targetOrgId = searchParams.get("orgId");
-	const { data: activeOrg, isPending: isOrgPending } = useActiveOrganization();
-	const [switchError, setSwitchError] = useState<string | null>(null);
-	const [isSwitching, setIsSwitching] = useState(false);
 	const runId = searchParams.get("runId");
 	const fromCoworker = searchParams.get("from") === "coworker";
 	const [showCoworkerBanner, setShowCoworkerBanner] = useState(fromCoworker && !runId);
-	const shouldSwitchOrg = useMemo(
-		() => Boolean(targetOrgId && activeOrg?.id && activeOrg.id !== targetOrgId),
-		[targetOrgId, activeOrg?.id],
+
+	const buildRedirectUrl = useCallback(
+		(orgId: string) => {
+			const params = new URLSearchParams({ orgId });
+			if (runId) params.set("runId", runId);
+			return `/workspace/${id}?${params.toString()}`;
+		},
+		[id, runId],
 	);
 
-	useEffect(() => {
-		if (!targetOrgId || isOrgPending || isSwitching || !shouldSwitchOrg) return;
-		setIsSwitching(true);
-		organization
-			.setActive({ organizationId: targetOrgId })
-			.then(() => {
-				const params = new URLSearchParams({ orgId: targetOrgId });
-				if (runId) params.set("runId", runId);
-				window.location.replace(`/workspace/${id}?${params.toString()}`);
-			})
-			.catch((err) => {
-				setSwitchError("Unable to switch organization for this session.");
-				setIsSwitching(false);
-			});
-	}, [targetOrgId, isOrgPending, isSwitching, shouldSwitchOrg, id, runId]);
+	const { isSwitching, isOrgPending, shouldSwitchOrg, switchError } = useOrgSwitch({
+		targetOrgId,
+		buildRedirectUrl,
+	});
 
 	// Sync active session ID with URL
 	useEffect(() => {

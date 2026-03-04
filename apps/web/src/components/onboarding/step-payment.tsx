@@ -1,6 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import type { PlanId } from "@/config/billing";
+import { ONBOARDING_PLANS } from "@/config/onboarding";
 import { cn } from "@/lib/display/utils";
 import { orpc } from "@/lib/infra/orpc";
 import { useMutation } from "@tanstack/react-query";
@@ -10,46 +12,6 @@ import { useState } from "react";
 interface StepPaymentProps {
 	onComplete: () => void;
 }
-
-type PlanId = "dev" | "pro";
-
-interface Plan {
-	id: PlanId;
-	name: string;
-	price: string;
-	priceNote?: string;
-	description: string;
-	features: string[];
-	cta: string;
-	popular?: boolean;
-}
-
-const PLANS: Plan[] = [
-	{
-		id: "dev",
-		name: "Developer",
-		price: "$20",
-		priceNote: "/month",
-		description: "For solo builders and small projects",
-		features: ["1,000 free trial credits", "10 concurrent sessions", "5 snapshots"],
-		cta: "Start free trial",
-	},
-	{
-		id: "pro",
-		name: "Professional",
-		price: "$500",
-		priceNote: "/month",
-		description: "For teams shipping fast",
-		features: [
-			"1,000 free trial credits",
-			"7,500 credits/month",
-			"100 concurrent sessions",
-			"200 snapshots",
-		],
-		cta: "Start free trial",
-		popular: true,
-	},
-];
 
 export function StepPayment({ onComplete }: StepPaymentProps) {
 	const [selectedPlan, setSelectedPlan] = useState<PlanId>("dev");
@@ -95,7 +57,7 @@ export function StepPayment({ onComplete }: StepPaymentProps) {
 
 			{/* Plan cards */}
 			<div className="grid md:grid-cols-2 gap-4">
-				{PLANS.map((plan) => (
+				{ONBOARDING_PLANS.map((plan) => (
 					<div
 						key={plan.id}
 						className={cn(

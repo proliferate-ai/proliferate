@@ -5,6 +5,8 @@
  */
 
 import { createSyncClient } from "@proliferate/gateway-clients";
+import type { CapabilityMode } from "@proliferate/shared/contracts/actions";
+import type { CoworkerCapabilityInput } from "@proliferate/shared/contracts/automations";
 import {
 	WORKER_RUN_EVENT_TYPES,
 	type WorkerRunEventType,
@@ -155,6 +157,47 @@ export interface PendingDirectiveItem {
 	senderUserId: string | null;
 }
 
+export interface WorkerCapability {
+	capabilityKey: string;
+	mode: CapabilityMode;
+	origin: string | null;
+}
+
+function normalizeWorkerCapabilities(
+	capabilities: CoworkerCapabilityInput[] | undefined,
+): CoworkerCapabilityInput[] {
+	if (!capabilities || capabilities.length === 0) {
+		return [];
+	}
+
+	const deduped = new Map<string, CoworkerCapabilityInput>();
+	for (const capability of capabilities) {
+		deduped.set(capability.capabilityKey, capability);
+	}
+	return [...deduped.values()];
+}
+
+async function applyWorkerCapabilities(
+	managerSessionId: string,
+	capabilities: CoworkerCapabilityInput[] | undefined,
+): Promise<void> {
+	const normalized = normalizeWorkerCapabilities(capabilities);
+	if (normalized.length === 0) {
+		return;
+	}
+
+	await Promise.all(
+		normalized.map((capability) =>
+			sessionsDb.upsertSessionCapability({
+				sessionId: managerSessionId,
+				capabilityKey: capability.capabilityKey,
+				mode: capability.mode,
+				origin: capability.origin ?? "coworker-settings",
+			}),
+		),
+	);
+}
+
 function toWorkerDetail(worker: WorkerRow): WorkerDetail {
 	return {
 		id: worker.id,
@@ -205,6 +248,7 @@ export async function createWorkerWithManagerSession(input: {
 	modelId?: string;
 	repoId?: string;
 	configurationId?: string;
+	capabilities?: CoworkerCapabilityInput[];
 }): Promise<WorkerDetail> {
 	const name = input.name || "Untitled coworker";
 
@@ -237,6 +281,8 @@ export async function createWorkerWithManagerSession(input: {
 		return createdWorker;
 	});
 
+	await applyWorkerCapabilities(worker.managerSessionId, input.capabilities);
+
 	return toWorkerDetail(worker);
 }
 
@@ -266,6 +312,19 @@ export async function getWorkerForOrg(
 		throw new WorkerNotFoundError(workerId);
 	}
 	return worker;
+}
+
+export async function listWorkerCapabilitiesForOrg(
+	workerId: string,
+	organizationId: string,
+): Promise<WorkerCapability[]> {
+	const worker = await getWorkerForOrg(workerId, organizationId);
+	const capabilities = await sessionsDb.listSessionCapabilities(worker.managerSessionId);
+	return capabilities.map((capability) => ({
+		capabilityKey: capability.capabilityKey,
+		mode: capability.mode as CapabilityMode,
+		origin: capability.origin,
+	}));
 }
 
 /**
@@ -431,6 +490,7 @@ export async function updateWorkerForOrg(input: {
 	};
 	repoId?: string | null;
 	configurationId?: string | null;
+	capabilities?: CoworkerCapabilityInput[];
 }): Promise<WorkerDetail | null> {
 	const updated = await workersDb.updateWorker(input.workerId, input.organizationId, input.fields);
 	if (!updated) {
@@ -443,6 +503,7 @@ export async function updateWorkerForOrg(input: {
 			configurationId: input.configurationId ?? null,
 		});
 	}
+	await applyWorkerCapabilities(updated.managerSessionId, input.capabilities);
 
 	return toWorkerDetail(updated);
 }

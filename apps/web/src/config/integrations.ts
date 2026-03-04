@@ -1,5 +1,6 @@
 import type { CatalogEntry } from "@/components/integrations/integration-picker-dialog";
 import type { Provider } from "@/components/integrations/provider-icon";
+import type { IntegrationCategory } from "@proliferate/shared";
 import { CONNECTOR_PRESETS } from "@proliferate/shared";
 
 const quickPresets = CONNECTOR_PRESETS.filter((p) => p.quickSetup);
@@ -101,4 +102,59 @@ export const CORE_PLATFORM_NOTES: Record<string, string> = {
 
 export const OAUTH_PROVIDERS: Provider[] = ["github", "sentry", "linear", "jira"];
 
+/** Nango-based OAuth providers shown in settings connection tab */
+export const CONNECTION_PROVIDERS: Provider[] = ["github", "sentry", "linear", "jira"];
+
 export type IntegrationTab = "connection" | "permissions";
+
+export const INTEGRATION_CATEGORY_ORDER: IntegrationCategory[] = [
+	"source-control",
+	"monitoring",
+	"project-management",
+	"communication",
+	"data",
+	"commerce",
+	"security",
+	"automation",
+	"developer-tools",
+];
+
+export const INTEGRATION_CATEGORY_LABELS: Record<IntegrationCategory, string> = {
+	"source-control": "Source Control",
+	monitoring: "Monitoring",
+	"project-management": "Project Management",
+	communication: "Communication",
+	data: "Data & Analytics",
+	commerce: "Commerce",
+	security: "Security",
+	automation: "Automation",
+	"developer-tools": "Developer Tools",
+};
+
+type ActionMode = "allow" | "require_approval" | "deny";
+
+export const PERMISSION_MODES: {
+	value: ActionMode;
+	label: string;
+	dotClass: string;
+	tooltip: string;
+}[] = [
+	{
+		value: "allow",
+		label: "Allow",
+		dotClass: "bg-success",
+		tooltip: "Executes automatically without human review",
+	},
+	{
+		value: "require_approval",
+		label: "Approval",
+		dotClass: "bg-warning",
+		tooltip: "Pauses for human approval (5 min timeout)",
+	},
+	{
+		value: "deny",
+		label: "Deny",
+		dotClass: "bg-destructive",
+		tooltip: "Agent is blocked from using this action",
+	},
+];

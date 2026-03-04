@@ -6,7 +6,7 @@
  */
 
 import { type Logger, createLogger } from "@proliferate/logger";
-import { baseSnapshots, billing, sessions } from "@proliferate/services";
+import { billing, sessions } from "@proliferate/services";
 import type {
 	AutoStartOutputEntry,
 	ConfigurationServiceCommand,
@@ -15,22 +15,20 @@ import type {
 	SandboxProviderType,
 	ServerMessage,
 } from "@proliferate/shared";
-import { getModalAppName, getSandboxProvider } from "@proliferate/shared/providers";
-import { SandboxProviderError } from "@proliferate/shared/sandbox";
-import { computeBaseSnapshotVersionKey } from "@proliferate/shared/sandbox";
+import { getSandboxProvider } from "@proliferate/shared/providers";
 import { scheduleSessionExpiry } from "../expiry/expiry-queue";
+import { OpenCodeCodingHarnessAdapter } from "../harness/coding/opencode/adapter";
 import type {
 	CodingHarnessEventStreamHandle,
 	CodingHarnessPromptImage,
 	RuntimeDaemonEvent,
-} from "../harness/coding-harness";
-import { ClaudeManagerHarnessAdapter } from "../harness/manager-claude-harness";
-import { OpenCodeCodingHarnessAdapter } from "../harness/opencode-coding-harness";
+} from "../harness/contracts/coding";
+import { ClaudeManagerHarnessAdapter } from "../harness/manager/adapter";
 import type { GatewayEnv } from "../lib/env";
-import { waitForMigrationLockRelease } from "../lib/lock";
-import { deriveSandboxMcpToken } from "../lib/sandbox-mcp-token";
-import { type SessionContext, loadSessionContext } from "../lib/session-store";
+import { deriveSandboxMcpToken } from "../middleware/auth";
 import type { SandboxInfo } from "../types";
+import { waitForMigrationLockRelease } from "./session/migration/lock";
+import { type SessionContext, loadSessionContext } from "./session/runtime/session-context-store";
 
 export class MigrationInProgressError extends Error {
 	constructor(message = "Migration in progress") {
@@ -73,8 +71,6 @@ export class SessionRuntime {
 	private provider: SandboxProvider | null = null;
 	private openCodeUrl: string | null = null;
 	private previewUrl: string | null = null;
-	private sshHost: string | null = null;
-	private sshPort: number | null = null;
 	private openCodeSessionId: string | null = null;
 	private sandboxExpiresAt: number | null = null;
 	private lifecycleStartTime = 0;
@@ -250,6 +246,34 @@ export class SessionRuntime {
 		});
 	}
 
+	async triggerManagerWakeCycle(): Promise<void> {
+		if (!this.isManagerSessionKind()) {
+			return;
+		}
+
+		let managerApiKey = this.env.anthropicApiKey;
+		let managerProxyUrl: string | undefined;
+		if (this.env.llmProxyRequired && this.env.llmProxyUrl) {
+			const { generateSessionAPIKey } = await import("@proliferate/shared/llm-proxy");
+			managerApiKey = await generateSessionAPIKey(
+				this.sessionId,
+				this.context.session.organization_id,
+			);
+			managerProxyUrl = this.env.llmProxyUrl;
+		}
+
+		const internalGatewayUrl = `http://localhost:${this.env.port}`;
+		await this.managerHarness.resume({
+			managerSessionId: this.sessionId,
+			organizationId: this.context.session.organization_id,
+			workerId: this.context.session.worker_id,
+			gatewayUrl: internalGatewayUrl,
+			serviceToken: this.env.serviceToken,
+			anthropicApiKey: managerApiKey,
+			llmProxyUrl: managerProxyUrl,
+		});
+	}
+
 	// ============================================
 	// Core lifecycle
 	// ============================================
@@ -291,8 +315,6 @@ export class SessionRuntime {
 			sandboxId: this.context.session.sandbox_id || null,
 			status: this.context.session.status || "unknown",
 			previewUrl: this.previewUrl,
-			sshHost: this.sshHost,
-			sshPort: this.sshPort,
 			expiresAt: this.sandboxExpiresAt,
 		};
 	}
@@ -309,8 +331,6 @@ export class SessionRuntime {
 		this.eventStreamConnected = false;
 		this.openCodeUrl = null;
 		this.previewUrl = null;
-		this.sshHost = null;
-		this.sshPort = null;
 		this.sandboxExpiresAt = null;
 		this.openCodeSessionId = null;
 		this.context.session.sandbox_id = null;
@@ -392,34 +412,6 @@ export class SessionRuntime {
 			this.provider = provider;
 			this.log("Using sandbox provider", { provider: provider.type });
 
-			// Resolve base snapshot from DB for Modal provider
-			let baseSnapshotId: string | undefined;
-			if (provider.type === "modal") {
-				try {
-					const versionKey = computeBaseSnapshotVersionKey();
-					const modalAppName = getModalAppName();
-					const dbSnapshotId = await baseSnapshots.getReadySnapshotId(
-						versionKey,
-						"modal",
-						modalAppName,
-					);
-					if (dbSnapshotId) {
-						baseSnapshotId = dbSnapshotId;
-						this.logger.info(
-							{ baseSnapshotId, versionKey: versionKey.slice(0, 12) },
-							"Base snapshot resolved from DB",
-						);
-					} else {
-						this.logger.debug(
-							{ versionKey: versionKey.slice(0, 12) },
-							"No ready base snapshot in DB, using env fallback",
-						);
-					}
-				} catch (err) {
-					this.logger.warn({ err }, "Failed to resolve base snapshot from DB (non-fatal)");
-				}
-			}
-
 			// Derive per-session sandbox-mcp auth token and merge into env vars
 			const sandboxMcpToken = deriveSandboxMcpToken(this.env.serviceToken, this.sessionId);
 			const envVarsWithToken = {
@@ -430,41 +422,20 @@ export class SessionRuntime {
 			};
 
 			const ensureSandboxStartMs = Date.now();
-			let result: Awaited<ReturnType<SandboxProvider["ensureSandbox"]>>;
-			try {
-				result = await provider.ensureSandbox({
-					sessionId: this.sessionId,
-					sessionType: this.context.session.session_type as "coding" | "setup" | "cli" | null,
-					repos: this.context.repos,
-					branch: this.context.primaryRepo.default_branch || "main",
-					envVars: envVarsWithToken,
-					systemPrompt: this.context.systemPrompt,
-					snapshotId: this.context.session.snapshot_id || undefined,
-					baseSnapshotId,
-					agentConfig: this.context.agentConfig,
-					currentSandboxId: this.context.session.sandbox_id || undefined,
-					sshPublicKey: this.context.sshPublicKey,
-					snapshotHasDeps: this.context.snapshotHasDeps,
-					serviceCommands: this.context.serviceCommands,
-					secretFileWrites: this.context.secretFileWrites,
-				});
-			} catch (ensureErr) {
-				// On memory snapshot restore failure, clear snapshotId so next reconnect
-				// creates a fresh sandbox instead of looping on a dead snapshot.
-				if (
-					ensureErr instanceof SandboxProviderError &&
-					ensureErr.operation === "restoreFromMemorySnapshot"
-				) {
-					this.logger.error(
-						{ err: ensureErr },
-						"Memory snapshot restore failed, clearing snapshotId",
-					);
-					await sessions.update(this.sessionId, { snapshotId: null }).catch((dbErr) => {
-						this.logger.error({ err: dbErr }, "Failed to clear snapshotId after restore failure");
-					});
-				}
-				throw ensureErr;
-			}
+			const result = await provider.ensureSandbox({
+				sessionId: this.sessionId,
+				sessionType: this.context.session.session_type as "coding" | "setup" | null,
+				repos: this.context.repos,
+				branch: this.context.primaryRepo.default_branch || "main",
+				envVars: envVarsWithToken,
+				systemPrompt: this.context.systemPrompt,
+				snapshotId: this.context.session.snapshot_id || undefined,
+				agentConfig: this.context.agentConfig,
+				currentSandboxId: this.context.session.sandbox_id || undefined,
+				snapshotHasDeps: this.context.snapshotHasDeps,
+				serviceCommands: this.context.serviceCommands,
+				secretFileWrites: this.context.secretFileWrites,
+			});
 			this.logLatency("runtime.ensure_ready.provider.ensure_sandbox", {
 				provider: provider.type,
 				durationMs: Date.now() - ensureSandboxStartMs,
@@ -486,8 +457,6 @@ export class SessionRuntime {
 			const canReuseStoredExpiry = result.recovered && previousSandboxId === result.sandboxId;
 			const resolvedExpiryMs = result.expiresAt ?? (canReuseStoredExpiry ? storedExpiryMs : null);
 			this.sandboxExpiresAt = resolvedExpiryMs;
-			this.sshHost = result.sshHost || null;
-			this.sshPort = result.sshPort || null;
 			this.log("Resolved sandbox expiry", {
 				previousSandboxId,
 				sandboxId: result.sandboxId,
@@ -505,8 +474,6 @@ export class SessionRuntime {
 				sandboxId: result.sandboxId,
 				tunnelUrl: this.openCodeUrl,
 				previewUrl: this.previewUrl,
-				sshHost: this.sshHost,
-				sshPort: this.sshPort,
 				expiresAt: this.sandboxExpiresAt ? new Date(this.sandboxExpiresAt).toISOString() : null,
 				recovered: result.recovered,
 			});

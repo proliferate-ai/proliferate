@@ -2,7 +2,7 @@
  * Session readiness middleware.
  */
 import type { RequestHandler } from "express";
-import type { HubManager } from "../../hub/hub-manager";
+import type { HubManager } from "../../hub/manager/hub-manager";
 import { ApiError } from "../errors/api-error";
 
 /**

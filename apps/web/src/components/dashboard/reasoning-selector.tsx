@@ -7,6 +7,7 @@ import {
 	ProliferateIconQuick,
 } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { EFFORT_OPTIONS } from "@/config/reasoning";
 import { cn } from "@/lib/display/utils";
 import {
 	DEFAULT_AGENT_TYPE,
@@ -34,12 +35,6 @@ const EFFORT_ICONS: Record<ReasoningEffort, FC<IconProps>> = {
 	normal: ProliferateIconNormal,
 	deep: ProliferateIconDeep,
 };
-
-const EFFORT_OPTIONS: { id: ReasoningEffort; label: string; description: string }[] = [
-	{ id: "quick", label: "Quick", description: "Minimal reasoning, fastest responses" },
-	{ id: "normal", label: "Normal", description: "Balanced reasoning (default)" },
-	{ id: "deep", label: "Deep", description: "Maximum reasoning depth" },
-];
 
 export function ReasoningSelector({ modelId, effort, onChange, disabled }: ReasoningSelectorProps) {
 	const [open, setOpen] = useState(false);

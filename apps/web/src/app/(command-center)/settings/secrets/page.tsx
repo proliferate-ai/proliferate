@@ -6,63 +6,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/org/use-secrets";
+import { useSecretsForm } from "@/hooks/settings/use-secrets-form";
 import { Eye, EyeOff, Key, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
 
 export default function SecretsPage() {
-	const [isAdding, setIsAdding] = useState(false);
-	const [newKey, setNewKey] = useState("");
-	const [newValue, setNewValue] = useState("");
-	const [newDescription, setNewDescription] = useState("");
-	const [showValue, setShowValue] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [deleting, setDeleting] = useState<string | null>(null);
-
-	const { data: secrets, isLoading } = useSecrets();
-	const createSecret = useCreateSecret();
-	const deleteSecret = useDeleteSecret();
-
-	const handleAdd = async () => {
-		if (!newKey.trim() || !newValue.trim()) {
-			setError("Key and value are required");
-			return;
-		}
-
-		setError(null);
-
-		try {
-			await createSecret.mutateAsync({
-				key: newKey.trim(),
-				value: newValue.trim(),
-				description: newDescription.trim() || undefined,
-			});
-
-			resetForm();
-		} catch (err) {
-			setError("Failed to create secret");
-		}
-	};
-
-	const handleDelete = async (id: string) => {
-		setDeleting(id);
-		try {
-			await deleteSecret.mutateAsync(id);
-		} catch (err) {
-			// silently ignore – UI will remain unchanged
-		} finally {
-			setDeleting(null);
-		}
-	};
-
-	const resetForm = () => {
-		setIsAdding(false);
-		setNewKey("");
-		setNewValue("");
-		setNewDescription("");
-		setShowValue(false);
-		setError(null);
-	};
+	const {
+		secrets,
+		isLoading,
+		isAdding,
+		setIsAdding,
+		newKey,
+		setNewKey,
+		newValue,
+		setNewValue,
+		newDescription,
+		setNewDescription,
+		showValue,
+		setShowValue,
+		error,
+		isCreating,
+		deletingId,
+		resetForm,
+		handleAdd,
+		handleDelete,
+	} = useSecretsForm();
 
 	if (isLoading) {
 		return (
@@ -126,8 +93,8 @@ export default function SecretsPage() {
 							<Button variant="outline" size="sm" onClick={resetForm}>
 								Cancel
 							</Button>
-							<Button size="sm" onClick={handleAdd} disabled={createSecret.isPending}>
-								{createSecret.isPending ? "Saving..." : "Add Secret"}
+							<Button size="sm" onClick={handleAdd} disabled={isCreating}>
+								{isCreating ? "Saving..." : "Add Secret"}
 							</Button>
 						</div>
 					</div>
@@ -144,9 +111,9 @@ export default function SecretsPage() {
 									size="icon"
 									className="h-6 w-6 text-muted-foreground hover:text-destructive"
 									onClick={() => handleDelete(secret.id)}
-									disabled={deleting === secret.id}
+									disabled={deletingId === secret.id}
 								>
-									{deleting === secret.id ? (
+									{deletingId === secret.id ? (
 										<LoadingDots size="sm" />
 									) : (
 										<Trash2 className="h-3 w-3" />

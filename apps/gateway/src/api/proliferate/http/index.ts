@@ -7,52 +7,42 @@
 import { Router, type Router as RouterType } from "express";
 import type { HubManager } from "../../../hub";
 import type { GatewayEnv } from "../../../lib/env";
-import { createEnsureSessionReady, createRequireAuth } from "../../../middleware";
-import { createActionsRouter } from "./actions";
-import cancelRouter from "./cancel";
-import { createEagerStartRouter } from "./eager-start";
-import { createHeartbeatRouter } from "./heartbeat";
-import infoRouter from "./info";
-import messageRouter from "./message";
+import { createRequireAuth } from "../../../middleware/auth";
+import { createEnsureSessionReady } from "../../../middleware/session";
+import { createDaemonHttpRouter } from "./daemon";
+import { createActionsRouter } from "./session/actions";
+import { createSessionControlRouter } from "./session/control";
+import { createSessionMediaRouter } from "./session/media";
+import { createSessionRuntimeRouter } from "./session/runtime";
+import { createSourceRouter } from "./session/source";
+import { createToolsRouter } from "./session/tools";
 import { createSessionsRouter } from "./sessions";
-import { createSourceRouter } from "./source";
-import { createToolsRouter } from "./tools";
-import { createVerificationMediaRouter } from "./verification-media";
 
 export function createProliferateHttpRoutes(hubManager: HubManager, env: GatewayEnv): RouterType {
 	const router: RouterType = Router();
 	const requireAuth = createRequireAuth(env);
 	const ensureSessionReady = createEnsureSessionReady(hubManager);
 
-	// All proliferate routes require auth
+	// Endpoint class: auth-only
 	router.use(requireAuth);
 
-	// Session creation - may need hub manager to kick off setup sessions
+	// Domain: daemon HTTP bridge (auth + runtime-ready)
+	router.use(createDaemonHttpRouter(hubManager, env));
+
+	// Domain: sessions (auth-only)
 	router.use("/sessions", createSessionsRouter(env, hubManager));
 
-	// Verification media doesn't need session hub (reads from S3)
-	router.use(createVerificationMediaRouter(env));
+	// Domain: session media (auth-only)
+	router.use(createSessionMediaRouter(env));
 
-	// Heartbeat — doesn't require sandbox running (resets idle timers only)
-	router.use("/:proliferateSessionId", createHeartbeatRouter(hubManager));
-
-	// Eager start — boots sandbox + sends initial prompt without WebSocket client
-	router.use("/:proliferateSessionId", createEagerStartRouter(hubManager));
-
-	// Actions routes — don't require sandbox running (DB + external API only)
-	router.use("/:proliferateSessionId/actions", createActionsRouter(env, hubManager));
-
-	// Source read routes — don't require sandbox running (DB + external API only)
-	router.use("/:proliferateSessionId/source", createSourceRouter(env));
-
-	// Tool callback routes — sandbox calls these synchronously during tool execution
+	// Endpoint class: auth + session-exists (no runtime required)
+	router.use("/:proliferateSessionId", createSessionControlRouter(hubManager));
+	router.use("/:proliferateSessionId/actions", createActionsRouter(hubManager));
+	router.use("/:proliferateSessionId/source", createSourceRouter());
 	router.use("/:proliferateSessionId/tools", createToolsRouter(env, hubManager));
 
-	// Routes that need the sandbox running
-	// Mount ensureSessionReady on the param path so params are extracted first
-	router.use("/:proliferateSessionId", ensureSessionReady, infoRouter);
-	router.use("/:proliferateSessionId", ensureSessionReady, messageRouter);
-	router.use("/:proliferateSessionId", ensureSessionReady, cancelRouter);
+	// Endpoint class: auth + runtime-ready
+	router.use("/:proliferateSessionId", ensureSessionReady, createSessionRuntimeRouter());
 
 	return router;
 }
