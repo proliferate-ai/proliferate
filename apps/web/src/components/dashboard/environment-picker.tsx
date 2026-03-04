@@ -19,19 +19,19 @@ import {
 } from "@/components/ui/dialog";
 import { GithubIcon } from "@/components/ui/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useConfigurations } from "@/hooks/use-configurations";
-import { useGitHubAppConnect } from "@/hooks/use-github-app-connect";
-import { useIntegrations } from "@/hooks/use-integrations";
+import { useGitHubAppConnect } from "@/hooks/integrations/use-github-app-connect";
+import { useIntegrations } from "@/hooks/integrations/use-integrations";
 import {
 	type NangoProvider,
 	shouldUseNangoForProvider,
 	useNangoConnect,
-} from "@/hooks/use-nango-connect";
-import { useRepos } from "@/hooks/use-repos";
-import { orpc } from "@/lib/orpc";
-import { getSetupInitialPrompt } from "@/lib/prompts";
-import { cn } from "@/lib/utils";
+} from "@/hooks/integrations/use-nango-connect";
+import { useRepos } from "@/hooks/org/use-repos";
+import { useConfigurations } from "@/hooks/sessions/use-configurations";
+import { cn } from "@/lib/display/utils";
+import { orpc } from "@/lib/infra/orpc";
 import { useDashboardStore } from "@/stores/dashboard";
+import { getSetupInitialPrompt } from "@proliferate/shared/prompts";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Layers, Pencil, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";

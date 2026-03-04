@@ -1,8 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useEffectiveServiceCommands } from "@/hooks/use-configurations";
-import { useServiceCommands } from "@/hooks/use-repos";
+import { useServiceCommands } from "@/hooks/org/use-repos";
+import { useEffectiveServiceCommands } from "@/hooks/sessions/use-configurations";
 import { Box, Camera, Loader2, Play } from "lucide-react";
 
 export interface SnapshotsContentProps {

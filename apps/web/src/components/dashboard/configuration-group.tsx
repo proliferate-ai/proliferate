@@ -12,12 +12,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
-import { useDeleteConfiguration, useUpdateConfiguration } from "@/hooks/use-configurations";
-import { useCreateSession } from "@/hooks/use-sessions";
-import { getSetupInitialPrompt } from "@/lib/prompts";
-import { cn, getRepoShortName } from "@/lib/utils";
+import {
+	useDeleteConfiguration,
+	useUpdateConfiguration,
+} from "@/hooks/sessions/use-configurations";
+import { useCreateSession } from "@/hooks/sessions/use-sessions";
+import { cn, getRepoShortName } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Session } from "@proliferate/shared/contracts";
+import { getSetupInitialPrompt } from "@proliferate/shared/prompts";
 import { ChevronRight, Pencil, Plus, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";

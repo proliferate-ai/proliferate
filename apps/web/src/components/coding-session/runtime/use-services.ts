@@ -1,6 +1,6 @@
 "use client";
 
-import { GATEWAY_URL } from "@/lib/gateway";
+import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type RefObject, useEffect } from "react";
 import type { Terminal } from "xterm";

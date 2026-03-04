@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
-import { useHasSlackInstallation } from "@/hooks/use-integrations";
+import { useHasSlackInstallation } from "@/hooks/integrations/use-integrations";
 import {
 	useDeleteSession,
 	usePrefetchSession,
@@ -21,9 +21,9 @@ import {
 	useSnapshotSession,
 	useSubscribeNotifications,
 	useUnsubscribeNotifications,
-} from "@/hooks/use-sessions";
-import { startSnapshotProgressToast } from "@/lib/snapshot-progress-toast";
-import { cn, formatRelativeTime, getRepoShortName } from "@/lib/utils";
+} from "@/hooks/sessions/use-sessions";
+import { startSnapshotProgressToast } from "@/lib/display/snapshot-progress-toast";
+import { cn, formatRelativeTime, getRepoShortName } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import type { Session } from "@proliferate/shared/contracts";
 import { Bell, BellOff, Camera, Loader2 } from "lucide-react";

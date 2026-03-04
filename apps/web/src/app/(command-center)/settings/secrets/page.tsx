@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/use-secrets";
+import { useCreateSecret, useDeleteSecret, useSecrets } from "@/hooks/org/use-secrets";
 import { Eye, EyeOff, Key, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 

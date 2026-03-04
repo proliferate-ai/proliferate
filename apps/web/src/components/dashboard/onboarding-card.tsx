@@ -1,7 +1,7 @@
 "use client";
 
 import { CardButton } from "@/components/ui/card-button";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { ChevronRight, X } from "lucide-react";
 import Image from "next/image";
 import type { ReactNode } from "react";

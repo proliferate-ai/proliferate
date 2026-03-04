@@ -1,7 +1,7 @@
 "use client";
 
-import { useMediaQuery } from "@/hooks/use-media-query";
-import { cn } from "@/lib/utils";
+import { useMediaQuery } from "@/hooks/ui/use-media-query";
+import { cn } from "@/lib/display/utils";
 import * as React from "react";
 import {
 	Dialog,

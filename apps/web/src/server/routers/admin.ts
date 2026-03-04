@@ -11,7 +11,7 @@ import {
 	getImpersonationCookie,
 	isSuperAdmin,
 	setImpersonationCookie,
-} from "@/lib/super-admin";
+} from "@/lib/auth/super-admin";
 import { os, ORPCError } from "@orpc/server";
 import { type EnvStatus, getEnvStatus } from "@proliferate/environment";
 import { nodeEnv } from "@proliferate/environment/runtime";

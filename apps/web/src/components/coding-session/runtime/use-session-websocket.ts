@@ -1,7 +1,7 @@
 "use client";
 
-import { devConsoleLog } from "@/lib/dev-console-log";
-import { GATEWAY_URL } from "@/lib/gateway";
+import { devConsoleLog } from "@/lib/analytics/dev-console-log";
+import { GATEWAY_URL } from "@/lib/infra/gateway";
 import {
 	type ServerMessage,
 	type SyncWebSocket,

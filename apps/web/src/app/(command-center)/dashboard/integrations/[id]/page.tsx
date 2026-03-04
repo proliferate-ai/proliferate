@@ -8,19 +8,19 @@ import type { Provider } from "@/components/integrations/provider-icon";
 import { ProviderIcon, getProviderDisplayName } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import { useActionModes, useSetActionMode } from "@/hooks/use-action-modes";
-import { useGitHubAppConnect } from "@/hooks/use-github-app-connect";
-import { useIntegrations } from "@/hooks/use-integrations";
+import { useActionModes, useSetActionMode } from "@/hooks/actions/use-action-modes";
+import { useGitHubAppConnect } from "@/hooks/integrations/use-github-app-connect";
+import { useIntegrations } from "@/hooks/integrations/use-integrations";
 import {
 	type NangoProvider,
 	getProviderFromIntegrationId,
 	shouldUseNangoForProvider,
 	useNangoConnect,
-} from "@/hooks/use-nango-connect";
-import { useOrgConnectors, useUpdateOrgConnector } from "@/hooks/use-org-connectors";
-import { ACTION_ADAPTERS, type ActionMeta } from "@/lib/action-adapters";
-import { orpc } from "@/lib/orpc";
-import { cn } from "@/lib/utils";
+} from "@/hooks/integrations/use-nango-connect";
+import { useOrgConnectors, useUpdateOrgConnector } from "@/hooks/integrations/use-org-connectors";
+import { cn } from "@/lib/display/utils";
+import { orpc } from "@/lib/infra/orpc";
+import { ACTION_ADAPTERS, type ActionMeta } from "@/lib/integrations/action-adapters";
 import type { ConnectorConfig } from "@proliferate/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Shield } from "lucide-react";

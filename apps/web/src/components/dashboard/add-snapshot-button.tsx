@@ -10,8 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { FolderPlusIcon } from "@/components/ui/icons";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { getSetupInitialPrompt } from "@/lib/prompts";
 import { useDashboardStore } from "@/stores/dashboard";
+import { getSetupInitialPrompt } from "@proliferate/shared/prompts";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CreateSnapshotContent } from "./snapshot-selector";

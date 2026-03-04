@@ -9,8 +9,8 @@ import {
 	CommandList,
 	CommandSeparator,
 } from "@/components/ui/command";
-import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
-import { useSessions } from "@/hooks/use-sessions";
+import { useAutomations, useCreateAutomation } from "@/hooks/automations/use-automations";
+import { useSessions } from "@/hooks/sessions/use-sessions";
 import { useDashboardStore } from "@/stores/dashboard";
 import { Blocks, Home, Plug, Plus, Search, Settings, User } from "lucide-react";
 import { useRouter } from "next/navigation";

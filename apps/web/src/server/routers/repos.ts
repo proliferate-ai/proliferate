@@ -2,7 +2,7 @@
  * Repos oRPC router.
  */
 
-import { type GitHubIntegration, listGitHubRepos } from "@/lib/github";
+import { type GitHubIntegration, listGitHubRepos } from "@/lib/integrations/github";
 import { ORPCError } from "@orpc/server";
 import { integrations, repos } from "@proliferate/services";
 import {

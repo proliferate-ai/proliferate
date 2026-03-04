@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { Check, Circle, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 

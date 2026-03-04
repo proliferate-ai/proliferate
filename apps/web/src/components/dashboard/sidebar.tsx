@@ -7,9 +7,9 @@ import { AutomationsIcon, SidebarCollapseIcon, SidebarExpandIcon } from "@/compo
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Text } from "@/components/ui/text";
-import { useSignOut } from "@/hooks/use-sign-out";
+import { useSignOut } from "@/hooks/ui/use-sign-out";
 import { useSession } from "@/lib/auth/client";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { env } from "@proliferate/environment/public";
 import {

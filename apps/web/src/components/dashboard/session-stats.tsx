@@ -1,6 +1,6 @@
 "use client";
 
-import { useSessions } from "@/hooks/use-sessions";
+import { useSessions } from "@/hooks/sessions/use-sessions";
 
 /**
  * Compact activity summary for returning users.

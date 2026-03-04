@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Textarea } from "@/components/ui/textarea";
-import { cn, formatRelativeTime } from "@/lib/utils";
+import { formatRelativeTime } from "@/lib/display/utils";
 import {
 	CheckCircle2,
 	ChevronDown,
@@ -195,50 +195,24 @@ export function WorkerActivityTab({
 
 	return (
 		<div className="flex flex-col gap-6">
-			{/* Summary strip */}
-			<div className="flex items-center gap-6 flex-wrap">
-				<div>
-					<p className="text-xs text-muted-foreground">Status</p>
-					<div className="flex items-center gap-1.5 mt-0.5">
-						<StatusDot
-							status={
-								worker.status === "active"
-									? "active"
-									: worker.status === "paused"
-										? "paused"
-										: "error"
-							}
-							size="sm"
-						/>
-						<span className="text-sm font-medium capitalize">{worker.status}</span>
-					</div>
-				</div>
-				<div>
-					<p className="text-xs text-muted-foreground">Active tasks</p>
-					<p className="text-sm font-medium mt-0.5 tabular-nums">{activeTaskCount}</p>
-				</div>
-				<div>
-					<p className="text-xs text-muted-foreground">Pending approvals</p>
-					<p
-						className={cn(
-							"text-sm mt-0.5 tabular-nums",
-							pendingApprovalCount > 0 ? "font-medium text-foreground" : "text-muted-foreground",
-						)}
-					>
-						{pendingApprovalCount}
-					</p>
-				</div>
-				<div>
-					<p className="text-xs text-muted-foreground">Last wake</p>
-					<p className="text-sm text-muted-foreground mt-0.5">
-						{worker.lastWakeAt ? formatRelativeTime(worker.lastWakeAt) : "Never"}
-					</p>
-				</div>
+			{/* Compact stats line */}
+			<div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+				<span className="tabular-nums font-medium text-foreground">{activeTaskCount}</span>
+				<span>active task{activeTaskCount !== 1 ? "s" : ""}</span>
+				{pendingApprovalCount > 0 && (
+					<>
+						<span>·</span>
+						<span className="tabular-nums font-medium text-foreground">{pendingApprovalCount}</span>
+						<span>pending approval{pendingApprovalCount !== 1 ? "s" : ""}</span>
+					</>
+				)}
+				<span>·</span>
+				<span>Last wake {worker.lastWakeAt ? formatRelativeTime(worker.lastWakeAt) : "never"}</span>
 				{worker.lastErrorCode && (
-					<div>
-						<p className="text-xs text-muted-foreground">Last error</p>
-						<p className="text-sm text-destructive mt-0.5">{worker.lastErrorCode}</p>
-					</div>
+					<>
+						<span>·</span>
+						<span className="text-destructive">{worker.lastErrorCode}</span>
+					</>
 				)}
 			</div>
 

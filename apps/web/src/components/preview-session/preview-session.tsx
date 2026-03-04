@@ -3,8 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SelectableItem } from "@/components/ui/selectable-item";
-import { useSessionData } from "@/hooks/use-sessions";
-import { getSessionGatewayUrl } from "@/lib/gateway";
+import { useSessionData } from "@/hooks/sessions/use-sessions";
+import { getSessionGatewayUrl } from "@/lib/infra/gateway";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { TerminalView } from "./terminal-view";

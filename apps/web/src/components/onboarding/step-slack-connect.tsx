@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Loader2, SlackIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
-import { useSlackConnect } from "@/hooks/use-integrations";
+import { useSlackConnect } from "@/hooks/integrations/use-integrations";
 import { useEffect, useRef, useState } from "react";
 
 interface StepSlackConnectProps {
@@ -111,7 +111,7 @@ export function StepSlackConnect({
 									Skip
 								</Button>
 								<Button
-									variant="dark"
+									variant="contrast"
 									onClick={handleSetupSlackConnect}
 									disabled={slackConnect.isPending}
 									className="h-11 flex-1 rounded-lg"
@@ -172,7 +172,7 @@ export function StepSlackConnect({
 								>
 									Reconnect
 								</Button>
-								<Button variant="dark" onClick={onSkip} className="h-11 flex-1 rounded-lg">
+								<Button variant="contrast" onClick={onSkip} className="h-11 flex-1 rounded-lg">
 									Continue
 								</Button>
 							</div>
@@ -209,7 +209,7 @@ export function StepSlackConnect({
 					</div>
 
 					<div className="space-y-3">
-						<Button variant="dark" onClick={handleConnect} className="h-11 w-full rounded-lg">
+						<Button variant="contrast" onClick={handleConnect} className="h-11 w-full rounded-lg">
 							Add to Slack
 						</Button>
 						<Button

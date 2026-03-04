@@ -4,7 +4,7 @@ import * as React from "react";
 
 import { Input, type InputProps } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/display/utils";
 
 export interface FormFieldProps extends InputProps {
 	label: string;

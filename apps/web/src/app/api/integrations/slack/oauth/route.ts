@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { requireAuth } from "@/lib/auth/server/helpers";
-import { createSignedOAuthState, sanitizeOAuthReturnUrl } from "@/lib/oauth-state";
-import { getSlackOAuthUrl } from "@/lib/slack";
+import { createSignedOAuthState, sanitizeOAuthReturnUrl } from "@/lib/integrations/oauth-state";
+import { getSlackOAuthUrl } from "@/lib/integrations/slack";
 import { orgs } from "@proliferate/services";
 import { NextResponse } from "next/server";
 

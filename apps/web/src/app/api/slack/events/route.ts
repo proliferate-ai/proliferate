@@ -6,7 +6,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "crypto";
-import { logger } from "@/lib/logger";
+import { logger } from "@/lib/infra/logger";
 import { env } from "@proliferate/environment/server";
 
 const log = logger.child({ handler: "slack-events" });
