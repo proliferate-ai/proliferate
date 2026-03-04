@@ -6,13 +6,12 @@
 
 import { isBillingEnabled } from "@/lib/infra/billing";
 import { logger } from "@/lib/infra/logger";
-import { type GitHubIntegration, listGitHubRepos } from "@/lib/integrations/github";
+import { listGitHubRepos } from "@/lib/integrations/github";
 
 const log = logger.child({ handler: "onboarding" });
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
-import { onboarding, orgs } from "@proliferate/services";
-import { TRIAL_CREDITS } from "@proliferate/shared/billing";
+import { onboarding } from "@proliferate/services";
 import {
 	FinalizeOnboardingInputSchema,
 	FinalizeOnboardingResponseSchema,
@@ -67,33 +66,18 @@ export const onboardingRouter = {
 	 * so they don't get stuck in onboarding if the active org changes.
 	 */
 	markComplete: orgProcedure
+		.input(z.object({}).optional())
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ context }) => {
 			try {
-				await orgs.markOnboardingComplete(context.orgId, true);
-
-				const org = await orgs.getBillingInfoV2(context.orgId);
-				if (org?.billingState === "unconfigured") {
-					await orgs.initializeBillingState(context.orgId, "trial", TRIAL_CREDITS);
-				}
+				await onboarding.completeOnboarding(context.orgId, context.user.id);
+				return { success: true };
 			} catch (err) {
 				log.error({ err, orgId: context.orgId }, "Failed to mark complete");
 				throw new ORPCError("INTERNAL_SERVER_ERROR", {
 					message: "Failed to complete onboarding",
 				});
 			}
-
-			// Also mark all other orgs the user belongs to as onboarding-complete.
-			// This prevents the user from getting stuck in onboarding if their
-			// session switches back to a personal workspace or another org.
-			try {
-				await orgs.markAllUserOrgsOnboardingComplete(context.user.id);
-			} catch (err) {
-				// Non-critical — log and continue
-				log.warn({ err, userId: context.user.id }, "Failed to mark other orgs complete");
-			}
-
-			return { success: true };
 		}),
 
 	/**
@@ -109,16 +93,7 @@ export const onboardingRouter = {
 				log.warn({ userId: context.user.id }, "No active organization for onboarding status check");
 			}
 
-			const status = await onboarding.getOnboardingStatus(orgId);
-
-			if (orgId && !status.onboardingComplete) {
-				const autoCompleted = await onboarding.autoCompleteIfNeeded(orgId, context.user.id);
-				if (autoCompleted) {
-					status.onboardingComplete = true;
-				}
-			}
-
-			return status;
+			return onboarding.getOnboardingStatusWithAutoComplete(orgId, context.user.id);
 		}),
 
 	/**
@@ -180,24 +155,10 @@ export const onboardingRouter = {
 			}
 
 			// Fetch available repos from GitHub (web-only: uses @octokit/auth-app)
-			const gitHubIntegration: GitHubIntegration = {
-				id: integration.id,
-				githubInstallationId: integration.github_installation_id,
-				connectionId: integration.connection_id,
-				provider: integration.provider ?? undefined,
-			};
-
-			let allRepos: Array<{
-				id: number;
-				full_name: string;
-				private: boolean;
-				clone_url: string;
-				html_url: string;
-				default_branch: string;
-			}>;
+			let allRepos: Awaited<ReturnType<typeof listGitHubRepos>>["repositories"];
 
 			try {
-				const result = await listGitHubRepos(gitHubIntegration);
+				const result = await listGitHubRepos(integration);
 				allRepos = result.repositories;
 			} catch (err) {
 				log.error({ err }, "Failed to fetch GitHub repos");
@@ -206,22 +167,14 @@ export const onboardingRouter = {
 				});
 			}
 
-			// Filter to only selected repos
-			const selectedRepos = allRepos.filter((repo) => selectedGithubRepoIds.includes(repo.id));
-
-			if (selectedRepos.length === 0) {
-				throw new ORPCError("BAD_REQUEST", {
-					message: "None of the selected repos are accessible",
-				});
-			}
-
-			// Delegate repo upsert + config creation to service
+			// Delegate repo filtering, upsert, and config creation to service
 			try {
-				return await onboarding.finalizeOnboarding({
+				return await onboarding.finalizeOnboardingWithRepos({
 					orgId,
 					userId,
-					selectedRepos,
 					integrationId,
+					selectedGithubRepoIds,
+					allRepos,
 					gatewayUrl: env.NEXT_PUBLIC_GATEWAY_URL,
 					serviceToken: env.SERVICE_TO_SERVICE_AUTH_TOKEN,
 				});

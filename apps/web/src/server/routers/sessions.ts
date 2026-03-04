@@ -6,9 +6,7 @@
  * integration and remain as separate handlers imported here.
  */
 
-import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { ORPCError } from "@orpc/server";
-import { env } from "@proliferate/environment/server";
 import { notifications, sessions } from "@proliferate/services";
 import {
 	CreateSessionInputSchema,
@@ -77,8 +75,6 @@ async function createSessionOrThrow(input: {
 			initialPrompt: input.initialPrompt,
 			orgId: input.orgId,
 			userId: input.userId,
-			gatewayUrl: GATEWAY_URL ?? "",
-			serviceToken: env.SERVICE_TO_SERVICE_AUTH_TOKEN ?? "",
 			continuedFromSessionId: input.continuedFromSessionId,
 			rerunOfSessionId: input.rerunOfSessionId,
 		});

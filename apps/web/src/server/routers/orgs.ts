@@ -17,6 +17,24 @@ import {
 import { z } from "zod";
 import { orgProcedure, protectedProcedure } from "./middleware";
 
+/** Map typed orgs domain errors to ORPCError. */
+function throwOrgsOrpcError(
+	err: unknown,
+	fallbackMessage = "Organization operation failed",
+): never {
+	if (err instanceof orgs.OrgForbiddenError || err instanceof orgs.ActionModePermissionError) {
+		throw new ORPCError("FORBIDDEN", { message: err.message });
+	}
+	if (err instanceof orgs.OrgMemberNotFoundError) {
+		throw new ORPCError("NOT_FOUND", { message: err.message });
+	}
+	if (err instanceof orgs.OrgOwnerProtectedError) {
+		throw new ORPCError("BAD_REQUEST", { message: err.message });
+	}
+	if (err instanceof ORPCError) throw err;
+	throw new ORPCError("INTERNAL_SERVER_ERROR", { message: fallbackMessage });
+}
+
 export const orgsRouter = {
 	/**
 	 * List all organizations the current user belongs to.
@@ -123,10 +141,7 @@ export const orgsRouter = {
 				await orgs.setActionMode(context.orgId, context.user.id, input.key, input.mode);
 				return { success: true };
 			} catch (err) {
-				if (err instanceof orgs.ActionModePermissionError) {
-					throw new ORPCError("FORBIDDEN", { message: err.message });
-				}
-				throw err;
+				throwOrgsOrpcError(err);
 			}
 		}),
 

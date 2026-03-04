@@ -43,6 +43,7 @@
 		"./contracts/workers": "./src/contracts/workers.ts",
 		"./providers": "./src/providers/index.ts",
 		"./billing": "./src/billing/index.ts",
+		"./connectors": "./src/lib/connectors.ts",
 		"./sandbox": "./src/sandbox/index.ts",
 		"./sessions": "./src/sessions/index.ts"
 	},

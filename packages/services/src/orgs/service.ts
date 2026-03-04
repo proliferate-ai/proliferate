@@ -37,14 +37,25 @@ export interface DomainSuggestions {
 	domain?: string;
 }
 
-export interface UpdateMemberRoleResult {
-	success: boolean;
-	error?: string;
+export class OrgForbiddenError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "OrgForbiddenError";
+	}
 }
 
-export interface RemoveMemberResult {
-	success: boolean;
-	error?: string;
+export class OrgMemberNotFoundError extends Error {
+	constructor(message = "Member not found") {
+		super(message);
+		this.name = "OrgMemberNotFoundError";
+	}
+}
+
+export class OrgOwnerProtectedError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "OrgOwnerProtectedError";
+	}
 }
 
 export class ActionModePermissionError extends Error {
@@ -298,11 +309,11 @@ export async function updateDomains(
 	orgId: string,
 	userId: string,
 	domains: string[],
-): Promise<{ allowed_domains: string[] } | { error: string }> {
+): Promise<{ allowed_domains: string[] }> {
 	// Check if user is owner
 	const role = await orgsDb.getUserRole(userId, orgId);
 	if (role !== "owner") {
-		return { error: "Only owners can manage domains" };
+		throw new OrgForbiddenError("Only owners can manage domains");
 	}
 
 	// Validate and normalize domains
@@ -323,61 +334,55 @@ export async function updateMemberRole(
 	memberId: string,
 	userId: string,
 	newRole: "admin" | "member",
-): Promise<UpdateMemberRoleResult> {
+): Promise<void> {
 	// Check if user is owner
 	const userRole = await orgsDb.getUserRole(userId, orgId);
 	if (userRole !== "owner") {
-		return { success: false, error: "Only owners can change roles" };
+		throw new OrgForbiddenError("Only owners can change roles");
 	}
 
 	// Get the member to check their current role
 	const member = await orgsDb.findMemberById(memberId, orgId);
 	if (!member) {
-		return { success: false, error: "Member not found" };
+		throw new OrgMemberNotFoundError();
 	}
 
 	// Don't allow changing owner role
 	if (member.role === "owner") {
-		return { success: false, error: "Cannot change owner role" };
+		throw new OrgOwnerProtectedError("Cannot change owner role");
 	}
 
 	await orgsDb.updateMemberRole(memberId, orgId, newRole);
-	return { success: true };
 }
 
 /**
  * Remove a member from the organization.
  * Only owners can perform this action.
  */
-export async function removeMember(
-	orgId: string,
-	memberId: string,
-	userId: string,
-): Promise<RemoveMemberResult> {
+export async function removeMember(orgId: string, memberId: string, userId: string): Promise<void> {
 	// Check if user is owner
 	const userRole = await orgsDb.getUserRole(userId, orgId);
 	if (userRole !== "owner") {
-		return { success: false, error: "Only owners can remove members" };
+		throw new OrgForbiddenError("Only owners can remove members");
 	}
 
 	// Get the member to check their role and identity
 	const member = await orgsDb.findMemberById(memberId, orgId);
 	if (!member) {
-		return { success: false, error: "Member not found" };
+		throw new OrgMemberNotFoundError();
 	}
 
 	// Don't allow removing owner
 	if (member.role === "owner") {
-		return { success: false, error: "Cannot remove owner" };
+		throw new OrgOwnerProtectedError("Cannot remove owner");
 	}
 
 	// Don't allow removing yourself through this endpoint
 	if (member.userId === userId) {
-		return { success: false, error: "Cannot remove yourself" };
+		throw new OrgOwnerProtectedError("Cannot remove yourself");
 	}
 
 	await orgsDb.removeMember(memberId, orgId);
-	return { success: true };
 }
 
 /**

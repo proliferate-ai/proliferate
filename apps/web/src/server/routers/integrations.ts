@@ -7,7 +7,6 @@
 
 import { isEmailEnabled, sendIntegrationRequestEmail } from "@/lib/infra/email";
 import { logger } from "@/lib/infra/logger";
-import { requireNangoIntegrationId } from "@/lib/integrations/nango";
 import { sendSlackConnectInvite } from "@/lib/integrations/slack";
 import { ORPCError } from "@orpc/server";
 import { connectors, integrations } from "@proliferate/services";
@@ -15,7 +14,7 @@ import {
 	ConnectorAuthSchema,
 	ConnectorConfigSchema,
 	ConnectorRiskPolicySchema,
-} from "@proliferate/shared";
+} from "@proliferate/shared/connectors";
 import {
 	GitHubStatusSchema,
 	IntegrationSchema,
@@ -40,11 +39,11 @@ function throwAsORPC(err: unknown): never {
 	if (err instanceof integrations.IntegrationInactiveError) {
 		throw new ORPCError("BAD_REQUEST", { message: err.message });
 	}
-	if (err instanceof integrations.NangoApiError) {
-		throw new ORPCError("BAD_REQUEST", { message: err.message });
-	}
 	if (err instanceof integrations.NoAccessTokenError) {
 		throw new ORPCError("BAD_REQUEST", { message: err.message });
+	}
+	if (err instanceof integrations.IntegrationAccessDeniedError) {
+		throw new ORPCError("FORBIDDEN", { message: err.message });
 	}
 	if (err instanceof integrations.IntegrationAdminRequiredError) {
 		throw new ORPCError("FORBIDDEN", { message: err.message });
@@ -147,31 +146,6 @@ export const integrationsRouter = {
 		}),
 
 	/**
-	 * Save integration after Nango OAuth callback.
-	 */
-	callback: orgProcedure
-		.input(z.object({ connectionId: z.string(), providerConfigKey: z.string() }))
-		.output(z.object({ success: z.boolean() }))
-		.handler(async ({ input, context }) => {
-			try {
-				await integrations.assertIntegrationAdmin(context.user.id, context.orgId);
-			} catch (err) {
-				throwAsORPC(err);
-			}
-			const displayName = integrations.getDisplayNameForProvider(input.providerConfigKey);
-
-			const result = await integrations.saveIntegrationFromCallback({
-				organizationId: context.orgId,
-				userId: context.user.id,
-				connectionId: input.connectionId,
-				providerConfigKey: input.providerConfigKey,
-				displayName,
-			});
-
-			return { success: result.success };
-		}),
-
-	/**
 	 * Disconnect an integration.
 	 */
 	disconnect: orgProcedure
@@ -179,7 +153,7 @@ export const integrationsRouter = {
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
 			try {
-				await integrations.disconnectIntegrationWithNango(
+				await integrations.disconnectIntegration(
 					input.integrationId,
 					context.orgId,
 					context.user.id,
@@ -201,17 +175,6 @@ export const integrationsRouter = {
 		return integrations.getGitHubStatusWithCreator(context.orgId);
 	}),
 
-	/**
-	 * Create a Nango connect session for GitHub OAuth.
-	 */
-	githubSession: orgProcedure
-		.output(z.object({ sessionToken: z.string() }))
-		.handler(async ({ context }) => {
-			throw new ORPCError("BAD_REQUEST", {
-				message: "Nango GitHub OAuth is not enabled. Use GitHub App flow instead.",
-			});
-		}),
-
 	// ----------------------------------------
 	// Sentry endpoints
 	// ----------------------------------------
@@ -222,28 +185,7 @@ export const integrationsRouter = {
 	sentryStatus: orgProcedure
 		.output(z.object({ connected: z.boolean() }))
 		.handler(async ({ context }) => {
-			const sentryIntegrationId = requireNangoIntegrationId("sentry");
-			return integrations.getSentryStatus(context.orgId, sentryIntegrationId);
-		}),
-
-	/**
-	 * Create a Nango connect session for Sentry OAuth.
-	 */
-	sentrySession: orgProcedure
-		.output(z.object({ sessionToken: z.string() }))
-		.handler(async ({ context }) => {
-			try {
-				await integrations.assertIntegrationAdmin(context.user.id, context.orgId);
-				return await integrations.createNangoConnectSession({
-					provider: "sentry",
-					orgId: context.orgId,
-					userId: context.user.id,
-					userEmail: context.user.email,
-					userDisplayName: context.user.name || context.user.email,
-				});
-			} catch (err) {
-				throwAsORPC(err);
-			}
+			return integrations.getSentryStatus(context.orgId, "sentry");
 		}),
 
 	/**
@@ -274,28 +216,7 @@ export const integrationsRouter = {
 	linearStatus: orgProcedure
 		.output(z.object({ connected: z.boolean() }))
 		.handler(async ({ context }) => {
-			const linearIntegrationId = requireNangoIntegrationId("linear");
-			return integrations.getLinearStatus(context.orgId, linearIntegrationId);
-		}),
-
-	/**
-	 * Create a Nango connect session for Linear OAuth.
-	 */
-	linearSession: orgProcedure
-		.output(z.object({ sessionToken: z.string() }))
-		.handler(async ({ context }) => {
-			try {
-				await integrations.assertIntegrationAdmin(context.user.id, context.orgId);
-				return await integrations.createNangoConnectSession({
-					provider: "linear",
-					orgId: context.orgId,
-					userId: context.user.id,
-					userEmail: context.user.email,
-					userDisplayName: context.user.name || context.user.email,
-				});
-			} catch (err) {
-				throwAsORPC(err);
-			}
+			return integrations.getLinearStatus(context.orgId, "linear");
 		}),
 
 	/**
@@ -326,28 +247,7 @@ export const integrationsRouter = {
 	jiraStatus: orgProcedure
 		.output(z.object({ connected: z.boolean() }))
 		.handler(async ({ context }) => {
-			const jiraIntegrationId = requireNangoIntegrationId("jira");
-			return integrations.getJiraStatus(context.orgId, jiraIntegrationId);
-		}),
-
-	/**
-	 * Create a Nango connect session for Jira OAuth.
-	 */
-	jiraSession: orgProcedure
-		.output(z.object({ sessionToken: z.string() }))
-		.handler(async ({ context }) => {
-			try {
-				await integrations.assertIntegrationAdmin(context.user.id, context.orgId);
-				return await integrations.createNangoConnectSession({
-					provider: "jira",
-					orgId: context.orgId,
-					userId: context.user.id,
-					userEmail: context.user.email,
-					userDisplayName: context.user.name || context.user.email,
-				});
-			} catch (err) {
-				throwAsORPC(err);
-			}
+			return integrations.getJiraStatus(context.orgId, "jira");
 		}),
 
 	/**

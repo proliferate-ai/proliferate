@@ -15,7 +15,6 @@ import { z } from "zod";
 import { orgProcedure } from "./middleware";
 
 // Provider value for Nango GitHub integrations
-const NANGO_GITHUB_PROVIDER = "github-app";
 
 export const reposRouter = {
 	/**
@@ -102,14 +101,6 @@ export const reposRouter = {
 			} else {
 				// Try GitHub App first
 				integration = await integrations.findFirstActiveGitHubAppForRepos(orgId);
-
-				if (!integration) {
-					// Fall back to Nango GitHub connection
-					integration = await integrations.findFirstActiveNangoGitHubForRepos(
-						orgId,
-						NANGO_GITHUB_PROVIDER,
-					);
-				}
 			}
 
 			if (!integration || (!integration.githubInstallationId && !integration.connectionId)) {

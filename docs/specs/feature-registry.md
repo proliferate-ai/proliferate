@@ -244,22 +244,22 @@
 |---------|--------|----------|-------|
 | Integration list/update | Implemented | `apps/web/src/server/routers/integrations.ts` | Generic integration routes |
 | GitHub OAuth (GitHub App) | Implemented | `apps/web/src/app/api/integrations/github/callback/route.ts` | Direct GitHub App installation flow |
-| Sentry OAuth | Implemented | `apps/web/src/server/routers/integrations.ts:sentryStatus/sentrySession` | Via Nango |
-| Linear OAuth | Implemented | `apps/web/src/server/routers/integrations.ts:linearStatus/linearSession` | Via Nango |
+| Sentry OAuth | Implemented | `apps/web/src/app/api/integrations/sentry/oauth/route.ts`, `apps/web/src/app/api/integrations/sentry/oauth/callback/route.ts` | First-party OAuth route + callback persistence |
+| Linear OAuth | Implemented | `apps/web/src/app/api/integrations/linear/oauth/route.ts`, `apps/web/src/app/api/integrations/linear/oauth/callback/route.ts` | First-party OAuth route + callback persistence |
 | Slack OAuth | Implemented | `apps/web/src/app/api/integrations/slack/oauth/callback/route.ts` | Workspace install stored in `slack_installations` (not Nango-managed) |
 | Slack installations | Implemented | `packages/db/src/schema/slack.ts:slackInstallations` | Workspace-level |
 | Slack conversations cache | Implemented | `packages/db/src/schema/slack.ts:slackConversations` | Channel cache |
 | Slack members API | Implemented | `apps/web/src/server/routers/integrations.ts:slackMembers` | Workspace member list for DM target picker |
 | Slack channels API | Implemented | `apps/web/src/server/routers/integrations.ts:slackChannels` | Workspace channel list for notification config |
 | Session notification subscriptions table | Implemented | `packages/db/src/schema/slack.ts:sessionNotificationSubscriptions` | Per-session DM notification opt-in |
-| Nango callback handling | Implemented | `apps/web/src/server/routers/integrations.ts:callback` | OAuth callback |
+| Provider OAuth callback handling | Implemented | `apps/web/src/app/api/integrations/**/oauth/callback/route.ts` | Provider-native callback persistence with signed OAuth state |
 | Integration disconnect | Implemented | `apps/web/src/server/routers/integrations.ts:disconnect` | Remove connection |
 | Connection binding (repos) | Implemented | `packages/db/src/schema/repos.ts:repoConnections` | Repo-to-integration |
 | Connection binding (automations) | Implemented | `packages/db/src/schema/automations.ts:automationConnections` | Automation-to-integration |
 | Connection binding (sessions) | Implemented | `packages/db/src/schema/sessions.ts:sessionConnections` | Session-to-integration |
 | Sentry metadata | Implemented | `apps/web/src/server/routers/integrations.ts:sentryMetadata` | Sentry project/org metadata |
 | Linear metadata | Implemented | `apps/web/src/server/routers/integrations.ts:linearMetadata` | Linear team/project metadata |
-| Jira OAuth | Implemented | `apps/web/src/server/routers/integrations.ts:jiraStatus/jiraSession` | Via Nango (Atlassian 3LO) |
+| Jira OAuth | Implemented | `apps/web/src/app/api/integrations/jira/oauth/route.ts`, `apps/web/src/app/api/integrations/jira/oauth/callback/route.ts` | First-party Atlassian 3LO route + callback persistence |
 | Jira metadata | Implemented | `apps/web/src/server/routers/integrations.ts:jiraMetadata` | Sites, projects, issue types |
 | Jira action adapter | Implemented | `packages/providers/src/providers/jira/actions.ts` | 6 actions: list_sites, list/get/create/update issues, add_comment |
 | GitHub auth (gateway) | Implemented | `apps/gateway/src/lib/github-auth.ts` | Gateway-side GitHub token resolution |

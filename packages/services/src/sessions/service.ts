@@ -7,6 +7,7 @@
  */
 
 import { randomUUID } from "crypto";
+import { env } from "@proliferate/environment/server";
 import { createSyncClient } from "@proliferate/gateway-clients";
 import type { AgentConfig, SandboxProviderType } from "@proliferate/shared";
 import { getDefaultAgentConfig, isValidModelId, parseModelId } from "@proliferate/shared";
@@ -266,8 +267,10 @@ export interface CreateSessionInput {
 	initialPrompt?: string;
 	orgId: string;
 	userId: string;
-	gatewayUrl: string;
-	serviceToken: string;
+	/** Override for gateway URL. Defaults to env.NEXT_PUBLIC_GATEWAY_URL. */
+	gatewayUrl?: string;
+	/** Override for service-to-service token. Defaults to env.SERVICE_TO_SERVICE_AUTH_TOKEN. */
+	serviceToken?: string;
 	continuedFromSessionId?: string;
 	rerunOfSessionId?: string;
 }
@@ -302,8 +305,8 @@ export async function createSession(input: CreateSessionInput): Promise<CreateSe
 		initialPrompt,
 		orgId,
 		userId,
-		gatewayUrl,
-		serviceToken,
+		gatewayUrl = env.NEXT_PUBLIC_GATEWAY_URL ?? "",
+		serviceToken = env.SERVICE_TO_SERVICE_AUTH_TOKEN ?? "",
 		continuedFromSessionId,
 		rerunOfSessionId,
 	} = input;
@@ -633,11 +636,31 @@ export class SessionAccessDeniedError extends Error {
 // Task session creation
 // ============================================
 
+export class TaskSessionValidationError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "TaskSessionValidationError";
+	}
+}
+
 export interface CreateUnifiedTaskSessionInput extends sessionsDb.CreateTaskSessionInput {}
 
 export async function createUnifiedTaskSession(
 	input: CreateUnifiedTaskSessionInput,
 ): Promise<sessionsDb.SessionRow> {
+	// Configured task sessions require full repo linkage for baseline diffing,
+	// UNLESS they're spawned by a manager (parentSessionId set) — those only
+	// need configurationId for snapshot/repo resolution, not baseline tracking.
+	if (
+		input.configurationId &&
+		!input.parentSessionId &&
+		(!input.repoId || !input.repoBaselineId || !input.repoBaselineTargetId)
+	) {
+		throw new TaskSessionValidationError(
+			"Configured task session requires repo + baseline + baseline target linkage",
+		);
+	}
+
 	return sessionsDb.createTaskSession({
 		id: input.id ?? randomUUID(),
 		organizationId: input.organizationId,

@@ -30,6 +30,28 @@ export interface OnboardingStatusResult extends OnboardingStatus {}
 // ============================================
 
 /**
+ * Complete onboarding for an organization.
+ * Handles billing state initialization and marks all user orgs as complete.
+ */
+export async function completeOnboarding(orgId: string, userId: string): Promise<void> {
+	await orgsService.markOnboardingComplete(orgId, true);
+
+	const org = await orgsService.getBillingInfoV2(orgId);
+	if (org?.billingState === "unconfigured") {
+		await orgsService.initializeBillingState(orgId, "trial", TRIAL_CREDITS);
+	}
+
+	// Also mark all other orgs the user belongs to as onboarding-complete.
+	// This prevents the user from getting stuck in onboarding if their
+	// session switches back to a personal workspace or another org.
+	try {
+		await orgsService.markAllUserOrgsOnboardingComplete(userId);
+	} catch (err) {
+		logger.warn({ err, userId }, "Failed to mark other orgs complete");
+	}
+}
+
+/**
  * Get onboarding status for an organization.
  */
 export async function getOnboardingStatus(orgId: string | undefined): Promise<OnboardingStatus> {
@@ -73,6 +95,27 @@ export async function getOnboardingStatus(orgId: string | undefined): Promise<On
 }
 
 /**
+ * Get onboarding status with auto-complete check.
+ * If the org hasn't completed onboarding but the user has another org that has,
+ * auto-completes and returns updated status.
+ */
+export async function getOnboardingStatusWithAutoComplete(
+	orgId: string | undefined,
+	userId: string,
+): Promise<OnboardingStatus> {
+	const status = await getOnboardingStatus(orgId);
+
+	if (orgId && !status.onboardingComplete) {
+		const autoCompleted = await autoCompleteIfNeeded(orgId, userId);
+		if (autoCompleted) {
+			status.onboardingComplete = true;
+		}
+	}
+
+	return status;
+}
+
+/**
  * Save tool selections to onboarding meta.
  */
 export async function saveToolSelections(orgId: string, selectedTools: string[]): Promise<void> {
@@ -91,26 +134,27 @@ export async function saveQuestionnaire(
 
 /**
  * Get integration for finalization.
+ * Returns a shape compatible with the web-layer GitHubIntegration type.
  */
 export async function getIntegrationForFinalization(
 	integrationId: string,
 	orgId: string,
 ): Promise<{
 	id: string;
-	github_installation_id: number | null;
-	connection_id: string | null;
-	provider: string | null;
+	githubInstallationId: number | null;
+	connectionId: string | null;
+	provider: string | undefined;
 } | null> {
 	const integration = await onboardingDb.getIntegration(integrationId, orgId);
 	if (!integration) return null;
 
 	return {
 		id: integration.id,
-		github_installation_id: integration.githubInstallationId
+		githubInstallationId: integration.githubInstallationId
 			? Number(integration.githubInstallationId)
 			: null,
-		connection_id: integration.connectionId,
-		provider: integration.provider,
+		connectionId: integration.connectionId,
+		provider: integration.provider ?? undefined,
 	};
 }
 
@@ -380,6 +424,47 @@ export async function finalizeOnboarding(
 		repoIds: createdRepoIds,
 		isNew: configuration.isNew,
 	};
+}
+
+/**
+ * Finalize onboarding with repo filtering.
+ *
+ * Accepts the full list of repos from a GitHub fetch and the selected IDs,
+ * filters to only selected repos, and delegates to `finalizeOnboarding`.
+ * The caller is responsible for fetching GitHub repos (web-only dependency).
+ */
+export async function finalizeOnboardingWithRepos(input: {
+	orgId: string;
+	userId: string;
+	integrationId: string;
+	selectedGithubRepoIds: number[];
+	allRepos: Array<{
+		id: number;
+		full_name: string;
+		private: boolean;
+		clone_url: string;
+		html_url: string;
+		default_branch: string;
+	}>;
+	gatewayUrl: string;
+	serviceToken: string;
+}): Promise<FinalizeOnboardingResult> {
+	const selectedRepos = input.allRepos.filter((repo) =>
+		input.selectedGithubRepoIds.includes(repo.id),
+	);
+
+	if (selectedRepos.length === 0) {
+		throw new Error("None of the selected repos are accessible");
+	}
+
+	return finalizeOnboarding({
+		orgId: input.orgId,
+		userId: input.userId,
+		selectedRepos,
+		integrationId: input.integrationId,
+		gatewayUrl: input.gatewayUrl,
+		serviceToken: input.serviceToken,
+	});
 }
 
 // ============================================

@@ -5,7 +5,6 @@
  * repo-linked integration connections, then falling back to org-wide.
  */
 
-import { env } from "@proliferate/environment/server";
 import { integrations } from "@proliferate/services";
 
 export async function resolveGitHubToken(orgId: string, repoId: string): Promise<string> {
@@ -26,36 +25,14 @@ export async function resolveGitHubToken(orgId: string, repoId: string): Promise
 	}
 
 	if (preferred?.connectionId) {
-		const nangoIntegrationId = env.NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID;
-		if (!nangoIntegrationId) return "";
-
-		return integrations.getToken({
-			id: preferred.id,
-			provider: "nango",
-			integrationId: nangoIntegrationId,
-			connectionId: preferred.connectionId,
-			githubInstallationId: null,
-		});
+		// Legacy non-GitHub-App connections are no longer supported.
+		return "";
 	}
 
 	// 2) Fall back to org-wide GitHub integration.
 	const githubAppIntegration = await integrations.findActiveGitHubApp(orgId);
 	if (githubAppIntegration?.githubInstallationId) {
 		return integrations.getInstallationToken(githubAppIntegration.githubInstallationId);
-	}
-
-	const nangoIntegrationId = env.NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID;
-	if (!nangoIntegrationId) return "";
-
-	const nangoIntegration = await integrations.findActiveNangoGitHub(orgId, nangoIntegrationId);
-	if (nangoIntegration?.connectionId) {
-		return integrations.getToken({
-			id: nangoIntegration.id,
-			provider: "nango",
-			integrationId: nangoIntegrationId,
-			connectionId: nangoIntegration.connectionId,
-			githubInstallationId: null,
-		});
 	}
 
 	return "";

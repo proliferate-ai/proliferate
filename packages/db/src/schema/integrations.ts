@@ -3,7 +3,7 @@
  */
 
 import { relations } from "drizzle-orm";
-import { index, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { organization, user } from "./auth";
 import { repos } from "./repos";
 
@@ -36,6 +36,11 @@ export const integrations = pgTable(
 
 		// GitHub App specific
 		githubInstallationId: text("github_installation_id"),
+		encryptedAccessToken: text("encrypted_access_token"),
+		encryptedRefreshToken: text("encrypted_refresh_token"),
+		tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+		tokenType: text("token_type"),
+		connectionMetadata: jsonb("connection_metadata"),
 
 		createdBy: text("created_by").references(() => user.id),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),

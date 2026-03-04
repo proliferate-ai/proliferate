@@ -5,6 +5,7 @@
  */
 
 import { randomBytes, randomUUID } from "crypto";
+import { env } from "@proliferate/environment/server";
 import {
 	addScheduledJob,
 	createPollGroupQueue,
@@ -166,9 +167,40 @@ export class TriggerIntegrationNotFoundError extends Error {
 	}
 }
 
+export class TriggerServiceUnavailableError extends Error {
+	constructor(message = "Trigger service not configured") {
+		super(message);
+		this.name = "TriggerServiceUnavailableError";
+	}
+}
+
 // ============================================
 // Service functions
 // ============================================
+
+/**
+ * List all available trigger providers from the trigger-service.
+ */
+export async function listProviders(): Promise<unknown> {
+	const triggerServiceUrl = env.TRIGGER_SERVICE_URL;
+	if (!triggerServiceUrl) {
+		throw new TriggerServiceUnavailableError();
+	}
+
+	const baseUrl = triggerServiceUrl.replace(/\/$/, "");
+	const response = await fetch(`${baseUrl}/providers`, {
+		headers: { "Content-Type": "application/json" },
+		cache: "no-store",
+		signal: AbortSignal.timeout(30_000),
+	});
+
+	if (!response.ok) {
+		const text = await response.text().catch(() => "");
+		throw new TriggerServiceUnavailableError(text || "Failed to fetch trigger providers");
+	}
+
+	return response.json();
+}
 
 /**
  * List all triggers for an organization with pending event counts.
