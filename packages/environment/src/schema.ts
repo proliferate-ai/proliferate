@@ -72,7 +72,6 @@ export const createPublicSchema = (env: EnvLike = process.env) => {
 export const createServerSchema = (env: EnvLike = process.env) => {
 	const isCloudProfile = env.DEPLOYMENT_PROFILE === "cloud";
 	const billingEnabled = isTruthy(env.NEXT_PUBLIC_BILLING_ENABLED) || isCloudProfile;
-	const integrationsEnabled = isTruthy(env.NEXT_PUBLIC_INTEGRATIONS_ENABLED) || isCloudProfile;
 	const emailEnabled =
 		isTruthy(env.EMAIL_ENABLED) ||
 		isTruthy(env.NEXT_PUBLIC_ENFORCE_EMAIL_VERIFICATION) ||

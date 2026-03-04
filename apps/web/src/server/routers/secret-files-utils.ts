@@ -1,14 +1,28 @@
 /**
  * Secret file path utilities.
  *
- * Thin wrapper around the service-layer normalizer for backward compatibility.
- * The canonical implementation lives in @proliferate/services/secret-files/service.ts.
+ * Pure path validation extracted here so unit tests can import it
+ * without pulling in the full services dependency tree.
+ * The canonical service-layer version lives in @proliferate/services secret-files service.
  */
 
-import { secretFiles } from "@proliferate/services";
+import path from "node:path";
 
 /**
  * Normalize and validate a secret file path for sandbox use.
- * Delegates to the service layer and re-throws domain errors as-is.
+ * Must be a relative path under the workspace root.
  */
-export const normalizeSecretFilePathForSandbox = secretFiles.normalizeSecretFilePath;
+export function normalizeSecretFilePathForSandbox(filePath: string): string {
+	const trimmed = filePath.trim();
+	if (!trimmed) {
+		throw new Error("Secret file path is required");
+	}
+	if (trimmed.includes("\0")) {
+		throw new Error("Secret file path contains invalid characters");
+	}
+	const normalized = path.posix.normalize(trimmed.replaceAll("\\", "/"));
+	if (path.posix.isAbsolute(normalized) || normalized.startsWith("..")) {
+		throw new Error("Secret file path must be a relative path under workspace");
+	}
+	return normalized;
+}
