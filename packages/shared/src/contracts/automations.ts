@@ -110,6 +110,16 @@ export const CreateAutomationInputSchema = z.object({
 
 export type CreateAutomationInput = z.infer<typeof CreateAutomationInputSchema>;
 
+export const CoworkerCapabilityModeSchema = z.enum(["allow", "require_approval", "deny"]);
+
+export const CoworkerCapabilityInputSchema = z.object({
+	capabilityKey: z.string().trim().min(1).max(200),
+	mode: CoworkerCapabilityModeSchema,
+	origin: z.string().trim().min(1).max(100).optional(),
+});
+
+export type CoworkerCapabilityInput = z.infer<typeof CoworkerCapabilityInputSchema>;
+
 // Update automation input
 export const UpdateAutomationInputSchema = z.object({
 	name: z.string().optional(),
