@@ -65,17 +65,6 @@ export function useDisconnectIntegration() {
 	};
 }
 
-export function useIntegrationCallback() {
-	const queryClient = useQueryClient();
-
-	return useMutation({
-		...orpc.integrations.callback.mutationOptions(),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: orpc.integrations.list.key() });
-		},
-	});
-}
-
 // ============================================
 // GitHub Hooks
 // ============================================
@@ -86,10 +75,6 @@ export function useGitHubStatus() {
 	});
 }
 
-export function useGitHubSession() {
-	return useMutation(orpc.integrations.githubSession.mutationOptions());
-}
-
 // ============================================
 // Sentry Hooks
 // ============================================
@@ -98,10 +83,6 @@ export function useSentryStatus() {
 	return useQuery({
 		...orpc.integrations.sentryStatus.queryOptions({ input: undefined }),
 	});
-}
-
-export function useSentrySession() {
-	return useMutation(orpc.integrations.sentrySession.mutationOptions());
 }
 
 export function useSentryMetadata(connectionId: string, projectSlug?: string) {
@@ -123,10 +104,6 @@ export function useLinearStatus() {
 	});
 }
 
-export function useLinearSession() {
-	return useMutation(orpc.integrations.linearSession.mutationOptions());
-}
-
 export function useLinearMetadata(connectionId: string, teamId?: string) {
 	return useQuery({
 		...orpc.integrations.linearMetadata.queryOptions({
@@ -144,10 +121,6 @@ export function useJiraStatus() {
 	return useQuery({
 		...orpc.integrations.jiraStatus.queryOptions({ input: undefined }),
 	});
-}
-
-export function useJiraSession() {
-	return useMutation(orpc.integrations.jiraSession.mutationOptions());
 }
 
 export function useJiraMetadata(connectionId: string, siteId?: string, projectId?: string) {

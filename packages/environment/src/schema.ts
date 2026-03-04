@@ -147,6 +147,12 @@ export const createServerSchema = (env: EnvLike = process.env) => {
 		LOG_LEVEL: optionalLogLevel,
 		LOG_PRETTY: optionalBoolean,
 		NANGO_SECRET_KEY: requiredWhen(integrationsEnabled, "Required when integrations are enabled"),
+		SENTRY_OAUTH_CLIENT_ID: optionalString,
+		SENTRY_OAUTH_CLIENT_SECRET: optionalString,
+		LINEAR_OAUTH_CLIENT_ID: optionalString,
+		LINEAR_OAUTH_CLIENT_SECRET: optionalString,
+		JIRA_OAUTH_CLIENT_ID: optionalString,
+		JIRA_OAUTH_CLIENT_SECRET: optionalString,
 		NEXT_BUILD_STANDALONE: optionalBoolean,
 		OPENAI_API_KEY: optionalString, // Used by LLM proxy for OpenAI model routing
 		GOOGLE_API_KEY: optionalString, // Used by LLM proxy for Gemini model routing

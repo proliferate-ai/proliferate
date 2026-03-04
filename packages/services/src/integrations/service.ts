@@ -10,14 +10,8 @@ import type {
 	IntegrationWithCreator,
 } from "@proliferate/shared/contracts/integrations";
 import * as configurationsModule from "../configurations";
-import { decrypt, getEncryptionKey } from "../db/crypto";
+import { decrypt, encrypt, getEncryptionKey } from "../db/crypto";
 import { toIsoString } from "../db/serialize";
-import {
-	type NangoProviderType,
-	getNango,
-	getNangoIntegrationId,
-	requireNangoIntegrationId,
-} from "../lib/nango";
 import { getServicesLogger } from "../logger";
 import * as orgsModule from "../orgs";
 import * as sessions from "../sessions";
@@ -31,6 +25,7 @@ import {
 	fetchLinearMetadata,
 	fetchSentryMetadata,
 } from "./providers";
+import { getToken } from "./tokens";
 
 const logger = getServicesLogger().child({ module: "integrations" });
 
@@ -38,6 +33,13 @@ export class OrganizationNotFoundError extends Error {
 	constructor(message = "Organization not found") {
 		super(message);
 		this.name = "OrganizationNotFoundError";
+	}
+}
+
+export class IntegrationAccessDeniedError extends Error {
+	constructor(message = "Access denied") {
+		super(message);
+		this.name = "IntegrationAccessDeniedError";
 	}
 }
 
@@ -84,12 +86,18 @@ export interface SlackStatusResult {
 	};
 }
 
-export interface CreateIntegrationInput {
+export interface SaveOAuthAppIntegrationInput {
 	organizationId: string;
 	userId: string;
+	provider: "sentry" | "linear" | "jira";
 	connectionId: string;
-	providerConfigKey: string;
 	displayName: string;
+	scopes?: string[];
+	accessToken: string;
+	refreshToken?: string | null;
+	expiresInSeconds?: number;
+	tokenType?: string | null;
+	connectionMetadata?: Record<string, unknown> | null;
 }
 
 // ============================================
@@ -159,52 +167,52 @@ export async function updateIntegration(
 }
 
 /**
- * Create or update integration from Nango callback.
+ * Create or update provider-native OAuth integration with encrypted credentials.
  */
-export async function saveIntegrationFromCallback(
-	input: CreateIntegrationInput,
-): Promise<{ success: boolean; existing: boolean }> {
-	// Check if this connection_id already exists (re-authorization)
-	const existingByConnectionId = await integrationsDb.findByConnectionId(input.connectionId);
+export async function saveOAuthAppIntegration(
+	input: SaveOAuthAppIntegrationInput,
+): Promise<IntegrationWithCreator> {
+	const encryptionKey = getEncryptionKey();
+	const encryptedAccessToken = encrypt(input.accessToken, encryptionKey);
+	const encryptedRefreshToken = input.refreshToken
+		? encrypt(input.refreshToken, encryptionKey)
+		: undefined;
+	const tokenExpiresAt =
+		typeof input.expiresInSeconds === "number" && Number.isFinite(input.expiresInSeconds)
+			? new Date(Date.now() + input.expiresInSeconds * 1000)
+			: null;
 
-	if (existingByConnectionId) {
-		// Re-authorizing the same connection - update status
-		await integrationsDb.updateStatus(existingByConnectionId.id, "active");
-		return { success: true, existing: true };
-	}
-
-	// New connection - insert it
-	await integrationsDb.create({
-		id: randomUUID(),
+	const row = await integrationsDb.upsertOAuthAppIntegration({
 		organizationId: input.organizationId,
-		provider: "nango",
-		integrationId: input.providerConfigKey,
+		integrationId: input.provider,
 		connectionId: input.connectionId,
 		displayName: input.displayName,
-		status: "active",
-		visibility: "org",
 		createdBy: input.userId,
+		scopes: input.scopes,
+		encryptedAccessToken,
+		encryptedRefreshToken,
+		tokenExpiresAt,
+		tokenType: input.tokenType ?? null,
+		connectionMetadata: input.connectionMetadata ?? null,
 	});
 
-	return { success: true, existing: false };
+	const creator = row.createdBy ? await integrationsDb.getUser(row.createdBy) : null;
+	return toIntegrationWithCreator(row, creator);
 }
 
 /**
  * Delete an integration and handle orphaned repos.
  */
-export async function deleteIntegration(
-	integrationId: string,
-	orgId: string,
-): Promise<{ success: boolean; error?: string }> {
+export async function deleteIntegration(integrationId: string, orgId: string): Promise<void> {
 	// Get the integration details
 	const integration = await integrationsDb.findById(integrationId);
 
 	if (!integration) {
-		return { success: false, error: "Connection not found" };
+		throw new IntegrationNotFoundError(integrationId);
 	}
 
 	if (integration.organizationId !== orgId) {
-		return { success: false, error: "Access denied" };
+		throw new IntegrationAccessDeniedError();
 	}
 
 	const isGitHubApp = integration.provider === "github-app";
@@ -217,8 +225,6 @@ export async function deleteIntegration(
 	if (isGitHubRelated) {
 		await handleOrphanedRepos(orgId);
 	}
-
-	return { success: true };
 }
 
 /**
@@ -772,13 +778,6 @@ export class IntegrationInactiveError extends Error {
 	}
 }
 
-export class NangoApiError extends Error {
-	constructor(operation: string, detail: string) {
-		super(`${operation}: ${detail}`);
-		this.name = "NangoApiError";
-	}
-}
-
 export class IntegrationAdminRequiredError extends Error {
 	constructor() {
 		super("Admin or owner role required");
@@ -814,123 +813,49 @@ export async function assertIntegrationAdmin(userId: string, orgId: string): Pro
 	}
 }
 
-// ============================================
-// Nango helpers
-// ============================================
-
-type NangoConnection = {
-	credentials: unknown;
-	connection_config?: unknown;
-};
-
-/**
- * Extract a useful error message from Nango SDK failures and throw a NangoApiError.
- */
-function handleNangoError(err: unknown, operation: string): never {
-	const axiosResponse = (err as { response?: { status?: number; data?: unknown } }).response;
-	if (axiosResponse) {
-		const { status, data } = axiosResponse;
-		logger.error({ status, data, operation }, "Nango API error");
-		const message =
-			(typeof data === "object" &&
-			data !== null &&
-			"error" in data &&
-			typeof data.error === "string"
-				? data.error
-				: null) ??
-			(typeof data === "object" &&
-			data !== null &&
-			"message" in data &&
-			typeof data.message === "string"
-				? data.message
-				: null) ??
-			`Nango API error (HTTP ${status})`;
-		throw new NangoApiError(operation, message);
-	}
-	throw err;
-}
-
-/**
- * Get Nango connection credentials for a provider.
- * Validates integration status and fetches credentials from Nango.
- */
-async function getNangoCredentials(
+async function getRuntimeTokenForIntegration(
 	integrationId: string,
 	orgId: string,
-	providerType: NangoProviderType,
-): Promise<{ credentials: Record<string, unknown>; connectionConfig?: Record<string, unknown> }> {
+): Promise<{
+	token: string;
+	integration: Pick<
+		integrationsDb.IntegrationRow,
+		"id" | "integrationId" | "provider" | "status" | "connectionMetadata"
+	>;
+}> {
 	const integration = await integrationsDb.getIntegrationWithStatus(integrationId, orgId);
-
 	if (!integration) {
 		throw new IntegrationNotFoundError(integrationId);
 	}
-
 	if (integration.status !== "active") {
 		throw new IntegrationInactiveError();
 	}
 
-	const nango = getNango();
-	const nangoIntegrationId = requireNangoIntegrationId(providerType);
-	let connection: NangoConnection;
-	try {
-		connection = await nango.getConnection(nangoIntegrationId, integration.connectionId!);
-	} catch (err) {
-		handleNangoError(err, `getConnection(${providerType}, connection=${integration.connectionId})`);
-	}
+	const token = await getToken({
+		id: integration.id,
+		provider: integration.provider,
+		integrationId: integration.integrationId,
+		connectionId: integration.connectionId,
+		githubInstallationId: null,
+		organizationId: orgId,
+		status: integration.status,
+		encryptedAccessToken: integration.encryptedAccessToken,
+		encryptedRefreshToken: integration.encryptedRefreshToken,
+		tokenExpiresAt: integration.tokenExpiresAt,
+		tokenType: integration.tokenType,
+		connectionMetadata: integration.connectionMetadata as Record<string, unknown> | null,
+	});
 
 	return {
-		credentials: connection.credentials as Record<string, unknown>,
-		connectionConfig: connection.connection_config as Record<string, unknown> | undefined,
+		token,
+		integration: {
+			id: integration.id,
+			integrationId: integration.integrationId,
+			provider: integration.provider,
+			status: integration.status,
+			connectionMetadata: integration.connectionMetadata as Record<string, unknown> | null,
+		},
 	};
-}
-
-// ============================================
-// Nango connect sessions
-// ============================================
-
-export interface CreateNangoConnectSessionInput {
-	provider: NangoProviderType;
-	orgId: string;
-	userId: string;
-	userEmail: string;
-	userDisplayName: string;
-}
-
-/**
- * Create a Nango connect session for OAuth flow.
- * Generic for all providers (github, sentry, linear, jira).
- */
-export async function createNangoConnectSession(
-	input: CreateNangoConnectSessionInput,
-): Promise<{ sessionToken: string }> {
-	const { provider, orgId, userId, userEmail, userDisplayName } = input;
-
-	const org = await integrationsDb.getOrganization(orgId);
-	if (!org) {
-		throw new OrganizationNotFoundError();
-	}
-
-	const nango = getNango();
-	const nangoIntegrationId = requireNangoIntegrationId(provider);
-
-	try {
-		const result = await nango.createConnectSession({
-			end_user: {
-				id: userId,
-				email: userEmail,
-				display_name: userDisplayName,
-			},
-			organization: {
-				id: orgId,
-				display_name: org.name,
-			},
-			allowed_integrations: [nangoIntegrationId],
-		});
-
-		return { sessionToken: result.data.token };
-	} catch (err) {
-		handleNangoError(err, `createConnectSession(${provider}, integration=${nangoIntegrationId})`);
-	}
 }
 
 // ============================================
@@ -938,44 +863,33 @@ export async function createNangoConnectSession(
 // ============================================
 
 /**
- * Fetch Sentry metadata via Nango credentials.
+ * Fetch Sentry metadata via resolved OAuth credentials.
  */
 export async function getSentryMetadata(
 	integrationId: string,
 	orgId: string,
 	projectSlug?: string,
 ): Promise<SentryMetadata> {
-	const { credentials, connectionConfig } = await getNangoCredentials(
-		integrationId,
-		orgId,
-		"sentry",
-	);
-	const creds = credentials as { apiKey?: string; access_token?: string };
-	const authToken = creds.apiKey || creds.access_token;
-	if (!authToken) throw new NoAccessTokenError();
-
-	const hostname = (connectionConfig as { hostname?: string } | undefined)?.hostname || "sentry.io";
-	return fetchSentryMetadata(authToken, hostname, projectSlug);
+	const { token, integration } = await getRuntimeTokenForIntegration(integrationId, orgId);
+	const metadata = (integration.connectionMetadata ?? {}) as { hostname?: string };
+	const hostname = metadata.hostname || "sentry.io";
+	return fetchSentryMetadata(token, hostname, projectSlug);
 }
 
 /**
- * Fetch Linear metadata via Nango credentials.
+ * Fetch Linear metadata via resolved OAuth credentials.
  */
 export async function getLinearMetadata(
 	integrationId: string,
 	orgId: string,
 	teamId?: string,
 ): Promise<LinearMetadata> {
-	const { credentials } = await getNangoCredentials(integrationId, orgId, "linear");
-	const creds = credentials as { apiKey?: string; access_token?: string };
-	const authToken = creds.apiKey || creds.access_token;
-	if (!authToken) throw new NoAccessTokenError();
-
-	return fetchLinearMetadata(authToken, teamId);
+	const { token } = await getRuntimeTokenForIntegration(integrationId, orgId);
+	return fetchLinearMetadata(token, teamId);
 }
 
 /**
- * Fetch Jira metadata via Nango credentials.
+ * Fetch Jira metadata via resolved OAuth credentials.
  */
 export async function getJiraMetadata(
 	integrationId: string,
@@ -983,12 +897,8 @@ export async function getJiraMetadata(
 	siteId?: string,
 	projectId?: string,
 ): Promise<JiraMetadata> {
-	const { credentials } = await getNangoCredentials(integrationId, orgId, "jira");
-	const creds = credentials as { access_token?: string };
-	const authToken = creds.access_token;
-	if (!authToken) throw new NoAccessTokenError();
-
-	return fetchJiraMetadata(authToken, siteId, projectId);
+	const { token } = await getRuntimeTokenForIntegration(integrationId, orgId);
+	return fetchJiraMetadata(token, siteId, projectId);
 }
 
 // ============================================
@@ -996,10 +906,10 @@ export async function getJiraMetadata(
 // ============================================
 
 /**
- * Disconnect an integration, including Nango cleanup.
+ * Disconnect an integration.
  * Checks role-based access: admins can disconnect any, members only their own.
  */
-export async function disconnectIntegrationWithNango(
+export async function disconnectIntegration(
 	integrationId: string,
 	orgId: string,
 	userId: string,
@@ -1016,29 +926,8 @@ export async function disconnectIntegrationWithNango(
 		throw new IntegrationAdminRequiredError();
 	}
 
-	const isGitHubApp = integration.provider === "github-app";
-
-	// For Nango-managed connections, delete from Nango first
-	if (!isGitHubApp && integration.connection_id) {
-		const nango = getNango();
-		try {
-			await nango.deleteConnection(integration.integration_id!, integration.connection_id);
-		} catch (err) {
-			handleNangoError(
-				err,
-				`deleteConnection(${integration.integration_id}, ${integration.connection_id})`,
-			);
-		}
-	}
-
 	// Delete from database and handle orphaned repos
-	const result = await deleteIntegration(integrationId, orgId);
-	if (!result.success) {
-		if (result.error === "Access denied") {
-			throw new IntegrationAdminRequiredError();
-		}
-		throw new IntegrationNotFoundError(integrationId);
-	}
+	await deleteIntegration(integrationId, orgId);
 }
 
 /**
@@ -1182,19 +1071,6 @@ export async function findActiveByIntegrationId(
 }
 
 /**
- * Find active Nango GitHub integration for an organization.
- */
-export async function findActiveNangoGitHub(
-	orgId: string,
-	integrationId: string,
-): Promise<Pick<
-	integrationsDb.IntegrationRow,
-	"id" | "githubInstallationId" | "connectionId"
-> | null> {
-	return integrationsDb.findActiveNangoGitHub(orgId, integrationId);
-}
-
-/**
  * Get repo connections with integration details for a repo.
  */
 export async function getRepoConnectionsWithIntegrations(
@@ -1227,16 +1103,6 @@ export async function findFirstActiveGitHubAppForRepos(
 	orgId: string,
 ): Promise<integrationsDb.GitHubIntegrationRow | null> {
 	return integrationsDb.findFirstActiveGitHubAppForRepos(orgId);
-}
-
-/**
- * Find first active Nango GitHub integration for repos.
- */
-export async function findFirstActiveNangoGitHubForRepos(
-	orgId: string,
-	nangoIntegrationId: string,
-): Promise<integrationsDb.GitHubIntegrationRow | null> {
-	return integrationsDb.findFirstActiveNangoGitHubForRepos(orgId, nangoIntegrationId);
 }
 
 /**
@@ -1367,7 +1233,7 @@ export async function listAllByOrganization(
 // ============================================
 
 /**
- * Get display name for a Nango provider config key.
+ * Get display name for a provider key.
  */
 export function getDisplayNameForProvider(providerConfigKey: string): string {
 	const staticNames: Record<string, string> = {
@@ -1380,16 +1246,6 @@ export function getDisplayNameForProvider(providerConfigKey: string): string {
 	if (staticNames[providerConfigKey]) {
 		return staticNames[providerConfigKey];
 	}
-
-	const githubId = getNangoIntegrationId("github");
-	const sentryId = getNangoIntegrationId("sentry");
-	const linearId = getNangoIntegrationId("linear");
-	const jiraId = getNangoIntegrationId("jira");
-
-	if (githubId && providerConfigKey === githubId) return "GitHub";
-	if (sentryId && providerConfigKey === sentryId) return "Sentry";
-	if (linearId && providerConfigKey === linearId) return "Linear";
-	if (jiraId && providerConfigKey === jiraId) return "Jira";
 
 	return providerConfigKey;
 }

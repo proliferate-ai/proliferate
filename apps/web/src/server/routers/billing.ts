@@ -6,6 +6,7 @@
 
 import { logger } from "@/lib/infra/logger";
 import { ORPCError } from "@orpc/server";
+import { env } from "@proliferate/environment/server";
 import { billing } from "@proliferate/services";
 import {
 	ActivatePlanResponseSchema,
@@ -108,6 +109,7 @@ export const billingRouter = {
 					orgId: context.orgId,
 					userEmail: context.user.email,
 					plan: input?.plan,
+					appUrl: env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
 				});
 			} catch (err) {
 				throwMappedBillingError(err, {
@@ -132,6 +134,7 @@ export const billingRouter = {
 					userId: context.user.id,
 					userEmail: context.user.email,
 					quantity: input?.quantity ?? 1,
+					appUrl: env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
 				});
 			} catch (err) {
 				throwMappedBillingError(err, {

@@ -439,6 +439,11 @@ export const integrations = pgTable(
 		createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow(),
 		githubInstallationId: text("github_installation_id"),
+		encryptedAccessToken: text("encrypted_access_token"),
+		encryptedRefreshToken: text("encrypted_refresh_token"),
+		tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true, mode: "date" }),
+		tokenType: text("token_type"),
+		connectionMetadata: jsonb("connection_metadata"),
 	},
 	(table) => [
 		index("idx_integrations_github_installation")

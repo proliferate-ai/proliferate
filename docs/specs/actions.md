@@ -148,6 +148,7 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 - Persisted results must always be redacted for sensitive keys and structurally truncated to valid JSON.
 - Gateway responses for executed actions may include truncated result payloads; DB persistence applies redaction/truncation regardless.
 - External action credentials must never be returned to clients or sandbox filesystem by actions routes.
+- Action execution must remain OAuth-broker agnostic and consume only integration token-resolver outputs (`getToken`, `resolveTokens`) rather than broker SDK primitives.
 
 ### 6.6 Approval and Notification Invariants
 - Pending invocations must produce `action_approval_request` WS messages best-effort.

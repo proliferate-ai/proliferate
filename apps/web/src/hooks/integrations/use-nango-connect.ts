@@ -2,7 +2,6 @@
 
 import type { Provider } from "@/components/integrations/provider-icon";
 import { orpc } from "@/lib/infra/orpc";
-import Nango from "@nangohq/frontend";
 import { env } from "@proliferate/environment/public";
 import { useCallback, useRef, useState } from "react";
 
@@ -17,12 +16,12 @@ export type NangoProvider =
 	| Exclude<NangoManagedProvider, "github">
 	| (typeof USE_NANGO_GITHUB extends true ? "github" : never);
 
-// All possible Nango integration IDs (GitHub included for when flag is enabled)
+// Provider keys used for reverse lookup compatibility.
 const ALL_NANGO_INTEGRATION_IDS: Record<NangoManagedProvider, string | undefined> = {
-	github: env.NEXT_PUBLIC_NANGO_GITHUB_INTEGRATION_ID,
-	sentry: env.NEXT_PUBLIC_NANGO_SENTRY_INTEGRATION_ID,
-	linear: env.NEXT_PUBLIC_NANGO_LINEAR_INTEGRATION_ID,
-	jira: env.NEXT_PUBLIC_NANGO_JIRA_INTEGRATION_ID,
+	github: "github",
+	sentry: "sentry",
+	linear: "linear",
+	jira: "jira",
 };
 
 // Export for backward compatibility - excludes GitHub unless flag is enabled
@@ -88,11 +87,11 @@ interface UseNangoConnectReturn {
 }
 
 export function useNangoConnect(options: UseNangoConnectOptions = {}): UseNangoConnectReturn {
-	const { flow = "auth", onSuccess, onError } = options;
+	const { onSuccess, onError } = options;
 	const [loadingProvider, setLoadingProvider] = useState<NangoProvider | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [isConnectUIOpen, setIsConnectUIOpen] = useState(false);
-	const connectUIRef = useRef<ReturnType<Nango["openConnectUI"]> | null>(null);
+	const connectUIRef = useRef<null>(null);
 
 	const connect = useCallback(
 		async (provider: NangoProvider) => {
@@ -103,63 +102,8 @@ export function useNangoConnect(options: UseNangoConnectOptions = {}): UseNangoC
 			setError(null);
 
 			try {
-				// 1. Get session token from our backend
-				const sessionProcedure = {
-					github: orpc.integrations.githubSession,
-					sentry: orpc.integrations.sentrySession,
-					linear: orpc.integrations.linearSession,
-					jira: orpc.integrations.jiraSession,
-				}[provider as NangoManagedProvider];
-
-				if (!sessionProcedure) {
-					throw new Error(`Unknown provider: ${provider}`);
-				}
-
-				const { sessionToken } = await sessionProcedure.call({});
-
-				const nango = new Nango({ connectSessionToken: sessionToken });
-
-				if (flow === "connectUI") {
-					// NEW FLOW: Use Nango's managed Connect UI (doesn't need integrationId)
-					setIsConnectUIOpen(true);
-					await new Promise<void>((resolve, reject) => {
-						connectUIRef.current = nango.openConnectUI({
-							onEvent: async (event) => {
-								if (event.type === "connect") {
-									try {
-										// Connection created in Nango, save to our DB
-										await orpc.integrations.callback.call({
-											connectionId: event.payload.connectionId,
-											providerConfigKey: event.payload.providerConfigKey,
-										});
-										resolve();
-									} catch (err) {
-										reject(err);
-									}
-								} else if (event.type === "close") {
-									// User closed the modal without completing
-									reject(new Error("Connection cancelled"));
-								}
-							},
-						});
-					});
-				} else {
-					// OLD FLOW: Use headless auth popup (requires integrationId)
-					const integrationId = NANGO_INTEGRATION_IDS[provider as NangoManagedProvider];
-					if (!integrationId) {
-						throw new Error(`Missing Nango integration ID for ${provider}`);
-					}
-					const result = await nango.auth(integrationId, {
-						detectClosedAuthWindow: true,
-					});
-
-					// Save connection to our DB
-					await orpc.integrations.callback.call({
-						connectionId: result.connectionId,
-						providerConfigKey: result.providerConfigKey,
-					});
-				}
-
+				const returnUrl = "/dashboard/integrations";
+				window.location.href = `/api/integrations/${provider}/oauth?returnUrl=${encodeURIComponent(returnUrl)}`;
 				onSuccess?.(provider);
 			} catch (err) {
 				const errorMessage = err instanceof Error ? err.message : "Connection failed";
@@ -175,7 +119,7 @@ export function useNangoConnect(options: UseNangoConnectOptions = {}): UseNangoC
 				connectUIRef.current = null;
 			}
 		},
-		[flow, onSuccess, onError],
+		[onSuccess, onError],
 	);
 
 	const disconnect = useCallback(

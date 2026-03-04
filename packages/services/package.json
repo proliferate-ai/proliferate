@@ -10,7 +10,6 @@
 		"./db/client": "./src/db/client.ts",
 		"./logger": "./src/logger.ts",
 		"./lock": "./src/lib/lock.ts",
-		"./nango": "./src/lib/nango.ts",
 		"./sessions": "./src/sessions/index.ts"
 	},
 	"scripts": {
@@ -21,7 +20,6 @@
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.26.0",
-		"@nangohq/node": "^0.69.22",
 		"@proliferate/db": "workspace:*",
 		"@proliferate/environment": "workspace:*",
 		"@proliferate/gateway-clients": "workspace:*",

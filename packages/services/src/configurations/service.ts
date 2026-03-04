@@ -332,10 +332,22 @@ export async function getConfigurationForOrg(
 export async function createConfigurationForOrg(input: {
 	organizationId: string;
 	userId: string;
-	repoIds: string[];
+	repoIds?: string[];
+	legacyRepos?: Array<{ repoId: string }>;
 	name?: string;
 }): Promise<CreateConfigurationResult> {
-	return createConfiguration(input);
+	// Normalize: support both new repoIds[] and legacy repos[] format
+	const resolvedRepoIds = input.repoIds || input.legacyRepos?.map((r) => r.repoId);
+	if (!resolvedRepoIds || resolvedRepoIds.length === 0) {
+		throw new ConfigurationValidationError("At least one repo is required");
+	}
+
+	return createConfiguration({
+		organizationId: input.organizationId,
+		userId: input.userId,
+		repoIds: resolvedRepoIds,
+		name: input.name,
+	});
 }
 
 export async function updateConfigurationForOrg(

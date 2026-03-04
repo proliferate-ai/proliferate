@@ -200,6 +200,7 @@ export async function activateOrgPlan(input: {
 	orgId: string;
 	userEmail: string;
 	plan?: "dev" | "pro";
+	appUrl: string;
 }): Promise<ActivatePlanResponse> {
 	if (!isBillingEnabled()) {
 		throw new BillingDisabledError();
@@ -213,7 +214,7 @@ export async function activateOrgPlan(input: {
 	const plan = input.plan ?? (org.billingPlan === "pro" ? "pro" : "dev");
 	await updateBillingPlan(input.orgId, plan);
 
-	const baseUrl = env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+	const baseUrl = input.appUrl || "http://localhost:3000";
 	const result = await autumnAttach({
 		customer_id: org.autumnCustomerId ?? input.orgId,
 		product_id: AUTUMN_PRODUCTS[plan],
@@ -264,6 +265,7 @@ export async function buyOrgCredits(input: {
 	userId: string;
 	userEmail: string;
 	quantity: number;
+	appUrl: string;
 }): Promise<BuyCreditsResponse> {
 	if (!isBillingEnabled()) {
 		throw new BillingDisabledError();
@@ -274,7 +276,7 @@ export async function buyOrgCredits(input: {
 		throw new BillingNotFoundError();
 	}
 
-	const baseUrl = env.NEXT_PUBLIC_APP_URL;
+	const baseUrl = input.appUrl;
 	const quantity = input.quantity;
 	const totalCredits = TOP_UP_PRODUCT.credits * quantity;
 	const totalPriceCents = TOP_UP_PRODUCT.priceCents * quantity;

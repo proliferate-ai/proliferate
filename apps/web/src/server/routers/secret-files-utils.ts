@@ -1,27 +1,14 @@
-import path from "node:path";
-import { ORPCError } from "@orpc/server";
+/**
+ * Secret file path utilities.
+ *
+ * Thin wrapper around the service-layer normalizer for backward compatibility.
+ * The canonical implementation lives in @proliferate/services/secret-files/service.ts.
+ */
 
-export function normalizeSecretFilePathForSandbox(filePath: string): string {
-	const trimmed = filePath.trim();
-	if (!trimmed) {
-		throw new ORPCError("BAD_REQUEST", { message: "Secret file path is required" });
-	}
-	if (trimmed.includes("\0")) {
-		throw new ORPCError("BAD_REQUEST", { message: "Secret file path contains invalid characters" });
-	}
+import { secretFiles } from "@proliferate/services";
 
-	const normalized = path.posix.normalize(trimmed.replaceAll("\\", "/"));
-	if (
-		normalized.startsWith("/") ||
-		normalized === "." ||
-		normalized === ".." ||
-		normalized.startsWith("../") ||
-		normalized.includes("/../")
-	) {
-		throw new ORPCError("BAD_REQUEST", {
-			message: "Secret file path must be a relative path under workspace",
-		});
-	}
-
-	return normalized;
-}
+/**
+ * Normalize and validate a secret file path for sandbox use.
+ * Delegates to the service layer and re-throws domain errors as-is.
+ */
+export const normalizeSecretFilePathForSandbox = secretFiles.normalizeSecretFilePath;

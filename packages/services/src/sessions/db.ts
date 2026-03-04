@@ -1899,17 +1899,6 @@ export interface CreateTaskSessionInput {
 }
 
 export async function createTaskSession(input: CreateTaskSessionInput): Promise<SessionRow> {
-	// Configured task sessions require full repo linkage for baseline diffing,
-	// UNLESS they're spawned by a manager (parentSessionId set) — those only
-	// need configurationId for snapshot/repo resolution, not baseline tracking.
-	if (
-		input.configurationId &&
-		!input.parentSessionId &&
-		(!input.repoId || !input.repoBaselineId || !input.repoBaselineTargetId)
-	) {
-		throw new Error("Configured task session requires repo + baseline + baseline target linkage");
-	}
-
 	const db = getDb();
 	const [row] = await db
 		.insert(sessions)

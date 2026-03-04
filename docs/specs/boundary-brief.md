@@ -19,7 +19,7 @@
 | 8 | `cli.md` | Device auth flow, local config, file sync, OpenCode launch, CLI-specific API routes. | 2 |
 | 9 | `repos-prebuilds.md` | Repo CRUD, configuration management, base + repo snapshot builds, service commands, env file generation. | 3 |
 | 10 | `secrets-environment.md` | Secret CRUD, bundles, bulk import, env file deployment to sandbox, encryption. | 3 |
-| 11 | `integrations.md` | OAuth connection lifecycle for GitHub/Sentry/Linear/Slack via Nango. Connection binding to repos/automations/sessions. | 3 |
+| 11 | `integrations.md` | OAuth connection lifecycle for GitHub/Sentry/Linear/Jira/Slack via provider-native routes and service token resolution. Connection binding to repos/automations/sessions. | 3 |
 | 12 | `auth-orgs.md` | better-auth, user/org/member model, invitations, onboarding/trial activation, API keys, admin/impersonation. | 3 |
 | 13 | `billing-metering.md` | Usage metering, credit gating, trial credits, reconciliation, org pause, Autumn integration. Owns charging/gating policy. | 3 |
 

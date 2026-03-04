@@ -1,85 +1,45 @@
 /**
  * Secret Files oRPC router.
  *
- * Handles file-based secrets CRUD for configurations.
- * Write operations require admin/owner role.
+ * Thin transport layer: validates input, delegates to service, maps errors.
  */
 
-import path from "node:path";
 import { logger } from "@/lib/infra/logger";
 import { ORPCError } from "@orpc/server";
-import { configurations, orgs, secretFiles, sessions } from "@proliferate/services";
-import type { SandboxProviderType } from "@proliferate/shared";
+import { secretFiles } from "@proliferate/services";
 import { SecretFileMetaSchema } from "@proliferate/shared/contracts/secrets";
-import { getSandboxProvider } from "@proliferate/shared/providers";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
-import { normalizeSecretFilePathForSandbox } from "./secret-files-utils";
 
-export { normalizeSecretFilePathForSandbox };
+/** Re-export for callers that need the path normalizer. */
+export const normalizeSecretFilePathForSandbox = secretFiles.normalizeSecretFilePath;
 
-const SANDBOX_WORKSPACE_ROOT = "/home/user/workspace";
-const SECRET_FILE_WRITE_TIMEOUT_MS = 15_000;
-const WRITE_SECRET_FILE_SCRIPT = `
-set -eu
-target="$PROLIFERATE_SECRET_FILE_TARGET"
-mkdir -p "$(dirname "$target")"
-printf '%s' "$PROLIFERATE_SECRET_FILE_CONTENT_B64" | base64 -d > "$target"
-`;
 const log = logger.child({ handler: "secret-files" });
 
-async function applySecretFileToActiveSession(params: {
-	orgId: string;
-	sessionId: string;
-	configurationId: string;
-	filePath: string;
-	content: string;
-}): Promise<void> {
-	const { orgId, sessionId, configurationId, filePath, content } = params;
-	const session = await sessions.getFullSession(sessionId, orgId);
-	if (!session) {
-		throw new ORPCError("NOT_FOUND", { message: "Session not found" });
-	}
-	if (!session.sandboxId) {
-		throw new ORPCError("BAD_REQUEST", { message: "Session has no active sandbox" });
-	}
-	if (session.configurationId !== configurationId) {
-		throw new ORPCError("BAD_REQUEST", {
-			message: "Session configuration does not match secret file configuration",
-		});
-	}
+// ============================================
+// Error Mapper
+// ============================================
 
-	const provider = getSandboxProvider(session.sandboxProvider as SandboxProviderType);
-	const execCommand = provider.execCommand;
-	if (!execCommand) {
-		throw new ORPCError("INTERNAL_SERVER_ERROR", {
-			message: "Sandbox provider does not support runtime file writes",
-		});
+function throwMappedSecretFileError(err: unknown, fallbackMessage: string): never {
+	if (err instanceof Error) {
+		switch (err.name) {
+			case "SecretFileForbiddenError":
+				throw new ORPCError("FORBIDDEN", { message: err.message });
+			case "SecretFileConfigurationNotFoundError":
+			case "SecretFileNotFoundError":
+				throw new ORPCError("NOT_FOUND", { message: err.message });
+			case "SecretFilePathValidationError":
+				throw new ORPCError("BAD_REQUEST", { message: err.message });
+			case "SecretFileApplyError":
+				throw new ORPCError("INTERNAL_SERVER_ERROR", { message: err.message });
+		}
 	}
-
-	const relativePath = normalizeSecretFilePathForSandbox(filePath);
-	const targetPath = path.posix.join(SANDBOX_WORKSPACE_ROOT, relativePath);
-	const contentBase64 = Buffer.from(content, "utf8").toString("base64");
-
-	const result = await execCommand.call(
-		provider,
-		session.sandboxId,
-		["sh", "-lc", WRITE_SECRET_FILE_SCRIPT],
-		{
-			timeoutMs: SECRET_FILE_WRITE_TIMEOUT_MS,
-			env: {
-				PROLIFERATE_SECRET_FILE_TARGET: targetPath,
-				PROLIFERATE_SECRET_FILE_CONTENT_B64: contentBase64,
-			},
-		},
-	);
-
-	if (result.exitCode !== 0) {
-		throw new ORPCError("INTERNAL_SERVER_ERROR", {
-			message: `Failed to apply secret file to sandbox: exit code ${result.exitCode}`,
-		});
-	}
+	throw new ORPCError("INTERNAL_SERVER_ERROR", { message: fallbackMessage });
 }
+
+// ============================================
+// Router
+// ============================================
 
 export const secretFilesRouter = {
 	/**
@@ -89,24 +49,20 @@ export const secretFilesRouter = {
 		.input(z.object({ configurationId: z.string().uuid() }))
 		.output(z.object({ files: z.array(SecretFileMetaSchema) }))
 		.handler(async ({ input, context }) => {
-			const belongsToOrg = await configurations.configurationBelongsToOrg(
-				input.configurationId,
-				context.orgId,
-			);
-			if (!belongsToOrg) {
-				throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
+			try {
+				const rows = await secretFiles.listForConfiguration(context.orgId, input.configurationId);
+				return {
+					files: rows.map((r) => ({
+						id: r.id,
+						filePath: r.filePath,
+						description: r.description,
+						createdAt: r.createdAt?.toISOString() ?? null,
+						updatedAt: r.updatedAt?.toISOString() ?? null,
+					})),
+				};
+			} catch (err) {
+				throwMappedSecretFileError(err, "Failed to list secret files");
 			}
-
-			const rows = await secretFiles.listByConfiguration(context.orgId, input.configurationId);
-			return {
-				files: rows.map((r) => ({
-					id: r.id,
-					filePath: r.filePath,
-					description: r.description,
-					createdAt: r.createdAt?.toISOString() ?? null,
-					updatedAt: r.updatedAt?.toISOString() ?? null,
-				})),
-			};
 		}),
 
 	/**
@@ -125,68 +81,55 @@ export const secretFilesRouter = {
 		)
 		.output(z.object({ file: SecretFileMetaSchema }))
 		.handler(async ({ input, context }) => {
-			const role = await orgs.getUserRole(context.user.id, context.orgId);
-			if (role !== "owner" && role !== "admin") {
-				throw new ORPCError("FORBIDDEN", {
-					message: "Only admins and owners can manage secret files",
+			try {
+				const row = await secretFiles.upsertForOrg({
+					organizationId: context.orgId,
+					configurationId: input.configurationId,
+					filePath: input.filePath,
+					content: input.content,
+					description: input.description,
+					createdBy: context.user.id,
+					userId: context.user.id,
 				});
-			}
-			const belongsToOrg = await configurations.configurationBelongsToOrg(
-				input.configurationId,
-				context.orgId,
-			);
-			if (!belongsToOrg) {
-				// Config ownership is inferred via linked repos. Empty configurations can
-				// legitimately have no repo links, so fall back to existence check.
-				const exists = await configurations.configurationExists(input.configurationId);
-				if (!exists) {
-					throw new ORPCError("NOT_FOUND", { message: "Configuration not found" });
-				}
-			}
 
-			const row = await secretFiles.upsertSecretFile({
-				organizationId: context.orgId,
-				configurationId: input.configurationId,
-				filePath: input.filePath,
-				content: input.content,
-				description: input.description,
-				createdBy: context.user.id,
-			});
-
-			// Optional live apply for active session UX (Environment panel path).
-			if (input.sessionId) {
-				try {
-					await applySecretFileToActiveSession({
-						orgId: context.orgId,
-						sessionId: input.sessionId,
-						configurationId: input.configurationId,
-						filePath: input.filePath,
-						content: input.content,
-					});
-				} catch (error) {
-					// Best effort: the DB save succeeded even if runtime apply failed.
-					log.warn(
-						{
-							err: error,
+				// Optional live apply for active session UX (Environment panel path).
+				if (input.sessionId) {
+					try {
+						await secretFiles.applyToActiveSession({
 							orgId: context.orgId,
-							configurationId: input.configurationId,
 							sessionId: input.sessionId,
+							configurationId: input.configurationId,
 							filePath: input.filePath,
-						},
-						"Failed to live-apply secret file to active sandbox",
-					);
+							content: input.content,
+						});
+					} catch (error) {
+						// Best effort: the DB save succeeded even if runtime apply failed.
+						log.warn(
+							{
+								err: error,
+								orgId: context.orgId,
+								configurationId: input.configurationId,
+								sessionId: input.sessionId,
+								filePath: input.filePath,
+							},
+							"Failed to live-apply secret file to active sandbox",
+						);
+					}
 				}
-			}
 
-			return {
-				file: {
-					id: row.id,
-					filePath: row.filePath,
-					description: row.description,
-					createdAt: row.createdAt?.toISOString() ?? null,
-					updatedAt: row.updatedAt?.toISOString() ?? null,
-				},
-			};
+				return {
+					file: {
+						id: row.id,
+						filePath: row.filePath,
+						description: row.description,
+						createdAt: row.createdAt?.toISOString() ?? null,
+						updatedAt: row.updatedAt?.toISOString() ?? null,
+					},
+				};
+			} catch (err) {
+				if (err instanceof ORPCError) throw err;
+				throwMappedSecretFileError(err, "Failed to upsert secret file");
+			}
 		}),
 
 	/**
@@ -197,18 +140,11 @@ export const secretFilesRouter = {
 		.input(z.object({ id: z.string().uuid() }))
 		.output(z.object({ success: z.boolean() }))
 		.handler(async ({ input, context }) => {
-			const role = await orgs.getUserRole(context.user.id, context.orgId);
-			if (role !== "owner" && role !== "admin") {
-				throw new ORPCError("FORBIDDEN", {
-					message: "Only admins and owners can manage secret files",
-				});
+			try {
+				await secretFiles.deleteForOrg(input.id, context.orgId, context.user.id);
+				return { success: true };
+			} catch (err) {
+				throwMappedSecretFileError(err, "Failed to delete secret file");
 			}
-
-			const deleted = await secretFiles.deleteById(input.id, context.orgId);
-			if (!deleted) {
-				throw new ORPCError("NOT_FOUND", { message: "Secret file not found" });
-			}
-
-			return { success: true };
 		}),
 };

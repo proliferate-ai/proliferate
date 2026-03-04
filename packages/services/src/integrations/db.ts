@@ -4,6 +4,7 @@
  * Raw Drizzle queries - no business logic.
  */
 
+import { randomUUID } from "crypto";
 import {
 	type InferSelectModel,
 	and,
@@ -244,6 +245,11 @@ export async function create(input: {
 	status: string;
 	visibility: string;
 	createdBy: string;
+	encryptedAccessToken?: string | null;
+	encryptedRefreshToken?: string | null;
+	tokenExpiresAt?: Date | null;
+	tokenType?: string | null;
+	connectionMetadata?: Record<string, unknown> | null;
 }): Promise<IntegrationRow> {
 	const db = getDb();
 	const [result] = await db
@@ -258,10 +264,109 @@ export async function create(input: {
 			status: input.status,
 			visibility: input.visibility,
 			createdBy: input.createdBy,
+			encryptedAccessToken: input.encryptedAccessToken ?? null,
+			encryptedRefreshToken: input.encryptedRefreshToken ?? null,
+			tokenExpiresAt: input.tokenExpiresAt ?? null,
+			tokenType: input.tokenType ?? null,
+			connectionMetadata: input.connectionMetadata ?? null,
 		})
 		.returning();
 
 	return result;
+}
+
+/**
+ * Upsert provider OAuth integration and credentials.
+ */
+export async function upsertOAuthAppIntegration(input: {
+	organizationId: string;
+	integrationId: string;
+	connectionId: string;
+	displayName: string;
+	createdBy: string;
+	scopes?: string[] | null;
+	encryptedAccessToken: string;
+	encryptedRefreshToken?: string | null;
+	tokenExpiresAt?: Date | null;
+	tokenType?: string | null;
+	connectionMetadata?: Record<string, unknown> | null;
+}): Promise<IntegrationRow> {
+	const db = getDb();
+	const now = new Date();
+	const [result] = await db
+		.insert(integrations)
+		.values({
+			id: randomUUID(),
+			organizationId: input.organizationId,
+			provider: "oauth-app",
+			integrationId: input.integrationId,
+			connectionId: input.connectionId,
+			displayName: input.displayName,
+			scopes: input.scopes ?? null,
+			status: "active",
+			visibility: "org",
+			createdBy: input.createdBy,
+			encryptedAccessToken: input.encryptedAccessToken,
+			encryptedRefreshToken: input.encryptedRefreshToken ?? null,
+			tokenExpiresAt: input.tokenExpiresAt ?? null,
+			tokenType: input.tokenType ?? null,
+			connectionMetadata: input.connectionMetadata ?? null,
+			updatedAt: now,
+		})
+		.onConflictDoUpdate({
+			target: [integrations.connectionId],
+			set: {
+				displayName: input.displayName,
+				scopes: input.scopes ?? null,
+				status: "active",
+				visibility: "org",
+				createdBy: input.createdBy,
+				encryptedAccessToken: input.encryptedAccessToken,
+				encryptedRefreshToken: input.encryptedRefreshToken ?? null,
+				tokenExpiresAt: input.tokenExpiresAt ?? null,
+				tokenType: input.tokenType ?? null,
+				connectionMetadata: input.connectionMetadata ?? null,
+				updatedAt: now,
+			},
+		})
+		.returning();
+
+	return result;
+}
+
+/**
+ * Update encrypted OAuth credentials for an integration.
+ */
+export async function updateOAuthCredentials(
+	integrationId: string,
+	input: {
+		encryptedAccessToken: string;
+		encryptedRefreshToken?: string | null;
+		tokenExpiresAt?: Date | null;
+		tokenType?: string | null;
+		connectionMetadata?: Record<string, unknown> | null;
+	},
+): Promise<void> {
+	const db = getDb();
+	await db
+		.update(integrations)
+		.set({
+			encryptedAccessToken: input.encryptedAccessToken,
+			...(input.encryptedRefreshToken !== undefined && {
+				encryptedRefreshToken: input.encryptedRefreshToken,
+			}),
+			...(input.tokenExpiresAt !== undefined && {
+				tokenExpiresAt: input.tokenExpiresAt,
+			}),
+			...(input.tokenType !== undefined && {
+				tokenType: input.tokenType,
+			}),
+			...(input.connectionMetadata !== undefined && {
+				connectionMetadata: input.connectionMetadata,
+			}),
+			updatedAt: new Date(),
+		})
+		.where(eq(integrations.id, integrationId));
 }
 
 /**
@@ -647,14 +752,33 @@ export async function findActiveGitHubAppWithCreator(
 export async function getIntegrationWithStatus(
 	id: string,
 	orgId: string,
-): Promise<Pick<IntegrationRow, "id" | "connectionId" | "status"> | null> {
+): Promise<Pick<
+	IntegrationRow,
+	| "id"
+	| "provider"
+	| "integrationId"
+	| "connectionId"
+	| "status"
+	| "encryptedAccessToken"
+	| "encryptedRefreshToken"
+	| "tokenExpiresAt"
+	| "tokenType"
+	| "connectionMetadata"
+> | null> {
 	const db = getDb();
 	const result = await db.query.integrations.findFirst({
 		where: and(eq(integrations.id, id), eq(integrations.organizationId, orgId)),
 		columns: {
 			id: true,
+			provider: true,
+			integrationId: true,
 			connectionId: true,
 			status: true,
+			encryptedAccessToken: true,
+			encryptedRefreshToken: true,
+			tokenExpiresAt: true,
+			tokenType: true,
+			connectionMetadata: true,
 		},
 	});
 
@@ -690,6 +814,11 @@ export async function findManyForTokens(
 		| "integrationId"
 		| "connectionId"
 		| "githubInstallationId"
+		| "encryptedAccessToken"
+		| "encryptedRefreshToken"
+		| "tokenExpiresAt"
+		| "tokenType"
+		| "connectionMetadata"
 		| "organizationId"
 		| "status"
 	>[]
@@ -705,6 +834,11 @@ export async function findManyForTokens(
 			integrationId: true,
 			connectionId: true,
 			githubInstallationId: true,
+			encryptedAccessToken: true,
+			encryptedRefreshToken: true,
+			tokenExpiresAt: true,
+			tokenType: true,
+			connectionMetadata: true,
 			organizationId: true,
 			status: true,
 		},

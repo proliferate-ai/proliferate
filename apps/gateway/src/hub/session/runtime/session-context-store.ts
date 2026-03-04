@@ -527,22 +527,6 @@ async function resolveGitHubToken(
 			});
 		}
 
-		// Try Nango GitHub integration
-		if (env.nangoGithubIntegrationId) {
-			const nangoIntegration = await integrations.findActiveNangoGitHub(
-				orgId,
-				env.nangoGithubIntegrationId,
-			);
-
-			if (nangoIntegration) {
-				addCandidate({
-					id: nangoIntegration.id,
-					github_installation_id: nangoIntegration.githubInstallationId,
-					connection_id: nangoIntegration.connectionId,
-				});
-			}
-		}
-
 		if (candidateIntegrations.length === 0) {
 			return "";
 		}
@@ -563,7 +547,7 @@ async function resolveGitHubToken(
 						{
 							repoUrl,
 							integrationId: candidate.id,
-							authType: candidate.github_installation_id ? "github-app" : "nango-oauth",
+							authType: "github-app",
 							tokenPrefix: token.substring(0, 6),
 						},
 						"Resolved git token for repo",

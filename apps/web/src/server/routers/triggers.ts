@@ -19,6 +19,28 @@ import {
 import { z } from "zod";
 import { orgProcedure, publicProcedure } from "./middleware";
 
+function throwMappedTriggerError(err: unknown, fallbackMessage: string): never {
+	if (err instanceof ORPCError) {
+		throw err;
+	}
+	if (err instanceof triggers.TriggerConfigurationNotFoundError) {
+		throw new ORPCError("NOT_FOUND", { message: err.message });
+	}
+	if (err instanceof triggers.TriggerIntegrationNotFoundError) {
+		throw new ORPCError("NOT_FOUND", { message: err.message });
+	}
+	if (err instanceof triggers.TriggerEventNotQueueableError) {
+		throw new ORPCError("BAD_REQUEST", { message: err.message });
+	}
+	if (err instanceof triggers.TriggerServiceUnavailableError) {
+		throw new ORPCError("INTERNAL_SERVER_ERROR", { message: err.message });
+	}
+	if (schedules.isCronValidationError(err)) {
+		throw new ORPCError("BAD_REQUEST", { message: (err as Error).message });
+	}
+	throw new ORPCError("INTERNAL_SERVER_ERROR", { message: fallbackMessage });
+}
+
 export const triggersRouter = {
 	/**
 	 * List all available trigger providers from trigger-service.
@@ -27,27 +49,11 @@ export const triggersRouter = {
 		.input(z.object({}).optional())
 		.output(TriggerProvidersResponseSchema)
 		.handler(async () => {
-			if (!env.TRIGGER_SERVICE_URL) {
-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: "Trigger service not configured",
-				});
+			try {
+				return (await triggers.listProviders()) as z.infer<typeof TriggerProvidersResponseSchema>;
+			} catch (error) {
+				throwMappedTriggerError(error, "Failed to fetch trigger providers");
 			}
-
-			const baseUrl = env.TRIGGER_SERVICE_URL.replace(/\/$/, "");
-			const response = await fetch(`${baseUrl}/providers`, {
-				headers: { "Content-Type": "application/json" },
-				cache: "no-store",
-				signal: AbortSignal.timeout(30_000),
-			});
-
-			if (!response.ok) {
-				const text = await response.text().catch(() => "");
-				throw new ORPCError("INTERNAL_SERVER_ERROR", {
-					message: text || "Failed to fetch trigger providers",
-				});
-			}
-
-			return (await response.json()) as z.infer<typeof TriggerProvidersResponseSchema>;
 		}),
 
 	/**
@@ -94,7 +100,7 @@ export const triggersRouter = {
 		)
 		.handler(async ({ input, context }) => {
 			try {
-				const result = await triggers.createTrigger({
+				return await triggers.createTrigger({
 					organizationId: context.orgId,
 					userId: context.user.id,
 					name: input.name,
@@ -111,18 +117,8 @@ export const triggersRouter = {
 					integrationId: input.integrationId,
 					gatewayUrl: env.NEXT_PUBLIC_GATEWAY_URL,
 				});
-				return result;
 			} catch (error) {
-				if (error instanceof triggers.TriggerConfigurationNotFoundError) {
-					throw new ORPCError("NOT_FOUND", { message: error.message });
-				}
-				if (error instanceof triggers.TriggerIntegrationNotFoundError) {
-					throw new ORPCError("NOT_FOUND", { message: error.message });
-				}
-				if (schedules.isCronValidationError(error)) {
-					throw new ORPCError("BAD_REQUEST", { message: error.message });
-				}
-				throw error;
+				throwMappedTriggerError(error, "Failed to create trigger");
 			}
 		}),
 
@@ -146,10 +142,7 @@ export const triggersRouter = {
 				}
 				return { trigger };
 			} catch (error) {
-				if (schedules.isCronValidationError(error)) {
-					throw new ORPCError("BAD_REQUEST", { message: error.message });
-				}
-				throw error;
+				throwMappedTriggerError(error, "Failed to update trigger");
 			}
 		}),
 
@@ -215,10 +208,7 @@ export const triggersRouter = {
 				}
 				return result;
 			} catch (error) {
-				if (error instanceof triggers.TriggerEventNotQueueableError) {
-					throw new ORPCError("BAD_REQUEST", { message: error.message });
-				}
-				throw error;
+				throwMappedTriggerError(error, "Failed to skip trigger event");
 			}
 		}),
 };
