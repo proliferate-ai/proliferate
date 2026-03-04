@@ -13,7 +13,7 @@ import {
 	OrgRoleSchema,
 	OrganizationSchema,
 	OrganizationWithRoleSchema,
-} from "@proliferate/shared";
+} from "@proliferate/shared/contracts/orgs";
 import { z } from "zod";
 import { orgProcedure, protectedProcedure } from "./middleware";
 

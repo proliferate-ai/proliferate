@@ -61,9 +61,9 @@ export function SessionInfoContent({
 								className={cn(
 									"h-2.5 w-2.5 fill-current",
 									isMigrating
-										? "text-yellow-500 animate-pulse"
+										? "text-warning animate-pulse"
 										: isRunning
-											? "text-green-500"
+											? "text-success"
 											: "text-muted-foreground/50",
 								)}
 							/>

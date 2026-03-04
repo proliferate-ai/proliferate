@@ -250,7 +250,7 @@ function ConnectorConnectionTab({ connector }: { connector: ConnectorConfig }) {
 							<span
 								className={cn(
 									"text-xs",
-									connector.enabled ? "text-green-600" : "text-muted-foreground",
+									connector.enabled ? "text-success" : "text-muted-foreground",
 								)}
 							>
 								{connector.enabled ? "Enabled" : "Disabled"}
@@ -354,7 +354,7 @@ function PermissionsTab({
 									className={cn(
 										"inline-block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border",
 										action.riskLevel === "write"
-											? "border-amber-500/30 text-amber-600 bg-amber-50 dark:bg-amber-950/30"
+											? "border-warning/30 text-warning bg-warning/10"
 											: "border-border text-muted-foreground",
 									)}
 								>

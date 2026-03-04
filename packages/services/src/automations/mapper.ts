@@ -12,7 +12,7 @@ import type {
 	AutomationListItem,
 	AutomationTrigger,
 	AutomationWithTriggers,
-} from "@proliferate/shared/contracts";
+} from "@proliferate/shared/contracts/automations";
 import { toIsoString } from "../db/serialize";
 import type {
 	AutomationRow,

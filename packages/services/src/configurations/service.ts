@@ -7,11 +7,8 @@
 import { randomUUID } from "crypto";
 import { env } from "@proliferate/environment/server";
 import { createConfigurationSnapshotBuildQueue } from "@proliferate/queue";
-import type {
-	Configuration,
-	ConfigurationServiceCommand,
-	SandboxProviderType,
-} from "@proliferate/shared";
+import type { ConfigurationServiceCommand, SandboxProviderType } from "@proliferate/shared";
+import type { Configuration } from "@proliferate/shared/contracts/configurations";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import {
 	parseConfigurationServiceCommands,

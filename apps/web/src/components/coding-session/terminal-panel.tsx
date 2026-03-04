@@ -40,8 +40,8 @@ function TerminalStatus({ status }: { status: ConnectionStatus }) {
 			<Circle
 				className={cn(
 					"h-2 w-2 fill-current",
-					status === "connected" && "text-green-500",
-					status === "connecting" && "text-yellow-500 animate-pulse",
+					status === "connected" && "text-success",
+					status === "connecting" && "text-warning animate-pulse",
 					(status === "error" || status === "closed") && "text-muted-foreground/50",
 				)}
 			/>

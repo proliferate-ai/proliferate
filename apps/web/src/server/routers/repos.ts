@@ -10,7 +10,7 @@ import {
 	GitHubRepoSchema,
 	RepoSchema,
 	SearchRepoSchema,
-} from "@proliferate/shared";
+} from "@proliferate/shared/contracts/repos";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 

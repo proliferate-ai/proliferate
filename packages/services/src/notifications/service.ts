@@ -14,7 +14,7 @@ import {
 	type NotificationChannel,
 	type NotificationPayload,
 	SUPPRESSION_WINDOW_MS,
-} from "@proliferate/shared/contracts";
+} from "@proliferate/shared/contracts/notifications";
 import { enqueueOutbox } from "../outbox/service";
 import * as notificationsDb from "./db";
 import type { NotificationRow } from "./db";

@@ -571,7 +571,7 @@ export async function dispatchV1Notification(
 	payload: V1NotificationPayload,
 	logger: Logger,
 ): Promise<void> {
-	const { CATEGORY_ROUTING } = await import("@proliferate/shared/contracts");
+	const { CATEGORY_ROUTING } = await import("@proliferate/shared/contracts/notifications");
 	const category = payload.category as keyof typeof CATEGORY_ROUTING;
 	const routing = CATEGORY_ROUTING[category];
 

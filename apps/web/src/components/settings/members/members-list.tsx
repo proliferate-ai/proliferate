@@ -112,7 +112,7 @@ export function MembersList({
 											className={cn(
 												"px-2 py-0.5 text-xs rounded-full capitalize",
 												member.role === "owner" && "bg-primary/10 text-primary",
-												member.role === "admin" && "bg-blue-500/10 text-blue-500",
+												member.role === "admin" && "bg-info/10 text-info",
 												member.role === "member" && "bg-muted text-muted-foreground",
 											)}
 										>

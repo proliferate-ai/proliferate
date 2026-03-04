@@ -49,11 +49,11 @@ function statusLabel(status: string): { label: string; color: string } {
 	// Porcelain v2: XY where X=staged, Y=unstaged
 	const x = status[0];
 	const y = status[1];
-	if (x === "." && y === "M") return { label: "M", color: "text-yellow-500" };
-	if (x === "M") return { label: "M", color: "text-yellow-500" };
-	if (x === "A" || y === "A") return { label: "A", color: "text-green-500" };
+	if (x === "." && y === "M") return { label: "M", color: "text-warning" };
+	if (x === "M") return { label: "M", color: "text-warning" };
+	if (x === "A" || y === "A") return { label: "A", color: "text-success" };
 	if (x === "D" || y === "D") return { label: "D", color: "text-destructive" };
-	if (x === "R") return { label: "R", color: "text-blue-500" };
+	if (x === "R") return { label: "R", color: "text-info" };
 	return { label: status.replace(/\./g, " ").trim() || "?", color: "text-muted-foreground" };
 }
 
@@ -260,14 +260,14 @@ function DiffView({
 				let className = "text-foreground";
 				let bgClassName = "";
 				if (line.startsWith("+") && !line.startsWith("+++")) {
-					className = "text-green-600 dark:text-green-400";
-					bgClassName = "bg-green-500/10";
+					className = "text-success";
+					bgClassName = "bg-success/10";
 				} else if (line.startsWith("-") && !line.startsWith("---")) {
-					className = "text-red-600 dark:text-red-400";
-					bgClassName = "bg-red-500/10";
+					className = "text-destructive";
+					bgClassName = "bg-destructive/10";
 				} else if (line.startsWith("@@")) {
-					className = "text-blue-600 dark:text-blue-400";
-					bgClassName = "bg-blue-500/5";
+					className = "text-info";
+					bgClassName = "bg-info/5";
 				} else if (line.startsWith("diff ") || line.startsWith("index ")) {
 					className = "text-muted-foreground";
 				}

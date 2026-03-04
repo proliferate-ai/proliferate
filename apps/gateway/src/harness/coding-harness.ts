@@ -10,7 +10,7 @@ import type {
 	CodingHarnessStartInput,
 	CodingHarnessStartResult,
 	RuntimeDaemonEvent,
-} from "@proliferate/shared/contracts";
+} from "@proliferate/shared/contracts/harness";
 import type { GatewayEnv } from "../lib/env";
 
 // Re-export shared types so existing gateway imports continue to work.
@@ -25,7 +25,7 @@ export type {
 	CodingHarnessShutdownInput,
 	CodingHarnessSendPromptInput,
 	CodingHarnessCollectOutputsInput,
-} from "@proliferate/shared/contracts";
+} from "@proliferate/shared/contracts/harness";
 
 export interface CodingHarnessStreamInput {
 	baseUrl: string;

@@ -111,7 +111,6 @@ function VerifyEmailContent() {
 				setResent(true);
 			}
 		} catch (err) {
-			console.error("Failed to send verification email:", err);
 			setError("Failed to send verification email");
 		} finally {
 			setIsResending(false);
@@ -167,7 +166,7 @@ function VerifyEmailContent() {
 					</p>
 
 					{resent && (
-						<p className="mb-3 text-center text-xs text-green-500">Verification email sent!</p>
+						<p className="mb-3 text-center text-xs text-success">Verification email sent!</p>
 					)}
 					{error && <p className="mb-3 text-center text-xs text-destructive">{error}</p>}
 

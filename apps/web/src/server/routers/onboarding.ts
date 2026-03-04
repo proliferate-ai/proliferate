@@ -12,14 +12,14 @@ const log = logger.child({ handler: "onboarding" });
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
 import { onboarding, orgs } from "@proliferate/services";
+import { TRIAL_CREDITS } from "@proliferate/shared/billing";
 import {
 	FinalizeOnboardingInputSchema,
 	FinalizeOnboardingResponseSchema,
 	OnboardingStatusSchema,
 	SaveQuestionnaireInputSchema,
 	SaveToolSelectionsInputSchema,
-} from "@proliferate/shared";
-import { TRIAL_CREDITS } from "@proliferate/shared/billing";
+} from "@proliferate/shared/contracts/onboarding";
 import { z } from "zod";
 import { orgProcedure, protectedProcedure } from "./middleware";
 

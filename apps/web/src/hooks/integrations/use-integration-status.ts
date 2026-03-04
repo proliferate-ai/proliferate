@@ -3,7 +3,7 @@
 import type { CatalogEntry } from "@/components/integrations/integration-picker-dialog";
 import type { Provider } from "@/components/integrations/provider-icon";
 import { INTEGRATION_CATALOG } from "@/config/integrations";
-import type { IntegrationWithCreator } from "@proliferate/shared";
+import type { IntegrationWithCreator } from "@proliferate/shared/contracts/integrations";
 import { useCallback, useMemo } from "react";
 
 interface UseIntegrationStatusOptions {

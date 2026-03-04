@@ -90,8 +90,8 @@ function TodoStatusIcon({ status }: { status: TodoItem["status"] }) {
 			);
 		case "in_progress":
 			return (
-				<div className="h-4 w-4 rounded-full border-2 border-blue-500 flex items-center justify-center">
-					<div className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+				<div className="h-4 w-4 rounded-full border-2 border-info flex items-center justify-center">
+					<div className="h-1.5 w-1.5 rounded-full bg-info" />
 				</div>
 			);
 		default:

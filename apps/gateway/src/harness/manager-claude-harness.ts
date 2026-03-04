@@ -10,7 +10,7 @@ import type {
 	ManagerHarnessAdapter,
 	ManagerHarnessStartInput,
 	ManagerHarnessState,
-} from "@proliferate/shared/contracts";
+} from "@proliferate/shared/contracts/harness";
 import { MANAGER_TOOLS, executeManagerTool, filterToolsByCapabilities } from "./manager-tools";
 import {
 	type ManagerToolContext,
@@ -26,7 +26,7 @@ export type {
 	ManagerHarnessAdapter,
 	ManagerHarnessStartInput,
 	ManagerHarnessState,
-} from "@proliferate/shared/contracts";
+} from "@proliferate/shared/contracts/harness";
 
 const MAX_CONVERSATION_TURNS = 15;
 const MAX_RETRY_ATTEMPTS = 1;

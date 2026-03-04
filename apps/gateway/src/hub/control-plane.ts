@@ -1,4 +1,5 @@
-import type { ControlPlaneSnapshotMessage, SessionRuntimeStatus } from "@proliferate/shared";
+import type { ControlPlaneSnapshotMessage } from "@proliferate/shared";
+import type { SessionRuntimeStatus } from "@proliferate/shared/contracts/sessions";
 import type { SessionRecord } from "../lib/session-store";
 
 export type ControlPlaneSnapshotPayload = ControlPlaneSnapshotMessage["payload"];

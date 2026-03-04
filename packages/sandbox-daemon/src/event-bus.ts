@@ -6,7 +6,7 @@
  * Uses the RuntimeDaemonEvent envelope from @proliferate/shared.
  */
 
-import type { RuntimeDaemonEvent } from "@proliferate/shared/contracts";
+import type { RuntimeDaemonEvent } from "@proliferate/shared/contracts/harness";
 
 // ---------------------------------------------------------------------------
 // Unified daemon event envelope (extends RuntimeDaemonEvent with seq/ts)

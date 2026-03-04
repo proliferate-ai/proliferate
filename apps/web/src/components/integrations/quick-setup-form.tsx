@@ -87,10 +87,10 @@ export function QuickSetupForm({ preset, onClose }: QuickSetupFormProps) {
 	if (successKey) {
 		return (
 			<div className="space-y-2">
-				<div className="rounded-lg border border-green-600/30 bg-green-600/5 p-4">
+				<div className="rounded-lg border border-success/30 bg-success/5 p-4">
 					<div className="flex items-center gap-2">
-						<Check className="h-4 w-4 text-green-600" />
-						<span className="text-sm font-medium text-green-600">{preset.name} connected</span>
+						<Check className="h-4 w-4 text-success" />
+						<span className="text-sm font-medium text-success">{preset.name} connected</span>
 					</div>
 					<p className="text-xs text-muted-foreground mt-1">
 						Secret key: <code className="font-mono">{successKey}</code>

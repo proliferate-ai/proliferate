@@ -34,10 +34,10 @@ import {
 	CreateAutomationScheduleInputSchema,
 	CreateAutomationTriggerInputSchema,
 	PendingRunSummarySchema,
-	ScheduleSchema,
-	type TriggerProviderSchema,
 	UpdateAutomationInputSchema,
-} from "@proliferate/shared";
+} from "@proliferate/shared/contracts/automations";
+import { ScheduleSchema } from "@proliferate/shared/contracts/schedules";
+import type { TriggerProviderSchema } from "@proliferate/shared/contracts/triggers";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 

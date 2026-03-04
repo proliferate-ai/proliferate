@@ -16,8 +16,8 @@ import type {
 	GitResultMessage,
 	GitState,
 	GitStatusMessage,
-	WorkspaceStateInfo,
 } from "@proliferate/shared";
+import type { WorkspaceStateInfo } from "@proliferate/shared/contracts/harness";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ExtendedMessage } from "../message-converter";
 import {

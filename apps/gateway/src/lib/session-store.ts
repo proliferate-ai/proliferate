@@ -4,9 +4,6 @@ import {
 	type AgentConfig,
 	type ModelId,
 	type RepoSpec,
-	type SessionOperatorStatus,
-	type SessionRuntimeStatus,
-	type SessionVisibility,
 	getAutomationSystemPrompt,
 	getCodingSystemPrompt,
 	getDefaultAgentConfig,
@@ -16,6 +13,11 @@ import {
 	parseModelId,
 } from "@proliferate/shared";
 import type { ConfigurationServiceCommand } from "@proliferate/shared";
+import type {
+	SessionOperatorStatus,
+	SessionRuntimeStatus,
+	SessionVisibility,
+} from "@proliferate/shared/contracts/sessions";
 import { parseServiceCommands, resolveServiceCommands } from "@proliferate/shared/sandbox";
 import type { GatewayEnv } from "./env";
 import { type GitIdentity, resolveGitIdentity, toGitIdentityEnv } from "./git-identity";

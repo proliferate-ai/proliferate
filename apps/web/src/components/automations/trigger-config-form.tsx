@@ -27,7 +27,7 @@ import type {
 	PostHogTriggerConfig,
 	SentryTriggerConfig,
 	TriggerConfig,
-} from "@proliferate/shared";
+} from "@proliferate/shared/contracts/trigger-configs";
 import cronstrue from "cronstrue";
 import { Check, Copy } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -556,11 +556,7 @@ function WebhookUrlField({
 						className="h-8 px-2"
 						onClick={() => copyUrl(webhookUrl)}
 					>
-						{urlCopied ? (
-							<Check className="h-4 w-4 text-green-500" />
-						) : (
-							<Copy className="h-4 w-4" />
-						)}
+						{urlCopied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
 					</Button>
 				</div>
 			</div>
@@ -582,7 +578,7 @@ function WebhookUrlField({
 							onClick={() => copySecret(webhookSecret)}
 						>
 							{secretCopied ? (
-								<Check className="h-4 w-4 text-green-500" />
+								<Check className="h-4 w-4 text-success" />
 							) : (
 								<Copy className="h-4 w-4" />
 							)}

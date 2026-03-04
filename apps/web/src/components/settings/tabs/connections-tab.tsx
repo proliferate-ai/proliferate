@@ -152,7 +152,7 @@ export function ConnectionsTab({ connect, disconnect, loadingProvider }: Connect
 										#{slackStatus.supportChannel.channelName}
 									</Text>
 								</div>
-								<CheckCircle2 className="h-4 w-4 text-green-500" />
+								<CheckCircle2 className="h-4 w-4 text-success" />
 							</div>
 						) : showSlackConnectForm ? (
 							<div className="p-3 bg-muted/30 rounded-lg space-y-3">

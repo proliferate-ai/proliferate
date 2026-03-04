@@ -6,7 +6,10 @@
  */
 
 import { notifications } from "@proliferate/services";
-import { NotificationFilterSchema, NotificationSchema } from "@proliferate/shared/contracts";
+import {
+	NotificationFilterSchema,
+	NotificationSchema,
+} from "@proliferate/shared/contracts/notifications";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 

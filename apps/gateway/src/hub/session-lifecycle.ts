@@ -7,7 +7,7 @@
 
 import type { Logger } from "@proliferate/logger";
 import { sessions } from "@proliferate/services";
-import type { SessionOutcome } from "@proliferate/shared";
+import type { SessionOutcome } from "@proliferate/shared/contracts/sessions";
 
 // ============================================
 // K1: Terminal outcome persistence

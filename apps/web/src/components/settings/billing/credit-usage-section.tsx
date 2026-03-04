@@ -34,7 +34,7 @@ function UsageBar({ used, total, label }: { used: number; total: number; label: 
 			</div>
 			<div className="h-2 w-full rounded-full bg-muted/50 overflow-hidden">
 				<div
-					className={`h-full rounded-full transition-all ${isLow ? "bg-amber-500" : "bg-primary"}`}
+					className={`h-full rounded-full transition-all ${isLow ? "bg-warning" : "bg-primary"}`}
 					style={{ width: `${percentage}%` }}
 				/>
 			</div>

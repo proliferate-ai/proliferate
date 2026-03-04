@@ -4,7 +4,7 @@
  * DB row shapes and input types for repos operations.
  */
 
-import type { Repo } from "@proliferate/shared";
+import type { Repo } from "@proliferate/shared/contracts/repos";
 
 // ============================================
 // DB Row Types (re-exported from db.ts)

@@ -4,7 +4,10 @@
  * Business logic for baseline resolution, status machine, and setup session invariant.
  */
 
-import { type RepoBaselineStatus, isValidRepoBaselineTransition } from "@proliferate/shared";
+import {
+	type RepoBaselineStatus,
+	isValidRepoBaselineTransition,
+} from "@proliferate/shared/contracts/baselines";
 import { getServicesLogger } from "../logger";
 import * as baselinesDb from "./db";
 import type { RepoBaselineRow, RepoBaselineTargetRow } from "./db";

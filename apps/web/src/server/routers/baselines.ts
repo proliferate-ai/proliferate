@@ -7,7 +7,11 @@
 import { ORPCError } from "@orpc/server";
 import { baselines } from "@proliferate/services";
 import type { baselines as baselinesTypes } from "@proliferate/services";
-import { RepoBaselineSchema, RepoBaselineTargetSchema } from "@proliferate/shared/contracts";
+import {
+	RepoBaselineSchema,
+	type RepoBaselineStatus,
+	RepoBaselineTargetSchema,
+} from "@proliferate/shared/contracts/baselines";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 
@@ -22,6 +26,7 @@ type TargetRow = baselinesTypes.RepoBaselineTargetRow;
 function serializeBaseline(row: BaselineRow) {
 	return {
 		...row,
+		status: row.status as RepoBaselineStatus,
 		createdAt: toIso(row.createdAt),
 		updatedAt: toIso(row.updatedAt),
 	};

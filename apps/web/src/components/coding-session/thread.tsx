@@ -198,7 +198,7 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 			className={cn(
 				"h-7 w-7 rounded-full",
 				listening
-					? "text-red-500 hover:text-red-600"
+					? "text-destructive hover:text-destructive/80"
 					: "text-muted-foreground hover:text-foreground",
 			)}
 			onClick={onToggleRecording}

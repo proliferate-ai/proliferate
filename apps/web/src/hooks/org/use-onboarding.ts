@@ -1,7 +1,7 @@
 "use client";
 
 import { orpc } from "@/lib/infra/orpc";
-import type { OnboardingRepo, OnboardingStatus } from "@proliferate/shared";
+import type { OnboardingRepo, OnboardingStatus } from "@proliferate/shared/contracts/onboarding";
 import { useQuery } from "@tanstack/react-query";
 
 export interface OnboardingState extends OnboardingStatus {

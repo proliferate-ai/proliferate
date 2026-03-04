@@ -8,12 +8,13 @@
 
 import { randomUUID } from "crypto";
 import { createSyncClient } from "@proliferate/gateway-clients";
-import type { AgentConfig, SandboxProviderType, Session } from "@proliferate/shared";
+import type { AgentConfig, SandboxProviderType } from "@proliferate/shared";
 import { getDefaultAgentConfig, isValidModelId, parseModelId } from "@proliferate/shared";
+import type { Session } from "@proliferate/shared/contracts/sessions";
 import {
 	type SessionRuntimeStatus,
 	isTerminalSessionRuntimeStatus,
-} from "@proliferate/shared/contracts";
+} from "@proliferate/shared/contracts/sessions";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { getBlockedReasonText, sanitizePromptSnippet } from "@proliferate/shared/sessions";
 import * as billing from "../billing";

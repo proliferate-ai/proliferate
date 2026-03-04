@@ -43,7 +43,7 @@ export function AdapterCard({
 				<div className="flex items-center gap-2 shrink-0">
 					{isConnected ? (
 						<>
-							<span className="text-xs text-green-600">Connected</span>
+							<span className="text-xs text-success">Connected</span>
 							{confirmDisconnect ? (
 								<div className="flex items-center gap-1">
 									<Button
@@ -119,8 +119,8 @@ export function AdapterCard({
 								className={cn(
 									"text-[10px] px-1.5 py-0.5 rounded border shrink-0",
 									action.riskLevel === "read"
-										? "text-green-600 border-green-600/30"
-										: "text-amber-600 border-amber-600/30",
+										? "text-success border-success/30"
+										: "text-warning border-warning/30",
 								)}
 							>
 								{action.riskLevel}

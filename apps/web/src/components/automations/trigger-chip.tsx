@@ -10,13 +10,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { StackedListButton } from "@/components/ui/stacked-list-button";
 import { cn } from "@/lib/display/utils";
 import { orpc } from "@/lib/infra/orpc";
+import type { AutomationTrigger as AutomationTriggerContract } from "@proliferate/shared/contracts/automations";
 import type {
-	AutomationTrigger,
 	GitHubTriggerConfig,
 	LinearTriggerConfig,
 	PostHogTriggerConfig,
 	SentryTriggerConfig,
-} from "@proliferate/shared";
+} from "@proliferate/shared/contracts/trigger-configs";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import cronstrue from "cronstrue";
 import { ChevronRight, X } from "lucide-react";
@@ -24,7 +24,7 @@ import { useState } from "react";
 import { TriggerConfigForm, type TriggerFormData } from "./trigger-config-form";
 
 // Extended trigger type that includes fields used by this component
-type Trigger = AutomationTrigger & {
+type Trigger = AutomationTriggerContract & {
 	polling_cron?: string | null;
 };
 

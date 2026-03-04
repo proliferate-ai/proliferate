@@ -19,7 +19,7 @@ import {
 import { useCreateSession } from "@/hooks/sessions/use-sessions";
 import { cn, getRepoShortName } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
-import type { Session } from "@proliferate/shared/contracts";
+import type { Session } from "@proliferate/shared/contracts/sessions";
 import { getSetupInitialPrompt } from "@proliferate/shared/prompts";
 import { ChevronRight, Pencil, Plus, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -173,7 +173,7 @@ export function ConfigurationGroup({
 						) : (
 							<span className="truncate">{displayName}</span>
 						)}
-						{isManaged && <Zap className="h-3 w-3 text-yellow-500 shrink-0" />}
+						{isManaged && <Zap className="h-3 w-3 text-warning shrink-0" />}
 					</div>
 
 					<div className="shrink-0 flex items-center gap-0.5">

@@ -335,7 +335,7 @@ export function OrganizationTab() {
 							<Mail className="h-4 w-4 text-muted-foreground" />
 							<div>
 								<p className="text-sm font-medium">{authSession.user.email}</p>
-								<p className={cn("text-xs", isEmailVerified ? "text-green-500" : "text-amber-500")}>
+								<p className={cn("text-xs", isEmailVerified ? "text-success" : "text-warning")}>
 									{isEmailVerified ? (
 										<span className="flex items-center gap-1">
 											<CheckCircle2 className="h-3 w-3" />
@@ -363,9 +363,7 @@ export function OrganizationTab() {
 						)}
 					</div>
 					{verificationResent && (
-						<p className="text-xs text-green-500 mt-2">
-							Verification email sent. Check your inbox.
-						</p>
+						<p className="text-xs text-success mt-2">Verification email sent. Check your inbox.</p>
 					)}
 					{verificationError && (
 						<p className="text-xs text-destructive mt-2">{verificationError}</p>
@@ -441,7 +439,7 @@ export function OrganizationTab() {
 										if (e.key === "Escape") setIsEditingSlug(false);
 									}}
 								/>
-								<p className="text-xs text-amber-600">Changing slug may break existing links</p>
+								<p className="text-xs text-warning">Changing slug may break existing links</p>
 								{slugError && <p className="text-xs text-destructive">{slugError}</p>}
 								<div className="flex gap-2">
 									<Button size="sm" onClick={handleSaveSlug} disabled={isUpdatingSlug}>
@@ -624,7 +622,7 @@ export function OrganizationTab() {
 												className={cn(
 													"px-2 py-1 text-xs rounded-full capitalize",
 													member.role === "owner" && "bg-primary/10 text-primary",
-													member.role === "admin" && "bg-blue-500/10 text-blue-500",
+													member.role === "admin" && "bg-info/10 text-info",
 													member.role === "member" && "bg-muted text-muted-foreground",
 												)}
 											>

@@ -6,8 +6,8 @@
 
 import { env } from "@proliferate/environment/server";
 import { createSyncClient } from "@proliferate/gateway-clients";
-import type { OnboardingRepo, OnboardingStatus } from "@proliferate/shared";
 import { TRIAL_CREDITS, autumnAttach, autumnCreateCustomer } from "@proliferate/shared/billing";
+import type { OnboardingRepo, OnboardingStatus } from "@proliferate/shared/contracts/onboarding";
 import * as configurationsService from "../configurations/service";
 import { toIsoString } from "../db/serialize";
 import { getServicesLogger } from "../logger";

@@ -4,7 +4,7 @@
  * Transforms DB rows (camelCase) to API response types (camelCase).
  */
 
-import type { Configuration } from "@proliferate/shared";
+import type { Configuration } from "@proliferate/shared/contracts/configurations";
 import { toIsoString } from "../db/serialize";
 import type { ConfigurationRow, ConfigurationWithRelationsRow } from "./db";
 

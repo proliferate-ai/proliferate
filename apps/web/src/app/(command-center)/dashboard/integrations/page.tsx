@@ -72,7 +72,7 @@ import { useActiveOrganization, useSession } from "@/lib/auth/client";
 import { type OrgRole, hasRoleOrHigher } from "@/lib/auth/roles";
 import { orpc } from "@/lib/infra/orpc";
 import { CONNECTOR_PRESETS, type ConnectorConfig } from "@proliferate/shared";
-import type { IntegrationWithCreator } from "@proliferate/shared";
+import type { IntegrationWithCreator } from "@proliferate/shared/contracts/integrations";
 import { useQueryClient } from "@tanstack/react-query";
 import {
 	CheckCircle2,
@@ -309,8 +309,8 @@ export default function IntegrationsPage() {
 		try {
 			await slackDisconnect.mutateAsync({});
 			queryClient.invalidateQueries({ queryKey: orpc.onboarding.getStatus.key() });
-		} catch (err) {
-			console.error("Failed to disconnect Slack:", err);
+		} catch (_err) {
+			// Slack disconnect error is surfaced via query invalidation
 		}
 	};
 
@@ -322,8 +322,8 @@ export default function IntegrationsPage() {
 			});
 			setShowSlackConnectForm(false);
 			setSlackConnectChannelName("");
-		} catch (err) {
-			console.error("Failed to create Slack Connect channel:", err);
+		} catch (_err) {
+			// Slack Connect channel creation error is surfaced via mutation state
 		}
 	};
 

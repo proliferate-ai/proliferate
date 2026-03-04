@@ -7,7 +7,7 @@ import type {
 	CreateAutomationScheduleInput,
 	CreateAutomationTriggerInput,
 	UpdateAutomationInput,
-} from "@proliferate/shared";
+} from "@proliferate/shared/contracts/automations";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 // ============================================

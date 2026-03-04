@@ -4,7 +4,7 @@
  * Business logic that orchestrates DB operations.
  */
 
-import type { Schedule } from "@proliferate/shared/contracts";
+import type { Schedule } from "@proliferate/shared/contracts/schedules";
 import type { CreateScheduleInput, UpdateScheduleInput } from "../types/schedules";
 import * as schedulesDb from "./db";
 import { toSchedule, toSchedules } from "./mapper";

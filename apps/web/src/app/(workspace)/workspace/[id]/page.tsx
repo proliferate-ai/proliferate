@@ -43,7 +43,6 @@ export default function SessionDetailPage({
 				window.location.replace(`/workspace/${id}?${params.toString()}`);
 			})
 			.catch((err) => {
-				console.error("Failed to switch organization:", err);
 				setSwitchError("Unable to switch organization for this session.");
 				setIsSwitching(false);
 			});
@@ -90,8 +89,7 @@ export default function SessionDetailPage({
 					sessionId={id}
 					runId={runId ?? undefined}
 					initialPrompt={pendingPrompt || sessionData?.initialPrompt || undefined}
-					onError={(error) => {
-						console.error("Session error:", error);
+					onError={() => {
 						clearPendingPrompt();
 					}}
 				/>

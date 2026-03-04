@@ -20,7 +20,7 @@ import {
 } from "@/hooks/integrations/use-nango-connect";
 import { cn } from "@/lib/display/utils";
 import { orpc } from "@/lib/infra/orpc";
-import type { IntegrationWithCreator } from "@proliferate/shared";
+import type { IntegrationWithCreator } from "@proliferate/shared/contracts/integrations";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, Laptop, Pencil, Plus, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";

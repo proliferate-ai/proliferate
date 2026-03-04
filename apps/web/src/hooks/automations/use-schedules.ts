@@ -1,7 +1,7 @@
 "use client";
 
 import { orpc } from "@/lib/infra/orpc";
-import type { UpdateScheduleInput } from "@proliferate/shared";
+import type { UpdateScheduleInput } from "@proliferate/shared/contracts/schedules";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function useSchedule(id: string) {

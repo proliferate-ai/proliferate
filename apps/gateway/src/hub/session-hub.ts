@@ -20,9 +20,9 @@ import type {
 	SandboxProviderType,
 	ServerMessage,
 	SessionEventMessage,
-	SessionRuntimeStatus,
 	SnapshotResultMessage,
 } from "@proliferate/shared";
+import type { SessionRuntimeStatus } from "@proliferate/shared/contracts/sessions";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import type { WebSocket } from "ws";
 import type { RuntimeDaemonEvent } from "../harness/coding-harness";

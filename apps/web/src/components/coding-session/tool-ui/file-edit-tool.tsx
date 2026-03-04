@@ -46,9 +46,9 @@ export const FileEditToolUI = makeAssistantToolUI<FileEditArgs, string>({
 					<span className="text-muted-foreground/70 truncate min-w-0">({filePath})</span>
 					{isComplete && (
 						<span className="text-xs shrink-0">
-							<span className="text-red-400">-{linesRemoved}</span>
+							<span className="text-destructive">-{linesRemoved}</span>
 							<span className="text-muted-foreground/60">/</span>
-							<span className="text-green-400">+{linesAdded}</span>
+							<span className="text-success">+{linesAdded}</span>
 						</span>
 					)}
 				</Button>
@@ -56,13 +56,13 @@ export const FileEditToolUI = makeAssistantToolUI<FileEditArgs, string>({
 					<pre className="ml-4 mt-1 max-h-40 overflow-auto rounded border border-border/40 bg-muted/30 p-2 font-mono text-xs">
 						{oldString?.split("\n").map((line, i) => (
 							// biome-ignore lint/suspicious/noArrayIndexKey: static list from split
-							<div key={i} className="text-red-400/80">
+							<div key={i} className="text-destructive/80">
 								- {line}
 							</div>
 						))}
 						{newString?.split("\n").map((line, i) => (
 							// biome-ignore lint/suspicious/noArrayIndexKey: static list from split
-							<div key={i} className="text-green-400/80">
+							<div key={i} className="text-success/80">
 								+ {line}
 							</div>
 						))}

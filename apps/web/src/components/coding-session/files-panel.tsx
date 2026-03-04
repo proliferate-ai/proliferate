@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/display/utils";
 import { GATEWAY_URL } from "@/lib/infra/gateway";
-import type { FsTreeEntry } from "@proliferate/shared/contracts";
+import type { FsTreeEntry } from "@proliferate/shared/contracts/harness";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	ChevronDown,

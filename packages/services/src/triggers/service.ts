@@ -12,7 +12,11 @@ import {
 	removePollGroupJob,
 	schedulePollGroupJob,
 } from "@proliferate/queue";
-import type { Trigger, TriggerEvent, TriggerWithIntegration } from "@proliferate/shared";
+import type {
+	Trigger,
+	TriggerEvent,
+	TriggerWithIntegration,
+} from "@proliferate/shared/contracts/triggers";
 import { getServicesLogger } from "../logger";
 import * as pollGroupsDb from "../poll-groups/db";
 import { CronValidationError, assertValidCronExpression } from "../schedules/service";

@@ -8,7 +8,7 @@ import type { ClientSource } from "@proliferate/shared";
 import type {
 	SessionMessageDeliveryState,
 	SessionMessageDirection,
-} from "@proliferate/shared/contracts";
+} from "@proliferate/shared/contracts/sessions";
 import {
 	type InferSelectModel,
 	actionInvocations,

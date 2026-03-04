@@ -29,7 +29,7 @@ import {
 	BillingSettingsSchema,
 	BuyCreditsResponseSchema,
 	UpdateBillingSettingsResponseSchema,
-} from "@proliferate/shared/contracts";
+} from "@proliferate/shared/contracts/billing";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 

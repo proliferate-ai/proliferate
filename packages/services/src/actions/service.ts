@@ -5,7 +5,7 @@
  */
 
 import { truncateJson } from "@proliferate/providers/helpers/truncation";
-import type { ActionInvocationStatus, CapabilityMode } from "@proliferate/shared/contracts";
+import type { ActionInvocationStatus, CapabilityMode } from "@proliferate/shared/contracts/actions";
 import { getServicesLogger } from "../logger";
 import type { ActionInvocationRow, ActionInvocationWithSession, ResumeIntentRow } from "./db";
 import * as actionsDb from "./db";

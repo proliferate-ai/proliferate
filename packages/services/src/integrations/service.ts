@@ -5,7 +5,10 @@
  */
 
 import { randomUUID } from "crypto";
-import type { Integration, IntegrationWithCreator } from "@proliferate/shared";
+import type {
+	Integration,
+	IntegrationWithCreator,
+} from "@proliferate/shared/contracts/integrations";
 import * as configurationsModule from "../configurations";
 import { decrypt, getEncryptionKey } from "../db/crypto";
 import { toIsoString } from "../db/serialize";

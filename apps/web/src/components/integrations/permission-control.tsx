@@ -11,19 +11,17 @@ interface PermissionControlProps {
 	disabled?: boolean;
 }
 
-// Dot colors: --destructive exists as a semantic token; no --success/--warning tokens exist
-// in the design system, so allow/approval use Tailwind palette values as a pragmatic fallback.
 const MODES: { value: ActionMode; label: string; dotClass: string; tooltip: string }[] = [
 	{
 		value: "allow",
 		label: "Allow",
-		dotClass: "bg-emerald-500",
+		dotClass: "bg-success",
 		tooltip: "Executes automatically without human review",
 	},
 	{
 		value: "require_approval",
 		label: "Approval",
-		dotClass: "bg-amber-500",
+		dotClass: "bg-warning",
 		tooltip: "Pauses for human approval (5 min timeout)",
 	},
 	{

@@ -10,8 +10,8 @@ import {
 import { useOrgMembersAndInvitations } from "@/hooks/org/use-orgs";
 import { useSession } from "@/lib/auth/client";
 import { hasRoleOrHigher } from "@/lib/auth/roles";
-import type { PendingRunSummary } from "@proliferate/shared";
 import type { ActionApprovalRequestMessage } from "@proliferate/shared";
+import type { PendingRunSummary } from "@proliferate/shared/contracts/automations";
 import {
 	AlertCircle,
 	Check,
@@ -231,11 +231,11 @@ function ApprovalCard({
 function getRunStatusInfo(status: string) {
 	switch (status) {
 		case "failed":
-			return { icon: XCircle, label: "Failed", className: "text-red-500" };
+			return { icon: XCircle, label: "Failed", className: "text-destructive" };
 		case "needs_human":
-			return { icon: Hand, label: "Needs Human", className: "text-amber-500" };
+			return { icon: Hand, label: "Needs Human", className: "text-warning" };
 		case "timed_out":
-			return { icon: Timer, label: "Timed Out", className: "text-orange-500" };
+			return { icon: Timer, label: "Timed Out", className: "text-warning" };
 		default:
 			return { icon: AlertCircle, label: status, className: "text-muted-foreground" };
 	}

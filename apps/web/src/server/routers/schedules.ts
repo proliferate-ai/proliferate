@@ -6,7 +6,7 @@
 
 import { ORPCError } from "@orpc/server";
 import { schedules } from "@proliferate/services";
-import { ScheduleSchema, UpdateScheduleInputSchema } from "@proliferate/shared";
+import { ScheduleSchema, UpdateScheduleInputSchema } from "@proliferate/shared/contracts/schedules";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 

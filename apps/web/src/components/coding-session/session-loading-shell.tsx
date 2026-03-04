@@ -368,7 +368,7 @@ export function SessionLoadingShell({
 								{CREATION_STEPS.map((step, i) => (
 									<div key={step.label} className="flex items-center gap-3">
 										{i < activeStep ? (
-											<Check className="h-4 w-4 text-green-500 shrink-0" />
+											<Check className="h-4 w-4 text-success shrink-0" />
 										) : i === activeStep ? (
 											<Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
 										) : (

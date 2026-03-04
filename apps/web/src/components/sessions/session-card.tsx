@@ -24,8 +24,8 @@ import {
 } from "@/hooks/sessions/use-sessions";
 import { DISPLAY_STATUS_CONFIG, formatConfigurationLabel } from "@/lib/display/session-display";
 import { cn } from "@/lib/display/utils";
-import type { PendingRunSummary } from "@proliferate/shared";
-import type { Session } from "@proliferate/shared/contracts";
+import type { PendingRunSummary } from "@proliferate/shared/contracts/automations";
+import type { Session } from "@proliferate/shared/contracts/sessions";
 import { type DisplayStatus, deriveDisplayStatus } from "@proliferate/shared/sessions";
 import { formatDistanceToNow } from "date-fns";
 import { Bell, BellOff, Terminal } from "lucide-react";

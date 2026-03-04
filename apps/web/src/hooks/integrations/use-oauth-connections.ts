@@ -17,7 +17,7 @@ import {
 	useNangoConnect,
 } from "@/hooks/integrations/use-nango-connect";
 import { orpc } from "@/lib/infra/orpc";
-import type { IntegrationWithCreator } from "@proliferate/shared";
+import type { IntegrationWithCreator } from "@proliferate/shared/contracts/integrations";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 

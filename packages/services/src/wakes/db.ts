@@ -15,7 +15,7 @@ import {
 	sql,
 	wakeEvents,
 } from "@proliferate/services/db/client";
-import type { WakeEventSource, WakeEventStatus } from "@proliferate/shared/contracts";
+import type { WakeEventSource, WakeEventStatus } from "@proliferate/shared/contracts/workers";
 
 // ============================================
 // Type Exports

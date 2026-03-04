@@ -15,9 +15,9 @@ const scopeLabel: Record<RequirementScope, string> = {
 };
 
 const scopeClasses: Record<RequirementScope, string> = {
-	core: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200",
-	feature: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200",
-	cloud: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200",
+	core: "bg-destructive/10 text-destructive",
+	feature: "bg-warning/10 text-warning",
+	cloud: "bg-info/10 text-info",
 };
 
 export function ConfigTab() {

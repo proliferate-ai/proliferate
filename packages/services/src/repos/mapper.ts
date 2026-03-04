@@ -4,7 +4,7 @@
  * Transforms DB rows (camelCase from Drizzle) to API response types (camelCase).
  */
 
-import type { Repo } from "@proliferate/shared";
+import type { Repo } from "@proliferate/shared/contracts/repos";
 import { toIsoString } from "../db/serialize";
 import type { RepoRow, RepoWithConfigurationsRow } from "./db";
 

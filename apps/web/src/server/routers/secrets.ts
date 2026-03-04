@@ -13,7 +13,7 @@ import {
 	CheckSecretsResultSchema,
 	CreateSecretInputSchema,
 	SecretSchema,
-} from "@proliferate/shared";
+} from "@proliferate/shared/contracts/secrets";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 

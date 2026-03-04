@@ -8,7 +8,7 @@ import { useSession } from "@/lib/auth/client";
 import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { modelSupportsReasoning } from "@proliferate/shared/agents";
-import type { PendingRunSummary } from "@proliferate/shared/contracts";
+import type { PendingRunSummary } from "@proliferate/shared/contracts/automations";
 import { formatDistanceToNow } from "date-fns";
 import { AlertCircle, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
@@ -127,7 +127,7 @@ function NeedsAttention() {
 								className={cn(
 									"text-xs shrink-0 ml-3 px-2 py-0.5 rounded-full border",
 									run.status === "needs_human"
-										? "border-amber-500/30 text-amber-600"
+										? "border-warning/30 text-warning"
 										: "border-destructive/30 text-destructive",
 								)}
 							>

@@ -11,8 +11,8 @@ import type {
 	AutoStartOutputMessage,
 	GitResultMessage,
 	GitState,
-	WorkspaceStateInfo,
 } from "@proliferate/shared";
+import type { WorkspaceStateInfo } from "@proliferate/shared/contracts/harness";
 import type { ExtendedMessage, MessagePart, TaskToolMetadata } from "../message-converter";
 import { type EnvRequest, type ServerPart, convertServerParts } from "./types";
 

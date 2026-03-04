@@ -4,7 +4,7 @@
  * Business logic that orchestrates DB operations.
  */
 
-import type { Secret } from "@proliferate/shared";
+import type { Secret } from "@proliferate/shared/contracts/secrets";
 import { parseEnvFile } from "@proliferate/shared";
 import { decrypt, encrypt, getEncryptionKey } from "../db/crypto";
 import * as secretsDb from "./db";

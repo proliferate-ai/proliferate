@@ -113,10 +113,10 @@ export function OverageSection({ billingSettings, overage, onUpdate }: OverageSe
 				)}
 
 				{!isPaused && overage.usedCents > 0 && (
-					<div className="px-4 py-3 bg-amber-500/10 border-t border-amber-500/20">
+					<div className="px-4 py-3 bg-warning/10 border-t border-warning/20">
 						<div className="flex items-center gap-2 text-sm">
-							<AlertTriangle className="h-4 w-4 text-amber-500" />
-							<span className="text-amber-700 dark:text-amber-400">
+							<AlertTriangle className="h-4 w-4 text-warning" />
+							<span className="text-warning">
 								Overage this month:{" "}
 								<span className="font-medium">{formatCurrency(overage.usedCents)}</span>
 							</span>

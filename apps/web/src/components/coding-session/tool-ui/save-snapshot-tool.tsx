@@ -29,8 +29,8 @@ export const SaveSnapshotToolUI = makeAssistantToolUI<SaveSnapshotArgs, string>(
 				)}
 				{!isRunning && isSuccess && (
 					<>
-						<CheckCircle className="h-4 w-4 text-green-600" />
-						<span className="text-sm font-medium text-green-600">Snapshot saved</span>
+						<CheckCircle className="h-4 w-4 text-success" />
+						<span className="text-sm font-medium text-success">Snapshot saved</span>
 					</>
 				)}
 				{!isRunning && !isSuccess && result && (

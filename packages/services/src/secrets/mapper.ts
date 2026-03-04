@@ -4,7 +4,7 @@
  * Transforms DB rows to API response types.
  */
 
-import type { Secret } from "@proliferate/shared";
+import type { Secret } from "@proliferate/shared/contracts/secrets";
 import type { SecretListRow } from "../types/secrets";
 
 /**

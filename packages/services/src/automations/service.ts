@@ -18,7 +18,7 @@ import type {
 	AutomationListItem,
 	AutomationTrigger,
 	AutomationWithTriggers,
-} from "@proliferate/shared/contracts";
+} from "@proliferate/shared/contracts/automations";
 import * as configurationsDb from "../configurations/db";
 import { getServicesLogger } from "../logger";
 import * as pollGroupsDb from "../poll-groups/db";

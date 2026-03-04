@@ -4,14 +4,14 @@
  * Business logic that orchestrates DB operations.
  */
 
+import type { OrgBillingSettings } from "@proliferate/shared/billing";
 import type {
 	Invitation,
 	Member,
 	OrgRole,
 	Organization,
 	OrganizationWithRole,
-} from "@proliferate/shared";
-import type { OrgBillingSettings } from "@proliferate/shared/billing";
+} from "@proliferate/shared/contracts/orgs";
 import * as orgsDb from "./db";
 import {
 	toDomainSuggestions,

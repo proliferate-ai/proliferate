@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from "crypto";
-import type { Repo, SearchRepo } from "@proliferate/shared";
+import type { Repo, SearchRepo } from "@proliferate/shared/contracts/repos";
 import * as configurationsService from "../configurations/service";
 import { getServicesLogger } from "../logger";
 import type { CreateRepoInput, CreateRepoResult } from "../types/repos";

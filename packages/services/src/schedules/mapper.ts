@@ -4,7 +4,7 @@
  * Transforms DB rows to API types.
  */
 
-import type { Schedule } from "@proliferate/shared/contracts";
+import type { Schedule } from "@proliferate/shared/contracts/schedules";
 import { toIsoString } from "../db/serialize";
 import type { ScheduleRow } from "./db";
 

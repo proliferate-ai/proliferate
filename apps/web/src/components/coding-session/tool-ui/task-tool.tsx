@@ -80,7 +80,7 @@ export const TaskToolUI = makeAssistantToolUI<TaskArgs, string>({
 								{item.state.status === "completed" ? (
 									<ChevronRight className="h-2.5 w-2.5 text-muted-foreground/50" />
 								) : item.state.status === "error" ? (
-									<span className="text-red-500/70 text-[10px]">✗</span>
+									<span className="text-destructive/70 text-[10px]">✗</span>
 								) : (
 									<span className="text-muted-foreground/50 text-[10px]">○</span>
 								)}

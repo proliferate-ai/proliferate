@@ -67,7 +67,7 @@ const statusConfig: Record<
 
 const riskColors: Record<string, string> = {
 	read: "text-muted-foreground border-muted-foreground/30",
-	write: "text-yellow-600 dark:text-yellow-400 border-yellow-500/30",
+	write: "text-warning border-warning/30",
 	danger: "text-destructive border-destructive/30",
 };
 
@@ -141,13 +141,13 @@ export function ActionInvocationCard({
 						className={cn(
 							"h-3.5 w-3.5 shrink-0",
 							invocation.status === "executing" && "animate-spin",
-							invocation.status === "completed" && "text-green-600 dark:text-green-400",
+							invocation.status === "completed" && "text-success",
 							invocation.status === "failed" && "text-destructive",
 							invocation.status === "denied" && "text-destructive",
-							invocation.status === "pending" && "text-yellow-600 dark:text-yellow-400",
+							invocation.status === "pending" && "text-warning",
 							invocation.status === "expired" && "text-muted-foreground",
 							(invocation.status === "approved" || invocation.status === "executing") &&
-								"text-blue-600 dark:text-blue-400",
+								"text-info",
 						)}
 					/>
 					<span className="font-medium truncate">
@@ -337,7 +337,7 @@ function CountdownTimer({ expiresAt }: { expiresAt: string }) {
 		return () => clearInterval(interval);
 	}, [expiresAt]);
 
-	return <span className="text-yellow-600 dark:text-yellow-400">{timeLeft}</span>;
+	return <span className="text-warning">{timeLeft}</span>;
 }
 
 export function formatParams(params: unknown): string {

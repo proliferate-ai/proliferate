@@ -170,7 +170,7 @@ export function PromptInput({ onSubmit, disabled, isLoading }: PromptInputProps)
 							className={cn(
 								"h-8 w-8",
 								listening
-									? "text-red-500 hover:text-red-600"
+									? "text-destructive hover:text-destructive/80"
 									: "text-muted-foreground hover:text-foreground",
 							)}
 							onClick={toggleRecording}

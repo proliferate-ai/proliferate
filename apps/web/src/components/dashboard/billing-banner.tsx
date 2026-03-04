@@ -88,7 +88,7 @@ export function BillingBanner() {
 			: null;
 
 		return (
-			<div className="bg-amber-500 text-amber-950 px-4 py-2 flex items-center justify-between">
+			<div className="bg-warning text-warning-foreground px-4 py-2 flex items-center justify-between">
 				<div className="flex items-center gap-2">
 					<Clock className="h-4 w-4" />
 					<Text variant="small" className="font-medium">
@@ -100,7 +100,7 @@ export function BillingBanner() {
 					variant="ghost"
 					size="sm"
 					asChild
-					className="h-7 px-3 bg-amber-600 hover:bg-amber-700 text-amber-950"
+					className="h-7 px-3 bg-warning/90 hover:bg-warning/80 text-warning-foreground"
 				>
 					<a href="/settings/billing">
 						<CreditCard className="h-4 w-4 mr-1" />
@@ -145,7 +145,7 @@ export function BillingBanner() {
 		const { used, included } = entitlementStatus.monthlyUsage;
 		const pct = included > 0 ? Math.round((used / included) * 100) : 0;
 		return (
-			<div className="bg-amber-500 text-amber-950 px-4 py-2 flex items-center justify-between">
+			<div className="bg-warning text-warning-foreground px-4 py-2 flex items-center justify-between">
 				<div className="flex items-center gap-2">
 					<AlertTriangle className="h-4 w-4" />
 					<Text variant="small" className="font-medium">
@@ -158,7 +158,7 @@ export function BillingBanner() {
 						variant="ghost"
 						size="sm"
 						asChild
-						className="h-7 px-3 bg-amber-600 hover:bg-amber-700 text-amber-950"
+						className="h-7 px-3 bg-warning/90 hover:bg-warning/80 text-warning-foreground"
 					>
 						<a href="/settings/billing">
 							<CreditCard className="h-4 w-4 mr-1" />
@@ -169,7 +169,7 @@ export function BillingBanner() {
 						variant="ghost"
 						size="icon"
 						onClick={() => setDismissed(true)}
-						className="h-7 w-7 text-amber-950 hover:bg-amber-600"
+						className="h-7 w-7 text-warning-foreground hover:bg-warning/90"
 						aria-label="Dismiss"
 					>
 						<X className="h-4 w-4" />
@@ -188,7 +188,7 @@ export function BillingBanner() {
 		const { used, included } = entitlementStatus.monthlyUsage;
 		const pct = included > 0 ? Math.round((used / included) * 100) : 0;
 		return (
-			<div className="bg-amber-500 text-amber-950 px-4 py-2 flex items-center justify-between">
+			<div className="bg-warning text-warning-foreground px-4 py-2 flex items-center justify-between">
 				<div className="flex items-center gap-2">
 					<AlertTriangle className="h-4 w-4" />
 					<Text variant="small" className="font-medium">
@@ -200,7 +200,7 @@ export function BillingBanner() {
 						variant="ghost"
 						size="sm"
 						asChild
-						className="h-7 px-3 bg-amber-600 hover:bg-amber-700 text-amber-950"
+						className="h-7 px-3 bg-warning/90 hover:bg-warning/80 text-warning-foreground"
 					>
 						<a href="/settings/billing">View Usage</a>
 					</Button>
@@ -208,7 +208,7 @@ export function BillingBanner() {
 						variant="ghost"
 						size="icon"
 						onClick={() => setDismissed(true)}
-						className="h-7 w-7 text-amber-950 hover:bg-amber-600"
+						className="h-7 w-7 text-warning-foreground hover:bg-warning/90"
 						aria-label="Dismiss"
 					>
 						<X className="h-4 w-4" />
@@ -221,7 +221,7 @@ export function BillingBanner() {
 	// Priority 7: Low credits warning (only for subscribed users without auto-reload)
 	if (isNearCreditLimit && hasActiveSubscription && overagePolicy !== "allow") {
 		return (
-			<div className="bg-amber-500 text-amber-950 px-4 py-2 flex items-center justify-between">
+			<div className="bg-warning text-warning-foreground px-4 py-2 flex items-center justify-between">
 				<div className="flex items-center gap-2">
 					<AlertTriangle className="h-4 w-4" />
 					<Text variant="small" className="font-medium">
@@ -233,7 +233,7 @@ export function BillingBanner() {
 						variant="ghost"
 						size="sm"
 						asChild
-						className="h-7 px-3 bg-amber-600 hover:bg-amber-700 text-amber-950"
+						className="h-7 px-3 bg-warning/90 hover:bg-warning/80 text-warning-foreground"
 					>
 						<a href="/settings/billing">
 							<CreditCard className="h-4 w-4 mr-1" />
@@ -244,7 +244,7 @@ export function BillingBanner() {
 						variant="ghost"
 						size="icon"
 						onClick={() => setDismissed(true)}
-						className="h-7 w-7 text-amber-950 hover:bg-amber-600"
+						className="h-7 w-7 text-warning-foreground hover:bg-warning/90"
 						aria-label="Dismiss"
 					>
 						<X className="h-4 w-4" />

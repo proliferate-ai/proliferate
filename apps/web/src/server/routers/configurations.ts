@@ -10,10 +10,12 @@ import { configurations } from "@proliferate/services";
 import {
 	ConfigurationSchema,
 	CreateConfigurationInputSchema,
+	UpdateConfigurationInputSchema,
+} from "@proliferate/shared/contracts/configurations";
+import {
 	FinalizeSetupInputSchema,
 	FinalizeSetupResponseSchema,
-	UpdateConfigurationInputSchema,
-} from "@proliferate/shared";
+} from "@proliferate/shared/contracts/repos";
 import { parseConfigurationServiceCommands } from "@proliferate/shared/sandbox";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";

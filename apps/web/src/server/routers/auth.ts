@@ -7,7 +7,7 @@
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
 import { signGatewayToken } from "@proliferate/shared";
-import { AuthProvidersSchema } from "@proliferate/shared/contracts";
+import { AuthProvidersSchema } from "@proliferate/shared/contracts/auth";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure } from "./middleware";
 

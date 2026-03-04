@@ -15,7 +15,7 @@ import {
 	TriggerSchema,
 	TriggerWithIntegrationSchema,
 	UpdateTriggerInputSchema,
-} from "@proliferate/shared";
+} from "@proliferate/shared/contracts/triggers";
 import { z } from "zod";
 import { orgProcedure, publicProcedure } from "./middleware";
 

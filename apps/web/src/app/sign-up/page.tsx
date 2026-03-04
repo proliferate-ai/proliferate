@@ -74,7 +74,6 @@ function SignUpContent() {
 				callbackURL: redirectUrl,
 			});
 		} catch (err) {
-			console.error("Google sign up failed:", err);
 			toast.error("Google sign up failed. Please try again.");
 			setGoogleLoading(false);
 		}

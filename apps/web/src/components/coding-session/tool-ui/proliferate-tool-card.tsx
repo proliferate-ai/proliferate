@@ -30,7 +30,7 @@ export function ProliferateToolCard({
 					{status === "running" && (
 						<Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 					)}
-					{status === "success" && <CheckCircle className="h-3.5 w-3.5 text-green-600" />}
+					{status === "success" && <CheckCircle className="h-3.5 w-3.5 text-success" />}
 					{status === "error" && <XCircle className="h-3.5 w-3.5 text-destructive" />}
 				</span>
 			</div>

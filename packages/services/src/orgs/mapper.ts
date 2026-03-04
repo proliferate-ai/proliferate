@@ -10,7 +10,7 @@ import type {
 	OrgRole,
 	Organization,
 	OrganizationWithRole,
-} from "@proliferate/shared";
+} from "@proliferate/shared/contracts/orgs";
 import { toIsoString } from "../db/serialize";
 import type {
 	DomainSuggestionRow,

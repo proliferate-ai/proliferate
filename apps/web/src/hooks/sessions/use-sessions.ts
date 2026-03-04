@@ -1,8 +1,9 @@
 "use client";
 
 import { orpc } from "@/lib/infra/orpc";
-import type { CreateSessionInput, FinalizeSetupInput } from "@proliferate/shared";
-import type { Session } from "@proliferate/shared/contracts";
+import type { FinalizeSetupInput } from "@proliferate/shared/contracts/repos";
+import type { CreateSessionInput } from "@proliferate/shared/contracts/sessions";
+import type { Session } from "@proliferate/shared/contracts/sessions";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 

@@ -4,7 +4,10 @@
  * Transforms DB rows (camelCase) to API response types (snake_case).
  */
 
-import type { Integration, IntegrationWithCreator } from "@proliferate/shared";
+import type {
+	Integration,
+	IntegrationWithCreator,
+} from "@proliferate/shared/contracts/integrations";
 import { toIsoString } from "../db/serialize";
 import type { IntegrationRow, IntegrationWithCreatorRow, UserRow } from "./db";
 

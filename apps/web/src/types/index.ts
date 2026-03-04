@@ -19,7 +19,8 @@ export type {
 } from "./dashboard";
 
 // Re-export database model types from contracts
-export type { Repo, Session, CreateRepoInput } from "@proliferate/shared/contracts";
+export type { Repo, CreateRepoInput } from "@proliferate/shared/contracts/repos";
+export type { Session } from "@proliferate/shared/contracts/sessions";
 
 // Billing types
 export type { BillingInfo } from "./billing";

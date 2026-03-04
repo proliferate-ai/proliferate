@@ -26,7 +26,7 @@ import type {
 	WorkerRunEventType,
 	WorkerRunStatus,
 	WorkerStatus,
-} from "@proliferate/shared/contracts";
+} from "@proliferate/shared/contracts/workers";
 
 // ============================================
 // Transaction Helpers

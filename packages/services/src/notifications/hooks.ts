@@ -7,7 +7,10 @@
  */
 
 import { env } from "@proliferate/environment/server";
-import type { NotificationCategory, NotificationPayload } from "@proliferate/shared/contracts";
+import type {
+	NotificationCategory,
+	NotificationPayload,
+} from "@proliferate/shared/contracts/notifications";
 import { enqueueOutbox } from "../outbox/service";
 
 interface NotificationHookContext {

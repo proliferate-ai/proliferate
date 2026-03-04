@@ -16,10 +16,10 @@ export interface ValidationResultProps {
 export function ValidationResult({ result }: ValidationResultProps) {
 	if (result.ok) {
 		return (
-			<div className="rounded-md border border-green-600/30 bg-green-600/5 p-3">
+			<div className="rounded-md border border-success/30 bg-success/5 p-3">
 				<div className="flex items-center gap-2 mb-2">
-					<Check className="h-4 w-4 text-green-600" />
-					<span className="text-xs font-medium text-green-600">
+					<Check className="h-4 w-4 text-success" />
+					<span className="text-xs font-medium text-success">
 						Connected — {result.tools.length} tool{result.tools.length !== 1 ? "s" : ""} discovered
 					</span>
 				</div>

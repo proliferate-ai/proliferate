@@ -22,7 +22,7 @@ import {
 	ImpersonatingOrgSchema,
 	ImpersonatingSchema,
 	ImpersonatingUserSchema,
-} from "@proliferate/shared";
+} from "@proliferate/shared/contracts/admin";
 import { z } from "zod";
 import { adminProcedure } from "./middleware";
 

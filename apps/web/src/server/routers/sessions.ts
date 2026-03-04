@@ -14,7 +14,7 @@ import {
 	CreateSessionInputSchema,
 	CreateSessionResponseSchema,
 	SessionSchema,
-} from "@proliferate/shared";
+} from "@proliferate/shared/contracts/sessions";
 import { z } from "zod";
 import { billingGatedProcedure, orgProcedure, publicProcedure } from "./middleware";
 

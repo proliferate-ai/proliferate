@@ -9,7 +9,7 @@
  */
 
 import type { Logger } from "@proliferate/logger";
-import type { RuntimeDaemonEvent } from "@proliferate/shared/contracts";
+import type { RuntimeDaemonEvent } from "@proliferate/shared/contracts/harness";
 import {
 	OPENCODE_HANDSHAKE_TIMEOUT_MS,
 	OPENCODE_HOST,

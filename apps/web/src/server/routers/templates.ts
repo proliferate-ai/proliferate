@@ -5,7 +5,7 @@
  */
 
 import { templates } from "@proliferate/services";
-import { AutomationTemplateSchema } from "@proliferate/shared/contracts";
+import { AutomationTemplateSchema } from "@proliferate/shared/contracts/templates";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 

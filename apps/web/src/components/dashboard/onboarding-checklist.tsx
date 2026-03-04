@@ -29,7 +29,7 @@ export function OnboardingChecklist({
 					{/* Step 1: Create account - always complete if on dashboard */}
 					<li className="flex items-start gap-3">
 						<div className="mt-0.5">
-							<div className="h-5 w-5 rounded-full bg-green-500 flex items-center justify-center">
+							<div className="h-5 w-5 rounded-full bg-success flex items-center justify-center">
 								<Check className="h-3 w-3 text-white" />
 							</div>
 						</div>
@@ -47,7 +47,7 @@ export function OnboardingChecklist({
 					<li className="flex items-start gap-3">
 						<div className="mt-0.5">
 							{state.hasGitHubConnection ? (
-								<div className="h-5 w-5 rounded-full bg-green-500 flex items-center justify-center">
+								<div className="h-5 w-5 rounded-full bg-success flex items-center justify-center">
 									<Check className="h-3 w-3 text-white" />
 								</div>
 							) : (
@@ -69,7 +69,7 @@ export function OnboardingChecklist({
 					<li className="flex items-start gap-3">
 						<div className="mt-0.5">
 							{state.hasRepos ? (
-								<div className="h-5 w-5 rounded-full bg-green-500 flex items-center justify-center">
+								<div className="h-5 w-5 rounded-full bg-success flex items-center justify-center">
 									<Check className="h-3 w-3 text-white" />
 								</div>
 							) : (

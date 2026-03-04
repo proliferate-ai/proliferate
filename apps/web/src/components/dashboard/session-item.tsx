@@ -25,7 +25,7 @@ import {
 import { startSnapshotProgressToast } from "@/lib/display/snapshot-progress-toast";
 import { cn, formatRelativeTime, getRepoShortName } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
-import type { Session } from "@proliferate/shared/contracts";
+import type { Session } from "@proliferate/shared/contracts/sessions";
 import { Bell, BellOff, Camera, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";

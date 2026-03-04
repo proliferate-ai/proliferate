@@ -38,7 +38,6 @@ export default function OnboardingCompletePage() {
 					router.replace("/onboarding?success=billing");
 				}
 			} catch (err) {
-				console.error("Failed to complete onboarding:", err);
 				setError("Failed to complete setup. Please try again.");
 			}
 		}

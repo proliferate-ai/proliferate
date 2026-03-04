@@ -9,7 +9,8 @@ import {
 	normalizeProvider,
 } from "@/lib/automations/display";
 import { cn } from "@/lib/display/utils";
-import type { AutomationRun, ParsedEventContext } from "@proliferate/shared";
+import type { AutomationRun } from "@proliferate/shared/contracts/automations";
+import type { ParsedEventContext } from "@proliferate/shared/contracts/trigger-configs";
 import { Bot } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";

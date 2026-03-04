@@ -10,7 +10,7 @@ import { logger } from "@/lib/infra/logger";
 import { ORPCError } from "@orpc/server";
 import { configurations, orgs, secretFiles, sessions } from "@proliferate/services";
 import type { SandboxProviderType } from "@proliferate/shared";
-import { SecretFileMetaSchema } from "@proliferate/shared/contracts";
+import { SecretFileMetaSchema } from "@proliferate/shared/contracts/secrets";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";

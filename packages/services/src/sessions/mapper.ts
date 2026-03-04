@@ -4,7 +4,7 @@
  * Transforms DB rows (camelCase from Drizzle) to API response types (camelCase).
  */
 
-import type { Session } from "@proliferate/shared";
+import type { Session } from "@proliferate/shared/contracts/sessions";
 import { sanitizePromptSnippet } from "@proliferate/shared/sessions";
 import { toIsoString } from "../db/serialize";
 import type { EnrichedSessionRow, RepoRow, SessionRow, SessionWithRepoRow } from "./db";

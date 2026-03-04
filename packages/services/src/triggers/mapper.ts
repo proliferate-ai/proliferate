@@ -4,7 +4,11 @@
  * Transforms DB rows (camelCase) to API response types (snake_case).
  */
 
-import type { Trigger, TriggerEvent, TriggerWithIntegration } from "@proliferate/shared";
+import type {
+	Trigger,
+	TriggerEvent,
+	TriggerWithIntegration,
+} from "@proliferate/shared/contracts/triggers";
 import { toIsoString } from "../db/serialize";
 import type {
 	TriggerEventRow,

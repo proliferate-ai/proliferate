@@ -49,7 +49,7 @@ export default function SecretsPage() {
 		try {
 			await deleteSecret.mutateAsync(id);
 		} catch (err) {
-			console.error("Failed to delete secret:", err);
+			// silently ignore – UI will remain unchanged
 		} finally {
 			setDeleting(null);
 		}

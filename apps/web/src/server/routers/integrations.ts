@@ -15,6 +15,9 @@ import {
 	ConnectorAuthSchema,
 	ConnectorConfigSchema,
 	ConnectorRiskPolicySchema,
+} from "@proliferate/shared";
+import type { ConnectorConfig } from "@proliferate/shared";
+import {
 	GitHubStatusSchema,
 	IntegrationSchema,
 	IntegrationWithCreatorSchema,
@@ -22,8 +25,7 @@ import {
 	LinearMetadataSchema,
 	SentryMetadataSchema,
 	SlackStatusSchema,
-} from "@proliferate/shared";
-import type { ConnectorConfig } from "@proliferate/shared";
+} from "@proliferate/shared/contracts/integrations";
 import { z } from "zod";
 import { orgProcedure } from "./middleware";
 

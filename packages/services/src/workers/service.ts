@@ -10,7 +10,7 @@ import {
 	type WorkerStatus,
 	isValidWorkerRunTransition,
 	isValidWorkerTransition,
-} from "@proliferate/shared/contracts";
+} from "@proliferate/shared/contracts/workers";
 import * as sessionsDb from "../sessions/db";
 import type { WakeEventRow } from "../wakes/db";
 import * as wakesDb from "../wakes/db";

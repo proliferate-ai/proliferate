@@ -87,9 +87,7 @@ export function ConnectionCard({
 									</Badge>
 								)}
 							</div>
-							<p
-								className={cn("text-sm", isConnected ? "text-green-500" : "text-muted-foreground")}
-							>
+							<p className={cn("text-sm", isConnected ? "text-success" : "text-muted-foreground")}>
 								{isConnected ? `Connected by ${connectedByText}` : "Not connected"}
 							</p>
 						</div>
@@ -263,8 +261,8 @@ export function ConnectionCard({
 	if (variant === "inline") {
 		if (!isConnected) {
 			return (
-				<div className="flex items-center gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-					<AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+				<div className="flex items-center gap-3 p-3 bg-warning/10 border border-warning/20 rounded-lg">
+					<AlertTriangle className="h-5 w-5 text-warning shrink-0" />
 					<div className="flex-1 min-w-0">
 						<p className="text-sm font-medium">{providerName} not connected</p>
 						<p className="text-xs text-muted-foreground">
@@ -279,7 +277,7 @@ export function ConnectionCard({
 		}
 
 		return (
-			<div className="flex items-center gap-2 text-sm text-green-500">
+			<div className="flex items-center gap-2 text-sm text-success">
 				<ProviderIcon provider={provider} size="sm" />
 				<span>Connected by {connectedByText}</span>
 			</div>
