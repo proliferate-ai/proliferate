@@ -22,7 +22,7 @@ import {
 import { useOrgPendingRuns } from "@/hooks/use-automations";
 import { useSessions } from "@/hooks/use-sessions";
 import { useSession } from "@/lib/auth/client";
-import { getSessionOrigin, sortSessions } from "@/lib/sessions/helpers";
+import { getSessionOrigin, sortSessions } from "@/lib/sessions/filters";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard";
 import { deriveDisplayStatus } from "@proliferate/shared/sessions";

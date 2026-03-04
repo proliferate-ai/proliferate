@@ -102,11 +102,3 @@ export const CORE_PLATFORM_NOTES: Record<string, string> = {
 export const OAUTH_PROVIDERS: Provider[] = ["github", "sentry", "linear", "jira"];
 
 export type IntegrationTab = "connection" | "permissions";
-
-export function getDisconnectDescription(entry: CatalogEntry): string {
-	if (entry.provider === "github") {
-		return "Repos using this connection will be marked as orphaned until reconnected.";
-	}
-	const name = entry.name;
-	return `Triggers and automations using this ${name} connection will stop working.`;
-}

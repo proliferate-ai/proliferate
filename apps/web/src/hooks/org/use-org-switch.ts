@@ -34,8 +34,7 @@ export function useOrgSwitch({
 			.then(() => {
 				window.location.replace(buildRedirectUrl(targetOrgId));
 			})
-			.catch((err) => {
-				console.error("Failed to switch organization:", err);
+			.catch(() => {
 				setSwitchError("Unable to switch organization for this session.");
 				setIsSwitching(false);
 			});

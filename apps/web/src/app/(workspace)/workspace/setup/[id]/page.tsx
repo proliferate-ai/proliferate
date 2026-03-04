@@ -1,6 +1,6 @@
 "use client";
 
-import { CodingSession } from "@/components/coding-session";
+import { CodingSession } from "@/components/coding-session/coding-session";
 import { SessionLoadingShell } from "@/components/coding-session/session-loading-shell";
 import { ExistingSetupSession } from "@/components/workspace/existing-setup-session";
 import { SessionCreationError } from "@/components/workspace/session-creation-error";

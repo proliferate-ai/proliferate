@@ -7,7 +7,7 @@ import {
 	getEventTypeLabel,
 	getSeverityDotClass,
 	normalizeProvider,
-} from "@/lib/automations/helpers";
+} from "@/lib/automations/display";
 import { cn } from "@/lib/utils";
 import type { AutomationRun, ParsedEventContext } from "@proliferate/shared";
 import { Bot } from "lucide-react";

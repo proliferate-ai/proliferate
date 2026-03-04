@@ -1,6 +1,6 @@
 "use client";
 
-import { PreviewSession } from "@/components/preview-session";
+import { PreviewSession } from "@/components/preview-session/preview-session";
 import { useOrgSwitch } from "@/hooks/org/use-org-switch";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";

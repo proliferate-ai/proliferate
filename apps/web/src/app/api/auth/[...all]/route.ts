@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth/server";
-import { getDevUserId } from "@/lib/auth/server/helpers";
+import { getDevUserId } from "@/lib/auth/server/session";
 import { logger } from "@/lib/logger";
 import { orgs, users } from "@proliferate/services";
 import { toNextJsHandler } from "better-auth/next-js";

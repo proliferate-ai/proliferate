@@ -35,8 +35,7 @@ export function useVerifyEmail() {
 			} else {
 				setResent(true);
 			}
-		} catch (err) {
-			console.error("Failed to send verification email:", err);
+		} catch {
 			setError("Failed to send verification email");
 		} finally {
 			setIsResending(false);

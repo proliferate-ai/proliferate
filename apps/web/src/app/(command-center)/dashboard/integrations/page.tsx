@@ -30,30 +30,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import {
-	CORE_ENTRIES,
-	CORE_PLATFORM_NOTES,
-	INTEGRATION_CATALOG,
-	getDisconnectDescription,
-} from "@/config/integrations";
+import { CORE_ENTRIES, CORE_PLATFORM_NOTES, INTEGRATION_CATALOG } from "@/config/integrations";
 import { useIntegrationActions } from "@/hooks/integrations/use-integration-actions";
+import { useIntegrationDialogs } from "@/hooks/integrations/use-integration-dialogs";
 import { useIntegrationStatus } from "@/hooks/integrations/use-integration-status";
 import { useOAuthConnections } from "@/hooks/integrations/use-oauth-connections";
 import { useSourceManagement } from "@/hooks/integrations/use-source-management";
 import { useCurrentUserRole } from "@/hooks/org/use-current-user-role";
 import { useConfigurations } from "@/hooks/use-configurations";
 import { useSlackConfig, useUpdateSlackConfig } from "@/hooks/use-integrations";
-import type { ConnectorConfig } from "@proliferate/shared";
+import { getDisconnectDescription } from "@/lib/integrations/display";
 import { CheckCircle2, Plus, Search } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 export default function IntegrationsPage() {
 	const { isAdmin } = useCurrentUserRole();
-
-	// ---- Modal state ----
-	const [pickerOpen, setPickerOpen] = useState(false);
-	const [selectedEntry, setSelectedEntry] = useState<CatalogEntry | null>(null);
-	const [openedFromPicker, setOpenedFromPicker] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 
 	// ---- OAuth & Slack ----
@@ -100,6 +91,32 @@ export default function IntegrationsPage() {
 			searchQuery,
 		});
 
+	// ---- Dialog state & navigation ----
+	const {
+		pickerOpen,
+		setPickerOpen,
+		selectedEntry,
+		setSelectedEntry,
+		openedFromPicker,
+		disconnectTarget,
+		setDisconnectTarget,
+		deleteConnectorTarget,
+		setDeleteConnectorTarget,
+		filteredConnectors,
+		handleSelectFromPicker,
+		handleSelectFromRow,
+		handleDetailBack,
+		handleDetailOpenChange,
+		handleConfirmDisconnect,
+		handleConfirmDeleteConnector,
+	} = useIntegrationDialogs({
+		connectors,
+		searchQuery,
+		disconnectOAuth,
+		handleSlackDisconnect,
+		handleRemoveConnector: handleRemove,
+	});
+
 	// ---- Slack config ----
 	const { data: slackConfig } = useSlackConfig();
 	const updateSlackConfig = useUpdateSlackConfig();
@@ -121,74 +138,6 @@ export default function IntegrationsPage() {
 		setShowSlackConnectForm(false);
 		setSlackConnectChannelName("");
 	}, [slackConnectChannelName, slackConnect]);
-
-	// ---- Disconnect confirmation dialog ----
-	const [disconnectTarget, setDisconnectTarget] = useState<{
-		entry: CatalogEntry;
-		integrationId?: string;
-	} | null>(null);
-
-	const handleConfirmDisconnect = useCallback(async () => {
-		if (!disconnectTarget) return;
-		const { entry, integrationId } = disconnectTarget;
-
-		if (entry.type === "oauth" && entry.provider && integrationId) {
-			await disconnectOAuth(entry.provider, integrationId);
-		} else if (entry.type === "slack") {
-			await handleSlackDisconnect();
-		}
-		setDisconnectTarget(null);
-	}, [disconnectTarget, disconnectOAuth, handleSlackDisconnect]);
-
-	// ---- Detail/picker navigation ----
-	const handleSelectFromPicker = useCallback((entry: CatalogEntry) => {
-		setPickerOpen(false);
-		setSelectedEntry(entry);
-		setOpenedFromPicker(true);
-	}, []);
-
-	const handleSelectFromRow = useCallback((entry: CatalogEntry) => {
-		setSelectedEntry(entry);
-		setOpenedFromPicker(false);
-	}, []);
-
-	const handleDetailBack = useCallback(() => {
-		setSelectedEntry(null);
-		setPickerOpen(true);
-	}, []);
-
-	const handleDetailOpenChange = useCallback(
-		(open: boolean) => {
-			if (!open) {
-				setSelectedEntry(null);
-				if (openedFromPicker) {
-					setPickerOpen(false);
-				}
-			}
-		},
-		[openedFromPicker],
-	);
-
-	// ---- Connector search ----
-	const filteredConnectors = useMemo(() => {
-		let list = connectors ?? [];
-		if (searchQuery.trim()) {
-			const q = searchQuery.toLowerCase();
-			list = list.filter(
-				(c: ConnectorConfig) => c.name.toLowerCase().includes(q) || c.url.toLowerCase().includes(q),
-			);
-		}
-		return list;
-	}, [connectors, searchQuery]);
-
-	// ---- Connector delete confirmation ----
-	const [deleteConnectorTarget, setDeleteConnectorTarget] = useState<string | null>(null);
-
-	const handleConfirmDeleteConnector = useCallback(async () => {
-		if (!deleteConnectorTarget) return;
-		await handleRemove(deleteConnectorTarget);
-		setDeleteConnectorTarget(null);
-	}, [deleteConnectorTarget, handleRemove]);
 
 	// ---- Loading state ----
 	if (integrationsLoading && connectorsLoading) {
@@ -249,10 +198,7 @@ export default function IntegrationsPage() {
 							key={entry.key}
 							variant="outline"
 							className="flex flex-col items-start p-4 pb-3 rounded-2xl h-auto text-left"
-							onClick={() => {
-								setSelectedEntry(entry);
-								setOpenedFromPicker(false);
-							}}
+							onClick={() => handleSelectFromRow(entry)}
 						>
 							<div className="w-7 h-7 rounded-lg border border-border bg-background flex items-center justify-center p-1 shrink-0">
 								{entry.provider ? <ProviderIcon provider={entry.provider} size="md" /> : null}

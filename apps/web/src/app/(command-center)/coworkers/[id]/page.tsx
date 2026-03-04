@@ -36,7 +36,7 @@ export default function CoworkerDetailPage({
 	const [activeTab, setActiveTab] = useState<CoworkerDetailTab>("activity");
 
 	const { data: worker, isLoading: isLoadingWorker, error: workerError } = useWorker(id);
-	const { data: _automation, isLoading: isLoadingAutomation } = useAutomation(id);
+	const { isLoading: isLoadingAutomation } = useAutomation(id);
 
 	const isWorkerActive = worker?.status === "active";
 	const hasWorker = !!worker && !workerError;

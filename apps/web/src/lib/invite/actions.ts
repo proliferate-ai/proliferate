@@ -1,6 +1,6 @@
 "use server";
 
-import { getSession } from "@/lib/auth/server/helpers";
+import { getSession } from "@/lib/auth/server/session";
 import { orgs } from "@proliferate/services";
 
 export async function getBasicInviteInfo(id: string) {

@@ -1,17 +1,10 @@
 import { useAuthProviders } from "@/hooks/use-auth-providers";
 import { signIn, useSession } from "@/lib/auth/client";
+import { setLastAuthMethod } from "@/lib/auth/last-auth-method";
 import { sanitizeRedirect } from "@/lib/auth/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-
-function setLastAuthMethod(method: "google" | "email") {
-	try {
-		localStorage.setItem("proliferate:last-auth-method", method);
-	} catch {
-		// localStorage may be unavailable in private browsing
-	}
-}
 
 export function useSignIn() {
 	const router = useRouter();
@@ -43,8 +36,7 @@ export function useSignIn() {
 				provider: "google",
 				callbackURL: redirectUrl,
 			});
-		} catch (err) {
-			console.error("Google sign in failed:", err);
+		} catch {
 			toast.error("Google sign in failed. Please try again.");
 			setGoogleLoading(false);
 		}

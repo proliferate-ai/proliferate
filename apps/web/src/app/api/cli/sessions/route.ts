@@ -1,4 +1,4 @@
-import { isAuthError, requireOrgAuth } from "@/lib/auth/server/helpers";
+import { isAuthError, requireOrgAuth } from "@/lib/auth/server/session";
 import { GATEWAY_URL } from "@/lib/gateway";
 import { logger } from "@/lib/logger";
 import { env } from "@proliferate/environment/server";

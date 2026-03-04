@@ -13,19 +13,19 @@ import {
 export function getRunStatusDisplay(status: string) {
 	switch (status) {
 		case "succeeded":
-			return { icon: CheckCircle2, label: "Succeeded", className: "text-emerald-500" };
+			return { icon: CheckCircle2, label: "Succeeded", className: "text-success" };
 		case "failed":
 			return { icon: XCircle, label: "Failed", className: "text-destructive" };
 		case "needs_human":
-			return { icon: Hand, label: "Needs attention", className: "text-amber-500" };
+			return { icon: Hand, label: "Needs attention", className: "text-warning" };
 		case "timed_out":
-			return { icon: Timer, label: "Timed out", className: "text-orange-500" };
+			return { icon: Timer, label: "Timed out", className: "text-warning" };
 		case "canceled":
 			return { icon: Ban, label: "Canceled", className: "text-muted-foreground" };
 		case "skipped":
 			return { icon: SkipForward, label: "Skipped", className: "text-muted-foreground" };
 		case "running":
-			return { icon: Loader2, label: "Running", className: "text-emerald-500" };
+			return { icon: Loader2, label: "Running", className: "text-success" };
 		case "queued":
 		case "enriching":
 		case "ready":

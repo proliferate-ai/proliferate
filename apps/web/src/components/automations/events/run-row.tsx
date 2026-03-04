@@ -6,7 +6,7 @@ import { ProviderIcon } from "@/components/integrations/provider-icon";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getEventTypeLabel, normalizeProvider } from "@/lib/automations/helpers";
+import { getEventTypeLabel, normalizeProvider } from "@/lib/automations/display";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import type { AutomationRun, ParsedEventContext } from "@proliferate/shared";
 import { Bot, ChevronRight } from "lucide-react";

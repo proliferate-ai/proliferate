@@ -1,20 +1,13 @@
 import { REQUIRE_EMAIL_VERIFICATION } from "@/config/auth";
 import { useAuthProviders } from "@/hooks/use-auth-providers";
 import { signIn, signUp, useSession } from "@/lib/auth/client";
+import { setLastAuthMethod } from "@/lib/auth/last-auth-method";
 import { sanitizeRedirect } from "@/lib/auth/utils";
 import { getUtms } from "@/lib/utm";
 import { useRouter, useSearchParams } from "next/navigation";
 import posthog from "posthog-js";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-
-function setLastAuthMethod(method: "google" | "email") {
-	try {
-		localStorage.setItem("proliferate:last-auth-method", method);
-	} catch {
-		// localStorage may be unavailable in private browsing
-	}
-}
 
 function trackSignup(method: "google" | "email") {
 	const utms = getUtms() ?? {};
@@ -58,8 +51,7 @@ export function useSignUp() {
 				provider: "google",
 				callbackURL: redirectUrl,
 			});
-		} catch (err) {
-			console.error("Google sign up failed:", err);
+		} catch {
 			toast.error("Google sign up failed. Please try again.");
 			setGoogleLoading(false);
 		}

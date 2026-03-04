@@ -25,3 +25,19 @@ export const LIVE_STATUSES: Set<DisplayStatus> = new Set([
 	"recovering",
 	"blocked",
 ]);
+
+export const DASHBOARD_ORIGIN_OPTIONS: { value: OriginFilter; label: string }[] = [
+	{ value: "all", label: "All Origins" },
+	{ value: "manual", label: "Manual" },
+	{ value: "automation", label: "Coworker" },
+	{ value: "slack", label: "Slack" },
+	{ value: "cli", label: "CLI" },
+];
+
+export const SESSIONS_ORIGIN_OPTIONS: { value: OriginFilter; label: string }[] = [
+	{ value: "all", label: "All Origins" },
+	{ value: "manual", label: "Manual" },
+	{ value: "coworker", label: "Coworker" },
+	{ value: "slack", label: "Slack" },
+	{ value: "cli", label: "CLI" },
+];

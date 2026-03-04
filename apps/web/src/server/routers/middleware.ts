@@ -7,7 +7,7 @@ import {
 	getSession,
 	isAuthError,
 	requireAuth,
-} from "@/lib/auth/server/helpers";
+} from "@/lib/auth/server/session";
 import { logger } from "@/lib/logger";
 import { isSuperAdmin } from "@/lib/super-admin";
 import { os, ORPCError } from "@orpc/server";
