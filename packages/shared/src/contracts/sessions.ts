@@ -128,3 +128,131 @@ export const PaymentRequiredErrorSchema = z.object({
 export const RenameSessionInputSchema = z.object({
 	title: z.string(),
 });
+
+// V1 canonical session contracts
+export const SESSION_KINDS = ["manager", "task", "setup"] as const;
+export type SessionKind = (typeof SESSION_KINDS)[number];
+
+export const SESSION_RUNTIME_STATUSES = [
+	"starting",
+	"running",
+	"paused",
+	"completed",
+	"failed",
+	"cancelled",
+] as const;
+export type SessionRuntimeStatus = (typeof SESSION_RUNTIME_STATUSES)[number];
+
+export const TERMINAL_SESSION_RUNTIME_STATUSES: readonly SessionRuntimeStatus[] = [
+	"completed",
+	"failed",
+	"cancelled",
+];
+export const NON_TERMINAL_SESSION_RUNTIME_STATUSES: readonly SessionRuntimeStatus[] = [
+	"starting",
+	"running",
+	"paused",
+];
+
+const SESSION_RUNTIME_TRANSITIONS: Record<string, readonly SessionRuntimeStatus[]> = {
+	starting: ["running", "failed", "cancelled"],
+	running: ["paused", "completed", "failed", "cancelled"],
+	paused: ["running", "failed", "cancelled"],
+};
+
+export function isValidSessionRuntimeTransition(
+	from: SessionRuntimeStatus,
+	to: SessionRuntimeStatus,
+): boolean {
+	return SESSION_RUNTIME_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+export function isTerminalSessionRuntimeStatus(status: SessionRuntimeStatus): boolean {
+	return TERMINAL_SESSION_RUNTIME_STATUSES.includes(status);
+}
+
+export function isNonTerminalSessionRuntimeStatus(status: SessionRuntimeStatus): boolean {
+	return NON_TERMINAL_SESSION_RUNTIME_STATUSES.includes(status);
+}
+
+export const SESSION_OPERATOR_STATUSES = [
+	"active",
+	"waiting_for_approval",
+	"needs_input",
+	"ready_for_review",
+	"errored",
+	"done",
+] as const;
+export type SessionOperatorStatus = (typeof SESSION_OPERATOR_STATUSES)[number];
+
+const SESSION_OPERATOR_TRANSITIONS: Record<string, readonly SessionOperatorStatus[]> = {
+	active: ["waiting_for_approval", "needs_input", "ready_for_review", "errored", "done"],
+	waiting_for_approval: ["active", "needs_input", "ready_for_review", "errored", "done"],
+	needs_input: ["active", "waiting_for_approval", "ready_for_review", "errored", "done"],
+	ready_for_review: ["active", "waiting_for_approval", "needs_input", "errored", "done"],
+	errored: ["active", "done"],
+};
+
+export function isValidSessionOperatorTransition(
+	from: SessionOperatorStatus,
+	to: SessionOperatorStatus,
+): boolean {
+	return SESSION_OPERATOR_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+export const SESSION_MESSAGE_DIRECTIONS = [
+	"user_to_manager",
+	"user_to_task",
+	"manager_to_task",
+	"task_to_manager",
+] as const;
+export type SessionMessageDirection = (typeof SESSION_MESSAGE_DIRECTIONS)[number];
+
+export const SESSION_MESSAGE_DELIVERY_STATES = [
+	"queued",
+	"delivered",
+	"consumed",
+	"failed",
+] as const;
+export type SessionMessageDeliveryState = (typeof SESSION_MESSAGE_DELIVERY_STATES)[number];
+
+export const SESSION_VISIBILITIES = ["private", "shared", "org"] as const;
+export type SessionVisibility = (typeof SESSION_VISIBILITIES)[number];
+
+export const SESSION_ACL_ROLES = ["viewer", "editor", "reviewer"] as const;
+export type SessionAclRole = (typeof SESSION_ACL_ROLES)[number];
+
+export const SESSION_EVENT_TYPES = [
+	"session_created",
+	"session_started",
+	"session_paused",
+	"session_resumed",
+	"session_completed",
+	"session_failed",
+	"session_cancelled",
+	"session_outcome_persisted",
+] as const;
+export type SessionEventType = (typeof SESSION_EVENT_TYPES)[number];
+
+export const PULL_REQUEST_STATES = ["open", "closed", "merged", "draft"] as const;
+export type PullRequestState = (typeof PULL_REQUEST_STATES)[number];
+
+export interface SessionOutcome {
+	summary: string | null;
+	changedFileCount: number;
+	topChangedFiles: string[];
+	testSummary: {
+		ran: number;
+		passed: number;
+		failed: number;
+		skipped: number;
+	} | null;
+	pullRequest: {
+		url: string;
+		number: number;
+		state: PullRequestState;
+		branch: string;
+	} | null;
+	errorCode: string | null;
+	errorMessage: string | null;
+}

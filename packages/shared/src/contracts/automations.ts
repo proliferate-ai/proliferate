@@ -355,3 +355,42 @@ export const AutomationConnectionSchema = z.object({
 });
 
 export type AutomationConnection = z.infer<typeof AutomationConnectionSchema>;
+
+// Resume intent lifecycle for automation/session handoffs.
+export const RESUME_INTENT_STATUSES = [
+	"queued",
+	"claimed",
+	"resuming",
+	"satisfied",
+	"continued",
+	"resume_failed",
+] as const;
+export type ResumeIntentStatus = (typeof RESUME_INTENT_STATUSES)[number];
+
+export const TERMINAL_RESUME_INTENT_STATUSES: readonly ResumeIntentStatus[] = [
+	"satisfied",
+	"continued",
+	"resume_failed",
+];
+export const ACTIVE_RESUME_INTENT_STATUSES: readonly ResumeIntentStatus[] = [
+	"queued",
+	"claimed",
+	"resuming",
+];
+
+const RESUME_INTENT_TRANSITIONS: Record<string, readonly ResumeIntentStatus[]> = {
+	queued: ["claimed"],
+	claimed: ["resuming", "continued", "resume_failed"],
+	resuming: ["satisfied", "continued", "resume_failed"],
+};
+
+export function isValidResumeIntentTransition(
+	from: ResumeIntentStatus,
+	to: ResumeIntentStatus,
+): boolean {
+	return RESUME_INTENT_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+export function isActiveResumeIntentStatus(status: ResumeIntentStatus): boolean {
+	return ACTIVE_RESUME_INTENT_STATUSES.includes(status);
+}
