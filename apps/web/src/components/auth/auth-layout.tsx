@@ -1,13 +1,4 @@
-import { GithubIcon, LinearIcon, PostHogIcon, SentryIcon, SlackIcon } from "@/components/ui/icons";
-import type { ComponentType, SVGProps } from "react";
-
-const INTEGRATIONS: { icon: ComponentType<SVGProps<SVGSVGElement>>; label: string }[] = [
-	{ icon: GithubIcon, label: "GitHub" },
-	{ icon: SlackIcon, label: "Slack" },
-	{ icon: LinearIcon, label: "Linear" },
-	{ icon: SentryIcon, label: "Sentry" },
-	{ icon: PostHogIcon, label: "PostHog" },
-];
+import { AUTH_INTEGRATIONS } from "@/config/auth";
 
 /**
  * Force dark-mode CSS custom properties so all shadcn components
@@ -60,7 +51,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
 					<div className="mt-12 flex flex-col items-center gap-3">
 						<span className="text-xs text-muted-foreground">Works with</span>
 						<div className="flex items-center gap-2">
-							{INTEGRATIONS.map(({ icon: Icon, label }) => (
+							{AUTH_INTEGRATIONS.map(({ icon: Icon, label }) => (
 								<div
 									key={label}
 									className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card/60"

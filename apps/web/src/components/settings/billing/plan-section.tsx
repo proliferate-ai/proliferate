@@ -13,44 +13,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PLAN_OPTIONS, type PlanId } from "@/config/billing";
 import { useActivatePlan } from "@/hooks/org/use-billing";
 import { cn } from "@/lib/display/utils";
 import type { BillingInfo } from "@/types/billing";
 import { Check } from "lucide-react";
 import { useState } from "react";
-
-type PlanId = "dev" | "pro";
-
-interface PlanOption {
-	id: PlanId;
-	name: string;
-	price: string;
-	creditsIncluded: number;
-	maxConcurrentSessions: number;
-	maxSnapshots: number;
-	snapshotRetentionDays: number;
-}
-
-const PLANS: PlanOption[] = [
-	{
-		id: "dev",
-		name: "Developer",
-		price: "$20",
-		creditsIncluded: 1000,
-		maxConcurrentSessions: 10,
-		maxSnapshots: 5,
-		snapshotRetentionDays: 30,
-	},
-	{
-		id: "pro",
-		name: "Professional",
-		price: "$500",
-		creditsIncluded: 7500,
-		maxConcurrentSessions: 100,
-		maxSnapshots: 200,
-		snapshotRetentionDays: 90,
-	},
-];
 
 interface PlanSectionProps {
 	plan: BillingInfo["plan"];
@@ -82,7 +50,7 @@ export function PlanSection({
 
 	const currentPlanId: PlanId | null =
 		selectedPlan === "dev" || selectedPlan === "pro" ? selectedPlan : null;
-	const targetPlan = confirmPlan ? (PLANS.find((p) => p.id === confirmPlan) ?? null) : null;
+	const targetPlan = confirmPlan ? (PLAN_OPTIONS.find((p) => p.id === confirmPlan) ?? null) : null;
 
 	const handleConfirm = async () => {
 		if (!confirmPlan) {
@@ -126,7 +94,7 @@ export function PlanSection({
 		if (planId === "pro") return currentPlanId === "dev" ? "Upgrade to Pro" : "Switch to Pro";
 		if (planId === "dev")
 			return currentPlanId === "pro" ? "Downgrade to Developer" : "Switch to Developer";
-		return `Switch to ${PLANS.find((p) => p.id === planId)?.name ?? planId}`;
+		return `Switch to ${PLAN_OPTIONS.find((p) => p.id === planId)?.name ?? planId}`;
 	};
 
 	return (
@@ -152,7 +120,7 @@ export function PlanSection({
 
 					{/* Plan picker cards */}
 					<div className="mt-4 grid grid-cols-2 gap-3">
-						{PLANS.map((p) => {
+						{PLAN_OPTIONS.map((p) => {
 							const isCurrent =
 								hasActiveSubscription && currentPlanId !== null && p.id === currentPlanId;
 							const isSelected = !hasActiveSubscription && p.id === selectedPlan;

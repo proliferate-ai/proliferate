@@ -42,15 +42,10 @@ export function useCoworkerCreate() {
 
 	const handleBlankCreate = async () => {
 		setCreateError(null);
-		try {
-			const result = await createWorker.mutateAsync({});
-			setPickerOpen(false);
-			startTransition(() => {
-				router.push(`/coworkers/${result.worker.id}`);
-			});
-		} catch (err) {
-			setCreateError(err instanceof Error ? err.message : "Failed to create coworker");
-		}
+		setPickerOpen(false);
+		startTransition(() => {
+			router.push("/coworkers?create=1");
+		});
 	};
 
 	const handleTemplateSelect = async (template: TemplateEntry) => {

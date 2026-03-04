@@ -21,6 +21,7 @@ import {
 	AutomationSchema,
 	AutomationTriggerSchema,
 	AutomationWithTriggersSchema,
+	CoworkerCapabilityInputSchema,
 	CreateAutomationInputSchema,
 	CreateAutomationScheduleInputSchema,
 	CreateAutomationTriggerInputSchema,
@@ -848,6 +849,7 @@ export const automationsRouter = {
 				modelId: z.string().optional(),
 				repoId: z.string().uuid().optional(),
 				configurationId: z.string().uuid().optional(),
+				capabilities: z.array(CoworkerCapabilityInputSchema).max(100).optional(),
 			}),
 		)
 		.output(
@@ -871,6 +873,7 @@ export const automationsRouter = {
 				modelId: input?.modelId,
 				repoId: input?.repoId,
 				configurationId: input?.configurationId,
+				capabilities: input?.capabilities,
 			});
 			return {
 				worker: {
@@ -957,13 +960,16 @@ export const automationsRouter = {
 					updatedAt: z.coerce.date(),
 					activeTaskCount: z.number(),
 					pendingApprovalCount: z.number(),
+					capabilities: z.array(CoworkerCapabilityInputSchema),
 				}),
 			}),
 		)
 		.handler(async ({ input, context }) => {
 			let worker: Awaited<ReturnType<typeof workers.getWorkerForOrgWithCounts>>;
+			let capabilities: Awaited<ReturnType<typeof workers.listWorkerCapabilitiesForOrg>>;
 			try {
 				worker = await workers.getWorkerForOrgWithCounts(input.id, context.orgId);
+				capabilities = await workers.listWorkerCapabilitiesForOrg(input.id, context.orgId);
 			} catch (err) {
 				if (err instanceof workers.WorkerNotFoundError) {
 					throw new ORPCError("NOT_FOUND", { message: "Worker not found" });
@@ -989,6 +995,11 @@ export const automationsRouter = {
 					updatedAt: worker.updatedAt,
 					activeTaskCount: worker.activeTaskCount,
 					pendingApprovalCount: worker.pendingApprovalCount,
+					capabilities: capabilities.map((capability) => ({
+						capabilityKey: capability.capabilityKey,
+						mode: capability.mode,
+						...(capability.origin ? { origin: capability.origin } : {}),
+					})),
 				},
 			};
 		}),
@@ -1272,6 +1283,7 @@ export const automationsRouter = {
 				modelId: z.string().optional(),
 				repoId: z.string().uuid().nullable().optional(),
 				configurationId: z.string().uuid().nullable().optional(),
+				capabilities: z.array(CoworkerCapabilityInputSchema).max(100).optional(),
 			}),
 		)
 		.output(
@@ -1296,13 +1308,14 @@ export const automationsRouter = {
 			}),
 		)
 		.handler(async ({ input, context }) => {
-			const { id, repoId, configurationId, ...fields } = input;
+			const { id, repoId, configurationId, capabilities, ...fields } = input;
 			const updated = await workers.updateWorkerForOrg({
 				workerId: id,
 				organizationId: context.orgId,
 				fields,
 				repoId,
 				configurationId,
+				capabilities,
 			});
 			if (!updated) {
 				throw new ORPCError("NOT_FOUND", { message: "Worker not found" });

@@ -5,6 +5,7 @@ import type { Provider } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Text } from "@/components/ui/text";
+import { CONNECTION_PROVIDERS } from "@/config/integrations";
 import {
 	useIntegrations,
 	useSlackConnect,
@@ -14,8 +15,6 @@ import {
 import { getProviderFromIntegrationId } from "@/hooks/integrations/use-nango-connect";
 import { CheckCircle2, Plus } from "lucide-react";
 import { useState } from "react";
-
-const PROVIDERS: Provider[] = ["github", "sentry", "linear", "jira"];
 
 export interface ConnectionsTabProps {
 	connect: (provider: Provider) => Promise<void>;
@@ -40,7 +39,7 @@ export function ConnectionsTab({ connect, disconnect, loadingProvider }: Connect
 	const integrations = integrationsData?.integrations ?? [];
 
 	// Group integrations by provider
-	const integrationsByProvider = PROVIDERS.reduce(
+	const integrationsByProvider = CONNECTION_PROVIDERS.reduce(
 		(acc, provider) => {
 			acc[provider] = integrations.filter((i) => {
 				if (!i.integration_id) return false;
@@ -89,7 +88,7 @@ export function ConnectionsTab({ connect, disconnect, loadingProvider }: Connect
 				</Text>
 			</div>
 
-			{PROVIDERS.map((provider) => {
+			{CONNECTION_PROVIDERS.map((provider) => {
 				const providerIntegrations = integrationsByProvider[provider];
 				const hasConnection = providerIntegrations.length > 0;
 

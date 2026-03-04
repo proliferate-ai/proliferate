@@ -40,3 +40,12 @@ export const GITHUB_CONCLUSIONS = [
 export const INTEGRATION_PROVIDERS: Provider[] = ["github", "linear", "sentry"];
 export const STANDALONE_PROVIDERS: Provider[] = ["posthog", "webhook", "scheduled"];
 export const ALL_PROVIDERS_LIST: Provider[] = [...INTEGRATION_PROVIDERS, ...STANDALONE_PROVIDERS];
+
+/** Default configs per provider for immediate trigger creation */
+export const DEFAULT_TRIGGER_CONFIGS: Record<string, Record<string, unknown>> = {
+	linear: { actionFilters: ["create"] },
+	sentry: {},
+	github: { eventTypes: ["issues"], actionFilters: ["opened"] },
+	posthog: {},
+	webhook: {},
+};

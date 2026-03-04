@@ -12,6 +12,14 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import {
+	type FilterTab,
+	IN_PROGRESS_STATUSES,
+	LIVE_STATUSES,
+	NEEDS_ATTENTION_STATUSES,
+	type OriginFilter,
+	TABS,
+} from "@/config/sessions";
 import { useOrgPendingRuns } from "@/hooks/automations/use-automations";
 import { useSessions } from "@/hooks/sessions/use-sessions";
 import { cn } from "@/lib/display/utils";
@@ -20,20 +28,6 @@ import { type DisplayStatus, deriveDisplayStatus } from "@proliferate/shared/ses
 import { Plus, Search } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-
-type FilterTab = "in_progress" | "needs_attention" | "paused" | "completed";
-type OriginFilter = "all" | "manual" | "coworker" | "slack" | "cli";
-
-const TABS: { value: FilterTab; label: string }[] = [
-	{ value: "in_progress", label: "In Progress" },
-	{ value: "needs_attention", label: "Needs Attention" },
-	{ value: "paused", label: "Paused" },
-	{ value: "completed", label: "Completed" },
-];
-
-const IN_PROGRESS_STATUSES: Set<DisplayStatus> = new Set(["active", "idle"]);
-const NEEDS_ATTENTION_STATUSES: Set<DisplayStatus> = new Set(["blocked", "failed", "recovering"]);
-const LIVE_STATUSES: Set<DisplayStatus> = new Set(["active", "idle", "recovering", "blocked"]);
 
 function getSessionOrigin(session: {
 	automationId?: string | null;

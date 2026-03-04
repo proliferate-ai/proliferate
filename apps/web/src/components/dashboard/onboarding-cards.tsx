@@ -10,7 +10,7 @@ import {
 	SentryIcon,
 	SlackIcon,
 } from "@/components/ui/icons";
-import { useAutomations, useCreateAutomation } from "@/hooks/automations/use-automations";
+import { useAutomations } from "@/hooks/automations/use-automations";
 import { useGitHubAppConnect } from "@/hooks/integrations/use-github-app-connect";
 import { useIntegrations } from "@/hooks/integrations/use-integrations";
 import {
@@ -71,9 +71,6 @@ export function OnboardingCards({ hideHeader }: { hideHeader?: boolean } = {}) {
 	const { data: integrationsData, isLoading: integrationsLoading } = useIntegrations();
 	const { data: automations, isLoading: automationsLoading } = useAutomations();
 	const { data: repos, isLoading: reposLoading } = useRepos();
-
-	// Create automation mutation
-	const createAutomationMutation = useCreateAutomation();
 
 	const isLoading = integrationsLoading || automationsLoading || reposLoading;
 	if (isLoading) return null;
@@ -219,11 +216,7 @@ export function OnboardingCards({ hideHeader }: { hideHeader?: boolean } = {}) {
 				title="Create an automation"
 				description="Run tasks on events like issues or messages."
 				ctaLabel="Create"
-				onCtaClick={async () => {
-					const automation = await createAutomationMutation.mutateAsync({});
-					router.push(`/coworkers/${automation.id}`);
-				}}
-				isLoading={createAutomationMutation.isPending}
+				onCtaClick={() => router.push("/coworkers?create=1")}
 				onDismiss={() => dismissOnboardingCard("automation")}
 				image="/onboarding/build.png"
 				gradient="automation"
