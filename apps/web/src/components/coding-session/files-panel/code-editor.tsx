@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import type { TargetFileLineRange } from "@/hooks/sessions/files-panel/state";
 import { cn } from "@/lib/display/utils";
 import { historyField } from "@codemirror/commands";
 import { html } from "@codemirror/lang-html";
@@ -17,7 +18,6 @@ import {
 	filesEditorLineHighlightExtension,
 	highlightLineRangeAndScroll,
 } from "./line-highlight";
-import type { TargetFileLineRange } from "./state";
 
 const stateFields = { history: historyField };
 

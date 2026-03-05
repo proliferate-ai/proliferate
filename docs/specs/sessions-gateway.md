@@ -391,6 +391,7 @@ WHERE id = $session_id
 | `save_snapshot` | Connection | Triggers snapshot |
 | `run_auto_start` | userId required | Tests service commands |
 | `get_git_status` | Connection | Returns git status |
+| `get_git_diff` | Connection | Returns git diff for path/scope |
 | `git_create_branch` | Mutation auth | Creates branch |
 | `git_commit` | Mutation auth | Commits changes |
 | `git_push` | Mutation auth | Pushes to remote |
@@ -398,7 +399,9 @@ WHERE id = $session_id
 
 **Mutation auth**: Requires `userId` to match `session.created_by` (or `created_by` is null for headless sessions). Source: `session-hub.ts:assertCanMutateSession`.
 
-**Server → Client messages**: `status`, `message`, `token`, `text_part_complete`, `tool_start`, `tool_metadata`, `tool_end`, `message_complete`, `message_cancelled`, `error`, `snapshot_result`, `init`, `preview_url`, `git_status`, `git_result`, `auto_start_output`, `pong`.
+**Server → Client messages**: `status`, `message`, `token`, `text_part_complete`, `tool_start`, `tool_metadata`, `tool_end`, `message_complete`, `message_cancelled`, `error`, `snapshot_result`, `init`, `preview_url`, `git_status`, `git_diff`, `git_result`, `auto_start_output`, `pong`.
+
+**Boundary note**: WebSocket transport stays thin in `api/proliferate/ws/session/handler.ts` (parse + delegate only), and git read/write handling in hub delegates to workflow modules, including git diff parity via `session/workflows/git-workflow.ts`.
 
 ### 6.5 Session Migration — `Implemented`
 

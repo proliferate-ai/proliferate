@@ -65,7 +65,11 @@ import {
 	touchLastVisibleUpdate,
 } from "./session/session-lifecycle";
 import { runCancelWorkflow } from "./session/workflows/cancel-workflow";
-import { runGitActionWorkflow, runGitStatusWorkflow } from "./session/workflows/git-workflow";
+import {
+	runGitActionWorkflow,
+	runGitDiffWorkflow,
+	runGitStatusWorkflow,
+} from "./session/workflows/git-workflow";
 import { buildInitMessages } from "./session/workflows/init-workflow";
 import { runPromptWorkflow } from "./session/workflows/prompt-workflow";
 import { runSaveSnapshotWorkflow } from "./session/workflows/snapshot-workflow";
@@ -1208,31 +1212,16 @@ export class SessionHub {
 		scope: "unstaged" | "staged" | "full" = "full",
 		workspacePath?: string,
 	): Promise<void> {
-		await this.ensureRuntimeReady();
-		try {
-			await this.runtime.refreshGitContext();
-		} catch (err) {
-			this.logError("Failed to refresh git context (using cached values)", err);
-		}
-		const result = await this.getGitOps().getDiff(path, scope, workspacePath);
-		this.log("Git diff resolved", {
-			path,
-			scope,
-			success: result.success,
-			hasPatch: Boolean(result.patch),
-			patchLength: result.patch?.length ?? 0,
-			message: result.message ?? null,
-		});
-		this.sendMessage(ws, {
-			type: "git_diff",
-			payload: {
-				path,
-				scope,
-				success: result.success,
-				...(result.patch ? { patch: result.patch } : {}),
-				...(result.message ? { message: result.message } : {}),
+		await runGitDiffWorkflow(
+			{
+				ensureRuntimeReady: () => this.ensureRuntimeReady(),
+				refreshGitContext: () => this.runtime.refreshGitContext(),
+				getGitOps: () => this.getGitOps(),
+				sendMessage: (socket, message) => this.sendMessage(socket, message as ServerMessage),
+				logError: (message, error) => this.logError(message, error),
 			},
-		});
+			{ ws, path, scope, workspacePath },
+		);
 	}
 
 	private async handleGitAction(

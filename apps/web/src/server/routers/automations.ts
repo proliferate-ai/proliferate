@@ -7,7 +7,7 @@
 import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { ORPCError } from "@orpc/server";
 import { env } from "@proliferate/environment/server";
-import { automations, orgs, runs, schedules, templates, workers } from "@proliferate/services";
+import { automations, orgs, runs, schedules, workers } from "@proliferate/services";
 import {
 	AutomationConnectionSchema,
 	AutomationEventDetailSchema,
@@ -166,19 +166,12 @@ export const automationsRouter = {
 			}),
 		)
 		.handler(async ({ input, context }) => {
-			// Validate template exists before hitting the service
-			const template = templates.getTemplateById(input.templateId);
-			if (!template) {
-				throw new ORPCError("NOT_FOUND", { message: "Template not found" });
-			}
-
 			try {
-				const worker = await workers.createWorkerWithManagerSession({
+				const worker = await workers.createWorkerFromTemplate({
 					organizationId: context.orgId,
 					createdBy: context.user.id,
-					name: template.name,
-					objective: template.agentInstructions,
-					modelId: template.modelId,
+					templateId: input.templateId,
+					integrationBindings: input.integrationBindings,
 				});
 				return {
 					worker: {

@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BlocksIcon, BlocksLoadingIcon, SlackIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
+import { OVERALL_WORK_STATE_DISPLAY, type OverallWorkStateDisplayConfig } from "@/config/sessions";
 import { useHasSlackInstallation } from "@/hooks/integrations/use-integrations";
 import { useOverallWorkState } from "@/hooks/sessions/use-overall-work-state";
 import {
@@ -25,10 +26,6 @@ import {
 	useUnsubscribeNotifications,
 } from "@/hooks/sessions/use-sessions";
 import { cn } from "@/lib/display/utils";
-import {
-	OVERALL_WORK_STATE_DISPLAY,
-	type OverallWorkStateDisplayConfig,
-} from "@/lib/sessions/overall-work-state";
 import type { PendingRunSummary } from "@proliferate/shared/contracts/automations";
 import type { Session } from "@proliferate/shared/contracts/sessions";
 import { formatDistanceToNowStrict } from "date-fns";

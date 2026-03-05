@@ -1,9 +1,9 @@
 "use client";
 
 import { BlocksIcon, BlocksLoadingIcon } from "@/components/ui/icons";
+import { OVERALL_WORK_STATE_DISPLAY } from "@/config/sessions";
 import { cn } from "@/lib/display/utils";
 import { formatRelativeTime, getRepoShortName } from "@/lib/display/utils";
-import { OVERALL_WORK_STATE_DISPLAY } from "@/lib/sessions/overall-work-state";
 import type { Session } from "@proliferate/shared/contracts/sessions";
 import { deriveOverallWorkState } from "@proliferate/shared/sessions";
 

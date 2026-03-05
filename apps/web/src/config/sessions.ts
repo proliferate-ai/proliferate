@@ -1,10 +1,40 @@
 import type { DisplayStatus } from "@proliferate/shared/sessions";
+import type { OverallWorkState } from "@proliferate/shared/sessions";
 
 export type FilterTab = "in_progress" | "needs_attention" | "paused" | "completed";
 
 export type OriginFilter = "all" | "manual" | "automation" | "coworker" | "slack" | "cli";
 
 export type CreatorFilter = "all" | "mine";
+
+export interface OverallWorkStateDisplayConfig {
+	label: string;
+	colorClassName: string;
+	animated: boolean;
+}
+
+export const OVERALL_WORK_STATE_DISPLAY: Record<OverallWorkState, OverallWorkStateDisplayConfig> = {
+	working: {
+		label: "Working",
+		colorClassName: "text-foreground",
+		animated: true,
+	},
+	needs_input: {
+		label: "Needs input",
+		colorClassName: "text-muted-foreground",
+		animated: false,
+	},
+	dormant: {
+		label: "Dormant",
+		colorClassName: "text-muted-foreground",
+		animated: false,
+	},
+	done: {
+		label: "Done",
+		colorClassName: "text-muted-foreground",
+		animated: false,
+	},
+};
 
 export const TABS: { value: FilterTab; label: string }[] = [
 	{ value: "in_progress", label: "In Progress" },
