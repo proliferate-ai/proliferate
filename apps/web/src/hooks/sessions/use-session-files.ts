@@ -8,7 +8,9 @@ import {
 	readFsFileBinary,
 	writeFsFile,
 } from "@/lib/infra/gateway-harness-client";
+import type { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
 
 export function useSessionFilesTree(
 	sessionId: string,
@@ -69,4 +71,23 @@ export function useSessionWriteFile(sessionId: string) {
 			return writeFsFile(sessionId, token, path, content);
 		},
 	});
+}
+
+export function useSessionFilePrefetch(sessionId: string) {
+	const { token } = useWsToken();
+	const canFetch = !!token && !!GATEWAY_URL;
+
+	const prefetchFileContent = useCallback(
+		async (queryClient: QueryClient, path: string) => {
+			if (!canFetch) return null;
+			return queryClient.fetchQuery({
+				queryKey: ["file-read", sessionId, path],
+				queryFn: () => readFsFile(sessionId, token!, path),
+				staleTime: 5_000,
+			});
+		},
+		[canFetch, sessionId, token],
+	);
+
+	return { canFetch, prefetchFileContent };
 }

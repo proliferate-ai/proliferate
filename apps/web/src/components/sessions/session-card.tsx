@@ -26,10 +26,6 @@ import {
 	useUnsubscribeNotifications,
 } from "@/hooks/sessions/use-sessions";
 import { cn } from "@/lib/display/utils";
-import {
-	OVERALL_WORK_STATE_DISPLAY,
-	type OverallWorkStateDisplayConfig,
-} from "@/lib/sessions/overall-work-state";
 import type { PendingRunSummary } from "@proliferate/shared/contracts/automations";
 import type { Session } from "@proliferate/shared/contracts/sessions";
 import { formatDistanceToNowStrict } from "date-fns";

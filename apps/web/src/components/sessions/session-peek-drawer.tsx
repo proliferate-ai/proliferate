@@ -10,6 +10,7 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
+import { OVERALL_WORK_STATE_DISPLAY } from "@/config/sessions";
 import { useOverallWorkState } from "@/hooks/sessions/use-overall-work-state";
 import { useSessionData } from "@/hooks/sessions/use-sessions";
 import {
@@ -19,7 +20,6 @@ import {
 	parsePrUrl,
 } from "@/lib/display/session-display";
 import { cn } from "@/lib/display/utils";
-import { OVERALL_WORK_STATE_DISPLAY } from "@/lib/sessions/overall-work-state";
 import type { Session } from "@proliferate/shared/contracts/sessions";
 import { getBlockedReasonText } from "@proliferate/shared/sessions";
 import { formatDistanceToNow } from "date-fns";

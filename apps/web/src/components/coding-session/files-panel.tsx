@@ -5,15 +5,16 @@ import { Input } from "@/components/ui/input";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useFilesPanelShortcuts } from "@/hooks/sessions/files-panel/shortcuts";
+import { useFilesPanelState } from "@/hooks/sessions/files-panel/state";
 import {
 	useSessionFileBinaryContent,
 	useSessionFileContent,
+	useSessionFilePrefetch,
 	useSessionFilesTree,
 	useSessionWriteFile,
 } from "@/hooks/sessions/use-session-files";
-import { useWsToken } from "@/hooks/sessions/use-ws-token";
 import { devConsoleLog } from "@/lib/analytics/dev-console-log";
-import { readFsFile } from "@/lib/infra/gateway-harness-client";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -21,8 +22,6 @@ import { FilesCodeEditor } from "./files-panel/code-editor";
 import { getFileRenderKind, isJsonFile, isLikelyTextFile } from "./files-panel/file-types";
 import { FilesTree } from "./files-panel/files-tree";
 import { FilesGlobalSearch } from "./files-panel/global-search";
-import { useFilesPanelShortcuts } from "./files-panel/shortcuts";
-import { useFilesPanelState } from "./files-panel/state";
 import { PanelShell } from "./panel-shell";
 
 interface FilesPanelProps {
@@ -62,8 +61,9 @@ function readInitialSplitSizes(): [number, number] {
 
 export function FilesPanel({ sessionId, activityTick = 0 }: FilesPanelProps) {
 	const queryClient = useQueryClient();
-	const { token } = useWsToken();
 	const writeFile = useSessionWriteFile(sessionId);
+	const { canFetch: canPrefetchSearchContent, prefetchFileContent } =
+		useSessionFilePrefetch(sessionId);
 	const [filePathQuery, setFilePathQuery] = useState("");
 	const [searchContentByPath, setSearchContentByPath] = useState<Record<string, string>>({});
 	const [initialSplitSizes] = useState<[number, number]>(() => readInitialSplitSizes());
@@ -165,7 +165,7 @@ export function FilesPanel({ sessionId, activityTick = 0 }: FilesPanelProps) {
 	useEffect(() => {
 		if (sidebarTab !== "search") return;
 		if (searchQuery.trim().length < 2) return;
-		if (!token) return;
+		if (!canPrefetchSearchContent) return;
 
 		const filePaths = (searchTreeData?.entries ?? [])
 			.filter((entry) => entry.type === "file")
@@ -183,11 +183,8 @@ export function FilesPanel({ sessionId, activityTick = 0 }: FilesPanelProps) {
 			const next: Record<string, string> = {};
 			for (const path of unresolvedPaths) {
 				try {
-					const data = await queryClient.fetchQuery({
-						queryKey: ["file-read", sessionId, path],
-						queryFn: () => readFsFile(sessionId, token, path),
-						staleTime: 5_000,
-					});
+					const data = await prefetchFileContent(queryClient, path);
+					if (!data) continue;
 					if (data.size > MAX_SEARCH_FILE_SIZE) continue;
 					if (!isCancelled) {
 						next[path] = data.content;
@@ -208,12 +205,12 @@ export function FilesPanel({ sessionId, activityTick = 0 }: FilesPanelProps) {
 		};
 	}, [
 		queryClient,
+		prefetchFileContent,
 		searchContentByPath,
 		searchQuery,
 		searchTreeData?.entries,
-		sessionId,
 		sidebarTab,
-		token,
+		canPrefetchSearchContent,
 	]);
 
 	const closeCurrentTab = useCallback(() => {
@@ -352,7 +349,6 @@ export function FilesPanel({ sessionId, activityTick = 0 }: FilesPanelProps) {
 			>
 				<ResizablePanel
 					id="files-panel-sidebar"
-					order={1}
 					defaultSize={initialSplitSizes[0]}
 					minSize={FILES_PANEL_LEFT_MIN}
 					maxSize={FILES_PANEL_LEFT_MAX}
@@ -370,7 +366,6 @@ export function FilesPanel({ sessionId, activityTick = 0 }: FilesPanelProps) {
 				/>
 				<ResizablePanel
 					id="files-panel-editor"
-					order={2}
 					defaultSize={initialSplitSizes[1]}
 					minSize={FILES_PANEL_RIGHT_MIN}
 				>

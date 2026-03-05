@@ -28,20 +28,22 @@ export function useFilesPanelState() {
 		}
 	}, []);
 
-	const closeTab = useCallback(
-		(path: string) => {
-			const nextTabs = openTabs.filter((tabPath) => tabPath !== path);
-			setOpenTabs(nextTabs);
+	const closeTab = useCallback((path: string) => {
+		setOpenTabs((prev) => {
+			const next = prev.filter((tabPath) => tabPath !== path);
+			if (next.length === 0) {
+				setCurrentFile(null);
+				return next;
+			}
 			setCurrentFile((selected) => {
 				if (selected !== path) return selected;
-				if (nextTabs.length === 0) return null;
-				const closedIndex = openTabs.indexOf(path);
+				const closedIndex = prev.indexOf(path);
 				const fallbackIndex = Math.max(0, closedIndex - 1);
-				return nextTabs[fallbackIndex] ?? nextTabs[0] ?? null;
+				return next[fallbackIndex] ?? next[0] ?? null;
 			});
-		},
-		[openTabs],
-	);
+			return next;
+		});
+	}, []);
 
 	const toggleDir = useCallback((path: string) => {
 		setExpandedDirs((prev) => {

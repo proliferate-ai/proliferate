@@ -294,19 +294,7 @@ export async function createWorkerFromTemplate(
 		name: template.name,
 		objective: template.agentInstructions,
 		modelId: template.modelId,
-		integrationIds: Object.values(input.integrationBindings).filter(Boolean),
 	});
-}
-
-async function applyWorkerIntegrationBindings(
-	managerSessionId: string,
-	integrationIds: string[] | undefined,
-): Promise<void> {
-	if (!integrationIds || integrationIds.length === 0) {
-		return;
-	}
-	const dedupedIntegrationIds = [...new Set(integrationIds)];
-	await sessionsDb.createSessionConnections(managerSessionId, dedupedIntegrationIds);
 }
 
 async function validateIntegrationBindings(
@@ -325,7 +313,7 @@ async function validateIntegrationBindings(
 			throw new TemplateIntegrationInactiveError(integrationId, integration.status);
 		}
 
-		if (integration.integrationId !== bindingKey) {
+		if (integration.integrationId && integration.integrationId !== bindingKey) {
 			throw new TemplateIntegrationBindingMismatchError(
 				integrationId,
 				integration.integrationId,

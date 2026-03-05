@@ -58,18 +58,6 @@ export function createSessionWsHandler(
 				ws.on("message", (data) => {
 					try {
 						const parsed = JSON.parse(data.toString());
-						if (parsed?.type === "get_git_diff") {
-							logger.info(
-								{
-									sessionId: proliferateSessionId,
-									userId: auth.userId,
-									path: parsed.path ?? null,
-									scope: parsed.scope ?? "full",
-									workspacePath: parsed.workspacePath ?? null,
-								},
-								"Received git diff request",
-							);
-						}
 						hub.handleClientMessage(ws, parsed);
 					} catch (error) {
 						logger.warn({ err: error }, "Invalid client message");

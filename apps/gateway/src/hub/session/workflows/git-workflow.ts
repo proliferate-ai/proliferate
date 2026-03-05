@@ -65,3 +65,32 @@ export async function runGitActionWorkflow(
 		});
 	}
 }
+
+export async function runGitDiffWorkflow(
+	deps: GitWorkflowDeps,
+	input: {
+		ws: WebSocket;
+		path: string;
+		scope?: "unstaged" | "staged" | "full";
+		workspacePath?: string;
+	},
+): Promise<void> {
+	await deps.ensureRuntimeReady();
+	try {
+		await deps.refreshGitContext();
+	} catch (err) {
+		deps.logError("Failed to refresh git context (using cached values)", err);
+	}
+	const scope = input.scope ?? "full";
+	const result = await deps.getGitOps().getDiff(input.path, scope, input.workspacePath);
+	deps.sendMessage(input.ws, {
+		type: "git_diff",
+		payload: {
+			path: input.path,
+			scope,
+			success: result.success,
+			...(result.patch ? { patch: result.patch } : {}),
+			...(result.message ? { message: result.message } : {}),
+		},
+	});
+}

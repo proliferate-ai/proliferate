@@ -41,6 +41,7 @@ import type {
 	CreateSessionInput,
 	CreateSetupSessionInput,
 	ListSessionsFilters,
+	SessionStatus,
 	UpdateSessionInput,
 } from "../types/sessions";
 
@@ -380,13 +381,26 @@ export async function findByIdNoOrg(
 }
 
 function mapLegacyStatusToSandboxState(
-	status: string,
+	status: CreateSessionInput["status"],
 ): "provisioning" | "running" | "paused" | "terminated" | "failed" {
-	if (status === "starting" || status === "pending") return "provisioning";
-	if (status === "running") return "running";
-	if (status === "paused" || status === "suspended") return "paused";
-	if (status === "stopped") return "terminated";
-	return "failed";
+	switch (status) {
+		case "starting":
+		case "pending":
+			return "provisioning";
+		case "running":
+			return "running";
+		case "paused":
+		case "suspended":
+			return "paused";
+		case "completed":
+		case "cancelled":
+		case "stopped":
+			return "terminated";
+		case "failed":
+			return "failed";
+	}
+
+	throw new Error(`Unsupported legacy session status: ${status}`);
 }
 
 /**
@@ -2047,7 +2061,10 @@ export async function updateLastVisibleUpdateAt(sessionId: string): Promise<void
 // K4: Operator status projection
 // ============================================
 
-export async function updateAgentState(sessionId: string, agentState: string): Promise<void> {
+export async function updateAgentState(
+	sessionId: string,
+	agentState: SessionStatus["agentState"],
+): Promise<void> {
 	const db = getDb();
 	await db
 		.update(sessions)

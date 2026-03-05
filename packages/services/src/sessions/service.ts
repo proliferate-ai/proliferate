@@ -1119,7 +1119,7 @@ export async function markSessionViewed(input: {
 export async function updateSessionAgentState(input: {
 	sessionId: string;
 	organizationId: string;
-	agentState: string;
+	agentState: SessionStatus["agentState"];
 }): Promise<void> {
 	await sessionsDb.updateAgentState(input.sessionId, input.agentState);
 }

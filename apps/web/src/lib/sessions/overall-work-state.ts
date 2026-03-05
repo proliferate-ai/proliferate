@@ -1,38 +1,7 @@
-"use client";
-
 import type { CreatorFilter, FilterTab, OriginFilter } from "@/config/sessions";
 import type { PendingRunSummary } from "@proliferate/shared/contracts/automations";
 import type { Session } from "@proliferate/shared/contracts/sessions";
 import { type OverallWorkState, deriveOverallWorkState } from "@proliferate/shared/sessions";
-
-export interface OverallWorkStateDisplayConfig {
-	label: string;
-	colorClassName: string;
-	animated: boolean;
-}
-
-export const OVERALL_WORK_STATE_DISPLAY: Record<OverallWorkState, OverallWorkStateDisplayConfig> = {
-	working: {
-		label: "Working",
-		colorClassName: "text-foreground",
-		animated: true,
-	},
-	needs_input: {
-		label: "Needs input",
-		colorClassName: "text-muted-foreground",
-		animated: false,
-	},
-	dormant: {
-		label: "Dormant",
-		colorClassName: "text-muted-foreground",
-		animated: false,
-	},
-	done: {
-		label: "Done",
-		colorClassName: "text-muted-foreground",
-		animated: false,
-	},
-};
 
 export interface DerivedSessionState {
 	overallWorkState: OverallWorkState;
@@ -51,40 +20,6 @@ export interface SessionListResult {
 	counts: Record<FilterTab, number>;
 	totalCount: number;
 	visibleHasLive: boolean;
-}
-
-const loggedStateKeys = new Set<string>();
-
-function isStatusDebugEnabled(): boolean {
-	if (typeof window === "undefined") return false;
-	try {
-		const params = new URLSearchParams(window.location.search);
-		if (params.get("statusDebug") === "1") return true;
-		return window.localStorage.getItem("statusDebug") === "1";
-	} catch {
-		return false;
-	}
-}
-
-function logStateDerivation(session: Session, derived: DerivedSessionState): void {
-	if (!isStatusDebugEnabled()) return;
-	const unread = hasUnreadUpdate(session);
-	const key = `${session.id}:${session.status.updatedAt ?? "none"}:${String(unread)}:${derived.overallWorkState}`;
-	if (loggedStateKeys.has(key)) return;
-	loggedStateKeys.add(key);
-	console.info("[status-debug] deriveSessionState", {
-		sessionId: session.id,
-		sandboxState: session.status.sandboxState,
-		agentState: session.status.agentState,
-		terminalState: session.status.terminalState,
-		reason: session.status.reason,
-		requiresHumanReview: session.status.requiresHumanReview,
-		agentFinishedIterating: session.status.agentFinishedIterating,
-		hasUnreadUpdate: unread,
-		overallWorkState: derived.overallWorkState,
-		needsAttention: derived.needsAttention,
-		isLive: derived.isLive,
-	});
 }
 
 export function getSessionOrigin(
@@ -115,9 +50,7 @@ export function deriveSessionState(
 	const isLive =
 		session.status.terminalState === null &&
 		(session.status.sandboxState === "running" || session.status.sandboxState === "provisioning");
-	const derived = { overallWorkState, needsAttention, isLive };
-	logStateDerivation(session, derived);
-	return derived;
+	return { overallWorkState, needsAttention, isLive };
 }
 
 export function sortSessionEntries<T extends SessionListEntry>(items: T[]): T[] {
