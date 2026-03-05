@@ -1,6 +1,5 @@
 import { integrations, sessions } from "@proliferate/services";
 import { describe, expect, it, vi } from "vitest";
-import type { ApiError } from "../../../../../server/middleware/errors";
 import { resolveProviderConnectionsForSession } from "./provider-connections";
 
 vi.mock("@proliferate/services", () => ({
@@ -73,7 +72,7 @@ describe("resolveProviderConnectionsForSession", () => {
 	it("throws when session is missing", async () => {
 		vi.mocked(sessions.findSessionByIdInternal).mockResolvedValue(null);
 
-		await expect(resolveProviderConnectionsForSession("missing")).rejects.toMatchObject<ApiError>({
+		await expect(resolveProviderConnectionsForSession("missing")).rejects.toMatchObject({
 			statusCode: 404,
 		});
 	});

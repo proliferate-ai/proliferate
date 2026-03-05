@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import type { ApiError } from "../../../../../server/middleware/errors";
 import { findIntegrationId, resolveActionSource } from "./resolver";
 
 const {
@@ -128,9 +127,7 @@ describe("actions resolver", () => {
 			connections: [],
 		});
 
-		await expect(
-			resolveActionSource("session-1", "linear", "create_issue"),
-		).rejects.toMatchObject<ApiError>({
+		await expect(resolveActionSource("session-1", "linear", "create_issue")).rejects.toMatchObject({
 			statusCode: 400,
 		});
 	});
