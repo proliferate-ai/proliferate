@@ -1,6 +1,7 @@
 import { requireAuth } from "@/lib/auth/server/session";
 import { logger } from "@/lib/infra/logger";
 import { listInstallationRepos, verifyInstallation } from "@/lib/integrations/github-app";
+import { getBaseUrl } from "@/lib/integrations/oauth-context";
 import { sanitizeOAuthReturnUrl, verifySignedOAuthState } from "@/lib/integrations/oauth-state";
 import { integrations, orgs, repos } from "@proliferate/services";
 import { type NextRequest, NextResponse } from "next/server";
@@ -18,18 +19,6 @@ interface GitHubOAuthState {
 function isGitHubOpaqueState(state: string): boolean {
 	// GitHub can send an opaque UUID-like state for direct installation management flows.
 	return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(state);
-}
-
-/**
- * Get the base URL for redirects, respecting proxy headers (ngrok, etc.)
- */
-function getBaseUrl(request: NextRequest): string {
-	const forwardedHost = request.headers.get("x-forwarded-host");
-	const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
-	if (forwardedHost) {
-		return `${forwardedProto}://${forwardedHost}`;
-	}
-	return request.nextUrl.origin;
 }
 
 function isValidGitHubOAuthState(state: unknown): state is GitHubOAuthState {
