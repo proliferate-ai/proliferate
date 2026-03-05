@@ -11,6 +11,7 @@ import {
 import { ApiError } from "../../../../../server/middleware/errors";
 import { isOrgAdmin, requireSessionOrgAccess } from "./authz";
 import { listSessionConnectorTools } from "./connector-cache";
+import { resolveProviderConnectionsForSession } from "./provider-connections";
 import { checkInvokeRateLimit } from "./rate-limit";
 import { findIntegrationId, resolveActionSource } from "./resolver";
 import { actionToResponse, mapActionExecutionError, mapActionMutationError } from "./response";
@@ -35,42 +36,100 @@ export function createActionsRoutes(hubManager: HubManager): RouterType {
 
 	router.get("/available", async (req, res, next) => {
 		try {
+			logger.debug({
+				msg: "Searching for available actions",
+				route: "/available",
+				params: req.params,
+				proliferateSessionId: req.proliferateSessionId,
+			});
+
 			const sessionId = req.proliferateSessionId!;
+			logger.debug({ msg: "Fetching session row", sessionId });
 			const sessionRow = await sessions.findSessionByIdInternal(sessionId);
 			if (!sessionRow) {
+				logger.warn({ msg: "Session not found", sessionId });
 				throw new ApiError(404, "Session not found");
 			}
 
 			if (req.auth?.source !== "sandbox" && req.auth?.source !== "service") {
+				logger.debug({ msg: "Requiring session org access", sessionId, orgId: req.auth?.orgId });
 				await requireSessionOrgAccess(sessionId, req.auth?.orgId);
 			}
 
-			const connections = await sessions.listSessionConnections(sessionId);
-			const available = connections
-				.filter((entry) => entry.integration?.status === "active")
-				.flatMap((entry) => {
-					const module = getProviderActions(entry.integration!.integrationId);
-					if (!module) return [];
-					return [
-						{
-							integrationId: entry.integrationId,
-							integration: entry.integration!.integrationId,
-							displayName: entry.integration!.displayName,
-							actions: module.actions.map(actionToResponse),
-						},
-					];
+			logger.debug({ msg: "Listing provider connections", sessionId });
+			const providerConnections = await resolveProviderConnectionsForSession(sessionId);
+			logger.debug({
+				msg: "Found provider connections",
+				connectionsCount: providerConnections.connections.length,
+				source: providerConnections.source,
+			});
+
+			const available = providerConnections.connections.flatMap((entry) => {
+				const module = getProviderActions(entry.integration.integrationId);
+				if (!module) {
+					logger.debug({
+						msg: "No module found for provider actions",
+						integrationId: entry.integration.integrationId,
+					});
+					return [];
+				}
+				const actionsResponse = module.actions.map(actionToResponse);
+				logger.debug({
+					msg: "Adding available integration",
+					integrationId: entry.integration.integrationId,
+					displayName: entry.integration.displayName,
+					actionsCount: actionsResponse.length,
+				});
+				return [
+					{
+						integrationId: entry.integrationId,
+						integration: entry.integration.integrationId,
+						displayName: entry.integration.displayName,
+						actions: actionsResponse,
+					},
+				];
+			});
+
+			logger.debug({ msg: "Listing connector tools", sessionId });
+			const connectorTools = await listSessionConnectorTools(sessionId);
+
+			logger.debug({ msg: "Mapping connector tool actions", toolsCount: connectorTools.length });
+			const connectorIntegrations = connectorTools
+				.filter((entry) => {
+					const hasActions = entry.actions.length > 0;
+					if (!hasActions) {
+						logger.debug({
+							msg: "Skipping connector tool with no actions",
+							connectorId: entry.connectorId,
+						});
+					}
+					return hasActions;
+				})
+				.map((entry) => {
+					const actionsResponse = entry.actions.map(actionToResponse);
+					logger.debug({
+						msg: "Adding connector integration",
+						connectorId: entry.connectorId,
+						connectorName: entry.connectorName,
+						actionsCount: actionsResponse.length,
+					});
+					return {
+						integrationId: null,
+						integration: `connector:${entry.connectorId}`,
+						displayName: entry.connectorName,
+						actions: actionsResponse,
+					};
 				});
 
-			const connectorTools = await listSessionConnectorTools(sessionId);
-			const connectorIntegrations = connectorTools
-				.filter((entry) => entry.actions.length > 0)
-				.map((entry) => ({
-					integrationId: null,
-					integration: `connector:${entry.connectorId}`,
-					displayName: entry.connectorName,
-					actions: entry.actions.map(actionToResponse),
-				}));
 			const userId = req.auth?.source !== "sandbox" ? req.auth?.userId : sessionRow.createdBy;
+			logger.debug({
+				msg: "Filtering available actions for session",
+				userId,
+				sessionId,
+				organizationId: sessionRow.organizationId,
+				integrationsCount: available.length + connectorIntegrations.length,
+			});
+
 			const capabilityFiltered = await actions.filterAvailableActionsForSession({
 				sessionId,
 				organizationId: sessionRow.organizationId,
@@ -79,8 +138,18 @@ export function createActionsRoutes(hubManager: HubManager): RouterType {
 				integrations: [...available, ...connectorIntegrations],
 			});
 
+			logger.debug({
+				msg: "Returning available integrations",
+				integrationsCount: capabilityFiltered.length,
+			});
 			res.json({ integrations: capabilityFiltered });
 		} catch (error) {
+			logger.error({
+				msg: "Error in /available route",
+				error,
+				params: req.params,
+				proliferateSessionId: req.proliferateSessionId,
+			});
 			next(error);
 		}
 	});

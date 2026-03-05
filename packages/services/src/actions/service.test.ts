@@ -151,9 +151,9 @@ describe("actions v1 service", () => {
 					return { mode: "allow", source: "inferred_default" };
 				}
 				if (input.riskLevel === "danger") {
-					return { mode: "deny", source: "inferred_default" };
+					return { mode: "allow", source: "inferred_default" };
 				}
-				return { mode: "require_approval", source: "inferred_default" };
+				return { mode: "allow", source: "inferred_default" };
 			},
 		);
 		// withTransaction executes the callback with a fake tx object
@@ -167,15 +167,15 @@ describe("actions v1 service", () => {
 		mockGetDisabledSourceIds.mockResolvedValue(new Set<string>());
 	});
 
-	it("requires approval for write actions and sets waiting status", async () => {
-		const row = makeInvocationRow({ status: "pending", expiresAt: new Date() });
+	it("allows write actions by default", async () => {
+		const row = makeInvocationRow({ status: "approved", mode: "allow", expiresAt: null });
 		mockCreateInvocation.mockResolvedValue(row);
 
 		const result = await invokeAction(baseInput);
 
-		expect(result.needsApproval).toBe(true);
-		expect(result.invocation.status).toBe("pending");
-		expect(mockSetSessionOperatorStatus).toHaveBeenCalledWith(
+		expect(result.needsApproval).toBe(false);
+		expect(result.invocation.status).toBe("approved");
+		expect(mockSetSessionOperatorStatus).not.toHaveBeenCalledWith(
 			expect.objectContaining({
 				sessionId: "session-1",
 				toStatus: "waiting_for_approval",
@@ -201,6 +201,7 @@ describe("actions v1 service", () => {
 	});
 
 	it("throws PendingLimitError when pending cap exceeded", async () => {
+		mockResolveMode.mockResolvedValue({ mode: "require_approval", source: "org_default" });
 		mockListPendingBySession.mockResolvedValue(
 			Array.from({ length: 10 }, (_, i) => ({ id: `p-${i}` })),
 		);
@@ -462,7 +463,7 @@ describe("actions v1 service", () => {
 				if (input.actionId === "delete_issue") {
 					return { mode: "deny", source: "org_default" };
 				}
-				if (input.riskLevel === "danger") {
+				if (input.actionId === "delete_project") {
 					return { mode: "deny", source: "inferred_default" };
 				}
 				return { mode: "allow", source: "inferred_default" };

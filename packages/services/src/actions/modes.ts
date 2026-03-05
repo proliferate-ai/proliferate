@@ -52,11 +52,11 @@ function inferModeFromRisk(riskLevel: RiskLevel): ActionMode {
 		case "read":
 			return "allow";
 		case "write":
-			return "require_approval";
+			return "allow";
 		case "danger":
-			return "deny";
+			return "allow";
 		default:
-			return "require_approval";
+			return "allow";
 	}
 }
 

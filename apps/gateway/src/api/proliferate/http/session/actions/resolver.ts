@@ -1,13 +1,55 @@
 import { ProviderActionSource } from "@proliferate/providers/action-source";
 import { getProviderActions } from "@proliferate/providers/providers/registry";
-import { actions, integrations, sessions } from "@proliferate/services";
+import { actions, integrations } from "@proliferate/services";
 import { ApiError } from "../../../../../server/middleware/errors";
 import {
 	computeConnectorDrift,
 	listSessionConnectorTools,
 	resolveConnector,
 } from "./connector-cache";
+import { resolveProviderConnectionsForSession } from "./provider-connections";
 import type { ResolvedAction } from "./types";
+
+function findActiveConnection(
+	connections: Awaited<ReturnType<typeof resolveProviderConnectionsForSession>>["connections"],
+	integration: string,
+) {
+	return connections.find(
+		(entry) =>
+			entry.integration?.integrationId === integration && entry.integration?.status === "active",
+	);
+}
+
+async function buildTokenInput(params: {
+	sessionId: string;
+	integration: string;
+	source: "session_connections" | "org_fallback";
+	connectionIntegrationId: string;
+	orgId: string;
+}) {
+	const integrationRow = await integrations.findByIdAndOrg(
+		params.connectionIntegrationId,
+		params.orgId,
+	);
+	if (!integrationRow) {
+		throw new ApiError(404, `Integration ${params.connectionIntegrationId} not found`);
+	}
+
+	return {
+		id: integrationRow.id,
+		provider: integrationRow.provider,
+		integrationId: integrationRow.integrationId,
+		connectionId: integrationRow.connectionId,
+		githubInstallationId: integrationRow.githubInstallationId,
+		organizationId: integrationRow.organizationId,
+		status: integrationRow.status,
+		encryptedAccessToken: integrationRow.encryptedAccessToken,
+		encryptedRefreshToken: integrationRow.encryptedRefreshToken,
+		tokenExpiresAt: integrationRow.tokenExpiresAt,
+		tokenType: integrationRow.tokenType,
+		connectionMetadata: integrationRow.connectionMetadata as Record<string, unknown> | null,
+	};
+}
 
 export async function resolveActionSource(
 	sessionId: string,
@@ -47,30 +89,25 @@ export async function resolveActionSource(
 	}
 
 	const source = new ProviderActionSource(integration, integration, module);
-	const connections = await sessions.listSessionConnections(sessionId);
-	const connection = connections.find(
-		(entry) =>
-			entry.integration?.integrationId === integration && entry.integration?.status === "active",
-	);
+	const providerConnections = await resolveProviderConnectionsForSession(sessionId);
+	const connection = findActiveConnection(providerConnections.connections, integration);
 	if (!connection?.integration) {
 		throw new ApiError(400, `Integration ${integration} not connected to this session`);
 	}
 
-	const session = await sessions.findSessionByIdInternal(sessionId);
-	if (!session) throw new ApiError(404, "Session not found");
-
-	const token = await integrations.getToken({
-		id: connection.integration.id,
-		provider: connection.integration.provider,
-		integrationId: connection.integration.integrationId,
-		connectionId: connection.integration.connectionId,
-		githubInstallationId: connection.integration.githubInstallationId,
+	const tokenInput = await buildTokenInput({
+		sessionId,
+		integration,
+		source: providerConnections.source,
+		connectionIntegrationId: connection.integration.id,
+		orgId: providerConnections.organizationId,
 	});
+	const token = await integrations.getToken(tokenInput);
 
 	return {
 		source,
 		actionDef,
-		ctx: { token, orgId: session.organizationId, sessionId },
+		ctx: { token, orgId: providerConnections.organizationId, sessionId },
 		isDrifted: false,
 	};
 }
@@ -79,10 +116,7 @@ export async function findIntegrationId(
 	sessionId: string,
 	integration: string,
 ): Promise<string | null> {
-	const connections = await sessions.listSessionConnections(sessionId);
-	const connection = connections.find(
-		(entry) =>
-			entry.integration?.integrationId === integration && entry.integration?.status === "active",
-	);
+	const providerConnections = await resolveProviderConnectionsForSession(sessionId);
+	const connection = findActiveConnection(providerConnections.connections, integration);
 	return connection?.integrationId ?? null;
 }
