@@ -16,7 +16,6 @@ import type {
 	ServerMessage,
 } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
-import { scheduleSessionExpiry } from "../expiry/expiry-queue";
 import { OpenCodeCodingHarnessAdapter } from "../harness/coding/opencode/adapter";
 import type {
 	CodingHarnessEventStreamHandle,
@@ -25,7 +24,8 @@ import type {
 } from "../harness/contracts/coding";
 import { ClaudeManagerHarnessAdapter } from "../harness/manager/adapter";
 import type { GatewayEnv } from "../lib/env";
-import { deriveSandboxMcpToken } from "../middleware/auth";
+import { scheduleSessionExpiry } from "../operations/expiry/queue";
+import { deriveSandboxMcpToken } from "../server/middleware/auth";
 import type { SandboxInfo } from "../types";
 import { waitForMigrationLockRelease } from "./session/migration/lock";
 import { type SessionContext, loadSessionContext } from "./session/runtime/session-context-store";
@@ -499,7 +499,7 @@ export class SessionRuntime {
 
 			// Update session with sandbox info
 			const updateStartMs = Date.now();
-			await sessions.update(this.sessionId, {
+			await sessions.updateSession(this.sessionId, {
 				sandboxId: result.sandboxId,
 				status: "running",
 				pauseReason: null,
@@ -538,7 +538,7 @@ export class SessionRuntime {
 
 			if (this.previewUrl && this.onBroadcast) {
 				this.onBroadcast({ type: "preview_url", payload: { url: this.previewUrl } });
-				await sessions.update(this.sessionId, { previewTunnelUrl: this.previewUrl });
+				await sessions.updateSession(this.sessionId, { previewTunnelUrl: this.previewUrl });
 			}
 
 			if (harnessFamily === "manager-claude") {
@@ -669,7 +669,7 @@ export class SessionRuntime {
 
 		this.openCodeSessionId = resumed.sessionId;
 		this.context.session.coding_agent_session_id = resumed.sessionId;
-		await sessions.update(this.sessionId, { codingAgentSessionId: resumed.sessionId });
+		await sessions.updateSession(this.sessionId, { codingAgentSessionId: resumed.sessionId });
 	}
 
 	/**

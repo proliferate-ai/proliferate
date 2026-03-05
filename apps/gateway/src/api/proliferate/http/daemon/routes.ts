@@ -3,8 +3,8 @@ import type { Request, Response } from "express";
 import { Router, type Router as RouterType } from "express";
 import type { HubManager } from "../../../../hub";
 import type { GatewayEnv } from "../../../../lib/env";
-import { createRequireAuth } from "../../../../middleware/auth";
-import { createEnsureSessionReady } from "../../../../middleware/session";
+import { createRequireAuth } from "../../../../server/middleware/auth";
+import { createEnsureSessionReady } from "../../../../server/middleware/session";
 import { daemonFetch, getDaemonUrl } from "./upstream";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "daemon-proxy" });

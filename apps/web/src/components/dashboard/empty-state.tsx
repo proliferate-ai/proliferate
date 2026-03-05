@@ -12,7 +12,6 @@ import type { PendingRunSummary } from "@proliferate/shared/contracts/automation
 import { formatDistanceToNow } from "date-fns";
 import { AlertCircle, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { EmptyChatsIllustration, PageEmptyState, PlusBadge } from "./page-empty-state";
 import { PromptInput } from "./prompt-input";
 import { ActivitySummary } from "./session-stats";
@@ -177,7 +176,6 @@ function RecentActivity() {
 // ============================================
 
 export function EmptyDashboard() {
-	const router = useRouter();
 	const { data: authSession } = useSession();
 	const { selectedRepoId, selectedSnapshotId, selectedModel, reasoningEffort, setPendingPrompt } =
 		useDashboardStore();

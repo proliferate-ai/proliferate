@@ -15,50 +15,27 @@ import * as orgsModule from "../orgs/service";
 import * as sessionsModule from "../sessions";
 import type { SecretFileBootRow, SecretFileMeta } from "./db";
 import * as secretFilesDb from "./db";
+import {
+	SecretFileApplyError,
+	SecretFileConfigurationNotFoundError,
+	SecretFileForbiddenError,
+	SecretFileNotFoundError,
+	SecretFilePathValidationError,
+} from "./errors";
 
 // Re-export types for consumers
 export type { SecretFileMeta, SecretFileBootRow } from "./db";
 
+// Re-export domain errors so the public API doesn't break
+export {
+	SecretFileApplyError,
+	SecretFileConfigurationNotFoundError,
+	SecretFileForbiddenError,
+	SecretFileNotFoundError,
+	SecretFilePathValidationError,
+} from "./errors";
+
 const logger = getServicesLogger().child({ module: "secret-files" });
-
-// ============================================
-// Domain Errors
-// ============================================
-
-export class SecretFileForbiddenError extends Error {
-	constructor(message = "Only admins and owners can manage secret files") {
-		super(message);
-		this.name = "SecretFileForbiddenError";
-	}
-}
-
-export class SecretFileConfigurationNotFoundError extends Error {
-	constructor(message = "Configuration not found") {
-		super(message);
-		this.name = "SecretFileConfigurationNotFoundError";
-	}
-}
-
-export class SecretFileNotFoundError extends Error {
-	constructor(message = "Secret file not found") {
-		super(message);
-		this.name = "SecretFileNotFoundError";
-	}
-}
-
-export class SecretFilePathValidationError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "SecretFilePathValidationError";
-	}
-}
-
-export class SecretFileApplyError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "SecretFileApplyError";
-	}
-}
 
 // ============================================
 // Path Validation

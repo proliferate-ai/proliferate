@@ -1,10 +1,10 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import type { TaskToolMetadata } from "@/lib/sessions/coding-message-converter";
 import { makeAssistantToolUI } from "@assistant-ui/react";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { useState } from "react";
-import type { TaskToolMetadata } from "../message-converter";
 
 type TaskArgs = {
 	description?: string;

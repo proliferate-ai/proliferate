@@ -4,7 +4,7 @@ import { createLogger } from "@proliferate/logger";
 import { WebSocket } from "ws";
 import type { HubManager } from "../../../../../hub";
 import type { GatewayEnv } from "../../../../../lib/env";
-import { deriveSandboxMcpToken } from "../../../../../middleware/auth";
+import { deriveSandboxMcpToken } from "../../../../../server/middleware/auth";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "terminal-ws" });
 

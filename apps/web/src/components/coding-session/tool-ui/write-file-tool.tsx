@@ -13,7 +13,7 @@ type WriteFileArgs = {
 
 export const WriteFileToolUI = makeAssistantToolUI<WriteFileArgs, string>({
 	toolName: "write",
-	render: function WriteFileUI({ args, result, status }) {
+	render: function WriteFileUI({ args, result: _result, status }) {
 		const [isExpanded, setIsExpanded] = useState(false);
 		const isRunning = status.type === "running";
 		const isComplete = status.type !== "running";

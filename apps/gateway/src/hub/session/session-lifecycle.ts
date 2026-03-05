@@ -26,7 +26,7 @@ export async function persistTerminalOutcome(input: {
 
 	try {
 		// Enrich outcome from existing session telemetry (prUrls, summary, metrics)
-		const session = await sessions.findByIdInternal(sessionId);
+		const session = await sessions.findSessionByIdInternal(sessionId);
 
 		const prUrlList = input.prUrls ?? (session?.prUrls as string[] | null) ?? [];
 		const firstPr =

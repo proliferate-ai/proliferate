@@ -1,5 +1,5 @@
 import type { GatewayEnv } from "../../../../../lib/env";
-import { verifyToken } from "../../../../../middleware/auth";
+import { verifyToken } from "../../../../../server/middleware/auth";
 
 export async function authenticatePathToken(token: string, env: GatewayEnv): Promise<boolean> {
 	try {

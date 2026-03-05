@@ -3,14 +3,18 @@
 import { Button } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-dot";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { ServiceInfo } from "@/hooks/sessions/use-devtools-services";
+import {
+	useRestartService,
+	useServiceList,
+	useStopService,
+} from "@/hooks/sessions/use-devtools-services";
 import { cn } from "@/lib/display/utils";
 import { Loader2, Play, RefreshCw, RotateCw, Square } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { toast } from "sonner";
 import { PanelShell } from "./panel-shell";
-import type { ServiceInfo } from "./runtime/use-services";
-import { useRestartService, useServiceList, useStopService } from "./runtime/use-services";
 
 const ServiceLogViewer = dynamic(
 	() => import("./service-log-viewer").then((m) => m.ServiceLogViewer),

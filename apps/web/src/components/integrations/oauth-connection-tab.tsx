@@ -70,7 +70,6 @@ export function OAuthConnectionTab({ integrationId, provider }: OAuthConnectionT
 				connectedByName={integration?.creator?.name}
 				connectedByEmail={integration?.creator?.email}
 				visibility={(integration?.visibility as "org" | "private") ?? "org"}
-				integrationId={integrationId}
 				isLoading={isLoading}
 				onConnect={handleConnect}
 				onReconnect={handleConnect}

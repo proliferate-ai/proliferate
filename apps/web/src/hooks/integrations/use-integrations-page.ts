@@ -14,6 +14,7 @@ import { useActiveOrganization, useSession } from "@/lib/auth/client";
 import { type OrgRole, hasRoleOrHigher } from "@/lib/auth/roles";
 import { useCallback, useMemo, useState } from "react";
 
+// TODO: break this hook into smaller, focused hooks (e.g. useSlackConfig, useConnectorManagement, useIntegrationPicker)
 export function useIntegrationsPage() {
 	// ---- Role detection ----
 	const { data: activeOrg } = useActiveOrganization();
@@ -37,7 +38,6 @@ export function useIntegrationsPage() {
 		slackStatus,
 		slackDisconnect,
 		slackConnect,
-		handleSlackConnect,
 		handleSlackDisconnect,
 		handleConnect,
 	} = useOAuthConnections();

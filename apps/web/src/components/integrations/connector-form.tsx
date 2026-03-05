@@ -45,7 +45,7 @@ export function ConnectorForm({ initial, isNew, preset, onSave, onCancel }: Conn
 	const [defaultRisk, setDefaultRisk] = useState<"read" | "write" | "danger">(
 		initial?.riskPolicy?.defaultRisk ?? defaults?.riskPolicy?.defaultRisk ?? "write",
 	);
-	const [enabled, setEnabled] = useState(initial?.enabled ?? defaults?.enabled ?? true);
+	const [enabled] = useState(initial?.enabled ?? defaults?.enabled ?? true);
 	const [saveError, setSaveError] = useState<string | null>(null);
 
 	const validateMutation = useValidateOrgConnector();

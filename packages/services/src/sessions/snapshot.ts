@@ -11,8 +11,14 @@ import * as billing from "../billing";
 import { prepareForSnapshot } from "../lib/snapshot-scrub";
 import { getServicesLogger } from "../logger";
 import * as orgs from "../orgs";
-import { SessionInvalidStateError, SessionNotFoundError } from "./pause";
+import {
+	SessionInvalidStateError,
+	SessionNotFoundError,
+	SessionSnapshotQuotaError,
+} from "./errors";
 import { getFullSession, updateSession } from "./service";
+
+export { SessionSnapshotQuotaError } from "./errors";
 
 export interface SnapshotSessionInput {
 	sessionId: string;
@@ -21,13 +27,6 @@ export interface SnapshotSessionInput {
 
 export interface SnapshotSessionResult {
 	snapshot_id: string;
-}
-
-export class SessionSnapshotQuotaError extends Error {
-	constructor() {
-		super("Snapshot quota exceeded. Delete an existing snapshot and try again.");
-		this.name = "SessionSnapshotQuotaError";
-	}
 }
 
 export async function snapshotSession(input: SnapshotSessionInput): Promise<SnapshotSessionResult> {

@@ -63,10 +63,7 @@ export function MobileSidebar() {
 	return (
 		<Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
 			<SheetContent side="left" className="w-full max-w-full p-0">
-				<SidebarShell
-					onNavigate={() => setMobileSidebarOpen(false)}
-					onClose={() => setMobileSidebarOpen(false)}
-				>
+				<SidebarShell onClose={() => setMobileSidebarOpen(false)}>
 					{isSettingsPage ? (
 						<SettingsNav onNavigate={() => setMobileSidebarOpen(false)} />
 					) : (
@@ -246,16 +243,13 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
 // Shared sidebar shell — header (logo + search) + nav area (children) + footer (support + user card)
 export function SidebarShell({
 	children,
-	onNavigate,
 	onClose,
 	showCollapseButton = false,
 }: {
 	children: React.ReactNode;
-	onNavigate?: () => void;
 	onClose?: () => void;
 	showCollapseButton?: boolean;
 }) {
-	const router = useRouter();
 	const handleSignOut = useSignOut();
 	const { data: authSession } = useSession();
 	const { theme, resolvedTheme, setTheme } = useTheme();
@@ -273,11 +267,6 @@ export function SidebarShell({
 				.toUpperCase()
 				.slice(0, 2)
 		: user?.email?.[0]?.toUpperCase() || "?";
-
-	const handleNavigate = (path: string) => {
-		router.push(path);
-		onNavigate?.();
-	};
 
 	return (
 		<>

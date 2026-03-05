@@ -16,7 +16,7 @@ type FileEditArgs = {
 
 export const FileEditToolUI = makeAssistantToolUI<FileEditArgs, string>({
 	toolName: "edit",
-	render: function FileEditUI({ args, result, status }) {
+	render: function FileEditUI({ args, result: _result, status }) {
 		const [isExpanded, setIsExpanded] = useState(false);
 		const isRunning = status.type === "running";
 		const isComplete = status.type !== "running";

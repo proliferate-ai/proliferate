@@ -6,13 +6,13 @@ import {
 } from "@/components/actions/action-invocation-card";
 import { useApproveAction, useDenyAction, useSessionActions } from "@/hooks/actions/use-actions";
 import { useOrgMembersAndInvitations } from "@/hooks/org/use-orgs";
+import { useWsToken } from "@/hooks/sessions/use-ws-token";
 import { useSession } from "@/lib/auth/client";
 import { hasRoleOrHigher } from "@/lib/auth/roles";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { useWsToken } from "./runtime/use-ws-token";
 
 export interface ActionsContentProps {
 	sessionId: string;

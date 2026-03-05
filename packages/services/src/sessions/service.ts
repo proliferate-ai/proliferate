@@ -23,6 +23,7 @@ import * as configurations from "../configurations";
 import { toIsoString } from "../db/serialize";
 import { getServicesLogger } from "../logger";
 import type {
+	CreateSetupSessionInput,
 	CreateSessionInput as DbCreateSessionInput,
 	ListSessionsOptions,
 	SessionStatus,
@@ -31,8 +32,32 @@ import type {
 import type { SessionRow } from "./db";
 import * as sessionsDb from "./db";
 import { createSessionEvent } from "./db";
+import {
+	ConfigurationNoReposError,
+	ConfigurationNotFoundError,
+	ConfigurationRepoUnauthorizedError,
+	SessionAccessDeniedError,
+	SessionKindError,
+	SessionLimitError,
+	SessionNotFoundError,
+	SessionRuntimeStatusError,
+	TaskSessionValidationError,
+} from "./errors";
 import { requestTitleGeneration } from "./generate-title";
 import { toSession, toSessions } from "./mapper";
+
+// Re-export all session errors so existing consumers of this module keep working.
+export {
+	ConfigurationNoReposError,
+	ConfigurationNotFoundError,
+	ConfigurationRepoUnauthorizedError,
+	SessionAccessDeniedError,
+	SessionKindError,
+	SessionLimitError,
+	SessionNotFoundError,
+	SessionRuntimeStatusError,
+	TaskSessionValidationError,
+} from "./errors";
 
 // ============================================
 // Service functions
@@ -164,10 +189,148 @@ export async function updateSessionWithOrgCheck(
 }
 
 /**
+ * Find a session row by ID without org scoping.
+ * Used by gateway/worker internal flows that already enforce auth context.
+ */
+export async function findSessionByIdInternal(id: string): Promise<SessionRow | null> {
+	return sessionsDb.findByIdInternal(id);
+}
+
+export async function findSessionById(
+	sessionId: string,
+	organizationId: string,
+): Promise<SessionRow | undefined> {
+	return sessionsDb.findSessionById(sessionId, organizationId);
+}
+
+export async function listChildSessionsByRun(
+	parentSessionId: string,
+	workerRunId: string,
+	organizationId: string,
+): Promise<SessionRow[]> {
+	return sessionsDb.listChildSessionsByRun(parentSessionId, workerRunId, organizationId);
+}
+
+export async function listAllChildSessions(
+	parentSessionId: string,
+	organizationId: string,
+): Promise<SessionRow[]> {
+	return sessionsDb.listAllChildSessions(parentSessionId, organizationId);
+}
+
+/**
+ * Create a raw session row record.
+ * Thin service boundary wrapper for callers outside the sessions module.
+ */
+export async function createSessionRecord(input: DbCreateSessionInput): Promise<SessionRow> {
+	return sessionsDb.create(input);
+}
+
+/**
+ * Atomic admission-guarded session create.
+ */
+export async function createSessionWithAdmissionGuard(
+	input: DbCreateSessionInput,
+	maxConcurrent: number,
+): Promise<{ created: boolean }> {
+	return sessionsDb.createWithAdmissionGuard(input, maxConcurrent);
+}
+
+/**
+ * Create setup-session record with admission guard counterpart.
+ */
+export async function createSetupSessionRecord(input: CreateSetupSessionInput): Promise<void> {
+	await sessionsDb.createSetupSession(input);
+}
+
+export async function createSetupSessionWithAdmissionGuard(
+	input: CreateSetupSessionInput,
+	maxConcurrent: number,
+): Promise<{ created: boolean }> {
+	return sessionsDb.createSetupSessionWithAdmissionGuard(input, maxConcurrent);
+}
+
+/**
+ * Create/list session integration connections.
+ */
+export async function createSessionConnections(
+	sessionId: string,
+	integrationIds: string[],
+): Promise<void> {
+	await sessionsDb.createSessionConnections(sessionId, integrationIds);
+}
+
+export async function listSessionConnections(sessionId: string) {
+	return sessionsDb.listSessionConnections(sessionId);
+}
+
+/**
+ * CAS/fencing update constrained by expected sandbox ID.
+ */
+export async function updateSessionWhereSandboxIdMatches(
+	id: string,
+	expectedSandboxId: string,
+	updates: UpdateSessionInput,
+): Promise<number> {
+	return sessionsDb.updateWhereSandboxIdMatches(id, expectedSandboxId, updates);
+}
+
+/**
+ * Telemetry + lifecycle passthrough wrappers.
+ */
+export async function flushSessionTelemetry(
+	sessionId: string,
+	delta: { toolCalls: number; messagesExchanged: number; activeSeconds: number },
+	newPrUrls: string[],
+	latestTask: string | null,
+): Promise<void> {
+	await sessionsDb.flushTelemetry(sessionId, delta, newPrUrls, latestTask);
+}
+
+export async function markSessionStopped(sessionId: string): Promise<void> {
+	await sessionsDb.markStopped(sessionId);
+}
+
+export async function listRunningSessionIds(): Promise<string[]> {
+	return sessionsDb.listRunningSessionIds();
+}
+
+export async function listSessionCapabilities(sessionId: string) {
+	return sessionsDb.listSessionCapabilities(sessionId);
+}
+
+export async function getSessionClientInfo(sessionId: string) {
+	return sessionsDb.getSessionClientInfo(sessionId);
+}
+
+export async function findSessionBySlackThread(
+	installationId: string,
+	channelId: string,
+	threadTs: string,
+) {
+	return sessionsDb.findBySlackThread(installationId, channelId, threadTs);
+}
+
+export async function updateSessionConfigurationId(
+	sessionId: string,
+	configurationId: string,
+): Promise<void> {
+	await sessionsDb.updateConfigurationId(sessionId, configurationId);
+}
+
+export async function updateLastVisibleUpdateAt(sessionId: string): Promise<void> {
+	await sessionsDb.updateLastVisibleUpdateAt(sessionId);
+}
+
+/**
  * Count running sessions for an organization.
  */
 export async function countRunningByOrganization(orgId: string): Promise<number> {
 	return sessionsDb.countRunningByOrganization(orgId);
+}
+
+export async function countNullPauseReasonSessions(): Promise<number> {
+	return sessionsDb.countNullPauseReasonSessions();
 }
 
 /**
@@ -228,36 +391,6 @@ export async function getBlockedSummary(orgId: string): Promise<BlockedSummary> 
 // ============================================
 
 const logger = getServicesLogger().child({ module: "sessions" });
-
-export class SessionLimitError extends Error {
-	constructor(public maxSessions: number) {
-		super(
-			`Concurrent session limit reached. Your plan allows ${maxSessions} concurrent session${maxSessions === 1 ? "" : "s"}.`,
-		);
-		this.name = "SessionLimitError";
-	}
-}
-
-export class ConfigurationNotFoundError extends Error {
-	constructor() {
-		super("Configuration not found");
-		this.name = "ConfigurationNotFoundError";
-	}
-}
-
-export class ConfigurationNoReposError extends Error {
-	constructor() {
-		super("Configuration has no repos");
-		this.name = "ConfigurationNoReposError";
-	}
-}
-
-export class ConfigurationRepoUnauthorizedError extends Error {
-	constructor() {
-		super("Unauthorized access to configuration repos");
-		this.name = "ConfigurationRepoUnauthorizedError";
-	}
-}
 
 export interface CreateSessionInput {
 	configurationId?: string;
@@ -608,40 +741,8 @@ async function createSessionWithAdmission(
 }
 
 // ============================================
-// V1 session errors
-// ============================================
-
-export class SessionNotFoundError extends Error {
-	constructor(sessionId: string) {
-		super(`Session not found: ${sessionId}`);
-	}
-}
-
-export class SessionKindError extends Error {
-	constructor(expected: string, actual: string | null | undefined) {
-		super(`Invalid session kind: expected ${expected}, received ${actual ?? "null"}`);
-	}
-}
-
-export class SessionRuntimeStatusError extends Error {}
-
-export class SessionAccessDeniedError extends Error {
-	constructor(sessionId: string) {
-		super(`Access denied to session: ${sessionId}`);
-		this.name = "SessionAccessDeniedError";
-	}
-}
-
-// ============================================
 // Task session creation
 // ============================================
-
-export class TaskSessionValidationError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "TaskSessionValidationError";
-	}
-}
 
 export interface CreateUnifiedTaskSessionInput extends sessionsDb.CreateTaskSessionInput {}
 

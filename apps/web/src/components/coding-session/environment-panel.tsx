@@ -171,12 +171,10 @@ function AddVariableForm({
 
 function PasteEnvForm({
 	sessionId,
-	configurationId,
 	onSaved,
 	onClose,
 }: {
 	sessionId: string;
-	configurationId?: string | null;
 	onSaved: () => void;
 	onClose: () => void;
 }) {
@@ -670,7 +668,6 @@ export function EnvironmentPanel({
 												{pasteMode ? (
 													<PasteEnvForm
 														sessionId={sessionId}
-														configurationId={configurationId}
 														onSaved={handleRefresh}
 														onClose={() => setPasteMode(false)}
 													/>

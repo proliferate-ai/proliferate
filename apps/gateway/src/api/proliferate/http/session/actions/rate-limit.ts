@@ -1,4 +1,4 @@
-import { ApiError } from "../../../../../middleware/errors";
+import { ApiError } from "../../../../../server/middleware/errors";
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 60;

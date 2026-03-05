@@ -8,41 +8,11 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { useGitDiff, useGitRepos, useGitStatus } from "@/hooks/sessions/use-session-git";
 import { cn } from "@/lib/display/utils";
-import { GATEWAY_URL } from "@/lib/infra/gateway";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { FileCode, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useWsToken } from "./runtime/use-ws-token";
-
-interface GitRepo {
-	id: string;
-	path: string;
-}
-
-interface GitFileStatus {
-	status: string;
-	path: string;
-}
-
-interface GitStatusResponse {
-	branch: string;
-	ahead: number;
-	behind: number;
-	files: GitFileStatus[];
-}
-
-function devtoolsUrl(sessionId: string, token: string, path: string): string {
-	return `${GATEWAY_URL}/proxy/${sessionId}/${token}/devtools/mcp${path}`;
-}
-
-async function fetchJson<T>(url: string): Promise<T> {
-	const res = await fetch(url);
-	if (!res.ok) {
-		throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-	}
-	return res.json();
-}
 
 /** Map porcelain v2 status codes to display labels. */
 function statusLabel(status: string): { label: string; color: string } {
@@ -64,7 +34,6 @@ export interface ChangesContentProps {
 }
 
 export function ChangesContent({ sessionId, activityTick }: ChangesContentProps) {
-	const { token } = useWsToken();
 	const queryClient = useQueryClient();
 	const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
 	const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -83,21 +52,8 @@ export function ChangesContent({ sessionId, activityTick }: ChangesContentProps)
 		};
 	}, [activityTick, queryClient, sessionId]);
 
-	const canFetch = !!token && !!GATEWAY_URL;
-
 	// Fetch repos
-	const {
-		data: reposData,
-		isLoading: reposLoading,
-		error: reposError,
-	} = useQuery({
-		queryKey: ["git-repos", sessionId],
-		queryFn: () =>
-			fetchJson<{ repos: GitRepo[] }>(devtoolsUrl(sessionId, token!, "/api/git/repos")),
-		enabled: canFetch,
-		staleTime: 60_000,
-		retry: 2,
-	});
+	const { data: reposData, isLoading: reposLoading, error: reposError } = useGitRepos(sessionId);
 
 	const repos = reposData?.repos ?? [];
 
@@ -113,35 +69,14 @@ export function ChangesContent({ sessionId, activityTick }: ChangesContentProps)
 		data: statusData,
 		isLoading: statusLoading,
 		error: statusError,
-	} = useQuery({
-		queryKey: ["git-status", sessionId, selectedRepo],
-		queryFn: () =>
-			fetchJson<GitStatusResponse>(
-				devtoolsUrl(sessionId, token!, `/api/git/status?repo=${encodeURIComponent(selectedRepo!)}`),
-			),
-		enabled: canFetch && !!selectedRepo,
-		staleTime: 10_000,
-		retry: 1,
-	});
+	} = useGitStatus(sessionId, selectedRepo);
 
 	// Fetch diff for selected file
 	const {
 		data: diffData,
 		isLoading: diffLoading,
 		error: diffError,
-	} = useQuery({
-		queryKey: ["git-diff", sessionId, selectedRepo, selectedFile],
-		queryFn: () => {
-			const params = new URLSearchParams({ repo: selectedRepo! });
-			if (selectedFile) params.set("path", selectedFile);
-			return fetchJson<{ diff: string }>(
-				devtoolsUrl(sessionId, token!, `/api/git/diff?${params.toString()}`),
-			);
-		},
-		enabled: canFetch && !!selectedRepo && !!selectedFile,
-		staleTime: 5_000,
-		retry: 1,
-	});
+	} = useGitDiff(sessionId, selectedRepo, selectedFile);
 
 	const handleFileClick = useCallback((filePath: string) => {
 		setSelectedFile((prev) => (prev === filePath ? null : filePath));

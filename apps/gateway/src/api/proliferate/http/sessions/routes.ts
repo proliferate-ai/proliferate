@@ -12,7 +12,7 @@ import {
 	reserveIdempotencyKey,
 	storeIdempotencyResponse,
 } from "../../../../lib/idempotency";
-import { ApiError } from "../../../../middleware/errors";
+import { ApiError } from "../../../../server/middleware/errors";
 import {
 	type ConfigurationResolutionOptions,
 	resolveConfiguration,
@@ -268,7 +268,7 @@ async function startSetupSession(
 			return;
 		}
 	} else {
-		await sessions.createSetupSession(setupInput);
+		await sessions.createSetupSessionRecord(setupInput);
 	}
 
 	hubManager

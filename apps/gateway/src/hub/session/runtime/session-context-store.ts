@@ -116,7 +116,7 @@ export async function loadSessionContext(
 	// Load session without repo relationship (repos now come from configuration_repos)
 	log.info("Loading session from database...");
 	const sessionRowStartMs = Date.now();
-	const sessionRow = await sessions.findByIdInternal(sessionId);
+	const sessionRow = await sessions.findSessionByIdInternal(sessionId);
 	log.debug(
 		{ durationMs: Date.now() - sessionRowStartMs, found: Boolean(sessionRow) },
 		"store.load_context.session_row",

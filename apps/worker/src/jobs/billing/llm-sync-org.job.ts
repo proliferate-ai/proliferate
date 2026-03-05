@@ -25,7 +25,7 @@ export async function processLLMSyncOrgJob(
 	const log = logger.child({ op: "llm-sync-org", orgId });
 
 	// 1. Read cursor
-	const cursor = await billing.getLLMSpendCursor(orgId);
+	const cursor = await billing.getLLMSpendCursorForBillingWorker(orgId);
 	const startDate = cursor
 		? cursor.lastStartTime
 		: new Date(Date.now() - LLM_SYNC_DEFAULT_LOOKBACK_MS);
@@ -89,7 +89,7 @@ export async function processLLMSyncOrgJob(
 		// Still advance cursor so we don't re-fetch the same skipped entries forever
 		const lastLog = logs[logs.length - 1];
 		const latestStartTime = lastLog.startTime ? new Date(lastLog.startTime) : startDate;
-		await billing.updateLLMSpendCursor({
+		await billing.updateLLMSpendCursorForBillingWorker({
 			organizationId: orgId,
 			lastStartTime: latestStartTime,
 			lastRequestId: lastLog.request_id,
@@ -116,7 +116,7 @@ export async function processLLMSyncOrgJob(
 	const lastLog = logs[logs.length - 1];
 	const latestStartTime = lastLog.startTime ? new Date(lastLog.startTime) : startDate;
 
-	await billing.updateLLMSpendCursor({
+	await billing.updateLLMSpendCursorForBillingWorker({
 		organizationId: orgId,
 		lastStartTime: latestStartTime,
 		lastRequestId: lastLog.request_id,

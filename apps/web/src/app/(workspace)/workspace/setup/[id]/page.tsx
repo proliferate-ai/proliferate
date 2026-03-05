@@ -50,7 +50,7 @@ export default function SetupPage() {
 		const create = async () => {
 			try {
 				// Create a baseline record (starts in validating status)
-				const baselineResult = await createBaseline.mutateAsync({
+				await createBaseline.mutateAsync({
 					repoId,
 				});
 

@@ -362,10 +362,10 @@ src/
 │   ├── session-telemetry.ts
 │   ├── session-lifecycle.ts
 │   └── capabilities/tools/*
-├── expiry/expiry-queue.ts
-├── sweeper/orphan-sweeper.ts
-├── middleware/{auth,cors,lifecycle,error-handler}.ts
-├── lib/{env,session-store,session-creator,session-leases,lock,...}
+├── operations/expiry/queue.ts
+├── operations/orphans/sweeper.ts
+├── server/middleware/{auth,errors,session,transport}/*
+├── lib/{env,redis,s3,idempotency,session-leases}.ts
 ├── server.ts
 ├── types.ts
 └── index.ts

@@ -18,8 +18,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 export interface SidebarItemProps {
-	/** Unique identifier for the item */
-	itemId: string;
 	/** Whether this item is currently active/selected */
 	isActive: boolean;
 	/** Callback when navigation occurs (e.g., to close mobile sidebar) */
@@ -62,7 +60,6 @@ export interface SidebarItemProps {
 }
 
 export function SidebarItem({
-	itemId,
 	isActive,
 	onNavigate,
 	displayName,

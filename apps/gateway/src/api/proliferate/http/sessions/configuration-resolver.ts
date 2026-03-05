@@ -7,7 +7,7 @@
  */
 
 import { configurations } from "@proliferate/services";
-import { ApiError } from "../../../../middleware/errors";
+import { ApiError } from "../../../../server/middleware/errors";
 
 export interface ResolvedConfiguration {
 	id: string;

@@ -8,7 +8,7 @@ import {
 	projectOperatorStatus,
 	touchLastVisibleUpdate,
 } from "../../../../../hub/session/session-lifecycle";
-import { ApiError } from "../../../../../middleware/errors";
+import { ApiError } from "../../../../../server/middleware/errors";
 import { isOrgAdmin, requireSessionOrgAccess } from "./authz";
 import { listSessionConnectorTools } from "./connector-cache";
 import { checkInvokeRateLimit } from "./rate-limit";
@@ -36,7 +36,7 @@ export function createActionsRoutes(hubManager: HubManager): RouterType {
 	router.get("/available", async (req, res, next) => {
 		try {
 			const sessionId = req.proliferateSessionId!;
-			const sessionRow = await sessions.findByIdInternal(sessionId);
+			const sessionRow = await sessions.findSessionByIdInternal(sessionId);
 			if (!sessionRow) {
 				throw new ApiError(404, "Session not found");
 			}
@@ -70,40 +70,14 @@ export function createActionsRoutes(hubManager: HubManager): RouterType {
 					displayName: entry.connectorName,
 					actions: entry.actions.map(actionToResponse),
 				}));
-
-			let allIntegrations = [...available, ...connectorIntegrations];
-
 			const userId = req.auth?.source !== "sandbox" ? req.auth?.userId : sessionRow.createdBy;
-			if (userId) {
-				const orgId = req.auth?.orgId ?? sessionRow.organizationId;
-				if (orgId) {
-					const disabled = await userActionPreferences.getDisabledSourceIds(userId, orgId);
-					if (disabled.size > 0) {
-						allIntegrations = allIntegrations.filter((entry) => !disabled.has(entry.integration));
-					}
-				}
-			}
-
-			const capabilityFiltered: typeof allIntegrations = [];
-			for (const integrationEntry of allIntegrations) {
-				const visibleActions: typeof integrationEntry.actions = [];
-				for (const actionEntry of integrationEntry.actions) {
-					const denied = await actions.isActionDeniedForSession({
-						sessionId,
-						organizationId: sessionRow.organizationId,
-						integration: integrationEntry.integration,
-						action: actionEntry.name,
-						riskLevel: actionEntry.riskLevel,
-						automationId: sessionRow.automationId ?? undefined,
-					});
-					if (!denied) {
-						visibleActions.push(actionEntry);
-					}
-				}
-				if (visibleActions.length > 0) {
-					capabilityFiltered.push({ ...integrationEntry, actions: visibleActions });
-				}
-			}
+			const capabilityFiltered = await actions.filterAvailableActionsForSession({
+				sessionId,
+				organizationId: sessionRow.organizationId,
+				automationId: sessionRow.automationId ?? undefined,
+				userId,
+				integrations: [...available, ...connectorIntegrations],
+			});
 
 			res.json({ integrations: capabilityFiltered });
 		} catch (error) {
@@ -188,7 +162,7 @@ export function createActionsRoutes(hubManager: HubManager): RouterType {
 				throw new ApiError(400, "Missing integration or action");
 			}
 
-			const session = await sessions.findByIdInternal(sessionId);
+			const session = await sessions.findSessionByIdInternal(sessionId);
 			if (!session) throw new ApiError(404, "Session not found");
 
 			if (session.createdBy) {

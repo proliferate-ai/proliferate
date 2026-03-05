@@ -26,7 +26,7 @@ export async function processLLMSyncDispatchJob(
 	}
 
 	try {
-		const orgIds = await billing.listBillableOrgIds();
+		const orgIds = await billing.listBillableOrgIdsForBillingWorker();
 		if (!orgIds.length) {
 			logger.debug("No billable orgs for LLM sync");
 			return;

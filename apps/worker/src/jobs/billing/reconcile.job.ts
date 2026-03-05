@@ -18,7 +18,7 @@ export async function processReconcileJob(
 	const reconcileLog = logger.child({ op: "reconcile" });
 
 	try {
-		const orgsToReconcile = await billing.listBillableOrgsWithCustomerId();
+		const orgsToReconcile = await billing.listBillableOrgsWithCustomerIdForReconcile();
 		if (!orgsToReconcile.length) {
 			reconcileLog.debug("No orgs to reconcile");
 			return;
@@ -87,7 +87,9 @@ export async function processReconcileJob(
 		}
 
 		// Staleness check: flag orgs that weren't in the billable set but should be monitored
-		const staleOrgs = await billing.listStaleReconcileOrgs(METERING_CONFIG.reconcileMaxStalenessMs);
+		const staleOrgs = await billing.listStaleReconcileOrgsForReconcile(
+			METERING_CONFIG.reconcileMaxStalenessMs,
+		);
 		if (staleOrgs.length > 0) {
 			reconcileLog.warn(
 				{ staleOrgCount: staleOrgs.length, alert: true },

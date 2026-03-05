@@ -26,6 +26,11 @@ import { createRunFromTriggerEvent } from "../runs/service";
 import { CronValidationError, assertValidCronExpression } from "../schedules/service";
 import * as automationsDb from "./db";
 import {
+	AutomationIntegrationNotFoundError,
+	AutomationNotFoundError,
+	AutomationValidationError,
+} from "./errors";
+import {
 	toAutomation,
 	toAutomationEvent,
 	toAutomationEventDetail,
@@ -35,26 +40,11 @@ import {
 	toNewAutomationListItem,
 } from "./mapper";
 
-export class AutomationNotFoundError extends Error {
-	constructor(message = "Automation not found") {
-		super(message);
-		this.name = "AutomationNotFoundError";
-	}
-}
-
-export class AutomationValidationError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "AutomationValidationError";
-	}
-}
-
-export class AutomationIntegrationNotFoundError extends Error {
-	constructor(message = "Integration not found") {
-		super(message);
-		this.name = "AutomationIntegrationNotFoundError";
-	}
-}
+export {
+	AutomationIntegrationNotFoundError,
+	AutomationNotFoundError,
+	AutomationValidationError,
+} from "./errors";
 
 let scheduledQueue: ReturnType<typeof createScheduledQueue> | null = null;
 let pollGroupQueue: ReturnType<typeof createPollGroupQueue> | null = null;

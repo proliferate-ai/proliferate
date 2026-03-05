@@ -17,46 +17,22 @@ import type {
 // Re-exported DB row types (service DTO boundary)
 export type { ActionInvocationRow, ActionInvocationWithSession, CreateInvocationInput };
 import * as actionsDb from "./db";
+export {
+	ActionConflictError,
+	ActionExpiredError,
+	ActionNotFoundError,
+	ApprovalAuthorityError,
+	PendingLimitError,
+} from "./errors";
+import { getDisabledSourceIds } from "../user-action-preferences";
+import {
+	ActionConflictError,
+	ActionExpiredError,
+	ActionNotFoundError,
+	ApprovalAuthorityError,
+	PendingLimitError,
+} from "./errors";
 import { resolveMode } from "./modes";
-
-// ============================================
-// Error Classes
-// ============================================
-
-export class ActionNotFoundError extends Error {
-	constructor(message = "Invocation not found") {
-		super(message);
-		this.name = "ActionNotFoundError";
-	}
-}
-
-export class ActionExpiredError extends Error {
-	constructor(message = "Invocation has expired") {
-		super(message);
-		this.name = "ActionExpiredError";
-	}
-}
-
-export class ActionConflictError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "ActionConflictError";
-	}
-}
-
-export class PendingLimitError extends Error {
-	constructor(message = "Too many pending approvals. Resolve existing ones first.") {
-		super(message);
-		this.name = "PendingLimitError";
-	}
-}
-
-export class ApprovalAuthorityError extends Error {
-	constructor(message = "You do not have approval authority for this session") {
-		super(message);
-		this.name = "ApprovalAuthorityError";
-	}
-}
 
 const PENDING_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes for approval timeout
 const MAX_PENDING_PER_SESSION = 10;
@@ -144,6 +120,18 @@ export interface ExecuteApprovedInvocationInput {
 export interface ExecuteApprovedInvocationResult {
 	invocation: ActionInvocationRow;
 	result: unknown;
+}
+
+export interface AvailableActionCatalogAction {
+	name: string;
+	riskLevel: "read" | "write" | "danger";
+}
+
+export interface AvailableActionCatalogIntegration<TAction extends AvailableActionCatalogAction> {
+	integrationId: string | null;
+	integration: string;
+	displayName: string | null;
+	actions: TAction[];
 }
 
 function parseMode(value: string | null | undefined): "allow" | "require_approval" | "deny" | null {
@@ -500,6 +488,53 @@ export async function isActionDeniedForSession(input: {
 }): Promise<boolean> {
 	const resolved = await resolveEffectiveMode(input);
 	return resolved.effectiveMode === "deny";
+}
+
+/**
+ * Filter action catalog visibility for a session.
+ *
+ * Applies user disabled-source preferences first, then policy filtering.
+ */
+export async function filterAvailableActionsForSession<
+	TAction extends AvailableActionCatalogAction,
+>(input: {
+	sessionId: string;
+	organizationId: string;
+	automationId?: string;
+	userId?: string | null;
+	integrations: AvailableActionCatalogIntegration<TAction>[];
+}): Promise<AvailableActionCatalogIntegration<TAction>[]> {
+	const disabledSourceIds =
+		input.userId && input.organizationId
+			? await getDisabledSourceIds(input.userId, input.organizationId)
+			: new Set<string>();
+	const preferenceFiltered =
+		disabledSourceIds.size > 0
+			? input.integrations.filter((entry) => !disabledSourceIds.has(entry.integration))
+			: input.integrations;
+
+	const filtered: AvailableActionCatalogIntegration<TAction>[] = [];
+	for (const integrationEntry of preferenceFiltered) {
+		const visibleActions: TAction[] = [];
+		for (const actionEntry of integrationEntry.actions) {
+			const denied = await isActionDeniedForSession({
+				sessionId: input.sessionId,
+				organizationId: input.organizationId,
+				integration: integrationEntry.integration,
+				action: actionEntry.name,
+				riskLevel: actionEntry.riskLevel,
+				automationId: input.automationId,
+			});
+			if (!denied) {
+				visibleActions.push(actionEntry);
+			}
+		}
+		if (visibleActions.length > 0) {
+			filtered.push({ ...integrationEntry, actions: visibleActions });
+		}
+	}
+
+	return filtered;
 }
 
 /**

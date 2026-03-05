@@ -1,5 +1,5 @@
 import type { Request } from "express";
-import { ApiError } from "../../../middleware/errors";
+import { ApiError } from "../../../server/middleware/errors";
 
 export function resolveOpenCodeUpstream(req: Request): string {
 	const openCodeUrl = req.hub?.getOpenCodeUrl();

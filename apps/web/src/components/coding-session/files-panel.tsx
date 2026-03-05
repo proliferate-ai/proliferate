@@ -2,10 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useSessionFileContent, useSessionFilesTree } from "@/hooks/sessions/use-session-files";
 import { cn } from "@/lib/display/utils";
-import { GATEWAY_URL } from "@/lib/infra/gateway";
 import type { FsTreeEntry } from "@proliferate/shared/contracts/harness";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import {
 	ChevronDown,
 	ChevronRight,
@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { PanelShell } from "./panel-shell";
-import { useWsToken } from "./runtime/use-ws-token";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,28 +30,6 @@ interface FilesPanelProps {
 
 interface ExpandedDirs {
 	[path: string]: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Data fetching
-// ---------------------------------------------------------------------------
-
-function buildFsUrl(sessionId: string, token: string, path: string, depth: number): string {
-	return `${GATEWAY_URL}/proliferate/v1/sessions/${sessionId}/fs/tree?path=${encodeURIComponent(path)}&depth=${depth}`;
-}
-
-function buildFileReadUrl(sessionId: string, token: string, path: string): string {
-	return `${GATEWAY_URL}/proliferate/v1/sessions/${sessionId}/fs/read?path=${encodeURIComponent(path)}`;
-}
-
-async function fetchWithAuth<T>(url: string, token: string): Promise<T> {
-	const res = await fetch(url, {
-		headers: { Authorization: `Bearer ${token}` },
-	});
-	if (!res.ok) {
-		throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-	}
-	return res.json();
 }
 
 // ---------------------------------------------------------------------------
@@ -89,19 +66,7 @@ function FileContentViewer({
 	filePath: string;
 	onClose: () => void;
 }) {
-	const { token } = useWsToken();
-
-	const { data, isLoading, error } = useQuery({
-		queryKey: ["file-read", sessionId, filePath],
-		queryFn: () =>
-			fetchWithAuth<{ content: string; size: number }>(
-				buildFileReadUrl(sessionId, token!, filePath),
-				token!,
-			),
-		enabled: !!token && !!GATEWAY_URL,
-		staleTime: 5_000,
-		retry: 1,
-	});
+	const { data, isLoading, error } = useSessionFileContent(sessionId, filePath);
 
 	return (
 		<div className="flex flex-col h-full">
@@ -199,22 +164,12 @@ function TreeRow({
 // ---------------------------------------------------------------------------
 
 export function FilesPanel({ sessionId }: FilesPanelProps) {
-	const { token } = useWsToken();
 	const queryClient = useQueryClient();
 	const [expandedDirs, setExpandedDirs] = useState<ExpandedDirs>({ ".": true });
 	const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
-	const canFetch = !!token && !!GATEWAY_URL;
-
 	// Fetch root tree
-	const { data, isLoading, error, refetch } = useQuery({
-		queryKey: ["fs-tree", sessionId, "."],
-		queryFn: () =>
-			fetchWithAuth<{ entries: FsTreeEntry[] }>(buildFsUrl(sessionId, token!, ".", 3), token!),
-		enabled: canFetch,
-		staleTime: 15_000,
-		retry: 2,
-	});
+	const { data, isLoading, error, refetch } = useSessionFilesTree(sessionId, ".", 3);
 
 	const entries = data?.entries ?? [];
 

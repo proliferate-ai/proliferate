@@ -1,7 +1,7 @@
 import type { IncomingMessage } from "node:http";
 import type { URL } from "node:url";
 import type { GatewayEnv } from "../../../../lib/env";
-import { verifyToken } from "../../../../middleware/auth";
+import { verifyToken } from "../../../../server/middleware/auth";
 
 export async function authenticateSessionUpgrade(req: IncomingMessage, url: URL, env: GatewayEnv) {
 	const queryToken = url.searchParams.get("token");

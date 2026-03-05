@@ -1,7 +1,7 @@
 import { createLogger } from "@proliferate/logger";
 import { Router, type Router as RouterType } from "express";
 import type { HubManager } from "../../../../../hub";
-import { ApiError } from "../../../../../middleware/errors";
+import { ApiError } from "../../../../../server/middleware/errors";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "eager-start" });
 

@@ -8,9 +8,9 @@ import type { Logger } from "@proliferate/logger";
 import { notifications, sessions } from "@proliferate/services";
 import type { SandboxProviderType, ServerMessage } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
-import { cancelSessionExpiry } from "../../../expiry/expiry-queue";
 import { abortOpenCodeSession } from "../../../harness/coding/opencode/client";
 import type { GatewayEnv } from "../../../lib/env";
+import { cancelSessionExpiry } from "../../../operations/expiry/queue";
 import type { SessionRuntime } from "../../session-runtime";
 import { MigrationConfig, type MigrationState } from "../../shared/types";
 import type { EventProcessor } from "../runtime/event-processor";
@@ -213,7 +213,7 @@ export class MigrationController {
 				}
 
 				// 5. CAS/fencing DB update: only applies if sandbox_id still matches
-				const rowsAffected = await sessions.updateWhereSandboxIdMatches(
+				const rowsAffected = await sessions.updateSessionWhereSandboxIdMatches(
 					this.options.sessionId,
 					freshSandboxId,
 					{
@@ -302,7 +302,7 @@ export class MigrationController {
 		}
 
 		try {
-			await sessions.update(this.options.sessionId, {
+			await sessions.updateSession(this.options.sessionId, {
 				status: "stopped",
 				pauseReason: "snapshot_failed",
 				latestTask: null,
@@ -394,7 +394,7 @@ export class MigrationController {
 
 					// Update session with new snapshot
 					const dbStartMs = Date.now();
-					await sessions.update(this.options.sessionId, { snapshotId });
+					await sessions.updateSession(this.options.sessionId, { snapshotId });
 					this.logger.debug({ durationMs: Date.now() - dbStartMs }, "migration.db.update_snapshot");
 					this.logger.info({ snapshotId }, "Snapshot saved");
 
@@ -476,7 +476,7 @@ export class MigrationController {
 					}
 
 					// CAS DB update for expiry path too
-					const rowsAffected = await sessions.updateWhereSandboxIdMatches(
+					const rowsAffected = await sessions.updateSessionWhereSandboxIdMatches(
 						this.options.sessionId,
 						sandboxId,
 						{

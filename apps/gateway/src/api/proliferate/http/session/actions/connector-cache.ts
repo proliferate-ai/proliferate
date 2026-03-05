@@ -3,7 +3,7 @@ import type { ActionDefinition } from "@proliferate/providers";
 import { computeDefinitionHash } from "@proliferate/providers/helpers/schema";
 import { actions, connectors, secrets, sessions } from "@proliferate/services";
 import type { ConnectorConfig } from "@proliferate/shared";
-import { ApiError } from "../../../../../middleware/errors";
+import { ApiError } from "../../../../../server/middleware/errors";
 import type { CachedConnectorTools, SessionConnectorContext } from "./types";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "actions-connector-cache" });
@@ -28,7 +28,7 @@ setInterval(() => {
 export async function loadSessionConnectors(
 	sessionId: string,
 ): Promise<SessionConnectorContext | null> {
-	const session = await sessions.findByIdInternal(sessionId);
+	const session = await sessions.findSessionByIdInternal(sessionId);
 	if (!session) return null;
 
 	const enabled = await connectors.listEnabledConnectors(session.organizationId);
@@ -98,7 +98,7 @@ export async function resolveConnector(
 	sessionId: string,
 	connectorId: string,
 ): Promise<{ connector: ConnectorConfig; orgId: string; secret: string }> {
-	const session = await sessions.findByIdInternal(sessionId);
+	const session = await sessions.findSessionByIdInternal(sessionId);
 	if (!session) throw new ApiError(404, "Session not found");
 
 	const connector = await connectors.getConnector(connectorId, session.organizationId);

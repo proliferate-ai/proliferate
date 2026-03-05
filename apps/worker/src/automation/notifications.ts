@@ -407,7 +407,7 @@ export async function dispatchSessionNotification(
 	}
 
 	// Fetch session info for the notification message
-	const session = await sessions.findByIdInternal(sessionId);
+	const session = await sessions.findSessionByIdInternal(sessionId);
 	if (!session) {
 		throw new Error(`Session not found: ${sessionId}`);
 	}

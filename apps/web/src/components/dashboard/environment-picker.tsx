@@ -28,7 +28,6 @@ import {
 } from "@/hooks/integrations/use-nango-connect";
 import { useRepos } from "@/hooks/org/use-repos";
 import { useConfigurations } from "@/hooks/sessions/use-configurations";
-import { cn } from "@/lib/display/utils";
 import { orpc } from "@/lib/infra/orpc";
 import { useDashboardStore } from "@/stores/dashboard";
 import { getSetupInitialPrompt } from "@proliferate/shared/prompts";

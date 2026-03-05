@@ -76,7 +76,7 @@ export function useSetupSession({
 
 		const create = async () => {
 			try {
-				const baselineResult = await createBaseline.mutateAsync({ repoId });
+				await createBaseline.mutateAsync({ repoId });
 
 				const configurationResult = await createConfiguration.mutateAsync({
 					repoIds: [repoId],

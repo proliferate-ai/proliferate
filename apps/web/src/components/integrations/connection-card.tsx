@@ -34,7 +34,6 @@ interface ConnectionCardProps {
 	connectedByName?: string | null;
 	connectedByEmail?: string | null;
 	visibility?: Visibility;
-	integrationId?: string;
 	// Callbacks
 	onConnect?: () => void;
 	onReconnect?: () => void;
@@ -54,7 +53,6 @@ export function ConnectionCard({
 	connectedByName,
 	connectedByEmail,
 	visibility = "org",
-	integrationId,
 	onConnect,
 	onReconnect,
 	onDisconnect,

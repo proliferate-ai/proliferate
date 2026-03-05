@@ -116,7 +116,6 @@ export function ConnectionsTab({ connect, disconnect, loadingProvider }: Connect
 						connectedByName={integration.creator?.name}
 						connectedByEmail={integration.creator?.email}
 						visibility={integration.visibility as "org" | "private"}
-						integrationId={integration.id}
 						isLoading={loadingProvider === provider}
 						onConnect={() => connect(provider)}
 						onReconnect={() => connect(provider)}

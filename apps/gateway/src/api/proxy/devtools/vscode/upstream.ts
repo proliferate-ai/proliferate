@@ -1,6 +1,6 @@
 import { createLogger } from "@proliferate/logger";
 import type { Request } from "express";
-import { ApiError } from "../../../../middleware/errors";
+import { ApiError } from "../../../../server/middleware/errors";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "proxy-devtools-vscode" });
 

@@ -23,12 +23,25 @@ import * as pollGroupsDb from "../poll-groups/db";
 import { CronValidationError, assertValidCronExpression } from "../schedules/service";
 import * as triggersDb from "./db";
 import {
+	TriggerConfigurationNotFoundError,
+	TriggerEventNotQueueableError,
+	TriggerIntegrationNotFoundError,
+	TriggerServiceUnavailableError,
+} from "./errors";
+import {
 	toTrigger,
 	toTriggerEvents,
 	toTriggerEventsWithRelations,
 	toTriggerWithIntegration,
 	toTriggersWithIntegration,
 } from "./mapper";
+
+export {
+	TriggerConfigurationNotFoundError,
+	TriggerEventNotQueueableError,
+	TriggerIntegrationNotFoundError,
+	TriggerServiceUnavailableError,
+} from "./errors";
 
 let pollGroupQueue: ReturnType<typeof createPollGroupQueue> | null = null;
 let scheduledQueue: ReturnType<typeof createScheduledQueue> | null = null;
@@ -144,34 +157,6 @@ export interface ListEventsResult {
 export interface SkipEventResult {
 	skipped: boolean;
 	eventId: string;
-}
-
-export class TriggerEventNotQueueableError extends Error {
-	constructor(status: string) {
-		super(`Event is already ${status}`);
-		this.name = "TriggerEventNotQueueableError";
-	}
-}
-
-export class TriggerConfigurationNotFoundError extends Error {
-	constructor() {
-		super("Configuration not found");
-		this.name = "TriggerConfigurationNotFoundError";
-	}
-}
-
-export class TriggerIntegrationNotFoundError extends Error {
-	constructor() {
-		super("Integration not found");
-		this.name = "TriggerIntegrationNotFoundError";
-	}
-}
-
-export class TriggerServiceUnavailableError extends Error {
-	constructor(message = "Trigger service not configured") {
-		super(message);
-		this.name = "TriggerServiceUnavailableError";
-	}
 }
 
 // ============================================

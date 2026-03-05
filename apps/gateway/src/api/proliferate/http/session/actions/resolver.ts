@@ -1,7 +1,7 @@
 import { ProviderActionSource } from "@proliferate/providers/action-source";
 import { getProviderActions } from "@proliferate/providers/providers/registry";
 import { actions, integrations, sessions } from "@proliferate/services";
-import { ApiError } from "../../../../../middleware/errors";
+import { ApiError } from "../../../../../server/middleware/errors";
 import {
 	computeConnectorDrift,
 	listSessionConnectorTools,
@@ -56,7 +56,7 @@ export async function resolveActionSource(
 		throw new ApiError(400, `Integration ${integration} not connected to this session`);
 	}
 
-	const session = await sessions.findByIdInternal(sessionId);
+	const session = await sessions.findSessionByIdInternal(sessionId);
 	if (!session) throw new ApiError(404, "Session not found");
 
 	const token = await integrations.getToken({

@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+	fetchVerificationTextContent,
 	prefetchVerificationUrls,
 	useVerificationMediaUrl,
 } from "@/hooks/sessions/use-verification-media-url";
@@ -142,10 +143,9 @@ function TextFileViewer({ file }: { file: VerificationFile }) {
 	const [contentLoading, setContentLoading] = useState(false);
 
 	useEffect(() => {
-		if (url && !content && !contentLoading) {
+		if (!content && !contentLoading) {
 			setContentLoading(true);
-			fetch(url)
-				.then((res) => res.text())
+			fetchVerificationTextContent(file.key)
 				.then((text) => {
 					setContent(text);
 					setContentLoading(false);
@@ -155,7 +155,7 @@ function TextFileViewer({ file }: { file: VerificationFile }) {
 					setContentLoading(false);
 				});
 		}
-	}, [url, content, contentLoading]);
+	}, [content, contentLoading, file.key]);
 
 	if (isLoading || contentLoading) {
 		return (
