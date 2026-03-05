@@ -49,10 +49,6 @@ function mapCanonicalToLegacy(status: CanonicalStatus): {
 		return { status: "stopped", pauseReason };
 	}
 
-	if (status.reason === "orphaned") {
-		return { status: "paused", pauseReason: "orphaned" };
-	}
-
 	if (status.agentState === "errored") {
 		return { status: "failed", pauseReason };
 	}
@@ -134,7 +130,7 @@ export function deriveOverallWorkState(
 	status: CanonicalStatus,
 	hasUnreadUpdate: boolean,
 ): OverallWorkState {
-	if (status.terminalState === "succeeded" || status.terminalState === "cancelled") {
+	if (status.terminalState === "succeeded") {
 		return "done";
 	}
 

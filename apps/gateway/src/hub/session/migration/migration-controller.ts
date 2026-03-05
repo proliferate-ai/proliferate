@@ -218,9 +218,10 @@ export class MigrationController {
 					{
 						snapshotId,
 						sandboxId: keepSandbox ? freshSandboxId : null,
-						status: "paused",
+						sandboxState: "paused",
+						agentState: "waiting_input",
 						pausedAt: new Date().toISOString(),
-						pauseReason: "inactivity",
+						stateReason: "inactivity",
 						latestTask: null,
 					},
 				);
@@ -302,8 +303,10 @@ export class MigrationController {
 
 		try {
 			await sessions.updateSession(this.options.sessionId, {
-				status: "stopped",
-				pauseReason: "snapshot_failed",
+				sandboxState: "failed",
+				agentState: "errored",
+				terminalState: "failed",
+				stateReason: "snapshot_failed",
 				latestTask: null,
 				outcome: "failed",
 			});
@@ -481,9 +484,10 @@ export class MigrationController {
 						{
 							snapshotId,
 							sandboxId: provider.supportsPause ? sandboxId : terminated ? null : sandboxId,
-							status: "paused",
+							sandboxState: "paused",
+							agentState: "waiting_input",
 							pausedAt: new Date().toISOString(),
-							pauseReason: "inactivity",
+							stateReason: "inactivity",
 							latestTask: null,
 						},
 					);

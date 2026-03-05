@@ -1,16 +1,43 @@
 "use client";
 
-import {
-	FILE_IMAGE_EXTENSIONS,
-	FILE_TEXT_BASENAMES,
-	FILE_TEXT_EXTENSIONS,
-} from "@/config/files-panel";
+const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg"]);
+const TEXT_EXTENSIONS = new Set([
+	"ts",
+	"tsx",
+	"js",
+	"jsx",
+	"mjs",
+	"cjs",
+	"json",
+	"md",
+	"mdx",
+	"txt",
+	"css",
+	"scss",
+	"less",
+	"html",
+	"xml",
+	"yaml",
+	"yml",
+	"toml",
+	"ini",
+	"sh",
+	"bash",
+	"zsh",
+	"py",
+	"go",
+	"rs",
+	"java",
+	"c",
+	"cpp",
+	"h",
+	"hpp",
+	"log",
+	"sql",
+	"env",
+]);
 
 export type FileRenderKind = "text" | "image" | "binary";
-
-function getFileName(path: string): string {
-	return path.split("/").pop()?.toLowerCase() ?? "";
-}
 
 export function getFileExtension(path: string): string {
 	const parts = path.toLowerCase().split(".");
@@ -18,11 +45,9 @@ export function getFileExtension(path: string): string {
 }
 
 export function getFileRenderKind(path: string): FileRenderKind {
-	const fileName = getFileName(path);
-	if (FILE_TEXT_BASENAMES.has(fileName)) return "text";
-	const ext = getFileExtension(fileName);
-	if (FILE_IMAGE_EXTENSIONS.has(ext)) return "image";
-	if (FILE_TEXT_EXTENSIONS.has(ext)) return "text";
+	const ext = getFileExtension(path);
+	if (IMAGE_EXTENSIONS.has(ext)) return "image";
+	if (TEXT_EXTENSIONS.has(ext)) return "text";
 	return "binary";
 }
 

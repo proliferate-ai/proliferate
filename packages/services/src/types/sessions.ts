@@ -40,7 +40,6 @@ export interface CreateSessionInput {
 }
 
 export interface UpdateSessionInput {
-	status?: string;
 	sandboxState?: "provisioning" | "running" | "paused" | "terminated" | "failed";
 	agentState?: "iterating" | "waiting_input" | "waiting_approval" | "done" | "errored";
 	terminalState?: "succeeded" | "failed" | "cancelled" | null;
@@ -58,7 +57,6 @@ export interface UpdateSessionInput {
 		| "cancelled_by_user"
 		| "runtime_error"
 		| null;
-	stateUpdatedAt?: string | null;
 	sandboxId?: string | null;
 	snapshotId?: string | null;
 	title?: string;
@@ -68,7 +66,6 @@ export interface UpdateSessionInput {
 	previewTunnelUrl?: string | null;
 	codingAgentSessionId?: string | null;
 	pausedAt?: string | null;
-	pauseReason?: string | null;
 	sandboxExpiresAt?: number | null;
 	automationId?: string | null;
 	triggerId?: string | null;
@@ -125,14 +122,27 @@ export interface ListSessionsOptions {
 }
 
 export interface SessionStatus {
-	sandboxState: Session["status"]["sandboxState"];
-	agentState: Session["status"]["agentState"];
-	terminalState: Session["status"]["terminalState"];
-	reason: Session["status"]["reason"];
-	isTerminal: Session["status"]["isTerminal"];
-	agentFinishedIterating: Session["status"]["agentFinishedIterating"];
-	requiresHumanReview: Session["status"]["requiresHumanReview"];
-	updatedAt: Session["status"]["updatedAt"];
+	sandboxState: "provisioning" | "running" | "paused" | "terminated" | "failed";
+	agentState: "iterating" | "waiting_input" | "waiting_approval" | "done" | "errored";
+	terminalState: "succeeded" | "failed" | "cancelled" | null;
+	reason:
+		| "manual_pause"
+		| "inactivity"
+		| "approval_required"
+		| "orphaned"
+		| "snapshot_failed"
+		| "automation_completed"
+		| "credit_limit"
+		| "payment_failed"
+		| "overage_cap"
+		| "suspended"
+		| "cancelled_by_user"
+		| "runtime_error"
+		| null;
+	isTerminal: boolean;
+	agentFinishedIterating: boolean;
+	requiresHumanReview: boolean;
+	updatedAt: string | null;
 }
 
 /** Input for creating a setup session (for managed configurations). */

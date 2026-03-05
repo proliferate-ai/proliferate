@@ -167,11 +167,12 @@ export const automationsRouter = {
 		)
 		.handler(async ({ input, context }) => {
 			try {
-				const worker = await workers.createWorkerFromTemplate({
+				const worker = await workers.createWorkerWithManagerSession({
 					organizationId: context.orgId,
 					createdBy: context.user.id,
-					templateId: input.templateId,
-					integrationBindings: input.integrationBindings,
+					name: template.name,
+					objective: template.agentInstructions,
+					modelId: template.modelId,
 				});
 				return {
 					worker: {

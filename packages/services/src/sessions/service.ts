@@ -12,10 +12,6 @@ import { createSyncClient } from "@proliferate/gateway-clients";
 import type { AgentConfig, SandboxProviderType } from "@proliferate/shared";
 import { getDefaultAgentConfig, isValidModelId, parseModelId } from "@proliferate/shared";
 import type { Session } from "@proliferate/shared/contracts/sessions";
-import {
-	type SessionRuntimeStatus,
-	isTerminalSessionRuntimeStatus,
-} from "@proliferate/shared/contracts/sessions";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { getBlockedReasonText, sanitizePromptSnippet } from "@proliferate/shared/sessions";
 import * as billing from "../billing";
@@ -45,6 +41,16 @@ import {
 } from "./errors";
 import { requestTitleGeneration } from "./generate-title";
 import { toCanonicalStatus, toSession, toSessions } from "./mapper";
+
+function isTerminalSessionRow(session: {
+	terminalState?: string | null;
+}): boolean {
+	return (
+		session.terminalState === "succeeded" ||
+		session.terminalState === "failed" ||
+		session.terminalState === "cancelled"
+	);
+}
 
 // Re-export all session errors so existing consumers of this module keep working.
 export {
@@ -119,7 +125,21 @@ export async function getSession(id: string, orgId: string): Promise<Session | n
 export async function getSessionStatus(id: string): Promise<SessionStatus | null> {
 	const row = await sessionsDb.findByIdNoOrg(id);
 	if (!row) return null;
-	return toCanonicalStatus(row);
+	const agentState = row.agentState as SessionStatus["agentState"];
+	return {
+		sandboxState: row.sandboxState as SessionStatus["sandboxState"],
+		agentState,
+		terminalState: (row.terminalState as SessionStatus["terminalState"]) ?? null,
+		reason: (row.stateReason as SessionStatus["reason"]) ?? null,
+		isTerminal: row.terminalState != null,
+		agentFinishedIterating: agentState !== "iterating",
+		requiresHumanReview:
+			agentState === "waiting_input" ||
+			agentState === "waiting_approval" ||
+			agentState === "done" ||
+			agentState === "errored",
+		updatedAt: row.stateUpdatedAt?.toISOString() ?? null,
+	};
 }
 
 /**
@@ -634,9 +654,10 @@ async function createConfigurationSession(input: {
 	const doUrl = `${gatewayUrl}/session/${sessionId}`;
 	reqLog.info("Session creation started");
 
-	// K2: Visibility defaults by kind/origin — setup sessions are org-visible, ad-hoc tasks are private
+	// K2: Visibility defaults by kind/origin — setup sessions are org-visible, ad-hoc sessions are private.
+	// Keep coding sessions kind=null unless they are worker-backed tasks with baseline linkage.
 	const visibility: "private" | "org" = sessionType === "setup" ? "org" : "private";
-	const kind: "task" | "setup" = sessionType === "setup" ? "setup" : "task";
+	const kind: "setup" | null = sessionType === "setup" ? "setup" : null;
 
 	// Resolve primary repo from configuration
 	const primaryRepoId = configurationRepos[0]?.repo?.id ?? null;
@@ -815,8 +836,7 @@ export async function sendTaskFollowup(
 		throw new SessionKindError("task", source.kind);
 	}
 
-	const runtimeStatus = (source.runtimeStatus ?? "starting") as SessionRuntimeStatus;
-	if (!isTerminalSessionRuntimeStatus(runtimeStatus)) {
+	if (!isTerminalSessionRow(source)) {
 		const sameSessionMessage = await sessionsDb.enqueueSessionMessage({
 			sessionId: source.id,
 			direction: "user_to_task",
@@ -963,9 +983,9 @@ export async function persistTerminalTaskOutcome(input: {
 	if (session.kind !== "task") {
 		throw new SessionKindError("task", session.kind);
 	}
-	if (!isTerminalSessionRuntimeStatus(session.runtimeStatus as SessionRuntimeStatus)) {
+	if (!isTerminalSessionRow(session)) {
 		throw new SessionRuntimeStatusError(
-			`Session ${input.sessionId} is not terminal (runtimeStatus=${session.runtimeStatus})`,
+			`Session ${input.sessionId} is not terminal (terminalState=${session.terminalState ?? "null"})`,
 		);
 	}
 
@@ -1096,12 +1116,12 @@ export async function markSessionViewed(input: {
 // K4: Operator status projection
 // ============================================
 
-export async function updateSessionOperatorStatus(input: {
+export async function updateSessionAgentState(input: {
 	sessionId: string;
 	organizationId: string;
-	operatorStatus: string;
+	agentState: string;
 }): Promise<void> {
-	await sessionsDb.updateOperatorStatus(input.sessionId, input.operatorStatus);
+	await sessionsDb.updateAgentState(input.sessionId, input.agentState);
 }
 
 // ============================================
@@ -1224,9 +1244,7 @@ export async function sendBackToCoworker(input: {
 	if (source.kind !== "task") {
 		throw new SessionKindError("task", source.kind);
 	}
-	if (
-		!isTerminalSessionRuntimeStatus((source.runtimeStatus ?? "starting") as SessionRuntimeStatus)
-	) {
+	if (!isTerminalSessionRow(source)) {
 		throw new SessionRuntimeStatusError(
 			`Session ${input.sessionId} is not terminal — cannot send back to coworker`,
 		);

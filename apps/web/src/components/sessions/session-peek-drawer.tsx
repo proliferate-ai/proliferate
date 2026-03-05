@@ -10,7 +10,6 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
-import { OVERALL_WORK_STATE_DISPLAY } from "@/config/sessions";
 import { useOverallWorkState } from "@/hooks/sessions/use-overall-work-state";
 import { useSessionData } from "@/hooks/sessions/use-sessions";
 import {
@@ -20,6 +19,7 @@ import {
 	parsePrUrl,
 } from "@/lib/display/session-display";
 import { cn } from "@/lib/display/utils";
+import { OVERALL_WORK_STATE_DISPLAY } from "@/lib/sessions/overall-work-state";
 import type { Session } from "@proliferate/shared/contracts/sessions";
 import { getBlockedReasonText } from "@proliferate/shared/sessions";
 import { formatDistanceToNow } from "date-fns";
@@ -86,7 +86,6 @@ function PeekDrawerContent({
 	const router = useRouter();
 	const { overallWorkState } = useOverallWorkState(session);
 	const isResumable = session.snapshotId != null && overallWorkState === "dormant";
-	const blockedReason = getBlockedReasonFromCanonical(session);
 
 	const displayTitle =
 		session.title ||
@@ -121,8 +120,8 @@ function PeekDrawerContent({
 							{getOutcomeDisplay(session.outcome).label}
 						</span>
 					)}
-					{overallWorkState === "needs_input" && blockedReason && (
-						<SheetDescription>{blockedReason}</SheetDescription>
+					{overallWorkState === "needs_input" && (
+						<SheetDescription>{getBlockedReasonFromCanonical(session)}</SheetDescription>
 					)}
 				</SheetHeader>
 

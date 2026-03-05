@@ -37,12 +37,14 @@ export function createDaemonRoutes(hubManager: HubManager, env: GatewayEnv): Rou
 			const daemonUrl = getDaemonUrl(req);
 			if (!daemonUrl) return res.status(503).json({ error: "Sandbox not ready" });
 			const path = req.query.path as string;
+			const format = (req.query.format as string | undefined) ?? undefined;
 			if (!path) return res.status(400).json({ error: "path query parameter is required" });
+			const suffix = format ? `&format=${encodeURIComponent(format)}` : "";
 			return proxyJson(
 				req,
 				res,
 				daemonUrl,
-				`/_proliferate/fs/read?path=${encodeURIComponent(path)}`,
+				`/_proliferate/fs/read?path=${encodeURIComponent(path)}${suffix}`,
 				env,
 			);
 		},

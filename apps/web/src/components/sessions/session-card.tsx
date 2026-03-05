@@ -26,6 +26,10 @@ import {
 	useUnsubscribeNotifications,
 } from "@/hooks/sessions/use-sessions";
 import { cn } from "@/lib/display/utils";
+import {
+	OVERALL_WORK_STATE_DISPLAY,
+	type OverallWorkStateDisplayConfig,
+} from "@/lib/sessions/overall-work-state";
 import type { PendingRunSummary } from "@proliferate/shared/contracts/automations";
 import type { Session } from "@proliferate/shared/contracts/sessions";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -67,27 +71,12 @@ function formatCompactTimeAgo(date: Date): string {
 /**
  * Attention indicator dot based on operator status.
  */
-function AttentionCell({
-	pendingRun,
-	requiresHumanReview,
-}: {
-	pendingRun?: PendingRunSummary;
-	requiresHumanReview?: boolean;
-}) {
+function AttentionCell({ pendingRun }: { pendingRun?: PendingRunSummary }) {
 	if (pendingRun) {
 		return (
 			<span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
 				<span className="h-1.5 w-1.5 rounded-full bg-destructive shrink-0" />
 				Pending
-			</span>
-		);
-	}
-
-	if (requiresHumanReview) {
-		return (
-			<span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-				<span className="h-1.5 w-1.5 rounded-full bg-warning shrink-0" />
-				Review
 			</span>
 		);
 	}
@@ -336,10 +325,7 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 
 				{/* Attention (w-24) */}
 				<Column className="w-20 shrink-0">
-					<AttentionCell
-						pendingRun={pendingRun}
-						requiresHumanReview={session.status.requiresHumanReview}
-					/>
+					<AttentionCell pendingRun={pendingRun} />
 				</Column>
 
 				{/* Origin (w-20, hidden on mobile) */}

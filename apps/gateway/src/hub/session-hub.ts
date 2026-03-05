@@ -533,6 +533,26 @@ export class SessionHub {
 				});
 				return;
 			}
+			case "get_git_diff": {
+				this.log("Git diff requested", {
+					path: message.path,
+					scope: message.scope ?? "full",
+					workspacePath: message.workspacePath ?? null,
+				});
+				this.handleGitDiff(ws, message.path, message.scope, message.workspacePath).catch((err) => {
+					this.logError("Failed to get git diff", err);
+					this.sendMessage(ws, {
+						type: "git_diff",
+						payload: {
+							path: message.path,
+							scope: message.scope ?? "full",
+							success: false,
+							message: err instanceof Error ? err.message : "Failed to get git diff",
+						},
+					});
+				});
+				return;
+			}
 			case "git_create_branch": {
 				const connection = this.clients.get(ws);
 				if (!this.assertCanMutateSession(ws, connection?.userId)) return;
@@ -1181,6 +1201,39 @@ export class SessionHub {
 			ws,
 			workspacePath,
 		);
+	}
+
+	private async handleGitDiff(
+		ws: WebSocket,
+		path: string,
+		scope: "unstaged" | "staged" | "full" = "full",
+		workspacePath?: string,
+	): Promise<void> {
+		await this.ensureRuntimeReady();
+		try {
+			await this.runtime.refreshGitContext();
+		} catch (err) {
+			this.logError("Failed to refresh git context (using cached values)", err);
+		}
+		const result = await this.getGitOps().getDiff(path, scope, workspacePath);
+		this.log("Git diff resolved", {
+			path,
+			scope,
+			success: result.success,
+			hasPatch: Boolean(result.patch),
+			patchLength: result.patch?.length ?? 0,
+			message: result.message ?? null,
+		});
+		this.sendMessage(ws, {
+			type: "git_diff",
+			payload: {
+				path,
+				scope,
+				success: result.success,
+				...(result.patch ? { patch: result.patch } : {}),
+				...(result.message ? { message: result.message } : {}),
+			},
+		});
 	}
 
 	private async handleGitAction(

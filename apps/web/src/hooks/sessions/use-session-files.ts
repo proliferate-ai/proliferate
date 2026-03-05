@@ -8,9 +8,7 @@ import {
 	readFsFileBinary,
 	writeFsFile,
 } from "@/lib/infra/gateway-harness-client";
-import type { QueryClient } from "@tanstack/react-query";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 export function useSessionFilesTree(
 	sessionId: string,
@@ -62,7 +60,6 @@ export function useSessionFileBinaryContent(
 
 export function useSessionWriteFile(sessionId: string) {
 	const { token } = useWsToken();
-	const queryClient = useQueryClient();
 
 	return useMutation({
 		mutationFn: async ({ path, content }: { path: string; content: string }) => {
@@ -71,28 +68,5 @@ export function useSessionWriteFile(sessionId: string) {
 			}
 			return writeFsFile(sessionId, token, path, content);
 		},
-		onSuccess: (_, variables) => {
-			queryClient.invalidateQueries({ queryKey: ["file-read", sessionId, variables.path] });
-			queryClient.invalidateQueries({ queryKey: ["fs-tree", sessionId] });
-		},
 	});
-}
-
-export function useSessionFilePrefetch(sessionId: string) {
-	const { token } = useWsToken();
-	const canFetch = !!token && !!GATEWAY_URL;
-
-	const prefetchFileContent = useCallback(
-		async (queryClient: QueryClient, path: string) => {
-			if (!canFetch) return null;
-			return queryClient.fetchQuery({
-				queryKey: ["file-read", sessionId, path],
-				queryFn: () => readFsFile(sessionId, token!, path),
-				staleTime: 5_000,
-			});
-		},
-		[canFetch, sessionId, token],
-	);
-
-	return { canFetch, prefetchFileContent };
 }

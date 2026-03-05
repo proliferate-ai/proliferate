@@ -135,7 +135,7 @@ It freezes the entire environment — code, dependencies, databases, running ser
 
 ## Local IDE Access
 
-Use the built-in VS Code panel or terminal in this session to edit and run code directly in the sandbox environment.
+You can also connect your local IDE to this cloud environment. Run \`npx @proliferate/cli\` in your terminal to sync files and use your preferred editor.
 
 ## Tips
 
