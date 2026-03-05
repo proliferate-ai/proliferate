@@ -1,0 +1,583 @@
+"use client";
+
+import { devConsoleLog } from "@/lib/analytics/dev-console-log";
+import { GATEWAY_URL } from "@/lib/infra/gateway";
+import type { ExtendedMessage } from "@/lib/sessions/coding-message-converter";
+import {
+	type ServerMessage,
+	type SyncWebSocket,
+	type ToolEndMessage,
+	type ToolMetadataMessage,
+	type ToolStartMessage,
+	createSyncClient,
+} from "@proliferate/gateway-clients";
+import type {
+	ActionApprovalRequestMessage,
+	AutoStartOutputMessage,
+	GitResultMessage,
+	GitState,
+} from "@proliferate/shared";
+import type { WorkspaceStateInfo } from "@proliferate/shared/contracts/harness";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	type MessageHandlerContext,
+	handleInit,
+	handleMessage,
+	handleMessageCancelled,
+	handleMessageComplete,
+	handleTextPartComplete,
+	handleToken,
+	handleToolEnd,
+	handleToolMetadata,
+	handleToolStart,
+} from "./message-handlers";
+import type { EnvRequest } from "./types";
+
+interface UseSessionWebSocketOptions {
+	sessionId: string;
+	token: string | null;
+	onTitleUpdate: (title: string) => void;
+}
+
+interface UseSessionWebSocketReturn {
+	messages: ExtendedMessage[];
+	streamingText: Record<string, string>;
+	isConnected: boolean;
+	isInitialized: boolean;
+	isRunning: boolean;
+	isMigrating: boolean;
+	statusMessage: string | null;
+	error: string | null;
+	previewUrl: string | null;
+	envRequest: EnvRequest | null;
+	activityTick: number;
+	autoStartOutput: AutoStartOutputMessage["payload"] | null;
+	gitState: GitState | null;
+	gitResult: GitResultMessage["payload"] | null;
+	pendingApprovals: ActionApprovalRequestMessage["payload"][];
+	workspaceState: WorkspaceStateInfo | null;
+	sendPrompt: (content: string, images?: string[]) => void;
+	sendCancel: () => void;
+	sendRunAutoStart: (
+		runId: string,
+		mode?: "test" | "start",
+		commands?: import("@proliferate/shared").ConfigurationServiceCommand[],
+	) => void;
+	sendGetGitStatus: (workspacePath?: string) => void;
+	sendGitCreateBranch: (branchName: string, workspacePath?: string) => void;
+	sendGitCommit: (
+		message: string,
+		opts?: { includeUntracked?: boolean; files?: string[]; workspacePath?: string },
+	) => void;
+	sendGitPush: (workspacePath?: string) => void;
+	sendGitCreatePr: (
+		title: string,
+		body?: string,
+		baseBranch?: string,
+		workspacePath?: string,
+	) => void;
+	clearEnvRequest: () => void;
+	clearGitResult: () => void;
+}
+
+function debugWs(
+	event: string,
+	payload: Record<string, unknown>,
+	options?: { persist?: boolean },
+): void {
+	devConsoleLog("coding-session:ws", event, payload, options);
+}
+
+function summarizeServerEvent(data: ServerMessage): Record<string, unknown> {
+	const payload = (data as { payload?: Record<string, unknown> }).payload;
+	switch (data.type) {
+		case "init":
+			return {
+				type: data.type,
+				messageCount: Array.isArray(payload?.messages) ? payload.messages.length : 0,
+				hasPreviewUrl: Boolean(
+					payload?.config &&
+						typeof payload.config === "object" &&
+						(payload.config as Record<string, unknown>).previewTunnelUrl,
+				),
+			};
+		case "message":
+			return {
+				type: data.type,
+				messageId: payload?.id ?? null,
+				role: payload?.role ?? null,
+				contentLength: typeof payload?.content === "string" ? payload.content.length : 0,
+				partCount: Array.isArray(payload?.parts) ? payload.parts.length : 0,
+			};
+		case "token":
+			return {
+				type: data.type,
+				messageId: payload?.messageId ?? null,
+				tokenLength: typeof payload?.token === "string" ? payload.token.length : 0,
+			};
+		case "text_part_complete":
+			return {
+				type: data.type,
+				messageId: payload?.messageId ?? null,
+				partId: payload?.partId ?? null,
+				textLength: typeof payload?.text === "string" ? payload.text.length : 0,
+			};
+		case "tool_start":
+		case "tool_end":
+		case "tool_metadata": {
+			const metadata =
+				payload && typeof payload === "object"
+					? (payload as { metadata?: { summary?: unknown[] } }).metadata
+					: undefined;
+			return {
+				type: data.type,
+				messageId: payload?.messageId ?? null,
+				toolCallId: payload?.toolCallId ?? null,
+				tool: payload?.tool ?? null,
+				title: payload?.title ?? null,
+				summaryLength: Array.isArray(metadata?.summary) ? metadata.summary.length : 0,
+			};
+		}
+		case "message_complete":
+		case "message_cancelled":
+			return { type: data.type, messageId: payload?.messageId ?? null };
+		case "status":
+			return {
+				type: data.type,
+				status: payload?.status ?? null,
+				message: payload?.message ?? null,
+			};
+		case "control_plane_snapshot":
+			return {
+				type: data.type,
+				runtimeStatus: payload?.runtimeStatus ?? null,
+				operatorStatus: payload?.operatorStatus ?? null,
+				reconnectSequence: payload?.reconnectSequence ?? null,
+			};
+		case "error":
+			return { type: data.type, message: payload?.message ?? null };
+		default:
+			return { type: data.type };
+	}
+}
+
+/**
+ * Manages WebSocket connection and message state for a coding session.
+ */
+export function useSessionWebSocket({
+	sessionId,
+	token,
+	onTitleUpdate,
+}: UseSessionWebSocketOptions): UseSessionWebSocketReturn {
+	const [messages, setMessages] = useState<ExtendedMessage[]>([]);
+	const [streamingText, setStreamingText] = useState<Record<string, string>>({});
+	const [isConnected, setIsConnected] = useState(false);
+	const [isInitialized, setIsInitialized] = useState(false);
+	const [isRunning, setIsRunning] = useState(false);
+	const [isMigrating, setIsMigrating] = useState(false);
+	const [statusMessage, setStatusMessage] = useState<string | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+	const [envRequest, setEnvRequest] = useState<EnvRequest | null>(null);
+	const [activityTick, setActivityTick] = useState(0);
+	const [autoStartOutput, setAutoStartOutput] = useState<AutoStartOutputMessage["payload"] | null>(
+		null,
+	);
+	const [gitState, setGitState] = useState<GitState | null>(null);
+	const [gitResult, setGitResult] = useState<GitResultMessage["payload"] | null>(null);
+	const [pendingApprovals, setPendingApprovals] = useState<
+		ActionApprovalRequestMessage["payload"][]
+	>([]);
+	const [workspaceState, setWorkspaceState] = useState<WorkspaceStateInfo | null>(null);
+
+	const streamingTextRef = useRef<Record<string, string>>({});
+	const messagesRef = useRef<ExtendedMessage[]>([]);
+	const wsRef = useRef<SyncWebSocket | null>(null);
+	const activeToolsRef = useRef<
+		Map<string, { tool: string; startedAt: number; lastUpdateAt: number }>
+	>(new Map());
+
+	// Keep messagesRef in sync
+	useEffect(() => {
+		messagesRef.current = messages;
+	}, [messages]);
+
+	const getLastAssistantMessageId = useCallback((): string | null => {
+		const last = messagesRef.current.findLast((m) => m.role === "assistant");
+		return last?.id || null;
+	}, []);
+
+	useEffect(() => {
+		if (!GATEWAY_URL) {
+			setError("No gateway URL configured");
+			return;
+		}
+		if (!token) {
+			return;
+		}
+
+		const ctx: MessageHandlerContext = {
+			sessionId,
+			setMessages,
+			setStreamingText,
+			setIsRunning,
+			setIsMigrating,
+			setStatusMessage,
+			setIsInitialized,
+			setPreviewUrl,
+			setEnvRequest,
+			setAutoStartOutput,
+			setGitState,
+			setGitResult,
+			setPendingApprovals,
+			setError,
+			setWorkspaceState,
+			onTitleUpdate,
+			streamingTextRef,
+			getLastAssistantMessageId,
+			incrementActivityTick: () => setActivityTick((t) => t + 1),
+		};
+
+		const client = createSyncClient({
+			baseUrl: GATEWAY_URL,
+			auth: { type: "token", token },
+			source: "web",
+		});
+
+		const ws = client.connect(sessionId, {
+			onOpen: () => {
+				setIsConnected(true);
+				setError(null);
+				debugWs("open", { sessionId, gatewayUrl: GATEWAY_URL });
+			},
+			onClose: () => {
+				setIsConnected(false);
+				setIsRunning(false);
+				setStatusMessage(null);
+				activeToolsRef.current.clear();
+				debugWs("close", { sessionId });
+			},
+			onReconnectFailed: () => {
+				setError("Connection lost");
+				debugWs("reconnect_failed", { sessionId });
+			},
+			onEvent: (data: ServerMessage) => {
+				const now = Date.now();
+				if (data.type === "tool_start" && data.payload?.toolCallId) {
+					const existing = activeToolsRef.current.get(data.payload.toolCallId);
+					activeToolsRef.current.set(data.payload.toolCallId, {
+						tool: data.payload.tool || existing?.tool || "tool",
+						startedAt: existing?.startedAt ?? now,
+						lastUpdateAt: now,
+					});
+				} else if (data.type === "tool_metadata" && data.payload?.toolCallId) {
+					const existing = activeToolsRef.current.get(data.payload.toolCallId);
+					if (existing) {
+						existing.lastUpdateAt = now;
+						existing.tool = data.payload.tool || existing.tool;
+					}
+				} else if (data.type === "tool_end" && data.payload?.toolCallId) {
+					activeToolsRef.current.delete(data.payload.toolCallId);
+				} else if (
+					data.type === "message_complete" ||
+					data.type === "message_cancelled" ||
+					data.type === "error"
+				) {
+					activeToolsRef.current.clear();
+				}
+
+				debugWs(
+					"event",
+					{
+						sessionId,
+						...summarizeServerEvent(data),
+					},
+					{ persist: data.type !== "token" },
+				);
+				handleServerMessage(data, ctx);
+			},
+		});
+
+		wsRef.current = ws;
+		const toolWatchdogTimer = setInterval(() => {
+			const runningTools = Array.from(activeToolsRef.current.entries());
+			if (runningTools.length === 0) {
+				return;
+			}
+
+			const now = Date.now();
+			debugWs("tool_watchdog", {
+				sessionId,
+				runningTools: runningTools.map(([toolCallId, tool]) => ({
+					toolCallId,
+					tool: tool.tool,
+					elapsedSeconds: Math.max(1, Math.floor((now - tool.startedAt) / 1000)),
+					quietSeconds: Math.max(1, Math.floor((now - tool.lastUpdateAt) / 1000)),
+				})),
+			});
+		}, 10_000);
+
+		return () => {
+			clearInterval(toolWatchdogTimer);
+			ws.close();
+			wsRef.current = null;
+			activeToolsRef.current.clear();
+		};
+	}, [token, sessionId, onTitleUpdate, getLastAssistantMessageId]);
+
+	const sendPrompt = useCallback((content: string, images?: string[]) => {
+		setStatusMessage(null);
+		wsRef.current?.sendPrompt(content, images);
+		setIsRunning(true); // Show cursor immediately while waiting for assistant response
+	}, []);
+
+	const sendCancel = useCallback(() => {
+		wsRef.current?.sendCancel();
+	}, []);
+
+	const sendRunAutoStart = useCallback(
+		(
+			runId: string,
+			mode?: "test" | "start",
+			commands?: import("@proliferate/shared").ConfigurationServiceCommand[],
+		) => {
+			setAutoStartOutput(null);
+			wsRef.current?.sendRunAutoStart(runId, mode, commands);
+		},
+		[],
+	);
+
+	const sendGetGitStatus = useCallback((workspacePath?: string) => {
+		wsRef.current?.sendGetGitStatus(workspacePath);
+	}, []);
+
+	const sendGitCreateBranch = useCallback((branchName: string, workspacePath?: string) => {
+		wsRef.current?.sendGitCreateBranch(branchName, workspacePath);
+	}, []);
+
+	const sendGitCommit = useCallback(
+		(
+			message: string,
+			opts?: { includeUntracked?: boolean; files?: string[]; workspacePath?: string },
+		) => {
+			wsRef.current?.sendGitCommit(message, opts);
+		},
+		[],
+	);
+
+	const sendGitPush = useCallback((workspacePath?: string) => {
+		wsRef.current?.sendGitPush(workspacePath);
+	}, []);
+
+	const sendGitCreatePr = useCallback(
+		(title: string, body?: string, baseBranch?: string, workspacePath?: string) => {
+			wsRef.current?.sendGitCreatePr(title, body, baseBranch, workspacePath);
+		},
+		[],
+	);
+
+	const clearEnvRequest = useCallback(() => {
+		setEnvRequest(null);
+	}, []);
+
+	const clearGitResult = useCallback(() => {
+		setGitResult(null);
+	}, []);
+
+	return {
+		messages,
+		streamingText,
+		isConnected,
+		isInitialized,
+		isRunning,
+		isMigrating,
+		statusMessage,
+		error,
+		previewUrl,
+		envRequest,
+		activityTick,
+		autoStartOutput,
+		gitState,
+		gitResult,
+		pendingApprovals,
+		workspaceState,
+		sendPrompt,
+		sendCancel,
+		sendRunAutoStart,
+		sendGetGitStatus,
+		sendGitCreateBranch,
+		sendGitCommit,
+		sendGitPush,
+		sendGitCreatePr,
+		clearEnvRequest,
+		clearGitResult,
+	};
+}
+
+/** Route server messages to appropriate handlers */
+function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
+	switch (data.type) {
+		case "init":
+			handleInit(data.payload, ctx);
+			break;
+
+		case "message":
+			handleMessage(data.payload, ctx);
+			break;
+
+		case "token":
+			handleToken(data.payload as { messageId?: string; token?: string }, ctx);
+			break;
+
+		case "text_part_complete":
+			handleTextPartComplete(
+				data.payload as { messageId?: string; partId?: string; text?: string },
+				ctx,
+			);
+			break;
+
+		case "tool_start":
+			handleToolStart(data as ToolStartMessage, ctx);
+			break;
+
+		case "tool_end":
+			handleToolEnd(data as ToolEndMessage, ctx);
+			ctx.setStatusMessage(null);
+			ctx.incrementActivityTick();
+			break;
+
+		case "tool_metadata":
+			handleToolMetadata(data as ToolMetadataMessage, ctx);
+			ctx.setStatusMessage(null);
+			break;
+
+		case "message_complete":
+			handleMessageComplete(data.payload as { messageId?: string }, ctx);
+			ctx.setStatusMessage(null);
+			ctx.incrementActivityTick();
+			break;
+
+		case "message_cancelled":
+			handleMessageCancelled(data.payload as { messageId?: string }, ctx);
+			ctx.setStatusMessage(null);
+			break;
+
+		case "error":
+			if (data.payload?.message) {
+				ctx.setError(data.payload.message);
+				ctx.setIsRunning(false);
+			}
+			ctx.setStatusMessage(null);
+			break;
+
+		case "session_paused":
+			ctx.setIsRunning(false);
+			ctx.setStatusMessage(null);
+			break;
+
+		case "session_resumed":
+			ctx.setError(null);
+			break;
+
+		case "status":
+			debugWs("status.received", {
+				sessionId: ctx.sessionId,
+				status: data.payload?.status ?? null,
+				message: data.payload?.message ?? null,
+			});
+			if (typeof data.payload?.message === "string" && data.payload.message.trim()) {
+				ctx.setStatusMessage(data.payload.message.trim());
+			} else {
+				ctx.setStatusMessage(null);
+			}
+			if (data.payload?.status === "resuming") {
+				ctx.setIsRunning(true);
+				ctx.setIsMigrating(false);
+			} else if (data.payload?.status === "migrating") {
+				ctx.setIsMigrating(true);
+			} else if (data.payload?.status === "running") {
+				ctx.setIsMigrating(false);
+			}
+			break;
+
+		case "preview_url":
+			if (data.payload?.url) {
+				ctx.setPreviewUrl(data.payload.url);
+			}
+			break;
+
+		case "title_update":
+			if (data.payload?.title) {
+				ctx.onTitleUpdate(data.payload.title);
+			}
+			break;
+
+		case "auto_start_output":
+			if (data.payload) {
+				ctx.setAutoStartOutput(data.payload);
+			}
+			break;
+
+		case "git_status":
+			if (data.payload) {
+				ctx.setGitState(data.payload as GitState);
+			}
+			break;
+
+		case "git_result":
+			if (data.payload) {
+				ctx.setGitResult(data.payload as GitResultMessage["payload"]);
+			}
+			break;
+
+		case "action_approval_request":
+			if (data.payload) {
+				const incoming = data.payload as ActionApprovalRequestMessage["payload"];
+				ctx.setPendingApprovals((prev) => {
+					const existing = prev.findIndex((a) => a.invocationId === incoming.invocationId);
+					if (existing >= 0) {
+						const updated = [...prev];
+						updated[existing] = incoming;
+						return updated;
+					}
+					return [...prev, incoming];
+				});
+			}
+			break;
+
+		case "action_approval_result":
+		case "action_completed":
+			if (data.payload?.invocationId) {
+				ctx.setPendingApprovals((prev) =>
+					prev.filter((a) => a.invocationId !== data.payload.invocationId),
+				);
+			}
+			break;
+
+		case "control_plane_snapshot":
+			break;
+
+		// G7: Workspace state updates from daemon
+		case "workspace_state":
+			if (data.payload) {
+				ctx.setWorkspaceState(data.payload as WorkspaceStateInfo);
+			}
+			break;
+
+		// G1: Daemon stream envelope (pty_out, fs_change, port_opened, etc.)
+		case "daemon_stream":
+			// Increment activity tick to trigger panel refreshes (files, services)
+			ctx.incrementActivityTick();
+			break;
+
+		// G4: Port events (preview port opened/closed)
+		case "port_event":
+			ctx.incrementActivityTick();
+			break;
+
+		// G3: File system changes
+		case "fs_change":
+			ctx.incrementActivityTick();
+			break;
+	}
+}

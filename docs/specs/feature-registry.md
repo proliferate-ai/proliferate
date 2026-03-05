@@ -54,28 +54,28 @@
 | Session pause | Implemented | `apps/web/src/server/routers/sessions.ts:pause` | Pauses sandbox via provider |
 | Session resume | Implemented | `apps/web/src/server/routers/sessions.ts:resume` | Resumes from snapshot |
 | Session snapshot | Implemented | `apps/web/src/server/routers/sessions.ts:snapshot` | Saves current state |
-| Gateway session creation | Implemented | `apps/gateway/src/lib/session-creator.ts` | HTTP route + provider orchestration |
-| Gateway hub manager | Implemented | `apps/gateway/src/hub/hub-manager.ts` | Creates/retrieves session hubs |
+| Gateway session creation | Implemented | `apps/gateway/src/api/proliferate/http/sessions/session-creator.ts` | HTTP route + provider orchestration |
+| Gateway hub manager | Implemented | `apps/gateway/src/hub/manager/hub-manager.ts` | Creates/retrieves session hubs |
 | Session hub | Implemented | `apps/gateway/src/hub/session-hub.ts` | Per-session runtime management |
 | Session runtime | Implemented | `apps/gateway/src/hub/session-runtime.ts` | Runtime state coordination |
-| Event processor | Implemented | `apps/gateway/src/hub/event-processor.ts` | Processes sandbox SSE events |
+| Event processor | Implemented | `apps/gateway/src/hub/session/runtime/event-processor.ts` | Processes sandbox SSE events |
 | WebSocket streaming | Implemented | `apps/gateway/src/api/proliferate/ws/` | Bidirectional real-time |
-| HTTP message route | Implemented | `apps/gateway/src/api/proliferate/http/sessions.ts` | `POST /:sessionId/message` |
-| Session status route | Implemented | `apps/gateway/src/api/proliferate/http/sessions.ts` | `GET /:sessionId/status` |
-| SSE bridge to OpenCode | Implemented | `apps/gateway/src/hub/sse-client.ts` | Connects gateway to sandbox OpenCode |
-| Session migration controller | Implemented | `apps/gateway/src/hub/migration-controller.ts` | Auto-migration on sandbox expiry |
+| HTTP message route | Implemented | `apps/gateway/src/api/proliferate/http/session/runtime/message.ts` | `POST /:sessionId/message` |
+| Session status route | Implemented | `apps/gateway/src/api/proliferate/http/sessions/routes.ts` | `GET /sessions/:sessionId/status` |
+| SSE bridge to OpenCode | Implemented | `apps/gateway/src/hub/session/runtime/sse-client.ts` | Connects gateway to sandbox OpenCode |
+| Session migration controller | Implemented | `apps/gateway/src/hub/session/migration/migration-controller.ts` | Auto-migration on sandbox expiry |
 | Preview/sharing URLs | Implemented | `apps/web/src/app/preview/[id]/page.tsx` | Public preview via `previewTunnelUrl` |
-| Port forwarding proxy | Implemented | `apps/gateway/src/api/proxy/opencode.ts` | Token-auth proxy to sandbox ports |
-| Git operations | Implemented | `apps/gateway/src/hub/git-operations.ts` | Stateless git/gh via gateway |
-| Session store | Implemented | `apps/gateway/src/lib/session-store.ts` | In-memory session state |
+| Port forwarding proxy | Implemented | `apps/gateway/src/api/proxy/opencode/routes.ts` | Token-auth proxy to sandbox ports |
+| Git operations | Implemented | `apps/gateway/src/hub/session/git/git-operations.ts` | Stateless git/gh via gateway |
+| Session context store | Implemented | `apps/gateway/src/hub/session/runtime/session-context-store.ts` | Runtime context loading and enrichment |
 | Session connections (DB) | Implemented | `packages/db/src/schema/sessions.ts` | `session_connections` table |
-| Session telemetry capture | Implemented | `apps/gateway/src/hub/session-telemetry.ts` | Passive metrics, PR URLs, latest task |
+| Session telemetry capture | Implemented | `apps/gateway/src/hub/session/runtime/session-telemetry.ts` | Passive metrics, PR URLs, latest task |
 | Session telemetry DB flush | Implemented | `packages/services/src/sessions/db.ts:flushTelemetry` | SQL-level atomic increment |
 | Session outcome derivation | Implemented | `apps/gateway/src/hub/capabilities/tools/automation-complete.ts` | Set at explicit terminal call sites |
-| Async graceful shutdown (telemetry) | Implemented | `apps/gateway/src/index.ts`, `apps/gateway/src/hub/hub-manager.ts` | Bounded 5s flush on SIGTERM/SIGINT |
-| Gateway auth middleware | Implemented | `apps/gateway/src/middleware/auth.ts` | Token verification |
-| Gateway CORS | Implemented | `apps/gateway/src/middleware/cors.ts` | CORS policy |
-| Gateway error handler | Implemented | `apps/gateway/src/middleware/error-handler.ts` | Centralized error handling |
+| Async graceful shutdown (telemetry) | Implemented | `apps/gateway/src/index.ts`, `apps/gateway/src/hub/manager/hub-manager.ts` | Bounded 5s flush on SIGTERM/SIGINT |
+| Gateway auth middleware | Implemented | `apps/gateway/src/server/middleware/auth/require-auth.ts` | Token verification |
+| Gateway CORS | Implemented | `apps/gateway/src/server/middleware/transport/cors.ts` | CORS policy |
+| Gateway error handler | Implemented | `apps/gateway/src/server/middleware/errors/error-handler.ts` | Centralized error handling |
 | Gateway request logging | Implemented | `apps/gateway/src/` | pino-http via `@proliferate/logger` |
 | Session telemetry in list rows | Implemented | `apps/web/src/components/sessions/session-card.tsx` | latestTask subtitle, outcome badge, PR indicator, compact metrics, dedicated configuration column |
 | Session peek drawer (URL-routable) | Implemented | `apps/web/src/components/sessions/session-peek-drawer.tsx` | `?peek=sessionId` URL param on sessions page |
@@ -211,7 +211,7 @@
 | Effective service commands | Implemented | `apps/web/src/server/routers/configurations.ts:getEffectiveServiceCommands` | Resolved config |
 | Base snapshot builds | Implemented | `apps/worker/src/base-snapshots/index.ts` | Worker queue, deduplication |
 | Configuration snapshot builds | Implemented | `apps/worker/src/configuration-snapshots/index.ts` | Multi-repo, tightly coupled to configuration creation |
-| Configuration resolver | Implemented | `apps/gateway/src/lib/configuration-resolver.ts` | Resolves config at session start |
+| Configuration resolver | Implemented | `apps/gateway/src/api/proliferate/http/sessions/configuration-resolver.ts` | Resolves config at session start |
 | Service commands persistence | Implemented | `packages/db/src/schema/configurations.ts:serviceCommands` | JSONB on configurations |
 | Env file persistence | Implemented | `packages/db/src/schema/configurations.ts:envFiles` | JSONB on configurations |
 | Configuration connector configuration (deprecated) | Deprecated | `packages/db/src/schema/configurations.ts:connectors` | Legacy JSONB on configurations table; migrated to org-scoped `org_connectors` table via `0022_org_connectors.sql` |
@@ -262,7 +262,7 @@
 | Jira OAuth | Implemented | `apps/web/src/app/api/integrations/jira/oauth/route.ts`, `apps/web/src/app/api/integrations/jira/oauth/callback/route.ts` | First-party Atlassian 3LO route + callback persistence |
 | Jira metadata | Implemented | `apps/web/src/server/routers/integrations.ts:jiraMetadata` | Sites, projects, issue types |
 | Jira action adapter | Implemented | `packages/providers/src/providers/jira/actions.ts` | 6 actions: list_sites, list/get/create/update issues, add_comment |
-| GitHub auth (gateway) | Implemented | `apps/gateway/src/lib/github-auth.ts` | Gateway-side GitHub token resolution |
+| GitHub auth (gateway) | Implemented | `apps/gateway/src/hub/session/runtime/github-auth.ts` | Gateway-side GitHub token resolution |
 | Org-scoped MCP connector catalog | Implemented | `packages/db/src/schema/schema.ts:orgConnectors`, `packages/services/src/connectors/` | Org-level connector CRUD with atomic secret provisioning |
 | Org-scoped connector management UI | Implemented | `apps/web/src/app/(command-center)/dashboard/integrations/page.tsx`, `apps/web/src/hooks/use-org-connectors.ts` | Settings → Tools redirects to integrations; connector management on integrations page |
 
@@ -301,7 +301,7 @@
 | Checkout flow | Implemented | `apps/web/src/server/routers/billing.ts:startCheckout` | Initiate payment |
 | Credit usage | Implemented | `apps/web/src/server/routers/billing.ts:useCredits` | Deduct credits |
 | Usage metering | Implemented | `packages/services/src/billing/metering.ts` | Real-time compute metering |
-| Credit gating | Implemented | `packages/shared/src/billing/gating.ts`, `packages/services/src/billing/gate.ts`, `apps/gateway/src/api/proliferate/http/sessions.ts` | Enforced in oRPC session creation, gateway session creation, setup sessions, and runtime resume |
+| Credit gating | Implemented | `packages/shared/src/billing/gating.ts`, `packages/services/src/billing/gate.ts`, `apps/gateway/src/api/proliferate/http/sessions/routes.ts` | Enforced in oRPC session creation, gateway session creation, setup sessions, and runtime resume |
 | Shadow balance | Implemented | `packages/services/src/billing/shadow-balance.ts` | Fast balance approximation |
 | Org pause on zero balance | Implemented | `packages/services/src/billing/org-pause.ts` | Auto-pause all sessions |
 | Trial credits | Implemented | `packages/services/src/billing/trial-activation.ts` | Auto-provision on signup |

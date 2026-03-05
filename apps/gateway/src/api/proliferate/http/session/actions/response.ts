@@ -1,7 +1,7 @@
 import type { ActionDefinition } from "@proliferate/providers";
 import { zodToJsonSchema } from "@proliferate/providers/helpers/schema";
 import { actions } from "@proliferate/services";
-import { ApiError } from "../../../../../middleware/errors";
+import { ApiError } from "../../../../../server/middleware/errors";
 
 export function actionToResponse(action: ActionDefinition) {
 	return {

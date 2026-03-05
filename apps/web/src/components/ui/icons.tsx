@@ -9,7 +9,6 @@
  */
 
 import { cn } from "@/lib/display/utils";
-import { Croissant } from "lucide-react";
 
 // Re-export LucideIcon type for typed icon props
 export type { LucideIcon } from "lucide-react";

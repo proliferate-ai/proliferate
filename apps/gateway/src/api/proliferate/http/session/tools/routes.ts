@@ -2,7 +2,7 @@ import { createLogger } from "@proliferate/logger";
 import { Router } from "express";
 import type { HubManager } from "../../../../../hub";
 import { getInterceptedToolHandler } from "../../../../../hub/capabilities/tools";
-import { ApiError } from "../../../../../middleware/errors";
+import { ApiError } from "../../../../../server/middleware/errors";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "http-tools" });
 

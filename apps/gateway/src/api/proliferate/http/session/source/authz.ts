@@ -1,8 +1,8 @@
 import { sessions } from "@proliferate/services";
-import { ApiError } from "../../../../../middleware/errors";
+import { ApiError } from "../../../../../server/middleware/errors";
 
 export async function resolveSessionWorker(sessionId: string, authOrgId?: string) {
-	const session = await sessions.findByIdInternal(sessionId);
+	const session = await sessions.findSessionByIdInternal(sessionId);
 	if (!session) {
 		throw new ApiError(404, "Session not found");
 	}

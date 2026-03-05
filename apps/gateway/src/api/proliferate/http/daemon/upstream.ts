@@ -1,6 +1,6 @@
 import { createLogger } from "@proliferate/logger";
 import type { Request } from "express";
-import { deriveSandboxMcpToken } from "../../../../middleware/auth";
+import { deriveSandboxMcpToken } from "../../../../server/middleware/auth";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "daemon-upstream" });
 

@@ -9,14 +9,10 @@ import { cn } from "@/lib/display/utils";
 import { orpc } from "@/lib/infra/orpc";
 import type { GitHubRepo, Repo } from "@/types";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, FolderGit2, GitBranch, Globe, Lock, Plus, Search, Star } from "lucide-react";
+import { ChevronDown, FolderGit2, GitBranch, Globe, Lock, Search, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 
-interface RepositoriesTabProps {
-	onClose: () => void;
-}
-
-export function RepositoriesTab({ onClose }: RepositoriesTabProps) {
+export function RepositoriesTab() {
 	const [showAvailable, setShowAvailable] = useState(false);
 	const [showPublicSearch, setShowPublicSearch] = useState(false);
 	const [addingRepoId, setAddingRepoId] = useState<number | null>(null);

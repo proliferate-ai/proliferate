@@ -217,7 +217,7 @@ describe("SessionHub lease cleanup", () => {
 
 describe("SessionHub initial prompt auto-send", () => {
 	it("marks initial prompt as sent and dispatches once", async () => {
-		const updateSpy = vi.spyOn(sessions, "update").mockResolvedValue(undefined);
+		const updateSpy = vi.spyOn(sessions, "updateSession").mockResolvedValue(undefined);
 		const hub = {
 			initialPromptSending: false,
 			sessionId: "session-1",
@@ -252,7 +252,7 @@ describe("SessionHub initial prompt auto-send", () => {
 	});
 
 	it("clears sent marker when auto-send fails so next init can retry", async () => {
-		const updateSpy = vi.spyOn(sessions, "update").mockResolvedValue(undefined);
+		const updateSpy = vi.spyOn(sessions, "updateSession").mockResolvedValue(undefined);
 		const context = {
 			initialPrompt: "Set up this repo",
 			session: {

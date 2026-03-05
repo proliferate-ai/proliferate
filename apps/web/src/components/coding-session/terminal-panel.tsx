@@ -1,6 +1,7 @@
 "use client";
 
 import "xterm/css/xterm.css";
+import { useWsToken } from "@/hooks/sessions/use-ws-token";
 import { cn } from "@/lib/display/utils";
 import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { Circle } from "lucide-react";
@@ -8,7 +9,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { PanelShell } from "./panel-shell";
-import { useWsToken } from "./runtime/use-ws-token";
 
 interface TerminalPanelProps {
 	sessionId: string;

@@ -1,2 +1,2 @@
-// Stub for vitest — allows importing server-only modules outside Next.js runtime.
+// Mock for server-only module in test environment
 export {};

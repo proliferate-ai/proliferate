@@ -8,12 +8,12 @@ import http from "http";
 import { type Logger, createHttpLogger } from "@proliferate/logger";
 import express, { type Express } from "express";
 import { mountRoutes, setupWebSocket } from "./api";
-import { startSessionExpiryWorker } from "./expiry/expiry-queue";
 import { HubManager } from "./hub";
 import type { GatewayEnv } from "./lib/env";
-import { errorHandler } from "./middleware/errors";
-import { cors } from "./middleware/transport";
-import { startOrphanSweeper } from "./sweeper/orphan-sweeper";
+import { startSessionExpiryWorker } from "./operations/expiry/queue";
+import { startOrphanSweeper } from "./operations/orphans/sweeper";
+import { errorHandler } from "./server/middleware/errors";
+import { cors } from "./server/middleware/transport";
 
 export interface ServerDependencies {
 	env: GatewayEnv;

@@ -7,7 +7,6 @@ import type { ReactNode } from "react";
 
 interface IntegrationConnectButtonProps {
 	provider: "sentry" | "linear";
-	integrationId: string;
 	onSuccess?: () => void;
 	hasConnection?: boolean;
 	/** Render as icon-only reconnect button */
@@ -24,7 +23,6 @@ interface IntegrationConnectButtonProps {
 
 export function IntegrationConnectButton({
 	provider,
-	integrationId,
 	onSuccess,
 	hasConnection = false,
 	iconOnly = false,

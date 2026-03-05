@@ -19,6 +19,7 @@ const {
 	mockFindActiveResumeIntentTx,
 	mockInsertResumeIntentTx,
 	mockGetSessionOperatorStatusTx,
+	mockGetDisabledSourceIds,
 } = vi.hoisted(() => ({
 	mockCreateInvocation: vi.fn(),
 	mockListPendingBySession: vi.fn(),
@@ -38,6 +39,7 @@ const {
 	mockFindActiveResumeIntentTx: vi.fn(),
 	mockInsertResumeIntentTx: vi.fn(),
 	mockGetSessionOperatorStatusTx: vi.fn(),
+	mockGetDisabledSourceIds: vi.fn(),
 }));
 
 vi.mock("./db", () => ({
@@ -84,10 +86,15 @@ vi.mock("./modes", () => ({
 	resolveMode: mockResolveMode,
 }));
 
+vi.mock("../user-action-preferences", () => ({
+	getDisabledSourceIds: mockGetDisabledSourceIds,
+}));
+
 const {
 	invokeAction,
 	PendingLimitError,
 	denyAction,
+	filterAvailableActionsForSession,
 	markCompleted,
 	approveAction,
 	ActionConflictError,
@@ -157,6 +164,7 @@ describe("actions v1 service", () => {
 		mockFindActiveResumeIntentTx.mockResolvedValue(undefined);
 		mockInsertResumeIntentTx.mockResolvedValue(undefined);
 		mockGetSessionOperatorStatusTx.mockResolvedValue(null);
+		mockGetDisabledSourceIds.mockResolvedValue(new Set<string>());
 	});
 
 	it("requires approval for write actions and sets waiting status", async () => {
@@ -417,5 +425,76 @@ describe("actions v1 service", () => {
 				isOrgAdmin: true,
 			}),
 		).resolves.toBeUndefined();
+	});
+
+	it("filters out disabled sources in available action catalog", async () => {
+		mockResolveMode.mockResolvedValue({ mode: "allow", source: "inferred_default" });
+		mockGetDisabledSourceIds.mockResolvedValue(new Set(["linear"]));
+
+		const result = await filterAvailableActionsForSession({
+			sessionId: "session-1",
+			organizationId: "org-1",
+			userId: "user-1",
+			integrations: [
+				{
+					integrationId: "int-1",
+					integration: "linear",
+					displayName: "Linear",
+					actions: [{ name: "create_issue", riskLevel: "write", description: "Create issue" }],
+				},
+				{
+					integrationId: "int-2",
+					integration: "github",
+					displayName: "GitHub",
+					actions: [{ name: "list_prs", riskLevel: "read", description: "List PRs" }],
+				},
+			],
+		});
+
+		expect(result).toHaveLength(1);
+		expect(result[0]?.integration).toBe("github");
+	});
+
+	it("filters denied actions and prunes empty integrations", async () => {
+		mockGetDisabledSourceIds.mockResolvedValue(new Set<string>());
+		mockResolveMode.mockImplementation(
+			async (input: { actionId: string; riskLevel: "read" | "write" | "danger" }) => {
+				if (input.actionId === "delete_issue") {
+					return { mode: "deny", source: "org_default" };
+				}
+				if (input.riskLevel === "danger") {
+					return { mode: "deny", source: "inferred_default" };
+				}
+				return { mode: "allow", source: "inferred_default" };
+			},
+		);
+
+		const result = await filterAvailableActionsForSession({
+			sessionId: "session-1",
+			organizationId: "org-1",
+			automationId: "auto-1",
+			userId: "user-1",
+			integrations: [
+				{
+					integrationId: "int-1",
+					integration: "linear",
+					displayName: "Linear",
+					actions: [
+						{ name: "create_issue", riskLevel: "write", description: "Create issue" },
+						{ name: "delete_issue", riskLevel: "danger", description: "Delete issue" },
+					],
+				},
+				{
+					integrationId: "int-2",
+					integration: "jira",
+					displayName: "Jira",
+					actions: [{ name: "delete_project", riskLevel: "danger", description: "Delete project" }],
+				},
+			],
+		});
+
+		expect(result).toHaveLength(1);
+		expect(result[0]?.integration).toBe("linear");
+		expect(result[0]?.actions.map((entry) => entry.name)).toEqual(["create_issue"]);
 	});
 });

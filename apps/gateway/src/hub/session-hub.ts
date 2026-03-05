@@ -390,7 +390,7 @@ export class SessionHub {
 
 		try {
 			// Mark as sent immediately to prevent duplicate sends on concurrent connections.
-			await sessions.update(this.sessionId, { initialPromptSentAt: sentAt });
+			await sessions.updateSession(this.sessionId, { initialPromptSentAt: sentAt });
 			session.initial_prompt_sent_at = sentAt;
 
 			// Use handlePrompt to broadcast to clients + send to OpenCode.
@@ -400,7 +400,7 @@ export class SessionHub {
 
 			// Roll back sent marker so the next runtime init can retry.
 			try {
-				await sessions.update(this.sessionId, { initialPromptSentAt: null });
+				await sessions.updateSession(this.sessionId, { initialPromptSentAt: null });
 				session.initial_prompt_sent_at = null;
 			} catch (clearErr) {
 				this.logError("Failed to clear initial_prompt_sent_at after send failure", clearErr);
@@ -813,7 +813,7 @@ export class SessionHub {
 				status: "ready",
 			});
 		} else {
-			await sessions.update(this.sessionId, {
+			await sessions.updateSession(this.sessionId, {
 				snapshotId: result.snapshotId,
 			});
 		}
@@ -1060,7 +1060,7 @@ export class SessionHub {
 	 * Delegates to SessionTelemetry's single-flight mutex.
 	 */
 	async flushTelemetry(): Promise<void> {
-		await this.telemetry.flush(sessions.flushTelemetry);
+		await this.telemetry.flush(sessions.flushSessionTelemetry);
 	}
 
 	// ============================================
@@ -1764,7 +1764,7 @@ export class SessionHub {
 
 	private async getFreshControlPlaneSession(base: SessionRecord): Promise<SessionRecord> {
 		try {
-			const fresh = await sessions.findByIdInternal(this.sessionId);
+			const fresh = await sessions.findSessionByIdInternal(this.sessionId);
 			if (!fresh) {
 				return base;
 			}

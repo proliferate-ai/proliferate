@@ -4,7 +4,6 @@ import { ConnectorConnectionTab } from "@/components/integrations/connector-conn
 import { ConnectorIcon } from "@/components/integrations/connector-icon";
 import { OAuthConnectionTab } from "@/components/integrations/oauth-connection-tab";
 import { PermissionsTab } from "@/components/integrations/permissions-tab";
-import type { Provider } from "@/components/integrations/provider-icon";
 import { ProviderIcon, getProviderDisplayName } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { LoadingDots } from "@/components/ui/loading-dots";

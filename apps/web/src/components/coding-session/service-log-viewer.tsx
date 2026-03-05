@@ -1,10 +1,10 @@
 "use client";
 
 import "xterm/css/xterm.css";
+import { useServiceLogs } from "@/hooks/sessions/use-devtools-services";
 import { useEffect, useRef } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
-import { useServiceLogs } from "./runtime/use-services";
 
 /** Resolve a CSS custom property to its computed HSL value. */
 function getCssColor(property: string): string {

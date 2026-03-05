@@ -1,5 +1,5 @@
 import { sourceReads } from "@proliferate/services";
-import { ApiError } from "../../../../../middleware/errors";
+import { ApiError } from "../../../../../server/middleware/errors";
 
 export function mapSourceReadError(error: unknown): never {
 	if (error instanceof sourceReads.BindingNotFoundError) {

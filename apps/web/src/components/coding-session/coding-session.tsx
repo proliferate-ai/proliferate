@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { INVESTIGATION_TAB, MANAGER_PANEL_TABS, PANEL_TABS } from "@/config/coding-session";
 import { useRepo } from "@/hooks/org/use-repos";
 import { useBackgroundVscodeStart } from "@/hooks/sessions/use-background-vscode";
+import { useCodingSessionRuntime } from "@/hooks/sessions/use-coding-session-runtime";
 import { useConfiguration } from "@/hooks/sessions/use-configurations";
 import {
 	useRenameSession,
@@ -20,7 +21,7 @@ import { startSnapshotProgressToast } from "@/lib/display/snapshot-progress-toas
 import { cn } from "@/lib/display/utils";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { ArrowLeft, ArrowRightLeft, Loader2, MoreHorizontal, Pin } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, MoreHorizontal, Pin } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SessionPanelProps } from "./right-panel";
@@ -30,7 +31,6 @@ import { SessionLoadingShell } from "./session-loading-shell";
 import { SetupSessionChrome } from "./setup-session-chrome";
 import { Thread } from "./thread";
 import { SessionContext } from "./tool-ui/env-request-tool";
-import { useCodingSessionRuntime } from "./use-coding-session-runtime";
 import { WorkspaceStateBanner, deriveWorkspaceState } from "./workspace-state-banner";
 
 interface CodingSessionProps {
@@ -93,7 +93,6 @@ export function CodingSession({
 		initialPrompt,
 		initialImages,
 		initialTitle: sessionData?.title ?? null,
-		clientType: sessionData?.clientType ?? null,
 	});
 
 	// Start VS Code server in the background as soon as the session connects
@@ -449,7 +448,6 @@ export function CodingSession({
 				disabled={headerDisabled}
 				mobileView={mobileView}
 				onToggleMobileView={toggleMobileView}
-				panelMode={mode}
 			/>
 		</div>
 	);

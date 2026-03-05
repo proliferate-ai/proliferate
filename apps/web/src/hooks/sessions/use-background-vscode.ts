@@ -1,6 +1,6 @@
 "use client";
 
-import { GATEWAY_URL } from "@/lib/infra/gateway";
+import { listServices, startServiceAllowConflict } from "@/lib/infra/gateway-devtools-client";
 import { useEffect, useRef } from "react";
 
 /**
@@ -21,51 +21,42 @@ export function useBackgroundVscodeStart(sessionId: string | undefined, token: s
 	const initiated = useRef(false);
 
 	useEffect(() => {
-		if (!sessionId || !token || !GATEWAY_URL || initiated.current) return;
+		if (!sessionId || !token || initiated.current) return;
 		if (vscodeStartedSessions.has(sessionId)) return;
 		initiated.current = true;
 		vscodeStartedSessions.add(sessionId);
 
-		const servicesUrl = `${GATEWAY_URL}/proxy/${sessionId}/${token}/devtools/mcp/api/services`;
 		const basePath = `/proxy/${sessionId}/${token}/devtools/vscode`;
 		const command = `openvscode-server --port 3901 --without-connection-token --host 127.0.0.1 --server-base-path=${basePath} --default-folder /home/user/workspace`;
 
 		(async () => {
 			try {
 				// Check if service already exists before trying to start.
-				const checkRes = await fetch(servicesUrl);
-				if (checkRes.ok) {
-					const data = await checkRes.json();
-					const existing = data.services?.find(
-						(s: { name: string; status: string; command?: string }) =>
-							s.name === "openvscode-server",
-					);
-					if (existing) {
-						const existingCommand = typeof existing.command === "string" ? existing.command : "";
-						const hasExpectedBasePath = existingCommand.includes(`--server-base-path=${basePath}`);
+				const data = await listServices(sessionId, token);
+				const existing = data.services?.find(
+					(s: { name: string; status: string; command?: string }) => s.name === "openvscode-server",
+				);
+				if (existing) {
+					const existingCommand = typeof existing.command === "string" ? existing.command : "";
+					const hasExpectedBasePath = existingCommand.includes(`--server-base-path=${basePath}`);
 
-						if (existing.status === "running" && hasExpectedBasePath) {
-							console.log("[vscode-bg] Service already running with current base path");
-							return;
-						}
-
-						console.log(
-							"[vscode-bg] Existing service is stale or not running, restarting:",
-							existing.status,
-						);
+					if (existing.status === "running" && hasExpectedBasePath) {
+						console.log("[vscode-bg] Service already running with current base path");
+						return;
 					}
+
+					console.log(
+						"[vscode-bg] Existing service is stale or not running, restarting:",
+						existing.status,
+					);
 				}
 
 				console.log("[vscode-bg] Starting openvscode-server in background");
-				const startRes = await fetch(servicesUrl, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						name: "openvscode-server",
-						command,
-					}),
+				await startServiceAllowConflict(sessionId, token, {
+					name: "openvscode-server",
+					command,
 				});
-				console.log("[vscode-bg] Start response:", startRes.status);
+				console.log("[vscode-bg] Start request sent");
 			} catch (err) {
 				console.warn("[vscode-bg] Failed (VscodePanel will retry):", err);
 			}

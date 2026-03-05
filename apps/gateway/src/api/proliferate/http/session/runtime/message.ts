@@ -7,7 +7,7 @@ import {
 	reserveIdempotencyKey,
 	storeIdempotencyResponse,
 } from "../../../../../lib/idempotency";
-import { ApiError } from "../../../../../middleware/errors";
+import { ApiError } from "../../../../../server/middleware/errors";
 
 const router: RouterType = Router({ mergeParams: true });
 const logger = createLogger({ service: "gateway" }).child({ module: "message-route" });

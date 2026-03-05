@@ -51,7 +51,7 @@ interface PreviewSessionProps {
 }
 
 export function PreviewSession({ sessionId }: PreviewSessionProps) {
-	const { data: sessionData } = useSessionData(sessionId);
+	useSessionData(sessionId);
 	const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
 	const [activeServicePort, setActiveServicePort] = useState<number | null>(null);
 

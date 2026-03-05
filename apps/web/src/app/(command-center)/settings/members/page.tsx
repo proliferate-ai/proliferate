@@ -9,7 +9,7 @@ import {
 } from "@/components/settings/members/member-dialogs";
 import { MembersList } from "@/components/settings/members/members-list";
 import { PendingInvitations } from "@/components/settings/members/pending-invitations";
-import { useMembersPage } from "@/components/settings/members/use-members-page";
+import { useMembersPage } from "@/hooks/org/use-members-page";
 
 export default function MembersPage() {
 	const {

@@ -2,7 +2,7 @@ import { createLogger } from "@proliferate/logger";
 import type { Request, Response } from "express";
 import { Router, type Router as RouterType } from "express";
 import type { GatewayEnv } from "../../../lib/env";
-import { createRequireProxyAuth } from "../../../middleware/auth";
+import { createRequireProxyAuth } from "../../../server/middleware/auth";
 
 const logger = createLogger({ service: "gateway" }).child({ module: "proxy-preview-health" });
 

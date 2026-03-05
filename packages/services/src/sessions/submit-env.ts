@@ -15,7 +15,7 @@ import type { SandboxProviderType } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
 import { getServicesLogger } from "../logger";
 import * as secrets from "../secrets";
-import { SessionInvalidStateError, SessionNotFoundError } from "./pause";
+import { SessionInvalidStateError, SessionNotFoundError } from "./errors";
 import { getFullSession } from "./service";
 
 export interface SecretInput {

@@ -3,13 +3,11 @@
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/display/utils";
-import type { PreviewMode } from "@/stores/preview-panel";
 import { MessageSquare, PanelRight } from "lucide-react";
 
 interface SessionHeaderProps {
 	error: string | null;
 	disabled?: boolean;
-	panelMode: PreviewMode;
 	// Mobile
 	mobileView?: "chat" | "preview";
 	onToggleMobileView?: () => void;
@@ -18,7 +16,6 @@ interface SessionHeaderProps {
 export function SessionHeader({
 	error,
 	disabled,
-	panelMode,
 	mobileView,
 	onToggleMobileView,
 }: SessionHeaderProps) {

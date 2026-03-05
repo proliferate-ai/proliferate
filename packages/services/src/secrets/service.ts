@@ -7,6 +7,7 @@
 import type { Secret } from "@proliferate/shared/contracts/secrets";
 import { parseEnvFile } from "@proliferate/shared";
 import { decrypt, encrypt, getEncryptionKey } from "../db/crypto";
+import type { SecretForSessionRow, UpsertSecretInput } from "../types/secrets";
 import * as secretsDb from "./db";
 import { toSecret, toSecrets } from "./mapper";
 
@@ -183,6 +184,62 @@ export async function bulkImportSecrets(input: BulkImportSecretsInput): Promise<
 	const skipped = entries.filter((e) => !createdSet.has(e.key)).map((e) => e.key);
 
 	return { created: createdKeys.length, skipped };
+}
+
+// ============================================
+// Session/configuration secret reads and upserts
+// ============================================
+
+/**
+ * Get org/repo-scoped secrets for session boot env injection.
+ */
+export async function getSecretsForSession(
+	orgId: string,
+	repoIds: string[],
+): Promise<SecretForSessionRow[]> {
+	return secretsDb.getSecretsForSession(orgId, repoIds);
+}
+
+/**
+ * Get org/repo-scoped secrets with scope metadata for precedence resolution.
+ */
+export async function getScopedSecretsForSession(
+	orgId: string,
+	repoIds: string[],
+): Promise<secretsDb.ScopedSecretForSessionRow[]> {
+	return secretsDb.getScopedSecretsForSession(orgId, repoIds);
+}
+
+/**
+ * Get configuration-linked secrets for session boot env injection.
+ */
+export async function getSecretsForConfiguration(
+	orgId: string,
+	configurationId: string,
+): Promise<SecretForSessionRow[]> {
+	return secretsDb.getSecretsForConfiguration(orgId, configurationId);
+}
+
+/**
+ * Get configuration-linked secrets with metadata for precedence resolution.
+ */
+export async function getScopedSecretsForConfiguration(
+	orgId: string,
+	configurationId: string,
+): Promise<secretsDb.ScopedSecretForSessionRow[]> {
+	return secretsDb.getScopedSecretsForConfiguration(orgId, configurationId);
+}
+
+/**
+ * Upsert a repo-scoped secret value by key.
+ */
+export async function upsertSecretByRepoAndKey(input: {
+	repoId: UpsertSecretInput["repoId"];
+	organizationId: UpsertSecretInput["organizationId"];
+	key: UpsertSecretInput["key"];
+	encryptedValue: UpsertSecretInput["encryptedValue"];
+}): Promise<boolean> {
+	return secretsDb.upsertByRepoAndKey(input);
 }
 
 // ============================================

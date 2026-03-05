@@ -38,7 +38,6 @@ export default function IntegrationsPage() {
 		setSearchQuery,
 		integrationsLoading,
 		connectorsLoading,
-		integrationsByProvider,
 		slackStatus,
 		slackConnectIsPending,
 		handleConnect,
@@ -46,7 +45,7 @@ export default function IntegrationsPage() {
 		getLoadingStatus,
 		getConnectedMeta,
 		connectedEntries,
-		connectors,
+		// connectors — available via filteredConnectors
 		filteredConnectors,
 		editingId,
 		setEditingId,

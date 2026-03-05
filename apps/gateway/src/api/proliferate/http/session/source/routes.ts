@@ -1,7 +1,7 @@
 import { createLogger } from "@proliferate/logger";
 import { sourceReads } from "@proliferate/services";
 import { Router, type Router as RouterType } from "express";
-import { ApiError } from "../../../../../middleware/errors";
+import { ApiError } from "../../../../../server/middleware/errors";
 import { resolveSessionWorker } from "./authz";
 import { mapSourceReadError } from "./response";
 

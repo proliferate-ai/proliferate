@@ -14,7 +14,7 @@ Sentry.init({
 	debug: false,
 
 	// Filter out non-critical errors
-	beforeSend(event, hint) {
+	beforeSend(event, _hint) {
 		// Don't send errors in development
 		if (nodeEnv !== "production") {
 			return null;

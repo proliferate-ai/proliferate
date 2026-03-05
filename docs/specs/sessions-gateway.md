@@ -59,7 +59,7 @@
 - `remove(sessionId)` is lifecycle cleanup entrypoint for in-memory hub references.
 - `releaseAllLeases()` performs best-effort telemetry flush and stops hub monitors during shutdown.
 
-References: `apps/gateway/src/hub/hub-manager.ts`, `apps/gateway/src/server.ts`
+References: `apps/gateway/src/hub/manager/hub-manager.ts`, `apps/gateway/src/server.ts`
 
 ### Session Ownership + Runtime Leases
 Redis leases coordinate multi-instance safety.
@@ -95,7 +95,7 @@ There are two intentional creation paths.
 - Gateway HTTP (`POST /proliferate/sessions`): configuration resolution, optional immediate sandbox, integration/session connections, Redis idempotency envelope.
 - Web oRPC (`sessions.create`): lightweight DB-centric path (including scratch sessions) that may trigger eager-start asynchronously.
 
-References: `apps/gateway/src/api/proliferate/http/sessions.ts`, `apps/gateway/src/lib/session-creator.ts`, `apps/web/src/server/routers/sessions-create.ts`
+References: `apps/gateway/src/api/proliferate/http/sessions/routes.ts`, `apps/gateway/src/api/proliferate/http/sessions/session-creator.ts`, `apps/web/src/server/routers/sessions-create.ts`
 
 ### SSE Bridge
 SSE is transport-only and unidirectional.
@@ -104,7 +104,7 @@ SSE is transport-only and unidirectional.
 - Hub owns reconnect strategy and policy; `SseClient` does not reconnect on its own.
 - Heartbeat/read timeout failures map to disconnect reasons that drive hub reconnect logic.
 
-References: `apps/gateway/src/hub/sse-client.ts`, `apps/gateway/src/hub/session-hub.ts`
+References: `apps/gateway/src/hub/session/runtime/sse-client.ts`, `apps/gateway/src/hub/session-hub.ts`
 
 ### Migration + Idle + Orphan Recovery
 Migration and cleanup are lock/fencing-driven.
@@ -114,7 +114,7 @@ Migration and cleanup are lock/fencing-driven.
 - Idle/orphan writes fence against stale sandbox IDs via CAS update methods.
 - Orphan sweeper is DB-first and runtime-lease-based, so recovery works post-restart with empty hub map.
 
-References: `apps/gateway/src/expiry/expiry-queue.ts`, `apps/gateway/src/hub/migration-controller.ts`, `apps/gateway/src/sweeper/orphan-sweeper.ts`
+References: `apps/gateway/src/operations/expiry/queue.ts`, `apps/gateway/src/hub/session/migration/migration-controller.ts`, `apps/gateway/src/operations/orphans/sweeper.ts`
 
 ### Gateway-Intercepted Tool Callbacks
 Intercepted tools execute through HTTP callbacks, not SSE interception.
@@ -123,7 +123,7 @@ Intercepted tools execute through HTTP callbacks, not SSE interception.
 - Auth source must be sandbox HMAC token.
 - Idempotency is per-process (`inflightCalls` + `completedResults` cache with retention).
 
-References: `apps/gateway/src/api/proliferate/http/tools.ts`, `apps/gateway/src/hub/capabilities/tools/`
+References: `apps/gateway/src/api/proliferate/http/session/tools/routes.ts`, `apps/gateway/src/hub/capabilities/tools/`
 
 ---
 
@@ -146,7 +146,7 @@ References: `apps/gateway/src/api/proliferate/http/tools.ts`, `apps/gateway/src/
 - Billing gate failures map to 402 via `BillingGateError` handling.
 - Unknown/unexpected exceptions are logged and returned as 500.
 
-Reference: `apps/gateway/src/middleware/error-handler.ts`
+Reference: `apps/gateway/src/server/middleware/errors/error-handler.ts`
 
 ### Reliability
 - **SSE read timeout**: Configurable via `env.sseReadTimeoutMs`. Stream read uses `readWithTimeout()` to detect stuck connections.
@@ -186,10 +186,10 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 **What it does:** Creates a session record and optionally provisions a sandbox.
 
 **Gateway HTTP path** (`POST /proliferate/sessions`):
-1. Auth middleware validates JWT/CLI token (`apps/gateway/src/middleware/auth.ts:createRequireAuth`).
-2. Route validates required configuration option (`apps/gateway/src/api/proliferate/http/sessions.ts`).
-3. `resolveConfiguration()` resolves or creates a configuration record (`apps/gateway/src/lib/configuration-resolver.ts`).
-4. `createSession()` writes DB record, creates session connections, and optionally creates sandbox (`apps/gateway/src/lib/session-creator.ts`).
+1. Auth middleware validates JWT/CLI token (`apps/gateway/src/server/middleware/auth/require-auth.ts:createRequireAuth`).
+2. Route validates required configuration option (`apps/gateway/src/api/proliferate/http/sessions/routes.ts`).
+3. `resolveConfiguration()` resolves or creates a configuration record (`apps/gateway/src/api/proliferate/http/sessions/configuration-resolver.ts`).
+4. `createSession()` writes DB record, creates session connections, and optionally creates sandbox (`apps/gateway/src/api/proliferate/http/sessions/session-creator.ts`).
 5. For new managed configurations, fires a setup session with auto-generated prompt.
 6. Immediate sandbox boot now injects the same gateway callback env vars used by runtime resume (`SANDBOX_MCP_AUTH_TOKEN`, `PROLIFERATE_GATEWAY_URL`, `PROLIFERATE_SESSION_ID`) so intercepted tools (including `automation.complete`) work on first boot.
 7. Immediate sandbox boot persists provider expiry (`sandbox_expires_at`) on the initial session update, instead of waiting for a later runtime reconciliation pass.
@@ -217,7 +217,7 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 - The `sessions` table has an `idempotency_key` TEXT column. When provided, callers can detect duplicate creation attempts.
 - Redis-based idempotency (`apps/gateway/src/lib/idempotency.ts`) also exists as a legacy deduplication path for the gateway HTTP route.
 
-**Files touched:** `apps/gateway/src/api/proliferate/http/sessions.ts`, `apps/gateway/src/lib/session-creator.ts`, `apps/web/src/server/routers/sessions.ts`, `apps/web/src/components/coding-session/setup-session-chrome.tsx`, `apps/web/src/components/coding-session/right-panel.tsx`, `apps/web/src/components/coding-session/environment-panel.tsx`, `apps/web/src/components/coding-session/runtime/message-handlers.ts`
+**Files touched:** `apps/gateway/src/api/proliferate/http/sessions/routes.ts`, `apps/gateway/src/api/proliferate/http/sessions/session-creator.ts`, `apps/web/src/server/routers/sessions.ts`, `apps/web/src/components/coding-session/setup-session-chrome.tsx`, `apps/web/src/components/coding-session/right-panel.tsx`, `apps/web/src/components/coding-session/environment-panel.tsx`, `apps/web/src/components/coding-session/runtime/message-handlers.ts`
 
 ### 6.2 Session Runtime Lifecycle — `Implemented`
 
@@ -231,12 +231,12 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 5. On failure: stop lease renewal to release ownership.
 
 **Happy path** (`apps/gateway/src/hub/session-runtime.ts:doEnsureRuntimeReady`):
-1. Wait for migration lock release (`lib/lock.ts:waitForMigrationLockRelease`).
-2. Reload `SessionContext` from database (`lib/session-store.ts:loadSessionContext`).
+1. Wait for migration lock release (`hub/session/migration/lock.ts:waitForMigrationLockRelease`).
+2. Reload `SessionContext` from database (`hub/session/runtime/session-context-store.ts:loadSessionContext`).
 3. Resolve provider, git identity, base snapshot, sandbox-mcp token.
 4. Call `provider.ensureSandbox()` — recovers existing or creates new sandbox.
 5. Update session DB record with `sandboxId`, `status: "running"`, tunnel URLs.
-6. Schedule expiry job via BullMQ (`expiry/expiry-queue.ts:scheduleSessionExpiry`).
+6. Schedule expiry job via BullMQ (`operations/expiry/queue.ts:scheduleSessionExpiry`).
 7. Ensure OpenCode session exists:
    - First verify stored `coding_agent_session_id` via direct `GET /session/:id` lookup.
    - If not found, fall back to `GET /session` list/adopt, then create only when no reusable session exists.
@@ -255,13 +255,13 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 - Stored tunnel URLs are used as fallback if provider returns empty values on recovery.
 - If lease renewal lag exceeds TTL during runtime work, self-terminate immediately to prevent split-brain ownership (see §2 Lease Heartbeat Lag Guard).
 
-**Files touched:** `apps/gateway/src/hub/session-runtime.ts`, `apps/gateway/src/lib/session-store.ts`
+**Files touched:** `apps/gateway/src/hub/session-runtime.ts`, `apps/gateway/src/hub/session/runtime/session-context-store.ts`
 
 ### 6.3 Event Processing Pipeline — `Implemented`
 
 **What it does:** Translates OpenCode SSE events into client-facing `ServerMessage` payloads.
 
-**Event types handled** (`apps/gateway/src/hub/event-processor.ts:process`):
+**Event types handled** (`apps/gateway/src/hub/session/runtime/event-processor.ts:process`):
 
 | SSE Event | Client Message(s) | Notes |
 |-----------|-------------------|-------|
@@ -279,7 +279,7 @@ References: `apps/gateway/src/hub/session-hub.test.ts`, `apps/gateway/src/api/pr
 - Gateway-mediated tools are executed via synchronous sandbox callbacks (`POST /proliferate/:sessionId/tools/:toolName`) rather than SSE interception. Idempotency is provided by in-memory `inflightCalls` + `completedResults` maps, keyed by `tool_call_id`. Invocations are also persisted in `session_tool_invocations`.
 - See `agent-contract.md` for the tool callback contract and tool schemas.
 
-**Files touched:** `apps/gateway/src/hub/event-processor.ts`, `apps/gateway/src/hub/session-hub.ts`
+**Files touched:** `apps/gateway/src/hub/session/runtime/event-processor.ts`, `apps/gateway/src/hub/session-hub.ts`
 
 ### 6.3a Session Telemetry — `Implemented`
 
@@ -343,7 +343,7 @@ WHERE id = $session_id
 
 **latestTask clearing:** All 12 non-hub write paths that transition sessions away from active states set `latestTask: null` to prevent zombie text (billing pause, manual pause, CLI stop, orphan sweeper, migration CAS).
 
-**Files touched:** `apps/gateway/src/hub/session-telemetry.ts`, `apps/gateway/src/hub/session-hub.ts`, `apps/gateway/src/hub/event-processor.ts`, `apps/gateway/src/hub/migration-controller.ts`, `apps/gateway/src/hub/hub-manager.ts`, `packages/services/src/sessions/db.ts`
+**Files touched:** `apps/gateway/src/hub/session/runtime/session-telemetry.ts`, `apps/gateway/src/hub/session-hub.ts`, `apps/gateway/src/hub/session/runtime/event-processor.ts`, `apps/gateway/src/hub/session/migration/migration-controller.ts`, `apps/gateway/src/hub/manager/hub-manager.ts`, `packages/services/src/sessions/db.ts`
 
 ### 6.4 WebSocket Protocol — `Implemented`
 
@@ -416,7 +416,7 @@ WHERE id = $session_id
 
 **Circuit breaker:** After `MAX_SNAPSHOT_FAILURES` (3) consecutive idle snapshot failures, the migration controller stops attempting further snapshots.
 
-Source: `apps/gateway/src/hub/migration-controller.ts`
+Source: `apps/gateway/src/hub/session/migration/migration-controller.ts`
 
 ### 6.6 Git Operations — `Implemented`
 
@@ -438,7 +438,7 @@ Source: `apps/gateway/src/hub/migration-controller.ts`
 
 **What it does:** Proxies HTTP requests from the client to sandbox ports via the OpenCode tunnel URL.
 
-**Route**: `GET/POST /proxy/:sessionId/:token/opencode/*` (`apps/gateway/src/api/proxy/opencode.ts`).
+**Route**: `GET/POST /proxy/:sessionId/:token/opencode/*` (`apps/gateway/src/api/proxy/opencode/routes.ts`).
 
 Auth is token-in-path (required for SSE clients that can't set headers). `createRequireProxyAuth()` validates the token. `createEnsureSessionReady()` ensures the hub and sandbox are ready. `http-proxy-middleware` forwards to the sandbox OpenCode URL with path rewriting.
 
@@ -464,12 +464,12 @@ Source: `packages/gateway-clients/src/`
 
 ### 6.9 Gateway Middleware — `Implemented`
 
-**Auth** (`apps/gateway/src/middleware/auth.ts`):
+**Auth** (`apps/gateway/src/server/middleware/auth/require-auth.ts`):
 Token verification chain: (1) User JWT (signed with `gatewayJwtSecret`), (2) Service JWT (signed with `serviceToken`, must have `service` claim), (3) Sandbox HMAC token (HMAC-SHA256 of `serviceToken + sessionId`), (4) CLI API key (HTTP call to web app for DB lookup).
 
-**CORS** (`apps/gateway/src/middleware/cors.ts`): Allows all origins (`*`), methods `GET/POST/PATCH/DELETE/OPTIONS`, headers `Content-Type/Authorization/Accept`, max-age 86400s.
+**CORS** (`apps/gateway/src/server/middleware/transport/cors.ts`): Allows all origins (`*`), methods `GET/POST/PATCH/DELETE/OPTIONS`, headers `Content-Type/Authorization/Accept`, max-age 86400s.
 
-**Error handler** (`apps/gateway/src/middleware/error-handler.ts`): Catches `ApiError` for structured JSON responses. Unhandled errors logged via `@proliferate/logger` and returned as 500.
+**Error handler** (`apps/gateway/src/server/middleware/errors/error-handler.ts`): Catches `ApiError` for structured JSON responses. Unhandled errors logged via `@proliferate/logger` and returned as 500.
 
 ### 6.10 Session UI Surfaces — `Implemented`
 
@@ -508,14 +508,14 @@ Token verification chain: (1) User JWT (signed with `gatewayJwtSecret`), (2) Ser
 - Sandbox callback/tool routes require sandbox auth source explicitly.
 - Session mutation operations guard against unauthorized user mutation even after connection auth.
 
-References: `apps/gateway/src/middleware/auth.ts`, `apps/gateway/src/api/proliferate/http/tools.ts`, `apps/gateway/src/hub/session-hub.ts`
+References: `apps/gateway/src/server/middleware/auth/require-auth.ts`, `apps/gateway/src/api/proliferate/http/session/tools/routes.ts`, `apps/gateway/src/hub/session-hub.ts`
 
 ### Observability
 - Structured logs are namespaced by gateway module (`hub`, `runtime`, `migration`, `sse-client`, etc.).
 - Runtime readiness logs latency breakdown for major lifecycle stages.
 - HTTP layer uses request logging via `pino-http` wrapper.
 
-References: `apps/gateway/src/server.ts`, `apps/gateway/src/hub/session-runtime.ts`, `apps/gateway/src/hub/sse-client.ts`
+References: `apps/gateway/src/server.ts`, `apps/gateway/src/hub/session-runtime.ts`, `apps/gateway/src/hub/session/runtime/sse-client.ts`
 
 ---
 

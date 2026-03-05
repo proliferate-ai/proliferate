@@ -19,7 +19,7 @@ import {
 import { orpc } from "@/lib/infra/orpc";
 import type { IntegrationWithCreator } from "@proliferate/shared/contracts/integrations";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 
 export function useOAuthConnections() {
 	const queryClient = useQueryClient();

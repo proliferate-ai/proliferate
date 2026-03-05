@@ -14,17 +14,10 @@ import { getServicesLogger } from "../logger";
 import * as notifications from "../notifications";
 import * as orgs from "../orgs";
 import { updateLastVisibleUpdateAt } from "./db";
-import { getFullSession, updateSession } from "./service";
-import { SessionNotFoundError, recordSessionEvent } from "./service";
+import { SessionInvalidStateError, SessionNotFoundError } from "./errors";
+import { getFullSession, recordSessionEvent, updateSession } from "./service";
 
-export { SessionNotFoundError };
-
-export class SessionInvalidStateError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "SessionInvalidStateError";
-	}
-}
+export { SessionInvalidStateError, SessionNotFoundError } from "./errors";
 
 export interface PauseSessionInput {
 	sessionId: string;

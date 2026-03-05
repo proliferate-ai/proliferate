@@ -130,7 +130,7 @@ export async function createSession(
 
 		const planLimits = await billing.getOrgPlanLimits(organizationId);
 		if (planLimits) {
-			const { created } = await sessions.createWithAdmissionGuard(
+			const { created } = await sessions.createSessionWithAdmissionGuard(
 				sessionInput,
 				planLimits.maxConcurrentSessions,
 			);
@@ -140,7 +140,7 @@ export async function createSession(
 				);
 			}
 		} else {
-			await sessions.create(sessionInput);
+			await sessions.createSessionRecord(sessionInput);
 		}
 	} catch (err) {
 		log.error({ err }, "Failed to create session");

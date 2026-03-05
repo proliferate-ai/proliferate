@@ -26,7 +26,7 @@ import { useSessions } from "@/hooks/sessions/use-sessions";
 import { useSession } from "@/lib/auth/client";
 import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
-import { type DisplayStatus, deriveDisplayStatus } from "@proliferate/shared/sessions";
+import { deriveDisplayStatus } from "@proliferate/shared/sessions";
 import { Plus, Search } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";

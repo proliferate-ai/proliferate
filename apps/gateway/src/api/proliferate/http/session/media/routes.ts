@@ -5,7 +5,7 @@ import {
 	getVerificationFileUrl,
 	listVerificationFiles,
 } from "../../../../../lib/s3";
-import { ApiError } from "../../../../../middleware/errors";
+import { ApiError } from "../../../../../server/middleware/errors";
 
 export function createSessionMediaRoutes(env: GatewayEnv): RouterType {
 	const router: RouterType = Router();

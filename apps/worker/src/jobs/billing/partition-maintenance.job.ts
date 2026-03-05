@@ -49,7 +49,7 @@ export async function processPartitionMaintenanceJob(
 	const name = partitionName(next.year, next.month);
 
 	try {
-		const created = await billing.ensureBillingPartition(
+		const created = await billing.ensureBillingPartitionForMaintenance(
 			name,
 			monthStart(next.year, next.month),
 			monthStart(afterNext.year, afterNext.month),
@@ -68,7 +68,7 @@ export async function processPartitionMaintenanceJob(
 	const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
 
 	try {
-		const deleted = await billing.cleanOldBillingEventKeys(cutoff);
+		const deleted = await billing.cleanOldBillingEventKeysForMaintenance(cutoff);
 		if (deleted > 0) {
 			log.info({ deleted, cutoffDate: cutoff.toISOString() }, "Cleaned old billing event keys");
 		}
@@ -78,7 +78,7 @@ export async function processPartitionMaintenanceJob(
 
 	// 3. Identify partitions eligible for detachment (>90 days old)
 	try {
-		const partitions = await billing.listBillingEventPartitions();
+		const partitions = await billing.listBillingEventPartitionsForMaintenance();
 		if (partitions.length > 0) {
 			const cutoffMonth = `${cutoff.getUTCFullYear()}${String(cutoff.getUTCMonth() + 1).padStart(2, "0")}`;
 			const eligible = partitions.filter((p) => {

@@ -6,7 +6,6 @@ import { ConnectorIcon } from "@/components/integrations/connector-icon";
 import type { CatalogEntry } from "@/components/integrations/integration-picker-dialog";
 import { CATEGORY_LABELS } from "@/components/integrations/integration-picker-dialog";
 import {
-	type Provider,
 	ProviderIcon,
 	getProviderDisplayName,
 	getProviderManageUrl,

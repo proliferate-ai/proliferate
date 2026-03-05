@@ -7,8 +7,8 @@
 import { Router, type Router as RouterType } from "express";
 import type { HubManager } from "../../../hub";
 import type { GatewayEnv } from "../../../lib/env";
-import { createRequireAuth } from "../../../middleware/auth";
-import { createEnsureSessionReady } from "../../../middleware/session";
+import { createRequireAuth } from "../../../server/middleware/auth";
+import { createEnsureSessionReady } from "../../../server/middleware/session";
 import { createDaemonHttpRouter } from "./daemon";
 import { createActionsRouter } from "./session/actions";
 import { createSessionControlRouter } from "./session/control";

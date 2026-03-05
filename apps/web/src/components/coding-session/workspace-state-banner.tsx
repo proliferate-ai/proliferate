@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/display/utils";
-import { AlertTriangle, CheckCircle2, Loader2, Pause, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Pause, XCircle } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Types

@@ -3,29 +3,29 @@
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { vscodeStartedSessions } from "@/hooks/sessions/use-background-vscode";
-import { GATEWAY_URL } from "@/lib/infra/gateway";
+import { useWsToken } from "@/hooks/sessions/use-ws-token";
+import {
+	buildGatewayProxyUrl,
+	createServiceLogsEventSource,
+	listServices,
+	startServiceAllowConflict,
+} from "@/lib/infra/gateway-devtools-client";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { FileText, Loader2, ServerCrash } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PanelShell } from "./panel-shell";
-import { useWsToken } from "./runtime/use-ws-token";
 
 interface VscodePanelProps {
 	sessionId: string;
 }
 
-function devtoolsUrl(sessionId: string, token: string, path: string): string {
-	return `${GATEWAY_URL}/proxy/${sessionId}/${token}/devtools/mcp${path}`;
-}
-
 function vscodeUrl(sessionId: string, token: string): string {
-	return `${GATEWAY_URL}/proxy/${sessionId}/${token}/devtools/vscode/?folder=/home/user/workspace`;
+	return `${buildGatewayProxyUrl(sessionId, token, "/devtools/vscode/")}?folder=/home/user/workspace`;
 }
 
 type SetupStage = "requesting" | "starting_process" | "checking_health" | "ready" | "error";
 
 const MAX_PROCESS_POLL_ATTEMPTS = 30;
-const MAX_HEALTH_POLL_ATTEMPTS = 20;
 
 export function VscodePanel({ sessionId }: VscodePanelProps) {
 	const { token } = useWsToken();
@@ -51,7 +51,7 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 					resolve(value);
 				};
 
-				const es = new EventSource(devtoolsUrl(sessionId, tkn, "/api/logs/openvscode-server"));
+				const es = createServiceLogsEventSource(sessionId, tkn, "openvscode-server");
 				const timeout = setTimeout(() => {
 					es.close();
 					finish("Log retrieval timed out.");
@@ -110,7 +110,7 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 	);
 
 	const startVscodeServer = useCallback(async () => {
-		if (!token || !GATEWAY_URL) return;
+		if (!token) return;
 		clearPolling();
 
 		setStage("requesting");
@@ -121,25 +121,19 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 			const command = `openvscode-server --port 3901 --without-connection-token --host 127.0.0.1 --server-base-path=${basePath} --default-folder /home/user/workspace`;
 
 			const dispatchStart = async (mode: "start" | "restart") => {
+				void mode;
 				vscodeStartedSessions.add(sessionId);
-				const startRes = await fetch(devtoolsUrl(sessionId, token, "/api/services"), {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ name: "openvscode-server", command }),
+				await startServiceAllowConflict(sessionId, token, {
+					name: "openvscode-server",
+					command,
 				});
-
-				// 409 can occur if a service lock/race exists; treat as dispatch success.
-				if (!startRes.ok && startRes.status !== 409) {
-					throw new Error(`Failed to dispatch service start (HTTP ${startRes.status}).`);
-				}
 			};
 
 			let serviceFound = false;
 
 			// Check if service already exists in any state.
-			const servicesRes = await fetch(devtoolsUrl(sessionId, token, "/api/services"));
-			if (servicesRes.ok) {
-				const data = await servicesRes.json();
+			try {
+				const data = await listServices(sessionId, token);
 				const vscodeService = data.services?.find(
 					(s: { name: string; status: string; command?: string }) => s.name === "openvscode-server",
 				);
@@ -179,24 +173,21 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 							}
 
 							try {
-								const res = await fetch(devtoolsUrl(sessionId, token, "/api/services"));
-								if (res.ok) {
-									const d = await res.json();
-									const svc = d.services?.find(
-										(s: { name: string }) => s.name === "openvscode-server",
-									);
-									if (!svc) {
-										if (!cancelled) setTimeout(poll, 1000);
-										return;
-									}
-									if (svc.status === "error") {
-										await failWithDiagnostics("VS Code process crashed during startup.");
-										return;
-									}
-									if (svc.status === "running" || svc.status === "stopped") {
-										checkHttpHealth(token);
-										return;
-									}
+								const list = await listServices(sessionId, token);
+								const svc = list.services?.find(
+									(s: { name: string }) => s.name === "openvscode-server",
+								);
+								if (!svc) {
+									if (!cancelled) setTimeout(poll, 1000);
+									return;
+								}
+								if (svc.status === "error") {
+									await failWithDiagnostics("VS Code process crashed during startup.");
+									return;
+								}
+								if (svc.status === "running" || svc.status === "stopped") {
+									checkHttpHealth(token);
+									return;
 								}
 							} catch {
 								// Keep polling.
@@ -212,6 +203,8 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 						return;
 					}
 				}
+			} catch {
+				// Service lookup failed; continue with startup request.
 			}
 
 			if (!serviceFound) {
@@ -235,25 +228,22 @@ export function VscodePanel({ sessionId }: VscodePanelProps) {
 				}
 
 				try {
-					const res = await fetch(devtoolsUrl(sessionId, token, "/api/services"));
-					if (res.ok) {
-						const data = await res.json();
-						const svc = data.services?.find((s: { name: string; status: string }) => {
-							return s.name === "openvscode-server";
-						});
+					const data = await listServices(sessionId, token);
+					const svc = data.services?.find((s: { name: string; status: string }) => {
+						return s.name === "openvscode-server";
+					});
 
-						if (!svc) {
-							if (!cancelled) setTimeout(poll, 1000);
-							return;
-						}
-						if (svc.status === "error") {
-							await failWithDiagnostics("VS Code process crashed during startup.");
-							return;
-						}
-						if (svc.status === "running" || svc.status === "stopped") {
-							checkHttpHealth(token);
-							return;
-						}
+					if (!svc) {
+						if (!cancelled) setTimeout(poll, 1000);
+						return;
+					}
+					if (svc.status === "error") {
+						await failWithDiagnostics("VS Code process crashed during startup.");
+						return;
+					}
+					if (svc.status === "running" || svc.status === "stopped") {
+						checkHttpHealth(token);
+						return;
 					}
 				} catch {
 					// Keep polling.

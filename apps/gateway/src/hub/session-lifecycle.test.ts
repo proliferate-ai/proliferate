@@ -9,7 +9,7 @@ import {
 
 vi.mock("@proliferate/services", () => ({
 	sessions: {
-		findByIdInternal: vi.fn(async () => null),
+		findSessionByIdInternal: vi.fn(async () => null),
 		persistTerminalTaskOutcome: vi.fn(async () => ({
 			outcomeJson: {},
 			outcomeVersion: 1,
@@ -147,7 +147,7 @@ describe("projectOperatorStatus", () => {
 
 describe("persistTerminalOutcome", () => {
 	it("enriches from session telemetry when no explicit prUrls/summary", async () => {
-		vi.mocked(sessions.findByIdInternal).mockResolvedValueOnce({
+		vi.mocked(sessions.findSessionByIdInternal).mockResolvedValueOnce({
 			prUrls: ["https://github.com/org/repo/pull/42"],
 			summary: "Added feature X",
 		} as never);
@@ -173,7 +173,7 @@ describe("persistTerminalOutcome", () => {
 	});
 
 	it("uses explicit prUrls over session telemetry", async () => {
-		vi.mocked(sessions.findByIdInternal).mockResolvedValueOnce({
+		vi.mocked(sessions.findSessionByIdInternal).mockResolvedValueOnce({
 			prUrls: ["https://github.com/org/repo/pull/old"],
 			summary: "Old summary",
 		} as never);
@@ -200,7 +200,7 @@ describe("persistTerminalOutcome", () => {
 	});
 
 	it("records lifecycle events on completion", async () => {
-		vi.mocked(sessions.findByIdInternal).mockResolvedValueOnce({} as never);
+		vi.mocked(sessions.findSessionByIdInternal).mockResolvedValueOnce({} as never);
 
 		await persistTerminalOutcome({
 			sessionId: "s-1",
@@ -220,7 +220,7 @@ describe("persistTerminalOutcome", () => {
 	});
 
 	it("records session_failed for failed runtime", async () => {
-		vi.mocked(sessions.findByIdInternal).mockResolvedValueOnce({} as never);
+		vi.mocked(sessions.findSessionByIdInternal).mockResolvedValueOnce({} as never);
 
 		await persistTerminalOutcome({
 			sessionId: "s-1",
@@ -237,7 +237,7 @@ describe("persistTerminalOutcome", () => {
 	});
 
 	it("swallows errors (best-effort persistence)", async () => {
-		vi.mocked(sessions.findByIdInternal).mockRejectedValueOnce(new Error("DB down"));
+		vi.mocked(sessions.findSessionByIdInternal).mockRejectedValueOnce(new Error("DB down"));
 
 		await persistTerminalOutcome({
 			sessionId: "s-1",

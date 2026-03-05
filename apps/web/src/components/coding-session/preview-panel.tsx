@@ -3,13 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { ExternalLink, Maximize2, Minimize2, RefreshCw } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
+import { usePreviewHealthCheck } from "@/hooks/sessions/use-preview-health-check";
+import { useWsToken } from "@/hooks/sessions/use-ws-token";
 import { usePolledReadiness } from "@/hooks/ui/use-polled-readiness";
 import { cn } from "@/lib/display/utils";
-import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PanelShell } from "./panel-shell";
-import { useWsToken } from "./runtime/use-ws-token";
 
 interface PreviewPanelProps {
 	url: string | null;
@@ -97,18 +97,7 @@ function PreviewOfflineIllustration() {
 export function PreviewPanel({ url, sessionId, className }: PreviewPanelProps) {
 	const [isFullscreen, setIsFullscreen] = useState(false);
 	const { token } = useWsToken();
-
-	const checkFn = useCallback(async (): Promise<boolean> => {
-		if (!url || !sessionId || !token) return false;
-		try {
-			const healthUrl = `${GATEWAY_URL}/proxy/${sessionId}/${token}/health-check?url=${encodeURIComponent(url)}`;
-			const res = await fetch(healthUrl);
-			const data = await res.json();
-			return data.ready === true;
-		} catch {
-			return false;
-		}
-	}, [url, sessionId, token]);
+	const checkFn = usePreviewHealthCheck(sessionId, url);
 
 	const { status, retry: handleRefresh } = usePolledReadiness({
 		checkFn,
