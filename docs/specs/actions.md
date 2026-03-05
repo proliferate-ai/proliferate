@@ -44,7 +44,7 @@ Mode resolution is deterministic and centralized in `packages/services/src/actio
 
 1. Automation override (`automations.action_modes["<sourceId>:<actionId>"]`)
 2. Org default (`organization.action_modes["<sourceId>:<actionId>"]`)
-3. Inferred default from action risk (`read→allow`, `write→require_approval`, `danger→deny`)
+3. Inferred default from action risk (`read→allow`, `write→allow`, `danger→allow`)
 
 The resolved mode and mode source are stored on every invocation row.
 
@@ -64,7 +64,7 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 1. Explicit connector per-tool override
 2. MCP annotations (`destructiveHint` before `readOnlyHint`)
 3. Connector default risk
-4. Fallback `write` (safe default requiring approval)
+4. Fallback `write` (conservative risk classification; policy still resolves via mode cascade)
 
 ### 2.5 Agent Bootstrap and CLI
 - Sandbox setup writes `.proliferate/actions-guide.md` from `ACTIONS_BOOTSTRAP` (`packages/shared/src/sandbox/config.ts`).
@@ -120,6 +120,7 @@ Connector risk level precedence (`packages/services/src/actions/connectors/risk.
 ### 6.1 Catalog Invariants
 - `GET /:sessionId/actions/available` must return a merged catalog of:
   - Active session provider integrations with registered modules.
+  - If session provider links are empty, active org integrations (same provider module constraints) as fallback.
   - Enabled org connectors with non-empty discovered tool lists.
 - Connector/tool discovery failures must degrade to omission, not global request failure.
 - User source-level disable preferences must be enforced in both listing and invoke paths.

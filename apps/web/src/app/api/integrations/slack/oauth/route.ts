@@ -1,40 +1,22 @@
-import { randomUUID } from "crypto";
-import { requireAuth } from "@/lib/auth/server/session";
-import { createSignedOAuthState, sanitizeOAuthReturnUrl } from "@/lib/integrations/oauth-state";
+import { requireIntegrationAdminContext } from "@/lib/integrations/oauth-context";
+import { buildSignedOAuthStateFromRequest } from "@/lib/integrations/oauth-state";
 import { getSlackOAuthUrl } from "@/lib/integrations/slack";
-import { orgs } from "@proliferate/services";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
-	const authResult = await requireAuth();
-	if ("error" in authResult) {
-		return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+	const authContext = await requireIntegrationAdminContext(request, {
+		unauthenticatedResponse: "json",
+	});
+	if ("response" in authContext) {
+		return authContext.response;
 	}
-
-	const orgId = authResult.session.session.activeOrganizationId;
-	if (!orgId) {
-		return NextResponse.json({ error: "No active organization" }, { status: 400 });
-	}
-
-	const userId = authResult.session.user.id;
-	const role = await orgs.getUserRole(userId, orgId);
-	if (role !== "owner" && role !== "admin") {
-		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-	}
-
-	// Get optional return URL from query params (must be a relative path)
-	const { searchParams } = new URL(request.url);
-	const rawReturnUrl = searchParams.get("returnUrl") ?? undefined;
-	const returnUrl = sanitizeOAuthReturnUrl(rawReturnUrl);
 
 	// Generate state token for CSRF protection
 	// Contains org context, nonce, and optional return URL
-	const state = createSignedOAuthState({
-		orgId,
-		userId,
-		nonce: randomUUID(),
-		timestamp: Date.now(),
-		returnUrl,
+	const { state, returnUrl } = buildSignedOAuthStateFromRequest({
+		request,
+		orgId: authContext.context.orgId,
+		userId: authContext.context.userId,
 	});
 
 	let oauthUrl: string;

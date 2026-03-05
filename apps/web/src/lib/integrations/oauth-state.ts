@@ -1,12 +1,21 @@
 import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { env } from "@proliferate/environment/server";
+import type { NextRequest } from "next/server";
 
 export type OAuthStateVerificationError =
 	| "invalid_encoding"
 	| "invalid_payload"
 	| "missing_signature"
 	| "invalid_signature";
+
+export interface BaseOAuthStatePayload {
+	orgId: string;
+	userId: string;
+	nonce: string;
+	timestamp: number;
+}
 
 const ALLOWED_OAUTH_RETURN_URL_PREFIXES = [
 	"/onboarding",
@@ -111,6 +120,23 @@ export function verifySignedOAuthState<T extends Record<string, unknown>>(
 	return { ok: true, payload: payload as T };
 }
 
+export function isBaseOAuthStatePayload(value: unknown): value is BaseOAuthStatePayload {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return false;
+	}
+
+	const payload = value as Record<string, unknown>;
+	return (
+		typeof payload.orgId === "string" &&
+		payload.orgId.length > 0 &&
+		typeof payload.userId === "string" &&
+		payload.userId.length > 0 &&
+		typeof payload.nonce === "string" &&
+		payload.nonce.length > 0 &&
+		typeof payload.timestamp === "number"
+	);
+}
+
 export function sanitizeOAuthReturnUrl(
 	returnUrl: string | undefined,
 	fallback?: string,
@@ -128,4 +154,40 @@ export function sanitizeOAuthReturnUrl(
 	);
 
 	return isAllowed ? trimmed : fallback;
+}
+
+interface BuildSignedOAuthStateFromRequestInput {
+	request: Request | NextRequest;
+	orgId: string;
+	userId: string;
+	defaultReturnUrl?: string;
+	extraPayload?: Record<string, unknown>;
+}
+
+export function buildSignedOAuthStateFromRequest({
+	request,
+	orgId,
+	userId,
+	defaultReturnUrl,
+	extraPayload,
+}: BuildSignedOAuthStateFromRequestInput): {
+	state: string;
+	returnUrl: string | undefined;
+} {
+	const requestUrl = "nextUrl" in request ? request.nextUrl : new URL(request.url);
+	const returnUrl = sanitizeOAuthReturnUrl(
+		requestUrl.searchParams.get("returnUrl") ?? undefined,
+		defaultReturnUrl,
+	);
+
+	const state = createSignedOAuthState({
+		orgId,
+		userId,
+		nonce: randomUUID(),
+		timestamp: Date.now(),
+		returnUrl,
+		...(extraPayload ?? {}),
+	});
+
+	return { state, returnUrl };
 }

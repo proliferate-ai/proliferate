@@ -1,28 +1,17 @@
-import { requireAuth } from "@/lib/auth/server/session";
-import { sanitizeOAuthReturnUrl, verifySignedOAuthState } from "@/lib/integrations/oauth-state";
+import {
+	OAUTH_CALLBACK_POLICIES,
+	parseOAuthCallbackPreflight,
+	redirectForOAuthCallbackError,
+	verifyOAuthCallbackContext,
+} from "@/lib/integrations/oauth-callback";
+import {
+	type BaseOAuthStatePayload,
+	isBaseOAuthStatePayload,
+	verifySignedOAuthState,
+} from "@/lib/integrations/oauth-state";
 import { env } from "@proliferate/environment/server";
-import { integrations, orgs } from "@proliferate/services";
+import { integrations } from "@proliferate/services";
 import { NextResponse } from "next/server";
-
-interface SentryOAuthState {
-	orgId: string;
-	userId: string;
-	nonce: string;
-	timestamp: number;
-	returnUrl?: string;
-	host?: string;
-}
-
-function isValidState(state: unknown): state is SentryOAuthState {
-	if (!state || typeof state !== "object" || Array.isArray(state)) return false;
-	const value = state as Record<string, unknown>;
-	return (
-		typeof value.orgId === "string" &&
-		typeof value.userId === "string" &&
-		typeof value.nonce === "string" &&
-		typeof value.timestamp === "number"
-	);
-}
 
 function sanitizeSentryHost(input: string | undefined): string {
 	if (!input) return "sentry.io";
@@ -33,50 +22,39 @@ function sanitizeSentryHost(input: string | undefined): string {
 
 export async function GET(request: Request) {
 	const url = new URL(request.url);
-	const code = url.searchParams.get("code");
-	const state = url.searchParams.get("state");
-	const oauthError = url.searchParams.get("error");
-	const appUrl = env.NEXT_PUBLIC_APP_URL;
-
-	if (oauthError) {
-		return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=sentry_oauth_denied`);
+	const preflight = parseOAuthCallbackPreflight(request, "sentry");
+	if ("response" in preflight) {
+		return preflight.response;
 	}
-	if (!code || !state) {
-		return NextResponse.redirect(
-			`${appUrl}/dashboard/integrations?error=sentry_oauth_missing_params`,
-		);
-	}
+	const { code, state } = preflight;
 
 	const verified = verifySignedOAuthState<Record<string, unknown>>(state);
-	if (!verified.ok || !isValidState(verified.payload)) {
-		return NextResponse.redirect(
-			`${appUrl}/dashboard/integrations?error=sentry_oauth_invalid_state`,
+	if (!verified.ok || !isBaseOAuthStatePayload(verified.payload)) {
+		return redirectForOAuthCallbackError(
+			"sentry",
+			OAUTH_CALLBACK_POLICIES.sentry.errors.invalidState,
 		);
 	}
-	const stateData = verified.payload;
-	const returnUrl = sanitizeOAuthReturnUrl(stateData.returnUrl, "/dashboard/integrations");
-	const redirectBase = `${appUrl}${returnUrl}`;
-
-	if (stateData.timestamp < Date.now() - 10 * 60 * 1000) {
-		return NextResponse.redirect(`${redirectBase}?error=sentry_oauth_expired`);
+	const stateData = verified.payload as BaseOAuthStatePayload & {
+		returnUrl?: string;
+		host?: unknown;
+	};
+	const callbackContext = await verifyOAuthCallbackContext({
+		provider: "sentry",
+		state: stateData,
+		returnUrl: stateData.returnUrl,
+	});
+	if ("response" in callbackContext) {
+		return callbackContext.response;
 	}
-
-	const authResult = await requireAuth();
-	if ("error" in authResult) {
-		return NextResponse.redirect(`${redirectBase}?error=sentry_oauth_unauthorized`);
-	}
-	if (authResult.session.user.id !== stateData.userId) {
-		return NextResponse.redirect(`${redirectBase}?error=sentry_oauth_forbidden`);
-	}
-	const role = await orgs.getUserRole(authResult.session.user.id, stateData.orgId);
-	if (role !== "owner" && role !== "admin") {
-		return NextResponse.redirect(`${redirectBase}?error=sentry_oauth_forbidden`);
-	}
+	const { orgId, userId, redirectBase } = callbackContext.context;
 
 	if (!env.SENTRY_OAUTH_CLIENT_ID || !env.SENTRY_OAUTH_CLIENT_SECRET) {
-		return NextResponse.redirect(`${redirectBase}?error=sentry_not_configured`);
+		return NextResponse.redirect(
+			`${redirectBase}?error=${OAUTH_CALLBACK_POLICIES.sentry.errors.notConfigured}`,
+		);
 	}
-	const host = sanitizeSentryHost(stateData.host);
+	const host = sanitizeSentryHost(typeof stateData.host === "string" ? stateData.host : undefined);
 	const tokenResponse = await fetch(`https://${host}/oauth/token/`, {
 		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -89,7 +67,9 @@ export async function GET(request: Request) {
 		}),
 	});
 	if (!tokenResponse.ok) {
-		return NextResponse.redirect(`${redirectBase}?error=sentry_oauth_token_failed`);
+		return NextResponse.redirect(
+			`${redirectBase}?error=${OAUTH_CALLBACK_POLICIES.sentry.errors.tokenFailed}`,
+		);
 	}
 
 	const tokenPayload = (await tokenResponse.json()) as {
@@ -107,10 +87,10 @@ export async function GET(request: Request) {
 
 	const userIdPart = tokenPayload.user?.id || tokenPayload.user?.email || "default";
 	await integrations.saveOAuthAppIntegration({
-		organizationId: stateData.orgId,
-		userId: authResult.session.user.id,
+		organizationId: orgId,
+		userId,
 		provider: "sentry",
-		connectionId: `sentry:${stateData.orgId}:${userIdPart}`,
+		connectionId: `sentry:${orgId}:${userIdPart}`,
 		displayName: tokenPayload.user?.name || tokenPayload.user?.email || "Sentry",
 		scopes: tokenPayload.scope ? tokenPayload.scope.split(/\s+/).filter(Boolean) : undefined,
 		accessToken: tokenPayload.access_token,
@@ -120,5 +100,7 @@ export async function GET(request: Request) {
 		connectionMetadata: { hostname: host, userId: tokenPayload.user?.id ?? null },
 	});
 
-	return NextResponse.redirect(`${redirectBase}?success=sentry`);
+	return NextResponse.redirect(
+		`${redirectBase}?success=${OAUTH_CALLBACK_POLICIES.sentry.errors.success}`,
+	);
 }

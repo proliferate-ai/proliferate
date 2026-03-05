@@ -23,7 +23,7 @@ import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { ArrowLeft, ArrowRightLeft, MoreHorizontal, Pin } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SessionPanelProps } from "./right-panel";
 import { RightPanel } from "./right-panel";
 import { SessionHeader } from "./session-header";
@@ -44,6 +44,15 @@ interface CodingSessionProps {
 	open?: boolean;
 	onOpenChange?: (open: boolean) => void;
 	onError?: (error: string) => void;
+}
+
+const PANEL_SIZE_EPSILON = 0.1;
+
+function panelSizesAreEqual(current: number[], next: number[]) {
+	return (
+		current.length === next.length &&
+		current.every((value, index) => Math.abs(value - next[index]) <= PANEL_SIZE_EPSILON)
+	);
 }
 
 export function CodingSession({
@@ -129,6 +138,8 @@ export function CodingSession({
 	} = usePreviewPanelStore();
 	const [viewPickerOpen, setViewPickerOpen] = useState(false);
 	const [isPanelDragging, setIsPanelDragging] = useState(false);
+	const shouldDebugPanelLayout =
+		typeof window !== "undefined" && window.location.search.includes("debugPanelLayout=1");
 
 	// Disable iframe pointer events during panel resize drag
 	useEffect(() => {
@@ -474,15 +485,40 @@ export function CodingSession({
 		</div>
 	);
 
-	const handleDesktopLayoutChanged = (layout: unknown) => {
-		const sizes = Array.isArray(layout) ? layout : Object.values(layout as Record<string, number>);
-		if (sizes.length < 2) return;
-		if (panelSide === "left") {
-			setPanelSizes([sizes[1], sizes[0]]);
-		} else {
-			setPanelSizes([sizes[0], sizes[1]]);
-		}
-	};
+	const handleDesktopLayoutChanged = useCallback(
+		(layout: unknown) => {
+			const sizes = Array.isArray(layout)
+				? layout
+				: Object.values(layout as Record<string, number>);
+			if (sizes.length < 2) return;
+			const nextPanelSizes =
+				panelSide === "left"
+					? [Number(sizes[1]), Number(sizes[0])]
+					: [Number(sizes[0]), Number(sizes[1])];
+
+			if (panelSizesAreEqual(panelSizes, nextPanelSizes)) {
+				if (shouldDebugPanelLayout) {
+					console.debug("[coding-session] skipping redundant panel size update", {
+						panelSide,
+						panelSizes,
+						nextPanelSizes,
+					});
+				}
+				return;
+			}
+
+			if (shouldDebugPanelLayout) {
+				console.debug("[coding-session] applying panel size update", {
+					panelSide,
+					panelSizes,
+					nextPanelSizes,
+				});
+			}
+
+			setPanelSizes(nextPanelSizes);
+		},
+		[panelSide, panelSizes, setPanelSizes, shouldDebugPanelLayout],
+	);
 
 	const chatPane = (
 		<ResizablePanel

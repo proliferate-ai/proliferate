@@ -56,6 +56,16 @@ export interface ListIntegrationsResult {
 	};
 }
 
+export interface ActiveOrgIntegration {
+	id: string;
+	provider: string;
+	integrationId: string;
+	connectionId: string;
+	displayName: string | null;
+	status: string | null;
+	githubInstallationId: string | null;
+}
+
 export interface GitHubStatusResult {
 	connected: boolean;
 	createdBy?: string;
@@ -127,6 +137,30 @@ export async function listIntegrations(
 		integrations: integrationsWithCreator,
 		byProvider,
 	};
+}
+
+/**
+ * List active integrations for an organization without visibility filtering.
+ * Used by server-side runtime paths that operate without end-user context.
+ */
+export async function listActiveIntegrationsForOrganization(
+	orgId: string,
+): Promise<ActiveOrgIntegration[]> {
+	const rows = await integrationsDb.listAllByOrganization(orgId);
+
+	return rows
+		.filter(
+			(row) => row.status === "active" && Boolean(row.integrationId) && Boolean(row.connectionId),
+		)
+		.map((row) => ({
+			id: row.id,
+			provider: row.provider,
+			integrationId: row.integrationId as string,
+			connectionId: row.connectionId as string,
+			displayName: row.displayName,
+			status: row.status,
+			githubInstallationId: row.githubInstallationId,
+		}));
 }
 
 /**
