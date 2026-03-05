@@ -9,7 +9,7 @@
  * Resolution order:
  *   1. Automation override  (automations.action_modes["sourceId:actionId"])
  *   2. Org default          (organizations.action_modes["sourceId:actionId"])
- *   3. Inferred default     (from action definition risk hint)
+ *   3. Inferred default     (allow for all risk levels unless overridden)
  */
 
 import type { ActionMode, RiskLevel } from "@proliferate/providers";
