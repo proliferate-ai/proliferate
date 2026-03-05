@@ -10,10 +10,12 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BlocksIcon, BlocksLoadingIcon, SlackIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { ItemActionsMenu } from "@/components/ui/item-actions-menu";
 import { useHasSlackInstallation } from "@/hooks/integrations/use-integrations";
+import { useOverallWorkState } from "@/hooks/sessions/use-overall-work-state";
 import {
 	useDeleteSession,
 	usePrefetchSession,
@@ -22,15 +24,17 @@ import {
 	useSubscribeNotifications,
 	useUnsubscribeNotifications,
 } from "@/hooks/sessions/use-sessions";
-import { DISPLAY_STATUS_CONFIG } from "@/lib/display/session-display";
 import { cn } from "@/lib/display/utils";
+import {
+	OVERALL_WORK_STATE_DISPLAY,
+	type OverallWorkStateDisplayConfig,
+} from "@/lib/sessions/overall-work-state";
 import type { PendingRunSummary } from "@proliferate/shared/contracts/automations";
 import type { Session } from "@proliferate/shared/contracts/sessions";
-import { deriveDisplayStatus } from "@proliferate/shared/sessions";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNowStrict } from "date-fns";
 import { Bell, BellOff, Terminal } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface SessionListRowProps {
@@ -45,15 +49,28 @@ function getRepoShortName(fullName: string): string {
 	return parts[parts.length - 1];
 }
 
+function Column({ className, children }: { className: string; children: ReactNode }) {
+	return <div className={className}>{children}</div>;
+}
+
+function formatCompactTimeAgo(date: Date): string {
+	const distance = formatDistanceToNowStrict(date);
+	const [value, unit] = distance.split(" ");
+	const unitKey = unit?.toLowerCase() ?? "";
+
+	if (unitKey.startsWith("second")) return `${value}s ago`;
+	if (unitKey.startsWith("minute")) return `${value}m ago`;
+	if (unitKey.startsWith("hour")) return `${value}h ago`;
+	if (unitKey.startsWith("day")) return `${value}d ago`;
+	if (unitKey.startsWith("month")) return `${value}mo ago`;
+	if (unitKey.startsWith("year")) return `${value}y ago`;
+	return `${distance} ago`;
+}
+
 /**
  * Attention indicator dot based on operator status.
  */
-function AttentionCell({
-	session,
-	pendingRun,
-}: { session: Session; pendingRun?: PendingRunSummary }) {
-	const operatorStatus = session.operatorStatus;
-
+function AttentionCell({ pendingRun }: { pendingRun?: PendingRunSummary }) {
 	if (pendingRun) {
 		return (
 			<span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -63,34 +80,7 @@ function AttentionCell({
 		);
 	}
 
-	if (operatorStatus === "waiting_for_approval") {
-		return (
-			<span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-				<span className="h-1.5 w-1.5 rounded-full bg-foreground/60 shrink-0" />
-				Approval
-			</span>
-		);
-	}
-
-	if (operatorStatus === "needs_input") {
-		return (
-			<span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-				<span className="h-1.5 w-1.5 rounded-full bg-foreground/40 shrink-0" />
-				Input
-			</span>
-		);
-	}
-
-	if (operatorStatus === "errored") {
-		return (
-			<span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-				<span className="h-1.5 w-1.5 rounded-full bg-destructive shrink-0" />
-				Error
-			</span>
-		);
-	}
-
-	return <span className="text-xs text-muted-foreground/50">&mdash;</span>;
+	return null;
 }
 
 /**
@@ -126,16 +116,70 @@ function OriginCell({ session }: { session: Session }) {
 	return <span className="text-xs text-muted-foreground">Ad-hoc</span>;
 }
 
+function RepoCell({ repoShortName }: { repoShortName: string | null }) {
+	return (
+		<span className="text-xs text-muted-foreground truncate block">
+			{repoShortName || "No repo"}
+		</span>
+	);
+}
+
+function BranchCell({ branchName }: { branchName: string | null }) {
+	return <span className="text-xs text-muted-foreground truncate block">{branchName}</span>;
+}
+
+function StatusCell({ config }: { config: OverallWorkStateDisplayConfig }) {
+	const Icon = config.animated ? BlocksLoadingIcon : BlocksIcon;
+	return (
+		<>
+			<Icon className={cn("h-3.5 w-3.5 shrink-0", config.colorClassName)} />
+			<span className="text-[11px] font-medium text-muted-foreground">{config.label}</span>
+		</>
+	);
+}
+
+function UpdatedCell({ timeAgo }: { timeAgo: string | null }) {
+	return (
+		<span className="text-xs text-muted-foreground whitespace-nowrap block">
+			{timeAgo || "\u2014"}
+		</span>
+	);
+}
+
 /**
  * Creator column: show initials from createdBy or a dash.
  */
-function CreatorCell({ createdBy }: { createdBy: string | null }) {
-	if (!createdBy) return <span className="text-xs text-muted-foreground/50">&mdash;</span>;
-	// Show first 2 chars as initials (user IDs are UUIDs, but we show a short identifier)
+function getInitials(value: string): string {
+	const normalized = value.trim();
+	if (!normalized) return "?";
+	const parts = normalized.split(/\s+/).filter(Boolean);
+	if (parts.length >= 2) {
+		return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+	}
+	return normalized.slice(0, 2).toUpperCase();
+}
+
+function CreatorCell({
+	createdBy,
+	creator,
+}: {
+	createdBy: string | null;
+	creator?: { id: string; name: string; image: string | null } | null;
+}) {
+	if (!createdBy || createdBy === "system") {
+		return (
+			<Avatar className="h-5 w-5" title="System">
+				<AvatarFallback className="text-[9px]">S</AvatarFallback>
+			</Avatar>
+		);
+	}
+
+	const displayName = creator?.name || createdBy.slice(0, 8);
 	return (
-		<span className="text-xs text-muted-foreground truncate block" title={createdBy}>
-			{createdBy.slice(0, 8)}
-		</span>
+		<Avatar className="h-5 w-5" title={displayName}>
+			<AvatarImage src={creator?.image ?? undefined} alt={displayName} />
+			<AvatarFallback className="text-[9px]">{getInitials(displayName)}</AvatarFallback>
+		</Avatar>
 	);
 }
 
@@ -144,7 +188,11 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 	const renameSession = useRenameSession();
 	const deleteSession = useDeleteSession();
 
-	const canSubscribe = session.status === "running" || session.status === "starting";
+	const sandboxState =
+		typeof session.status === "object" && session.status !== null
+			? session.status.sandboxState
+			: session.status;
+	const canSubscribe = sandboxState === "running" || sandboxState === "provisioning";
 	const { data: isSubscribed } = useSessionNotificationSubscription(session.id, canSubscribe);
 	const subscribeNotifications = useSubscribeNotifications();
 	const unsubscribeNotifications = useUnsubscribeNotifications();
@@ -156,20 +204,18 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 	const [menuOpen, setMenuOpen] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 
-	const displayStatus = deriveDisplayStatus(session.status, session.pauseReason);
-	const config = DISPLAY_STATUS_CONFIG[displayStatus];
-	const Icon = config.animated ? BlocksLoadingIcon : BlocksIcon;
+	const { overallWorkState } = useOverallWorkState(session, pendingRun);
+	const config = OVERALL_WORK_STATE_DISPLAY[overallWorkState];
 
 	const repoShortName = session.repo?.githubRepoName
 		? getRepoShortName(session.repo.githubRepoName)
 		: null;
 
 	const displayTitle = session.title || session.promptSnippet || repoShortName || "Untitled";
+	const hasUnreadUpdate = session.hasUnreadUpdate ?? session.unread ?? false;
 
 	const activityDate = session.lastActivityAt || session.startedAt;
-	const timeAgo = activityDate
-		? formatDistanceToNow(new Date(activityDate), { addSuffix: true })
-		: null;
+	const timeAgo = activityDate ? formatCompactTimeAgo(new Date(activityDate)) : null;
 
 	useEffect(() => {
 		if (isEditing && inputRef.current) {
@@ -231,7 +277,7 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 				}}
 			>
 				{/* Title (flex-1) */}
-				<div className="flex-1 min-w-[180px]">
+				<div className="flex-1 min-w-[140px]">
 					{isEditing ? (
 						<Input
 							ref={inputRef}
@@ -248,54 +294,56 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 					) : session.titleStatus === "generating" ? (
 						<span className="inline-block h-4 w-40 rounded bg-muted-foreground/20 animate-pulse" />
 					) : (
-						<span className="font-medium text-foreground truncate block">{displayTitle}</span>
+						<span className="inline-flex items-center gap-1.5 min-w-0">
+							{hasUnreadUpdate ? (
+								<span
+									className="h-1.5 w-1.5 rounded-full bg-primary shrink-0"
+									aria-label="Unread update"
+									title="Unread update"
+								/>
+							) : null}
+							<span className="font-medium text-foreground truncate block">{displayTitle}</span>
+						</span>
 					)}
 				</div>
 
 				{/* Repo (w-24, hidden on mobile) */}
-				<div className="w-24 shrink-0 hidden md:block">
-					<span className="text-xs text-muted-foreground truncate block">
-						{repoShortName || "\u2014"}
-					</span>
-				</div>
+				<Column className="w-24 shrink-0 hidden md:block">
+					<RepoCell repoShortName={repoShortName} />
+				</Column>
 
 				{/* Branch (w-28, hidden on mobile) */}
-				<div className="w-28 shrink-0 hidden md:block">
-					<span className="text-xs text-muted-foreground truncate block">
-						{session.branchName || "\u2014"}
-					</span>
-				</div>
+				<Column className="w-24 shrink-0 hidden md:block">
+					<BranchCell branchName={session.branchName} />
+				</Column>
 
 				{/* Status (w-20) */}
-				<div className="w-20 shrink-0 flex items-center gap-1.5">
-					<Icon className={cn("h-3.5 w-3.5 shrink-0", config.colorClassName)} />
-					<span className="text-[11px] font-medium text-muted-foreground">{config.label}</span>
-				</div>
+				<Column className="w-20 shrink-0 flex items-center gap-1.5">
+					<StatusCell config={config} />
+				</Column>
 
 				{/* Attention (w-24) */}
-				<div className="w-24 shrink-0">
-					<AttentionCell session={session} pendingRun={pendingRun} />
-				</div>
+				<Column className="w-20 shrink-0">
+					<AttentionCell pendingRun={pendingRun} />
+				</Column>
 
 				{/* Origin (w-20, hidden on mobile) */}
-				<div className="w-20 shrink-0 hidden md:block">
+				<Column className="w-16 shrink-0 hidden md:block">
 					<OriginCell session={session} />
-				</div>
+				</Column>
 
-				{/* Creator (w-20, hidden on mobile) */}
-				<div className="w-20 shrink-0 hidden md:block">
-					<CreatorCell createdBy={session.createdBy} />
-				</div>
+				{/* Creator avatar (w-8, hidden on mobile) */}
+				<Column className="w-8 shrink-0 hidden md:flex items-center">
+					<CreatorCell createdBy={session.createdBy} creator={session.creator} />
+				</Column>
 
 				{/* Updated (w-20) */}
-				<div className="w-20 shrink-0">
-					<span className="text-xs text-muted-foreground truncate block">
-						{timeAgo || "\u2014"}
-					</span>
-				</div>
+				<Column className="w-14 shrink-0 text-right">
+					<UpdatedCell timeAgo={timeAgo} />
+				</Column>
 
 				{/* Actions overlay (w-6) */}
-				<div className="w-6 shrink-0 relative flex items-center justify-center">
+				<div className="w-5 shrink-0 relative flex items-center justify-center">
 					<div
 						className={cn("hidden group-hover:flex items-center", menuOpen && "flex")}
 						onClick={(e) => e.stopPropagation()}

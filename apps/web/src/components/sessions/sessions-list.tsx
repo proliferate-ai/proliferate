@@ -2,7 +2,6 @@
 
 import { PageShell } from "@/components/dashboard/page-shell";
 import { SessionListRow } from "@/components/sessions/session-card";
-import { SessionPeekDrawer } from "@/components/sessions/session-peek-drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,23 +12,17 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import type { CreatorFilter, FilterTab, OriginFilter } from "@/config/sessions";
-import {
-	IN_PROGRESS_STATUSES,
-	LIVE_STATUSES,
-	NEEDS_ATTENTION_STATUSES,
-	TABS,
-} from "@/config/sessions";
+import { TABS } from "@/config/sessions";
 import { useOrgPendingRuns } from "@/hooks/automations/use-automations";
+import { useSessionListState } from "@/hooks/sessions/use-overall-work-state";
 import { useSessions } from "@/hooks/sessions/use-sessions";
 import { useSession } from "@/lib/auth/client";
 import { cn } from "@/lib/display/utils";
-import { getSessionOrigin, sortSessions } from "@/lib/sessions/filters";
 import { useDashboardStore } from "@/stores/dashboard";
-import { deriveDisplayStatus } from "@proliferate/shared/sessions";
 import { Plus, Search } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 interface OriginOption {
 	value: OriginFilter;
@@ -54,7 +47,6 @@ export function SessionsList({
 	tableHeader,
 }: SessionsListProps) {
 	const router = useRouter();
-	const searchParams = useSearchParams();
 	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
 	const { data: authSession } = useSession();
 	const [activeTab, setActiveTab] = useState<FilterTab>("in_progress");
@@ -64,20 +56,6 @@ export function SessionsList({
 
 	const currentUserId = authSession?.user?.id;
 
-	const peekSessionId = searchParams.get("peek");
-
-	const handleRowClick = (sessionId: string) => {
-		const params = new URLSearchParams(searchParams.toString());
-		params.set("peek", sessionId);
-		router.replace(`?${params.toString()}`, { scroll: false });
-	};
-
-	const handlePeekClose = () => {
-		const params = new URLSearchParams(searchParams.toString());
-		params.delete("peek");
-		router.replace(`?${params.toString()}`, { scroll: false });
-	};
-
 	const [hasLiveSessions, setHasLiveSessions] = useState(false);
 
 	const { data: sessions, isLoading } = useSessions({
@@ -86,118 +64,17 @@ export function SessionsList({
 	});
 
 	const { data: pendingRuns } = useOrgPendingRuns();
-
-	const pendingRunsBySession = useMemo(() => {
-		const map = new Map<string, NonNullable<typeof pendingRuns>[number]>();
-		if (!pendingRuns) return map;
-		for (const run of pendingRuns) {
-			if (run.session_id && !map.has(run.session_id)) {
-				map.set(run.session_id, run);
-			}
-		}
-		return map;
-	}, [pendingRuns]);
-
-	const result = useMemo(() => {
-		const baseSessions = sessions?.filter((s) => !s.kind || s.kind === "task") ?? [];
-
-		const withStatus = baseSessions.map((s) => ({
-			session: s,
-			displayStatus: deriveDisplayStatus(s.status, s.pauseReason),
-			origin: getSessionOrigin(s, automationOriginValue),
-		}));
-
-		// Apply creator filter (only if enabled)
-		const creatorFiltered =
-			showCreatorFilter && creatorFilter !== "all" && currentUserId
-				? withStatus.filter((s) => s.session.createdBy === currentUserId)
-				: withStatus;
-
-		const originFiltered =
-			originFilter === "all"
-				? creatorFiltered
-				: creatorFiltered.filter((s) => s.origin === originFilter);
-
-		const tabCounts = {
-			in_progress: 0,
-			needs_attention: 0,
-			paused: 0,
-			completed: 0,
-		};
-
-		for (const { session, displayStatus } of originFiltered) {
-			if (IN_PROGRESS_STATUSES.has(displayStatus)) {
-				tabCounts.in_progress++;
-			} else if (
-				NEEDS_ATTENTION_STATUSES.has(displayStatus) ||
-				pendingRunsBySession.has(session.id)
-			) {
-				tabCounts.needs_attention++;
-			} else if (displayStatus === "paused") {
-				tabCounts.paused++;
-			} else {
-				tabCounts.completed++;
-			}
-		}
-
-		let tabFiltered = originFiltered;
-		switch (activeTab) {
-			case "in_progress":
-				tabFiltered = originFiltered.filter((s) => IN_PROGRESS_STATUSES.has(s.displayStatus));
-				break;
-			case "needs_attention":
-				tabFiltered = originFiltered.filter(
-					(s) =>
-						NEEDS_ATTENTION_STATUSES.has(s.displayStatus) || pendingRunsBySession.has(s.session.id),
-				);
-				break;
-			case "paused":
-				tabFiltered = originFiltered.filter((s) => s.displayStatus === "paused");
-				break;
-			case "completed":
-				tabFiltered = originFiltered.filter((s) => s.displayStatus === "completed");
-				break;
-		}
-
-		let finalFiltered = tabFiltered;
-		if (searchQuery.trim()) {
-			const q = searchQuery.toLowerCase().trim();
-			finalFiltered = tabFiltered.filter(({ session: s }) => {
-				const title = s.title?.toLowerCase() ?? "";
-				const repo = s.repo?.githubRepoName?.toLowerCase() ?? "";
-				const branch = s.branchName?.toLowerCase() ?? "";
-				const automationName = s.automation?.name?.toLowerCase() ?? "";
-				const snippet = s.promptSnippet?.toLowerCase() ?? "";
-				return (
-					title.includes(q) ||
-					repo.includes(q) ||
-					branch.includes(q) ||
-					automationName.includes(q) ||
-					snippet.includes(q)
-				);
-			});
-		}
-
-		const sorted = enableSorting ? sortSessions(finalFiltered) : finalFiltered;
-
-		return {
-			filtered: sorted.map((s) => s.session),
-			counts: tabCounts,
-			totalCount: baseSessions.length,
-			visibleHasLive: finalFiltered.some((s) => LIVE_STATUSES.has(s.displayStatus)),
-		};
-	}, [
+	const { pendingRunsBySession, result } = useSessionListState({
 		sessions,
 		activeTab,
 		searchQuery,
 		originFilter,
-		creatorFilter,
+		creatorFilter: showCreatorFilter ? creatorFilter : "all",
 		currentUserId,
-		pendingRunsBySession,
 		automationOriginValue,
-		showCreatorFilter,
+		pendingRuns,
 		enableSorting,
-	]);
+	});
 
 	useEffect(() => {
 		setHasLiveSessions(result.visibleHasLive);
@@ -340,17 +217,10 @@ export function SessionsList({
 							key={session.id}
 							session={session}
 							pendingRun={pendingRunsBySession.get(session.id)}
-							onClick={handleRowClick}
 						/>
 					))}
 				</div>
 			)}
-
-			<SessionPeekDrawer
-				sessionId={peekSessionId}
-				pendingRunId={peekSessionId ? pendingRunsBySession.get(peekSessionId)?.id : undefined}
-				onClose={handlePeekClose}
-			/>
 		</PageShell>
 	);
 }

@@ -160,7 +160,7 @@ export function CommandSearch({ open, onOpenChange }: CommandSearchProps) {
 									repoName={session.repo?.githubRepoName || null}
 									branchName={session.branchName}
 									status={session.status}
-									pauseReason={session.pauseReason}
+									hasUnreadUpdate={session.hasUnreadUpdate ?? session.unread ?? false}
 									lastActivityAt={session.lastActivityAt}
 									startedAt={session.startedAt}
 								/>

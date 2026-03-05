@@ -77,7 +77,16 @@ export function useCreateSession() {
 				organizationId: "",
 				createdBy: null,
 				sessionType: variables.sessionType ?? null,
-				status: "starting",
+				status: {
+					sandboxState: "provisioning",
+					agentState: "iterating",
+					terminalState: null,
+					reason: null,
+					isTerminal: false,
+					agentFinishedIterating: false,
+					requiresHumanReview: false,
+					updatedAt: new Date().toISOString(),
+				},
 				sandboxId: result.sandboxId ?? null,
 				snapshotId: null,
 				configurationId: variables.configurationId ?? null,
@@ -91,6 +100,7 @@ export function useCreateSession() {
 				pausedAt: null,
 				origin: "web",
 				clientType: null,
+				hasUnreadUpdate: false,
 				repo: undefined,
 			};
 

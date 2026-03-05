@@ -22,7 +22,7 @@ export function ActivitySummary() {
 	const recentCount = sessions.filter(
 		(s) => s.startedAt && new Date(s.startedAt) >= weekAgo,
 	).length;
-	const activeCount = sessions.filter((s) => s.status === "running").length;
+	const activeCount = sessions.filter((s) => s.status.sandboxState === "running").length;
 
 	// Build summary parts
 	const parts: string[] = [];

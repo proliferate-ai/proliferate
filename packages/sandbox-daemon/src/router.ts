@@ -348,13 +348,14 @@ export class Router {
 
 	private handleFsRead(res: ServerResponse, query: URLSearchParams): void {
 		const path = query.get("path");
+		const format = query.get("format");
 		if (!path) {
 			sendJson(res, 400, { error: "path is required" });
 			return;
 		}
 
 		try {
-			const result = this.fs.read(path);
+			const result = format === "base64" ? this.fs.readBinary(path) : this.fs.read(path);
 			sendJson(res, 200, result);
 		} catch (err) {
 			if (err instanceof FsSecurityError) {

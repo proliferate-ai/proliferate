@@ -94,8 +94,11 @@ async function cleanupOrphanedSession(
 
 		// Fetch session from DB
 		const session = await sessions.findSessionByIdInternal(sessionId);
-		if (!session || session.status !== "running") {
-			logger.info({ sessionId, status: session?.status }, "orphan_sweep.abort_status_changed");
+		if (!session || session.sandboxState !== "running") {
+			logger.info(
+				{ sessionId, sandboxState: session?.sandboxState },
+				"orphan_sweep.abort_status_changed",
+			);
 			return;
 		}
 
@@ -103,8 +106,9 @@ async function cleanupOrphanedSession(
 		if (!sandboxId) {
 			// No sandbox — just mark as paused
 			await sessions.updateSession(sessionId, {
-				status: "paused",
-				pauseReason: "orphaned",
+				sandboxState: "paused",
+				agentState: "waiting_input",
+				stateReason: "orphaned",
 				latestTask: null,
 			});
 			// Enqueue session completion notifications (best-effort)
@@ -171,9 +175,10 @@ async function cleanupOrphanedSession(
 		const rowsAffected = await sessions.updateSessionWhereSandboxIdMatches(sessionId, sandboxId, {
 			...(snapshotId ? { snapshotId } : {}),
 			sandboxId: keepSandbox ? sandboxId : null,
-			status: "paused",
+			sandboxState: "paused",
+			agentState: "waiting_input",
 			pausedAt: new Date().toISOString(),
-			pauseReason: "orphaned",
+			stateReason: "orphaned",
 			latestTask: null,
 		});
 

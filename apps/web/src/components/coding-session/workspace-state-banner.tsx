@@ -2,6 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/display/utils";
+import type { Session } from "@proliferate/shared/contracts/sessions";
+import type { OverallWorkState } from "@proliferate/shared/sessions";
 import { CheckCircle2, Loader2, Pause, XCircle } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -134,14 +136,17 @@ export function WorkspaceStateBanner({
  * Derive the workspace banner state from session data fields.
  */
 export function deriveWorkspaceState(session: {
-	status?: string | null;
+	status?: Session["status"] | null;
+	overallWorkState?: OverallWorkState | null;
 	outcome?: string | null;
-	pauseReason?: string | null;
 	sandboxId?: string | null;
 }): WorkspaceBannerState {
-	if (session.status === "failed") return "failed";
-	if (session.status === "paused") return "paused";
-	if (session.status === "stopped" && session.outcome) return "completed";
+	if (!session.status) return "running";
+	if (session.status.terminalState === "failed" || session.status.agentState === "errored")
+		return "failed";
+	if (session.status.sandboxState === "paused") return "paused";
+	if (session.overallWorkState === "done") return "completed";
+	if (session.status.terminalState === "succeeded") return "completed";
 	if (session.outcome === "completed" || session.outcome === "succeeded") return "completed";
 	if (session.outcome === "failed") return "failed";
 	return "running";

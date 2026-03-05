@@ -15,7 +15,7 @@ export function useTemplateCatalog() {
 }
 
 /**
- * Create an automation from a template.
+ * Create a worker from a template.
  */
 export function useCreateFromTemplate() {
 	const queryClient = useQueryClient();
@@ -23,7 +23,7 @@ export function useCreateFromTemplate() {
 	const mutation = useMutation({
 		...orpc.automations.createFromTemplate.mutationOptions(),
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: orpc.automations.list.key() });
+			queryClient.invalidateQueries({ queryKey: orpc.automations.listWorkers.key() });
 		},
 	});
 
@@ -32,7 +32,7 @@ export function useCreateFromTemplate() {
 		integrationBindings: Record<string, string>;
 	}) => {
 		const result = await mutation.mutateAsync(input);
-		return result.automation;
+		return result.worker;
 	};
 
 	return {

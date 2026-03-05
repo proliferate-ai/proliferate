@@ -39,8 +39,10 @@ export async function pauseSession(input: PauseSessionInput): Promise<PauseSessi
 		throw new SessionNotFoundError(sessionId);
 	}
 
-	if (session.status !== "running") {
-		throw new SessionInvalidStateError(`Cannot pause session with status '${session.status}'`);
+	if (session.sandboxState !== "running") {
+		throw new SessionInvalidStateError(
+			`Cannot pause session with sandboxState '${session.sandboxState}'`,
+		);
 	}
 
 	if (!session.sandboxId) {
@@ -98,8 +100,9 @@ export async function pauseSession(input: PauseSessionInput): Promise<PauseSessi
 
 	try {
 		await updateSession(sessionId, {
-			status: "paused",
-			pauseReason: "manual",
+			sandboxState: "paused",
+			agentState: "waiting_input",
+			stateReason: "manual_pause",
 			snapshotId,
 			sandboxId: null,
 			openCodeTunnelUrl: null,

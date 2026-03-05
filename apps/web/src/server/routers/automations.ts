@@ -153,7 +153,18 @@ export const automationsRouter = {
 				integrationBindings: z.record(z.string()),
 			}),
 		)
-		.output(z.object({ automation: AutomationListItemSchema }))
+		.output(
+			z.object({
+				worker: z.object({
+					id: z.string().uuid(),
+					name: z.string(),
+					status: z.string(),
+					objective: z.string().nullable(),
+					modelId: z.string().nullable(),
+					managerSessionId: z.string().uuid(),
+				}),
+			}),
+		)
 		.handler(async ({ input, context }) => {
 			// Validate template exists before hitting the service
 			const template = templates.getTemplateById(input.templateId);
@@ -162,13 +173,25 @@ export const automationsRouter = {
 			}
 
 			try {
-				const automation = await automations.createFromTemplate(context.orgId, context.user.id, {
-					templateId: input.templateId,
-					integrationBindings: input.integrationBindings,
+				const worker = await workers.createWorkerWithManagerSession({
+					organizationId: context.orgId,
+					createdBy: context.user.id,
+					name: template.name,
+					objective: template.agentInstructions,
+					modelId: template.modelId,
 				});
-				return { automation };
+				return {
+					worker: {
+						id: worker.id,
+						name: worker.name,
+						status: worker.status,
+						objective: worker.objective,
+						modelId: worker.modelId,
+						managerSessionId: worker.managerSessionId,
+					},
+				};
 			} catch (err) {
-				throwAutomationORPCError(err, "Failed to create automation from template");
+				throwAutomationORPCError(err, "Failed to create worker from template");
 			}
 		}),
 

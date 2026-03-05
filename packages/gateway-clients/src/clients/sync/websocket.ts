@@ -34,6 +34,12 @@ export interface SyncWebSocket {
 	sendGetGitStatus(workspacePath?: string): void;
 	/** Create and checkout a new branch */
 	sendGitCreateBranch(branchName: string, workspacePath?: string): void;
+	/** Request diff patch for a single file */
+	sendGetGitDiff(
+		path: string,
+		scope?: "unstaged" | "staged" | "full",
+		workspacePath?: string,
+	): void;
 	/** Stage and commit changes */
 	sendGitCommit(
 		message: string,
@@ -143,6 +149,19 @@ export class SyncWebSocketImpl implements SyncWebSocket {
 
 	sendGitCreateBranch(branchName: string, workspacePath?: string): void {
 		this.send({ type: "git_create_branch", branchName, ...(workspacePath && { workspacePath }) });
+	}
+
+	sendGetGitDiff(
+		path: string,
+		scope: "unstaged" | "staged" | "full" = "full",
+		workspacePath?: string,
+	): void {
+		this.send({
+			type: "get_git_diff",
+			path,
+			scope,
+			...(workspacePath && { workspacePath }),
+		});
 	}
 
 	sendGitCommit(

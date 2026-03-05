@@ -12,6 +12,7 @@ import {
 	CreateSessionInputSchema,
 	CreateSessionResponseSchema,
 	SessionSchema,
+	SessionStatusSchema,
 } from "@proliferate/shared/contracts/sessions";
 import { z } from "zod";
 import { billingGatedProcedure, orgProcedure, publicProcedure } from "./middleware";
@@ -267,12 +268,7 @@ export const sessionsRouter = {
 	 */
 	status: publicProcedure
 		.input(z.object({ id: z.string().uuid() }))
-		.output(
-			z.object({
-				status: z.string(),
-				isComplete: z.boolean(),
-			}),
-		)
+		.output(SessionStatusSchema)
 		.handler(async ({ input }) => {
 			const status = await sessions.getSessionStatus(input.id);
 			if (!status) {

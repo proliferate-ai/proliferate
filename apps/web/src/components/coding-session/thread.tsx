@@ -17,6 +17,8 @@ import {
 } from "@assistant-ui/react";
 import type { ActionApprovalRequestMessage } from "@proliferate/shared";
 import type { ModelId } from "@proliferate/shared";
+import type { Session } from "@proliferate/shared/contracts/sessions";
+import type { OverallWorkState } from "@proliferate/shared/sessions";
 import {
 	ArrowUp,
 	Camera,
@@ -42,8 +44,139 @@ interface MarkdownContentProps {
 	variant?: "user" | "assistant";
 }
 
+interface ProliferateCommandSegment {
+	type: "command";
+	command: string;
+	actionLabel: string;
+	url: string | null;
+}
+
+interface MarkdownSegment {
+	type: "markdown";
+	text: string;
+}
+
+type AssistantContentSegment = ProliferateCommandSegment | MarkdownSegment;
+
+function getProliferateCommandFromLine(line: string): string | null {
+	const trimmed = line.trim();
+	if (!trimmed) return null;
+
+	const unwrapped = trimmed
+		.replace(/^[-*]\s+/, "")
+		.replace(/^\d+\.\s+/, "")
+		.replace(/^`+|`+$/g, "");
+	const match = unwrapped.match(/(?:^|\()((?:@?proliferate)\s+[^\n)`]+)/i);
+	if (!match) return null;
+	return match[1].replace(/^@/i, "").trim();
+}
+
+function getProliferateActionLabel(command: string): string {
+	const normalized = command.toLowerCase();
+	if (normalized.includes("actions list")) return "List actions";
+	if (normalized.includes("sentry action")) return "Run Sentry action";
+	if (normalized.includes("create pr") || normalized.includes("pr create"))
+		return "Create pull request";
+	if (normalized.includes("env set")) return "Set environment values";
+	if (normalized.includes("save_snapshot")) return "Save snapshot";
+	return "Proliferate command";
+}
+
+function parseAssistantContentSegments(text: string): AssistantContentSegment[] {
+	const lines = text.split("\n");
+	const segments: AssistantContentSegment[] = [];
+	let markdownBuffer: string[] = [];
+
+	const flushMarkdown = () => {
+		const chunk = markdownBuffer.join("\n").trim();
+		if (chunk) segments.push({ type: "markdown", text: chunk });
+		markdownBuffer = [];
+	};
+
+	for (let index = 0; index < lines.length; index += 1) {
+		const line = lines[index];
+		const command = getProliferateCommandFromLine(line);
+		if (!command) {
+			markdownBuffer.push(line);
+			continue;
+		}
+
+		flushMarkdown();
+		let nextUrl: string | null = null;
+		for (let lookAhead = index + 1; lookAhead < Math.min(lines.length, index + 4); lookAhead += 1) {
+			const urlMatch = lines[lookAhead].match(/https?:\/\/\S+/i);
+			if (urlMatch) {
+				nextUrl = urlMatch[0];
+				break;
+			}
+			if (!lines[lookAhead].trim()) break;
+		}
+
+		segments.push({
+			type: "command",
+			command,
+			actionLabel: getProliferateActionLabel(command),
+			url: nextUrl,
+		});
+	}
+
+	flushMarkdown();
+	return segments;
+}
+
+const AssistantCommandCard: FC<{
+	actionLabel: string;
+	command: string;
+	url: string | null;
+}> = ({ actionLabel, command, url }) => (
+	<div className="my-2 rounded-md border border-border/70 bg-muted/30 p-2.5">
+		<p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+			{actionLabel}
+		</p>
+		<code className="mt-1 block rounded bg-background px-2 py-1 text-xs font-mono text-foreground">
+			{command}
+		</code>
+		{url && (
+			<a
+				href={url}
+				target="_blank"
+				rel="noreferrer"
+				className="mt-1.5 inline-block text-xs text-primary hover:underline"
+			>
+				Open result
+			</a>
+		)}
+	</div>
+);
+
 const MarkdownContent: FC<MarkdownContentProps> = ({ text, variant = "assistant" }) => {
 	const isUser = variant === "user";
+	const assistantSegments = !isUser ? parseAssistantContentSegments(text) : null;
+	const hasAssistantCommand =
+		assistantSegments?.some((segment) => segment.type === "command") ?? false;
+
+	if (!isUser && assistantSegments && hasAssistantCommand) {
+		return (
+			<div>
+				{assistantSegments.map((segment, index) =>
+					segment.type === "command" ? (
+						<AssistantCommandCard
+							key={`assistant-command-${segment.command}-${index}`}
+							actionLabel={segment.actionLabel}
+							command={segment.command}
+							url={segment.url}
+						/>
+					) : (
+						<MarkdownContent
+							key={`assistant-markdown-${index}`}
+							text={segment.text}
+							variant="assistant"
+						/>
+					),
+				)}
+			</div>
+		);
+	}
 
 	return (
 		<Markdown
@@ -232,19 +365,10 @@ const ComposerActionsRight: FC<ComposerActionsRightProps> = ({
 	</div>
 );
 
-// Small avatar for assistant messages
-const AssistantAvatar: FC = () => (
-	<div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full ">
-		<BlocksIcon className="h-3.5 w-3.5 text-primary" />
-	</div>
-);
-
 interface SessionStateForComposer {
 	sessionId: string;
-	status: string | null;
-	runtimeStatus?: string | null;
-	operatorStatus?: string | null;
-	pauseReason?: string | null;
+	status: Session["status"];
+	overallWorkState: OverallWorkState;
 	outcome?: string | null;
 	workerId?: string | null;
 }
@@ -348,19 +472,19 @@ type ComposerMode = "normal" | "paused" | "waiting_approval" | "completed" | "fa
 function deriveComposerMode(sessionState?: SessionStateForComposer): ComposerMode {
 	if (!sessionState) return "normal";
 
-	const { status, runtimeStatus, operatorStatus, pauseReason, outcome } = sessionState;
+	const { status, overallWorkState, outcome } = sessionState;
 
-	if (operatorStatus === "waiting_for_approval") return "waiting_approval";
+	if (status.agentState === "waiting_approval") return "waiting_approval";
 
-	if (runtimeStatus === "failed" || (status === "stopped" && pauseReason === "snapshot_failed")) {
+	if (status.terminalState === "failed" || status.agentState === "errored") {
 		return "failed";
 	}
 
-	if (runtimeStatus === "completed" || (status === "stopped" && outcome)) {
+	if (overallWorkState === "done" || outcome) {
 		return "completed";
 	}
 
-	if (status === "paused") return "paused";
+	if (status.sandboxState === "paused" || overallWorkState === "dormant") return "paused";
 
 	return "normal";
 }
@@ -591,16 +715,13 @@ const UserMessage: FC = () => (
 
 const AssistantMessage: FC = () => (
 	<MessagePrimitive.Root className="py-4 px-4">
-		<div className="max-w-2xl mx-auto flex items-start gap-3">
-			<AssistantAvatar />
-			<div className="min-w-0 flex-1 text-sm pt-0.5">
-				<MessagePrimitive.Content
-					components={{
-						Text: ({ text }) => <MarkdownContent text={text} variant="assistant" />,
-						tools: { Fallback: ToolFallback },
-					}}
-				/>
-			</div>
+		<div className="max-w-2xl mx-auto min-w-0 text-sm">
+			<MessagePrimitive.Content
+				components={{
+					Text: ({ text }) => <MarkdownContent text={text} variant="assistant" />,
+					tools: { Fallback: ToolFallback },
+				}}
+			/>
 		</div>
 	</MessagePrimitive.Root>
 );

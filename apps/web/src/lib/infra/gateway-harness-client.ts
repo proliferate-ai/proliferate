@@ -16,6 +16,16 @@ export interface FileReadResponse {
 	size: number;
 }
 
+export interface FileReadBinaryResponse {
+	base64: string;
+	size: number;
+	mimeType: string;
+}
+
+export interface FileWriteResponse {
+	bytesWritten: number;
+}
+
 export interface FsTreeResponse {
 	entries: FsTreeEntry[];
 }
@@ -72,4 +82,35 @@ export async function readFsFile(
 		headers: withBearer(token),
 	});
 	return parseJsonResponse<FileReadResponse>(response);
+}
+
+export async function readFsFileBinary(
+	sessionId: string,
+	token: string,
+	path: string,
+): Promise<FileReadBinaryResponse> {
+	const response = await fetch(
+		harnessUrl(sessionId, `/fs/read?path=${encodeURIComponent(path)}&format=base64`),
+		{
+			headers: withBearer(token),
+		},
+	);
+	return parseJsonResponse<FileReadBinaryResponse>(response);
+}
+
+export async function writeFsFile(
+	sessionId: string,
+	token: string,
+	path: string,
+	content: string,
+): Promise<FileWriteResponse> {
+	const response = await fetch(harnessUrl(sessionId, "/fs/write"), {
+		method: "POST",
+		headers: {
+			...withBearer(token),
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({ path, content }),
+	});
+	return parseJsonResponse<FileWriteResponse>(response);
 }

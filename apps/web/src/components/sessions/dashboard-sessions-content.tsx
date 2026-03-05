@@ -2,7 +2,6 @@
 
 import { PageShell } from "@/components/dashboard/page-shell";
 import { SessionListRow } from "@/components/sessions/session-card";
-import { SessionPeekDrawer } from "@/components/sessions/session-peek-drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,71 +11,19 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
-import {
-	type CreatorFilter,
-	type FilterTab,
-	IN_PROGRESS_STATUSES,
-	LIVE_STATUSES,
-	NEEDS_ATTENTION_STATUSES,
-	type OriginFilter,
-	TABS,
-} from "@/config/sessions";
+import { type CreatorFilter, type FilterTab, type OriginFilter, TABS } from "@/config/sessions";
 import { useOrgPendingRuns } from "@/hooks/automations/use-automations";
+import { useSessionListState } from "@/hooks/sessions/use-overall-work-state";
 import { useSessions } from "@/hooks/sessions/use-sessions";
 import { useSession } from "@/lib/auth/client";
 import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
-import { deriveDisplayStatus } from "@proliferate/shared/sessions";
 import { Plus, Search } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-
-function getSessionOrigin(session: {
-	automationId?: string | null;
-	origin?: string | null;
-	clientType?: string | null;
-}): OriginFilter {
-	if (session.automationId) return "automation";
-	if (session.origin === "slack" || session.clientType === "slack") return "slack";
-	if (session.origin === "cli" || session.clientType === "cli") return "cli";
-	return "manual";
-}
-
-/**
- * Sort sessions by urgency priority then recency.
- * 1. waiting_for_approval / needs_input / errored (operatorStatus)
- * 2. running (runtimeStatus)
- * 3. failed
- * 4. Recently updated (default)
- * 5. completed / archived lower
- */
-function sortSessions<T extends { session: SessionEntry }>(items: T[]): T[] {
-	const priority = (s: SessionEntry) => {
-		if (
-			s.operatorStatus === "waiting_for_approval" ||
-			s.operatorStatus === "needs_input" ||
-			s.operatorStatus === "errored"
-		) {
-			return 0;
-		}
-		if (s.runtimeStatus === "running" || s.status === "running") return 1;
-		if (s.runtimeStatus === "failed" || s.status === "failed") return 2;
-		if (s.runtimeStatus === "completed" || s.status === "stopped") return 4;
-		return 3;
-	};
-	return [...items].sort(
-		(a, b) =>
-			priority(a.session) - priority(b.session) ||
-			new Date(b.session.lastActivityAt ?? 0).getTime() -
-				new Date(a.session.lastActivityAt ?? 0).getTime(),
-	);
-}
-
-type SessionEntry = NonNullable<ReturnType<typeof useSessions>["data"]>[number];
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export function DashboardSessionsContent() {
 	const router = useRouter();
-	const searchParams = useSearchParams();
 	const { setActiveSession, clearPendingPrompt } = useDashboardStore();
 	const { data: authSession } = useSession();
 	const [activeTab, setActiveTab] = useState<FilterTab>("in_progress");
@@ -85,21 +32,6 @@ export function DashboardSessionsContent() {
 	const [creatorFilter, setCreatorFilter] = useState<CreatorFilter>("all");
 
 	const currentUserId = authSession?.user?.id;
-
-	// Peek drawer via URL param
-	const peekSessionId = searchParams.get("peek");
-
-	const handleRowClick = (sessionId: string) => {
-		const params = new URLSearchParams(searchParams.toString());
-		params.set("peek", sessionId);
-		router.replace(`?${params.toString()}`, { scroll: false });
-	};
-
-	const handlePeekClose = () => {
-		const params = new URLSearchParams(searchParams.toString());
-		params.delete("peek");
-		router.replace(`?${params.toString()}`, { scroll: false });
-	};
 
 	// Track whether visible sessions include live ones (for polling).
 	const [hasLiveSessions, setHasLiveSessions] = useState(false);
@@ -110,123 +42,17 @@ export function DashboardSessionsContent() {
 	});
 
 	const { data: pendingRuns } = useOrgPendingRuns();
-
-	// Build a map of sessionId -> most recent pendingRun for urgency indicators.
-	const pendingRunsBySession = useMemo(() => {
-		const map = new Map<string, NonNullable<typeof pendingRuns>[number]>();
-		if (!pendingRuns) return map;
-		for (const run of pendingRuns) {
-			if (run.session_id && !map.has(run.session_id)) {
-				map.set(run.session_id, run);
-			}
-		}
-		return map;
-	}, [pendingRuns]);
-
-	const result = useMemo(() => {
-		// V1 default scope: task sessions + ad-hoc (kind=null), exclude setup/manager.
-		const baseSessions = sessions?.filter((s) => !s.kind || s.kind === "task") ?? [];
-
-		// Derive display status for all sessions once
-		const withStatus = baseSessions.map((s) => ({
-			session: s,
-			displayStatus: deriveDisplayStatus(s.status, s.pauseReason),
-			origin: getSessionOrigin(s),
-		}));
-
-		// Apply creator filter
-		const creatorFiltered =
-			creatorFilter === "all" || !currentUserId
-				? withStatus
-				: withStatus.filter((s) => s.session.createdBy === currentUserId);
-
-		// Apply origin filter for counting
-		const originFiltered =
-			originFilter === "all"
-				? creatorFiltered
-				: creatorFiltered.filter((s) => s.origin === originFilter);
-
-		// Count per tab
-		const tabCounts = {
-			in_progress: 0,
-			needs_attention: 0,
-			paused: 0,
-			completed: 0,
-		};
-
-		for (const { session, displayStatus } of originFiltered) {
-			if (IN_PROGRESS_STATUSES.has(displayStatus)) {
-				tabCounts.in_progress++;
-			} else if (
-				NEEDS_ATTENTION_STATUSES.has(displayStatus) ||
-				pendingRunsBySession.has(session.id)
-			) {
-				tabCounts.needs_attention++;
-			} else if (displayStatus === "paused") {
-				tabCounts.paused++;
-			} else {
-				tabCounts.completed++;
-			}
-		}
-
-		// Filter by tab
-		let tabFiltered = originFiltered;
-		switch (activeTab) {
-			case "in_progress":
-				tabFiltered = originFiltered.filter((s) => IN_PROGRESS_STATUSES.has(s.displayStatus));
-				break;
-			case "needs_attention":
-				tabFiltered = originFiltered.filter(
-					(s) =>
-						NEEDS_ATTENTION_STATUSES.has(s.displayStatus) || pendingRunsBySession.has(s.session.id),
-				);
-				break;
-			case "paused":
-				tabFiltered = originFiltered.filter((s) => s.displayStatus === "paused");
-				break;
-			case "completed":
-				tabFiltered = originFiltered.filter((s) => s.displayStatus === "completed");
-				break;
-		}
-
-		// Apply search filter
-		let finalFiltered = tabFiltered;
-		if (searchQuery.trim()) {
-			const q = searchQuery.toLowerCase().trim();
-			finalFiltered = tabFiltered.filter(({ session: s }) => {
-				const title = s.title?.toLowerCase() ?? "";
-				const repo = s.repo?.githubRepoName?.toLowerCase() ?? "";
-				const branch = s.branchName?.toLowerCase() ?? "";
-				const automationName = s.automation?.name?.toLowerCase() ?? "";
-				const snippet = s.promptSnippet?.toLowerCase() ?? "";
-				return (
-					title.includes(q) ||
-					repo.includes(q) ||
-					branch.includes(q) ||
-					automationName.includes(q) ||
-					snippet.includes(q)
-				);
-			});
-		}
-
-		// Apply urgency-based sorting
-		const sorted = sortSessions(finalFiltered);
-
-		return {
-			filtered: sorted.map((s) => s.session),
-			counts: tabCounts,
-			totalCount: baseSessions.length,
-			visibleHasLive: finalFiltered.some((s) => LIVE_STATUSES.has(s.displayStatus)),
-		};
-	}, [
+	const { pendingRunsBySession, result } = useSessionListState({
 		sessions,
 		activeTab,
 		searchQuery,
 		originFilter,
 		creatorFilter,
 		currentUserId,
-		pendingRunsBySession,
-	]);
+		automationOriginValue: "automation",
+		pendingRuns,
+		enableSorting: true,
+	});
 
 	// Sync polling state outside of useMemo to avoid side-effects during render
 	useEffect(() => {
@@ -378,17 +204,10 @@ export function DashboardSessionsContent() {
 							key={session.id}
 							session={session}
 							pendingRun={pendingRunsBySession.get(session.id)}
-							onClick={handleRowClick}
 						/>
 					))}
 				</div>
 			)}
-
-			<SessionPeekDrawer
-				sessionId={peekSessionId}
-				pendingRunId={peekSessionId ? pendingRunsBySession.get(peekSessionId)?.id : undefined}
-				onClose={handlePeekClose}
-			/>
 		</PageShell>
 	);
 }

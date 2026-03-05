@@ -35,7 +35,7 @@ interface SessionForMetering {
 	sandboxProvider: string | null;
 	meteredThroughAt: Date | null;
 	startedAt: Date;
-	status: string;
+	sandboxState: string;
 	lastSeenAliveAt: Date | null;
 	aliveCheckFailures: number | null;
 }
@@ -336,7 +336,7 @@ export async function finalizeSessionBilling(
 	}
 
 	// Only finalize running sessions
-	if (session.status !== "running") {
+	if (session.sandboxState !== "running") {
 		return { creditsBilled: 0, secondsBilled: 0 };
 	}
 

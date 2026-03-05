@@ -51,8 +51,8 @@ export function SessionItem({ session, isActive, onNavigate }: SessionItemProps)
 	const snapshotSession = useSnapshotSession();
 	const prefetchSession = usePrefetchSession();
 
-	const isRunning = session.status === "running";
-	const canSubscribe = isRunning || session.status === "starting";
+	const isRunning = session.status.sandboxState === "running";
+	const canSubscribe = isRunning || session.status.sandboxState === "provisioning";
 	const { data: isSubscribed } = useSessionNotificationSubscription(session.id, canSubscribe);
 	const subscribeNotifications = useSubscribeNotifications();
 	const unsubscribeNotifications = useUnsubscribeNotifications();

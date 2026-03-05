@@ -50,6 +50,60 @@ function toSessionKind(kind: string | null): Session["kind"] {
 	return kind === "manager" || kind === "task" || kind === "setup" ? kind : null;
 }
 
+function toCanonicalStatus(row: SessionRow): Session["status"] {
+	const agentState =
+		row.agentState === "iterating" ||
+		row.agentState === "waiting_input" ||
+		row.agentState === "waiting_approval" ||
+		row.agentState === "done" ||
+		row.agentState === "errored"
+			? row.agentState
+			: "errored";
+	const terminalState =
+		row.terminalState === "succeeded" ||
+		row.terminalState === "failed" ||
+		row.terminalState === "cancelled"
+			? row.terminalState
+			: null;
+	const reason =
+		row.stateReason === "manual_pause" ||
+		row.stateReason === "inactivity" ||
+		row.stateReason === "approval_required" ||
+		row.stateReason === "orphaned" ||
+		row.stateReason === "snapshot_failed" ||
+		row.stateReason === "automation_completed" ||
+		row.stateReason === "credit_limit" ||
+		row.stateReason === "payment_failed" ||
+		row.stateReason === "overage_cap" ||
+		row.stateReason === "suspended" ||
+		row.stateReason === "cancelled_by_user" ||
+		row.stateReason === "runtime_error"
+			? row.stateReason
+			: null;
+
+	return {
+		sandboxState:
+			row.sandboxState === "provisioning" ||
+			row.sandboxState === "running" ||
+			row.sandboxState === "paused" ||
+			row.sandboxState === "terminated" ||
+			row.sandboxState === "failed"
+				? row.sandboxState
+				: "failed",
+		agentState,
+		terminalState,
+		reason,
+		isTerminal: terminalState !== null,
+		agentFinishedIterating: agentState !== "iterating",
+		requiresHumanReview:
+			agentState === "waiting_input" ||
+			agentState === "waiting_approval" ||
+			agentState === "done" ||
+			agentState === "errored",
+		updatedAt: toIsoString(row.stateUpdatedAt),
+	};
+}
+
 /**
  * Map a DB row (camelCase with repo) to API Session type (camelCase).
  */
@@ -63,11 +117,10 @@ export function toSession(
 		repoId: row.repoId,
 		organizationId: row.organizationId,
 		createdBy: row.createdBy,
+		creator: row.creator ?? null,
 		kind: toSessionKind(row.kind),
 		sessionType: row.sessionType,
-		status: row.status,
-		runtimeStatus: row.runtimeStatus ?? null,
-		operatorStatus: row.operatorStatus ?? null,
+		status: toCanonicalStatus(row),
 		sandboxId: row.sandboxId,
 		snapshotId: row.snapshotId,
 		configurationId: row.configurationId ?? null,
@@ -80,7 +133,6 @@ export function toSession(
 		lastActivityAt: toIsoString(row.lastActivityAt),
 		endedAt: toIsoString(row.endedAt),
 		pausedAt: toIsoString(row.pausedAt),
-		pauseReason: row.pauseReason ?? null,
 		promptSnippet: sanitizePromptSnippet(row.initialPrompt),
 		...(options?.includeInitialPrompt ? { initialPrompt: row.initialPrompt ?? null } : {}),
 		origin: row.origin,
@@ -107,6 +159,7 @@ export function toSession(
 		continuedFromSessionId: row.continuedFromSessionId ?? null,
 		rerunOfSessionId: row.rerunOfSessionId ?? null,
 		unread: enriched ? row.isUnread : undefined,
+		hasUnreadUpdate: enriched ? row.isUnread : undefined,
 		pendingApprovalCount: enriched ? row.pendingApprovalCount : undefined,
 	};
 }
@@ -131,11 +184,10 @@ export function toSessionPartial(row: SessionRow): Omit<Session, "repo"> {
 		repoId: row.repoId,
 		organizationId: row.organizationId,
 		createdBy: row.createdBy,
+		creator: null,
 		kind: toSessionKind(row.kind),
 		sessionType: row.sessionType,
-		status: row.status,
-		runtimeStatus: row.runtimeStatus ?? null,
-		operatorStatus: row.operatorStatus ?? null,
+		status: toCanonicalStatus(row),
 		sandboxId: row.sandboxId,
 		snapshotId: row.snapshotId,
 		configurationId: row.configurationId ?? null,
@@ -148,7 +200,6 @@ export function toSessionPartial(row: SessionRow): Omit<Session, "repo"> {
 		lastActivityAt: toIsoString(row.lastActivityAt),
 		endedAt: toIsoString(row.endedAt),
 		pausedAt: toIsoString(row.pausedAt),
-		pauseReason: row.pauseReason ?? null,
 		promptSnippet: sanitizePromptSnippet(row.initialPrompt),
 		origin: row.origin,
 		clientType: row.clientType,

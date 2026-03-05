@@ -157,6 +157,10 @@ export interface GitState {
 	isBusy: boolean;
 	rebaseInProgress: boolean;
 	mergeInProgress: boolean;
+	/** Open PR URL for current branch when available */
+	openPrUrl?: string;
+	/** Open PR number for current branch when available */
+	openPrNumber?: number;
 }
 
 // ============================================
@@ -197,6 +201,13 @@ export interface GitCreatePrMessage {
 	workspacePath?: string;
 }
 
+export interface GetGitDiffMessage {
+	type: "get_git_diff";
+	path: string;
+	scope?: "unstaged" | "staged" | "full";
+	workspacePath?: string;
+}
+
 // ============================================
 // Git Server Messages
 // ============================================
@@ -217,6 +228,17 @@ export interface GitResultMessage {
 	};
 }
 
+export interface GitDiffMessage {
+	type: "git_diff";
+	payload: {
+		path: string;
+		scope: "unstaged" | "staged" | "full";
+		success: boolean;
+		patch?: string;
+		message?: string;
+	};
+}
+
 export type ClientMessage =
 	| PromptMessage
 	| PingMessage
@@ -226,6 +248,7 @@ export type ClientMessage =
 	| SaveSnapshotMessage
 	| RunAutoStartMessage
 	| GetGitStatusMessage
+	| GetGitDiffMessage
 	| GitCreateBranchMessage
 	| GitCommitMessage
 	| GitPushMessage
@@ -511,6 +534,7 @@ export type ServerMessage =
 	| AutoStartOutputMessage
 	| GitStatusMessage
 	| GitResultMessage
+	| GitDiffMessage
 	| ActionApprovalRequestMessage
 	| ActionApprovalResultMessage
 	| ActionCompletedMessage

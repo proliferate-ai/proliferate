@@ -151,6 +151,31 @@ export class FsTransport {
 		return { content, size: stat.size };
 	}
 
+	readBinary(relativePath: string): { base64: string; size: number; mimeType: string } {
+		if (!relativePath) {
+			throw new FsSecurityError("Path is required");
+		}
+
+		const resolved = resolveSecure(this.workspaceRoot, relativePath);
+		verifySymlinkTarget(this.workspaceRoot, resolved);
+
+		if (!existsSync(resolved)) {
+			throw new Error(`File not found: ${relativePath}`);
+		}
+
+		const stat = lstatSync(resolved);
+		if (stat.isDirectory()) {
+			throw new Error(`Path is a directory: ${relativePath}`);
+		}
+
+		const buffer = readFileSync(resolved);
+		return {
+			base64: buffer.toString("base64"),
+			size: stat.size,
+			mimeType: inferMimeType(relativePath),
+		};
+	}
+
 	/**
 	 * Write content to a file. Creates parent directories if needed.
 	 * Max payload: 10 MB.
@@ -230,5 +255,24 @@ export class FsTransport {
 			}
 		}
 		return result;
+	}
+}
+
+function inferMimeType(path: string): string {
+	const ext = path.toLowerCase().split(".").pop() ?? "";
+	switch (ext) {
+		case "png":
+			return "image/png";
+		case "jpg":
+		case "jpeg":
+			return "image/jpeg";
+		case "gif":
+			return "image/gif";
+		case "webp":
+			return "image/webp";
+		case "svg":
+			return "image/svg+xml";
+		default:
+			return "application/octet-stream";
 	}
 }

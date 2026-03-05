@@ -38,6 +38,42 @@ export type RepoConnectionRow = InferSelectModel<typeof repoConnections>;
 export type UserRow = Pick<InferSelectModel<typeof user>, "id" | "name" | "email">;
 export type OrganizationRow = Pick<InferSelectModel<typeof organization>, "id" | "name">;
 
+/**
+ * Backward-compatible integration projection for environments that may not
+ * have applied OAuth credential column migrations yet.
+ */
+const integrationCompatColumns = {
+	id: true,
+	organizationId: true,
+	provider: true,
+	integrationId: true,
+	connectionId: true,
+	displayName: true,
+	scopes: true,
+	status: true,
+	visibility: true,
+	createdBy: true,
+	createdAt: true,
+	updatedAt: true,
+	githubInstallationId: true,
+} as const;
+
+const integrationCompatReturning = {
+	id: integrations.id,
+	organizationId: integrations.organizationId,
+	provider: integrations.provider,
+	integrationId: integrations.integrationId,
+	connectionId: integrations.connectionId,
+	displayName: integrations.displayName,
+	scopes: integrations.scopes,
+	status: integrations.status,
+	visibility: integrations.visibility,
+	createdBy: integrations.createdBy,
+	createdAt: integrations.createdAt,
+	updatedAt: integrations.updatedAt,
+	githubInstallationId: integrations.githubInstallationId,
+} as const;
+
 /** Integration with creator info. */
 export interface IntegrationWithCreatorRow extends IntegrationRow {
 	createdByUser: UserRow | null;
@@ -87,6 +123,7 @@ export interface GitHubAppIntegrationRow {
 export async function listByOrganization(orgId: string, userId: string): Promise<IntegrationRow[]> {
 	const db = getDb();
 	const results = await db.query.integrations.findMany({
+		columns: integrationCompatColumns,
 		where: and(
 			eq(integrations.organizationId, orgId),
 			or(
@@ -98,7 +135,7 @@ export async function listByOrganization(orgId: string, userId: string): Promise
 		orderBy: [desc(integrations.createdAt)],
 	});
 
-	return results;
+	return results as IntegrationRow[];
 }
 
 /**
@@ -140,9 +177,10 @@ export async function findById(id: string): Promise<IntegrationRow | null> {
 	const db = getDb();
 	const result = await db.query.integrations.findFirst({
 		where: eq(integrations.id, id),
+		columns: integrationCompatColumns,
 	});
 
-	return result ?? null;
+	return (result as IntegrationRow | undefined) ?? null;
 }
 
 /**
@@ -152,9 +190,10 @@ export async function findByIdAndOrg(id: string, orgId: string): Promise<Integra
 	const db = getDb();
 	const result = await db.query.integrations.findFirst({
 		where: and(eq(integrations.id, id), eq(integrations.organizationId, orgId)),
+		columns: integrationCompatColumns,
 	});
 
-	return result ?? null;
+	return (result as IntegrationRow | undefined) ?? null;
 }
 
 /**
@@ -204,9 +243,10 @@ export async function findActiveGitHubApp(orgId: string): Promise<IntegrationRow
 			eq(integrations.status, "active"),
 			isNotNull(integrations.githubInstallationId),
 		),
+		columns: integrationCompatColumns,
 	});
 
-	return result ?? null;
+	return (result as IntegrationRow | undefined) ?? null;
 }
 
 /**
@@ -395,9 +435,9 @@ export async function updateDisplayName(
 		.update(integrations)
 		.set({ displayName })
 		.where(eq(integrations.id, id))
-		.returning();
+		.returning(integrationCompatReturning);
 
-	return result;
+	return result as IntegrationRow;
 }
 
 /**
@@ -730,6 +770,7 @@ export async function findActiveGitHubAppWithCreator(
 			eq(integrations.status, "active"),
 			isNotNull(integrations.githubInstallationId),
 		),
+		columns: integrationCompatColumns,
 		with: {
 			user: {
 				columns: {
@@ -743,7 +784,7 @@ export async function findActiveGitHubAppWithCreator(
 
 	if (!result) return null;
 	const { user: createdByUser, ...rest } = result;
-	return { ...rest, createdByUser: createdByUser ?? null };
+	return { ...(rest as IntegrationRow), createdByUser: createdByUser ?? null };
 }
 
 /**
@@ -1058,6 +1099,7 @@ export async function upsertGitHubAppInstallation(
 			eq(integrations.connectionId, connectionId),
 			eq(integrations.organizationId, input.organizationId),
 		),
+		columns: { id: true },
 	});
 	logger.debug({ existingId: existing?.id ?? null }, "Checked for existing installation");
 
@@ -1082,7 +1124,7 @@ export async function upsertGitHubAppInstallation(
 					updatedAt: new Date(),
 				},
 			})
-			.returning();
+			.returning(integrationCompatReturning);
 
 		logger.debug({ resultId: result?.id ?? null }, "Upsert complete");
 
@@ -1092,10 +1134,11 @@ export async function upsertGitHubAppInstallation(
 				eq(integrations.connectionId, connectionId),
 				eq(integrations.organizationId, input.organizationId),
 			),
+			columns: { id: true },
 		});
 		logger.debug({ verified: !!verify }, "Verification read");
 
-		return result ?? null;
+		return (result as IntegrationRow | undefined) ?? null;
 	} catch (error) {
 		logger.error({ err: error }, "Failed to upsert GitHub App installation");
 		throw error;

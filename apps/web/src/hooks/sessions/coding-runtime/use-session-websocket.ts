@@ -14,6 +14,7 @@ import {
 import type {
 	ActionApprovalRequestMessage,
 	AutoStartOutputMessage,
+	GitDiffMessage,
 	GitResultMessage,
 	GitState,
 } from "@proliferate/shared";
@@ -54,6 +55,7 @@ interface UseSessionWebSocketReturn {
 	autoStartOutput: AutoStartOutputMessage["payload"] | null;
 	gitState: GitState | null;
 	gitResult: GitResultMessage["payload"] | null;
+	gitDiff: GitDiffMessage["payload"] | null;
 	pendingApprovals: ActionApprovalRequestMessage["payload"][];
 	workspaceState: WorkspaceStateInfo | null;
 	sendPrompt: (content: string, images?: string[]) => void;
@@ -64,6 +66,11 @@ interface UseSessionWebSocketReturn {
 		commands?: import("@proliferate/shared").ConfigurationServiceCommand[],
 	) => void;
 	sendGetGitStatus: (workspacePath?: string) => void;
+	sendGetGitDiff: (
+		path: string,
+		scope?: "unstaged" | "staged" | "full",
+		workspacePath?: string,
+	) => void;
 	sendGitCreateBranch: (branchName: string, workspacePath?: string) => void;
 	sendGitCommit: (
 		message: string,
@@ -185,6 +192,7 @@ export function useSessionWebSocket({
 	);
 	const [gitState, setGitState] = useState<GitState | null>(null);
 	const [gitResult, setGitResult] = useState<GitResultMessage["payload"] | null>(null);
+	const [gitDiff, setGitDiff] = useState<GitDiffMessage["payload"] | null>(null);
 	const [pendingApprovals, setPendingApprovals] = useState<
 		ActionApprovalRequestMessage["payload"][]
 	>([]);
@@ -229,6 +237,7 @@ export function useSessionWebSocket({
 			setAutoStartOutput,
 			setGitState,
 			setGitResult,
+			setGitDiff,
 			setPendingApprovals,
 			setError,
 			setWorkspaceState,
@@ -355,6 +364,60 @@ export function useSessionWebSocket({
 		wsRef.current?.sendGitCreateBranch(branchName, workspacePath);
 	}, []);
 
+	const sendGetGitDiff = useCallback(
+		(path: string, scope: "unstaged" | "staged" | "full" = "full", workspacePath?: string) => {
+			const wsWithDiff = wsRef.current as
+				| (SyncWebSocket & {
+						sendGetGitDiff?: (
+							path: string,
+							scope?: "unstaged" | "staged" | "full",
+							workspacePath?: string,
+						) => void;
+						send?: (message: Record<string, unknown>) => void;
+				  })
+				| null;
+			debugWs("git_diff.request", {
+				sessionId,
+				path,
+				scope,
+				workspacePath: workspacePath ?? null,
+				hasMethod: Boolean(wsWithDiff?.sendGetGitDiff),
+				hasPrivateSend: Boolean(wsWithDiff?.send),
+			});
+			if (wsWithDiff?.sendGetGitDiff) {
+				wsWithDiff.sendGetGitDiff(path, scope, workspacePath);
+				return;
+			}
+
+			// Fallback for stale gateway-clients runtime instances that don't yet expose
+			// sendGetGitDiff() publicly, but still have the internal send() helper.
+			if (wsWithDiff?.send) {
+				wsWithDiff.send({
+					type: "get_git_diff",
+					path,
+					scope,
+					...(workspacePath ? { workspacePath } : {}),
+				});
+				debugWs("git_diff.request_fallback_send", {
+					sessionId,
+					path,
+					scope,
+					workspacePath: workspacePath ?? null,
+				});
+				return;
+			}
+
+			if (!wsWithDiff?.sendGetGitDiff) {
+				debugWs("git_diff.request_skipped", {
+					sessionId,
+					reason: "sendGetGitDiff not available on websocket client",
+				});
+				return;
+			}
+		},
+		[sessionId],
+	);
+
 	const sendGitCommit = useCallback(
 		(
 			message: string,
@@ -399,12 +462,14 @@ export function useSessionWebSocket({
 		autoStartOutput,
 		gitState,
 		gitResult,
+		gitDiff,
 		pendingApprovals,
 		workspaceState,
 		sendPrompt,
 		sendCancel,
 		sendRunAutoStart,
 		sendGetGitStatus,
+		sendGetGitDiff,
 		sendGitCreateBranch,
 		sendGitCommit,
 		sendGitPush,
@@ -527,6 +592,20 @@ function handleServerMessage(data: ServerMessage, ctx: MessageHandlerContext) {
 		case "git_result":
 			if (data.payload) {
 				ctx.setGitResult(data.payload as GitResultMessage["payload"]);
+			}
+			break;
+
+		case "git_diff":
+			if (data.payload) {
+				debugWs("git_diff.response", {
+					sessionId: ctx.sessionId,
+					path: (data.payload as GitDiffMessage["payload"]).path,
+					scope: (data.payload as GitDiffMessage["payload"]).scope,
+					success: (data.payload as GitDiffMessage["payload"]).success,
+					hasPatch: Boolean((data.payload as GitDiffMessage["payload"]).patch),
+					message: (data.payload as GitDiffMessage["payload"]).message ?? null,
+				});
+				ctx.setGitDiff(data.payload as GitDiffMessage["payload"]);
 			}
 			break;
 

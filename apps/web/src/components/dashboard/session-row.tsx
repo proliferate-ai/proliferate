@@ -3,15 +3,17 @@
 import { BlocksIcon, BlocksLoadingIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/display/utils";
 import { formatRelativeTime, getRepoShortName } from "@/lib/display/utils";
-import { deriveDisplayStatus } from "@proliferate/shared/sessions";
+import { OVERALL_WORK_STATE_DISPLAY } from "@/lib/sessions/overall-work-state";
+import type { Session } from "@proliferate/shared/contracts/sessions";
+import { deriveOverallWorkState } from "@proliferate/shared/sessions";
 
 interface SessionRowProps {
 	title: string | null;
 	promptSnippet?: string | null;
 	repoName: string | null;
 	branchName: string | null;
-	status: string | null;
-	pauseReason?: string | null;
+	status: Session["status"];
+	hasUnreadUpdate?: boolean;
 	lastActivityAt: string | null;
 	startedAt: string | null;
 	className?: string;
@@ -27,7 +29,7 @@ export function SessionRow({
 	repoName,
 	branchName,
 	status,
-	pauseReason,
+	hasUnreadUpdate = false,
 	lastActivityAt,
 	startedAt,
 	className,
@@ -38,15 +40,11 @@ export function SessionRow({
 	const repoAndBranch = `${repoShortName}${branchName ? ` (${branchName})` : ""}`;
 	const displayTitle = title || promptSnippet || repoAndBranch;
 
-	const displayStatus = deriveDisplayStatus(status, pauseReason);
-	const isAnimated = displayStatus === "active" || displayStatus === "recovering";
+	const overallWorkState = deriveOverallWorkState(status, hasUnreadUpdate);
+	const display = OVERALL_WORK_STATE_DISPLAY[overallWorkState];
+	const isAnimated = display.animated;
 	const Icon = isAnimated ? BlocksLoadingIcon : BlocksIcon;
-	const color =
-		displayStatus === "blocked" || displayStatus === "failed"
-			? "text-destructive"
-			: displayStatus === "active"
-				? "text-foreground"
-				: "text-muted-foreground/50";
+	const color = display.colorClassName;
 
 	return (
 		<div className={cn("flex items-start min-w-0", className)}>
@@ -59,7 +57,7 @@ export function SessionRow({
 					{branchName && ` · ${branchName}`}
 				</p>
 			</div>
-			{status && <Icon className={`h-3.5 w-3.5 mt-0.5 ml-2 flex-shrink-0 ${color}`} />}
+			<Icon className={`h-3.5 w-3.5 mt-0.5 ml-2 flex-shrink-0 ${color}`} />
 		</div>
 	);
 }

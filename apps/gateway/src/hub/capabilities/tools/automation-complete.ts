@@ -98,9 +98,11 @@ export const automationCompleteHandler: InterceptedToolHandler = {
 		// OpenCode session IDs and dropping transcript visibility.
 		const pausedAtIso = new Date().toISOString();
 		await sessions.updateSession(hub.getSessionId(), {
-			status: "paused",
+			sandboxState: "paused",
+			agentState: "done",
+			terminalState: outcome === "succeeded" ? "succeeded" : outcome === "failed" ? "failed" : null,
 			pausedAt: pausedAtIso,
-			pauseReason: "automation_completed",
+			stateReason: "automation_completed",
 			outcome,
 			summary: payload.summary_markdown ?? null,
 			latestTask: null,
@@ -117,7 +119,7 @@ export const automationCompleteHandler: InterceptedToolHandler = {
 				runId,
 				outcome,
 				sessionStatus: "paused",
-				pauseReason: "automation_completed",
+				stateReason: "automation_completed",
 			},
 			"automation.complete.session_updated",
 		);

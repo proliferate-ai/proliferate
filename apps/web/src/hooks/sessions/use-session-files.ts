@@ -2,12 +2,22 @@
 
 import { useWsToken } from "@/hooks/sessions/use-ws-token";
 import { GATEWAY_URL } from "@/lib/infra/gateway";
-import { getFsTree, readFsFile } from "@/lib/infra/gateway-harness-client";
-import { useQuery } from "@tanstack/react-query";
+import {
+	getFsTree,
+	readFsFile,
+	readFsFileBinary,
+	writeFsFile,
+} from "@/lib/infra/gateway-harness-client";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
-export function useSessionFilesTree(sessionId: string, path: string, depth: number) {
+export function useSessionFilesTree(
+	sessionId: string,
+	path: string,
+	depth: number,
+	enabled = true,
+) {
 	const { token } = useWsToken();
-	const canFetch = !!token && !!GATEWAY_URL;
+	const canFetch = !!token && !!GATEWAY_URL && enabled;
 
 	return useQuery({
 		queryKey: ["fs-tree", sessionId, path, depth],
@@ -28,5 +38,35 @@ export function useSessionFileContent(sessionId: string, path: string | null) {
 		enabled: canFetch,
 		staleTime: 5_000,
 		retry: 1,
+	});
+}
+
+export function useSessionFileBinaryContent(
+	sessionId: string,
+	path: string | null,
+	enabled = true,
+) {
+	const { token } = useWsToken();
+	const canFetch = !!token && !!GATEWAY_URL && !!path && enabled;
+
+	return useQuery({
+		queryKey: ["file-read-binary", sessionId, path],
+		queryFn: async () => readFsFileBinary(sessionId, token!, path!),
+		enabled: canFetch,
+		staleTime: 5_000,
+		retry: 1,
+	});
+}
+
+export function useSessionWriteFile(sessionId: string) {
+	const { token } = useWsToken();
+
+	return useMutation({
+		mutationFn: async ({ path, content }: { path: string; content: string }) => {
+			if (!token || !GATEWAY_URL) {
+				throw new Error("Session is not ready for file writes");
+			}
+			return writeFsFile(sessionId, token, path, content);
+		},
 	});
 }

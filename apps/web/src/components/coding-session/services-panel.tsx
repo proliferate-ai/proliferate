@@ -10,7 +10,7 @@ import {
 	useStopService,
 } from "@/hooks/sessions/use-devtools-services";
 import { cn } from "@/lib/display/utils";
-import { Loader2, Play, RefreshCw, RotateCw, Square } from "lucide-react";
+import { Loader2, MousePointerClick, Play, RefreshCw, RotateCw, Square } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -85,7 +85,7 @@ export function ServicesPanel({ sessionId }: ServicesPanelProps) {
 	);
 
 	return (
-		<PanelShell title="Services" actions={panelActions} noPadding>
+		<PanelShell title="Logs" actions={panelActions} noPadding>
 			<div className="flex flex-col h-full">
 				{isLoading ? (
 					<div className="flex items-center justify-center py-8">
@@ -93,11 +93,12 @@ export function ServicesPanel({ sessionId }: ServicesPanelProps) {
 					</div>
 				) : error ? (
 					<div className="px-3 py-4 text-sm text-destructive">
-						{error instanceof Error ? error.message : "Failed to load services"}
+						{error instanceof Error ? error.message : "Failed to load logs"}
 					</div>
 				) : services.length === 0 ? (
-					<div className="flex items-center justify-center h-full">
-						<p className="text-sm text-muted-foreground">No services running</p>
+					<div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+						<MousePointerClick className="mb-3 h-8 w-8 opacity-40" />
+						<p className="text-sm">No running services to show logs for</p>
 					</div>
 				) : (
 					<>
@@ -126,10 +127,9 @@ export function ServicesPanel({ sessionId }: ServicesPanelProps) {
 						{/* Log panes */}
 						<div className="flex-1 min-h-0">
 							{activeServices.size === 0 ? (
-								<div className="flex items-center justify-center h-full">
-									<p className="text-sm text-muted-foreground">
-										Select a service above to view logs
-									</p>
+								<div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+									<MousePointerClick className="mb-3 h-8 w-8 opacity-40" />
+									<p className="text-sm">Select a service to view logs</p>
 								</div>
 							) : (
 								<div className="flex h-full divide-x divide-border">

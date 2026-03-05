@@ -12,7 +12,6 @@ export type PreviewMode =
 	| { type: "settings"; tab?: "info" | "snapshots" | "auto-start" }
 	| { type: "git" }
 	| { type: "terminal" }
-	| { type: "vscode" }
 	| { type: "artifacts" }
 	| { type: "services" }
 	| { type: "environment" }
@@ -44,7 +43,6 @@ interface PreviewPanelState {
 			| "settings"
 			| "git"
 			| "terminal"
-			| "vscode"
 			| "artifacts"
 			| "services"
 			| "environment"
@@ -76,7 +74,7 @@ export const usePreviewPanelStore = create<PreviewPanelState>()(
 		(set, get) => ({
 			mode: DEFAULT_MODE,
 			mobileView: "chat",
-			pinnedTabs: ["url", "services", "vscode", "settings"],
+			pinnedTabs: ["url", "services", "git", "terminal"],
 			panelSizes: [35, 65],
 			panelSide: "right",
 			missingEnvKeyCount: 0,
@@ -108,7 +106,6 @@ export const usePreviewPanelStore = create<PreviewPanelState>()(
 					| "settings"
 					| "git"
 					| "terminal"
-					| "vscode"
 					| "artifacts"
 					| "services"
 					| "environment"

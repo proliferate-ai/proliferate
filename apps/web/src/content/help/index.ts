@@ -135,7 +135,7 @@ It freezes the entire environment — code, dependencies, databases, running ser
 
 ## Local CLI
 
-You can also connect your local IDE to this cloud environment. Run \`npx @proliferate/cli\` in your terminal to sync files and use VS Code, Cursor, or any editor you prefer.
+You can also connect your local IDE to this cloud environment. Run \`npx @proliferate/cli\` in your terminal to sync files and use your preferred editor.
 
 ## Tips
 

@@ -14,6 +14,7 @@ import type {
 import type {
 	ActionApprovalRequestMessage,
 	AutoStartOutputMessage,
+	GitDiffMessage,
 	GitResultMessage,
 	GitState,
 } from "@proliferate/shared";
@@ -47,6 +48,7 @@ export interface MessageHandlerContext {
 	setAutoStartOutput: (output: AutoStartOutputMessage["payload"] | null) => void;
 	setGitState: (state: GitState | null) => void;
 	setGitResult: (result: GitResultMessage["payload"] | null) => void;
+	setGitDiff: (diff: GitDiffMessage["payload"] | null) => void;
 	setPendingApprovals: React.Dispatch<
 		React.SetStateAction<ActionApprovalRequestMessage["payload"][]>
 	>;

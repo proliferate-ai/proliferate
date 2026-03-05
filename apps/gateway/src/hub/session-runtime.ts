@@ -505,8 +505,9 @@ export class SessionRuntime {
 			const updateStartMs = Date.now();
 			await sessions.updateSession(this.sessionId, {
 				sandboxId: result.sandboxId,
-				status: "running",
-				pauseReason: null,
+				sandboxState: "running",
+				agentState: "iterating",
+				stateReason: null,
 				openCodeTunnelUrl: result.tunnelUrl,
 				previewTunnelUrl: result.previewUrl,
 				sandboxExpiresAt: resolvedExpiryMs,

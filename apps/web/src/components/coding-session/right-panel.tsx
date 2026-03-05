@@ -5,12 +5,14 @@ import { usePreviewPanelStore } from "@/stores/preview-panel";
 import type {
 	ActionApprovalRequestMessage,
 	AutoStartOutputMessage,
+	GitDiffMessage,
 	GitResultMessage,
 	GitState,
 } from "@proliferate/shared";
 import { AnimatePresence, motion } from "framer-motion";
 import { KeyRound, Loader2, MousePointerClick } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { ArtifactsPanel } from "./artifacts-panel";
 import { EnvironmentPanel } from "./environment-panel";
 import { FilesPanel } from "./files-panel";
@@ -18,8 +20,6 @@ import { GitPanel } from "./git-panel";
 import { InvestigationPanel } from "./investigation-panel";
 import { PanelErrorBoundary } from "./panel-error-boundary";
 import { PreviewPanel } from "./preview-panel";
-import { SettingsPanel } from "./settings-panel";
-import { VscodePanel } from "./vscode-panel";
 
 const TerminalPanel = dynamic(() => import("./terminal-panel").then((m) => m.TerminalPanel), {
 	ssr: false,
@@ -53,7 +53,13 @@ export interface SessionPanelProps {
 	) => void;
 	gitState?: GitState | null;
 	gitResult?: GitResultMessage["payload"] | null;
+	gitDiff?: GitDiffMessage["payload"] | null;
 	sendGetGitStatus?: (workspacePath?: string) => void;
+	sendGetGitDiff?: (
+		path: string,
+		scope?: "unstaged" | "staged" | "full",
+		workspacePath?: string,
+	) => void;
 	sendGitCreateBranch?: (branchName: string, workspacePath?: string) => void;
 	sendGitCommit?: (
 		message: string,
@@ -91,6 +97,9 @@ export function RightPanel({
 	sessionKind = "worker",
 }: RightPanelProps) {
 	const { mode, togglePanel } = usePreviewPanelStore();
+	const repoSettingsHref = sessionProps?.repoId
+		? `/settings/repositories/${sessionProps.repoId}`
+		: "/settings/repositories";
 
 	// If session isn't ready, show loading placeholder
 	if (!sessionProps?.sessionId && mode.type !== "url") {
@@ -152,33 +161,23 @@ export function RightPanel({
 	}
 
 	const panelContent = (() => {
-		// Settings panel
-		if (mode.type === "settings" && sessionProps) {
-			return (
-				<SettingsPanel
-					sessionId={sessionProps.sessionId}
-					sessionStatus={sessionProps.sessionStatus}
-					repoName={sessionProps.repoName}
-					branchName={sessionProps.branchName}
-					snapshotId={sessionProps.snapshotId}
-					startedAt={sessionProps.startedAt}
-					concurrentUsers={sessionProps.concurrentUsers}
-					isModal={sessionProps.isModal}
-					isMigrating={sessionProps.isMigrating}
-					canSnapshot={sessionProps.canSnapshot}
-					isSnapshotting={sessionProps.isSnapshotting}
-					onSnapshot={sessionProps.onSnapshot}
-					repoId={sessionProps.repoId}
-					configurationId={sessionProps.configurationId}
-					autoStartOutput={sessionProps.autoStartOutput}
-					sendRunAutoStart={sessionProps.sendRunAutoStart}
-					slackThreadUrl={sessionProps.slackThreadUrl}
-				/>
-			);
-		}
-
 		// Environment panel
 		if (mode.type === "environment" && sessionProps?.sessionId) {
+			if (!isSetupSession) {
+				return (
+					<div className="flex h-full items-center justify-center p-4">
+						<div className="w-full max-w-sm rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+							<p className="text-sm font-medium">Environment moved to repository settings</p>
+							<p className="text-xs text-muted-foreground">
+								Manage environment files and secrets from repository settings.
+							</p>
+							<Button asChild size="sm" className="h-8 text-xs">
+								<Link href={repoSettingsHref}>Open repository settings</Link>
+							</Button>
+						</div>
+					</div>
+				);
+			}
 			return (
 				<EnvironmentPanel
 					sessionId={sessionProps.sessionId}
@@ -196,8 +195,10 @@ export function RightPanel({
 				<GitPanel
 					gitState={sessionProps.gitState ?? null}
 					gitResult={sessionProps.gitResult ?? null}
+					gitDiff={sessionProps.gitDiff ?? null}
 					workspaceOptions={sessionProps.workspaceOptions}
 					sendGetGitStatus={sessionProps.sendGetGitStatus}
+					sendGetGitDiff={sessionProps.sendGetGitDiff}
 					sendGitCreateBranch={sessionProps.sendGitCreateBranch}
 					sendGitCommit={sessionProps.sendGitCommit}
 					sendGitPush={sessionProps.sendGitPush}
@@ -227,12 +228,12 @@ export function RightPanel({
 					</div>
 				);
 			}
-			return <FilesPanel sessionId={sessionProps.sessionId} />;
-		}
-
-		// VS Code panel
-		if (mode.type === "vscode" && sessionProps?.sessionId) {
-			return <VscodePanel sessionId={sessionProps.sessionId} />;
+			return (
+				<FilesPanel
+					sessionId={sessionProps.sessionId}
+					activityTick={sessionProps.activityTick ?? 0}
+				/>
+			);
 		}
 
 		// Artifacts panel

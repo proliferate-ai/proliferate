@@ -150,8 +150,8 @@ export class GitOperations {
 	async getStatus(workspacePath?: string): Promise<GitState> {
 		const cwd = this.resolveGitDir(workspacePath);
 
-		// Run all 3 commands in parallel
-		const [statusResult, logResult, probeResult] = await Promise.all([
+		// Run read-only probes in parallel.
+		const [statusResult, logResult, probeResult, prResult] = await Promise.all([
 			this.exec(["git", "status", "--porcelain=v2", "--branch", "-z"], {
 				cwd,
 				timeoutMs: 10_000,
@@ -173,6 +173,15 @@ export class GitOperations {
 				],
 				{ cwd, timeoutMs: 10_000, env: this.getReadOnlyEnv() },
 			),
+			this.exec(["gh", "pr", "view", "--json", "number,url", "--jq", '.number|tostring+"|"+.url'], {
+				cwd,
+				timeoutMs: 8_000,
+				env: {
+					...this.getReadOnlyEnv(),
+					...this.getAuthEnv(workspacePath),
+					GH_PROMPT_DISABLED: "1",
+				},
+			}),
 		]);
 
 		// If git status fails entirely (e.g., not a repo), return NOT_A_REPO state
@@ -197,6 +206,17 @@ export class GitOperations {
 		const statusParsed = parseStatusV2(statusResult.stdout);
 		const commits = parseLogOutput(logResult.stdout);
 		const busyState = parseBusyState(probeResult.stdout);
+		let openPrUrl: string | undefined;
+		let openPrNumber: number | undefined;
+		// Keep PR lookup best-effort. Any failure means "no PR info".
+		if (prResult.exitCode === 0) {
+			const [numberPart, urlPart] = prResult.stdout.trim().split("|");
+			const parsedNumber = Number.parseInt(numberPart || "", 10);
+			if (Number.isFinite(parsedNumber) && urlPart) {
+				openPrNumber = parsedNumber;
+				openPrUrl = urlPart.trim();
+			}
+		}
 
 		return {
 			...statusParsed,
@@ -208,7 +228,77 @@ export class GitOperations {
 			isBusy: busyState.isBusy,
 			rebaseInProgress: busyState.rebaseInProgress,
 			mergeInProgress: busyState.mergeInProgress,
+			...(openPrUrl ? { openPrUrl } : {}),
+			...(openPrNumber ? { openPrNumber } : {}),
 		};
+	}
+
+	async getDiff(
+		path: string,
+		scope: "unstaged" | "staged" | "full" = "full",
+		workspacePath?: string,
+	): Promise<{ success: boolean; patch?: string; message?: string }> {
+		const cwd = this.resolveGitDir(workspacePath);
+		const env = this.getReadOnlyEnv();
+		const run = async (args: string[]) =>
+			this.exec(["git", "--no-pager", "diff", "--no-color", "--unified=3", ...args], {
+				cwd,
+				timeoutMs: 15_000,
+				env,
+			});
+
+		const trimPatch = (value: string): string => {
+			const normalized = value.trim();
+			if (!normalized) return "";
+			const MAX_CHARS = 20_000;
+			if (normalized.length <= MAX_CHARS) return normalized;
+			return `${normalized.slice(0, MAX_CHARS)}\n\n... diff truncated ...`;
+		};
+
+		const tryUntrackedDiff = async (): Promise<string> => {
+			const result = await run(["--no-index", "--", "/dev/null", path]);
+			// git diff --no-index returns exitCode 1 when files differ.
+			if (result.exitCode <= 1) return trimPatch(result.stdout);
+			return "";
+		};
+
+		if (scope === "staged") {
+			const staged = await run(["--cached", "--", path]);
+			if (staged.exitCode > 1) {
+				return { success: false, message: staged.stderr || "Failed to load staged diff" };
+			}
+			const patch = trimPatch(staged.stdout);
+			return patch ? { success: true, patch } : { success: true, message: "No staged changes" };
+		}
+
+		if (scope === "unstaged") {
+			const unstaged = await run(["--", path]);
+			if (unstaged.exitCode > 1) {
+				return { success: false, message: unstaged.stderr || "Failed to load unstaged diff" };
+			}
+			const patch = trimPatch(unstaged.stdout) || (await tryUntrackedDiff());
+			return patch ? { success: true, patch } : { success: true, message: "No unstaged changes" };
+		}
+
+		const [staged, unstaged] = await Promise.all([
+			run(["--cached", "--", path]),
+			run(["--", path]),
+		]);
+		if (staged.exitCode > 1) {
+			return { success: false, message: staged.stderr || "Failed to load staged diff" };
+		}
+		if (unstaged.exitCode > 1) {
+			return { success: false, message: unstaged.stderr || "Failed to load unstaged diff" };
+		}
+
+		const stagedPatch = trimPatch(staged.stdout);
+		const unstagedPatch = trimPatch(unstaged.stdout);
+		const combined = [stagedPatch, unstagedPatch].filter(Boolean).join("\n\n");
+		const fallbackPatch = combined || (await tryUntrackedDiff());
+		if (!fallbackPatch) {
+			return { success: true, message: "No diff available" };
+		}
+		return { success: true, patch: fallbackPatch };
 	}
 
 	// ============================================

@@ -34,6 +34,41 @@ interface BulkPauseResult {
 	failed: number;
 }
 
+function toCanonicalStateReason(
+	reason: PauseReason,
+):
+	| "manual_pause"
+	| "inactivity"
+	| "approval_required"
+	| "orphaned"
+	| "snapshot_failed"
+	| "automation_completed"
+	| "credit_limit"
+	| "payment_failed"
+	| "overage_cap"
+	| "suspended"
+	| "cancelled_by_user"
+	| "runtime_error" {
+	switch (reason) {
+		case "manual":
+			return "manual_pause";
+		case "inactivity":
+			return "inactivity";
+		case "orphaned":
+			return "orphaned";
+		case "snapshot_failed":
+			return "snapshot_failed";
+		case "credit_limit":
+			return "credit_limit";
+		case "payment_failed":
+			return "payment_failed";
+		case "overage_cap":
+			return "overage_cap";
+		case "suspended":
+			return "suspended";
+	}
+}
+
 /**
  * Pause ALL running sessions for an organization.
  *
@@ -298,9 +333,10 @@ async function pauseSessionWithSnapshot(
 				const rowsAffected = await updateWhereSandboxIdMatches(sessionId, session.sandboxId, {
 					snapshotId,
 					sandboxId: session.sandboxId,
-					status: "paused",
+					sandboxState: "paused",
+					agentState: "waiting_input",
 					pausedAt: new Date().toISOString(),
-					pauseReason: reason,
+					stateReason: toCanonicalStateReason(reason),
 					latestTask: null,
 				});
 
@@ -325,9 +361,10 @@ async function pauseSessionWithSnapshot(
 		const rowsAffected = await updateWhereSandboxIdMatches(sessionId, session.sandboxId, {
 			snapshotId,
 			sandboxId: keepSandbox ? session.sandboxId : null,
-			status: "paused",
+			sandboxState: "paused",
+			agentState: "waiting_input",
 			pausedAt: new Date().toISOString(),
-			pauseReason: reason,
+			stateReason: toCanonicalStateReason(reason),
 			latestTask: null,
 		});
 

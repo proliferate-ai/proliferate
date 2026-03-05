@@ -5,14 +5,53 @@ import { RepoSchema } from "./repos";
 // Schemas
 // ============================================
 
-export const SessionStatusSchema = z.enum([
-	"pending",
-	"starting",
+export const SESSION_SANDBOX_STATES = [
+	"provisioning",
 	"running",
 	"paused",
+	"terminated",
+	"failed",
+] as const;
+export type SessionSandboxState = (typeof SESSION_SANDBOX_STATES)[number];
+
+export const SESSION_AGENT_STATES = [
+	"iterating",
+	"waiting_input",
+	"waiting_approval",
+	"done",
+	"errored",
+] as const;
+export type SessionAgentState = (typeof SESSION_AGENT_STATES)[number];
+
+export const SESSION_TERMINAL_STATES = ["succeeded", "failed", "cancelled"] as const;
+export type SessionTerminalState = (typeof SESSION_TERMINAL_STATES)[number];
+
+export const SESSION_STATE_REASONS = [
+	"manual_pause",
+	"inactivity",
+	"approval_required",
+	"orphaned",
+	"snapshot_failed",
+	"automation_completed",
+	"credit_limit",
+	"payment_failed",
+	"overage_cap",
 	"suspended",
-	"stopped",
-]);
+	"cancelled_by_user",
+	"runtime_error",
+] as const;
+export type SessionStateReason = (typeof SESSION_STATE_REASONS)[number];
+
+export const SessionStatusSchema = z.object({
+	sandboxState: z.enum(SESSION_SANDBOX_STATES),
+	agentState: z.enum(SESSION_AGENT_STATES),
+	terminalState: z.enum(SESSION_TERMINAL_STATES).nullable(),
+	reason: z.enum(SESSION_STATE_REASONS).nullable(),
+	isTerminal: z.boolean(),
+	agentFinishedIterating: z.boolean(),
+	requiresHumanReview: z.boolean(),
+	updatedAt: z.string().nullable(),
+});
 
 export const SessionOriginSchema = z.enum(["web", "cli"]).nullable();
 
@@ -21,11 +60,17 @@ export const SessionSchema = z.object({
 	repoId: z.string().uuid().nullable(),
 	organizationId: z.string(),
 	createdBy: z.string().nullable(),
+	creator: z
+		.object({
+			id: z.string(),
+			name: z.string(),
+			image: z.string().nullable(),
+		})
+		.nullable()
+		.optional(),
 	kind: z.enum(["manager", "task", "setup"]).nullable().optional(),
 	sessionType: z.string().nullable(),
-	status: z.string().nullable(), // DB returns string, not enum
-	runtimeStatus: z.string().nullable().optional(),
-	operatorStatus: z.string().nullable().optional(),
+	status: SessionStatusSchema,
 	sandboxId: z.string().nullable(),
 	snapshotId: z.string().nullable(),
 	configurationId: z.string().uuid().nullable(),
@@ -37,7 +82,6 @@ export const SessionSchema = z.object({
 	startedAt: z.string().nullable(),
 	lastActivityAt: z.string().nullable(),
 	pausedAt: z.string().nullable(),
-	pauseReason: z.string().nullable().optional(),
 	origin: z.string().nullable(),
 	clientType: z.string().nullable(),
 	automationId: z.string().uuid().nullable().optional(),
@@ -73,6 +117,7 @@ export const SessionSchema = z.object({
 	continuedFromSessionId: z.string().uuid().nullable().optional(),
 	rerunOfSessionId: z.string().uuid().nullable().optional(),
 	unread: z.boolean().optional(),
+	hasUnreadUpdate: z.boolean().optional(),
 	pendingApprovalCount: z.number().optional(),
 });
 
@@ -129,10 +174,11 @@ export const RenameSessionInputSchema = z.object({
 	title: z.string(),
 });
 
-// V1 canonical session contracts
+// V2 canonical session contracts
 export const SESSION_KINDS = ["manager", "task", "setup"] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
 
+// Legacy runtime/operator enums are kept for internal gateway protocol compatibility.
 export const SESSION_RUNTIME_STATUSES = [
 	"starting",
 	"running",
@@ -148,31 +194,9 @@ export const TERMINAL_SESSION_RUNTIME_STATUSES: readonly SessionRuntimeStatus[] 
 	"failed",
 	"cancelled",
 ];
-export const NON_TERMINAL_SESSION_RUNTIME_STATUSES: readonly SessionRuntimeStatus[] = [
-	"starting",
-	"running",
-	"paused",
-];
-
-const SESSION_RUNTIME_TRANSITIONS: Record<string, readonly SessionRuntimeStatus[]> = {
-	starting: ["running", "failed", "cancelled"],
-	running: ["paused", "completed", "failed", "cancelled"],
-	paused: ["running", "failed", "cancelled"],
-};
-
-export function isValidSessionRuntimeTransition(
-	from: SessionRuntimeStatus,
-	to: SessionRuntimeStatus,
-): boolean {
-	return SESSION_RUNTIME_TRANSITIONS[from]?.includes(to) ?? false;
-}
 
 export function isTerminalSessionRuntimeStatus(status: SessionRuntimeStatus): boolean {
 	return TERMINAL_SESSION_RUNTIME_STATUSES.includes(status);
-}
-
-export function isNonTerminalSessionRuntimeStatus(status: SessionRuntimeStatus): boolean {
-	return NON_TERMINAL_SESSION_RUNTIME_STATUSES.includes(status);
 }
 
 export const SESSION_OPERATOR_STATUSES = [
@@ -185,19 +209,22 @@ export const SESSION_OPERATOR_STATUSES = [
 ] as const;
 export type SessionOperatorStatus = (typeof SESSION_OPERATOR_STATUSES)[number];
 
-const SESSION_OPERATOR_TRANSITIONS: Record<string, readonly SessionOperatorStatus[]> = {
-	active: ["waiting_for_approval", "needs_input", "ready_for_review", "errored", "done"],
-	waiting_for_approval: ["active", "needs_input", "ready_for_review", "errored", "done"],
-	needs_input: ["active", "waiting_for_approval", "ready_for_review", "errored", "done"],
-	ready_for_review: ["active", "waiting_for_approval", "needs_input", "errored", "done"],
-	errored: ["active", "done"],
+const SESSION_SANDBOX_TRANSITIONS: Record<string, readonly SessionSandboxState[]> = {
+	provisioning: ["running", "failed", "terminated"],
+	running: ["paused", "terminated", "failed"],
+	paused: ["running", "terminated", "failed"],
+	failed: ["terminated"],
 };
 
-export function isValidSessionOperatorTransition(
-	from: SessionOperatorStatus,
-	to: SessionOperatorStatus,
+export function isValidSessionSandboxTransition(
+	from: SessionSandboxState,
+	to: SessionSandboxState,
 ): boolean {
-	return SESSION_OPERATOR_TRANSITIONS[from]?.includes(to) ?? false;
+	return SESSION_SANDBOX_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+export function isTerminalSession(status: Pick<Session["status"], "terminalState">): boolean {
+	return status.terminalState !== null;
 }
 
 export const SESSION_MESSAGE_DIRECTIONS = [

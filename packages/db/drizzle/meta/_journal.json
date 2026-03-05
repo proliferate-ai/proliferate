@@ -368,6 +368,20 @@
       "when": 1772662800000,
       "tag": "0052_add_worker_id_to_automations",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1772700000000,
+      "tag": "0054_canonical_session_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1772752000000,
+      "tag": "0055_backfill_integration_oauth_columns",
+      "breakpoints": true
     }
   ]
 }

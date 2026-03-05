@@ -102,42 +102,65 @@ export async function projectOperatorStatus(input: {
 	isAgentIdle?: boolean;
 	logger: Logger;
 }): Promise<string> {
-	const {
-		sessionId,
-		organizationId,
-		runtimeStatus,
-		hasPendingApproval,
-		isAgentIdle,
-		logger: log,
-	} = input;
+	const { sessionId, runtimeStatus, hasPendingApproval, isAgentIdle, logger: log } = input;
 
-	let operatorStatus: string;
+	let agentState: "iterating" | "waiting_input" | "waiting_approval" | "done" | "errored" =
+		"iterating";
+	let terminalState: "succeeded" | "failed" | "cancelled" | null = null;
+	let sandboxState: "provisioning" | "running" | "paused" | "terminated" | "failed" | undefined;
+	let stateReason:
+		| "manual_pause"
+		| "inactivity"
+		| "approval_required"
+		| "orphaned"
+		| "snapshot_failed"
+		| "automation_completed"
+		| "credit_limit"
+		| "payment_failed"
+		| "overage_cap"
+		| "suspended"
+		| "cancelled_by_user"
+		| "runtime_error"
+		| null = null;
 
-	if (runtimeStatus === "completed" || runtimeStatus === "cancelled") {
-		operatorStatus = "ready_for_review";
+	if (runtimeStatus === "completed") {
+		agentState = "done";
+		terminalState = "succeeded";
+		sandboxState = "terminated";
+	} else if (runtimeStatus === "cancelled") {
+		agentState = "done";
+		terminalState = "cancelled";
+		sandboxState = "terminated";
+		stateReason = "cancelled_by_user";
 	} else if (runtimeStatus === "failed") {
-		operatorStatus = "errored";
+		agentState = "errored";
+		terminalState = "failed";
+		sandboxState = "failed";
+		stateReason = "runtime_error";
 	} else if (hasPendingApproval) {
-		operatorStatus = "waiting_for_approval";
+		agentState = "waiting_approval";
+		stateReason = "approval_required";
 	} else if (isAgentIdle) {
-		operatorStatus = "needs_input";
+		agentState = "waiting_input";
 	} else if (runtimeStatus === "running") {
-		operatorStatus = "active";
+		agentState = "iterating";
+		sandboxState = "running";
 	} else {
-		operatorStatus = "active";
+		agentState = "iterating";
 	}
 
 	try {
-		await sessions.updateSessionOperatorStatus({
-			sessionId,
-			organizationId,
-			operatorStatus,
+		await sessions.updateSession(sessionId, {
+			agentState,
+			...(sandboxState ? { sandboxState } : {}),
+			...(terminalState ? { terminalState } : {}),
+			stateReason,
 		});
 	} catch (err) {
-		log.warn({ err, sessionId, operatorStatus }, "Failed to update operator status");
+		log.warn({ err, sessionId, agentState }, "Failed to update canonical agent state");
 	}
 
-	return operatorStatus;
+	return agentState;
 }
 
 // ============================================

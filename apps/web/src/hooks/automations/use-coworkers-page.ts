@@ -146,13 +146,13 @@ export function useCoworkersPage() {
 			}
 		}
 		try {
-			const automation = await createFromTemplate.mutateAsync({
+			const worker = await createFromTemplate.mutateAsync({
 				templateId: template.id,
 				integrationBindings,
 			});
 			setPickerOpen(false);
 			startTransition(() => {
-				router.push(`/coworkers/${automation.id}`);
+				router.push(`/coworkers/${worker.id}`);
 			});
 		} catch (err) {
 			setCreateError(

@@ -34,6 +34,7 @@ import {
 	sessionUserState,
 	sessions,
 	sql,
+	user,
 	workers,
 } from "../db/client";
 import type {
@@ -58,12 +59,14 @@ export type RepoRow = InferSelectModel<typeof repos>;
 /** Automation/configuration summary for session list responses */
 export type AutomationSummary = { id: string; name: string };
 export type ConfigurationSummary = { id: string; name: string };
+export type CreatorSummary = { id: string; name: string; image: string | null };
 
 /** Session with repo relation */
 export type SessionWithRepoRow = SessionRow & {
 	repo: RepoRow | null;
 	automation?: AutomationSummary | null;
 	configuration?: ConfigurationSummary | null;
+	creator?: CreatorSummary | null;
 };
 
 /** Enriched session row with unread, worker name, and pending approval count */
@@ -72,6 +75,39 @@ export type EnrichedSessionRow = SessionWithRepoRow & {
 	isUnread: boolean;
 	pendingApprovalCount: number;
 };
+
+async function fetchCreatorProfiles(
+	rows: Array<{ createdBy: string | null }>,
+): Promise<Map<string, CreatorSummary>> {
+	const creatorIds = [
+		...new Set(rows.map((row) => row.createdBy).filter((id): id is string => !!id)),
+	];
+	if (creatorIds.length === 0) {
+		return new Map();
+	}
+
+	const db = getDb();
+	const creatorRows = await db
+		.select({
+			id: user.id,
+			name: user.name,
+			image: user.image,
+		})
+		.from(user)
+		.where(inArray(user.id, creatorIds));
+
+	return new Map(creatorRows.map((creator) => [creator.id, creator]));
+}
+
+async function attachCreatorProfiles<T extends { createdBy: string | null }>(
+	rows: T[],
+): Promise<Array<T & { creator: CreatorSummary | null }>> {
+	const creatorMap = await fetchCreatorProfiles(rows);
+	return rows.map((row) => ({
+		...row,
+		creator: row.createdBy ? (creatorMap.get(row.createdBy) ?? null) : null,
+	}));
+}
 
 // ============================================
 // Queries
@@ -94,7 +130,7 @@ export async function listByOrganization(
 	}
 
 	if (filters?.status) {
-		conditions.push(eq(sessions.status, filters.status));
+		conditions.push(eq(sessions.sandboxState, filters.status));
 	}
 
 	if (filters?.kinds && filters.kinds.length > 0) {
@@ -146,13 +182,13 @@ export async function listByOrganization(
 			},
 		},
 		orderBy: [
-			sql`CASE WHEN ${sessions.status} IN ('starting', 'running', 'paused') THEN 0 ELSE 1 END`,
+			sql`CASE WHEN ${sessions.sandboxState} IN ('provisioning', 'running', 'paused') THEN 0 ELSE 1 END`,
 			desc(sessions.lastActivityAt),
 		],
 		...(filters?.limit ? { limit: filters.limit } : {}),
 	});
 
-	return results;
+	return attachCreatorProfiles(results);
 }
 
 /**
@@ -179,7 +215,7 @@ export async function listByOrganizationEnriched(
 	}
 
 	if (filters?.status) {
-		conditions.push(eq(sessions.status, filters.status));
+		conditions.push(eq(sessions.sandboxState, filters.status));
 	}
 
 	if (filters?.kinds && filters.kinds.length > 0) {
@@ -229,12 +265,12 @@ export async function listByOrganizationEnriched(
 		.leftJoin(pendingApprovalCount, eq(pendingApprovalCount.sessionId, sessions.id))
 		.where(and(...conditions))
 		.orderBy(
-			// Operator status priority: waiting_for_approval/needs_input first, then running, then failed, then others
+			// Canonical priority: waiting states first, then iterating/running, then errored, then paused, then others.
 			sql`CASE
-				WHEN ${sessions.operatorStatus} IN ('waiting_for_approval', 'needs_input') THEN 0
-				WHEN ${sessions.status} IN ('starting', 'running') THEN 1
-				WHEN ${sessions.operatorStatus} = 'errored' THEN 2
-				WHEN ${sessions.status} IN ('paused') THEN 3
+				WHEN ${sessions.agentState} IN ('waiting_approval', 'waiting_input') THEN 0
+				WHEN ${sessions.sandboxState} IN ('provisioning', 'running') AND ${sessions.agentState} = 'iterating' THEN 1
+				WHEN ${sessions.agentState} = 'errored' THEN 2
+				WHEN ${sessions.sandboxState} = 'paused' THEN 3
 				ELSE 4
 			END`,
 			desc(sessions.lastActivityAt),
@@ -261,7 +297,7 @@ export async function listByOrganizationEnriched(
 
 	const relationsMap = new Map(sessionsWithRelations.map((s) => [s.id, s]));
 
-	return rows.map((row) => {
+	const enrichedRows = rows.map((row) => {
 		const relations = relationsMap.get(row.session.id);
 		const isUnread =
 			row.session.lastVisibleUpdateAt != null &&
@@ -277,6 +313,8 @@ export async function listByOrganizationEnriched(
 			pendingApprovalCount: Number(row.pendingApprovalCount ?? 0),
 		};
 	});
+
+	return attachCreatorProfiles(enrichedRows);
 }
 
 /**
@@ -297,23 +335,44 @@ export async function findById(id: string, orgId: string): Promise<SessionWithRe
 		},
 	});
 
-	return result ?? null;
+	if (!result) return null;
+	const [withCreator] = await attachCreatorProfiles([result]);
+	return withCreator;
 }
 
 /**
  * Get session by ID without org check (for status endpoint).
  */
-export async function findByIdNoOrg(id: string): Promise<Pick<SessionRow, "id" | "status"> | null> {
+export async function findByIdNoOrg(
+	id: string,
+): Promise<Pick<
+	SessionRow,
+	"id" | "sandboxState" | "agentState" | "terminalState" | "stateReason" | "stateUpdatedAt"
+> | null> {
 	const db = getDb();
 	const result = await db.query.sessions.findFirst({
 		where: eq(sessions.id, id),
 		columns: {
 			id: true,
-			status: true,
+			sandboxState: true,
+			agentState: true,
+			terminalState: true,
+			stateReason: true,
+			stateUpdatedAt: true,
 		},
 	});
 
 	return result ?? null;
+}
+
+function mapLegacyStatusToSandboxState(
+	status: string,
+): "provisioning" | "running" | "paused" | "terminated" | "failed" {
+	if (status === "starting" || status === "pending") return "provisioning";
+	if (status === "running") return "running";
+	if (status === "paused" || status === "suspended") return "paused";
+	if (status === "stopped") return "terminated";
+	return "failed";
 }
 
 /**
@@ -329,7 +388,8 @@ export async function create(input: CreateSessionInput): Promise<SessionRow> {
 			organizationId: input.organizationId,
 			repoId: input.repoId ?? null,
 			sessionType: input.sessionType,
-			status: input.status,
+			sandboxState: mapLegacyStatusToSandboxState(input.status),
+			agentState: "iterating",
 			sandboxProvider: input.sandboxProvider,
 			createdBy: input.createdBy ?? null,
 			snapshotId: input.snapshotId ?? null,
@@ -379,7 +439,7 @@ export async function createWithAdmissionGuard(
 			.where(
 				and(
 					eq(sessions.organizationId, input.organizationId),
-					sql`${sessions.status} IN ('starting', 'pending', 'running')`,
+					sql`${sessions.sandboxState} IN ('provisioning', 'running')`,
 				),
 			);
 
@@ -394,7 +454,8 @@ export async function createWithAdmissionGuard(
 			organizationId: input.organizationId,
 			repoId: input.repoId ?? null,
 			sessionType: input.sessionType,
-			status: input.status,
+			sandboxState: mapLegacyStatusToSandboxState(input.status),
+			agentState: "iterating",
 			sandboxProvider: input.sandboxProvider,
 			createdBy: input.createdBy ?? null,
 			snapshotId: input.snapshotId ?? null,
@@ -424,7 +485,10 @@ export async function update(id: string, input: UpdateSessionInput): Promise<voi
 	const db = getDb();
 	const updates: Partial<typeof sessions.$inferInsert> = {};
 
-	if (input.status !== undefined) updates.status = input.status;
+	if (input.sandboxState !== undefined) updates.sandboxState = input.sandboxState;
+	if (input.agentState !== undefined) updates.agentState = input.agentState;
+	if (input.terminalState !== undefined) updates.terminalState = input.terminalState;
+	if (input.stateReason !== undefined) updates.stateReason = input.stateReason;
 	if (input.sandboxId !== undefined) updates.sandboxId = input.sandboxId;
 	if (input.snapshotId !== undefined) updates.snapshotId = input.snapshotId;
 	if (input.title !== undefined) updates.title = input.title;
@@ -439,7 +503,6 @@ export async function update(id: string, input: UpdateSessionInput): Promise<voi
 		updates.codingAgentSessionId = input.codingAgentSessionId;
 	if (input.pausedAt !== undefined)
 		updates.pausedAt = input.pausedAt ? new Date(input.pausedAt) : null;
-	if (input.pauseReason !== undefined) updates.pauseReason = input.pauseReason;
 	if (input.sandboxExpiresAt !== undefined)
 		updates.sandboxExpiresAt = input.sandboxExpiresAt ? new Date(input.sandboxExpiresAt) : null;
 	if (input.automationId !== undefined) updates.automationId = input.automationId;
@@ -450,6 +513,12 @@ export async function update(id: string, input: UpdateSessionInput): Promise<voi
 	if (input.summary !== undefined) updates.summary = input.summary;
 	if (input.prUrls !== undefined) updates.prUrls = input.prUrls;
 	if (input.metrics !== undefined) updates.metrics = input.metrics;
+	if (
+		input.sandboxState !== undefined ||
+		input.agentState !== undefined ||
+		input.terminalState !== undefined
+	)
+		updates.stateUpdatedAt = new Date();
 
 	await db.update(sessions).set(updates).where(eq(sessions.id, id));
 }
@@ -465,7 +534,10 @@ export async function updateWithOrgCheck(
 	const db = getDb();
 	const updates: Partial<typeof sessions.$inferInsert> = {};
 
-	if (input.status !== undefined) updates.status = input.status;
+	if (input.sandboxState !== undefined) updates.sandboxState = input.sandboxState;
+	if (input.agentState !== undefined) updates.agentState = input.agentState;
+	if (input.terminalState !== undefined) updates.terminalState = input.terminalState;
+	if (input.stateReason !== undefined) updates.stateReason = input.stateReason;
 	if (input.sandboxId !== undefined) updates.sandboxId = input.sandboxId;
 	if (input.snapshotId !== undefined) updates.snapshotId = input.snapshotId;
 	if (input.title !== undefined) updates.title = input.title;
@@ -480,12 +552,17 @@ export async function updateWithOrgCheck(
 		updates.codingAgentSessionId = input.codingAgentSessionId;
 	if (input.pausedAt !== undefined)
 		updates.pausedAt = input.pausedAt ? new Date(input.pausedAt) : null;
-	if (input.pauseReason !== undefined) updates.pauseReason = input.pauseReason;
 	if (input.latestTask !== undefined) updates.latestTask = input.latestTask;
 	if (input.outcome !== undefined) updates.outcome = input.outcome;
 	if (input.summary !== undefined) updates.summary = input.summary;
 	if (input.prUrls !== undefined) updates.prUrls = input.prUrls;
 	if (input.metrics !== undefined) updates.metrics = input.metrics;
+	if (
+		input.sandboxState !== undefined ||
+		input.agentState !== undefined ||
+		input.terminalState !== undefined
+	)
+		updates.stateUpdatedAt = new Date();
 
 	await db
 		.update(sessions)
@@ -505,13 +582,21 @@ export async function updateWhereSandboxIdMatches(
 	const db = getDb();
 	const updates: Partial<typeof sessions.$inferInsert> = {};
 
-	if (input.status !== undefined) updates.status = input.status;
+	if (input.sandboxState !== undefined) updates.sandboxState = input.sandboxState;
+	if (input.agentState !== undefined) updates.agentState = input.agentState;
+	if (input.terminalState !== undefined) updates.terminalState = input.terminalState;
+	if (input.stateReason !== undefined) updates.stateReason = input.stateReason;
 	if (input.sandboxId !== undefined) updates.sandboxId = input.sandboxId;
 	if (input.snapshotId !== undefined) updates.snapshotId = input.snapshotId;
 	if (input.pausedAt !== undefined)
 		updates.pausedAt = input.pausedAt ? new Date(input.pausedAt) : null;
-	if (input.pauseReason !== undefined) updates.pauseReason = input.pauseReason;
 	if (input.latestTask !== undefined) updates.latestTask = input.latestTask;
+	if (
+		input.sandboxState !== undefined ||
+		input.agentState !== undefined ||
+		input.terminalState !== undefined
+	)
+		updates.stateUpdatedAt = new Date();
 
 	const rows = await db
 		.update(sessions)
@@ -573,9 +658,11 @@ export async function markStopped(sessionId: string): Promise<void> {
 	await db
 		.update(sessions)
 		.set({
-			status: "stopped",
+			sandboxState: "terminated",
+			terminalState: "succeeded",
 			endedAt: new Date(),
 			latestTask: null,
+			stateUpdatedAt: new Date(),
 		})
 		.where(eq(sessions.id, sessionId));
 }
@@ -643,7 +730,8 @@ export async function createSetupSession(input: CreateSetupSessionInput): Promis
 		configurationId: input.configurationId,
 		organizationId: input.organizationId,
 		sessionType: "setup",
-		status: "starting",
+		sandboxState: "provisioning",
+		agentState: "iterating",
 		initialPrompt: input.initialPrompt,
 		source: "managed-configuration",
 		visibility: "org",
@@ -671,7 +759,7 @@ export async function createSetupSessionWithAdmissionGuard(
 			.where(
 				and(
 					eq(sessions.organizationId, input.organizationId),
-					sql`${sessions.status} IN ('starting', 'pending', 'running')`,
+					sql`${sessions.sandboxState} IN ('provisioning', 'running')`,
 				),
 			);
 
@@ -684,7 +772,8 @@ export async function createSetupSessionWithAdmissionGuard(
 			configurationId: input.configurationId,
 			organizationId: input.organizationId,
 			sessionType: "setup",
-			status: "starting",
+			sandboxState: "provisioning",
+			agentState: "iterating",
 			initialPrompt: input.initialPrompt,
 			source: "managed-configuration",
 			visibility: "org",
@@ -707,7 +796,7 @@ export async function findBySlackThread(
 	installationId: string,
 	channelId: string,
 	threadTs: string,
-): Promise<Pick<SessionRow, "id" | "status"> | null> {
+): Promise<Pick<SessionRow, "id" | "sandboxState"> | null> {
 	const db = getDb();
 	const result = await db.query.sessions.findFirst({
 		where: and(
@@ -718,7 +807,7 @@ export async function findBySlackThread(
 		),
 		columns: {
 			id: true,
-			status: true,
+			sandboxState: true,
 		},
 	});
 
@@ -757,7 +846,7 @@ export async function countRunningByOrganization(orgId: string): Promise<number>
 	const [result] = await db
 		.select({ count: sql<number>`count(*)` })
 		.from(sessions)
-		.where(and(eq(sessions.organizationId, orgId), eq(sessions.status, "running")));
+		.where(and(eq(sessions.organizationId, orgId), eq(sessions.sandboxState, "running")));
 
 	return Number(result?.count ?? 0);
 }
@@ -771,7 +860,7 @@ export async function listRunningSessionIds(): Promise<string[]> {
 	const rows = await db
 		.select({ id: sessions.id })
 		.from(sessions)
-		.where(eq(sessions.status, "running"));
+		.where(eq(sessions.sandboxState, "running"));
 	return rows.map((r) => r.id);
 }
 
@@ -785,12 +874,12 @@ export async function getSessionCountsByOrganization(
 	const db = getDb();
 	const results = await db
 		.select({
-			status: sessions.status,
+			status: sessions.sandboxState,
 			count: sql<number>`count(*)`,
 		})
 		.from(sessions)
 		.where(eq(sessions.organizationId, orgId))
-		.groupBy(sessions.status);
+		.groupBy(sessions.sandboxState);
 
 	let running = 0;
 	let paused = 0;
@@ -807,14 +896,14 @@ export async function getSessionCountsByOrganization(
 }
 
 /**
- * Count paused sessions with null pause_reason (should be zero after backfill).
+ * Count paused sessions with null state_reason (should be zero after backfill).
  */
 export async function countNullPauseReasonSessions(): Promise<number> {
 	const db = getDb();
 	const [result] = await db
 		.select({ count: sql<number>`count(*)` })
 		.from(sessions)
-		.where(and(eq(sessions.status, "paused"), isNull(sessions.pauseReason)));
+		.where(and(eq(sessions.sandboxState, "paused"), isNull(sessions.stateReason)));
 
 	return Number(result?.count ?? 0);
 }
@@ -857,16 +946,15 @@ export async function getBlockedSummary(orgId: string): Promise<BlockedGroupRow[
 		WITH blocked AS (
 			SELECT
 				id, title, initial_prompt, started_at, paused_at,
-				COALESCE(pause_reason, status) AS block_reason,
+				COALESCE(state_reason, sandbox_state) AS block_reason,
 				ROW_NUMBER() OVER (
-					PARTITION BY COALESCE(pause_reason, status)
+					PARTITION BY COALESCE(state_reason, sandbox_state)
 					ORDER BY COALESCE(paused_at, started_at) DESC
 				) AS rn
 			FROM sessions
 			WHERE organization_id = ${orgId}
 				AND (
-					(status = 'paused' AND pause_reason IN ('credit_limit', 'payment_failed', 'overage_cap', 'suspended'))
-					OR status = 'suspended'
+					(sandbox_state = 'paused' AND state_reason IN ('credit_limit', 'payment_failed', 'overage_cap', 'suspended'))
 				)
 		),
 		counts AS (
@@ -940,7 +1028,7 @@ export async function findRunningByOrganization(
 ): Promise<Record<string, unknown>[]> {
 	const db = getDb();
 	return db.query.sessions.findMany({
-		where: and(eq(sessions.organizationId, orgId), eq(sessions.status, "running")),
+		where: and(eq(sessions.organizationId, orgId), eq(sessions.sandboxState, "running")),
 		columns,
 	});
 }
@@ -953,7 +1041,7 @@ export async function findRunningById(
 ): Promise<{ id: string; sandboxId: string | null } | null> {
 	const db = getDb();
 	const result = await db.query.sessions.findFirst({
-		where: and(eq(sessions.id, sessionId), eq(sessions.status, "running")),
+		where: and(eq(sessions.id, sessionId), eq(sessions.sandboxState, "running")),
 		columns: { id: true, sandboxId: true },
 	});
 	return result ?? null;
@@ -970,15 +1058,16 @@ export async function pauseSession(
 	const db = getDb();
 	const conditions = [eq(sessions.id, sessionId)];
 	if (additionalWhere === "running") {
-		conditions.push(eq(sessions.status, "running"));
+		conditions.push(eq(sessions.sandboxState, "running"));
 	}
 	await db
 		.update(sessions)
 		.set({
-			status: "paused",
-			pauseReason: reason,
+			sandboxState: "paused",
+			stateReason: reason,
 			pausedAt: new Date(),
 			latestTask: null,
+			stateUpdatedAt: new Date(),
 		})
 		.where(and(...conditions));
 }
@@ -991,7 +1080,7 @@ export async function findForMetering(sessionId: string): Promise<{
 	organizationId: string;
 	meteredThroughAt: Date | null;
 	startedAt: Date;
-	status: string;
+	sandboxState: string;
 } | null> {
 	const db = getDb();
 	const result = await db.query.sessions.findFirst({
@@ -1001,7 +1090,7 @@ export async function findForMetering(sessionId: string): Promise<{
 			organizationId: true,
 			meteredThroughAt: true,
 			startedAt: true,
-			status: true,
+			sandboxState: true,
 		},
 	});
 	return (
@@ -1011,7 +1100,7 @@ export async function findForMetering(sessionId: string): Promise<{
 					organizationId: string;
 					meteredThroughAt: Date | null;
 					startedAt: Date;
-					status: string;
+					sandboxState: string;
 			  }
 			| undefined) ?? null
 	);
@@ -1028,14 +1117,14 @@ export async function findAllRunningForMetering(): Promise<
 		sandboxProvider: string | null;
 		meteredThroughAt: Date | null;
 		startedAt: Date;
-		status: string;
+		sandboxState: string;
 		lastSeenAliveAt: Date | null;
 		aliveCheckFailures: number | null;
 	}[]
 > {
 	const db = getDb();
 	return db.query.sessions.findMany({
-		where: eq(sessions.status, "running"),
+		where: eq(sessions.sandboxState, "running"),
 		columns: {
 			id: true,
 			organizationId: true,
@@ -1043,7 +1132,7 @@ export async function findAllRunningForMetering(): Promise<
 			sandboxProvider: true,
 			meteredThroughAt: true,
 			startedAt: true,
-			status: true,
+			sandboxState: true,
 			lastSeenAliveAt: true,
 			aliveCheckFailures: true,
 		},
@@ -1055,7 +1144,7 @@ export async function findAllRunningForMetering(): Promise<
 			sandboxProvider: string | null;
 			meteredThroughAt: Date | null;
 			startedAt: Date;
-			status: string;
+			sandboxState: string;
 			lastSeenAliveAt: Date | null;
 			aliveCheckFailures: number | null;
 		}[]
@@ -1814,9 +1903,8 @@ export async function createManagerSessionPlaceholder(
 			createdBy: input.createdBy,
 			sessionType: "coding",
 			kind: null,
-			status: "starting",
-			runtimeStatus: "starting",
-			operatorStatus: "active",
+			sandboxState: "provisioning",
+			agentState: "iterating",
 			visibility: input.visibility ?? "org",
 			repoId: input.repoId ?? null,
 			repoBaselineId: input.repoBaselineId ?? null,
@@ -1908,9 +1996,8 @@ export async function createTaskSession(input: CreateTaskSessionInput): Promise<
 			createdBy: input.createdBy,
 			sessionType: "coding",
 			kind: "task",
-			status: "starting",
-			runtimeStatus: "starting",
-			operatorStatus: "active",
+			sandboxState: "provisioning",
+			agentState: "iterating",
 			visibility: input.visibility ?? "private",
 			repoId: input.repoId ?? null,
 			repoBaselineId: input.repoBaselineId ?? null,
@@ -1946,12 +2033,12 @@ export async function updateLastVisibleUpdateAt(sessionId: string): Promise<void
 // K4: Operator status projection
 // ============================================
 
-export async function updateOperatorStatus(
-	sessionId: string,
-	operatorStatus: string,
-): Promise<void> {
+export async function updateAgentState(sessionId: string, agentState: string): Promise<void> {
 	const db = getDb();
-	await db.update(sessions).set({ operatorStatus }).where(eq(sessions.id, sessionId));
+	await db
+		.update(sessions)
+		.set({ agentState, stateUpdatedAt: new Date() })
+		.where(eq(sessions.id, sessionId));
 }
 
 // ============================================

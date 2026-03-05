@@ -84,6 +84,63 @@ describe("deriveDisplayStatus", () => {
 	it('returns "failed" for empty string status', () => {
 		expect(deriveDisplayStatus("", null)).toBe("failed");
 	});
+
+	// Canonical object states
+	it('returns "idle" for canonical waiting_input', () => {
+		expect(
+			deriveDisplayStatus(
+				{
+					sandboxState: "running",
+					agentState: "waiting_input",
+					terminalState: null,
+					reason: null,
+				},
+				null,
+			),
+		).toBe("idle");
+	});
+
+	it('returns "blocked" for canonical waiting_approval', () => {
+		expect(
+			deriveDisplayStatus(
+				{
+					sandboxState: "running",
+					agentState: "waiting_approval",
+					terminalState: null,
+					reason: null,
+				},
+				null,
+			),
+		).toBe("blocked");
+	});
+
+	it('returns "completed" for canonical done', () => {
+		expect(
+			deriveDisplayStatus(
+				{
+					sandboxState: "running",
+					agentState: "done",
+					terminalState: null,
+					reason: null,
+				},
+				null,
+			),
+		).toBe("completed");
+	});
+
+	it('returns "failed" for canonical errored', () => {
+		expect(
+			deriveDisplayStatus(
+				{
+					sandboxState: "running",
+					agentState: "errored",
+					terminalState: null,
+					reason: null,
+				},
+				null,
+			),
+		).toBe("failed");
+	});
 });
 
 describe("getBlockedReasonText", () => {
@@ -112,5 +169,9 @@ describe("getBlockedReasonText", () => {
 		expect(getBlockedReasonText("inactivity", "paused")).toBeNull();
 		expect(getBlockedReasonText(null, "paused")).toBeNull();
 		expect(getBlockedReasonText(null, "running")).toBeNull();
+	});
+
+	it('returns "Approval required" for approval_required', () => {
+		expect(getBlockedReasonText("approval_required", "paused")).toBe("Approval required");
 	});
 });

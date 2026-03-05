@@ -1,281 +1,403 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useSessionFileContent, useSessionFilesTree } from "@/hooks/sessions/use-session-files";
-import { cn } from "@/lib/display/utils";
-import type { FsTreeEntry } from "@proliferate/shared/contracts/harness";
-import { useQueryClient } from "@tanstack/react-query";
 import {
-	ChevronDown,
-	ChevronRight,
-	File,
-	Folder,
-	FolderOpen,
-	Link,
-	Loader2,
-	RefreshCw,
-	X,
-} from "lucide-react";
-import { useCallback, useState } from "react";
+	useSessionFileBinaryContent,
+	useSessionFileContent,
+	useSessionFilesTree,
+	useSessionWriteFile,
+} from "@/hooks/sessions/use-session-files";
+import { useWsToken } from "@/hooks/sessions/use-ws-token";
+import { devConsoleLog } from "@/lib/analytics/dev-console-log";
+import { readFsFile } from "@/lib/infra/gateway-harness-client";
+import { useQueryClient } from "@tanstack/react-query";
+import { Loader2, RefreshCw, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FilesCodeEditor } from "./files-panel/code-editor";
+import { getFileRenderKind, isJsonFile, isLikelyTextFile } from "./files-panel/file-types";
+import { FilesTree } from "./files-panel/files-tree";
+import { FilesGlobalSearch } from "./files-panel/global-search";
+import { useFilesPanelShortcuts } from "./files-panel/shortcuts";
+import { useFilesPanelState } from "./files-panel/state";
 import { PanelShell } from "./panel-shell";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 interface FilesPanelProps {
 	sessionId: string;
+	activityTick?: number;
 }
 
-interface ExpandedDirs {
-	[path: string]: boolean;
+const MAX_SEARCH_FILES = 160;
+const MAX_SEARCH_FILE_SIZE = 1_000_000;
+const FILES_PANEL_LEFT_MIN = 18;
+const FILES_PANEL_LEFT_MAX = 400;
+const FILES_PANEL_RIGHT_MIN = 25;
+
+function normalizeSplitSizes(leftCandidate: number): [number, number] {
+	const left = Math.max(FILES_PANEL_LEFT_MIN, Math.min(FILES_PANEL_LEFT_MAX, leftCandidate));
+	const right = 100 - left;
+	return [left, right];
 }
 
-// ---------------------------------------------------------------------------
-// File icon
-// ---------------------------------------------------------------------------
-
-function FileIcon({ entry }: { entry: FsTreeEntry }) {
-	if (entry.type === "symlink") {
-		return <Link className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+function readInitialSplitSizes(): [number, number] {
+	if (typeof window === "undefined") {
+		return [32, 68];
 	}
-	if (entry.type === "directory") {
-		return <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+
+	try {
+		const stored = window.localStorage.getItem("files-panel-split-v1");
+		if (!stored) return [32, 68];
+		const parsed = JSON.parse(stored) as number[];
+		if (!Array.isArray(parsed) || parsed.length < 2) return [32, 68];
+		const left = Number(parsed[0]);
+		if (!Number.isFinite(left)) return [32, 68];
+		return normalizeSplitSizes(left);
+	} catch {
+		return [32, 68];
 	}
-	return <File className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
 }
 
-function formatFileSize(bytes: number | undefined): string {
-	if (bytes === undefined) return "";
-	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-// ---------------------------------------------------------------------------
-// File content viewer
-// ---------------------------------------------------------------------------
-
-function FileContentViewer({
-	sessionId,
-	filePath,
-	onClose,
-}: {
-	sessionId: string;
-	filePath: string;
-	onClose: () => void;
-}) {
-	const { data, isLoading, error } = useSessionFileContent(sessionId, filePath);
-
-	return (
-		<div className="flex flex-col h-full">
-			<div className="flex items-center justify-between px-3 py-1.5 border-b border-border/50 shrink-0">
-				<span className="text-xs font-medium truncate">{filePath}</span>
-				<div className="flex items-center gap-1">
-					{data?.size !== undefined && (
-						<span className="text-[11px] text-muted-foreground">{formatFileSize(data.size)}</span>
-					)}
-					<Button variant="ghost" size="icon" className="h-5 w-5" onClick={onClose}>
-						<X className="h-3 w-3" />
-					</Button>
-				</div>
-			</div>
-			<div className="flex-1 min-h-0 overflow-auto">
-				{isLoading ? (
-					<div className="flex items-center justify-center py-8">
-						<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-					</div>
-				) : error ? (
-					<div className="px-3 py-4 text-sm text-destructive">
-						{error instanceof Error ? error.message : "Failed to read file"}
-					</div>
-				) : (
-					<pre className="text-xs font-mono p-3 whitespace-pre-wrap break-all text-foreground">
-						{data?.content ?? ""}
-					</pre>
-				)}
-			</div>
-		</div>
-	);
-}
-
-// ---------------------------------------------------------------------------
-// Tree row
-// ---------------------------------------------------------------------------
-
-function TreeRow({
-	entry,
-	depth,
-	isExpanded,
-	onToggle,
-	onSelect,
-	isSelected,
-}: {
-	entry: FsTreeEntry;
-	depth: number;
-	isExpanded: boolean;
-	onToggle: () => void;
-	onSelect: () => void;
-	isSelected: boolean;
-}) {
-	const isDir = entry.type === "directory";
-	const indent = depth * 16;
-
-	return (
-		<Button
-			type="button"
-			variant="ghost"
-			className={cn(
-				"flex items-center gap-1.5 w-full py-1 px-2 text-left hover:bg-muted/50 text-sm h-auto justify-start rounded-none",
-				isSelected && "bg-muted/70",
-			)}
-			style={{ paddingLeft: `${indent + 8}px` }}
-			onClick={isDir ? onToggle : onSelect}
-		>
-			{isDir ? (
-				<span className="shrink-0 w-3.5">
-					{isExpanded ? (
-						<ChevronDown className="h-3 w-3 text-muted-foreground" />
-					) : (
-						<ChevronRight className="h-3 w-3 text-muted-foreground" />
-					)}
-				</span>
-			) : (
-				<span className="shrink-0 w-3.5" />
-			)}
-			{isDir && isExpanded ? (
-				<FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-			) : (
-				<FileIcon entry={entry} />
-			)}
-			<span className="truncate text-foreground">{entry.name}</span>
-			{entry.size !== undefined && entry.type === "file" && (
-				<span className="ml-auto text-[11px] text-muted-foreground shrink-0">
-					{formatFileSize(entry.size)}
-				</span>
-			)}
-		</Button>
-	);
-}
-
-// ---------------------------------------------------------------------------
-// Files Panel
-// ---------------------------------------------------------------------------
-
-export function FilesPanel({ sessionId }: FilesPanelProps) {
+export function FilesPanel({ sessionId, activityTick = 0 }: FilesPanelProps) {
 	const queryClient = useQueryClient();
-	const [expandedDirs, setExpandedDirs] = useState<ExpandedDirs>({ ".": true });
-	const [selectedFile, setSelectedFile] = useState<string | null>(null);
+	const { token } = useWsToken();
+	const writeFile = useSessionWriteFile(sessionId);
+	const [filePathQuery, setFilePathQuery] = useState("");
+	const [searchContentByPath, setSearchContentByPath] = useState<Record<string, string>>({});
+	const [initialSplitSizes] = useState<[number, number]>(() => readInitialSplitSizes());
 
-	// Fetch root tree
-	const { data, isLoading, error, refetch } = useSessionFilesTree(sessionId, ".", 3);
+	const {
+		sidebarTab,
+		setSidebarTab,
+		currentFile,
+		setCurrentFile,
+		openTabs,
+		openFile,
+		closeTab,
+		expandedDirs,
+		toggleDir,
+		searchQuery,
+		setSearchQuery,
+		expandedSearchFiles,
+		setExpandedSearchFiles,
+		pendingChanges,
+		setDraft,
+		discardDraft,
+		dirtyPaths,
+		targetFileLineRange,
+		clearTargetFileRange,
+	} = useFilesPanelState();
 
-	const entries = data?.entries ?? [];
+	const {
+		data: currentFileData,
+		isLoading: isCurrentFileLoading,
+		error: currentFileReadError,
+	} = useSessionFileContent(sessionId, currentFile);
+	const fileRenderKind = currentFile ? getFileRenderKind(currentFile) : "text";
+	const { data: currentBinaryFileData, error: currentBinaryFileError } =
+		useSessionFileBinaryContent(
+			sessionId,
+			currentFile,
+			fileRenderKind === "image" || fileRenderKind === "binary",
+		);
+	const { data: searchTreeData } = useSessionFilesTree(sessionId, ".", 6, sidebarTab === "search");
 
-	const toggleDir = useCallback((path: string) => {
-		setExpandedDirs((prev) => ({ ...prev, [path]: !prev[path] }));
-	}, []);
+	const currentContent =
+		(currentFile && pendingChanges[currentFile]) ??
+		currentFileData?.content ??
+		(currentFile ? "" : "Select a file to view.");
 
-	const handleSelectFile = useCallback((path: string) => {
-		setSelectedFile((prev) => (prev === path ? null : path));
-	}, []);
+	const isCurrentFileDirty = currentFile ? dirtyPaths.has(currentFile) : false;
+	const readErrorMessage = currentFile
+		? fileRenderKind === "text"
+			? currentFileReadError instanceof Error
+				? currentFileReadError.message
+				: null
+			: currentBinaryFileError instanceof Error
+				? currentBinaryFileError.message
+				: null
+		: null;
+	const saveErrorMessage =
+		writeFile.error instanceof Error
+			? writeFile.error.message
+			: writeFile.error
+				? "Write failed"
+				: null;
+	const jsonDiagnosticMessage = useMemo(() => {
+		if (!currentFile || !isJsonFile(currentFile)) return null;
+		if (fileRenderKind !== "text") return null;
+		try {
+			JSON.parse(currentContent);
+			return null;
+		} catch (error) {
+			return error instanceof Error ? `JSON parse error: ${error.message}` : "Invalid JSON";
+		}
+	}, [currentContent, currentFile, fileRenderKind]);
+	const currentImageDataUrl =
+		fileRenderKind === "image" && currentBinaryFileData
+			? `data:${currentBinaryFileData.mimeType};base64,${currentBinaryFileData.base64}`
+			: null;
 
 	const handleRefresh = useCallback(() => {
-		refetch();
 		queryClient.invalidateQueries({ queryKey: ["fs-tree", sessionId] });
-	}, [refetch, queryClient, sessionId]);
+		queryClient.invalidateQueries({ queryKey: ["file-read", sessionId] });
+	}, [queryClient, sessionId]);
 
-	// Build hierarchical view from flat entries
-	const rootEntries = entries.filter((e) => !e.path.includes("/"));
-	const childrenOf = (parentPath: string) =>
-		entries.filter((e) => {
-			const parent = e.path.substring(0, e.path.lastIndexOf("/"));
-			return parent === parentPath;
+	useEffect(() => {
+		devConsoleLog("files-panel", "split_sizes.loaded", {
+			left: initialSplitSizes[0],
+			right: initialSplitSizes[1],
 		});
+	}, [initialSplitSizes]);
 
-	function renderEntries(items: FsTreeEntry[], depth: number): React.ReactNode {
-		// Sort: directories first, then alphabetical
-		const sorted = [...items].sort((a, b) => {
-			if (a.type === "directory" && b.type !== "directory") return -1;
-			if (a.type !== "directory" && b.type === "directory") return 1;
-			return a.name.localeCompare(b.name);
-		});
+	useEffect(() => {
+		if (activityTick === 0) return;
+		queryClient.invalidateQueries({ queryKey: ["fs-tree", sessionId] });
+		for (const path of openTabs) {
+			if (!dirtyPaths.has(path)) {
+				queryClient.invalidateQueries({ queryKey: ["file-read", sessionId, path] });
+			}
+		}
+	}, [activityTick, dirtyPaths, openTabs, queryClient, sessionId]);
 
-		return sorted.map((entry) => {
-			const isDir = entry.type === "directory";
-			const isExpanded = expandedDirs[entry.path] ?? false;
-			const children = isDir && isExpanded ? childrenOf(entry.path) : [];
+	useEffect(() => {
+		if (sidebarTab !== "search") return;
+		if (searchQuery.trim().length < 2) return;
+		if (!token) return;
 
-			return (
-				<div key={entry.path}>
-					<TreeRow
-						entry={entry}
-						depth={depth}
-						isExpanded={isExpanded}
-						onToggle={() => toggleDir(entry.path)}
-						onSelect={() => handleSelectFile(entry.path)}
-						isSelected={selectedFile === entry.path}
+		const filePaths = (searchTreeData?.entries ?? [])
+			.filter((entry) => entry.type === "file")
+			.map((entry) => entry.path)
+			.filter((path) => isLikelyTextFile(path))
+			.slice(0, MAX_SEARCH_FILES);
+
+		if (filePaths.length === 0) return;
+
+		let isCancelled = false;
+		const hydrateSearchIndex = async () => {
+			const unresolvedPaths = filePaths.filter((path) => !(path in searchContentByPath));
+			if (unresolvedPaths.length === 0) return;
+
+			const next: Record<string, string> = {};
+			for (const path of unresolvedPaths) {
+				try {
+					const data = await queryClient.fetchQuery({
+						queryKey: ["file-read", sessionId, path],
+						queryFn: () => readFsFile(sessionId, token, path),
+						staleTime: 5_000,
+					});
+					if (data.size > MAX_SEARCH_FILE_SIZE) continue;
+					if (!isCancelled) {
+						next[path] = data.content;
+					}
+				} catch {
+					// Ignore unreadable/binary files for search index.
+				}
+			}
+
+			if (!isCancelled && Object.keys(next).length > 0) {
+				setSearchContentByPath((prev) => ({ ...prev, ...next }));
+			}
+		};
+
+		hydrateSearchIndex().catch(() => undefined);
+		return () => {
+			isCancelled = true;
+		};
+	}, [
+		queryClient,
+		searchContentByPath,
+		searchQuery,
+		searchTreeData?.entries,
+		sessionId,
+		sidebarTab,
+		token,
+	]);
+
+	const closeCurrentTab = useCallback(() => {
+		if (!currentFile) return;
+		closeTab(currentFile);
+	}, [closeTab, currentFile]);
+
+	useFilesPanelShortcuts({
+		sidebarTab,
+		setSidebarTab,
+		currentFile,
+		closeCurrentTab,
+	});
+
+	const saveCurrentFile = useCallback(async () => {
+		if (!currentFile) return;
+		const draft = pendingChanges[currentFile];
+		if (typeof draft !== "string") return;
+		await writeFile.mutateAsync({ path: currentFile, content: draft });
+		discardDraft(currentFile);
+		queryClient.invalidateQueries({ queryKey: ["file-read", sessionId, currentFile] });
+		queryClient.invalidateQueries({ queryKey: ["fs-tree", sessionId] });
+	}, [currentFile, discardDraft, pendingChanges, queryClient, sessionId, writeFile]);
+
+	const discardCurrentFileChanges = useCallback(() => {
+		if (!currentFile) return;
+		discardDraft(currentFile);
+	}, [currentFile, discardDraft]);
+
+	const sidebar = (
+		<div className="flex h-full min-h-0 w-full flex-col border-r border-border/60">
+			<Tabs
+				value={sidebarTab}
+				onValueChange={(value) =>
+					value === "files" || value === "search" ? setSidebarTab(value) : undefined
+				}
+			>
+				<TabsList className="m-2 grid h-8 w-auto grid-cols-2">
+					<TabsTrigger value="files" className="text-xs">
+						Files
+					</TabsTrigger>
+					<TabsTrigger value="search" className="text-xs">
+						<Search className="mr-1 h-3.5 w-3.5" />
+						Search
+					</TabsTrigger>
+				</TabsList>
+			</Tabs>
+			{sidebarTab === "files" ? (
+				<>
+					<div className="px-2 pb-2">
+						<Input
+							value={filePathQuery}
+							onChange={(event) => setFilePathQuery(event.target.value.trim().toLowerCase())}
+							placeholder="Filter file paths..."
+							className="h-8 text-xs"
+						/>
+					</div>
+					<FilesTree
+						sessionId={sessionId}
+						expandedDirs={expandedDirs}
+						currentFile={currentFile}
+						pathQuery={filePathQuery}
+						onToggleDir={toggleDir}
+						onSelectFile={(path) => {
+							openFile(path);
+							setSidebarTab("files");
+						}}
 					/>
-					{isDir && isExpanded && children.length > 0 && renderEntries(children, depth + 1)}
-				</div>
-			);
-		});
-	}
-
-	const panelActions = (
-		<Tooltip>
-			<TooltipTrigger asChild>
-				<Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRefresh}>
-					<RefreshCw className="h-3.5 w-3.5" />
-				</Button>
-			</TooltipTrigger>
-			<TooltipContent>Refresh</TooltipContent>
-		</Tooltip>
+				</>
+			) : (
+				<FilesGlobalSearch
+					query={searchQuery}
+					onQueryChange={setSearchQuery}
+					expandedFilePaths={expandedSearchFiles}
+					skippedMessage={`Skipping non-text and files larger than ${Math.floor(MAX_SEARCH_FILE_SIZE / 1_000_000)}MB.`}
+					onToggleExpanded={(path) =>
+						setExpandedSearchFiles((prev) => {
+							const next = new Set(prev);
+							if (next.has(path)) next.delete(path);
+							else next.add(path);
+							return next;
+						})
+					}
+					contentByPath={searchContentByPath}
+					onOpenResult={(path, line) => {
+						openFile(path, { filePath: path, startLine: line, endLine: line });
+						setSidebarTab("files");
+					}}
+				/>
+			)}
+		</div>
 	);
 
-	if (selectedFile) {
-		return (
-			<PanelShell title="Files" noPadding actions={panelActions}>
-				<FileContentViewer
-					sessionId={sessionId}
-					filePath={selectedFile}
-					onClose={() => setSelectedFile(null)}
-				/>
-			</PanelShell>
-		);
-	}
+	const panelActions = (
+		<>
+			{writeFile.isPending && (
+				<Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+			)}
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRefresh}>
+						<RefreshCw className="h-3.5 w-3.5" />
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent>Refresh files</TooltipContent>
+			</Tooltip>
+		</>
+	);
+
+	const handleLayoutChanged = useCallback((layout: unknown) => {
+		const recordLayout = Array.isArray(layout) ? null : (layout as Record<string, number>);
+		const left =
+			recordLayout && Number.isFinite(Number(recordLayout["files-panel-sidebar"]))
+				? Number(recordLayout["files-panel-sidebar"])
+				: Array.isArray(layout) && layout.length >= 1
+					? Number(layout[0])
+					: Number.NaN;
+		if (!Number.isFinite(left)) return;
+		const [nextLeft, nextRight] = normalizeSplitSizes(left);
+		devConsoleLog("files-panel", "split_sizes.changed", {
+			rawLayout: layout,
+			left: nextLeft,
+			right: nextRight,
+		});
+		if (typeof window !== "undefined") {
+			window.localStorage.setItem("files-panel-split-v1", JSON.stringify([nextLeft, nextRight]));
+		}
+	}, []);
 
 	return (
 		<PanelShell title="Files" noPadding actions={panelActions}>
-			<div className="flex flex-col h-full">
-				{isLoading ? (
-					<div className="flex items-center justify-center py-8">
-						<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+			<ResizablePanelGroup
+				orientation="horizontal"
+				className="h-full"
+				onLayoutChanged={handleLayoutChanged}
+			>
+				<ResizablePanel
+					id="files-panel-sidebar"
+					order={1}
+					defaultSize={initialSplitSizes[0]}
+					minSize={FILES_PANEL_LEFT_MIN}
+					maxSize={FILES_PANEL_LEFT_MAX}
+				>
+					{sidebar}
+				</ResizablePanel>
+				<ResizableHandle
+					withHandle
+					onMouseDown={() => {
+						devConsoleLog("files-panel", "split_handle.mouse_down", {
+							left: initialSplitSizes[0],
+							right: initialSplitSizes[1],
+						});
+					}}
+				/>
+				<ResizablePanel
+					id="files-panel-editor"
+					order={2}
+					defaultSize={initialSplitSizes[1]}
+					minSize={FILES_PANEL_RIGHT_MIN}
+				>
+					<div className="min-h-0 min-w-0 flex-1">
+						<FilesCodeEditor
+							currentFile={currentFile}
+							openTabs={openTabs}
+							isLoadingCurrentFile={isCurrentFileLoading}
+							currentContent={currentContent}
+							isCurrentFileDirty={isCurrentFileDirty}
+							fileRenderKind={fileRenderKind}
+							imageDataUrl={currentImageDataUrl}
+							readError={readErrorMessage}
+							saveError={saveErrorMessage}
+							diagnosticMessage={jsonDiagnosticMessage}
+							targetFileLineRange={targetFileLineRange}
+							readOnly={false}
+							onSelectTab={setCurrentFile}
+							onCloseTab={closeTab}
+							onChange={(path, value) => setDraft(path, value)}
+							onSaveCurrent={saveCurrentFile}
+							onDiscardCurrent={discardCurrentFileChanges}
+							onLineHighlightDone={clearTargetFileRange}
+						/>
 					</div>
-				) : error ? (
-					<div className="px-3 py-4 text-sm text-destructive">
-						{error instanceof Error ? error.message : "Failed to load files"}
-					</div>
-				) : entries.length === 0 ? (
-					<div className="flex items-center justify-center h-full">
-						<p className="text-sm text-muted-foreground">No files in workspace</p>
-					</div>
-				) : (
-					<div className="flex-1 min-h-0 overflow-y-auto">{renderEntries(rootEntries, 0)}</div>
-				)}
-
-				{/* Footer: file count */}
-				{entries.length > 0 && (
-					<div className="px-3 py-1.5 border-t text-xs text-muted-foreground shrink-0">
-						{entries.filter((e) => e.type === "file").length} file
-						{entries.filter((e) => e.type === "file").length !== 1 ? "s" : ""}
-						{", "}
-						{entries.filter((e) => e.type === "directory").length} folder
-						{entries.filter((e) => e.type === "directory").length !== 1 ? "s" : ""}
-					</div>
-				)}
-			</div>
+				</ResizablePanel>
+			</ResizablePanelGroup>
 		</PanelShell>
 	);
 }
