@@ -17,7 +17,9 @@ export default function SessionDetailPage({
 	params: Promise<{ id: string }>;
 }) {
 	const { id } = use(params);
-	const { setActiveSession, pendingPrompt, clearPendingPrompt } = useDashboardStore();
+	const setActiveSession = useDashboardStore((state) => state.setActiveSession);
+	const pendingPrompt = useDashboardStore((state) => state.pendingPrompt);
+	const clearPendingPrompt = useDashboardStore((state) => state.clearPendingPrompt);
 	const { data: sessionData } = useSessionData(id);
 	useMarkSessionViewed(id);
 	const searchParams = useSearchParams();
