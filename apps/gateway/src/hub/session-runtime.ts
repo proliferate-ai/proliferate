@@ -144,10 +144,13 @@ export class SessionRuntime implements RuntimeFacade {
 	 */
 	async refreshGitContext(): Promise<void> {
 		const refreshed = await loadSessionRuntimeContext(this.env, this.sessionId);
-		this.runtimeContext.config = {
-			...this.runtimeContext.config,
-			repos: refreshed.config.repos,
-			gitIdentity: refreshed.config.gitIdentity,
+		this.runtimeContext = {
+			config: {
+				...this.runtimeContext.config,
+				repos: refreshed.config.repos,
+				gitIdentity: refreshed.config.gitIdentity,
+			},
+			live: this.runtimeContext.live,
 		};
 	}
 
@@ -343,7 +346,7 @@ export class SessionRuntime implements RuntimeFacade {
 				configurationId: live.session.configuration_id,
 				repoCount: config.repos.length,
 				primaryRepo: config.primaryRepo.github_repo_name,
-				hasSandandbox: Boolean(live.session.sandbox_id),
+				hasSandbox: Boolean(live.session.sandbox_id),
 				hasSnapshot: Boolean(live.session.snapshot_id),
 			});
 			this.log(

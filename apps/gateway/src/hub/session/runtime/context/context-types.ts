@@ -32,7 +32,7 @@ export interface SessionLiveState {
 }
 
 export interface SessionRuntimeContext {
-	config: SessionConfig;
+	readonly config: SessionConfig;
 	live: SessionLiveState;
 }
 

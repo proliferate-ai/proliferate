@@ -12,11 +12,12 @@ import type {
 	RuntimeDriverExecutionInput,
 	RuntimeDriverReadyResult,
 } from "../contracts/runtime-driver";
+import type { SessionLiveState } from "../state/session-live-state";
 import { reconcileRuntimePointers } from "../state/state-reconciler";
 
 export class ManagerRuntimeDriver implements RuntimeDriver {
 	private provider: SandboxProvider | null = null;
-	private state: RuntimeDriverExecutionInput | null = null;
+	private live: SessionLiveState | null = null;
 	private readonly managerHarness: ClaudeManagerHarnessAdapter;
 
 	constructor(managerHarness: ClaudeManagerHarnessAdapter) {
@@ -29,7 +30,7 @@ export class ManagerRuntimeDriver implements RuntimeDriver {
 
 	async activate(input: RuntimeDriverActivationInput): Promise<RuntimeDriverReadyResult> {
 		this.provider = input.provider;
-		this.state = { config: input.config, live: input.live };
+		this.live = input.live;
 		const managerHarnessStartMs = Date.now();
 		let managerApiKey = input.env.anthropicApiKey;
 		let managerProxyUrl: string | undefined;
@@ -47,11 +48,14 @@ export class ManagerRuntimeDriver implements RuntimeDriver {
 			anthropicApiKey: managerApiKey,
 			llmProxyUrl: managerProxyUrl,
 		};
-		if (input.options?.reason === "auto_reconnect") {
-			await this.managerHarness.resume(harnessInput);
-		} else {
-			await this.managerHarness.start(harnessInput);
+		const managerState =
+			input.options?.reason === "auto_reconnect"
+				? await this.managerHarness.resume(harnessInput)
+				: await this.managerHarness.start(harnessInput);
+		if (managerState.status !== "running") {
+			throw new Error(`Manager harness failed to enter running state: ${managerState.status}`);
 		}
+		input.log("Manager harness ready", { currentRunId: managerState.currentRunId ?? null });
 		input.logLatency("runtime.ensure_ready.manager_harness.start", {
 			durationMs: Date.now() - managerHarnessStartMs,
 		});
@@ -66,7 +70,7 @@ export class ManagerRuntimeDriver implements RuntimeDriver {
 	}
 
 	async interrupt(): Promise<void> {
-		return;
+		await this.managerHarness.interrupt();
 	}
 
 	async collectOutputs(): Promise<Message[]> {
@@ -74,8 +78,8 @@ export class ManagerRuntimeDriver implements RuntimeDriver {
 	}
 
 	disconnectStream(): void {
-		if (this.state) {
-			this.state.live.eventStreamConnected = false;
+		if (this.live) {
+			this.live.eventStreamConnected = false;
 		}
 	}
 

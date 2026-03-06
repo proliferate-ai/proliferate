@@ -39,6 +39,7 @@ export interface RuntimeDriverExecutionInput {
 	live: SessionLiveState;
 }
 
+/** Identifies the activated driver for telemetry/logging; selection still uses session kind mapping elsewhere. */
 export interface RuntimeDriverReadyResult {
 	driverKind: "coding-opencode" | "manager-claude";
 }

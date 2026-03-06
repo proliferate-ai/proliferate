@@ -17,6 +17,7 @@ import type {
 } from "../contracts/runtime-driver";
 import { connectCodingEventStream } from "../event-stream";
 import { waitForOpenCodeReady } from "../opencode-ready";
+import type { SessionLiveState } from "../state/session-live-state";
 import { withStepTiming } from "../timing";
 import { persistCodingSessionId } from "../write-authority/runtime-writers";
 
@@ -26,7 +27,8 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 	private openCodeSessionId: string | null = null;
 	private eventStreamHandle: CodingHarnessEventStreamHandle | null = null;
 	private provider: SandboxProvider | null = null;
-	private state: RuntimeDriverExecutionInput | null = null;
+	private live: SessionLiveState | null = null;
+	private serviceCommands: ConfigurationServiceCommand[] | undefined;
 
 	isReady(input: RuntimeDriverExecutionInput): boolean {
 		return Boolean(
@@ -36,7 +38,8 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 
 	async activate(input: RuntimeDriverActivationInput): Promise<RuntimeDriverReadyResult> {
 		this.provider = input.provider;
-		this.state = { config: input.config, live: input.live };
+		this.live = input.live;
+		this.serviceCommands = input.config.serviceCommands;
 		this.openCodeUrl = input.live.openCodeUrl;
 		if (!this.openCodeUrl) {
 			throw new Error("Missing agent tunnel URL");
@@ -118,8 +121,8 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 	disconnectStream(): void {
 		this.eventStreamHandle?.disconnect();
 		this.eventStreamHandle = null;
-		if (this.state) {
-			this.state.live.eventStreamConnected = false;
+		if (this.live) {
+			this.live.eventStreamConnected = false;
 		}
 	}
 
@@ -131,13 +134,11 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 		runId: string,
 		overrideCommands?: ConfigurationServiceCommand[],
 	): Promise<AutoStartOutputEntry[]> {
-		if (!this.provider || !this.state) {
+		if (!this.provider || !this.live) {
 			throw new Error("Runtime not ready");
 		}
-		const sandboxId = this.state.live.session.sandbox_id;
-		const commands = overrideCommands?.length
-			? overrideCommands
-			: this.state.config.serviceCommands;
+		const sandboxId = this.live.session.sandbox_id;
+		const commands = overrideCommands?.length ? overrideCommands : this.serviceCommands;
 		if (!this.provider.testServiceCommands || !sandboxId) {
 			throw new Error("Runtime not ready");
 		}
