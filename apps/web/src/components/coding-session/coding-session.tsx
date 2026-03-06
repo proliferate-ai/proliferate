@@ -369,6 +369,8 @@ export function CodingSession({
 				const tab = PANEL_TABS.find((t) => t.type === tabType);
 				if (!tab) return null;
 				const isActive = activeType === tabType;
+				const previewAvailable = Boolean(previewUrl || (mode.type === "url" ? mode.url : null));
+				const isPreviewDisabled = tab.type === "url" && !previewAvailable;
 				return (
 					<Button
 						key={tabType}
@@ -377,8 +379,11 @@ export function CodingSession({
 						className={cn(
 							"h-7 gap-1.5 text-xs font-medium px-2.5",
 							!isActive && "text-muted-foreground hover:text-foreground",
+							isPreviewDisabled && "opacity-50",
 						)}
+						disabled={isPreviewDisabled}
 						onClick={() => {
+							if (isPreviewDisabled) return;
 							if (tab.type === "url") toggleUrlPreview(previewUrl || null);
 							else togglePanel(tab.type);
 						}}
@@ -398,6 +403,8 @@ export function CodingSession({
 					{effectivePanelTabs.map(({ type, label, icon: Icon }) => {
 						const isActive = activeType === type;
 						const isPinned = pinnedTabs.includes(type);
+						const previewAvailable = Boolean(previewUrl || (mode.type === "url" ? mode.url : null));
+						const isPreviewDisabled = type === "url" && !previewAvailable;
 						return (
 							<div key={type} className="flex items-center gap-0.5">
 								<Button
@@ -406,8 +413,11 @@ export function CodingSession({
 									className={cn(
 										"flex-1 justify-start gap-2 h-8 text-sm font-normal px-2.5",
 										isActive && "bg-secondary text-secondary-foreground",
+										isPreviewDisabled && "opacity-50",
 									)}
+									disabled={isPreviewDisabled}
 									onClick={() => {
+										if (isPreviewDisabled) return;
 										if (type === "url") toggleUrlPreview(previewUrl || null);
 										else togglePanel(type);
 										setViewPickerOpen(false);

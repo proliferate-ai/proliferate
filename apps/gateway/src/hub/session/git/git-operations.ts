@@ -197,6 +197,10 @@ export class GitOperations {
 		const statusParsed = parseStatusV2(statusResult.stdout);
 		const commits = parseLogOutput(logResult.stdout);
 		const busyState = parseBusyState(probeResult.stdout);
+		const openPr =
+			!statusParsed.detached && statusParsed.branch
+				? await this.detectOpenPullRequest(cwd, statusParsed.branch, workspacePath)
+				: null;
 
 		return {
 			...statusParsed,
@@ -208,7 +212,52 @@ export class GitOperations {
 			isBusy: busyState.isBusy,
 			rebaseInProgress: busyState.rebaseInProgress,
 			mergeInProgress: busyState.mergeInProgress,
+			...(openPr?.url ? { openPrUrl: openPr.url } : {}),
+			...(openPr?.number ? { openPrNumber: openPr.number } : {}),
 		};
+	}
+
+	private async detectOpenPullRequest(
+		cwd: string,
+		branch: string,
+		workspacePath?: string,
+	): Promise<{ url: string; number: number } | null> {
+		const commandEnv = { ...this.getReadOnlyEnv(), ...this.getAuthEnv(workspacePath) };
+		const result = await this.exec(
+			[
+				"gh",
+				"pr",
+				"list",
+				"--head",
+				branch,
+				"--state",
+				"open",
+				"--limit",
+				"1",
+				"--json",
+				"url,number",
+			],
+			{
+				cwd,
+				timeoutMs: 5_000,
+				env: commandEnv,
+			},
+		);
+
+		if (result.exitCode !== 0 || !result.stdout.trim()) {
+			return null;
+		}
+
+		try {
+			const parsed = JSON.parse(result.stdout) as Array<{ url?: unknown; number?: unknown }>;
+			const first = parsed[0];
+			if (!first || typeof first.url !== "string" || typeof first.number !== "number") {
+				return null;
+			}
+			return { url: first.url, number: first.number };
+		} catch {
+			return null;
+		}
 	}
 
 	// ============================================

@@ -19,7 +19,7 @@ const {
 	mockFindActiveResumeIntentTx,
 	mockInsertResumeIntentTx,
 	mockGetSessionOperatorStatusTx,
-	mockGetDisabledSourceIds,
+	mockGetDisabledPreferences,
 } = vi.hoisted(() => ({
 	mockCreateInvocation: vi.fn(),
 	mockListPendingBySession: vi.fn(),
@@ -39,7 +39,7 @@ const {
 	mockFindActiveResumeIntentTx: vi.fn(),
 	mockInsertResumeIntentTx: vi.fn(),
 	mockGetSessionOperatorStatusTx: vi.fn(),
-	mockGetDisabledSourceIds: vi.fn(),
+	mockGetDisabledPreferences: vi.fn(),
 }));
 
 vi.mock("./db", () => ({
@@ -87,7 +87,7 @@ vi.mock("./modes", () => ({
 }));
 
 vi.mock("../user-action-preferences", () => ({
-	getDisabledSourceIds: mockGetDisabledSourceIds,
+	getDisabledPreferences: mockGetDisabledPreferences,
 }));
 
 const {
@@ -164,7 +164,10 @@ describe("actions v1 service", () => {
 		mockFindActiveResumeIntentTx.mockResolvedValue(undefined);
 		mockInsertResumeIntentTx.mockResolvedValue(undefined);
 		mockGetSessionOperatorStatusTx.mockResolvedValue(null);
-		mockGetDisabledSourceIds.mockResolvedValue(new Set<string>());
+		mockGetDisabledPreferences.mockResolvedValue({
+			disabledSourceIds: new Set<string>(),
+			disabledActionsBySource: new Map<string, Set<string>>(),
+		});
 	});
 
 	it("allows write actions by default", async () => {
@@ -430,7 +433,10 @@ describe("actions v1 service", () => {
 
 	it("filters out disabled sources in available action catalog", async () => {
 		mockResolveMode.mockResolvedValue({ mode: "allow", source: "inferred_default" });
-		mockGetDisabledSourceIds.mockResolvedValue(new Set(["linear"]));
+		mockGetDisabledPreferences.mockResolvedValue({
+			disabledSourceIds: new Set(["linear"]),
+			disabledActionsBySource: new Map<string, Set<string>>(),
+		});
 
 		const result = await filterAvailableActionsForSession({
 			sessionId: "session-1",
@@ -457,7 +463,10 @@ describe("actions v1 service", () => {
 	});
 
 	it("filters denied actions and prunes empty integrations", async () => {
-		mockGetDisabledSourceIds.mockResolvedValue(new Set<string>());
+		mockGetDisabledPreferences.mockResolvedValue({
+			disabledSourceIds: new Set<string>(),
+			disabledActionsBySource: new Map<string, Set<string>>(),
+		});
 		mockResolveMode.mockImplementation(
 			async (input: { actionId: string; riskLevel: "read" | "write" | "danger" }) => {
 				if (input.actionId === "delete_issue") {
@@ -496,6 +505,34 @@ describe("actions v1 service", () => {
 
 		expect(result).toHaveLength(1);
 		expect(result[0]?.integration).toBe("linear");
+		expect(result[0]?.actions.map((entry) => entry.name)).toEqual(["create_issue"]);
+	});
+
+	it("filters actions disabled by user action-level preferences", async () => {
+		mockResolveMode.mockResolvedValue({ mode: "allow", source: "inferred_default" });
+		mockGetDisabledPreferences.mockResolvedValue({
+			disabledSourceIds: new Set<string>(),
+			disabledActionsBySource: new Map([["linear", new Set(["delete_issue"])]]),
+		});
+
+		const result = await filterAvailableActionsForSession({
+			sessionId: "session-1",
+			organizationId: "org-1",
+			userId: "user-1",
+			integrations: [
+				{
+					integrationId: "int-1",
+					integration: "linear",
+					displayName: "Linear",
+					actions: [
+						{ name: "create_issue", riskLevel: "write", description: "Create issue" },
+						{ name: "delete_issue", riskLevel: "danger", description: "Delete issue" },
+					],
+				},
+			],
+		});
+
+		expect(result).toHaveLength(1);
 		expect(result[0]?.actions.map((entry) => entry.name)).toEqual(["create_issue"]);
 	});
 });

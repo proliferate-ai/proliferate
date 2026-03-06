@@ -27,6 +27,7 @@ import {
 	Video,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { ProliferateToolCard } from "./proliferate-tool-card";
 
 // Get icon for file based on content type
 function getFileIcon(contentType: string) {
@@ -174,21 +175,23 @@ export const VerificationToolUI = makeAssistantToolUI<
 		const fileCount = files.length;
 
 		return (
-			<div className="ml-4 my-1">
+			<ProliferateToolCard
+				label="Verification"
+				status={isRunning ? "running" : errorMessage ? "error" : "success"}
+				errorMessage={errorMessage ?? undefined}
+			>
 				<Button
 					variant="ghost"
 					onClick={() => setIsExpanded(!isExpanded)}
-					className="h-auto p-0 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-transparent group max-w-full"
+					className="h-auto p-0 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-transparent group max-w-full"
 				>
-					{isRunning ? (
-						<Loader2 className="h-3 w-3 animate-spin shrink-0" />
-					) : isExpanded ? (
+					{isExpanded ? (
 						<ChevronDown className="h-3 w-3 shrink-0" />
 					) : (
 						<ChevronRight className="h-3 w-3 shrink-0" />
 					)}
 					<FileCheck className="h-3 w-3 shrink-0" />
-					<span className="shrink-0">Verify</span>
+					<span className="shrink-0">verify</span>
 					<span className="text-muted-foreground/70 truncate min-w-0">
 						{isComplete && fileCount > 0
 							? `(${fileCount} file${fileCount !== 1 ? "s" : ""})`
@@ -197,7 +200,7 @@ export const VerificationToolUI = makeAssistantToolUI<
 				</Button>
 
 				{isExpanded && isComplete && (
-					<div className="ml-4 mt-2 space-y-3 text-sm">
+					<div className="mt-2 space-y-3 text-sm">
 						{filesLoading ? (
 							<div className="flex items-center gap-2 text-muted-foreground">
 								<Loader2 className="h-3 w-3 animate-spin" />
@@ -288,7 +291,7 @@ export const VerificationToolUI = makeAssistantToolUI<
 						)}
 					</div>
 				)}
-			</div>
+			</ProliferateToolCard>
 		);
 	},
 });

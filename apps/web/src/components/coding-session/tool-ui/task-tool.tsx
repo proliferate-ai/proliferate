@@ -3,8 +3,9 @@
 import { Button } from "@/components/ui/button";
 import type { TaskToolMetadata } from "@/lib/sessions/coding-message-converter";
 import { makeAssistantToolUI } from "@assistant-ui/react";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
+import { ProliferateToolCard } from "./proliferate-tool-card";
 
 type TaskArgs = {
 	description?: string;
@@ -38,7 +39,10 @@ export const TaskToolUI = makeAssistantToolUI<TaskArgs, string>({
 		);
 
 		return (
-			<div className="ml-4 my-0.5">
+			<ProliferateToolCard
+				label={`${capitalizeFirst(agentType)} task`}
+				status={isRunning ? "running" : "success"}
+			>
 				<Button
 					variant="ghost"
 					onClick={() => {
@@ -46,11 +50,9 @@ export const TaskToolUI = makeAssistantToolUI<TaskArgs, string>({
 						setIsExpanded(!isExpanded);
 					}}
 					disabled={!canExpand}
-					className="h-auto p-0 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-transparent disabled:cursor-default group max-w-full"
+					className="h-auto p-0 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-transparent disabled:cursor-default group max-w-full"
 				>
-					{isRunning ? (
-						<Loader2 className="h-3 w-3 animate-spin shrink-0" />
-					) : isExpanded ? (
+					{isExpanded ? (
 						<ChevronDown className="h-3 w-3 shrink-0" />
 					) : (
 						<ChevronRight className="h-3 w-3 shrink-0" />
@@ -71,7 +73,7 @@ export const TaskToolUI = makeAssistantToolUI<TaskArgs, string>({
 
 				{/* Expanded: tool summary list */}
 				{isExpanded && summary.length > 0 && (
-					<div className="ml-4 mt-1 space-y-0.5">
+					<div className="mt-1 space-y-0.5">
 						{summary.map((item, index) => (
 							<div
 								key={item.id || index}
@@ -95,12 +97,12 @@ export const TaskToolUI = makeAssistantToolUI<TaskArgs, string>({
 
 				{/* Result text if no summary */}
 				{isExpanded && result && summary.length === 0 && (
-					<pre className="ml-4 mt-1 max-h-40 overflow-auto rounded border border-border/40 bg-muted/30 p-2 font-mono text-xs text-muted-foreground whitespace-pre-wrap">
+					<pre className="mt-1 max-h-40 overflow-auto rounded border border-border/40 bg-muted/30 p-2 font-mono text-xs text-muted-foreground whitespace-pre-wrap">
 						{result.slice(0, 2000)}
 						{result.length > 2000 && "\n..."}
 					</pre>
 				)}
-			</div>
+			</ProliferateToolCard>
 		);
 	},
 });

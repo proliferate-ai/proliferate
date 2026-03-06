@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { makeAssistantToolUI } from "@assistant-ui/react";
 import { Check, ChevronDown, ChevronRight, Circle, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { ProliferateToolCard } from "./proliferate-tool-card";
 
 type TodoItem = {
 	id?: string;
@@ -30,21 +31,18 @@ export const TodoWriteToolUI = makeAssistantToolUI<TodoWriteArgs, string>({
 		// Initial loading state - no todos yet
 		if (isRunning && totalCount === 0) {
 			return (
-				<div className="my-2 rounded-lg border border-border/50 bg-muted/20 overflow-hidden">
-					<div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-						<Loader2 className="h-4 w-4 animate-spin" />
-						<span>Planning tasks...</span>
-					</div>
-				</div>
+				<ProliferateToolCard label="Todo plan" status="running">
+					Planning tasks...
+				</ProliferateToolCard>
 			);
 		}
 
 		return (
-			<div className="my-2 rounded-lg border border-border/50 bg-muted/20 overflow-hidden">
+			<ProliferateToolCard label="Todo plan" status={isRunning ? "running" : "success"}>
 				<Button
 					variant="ghost"
 					onClick={() => setIsExpanded(!isExpanded)}
-					className="flex w-full h-auto items-center justify-start gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted/30 rounded-none"
+					className="flex w-full h-auto items-center justify-start gap-2 px-0 py-0 text-xs text-muted-foreground hover:bg-transparent rounded-none"
 				>
 					{isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
 					<span>
@@ -54,13 +52,13 @@ export const TodoWriteToolUI = makeAssistantToolUI<TodoWriteArgs, string>({
 				</Button>
 
 				{isExpanded && todos.length > 0 && (
-					<div className="px-3 pb-2 space-y-1">
+					<div className="pt-2 space-y-1">
 						{todos.map((todo, index) => (
 							<TodoItemRow key={todo.id || index} todo={todo} />
 						))}
 					</div>
 				)}
-			</div>
+			</ProliferateToolCard>
 		);
 	},
 });

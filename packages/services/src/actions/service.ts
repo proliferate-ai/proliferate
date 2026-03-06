@@ -24,7 +24,7 @@ export {
 	ApprovalAuthorityError,
 	PendingLimitError,
 } from "./errors";
-import { getDisabledSourceIds } from "../user-action-preferences";
+import { getDisabledPreferences } from "../user-action-preferences";
 import {
 	ActionConflictError,
 	ActionExpiredError,
@@ -504,19 +504,31 @@ export async function filterAvailableActionsForSession<
 	userId?: string | null;
 	integrations: AvailableActionCatalogIntegration<TAction>[];
 }): Promise<AvailableActionCatalogIntegration<TAction>[]> {
-	const disabledSourceIds =
+	const disabledPreferences =
 		input.userId && input.organizationId
-			? await getDisabledSourceIds(input.userId, input.organizationId)
-			: new Set<string>();
+			? await getDisabledPreferences(input.userId, input.organizationId)
+			: {
+					disabledSourceIds: new Set<string>(),
+					disabledActionsBySource: new Map<string, Set<string>>(),
+				};
 	const preferenceFiltered =
-		disabledSourceIds.size > 0
-			? input.integrations.filter((entry) => !disabledSourceIds.has(entry.integration))
+		disabledPreferences.disabledSourceIds.size > 0
+			? input.integrations.filter(
+					(entry) => !disabledPreferences.disabledSourceIds.has(entry.integration),
+				)
 			: input.integrations;
 
 	const filtered: AvailableActionCatalogIntegration<TAction>[] = [];
 	for (const integrationEntry of preferenceFiltered) {
+		const disabledActions = disabledPreferences.disabledActionsBySource.get(
+			integrationEntry.integration,
+		);
 		const visibleActions: TAction[] = [];
 		for (const actionEntry of integrationEntry.actions) {
+			if (disabledActions?.has(actionEntry.name)) {
+				continue;
+			}
+
 			const denied = await isActionDeniedForSession({
 				sessionId: input.sessionId,
 				organizationId: input.organizationId,

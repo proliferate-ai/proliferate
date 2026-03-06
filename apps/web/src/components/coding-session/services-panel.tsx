@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/display/utils";
 import { Loader2, MousePointerClick, Play, RefreshCw, RotateCw, Square } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PanelShell } from "./panel-shell";
 
@@ -47,6 +47,29 @@ export function ServicesPanel({ sessionId }: ServicesPanelProps) {
 	const [activeServices, setActiveServices] = useState<Set<string>>(new Set());
 
 	const services = data?.services ?? [];
+	const runningServiceNames = services
+		.filter((service) => service.status === "running")
+		.map((service) => service.name);
+
+	useEffect(() => {
+		if (services.length === 0) {
+			if (activeServices.size > 0) {
+				setActiveServices(new Set());
+			}
+			return;
+		}
+
+		if (activeServices.size > 0) {
+			return;
+		}
+
+		if (runningServiceNames.length > 0) {
+			setActiveServices(new Set(runningServiceNames));
+			return;
+		}
+
+		setActiveServices(new Set([services[0].name]));
+	}, [services, runningServiceNames, activeServices.size]);
 
 	const toggleService = (name: string) => {
 		setActiveServices((prev) => {
@@ -74,14 +97,34 @@ export function ServicesPanel({ sessionId }: ServicesPanelProps) {
 	};
 
 	const panelActions = (
-		<Tooltip>
-			<TooltipTrigger asChild>
-				<Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => refetch()}>
-					<RefreshCw className="h-3.5 w-3.5" />
-				</Button>
-			</TooltipTrigger>
-			<TooltipContent>Refresh</TooltipContent>
-		</Tooltip>
+		<div className="flex items-center gap-1">
+			<Button
+				variant="ghost"
+				size="sm"
+				className="h-7 px-2 text-xs"
+				onClick={() => setActiveServices(new Set(services.map((service) => service.name)))}
+				disabled={services.length === 0}
+			>
+				All
+			</Button>
+			<Button
+				variant="ghost"
+				size="sm"
+				className="h-7 px-2 text-xs"
+				onClick={() => setActiveServices(new Set(runningServiceNames))}
+				disabled={runningServiceNames.length === 0}
+			>
+				Running
+			</Button>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => refetch()}>
+						<RefreshCw className="h-3.5 w-3.5" />
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent>Refresh</TooltipContent>
+			</Tooltip>
+		</div>
 	);
 
 	return (

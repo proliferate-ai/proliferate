@@ -1,7 +1,7 @@
 "use client";
 
 import { makeAssistantToolUI } from "@assistant-ui/react";
-import { CheckCircle, Loader2, XCircle } from "lucide-react";
+import { ProliferateToolCard } from "./proliferate-tool-card";
 
 interface SaveSnapshotArgs {
 	message?: string;
@@ -18,28 +18,14 @@ export const SaveSnapshotToolUI = makeAssistantToolUI<SaveSnapshotArgs, string>(
 		const isSuccess = result && !result.toLowerCase().includes("failed");
 
 		return (
-			<div className="my-2 py-3 flex items-center gap-2">
-				{isRunning && (
-					<>
-						<Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-						<span className="text-sm text-muted-foreground">
-							{args?.message || "Saving snapshot..."}
-						</span>
-					</>
-				)}
-				{!isRunning && isSuccess && (
-					<>
-						<CheckCircle className="h-4 w-4 text-success" />
-						<span className="text-sm font-medium text-success">Snapshot saved</span>
-					</>
-				)}
-				{!isRunning && !isSuccess && result && (
-					<>
-						<XCircle className="h-4 w-4 text-destructive" />
-						<span className="text-sm text-destructive">{result}</span>
-					</>
-				)}
-			</div>
+			<ProliferateToolCard
+				label={isRunning ? "Saving snapshot..." : "Save snapshot"}
+				status={isRunning ? "running" : isSuccess ? "success" : "error"}
+				errorMessage={!isRunning && !isSuccess && result ? result : undefined}
+			>
+				{isRunning && <span>{args?.message || "Capturing current workspace state..."}</span>}
+				{!isRunning && isSuccess && <span>Snapshot saved successfully.</span>}
+			</ProliferateToolCard>
 		);
 	},
 });

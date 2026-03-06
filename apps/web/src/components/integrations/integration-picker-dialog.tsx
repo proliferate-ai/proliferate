@@ -5,6 +5,7 @@ import { type Provider, ProviderIcon } from "@/components/integrations/provider-
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { getIntegrationScopeMeta } from "@/config/integration-scopes";
 import { INTEGRATION_CATEGORY_LABELS, INTEGRATION_CATEGORY_ORDER } from "@/config/integrations";
 import { cn } from "@/lib/display/utils";
 import { orpc } from "@/lib/infra/orpc";
@@ -176,6 +177,15 @@ export function IntegrationPickerDialog({
 													<p className="text-sm font-semibold text-foreground">{entry.name}</p>
 													<p className="text-xs text-muted-foreground line-clamp-2">
 														{entry.description}
+													</p>
+													<p className="text-[11px] text-muted-foreground/80">
+														{
+															getIntegrationScopeMeta({
+																key: entry.key,
+																type: entry.type,
+																category: entry.category,
+															}).label
+														}
 													</p>
 												</div>
 											</Button>

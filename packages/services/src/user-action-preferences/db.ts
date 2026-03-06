@@ -13,6 +13,11 @@ import { and, eq, getDb, isNull, userActionPreferences } from "../db/client";
 
 export type UserActionPreferenceRow = typeof userActionPreferences.$inferSelect;
 
+export interface DisabledActionPreferences {
+	disabledSourceIds: Set<string>;
+	disabledActionsBySource: Map<string, Set<string>>;
+}
+
 // ============================================
 // Queries
 // ============================================
@@ -52,6 +57,50 @@ export async function getDisabledSourceIds(userId: string, orgId: string): Promi
 			),
 		);
 	return new Set(rows.map((r) => r.sourceId));
+}
+
+/**
+ * Get all explicit disabled preferences for a user/org.
+ * Includes both source-level and action-level rows.
+ */
+export async function getDisabledPreferences(
+	userId: string,
+	orgId: string,
+): Promise<DisabledActionPreferences> {
+	const db = getDb();
+	const rows = await db
+		.select({
+			sourceId: userActionPreferences.sourceId,
+			actionId: userActionPreferences.actionId,
+		})
+		.from(userActionPreferences)
+		.where(
+			and(
+				eq(userActionPreferences.userId, userId),
+				eq(userActionPreferences.organizationId, orgId),
+				eq(userActionPreferences.enabled, false),
+			),
+		);
+
+	const disabledSourceIds = new Set<string>();
+	const disabledActionsBySource = new Map<string, Set<string>>();
+
+	for (const row of rows) {
+		if (!row.actionId) {
+			disabledSourceIds.add(row.sourceId);
+			continue;
+		}
+
+		const existing = disabledActionsBySource.get(row.sourceId);
+		if (existing) {
+			existing.add(row.actionId);
+			continue;
+		}
+
+		disabledActionsBySource.set(row.sourceId, new Set([row.actionId]));
+	}
+
+	return { disabledSourceIds, disabledActionsBySource };
 }
 
 /**

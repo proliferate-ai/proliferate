@@ -29,6 +29,19 @@ export interface ActionInvocation {
 	sessionTitle?: string | null;
 }
 
+export interface AvailableSessionAction {
+	name: string;
+	description: string;
+	riskLevel: "read" | "write" | "danger";
+}
+
+export interface AvailableSessionIntegration {
+	integrationId: string;
+	integration: string;
+	displayName: string;
+	actions: AvailableSessionAction[];
+}
+
 // ============================================
 // Org-Level Queries (oRPC, for dashboard inbox)
 // ============================================
@@ -62,6 +75,29 @@ export function useSessionActions(sessionId: string, token: string | null) {
 		},
 		enabled: !!token && !!GATEWAY_URL && !!sessionId,
 		staleTime: 10_000,
+	});
+}
+
+export function useSessionAvailableActions(sessionId: string, token: string | null) {
+	return useQuery({
+		queryKey: ["session-available-actions", sessionId],
+		queryFn: async (): Promise<AvailableSessionIntegration[]> => {
+			if (!GATEWAY_URL || !token) {
+				throw new Error("Not ready");
+			}
+			const response = await fetch(`${GATEWAY_URL}/proliferate/${sessionId}/actions/available`, {
+				headers: { Authorization: `Bearer ${token}` },
+			});
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}`);
+			}
+			const payload = (await response.json()) as {
+				integrations?: AvailableSessionIntegration[];
+			};
+			return payload.integrations ?? [];
+		},
+		enabled: !!token && !!GATEWAY_URL && !!sessionId,
+		staleTime: 30_000,
 	});
 }
 

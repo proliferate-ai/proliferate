@@ -11,7 +11,6 @@ import type {
 } from "@proliferate/shared";
 import { AnimatePresence, motion } from "framer-motion";
 import { KeyRound, Loader2, MousePointerClick } from "lucide-react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArtifactsPanel } from "./artifacts-panel";
 import { EnvironmentPanel } from "./environment-panel";
@@ -20,14 +19,8 @@ import { GitPanel } from "./git-panel";
 import { InvestigationPanel } from "./investigation-panel";
 import { PanelErrorBoundary } from "./panel-error-boundary";
 import { PreviewPanel } from "./preview-panel";
-
-const TerminalPanel = dynamic(() => import("./terminal-panel").then((m) => m.TerminalPanel), {
-	ssr: false,
-});
-
-const ServicesPanel = dynamic(() => import("./services-panel").then((m) => m.ServicesPanel), {
-	ssr: false,
-});
+import { ServicesPanel } from "./services-panel";
+import { TerminalPanel } from "./terminal-panel";
 
 export interface SessionPanelProps {
 	sessionId?: string;
@@ -237,10 +230,18 @@ export function RightPanel({
 		}
 
 		// Artifacts panel
-		if (
-			(mode.type === "artifacts" || mode.type === "file" || mode.type === "gallery") &&
-			sessionProps?.sessionId
-		) {
+		if (mode.type === "artifacts" && sessionProps?.sessionId) {
+			return (
+				<div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+					<p className="text-sm font-medium text-foreground">Workspace coming soon</p>
+					<p className="mt-1 text-xs text-muted-foreground">
+						Use Code, Logs, and Preview while this view is being finalized.
+					</p>
+				</div>
+			);
+		}
+
+		if ((mode.type === "file" || mode.type === "gallery") && sessionProps?.sessionId) {
 			return (
 				<ArtifactsPanel
 					sessionId={sessionProps.sessionId}

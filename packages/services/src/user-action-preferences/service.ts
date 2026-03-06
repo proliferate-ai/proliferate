@@ -7,6 +7,7 @@
 import * as db from "./db";
 
 export type { UserActionPreferenceRow } from "./db";
+export type { DisabledActionPreferences } from "./db";
 
 // ============================================
 // Reads
@@ -25,6 +26,13 @@ export async function listPreferences(userId: string, orgId: string) {
  */
 export async function getDisabledSourceIds(userId: string, orgId: string): Promise<Set<string>> {
 	return db.getDisabledSourceIds(userId, orgId);
+}
+
+/**
+ * Get disabled source + action preferences for a user in an org.
+ */
+export async function getDisabledPreferences(userId: string, orgId: string) {
+	return db.getDisabledPreferences(userId, orgId);
 }
 
 // ============================================

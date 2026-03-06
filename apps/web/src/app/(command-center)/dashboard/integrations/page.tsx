@@ -27,6 +27,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { getIntegrationScopeMeta } from "@/config/integration-scopes";
 import { CORE_ENTRIES, CORE_PLATFORM_NOTES } from "@/config/integrations";
 import { useIntegrationsPage } from "@/hooks/integrations/use-integrations-page";
 import { CheckCircle2, Plus, Search } from "lucide-react";
@@ -154,6 +155,15 @@ export default function IntegrationsPage() {
 								<p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
 									{CORE_PLATFORM_NOTES[entry.key] ?? entry.description}
 								</p>
+								<p className="text-[11px] text-muted-foreground/80 mt-1">
+									{
+										getIntegrationScopeMeta({
+											key: entry.key,
+											type: entry.type,
+											category: entry.category,
+										}).label
+									}
+								</p>
 							</div>
 						</Button>
 					))}
@@ -194,6 +204,11 @@ export default function IntegrationsPage() {
 							const connectedMeta = getConnectedMeta(entry);
 							const isLoading = getLoadingStatus(entry);
 							const enabled = isSourceEnabled(entry);
+							const scopeMeta = getIntegrationScopeMeta({
+								key: entry.key,
+								type: entry.type,
+								category: entry.category,
+							});
 
 							return (
 								<div
@@ -214,6 +229,7 @@ export default function IntegrationsPage() {
 									<div className="flex-1 min-w-0">
 										<p className="text-sm font-medium">{entry.name}</p>
 										<p className="text-xs text-muted-foreground truncate">{entry.description}</p>
+										<p className="text-[11px] text-muted-foreground/80">{scopeMeta.label}</p>
 									</div>
 
 									{/* Admin: Status */}

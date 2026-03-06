@@ -3,8 +3,9 @@
 import { Button } from "@/components/ui/button";
 import { usePreviewPanelStore } from "@/stores/preview-panel";
 import { makeAssistantToolUI } from "@assistant-ui/react";
-import { CheckCircle, KeyRound, Loader2 } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import { createContext, useContext, useMemo } from "react";
+import { ProliferateToolCard } from "./proliferate-tool-card";
 
 // Context for session info needed by the tool UI
 interface SessionContextValue {
@@ -44,50 +45,42 @@ export const EnvRequestToolUI = makeAssistantToolUI<EnvRequestArgs, string>({
 		// Submitted state
 		if (result) {
 			return (
-				<div className="my-2 py-3">
-					<div className="flex items-center gap-2">
-						<CheckCircle className="h-4 w-4 text-muted-foreground" />
-						<span className="text-sm text-muted-foreground">Configuration submitted</span>
-					</div>
-				</div>
+				<ProliferateToolCard label="Environment request" status="success">
+					Configuration submitted.
+				</ProliferateToolCard>
 			);
 		}
 
 		// Loading state
 		if (isRunning || !args?.keys) {
 			return (
-				<div className="my-2 py-3">
-					<div className="flex items-center gap-2 text-muted-foreground">
-						<Loader2 className="h-4 w-4 animate-spin" />
-						<span className="text-sm">Requesting configuration...</span>
-					</div>
-				</div>
+				<ProliferateToolCard label="Environment request" status="running">
+					Requesting configuration...
+				</ProliferateToolCard>
 			);
 		}
 
 		// Redirect card — directs user to the Environment sidebar tab
 		return (
-			<div className="my-2 py-3 space-y-3">
-				<div className="flex items-center gap-2">
-					<KeyRound className="h-4 w-4 text-muted-foreground" />
-					<span className="text-sm font-medium">
-						{requiredCount} environment {requiredCount === 1 ? "variable" : "variables"} needed
-					</span>
+			<ProliferateToolCard label="Environment request" status="success">
+				<div className="space-y-2">
+					<p>
+						{requiredCount} environment {requiredCount === 1 ? "variable" : "variables"} needed.
+					</p>
+					<p className="text-xs text-muted-foreground">
+						Open Environment and create or update secret files (path + contents), then resume.
+					</p>
+					<Button
+						size="sm"
+						variant="outline"
+						className="h-7 gap-1.5 px-2 text-xs"
+						onClick={() => togglePanel("environment")}
+					>
+						<KeyRound className="h-3.5 w-3.5" />
+						Open Environment Panel
+					</Button>
 				</div>
-				<p className="text-xs text-muted-foreground">
-					The agent needs credentials to continue. Open Environment and create or update secret
-					files (path + contents), then resume setup.
-				</p>
-				<Button
-					size="sm"
-					variant="outline"
-					className="gap-2 text-xs"
-					onClick={() => togglePanel("environment")}
-				>
-					<KeyRound className="h-3.5 w-3.5" />
-					Open Environment Panel
-				</Button>
-			</div>
+			</ProliferateToolCard>
 		);
 	},
 });

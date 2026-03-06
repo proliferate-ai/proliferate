@@ -5,16 +5,16 @@ import {
 	Globe,
 	Layers,
 	SquareTerminal,
-	Zap,
+	Wrench,
 } from "lucide-react";
 
 export const PANEL_TABS = [
 	{ type: "url" as const, label: "Preview", icon: Globe },
-	{ type: "files" as const, label: "Files", icon: FolderTree },
+	{ type: "files" as const, label: "Code", icon: FolderTree },
 	{ type: "terminal" as const, label: "Terminal", icon: SquareTerminal },
 	{ type: "git" as const, label: "Git", icon: GitBranch },
 	{ type: "services" as const, label: "Logs", icon: Layers },
-	{ type: "artifacts" as const, label: "Workspace", icon: Zap },
+	{ type: "artifacts" as const, label: "Workspace", icon: Wrench },
 ];
 
 /** Manager sessions: simplified panel set (G9). */

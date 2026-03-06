@@ -330,15 +330,19 @@ export function GitPanel({
 
 	const diffScope: "unstaged" | "staged" | "full" = changeScope === "working" ? "unstaged" : "full";
 
-	const toggleFileDiff = useCallback(
-		(path: string) => {
+	const requestFileDiff = useCallback(
+		(path: string, force = false) => {
+			if (!sendGetGitDiff) return;
 			const key = `${diffScope}:${path}`;
-			const nextValue = !expandedFiles[path];
-			setExpandedFiles((prev) => ({ ...prev, [path]: nextValue }));
-			if (!nextValue || !sendGetGitDiff) return;
-			if (diffCacheRef.current[key] || loadingDiffsRef.current[key]) return;
+			if (!force && (diffCacheRef.current[key] || loadingDiffsRef.current[key])) return;
 
 			setLoadingDiffs((loadingPrev) => ({ ...loadingPrev, [key]: true }));
+			setDiffErrors((errorPrev) => {
+				if (!errorPrev[key]) return errorPrev;
+				const next = { ...errorPrev };
+				delete next[key];
+				return next;
+			});
 			const existingTimeout = diffTimeouts.current.get(key);
 			if (existingTimeout) {
 				clearTimeout(existingTimeout);
@@ -349,9 +353,7 @@ export function GitPanel({
 					if (diffCacheRef.current[key]) return errorPrev;
 					return {
 						...errorPrev,
-						[key]:
-							errorPrev[key] ||
-							"Diff request timed out. Try collapsing and expanding this file again.",
+						[key]: errorPrev[key] || "Diff request timed out. Click Retry to try again.",
 					};
 				});
 				diffTimeouts.current.delete(key);
@@ -359,7 +361,17 @@ export function GitPanel({
 			diffTimeouts.current.set(key, timeout);
 			sendGetGitDiff(path, diffScope, resolvedWorkspacePath);
 		},
-		[diffScope, expandedFiles, resolvedWorkspacePath, sendGetGitDiff],
+		[diffScope, resolvedWorkspacePath, sendGetGitDiff],
+	);
+
+	const toggleFileDiff = useCallback(
+		(path: string) => {
+			const nextValue = !expandedFiles[path];
+			setExpandedFiles((prev) => ({ ...prev, [path]: nextValue }));
+			if (!nextValue) return;
+			requestFileDiff(path);
+		},
+		[expandedFiles, requestFileDiff],
 	);
 
 	return (
@@ -421,6 +433,7 @@ export function GitPanel({
 						diffErrors={diffErrors}
 						loadingDiffs={loadingDiffs}
 						onToggleFileDiff={toggleFileDiff}
+						onRetryFileDiff={(path) => requestFileDiff(path, true)}
 					/>
 
 					<CommitSection gitState={gitState} canMutate={canMutate} sendGitCommit={handleCommit} />
@@ -799,6 +812,7 @@ function ChangesFirstSection({
 	diffErrors,
 	loadingDiffs,
 	onToggleFileDiff,
+	onRetryFileDiff,
 }: {
 	fileRows: FileRow[];
 	changeScope: ChangeScope;
@@ -809,6 +823,7 @@ function ChangesFirstSection({
 	diffErrors: Record<string, string>;
 	loadingDiffs: Record<string, boolean>;
 	onToggleFileDiff: (path: string) => void;
+	onRetryFileDiff: (path: string) => void;
 }) {
 	const scopeCount = fileRows.length;
 
@@ -890,7 +905,17 @@ function ChangesFirstSection({
 										{loading ? (
 											<p className="text-xs text-muted-foreground">Loading diff...</p>
 										) : error ? (
-											<p className="text-xs text-muted-foreground">{error}</p>
+											<div className="flex items-center justify-between gap-2">
+												<p className="text-xs text-muted-foreground">{error}</p>
+												<Button
+													variant="outline"
+													size="sm"
+													className="h-6 px-2 text-[11px]"
+													onClick={() => onRetryFileDiff(row.path)}
+												>
+													Retry
+												</Button>
+											</div>
 										) : patch ? (
 											<DiffContent patch={patch} />
 										) : (

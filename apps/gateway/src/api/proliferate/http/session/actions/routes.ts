@@ -235,12 +235,16 @@ export function createActionsRoutes(hubManager: HubManager): RouterType {
 			if (!session) throw new ApiError(404, "Session not found");
 
 			if (session.createdBy) {
-				const disabled = await userActionPreferences.getDisabledSourceIds(
+				const disabled = await userActionPreferences.getDisabledPreferences(
 					session.createdBy,
 					session.organizationId,
 				);
-				if (disabled.has(integration)) {
+				if (disabled.disabledSourceIds.has(integration)) {
 					throw new ApiError(403, "This integration is disabled by user preferences");
+				}
+				const disabledActions = disabled.disabledActionsBySource.get(integration);
+				if (disabledActions?.has(action)) {
+					throw new ApiError(403, "This action is disabled by user preferences");
 				}
 			}
 

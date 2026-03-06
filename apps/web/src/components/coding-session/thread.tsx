@@ -1,10 +1,14 @@
 "use client";
 
 import { ModelSelector } from "@/components/automations/model-selector";
+import { ReasoningSelector } from "@/components/dashboard/reasoning-selector";
+import { type Provider, ProviderIcon } from "@/components/integrations/provider-icon";
 import { Button } from "@/components/ui/button";
 import { BlocksIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { RoundIconActionButton } from "@/components/ui/round-icon-action-button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useSessionAvailableActions } from "@/hooks/actions/use-actions";
 import { useCreateFollowUp } from "@/hooks/sessions/use-follow-up";
 import { cn } from "@/lib/display/utils";
 import { useDashboardStore } from "@/stores/dashboard";
@@ -31,12 +35,14 @@ import {
 	Square,
 	X,
 } from "lucide-react";
+import Link from "next/link";
 import type { FC } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 import { InboxTray } from "./inbox-tray";
 import { allToolUIs } from "./tool-ui/all-tool-uis";
+import { ProliferateToolCard } from "./tool-ui/proliferate-tool-card";
 
 // Shared markdown components for consistent rendering
 interface MarkdownContentProps {
@@ -168,7 +174,7 @@ const MarkdownContent: FC<MarkdownContentProps> = ({ text, variant = "assistant"
 						/>
 					) : (
 						<MarkdownContent
-							key={`assistant-markdown-${index}`}
+							key={`assistant-markdown-${segment.text}`}
 							text={segment.text}
 							variant="assistant"
 						/>
@@ -287,12 +293,24 @@ const AttachmentPreview: FC<AttachmentPreviewProps> = ({ preview, index, onRemov
 // Context selectors (model selector) - left side of toolbar
 interface ComposerActionsLeftProps {
 	selectedModel: ModelId;
+	reasoningEffort: "quick" | "normal" | "deep";
 	onModelChange: (modelId: ModelId) => void;
+	onReasoningEffortChange: (effort: "quick" | "normal" | "deep") => void;
 }
 
-const ComposerActionsLeft: FC<ComposerActionsLeftProps> = ({ selectedModel, onModelChange }) => (
+const ComposerActionsLeft: FC<ComposerActionsLeftProps> = ({
+	selectedModel,
+	reasoningEffort,
+	onModelChange,
+	onReasoningEffortChange,
+}) => (
 	<div className="flex items-center gap-1">
 		<ModelSelector modelId={selectedModel} onChange={onModelChange} variant="ghost" />
+		<ReasoningSelector
+			modelId={selectedModel}
+			effort={reasoningEffort}
+			onChange={onReasoningEffortChange}
+		/>
 	</div>
 );
 
@@ -400,6 +418,8 @@ export const Thread: FC<ThreadProps> = ({
 	runId,
 	sessionState,
 }) => {
+	const [showStatusDetails, setShowStatusDetails] = useState(false);
+
 	return (
 		<ThreadPrimitive.Root className="flex h-full flex-col">
 			{/* Scrollable message area */}
@@ -434,9 +454,27 @@ export const Thread: FC<ThreadProps> = ({
 
 			{statusMessage && (
 				<div className="shrink-0 px-3 pt-2">
-					<div className="mx-auto flex max-w-2xl items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-						<Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-						<span className="truncate">{statusMessage}</span>
+					<div className="mx-auto max-w-2xl rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							className="h-auto w-full justify-start gap-2 px-0 py-0 text-xs text-muted-foreground hover:text-foreground"
+							onClick={() => setShowStatusDetails((value) => !value)}
+						>
+							<Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+							<span className="truncate">{statusMessage}</span>
+							{showStatusDetails ? (
+								<ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0" />
+							) : (
+								<ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0" />
+							)}
+						</Button>
+						{showStatusDetails && (
+							<p className="mt-2 text-[11px] text-muted-foreground">
+								Long-running work is active. You can keep chatting while this runs.
+							</p>
+						)}
 					</div>
 				</div>
 			)}
@@ -457,7 +495,7 @@ export const Thread: FC<ThreadProps> = ({
 						</Button>
 					</div>
 				)}
-				<Composer sessionState={sessionState} />
+				<Composer sessionState={sessionState} sessionId={sessionId} token={token} />
 			</div>
 
 			{allToolUIs.map(({ id, Component }) => (
@@ -507,15 +545,87 @@ const COMPOSER_PLACEHOLDERS: Record<ComposerMode, string> = {
 
 interface ComposerProps {
 	sessionState?: SessionStateForComposer;
+	sessionId?: string;
+	token?: string | null;
 }
 
-const Composer: FC<ComposerProps> = ({ sessionState }) => {
+function getProviderForIntegration(integration: string): Provider | null {
+	if (integration === "github" || integration === "jira" || integration === "linear") {
+		return integration;
+	}
+	if (integration === "posthog" || integration === "sentry" || integration === "slack") {
+		return integration;
+	}
+	return null;
+}
+
+const EnabledActionsStrip: FC<{ sessionId?: string; token?: string | null }> = ({
+	sessionId,
+	token,
+}) => {
+	const { data: integrations } = useSessionAvailableActions(sessionId ?? "", token ?? null);
+	const enabledIntegrations = integrations?.filter((entry) => entry.actions.length > 0) ?? [];
+	const enabledActionCount = enabledIntegrations.reduce(
+		(total, entry) => total + entry.actions.length,
+		0,
+	);
+
+	if (!sessionId || !token || enabledIntegrations.length === 0) {
+		return null;
+	}
+
+	const visibleIntegrations = enabledIntegrations.slice(0, 3);
+	const overflowCount = Math.max(enabledIntegrations.length - visibleIntegrations.length, 0);
+
+	return (
+		<TooltipProvider>
+			<div className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+				<div className="flex items-center gap-2">
+					<div className="flex items-center -space-x-1">
+						{visibleIntegrations.map((entry) => {
+							const provider = getProviderForIntegration(entry.integration);
+							const tooltipText = `${entry.displayName}: ${entry.actions.length} actions enabled`;
+							return (
+								<Tooltip key={entry.integrationId}>
+									<TooltipTrigger asChild>
+										<div className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-foreground">
+											{provider ? (
+												<ProviderIcon provider={provider} size="sm" />
+											) : (
+												<BlocksIcon className="h-3.5 w-3.5" />
+											)}
+										</div>
+									</TooltipTrigger>
+									<TooltipContent>{tooltipText}</TooltipContent>
+								</Tooltip>
+							);
+						})}
+						{overflowCount > 0 && (
+							<div className="ml-1 flex h-6 items-center rounded-full border border-border bg-background px-2 text-[11px] text-muted-foreground">
+								+{overflowCount}
+							</div>
+						)}
+					</div>
+					<span className="text-xs text-muted-foreground">
+						{enabledActionCount} actions enabled
+					</span>
+				</div>
+				<Link href="/dashboard/integrations" className="text-xs text-primary hover:underline">
+					Manage actions
+				</Link>
+			</div>
+		</TooltipProvider>
+	);
+};
+
+const Composer: FC<ComposerProps> = ({ sessionState, sessionId, token }) => {
 	const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const threadRuntime = useThreadRuntime();
 	const composerRuntime = useComposerRuntime();
-	const { selectedModel, setSelectedModel } = useDashboardStore();
+	const { selectedModel, setSelectedModel, reasoningEffort, setReasoningEffort } =
+		useDashboardStore();
 	const createFollowUp = useCreateFollowUp();
 
 	const composerMode = deriveComposerMode(sessionState);
@@ -618,6 +728,7 @@ const Composer: FC<ComposerProps> = ({ sessionState }) => {
 			/>
 
 			{label && <p className="text-xs text-muted-foreground px-5 pb-1.5">{label}</p>}
+			<EnabledActionsStrip sessionId={sessionId} token={token} />
 
 			<div className="flex flex-col rounded-3xl border border-border bg-muted/40 dark:bg-card">
 				{attachments.length > 0 && (
@@ -661,7 +772,12 @@ const Composer: FC<ComposerProps> = ({ sessionState }) => {
 						>
 							<Plus className="h-4 w-4" />
 						</Button>
-						<ComposerActionsLeft selectedModel={selectedModel} onModelChange={setSelectedModel} />
+						<ComposerActionsLeft
+							selectedModel={selectedModel}
+							reasoningEffort={reasoningEffort}
+							onModelChange={setSelectedModel}
+							onReasoningEffortChange={setReasoningEffort}
+						/>
 					</div>
 					<div className="flex items-center gap-0.5">
 						{sessionState?.workerId && (
@@ -726,10 +842,12 @@ const AssistantMessage: FC = () => (
 	</MessagePrimitive.Root>
 );
 
-const ToolFallback: FC<{ toolName: string; args: unknown; result?: unknown }> = ({
-	toolName,
-	result,
-}) => {
+const ToolFallback: FC<{
+	toolName: string;
+	args: unknown;
+	result?: unknown;
+	status?: { type: string };
+}> = ({ toolName, result, status }) => {
 	const [expanded, setExpanded] = useState(false);
 	const hasResult = result !== undefined;
 	const resultString = hasResult
@@ -739,30 +857,26 @@ const ToolFallback: FC<{ toolName: string; args: unknown; result?: unknown }> = 
 		: null;
 
 	return (
-		<div className="my-0.5">
+		<ProliferateToolCard
+			label={toolName}
+			status={status?.type === "running" ? "running" : "success"}
+			errorMessage={typeof result === "string" && result.startsWith("Error") ? result : undefined}
+		>
 			<Button
 				type="button"
 				variant="ghost"
 				onClick={() => hasResult && setExpanded(!expanded)}
-				className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors h-auto p-0"
+				className="h-auto gap-1 p-0 text-xs text-muted-foreground hover:bg-transparent hover:text-foreground"
 				disabled={!hasResult}
 			>
-				{hasResult ? (
-					expanded ? (
-						<ChevronDown className="h-3 w-3" />
-					) : (
-						<ChevronRight className="h-3 w-3" />
-					)
-				) : (
-					<Loader2 className="h-3 w-3 animate-spin" />
-				)}
-				<span>{toolName}</span>
+				{expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+				<span>{expanded ? "Hide details" : "Show details"}</span>
 			</Button>
 			{expanded && resultString && (
 				<pre className="mt-1 max-h-40 overflow-auto rounded-lg border border-border/40 bg-muted/30 p-2 font-mono text-xs text-muted-foreground">
 					{resultString.slice(0, 3000)}
 				</pre>
 			)}
-		</div>
+		</ProliferateToolCard>
 	);
 };

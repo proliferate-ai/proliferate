@@ -634,9 +634,10 @@ async function createConfigurationSession(input: {
 	const doUrl = `${gatewayUrl}/session/${sessionId}`;
 	reqLog.info("Session creation started");
 
-	// K2: Visibility defaults by kind/origin — setup sessions are org-visible, ad-hoc tasks are private
+	// K2: Visibility defaults by kind/origin — setup sessions are org-visible.
 	const visibility: "private" | "org" = sessionType === "setup" ? "org" : "private";
-	const kind: "task" | "setup" = sessionType === "setup" ? "setup" : "task";
+	// Regular coding sessions are ad-hoc (kind=null). Only setup sessions are explicitly kinded.
+	const kind: "setup" | null = sessionType === "setup" ? "setup" : null;
 
 	// Resolve primary repo from configuration
 	const primaryRepoId = configurationRepos[0]?.repo?.id ?? null;
