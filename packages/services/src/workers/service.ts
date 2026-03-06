@@ -313,7 +313,7 @@ async function validateIntegrationBindings(
 			throw new TemplateIntegrationInactiveError(integrationId, integration.status);
 		}
 
-		if (integration.integrationId && integration.integrationId !== bindingKey) {
+		if (integration.integrationId !== bindingKey) {
 			throw new TemplateIntegrationBindingMismatchError(
 				integrationId,
 				integration.integrationId,

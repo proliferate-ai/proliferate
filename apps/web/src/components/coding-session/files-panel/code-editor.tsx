@@ -3,7 +3,6 @@
 import { Button } from "@/components/ui/button";
 import type { TargetFileLineRange } from "@/hooks/sessions/files-panel/state";
 import { cn } from "@/lib/display/utils";
-import { historyField } from "@codemirror/commands";
 import { html } from "@codemirror/lang-html";
 import { javascript } from "@codemirror/lang-javascript";
 import type { Extension } from "@codemirror/state";
@@ -18,8 +17,6 @@ import {
 	filesEditorLineHighlightExtension,
 	highlightLineRangeAndScroll,
 } from "./line-highlight";
-
-const stateFields = { history: historyField };
 
 const baseExtensions: Extension[] = [
 	javascript({ jsx: true, typescript: true }),
@@ -153,37 +150,43 @@ export function FilesCodeEditor({
 					{openTabs.map((tabPath) => {
 						const isActive = tabPath === currentFile;
 						return (
-							<button
+							<div
 								key={tabPath}
-								type="button"
-								onClick={() => onSelectTab(tabPath)}
 								className={cn(
-									"group flex h-full min-w-0 max-w-72 items-center gap-1.5 border-r border-border/60 px-3 text-xs",
+									"group flex h-full min-w-0 max-w-72 items-center gap-1 border-r border-border/60 pl-1",
 									isActive
 										? "bg-muted/60 text-foreground"
-										: "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+										: "text-muted-foreground hover:bg-muted/40",
 								)}
 							>
-								<span className="truncate">{tabPath}</span>
-								<span
-									role="button"
-									tabIndex={0}
-									onClick={(event) => {
-										event.stopPropagation();
-										onCloseTab(tabPath);
-									}}
-									onKeyDown={(event) => {
-										if (event.key === "Enter" || event.key === " ") {
-											event.preventDefault();
-											event.stopPropagation();
-											onCloseTab(tabPath);
-										}
-									}}
-									className="opacity-0 transition-opacity group-hover:opacity-100"
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									onClick={() => onSelectTab(tabPath)}
+									className={cn(
+										"h-7 min-w-0 flex-1 justify-start rounded-sm px-2 text-xs font-normal",
+										isActive
+											? "text-foreground hover:bg-transparent"
+											: "text-muted-foreground hover:text-foreground",
+									)}
+								>
+									<span className="truncate">{tabPath}</span>
+								</Button>
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon"
+									onClick={() => onCloseTab(tabPath)}
+									className={cn(
+										"h-6 w-6 rounded-sm text-muted-foreground transition-opacity",
+										isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+									)}
+									aria-label={`Close ${tabPath}`}
 								>
 									<X className="h-3.5 w-3.5" />
-								</span>
-							</button>
+								</Button>
+							</div>
 						);
 					})}
 				</div>
@@ -249,10 +252,7 @@ export function FilesCodeEditor({
 						theme={isDark ? "dark" : "light"}
 						extensions={extensions}
 						onCreateEditor={handleCreateEditor}
-						onChange={(value, update) => {
-							void update.state.toJSON(stateFields);
-							onChange(currentFile, value);
-						}}
+						onChange={(value) => onChange(currentFile, value)}
 						className="h-full"
 					/>
 				)}

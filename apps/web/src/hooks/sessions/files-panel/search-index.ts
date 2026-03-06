@@ -1,7 +1,7 @@
 "use client";
 
 import type { QueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 interface FilesTreeEntry {
 	type: string;
@@ -30,8 +30,6 @@ interface UseFilesPanelSearchIndexOptions {
 
 export function useFilesPanelSearchIndex(options: UseFilesPanelSearchIndexOptions) {
 	const [searchContentByPath, setSearchContentByPath] = useState<Record<string, string>>({});
-	const searchContentByPathRef = useRef(searchContentByPath);
-	searchContentByPathRef.current = searchContentByPath;
 
 	useEffect(() => {
 		if (options.sidebarTab !== "search") return;
@@ -48,7 +46,7 @@ export function useFilesPanelSearchIndex(options: UseFilesPanelSearchIndexOption
 
 		let isCancelled = false;
 		const hydrateSearchIndex = async () => {
-			const unresolvedPaths = filePaths.filter((path) => !(path in searchContentByPathRef.current));
+			const unresolvedPaths = filePaths.filter((path) => !(path in searchContentByPath));
 			const next: Record<string, string> = {};
 
 			for (const path of unresolvedPaths) {
@@ -91,6 +89,7 @@ export function useFilesPanelSearchIndex(options: UseFilesPanelSearchIndexOption
 		options.queryClient,
 		options.searchQuery,
 		options.sidebarTab,
+		searchContentByPath,
 	]);
 
 	return {

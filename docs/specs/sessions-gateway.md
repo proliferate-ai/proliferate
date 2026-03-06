@@ -139,7 +139,7 @@ Authoritative transition intent:
 | New prompt / resume work | `agent_state=iterating`, `state_reason=null` |
 | Pause (manual/idle/orphan/billing) | `sandbox_state=paused`, `agent_state=waiting_input`, `state_reason=<normalized_reason>` |
 | Success terminal | `sandbox_state=terminated`, `agent_state=done`, `terminal_state=succeeded` |
-| Failure terminal | `sandbox_state=failed`, `agent_state=errored`, `terminal_state=failed`, `state_reason=runtime_error|snapshot_failed` |
+| Failure terminal | `sandbox_state=failed`, `agent_state=errored`, `terminal_state=failed`, `state_reason=runtime_error\|snapshot_failed` |
 | Cancel terminal | `sandbox_state=terminated`, `agent_state=done`, `terminal_state=cancelled`, `state_reason=cancelled_by_user` |
 
 ### Gateway-Intercepted Tool Callbacks

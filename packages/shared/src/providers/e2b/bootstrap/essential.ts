@@ -126,10 +126,12 @@ export async function setupEssentialDependencies(
 		log.debug({ llmProxyBaseUrl, hasApiKey: true }, "OpenCode using LLM proxy");
 		opencodeEnv.ANTHROPIC_API_KEY = llmProxyApiKey;
 		opencodeEnv.ANTHROPIC_BASE_URL = llmProxyBaseUrl;
-	} else if (opts.envVars.ANTHROPIC_API_KEY) {
-		// NOTE: shuold only be set during development work
+	} else if (opts.envVars.ANTHROPIC_API_KEY && opts.envVars.NODE_ENV !== "production") {
+		// Direct-key fallback is development-only.
 		log.warn("OpenCode using direct key (no LLM proxy)");
 		opencodeEnv.ANTHROPIC_API_KEY = opts.envVars.ANTHROPIC_API_KEY;
+	} else if (opts.envVars.ANTHROPIC_API_KEY) {
+		log.error("Ignoring direct ANTHROPIC_API_KEY in production without LLM proxy");
 	} else {
 		log.error("OpenCode has no LLM proxy AND no direct ANTHROPIC_API_KEY — it will fail to start");
 	}

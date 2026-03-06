@@ -15,7 +15,6 @@ import {
 	useSessionData,
 	useSnapshotSession,
 } from "@/hooks/sessions/use-sessions";
-import { devConsoleLog } from "@/lib/analytics/dev-console-log";
 import { useSession as useBetterAuthSession } from "@/lib/auth/client";
 import { startSnapshotProgressToast } from "@/lib/display/snapshot-progress-toast";
 import { cn } from "@/lib/display/utils";
@@ -148,8 +147,6 @@ export function CodingSession({
 	const [viewPickerOpen, setViewPickerOpen] = useState(false);
 	const [isPanelDragging, setIsPanelDragging] = useState(false);
 	const latestDesktopPanelSizesRef = useRef<number[] | null>(null);
-	const shouldDebugPanelLayout =
-		typeof window !== "undefined" && window.location.search.includes("debugPanelLayout=1");
 
 	const startDesktopPanelDrag = useCallback(() => {
 		setIsPanelDragging((current) => {
@@ -162,16 +159,6 @@ export function CodingSession({
 	useEffect(() => {
 		if (!isPanelDragging) return;
 		document.body.classList.add("panel-resizing");
-		console.info("[coding-session] desktop_split.drag_started", {
-			sessionId,
-			panelSide,
-			panelSizes,
-		});
-		devConsoleLog("coding-session", "desktop_split.drag_started", {
-			sessionId,
-			panelSide,
-			panelSizes,
-		});
 		const onMouseUp = () => setIsPanelDragging(false);
 		const onPointerUp = () => setIsPanelDragging(false);
 		window.addEventListener("mouseup", onMouseUp);
@@ -180,55 +167,18 @@ export function CodingSession({
 			document.body.classList.remove("panel-resizing");
 			window.removeEventListener("mouseup", onMouseUp);
 			window.removeEventListener("pointerup", onPointerUp);
-			console.info("[coding-session] desktop_split.drag_stopped", {
-				sessionId,
-				panelSide,
-				panelSizes,
-			});
-			devConsoleLog("coding-session", "desktop_split.drag_stopped", {
-				sessionId,
-				panelSide,
-				panelSizes,
-			});
 		};
-	}, [isPanelDragging, panelSide, panelSizes, sessionId]);
+	}, [isPanelDragging]);
 
 	useEffect(() => {
 		if (isPanelDragging) return;
 		const pending = latestDesktopPanelSizesRef.current;
-		if (!pending) {
-			devConsoleLog("coding-session", "desktop_split.persist_skipped_no_pending", {
-				sessionId,
-				panelSide,
-				panelSizes,
-			});
-			return;
-		}
-		if (panelSizesAreEqual(panelSizes, pending)) {
-			devConsoleLog("coding-session", "desktop_split.persist_skipped_equal", {
-				sessionId,
-				panelSide,
-				panelSizes,
-				pending,
-			});
-			return;
-		}
-
-		if (shouldDebugPanelLayout) {
-			console.debug("[coding-session] persisting panel sizes after drag", {
-				panelSizes,
-				pending,
-			});
-		}
+		if (!pending) return;
+		if (panelSizesAreEqual(panelSizes, pending)) return;
 
 		setPanelSizes(pending);
 		latestDesktopPanelSizesRef.current = null;
-		devConsoleLog("coding-session", "desktop_split.persisted", {
-			sessionId,
-			panelSide,
-			panelSizes: pending,
-		});
-	}, [isPanelDragging, panelSide, panelSizes, sessionId, setPanelSizes, shouldDebugPanelLayout]);
+	}, [isPanelDragging, panelSizes, setPanelSizes]);
 	const activeType = mode.type === "file" || mode.type === "gallery" ? "artifacts" : mode.type;
 
 	// Auto-open investigation panel when runId is present (fires once per runId)
@@ -585,43 +535,11 @@ export function CodingSession({
 						: Number.NaN;
 			if (!Number.isFinite(chatRaw)) return;
 			const nextPanelSizes = normalizeDesktopPanelSizes(chatRaw);
-			console.info("[coding-session] desktop_split.layout_changed", {
-				sessionId,
-				panelSide,
-				rawLayout: layout,
-				chatRaw,
-				nextPanelSizes,
-			});
-			devConsoleLog("coding-session", "desktop_split.layout_changed", {
-				sessionId,
-				panelSide,
-				rawLayout: layout,
-				chatRaw,
-				nextPanelSizes,
-			});
-
-			if (panelSizesAreEqual(panelSizes, nextPanelSizes)) {
-				if (shouldDebugPanelLayout) {
-					console.debug("[coding-session] skipping redundant panel size update", {
-						panelSide,
-						panelSizes,
-						nextPanelSizes,
-					});
-				}
-				return;
-			}
-
-			if (shouldDebugPanelLayout) {
-				console.debug("[coding-session] received layout update", {
-					panelSide,
-					panelSizes,
-					nextPanelSizes,
-				});
-			}
+			if (panelSizesAreEqual(panelSizes, nextPanelSizes)) return;
 
 			latestDesktopPanelSizesRef.current = nextPanelSizes;
 		},
-		[panelSide, panelSizes, sessionId, shouldDebugPanelLayout],
+		[panelSide, panelSizes],
 	);
 
 	const chatPane = (
@@ -648,25 +566,6 @@ export function CodingSession({
 					sandboxId: sessionData.sandboxId,
 				})
 			: "running";
-
-	useEffect(() => {
-		if (!sessionData || typeof window === "undefined") return;
-		const params = new URLSearchParams(window.location.search);
-		const shouldLog =
-			params.get("statusDebug") === "1" || window.localStorage.getItem("statusDebug") === "1";
-		if (!shouldLog) return;
-		console.info("[status-debug] workspaceSessionState", {
-			sessionId,
-			sandboxState: sessionData.status.sandboxState,
-			agentState: sessionData.status.agentState,
-			terminalState: sessionData.status.terminalState,
-			reason: sessionData.status.reason,
-			hasUnreadUpdate: sessionData.hasUnreadUpdate ?? sessionData.unread ?? false,
-			overallWorkState,
-			bannerState,
-			runtimeWorkspaceState: workspaceState?.state ?? null,
-		});
-	}, [sessionData, sessionId, overallWorkState, bannerState, workspaceState?.state]);
 
 	const toolPane = (
 		<ResizablePanel
@@ -712,24 +611,9 @@ export function CodingSession({
 					<ResizableHandle
 						withHandle
 						onPointerDown={() => {
-							console.info("[coding-session] desktop_split.handle_pointer_down", {
-								sessionId,
-								panelSide,
-								panelSizes,
-							});
 							startDesktopPanelDrag();
 						}}
 						onMouseDown={() => {
-							console.info("[coding-session] desktop_split.handle_mouse_down", {
-								sessionId,
-								panelSide,
-								panelSizes,
-							});
-							devConsoleLog("coding-session", "desktop_split.handle_mouse_down", {
-								sessionId,
-								panelSide,
-								panelSizes,
-							});
 							startDesktopPanelDrag();
 						}}
 					/>
@@ -741,24 +625,9 @@ export function CodingSession({
 					<ResizableHandle
 						withHandle
 						onPointerDown={() => {
-							console.info("[coding-session] desktop_split.handle_pointer_down", {
-								sessionId,
-								panelSide,
-								panelSizes,
-							});
 							startDesktopPanelDrag();
 						}}
 						onMouseDown={() => {
-							console.info("[coding-session] desktop_split.handle_mouse_down", {
-								sessionId,
-								panelSide,
-								panelSizes,
-							});
-							devConsoleLog("coding-session", "desktop_split.handle_mouse_down", {
-								sessionId,
-								panelSide,
-								panelSizes,
-							});
 							startDesktopPanelDrag();
 						}}
 					/>
