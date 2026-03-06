@@ -39,6 +39,17 @@ export interface CreateSessionInput {
 	rerunOfSessionId?: string | null;
 }
 
+export type CreateSessionStatus =
+	| "starting"
+	| "pending"
+	| "running"
+	| "paused"
+	| "suspended"
+	| "completed"
+	| "stopped"
+	| "cancelled"
+	| "failed";
+
 export interface UpdateSessionInput {
 	sandboxState?: "provisioning" | "running" | "paused" | "terminated" | "failed";
 	agentState?: "iterating" | "waiting_input" | "waiting_approval" | "done" | "errored";
