@@ -19,11 +19,13 @@ import { SANDBOX_PATHS } from "./config";
  * @param opencodeModelId - The OpenCode-formatted model ID (e.g., "anthropic/claude-opus-4-6" or "litellm/gpt-5.2")
  * @param proxyBaseUrl - Optional LLM proxy base URL (shared by all providers)
  * @param proxyApiKey - Optional API key to embed in config (avoid for sandboxed proxy keys; prefer env)
+ * @param instructions - Optional instruction file paths for OpenCode to load
  */
 export function getOpencodeConfig(
 	opencodeModelId: string,
 	proxyBaseUrl?: string,
 	proxyApiKey?: string,
+	instructions?: string[],
 ): string {
 	// Build Anthropic provider options
 	const anthropicOptions: string[] = [];
@@ -70,6 +72,14 @@ export function getOpencodeConfig(
       }
     }`;
 
+	const instructionPaths =
+		instructions?.filter((entry) => typeof entry === "string" && entry.trim().length > 0) ?? [];
+	const instructionsBlock =
+		instructionPaths.length > 0
+			? `,
+  "instructions": ${JSON.stringify(instructionPaths)}`
+			: "";
+
 	return `{
   "$schema": "https://opencode.ai/config.json",
   "model": "${opencodeModelId}",
@@ -86,7 +96,7 @@ export function getOpencodeConfig(
     "*": "allow",
     "question": "deny"
   },
-  "mcp": {}
+  "mcp": {}${instructionsBlock}
 }`;
 }
 

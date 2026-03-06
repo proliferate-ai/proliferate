@@ -52,7 +52,6 @@ pnpm-debug.log*
 supabase/.temp/
 
 # CLI binary artifacts
-packages/cli/bin/
 *.exe
 *.dll
 *.so

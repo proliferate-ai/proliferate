@@ -41,13 +41,18 @@ export async function setupEssentialDependencies(
 	const globalPluginDir = SANDBOX_PATHS.globalPluginDir;
 	const localOpencodeDir = `${repoDir}/.opencode`;
 	const localToolDir = `${localOpencodeDir}/tool`;
+	const repoInstructions = [".opencode/instructions.md", "AGENTS.md"];
 
 	const agentConfig = opts.agentConfig || getDefaultAgentConfig();
 	const opencodeModelId = toOpencodeModelId(agentConfig.modelId);
-	const opencodeConfig =
+	const globalOpencodeConfig =
 		llmProxyBaseUrl && llmProxyApiKey
 			? getOpencodeConfig(opencodeModelId, llmProxyBaseUrl)
 			: getOpencodeConfig(opencodeModelId);
+	const repoOpencodeConfig =
+		llmProxyBaseUrl && llmProxyApiKey
+			? getOpencodeConfig(opencodeModelId, llmProxyBaseUrl, undefined, repoInstructions)
+			: getOpencodeConfig(opencodeModelId, undefined, undefined, repoInstructions);
 	if (llmProxyBaseUrl && llmProxyApiKey) {
 		log.debug({ llmProxyBaseUrl }, "Using LLM proxy");
 	} else {
@@ -76,8 +81,8 @@ export async function setupEssentialDependencies(
 		writeFile(`${localToolDir}/save_snapshot.txt`, SAVE_SNAPSHOT_DESCRIPTION),
 		writeFile(`${localToolDir}/automation_complete.ts`, AUTOMATION_COMPLETE_TOOL),
 		writeFile(`${localToolDir}/automation_complete.txt`, AUTOMATION_COMPLETE_DESCRIPTION),
-		writeFile(`${globalOpencodeDir}/opencode.json`, opencodeConfig),
-		writeFile(`${repoDir}/opencode.json`, opencodeConfig),
+		writeFile(`${globalOpencodeDir}/opencode.json`, globalOpencodeConfig),
+		writeFile(`${repoDir}/opencode.json`, repoOpencodeConfig),
 		writeFile(`${localOpencodeDir}/instructions.md`, instructions),
 		writeFile(`${repoDir}/.proliferate/actions-guide.md`, ACTIONS_BOOTSTRAP),
 		(async () => {

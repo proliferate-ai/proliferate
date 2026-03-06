@@ -133,9 +133,9 @@ It freezes the entire environment — code, dependencies, databases, running ser
 - **Configured** — a setup session has run, a snapshot is saved. Coding sessions boot instantly.
 - **Not configured** — no setup yet. You can still start a coding session, but the agent will need to install everything from scratch.
 
-## Local CLI
+## Local IDE Access
 
-You can also connect your local IDE to this cloud environment. Run \`npx @proliferate/cli\` in your terminal to sync files and use your preferred editor.
+Use the built-in VS Code panel or terminal in this session to edit and run code directly in the sandbox environment.
 
 ## Tips
 

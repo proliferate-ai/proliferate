@@ -56,7 +56,7 @@ PostgreSQL: metadata persistence only (not in streaming path)
 
 ```
 apps/                 # web, gateway, worker, llm-proxy, trigger-service
-packages/             # shared, services, db, gateway-clients, environment, cli
+packages/             # shared, services, db, gateway-clients, environment
 docs/specs/           # system specs (authoritative subsystem docs)
 charts/               # Helm chart
 infra/                # pulumi-k8s (EKS), pulumi-k8s-gcp (GKE), legacy ECS
@@ -202,7 +202,7 @@ Key commands:
 - `deploy-ecs.yml`: manual legacy ECS deploy
 - `deploy-modal.yml`: Modal deploy on changes to `packages/modal-sandbox/**`
 - `docker-publish.yml`: GHCR images on `v*` tags
-- `changesets.yml` + `release-cli.yml`: CLI release pipeline
+- `changesets.yml`: release pipeline
 
 ## Makefile Shortcuts
 

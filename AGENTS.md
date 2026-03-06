@@ -125,7 +125,7 @@ Key commands:
 - `deploy-ecs.yml`: manual legacy ECS deploy
 - `deploy-modal.yml`: Modal deploy on changes to `packages/modal-sandbox/**`
 - `docker-publish.yml`: GHCR images on `v*` tags
-- `changesets.yml` + `release-cli.yml`: CLI release pipeline
+- `changesets.yml`: release pipeline
 
 ## Makefile Shortcuts
 
