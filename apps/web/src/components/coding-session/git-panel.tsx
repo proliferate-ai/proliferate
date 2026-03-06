@@ -169,6 +169,18 @@ export function GitPanel({
 
 	const resolvedWorkspacePath = workspaceOptions?.length ? selectedWorkspacePath : undefined;
 	const showWorkspaceSelector = (workspaceOptions?.length ?? 0) > 1;
+	const resetDiffState = useCallback(() => {
+		setLatestPrUrl(null);
+		setLatestPrNumber(null);
+		for (const timeout of diffTimeouts.current.values()) {
+			clearTimeout(timeout);
+		}
+		diffTimeouts.current.clear();
+		setExpandedFiles({});
+		setDiffCache({});
+		setDiffErrors({});
+		setLoadingDiffs({});
+	}, []);
 
 	useEffect(() => {
 		if (!workspaceOptions || workspaceOptions.length === 0) return;
@@ -219,19 +231,6 @@ export function GitPanel({
 	useEffect(() => {
 		if (gitResult) pollPending.current = false;
 	}, [gitResult]);
-
-	useEffect(() => {
-		setLatestPrUrl(null);
-		setLatestPrNumber(null);
-		for (const timeout of diffTimeouts.current.values()) {
-			clearTimeout(timeout);
-		}
-		diffTimeouts.current.clear();
-		setExpandedFiles({});
-		setDiffCache({});
-		setDiffErrors({});
-		setLoadingDiffs({});
-	}, [resolvedWorkspacePath, changeScope]);
 
 	useEffect(() => {
 		diffCacheRef.current = diffCache;
@@ -387,7 +386,13 @@ export function GitPanel({
 							<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
 								Workspace
 							</p>
-							<Select value={selectedWorkspacePath} onValueChange={setSelectedWorkspacePath}>
+							<Select
+								value={selectedWorkspacePath}
+								onValueChange={(nextWorkspacePath) => {
+									setSelectedWorkspacePath(nextWorkspacePath);
+									resetDiffState();
+								}}
+							>
 								<SelectTrigger className="h-8 text-xs">
 									<SelectValue />
 								</SelectTrigger>
@@ -426,7 +431,10 @@ export function GitPanel({
 					<ChangesFirstSection
 						fileRows={fileRows}
 						changeScope={changeScope}
-						onChangeScope={setChangeScope}
+						onChangeScope={(nextScope) => {
+							setChangeScope(nextScope);
+							resetDiffState();
+						}}
 						diffScope={diffScope}
 						expandedFiles={expandedFiles}
 						diffCache={diffCache}
@@ -753,6 +761,20 @@ function DiffContent({ patch }: { patch: string }) {
 		);
 	}
 	const rows = compactContextRows(parsed, 0);
+	let omittedCounter = 0;
+	const keyedRows = rows.map((row) => {
+		if (row.kind === "omitted") {
+			omittedCounter += 1;
+			return { key: `omitted-${omittedCounter}-${row.count}`, row };
+		}
+		if (row.kind === "hunk") {
+			return { key: `hunk-${row.content}`, row };
+		}
+		return {
+			key: `${row.kind}-${row.oldLine ?? "n"}-${row.newLine ?? "n"}-${row.content}`,
+			row,
+		};
+	});
 
 	const renderLineNumber = (value: number | null) => (
 		<span className="w-10 shrink-0 text-right tabular-nums text-muted-foreground">
@@ -763,11 +785,11 @@ function DiffContent({ patch }: { patch: string }) {
 	return (
 		<div className="rounded-md border border-border/70 bg-muted/20 overflow-x-auto">
 			<div className="min-w-full p-2 font-mono text-[12px] leading-6">
-				{rows.map((row, index) => {
+				{keyedRows.map(({ key, row }) => {
 					if (row.kind === "omitted") {
 						return (
 							<div
-								key={`omitted-${index}`}
+								key={key}
 								className="mx-1 my-1 rounded-md border border-border/60 bg-background px-3 py-1 text-[11px] text-muted-foreground"
 							>
 								{row.count} unmodified lines
@@ -789,7 +811,7 @@ function DiffContent({ patch }: { patch: string }) {
 
 					return (
 						<div
-							key={`line-${index}`}
+							key={key}
 							className={`grid grid-cols-[2.6rem_minmax(0,1fr)] items-center gap-2 px-2 ${rowClassName}`}
 						>
 							{renderLineNumber(displayLine)}
@@ -1058,6 +1080,11 @@ function PrSection({
 	const [title, setTitle] = useState("");
 	const [body, setBody] = useState("");
 	const [baseBranch, setBaseBranch] = useState("");
+	const resetForm = () => {
+		setTitle("");
+		setBody("");
+		setBaseBranch("");
+	};
 
 	if (gitState.detached) {
 		return (
@@ -1115,6 +1142,7 @@ function PrSection({
 									body.trim() || undefined,
 									baseBranch.trim() || undefined,
 								);
+								resetForm();
 								onShowFormChange(false);
 							}}
 						>
@@ -1125,7 +1153,10 @@ function PrSection({
 							variant="ghost"
 							size="sm"
 							className="h-7 px-2"
-							onClick={() => onShowFormChange(false)}
+							onClick={() => {
+								resetForm();
+								onShowFormChange(false);
+							}}
 						>
 							<X className="h-3 w-3" />
 						</Button>

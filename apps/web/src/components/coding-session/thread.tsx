@@ -113,6 +113,7 @@ function parseAssistantContentSegments(text: string): AssistantContentSegment[] 
 			const urlMatch = lines[lookAhead].match(/https?:\/\/\S+/i);
 			if (urlMatch) {
 				nextUrl = urlMatch[0];
+				index = lookAhead;
 				break;
 			}
 			if (!lines[lookAhead].trim()) break;

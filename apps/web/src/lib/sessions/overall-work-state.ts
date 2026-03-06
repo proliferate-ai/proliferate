@@ -59,14 +59,12 @@ export function sortSessionEntries<T extends SessionListEntry>(items: T[]): T[] 
 		switch (entry.derived.overallWorkState) {
 			case "working":
 				return 1;
-			case "needs_input":
-				return 2;
 			case "dormant":
-				return 3;
+				return 2;
 			case "done":
-				return 4;
+				return 3;
 			default:
-				return 5;
+				return 4;
 		}
 	};
 

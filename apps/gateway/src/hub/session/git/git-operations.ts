@@ -19,6 +19,7 @@ import { SANDBOX_PATHS, buildGitCredentialsMap, shellEscape } from "@proliferate
 import type { GitIdentity } from "../runtime/git-identity";
 
 const WORKSPACE_DIR = `${SANDBOX_PATHS.home}/workspace`;
+const OPEN_PR_CACHE_TTL_MS = 60_000;
 
 /** Non-interactive env for all git/gh commands. */
 const GIT_BASE_ENV: Record<string, string> = {
@@ -41,6 +42,12 @@ type GitActionResult = {
 };
 
 export class GitOperations {
+	private openPrCache: {
+		key: string;
+		value: { url: string; number: number } | null;
+		fetchedAtMs: number;
+	} | null = null;
+
 	constructor(
 		private provider: SandboxProvider,
 		private sandboxId: string,
@@ -222,6 +229,16 @@ export class GitOperations {
 		branch: string,
 		workspacePath?: string,
 	): Promise<{ url: string; number: number } | null> {
+		const cacheKey = `${workspacePath || "."}:${branch}`;
+		const now = Date.now();
+		if (
+			this.openPrCache &&
+			this.openPrCache.key === cacheKey &&
+			now - this.openPrCache.fetchedAtMs < OPEN_PR_CACHE_TTL_MS
+		) {
+			return this.openPrCache.value;
+		}
+
 		const commandEnv = { ...this.getReadOnlyEnv(), ...this.getAuthEnv(workspacePath) };
 		const result = await this.exec(
 			[
@@ -245,6 +262,7 @@ export class GitOperations {
 		);
 
 		if (result.exitCode !== 0 || !result.stdout.trim()) {
+			this.openPrCache = { key: cacheKey, value: null, fetchedAtMs: now };
 			return null;
 		}
 
@@ -252,10 +270,14 @@ export class GitOperations {
 			const parsed = JSON.parse(result.stdout) as Array<{ url?: unknown; number?: unknown }>;
 			const first = parsed[0];
 			if (!first || typeof first.url !== "string" || typeof first.number !== "number") {
+				this.openPrCache = { key: cacheKey, value: null, fetchedAtMs: now };
 				return null;
 			}
-			return { url: first.url, number: first.number };
+			const value = { url: first.url, number: first.number };
+			this.openPrCache = { key: cacheKey, value, fetchedAtMs: now };
+			return value;
 		} catch {
+			this.openPrCache = { key: cacheKey, value: null, fetchedAtMs: now };
 			return null;
 		}
 	}
