@@ -7,14 +7,7 @@
 
 import type { Logger } from "@proliferate/logger";
 import { sessions } from "@proliferate/services";
-import type {
-	SessionAgentState,
-	SessionOutcome,
-	SessionRuntimeStatus,
-	SessionSandboxState,
-	SessionStateReason,
-	SessionTerminalState,
-} from "@proliferate/shared/contracts/sessions";
+import type { SessionOutcome } from "@proliferate/shared/contracts/sessions";
 import {
 	SESSION_LIFECYCLE_EVENT,
 	type SessionLifecycleEventType,
@@ -27,7 +20,7 @@ import {
 export async function persistTerminalOutcome(input: {
 	sessionId: string;
 	organizationId: string;
-	runtimeStatus: SessionRuntimeStatus;
+	runtimeStatus: string;
 	summary?: string | null;
 	prUrls?: string[];
 	errorMessage?: string | null;
@@ -104,56 +97,47 @@ export async function touchLastVisibleUpdate(sessionId: string, logger: Logger):
 export async function projectOperatorStatus(input: {
 	sessionId: string;
 	organizationId: string;
-	runtimeStatus: SessionRuntimeStatus;
+	runtimeStatus: string;
 	hasPendingApproval: boolean;
 	isAgentIdle?: boolean;
 	logger: Logger;
 }): Promise<string> {
-	const { sessionId, runtimeStatus, hasPendingApproval, isAgentIdle, logger: log } = input;
+	const {
+		sessionId,
+		organizationId,
+		runtimeStatus,
+		hasPendingApproval,
+		isAgentIdle,
+		logger: log,
+	} = input;
 
-	let agentState: SessionAgentState = "iterating";
-	let terminalState: SessionTerminalState | null = null;
-	let sandboxState: SessionSandboxState | undefined;
-	let stateReason: SessionStateReason | null = null;
+	let operatorStatus: string;
 
-	if (runtimeStatus === "completed") {
-		agentState = "done";
-		terminalState = "succeeded";
-		sandboxState = "terminated";
-	} else if (runtimeStatus === "cancelled") {
-		agentState = "done";
-		terminalState = "cancelled";
-		sandboxState = "terminated";
-		stateReason = "cancelled_by_user";
+	if (runtimeStatus === "completed" || runtimeStatus === "cancelled") {
+		operatorStatus = "ready_for_review";
 	} else if (runtimeStatus === "failed") {
-		agentState = "errored";
-		terminalState = "failed";
-		sandboxState = "failed";
-		stateReason = "runtime_error";
+		operatorStatus = "errored";
 	} else if (hasPendingApproval) {
-		agentState = "waiting_approval";
-		stateReason = "approval_required";
+		operatorStatus = "waiting_for_approval";
 	} else if (isAgentIdle) {
-		agentState = "waiting_input";
+		operatorStatus = "needs_input";
 	} else if (runtimeStatus === "running") {
-		agentState = "iterating";
-		sandboxState = "running";
+		operatorStatus = "active";
 	} else {
-		agentState = "iterating";
+		operatorStatus = "active";
 	}
 
 	try {
-		await sessions.updateSession(sessionId, {
-			agentState,
-			...(sandboxState ? { sandboxState } : {}),
-			...(terminalState ? { terminalState } : {}),
-			stateReason,
+		await sessions.updateSessionOperatorStatus({
+			sessionId,
+			organizationId,
+			operatorStatus,
 		});
 	} catch (err) {
-		log.warn({ err, sessionId, agentState }, "Failed to update canonical agent state");
+		log.warn({ err, sessionId, operatorStatus }, "Failed to update operator status");
 	}
 
-	return agentState;
+	return operatorStatus;
 }
 
 // ============================================

@@ -91,7 +91,6 @@ export async function setupEssentialDependencies(
 	];
 
 	if (isSetupSession) {
-		// These are Proliferate tools specific to set up sessions / onboarding.
 		writePromises.push(
 			writeFile(`${localToolDir}/save_service_commands.ts`, SAVE_SERVICE_COMMANDS_TOOL),
 			writeFile(`${localToolDir}/save_service_commands.txt`, SAVE_SERVICE_COMMANDS_DESCRIPTION),
@@ -116,17 +115,13 @@ export async function setupEssentialDependencies(
 		SESSION_ID: opts.sessionId,
 		OPENCODE_DISABLE_DEFAULT_PLUGINS: "true",
 	};
-
 	if (llmProxyBaseUrl && llmProxyApiKey) {
 		log.debug({ llmProxyBaseUrl, hasApiKey: true }, "OpenCode using LLM proxy");
 		opencodeEnv.ANTHROPIC_API_KEY = llmProxyApiKey;
 		opencodeEnv.ANTHROPIC_BASE_URL = llmProxyBaseUrl;
-	} else if (opts.envVars.ANTHROPIC_API_KEY && opts.envVars.NODE_ENV !== "production") {
-		// Direct-key fallback is development-only.
+	} else if (opts.envVars.ANTHROPIC_API_KEY) {
 		log.warn("OpenCode using direct key (no LLM proxy)");
 		opencodeEnv.ANTHROPIC_API_KEY = opts.envVars.ANTHROPIC_API_KEY;
-	} else if (opts.envVars.ANTHROPIC_API_KEY) {
-		log.error("Ignoring direct ANTHROPIC_API_KEY in production without LLM proxy");
 	} else {
 		log.error("OpenCode has no LLM proxy AND no direct ANTHROPIC_API_KEY — it will fail to start");
 	}

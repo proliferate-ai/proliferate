@@ -1,4 +1,3 @@
-import path from "path";
 import type { GitResultCode } from "@proliferate/shared";
 import type { WebSocket } from "ws";
 import type { GitOperations } from "../git/git-operations";
@@ -9,15 +8,6 @@ export interface GitWorkflowDeps {
 	getGitOps: () => GitOperations;
 	sendMessage: (ws: WebSocket, message: unknown) => void;
 	logError: (message: string, error?: unknown) => void;
-}
-
-function normalizeGitDiffPath(pathInput: string): string | null {
-	const trimmed = pathInput.trim();
-	const candidate = trimmed.length > 0 ? trimmed : ".";
-	if (path.isAbsolute(candidate)) return null;
-	const normalized = path.posix.normalize(candidate.replaceAll("\\", "/"));
-	if (normalized === ".." || normalized.startsWith("../")) return null;
-	return normalized;
 }
 
 export async function runGitStatusWorkflow(
@@ -74,46 +64,4 @@ export async function runGitActionWorkflow(
 			},
 		});
 	}
-}
-
-export async function runGitDiffWorkflow(
-	deps: GitWorkflowDeps,
-	input: {
-		ws: WebSocket;
-		path: string;
-		scope?: "unstaged" | "staged" | "full";
-		workspacePath?: string;
-	},
-): Promise<void> {
-	await deps.ensureRuntimeReady();
-	try {
-		await deps.refreshGitContext();
-	} catch (err) {
-		deps.logError("Failed to refresh git context (using cached values)", err);
-	}
-	const scope = input.scope ?? "full";
-	const safePath = normalizeGitDiffPath(input.path);
-	if (!safePath) {
-		deps.sendMessage(input.ws, {
-			type: "git_diff",
-			payload: {
-				path: input.path,
-				scope,
-				success: false,
-				message: "Invalid path",
-			},
-		});
-		return;
-	}
-	const result = await deps.getGitOps().getDiff(safePath, scope, input.workspacePath);
-	deps.sendMessage(input.ws, {
-		type: "git_diff",
-		payload: {
-			path: safePath,
-			scope,
-			success: result.success,
-			...(result.patch ? { patch: result.patch } : {}),
-			...(result.message ? { message: result.message } : {}),
-		},
-	});
 }

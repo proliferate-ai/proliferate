@@ -50,7 +50,12 @@ function toSessionKind(kind: string | null): Session["kind"] {
 	return kind === "manager" || kind === "task" || kind === "setup" ? kind : null;
 }
 
-function toCanonicalStatus(row: SessionRow): Session["status"] {
+type CanonicalStatusRow = Pick<
+	SessionRow,
+	"sandboxState" | "agentState" | "terminalState" | "stateReason" | "stateUpdatedAt"
+>;
+
+export function toCanonicalStatus(row: CanonicalStatusRow): Session["status"] {
 	const agentState =
 		row.agentState === "iterating" ||
 		row.agentState === "waiting_input" ||
@@ -98,7 +103,6 @@ function toCanonicalStatus(row: SessionRow): Session["status"] {
 		requiresHumanReview:
 			agentState === "waiting_input" ||
 			agentState === "waiting_approval" ||
-			agentState === "done" ||
 			agentState === "errored",
 		updatedAt: toIsoString(row.stateUpdatedAt),
 	};
@@ -117,7 +121,7 @@ export function toSession(
 		repoId: row.repoId,
 		organizationId: row.organizationId,
 		createdBy: row.createdBy,
-		creator: row.creator ?? null,
+		creator: null,
 		kind: toSessionKind(row.kind),
 		sessionType: row.sessionType,
 		status: toCanonicalStatus(row),
