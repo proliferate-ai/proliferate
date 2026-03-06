@@ -1,5 +1,5 @@
 import { createLogger } from "@proliferate/logger";
-import { createApiApp } from "./api/create-api-app.js";
+import { createApiApp } from "./create-api-app.js";
 
 const logger = createLogger({ service: "sandbox-mcp" }).child({ module: "api-server" });
 

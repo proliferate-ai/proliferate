@@ -1,6 +1,6 @@
-import { CliError } from "./cli/errors.js";
-import { runCli } from "./cli/main.js";
-import { writeStderr } from "./cli/output.js";
+import { CliError } from "./errors.js";
+import { runCli } from "./main.js";
+import { writeStderr } from "./output.js";
 
 runCli(process.argv.slice(2)).catch((error: unknown) => {
 	if (error instanceof CliError) {

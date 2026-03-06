@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { streamServiceLogs } from "../../app/services/stream-service-logs.js";
 import {
 	exposePort,
 	getExposedPort,
@@ -7,7 +6,8 @@ import {
 	getServices,
 	startService,
 	stopService,
-} from "../../service-manager.js";
+} from "../../app/services/manage-services.js";
+import { streamServiceLogs } from "../../app/services/stream-service-logs.js";
 import { requireAuth } from "../middleware/auth.js";
 
 export function createServicesRoutes(): Router {
