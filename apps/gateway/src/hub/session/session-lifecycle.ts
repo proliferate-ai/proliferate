@@ -7,7 +7,14 @@
 
 import type { Logger } from "@proliferate/logger";
 import { sessions } from "@proliferate/services";
-import type { SessionOutcome } from "@proliferate/shared/contracts/sessions";
+import type {
+	SessionAgentState,
+	SessionOutcome,
+	SessionRuntimeStatus,
+	SessionSandboxState,
+	SessionStateReason,
+	SessionTerminalState,
+} from "@proliferate/shared/contracts/sessions";
 import {
 	SESSION_LIFECYCLE_EVENT,
 	type SessionLifecycleEventType,
@@ -20,7 +27,7 @@ import {
 export async function persistTerminalOutcome(input: {
 	sessionId: string;
 	organizationId: string;
-	runtimeStatus: string;
+	runtimeStatus: SessionRuntimeStatus;
 	summary?: string | null;
 	prUrls?: string[];
 	errorMessage?: string | null;
@@ -97,31 +104,17 @@ export async function touchLastVisibleUpdate(sessionId: string, logger: Logger):
 export async function projectOperatorStatus(input: {
 	sessionId: string;
 	organizationId: string;
-	runtimeStatus: string;
+	runtimeStatus: SessionRuntimeStatus;
 	hasPendingApproval: boolean;
 	isAgentIdle?: boolean;
 	logger: Logger;
 }): Promise<string> {
 	const { sessionId, runtimeStatus, hasPendingApproval, isAgentIdle, logger: log } = input;
 
-	let agentState: "iterating" | "waiting_input" | "waiting_approval" | "done" | "errored" =
-		"iterating";
-	let terminalState: "succeeded" | "failed" | "cancelled" | null = null;
-	let sandboxState: "provisioning" | "running" | "paused" | "terminated" | "failed" | undefined;
-	let stateReason:
-		| "manual_pause"
-		| "inactivity"
-		| "approval_required"
-		| "orphaned"
-		| "snapshot_failed"
-		| "automation_completed"
-		| "credit_limit"
-		| "payment_failed"
-		| "overage_cap"
-		| "suspended"
-		| "cancelled_by_user"
-		| "runtime_error"
-		| null = null;
+	let agentState: SessionAgentState = "iterating";
+	let terminalState: SessionTerminalState | null = null;
+	let sandboxState: SessionSandboxState | undefined;
+	let stateReason: SessionStateReason | null = null;
 
 	if (runtimeStatus === "completed") {
 		agentState = "done";

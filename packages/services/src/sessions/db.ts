@@ -530,7 +530,8 @@ export async function update(id: string, input: UpdateSessionInput): Promise<voi
 	if (
 		input.sandboxState !== undefined ||
 		input.agentState !== undefined ||
-		input.terminalState !== undefined
+		input.terminalState !== undefined ||
+		input.stateReason !== undefined
 	)
 		updates.stateUpdatedAt = new Date();
 
@@ -574,7 +575,8 @@ export async function updateWithOrgCheck(
 	if (
 		input.sandboxState !== undefined ||
 		input.agentState !== undefined ||
-		input.terminalState !== undefined
+		input.terminalState !== undefined ||
+		input.stateReason !== undefined
 	)
 		updates.stateUpdatedAt = new Date();
 
@@ -608,7 +610,8 @@ export async function updateWhereSandboxIdMatches(
 	if (
 		input.sandboxState !== undefined ||
 		input.agentState !== undefined ||
-		input.terminalState !== undefined
+		input.terminalState !== undefined ||
+		input.stateReason !== undefined
 	)
 		updates.stateUpdatedAt = new Date();
 

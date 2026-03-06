@@ -58,6 +58,19 @@ export class GitOperations {
 		return resolved;
 	}
 
+	private normalizeDiffPath(pathInput: string): string {
+		const trimmed = pathInput.trim();
+		const candidate = trimmed.length > 0 ? trimmed : ".";
+		if (path.isAbsolute(candidate)) {
+			throw new Error("Invalid diff path");
+		}
+		const normalized = path.posix.normalize(candidate.replaceAll("\\", "/"));
+		if (normalized === ".." || normalized.startsWith("../")) {
+			throw new Error("Invalid diff path");
+		}
+		return normalized;
+	}
+
 	private async exec(
 		argv: string[],
 		opts?: { cwd?: string; timeoutMs?: number; env?: Record<string, string> },
@@ -238,6 +251,15 @@ export class GitOperations {
 		scope: "unstaged" | "staged" | "full" = "full",
 		workspacePath?: string,
 	): Promise<{ success: boolean; patch?: string; message?: string }> {
+		let safePath: string;
+		try {
+			safePath = this.normalizeDiffPath(path);
+		} catch (err) {
+			return {
+				success: false,
+				message: err instanceof Error ? err.message : "Invalid diff path",
+			};
+		}
 		const cwd = this.resolveGitDir(workspacePath);
 		const env = this.getReadOnlyEnv();
 		const run = async (args: string[]) =>
@@ -256,14 +278,14 @@ export class GitOperations {
 		};
 
 		const tryUntrackedDiff = async (): Promise<string> => {
-			const result = await run(["--no-index", "--", "/dev/null", path]);
+			const result = await run(["--no-index", "--", "/dev/null", safePath]);
 			// git diff --no-index returns exitCode 1 when files differ.
 			if (result.exitCode <= 1) return trimPatch(result.stdout);
 			return "";
 		};
 
 		if (scope === "staged") {
-			const staged = await run(["--cached", "--", path]);
+			const staged = await run(["--cached", "--", safePath]);
 			if (staged.exitCode > 1) {
 				return { success: false, message: staged.stderr || "Failed to load staged diff" };
 			}
@@ -272,7 +294,7 @@ export class GitOperations {
 		}
 
 		if (scope === "unstaged") {
-			const unstaged = await run(["--", path]);
+			const unstaged = await run(["--", safePath]);
 			if (unstaged.exitCode > 1) {
 				return { success: false, message: unstaged.stderr || "Failed to load unstaged diff" };
 			}
@@ -281,8 +303,8 @@ export class GitOperations {
 		}
 
 		const [staged, unstaged] = await Promise.all([
-			run(["--cached", "--", path]),
-			run(["--", path]),
+			run(["--cached", "--", safePath]),
+			run(["--", safePath]),
 		]);
 		if (staged.exitCode > 1) {
 			return { success: false, message: staged.stderr || "Failed to load staged diff" };

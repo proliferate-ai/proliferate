@@ -86,6 +86,7 @@ function PeekDrawerContent({
 	const router = useRouter();
 	const { overallWorkState } = useOverallWorkState(session);
 	const isResumable = session.snapshotId != null && overallWorkState === "dormant";
+	const blockedReason = getBlockedReasonFromCanonical(session);
 
 	const displayTitle =
 		session.title ||
@@ -120,8 +121,8 @@ function PeekDrawerContent({
 							{getOutcomeDisplay(session.outcome).label}
 						</span>
 					)}
-					{overallWorkState === "needs_input" && (
-						<SheetDescription>{getBlockedReasonFromCanonical(session)}</SheetDescription>
+					{overallWorkState === "needs_input" && blockedReason && (
+						<SheetDescription>{blockedReason}</SheetDescription>
 					)}
 				</SheetHeader>
 

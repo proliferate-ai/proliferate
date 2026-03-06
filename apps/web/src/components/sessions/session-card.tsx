@@ -67,12 +67,27 @@ function formatCompactTimeAgo(date: Date): string {
 /**
  * Attention indicator dot based on operator status.
  */
-function AttentionCell({ pendingRun }: { pendingRun?: PendingRunSummary }) {
+function AttentionCell({
+	pendingRun,
+	requiresHumanReview,
+}: {
+	pendingRun?: PendingRunSummary;
+	requiresHumanReview?: boolean;
+}) {
 	if (pendingRun) {
 		return (
 			<span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
 				<span className="h-1.5 w-1.5 rounded-full bg-destructive shrink-0" />
 				Pending
+			</span>
+		);
+	}
+
+	if (requiresHumanReview) {
+		return (
+			<span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+				<span className="h-1.5 w-1.5 rounded-full bg-warning shrink-0" />
+				Review
 			</span>
 		);
 	}
@@ -321,7 +336,10 @@ export function SessionListRow({ session, pendingRun, isNew, onClick }: SessionL
 
 				{/* Attention (w-24) */}
 				<Column className="w-20 shrink-0">
-					<AttentionCell pendingRun={pendingRun} />
+					<AttentionCell
+						pendingRun={pendingRun}
+						requiresHumanReview={session.status.requiresHumanReview}
+					/>
 				</Column>
 
 				{/* Origin (w-20, hidden on mobile) */}
