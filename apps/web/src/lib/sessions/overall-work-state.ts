@@ -155,10 +155,15 @@ export function buildSessionListResult({
 	};
 
 	for (const entry of entries) {
-		if (matchesTab(entry, "in_progress")) counts.in_progress += 1;
-		if (matchesTab(entry, "needs_attention")) counts.needs_attention += 1;
-		if (matchesTab(entry, "paused")) counts.paused += 1;
-		if (matchesTab(entry, "completed")) counts.completed += 1;
+		if (matchesTab(entry, "needs_attention")) {
+			counts.needs_attention += 1;
+		} else if (matchesTab(entry, "in_progress")) {
+			counts.in_progress += 1;
+		} else if (matchesTab(entry, "paused")) {
+			counts.paused += 1;
+		} else if (matchesTab(entry, "completed")) {
+			counts.completed += 1;
+		}
 	}
 
 	const tabFiltered = entries.filter((entry) => matchesTab(entry, activeTab));
