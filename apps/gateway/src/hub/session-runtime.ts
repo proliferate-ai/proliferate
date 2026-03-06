@@ -15,7 +15,10 @@ import type {
 	SandboxProviderType,
 } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
-import type { CodingHarnessPromptImage } from "../harness/contracts/coding";
+import type {
+	CodingHarnessEventStreamHandle,
+	CodingHarnessPromptImage,
+} from "../harness/contracts/coding";
 import { ClaudeManagerHarnessAdapter } from "../harness/manager/adapter";
 import type { GatewayEnv } from "../lib/env";
 import { scheduleSessionExpiry } from "../operations/expiry/queue";
@@ -86,6 +89,7 @@ export class SessionRuntime implements RuntimeFacade {
 	private readonly onDisconnect: SessionRuntimeOptions["onDisconnect"];
 
 	private provider: SandboxProvider | null = null;
+	private eventStreamHandle: CodingHarnessEventStreamHandle | null = null;
 	private lifecycleStartTime = 0;
 
 	private ensureReadyPromise: Promise<void> | null = null;
@@ -198,7 +202,7 @@ export class SessionRuntime implements RuntimeFacade {
 	}
 
 	isSseConnected(): boolean {
-		return this.runtimeContext.live.eventStreamConnected;
+		return Boolean(this.runtimeContext.live.eventStreamConnected && this.eventStreamHandle);
 	}
 
 	private isManagerSessionKind(): boolean {
@@ -305,10 +309,12 @@ export class SessionRuntime implements RuntimeFacade {
 
 	disconnectSse(): void {
 		this.runtimeDriver.disconnectStream();
+		this.eventStreamHandle = null;
 	}
 
 	resetSandboxState(): void {
 		this.runtimeDriver.resetState();
+		this.eventStreamHandle = null;
 		clearRuntimePointers(this.runtimeContext.live);
 	}
 
@@ -499,7 +505,9 @@ export class SessionRuntime implements RuntimeFacade {
 				logLatency: (event, data) => this.logLatency(event, data),
 				onRuntimeEvent: (event) => this.onEvent(event),
 				onDisconnect: (reason) => this.handleSseDisconnect(reason),
-				setEventStreamHandle: () => {},
+				setEventStreamHandle: (handle) => {
+					this.eventStreamHandle = handle;
+				},
 				onBroadcast: this.onBroadcast,
 			});
 
@@ -521,6 +529,7 @@ export class SessionRuntime implements RuntimeFacade {
 
 	private handleSseDisconnect(reason: string): void {
 		this.runtimeContext.live.eventStreamConnected = false;
+		this.eventStreamHandle = null;
 		this.log("SSE disconnected", { reason });
 		this.logLatency("runtime.sse.disconnect", { reason });
 		this.log("SSE disconnected; preserving OpenCode session identity for reconnect", {
