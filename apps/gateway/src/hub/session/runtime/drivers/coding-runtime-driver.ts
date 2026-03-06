@@ -138,7 +138,7 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 			throw new Error("Runtime not ready");
 		}
 		const sandboxId = this.live.session.sandbox_id;
-		const commands = overrideCommands?.length ? overrideCommands : this.serviceCommands;
+		const commands = overrideCommands !== undefined ? overrideCommands : this.serviceCommands;
 		if (!this.provider.testServiceCommands || !sandboxId) {
 			throw new Error("Runtime not ready");
 		}
@@ -169,5 +169,14 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 			live,
 			codingSessionId: resumed.sessionId,
 		});
+	}
+
+	resetState(): void {
+		this.disconnectStream();
+		this.openCodeUrl = null;
+		this.openCodeSessionId = null;
+		this.provider = null;
+		this.live = null;
+		this.serviceCommands = undefined;
 	}
 }

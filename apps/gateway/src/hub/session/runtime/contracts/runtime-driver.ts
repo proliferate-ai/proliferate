@@ -51,6 +51,7 @@ export interface RuntimeDriver {
 	interrupt(): Promise<void>;
 	collectOutputs(): Promise<Message[]>;
 	disconnectStream(): void;
+	resetState(): void;
 	getOpenCodeSessionId(): string | null;
 	testAutoStartCommands(
 		runId: string,

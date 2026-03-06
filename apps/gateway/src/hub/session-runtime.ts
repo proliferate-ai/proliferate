@@ -308,7 +308,7 @@ export class SessionRuntime implements RuntimeFacade {
 	}
 
 	resetSandboxState(): void {
-		this.runtimeDriver.disconnectStream();
+		this.runtimeDriver.resetState();
 		clearRuntimePointers(this.runtimeContext.live);
 	}
 
