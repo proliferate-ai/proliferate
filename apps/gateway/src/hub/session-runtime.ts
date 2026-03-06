@@ -40,10 +40,7 @@ import { selectRuntimeDriver } from "./session/runtime/drivers/driver-selector";
 import { ManagerRuntimeDriver } from "./session/runtime/drivers/manager-runtime-driver";
 import type { SessionContext } from "./session/runtime/session-context-store";
 import { clearRuntimePointers } from "./session/runtime/state/state-reconciler";
-import {
-	persistPreviewUrl,
-	persistRuntimeReady,
-} from "./session/runtime/write-authority/runtime-writers";
+import { persistRuntimeReady } from "./session/runtime/write-authority/runtime-writers";
 import type {
 	BroadcastServerMessageCallback,
 	DisconnectCallback,
@@ -151,6 +148,7 @@ export class SessionRuntime implements RuntimeFacade {
 		this.runtimeContext = {
 			config: {
 				...this.runtimeContext.config,
+				primaryRepo: refreshed.config.primaryRepo,
 				repos: refreshed.config.repos,
 				gitIdentity: refreshed.config.gitIdentity,
 			},
@@ -486,11 +484,6 @@ export class SessionRuntime implements RuntimeFacade {
 
 			if (live.previewUrl && this.onBroadcast) {
 				this.onBroadcast({ type: "preview_url", payload: { url: live.previewUrl } });
-				await persistPreviewUrl({
-					sessionId: this.sessionId,
-					live,
-					previewTunnelUrl: live.previewUrl,
-				});
 			}
 			await this.runtimeDriver.activate({
 				sessionId: this.sessionId,

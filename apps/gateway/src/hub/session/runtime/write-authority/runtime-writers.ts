@@ -39,12 +39,3 @@ export async function persistCodingSessionId(input: {
 	await sessions.updateSession(input.sessionId, { codingAgentSessionId: input.codingSessionId });
 	reconcileRuntimePointers(input.live, { openCodeSessionId: input.codingSessionId });
 }
-
-export async function persistPreviewUrl(input: {
-	sessionId: string;
-	live: SessionLiveState;
-	previewTunnelUrl: string;
-}): Promise<void> {
-	await sessions.updateSession(input.sessionId, { previewTunnelUrl: input.previewTunnelUrl });
-	reconcileRuntimePointers(input.live, { previewUrl: input.previewTunnelUrl });
-}
