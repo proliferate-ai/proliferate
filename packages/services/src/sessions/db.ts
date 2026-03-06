@@ -239,6 +239,20 @@ export async function listByOrganizationEnriched(
 		conditions.push(eq(sessions.createdBy, filters.createdBy));
 	}
 
+	conditions.push(isNull(sessions.deletedAt));
+
+	if (!filters?.includeArchived) {
+		conditions.push(isNull(sessions.archivedAt));
+	}
+
+	conditions.push(
+		or(
+			eq(sessions.createdBy, userId),
+			eq(sessions.visibility, "org"),
+			sql`EXISTS (SELECT 1 FROM session_acl WHERE session_acl.session_id = ${sessions.id} AND session_acl.user_id = ${userId})`,
+		)!,
+	);
+
 	// Pending approval count subquery
 	const pendingApprovalCount = db
 		.select({

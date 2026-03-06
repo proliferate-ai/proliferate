@@ -113,7 +113,7 @@ export async function createSession(
 			organizationId,
 			sessionType,
 			clientType,
-			status: "pending",
+			status: "pending" as const,
 			sandboxProvider: provider.type,
 			createdBy: userId,
 			snapshotId,

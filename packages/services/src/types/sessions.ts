@@ -14,7 +14,7 @@ export interface CreateSessionInput {
 	configurationId: string | null;
 	organizationId: string;
 	sessionType: string;
-	status: string;
+	status: CreateSessionStatus;
 	sandboxProvider: string;
 
 	// Optional fields
@@ -36,6 +36,17 @@ export interface CreateSessionInput {
 	continuedFromSessionId?: string | null;
 	rerunOfSessionId?: string | null;
 }
+
+export type CreateSessionStatus =
+	| "starting"
+	| "pending"
+	| "running"
+	| "paused"
+	| "suspended"
+	| "completed"
+	| "stopped"
+	| "cancelled"
+	| "failed";
 
 export interface UpdateSessionInput {
 	sandboxState?: "provisioning" | "running" | "paused" | "terminated" | "failed";
