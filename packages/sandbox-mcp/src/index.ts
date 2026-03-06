@@ -1,4 +1,4 @@
-import { startApiServer } from "./api-server.js";
+import { startApiServer } from "./api/server.js";
 import { setupTerminalWebSocket } from "./terminal.js";
 
 const mode = process.argv[2];

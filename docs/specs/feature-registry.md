@@ -184,10 +184,10 @@
 
 | Feature | Status | Evidence | Notes |
 |---------|--------|----------|-------|
-| Device auth flow | Implemented | `packages/cli/src/state/auth.ts` | OAuth device code flow, token saved to `~/.proliferate/token` |
-| Local config management | Implemented | `packages/cli/src/state/config.ts` | Project-local `.proliferate/` config |
-| File sync (local → sandbox) | Implemented | `packages/cli/src/lib/sync.ts` | Unidirectional rsync-based push |
-| OpenCode launch | Implemented | `packages/cli/src/agents/opencode.ts` | Opens OpenCode UI |
+| Device auth flow | Deprecated | `docs/specs/cli.md` | Legacy local CLI package removed from this repo |
+| Local config management | Deprecated | `docs/specs/cli.md` | Legacy local CLI package removed from this repo |
+| File sync (local → sandbox) | Deprecated | `docs/specs/cli.md` | Legacy local CLI package removed from this repo |
+| OpenCode launch | Deprecated | `docs/specs/cli.md` | Legacy local CLI package removed from this repo |
 | CLI API routes (auth) | Implemented | `apps/web/src/server/routers/cli.ts:cliAuthRouter`, `apps/web/src/app/api/cli/auth/device/route.ts`, `apps/web/src/app/api/cli/auth/device/poll/route.ts` | oRPC-backed auth flows plus `/api/cli/auth/*` compatibility handlers |
 | CLI API routes (repos) | Implemented | `apps/web/src/server/routers/cli.ts:cliReposRouter` | Get/create repos from CLI |
 | CLI API routes (sessions) | Implemented | `apps/web/src/server/routers/cli.ts:cliSessionsRouter` | Session creation for CLI |

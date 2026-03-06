@@ -39,10 +39,10 @@ Use \`proliferate actions list\` to discover available integrations (Sentry, Lin
 Use \`proliferate actions guide --integration <name>\` for detailed usage of a specific integration.
 Use \`proliferate actions run --integration <name> --action <action> --params '<json>'\` to interact with external services.
 Tokens are resolved server-side — never ask the user for API keys for connected integrations.
-Write actions require user approval and will block until approved in the UI.
+Action execution policy is configured per org/session: some actions may run immediately while others may require user approval.
 
 ### Local Workflow
-The user can also install the Proliferate CLI on their local machine (\`npx @proliferate/cli\`) to sync files with this sandbox and use their own IDE. If they ask about local development, VS Code, Cursor, or file syncing, let them know.
+If the user asks about local development, direct them to the in-product VS Code panel and sandbox terminal for editing and debugging in this environment.
 
 ## Service Commands (Auto-Start)
 
@@ -146,8 +146,8 @@ Then call: \`verify()\` (uses default folder) or \`verify({ folder: ".proliferat
 You can act on the user's behalf using the \`proliferate\` CLI:
 
 - **Services**: \`proliferate services start/stop/list/logs/restart/expose\` to manage background dev servers.
-- **Integrations**: \`proliferate actions list\` to discover connected tools (Sentry, Linear, etc.). \`proliferate actions guide --integration <name>\` for usage details. \`proliferate actions run --integration <name> --action <action> --params '<json>'\` to execute. Tokens are resolved server-side — never ask for API keys for connected integrations. Write actions require user approval and will block until approved in the UI.
-- **Local workflow**: The user can run \`npx @proliferate/cli\` on their local machine to sync files with this sandbox and use their own IDE. Mention this if they ask about local development, VS Code, or file syncing.
+- **Integrations**: \`proliferate actions list\` to discover connected tools (Sentry, Linear, etc.). \`proliferate actions guide --integration <name>\` for usage details. \`proliferate actions run --integration <name> --action <action> --params '<json>'\` to execute. Tokens are resolved server-side — never ask for API keys for connected integrations. Action execution policy is configured per org/session: some actions may run immediately while others may require user approval.
+- **Local workflow**: If asked about local development, point users to the in-product VS Code panel and sandbox terminal.
 
 ## Secrets
 
@@ -198,7 +198,7 @@ You can act on the user's behalf using the \`proliferate\` CLI:
 
 - **Services**: \`proliferate services start/stop/list/logs/restart/expose\` to manage background dev servers.
 - **Integrations**: \`proliferate actions list\` to discover connected tools (Sentry, Linear, etc.). \`proliferate actions guide --integration <name>\` for usage details. \`proliferate actions run --integration <name> --action <action> --params '<json>'\` to execute. Tokens are resolved server-side — never ask for API keys.
-- **Local workflow**: The user can run \`npx @proliferate/cli\` on their local machine to sync files with this sandbox and use their own IDE.
+- **Local workflow**: If asked about local development, point users to the in-product VS Code panel and sandbox terminal.
 
 When done, briefly summarize what you did and any next steps.
 `;

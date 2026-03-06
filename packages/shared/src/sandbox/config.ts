@@ -143,9 +143,9 @@ proliferate actions run --integration <name> --action <action> --params '<json>'
 
 ## How It Works
 
-- **Read** actions (e.g. list issues, get details) are auto-approved and return immediately.
-- **Write** actions (e.g. create issue, resolve issue) require user approval — your terminal blocks until the user clicks Approve in their web UI.
-- **Danger** actions are denied by default.
+- Action execution policy is configured by the platform per org/session.
+- Some actions may execute immediately, while others may require user approval.
+- If approval is required, \`proliferate actions run\` blocks until the decision is made in the web UI.
 - Authentication tokens are resolved server-side — never ask for API keys for connected integrations.
 
 ## Usage
@@ -155,9 +155,9 @@ If the user asks you to check Linear issues, look at Sentry errors, or interact 
 Run \`proliferate actions list\` to see which integrations are connected.
 Run \`proliferate actions guide --integration <name>\` for provider-specific examples.
 
-## Local CLI
+## Local Development
 
-The user can also run \`npx @proliferate/cli\` on their local machine to sync files with this sandbox and use their own IDE (VS Code, Cursor, etc.).
+Users should work directly in the sandbox using the session terminal and VS Code panel.
 `;
 
 /**

@@ -13,14 +13,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ============================================
 // Test helpers — we re-implement the pure functions
-// from proliferate-cli.ts to test them in isolation.
+// from the CLI command modules to test them in isolation.
 // The CLI is a single-file script with no exports,
 // so we extract and test the core logic directly.
 // ============================================
 
 /**
  * safePath — validates that an untrusted path doesn't escape `base`.
- * Mirrors the implementation in proliferate-cli.ts.
+ * Mirrors the implementation in the CLI env/domain modules.
  */
 function safePath(base: string, untrusted: string): string {
 	const { isAbsolute, resolve, relative } = require("node:path");
