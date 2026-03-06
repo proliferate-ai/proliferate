@@ -66,11 +66,7 @@ import {
 	touchLastVisibleUpdate,
 } from "./session/session-lifecycle";
 import { runCancelWorkflow } from "./session/workflows/cancel-workflow";
-import {
-	runGitActionWorkflow,
-	runGitDiffWorkflow,
-	runGitStatusWorkflow,
-} from "./session/workflows/git-workflow";
+import { runGitActionWorkflow, runGitStatusWorkflow } from "./session/workflows/git-workflow";
 import { buildInitMessages } from "./session/workflows/init-workflow";
 import { runPromptWorkflow } from "./session/workflows/prompt-workflow";
 import { runSaveSnapshotWorkflow } from "./session/workflows/snapshot-workflow";
@@ -532,26 +528,6 @@ export class SessionHub {
 							success: false,
 							code: "UNKNOWN_ERROR" as GitResultCode,
 							message: err instanceof Error ? err.message : "Failed to get git status",
-						},
-					});
-				});
-				return;
-			}
-			case "get_git_diff": {
-				this.log("Git diff requested", {
-					path: message.path,
-					scope: message.scope ?? "full",
-					workspacePath: message.workspacePath ?? null,
-				});
-				this.handleGitDiff(ws, message.path, message.scope, message.workspacePath).catch((err) => {
-					this.logError("Failed to get git diff", err);
-					this.sendMessage(ws, {
-						type: "git_diff",
-						payload: {
-							path: message.path,
-							scope: message.scope ?? "full",
-							success: false,
-							message: err instanceof Error ? err.message : "Failed to get git diff",
 						},
 					});
 				});
@@ -1204,24 +1180,6 @@ export class SessionHub {
 			},
 			ws,
 			workspacePath,
-		);
-	}
-
-	private async handleGitDiff(
-		ws: WebSocket,
-		path: string,
-		scope: "unstaged" | "staged" | "full" = "full",
-		workspacePath?: string,
-	): Promise<void> {
-		await runGitDiffWorkflow(
-			{
-				ensureRuntimeReady: () => this.ensureRuntimeReady(),
-				refreshGitContext: () => this.runtime.refreshGitContext(),
-				getGitOps: () => this.getGitOps(),
-				sendMessage: (socket, message) => this.sendMessage(socket, message as ServerMessage),
-				logError: (message, error) => this.logError(message, error),
-			},
-			{ ws, path, scope, workspacePath },
 		);
 	}
 

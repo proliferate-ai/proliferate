@@ -1439,19 +1439,6 @@ export const sessions = pgTable(
 		// V1 operator status: active | waiting_for_approval | needs_input | ready_for_review | errored | done
 		operatorStatus: text("operator_status").default("active").notNull(),
 
-		// V2 canonical session state model
-		// sandbox_state: provisioning | running | paused | terminated | failed
-		sandboxState: text("sandbox_state").default("provisioning").notNull(),
-		// agent_state: iterating | waiting_input | waiting_approval | done | errored
-		agentState: text("agent_state").default("iterating").notNull(),
-		// terminal_state: succeeded | failed | cancelled | null
-		terminalState: text("terminal_state"),
-		// normalized state reason (manual_pause, inactivity, approval_required, etc.)
-		stateReason: text("state_reason"),
-		stateUpdatedAt: timestamp("state_updated_at", { withTimezone: true, mode: "date" })
-			.defaultNow()
-			.notNull(),
-
 		// V1 visibility: private | shared | org
 		visibility: text("visibility").default("private").notNull(),
 
@@ -1606,22 +1593,6 @@ export const sessions = pgTable(
 			sql`operator_status = ANY (ARRAY['active'::text, 'waiting_for_approval'::text, 'needs_input'::text, 'ready_for_review'::text, 'errored'::text, 'done'::text])`,
 		),
 		check(
-			"sessions_sandbox_state_check",
-			sql`sandbox_state = ANY (ARRAY['provisioning'::text, 'running'::text, 'paused'::text, 'terminated'::text, 'failed'::text])`,
-		),
-		check(
-			"sessions_agent_state_check",
-			sql`agent_state = ANY (ARRAY['iterating'::text, 'waiting_input'::text, 'waiting_approval'::text, 'done'::text, 'errored'::text])`,
-		),
-		check(
-			"sessions_terminal_state_check",
-			sql`terminal_state IS NULL OR terminal_state = ANY (ARRAY['succeeded'::text, 'failed'::text, 'cancelled'::text])`,
-		),
-		check(
-			"sessions_state_reason_check",
-			sql`state_reason IS NULL OR state_reason = ANY (ARRAY['manual_pause'::text, 'inactivity'::text, 'approval_required'::text, 'orphaned'::text, 'snapshot_failed'::text, 'automation_completed'::text, 'credit_limit'::text, 'payment_failed'::text, 'overage_cap'::text, 'suspended'::text, 'cancelled_by_user'::text, 'runtime_error'::text])`,
-		),
-		check(
 			"sessions_visibility_v1_check",
 			sql`visibility = ANY (ARRAY['private'::text, 'shared'::text, 'org'::text])`,
 		),
@@ -1651,18 +1622,6 @@ export const sessions = pgTable(
 		index("idx_sessions_operator_status").using(
 			"btree",
 			table.operatorStatus.asc().nullsLast().op("text_ops"),
-		),
-		index("idx_sessions_sandbox_state").using(
-			"btree",
-			table.sandboxState.asc().nullsLast().op("text_ops"),
-		),
-		index("idx_sessions_agent_state").using(
-			"btree",
-			table.agentState.asc().nullsLast().op("text_ops"),
-		),
-		index("idx_sessions_terminal_state").using(
-			"btree",
-			table.terminalState.asc().nullsLast().op("text_ops"),
 		),
 		index("idx_sessions_worker").using("btree", table.workerId.asc().nullsLast().op("uuid_ops")),
 		index("idx_sessions_worker_run").using(
