@@ -11,17 +11,17 @@ import { getSandboxProvider } from "@proliferate/shared/providers";
 import { abortOpenCodeSession } from "../../../harness/coding/opencode/client";
 import type { GatewayEnv } from "../../../lib/env";
 import { cancelSessionExpiry } from "../../../operations/expiry/queue";
-import type { SessionRuntime } from "../../session-runtime";
 import type { BroadcastServerMessageCallback } from "../../shared/callbacks";
 import type { HubStatusCallback } from "../../shared/status";
 import { MigrationConfig, type MigrationState } from "../../shared/types";
+import type { RuntimeFacade } from "../runtime/contracts/runtime-facade";
 import type { EventProcessor } from "../runtime/event-processor";
 import { runWithMigrationLock } from "./lock";
 import { prepareForSnapshot } from "./snapshot-scrub";
 
 export interface MigrationControllerOptions {
 	sessionId: string;
-	runtime: SessionRuntime;
+	runtime: RuntimeFacade;
 	eventProcessor: EventProcessor;
 	broadcast: BroadcastServerMessageCallback;
 	broadcastStatus: HubStatusCallback;

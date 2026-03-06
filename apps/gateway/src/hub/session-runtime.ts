@@ -6,7 +6,7 @@
  */
 
 import { type Logger, createLogger } from "@proliferate/logger";
-import { billing, sessions } from "@proliferate/services";
+import { billing } from "@proliferate/services";
 import type {
 	AutoStartOutputEntry,
 	ConfigurationServiceCommand,
@@ -15,21 +15,32 @@ import type {
 	SandboxProviderType,
 } from "@proliferate/shared";
 import { getSandboxProvider } from "@proliferate/shared/providers";
-import { OpenCodeCodingHarnessAdapter } from "../harness/coding/opencode/adapter";
-import type {
-	CodingHarnessEventStreamHandle,
-	CodingHarnessPromptImage,
-} from "../harness/contracts/coding";
+import type { CodingHarnessPromptImage } from "../harness/contracts/coding";
 import { ClaudeManagerHarnessAdapter } from "../harness/manager/adapter";
 import type { GatewayEnv } from "../lib/env";
 import { scheduleSessionExpiry } from "../operations/expiry/queue";
 import { deriveSandboxMcpToken } from "../server/middleware/auth";
 import type { SandboxInfo } from "../types";
 import { waitForMigrationLockRelease } from "./session/migration/lock";
-import { connectCodingEventStream } from "./session/runtime/event-stream";
-import { waitForOpenCodeReady as waitForOpenCodeReadyHelper } from "./session/runtime/opencode-ready";
-import { type SessionContext, loadSessionContext } from "./session/runtime/session-context-store";
-import { withStepTiming } from "./session/runtime/timing";
+import {
+	loadSessionRuntimeContext,
+	splitSessionContext,
+} from "./session/runtime/context/context-loader";
+import {
+	type SessionRuntimeContext,
+	toLegacySessionContext,
+} from "./session/runtime/context/context-types";
+import type { RuntimeDriver } from "./session/runtime/contracts/runtime-driver";
+import type { RuntimeFacade } from "./session/runtime/contracts/runtime-facade";
+import { CodingRuntimeDriver } from "./session/runtime/drivers/coding-runtime-driver";
+import { selectRuntimeDriver } from "./session/runtime/drivers/driver-selector";
+import { ManagerRuntimeDriver } from "./session/runtime/drivers/manager-runtime-driver";
+import type { SessionContext } from "./session/runtime/session-context-store";
+import { clearRuntimePointers } from "./session/runtime/state/state-reconciler";
+import {
+	persistPreviewUrl,
+	persistRuntimeReady,
+} from "./session/runtime/write-authority/runtime-writers";
 import type {
 	BroadcastServerMessageCallback,
 	DisconnectCallback,
@@ -59,34 +70,30 @@ export interface SessionRuntimeOptions {
 	onBroadcast?: BroadcastServerMessageCallback;
 }
 
-export class SessionRuntime {
+export class SessionRuntime implements RuntimeFacade {
 	private readonly env: GatewayEnv;
 	private readonly sessionId: string;
-	private context: SessionContext;
+	private runtimeContext: SessionRuntimeContext;
 	private readonly logger: Logger;
 
-	private readonly codingHarness: OpenCodeCodingHarnessAdapter;
 	private readonly managerHarness: ClaudeManagerHarnessAdapter;
+	private readonly codingDriver: CodingRuntimeDriver;
+	private readonly managerDriver: ManagerRuntimeDriver;
+	private runtimeDriver: RuntimeDriver;
 	private readonly onEvent: SessionRuntimeOptions["onEvent"];
 	private readonly onStatus: SessionRuntimeOptions["onStatus"];
 	private readonly onBroadcast?: SessionRuntimeOptions["onBroadcast"];
 	private readonly onDisconnect: SessionRuntimeOptions["onDisconnect"];
 
 	private provider: SandboxProvider | null = null;
-	private openCodeUrl: string | null = null;
-	private previewUrl: string | null = null;
-	private openCodeSessionId: string | null = null;
-	private sandboxExpiresAt: number | null = null;
 	private lifecycleStartTime = 0;
-	private eventStreamHandle: CodingHarnessEventStreamHandle | null = null;
-	private eventStreamConnected = false;
 
 	private ensureReadyPromise: Promise<void> | null = null;
 
 	constructor(options: SessionRuntimeOptions) {
 		this.env = options.env;
 		this.sessionId = options.sessionId;
-		this.context = options.context;
+		this.runtimeContext = splitSessionContext(options.context);
 		this.logger = createLogger({ service: "gateway" }).child({
 			module: "runtime",
 			sessionId: options.sessionId,
@@ -95,8 +102,13 @@ export class SessionRuntime {
 		this.onStatus = options.onStatus;
 		this.onBroadcast = options.onBroadcast;
 		this.onDisconnect = options.onDisconnect;
-		this.codingHarness = new OpenCodeCodingHarnessAdapter();
 		this.managerHarness = new ClaudeManagerHarnessAdapter(this.logger);
+		this.codingDriver = new CodingRuntimeDriver();
+		this.managerDriver = new ManagerRuntimeDriver(this.managerHarness);
+		this.runtimeDriver = selectRuntimeDriver(this.runtimeContext.config, {
+			coding: this.codingDriver,
+			manager: this.managerDriver,
+		});
 	}
 
 	private logLatency(event: string, data?: Record<string, unknown>): void {
@@ -123,7 +135,7 @@ export class SessionRuntime {
 	// ============================================
 
 	getContext(): SessionContext {
-		return this.context;
+		return toLegacySessionContext(this.runtimeContext);
 	}
 
 	/**
@@ -131,65 +143,47 @@ export class SessionRuntime {
 	 * newly-resolved integration tokens and latest user identity.
 	 */
 	async refreshGitContext(): Promise<void> {
-		const refreshed = await loadSessionContext(this.env, this.sessionId);
-		this.context.repos = refreshed.repos;
-		this.context.gitIdentity = refreshed.gitIdentity;
+		const refreshed = await loadSessionRuntimeContext(this.env, this.sessionId);
+		this.runtimeContext.config = {
+			...this.runtimeContext.config,
+			repos: refreshed.config.repos,
+			gitIdentity: refreshed.config.gitIdentity,
+		};
 	}
 
 	getOpenCodeUrl(): string | null {
-		return this.openCodeUrl;
+		return this.runtimeContext.live.openCodeUrl;
 	}
 
 	getOpenCodeSessionId(): string | null {
-		return this.openCodeSessionId;
+		return this.runtimeContext.live.openCodeSessionId;
 	}
 
 	async sendPrompt(content: string, images?: CodingHarnessPromptImage[]): Promise<void> {
-		if (!this.openCodeUrl || !this.openCodeSessionId) {
-			throw new Error("Agent session unavailable");
-		}
-		await this.codingHarness.sendPrompt({
-			baseUrl: this.openCodeUrl,
-			sessionId: this.openCodeSessionId,
-			content,
-			images,
-		});
+		await this.runtimeDriver.sendPrompt(content, images);
 	}
 
 	async interruptCurrentRun(): Promise<void> {
-		if (!this.openCodeUrl || !this.openCodeSessionId) {
-			return;
-		}
-		await this.codingHarness.interrupt({
-			baseUrl: this.openCodeUrl,
-			sessionId: this.openCodeSessionId,
-		});
+		await this.runtimeDriver.interrupt();
 	}
 
 	async collectOutputs(): Promise<Message[]> {
-		if (!this.openCodeUrl || !this.openCodeSessionId) {
-			throw new Error("Missing agent session info");
-		}
-		const result = await this.codingHarness.collectOutputs({
-			baseUrl: this.openCodeUrl,
-			sessionId: this.openCodeSessionId,
-		});
-		return result.messages;
+		return this.runtimeDriver.collectOutputs();
 	}
 
 	getPreviewUrl(): string | null {
-		return this.previewUrl;
+		return this.runtimeContext.live.previewUrl;
 	}
 
 	getSandboxExpiresAt(): number | null {
-		return this.sandboxExpiresAt;
+		return this.runtimeContext.live.sandboxExpiresAt;
 	}
 
 	isReady(): boolean {
-		if (this.isManagerSessionKind()) {
-			return Boolean(this.provider && this.context.session.sandbox_id);
-		}
-		return Boolean(this.openCodeUrl && this.openCodeSessionId && this.eventStreamConnected);
+		return this.runtimeDriver.isReady({
+			config: this.runtimeContext.config,
+			live: this.runtimeContext.live,
+		});
 	}
 
 	isConnecting(): boolean {
@@ -197,19 +191,15 @@ export class SessionRuntime {
 	}
 
 	hasOpenCodeUrl(): boolean {
-		return Boolean(this.openCodeUrl);
+		return Boolean(this.runtimeContext.live.openCodeUrl);
 	}
 
 	isSseConnected(): boolean {
-		return this.eventStreamConnected;
+		return this.runtimeContext.live.eventStreamConnected;
 	}
 
 	private isManagerSessionKind(): boolean {
-		return this.context.session.kind === "manager";
-	}
-
-	private getHarnessFamily(): "manager-claude" | "coding-opencode" {
-		return this.isManagerSessionKind() ? "manager-claude" : "coding-opencode";
+		return this.runtimeContext.config.kind === "manager";
 	}
 
 	// ============================================
@@ -217,7 +207,7 @@ export class SessionRuntime {
 	// ============================================
 
 	getProviderAndSandboxId(): { provider: SandboxProvider; sandboxId: string } | null {
-		const sandboxId = this.context.session.sandbox_id;
+		const sandboxId = this.runtimeContext.live.session.sandbox_id;
 		if (!this.provider || !sandboxId) return null;
 		return { provider: this.provider, sandboxId };
 	}
@@ -234,20 +224,7 @@ export class SessionRuntime {
 		runId: string,
 		overrideCommands?: ConfigurationServiceCommand[],
 	): Promise<AutoStartOutputEntry[]> {
-		const sandboxId = this.context.session.sandbox_id;
-		const commands = overrideCommands?.length ? overrideCommands : this.context.serviceCommands;
-
-		if (!this.provider?.testServiceCommands || !sandboxId) {
-			throw new Error("Runtime not ready");
-		}
-		if (!commands?.length) {
-			return [];
-		}
-
-		return this.provider.testServiceCommands(sandboxId, commands, {
-			timeoutMs: 10_000,
-			runId,
-		});
+		return this.runtimeDriver.testAutoStartCommands(runId, overrideCommands);
 	}
 
 	async triggerManagerWakeCycle(): Promise<void> {
@@ -261,7 +238,7 @@ export class SessionRuntime {
 			const { generateSessionAPIKey } = await import("@proliferate/shared/llm-proxy");
 			managerApiKey = await generateSessionAPIKey(
 				this.sessionId,
-				this.context.session.organization_id,
+				this.runtimeContext.config.organizationId,
 			);
 			managerProxyUrl = this.env.llmProxyUrl;
 		}
@@ -269,8 +246,8 @@ export class SessionRuntime {
 		const internalGatewayUrl = `http://localhost:${this.env.port}`;
 		await this.managerHarness.resume({
 			managerSessionId: this.sessionId,
-			organizationId: this.context.session.organization_id,
-			workerId: this.context.session.worker_id,
+			organizationId: this.runtimeContext.config.organizationId,
+			workerId: this.runtimeContext.live.session.worker_id,
 			gatewayUrl: internalGatewayUrl,
 			serviceToken: this.env.serviceToken,
 			anthropicApiKey: managerApiKey,
@@ -299,10 +276,10 @@ export class SessionRuntime {
 		this.log("Starting runtime lifecycle");
 		this.logLatency("runtime.ensure_ready.start", {
 			skipMigrationLock: Boolean(options?.skipMigrationLock),
-			hasSandboxId: Boolean(this.context.session.sandbox_id),
-			hasSnapshotId: Boolean(this.context.session.snapshot_id),
-			hasOpenCodeUrl: Boolean(this.openCodeUrl),
-			hasOpenCodeSessionId: Boolean(this.openCodeSessionId),
+			hasSandboxId: Boolean(this.runtimeContext.live.session.sandbox_id),
+			hasSnapshotId: Boolean(this.runtimeContext.live.session.snapshot_id),
+			hasOpenCodeUrl: Boolean(this.runtimeContext.live.openCodeUrl),
+			hasOpenCodeSessionId: Boolean(this.runtimeContext.live.openCodeSessionId),
 		});
 
 		this.ensureReadyPromise = this.doEnsureRuntimeReady(options);
@@ -316,29 +293,20 @@ export class SessionRuntime {
 	getSandboxInfo(): SandboxInfo {
 		return {
 			sessionId: this.sessionId,
-			sandboxId: this.context.session.sandbox_id || null,
-			status: this.context.session.status || "unknown",
-			previewUrl: this.previewUrl,
-			expiresAt: this.sandboxExpiresAt,
+			sandboxId: this.runtimeContext.live.session.sandbox_id || null,
+			status: this.runtimeContext.live.session.status || "unknown",
+			previewUrl: this.runtimeContext.live.previewUrl,
+			expiresAt: this.runtimeContext.live.sandboxExpiresAt,
 		};
 	}
 
 	disconnectSse(): void {
-		this.eventStreamHandle?.disconnect();
-		this.eventStreamHandle = null;
-		this.eventStreamConnected = false;
+		this.runtimeDriver.disconnectStream();
 	}
 
 	resetSandboxState(): void {
-		this.eventStreamHandle?.disconnect();
-		this.eventStreamHandle = null;
-		this.eventStreamConnected = false;
-		this.openCodeUrl = null;
-		this.previewUrl = null;
-		this.sandboxExpiresAt = null;
-		this.openCodeSessionId = null;
-		this.context.session.sandbox_id = null;
-		this.context.session.sandbox_expires_at = null;
+		this.runtimeDriver.disconnectStream();
+		clearRuntimePointers(this.runtimeContext.live);
 	}
 
 	// ============================================
@@ -358,38 +326,43 @@ export class SessionRuntime {
 			// Reload context fresh from database
 			const contextStartMs = Date.now();
 			this.log("Loading session context...");
-			this.context = await loadSessionContext(this.env, this.sessionId);
+			this.runtimeContext = await loadSessionRuntimeContext(this.env, this.sessionId);
+			const { config, live } = this.runtimeContext;
+			this.runtimeDriver = selectRuntimeDriver(config, {
+				coding: this.codingDriver,
+				manager: this.managerDriver,
+			});
 			this.logLatency("runtime.ensure_ready.load_context", {
 				durationMs: Date.now() - contextStartMs,
-				configurationId: this.context.session.configuration_id,
-				repoCount: this.context.repos.length,
-				hasSandbox: Boolean(this.context.session.sandbox_id),
-				hasSnapshot: Boolean(this.context.session.snapshot_id),
+				configurationId: live.session.configuration_id,
+				repoCount: config.repos.length,
+				hasSandbox: Boolean(live.session.sandbox_id),
+				hasSnapshot: Boolean(live.session.snapshot_id),
 			});
 			this.log("Session context loaded", {
-				configurationId: this.context.session.configuration_id,
-				repoCount: this.context.repos.length,
-				primaryRepo: this.context.primaryRepo.github_repo_name,
-				hasSandandbox: Boolean(this.context.session.sandbox_id),
-				hasSnapshot: Boolean(this.context.session.snapshot_id),
+				configurationId: live.session.configuration_id,
+				repoCount: config.repos.length,
+				primaryRepo: config.primaryRepo.github_repo_name,
+				hasSandandbox: Boolean(live.session.sandbox_id),
+				hasSnapshot: Boolean(live.session.snapshot_id),
 			});
 			this.log(
-				`Session context loaded: status=${this.context.session.status ?? "null"} sandboxId=${this.context.session.sandbox_id ?? "null"} snapshotId=${this.context.session.snapshot_id ?? "null"} clientType=${this.context.session.client_type ?? "null"}`,
+				`Session context loaded: status=${live.session.status ?? "null"} sandboxId=${live.session.sandbox_id ?? "null"} snapshotId=${live.session.snapshot_id ?? "null"} clientType=${live.session.client_type ?? "null"}`,
 			);
-			const harnessFamily = this.getHarnessFamily();
+			const harnessFamily = config.kind === "manager" ? "manager-claude" : "coding-opencode";
 			this.log("Selected harness family", {
 				harnessFamily,
-				sessionKind: this.context.session.kind ?? "unknown",
+				sessionKind: config.kind ?? "unknown",
 			});
 
 			// Abort auto-reconnect when session has transitioned to a terminal/non-running state
 			// while we were waiting on locks/loading context.
 			if (
 				options?.reason === "auto_reconnect" &&
-				(this.context.session.status === "paused" || this.context.session.status === "stopped")
+				(live.session.status === "paused" || live.session.status === "stopped")
 			) {
 				this.log("Auto-reconnect aborted: session is no longer running", {
-					status: this.context.session.status,
+					status: live.session.status,
 				});
 				return;
 			}
@@ -397,7 +370,7 @@ export class SessionRuntime {
 			// Billing gate: deny resume/cold-start when org is blocked or exhausted.
 			// Uses "session_resume" which skips credit minimum but enforces state-level checks.
 			// Already-running sessions skip this entirely (ensureRuntimeReady returns early).
-			const orgId = this.context.session.organization_id;
+			const orgId = config.organizationId;
 			if (orgId) {
 				const gateResult = await billing.checkBillingGateForOrg(orgId, "session_resume");
 				if (!gateResult.allowed) {
@@ -408,10 +381,10 @@ export class SessionRuntime {
 				}
 			}
 
-			const hasSandbox = Boolean(this.context.session.sandbox_id);
+			const hasSandbox = Boolean(live.session.sandbox_id);
 			this.onStatus(hasSandbox ? "resuming" : "creating");
 
-			const providerType = this.context.session.sandbox_provider as SandboxProviderType | undefined;
+			const providerType = live.session.sandbox_provider as SandboxProviderType | undefined;
 			const provider = getSandboxProvider(providerType);
 			this.provider = provider;
 			this.log("Using sandbox provider", { provider: provider.type });
@@ -419,7 +392,7 @@ export class SessionRuntime {
 			// Derive per-session sandbox-mcp auth token and merge into env vars
 			const sandboxMcpToken = deriveSandboxMcpToken(this.env.serviceToken, this.sessionId);
 			const envVarsWithToken = {
-				...this.context.envVars,
+				...config.envVars,
 				SANDBOX_MCP_AUTH_TOKEN: sandboxMcpToken,
 				PROLIFERATE_GATEWAY_URL: this.env.gatewayUrl,
 				PROLIFERATE_SESSION_ID: this.sessionId,
@@ -428,17 +401,17 @@ export class SessionRuntime {
 			const ensureSandboxStartMs = Date.now();
 			const result = await provider.ensureSandbox({
 				sessionId: this.sessionId,
-				sessionType: this.context.session.session_type as "coding" | "setup" | null,
-				repos: this.context.repos,
-				branch: this.context.primaryRepo.default_branch || "main",
+				sessionType: live.session.session_type as "coding" | "setup" | null,
+				repos: config.repos,
+				branch: config.primaryRepo.default_branch || "main",
 				envVars: envVarsWithToken,
-				systemPrompt: this.context.systemPrompt,
-				snapshotId: this.context.session.snapshot_id || undefined,
-				agentConfig: this.context.agentConfig,
-				currentSandboxId: this.context.session.sandbox_id || undefined,
-				snapshotHasDeps: this.context.snapshotHasDeps,
-				serviceCommands: this.context.serviceCommands,
-				secretFileWrites: this.context.secretFileWrites,
+				systemPrompt: config.systemPrompt,
+				snapshotId: live.session.snapshot_id || undefined,
+				agentConfig: config.agentConfig,
+				currentSandboxId: live.session.sandbox_id || undefined,
+				snapshotHasDeps: config.snapshotHasDeps,
+				serviceCommands: config.serviceCommands,
+				secretFileWrites: config.secretFileWrites,
 			});
 			this.logLatency("runtime.ensure_ready.provider.ensure_sandbox", {
 				provider: provider.type,
@@ -450,17 +423,12 @@ export class SessionRuntime {
 				hasExpiresAt: Boolean(result.expiresAt),
 			});
 
-			this.openCodeUrl = result.tunnelUrl;
-			this.previewUrl = result.previewUrl;
-			const previousSandboxId = this.context.session.sandbox_id ?? null;
-			const storedExpiry = this.context.session.sandbox_expires_at
-				? Date.parse(this.context.session.sandbox_expires_at)
-				: null;
-			const storedExpiryMs =
-				typeof storedExpiry === "number" && Number.isFinite(storedExpiry) ? storedExpiry : null;
+			const previousSandboxId = live.session.sandbox_id ?? null;
+			const storedExpiryMs = live.sandboxExpiresAt;
 			const canReuseStoredExpiry = result.recovered && previousSandboxId === result.sandboxId;
 			const resolvedExpiryMs = result.expiresAt ?? (canReuseStoredExpiry ? storedExpiryMs : null);
-			this.sandboxExpiresAt = resolvedExpiryMs;
+			const resolvedOpenCodeUrl = result.tunnelUrl ?? live.session.open_code_tunnel_url ?? null;
+			const resolvedPreviewUrl = result.previewUrl ?? live.session.preview_tunnel_url ?? null;
 			this.log("Resolved sandbox expiry", {
 				previousSandboxId,
 				sandboxId: result.sandboxId,
@@ -476,163 +444,64 @@ export class SessionRuntime {
 
 			this.log(result.recovered ? "Sandbox recovered" : "Sandbox created", {
 				sandboxId: result.sandboxId,
-				tunnelUrl: this.openCodeUrl,
-				previewUrl: this.previewUrl,
-				expiresAt: this.sandboxExpiresAt ? new Date(this.sandboxExpiresAt).toISOString() : null,
+				tunnelUrl: resolvedOpenCodeUrl,
+				previewUrl: resolvedPreviewUrl,
+				expiresAt: resolvedExpiryMs ? new Date(resolvedExpiryMs).toISOString() : null,
 				recovered: result.recovered,
 			});
 
-			// Git Freshness Post-Thaw: pull latest changes after restoring from snapshot.
-			// The repo may be stale if time has passed since the snapshot was taken.
-			if (this.context.session.snapshot_id && provider.execCommand) {
-				try {
-					const gitStartMs = Date.now();
-					const gitResult = await provider.execCommand(
-						result.sandboxId,
-						["bash", "-c", "cd /home/user/workspace && git pull --ff-only 2>&1 || true"],
-						{ timeoutMs: 30_000 },
-					);
-					this.logLatency("runtime.ensure_ready.git_freshness", {
-						durationMs: Date.now() - gitStartMs,
-						exitCode: gitResult.exitCode,
-					});
-				} catch (err) {
-					this.logger.warn({ err }, "Git freshness pull failed (non-fatal)");
-				}
-			}
-
-			// Update session with sandbox info
 			const updateStartMs = Date.now();
-			await sessions.updateSession(this.sessionId, {
+			await persistRuntimeReady({
+				sessionId: this.sessionId,
+				live,
 				sandboxId: result.sandboxId,
-				status: "running",
-				pauseReason: null,
-				openCodeTunnelUrl: result.tunnelUrl,
-				previewTunnelUrl: result.previewUrl,
+				openCodeTunnelUrl: resolvedOpenCodeUrl,
+				previewTunnelUrl: resolvedPreviewUrl,
 				sandboxExpiresAt: resolvedExpiryMs,
-				...(provider.supportsAutoPause &&
-					!this.context.session.snapshot_id && { snapshotId: result.sandboxId }),
+				autoPauseSnapshotId:
+					provider.supportsAutoPause && !live.session.snapshot_id ? result.sandboxId : undefined,
 			});
 			this.logLatency("runtime.ensure_ready.db.update_session", {
 				durationMs: Date.now() - updateStartMs,
 			});
 
-			// Update in-memory context
-			this.context.session.sandbox_id = result.sandboxId;
-			this.context.session.sandbox_expires_at = resolvedExpiryMs
-				? new Date(resolvedExpiryMs).toISOString()
-				: null;
-			if (provider.supportsAutoPause && !this.context.session.snapshot_id) {
-				this.context.session.snapshot_id = result.sandboxId;
-			}
-
-			// Fallback to stored URLs if provider didn't return them
-			this.openCodeUrl = this.openCodeUrl || this.context.session.open_code_tunnel_url || null;
-			this.previewUrl = this.previewUrl || this.context.session.preview_tunnel_url || null;
-
 			// Schedule expiry snapshot/migration
 			const expiryScheduleStartMs = Date.now();
-			scheduleSessionExpiry(this.env, this.sessionId, this.sandboxExpiresAt).catch((err) => {
+			scheduleSessionExpiry(this.env, this.sessionId, live.sandboxExpiresAt).catch((err) => {
 				this.logError("Failed to schedule expiry job", err);
 			});
 			this.logLatency("runtime.ensure_ready.expiry.schedule", {
 				durationMs: Date.now() - expiryScheduleStartMs,
-				expiresAt: this.sandboxExpiresAt ? new Date(this.sandboxExpiresAt).toISOString() : null,
+				expiresAt: live.sandboxExpiresAt ? new Date(live.sandboxExpiresAt).toISOString() : null,
 			});
 
-			if (this.previewUrl && this.onBroadcast) {
-				this.onBroadcast({ type: "preview_url", payload: { url: this.previewUrl } });
-				await sessions.updateSession(this.sessionId, { previewTunnelUrl: this.previewUrl });
-			}
-
-			if (harnessFamily === "manager-claude") {
-				const managerHarnessStartMs = Date.now();
-
-				// Resolve API key + proxy for the manager harness.
-				// When the proxy is required, generate a virtual key; otherwise use direct API key.
-				let managerApiKey = this.env.anthropicApiKey;
-				let managerProxyUrl: string | undefined;
-				if (this.env.llmProxyRequired && this.env.llmProxyUrl) {
-					const { generateSessionAPIKey } = await import("@proliferate/shared/llm-proxy");
-					managerApiKey = await generateSessionAPIKey(
-						this.sessionId,
-						this.context.session.organization_id,
-					);
-					managerProxyUrl = this.env.llmProxyUrl;
-				}
-
-				// Use the local URL for internal HTTP calls (eager-start, message, cancel)
-				// since the manager harness runs in the same process as the gateway.
-				const internalGatewayUrl = `http://localhost:${this.env.port}`;
-
-				const harnessInput = {
-					managerSessionId: this.sessionId,
-					organizationId: this.context.session.organization_id,
-					workerId: this.context.session.worker_id,
-					gatewayUrl: internalGatewayUrl,
-					serviceToken: this.env.serviceToken,
-					anthropicApiKey: managerApiKey,
-					llmProxyUrl: managerProxyUrl,
-				};
-				if (options?.reason === "auto_reconnect") {
-					await this.managerHarness.resume(harnessInput);
-				} else {
-					await this.managerHarness.start(harnessInput);
-				}
-				this.logLatency("runtime.ensure_ready.manager_harness.start", {
-					durationMs: Date.now() - managerHarnessStartMs,
+			if (live.previewUrl && this.onBroadcast) {
+				this.onBroadcast({ type: "preview_url", payload: { url: live.previewUrl } });
+				await persistPreviewUrl({
+					sessionId: this.sessionId,
+					live,
+					previewTunnelUrl: live.previewUrl,
 				});
-
-				// Manager sessions do not run OpenCode; clear coding-session state.
-				this.eventStreamHandle?.disconnect();
-				this.eventStreamHandle = null;
-				this.eventStreamConnected = false;
-				this.openCodeSessionId = null;
-
-				this.onStatus("running");
-				this.log("Runtime lifecycle complete - manager harness ready");
-				this.logLatency("runtime.ensure_ready.complete");
-				return;
 			}
-
-			if (!this.openCodeUrl) {
-				throw new Error("Missing agent tunnel URL");
-			}
-
-			// Wait for OpenCode to become reachable before session operations.
-			// After sandbox recovery the tunnel may resolve before OpenCode is serving.
-			await withStepTiming("runtime.ensure_ready.opencode_ready", this.logLatency.bind(this), () =>
-				this.waitForOpenCodeReady(),
-			);
-
-			// Ensure OpenCode session exists
-			const ensureOpenCodeStartMs = Date.now();
-			await this.ensureOpenCodeSession();
-			this.logLatency("runtime.ensure_ready.opencode_session.ensure", {
-				durationMs: Date.now() - ensureOpenCodeStartMs,
-				hasOpenCodeSessionId: Boolean(this.openCodeSessionId),
+			await this.runtimeDriver.activate({
+				sessionId: this.sessionId,
+				env: this.env,
+				logger: this.logger,
+				provider,
+				config,
+				live,
+				options,
+				log: (message, data) => this.log(message, data),
+				logError: (message, error) => this.logError(message, error),
+				logLatency: (event, data) => this.logLatency(event, data),
+				onRuntimeEvent: (event) => this.onEvent(event),
+				onDisconnect: (reason) => this.handleSseDisconnect(reason),
+				setEventStreamHandle: () => {},
+				onBroadcast: this.onBroadcast,
 			});
-
-			// Connect to daemon event stream via harness adapter
-			this.eventStreamHandle?.disconnect();
-			this.eventStreamHandle = await withStepTiming(
-				"runtime.ensure_ready.sse.connect",
-				this.logLatency.bind(this),
-				() =>
-					connectCodingEventStream({
-						codingHarness: this.codingHarness,
-						openCodeUrl: this.openCodeUrl as string,
-						env: this.env,
-						logger: this.logger,
-						onDisconnect: (reason) => this.handleSseDisconnect(reason),
-						onEvent: (event) => this.onEvent(event),
-						onLog: (message, data) => this.log(message, data),
-					}),
-			);
-			this.eventStreamConnected = true;
 
 			this.onStatus("running");
-			this.log("Runtime lifecycle complete - status: running");
+			this.log("Runtime lifecycle complete - runtime driver active", { harnessFamily });
 			this.logLatency("runtime.ensure_ready.complete");
 		} catch (err) {
 			const errorMessage = err instanceof Error ? err.message : "Unknown error";
@@ -643,62 +512,18 @@ export class SessionRuntime {
 		}
 	}
 
-	private async ensureOpenCodeSession(): Promise<void> {
-		if (!this.openCodeUrl) {
-			throw new Error("Agent URL missing");
-		}
-
-		const storedId = this.openCodeSessionId ?? this.context.session.coding_agent_session_id;
-		const resumeStartMs = Date.now();
-		const resumed = await this.codingHarness.resume({
-			baseUrl: this.openCodeUrl,
-			sessionId: storedId,
-		});
-		this.logLatency("runtime.opencode_session.resume", {
-			durationMs: Date.now() - resumeStartMs,
-			mode: resumed.mode,
-			hadStoredId: Boolean(storedId),
-		});
-		this.log("OpenCode session resolved via harness adapter", {
-			sessionId: resumed.sessionId,
-			mode: resumed.mode,
-		});
-
-		this.openCodeSessionId = resumed.sessionId;
-		this.context.session.coding_agent_session_id = resumed.sessionId;
-		await sessions.updateSession(this.sessionId, { codingAgentSessionId: resumed.sessionId });
-	}
-
-	/**
-	 * Poll the OpenCode session-list endpoint until it responds.
-	 * Prevents downstream 5s-timeout failures when the tunnel is up
-	 * but OpenCode hasn't started serving yet (common after snapshot restore).
-	 */
-	private async waitForOpenCodeReady(): Promise<void> {
-		if (!this.openCodeUrl) {
-			throw new Error("OpenCode URL missing");
-		}
-		await waitForOpenCodeReadyHelper({
-			openCodeUrl: this.openCodeUrl,
-			log: (message, data) => this.log(message, data),
-			logError: (message, error) => this.logError(message, error),
-			loggerWarn: (data, message) => this.logger.warn(data, message),
-		});
-	}
-
 	// ============================================
 	// SSE handling
 	// ============================================
 
 	private handleSseDisconnect(reason: string): void {
-		this.eventStreamConnected = false;
-		this.eventStreamHandle = null;
+		this.runtimeContext.live.eventStreamConnected = false;
 		this.log("SSE disconnected", { reason });
 		this.logLatency("runtime.sse.disconnect", { reason });
 		this.log("SSE disconnected; preserving OpenCode session identity for reconnect", {
 			reason,
-			openCodeUrl: this.openCodeUrl,
-			openCodeSessionId: this.openCodeSessionId,
+			openCodeUrl: this.runtimeContext.live.openCodeUrl,
+			openCodeSessionId: this.runtimeContext.live.openCodeSessionId,
 		});
 		this.onDisconnect(reason);
 	}

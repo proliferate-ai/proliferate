@@ -83,9 +83,11 @@ Reference: `apps/gateway/src/hub/session-hub.ts`
 `SessionRuntime` owns the actual runtime state machine.
 
 - Single-flight `ensureRuntimeReady()` coalesces concurrent callers.
-- Context is reloaded from DB on readiness attempts.
+- Context is reloaded from DB on readiness attempts, then split into immutable `SessionConfig` + mutable `SessionLiveState`.
 - Runtime waits migration lock release (unless skip flag during controlled migration re-init).
 - Runtime always goes through provider abstraction (`ensureSandbox`) instead of direct create calls.
+- Harness behavior is delegated through runtime drivers (`CodingRuntimeDriver`, `ManagerRuntimeDriver`) selected from session kind.
+- Durable runtime-owned writes flow through write-authority helpers in `session/runtime/write-authority/`.
 
 Reference: `apps/gateway/src/hub/session-runtime.ts`
 
@@ -140,6 +142,30 @@ Authoritative transition intent:
 | Failure terminal | `sandbox_state=failed`, `agent_state=errored`, `terminal_state=failed`, `state_reason=runtime_error\|snapshot_failed` |
 | Cancel terminal | `sandbox_state=terminated`, `agent_state=done`, `terminal_state=cancelled`, `state_reason=cancelled_by_user` |
 
+### Session Write-Authority Matrix (Current)
+This matrix defines who is allowed to mutate critical session/runtime state. If a write path is not listed, treat it as a layering violation and refactor to an owner method.
+
+| Field / Side Effect | Canonical Owner | Allowed Writers | Lock / Lease Requirement | Storage Class |
+| --- | --- | --- | --- | --- |
+| `sessions.sandbox_id` | Runtime lifecycle owner (`SessionRuntime`), migration owner (`MigrationController`) | `SessionRuntime.ensureRuntimeReady()`, migration/idle/orphan CAS paths | Owner lease for runtime writes; migration lock + CAS for migration/idle/orphan writes | Durable DB + mirrored in-memory context |
+| `sessions.snapshot_id` | Snapshot/migration lifecycle | `runSaveSnapshotWorkflow`, migration/idle pause paths, web pause/snapshot handlers | Migration lock + CAS for automated paths; explicit route ownership for manual snapshot APIs | Durable DB + mirrored in-memory context |
+| `sessions.coding_agent_session_id` | Coding harness lifecycle (`CodingRuntimeDriver`) | `CodingRuntimeDriver.activate()` via `persistCodingSessionId()` | Owner lease required through hub runtime gate | Durable DB + mirrored in-memory context |
+| `sessions.open_code_tunnel_url` | Runtime lifecycle (`SessionRuntime`) | `SessionRuntime.ensureRuntimeReady()` | Owner lease via `SessionHub.ensureRuntimeReady()` | Durable DB + mirrored in-memory context |
+| `sessions.preview_tunnel_url` | Runtime lifecycle (`SessionRuntime`) | `SessionRuntime.ensureRuntimeReady()` (provider return / fallback) | Owner lease via runtime gate | Durable DB + mirrored in-memory context |
+| `sessions.sandbox_expires_at` | Runtime + migration lifecycle | `SessionRuntime.ensureRuntimeReady()`, migration/idle pause flows | Owner lease for runtime path; migration lock + CAS for migration/idle/orphan | Durable DB + mirrored in-memory context |
+| Canonical status object (`sandbox_state`, `agent_state`, `terminal_state`, `state_reason`, `state_updated_at`) | Lifecycle projection owner (`session/session-lifecycle.ts`) | Runtime/hub lifecycle transitions through projection helpers and bounded route handlers | Transition-specific: owner lease for runtime transitions; migration lock + CAS for migration transitions | Durable DB projection |
+| Legacy status fields (`status`, `runtime_status`, `operator_status`, `pause_reason`) | Transitional compatibility layer | Same writers as canonical status owner until full migration | Same as canonical transition class | Durable DB projection |
+| Reconnect generation/attempt/timer | Hub reconnect controller | `reconnect-controller.ts` via `SessionHub` state adapters | In-memory only (no distributed lock) | In-memory only |
+| Idle activity state (`lastActivityAt`, `activeHttpToolCalls`, `lastKnownAgentIdleAt`, proxy connection set) | Hub idle controller | `idle-controller.ts` via `SessionHub` state adapters; tool/proxy route hooks | In-memory only; snapshot action itself requires migration lock | In-memory only |
+| Owner lease key `lease:owner:{sessionId}` | Lease controller | `owner-lease-controller.ts` (`acquire/renew/release`) | Redis lease semantics enforced by Lua/TTL | External ephemeral (Redis) |
+| Runtime lease key `lease:runtime:{sessionId}` | Runtime liveness path | `SessionHub.ensureRuntimeReady()`, owner lease renewal heartbeat, cleanup paths | Must correspond to active runtime ownership path | External ephemeral (Redis) |
+| `last_visible_update_at` / visibility touch side effect | Lifecycle projection helper | `touchLastVisibleUpdate()` on message completion and action transitions | No lease requirement; best-effort timestamp projection | Durable DB side effect |
+
+Notes:
+- `SessionContext` is a runtime cache, not a write-authority source. Durable writes must flow through owner services (`sessions.*`, migration CAS helpers, projection helpers).
+- Intercepted tool handlers must not mutate `runtime.getContext().session` directly unless that mutation is an explicit in-memory mirror of an already-successful durable owner write.
+- For `sandbox_id`/`snapshot_id` class fields, prefer CAS-wrapped helpers when a concurrent actor may exist.
+
 ### Gateway-Intercepted Tool Callbacks
 Intercepted tools execute through HTTP callbacks, not SSE interception.
 
@@ -187,6 +213,7 @@ Reference: `apps/gateway/src/server/middleware/errors/error-handler.ts`
 - **Migration lock**: Distributed Redis lock prevents concurrent migrations for the same session. Active expiry migrations use a 120s TTL to cover OpenCode stop + scrub/snapshot/re-apply + runtime bring-up critical path.
 - **Expiry triggers**: Hub schedules an in-process expiry timer (primary) plus a BullMQ job as a fallback for evicted hubs.
 - **Expiry timestamp source-of-truth**: Newly created sandboxes use provider-reported expiry only; stored DB expiry is reused only when recovering the same sandbox ID.
+- **Restore-time git freshness ownership**: restore/update freshness is provider-owned (`@proliferate/shared/providers/e2b`); runtime no longer performs a second restore-time `git pull`.
 - **Snapshot secret scrubbing**: All snapshot capture paths (`save_snapshot`, idle snapshot, expiry migration, web `sessions.pause`, web `sessions.snapshot`) run `proliferate env scrub` before capture when env-file spec is configured. Paths that continue running the same sandbox re-apply env files after capture; pause/stop paths skip re-apply.
 - **Scrub failure policy**: Manual snapshots use strict scrub mode (scrub failure aborts capture). Idle/expiry paths use best-effort scrub mode (log and continue) so pause/stop cleanup is not blocked by scrub command failures.
 - **Streaming backpressure**: Token batching (50-100ms) and slow-consumer disconnect based on `ws.bufferedAmount` thresholds.

@@ -56,6 +56,7 @@ import {
 	cancelReconnect as cancelReconnectState,
 	scheduleReconnect as scheduleReconnectState,
 } from "./session/reconnect/reconnect-controller";
+import type { RuntimeFacade } from "./session/runtime/contracts/runtime-facade";
 import { EventProcessor } from "./session/runtime/event-processor";
 import type { SessionContext, SessionRecord } from "./session/runtime/session-context-store";
 import { SessionTelemetry, extractPrUrls } from "./session/runtime/session-telemetry";
@@ -102,7 +103,7 @@ export class SessionHub {
 
 	// SSE and event processing
 	private readonly eventProcessor: EventProcessor;
-	private readonly runtime: SessionRuntime;
+	private readonly runtime: RuntimeFacade;
 
 	private lifecycleStartTime = 0;
 
