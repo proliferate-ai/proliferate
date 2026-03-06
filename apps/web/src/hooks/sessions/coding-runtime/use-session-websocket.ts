@@ -407,13 +407,11 @@ export function useSessionWebSocket({
 				return;
 			}
 
-			if (!wsWithDiff?.sendGetGitDiff) {
-				debugWs("git_diff.request_skipped", {
-					sessionId,
-					reason: "sendGetGitDiff not available on websocket client",
-				});
-				return;
-			}
+			debugWs("git_diff.request_skipped", {
+				sessionId,
+				reason: "sendGetGitDiff not available on websocket client",
+			});
+			return;
 		},
 		[sessionId],
 	);

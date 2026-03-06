@@ -75,6 +75,10 @@ interface FileRow {
 	priority: number;
 }
 
+function buildDiffCacheKey(workspacePath: string, scope: string, path: string): string {
+	return `${workspacePath}:${scope}:${path}`;
+}
+
 const IGNORED_GIT_PATH_PREFIXES = [".opencode/", ".proliferate/"] as const;
 const IGNORED_GIT_PATH_EXACT = ["opencode.json", ".opencode.json"] as const;
 
@@ -152,6 +156,7 @@ export function GitPanel({
 	const pollPending = useRef(false);
 	const pollInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 	const diffTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+	const diffRequestWorkspaceRef = useRef<Record<string, string>>({});
 	const [pollError, setPollError] = useState<string | null>(null);
 	const [changeScope, setChangeScope] = useState<ChangeScope>("working");
 	const [showPrComposer, setShowPrComposer] = useState(false);
@@ -168,6 +173,7 @@ export function GitPanel({
 	);
 
 	const resolvedWorkspacePath = workspaceOptions?.length ? selectedWorkspacePath : undefined;
+	const workspaceKey = resolvedWorkspacePath ?? ".";
 	const showWorkspaceSelector = (workspaceOptions?.length ?? 0) > 1;
 	const resetDiffState = useCallback(() => {
 		setLatestPrUrl(null);
@@ -176,6 +182,7 @@ export function GitPanel({
 			clearTimeout(timeout);
 		}
 		diffTimeouts.current.clear();
+		diffRequestWorkspaceRef.current = {};
 		setExpandedFiles({});
 		setDiffCache({});
 		setDiffErrors({});
@@ -290,7 +297,10 @@ export function GitPanel({
 
 	useEffect(() => {
 		if (!gitDiff) return;
-		const key = `${gitDiff.scope}:${gitDiff.path}`;
+		const requestKey = `${gitDiff.scope}:${gitDiff.path}`;
+		const responseWorkspaceKey = diffRequestWorkspaceRef.current[requestKey] ?? workspaceKey;
+		delete diffRequestWorkspaceRef.current[requestKey];
+		const key = buildDiffCacheKey(responseWorkspaceKey, gitDiff.scope, gitDiff.path);
 		const pendingTimeout = diffTimeouts.current.get(key);
 		if (pendingTimeout) {
 			clearTimeout(pendingTimeout);
@@ -308,7 +318,7 @@ export function GitPanel({
 		} else if (!gitDiff.success || gitDiff.message) {
 			setDiffErrors((prev) => ({ ...prev, [key]: gitDiff.message || "Failed to load diff" }));
 		}
-	}, [gitDiff]);
+	}, [gitDiff, workspaceKey]);
 
 	useEffect(() => {
 		return () => {
@@ -332,7 +342,8 @@ export function GitPanel({
 	const requestFileDiff = useCallback(
 		(path: string, force = false) => {
 			if (!sendGetGitDiff) return;
-			const key = `${diffScope}:${path}`;
+			const requestKey = `${diffScope}:${path}`;
+			const key = buildDiffCacheKey(workspaceKey, diffScope, path);
 			if (!force && (diffCacheRef.current[key] || loadingDiffsRef.current[key])) return;
 
 			setLoadingDiffs((loadingPrev) => ({ ...loadingPrev, [key]: true }));
@@ -358,9 +369,10 @@ export function GitPanel({
 				diffTimeouts.current.delete(key);
 			}, 12_000);
 			diffTimeouts.current.set(key, timeout);
+			diffRequestWorkspaceRef.current[requestKey] = workspaceKey;
 			sendGetGitDiff(path, diffScope, resolvedWorkspacePath);
 		},
-		[diffScope, resolvedWorkspacePath, sendGetGitDiff],
+		[diffScope, workspaceKey, resolvedWorkspacePath, sendGetGitDiff],
 	);
 
 	const toggleFileDiff = useCallback(
@@ -430,6 +442,7 @@ export function GitPanel({
 
 					<ChangesFirstSection
 						fileRows={fileRows}
+						workspaceKey={workspaceKey}
 						changeScope={changeScope}
 						onChangeScope={(nextScope) => {
 							setChangeScope(nextScope);
@@ -828,6 +841,7 @@ function DiffContent({ patch }: { patch: string }) {
 
 function ChangesFirstSection({
 	fileRows,
+	workspaceKey,
 	changeScope,
 	onChangeScope,
 	diffScope,
@@ -839,6 +853,7 @@ function ChangesFirstSection({
 	onRetryFileDiff,
 }: {
 	fileRows: FileRow[];
+	workspaceKey: string;
 	changeScope: ChangeScope;
 	onChangeScope: (scope: ChangeScope) => void;
 	diffScope: "unstaged" | "staged" | "full";
@@ -883,7 +898,7 @@ function ChangesFirstSection({
 			) : (
 				<div className="space-y-2">
 					{fileRows.map((row) => {
-						const key = `${diffScope}:${row.path}`;
+						const key = buildDiffCacheKey(workspaceKey, diffScope, row.path);
 						const expanded = !!expandedFiles[row.path];
 						const patch = diffCache[key];
 						const error = diffErrors[key];
