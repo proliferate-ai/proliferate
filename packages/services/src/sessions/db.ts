@@ -366,24 +366,25 @@ export async function findByIdNoOrg(
 	return result ?? null;
 }
 
-function mapLegacyStatusToSandboxState(
+function mapLegacyStatusToCanonicalState(
 	status: CreateSessionInput["status"],
-): "provisioning" | "running" | "paused" | "terminated" | "failed" {
+): Pick<SessionStatus, "sandboxState" | "agentState" | "terminalState"> {
 	switch (status) {
 		case "starting":
 		case "pending":
-			return "provisioning";
+			return { sandboxState: "provisioning", agentState: "iterating", terminalState: null };
 		case "running":
-			return "running";
+			return { sandboxState: "running", agentState: "iterating", terminalState: null };
 		case "paused":
 		case "suspended":
-			return "paused";
+			return { sandboxState: "paused", agentState: "iterating", terminalState: null };
 		case "completed":
-		case "cancelled":
 		case "stopped":
-			return "terminated";
+			return { sandboxState: "terminated", agentState: "done", terminalState: "succeeded" };
+		case "cancelled":
+			return { sandboxState: "terminated", agentState: "done", terminalState: "cancelled" };
 		case "failed":
-			return "failed";
+			return { sandboxState: "failed", agentState: "errored", terminalState: "failed" };
 	}
 
 	throw new Error(`Unsupported legacy session status: ${status}`);
@@ -402,8 +403,7 @@ export async function create(input: CreateSessionInput): Promise<SessionRow> {
 			organizationId: input.organizationId,
 			repoId: input.repoId ?? null,
 			sessionType: input.sessionType,
-			sandboxState: mapLegacyStatusToSandboxState(input.status),
-			agentState: "iterating",
+			...mapLegacyStatusToCanonicalState(input.status),
 			sandboxProvider: input.sandboxProvider,
 			createdBy: input.createdBy ?? null,
 			snapshotId: input.snapshotId ?? null,
@@ -468,8 +468,7 @@ export async function createWithAdmissionGuard(
 			organizationId: input.organizationId,
 			repoId: input.repoId ?? null,
 			sessionType: input.sessionType,
-			sandboxState: mapLegacyStatusToSandboxState(input.status),
-			agentState: "iterating",
+			...mapLegacyStatusToCanonicalState(input.status),
 			sandboxProvider: input.sandboxProvider,
 			createdBy: input.createdBy ?? null,
 			snapshotId: input.snapshotId ?? null,
@@ -676,6 +675,7 @@ export async function markStopped(sessionId: string): Promise<void> {
 		.update(sessions)
 		.set({
 			sandboxState: "terminated",
+			agentState: "done",
 			terminalState: "succeeded",
 			endedAt: new Date(),
 			latestTask: null,

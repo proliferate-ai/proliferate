@@ -5,7 +5,6 @@ import type { RefObject } from "react";
 import type { FilesSidebarTab } from "./state";
 
 interface FilesPanelShortcutsOptions {
-	sidebarTab: FilesSidebarTab;
 	setSidebarTab: (tab: FilesSidebarTab) => void;
 	currentFile: string | null;
 	closeCurrentTab: () => void;
