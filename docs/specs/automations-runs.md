@@ -48,7 +48,7 @@ The system is intentionally **at-least-once** at dispatch boundaries. Idempotenc
 - `transitionRunStatus` does not enforce allowed transition edges; callers must preserve lifecycle correctness (`packages/services/src/runs/service.ts:transitionRunStatus`).
 - Session notifications are not automation-only; gateway idle/orphan paths can also enqueue `notify_session_complete` (`apps/gateway/src/hub/migration-controller.ts`, `apps/gateway/src/sweeper/orphan-sweeper.ts`).
 - Run claim/unclaim are available to any org member, while resolve remains `owner|admin`; DB mutations are scoped by `run_id + organization_id + automation_id` when automation context is provided (`apps/web/src/server/routers/automations.ts`, `packages/services/src/runs/db.ts`).
-- Template instantiation in coworker UI is worker-first: `automations.createFromTemplate` now returns `{ worker }`, routes to coworker detail, and delegates template/binding validation + worker creation to `workers.createWorkerFromTemplate` (router stays transport-thin) (`apps/web/src/server/routers/automations.ts`, `packages/services/src/workers/service.ts`, `apps/web/src/hooks/org/use-templates.ts`).
+- Template instantiation in coworker UI is worker-first: `automations.createFromTemplate` now returns `{ worker }`, routes to coworker detail, and delegates template/binding validation + worker creation to `workers.createWorkerFromTemplate`; validated integration bindings are applied to the worker manager session as session connections (`apps/web/src/server/routers/automations.ts`, `packages/services/src/workers/service.ts`, `apps/web/src/hooks/org/use-templates.ts`).
 
 ---
 

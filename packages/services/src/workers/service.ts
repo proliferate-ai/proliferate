@@ -239,6 +239,7 @@ export async function createWorkerWithManagerSession(input: {
 	repoId?: string;
 	configurationId?: string;
 	capabilities?: CoworkerCapabilityInput[];
+	integrationIds?: string[];
 }): Promise<WorkerDetail> {
 	const name = input.name || "Untitled coworker";
 
@@ -272,6 +273,7 @@ export async function createWorkerWithManagerSession(input: {
 	});
 
 	await applyWorkerCapabilities(worker.managerSessionId, input.capabilities);
+	await applyWorkerIntegrationBindings(worker.managerSessionId, input.integrationIds);
 
 	return toWorkerDetail(worker);
 }
@@ -292,7 +294,19 @@ export async function createWorkerFromTemplate(
 		name: template.name,
 		objective: template.agentInstructions,
 		modelId: template.modelId,
+		integrationIds: Object.values(input.integrationBindings).filter(Boolean),
 	});
+}
+
+async function applyWorkerIntegrationBindings(
+	managerSessionId: string,
+	integrationIds: string[] | undefined,
+): Promise<void> {
+	if (!integrationIds || integrationIds.length === 0) {
+		return;
+	}
+	const dedupedIntegrationIds = [...new Set(integrationIds)];
+	await sessionsDb.createSessionConnections(managerSessionId, dedupedIntegrationIds);
 }
 
 async function validateIntegrationBindings(
