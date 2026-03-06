@@ -528,7 +528,7 @@ function GitTopBar({
 					<div className="flex min-w-0 items-center gap-2">
 						<GitBranch className="h-4 w-4 shrink-0 text-success" />
 						<span className="shrink-0 text-sm font-medium">
-							{effectivePrNumber ? `#${effectivePrNumber}` : `#${fileCount}`}
+							{effectivePrNumber ? `#${effectivePrNumber}` : `${fileCount} files`}
 						</span>
 						<div className="ml-1 flex items-center gap-1.5">
 							<p className="text-sm font-medium text-success">+{positiveCount}</p>
@@ -741,7 +741,9 @@ function compactContextRows(rows: ParsedDiffRow[], keepEdgeLines = 2): RenderRow
 		} else {
 			output.push(...run.slice(0, keepEdgeLines));
 			output.push({ kind: "omitted", count: run.length - keepEdgeLines * 2 });
-			output.push(...run.slice(-keepEdgeLines));
+			if (keepEdgeLines > 0) {
+				output.push(...run.slice(-keepEdgeLines));
+			}
 		}
 		index = end;
 	}
