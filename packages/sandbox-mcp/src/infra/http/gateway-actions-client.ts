@@ -1,3 +1,4 @@
+import { CliError } from "../../cli/errors.js";
 import { sandboxEnv } from "../../env.js";
 
 const ACTIONS_TIMEOUT_MS = 120_000;
@@ -21,7 +22,7 @@ export class GatewayActionsClient {
 
 	private getHeaders(): Record<string, string> {
 		if (!this.authToken) {
-			throw new Error("Auth token not set. Set SANDBOX_MCP_AUTH_TOKEN.");
+			throw new CliError("Auth token not set. Set SANDBOX_MCP_AUTH_TOKEN.", 2);
 		}
 		return {
 			Authorization: `Bearer ${this.authToken}`,

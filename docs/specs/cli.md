@@ -51,7 +51,7 @@
 
 ```
 packages/sandbox-mcp/src/
-  proliferate-cli.ts                 # CLI entrypoint
+  cli/entrypoint.ts                  # CLI entrypoint
   cli/main.ts                        # command dispatcher
   cli/commands/services.ts           # services command handlers
   cli/commands/env.ts                # env apply/scrub handlers
@@ -59,9 +59,10 @@ packages/sandbox-mcp/src/
   cli/errors.ts                      # CLI error helpers
   cli/output.ts                      # stdout/stderr helpers
   cli/flags.ts                       # argv flag parsing
-  api/create-server.ts               # express app composition
+  api/create-api-app.ts              # express app composition
+  api/server.ts                      # API server startup
   api/routes/*.ts                    # transport route modules
-  api/middleware/*.ts                # auth + error middleware
+  api/middleware/*.ts                # auth + CORS middleware
   app/**                             # orchestration use-cases
   domain/**                          # pure policy/parser utilities
   infra/**                           # process/fs/http adapters
@@ -92,18 +93,18 @@ packages/sandbox-mcp/src/
 - CLI writes machine-readable JSON for successful command payloads.
 
 Evidence:
-- `packages/sandbox-mcp/src/proliferate-cli.ts`
+- `packages/sandbox-mcp/src/cli/entrypoint.ts`
 - `packages/sandbox-mcp/src/cli/main.ts`
 
 ### 6.2 API Transport Invariants
 - `/api/health` is unauthenticated.
 - Other sandbox-mcp routes require bearer auth.
-- Error responses are normalized via shared middleware.
+- Routes validate input and return explicit JSON error payloads.
 
 Evidence:
-- `packages/sandbox-mcp/src/api/create-server.ts`
-- `packages/sandbox-mcp/src/api/middleware/require-auth.ts`
-- `packages/sandbox-mcp/src/api/middleware/error-handler.ts`
+- `packages/sandbox-mcp/src/api/create-api-app.ts`
+- `packages/sandbox-mcp/src/api/middleware/auth.ts`
+- `packages/sandbox-mcp/src/api/routes/services-routes.ts`
 
 ### 6.3 Service Runtime Invariants
 - Service runtime state persists in `/tmp/proliferate/state.json`.
@@ -112,8 +113,8 @@ Evidence:
 
 Evidence:
 - `packages/sandbox-mcp/src/infra/services/state-store.ts`
-- `packages/sandbox-mcp/src/infra/services/process-runtime.ts`
-- `packages/sandbox-mcp/src/infra/services/caddy-exposure.ts`
+- `packages/sandbox-mcp/src/infra/services/process-registry.ts`
+- `packages/sandbox-mcp/src/app/services/manage-services.ts`
 
 ---
 

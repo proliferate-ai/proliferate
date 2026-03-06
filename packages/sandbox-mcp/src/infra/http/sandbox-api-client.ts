@@ -1,3 +1,4 @@
+import { CliError } from "../../cli/errors.js";
 import { sandboxEnv } from "../../env.js";
 import { fetchWithRetry, streamSse } from "./sse-client.js";
 
@@ -14,8 +15,9 @@ export class SandboxApiClient {
 
 	assertAuthToken(): void {
 		if (!this.authToken) {
-			throw new Error(
+			throw new CliError(
 				"Auth token not set. Set SANDBOX_MCP_AUTH_TOKEN or SERVICE_TO_SERVICE_AUTH_TOKEN.",
+				2,
 			);
 		}
 	}
