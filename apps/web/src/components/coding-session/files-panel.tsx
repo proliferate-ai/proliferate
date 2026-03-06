@@ -157,7 +157,6 @@ export function FilesPanel({ sessionId, activityTick = 0 }: FilesPanelProps) {
 	}, [closeTab, currentFile]);
 
 	useFilesPanelShortcuts({
-		sidebarTab,
 		setSidebarTab,
 		currentFile,
 		closeCurrentTab,
