@@ -21,14 +21,6 @@ function isWorkspaceStateInfo(value: unknown): value is WorkspaceStateInfo {
 function toWorkspaceStateMessage(
 	envelope: DaemonStreamEnvelope,
 ): Extract<ServerMessage, { type: "workspace_state" }> | null {
-	const stream = envelope.stream as string;
-	if (stream === "workspace_state" && isWorkspaceStateInfo(envelope.payload)) {
-		return {
-			type: "workspace_state",
-			payload: envelope.payload,
-		};
-	}
-
 	if (envelope.stream !== "agent_event" || envelope.event !== "data") {
 		return null;
 	}
