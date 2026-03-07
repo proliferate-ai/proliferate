@@ -58,6 +58,10 @@ import {
 } from "./session/reconnect/reconnect-controller";
 import type { RuntimeFacade } from "./session/runtime/contracts/runtime-facade";
 import { EventProcessor } from "./session/runtime/event-processor";
+import {
+	type ManagerControlTarget,
+	createInProcessManagerControlFacade,
+} from "./session/runtime/manager/manager-control-facade";
 import type { SessionContext, SessionRecord } from "./session/runtime/session-context-store";
 import { SessionTelemetry, extractPrUrls } from "./session/runtime/session-telemetry";
 import {
@@ -79,6 +83,7 @@ interface HubDependencies {
 	sessionId: string;
 	context: SessionContext;
 	onEvict?: () => void;
+	getOrCreateHub?: (sessionId: string) => Promise<ManagerControlTarget>;
 }
 
 /** Renewal interval: ~1/3 of owner lease TTL. */
@@ -200,6 +205,11 @@ export class SessionHub {
 			onDisconnect: (reason) => this.handleSseDisconnect(reason),
 			onStatus: (status, message) => this.broadcastStatus(status, message),
 			onBroadcast: (message) => this.broadcast(message),
+			managerControlFacade: deps.getOrCreateHub
+				? createInProcessManagerControlFacade({
+						getOrCreateHub: deps.getOrCreateHub,
+					})
+				: undefined,
 		});
 
 		this.onEvict = deps.onEvict;
@@ -1410,6 +1420,8 @@ export class SessionHub {
 	// ============================================
 
 	private broadcast(message: ServerMessage): void {
+		this.persistDurableFact(message);
+
 		if (
 			message.type === "status" ||
 			message.type === "tool_start" ||
@@ -1460,6 +1472,53 @@ export class SessionHub {
 				// Ignore send failures
 			}
 		}
+	}
+
+	private persistDurableFact(message: ServerMessage): void {
+		let eventType: string | null = null;
+		let payloadJson: unknown;
+
+		switch (message.type) {
+			case "tool_start":
+				eventType = "runtime_tool_started";
+				payloadJson = message.payload;
+				break;
+			case "tool_end":
+				eventType = "runtime_tool_finished";
+				payloadJson = message.payload;
+				break;
+			case "action_approval_request":
+				eventType = "runtime_approval_requested";
+				payloadJson = message.payload;
+				break;
+			case "action_approval_result":
+				eventType = "runtime_approval_resolved";
+				payloadJson = message.payload;
+				break;
+			case "action_completed":
+				eventType = "runtime_action_completed";
+				payloadJson = message.payload;
+				break;
+			case "error":
+				eventType = "runtime_error";
+				payloadJson = message.payload;
+				break;
+			default:
+				return;
+		}
+
+		void sessions
+			.recordSessionEvent({
+				sessionId: this.sessionId,
+				eventType,
+				payloadJson,
+			})
+			.catch((err) => {
+				this.logger.warn(
+					{ err, sessionId: this.sessionId, eventType },
+					"Failed to persist runtime fact",
+				);
+			});
 	}
 
 	private sendMessage(ws: WebSocket, message: ServerMessage): void {
