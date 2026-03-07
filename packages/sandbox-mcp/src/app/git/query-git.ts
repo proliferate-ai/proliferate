@@ -62,13 +62,33 @@ export async function getRepoDiff(repoPath: string, filePath?: string): Promise<
 			timeout: 10000,
 			maxBuffer: MAX_DIFF_BYTES * 2,
 		}));
-	} catch {
-		const args = ["-C", repoPath, "diff"];
-		if (filePath) args.push("--", filePath);
-		({ stdout } = await execFileAsync("git", args, {
-			timeout: 10000,
-			maxBuffer: MAX_DIFF_BYTES * 2,
-		}));
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		const isMissingHead =
+			message.includes("bad revision 'HEAD'") ||
+			message.includes("ambiguous argument 'HEAD'") ||
+			message.includes("unknown revision or path not in the working tree");
+		if (!isMissingHead) {
+			throw error;
+		}
+
+		const stagedArgs = ["-C", repoPath, "diff", "--cached"];
+		const workingArgs = ["-C", repoPath, "diff"];
+		if (filePath) {
+			stagedArgs.push("--", filePath);
+			workingArgs.push("--", filePath);
+		}
+		const [stagedDiff, workingDiff] = await Promise.all([
+			execFileAsync("git", stagedArgs, {
+				timeout: 10000,
+				maxBuffer: MAX_DIFF_BYTES * 2,
+			}),
+			execFileAsync("git", workingArgs, {
+				timeout: 10000,
+				maxBuffer: MAX_DIFF_BYTES * 2,
+			}),
+		]);
+		stdout = [stagedDiff.stdout, workingDiff.stdout].filter(Boolean).join("\n");
 	}
 
 	if (stdout.length > MAX_DIFF_BYTES) {

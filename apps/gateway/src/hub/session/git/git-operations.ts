@@ -19,7 +19,8 @@ import { SANDBOX_PATHS, buildGitCredentialsMap, shellEscape } from "@proliferate
 import type { GitIdentity } from "../runtime/git-identity";
 
 const WORKSPACE_DIR = `${SANDBOX_PATHS.home}/workspace`;
-const OPEN_PR_CACHE_TTL_MS = 60_000;
+const OPEN_PR_SUCCESS_CACHE_TTL_MS = 60_000;
+const OPEN_PR_ERROR_CACHE_TTL_MS = 10_000;
 
 /** Non-interactive env for all git/gh commands. */
 const GIT_BASE_ENV: Record<string, string> = {
@@ -46,6 +47,7 @@ export class GitOperations {
 		key: string;
 		value: { url: string; number: number } | null;
 		fetchedAtMs: number;
+		ttlMs: number;
 	} | null = null;
 
 	constructor(
@@ -234,7 +236,7 @@ export class GitOperations {
 		if (
 			this.openPrCache &&
 			this.openPrCache.key === cacheKey &&
-			now - this.openPrCache.fetchedAtMs < OPEN_PR_CACHE_TTL_MS
+			now - this.openPrCache.fetchedAtMs < this.openPrCache.ttlMs
 		) {
 			return this.openPrCache.value;
 		}
@@ -262,7 +264,12 @@ export class GitOperations {
 		);
 
 		if (result.exitCode !== 0 || !result.stdout.trim()) {
-			this.openPrCache = { key: cacheKey, value: null, fetchedAtMs: now };
+			this.openPrCache = {
+				key: cacheKey,
+				value: null,
+				fetchedAtMs: now,
+				ttlMs: OPEN_PR_ERROR_CACHE_TTL_MS,
+			};
 			return null;
 		}
 
@@ -270,14 +277,29 @@ export class GitOperations {
 			const parsed = JSON.parse(result.stdout) as Array<{ url?: unknown; number?: unknown }>;
 			const first = parsed[0];
 			if (!first || typeof first.url !== "string" || typeof first.number !== "number") {
-				this.openPrCache = { key: cacheKey, value: null, fetchedAtMs: now };
+				this.openPrCache = {
+					key: cacheKey,
+					value: null,
+					fetchedAtMs: now,
+					ttlMs: OPEN_PR_ERROR_CACHE_TTL_MS,
+				};
 				return null;
 			}
 			const value = { url: first.url, number: first.number };
-			this.openPrCache = { key: cacheKey, value, fetchedAtMs: now };
+			this.openPrCache = {
+				key: cacheKey,
+				value,
+				fetchedAtMs: now,
+				ttlMs: OPEN_PR_SUCCESS_CACHE_TTL_MS,
+			};
 			return value;
 		} catch {
-			this.openPrCache = { key: cacheKey, value: null, fetchedAtMs: now };
+			this.openPrCache = {
+				key: cacheKey,
+				value: null,
+				fetchedAtMs: now,
+				ttlMs: OPEN_PR_ERROR_CACHE_TTL_MS,
+			};
 			return null;
 		}
 	}
