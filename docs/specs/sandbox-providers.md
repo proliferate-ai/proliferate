@@ -14,7 +14,7 @@
 - sandbox-mcp sidecar (`api-server`, terminal WS, service manager, in-sandbox CLI)
 - Sandbox auth token wiring (`SANDBOX_MCP_AUTH_TOKEN`)
 - Caddy preview/proxy integration (`/_proliferate/mcp/*`, `/_proliferate/vscode/*`)
-- sandbox-daemon runtime bridge endpoints (`/_proliferate/v1/runtime/session/*`) used by gateway coding runtime
+- sandbox-daemon runtime bridge endpoints (`/_proliferate/v1/runtime/session/*`) used by gateway coding runtime and the planned Pi manager runtime cutover
 
 ### Out of Scope
 - Session lifecycle orchestration, hub ownership, SSE runtime state machine — see `sessions-gateway.md`
@@ -43,6 +43,7 @@ Boot is intentionally split into two phases:
 State is intentionally split:
 - Durable session metadata in DB (`sessions` row and linked records).
 - In-sandbox operational metadata at `/home/user/.proliferate/metadata.json`.
+- For Pi manager runtime, hidden runtime-private transcript/session state must remain in hidden sandbox storage separate from the agent-managed `$MANAGER_MEMORY_DIR` working-memory root.
 - Provider instances themselves are ephemeral/stateless across calls.
 
 ### Things Agents Get Wrong
@@ -57,6 +58,7 @@ State is intentionally split:
 - `PLUGIN_MJS` logs execute inside sandbox runtime, not in provider process (`packages/shared/src/sandbox/config.ts`).
 - `checkSandboxes()` must be side-effect free; E2B must not use `Sandbox.connect()` there (`packages/shared/src/providers/provider-contract.test.ts`, `packages/shared/src/providers/e2b.ts`, `packages/shared/src/providers/e2b/*.ts`).
 - Snapshot restore freshness is cadence-gated and metadata-aware; cadence advances only when all pulls succeed (`packages/shared/src/sandbox/git-freshness.ts`, `packages/shared/src/providers/pull-on-restore.test.ts`).
+- For Pi manager runtime, hidden runtime-private transcript/session state is not the same surface as `$MANAGER_MEMORY_DIR`; transcript state is runtime-private, while the memory root is agent-managed working memory.
 - Gateway callback tools (`verify`, `save_snapshot`, etc.) require `PROLIFERATE_GATEWAY_URL`, `PROLIFERATE_SESSION_ID`, and `SANDBOX_MCP_AUTH_TOKEN` in sandbox env (`packages/shared/src/opencode-tools/index.ts`).
 - Direct provider instantiation is valid for snapshot workers, not for session runtime code paths (`apps/worker/src/base-snapshots/index.ts`, `apps/worker/src/configuration-snapshots/index.ts`, `packages/shared/src/providers/index.ts`).
 
