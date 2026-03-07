@@ -188,7 +188,7 @@ export function mapUniversalEventToRuntimeDaemonEvent(
 						id: event.data.itemId,
 						role: "assistant",
 						sessionId: event.session_id,
-						time: { completed: Date.now() },
+						time: { completed: new Date(event.time).getTime() },
 					},
 				},
 			};

@@ -31,7 +31,14 @@ function broadcastDaemonEnvelope(
 	if (!onBroadcast) {
 		return;
 	}
-	onBroadcast({ type: "daemon_stream", payload: envelope } as ServerMessage);
+
+	const hasTypedHandler =
+		envelope.stream === "port_opened" ||
+		envelope.stream === "port_closed" ||
+		envelope.stream === "fs_change";
+	if (envelope.stream !== "agent_event" && !hasTypedHandler) {
+		onBroadcast({ type: "daemon_stream", payload: envelope } as ServerMessage);
+	}
 
 	if (envelope.stream === "port_opened" || envelope.stream === "port_closed") {
 		const payload = envelope.payload as { port?: unknown; host?: unknown };
@@ -88,17 +95,17 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 		if (!this.runtimeBaseUrl || !this.runtimeAuthToken) {
 			throw new Error("Missing sandbox runtime daemon endpoint");
 		}
-		this.runtimeBindingId = randomUUID();
-		input.setRuntimeBindingId(this.runtimeBindingId);
 
 		const ensureSessionStartMs = Date.now();
-		await this.ensureAgentSession(input.sessionId, input.live);
+		await this.ensureAgentSession(input.sessionId, input.live, input.logger);
 		input.logLatency("runtime.ensure_ready.agent_session.ensure", {
 			durationMs: Date.now() - ensureSessionStartMs,
 			hasSessionId: Boolean(input.live.openCodeSessionId),
 		});
 
 		this.eventStreamHandle?.disconnect();
+		this.runtimeBindingId = randomUUID();
+		input.setRuntimeBindingId(this.runtimeBindingId);
 		this.eventStreamHandle = await withStepTiming(
 			"runtime.ensure_ready.sse.connect",
 			input.logLatency,
@@ -212,16 +219,30 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 	private async ensureAgentSession(
 		sessionId: string,
 		live: RuntimeDriverExecutionInput["live"],
+		logger: import("@proliferate/logger").Logger,
 	): Promise<void> {
 		if (!this.runtimeBaseUrl || !this.runtimeAuthToken) {
 			throw new Error("Agent URL missing");
 		}
 		const storedId = live.openCodeSessionId ?? live.session.coding_agent_session_id;
-		const resumed = await this.codingHarness.resume({
-			baseUrl: this.runtimeBaseUrl,
-			authToken: this.runtimeAuthToken,
-			sessionId: storedId,
-		});
+		let resumed: { sessionId: string; mode: string };
+		try {
+			resumed = await this.codingHarness.resume({
+				baseUrl: this.runtimeBaseUrl,
+				authToken: this.runtimeAuthToken,
+				sessionId: storedId,
+			});
+		} catch (error) {
+			logger.warn(
+				{ err: error, mode: "get", hasSessionId: Boolean(storedId) },
+				"Runtime session lookup failed, falling back to stored ID",
+			);
+			if (storedId) {
+				resumed = { sessionId: storedId, mode: "reused" };
+			} else {
+				throw error;
+			}
+		}
 		this.openCodeSessionId = resumed.sessionId;
 		await persistCodingSessionId({
 			sessionId,

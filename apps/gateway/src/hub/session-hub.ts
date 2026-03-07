@@ -1042,9 +1042,12 @@ export class SessionHub {
 			{
 				sessionId: this.sessionId,
 				isCompletedAutomationSession: () => this.isCompletedAutomationSession(),
-				isRunActive: () => this.isRunActive(),
-				markRunStarted: (runId) => {
+				tryStartRun: (runId) => {
+					if (this.isRunActive()) {
+						return false;
+					}
 					this.activePromptRunId = runId;
+					return true;
 				},
 				clearRunState: () => {
 					this.activePromptRunId = null;

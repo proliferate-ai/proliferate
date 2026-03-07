@@ -12,7 +12,7 @@
  *   DELETE /v1/acp/{serverId}   — Terminate and clean up the server
  */
 
-const ACP_TIMEOUT_MS = 10_000;
+const runtimeMutationTimeoutMs = 30_000;
 
 function withAuthHeaders(authToken: string): HeadersInit {
 	return {
@@ -40,7 +40,7 @@ export async function createAcpServer(
 		method: "POST",
 		headers: withAuthHeaders(authToken),
 		body: JSON.stringify({ agent }),
-		signal: AbortSignal.timeout(ACP_TIMEOUT_MS),
+		signal: AbortSignal.timeout(runtimeMutationTimeoutMs),
 	});
 	if (!response.ok) {
 		const text = await response.text();
@@ -82,7 +82,7 @@ export async function sendAcpEnvelope(
 		method: "POST",
 		headers: withAuthHeaders(authToken),
 		body: JSON.stringify({ parts }),
-		signal: AbortSignal.timeout(ACP_TIMEOUT_MS),
+		signal: AbortSignal.timeout(runtimeMutationTimeoutMs),
 	});
 	if (!response.ok && response.status !== 204) {
 		const text = await response.text();
@@ -98,7 +98,7 @@ export async function deleteAcpServer(
 	const response = await fetch(`${baseUrl}/v1/acp/${encodeURIComponent(serverId)}`, {
 		method: "DELETE",
 		headers: { Authorization: `Bearer ${authToken}` },
-		signal: AbortSignal.timeout(ACP_TIMEOUT_MS),
+		signal: AbortSignal.timeout(runtimeMutationTimeoutMs),
 	});
 	if (!response.ok && response.status !== 404) {
 		const text = await response.text();
