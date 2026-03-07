@@ -16,7 +16,7 @@ export interface RuntimeFacade {
 	getPreviewUrl(): string | null;
 	getSandboxExpiresAt(): number | null;
 	getProviderAndSandboxId(): { provider: SandboxProvider; sandboxId: string } | null;
-	sendPrompt(content: string, images?: CodingHarnessPromptImage[]): Promise<void>;
+	sendPrompt(userId: string, content: string, images?: CodingHarnessPromptImage[]): Promise<void>;
 	interruptCurrentRun(): Promise<void>;
 	collectOutputs(): Promise<Message[]>;
 	disconnectSse(): void;

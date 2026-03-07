@@ -6,21 +6,11 @@
  */
 
 // ---------------------------------------------------------------------------
-// Daemon modes
-// ---------------------------------------------------------------------------
-
-export type DaemonMode = "worker" | "manager";
-
-// ---------------------------------------------------------------------------
 // Network
 // ---------------------------------------------------------------------------
 
 /** Port the daemon HTTP server binds to inside the sandbox. */
 export const DAEMON_PORT = 8470;
-
-/** OpenCode local SSE server inside the sandbox. */
-export const OPENCODE_HOST = "127.0.0.1";
-export const OPENCODE_PORT = 4096;
 
 // ---------------------------------------------------------------------------
 // Preview port policy
@@ -71,44 +61,20 @@ export const NONCE_CACHE_MAX = 10_000;
 export const NONCE_EXPIRY_WINDOW_MS = 5 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
-// OpenCode bridge
-// ---------------------------------------------------------------------------
-
-/** Timeout (ms) waiting for initial `server.connected` handshake. */
-export const OPENCODE_HANDSHAKE_TIMEOUT_MS = 30_000;
-
-/** Reconnect delay (ms) when OpenCode SSE drops. */
-export const OPENCODE_RECONNECT_DELAY_MS = 2_000;
-
-/** Max reconnect attempts before giving up (0 = unlimited). */
-export const OPENCODE_MAX_RECONNECT_ATTEMPTS = 0;
-
-// ---------------------------------------------------------------------------
 // Derived runtime config
 // ---------------------------------------------------------------------------
 
 export interface DaemonConfig {
-	mode: DaemonMode;
 	port: number;
 	sessionToken: string | null;
 	signatureSecret: string | null;
 	workspaceRoot: string;
 }
 
-export function loadConfig(argv: string[]): DaemonConfig {
-	let mode: DaemonMode = "worker";
-	for (const arg of argv) {
-		if (arg === "--mode=manager") {
-			mode = "manager";
-		} else if (arg === "--mode=worker") {
-			mode = "worker";
-		}
-	}
-
+export function loadConfig(_argv: string[]): DaemonConfig {
 	// biome-ignore lint/nursery/noProcessEnv: loadConfig IS the centralized config entry point
 	const env = process.env;
 	return {
-		mode,
 		port: Number(env.SANDBOX_DAEMON_PORT) || DAEMON_PORT,
 		sessionToken: env.PROLIFERATE_SESSION_TOKEN ?? null,
 		signatureSecret: env.PROLIFERATE_SIGNATURE_SECRET ?? null,

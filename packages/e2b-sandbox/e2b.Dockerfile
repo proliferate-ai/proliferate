@@ -64,6 +64,12 @@ RUN npm install -g opencode-ai@latest proliferate-sandbox-mcp@0.1.19
 COPY sandbox-daemon.cjs /usr/local/bin/sandbox-daemon
 RUN chmod +x /usr/local/bin/sandbox-daemon
 
+# Install Sandbox Agent (Rivet) — universal agent substrate for coding + manager sessions
+RUN curl -fsSL https://releases.rivet.dev/sandbox-agent/0.2.x/install.sh | sh
+
+# Install Pi coding agent + ACP adapter (used by manager sessions via sandbox-agent)
+RUN npm install -g @mariozechner/pi-coding-agent@latest pi-acp@latest
+
 # Install Python tools
 RUN pip install httpx uv playwright psycopg2-binary redis
 

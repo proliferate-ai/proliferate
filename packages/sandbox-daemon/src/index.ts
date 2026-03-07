@@ -1,12 +1,11 @@
 /**
- * sandbox-daemon — PID 1 transport boundary inside sandboxes.
+ * sandbox-daemon — platform transport boundary inside sandboxes.
  *
- * Replaces direct OpenCode SSE connections with a unified, authenticated
- * daemon that routes platform transport and preview proxy traffic.
+ * Provides PTY, FS, ports, preview proxy, and platform SSE.
+ * Agent lifecycle is managed by sandbox-agent (ACP protocol).
  *
  * Usage:
- *   sandbox-daemon --mode=worker   # Full: PTY + FS + preview + agent stream
- *   sandbox-daemon --mode=manager  # Lean: minimal transport, no FS/preview watchers
+ *   sandbox-daemon
  *
  * The daemon should be launched via tini/dumb-init as PID 1 wrapper
  * for proper signal handling and child process reaping.
@@ -17,7 +16,6 @@ import { setSessionToken, setSignatureSecret } from "./auth.js";
 import { TOKEN_TTL_MINUTES, loadConfig } from "./config.js";
 import { EventBus } from "./event-bus.js";
 import { FsTransport } from "./fs.js";
-import { OpenCodeBridge } from "./opencode-bridge.js";
 import { PortWatcher } from "./ports.js";
 import { PreviewProxy } from "./preview-proxy.js";
 import { PtyTransport } from "./pty.js";
@@ -31,10 +29,7 @@ import { createDaemonServer } from "./server.js";
 const config = loadConfig(process.argv);
 const logger = createLogger({ service: "sandbox-daemon" });
 
-logger.info(
-	{ mode: config.mode, port: config.port, workspace: config.workspaceRoot },
-	"Starting sandbox daemon",
-);
+logger.info({ port: config.port, workspace: config.workspaceRoot }, "Starting sandbox daemon");
 
 // ---------------------------------------------------------------------------
 // Auth setup (B7)
@@ -66,16 +61,6 @@ const portWatcher = new PortWatcher({ eventBus, logger });
 const previewProxy = new PreviewProxy({ portWatcher, logger });
 
 // ---------------------------------------------------------------------------
-// OpenCode bridge (B2 — worker mode only)
-// ---------------------------------------------------------------------------
-
-let opencodeBridge: OpenCodeBridge | null = null;
-
-if (config.mode === "worker") {
-	opencodeBridge = new OpenCodeBridge({ eventBus, logger });
-}
-
-// ---------------------------------------------------------------------------
 // Router (B1)
 // ---------------------------------------------------------------------------
 
@@ -86,7 +71,6 @@ const router = new Router({
 	portWatcher,
 	previewProxy,
 	logger,
-	opencodeBridgeConnected: () => opencodeBridge?.isConnected() ?? false,
 });
 
 // ---------------------------------------------------------------------------
@@ -105,25 +89,11 @@ const server = createDaemonServer({
 // ---------------------------------------------------------------------------
 
 async function startSubsystems(): Promise<void> {
-	// Start port watcher (worker mode only, per spec)
-	if (config.mode === "worker") {
-		portWatcher.start();
-		logger.info("Port watcher started");
-	}
+	portWatcher.start();
+	logger.info("Port watcher started");
 
-	// Start OpenCode bridge (worker mode only)
-	if (opencodeBridge) {
-		try {
-			await opencodeBridge.start();
-			logger.info("OpenCode bridge connected");
-		} catch (err) {
-			logger.error({ err }, "OpenCode bridge initial connection failed (will retry)");
-			// Non-fatal: bridge will reconnect automatically
-		}
-	}
-
-	eventBus.emitSystemEvent({ type: "daemon_ready", mode: config.mode });
-	logger.info({ mode: config.mode }, "Daemon ready");
+	eventBus.emitSystemEvent({ type: "daemon_ready" });
+	logger.info("Daemon ready");
 }
 
 startSubsystems().catch((err) => {
@@ -137,7 +107,6 @@ startSubsystems().catch((err) => {
 function shutdown(signal: string): void {
 	logger.info({ signal }, "Shutting down daemon");
 
-	opencodeBridge?.stop();
 	portWatcher.stop();
 	ptyTransport.clearAll();
 
@@ -176,12 +145,11 @@ process.on("unhandledRejection", (reason) => {
 
 export { EventBus } from "./event-bus.js";
 export { FsTransport, FsSecurityError } from "./fs.js";
-export { OpenCodeBridge } from "./opencode-bridge.js";
 export { PortWatcher } from "./ports.js";
 export { PreviewProxy } from "./preview-proxy.js";
 export { PtyTransport } from "./pty.js";
 export { Router } from "./router.js";
 export { createDaemonServer } from "./server.js";
 export { loadConfig } from "./config.js";
-export type { DaemonConfig, DaemonMode } from "./config.js";
+export type { DaemonConfig } from "./config.js";
 export type { DaemonStreamEvent, EventSubscriber } from "./event-bus.js";

@@ -493,7 +493,7 @@ export async function isActionDeniedForSession(input: {
 /**
  * Filter action catalog visibility for a session.
  *
- * Applies user disabled-source preferences first, then policy filtering.
+ * Applies user disabled source/action preferences first, then policy filtering.
  */
 export async function filterAvailableActionsForSession<
 	TAction extends AvailableActionCatalogAction,
@@ -528,7 +528,6 @@ export async function filterAvailableActionsForSession<
 			if (disabledActions?.has(actionEntry.name)) {
 				continue;
 			}
-
 			const denied = await isActionDeniedForSession({
 				sessionId: input.sessionId,
 				organizationId: input.organizationId,

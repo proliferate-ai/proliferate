@@ -65,6 +65,8 @@ export interface CreateSandboxOpts {
 	sessionId: string;
 	/** Session mode, used for mode-specific tool injection and behavior. */
 	sessionType?: "coding" | "setup" | null;
+	/** Session kind, used for runtime bootstrap selection (task/setup/manager). */
+	sessionKind?: "task" | "setup" | "manager" | null;
 	repos: RepoSpec[]; // Repos to clone (always use this, even for single repo)
 	branch: string;
 	envVars: Record<string, string>;

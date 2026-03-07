@@ -1,41 +1,52 @@
-import type { ManagerHarnessStartInput, ManagerHarnessState } from "@proliferate/shared/contracts";
-import type { ClaudeManagerHarnessAdapter } from "../../../../harness/manager/adapter";
+import {
+	createAcpSession,
+	interruptAcpSession,
+	sendAcpPrompt,
+	waitForAcpReady,
+} from "../../../../harness/coding/sandbox-agent-v2/client";
 import type { RuntimeDriverActivationInput } from "../contracts/runtime-driver";
 
-const DEFAULT_MANAGER_MEMORY_DIR = "/workspace/.proliferate/manager-memory";
+export interface ManagerAcpState {
+	serverId: string;
+	status: "ready" | "prompting" | "interrupted";
+}
 
 export class ManagerRuntimeService {
-	constructor(private readonly managerHarness: ClaudeManagerHarnessAdapter) {}
+	private baseUrl: string | null = null;
+	private serverId: string | null = null;
+	private agentSessionId: string | null = null;
 
-	async startOrResume(input: RuntimeDriverActivationInput): Promise<ManagerHarnessState> {
-		let managerApiKey = input.env.anthropicApiKey;
-		let managerProxyUrl: string | undefined;
-		if (input.env.llmProxyRequired && input.env.llmProxyUrl) {
-			const { generateSessionAPIKey } = await import("@proliferate/shared/llm-proxy");
-			managerApiKey = await generateSessionAPIKey(input.sessionId, input.config.organizationId);
-			managerProxyUrl = input.env.llmProxyUrl;
+	async startOrResume(input: RuntimeDriverActivationInput): Promise<ManagerAcpState> {
+		const baseUrl = input.live.previewUrl;
+		if (!baseUrl) {
+			throw new Error("Manager runtime requires a sandbox preview URL");
 		}
 
-		const memoryDir = DEFAULT_MANAGER_MEMORY_DIR;
-		const harnessInput: ManagerHarnessStartInput = {
-			managerSessionId: input.sessionId,
-			organizationId: input.config.organizationId,
-			workerId: input.live.session.worker_id,
-			gatewayUrl: `http://localhost:${input.env.port}`,
-			serviceToken: input.env.serviceToken,
-			anthropicApiKey: managerApiKey,
-			llmProxyUrl: managerProxyUrl,
-			managerMemoryDir: memoryDir,
-			managerMemoryIndexPath: `${memoryDir}/memory.md`,
-		};
+		this.baseUrl = baseUrl;
+		const serverId = crypto.randomUUID();
+		this.serverId = serverId;
 
-		if (input.options?.reason === "auto_reconnect") {
-			return this.managerHarness.resume(harnessInput);
+		await waitForAcpReady(baseUrl);
+		const agentSessionId = await createAcpSession(baseUrl, serverId, "pi");
+		this.agentSessionId = agentSessionId;
+		return { serverId, status: "ready" };
+	}
+
+	async wake(prompt: string): Promise<void> {
+		if (!this.baseUrl || !this.serverId) {
+			throw new Error("Manager runtime has not been configured");
 		}
-		return this.managerHarness.start(harnessInput);
+		await sendAcpPrompt(this.baseUrl, this.serverId, prompt, this.agentSessionId ?? undefined);
 	}
 
 	async interrupt(): Promise<void> {
-		await this.managerHarness.interrupt();
+		if (!this.baseUrl || !this.serverId) {
+			return;
+		}
+		await interruptAcpSession(this.baseUrl, this.serverId);
+	}
+
+	getServerId(): string | null {
+		return this.serverId;
 	}
 }

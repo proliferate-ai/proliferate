@@ -42,14 +42,14 @@ export interface RuntimeDriverExecutionInput {
 
 /** Identifies the activated driver for telemetry/logging; selection still uses session kind mapping elsewhere. */
 export interface RuntimeDriverReadyResult {
-	driverKind: "coding-opencode" | "manager-claude";
+	driverKind: "coding-opencode" | "manager-pi";
 	runtimeBindingId?: string | null;
 }
 
 export interface RuntimeDriver {
 	activate(input: RuntimeDriverActivationInput): Promise<RuntimeDriverReadyResult>;
 	isReady(input: RuntimeDriverExecutionInput): boolean;
-	sendPrompt(content: string, images?: CodingHarnessPromptImage[]): Promise<void>;
+	sendPrompt(userId: string, content: string, images?: CodingHarnessPromptImage[]): Promise<void>;
 	interrupt(): Promise<void>;
 	collectOutputs(): Promise<Message[]>;
 	disconnectStream(): void;

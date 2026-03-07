@@ -1,7 +1,7 @@
 import type { Logger } from "@proliferate/logger";
 import { sessions, workers } from "@proliferate/services";
-import type { ManagerToolContext } from "../../wake-cycle/types";
 import { getServiceJwt } from "../auth";
+import type { ManagerToolContext } from "../types";
 
 export async function handleSpawnChildTask(
 	args: Record<string, unknown>,

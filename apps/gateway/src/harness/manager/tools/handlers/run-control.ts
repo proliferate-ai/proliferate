@@ -1,6 +1,6 @@
 import type { Logger } from "@proliferate/logger";
 import { workers } from "@proliferate/services";
-import type { ManagerToolContext } from "../../wake-cycle/types";
+import type { ManagerToolContext } from "../types";
 
 export async function handleSendNotification(
 	args: Record<string, unknown>,
@@ -60,16 +60,29 @@ export async function handleSkipRun(
 		payloadJson: { decision: "skip", reason },
 	});
 
+	await workers.completeWorkerRun({
+		workerRunId: ctx.workerRunId,
+		organizationId: ctx.organizationId,
+		summary: `Skipped: ${reason}`,
+		result: "skipped",
+	});
+
 	log.info({ reason }, "Run skipped");
 	return JSON.stringify({ ok: true, outcome: "skipped", reason });
 }
 
 export async function handleCompleteRun(
 	args: Record<string, unknown>,
-	_ctx: ManagerToolContext,
+	ctx: ManagerToolContext,
 	log: Logger,
 ): Promise<string> {
 	const summary = args.summary as string;
+
+	await workers.completeWorkerRun({
+		workerRunId: ctx.workerRunId,
+		organizationId: ctx.organizationId,
+		summary,
+	});
 
 	log.info({ summaryLength: summary.length }, "Run completed");
 	return JSON.stringify({ ok: true, outcome: "completed", summary });

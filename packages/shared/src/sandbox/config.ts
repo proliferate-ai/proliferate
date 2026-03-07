@@ -55,6 +55,11 @@ export const DEFAULT_CADDYFILE = `{
         }
     }
 
+    # Sandbox Agent ACP — universal agent substrate (coding + manager sessions)
+    handle /v1/* {
+        reverse_proxy localhost:2468
+    }
+
     # Sandbox daemon endpoints: fs, pty, ports, health, events, token refresh
     handle /_proliferate/* {
         reverse_proxy localhost:8470

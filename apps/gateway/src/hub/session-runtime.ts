@@ -19,7 +19,6 @@ import type {
 	CodingHarnessEventStreamHandle,
 	CodingHarnessPromptImage,
 } from "../harness/contracts/coding";
-import { ClaudeManagerHarnessAdapter } from "../harness/manager/adapter";
 import type { ManagerControlFacade } from "../harness/manager/control-facade";
 import type { GatewayEnv } from "../lib/env";
 import { scheduleSessionExpiry } from "../operations/expiry/queue";
@@ -79,7 +78,6 @@ export class SessionRuntime implements RuntimeFacade {
 	private runtimeContext: SessionRuntimeContext;
 	private readonly logger: Logger;
 
-	private readonly managerHarness: ClaudeManagerHarnessAdapter;
 	private readonly managerRuntimeService: ManagerRuntimeService;
 	private readonly codingDriver: CodingRuntimeDriver;
 	private readonly managerDriver: ManagerRuntimeDriver;
@@ -107,11 +105,7 @@ export class SessionRuntime implements RuntimeFacade {
 		this.onStatus = options.onStatus;
 		this.onBroadcast = options.onBroadcast;
 		this.onDisconnect = options.onDisconnect;
-		this.managerHarness = new ClaudeManagerHarnessAdapter(
-			this.logger,
-			options.managerControlFacade,
-		);
-		this.managerRuntimeService = new ManagerRuntimeService(this.managerHarness);
+		this.managerRuntimeService = new ManagerRuntimeService();
 		this.codingDriver = new CodingRuntimeDriver();
 		this.managerDriver = new ManagerRuntimeDriver(this.managerRuntimeService);
 		this.runtimeDriver = selectRuntimeDriver(this.runtimeContext.config, {
@@ -177,8 +171,12 @@ export class SessionRuntime implements RuntimeFacade {
 		return this.runtimeContext.live.runtimeBindingId;
 	}
 
-	async sendPrompt(content: string, images?: CodingHarnessPromptImage[]): Promise<void> {
-		await this.runtimeDriver.sendPrompt(content, images);
+	async sendPrompt(
+		userId: string,
+		content: string,
+		images?: CodingHarnessPromptImage[],
+	): Promise<void> {
+		await this.runtimeDriver.sendPrompt(userId, content, images);
 	}
 
 	async interruptCurrentRun(): Promise<void> {
@@ -249,28 +247,7 @@ export class SessionRuntime implements RuntimeFacade {
 		if (!this.isManagerSessionKind()) {
 			return;
 		}
-
-		let managerApiKey = this.env.anthropicApiKey;
-		let managerProxyUrl: string | undefined;
-		if (this.env.llmProxyRequired && this.env.llmProxyUrl) {
-			const { generateSessionAPIKey } = await import("@proliferate/shared/llm-proxy");
-			managerApiKey = await generateSessionAPIKey(
-				this.sessionId,
-				this.runtimeContext.config.organizationId,
-			);
-			managerProxyUrl = this.env.llmProxyUrl;
-		}
-
-		const internalGatewayUrl = `http://localhost:${this.env.port}`;
-		await this.managerHarness.resume({
-			managerSessionId: this.sessionId,
-			organizationId: this.runtimeContext.config.organizationId,
-			workerId: this.runtimeContext.live.session.worker_id,
-			gatewayUrl: internalGatewayUrl,
-			serviceToken: this.env.serviceToken,
-			anthropicApiKey: managerApiKey,
-			llmProxyUrl: managerProxyUrl,
-		});
+		await this.managerDriver.wake();
 	}
 
 	// ============================================
@@ -369,7 +346,7 @@ export class SessionRuntime implements RuntimeFacade {
 			this.log(
 				`Session context loaded: status=${live.session.status ?? "null"} sandboxId=${live.session.sandbox_id ?? "null"} snapshotId=${live.session.snapshot_id ?? "null"} clientType=${live.session.client_type ?? "null"}`,
 			);
-			const harnessFamily = config.kind === "manager" ? "manager-claude" : "coding-opencode";
+			const harnessFamily = config.kind === "manager" ? "manager-pi" : "coding-opencode";
 			this.log("Selected harness family", {
 				harnessFamily,
 				sessionKind: config.kind ?? "unknown",
@@ -422,6 +399,7 @@ export class SessionRuntime implements RuntimeFacade {
 			const result = await provider.ensureSandbox({
 				sessionId: this.sessionId,
 				sessionType: live.session.session_type as "coding" | "setup" | null,
+				sessionKind: config.kind as "task" | "setup" | "manager" | null,
 				repos: config.repos,
 				branch: config.primaryRepo.default_branch || "main",
 				envVars: envVarsWithToken,
@@ -447,7 +425,10 @@ export class SessionRuntime implements RuntimeFacade {
 			const storedExpiryMs = live.sandboxExpiresAt;
 			const canReuseStoredExpiry = result.recovered && previousSandboxId === result.sandboxId;
 			const resolvedExpiryMs = result.expiresAt ?? (canReuseStoredExpiry ? storedExpiryMs : null);
-			const resolvedOpenCodeUrl = result.tunnelUrl ?? live.session.open_code_tunnel_url ?? null;
+			const resolvedOpenCodeUrl =
+				typeof result.tunnelUrl === "string" && result.tunnelUrl.length > 0
+					? result.tunnelUrl
+					: (live.session.open_code_tunnel_url ?? null);
 			const resolvedPreviewUrl = result.previewUrl ?? live.session.preview_tunnel_url ?? null;
 			this.log("Resolved sandbox expiry", {
 				previousSandboxId,

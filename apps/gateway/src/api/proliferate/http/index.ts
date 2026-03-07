@@ -12,6 +12,7 @@ import { createEnsureSessionReady } from "../../../server/middleware/session";
 import { createDaemonHttpRouter } from "./daemon";
 import { createActionsRouter } from "./session/actions";
 import { createSessionControlRouter } from "./session/control";
+import { createSessionManagerRouter } from "./session/manager";
 import { createSessionMediaRouter } from "./session/media";
 import { createSessionRuntimeRouter } from "./session/runtime";
 import { createSourceRouter } from "./session/source";
@@ -38,6 +39,7 @@ export function createProliferateHttpRoutes(hubManager: HubManager, env: Gateway
 	// Endpoint class: auth + session-exists (no runtime required)
 	router.use("/:proliferateSessionId", createSessionControlRouter(hubManager));
 	router.use("/:proliferateSessionId/actions", createActionsRouter(hubManager));
+	router.use("/:proliferateSessionId/manager", createSessionManagerRouter(hubManager));
 	router.use("/:proliferateSessionId/source", createSourceRouter());
 	router.use("/:proliferateSessionId/tools", createToolsRouter(env, hubManager));
 

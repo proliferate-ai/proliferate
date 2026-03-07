@@ -7,7 +7,7 @@ import type {
 	ServerMessage,
 } from "@proliferate/shared";
 import type { DaemonStreamEnvelope } from "@proliferate/shared/contracts/harness";
-import { SandboxAgentV1CodingHarnessAdapter } from "../../../../harness/coding/sandbox-agent-v1/adapter";
+import { SandboxAgentV2CodingHarnessAdapter } from "../../../../harness/coding/sandbox-agent-v2/adapter";
 import type {
 	CodingHarnessEventStreamHandle,
 	CodingHarnessPromptImage,
@@ -20,7 +20,6 @@ import type {
 	RuntimeDriverReadyResult,
 } from "../contracts/runtime-driver";
 import { connectCodingEventStream } from "../event-stream";
-import { waitForOpenCodeReady } from "../opencode-ready";
 import type { SessionLiveState } from "../state/session-live-state";
 import { withStepTiming } from "../timing";
 import { persistCodingSessionId } from "../write-authority/runtime-writers";
@@ -66,9 +65,8 @@ function broadcastDaemonEnvelope(
 }
 
 export class CodingRuntimeDriver implements RuntimeDriver {
-	private readonly codingHarness = new SandboxAgentV1CodingHarnessAdapter();
+	private readonly codingHarness = new SandboxAgentV2CodingHarnessAdapter();
 	private runtimeBaseUrl: string | null = null;
-	private runtimeAuthToken: string | null = null;
 	private openCodeSessionId: string | null = null;
 	private runtimeBindingId: string | null = null;
 	private eventStreamHandle: CodingHarnessEventStreamHandle | null = null;
@@ -87,34 +85,23 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 		this.live = input.live;
 		this.serviceCommands = input.config.serviceCommands;
 		this.runtimeBaseUrl = input.live.previewUrl;
-		this.runtimeAuthToken = deriveSandboxMcpToken(input.env.serviceToken, input.sessionId);
-		if (!this.runtimeBaseUrl || !this.runtimeAuthToken) {
-			throw new Error("Missing sandbox runtime daemon endpoint");
+		if (!this.runtimeBaseUrl) {
+			throw new Error("Missing sandbox runtime endpoint");
 		}
-		const openCodeUrl = input.live.openCodeUrl;
-		if (!openCodeUrl) {
-			throw new Error("Missing coding runtime URL");
-		}
-		this.runtimeBindingId = randomUUID();
-		input.setRuntimeBindingId(this.runtimeBindingId);
 
-		await withStepTiming("runtime.ensure_ready.opencode_ready", input.logLatency, async () => {
-			await waitForOpenCodeReady({
-				openCodeUrl,
-				log: input.log,
-				logError: input.logError,
-				loggerWarn: (data, message) => input.logger.warn(data, message),
-			});
-		});
-
-		const ensureOpenCodeStartMs = Date.now();
-		await this.ensureOpenCodeSession(input.sessionId, input.live);
-		input.logLatency("runtime.ensure_ready.opencode_session.ensure", {
-			durationMs: Date.now() - ensureOpenCodeStartMs,
+		// Ensure or create an ACP session via sandbox-agent
+		const ensureAcpStartMs = Date.now();
+		await this.ensureAcpSession(input.sessionId, input.live);
+		input.logLatency("runtime.ensure_ready.acp_session.ensure", {
+			durationMs: Date.now() - ensureAcpStartMs,
 			hasOpenCodeSessionId: Boolean(input.live.openCodeSessionId),
 		});
 
+		this.runtimeBindingId = this.openCodeSessionId ?? randomUUID();
+		input.setRuntimeBindingId(this.runtimeBindingId);
+
 		this.eventStreamHandle?.disconnect();
+		const sandboxAuthToken = deriveSandboxMcpToken(input.env.serviceToken, input.sessionId);
 		this.eventStreamHandle = await withStepTiming(
 			"runtime.ensure_ready.sse.connect",
 			input.logLatency,
@@ -122,7 +109,7 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 				connectCodingEventStream({
 					codingHarness: this.codingHarness,
 					runtimeBaseUrl: this.runtimeBaseUrl as string,
-					authToken: this.runtimeAuthToken as string,
+					authToken: sandboxAuthToken,
 					afterSeq: input.live.lastRuntimeSourceSeq ?? undefined,
 					bindingId: this.runtimeBindingId as string,
 					env: input.env,
@@ -149,13 +136,16 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 		return { driverKind: "coding-opencode", runtimeBindingId: this.runtimeBindingId };
 	}
 
-	async sendPrompt(content: string, images?: CodingHarnessPromptImage[]): Promise<void> {
-		if (!this.runtimeBaseUrl || !this.runtimeAuthToken || !this.openCodeSessionId) {
+	async sendPrompt(
+		_userId: string,
+		content: string,
+		images?: CodingHarnessPromptImage[],
+	): Promise<void> {
+		if (!this.runtimeBaseUrl || !this.openCodeSessionId) {
 			throw new Error("Agent session unavailable");
 		}
 		await this.codingHarness.sendPrompt({
 			baseUrl: this.runtimeBaseUrl,
-			authToken: this.runtimeAuthToken,
 			sessionId: this.openCodeSessionId,
 			content,
 			images,
@@ -163,23 +153,21 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 	}
 
 	async interrupt(): Promise<void> {
-		if (!this.runtimeBaseUrl || !this.runtimeAuthToken || !this.openCodeSessionId) {
+		if (!this.runtimeBaseUrl || !this.openCodeSessionId) {
 			return;
 		}
 		await this.codingHarness.interrupt({
 			baseUrl: this.runtimeBaseUrl,
-			authToken: this.runtimeAuthToken,
 			sessionId: this.openCodeSessionId,
 		});
 	}
 
 	async collectOutputs(): Promise<Message[]> {
-		if (!this.runtimeBaseUrl || !this.runtimeAuthToken || !this.openCodeSessionId) {
+		if (!this.runtimeBaseUrl || !this.openCodeSessionId) {
 			throw new Error("Missing agent session info");
 		}
 		const result = await this.codingHarness.collectOutputs({
 			baseUrl: this.runtimeBaseUrl,
-			authToken: this.runtimeAuthToken,
 			sessionId: this.openCodeSessionId,
 		});
 		return result.messages;
@@ -222,17 +210,16 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 		});
 	}
 
-	private async ensureOpenCodeSession(
+	private async ensureAcpSession(
 		sessionId: string,
 		live: RuntimeDriverExecutionInput["live"],
 	): Promise<void> {
-		if (!this.runtimeBaseUrl || !this.runtimeAuthToken) {
+		if (!this.runtimeBaseUrl) {
 			throw new Error("Agent URL missing");
 		}
 		const storedId = live.openCodeSessionId ?? live.session.coding_agent_session_id;
 		const resumed = await this.codingHarness.resume({
 			baseUrl: this.runtimeBaseUrl,
-			authToken: this.runtimeAuthToken,
 			sessionId: storedId,
 		});
 		this.openCodeSessionId = resumed.sessionId;
@@ -246,7 +233,6 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 	resetState(): void {
 		this.disconnectStream();
 		this.runtimeBaseUrl = null;
-		this.runtimeAuthToken = null;
 		this.openCodeSessionId = null;
 		this.runtimeBindingId = null;
 		this.provider = null;

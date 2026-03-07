@@ -13,7 +13,7 @@
 team_id = "18587c49-ea26-407a-8f22-def12957005f"
 memory_mb = 8_192
 cpu_count = 4
-start_cmd = "/usr/local/bin/start-services.sh"
+start_cmd = "echo done"
 dockerfile = "e2b.Dockerfile"
 template_name = "proliferate-base-test"
 template_id = "vicdyvztj87ani5uwzte"

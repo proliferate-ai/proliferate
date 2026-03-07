@@ -269,11 +269,7 @@ export class SessionHub {
 	}
 
 	private isRunActive(): boolean {
-		return Boolean(
-			this.activePromptRunId ||
-				this.eventProcessor.getCurrentAssistantMessageId() ||
-				this.eventProcessor.hasRunningTools(),
-		);
+		return Boolean(this.activePromptRunId || this.eventProcessor.hasRunningTools());
 	}
 
 	private isCompletedAutomationSession(): boolean {
@@ -417,7 +413,13 @@ export class SessionHub {
 			return;
 		}
 		await this.ensureRuntimeReady();
-		await this.maybeSendInitialPrompt();
+		if (this.runtime.getContext().session.kind === "manager") {
+			this.log("Manager runtime first boot — triggering initial wake cycle");
+			await this.runtime.triggerManagerWakeCycle();
+			this.log("Manager initial wake cycle triggered");
+		} else {
+			await this.maybeSendInitialPrompt();
+		}
 		this.log("Eager start complete");
 	}
 
@@ -1118,7 +1120,7 @@ export class SessionHub {
 				getSessionClientType: () => this.runtime.getContext().session.client_type ?? null,
 				resetEventProcessorForNewPrompt: () => this.eventProcessor.resetForNewPrompt(),
 				sendPromptToRuntime: (promptContent, images) =>
-					this.runtime.sendPrompt(promptContent, images),
+					this.runtime.sendPrompt(userId, promptContent, images),
 			},
 			content,
 			userId,
@@ -1322,6 +1324,12 @@ export class SessionHub {
 			},
 		});
 
+		const runtimeServerMessage = this.extractRuntimeServerMessage(event.payload);
+		if (runtimeServerMessage) {
+			this.handleRuntimeServerMessage(event, runtimeServerMessage);
+			return;
+		}
+
 		const rawEvent = event.payload;
 		if (!isOpenCodeEvent(rawEvent)) {
 			this.logger.warn({ eventType: event.type }, "Ignoring unsupported daemon event payload");
@@ -1363,6 +1371,55 @@ export class SessionHub {
 				logger: this.logger,
 			});
 		}
+	}
+
+	private handleRuntimeServerMessage(event: RuntimeDaemonEvent, message: ServerMessage): void {
+		this.touchActivity();
+		if (message.type === "message") {
+			clearAgentIdle(this.getIdleControllerState());
+			const payloadId =
+				message.payload &&
+				typeof message.payload === "object" &&
+				"id" in message.payload &&
+				typeof message.payload.id === "string"
+					? message.payload.id
+					: null;
+			this.activePromptRunId = event.runId ?? payloadId ?? "manager-runtime";
+		}
+		if (
+			message.type === "message_complete" ||
+			message.type === "message_cancelled" ||
+			message.type === "error"
+		) {
+			markAgentIdle(this.getIdleControllerState());
+			this.activePromptRunId = null;
+			const orgId = this.runtime.getContext().session.organization_id;
+			void projectOperatorStatus({
+				sessionId: this.sessionId,
+				organizationId: orgId,
+				runtimeStatus: "running",
+				hasPendingApproval: false,
+				isAgentIdle: true,
+				logger: this.logger,
+			});
+		}
+		this.broadcast(message);
+	}
+
+	private extractRuntimeServerMessage(payload: unknown): ServerMessage | null {
+		if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+			return null;
+		}
+		const candidate = payload as { message?: unknown };
+		if (
+			!candidate.message ||
+			typeof candidate.message !== "object" ||
+			Array.isArray(candidate.message)
+		) {
+			return null;
+		}
+		const serverMessage = candidate.message as { type?: unknown };
+		return typeof serverMessage.type === "string" ? (candidate.message as ServerMessage) : null;
 	}
 
 	private handleSseDisconnect(reason: string): void {

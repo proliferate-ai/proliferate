@@ -1,6 +1,7 @@
 import type { Logger } from "@proliferate/logger";
 import type { Sandbox } from "e2b";
 import { getDefaultAgentConfig, toOpencodeModelId } from "../../../agents";
+import { PI_MANAGER_EXTENSION } from "../../../manager/pi-manager-extension";
 import {
 	AUTOMATION_COMPLETE_DESCRIPTION,
 	AUTOMATION_COMPLETE_TOOL,
@@ -20,7 +21,6 @@ import {
 	ENV_INSTRUCTIONS,
 	PLUGIN_MJS,
 	SANDBOX_PATHS,
-	capOutput,
 	getOpencodeConfig,
 } from "../../../sandbox";
 import type { CreateSandboxOpts } from "../../types";
@@ -113,51 +113,18 @@ export async function setupEssentialDependencies(
 		);
 	}
 
-	await Promise.all(writePromises);
-
-	log.debug("Starting OpenCode server");
-	const opencodeEnv: Record<string, string> = {
-		SESSION_ID: opts.sessionId,
-		OPENCODE_DISABLE_DEFAULT_PLUGINS: "true",
-	};
-	if (llmProxyBaseUrl && llmProxyApiKey) {
-		log.debug({ llmProxyBaseUrl, hasApiKey: true }, "OpenCode using LLM proxy");
-		opencodeEnv.ANTHROPIC_API_KEY = llmProxyApiKey;
-		opencodeEnv.ANTHROPIC_BASE_URL = llmProxyBaseUrl;
-	} else if (opts.envVars.ANTHROPIC_API_KEY) {
-		log.warn("OpenCode using direct key (no LLM proxy)");
-		opencodeEnv.ANTHROPIC_API_KEY = opts.envVars.ANTHROPIC_API_KEY;
-	} else {
-		log.error("OpenCode has no LLM proxy AND no direct ANTHROPIC_API_KEY — it will fail to start");
+	// For manager sessions, write the Pi extension that registers manager tools.
+	// pi-acp auto-discovers extensions from ~/.pi/agent/extensions/
+	const isManagerSession = opts.sessionKind === "manager";
+	if (isManagerSession) {
+		writePromises.push(
+			writeFile("/home/user/.pi/agent/extensions/manager-tools-extension.ts", PI_MANAGER_EXTENSION),
+		);
 	}
 
-	sandbox.commands
-		.run(
-			`cd ${repoDir} && opencode serve --print-logs --log-level ERROR --port 4096 --hostname 0.0.0.0 > /tmp/opencode.log 2>&1`,
-			{ timeoutMs: 3600000, envs: opencodeEnv },
-		)
-		.then(async (result) => {
-			if (result.exitCode !== 0) {
-				let logTail = "";
-				try {
-					const tailResult = await sandbox.commands.run("tail -50 /tmp/opencode.log", {
-						timeoutMs: 5000,
-					});
-					logTail = tailResult.stdout;
-				} catch {
-					// sandbox may already be gone
-				}
-				log.warn(
-					{
-						exitCode: result.exitCode,
-						stderr: capOutput(result.stderr),
-						logTail: capOutput(logTail),
-					},
-					"OpenCode exited unexpectedly",
-				);
-			}
-		})
-		.catch((err: unknown) => {
-			log.warn({ err }, "OpenCode process failed");
-		});
+	await Promise.all(writePromises);
+
+	// OpenCode and Pi are started on-demand by sandbox-agent via ACP protocol.
+	// Config files written above are read by agents when sandbox-agent launches them.
+	log.debug("Essential bootstrap complete (sandbox-agent manages agent lifecycle)");
 }
