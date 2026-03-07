@@ -40,7 +40,17 @@ export async function runGitActionWorkflow(
 	try {
 		await deps.refreshGitContext(input.preferredGitUserId);
 	} catch (err) {
-		deps.logError("Failed to refresh git context (using cached values)", err);
+		deps.logError("Failed to refresh git context", err);
+		deps.sendMessage(input.ws, {
+			type: "git_result",
+			payload: {
+				action: input.action,
+				success: false,
+				code: "UNKNOWN_ERROR" as GitResultCode,
+				message: err instanceof Error ? err.message : "Failed to refresh git context",
+			},
+		});
+		return;
 	}
 	try {
 		const result = await input.run();

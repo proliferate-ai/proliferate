@@ -56,4 +56,43 @@ describe("git workflow attribution", () => {
 
 		expect(refreshGitContext).toHaveBeenCalledWith("user_last_prompt");
 	});
+
+	it("aborts mutating git action when refreshGitContext fails", async () => {
+		const refreshGitContext = vi.fn(async () => {
+			throw new Error("token expired");
+		});
+		const sendMessage = vi.fn();
+		const run = vi.fn();
+
+		await runGitActionWorkflow(
+			{
+				ensureRuntimeReady: async () => {},
+				refreshGitContext,
+				getGitOps: () => ({}) as unknown as GitOperations,
+				sendMessage,
+				logError: () => {},
+				recordPrUrl: () => {},
+			},
+			{
+				ws: {} as WebSocket,
+				action: "commit",
+				workspacePath: "/home/user/workspace",
+				preferredGitUserId: "user_abc",
+				run,
+			},
+		);
+
+		expect(run).not.toHaveBeenCalled();
+		expect(sendMessage).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				type: "git_result",
+				payload: expect.objectContaining({
+					action: "commit",
+					success: false,
+					message: "token expired",
+				}),
+			}),
+		);
+	});
 });

@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/display/utils";
 import { Loader2, MousePointerClick, Play, RefreshCw, RotateCw, Square } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PanelShell } from "./panel-shell";
 
@@ -47,9 +47,10 @@ export function ServicesPanel({ sessionId }: ServicesPanelProps) {
 	const [activeServices, setActiveServices] = useState<Set<string>>(new Set());
 
 	const services = data?.services ?? [];
-	const runningServiceNames = services
-		.filter((service) => service.status === "running")
-		.map((service) => service.name);
+	const runningServiceNames = useMemo(
+		() => services.filter((service) => service.status === "running").map((service) => service.name),
+		[services],
+	);
 
 	useEffect(() => {
 		if (services.length === 0) {

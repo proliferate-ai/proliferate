@@ -77,6 +77,11 @@ export async function startService(input: {
 		detached: true,
 	});
 
+	if (processHandle.pid === undefined) {
+		logStream.end();
+		throw new Error(`Failed to start service "${name}"`);
+	}
+
 	processHandle.stdout?.pipe(logStream);
 	processHandle.stderr?.pipe(logStream);
 	setProcess(name, processHandle);
@@ -85,7 +90,7 @@ export async function startService(input: {
 		name,
 		command,
 		cwd,
-		pid: processHandle.pid ?? -1,
+		pid: processHandle.pid,
 		status: "running",
 		startedAt: Date.now(),
 		logFile,
