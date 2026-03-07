@@ -448,7 +448,7 @@ All actions require a \`cloud_id\` parameter identifying the Atlassian site.
 
 ## Discovery
 Use \`list_sites\` first to discover available Jira Cloud sites and their IDs.
-Then use \`list_projects\`, \`list_issue_types\`, and \`list_users\` to discover IDs needed by write actions.
+Then use \`list_projects\`, \`list_issue_types\`, and \`list_users\` to discover the project key, issue type name, and assignee account ID needed by write actions.
 
 ## Searching Issues
 Use \`list_issues\` with a JQL query to find issues:

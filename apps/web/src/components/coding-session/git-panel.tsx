@@ -571,6 +571,7 @@ function GitTopBar({
 						size="icon"
 						className="h-7 w-7"
 						onClick={onRefresh}
+						aria-label="Refresh git status"
 						title="Refresh"
 					>
 						<RefreshCcw className="h-3.5 w-3.5" />
@@ -624,6 +625,7 @@ function GitTopBar({
 						variant="ghost"
 						size="sm"
 						className="h-7 px-2"
+						aria-label="Cancel branch creation"
 						onClick={() => setShowBranchInput(false)}
 					>
 						<X className="h-3 w-3" />
@@ -1170,6 +1172,7 @@ function PrSection({
 							variant="ghost"
 							size="sm"
 							className="h-7 px-2"
+							aria-label="Close pull request form"
 							onClick={() => {
 								resetForm();
 								onShowFormChange(false);
@@ -1193,7 +1196,7 @@ function CommitsSection({ gitState }: { gitState: GitState }) {
 			<div className="space-y-1">
 				{gitState.commits.slice(0, 8).map((commit) => (
 					<div key={commit.sha} className="flex items-start gap-1.5 text-xs">
-						<span className="font-mono text-muted-foreground shrink-0">
+						<span className="tabular-nums text-muted-foreground shrink-0">
 							{commit.sha.slice(0, 7)}
 						</span>
 						<span className="truncate">{commit.message}</span>

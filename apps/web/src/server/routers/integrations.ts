@@ -676,7 +676,7 @@ export const integrationsRouter = {
 
 			const inFlight = connectorActionsInFlight.get(cacheKey);
 			if (inFlight) {
-				return inFlight;
+				return await inFlight;
 			}
 
 			const loadActionsPromise = (async () => {

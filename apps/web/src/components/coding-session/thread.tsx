@@ -161,7 +161,7 @@ const MarkdownContent: FC<MarkdownContentProps> = ({ text, variant = "assistant"
 						/>
 					) : (
 						<MarkdownContent
-							key={`assistant-markdown-${segment.text}`}
+							key={`assistant-markdown-${index}`}
 							text={segment.text}
 							variant="assistant"
 						/>
