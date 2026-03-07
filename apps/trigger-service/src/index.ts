@@ -1,3 +1,4 @@
+import "@proliferate/environment/bootstrap";
 import { runtimeEnv } from "@proliferate/environment/runtime";
 import { env } from "@proliferate/environment/server";
 import { setServicesLogger } from "@proliferate/services/logger";

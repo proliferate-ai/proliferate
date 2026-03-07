@@ -1,20 +1,10 @@
-import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { createEnv } from "@t3-oss/env-core";
-import { config } from "dotenv";
 import { nextPhase } from "./runtime";
 import { createPublicSchema, createServerSchema } from "./schema";
 
-// Load .env files for non-Next.js contexts (worker, db migrations, scripts).
-// Neither call uses `override`, so shell/CI/Next.js vars always win.
-// Load .env.local first so its values take precedence over .env defaults.
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const root = resolve(__dirname, "../../..");
-const envLocalPath = resolve(root, ".env.local");
-const envPath = resolve(root, ".env");
-if (existsSync(envLocalPath)) config({ path: envLocalPath });
-if (existsSync(envPath)) config({ path: envPath });
+// Bootstrap .env files for non-Next.js contexts (worker, db migrations, scripts).
+// Import `@proliferate/environment/bootstrap` at the top of your entrypoint
+// before importing this module. Next.js loads .env files automatically.
 
 const rawEnv = createEnv({
 	server: createServerSchema(process.env),
