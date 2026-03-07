@@ -41,6 +41,7 @@ export class HubManager {
 				sessionId,
 				context,
 				onEvict: () => this.remove(sessionId),
+				getOrCreateHub: (targetSessionId) => this.getOrCreate(targetSessionId),
 			});
 
 			this.hubs.set(sessionId, hub);

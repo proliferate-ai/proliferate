@@ -5,13 +5,13 @@ import type {
 	SandboxProvider,
 } from "@proliferate/shared";
 import type { CodingHarnessPromptImage } from "../../../../harness/contracts/coding";
-import type { ClaudeManagerHarnessAdapter } from "../../../../harness/manager/adapter";
 import type {
 	RuntimeDriver,
 	RuntimeDriverActivationInput,
 	RuntimeDriverExecutionInput,
 	RuntimeDriverReadyResult,
 } from "../contracts/runtime-driver";
+import type { ManagerRuntimeService } from "../manager/manager-runtime-service";
 import type { SessionLiveState } from "../state/session-live-state";
 import { reconcileRuntimePointers } from "../state/state-reconciler";
 
@@ -20,10 +20,10 @@ export class ManagerRuntimeDriver implements RuntimeDriver {
 	private live: SessionLiveState | null = null;
 	private active = false;
 	private runtimeBindingId: string | null = null;
-	private readonly managerHarness: ClaudeManagerHarnessAdapter;
+	private readonly managerRuntimeService: ManagerRuntimeService;
 
-	constructor(managerHarness: ClaudeManagerHarnessAdapter) {
-		this.managerHarness = managerHarness;
+	constructor(managerRuntimeService: ManagerRuntimeService) {
+		this.managerRuntimeService = managerRuntimeService;
 	}
 
 	isReady(input: RuntimeDriverExecutionInput): boolean {
@@ -36,27 +36,8 @@ export class ManagerRuntimeDriver implements RuntimeDriver {
 		this.active = false;
 		this.runtimeBindingId = null;
 		const managerHarnessStartMs = Date.now();
-		let managerApiKey = input.env.anthropicApiKey;
-		let managerProxyUrl: string | undefined;
-		if (input.env.llmProxyRequired && input.env.llmProxyUrl) {
-			const { generateSessionAPIKey } = await import("@proliferate/shared/llm-proxy");
-			managerApiKey = await generateSessionAPIKey(input.sessionId, input.config.organizationId);
-			managerProxyUrl = input.env.llmProxyUrl;
-		}
-		const harnessInput = {
-			managerSessionId: input.sessionId,
-			organizationId: input.config.organizationId,
-			workerId: input.live.session.worker_id,
-			gatewayUrl: `http://localhost:${input.env.port}`,
-			serviceToken: input.env.serviceToken,
-			anthropicApiKey: managerApiKey,
-			llmProxyUrl: managerProxyUrl,
-		};
 		try {
-			const managerState =
-				input.options?.reason === "auto_reconnect"
-					? await this.managerHarness.resume(harnessInput)
-					: await this.managerHarness.start(harnessInput);
+			const managerState = await this.managerRuntimeService.startOrResume(input);
 			if (managerState.status !== "running") {
 				throw new Error(`Manager harness failed to enter running state: ${managerState.status}`);
 			}
@@ -83,7 +64,7 @@ export class ManagerRuntimeDriver implements RuntimeDriver {
 	}
 
 	async interrupt(): Promise<void> {
-		await this.managerHarness.interrupt();
+		await this.managerRuntimeService.interrupt();
 		this.provider = null;
 		this.active = false;
 	}
