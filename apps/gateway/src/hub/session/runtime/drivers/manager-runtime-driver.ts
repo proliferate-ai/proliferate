@@ -19,6 +19,7 @@ export class ManagerRuntimeDriver implements RuntimeDriver {
 	private provider: SandboxProvider | null = null;
 	private live: SessionLiveState | null = null;
 	private active = false;
+	private runtimeBindingId: string | null = null;
 	private readonly managerHarness: ClaudeManagerHarnessAdapter;
 
 	constructor(managerHarness: ClaudeManagerHarnessAdapter) {
@@ -33,6 +34,7 @@ export class ManagerRuntimeDriver implements RuntimeDriver {
 		this.provider = null;
 		this.live = input.live;
 		this.active = false;
+		this.runtimeBindingId = null;
 		const managerHarnessStartMs = Date.now();
 		let managerApiKey = input.env.anthropicApiKey;
 		let managerProxyUrl: string | undefined;
@@ -70,9 +72,10 @@ export class ManagerRuntimeDriver implements RuntimeDriver {
 			durationMs: Date.now() - managerHarnessStartMs,
 		});
 		input.setEventStreamHandle(null);
+		input.setRuntimeBindingId(null);
 		input.live.eventStreamConnected = false;
 		reconcileRuntimePointers(input.live, { openCodeSessionId: null });
-		return { driverKind: "manager-claude" };
+		return { driverKind: "manager-claude", runtimeBindingId: null };
 	}
 
 	async sendPrompt(_content: string, _images?: CodingHarnessPromptImage[]): Promise<void> {
@@ -99,6 +102,10 @@ export class ManagerRuntimeDriver implements RuntimeDriver {
 		return null;
 	}
 
+	getBindingId(): string | null {
+		return this.runtimeBindingId;
+	}
+
 	async testAutoStartCommands(
 		_runId: string,
 		_overrideCommands?: ConfigurationServiceCommand[],
@@ -111,5 +118,6 @@ export class ManagerRuntimeDriver implements RuntimeDriver {
 		this.provider = null;
 		this.live = null;
 		this.active = false;
+		this.runtimeBindingId = null;
 	}
 }

@@ -12,6 +12,7 @@ export interface RuntimeFacade {
 	getContext(): SessionContext;
 	getOpenCodeUrl(): string | null;
 	getOpenCodeSessionId(): string | null;
+	getRuntimeBindingId(): string | null;
 	getPreviewUrl(): string | null;
 	getSandboxExpiresAt(): number | null;
 	getProviderAndSandboxId(): { provider: SandboxProvider; sandboxId: string } | null;

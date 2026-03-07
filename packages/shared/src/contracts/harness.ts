@@ -10,13 +10,84 @@
 // Runtime daemon events
 // ---------------------------------------------------------------------------
 
+export type HarnessWorkflowKind = "coding" | "manager";
+export type HarnessEngine = "opencode";
+
+export type RuntimeLifecycleState =
+	| "uninitialized"
+	| "starting"
+	| "ready"
+	| "running"
+	| "paused_for_approval"
+	| "interrupting"
+	| "stopped"
+	| "failed";
+
+export type RuntimeEventSource = "runtime" | "gateway_system";
+export type RuntimeStreamChannel = "server" | "session" | "message";
+
+/**
+ * Canonical event envelope emitted by gateway after normalization.
+ * This contract is shared across runtime and web boundaries.
+ */
+export interface CanonicalRuntimeEventEnvelope {
+	protocolVersion: "v1";
+	sessionId: string;
+	workflowKind: HarnessWorkflowKind;
+	engine: HarnessEngine;
+	eventSeq: number;
+	eventType: string;
+	source: RuntimeEventSource;
+	bindingId: string;
+	sourceEventKey: string;
+	ts: string;
+	terminal: boolean;
+	runId?: string | null;
+	itemId?: string | null;
+	parentItemId?: string | null;
+	toolCallId?: string | null;
+	approvalId?: string | null;
+	sourceSeq?: number;
+	payload: unknown;
+}
+
 export interface RuntimeDaemonEvent {
 	source: "daemon";
-	channel: "server" | "session" | "message";
+	channel: RuntimeStreamChannel;
 	type: string;
 	isTerminal: boolean;
 	occurredAt: string;
+	/** Gateway-issued runtime binding identifier for stale stream fencing. */
+	bindingId?: string;
+	/** Stable dedupe key for this runtime-originated event. */
+	sourceEventKey?: string;
+	/** Runtime-side sequence used for reconnect catch-up. */
+	sourceSeq?: number;
+	/** Canonical merged sequence assigned by gateway. */
+	eventSeq?: number;
+	runId?: string | null;
+	itemId?: string | null;
+	parentItemId?: string | null;
+	toolCallId?: string | null;
+	approvalId?: string | null;
 	payload: unknown;
+}
+
+export interface HarnessMaterializedSessionView {
+	sessionId: string;
+	workflowKind: HarnessWorkflowKind;
+	engine: HarnessEngine;
+	lastEventSeq: number | null;
+	lastSourceSeq: number | null;
+}
+
+export interface HarnessAttachRequest {
+	afterCursor?: string | null;
+}
+
+export interface HarnessAttachResponse {
+	view: HarnessMaterializedSessionView;
+	resumeCursor: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -30,6 +101,7 @@ export interface CodingHarnessPromptImage {
 
 export interface CodingHarnessStartInput {
 	baseUrl: string;
+	authToken?: string;
 	title?: string;
 }
 
@@ -39,6 +111,7 @@ export interface CodingHarnessStartResult {
 
 export interface CodingHarnessResumeInput {
 	baseUrl: string;
+	authToken?: string;
 	sessionId?: string | null;
 	title?: string;
 }
@@ -50,16 +123,19 @@ export interface CodingHarnessResumeResult {
 
 export interface CodingHarnessInterruptInput {
 	baseUrl: string;
+	authToken?: string;
 	sessionId: string;
 }
 
 export interface CodingHarnessShutdownInput {
 	baseUrl: string;
+	authToken?: string;
 	sessionId: string;
 }
 
 export interface CodingHarnessSendPromptInput {
 	baseUrl: string;
+	authToken?: string;
 	sessionId: string;
 	content: string;
 	images?: CodingHarnessPromptImage[];
@@ -67,6 +143,7 @@ export interface CodingHarnessSendPromptInput {
 
 export interface CodingHarnessCollectOutputsInput {
 	baseUrl: string;
+	authToken?: string;
 	sessionId: string;
 }
 
