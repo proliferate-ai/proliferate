@@ -212,7 +212,16 @@ export * from "./entities";
 
 // Re-export harness contract interfaces
 export type {
+	HarnessWorkflowKind,
+	HarnessEngine,
+	RuntimeLifecycleState,
+	RuntimeEventSource,
+	RuntimeStreamChannel,
+	CanonicalRuntimeEventEnvelope,
 	RuntimeDaemonEvent,
+	HarnessMaterializedSessionView,
+	HarnessAttachRequest,
+	HarnessAttachResponse,
 	DaemonStreamType,
 	DaemonStreamEnvelope,
 	WorkspaceSessionState,
