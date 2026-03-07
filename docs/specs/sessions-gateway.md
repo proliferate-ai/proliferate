@@ -102,7 +102,8 @@ References: `apps/gateway/src/api/proliferate/http/sessions/routes.ts`, `apps/ga
 ### SSE Bridge
 SSE is transport-only and unidirectional.
 
-- Gateway connects to sandbox `GET /event` and parses events with `eventsource-parser`.
+- Gateway coding runtime connects to sandbox daemon `GET /_proliferate/events` and parses events with `eventsource-parser`.
+- Runtime control calls (`resume`, `prompt`, `interrupt`, `messages`) flow through sandbox daemon `/_proliferate/v1/runtime/session/*` endpoints.
 - Hub owns reconnect strategy and policy; `SseClient` does not reconnect on its own.
 - Heartbeat/read timeout failures map to disconnect reasons that drive hub reconnect logic.
 
