@@ -6,8 +6,6 @@ import { cn } from "@/lib/display/utils";
 import { GATEWAY_URL } from "@/lib/infra/gateway";
 import { Circle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Terminal } from "xterm";
-import { FitAddon } from "xterm-addon-fit";
 import { PanelShell } from "./panel-shell";
 
 interface TerminalPanelProps {
@@ -56,7 +54,12 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 	const { token } = useWsToken();
 
 	const connect = useCallback(
-		(container: HTMLDivElement, tkn: string) => {
+		async (container: HTMLDivElement, tkn: string) => {
+			const [{ Terminal }, { FitAddon }] = await Promise.all([
+				import("xterm"),
+				import("xterm-addon-fit"),
+			]);
+
 			let isActive = true;
 			setStatus("connecting");
 
@@ -113,8 +116,13 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 					if (isActive && containerRef.current) {
 						term.dispose();
 						observer.disconnect();
-						const cleanup = connect(containerRef.current, tkn);
-						cleanupRef.current = cleanup;
+						void connect(containerRef.current, tkn).then((cleanup) => {
+							if (!isActive) {
+								cleanup();
+								return;
+							}
+							cleanupRef.current = cleanup;
+						});
 					}
 				}, 2000);
 			};
@@ -173,13 +181,26 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 	useEffect(() => {
 		const container = containerRef.current;
 		if (!container || !token || !GATEWAY_URL) return;
+		let cancelled = false;
+		let cleanup: (() => void) | null = null;
 
-		const cleanup = connect(container, token);
-		cleanupRef.current = cleanup;
+		void connect(container, token)
+			.then((nextCleanup) => {
+				if (cancelled) {
+					nextCleanup();
+					return;
+				}
+				cleanup = nextCleanup;
+				cleanupRef.current = nextCleanup;
+			})
+			.catch(() => {
+				setStatus("error");
+			});
 
 		return () => {
+			cancelled = true;
 			cleanupRef.current = null;
-			cleanup();
+			cleanup?.();
 		};
 	}, [connect, token]);
 
