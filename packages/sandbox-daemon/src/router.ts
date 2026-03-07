@@ -1,8 +1,11 @@
 /**
- * HTTP router — B1: unified in-sandbox router.
+ * HTTP router — platform transport APIs.
  *
- * /_proliferate/* -> platform transport APIs
+ * /_proliferate/* -> platform transport APIs (PTY, FS, ports, health, events)
  * /*              -> dynamic reverse proxy to preview app
+ *
+ * Agent session routes are handled by Sandbox Agent on port 2468,
+ * proxied via Caddy at /v1/*.
  *
  * Routes:
  *   GET  /_proliferate/health          -> health check
@@ -14,7 +17,7 @@
  *   GET  /_proliferate/fs/read         -> read file
  *   POST /_proliferate/fs/write        -> write file
  *   GET  /_proliferate/ports           -> list active preview ports
- *   POST /_proliferate/token/refresh   -> token refresh (B7)
+ *   POST /_proliferate/token/refresh   -> token refresh
  */
 
 import { createHash } from "node:crypto";
@@ -28,14 +31,6 @@ import {
 } from "./auth.js";
 import type { EventBus } from "./event-bus.js";
 import { FsSecurityError, type FsTransport } from "./fs.js";
-import {
-	createSession as createOpenCodeSession,
-	hasSession as hasOpenCodeSession,
-	interrupt as interruptOpenCodeSession,
-	listMessages as listOpenCodeMessages,
-	listSessions as listOpenCodeSessions,
-	sendPrompt as sendOpenCodePrompt,
-} from "./opencode-runtime.js";
 import type { PortWatcher } from "./ports.js";
 import type { PreviewProxy } from "./preview-proxy.js";
 import type { PtyTransport } from "./pty.js";
@@ -83,7 +78,6 @@ export interface RouterOptions {
 	portWatcher: PortWatcher;
 	previewProxy: PreviewProxy;
 	logger: Logger;
-	opencodeBridgeConnected: () => boolean;
 }
 
 export class Router {
@@ -93,7 +87,6 @@ export class Router {
 	private readonly portWatcher: PortWatcher;
 	private readonly preview: PreviewProxy;
 	private readonly logger: Logger;
-	private readonly opencodeBridgeConnected: () => boolean;
 
 	constructor(options: RouterOptions) {
 		this.eventBus = options.eventBus;
@@ -102,7 +95,6 @@ export class Router {
 		this.portWatcher = options.portWatcher;
 		this.preview = options.previewProxy;
 		this.logger = options.logger.child({ module: "router" });
-		this.opencodeBridgeConnected = options.opencodeBridgeConnected;
 	}
 
 	/**
@@ -140,13 +132,11 @@ export class Router {
 			return;
 		}
 
-		// Validate signature if present (B8: gateway-signed requests)
+		// Validate signature if present (gateway-signed requests)
 		const sigHeader = req.headers["x-proliferate-sandbox-signature"] as string | undefined;
 		if (sigHeader) {
 			const components = parseSignatureHeader(sigHeader);
 			if (components) {
-				// For requests with bodies, read and hash the actual body.
-				// For bodyless methods, hash empty string.
 				const hasBody = req.method === "POST" || req.method === "PUT" || req.method === "PATCH";
 				if (hasBody) {
 					const body = await readBody(req);
@@ -155,7 +145,6 @@ export class Router {
 						sendJson(res, 403, { error: "Invalid signature" });
 						return;
 					}
-					// Store body for downstream handlers to avoid re-reading
 					(req as IncomingMessage & { _body?: string })._body = body;
 				} else {
 					const bodyHash = createHash("sha256").update("").digest("hex");
@@ -173,42 +162,6 @@ export class Router {
 			case "/_proliferate/events":
 				if (req.method === "GET") {
 					this.handleEventsStream(req, res, query);
-					return;
-				}
-				break;
-			case "/_proliferate/v1/runtime/session/create":
-				if (req.method === "POST") {
-					this.handleRuntimeSessionCreate(req, res);
-					return;
-				}
-				break;
-			case "/_proliferate/v1/runtime/session/list":
-				if (req.method === "GET") {
-					this.handleRuntimeSessionList(res);
-					return;
-				}
-				break;
-			case "/_proliferate/v1/runtime/session/get":
-				if (req.method === "GET") {
-					this.handleRuntimeSessionGet(res, query);
-					return;
-				}
-				break;
-			case "/_proliferate/v1/runtime/session/messages":
-				if (req.method === "GET") {
-					this.handleRuntimeSessionMessages(res, query);
-					return;
-				}
-				break;
-			case "/_proliferate/v1/runtime/session/prompt":
-				if (req.method === "POST") {
-					this.handleRuntimeSessionPrompt(req, res);
-					return;
-				}
-				break;
-			case "/_proliferate/v1/runtime/session/interrupt":
-				if (req.method === "POST") {
-					this.handleRuntimeSessionInterrupt(req, res);
 					return;
 				}
 				break;
@@ -273,7 +226,6 @@ export class Router {
 	private handleHealth(res: ServerResponse): void {
 		sendJson(res, 200, {
 			status: "ok",
-			opencode: this.opencodeBridgeConnected(),
 			ports: this.portWatcher.getActivePorts(),
 			seq: this.eventBus.getSeq(),
 		});
@@ -303,7 +255,6 @@ export class Router {
 			type: "init",
 			seq: this.eventBus.getSeq(),
 			ports: this.portWatcher.getActivePorts(),
-			opencode: this.opencodeBridgeConnected(),
 		};
 		res.write(`data: ${JSON.stringify(initialPayload)}\n\n`);
 
@@ -325,111 +276,6 @@ export class Router {
 
 		req.on("close", cleanup);
 		req.on("error", cleanup);
-	}
-
-	// -----------------------------------------------------------------------
-	// Runtime session bridge (sandbox-agent v1 substrate for OpenCode)
-	// -----------------------------------------------------------------------
-
-	private handleRuntimeSessionCreate(req: IncomingMessage, res: ServerResponse): void {
-		const preRead = (req as IncomingMessage & { _body?: string })._body;
-		(preRead !== undefined ? Promise.resolve(preRead) : readBody(req))
-			.then(async (body) => {
-				const parsed = JSON.parse(body) as { title?: string };
-				const id = await createOpenCodeSession(
-					typeof parsed.title === "string" ? parsed.title : undefined,
-				);
-				sendJson(res, 200, { id });
-			})
-			.catch((err) => {
-				sendJson(res, 500, { error: err instanceof Error ? err.message : "Runtime create failed" });
-			});
-	}
-
-	private handleRuntimeSessionList(res: ServerResponse): void {
-		listOpenCodeSessions()
-			.then((sessions) => {
-				sendJson(res, 200, { sessions });
-			})
-			.catch((err) => {
-				sendJson(res, 500, { error: err instanceof Error ? err.message : "Runtime list failed" });
-			});
-	}
-
-	private handleRuntimeSessionGet(res: ServerResponse, query: URLSearchParams): void {
-		const sessionId = query.get("session_id");
-		if (!sessionId) {
-			sendJson(res, 400, { error: "session_id query parameter is required" });
-			return;
-		}
-		hasOpenCodeSession(sessionId)
-			.then((exists) => {
-				if (!exists) {
-					sendJson(res, 404, { exists: false });
-					return;
-				}
-				sendJson(res, 200, { exists: true });
-			})
-			.catch((err) => {
-				sendJson(res, 500, { error: err instanceof Error ? err.message : "Runtime get failed" });
-			});
-	}
-
-	private handleRuntimeSessionMessages(res: ServerResponse, query: URLSearchParams): void {
-		const sessionId = query.get("session_id");
-		if (!sessionId) {
-			sendJson(res, 400, { error: "session_id query parameter is required" });
-			return;
-		}
-		listOpenCodeMessages(sessionId)
-			.then((messages) => {
-				sendJson(res, 200, { messages });
-			})
-			.catch((err) => {
-				sendJson(res, 500, {
-					error: err instanceof Error ? err.message : "Runtime messages failed",
-				});
-			});
-	}
-
-	private handleRuntimeSessionPrompt(req: IncomingMessage, res: ServerResponse): void {
-		const preRead = (req as IncomingMessage & { _body?: string })._body;
-		(preRead !== undefined ? Promise.resolve(preRead) : readBody(req))
-			.then(async (body) => {
-				const parsed = JSON.parse(body) as {
-					sessionId?: string;
-					content?: string;
-					images?: Array<{ data: string; mediaType: string }>;
-				};
-				if (!parsed.sessionId || typeof parsed.content !== "string") {
-					sendJson(res, 400, { error: "sessionId and content are required" });
-					return;
-				}
-				await sendOpenCodePrompt(parsed.sessionId, parsed.content, parsed.images);
-				sendJson(res, 200, { ok: true });
-			})
-			.catch((err) => {
-				sendJson(res, 500, { error: err instanceof Error ? err.message : "Runtime prompt failed" });
-			});
-	}
-
-	private handleRuntimeSessionInterrupt(req: IncomingMessage, res: ServerResponse): void {
-		const preRead = (req as IncomingMessage & { _body?: string })._body;
-		(preRead !== undefined ? Promise.resolve(preRead) : readBody(req))
-			.then(async (body) => {
-				const parsed = JSON.parse(body) as { sessionId?: string };
-				if (!parsed.sessionId) {
-					sendJson(res, 400, { error: "sessionId is required" });
-					return;
-				}
-				await interruptOpenCodeSession(parsed.sessionId);
-				sendJson(res, 200, { ok: true });
-			})
-			.catch((err) => {
-				sendJson(res, 500, {
-					error: err instanceof Error ? err.message : "Runtime interrupt failed",
-				});
-			});
 	}
 
 	// -----------------------------------------------------------------------
@@ -546,7 +392,7 @@ export class Router {
 	}
 
 	// -----------------------------------------------------------------------
-	// Token refresh (B7)
+	// Token refresh
 	// -----------------------------------------------------------------------
 
 	private handleTokenRefresh(req: IncomingMessage, res: ServerResponse): void {

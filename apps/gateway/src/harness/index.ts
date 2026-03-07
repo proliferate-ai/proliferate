@@ -21,4 +21,4 @@ export {
 	type ManagerHarnessState,
 } from "./manager/adapter";
 
-export { SandboxAgentV1CodingHarnessAdapter } from "./coding/sandbox-agent-v1/adapter";
+export { SandboxAgentV2CodingHarnessAdapter } from "./coding/sandbox-agent-v2/adapter";

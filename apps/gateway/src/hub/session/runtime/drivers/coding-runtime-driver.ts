@@ -7,7 +7,7 @@ import type {
 	ServerMessage,
 } from "@proliferate/shared";
 import type { DaemonStreamEnvelope } from "@proliferate/shared/contracts/harness";
-import { SandboxAgentV1CodingHarnessAdapter } from "../../../../harness/coding/sandbox-agent-v1/adapter";
+import { SandboxAgentV2CodingHarnessAdapter } from "../../../../harness/coding/sandbox-agent-v2/adapter";
 import type {
 	CodingHarnessEventStreamHandle,
 	CodingHarnessPromptImage,
@@ -20,7 +20,6 @@ import type {
 	RuntimeDriverReadyResult,
 } from "../contracts/runtime-driver";
 import { connectCodingEventStream } from "../event-stream";
-import { waitForOpenCodeReady } from "../opencode-ready";
 import type { SessionLiveState } from "../state/session-live-state";
 import { withStepTiming } from "../timing";
 import { persistCodingSessionId } from "../write-authority/runtime-writers";
@@ -66,7 +65,7 @@ function broadcastDaemonEnvelope(
 }
 
 export class CodingRuntimeDriver implements RuntimeDriver {
-	private readonly codingHarness = new SandboxAgentV1CodingHarnessAdapter();
+	private readonly codingHarness = new SandboxAgentV2CodingHarnessAdapter();
 	private runtimeBaseUrl: string | null = null;
 	private runtimeAuthToken: string | null = null;
 	private openCodeSessionId: string | null = null;
@@ -91,27 +90,14 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 		if (!this.runtimeBaseUrl || !this.runtimeAuthToken) {
 			throw new Error("Missing sandbox runtime daemon endpoint");
 		}
-		const openCodeUrl = input.live.openCodeUrl;
-		if (!openCodeUrl) {
-			throw new Error("Missing coding runtime URL");
-		}
 		this.runtimeBindingId = randomUUID();
 		input.setRuntimeBindingId(this.runtimeBindingId);
 
-		await withStepTiming("runtime.ensure_ready.opencode_ready", input.logLatency, async () => {
-			await waitForOpenCodeReady({
-				openCodeUrl,
-				log: input.log,
-				logError: input.logError,
-				loggerWarn: (data, message) => input.logger.warn(data, message),
-			});
-		});
-
-		const ensureOpenCodeStartMs = Date.now();
-		await this.ensureOpenCodeSession(input.sessionId, input.live);
-		input.logLatency("runtime.ensure_ready.opencode_session.ensure", {
-			durationMs: Date.now() - ensureOpenCodeStartMs,
-			hasOpenCodeSessionId: Boolean(input.live.openCodeSessionId),
+		const ensureSessionStartMs = Date.now();
+		await this.ensureAgentSession(input.sessionId, input.live);
+		input.logLatency("runtime.ensure_ready.agent_session.ensure", {
+			durationMs: Date.now() - ensureSessionStartMs,
+			hasSessionId: Boolean(input.live.openCodeSessionId),
 		});
 
 		this.eventStreamHandle?.disconnect();
@@ -222,7 +208,7 @@ export class CodingRuntimeDriver implements RuntimeDriver {
 		});
 	}
 
-	private async ensureOpenCodeSession(
+	private async ensureAgentSession(
 		sessionId: string,
 		live: RuntimeDriverExecutionInput["live"],
 	): Promise<void> {

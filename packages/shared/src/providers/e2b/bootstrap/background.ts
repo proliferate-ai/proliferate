@@ -59,12 +59,22 @@ export async function setupAdditionalDependencies(
 		daemonEnvs.PROLIFERATE_SESSION_TOKEN = opts.envVars.SANDBOX_MCP_AUTH_TOKEN;
 	}
 	sandbox.commands
-		.run("sandbox-daemon --mode=worker > /tmp/sandbox-daemon.log 2>&1", {
+		.run("sandbox-daemon > /tmp/sandbox-daemon.log 2>&1", {
 			timeoutMs: 3600000,
 			envs: daemonEnvs,
 		})
 		.catch((err: unknown) => {
 			providerLogger.warn({ err }, "sandbox-daemon process failed");
+		});
+
+	log.debug("Starting Sandbox Agent (async)");
+	sandbox.commands
+		.run("sandbox-agent serve --port 2468 > /tmp/sandbox-agent.log 2>&1", {
+			timeoutMs: 3600000,
+			envs: { HOME: "/home/user" },
+		})
+		.catch((err: unknown) => {
+			providerLogger.warn({ err }, "sandbox-agent process failed");
 		});
 
 	void bootServices(sandbox, opts, log);

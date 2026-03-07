@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 
 export type HarnessWorkflowKind = "coding" | "manager";
-export type HarnessEngine = "opencode";
+export type HarnessEngine = "opencode" | "pi";
 
 export type RuntimeLifecycleState =
 	| "uninitialized"
