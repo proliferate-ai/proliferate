@@ -43,6 +43,10 @@ export async function handleSpawnChildTask(
 	log.info({ childSessionId: childSession.id, title }, "Spawned child task session");
 
 	try {
+		if (ctx.controlFacade) {
+			await ctx.controlFacade.eagerStartSession(childSession.id);
+			return JSON.stringify({ session_id: childSession.id, title, status: "starting" });
+		}
 		const jwt = await getServiceJwt(ctx);
 		const res = await fetch(`${ctx.gatewayUrl}/proliferate/${childSession.id}/eager-start`, {
 			method: "POST",
@@ -132,6 +136,16 @@ export async function handleMessageChild(
 	}
 
 	try {
+		if (ctx.controlFacade) {
+			await ctx.controlFacade.sendPromptToSession({
+				sessionId,
+				content,
+				userId: "manager",
+				source: "automation",
+			});
+			log.info({ sessionId, contentLength: content.length }, "Sent message to child session");
+			return JSON.stringify({ ok: true });
+		}
 		const jwt = await getServiceJwt(ctx);
 		const res = await fetch(`${ctx.gatewayUrl}/proliferate/${sessionId}/message`, {
 			method: "POST",
@@ -174,6 +188,11 @@ export async function handleCancelChild(
 	}
 
 	try {
+		if (ctx.controlFacade) {
+			await ctx.controlFacade.cancelSession(sessionId);
+			log.info({ sessionId }, "Cancelled child session");
+			return JSON.stringify({ ok: true, session_id: sessionId });
+		}
 		const jwt = await getServiceJwt(ctx);
 		const res = await fetch(`${ctx.gatewayUrl}/proliferate/${sessionId}/cancel`, {
 			method: "POST",

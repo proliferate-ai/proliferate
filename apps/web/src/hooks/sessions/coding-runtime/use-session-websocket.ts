@@ -3,6 +3,7 @@
 import { devConsoleLog } from "@/lib/analytics/dev-console-log";
 import { GATEWAY_URL } from "@/lib/infra/gateway";
 import type { ExtendedMessage } from "@/lib/sessions/coding-message-converter";
+import { normalizeServerMessages } from "@/lib/sessions/coding-message-normalizer";
 import {
 	type ServerMessage,
 	type SyncWebSocket,
@@ -271,39 +272,41 @@ export function useSessionWebSocket({
 				debugWs("reconnect_failed", { sessionId });
 			},
 			onEvent: (data: ServerMessage) => {
-				const now = Date.now();
-				if (data.type === "tool_start" && data.payload?.toolCallId) {
-					const existing = activeToolsRef.current.get(data.payload.toolCallId);
-					activeToolsRef.current.set(data.payload.toolCallId, {
-						tool: data.payload.tool || existing?.tool || "tool",
-						startedAt: existing?.startedAt ?? now,
-						lastUpdateAt: now,
-					});
-				} else if (data.type === "tool_metadata" && data.payload?.toolCallId) {
-					const existing = activeToolsRef.current.get(data.payload.toolCallId);
-					if (existing) {
-						existing.lastUpdateAt = now;
-						existing.tool = data.payload.tool || existing.tool;
+				for (const message of normalizeServerMessages(data)) {
+					const now = Date.now();
+					if (message.type === "tool_start" && message.payload?.toolCallId) {
+						const existing = activeToolsRef.current.get(message.payload.toolCallId);
+						activeToolsRef.current.set(message.payload.toolCallId, {
+							tool: message.payload.tool || existing?.tool || "tool",
+							startedAt: existing?.startedAt ?? now,
+							lastUpdateAt: now,
+						});
+					} else if (message.type === "tool_metadata" && message.payload?.toolCallId) {
+						const existing = activeToolsRef.current.get(message.payload.toolCallId);
+						if (existing) {
+							existing.lastUpdateAt = now;
+							existing.tool = message.payload.tool || existing.tool;
+						}
+					} else if (message.type === "tool_end" && message.payload?.toolCallId) {
+						activeToolsRef.current.delete(message.payload.toolCallId);
+					} else if (
+						message.type === "message_complete" ||
+						message.type === "message_cancelled" ||
+						message.type === "error"
+					) {
+						activeToolsRef.current.clear();
 					}
-				} else if (data.type === "tool_end" && data.payload?.toolCallId) {
-					activeToolsRef.current.delete(data.payload.toolCallId);
-				} else if (
-					data.type === "message_complete" ||
-					data.type === "message_cancelled" ||
-					data.type === "error"
-				) {
-					activeToolsRef.current.clear();
-				}
 
-				debugWs(
-					"event",
-					{
-						sessionId,
-						...summarizeServerEvent(data),
-					},
-					{ persist: data.type !== "token" },
-				);
-				handleServerMessage(data, ctx);
+					debugWs(
+						"event",
+						{
+							sessionId,
+							...summarizeServerEvent(message),
+						},
+						{ persist: message.type !== "token" },
+					);
+					handleServerMessage(message, ctx);
+				}
 			},
 		});
 
