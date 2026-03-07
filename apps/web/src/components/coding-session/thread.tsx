@@ -85,11 +85,13 @@ function parseAssistantContentSegments(text: string): AssistantContentSegment[] 
 		markdownBuffer = [];
 	};
 
-	for (let index = 0; index < lines.length; index += 1) {
+	let index = 0;
+	while (index < lines.length) {
 		const line = lines[index];
 		const command = getProliferateCommandFromLine(line);
 		if (!command) {
 			markdownBuffer.push(line);
+			index += 1;
 			continue;
 		}
 
@@ -111,6 +113,7 @@ function parseAssistantContentSegments(text: string): AssistantContentSegment[] 
 			actionLabel: getProliferateActionLabel(command),
 			url: nextUrl,
 		});
+		index += 1;
 	}
 
 	flushMarkdown();
