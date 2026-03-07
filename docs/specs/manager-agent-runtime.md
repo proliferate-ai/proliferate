@@ -40,6 +40,16 @@
 
 ---
 
+> ### Current State vs. V1 Target
+>
+> The **current implementation** uses `ManagerRuntimeDriver` + `ManagerRuntimeService` running in-process in the gateway with a Claude-based harness adapter (`driverKind: "manager-claude"`). This is transitional.
+>
+> The **v1 target contract** described in this spec covers the Pi-based sandbox runtime placement (`engine="pi"`, `profile="manager"` inside `sandbox-agent /v1`), where the gateway selects the provider/model binding but execution moves out of the gateway process.
+>
+> Sections marked with status indicators (`Planned`, `Partial`, `Implemented`) in the deep dives (section 4) show which parts are implemented vs. planned.
+
+---
+
 ## 2. Core Concepts
 
 ### Runtime Identity
@@ -154,7 +164,7 @@ Canonical manager event semantics must include the same binding/dedupe fields us
 
 ---
 
-## 5. Conventions & Patterns
+## 3. Conventions & Patterns
 
 ### Do
 - Treat manager as orchestration-first and prefer child coding sessions for non-trivial implementation work.
@@ -181,44 +191,44 @@ Canonical manager event semantics must include the same binding/dedupe fields us
 
 ---
 
-## 6. Subsystem Deep Dives
+## 4. Subsystem Deep Dives
 
-### 6.1 Runtime Identity + Placement Invariants — `Planned`
+### 4.1 Runtime Identity + Placement Invariants — `Planned`
 - Manager runtime identity is fixed to `engine="pi"` and `profile="manager"`.
 - Manager execution must run inside `sandbox-agent /v1`, not as a gateway-hosted provider loop.
 - Gateway must choose the exact provider/model binding and pass it into the runtime.
 - Current main still runs a gateway-local Claude harness, so the frozen v1 contract is not implemented yet. References: `apps/gateway/src/hub/session/runtime/drivers/manager-runtime-driver.ts`, `apps/gateway/src/hub/session/runtime/manager/manager-runtime-service.ts`, `docs/specs/sessions-gateway.md`.
 
-### 6.2 Storage Authority + Memory Root Invariants — `Partial`
+### 4.2 Storage Authority + Memory Root Invariants — `Partial`
 - `$MANAGER_MEMORY_DIR` and the `memory.md` root-index contract already exist in current harness inputs/prompts.
 - Hidden runtime-private transcript/session-manager state remains distinct from `$MANAGER_MEMORY_DIR`.
 - Postgres remains a mirror/projection store, not transcript authority.
 - Hidden transcript authority is not implemented in tracked runtime code yet. References: `apps/gateway/src/hub/session/runtime/manager/manager-runtime-service.ts`, `apps/gateway/src/harness/manager/wake-cycle/prompts.ts`, `docs/specs/sessions-gateway.md`, `docs/specs/sandbox-providers.md`.
 
-### 6.3 Inbox + Preemption Invariants — `Planned`
+### 4.3 Inbox + Preemption Invariants — `Planned`
 - V1 inbox kinds are `user_prompt` and `scheduler_wake` only.
 - Only `user_prompt` may preempt an active manager run.
 - `scheduler_wake` must queue or coalesce instead of interrupting.
 - `approval_result` and `child_update` are intentionally outside the v1 manager inbox contract. References: `apps/gateway/src/api/proliferate/http/session/actions/routes.ts`, `apps/gateway/src/hub/session-hub.ts`, `docs/specs/sessions-gateway.md`, `docs/specs/boundary-brief.md`.
 
-### 6.4 Child Coding-Session Topology Invariants — `Partial`
+### 4.4 Child Coding-Session Topology Invariants — `Partial`
 - Manager child work must run as independent coding sessions linked back to the manager session/run.
 - Current tooling already supports spawn, list, inspect, message, and cancel for child sessions.
 - Manager-spawned manager children are disallowed in v1.
 - Control-facade orchestration is preferred over HTTP loopback fallback. References: `apps/gateway/src/harness/manager/tools/handlers/child-sessions.ts`, `apps/gateway/src/harness/manager/tools/registry.ts`, `apps/gateway/src/hub/session/runtime/manager/manager-control-facade.ts`.
 
-### 6.5 Tool Surface + Policy Boundary Invariants — `Partial`
+### 4.5 Tool Surface + Policy Boundary Invariants — `Partial`
 - Manager must retain explicit orchestration tools and gain coding-class general workspace tools in v1.
 - Gateway remains the authority for capability filtering, approval checks, and durable action-side effects.
 - Current tracked tool registry proves orchestration/source/action coverage but not full general-tool parity yet. References: `apps/gateway/src/harness/manager/tools/registry.ts`, `apps/gateway/src/hub/session/runtime/manager/manager-control-facade.ts`, `docs/specs/actions.md`, `docs/specs/agent-contract.md`.
 
-### 6.6 Code-Editing + Delegation Quality Invariants — `Planned`
+### 4.6 Code-Editing + Delegation Quality Invariants — `Planned`
 - Manager should prefer delegation for non-trivial implementation work.
 - Direct manager edits must obey repo-local instruction files and relevant subsystem specs.
 - Child handoffs should include precise scope, constraints, success criteria, and verification expectations.
 - Verification status must be reported honestly; unrelated local changes must be preserved. References: `CLAUDE.md`, `AGENTS.md`, `docs/specs/boundary-brief.md`.
 
-### 6.7 Canonical Stream + Restart Invariants — `Planned`
+### 4.7 Canonical Stream + Restart Invariants — `Planned`
 - Manager must share the same attach/replay/catch-up/live-tail interface class as coding sessions.
 - Canonical event fencing/dedupe fields (`bindingId`, `sourceSeq`, `sourceEventKey`, `eventSeq`) are required.
 - Transcript continuity must survive reconnect/restart without making Postgres the transcript authority.
@@ -226,7 +236,7 @@ Canonical manager event semantics must include the same binding/dedupe fields us
 
 ---
 
-## 7. Cross-Cutting Concerns
+## 5. Cross-Cutting Concerns
 
 | Dependency | Direction | Interface | Notes |
 |---|---|---|---|
@@ -248,17 +258,17 @@ Canonical manager event semantics must include the same binding/dedupe fields us
 
 ---
 
-## 8. Acceptance Gates
+## 6. Acceptance Gates
 
-- [ ] `docs/specs/manager-agent-runtime.md` exists and resolves the existing references from `sessions-gateway.md` and `sandbox-providers.md`.
-- [ ] The spec clearly distinguishes current gateway-local manager harness behavior from the frozen v1 Pi runtime contract.
-- [ ] The spec explicitly locks engine/profile, runtime placement, exact gateway-chosen provider/model binding, storage authority split, inbox kinds, preemption, and child topology.
-- [ ] The spec states that manager gets coding-class general tools plus orchestration tools, with gateway retaining policy authority.
-- [ ] The spec records manager code-quality and repository-rule expectations for both direct edits and delegated child work.
+- [x] `docs/specs/manager-agent-runtime.md` exists and resolves the existing references from `sessions-gateway.md` and `sandbox-providers.md`.
+- [x] The spec clearly distinguishes current gateway-local manager harness behavior from the frozen v1 Pi runtime contract.
+- [x] The spec explicitly locks engine/profile, runtime placement, exact gateway-chosen provider/model binding, storage authority split, inbox kinds, preemption, and child topology.
+- [x] The spec states that manager gets coding-class general tools plus orchestration tools, with gateway retaining policy authority.
+- [x] The spec records manager code-quality and repository-rule expectations for both direct edits and delegated child work.
 
 ---
 
-## 9. Known Limitations & Tech Debt
+## 7. Known Limitations & Tech Debt
 
 - [ ] **Current manager runtime is still gateway-local Claude harness** — `ManagerRuntimeService` still starts/resumes `ClaudeManagerHarnessAdapter`, and `ManagerRuntimeDriver` still reports `driverKind: "manager-claude"` instead of Pi manager identity. References: `apps/gateway/src/hub/session/runtime/manager/manager-runtime-service.ts`, `apps/gateway/src/hub/session/runtime/drivers/manager-runtime-driver.ts`.
 - [ ] **Manager driver has no canonical event-stream binding yet** — `ManagerRuntimeDriver.activate()` sets both event-stream handle and runtime binding ID to `null`, so manager does not yet meet the frozen replay/attach contract. References: `apps/gateway/src/hub/session/runtime/drivers/manager-runtime-driver.ts`, `apps/gateway/src/hub/session/runtime/contracts/runtime-driver.ts`.

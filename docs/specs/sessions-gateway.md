@@ -88,11 +88,8 @@ Reference: `apps/gateway/src/hub/session-hub.ts`
 - Runtime waits migration lock release (unless skip flag during controlled migration re-init).
 - Runtime always goes through provider abstraction (`ensureSandbox`) instead of direct create calls.
 - Harness behavior is delegated through runtime drivers (`CodingRuntimeDriver`, `ManagerRuntimeDriver`) selected from session kind.
-- Locked direction for the ongoing manager cutover: manager runtime moves to `engine="pi"` / `profile="manager"` inside `sandbox-agent /v1`; the current gateway-local manager harness remains transitional until that cutover lands (see `manager-agent-runtime.md`).
-- Manager runtime control operations (child eager-start/prompt/cancel) use an in-process facade to hubs when available; HTTP loopback remains fallback-only for out-of-process manager execution.
-- Manager wake-cycle prompts enforce a memory-root directive (`$MANAGER_MEMORY_DIR` + `memory.md` index policy) for durable planning artifacts.
-- Locked manager storage contract: hidden runtime-private transcript/session state is distinct from `$MANAGER_MEMORY_DIR`, while DB stores mirrored messages/events/inbox projections rather than transcript authority.
-- Locked v1 manager inbox contract: manager consumes `user_prompt` and `scheduler_wake`; only user prompts may preempt an active manager run.
+
+> **Manager runtime contract**: See `manager-agent-runtime.md` for placement, storage, inbox, and preemption semantics.
 - Durable runtime-owned writes flow through write-authority helpers in `session/runtime/write-authority/`.
 
 Reference: `apps/gateway/src/hub/session-runtime.ts`

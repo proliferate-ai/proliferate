@@ -22,7 +22,7 @@
 | 11 | `integrations.md` | OAuth connection lifecycle for GitHub/Sentry/Linear/Jira/Slack via provider-native routes and service token resolution. Connection binding to repos/automations/sessions. | 3 |
 | 12 | `auth-orgs.md` | better-auth, user/org/member model, invitations, onboarding/trial activation, API keys, admin/impersonation. | 3 |
 | 13 | `billing-metering.md` | Usage metering, credit gating, trial credits, reconciliation, org pause, Autumn integration. Owns charging/gating policy. | 3 |
-| 14 | `manager-agent-runtime.md` | Pi-based manager runtime identity, memory model, inbox semantics, child coding-session topology, and manager-specific execution rules. | 2 |
+| 14 | `manager-agent-runtime.md` | Pi-based manager runtime identity, memory model, inbox semantics, child coding-session topology, and manager-specific execution rules. | 3 |
 
 ### Phase ordering
 
