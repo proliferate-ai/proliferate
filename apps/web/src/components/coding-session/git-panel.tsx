@@ -195,7 +195,8 @@ export function GitPanel({
 			return;
 		}
 		setSelectedWorkspacePath(workspaceOptions[0].workspacePath);
-	}, [workspaceOptions, selectedWorkspacePath]);
+		resetDiffState();
+	}, [workspaceOptions, selectedWorkspacePath, resetDiffState]);
 
 	const requestStatus = useCallback(() => {
 		if (pollPending.current || !sendGetGitStatus) return;

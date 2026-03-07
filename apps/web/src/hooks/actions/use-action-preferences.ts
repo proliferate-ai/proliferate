@@ -2,6 +2,7 @@
 
 import { orpc } from "@/lib/infra/orpc";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 interface ActionPreferenceRow {
 	sourceId: string;
@@ -64,12 +65,12 @@ export function useActionPreferences() {
  */
 export function useDisabledSourceIds(): Set<string> {
 	const { data: preferences } = useActionPreferences();
-	return buildActionPreferenceIndex(preferences).disabledSourceIds;
+	return useMemo(() => buildActionPreferenceIndex(preferences).disabledSourceIds, [preferences]);
 }
 
 export function useActionPreferenceIndex(): ActionPreferenceIndex {
 	const { data: preferences } = useActionPreferences();
-	return buildActionPreferenceIndex(preferences);
+	return useMemo(() => buildActionPreferenceIndex(preferences), [preferences]);
 }
 
 export function useToggleActionPreference() {

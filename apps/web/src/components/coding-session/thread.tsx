@@ -704,7 +704,9 @@ const ToolFallback: FC<{
 	return (
 		<ProliferateToolCard
 			label={toolName}
-			status={status?.type === "running" ? "running" : "success"}
+			status={
+				status?.type === "running" ? "running" : status?.type === "error" ? "error" : "success"
+			}
 			errorMessage={typeof result === "string" && result.startsWith("Error") ? result : undefined}
 		>
 			<Button
