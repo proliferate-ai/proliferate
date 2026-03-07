@@ -28,6 +28,6 @@ export interface RuntimeFacade {
 		runId: string,
 		overrideCommands?: ConfigurationServiceCommand[],
 	): Promise<import("@proliferate/shared").AutoStartOutputEntry[]>;
-	refreshGitContext(): Promise<void>;
+	refreshGitContext(preferredGitUserId?: string | null): Promise<void>;
 	triggerManagerWakeCycle(): Promise<void>;
 }

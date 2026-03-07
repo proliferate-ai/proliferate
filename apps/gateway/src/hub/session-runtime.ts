@@ -38,7 +38,7 @@ import type { RuntimeFacade } from "./session/runtime/contracts/runtime-facade";
 import { CodingRuntimeDriver } from "./session/runtime/drivers/coding-runtime-driver";
 import { selectRuntimeDriver } from "./session/runtime/drivers/driver-selector";
 import { ManagerRuntimeDriver } from "./session/runtime/drivers/manager-runtime-driver";
-import type { SessionContext } from "./session/runtime/session-context-store";
+import { type SessionContext, loadSessionContext } from "./session/runtime/session-context-store";
 import { clearRuntimePointers } from "./session/runtime/state/state-reconciler";
 import { persistRuntimeReady } from "./session/runtime/write-authority/runtime-writers";
 import type {
@@ -147,8 +147,14 @@ export class SessionRuntime implements RuntimeFacade {
 		const refreshed = await loadSessionContext(this.env, this.sessionId, {
 			preferredGitUserId: preferredGitUserId ?? null,
 		});
-		this.context.repos = refreshed.repos;
-		this.context.gitIdentity = refreshed.gitIdentity;
+		this.runtimeContext = {
+			...this.runtimeContext,
+			config: {
+				...this.runtimeContext.config,
+				repos: refreshed.repos,
+				gitIdentity: refreshed.gitIdentity,
+			},
+		};
 	}
 
 	getOpenCodeUrl(): string | null {
@@ -457,8 +463,6 @@ export class SessionRuntime implements RuntimeFacade {
 				sessionId: this.sessionId,
 				live,
 				sandboxId: result.sandboxId,
-				status: "running",
-				pauseReason: null,
 				openCodeTunnelUrl: result.tunnelUrl,
 				previewTunnelUrl: result.previewUrl,
 				sandboxExpiresAt: resolvedExpiryMs,
