@@ -12,6 +12,7 @@ import type {
 	ManagerHarnessState,
 } from "@proliferate/shared/contracts";
 import { callClaudeWithRetry, createAnthropicClient } from "./client";
+import { DEFAULT_MANAGER_MEMORY_DIR } from "./constants";
 import type { ManagerControlFacade } from "./control-facade";
 import { MANAGER_TOOLS, filterToolsByCapabilities } from "./tools";
 import { runWakeCyclePhase } from "./wake-cycle/engine";
@@ -30,7 +31,6 @@ import type {
 
 export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 	readonly name = "claude-manager";
-	private static readonly defaultMemoryDir = "/workspace/.proliferate/manager-memory";
 
 	private readonly logger: Logger;
 	private readonly managerControlFacade?: ManagerControlFacade;
@@ -140,7 +140,7 @@ export class ClaudeManagerHarnessAdapter implements ManagerHarnessAdapter {
 		const managerMemoryDir =
 			input.managerMemoryDir && input.managerMemoryDir.trim().length > 0
 				? input.managerMemoryDir.trim()
-				: ClaudeManagerHarnessAdapter.defaultMemoryDir;
+				: DEFAULT_MANAGER_MEMORY_DIR;
 		const managerMemoryIndexPath =
 			input.managerMemoryIndexPath && input.managerMemoryIndexPath.trim().length > 0
 				? input.managerMemoryIndexPath.trim()

@@ -1,8 +1,7 @@
 import type { ManagerHarnessStartInput, ManagerHarnessState } from "@proliferate/shared/contracts";
 import type { ClaudeManagerHarnessAdapter } from "../../../../harness/manager/adapter";
+import { DEFAULT_MANAGER_MEMORY_DIR } from "../../../../harness/manager/constants";
 import type { RuntimeDriverActivationInput } from "../contracts/runtime-driver";
-
-const DEFAULT_MANAGER_MEMORY_DIR = "/workspace/.proliferate/manager-memory";
 
 export class ManagerRuntimeService {
 	constructor(private readonly managerHarness: ClaudeManagerHarnessAdapter) {}

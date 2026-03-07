@@ -199,14 +199,18 @@ export function createInProcessManagerControlFacade(
 						},
 					});
 
-					void projectOperatorStatus({
+					projectOperatorStatus({
 						sessionId: input.sessionId,
 						organizationId: session.organizationId,
 						runtimeStatus: "running",
 						hasPendingApproval: true,
 						logger,
-					});
-					void touchLastVisibleUpdate(input.sessionId, logger);
+					}).catch((err) =>
+						logger.warn({ err, sessionId: input.sessionId }, "Failed to project operator status"),
+					);
+					touchLastVisibleUpdate(input.sessionId, logger).catch((err) =>
+						logger.warn({ err, sessionId: input.sessionId }, "Failed to touch last visible update"),
+					);
 
 					return {
 						status: 202,
