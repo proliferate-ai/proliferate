@@ -463,8 +463,8 @@ export class SessionRuntime implements RuntimeFacade {
 				sessionId: this.sessionId,
 				live,
 				sandboxId: result.sandboxId,
-				openCodeTunnelUrl: result.tunnelUrl,
-				previewTunnelUrl: result.previewUrl,
+				openCodeTunnelUrl: resolvedOpenCodeUrl,
+				previewTunnelUrl: resolvedPreviewUrl,
 				sandboxExpiresAt: resolvedExpiryMs,
 				autoPauseSnapshotId:
 					provider.supportsAutoPause && !live.session.snapshot_id ? result.sandboxId : undefined,

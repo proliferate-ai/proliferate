@@ -116,13 +116,17 @@ export function TerminalPanel({ sessionId }: TerminalPanelProps) {
 					if (isActive && containerRef.current) {
 						term.dispose();
 						observer.disconnect();
-						void connect(containerRef.current, tkn).then((cleanup) => {
-							if (!isActive) {
-								cleanup();
-								return;
-							}
-							cleanupRef.current = cleanup;
-						});
+						void connect(containerRef.current, tkn)
+							.then((cleanup) => {
+								if (!isActive) {
+									cleanup();
+									return;
+								}
+								cleanupRef.current = cleanup;
+							})
+							.catch(() => {
+								if (isActive) setStatus("error");
+							});
 					}
 				}, 2000);
 			};
