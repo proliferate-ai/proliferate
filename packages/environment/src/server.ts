@@ -1,6 +1,19 @@
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createEnv } from "@t3-oss/env-core";
+import { config } from "dotenv";
 import { nextPhase } from "./runtime";
 import { createPublicSchema, createServerSchema } from "./schema";
+
+// Load .env files for non-Next.js contexts (worker, db migrations, scripts).
+// Next.js handles this automatically; dotenv.config() is a no-op when vars already exist.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const root = resolve(__dirname, "../../..");
+const envPath = resolve(root, ".env");
+const envLocalPath = resolve(root, ".env.local");
+if (existsSync(envPath)) config({ path: envPath });
+if (existsSync(envLocalPath)) config({ path: envLocalPath, override: true });
 
 const rawEnv = createEnv({
 	server: createServerSchema(process.env),
