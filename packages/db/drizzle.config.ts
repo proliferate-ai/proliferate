@@ -1,3 +1,4 @@
+import "@proliferate/environment/bootstrap";
 import { env } from "@proliferate/environment/server";
 import { defineConfig } from "drizzle-kit";
 
